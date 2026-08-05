@@ -1,0 +1,10 @@
+### Common ###
+### OS ###
+.DS_Store
+
+### Backend ###
+### IntelliJ IDEA ###
+.idea/
+*.iml
+*.iws
+*.ipr
