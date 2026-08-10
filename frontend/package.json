@@ -14,7 +14,6 @@
     "dev": "webpack serve --config webpack/webpack.dev.cjs",
     "build": "webpack --config webpack/webpack.prod.cjs",
     "typecheck": "tsc --noEmit",
-    "webpack-merge": "^6.0.1",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -51,6 +50,7 @@
     "typescript-eslint": "^8.66.0",
     "webpack": "^5.109.2",
     "webpack-cli": "^7.2.2",
-    "webpack-dev-server": "^5.2.6"
+    "webpack-dev-server": "^5.2.6",
+    "webpack-merge": "^6.0.1"
   }
 }
