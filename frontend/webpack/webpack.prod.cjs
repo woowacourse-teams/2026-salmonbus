@@ -20,7 +20,12 @@ module.exports = merge(common, {
       {
         test: /\.[jt]sx?$/,
         exclude: /node_modules/,
-        use: "babel-loader",
+        use: {
+          loader: "babel-loader",
+          options: {
+            envName: "production",
+          },
+        },
       },
       {
         test: /\.vanilla\.css$/i,

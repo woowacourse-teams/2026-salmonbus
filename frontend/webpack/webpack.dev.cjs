@@ -13,6 +13,7 @@ module.exports = merge(common, {
         use: {
           loader: "babel-loader",
           options: {
+            envName: "development",
             plugins: ["react-refresh/babel"],
           },
         },
