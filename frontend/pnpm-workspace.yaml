@@ -1,3 +1,4 @@
 allowBuilds:
   core-js-pure: false
   esbuild: true
+engineStrict: true
