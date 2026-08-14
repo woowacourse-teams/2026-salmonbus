@@ -19,5 +19,4 @@ export function initAnalytics() {
     analytics: { autocapture: true },
     sessionReplay: { sampleRate: 1 },
   });
-  amplitude.track("Viewed Home Page", { prompt_version: "BA400.4" });
 }
