@@ -6,6 +6,9 @@ const common = require("./webpack.common.cjs");
 
 module.exports = merge(common, {
   mode: "production",
+  dotenv: {
+    dir: "./env",
+  },
   devtool: "source-map",
   output: {
     path: path.resolve(__dirname, "../dist"),

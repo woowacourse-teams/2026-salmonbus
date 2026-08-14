@@ -4,6 +4,9 @@ const common = require("./webpack.common.cjs");
 
 module.exports = merge(common, {
   mode: "development",
+  dotenv: {
+    dir: "./env",
+  },
   devtool: "eval-source-map",
   module: {
     rules: [
