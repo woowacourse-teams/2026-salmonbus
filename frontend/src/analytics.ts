@@ -15,6 +15,7 @@ export function initAnalytics() {
   }
 
   initialized = true;
+
   amplitude.initAll(AMPLITUDE_API_KEY, {
     analytics: { autocapture: true },
     sessionReplay: { sampleRate: 1 },
