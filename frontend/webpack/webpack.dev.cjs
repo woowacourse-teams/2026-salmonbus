@@ -1,3 +1,4 @@
+const path = require("path");
 const { merge } = require("webpack-merge");
 const ReactRefreshWebpackPlugin = require("@pmmmwh/react-refresh-webpack-plugin");
 const common = require("./webpack.common.cjs");
@@ -5,7 +6,7 @@ const common = require("./webpack.common.cjs");
 module.exports = merge(common, {
   mode: "development",
   dotenv: {
-    dir: "./env",
+    dir: path.resolve(__dirname, "../env"),
   },
   devtool: "eval-source-map",
   module: {
