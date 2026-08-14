@@ -20,7 +20,7 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@amplitude/analytics-browser": "^2.45.6",
+    "@amplitude/unified": "^1.1.29",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
