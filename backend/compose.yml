@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:17
+    container_name: salmonbus-db
+    environment:
+      POSTGRES_DB: salmonbus
+      POSTGRES_USER: salmonbus
+      POSTGRES_PASSWORD: salmonbus
+      TZ: Asia/Seoul
+    ports:
+      - "5432:5432"
+    volumes:
+      - salmonbus-db-data:/var/lib/postgresql/data
+
+volumes:
+  salmonbus-db-data:
