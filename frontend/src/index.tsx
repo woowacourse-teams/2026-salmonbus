@@ -1,8 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import "./styles/reset.css";
-import { App } from "./App";
-import { initAnalytics } from "./analytics";
+import "@/shared/styles/reset.css";
+import { App } from "@/app/App";
+import { initAnalytics } from "@/shared/analytics/analytics";
 
 const container = document.getElementById("root");
 if (!container) {
