@@ -46,3 +46,4 @@ jobs:
           report_paths: backend/build/test-results/test/TEST-*.xml
           check_name: 'BE 테스트 결과'
           detailed_summary: true
+          require_tests: true
