@@ -6,12 +6,17 @@ on:
   pull_request:
     branches: [ "dev", "main" ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   backend-build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
+      checks: write
 
     defaults:
       run:
@@ -28,5 +33,16 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
       - name: Build with Gradle
         run: ./gradlew build
+
+      - name: Publish test report
+        if: ${{ !cancelled() }}
+        uses: mikepenz/action-junit-report@v6
+        with:
+          report_paths: backend/build/test-results/test/TEST-*.xml
+          check_name: 'BE 테스트 결과'
+          detailed_summary: true
