@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: backend
+
+  http:
+    clients:
+      connect-timeout: 3s # Open API 실측: 0.04~0.15초 (2026-08-19, 10회).
+      read-timeout: 5s
+
+gbis:
+  base-url: https://apis.data.go.kr/6410000 # 경기도 버스정보시스템(GBIS) 실시간 조회 API
+  service-key: ${GBIS_SERVICE_KEY}  # 공공데이터포털에서 발급받은 Decoding 인증키

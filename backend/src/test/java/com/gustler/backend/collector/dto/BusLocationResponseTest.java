@@ -16,7 +16,7 @@ class BusLocationResponseTest {
     private ObjectMapper objectMapper;
 
     @Test
-    void 운행_차량이_여러_대면_배열로_읽고_리스트로_파싱한다() {
+    void 차량이_여러_대면_배열로_와서_리스트로_읽는다() {
         // given
         InputStream given = fixture("location-two-vehicles.json");
 
@@ -31,7 +31,7 @@ class BusLocationResponseTest {
     }
 
     @Test
-    void 운행_차량이_한_대면_객체로_읽고_객체로_파싱한다() {
+    void 운행_차량이_한_대이어도_객체로_읽고_리스트로_파싱한다() {
         // given
         InputStream given = fixture("location-single-vehicle.json");
 
