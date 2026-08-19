@@ -1,0 +1,1 @@
+export { VerdictBoardPage } from "./VerdictBoardPage";
