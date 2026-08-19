@@ -1,4 +1,4 @@
-import type { Board, Direction, StopState } from "./types";
+import type { Board, Direction, StopState } from "./verdictBoard.types";
 
 function boardingStop(sequence: number, name: string, direction: Direction, probability: number): StopState {
   return {

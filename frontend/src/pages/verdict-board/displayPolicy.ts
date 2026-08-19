@@ -1,4 +1,4 @@
-import type { Board, Direction, StopState } from "./types";
+import type { Board, Direction, StopState } from "./api/verdictBoard.types";
 
 export type SeatLevel = "high" | "low" | "veryLow";
 
@@ -16,6 +16,11 @@ export interface PassThroughStopView {
 }
 
 export type StopView = BoardingStopView | PassThroughStopView;
+
+export interface DirectionView {
+  id: Direction;
+  label: string;
+}
 
 const SEAT_LEVEL_THRESHOLDS = {
   high: 0.7,
@@ -43,8 +48,20 @@ export function toStopView(stop: StopState): StopView {
 export function stopViewsFor(board: Board, direction: Direction): StopView[] {
   return board.stops
     .filter((stop) => stop.direction === direction)
-    .toSorted((left, right) => left.sequence - right.sequence)
+    .sort((left, right) => left.sequence - right.sequence)
     .map(toStopView);
+}
+
+export function directionViewsFor(board: Board): DirectionView[] {
+  return board.route.directions.map((info) => {
+    const stops = stopViewsFor(board, info.id);
+    const first = stops[0];
+    const last = stops[stops.length - 1];
+    return {
+      id: info.id,
+      label: first && last && first !== last ? `${first.name} → ${last.name}` : info.name,
+    };
+  });
 }
 
 export const SEAT_LEVEL_LABELS: Record<SeatLevel, string> = {
