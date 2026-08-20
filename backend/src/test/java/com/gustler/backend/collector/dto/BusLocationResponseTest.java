@@ -72,6 +72,10 @@ class BusLocationResponseTest {
     private InputStream fixture(
         final String name
     ) {
-        return getClass().getClassLoader().getResourceAsStream("gbis/" + name);
+        final InputStream stream = getClass().getClassLoader().getResourceAsStream("gbis/" + name);
+        if (stream == null) {
+            throw new IllegalArgumentException("픽스처를 찾지 못했다: gbis/" + name);
+        }
+        return stream;
     }
 }

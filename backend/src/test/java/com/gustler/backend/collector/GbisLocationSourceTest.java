@@ -42,7 +42,7 @@ class GbisLocationSourceTest {
         <OpenAPI_ServiceResponse>
           <cmmMsgHeader>
             <errMsg>SERVICE ERROR</errMsg>
-            <returnAuthMsg>%s</returnAuthMsg>
+            <returnAuthMsg>SERVICE_ERROR</returnAuthMsg>
             <returnReasonCode>%s</returnReasonCode>
           </cmmMsgHeader>
         </OpenAPI_ServiceResponse>
@@ -166,8 +166,7 @@ class GbisLocationSourceTest {
     @Test
     void 일일_한도_초과는_XML로_오는_오류_본문에서_읽어낸다() {
         // given
-        respondWithXml(PORTAL_ERROR_XML.formatted(
-            "LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR", "22"));
+        respondWithPortalError("22");
 
         // when
         final GbisLocationResult actual = source.read(ROUTE_3330);
@@ -179,7 +178,7 @@ class GbisLocationSourceTest {
     @Test
     void 초당_허용량_초과는_일일_한도_초과와_구분한다() {
         // given
-        respondWithXml(PORTAL_ERROR_XML.formatted("LIMITED_NUMBER_OF_SERVICE_REQUESTS", "23"));
+        respondWithPortalError("23");
 
         // when
         final GbisLocationResult actual = source.read(ROUTE_3330);
@@ -191,7 +190,7 @@ class GbisLocationSourceTest {
     @Test
     void 서비스키_오류처럼_모르는_거부는_사유_코드를_남긴다() {
         // given
-        respondWithXml(PORTAL_ERROR_XML.formatted("SERVICE_KEY_IS_NOT_REGISTERED_ERROR", "30"));
+        respondWithPortalError("30");
 
         // when
         final GbisLocationResult actual = source.read(ROUTE_3330);
@@ -208,7 +207,7 @@ class GbisLocationSourceTest {
         // given
         openApi.expect(requestTo(containsString(ROUTE_3330)))
             .andRespond(withServerError()
-                .body(PORTAL_ERROR_XML.formatted("SERVICE ERROR", "22"))
+                .body(PORTAL_ERROR_XML.formatted("22"))
                 .contentType(MediaType.APPLICATION_XML));
 
         // when
@@ -225,18 +224,29 @@ class GbisLocationSourceTest {
             .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
     }
 
-    private void respondWithXml(
-        final String body
+    private void respondWithPortalError(
+        final String reasonCode
     ) {
         openApi.expect(requestTo(containsString(ROUTE_3330)))
-            .andRespond(withSuccess(body, MediaType.APPLICATION_XML));
+            .andRespond(withSuccess(
+                PORTAL_ERROR_XML.formatted(reasonCode), MediaType.APPLICATION_XML));
+    }
+
+    private static InputStream openFixture(
+        final String name
+    ) {
+        final InputStream stream =
+            GbisLocationSourceTest.class.getClassLoader().getResourceAsStream("gbis/" + name);
+        if (stream == null) {
+            throw new IllegalArgumentException("픽스처를 찾지 못했다: gbis/" + name);
+        }
+        return stream;
     }
 
     private static String fixture(
         final String name
     ) {
-        try (InputStream stream =
-                 GbisLocationSourceTest.class.getClassLoader().getResourceAsStream("gbis/" + name)) {
+        try (InputStream stream = openFixture(name)) {
             return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
         } catch (final IOException e) {
             throw new UncheckedIOException(e);
