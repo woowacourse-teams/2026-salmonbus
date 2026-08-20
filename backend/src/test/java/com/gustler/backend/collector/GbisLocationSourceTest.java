@@ -60,7 +60,7 @@ class GbisLocationSourceTest {
     }
 
     @Test
-    void 정상_응답이면_차량_목록을_담는다() {
+    void 정상_응답이면_응답에_담긴_차량을_모두_읽는다() {
         // given
         respondWithJson(fixture("location-two-vehicles.json"));
 
@@ -68,12 +68,14 @@ class GbisLocationSourceTest {
         final GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
-        assertThat(actual).isInstanceOfSatisfying(Success.class,
-            success -> assertThat(success.buses()).hasSize(2));
+        assertThat(actual)
+            .isInstanceOfSatisfying(
+                Success.class,
+                success -> assertThat(success.buses()).hasSize(2));
     }
 
     @Test
-    void 정상_응답이면_Open_API가_알려준_조회_시각을_그대로_들고_온다() {
+    void 정상_응답이면_Open_API가_준_조회_시각도_그대로_담는다() {
         // given
         respondWithJson(fixture("location-two-vehicles.json"));
 
@@ -86,7 +88,7 @@ class GbisLocationSourceTest {
     }
 
     @Test
-    void 운행_차량이_0대면_장애가_아니라_NoVehicles_다() {
+    void 운행_차량이_0대인_것은_오류가_아니다() {
         // given
         respondWithJson(GBIS_HEADER_ONLY_JSON.formatted(4, "결과가 없습니다."));
 
@@ -98,7 +100,7 @@ class GbisLocationSourceTest {
     }
 
     @Test
-    void GBIS_시스템_에러는_값으로_돌려준다() {
+    void GBIS_시스템_오류는_예외가_아니라_결과로_받는다() {
         // given
         respondWithJson(GBIS_HEADER_ONLY_JSON.formatted(1, "시스템 에러가 발생했습니다."));
 
@@ -110,7 +112,7 @@ class GbisLocationSourceTest {
     }
 
     @Test
-    void 필수_파라미터_누락도_예외가_아니라_값이다() {
+    void 필수_파라미터_누락도_예외가_아니라_결과로_받는다() {
         // given
         respondWithJson(GBIS_HEADER_ONLY_JSON.formatted(2, "필수 파라미터가 누락되었습니다."));
 
@@ -122,7 +124,7 @@ class GbisLocationSourceTest {
     }
 
     @Test
-    void 명세에_없는_결과_코드는_사유_코드를_들고_온다() {
+    void 명세에_없는_결과_코드가_와도_어떤_코드였는지_남긴다() {
         // given
         respondWithJson(GBIS_HEADER_ONLY_JSON.formatted(9, "알 수 없는 응답입니다."));
 
@@ -135,7 +137,7 @@ class GbisLocationSourceTest {
     }
 
     @Test
-    void 포털_오류는_JSON_을_요청해도_XML_로_와서_첫_글자로_가른다() {
+    void 일일_한도_초과는_XML로_오는_오류_본문에서_읽어낸다() {
         // given
         respondWithXml(PORTAL_ERROR_XML.formatted(
             "LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR", "22"));
@@ -148,7 +150,7 @@ class GbisLocationSourceTest {
     }
 
     @Test
-    void 초당_허용량_초과는_일_한도_초과와_다른_값이다() {
+    void 초당_허용량_초과는_일일_한도_초과와_구분한다() {
         // given
         respondWithXml(PORTAL_ERROR_XML.formatted("LIMITED_NUMBER_OF_SERVICE_REQUESTS", "23"));
 
@@ -160,7 +162,7 @@ class GbisLocationSourceTest {
     }
 
     @Test
-    void 키_오류처럼_사람이_고쳐야_하는_거부는_사유_코드를_들고_온다() {
+    void 서비스키_오류처럼_모르는_거부는_사유_코드를_남긴다() {
         // given
         respondWithXml(PORTAL_ERROR_XML.formatted("SERVICE_KEY_IS_NOT_REGISTERED_ERROR", "30"));
 
@@ -173,7 +175,7 @@ class GbisLocationSourceTest {
     }
 
     @Test
-    void HTTP_에러여도_예외를_던지지_않고_본문을_본다() {
+    void HTTP_상태가_오류여도_예외_대신_본문을_읽는다() {
         // given
         openApi.expect(requestTo(containsString(ROUTE_3330)))
             .andRespond(withServerError()
@@ -205,7 +207,7 @@ class GbisLocationSourceTest {
         final String name
     ) {
         try (InputStream stream =
-            GbisLocationSourceTest.class.getClassLoader().getResourceAsStream("gbis/" + name)) {
+                 GbisLocationSourceTest.class.getClassLoader().getResourceAsStream("gbis/" + name)) {
             return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
         } catch (final IOException e) {
             throw new UncheckedIOException(e);

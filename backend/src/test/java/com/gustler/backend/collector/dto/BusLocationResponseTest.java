@@ -16,34 +16,38 @@ class BusLocationResponseTest {
     private ObjectMapper objectMapper;
 
     @Test
-    void 차량이_여러_대면_배열로_와서_리스트로_읽는다() {
+    void 차량이_여러_대면_배열로_응답받고_리스트로_읽는다() {
         // given
-        InputStream given = fixture("location-two-vehicles.json");
+        final InputStream twoVehiclesJson = fixture("location-two-vehicles.json");
 
         // when
-        BusLocationResponse actual = objectMapper.readValue(given, BusLocationResponse.class);
+        final BusLocationResponse actualResponse =
+            objectMapper.readValue(twoVehiclesJson, BusLocationResponse.class);
 
         // then
-        assertThat(actual.response().header().resultCode()).isZero();
-        assertThat(actual.response().body().busLocations())
+        assertThat(actualResponse.response().header().resultCode()).isZero();
+        assertThat(actualResponse.response().body().busLocations())
             .extracting(BusLocation::vehicleId)
             .hasSize(2);
     }
 
     @Test
-    void 운행_차량이_한_대이어도_객체로_읽고_리스트로_파싱한다() {
+    void 차량이_한_대면_객체로_응답받고_리스트로_읽는다() {
         // given
-        InputStream given = fixture("location-single-vehicle.json");
+        final InputStream singleVehicleJson = fixture("location-single-vehicle.json");
 
         // when
-        BusLocationResponse actual = objectMapper.readValue(given, BusLocationResponse.class);
+        final BusLocationResponse actualResponse =
+            objectMapper.readValue(singleVehicleJson, BusLocationResponse.class);
 
         // then
-        assertThat(actual.response().body().busLocations())
+        assertThat(actualResponse.response().body().busLocations())
             .hasSize(1);
     }
 
-    private InputStream fixture(String name) {
+    private InputStream fixture(
+        final String name
+    ) {
         return getClass().getClassLoader().getResourceAsStream("gbis/" + name);
     }
 }
