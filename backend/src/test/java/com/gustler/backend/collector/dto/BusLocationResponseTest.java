@@ -45,6 +45,30 @@ class BusLocationResponseTest {
             .hasSize(1);
     }
 
+    @Test
+    void GBIS_필드명을_서버에서_이해하기_쉬운_변수명으로_매핑한다() {
+        // given
+        final InputStream twoVehiclesJson = fixture("location-two-vehicles.json");
+
+        // when
+        final BusLocationResponse actualResponse =
+            objectMapper.readValue(twoVehiclesJson, BusLocationResponse.class);
+
+        // then
+        final BusLocation actualBus = actualResponse.response().body().busLocations().getFirst();
+        assertThat(actualBus.plateNumber()).isEqualTo("경기70아0001");
+        assertThat(actualBus.vehicleId()).isEqualTo("204000206");
+        assertThat(actualBus.vehicleType()).isEqualTo(2);
+        assertThat(actualBus.routeId()).isEqualTo("204000057");
+        assertThat(actualBus.routeType()).isEqualTo(11);
+        assertThat(actualBus.stopId()).isEqualTo("205000217");
+        assertThat(actualBus.stopSequence()).isEqualTo(6);
+        assertThat(actualBus.runningStatus()).isEqualTo(2);
+        assertThat(actualBus.remainingSeatCount()).isEqualTo(67);
+        assertThat(actualBus.crowdLevel()).isZero();
+        assertThat(actualBus.taglessCode()).isEqualTo(1);
+    }
+
     private InputStream fixture(
         final String name
     ) {
