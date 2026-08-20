@@ -34,4 +34,5 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+    environment 'GBIS_SERVICE_KEY', 'fake-service-key-for-test'
 }
