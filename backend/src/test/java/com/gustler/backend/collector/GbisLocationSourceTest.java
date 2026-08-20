@@ -2,6 +2,7 @@ package com.gustler.backend.collector;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.queryParam;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -31,6 +32,11 @@ class GbisLocationSourceTest {
     private static final String SERVICE_KEY = "fake-service-key-for-test";
     private static final String ROUTE_3330 = "204000057";
     private static final String QUERY_TIME_IN_FIXTURE = "2026-08-19 11:14:04.911";
+    private static final String BUS_LOCATION_PATH = "/buslocationservice/v2/getBusLocationListv2";
+    private static final String SYSTEM_FAILURE_MESSAGE = "시스템 에러가 발생했습니다.";
+    private static final String PARAMETER_MISSING_MESSAGE = "필수 파라미터가 누락되었습니다.";
+    private static final String UNKNOWN_RESULT_MESSAGE = "알 수 없는 응답입니다.";
+    private static final String PORTAL_ERROR_MESSAGE = "SERVICE ERROR";
 
     private static final String PORTAL_ERROR_XML = """
         <OpenAPI_ServiceResponse>
@@ -57,6 +63,23 @@ class GbisLocationSourceTest {
             builder.build(),
             new GbisProperties(BASE_URL, SERVICE_KEY),
             new ObjectMapper());
+    }
+
+    @Test
+    void Open_API를_부를_때_서비스키와_노선ID와_JSON_형식을_보낸다() {
+        // given
+        openApi.expect(requestTo(containsString(BUS_LOCATION_PATH)))
+            .andExpect(queryParam("serviceKey", SERVICE_KEY))
+            .andExpect(queryParam("routeId", ROUTE_3330))
+            .andExpect(queryParam("format", "json"))
+            .andRespond(withSuccess(
+                fixture("location-two-vehicles.json"), MediaType.APPLICATION_JSON));
+
+        // when
+        source.read(ROUTE_3330);
+
+        // then
+        openApi.verify();
     }
 
     @Test
@@ -102,38 +125,42 @@ class GbisLocationSourceTest {
     @Test
     void GBIS_시스템_오류는_예외가_아니라_결과로_받는다() {
         // given
-        respondWithJson(GBIS_HEADER_ONLY_JSON.formatted(1, "시스템 에러가 발생했습니다."));
+        respondWithJson(GBIS_HEADER_ONLY_JSON.formatted(1, SYSTEM_FAILURE_MESSAGE));
 
         // when
         final GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
-        assertThat(actual).isInstanceOf(GbisSystemError.class);
+        assertThat(actual).isInstanceOfSatisfying(GbisSystemError.class,
+            error -> assertThat(error.message()).isEqualTo(SYSTEM_FAILURE_MESSAGE));
     }
 
     @Test
     void 필수_파라미터_누락도_예외가_아니라_결과로_받는다() {
         // given
-        respondWithJson(GBIS_HEADER_ONLY_JSON.formatted(2, "필수 파라미터가 누락되었습니다."));
+        respondWithJson(GBIS_HEADER_ONLY_JSON.formatted(2, PARAMETER_MISSING_MESSAGE));
 
         // when
         final GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
-        assertThat(actual).isInstanceOf(MissingRequiredParameter.class);
+        assertThat(actual).isInstanceOfSatisfying(MissingRequiredParameter.class,
+            missing -> assertThat(missing.message()).isEqualTo(PARAMETER_MISSING_MESSAGE));
     }
 
     @Test
     void 명세에_없는_결과_코드가_와도_어떤_코드였는지_남긴다() {
         // given
-        respondWithJson(GBIS_HEADER_ONLY_JSON.formatted(9, "알 수 없는 응답입니다."));
+        respondWithJson(GBIS_HEADER_ONLY_JSON.formatted(9, UNKNOWN_RESULT_MESSAGE));
 
         // when
         final GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
-        assertThat(actual).isInstanceOfSatisfying(GatewayRejected.class,
-            rejected -> assertThat(rejected.reasonCode()).isEqualTo("9"));
+        assertThat(actual).isInstanceOfSatisfying(GatewayRejected.class, rejected -> {
+            assertThat(rejected.reasonCode()).isEqualTo("9");
+            assertThat(rejected.message()).isEqualTo(UNKNOWN_RESULT_MESSAGE);
+        });
     }
 
     @Test
@@ -170,8 +197,10 @@ class GbisLocationSourceTest {
         final GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
-        assertThat(actual).isInstanceOfSatisfying(GatewayRejected.class,
-            rejected -> assertThat(rejected.reasonCode()).isEqualTo("30"));
+        assertThat(actual).isInstanceOfSatisfying(GatewayRejected.class, rejected -> {
+            assertThat(rejected.reasonCode()).isEqualTo("30");
+            assertThat(rejected.message()).isEqualTo(PORTAL_ERROR_MESSAGE);
+        });
     }
 
     @Test
