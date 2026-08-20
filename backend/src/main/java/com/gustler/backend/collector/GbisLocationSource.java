@@ -34,10 +34,6 @@ public class GbisLocationSource {
     private static final String UNKNOWN_REASON_CODE = "UNKNOWN";
     private static final String NO_MESSAGE = "";
 
-    private static final Pattern SERVICE_KEY_IN_URL = Pattern.compile("serviceKey=[^&\\s]+");
-    private static final String MASKED_SERVICE_KEY_IN_URL = "serviceKey=***";
-    private static final String MASK = "***";
-
     private static final ErrorHandler KEEP_ERROR_BODY = (request, response) -> {
     };
 
@@ -55,13 +51,8 @@ public class GbisLocationSource {
         this.objectMapper = objectMapper;
     }
 
+    // TODO 로깅 혹은 저장 시 serviceKey 를 마스킹해야 한다.
     public GbisLocationResult read(
-        final String routeId
-    ) {
-        return hideServiceKey(call(routeId));
-    }
-
-    private GbisLocationResult call(
         final String routeId
     ) {
         try {
@@ -79,25 +70,6 @@ public class GbisLocationSource {
         } catch (final RestClientException e) {
             return new NoResponse(e.getMessage());
         }
-    }
-
-    private GbisLocationResult hideServiceKey(
-        final GbisLocationResult result
-    ) {
-        return switch (result) {
-            case Success success -> success;
-            case NoVehicles noVehicles -> noVehicles;
-            case DailyQuotaExceeded dailyQuotaExceeded -> dailyQuotaExceeded;
-            case PerSecondQuotaExceeded perSecondQuotaExceeded -> perSecondQuotaExceeded;
-            case GatewayRejected(final String reasonCode, final String message) ->
-                new GatewayRejected(reasonCode, hideServiceKey(message));
-            case GbisSystemError(final String message) ->
-                new GbisSystemError(hideServiceKey(message));
-            case MissingRequiredParameter(final String message) ->
-                new MissingRequiredParameter(hideServiceKey(message));
-            case NoResponse(final String message) ->
-                new NoResponse(hideServiceKey(message));
-        };
     }
 
     private GbisLocationResult interpret(
@@ -178,13 +150,4 @@ public class GbisLocationSource {
         return fallback;
     }
 
-    private String hideServiceKey(
-        final String message
-    ) {
-        if (message == null) {
-            return NO_MESSAGE;
-        }
-        final String withoutKeyValue = message.replace(properties.serviceKey(), MASK);
-        return SERVICE_KEY_IN_URL.matcher(withoutKeyValue).replaceAll(MASKED_SERVICE_KEY_IN_URL);
-    }
 }
