@@ -87,13 +87,37 @@ public class GbisLocationSource {
     private GbisLocationResult interpretPortalError(
         final String body
     ) {
-        final String reasonCode = firstGroupOr(REASON_CODE_IN_XML, body, UNKNOWN_REASON_CODE);
+        final String reasonCode = reasonCodeOf(body);
+
         return switch (PortalReasonCode.from(reasonCode)) {
             case DAILY_QUOTA_EXCEEDED -> new DailyQuotaExceeded();
             case PER_SECOND_QUOTA_EXCEEDED -> new PerSecondQuotaExceeded();
-            case OTHER -> new GatewayRejected(
-                reasonCode, firstGroupOr(ERROR_MESSAGE_IN_XML, body, NO_MESSAGE));
+            case OTHER -> new GatewayRejected(reasonCode, errorMessageOf(body));
         };
+    }
+
+    private String reasonCodeOf(
+        final String xml
+    ) {
+        return extractOr(REASON_CODE_IN_XML, xml, UNKNOWN_REASON_CODE);
+    }
+
+    private String errorMessageOf(
+        final String xml
+    ) {
+        return extractOr(ERROR_MESSAGE_IN_XML, xml, NO_MESSAGE);
+    }
+
+    private String extractOr(
+        final Pattern pattern,
+        final String xml,
+        final String fallback
+    ) {
+        final Matcher matcher = pattern.matcher(xml);
+        if (matcher.find()) {
+            return matcher.group(1).trim();
+        }
+        return fallback;
     }
 
     private GbisLocationResult interpretGbisResponse(
@@ -136,18 +160,6 @@ public class GbisLocationSource {
             return List.of();
         }
         return response.response().body().busLocations();
-    }
-
-    private String firstGroupOr(
-        final Pattern pattern,
-        final String text,
-        final String fallback
-    ) {
-        final Matcher matcher = pattern.matcher(text);
-        if (matcher.find()) {
-            return matcher.group(1).trim();
-        }
-        return fallback;
     }
 
 }
