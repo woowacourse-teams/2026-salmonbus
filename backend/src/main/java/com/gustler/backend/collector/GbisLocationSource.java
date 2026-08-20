@@ -9,6 +9,7 @@ import com.gustler.backend.collector.GbisLocationResult.NoVehicles;
 import com.gustler.backend.collector.GbisLocationResult.PerSecondQuotaExceeded;
 import com.gustler.backend.collector.GbisLocationResult.Success;
 import com.gustler.backend.collector.dto.BusLocationResponse;
+import com.gustler.backend.collector.dto.BusLocationResponse.Body;
 import com.gustler.backend.collector.dto.BusLocationResponse.BusLocation;
 import com.gustler.backend.collector.dto.BusLocationResponse.Header;
 import java.util.List;
@@ -155,11 +156,11 @@ public class GbisLocationSource {
     private List<BusLocation> busesOf(
         final BusLocationResponse response
     ) {
-        if (response.response().body() == null
-            || response.response().body().busLocations() == null) {
+        final Body body = response.response().body();
+
+        if (body == null || body.busLocations() == null) {
             return List.of();
         }
-        return response.response().body().busLocations();
+        return body.busLocations();
     }
-
 }
