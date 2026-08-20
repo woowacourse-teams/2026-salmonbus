@@ -41,9 +41,19 @@ class GbisLocationSourceTest {
           </cmmMsgHeader>
         </OpenAPI_ServiceResponse>
         """;
+    private static final String SYSTEM_ERROR_MESSAGE = "시스템 에러가 발생했습니다.";
+
     private static final String MESSAGE_WITH_BARE_KEY =
         "인증키 " + REAL_LOOKING_SERVICE_KEY + " 가 등록되지 않았습니다.";
 
+    private static final String PORTAL_ERROR_XML_WITH_MESSAGE = """
+        <OpenAPI_ServiceResponse>
+          <cmmMsgHeader>
+            <errMsg>%s</errMsg>
+            <returnReasonCode>%s</returnReasonCode>
+          </cmmMsgHeader>
+        </OpenAPI_ServiceResponse>
+        """;
     private static final String GBIS_HEADER_ONLY_JSON = """
         {"response":{"comMsgHeader":"","msgHeader":{
           "queryTime":"2026-08-20 09:00:00.000","resultCode":%d,"resultMessage":"%s"}}}
@@ -223,6 +233,71 @@ class GbisLocationSourceTest {
         assertThat(actual).isInstanceOfSatisfying(NoResponse.class,
             noResponse -> assertThat(noResponse.message())
                 .doesNotContain(REAL_LOOKING_SERVICE_KEY));
+    }
+
+    @Test
+    void GBIS_시스템_에러_메시지에_포함된_서비스키를_마스킹한다() {
+        // given
+        respondWithJson(GBIS_HEADER_ONLY_JSON.formatted(1, MESSAGE_WITH_BARE_KEY));
+
+        // when
+        final GbisLocationResult actual = source.read(ROUTE_3330);
+
+        // then
+        assertThat(actual).isInstanceOfSatisfying(GbisSystemError.class,
+            error -> assertThat(error.message()).doesNotContain(REAL_LOOKING_SERVICE_KEY));
+    }
+
+    @Test
+    void 필수_파라미터_누락_메시지에_포함된_서비스키를_마스킹한다() {
+        // given
+        respondWithJson(GBIS_HEADER_ONLY_JSON.formatted(2, MESSAGE_WITH_BARE_KEY));
+
+        // when
+        final GbisLocationResult actual = source.read(ROUTE_3330);
+
+        // then
+        assertThat(actual).isInstanceOfSatisfying(MissingRequiredParameter.class,
+            missing -> assertThat(missing.message()).doesNotContain(REAL_LOOKING_SERVICE_KEY));
+    }
+
+    @Test
+    void 명세에_없는_결과_코드의_메시지에_포함된_서비스키를_마스킹한다() {
+        // given
+        respondWithJson(GBIS_HEADER_ONLY_JSON.formatted(9, MESSAGE_WITH_BARE_KEY));
+
+        // when
+        final GbisLocationResult actual = source.read(ROUTE_3330);
+
+        // then
+        assertThat(actual).isInstanceOfSatisfying(GatewayRejected.class,
+            rejected -> assertThat(rejected.message()).doesNotContain(REAL_LOOKING_SERVICE_KEY));
+    }
+
+    @Test
+    void 포털_오류_메시지에_포함된_서비스키를_마스킹한다() {
+        // given
+        respondWithXml(PORTAL_ERROR_XML_WITH_MESSAGE.formatted(MESSAGE_WITH_BARE_KEY, "30"));
+
+        // when
+        final GbisLocationResult actual = source.read(ROUTE_3330);
+
+        // then
+        assertThat(actual).isInstanceOfSatisfying(GatewayRejected.class,
+            rejected -> assertThat(rejected.message()).doesNotContain(REAL_LOOKING_SERVICE_KEY));
+    }
+
+    @Test
+    void 서비스키가_없는_메시지는_마스킹하지_않는다() {
+        // given
+        respondWithJson(GBIS_HEADER_ONLY_JSON.formatted(1, SYSTEM_ERROR_MESSAGE));
+
+        // when
+        final GbisLocationResult actual = source.read(ROUTE_3330);
+
+        // then
+        assertThat(actual).isInstanceOfSatisfying(GbisSystemError.class,
+            error -> assertThat(error.message()).isEqualTo(SYSTEM_ERROR_MESSAGE));
     }
 
     private void respondWithJson(

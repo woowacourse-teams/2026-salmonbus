@@ -58,6 +58,12 @@ public class GbisLocationSource {
     public GbisLocationResult read(
         final String routeId
     ) {
+        return hideServiceKey(call(routeId));
+    }
+
+    private GbisLocationResult call(
+        final String routeId
+    ) {
         try {
             final String body = gbisRestClient.get()
                 .uri(builder -> builder
@@ -71,8 +77,27 @@ public class GbisLocationSource {
                 .body(String.class);
             return interpret(body);
         } catch (final RestClientException e) {
-            return new NoResponse(hideServiceKey(e.getMessage()));
+            return new NoResponse(e.getMessage());
         }
+    }
+
+    private GbisLocationResult hideServiceKey(
+        final GbisLocationResult result
+    ) {
+        return switch (result) {
+            case Success success -> success;
+            case NoVehicles noVehicles -> noVehicles;
+            case DailyQuotaExceeded dailyQuotaExceeded -> dailyQuotaExceeded;
+            case PerSecondQuotaExceeded perSecondQuotaExceeded -> perSecondQuotaExceeded;
+            case GatewayRejected(final String reasonCode, final String message) ->
+                new GatewayRejected(reasonCode, hideServiceKey(message));
+            case GbisSystemError(final String message) ->
+                new GbisSystemError(hideServiceKey(message));
+            case MissingRequiredParameter(final String message) ->
+                new MissingRequiredParameter(hideServiceKey(message));
+            case NoResponse(final String message) ->
+                new NoResponse(hideServiceKey(message));
+        };
     }
 
     private GbisLocationResult interpret(
