@@ -143,13 +143,14 @@ public class GbisLocationSource {
         final BusLocationResponse response
     ) {
         final Header header = response.response().header();
-        return switch (GbisResultCode.from(header.resultCode())) {
+        final int resultCode = header.resultCode();
+
+        return switch (GbisResultCode.from(resultCode)) {
             case SUCCESS -> new Success(header.queryTime(), busesOf(response));
             case NO_VEHICLES -> new NoVehicles(header.queryTime());
             case SYSTEM_FAILURE -> new GbisSystemError(header.resultMessage());
             case PARAMETER_MISSING -> new MissingRequiredParameter(header.resultMessage());
-            case OTHER -> new GatewayRejected(
-                String.valueOf(header.resultCode()), header.resultMessage());
+            case OTHER -> new GatewayRejected(String.valueOf(resultCode), header.resultMessage());
         };
     }
 
