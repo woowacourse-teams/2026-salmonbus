@@ -41,6 +41,9 @@ class GbisLocationSourceTest {
           </cmmMsgHeader>
         </OpenAPI_ServiceResponse>
         """;
+    private static final String MESSAGE_WITH_BARE_KEY =
+        "인증키 " + REAL_LOOKING_SERVICE_KEY + " 가 등록되지 않았습니다.";
+
     private static final String GBIS_HEADER_ONLY_JSON = """
         {"response":{"comMsgHeader":"","msgHeader":{
           "queryTime":"2026-08-20 09:00:00.000","resultCode":%d,"resultMessage":"%s"}}}
@@ -203,6 +206,23 @@ class GbisLocationSourceTest {
             assertThat(noResponse.message()).doesNotContain(REAL_LOOKING_SERVICE_KEY);
             assertThat(noResponse.message()).contains("serviceKey=***");
         });
+    }
+
+    @Test
+    void 서비스키가_serviceKey_형태가_아니어도_값이_같으면_마스킹한다() {
+        // given
+        openApi.expect(requestTo(containsString(ROUTE_3330)))
+            .andRespond(request -> {
+                throw new IOException(MESSAGE_WITH_BARE_KEY);
+            });
+
+        // when
+        final GbisLocationResult actual = source.read(ROUTE_3330);
+
+        // then
+        assertThat(actual).isInstanceOfSatisfying(NoResponse.class,
+            noResponse -> assertThat(noResponse.message())
+                .doesNotContain(REAL_LOOKING_SERVICE_KEY));
     }
 
     private void respondWithJson(

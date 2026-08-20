@@ -34,8 +34,9 @@ public class GbisLocationSource {
     private static final String UNKNOWN_REASON_CODE = "UNKNOWN";
     private static final String NO_MESSAGE = "";
 
-    private static final Pattern SERVICE_KEY_IN_MESSAGE = Pattern.compile("serviceKey=[^&\\s]+");
-    private static final String SERVICE_KEY_MASK = "serviceKey=***";
+    private static final Pattern SERVICE_KEY_IN_URL = Pattern.compile("serviceKey=[^&\\s]+");
+    private static final String MASKED_SERVICE_KEY_IN_URL = "serviceKey=***";
+    private static final String MASK = "***";
 
     private static final ErrorHandler KEEP_ERROR_BODY = (request, response) -> {
     };
@@ -70,7 +71,7 @@ public class GbisLocationSource {
                 .body(String.class);
             return interpret(body);
         } catch (final RestClientException e) {
-            return new NoResponse(maskServiceKey(e.getMessage()));
+            return new NoResponse(hideServiceKey(e.getMessage()));
         }
     }
 
@@ -152,12 +153,13 @@ public class GbisLocationSource {
         return fallback;
     }
 
-    private String maskServiceKey(
+    private String hideServiceKey(
         final String message
     ) {
         if (message == null) {
             return NO_MESSAGE;
         }
-        return SERVICE_KEY_IN_MESSAGE.matcher(message).replaceAll(SERVICE_KEY_MASK);
+        final String withoutKeyValue = message.replace(properties.serviceKey(), MASK);
+        return SERVICE_KEY_IN_URL.matcher(withoutKeyValue).replaceAll(MASKED_SERVICE_KEY_IN_URL);
     }
 }
