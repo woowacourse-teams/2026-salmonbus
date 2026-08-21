@@ -1,0 +1,61 @@
+name: FRONTEND-CI
+
+on:
+  push:
+    branches: ["dev", "main"]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+
+  pull_request:
+    branches: ["dev", "main"]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  frontend-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js and pnpm
+        uses: pnpm/setup@v1
+        with:
+          version: 11.20.0
+          runtime: node@24
+          cache: true
+          cache-dependency-path: frontend/pnpm-lock.yaml
+          package-json-file: frontend/package.json
+          install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
