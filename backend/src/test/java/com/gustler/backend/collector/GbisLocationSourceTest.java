@@ -170,6 +170,20 @@ class GbisLocationSourceTest {
     }
 
     @Test
+    void 우리가_모르는_JSON이_와도_예외_대신_결과로_받는다() {
+        // given
+        respondWithJson("""
+            {"somethingElse":{"whatever":1}}
+            """);
+
+        // when
+        final GbisLocationResult actual = source.read(ROUTE_3330);
+
+        // then
+        assertThat(actual).isInstanceOf(GbisSystemError.class);
+    }
+
+    @Test
     void 일일_한도_초과는_XML로_오는_오류_본문에서_읽어낸다() {
         // given
         respondWithPortalError("22");

@@ -130,8 +130,15 @@ public class GbisLocationSource {
         final String body
     ) {
         return parse(body)
+            .filter(this::hasHeader)
             .map(this::interpretHeader)
             .orElseGet(() -> new GbisSystemError("Open API 응답을 읽지 못했다"));
+    }
+
+    private boolean hasHeader(
+        final BusLocationResponse response
+    ) {
+        return response.response() != null && response.response().header() != null;
     }
 
     private Optional<BusLocationResponse> parse(
