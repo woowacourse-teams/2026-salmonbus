@@ -36,6 +36,8 @@ public class GbisLocationSource {
     private static final Pattern ERROR_MESSAGE_IN_JSON = Pattern.compile("\"errMsg\"\\s*:\\s*\"(.*?)\"");
     private static final String UNKNOWN_REASON_CODE = "UNKNOWN";
     private static final String NO_MESSAGE = "";
+    private static final String PARSE_FAILURE = "Open API 응답을 파싱하지 못했다: ";
+    private static final String NO_HEADER = "Open API 응답에 헤더가 없다";
 
     private static final ErrorHandler KEEP_ERROR_BODY = (request, response) -> {
     };
@@ -129,26 +131,23 @@ public class GbisLocationSource {
     private GbisLocationResult interpretGbisResponse(
         final String body
     ) {
-        return parse(body)
-            .filter(this::hasHeader)
-            .map(this::interpretHeader)
-            .orElseGet(() -> new UnreadableResponse("Open API 응답을 읽지 못했다"));
+        final BusLocationResponse response;
+        try {
+            response = objectMapper.readValue(body, BusLocationResponse.class);
+        } catch (final JacksonException e) {
+            return new UnreadableResponse(PARSE_FAILURE + e.getOriginalMessage());
+        }
+
+        if (hasHeader(response)) {
+            return interpretHeader(response);
+        }
+        return new UnreadableResponse(NO_HEADER);
     }
 
     private boolean hasHeader(
         final BusLocationResponse response
     ) {
         return response.response() != null && response.response().header() != null;
-    }
-
-    private Optional<BusLocationResponse> parse(
-        final String body
-    ) {
-        try {
-            return Optional.of(objectMapper.readValue(body, BusLocationResponse.class));
-        } catch (final JacksonException e) {
-            return Optional.empty();
-        }
     }
 
     private GbisLocationResult interpretHeader(

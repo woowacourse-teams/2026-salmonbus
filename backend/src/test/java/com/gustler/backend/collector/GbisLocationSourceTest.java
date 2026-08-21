@@ -41,6 +41,7 @@ class GbisLocationSourceTest {
     private static final String PARAMETER_MISSING_MESSAGE = "필수 요청 Parameter 가 존재하지 않습니다.";
     private static final String UNKNOWN_RESULT_MESSAGE = "알 수 없는 응답입니다.";
     private static final String PORTAL_ERROR_MESSAGE = "SERVICE_KEY_IS_NOT_REGISTERED_ERROR";
+    private static final String PARSE_FAILURE = "Open API 응답을 파싱하지 못했다: ";
 
     private static final String PORTAL_ERROR_XML = """
         <OpenAPI_ServiceResponse>
@@ -188,6 +189,21 @@ class GbisLocationSourceTest {
             assertThat(unknown.message()).isEqualTo(UNKNOWN_RESULT_MESSAGE);
             assertThat(unknown.gbisQueryTime()).isEqualTo(QUERY_TIME_IN_TEMPLATE);
         });
+    }
+
+    @Test
+    void 파싱에_실패하면_원인을_함께_담는다() {
+        // given
+        respondWithJson("{not json");
+
+        // when
+        final GbisLocationResult actual = source.read(ROUTE_3330);
+
+        // then
+        assertThat(actual).isInstanceOfSatisfying(UnreadableResponse.class,
+            unreadable -> assertThat(unreadable.message())
+                .startsWith(PARSE_FAILURE)
+                .hasSizeGreaterThan(PARSE_FAILURE.length()));
     }
 
     @Test
