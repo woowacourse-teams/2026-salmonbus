@@ -47,6 +47,12 @@ class GbisLocationSourceTest {
           </cmmMsgHeader>
         </OpenAPI_ServiceResponse>
         """;
+    private static final String PORTAL_ERROR_JSON = """
+        {"OpenAPI_ServiceResponse":{"cmmMsgHeader":{
+          "errMsg":"SERVICE ERROR",
+          "returnAuthMsg":"등록되지 않은 서비스키",
+          "returnReasonCode":"%s"}}}
+        """;
     private static final String GBIS_HEADER_ONLY_JSON = """
         {"response":{"comMsgHeader":"","msgHeader":{
           "queryTime":"2026-08-20 09:00:00.000","resultCode":%d,"resultMessage":"%s"}}}
@@ -176,6 +182,33 @@ class GbisLocationSourceTest {
     }
 
     @Test
+    void 일일_한도_초과가_JSON으로_와도_XML과_같은_값으로_받는다() {
+        // given
+        respondWithPortalErrorAsJson("22");
+
+        // when
+        final GbisLocationResult actual = source.read(ROUTE_3330);
+
+        // then
+        assertThat(actual).isInstanceOf(DailyQuotaExceeded.class);
+    }
+
+    @Test
+    void 서비스키_오류가_JSON으로_와도_사유_코드를_남긴다() {
+        // given
+        respondWithPortalErrorAsJson("30");
+
+        // when
+        final GbisLocationResult actual = source.read(ROUTE_3330);
+
+        // then
+        assertThat(actual).isInstanceOfSatisfying(GatewayRejected.class, rejected -> {
+            assertThat(rejected.reasonCode()).isEqualTo("30");
+            assertThat(rejected.message()).isEqualTo(PORTAL_ERROR_MESSAGE);
+        });
+    }
+
+    @Test
     void 초당_허용량_초과는_일일_한도_초과와_구분한다() {
         // given
         respondWithPortalError("23");
@@ -230,6 +263,14 @@ class GbisLocationSourceTest {
         openApi.expect(requestTo(containsString(ROUTE_3330)))
             .andRespond(withSuccess(
                 PORTAL_ERROR_XML.formatted(reasonCode), MediaType.APPLICATION_XML));
+    }
+
+    private void respondWithPortalErrorAsJson(
+        final String reasonCode
+    ) {
+        openApi.expect(requestTo(containsString(ROUTE_3330)))
+            .andRespond(withSuccess(
+                PORTAL_ERROR_JSON.formatted(reasonCode), MediaType.APPLICATION_JSON));
     }
 
     private static InputStream openFixture(

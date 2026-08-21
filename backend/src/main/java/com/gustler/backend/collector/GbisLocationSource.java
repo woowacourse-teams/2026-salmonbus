@@ -29,9 +29,11 @@ public class GbisLocationSource {
 
     private static final String BUS_LOCATION_PATH = "/buslocationservice/v2/getBusLocationListv2";
 
-    private static final String XML_PREFIX = "<";
+    private static final String PORTAL_ERROR_ROOT = "OpenAPI_ServiceResponse";
     private static final Pattern REASON_CODE_IN_XML = Pattern.compile("<returnReasonCode>(.*?)</returnReasonCode>");
+    private static final Pattern REASON_CODE_IN_JSON = Pattern.compile("\"returnReasonCode\"\\s*:\\s*\"(.*?)\"");
     private static final Pattern ERROR_MESSAGE_IN_XML = Pattern.compile("<errMsg>(.*?)</errMsg>");
+    private static final Pattern ERROR_MESSAGE_IN_JSON = Pattern.compile("\"errMsg\"\\s*:\\s*\"(.*?)\"");
     private static final String UNKNOWN_REASON_CODE = "UNKNOWN";
     private static final String NO_MESSAGE = "";
 
@@ -79,7 +81,7 @@ public class GbisLocationSource {
         if (body == null || body.isBlank()) {
             return new NoResponse("Open API가 본문 없이 응답했다");
         }
-        if (body.stripLeading().startsWith(XML_PREFIX)) {
+        if (body.contains(PORTAL_ERROR_ROOT)) {
             return interpretPortalError(body);
         }
         return interpretGbisResponse(body);
@@ -98,27 +100,30 @@ public class GbisLocationSource {
     }
 
     private String reasonCodeOf(
-        final String xml
+        final String body
     ) {
-        return extractOr(REASON_CODE_IN_XML, xml, UNKNOWN_REASON_CODE);
+        return extract(REASON_CODE_IN_XML, body)
+            .or(() -> extract(REASON_CODE_IN_JSON, body))
+            .orElse(UNKNOWN_REASON_CODE);
     }
 
     private String errorMessageOf(
-        final String xml
+        final String body
     ) {
-        return extractOr(ERROR_MESSAGE_IN_XML, xml, NO_MESSAGE);
+        return extract(ERROR_MESSAGE_IN_XML, body)
+            .or(() -> extract(ERROR_MESSAGE_IN_JSON, body))
+            .orElse(NO_MESSAGE);
     }
 
-    private String extractOr(
+    private Optional<String> extract(
         final Pattern pattern,
-        final String xml,
-        final String fallback
+        final String body
     ) {
-        final Matcher matcher = pattern.matcher(xml);
+        final Matcher matcher = pattern.matcher(body);
         if (matcher.find()) {
-            return matcher.group(1).trim();
+            return Optional.of(matcher.group(1).trim());
         }
-        return fallback;
+        return Optional.empty();
     }
 
     private GbisLocationResult interpretGbisResponse(
