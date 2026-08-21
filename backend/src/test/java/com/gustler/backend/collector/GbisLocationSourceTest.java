@@ -34,6 +34,7 @@ class GbisLocationSourceTest {
     private static final String SERVICE_KEY = "fake-service-key-for-test";
     private static final String ROUTE_3330 = "204000057";
     private static final String QUERY_TIME_IN_FIXTURE = "2026-08-19 11:14:04.911";
+    private static final String QUERY_TIME_IN_TEMPLATE = "2026-08-20 09:00:00.000";
     private static final String BUS_LOCATION_PATH = "/buslocationservice/v2/getBusLocationListv2";
     private static final String SYSTEM_FAILURE_MESSAGE = "시스템 에러가 발생했습니다.";
     private static final String PARAMETER_MISSING_MESSAGE = "필수 파라미터가 누락되었습니다.";
@@ -139,8 +140,10 @@ class GbisLocationSourceTest {
         final GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
-        assertThat(actual).isInstanceOfSatisfying(GbisSystemError.class,
-            error -> assertThat(error.message()).isEqualTo(SYSTEM_FAILURE_MESSAGE));
+        assertThat(actual).isInstanceOfSatisfying(GbisSystemError.class, error -> {
+            assertThat(error.message()).isEqualTo(SYSTEM_FAILURE_MESSAGE);
+            assertThat(error.gbisQueryTime()).isEqualTo(QUERY_TIME_IN_TEMPLATE);
+        });
     }
 
     @Test
@@ -152,8 +155,10 @@ class GbisLocationSourceTest {
         final GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
-        assertThat(actual).isInstanceOfSatisfying(MissingRequiredParameter.class,
-            missing -> assertThat(missing.message()).isEqualTo(PARAMETER_MISSING_MESSAGE));
+        assertThat(actual).isInstanceOfSatisfying(MissingRequiredParameter.class, missing -> {
+            assertThat(missing.message()).isEqualTo(PARAMETER_MISSING_MESSAGE);
+            assertThat(missing.gbisQueryTime()).isEqualTo(QUERY_TIME_IN_TEMPLATE);
+        });
     }
 
     @Test
@@ -168,6 +173,7 @@ class GbisLocationSourceTest {
         assertThat(actual).isInstanceOfSatisfying(UnknownGbisResultCode.class, unknown -> {
             assertThat(unknown.resultCode()).isEqualTo(9);
             assertThat(unknown.message()).isEqualTo(UNKNOWN_RESULT_MESSAGE);
+            assertThat(unknown.gbisQueryTime()).isEqualTo(QUERY_TIME_IN_TEMPLATE);
         });
     }
 

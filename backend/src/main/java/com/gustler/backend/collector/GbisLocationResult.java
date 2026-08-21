@@ -23,6 +23,7 @@ public sealed interface GbisLocationResult {
     }
 
     record UnknownGbisResultCode(
+        String gbisQueryTime,
         int resultCode,
         String message
     ) implements GbisLocationResult {
@@ -35,6 +36,7 @@ public sealed interface GbisLocationResult {
     }
 
     record GbisSystemError(
+        String gbisQueryTime,
         String message
     ) implements GbisLocationResult {
     }
@@ -50,6 +52,7 @@ public sealed interface GbisLocationResult {
     }
 
     record MissingRequiredParameter(
+        String gbisQueryTime,
         String message
     ) implements GbisLocationResult {
     }

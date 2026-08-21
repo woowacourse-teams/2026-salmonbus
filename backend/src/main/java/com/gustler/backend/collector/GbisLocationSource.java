@@ -162,9 +162,11 @@ public class GbisLocationSource {
         return switch (GbisResultCode.from(resultCode)) {
             case SUCCESS -> new Success(header.queryTime(), busesOf(response));
             case NO_VEHICLES -> new NoVehicles(header.queryTime());
-            case SYSTEM_FAILURE -> new GbisSystemError(header.resultMessage());
-            case PARAMETER_MISSING -> new MissingRequiredParameter(header.resultMessage());
-            case OTHER -> new UnknownGbisResultCode(resultCode, header.resultMessage());
+            case SYSTEM_FAILURE -> new GbisSystemError(header.queryTime(), header.resultMessage());
+            case PARAMETER_MISSING ->
+                new MissingRequiredParameter(header.queryTime(), header.resultMessage());
+            case OTHER ->
+                new UnknownGbisResultCode(header.queryTime(), resultCode, header.resultMessage());
         };
     }
 
