@@ -1,11 +1,7 @@
-import { useEffect, useState } from "react";
-import type { Routes } from "./api/RouteSelect.type.ts";
-import { RouteLists } from "./components/RouteLists.js";
+import { RouteLists } from "./components/RouteLists";
 import salmongProud from "./assets/salmong-proud.png";
 
 export function RouteSelectPage() {
-  const [routes, setRoute] = useState<Routes>();
-
   return (
     <>
       <header>
