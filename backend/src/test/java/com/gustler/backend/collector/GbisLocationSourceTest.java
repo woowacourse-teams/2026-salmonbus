@@ -121,6 +121,18 @@ class GbisLocationSourceTest {
     }
 
     @Test
+    void 결과_코드가_정상인데_본문이_없으면_읽지_못한_것으로_받는다() {
+        // given
+        respondWithJson(GBIS_HEADER_ONLY_JSON.formatted(0, "정상적으로 처리되었습니다."));
+
+        // when
+        final GbisLocationResult actual = source.read(ROUTE_3330);
+
+        // then
+        assertThat(actual).isInstanceOf(UnreadableResponse.class);
+    }
+
+    @Test
     void 운행_차량이_0대인_것은_오류가_아니다() {
         // given
         respondWithJson(fixture("location-no-vehicles.json"));

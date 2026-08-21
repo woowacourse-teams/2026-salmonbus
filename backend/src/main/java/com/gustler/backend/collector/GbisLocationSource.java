@@ -12,9 +12,7 @@ import com.gustler.backend.collector.GbisLocationResult.UnknownGbisResultCode;
 import com.gustler.backend.collector.GbisLocationResult.UnreadableResponse;
 import com.gustler.backend.collector.dto.BusLocationResponse;
 import com.gustler.backend.collector.dto.BusLocationResponse.Body;
-import com.gustler.backend.collector.dto.BusLocationResponse.BusLocation;
 import com.gustler.backend.collector.dto.BusLocationResponse.Header;
-import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -161,7 +159,7 @@ public class GbisLocationSource {
 
         return switch (GbisResultCode.from(resultCode)) {
             case SUCCESS ->
-                new Success(header.queryTime(), busesOf(response));
+                interpretSuccess(header, response);
             case NO_VEHICLES ->
                 new NoVehicles(header.queryTime());
             case SYSTEM_FAILURE ->
@@ -173,14 +171,15 @@ public class GbisLocationSource {
         };
     }
 
-    private List<BusLocation> busesOf(
+    private GbisLocationResult interpretSuccess(
+        final Header header,
         final BusLocationResponse response
     ) {
         final Body body = response.response().body();
 
         if (body == null || body.busLocations() == null) {
-            return List.of();
+            return new UnreadableResponse("결과 코드는 정상인데 응답 본문이 없다");
         }
-        return body.busLocations();
+        return new Success(header.queryTime(), body.busLocations());
     }
 }
