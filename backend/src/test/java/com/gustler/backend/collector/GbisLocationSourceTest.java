@@ -15,6 +15,7 @@ import com.gustler.backend.collector.GbisLocationResult.NoResponse;
 import com.gustler.backend.collector.GbisLocationResult.NoVehicles;
 import com.gustler.backend.collector.GbisLocationResult.PerSecondQuotaExceeded;
 import com.gustler.backend.collector.GbisLocationResult.Success;
+import com.gustler.backend.collector.GbisLocationResult.UnknownGbisResultCode;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -155,7 +156,7 @@ class GbisLocationSourceTest {
     }
 
     @Test
-    void 명세에_없는_결과_코드가_와도_어떤_코드였는지_남긴다() {
+    void GBIS가_명세에_없는_결과_코드를_주면_그_코드를_남긴다() {
         // given
         respondWithJson(GBIS_HEADER_ONLY_JSON.formatted(9, UNKNOWN_RESULT_MESSAGE));
 
@@ -163,9 +164,9 @@ class GbisLocationSourceTest {
         final GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
-        assertThat(actual).isInstanceOfSatisfying(GatewayRejected.class, rejected -> {
-            assertThat(rejected.reasonCode()).isEqualTo("9");
-            assertThat(rejected.message()).isEqualTo(UNKNOWN_RESULT_MESSAGE);
+        assertThat(actual).isInstanceOfSatisfying(UnknownGbisResultCode.class, unknown -> {
+            assertThat(unknown.resultCode()).isEqualTo(9);
+            assertThat(unknown.message()).isEqualTo(UNKNOWN_RESULT_MESSAGE);
         });
     }
 
@@ -208,7 +209,7 @@ class GbisLocationSourceTest {
     }
 
     @Test
-    void 서비스키_오류가_JSON으로_와도_사유_코드를_남긴다() {
+    void 포털_거부가_JSON으로_와도_같은_사유_코드를_남긴다() {
         // given
         respondWithPortalErrorAsJson("30");
 
@@ -235,7 +236,7 @@ class GbisLocationSourceTest {
     }
 
     @Test
-    void 서비스키_오류처럼_모르는_거부는_사유_코드를_남긴다() {
+    void 포털이_서비스키를_거부하면_사유_코드를_남긴다() {
         // given
         respondWithPortalError("30");
 

@@ -8,6 +8,7 @@ import com.gustler.backend.collector.GbisLocationResult.NoResponse;
 import com.gustler.backend.collector.GbisLocationResult.NoVehicles;
 import com.gustler.backend.collector.GbisLocationResult.PerSecondQuotaExceeded;
 import com.gustler.backend.collector.GbisLocationResult.Success;
+import com.gustler.backend.collector.GbisLocationResult.UnknownGbisResultCode;
 import com.gustler.backend.collector.dto.BusLocationResponse;
 import com.gustler.backend.collector.dto.BusLocationResponse.Body;
 import com.gustler.backend.collector.dto.BusLocationResponse.BusLocation;
@@ -162,7 +163,7 @@ public class GbisLocationSource {
             case NO_VEHICLES -> new NoVehicles(header.queryTime());
             case SYSTEM_FAILURE -> new GbisSystemError(header.resultMessage());
             case PARAMETER_MISSING -> new MissingRequiredParameter(header.resultMessage());
-            case OTHER -> new GatewayRejected(String.valueOf(resultCode), header.resultMessage());
+            case OTHER -> new UnknownGbisResultCode(resultCode, header.resultMessage());
         };
     }
 

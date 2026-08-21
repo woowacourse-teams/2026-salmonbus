@@ -22,6 +22,12 @@ public sealed interface GbisLocationResult {
     record PerSecondQuotaExceeded() implements GbisLocationResult {
     }
 
+    record UnknownGbisResultCode(
+        int resultCode,
+        String message
+    ) implements GbisLocationResult {
+    }
+
     record GatewayRejected(
         String reasonCode,
         String message
