@@ -35,11 +35,12 @@ class GbisLocationSourceTest {
     private static final String ROUTE_3330 = "204000057";
     private static final String QUERY_TIME_IN_FIXTURE = "2026-08-19 11:14:04.911";
     private static final String QUERY_TIME_IN_TEMPLATE = "2026-08-20 09:00:00.000";
+    private static final String QUERY_TIME_IN_PARAMETER_MISSING = "2026-08-21 19:43:51.069";
     private static final String BUS_LOCATION_PATH = "/buslocationservice/v2/getBusLocationListv2";
     private static final String SYSTEM_FAILURE_MESSAGE = "시스템 에러가 발생했습니다.";
-    private static final String PARAMETER_MISSING_MESSAGE = "필수 파라미터가 누락되었습니다.";
+    private static final String PARAMETER_MISSING_MESSAGE = "필수 요청 Parameter 가 존재하지 않습니다.";
     private static final String UNKNOWN_RESULT_MESSAGE = "알 수 없는 응답입니다.";
-    private static final String PORTAL_ERROR_MESSAGE = "SERVICE ERROR";
+    private static final String PORTAL_ERROR_MESSAGE = "SERVICE_KEY_IS_NOT_REGISTERED_ERROR";
 
     private static final String PORTAL_ERROR_XML = """
         <OpenAPI_ServiceResponse>
@@ -122,7 +123,7 @@ class GbisLocationSourceTest {
     @Test
     void 운행_차량이_0대인_것은_오류가_아니다() {
         // given
-        respondWithJson(GBIS_HEADER_ONLY_JSON.formatted(4, "결과가 없습니다."));
+        respondWithJson(fixture("location-no-vehicles.json"));
 
         // when
         final GbisLocationResult actual = source.read(ROUTE_3330);
@@ -149,7 +150,7 @@ class GbisLocationSourceTest {
     @Test
     void 필수_파라미터_누락도_예외가_아니라_결과로_받는다() {
         // given
-        respondWithJson(GBIS_HEADER_ONLY_JSON.formatted(2, PARAMETER_MISSING_MESSAGE));
+        respondWithJson(fixture("location-parameter-missing.json"));
 
         // when
         final GbisLocationResult actual = source.read(ROUTE_3330);
@@ -157,7 +158,7 @@ class GbisLocationSourceTest {
         // then
         assertThat(actual).isInstanceOfSatisfying(MissingRequiredParameter.class, missing -> {
             assertThat(missing.message()).isEqualTo(PARAMETER_MISSING_MESSAGE);
-            assertThat(missing.gbisQueryTime()).isEqualTo(QUERY_TIME_IN_TEMPLATE);
+            assertThat(missing.gbisQueryTime()).isEqualTo(QUERY_TIME_IN_PARAMETER_MISSING);
         });
     }
 
@@ -218,7 +219,7 @@ class GbisLocationSourceTest {
     @Test
     void 포털_거부가_JSON으로_와도_같은_사유_코드를_남긴다() {
         // given
-        respondWithPortalErrorAsJson("30");
+        respondWithJson(fixture("portal-key-not-registered.json"));
 
         // when
         final GbisLocationResult actual = source.read(ROUTE_3330);
@@ -245,7 +246,7 @@ class GbisLocationSourceTest {
     @Test
     void 포털이_서비스키를_거부하면_사유_코드를_남긴다() {
         // given
-        respondWithPortalError("30");
+        respondWithXml(fixture("portal-key-not-registered.xml"));
 
         // when
         final GbisLocationResult actual = source.read(ROUTE_3330);
@@ -277,6 +278,13 @@ class GbisLocationSourceTest {
     ) {
         openApi.expect(requestTo(containsString(ROUTE_3330)))
             .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+    }
+
+    private void respondWithXml(
+        final String body
+    ) {
+        openApi.expect(requestTo(containsString(ROUTE_3330)))
+            .andRespond(withSuccess(body, MediaType.APPLICATION_XML));
     }
 
     private void respondWithPortalError(
