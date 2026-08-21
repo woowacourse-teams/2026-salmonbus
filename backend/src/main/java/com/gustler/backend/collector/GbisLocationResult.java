@@ -44,6 +44,11 @@ public sealed interface GbisLocationResult {
     ) implements GbisLocationResult {
     }
 
+    record UnreadableResponse(
+        String message
+    ) implements GbisLocationResult {
+    }
+
     record MissingRequiredParameter(
         String message
     ) implements GbisLocationResult {

@@ -16,6 +16,7 @@ import com.gustler.backend.collector.GbisLocationResult.NoVehicles;
 import com.gustler.backend.collector.GbisLocationResult.PerSecondQuotaExceeded;
 import com.gustler.backend.collector.GbisLocationResult.Success;
 import com.gustler.backend.collector.GbisLocationResult.UnknownGbisResultCode;
+import com.gustler.backend.collector.GbisLocationResult.UnreadableResponse;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -181,7 +182,7 @@ class GbisLocationSourceTest {
         final GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
-        assertThat(actual).isInstanceOf(GbisSystemError.class);
+        assertThat(actual).isInstanceOf(UnreadableResponse.class);
     }
 
     @Test

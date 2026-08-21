@@ -9,6 +9,7 @@ import com.gustler.backend.collector.GbisLocationResult.NoVehicles;
 import com.gustler.backend.collector.GbisLocationResult.PerSecondQuotaExceeded;
 import com.gustler.backend.collector.GbisLocationResult.Success;
 import com.gustler.backend.collector.GbisLocationResult.UnknownGbisResultCode;
+import com.gustler.backend.collector.GbisLocationResult.UnreadableResponse;
 import com.gustler.backend.collector.dto.BusLocationResponse;
 import com.gustler.backend.collector.dto.BusLocationResponse.Body;
 import com.gustler.backend.collector.dto.BusLocationResponse.BusLocation;
@@ -133,7 +134,7 @@ public class GbisLocationSource {
         return parse(body)
             .filter(this::hasHeader)
             .map(this::interpretHeader)
-            .orElseGet(() -> new GbisSystemError("Open API 응답을 읽지 못했다"));
+            .orElseGet(() -> new UnreadableResponse("Open API 응답을 읽지 못했다"));
     }
 
     private boolean hasHeader(
