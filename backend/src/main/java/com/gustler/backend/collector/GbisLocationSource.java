@@ -13,6 +13,9 @@ import com.gustler.backend.collector.GbisLocationResult.UnreadableResponse;
 import com.gustler.backend.collector.dto.BusLocationResponse;
 import com.gustler.backend.collector.dto.BusLocationResponse.Body;
 import com.gustler.backend.collector.dto.BusLocationResponse.Header;
+import com.gustler.backend.collector.dto.PortalErrorResponse;
+import com.gustler.backend.collector.dto.PortalErrorResponse.CommonHeader;
+import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -31,9 +34,8 @@ public class GbisLocationSource {
 
     private static final String PORTAL_ERROR_ROOT = "OpenAPI_ServiceResponse";
     private static final Pattern REASON_CODE_IN_XML = Pattern.compile("<returnReasonCode>(.*?)</returnReasonCode>");
-    private static final Pattern REASON_CODE_IN_JSON = Pattern.compile("\"returnReasonCode\"\\s*:\\s*\"(.*?)\"");
-    private static final Pattern ERROR_MESSAGE_IN_XML = Pattern.compile("<errMsg>(.*?)</errMsg>");
-    private static final Pattern ERROR_MESSAGE_IN_JSON = Pattern.compile("\"errMsg\"\\s*:\\s*\"(.*?)\"");
+    private static final Pattern ERROR_CODE_IN_XML = Pattern.compile("<errMsg>(.*?)</errMsg>");
+    private static final Pattern AUTH_MESSAGE_IN_XML = Pattern.compile("<returnAuthMsg>(.*?)</returnAuthMsg>");
     private static final String UNKNOWN_REASON_CODE = "UNKNOWN";
     private static final String NO_MESSAGE = "";
     private static final String PARSE_FAILURE = "Open API 응답을 파싱하지 못했다: ";
@@ -61,7 +63,7 @@ public class GbisLocationSource {
         final String routeId
     ) {
         try {
-            final String body = gbisRestClient.get()
+            final byte[] raw = gbisRestClient.get()
                 .uri(builder -> builder
                     .path(BUS_LOCATION_PATH)
                     .queryParam("serviceKey", properties.serviceKey())
@@ -70,11 +72,20 @@ public class GbisLocationSource {
                     .build())
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, KEEP_ERROR_BODY)
-                .body(String.class);
-            return interpret(body);
+                .body(byte[].class);
+            return interpret(decode(raw));
         } catch (final RestClientException e) {
             return new NoResponse(e.getMessage());
         }
+    }
+
+    private String decode(
+        final byte[] raw
+    ) {
+        if (raw == null) {
+            return null;
+        }
+        return new String(raw, StandardCharsets.UTF_8);
     }
 
     private GbisLocationResult interpret(
@@ -92,29 +103,41 @@ public class GbisLocationSource {
     private GbisLocationResult interpretPortalError(
         final String body
     ) {
-        final String reasonCode = reasonCodeOf(body);
+        final CommonHeader header = parsePortalHeaderOf(body);
 
-        return switch (PortalReasonCode.from(reasonCode)) {
+        return switch (PortalReasonCode.from(header.returnReasonCode())) {
             case DAILY_QUOTA_EXCEEDED -> new DailyQuotaExceeded();
             case PER_SECOND_QUOTA_EXCEEDED -> new PerSecondQuotaExceeded();
-            case OTHER -> new GatewayRejected(reasonCode, errorMessageOf(body));
+            case OTHER -> new GatewayRejected(header.returnReasonCode(), header.errMsg(), header.returnAuthMsg());
         };
     }
 
-    private String reasonCodeOf(
+    private CommonHeader parsePortalHeaderOf(
         final String body
     ) {
-        return extract(REASON_CODE_IN_XML, body)
-            .or(() -> extract(REASON_CODE_IN_JSON, body))
-            .orElse(UNKNOWN_REASON_CODE);
+        return parsePortalError(body)
+            .orElseGet(() -> portalHeaderFromXml(body));
     }
 
-    private String errorMessageOf(
+    private Optional<CommonHeader> parsePortalError(
         final String body
     ) {
-        return extract(ERROR_MESSAGE_IN_XML, body)
-            .or(() -> extract(ERROR_MESSAGE_IN_JSON, body))
-            .orElse(NO_MESSAGE);
+        try {
+            final PortalErrorResponse parsed = objectMapper.readValue(body, PortalErrorResponse.class);
+            return Optional.ofNullable(parsed.response())
+                .map(PortalErrorResponse.ServiceResponse::header);
+        } catch (final JacksonException e) {
+            return Optional.empty();
+        }
+    }
+
+    private CommonHeader portalHeaderFromXml(
+        final String body
+    ) {
+        return new CommonHeader(
+            extract(ERROR_CODE_IN_XML, body).orElse(NO_MESSAGE),
+            extract(AUTH_MESSAGE_IN_XML, body).orElse(NO_MESSAGE),
+            extract(REASON_CODE_IN_XML, body).orElse(UNKNOWN_REASON_CODE));
     }
 
     private Optional<String> extract(
@@ -157,16 +180,11 @@ public class GbisLocationSource {
         final int resultCode = header.resultCode();
 
         return switch (GbisResultCode.from(resultCode)) {
-            case SUCCESS ->
-                interpretSuccess(header, response);
-            case NO_VEHICLES ->
-                new NoVehicles(header.queryTime());
-            case SYSTEM_FAILURE ->
-                new GbisSystemError(header.queryTime(), header.resultMessage());
-            case PARAMETER_MISSING ->
-                new MissingRequiredParameter(header.queryTime(), header.resultMessage());
-            case OTHER ->
-                new UnknownGbisResultCode(header.queryTime(), resultCode, header.resultMessage());
+            case SUCCESS -> interpretSuccess(header, response);
+            case NO_VEHICLES -> new NoVehicles(header.queryTime());
+            case SYSTEM_FAILURE -> new GbisSystemError(header.queryTime(), header.resultMessage());
+            case PARAMETER_MISSING -> new MissingRequiredParameter(header.queryTime(), header.resultMessage());
+            case OTHER -> new UnknownGbisResultCode(header.queryTime(), resultCode, header.resultMessage());
         };
     }
 

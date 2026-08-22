@@ -31,6 +31,7 @@ public sealed interface GbisLocationResult {
 
     record GatewayRejected(
         String reasonCode,
+        String errorCode,
         String message
     ) implements GbisLocationResult {
     }

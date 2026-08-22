@@ -40,14 +40,15 @@ class GbisLocationSourceTest {
     private static final String SYSTEM_FAILURE_MESSAGE = "시스템 에러가 발생했습니다.";
     private static final String PARAMETER_MISSING_MESSAGE = "필수 요청 Parameter 가 존재하지 않습니다.";
     private static final String UNKNOWN_RESULT_MESSAGE = "알 수 없는 응답입니다.";
-    private static final String PORTAL_ERROR_MESSAGE = "SERVICE_KEY_IS_NOT_REGISTERED_ERROR";
+    private static final String PORTAL_ERROR_CODE = "SERVICE_KEY_IS_NOT_REGISTERED_ERROR";
+    private static final String PORTAL_ERROR_MESSAGE = "등록되지 않은 서비스키";
     private static final String PARSE_FAILURE = "Open API 응답을 파싱하지 못했다: ";
 
     private static final String PORTAL_ERROR_XML = """
         <OpenAPI_ServiceResponse>
           <cmmMsgHeader>
             <errMsg>SERVICE ERROR</errMsg>
-            <returnAuthMsg>SERVICE_ERROR</returnAuthMsg>
+            <returnAuthMsg>등록되지 않은 서비스키</returnAuthMsg>
             <returnReasonCode>%s</returnReasonCode>
           </cmmMsgHeader>
         </OpenAPI_ServiceResponse>
@@ -255,6 +256,7 @@ class GbisLocationSourceTest {
         // then
         assertThat(actual).isInstanceOfSatisfying(GatewayRejected.class, rejected -> {
             assertThat(rejected.reasonCode()).isEqualTo("30");
+            assertThat(rejected.errorCode()).isEqualTo(PORTAL_ERROR_CODE);
             assertThat(rejected.message()).isEqualTo(PORTAL_ERROR_MESSAGE);
         });
     }
@@ -282,6 +284,7 @@ class GbisLocationSourceTest {
         // then
         assertThat(actual).isInstanceOfSatisfying(GatewayRejected.class, rejected -> {
             assertThat(rejected.reasonCode()).isEqualTo("30");
+            assertThat(rejected.errorCode()).isEqualTo(PORTAL_ERROR_CODE);
             assertThat(rejected.message()).isEqualTo(PORTAL_ERROR_MESSAGE);
         });
     }
