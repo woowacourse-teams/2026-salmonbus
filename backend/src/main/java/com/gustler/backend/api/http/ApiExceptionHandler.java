@@ -1,5 +1,6 @@
 package com.gustler.backend.api.http;
 
+import com.gustler.backend.api.board.NoRecentObservationException;
 import com.gustler.backend.api.route.InvalidRouteIdException;
 import com.gustler.backend.api.route.RouteNotFoundException;
 import java.util.UUID;
@@ -43,6 +44,18 @@ public class ApiExceptionHandler {
         return createResponse(
             HttpStatus.SERVICE_UNAVAILABLE,
             ErrorCode.SERVICE_UNAVAILABLE,
+            exception.getMessage(),
+            true
+        );
+    }
+
+    @ExceptionHandler(NoRecentObservationException.class)
+    public ResponseEntity<ErrorResponse> handleNoRecentObservation(
+        final NoRecentObservationException exception
+    ) {
+        return createResponse(
+            HttpStatus.SERVICE_UNAVAILABLE,
+            ErrorCode.NO_RECENT_OBSERVATION,
             exception.getMessage(),
             true
         );
