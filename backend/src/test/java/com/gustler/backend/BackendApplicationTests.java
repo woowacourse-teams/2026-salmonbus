@@ -1,9 +1,9 @@
 package com.gustler.backend;
 
+import com.gustler.backend.support.IntegrationTest;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
+@IntegrationTest
 class BackendApplicationTests {
 
     @Test
