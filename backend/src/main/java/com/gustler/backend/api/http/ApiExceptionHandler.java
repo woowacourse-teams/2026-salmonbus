@@ -36,6 +36,18 @@ public class ApiExceptionHandler {
         );
     }
 
+    @ExceptionHandler(ServiceUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleServiceUnavailable(
+        final ServiceUnavailableException exception
+    ) {
+        return createResponse(
+            HttpStatus.SERVICE_UNAVAILABLE,
+            ErrorCode.SERVICE_UNAVAILABLE,
+            exception.getMessage(),
+            true
+        );
+    }
+
     private ResponseEntity<ErrorResponse> createResponse(
         final HttpStatus status,
         final ErrorCode code,
