@@ -32,7 +32,7 @@ class RouteNotFoundResponseTest {
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
             .andExpect(jsonPath("$", aMapWithSize(4)))
             .andExpect(jsonPath("$.code").value("ROUTE_NOT_FOUND"))
-            .andExpect(jsonPath("$.message").value("unknown routeId"))
+            .andExpect(jsonPath("$.message").value("등록되지 않은 노선입니다."))
             .andExpect(jsonPath("$.requestId").isNotEmpty())
             .andExpect(jsonPath("$.retryable").value(false));
     }

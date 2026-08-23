@@ -20,7 +20,7 @@ class ErrorResponseTest {
         // given
         final ErrorResponse response = new ErrorResponse(
             ErrorCode.INVALID_ROUTE_ID,
-            "routeId must be 9 digits",
+            "routeId는 9자리 숫자여야 합니다.",
             "request-id",
             false
         );
@@ -29,7 +29,7 @@ class ErrorResponseTest {
         assertThat(json.write(response)).isStrictlyEqualToJson("""
             {
               "code": "INVALID_ROUTE_ID",
-              "message": "routeId must be 9 digits",
+              "message": "routeId는 9자리 숫자여야 합니다.",
               "requestId": "request-id",
               "retryable": false
             }
@@ -40,12 +40,12 @@ class ErrorResponseTest {
     void 계약에서_필수인_필드가_null이면_오류_응답을_만들지_않는다() {
         assertThatThrownBy(() -> new ErrorResponse(null, "message", "request-id", false))
             .isInstanceOf(NullPointerException.class)
-            .hasMessage("code must not be null");
+            .hasMessage("code는 null일 수 없습니다.");
         assertThatThrownBy(() -> new ErrorResponse(ErrorCode.INVALID_ROUTE_ID, null, "request-id", false))
             .isInstanceOf(NullPointerException.class)
-            .hasMessage("message must not be null");
+            .hasMessage("message는 null일 수 없습니다.");
         assertThatThrownBy(() -> new ErrorResponse(ErrorCode.INVALID_ROUTE_ID, "message", null, false))
             .isInstanceOf(NullPointerException.class)
-            .hasMessage("requestId must not be null");
+            .hasMessage("requestId는 null일 수 없습니다.");
     }
 }

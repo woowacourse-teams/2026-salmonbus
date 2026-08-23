@@ -10,8 +10,8 @@ public record ErrorResponse(
 ) {
 
     public ErrorResponse {
-        Objects.requireNonNull(code, "code must not be null");
-        Objects.requireNonNull(message, "message must not be null");
-        Objects.requireNonNull(requestId, "requestId must not be null");
+        Objects.requireNonNull(code, "code는 null일 수 없습니다.");
+        Objects.requireNonNull(message, "message는 null일 수 없습니다.");
+        Objects.requireNonNull(requestId, "requestId는 null일 수 없습니다.");
     }
 }

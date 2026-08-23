@@ -39,7 +39,7 @@ class InvalidRouteIdResponseTest {
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
             .andExpect(jsonPath("$", aMapWithSize(4)))
             .andExpect(jsonPath("$.code").value("INVALID_ROUTE_ID"))
-            .andExpect(jsonPath("$.message").value("routeId must be 9 digits"))
+            .andExpect(jsonPath("$.message").value("routeId는 9자리 숫자여야 합니다."))
             .andExpect(jsonPath("$.requestId").isNotEmpty())
             .andExpect(jsonPath("$.retryable").value(false));
     }

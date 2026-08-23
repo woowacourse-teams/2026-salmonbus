@@ -26,6 +26,6 @@ class RouteIdTest {
         // when & then
         assertThatThrownBy(() -> new RouteId(value))
             .isInstanceOf(InvalidRouteIdException.class)
-            .hasMessage("routeId must be 9 digits");
+            .hasMessage("routeId는 9자리 숫자여야 합니다.");
     }
 }

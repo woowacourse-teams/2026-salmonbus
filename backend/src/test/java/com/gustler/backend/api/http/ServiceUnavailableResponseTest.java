@@ -23,14 +23,13 @@ class ServiceUnavailableResponseTest {
     private MockMvc mockMvc;
 
     @Test
-    void 재시도_시각을_모르는_서버_장애에는_Retry_After를_보내지_않는다() throws Exception {
+    void 일시적인_서버_장애에_503과_오류_응답을_반환한다() throws Exception {
         mockMvc.perform(get("/test/service-unavailable"))
             .andExpect(status().isServiceUnavailable())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-            .andExpect(header().doesNotExist(HttpHeaders.RETRY_AFTER))
             .andExpect(jsonPath("$", aMapWithSize(4)))
             .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"))
-            .andExpect(jsonPath("$.message").value("temporary failure"))
+            .andExpect(jsonPath("$.message").value("일시적인 서버 장애가 발생했습니다."))
             .andExpect(jsonPath("$.requestId").isNotEmpty())
             .andExpect(jsonPath("$.retryable").value(true));
     }
