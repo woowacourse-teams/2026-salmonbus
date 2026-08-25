@@ -8,10 +8,15 @@ import com.gustler.backend.api.route.InvalidRouteIdException;
 import com.gustler.backend.api.route.RouteNotFoundException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 class ApiExceptionHandlerTest {
@@ -58,15 +63,21 @@ class ApiExceptionHandlerTest {
     }
 
     @Test
-    void 오류_코드마다_예외가_하나씩_있다() {
+    void 모든_오류_코드는_예외나_상태_매핑으로_도달한다() {
         // given
-        final List<ErrorCode> 예외가_있는_코드 = 우리가_던지는_예외들().stream()
+        final Set<ErrorCode> 예외로_도달 = 우리가_던지는_예외들().stream()
             .map(ApiException::code)
-            .toList();
+            .collect(Collectors.toSet());
+        final Set<ErrorCode> 상태로_도달 = Arrays.stream(ErrorCode.values())
+            .map(code -> ErrorCode.of(code.status()))
+            .collect(Collectors.toSet());
 
-        // when & then
-        assertThat(예외가_있는_코드)
-            .containsExactlyInAnyOrderElementsOf(Arrays.asList(ErrorCode.values()));
+        // when
+        final Set<ErrorCode> 도달_가능 = Stream.concat(예외로_도달.stream(), 상태로_도달.stream())
+            .collect(Collectors.toSet());
+
+        // then
+        assertThat(도달_가능).containsAll(Arrays.asList(ErrorCode.values()));
     }
 
     @Test
@@ -84,4 +95,49 @@ class ApiExceptionHandlerTest {
         );
     }
 
+    @ParameterizedTest
+    @CsvSource({
+        "404, ENDPOINT_NOT_FOUND",
+        "405, METHOD_NOT_ALLOWED",
+        "503, SERVICE_UNAVAILABLE",
+        "400, INVALID_REQUEST",
+        "415, INVALID_REQUEST",
+        "500, INTERNAL_ERROR",
+        "502, INTERNAL_ERROR"
+    })
+    void 스프링이_판정한_상태를_우리_오류_코드로_옮긴다(
+        final int status,
+        final ErrorCode expected
+    ) {
+        // when
+        final ResponseEntity<Object> actual = handler.handleExceptionInternal(
+            new IllegalStateException("스프링이 잡은 예외"),
+            null,
+            new HttpHeaders(),
+            HttpStatus.valueOf(status),
+            null
+        );
+
+        // then
+        assertThat(actual.getStatusCode().value()).isEqualTo(status);
+        assertThat(actual.getHeaders().getCacheControl()).isEqualTo("no-store");
+        assertThat(actual.getBody()).isInstanceOfSatisfying(ErrorResponse.class, body -> {
+            assertThat(body.code()).isEqualTo(expected);
+            assertThat(body.message()).isEqualTo(expected.message());
+            assertThat(body.retryable()).isEqualTo(expected.retryable());
+        });
+    }
+
+    @Test
+    void 예상하지_못한_예외는_500으로_옮긴다() {
+        // when
+        final ResponseEntity<ErrorResponse> actual =
+            handler.handleUnexpected(new IllegalStateException("아무도 모르는 오류"));
+
+        // then
+        assertThat(actual.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(actual.getBody().code()).isEqualTo(ErrorCode.INTERNAL_ERROR);
+        assertThat(actual.getBody().retryable()).isFalse();
+        assertThat(actual.getHeaders().getCacheControl()).isEqualTo("no-store");
+    }
 }
