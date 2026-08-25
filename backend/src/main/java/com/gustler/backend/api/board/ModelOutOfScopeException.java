@@ -1,8 +1,11 @@
 package com.gustler.backend.api.board;
 
-public class ModelOutOfScopeException extends RuntimeException {
+import com.gustler.backend.api.http.ApiException;
+import com.gustler.backend.api.http.ErrorCode;
+
+public class ModelOutOfScopeException extends ApiException {
 
     public ModelOutOfScopeException() {
-        super("활성 모델 번들이 지원하지 않는 노선 판본입니다.");
+        super(ErrorCode.MODEL_OUT_OF_SCOPE);
     }
 }

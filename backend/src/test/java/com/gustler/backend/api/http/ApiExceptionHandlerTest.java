@@ -6,84 +6,82 @@ import com.gustler.backend.api.board.ModelOutOfScopeException;
 import com.gustler.backend.api.board.NoRecentObservationException;
 import com.gustler.backend.api.route.InvalidRouteIdException;
 import com.gustler.backend.api.route.RouteNotFoundException;
+import java.util.Arrays;
+import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 class ApiExceptionHandlerTest {
 
     private final ApiExceptionHandler handler = new ApiExceptionHandler();
 
-    @Test
-    void 잘못된_노선_ID를_400_INVALID_ROUTE_ID로_옮긴다() {
-        // when
-        final ResponseEntity<ErrorResponse> actual =
-            handler.handleInvalidRouteId(new InvalidRouteIdException());
-
-        // then
-        assertContract(actual, HttpStatus.BAD_REQUEST, ErrorCode.INVALID_ROUTE_ID,
-            "routeId는 9자리 숫자여야 합니다.", false);
+    private static List<ApiException> 우리가_던지는_예외들() {
+        return List.of(
+            new InvalidRouteIdException(),
+            new RouteNotFoundException(),
+            new ModelOutOfScopeException(),
+            new NoRecentObservationException(),
+            new ServiceUnavailableException()
+        );
     }
 
-    @Test
-    void 등록되지_않은_노선을_404_ROUTE_NOT_FOUND로_옮긴다() {
+    @ParameterizedTest
+    @MethodSource("우리가_던지는_예외들")
+    void 오류_코드가_정한_상태와_메시지와_재시도_여부로_응답한다(final ApiException exception) {
+        // given
+        final ErrorCode code = exception.code();
+
         // when
-        final ResponseEntity<ErrorResponse> actual =
-            handler.handleRouteNotFound(new RouteNotFoundException());
+        final ResponseEntity<ErrorResponse> actual = handler.handleApiException(exception);
 
         // then
-        assertContract(actual, HttpStatus.NOT_FOUND, ErrorCode.ROUTE_NOT_FOUND,
-            "등록되지 않은 노선입니다.", false);
+        assertThat(actual.getStatusCode()).isEqualTo(code.status());
+        assertThat(actual.getBody()).isNotNull();
+        assertThat(actual.getBody().code()).isEqualTo(code);
+        assertThat(actual.getBody().message()).isEqualTo(code.message());
+        assertThat(actual.getBody().requestId()).isNotBlank();
+        assertThat(actual.getBody().retryable()).isEqualTo(code.retryable());
     }
 
-    @Test
-    void 활성_번들이_담지_않은_노선_판본을_503_MODEL_OUT_OF_SCOPE로_옮긴다() {
+    @ParameterizedTest
+    @MethodSource("우리가_던지는_예외들")
+    void 오류_응답은_저장하지_않게_하고_재시도_시각은_알리지_않는다(final ApiException exception) {
         // when
-        final ResponseEntity<ErrorResponse> actual =
-            handler.handleModelOutOfScope(new ModelOutOfScopeException());
+        final ResponseEntity<ErrorResponse> actual = handler.handleApiException(exception);
 
         // then
-        assertContract(actual, HttpStatus.SERVICE_UNAVAILABLE, ErrorCode.MODEL_OUT_OF_SCOPE,
-            "활성 모델 번들이 지원하지 않는 노선 판본입니다.", true);
-    }
-
-    @Test
-    void 최근_관측_없음을_503_NO_RECENT_OBSERVATION으로_옮긴다() {
-        // when
-        final ResponseEntity<ErrorResponse> actual =
-            handler.handleNoRecentObservation(new NoRecentObservationException());
-
-        // then
-        assertContract(actual, HttpStatus.SERVICE_UNAVAILABLE, ErrorCode.NO_RECENT_OBSERVATION,
-            "예보 기준으로 사용할 최근 차량 관측이 없습니다.", true);
-    }
-
-    @Test
-    void 일시적인_서버_장애를_503_SERVICE_UNAVAILABLE로_옮긴다() {
-        // when
-        final ResponseEntity<ErrorResponse> actual =
-            handler.handleServiceUnavailable(new ServiceUnavailableException());
-
-        // then
-        assertContract(actual, HttpStatus.SERVICE_UNAVAILABLE, ErrorCode.SERVICE_UNAVAILABLE,
-            "일시적인 서버 장애가 발생했습니다.", true);
-    }
-
-    private void assertContract(
-        final ResponseEntity<ErrorResponse> actual,
-        final HttpStatus expectedStatus,
-        final ErrorCode expectedCode,
-        final String expectedMessage,
-        final boolean expectedRetryable
-    ) {
-        assertThat(actual.getStatusCode()).isEqualTo(expectedStatus);
         assertThat(actual.getHeaders().getCacheControl()).isEqualTo("no-store");
         assertThat(actual.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isNull();
-        assertThat(actual.getBody()).isNotNull();
-        assertThat(actual.getBody().code()).isEqualTo(expectedCode);
-        assertThat(actual.getBody().message()).isEqualTo(expectedMessage);
-        assertThat(actual.getBody().requestId()).isNotBlank();
-        assertThat(actual.getBody().retryable()).isEqualTo(expectedRetryable);
     }
+
+    @Test
+    void 오류_코드마다_예외가_하나씩_있다() {
+        // given
+        final List<ErrorCode> 예외가_있는_코드 = 우리가_던지는_예외들().stream()
+            .map(ApiException::code)
+            .toList();
+
+        // when & then
+        assertThat(예외가_있는_코드)
+            .containsExactlyInAnyOrderElementsOf(Arrays.asList(ErrorCode.values()));
+    }
+
+    @Test
+    void 재시도_가능한_오류는_이름을_가진_것뿐이다() {
+        // when
+        final List<ErrorCode> 재시도_가능 = Arrays.stream(ErrorCode.values())
+            .filter(ErrorCode::retryable)
+            .toList();
+
+        // then
+        assertThat(재시도_가능).containsExactlyInAnyOrder(
+            ErrorCode.MODEL_OUT_OF_SCOPE,
+            ErrorCode.NO_RECENT_OBSERVATION,
+            ErrorCode.SERVICE_UNAVAILABLE
+        );
+    }
+
 }

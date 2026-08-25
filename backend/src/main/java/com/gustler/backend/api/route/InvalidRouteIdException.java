@@ -1,8 +1,11 @@
 package com.gustler.backend.api.route;
 
-public class InvalidRouteIdException extends IllegalArgumentException {
+import com.gustler.backend.api.http.ApiException;
+import com.gustler.backend.api.http.ErrorCode;
+
+public class InvalidRouteIdException extends ApiException {
 
     public InvalidRouteIdException() {
-        super("routeId는 9자리 숫자여야 합니다.");
+        super(ErrorCode.INVALID_ROUTE_ID);
     }
 }

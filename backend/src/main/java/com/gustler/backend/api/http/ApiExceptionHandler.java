@@ -1,12 +1,8 @@
 package com.gustler.backend.api.http;
 
-import com.gustler.backend.api.board.ModelOutOfScopeException;
-import com.gustler.backend.api.board.NoRecentObservationException;
-import com.gustler.backend.api.route.InvalidRouteIdException;
-import com.gustler.backend.api.route.RouteNotFoundException;
 import java.util.UUID;
 import org.springframework.http.CacheControl;
-import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -14,81 +10,31 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
-    @ExceptionHandler(InvalidRouteIdException.class)
-    public ResponseEntity<ErrorResponse> handleInvalidRouteId(
-        final InvalidRouteIdException exception
+    @ExceptionHandler(ApiException.class)
+    public ResponseEntity<ErrorResponse> handleApiException(
+        final ApiException exception
     ) {
-        return createResponse(
-            HttpStatus.BAD_REQUEST,
-            ErrorCode.INVALID_ROUTE_ID,
-            exception.getMessage(),
-            false
-        );
+        final ErrorCode code = exception.code();
+
+        return new ResponseEntity<>(bodyOf(code, exception.getMessage()), noStore(), code.status());
     }
 
-    @ExceptionHandler(RouteNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleRouteNotFound(
-        final RouteNotFoundException exception
-    ) {
-        return createResponse(
-            HttpStatus.NOT_FOUND,
-            ErrorCode.ROUTE_NOT_FOUND,
-            exception.getMessage(),
-            false
-        );
-    }
-
-    @ExceptionHandler(ServiceUnavailableException.class)
-    public ResponseEntity<ErrorResponse> handleServiceUnavailable(
-        final ServiceUnavailableException exception
-    ) {
-        return createResponse(
-            HttpStatus.SERVICE_UNAVAILABLE,
-            ErrorCode.SERVICE_UNAVAILABLE,
-            exception.getMessage(),
-            true
-        );
-    }
-
-    @ExceptionHandler(NoRecentObservationException.class)
-    public ResponseEntity<ErrorResponse> handleNoRecentObservation(
-        final NoRecentObservationException exception
-    ) {
-        return createResponse(
-            HttpStatus.SERVICE_UNAVAILABLE,
-            ErrorCode.NO_RECENT_OBSERVATION,
-            exception.getMessage(),
-            true
-        );
-    }
-
-    @ExceptionHandler(ModelOutOfScopeException.class)
-    public ResponseEntity<ErrorResponse> handleModelOutOfScope(
-        final ModelOutOfScopeException exception
-    ) {
-        return createResponse(
-            HttpStatus.SERVICE_UNAVAILABLE,
-            ErrorCode.MODEL_OUT_OF_SCOPE,
-            exception.getMessage(),
-            true
-        );
-    }
-
-    private ResponseEntity<ErrorResponse> createResponse(
-        final HttpStatus status,
+    private ErrorResponse bodyOf(
         final ErrorCode code,
-        final String message,
-        final boolean retryable
+        final String message
     ) {
-        final ErrorResponse response = new ErrorResponse(
+        return new ErrorResponse(
             code,
             message,
             UUID.randomUUID().toString(),
-            retryable
+            code.retryable()
         );
+    }
 
-        return ResponseEntity.status(status)
-            .cacheControl(CacheControl.noStore())
-            .body(response);
+    private HttpHeaders noStore() {
+        final HttpHeaders headers = new HttpHeaders();
+        headers.setCacheControl(CacheControl.noStore());
+
+        return headers;
     }
 }

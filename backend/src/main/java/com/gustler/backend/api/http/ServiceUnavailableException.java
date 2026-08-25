@@ -1,8 +1,8 @@
 package com.gustler.backend.api.http;
 
-public class ServiceUnavailableException extends RuntimeException {
+public class ServiceUnavailableException extends ApiException {
 
     public ServiceUnavailableException() {
-        super("일시적인 서버 장애가 발생했습니다.");
+        super(ErrorCode.SERVICE_UNAVAILABLE);
     }
 }

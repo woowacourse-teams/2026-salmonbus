@@ -1,8 +1,11 @@
 package com.gustler.backend.api.route;
 
-public class RouteNotFoundException extends RuntimeException {
+import com.gustler.backend.api.http.ApiException;
+import com.gustler.backend.api.http.ErrorCode;
+
+public class RouteNotFoundException extends ApiException {
 
     public RouteNotFoundException() {
-        super("등록되지 않은 노선입니다.");
+        super(ErrorCode.ROUTE_NOT_FOUND);
     }
 }

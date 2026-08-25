@@ -1,8 +1,11 @@
 package com.gustler.backend.api.board;
 
-public class NoRecentObservationException extends RuntimeException {
+import com.gustler.backend.api.http.ApiException;
+import com.gustler.backend.api.http.ErrorCode;
+
+public class NoRecentObservationException extends ApiException {
 
     public NoRecentObservationException() {
-        super("예보 기준으로 사용할 최근 차량 관측이 없습니다.");
+        super(ErrorCode.NO_RECENT_OBSERVATION);
     }
 }
