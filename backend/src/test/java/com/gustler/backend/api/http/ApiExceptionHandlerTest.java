@@ -2,6 +2,7 @@ package com.gustler.backend.api.http;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gustler.backend.api.board.ModelOutOfScopeException;
 import com.gustler.backend.api.board.NoRecentObservationException;
 import com.gustler.backend.api.route.InvalidRouteIdException;
 import com.gustler.backend.api.route.RouteNotFoundException;
@@ -34,6 +35,17 @@ class ApiExceptionHandlerTest {
         // then
         assertContract(actual, HttpStatus.NOT_FOUND, ErrorCode.ROUTE_NOT_FOUND,
             "등록되지 않은 노선입니다.", false);
+    }
+
+    @Test
+    void 활성_번들이_담지_않은_노선_판본을_503_MODEL_OUT_OF_SCOPE로_옮긴다() {
+        // when
+        final ResponseEntity<ErrorResponse> actual =
+            handler.handleModelOutOfScope(new ModelOutOfScopeException());
+
+        // then
+        assertContract(actual, HttpStatus.SERVICE_UNAVAILABLE, ErrorCode.MODEL_OUT_OF_SCOPE,
+            "활성 모델 번들이 지원하지 않는 노선 판본입니다.", true);
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.gustler.backend.api.http;
 
+import com.gustler.backend.api.board.ModelOutOfScopeException;
 import com.gustler.backend.api.board.NoRecentObservationException;
 import com.gustler.backend.api.route.InvalidRouteIdException;
 import com.gustler.backend.api.route.RouteNotFoundException;
@@ -56,6 +57,18 @@ public class ApiExceptionHandler {
         return createResponse(
             HttpStatus.SERVICE_UNAVAILABLE,
             ErrorCode.NO_RECENT_OBSERVATION,
+            exception.getMessage(),
+            true
+        );
+    }
+
+    @ExceptionHandler(ModelOutOfScopeException.class)
+    public ResponseEntity<ErrorResponse> handleModelOutOfScope(
+        final ModelOutOfScopeException exception
+    ) {
+        return createResponse(
+            HttpStatus.SERVICE_UNAVAILABLE,
+            ErrorCode.MODEL_OUT_OF_SCOPE,
             exception.getMessage(),
             true
         );
