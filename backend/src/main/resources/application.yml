@@ -2,6 +2,10 @@ spring:
   application:
     name: backend
 
+  web:
+    resources:
+      add-mappings: false # API 전용 서버라 정적 리소스를 서빙하지 않는다. 없는 경로가 예외로 올라온다.
+
   http:
     clients:
       connect-timeout: 3s # Open API 실측: 0.04~0.15초 (2026-08-19, 10회).
