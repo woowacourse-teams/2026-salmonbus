@@ -1,8 +1,6 @@
 package com.gustler.backend.api.http;
 
 import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
@@ -14,8 +12,6 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 
 @RestControllerAdvice
 public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
-
-    private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ErrorResponse> handleApiException(
@@ -30,8 +26,6 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ErrorResponse> handleUnexpected(
         final Exception exception
     ) {
-        log.error("예상하지 못한 오류가 발생했습니다.", exception);
-
         return respond(ErrorCode.INTERNAL_ERROR, ErrorCode.INTERNAL_ERROR.message(),
             ErrorCode.INTERNAL_ERROR.status());
     }
