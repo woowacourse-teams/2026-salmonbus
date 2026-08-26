@@ -40,7 +40,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     ) {
         final ErrorCode code = ErrorCode.of(status);
 
-        return new ResponseEntity<>(bodyOf(code, code.message()), noStore(), status);
+        return new ResponseEntity<>(bodyOf(code, code.message()), noStore(headers), status);
     }
 
     private ResponseEntity<ErrorResponse> respond(
@@ -64,7 +64,14 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     private HttpHeaders noStore() {
+        return noStore(HttpHeaders.EMPTY);
+    }
+
+    private HttpHeaders noStore(
+        final HttpHeaders original
+    ) {
         final HttpHeaders headers = new HttpHeaders();
+        headers.addAll(original);
         headers.setCacheControl(CacheControl.noStore());
 
         return headers;
