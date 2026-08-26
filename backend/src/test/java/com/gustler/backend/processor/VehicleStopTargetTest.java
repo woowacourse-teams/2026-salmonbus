@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class VehicleStopTargetTest {
 
@@ -22,10 +25,14 @@ class VehicleStopTargetTest {
         assertThat(actual).isEqualTo(8);
     }
 
-    @Test
-    void 잔여석을_아는_차량만_예보한다() {
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(ints = {-1})
+    void 잔여석을_아는_차량만_예보한다(
+        final Integer unknownSeats
+    ) {
         // given
-        final ObservedVehicle seatsUnknown = observed(3, null);
+        final ObservedVehicle seatsUnknown = observed(3, unknownSeats);
 
         // when & then
         assertThatThrownBy(() -> new VehicleStopTarget(seatsUnknown, Horizon.of(5)))
