@@ -1,9 +1,11 @@
-interface Route {
+export type RouteStatus = "PREPARING" | "FORECAST_READY";
+
+export interface RouteCore {
   id: string;
   displayName: string;
   startStopName: string;
   endStopName: string;
-  status: "FORECAST_READY" | "PREPARING";
+  status: RouteStatus;
 }
 
 export interface Routes {
