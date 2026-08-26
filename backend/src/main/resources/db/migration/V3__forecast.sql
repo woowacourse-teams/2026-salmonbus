@@ -2,10 +2,13 @@
 -- 발행 계층(forecast_publication · stop_prediction)은 v4 계약에서 빠졌고,
 -- 이 DB 에는 발행본이 쌓인 적이 없어 만들지 않는다.
 --
--- CHECK 은 둘만 남긴다.
---   NaN 가드 — double precision 은 NaN 을 담을 수 있고 응답이 1 - NaN 이 되면 안 된다.
---              범위 규칙과 달리 모델이 바뀌어도 안 바뀌는 값이다. x = x 가 거짓인 값은 NaN 하나뿐이다.
---   지평 상한 — 계약이 정한 범위라 모델과 무관하다.
+-- CHECK 은 값의 정의가 정한 것만 남긴다. 모델이 바뀌어도 안 바뀌는 값들이다.
+-- 확률은 0 에서 1 사이이고, 앞으로 지날 정류소 수는 api 문서가 12 로 막았다.
+--
+-- PostgreSQL 은 NaN 을 정렬하고 인덱스에 넣을 수 있게 하려고 NaN = NaN 을 참으로 본다.
+-- 그래서 x = x 로는 NaN 이 안 걸러진다(postgres 18 실측). 대신 NaN 을 모든 수보다 크게
+-- 다루므로 BETWEEN 이 NaN 과 Infinity 를 둘 다 막는다.
+-- 상한이 없는 expected_seats 만 <> 'NaN' 을 따로 건다.
 
 CREATE TABLE stop_demand_statistics (
     route_version_id           bigint           NOT NULL,
@@ -21,10 +24,8 @@ CREATE TABLE stop_demand_statistics (
     CONSTRAINT pk_stop_demand_statistics PRIMARY KEY (route_version_id, stop_order, time_slot, calculation_version),
     CONSTRAINT fk_statistics_route_stop FOREIGN KEY (route_version_id, stop_order)
         REFERENCES route_stop (route_version_id, stop_order),
-    CONSTRAINT ck_statistics_not_nan CHECK (
-        average_fill_rate = average_fill_rate
-        AND average_net_boarding_rate = average_net_boarding_rate
-    )
+    CONSTRAINT ck_statistics_fill_rate CHECK (average_fill_rate BETWEEN 0 AND 1),
+    CONSTRAINT ck_statistics_net_boarding_rate CHECK (average_net_boarding_rate BETWEEN -1 AND 1)
 );
 
 CREATE TABLE seat_forecast (
@@ -49,22 +50,17 @@ CREATE TABLE seat_forecast (
         REFERENCES route_stop (route_version_id, stop_order),
     CONSTRAINT fk_forecast_deployment FOREIGN KEY (model_deployment_id)
         REFERENCES model_deployment (id),
-    -- 아직 못 정한 것 — 개발 요청서 BE N17 :
+    -- 아직 못 정한 것. 개발 요청서 BE N17 :
     --   위 fk_forecast_observation 은 판본을 같이 보는데 이것은 (id) 하나뿐이라,
     --   도착 관측이 다른 판본의 행이어도 DB 가 막지 않는다. 복합으로 바꾸면 회수 배치가
     --   판본을 같이 넘겨야 한다. 여정 키에 판본이 들어 있어 실무상 잘 안 나므로 급하지 않다.
     CONSTRAINT fk_forecast_arrival FOREIGN KEY (arrival_observation_id)
         REFERENCES vehicle_observation (id),
-    CONSTRAINT ck_forecast_not_nan CHECK (
-        seat_full_chance_raw = seat_full_chance_raw
-        AND seat_full_chance = seat_full_chance
-        AND (expected_seats IS NULL OR expected_seats = expected_seats)
+    CONSTRAINT ck_forecast_chance_raw CHECK (seat_full_chance_raw BETWEEN 0 AND 1),
+    CONSTRAINT ck_forecast_chance CHECK (seat_full_chance BETWEEN 0 AND 1),
+    CONSTRAINT ck_forecast_expected_seats CHECK (
+        expected_seats IS NULL
+        OR (expected_seats >= 0 AND expected_seats <> 'NaN'::double precision)
     ),
-    -- 계약이 정한 범위다. 모델이 바뀌어도 안 바뀐다
     CONSTRAINT ck_forecast_stops_to_target CHECK (stops_to_target BETWEEN 1 AND 12)
 );
-
--- 아직 안 닫힌 예보 — 채점 배치가 집는 경로
-CREATE INDEX ix_forecast_pending
-    ON seat_forecast (route_version_id, generated_at)
-    WHERE scoring_state = 'PENDING';
