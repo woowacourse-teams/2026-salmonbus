@@ -5,8 +5,7 @@ import java.util.Objects;
 public record ErrorResponse(
     ErrorCode code,
     String message,
-    String requestId,
-    boolean retryable
+    String requestId
 ) {
 
     public ErrorResponse {

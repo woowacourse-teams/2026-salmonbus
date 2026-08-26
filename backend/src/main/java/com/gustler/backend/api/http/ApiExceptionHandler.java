@@ -61,8 +61,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return new ErrorResponse(
             code,
             message,
-            UUID.randomUUID().toString(),
-            code.retryable()
+            UUID.randomUUID().toString()
         );
     }
 

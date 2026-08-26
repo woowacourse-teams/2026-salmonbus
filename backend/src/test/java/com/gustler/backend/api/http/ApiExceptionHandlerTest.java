@@ -36,7 +36,7 @@ class ApiExceptionHandlerTest {
 
     @ParameterizedTest
     @MethodSource("thrownExceptions")
-    void 오류_코드가_정한_상태와_메시지와_재시도_여부로_응답한다(final ApiException exception) {
+    void 오류_코드가_정한_상태와_메시지로_응답한다(final ApiException exception) {
         // given
         final ErrorCode code = exception.code();
 
@@ -49,7 +49,6 @@ class ApiExceptionHandlerTest {
         assertThat(actual.getBody().code()).isEqualTo(code);
         assertThat(actual.getBody().message()).isEqualTo(code.message());
         assertThat(actual.getBody().requestId()).isNotBlank();
-        assertThat(actual.getBody().retryable()).isEqualTo(code.retryable());
     }
 
     @ParameterizedTest
@@ -80,21 +79,6 @@ class ApiExceptionHandlerTest {
 
         // then
         assertThat(reachable).containsAll(Arrays.asList(ErrorCode.values()));
-    }
-
-    @Test
-    void 재시도_가능한_오류는_이름을_가진_것뿐이다() {
-        // when
-        final List<ErrorCode> retryables = Arrays.stream(ErrorCode.values())
-            .filter(ErrorCode::retryable)
-            .toList();
-
-        // then
-        assertThat(retryables).containsExactlyInAnyOrder(
-            ErrorCode.MODEL_OUT_OF_SCOPE,
-            ErrorCode.NO_RECENT_OBSERVATION,
-            ErrorCode.SERVICE_UNAVAILABLE
-        );
     }
 
     @Test
@@ -138,7 +122,6 @@ class ApiExceptionHandlerTest {
         assertThat(actual.getBody()).isInstanceOfSatisfying(ErrorResponse.class, body -> {
             assertThat(body.code()).isEqualTo(expected);
             assertThat(body.message()).isEqualTo(expected.message());
-            assertThat(body.retryable()).isEqualTo(expected.retryable());
         });
     }
 
@@ -151,7 +134,6 @@ class ApiExceptionHandlerTest {
         // then
         assertThat(actual.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(actual.getBody().code()).isEqualTo(ErrorCode.INTERNAL_ERROR);
-        assertThat(actual.getBody().retryable()).isFalse();
         assertThat(actual.getHeaders().getCacheControl()).isEqualTo("no-store");
     }
 }
