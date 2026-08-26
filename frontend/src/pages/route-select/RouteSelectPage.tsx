@@ -1,16 +1,17 @@
-import { RouteLists } from "./components/RouteLists";
+import { RouteList } from "./components/RouteLists";
 import salmongProud from "./assets/salmong-proud.png";
+import { Pageinfo } from "./components/PageInfo";
+import { titleMock, captionMock, routesMock } from "./api/RouteSelect.mock";
 
 export function RouteSelectPage() {
   return (
     <>
       <header>
-        <img src={salmongProud}></img>
-        <h1>어떤 버스를 타시나요?</h1>
-        <p>노선을 선택하면 정류잘별 도착 예상 좌석과 탑승 판정을 빠르게 확인할 수 있어요.</p>
+        <img src={salmongProud} alt="salmonbus-logo"></img>
+        <Pageinfo title={titleMock} caption={captionMock} />
       </header>
       <main>
-        <RouteLists />
+        <RouteList routes={routesMock} />
       </main>
     </>
   );
