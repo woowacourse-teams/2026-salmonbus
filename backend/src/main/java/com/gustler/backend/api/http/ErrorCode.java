@@ -33,13 +33,13 @@ public enum ErrorCode {
     public static ErrorCode of(
         final HttpStatusCode status
     ) {
-        if (status.value() == HttpStatus.NOT_FOUND.value()) {
+        if (status.isSameCodeAs(HttpStatus.NOT_FOUND)) {
             return ENDPOINT_NOT_FOUND;
         }
-        if (status.value() == HttpStatus.METHOD_NOT_ALLOWED.value()) {
+        if (status.isSameCodeAs(HttpStatus.METHOD_NOT_ALLOWED)) {
             return METHOD_NOT_ALLOWED;
         }
-        if (status.value() == HttpStatus.SERVICE_UNAVAILABLE.value()) {
+        if (status.isSameCodeAs(HttpStatus.SERVICE_UNAVAILABLE)) {
             return SERVICE_UNAVAILABLE;
         }
         if (status.is4xxClientError()) {
