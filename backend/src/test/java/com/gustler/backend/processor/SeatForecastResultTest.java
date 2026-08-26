@@ -1,8 +1,11 @@
 package com.gustler.backend.processor;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class SeatForecastResultTest {
 
@@ -31,5 +34,16 @@ class SeatForecastResultTest {
         // then
         assertThat(actual).isEqualTo(0.35);
         assertThat(result.pFull()).isEqualTo(0.2);
+    }
+
+    @ParameterizedTest
+    @ValueSource(doubles = {-0.1, 1.5, Double.NaN, Double.POSITIVE_INFINITY})
+    void 보정_전_만석_확률은_0과_1_사이의_수다(
+        final double notProbability
+    ) {
+        // when & then
+        assertThatThrownBy(
+            () -> new SeatForecastResult(SeatDistribution.of(0.2, 0.3, 0.5), notProbability)
+        ).isInstanceOf(IllegalArgumentException.class);
     }
 }
