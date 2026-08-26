@@ -6,6 +6,7 @@ import com.gustler.backend.api.board.ModelOutOfScopeException;
 import com.gustler.backend.api.board.NoRecentObservationException;
 import com.gustler.backend.api.route.InvalidRouteIdException;
 import com.gustler.backend.api.route.RouteNotFoundException;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -94,6 +95,18 @@ class ApiExceptionHandlerTest {
             ErrorCode.NO_RECENT_OBSERVATION,
             ErrorCode.SERVICE_UNAVAILABLE
         );
+    }
+
+    @Test
+    void 다음_수집_시각을_알면_그때까지의_초를_알린다() {
+        // given
+        final ApiException exception = new NoRecentObservationException(Duration.ofSeconds(15));
+
+        // when
+        final ResponseEntity<ErrorResponse> actual = handler.handleApiException(exception);
+
+        // then
+        assertThat(actual.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isEqualTo("15");
     }
 
     @ParameterizedTest

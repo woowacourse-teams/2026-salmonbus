@@ -18,8 +18,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         final ApiException exception
     ) {
         final ErrorCode code = exception.code();
+        final HttpHeaders headers = noStore();
+        exception.retryAfter().ifPresent(retryAfter ->
+            headers.set(HttpHeaders.RETRY_AFTER, String.valueOf(retryAfter.toSeconds())));
 
-        return respond(code, exception.getMessage(), code.status());
+        return new ResponseEntity<>(bodyOf(code, exception.getMessage()), headers, code.status());
     }
 
     @ExceptionHandler(Exception.class)
