@@ -1,4 +1,4 @@
-export type RouteStatus = "PREPARING" | "FORECAST_READY";
+export type RouteStatus = "FORECAST_READY" | "PREPARING";
 
 export interface RouteCore {
   id: string;
