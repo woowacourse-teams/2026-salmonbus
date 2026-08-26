@@ -20,7 +20,7 @@ repositories {
 
 dependencyManagement {
     imports {
-        mavenBom 'org.testcontainers:testcontainers-bom:1.21.3' // Spring Boot 4.1 BOM 이 관리하지 않는다.
+        mavenBom 'org.testcontainers:testcontainers-bom:1.21.4' // Spring Boot 4.1 BOM 이 관리하지 않는다.
     }
 }
 
