@@ -23,7 +23,7 @@ class ApiExceptionHandlerTest {
 
     private final ApiExceptionHandler handler = new ApiExceptionHandler();
 
-    private static List<ApiException> 우리가_던지는_예외들() {
+    private static List<ApiException> thrownExceptions() {
         return List.of(
             new InvalidRouteIdException(),
             new RouteNotFoundException(),
@@ -34,7 +34,7 @@ class ApiExceptionHandlerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("우리가_던지는_예외들")
+    @MethodSource("thrownExceptions")
     void 오류_코드가_정한_상태와_메시지와_재시도_여부로_응답한다(final ApiException exception) {
         // given
         final ErrorCode code = exception.code();
@@ -52,7 +52,7 @@ class ApiExceptionHandlerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("우리가_던지는_예외들")
+    @MethodSource("thrownExceptions")
     void 오류_응답은_저장하지_않게_하고_재시도_시각은_알리지_않는다(final ApiException exception) {
         // when
         final ResponseEntity<ErrorResponse> actual = handler.handleApiException(exception);
@@ -65,30 +65,31 @@ class ApiExceptionHandlerTest {
     @Test
     void 모든_오류_코드는_예외나_상태_매핑으로_도달한다() {
         // given
-        final Set<ErrorCode> 예외로_도달 = 우리가_던지는_예외들().stream()
+        final Set<ErrorCode> reachedByException = thrownExceptions().stream()
             .map(ApiException::code)
             .collect(Collectors.toSet());
-        final Set<ErrorCode> 상태로_도달 = Arrays.stream(ErrorCode.values())
+        final Set<ErrorCode> reachedByStatus = Arrays.stream(ErrorCode.values())
             .map(code -> ErrorCode.of(code.status()))
             .collect(Collectors.toSet());
 
         // when
-        final Set<ErrorCode> 도달_가능 = Stream.concat(예외로_도달.stream(), 상태로_도달.stream())
-            .collect(Collectors.toSet());
+        final Set<ErrorCode> reachable =
+            Stream.concat(reachedByException.stream(), reachedByStatus.stream())
+                .collect(Collectors.toSet());
 
         // then
-        assertThat(도달_가능).containsAll(Arrays.asList(ErrorCode.values()));
+        assertThat(reachable).containsAll(Arrays.asList(ErrorCode.values()));
     }
 
     @Test
     void 재시도_가능한_오류는_이름을_가진_것뿐이다() {
         // when
-        final List<ErrorCode> 재시도_가능 = Arrays.stream(ErrorCode.values())
+        final List<ErrorCode> retryables = Arrays.stream(ErrorCode.values())
             .filter(ErrorCode::retryable)
             .toList();
 
         // then
-        assertThat(재시도_가능).containsExactlyInAnyOrder(
+        assertThat(retryables).containsExactlyInAnyOrder(
             ErrorCode.MODEL_OUT_OF_SCOPE,
             ErrorCode.NO_RECENT_OBSERVATION,
             ErrorCode.SERVICE_UNAVAILABLE
