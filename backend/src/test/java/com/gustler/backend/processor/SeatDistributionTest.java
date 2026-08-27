@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -80,12 +82,11 @@ class SeatDistributionTest {
     @Test
     void 분포는_한_번_만들어지면_바뀌지_않는다() {
         // given
-        final double[] chanceBySeats = {0.2, 0.8};
-        final SeatDistribution actual = new SeatDistribution(chanceBySeats);
+        final List<Double> chances = new ArrayList<>(List.of(0.2, 0.8));
+        final SeatDistribution actual = new SeatDistribution(chances);
 
         // when
-        chanceBySeats[0] = 0.9;
-        actual.chanceBySeats()[1] = 0.1;
+        chances.set(0, 0.9);
 
         // then
         assertThat(actual).isEqualTo(SeatDistribution.of(0.2, 0.8));
