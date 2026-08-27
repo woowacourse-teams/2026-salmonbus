@@ -28,28 +28,22 @@ public class RouteVersionJpaEntity {
     @JoinColumn(name = "route_id", nullable = false)
     private RouteJpaEntity route;
 
-    @Column(name = "turn_sequence")
     private Integer turnSequence;
 
-    @Column(name = "up_first_departure_time", length = 5)
     private String upFirstDepartureTime;
 
-    @Column(name = "up_last_departure_time", length = 5)
     private String upLastDepartureTime;
 
-    @Column(name = "down_first_departure_time", length = 5)
     private String downFirstDepartureTime;
 
-    @Column(name = "down_last_departure_time", length = 5)
     private String downLastDepartureTime;
 
     @JdbcTypeCode(SqlTypes.CHAR)
-    @Column(name = "content_digest", nullable = false, length = 64)
+    @Column(nullable = false)
     private String contentDigest;
 
-    @Column(name = "valid_from", nullable = false)
+    @Column(nullable = false)
     private OffsetDateTime validFrom;
 
-    @Column(name = "valid_to")
     private OffsetDateTime validTo;
 }

@@ -19,22 +19,22 @@ public class RouteJpaEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "public_route_id", nullable = false, length = 30)
+    @Column(nullable = false)
     private String publicRouteId;
 
-    @Column(name = "source_id", nullable = false, length = 40)
+    @Column(nullable = false)
     private String sourceId;
 
-    @Column(name = "source_route_id", nullable = false, length = 30)
+    @Column(nullable = false)
     private String sourceRouteId;
 
-    @Column(name = "display_name", nullable = false, length = 40)
+    @Column(nullable = false)
     private String displayName;
 
-    @Column(name = "start_stop_name", nullable = false, length = 60)
+    @Column(nullable = false)
     private String startStopName;
 
-    @Column(name = "end_stop_name", nullable = false, length = 60)
+    @Column(nullable = false)
     private String endStopName;
 
     Route toDomain() {

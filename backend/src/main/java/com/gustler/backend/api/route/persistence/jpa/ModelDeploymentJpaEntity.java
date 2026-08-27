@@ -21,6 +21,6 @@ public class ModelDeploymentJpaEntity {
     private Long id;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "state", nullable = false, length = 12)
+    @Column(nullable = false)
     private ModelDeploymentState state;
 }
