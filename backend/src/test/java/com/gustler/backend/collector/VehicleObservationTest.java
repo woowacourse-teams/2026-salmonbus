@@ -209,6 +209,52 @@ class VehicleObservationTest {
         assertThat(actual.stopOrder()).isEqualTo(FIRST_STOP_ORDER);
     }
 
+    @Test
+    void 차량_아이디는_Open_API가_준_값을_문자열_그대로_쓴다() {
+        // given
+        final BusLocation bus = busAt(STOP_ORDER_6, RUNNING_STATE_DEPARTED);
+
+        // when
+        final VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual.vehicleId()).isEqualTo(VEHICLE_204000206);
+    }
+
+    @Test
+    void 번호판도_관측에_담는다() {
+        // given
+        final BusLocation bus = busAt(STOP_ORDER_6, RUNNING_STATE_DEPARTED);
+
+        // when
+        final VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual.plateNumber()).isEqualTo(PLATE_NUMBER);
+    }
+
+    @Test
+    void Open_API가_준_차량_한_대를_관측_한_건으로_만든다() {
+        // given
+        final BusLocation bus = bus(STOP_ORDER_6, RUNNING_STATE_DEPARTED, SEATS_43, CROWD_LEVEL_3, DOUBLE_DECKER_BUS);
+
+        // when
+        final VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual).isEqualTo(new VehicleObservation(
+            VEHICLE_204000206,
+            PLATE_NUMBER,
+            STOP_ORDER_6,
+            STOP_205000217,
+            RUNNING_STATE_DEPARTED,
+            new Known(SEATS_43),
+            CROWD_LEVEL_3,
+            DOUBLE_DECKER_BUS,
+            ROUTE_TYPE_11,
+            TAGLESS_1));
+    }
+
     private static BusLocation busAt(
         final int stopOrder,
         final int runningState
