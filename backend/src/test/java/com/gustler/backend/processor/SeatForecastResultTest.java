@@ -13,8 +13,7 @@ class SeatForecastResultTest {
     @Test
     void 만석_확률은_분포의_0석_남을_확률이다() {
         // given
-        final SeatForecastResult result =
-            new SeatForecastResult(new SeatDistribution(List.of(0.2, 0.3, 0.5)), 0.35);
+        final SeatForecastResult result = new SeatForecastResult(seatDistribution(), 0.35);
 
         // when
         final double actual = result.fullChance();
@@ -24,17 +23,15 @@ class SeatForecastResultTest {
     }
 
     @Test
-    void 예보는_보정_전_만석_확률을_따로_들고_있다() {
+    void 보정_전_만석_확률은_분포와_따로_들고_있다() {
         // given
-        final SeatForecastResult result =
-            new SeatForecastResult(new SeatDistribution(List.of(0.2, 0.3, 0.5)), 0.35);
+        final SeatForecastResult result = new SeatForecastResult(seatDistribution(), 0.35);
 
         // when
         final double actual = result.fullChanceRaw();
 
         // then
         assertThat(actual).isEqualTo(0.35);
-        assertThat(result.fullChance()).isEqualTo(0.2);
     }
 
     @ParameterizedTest
@@ -43,8 +40,11 @@ class SeatForecastResultTest {
         final double notChance
     ) {
         // when & then
-        assertThatThrownBy(
-            () -> new SeatForecastResult(new SeatDistribution(List.of(0.2, 0.3, 0.5)), notChance)
-        ).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new SeatForecastResult(seatDistribution(), notChance))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    private SeatDistribution seatDistribution() {
+        return new SeatDistribution(List.of(0.2, 0.3, 0.5));
     }
 }

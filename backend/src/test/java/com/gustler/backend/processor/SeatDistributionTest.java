@@ -13,10 +13,15 @@ import org.junit.jupiter.params.provider.ValueSource;
 class SeatDistributionTest {
 
     @Test
-    void 확률을_모두_더해_1이_되는_분포만_만든다() {
+    void 좌석_수마다의_확률을_모두_더하면_1이_된다() {
         // when & then
         assertThatCode(() -> new SeatDistribution(List.of(0.2, 0.3, 0.5)))
             .doesNotThrowAnyException();
+    }
+
+    @Test
+    void 분포는_합이_1인_확률만_받는다() {
+        // when & then
         assertThatThrownBy(() -> new SeatDistribution(List.of(0.2, 0.3)))
             .isInstanceOf(IllegalArgumentException.class);
     }
@@ -34,13 +39,27 @@ class SeatDistributionTest {
     @Test
     void 만석_확률은_0석_남을_확률이다() {
         // given
-        final SeatDistribution distribution = new SeatDistribution(List.of(0.2, 0.3, 0.5));
+        final double zeroSeatChance = 0.2;
+        final SeatDistribution distribution = new SeatDistribution(List.of(zeroSeatChance, 0.3, 0.5));
 
         // when
         final double actual = distribution.fullChance();
 
         // then
-        assertThat(actual).isEqualTo(0.2);
+        assertThat(actual).isEqualTo(zeroSeatChance);
+    }
+
+    @Test
+    void 분포의_세_번째_칸은_2석_남을_확률이다() {
+        // given
+        final double twoSeatsChance = 0.5;
+        final SeatDistribution distribution = new SeatDistribution(List.of(0.2, 0.3, twoSeatsChance));
+
+        // when
+        final double actual = distribution.chanceOf(2);
+
+        // then
+        assertThat(actual).isEqualTo(twoSeatsChance);
     }
 
     @Test
@@ -68,7 +87,7 @@ class SeatDistributionTest {
     }
 
     @Test
-    void 분포에_넣은_확률이_그대로_나온다() {
+    void 분포는_받은_확률을_소수점까지_그대로_낸다() {
         // given
         final SeatDistribution distribution = new SeatDistribution(List.of(0.996, 0.004));
 

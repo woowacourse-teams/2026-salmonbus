@@ -43,7 +43,7 @@ class TimeSlotTest {
     }
 
     @ParameterizedTest
-    @MethodSource("아침도_저녁도_아닌_시각")
+    @MethodSource("hoursOutsideMorningAndEvening")
     void 아침과_저녁_밖의_시각은_모두_기타다(
         final int hour
     ) {
@@ -54,7 +54,7 @@ class TimeSlotTest {
         assertThat(actual).isEqualTo(TimeSlot.OTHER);
     }
 
-    private static IntStream 아침도_저녁도_아닌_시각() {
+    private static IntStream hoursOutsideMorningAndEvening() {
         return IntStream.rangeClosed(0, 23)
             .filter(hour -> hour < 7 || (9 <= hour && hour < 17) || 20 <= hour);
     }
