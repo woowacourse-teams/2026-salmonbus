@@ -1,0 +1,200 @@
+package com.gustler.backend.api.vehicle.application;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+
+import com.gustler.backend.api.route.RouteId;
+import com.gustler.backend.api.route.RouteNotFoundException;
+import com.gustler.backend.api.vehicle.domain.ObservedVehicle;
+import com.gustler.backend.api.vehicle.domain.VehicleDirection;
+import com.gustler.backend.api.vehicle.domain.VehicleObservationState;
+import com.gustler.backend.api.vehicle.domain.VehiclePhase;
+import com.gustler.backend.api.vehicle.domain.VehiclePollOutcome;
+import com.gustler.backend.api.vehicle.domain.VehicleSeat;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.util.List;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class LiveVehicleQueryServiceTest {
+
+    private static final RouteId ROUTE_ID = new RouteId("204000057");
+    private static final Clock CLOCK = Clock.fixed(
+        Instant.parse("2026-08-27T03:00:00Z"),
+        ZoneId.of("Asia/Seoul")
+    );
+    private static final OffsetDateTime RECENT = OffsetDateTime.parse(
+        "2026-08-27T11:58:00+09:00"
+    );
+    private static final ObservedVehicle VEHICLE = new ObservedVehicle(
+        "204000206",
+        VehicleDirection.UP,
+        5,
+        "205000217",
+        "범계역",
+        VehiclePhase.DEPARTED,
+        new VehicleSeat.Exact(0)
+    );
+
+    @Mock
+    private VehicleQueryRepository vehicleQueryRepository;
+
+    private LiveVehicleQueryService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new LiveVehicleQueryService(
+            vehicleQueryRepository,
+            new VehicleFreshnessPolicy(CLOCK),
+            new VehicleCachePolicy(),
+            CLOCK
+        );
+    }
+
+    @Test
+    void 최신_정상_poll에_차량이_있으면_차량_현황을_반환한다() {
+        given(vehicleQueryRepository.findLatestSnapshot(ROUTE_ID))
+            .willReturn(Optional.of(snapshot(
+                1L,
+                VehiclePollOutcome.SUCCESS_ROWS,
+                RECENT
+            )));
+        given(vehicleQueryRepository.findVehicles(1L)).willReturn(List.of(VEHICLE));
+
+        final LiveVehicleOverview actual = service.getLiveVehicles(ROUTE_ID);
+
+        assertThat(actual.state()).isEqualTo(VehicleObservationState.VEHICLES_PRESENT);
+        assertThat(actual.observedAt()).isEqualTo(RECENT);
+        assertThat(actual.staleAt()).isEqualTo(RECENT.plusMinutes(5));
+        assertThat(actual.vehicles()).containsExactly(VEHICLE);
+        assertThat(actual.cacheMaxAge()).isEqualTo(Duration.ofSeconds(20));
+    }
+
+    @Test
+    void 최신_정상_poll이_SUCCESS_EMPTY면_차량이_없다는_정상_상태를_반환한다() {
+        given(vehicleQueryRepository.findLatestSnapshot(ROUTE_ID))
+            .willReturn(Optional.of(snapshot(
+                2L,
+                VehiclePollOutcome.SUCCESS_EMPTY,
+                RECENT
+            )));
+
+        final LiveVehicleOverview actual = service.getLiveVehicles(ROUTE_ID);
+
+        assertThat(actual.state()).isEqualTo(
+            VehicleObservationState.NO_VEHICLES_OBSERVED
+        );
+        assertThat(actual.vehicles()).isEmpty();
+        verify(vehicleQueryRepository, never()).findVehicles(2L);
+    }
+
+    @Test
+    void 최신_poll이_실패하면_마지막_정상_시각을_주되_차량은_반환하지_않는다() {
+        given(vehicleQueryRepository.findLatestSnapshot(ROUTE_ID))
+            .willReturn(Optional.of(snapshot(3L, VehiclePollOutcome.UNKNOWN, RECENT)));
+
+        final LiveVehicleOverview actual = service.getLiveVehicles(ROUTE_ID);
+
+        assertThat(actual.state()).isEqualTo(VehicleObservationState.UNKNOWN);
+        assertThat(actual.observedAt()).isEqualTo(RECENT);
+        assertThat(actual.staleAt()).isEqualTo(RECENT.plusMinutes(5));
+        assertThat(actual.vehicles()).isEmpty();
+        verify(vehicleQueryRepository, never()).findVehicles(3L);
+    }
+
+    @Test
+    void 최신_정상_스냅샷이_자기_staleAt을_넘겼으면_UNKNOWN으로_강등한다() {
+        final OffsetDateTime oldObservation = OffsetDateTime.parse(
+            "2026-08-27T11:54:59+09:00"
+        );
+        given(vehicleQueryRepository.findLatestSnapshot(ROUTE_ID))
+            .willReturn(Optional.of(snapshot(
+                4L,
+                VehiclePollOutcome.SUCCESS_ROWS,
+                oldObservation
+            )));
+
+        final LiveVehicleOverview actual = service.getLiveVehicles(ROUTE_ID);
+
+        assertThat(actual.state()).isEqualTo(VehicleObservationState.UNKNOWN);
+        assertThat(actual.observedAt()).isEqualTo(oldObservation);
+        assertThat(actual.staleAt()).isEqualTo(oldObservation.plusMinutes(5));
+        assertThat(actual.vehicles()).isEmpty();
+        verify(vehicleQueryRepository, never()).findVehicles(4L);
+    }
+
+    @Test
+    void 현재_시각이_staleAt과_같으면_아직_차량을_반환한다() {
+        final OffsetDateTime boundaryObservation = OffsetDateTime.parse(
+            "2026-08-27T11:55:00+09:00"
+        );
+        given(vehicleQueryRepository.findLatestSnapshot(ROUTE_ID))
+            .willReturn(Optional.of(snapshot(
+                5L,
+                VehiclePollOutcome.SUCCESS_ROWS,
+                boundaryObservation
+            )));
+        given(vehicleQueryRepository.findVehicles(5L)).willReturn(List.of(VEHICLE));
+
+        final LiveVehicleOverview actual = service.getLiveVehicles(ROUTE_ID);
+
+        assertThat(actual.state()).isEqualTo(VehicleObservationState.VEHICLES_PRESENT);
+        assertThat(actual.vehicles()).containsExactly(VEHICLE);
+    }
+
+    @Test
+    void 정상_수집이_한_번도_없으면_시각이_없는_UNKNOWN을_반환한다() {
+        final VehicleSnapshot neverObserved = new VehicleSnapshot(
+            ROUTE_ID.value(),
+            "42",
+            null,
+            VehiclePollOutcome.UNKNOWN,
+            null,
+            null
+        );
+        given(vehicleQueryRepository.findLatestSnapshot(ROUTE_ID))
+            .willReturn(Optional.of(neverObserved));
+
+        final LiveVehicleOverview actual = service.getLiveVehicles(ROUTE_ID);
+
+        assertThat(actual.state()).isEqualTo(VehicleObservationState.UNKNOWN);
+        assertThat(actual.observedAt()).isNull();
+        assertThat(actual.staleAt()).isNull();
+        assertThat(actual.vehicles()).isEmpty();
+    }
+
+    @Test
+    void 현재_판본이_있는_노선이_없으면_찾을_수_없음_예외를_던진다() {
+        given(vehicleQueryRepository.findLatestSnapshot(ROUTE_ID)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getLiveVehicles(ROUTE_ID))
+            .isInstanceOf(RouteNotFoundException.class);
+    }
+
+    private VehicleSnapshot snapshot(
+        final Long batchId,
+        final VehiclePollOutcome outcome,
+        final OffsetDateTime observedAt
+    ) {
+        return new VehicleSnapshot(
+            ROUTE_ID.value(),
+            "42",
+            batchId,
+            outcome,
+            observedAt,
+            observedAt
+        );
+    }
+}
