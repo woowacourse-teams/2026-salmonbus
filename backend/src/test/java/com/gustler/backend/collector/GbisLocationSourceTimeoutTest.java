@@ -42,7 +42,7 @@ class GbisLocationSourceTimeoutTest {
 
     @DynamicPropertySource
     static void pointAtSlowOpenApi(
-        final DynamicPropertyRegistry registry
+        DynamicPropertyRegistry registry
     ) {
         registry.add("gbis.base-url",
             () -> "http://localhost:" + SLOW_OPEN_API.getAddress().getPort());
@@ -52,9 +52,9 @@ class GbisLocationSourceTimeoutTest {
     @Test
     void Open_API가_응답을_안_줘도_읽기_제한시간에_포기한다() {
         // when
-        final long startedAt = System.nanoTime();
-        final GbisLocationResult actual = source.read(ROUTE_3330);
-        final Duration waited = Duration.ofNanos(System.nanoTime() - startedAt);
+        long startedAt = System.nanoTime();
+        GbisLocationResult actual = source.read(ROUTE_3330);
+        Duration waited = Duration.ofNanos(System.nanoTime() - startedAt);
 
         // then
         assertThat(actual).isInstanceOf(NoResponse.class);
@@ -64,7 +64,7 @@ class GbisLocationSourceTimeoutTest {
     @Test
     void 포기한_응답_사유에_서비스키가_남지_않는다() {
         // when
-        final GbisLocationResult actual = source.read(ROUTE_3330);
+        GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(actual).isInstanceOfSatisfying(NoResponse.class,
@@ -73,11 +73,11 @@ class GbisLocationSourceTimeoutTest {
 
     private static HttpServer startSlowOpenApi() {
         try {
-            final HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+            HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
             server.createContext("/", exchange -> {
                 try {
                     Thread.sleep(RESPONSE_DELAY);
-                } catch (final InterruptedException e) {
+                } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
                 exchange.close();
@@ -85,7 +85,7 @@ class GbisLocationSourceTimeoutTest {
             server.setExecutor(Executors.newSingleThreadExecutor());
             server.start();
             return server;
-        } catch (final IOException e) {
+        } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }

@@ -49,9 +49,9 @@ public class GbisLocationSource {
     private final ObjectMapper objectMapper;
 
     public GbisLocationSource(
-        final RestClient gbisRestClient,
-        final GbisProperties properties,
-        final ObjectMapper objectMapper
+        RestClient gbisRestClient,
+        GbisProperties properties,
+        ObjectMapper objectMapper
     ) {
         this.gbisRestClient = gbisRestClient;
         this.properties = properties;
@@ -60,10 +60,10 @@ public class GbisLocationSource {
 
     // TODO 로깅 혹은 저장 시 serviceKey 를 마스킹해야 한다.
     public GbisLocationResult read(
-        final String routeId
+        String routeId
     ) {
         try {
-            final byte[] raw = gbisRestClient.get()
+            byte[] raw = gbisRestClient.get()
                 .uri(builder -> builder
                     .path(BUS_LOCATION_PATH)
                     .queryParam("serviceKey", properties.serviceKey())
@@ -74,13 +74,13 @@ public class GbisLocationSource {
                 .onStatus(HttpStatusCode::isError, KEEP_ERROR_BODY)
                 .body(byte[].class);
             return interpret(decode(raw));
-        } catch (final RestClientException e) {
+        } catch (RestClientException e) {
             return new NoResponse(e.getMessage());
         }
     }
 
     private String decode(
-        final byte[] raw
+        byte[] raw
     ) {
         if (raw == null) {
             return null;
@@ -89,7 +89,7 @@ public class GbisLocationSource {
     }
 
     private GbisLocationResult interpret(
-        final String body
+        String body
     ) {
         if (body == null || body.isBlank()) {
             return new NoResponse("Open API가 본문 없이 응답했다");
@@ -101,9 +101,9 @@ public class GbisLocationSource {
     }
 
     private GbisLocationResult interpretPortalError(
-        final String body
+        String body
     ) {
-        final CommonHeader header = parsePortalHeaderOf(body);
+        CommonHeader header = parsePortalHeaderOf(body);
 
         return switch (PortalReasonCode.from(header.returnReasonCode())) {
             case DAILY_QUOTA_EXCEEDED -> new DailyQuotaExceeded();
@@ -113,26 +113,26 @@ public class GbisLocationSource {
     }
 
     private CommonHeader parsePortalHeaderOf(
-        final String body
+        String body
     ) {
         return parsePortalError(body)
             .orElseGet(() -> portalHeaderFromXml(body));
     }
 
     private Optional<CommonHeader> parsePortalError(
-        final String body
+        String body
     ) {
         try {
-            final PortalErrorResponse parsed = objectMapper.readValue(body, PortalErrorResponse.class);
+            PortalErrorResponse parsed = objectMapper.readValue(body, PortalErrorResponse.class);
             return Optional.ofNullable(parsed.response())
                 .map(PortalErrorResponse.ServiceResponse::header);
-        } catch (final JacksonException e) {
+        } catch (JacksonException e) {
             return Optional.empty();
         }
     }
 
     private CommonHeader portalHeaderFromXml(
-        final String body
+        String body
     ) {
         return new CommonHeader(
             extract(ERROR_CODE_IN_XML, body).orElse(NO_MESSAGE),
@@ -141,10 +141,10 @@ public class GbisLocationSource {
     }
 
     private Optional<String> extract(
-        final Pattern pattern,
-        final String body
+        Pattern pattern,
+        String body
     ) {
-        final Matcher matcher = pattern.matcher(body);
+        Matcher matcher = pattern.matcher(body);
         if (matcher.find()) {
             return Optional.of(matcher.group(1).trim());
         }
@@ -152,12 +152,12 @@ public class GbisLocationSource {
     }
 
     private GbisLocationResult interpretGbisResponse(
-        final String body
+        String body
     ) {
-        final BusLocationResponse response;
+        BusLocationResponse response;
         try {
             response = objectMapper.readValue(body, BusLocationResponse.class);
-        } catch (final JacksonException e) {
+        } catch (JacksonException e) {
             return new UnreadableResponse(PARSE_FAILURE + e.getOriginalMessage());
         }
 
@@ -168,16 +168,16 @@ public class GbisLocationSource {
     }
 
     private boolean hasHeader(
-        final BusLocationResponse response
+        BusLocationResponse response
     ) {
         return response.response() != null && response.response().header() != null;
     }
 
     private GbisLocationResult interpretHeader(
-        final BusLocationResponse response
+        BusLocationResponse response
     ) {
-        final Header header = response.response().header();
-        final int resultCode = header.resultCode();
+        Header header = response.response().header();
+        int resultCode = header.resultCode();
 
         return switch (GbisResultCode.from(resultCode)) {
             case SUCCESS -> interpretSuccess(header, response);
@@ -189,10 +189,10 @@ public class GbisLocationSource {
     }
 
     private GbisLocationResult interpretSuccess(
-        final Header header,
-        final BusLocationResponse response
+        Header header,
+        BusLocationResponse response
     ) {
-        final Body body = response.response().body();
+        Body body = response.response().body();
 
         if (body == null || body.busLocations() == null) {
             return new UnreadableResponse("결과 코드는 정상인데 응답 본문이 없다");

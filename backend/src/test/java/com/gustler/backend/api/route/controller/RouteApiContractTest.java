@@ -49,13 +49,13 @@ class RouteApiContractTest {
 
     @Test
     void 현재_판본이_있는_노선을_DB_생성_순서와_계약_필드_순서대로_반환한다() throws Exception {
-        final long firstRouteId = insertRoute(
+        long firstRouteId = insertRoute(
             "234000050",
             "1650",
             "구리수택차고지",
             "안양역"
         );
-        final long secondRouteId = insertRoute(
+        long secondRouteId = insertRoute(
             "204000057",
             "3330",
             "도촌동9단지앞",
@@ -65,7 +65,7 @@ class RouteApiContractTest {
         insertCurrentVersionWithStop(secondRouteId, SECOND_DIGEST, "205000001");
         insertModelDeployment("STAGED");
 
-        final String expected = """
+        String expected = """
             {"routes":[{"id":"234000050","displayName":"1650","startStopName":"구리수택차고지","endStopName":"안양역","status":"PREPARING"},{"id":"204000057","displayName":"3330","startStopName":"도촌동9단지앞","endStopName":"안양역","status":"PREPARING"}]}
             """.strip();
 
@@ -77,7 +77,7 @@ class RouteApiContractTest {
 
     @Test
     void 활성_모델이_있으면_현재_노선을_FORECAST_READY로_반환한다() throws Exception {
-        final long routeId = insertRoute(
+        long routeId = insertRoute(
             "204000057",
             "3330",
             "도촌동9단지앞",
@@ -93,7 +93,7 @@ class RouteApiContractTest {
 
     @Test
     void 판본이_교체되면_종료된_판본을_제외하고_새_현재_판본을_읽는다() throws Exception {
-        final long routeId = insertRoute(
+        long routeId = insertRoute(
             "204000057",
             "3330",
             "도촌동9단지앞",
@@ -114,10 +114,10 @@ class RouteApiContractTest {
     }
 
     private long insertRoute(
-        final String sourceRouteId,
-        final String displayName,
-        final String startStopName,
-        final String endStopName
+        String sourceRouteId,
+        String displayName,
+        String startStopName,
+        String endStopName
     ) {
         return jdbcClient.sql("""
                 INSERT INTO route (
@@ -139,11 +139,11 @@ class RouteApiContractTest {
     }
 
     private void insertCurrentVersionWithStop(
-        final long routeId,
-        final String contentDigest,
-        final String stopId
+        long routeId,
+        String contentDigest,
+        String stopId
     ) {
-        final long routeVersionId = jdbcClient.sql("""
+        long routeVersionId = jdbcClient.sql("""
                 INSERT INTO route_version (route_id, content_digest, valid_from)
                 VALUES (?, ?, ?)
                 RETURNING id
@@ -155,11 +155,11 @@ class RouteApiContractTest {
     }
 
     private void insertExpiredVersionWithStop(
-        final long routeId,
-        final String contentDigest,
-        final String stopId
+        long routeId,
+        String contentDigest,
+        String stopId
     ) {
-        final long routeVersionId = jdbcClient.sql("""
+        long routeVersionId = jdbcClient.sql("""
                 INSERT INTO route_version (route_id, content_digest, valid_from, valid_to)
                 VALUES (?, ?, ?, ?)
                 RETURNING id
@@ -171,8 +171,8 @@ class RouteApiContractTest {
     }
 
     private void insertRouteStop(
-        final long routeVersionId,
-        final String stopId
+        long routeVersionId,
+        String stopId
     ) {
         jdbcClient.sql("""
                 INSERT INTO route_stop (
@@ -184,7 +184,7 @@ class RouteApiContractTest {
             .update();
     }
 
-    private void insertModelDeployment(final String state) {
+    private void insertModelDeployment(String state) {
         jdbcClient.sql("""
                 INSERT INTO model_deployment (
                     deployment_key, release_id, model_key, model_version,

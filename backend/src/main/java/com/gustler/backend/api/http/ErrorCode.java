@@ -20,15 +20,15 @@ public enum ErrorCode {
     private final String message;
 
     ErrorCode(
-        final HttpStatus status,
-        final String message
+        HttpStatus status,
+        String message
     ) {
         this.status = status;
         this.message = message;
     }
 
     public static ErrorCode of(
-        final HttpStatusCode status
+        HttpStatusCode status
     ) {
         if (status.isSameCodeAs(HttpStatus.NOT_FOUND)) {
             return ENDPOINT_NOT_FOUND;

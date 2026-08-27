@@ -22,7 +22,7 @@ class DatabaseConnectionTest {
     void 테스트는_운영과_같은_PostgreSQL_18에서_돈다() throws SQLException {
         try (Connection connection = dataSource.getConnection()) {
             // when
-            final DatabaseMetaData actual = connection.getMetaData();
+            DatabaseMetaData actual = connection.getMetaData();
 
             // then
             assertThat(actual.getDatabaseProductName()).isEqualTo("PostgreSQL");

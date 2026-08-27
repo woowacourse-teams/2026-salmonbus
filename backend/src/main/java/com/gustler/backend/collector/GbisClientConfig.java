@@ -11,8 +11,8 @@ public class GbisClientConfig {
 
     @Bean
     public RestClient gbisRestClient(
-        final RestClient.Builder builder,
-        final GbisProperties properties
+        RestClient.Builder builder,
+        GbisProperties properties
     ) {
         return builder
             .baseUrl(properties.baseUrl())

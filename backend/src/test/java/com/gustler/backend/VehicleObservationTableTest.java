@@ -37,7 +37,7 @@ class VehicleObservationTableTest {
 
     @BeforeEach
     void 노선_판본과_정류소와_수집_묶음을_먼저_저장한다() {
-        final long routeId = insertRoute();
+        long routeId = insertRoute();
         routeVersionId = insertRouteVersion(routeId);
         insertRouteStop(routeVersionId);
         batchId = insertObservationBatch(routeVersionId);
@@ -63,13 +63,13 @@ class VehicleObservationTableTest {
     @Test
     void KST로_넣든_UTC로_넣든_한국_시간으로_조회할_수_있다() {
         // given
-        final OffsetDateTime inKst = OffsetDateTime.parse("2026-08-19T11:14:04.911+09:00");
-        final OffsetDateTime inUtc = OffsetDateTime.parse("2026-08-19T02:14:04.911Z");
+        OffsetDateTime inKst = OffsetDateTime.parse("2026-08-19T11:14:04.911+09:00");
+        OffsetDateTime inUtc = OffsetDateTime.parse("2026-08-19T02:14:04.911Z");
 
         // when
         insertObservation(batchId, VEHICLE_204000206, 0, inKst);
         insertObservation(batchId, VEHICLE_204003542, 1, inUtc);
-        final List<LocalDateTime> actual = jdbcClient
+        List<LocalDateTime> actual = jdbcClient
             .sql("""
                 SELECT observed_at AT TIME ZONE 'Asia/Seoul'
                 FROM vehicle_observation
@@ -98,7 +98,7 @@ class VehicleObservationTableTest {
     }
 
     private long insertRouteVersion(
-        final long routeId
+        long routeId
     ) {
         return jdbcClient.sql("""
                 INSERT INTO route_version (route_id, content_digest, valid_from)
@@ -111,7 +111,7 @@ class VehicleObservationTableTest {
     }
 
     private void insertRouteStop(
-        final long versionId
+        long versionId
     ) {
         jdbcClient.sql("""
                 INSERT INTO route_stop (
@@ -123,7 +123,7 @@ class VehicleObservationTableTest {
     }
 
     private long insertObservationBatch(
-        final long versionId
+        long versionId
     ) {
         return jdbcClient.sql("""
                 INSERT INTO observation_batch (
@@ -137,10 +137,10 @@ class VehicleObservationTableTest {
     }
 
     private void insertObservation(
-        final long targetBatchId,
-        final String vehicleId,
-        final int sourceRowNumber,
-        final OffsetDateTime observedAt
+        long targetBatchId,
+        String vehicleId,
+        int sourceRowNumber,
+        OffsetDateTime observedAt
     ) {
         jdbcClient.sql("""
                 INSERT INTO vehicle_observation (

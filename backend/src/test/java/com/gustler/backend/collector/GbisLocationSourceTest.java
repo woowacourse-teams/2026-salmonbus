@@ -69,7 +69,7 @@ class GbisLocationSourceTest {
 
     @BeforeEach
     void setUp() {
-        final RestClient.Builder builder = RestClient.builder().baseUrl(BASE_URL);
+        RestClient.Builder builder = RestClient.builder().baseUrl(BASE_URL);
         openApi = MockRestServiceServer.bindTo(builder).build();
         source = new GbisLocationSource(
             builder.build(),
@@ -100,7 +100,7 @@ class GbisLocationSourceTest {
         respondWithJson(fixture("location-two-vehicles.json"));
 
         // when
-        final GbisLocationResult actual = source.read(ROUTE_3330);
+        GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(actual)
@@ -115,7 +115,7 @@ class GbisLocationSourceTest {
         respondWithJson(fixture("location-two-vehicles.json"));
 
         // when
-        final GbisLocationResult actual = source.read(ROUTE_3330);
+        GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(actual).isInstanceOfSatisfying(Success.class,
@@ -128,7 +128,7 @@ class GbisLocationSourceTest {
         respondWithJson(GBIS_HEADER_ONLY_JSON.formatted(0, "정상적으로 처리되었습니다."));
 
         // when
-        final GbisLocationResult actual = source.read(ROUTE_3330);
+        GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(actual).isInstanceOf(UnreadableResponse.class);
@@ -140,7 +140,7 @@ class GbisLocationSourceTest {
         respondWithJson(fixture("location-no-vehicles.json"));
 
         // when
-        final GbisLocationResult actual = source.read(ROUTE_3330);
+        GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(actual).isInstanceOf(NoVehicles.class);
@@ -152,7 +152,7 @@ class GbisLocationSourceTest {
         respondWithJson(GBIS_HEADER_ONLY_JSON.formatted(1, SYSTEM_FAILURE_MESSAGE));
 
         // when
-        final GbisLocationResult actual = source.read(ROUTE_3330);
+        GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(actual).isInstanceOfSatisfying(GbisSystemError.class, error -> {
@@ -167,7 +167,7 @@ class GbisLocationSourceTest {
         respondWithJson(fixture("location-parameter-missing.json"));
 
         // when
-        final GbisLocationResult actual = source.read(ROUTE_3330);
+        GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(actual).isInstanceOfSatisfying(MissingRequiredParameter.class, missing -> {
@@ -182,7 +182,7 @@ class GbisLocationSourceTest {
         respondWithJson(GBIS_HEADER_ONLY_JSON.formatted(9, UNKNOWN_RESULT_MESSAGE));
 
         // when
-        final GbisLocationResult actual = source.read(ROUTE_3330);
+        GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(actual).isInstanceOfSatisfying(UnknownGbisResultCode.class, unknown -> {
@@ -198,7 +198,7 @@ class GbisLocationSourceTest {
         respondWithJson("{not json");
 
         // when
-        final GbisLocationResult actual = source.read(ROUTE_3330);
+        GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(actual).isInstanceOfSatisfying(UnreadableResponse.class,
@@ -215,7 +215,7 @@ class GbisLocationSourceTest {
             """);
 
         // when
-        final GbisLocationResult actual = source.read(ROUTE_3330);
+        GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(actual).isInstanceOf(UnreadableResponse.class);
@@ -227,7 +227,7 @@ class GbisLocationSourceTest {
         respondWithPortalError("22");
 
         // when
-        final GbisLocationResult actual = source.read(ROUTE_3330);
+        GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(actual).isInstanceOf(DailyQuotaExceeded.class);
@@ -239,7 +239,7 @@ class GbisLocationSourceTest {
         respondWithPortalErrorAsJson("22");
 
         // when
-        final GbisLocationResult actual = source.read(ROUTE_3330);
+        GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(actual).isInstanceOf(DailyQuotaExceeded.class);
@@ -251,7 +251,7 @@ class GbisLocationSourceTest {
         respondWithJson(fixture("portal-key-not-registered.json"));
 
         // when
-        final GbisLocationResult actual = source.read(ROUTE_3330);
+        GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(actual).isInstanceOfSatisfying(GatewayRejected.class, rejected -> {
@@ -267,7 +267,7 @@ class GbisLocationSourceTest {
         respondWithPortalError("23");
 
         // when
-        final GbisLocationResult actual = source.read(ROUTE_3330);
+        GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(actual).isInstanceOf(PerSecondQuotaExceeded.class);
@@ -279,7 +279,7 @@ class GbisLocationSourceTest {
         respondWithXml(fixture("portal-key-not-registered.xml"));
 
         // when
-        final GbisLocationResult actual = source.read(ROUTE_3330);
+        GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(actual).isInstanceOfSatisfying(GatewayRejected.class, rejected -> {
@@ -298,28 +298,28 @@ class GbisLocationSourceTest {
                 .contentType(MediaType.APPLICATION_XML));
 
         // when
-        final GbisLocationResult actual = source.read(ROUTE_3330);
+        GbisLocationResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(actual).isInstanceOf(DailyQuotaExceeded.class);
     }
 
     private void respondWithJson(
-        final String body
+        String body
     ) {
         openApi.expect(requestTo(containsString(ROUTE_3330)))
             .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
     }
 
     private void respondWithXml(
-        final String body
+        String body
     ) {
         openApi.expect(requestTo(containsString(ROUTE_3330)))
             .andRespond(withSuccess(body, MediaType.APPLICATION_XML));
     }
 
     private void respondWithPortalError(
-        final String reasonCode
+        String reasonCode
     ) {
         openApi.expect(requestTo(containsString(ROUTE_3330)))
             .andRespond(withSuccess(
@@ -327,7 +327,7 @@ class GbisLocationSourceTest {
     }
 
     private void respondWithPortalErrorAsJson(
-        final String reasonCode
+        String reasonCode
     ) {
         openApi.expect(requestTo(containsString(ROUTE_3330)))
             .andRespond(withSuccess(
@@ -335,9 +335,9 @@ class GbisLocationSourceTest {
     }
 
     private static InputStream openFixture(
-        final String name
+        String name
     ) {
-        final InputStream stream =
+        InputStream stream =
             GbisLocationSourceTest.class.getClassLoader().getResourceAsStream("gbis/" + name);
         if (stream == null) {
             throw new IllegalArgumentException("픽스처를 찾지 못했다: gbis/" + name);
@@ -346,11 +346,11 @@ class GbisLocationSourceTest {
     }
 
     private static String fixture(
-        final String name
+        String name
     ) {
         try (InputStream stream = openFixture(name)) {
             return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (final IOException e) {
+        } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }

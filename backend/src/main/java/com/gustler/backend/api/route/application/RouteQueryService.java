@@ -12,13 +12,13 @@ public class RouteQueryService {
 
     private final RouteQueryRepository routeQueryRepository;
 
-    public RouteQueryService(final RouteQueryRepository routeQueryRepository) {
+    public RouteQueryService(RouteQueryRepository routeQueryRepository) {
         this.routeQueryRepository = routeQueryRepository;
     }
 
     public RouteOverview getRouteOverview() {
-        final List<Route> routes = routeQueryRepository.findAllCurrentRoutes();
-        final RouteStatus status = routeQueryRepository.existsActiveModel()
+        List<Route> routes = routeQueryRepository.findAllCurrentRoutes();
+        RouteStatus status = routeQueryRepository.existsActiveModel()
             ? RouteStatus.FORECAST_READY
             : RouteStatus.PREPARING;
 

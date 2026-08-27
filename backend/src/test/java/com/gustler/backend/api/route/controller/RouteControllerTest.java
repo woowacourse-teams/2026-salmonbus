@@ -38,13 +38,13 @@ class RouteControllerTest {
 
     @Test
     void 지원_노선을_조회_순서대로_반환한다() throws Exception {
-        final Route firstRoute = new Route(
+        Route firstRoute = new Route(
             "204000057",
             "3330",
             "도촌동9단지앞",
             "안양역"
         );
-        final Route secondRoute = new Route(
+        Route secondRoute = new Route(
             "234000050",
             "1650",
             "구리수택차고지",

@@ -39,7 +39,7 @@ class RouteQueryServiceTest {
         given(routeQueryRepository.existsActiveModel()).willReturn(true);
 
         // when
-        final RouteOverview actual = routeQueryService.getRouteOverview();
+        RouteOverview actual = routeQueryService.getRouteOverview();
 
         // then
         assertThat(actual.routes()).containsExactly(ROUTE);
@@ -52,7 +52,7 @@ class RouteQueryServiceTest {
         given(routeQueryRepository.existsActiveModel()).willReturn(false);
 
         // when
-        final RouteOverview actual = routeQueryService.getRouteOverview();
+        RouteOverview actual = routeQueryService.getRouteOverview();
 
         // then
         assertThat(actual.routes()).containsExactly(ROUTE);

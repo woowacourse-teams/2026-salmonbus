@@ -20,7 +20,7 @@ class SchemaMigrationTest {
     @Test
     void 앱_부팅_시_Flyway가_마이그레이션을_V1부터_순차적으로_모두_실행한다() {
         // when
-        final MigrationInfo[] actual = flyway.info().applied();
+        MigrationInfo[] actual = flyway.info().applied();
 
         // then
         assertThat(actual)
@@ -32,13 +32,13 @@ class SchemaMigrationTest {
     @Test
     void 앱을_다시_띄우면_기존에_돌았던_V1_V2_V3은_처음_실행됐던_시각을_유지하고_실행되지_않는다() {
         // given
-        final List<Date> firstRun = installedOn();
+        List<Date> firstRun = installedOn();
 
         // when
         flyway.migrate();
 
         // then
-        final List<Date> actual = installedOn();
+        List<Date> actual = installedOn();
         assertThat(actual).isEqualTo(firstRun);
     }
 

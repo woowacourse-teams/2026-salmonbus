@@ -14,13 +14,13 @@ public enum GbisResultCode {
     private final Integer code;
 
     GbisResultCode(
-        final Integer code
+        Integer code
     ) {
         this.code = code;
     }
 
     public static GbisResultCode from(
-        final int resultCode
+        int resultCode
     ) {
         return Arrays.stream(values())
             .filter(candidate -> Objects.equals(candidate.code, resultCode))
