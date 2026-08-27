@@ -7,9 +7,12 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "route")
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RouteJpaEntity {
 
     @Id
@@ -33,9 +36,6 @@ public class RouteJpaEntity {
 
     @Column(name = "end_stop_name", nullable = false, length = 60)
     private String endStopName;
-
-    protected RouteJpaEntity() {
-    }
 
     Route toDomain() {
         return new Route(
