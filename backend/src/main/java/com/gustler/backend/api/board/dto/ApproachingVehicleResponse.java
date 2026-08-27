@@ -11,7 +11,7 @@ public record ApproachingVehicleResponse(
     Double expectedSeats
 ) {
 
-    static ApproachingVehicleResponse from(final ApproachingVehicle vehicle) {
+    static ApproachingVehicleResponse from(ApproachingVehicle vehicle) {
         return new ApproachingVehicleResponse(
             vehicle.vehicleId(),
             vehicle.horizonStops(),

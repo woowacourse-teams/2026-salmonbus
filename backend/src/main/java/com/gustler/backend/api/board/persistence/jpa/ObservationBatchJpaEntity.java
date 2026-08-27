@@ -41,7 +41,7 @@ public class ObservationBatchJpaEntity {
     protected ObservationBatchJpaEntity() {
     }
 
-    public SnapshotObservation toDomain(final ZoneId zoneId) {
+    public SnapshotObservation toDomain(ZoneId zoneId) {
         return new SnapshotObservation(
             id,
             responseReceivedAt.atZoneSameInstant(zoneId).toOffsetDateTime(),

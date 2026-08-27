@@ -26,7 +26,7 @@ public class RouteStopJpaId implements Serializable {
     }
 
     @Override
-    public boolean equals(final Object other) {
+    public boolean equals(Object other) {
         if (this == other) {
             return true;
         }

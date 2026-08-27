@@ -64,7 +64,7 @@ class BoardControllerTest {
     }
 
     private BoardOverview overview() {
-        final BoardRoute route = new BoardRoute(
+        BoardRoute route = new BoardRoute(
             "204000057",
             "3330",
             "기점",
@@ -81,7 +81,7 @@ class BoardControllerTest {
             )),
             "1"
         );
-        final StopState stop = new StopState(
+        StopState stop = new StopState(
             1,
             "STOP-1",
             "기점",
@@ -89,7 +89,7 @@ class BoardControllerTest {
             true,
             List.of(new ApproachingVehicle(null, 1, 0.8, null))
         );
-        final Board board = new Board(
+        Board board = new Board(
             route,
             OffsetDateTime.parse("2026-08-27T08:00:00+09:00"),
             new ForecastModel(

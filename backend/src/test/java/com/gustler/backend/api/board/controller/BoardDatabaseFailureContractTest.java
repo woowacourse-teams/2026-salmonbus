@@ -57,8 +57,8 @@ class BoardDatabaseFailureContractTest {
 
     @Test
     void 실행_중_DB_연결을_잃으면_공통_503_오류로_응답한다() throws Exception {
-        final OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
-        final RouteContext route = fixture.insertRoute(
+        OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
+        RouteContext route = fixture.insertRoute(
             "204000057",
             "3330",
             "기점",

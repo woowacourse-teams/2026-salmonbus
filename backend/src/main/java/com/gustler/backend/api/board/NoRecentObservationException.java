@@ -11,7 +11,7 @@ public class NoRecentObservationException extends ApiException {
     }
 
     public NoRecentObservationException(
-        final Duration retryAfter
+        Duration retryAfter
     ) {
         super(ErrorCode.NO_RECENT_OBSERVATION, retryAfter);
     }

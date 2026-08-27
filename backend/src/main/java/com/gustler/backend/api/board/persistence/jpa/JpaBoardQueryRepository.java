@@ -38,11 +38,11 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
     private final ModelDeploymentEntityRepository modelDeploymentRepository;
 
     public JpaBoardQueryRepository(
-        final BoardRouteVersionEntityRepository routeVersionRepository,
-        final ObservationBatchEntityRepository observationBatchRepository,
-        final RouteStopEntityRepository routeStopRepository,
-        final SeatForecastEntityRepository seatForecastRepository,
-        final ModelDeploymentEntityRepository modelDeploymentRepository
+        BoardRouteVersionEntityRepository routeVersionRepository,
+        ObservationBatchEntityRepository observationBatchRepository,
+        RouteStopEntityRepository routeStopRepository,
+        SeatForecastEntityRepository seatForecastRepository,
+        ModelDeploymentEntityRepository modelDeploymentRepository
     ) {
         this.routeVersionRepository = routeVersionRepository;
         this.observationBatchRepository = observationBatchRepository;
@@ -52,46 +52,46 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
     }
 
     @Override
-    public Optional<BoardSnapshot> findSnapshot(final RouteId routeId) {
+    public Optional<BoardSnapshot> findSnapshot(RouteId routeId) {
         try {
             return routeVersionRepository.findCurrent(routeId.value())
                 .map(this::toSnapshot);
-        } catch (final DataAccessException exception) {
+        } catch (DataAccessException exception) {
             throw new ServiceUnavailableException();
         }
     }
 
     @Override
-    public List<BoardStop> findStops(final long routeVersionId) {
+    public List<BoardStop> findStops(long routeVersionId) {
         try {
             return routeStopRepository.findAllByRouteVersionId(routeVersionId)
                 .stream()
                 .map(RouteStopJpaEntity::toDomain)
                 .toList();
-        } catch (final DataAccessException exception) {
+        } catch (DataAccessException exception) {
             throw new ServiceUnavailableException();
         }
     }
 
     @Override
-    public List<StoredPrediction> findPredictions(final long observationBatchId) {
+    public List<StoredPrediction> findPredictions(long observationBatchId) {
         try {
             return seatForecastRepository.findAllByBatchId(observationBatchId)
                 .stream()
                 .map(forecast -> forecast.toDomain(SEOUL))
                 .toList();
-        } catch (final DataAccessException exception) {
+        } catch (DataAccessException exception) {
             throw new ServiceUnavailableException();
         }
     }
 
-    private BoardSnapshot toSnapshot(final RouteVersionJpaEntity routeVersion) {
-        final Optional<SnapshotObservation> observation = observationBatchRepository
+    private BoardSnapshot toSnapshot(RouteVersionJpaEntity routeVersion) {
+        Optional<SnapshotObservation> observation = observationBatchRepository
             .findLatestCompleted(routeVersion, SUCCESSFUL_OUTCOMES, FIRST_RESULT)
             .stream()
             .findFirst()
             .map(batch -> batch.toDomain(SEOUL));
-        final Optional<ForecastModel> activeModel = modelDeploymentRepository
+        Optional<ForecastModel> activeModel = modelDeploymentRepository
             .findByState(ModelDeploymentState.ACTIVE)
             .map(this::toModel);
 
@@ -110,7 +110,7 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
         );
     }
 
-    private ForecastModel toModel(final ModelDeploymentJpaEntity model) {
+    private ForecastModel toModel(ModelDeploymentJpaEntity model) {
         return new ForecastModel(
             model.id(),
             model.releaseId(),

@@ -50,21 +50,21 @@ public class BoardQueryService {
     private final BoardCachePolicy cachePolicy;
 
     public BoardQueryService(
-        final BoardQueryRepository boardQueryRepository,
-        final BoardFreshnessPolicy freshnessPolicy,
-        final BoardCachePolicy cachePolicy
+        BoardQueryRepository boardQueryRepository,
+        BoardFreshnessPolicy freshnessPolicy,
+        BoardCachePolicy cachePolicy
     ) {
         this.boardQueryRepository = boardQueryRepository;
         this.freshnessPolicy = freshnessPolicy;
         this.cachePolicy = cachePolicy;
     }
 
-    public BoardOverview getBoard(final RouteId routeId) {
-        final BoardSnapshot snapshot = boardQueryRepository.findSnapshot(routeId)
+    public BoardOverview getBoard(RouteId routeId) {
+        BoardSnapshot snapshot = boardQueryRepository.findSnapshot(routeId)
             .orElseThrow(RouteNotFoundException::new);
-        final ForecastModel activeModel = snapshot.activeModel()
+        ForecastModel activeModel = snapshot.activeModel()
             .orElseThrow(ModelOutOfScopeException::new);
-        final SnapshotObservation observation = snapshot.observation()
+        SnapshotObservation observation = snapshot.observation()
             .orElseThrow(NoRecentObservationException::new);
 
         if (freshnessPolicy.isStale(observation.observedAt())) {
@@ -75,27 +75,27 @@ public class BoardQueryService {
             throw new ServiceUnavailableException();
         }
 
-        final List<BoardStop> stops = boardQueryRepository.findStops(
+        List<BoardStop> stops = boardQueryRepository.findStops(
             snapshot.routeVersionId()
         );
         if (stops.isEmpty()) {
             throw new ServiceUnavailableException();
         }
 
-        final List<StoredPrediction> predictions = boardQueryRepository.findPredictions(
+        List<StoredPrediction> predictions = boardQueryRepository.findPredictions(
             observation.batchId()
         );
-        final ForecastModel model = predictions.isEmpty()
+        ForecastModel model = predictions.isEmpty()
             ? activeModel
             : predictions.getFirst().model();
-        final Map<Integer, List<ApproachingVehicle>> predictionsByStop = groupPredictions(
+        Map<Integer, List<ApproachingVehicle>> predictionsByStop = groupPredictions(
             predictions
         );
-        final List<StopState> stopStates = stops.stream()
+        List<StopState> stopStates = stops.stream()
             .map(stop -> toStopState(stop, predictionsByStop))
             .toList();
 
-        final Board board = new Board(
+        Board board = new Board(
             toBoardRoute(snapshot, stops),
             observation.observedAt(),
             model,
@@ -108,12 +108,12 @@ public class BoardQueryService {
         );
     }
 
-    static double seatAvailableProbability(final double pFull) {
+    static double seatAvailableProbability(double pFull) {
         return 1.0d - pFull;
     }
 
     private Map<Integer, List<ApproachingVehicle>> groupPredictions(
-        final List<StoredPrediction> predictions
+        List<StoredPrediction> predictions
     ) {
         return predictions.stream()
             .filter(this::hasValidNumbers)
@@ -133,17 +133,17 @@ public class BoardQueryService {
             ));
     }
 
-    private boolean hasValidNumbers(final StoredPrediction prediction) {
-        final double pFull = prediction.pFull();
+    private boolean hasValidNumbers(StoredPrediction prediction) {
+        double pFull = prediction.pFull();
         if (!Double.isFinite(pFull) || pFull < 0.0d || pFull > 1.0d) {
             return false;
         }
-        final Double expectedSeats = prediction.expectedSeats();
+        Double expectedSeats = prediction.expectedSeats();
         return expectedSeats == null
             || Double.isFinite(expectedSeats) && expectedSeats >= 0.0d;
     }
 
-    private ApproachingVehicle toApproachingVehicle(final StoredPrediction prediction) {
+    private ApproachingVehicle toApproachingVehicle(StoredPrediction prediction) {
         return new ApproachingVehicle(
             prediction.vehicleId(),
             prediction.horizonStops(),
@@ -153,10 +153,10 @@ public class BoardQueryService {
     }
 
     private StopState toStopState(
-        final BoardStop stop,
-        final Map<Integer, List<ApproachingVehicle>> predictionsByStop
+        BoardStop stop,
+        Map<Integer, List<ApproachingVehicle>> predictionsByStop
     ) {
-        final List<ApproachingVehicle> approachingVehicles = stop.boardingAllowed()
+        List<ApproachingVehicle> approachingVehicles = stop.boardingAllowed()
             ? predictionsByStop.getOrDefault(stop.sequence(), List.of())
             : List.of();
         return new StopState(
@@ -170,10 +170,10 @@ public class BoardQueryService {
     }
 
     private BoardRoute toBoardRoute(
-        final BoardSnapshot snapshot,
-        final List<BoardStop> stops
+        BoardSnapshot snapshot,
+        List<BoardStop> stops
     ) {
-        final Route route = snapshot.route();
+        Route route = snapshot.route();
         return new BoardRoute(
             route.id(),
             route.displayName(),
@@ -187,8 +187,8 @@ public class BoardQueryService {
     }
 
     private List<DirectionInfo> directionsOf(
-        final BoardSnapshot snapshot,
-        final List<BoardStop> stops
+        BoardSnapshot snapshot,
+        List<BoardStop> stops
     ) {
         if (snapshot.turnSequence() == null) {
             return List.of(singleDirectionOf(snapshot.schedule(), stops));
@@ -197,23 +197,23 @@ public class BoardQueryService {
     }
 
     private DirectionInfo singleDirectionOf(
-        final DepartureSchedule schedule,
-        final List<BoardStop> stops
+        DepartureSchedule schedule,
+        List<BoardStop> stops
     ) {
-        final Set<BoardDirection> directions = stops.stream()
+        Set<BoardDirection> directions = stops.stream()
             .map(BoardStop::direction)
             .collect(Collectors.toCollection(() -> EnumSet.noneOf(BoardDirection.class)));
         if (directions.size() != 1) {
             throw new ServiceUnavailableException();
         }
 
-        final BoardDirection direction = directions.iterator().next();
-        final BoardStop origin = stops.getFirst();
-        final BoardStop terminal = stops.getLast();
-        final String firstDepartureTime = direction == BoardDirection.UP
+        BoardDirection direction = directions.iterator().next();
+        BoardStop origin = stops.getFirst();
+        BoardStop terminal = stops.getLast();
+        String firstDepartureTime = direction == BoardDirection.UP
             ? requireDepartureTime(schedule.upFirstDepartureTime())
             : requireDepartureTime(schedule.downFirstDepartureTime());
-        final String lastDepartureTime = direction == BoardDirection.UP
+        String lastDepartureTime = direction == BoardDirection.UP
             ? requireDepartureTime(schedule.upLastDepartureTime())
             : requireDepartureTime(schedule.downLastDepartureTime());
 
@@ -228,27 +228,27 @@ public class BoardQueryService {
     }
 
     private List<DirectionInfo> roundTripDirectionsOf(
-        final BoardSnapshot snapshot,
-        final List<BoardStop> stops
+        BoardSnapshot snapshot,
+        List<BoardStop> stops
     ) {
-        final int turnSequence = snapshot.turnSequence();
-        final Map<Integer, BoardStop> stopsBySequence = stops.stream()
+        int turnSequence = snapshot.turnSequence();
+        Map<Integer, BoardStop> stopsBySequence = stops.stream()
             .collect(Collectors.toMap(
                 BoardStop::sequence,
                 Function.identity(),
                 (first, second) -> first,
                 LinkedHashMap::new
             ));
-        final BoardStop origin = stops.getFirst();
-        final BoardStop turn = stopsBySequence.get(turnSequence);
-        final BoardStop terminal = stops.getLast();
+        BoardStop origin = stops.getFirst();
+        BoardStop turn = stopsBySequence.get(turnSequence);
+        BoardStop terminal = stops.getLast();
         if (turn == null || turn == origin || turn == terminal) {
             throw new ServiceUnavailableException();
         }
         assertRoundTripDirections(stops, turnSequence);
 
-        final DepartureSchedule schedule = snapshot.schedule();
-        final List<DirectionInfo> directions = new ArrayList<>(2);
+        DepartureSchedule schedule = snapshot.schedule();
+        List<DirectionInfo> directions = new ArrayList<>(2);
         directions.add(new DirectionInfo(
             BoardDirection.UP,
             directionName(turn),
@@ -269,10 +269,10 @@ public class BoardQueryService {
     }
 
     private void assertRoundTripDirections(
-        final List<BoardStop> stops,
-        final int turnSequence
+        List<BoardStop> stops,
+        int turnSequence
     ) {
-        final boolean inconsistent = stops.stream().anyMatch(stop ->
+        boolean inconsistent = stops.stream().anyMatch(stop ->
             stop.sequence() <= turnSequence && stop.direction() != BoardDirection.UP
                 || stop.sequence() > turnSequence && stop.direction() != BoardDirection.DOWN
         );
@@ -281,11 +281,11 @@ public class BoardQueryService {
         }
     }
 
-    private String directionName(final BoardStop terminal) {
+    private String directionName(BoardStop terminal) {
         return terminal.name() + " 방면";
     }
 
-    private String requireDepartureTime(final String value) {
+    private String requireDepartureTime(String value) {
         if (value == null || !DEPARTURE_TIME.matcher(value).matches()) {
             throw new ServiceUnavailableException();
         }

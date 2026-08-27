@@ -8,23 +8,23 @@ public class BoardDatabaseFixture {
 
     private final JdbcClient jdbcClient;
 
-    public BoardDatabaseFixture(final JdbcClient jdbcClient) {
+    public BoardDatabaseFixture(JdbcClient jdbcClient) {
         this.jdbcClient = jdbcClient;
     }
 
     public RouteContext insertRoute(
-        final String sourceRouteId,
-        final String displayName,
-        final String startStopName,
-        final String endStopName,
-        final Integer turnSequence,
-        final String upFirstDepartureTime,
-        final String upLastDepartureTime,
-        final String downFirstDepartureTime,
-        final String downLastDepartureTime,
-        final OffsetDateTime validFrom
+        String sourceRouteId,
+        String displayName,
+        String startStopName,
+        String endStopName,
+        Integer turnSequence,
+        String upFirstDepartureTime,
+        String upLastDepartureTime,
+        String downFirstDepartureTime,
+        String downLastDepartureTime,
+        OffsetDateTime validFrom
     ) {
-        final long routeId = jdbcClient.sql("""
+        long routeId = jdbcClient.sql("""
                 INSERT INTO route (
                     public_route_id, source_id, source_route_id,
                     display_name, start_stop_name, end_stop_name
@@ -39,7 +39,7 @@ public class BoardDatabaseFixture {
             .param("endStopName", endStopName)
             .query(Long.class)
             .single();
-        final long routeVersionId = jdbcClient.sql("""
+        long routeVersionId = jdbcClient.sql("""
                 INSERT INTO route_version (
                     route_id, turn_sequence,
                     up_first_departure_time, up_last_departure_time,
@@ -68,12 +68,12 @@ public class BoardDatabaseFixture {
     }
 
     public void insertStop(
-        final RouteContext route,
-        final int sequence,
-        final String stopId,
-        final String name,
-        final String direction,
-        final boolean boardingAllowed
+        RouteContext route,
+        int sequence,
+        String stopId,
+        String name,
+        String direction,
+        boolean boardingAllowed
     ) {
         jdbcClient.sql("""
                 INSERT INTO route_stop (
@@ -94,9 +94,9 @@ public class BoardDatabaseFixture {
     }
 
     public long insertModel(
-        final String releaseId,
-        final String state,
-        final OffsetDateTime trainedThrough
+        String releaseId,
+        String state,
+        OffsetDateTime trainedThrough
     ) {
         return jdbcClient.sql("""
                 INSERT INTO model_deployment (
@@ -127,11 +127,11 @@ public class BoardDatabaseFixture {
     }
 
     public long insertBatch(
-        final RouteContext route,
-        final OffsetDateTime responseReceivedAt,
-        final OffsetDateTime forecastCompletedAt,
-        final String outcome,
-        final Integer storedRows
+        RouteContext route,
+        OffsetDateTime responseReceivedAt,
+        OffsetDateTime forecastCompletedAt,
+        String outcome,
+        Integer storedRows
     ) {
         return jdbcClient.sql("""
                 INSERT INTO observation_batch (
@@ -160,13 +160,13 @@ public class BoardDatabaseFixture {
     }
 
     public long insertObservation(
-        final RouteContext route,
-        final long batchId,
-        final int sourceRowNumber,
-        final String vehicleId,
-        final int stopOrder,
-        final String stopId,
-        final OffsetDateTime observedAt
+        RouteContext route,
+        long batchId,
+        int sourceRowNumber,
+        String vehicleId,
+        int stopOrder,
+        String stopId,
+        OffsetDateTime observedAt
     ) {
         return jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
@@ -190,14 +190,14 @@ public class BoardDatabaseFixture {
     }
 
     public void insertForecast(
-        final RouteContext route,
-        final long observationId,
-        final int targetStopOrder,
-        final int horizonStops,
-        final long modelDeploymentId,
-        final double pFull,
-        final Double expectedSeats,
-        final OffsetDateTime generatedAt
+        RouteContext route,
+        long observationId,
+        int targetStopOrder,
+        int horizonStops,
+        long modelDeploymentId,
+        double pFull,
+        Double expectedSeats,
+        OffsetDateTime generatedAt
     ) {
         jdbcClient.sql("""
                 INSERT INTO seat_forecast (

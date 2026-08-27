@@ -17,15 +17,15 @@ public class BoardController {
 
     private final BoardQueryService boardQueryService;
 
-    public BoardController(final BoardQueryService boardQueryService) {
+    public BoardController(BoardQueryService boardQueryService) {
         this.boardQueryService = boardQueryService;
     }
 
     @GetMapping
     public ResponseEntity<BoardResponse> getBoard(
-        @PathVariable final String routeId
+        @PathVariable String routeId
     ) {
-        final BoardOverview overview = boardQueryService.getBoard(new RouteId(routeId));
+        BoardOverview overview = boardQueryService.getBoard(new RouteId(routeId));
 
         return ResponseEntity.ok()
             .cacheControl(CacheControl.maxAge(overview.cacheMaxAge()).cachePublic())

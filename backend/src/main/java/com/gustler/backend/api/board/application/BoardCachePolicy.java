@@ -13,8 +13,8 @@ public class BoardCachePolicy {
     private static final Duration REGULAR = Duration.ofSeconds(20);
     private static final Duration OVERNIGHT = Duration.ofSeconds(600);
 
-    public Duration maxAgeAt(final OffsetDateTime observedAt) {
-        final int hour = observedAt.atZoneSameInstant(SEOUL).getHour();
+    public Duration maxAgeAt(OffsetDateTime observedAt) {
+        int hour = observedAt.atZoneSameInstant(SEOUL).getHour();
         if (isDenseHour(hour)) {
             return DENSE;
         }
@@ -24,7 +24,7 @@ public class BoardCachePolicy {
         return REGULAR;
     }
 
-    private boolean isDenseHour(final int hour) {
+    private boolean isDenseHour(int hour) {
         return hour >= 7 && hour < 9
             || hour >= 17 && hour < 23;
     }

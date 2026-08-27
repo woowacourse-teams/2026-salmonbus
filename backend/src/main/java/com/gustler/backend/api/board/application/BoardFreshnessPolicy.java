@@ -12,15 +12,15 @@ public class BoardFreshnessPolicy {
 
     private final Clock clock;
 
-    public BoardFreshnessPolicy(final Clock clock) {
+    public BoardFreshnessPolicy(Clock clock) {
         this.clock = clock;
     }
 
-    public OffsetDateTime staleAt(final OffsetDateTime observedAt) {
+    public OffsetDateTime staleAt(OffsetDateTime observedAt) {
         return observedAt.plus(FRESHNESS);
     }
 
-    public boolean isStale(final OffsetDateTime observedAt) {
+    public boolean isStale(OffsetDateTime observedAt) {
         return OffsetDateTime.now(clock).isAfter(staleAt(observedAt));
     }
 }

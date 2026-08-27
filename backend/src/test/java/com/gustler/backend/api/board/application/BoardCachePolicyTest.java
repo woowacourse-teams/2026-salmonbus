@@ -27,10 +27,10 @@ class BoardCachePolicyTest {
         "23:00:00, 20"
     })
     void KST_시간대별_수집_간격을_캐시_수명으로_사용한다(
-        final String time,
-        final long expectedSeconds
+        String time,
+        long expectedSeconds
     ) {
-        final OffsetDateTime observedAt = OffsetDateTime.parse(
+        OffsetDateTime observedAt = OffsetDateTime.parse(
             "2026-08-27T" + time + "+09:00"
         );
 

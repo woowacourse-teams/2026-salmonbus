@@ -53,7 +53,7 @@ class BoardQueryServiceTest {
 
     @BeforeEach
     void setUp() {
-        final Clock clock = Clock.fixed(
+        Clock clock = Clock.fixed(
             Instant.parse("2026-08-26T23:04:59Z"),
             ZoneOffset.UTC
         );
@@ -77,9 +77,9 @@ class BoardQueryServiceTest {
             prediction(2, "IGNORED", 6, 1, 0.2, 10.0)
         ));
 
-        final BoardOverview overview = service.getBoard(ROUTE_ID);
+        BoardOverview overview = service.getBoard(ROUTE_ID);
 
-        final Board board = overview.board();
+        Board board = overview.board();
         assertThat(board.model()).isEqualTo(SNAPSHOT_MODEL);
         assertThat(board.observedAt()).isEqualTo(OBSERVED_AT);
         assertThat(board.vehiclesInService()).isEqualTo(4);
@@ -88,7 +88,7 @@ class BoardQueryServiceTest {
             .extracting(direction -> direction.name())
             .containsExactly("회차점 방면", "종점 방면");
 
-        final StopState boardingStop = board.stops().get(2);
+        StopState boardingStop = board.stops().get(2);
         assertThat(boardingStop.approachingVehicles())
             .extracting(ApproachingVehicle::vehicleId)
             .containsExactly("B", null, "A");
@@ -109,7 +109,7 @@ class BoardQueryServiceTest {
 
     @Test
     void ACTIVE_모델이_없으면_모델_범위_밖_오류다() {
-        final BoardSnapshot snapshot = new BoardSnapshot(
+        BoardSnapshot snapshot = new BoardSnapshot(
             1L,
             route(),
             2,
@@ -125,7 +125,7 @@ class BoardQueryServiceTest {
 
     @Test
     void 완료된_poll이_없으면_최근_관측_없음_오류다() {
-        final BoardSnapshot snapshot = new BoardSnapshot(
+        BoardSnapshot snapshot = new BoardSnapshot(
             1L,
             route(),
             2,
@@ -141,7 +141,7 @@ class BoardQueryServiceTest {
 
     @Test
     void 단방향은_하나의_방향과_그_방향의_시간표만_사용한다() {
-        final BoardSnapshot snapshot = new BoardSnapshot(
+        BoardSnapshot snapshot = new BoardSnapshot(
             2L,
             route(),
             null,
@@ -156,7 +156,7 @@ class BoardQueryServiceTest {
         ));
         given(repository.findPredictions(100L)).willReturn(List.of());
 
-        final Board board = service.getBoard(ROUTE_ID).board();
+        Board board = service.getBoard(ROUTE_ID).board();
 
         assertThat(board.route().turnSequence()).isNull();
         assertThat(board.route().directions()).singleElement().satisfies(direction -> {
@@ -214,21 +214,21 @@ class BoardQueryServiceTest {
     }
 
     private BoardStop stop(
-        final int sequence,
-        final String name,
-        final BoardDirection direction,
-        final boolean boardingAllowed
+        int sequence,
+        String name,
+        BoardDirection direction,
+        boolean boardingAllowed
     ) {
         return new BoardStop(sequence, "STOP-" + sequence, name, direction, boardingAllowed);
     }
 
     private StoredPrediction prediction(
-        final int targetStopOrder,
-        final String vehicleId,
-        final int sourceRowNumber,
-        final int horizonStops,
-        final double pFull,
-        final Double expectedSeats
+        int targetStopOrder,
+        String vehicleId,
+        int sourceRowNumber,
+        int horizonStops,
+        double pFull,
+        Double expectedSeats
     ) {
         return new StoredPrediction(
             targetStopOrder,
