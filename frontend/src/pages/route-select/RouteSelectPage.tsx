@@ -1,4 +1,4 @@
-import { RouteList } from "./components/RouteLists";
+import { RouteList } from "./components/RouteList";
 import salmongProud from "./assets/salmong-proud.png";
 import { Pageinfo } from "./components/PageInfo";
 import { titleMock, captionMock, routesMock } from "./api/routeSelect.mock";
