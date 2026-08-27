@@ -17,15 +17,15 @@ public class LiveVehicleController {
 
     private final LiveVehicleQueryService liveVehicleQueryService;
 
-    public LiveVehicleController(final LiveVehicleQueryService liveVehicleQueryService) {
+    public LiveVehicleController(LiveVehicleQueryService liveVehicleQueryService) {
         this.liveVehicleQueryService = liveVehicleQueryService;
     }
 
     @GetMapping("/{routeId}/vehicles")
     public ResponseEntity<LiveVehicleResponse> getLiveVehicles(
-        @PathVariable("routeId") final String routeId
+        @PathVariable("routeId") String routeId
     ) {
-        final LiveVehicleOverview overview = liveVehicleQueryService.getLiveVehicles(
+        LiveVehicleOverview overview = liveVehicleQueryService.getLiveVehicles(
             new RouteId(routeId)
         );
 

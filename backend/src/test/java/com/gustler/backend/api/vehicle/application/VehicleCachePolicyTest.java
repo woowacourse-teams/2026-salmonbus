@@ -27,8 +27,8 @@ class VehicleCachePolicyTest {
         "2026-08-27T23:00:00+09:00, 20"
     })
     void KST_수집_구간에_맞는_캐시_수명을_반환한다(
-        final OffsetDateTime pollAt,
-        final long expectedSeconds
+        OffsetDateTime pollAt,
+        long expectedSeconds
     ) {
         assertThat(policy.maxAgeAt(pollAt)).isEqualTo(Duration.ofSeconds(expectedSeconds));
     }

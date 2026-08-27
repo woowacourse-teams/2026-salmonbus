@@ -58,13 +58,13 @@ class LiveVehicleApiContractTest {
 
     @Test
     void 최신_정상_poll의_차량을_방향과_순번으로_정렬해_계약대로_반환한다() throws Exception {
-        final RouteContext route = insertCurrentRoute();
+        RouteContext route = insertCurrentRoute();
         insertStop(route, 2, "205000002", "하행 두 번째", "DOWN");
         insertStop(route, 5, "205000005", "상행 다섯 번째", "UP");
         insertStop(route, 6, "205000006", "상행 여섯 번째", "UP");
         insertStop(route, 9, "205000009", "상행 아홉 번째", "UP");
-        final OffsetDateTime observedAt = NOW.minusMinutes(1);
-        final long batchId = insertSuccessfulBatch(
+        OffsetDateTime observedAt = NOW.minusMinutes(1);
+        long batchId = insertSuccessfulBatch(
             route,
             observedAt,
             "SUCCESS_ROWS",
@@ -129,8 +129,8 @@ class LiveVehicleApiContractTest {
 
     @Test
     void SUCCESS_EMPTY는_운행_종료로_단정하지_않고_빈_배열의_정상_응답을_반환한다() throws Exception {
-        final RouteContext route = insertCurrentRoute();
-        final OffsetDateTime observedAt = NOW.minusMinutes(1);
+        RouteContext route = insertCurrentRoute();
+        OffsetDateTime observedAt = NOW.minusMinutes(1);
         insertSuccessfulBatch(route, observedAt, "SUCCESS_EMPTY", 0);
 
         mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID))
@@ -145,8 +145,8 @@ class LiveVehicleApiContractTest {
 
     @Test
     void 최신_poll이_실패하면_마지막_정상_시각과_UNKNOWN을_반환한다() throws Exception {
-        final RouteContext route = insertCurrentRoute();
-        final OffsetDateTime lastObservedAt = NOW.minusMinutes(2);
+        RouteContext route = insertCurrentRoute();
+        OffsetDateTime lastObservedAt = NOW.minusMinutes(2);
         insertSuccessfulBatch(route, lastObservedAt, "SUCCESS_ROWS", 1);
         insertFailedBatch(route, NOW.minusSeconds(30));
 
@@ -162,8 +162,8 @@ class LiveVehicleApiContractTest {
 
     @Test
     void 최신_정상_스냅샷이_자기_staleAt을_넘겼으면_UNKNOWN과_빈_배열을_반환한다() throws Exception {
-        final RouteContext route = insertCurrentRoute();
-        final OffsetDateTime observedAt = NOW.minusMinutes(5).minusSeconds(1);
+        RouteContext route = insertCurrentRoute();
+        OffsetDateTime observedAt = NOW.minusMinutes(5).minusSeconds(1);
         insertSuccessfulBatch(route, observedAt, "SUCCESS_ROWS", 1);
 
         mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID))
@@ -214,7 +214,7 @@ class LiveVehicleApiContractTest {
     }
 
     private RouteContext insertCurrentRoute() {
-        final long routeId = jdbcClient.sql("""
+        long routeId = jdbcClient.sql("""
                 INSERT INTO route (
                     public_route_id, source_id, source_route_id,
                     display_name, start_stop_name, end_stop_name
@@ -224,7 +224,7 @@ class LiveVehicleApiContractTest {
             .params(ROUTE_ID, "GBIS", ROUTE_ID, "3330", "도촌동9단지앞", "안양역")
             .query(Long.class)
             .single();
-        final long routeVersionId = jdbcClient.sql("""
+        long routeVersionId = jdbcClient.sql("""
                 INSERT INTO route_version (route_id, content_digest, valid_from)
                 VALUES (?, ?, ?)
                 RETURNING id
@@ -236,16 +236,16 @@ class LiveVehicleApiContractTest {
         return new RouteContext(routeVersionId);
     }
 
-    private String jsonTime(final OffsetDateTime value) {
+    private String jsonTime(OffsetDateTime value) {
         return JSON_TIME.format(value);
     }
 
     private void insertStop(
-        final RouteContext route,
-        final int stopOrder,
-        final String stopId,
-        final String name,
-        final String direction
+        RouteContext route,
+        int stopOrder,
+        String stopId,
+        String name,
+        String direction
     ) {
         jdbcClient.sql("""
                 INSERT INTO route_stop (
@@ -258,10 +258,10 @@ class LiveVehicleApiContractTest {
     }
 
     private long insertSuccessfulBatch(
-        final RouteContext route,
-        final OffsetDateTime observedAt,
-        final String outcome,
-        final int storedRows
+        RouteContext route,
+        OffsetDateTime observedAt,
+        String outcome,
+        int storedRows
     ) {
         return jdbcClient.sql("""
                 INSERT INTO observation_batch (
@@ -289,8 +289,8 @@ class LiveVehicleApiContractTest {
     }
 
     private void insertFailedBatch(
-        final RouteContext route,
-        final OffsetDateTime scheduledAt
+        RouteContext route,
+        OffsetDateTime scheduledAt
     ) {
         jdbcClient.sql("""
                 INSERT INTO observation_batch (
@@ -312,14 +312,14 @@ class LiveVehicleApiContractTest {
     }
 
     private void insertObservation(
-        final long batchId,
-        final RouteContext route,
-        final int sourceRowNumber,
-        final String vehicleId,
-        final int stopOrder,
-        final String stopId,
-        final int runningState,
-        final int remainingSeats
+        long batchId,
+        RouteContext route,
+        int sourceRowNumber,
+        String vehicleId,
+        int stopOrder,
+        String stopId,
+        int runningState,
+        int remainingSeats
     ) {
         jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
@@ -343,13 +343,13 @@ class LiveVehicleApiContractTest {
     }
 
     private void insertObservationWithoutSeats(
-        final long batchId,
-        final RouteContext route,
-        final int sourceRowNumber,
-        final String vehicleId,
-        final int stopOrder,
-        final String stopId,
-        final int runningState
+        long batchId,
+        RouteContext route,
+        int sourceRowNumber,
+        String vehicleId,
+        int stopOrder,
+        String stopId,
+        int runningState
     ) {
         jdbcClient.sql("""
                 INSERT INTO vehicle_observation (

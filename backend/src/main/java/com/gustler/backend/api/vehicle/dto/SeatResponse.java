@@ -4,7 +4,7 @@ import com.gustler.backend.api.vehicle.domain.VehicleSeat;
 
 public sealed interface SeatResponse permits SeatResponse.Exact, SeatResponse.Unknown {
 
-    static SeatResponse from(final VehicleSeat seat) {
+    static SeatResponse from(VehicleSeat seat) {
         if (seat instanceof VehicleSeat.Exact exact) {
             return new Exact(Kind.EXACT, exact.remaining());
         }

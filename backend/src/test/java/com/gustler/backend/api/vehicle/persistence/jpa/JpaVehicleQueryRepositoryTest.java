@@ -31,7 +31,7 @@ class JpaVehicleQueryRepositoryTest {
 
     @Test
     void 스냅샷_조회_중_DB_장애가_발생하면_서비스_불가_예외로_변환한다() {
-        final RouteId routeId = new RouteId("204000057");
+        RouteId routeId = new RouteId("204000057");
         given(routeVersionRepository.findByRoute_SourceRouteIdAndValidToIsNull(
             routeId.value()
         ))

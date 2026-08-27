@@ -2,7 +2,7 @@ package com.gustler.backend.api.vehicle.domain;
 
 public sealed interface VehicleSeat permits VehicleSeat.Exact, VehicleSeat.Unknown {
 
-    static VehicleSeat from(final Integer remainingSeats) {
+    static VehicleSeat from(Integer remainingSeats) {
         if (remainingSeats == null || remainingSeats < 0) {
             return Unknown.INSTANCE;
         }

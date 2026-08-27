@@ -31,9 +31,9 @@ public class JpaVehicleQueryRepository implements VehicleQueryRepository {
     private final VehicleObservationEntityRepository vehicleObservationRepository;
 
     public JpaVehicleQueryRepository(
-        final VehicleRouteVersionEntityRepository routeVersionRepository,
-        final ObservationBatchEntityRepository observationBatchRepository,
-        final VehicleObservationEntityRepository vehicleObservationRepository
+        VehicleRouteVersionEntityRepository routeVersionRepository,
+        ObservationBatchEntityRepository observationBatchRepository,
+        VehicleObservationEntityRepository vehicleObservationRepository
     ) {
         this.routeVersionRepository = routeVersionRepository;
         this.observationBatchRepository = observationBatchRepository;
@@ -41,36 +41,36 @@ public class JpaVehicleQueryRepository implements VehicleQueryRepository {
     }
 
     @Override
-    public Optional<VehicleSnapshot> findLatestSnapshot(final RouteId routeId) {
+    public Optional<VehicleSnapshot> findLatestSnapshot(RouteId routeId) {
         try {
             return routeVersionRepository
                 .findByRoute_SourceRouteIdAndValidToIsNull(routeId.value())
                 .map(this::toSnapshot);
-        } catch (final DataAccessException exception) {
+        } catch (DataAccessException exception) {
             throw new ServiceUnavailableException();
         }
     }
 
     @Override
-    public List<ObservedVehicle> findVehicles(final long observationBatchId) {
+    public List<ObservedVehicle> findVehicles(long observationBatchId) {
         try {
             return vehicleObservationRepository.findAllByBatchId(observationBatchId)
                 .stream()
                 .map(VehicleObservationJpaEntity::toDomain)
                 .toList();
-        } catch (final DataAccessException exception) {
+        } catch (DataAccessException exception) {
             throw new ServiceUnavailableException();
         }
     }
 
-    private VehicleSnapshot toSnapshot(final RouteVersionJpaEntity routeVersion) {
-        final Optional<ObservationBatchJpaEntity> latestBatch = firstBatchOf(
+    private VehicleSnapshot toSnapshot(RouteVersionJpaEntity routeVersion) {
+        Optional<ObservationBatchJpaEntity> latestBatch = firstBatchOf(
             observationBatchRepository.findLatestByRouteVersion(
                 routeVersion,
                 FIRST_RESULT_PAGE
             )
         );
-        final Optional<ObservationBatchJpaEntity> latestNormalBatch = firstBatchOf(
+        Optional<ObservationBatchJpaEntity> latestNormalBatch = firstBatchOf(
             observationBatchRepository.findLatestNormalByRouteVersion(
                 routeVersion,
                 NORMAL_OUTCOMES,
@@ -94,12 +94,12 @@ public class JpaVehicleQueryRepository implements VehicleQueryRepository {
         );
     }
 
-    private OffsetDateTime inSeoul(final OffsetDateTime dateTime) {
+    private OffsetDateTime inSeoul(OffsetDateTime dateTime) {
         return dateTime.atZoneSameInstant(SEOUL).toOffsetDateTime();
     }
 
     private Optional<ObservationBatchJpaEntity> firstBatchOf(
-        final List<ObservationBatchJpaEntity> batches
+        List<ObservationBatchJpaEntity> batches
     ) {
         return batches.stream().findFirst();
     }

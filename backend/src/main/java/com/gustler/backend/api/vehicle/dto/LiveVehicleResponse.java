@@ -19,7 +19,7 @@ public record LiveVehicleResponse(
         vehicles = List.copyOf(vehicles);
     }
 
-    public static LiveVehicleResponse from(final LiveVehicleOverview overview) {
+    public static LiveVehicleResponse from(LiveVehicleOverview overview) {
         return new LiveVehicleResponse(
             overview.routeId(),
             overview.referenceVersionId(),

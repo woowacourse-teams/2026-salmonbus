@@ -19,7 +19,7 @@ class VehicleFreshnessPolicyTest {
 
     @Test
     void 관측_시각에서_5분_뒤를_staleAt으로_계산한다() {
-        final OffsetDateTime observedAt = OffsetDateTime.parse("2026-08-27T11:55:00+09:00");
+        OffsetDateTime observedAt = OffsetDateTime.parse("2026-08-27T11:55:00+09:00");
 
         assertThat(policy.staleAt(observedAt))
             .isEqualTo(OffsetDateTime.parse("2026-08-27T12:00:00+09:00"));
@@ -27,8 +27,8 @@ class VehicleFreshnessPolicyTest {
 
     @Test
     void 현재_시각이_staleAt을_초과해야만_오래된_관측이다() {
-        final OffsetDateTime boundary = OffsetDateTime.parse("2026-08-27T12:00:00+09:00");
-        final OffsetDateTime exceeded = boundary.minusNanos(1);
+        OffsetDateTime boundary = OffsetDateTime.parse("2026-08-27T12:00:00+09:00");
+        OffsetDateTime exceeded = boundary.minusNanos(1);
 
         assertThat(policy.isStale(boundary)).isFalse();
         assertThat(policy.isStale(exceeded)).isTrue();

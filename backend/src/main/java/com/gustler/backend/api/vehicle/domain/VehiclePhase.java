@@ -6,7 +6,7 @@ public enum VehiclePhase {
     DEPARTED,
     IN_TRANSIT;
 
-    public static VehiclePhase fromRunningState(final Integer runningState) {
+    public static VehiclePhase fromRunningState(Integer runningState) {
         if (runningState == null) {
             throw new IllegalArgumentException("runningState는 null일 수 없습니다.");
         }

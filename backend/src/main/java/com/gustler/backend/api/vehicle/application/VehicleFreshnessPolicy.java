@@ -12,15 +12,15 @@ public class VehicleFreshnessPolicy {
 
     private final Clock clock;
 
-    public VehicleFreshnessPolicy(final Clock clock) {
+    public VehicleFreshnessPolicy(Clock clock) {
         this.clock = clock;
     }
 
-    public OffsetDateTime staleAt(final OffsetDateTime observedAt) {
+    public OffsetDateTime staleAt(OffsetDateTime observedAt) {
         return observedAt.plus(STALE_INTERVAL);
     }
 
-    public boolean isStale(final OffsetDateTime staleAt) {
+    public boolean isStale(OffsetDateTime staleAt) {
         return clock.instant().isAfter(staleAt.toInstant());
     }
 }

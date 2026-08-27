@@ -15,7 +15,7 @@ public record ObservationResponse(
         Objects.requireNonNull(state, "state는 null일 수 없습니다.");
     }
 
-    public static ObservationResponse from(final LiveVehicleOverview overview) {
+    public static ObservationResponse from(LiveVehicleOverview overview) {
         return new ObservationResponse(
             overview.state(),
             overview.observedAt(),

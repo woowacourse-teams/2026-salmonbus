@@ -73,7 +73,7 @@ class LiveVehicleQueryServiceTest {
             )));
         given(vehicleQueryRepository.findVehicles(1L)).willReturn(List.of(VEHICLE));
 
-        final LiveVehicleOverview actual = service.getLiveVehicles(ROUTE_ID);
+        LiveVehicleOverview actual = service.getLiveVehicles(ROUTE_ID);
 
         assertThat(actual.state()).isEqualTo(VehicleObservationState.VEHICLES_PRESENT);
         assertThat(actual.observedAt()).isEqualTo(RECENT);
@@ -91,7 +91,7 @@ class LiveVehicleQueryServiceTest {
                 RECENT
             )));
 
-        final LiveVehicleOverview actual = service.getLiveVehicles(ROUTE_ID);
+        LiveVehicleOverview actual = service.getLiveVehicles(ROUTE_ID);
 
         assertThat(actual.state()).isEqualTo(
             VehicleObservationState.NO_VEHICLES_OBSERVED
@@ -105,7 +105,7 @@ class LiveVehicleQueryServiceTest {
         given(vehicleQueryRepository.findLatestSnapshot(ROUTE_ID))
             .willReturn(Optional.of(snapshot(3L, VehiclePollOutcome.UNKNOWN, RECENT)));
 
-        final LiveVehicleOverview actual = service.getLiveVehicles(ROUTE_ID);
+        LiveVehicleOverview actual = service.getLiveVehicles(ROUTE_ID);
 
         assertThat(actual.state()).isEqualTo(VehicleObservationState.UNKNOWN);
         assertThat(actual.observedAt()).isEqualTo(RECENT);
@@ -116,7 +116,7 @@ class LiveVehicleQueryServiceTest {
 
     @Test
     void 최신_정상_스냅샷이_자기_staleAt을_넘겼으면_UNKNOWN으로_강등한다() {
-        final OffsetDateTime oldObservation = OffsetDateTime.parse(
+        OffsetDateTime oldObservation = OffsetDateTime.parse(
             "2026-08-27T11:54:59+09:00"
         );
         given(vehicleQueryRepository.findLatestSnapshot(ROUTE_ID))
@@ -126,7 +126,7 @@ class LiveVehicleQueryServiceTest {
                 oldObservation
             )));
 
-        final LiveVehicleOverview actual = service.getLiveVehicles(ROUTE_ID);
+        LiveVehicleOverview actual = service.getLiveVehicles(ROUTE_ID);
 
         assertThat(actual.state()).isEqualTo(VehicleObservationState.UNKNOWN);
         assertThat(actual.observedAt()).isEqualTo(oldObservation);
@@ -137,7 +137,7 @@ class LiveVehicleQueryServiceTest {
 
     @Test
     void 현재_시각이_staleAt과_같으면_아직_차량을_반환한다() {
-        final OffsetDateTime boundaryObservation = OffsetDateTime.parse(
+        OffsetDateTime boundaryObservation = OffsetDateTime.parse(
             "2026-08-27T11:55:00+09:00"
         );
         given(vehicleQueryRepository.findLatestSnapshot(ROUTE_ID))
@@ -148,7 +148,7 @@ class LiveVehicleQueryServiceTest {
             )));
         given(vehicleQueryRepository.findVehicles(5L)).willReturn(List.of(VEHICLE));
 
-        final LiveVehicleOverview actual = service.getLiveVehicles(ROUTE_ID);
+        LiveVehicleOverview actual = service.getLiveVehicles(ROUTE_ID);
 
         assertThat(actual.state()).isEqualTo(VehicleObservationState.VEHICLES_PRESENT);
         assertThat(actual.vehicles()).containsExactly(VEHICLE);
@@ -156,7 +156,7 @@ class LiveVehicleQueryServiceTest {
 
     @Test
     void 정상_수집이_한_번도_없으면_시각이_없는_UNKNOWN을_반환한다() {
-        final VehicleSnapshot neverObserved = new VehicleSnapshot(
+        VehicleSnapshot neverObserved = new VehicleSnapshot(
             ROUTE_ID.value(),
             "42",
             null,
@@ -167,7 +167,7 @@ class LiveVehicleQueryServiceTest {
         given(vehicleQueryRepository.findLatestSnapshot(ROUTE_ID))
             .willReturn(Optional.of(neverObserved));
 
-        final LiveVehicleOverview actual = service.getLiveVehicles(ROUTE_ID);
+        LiveVehicleOverview actual = service.getLiveVehicles(ROUTE_ID);
 
         assertThat(actual.state()).isEqualTo(VehicleObservationState.UNKNOWN);
         assertThat(actual.observedAt()).isNull();
@@ -184,9 +184,9 @@ class LiveVehicleQueryServiceTest {
     }
 
     private VehicleSnapshot snapshot(
-        final Long batchId,
-        final VehiclePollOutcome outcome,
-        final OffsetDateTime observedAt
+        Long batchId,
+        VehiclePollOutcome outcome,
+        OffsetDateTime observedAt
     ) {
         return new VehicleSnapshot(
             ROUTE_ID.value(),

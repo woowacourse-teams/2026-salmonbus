@@ -23,7 +23,7 @@ public record VehicleResponse(
         Objects.requireNonNull(seat, "seat는 null일 수 없습니다.");
     }
 
-    public static VehicleResponse from(final ObservedVehicle vehicle) {
+    public static VehicleResponse from(ObservedVehicle vehicle) {
         return new VehicleResponse(
             vehicle.vehicleId(),
             vehicle.direction(),

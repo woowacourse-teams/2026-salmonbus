@@ -22,10 +22,10 @@ public class LiveVehicleQueryService {
     private final Clock clock;
 
     public LiveVehicleQueryService(
-        final VehicleQueryRepository vehicleQueryRepository,
-        final VehicleFreshnessPolicy freshnessPolicy,
-        final VehicleCachePolicy cachePolicy,
-        final Clock clock
+        VehicleQueryRepository vehicleQueryRepository,
+        VehicleFreshnessPolicy freshnessPolicy,
+        VehicleCachePolicy cachePolicy,
+        Clock clock
     ) {
         this.vehicleQueryRepository = vehicleQueryRepository;
         this.freshnessPolicy = freshnessPolicy;
@@ -33,14 +33,14 @@ public class LiveVehicleQueryService {
         this.clock = clock;
     }
 
-    public LiveVehicleOverview getLiveVehicles(final RouteId routeId) {
-        final VehicleSnapshot snapshot = vehicleQueryRepository.findLatestSnapshot(routeId)
+    public LiveVehicleOverview getLiveVehicles(RouteId routeId) {
+        VehicleSnapshot snapshot = vehicleQueryRepository.findLatestSnapshot(routeId)
             .orElseThrow(RouteNotFoundException::new);
-        final OffsetDateTime observedAt = snapshot.observedAt();
-        final OffsetDateTime staleAt = observedAt == null
+        OffsetDateTime observedAt = snapshot.observedAt();
+        OffsetDateTime staleAt = observedAt == null
             ? null
             : freshnessPolicy.staleAt(observedAt);
-        final OffsetDateTime cacheReferenceAt = snapshot.latestPollAt() == null
+        OffsetDateTime cacheReferenceAt = snapshot.latestPollAt() == null
             ? OffsetDateTime.now(clock)
             : snapshot.latestPollAt();
 
@@ -66,7 +66,7 @@ public class LiveVehicleQueryService {
             );
         }
 
-        final List<ObservedVehicle> vehicles = vehicleQueryRepository.findVehicles(
+        List<ObservedVehicle> vehicles = vehicleQueryRepository.findVehicles(
             snapshot.latestBatchId()
         );
         return overviewOf(
@@ -80,8 +80,8 @@ public class LiveVehicleQueryService {
     }
 
     private boolean isUsableLatestSnapshot(
-        final VehicleSnapshot snapshot,
-        final OffsetDateTime staleAt
+        VehicleSnapshot snapshot,
+        OffsetDateTime staleAt
     ) {
         if (!snapshot.latestOutcome().isNormal()
             || snapshot.latestBatchId() == null
@@ -92,12 +92,12 @@ public class LiveVehicleQueryService {
     }
 
     private LiveVehicleOverview overviewOf(
-        final VehicleSnapshot snapshot,
-        final VehicleObservationState state,
-        final OffsetDateTime observedAt,
-        final OffsetDateTime staleAt,
-        final List<ObservedVehicle> vehicles,
-        final OffsetDateTime cacheReferenceAt
+        VehicleSnapshot snapshot,
+        VehicleObservationState state,
+        OffsetDateTime observedAt,
+        OffsetDateTime staleAt,
+        List<ObservedVehicle> vehicles,
+        OffsetDateTime cacheReferenceAt
     ) {
         return new LiveVehicleOverview(
             snapshot.routeId(),

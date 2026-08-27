@@ -15,8 +15,8 @@ class VehiclePollOutcomeTest {
         "SUCCESS_EMPTY, SUCCESS_EMPTY"
     })
     void 정상_DB_outcome을_API가_사용하는_타입으로_변환한다(
-        final String databaseValue,
-        final VehiclePollOutcome expected
+        String databaseValue,
+        VehiclePollOutcome expected
     ) {
         assertThat(VehiclePollOutcome.fromDatabaseValue(databaseValue)).isEqualTo(expected);
     }
@@ -24,7 +24,7 @@ class VehiclePollOutcomeTest {
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = {"TRANSPORT_FAILURE", "IN_PROGRESS", "UNEXPECTED"})
-    void 정상이_아닌_DB_outcome은_UNKNOWN으로_해석한다(final String databaseValue) {
+    void 정상이_아닌_DB_outcome은_UNKNOWN으로_해석한다(String databaseValue) {
         assertThat(VehiclePollOutcome.fromDatabaseValue(databaseValue))
             .isEqualTo(VehiclePollOutcome.UNKNOWN);
     }
