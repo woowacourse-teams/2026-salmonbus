@@ -8,6 +8,7 @@ import com.gustler.backend.api.http.ServiceUnavailableException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.IncorrectResultSizeDataAccessException;
 
 class JpaRouteQueryRepositoryTest {
 
@@ -30,6 +31,16 @@ class JpaRouteQueryRepositoryTest {
         assertThatThrownBy(repository::findAllCurrentRoutes)
             .isInstanceOf(ServiceUnavailableException.class)
             .hasMessage("일시적인 서버 장애가 발생했습니다.");
+    }
+
+    @Test
+    void 노선_조회_결과_계약_오류는_서비스_불가_예외로_변환하지_않는다() {
+        IncorrectResultSizeDataAccessException exception =
+            new IncorrectResultSizeDataAccessException(1, 2);
+        given(routeRepository.findAllCurrentRoutes()).willThrow(exception);
+
+        assertThatThrownBy(repository::findAllCurrentRoutes)
+            .isSameAs(exception);
     }
 
     @Test
