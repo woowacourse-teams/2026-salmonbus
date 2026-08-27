@@ -15,7 +15,7 @@ class VehicleStopTargetTest {
     private static final long ROUTE_VERSION_3330 = 1L;
 
     @Test
-    void 차량이_44번_정류장에서_49번_정류장을_예보하면_거리는_5정류장이다() {
+    void 정류장_44번까지_지나온_차량이_49번_정류장을_예보하면_거리는_5정류장이다() {
         // given
         VehicleStopTarget target = new VehicleStopTarget(observed(44, 12), routeStop(49));
 
@@ -27,7 +27,7 @@ class VehicleStopTargetTest {
     }
 
     @Test
-    void 예보_대상은_관측한_정류장의_다음_정류장부터다() {
+    void 예보_대상은_지나온_정류장의_다음_정류장부터다() {
         // given
         RouteStop passedStop = routeStop(40);
 
@@ -73,10 +73,10 @@ class VehicleStopTargetTest {
     }
 
     private ObservedVehicle observed(
-        final int stopOrder,
+        final int passedStopOrder,
         Integer remainingSeats
     ) {
-        return new ObservedVehicle("204000206", stopOrder, OBSERVED_AT, remainingSeats);
+        return new ObservedVehicle("204000206", passedStopOrder, OBSERVED_AT, remainingSeats);
     }
 
     private RouteStop routeStop(

@@ -4,7 +4,7 @@ import java.time.Instant;
 
 public record ObservedVehicle(
     String vehicleId,
-    int stopOrder,
+    int passedStopOrder,
     Instant observedAt,
     Integer remainingSeats
 ) {

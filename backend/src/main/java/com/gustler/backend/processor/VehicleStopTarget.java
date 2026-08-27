@@ -16,7 +16,7 @@ public record VehicleStopTarget(
         return distanceBetween(observation, targetStop);
     }
 
-    public int stopOrder() {
+    public int passedStopOrder() {
         return targetStop.stopOrder();
     }
 
@@ -28,6 +28,6 @@ public record VehicleStopTarget(
         ObservedVehicle observation,
         RouteStop targetStop
     ) {
-        return new ForecastDistance(targetStop.stopOrder() - observation.stopOrder());
+        return new ForecastDistance(targetStop.stopOrder() - observation.passedStopOrder());
     }
 }
