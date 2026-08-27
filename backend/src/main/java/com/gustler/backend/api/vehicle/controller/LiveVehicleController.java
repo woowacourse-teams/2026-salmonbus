@@ -4,6 +4,7 @@ import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.vehicle.application.LiveVehicleOverview;
 import com.gustler.backend.api.vehicle.application.LiveVehicleQueryService;
 import com.gustler.backend.api.vehicle.dto.LiveVehicleResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,14 +13,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/api/v1/routes")
 public class LiveVehicleController {
 
     private final LiveVehicleQueryService liveVehicleQueryService;
-
-    public LiveVehicleController(LiveVehicleQueryService liveVehicleQueryService) {
-        this.liveVehicleQueryService = liveVehicleQueryService;
-    }
 
     @GetMapping("/{routeId}/vehicles")
     public ResponseEntity<LiveVehicleResponse> getLiveVehicles(

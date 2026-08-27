@@ -8,11 +8,13 @@ import com.gustler.backend.api.vehicle.domain.VehiclePollOutcome;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 public class LiveVehicleQueryService {
 
@@ -20,18 +22,6 @@ public class LiveVehicleQueryService {
     private final VehicleFreshnessPolicy freshnessPolicy;
     private final VehicleCachePolicy cachePolicy;
     private final Clock clock;
-
-    public LiveVehicleQueryService(
-        VehicleQueryRepository vehicleQueryRepository,
-        VehicleFreshnessPolicy freshnessPolicy,
-        VehicleCachePolicy cachePolicy,
-        Clock clock
-    ) {
-        this.vehicleQueryRepository = vehicleQueryRepository;
-        this.freshnessPolicy = freshnessPolicy;
-        this.cachePolicy = cachePolicy;
-        this.clock = clock;
-    }
 
     public LiveVehicleOverview getLiveVehicles(RouteId routeId) {
         VehicleSnapshot snapshot = vehicleQueryRepository.findLatestSnapshot(routeId)

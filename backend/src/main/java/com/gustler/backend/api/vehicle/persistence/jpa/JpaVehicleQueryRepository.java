@@ -11,12 +11,14 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 @Repository
+@RequiredArgsConstructor
 public class JpaVehicleQueryRepository implements VehicleQueryRepository {
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
@@ -29,16 +31,6 @@ public class JpaVehicleQueryRepository implements VehicleQueryRepository {
     private final VehicleRouteVersionEntityRepository routeVersionRepository;
     private final ObservationBatchEntityRepository observationBatchRepository;
     private final VehicleObservationEntityRepository vehicleObservationRepository;
-
-    public JpaVehicleQueryRepository(
-        VehicleRouteVersionEntityRepository routeVersionRepository,
-        ObservationBatchEntityRepository observationBatchRepository,
-        VehicleObservationEntityRepository vehicleObservationRepository
-    ) {
-        this.routeVersionRepository = routeVersionRepository;
-        this.observationBatchRepository = observationBatchRepository;
-        this.vehicleObservationRepository = vehicleObservationRepository;
-    }
 
     @Override
     public Optional<VehicleSnapshot> findLatestSnapshot(RouteId routeId) {
