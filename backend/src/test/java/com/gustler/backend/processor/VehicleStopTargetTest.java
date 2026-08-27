@@ -12,17 +12,38 @@ import org.junit.jupiter.params.provider.ValueSource;
 class VehicleStopTargetTest {
 
     private static final Instant OBSERVED_AT = Instant.parse("2026-08-25T08:30:00Z");
+    private static final long ROUTE_VERSION_3330 = 1L;
 
     @Test
-    void 차량이_3번_정류장에서_5정류장_앞을_예보하면_대상은_8번_정류장이다() {
+    void 차량이_44번_정류장에서_49번_정류장을_예보하면_거리는_5정류장이다() {
         // given
-        final VehicleStopTarget target = new VehicleStopTarget(observed(3, 12), new ForecastDistance(5));
+        final VehicleStopTarget target = new VehicleStopTarget(observed(44, 12), routeStop(49));
 
         // when
-        final int actual = target.stopOrderToForecast();
+        final ForecastDistance actual = target.distance();
 
         // then
-        assertThat(actual).isEqualTo(8);
+        assertThat(actual.stopCount()).isEqualTo(5);
+    }
+
+    @Test
+    void 예보_대상은_관측한_정류장의_다음_정류장부터다() {
+        // given
+        final RouteStop passedStop = routeStop(40);
+
+        // when & then
+        assertThatThrownBy(() -> new VehicleStopTarget(observed(44, 12), passedStop))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 예보_대상은_12정류장_앞까지다() {
+        // given
+        final RouteStop farStop = routeStop(57);
+
+        // when & then
+        assertThatThrownBy(() -> new VehicleStopTarget(observed(44, 12), farStop))
+            .isInstanceOf(IllegalArgumentException.class);
     }
 
     @ParameterizedTest
@@ -32,17 +53,17 @@ class VehicleStopTargetTest {
         final Integer unknownSeats
     ) {
         // given
-        final ObservedVehicle seatsUnknown = observed(3, unknownSeats);
+        final ObservedVehicle seatsUnknown = observed(44, unknownSeats);
 
         // when & then
-        assertThatThrownBy(() -> new VehicleStopTarget(seatsUnknown, new ForecastDistance(5)))
+        assertThatThrownBy(() -> new VehicleStopTarget(seatsUnknown, routeStop(49)))
             .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void 잔여석_12석으로_관측한_차량은_예보_입력도_12석이다() {
         // given
-        final VehicleStopTarget target = new VehicleStopTarget(observed(3, 12), new ForecastDistance(5));
+        final VehicleStopTarget target = new VehicleStopTarget(observed(44, 12), routeStop(49));
 
         // when
         final int actual = target.remainingSeats();
@@ -56,5 +77,11 @@ class VehicleStopTargetTest {
         final Integer remainingSeats
     ) {
         return new ObservedVehicle("204000206", stopOrder, OBSERVED_AT, remainingSeats);
+    }
+
+    private RouteStop routeStop(
+        final int stopOrder
+    ) {
+        return new RouteStop(ROUTE_VERSION_3330, stopOrder, "20400" + stopOrder);
     }
 }
