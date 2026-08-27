@@ -36,11 +36,17 @@ public record SeatDistribution(
             .sum();
     }
 
+    static boolean isChance(
+        final double chance
+    ) {
+        return chance >= 0.0 && chance <= 1.0;
+    }
+
     private static void validate(
         final List<Double> chanceBySeats
     ) {
         for (final double chance : chanceBySeats) {
-            if (!(chance >= 0.0 && chance <= 1.0)) {
+            if (!isChance(chance)) {
                 throw new IllegalArgumentException(
                     "0석 남을 확률부터 차례로 담는다. 각 값은 0과 1 사이여야 한다: " + chance
                 );

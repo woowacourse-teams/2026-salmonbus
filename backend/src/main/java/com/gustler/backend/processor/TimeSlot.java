@@ -7,7 +7,8 @@ public enum TimeSlot {
 
     MORNING,
     EVENING,
-    OTHER;
+    OTHER,
+    ;
 
     private static final int MORNING_FROM_HOUR = 7;
     private static final int MORNING_UNTIL_HOUR = 9;
@@ -19,12 +20,24 @@ public enum TimeSlot {
         final Clock clock
     ) {
         final int hour = at.atZone(clock.getZone()).getHour();
-        if (MORNING_FROM_HOUR <= hour && hour < MORNING_UNTIL_HOUR) {
+        if (isMorning(hour)) {
             return MORNING;
         }
-        if (EVENING_FROM_HOUR <= hour && hour < EVENING_UNTIL_HOUR) {
+        if (isEvening(hour)) {
             return EVENING;
         }
         return OTHER;
+    }
+
+    private static boolean isMorning(
+        final int hour
+    ) {
+        return MORNING_FROM_HOUR <= hour && hour < MORNING_UNTIL_HOUR;
+    }
+
+    private static boolean isEvening(
+        final int hour
+    ) {
+        return EVENING_FROM_HOUR <= hour && hour < EVENING_UNTIL_HOUR;
     }
 }

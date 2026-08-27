@@ -6,7 +6,8 @@ public enum ScoringState {
     SETTLED,
     SKIPPED,
     LOST,
-    SEAT_MISSING;
+    SEAT_MISSING,
+    ;
 
     public boolean scorable() {
         return this == SETTLED;
