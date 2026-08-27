@@ -4,6 +4,7 @@ import java.time.Instant;
 
 public record ObservedVehicle(
     String vehicleId,
+    long routeVersionId,
     int passedStopOrder,
     Instant observedAt,
     Integer remainingSeats

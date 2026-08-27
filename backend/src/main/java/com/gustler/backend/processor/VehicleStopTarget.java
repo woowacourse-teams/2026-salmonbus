@@ -9,6 +9,12 @@ public record VehicleStopTarget(
         if (!observation.hasKnownSeats()) {
             throw new IllegalArgumentException("잔여석을 모르는 관측으로는 예보하지 않는다: " + observation);
         }
+        if (observation.routeVersionId() != targetStop.routeVersionId()) {
+            throw new IllegalArgumentException(
+                "관측과 대상 정류장의 노선 판본이 다르다: %d, %d"
+                    .formatted(observation.routeVersionId(), targetStop.routeVersionId())
+            );
+        }
         distanceBetween(observation, targetStop);
     }
 
@@ -16,7 +22,7 @@ public record VehicleStopTarget(
         return distanceBetween(observation, targetStop);
     }
 
-    public int passedStopOrder() {
+    public int stopOrder() {
         return targetStop.stopOrder();
     }
 
