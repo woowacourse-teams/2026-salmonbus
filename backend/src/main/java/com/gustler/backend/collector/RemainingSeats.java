@@ -5,7 +5,7 @@ import java.util.Objects;
 public sealed interface RemainingSeats {
 
     static RemainingSeats from(
-        final Integer remainingSeatCount
+        Integer remainingSeatCount
     ) {
         if (remainingSeatCount == null) {
             return new Unknown(SeatUnknownReason.NOT_REPORTED);
