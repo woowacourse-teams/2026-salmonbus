@@ -8,6 +8,7 @@ import com.gustler.backend.collector.RemainingSeats.Unknown;
 import com.gustler.backend.collector.dto.BusLocationResponse.BusLocation;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class VehicleObservationTest {
@@ -21,6 +22,7 @@ class VehicleObservationTest {
     private static final int TAGLESS_1 = 1;
 
     private static final int NORMAL_BUS = 0;
+    private static final int DOUBLE_DECKER_BUS = 2;
 
     private static final int RUNNING_STATE_DEPARTED = 2;
 
@@ -111,10 +113,86 @@ class VehicleObservationTest {
             .isInstanceOf(NullPointerException.class);
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 3, 4})
+    void 혼잡도가_1에서_4까지면_그대로_쓴다(
+        final int crowdLevel
+    ) {
+        // given
+        final BusLocation bus = busWithCrowdLevel(crowdLevel);
+
+        // when
+        final VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual.crowdLevel()).isEqualTo(crowdLevel);
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(ints = {0, 5, -1})
+    void 혼잡도가_1에서_4가_아니면_모르는_것으로_판단한다(
+        final Integer crowdLevel
+    ) {
+        // given
+        final BusLocation bus = busWithCrowdLevel(crowdLevel);
+
+        // when
+        final VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual.crowdLevel()).isNull();
+    }
+
+    @Test
+    void 잔여석을_몰라도_혼잡도_3은_그대로_쓴다() {
+        // given
+        final BusLocation bus = bus(STOP_ORDER_6, RUNNING_STATE_DEPARTED, -1, CROWD_LEVEL_3, NORMAL_BUS);
+
+        // when
+        final VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual.remainingSeats()).isInstanceOf(Unknown.class);
+        assertThat(actual.crowdLevel()).isEqualTo(CROWD_LEVEL_3);
+    }
+
+    @Test
+    void 혼잡도를_몰라도_잔여석_43석은_그대로_쓴다() {
+        // given
+        final BusLocation bus = bus(STOP_ORDER_6, RUNNING_STATE_DEPARTED, SEATS_43, 0, NORMAL_BUS);
+
+        // when
+        final VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual.crowdLevel()).isNull();
+        assertThat(actual.remainingSeats()).isEqualTo(new Known(SEATS_43));
+    }
+
+    @Test
+    void 이층버스의_차량_유형은_2이고_잔여석은_43석_그대로다() {
+        // given
+        final BusLocation bus = bus(STOP_ORDER_6, RUNNING_STATE_DEPARTED, SEATS_43, CROWD_LEVEL_3, DOUBLE_DECKER_BUS);
+
+        // when
+        final VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual.vehicleType()).isEqualTo(DOUBLE_DECKER_BUS);
+        assertThat(actual.remainingSeats()).isEqualTo(new Known(SEATS_43));
+    }
+
     private static BusLocation busWithSeats(
         final Integer remainingSeatCount
     ) {
         return bus(STOP_ORDER_6, RUNNING_STATE_DEPARTED, remainingSeatCount, CROWD_LEVEL_3, NORMAL_BUS);
+    }
+
+    private static BusLocation busWithCrowdLevel(
+        final Integer crowdLevel
+    ) {
+        return bus(STOP_ORDER_6, RUNNING_STATE_DEPARTED, SEATS_43, crowdLevel, NORMAL_BUS);
     }
 
     private static BusLocation bus(
