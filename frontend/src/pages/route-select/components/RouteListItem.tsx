@@ -7,10 +7,12 @@ interface RouteListItemProps {
 export function RouteListItem({ displayName, startStopName, endStopName }: RouteListItemProps) {
   return (
     <li>
-      <span>{displayName}</span>
-      <p>
-        {startStopName} ↔ {endStopName}
-      </p>
+      <button type="button">
+        <span>{displayName}</span>
+        <span>
+          {startStopName} ↔ {endStopName}
+        </span>
+      </button>
     </li>
   );
 }
