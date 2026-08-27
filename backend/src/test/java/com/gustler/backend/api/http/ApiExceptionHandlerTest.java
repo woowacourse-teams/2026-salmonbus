@@ -19,6 +19,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.jpa.JpaSystemException;
+import org.springframework.transaction.CannotCreateTransactionException;
 
 class ApiExceptionHandlerTest {
 
@@ -31,6 +33,13 @@ class ApiExceptionHandlerTest {
             new ModelOutOfScopeException(),
             new NoRecentObservationException(),
             new ServiceUnavailableException()
+        );
+    }
+
+    private static List<RuntimeException> databaseUnavailableExceptions() {
+        return List.of(
+            new CannotCreateTransactionException("DB 연결을 얻지 못했다"),
+            new JpaSystemException(new IllegalStateException("DB 트랜잭션을 종료하지 못했다"))
         );
     }
 
@@ -91,6 +100,25 @@ class ApiExceptionHandlerTest {
 
         // then
         assertThat(actual.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isEqualTo("15");
+    }
+
+    @ParameterizedTest
+    @MethodSource("databaseUnavailableExceptions")
+    void DB_트랜잭션을_시작하거나_종료하지_못하면_서비스_불가로_응답한다(
+        final RuntimeException exception
+    ) {
+        // when
+        final ResponseEntity<ErrorResponse> actual =
+            handler.handleDatabaseUnavailable(exception);
+
+        // then
+        assertThat(actual.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(actual.getHeaders().getCacheControl()).isEqualTo("no-store");
+        assertThat(actual.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isNull();
+        assertThat(actual.getBody()).isNotNull();
+        assertThat(actual.getBody().code()).isEqualTo(ErrorCode.SERVICE_UNAVAILABLE);
+        assertThat(actual.getBody().message()).isEqualTo(ErrorCode.SERVICE_UNAVAILABLE.message());
+        assertThat(actual.getBody().requestId()).isNotBlank();
     }
 
     @ParameterizedTest

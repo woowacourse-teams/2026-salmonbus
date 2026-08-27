@@ -5,6 +5,8 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.jpa.JpaSystemException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
@@ -23,6 +25,20 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             headers.set(HttpHeaders.RETRY_AFTER, String.valueOf(retryAfter.toSeconds())));
 
         return new ResponseEntity<>(bodyOf(code, exception.getMessage()), headers, code.status());
+    }
+
+    @ExceptionHandler({
+        CannotCreateTransactionException.class,
+        JpaSystemException.class
+    })
+    public ResponseEntity<ErrorResponse> handleDatabaseUnavailable(
+        final RuntimeException exception
+    ) {
+        return respond(
+            ErrorCode.SERVICE_UNAVAILABLE,
+            ErrorCode.SERVICE_UNAVAILABLE.message(),
+            ErrorCode.SERVICE_UNAVAILABLE.status()
+        );
     }
 
     @ExceptionHandler(Exception.class)

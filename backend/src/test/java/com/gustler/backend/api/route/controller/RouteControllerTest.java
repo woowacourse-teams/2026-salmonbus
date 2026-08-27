@@ -69,7 +69,7 @@ class RouteControllerTest {
     }
 
     @Test
-    void DB_장애는_공통_503_오류_응답으로_반환한다() throws Exception {
+    void 서비스_불가_예외는_공통_503_오류_응답으로_반환한다() throws Exception {
         given(routeQueryService.getRouteOverview()).willThrow(new ServiceUnavailableException());
 
         mockMvc.perform(get("/api/v1/routes"))
