@@ -17,8 +17,8 @@ class VehicleObservationTest {
     private static final String PLATE_NUMBER = "경기70아0001";
     private static final String ROUTE_3330 = "204000057";
     private static final String STOP_205000217 = "205000217";
-    private static final int STOP_ORDER_6 = 6;
-    private static final int FIRST_STOP_ORDER = 1;
+    private static final int STOP_SEQUENCE_6 = 6;
+    private static final int FIRST_STOP_SEQUENCE = 1;
     private static final int ROUTE_TYPE_11 = 11;
     private static final int TAGLESS_1 = 1;
 
@@ -34,10 +34,10 @@ class VehicleObservationTest {
     @Test
     void 잔여석이_있는_차량은_그_수를_그대로_쓴다() {
         // given
-        final BusLocation bus = busWithSeats(SEATS_43);
+        BusLocation bus = busWithSeats(SEATS_43);
 
         // when
-        final VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = VehicleObservation.from(bus);
 
         // then
         assertThat(actual.remainingSeats()).isEqualTo(new Known(SEATS_43));
@@ -46,10 +46,10 @@ class VehicleObservationTest {
     @Test
     void 잔여석이_0인_차량은_잔여석을_아는_차량이다() {
         // given
-        final BusLocation bus = busWithSeats(0);
+        BusLocation bus = busWithSeats(0);
 
         // when
-        final VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = VehicleObservation.from(bus);
 
         // then
         assertThat(actual.remainingSeats()).isEqualTo(new Known(0));
@@ -61,10 +61,10 @@ class VehicleObservationTest {
         final int remainingSeatCount
     ) {
         // given
-        final BusLocation bus = busWithSeats(remainingSeatCount);
+        BusLocation bus = busWithSeats(remainingSeatCount);
 
         // when
-        final VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = VehicleObservation.from(bus);
 
         // then
         assertThat(actual.remainingSeats())
@@ -74,10 +74,10 @@ class VehicleObservationTest {
     @Test
     void 잔여석_항목이_없는_차량은_알려주지_않은_것으로_판단한다() {
         // given
-        final BusLocation bus = busWithSeats(null);
+        BusLocation bus = busWithSeats(null);
 
         // when
-        final VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = VehicleObservation.from(bus);
 
         // then
         assertThat(actual.remainingSeats())
@@ -104,7 +104,7 @@ class VehicleObservationTest {
         assertThatThrownBy(() -> new VehicleObservation(
             VEHICLE_204000206,
             PLATE_NUMBER,
-            STOP_ORDER_6,
+            STOP_SEQUENCE_6,
             STOP_205000217,
             RUNNING_STATE_DEPARTED,
             null,
@@ -121,10 +121,10 @@ class VehicleObservationTest {
         final int crowdLevel
     ) {
         // given
-        final BusLocation bus = busWithCrowdLevel(crowdLevel);
+        BusLocation bus = busWithCrowdLevel(crowdLevel);
 
         // when
-        final VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = VehicleObservation.from(bus);
 
         // then
         assertThat(actual.crowdLevel()).isEqualTo(crowdLevel);
@@ -134,13 +134,13 @@ class VehicleObservationTest {
     @NullSource
     @ValueSource(ints = {0, 5, -1})
     void 혼잡도가_1에서_4가_아니면_모르는_것으로_판단한다(
-        final Integer crowdLevel
+        Integer crowdLevel
     ) {
         // given
-        final BusLocation bus = busWithCrowdLevel(crowdLevel);
+        BusLocation bus = busWithCrowdLevel(crowdLevel);
 
         // when
-        final VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = VehicleObservation.from(bus);
 
         // then
         assertThat(actual.crowdLevel()).isNull();
@@ -149,10 +149,10 @@ class VehicleObservationTest {
     @Test
     void 잔여석을_몰라도_혼잡도_3은_그대로_쓴다() {
         // given
-        final BusLocation bus = bus(STOP_ORDER_6, RUNNING_STATE_DEPARTED, -1, CROWD_LEVEL_3, NORMAL_BUS);
+        BusLocation bus = bus(STOP_SEQUENCE_6, RUNNING_STATE_DEPARTED, -1, CROWD_LEVEL_3, NORMAL_BUS);
 
         // when
-        final VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = VehicleObservation.from(bus);
 
         // then
         assertThat(actual.remainingSeats()).isInstanceOf(Unknown.class);
@@ -162,10 +162,10 @@ class VehicleObservationTest {
     @Test
     void 혼잡도를_몰라도_잔여석_43석은_그대로_쓴다() {
         // given
-        final BusLocation bus = bus(STOP_ORDER_6, RUNNING_STATE_DEPARTED, SEATS_43, 0, NORMAL_BUS);
+        BusLocation bus = bus(STOP_SEQUENCE_6, RUNNING_STATE_DEPARTED, SEATS_43, 0, NORMAL_BUS);
 
         // when
-        final VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = VehicleObservation.from(bus);
 
         // then
         assertThat(actual.crowdLevel()).isNull();
@@ -175,10 +175,10 @@ class VehicleObservationTest {
     @Test
     void 이층버스의_차량_유형은_2이고_잔여석은_43석_그대로다() {
         // given
-        final BusLocation bus = bus(STOP_ORDER_6, RUNNING_STATE_DEPARTED, SEATS_43, CROWD_LEVEL_3, DOUBLE_DECKER_BUS);
+        BusLocation bus = bus(STOP_SEQUENCE_6, RUNNING_STATE_DEPARTED, SEATS_43, CROWD_LEVEL_3, DOUBLE_DECKER_BUS);
 
         // when
-        final VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = VehicleObservation.from(bus);
 
         // then
         assertThat(actual.vehicleType()).isEqualTo(DOUBLE_DECKER_BUS);
@@ -188,34 +188,94 @@ class VehicleObservationTest {
     @Test
     void 정류소_순번은_Open_API가_준_순번을_그대로_쓴다() {
         // given
-        final BusLocation bus = busAt(STOP_ORDER_6, RUNNING_STATE_DEPARTED);
+        BusLocation bus = busAt(STOP_SEQUENCE_6, RUNNING_STATE_DEPARTED);
 
         // when
-        final VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = VehicleObservation.from(bus);
 
         // then
-        assertThat(actual.stopOrder()).isEqualTo(STOP_ORDER_6);
+        assertThat(actual.stopSequence()).isEqualTo(STOP_SEQUENCE_6);
+    }
+
+    @Test
+    void 정류소에_도착한_버스도_그_정류소_순번을_그대로_쓴다() {
+        // given
+        BusLocation bus = busAt(STOP_SEQUENCE_6, RUNNING_STATE_ARRIVED);
+
+        // when
+        VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual.stopSequence()).isEqualTo(STOP_SEQUENCE_6);
     }
 
     @Test
     void 첫_정류소에_도착한_버스의_순번은_1이다() {
         // given
-        final BusLocation bus = busAt(FIRST_STOP_ORDER, RUNNING_STATE_ARRIVED);
+        BusLocation bus = busAt(FIRST_STOP_SEQUENCE, RUNNING_STATE_ARRIVED);
 
         // when
-        final VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = VehicleObservation.from(bus);
 
         // then
-        assertThat(actual.stopOrder()).isEqualTo(FIRST_STOP_ORDER);
+        assertThat(actual.stopSequence()).isEqualTo(FIRST_STOP_SEQUENCE);
+    }
+
+    @Test
+    void 정류소를_출발한_버스는_그_정류소까지_지나왔다() {
+        // given
+        BusLocation bus = busAt(STOP_SEQUENCE_6, RUNNING_STATE_DEPARTED);
+
+        // when
+        VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual.passedStopOrder()).isEqualTo(STOP_SEQUENCE_6);
+    }
+
+    @Test
+    void 정류소에_도착한_버스는_직전_정류소까지_지나왔다() {
+        // given
+        BusLocation bus = busAt(STOP_SEQUENCE_6, RUNNING_STATE_ARRIVED);
+
+        // when
+        VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual.passedStopOrder()).isEqualTo(STOP_SEQUENCE_6 - 1);
+    }
+
+    @Test
+    void 첫_정류소에_도착한_버스는_지나온_정류소가_없다() {
+        // given
+        BusLocation bus = busAt(FIRST_STOP_SEQUENCE, RUNNING_STATE_ARRIVED);
+
+        // when
+        VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual.passedStopOrder()).isZero();
+    }
+
+    @Test
+    void 운행_상태를_모르면_지나온_정류소도_모른다() {
+        // given
+        BusLocation bus = bus(STOP_SEQUENCE_6, null, SEATS_43, CROWD_LEVEL_3, NORMAL_BUS);
+
+        // when
+        VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual.passedStopOrder()).isNull();
     }
 
     @Test
     void 차량_아이디는_Open_API가_준_값을_문자열_그대로_쓴다() {
         // given
-        final BusLocation bus = busAt(STOP_ORDER_6, RUNNING_STATE_DEPARTED);
+        BusLocation bus = busAt(STOP_SEQUENCE_6, RUNNING_STATE_DEPARTED);
 
         // when
-        final VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = VehicleObservation.from(bus);
 
         // then
         assertThat(actual.vehicleId()).isEqualTo(VEHICLE_204000206);
@@ -224,10 +284,10 @@ class VehicleObservationTest {
     @Test
     void 번호판도_관측에_담는다() {
         // given
-        final BusLocation bus = busAt(STOP_ORDER_6, RUNNING_STATE_DEPARTED);
+        BusLocation bus = busAt(STOP_SEQUENCE_6, RUNNING_STATE_DEPARTED);
 
         // when
-        final VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = VehicleObservation.from(bus);
 
         // then
         assertThat(actual.plateNumber()).isEqualTo(PLATE_NUMBER);
@@ -236,16 +296,16 @@ class VehicleObservationTest {
     @Test
     void Open_API가_준_차량_한_대를_관측_한_건으로_만든다() {
         // given
-        final BusLocation bus = bus(STOP_ORDER_6, RUNNING_STATE_DEPARTED, SEATS_43, CROWD_LEVEL_3, DOUBLE_DECKER_BUS);
+        BusLocation bus = bus(STOP_SEQUENCE_6, RUNNING_STATE_DEPARTED, SEATS_43, CROWD_LEVEL_3, DOUBLE_DECKER_BUS);
 
         // when
-        final VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = VehicleObservation.from(bus);
 
         // then
         assertThat(actual).isEqualTo(new VehicleObservation(
             VEHICLE_204000206,
             PLATE_NUMBER,
-            STOP_ORDER_6,
+            STOP_SEQUENCE_6,
             STOP_205000217,
             RUNNING_STATE_DEPARTED,
             new Known(SEATS_43),
@@ -256,30 +316,30 @@ class VehicleObservationTest {
     }
 
     private static BusLocation busAt(
-        final int stopOrder,
+        final int stopSequence,
         final int runningState
     ) {
-        return bus(stopOrder, runningState, SEATS_43, CROWD_LEVEL_3, NORMAL_BUS);
+        return bus(stopSequence, runningState, SEATS_43, CROWD_LEVEL_3, NORMAL_BUS);
     }
 
     private static BusLocation busWithSeats(
-        final Integer remainingSeatCount
+        Integer remainingSeatCount
     ) {
-        return bus(STOP_ORDER_6, RUNNING_STATE_DEPARTED, remainingSeatCount, CROWD_LEVEL_3, NORMAL_BUS);
+        return bus(STOP_SEQUENCE_6, RUNNING_STATE_DEPARTED, remainingSeatCount, CROWD_LEVEL_3, NORMAL_BUS);
     }
 
     private static BusLocation busWithCrowdLevel(
-        final Integer crowdLevel
+        Integer crowdLevel
     ) {
-        return bus(STOP_ORDER_6, RUNNING_STATE_DEPARTED, SEATS_43, crowdLevel, NORMAL_BUS);
+        return bus(STOP_SEQUENCE_6, RUNNING_STATE_DEPARTED, SEATS_43, crowdLevel, NORMAL_BUS);
     }
 
     private static BusLocation bus(
-        final Integer stopOrder,
-        final Integer runningState,
-        final Integer remainingSeatCount,
-        final Integer crowdLevel,
-        final Integer vehicleType
+        Integer stopSequence,
+        Integer runningState,
+        Integer remainingSeatCount,
+        Integer crowdLevel,
+        Integer vehicleType
     ) {
         return new BusLocation(
             PLATE_NUMBER,
@@ -288,7 +348,7 @@ class VehicleObservationTest {
             ROUTE_3330,
             ROUTE_TYPE_11,
             STOP_205000217,
-            stopOrder,
+            stopSequence,
             runningState,
             remainingSeatCount,
             crowdLevel,
