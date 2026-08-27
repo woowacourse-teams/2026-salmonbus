@@ -16,7 +16,7 @@ class SeatForecastResultTest {
             new SeatForecastResult(SeatDistribution.of(0.2, 0.3, 0.5), 0.35);
 
         // when
-        final double actual = result.pFull();
+        final double actual = result.fullChance();
 
         // then
         assertThat(actual).isEqualTo(0.2);
@@ -29,21 +29,21 @@ class SeatForecastResultTest {
             new SeatForecastResult(SeatDistribution.of(0.2, 0.3, 0.5), 0.35);
 
         // when
-        final double actual = result.pFullRaw();
+        final double actual = result.fullChanceRaw();
 
         // then
         assertThat(actual).isEqualTo(0.35);
-        assertThat(result.pFull()).isEqualTo(0.2);
+        assertThat(result.fullChance()).isEqualTo(0.2);
     }
 
     @ParameterizedTest
     @ValueSource(doubles = {-0.1, 1.5, Double.NaN, Double.POSITIVE_INFINITY})
     void 보정_전_만석_확률은_0과_1_사이의_수다(
-        final double notProbability
+        final double notChance
     ) {
         // when & then
         assertThatThrownBy(
-            () -> new SeatForecastResult(SeatDistribution.of(0.2, 0.3, 0.5), notProbability)
+            () -> new SeatForecastResult(SeatDistribution.of(0.2, 0.3, 0.5), notChance)
         ).isInstanceOf(IllegalArgumentException.class);
     }
 }

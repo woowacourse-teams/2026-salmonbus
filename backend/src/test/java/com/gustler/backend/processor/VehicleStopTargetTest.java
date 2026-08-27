@@ -16,7 +16,7 @@ class VehicleStopTargetTest {
     @Test
     void 차량이_3번_정류장에서_5정류장_앞을_예보하면_대상은_8번_정류장이다() {
         // given
-        final VehicleStopTarget target = new VehicleStopTarget(observed(3, 12), Horizon.of(5));
+        final VehicleStopTarget target = new VehicleStopTarget(observed(3, 12), new ForecastDistance(5));
 
         // when
         final int actual = target.targetStopOrder();
@@ -35,14 +35,14 @@ class VehicleStopTargetTest {
         final ObservedVehicle seatsUnknown = observed(3, unknownSeats);
 
         // when & then
-        assertThatThrownBy(() -> new VehicleStopTarget(seatsUnknown, Horizon.of(5)))
+        assertThatThrownBy(() -> new VehicleStopTarget(seatsUnknown, new ForecastDistance(5)))
             .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void 잔여석_12석으로_관측한_차량은_예보_입력도_12석이다() {
         // given
-        final VehicleStopTarget target = new VehicleStopTarget(observed(3, 12), Horizon.of(5));
+        final VehicleStopTarget target = new VehicleStopTarget(observed(3, 12), new ForecastDistance(5));
 
         // when
         final int actual = target.remainingSeats();

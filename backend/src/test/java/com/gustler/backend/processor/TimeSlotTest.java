@@ -12,7 +12,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-class TimeBandTest {
+class TimeSlotTest {
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final Clock CLOCK = Clock.fixed(Instant.EPOCH, SEOUL);
@@ -24,10 +24,10 @@ class TimeBandTest {
         final int hour
     ) {
         // when
-        final TimeBand actual = TimeBand.of(seoulTimeAt(hour), CLOCK);
+        final TimeSlot actual = TimeSlot.of(seoulTimeAt(hour), CLOCK);
 
         // then
-        assertThat(actual).isEqualTo(TimeBand.MORNING);
+        assertThat(actual).isEqualTo(TimeSlot.MORNING);
     }
 
     @ParameterizedTest
@@ -36,10 +36,10 @@ class TimeBandTest {
         final int hour
     ) {
         // when
-        final TimeBand actual = TimeBand.of(seoulTimeAt(hour), CLOCK);
+        final TimeSlot actual = TimeSlot.of(seoulTimeAt(hour), CLOCK);
 
         // then
-        assertThat(actual).isEqualTo(TimeBand.EVENING);
+        assertThat(actual).isEqualTo(TimeSlot.EVENING);
     }
 
     @ParameterizedTest
@@ -48,10 +48,10 @@ class TimeBandTest {
         final int hour
     ) {
         // when
-        final TimeBand actual = TimeBand.of(seoulTimeAt(hour), CLOCK);
+        final TimeSlot actual = TimeSlot.of(seoulTimeAt(hour), CLOCK);
 
         // then
-        assertThat(actual).isEqualTo(TimeBand.OTHER);
+        assertThat(actual).isEqualTo(TimeSlot.OTHER);
     }
 
     private static IntStream 아침도_저녁도_아닌_시각() {

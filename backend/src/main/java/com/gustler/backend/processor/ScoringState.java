@@ -1,6 +1,6 @@
 package com.gustler.backend.processor;
 
-public enum Settlement {
+public enum ScoringState {
 
     PENDING,
     SETTLED,

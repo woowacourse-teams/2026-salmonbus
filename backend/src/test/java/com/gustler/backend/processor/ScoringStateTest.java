@@ -5,17 +5,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
-class SettlementTest {
+class ScoringStateTest {
 
     @ParameterizedTest
-    @EnumSource(Settlement.class)
+    @EnumSource(ScoringState.class)
     void 실제_잔여석을_받아낸_예보만_채점한다(
-        final Settlement settlement
+        final ScoringState scoringState
     ) {
         // when
-        final boolean actual = settlement.scorable();
+        final boolean actual = scoringState.scorable();
 
         // then
-        assertThat(actual).isEqualTo(settlement == Settlement.SETTLED);
+        assertThat(actual).isEqualTo(scoringState == ScoringState.SETTLED);
     }
 }

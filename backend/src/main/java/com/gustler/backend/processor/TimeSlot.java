@@ -3,7 +3,7 @@ package com.gustler.backend.processor;
 import java.time.Clock;
 import java.time.Instant;
 
-public enum TimeBand {
+public enum TimeSlot {
 
     MORNING,
     EVENING,
@@ -14,7 +14,7 @@ public enum TimeBand {
     private static final int EVENING_FROM_HOUR = 17;
     private static final int EVENING_UNTIL_HOUR = 20;
 
-    public static TimeBand of(
+    public static TimeSlot of(
         final Instant at,
         final Clock clock
     ) {

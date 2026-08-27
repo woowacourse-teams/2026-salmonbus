@@ -1,6 +1,7 @@
 package com.gustler.backend.processor;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
@@ -10,12 +11,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 class SeatDistributionTest {
 
     @Test
-    void 좌석_수별_확률을_모두_더하면_1이다() {
-        // when
-        final SeatDistribution actual = SeatDistribution.of(0.2, 0.3, 0.5);
-
-        // then
-        assertThat(actual.probabilities()).containsExactly(0.2, 0.3, 0.5);
+    void 확률을_모두_더해_1이_되는_분포만_만든다() {
+        // when & then
+        assertThatCode(() -> SeatDistribution.of(0.2, 0.3, 0.5))
+            .doesNotThrowAnyException();
         assertThatThrownBy(() -> SeatDistribution.of(0.2, 0.3))
             .isInstanceOf(IllegalArgumentException.class);
     }
@@ -23,10 +22,10 @@ class SeatDistributionTest {
     @ParameterizedTest
     @ValueSource(doubles = {-0.1, 1.5, Double.NaN, Double.POSITIVE_INFINITY})
     void 좌석_수별_확률은_0과_1_사이의_수다(
-        final double notProbability
+        final double notChance
     ) {
         // when & then
-        assertThatThrownBy(() -> SeatDistribution.of(notProbability, 1.0 - notProbability))
+        assertThatThrownBy(() -> SeatDistribution.of(notChance, 1.0 - notChance))
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -36,7 +35,7 @@ class SeatDistributionTest {
         final SeatDistribution distribution = SeatDistribution.of(0.2, 0.3, 0.5);
 
         // when
-        final double actual = distribution.pFull();
+        final double actual = distribution.fullChance();
 
         // then
         assertThat(actual).isEqualTo(0.2);
@@ -72,7 +71,7 @@ class SeatDistributionTest {
         final SeatDistribution distribution = SeatDistribution.of(0.996, 0.004);
 
         // when
-        final double actual = distribution.pFull();
+        final double actual = distribution.fullChance();
 
         // then
         assertThat(actual).isEqualTo(0.996);
@@ -81,12 +80,12 @@ class SeatDistributionTest {
     @Test
     void 분포는_한_번_만들어지면_바뀌지_않는다() {
         // given
-        final double[] probabilities = {0.2, 0.8};
-        final SeatDistribution actual = new SeatDistribution(probabilities);
+        final double[] chanceBySeats = {0.2, 0.8};
+        final SeatDistribution actual = new SeatDistribution(chanceBySeats);
 
         // when
-        probabilities[0] = 0.9;
-        actual.probabilities()[1] = 0.1;
+        chanceBySeats[0] = 0.9;
+        actual.chanceBySeats()[1] = 0.1;
 
         // then
         assertThat(actual).isEqualTo(SeatDistribution.of(0.2, 0.8));

@@ -2,7 +2,7 @@ package com.gustler.backend.processor;
 
 public record VehicleStopTarget(
     ObservedVehicle observation,
-    Horizon horizon
+    ForecastDistance distance
 ) {
 
     public VehicleStopTarget {
@@ -13,7 +13,7 @@ public record VehicleStopTarget(
     }
 
     public int targetStopOrder() {
-        return observation.stopOrder() + horizon.stopsAhead();
+        return observation.stopOrder() + distance.stopCount();
     }
 
     public int remainingSeats() {
