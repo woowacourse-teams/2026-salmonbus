@@ -1,6 +1,6 @@
 package com.gustler.backend.api.route.persistence.jpa;
 
-enum ModelDeploymentState {
+public enum ModelDeploymentState {
 
     STAGED,
     ACTIVE,

@@ -52,4 +52,32 @@ public class RouteVersionJpaEntity {
 
     protected RouteVersionJpaEntity() {
     }
+
+    public Long id() {
+        return id;
+    }
+
+    public RouteJpaEntity route() {
+        return route;
+    }
+
+    public Integer turnSequence() {
+        return turnSequence;
+    }
+
+    public String upFirstDepartureTime() {
+        return upFirstDepartureTime;
+    }
+
+    public String upLastDepartureTime() {
+        return upLastDepartureTime;
+    }
+
+    public String downFirstDepartureTime() {
+        return downFirstDepartureTime;
+    }
+
+    public String downLastDepartureTime() {
+        return downLastDepartureTime;
+    }
 }
