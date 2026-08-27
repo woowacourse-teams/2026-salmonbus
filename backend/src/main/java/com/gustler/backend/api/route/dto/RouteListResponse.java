@@ -13,8 +13,8 @@ public record RouteListResponse(
         routes = List.copyOf(routes);
     }
 
-    public static RouteListResponse from(final RouteOverview overview) {
-        final List<RouteSummary> routes = overview.routes()
+    public static RouteListResponse from(RouteOverview overview) {
+        List<RouteSummary> routes = overview.routes()
             .stream()
             .map(route -> RouteSummary.from(route, overview.status()))
             .toList();

@@ -19,13 +19,13 @@ public class RouteController {
 
     private final RouteQueryService routeQueryService;
 
-    public RouteController(final RouteQueryService routeQueryService) {
+    public RouteController(RouteQueryService routeQueryService) {
         this.routeQueryService = routeQueryService;
     }
 
     @GetMapping
     public ResponseEntity<RouteListResponse> listRoutes() {
-        final RouteListResponse response = RouteListResponse.from(
+        RouteListResponse response = RouteListResponse.from(
             routeQueryService.getRouteOverview()
         );
 

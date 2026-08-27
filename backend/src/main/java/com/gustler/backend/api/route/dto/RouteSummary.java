@@ -21,8 +21,8 @@ public record RouteSummary(
     }
 
     public static RouteSummary from(
-        final Route route,
-        final RouteStatus status
+        Route route,
+        RouteStatus status
     ) {
         return new RouteSummary(
             route.id(),

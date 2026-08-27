@@ -14,8 +14,8 @@ public class JpaRouteQueryRepository implements RouteQueryRepository {
     private final ModelDeploymentEntityRepository modelDeploymentRepository;
 
     public JpaRouteQueryRepository(
-        final RouteEntityRepository routeRepository,
-        final ModelDeploymentEntityRepository modelDeploymentRepository
+        RouteEntityRepository routeRepository,
+        ModelDeploymentEntityRepository modelDeploymentRepository
     ) {
         this.routeRepository = routeRepository;
         this.modelDeploymentRepository = modelDeploymentRepository;
@@ -28,7 +28,7 @@ public class JpaRouteQueryRepository implements RouteQueryRepository {
                 .stream()
                 .map(RouteJpaEntity::toDomain)
                 .toList();
-        } catch (final DataAccessException exception) {
+        } catch (DataAccessException exception) {
             throw new ServiceUnavailableException();
         }
     }
@@ -37,7 +37,7 @@ public class JpaRouteQueryRepository implements RouteQueryRepository {
     public boolean existsActiveModel() {
         try {
             return modelDeploymentRepository.existsByState(ModelDeploymentState.ACTIVE);
-        } catch (final DataAccessException exception) {
+        } catch (DataAccessException exception) {
             throw new ServiceUnavailableException();
         }
     }
