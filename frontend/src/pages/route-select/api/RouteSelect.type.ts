@@ -8,6 +8,6 @@ export interface RouteCore {
   status: RouteStatus;
 }
 
-export interface RouteListRespone {
+export interface RouteListResponese {
   routes: RouteCore[];
 }
