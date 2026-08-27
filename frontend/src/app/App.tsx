@@ -1,4 +1,4 @@
-import { RouteSelectPage } from "@/pages/route-select/RouteSelectPage";
+import { RouteSelectPage } from "@/pages/route-select";
 
 export function App() {
   return <RouteSelectPage />;
