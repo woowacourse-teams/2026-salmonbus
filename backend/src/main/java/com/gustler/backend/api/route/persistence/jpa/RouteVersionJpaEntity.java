@@ -1,5 +1,6 @@
 package com.gustler.backend.api.route.persistence.jpa;
 
+import com.gustler.backend.api.route.domain.Route;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -51,5 +52,13 @@ public class RouteVersionJpaEntity {
     private OffsetDateTime validTo;
 
     protected RouteVersionJpaEntity() {
+    }
+
+    public Long id() {
+        return id;
+    }
+
+    public Route toRoute() {
+        return route.toDomain();
     }
 }
