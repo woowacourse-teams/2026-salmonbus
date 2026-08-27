@@ -4,6 +4,7 @@ import com.gustler.backend.api.board.application.BoardOverview;
 import com.gustler.backend.api.board.application.BoardQueryService;
 import com.gustler.backend.api.board.dto.BoardResponse;
 import com.gustler.backend.api.route.RouteId;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,13 +14,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/routes/{routeId}/board")
+@RequiredArgsConstructor
 public class BoardController {
 
     private final BoardQueryService boardQueryService;
-
-    public BoardController(BoardQueryService boardQueryService) {
-        this.boardQueryService = boardQueryService;
-    }
 
     @GetMapping
     public ResponseEntity<BoardResponse> getBoard(

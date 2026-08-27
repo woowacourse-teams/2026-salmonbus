@@ -16,12 +16,14 @@ import com.gustler.backend.api.route.persistence.jpa.RouteVersionJpaEntity;
 import java.util.List;
 import java.util.Optional;
 import java.time.ZoneId;
+import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 @Repository
+@RequiredArgsConstructor
 public class JpaBoardQueryRepository implements BoardQueryRepository {
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
@@ -36,20 +38,6 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
     private final RouteStopEntityRepository routeStopRepository;
     private final SeatForecastEntityRepository seatForecastRepository;
     private final ModelDeploymentEntityRepository modelDeploymentRepository;
-
-    public JpaBoardQueryRepository(
-        BoardRouteVersionEntityRepository routeVersionRepository,
-        ObservationBatchEntityRepository observationBatchRepository,
-        RouteStopEntityRepository routeStopRepository,
-        SeatForecastEntityRepository seatForecastRepository,
-        ModelDeploymentEntityRepository modelDeploymentRepository
-    ) {
-        this.routeVersionRepository = routeVersionRepository;
-        this.observationBatchRepository = observationBatchRepository;
-        this.routeStopRepository = routeStopRepository;
-        this.seatForecastRepository = seatForecastRepository;
-        this.modelDeploymentRepository = modelDeploymentRepository;
-    }
 
     @Override
     public Optional<BoardSnapshot> findSnapshot(RouteId routeId) {

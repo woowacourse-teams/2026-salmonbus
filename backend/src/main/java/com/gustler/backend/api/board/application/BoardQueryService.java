@@ -25,12 +25,14 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+@RequiredArgsConstructor
 public class BoardQueryService {
 
     private static final int MAX_APPROACHING_VEHICLES = 3;
@@ -48,16 +50,6 @@ public class BoardQueryService {
     private final BoardQueryRepository boardQueryRepository;
     private final BoardFreshnessPolicy freshnessPolicy;
     private final BoardCachePolicy cachePolicy;
-
-    public BoardQueryService(
-        BoardQueryRepository boardQueryRepository,
-        BoardFreshnessPolicy freshnessPolicy,
-        BoardCachePolicy cachePolicy
-    ) {
-        this.boardQueryRepository = boardQueryRepository;
-        this.freshnessPolicy = freshnessPolicy;
-        this.cachePolicy = cachePolicy;
-    }
 
     public BoardOverview getBoard(RouteId routeId) {
         BoardSnapshot snapshot = boardQueryRepository.findSnapshot(routeId)
