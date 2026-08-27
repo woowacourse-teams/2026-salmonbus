@@ -34,6 +34,13 @@ class SeatForecastResultTest {
         assertThat(actual).isEqualTo(0.35);
     }
 
+    @Test
+    void 예보는_좌석_분포를_반드시_들고_있다() {
+        // when & then
+        assertThatThrownBy(() -> new SeatForecastResult(null, 0.35))
+            .isInstanceOf(NullPointerException.class);
+    }
+
     @ParameterizedTest
     @ValueSource(doubles = {-0.1, 1.5, Double.NaN, Double.POSITIVE_INFINITY})
     void 보정_전_만석_확률은_0과_1_사이의_수다(
