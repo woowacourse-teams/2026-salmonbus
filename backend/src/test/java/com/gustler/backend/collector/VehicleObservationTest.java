@@ -18,12 +18,14 @@ class VehicleObservationTest {
     private static final String ROUTE_3330 = "204000057";
     private static final String STOP_205000217 = "205000217";
     private static final int STOP_ORDER_6 = 6;
+    private static final int FIRST_STOP_ORDER = 1;
     private static final int ROUTE_TYPE_11 = 11;
     private static final int TAGLESS_1 = 1;
 
     private static final int NORMAL_BUS = 0;
     private static final int DOUBLE_DECKER_BUS = 2;
 
+    private static final int RUNNING_STATE_ARRIVED = 1;
     private static final int RUNNING_STATE_DEPARTED = 2;
 
     private static final int SEATS_43 = 43;
@@ -181,6 +183,37 @@ class VehicleObservationTest {
         // then
         assertThat(actual.vehicleType()).isEqualTo(DOUBLE_DECKER_BUS);
         assertThat(actual.remainingSeats()).isEqualTo(new Known(SEATS_43));
+    }
+
+    @Test
+    void 정류소_순번은_Open_API가_준_순번을_그대로_쓴다() {
+        // given
+        final BusLocation bus = busAt(STOP_ORDER_6, RUNNING_STATE_DEPARTED);
+
+        // when
+        final VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual.stopOrder()).isEqualTo(STOP_ORDER_6);
+    }
+
+    @Test
+    void 첫_정류소에_도착한_버스의_순번은_1이다() {
+        // given
+        final BusLocation bus = busAt(FIRST_STOP_ORDER, RUNNING_STATE_ARRIVED);
+
+        // when
+        final VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual.stopOrder()).isEqualTo(FIRST_STOP_ORDER);
+    }
+
+    private static BusLocation busAt(
+        final int stopOrder,
+        final int runningState
+    ) {
+        return bus(stopOrder, runningState, SEATS_43, CROWD_LEVEL_3, NORMAL_BUS);
     }
 
     private static BusLocation busWithSeats(
