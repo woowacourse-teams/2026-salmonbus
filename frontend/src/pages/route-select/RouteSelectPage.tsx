@@ -7,7 +7,7 @@ export function RouteSelectPage() {
   return (
     <>
       <header>
-        <img src={salmongProud} alt="salmonbus-logo"></img>
+        <img src={salmongProud} alt="salmonbus-logo" />
         <Pageinfo title={titleMock} caption={captionMock} />
       </header>
       <main>
