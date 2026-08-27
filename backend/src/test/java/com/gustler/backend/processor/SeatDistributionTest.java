@@ -40,7 +40,7 @@ class SeatDistributionTest {
     void 만석_확률은_0석_남을_확률이다() {
         // given
         final double zeroSeatChance = 0.2;
-        final SeatDistribution distribution = new SeatDistribution(List.of(zeroSeatChance, 0.3, 0.5));
+        SeatDistribution distribution = new SeatDistribution(List.of(zeroSeatChance, 0.3, 0.5));
 
         // when
         final double actual = distribution.fullChance();
@@ -53,7 +53,7 @@ class SeatDistributionTest {
     void 분포의_세_번째_칸은_2석_남을_확률이다() {
         // given
         final double twoSeatsChance = 0.5;
-        final SeatDistribution distribution = new SeatDistribution(List.of(0.2, 0.3, twoSeatsChance));
+        SeatDistribution distribution = new SeatDistribution(List.of(0.2, 0.3, twoSeatsChance));
 
         // when
         final double actual = distribution.chanceOf(2);
@@ -65,7 +65,7 @@ class SeatDistributionTest {
     @Test
     void 좌석이_2석_남을_확률이_100퍼센트면_기대_잔여석도_2석이다() {
         // given
-        final SeatDistribution distribution = new SeatDistribution(List.of(0.0, 0.0, 1.0));
+        SeatDistribution distribution = new SeatDistribution(List.of(0.0, 0.0, 1.0));
 
         // when
         final double actual = distribution.expectedSeats();
@@ -77,7 +77,7 @@ class SeatDistributionTest {
     @Test
     void 좌석이_0석과_2석일_확률이_각각_50퍼센트면_기대_잔여석은_1석이다() {
         // given
-        final SeatDistribution distribution = new SeatDistribution(List.of(0.5, 0.0, 0.5));
+        SeatDistribution distribution = new SeatDistribution(List.of(0.5, 0.0, 0.5));
 
         // when
         final double actual = distribution.expectedSeats();
@@ -89,7 +89,7 @@ class SeatDistributionTest {
     @Test
     void 분포는_받은_확률을_소수점까지_그대로_낸다() {
         // given
-        final SeatDistribution distribution = new SeatDistribution(List.of(0.996, 0.004));
+        SeatDistribution distribution = new SeatDistribution(List.of(0.996, 0.004));
 
         // when
         final double actual = distribution.fullChance();
@@ -101,8 +101,8 @@ class SeatDistributionTest {
     @Test
     void 분포는_한_번_만들어지면_바뀌지_않는다() {
         // given
-        final List<Double> chances = new ArrayList<>(List.of(0.2, 0.8));
-        final SeatDistribution actual = new SeatDistribution(chances);
+        List<Double> chances = new ArrayList<>(List.of(0.2, 0.8));
+        SeatDistribution actual = new SeatDistribution(chances);
 
         // when
         chances.set(0, 0.9);

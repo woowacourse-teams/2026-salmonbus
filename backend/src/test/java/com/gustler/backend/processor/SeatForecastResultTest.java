@@ -13,7 +13,7 @@ class SeatForecastResultTest {
     @Test
     void 만석_확률은_분포의_0석_남을_확률이다() {
         // given
-        final SeatForecastResult result = new SeatForecastResult(seatDistribution(), 0.35);
+        SeatForecastResult result = new SeatForecastResult(seatDistribution(), 0.35);
 
         // when
         final double actual = result.fullChance();
@@ -25,7 +25,7 @@ class SeatForecastResultTest {
     @Test
     void 보정_전_만석_확률은_분포와_따로_들고_있다() {
         // given
-        final SeatForecastResult result = new SeatForecastResult(seatDistribution(), 0.35);
+        SeatForecastResult result = new SeatForecastResult(seatDistribution(), 0.35);
 
         // when
         final double actual = result.fullChanceRaw();

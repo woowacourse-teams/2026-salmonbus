@@ -38,7 +38,7 @@ public record SeatDistribution(
     }
 
     private static void validate(
-        final List<Double> chanceBySeats
+        List<Double> chanceBySeats
     ) {
         chanceBySeats.stream()
             .filter(chance -> !isBetweenZeroAndOne(chance))

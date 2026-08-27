@@ -10,7 +10,7 @@ class ScoringStateTest {
     @ParameterizedTest
     @EnumSource(ScoringState.class)
     void 실제_잔여석을_받아낸_예보만_채점한다(
-        final ScoringState scoringState
+        ScoringState scoringState
     ) {
         // when
         final boolean actual = scoringState.scorable();

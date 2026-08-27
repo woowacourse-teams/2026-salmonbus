@@ -24,7 +24,7 @@ class TimeSlotTest {
         final int hour
     ) {
         // when
-        final TimeSlot actual = TimeSlot.of(seoulTimeAt(hour), CLOCK);
+        TimeSlot actual = TimeSlot.of(seoulTimeAt(hour), CLOCK);
 
         // then
         assertThat(actual).isEqualTo(TimeSlot.MORNING);
@@ -36,7 +36,7 @@ class TimeSlotTest {
         final int hour
     ) {
         // when
-        final TimeSlot actual = TimeSlot.of(seoulTimeAt(hour), CLOCK);
+        TimeSlot actual = TimeSlot.of(seoulTimeAt(hour), CLOCK);
 
         // then
         assertThat(actual).isEqualTo(TimeSlot.EVENING);
@@ -48,7 +48,7 @@ class TimeSlotTest {
         final int hour
     ) {
         // when
-        final TimeSlot actual = TimeSlot.of(seoulTimeAt(hour), CLOCK);
+        TimeSlot actual = TimeSlot.of(seoulTimeAt(hour), CLOCK);
 
         // then
         assertThat(actual).isEqualTo(TimeSlot.OTHER);

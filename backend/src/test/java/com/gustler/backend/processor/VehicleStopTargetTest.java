@@ -17,10 +17,10 @@ class VehicleStopTargetTest {
     @Test
     void 차량이_44번_정류장에서_49번_정류장을_예보하면_거리는_5정류장이다() {
         // given
-        final VehicleStopTarget target = new VehicleStopTarget(observed(44, 12), routeStop(49));
+        VehicleStopTarget target = new VehicleStopTarget(observed(44, 12), routeStop(49));
 
         // when
-        final ForecastDistance actual = target.distance();
+        ForecastDistance actual = target.distance();
 
         // then
         assertThat(actual.stopCount()).isEqualTo(5);
@@ -29,7 +29,7 @@ class VehicleStopTargetTest {
     @Test
     void 예보_대상은_관측한_정류장의_다음_정류장부터다() {
         // given
-        final RouteStop passedStop = routeStop(40);
+        RouteStop passedStop = routeStop(40);
 
         // when & then
         assertThatThrownBy(() -> new VehicleStopTarget(observed(44, 12), passedStop))
@@ -39,7 +39,7 @@ class VehicleStopTargetTest {
     @Test
     void 예보_대상은_12정류장_앞까지다() {
         // given
-        final RouteStop farStop = routeStop(57);
+        RouteStop farStop = routeStop(57);
 
         // when & then
         assertThatThrownBy(() -> new VehicleStopTarget(observed(44, 12), farStop))
@@ -50,10 +50,10 @@ class VehicleStopTargetTest {
     @NullSource
     @ValueSource(ints = {-1})
     void 잔여석을_아는_차량만_예보한다(
-        final Integer unknownSeats
+        Integer unknownSeats
     ) {
         // given
-        final ObservedVehicle seatsUnknown = observed(44, unknownSeats);
+        ObservedVehicle seatsUnknown = observed(44, unknownSeats);
 
         // when & then
         assertThatThrownBy(() -> new VehicleStopTarget(seatsUnknown, routeStop(49)))
@@ -63,7 +63,7 @@ class VehicleStopTargetTest {
     @Test
     void 잔여석_12석으로_관측한_차량은_예보_입력도_12석이다() {
         // given
-        final VehicleStopTarget target = new VehicleStopTarget(observed(44, 12), routeStop(49));
+        VehicleStopTarget target = new VehicleStopTarget(observed(44, 12), routeStop(49));
 
         // when
         final int actual = target.remainingSeats();
@@ -74,7 +74,7 @@ class VehicleStopTargetTest {
 
     private ObservedVehicle observed(
         final int stopOrder,
-        final Integer remainingSeats
+        Integer remainingSeats
     ) {
         return new ObservedVehicle("204000206", stopOrder, OBSERVED_AT, remainingSeats);
     }

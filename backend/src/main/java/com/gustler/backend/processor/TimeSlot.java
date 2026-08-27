@@ -16,8 +16,8 @@ public enum TimeSlot {
     private static final int EVENING_UNTIL_HOUR = 20;
 
     public static TimeSlot of(
-        final Instant forecastedAt,
-        final Clock clock
+        Instant forecastedAt,
+        Clock clock
     ) {
         final int hour = forecastedAt.atZone(clock.getZone()).getHour();
         if (isMorning(hour)) {

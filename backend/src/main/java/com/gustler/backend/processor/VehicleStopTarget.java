@@ -25,8 +25,8 @@ public record VehicleStopTarget(
     }
 
     private static ForecastDistance distanceBetween(
-        final ObservedVehicle observation,
-        final RouteStop targetStop
+        ObservedVehicle observation,
+        RouteStop targetStop
     ) {
         return new ForecastDistance(targetStop.stopOrder() - observation.stopOrder());
     }
