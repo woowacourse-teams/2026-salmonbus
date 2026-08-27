@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: backend
+
+  web:
+    resources:
+      add-mappings: false # API 전용 서버라 정적 리소스를 서빙하지 않는다. 없는 경로가 예외로 올라온다.
+
+  http:
+    clients:
+      connect-timeout: 3s # Open API 실측: 0.04~0.15초 (2026-08-19, 10회).
+      read-timeout: 5s
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/salmonbus} # 기본값은 compose.yml 과 같다.
+    username: ${DB_USERNAME:salmonbus}
+    password: ${DB_PASSWORD:salmonbus}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate # 스키마의 주인은 Flyway 다. Hibernate 는 대조만 한다.
+
+gbis:
+  base-url: https://apis.data.go.kr/6410000 # 경기도 버스정보시스템(GBIS) 실시간 조회 API
+  service-key: ${GBIS_SERVICE_KEY}  # 공공데이터포털에서 발급받은 Decoding 인증키
