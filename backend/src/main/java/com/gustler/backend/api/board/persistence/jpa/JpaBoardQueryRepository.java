@@ -15,6 +15,7 @@ import com.gustler.backend.api.route.persistence.jpa.ModelDeploymentState;
 import com.gustler.backend.api.route.persistence.jpa.RouteVersionJpaEntity;
 import java.util.List;
 import java.util.Optional;
+import java.time.ZoneId;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class JpaBoardQueryRepository implements BoardQueryRepository {
 
+    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final List<String> SUCCESSFUL_OUTCOMES = List.of(
         "SUCCESS_ROWS",
         "SUCCESS_EMPTY"
@@ -76,7 +78,7 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
         try {
             return seatForecastRepository.findAllByBatchId(observationBatchId)
                 .stream()
-                .map(SeatForecastJpaEntity::toDomain)
+                .map(forecast -> forecast.toDomain(SEOUL))
                 .toList();
         } catch (final DataAccessException exception) {
             throw new ServiceUnavailableException();
@@ -88,7 +90,7 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
             .findLatestCompleted(routeVersion, SUCCESSFUL_OUTCOMES, FIRST_RESULT)
             .stream()
             .findFirst()
-            .map(ObservationBatchJpaEntity::toDomain);
+            .map(batch -> batch.toDomain(SEOUL));
         final Optional<ForecastModel> activeModel = modelDeploymentRepository
             .findByState(ModelDeploymentState.ACTIVE)
             .map(this::toModel);
@@ -109,6 +111,10 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
     }
 
     private ForecastModel toModel(final ModelDeploymentJpaEntity model) {
-        return new ForecastModel(model.id(), model.releaseId(), model.dataUntil());
+        return new ForecastModel(
+            model.id(),
+            model.releaseId(),
+            model.dataUntil().atZoneSameInstant(SEOUL).toOffsetDateTime()
+        );
     }
 }

@@ -10,6 +10,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.ZoneId;
 
 @Entity(name = "BoardSeatForecastJpaEntity")
 @Table(name = "seat_forecast")
@@ -43,7 +44,7 @@ public class SeatForecastJpaEntity {
     protected SeatForecastJpaEntity() {
     }
 
-    public StoredPrediction toDomain() {
+    public StoredPrediction toDomain(final ZoneId zoneId) {
         return new StoredPrediction(
             id.targetStopOrder(),
             vehicleObservation.vehicleId(),
@@ -55,6 +56,8 @@ public class SeatForecastJpaEntity {
                 modelDeployment.id(),
                 modelDeployment.releaseId(),
                 modelDeployment.dataUntil()
+                    .atZoneSameInstant(zoneId)
+                    .toOffsetDateTime()
             )
         );
     }

@@ -12,6 +12,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 
 @Entity(name = "BoardObservationBatchJpaEntity")
 @Table(name = "observation_batch")
@@ -40,7 +41,11 @@ public class ObservationBatchJpaEntity {
     protected ObservationBatchJpaEntity() {
     }
 
-    public SnapshotObservation toDomain() {
-        return new SnapshotObservation(id, responseReceivedAt, storedRows);
+    public SnapshotObservation toDomain(final ZoneId zoneId) {
+        return new SnapshotObservation(
+            id,
+            responseReceivedAt.atZoneSameInstant(zoneId).toOffsetDateTime(),
+            storedRows
+        );
     }
 }
