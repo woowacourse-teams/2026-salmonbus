@@ -1,4 +1,4 @@
-import type { RouteCore } from "../api/RouteSelect.type";
+import type { RouteCore } from "../api/routeSelect.type";
 import { RouteListItem } from "./RouteListItem";
 
 interface RouteListProps {
