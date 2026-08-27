@@ -8,4 +8,8 @@ public record ObservedVehicle(
     Instant observedAt,
     Integer remainingSeats
 ) {
+
+    public boolean hasKnownSeats() {
+        return remainingSeats != null && remainingSeats >= 0;
+    }
 }

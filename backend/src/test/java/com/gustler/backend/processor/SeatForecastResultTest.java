@@ -3,6 +3,7 @@ package com.gustler.backend.processor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -13,7 +14,7 @@ class SeatForecastResultTest {
     void 만석_확률은_분포의_0석_남을_확률이다() {
         // given
         final SeatForecastResult result =
-            new SeatForecastResult(SeatDistribution.of(0.2, 0.3, 0.5), 0.35);
+            new SeatForecastResult(new SeatDistribution(List.of(0.2, 0.3, 0.5)), 0.35);
 
         // when
         final double actual = result.fullChance();
@@ -26,7 +27,7 @@ class SeatForecastResultTest {
     void 예보는_보정_전_만석_확률을_따로_들고_있다() {
         // given
         final SeatForecastResult result =
-            new SeatForecastResult(SeatDistribution.of(0.2, 0.3, 0.5), 0.35);
+            new SeatForecastResult(new SeatDistribution(List.of(0.2, 0.3, 0.5)), 0.35);
 
         // when
         final double actual = result.fullChanceRaw();
@@ -43,7 +44,7 @@ class SeatForecastResultTest {
     ) {
         // when & then
         assertThatThrownBy(
-            () -> new SeatForecastResult(SeatDistribution.of(0.2, 0.3, 0.5), notChance)
+            () -> new SeatForecastResult(new SeatDistribution(List.of(0.2, 0.3, 0.5)), notChance)
         ).isInstanceOf(IllegalArgumentException.class);
     }
 }

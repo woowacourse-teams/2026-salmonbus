@@ -19,7 +19,7 @@ class VehicleStopTargetTest {
         final VehicleStopTarget target = new VehicleStopTarget(observed(3, 12), new ForecastDistance(5));
 
         // when
-        final int actual = target.targetStopOrder();
+        final int actual = target.stopOrderToForecast();
 
         // then
         assertThat(actual).isEqualTo(8);

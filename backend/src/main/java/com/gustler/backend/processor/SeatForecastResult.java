@@ -6,7 +6,7 @@ public record SeatForecastResult(
 ) {
 
     public SeatForecastResult {
-        if (!SeatDistribution.isChance(fullChanceRaw)) {
+        if (!SeatDistribution.isBetweenZeroAndOne(fullChanceRaw)) {
             throw new IllegalArgumentException("보정 전 만석 확률은 0과 1 사이의 수다: " + fullChanceRaw);
         }
     }

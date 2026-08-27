@@ -15,9 +15,9 @@ class SeatDistributionTest {
     @Test
     void 확률을_모두_더해_1이_되는_분포만_만든다() {
         // when & then
-        assertThatCode(() -> SeatDistribution.of(0.2, 0.3, 0.5))
+        assertThatCode(() -> new SeatDistribution(List.of(0.2, 0.3, 0.5)))
             .doesNotThrowAnyException();
-        assertThatThrownBy(() -> SeatDistribution.of(0.2, 0.3))
+        assertThatThrownBy(() -> new SeatDistribution(List.of(0.2, 0.3)))
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -27,14 +27,14 @@ class SeatDistributionTest {
         final double notChance
     ) {
         // when & then
-        assertThatThrownBy(() -> SeatDistribution.of(notChance, 1.0 - notChance))
+        assertThatThrownBy(() -> new SeatDistribution(List.of(notChance, 1.0 - notChance)))
             .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void 만석_확률은_0석_남을_확률이다() {
         // given
-        final SeatDistribution distribution = SeatDistribution.of(0.2, 0.3, 0.5);
+        final SeatDistribution distribution = new SeatDistribution(List.of(0.2, 0.3, 0.5));
 
         // when
         final double actual = distribution.fullChance();
@@ -46,7 +46,7 @@ class SeatDistributionTest {
     @Test
     void 좌석이_2석_남을_확률이_100퍼센트면_기대_잔여석도_2석이다() {
         // given
-        final SeatDistribution distribution = SeatDistribution.of(0.0, 0.0, 1.0);
+        final SeatDistribution distribution = new SeatDistribution(List.of(0.0, 0.0, 1.0));
 
         // when
         final double actual = distribution.expectedSeats();
@@ -58,7 +58,7 @@ class SeatDistributionTest {
     @Test
     void 좌석이_0석과_2석일_확률이_각각_50퍼센트면_기대_잔여석은_1석이다() {
         // given
-        final SeatDistribution distribution = SeatDistribution.of(0.5, 0.0, 0.5);
+        final SeatDistribution distribution = new SeatDistribution(List.of(0.5, 0.0, 0.5));
 
         // when
         final double actual = distribution.expectedSeats();
@@ -70,7 +70,7 @@ class SeatDistributionTest {
     @Test
     void 분포에_넣은_확률이_그대로_나온다() {
         // given
-        final SeatDistribution distribution = SeatDistribution.of(0.996, 0.004);
+        final SeatDistribution distribution = new SeatDistribution(List.of(0.996, 0.004));
 
         // when
         final double actual = distribution.fullChance();
@@ -89,6 +89,6 @@ class SeatDistributionTest {
         chances.set(0, 0.9);
 
         // then
-        assertThat(actual).isEqualTo(SeatDistribution.of(0.2, 0.8));
+        assertThat(actual).isEqualTo(new SeatDistribution(List.of(0.2, 0.8)));
     }
 }
