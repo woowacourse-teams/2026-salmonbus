@@ -16,9 +16,7 @@ public class RouteQueryService {
 
     public RouteOverview getRouteOverview() {
         List<Route> routes = routeQueryRepository.findAllCurrentRoutes();
-        RouteStatus status = routeQueryRepository.existsActiveModel()
-            ? RouteStatus.FORECAST_READY
-            : RouteStatus.PREPARING;
+        RouteStatus status = RouteStatus.from(routeQueryRepository.existsActiveModel());
 
         return new RouteOverview(routes, status);
     }
