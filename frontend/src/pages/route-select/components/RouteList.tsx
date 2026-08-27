@@ -6,14 +6,15 @@ interface RouteListProps {
 }
 
 export function RouteList({ routes }: RouteListProps) {
+  const handleSelect = (routeId: RouteCore["id"]) => {
+    void routeId;
+    //TODO: SAL-53에서 판정 보드 이동 로직 구현 예정
+  };
+
   return (
     <ul>
       {routes.map((route) => (
-        <RouteListItem
-          displayName={route.displayName}
-          startStopName={route.startStopName}
-          endStopName={route.endStopName}
-        />
+        <RouteListItem key={route.id} route={route} onSelect={() => handleSelect(route.id)} />
       ))}
     </ul>
   );

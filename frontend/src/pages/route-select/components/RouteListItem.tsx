@@ -1,16 +1,20 @@
+import type { RouteCore } from "../api/routeSelect.type";
 interface RouteListItemProps {
-  displayName: string;
-  startStopName: string;
-  endStopName: string;
+  route: RouteCore;
+  onSelect: (routeId: RouteCore["id"]) => void;
 }
 
-export function RouteListItem({ displayName, startStopName, endStopName }: RouteListItemProps) {
+export function RouteListItem({ route, onSelect }: RouteListItemProps) {
   return (
     <li>
-      <button type="button" aria-label={`${displayName}번 노선, ${startStopName}부터 ${endStopName} 구간`}>
-        <span>{displayName}</span>
+      <button
+        type="button"
+        aria-label={`${route.displayName}번 노선, ${route.startStopName}부터 ${route.endStopName} 구간`}
+        onClick={() => onSelect(route.id)}
+      >
+        <span>{route.displayName}</span>
         <span>
-          {startStopName} ↔ {endStopName}
+          {route.startStopName} ↔ {route.endStopName}
         </span>
       </button>
     </li>
