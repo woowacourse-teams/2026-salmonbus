@@ -4,5 +4,6 @@ enum ModelDeploymentState {
 
     STAGED,
     ACTIVE,
-    RETIRED
+    RETIRED,
+    ;
 }

@@ -37,7 +37,8 @@ class RouteControllerTest {
     }
 
     @Test
-    void 지원_노선을_조회_순서대로_반환한다() throws Exception {
+    void 지원_노선을_DB_생성_순서대로_반환한다() throws Exception {
+        // given
         final Route firstRoute = new Route(
             "204000057",
             "3330",
@@ -55,6 +56,7 @@ class RouteControllerTest {
             RouteStatus.FORECAST_READY
         ));
 
+        // when & then
         mockMvc.perform(get("/api/v1/routes"))
             .andExpect(status().isOk())
             .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
@@ -70,8 +72,10 @@ class RouteControllerTest {
 
     @Test
     void 서비스_불가_예외는_공통_503_오류_응답으로_반환한다() throws Exception {
+        // given
         given(routeQueryService.getRouteOverview()).willThrow(new ServiceUnavailableException());
 
+        // when & then
         mockMvc.perform(get("/api/v1/routes"))
             .andExpect(status().isServiceUnavailable())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
