@@ -18,7 +18,7 @@ export function StopList({ stops }: StopListProps) {
   return (
     <ul className={styles.list}>
       {stops.map((stop, index) => (
-        <StopRow key={stop.sequence} stop={stop} routePosition={routePositionFor(index, stops.length - 1)} />
+        <StopRow key={stop.stopId} stop={stop} routePosition={routePositionFor(index, stops.length - 1)} />
       ))}
     </ul>
   );

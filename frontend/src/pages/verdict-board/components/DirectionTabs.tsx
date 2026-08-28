@@ -1,4 +1,4 @@
-import type { Direction } from "../api/verdictBoard.types";
+import type { Direction } from "@/shared/api/routeForecast.types";
 import type { DirectionView } from "../displayPolicy";
 import * as styles from "./DirectionTabs.css";
 
