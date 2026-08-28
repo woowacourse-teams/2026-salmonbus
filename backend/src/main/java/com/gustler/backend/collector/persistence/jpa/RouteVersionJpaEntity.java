@@ -3,6 +3,7 @@ package com.gustler.backend.collector.persistence.jpa;
 import com.gustler.backend.collector.RouteContentDigest;
 import com.gustler.backend.collector.RouteTimetable;
 import com.gustler.backend.collector.RouteVersionContent;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -25,23 +26,32 @@ public class RouteVersionJpaEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "route_id")
     private Long routeId;
 
+    @Column(name = "turn_sequence")
     private Integer turnSequence;
 
+    @Column(name = "up_first_departure_time")
     private String upFirstDepartureTime;
 
+    @Column(name = "up_last_departure_time")
     private String upLastDepartureTime;
 
+    @Column(name = "down_first_departure_time")
     private String downFirstDepartureTime;
 
+    @Column(name = "down_last_departure_time")
     private String downLastDepartureTime;
 
     @JdbcTypeCode(SqlTypes.CHAR)
+    @Column(name = "content_digest")
     private String contentDigest;
 
+    @Column(name = "valid_from")
     private OffsetDateTime validFrom;
 
+    @Column(name = "valid_to")
     private OffsetDateTime validTo;
 
     public RouteVersionJpaEntity(
