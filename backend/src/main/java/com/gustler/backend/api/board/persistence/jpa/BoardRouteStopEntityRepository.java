@@ -5,7 +5,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
-public interface RouteStopEntityRepository extends Repository<RouteStopJpaEntity, RouteStopJpaId> {
+public interface BoardRouteStopEntityRepository
+    extends Repository<RouteStopJpaEntity, RouteStopJpaId> {
 
     @Query("""
         SELECT stop

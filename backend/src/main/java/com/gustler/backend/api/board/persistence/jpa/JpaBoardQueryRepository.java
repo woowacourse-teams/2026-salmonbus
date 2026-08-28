@@ -30,8 +30,8 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
 
     private final Clock clock;
     private final BoardRouteVersionEntityRepository routeVersionRepository;
-    private final ObservationBatchEntityRepository observationBatchRepository;
-    private final RouteStopEntityRepository routeStopRepository;
+    private final BoardObservationBatchEntityRepository observationBatchRepository;
+    private final BoardRouteStopEntityRepository routeStopRepository;
     private final SeatForecastEntityRepository seatForecastRepository;
     private final ModelDeploymentEntityRepository modelDeploymentRepository;
 

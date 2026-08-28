@@ -23,8 +23,8 @@ class JpaBoardQueryRepositoryTest {
         repository = new JpaBoardQueryRepository(
             Clock.systemUTC(),
             routeVersionRepository,
-            mock(ObservationBatchEntityRepository.class),
-            mock(RouteStopEntityRepository.class),
+            mock(BoardObservationBatchEntityRepository.class),
+            mock(BoardRouteStopEntityRepository.class),
             mock(SeatForecastEntityRepository.class),
             mock(ModelDeploymentEntityRepository.class)
         );
