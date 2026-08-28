@@ -1,6 +1,6 @@
 const WHOLE_SECONDS = /^\d+$/;
 
-export function retryAfterMillisFrom(headers: Headers, now: number): number | null {
+export function retryAfterMillisFrom(headers: Headers, now: number | null): number | null {
   const retryAfter = headers.get("retry-after");
   if (retryAfter === null) {
     return null;
@@ -8,6 +8,10 @@ export function retryAfterMillisFrom(headers: Headers, now: number): number | nu
 
   if (WHOLE_SECONDS.test(retryAfter)) {
     return Number(retryAfter) * 1000;
+  }
+
+  if (now === null) {
+    return null;
   }
 
   const retryAt = Date.parse(retryAfter);

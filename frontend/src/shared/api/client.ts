@@ -131,7 +131,7 @@ function isErrorResponse(value: unknown): value is ErrorResponse {
 }
 
 function retryAfterMsOf(response: Response, clock: ReferenceClock | null): number | null {
-  return clock === null ? null : retryAfterMillisFrom(response.headers, clock.now());
+  return retryAfterMillisFrom(response.headers, clock === null ? null : clock.now());
 }
 
 function requestIdOf(response: Response): string | null {
