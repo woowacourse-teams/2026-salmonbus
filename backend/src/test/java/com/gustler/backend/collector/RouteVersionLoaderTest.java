@@ -180,6 +180,28 @@ class RouteVersionLoaderTest {
         assertThat(actual).isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void 새_판본은_아직_열려_있는_직전_판본_뒤에만_연다() {
+        // given
+        insertClosedVersion();
+
+        // when
+        Throwable actual = catchThrowable(
+            () -> loader.load(routeId, threeStops(), TIMETABLE_1650, SECOND_READ_AT));
+
+        // then
+        assertThat(actual).isInstanceOf(IllegalStateException.class);
+    }
+
+    private void insertClosedVersion() {
+        jdbcClient.sql("""
+                INSERT INTO route_version (route_id, content_digest, valid_from, valid_to)
+                VALUES (?, ?, ?, ?)
+                """)
+            .params(routeId, "0".repeat(64), FIRST_READ_AT, SECOND_READ_AT)
+            .update();
+    }
+
     private RouteStops threeStops() {
         return RouteStops.from(TURN_SEQUENCE, List.of(
             new UpstreamRouteStop(1, STOP_205000217, "범계역"),

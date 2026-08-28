@@ -28,7 +28,8 @@ public class JpaRouteVersionRepository implements RouteVersionRepository {
         final long routeId
     ) {
         return routeVersionEntityRepository.findFirstByRouteIdOrderByValidFromDescIdDesc(routeId)
-            .map(version -> new StoredRouteVersion(version.getId(), version.getValidFrom(), version.content()));
+            .map(version -> new StoredRouteVersion(
+                version.getId(), version.getValidFrom(), version.getValidTo(), version.content()));
     }
 
     @Override
