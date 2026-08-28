@@ -19,6 +19,11 @@ public enum GbisResultCode {
         this.code = code;
     }
 
+    /** OTHER 는 무슨 코드였는지 특정하지 못해 비어 있다. */
+    public Integer code() {
+        return code;
+    }
+
     public static GbisResultCode from(
         final int resultCode
     ) {
