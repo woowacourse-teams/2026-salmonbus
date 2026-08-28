@@ -1,5 +1,10 @@
-import { RouteSelectPage } from "@/pages/route-select";
+import { BrowserRouter } from "react-router";
+import { AppRoutes } from "./routes";
 
 export function App() {
-  return <RouteSelectPage />;
+  return (
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
+  );
 }
