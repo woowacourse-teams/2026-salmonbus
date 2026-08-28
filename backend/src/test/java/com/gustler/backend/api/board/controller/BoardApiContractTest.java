@@ -12,6 +12,7 @@ import com.gustler.backend.api.board.support.BoardDatabaseFixture.RouteContext;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -92,7 +93,8 @@ class BoardApiContractTest {
             .andExpect(jsonPath("$.route.directions[0]", aMapWithSize(6)))
             .andExpect(jsonPath("$.route.directions[0].name").value("회차점 방면"))
             .andExpect(jsonPath("$.route.directions[1].name").value("종점 방면"))
-            .andExpect(jsonPath("$.observedAt").value(observedAt.toString()))
+            .andExpect(jsonPath("$.observedAt")
+                .value(DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(observedAt)))
             .andExpect(jsonPath("$.model", aMapWithSize(2)))
             .andExpect(jsonPath("$.model.releaseId").value("model-snapshot"))
             .andExpect(jsonPath("$.vehiclesInService").value(5))
