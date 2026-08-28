@@ -25,6 +25,8 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -65,37 +67,107 @@ class BoardQueryServiceTest {
     }
 
     @Test
-    void 저장된_예보를_검증하고_정렬한_뒤_정류장별_최대_3대를_조립한다() {
-        given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(roundTripSnapshot()));
-        given(repository.findStops(1L)).willReturn(roundTripStops());
-        given(repository.findPredictions(100L)).willReturn(List.of(
-            prediction(3, "C", 5, 3, 0.4, 12.0),
-            prediction(3, null, 4, 1, 0.2, null),
-            prediction(3, "A", 3, 2, 0.1, 20.0),
-            prediction(3, "B", 2, 1, 0.3, 15.0),
-            prediction(3, "0", 1, 1, 0.5, Double.POSITIVE_INFINITY),
-            prediction(2, "IGNORED", 6, 1, 0.2, 10.0)
-        ));
+    void 관측_정보와_노선_방향으로_Board를_조립한다() {
+        givenRoundTripBoard(List.of(prediction(3, "A", 1, 1, 0.2, 10.0)));
 
         BoardOverview overview = service.getBoard(ROUTE_ID);
 
         Board board = overview.board();
-        assertThat(board.model()).isEqualTo(SNAPSHOT_MODEL);
         assertThat(board.observedAt()).isEqualTo(OBSERVED_AT);
         assertThat(board.vehiclesInService()).isEqualTo(4);
         assertThat(overview.cacheMaxAge()).isEqualTo(Duration.ofSeconds(15));
         assertThat(board.route().directions())
             .extracting(direction -> direction.name())
             .containsExactly("회차점 방면", "종점 방면");
+    }
 
-        StopState boardingStop = board.stops().get(2);
+    @Test
+    void 예보_행이_있으면_그_행의_모델을_사용한다() {
+        givenRoundTripBoard(List.of(prediction(3, "A", 1, 1, 0.2, 10.0)));
+
+        assertThat(service.getBoard(ROUTE_ID).board().model()).isEqualTo(SNAPSHOT_MODEL);
+    }
+
+    @Test
+    void 접근_차량을_거리순으로_정렬해_정류장별_최대_3대를_조립한다() {
+        givenRoundTripBoard(List.of(
+            prediction(3, "C", 5, 3, 0.4, 12.0),
+            prediction(3, null, 4, 1, 0.2, null),
+            prediction(3, "A", 3, 2, 0.1, 20.0),
+            prediction(3, "B", 2, 1, 0.3, 15.0),
+            prediction(3, "D", 1, 1, 0.5, 18.0)
+        ));
+
+        StopState boardingStop = service.getBoard(ROUTE_ID).board().stops().get(2);
+
         assertThat(boardingStop.approachingVehicles())
             .extracting(ApproachingVehicle::vehicleId)
-            .containsExactly("B", null, "A");
-        assertThat(boardingStop.approachingVehicles().getFirst().seatAvailableProbability())
-            .isEqualTo(0.7d);
-        assertThat(boardingStop.approachingVehicles().get(1).expectedSeats()).isNull();
-        assertThat(board.stops().get(1).approachingVehicles()).isEmpty();
+            .containsExactly("B", "D", null);
+    }
+
+    @Test
+    void 만석_확률을_반올림하지_않고_빈자리_확률로_뒤집는다() {
+        givenRoundTripBoard(List.of(prediction(3, "A", 1, 1, 0.004, 10.0)));
+
+        ApproachingVehicle vehicle = service.getBoard(ROUTE_ID)
+            .board()
+            .stops()
+            .get(2)
+            .approachingVehicles()
+            .getFirst();
+
+        assertThat(vehicle.seatAvailableProbability()).isEqualTo(0.996d);
+    }
+
+    @Test
+    void 기대_잔여석이_없어도_예보_차량을_유지한다() {
+        givenRoundTripBoard(List.of(prediction(3, "A", 1, 1, 0.2, null)));
+
+        List<ApproachingVehicle> vehicles = service.getBoard(ROUTE_ID)
+            .board()
+            .stops()
+            .get(2)
+            .approachingVehicles();
+
+        assertThat(vehicles).singleElement().satisfies(vehicle -> {
+            assertThat(vehicle.vehicleId()).isEqualTo("A");
+            assertThat(vehicle.expectedSeats()).isNull();
+        });
+    }
+
+    @Test
+    void 기대_잔여석이_비유한값이면_예보_행_전체를_제외한다() {
+        givenRoundTripBoard(List.of(
+            prediction(3, "INVALID", 1, 1, 0.2, Double.POSITIVE_INFINITY),
+            prediction(3, "VALID", 2, 2, 0.3, 10.0)
+        ));
+
+        assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
+            .extracting(ApproachingVehicle::vehicleId)
+            .containsExactly("VALID");
+    }
+
+    @ParameterizedTest
+    @ValueSource(doubles = {-0.1, 1.1, Double.NaN, Double.POSITIVE_INFINITY})
+    void 만석_확률이_범위_밖이거나_비유한값이면_예보_행_전체를_제외한다(
+        double invalidSeatFullChance
+    ) {
+        givenRoundTripBoard(List.of(
+            prediction(3, "INVALID", 1, 1, invalidSeatFullChance, 10.0),
+            prediction(3, "VALID", 2, 2, 0.3, 10.0)
+        ));
+
+        assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
+            .extracting(ApproachingVehicle::vehicleId)
+            .containsExactly("VALID");
+    }
+
+    @Test
+    void 승차_불가_정류장은_접근_차량을_비운다() {
+        givenRoundTripBoard(List.of(prediction(2, "IGNORED", 1, 1, 0.2, 10.0)));
+
+        assertThat(service.getBoard(ROUTE_ID).board().stops().get(1).approachingVehicles())
+            .isEmpty();
     }
 
     @Test
@@ -142,7 +214,7 @@ class BoardQueryServiceTest {
     }
 
     @Test
-    void 완료된_poll이_없으면_최근_관측_없음_오류다() {
+    void 예보_완료_관측_묶음이_없으면_최근_관측_없음_오류다() {
         BoardSnapshot snapshot = new BoardSnapshot(
             1L,
             route(),
@@ -187,7 +259,7 @@ class BoardQueryServiceTest {
     }
 
     @Test
-    void 방향_골격과_시간표가_계약을_만들지_못하면_서비스_불가다() {
+    void 회차점_이하에_DOWN_정류장이_있으면_서비스_불가다() {
         given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(roundTripSnapshot()));
         given(repository.findStops(1L)).willReturn(List.of(
             stop(1, "기점", BoardDirection.UP, true),
@@ -209,6 +281,14 @@ class BoardQueryServiceTest {
             Optional.of(observation()),
             Optional.of(ACTIVE_MODEL)
         );
+    }
+
+    private void givenRoundTripBoard(
+        List<StoredPrediction> predictions
+    ) {
+        given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(roundTripSnapshot()));
+        given(repository.findStops(1L)).willReturn(roundTripStops());
+        given(repository.findPredictions(100L)).willReturn(predictions);
     }
 
     private Route route() {

@@ -8,7 +8,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class BoardCachePolicyTest {
 
@@ -20,28 +20,43 @@ class BoardCachePolicyTest {
     private final BoardCachePolicy policy = new BoardCachePolicy(SEOUL_CLOCK);
 
     @ParameterizedTest
-    @CsvSource({
-        "00:59:59, 20",
-        "01:00:00, 600",
-        "03:59:59, 600",
-        "04:00:00, 20",
-        "06:59:59, 20",
-        "07:00:00, 15",
-        "08:59:59, 15",
-        "09:00:00, 20",
-        "16:59:59, 20",
-        "17:00:00, 15",
-        "22:59:59, 15",
-        "23:00:00, 20"
+    @ValueSource(strings = {"07:00:00", "08:59:59", "17:00:00", "22:59:59"})
+    void 오전_7시부터_8시와_오후_5시부터_10시는_15초를_캐시한다(
+        String time
+    ) {
+        assertMaxAge(time, 15);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"01:00:00", "03:59:59"})
+    void 오전_1시부터_3시는_600초를_캐시한다(
+        String time
+    ) {
+        assertMaxAge(time, 600);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "00:59:59",
+        "04:00:00",
+        "06:59:59",
+        "09:00:00",
+        "16:59:59",
+        "23:00:00"
     })
-    void KST_시간대별_수집_간격을_캐시_수명으로_사용한다(
+    void 그_밖의_시간은_20초를_캐시한다(
+        String time
+    ) {
+        assertMaxAge(time, 20);
+    }
+
+    private void assertMaxAge(
         String time,
         long expectedSeconds
     ) {
         OffsetDateTime observedAt = OffsetDateTime.parse(
             "2026-08-27T" + time + "+09:00"
         );
-
         assertThat(policy.maxAgeAt(observedAt))
             .isEqualTo(Duration.ofSeconds(expectedSeconds));
     }

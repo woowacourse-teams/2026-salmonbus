@@ -50,7 +50,7 @@ class BoardApiContractTest {
     }
 
     @Test
-    void 최신_완료_poll로_v4_Board를_조립한다() throws Exception {
+    void 최신_예보_완료_관측_묶음으로_v4_Board를_조립한다() throws Exception {
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         OffsetDateTime observedAt = now.minusMinutes(1);
         RouteContext route = insertRoundTripRoute(now.minusDays(1));
@@ -118,7 +118,7 @@ class BoardApiContractTest {
     }
 
     @Test
-    void 완료_poll이_같은_시각이면_ID가_큰_poll을_선택한다() throws Exception {
+    void 예보_완료_관측_묶음이_같은_시각이면_ID가_큰_묶음을_선택한다() throws Exception {
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         OffsetDateTime observedAt = now.minusMinutes(1);
         RouteContext route = insertRoundTripRoute(now.minusDays(1));
@@ -163,7 +163,7 @@ class BoardApiContractTest {
     }
 
     @Test
-    void 완료_poll이_없으면_NO_RECENT_OBSERVATION_503이다() throws Exception {
+    void 예보_완료_관측_묶음이_없으면_NO_RECENT_OBSERVATION_503이다() throws Exception {
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         insertRoundTripRoute(now.minusDays(1));
         fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
@@ -176,7 +176,7 @@ class BoardApiContractTest {
     }
 
     @Test
-    void 완료_poll이_5분을_넘으면_NO_RECENT_OBSERVATION_503이다() throws Exception {
+    void 예보_완료_관측_묶음이_5분을_넘으면_NO_RECENT_OBSERVATION_503이다() throws Exception {
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         RouteContext route = insertRoundTripRoute(now.minusDays(1));
         fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
