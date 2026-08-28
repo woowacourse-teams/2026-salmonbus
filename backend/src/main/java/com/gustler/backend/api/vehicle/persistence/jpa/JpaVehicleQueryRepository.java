@@ -37,7 +37,7 @@ public class JpaVehicleQueryRepository implements VehicleQueryRepository {
         try {
             return routeVersionRepository
                 .findByRoute_SourceRouteIdAndValidToIsNull(routeId.value())
-                .map(this::toSnapshot);
+                .map(routeVersion -> toSnapshot(routeId, routeVersion));
         } catch (DataAccessException exception) {
             throw new ServiceUnavailableException();
         }
@@ -55,7 +55,10 @@ public class JpaVehicleQueryRepository implements VehicleQueryRepository {
         }
     }
 
-    private VehicleSnapshot toSnapshot(RouteVersionJpaEntity routeVersion) {
+    private VehicleSnapshot toSnapshot(
+        RouteId routeId,
+        RouteVersionJpaEntity routeVersion
+    ) {
         Optional<ObservationBatchJpaEntity> latestBatch = firstBatchOf(
             observationBatchRepository.findLatestByRouteVersion(
                 routeVersion,
@@ -71,7 +74,7 @@ public class JpaVehicleQueryRepository implements VehicleQueryRepository {
         );
 
         return new VehicleSnapshot(
-            routeVersion.toRoute().id(),
+            routeId.value(),
             String.valueOf(routeVersion.id()),
             latestBatch.map(ObservationBatchJpaEntity::id).orElse(null),
             latestBatch.filter(ObservationBatchJpaEntity::hasResponseReceivedAt)

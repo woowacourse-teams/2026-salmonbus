@@ -1,14 +1,21 @@
 package com.gustler.backend.api.vehicle.persistence.jpa;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
 import com.gustler.backend.api.http.ServiceUnavailableException;
 import com.gustler.backend.api.route.RouteId;
+import com.gustler.backend.api.route.persistence.jpa.RouteVersionJpaEntity;
+import com.gustler.backend.api.vehicle.application.VehicleSnapshot;
+import com.gustler.backend.api.vehicle.domain.VehiclePollOutcome;
+import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.data.domain.PageRequest;
 
 class JpaVehicleQueryRepositoryTest {
 
@@ -50,5 +57,32 @@ class JpaVehicleQueryRepositoryTest {
         assertThatThrownBy(() -> repository.findVehicles(1L))
             .isInstanceOf(ServiceUnavailableException.class)
             .hasMessage("일시적인 서버 장애가 발생했습니다.");
+    }
+
+    @Test
+    void 요청한_노선_ID를_스냅샷에_그대로_사용한다() {
+        RouteId routeId = new RouteId("204000057");
+        RouteVersionJpaEntity routeVersion = mock(RouteVersionJpaEntity.class);
+        PageRequest firstResultPage = PageRequest.of(0, 1);
+        given(routeVersionRepository.findByRoute_SourceRouteIdAndValidToIsNull(
+            routeId.value()
+        )).willReturn(Optional.of(routeVersion));
+        given(routeVersion.id()).willReturn(42L);
+        given(observationBatchRepository.findLatestByRouteVersion(
+            routeVersion,
+            firstResultPage
+        )).willReturn(List.of());
+        given(observationBatchRepository.findLatestNormalByRouteVersion(
+            routeVersion,
+            List.of(
+                VehiclePollOutcome.SUCCESS_ROWS.name(),
+                VehiclePollOutcome.SUCCESS_EMPTY.name()
+            ),
+            firstResultPage
+        )).willReturn(List.of());
+
+        VehicleSnapshot actual = repository.findLatestSnapshot(routeId).orElseThrow();
+
+        assertThat(actual.routeId()).isEqualTo(routeId.value());
     }
 }
