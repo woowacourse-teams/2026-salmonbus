@@ -12,7 +12,9 @@ public record DirectionInfoResponse(
     String lastDepartureTime
 ) {
 
-    static DirectionInfoResponse from(DirectionInfo direction) {
+    static DirectionInfoResponse from(
+        DirectionInfo direction
+    ) {
         return new DirectionInfoResponse(
             direction.id(),
             direction.name(),

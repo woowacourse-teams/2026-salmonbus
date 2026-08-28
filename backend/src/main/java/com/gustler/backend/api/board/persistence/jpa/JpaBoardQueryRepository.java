@@ -36,7 +36,9 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
     private final ModelDeploymentEntityRepository modelDeploymentRepository;
 
     @Override
-    public Optional<BoardSnapshot> findSnapshot(RouteId routeId) {
+    public Optional<BoardSnapshot> findSnapshot(
+        RouteId routeId
+    ) {
         try {
             return routeVersionRepository.findCurrent(routeId.value())
                 .map(this::toSnapshot);
@@ -46,7 +48,9 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
     }
 
     @Override
-    public List<BoardStop> findStops(long routeVersionId) {
+    public List<BoardStop> findStops(
+        final long routeVersionId
+    ) {
         try {
             return routeStopRepository.findAllByRouteVersionId(routeVersionId)
                 .stream()
@@ -58,7 +62,9 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
     }
 
     @Override
-    public List<StoredPrediction> findPredictions(long observationBatchId) {
+    public List<StoredPrediction> findPredictions(
+        final long observationBatchId
+    ) {
         try {
             return seatForecastRepository.findAllByBatchId(observationBatchId)
                 .stream()
@@ -69,7 +75,9 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
         }
     }
 
-    private BoardSnapshot toSnapshot(RouteVersionJpaEntity routeVersion) {
+    private BoardSnapshot toSnapshot(
+        RouteVersionJpaEntity routeVersion
+    ) {
         Optional<SnapshotObservation> observation = observationBatchRepository
             .findLatestForecastCompleted(routeVersion, FIRST_RESULT)
             .stream()
@@ -94,7 +102,9 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
         );
     }
 
-    private ForecastModel toModel(ModelDeploymentJpaEntity model) {
+    private ForecastModel toModel(
+        ModelDeploymentJpaEntity model
+    ) {
         return new ForecastModel(
             model.id(),
             model.releaseId(),

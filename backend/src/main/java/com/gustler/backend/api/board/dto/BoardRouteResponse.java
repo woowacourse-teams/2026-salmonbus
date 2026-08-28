@@ -15,7 +15,9 @@ public record BoardRouteResponse(
     String referenceVersionId
 ) {
 
-    static BoardRouteResponse from(BoardRoute route) {
+    static BoardRouteResponse from(
+        BoardRoute route
+    ) {
         return new BoardRouteResponse(
             route.id(),
             route.displayName(),

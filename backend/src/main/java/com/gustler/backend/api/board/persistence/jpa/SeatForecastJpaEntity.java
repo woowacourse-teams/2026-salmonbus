@@ -44,7 +44,9 @@ public class SeatForecastJpaEntity {
     protected SeatForecastJpaEntity() {
     }
 
-    public StoredPrediction toDomain(ZoneId zoneId) {
+    public StoredPrediction toDomain(
+        ZoneId zoneId
+    ) {
         return new StoredPrediction(
             id.targetStopOrder(),
             vehicleObservation.vehicleId(),

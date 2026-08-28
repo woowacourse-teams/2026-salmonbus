@@ -8,7 +8,9 @@ public record ModelInfoResponse(
     OffsetDateTime trainedThrough
 ) {
 
-    static ModelInfoResponse from(ForecastModel model) {
+    static ModelInfoResponse from(
+        ForecastModel model
+    ) {
         return new ModelInfoResponse(model.releaseId(), model.trainedThrough());
     }
 }

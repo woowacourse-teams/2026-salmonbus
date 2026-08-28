@@ -14,11 +14,15 @@ public class BoardFreshnessPolicy {
 
     private final Clock clock;
 
-    public OffsetDateTime staleAt(OffsetDateTime observedAt) {
+    public OffsetDateTime staleAt(
+        OffsetDateTime observedAt
+    ) {
         return observedAt.plus(FRESHNESS_WINDOW);
     }
 
-    public boolean isStale(OffsetDateTime observedAt) {
+    public boolean isStale(
+        OffsetDateTime observedAt
+    ) {
         return OffsetDateTime.now(clock).isAfter(staleAt(observedAt));
     }
 }

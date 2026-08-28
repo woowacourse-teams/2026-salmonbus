@@ -16,8 +16,10 @@ public class BoardCachePolicy {
 
     private final Clock clock;
 
-    public Duration maxAgeAt(OffsetDateTime observedAt) {
-        int hour = observedAt.atZoneSameInstant(clock.getZone()).getHour();
+    public Duration maxAgeAt(
+        OffsetDateTime observedAt
+    ) {
+        final int hour = observedAt.atZoneSameInstant(clock.getZone()).getHour();
         if (isDenseHour(hour)) {
             return DENSE_HOUR_MAX_AGE;
         }
@@ -27,7 +29,9 @@ public class BoardCachePolicy {
         return REGULAR_HOUR_MAX_AGE;
     }
 
-    private boolean isDenseHour(int hour) {
+    private boolean isDenseHour(
+        final int hour
+    ) {
         return hour >= 7 && hour < 9
             || hour >= 17 && hour < 23;
     }

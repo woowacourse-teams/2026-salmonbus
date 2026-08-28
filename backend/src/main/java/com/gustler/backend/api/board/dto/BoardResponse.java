@@ -12,7 +12,9 @@ public record BoardResponse(
     List<StopStateResponse> stops
 ) {
 
-    public static BoardResponse from(Board board) {
+    public static BoardResponse from(
+        Board board
+    ) {
         return new BoardResponse(
             BoardRouteResponse.from(board.route()),
             board.observedAt(),

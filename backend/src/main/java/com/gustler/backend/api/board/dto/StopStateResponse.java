@@ -13,7 +13,9 @@ public record StopStateResponse(
     List<ApproachingVehicleResponse> approachingVehicles
 ) {
 
-    static StopStateResponse from(StopState stop) {
+    static StopStateResponse from(
+        StopState stop
+    ) {
         return new StopStateResponse(
             stop.sequence(),
             stop.stopId(),
