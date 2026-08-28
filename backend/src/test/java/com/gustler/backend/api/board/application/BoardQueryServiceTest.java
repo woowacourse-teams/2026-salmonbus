@@ -106,7 +106,7 @@ class BoardQueryServiceTest {
     }
 
     @Test
-    void 만석_확률을_반올림하지_않고_빈자리_확률로_뒤집는다() {
+    void 만석_확률을_뒤집은_빈자리_확률이_소수점까지_그대로_나온다() {
         givenRoundTripBoard(List.of(prediction(3, "A", 1, 1, 0.004, 10.0)));
 
         ApproachingVehicle vehicle = service.getBoard(ROUTE_ID)
