@@ -49,6 +49,7 @@ class RouteApiContractTest {
 
     @Test
     void 현재_판본이_있는_노선을_DB_생성_순서와_계약_필드_순서대로_반환한다() throws Exception {
+        // given
         final long firstRouteId = insertRoute(
             "234000050",
             "1650",
@@ -69,6 +70,7 @@ class RouteApiContractTest {
             {"routes":[{"id":"234000050","displayName":"1650","startStopName":"구리수택차고지","endStopName":"안양역","status":"PREPARING"},{"id":"204000057","displayName":"3330","startStopName":"도촌동9단지앞","endStopName":"안양역","status":"PREPARING"}]}
             """.strip();
 
+        // when & then
         mockMvc.perform(get("/api/v1/routes"))
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "max-age=300, public"))
@@ -77,6 +79,7 @@ class RouteApiContractTest {
 
     @Test
     void 활성_모델이_있으면_현재_노선을_FORECAST_READY로_반환한다() throws Exception {
+        // given
         final long routeId = insertRoute(
             "204000057",
             "3330",
@@ -86,13 +89,15 @@ class RouteApiContractTest {
         insertCurrentVersionWithStop(routeId, FIRST_DIGEST, "205000001");
         insertModelDeployment("ACTIVE");
 
+        // when & then
         mockMvc.perform(get("/api/v1/routes"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.routes[0].status").value("FORECAST_READY"));
     }
 
     @Test
-    void 판본이_교체되면_종료된_판본을_제외하고_새_현재_판본을_읽는다() throws Exception {
+    void 종료된_판본만_있는_노선은_목록에서_빠진다() throws Exception {
+        // given
         final long routeId = insertRoute(
             "204000057",
             "3330",
@@ -101,12 +106,25 @@ class RouteApiContractTest {
         );
         insertExpiredVersionWithStop(routeId, FIRST_DIGEST, "205000001");
 
+        // when & then
         mockMvc.perform(get("/api/v1/routes"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.routes").isEmpty());
+    }
 
+    @Test
+    void 새_현재_판본이_생기면_목록에_들어온다() throws Exception {
+        // given
+        final long routeId = insertRoute(
+            "204000057",
+            "3330",
+            "도촌동9단지앞",
+            "안양역"
+        );
+        insertExpiredVersionWithStop(routeId, FIRST_DIGEST, "205000001");
         insertCurrentVersionWithStop(routeId, SECOND_DIGEST, "205000002");
 
+        // when & then
         mockMvc.perform(get("/api/v1/routes"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.routes.length()").value(1))

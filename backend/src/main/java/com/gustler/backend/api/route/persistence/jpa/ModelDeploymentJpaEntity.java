@@ -8,9 +8,12 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "model_deployment")
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ModelDeploymentJpaEntity {
 
     @Id
@@ -18,9 +21,6 @@ public class ModelDeploymentJpaEntity {
     private Long id;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "state", nullable = false, length = 12)
+    @Column(nullable = false)
     private ModelDeploymentState state;
-
-    protected ModelDeploymentJpaEntity() {
-    }
 }
