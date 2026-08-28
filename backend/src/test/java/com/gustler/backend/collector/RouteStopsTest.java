@@ -3,10 +3,13 @@ package com.gustler.backend.collector;
 import static com.gustler.backend.collector.StopDirection.DOWN;
 import static com.gustler.backend.collector.StopDirection.UP;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.util.List;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class RouteStopsTest {
 
@@ -51,7 +54,7 @@ class RouteStopsTest {
     @Test
     void 정류소_순번에_GBIS_stationSeq를_그대로_넣는다() {
         // given
-        RouteStops routeStops = RouteStops.from(1, List.of(
+        RouteStops routeStops = RouteStops.from(6, List.of(
             new UpstreamRouteStop(6, STOP_205000217, ANY_STOP_NAME)
         ));
 
@@ -93,10 +96,26 @@ class RouteStopsTest {
         assertThat(actual).containsExactly(true, false, true);
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {0, 999})
+    void 회차_순번은_경유하는_정류소_중_하나의_순번이다(
+        final int turnSequence
+    ) {
+        // when
+        Throwable actual = catchThrowable(() -> RouteStops.from(turnSequence, eightyFiveUpstreamStops()));
+
+        // then
+        assertThat(actual).isInstanceOf(IllegalArgumentException.class);
+    }
+
     private RouteStops fold3330() {
-        return RouteStops.from(TURN_SEQUENCE_3330, IntStream.rangeClosed(1, STOP_COUNT_3330)
+        return RouteStops.from(TURN_SEQUENCE_3330, eightyFiveUpstreamStops());
+    }
+
+    private List<UpstreamRouteStop> eightyFiveUpstreamStops() {
+        return IntStream.rangeClosed(1, STOP_COUNT_3330)
             .mapToObj(stopOrder -> new UpstreamRouteStop(stopOrder, STOP_205000217, ANY_STOP_NAME))
-            .toList());
+            .toList();
     }
 
     private StopDirection directionAt(

@@ -9,6 +9,22 @@ public record RouteStops(
 
     public RouteStops {
         stops = List.copyOf(stops);
+        validateTurnSequenceIsOneOfStops(turnSequence, stops);
+    }
+
+    private static void validateTurnSequenceIsOneOfStops(
+        Integer turnSequence,
+        List<RouteStop> stops
+    ) {
+        if (turnSequence == null) {
+            return;
+        }
+        final boolean passesTurnSequence = stops.stream()
+            .anyMatch(stop -> stop.stopOrder() == turnSequence);
+        if (!passesTurnSequence) {
+            throw new IllegalArgumentException(
+                "회차 순번 %d 인 정류소를 경유하지 않는다".formatted(turnSequence));
+        }
     }
 
     public static RouteStops from(

@@ -25,7 +25,7 @@ class RouteVersionLoaderTest {
     private static final String STOP_205000217 = "205000217";
     private static final String STOP_208000069 = "208000069";
     private static final String STOP_277103149 = "277103149";
-    private static final int TURN_SEQUENCE_3330 = 43;
+    private static final int TURN_SEQUENCE = 2;
     private static final String LAST_BUS_MOVED_TO = "22:50";
 
     private static final RouteTimetable TIMETABLE_1650 =
@@ -162,7 +162,7 @@ class RouteVersionLoaderTest {
     }
 
     private RouteStops threeStops() {
-        return RouteStops.from(TURN_SEQUENCE_3330, List.of(
+        return RouteStops.from(TURN_SEQUENCE, List.of(
             new UpstreamRouteStop(1, STOP_205000217, "범계역"),
             new UpstreamRouteStop(2, STOP_277103149, "안양대교(경유)"),
             new UpstreamRouteStop(3, STOP_208000069, "안양역")
@@ -170,7 +170,7 @@ class RouteVersionLoaderTest {
     }
 
     private RouteStops fourStops() {
-        return RouteStops.from(TURN_SEQUENCE_3330, List.of(
+        return RouteStops.from(TURN_SEQUENCE, List.of(
             new UpstreamRouteStop(1, STOP_205000217, "범계역"),
             new UpstreamRouteStop(2, STOP_277103149, "안양대교(경유)"),
             new UpstreamRouteStop(3, STOP_208000069, "안양역"),
