@@ -49,13 +49,13 @@ class RouteApiContractTest {
 
     @Test
     void 현재_판본이_있는_노선을_DB_생성_순서와_계약_필드_순서대로_반환한다() throws Exception {
-        long firstRouteId = insertRoute(
+        final long firstRouteId = insertRoute(
             "234000050",
             "1650",
             "구리수택차고지",
             "안양역"
         );
-        long secondRouteId = insertRoute(
+        final long secondRouteId = insertRoute(
             "204000057",
             "3330",
             "도촌동9단지앞",
@@ -77,7 +77,7 @@ class RouteApiContractTest {
 
     @Test
     void 활성_모델이_있으면_현재_노선을_FORECAST_READY로_반환한다() throws Exception {
-        long routeId = insertRoute(
+        final long routeId = insertRoute(
             "204000057",
             "3330",
             "도촌동9단지앞",
@@ -93,7 +93,7 @@ class RouteApiContractTest {
 
     @Test
     void 판본이_교체되면_종료된_판본을_제외하고_새_현재_판본을_읽는다() throws Exception {
-        long routeId = insertRoute(
+        final long routeId = insertRoute(
             "204000057",
             "3330",
             "도촌동9단지앞",
@@ -139,11 +139,11 @@ class RouteApiContractTest {
     }
 
     private void insertCurrentVersionWithStop(
-        long routeId,
+        final long routeId,
         String contentDigest,
         String stopId
     ) {
-        long routeVersionId = jdbcClient.sql("""
+        final long routeVersionId = jdbcClient.sql("""
                 INSERT INTO route_version (route_id, content_digest, valid_from)
                 VALUES (?, ?, ?)
                 RETURNING id
@@ -155,11 +155,11 @@ class RouteApiContractTest {
     }
 
     private void insertExpiredVersionWithStop(
-        long routeId,
+        final long routeId,
         String contentDigest,
         String stopId
     ) {
-        long routeVersionId = jdbcClient.sql("""
+        final long routeVersionId = jdbcClient.sql("""
                 INSERT INTO route_version (route_id, content_digest, valid_from, valid_to)
                 VALUES (?, ?, ?, ?)
                 RETURNING id
@@ -171,7 +171,7 @@ class RouteApiContractTest {
     }
 
     private void insertRouteStop(
-        long routeVersionId,
+        final long routeVersionId,
         String stopId
     ) {
         jdbcClient.sql("""

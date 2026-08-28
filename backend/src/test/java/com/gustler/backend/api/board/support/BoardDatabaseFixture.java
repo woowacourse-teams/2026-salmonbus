@@ -24,7 +24,7 @@ public class BoardDatabaseFixture {
         String downLastDepartureTime,
         OffsetDateTime validFrom
     ) {
-        long routeId = jdbcClient.sql("""
+        final long routeId = jdbcClient.sql("""
                 INSERT INTO route (
                     public_route_id, source_id, source_route_id,
                     display_name, start_stop_name, end_stop_name
@@ -39,7 +39,7 @@ public class BoardDatabaseFixture {
             .param("endStopName", endStopName)
             .query(Long.class)
             .single();
-        long routeVersionId = jdbcClient.sql("""
+        final long routeVersionId = jdbcClient.sql("""
                 INSERT INTO route_version (
                     route_id, turn_sequence,
                     up_first_departure_time, up_last_departure_time,
@@ -69,11 +69,11 @@ public class BoardDatabaseFixture {
 
     public void insertStop(
         RouteContext route,
-        int sequence,
+        final int sequence,
         String stopId,
         String name,
         String direction,
-        boolean boardingAllowed
+        final boolean boardingAllowed
     ) {
         jdbcClient.sql("""
                 INSERT INTO route_stop (
@@ -161,10 +161,10 @@ public class BoardDatabaseFixture {
 
     public long insertObservation(
         RouteContext route,
-        long batchId,
-        int sourceRowNumber,
+        final long batchId,
+        final int sourceRowNumber,
         String vehicleId,
-        int stopOrder,
+        final int stopOrder,
         String stopId,
         OffsetDateTime observedAt
     ) {
@@ -191,11 +191,11 @@ public class BoardDatabaseFixture {
 
     public void insertForecast(
         RouteContext route,
-        long observationId,
-        int targetStopOrder,
-        int stopsToTarget,
-        long modelDeploymentId,
-        double seatFullChance,
+        final long observationId,
+        final int targetStopOrder,
+        final int stopsToTarget,
+        final long modelDeploymentId,
+        final double seatFullChance,
         Double expectedSeats,
         OffsetDateTime generatedAt
     ) {

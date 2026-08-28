@@ -54,13 +54,13 @@ class BoardApiContractTest {
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         OffsetDateTime observedAt = now.minusMinutes(1);
         RouteContext route = insertRoundTripRoute(now.minusDays(1));
-        long snapshotModelId = fixture.insertModel(
+        final long snapshotModelId = fixture.insertModel(
             "model-snapshot",
             "RETIRED",
             now.minusDays(2)
         );
         fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
-        long completedBatchId = fixture.insertBatch(
+        final long completedBatchId = fixture.insertBatch(
             route,
             observedAt,
             observedAt.plusSeconds(2),
@@ -123,16 +123,16 @@ class BoardApiContractTest {
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         OffsetDateTime observedAt = now.minusMinutes(1);
         RouteContext route = insertRoundTripRoute(now.minusDays(1));
-        long firstModel = fixture.insertModel("model-first", "RETIRED", now.minusDays(2));
-        long secondModel = fixture.insertModel("model-second", "ACTIVE", now.minusDays(1));
-        long firstBatch = fixture.insertBatch(
+        final long firstModel = fixture.insertModel("model-first", "RETIRED", now.minusDays(2));
+        final long secondModel = fixture.insertModel("model-second", "ACTIVE", now.minusDays(1));
+        final long firstBatch = fixture.insertBatch(
             route,
             observedAt,
             observedAt.plusSeconds(1),
             "SUCCESS_ROWS",
             1
         );
-        long secondBatch = fixture.insertBatch(
+        final long secondBatch = fixture.insertBatch(
             route,
             observedAt,
             observedAt.plusSeconds(2),
@@ -233,8 +233,8 @@ class BoardApiContractTest {
 
     private void insertPredictions(
         RouteContext route,
-        long batchId,
-        long modelId,
+        final long batchId,
+        final long modelId,
         OffsetDateTime observedAt
     ) {
         insertPrediction(route, batchId, modelId, 1, "C", 1, "STOP-1", 3, 2, 0.4, 12.0,
@@ -265,8 +265,8 @@ class BoardApiContractTest {
 
     private void insertSinglePrediction(
         RouteContext route,
-        long batchId,
-        long modelId,
+        final long batchId,
+        final long modelId,
         String vehicleId,
         OffsetDateTime observedAt
     ) {
@@ -276,19 +276,19 @@ class BoardApiContractTest {
 
     private void insertPrediction(
         RouteContext route,
-        long batchId,
-        long modelId,
-        int sourceRowNumber,
+        final long batchId,
+        final long modelId,
+        final int sourceRowNumber,
         String vehicleId,
-        int currentStopOrder,
+        final int currentStopOrder,
         String currentStopId,
-        int targetStopOrder,
-        int stopsToTarget,
-        double seatFullChance,
+        final int targetStopOrder,
+        final int stopsToTarget,
+        final double seatFullChance,
         Double expectedSeats,
         OffsetDateTime observedAt
     ) {
-        long observationId = fixture.insertObservation(
+        final long observationId = fixture.insertObservation(
             route,
             batchId,
             sourceRowNumber,

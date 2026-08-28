@@ -132,7 +132,7 @@ class ApiExceptionHandlerTest {
         "502, INTERNAL_ERROR"
     })
     void 스프링이_판정한_상태를_우리_오류_코드로_옮긴다(
-        int status,
+        final int status,
         ErrorCode expected
     ) {
         // when

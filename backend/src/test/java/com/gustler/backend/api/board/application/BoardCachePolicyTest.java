@@ -52,7 +52,7 @@ class BoardCachePolicyTest {
 
     private void assertMaxAge(
         String time,
-        long expectedSeconds
+        final long expectedSeconds
     ) {
         OffsetDateTime observedAt = OffsetDateTime.parse(
             "2026-08-27T" + time + "+09:00"

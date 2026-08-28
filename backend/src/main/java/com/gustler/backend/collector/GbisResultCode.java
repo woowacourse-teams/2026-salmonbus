@@ -20,7 +20,7 @@ public enum GbisResultCode {
     }
 
     public static GbisResultCode from(
-        int resultCode
+        final int resultCode
     ) {
         return Arrays.stream(values())
             .filter(candidate -> Objects.equals(candidate.code, resultCode))

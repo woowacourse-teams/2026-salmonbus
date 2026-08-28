@@ -150,7 +150,7 @@ class BoardQueryServiceTest {
     @ParameterizedTest
     @ValueSource(doubles = {-0.1, 1.1, Double.NaN, Double.POSITIVE_INFINITY})
     void 만석_확률이_범위_밖이거나_비유한값이면_예보_행_전체를_제외한다(
-        double invalidSeatFullChance
+        final double invalidSeatFullChance
     ) {
         givenRoundTripBoard(List.of(
             prediction(3, "INVALID", 1, 1, invalidSeatFullChance, 10.0),
@@ -312,20 +312,20 @@ class BoardQueryServiceTest {
     }
 
     private BoardStop stop(
-        int sequence,
+        final int sequence,
         String name,
         BoardDirection direction,
-        boolean boardingAllowed
+        final boolean boardingAllowed
     ) {
         return new BoardStop(sequence, "STOP-" + sequence, name, direction, boardingAllowed);
     }
 
     private StoredPrediction prediction(
-        int targetStopOrder,
+        final int targetStopOrder,
         String vehicleId,
-        int sourceRowNumber,
-        int stopsToTarget,
-        double seatFullChance,
+        final int sourceRowNumber,
+        final int stopsToTarget,
+        final double seatFullChance,
         Double expectedSeats
     ) {
         return prediction(
@@ -340,11 +340,11 @@ class BoardQueryServiceTest {
     }
 
     private StoredPrediction prediction(
-        int targetStopOrder,
+        final int targetStopOrder,
         String vehicleId,
-        int sourceRowNumber,
-        int stopsToTarget,
-        double seatFullChance,
+        final int sourceRowNumber,
+        final int stopsToTarget,
+        final double seatFullChance,
         Double expectedSeats,
         ForecastModel model
     ) {

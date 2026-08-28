@@ -37,7 +37,7 @@ class VehicleObservationTableTest {
 
     @BeforeEach
     void 노선_판본과_정류소와_수집_묶음을_먼저_저장한다() {
-        long routeId = insertRoute();
+        final long routeId = insertRoute();
         routeVersionId = insertRouteVersion(routeId);
         insertRouteStop(routeVersionId);
         batchId = insertObservationBatch(routeVersionId);
@@ -98,7 +98,7 @@ class VehicleObservationTableTest {
     }
 
     private long insertRouteVersion(
-        long routeId
+        final long routeId
     ) {
         return jdbcClient.sql("""
                 INSERT INTO route_version (route_id, content_digest, valid_from)
@@ -111,7 +111,7 @@ class VehicleObservationTableTest {
     }
 
     private void insertRouteStop(
-        long versionId
+        final long versionId
     ) {
         jdbcClient.sql("""
                 INSERT INTO route_stop (
@@ -123,7 +123,7 @@ class VehicleObservationTableTest {
     }
 
     private long insertObservationBatch(
-        long versionId
+        final long versionId
     ) {
         return jdbcClient.sql("""
                 INSERT INTO observation_batch (
@@ -137,9 +137,9 @@ class VehicleObservationTableTest {
     }
 
     private void insertObservation(
-        long targetBatchId,
+        final long targetBatchId,
         String vehicleId,
-        int sourceRowNumber,
+        final int sourceRowNumber,
         OffsetDateTime observedAt
     ) {
         jdbcClient.sql("""

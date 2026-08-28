@@ -177,7 +177,7 @@ public class GbisLocationSource {
         BusLocationResponse response
     ) {
         Header header = response.response().header();
-        int resultCode = header.resultCode();
+        final int resultCode = header.resultCode();
 
         return switch (GbisResultCode.from(resultCode)) {
             case SUCCESS -> interpretSuccess(header, response);
