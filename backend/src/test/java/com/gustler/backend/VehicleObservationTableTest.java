@@ -195,6 +195,17 @@ class VehicleObservationTableTest {
         assertThat(storedRowCount()).isEqualTo(1);
     }
 
+    /**
+     * 통과 순번이 빈 관측은 궤적을 못 잇는다. 어느 정류소를 지났는지 모르면
+     * 좌석 변화도 연속 만석도 잴 자리가 없다. 읽는 쪽에서 거르지 않고 저장 단계에서 막는다.
+     */
+    @Test
+    void 통과_순번이_없는_관측은_저장되지_않는다() {
+        // when & then
+        assertThatThrownBy(this::insertObservationWithoutPassedStopOrder)
+            .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
     private long insertRoute() {
         return jdbcClient.sql("""
                 INSERT INTO route (
@@ -285,6 +296,22 @@ class VehicleObservationTableTest {
         insertObservation(
             batchId, VEHICLE_204003542, 0,
             runningState, SEATS_43, null, CROWD_LEVEL_3);
+    }
+
+    private void insertObservationWithoutPassedStopOrder() {
+        jdbcClient.sql("""
+                INSERT INTO vehicle_observation (
+                    observation_batch_id, route_version_id, source_row_number,
+                    vehicle_id, stop_order, stop_id, passed_stop_order,
+                    running_state, remaining_seats, crowd_level
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """)
+            .params(
+                batchId, routeVersionId, 0,
+                VEHICLE_204003542, STOP_ORDER, STOP_205000217, null,
+                RUNNING_STATE_DEPARTED, SEATS_43, CROWD_LEVEL_3
+            )
+            .update();
     }
 
     private void insertObservation(
