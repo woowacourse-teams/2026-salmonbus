@@ -27,10 +27,6 @@ import org.springframework.stereotype.Repository;
 public class JpaBoardQueryRepository implements BoardQueryRepository {
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
-    private static final List<String> SUCCESSFUL_OUTCOMES = List.of(
-        "SUCCESS_ROWS",
-        "SUCCESS_EMPTY"
-    );
     private static final Pageable FIRST_RESULT = PageRequest.of(0, 1);
 
     private final BoardRouteVersionEntityRepository routeVersionRepository;
@@ -75,7 +71,7 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
 
     private BoardSnapshot toSnapshot(RouteVersionJpaEntity routeVersion) {
         Optional<SnapshotObservation> observation = observationBatchRepository
-            .findLatestCompleted(routeVersion, SUCCESSFUL_OUTCOMES, FIRST_RESULT)
+            .findLatestForecastCompleted(routeVersion, FIRST_RESULT)
             .stream()
             .findFirst()
             .map(batch -> batch.toDomain(SEOUL));

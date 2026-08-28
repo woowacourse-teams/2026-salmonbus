@@ -77,9 +77,7 @@ public class BoardQueryService {
         List<StoredPrediction> predictions = boardQueryRepository.findPredictions(
             observation.batchId()
         );
-        ForecastModel model = predictions.isEmpty()
-            ? activeModel
-            : predictions.getFirst().model();
+        ForecastModel model = modelOf(predictions, activeModel);
         Map<Integer, List<ApproachingVehicle>> predictionsByStop = groupPredictions(
             predictions
         );
@@ -102,6 +100,24 @@ public class BoardQueryService {
 
     static double seatAvailableProbability(double pFull) {
         return 1.0d - pFull;
+    }
+
+    private ForecastModel modelOf(
+        List<StoredPrediction> predictions,
+        ForecastModel activeModel
+    ) {
+        if (predictions.isEmpty()) {
+            return activeModel;
+        }
+
+        List<ForecastModel> models = predictions.stream()
+            .map(StoredPrediction::model)
+            .distinct()
+            .toList();
+        if (models.size() != 1) {
+            throw new ServiceUnavailableException();
+        }
+        return models.getFirst();
     }
 
     private Map<Integer, List<ApproachingVehicle>> groupPredictions(

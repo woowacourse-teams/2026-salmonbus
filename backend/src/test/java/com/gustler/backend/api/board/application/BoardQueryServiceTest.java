@@ -108,6 +108,24 @@ class BoardQueryServiceTest {
     }
 
     @Test
+    void 하나의_관측_묶음에_여러_모델의_예보가_섞이면_서비스_불가다() {
+        ForecastModel anotherModel = new ForecastModel(
+            8L,
+            "model-another",
+            OffsetDateTime.parse("2026-08-24T23:59:59+09:00")
+        );
+        given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(roundTripSnapshot()));
+        given(repository.findStops(1L)).willReturn(roundTripStops());
+        given(repository.findPredictions(100L)).willReturn(List.of(
+            prediction(3, "A", 1, 1, 0.2, 10.0),
+            prediction(3, "B", 2, 2, 0.3, 11.0, anotherModel)
+        ));
+
+        assertThatThrownBy(() -> service.getBoard(ROUTE_ID))
+            .isInstanceOf(ServiceUnavailableException.class);
+    }
+
+    @Test
     void ACTIVE_모델이_없으면_모델_범위_밖_오류다() {
         BoardSnapshot snapshot = new BoardSnapshot(
             1L,
@@ -230,7 +248,7 @@ class BoardQueryServiceTest {
         double pFull,
         Double expectedSeats
     ) {
-        return new StoredPrediction(
+        return prediction(
             targetStopOrder,
             vehicleId,
             sourceRowNumber,
@@ -238,6 +256,26 @@ class BoardQueryServiceTest {
             pFull,
             expectedSeats,
             SNAPSHOT_MODEL
+        );
+    }
+
+    private StoredPrediction prediction(
+        int targetStopOrder,
+        String vehicleId,
+        int sourceRowNumber,
+        int horizonStops,
+        double pFull,
+        Double expectedSeats,
+        ForecastModel model
+    ) {
+        return new StoredPrediction(
+            targetStopOrder,
+            vehicleId,
+            sourceRowNumber,
+            horizonStops,
+            pFull,
+            expectedSeats,
+            model
         );
     }
 }
