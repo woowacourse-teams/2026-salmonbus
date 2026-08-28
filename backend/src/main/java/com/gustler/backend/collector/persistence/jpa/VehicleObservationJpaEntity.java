@@ -6,6 +6,7 @@ import com.gustler.backend.collector.RemainingSeats.Unknown;
 import com.gustler.backend.collector.SeatUnknownReason;
 import com.gustler.backend.collector.UpstreamObservationRow;
 import com.gustler.backend.collector.VehicleObservation;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -17,7 +18,10 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
 /**
- * vehicle_trip_key 는 매핑하지 않는다. 여정을 어디서 가를지 문턱값이 아직 없어서
+ * 조회 쪽도 이 표를 매핑한다. 같은 물리 컬럼에 논리명이 둘이면 Hibernate 가
+ * DuplicateMappingException 을 내고 앱이 안 뜬다. 그래서 전 필드에 @Column(name) 을 명시한다.
+ *
+ * <p>vehicle_trip_key 는 매핑하지 않는다. 여정을 어디서 가를지 문턱값이 아직 없어서
  * 지금 채우면 뜻이 없는 값이 들어간다. 열은 NULL 허용으로 이미 있다.
  */
 @Entity(name = "CollectorVehicleObservation")
@@ -29,35 +33,50 @@ public class VehicleObservationJpaEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "observation_batch_id")
     private Long observationBatchId;
 
+    @Column(name = "route_version_id")
     private Long routeVersionId;
 
+    @Column(name = "source_row_number")
     private Integer sourceRowNumber;
 
+    @Column(name = "vehicle_id")
     private String vehicleId;
 
+    @Column(name = "plate_number")
     private String plateNumber;
 
+    @Column(name = "stop_order")
     private Integer stopOrder;
 
+    @Column(name = "stop_id")
     private String stopId;
 
+    @Column(name = "passed_stop_order")
     private Integer passedStopOrder;
 
+    @Column(name = "running_state")
     private Integer runningState;
 
+    @Column(name = "remaining_seats")
     private Integer remainingSeats;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "seat_unknown_reason")
     private SeatUnknownReason seatUnknownReason;
 
+    @Column(name = "crowd_level")
     private Integer crowdLevel;
 
+    @Column(name = "vehicle_type")
     private Integer vehicleType;
 
+    @Column(name = "route_type")
     private Integer routeType;
 
+    @Column(name = "tagless")
     private Integer tagless;
 
     public VehicleObservationJpaEntity(
