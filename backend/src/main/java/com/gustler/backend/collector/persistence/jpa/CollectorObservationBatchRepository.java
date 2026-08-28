@@ -1,5 +1,6 @@
 package com.gustler.backend.collector.persistence.jpa;
 
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
@@ -8,4 +9,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * 이름이 겹치면 BeanDefinitionOverrideException 으로 앱이 안 뜬다.
  */
 public interface CollectorObservationBatchRepository extends JpaRepository<ObservationBatchJpaEntity, Long> {
+
+    Optional<ObservationBatchJpaEntity> findByRouteVersionIdAndAttemptKey(
+        long routeVersionId,
+        String attemptKey
+    );
 }

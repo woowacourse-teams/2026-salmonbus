@@ -2,6 +2,7 @@ package com.gustler.backend.collector;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gustler.backend.collector.GbisLocationResult.Success;
 import com.gustler.backend.collector.dto.BusLocationResponse.BusLocation;
 import com.gustler.backend.support.IntegrationTest;
 import jakarta.persistence.EntityManager;
@@ -43,15 +44,18 @@ class ObservationLoaderTest {
     private static final int RUNNING_STATE_NEVER_OBSERVED = 3;
 
     private static final OffsetDateTime SCHEDULED_AT = OffsetDateTime.parse("2026-08-19T11:14:00+09:00");
-    private static final OffsetDateTime REQUESTED_AT = OffsetDateTime.parse("2026-08-19T11:14:04.800+09:00");
     private static final OffsetDateTime RESPONSE_RECEIVED_AT = OffsetDateTime.parse("2026-08-19T11:14:04.911+09:00");
     private static final String ATTEMPT_KEY = "204000057-2026-08-19T11:14";
+    private static final String QUERY_TIME = "2026-08-19 11:14:04.9";
 
     private static final RouteTimetable TIMETABLE_3330 =
         new RouteTimetable("05:00", "22:35", "05:00", "23:55");
 
     @Autowired
     private ObservationLoader loader;
+
+    @Autowired
+    private ObservationRepository observationRepository;
 
     @Autowired
     private RouteVersionLoader routeVersionLoader;
@@ -63,17 +67,20 @@ class ObservationLoaderTest {
     private EntityManager entityManager;
 
     private long routeVersionId;
+    private long batchId;
 
     @BeforeEach
-    void 노선과_판본과_정류소를_먼저_적재한다() {
+    void 노선과_판본과_정류소를_적재하고_묶음을_열어둔다() {
         final long routeId = insertRoute();
         routeVersionId = routeVersionLoader.load(routeId, threeStops(), TIMETABLE_3330, SCHEDULED_AT);
+        batchId = observationRepository.openReserved(
+            new ObservationAttempt(routeVersionId, SCHEDULED_AT, ATTEMPT_KEY));
     }
 
     @Test
     void 차량이_있는_판은_수집_묶음_한_행을_남긴다() {
         // when
-        final long batchId = loader.load(attempt(), List.of(
+        loadBuses(List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_DEPARTED)));
 
         // then
@@ -83,7 +90,7 @@ class ObservationLoaderTest {
     @Test
     void 차량이_있는_판은_본_차량만큼_관측을_쌓는다() {
         // when
-        final long batchId = loader.load(attempt(), List.of(
+        loadBuses(List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_DEPARTED),
             busAt(VEHICLE_204003542, 2, STOP_277103149, RUNNING_STATE_MOVING),
             busAt(VEHICLE_204000139, 3, STOP_208000069, RUNNING_STATE_ARRIVED)));
@@ -95,7 +102,7 @@ class ObservationLoaderTest {
     @Test
     void 차량이_한_대도_없는_판도_묶음_한_행이_남는다() {
         // when
-        final long batchId = loader.load(attempt(), List.of());
+        loadBuses(List.of());
 
         // then
         assertThat(batchCountOf(batchId)).isEqualTo(1);
@@ -104,7 +111,7 @@ class ObservationLoaderTest {
     @Test
     void 차량이_한_대도_없는_판의_결말은_SUCCESS_EMPTY다() {
         // when
-        final long batchId = loader.load(attempt(), List.of());
+        loadBuses(List.of());
 
         // then
         assertThat(outcomeOf(batchId)).isEqualTo("SUCCESS_EMPTY");
@@ -113,7 +120,7 @@ class ObservationLoaderTest {
     @Test
     void 차량이_있는_판의_결말은_SUCCESS_ROWS다() {
         // when
-        final long batchId = loader.load(attempt(), List.of(
+        loadBuses(List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_DEPARTED)));
 
         // then
@@ -123,7 +130,7 @@ class ObservationLoaderTest {
     @Test
     void 뜻을_모르는_운행_상태의_차량은_빼고_나머지가_저장된다() {
         // when
-        final long batchId = loader.load(attempt(), List.of(
+        loadBuses(List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_DEPARTED),
             busAt(VEHICLE_204003542, 2, STOP_277103149, RUNNING_STATE_NEVER_OBSERVED),
             busAt(VEHICLE_204000139, 3, STOP_208000069, RUNNING_STATE_MOVING)));
@@ -157,7 +164,7 @@ class ObservationLoaderTest {
     @Test
     void 뺀_차량이_있어도_상류가_준_행_수는_그대로_남는다() {
         // when
-        final long batchId = loader.load(attempt(), List.of(
+        loadBuses(List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_DEPARTED),
             busAt(VEHICLE_204003542, 2, STOP_277103149, RUNNING_STATE_NEVER_OBSERVED)));
 
@@ -168,7 +175,7 @@ class ObservationLoaderTest {
     @Test
     void 뺀_차량_수가_묶음에_남는다() {
         // when
-        final long batchId = loader.load(attempt(), List.of(
+        loadBuses(List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_DEPARTED),
             busAt(VEHICLE_204003542, 2, STOP_277103149, RUNNING_STATE_NEVER_OBSERVED)));
 
@@ -179,7 +186,7 @@ class ObservationLoaderTest {
     @Test
     void 차량을_전부_뺀_판의_결말도_SUCCESS_ROWS다() {
         // when
-        final long batchId = loader.load(attempt(), List.of(
+        loadBuses(List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_NEVER_OBSERVED)));
 
         // then
@@ -189,7 +196,7 @@ class ObservationLoaderTest {
     @Test
     void 정류소를_지난_차량의_통과_순번은_그_정류소_순번이다() {
         // when
-        final long batchId = loader.load(attempt(), List.of(
+        loadBuses(List.of(
             busAt(VEHICLE_204000206, 2, STOP_277103149, RUNNING_STATE_DEPARTED)));
 
         // then
@@ -199,7 +206,7 @@ class ObservationLoaderTest {
     @Test
     void 도착_중인_차량의_통과_순번은_직전_정류소_순번이다() {
         // when
-        final long batchId = loader.load(attempt(), List.of(
+        loadBuses(List.of(
             busAt(VEHICLE_204000206, 2, STOP_277103149, RUNNING_STATE_ARRIVED)));
 
         // then
@@ -209,7 +216,7 @@ class ObservationLoaderTest {
     @Test
     void 첫_정류소에_도착_중인_차량의_통과_순번은_0이다() {
         // when
-        final long batchId = loader.load(attempt(), List.of(
+        loadBuses(List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_ARRIVED)));
 
         // then
@@ -219,7 +226,7 @@ class ObservationLoaderTest {
     @Test
     void 잔여석을_아는_차량은_좌석_수만_저장된다() {
         // when
-        final long batchId = loader.load(attempt(), List.of(
+        loadBuses(List.of(
             busWithSeats(SEATS_43)));
 
         // then
@@ -229,7 +236,7 @@ class ObservationLoaderTest {
     @Test
     void 잔여석을_모른다고_알려준_차량은_사유만_저장된다() {
         // when
-        final long batchId = loader.load(attempt(), List.of(
+        loadBuses(List.of(
             busWithSeats(SEATS_REPORTED_UNKNOWN)));
 
         // then
@@ -239,7 +246,7 @@ class ObservationLoaderTest {
     @Test
     void 잔여석을_안_알려준_차량은_사유만_저장된다() {
         // when
-        final long batchId = loader.load(attempt(), List.of(
+        loadBuses(List.of(
             busWithSeats(null)));
 
         // then
@@ -249,7 +256,7 @@ class ObservationLoaderTest {
     @Test
     void 관측은_상류_응답에서_몇_번째_줄이었는지를_그대로_쌓는다() {
         // when
-        final long batchId = loader.load(attempt(), List.of(
+        loadBuses(List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_NEVER_OBSERVED),
             busAt(VEHICLE_204003542, 2, STOP_277103149, RUNNING_STATE_MOVING)));
 
@@ -260,11 +267,11 @@ class ObservationLoaderTest {
     @Test
     void 정규화_판이_묶음에_남는다() {
         // when
-        final long batchId = loader.load(attempt(), List.of());
+        loadBuses(List.of());
 
         // then
         assertThat(normalizationVersionOf(batchId))
-            .isEqualTo(ObservationBatch.CURRENT_NORMALIZATION_VERSION);
+            .isEqualTo(CollectedObservations.CURRENT_NORMALIZATION_VERSION);
     }
 
     private record StoredSeats(
@@ -273,9 +280,15 @@ class ObservationLoaderTest {
     ) {
     }
 
-    private ObservationAttempt attempt() {
-        return new ObservationAttempt(
-            routeVersionId, SCHEDULED_AT, 1, ATTEMPT_KEY, REQUESTED_AT, RESPONSE_RECEIVED_AT);
+    /** 상류가 정상으로 답한 판. 결말은 프로덕션과 같은 길로 응답에서 뽑는다. */
+    private void loadBuses(
+        List<BusLocation> buses
+    ) {
+        loader.load(
+            batchId,
+            ObservationBatchConclusion.from(new Success(QUERY_TIME, buses)),
+            buses,
+            RESPONSE_RECEIVED_AT);
     }
 
     private RouteStops threeStops() {

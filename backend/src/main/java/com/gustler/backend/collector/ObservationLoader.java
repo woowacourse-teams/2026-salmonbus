@@ -1,6 +1,7 @@
 package com.gustler.backend.collector;
 
 import com.gustler.backend.collector.dto.BusLocationResponse.BusLocation;
+import java.time.OffsetDateTime;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -8,9 +9,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 한 판의 호출과 그 판에서 본 차량을 한 트랜잭션에 쌓는다.
+ * 이미 열려 있는 판에 그 판에서 본 차량을 쌓고, 같은 트랜잭션에서 판을 닫는다.
  *
- * <p>차가 한 대도 없는 판도 묶음을 남긴다. 지운 적이 없어야 관측 간격 90초 판정에서
+ * <p>판은 여기서 만들지 않는다. 호출을 보내기 전에 자리를 잡으면서 ObservationBatchLedger 가 연다.
+ *
+ * <p>차가 한 대도 없는 판도 닫아서 남긴다. 지운 적이 없어야 관측 간격 90초 판정에서
  * 연결이 끊긴 자리를 알아본다.
  */
 @Component
@@ -27,16 +30,16 @@ public class ObservationLoader {
     }
 
     @Transactional
-    public long load(
-        ObservationAttempt attempt,
-        List<BusLocation> buses
+    public void load(
+        final long batchId,
+        ObservationBatchConclusion conclusion,
+        List<BusLocation> buses,
+        OffsetDateTime responseReceivedAt
     ) {
         CollectedObservations collected = CollectedObservations.from(buses);
-        logExcludedRows(attempt, collected);
+        logExcludedRows(batchId, collected);
 
-        return observationRepository.save(
-            ObservationBatch.of(attempt, collected),
-            collected.storableRows());
+        observationRepository.concludeWithRows(batchId, conclusion, collected, responseReceivedAt);
     }
 
     /**
@@ -44,14 +47,13 @@ public class ObservationLoader {
      * 차량 아이디와 번호판은 찍지 않는다.
      */
     private void logExcludedRows(
-        ObservationAttempt attempt,
+        final long batchId,
         CollectedObservations collected
     ) {
         for (UpstreamObservationRow row : collected.excludedRows()) {
             log.warn(
-                "쌓을 수 없는 관측을 뺐다. 판본={} 시도키={} 상류행={} 운행상태={} 정류소순번={}",
-                attempt.routeVersionId(),
-                attempt.attemptKey(),
+                "쌓을 수 없는 관측을 뺐다. 묶음={} 상류행={} 운행상태={} 정류소순번={}",
+                batchId,
                 row.sourceRowNumber(),
                 row.observation().runningState(),
                 row.observation().stopSequence());

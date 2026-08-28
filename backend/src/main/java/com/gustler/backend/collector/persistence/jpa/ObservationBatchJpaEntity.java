@@ -1,7 +1,9 @@
 package com.gustler.backend.collector.persistence.jpa;
 
+import com.gustler.backend.collector.CollectedObservations;
 import com.gustler.backend.collector.ObservationAttempt;
-import com.gustler.backend.collector.ObservationBatch;
+import com.gustler.backend.collector.ObservationBatchConclusion;
+import com.gustler.backend.collector.ObservationBatchFailureCode;
 import com.gustler.backend.collector.ObservationBatchOutcome;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -19,12 +21,20 @@ import lombok.NoArgsConstructor;
 /**
  * 조회 쪽도 이 표를 매핑한다. 같은 물리 컬럼에 논리명이 둘이면 Hibernate 가
  * DuplicateMappingException 을 내고 앱이 안 뜬다. 그래서 전 필드에 @Column(name) 을 명시한다.
+ *
+ * <p>http_status 는 매핑하지 않는다. GbisLocationSource 가 오류 응답의 상태 코드를 삼키고
+ * GbisLocationResult 가 그것을 들고 나오지 않아 채울 값이 없다. 열은 NULL 허용으로 이미 있다.
+ *
+ * <p>completed_at 도 매핑하지 않는다. 무엇을 완료로 볼지는 예보까지 끝났는지를 찍는
+ * forecast_completed_at 과 같이 정해야 뜻이 선다.
  */
 @Entity(name = "CollectorObservationBatch")
 @Table(name = "observation_batch")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ObservationBatchJpaEntity {
+
+    private static final int FIRST_ATTEMPT = 1;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -52,6 +62,13 @@ public class ObservationBatchJpaEntity {
     @Column(name = "outcome")
     private ObservationBatchOutcome outcome;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "failure_code")
+    private ObservationBatchFailureCode failureCode;
+
+    @Column(name = "result_code")
+    private Integer resultCode;
+
     @Column(name = "provider_rows")
     private Integer providerRows;
 
@@ -65,19 +82,65 @@ public class ObservationBatchJpaEntity {
     private String normalizationVersion;
 
     public ObservationBatchJpaEntity(
-        ObservationBatch batch
+        ObservationAttempt attempt,
+        ObservationBatchOutcome outcome,
+        ObservationBatchFailureCode failureCode
     ) {
-        ObservationAttempt attempt = batch.attempt();
         this.routeVersionId = attempt.routeVersionId();
         this.scheduledAt = attempt.scheduledAt();
-        this.attemptNumber = attempt.attemptNumber();
         this.attemptKey = attempt.attemptKey();
-        this.requestedAt = attempt.requestedAt();
-        this.responseReceivedAt = attempt.responseReceivedAt();
-        this.outcome = batch.outcome();
-        this.providerRows = batch.providerRows();
-        this.storedRows = batch.storedRows();
-        this.excludedRows = batch.excludedRows();
-        this.normalizationVersion = batch.normalizationVersion();
+        this.attemptNumber = FIRST_ATTEMPT;
+        this.outcome = outcome;
+        this.failureCode = failureCode;
+        this.normalizationVersion = CollectedObservations.CURRENT_NORMALIZATION_VERSION;
+    }
+
+    /**
+     * 같은 계획을 다시 부른다. 시도 횟수만 올리고 나머지는 처음 상태로 되돌린다.
+     * 묶음은 계획 하나에 한 행이라 지난 시도의 값이 남아 있으면 이번 판의 사실이 아니게 된다.
+     */
+    public void reopen(
+        ObservationBatchOutcome newOutcome,
+        ObservationBatchFailureCode newFailureCode
+    ) {
+        this.attemptNumber = attemptNumber + 1;
+        this.outcome = newOutcome;
+        this.failureCode = newFailureCode;
+        this.requestedAt = null;
+        this.responseReceivedAt = null;
+        this.resultCode = null;
+        this.providerRows = null;
+        this.storedRows = null;
+        this.excludedRows = null;
+    }
+
+    public void markDispatching(
+        OffsetDateTime dispatchedAt
+    ) {
+        this.outcome = ObservationBatchOutcome.DISPATCHING;
+        this.requestedAt = dispatchedAt;
+    }
+
+    public void abandonBeforeSend() {
+        this.outcome = ObservationBatchOutcome.ABANDONED_BEFORE_SEND;
+    }
+
+    public void conclude(
+        ObservationBatchConclusion conclusion,
+        OffsetDateTime receivedAt
+    ) {
+        this.outcome = conclusion.outcome();
+        this.failureCode = conclusion.failureCode();
+        this.resultCode = conclusion.upstreamResultCode();
+        this.responseReceivedAt = receivedAt;
+    }
+
+    /** 상류가 준 행 수와 우리가 쌓은 행 수와 뺀 행 수. 상류가 정상으로 답한 판에만 있다. */
+    public void countRows(
+        CollectedObservations collected
+    ) {
+        this.providerRows = collected.providerRows();
+        this.storedRows = collected.storableRows().size();
+        this.excludedRows = collected.excludedRows().size();
     }
 }

@@ -1,9 +1,13 @@
 package com.gustler.backend.collector.persistence.jpa;
 
-import com.gustler.backend.collector.ObservationBatch;
+import com.gustler.backend.collector.CollectedObservations;
+import com.gustler.backend.collector.ObservationAttempt;
+import com.gustler.backend.collector.ObservationBatchConclusion;
+import com.gustler.backend.collector.ObservationBatchFailureCode;
+import com.gustler.backend.collector.ObservationBatchOutcome;
 import com.gustler.backend.collector.ObservationRepository;
 import com.gustler.backend.collector.UpstreamObservationRow;
-import java.util.List;
+import java.time.OffsetDateTime;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -21,20 +25,98 @@ public class JpaObservationRepository implements ObservationRepository {
     }
 
     @Override
-    public long save(
-        ObservationBatch batch,
-        List<UpstreamObservationRow> storableRows
+    public long openReserved(
+        ObservationAttempt attempt
     ) {
-        ObservationBatchJpaEntity savedBatch =
-            observationBatchRepository.save(new ObservationBatchJpaEntity(batch));
+        return open(attempt, ObservationBatchOutcome.RESERVED, null);
+    }
 
-        vehicleObservationRepository.saveAll(storableRows.stream()
-            .map(row -> new VehicleObservationJpaEntity(
-                savedBatch.getId(),
-                batch.attempt().routeVersionId(),
-                row))
+    @Override
+    public long openNotReserved(
+        ObservationAttempt attempt
+    ) {
+        return open(
+            attempt,
+            ObservationBatchOutcome.NOT_RESERVED,
+            ObservationBatchFailureCode.LOCAL_QUOTA_EXHAUSTED);
+    }
+
+    @Override
+    public void markDispatching(
+        final long batchId,
+        OffsetDateTime requestedAt
+    ) {
+        batchOf(batchId).markDispatching(requestedAt);
+    }
+
+    @Override
+    public void abandonBeforeSend(
+        final long batchId
+    ) {
+        batchOf(batchId).abandonBeforeSend();
+    }
+
+    @Override
+    public void concludeWithoutRows(
+        final long batchId,
+        ObservationBatchConclusion conclusion,
+        OffsetDateTime responseReceivedAt
+    ) {
+        batchOf(batchId).conclude(conclusion, responseReceivedAt);
+    }
+
+    @Override
+    public void concludeWithRows(
+        final long batchId,
+        ObservationBatchConclusion conclusion,
+        CollectedObservations collected,
+        OffsetDateTime responseReceivedAt
+    ) {
+        ObservationBatchJpaEntity batch = batchOf(batchId);
+        batch.conclude(conclusion, responseReceivedAt);
+        batch.countRows(collected);
+
+        vehicleObservationRepository.saveAll(collected.storableRows().stream()
+            .map(row -> toEntity(batch, row))
             .toList());
+    }
 
-        return savedBatch.getId();
+    /**
+     * 같은 계획의 판이 이미 있으면 그 행을 다시 연다.
+     * ux_batch_attempt 가 계획 하나에 묶음 하나를 강제해서 새로 넣으면 들어가지 않는다.
+     */
+    private long open(
+        ObservationAttempt attempt,
+        ObservationBatchOutcome outcome,
+        ObservationBatchFailureCode failureCode
+    ) {
+        return observationBatchRepository
+            .findByRouteVersionIdAndAttemptKey(attempt.routeVersionId(), attempt.attemptKey())
+            .map(existing -> reopen(existing, outcome, failureCode))
+            .orElseGet(() -> observationBatchRepository
+                .save(new ObservationBatchJpaEntity(attempt, outcome, failureCode))
+                .getId());
+    }
+
+    private long reopen(
+        ObservationBatchJpaEntity existing,
+        ObservationBatchOutcome outcome,
+        ObservationBatchFailureCode failureCode
+    ) {
+        existing.reopen(outcome, failureCode);
+        return existing.getId();
+    }
+
+    private ObservationBatchJpaEntity batchOf(
+        final long batchId
+    ) {
+        return observationBatchRepository.findById(batchId).orElseThrow();
+    }
+
+    private VehicleObservationJpaEntity toEntity(
+        ObservationBatchJpaEntity batch,
+        UpstreamObservationRow row
+    ) {
+        return new VehicleObservationJpaEntity(batch.getId(), batch.getRouteVersionId(), row);
     }
 }
