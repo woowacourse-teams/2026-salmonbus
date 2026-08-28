@@ -9,6 +9,9 @@ module.exports = merge(common, {
     dir: path.resolve(__dirname, "../env"),
   },
   devtool: "eval-source-map",
+  output: {
+    publicPath: "/",
+  },
   module: {
     rules: [
       {
@@ -35,7 +38,7 @@ module.exports = merge(common, {
     proxy: [
       {
         context: ["/api"],
-        target: "http://localhost:8080",
+        target: process.env.API_PROXY_TARGET ?? "http://localhost:8080",
         changeOrigin: true,
       },
     ],
