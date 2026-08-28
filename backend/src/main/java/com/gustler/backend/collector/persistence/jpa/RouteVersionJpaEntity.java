@@ -60,6 +60,9 @@ public class RouteVersionJpaEntity {
     public void closeAt(
         OffsetDateTime closedAt
     ) {
+        if (validTo != null) {
+            throw new IllegalStateException("판본 %d 는 %s 에 이미 닫혔다".formatted(id, validTo));
+        }
         this.validTo = closedAt;
     }
 

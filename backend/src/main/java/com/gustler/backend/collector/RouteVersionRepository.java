@@ -9,10 +9,15 @@ public interface RouteVersionRepository {
         long routeId
     );
 
+    void closeAt(
+        long routeVersionId,
+        OffsetDateTime closedAt
+    );
+
     long openNewVersion(
         long routeId,
         RouteStops routeStops,
-        RouteTimetable timetable,
+        RouteVersionContent content,
         OffsetDateTime openedAt
     );
 

@@ -1,6 +1,7 @@
 package com.gustler.backend.collector;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.gustler.backend.support.IntegrationTest;
 import jakarta.persistence.EntityManager;
@@ -8,6 +9,8 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
@@ -159,6 +162,22 @@ class RouteVersionLoaderTest {
 
         // then
         assertThat(stopOrdersOf(versionId)).containsExactly(1, 2);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"2026-08-19T11:14:04.911+09:00", "2026-08-12T11:14:04.911+09:00"})
+    void 새_판본은_직전_판본이_시작한_뒤의_시각에만_연다(
+        String readAt
+    ) {
+        // given
+        loader.load(routeId, threeStops(), TIMETABLE_1650, FIRST_READ_AT);
+
+        // when
+        Throwable actual = catchThrowable(
+            () -> loader.load(routeId, fourStops(), TIMETABLE_1650, OffsetDateTime.parse(readAt)));
+
+        // then
+        assertThat(actual).isInstanceOf(IllegalArgumentException.class);
     }
 
     private RouteStops threeStops() {

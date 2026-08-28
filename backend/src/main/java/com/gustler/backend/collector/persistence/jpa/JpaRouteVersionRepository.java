@@ -28,23 +28,27 @@ public class JpaRouteVersionRepository implements RouteVersionRepository {
         final long routeId
     ) {
         return routeVersionEntityRepository.findFirstByRouteIdOrderByValidFromDescIdDesc(routeId)
-            .map(version -> new StoredRouteVersion(version.getId(), version.content()));
+            .map(version -> new StoredRouteVersion(version.getId(), version.getValidFrom(), version.content()));
+    }
+
+    @Override
+    public void closeAt(
+        final long routeVersionId,
+        OffsetDateTime closedAt
+    ) {
+        findVersionOrThrow(routeVersionId).closeAt(closedAt);
+        routeVersionEntityRepository.flush();
     }
 
     @Override
     public long openNewVersion(
         final long routeId,
         RouteStops routeStops,
-        RouteTimetable timetable,
+        RouteVersionContent content,
         OffsetDateTime openedAt
     ) {
-        closePreviousBeforeOpeningNew(routeId, openedAt);
-
-        RouteVersionJpaEntity newVersion = routeVersionEntityRepository.save(new RouteVersionJpaEntity(
-            routeId,
-            routeStops.turnSequence(),
-            RouteVersionContent.of(routeStops, timetable),
-            openedAt));
+        RouteVersionJpaEntity newVersion = routeVersionEntityRepository.save(
+            new RouteVersionJpaEntity(routeId, routeStops.turnSequence(), content, openedAt));
         routeStopEntityRepository.saveAll(routeStops.stops().stream()
             .map(stop -> new RouteStopJpaEntity(newVersion.getId(), stop))
             .toList());
@@ -56,19 +60,13 @@ public class JpaRouteVersionRepository implements RouteVersionRepository {
         final long routeVersionId,
         RouteTimetable timetable
     ) {
-        routeVersionEntityRepository.findById(routeVersionId)
-            .orElseThrow()
-            .revise(timetable);
+        findVersionOrThrow(routeVersionId).revise(timetable);
     }
 
-    private void closePreviousBeforeOpeningNew(
-        final long routeId,
-        OffsetDateTime openedAt
+    private RouteVersionJpaEntity findVersionOrThrow(
+        final long routeVersionId
     ) {
-        routeVersionEntityRepository.findFirstByRouteIdOrderByValidFromDescIdDesc(routeId)
-            .ifPresent(previousVersion -> {
-                previousVersion.closeAt(openedAt);
-                routeVersionEntityRepository.flush();
-            });
+        return routeVersionEntityRepository.findById(routeVersionId)
+            .orElseThrow(() -> new IllegalStateException("판본 %d 가 없다".formatted(routeVersionId)));
     }
 }
