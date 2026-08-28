@@ -250806,8 +250806,13 @@
         {
           "type": "frame",
           "id": "CRrQW",
+<<<<<<< HEAD
           "x": 5782,
           "y": 13249,
+=======
+          "x": 2974,
+          "y": 336,
+>>>>>>> f8e1bbe (docs(SAL-108): 디자인 .pen 파일을 레포에서 관리)
           "name": "ROE Token Registry · 11 Source Screens",
           "clip": true,
           "width": 1480,
