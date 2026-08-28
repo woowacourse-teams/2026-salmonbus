@@ -1,0 +1,57 @@
+package com.gustler.backend.processor;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+class SeatForecastResultTest {
+
+    @Test
+    void 만석_확률은_분포의_0석_남을_확률이다() {
+        // given
+        SeatForecastResult result = new SeatForecastResult(seatDistribution(), 0.35);
+
+        // when
+        final double actual = result.fullChance();
+
+        // then
+        assertThat(actual).isEqualTo(0.2);
+    }
+
+    @Test
+    void 보정_전_만석_확률은_분포와_따로_들고_있다() {
+        // given
+        SeatForecastResult result = new SeatForecastResult(seatDistribution(), 0.35);
+
+        // when
+        final double actual = result.fullChanceRaw();
+
+        // then
+        assertThat(actual).isEqualTo(0.35);
+    }
+
+    @Test
+    void 예보는_좌석_분포를_반드시_들고_있다() {
+        // when & then
+        assertThatThrownBy(() -> new SeatForecastResult(null, 0.35))
+            .isInstanceOf(NullPointerException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(doubles = {-0.1, 1.5, Double.NaN, Double.POSITIVE_INFINITY})
+    void 보정_전_만석_확률은_0과_1_사이의_수다(
+        final double notChance
+    ) {
+        // when & then
+        assertThatThrownBy(() -> new SeatForecastResult(seatDistribution(), notChance))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    private SeatDistribution seatDistribution() {
+        return new SeatDistribution(List.of(0.2, 0.3, 0.5));
+    }
+}

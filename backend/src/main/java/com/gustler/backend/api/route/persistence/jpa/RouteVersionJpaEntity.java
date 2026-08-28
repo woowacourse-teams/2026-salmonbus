@@ -11,11 +11,14 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "route_version")
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RouteVersionJpaEntity {
 
     @Id
@@ -29,20 +32,20 @@ public class RouteVersionJpaEntity {
     @Column(name = "turn_sequence")
     private Integer turnSequence;
 
-    @Column(name = "up_first_departure_time", length = 5)
+    @Column(name = "up_first_departure_time")
     private String upFirstDepartureTime;
 
-    @Column(name = "up_last_departure_time", length = 5)
+    @Column(name = "up_last_departure_time")
     private String upLastDepartureTime;
 
-    @Column(name = "down_first_departure_time", length = 5)
+    @Column(name = "down_first_departure_time")
     private String downFirstDepartureTime;
 
-    @Column(name = "down_last_departure_time", length = 5)
+    @Column(name = "down_last_departure_time")
     private String downLastDepartureTime;
 
     @JdbcTypeCode(SqlTypes.CHAR)
-    @Column(name = "content_digest", nullable = false, length = 64)
+    @Column(name = "content_digest", nullable = false)
     private String contentDigest;
 
     @Column(name = "valid_from", nullable = false)
@@ -50,9 +53,6 @@ public class RouteVersionJpaEntity {
 
     @Column(name = "valid_to")
     private OffsetDateTime validTo;
-
-    protected RouteVersionJpaEntity() {
-    }
 
     public Long id() {
         return id;

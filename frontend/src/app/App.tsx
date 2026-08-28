@@ -1,5 +1,5 @@
-import { VerdictBoardPage } from "@/pages/verdict-board";
+import { RouteSelectPage } from "@/pages/route-select";
 
 export function App() {
-  return <VerdictBoardPage />;
+  return <RouteSelectPage />;
 }

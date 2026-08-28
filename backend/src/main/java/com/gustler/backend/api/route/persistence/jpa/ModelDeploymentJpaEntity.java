@@ -9,27 +9,27 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "model_deployment")
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ModelDeploymentJpaEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "release_id", nullable = false, length = 80)
+    @Column(name = "release_id", nullable = false)
     private String releaseId;
 
     @Column(name = "data_until", nullable = false)
     private OffsetDateTime dataUntil;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "state", nullable = false, length = 12)
+    @Column(nullable = false)
     private ModelDeploymentState state;
-
-    protected ModelDeploymentJpaEntity() {
-    }
 
     public Long id() {
         return id;

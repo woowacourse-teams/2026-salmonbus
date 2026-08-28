@@ -4,22 +4,16 @@ import com.gustler.backend.api.http.ServiceUnavailableException;
 import com.gustler.backend.api.route.application.RouteQueryRepository;
 import com.gustler.backend.api.route.domain.Route;
 import java.util.List;
-import org.springframework.dao.DataAccessException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.stereotype.Repository;
 
 @Repository
+@RequiredArgsConstructor
 public class JpaRouteQueryRepository implements RouteQueryRepository {
 
     private final RouteEntityRepository routeRepository;
     private final ModelDeploymentEntityRepository modelDeploymentRepository;
-
-    public JpaRouteQueryRepository(
-        RouteEntityRepository routeRepository,
-        ModelDeploymentEntityRepository modelDeploymentRepository
-    ) {
-        this.routeRepository = routeRepository;
-        this.modelDeploymentRepository = modelDeploymentRepository;
-    }
 
     @Override
     public List<Route> findAllCurrentRoutes() {
@@ -28,7 +22,7 @@ public class JpaRouteQueryRepository implements RouteQueryRepository {
                 .stream()
                 .map(RouteJpaEntity::toDomain)
                 .toList();
-        } catch (DataAccessException exception) {
+        } catch (DataAccessResourceFailureException exception) {
             throw new ServiceUnavailableException();
         }
     }
@@ -37,7 +31,7 @@ public class JpaRouteQueryRepository implements RouteQueryRepository {
     public boolean existsActiveModel() {
         try {
             return modelDeploymentRepository.existsByState(ModelDeploymentState.ACTIVE);
-        } catch (DataAccessException exception) {
+        } catch (DataAccessResourceFailureException exception) {
             throw new ServiceUnavailableException();
         }
     }
