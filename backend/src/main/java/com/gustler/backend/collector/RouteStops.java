@@ -9,7 +9,20 @@ public record RouteStops(
 
     public RouteStops {
         stops = List.copyOf(stops);
+        validateStopOrdersDoNotRepeat(stops);
         validateTurnSequenceIsOneOfStops(turnSequence, stops);
+    }
+
+    private static void validateStopOrdersDoNotRepeat(
+        List<RouteStop> stops
+    ) {
+        final long distinctStopOrders = stops.stream()
+            .mapToInt(RouteStop::stopOrder)
+            .distinct()
+            .count();
+        if (distinctStopOrders != stops.size()) {
+            throw new IllegalArgumentException("한 판본에 같은 정류소 순번이 두 번 나온다");
+        }
     }
 
     private static void validateTurnSequenceIsOneOfStops(
