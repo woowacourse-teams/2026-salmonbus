@@ -30,9 +30,6 @@ public class ObservationBatchJpaEntity {
     @Column(name = "attempt_number", nullable = false)
     private Integer attemptNumber;
 
-    @Column(name = "requested_at", nullable = false)
-    private OffsetDateTime requestedAt;
-
     @Column(name = "response_received_at")
     private OffsetDateTime responseReceivedAt;
 
@@ -56,12 +53,5 @@ public class ObservationBatchJpaEntity {
 
     public boolean hasResponseReceivedAt() {
         return responseReceivedAt != null;
-    }
-
-    public OffsetDateTime effectivePollAt() {
-        if (responseReceivedAt != null) {
-            return responseReceivedAt;
-        }
-        return requestedAt;
     }
 }

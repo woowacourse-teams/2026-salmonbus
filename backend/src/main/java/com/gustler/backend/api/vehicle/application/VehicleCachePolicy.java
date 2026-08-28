@@ -13,8 +13,11 @@ public class VehicleCachePolicy {
     private static final Duration REGULAR_MAX_AGE = Duration.ofSeconds(20);
     private static final Duration OVERNIGHT_MAX_AGE = Duration.ofSeconds(600);
 
-    public Duration maxAgeAt(OffsetDateTime pollAt) {
-        final int hour = pollAt.atZoneSameInstant(SEOUL).getHour();
+    /**
+     * max-age 는 응답을 받은 시점부터 세는 값이라 관측 시각이 아니라 응답 시각으로 구간을 정한다.
+     */
+    public Duration maxAgeAt(OffsetDateTime respondedAt) {
+        final int hour = respondedAt.atZoneSameInstant(SEOUL).getHour();
 
         if (hour >= 1 && hour < 4) {
             return OVERNIGHT_MAX_AGE;

@@ -82,9 +82,6 @@ public class JpaVehicleQueryRepository implements VehicleQueryRepository {
                 .map(ObservationBatchJpaEntity::outcome)
                 .map(VehiclePollOutcome::fromDatabaseValue)
                 .orElse(VehiclePollOutcome.UNKNOWN),
-            latestBatch.map(ObservationBatchJpaEntity::effectivePollAt)
-                .map(this::inSeoul)
-                .orElse(null),
             latestNormalBatch.map(ObservationBatchJpaEntity::responseReceivedAt)
                 .map(this::inSeoul)
                 .orElse(null)

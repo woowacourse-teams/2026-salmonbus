@@ -30,9 +30,6 @@ public class LiveVehicleQueryService {
         OffsetDateTime staleAt = observedAt == null
             ? null
             : freshnessPolicy.staleAt(observedAt);
-        OffsetDateTime cacheReferenceAt = snapshot.latestPollAt() == null
-            ? OffsetDateTime.now(clock)
-            : snapshot.latestPollAt();
 
         if (!isUsableLatestSnapshot(snapshot, staleAt)) {
             return overviewOf(
@@ -40,8 +37,7 @@ public class LiveVehicleQueryService {
                 VehicleObservationState.UNKNOWN,
                 observedAt,
                 staleAt,
-                List.of(),
-                cacheReferenceAt
+                List.of()
             );
         }
 
@@ -51,8 +47,7 @@ public class LiveVehicleQueryService {
                 VehicleObservationState.NO_VEHICLES_OBSERVED,
                 observedAt,
                 staleAt,
-                List.of(),
-                cacheReferenceAt
+                List.of()
             );
         }
 
@@ -64,8 +59,7 @@ public class LiveVehicleQueryService {
             VehicleObservationState.VEHICLES_PRESENT,
             observedAt,
             staleAt,
-            vehicles,
-            cacheReferenceAt
+            vehicles
         );
     }
 
@@ -86,8 +80,7 @@ public class LiveVehicleQueryService {
         VehicleObservationState state,
         OffsetDateTime observedAt,
         OffsetDateTime staleAt,
-        List<ObservedVehicle> vehicles,
-        OffsetDateTime cacheReferenceAt
+        List<ObservedVehicle> vehicles
     ) {
         return new LiveVehicleOverview(
             snapshot.routeId(),
@@ -96,7 +89,7 @@ public class LiveVehicleQueryService {
             observedAt,
             staleAt,
             vehicles,
-            cachePolicy.maxAgeAt(cacheReferenceAt)
+            cachePolicy.maxAgeAt(OffsetDateTime.now(clock))
         );
     }
 }

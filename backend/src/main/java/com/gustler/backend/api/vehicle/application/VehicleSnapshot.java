@@ -9,7 +9,6 @@ public record VehicleSnapshot(
     String referenceVersionId,
     Long latestBatchId,
     VehiclePollOutcome latestOutcome,
-    OffsetDateTime latestPollAt,
     OffsetDateTime observedAt
 ) {
 

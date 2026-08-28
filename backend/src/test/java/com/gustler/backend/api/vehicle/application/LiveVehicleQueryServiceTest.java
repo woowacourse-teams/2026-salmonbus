@@ -16,7 +16,6 @@ import com.gustler.backend.api.vehicle.domain.VehiclePollOutcome;
 import com.gustler.backend.api.vehicle.domain.VehicleSeat;
 import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -31,10 +30,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class LiveVehicleQueryServiceTest {
 
     private static final RouteId ROUTE_ID = new RouteId("204000057");
-    private static final Clock CLOCK = Clock.fixed(
-        Instant.parse("2026-08-27T03:00:00Z"),
-        ZoneId.of("Asia/Seoul")
-    );
+    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+    private static final Clock CLOCK = clockAt("2026-08-27T12:00:00+09:00");
     private static final OffsetDateTime RECENT = OffsetDateTime.parse(
         "2026-08-27T11:58:00+09:00"
     );
@@ -55,12 +52,7 @@ class LiveVehicleQueryServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new LiveVehicleQueryService(
-            vehicleQueryRepository,
-            new VehicleFreshnessPolicy(CLOCK),
-            new VehicleCachePolicy(),
-            CLOCK
-        );
+        service = serviceAt(CLOCK);
     }
 
     @Test
@@ -161,7 +153,6 @@ class LiveVehicleQueryServiceTest {
             "42",
             null,
             VehiclePollOutcome.UNKNOWN,
-            null,
             null
         );
         given(vehicleQueryRepository.findLatestSnapshot(ROUTE_ID))
@@ -176,11 +167,71 @@ class LiveVehicleQueryServiceTest {
     }
 
     @Test
+    void 관측이_비혼잡_시간대여도_응답_시각이_혼잡_시간대면_15초를_붙인다() {
+        Clock peakClock = clockAt("2026-08-27T07:00:00+09:00");
+        OffsetDateTime observedAt = OffsetDateTime.parse("2026-08-27T06:59:30+09:00");
+        given(vehicleQueryRepository.findLatestSnapshot(ROUTE_ID))
+            .willReturn(Optional.of(snapshot(
+                6L,
+                VehiclePollOutcome.SUCCESS_ROWS,
+                observedAt
+            )));
+        given(vehicleQueryRepository.findVehicles(6L)).willReturn(List.of(VEHICLE));
+
+        LiveVehicleOverview actual = serviceAt(peakClock).getLiveVehicles(ROUTE_ID);
+
+        assertThat(actual.cacheMaxAge()).isEqualTo(Duration.ofSeconds(15));
+    }
+
+    @Test
+    void 응답_시각이_혼잡_시간대_직전이면_20초를_붙인다() {
+        Clock beforePeakClock = clockAt("2026-08-27T06:59:59+09:00");
+        OffsetDateTime observedAt = OffsetDateTime.parse("2026-08-27T06:59:30+09:00");
+        given(vehicleQueryRepository.findLatestSnapshot(ROUTE_ID))
+            .willReturn(Optional.of(snapshot(
+                7L,
+                VehiclePollOutcome.SUCCESS_ROWS,
+                observedAt
+            )));
+        given(vehicleQueryRepository.findVehicles(7L)).willReturn(List.of(VEHICLE));
+
+        LiveVehicleOverview actual = serviceAt(beforePeakClock).getLiveVehicles(ROUTE_ID);
+
+        assertThat(actual.cacheMaxAge()).isEqualTo(Duration.ofSeconds(20));
+    }
+
+    @Test
+    void 관측이_혼잡_시간대여도_응답_시각이_심야면_600초를_붙인다() {
+        Clock overnightClock = clockAt("2026-08-27T01:00:00+09:00");
+        OffsetDateTime observedAt = OffsetDateTime.parse("2026-08-27T00:59:00+09:00");
+        given(vehicleQueryRepository.findLatestSnapshot(ROUTE_ID))
+            .willReturn(Optional.of(snapshot(
+                8L,
+                VehiclePollOutcome.SUCCESS_ROWS,
+                observedAt
+            )));
+        given(vehicleQueryRepository.findVehicles(8L)).willReturn(List.of(VEHICLE));
+
+        LiveVehicleOverview actual = serviceAt(overnightClock).getLiveVehicles(ROUTE_ID);
+
+        assertThat(actual.cacheMaxAge()).isEqualTo(Duration.ofSeconds(600));
+    }
+
+    @Test
     void 현재_판본이_있는_노선이_없으면_찾을_수_없음_예외를_던진다() {
         given(vehicleQueryRepository.findLatestSnapshot(ROUTE_ID)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getLiveVehicles(ROUTE_ID))
             .isInstanceOf(RouteNotFoundException.class);
+    }
+
+    private LiveVehicleQueryService serviceAt(Clock clock) {
+        return new LiveVehicleQueryService(
+            vehicleQueryRepository,
+            new VehicleFreshnessPolicy(clock),
+            new VehicleCachePolicy(),
+            clock
+        );
     }
 
     private VehicleSnapshot snapshot(
@@ -193,8 +244,14 @@ class LiveVehicleQueryServiceTest {
             "42",
             batchId,
             outcome,
-            observedAt,
             observedAt
+        );
+    }
+
+    private static Clock clockAt(String isoOffsetDateTime) {
+        return Clock.fixed(
+            OffsetDateTime.parse(isoOffsetDateTime).toInstant(),
+            SEOUL
         );
     }
 }
