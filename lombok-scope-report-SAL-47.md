@@ -132,3 +132,13 @@ record는 그대로 유지했고, 로그 필드가 없으므로 `@Slf4j`를 추�
 - 결과: **BUILD SUCCESSFUL**
 - 테스트: **104개 통과**
 - 테스트 소스 변경·삭제: **0개**
+
+### 5.4 PR #33 리뷰 반영 후 상태
+
+위 5.1~5.3은 최초 Lombok 적용 커밋 `aa31954` 시점의 실측값이다. PR #33 리뷰 반영 과정에서 시간대 정의를 `ClockConfig`로 모으기 위해 `BoardCachePolicy`에도 `Clock` 생성자 주입이 생겼고, 이 클래스에도 `@RequiredArgsConstructor`를 적용했다.
+
+- 현재 `@RequiredArgsConstructor`: **5개 production 파일**
+- 현재 `@EqualsAndHashCode`: **2개 production 파일**
+- 현재 Lombok 선택 적용: **production 7개 파일**
+- record, `@Slf4j`, fluent getter, JPA no-arg constructor, 테스트 fixture 미적용 원칙은 유지
+- 리뷰 반영 후 전체 검증: `./gradlew clean test`, **115개 통과**
