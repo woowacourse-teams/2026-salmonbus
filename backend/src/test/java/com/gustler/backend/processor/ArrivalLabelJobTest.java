@@ -216,6 +216,6 @@ class ArrivalLabelJobTest {
 
     private ForecastProperties properties() {
         return new ForecastProperties(
-            true, Duration.ofSeconds(10), Duration.ofSeconds(60), 20, 500, 200);
+            true, Duration.ofSeconds(10), Duration.ofSeconds(60), Duration.ofHours(6), 20, 500, 200);
     }
 }

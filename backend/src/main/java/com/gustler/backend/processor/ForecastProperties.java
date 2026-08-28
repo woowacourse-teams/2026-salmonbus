@@ -14,6 +14,7 @@ public record ForecastProperties(
     boolean enabled,
     Duration interval,
     Duration settlementInterval,
+    Duration statisticsInterval,
     int batchLimit,
     int pendingLimit,
     int arrivalLimit

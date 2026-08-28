@@ -40,6 +40,7 @@ forecast:
   enabled: false
   interval: 10s # 예보가 안 붙은 판을 집으러 가는 주기. 수집이 첨두 15초라 그보다 짧게 둔다.
   settlement-interval: 60s # 라벨 회수 주기. 예보와 다른 시계에서 돈다.
+  statistics-interval: 6h # 셀 통계 재계산 주기. 관측이 쌓여야 값이 바뀌어서 셋 중 제일 느리다.
   batch-limit: 20 # 한 회차에 예보를 붙일 판의 수.
   pending-limit: 500 # 한 회차에 회수를 시도할 예보 줄 수.
   arrival-limit: 200 # 한 차량의 뒤 관측을 얼마나 읽나. 지평 12의 중앙 소요가 26.5분이다.
