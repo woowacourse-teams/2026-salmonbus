@@ -9,6 +9,9 @@ public record VehicleStopTarget(
         if (!observation.hasKnownSeats()) {
             throw new IllegalArgumentException("잔여석을 모르는 관측으로는 예보하지 않는다: " + observation);
         }
+        if (!targetStop.boardingAllowed()) {
+            throw new IllegalArgumentException("승차할 수 없는 정류장에는 예보하지 않는다: " + targetStop);
+        }
         if (observation.routeVersionId() != targetStop.routeVersionId()) {
             throw new IllegalArgumentException(
                 "관측과 대상 정류장의 노선 판본이 다르다: %d, %d"
