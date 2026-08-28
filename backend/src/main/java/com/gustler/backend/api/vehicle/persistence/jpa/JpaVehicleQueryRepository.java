@@ -74,7 +74,8 @@ public class JpaVehicleQueryRepository implements VehicleQueryRepository {
             routeVersion.toRoute().id(),
             String.valueOf(routeVersion.id()),
             latestBatch.map(ObservationBatchJpaEntity::id).orElse(null),
-            latestBatch.map(ObservationBatchJpaEntity::outcome)
+            latestBatch.filter(ObservationBatchJpaEntity::hasResponseReceivedAt)
+                .map(ObservationBatchJpaEntity::outcome)
                 .map(VehiclePollOutcome::fromDatabaseValue)
                 .orElse(VehiclePollOutcome.UNKNOWN),
             latestBatch.map(ObservationBatchJpaEntity::effectivePollAt)

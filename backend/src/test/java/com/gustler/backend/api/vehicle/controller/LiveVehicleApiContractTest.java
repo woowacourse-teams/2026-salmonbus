@@ -161,6 +161,23 @@ class LiveVehicleApiContractTest {
     }
 
     @Test
+    void 최신_성공_poll에_응답_수신_시각이_없으면_불완전한_관측으로_처리한다() throws Exception {
+        RouteContext route = insertCurrentRoute();
+        OffsetDateTime lastObservedAt = NOW.minusMinutes(2);
+        insertSuccessfulBatch(route, lastObservedAt, "SUCCESS_ROWS", 1);
+        insertIncompleteSuccessfulBatch(route, NOW.minusSeconds(20));
+
+        mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.observation.state").value("UNKNOWN"))
+            .andExpect(jsonPath("$.observation.observedAt").value(jsonTime(lastObservedAt)))
+            .andExpect(jsonPath("$.observation.staleAt").value(
+                jsonTime(lastObservedAt.plusMinutes(5))
+            ))
+            .andExpect(jsonPath("$.vehicles").isEmpty());
+    }
+
+    @Test
     void 최신_정상_스냅샷이_자기_staleAt을_넘겼으면_UNKNOWN과_빈_배열을_반환한다() throws Exception {
         RouteContext route = insertCurrentRoute();
         OffsetDateTime observedAt = NOW.minusMinutes(5).minusSeconds(1);
@@ -307,6 +324,29 @@ class LiveVehicleApiContractTest {
                 scheduledAt.plusSeconds(2),
                 "TRANSPORT_FAILURE",
                 "UPSTREAM_TIMEOUT"
+            )
+            .update();
+    }
+
+    private void insertIncompleteSuccessfulBatch(
+        RouteContext route,
+        OffsetDateTime scheduledAt
+    ) {
+        jdbcClient.sql("""
+                INSERT INTO observation_batch (
+                    route_version_id, scheduled_at, attempt_number, attempt_key,
+                    requested_at, completed_at, outcome, stored_rows
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """)
+            .params(
+                route.routeVersionId(),
+                scheduledAt,
+                1,
+                UUID.randomUUID().toString(),
+                scheduledAt.plusSeconds(1),
+                scheduledAt.plusSeconds(2),
+                "SUCCESS_ROWS",
+                1
             )
             .update();
     }

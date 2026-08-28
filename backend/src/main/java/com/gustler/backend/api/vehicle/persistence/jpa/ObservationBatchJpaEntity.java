@@ -54,6 +54,10 @@ public class ObservationBatchJpaEntity {
         return responseReceivedAt;
     }
 
+    public boolean hasResponseReceivedAt() {
+        return responseReceivedAt != null;
+    }
+
     public OffsetDateTime effectivePollAt() {
         if (responseReceivedAt != null) {
             return responseReceivedAt;
