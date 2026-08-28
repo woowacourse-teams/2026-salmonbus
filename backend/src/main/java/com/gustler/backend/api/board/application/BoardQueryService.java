@@ -36,11 +36,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class BoardQueryService {
 
     private static final int MAX_APPROACHING_VEHICLES = 3;
-    private static final Pattern DEPARTURE_TIME = Pattern.compile(
+    private static final Pattern DEPARTURE_TIME_FORMAT = Pattern.compile(
         "([01][0-9]|2[0-3]):[0-5][0-9]"
     );
     private static final Comparator<StoredPrediction> PREDICTION_ORDER = Comparator
-        .comparingInt(StoredPrediction::horizonStops)
+        .comparingInt(StoredPrediction::stopsToTarget)
         .thenComparing(
             StoredPrediction::vehicleId,
             Comparator.nullsLast(Comparator.naturalOrder())
@@ -98,8 +98,8 @@ public class BoardQueryService {
         );
     }
 
-    static double seatAvailableProbability(double pFull) {
-        return 1.0d - pFull;
+    private static double seatAvailableProbability(double seatFullChance) {
+        return 1.0d - seatFullChance;
     }
 
     private ForecastModel modelOf(
@@ -124,7 +124,7 @@ public class BoardQueryService {
         List<StoredPrediction> predictions
     ) {
         return predictions.stream()
-            .filter(this::hasValidNumbers)
+            .filter(this::hasValidForecastValues)
             .sorted(Comparator
                 .comparingInt(StoredPrediction::targetStopOrder)
                 .thenComparing(PREDICTION_ORDER))
@@ -141,9 +141,11 @@ public class BoardQueryService {
             ));
     }
 
-    private boolean hasValidNumbers(StoredPrediction prediction) {
-        double pFull = prediction.pFull();
-        if (!Double.isFinite(pFull) || pFull < 0.0d || pFull > 1.0d) {
+    private boolean hasValidForecastValues(StoredPrediction prediction) {
+        double seatFullChance = prediction.seatFullChance();
+        if (!Double.isFinite(seatFullChance)
+            || seatFullChance < 0.0d
+            || seatFullChance > 1.0d) {
             return false;
         }
         Double expectedSeats = prediction.expectedSeats();
@@ -154,8 +156,8 @@ public class BoardQueryService {
     private ApproachingVehicle toApproachingVehicle(StoredPrediction prediction) {
         return new ApproachingVehicle(
             prediction.vehicleId(),
-            prediction.horizonStops(),
-            seatAvailableProbability(prediction.pFull()),
+            prediction.stopsToTarget(),
+            seatAvailableProbability(prediction.seatFullChance()),
             prediction.expectedSeats()
         );
     }
@@ -253,7 +255,7 @@ public class BoardQueryService {
         if (turn == null || turn == origin || turn == terminal) {
             throw new ServiceUnavailableException();
         }
-        assertRoundTripDirections(stops, turnSequence);
+        requireRoundTripDirections(stops, turnSequence);
 
         DepartureSchedule schedule = snapshot.schedule();
         List<DirectionInfo> directions = new ArrayList<>(2);
@@ -276,7 +278,7 @@ public class BoardQueryService {
         return List.copyOf(directions);
     }
 
-    private void assertRoundTripDirections(
+    private void requireRoundTripDirections(
         List<BoardStop> stops,
         int turnSequence
     ) {
@@ -294,7 +296,7 @@ public class BoardQueryService {
     }
 
     private String requireDepartureTime(String value) {
-        if (value == null || !DEPARTURE_TIME.matcher(value).matches()) {
+        if (value == null || !DEPARTURE_TIME_FORMAT.matcher(value).matches()) {
             throw new ServiceUnavailableException();
         }
         return value;

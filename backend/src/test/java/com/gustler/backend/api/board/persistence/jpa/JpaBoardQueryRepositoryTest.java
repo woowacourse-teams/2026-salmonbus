@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import com.gustler.backend.api.http.ServiceUnavailableException;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.persistence.jpa.ModelDeploymentEntityRepository;
+import java.time.Clock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
@@ -20,6 +21,7 @@ class JpaBoardQueryRepositoryTest {
     void setUp() {
         routeVersionRepository = mock(BoardRouteVersionEntityRepository.class);
         repository = new JpaBoardQueryRepository(
+            Clock.systemUTC(),
             routeVersionRepository,
             mock(ObservationBatchEntityRepository.class),
             mock(RouteStopEntityRepository.class),

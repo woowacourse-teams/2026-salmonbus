@@ -7,8 +7,8 @@ public record StoredPrediction(
     int targetStopOrder,
     String vehicleId,
     int sourceRowNumber,
-    int horizonStops,
-    double pFull,
+    int stopsToTarget,
+    double seatFullChance,
     Double expectedSeats,
     ForecastModel model
 ) {

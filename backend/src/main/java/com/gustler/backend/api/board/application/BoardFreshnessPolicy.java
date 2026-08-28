@@ -10,12 +10,12 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class BoardFreshnessPolicy {
 
-    private static final Duration FRESHNESS = Duration.ofMinutes(5);
+    private static final Duration FRESHNESS_WINDOW = Duration.ofMinutes(5);
 
     private final Clock clock;
 
     public OffsetDateTime staleAt(OffsetDateTime observedAt) {
-        return observedAt.plus(FRESHNESS);
+        return observedAt.plus(FRESHNESS_WINDOW);
     }
 
     public boolean isStale(OffsetDateTime observedAt) {

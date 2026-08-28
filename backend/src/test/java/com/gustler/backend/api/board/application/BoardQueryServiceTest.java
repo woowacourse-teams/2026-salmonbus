@@ -19,7 +19,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,12 +55,12 @@ class BoardQueryServiceTest {
     void setUp() {
         Clock clock = Clock.fixed(
             Instant.parse("2026-08-26T23:04:59Z"),
-            ZoneOffset.UTC
+            ZoneId.of("Asia/Seoul")
         );
         service = new BoardQueryService(
             repository,
             new BoardFreshnessPolicy(clock),
-            new BoardCachePolicy()
+            new BoardCachePolicy(clock)
         );
     }
 
@@ -244,16 +244,16 @@ class BoardQueryServiceTest {
         int targetStopOrder,
         String vehicleId,
         int sourceRowNumber,
-        int horizonStops,
-        double pFull,
+        int stopsToTarget,
+        double seatFullChance,
         Double expectedSeats
     ) {
         return prediction(
             targetStopOrder,
             vehicleId,
             sourceRowNumber,
-            horizonStops,
-            pFull,
+            stopsToTarget,
+            seatFullChance,
             expectedSeats,
             SNAPSHOT_MODEL
         );
@@ -263,8 +263,8 @@ class BoardQueryServiceTest {
         int targetStopOrder,
         String vehicleId,
         int sourceRowNumber,
-        int horizonStops,
-        double pFull,
+        int stopsToTarget,
+        double seatFullChance,
         Double expectedSeats,
         ForecastModel model
     ) {
@@ -272,8 +272,8 @@ class BoardQueryServiceTest {
             targetStopOrder,
             vehicleId,
             sourceRowNumber,
-            horizonStops,
-            pFull,
+            stopsToTarget,
+            seatFullChance,
             expectedSeats,
             model
         );

@@ -1,27 +1,30 @@
 package com.gustler.backend.api.board.application;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 public class BoardCachePolicy {
 
-    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
-    private static final Duration DENSE = Duration.ofSeconds(15);
-    private static final Duration REGULAR = Duration.ofSeconds(20);
-    private static final Duration OVERNIGHT = Duration.ofSeconds(600);
+    private static final Duration DENSE_HOUR_MAX_AGE = Duration.ofSeconds(15);
+    private static final Duration REGULAR_HOUR_MAX_AGE = Duration.ofSeconds(20);
+    private static final Duration OVERNIGHT_MAX_AGE = Duration.ofSeconds(600);
+
+    private final Clock clock;
 
     public Duration maxAgeAt(OffsetDateTime observedAt) {
-        int hour = observedAt.atZoneSameInstant(SEOUL).getHour();
+        int hour = observedAt.atZoneSameInstant(clock.getZone()).getHour();
         if (isDenseHour(hour)) {
-            return DENSE;
+            return DENSE_HOUR_MAX_AGE;
         }
         if (hour >= 1 && hour < 4) {
-            return OVERNIGHT;
+            return OVERNIGHT_MAX_AGE;
         }
-        return REGULAR;
+        return REGULAR_HOUR_MAX_AGE;
     }
 
     private boolean isDenseHour(int hour) {

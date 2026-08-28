@@ -1,5 +1,6 @@
 package com.gustler.backend.api.route.persistence.jpa;
 
+import com.gustler.backend.api.route.domain.Route;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -57,8 +58,8 @@ public class RouteVersionJpaEntity {
         return id;
     }
 
-    public RouteJpaEntity route() {
-        return route;
+    public Route toRoute() {
+        return route.toDomain();
     }
 
     public Integer turnSequence() {

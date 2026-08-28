@@ -13,9 +13,9 @@ import com.gustler.backend.api.route.persistence.jpa.ModelDeploymentEntityReposi
 import com.gustler.backend.api.route.persistence.jpa.ModelDeploymentJpaEntity;
 import com.gustler.backend.api.route.persistence.jpa.ModelDeploymentState;
 import com.gustler.backend.api.route.persistence.jpa.RouteVersionJpaEntity;
+import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
-import java.time.ZoneId;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.PageRequest;
@@ -26,9 +26,9 @@ import org.springframework.stereotype.Repository;
 @RequiredArgsConstructor
 public class JpaBoardQueryRepository implements BoardQueryRepository {
 
-    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final Pageable FIRST_RESULT = PageRequest.of(0, 1);
 
+    private final Clock clock;
     private final BoardRouteVersionEntityRepository routeVersionRepository;
     private final ObservationBatchEntityRepository observationBatchRepository;
     private final RouteStopEntityRepository routeStopRepository;
@@ -62,7 +62,7 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
         try {
             return seatForecastRepository.findAllByBatchId(observationBatchId)
                 .stream()
-                .map(forecast -> forecast.toDomain(SEOUL))
+                .map(forecast -> forecast.toDomain(clock.getZone()))
                 .toList();
         } catch (DataAccessException exception) {
             throw new ServiceUnavailableException();
@@ -74,14 +74,14 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
             .findLatestForecastCompleted(routeVersion, FIRST_RESULT)
             .stream()
             .findFirst()
-            .map(batch -> batch.toDomain(SEOUL));
+            .map(batch -> batch.toDomain(clock.getZone()));
         Optional<ForecastModel> activeModel = modelDeploymentRepository
             .findByState(ModelDeploymentState.ACTIVE)
             .map(this::toModel);
 
         return new BoardSnapshot(
             routeVersion.id(),
-            routeVersion.route().toDomain(),
+            routeVersion.toRoute(),
             routeVersion.turnSequence(),
             new DepartureSchedule(
                 routeVersion.upFirstDepartureTime(),
@@ -98,7 +98,7 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
         return new ForecastModel(
             model.id(),
             model.releaseId(),
-            model.dataUntil().atZoneSameInstant(SEOUL).toOffsetDateTime()
+            model.dataUntil().atZoneSameInstant(clock.getZone()).toOffsetDateTime()
         );
     }
 }

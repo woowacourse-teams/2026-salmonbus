@@ -2,14 +2,22 @@ package com.gustler.backend.api.board.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class BoardCachePolicyTest {
 
-    private final BoardCachePolicy policy = new BoardCachePolicy();
+    private static final Clock SEOUL_CLOCK = Clock.fixed(
+        Instant.EPOCH,
+        ZoneId.of("Asia/Seoul")
+    );
+
+    private final BoardCachePolicy policy = new BoardCachePolicy(SEOUL_CLOCK);
 
     @ParameterizedTest
     @CsvSource({

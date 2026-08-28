@@ -193,9 +193,9 @@ public class BoardDatabaseFixture {
         RouteContext route,
         long observationId,
         int targetStopOrder,
-        int horizonStops,
+        int stopsToTarget,
         long modelDeploymentId,
-        double pFull,
+        double seatFullChance,
         Double expectedSeats,
         OffsetDateTime generatedAt
     ) {
@@ -207,17 +207,17 @@ public class BoardDatabaseFixture {
                     generated_at, scoring_state
                 ) VALUES (
                     :observationId, :targetStopOrder, :routeVersionId,
-                    :horizonStops, :modelDeploymentId, 1,
-                    :pFull, :pFull, :expectedSeats,
+                    :stopsToTarget, :modelDeploymentId, 1,
+                    :seatFullChance, :seatFullChance, :expectedSeats,
                     :generatedAt, 'PENDING'
                 )
                 """)
             .param("observationId", observationId)
             .param("targetStopOrder", targetStopOrder)
             .param("routeVersionId", route.routeVersionId())
-            .param("horizonStops", horizonStops)
+            .param("stopsToTarget", stopsToTarget)
             .param("modelDeploymentId", modelDeploymentId)
-            .param("pFull", pFull)
+            .param("seatFullChance", seatFullChance)
             .param("expectedSeats", expectedSeats)
             .param("generatedAt", generatedAt)
             .update();

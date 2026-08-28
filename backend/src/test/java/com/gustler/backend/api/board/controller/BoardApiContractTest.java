@@ -77,7 +77,7 @@ class BoardApiContractTest {
         insertPredictions(route, completedBatchId, snapshotModelId, observedAt);
 
         String cacheControl = "max-age="
-            + new BoardCachePolicy().maxAgeAt(observedAt).toSeconds()
+            + new BoardCachePolicy(clock).maxAgeAt(observedAt).toSeconds()
             + ", public";
 
         mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
@@ -282,8 +282,8 @@ class BoardApiContractTest {
         int currentStopOrder,
         String currentStopId,
         int targetStopOrder,
-        int horizonStops,
-        double pFull,
+        int stopsToTarget,
+        double seatFullChance,
         Double expectedSeats,
         OffsetDateTime observedAt
     ) {
@@ -300,9 +300,9 @@ class BoardApiContractTest {
             route,
             observationId,
             targetStopOrder,
-            horizonStops,
+            stopsToTarget,
             modelId,
-            pFull,
+            seatFullChance,
             expectedSeats,
             observedAt.plusSeconds(1)
         );

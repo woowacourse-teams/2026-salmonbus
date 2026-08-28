@@ -37,7 +37,7 @@ public class RouteJpaEntity {
     protected RouteJpaEntity() {
     }
 
-    public Route toDomain() {
+    Route toDomain() {
         return new Route(
             sourceRouteId,
             displayName,
