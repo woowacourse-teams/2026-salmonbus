@@ -89,7 +89,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
      * 스키마가 그 열을 NULL 허용으로 두고 있어서 실제로 생길 수 있다.
      */
     private static final String SELECT_OBSERVATIONS_IN_BATCHES = """
-        SELECT observation_batch_id, route_version_id, vehicle_id,
+        SELECT id, observation_batch_id, route_version_id, vehicle_id,
                vehicle_trip_key, passed_stop_order, remaining_seats, seat_unknown_reason
         FROM vehicle_observation
         WHERE observation_batch_id IN (:observationBatchIds)
@@ -190,6 +190,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
         List<ObservationRow> rows = jdbcClient.sql(SELECT_OBSERVATIONS_IN_BATCHES)
             .param("observationBatchIds", observedAtByBatch.keySet())
             .query((resultSet, rowNumber) -> new ObservationRow(
+                resultSet.getLong("id"),
                 resultSet.getLong("observation_batch_id"),
                 resultSet.getLong("route_version_id"),
                 resultSet.getString("vehicle_id"),
@@ -235,6 +236,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
 
     /** 관측 한 행. 관측 시각만 자기 판에서 받아 채운다. */
     private record ObservationRow(
+        long id,
         long observationBatchId,
         long routeVersionId,
         String vehicleId,
@@ -248,6 +250,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
             Instant observedAt
         ) {
             return new TrajectoryObservation(
+                id,
                 new ObservedVehicle(vehicleId, routeVersionId, passedStopOrder, observedAt, remainingSeats),
                 vehicleTripKey,
                 ObservedSeats.of(remainingSeats, seatUnknownReasonOf()));

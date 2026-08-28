@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Test;
 class VehicleTrajectoryAssemblerTest {
 
     private static final long ROUTE_VERSION_ID = 1L;
+    /** 조립은 관측 행 번호를 안 본다. 차량 아이디로 잇는다. */
+    private static final long ANY_OBSERVATION_ID = 0L;
     private static final Instant FIRST_RESPONSE_RECEIVED_AT = Instant.parse("2026-08-19T02:14:04.911Z");
     private static final int POLL_INTERVAL_SECONDS = 15;
 
@@ -350,6 +352,7 @@ class VehicleTrajectoryAssemblerTest {
     ) {
         ObservedVehicle vehicle = observation.vehicle();
         return new TrajectoryObservation(
+            observation.vehicleObservationId(),
             new ObservedVehicle(
                 vehicle.vehicleId(),
                 vehicle.routeVersionId(),
@@ -375,6 +378,7 @@ class VehicleTrajectoryAssemblerTest {
         String vehicleTripKey
     ) {
         return new TrajectoryObservation(
+            ANY_OBSERVATION_ID,
             new ObservedVehicle(
                 vehicleId,
                 ROUTE_VERSION_ID,

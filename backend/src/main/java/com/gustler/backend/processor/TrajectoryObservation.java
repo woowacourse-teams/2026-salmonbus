@@ -11,6 +11,7 @@ package com.gustler.backend.processor;
  * 모르는 사유가 들어갈 자리가 없다.
  */
 public record TrajectoryObservation(
+    long vehicleObservationId,
     ObservedVehicle vehicle,
     String vehicleTripKey,
     ObservedSeats seats

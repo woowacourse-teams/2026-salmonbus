@@ -162,13 +162,14 @@ class JdbcVehicleTrajectoryRepositoryTest {
         insertObservation(earlier, VEHICLE_204000206, STOP_5, 43);
         insertObservation(earlier, VEHICLE_204003542, STOP_6, NO_SEAT_LEFT);
         final long later = insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
-        insertObservation(later, VEHICLE_204000206, STOP_6, 40);
+        final long observationId = insertObservation(later, VEHICLE_204000206, STOP_6, 40);
 
         // when
         List<VehicleTrajectory> actual = repository.readTrajectories(later);
 
         // then
         assertThat(actual).containsExactly(new VehicleTrajectory(
+            observationId,
             new ObservedVehicle(VEHICLE_204000206, routeVersionId, STOP_6, LATER_POLL.toInstant(), 40),
             new ObservedSeats.Known(40),
             new SeatSlope.Known(-3),
@@ -334,13 +335,13 @@ class JdbcVehicleTrajectoryRepositoryTest {
             .single();
     }
 
-    private void insertObservation(
+    private long insertObservation(
         final long batchId,
         String vehicleId,
         final int stopOrder,
         Integer remainingSeats
     ) {
-        insertObservation(routeVersionId, batchId, vehicleId, stopOrder, remainingSeats, null);
+        return insertObservation(routeVersionId, batchId, vehicleId, stopOrder, remainingSeats, null);
     }
 
     private void insertObservationWithoutSeats(
@@ -352,18 +353,18 @@ class JdbcVehicleTrajectoryRepositoryTest {
         insertObservation(routeVersionId, batchId, vehicleId, stopOrder, null, seatUnknownReason);
     }
 
-    private void insertObservation(
+    private long insertObservation(
         final long versionId,
         final long batchId,
         String vehicleId,
         final int stopOrder,
         Integer remainingSeats
     ) {
-        insertObservation(versionId, batchId, vehicleId, stopOrder, remainingSeats, null);
+        return insertObservation(versionId, batchId, vehicleId, stopOrder, remainingSeats, null);
     }
 
     /** 통과 순번은 지나감(2)이라 상류 순번과 같다. 관측 시각 열은 SAL-84 가 지웠다. */
-    private void insertObservation(
+    private long insertObservation(
         final long versionId,
         final long batchId,
         String vehicleId,
@@ -371,19 +372,21 @@ class JdbcVehicleTrajectoryRepositoryTest {
         Integer remainingSeats,
         String seatUnknownReason
     ) {
-        jdbcClient.sql("""
+        return jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
                     observation_batch_id, route_version_id, source_row_number,
                     vehicle_id, stop_order, stop_id, passed_stop_order,
                     running_state, remaining_seats, seat_unknown_reason, crowd_level
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                RETURNING id
                 """)
             .params(
                 batchId, versionId, nextRowNumber(batchId),
                 vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
                 RUNNING_STATE_DEPARTED, remainingSeats, seatUnknownReason, CROWD_LEVEL_3
             )
-            .update();
+            .query(Long.class)
+            .single();
     }
 
     private int nextRowNumber(

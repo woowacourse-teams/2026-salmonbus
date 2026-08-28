@@ -41,6 +41,7 @@ public final class VehicleTrajectoryAssembler {
     ) {
         LinkedChain chain = chainOf(history, target);
         return new VehicleTrajectory(
+            target.vehicleObservationId(),
             target.vehicle(),
             target.seats(),
             slopeOf(chain),
