@@ -13,6 +13,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinColumns;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.util.Optional;
 
 @Entity
 @Table(name = "vehicle_observation")
@@ -67,15 +68,16 @@ public class VehicleObservationJpaEntity {
     protected VehicleObservationJpaEntity() {
     }
 
-    public ObservedVehicle toDomain() {
-        return new ObservedVehicle(
-            vehicleId,
-            routeStop.direction(),
-            stopOrder,
-            stopId,
-            routeStop.name(),
-            VehiclePhase.fromRunningState(runningState),
-            VehicleSeat.from(remainingSeats)
-        );
+    public Optional<ObservedVehicle> toDomain() {
+        return VehiclePhase.fromRunningState(runningState)
+            .map(phase -> new ObservedVehicle(
+                vehicleId,
+                routeStop.direction(),
+                stopOrder,
+                stopId,
+                routeStop.name(),
+                phase,
+                VehicleSeat.from(remainingSeats)
+            ));
     }
 }

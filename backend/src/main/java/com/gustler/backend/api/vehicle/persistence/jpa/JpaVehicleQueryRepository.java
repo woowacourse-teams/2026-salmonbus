@@ -49,6 +49,7 @@ public class JpaVehicleQueryRepository implements VehicleQueryRepository {
             return vehicleObservationRepository.findAllByBatchId(observationBatchId)
                 .stream()
                 .map(VehicleObservationJpaEntity::toDomain)
+                .flatMap(Optional::stream)
                 .toList();
         } catch (DataAccessException exception) {
             throw new ServiceUnavailableException();

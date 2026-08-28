@@ -128,6 +128,42 @@ class LiveVehicleApiContractTest {
     }
 
     @Test
+    void 운행_상태를_해석할_수_없는_관측은_그_행만_빼고_나머지를_반환한다() throws Exception {
+        RouteContext route = insertCurrentRoute();
+        insertStop(route, 3, "205000003", "상행 세 번째", "UP");
+        insertStop(route, 5, "205000005", "상행 다섯 번째", "UP");
+        insertStop(route, 7, "205000007", "상행 일곱 번째", "UP");
+        OffsetDateTime observedAt = NOW.minusMinutes(1);
+        final long batchId = insertSuccessfulBatch(
+            route,
+            observedAt,
+            "SUCCESS_ROWS",
+            3
+        );
+        insertObservationWithoutRunningState(
+            batchId,
+            route,
+            0,
+            "204000203",
+            3,
+            "205000003",
+            12
+        );
+        insertObservation(batchId, route, 1, "204000205", 5, "205000005", 1, 7);
+        insertObservation(batchId, route, 2, "204000207", 7, "205000007", 9, 3);
+
+        mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.observation.state").value("VEHICLES_PRESENT"))
+            .andExpect(jsonPath("$.observation.observedAt").value(jsonTime(observedAt)))
+            .andExpect(jsonPath("$.vehicles.length()").value(1))
+            .andExpect(jsonPath("$.vehicles[0].vehicleId").value("204000205"))
+            .andExpect(jsonPath("$.vehicles[0].currentStopSequence").value(5))
+            .andExpect(jsonPath("$.vehicles[0].phase").value("ARRIVING"))
+            .andExpect(jsonPath("$.vehicles[0].seat.remaining").value(7));
+    }
+
+    @Test
     void SUCCESS_EMPTY는_운행_종료로_단정하지_않고_빈_배열의_정상_응답을_반환한다() throws Exception {
         RouteContext route = insertCurrentRoute();
         OffsetDateTime observedAt = NOW.minusMinutes(1);
@@ -377,6 +413,34 @@ class LiveVehicleApiContractTest {
                 stopOrder,
                 stopId,
                 runningState,
+                remainingSeats
+            )
+            .update();
+    }
+
+    private void insertObservationWithoutRunningState(
+        final long batchId,
+        RouteContext route,
+        final int sourceRowNumber,
+        String vehicleId,
+        final int stopOrder,
+        String stopId,
+        final int remainingSeats
+    ) {
+        jdbcClient.sql("""
+                INSERT INTO vehicle_observation (
+                    observation_batch_id, route_version_id, source_row_number,
+                    observed_at, vehicle_id, stop_order, stop_id, remaining_seats
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """)
+            .params(
+                batchId,
+                route.routeVersionId(),
+                sourceRowNumber,
+                NOW.minusMinutes(1),
+                vehicleId,
+                stopOrder,
+                stopId,
                 remainingSeats
             )
             .update();
