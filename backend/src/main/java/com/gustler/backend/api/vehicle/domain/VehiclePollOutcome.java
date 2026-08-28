@@ -4,7 +4,8 @@ public enum VehiclePollOutcome {
 
     SUCCESS_ROWS,
     SUCCESS_EMPTY,
-    UNKNOWN;
+    UNKNOWN,
+    ;
 
     public static VehiclePollOutcome fromDatabaseValue(String value) {
         if (SUCCESS_ROWS.name().equals(value)) {

@@ -15,7 +15,8 @@ public sealed interface SeatResponse permits SeatResponse.Exact, SeatResponse.Un
     enum Kind {
 
         EXACT,
-        UNKNOWN
+        UNKNOWN,
+        ;
     }
 
     record Exact(int remaining) implements SeatResponse {

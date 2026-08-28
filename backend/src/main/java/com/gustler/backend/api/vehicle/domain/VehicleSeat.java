@@ -20,6 +20,7 @@ public sealed interface VehicleSeat permits VehicleSeat.Exact, VehicleSeat.Unkno
 
     enum Unknown implements VehicleSeat {
 
-        INSTANCE
+        INSTANCE,
+        ;
     }
 }

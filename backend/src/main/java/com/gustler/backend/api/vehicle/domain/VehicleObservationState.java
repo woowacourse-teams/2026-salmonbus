@@ -4,5 +4,6 @@ public enum VehicleObservationState {
 
     VEHICLES_PRESENT,
     NO_VEHICLES_OBSERVED,
-    UNKNOWN
+    UNKNOWN,
+    ;
 }

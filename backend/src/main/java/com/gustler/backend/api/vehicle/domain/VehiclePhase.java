@@ -4,7 +4,8 @@ public enum VehiclePhase {
 
     ARRIVING,
     DEPARTED,
-    IN_TRANSIT;
+    IN_TRANSIT,
+    ;
 
     public static VehiclePhase fromRunningState(Integer runningState) {
         if (runningState == null) {
