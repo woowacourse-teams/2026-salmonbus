@@ -6,7 +6,9 @@ public enum RouteStatus {
     PREPARING,
     ;
 
-    public static RouteStatus from(boolean activeModelExists) {
+    public static RouteStatus from(
+        final boolean activeModelExists
+    ) {
         if (activeModelExists) {
             return FORECAST_READY;
         }
