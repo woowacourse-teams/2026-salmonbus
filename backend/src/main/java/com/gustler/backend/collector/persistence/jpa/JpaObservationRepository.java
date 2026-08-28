@@ -104,6 +104,7 @@ public class JpaObservationRepository implements ObservationRepository {
         ObservationBatchFailureCode failureCode
     ) {
         existing.reopen(outcome, failureCode);
+        vehicleObservationRepository.deleteByObservationBatchId(existing.getId());
         return existing.getId();
     }
 

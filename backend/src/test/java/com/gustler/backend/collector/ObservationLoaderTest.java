@@ -265,6 +265,21 @@ class ObservationLoaderTest {
     }
 
     @Test
+    void 같은_계획을_다시_열면_지난_시도의_관측이_지워진다() {
+        // given
+        loadBuses(List.of(
+            busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_DEPARTED),
+            busAt(VEHICLE_204003542, 2, STOP_277103149, RUNNING_STATE_MOVING)));
+
+        // when
+        observationRepository.openReserved(
+            new ObservationAttempt(routeVersionId, SCHEDULED_AT, ATTEMPT_KEY));
+
+        // then
+        assertThat(observationCountOf(batchId)).isZero();
+    }
+
+    @Test
     void 정규화_판이_묶음에_남는다() {
         // when
         loadBuses(List.of());
