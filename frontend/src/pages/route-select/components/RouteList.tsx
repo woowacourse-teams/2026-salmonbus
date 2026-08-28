@@ -1,3 +1,5 @@
+import { useNavigate } from "react-router";
+import { boardPathFor } from "@/shared/routing/paths";
 import type { RouteCore } from "../api/routeSelect.type";
 import { RouteListItem } from "./RouteListItem";
 
@@ -6,9 +8,9 @@ interface RouteListProps {
 }
 
 export function RouteList({ routes }: RouteListProps) {
+  const navigate = useNavigate();
   const handleSelect = (routeId: RouteCore["id"]) => {
-    void routeId;
-    //TODO: SAL-53에서 판정 보드 이동 로직 구현 예정
+    void navigate(boardPathFor(routeId));
   };
 
   return (
