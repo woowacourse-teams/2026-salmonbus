@@ -37,7 +37,7 @@ class RouteControllerTest {
     }
 
     @Test
-    void 지원_노선을_DB_생성_순서대로_반환한다() throws Exception {
+    void 지원_노선을_받은_순서_그대로_반환한다() throws Exception {
         // given
         final Route firstRoute = new Route(
             "204000057",
