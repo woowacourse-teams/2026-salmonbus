@@ -9,5 +9,5 @@ public interface VehicleQueryRepository {
 
     Optional<VehicleSnapshot> findLatestSnapshot(RouteId routeId);
 
-    List<ObservedVehicle> findVehicles(long observationBatchId);
+    List<ObservedVehicle> findVehicles(final long observationBatchId);
 }

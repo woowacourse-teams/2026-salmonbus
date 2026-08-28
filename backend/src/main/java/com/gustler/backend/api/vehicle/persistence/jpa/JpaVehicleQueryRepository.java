@@ -44,7 +44,7 @@ public class JpaVehicleQueryRepository implements VehicleQueryRepository {
     }
 
     @Override
-    public List<ObservedVehicle> findVehicles(long observationBatchId) {
+    public List<ObservedVehicle> findVehicles(final long observationBatchId) {
         try {
             return vehicleObservationRepository.findAllByBatchId(observationBatchId)
                 .stream()

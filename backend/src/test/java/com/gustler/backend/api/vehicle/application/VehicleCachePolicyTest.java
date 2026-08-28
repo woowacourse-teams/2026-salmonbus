@@ -28,7 +28,7 @@ class VehicleCachePolicyTest {
     })
     void KST_수집_구간에_맞는_캐시_수명을_반환한다(
         OffsetDateTime pollAt,
-        long expectedSeconds
+        final long expectedSeconds
     ) {
         assertThat(policy.maxAgeAt(pollAt)).isEqualTo(Duration.ofSeconds(expectedSeconds));
     }

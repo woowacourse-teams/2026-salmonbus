@@ -14,7 +14,7 @@ class VehiclePhaseTest {
         "2, DEPARTED"
     })
     void 상류_운행_상태를_API_차량_단계로_변환한다(
-        int runningState,
+        final int runningState,
         VehiclePhase expected
     ) {
         assertThat(VehiclePhase.fromRunningState(runningState)).isEqualTo(expected);

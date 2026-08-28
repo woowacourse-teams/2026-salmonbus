@@ -21,5 +21,7 @@ public interface VehicleObservationEntityRepository
                  observation.stopOrder,
                  observation.sourceRowNumber
         """)
-    List<VehicleObservationJpaEntity> findAllByBatchId(@Param("batchId") long batchId);
+    List<VehicleObservationJpaEntity> findAllByBatchId(
+        @Param("batchId") final long batchId
+    );
 }

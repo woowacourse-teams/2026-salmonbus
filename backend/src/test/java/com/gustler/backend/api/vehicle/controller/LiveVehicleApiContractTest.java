@@ -64,7 +64,7 @@ class LiveVehicleApiContractTest {
         insertStop(route, 6, "205000006", "상행 여섯 번째", "UP");
         insertStop(route, 9, "205000009", "상행 아홉 번째", "UP");
         OffsetDateTime observedAt = NOW.minusMinutes(1);
-        long batchId = insertSuccessfulBatch(
+        final long batchId = insertSuccessfulBatch(
             route,
             observedAt,
             "SUCCESS_ROWS",
@@ -231,7 +231,7 @@ class LiveVehicleApiContractTest {
     }
 
     private RouteContext insertCurrentRoute() {
-        long routeId = jdbcClient.sql("""
+        final long routeId = jdbcClient.sql("""
                 INSERT INTO route (
                     public_route_id, source_id, source_route_id,
                     display_name, start_stop_name, end_stop_name
@@ -241,7 +241,7 @@ class LiveVehicleApiContractTest {
             .params(ROUTE_ID, "GBIS", ROUTE_ID, "3330", "도촌동9단지앞", "안양역")
             .query(Long.class)
             .single();
-        long routeVersionId = jdbcClient.sql("""
+        final long routeVersionId = jdbcClient.sql("""
                 INSERT INTO route_version (route_id, content_digest, valid_from)
                 VALUES (?, ?, ?)
                 RETURNING id
@@ -259,7 +259,7 @@ class LiveVehicleApiContractTest {
 
     private void insertStop(
         RouteContext route,
-        int stopOrder,
+        final int stopOrder,
         String stopId,
         String name,
         String direction
@@ -278,7 +278,7 @@ class LiveVehicleApiContractTest {
         RouteContext route,
         OffsetDateTime observedAt,
         String outcome,
-        int storedRows
+        final int storedRows
     ) {
         return jdbcClient.sql("""
                 INSERT INTO observation_batch (
@@ -352,14 +352,14 @@ class LiveVehicleApiContractTest {
     }
 
     private void insertObservation(
-        long batchId,
+        final long batchId,
         RouteContext route,
-        int sourceRowNumber,
+        final int sourceRowNumber,
         String vehicleId,
-        int stopOrder,
+        final int stopOrder,
         String stopId,
-        int runningState,
-        int remainingSeats
+        final int runningState,
+        final int remainingSeats
     ) {
         jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
@@ -383,13 +383,13 @@ class LiveVehicleApiContractTest {
     }
 
     private void insertObservationWithoutSeats(
-        long batchId,
+        final long batchId,
         RouteContext route,
-        int sourceRowNumber,
+        final int sourceRowNumber,
         String vehicleId,
-        int stopOrder,
+        final int stopOrder,
         String stopId,
-        int runningState
+        final int runningState
     ) {
         jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
