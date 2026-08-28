@@ -9,11 +9,12 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import org.springframework.data.domain.Persistable;
 
 @Entity(name = "CollectorRouteStop")
 @Table(name = "route_stop")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class RouteStopJpaEntity {
+public class RouteStopJpaEntity implements Persistable<RouteStopJpaId> {
 
     @EmbeddedId
     private RouteStopJpaId id;
@@ -36,5 +37,15 @@ public class RouteStopJpaEntity {
         this.name = stop.name();
         this.direction = stop.direction();
         this.boardingAllowed = stop.boardingAllowed();
+    }
+
+    @Override
+    public RouteStopJpaId getId() {
+        return id;
+    }
+
+    @Override
+    public boolean isNew() {
+        return true;
     }
 }
