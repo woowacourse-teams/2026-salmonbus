@@ -20,6 +20,7 @@ class ObservationBatchTableTest {
     private static final String ROUTE_204000057 = "204000057";
     private static final String CONTENT_DIGEST = "0".repeat(64);
     private static final String NORMALIZATION_VERSION = "normalization-v1.0.0";
+    private static final String STRATEGY_VERSION = "adaptive-kst-v1.0.1";
     private static final OffsetDateTime SCHEDULED_AT = OffsetDateTime.parse("2026-08-19T11:14:00+09:00");
     private static final String ATTEMPT_KEY = "204000057-2026-08-19T11:14";
 
@@ -90,12 +91,14 @@ class ObservationBatchTableTest {
         jdbcClient.sql("""
                 INSERT INTO observation_batch (
                     route_version_id, scheduled_at, attempt_number, attempt_key,
-                    requested_at, outcome, failure_code, normalization_version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    requested_at, outcome, failure_code, normalization_version,
+                    collection_strategy_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """)
             .params(
                 routeVersionId, SCHEDULED_AT, 1, ATTEMPT_KEY,
-                requestedAt, outcome, failureCode, NORMALIZATION_VERSION
+                requestedAt, outcome, failureCode, NORMALIZATION_VERSION,
+                STRATEGY_VERSION
             )
             .update();
     }

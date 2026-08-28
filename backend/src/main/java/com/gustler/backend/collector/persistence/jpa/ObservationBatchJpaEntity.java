@@ -1,6 +1,7 @@
 package com.gustler.backend.collector.persistence.jpa;
 
 import com.gustler.backend.collector.CollectedObservations;
+import com.gustler.backend.collector.CollectionSchedule;
 import com.gustler.backend.collector.ForecastAlreadyCompletedException;
 import com.gustler.backend.collector.ObservationAttempt;
 import com.gustler.backend.collector.ObservationBatchConclusion;
@@ -89,6 +90,9 @@ public class ObservationBatchJpaEntity {
     @Column(name = "normalization_version")
     private String normalizationVersion;
 
+    @Column(name = "collection_strategy_version")
+    private String collectionStrategyVersion;
+
     public ObservationBatchJpaEntity(
         ObservationAttempt attempt,
         ObservationBatchOutcome outcome,
@@ -101,6 +105,7 @@ public class ObservationBatchJpaEntity {
         this.outcome = outcome;
         this.failureCode = failureCode;
         this.normalizationVersion = CollectedObservations.CURRENT_NORMALIZATION_VERSION;
+        this.collectionStrategyVersion = CollectionSchedule.CURRENT_STRATEGY_VERSION;
     }
 
     /**

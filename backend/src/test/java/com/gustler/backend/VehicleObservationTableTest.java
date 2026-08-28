@@ -31,6 +31,7 @@ class VehicleObservationTableTest {
     private static final long MISSING_BATCH_ID = 9_999_999L;
     private static final String CONTENT_DIGEST = "0".repeat(64);
     private static final String NORMALIZATION_VERSION = "normalization-v1.0.0";
+    private static final String STRATEGY_VERSION = "adaptive-kst-v1.0.1";
     private static final OffsetDateTime OBSERVED_AT = OffsetDateTime.parse("2026-08-19T11:14:04.911+09:00");
     private static final LocalDateTime SEOUL_WALL_CLOCK = LocalDateTime.of(2026, 8, 19, 11, 14, 4, 911_000_000);
 
@@ -251,13 +252,15 @@ class VehicleObservationTableTest {
         return jdbcClient.sql("""
                 INSERT INTO observation_batch (
                     route_version_id, scheduled_at, attempt_number, attempt_key,
-                    requested_at, response_received_at, outcome, normalization_version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    requested_at, response_received_at, outcome, normalization_version,
+                    collection_strategy_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
             .params(
                 routeVersionId, OBSERVED_AT, 1, attemptKey,
-                OBSERVED_AT, responseReceivedAt, "SUCCESS_ROWS", NORMALIZATION_VERSION
+                OBSERVED_AT, responseReceivedAt, "SUCCESS_ROWS", NORMALIZATION_VERSION,
+                STRATEGY_VERSION
             )
             .query(Long.class)
             .single();
