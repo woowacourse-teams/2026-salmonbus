@@ -72,10 +72,13 @@ class GbisLocationSourceTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder().baseUrl(BASE_URL);
         openApi = MockRestServiceServer.bindTo(builder).build();
+        ObjectMapper objectMapper = new ObjectMapper();
         source = new GbisLocationSource(
-            builder.build(),
-            new GbisProperties(BASE_URL, SERVICE_KEY, DAILY_LIMIT),
-            new ObjectMapper());
+            new GbisApiCaller(
+                builder.build(),
+                new GbisProperties(BASE_URL, SERVICE_KEY, DAILY_LIMIT),
+                objectMapper),
+            objectMapper);
     }
 
     @Test
