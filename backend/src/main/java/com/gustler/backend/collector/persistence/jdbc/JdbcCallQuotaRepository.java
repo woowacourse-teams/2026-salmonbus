@@ -23,15 +23,15 @@ public class JdbcCallQuotaRepository implements CallQuotaRepository {
      * 그날 행이 이미 있으면 daily_limit 은 안 건드린다.
      * 설정을 바꿔도 그날 장부는 처음 정한 한도로 끝까지 센다.
      */
-    private static final String RESERVE_ONE = """
+    private static final String RESERVE = """
         INSERT INTO daily_call_quota (provider, api_service, kst_date, reserved_calls, daily_limit)
-        VALUES (?, ?, ?, 1, ?)
+        VALUES (?, ?, ?, ?, ?)
         ON CONFLICT ON CONSTRAINT pk_daily_call_quota DO UPDATE
-            SET reserved_calls = daily_call_quota.reserved_calls + 1
-            WHERE daily_call_quota.reserved_calls < daily_call_quota.daily_limit
+            SET reserved_calls = daily_call_quota.reserved_calls + ?
+            WHERE daily_call_quota.reserved_calls + ? <= daily_call_quota.daily_limit
         """;
 
-    private static final int RESERVED_ONE_SEAT = 1;
+    private static final int ONE_ROW_CHANGED = 1;
 
     private final JdbcClient jdbcClient;
 
@@ -42,13 +42,14 @@ public class JdbcCallQuotaRepository implements CallQuotaRepository {
     }
 
     @Override
-    public boolean reserveOne(
+    public boolean reserve(
         CallQuota quota,
         LocalDate kstDate,
+        final int calls,
         final int dailyLimit
     ) {
-        return jdbcClient.sql(RESERVE_ONE)
-            .params(quota.provider(), quota.apiService(), kstDate, dailyLimit)
-            .update() == RESERVED_ONE_SEAT;
+        return jdbcClient.sql(RESERVE)
+            .params(quota.provider(), quota.apiService(), kstDate, calls, dailyLimit, calls, calls)
+            .update() == ONE_ROW_CHANGED;
     }
 }

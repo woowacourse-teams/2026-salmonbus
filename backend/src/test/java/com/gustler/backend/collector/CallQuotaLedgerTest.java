@@ -31,6 +31,7 @@ class CallQuotaLedgerTest {
     private static final int ONE_SEAT_LEFT = 1;
     private static final int NO_SEAT_LEFT = 0;
     private static final int ALREADY_USED_UP = 3;
+    private static final int TWO_CALLS = 2;
 
     @Autowired
     private CallQuotaLedger ledger;
@@ -176,6 +177,51 @@ class CallQuotaLedgerTest {
 
         // then
         assertThat(actual).isFalse();
+    }
+
+    @Test
+    void 한_번에_두_자리를_잡으면_쓴_횟수가_2가_된다() {
+        // when
+        ledger.reserve(CallQuota.BUS_ROUTE, KOREA_8_28_LATE_NIGHT, TWO_CALLS);
+
+        // then
+        assertThat(reservedCallsOn(KOREA_8_28, CallQuota.BUS_ROUTE)).isEqualTo(TWO_CALLS);
+    }
+
+    @Test
+    void 한_자리만_남은_장부는_두_자리_예약을_거절한다() {
+        // given
+        insertQuota(CallQuota.BUS_ROUTE, KOREA_8_28, NO_SEAT_LEFT, ONE_SEAT_LEFT);
+
+        // when
+        final boolean actual = ledger.reserve(CallQuota.BUS_ROUTE, KOREA_8_28_LATE_NIGHT, TWO_CALLS);
+
+        // then
+        assertThat(actual).isFalse();
+    }
+
+    @Test
+    void 두_자리를_못_잡으면_한_자리도_쓰지_않는다() {
+        // given
+        insertQuota(CallQuota.BUS_ROUTE, KOREA_8_28, NO_SEAT_LEFT, ONE_SEAT_LEFT);
+
+        // when
+        ledger.reserve(CallQuota.BUS_ROUTE, KOREA_8_28_LATE_NIGHT, TWO_CALLS);
+
+        // then
+        assertThat(reservedCallsOn(KOREA_8_28, CallQuota.BUS_ROUTE)).isEqualTo(NO_SEAT_LEFT);
+    }
+
+    @Test
+    void 자리를_여럿_잡는_예약도_부른_트랜잭션이_되돌아가면_그대로_남는다() {
+        // when
+        transactionTemplate.executeWithoutResult(status -> {
+            ledger.reserve(CallQuota.BUS_ROUTE, KOREA_8_28_LATE_NIGHT, TWO_CALLS);
+            status.setRollbackOnly();
+        });
+
+        // then
+        assertThat(reservedCallsOn(KOREA_8_28, CallQuota.BUS_ROUTE)).isEqualTo(TWO_CALLS);
     }
 
     @Test

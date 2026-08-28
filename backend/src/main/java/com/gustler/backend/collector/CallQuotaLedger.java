@@ -4,7 +4,6 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -27,6 +26,8 @@ public class CallQuotaLedger {
     /** 한도는 한국 자정에 리셋된다. 서버 타임존이나 UTC 날짜와 다르다. */
     private static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
 
+    private static final int ONE_CALL = 1;
+
     private final CallQuotaRepository callQuotaRepository;
     private final int dailyLimit;
 
@@ -38,19 +39,34 @@ public class CallQuotaLedger {
         this.dailyLimit = properties.dailyLimit();
     }
 
-    /**
-     * 부른 쪽 트랜잭션에 합류한다. 트랜잭션 경계는 부르는 쪽이 정한다.
-     *
-     * <p>여기서 제 트랜잭션을 열면 자리는 잡혔는데 그 자리를 쓸 판이 안 열리는 틈이 생긴다.
-     * 그 사이에 판 INSERT 가 실패하거나 프로세스가 죽으면 쓴 횟수만 오르고 아무 기록도 안 남는다.
-     * 자리와 판이 같이 커밋되도록 ObservationBatchLedger 가 바깥에서 새 트랜잭션을 연다.
-     */
+    /** 자리 하나를 예약한다. 위치정보는 한 batch 가 호출 한 번이다. */
     @Transactional
     public boolean reserve(
         CallQuota quota,
         OffsetDateTime requestedAt
     ) {
-        return callQuotaRepository.reserveOne(quota, koreanDateOf(requestedAt), dailyLimit);
+        return reserveCalls(quota, requestedAt, ONE_CALL);
+    }
+
+    /** 자리를 원하는 만큼 잡는다. 노선정보는 한 노선을 읽는 데 호출 두 번이 든다. */
+    @Transactional
+    public boolean reserve(
+        CallQuota quota,
+        OffsetDateTime requestedAt,
+        final int calls
+    ) {
+        return reserveCalls(quota, requestedAt, calls);
+    }
+
+    private boolean reserveCalls(
+        CallQuota quota,
+        OffsetDateTime requestedAt,
+        final int calls
+    ) {
+        if (calls > dailyLimit) {
+            return false;
+        }
+        return callQuotaRepository.reserve(quota, koreanDateOf(requestedAt), calls, dailyLimit);
     }
 
     /**
@@ -69,7 +85,7 @@ public class CallQuotaLedger {
         if (koreanDateOf(reservedAt).equals(koreanDateOf(dispatchAt))) {
             return true;
         }
-        return callQuotaRepository.reserveOne(quota, koreanDateOf(dispatchAt), dailyLimit);
+        return reserveCalls(quota, dispatchAt, ONE_CALL);
     }
 
     private LocalDate koreanDateOf(
