@@ -32,6 +32,7 @@ class GbisLocationSourceTest {
 
     private static final String BASE_URL = "https://gbis.test";
     private static final String SERVICE_KEY = "fake-service-key-for-test";
+    private static final int DAILY_LIMIT = 10_000;
     private static final String ROUTE_3330 = "204000057";
     private static final String QUERY_TIME_IN_FIXTURE = "2026-08-19 11:14:04.911";
     private static final String QUERY_TIME_IN_TEMPLATE = "2026-08-20 09:00:00.000";
@@ -73,7 +74,7 @@ class GbisLocationSourceTest {
         openApi = MockRestServiceServer.bindTo(builder).build();
         source = new GbisLocationSource(
             builder.build(),
-            new GbisProperties(BASE_URL, SERVICE_KEY),
+            new GbisProperties(BASE_URL, SERVICE_KEY, DAILY_LIMIT),
             new ObjectMapper());
     }
 
