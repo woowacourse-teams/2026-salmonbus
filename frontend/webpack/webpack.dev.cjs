@@ -5,9 +5,6 @@ const common = require("./webpack.common.cjs");
 
 module.exports = merge(common, {
   mode: "development",
-  output: {
-    publicPath: "/",
-  },
   dotenv: {
     dir: path.resolve(__dirname, "../env"),
   },
