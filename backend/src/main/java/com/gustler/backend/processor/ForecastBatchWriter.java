@@ -23,26 +23,20 @@ import org.springframework.transaction.annotation.Transactional;
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class ForecastBatchWriter {
 
-    /**
-     * 어느 셀 통계 세대를 읽었는지.
-     *
-     * <p>셀 통계 집계가 아직 없어 읽은 세대가 없다는 뜻으로 0 을 쓴다. 집계 배치가 들어오면
-     * 그때 읽은 세대로 바뀐다. 그때까지 이 값이 DB 에 닿을 일은 없다. 도는 배포가 없으면
-     * 예보 행 자체가 안 생기고, 배포는 계수 번들이 와야 선다.
-     */
-    private static final int NO_DEMAND_STATISTICS_READ = 0;
-
     private final VehicleTrajectoryRepository vehicleTrajectoryRepository;
     private final SeatForecastRepository seatForecastRepository;
+    private final StopDemandStatisticsRepository stopDemandStatisticsRepository;
     private final Clock clock;
 
     public ForecastBatchWriter(
         VehicleTrajectoryRepository vehicleTrajectoryRepository,
         SeatForecastRepository seatForecastRepository,
+        StopDemandStatisticsRepository stopDemandStatisticsRepository,
         Clock clock
     ) {
         this.vehicleTrajectoryRepository = vehicleTrajectoryRepository;
         this.seatForecastRepository = seatForecastRepository;
+        this.stopDemandStatisticsRepository = stopDemandStatisticsRepository;
         this.clock = clock;
     }
 
@@ -54,8 +48,26 @@ public class ForecastBatchWriter {
         SeatForecastModel model
     ) {
         Instant generatedAt = clock.instant();
-        seatForecastRepository.save(forecastsOf(batch, stops, deployment, model, generatedAt));
+        seatForecastRepository.save(
+            forecastsOf(batch, stops, deployment, model, generatedAt, demandStatisticsRevisionOf(batch, deployment)));
         seatForecastRepository.markForecastCompleted(batch.observationBatchId(), generatedAt);
+    }
+
+    /**
+     * 이 예보가 읽은 셀 통계 세대.
+     *
+     * <p>배포가 든 계산 규칙 판과 같은 행만 읽는다. 자리가 찬 비율도 순승차 비율도 정원으로 나눈 값이라
+     * 규칙이 다르면 값의 뜻이 달라진다.
+     *
+     * <p>그 규칙으로 낸 세대가 아직 없으면 0 이다. 셀 통계가 비는 동안은 이웃 폴백만 도는데,
+     * 어느 세대도 안 읽었다는 것을 이 값이 남긴다. 노선 개편 직후 새 판본도 같은 자리다.
+     */
+    private int demandStatisticsRevisionOf(
+        PendingForecastBatch batch,
+        ActiveModelDeployment deployment
+    ) {
+        return stopDemandStatisticsRepository.currentRevision(
+            batch.routeVersionId(), deployment.calculationVersion());
     }
 
     private List<SeatForecast> forecastsOf(
@@ -63,7 +75,8 @@ public class ForecastBatchWriter {
         RouteStops stops,
         ActiveModelDeployment deployment,
         SeatForecastModel model,
-        Instant generatedAt
+        Instant generatedAt,
+        final int demandStatisticsRevision
     ) {
         List<SeatForecast> forecasts = new ArrayList<>();
         for (VehicleTrajectory trajectory : vehicleTrajectoryRepository.readTrajectories(batch.observationBatchId())) {
@@ -73,7 +86,7 @@ public class ForecastBatchWriter {
                     target,
                     model.predict(target),
                     deployment,
-                    NO_DEMAND_STATISTICS_READ,
+                    demandStatisticsRevision,
                     generatedAt));
             }
         }
