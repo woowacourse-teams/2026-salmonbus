@@ -1,6 +1,6 @@
 import { RouteList } from "./components/RouteList";
 import salmongProud from "./assets/salmong-proud.png";
-import { Pageinfo } from "./components/PageInfo";
+import { PageInfo } from "../../shared/components/PageInfo";
 import { titleMock, captionMock, routesMock } from "./api/routeSelect.mock";
 
 export function RouteSelectPage() {
@@ -8,7 +8,7 @@ export function RouteSelectPage() {
     <>
       <header>
         <img src={salmongProud} alt="연어 버스 로고" />
-        <Pageinfo title={titleMock} caption={captionMock} />
+        <PageInfo title={titleMock} caption={captionMock} />
       </header>
       <main>
         <RouteList routes={routesMock} />

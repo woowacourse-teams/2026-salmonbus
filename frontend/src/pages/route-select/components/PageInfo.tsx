@@ -3,7 +3,7 @@ interface PageInfoProps {
   caption: string;
 }
 
-export function Pageinfo({ title, caption }: PageInfoProps) {
+export function PageInfo({ title, caption }: PageInfoProps) {
   return (
     <div>
       <h1>{title}</h1>
