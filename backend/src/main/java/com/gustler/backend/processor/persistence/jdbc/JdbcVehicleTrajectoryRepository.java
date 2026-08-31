@@ -107,6 +107,9 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
      * <p>기준 시각으로 자르는 것도 집계와 같다. 자르지 않으면 나중에 더 큰 잔여석이 들어올 때
      * 예전 예보를 같은 시각으로 다시 계산해도 다른 값이 나온다.
      *
+     * <p><b>시각 하나가 아니라 (시각, id) 쌍으로 자른다.</b> 같은 시각의 batch 가 둘이면 시각만으로는
+     * 물어본 batch 뒤의 것이 안 걸러진다. 바로 위 이력 조회가 같은 이유로 같은 커서를 쓴다.
+     *
      * <p>줄곧 만석이던 차량은 최대 잔여석이 0석인데 그것으로 나눌 수 없어 1석을 바닥으로 둔다.
      * 집계 쪽 GREATEST 와 같은 자리다. 잔여석을 한 번도 안 보여 준 차량은 결과에 아예 없고,
      * 그 자리를 1석으로 세는 것은 도메인이 한다.
@@ -120,7 +123,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
         WHERE observation.route_version_id = :routeVersionId
           AND observation.vehicle_id IN (:vehicleIds)
           AND observation.remaining_seats IS NOT NULL
-          AND batch.response_received_at <= :until
+          AND (batch.response_received_at, batch.id) <= (:until, :observationBatchId)
         GROUP BY observation.vehicle_id
         """;
 
@@ -182,6 +185,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
             .param("routeVersionId", target.routeVersionId())
             .param("vehicleIds", vehicleIds)
             .param("until", offsetOf(target.responseReceivedAt()))
+            .param("observationBatchId", target.observationBatchId())
             .query((resultSet, rowNumber) -> new VehicleMaximumSeats(
                 resultSet.getString("vehicle_id"), resultSet.getInt("maximum_seats")))
             .list();

@@ -239,6 +239,21 @@ class JdbcVehicleTrajectoryRepositoryTest {
     }
 
     @Test
+    void 같은_시각의_뒤_batch_는_최대_잔여석에_안_들어간다() {
+        // given 시각이 같고 id 만 큰 batch 가 뒤에 하나 더 있다
+        final long targetBatchId = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
+        insertObservation(targetBatchId, VEHICLE_204000206, STOP_5, 12);
+        final long sameTimeLaterBatchId = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
+        insertObservation(sameTimeLaterBatchId, VEHICLE_204000206, STOP_6, 44);
+
+        // when
+        List<VehicleTrajectory> actual = repository.readTrajectories(targetBatchId);
+
+        // then 시각만으로 자르면 44가 새어 들어온다
+        assertThat(actual.getFirst().maximumSeatsEverObserved()).isEqualTo(12);
+    }
+
+    @Test
     void 잔여석을_모르면_왜_모르는지까지_같이_준다() {
         // given
         final long batchId = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
