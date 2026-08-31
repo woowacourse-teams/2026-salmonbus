@@ -9,6 +9,8 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 public class LiveVehicleQueryService {
+
+    private static final Logger log = LoggerFactory.getLogger(LiveVehicleQueryService.class);
 
     private final VehicleQueryRepository vehicleQueryRepository;
     private final VehicleFreshnessPolicy freshnessPolicy;
@@ -54,9 +58,12 @@ public class LiveVehicleQueryService {
         List<ObservedVehicle> vehicles = vehicleQueryRepository.findVehicles(
             snapshot.latestBatchId()
         );
+        if (vehicles.isEmpty()) {
+            return unreadableObservation(snapshot, observedAt, staleAt);
+        }
         return overviewOf(
             snapshot,
-            stateOf(vehicles),
+            VehicleObservationState.VEHICLES_PRESENT,
             observedAt,
             staleAt,
             vehicles
@@ -64,19 +71,30 @@ public class LiveVehicleQueryService {
     }
 
     /**
-     * 상류가 차를 줬어도 내보낼 것이 하나도 없으면 "본 차가 없다" 다.
-     * VEHICLES_PRESENT 에 빈 배열을 실어 보내면 계약이 어긋난다.
+     * 상류가 차량 행을 줬는데 우리가 하나도 못 읽은 상태.
      *
-     * <p>비는 길이 둘이다. 저장할 때 뺀 행(SAL-84)과 읽을 때 거른 행(운행 상태를 해석 못 한 경우)이다.
-     * stored_rows 를 읽는 대신 실제로 내보낼 목록을 보면 둘 다 덮인다.
+     * <p>"차가 없다"(NO_VEHICLES_OBSERVED)로 내면 안 된다. 상류가 없다고 한 적이 없다.
+     * 상류가 필드 형식을 바꾸면 그때부터 모든 행이 걸러지는데, 0대로 보이면 이상을 알아챌 수가 없다.
+     * 지금 무엇이 다니는지 말해줄 수 없다는 뜻이라 UNKNOWN 이 맞는 자리다.
+     *
+     * <p>계속 나면 상류 계약이 바뀐 것이다. 운영이 알아채라고 WARN 을 남긴다.
      */
-    private VehicleObservationState stateOf(
-        List<ObservedVehicle> vehicles
+    private LiveVehicleOverview unreadableObservation(
+        VehicleSnapshot snapshot,
+        OffsetDateTime observedAt,
+        OffsetDateTime staleAt
     ) {
-        if (vehicles.isEmpty()) {
-            return VehicleObservationState.NO_VEHICLES_OBSERVED;
-        }
-        return VehicleObservationState.VEHICLES_PRESENT;
+        log.warn(
+            "상류가 차량 행을 줬는데 읽어낸 관측이 없다. 노선={} 묶음={}",
+            snapshot.routeId(),
+            snapshot.latestBatchId());
+        return overviewOf(
+            snapshot,
+            VehicleObservationState.UNKNOWN,
+            observedAt,
+            staleAt,
+            List.of()
+        );
     }
 
     private boolean isUsableLatestSnapshot(

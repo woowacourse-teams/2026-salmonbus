@@ -133,15 +133,16 @@ class LiveVehicleApiContractTest {
     //   애초에 안 쌓는 것  VehicleObservationTableTest.운행_상태는_0과_1과_2만_저장된다
 
     @Test
-    void 상류가_차를_줬어도_내보낼_관측이_없으면_본_차가_없는_것으로_반환한다() throws Exception {
-        // 저장 단계가 전부 뺀 판이다. outcome 은 SUCCESS_ROWS 인데 쌓인 관측이 없다.
+    void 상류가_차량_행을_줬는데_읽어낸_관측이_없으면_모르는_것으로_반환한다() throws Exception {
+        // 저장 단계가 전부 뺀 batch 다. outcome 은 SUCCESS_ROWS 인데 쌓인 관측이 없다.
+        // 상류가 "차가 없다" 고 한 적이 없으므로 NO_VEHICLES_OBSERVED 가 아니다.
         RouteContext route = insertCurrentRoute();
         OffsetDateTime observedAt = NOW.minusMinutes(1);
         insertSuccessfulBatch(route, observedAt, "SUCCESS_ROWS", 0);
 
         mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.observation.state").value("NO_VEHICLES_OBSERVED"))
+            .andExpect(jsonPath("$.observation.state").value("UNKNOWN"))
             .andExpect(jsonPath("$.vehicles").isEmpty());
     }
 
