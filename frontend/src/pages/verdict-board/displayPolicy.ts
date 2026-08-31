@@ -44,17 +44,18 @@ export function toSeatLevel(probability: number): SeatLevel {
 }
 
 export function toStopView(stop: StopState, vehiclesInService: number): StopView {
-  const base = { sequence: stop.sequence, stopId: stop.stopId, name: stop.name };
+  const { sequence, stopId, name } = stop;
+
   if (!stop.boardingAllowed) {
-    return { kind: "passThrough", ...base };
+    return { kind: "passThrough", sequence, stopId, name };
   }
 
   const nearest = stop.approachingVehicles[0];
   if (nearest !== undefined) {
-    return { kind: "boarding", ...base, level: toSeatLevel(nearest.seatAvailableProbability) };
+    return { kind: "boarding", sequence, stopId, name, level: toSeatLevel(nearest.seatAvailableProbability) };
   }
 
-  return { kind: "waiting", ...base, reason: waitingReasonFor(stop.sequence, vehiclesInService) };
+  return { kind: "waiting", sequence, stopId, name, reason: waitingReasonFor(sequence, vehiclesInService) };
 }
 
 function waitingReasonFor(sequence: number, vehiclesInService: number): WaitingReason {

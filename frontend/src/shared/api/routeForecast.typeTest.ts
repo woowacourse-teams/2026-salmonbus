@@ -51,6 +51,13 @@ function rejectsLegacyForecastMeta(board: Board): unknown {
   return board.forecastMeta;
 }
 
+function rejectsExplicitUndefinedRemaining(): SeatInfo {
+  const smuggled = { kind: "UNKNOWN" as const, remaining: undefined };
+  // @ts-expect-error exactOptionalPropertyTypes 아래서는 remaining: undefined 주입되는 것도 막혀야 한다
+  const seat: SeatInfo = smuggled;
+  return seat;
+}
+
 // 이 함수만 정상 코드다. kind로 분기하면 remaining이 number로 좁혀지는지 확인한다.
 function narrowsSeatByKind(seat: SeatInfo): number {
   if (seat.kind === "EXACT") {
