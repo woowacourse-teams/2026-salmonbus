@@ -40,9 +40,12 @@ class MigrationOrderTest {
      *
      * <p>번호로 고르면 안 된다. "제일 높은 번호가 이 브랜치 것" 을 가정으로 깔면
      * 번호가 거꾸로 배정돼도 그 가정에 맞춰 다른 파일을 빼게 되고, 결국 늘 순서가 맞아서 통과한다.
-     * 이름으로 고르고, 그 파일이 정말 제일 높은 번호인지는 아래에서 따로 단언한다.
+     * 이름으로 고르고, 그 파일들이 정말 마지막 번호인지는 아래에서 따로 단언한다.
+     *
+     * <p>목록인 이유는 한 브랜치가 마이그레이션을 여럿 더할 수 있어서다. 이 브랜치가 둘이다.
      */
-    private static final String MIGRATION_THIS_BRANCH_ADDS = "collection_strategy";
+    private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
+        List.of("forecast_settlement", "stop_demand_day_count");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";
@@ -79,12 +82,14 @@ class MigrationOrderTest {
     }
 
     @Test
-    void 이_브랜치가_더하는_마이그레이션의_번호가_제일_높다() {
+    void 이_브랜치가_더하는_마이그레이션이_마지막_번호를_차지한다() {
         // when
-        final int actual = versionOf(thisBranchMigration());
+        final List<Integer> actual = thisBranchMigrations().stream().map(this::versionOf).toList();
 
-        // then 앞 브랜치가 먼저 머지되므로 이 브랜치 것이 마지막 번호여야 한다
-        assertThat(actual).isEqualTo(migrationCount());
+        // then 앞 브랜치가 먼저 머지되므로 이 브랜치 것이 마지막 번호들이어야 한다
+        final int firstOfThisBranch = migrationCount() - MIGRATIONS_THIS_BRANCH_ADDS.size() + 1;
+        assertThat(actual).containsExactlyElementsOf(
+            IntStream.rangeClosed(firstOfThisBranch, migrationCount()).boxed().toList());
     }
 
     @Test
@@ -108,21 +113,21 @@ class MigrationOrderTest {
     }
 
     private static boolean isThisBranchMigration(
-        final String fileName
+        String fileName
     ) {
-        return fileName.contains(MIGRATION_THIS_BRANCH_ADDS);
+        return MIGRATIONS_THIS_BRANCH_ADDS.stream().anyMatch(fileName::contains);
     }
 
-    /** 이 브랜치가 더하는 마이그레이션 하나. 없거나 둘이면 상수가 낡은 것이다. */
-    private MigrationInfo thisBranchMigration() {
-        final List<MigrationInfo> found = Stream.of(flywayAt("classpath:" + MIGRATION_LOCATION).info().all())
+    /** 이 브랜치가 더하는 마이그레이션. 적힌 수와 안 맞으면 상수가 낡은 것이다. */
+    private List<MigrationInfo> thisBranchMigrations() {
+        List<MigrationInfo> found = Stream.of(flywayAt("classpath:" + MIGRATION_LOCATION).info().all())
             .filter(info -> isThisBranchMigration(info.getScript()))
             .toList();
         assertThat(found)
-            .withFailMessage("이 브랜치가 더하는 마이그레이션 '%s' 을 하나만 찾아야 하는데 %d 개다",
-                MIGRATION_THIS_BRANCH_ADDS, found.size())
-            .hasSize(1);
-        return found.getFirst();
+            .withFailMessage("이 브랜치가 더하는 마이그레이션 %s 를 %d 개 찾아야 하는데 %d 개다",
+                MIGRATIONS_THIS_BRANCH_ADDS, MIGRATIONS_THIS_BRANCH_ADDS.size(), found.size())
+            .hasSize(MIGRATIONS_THIS_BRANCH_ADDS.size());
+        return found;
     }
 
     private int versionOf(
