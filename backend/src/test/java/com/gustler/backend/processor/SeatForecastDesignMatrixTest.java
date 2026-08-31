@@ -106,7 +106,7 @@ class SeatForecastDesignMatrixTest {
         // given 시간대도 잔여석도 혼잡도도 다른 두 재료
         SeatForecastDesignMatrix morning = matrixOf(input());
         SeatForecastDesignMatrix evening = matrixOf(
-            inputOf(observed(NO_SEAT_LEFT, CROWD_LEVEL_UNKNOWN, EVENING_AT), fullStatistics()));
+            inputOf(observed(NO_SEAT_LEFT, CROWD_LEVEL_UNKNOWN, EVENING_AT), statisticsOf(TimeSlot.EVENING)));
 
         // when
         List<Double> actual = SeatForecastDesignMatrix.COLUMNS_WAITING_FOR_COEFFICIENTS.stream()
@@ -136,7 +136,7 @@ class SeatForecastDesignMatrixTest {
     }
 
     @Test
-    void 아침_8시_30분_관측은_아침이_1이다() {
+    void 아침으로_정해진_예보는_아침_열이_1이다() {
         // when
         SeatForecastDesignMatrix actual = matrixOf(input());
 
@@ -145,20 +145,20 @@ class SeatForecastDesignMatrixTest {
     }
 
     @Test
-    void 저녁_6시_관측은_저녁이_1이다() {
+    void 저녁으로_정해진_예보는_저녁_열이_1이다() {
         // when
         SeatForecastDesignMatrix actual = matrixOf(
-            inputOf(observed(SEATS_LEFT_12, CROWD_LEVEL_3, EVENING_AT), fullStatistics()));
+            inputOf(observed(SEATS_LEFT_12, CROWD_LEVEL_3, EVENING_AT), statisticsOf(TimeSlot.EVENING)));
 
         // then
         assertThat(actual.columnAt(IS_EVENING)).isEqualTo(1);
     }
 
     @Test
-    void 낮_1시_관측은_아침도_저녁도_아니다() {
+    void 아침도_저녁도_아닌_예보는_두_열이_모두_0이다() {
         // when
         SeatForecastDesignMatrix actual = matrixOf(
-            inputOf(observed(SEATS_LEFT_12, CROWD_LEVEL_3, MIDDAY_AT), fullStatistics()));
+            inputOf(observed(SEATS_LEFT_12, CROWD_LEVEL_3, MIDDAY_AT), statisticsOf(TimeSlot.OTHER)));
 
         // then
         assertThat(actual.columnAt(IS_MORNING) + actual.columnAt(IS_EVENING)).isEqualTo(0);
@@ -371,7 +371,7 @@ class SeatForecastDesignMatrixTest {
     private static SeatForecastDesignMatrix matrixOf(
         SeatForecastInput input
     ) {
-        return SeatForecastDesignMatrix.of(input, KOREAN_CLOCK);
+        return SeatForecastDesignMatrix.of(input);
     }
 
     private static SeatForecastInput input() {
@@ -382,18 +382,35 @@ class SeatForecastDesignMatrixTest {
         ObservedVehicle observation,
         StopDemandStatistics statistics
     ) {
+        return inputOf(observation, statistics, statistics.timeSlot());
+    }
+
+    private static SeatForecastInput inputOf(
+        ObservedVehicle observation,
+        StopDemandStatistics statistics,
+        TimeSlot timeSlot
+    ) {
         return inputOf(
             trajectoryOf(observation, new SeatSlope.Known(-3), precedingVehicle(), new FullSeatStreak.SeenToEnd(3)),
-            statistics);
+            statistics,
+            timeSlot);
     }
 
     private static SeatForecastInput inputOf(
         VehicleTrajectory trajectory,
         StopDemandStatistics statistics
     ) {
+        return inputOf(trajectory, statistics, statistics.timeSlot());
+    }
+
+    private static SeatForecastInput inputOf(
+        VehicleTrajectory trajectory,
+        StopDemandStatistics statistics,
+        TimeSlot timeSlot
+    ) {
         VehicleStopTarget target = new VehicleStopTarget(
             trajectory.observation(), new RouteStop(ROUTE_VERSION_3330, TARGET_STOP_49, "20400049", true));
-        return new SeatForecastInput(target, trajectory, statistics, stops());
+        return new SeatForecastInput(target, trajectory, statistics, stops(), timeSlot);
     }
 
     private static ObservedVehicle observed(
@@ -427,11 +444,17 @@ class SeatForecastDesignMatrixTest {
 
     /** 대상 49번 셀이 있는 세대. 지나갈 구간 다섯 정류장에도 셀이 있다. */
     private static StopDemandStatistics fullStatistics() {
+        return statisticsOf(TimeSlot.MORNING);
+    }
+
+    private static StopDemandStatistics statisticsOf(
+        TimeSlot timeSlot
+    ) {
         List<StopDemandCell> cells = new ArrayList<>();
         for (int stopOrder = TARGET_STOP_49 - STOPS_TO_TARGET + 1; stopOrder <= TARGET_STOP_49; stopOrder++) {
             cells.add(new StopDemandCell(stopOrder, 0.5, 0.1, 30, 10));
         }
-        return new StopDemandStatistics(ROUTE_VERSION_3330, TimeSlot.MORNING, 1, cells);
+        return new StopDemandStatistics(ROUTE_VERSION_3330, timeSlot, 1, cells);
     }
 
     private static RouteStops stops() {

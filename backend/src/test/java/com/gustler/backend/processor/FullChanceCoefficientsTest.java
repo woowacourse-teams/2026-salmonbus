@@ -104,7 +104,7 @@ class FullChanceCoefficientsTest {
     }
 
     private static SeatForecastDesignMatrix matrix() {
-        return SeatForecastDesignMatrix.of(input(), KOREAN_CLOCK);
+        return SeatForecastDesignMatrix.of(input());
     }
 
     private static SeatForecastInput input() {
@@ -120,7 +120,7 @@ class FullChanceCoefficientsTest {
             MAXIMUM_SEATS_44);
         VehicleStopTarget target = new VehicleStopTarget(
             observation, new RouteStop(ROUTE_VERSION_3330, TARGET_STOP_49, "20400049", true));
-        return new SeatForecastInput(target, trajectory, statistics(), stops());
+        return new SeatForecastInput(target, trajectory, statistics(), stops(), TimeSlot.MORNING);
     }
 
     private static StopDemandStatistics statistics() {

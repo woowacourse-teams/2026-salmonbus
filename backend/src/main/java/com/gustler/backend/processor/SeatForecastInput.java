@@ -13,12 +13,16 @@ import java.util.Objects;
  *
  * <p>넷이 서로 다른 노선 판본의 것이면 여기서 멈춘다. 설계행렬은 넷을 한 줄에 섞어 놓기 때문에
  * 어긋난 채로 지나가면 그럴듯한 수가 나오고 아무도 못 알아챈다.
+ *
+ * <p><b>시간대도 하나만 든다.</b> 설계행렬의 아침·저녁 열과 셀 통계가 서로 다른 시간대를 쓰면
+ * 한 예보 행이 두 시간대의 값을 섞는다. 셀 통계가 자기 시간대를 들고 있어서 여기서 대조한다.
  */
 public record SeatForecastInput(
     VehicleStopTarget target,
     VehicleTrajectory trajectory,
     StopDemandStatistics statistics,
-    RouteStops stops
+    RouteStops stops,
+    TimeSlot timeSlot
 ) {
 
     public SeatForecastInput {
@@ -26,6 +30,13 @@ public record SeatForecastInput(
         Objects.requireNonNull(trajectory, "예보에는 그 차량의 궤적 재료가 있어야 한다");
         Objects.requireNonNull(statistics, "예보에는 셀 통계가 있어야 한다");
         Objects.requireNonNull(stops, "예보에는 그 판본의 정류장 목록이 있어야 한다");
+        Objects.requireNonNull(timeSlot, "예보에는 시간대가 있어야 한다");
+
+        if (statistics.timeSlot() != timeSlot) {
+            throw new IllegalArgumentException(
+                "설계행렬의 시간대와 셀 통계의 시간대가 다르다: %s, %s".formatted(timeSlot, statistics.timeSlot())
+            );
+        }
 
         if (!trajectory.observation().equals(target.observation())) {
             throw new IllegalArgumentException(

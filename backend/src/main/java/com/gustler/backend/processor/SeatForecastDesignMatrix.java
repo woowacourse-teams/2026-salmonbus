@@ -1,6 +1,5 @@
 package com.gustler.backend.processor;
 
-import java.time.Clock;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -10,8 +9,9 @@ import java.util.stream.Stream;
  * <p>문서가 설계행렬이라고 부르는 것이고 A18 문서의 0단계다. 열 번호는 문서와 같이 1부터 세고
  * 배열 자리는 하나 작다. 기본 20열 · 정류장 위치 8열 · 정류장 통계 3열로 나뉜다.
  *
- * <p><b>재료 밖에서 오는 값이 없다.</b> {@link SeatForecastInput} 하나와 시간대를 가르는 시계만
- * 받는다. 그래서 과거 시점 재료를 손으로 만들어 넣으면 그때의 설계행렬이 그대로 다시 나온다.
+ * <p><b>재료 밖에서 오는 값이 없다.</b> {@link SeatForecastInput} 하나만 받는다. 시계도 안 받아서
+ * 시간대를 여기서 정할 수 없다. 그 결정은 {@link ForecastTimeSlot} 한 자리에 있다.
+ * 그래서 과거 시점 재료를 손으로 만들어 넣으면 그때의 설계행렬이 그대로 다시 나온다.
  *
  * <h2>지금 채우는 열과 못 채우는 열</h2>
  *
@@ -148,12 +148,11 @@ public final class SeatForecastDesignMatrix {
     }
 
     public static SeatForecastDesignMatrix of(
-        SeatForecastInput input,
-        Clock clock
+        SeatForecastInput input
     ) {
         double[] columns = new double[COLUMN_COUNT];
         ObservedVehicle observation = input.observation();
-        TimeSlot timeSlot = TimeSlot.of(observation.observedAt(), clock);
+        TimeSlot timeSlot = input.timeSlot();
         final int seatsLeft = input.target().remainingSeats();
         final double maximumSeats = input.maximumSeatsEverObserved();
 

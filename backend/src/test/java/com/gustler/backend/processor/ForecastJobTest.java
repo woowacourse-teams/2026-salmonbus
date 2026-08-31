@@ -290,6 +290,38 @@ class ForecastJobTest {
             .list();
     }
 
+    @Test
+    void 예보에_남는_세대_번호는_모델에_넘긴_셀_통계의_세대다() {
+        // when
+        forecastJob.writeForecasts();
+
+        // then 값과 세대 번호를 따로 읽으면 그 사이 집계 교체에 두 값이 갈린다
+        final int actual = seatForecastModel.firstReceivedInput().statistics().revision();
+        assertThat(readDemandStatisticsRevisions()).isNotEmpty().containsOnly(actual);
+    }
+
+    @Test
+    void 설계행렬의_시간대와_셀_통계의_시간대가_같다() {
+        // when
+        forecastJob.writeForecasts();
+
+        // then 두 곳이 각자 정하면 경계에서 한 예보 행이 두 시간대를 섞는다
+        SeatForecastInput actual = seatForecastModel.firstReceivedInput();
+        assertThat(actual.timeSlot()).isEqualTo(actual.statistics().timeSlot());
+    }
+
+    private List<Integer> readDemandStatisticsRevisions() {
+        return jdbcClient.sql("""
+                SELECT forecast.demand_statistics_revision
+                FROM seat_forecast forecast
+                JOIN vehicle_observation observation ON observation.id = forecast.vehicle_observation_id
+                WHERE observation.observation_batch_id = ?
+                """)
+            .param(observationBatchId)
+            .query(Integer.class)
+            .list();
+    }
+
     private List<Long> readModelDeploymentIds() {
         return jdbcClient.sql("""
                 SELECT forecast.model_deployment_id

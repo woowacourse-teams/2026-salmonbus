@@ -36,7 +36,7 @@ class SeatForecastInputTest {
     void 손으로_만든_재료_넷만으로_모델_입력이_선다() {
         // when
         SeatForecastInput actual = new SeatForecastInput(
-            target(), trajectoryOf(observed(VEHICLE_204000206)), statisticsOf(ROUTE_VERSION_3330), stops());
+            target(), trajectoryOf(observed(VEHICLE_204000206)), statisticsOf(ROUTE_VERSION_3330), stops(), TimeSlot.MORNING);
 
         // then
         assertThat(actual.maximumSeatsEverObserved()).isEqualTo(MAXIMUM_SEATS_EVER_OBSERVED);
@@ -49,7 +49,7 @@ class SeatForecastInputTest {
 
         // when, then
         assertThatThrownBy(() -> new SeatForecastInput(
-            target(), otherVehicle, statisticsOf(ROUTE_VERSION_3330), stops()))
+            target(), otherVehicle, statisticsOf(ROUTE_VERSION_3330), stops(), TimeSlot.MORNING))
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -60,7 +60,7 @@ class SeatForecastInputTest {
 
         // when, then
         assertThatThrownBy(() -> new SeatForecastInput(
-            target(), trajectoryOf(observed(VEHICLE_204000206)), otherVersion, stops()))
+            target(), trajectoryOf(observed(VEHICLE_204000206)), otherVersion, stops(), TimeSlot.MORNING))
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -72,7 +72,18 @@ class SeatForecastInputTest {
 
         // when, then
         assertThatThrownBy(() -> new SeatForecastInput(
-            target(), trajectoryOf(observed(VEHICLE_204000206)), statisticsOf(ROUTE_VERSION_3330), otherVersion))
+            target(), trajectoryOf(observed(VEHICLE_204000206)), statisticsOf(ROUTE_VERSION_3330), otherVersion, TimeSlot.MORNING))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 셀_통계와_다른_시간대로는_모델_입력을_만들_수_없다() {
+        // given 셀 통계는 아침 세대인데 예보는 저녁으로 정해졌다
+        StopDemandStatistics morning = statisticsOf(ROUTE_VERSION_3330);
+
+        // when, then 한 예보 행이 두 시간대의 값을 섞지 않는다
+        assertThatThrownBy(() -> new SeatForecastInput(
+            target(), trajectoryOf(observed(VEHICLE_204000206)), morning, stops(), TimeSlot.EVENING))
             .isInstanceOf(IllegalArgumentException.class);
     }
 
