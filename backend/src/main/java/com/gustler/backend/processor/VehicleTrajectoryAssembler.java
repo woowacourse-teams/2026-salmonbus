@@ -42,6 +42,7 @@ public final class VehicleTrajectoryAssembler {
         LinkedChain chain = chainOf(history, target);
         return new VehicleTrajectory(
             target.vehicle(),
+            target.seats(),
             slopeOf(chain),
             findPrecedingVehicle(history, target),
             streakOf(chain));
@@ -109,12 +110,11 @@ public final class VehicleTrajectoryAssembler {
         if (!chain.hasEarlierObservation()) {
             return new SeatSlope.Unknown(chain.gap());
         }
-        ObservedVehicle later = chain.latest().vehicle();
-        ObservedVehicle earlier = chain.justBeforeLatest().vehicle();
-        if (!later.hasKnownSeats() || !earlier.hasKnownSeats()) {
+        if (!(chain.latest().seats() instanceof ObservedSeats.Known later)
+            || !(chain.justBeforeLatest().seats() instanceof ObservedSeats.Known earlier)) {
             return new SeatSlope.Unknown(TrajectoryGap.SEATS_UNKNOWN);
         }
-        return new SeatSlope.Known(later.remainingSeats() - earlier.remainingSeats());
+        return new SeatSlope.Known(later.seats() - earlier.seats());
     }
 
     /**
@@ -129,7 +129,7 @@ public final class VehicleTrajectoryAssembler {
         boolean hasCounted = false;
 
         for (TrajectoryObservation observation : chain.observations()) {
-            if (!observation.vehicle().hasKnownSeats()) {
+            if (observation.seats() instanceof ObservedSeats.Unknown) {
                 return new FullSeatStreak.CutByGap(stopCount, TrajectoryGap.SEATS_UNKNOWN);
             }
             if (!observation.isFull()) {
@@ -208,13 +208,10 @@ public final class VehicleTrajectoryAssembler {
     private static PrecedingVehicle toPrecedingVehicle(
         StopEntry ahead
     ) {
-        if (!ahead.observation().vehicle().hasKnownSeats()) {
+        if (!(ahead.observation().seats() instanceof ObservedSeats.Known known)) {
             return new PrecedingVehicle.Unknown(TrajectoryGap.SEATS_UNKNOWN);
         }
-        return new PrecedingVehicle.Known(
-            ahead.vehicleId(),
-            ahead.observation().vehicle().remainingSeats(),
-            ahead.enteredAt());
+        return new PrecedingVehicle.Known(ahead.vehicleId(), known.seats(), ahead.enteredAt());
     }
 
     /** 차량 하나가 어느 순번에 처음 들어온 시점과 그때의 관측. */

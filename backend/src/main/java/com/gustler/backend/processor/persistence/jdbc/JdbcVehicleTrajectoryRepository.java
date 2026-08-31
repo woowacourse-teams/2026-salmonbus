@@ -2,8 +2,10 @@ package com.gustler.backend.processor.persistence.jdbc;
 
 import com.gustler.backend.processor.ObservationHistory;
 import com.gustler.backend.processor.ObservedBatch;
+import com.gustler.backend.processor.ObservedSeats;
 import com.gustler.backend.processor.ObservedVehicle;
 import com.gustler.backend.processor.PendingForecastBatch;
+import com.gustler.backend.processor.SeatUnknownReason;
 import com.gustler.backend.processor.TrajectoryObservation;
 import com.gustler.backend.processor.VehicleTrajectory;
 import com.gustler.backend.processor.VehicleTrajectoryAssembler;
@@ -88,7 +90,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
      */
     private static final String SELECT_OBSERVATIONS_IN_BATCHES = """
         SELECT observation_batch_id, route_version_id, vehicle_id,
-               vehicle_trip_key, passed_stop_order, remaining_seats
+               vehicle_trip_key, passed_stop_order, remaining_seats, seat_unknown_reason
         FROM vehicle_observation
         WHERE observation_batch_id IN (:observationBatchIds)
           AND vehicle_id IS NOT NULL
@@ -193,7 +195,8 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
                 resultSet.getString("vehicle_id"),
                 resultSet.getString("vehicle_trip_key"),
                 resultSet.getInt("passed_stop_order"),
-                resultSet.getObject("remaining_seats", Integer.class)))
+                resultSet.getObject("remaining_seats", Integer.class),
+                resultSet.getString("seat_unknown_reason")))
             .list();
 
         Map<Long, List<TrajectoryObservation>> observationsByBatch = new LinkedHashMap<>();
@@ -237,7 +240,8 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
         String vehicleId,
         String vehicleTripKey,
         int passedStopOrder,
-        Integer remainingSeats
+        Integer remainingSeats,
+        String seatUnknownReason
     ) {
 
         TrajectoryObservation toObservation(
@@ -245,7 +249,16 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
         ) {
             return new TrajectoryObservation(
                 new ObservedVehicle(vehicleId, routeVersionId, passedStopOrder, observedAt, remainingSeats),
-                vehicleTripKey);
+                vehicleTripKey,
+                ObservedSeats.of(remainingSeats, seatUnknownReasonOf()));
+        }
+
+        /** 값 목록은 V4 의 CHECK 이 둘로 묶어 둔다. 그 밖의 값이 오면 스키마가 어긋난 것이라 멈춘다. */
+        private SeatUnknownReason seatUnknownReasonOf() {
+            if (seatUnknownReason == null) {
+                return null;
+            }
+            return SeatUnknownReason.valueOf(seatUnknownReason);
         }
     }
 }

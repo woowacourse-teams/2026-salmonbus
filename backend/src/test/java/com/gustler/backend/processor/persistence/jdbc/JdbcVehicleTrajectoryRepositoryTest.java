@@ -3,10 +3,12 @@ package com.gustler.backend.processor.persistence.jdbc;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.processor.FullSeatStreak;
+import com.gustler.backend.processor.ObservedSeats;
 import com.gustler.backend.processor.ObservedVehicle;
 import com.gustler.backend.processor.PendingForecastBatch;
 import com.gustler.backend.processor.PrecedingVehicle;
 import com.gustler.backend.processor.SeatSlope;
+import com.gustler.backend.processor.SeatUnknownReason;
 import com.gustler.backend.processor.TrajectoryGap;
 import com.gustler.backend.processor.VehicleTrajectory;
 import com.gustler.backend.support.IntegrationTest;
@@ -27,6 +29,8 @@ class JdbcVehicleTrajectoryRepositoryTest {
     private static final String ROUTE_204000121 = "204000121";
     private static final String CONTENT_DIGEST = "0".repeat(64);
     private static final String NORMALIZATION_VERSION = "normalization-v1.0.0";
+
+    private static final String REPORTED_UNKNOWN = "REPORTED_UNKNOWN";
 
     private static final String SUCCESS_ROWS = "SUCCESS_ROWS";
     private static final String SUCCESS_EMPTY = "SUCCESS_EMPTY";
@@ -165,9 +169,24 @@ class JdbcVehicleTrajectoryRepositoryTest {
         // then
         assertThat(actual).containsExactly(new VehicleTrajectory(
             new ObservedVehicle(VEHICLE_204000206, routeVersionId, STOP_6, LATER_POLL.toInstant(), 40),
+            new ObservedSeats.Known(40),
             new SeatSlope.Known(-3),
             new PrecedingVehicle.Known(VEHICLE_204003542, NO_SEAT_LEFT, EARLIER_POLL.toInstant()),
             new FullSeatStreak.SeenToEnd(0)));
+    }
+
+    @Test
+    void 잔여석을_모르면_왜_모르는지까지_같이_준다() {
+        // given
+        final long batchId = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
+        insertObservationWithoutSeats(batchId, VEHICLE_204000206, STOP_6, REPORTED_UNKNOWN);
+
+        // when
+        List<VehicleTrajectory> actual = repository.readTrajectories(batchId);
+
+        // then
+        assertThat(actual.getFirst().seats())
+            .isEqualTo(new ObservedSeats.Unknown(SeatUnknownReason.REPORTED_UNKNOWN));
     }
 
     @Test
@@ -318,7 +337,26 @@ class JdbcVehicleTrajectoryRepositoryTest {
         final int stopOrder,
         Integer remainingSeats
     ) {
-        insertObservation(routeVersionId, batchId, vehicleId, stopOrder, remainingSeats);
+        insertObservation(routeVersionId, batchId, vehicleId, stopOrder, remainingSeats, null);
+    }
+
+    private void insertObservationWithoutSeats(
+        final long batchId,
+        String vehicleId,
+        final int stopOrder,
+        String seatUnknownReason
+    ) {
+        insertObservation(routeVersionId, batchId, vehicleId, stopOrder, null, seatUnknownReason);
+    }
+
+    private void insertObservation(
+        final long versionId,
+        final long batchId,
+        String vehicleId,
+        final int stopOrder,
+        Integer remainingSeats
+    ) {
+        insertObservation(versionId, batchId, vehicleId, stopOrder, remainingSeats, null);
     }
 
     /** 통과 순번은 지나감(2)이라 상류 순번과 같다. 관측 시각 열은 SAL-84 가 지웠다. */
@@ -327,19 +365,20 @@ class JdbcVehicleTrajectoryRepositoryTest {
         final long batchId,
         String vehicleId,
         final int stopOrder,
-        Integer remainingSeats
+        Integer remainingSeats,
+        String seatUnknownReason
     ) {
         jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
                     observation_batch_id, route_version_id, source_row_number,
                     vehicle_id, stop_order, stop_id, passed_stop_order,
-                    running_state, remaining_seats, crowd_level
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    running_state, remaining_seats, seat_unknown_reason, crowd_level
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """)
             .params(
                 batchId, versionId, nextRowNumber(batchId),
                 vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
-                RUNNING_STATE_DEPARTED, remainingSeats, CROWD_LEVEL_3
+                RUNNING_STATE_DEPARTED, remainingSeats, seatUnknownReason, CROWD_LEVEL_3
             )
             .update();
     }

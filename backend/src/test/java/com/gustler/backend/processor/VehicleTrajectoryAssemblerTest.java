@@ -356,7 +356,8 @@ class VehicleTrajectoryAssemblerTest {
                 vehicle.passedStopOrder(),
                 observedAt,
                 vehicle.remainingSeats()),
-            observation.vehicleTripKey());
+            observation.vehicleTripKey(),
+            observation.seats());
     }
 
     private static TrajectoryObservation observed(
@@ -380,7 +381,18 @@ class VehicleTrajectoryAssemblerTest {
                 passedStopOrder,
                 Instant.EPOCH,
                 remainingSeats),
-            vehicleTripKey);
+            vehicleTripKey,
+            seatsOf(remainingSeats));
+    }
+
+    /** 잔여석을 안 주는 픽스처는 상류가 값을 아예 안 준 것으로 둔다. */
+    private static ObservedSeats seatsOf(
+        Integer remainingSeats
+    ) {
+        if (remainingSeats == null) {
+            return new ObservedSeats.Unknown(SeatUnknownReason.NOT_REPORTED);
+        }
+        return new ObservedSeats.Known(remainingSeats);
     }
 
     private static Instant responseReceivedAt(
