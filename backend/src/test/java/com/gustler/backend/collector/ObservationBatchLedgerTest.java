@@ -260,6 +260,30 @@ class ObservationBatchLedgerTest {
     }
 
     @Test
+    void 예보가_끝난_판은_같은_계획으로_다시_열_수_없다() {
+        // given
+        completeForecastOf(ledger.reserve(attempt(), RESERVED_AT).batchId());
+
+        // when & then
+        assertThatThrownBy(() -> ledger.reserve(attempt(), RESERVED_AT))
+            .isInstanceOf(ForecastAlreadyCompletedException.class)
+            .hasMessageContaining("다시 열 수 없다");
+    }
+
+    @Test
+    void 예보가_끝난_판을_다시_열려다_막히면_쓴_횟수도_안_오른다() {
+        // given
+        completeForecastOf(ledger.reserve(attempt(), RESERVED_AT).batchId());
+
+        // when
+        assertThatThrownBy(() -> ledger.reserve(attempt(), RESERVED_AT))
+            .isInstanceOf(ForecastAlreadyCompletedException.class);
+
+        // then 첫 예약 하나에서 안 늘었다
+        assertThat(reservedCallsOn(KOREA_8_19)).isEqualTo(1);
+    }
+
+    @Test
     void 같은_계획을_재시도하면_수집_묶음은_한_행으로_남는다() {
         // given
         ledger.reserve(attempt(), RESERVED_AT);
@@ -331,6 +355,14 @@ class ObservationBatchLedgerTest {
             .params(
                 CallQuota.BUS_LOCATION.provider(), CallQuota.BUS_LOCATION.apiService(),
                 kstDate, ALREADY_USED_UP, ALREADY_USED_UP)
+            .update();
+    }
+
+    private void completeForecastOf(
+        final long batchId
+    ) {
+        jdbcClient.sql("UPDATE observation_batch SET forecast_completed_at = ? WHERE id = ?")
+            .params(RESPONSE_RECEIVED_AT, batchId)
             .update();
     }
 

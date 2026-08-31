@@ -1,6 +1,7 @@
 package com.gustler.backend.collector.persistence.jpa;
 
 import com.gustler.backend.collector.CollectedObservations;
+import com.gustler.backend.collector.ForecastAlreadyCompletedException;
 import com.gustler.backend.collector.ObservationAttempt;
 import com.gustler.backend.collector.ObservationBatchConclusion;
 import com.gustler.backend.collector.ObservationBatchFailureCode;
@@ -58,6 +59,13 @@ public class ObservationBatchJpaEntity {
     @Column(name = "response_received_at")
     private OffsetDateTime responseReceivedAt;
 
+    /**
+     * processor 가 이 판으로 예보를 끝냈을 때 찍는다. 수집은 이 값을 쓰지 않고 읽기만 한다.
+     * 예보가 끝난 판을 다시 열면 안 되는지 판별하는 데만 본다.
+     */
+    @Column(name = "forecast_completed_at", insertable = false, updatable = false)
+    private OffsetDateTime forecastCompletedAt;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "outcome")
     private ObservationBatchOutcome outcome;
@@ -98,11 +106,17 @@ public class ObservationBatchJpaEntity {
     /**
      * 같은 계획을 다시 부른다. 시도 횟수만 올리고 나머지는 처음 상태로 되돌린다.
      * 묶음은 계획 하나에 한 행이라 지난 시도의 값이 남아 있으면 이번 판의 사실이 아니게 된다.
+     *
+     * <p>예보가 이미 끝난 판은 거절한다. 되돌릴 것이 수집 밖으로 번지기 때문이다.
+     * forecast_completed_at 을 그대로 두면 예보 대기 조회가 이 판을 건너뛰고 조회 쪽은 지난 완료 시각을
+     * 이번 예보의 것으로 읽는다. 지우면 이미 나간 seat_forecast 행까지 같이 정리해야 하는데,
+     * 그건 수집이 건드릴 영역이 아니다. 애초에 예보가 끝난 뒤 같은 계획을 다시 부를 일이 없다.
      */
     public void reopen(
         ObservationBatchOutcome newOutcome,
         ObservationBatchFailureCode newFailureCode
     ) {
+        requireForecastNotCompleted();
         this.attemptNumber = attemptNumber + 1;
         this.outcome = newOutcome;
         this.failureCode = newFailureCode;
@@ -112,6 +126,12 @@ public class ObservationBatchJpaEntity {
         this.providerRows = null;
         this.storedRows = null;
         this.excludedRows = null;
+    }
+
+    private void requireForecastNotCompleted() {
+        if (forecastCompletedAt != null) {
+            throw new ForecastAlreadyCompletedException(id, forecastCompletedAt);
+        }
     }
 
     public void markDispatching(
