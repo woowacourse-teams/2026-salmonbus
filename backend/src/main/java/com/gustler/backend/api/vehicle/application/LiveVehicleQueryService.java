@@ -56,11 +56,27 @@ public class LiveVehicleQueryService {
         );
         return overviewOf(
             snapshot,
-            VehicleObservationState.VEHICLES_PRESENT,
+            stateOf(vehicles),
             observedAt,
             staleAt,
             vehicles
         );
+    }
+
+    /**
+     * 상류가 차를 줬어도 내보낼 것이 하나도 없으면 "본 차가 없다" 다.
+     * VEHICLES_PRESENT 에 빈 배열을 실어 보내면 계약이 어긋난다.
+     *
+     * <p>비는 길이 둘이다. 저장할 때 뺀 행(SAL-84)과 읽을 때 거른 행(운행 상태를 해석 못 한 경우)이다.
+     * stored_rows 를 읽는 대신 실제로 내보낼 목록을 보면 둘 다 덮인다.
+     */
+    private VehicleObservationState stateOf(
+        List<ObservedVehicle> vehicles
+    ) {
+        if (vehicles.isEmpty()) {
+            return VehicleObservationState.NO_VEHICLES_OBSERVED;
+        }
+        return VehicleObservationState.VEHICLES_PRESENT;
     }
 
     private boolean isUsableLatestSnapshot(
