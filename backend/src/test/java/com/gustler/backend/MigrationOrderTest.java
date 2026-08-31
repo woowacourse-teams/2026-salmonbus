@@ -42,7 +42,7 @@ class MigrationOrderTest {
      * 번호가 거꾸로 배정돼도 그 가정에 맞춰 다른 파일을 빼게 되고, 결국 늘 순서가 맞아서 통과한다.
      * 이름으로 고르고, 그 파일이 정말 제일 높은 번호인지는 아래에서 따로 단언한다.
      */
-    private static final String MIGRATION_THIS_BRANCH_ADDS = "call_reservation";
+    private static final String MIGRATION_THIS_BRANCH_ADDS = "collection_strategy";
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";
