@@ -5,7 +5,6 @@ export interface ErrorResponse {
   code: ErrorCode;
   message: string;
   requestId: string;
-  retryable: boolean;
 }
 
 export type Direction = "UP" | "DOWN";
