@@ -43,6 +43,14 @@ public record VehicleObservation(
     }
 
     /**
+     * 이 관측이 어느 정류소의 것인지 아는가.
+     * 순번과 정류소 ID 가 둘 다 있어야 쌓을 수 있다. 둘 다 저장할 때 비울 수 없는 값이다.
+     */
+    public boolean hasKnownStop() {
+        return stopSequence != null && stopId != null;
+    }
+
+    /**
      * 상류가 준 운행 상태가 우리가 뜻을 아는 값인가.
      * 0 이동 중 · 1 도착 중 · 2 지나감 셋뿐이고, 그 밖의 값은 무슨 상황인지 모른다.
      */

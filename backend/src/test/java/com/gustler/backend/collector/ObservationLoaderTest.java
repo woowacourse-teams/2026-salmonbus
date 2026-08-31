@@ -133,6 +133,28 @@ class ObservationLoaderTest {
     }
 
     @Test
+    void 정류소_순번이_빈_차량이_섞여도_나머지가_저장된다() {
+        // when
+        final long batchId = loader.load(attempt(), List.of(
+            busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_DEPARTED),
+            busWithoutStopSequence(VEHICLE_204003542),
+            busAt(VEHICLE_204000139, 3, STOP_208000069, RUNNING_STATE_MOVING)));
+
+        // then
+        assertThat(vehicleIdsOf(batchId)).containsExactly(VEHICLE_204000206, VEHICLE_204000139);
+    }
+
+    @Test
+    void 정류소_순번이_빈_차량이_있어도_수집_묶음은_남는다() {
+        // when
+        final long batchId = loader.load(attempt(), List.of(
+            busWithoutStopSequence(VEHICLE_204003542)));
+
+        // then
+        assertThat(batchCountOf(batchId)).isEqualTo(1);
+    }
+
+    @Test
     void 뺀_차량이_있어도_상류가_준_행_수는_그대로_남는다() {
         // when
         final long batchId = loader.load(attempt(), List.of(
@@ -270,6 +292,14 @@ class ObservationLoaderTest {
         final int runningState
     ) {
         return bus(vehicleId, stopSequence, stopId, runningState, SEATS_43);
+    }
+
+    private static BusLocation busWithoutStopSequence(
+        String vehicleId
+    ) {
+        return new BusLocation(
+            PLATE_NUMBER, vehicleId, NORMAL_BUS, ROUTE_204000057, ROUTE_TYPE_11,
+            STOP_205000217, null, RUNNING_STATE_DEPARTED, SEATS_43, CROWD_LEVEL_3, TAGLESS_1);
     }
 
     private static BusLocation busWithSeats(

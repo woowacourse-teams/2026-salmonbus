@@ -270,6 +270,30 @@ class VehicleObservationTest {
         assertThat(actual.passedStopOrder()).isNull();
     }
 
+    @Test
+    void 정류소_순번과_정류소_ID가_다_있으면_어느_정류소의_관측인지_안다() {
+        // given
+        BusLocation bus = busAt(STOP_SEQUENCE_6, RUNNING_STATE_DEPARTED);
+
+        // when
+        VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual.hasKnownStop()).isTrue();
+    }
+
+    @Test
+    void 정류소_순번이_비면_어느_정류소의_관측인지_모른다() {
+        // given
+        BusLocation bus = bus(null, RUNNING_STATE_DEPARTED, SEATS_43, CROWD_LEVEL_3, NORMAL_BUS);
+
+        // when
+        VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual.hasKnownStop()).isFalse();
+    }
+
     @ParameterizedTest
     @ValueSource(ints = {0, 1, 2})
     void 운행_상태_0과_1과_2는_뜻을_아는_값이다(

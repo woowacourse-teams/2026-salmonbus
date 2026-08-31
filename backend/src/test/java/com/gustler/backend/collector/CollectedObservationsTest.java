@@ -92,12 +92,36 @@ class CollectedObservationsTest {
     }
 
     @Test
+    void 정류소를_모르는_차량은_쌓을_대상에서_빠진다() {
+        // given
+        List<BusLocation> buses = List.of(
+            bus(VEHICLE_204000206, RUNNING_STATE_DEPARTED),
+            busWithoutStopSequence(VEHICLE_204003542));
+
+        // when
+        CollectedObservations actual = CollectedObservations.from(buses);
+
+        // then
+        assertThat(actual.storableRows())
+            .extracting(row -> row.observation().vehicleId())
+            .containsExactly(VEHICLE_204000206);
+    }
+
+    @Test
     void 차량이_한_대도_없으면_쌓을_관측도_없다() {
         // when
         CollectedObservations actual = CollectedObservations.from(List.of());
 
         // then
         assertThat(actual.storableRows()).isEmpty();
+    }
+
+    private static BusLocation busWithoutStopSequence(
+        String vehicleId
+    ) {
+        return new BusLocation(
+            PLATE_NUMBER, vehicleId, NORMAL_BUS, ROUTE_3330, ROUTE_TYPE_11,
+            STOP_205000217, null, RUNNING_STATE_DEPARTED, SEATS_43, CROWD_LEVEL_3, TAGLESS_1);
     }
 
     private static BusLocation bus(

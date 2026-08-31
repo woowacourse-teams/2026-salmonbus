@@ -49,11 +49,12 @@ public class ObservationLoader {
     ) {
         for (UpstreamObservationRow row : collected.excludedRows()) {
             log.warn(
-                "뜻을 모르는 운행 상태라 관측을 뺐다. 판본={} 시도키={} 상류행={} 운행상태={}",
+                "쌓을 수 없는 관측을 뺐다. 판본={} 시도키={} 상류행={} 운행상태={} 정류소순번={}",
                 attempt.routeVersionId(),
                 attempt.attemptKey(),
                 row.sourceRowNumber(),
-                row.observation().runningState());
+                row.observation().runningState(),
+                row.observation().stopSequence());
         }
     }
 }
