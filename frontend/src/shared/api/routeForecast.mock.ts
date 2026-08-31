@@ -262,32 +262,47 @@ export const liveVehiclesRevisedMock = {
 export const errorResponseMocks = {
   INVALID_ROUTE_ID: {
     code: "INVALID_ROUTE_ID",
-    message: "노선 ID 형식이 올바르지 않다",
-    requestId: "req-0f3c1a",
-    retryable: false,
+    message: "routeId must be 9 digits",
+    requestId: "req-01J9X2ABCD",
   },
   ROUTE_NOT_FOUND: {
     code: "ROUTE_NOT_FOUND",
-    message: "등록되지 않은 노선이다",
-    requestId: "req-8b21d4",
-    retryable: false,
+    message: "unknown routeId",
+    requestId: "req-01J9X2ABCE",
   },
   MODEL_OUT_OF_SCOPE: {
     code: "MODEL_OUT_OF_SCOPE",
-    message: "이 노선은 아직 예보 대상이 아니다",
-    requestId: "req-c77e02",
-    retryable: false,
+    message: "active bundle does not support this route reference",
+    requestId: "req-01J9X2ABCG",
   },
   NO_RECENT_OBSERVATION: {
     code: "NO_RECENT_OBSERVATION",
-    message: "최근 관측이 없어 예보를 만들 수 없다",
-    requestId: "req-53aa9e",
-    retryable: true,
+    message: "no vehicle observation recent enough to anchor a forecast",
+    requestId: "req-01J9X2ABCF",
   },
   SERVICE_UNAVAILABLE: {
     code: "SERVICE_UNAVAILABLE",
-    message: "일시적으로 응답할 수 없다",
-    requestId: "req-e19f60",
-    retryable: true,
+    message: "temporary failure",
+    requestId: "req-01J9X2ABCH",
+  },
+  INVALID_REQUEST: {
+    code: "INVALID_REQUEST",
+    message: "invalid request",
+    requestId: "req-01J9X2ABCL",
+  },
+  ENDPOINT_NOT_FOUND: {
+    code: "ENDPOINT_NOT_FOUND",
+    message: "요청한 경로를 찾을 수 없습니다.",
+    requestId: "req-01J9X2ABCI",
+  },
+  METHOD_NOT_ALLOWED: {
+    code: "METHOD_NOT_ALLOWED",
+    message: "이 경로에서 지원하지 않는 요청 방식입니다.",
+    requestId: "req-01J9X2ABCJ",
+  },
+  INTERNAL_ERROR: {
+    code: "INTERNAL_ERROR",
+    message: "요청을 처리하지 못했습니다.",
+    requestId: "req-01J9X2ABCK",
   },
 } satisfies Record<ErrorCode, ErrorResponse>;
