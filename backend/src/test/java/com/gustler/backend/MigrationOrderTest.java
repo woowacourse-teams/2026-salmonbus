@@ -42,10 +42,11 @@ class MigrationOrderTest {
      * 번호가 거꾸로 배정돼도 그 가정에 맞춰 다른 파일을 빼게 되고, 결국 늘 순서가 맞아서 통과한다.
      * 이름으로 고르고, 그 파일들이 정말 마지막 번호인지는 아래에서 따로 단언한다.
      *
-     * <p>목록인 이유는 한 브랜치가 마이그레이션을 여럿 더할 수 있어서다. 이 브랜치가 둘이다.
+     * <p><b>이 브랜치는 하나도 안 더한다.</b> 계수는 번들 안에 있어 열이 되지 않고,
+     * 어떤 계수 묶음이 도는지를 담는 model_deployment 는 V2 에 이미 있다. 목록이 비면
+     * 아래 네 테스트는 앞 브랜치까지 머지된 DB 와 지금 DB 가 같다는 것을 확인하는 일이 된다.
      */
-    private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
-        List.of("forecast_settlement", "stop_demand_day_count");
+    private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS = List.of();
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";
