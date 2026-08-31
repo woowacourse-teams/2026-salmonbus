@@ -2,6 +2,16 @@
 ### OS ###
 .DS_Store
 
+### Secret ###
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.jks
+secrets/
+
 ### Backend ###
 ### IntelliJ IDEA ###
 .idea/
