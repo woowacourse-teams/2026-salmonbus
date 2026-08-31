@@ -5,6 +5,7 @@ import com.gustler.backend.collector.GbisRawResponse.PortalRejected;
 import com.gustler.backend.collector.GbisRawResponse.Received;
 import com.gustler.backend.collector.dto.PortalErrorResponse;
 import com.gustler.backend.collector.dto.PortalErrorResponse.CommonHeader;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClient.ResponseSpec.ErrorHandler;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.util.UriUtils;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -59,12 +61,7 @@ public class GbisApiCaller {
     ) {
         try {
             byte[] raw = gbisRestClient.get()
-                .uri(builder -> builder
-                    .path(path)
-                    .queryParam("serviceKey", properties.serviceKey())
-                    .queryParam("routeId", routeId)
-                    .queryParam("format", "json")
-                    .build())
+                .uri(addressOf(path, routeId))
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, KEEP_ERROR_BODY)
                 .body(byte[].class);
@@ -72,6 +69,36 @@ public class GbisApiCaller {
         } catch (RestClientException e) {
             return new NotReceived(e.getMessage());
         }
+    }
+
+    /**
+     * 주소를 다 만들어서 넘긴다. queryParam 에 맡기면 인증키가 깨진다.
+     *
+     * <p>UriComponentsBuilder 는 질의문자열에서 적법한 글자를 안 건드린다. 인증키에 든 {@code +} 가
+     * 그대로 나가고, 서버는 그것을 공백으로 읽는다. 그래서 다른 키로 취급돼 등록되지 않은 인증키로 거절당한다.
+     * 2026-08-31 실측이다. 같은 키를 직접 부르면 200 인데 이 경로로만 거절됐다.
+     */
+    private URI addressOf(
+        String path,
+        String routeId
+    ) {
+        return URI.create(properties.baseUrl() + path
+            + "?serviceKey=" + encodedServiceKey()
+            + "&routeId=" + routeId
+            + "&format=json");
+    }
+
+    /**
+     * 어느 형태로 받아도 같은 값이 나가게 한다.
+     *
+     * <p>공공데이터포털은 한때 인증키를 인코딩본과 디코딩본 두 벌로 줬다. 2025-08-21 개편으로 화면에서
+     * 구분이 없어졌지만 그 전에 발급된 키는 여전히 두 벌이고, 어느 쪽을 환경변수에 넣었는지 알 수 없다.
+     * 먼저 퍼센트 디코딩해서 원래 값으로 되돌린 다음 다시 인코딩한다. 디코딩본을 넣었으면 첫 단계가 아무 일도
+     * 안 하고, 인코딩본을 넣었으면 이중 인코딩이 안 된다.
+     */
+    private String encodedServiceKey() {
+        String raw = UriUtils.decode(properties.serviceKey(), StandardCharsets.UTF_8);
+        return UriUtils.encode(raw, StandardCharsets.UTF_8);
     }
 
     private String decode(
