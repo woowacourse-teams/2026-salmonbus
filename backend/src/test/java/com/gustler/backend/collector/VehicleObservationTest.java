@@ -27,6 +27,7 @@ class VehicleObservationTest {
 
     private static final int RUNNING_STATE_ARRIVED = 1;
     private static final int RUNNING_STATE_DEPARTED = 2;
+    private static final int RUNNING_STATE_NEVER_OBSERVED = 3;
 
     private static final int SEATS_43 = 43;
     private static final int CROWD_LEVEL_3 = 3;
@@ -267,6 +268,69 @@ class VehicleObservationTest {
 
         // then
         assertThat(actual.passedStopOrder()).isNull();
+    }
+
+    @Test
+    void 정류소_순번과_정류소_ID가_다_있으면_어느_정류소의_관측인지_안다() {
+        // given
+        BusLocation bus = busAt(STOP_SEQUENCE_6, RUNNING_STATE_DEPARTED);
+
+        // when
+        VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual.hasKnownStop()).isTrue();
+    }
+
+    @Test
+    void 정류소_순번이_비면_어느_정류소의_관측인지_모른다() {
+        // given
+        BusLocation bus = bus(null, RUNNING_STATE_DEPARTED, SEATS_43, CROWD_LEVEL_3, NORMAL_BUS);
+
+        // when
+        VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual.hasKnownStop()).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2})
+    void 운행_상태_0과_1과_2는_뜻을_아는_값이다(
+        final int runningState
+    ) {
+        // given
+        BusLocation bus = busAt(STOP_SEQUENCE_6, runningState);
+
+        // when
+        VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual.hasKnownRunningState()).isTrue();
+    }
+
+    @Test
+    void 운행_상태가_비어_있으면_뜻을_모르는_값이다() {
+        // given
+        BusLocation bus = bus(STOP_SEQUENCE_6, null, SEATS_43, CROWD_LEVEL_3, NORMAL_BUS);
+
+        // when
+        VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual.hasKnownRunningState()).isFalse();
+    }
+
+    @Test
+    void 운행_상태가_3이면_뜻을_모르는_값이다() {
+        // given
+        BusLocation bus = busAt(STOP_SEQUENCE_6, RUNNING_STATE_NEVER_OBSERVED);
+
+        // when
+        VehicleObservation actual = VehicleObservation.from(bus);
+
+        // then
+        assertThat(actual.hasKnownRunningState()).isFalse();
     }
 
     @Test

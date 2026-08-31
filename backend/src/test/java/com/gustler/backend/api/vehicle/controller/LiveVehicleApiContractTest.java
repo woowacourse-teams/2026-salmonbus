@@ -37,6 +37,11 @@ class LiveVehicleApiContractTest {
         "2026-08-27T12:00:00+09:00"
     );
     private static final String CONTENT_DIGEST = "5".repeat(64);
+    private static final String NORMALIZATION_VERSION = "normalization-v1.0.0";
+    private static final String STRATEGY_VERSION = "adaptive-kst-v1.0.1";
+    private static final int RUNNING_STATE_ARRIVING = 1;
+    private static final String SEATS_REPORTED_UNKNOWN = "REPORTED_UNKNOWN";
+    private static final String SEATS_NOT_REPORTED = "NOT_REPORTED";
     private static final DateTimeFormatter JSON_TIME = DateTimeFormatter.ofPattern(
         "uuuu-MM-dd'T'HH:mm:ssXXX"
     );
@@ -72,16 +77,10 @@ class LiveVehicleApiContractTest {
         );
         insertObservation(batchId, route, 0, "204000202", 2, "205000002", 0, 23);
         insertObservation(batchId, route, 1, "204000209", 9, "205000009", 2, 0);
-        insertObservation(batchId, route, 2, "204000206", 6, "205000006", 2, -1);
-        insertObservationWithoutSeats(
-            batchId,
-            route,
-            3,
-            "204000205",
-            5,
-            "205000005",
-            1
-        );
+        insertObservationWithUnknownSeats(
+            batchId, route, 2, "204000206", 6, "205000006", 2, SEATS_REPORTED_UNKNOWN);
+        insertObservationWithUnknownSeats(
+            batchId, route, 3, "204000205", 5, "205000005", 1, SEATS_NOT_REPORTED);
 
         mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID))
             .andExpect(status().isOk())
@@ -127,40 +126,25 @@ class LiveVehicleApiContractTest {
             .andExpect(jsonPath("$.vehicles[3].seat.remaining").value(23));
     }
 
+    // 운행_상태를_해석할_수_없는_관측은_그_행만_빼고_나머지를_반환한다 는 여기서 못 만든다.
+    // SAL-84 가 running_state 를 NOT NULL + CHECK (0, 1, 2) 로 조여서 그런 행이 DB 에 안 들어간다.
+    // 규칙은 세 곳이 나눠 지킨다.
+    //   값 해석          VehiclePhaseTest.문서_밖_운행_상태는_해석하지_않는다
+    //   행이 빠지는 것    JpaVehicleQueryRepositoryTest.운행_상태를_해석할_수_없는_관측은_그_행만_빼고_나머지를_돌려준다
+    //   애초에 안 쌓는 것  VehicleObservationTableTest.운행_상태는_0과_1과_2만_저장된다
+
     @Test
-    void 운행_상태를_해석할_수_없는_관측은_그_행만_빼고_나머지를_반환한다() throws Exception {
+    void 상류가_차량_행을_줬는데_읽어낸_관측이_없으면_모르는_것으로_반환한다() throws Exception {
+        // 저장 단계가 전부 뺀 batch 다. outcome 은 SUCCESS_ROWS 인데 쌓인 관측이 없다.
+        // 상류가 "차가 없다" 고 한 적이 없으므로 NO_VEHICLES_OBSERVED 가 아니다.
         RouteContext route = insertCurrentRoute();
-        insertStop(route, 3, "205000003", "상행 세 번째", "UP");
-        insertStop(route, 5, "205000005", "상행 다섯 번째", "UP");
-        insertStop(route, 7, "205000007", "상행 일곱 번째", "UP");
         OffsetDateTime observedAt = NOW.minusMinutes(1);
-        final long batchId = insertSuccessfulBatch(
-            route,
-            observedAt,
-            "SUCCESS_ROWS",
-            3
-        );
-        insertObservationWithoutRunningState(
-            batchId,
-            route,
-            0,
-            "204000203",
-            3,
-            "205000003",
-            12
-        );
-        insertObservation(batchId, route, 1, "204000205", 5, "205000005", 1, 7);
-        insertObservation(batchId, route, 2, "204000207", 7, "205000007", 9, 3);
+        insertSuccessfulBatch(route, observedAt, "SUCCESS_ROWS", 0);
 
         mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.observation.state").value("VEHICLES_PRESENT"))
-            .andExpect(jsonPath("$.observation.observedAt").value(jsonTime(observedAt)))
-            .andExpect(jsonPath("$.vehicles.length()").value(1))
-            .andExpect(jsonPath("$.vehicles[0].vehicleId").value("204000205"))
-            .andExpect(jsonPath("$.vehicles[0].currentStopSequence").value(5))
-            .andExpect(jsonPath("$.vehicles[0].phase").value("ARRIVING"))
-            .andExpect(jsonPath("$.vehicles[0].seat.remaining").value(7));
+            .andExpect(jsonPath("$.observation.state").value("UNKNOWN"))
+            .andExpect(jsonPath("$.vehicles").isEmpty());
     }
 
     @Test
@@ -320,8 +304,9 @@ class LiveVehicleApiContractTest {
                 INSERT INTO observation_batch (
                     route_version_id, scheduled_at, attempt_number, attempt_key,
                     requested_at, response_received_at, completed_at,
-                    http_status, result_code, outcome, stored_rows
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    http_status, result_code, outcome, stored_rows, normalization_version,
+                    collection_strategy_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
             .params(
@@ -335,7 +320,9 @@ class LiveVehicleApiContractTest {
                 200,
                 0,
                 outcome,
-                storedRows
+                storedRows,
+                NORMALIZATION_VERSION,
+                STRATEGY_VERSION
             )
             .query(Long.class)
             .single();
@@ -348,8 +335,9 @@ class LiveVehicleApiContractTest {
         jdbcClient.sql("""
                 INSERT INTO observation_batch (
                     route_version_id, scheduled_at, attempt_number, attempt_key,
-                    requested_at, completed_at, outcome, failure_code
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    requested_at, completed_at, outcome, failure_code, normalization_version,
+                    collection_strategy_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """)
             .params(
                 route.routeVersionId(),
@@ -358,8 +346,10 @@ class LiveVehicleApiContractTest {
                 UUID.randomUUID().toString(),
                 scheduledAt.plusSeconds(1),
                 scheduledAt.plusSeconds(2),
-                "TRANSPORT_FAILURE",
-                "UPSTREAM_TIMEOUT"
+                "FAILED_UPSTREAM",
+                "UPSTREAM_ERROR",
+                NORMALIZATION_VERSION,
+                STRATEGY_VERSION
             )
             .update();
     }
@@ -371,8 +361,9 @@ class LiveVehicleApiContractTest {
         jdbcClient.sql("""
                 INSERT INTO observation_batch (
                     route_version_id, scheduled_at, attempt_number, attempt_key,
-                    requested_at, completed_at, outcome, stored_rows
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    requested_at, completed_at, outcome, stored_rows, normalization_version,
+                    collection_strategy_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """)
             .params(
                 route.routeVersionId(),
@@ -382,7 +373,9 @@ class LiveVehicleApiContractTest {
                 scheduledAt.plusSeconds(1),
                 scheduledAt.plusSeconds(2),
                 "SUCCESS_ROWS",
-                1
+                1,
+                NORMALIZATION_VERSION,
+                STRATEGY_VERSION
             )
             .update();
     }
@@ -397,81 +390,69 @@ class LiveVehicleApiContractTest {
         final int runningState,
         final int remainingSeats
     ) {
-        jdbcClient.sql("""
-                INSERT INTO vehicle_observation (
-                    observation_batch_id, route_version_id, source_row_number,
-                    observed_at, vehicle_id, stop_order, stop_id,
-                    running_state, remaining_seats
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """)
-            .params(
-                batchId,
-                route.routeVersionId(),
-                sourceRowNumber,
-                NOW.minusMinutes(1),
-                vehicleId,
-                stopOrder,
-                stopId,
-                runningState,
-                remainingSeats
-            )
-            .update();
+        insertObservation(
+            batchId, route, sourceRowNumber, vehicleId, stopOrder, stopId,
+            runningState, remainingSeats, null);
     }
 
-    private void insertObservationWithoutRunningState(
+    /**
+     * 잔여석을 모르는 관측. 상류의 음수와 누락은 정규화가 사유로 접어서,
+     * DB 에는 좌석 수가 비고 사유만 남는다. remaining_seats 에 -1 이 들어가는 일은 없다.
+     */
+    private void insertObservationWithUnknownSeats(
         final long batchId,
         RouteContext route,
         final int sourceRowNumber,
         String vehicleId,
         final int stopOrder,
         String stopId,
-        final int remainingSeats
+        final int runningState,
+        String seatUnknownReason
+    ) {
+        insertObservation(
+            batchId, route, sourceRowNumber, vehicleId, stopOrder, stopId,
+            runningState, null, seatUnknownReason);
+    }
+
+    private void insertObservation(
+        final long batchId,
+        RouteContext route,
+        final int sourceRowNumber,
+        String vehicleId,
+        final int stopOrder,
+        String stopId,
+        final int runningState,
+        Integer remainingSeats,
+        String seatUnknownReason
     ) {
         jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
                     observation_batch_id, route_version_id, source_row_number,
-                    observed_at, vehicle_id, stop_order, stop_id, remaining_seats
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    vehicle_id, stop_order, stop_id, passed_stop_order,
+                    running_state, remaining_seats, seat_unknown_reason
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """)
             .params(
                 batchId,
                 route.routeVersionId(),
                 sourceRowNumber,
-                NOW.minusMinutes(1),
                 vehicleId,
                 stopOrder,
                 stopId,
-                remainingSeats
+                passedStopOrderOf(stopOrder, runningState),
+                runningState,
+                remainingSeats,
+                seatUnknownReason
             )
             .update();
     }
 
-    private void insertObservationWithoutSeats(
-        final long batchId,
-        RouteContext route,
-        final int sourceRowNumber,
-        String vehicleId,
+    /** 도착 중(1)인 버스는 그 정류소를 아직 안 지났다. */
+    private int passedStopOrderOf(
         final int stopOrder,
-        String stopId,
         final int runningState
     ) {
-        jdbcClient.sql("""
-                INSERT INTO vehicle_observation (
-                    observation_batch_id, route_version_id, source_row_number,
-                    observed_at, vehicle_id, stop_order, stop_id, running_state
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """)
-            .params(
-                batchId,
-                route.routeVersionId(),
-                sourceRowNumber,
-                NOW.minusMinutes(1),
-                vehicleId,
-                stopOrder,
-                stopId,
-                runningState
-            )
-            .update();
+        return runningState == RUNNING_STATE_ARRIVING ? stopOrder - 1 : stopOrder;
     }
 
     private record RouteContext(long routeVersionId) {

@@ -18,10 +18,10 @@ class BusLocationResponseTest {
     @Test
     void 차량이_여러_대면_배열로_응답받고_리스트로_읽는다() {
         // given
-        final InputStream twoVehiclesJson = fixture("location-two-vehicles.json");
+        InputStream twoVehiclesJson = fixture("location-two-vehicles.json");
 
         // when
-        final BusLocationResponse actualResponse =
+        BusLocationResponse actualResponse =
             objectMapper.readValue(twoVehiclesJson, BusLocationResponse.class);
 
         // then
@@ -34,10 +34,10 @@ class BusLocationResponseTest {
     @Test
     void 차량이_한_대면_객체로_응답받고_리스트로_읽는다() {
         // given
-        final InputStream singleVehicleJson = fixture("location-single-vehicle.json");
+        InputStream singleVehicleJson = fixture("location-single-vehicle.json");
 
         // when
-        final BusLocationResponse actualResponse =
+        BusLocationResponse actualResponse =
             objectMapper.readValue(singleVehicleJson, BusLocationResponse.class);
 
         // then
@@ -48,14 +48,14 @@ class BusLocationResponseTest {
     @Test
     void GBIS_필드명을_서버에서_이해하기_쉬운_변수명으로_매핑한다() {
         // given
-        final InputStream twoVehiclesJson = fixture("location-two-vehicles.json");
+        InputStream twoVehiclesJson = fixture("location-two-vehicles.json");
 
         // when
-        final BusLocationResponse actualResponse =
+        BusLocationResponse actualResponse =
             objectMapper.readValue(twoVehiclesJson, BusLocationResponse.class);
 
         // then
-        final BusLocation actualBus = actualResponse.response().body().busLocations().getFirst();
+        BusLocation actualBus = actualResponse.response().body().busLocations().getFirst();
         assertThat(actualBus.plateNumber()).isEqualTo("경기70아0001");
         assertThat(actualBus.vehicleId()).isEqualTo("204000206");
         assertThat(actualBus.vehicleType()).isEqualTo(2);
@@ -70,9 +70,9 @@ class BusLocationResponseTest {
     }
 
     private InputStream fixture(
-        final String name
+        String name
     ) {
-        final InputStream stream = getClass().getClassLoader().getResourceAsStream("gbis/" + name);
+        InputStream stream = getClass().getClassLoader().getResourceAsStream("gbis/" + name);
         if (stream == null) {
             throw new IllegalArgumentException("픽스처를 찾지 못했다: gbis/" + name);
         }

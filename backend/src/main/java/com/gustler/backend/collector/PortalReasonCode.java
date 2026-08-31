@@ -12,13 +12,13 @@ public enum PortalReasonCode {
     private final String code;
 
     PortalReasonCode(
-        final String code
+        String code
     ) {
         this.code = code;
     }
 
     public static PortalReasonCode from(
-        final String reasonCode
+        String reasonCode
     ) {
         return Arrays.stream(values())
             .filter(candidate -> Objects.equals(candidate.code, reasonCode))

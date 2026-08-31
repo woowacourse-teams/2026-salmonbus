@@ -10,14 +10,14 @@ public abstract class ApiException extends RuntimeException {
     private final Duration retryAfter;
 
     protected ApiException(
-        final ErrorCode code
+        ErrorCode code
     ) {
         this(code, null);
     }
 
     protected ApiException(
-        final ErrorCode code,
-        final Duration retryAfter
+        ErrorCode code,
+        Duration retryAfter
     ) {
         super(Objects.requireNonNull(code, "code는 null일 수 없습니다.").message());
         this.code = code;

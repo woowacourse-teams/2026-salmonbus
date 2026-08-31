@@ -50,7 +50,7 @@ class VehicleStopTargetTest {
     void 관측과_대상_정류장은_같은_노선_판본이다() {
         // given
         final long otherRouteVersion = 2L;
-        RouteStop stopOfOtherVersion = new RouteStop(otherRouteVersion, 49, "20449");
+        RouteStop stopOfOtherVersion = new RouteStop(otherRouteVersion, 49, "20449", true);
 
         // when & then
         assertThatThrownBy(() -> new VehicleStopTarget(observed(44, 12), stopOfOtherVersion))
@@ -68,6 +68,16 @@ class VehicleStopTargetTest {
 
         // when & then
         assertThatThrownBy(() -> new VehicleStopTarget(seatsUnknown, routeStop(49)))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 예보_대상은_승차할_수_있는_정류장이다() {
+        // given
+        RouteStop passingStop = new RouteStop(ROUTE_VERSION_3330, 49, "27700049", false);
+
+        // when & then
+        assertThatThrownBy(() -> new VehicleStopTarget(observed(44, 12), passingStop))
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -93,6 +103,6 @@ class VehicleStopTargetTest {
     private RouteStop routeStop(
         final int stopOrder
     ) {
-        return new RouteStop(ROUTE_VERSION_3330, stopOrder, "20400" + stopOrder);
+        return new RouteStop(ROUTE_VERSION_3330, stopOrder, "20400" + stopOrder, true);
     }
 }

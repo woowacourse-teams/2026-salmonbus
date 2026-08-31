@@ -17,10 +17,10 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ErrorResponse> handleApiException(
-        final ApiException exception
+        ApiException exception
     ) {
-        final ErrorCode code = exception.code();
-        final HttpHeaders headers = noStore();
+        ErrorCode code = exception.code();
+        HttpHeaders headers = noStore();
         exception.retryAfter().ifPresent(retryAfter ->
             headers.set(HttpHeaders.RETRY_AFTER, String.valueOf(retryAfter.toSeconds())));
 
@@ -32,7 +32,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         JpaSystemException.class
     })
     public ResponseEntity<ErrorResponse> handleDatabaseUnavailable(
-        final RuntimeException exception
+        RuntimeException exception
     ) {
         return respond(
             ErrorCode.SERVICE_UNAVAILABLE,
@@ -43,7 +43,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(
-        final Exception exception
+        Exception exception
     ) {
         return respond(ErrorCode.INTERNAL_ERROR, ErrorCode.INTERNAL_ERROR.message(),
             ErrorCode.INTERNAL_ERROR.status());
@@ -51,28 +51,28 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @Override
     protected ResponseEntity<Object> handleExceptionInternal(
-        final Exception exception,
-        final Object body,
-        final HttpHeaders headers,
-        final HttpStatusCode status,
-        final WebRequest request
+        Exception exception,
+        Object body,
+        HttpHeaders headers,
+        HttpStatusCode status,
+        WebRequest request
     ) {
-        final ErrorCode code = ErrorCode.of(status);
+        ErrorCode code = ErrorCode.of(status);
 
         return new ResponseEntity<>(bodyOf(code, code.message()), noStore(headers), status);
     }
 
     private ResponseEntity<ErrorResponse> respond(
-        final ErrorCode code,
-        final String message,
-        final HttpStatusCode status
+        ErrorCode code,
+        String message,
+        HttpStatusCode status
     ) {
         return new ResponseEntity<>(bodyOf(code, message), noStore(), status);
     }
 
     private ErrorResponse bodyOf(
-        final ErrorCode code,
-        final String message
+        ErrorCode code,
+        String message
     ) {
         return new ErrorResponse(
             code,
@@ -86,9 +86,9 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     private HttpHeaders noStore(
-        final HttpHeaders original
+        HttpHeaders original
     ) {
-        final HttpHeaders headers = new HttpHeaders();
+        HttpHeaders headers = new HttpHeaders();
         headers.addAll(original);
         headers.setCacheControl(CacheControl.noStore());
 

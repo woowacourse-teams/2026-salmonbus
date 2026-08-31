@@ -45,12 +45,12 @@ class ApiExceptionHandlerTest {
 
     @ParameterizedTest
     @MethodSource("thrownExceptions")
-    void 오류_코드가_정한_상태와_메시지로_응답한다(final ApiException exception) {
+    void 오류_코드가_정한_상태와_메시지로_응답한다(ApiException exception) {
         // given
-        final ErrorCode code = exception.code();
+        ErrorCode code = exception.code();
 
         // when
-        final ResponseEntity<ErrorResponse> actual = handler.handleApiException(exception);
+        ResponseEntity<ErrorResponse> actual = handler.handleApiException(exception);
 
         // then
         assertThat(actual.getStatusCode()).isEqualTo(code.status());
@@ -62,9 +62,9 @@ class ApiExceptionHandlerTest {
 
     @ParameterizedTest
     @MethodSource("thrownExceptions")
-    void 오류_응답은_저장하지_않게_하고_재시도_시각은_알리지_않는다(final ApiException exception) {
+    void 오류_응답은_저장하지_않게_하고_재시도_시각은_알리지_않는다(ApiException exception) {
         // when
-        final ResponseEntity<ErrorResponse> actual = handler.handleApiException(exception);
+        ResponseEntity<ErrorResponse> actual = handler.handleApiException(exception);
 
         // then
         assertThat(actual.getHeaders().getCacheControl()).isEqualTo("no-store");
@@ -74,15 +74,15 @@ class ApiExceptionHandlerTest {
     @Test
     void 모든_오류_코드는_예외나_상태_매핑으로_도달한다() {
         // given
-        final Set<ErrorCode> reachedByException = thrownExceptions().stream()
+        Set<ErrorCode> reachedByException = thrownExceptions().stream()
             .map(ApiException::code)
             .collect(Collectors.toSet());
-        final Set<ErrorCode> reachedByStatus = Arrays.stream(ErrorCode.values())
+        Set<ErrorCode> reachedByStatus = Arrays.stream(ErrorCode.values())
             .map(code -> ErrorCode.of(code.status()))
             .collect(Collectors.toSet());
 
         // when
-        final Set<ErrorCode> reachable =
+        Set<ErrorCode> reachable =
             Stream.concat(reachedByException.stream(), reachedByStatus.stream())
                 .collect(Collectors.toSet());
 
@@ -93,10 +93,10 @@ class ApiExceptionHandlerTest {
     @Test
     void 다음_수집_시각을_알면_그때까지의_초를_알린다() {
         // given
-        final ApiException exception = new NoRecentObservationException(Duration.ofSeconds(15));
+        ApiException exception = new NoRecentObservationException(Duration.ofSeconds(15));
 
         // when
-        final ResponseEntity<ErrorResponse> actual = handler.handleApiException(exception);
+        ResponseEntity<ErrorResponse> actual = handler.handleApiException(exception);
 
         // then
         assertThat(actual.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isEqualTo("15");
@@ -105,10 +105,10 @@ class ApiExceptionHandlerTest {
     @ParameterizedTest
     @MethodSource("databaseUnavailableExceptions")
     void DB_트랜잭션을_시작하거나_종료하지_못하면_서비스_불가로_응답한다(
-        final RuntimeException exception
+        RuntimeException exception
     ) {
         // when
-        final ResponseEntity<ErrorResponse> actual =
+        ResponseEntity<ErrorResponse> actual =
             handler.handleDatabaseUnavailable(exception);
 
         // then
@@ -133,10 +133,10 @@ class ApiExceptionHandlerTest {
     })
     void 스프링이_판정한_상태를_우리_오류_코드로_옮긴다(
         final int status,
-        final ErrorCode expected
+        ErrorCode expected
     ) {
         // when
-        final ResponseEntity<Object> actual = handler.handleExceptionInternal(
+        ResponseEntity<Object> actual = handler.handleExceptionInternal(
             new IllegalStateException("스프링이 잡은 예외"),
             null,
             new HttpHeaders(),
@@ -156,7 +156,7 @@ class ApiExceptionHandlerTest {
     @Test
     void 예상하지_못한_예외는_500으로_옮긴다() {
         // when
-        final ResponseEntity<ErrorResponse> actual =
+        ResponseEntity<ErrorResponse> actual =
             handler.handleUnexpected(new IllegalStateException("아무도 모르는 오류"));
 
         // then
