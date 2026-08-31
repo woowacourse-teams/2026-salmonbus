@@ -5,11 +5,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class VehicleTrajectoryAssemblerTest {
 
     private static final long ROUTE_VERSION_ID = 1L;
+
+    /** 혼잡도를 안 준 관측. 궤적을 잇는 판정은 혼잡도를 안 본다. */
+    private static final Integer CROWD_LEVEL_UNKNOWN = null;
+
+    /** 보여 준 최대 잔여석은 30분 창 밖에서 오므로 여기서는 픽스처가 준다. */
+    private static final Map<String, Integer> NO_MAXIMUM_SEATS_READ = Map.of();
     /** 조립은 관측 행 번호를 안 본다. 차량 아이디로 잇는다. */
     private static final long ANY_OBSERVATION_ID = 0L;
     private static final Instant FIRST_RESPONSE_RECEIVED_AT = Instant.parse("2026-08-19T02:14:04.911Z");
@@ -301,7 +308,8 @@ class VehicleTrajectoryAssemblerTest {
             batch(1, observed(VEHICLE_204000206, STOP_6, 40), observed(VEHICLE_204003542, STOP_3, 12)));
 
         // when
-        List<VehicleTrajectory> actual = VehicleTrajectoryAssembler.assemble(history);
+        List<VehicleTrajectory> actual =
+            VehicleTrajectoryAssembler.assemble(history, NO_MAXIMUM_SEATS_READ);
 
         // then
         assertThat(actual)
@@ -312,7 +320,8 @@ class VehicleTrajectoryAssemblerTest {
     private static VehicleTrajectory onlyTrajectoryOf(
         ObservationHistory history
     ) {
-        List<VehicleTrajectory> trajectories = VehicleTrajectoryAssembler.assemble(history);
+        List<VehicleTrajectory> trajectories =
+            VehicleTrajectoryAssembler.assemble(history, NO_MAXIMUM_SEATS_READ);
         return trajectories.getFirst();
     }
 
@@ -320,7 +329,7 @@ class VehicleTrajectoryAssemblerTest {
         ObservationHistory history,
         String vehicleId
     ) {
-        return VehicleTrajectoryAssembler.assemble(history).stream()
+        return VehicleTrajectoryAssembler.assemble(history, NO_MAXIMUM_SEATS_READ).stream()
             .filter(trajectory -> vehicleId.equals(trajectory.observation().vehicleId()))
             .findFirst()
             .orElseThrow();
@@ -358,7 +367,8 @@ class VehicleTrajectoryAssemblerTest {
                 vehicle.routeVersionId(),
                 vehicle.passedStopOrder(),
                 observedAt,
-                vehicle.remainingSeats()),
+                vehicle.remainingSeats(),
+                vehicle.crowdLevel()),
             observation.vehicleTripKey(),
             observation.seats());
     }
@@ -384,7 +394,8 @@ class VehicleTrajectoryAssemblerTest {
                 ROUTE_VERSION_ID,
                 passedStopOrder,
                 Instant.EPOCH,
-                remainingSeats),
+                remainingSeats,
+                CROWD_LEVEL_UNKNOWN),
             vehicleTripKey,
             seatsOf(remainingSeats));
     }

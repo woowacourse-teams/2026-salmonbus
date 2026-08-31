@@ -11,6 +11,9 @@ class SeatForecastTest {
 
     private static final Instant OBSERVED_AT = Instant.parse("2026-08-25T08:30:00Z");
     private static final Instant GENERATED_AT = Instant.parse("2026-08-25T08:30:01Z");
+    /** 혼잡도를 안 준 관측. 이 테스트가 보는 것과 무관하다. */
+    private static final Integer CROWD_LEVEL_UNKNOWN = null;
+
     private static final long ROUTE_VERSION_3330 = 1L;
     private static final long OBSERVATION_ID = 100L;
     private static final int DEMAND_STATISTICS_REVISION = 3;
@@ -87,7 +90,8 @@ class SeatForecastTest {
     private ObservedVehicle observed(
         final int passedStopOrder
     ) {
-        return new ObservedVehicle("204000206", ROUTE_VERSION_3330, passedStopOrder, OBSERVED_AT, 12);
+        return new ObservedVehicle(
+            "204000206", ROUTE_VERSION_3330, passedStopOrder, OBSERVED_AT, 12, CROWD_LEVEL_UNKNOWN);
     }
 
     private RouteStop routeStop(

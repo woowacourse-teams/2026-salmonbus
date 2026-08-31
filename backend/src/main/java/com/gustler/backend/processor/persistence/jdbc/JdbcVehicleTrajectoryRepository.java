@@ -90,11 +90,38 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
      */
     private static final String SELECT_OBSERVATIONS_IN_BATCHES = """
         SELECT id, observation_batch_id, route_version_id, vehicle_id,
-               vehicle_trip_key, passed_stop_order, remaining_seats, seat_unknown_reason
+               vehicle_trip_key, passed_stop_order, remaining_seats, seat_unknown_reason, crowd_level
         FROM vehicle_observation
         WHERE observation_batch_id IN (:observationBatchIds)
           AND vehicle_id IS NOT NULL
         ORDER BY observation_batch_id, source_row_number
+        """;
+
+    /**
+     * 차량마다 지금까지 보여 준 가장 많은 잔여석.
+     *
+     * <p><b>궤적을 잇는 30분 창을 안 쓴다.</b> 셀 통계 집계가 같은 값을 그 차량의 관측 전부에서
+     * 세고 있어서, 창으로 자르면 집계 쪽 분모와 서빙 쪽 분모가 갈린다. 그러면 설계행렬의
+     * 잔여석 비율과 셀 통계의 z값이 서로 다른 수로 나눈 값이 된다.
+     *
+     * <p>기준 시각으로 자르는 것도 집계와 같다. 자르지 않으면 나중에 더 큰 잔여석이 들어올 때
+     * 예전 예보를 같은 시각으로 다시 계산해도 다른 값이 나온다.
+     *
+     * <p>줄곧 만석이던 차량은 최대 잔여석이 0석인데 그것으로 나눌 수 없어 1석을 바닥으로 둔다.
+     * 집계 쪽 GREATEST 와 같은 자리다. 잔여석을 한 번도 안 보여 준 차량은 결과에 아예 없고,
+     * 그 자리를 1석으로 세는 것은 도메인이 한다.
+     */
+    private static final String SELECT_MAXIMUM_SEATS_EVER_OBSERVED = """
+        SELECT observation.vehicle_id,
+               GREATEST(MAX(observation.remaining_seats), 1) AS maximum_seats
+        FROM vehicle_observation observation
+        JOIN observation_batch batch
+          ON batch.id = observation.observation_batch_id
+        WHERE observation.route_version_id = :routeVersionId
+          AND observation.vehicle_id IN (:vehicleIds)
+          AND observation.remaining_seats IS NOT NULL
+          AND batch.response_received_at <= :until
+        GROUP BY observation.vehicle_id
         """;
 
     private final JdbcClient jdbcClient;
@@ -129,7 +156,41 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
         if (target.isEmpty()) {
             return List.of();
         }
-        return VehicleTrajectoryAssembler.assemble(historyEndingAt(target.get()));
+        ObservationHistory history = historyEndingAt(target.get());
+        return VehicleTrajectoryAssembler.assemble(
+            history, maximumSeatsEverObservedOf(target.get(), history));
+    }
+
+    /**
+     * 대상 batch 에 있는 차량마다 그 노선 판본에서 지금까지 보여 준 가장 많은 잔여석.
+     *
+     * <p>대상 batch 의 차량만 묻는다. 궤적 창 안의 다른 batch 에만 있는 차량은 예보 대상이 아니라
+     * 그 값이 필요 없다.
+     */
+    private Map<String, Integer> maximumSeatsEverObservedOf(
+        TargetBatch target,
+        ObservationHistory history
+    ) {
+        List<String> vehicleIds = history.targetBatch().observations().stream()
+            .map(TrajectoryObservation::vehicleId)
+            .distinct()
+            .toList();
+        if (vehicleIds.isEmpty()) {
+            return Map.of();
+        }
+        List<VehicleMaximumSeats> rows = jdbcClient.sql(SELECT_MAXIMUM_SEATS_EVER_OBSERVED)
+            .param("routeVersionId", target.routeVersionId())
+            .param("vehicleIds", vehicleIds)
+            .param("until", offsetOf(target.responseReceivedAt()))
+            .query((resultSet, rowNumber) -> new VehicleMaximumSeats(
+                resultSet.getString("vehicle_id"), resultSet.getInt("maximum_seats")))
+            .list();
+
+        Map<String, Integer> maximumSeatsByVehicle = new LinkedHashMap<>();
+        for (VehicleMaximumSeats row : rows) {
+            maximumSeatsByVehicle.put(row.vehicleId(), row.maximumSeats());
+        }
+        return maximumSeatsByVehicle;
     }
 
     /**
@@ -197,7 +258,8 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
                 resultSet.getString("vehicle_trip_key"),
                 resultSet.getInt("passed_stop_order"),
                 resultSet.getObject("remaining_seats", Integer.class),
-                resultSet.getString("seat_unknown_reason")))
+                resultSet.getString("seat_unknown_reason"),
+                resultSet.getObject("crowd_level", Integer.class)))
             .list();
 
         Map<Long, List<TrajectoryObservation>> observationsByBatch = new LinkedHashMap<>();
@@ -234,6 +296,13 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
     ) {
     }
 
+    /** 차량 하나가 지금까지 보여 준 가장 많은 잔여석. */
+    private record VehicleMaximumSeats(
+        String vehicleId,
+        int maximumSeats
+    ) {
+    }
+
     /** 관측 한 행. 관측 시각만 자기 판에서 받아 채운다. */
     private record ObservationRow(
         long id,
@@ -243,7 +312,8 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
         String vehicleTripKey,
         int passedStopOrder,
         Integer remainingSeats,
-        String seatUnknownReason
+        String seatUnknownReason,
+        Integer crowdLevel
     ) {
 
         TrajectoryObservation toObservation(
@@ -251,7 +321,8 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
         ) {
             return new TrajectoryObservation(
                 id,
-                new ObservedVehicle(vehicleId, routeVersionId, passedStopOrder, observedAt, remainingSeats),
+                new ObservedVehicle(
+                    vehicleId, routeVersionId, passedStopOrder, observedAt, remainingSeats, crowdLevel),
                 vehicleTripKey,
                 ObservedSeats.of(remainingSeats, seatUnknownReasonOf()));
         }
