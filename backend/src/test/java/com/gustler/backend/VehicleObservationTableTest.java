@@ -179,6 +179,22 @@ class VehicleObservationTableTest {
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    void 통과_순번은_0석_이상이어야_저장된다() {
+        // when & then
+        assertThatThrownBy(() -> insertObservationWithPassedStopOrder(-1))
+            .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void 첫_정류소에_도착_중인_차량의_통과_순번_0도_저장된다() {
+        // when
+        insertObservationWithPassedStopOrder(0);
+
+        // then
+        assertThat(storedRowCount()).isEqualTo(1);
+    }
+
     private long insertRoute() {
         return jdbcClient.sql("""
                 INSERT INTO route (
@@ -291,6 +307,24 @@ class VehicleObservationTableTest {
                 targetBatchId, routeVersionId, sourceRowNumber,
                 vehicleId, STOP_ORDER, STOP_205000217, PASSED_STOP_ORDER,
                 runningState, remainingSeats, seatUnknownReason, crowdLevel
+            )
+            .update();
+    }
+
+    private void insertObservationWithPassedStopOrder(
+        final int passedStopOrder
+    ) {
+        jdbcClient.sql("""
+                INSERT INTO vehicle_observation (
+                    observation_batch_id, route_version_id, source_row_number,
+                    vehicle_id, stop_order, stop_id, passed_stop_order,
+                    running_state, remaining_seats, crowd_level
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """)
+            .params(
+                batchId, routeVersionId, 0,
+                VEHICLE_204003542, STOP_ORDER, STOP_205000217, passedStopOrder,
+                RUNNING_STATE_DEPARTED, SEATS_43, CROWD_LEVEL_3
             )
             .update();
     }

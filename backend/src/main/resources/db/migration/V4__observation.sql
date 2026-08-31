@@ -31,6 +31,9 @@ ALTER TABLE vehicle_observation
 ALTER TABLE vehicle_observation
     ADD CONSTRAINT ck_observation_running_state_value
         CHECK (running_state IN (0, 1, 2)),
+    -- 첫 정류소에 도착 중이면 0 이다. 그보다 작은 값은 뜻이 없다
+    ADD CONSTRAINT ck_observation_passed_stop_order_not_negative
+        CHECK (passed_stop_order >= 0),
     -- 잔여석은 아는 값이거나 모르는 사유이고, 둘 다이거나 둘 다 아닌 행은 없다
     ADD CONSTRAINT ck_observation_seats_exclusive_with_reason
         CHECK ((remaining_seats IS NULL) <> (seat_unknown_reason IS NULL)),
@@ -48,3 +51,10 @@ ALTER TABLE vehicle_observation
 -- 한 묶음의 행은 같은 규칙으로 접히므로 판 단위로 들고 있는다.
 ALTER TABLE observation_batch
     ADD COLUMN normalization_version varchar(40) NOT NULL;
+
+-- V3 의 주석이 stops_to_target 을 "target_stop_order - 관측 stop_order" 라고 적었는데 틀렸다.
+-- stop_order 는 stationSeq 원문이라 도착 중인 차량에서는 아직 안 지난 정류소를 가리킨다.
+-- 6번에 도착 중인 차가 10번을 예보하면 그 기준으로 4 가 되는데 실제로는 5 다.
+-- V3 은 이미 머지돼서 checksum 때문에 못 고치므로 여기서 열 주석으로 바로잡는다.
+COMMENT ON COLUMN seat_forecast.stops_to_target IS
+    'target_stop_order - vehicle_observation.passed_stop_order. stop_order 가 아니다.';
