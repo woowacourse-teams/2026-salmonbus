@@ -7,6 +7,7 @@ import java.util.List;
 public record BoardResponse(
     BoardRouteResponse route,
     OffsetDateTime observedAt,
+    OffsetDateTime staleAt,
     ModelInfoResponse model,
     int vehiclesInService,
     List<StopStateResponse> stops
@@ -18,6 +19,7 @@ public record BoardResponse(
         return new BoardResponse(
             BoardRouteResponse.from(board.route()),
             board.observedAt(),
+            board.staleAt(),
             ModelInfoResponse.from(board.model()),
             board.vehiclesInService(),
             board.stops().stream()

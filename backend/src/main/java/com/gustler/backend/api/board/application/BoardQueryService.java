@@ -90,6 +90,7 @@ public class BoardQueryService {
         Board board = new Board(
             toBoardRoute(snapshot, stops),
             observation.observedAt(),
+            freshnessPolicy.staleAt(observation.observedAt()),
             model,
             observation.vehiclesInService(),
             stopStates

@@ -55,6 +55,8 @@ class BoardControllerTest {
             .andExpect(jsonPath("$.route.id").value("204000057"))
             .andExpect(jsonPath("$.route.turnSequence").isEmpty())
             .andExpect(jsonPath("$.route.directions.length()").value(1))
+            .andExpect(jsonPath("$.observedAt").value("2026-08-27T08:00:00+09:00"))
+            .andExpect(jsonPath("$.staleAt").value("2026-08-27T08:05:00+09:00"))
             .andExpect(jsonPath("$.model.releaseId").value("model-7"))
             .andExpect(jsonPath("$.vehiclesInService").value(1))
             .andExpect(jsonPath("$.stops[0].stopId").value("STOP-1"))
@@ -92,6 +94,7 @@ class BoardControllerTest {
         Board board = new Board(
             route,
             OffsetDateTime.parse("2026-08-27T08:00:00+09:00"),
+            OffsetDateTime.parse("2026-08-27T08:05:00+09:00"),
             new ForecastModel(
                 7L,
                 "model-7",
