@@ -25,6 +25,14 @@ public interface SeatForecastRepository {
         Instant completedAt
     );
 
+    /**
+     * 아직 안 닫힌 예보가 남아 있는 노선 판본.
+     *
+     * <p>지금 쓰는 판본만 묻지 않는다. 노선이 개편되면 옛 판본의 예보가 그대로 남는데,
+     * 그 행들도 닫아야 안 닫힌 행이 영영 쌓이지 않는다.
+     */
+    List<Long> findRouteVersionIdsWithPendingForecasts();
+
     /** 아직 라벨을 못 채운 예보를 오래된 것부터. */
     List<PendingForecast> findPending(
         long routeVersionId,

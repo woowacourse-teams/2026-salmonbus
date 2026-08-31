@@ -83,7 +83,8 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
                forecast.route_version_id,
                observation.vehicle_id,
                forecast.stops_to_target,
-               batch.response_received_at
+               batch.response_received_at,
+               forecast.generated_at
         FROM seat_forecast forecast
         JOIN vehicle_observation observation
           ON observation.id = forecast.vehicle_observation_id
@@ -93,6 +94,17 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
           AND forecast.route_version_id = :routeVersionId
         ORDER BY forecast.generated_at
         LIMIT :limit
+        """;
+
+    /**
+     * 안 닫힌 예보가 남은 노선 판본. 부분 인덱스의 조건과 글자가 같아야 그것을 고른다.
+     *
+     * <p>노선당 차량이 백 대 안쪽이라 DISTINCT 결과가 몇 줄에서 끝난다.
+     */
+    private static final String SELECT_ROUTE_VERSIONS_AWAITING_LABEL = """
+        SELECT DISTINCT route_version_id
+        FROM seat_forecast
+        WHERE scoring_state = 'PENDING'
         """;
 
     /** 회수한 라벨을 예보 행에 채운다. 라벨 세 열과 회수 상태를 한 번에 써야 V8 의 짝 검사를 통과한다. */
@@ -166,7 +178,15 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
                 resultSet.getLong("route_version_id"),
                 resultSet.getString("vehicle_id"),
                 resultSet.getInt("stops_to_target"),
-                instantOf(resultSet.getObject("response_received_at", OffsetDateTime.class))))
+                instantOf(resultSet.getObject("response_received_at", OffsetDateTime.class)),
+                instantOf(resultSet.getObject("generated_at", OffsetDateTime.class))))
+            .list();
+    }
+
+    @Override
+    public List<Long> findRouteVersionIdsWithPendingForecasts() {
+        return jdbcClient.sql(SELECT_ROUTE_VERSIONS_AWAITING_LABEL)
+            .query(Long.class)
             .list();
     }
 

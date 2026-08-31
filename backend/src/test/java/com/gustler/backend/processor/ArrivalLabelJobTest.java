@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -29,12 +30,9 @@ class ArrivalLabelJobTest {
     private static final long ROUTE_VERSION_3330 = 1L;
     private static final String VEHICLE_ID = "204000206";
     private static final Instant OBSERVED_AT = Instant.parse("2026-08-25T08:30:00Z");
-    private static final Instant SETTLED_AT = Instant.parse("2026-08-25T08:40:00Z");
+    private static final Instant SETTLED_AT = OBSERVED_AT.plusSeconds(600);
     private static final int TARGET_STOP_ORDER = 44;
     private static final long ARRIVAL_OBSERVATION_ID = 7700L;
-
-    @Mock
-    private RouteVersionRepository routeVersionRepository;
 
     @Mock
     private SeatForecastRepository seatForecastRepository;
@@ -50,18 +48,16 @@ class ArrivalLabelJobTest {
     @BeforeEach
     void 회수_배치를_멈춘_시계로_세운다() {
         job = new ArrivalLabelJob(
-            routeVersionRepository,
             seatForecastRepository,
             arrivalObservationRepository,
             properties(),
             Clock.fixed(SETTLED_AT, ZoneOffset.UTC));
-        when(routeVersionRepository.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
     }
 
     @Test
     void 대상_정류장을_지난_관측이_들어오면_예보_행이_닫힌다() {
         // given
-        givenPending(pending(100L, 40));
+        givenPendingOn(ROUTE_VERSION_3330, pending(100L, 40));
         givenArrivals(passedAt(TARGET_STOP_ORDER, 60, 0));
 
         // when
@@ -74,7 +70,7 @@ class ArrivalLabelJobTest {
     @Test
     void 아직_대상_정류장에_안_닿은_예보는_열어_둔다() {
         // given
-        givenPending(pending(100L, 40));
+        givenPendingOn(ROUTE_VERSION_3330, pending(100L, 40));
         givenArrivals(passedAt(41, 20, 9));
 
         // when
@@ -87,7 +83,7 @@ class ArrivalLabelJobTest {
     @Test
     void 잔여석을_모르는_도착_관측은_좌석_결측으로_닫는다() {
         // given
-        givenPending(pending(100L, 40));
+        givenPendingOn(ROUTE_VERSION_3330, pending(100L, 40));
         givenArrivals(passedAt(TARGET_STOP_ORDER, 60, null));
 
         // when
@@ -100,7 +96,7 @@ class ArrivalLabelJobTest {
     @Test
     void 한_도착_관측이_지평이_다른_예보_여럿을_한꺼번에_닫는다() {
         // given
-        givenPending(pending(100L, 40), pendingObservedLater(101L, 42, 60));
+        givenPendingOn(ROUTE_VERSION_3330, pending(100L, 40), forecastMadeAt(101L, 42, 60));
         givenArrivals(passedAt(42, 60, 9), passedAt(TARGET_STOP_ORDER, 120, 0));
 
         // when
@@ -115,7 +111,7 @@ class ArrivalLabelJobTest {
     @Test
     void 같은_차량의_예보_여럿은_뒤_관측을_한_번만_읽는다() {
         // given
-        givenPending(pending(100L, 40), pendingObservedLater(101L, 42, 60));
+        givenPendingOn(ROUTE_VERSION_3330, pending(100L, 40), forecastMadeAt(101L, 42, 60));
         givenArrivals(passedAt(42, 60, 9), passedAt(TARGET_STOP_ORDER, 120, 0));
 
         // when
@@ -128,7 +124,8 @@ class ArrivalLabelJobTest {
     @Test
     void 차량_아이디가_없는_예보는_뒤_관측을_안_읽는다() {
         // given
-        givenPending(new PendingForecast(100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, null, 4, OBSERVED_AT));
+        givenPendingOn(ROUTE_VERSION_3330, new PendingForecast(
+            100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, null, 4, OBSERVED_AT, OBSERVED_AT));
 
         // when
         job.settleArrivalLabels();
@@ -140,7 +137,7 @@ class ArrivalLabelJobTest {
     @Test
     void 회수_시각은_주입받은_시계에서_온다() {
         // given
-        givenPending(pending(100L, 40));
+        givenPendingOn(ROUTE_VERSION_3330, pending(100L, 40));
         givenArrivals(passedAt(TARGET_STOP_ORDER, 60, 0));
 
         // when
@@ -150,9 +147,65 @@ class ArrivalLabelJobTest {
         assertThat(captured().getFirst().scoredAt()).isEqualTo(SETTLED_AT);
     }
 
-    private void givenPending(
+    @Test
+    void 예보를_계산하기_전에_이미_있던_도착_관측은_라벨로_안_쓴다() {
+        // given
+        givenPendingOn(ROUTE_VERSION_3330, forecastMadeAt(100L, 40, 90));
+        givenArrivals(passedAt(TARGET_STOP_ORDER, 30, 0));
+
+        // when
+        job.settleArrivalLabels();
+
+        // then
+        assertThat(settledLabels()).isEmpty();
+    }
+
+    @Test
+    void 도착_후보를_읽는_하한은_예보를_계산한_시각이다() {
+        // given
+        givenPendingOn(ROUTE_VERSION_3330, forecastMadeAt(100L, 40, 90));
+        givenArrivals(passedAt(TARGET_STOP_ORDER, 120, 0));
+
+        // when
+        job.settleArrivalLabels();
+
+        // then
+        verify(arrivalObservationRepository)
+            .findAfter(anyLong(), anyString(), eq(OBSERVED_AT.plusSeconds(90)), anyInt());
+    }
+
+    @Test
+    void 유효_기간이_닫힌_판본의_예보도_회수_대상이다() {
+        // given
+        final long retiredRouteVersion = 9L;
+        givenPendingOn(retiredRouteVersion);
+
+        // when
+        job.settleArrivalLabels();
+
+        // then
+        verify(seatForecastRepository).findPending(eq(retiredRouteVersion), anyInt());
+    }
+
+    @Test
+    void 한_회차는_회수된_예보만큼_안_닫힌_행을_줄인다() {
+        // given
+        givenPendingOn(ROUTE_VERSION_3330, pending(100L, 40), pending(101L, 41), pending(102L, 42));
+        givenArrivals(passedAt(TARGET_STOP_ORDER, 60, 0));
+
+        // when
+        job.settleArrivalLabels();
+
+        // then
+        assertThat(captured()).hasSize(3);
+    }
+
+    private void givenPendingOn(
+        final long routeVersionId,
         PendingForecast... forecasts
     ) {
+        when(seatForecastRepository.findRouteVersionIdsWithPendingForecasts())
+            .thenReturn(List.of(routeVersionId));
         when(seatForecastRepository.findPending(anyLong(), anyInt())).thenReturn(List.of(forecasts));
     }
 
@@ -176,19 +229,13 @@ class ArrivalLabelJobTest {
         final long vehicleObservationId,
         final int passedStopOrder
     ) {
-        return new PendingForecast(
-            vehicleObservationId,
-            TARGET_STOP_ORDER,
-            ROUTE_VERSION_3330,
-            VEHICLE_ID,
-            TARGET_STOP_ORDER - passedStopOrder,
-            OBSERVED_AT);
+        return forecastMadeAt(vehicleObservationId, passedStopOrder, 0);
     }
 
-    private PendingForecast pendingObservedLater(
+    private PendingForecast forecastMadeAt(
         final long vehicleObservationId,
         final int passedStopOrder,
-        final int secondsLater
+        final int secondsAfterObserved
     ) {
         return new PendingForecast(
             vehicleObservationId,
@@ -196,12 +243,13 @@ class ArrivalLabelJobTest {
             ROUTE_VERSION_3330,
             VEHICLE_ID,
             TARGET_STOP_ORDER - passedStopOrder,
-            OBSERVED_AT.plusSeconds(secondsLater));
+            OBSERVED_AT.plusSeconds(secondsAfterObserved),
+            OBSERVED_AT.plusSeconds(secondsAfterObserved));
     }
 
     private ArrivalCandidate passedAt(
         final int passedStopOrder,
-        final int secondsAfterForecast,
+        final int secondsAfterObserved,
         Integer remainingSeats
     ) {
         return new ArrivalCandidate(
@@ -210,12 +258,12 @@ class ArrivalLabelJobTest {
                 VEHICLE_ID,
                 ROUTE_VERSION_3330,
                 passedStopOrder,
-                OBSERVED_AT.plusSeconds(secondsAfterForecast),
+                OBSERVED_AT.plusSeconds(secondsAfterObserved),
                 remainingSeats));
     }
 
     private ForecastProperties properties() {
         return new ForecastProperties(
-            true, Duration.ofSeconds(10), Duration.ofSeconds(60), Duration.ofHours(6), 20, 500, 200);
+            true, Duration.ofSeconds(10), Duration.ofSeconds(60), Duration.ofHours(6), 20, 3000, 400);
     }
 }

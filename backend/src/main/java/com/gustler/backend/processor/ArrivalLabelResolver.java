@@ -16,6 +16,10 @@ import java.util.List;
  * <p>도착이 아니라 <b>출발</b>을 재는 이유는 도착 시점의 0석이 만차가 아니기 때문이다.
  * 하차하면 자리가 생긴다. 실측으로도 도착 시점 만석 3.02퍼센트 대 출발 이후 11.95퍼센트로 네 배 벌어진다.
  *
+ * <p><b>기다리다 포기하는 자리가 있다.</b> 뒤 관측이 아무리 봐도 대상 순번에 안 닿으면 그 예보는
+ * 영영 안 닫힌다. 운행을 끝낸 차량이 그렇다. 안 닫힌 행이 쌓이면 회수 대상 조회가 그 행들로 채워져서
+ * 뒤에 온 예보가 조회에 못 들어온다. 그래서 {@link #LONGEST_WAIT_FOR_ARRIVAL} 이 지나면 끊긴 것으로 닫는다.
+ *
  * <p>여정은 여정 키로 안 잇는다. 적재가 그 열을 아직 안 채워서 늘 비어 있고, 티켓대로 하면
  * 모든 예보 행이 끊김으로 닫힌다. 대신 같은 차량으로 잇고 순번 되돌림과 관측 공백으로 끊는다.
  * 궤적 조립이 쓰는 규칙과 같다. 여정 키가 채워지면 이 판정을 다시 봐야 한다.
@@ -30,15 +34,25 @@ public final class ArrivalLabelResolver {
      */
     private static final Duration LONGEST_LABEL_GAP = Duration.ofSeconds(90);
 
+    /**
+     * 도착을 기다리는 한도. 이만큼 지나도 대상 순번에 안 닿으면 그 여정은 끝난 것으로 본다.
+     *
+     * <p>지평 12의 중앙 소요가 26.5분이라 정상 운행이면 그 안에 닿는다. 지연과 심야 배차를 감안해
+     * 네 배 넘게 잡았다. 짧게 잡으면 늦은 차의 라벨을 버리고, 길게 잡으면 안 닫힌 행이 오래 쌓인다.
+     */
+    private static final Duration LONGEST_WAIT_FOR_ARRIVAL = Duration.ofHours(2);
+
     private ArrivalLabelResolver() {
     }
 
     /**
-     * @param laterObservations 예보를 낸 관측보다 뒤인 같은 차량의 관측. 시각 오름차순이어야 한다
+     * @param laterObservations 예보를 낸 뒤인 같은 차량의 관측. 시각 오름차순이어야 한다
+     * @param now 지금 시각. 기다림을 언제 그만둘지 재는 데만 쓴다
      */
     public static ArrivalLabel resolve(
         PendingForecast forecast,
-        List<ArrivalCandidate> laterObservations
+        List<ArrivalCandidate> laterObservations,
+        Instant now
     ) {
         if (!forecast.hasVehicleId()) {
             return new ArrivalLabel.Lost();
@@ -61,7 +75,16 @@ public final class ArrivalLabelResolver {
             passedStopOrder = candidate.passedStopOrder();
             previousObservedAt = candidate.observedAt();
         }
-        return new ArrivalLabel.NotArrivedYet();
+        return waitedTooLong(forecast, now)
+            ? new ArrivalLabel.Lost()
+            : new ArrivalLabel.NotArrivedYet();
+    }
+
+    private static boolean waitedTooLong(
+        PendingForecast forecast,
+        Instant now
+    ) {
+        return Duration.between(forecast.observedAt(), now).compareTo(LONGEST_WAIT_FOR_ARRIVAL) > 0;
     }
 
     private static boolean isGapTooLong(

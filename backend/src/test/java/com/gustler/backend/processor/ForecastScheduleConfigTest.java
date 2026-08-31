@@ -13,6 +13,12 @@ import org.springframework.test.context.TestPropertySource;
 @TestPropertySource(properties = "forecast.enabled=true")
 class ForecastScheduleConfigTest {
 
+    /**
+     * 예보 행이 하루에 얼마나 들어오나. 노선당 98만 행이 에픽이 잡은 상한이고 지금 노선이 둘이다.
+     * 회수가 이보다 느리면 안 닫힌 행이 날마다 쌓인다.
+     */
+    private static final long LARGEST_DAILY_FORECAST_ROWS = 980_000L * 2;
+
     @Autowired
     private ApplicationContext applicationContext;
 
@@ -23,6 +29,19 @@ class ForecastScheduleConfigTest {
 
         // then
         assertThat(actual).isNotNull();
+    }
+
+    @Test
+    void 하루_회수량이_예상_최대_유입보다_많다() {
+        // given
+        ForecastProperties properties = applicationContext.getBean(ForecastProperties.class);
+
+        // when
+        final long actual = Duration.ofDays(1).dividedBy(properties.settlementInterval())
+            * properties.pendingLimit();
+
+        // then
+        assertThat(actual).isGreaterThan(LARGEST_DAILY_FORECAST_ROWS);
     }
 
     @Test

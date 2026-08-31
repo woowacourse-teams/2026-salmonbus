@@ -16,13 +16,19 @@ class ArrivalLabelResolverTest {
     private static final int PASSED_STOP_ORDER = TARGET_STOP_ORDER - STOPS_TO_TARGET;
     private static final long ARRIVAL_OBSERVATION_ID = 7700L;
 
+    /** 아직 기다릴 만한 시각. 예보를 낸 지 10분이다. */
+    private static final Instant STILL_WAITING_AT = FORECAST_AT.plusSeconds(600);
+
+    /** 기다림 한도(2시간)를 넘긴 시각. */
+    private static final Instant WAITED_TOO_LONG_AT = FORECAST_AT.plusSeconds(2 * 3600 + 1);
+
     @Test
     void 대상_정류장을_지난_관측의_잔여석이_0이면_만석으로_회수한다() {
         // given
         List<ArrivalCandidate> passing = List.of(passedAt(TARGET_STOP_ORDER, 60, 0));
 
         // when
-        ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), passing);
+        ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), passing, STILL_WAITING_AT);
 
         // then
         assertThat(actual).isEqualTo(new ArrivalLabel.Settled(ARRIVAL_OBSERVATION_ID, 0));
@@ -34,7 +40,7 @@ class ArrivalLabelResolverTest {
         List<ArrivalCandidate> passing = List.of(passedAt(TARGET_STOP_ORDER, 60, 9));
 
         // when
-        ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), passing);
+        ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), passing, STILL_WAITING_AT);
 
         // then
         assertThat(actual).isEqualTo(new ArrivalLabel.Settled(ARRIVAL_OBSERVATION_ID, 9));
@@ -48,7 +54,7 @@ class ArrivalLabelResolverTest {
             passedAt(PASSED_STOP_ORDER + 2, 40, 8));
 
         // when
-        ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), stillComing);
+        ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), stillComing, STILL_WAITING_AT);
 
         // then
         assertThat(actual.scoringState()).isEqualTo(ScoringState.PENDING);
@@ -60,7 +66,7 @@ class ArrivalLabelResolverTest {
         List<ArrivalCandidate> passing = List.of(passedAt(TARGET_STOP_ORDER, 60, null));
 
         // when
-        ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), passing);
+        ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), passing, STILL_WAITING_AT);
 
         // then
         assertThat(actual).isEqualTo(new ArrivalLabel.SeatMissing(ARRIVAL_OBSERVATION_ID));
@@ -74,7 +80,7 @@ class ArrivalLabelResolverTest {
             passedAt(TARGET_STOP_ORDER + 1, 80, 9));
 
         // when
-        ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), jumped);
+        ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), jumped, STILL_WAITING_AT);
 
         // then
         assertThat(actual.scoringState()).isEqualTo(ScoringState.SKIPPED);
@@ -86,7 +92,7 @@ class ArrivalLabelResolverTest {
         List<ArrivalCandidate> afterGap = List.of(passedAt(TARGET_STOP_ORDER, 91, 9));
 
         // when
-        ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), afterGap);
+        ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), afterGap, STILL_WAITING_AT);
 
         // then
         assertThat(actual.scoringState()).isEqualTo(ScoringState.LOST);
@@ -98,7 +104,7 @@ class ArrivalLabelResolverTest {
         List<ArrivalCandidate> withinGap = List.of(passedAt(TARGET_STOP_ORDER, 90, 9));
 
         // when
-        ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), withinGap);
+        ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), withinGap, STILL_WAITING_AT);
 
         // then
         assertThat(actual.scoringState()).isEqualTo(ScoringState.SETTLED);
@@ -112,7 +118,7 @@ class ArrivalLabelResolverTest {
             passedAt(1, 40, 40));
 
         // when
-        ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), turnedAround);
+        ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), turnedAround, STILL_WAITING_AT);
 
         // then
         assertThat(actual.scoringState()).isEqualTo(ScoringState.LOST);
@@ -122,10 +128,10 @@ class ArrivalLabelResolverTest {
     void 차량_아이디가_없는_예보는_도착을_찾을_수_없어_끊긴_것으로_닫는다() {
         // given
         PendingForecast withoutVehicleId = new PendingForecast(
-            100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, null, STOPS_TO_TARGET, FORECAST_AT);
+            100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, null, STOPS_TO_TARGET, FORECAST_AT, FORECAST_AT);
 
         // when
-        ArrivalLabel actual = ArrivalLabelResolver.resolve(withoutVehicleId, List.of());
+        ArrivalLabel actual = ArrivalLabelResolver.resolve(withoutVehicleId, List.of(), STILL_WAITING_AT);
 
         // then
         assertThat(actual.scoringState()).isEqualTo(ScoringState.LOST);
@@ -140,15 +146,45 @@ class ArrivalLabelResolverTest {
             passedAt(PASSED_STOP_ORDER, 60, 9));
 
         // when
-        ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), waiting);
+        ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), waiting, STILL_WAITING_AT);
 
         // then
         assertThat(actual.scoringState()).isEqualTo(ScoringState.PENDING);
     }
 
+    @Test
+    void 기다림_한도를_넘도록_대상_정류장에_안_닿으면_끊긴_것으로_닫는다() {
+        // given
+        List<ArrivalCandidate> stillComing = List.of(passedAt(PASSED_STOP_ORDER + 1, 20, 9));
+
+        // when
+        ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), stillComing, WAITED_TOO_LONG_AT);
+
+        // then
+        assertThat(actual.scoringState()).isEqualTo(ScoringState.LOST);
+    }
+
+    @Test
+    void 뒤_관측이_하나도_없어도_한도_전까지는_열어_둔다() {
+        // when
+        ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), List.of(), STILL_WAITING_AT);
+
+        // then
+        assertThat(actual.scoringState()).isEqualTo(ScoringState.PENDING);
+    }
+
+    @Test
+    void 운행을_끝내_뒤_관측이_없는_차량은_한도가_지나면_닫힌다() {
+        // when
+        ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), List.of(), WAITED_TOO_LONG_AT);
+
+        // then
+        assertThat(actual.scoringState()).isEqualTo(ScoringState.LOST);
+    }
+
     private PendingForecast pending() {
         return new PendingForecast(
-            100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, VEHICLE_ID, STOPS_TO_TARGET, FORECAST_AT);
+            100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, VEHICLE_ID, STOPS_TO_TARGET, FORECAST_AT, FORECAST_AT);
     }
 
     private ArrivalCandidate passedAt(
