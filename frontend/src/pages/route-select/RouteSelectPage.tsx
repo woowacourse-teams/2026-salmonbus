@@ -1,6 +1,6 @@
 import { RouteList } from "./components/RouteList";
 import salmongProud from "./assets/salmong-proud.png";
-import { PageInfo } from "../../shared/components/PageInfo";
+import { PageInfo } from "@/shared/components/PageInfo";
 import { titleMock, captionMock, routesMock } from "./api/routeSelect.mock";
 
 export function RouteSelectPage() {
