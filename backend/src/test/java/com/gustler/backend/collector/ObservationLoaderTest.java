@@ -142,7 +142,7 @@ class ObservationLoaderTest {
     @Test
     void 정류소_순번이_빈_차량이_섞여도_나머지가_저장된다() {
         // when
-        final long batchId = loader.load(attempt(), List.of(
+        loadBuses(List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_DEPARTED),
             busWithoutStopSequence(VEHICLE_204003542),
             busAt(VEHICLE_204000139, 3, STOP_208000069, RUNNING_STATE_MOVING)));
@@ -154,7 +154,7 @@ class ObservationLoaderTest {
     @Test
     void 정류소_순번이_빈_차량이_있어도_수집_묶음은_남는다() {
         // when
-        final long batchId = loader.load(attempt(), List.of(
+        loadBuses(List.of(
             busWithoutStopSequence(VEHICLE_204003542)));
 
         // then
