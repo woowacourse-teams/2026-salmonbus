@@ -29,6 +29,7 @@ class JdbcVehicleTrajectoryRepositoryTest {
     private static final String ROUTE_204000121 = "204000121";
     private static final String CONTENT_DIGEST = "0".repeat(64);
     private static final String NORMALIZATION_VERSION = "normalization-v1.0.0";
+    private static final String STRATEGY_VERSION = "adaptive-kst-v1.0.1";
 
     private static final String REPORTED_UNKNOWN = "REPORTED_UNKNOWN";
 
@@ -319,13 +320,15 @@ class JdbcVehicleTrajectoryRepositoryTest {
         return jdbcClient.sql("""
                 INSERT INTO observation_batch (
                     route_version_id, scheduled_at, attempt_number, attempt_key, requested_at,
-                    response_received_at, forecast_completed_at, outcome, normalization_version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    response_received_at, forecast_completed_at, outcome, normalization_version,
+                    collection_strategy_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
             .params(
                 versionId, EARLIER_POLL, 1, "%s-%d".formatted(ROUTE_204000057, insertedBatchCount++),
-                EARLIER_POLL, responseReceivedAt, forecastCompletedAt, outcome, NORMALIZATION_VERSION
+                EARLIER_POLL, responseReceivedAt, forecastCompletedAt, outcome, NORMALIZATION_VERSION,
+                STRATEGY_VERSION
             )
             .query(Long.class)
             .single();

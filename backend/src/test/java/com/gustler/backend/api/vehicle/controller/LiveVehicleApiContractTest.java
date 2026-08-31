@@ -38,6 +38,7 @@ class LiveVehicleApiContractTest {
     );
     private static final String CONTENT_DIGEST = "5".repeat(64);
     private static final String NORMALIZATION_VERSION = "normalization-v1.0.0";
+    private static final String STRATEGY_VERSION = "adaptive-kst-v1.0.1";
     private static final int RUNNING_STATE_ARRIVING = 1;
     private static final String SEATS_REPORTED_UNKNOWN = "REPORTED_UNKNOWN";
     private static final String SEATS_NOT_REPORTED = "NOT_REPORTED";
@@ -303,8 +304,9 @@ class LiveVehicleApiContractTest {
                 INSERT INTO observation_batch (
                     route_version_id, scheduled_at, attempt_number, attempt_key,
                     requested_at, response_received_at, completed_at,
-                    http_status, result_code, outcome, stored_rows, normalization_version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    http_status, result_code, outcome, stored_rows, normalization_version,
+                    collection_strategy_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
             .params(
@@ -319,7 +321,8 @@ class LiveVehicleApiContractTest {
                 0,
                 outcome,
                 storedRows,
-                NORMALIZATION_VERSION
+                NORMALIZATION_VERSION,
+                STRATEGY_VERSION
             )
             .query(Long.class)
             .single();
@@ -332,8 +335,9 @@ class LiveVehicleApiContractTest {
         jdbcClient.sql("""
                 INSERT INTO observation_batch (
                     route_version_id, scheduled_at, attempt_number, attempt_key,
-                    requested_at, completed_at, outcome, failure_code, normalization_version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    requested_at, completed_at, outcome, failure_code, normalization_version,
+                    collection_strategy_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """)
             .params(
                 route.routeVersionId(),
@@ -344,7 +348,8 @@ class LiveVehicleApiContractTest {
                 scheduledAt.plusSeconds(2),
                 "FAILED_UPSTREAM",
                 "UPSTREAM_ERROR",
-                NORMALIZATION_VERSION
+                NORMALIZATION_VERSION,
+                STRATEGY_VERSION
             )
             .update();
     }
@@ -356,8 +361,9 @@ class LiveVehicleApiContractTest {
         jdbcClient.sql("""
                 INSERT INTO observation_batch (
                     route_version_id, scheduled_at, attempt_number, attempt_key,
-                    requested_at, completed_at, outcome, stored_rows, normalization_version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    requested_at, completed_at, outcome, stored_rows, normalization_version,
+                    collection_strategy_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """)
             .params(
                 route.routeVersionId(),
@@ -368,7 +374,8 @@ class LiveVehicleApiContractTest {
                 scheduledAt.plusSeconds(2),
                 "SUCCESS_ROWS",
                 1,
-                NORMALIZATION_VERSION
+                NORMALIZATION_VERSION,
+                STRATEGY_VERSION
             )
             .update();
     }

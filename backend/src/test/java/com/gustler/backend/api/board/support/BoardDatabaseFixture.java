@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 public class BoardDatabaseFixture {
 
     private static final String NORMALIZATION_VERSION = "normalization-v1.0.0";
+    private static final String COLLECTION_STRATEGY_VERSION = "adaptive-kst-v1.0.1";
     /** 지나온 정류소 순번이 stop_order 와 같아지는 상태다. 이 픽스처는 차량 위치만 쓰고 상태는 안 본다. */
     private static final int RUNNING_STATE_DEPARTED = 2;
     /** 잔여석은 아는 값이거나 모르는 사유 둘 중 하나만 있어야 한다. 이 픽스처는 좌석을 안 본다. */
@@ -144,12 +145,12 @@ public class BoardDatabaseFixture {
                     route_version_id, scheduled_at, attempt_number, attempt_key,
                     requested_at, response_received_at, forecast_completed_at,
                     completed_at, outcome, provider_rows, stored_rows, excluded_rows,
-                    normalization_version
+                    normalization_version, collection_strategy_version
                 ) VALUES (
                     :routeVersionId, :scheduledAt, 1, :attemptKey,
                     :requestedAt, :responseReceivedAt, :forecastCompletedAt,
                     :completedAt, :outcome, :providerRows, :storedRows, 0,
-                    :normalizationVersion
+                    :normalizationVersion, :collectionStrategyVersion
                 )
                 RETURNING id
                 """)
@@ -164,6 +165,7 @@ public class BoardDatabaseFixture {
             .param("providerRows", storedRows)
             .param("storedRows", storedRows)
             .param("normalizationVersion", NORMALIZATION_VERSION)
+            .param("collectionStrategyVersion", COLLECTION_STRATEGY_VERSION)
             .query(Long.class)
             .single();
     }
