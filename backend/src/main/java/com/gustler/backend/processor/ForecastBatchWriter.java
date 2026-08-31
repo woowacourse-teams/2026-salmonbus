@@ -48,9 +48,28 @@ public class ForecastBatchWriter {
         SeatForecastModel model
     ) {
         Instant generatedAt = clock.instant();
-        seatForecastRepository.save(
-            forecastsOf(batch, stops, deployment, model, generatedAt, demandStatisticsRevisionOf(batch, deployment)));
+        StopDemandStatistics statistics = stopDemandStatisticsOf(batch, deployment, generatedAt);
+        seatForecastRepository.save(forecastsOf(
+            batch, stops, statistics, deployment, model, generatedAt, demandStatisticsRevisionOf(batch, deployment)));
         seatForecastRepository.markForecastCompleted(batch.observationBatchId(), generatedAt);
+    }
+
+    /**
+     * 이 batch 의 예보가 읽을 셀 통계. batch 하나에 한 번만 읽는다.
+     *
+     * <p>셀 하나만 집어 오는 길이 없다. z화도 이웃 폴백도 구간합도 같은 세대의 행 전부가 손에 있어야
+     * 닫힌다. 차량마다 다시 읽으면 같은 세대를 수십 번 읽게 된다.
+     *
+     * <p>시간대는 계산 시각으로 가른다. 그 차량이 대상 정류장에 도착할 시각이 더 맞지만 그 시각을
+     * 우리는 모른다. 12정류장 앞이 중앙값 26.5분이라 아침과 저녁의 경계에서만 갈린다.
+     */
+    private StopDemandStatistics stopDemandStatisticsOf(
+        PendingForecastBatch batch,
+        ActiveModelDeployment deployment,
+        Instant generatedAt
+    ) {
+        return stopDemandStatisticsRepository.read(
+            batch.routeVersionId(), TimeSlot.of(generatedAt, clock), deployment.calculationVersion());
     }
 
     /**
@@ -73,6 +92,7 @@ public class ForecastBatchWriter {
     private List<SeatForecast> forecastsOf(
         PendingForecastBatch batch,
         RouteStops stops,
+        StopDemandStatistics statistics,
         ActiveModelDeployment deployment,
         SeatForecastModel model,
         Instant generatedAt,
@@ -84,7 +104,7 @@ public class ForecastBatchWriter {
                 forecasts.add(SeatForecast.of(
                     trajectory.vehicleObservationId(),
                     target,
-                    model.predict(target),
+                    model.predict(new SeatForecastInput(target, trajectory, statistics, stops)),
                     deployment,
                     demandStatisticsRevision,
                     generatedAt));

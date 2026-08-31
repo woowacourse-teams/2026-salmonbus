@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -95,6 +96,9 @@ class ForecastJobTest {
     @Autowired
     private JdbcClient jdbcClient;
 
+    @Autowired
+    private RecordingSeatForecastModel seatForecastModel;
+
     private long routeVersionId;
     private long modelDeploymentId;
     private long observationBatchId;
@@ -102,6 +106,7 @@ class ForecastJobTest {
 
     @BeforeEach
     void 노선_판본과_정류장과_도는_배포와_관측을_먼저_저장한다() {
+        seatForecastModel.forgetReceivedInputs();
         final long routeId = insertRoute();
         routeVersionId = insertRouteVersion(routeId);
         for (int stopOrder = FIRST_STOP_ORDER; stopOrder <= LAST_STOP_ORDER; stopOrder++) {
@@ -338,6 +343,36 @@ class ForecastJobTest {
             .orElse(null);
     }
 
+    @Test
+    void 배치는_모델에_셀_통계와_정류장_목록까지_모아_넘긴다() {
+        // when
+        forecastJob.writeForecasts();
+
+        // then 모델이 DB 를 안 읽으므로 배치가 재료를 다 챙겨야 한다
+        SeatForecastInput actual = seatForecastModel.firstReceivedInput();
+        assertThat(actual.stops().largestStopOrder()).isEqualTo(LAST_STOP_ORDER);
+    }
+
+    @Test
+    void 배치가_넘기는_재료의_셀_통계는_그_노선_판본의_것이다() {
+        // when
+        forecastJob.writeForecasts();
+
+        // then
+        SeatForecastInput actual = seatForecastModel.firstReceivedInput();
+        assertThat(actual.statistics().routeVersionId()).isEqualTo(routeVersionId);
+    }
+
+    @Test
+    void 배치가_넘기는_재료에_그_차량이_보여_준_최대_잔여석이_들어_있다() {
+        // when
+        forecastJob.writeForecasts();
+
+        // then
+        SeatForecastInput actual = seatForecastModel.firstReceivedInput();
+        assertThat(actual.maximumSeatsEverObserved()).isEqualTo(SEATS_LEFT);
+    }
+
     private void markForecastCompleted(
         final long batchId,
         OffsetDateTime completedAt
@@ -524,22 +559,46 @@ class ForecastJobTest {
     }
 
     /**
-     * 늘 같은 값을 내는 좌석 예보 모델.
+     * 늘 같은 값을 내고 받은 재료를 적어 두는 좌석 예보 모델.
      *
      * <p>계수 번들이 없어 {@link SeatForecastModel} 구현이 아직 없다. 배치가 판을 열려면 모델 빈이
      * 있어야 해서 테스트가 하나 올린다. 값이 고정이라 예보 행의 확률과 기대 잔여석이 실행마다 같다.
+     *
+     * <p>받은 재료를 적어 두는 이유는 배치가 모델에 무엇을 넘기는지가 이 티켓에서 바뀌었기 때문이다.
+     * 예보 행만 보면 재료가 빈 채로 넘어가도 알 수 없다.
      */
     @TestConfiguration(proxyBeanMethods = false)
     static class FixedSeatForecastModel {
+
+        @Bean
+        RecordingSeatForecastModel seatForecastModel() {
+            return new RecordingSeatForecastModel();
+        }
+    }
+
+    static class RecordingSeatForecastModel implements SeatForecastModel {
 
         private static final double FULL_CHANCE_RAW = 0.4;
 
         /** 0석 남을 확률 0.4, 1석 남을 확률 0.6. 합이 1이라 분포 규칙을 지킨다. */
         private static final List<Double> CHANCE_BY_SEATS = List.of(0.4, 0.6);
 
-        @Bean
-        SeatForecastModel seatForecastModel() {
-            return target -> new SeatForecastResult(new SeatDistribution(CHANCE_BY_SEATS), FULL_CHANCE_RAW);
+        private final List<SeatForecastInput> receivedInputs = new ArrayList<>();
+
+        @Override
+        public SeatForecastResult predict(
+            SeatForecastInput input
+        ) {
+            receivedInputs.add(input);
+            return new SeatForecastResult(new SeatDistribution(CHANCE_BY_SEATS), FULL_CHANCE_RAW);
+        }
+
+        void forgetReceivedInputs() {
+            receivedInputs.clear();
+        }
+
+        SeatForecastInput firstReceivedInput() {
+            return receivedInputs.getFirst();
         }
     }
 }
