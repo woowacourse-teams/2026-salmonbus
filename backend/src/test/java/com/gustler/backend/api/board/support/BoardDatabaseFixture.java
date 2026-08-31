@@ -6,6 +6,12 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 public class BoardDatabaseFixture {
 
+    private static final String NORMALIZATION_VERSION = "normalization-v1.0.0";
+    /** 지나온 정류소 순번이 stop_order 와 같아지는 상태다. 이 픽스처는 차량 위치만 쓰고 상태는 안 본다. */
+    private static final int RUNNING_STATE_DEPARTED = 2;
+    /** 잔여석은 아는 값이거나 모르는 사유 둘 중 하나만 있어야 한다. 이 픽스처는 좌석을 안 본다. */
+    private static final String NOT_REPORTED = "NOT_REPORTED";
+
     private final JdbcClient jdbcClient;
 
     public BoardDatabaseFixture(JdbcClient jdbcClient) {
@@ -137,11 +143,13 @@ public class BoardDatabaseFixture {
                 INSERT INTO observation_batch (
                     route_version_id, scheduled_at, attempt_number, attempt_key,
                     requested_at, response_received_at, forecast_completed_at,
-                    completed_at, outcome, provider_rows, stored_rows, excluded_rows
+                    completed_at, outcome, provider_rows, stored_rows, excluded_rows,
+                    normalization_version
                 ) VALUES (
                     :routeVersionId, :scheduledAt, 1, :attemptKey,
                     :requestedAt, :responseReceivedAt, :forecastCompletedAt,
-                    :completedAt, :outcome, :providerRows, :storedRows, 0
+                    :completedAt, :outcome, :providerRows, :storedRows, 0,
+                    :normalizationVersion
                 )
                 RETURNING id
                 """)
@@ -155,10 +163,16 @@ public class BoardDatabaseFixture {
             .param("outcome", outcome)
             .param("providerRows", storedRows)
             .param("storedRows", storedRows)
+            .param("normalizationVersion", NORMALIZATION_VERSION)
             .query(Long.class)
             .single();
     }
 
+    /**
+     * observedAt 은 더 이상 저장되지 않는다. vehicle_observation.observed_at 이 지워졌고
+     * 관측 시각은 묶음의 response_received_at 이 권위다. 이 클래스를 쓰는 테스트가 두 곳에
+     * 같은 값을 넘기고 있어 뜻은 그대로다. 파라미터를 지우려면 호출부까지 손봐야 해서 남겨뒀다.
+     */
     public long insertObservation(
         RouteContext route,
         final long batchId,
@@ -171,20 +185,23 @@ public class BoardDatabaseFixture {
         return jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
                     observation_batch_id, route_version_id, source_row_number,
-                    observed_at, vehicle_id, stop_order, stop_id
+                    vehicle_id, stop_order, stop_id,
+                    passed_stop_order, running_state, seat_unknown_reason
                 ) VALUES (
                     :batchId, :routeVersionId, :sourceRowNumber,
-                    :observedAt, :vehicleId, :stopOrder, :stopId
+                    :vehicleId, :stopOrder, :stopId,
+                    :stopOrder, :runningState, :seatUnknownReason
                 )
                 RETURNING id
                 """)
             .param("batchId", batchId)
             .param("routeVersionId", route.routeVersionId())
             .param("sourceRowNumber", sourceRowNumber)
-            .param("observedAt", observedAt)
             .param("vehicleId", vehicleId)
             .param("stopOrder", stopOrder)
             .param("stopId", stopId)
+            .param("runningState", RUNNING_STATE_DEPARTED)
+            .param("seatUnknownReason", NOT_REPORTED)
             .query(Long.class)
             .single();
     }
