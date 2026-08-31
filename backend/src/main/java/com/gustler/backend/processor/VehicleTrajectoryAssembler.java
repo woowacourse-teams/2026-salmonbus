@@ -1,7 +1,10 @@
 package com.gustler.backend.processor;
 
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -142,36 +145,84 @@ public final class VehicleTrajectoryAssembler {
     }
 
     /**
-     * 같은 정류소를 나보다 앞서 지난 다른 차를 이력에서 찾는다. 가장 최근에 지난 차를 고른다.
-     * 여정이 아니라 정류소로 찾는 것이라 궤적이 끊겨도 상관없다.
+     * 같은 정류소를 나보다 앞서 지난 차. 그 순번에 처음 들어온 시각으로 앞뒤를 가리고,
+     * 나보다 먼저 들어온 차 중 가장 늦게 들어온 차를 고른다.
+     *
+     * <p>한 판 안에서는 앞뒤를 못 가린다. 그 판의 차는 관측 시각이 다 같고, 상류가 준 행 순서는
+     * 통과 순서가 아니다. 그래서 나와 같은 판으로 그 순번에 들어온 차가 있으면 모른다고 답한다.
+     * 그렇게 해야 두 차가 서로를 앞차로 지목하는 일이 안 생긴다.
      */
     private static PrecedingVehicle findPrecedingVehicle(
         ObservationHistory history,
         TrajectoryObservation target
     ) {
-        List<ObservedBatch> batches = history.batches();
-        for (int index = batches.size() - 2; index >= 0; index--) {
-            Optional<TrajectoryObservation> ahead = batches.get(index).observations().stream()
-                .filter(observation -> !observation.vehicleId().equals(target.vehicleId()))
-                .filter(observation -> observation.passedStopOrder() == target.passedStopOrder())
-                .findFirst();
-            if (ahead.isPresent()) {
-                return toPrecedingVehicle(ahead.get());
+        Map<String, StopEntry> entryByVehicle = stopEntriesAt(history, target.passedStopOrder());
+        Instant enteredAt = entryByVehicle.get(target.vehicleId()).enteredAt();
+
+        StopEntry nearestAhead = null;
+        for (StopEntry other : entryByVehicle.values()) {
+            if (other.vehicleId().equals(target.vehicleId())) {
+                continue;
+            }
+            if (other.enteredAt().equals(enteredAt)) {
+                return new PrecedingVehicle.Unknown(TrajectoryGap.ARRIVAL_ORDER_UNKNOWN);
+            }
+            if (other.enteredAt().isBefore(enteredAt) && isLaterThan(other, nearestAhead)) {
+                nearestAhead = other;
             }
         }
-        return new PrecedingVehicle.Unknown(TrajectoryGap.NO_VEHICLE_AHEAD);
+        if (nearestAhead == null) {
+            return new PrecedingVehicle.Unknown(TrajectoryGap.NO_VEHICLE_AHEAD);
+        }
+        return toPrecedingVehicle(nearestAhead);
+    }
+
+    /**
+     * 차량마다 그 순번에 처음 들어온 판을 찾는다. 판이 오래된 것부터 늘어서 있어서
+     * 처음 넣은 것이 곧 처음 들어온 시점이다.
+     */
+    private static Map<String, StopEntry> stopEntriesAt(
+        ObservationHistory history,
+        final int passedStopOrder
+    ) {
+        Map<String, StopEntry> entryByVehicle = new LinkedHashMap<>();
+        for (ObservedBatch batch : history.batches()) {
+            for (TrajectoryObservation observation : batch.observations()) {
+                if (observation.passedStopOrder() == passedStopOrder) {
+                    entryByVehicle.putIfAbsent(
+                        observation.vehicleId(),
+                        new StopEntry(observation.vehicleId(), batch.responseReceivedAt(), observation));
+                }
+            }
+        }
+        return entryByVehicle;
+    }
+
+    private static boolean isLaterThan(
+        StopEntry candidate,
+        StopEntry chosen
+    ) {
+        return chosen == null || candidate.enteredAt().isAfter(chosen.enteredAt());
     }
 
     private static PrecedingVehicle toPrecedingVehicle(
-        TrajectoryObservation ahead
+        StopEntry ahead
     ) {
-        if (!ahead.vehicle().hasKnownSeats()) {
+        if (!ahead.observation().vehicle().hasKnownSeats()) {
             return new PrecedingVehicle.Unknown(TrajectoryGap.SEATS_UNKNOWN);
         }
         return new PrecedingVehicle.Known(
             ahead.vehicleId(),
-            ahead.vehicle().remainingSeats(),
-            ahead.vehicle().observedAt());
+            ahead.observation().vehicle().remainingSeats(),
+            ahead.enteredAt());
+    }
+
+    /** 차량 하나가 어느 순번에 처음 들어온 시점과 그때의 관측. */
+    private record StopEntry(
+        String vehicleId,
+        Instant enteredAt,
+        TrajectoryObservation observation
+    ) {
     }
 
     /** 대상 관측에서 뒤로 이어진 관측들. 최신이 앞이고, gap 은 이어지기를 멈춘 사유다. */

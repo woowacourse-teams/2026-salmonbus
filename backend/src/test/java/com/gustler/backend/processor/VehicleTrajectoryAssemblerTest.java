@@ -186,6 +186,24 @@ class VehicleTrajectoryAssemblerTest {
     }
 
     @Test
+    void 같은_판에_같은_순번으로_들어온_두_차는_서로를_앞차로_지목하지_않는다() {
+        // given
+        ObservationHistory history = history(
+            batch(1, observed(VEHICLE_204000206, STOP_6, 40), observed(VEHICLE_204003542, STOP_6, 12)),
+            batch(2, observed(VEHICLE_204000206, STOP_6, 38), observed(VEHICLE_204003542, STOP_6, 10)));
+
+        // when
+        List<PrecedingVehicle> actual = List.of(
+            trajectoryOf(history, VEHICLE_204000206).precedingVehicle(),
+            trajectoryOf(history, VEHICLE_204003542).precedingVehicle());
+
+        // then
+        assertThat(actual).containsExactly(
+            new PrecedingVehicle.Unknown(TrajectoryGap.ARRIVAL_ORDER_UNKNOWN),
+            new PrecedingVehicle.Unknown(TrajectoryGap.ARRIVAL_ORDER_UNKNOWN));
+    }
+
+    @Test
     void 앞서_그_정류소를_지난_차가_없으면_앞차를_없음으로_준다() {
         // given
         ObservationHistory history = history(

@@ -22,5 +22,7 @@ public enum TrajectoryGap {
     SEATS_UNKNOWN,
     /** 그 정류소를 앞서 지난 차가 이력 창에 없다 */
     NO_VEHICLE_AHEAD,
+    /** 그 순번에 같은 판으로 들어온 차가 있어 누가 앞인지 가릴 수 없다 */
+    ARRIVAL_ORDER_UNKNOWN,
     ;
 }
