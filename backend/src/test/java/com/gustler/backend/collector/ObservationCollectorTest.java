@@ -1,6 +1,7 @@
 package com.gustler.backend.collector;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
@@ -243,6 +244,31 @@ class ObservationCollectorTest {
     }
 
     @Test
+    void 노선_행_확보와_판본_열기가_한_트랜잭션에서_끝난다() {
+        // given 정류소 이름이 열 길이를 넘어 판본의 정류소를 넣는 데서 터진다
+        given(routeSource.read(ROUTE_3330))
+            .willReturn(new GbisRouteResult.Success(routeWithTooLongStopName()));
+
+        // when
+        assertThatThrownBy(() -> collector.collectOnce(ROUTE_3330)).isInstanceOf(RuntimeException.class);
+
+        // then 노선 행만 남고 판본이 없는 상태가 안 된다
+        assertThat(routeRowCount()).isZero();
+    }
+
+    @Test
+    void 상류를_부른_뒤_뜻밖의_예외가_나도_묶음이_DISPATCHING으로_안_남는다() {
+        // given RestClientException 이 아닌 것이라 GbisLocationSource 가 안 접어준다
+        given(locationSource.read(ROUTE_3330)).willThrow(new IllegalStateException("파서가 터졌다"));
+
+        // when
+        collector.collectOnce(ROUTE_3330);
+
+        // then 보낸 것은 맞고 결과만 모르는 자리로 닫힌다
+        assertThat(onlyBatchColumn("outcome", String.class)).isEqualTo("UNKNOWN_AFTER_DISPATCH");
+    }
+
+    @Test
     void 위치정보_한도가_없으면_판이_NOT_RESERVED로_남는다() {
         // given
         useUpQuotaOf(CallQuota.BUS_LOCATION);
@@ -312,6 +338,22 @@ class ObservationCollectorTest {
 
         // then
         assertThat(quotaRowCountOf(CallQuota.BUS_LOCATION)).isZero();
+    }
+
+    /**
+     * 정류소 이름이 route_stop.name 의 varchar(60) 을 넘는다.
+     * 노선 행은 들어가고 판본의 정류소를 넣는 데서 터지므로, 트랜잭션이 걸려 있으면 노선 행도 같이 되돌아간다.
+     */
+    private static UpstreamRoute routeWithTooLongStopName() {
+        return new UpstreamRoute(
+            ROUTE_3330, "3330", "범계역", "강남역",
+            RouteStops.from(null, List.of(
+                new UpstreamRouteStop(1, STOP_205000217, "범".repeat(61)))),
+            new RouteTimetable("05:00", "22:35", "05:00", "23:55"));
+    }
+
+    private int routeRowCount() {
+        return jdbcClient.sql("SELECT count(*) FROM route").query(Integer.class).single();
     }
 
     private static UpstreamRoute upstreamRoute() {

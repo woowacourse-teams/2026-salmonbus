@@ -132,6 +132,18 @@ class GbisRouteSourceTest {
     }
 
     @Test
+    void 회차_순번이_0_으로_와도_단방향_노선으로_읽어낸다() {
+        // given
+        respondWith(ROUTE_INFO_JSON.formatted(0).replace("\"turnSeq\":2", "\"turnSeq\":0"), THREE_STATIONS_JSON);
+
+        // when
+        final GbisRouteResult actual = source.read(ROUTE_3330);
+
+        // then 접지 않으면 회차 순번 검증에 걸려 이 노선 수집이 통째로 멈춘다
+        assertThat(((Success) actual).route().stops().turnSequence()).isNull();
+    }
+
+    @Test
     void 노선정보_결과_코드가_정상이_아니면_읽지_못한_것으로_받는다() {
         // given
         openApi.expect(requestTo(Matchers.containsString(ROUTE_INFO_PATH)))

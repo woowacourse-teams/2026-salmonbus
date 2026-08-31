@@ -32,6 +32,15 @@ class BusRouteInfoResponseTest {
             "downFirstTime":"05:00","downLastTime":"23:55"}}}}
         """;
 
+    private static final String ZERO_TURN_JSON = """
+        {"response":{"msgHeader":{
+            "queryTime":"2026-08-28 11:14:04.911","resultCode":0,"resultMessage":"정상"},
+          "msgBody":{"busRouteInfoItem":{
+            "routeName":"3330","startStationName":"범계역","endStationName":"강남역",
+            "upFirstTime":"05:00","upLastTime":"22:35",
+            "downFirstTime":"05:00","downLastTime":"23:55","turnSeq":0}}}}
+        """;
+
     @Autowired
     private ObjectMapper objectMapper;
 
@@ -44,6 +53,16 @@ class BusRouteInfoResponseTest {
         // then
         assertThat(actual.response().body().routeInfo()).isEqualTo(new RouteInfoItem(
             "3330", "범계역", "강남역", "05:00", "22:35", "05:00", "23:55", 2));
+    }
+
+    @Test
+    void 회차_순번이_0_이면_회차_없음으로_읽는다() {
+        // when
+        final BusRouteInfoResponse actual =
+            objectMapper.readValue(ZERO_TURN_JSON, BusRouteInfoResponse.class);
+
+        // then 정류소 순번은 1 부터라 0 인 회차 지점은 있을 수 없다
+        assertThat(actual.response().body().routeInfo().turnSequence()).isNull();
     }
 
     @Test

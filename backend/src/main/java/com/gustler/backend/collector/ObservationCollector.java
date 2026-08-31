@@ -69,8 +69,26 @@ public class ObservationCollector {
         }
 
         batchLedger.markDispatching(reservation.batchId(), now());
-        GbisLocationResult result = locationSource.read(upstreamRouteId);
-        batchLedger.conclude(reservation.batchId(), result, now());
+        batchLedger.conclude(reservation.batchId(), readOrGiveUp(upstreamRouteId), now());
+    }
+
+    /**
+     * 보낸 뒤에 뜻밖의 예외가 나도 그 묶음을 열어둔 채로 끝내지 않는다.
+     *
+     * <p>GbisLocationSource 가 RestClientException 은 NoResponse 로 접어주는데 그 밖의 것은 그대로 올라온다.
+     * 그러면 conclude 까지 못 가고 묶음이 DISPATCHING 으로 굳는다. 보낸 것은 맞고 결과만 모르는 상태라
+     * 응답이 안 온 것과 같은 자리(UNKNOWN_AFTER_DISPATCH)로 닫는다.
+     */
+    private GbisLocationResult readOrGiveUp(
+        String upstreamRouteId
+    ) {
+        try {
+            return locationSource.read(upstreamRouteId);
+        } catch (final RuntimeException e) {
+            log.error("상류를 부른 뒤 뜻밖의 예외가 났다. 보낸 것은 맞고 결과만 모른다. 노선={}",
+                upstreamRouteId, e);
+            return new GbisLocationResult.NoResponse(e.getMessage());
+        }
     }
 
     /**
