@@ -68,7 +68,12 @@ public class ObservationCollector {
             return;
         }
 
-        batchLedger.markDispatching(reservation.batchId(), now());
+        if (!batchLedger.markDispatching(reservation.batchId(), scheduledAt, now())) {
+            log.warn("자리를 잡고 보내기 전에 한국 자정이 지났는데 다음 날 한도가 없다. 이 batch 는 안 보낸다. "
+                + "노선={} 묶음={}", upstreamRouteId, reservation.batchId());
+            return;
+        }
+
         batchLedger.conclude(reservation.batchId(), readOrGiveUp(upstreamRouteId), now());
     }
 

@@ -213,7 +213,7 @@ class CallQuotaLedgerTest {
     }
 
     @Test
-    void 자리를_여럿_잡는_예약도_부른_트랜잭션이_되돌아가면_그대로_남는다() {
+    void 자리를_여럿_잡는_예약도_부른_쪽_트랜잭션에_합류한다() {
         // when
         transactionTemplate.executeWithoutResult(status -> {
             ledger.reserve(CallQuota.BUS_ROUTE, KOREA_8_28_LATE_NIGHT, TWO_CALLS);
@@ -221,7 +221,7 @@ class CallQuotaLedgerTest {
         });
 
         // then
-        assertThat(reservedCallsOn(KOREA_8_28, CallQuota.BUS_ROUTE)).isEqualTo(TWO_CALLS);
+        assertThat(quotaRowCountOn(KOREA_8_28, CallQuota.BUS_ROUTE)).isZero();
     }
 
     @Test
