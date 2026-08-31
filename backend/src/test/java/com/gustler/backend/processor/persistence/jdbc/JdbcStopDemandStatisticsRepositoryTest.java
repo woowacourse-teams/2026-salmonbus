@@ -80,6 +80,15 @@ class JdbcStopDemandStatisticsRepositoryTest {
     private static final int OBSERVED_MAX_SEATS = 40;
     private static final int SEATS_ON_PREDICTION_BELOW_MAX = 12;
 
+    /**
+     * 기준 시각 뒤에 받은 판의 잔여석과 그 판의 응답 시각. 시각은 DATA_UNTIL 보다 한 시간 뒤다.
+     *
+     * <p>이 잔여석이 정원으로 잡히면 1 - 10/80 = 0.875 가 나와서 0.75 와 갈린다.
+     */
+    private static final int SEATS_SEEN_AFTER_DATA_UNTIL = 80;
+    private static final OffsetDateTime RESPONSE_RECEIVED_AFTER_DATA_UNTIL =
+        OffsetDateTime.parse("2026-08-19T14:00:00+09:00");
+
     /** 잔여석 10 으로 도착한 정원 40 짜리 차량이 채운 비율. 정원을 12 로 잡으면 0.1667 이 나온다. */
     private static final double FILL_RATE_WITH_CAPACITY_40 = 0.75;
 
@@ -296,6 +305,28 @@ class JdbcStopDemandStatisticsRepositoryTest {
         insertSettledLabel(
             VEHICLE_204000206, TARGET_STOP_ORDER, NEXT_STOP_AHEAD,
             SEATS_ON_PREDICTION_BELOW_MAX, SEATS_ON_FIRST_ARRIVAL, FIRST_ARRIVED_AT, SCORED_AT);
+
+        // when
+        List<StopDemandHourlyTotals> actual =
+            jdbcStopDemandStatisticsRepository.readHourlyTotals(routeVersionId, DATA_UNTIL);
+
+        // then
+        assertThat(actual).singleElement()
+            .extracting(StopDemandHourlyTotals::fillRateTotal)
+            .isEqualTo(FILL_RATE_WITH_CAPACITY_40);
+    }
+
+    @Test
+    void 기준_시각_뒤에_들어온_잔여석은_정원에_안_들어간다() {
+        // given
+        insertSettledLabel(
+            VEHICLE_204000206, TARGET_STOP_ORDER, NEXT_STOP_AHEAD,
+            SEATS_ON_PREDICTION, SEATS_ON_FIRST_ARRIVAL, FIRST_ARRIVED_AT, SCORED_AT);
+        insertObservation(
+            VEHICLE_204000206,
+            TARGET_STOP_ORDER,
+            SEATS_SEEN_AFTER_DATA_UNTIL,
+            RESPONSE_RECEIVED_AFTER_DATA_UNTIL);
 
         // when
         List<StopDemandHourlyTotals> actual =

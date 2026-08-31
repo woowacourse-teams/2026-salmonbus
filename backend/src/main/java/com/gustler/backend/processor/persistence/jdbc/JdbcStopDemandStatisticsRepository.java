@@ -84,16 +84,23 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
      *
      * <p>도착 시각은 도착 관측이 딸린 판의 response_received_at 이다. 관측 시각의 권위가 거기 있다.
      * 라벨은 응답을 받은 판에서만 나와서 그 시각이 비지 않는다.
+     *
+     * <p><b>정원도 기준 시각에 걸린다.</b> 정원이 그 차량이 보여 준 최대 잔여석이라, 기준 시각 뒤에 더 큰
+     * 잔여석이 들어오면 예전 라벨의 분모가 달라진다. 그러면 같은 기준 시각으로 다시 돌려도 다른 값이 나와서
+     * 세대를 고정한다는 말이 성립하지 않는다. 그래서 정원을 세는 관측도 판을 조인해 같은 시각으로 자른다.
      */
     private static final String SELECT_HOURLY_TOTALS = """
         WITH vehicle_capacity AS (
-            SELECT vehicle_id,
-                   GREATEST(MAX(remaining_seats), 1) AS capacity
-            FROM vehicle_observation
-            WHERE route_version_id = :routeVersionId
-              AND vehicle_id IS NOT NULL
-              AND remaining_seats IS NOT NULL
-            GROUP BY vehicle_id
+            SELECT observation.vehicle_id,
+                   GREATEST(MAX(observation.remaining_seats), 1) AS capacity
+            FROM vehicle_observation observation
+            JOIN observation_batch capacity_batch
+              ON capacity_batch.id = observation.observation_batch_id
+            WHERE observation.route_version_id = :routeVersionId
+              AND observation.vehicle_id IS NOT NULL
+              AND observation.remaining_seats IS NOT NULL
+              AND capacity_batch.response_received_at <= :dataUntil
+            GROUP BY observation.vehicle_id
         )
         SELECT forecast.target_stop_order AS stop_order,
                date_trunc('hour', arrival_batch.response_received_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
