@@ -25,11 +25,11 @@ phases:
       - pnpm build
   post_build:
     commands:
-      # build가 실패해도 post_build는 실행되므로 이 줄이 배포 진입을 막는다
+      # build가 실패해도 post_build는 실행되므로 아래 라인이 배포를 막는 역할을 한다
       - test "$CODEBUILD_BUILD_SUCCEEDING" = "1"
       - cd "${CODEBUILD_SRC_DIR}/frontend"
       - APP_VERSION="$(echo "$CODEBUILD_RESOLVED_SOURCE_VERSION" | cut -c1-7)"
-      # 업로드 순서 고정 (SAL-100 결정 2): 자산 -> releases 사본 -> index.html -> invalidation
+      # 업로드 순서 (SAL-100 결정2): assets → releases 사본 → index.html → CloudFront 무효화
       - aws s3 sync dist/assets "${S3_BASE}/assets" --cache-control "public, max-age=31536000, immutable"
       - aws s3 cp "dist/index.html" "${S3_BASE}/releases/index-${APP_VERSION}.html" --cache-control "no-cache" --content-type "text/html"
       - aws s3 cp "dist/index.html" "${S3_BASE}/index.html" --cache-control "no-cache" --content-type "text/html"
