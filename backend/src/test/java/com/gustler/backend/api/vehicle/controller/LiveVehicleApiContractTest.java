@@ -342,8 +342,8 @@ class LiveVehicleApiContractTest {
                 UUID.randomUUID().toString(),
                 scheduledAt.plusSeconds(1),
                 scheduledAt.plusSeconds(2),
-                "TRANSPORT_FAILURE",
-                "UPSTREAM_TIMEOUT",
+                "FAILED_UPSTREAM",
+                "UPSTREAM_ERROR",
                 NORMALIZATION_VERSION
             )
             .update();
