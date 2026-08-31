@@ -34,15 +34,37 @@ public class CallQuotaLedger {
     }
 
     /**
-     * 제 트랜잭션에서 돈다. 부른 쪽이 되돌아가도 쓴 횟수는 남는다.
-     * 같은 트랜잭션에서 돌면 수집이 실패할 때 예약까지 같이 사라져 보수적 소비가 깨진다.
+     * 부른 쪽 트랜잭션에 합류한다. 트랜잭션 경계는 부르는 쪽이 정한다.
+     *
+     * <p>여기서 제 트랜잭션을 열면 자리는 잡혔는데 그 자리를 쓸 판이 안 열리는 틈이 생긴다.
+     * 그 사이에 판 INSERT 가 실패하거나 프로세스가 죽으면 쓴 횟수만 오르고 아무 기록도 안 남는다.
+     * 자리와 판이 같이 커밋되도록 ObservationBatchLedger 가 바깥에서 새 트랜잭션을 연다.
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public boolean reserve(
         CallQuota quota,
         OffsetDateTime requestedAt
     ) {
         return callQuotaRepository.reserveOne(quota, koreanDateOf(requestedAt), dailyLimit);
+    }
+
+    /**
+     * 보내기 직전에도 그 날짜 자리를 들고 있나. 없으면 새로 잡는다.
+     *
+     * <p>자리를 잡은 시각과 실제로 보내는 시각 사이에 한국 자정이 지날 수 있다.
+     * 23:59:59 에 잡고 00:00:00 에 보내면 상류는 다음 날 호출로 세는데 우리 장부는 전날에 달아둔 것이라,
+     * 다음 날 자리가 하나 덜 닳고 그만큼 상류 한도를 넘긴다.
+     */
+    @Transactional
+    public boolean holdsSeatAt(
+        CallQuota quota,
+        OffsetDateTime reservedAt,
+        OffsetDateTime dispatchAt
+    ) {
+        if (koreanDateOf(reservedAt).equals(koreanDateOf(dispatchAt))) {
+            return true;
+        }
+        return callQuotaRepository.reserveOne(quota, koreanDateOf(dispatchAt), dailyLimit);
     }
 
     private LocalDate koreanDateOf(

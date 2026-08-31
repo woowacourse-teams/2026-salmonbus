@@ -125,8 +125,12 @@ class CallQuotaLedgerTest {
         assertThat(actual).isTrue();
     }
 
+    /**
+     * 트랜잭션 경계를 부르는 쪽이 갖는다. 여기서 제 트랜잭션을 열면 자리는 잡혔는데
+     * 그 자리를 쓸 판이 안 열리는 틈이 생긴다. 되돌아가도 남는 것은 ObservationBatchLedger 가 보장한다.
+     */
     @Test
-    void 예약을_부른_트랜잭션이_되돌아가도_쓴_횟수는_남는다() {
+    void 예약은_부른_쪽_트랜잭션에_합류한다() {
         // when
         transactionTemplate.executeWithoutResult(status -> {
             ledger.reserve(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT);
@@ -134,7 +138,44 @@ class CallQuotaLedgerTest {
         });
 
         // then
+        assertThat(quotaRowCountOn(KOREA_8_28, CallQuota.BUS_LOCATION)).isZero();
+    }
+
+    @Test
+    void 자리를_잡은_날과_보내는_날이_같으면_이미_잡은_자리를_쓴다() {
+        // given
+        ledger.reserve(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT);
+
+        // when
+        ledger.holdsSeatAt(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT, KOREA_8_28_LATE_NIGHT);
+
+        // then
         assertThat(reservedCallsOn(KOREA_8_28, CallQuota.BUS_LOCATION)).isEqualTo(1);
+    }
+
+    @Test
+    void 자리를_잡고_보내기_전에_한국_자정이_지나면_다음_날_자리를_새로_잡는다() {
+        // given 한국 시각 23:59:59 에 잡고 00:00:00 에 보낸다
+        ledger.reserve(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT);
+
+        // when
+        ledger.holdsSeatAt(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT);
+
+        // then
+        assertThat(reservedCallsOn(KOREA_8_29, CallQuota.BUS_LOCATION)).isEqualTo(1);
+    }
+
+    @Test
+    void 자정이_지났는데_다음_날_한도가_없으면_자리를_못_잡는다() {
+        // given
+        insertQuota(CallQuota.BUS_LOCATION, KOREA_8_29, ALREADY_USED_UP, ALREADY_USED_UP);
+
+        // when
+        final boolean actual =
+            ledger.holdsSeatAt(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT);
+
+        // then
+        assertThat(actual).isFalse();
     }
 
     @Test
@@ -192,6 +233,19 @@ class CallQuotaLedgerTest {
                 """)
             .params(quota.provider(), quota.apiService(), kstDate, reservedCalls, dailyLimit)
             .update();
+    }
+
+    private int quotaRowCountOn(
+        LocalDate kstDate,
+        CallQuota quota
+    ) {
+        return jdbcClient.sql("""
+                SELECT count(*) FROM daily_call_quota
+                WHERE provider = ? AND api_service = ? AND kst_date = ?
+                """)
+            .params(quota.provider(), quota.apiService(), kstDate)
+            .query(Integer.class)
+            .single();
     }
 
     private int reservedCallsOn(

@@ -1,6 +1,7 @@
 package com.gustler.backend.collector;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gustler.backend.collector.GbisLocationResult.GbisSystemError;
 import com.gustler.backend.collector.GbisLocationResult.NoResponse;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
@@ -34,6 +36,12 @@ class ObservationBatchLedgerTest {
     private static final LocalDate KOREA_8_19 = LocalDate.of(2026, 8, 19);
 
     private static final int ALREADY_USED_UP = 3;
+    private static final long MISSING_ROUTE_VERSION_ID = 9_999_999L;
+
+    /** 한국 시각 2026-08-28 23:59:59 와 2026-08-29 00:00:00. 세계 표준시로는 같은 날이다. */
+    private static final OffsetDateTime KOREA_8_28_LATE_NIGHT = OffsetDateTime.parse("2026-08-28T14:59:59Z");
+    private static final OffsetDateTime KOREA_8_29_MIDNIGHT = OffsetDateTime.parse("2026-08-28T15:00:00Z");
+    private static final LocalDate KOREA_8_29 = LocalDate.of(2026, 8, 29);
 
     @Autowired
     private ObservationBatchLedger ledger;
@@ -117,7 +125,7 @@ class ObservationBatchLedgerTest {
         final long batchId = ledger.reserve(attempt(), RESERVED_AT).batchId();
 
         // when
-        ledger.markDispatching(batchId, REQUESTED_AT);
+        ledger.markDispatching(batchId, RESERVED_AT, REQUESTED_AT);
 
         // then
         assertThat(outcomeOf(batchId)).isEqualTo("DISPATCHING");
@@ -129,7 +137,7 @@ class ObservationBatchLedgerTest {
         final long batchId = ledger.reserve(attempt(), RESERVED_AT).batchId();
 
         // when
-        ledger.markDispatching(batchId, REQUESTED_AT);
+        ledger.markDispatching(batchId, RESERVED_AT, REQUESTED_AT);
 
         // then
         assertThat(requestedAtOf(batchId)).isEqualTo(REQUESTED_AT);
@@ -195,6 +203,62 @@ class ObservationBatchLedgerTest {
         assertThat(providerRowsOf(batchId)).isZero();
     }
 
+    /**
+     * 자리와 판이 한 트랜잭션에서 커밋된다. 판이 안 열리면 자리도 같이 되돌아가야
+     * "쓴 횟수는 올랐는데 그 자리를 쓸 판이 없다" 가 안 생긴다.
+     */
+    @Test
+    void 판을_못_열면_쓴_횟수도_안_오른다() {
+        // given 없는 노선 판본이라 판을 열다가 외래 키에 걸린다
+        ObservationAttempt brokenAttempt =
+            new ObservationAttempt(MISSING_ROUTE_VERSION_ID, SCHEDULED_AT, ATTEMPT_KEY);
+
+        // when
+        assertThatThrownBy(() -> ledger.reserve(brokenAttempt, RESERVED_AT))
+            .isInstanceOf(DataIntegrityViolationException.class);
+
+        // then
+        assertThat(quotaRowCount()).isZero();
+    }
+
+    @Test
+    void 보내기_전에_한국_자정이_지나면_다음_날_자리를_쓴다() {
+        // given
+        final long batchId = ledger.reserve(attempt(), KOREA_8_28_LATE_NIGHT).batchId();
+
+        // when
+        ledger.markDispatching(batchId, KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT);
+
+        // then
+        assertThat(reservedCallsOn(KOREA_8_29)).isEqualTo(1);
+    }
+
+    @Test
+    void 자정이_지났는데_다음_날_한도가_없으면_보내지_않는다() {
+        // given
+        final long batchId = ledger.reserve(attempt(), KOREA_8_28_LATE_NIGHT).batchId();
+        useUpQuotaOn(KOREA_8_29);
+
+        // when
+        final boolean actual = ledger.markDispatching(batchId, KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT);
+
+        // then
+        assertThat(actual).isFalse();
+    }
+
+    @Test
+    void 자정이_지나_자리를_못_잡은_판은_ABANDONED_BEFORE_SEND로_닫힌다() {
+        // given
+        final long batchId = ledger.reserve(attempt(), KOREA_8_28_LATE_NIGHT).batchId();
+        useUpQuotaOn(KOREA_8_29);
+
+        // when
+        ledger.markDispatching(batchId, KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT);
+
+        // then
+        assertThat(outcomeOf(batchId)).isEqualTo("ABANDONED_BEFORE_SEND");
+    }
+
     @Test
     void 같은_계획을_재시도하면_수집_묶음은_한_행으로_남는다() {
         // given
@@ -249,8 +313,25 @@ class ObservationBatchLedgerTest {
 
     private long dispatchedBatch() {
         final long batchId = ledger.reserve(attempt(), RESERVED_AT).batchId();
-        ledger.markDispatching(batchId, REQUESTED_AT);
+        ledger.markDispatching(batchId, RESERVED_AT, REQUESTED_AT);
         return batchId;
+    }
+
+    private int quotaRowCount() {
+        return jdbcClient.sql("SELECT count(*) FROM daily_call_quota").query(Integer.class).single();
+    }
+
+    private void useUpQuotaOn(
+        LocalDate kstDate
+    ) {
+        jdbcClient.sql("""
+                INSERT INTO daily_call_quota (provider, api_service, kst_date, reserved_calls, daily_limit)
+                VALUES (?, ?, ?, ?, ?)
+                """)
+            .params(
+                CallQuota.BUS_LOCATION.provider(), CallQuota.BUS_LOCATION.apiService(),
+                kstDate, ALREADY_USED_UP, ALREADY_USED_UP)
+            .update();
     }
 
     private void useUpTheQuota() {

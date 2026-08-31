@@ -5,6 +5,7 @@ import com.gustler.backend.collector.GbisLocationResult.Success;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -31,8 +32,14 @@ public class ObservationBatchLedger {
         this.observationLoader = observationLoader;
     }
 
-    /** 자리를 먼저 잡고 판을 연다. 못 잡으면 안 보냈다는 판을 열고 거짓을 준다. */
-    @Transactional
+    /**
+     * 자리를 먼저 잡고 판을 연다. 못 잡으면 안 보냈다는 판을 열고 거짓을 준다.
+     *
+     * <p>제 트랜잭션에서 돈다. 자리와 판이 같이 커밋되므로 "쓴 횟수는 올랐는데 판이 없다" 가 안 생긴다.
+     * 판 id 를 받기 전에는 호출을 못 보내니 여기까지 되돌아가도 상류를 부른 적이 없다.
+     * 커밋된 뒤로는 되돌리지 않는다. 안 보냈을 수도 있는 호출을 안 썼다고 치면 다음 시도가 같은 자리를 또 쓴다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ObservationBatchReservation reserve(
         ObservationAttempt attempt,
         OffsetDateTime reservedAt
@@ -43,12 +50,22 @@ public class ObservationBatchLedger {
         return new ObservationBatchReservation(observationRepository.openNotReserved(attempt), false);
     }
 
-    @Transactional
-    public void markDispatching(
+    /**
+     * 보내기 직전. 자리를 잡은 뒤 한국 자정이 지났으면 새 날짜 자리를 다시 잡는다.
+     * 못 잡으면 보내지 않고 거짓을 준다. 그 판은 자리를 잡고 그만둔 것으로 닫는다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean markDispatching(
         final long batchId,
+        OffsetDateTime reservedAt,
         OffsetDateTime requestedAt
     ) {
+        if (!callQuotaLedger.holdsSeatAt(CallQuota.BUS_LOCATION, reservedAt, requestedAt)) {
+            observationRepository.abandonBeforeSend(batchId);
+            return false;
+        }
         observationRepository.markDispatching(batchId, requestedAt);
+        return true;
     }
 
     @Transactional
