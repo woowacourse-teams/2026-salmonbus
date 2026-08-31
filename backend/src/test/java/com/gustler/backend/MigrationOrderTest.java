@@ -35,6 +35,15 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 @IntegrationTest
 class MigrationOrderTest {
 
+    /**
+     * 이 브랜치가 더하는 마이그레이션. 브랜치마다 다르므로 여기만 고치면 된다.
+     *
+     * <p>번호로 고르면 안 된다. "제일 높은 번호가 이 브랜치 것" 을 가정으로 깔면
+     * 번호가 거꾸로 배정돼도 그 가정에 맞춰 다른 파일을 빼게 되고, 결국 늘 순서가 맞아서 통과한다.
+     * 이름으로 고르고, 그 파일이 정말 제일 높은 번호인지는 아래에서 따로 단언한다.
+     */
+    private static final String MIGRATION_THIS_BRANCH_ADDS = "call_reservation";
+
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";
 
@@ -70,6 +79,15 @@ class MigrationOrderTest {
     }
 
     @Test
+    void 이_브랜치가_더하는_마이그레이션의_번호가_제일_높다() {
+        // when
+        final int actual = versionOf(thisBranchMigration());
+
+        // then 앞 브랜치가 먼저 머지되므로 이 브랜치 것이 마지막 번호여야 한다
+        assertThat(actual).isEqualTo(migrationCount());
+    }
+
+    @Test
     void 마이그레이션_번호에_빈_자리도_겹치는_자리도_없다() {
         // when
         final List<Integer> actual = versionsOf(flywayAt("classpath:" + MIGRATION_LOCATION).info().all());
@@ -89,6 +107,30 @@ class MigrationOrderTest {
             .toList();
     }
 
+    private static boolean isThisBranchMigration(
+        final String fileName
+    ) {
+        return fileName.contains(MIGRATION_THIS_BRANCH_ADDS);
+    }
+
+    /** 이 브랜치가 더하는 마이그레이션 하나. 없거나 둘이면 상수가 낡은 것이다. */
+    private MigrationInfo thisBranchMigration() {
+        final List<MigrationInfo> found = Stream.of(flywayAt("classpath:" + MIGRATION_LOCATION).info().all())
+            .filter(info -> isThisBranchMigration(info.getScript()))
+            .toList();
+        assertThat(found)
+            .withFailMessage("이 브랜치가 더하는 마이그레이션 '%s' 을 하나만 찾아야 하는데 %d 개다",
+                MIGRATION_THIS_BRANCH_ADDS, found.size())
+            .hasSize(1);
+        return found.getFirst();
+    }
+
+    private int versionOf(
+        MigrationInfo info
+    ) {
+        return Integer.parseInt(info.getVersion().getVersion());
+    }
+
     private int migrationCount() {
         return versionsOf(flywayAt("classpath:" + MIGRATION_LOCATION).info().all()).size();
     }
@@ -99,10 +141,8 @@ class MigrationOrderTest {
             final Path source = Path.of(
                 getClass().getClassLoader().getResource(MIGRATION_LOCATION).toURI());
             final Path staged = Files.createTempDirectory("staged-migration");
-            // 번호가 머지 순서를 따라가므로 제일 높은 번호가 곧 이 브랜치가 더하는 것이다
-            final String newest = "V%d__".formatted(migrationCount());
             try (Stream<Path> files = Files.list(source)) {
-                files.filter(file -> !file.getFileName().toString().startsWith(newest))
+                files.filter(file -> !isThisBranchMigration(file.getFileName().toString()))
                     .forEach(file -> copyInto(staged, file));
             }
             return staged;
