@@ -32,17 +32,11 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
     private static final int NO_GENERATION_YET = 0;
 
     /**
-     * 한 노선 판본 · 한 시간대의 셀 전부. 정류장 순번 오름차순으로 낸다.
-     *
-     * <p>세대 번호를 셀과 같은 질의에서 읽는다. 한 세대의 행은 이 값이 다 같아서 아무 행에서나
-     * 집으면 된다. 질의를 하나 더 두면 그 사이에 집계가 덮어써 셀과 세대 번호가 어긋날 수 있다.
+     * 그 계산 규칙 판의 세대 번호와, 그 세대에서 고른 시간대의 셀들. 정류장 순번 오름차순이다.
      *
      * <p>승차할 수 없는 정류장에는 셀이 없어서 순번이 건너뛴다. 행 수는 판본 정류장 수와 다르다.
-     */
-    /**
-     * 그 계산 규칙 판의 세대 번호와, 그 세대에서 고른 시간대의 셀들.
      *
-     * <p><b>세대 번호를 시간대로 안 거른다.</b> 한 세대는 세 시간대를 한꺼번에 갈아 끼우는데,
+     * <p><b>세대 번호를 시간대로 안 거른다.</b> 한 세대는 세 시간대를 한꺼번에 내는데,
      * 그중 한 시간대에 라벨이 아직 안 쌓여 셀이 없을 수 있다. 그 자리를 시간대로 걸러 세면
      * "N세대인데 이 시간대는 비었다" 가 "세대가 아예 없다" 와 같은 0으로 나온다.
      *
@@ -157,12 +151,6 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
         ORDER BY forecast.target_stop_order, arrived_hour_start
         """;
 
-    /**
-     * 같은 (노선 판본, 계산 규칙 판) 의 옛 행을 전부 지운다.
-     *
-     * <p>시간대를 안 본다. 한 판이 세 시간대를 다 다시 내기 때문에 한 시간대만 지우면
-     * 라벨이 사라진 시간대의 옛 행이 그대로 남는다.
-     */
     /** 셀 한 줄. 세대 번호와 기준 시각과 계산 시각은 한 세대의 모든 행에 같은 값이 들어간다. */
     private static final String INSERT_CELL = """
         INSERT INTO stop_demand_statistics (
@@ -249,13 +237,14 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
     }
 
     /**
-     * 한 세대를 통째로 갈아 끼운다. 지우고 넣는 둘이 한 transaction 안에서 돈다.
+     * 한 세대를 더한다. 옛 세대는 안 지운다.
      *
-     * <p>덮어쓰기만 하면 이번 판에서 라벨이 사라진 정류장의 옛 행이 남는다. 그 행이 다음 세대의
-     * z 모집단에 섞여 살아 있는 셀의 z 값을 통째로 밀어낸다. 그래서 지우고 다시 넣는다.
+     * <p><b>transaction 은 세대 하나를 다 넣을 때까지 아무도 못 읽게 하려고 건다.</b> 없으면 셀마다
+     * 자동 커밋되고, 첫 행이 커밋되는 순간 {@link #readAsOf} 가 그 revision 을 가장 최근 세대로 잡는다.
+     * 그러면 몇 줄만 들어간 세대로 z 모집단이 만들어져 살아 있는 셀의 z 값이 통째로 밀린다.
      *
-     * <p>transaction 을 부르는 배치가 아니라 여기에 건다. 배치가 자기 메서드를 부르는 구조라
-     * 거기서 걸면 프록시를 안 거쳐 transaction 이 안 열린다.
+     * <p>부르는 배치가 아니라 여기에 건다. 배치가 자기 메서드를 부르는 구조라 거기서 걸면
+     * 프록시를 안 거쳐 transaction 이 안 열린다.
      */
     @Override
     @Transactional
