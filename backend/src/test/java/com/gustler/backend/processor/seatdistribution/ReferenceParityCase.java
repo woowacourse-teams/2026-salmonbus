@@ -9,12 +9,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 파이썬 정본이 뽑아 둔 대조 사례 하나.
+ * 서빙 정본이 뽑아 둔 대조 사례 하나.
  *
- * <p>값을 만든 것은 {@code models.py} 의 {@code _ResidualLayer.pmf} 다. 그 파일을 고치지 않고
- * 그대로 불러 뽑았다. 손으로 옮긴 파이썬으로 대조하면 같은 오해가 양쪽에 들어가 아무것도 못 잰다.
+ * <p>값을 만든 것은 서빙 저장소 {@code server/model/distribution.py} 의 {@code distribution_pmf} 다.
+ * 그 파일을 고치지 않고 그대로 불러 뽑았다. 손으로 옮긴 파이썬으로 대조하면 같은 오해가 양쪽에
+ * 들어가 아무것도 못 잰다.
  *
- * <p>값을 다시 뽑는 방법은 {@code ~/dev/.salmonbus-claude/참고/a18-python-정본/대조값-생성기.py} 에 있다.
+ * <p>처음에는 오프라인 채점기로 대조했는데 그쪽에 결함이 둘 있어서 서빙 것으로 바꿨다.
+ *
+ * <p><b>이 파일은 2026-08-23 계보라 v4-1 이 안 들어가 있다.</b> 계수 계약 · 셀 통계 · 도착 lead 는
+ * 이것을 근거로 삼지 않는다. 잔차에서 좌석 확률로 가는 변환 수식 대조에만 쓴다.
+ *
+ * <p>값을 다시 뽑는 방법은
+ * {@code ~/dev/.salmonbus-claude/참고/a18-서빙-8월23일/대조값-생성기.py} 에 있다.
  */
 record ReferenceParityCase(
     String name,
@@ -32,17 +39,7 @@ record ReferenceParityCase(
     double[] expectedProbabilities
 ) {
 
-    private static final String FIXTURE = "/seat-distribution/python-parity.json";
-
-    /** 만석이 아닐 질량이 하나도 안 남는 자리. 파이썬 채점기는 0석 확률을 1 로 만든다. */
-    static final String NO_SEAT_LEFT_TO_SPREAD = "만석이_아닐_질량이_안_남음";
-
-    /** 크기 묶음 하나가 통째로 잔차 격자 밖으로 밀리는 자리. 파이썬 채점기가 질량을 더 놓는다. */
-    static final String BIN_FULLY_UNDER_GRID = "격자_아래로_밀림";
-
-    /** 파이썬 채점기와 서빙 계약이 갈리는 사례. 대조에서 빼고 하나씩 따로 본다. */
-    static final List<String> DIVERGING_CASES =
-        List.of(NO_SEAT_LEFT_TO_SPREAD, BIN_FULLY_UNDER_GRID);
+    private static final String FIXTURE = "/seat-distribution/serving-parity.json";
 
     static double[] relativeEdges() {
         return doublesOf(root().get("settings").get("relative_bin_edges"));

@@ -24,8 +24,7 @@ class SeatDistributionParityTest {
     private static final int SMALLEST_RESIDUAL_SEATS = -40;
 
     static Stream<ReferenceParityCase> 대조_사례() {
-        return ReferenceParityCase.all().stream()
-            .filter(one -> !ReferenceParityCase.DIVERGING_CASES.contains(one.name()));
+        return ReferenceParityCase.all().stream();
     }
 
     @ParameterizedTest(name = "{0}")
@@ -62,62 +61,7 @@ class SeatDistributionParityTest {
         assertThat(actual).hasSize(8);
     }
 
-    @Test
-    void 만석이_아닐_확률이_한_칸도_안_남으면_파이썬_채점기는_만석을_100퍼센트로_만든다() {
-        // given 서빙 계약과 갈리는 자리라 대조에서 뺀 사례다
-        ReferenceParityCase given =
-            ReferenceParityCase.named(ReferenceParityCase.NO_SEAT_LEFT_TO_SPREAD);
 
-        // when
-        final double actual = given.expectedProbabilities()[0];
 
-        // then
-        assertThat(actual).isEqualTo(1.0);
-    }
 
-    @Test
-    void 만석이_아닐_확률이_한_칸도_안_남으면_우리는_탈_수_있는_가장_가까운_좌석에_남긴다() {
-        // given
-        ReferenceParityCase given =
-            ReferenceParityCase.named(ReferenceParityCase.NO_SEAT_LEFT_TO_SPREAD);
-
-        // when
-        double[] actual = given.seatChances();
-
-        // then
-        assertThat(actual[1]).isEqualTo(1.0 - given.fullChance(), within(TOLERANCE));
-    }
-
-    /**
-     * 정원 70석에 중심 3석이면 좌석이 늘어나는 쪽 배율이 67 이고, 크기 47~50 묶음이 통째로
-     * 잔차 격자(-40) 밖으로 밀린다. 파이썬 채점기는 그 묶음의 질량을 2.75배로 놓는다.
-     * 격자에 걸치기만 하는 묶음(크기 33~46)에서는 정확히 1배로 놓아서, 통째로 밀릴 때만
-     * 어긋난다. 우리는 밀린 크기 하나에 한 몫씩만 놓는다.
-     */
-    @Test
-    void 구간_전체가_셀_수_있는_범위_밖이면_파이썬_채점기가_가장자리에_확률을_더_놓는다() {
-        // given 중심 3석에서 잔차 -40 은 43석 칸이다
-        ReferenceParityCase given =
-            ReferenceParityCase.named(ReferenceParityCase.BIN_FULLY_UNDER_GRID);
-        final int edgeSeats = given.anchorSeats() - SMALLEST_RESIDUAL_SEATS;
-
-        // when
-        double[] actual = given.seatChances();
-
-        // then
-        assertThat(actual[edgeSeats]).isLessThan(given.expectedProbabilities()[edgeSeats]);
-    }
-
-    @Test
-    void 구간_전체가_셀_수_있는_범위_밖이어도_확률의_합은_1이다() {
-        // given
-        ReferenceParityCase given =
-            ReferenceParityCase.named(ReferenceParityCase.BIN_FULLY_UNDER_GRID);
-
-        // when
-        final double actual = Arrays.stream(given.seatChances()).sum();
-
-        // then
-        assertThat(actual).isEqualTo(1.0, within(TOLERANCE));
-    }
 }
