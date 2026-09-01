@@ -83,7 +83,7 @@ class BundleLoaderTest {
     }
 
     @Test
-    void 설명_파일이_정규_모양이_아니면_거절한다() throws IOException {
+    void 설명_파일에_빈칸이_들어_있으면_거절한다() throws IOException {
         // given 뜻은 같은데 항목 사이에 빈칸을 넣어 다시 쓴다
         BundleFiles files = DummyBundle.valid().writeTo(directory);
         Files.write(files.manifest(),
@@ -92,6 +92,30 @@ class BundleLoaderTest {
                 .getBytes(StandardCharsets.UTF_8));
 
         // when & then 빈칸 하나로 요약값이 달라져 같은 계수가 두 신원이 된다
+        assertRejectedBy(BundleCheck.MANIFEST_IS_CANONICAL_JSON, () -> BundleLoader.load(files));
+    }
+
+    @Test
+    void 설명_파일의_항목_순서가_이름순이_아니면_거절한다() throws IOException {
+        // given 빈칸은 그대로 두고 맨 앞 항목 하나만 맨 뒤로 옮긴다
+        BundleFiles files = DummyBundle.valid().writeTo(directory);
+        Files.write(files.manifest(), movedToEnd(
+            read(files.manifest()),
+            "\"bundleSchemaVersion\":\"%s\"".formatted(DummyBundle.BUNDLE_SCHEMA_VERSION)));
+
+        // when & then 순서만 달라도 요약값이 달라져 같은 계수가 두 신원이 된다
+        assertRejectedBy(BundleCheck.MANIFEST_IS_CANONICAL_JSON, () -> BundleLoader.load(files));
+    }
+
+    @Test
+    void 설명_파일_안쪽_항목의_순서가_이름순이_아니면_거절한다() throws IOException {
+        // given 배열 선언 하나에서 자료형과 크기의 순서를 맞바꾼다
+        BundleFiles files = DummyBundle.valid().writeTo(directory);
+        Files.write(files.manifest(), read(files.manifest()).replaceFirst(
+            "\\{\"dtype\":(\"[A-Z0-9]+\"),\"shape\":(\\[[0-9,]+])}",
+            "{\"shape\":$2,\"dtype\":$1}").getBytes(StandardCharsets.UTF_8));
+
+        // when & then 안쪽도 이름순이어야 같은 뜻이 한 요약값으로만 적힌다
         assertRejectedBy(BundleCheck.MANIFEST_IS_CANONICAL_JSON, () -> BundleLoader.load(files));
     }
 
@@ -334,6 +358,22 @@ class BundleLoaderTest {
         List<String> names = new ArrayList<>(SeatForecastDesignMatrix.COLUMN_NAMES);
         names.set(0, "intercept");
         return names;
+    }
+
+    private static String read(
+        Path path
+    ) throws IOException {
+        return new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
+    }
+
+    /** 뜻은 그대로 두고 항목 하나의 자리만 옮긴다. 값을 다시 쓰지 않아 빈칸과 수의 모양이 그대로다. */
+    private static byte[] movedToEnd(
+        String manifest,
+        String field
+    ) {
+        String without = manifest.replace(field + ",", "");
+        return (without.substring(0, without.length() - 1) + "," + field + "}")
+            .getBytes(StandardCharsets.UTF_8);
     }
 
     private Runnable loading(

@@ -12,7 +12,8 @@ import java.util.Map;
 import java.util.Set;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.cfg.JsonNodeFeature;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 설명 파일을 읽는다.
@@ -24,6 +25,17 @@ import tools.jackson.databind.SerializationFeature;
  * 특징 이름이 조용히 달라진다.
  */
 final class BundleManifestReader {
+
+    /**
+     * 항목을 이름순으로 다시 적는 mapper.
+     *
+     * <p>{@code SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS} 로는 안 된다. 그것은 {@code Map} 을
+     * 쓸 때만 걸리고, 여기서 다시 쓰는 것은 {@code JsonNode} 라 원래 순서가 그대로 나온다.
+     * 그러면 <b>빈칸 없이 항목 순서만 바꾼 설명 파일이 통과한다.</b>
+     */
+    private static final ObjectMapper CANONICAL_WRITER = JsonMapper.builder()
+        .enable(JsonNodeFeature.WRITE_PROPERTIES_SORTED)
+        .build();
 
     private static final Set<String> KNOWN_FIELDS = Set.of(
         "bundleSchemaVersion", "modelVersion", "releaseId", "featureContractVersion",
@@ -101,10 +113,7 @@ final class BundleManifestReader {
         JsonNode root,
         String text
     ) {
-        String canonical = new ObjectMapper()
-            .writer()
-            .with(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
-            .writeValueAsString(root);
+        String canonical = CANONICAL_WRITER.writeValueAsString(root);
         BundleCheck.MANIFEST_IS_CANONICAL_JSON.require(
             canonical.equals(text.strip()),
             "항목을 이름순으로 빈칸 없이 다시 적은 것과 다르다");
