@@ -11,10 +11,12 @@ package com.gustler.backend.processor.seatdistribution;
  */
 enum BundleCheck {
 
+    BUNDLE_DIRECTORY_IS_NOT_SYMBOLIC_LINK("계수 묶음 자리가 symlink 다"),
     MANIFEST_IS_REGULAR_FILE("설명 파일이 일반 파일이 아니다"),
     WEIGHTS_IS_REGULAR_FILE("계수 파일이 일반 파일이 아니다"),
     MANIFEST_IS_UTF8_JSON("설명 파일이 UTF-8 JSON 이 아니다"),
     MANIFEST_IS_CANONICAL_JSON("설명 파일이 정규 모양이 아니다. 같은 뜻인데 요약값이 다른 파일이 생긴다"),
+    MANIFEST_FIELD_TYPE("설명 파일의 항목이 없거나 자료형이 다르다"),
     MANIFEST_HAS_NO_UNKNOWN_FIELD("설명 파일에 우리가 모르는 항목이 있다"),
     BUNDLE_SCHEMA_VERSION("번들 판 이름이 다르다"),
     MODEL_VERSION("모델 판 이름이 다르다"),

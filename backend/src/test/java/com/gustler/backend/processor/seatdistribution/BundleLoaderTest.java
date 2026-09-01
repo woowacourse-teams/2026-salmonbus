@@ -83,6 +83,18 @@ class BundleLoaderTest {
     }
 
     @Test
+    void 묶음이_놓인_자리가_symlink_면_거절한다() throws IOException {
+        // given 배포 자리에 흔한 current 처럼 디렉터리 자체가 연결이다
+        Path released = Files.createDirectory(directory.resolve("release-0001"));
+        DummyBundle.valid().writeTo(released);
+        Path linked = Files.createSymbolicLink(directory.resolve("current"), released);
+
+        // when & then 설명 파일을 읽은 뒤 연결이 옮겨 가면 다른 계수 파일을 읽게 된다
+        assertRejectedBy(
+            BundleCheck.BUNDLE_DIRECTORY_IS_NOT_SYMBOLIC_LINK, () -> BundleLoader.load(BundleFiles.under(linked)));
+    }
+
+    @Test
     void 설명_파일에_빈칸이_들어_있으면_거절한다() throws IOException {
         // given 뜻은 같은데 항목 사이에 빈칸을 넣어 다시 쓴다
         BundleFiles files = DummyBundle.valid().writeTo(directory);
@@ -117,6 +129,26 @@ class BundleLoaderTest {
 
         // when & then 안쪽도 이름순이어야 같은 뜻이 한 요약값으로만 적힌다
         assertRejectedBy(BundleCheck.MANIFEST_IS_CANONICAL_JSON, () -> BundleLoader.load(files));
+    }
+
+    @Test
+    void 대조_사례에_특징_벡터가_없으면_거절한다() {
+        // given
+        Map<String, Object> golden = new LinkedHashMap<>(DummyBundle.valid().goldenVectorFrom());
+        golden.remove("featureVector");
+
+        // when & then 안 보고 꺼내면 여기서 NullPointerException 이 나 거절을 안 거친다
+        assertRejectedBy(BundleCheck.MANIFEST_FIELD_TYPE, loading(DummyBundle.valid()
+            .put("goldenVector", golden)
+            .put("goldenVectorDigest", "0".repeat(64))));
+    }
+
+    @Test
+    void 설명_파일이_수를_문자열로_적으면_거절한다() {
+        // when & then 문자열을 수로 바꿔 읽어 주면 다른 뜻의 묶음이 통과한다
+        assertRejectedBy(
+            BundleCheck.MANIFEST_FIELD_TYPE,
+            loading(DummyBundle.valid().put("horizonStops", List.of("1", "2", "3"))));
     }
 
     @Test

@@ -23,6 +23,10 @@ import tools.jackson.databind.json.JsonMapper;
  *
  * <p>바이트를 엄격하게 UTF-8 로 읽는다. 느슨하게 읽으면 깨진 바이트가 물음표로 바뀌어
  * 특징 이름이 조용히 달라진다.
+ *
+ * <p>항목을 꺼내기 전에 자료형을 본다. 안 보고 꺼내면 항목이 빠졌을 때 {@link NullPointerException}
+ * 이 나서 {@link BundleRejectedException} 을 안 거치고, 값이 문자열이면 숫자로 바꿔 읽어 준다.
+ * 둘 다 <b>안 올리기로 한 묶음이 올라가는 길</b>이다.
  */
 final class BundleManifestReader {
 
@@ -55,26 +59,27 @@ final class BundleManifestReader {
         BundleCheck.MANIFEST_IS_UTF8_JSON.require(root.isObject(), "최상위가 객체가 아니다");
         requireCanonical(root, text);
         rejectUnknownFields(root);
+        JsonNode routeReference = objectAt(root, "routeReference");
         return new BundleManifest(
             textAt(root, "bundleSchemaVersion"),
             textAt(root, "modelVersion"),
             textAt(root, "releaseId"),
             textAt(root, "featureContractVersion"),
             textAt(root, "sourceCommit"),
-            textAt(root.get("routeReference"), "version"),
-            textAt(root.get("routeReference"), "digest"),
-            textsOf(root.get("routes")),
-            numbersOf(root.get("horizonStops")),
-            textsOf(root.get("featureNames")),
-            constantsOf(root.get("normalizationConstants")),
+            textAt(routeReference, "version"),
+            textAt(routeReference, "digest"),
+            textsAt(root, "routes"),
+            wholeNumbersAt(root, "horizonStops"),
+            textsAt(root, "featureNames"),
+            constantsAt(root, "normalizationConstants"),
             textAt(root, "timeSlotSource"),
             textAt(root, "capacityPolicy"),
             textAt(root, "cellStatisticsPolicy"),
-            declarationsOf(root.get("tensors")),
+            declarationsAt(root, "tensors"),
             textAt(root, "weightsDigest"),
             textAt(root, "identityDigest"),
             textAt(root, "goldenVectorDigest"),
-            goldenVectorOf(root.get("goldenVector")),
+            goldenVectorAt(root, "goldenVector"),
             textAt(root, "dataThrough"));
     }
 
@@ -128,94 +133,173 @@ final class BundleManifestReader {
         }
     }
 
+    /** 객체에서 항목 하나를 꺼낸다. 담은 것이 객체가 아니거나 항목이 없으면 거기서 멈춘다. */
+    private static JsonNode fieldAt(
+        JsonNode node,
+        String field
+    ) {
+        BundleCheck.MANIFEST_FIELD_TYPE.require(
+            node != null && node.isObject(), "객체가 아닌 것에서 항목을 찾았다: " + field);
+        JsonNode value = node.get(field);
+        BundleCheck.MANIFEST_FIELD_TYPE.require(value != null, "항목이 없다: " + field);
+        return value;
+    }
+
+    private static JsonNode objectAt(
+        JsonNode node,
+        String field
+    ) {
+        JsonNode value = fieldAt(node, field);
+        BundleCheck.MANIFEST_FIELD_TYPE.require(value.isObject(), "객체가 아니다: " + field);
+        return value;
+    }
+
+    private static JsonNode arrayAt(
+        JsonNode node,
+        String field
+    ) {
+        JsonNode value = fieldAt(node, field);
+        BundleCheck.MANIFEST_FIELD_TYPE.require(value.isArray(), "목록이 아니다: " + field);
+        return value;
+    }
+
     private static String textAt(
         JsonNode node,
         String field
     ) {
-        if (node == null || node.get(field) == null || !node.get(field).isString()) {
-            throw BundleCheck.MANIFEST_IS_UTF8_JSON.reject("문자열 항목이 없다: " + field);
-        }
-        return node.get(field).stringValue();
+        return textOf(fieldAt(node, field), field);
     }
 
-    private static List<String> textsOf(
-        JsonNode node
+    private static int wholeNumberAt(
+        JsonNode node,
+        String field
     ) {
-        if (node == null || !node.isArray()) {
-            throw BundleCheck.MANIFEST_IS_UTF8_JSON.reject("목록이어야 하는 항목이 목록이 아니다");
-        }
+        return wholeNumberOf(fieldAt(node, field), field);
+    }
+
+    private static double numberAt(
+        JsonNode node,
+        String field
+    ) {
+        return numberOf(fieldAt(node, field), field);
+    }
+
+    private static String textOf(
+        JsonNode value,
+        String field
+    ) {
+        BundleCheck.MANIFEST_FIELD_TYPE.require(value.isString(), "문자열이 아니다: " + field);
+        return value.stringValue();
+    }
+
+    /** 정수만 받는다. {@code "3"} 이나 {@code 3.5} 를 3 으로 바꿔 읽지 않는다. */
+    private static int wholeNumberOf(
+        JsonNode value,
+        String field
+    ) {
+        BundleCheck.MANIFEST_FIELD_TYPE.require(
+            value.isIntegralNumber() && value.canConvertToInt(), "정수가 아니다: " + field);
+        return value.intValue();
+    }
+
+    /** 유한한 수만 받는다. 문자열로 적힌 수도 안 받는다. */
+    private static double numberOf(
+        JsonNode value,
+        String field
+    ) {
+        BundleCheck.MANIFEST_FIELD_TYPE.require(value.isNumber(), "수가 아니다: " + field);
+        final double number = value.doubleValue();
+        BundleCheck.MANIFEST_FIELD_TYPE.require(
+            Double.isFinite(number), "유한한 수가 아니다: %s, %s".formatted(field, number));
+        return number;
+    }
+
+    private static List<String> textsAt(
+        JsonNode node,
+        String field
+    ) {
         List<String> texts = new ArrayList<>();
-        for (JsonNode item : node) {
-            texts.add(item.stringValue());
+        for (JsonNode item : arrayAt(node, field)) {
+            texts.add(textOf(item, field + " 의 값"));
         }
         return List.copyOf(texts);
     }
 
-    private static List<Integer> numbersOf(
-        JsonNode node
+    private static List<Integer> wholeNumbersAt(
+        JsonNode node,
+        String field
     ) {
-        if (node == null || !node.isArray()) {
-            throw BundleCheck.MANIFEST_IS_UTF8_JSON.reject("목록이어야 하는 항목이 목록이 아니다");
-        }
         List<Integer> numbers = new ArrayList<>();
-        for (JsonNode item : node) {
-            numbers.add(item.asInt());
+        for (JsonNode item : arrayAt(node, field)) {
+            numbers.add(wholeNumberOf(item, field + " 의 값"));
         }
         return List.copyOf(numbers);
     }
 
-    private static Map<String, Double> constantsOf(
-        JsonNode node
+    private static List<Double> numbersAt(
+        JsonNode node,
+        String field
     ) {
-        if (node == null || !node.isObject()) {
-            throw BundleCheck.MANIFEST_IS_UTF8_JSON.reject("정규화 상수가 객체가 아니다");
+        List<Double> numbers = new ArrayList<>();
+        for (JsonNode item : arrayAt(node, field)) {
+            numbers.add(numberOf(item, field + " 의 값"));
         }
+        return List.copyOf(numbers);
+    }
+
+    private static Map<String, Double> constantsAt(
+        JsonNode node,
+        String field
+    ) {
         Map<String, Double> constants = new LinkedHashMap<>();
-        for (Map.Entry<String, JsonNode> field : node.properties()) {
-            constants.put(field.getKey(), field.getValue().asDouble());
+        for (Map.Entry<String, JsonNode> constant : objectAt(node, field).properties()) {
+            constants.put(
+                constant.getKey(), numberOf(constant.getValue(), field + "." + constant.getKey()));
         }
         return Map.copyOf(constants);
     }
 
-    private static BundleManifest.GoldenVector goldenVectorOf(
-        JsonNode node
+    private static BundleManifest.GoldenVector goldenVectorAt(
+        JsonNode node,
+        String field
     ) {
-        if (node == null || !node.isObject()) {
-            throw BundleCheck.GOLDEN_VECTOR.reject("대조 사례가 없다");
-        }
-        List<Double> featureVector = new ArrayList<>();
-        for (JsonNode value : node.get("featureVector")) {
-            featureVector.add(value.asDouble());
-        }
+        JsonNode golden = objectAt(node, field);
         return new BundleManifest.GoldenVector(
-            List.copyOf(featureVector),
-            textAt(node, "modelRoute"),
-            node.get("stopsAhead").asInt(),
-            node.get("currentSeats").asInt(),
-            node.get("capacity").asInt(),
-            node.get("expectedFullChance").asDouble(),
-            node.get("expectedSeats").asDouble());
+            numbersAt(golden, "featureVector"),
+            textAt(golden, "modelRoute"),
+            wholeNumberAt(golden, "stopsAhead"),
+            wholeNumberAt(golden, "currentSeats"),
+            wholeNumberAt(golden, "capacity"),
+            numberAt(golden, "expectedFullChance"),
+            numberAt(golden, "expectedSeats"));
     }
 
-    private static Map<String, BundleManifest.TensorDeclaration> declarationsOf(
-        JsonNode node
+    private static Map<String, BundleManifest.TensorDeclaration> declarationsAt(
+        JsonNode node,
+        String field
     ) {
-        if (node == null || !node.isObject()) {
-            throw BundleCheck.MANIFEST_IS_UTF8_JSON.reject("배열 선언이 객체가 아니다");
-        }
         Map<String, BundleManifest.TensorDeclaration> declarations = new LinkedHashMap<>();
         Set<String> seen = new LinkedHashSet<>();
-        for (Map.Entry<String, JsonNode> field : node.properties()) {
+        for (Map.Entry<String, JsonNode> declared : objectAt(node, field).properties()) {
             BundleCheck.MANIFEST_HAS_NO_UNKNOWN_FIELD.require(
-                seen.add(field.getKey()), "배열 선언이 겹친다: " + field.getKey());
-            JsonNode shape = field.getValue().get("shape");
-            int[] axes = new int[shape.size()];
-            for (int index = 0; index < axes.length; index++) {
-                axes[index] = shape.get(index).asInt();
-            }
-            declarations.put(field.getKey(), new BundleManifest.TensorDeclaration(
-                TensorDataType.of(field.getValue().get("dtype").stringValue()), axes));
+                seen.add(declared.getKey()), "배열 선언이 겹친다: " + declared.getKey());
+            declarations.put(declared.getKey(), declarationOf(declared.getValue(), declared.getKey()));
         }
         return declarations;
+    }
+
+    private static BundleManifest.TensorDeclaration declarationOf(
+        JsonNode declared,
+        String name
+    ) {
+        BundleCheck.MANIFEST_FIELD_TYPE.require(
+            declared.isObject(), "배열 선언이 객체가 아니다: " + name);
+        List<Integer> axes = wholeNumbersAt(declared, "shape");
+        int[] shape = new int[axes.size()];
+        for (int index = 0; index < shape.length; index++) {
+            shape[index] = axes.get(index);
+        }
+        return new BundleManifest.TensorDeclaration(
+            TensorDataType.of(textAt(declared, "dtype")), shape);
     }
 }

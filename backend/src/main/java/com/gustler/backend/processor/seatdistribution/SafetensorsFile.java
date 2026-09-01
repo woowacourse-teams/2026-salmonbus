@@ -21,6 +21,10 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>이 파일이 계수를 담는 형식이라 <b>믿고 읽지 않는다.</b> 머리말이 적은 구간이 파일 밖을
  * 가리키거나 크기와 안 맞으면 거기서 멈춘다.
+ *
+ * <p>머리말에서 값을 꺼내기 전에 항목이 있는지와 자료형을 본다. 안 보고 꺼내면 항목이 빠졌을 때
+ * {@link NullPointerException} 이 나서 {@link BundleRejectedException} 을 안 거친다. 그러면 적재가
+ * "거절했다" 가 아니라 "터졌다" 로 끝나서, 기동이 통째로 멈춘다.
  */
 final class SafetensorsFile {
 
@@ -105,12 +109,15 @@ final class SafetensorsFile {
         byte[] content,
         final int valuesFrom
     ) {
-        TensorDataType dataType = TensorDataType.of(declaration.get("dtype").stringValue());
-        int[] shape = shapeOf(declaration.get("shape"));
-        JsonNode offsets = declaration.get("data_offsets");
-        final long from = offsets.get(0).asLong();
-        final long until = offsets.get(1).asLong();
-        if (from < 0 || until < from || valuesFrom + until > content.length) {
+        require(declaration.isObject(), name + " 의 선언이 객체가 아니다");
+        TensorDataType dataType = TensorDataType.of(textAt(declaration, "dtype", name));
+        int[] shape = shapeOf(arrayAt(declaration, "shape", name), name);
+        JsonNode offsets = arrayAt(declaration, "data_offsets", name);
+        require(offsets.size() == 2,
+            "%s 의 값 구간은 시작과 끝 둘이다: %d개".formatted(name, offsets.size()));
+        final long from = wholeNumberOf(offsets.get(0), name + " 의 값 구간 시작");
+        final long until = wholeNumberOf(offsets.get(1), name + " 의 값 구간 끝");
+        if (from < 0 || until < from || until > (long) content.length - valuesFrom) {
             throw new BundleRejectedException(
                 "%s 의 값 구간이 파일 밖을 가리킨다: %d, %d".formatted(name, from, until));
         }
@@ -126,16 +133,67 @@ final class SafetensorsFile {
     }
 
     private static int[] shapeOf(
-        JsonNode node
+        JsonNode node,
+        String name
     ) {
         int[] shape = new int[node.size()];
         for (int index = 0; index < shape.length; index++) {
-            shape[index] = node.get(index).asInt();
-            if (shape[index] <= 0) {
-                throw new BundleRejectedException("배열의 크기는 1 이상이다: " + shape[index]);
+            final long axis = wholeNumberOf(node.get(index), name + " 의 크기");
+            if (axis <= 0 || axis > Integer.MAX_VALUE) {
+                throw new BundleRejectedException(
+                    "%s 의 크기는 1 이상이다: %d".formatted(name, axis));
             }
+            shape[index] = (int) axis;
         }
         return shape;
+    }
+
+    private static JsonNode fieldAt(
+        JsonNode declaration,
+        String field,
+        String name
+    ) {
+        JsonNode value = declaration.get(field);
+        require(value != null, "%s 의 선언에 %s 가 없다".formatted(name, field));
+        return value;
+    }
+
+    private static String textAt(
+        JsonNode declaration,
+        String field,
+        String name
+    ) {
+        JsonNode value = fieldAt(declaration, field, name);
+        require(value.isString(), "%s 의 %s 가 문자열이 아니다".formatted(name, field));
+        return value.stringValue();
+    }
+
+    private static JsonNode arrayAt(
+        JsonNode declaration,
+        String field,
+        String name
+    ) {
+        JsonNode value = fieldAt(declaration, field, name);
+        require(value.isArray(), "%s 의 %s 가 목록이 아니다".formatted(name, field));
+        return value;
+    }
+
+    /** 정수만 받는다. 문자열이나 소수를 정수로 바꿔 읽지 않는다. */
+    private static long wholeNumberOf(
+        JsonNode value,
+        String where
+    ) {
+        require(value.isIntegralNumber() && value.canConvertToLong(), where + " 가 정수가 아니다");
+        return value.longValue();
+    }
+
+    private static void require(
+        final boolean satisfied,
+        String detail
+    ) {
+        if (!satisfied) {
+            throw new BundleRejectedException(detail);
+        }
     }
 
     private static double[] valuesOf(

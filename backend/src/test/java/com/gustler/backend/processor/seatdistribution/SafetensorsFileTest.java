@@ -119,6 +119,56 @@ class SafetensorsFileTest {
     }
 
     @Test
+    void 배열_선언에_자료형이_없으면_거절한다() {
+        // given
+        byte[] given = fileOf(
+            "{\"hurdle_coefficients\":{\"shape\":[1],\"data_offsets\":[0,8]}}"
+                .getBytes(StandardCharsets.UTF_8), 8);
+
+        // when & then 안 보고 꺼내면 거절이 아니라 NullPointerException 으로 끝난다
+        assertThatThrownBy(() -> SafetensorsFile.of(given))
+            .isInstanceOf(BundleRejectedException.class);
+    }
+
+    @Test
+    void 값_구간이_시작과_끝_둘이_아니면_거절한다() {
+        // given
+        byte[] given = fileOf(
+            "{\"hurdle_coefficients\":{\"dtype\":\"F64\",\"shape\":[1],\"data_offsets\":[0]}}"
+                .getBytes(StandardCharsets.UTF_8), 8);
+
+        // when & then
+        assertThatThrownBy(() -> SafetensorsFile.of(given))
+            .isInstanceOf(BundleRejectedException.class);
+    }
+
+    @Test
+    void 값_구간이_파일_크기보다_아득히_크면_거절한다() {
+        // given 구간 길이는 실수 하나와 맞는데 자리가 파일 크기와 견줄 수 없을 만큼 뒤다
+        byte[] given = fileOf(
+            ("{\"hurdle_coefficients\":{\"dtype\":\"F64\",\"shape\":[1],"
+                + "\"data_offsets\":[9223372036854775799,9223372036854775807]}}")
+                .getBytes(StandardCharsets.UTF_8), 8);
+
+        // when & then 더해서 재면 넘쳐서 음수가 되고 검사를 그냥 통과한다
+        assertThatThrownBy(() -> SafetensorsFile.of(given))
+            .isInstanceOf(BundleRejectedException.class)
+            .hasMessageContaining("파일 밖");
+    }
+
+    @Test
+    void 배열의_칸_수가_셀_수_있는_범위를_넘으면_거절한다() {
+        // given 크기 둘을 곱하면 43억 칸인데 값은 한 칸도 안 붙어 있다
+        byte[] given = fileOf(
+            ("{\"hurdle_coefficients\":{\"dtype\":\"F64\",\"shape\":[65536,65536],"
+                + "\"data_offsets\":[0,0]}}").getBytes(StandardCharsets.UTF_8), 0);
+
+        // when & then 곱을 int 로 세면 43억이 조용히 0 이 돼서, 값 0칸과 앞뒤가 맞아 통과한다
+        assertThatThrownBy(() -> SafetensorsFile.of(given))
+            .isInstanceOf(BundleRejectedException.class);
+    }
+
+    @Test
     void 머리말이_자기_정보를_담은_자리는_배열로_안_읽는다() {
         // given safetensors 는 __metadata__ 에 배열이 아닌 것을 담는다
         byte[] given = fileOf(

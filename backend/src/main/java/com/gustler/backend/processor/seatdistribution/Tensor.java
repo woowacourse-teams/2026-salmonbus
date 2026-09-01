@@ -21,14 +21,23 @@ record Tensor(
         }
     }
 
+    /**
+     * 크기를 곱해 값이 몇 칸인지 낸다.
+     *
+     * <p>{@code long} 으로 곱한다. {@code int} 로 곱하면 계수 파일이 적은 크기가 클 때 조용히
+     * 넘쳐서, 실제보다 작은 칸 수가 나오고 그 칸 수로 파일을 읽는다.
+     */
     static int valueCountOf(
         int[] shape
     ) {
-        int count = 1;
+        long count = 1;
         for (final int length : shape) {
             count *= length;
+            if (count > Integer.MAX_VALUE) {
+                throw new BundleRejectedException("배열이 " + count + " 칸이라 못 읽는다");
+            }
         }
-        return count;
+        return (int) count;
     }
 
     /** 앞쪽 축을 하나씩 짚어 들어간 뒤 남은 축 하나를 통째로 꺼낸다. */
