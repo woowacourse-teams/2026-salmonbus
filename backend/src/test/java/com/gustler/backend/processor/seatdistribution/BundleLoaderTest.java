@@ -83,6 +83,19 @@ class BundleLoaderTest {
     }
 
     @Test
+    void 설명_파일이_정규_모양이_아니면_거절한다() throws IOException {
+        // given 뜻은 같은데 항목 사이에 빈칸을 넣어 다시 쓴다
+        BundleFiles files = DummyBundle.valid().writeTo(directory);
+        Files.write(files.manifest(),
+            new String(Files.readAllBytes(files.manifest()), StandardCharsets.UTF_8)
+                .replace(",\"", ", \"")
+                .getBytes(StandardCharsets.UTF_8));
+
+        // when & then 빈칸 하나로 요약값이 달라져 같은 계수가 두 신원이 된다
+        assertRejectedBy(BundleCheck.MANIFEST_IS_CANONICAL_JSON, () -> BundleLoader.load(files));
+    }
+
+    @Test
     void 설명_파일에_모르는_항목이_있으면_거절한다() {
         // when & then
         assertRejectedBy(

@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Set;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
 
 /**
  * 설명 파일을 읽는다.
@@ -37,8 +38,10 @@ final class BundleManifestReader {
     static BundleManifest read(
         byte[] content
     ) {
-        JsonNode root = parse(textOf(content));
+        String text = textOf(content);
+        JsonNode root = parse(text);
         BundleCheck.MANIFEST_IS_UTF8_JSON.require(root.isObject(), "최상위가 객체가 아니다");
+        requireCanonical(root, text);
         rejectUnknownFields(root);
         return new BundleManifest(
             textAt(root, "bundleSchemaVersion"),
@@ -85,6 +88,26 @@ final class BundleManifestReader {
         } catch (RuntimeException error) {
             throw BundleCheck.MANIFEST_IS_UTF8_JSON.reject(error.getMessage());
         }
+    }
+
+    /**
+     * 설명 파일이 정규 모양인지 본다. 항목을 이름순으로 놓고 빈칸 없이 다시 적었을 때 원문과
+     * 글자 그대로 같아야 한다.
+     *
+     * <p>정규 모양이 아니면 <b>같은 뜻인데 요약값이 다른 파일</b>이 여럿 생긴다. 빈칸 하나나
+     * 항목 순서만 달라도 요약값이 달라져서, 같은 계수를 두 신원으로 올릴 수 있게 된다.
+     */
+    private static void requireCanonical(
+        JsonNode root,
+        String text
+    ) {
+        String canonical = new ObjectMapper()
+            .writer()
+            .with(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+            .writeValueAsString(root);
+        BundleCheck.MANIFEST_IS_CANONICAL_JSON.require(
+            canonical.equals(text.strip()),
+            "항목을 이름순으로 빈칸 없이 다시 적은 것과 다르다");
     }
 
     private static void rejectUnknownFields(
