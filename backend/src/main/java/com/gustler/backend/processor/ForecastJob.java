@@ -1,5 +1,7 @@
 package com.gustler.backend.processor;
 
+import com.gustler.backend.processor.seatdistribution.RuntimeSnapshot;
+
 import jakarta.annotation.PostConstruct;
 import java.util.List;
 import java.util.Optional;
@@ -27,9 +29,8 @@ public class ForecastJob {
 
     private final VehicleTrajectoryRepository vehicleTrajectoryRepository;
     private final RouteVersionRepository routeVersionRepository;
-    private final ModelDeploymentRepository modelDeploymentRepository;
+    private final ForecastRuntime forecastRuntime;
     private final ForecastBatchWriter forecastBatchWriter;
-    private final Optional<SeatForecastModel> seatForecastModel;
     private final ForecastProperties properties;
 
     /**
@@ -39,51 +40,46 @@ public class ForecastJob {
      */
     @PostConstruct
     void 예보를_낼_수_있는지_남긴다() {
-        if (seatForecastModel.isEmpty()) {
-            log.warn("예보 배치가 켜져 있는데 좌석 예보 모델이 없다. 계수가 붙기 전까지 batch 를 하나도 안 연다");
+        if (forecastRuntime.resolveActive().isEmpty()) {
+            log.warn("예보 배치가 켜져 있는데 쓸 계수가 없다. 도는 배포와 올라온 계수의 신원이 맞을 때까지 "
+                + "batch 를 하나도 안 연다");
         }
     }
 
     public ForecastJob(
         VehicleTrajectoryRepository vehicleTrajectoryRepository,
         RouteVersionRepository routeVersionRepository,
-        ModelDeploymentRepository modelDeploymentRepository,
+        ForecastRuntime forecastRuntime,
         ForecastBatchWriter forecastBatchWriter,
-        Optional<SeatForecastModel> seatForecastModel,
         ForecastProperties properties
     ) {
         this.vehicleTrajectoryRepository = vehicleTrajectoryRepository;
         this.routeVersionRepository = routeVersionRepository;
-        this.modelDeploymentRepository = modelDeploymentRepository;
+        this.forecastRuntime = forecastRuntime;
         this.forecastBatchWriter = forecastBatchWriter;
-        this.seatForecastModel = seatForecastModel;
         this.properties = properties;
     }
 
     @Scheduled(fixedDelayString = "${forecast.interval}")
     public void writeForecasts() {
-        if (seatForecastModel.isEmpty()) {
-            return;
-        }
-        Optional<ActiveModelDeployment> deployment = modelDeploymentRepository.findActive();
-        if (deployment.isEmpty()) {
+        Optional<RuntimeSnapshot> runtime = forecastRuntime.resolveActive();
+        if (runtime.isEmpty()) {
             return;
         }
         for (Long routeVersionId : routeVersionRepository.findActiveVersionIds()) {
-            writeForecastsOf(routeVersionId, deployment.get(), seatForecastModel.get());
+            writeForecastsOf(routeVersionId, runtime.get());
         }
     }
 
     private void writeForecastsOf(
         final long routeVersionId,
-        ActiveModelDeployment deployment,
-        SeatForecastModel model
+        RuntimeSnapshot runtime
     ) {
         RouteStops stops = routeVersionRepository.readStops(routeVersionId);
         List<PendingForecastBatch> batches =
             vehicleTrajectoryRepository.findBatchesAwaitingForecast(routeVersionId, properties.batchLimit());
         for (PendingForecastBatch batch : batches) {
-            forecastBatchWriter.writeForecastsOf(batch, stops, deployment, model);
+            forecastBatchWriter.writeForecastsOf(batch, stops, runtime);
         }
     }
 }

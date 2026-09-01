@@ -116,7 +116,7 @@ class ActiveForecastRuntimeResolverTest {
         bundles.add(loadedInto(directory.resolve("next")));
 
         // then 이미 받아 든 것은 안 바뀐다
-        assertThat(taken.predictor()).isSameAs(first.predictor());
+        assertThat(taken.bundleDigest()).isEqualTo(first.bundleDigest());
     }
 
     private ActiveForecastRuntimeResolver resolver(

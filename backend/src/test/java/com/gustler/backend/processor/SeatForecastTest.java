@@ -9,6 +9,8 @@ import org.junit.jupiter.api.Test;
 
 class SeatForecastTest {
 
+    private static final long DEPLOYMENT_ID = 1L;
+
     private static final Instant OBSERVED_AT = Instant.parse("2026-08-25T08:30:00Z");
     private static final Instant GENERATED_AT = Instant.parse("2026-08-25T08:30:01Z");
     /** 혼잡도를 안 준 관측. 이 테스트가 보는 것과 무관하다. */
@@ -25,7 +27,7 @@ class SeatForecastTest {
 
         // when
         SeatForecast actual = SeatForecast.of(
-            OBSERVATION_ID, target, result(), deployment(), DEMAND_STATISTICS_REVISION, GENERATED_AT);
+            OBSERVATION_ID, target, result(), DEPLOYMENT_ID, DEMAND_STATISTICS_REVISION, GENERATED_AT);
 
         // then
         assertThat(actual.stopsToTarget()).isEqualTo(5);
@@ -38,7 +40,7 @@ class SeatForecastTest {
 
         // when
         SeatForecast actual = SeatForecast.of(
-            OBSERVATION_ID, target, result(), deployment(), DEMAND_STATISTICS_REVISION, GENERATED_AT);
+            OBSERVATION_ID, target, result(), DEPLOYMENT_ID, DEMAND_STATISTICS_REVISION, GENERATED_AT);
 
         // then
         assertThat(actual).extracting(SeatForecast::seatFullChanceRaw, SeatForecast::seatFullChance)
@@ -52,7 +54,7 @@ class SeatForecastTest {
 
         // when
         SeatForecast actual = SeatForecast.of(
-            OBSERVATION_ID, target, result(), deployment(), DEMAND_STATISTICS_REVISION, GENERATED_AT);
+            OBSERVATION_ID, target, result(), DEPLOYMENT_ID, DEMAND_STATISTICS_REVISION, GENERATED_AT);
 
         // then
         assertThat(actual.routeVersionId()).isEqualTo(ROUTE_VERSION_3330);
@@ -104,7 +106,5 @@ class SeatForecastTest {
         return new SeatForecastResult(new SeatDistribution(List.of(0.4, 0.6)), 0.38);
     }
 
-    private ActiveModelDeployment deployment() {
-        return new ActiveModelDeployment(1L, "seat-feature-v1", "release-2026-08-19", "0".repeat(64));
-    }
+
 }

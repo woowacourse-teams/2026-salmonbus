@@ -1,5 +1,7 @@
 package com.gustler.backend.processor.seatdistribution;
 
+import com.gustler.backend.processor.ActiveModelDeployment;
+import com.gustler.backend.processor.SeatForecastModel;
 import java.time.Instant;
 
 /**
@@ -19,27 +21,35 @@ import java.time.Instant;
  * </ul>
  */
 public record RuntimeSnapshot(
-    long deploymentId,
-    String releaseId,
-    String bundleDigest,
-    String featureContractVersion,
+    ActiveModelDeployment deployment,
     SupportedForecastScope scope,
-    SeatDistributionPredictor predictor,
+    SeatForecastModel model,
     Instant dataUntil
 ) {
 
     public RuntimeSnapshot {
-        if (releaseId == null || releaseId.isBlank()) {
-            throw new IllegalArgumentException("배포에는 출시 식별자가 있어야 한다");
+        if (deployment == null) {
+            throw new IllegalArgumentException("도는 배포가 있어야 한다");
         }
-        if (bundleDigest == null || bundleDigest.length() != 64) {
-            throw new IllegalArgumentException("계수 묶음 요약값은 64자리다: " + bundleDigest);
+        if (model == null) {
+            throw new IllegalArgumentException("배포에는 좌석 분포를 낼 모델이 있어야 한다");
         }
-        if (featureContractVersion == null || featureContractVersion.isBlank()) {
-            throw new IllegalArgumentException("배포에는 특징 계약 판 이름이 있어야 한다");
-        }
-        if (predictor == null) {
-            throw new IllegalArgumentException("배포에는 예측기가 있어야 한다");
-        }
+    }
+
+    /** 예보 행이 가리킬 배포. 이 안의 예측기와 같은 묶음에서 나온 것이다. */
+    public long deploymentId() {
+        return deployment.id();
+    }
+
+    public String releaseId() {
+        return deployment.releaseId();
+    }
+
+    public String bundleDigest() {
+        return deployment.bundleDigest();
+    }
+
+    public String featureContractVersion() {
+        return deployment.calculationVersion();
     }
 }

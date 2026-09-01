@@ -43,7 +43,7 @@ public record SeatForecast(
         final long vehicleObservationId,
         VehicleStopTarget target,
         SeatForecastResult result,
-        ActiveModelDeployment deployment,
+        final long modelDeploymentId,
         final int demandStatisticsRevision,
         Instant generatedAt
     ) {
@@ -52,7 +52,7 @@ public record SeatForecast(
             target.observation().routeVersionId(),
             target.stopOrder(),
             target.distance().stopCount(),
-            deployment.id(),
+            modelDeploymentId,
             demandStatisticsRevision,
             result.fullChanceRaw(),
             result.fullChance(),

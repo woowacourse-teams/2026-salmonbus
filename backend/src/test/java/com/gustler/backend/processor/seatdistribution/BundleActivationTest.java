@@ -146,7 +146,7 @@ class BundleActivationTest {
         RuntimeSnapshot snapshot = resolver().resolveActive().orElseThrow();
 
         // when
-        SeatForecastResult actual = snapshot.predictor().predict(new SeatDistributionInput(
+        SeatForecastResult actual = predictorOf(snapshot).predict(new SeatDistributionInput(
             featureVector(), ModelRoute.of("204000057"), FOUR_STOPS_AHEAD, 20, 44, null));
 
         // then
@@ -160,7 +160,7 @@ class BundleActivationTest {
         RuntimeSnapshot snapshot = resolver().resolveActive().orElseThrow();
 
         // when
-        SeatForecastResult actual = snapshot.predictor().predict(new SeatDistributionInput(
+        SeatForecastResult actual = predictorOf(snapshot).predict(new SeatDistributionInput(
             featureVector(), ModelRoute.of("234000050"), 1, 44, 44, null));
 
         // then
@@ -188,6 +188,13 @@ class BundleActivationTest {
 
         // then
         assertThat(actual).isEmpty();
+    }
+
+    /** 예보 경로는 모델 포트로 부르는데, 이 테스트는 열 31개를 곧바로 넣어 보려고 예측기를 꺼낸다. */
+    private SeatDistributionPredictor predictorOf(
+        RuntimeSnapshot snapshot
+    ) {
+        return bundles.find(snapshot.bundleDigest()).orElseThrow().predictor();
     }
 
     private BundleActivation activation() {

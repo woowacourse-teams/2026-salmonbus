@@ -7,12 +7,16 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
+import com.gustler.backend.processor.seatdistribution.RuntimeSnapshot;
+import com.gustler.backend.processor.seatdistribution.SupportedForecastScope;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.TestPropertySource;
@@ -602,9 +606,30 @@ class ForecastJobTest {
     @TestConfiguration(proxyBeanMethods = false)
     static class FixedSeatForecastModel {
 
+        private static final Instant DATA_UNTIL = Instant.parse("2026-08-30T14:59:56Z");
+
         @Bean
         RecordingSeatForecastModel seatForecastModel() {
             return new RecordingSeatForecastModel();
+        }
+
+        /**
+         * 도는 배포와 모델을 한 덩어리로 내는 자리를 가짜로 바꾼다.
+         *
+         * <p>계수 파일이 없어서 진짜 자리는 아무것도 안 낸다. 배치가 무엇을 모델에 넘기는지를 보려면
+         * 그 자리가 배포 행과 이 가짜 모델을 묶어 내야 한다.
+         */
+        @Bean
+        @Primary
+        ForecastRuntime forecastRuntime(
+            ModelDeploymentRepository deployments,
+            RecordingSeatForecastModel model
+        ) {
+            return () -> deployments.findActive().map(deployment -> new RuntimeSnapshot(
+                deployment,
+                new SupportedForecastScope(List.of("1650", "3330")),
+                model,
+                DATA_UNTIL));
         }
     }
 

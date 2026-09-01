@@ -1,6 +1,7 @@
 package com.gustler.backend.processor.seatdistribution;
 
 import com.gustler.backend.processor.ActiveModelDeployment;
+import com.gustler.backend.processor.ForecastRuntime;
 import com.gustler.backend.processor.ModelDeploymentRepository;
 import java.time.Instant;
 import java.util.Optional;
@@ -15,7 +16,7 @@ import java.util.Optional;
  * 어긋났다는 뜻이고, 그 상태로 낸 예보는 어느 계수로 낸 것인지 나중에 알 수 없다.
  * 예보를 안 내는 것은 이미 정상 상태다. 계수 번들이 없는 동안 예보 배치가 도는 방식과 같다.
  */
-public final class ActiveForecastRuntimeResolver {
+public final class ActiveForecastRuntimeResolver implements ForecastRuntime {
 
     private final ModelDeploymentRepository deployments;
     private final LoadedBundleHolder bundles;
@@ -34,6 +35,7 @@ public final class ActiveForecastRuntimeResolver {
      * <p>받아 든 것은 뒤에 승격이 일어나도 안 바뀐다. batch 하나가 이것을 한 번 받아 끝까지
      * 쓰면 그 batch 의 모든 예보 행이 같은 계수에서 나온다.
      */
+    @Override
     public Optional<RuntimeSnapshot> resolveActive() {
         Optional<ActiveModelDeployment> deployment = deployments.findActive();
         if (deployment.isEmpty()) {
@@ -58,12 +60,9 @@ public final class ActiveForecastRuntimeResolver {
         LoadedBundle bundle
     ) {
         return new RuntimeSnapshot(
-            deployment.id(),
-            bundle.releaseId(),
-            bundle.bundleDigest(),
-            bundle.featureContractVersion(),
+            deployment,
             bundle.scope(),
-            bundle.predictor(),
+            new SeatDistributionForecastModel(bundle.predictor()),
             dataUntilOf(bundle));
     }
 
