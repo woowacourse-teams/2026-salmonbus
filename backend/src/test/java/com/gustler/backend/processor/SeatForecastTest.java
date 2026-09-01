@@ -105,6 +105,6 @@ class SeatForecastTest {
     }
 
     private ActiveModelDeployment deployment() {
-        return new ActiveModelDeployment(1L, "a18-feature-v1", "release-2026-08-19", "0".repeat(64));
+        return new ActiveModelDeployment(1L, "seat-feature-v1", "release-2026-08-19", "0".repeat(64));
     }
 }
