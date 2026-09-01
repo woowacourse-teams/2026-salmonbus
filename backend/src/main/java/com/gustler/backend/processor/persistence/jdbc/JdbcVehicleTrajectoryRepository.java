@@ -110,13 +110,13 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
      * <p><b>시각 하나가 아니라 (시각, id) 쌍으로 자른다.</b> 같은 시각의 batch 가 둘이면 시각만으로는
      * 물어본 batch 뒤의 것이 안 걸러진다. 바로 위 이력 조회가 같은 이유로 같은 커서를 쓴다.
      *
-     * <p>줄곧 만석이던 차량은 최대 잔여석이 0석인데 그것으로 나눌 수 없어 1석을 바닥으로 둔다.
-     * 집계 쪽 GREATEST 와 같은 자리다. 잔여석을 한 번도 안 보여 준 차량은 결과에 아예 없고,
-     * 그 자리를 1석으로 세는 것은 도메인이 한다.
+     * <p><b>줄곧 만석이던 차량은 결과에 안 담는다.</b> 최대 잔여석이 0석이라 정원을 모르는 것이고,
+     * 1석으로 꾸며 내면 값은 나오는데 뜻이 없는 예보가 나간다. 잔여석을 한 번도 안 보여 준 차량이
+     * 애초에 결과에 없는 것과 같은 자리다. 그 차량들은 궤적이 안 만들어져 예보도 안 나간다.
      */
     private static final String SELECT_MAXIMUM_SEATS_EVER_OBSERVED = """
         SELECT observation.vehicle_id,
-               GREATEST(MAX(observation.remaining_seats), 1) AS maximum_seats
+               MAX(observation.remaining_seats) AS maximum_seats
         FROM vehicle_observation observation
         JOIN observation_batch batch
           ON batch.id = observation.observation_batch_id
@@ -125,6 +125,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
           AND observation.remaining_seats IS NOT NULL
           AND (batch.response_received_at, batch.id) <= (:until, :observationBatchId)
         GROUP BY observation.vehicle_id
+        HAVING MAX(observation.remaining_seats) > 0
         """;
 
     private final JdbcClient jdbcClient;

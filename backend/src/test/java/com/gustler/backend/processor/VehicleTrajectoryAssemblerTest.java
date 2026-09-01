@@ -15,8 +15,6 @@ class VehicleTrajectoryAssemblerTest {
     /** 혼잡도를 안 준 관측. 궤적을 잇는 판정은 혼잡도를 안 본다. */
     private static final Integer CROWD_LEVEL_UNKNOWN = null;
 
-    /** 보여 준 최대 잔여석은 30분 창 밖에서 오므로 여기서는 픽스처가 준다. */
-    private static final Map<String, Integer> NO_MAXIMUM_SEATS_READ = Map.of();
     /** 조립은 관측 행 번호를 안 본다. 차량 아이디로 잇는다. */
     private static final long ANY_OBSERVATION_ID = 0L;
     private static final Instant FIRST_RESPONSE_RECEIVED_AT = Instant.parse("2026-08-19T02:14:04.911Z");
@@ -24,6 +22,15 @@ class VehicleTrajectoryAssemblerTest {
 
     private static final String VEHICLE_204000206 = "204000206";
     private static final String VEHICLE_204003542 = "204003542";
+
+    /**
+     * 보여 준 최대 잔여석은 30분 창 밖에서 오므로 여기서는 픽스처가 준다.
+     *
+     * <p>이 테스트가 재는 것은 기울기 · 앞차 · 연속 만석이라 정원 값 자체는 아무 수나 좋다.
+     * 다만 목록에 없는 차량은 궤적이 안 만들어지므로 두 차량 다 넣어 둔다.
+     */
+    private static final Map<String, Integer> MAXIMUM_SEATS_READ =
+        Map.of(VEHICLE_204000206, 44, VEHICLE_204003542, 44);
     private static final String VEHICLE_204001188 = "204001188";
 
     private static final String TRIP_MORNING = "204000206-2026-08-19T07:10";
@@ -309,7 +316,7 @@ class VehicleTrajectoryAssemblerTest {
 
         // when
         List<VehicleTrajectory> actual =
-            VehicleTrajectoryAssembler.assemble(history, NO_MAXIMUM_SEATS_READ);
+            VehicleTrajectoryAssembler.assemble(history, MAXIMUM_SEATS_READ);
 
         // then
         assertThat(actual)
@@ -321,7 +328,7 @@ class VehicleTrajectoryAssemblerTest {
         ObservationHistory history
     ) {
         List<VehicleTrajectory> trajectories =
-            VehicleTrajectoryAssembler.assemble(history, NO_MAXIMUM_SEATS_READ);
+            VehicleTrajectoryAssembler.assemble(history, MAXIMUM_SEATS_READ);
         return trajectories.getFirst();
     }
 
@@ -329,7 +336,7 @@ class VehicleTrajectoryAssemblerTest {
         ObservationHistory history,
         String vehicleId
     ) {
-        return VehicleTrajectoryAssembler.assemble(history, NO_MAXIMUM_SEATS_READ).stream()
+        return VehicleTrajectoryAssembler.assemble(history, MAXIMUM_SEATS_READ).stream()
             .filter(trajectory -> vehicleId.equals(trajectory.observation().vehicleId()))
             .findFirst()
             .orElseThrow();

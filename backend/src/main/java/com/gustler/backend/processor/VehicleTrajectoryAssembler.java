@@ -29,8 +29,11 @@ public final class VehicleTrajectoryAssembler {
      * 차량마다 궤적 재료를 만든다.
      *
      * <p>보여 준 최대 잔여석만 30분 창 밖에서 온다. 이력 전부를 봐야 나오는 값이라 여기서
-     * 세지 않고 차량 아이디로 받는다. 잔여석을 한 번도 안 보여 준 차량은 그 목록에 없고
-     * 그때는 {@link VehicleTrajectory#SMALLEST_MAXIMUM_SEATS} 로 센다.
+     * 세지 않고 차량 아이디로 받는다.
+     *
+     * <p><b>그 목록에 없는 차량은 궤적을 안 만든다.</b> 잔여석을 한 번도 안 보여 준 차량과 줄곧
+     * 만석이던 차량이 그 자리다. 정원을 모르는데 1석으로 꾸며 내면 지금 잔여석 비율이 늘 0 이고
+     * 정원 비율이 1/68 이라, 값은 나오는데 뜻이 없는 예보가 나간다. 예보를 안 내는 편이 낫다.
      */
     public static List<VehicleTrajectory> assemble(
         ObservationHistory history,
@@ -38,6 +41,9 @@ public final class VehicleTrajectoryAssembler {
     ) {
         List<VehicleTrajectory> trajectories = new ArrayList<>();
         for (TrajectoryObservation observation : history.targetBatch().observations()) {
+            if (!maximumSeatsByVehicle.containsKey(observation.vehicleId())) {
+                continue;
+            }
             trajectories.add(trajectoryOf(history, observation, maximumSeatsByVehicle));
         }
         return List.copyOf(trajectories);
@@ -56,7 +62,7 @@ public final class VehicleTrajectoryAssembler {
             slopeOf(chain),
             findPrecedingVehicle(history, target),
             streakOf(chain),
-            maximumSeatsByVehicle.getOrDefault(target.vehicleId(), VehicleTrajectory.SMALLEST_MAXIMUM_SEATS));
+            maximumSeatsByVehicle.get(target.vehicleId()));
     }
 
     /**

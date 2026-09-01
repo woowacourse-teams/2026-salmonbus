@@ -180,8 +180,8 @@ class JdbcVehicleTrajectoryRepositoryTest {
     }
 
     @Test
-    void 줄곧_만석이던_차량도_최대_잔여석은_1석이다() {
-        // given
+    void 줄곧_만석이던_차량은_궤적이_안_나온다() {
+        // given 한 번도 빈자리를 안 보여 줘서 정원을 모르는 차량이다
         final long earlier = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
         insertObservation(earlier, VEHICLE_204000206, STOP_5, NO_SEAT_LEFT);
         final long later = insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
@@ -190,12 +190,12 @@ class JdbcVehicleTrajectoryRepositoryTest {
         // when
         List<VehicleTrajectory> actual = repository.readTrajectories(later);
 
-        // then 0으로는 나눌 수 없어 셀 통계 집계와 같은 자리에서 1석을 바닥으로 둔다
-        assertThat(actual.getFirst().maximumSeatsEverObserved()).isEqualTo(1);
+        // then 1석으로 꾸며 내면 값은 나오는데 뜻이 없는 예보가 나간다
+        assertThat(actual).isEmpty();
     }
 
     @Test
-    void 잔여석을_한_번도_안_보여_준_차량도_최대_잔여석은_1석이다() {
+    void 잔여석을_한_번도_안_보여_준_차량은_궤적이_안_나온다() {
         // given
         final long batchId = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
         insertObservationWithoutSeats(batchId, VEHICLE_204000206, STOP_6, REPORTED_UNKNOWN);
@@ -204,7 +204,7 @@ class JdbcVehicleTrajectoryRepositoryTest {
         List<VehicleTrajectory> actual = repository.readTrajectories(batchId);
 
         // then
-        assertThat(actual.getFirst().maximumSeatsEverObserved()).isEqualTo(1);
+        assertThat(actual).isEmpty();
     }
 
     @Test
@@ -255,12 +255,14 @@ class JdbcVehicleTrajectoryRepositoryTest {
 
     @Test
     void 잔여석을_모르면_왜_모르는지까지_같이_준다() {
-        // given
-        final long batchId = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
-        insertObservationWithoutSeats(batchId, VEHICLE_204000206, STOP_6, REPORTED_UNKNOWN);
+        // given 지금은 잔여석을 모르지만 예전에 빈자리를 보여 줘서 정원은 아는 차량이다
+        final long earlier = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
+        insertObservation(earlier, VEHICLE_204000206, STOP_5, 44);
+        final long later = insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
+        insertObservationWithoutSeats(later, VEHICLE_204000206, STOP_6, REPORTED_UNKNOWN);
 
         // when
-        List<VehicleTrajectory> actual = repository.readTrajectories(batchId);
+        List<VehicleTrajectory> actual = repository.readTrajectories(later);
 
         // then
         assertThat(actual.getFirst().seats())
