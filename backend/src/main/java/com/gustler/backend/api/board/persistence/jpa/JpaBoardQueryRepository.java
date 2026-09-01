@@ -4,6 +4,7 @@ import com.gustler.backend.api.board.application.BoardQueryRepository;
 import com.gustler.backend.api.board.application.BoardSnapshot;
 import com.gustler.backend.api.board.application.DepartureSchedule;
 import com.gustler.backend.api.board.application.SnapshotObservation;
+import com.gustler.backend.api.board.application.StoredObservation;
 import com.gustler.backend.api.board.application.StoredPrediction;
 import com.gustler.backend.api.board.domain.BoardStop;
 import com.gustler.backend.api.board.domain.ForecastModel;
@@ -33,6 +34,7 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
     private final BoardObservationBatchEntityRepository observationBatchRepository;
     private final BoardRouteStopEntityRepository routeStopRepository;
     private final SeatForecastEntityRepository seatForecastRepository;
+    private final BoardVehicleObservationEntityRepository vehicleObservationRepository;
     private final ModelDeploymentEntityRepository modelDeploymentRepository;
 
     @Override
@@ -69,6 +71,20 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
             return seatForecastRepository.findAllByBatchId(observationBatchId)
                 .stream()
                 .map(forecast -> forecast.toDomain(clock.getZone()))
+                .toList();
+        } catch (DataAccessException exception) {
+            throw new ServiceUnavailableException();
+        }
+    }
+
+    @Override
+    public List<StoredObservation> findObservations(
+        final long observationBatchId
+    ) {
+        try {
+            return vehicleObservationRepository.findAllByBatchId(observationBatchId)
+                .stream()
+                .map(VehicleObservationJpaEntity::toDomain)
                 .toList();
         } catch (DataAccessException exception) {
             throw new ServiceUnavailableException();

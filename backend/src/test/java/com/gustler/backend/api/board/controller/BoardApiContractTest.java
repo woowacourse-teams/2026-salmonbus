@@ -107,18 +107,22 @@ class BoardApiContractTest {
             .andExpect(jsonPath("$.stops[1].boardingAllowed").value(false))
             .andExpect(jsonPath("$.stops[1].approachingVehicles").isEmpty())
             .andExpect(jsonPath("$.stops[2].approachingVehicles.length()").value(3))
-            .andExpect(jsonPath("$.stops[2].approachingVehicles[0]", aMapWithSize(5)))
-            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].kind").value("FORECAST"))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0]", aMapWithSize(3)))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].kind").value("UNKNOWN"))
             .andExpect(jsonPath("$.stops[2].approachingVehicles[0].vehicleId")
-                .value("B"))
+                .value("0"))
             .andExpect(jsonPath("$.stops[2].approachingVehicles[0].seatAvailableProbability")
-                .value(0.996))
-            .andExpect(jsonPath("$.stops[2].approachingVehicles[1]", aMapWithSize(4)))
-            .andExpect(jsonPath("$.stops[2].approachingVehicles[1].vehicleId").isEmpty())
-            .andExpect(jsonPath("$.stops[2].approachingVehicles[1].expectedSeats")
                 .doesNotExist())
-            .andExpect(jsonPath("$.stops[2].approachingVehicles[2].vehicleId")
-                .value("A"));
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[1]", aMapWithSize(5)))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[1].kind").value("FORECAST"))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[1].vehicleId")
+                .value("B"))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[1].seatAvailableProbability")
+                .value(0.996))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[2]", aMapWithSize(4)))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[2].vehicleId").isEmpty())
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[2].expectedSeats")
+                .doesNotExist());
     }
 
     @Test
@@ -195,6 +199,54 @@ class BoardApiContractTest {
         mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
             .andExpect(status().isServiceUnavailable())
             .andExpect(jsonPath("$.code").value("NO_RECENT_OBSERVATION"));
+    }
+
+    @Test
+    void 예보를_못_낸_차량도_보드에_좌석을_모른다고_나온다() throws Exception {
+        OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
+        OffsetDateTime observedAt = now.minusMinutes(1);
+        RouteContext route = insertRoundTripRoute(now.minusDays(1));
+        fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        final long batchId = fixture.insertBatch(
+            route,
+            observedAt,
+            observedAt.plusSeconds(2),
+            "SUCCESS_ROWS",
+            1
+        );
+        fixture.insertObservation(route, batchId, 1, "SEATLESS", 2, "STOP-2", observedAt);
+
+        mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.stops[2].approachingVehicles.length()").value(1))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0]", aMapWithSize(3)))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].kind").value("UNKNOWN"))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].vehicleId")
+                .value("SEATLESS"))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].horizonStops").value(1))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].seatAvailableProbability")
+                .doesNotExist());
+    }
+
+    @Test
+    void 차량_id가_없는_관측도_보드에_나온다() throws Exception {
+        OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
+        OffsetDateTime observedAt = now.minusMinutes(1);
+        RouteContext route = insertRoundTripRoute(now.minusDays(1));
+        fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        final long batchId = fixture.insertBatch(
+            route,
+            observedAt,
+            observedAt.plusSeconds(2),
+            "SUCCESS_ROWS",
+            1
+        );
+        fixture.insertObservation(route, batchId, 1, null, 2, "STOP-2", observedAt);
+
+        mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.stops[2].approachingVehicles.length()").value(1))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].kind").value("UNKNOWN"));
     }
 
     @Test

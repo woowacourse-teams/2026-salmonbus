@@ -12,4 +12,6 @@ public interface BoardQueryRepository {
     List<BoardStop> findStops(long routeVersionId);
 
     List<StoredPrediction> findPredictions(long observationBatchId);
+
+    List<StoredObservation> findObservations(long observationBatchId);
 }
