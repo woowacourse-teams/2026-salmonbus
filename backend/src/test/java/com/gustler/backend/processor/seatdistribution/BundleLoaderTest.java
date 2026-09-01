@@ -9,6 +9,7 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import com.gustler.backend.processor.SeatForecastDesignMatrix;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -136,11 +137,19 @@ class BundleLoaderTest {
     }
 
     @Test
-    void 입력값_이름이_겹치면_거절한다() {
+    void 입력값_이름의_순서가_바뀌면_거절한다() {
+        // given 이름도 개수도 같은데 두 열의 자리만 바꾼다
+        assertRejectedBy(
+            BundleCheck.FEATURE_NAMES,
+            loading(DummyBundle.valid().put("featureNames", swappedFeatureNames())));
+    }
+
+    @Test
+    void 입력값_이름이_우리_설계행렬에_없는_것이면_거절한다() {
         // when & then
         assertRejectedBy(
             BundleCheck.FEATURE_NAMES,
-            loading(DummyBundle.valid().put("featureNames", duplicatedFeatureNames())));
+            loading(DummyBundle.valid().put("featureNames", renamedFeatureNames())));
     }
 
     @Test
@@ -240,16 +249,14 @@ class BundleLoaderTest {
         assertRejectedBy(BundleCheck.RELEASE_IDENTITY_DIGEST, loading(given));
     }
 
+    /**
+     * 열 개수만 맞추고 올리면, 그 계수는 우리 설계행렬과 다른 자리에 학습된 것이다. 값은 정상으로
+     * 보이면서 뜻이 없는 예보가 나간다. 그래서 개수가 아니라 이름과 순서를 본다.
+     */
     @Test
-    void 입력값이_24개인_계수_묶음도_길이만_맞으면_올라간다() {
-        // given 입력을 만드는 규칙이 아직 안 정해져서 입력값 개수가 바뀔 수 있다
-        DummyBundle given = DummyBundle.withFeatureCount(24);
-
-        // when
-        CoefficientBundle actual = BundleLoader.load(given.writeTo(directory));
-
-        // then
-        assertThat(actual.at("1650", 1).featureCount()).isEqualTo(24);
+    void 입력값이_24개인_계수_묶음은_거절한다() {
+        // when & then
+        assertRejectedBy(BundleCheck.FEATURE_NAMES, loading(DummyBundle.withFeatureCount(24)));
     }
 
     private static String identityDigestOf(
@@ -272,11 +279,16 @@ class BundleLoaderTest {
         return file.array();
     }
 
-    private static List<String> duplicatedFeatureNames() {
-        List<String> names = new ArrayList<>();
-        for (int index = 0; index < DummyBundle.FEATURE_COUNT; index++) {
-            names.add(index == 5 ? "feature_0" : "feature_" + index);
-        }
+    private static List<String> swappedFeatureNames() {
+        List<String> names = new ArrayList<>(SeatForecastDesignMatrix.COLUMN_NAMES);
+        names.set(1, SeatForecastDesignMatrix.COLUMN_NAMES.get(2));
+        names.set(2, SeatForecastDesignMatrix.COLUMN_NAMES.get(1));
+        return names;
+    }
+
+    private static List<String> renamedFeatureNames() {
+        List<String> names = new ArrayList<>(SeatForecastDesignMatrix.COLUMN_NAMES);
+        names.set(0, "intercept");
         return names;
     }
 

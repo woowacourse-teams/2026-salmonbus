@@ -36,8 +36,27 @@ record BundleManifest(
     String weightsDigest,
     String identityDigest,
     String goldenVectorDigest,
+    GoldenVector goldenVector,
     String dataThrough
 ) {
+
+    /**
+     * 계수 파일이 같이 싣는 대조 사례 하나.
+     *
+     * <p>학습 쪽이 자기 구현으로 이 입력을 넣어 얻은 값이다. 우리가 그 입력을 넣어 같은 값이
+     * 나와야 <b>두 구현이 같은 계산을 한다</b>는 것이 선다. 이게 없으면 크기와 자료형만 맞는
+     * 계수 파일이 다른 계산으로 예보를 내도 아무 데서도 안 걸린다.
+     */
+    record GoldenVector(
+        java.util.List<Double> featureVector,
+        String modelRoute,
+        int stopsAhead,
+        int currentSeats,
+        int capacity,
+        double expectedFullChance,
+        double expectedSeats
+    ) {
+    }
 
     record TensorDeclaration(
         TensorDataType dataType,

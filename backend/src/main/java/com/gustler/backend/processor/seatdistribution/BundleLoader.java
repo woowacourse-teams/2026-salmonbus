@@ -1,12 +1,14 @@
 package com.gustler.backend.processor.seatdistribution;
 
+import com.gustler.backend.processor.SeatForecastDesignMatrix;
+
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.Arrays;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 계수 묶음을 읽어 검사한다. 하나라도 어긋나면 안 올린다.
@@ -76,10 +78,13 @@ public final class BundleLoader {
         BundleCheck.ROUTE_ORDER.require(ROUTES.equals(manifest.routes()), manifest.routes().toString());
         BundleCheck.HORIZON_STOPS.require(
             expectedHorizonStops().equals(manifest.horizonStops()), manifest.horizonStops().toString());
-        BundleCheck.FEATURE_NAMES.require(!manifest.featureNames().isEmpty(), "비어 있다");
         BundleCheck.FEATURE_NAMES.require(
-            new LinkedHashSet<>(manifest.featureNames()).size() == manifest.featureNames().size(),
-            "겹치는 이름이 있다");
+            SeatForecastDesignMatrix.COLUMN_NAMES.equals(manifest.featureNames()),
+            "우리 열 %d개, 계수 파일 %d개. 처음 어긋나는 자리는 %s"
+                .formatted(
+                    SeatForecastDesignMatrix.COLUMN_NAMES.size(),
+                    manifest.featureNames().size(),
+                    firstDifferenceOf(manifest.featureNames())));
     }
 
     private static List<Integer> expectedHorizonStops() {
@@ -93,9 +98,12 @@ public final class BundleLoader {
     /**
      * 출시 식별자가 무엇으로 만들어졌는지를 요약값 하나로 묶는다.
      *
-     * <p>특징 계약 판 · 학습 소스 · 모델 판 · 노선 참조 · 계수 파일 요약값을 이어 붙여 잰다.
-     * 이 중 하나만 바뀌어도 요약값이 달라져서, 계수는 그대로인데 뜻만 바뀐 묶음이 같은 출시
-     * 식별자로 올라오지 못한다.
+     * <p>계수 파일 요약값만 묶으면 모자란다. 계수가 한 글자도 안 바뀌어도 <b>입력을 만드는 규칙이
+     * 바뀌면 그 계수의 뜻이 바뀐다.</b> 그래서 열 이름과 순서 · 정규화 상수 · 시간대 기준 ·
+     * 정원 정책 · 셀 통계 정책 · 대조 사례 요약값까지 같이 묶는다.
+     *
+     * <p>이 중 하나만 바뀌어도 요약값이 달라져서, 뜻만 바뀐 묶음이 같은 출시 식별자로 올라오지
+     * 못한다.
      */
     private static void checkWeightsDigest(
         BundleManifest manifest,
@@ -111,9 +119,38 @@ public final class BundleLoader {
             manifest.modelVersion(),
             manifest.routeReferenceVersion(),
             manifest.routeReferenceDigest(),
-            manifest.weightsDigest()));
+            manifest.weightsDigest(),
+            String.join(",", manifest.featureNames()),
+            normalizationText(manifest),
+            manifest.timeSlotSource(),
+            manifest.capacityPolicy(),
+            manifest.cellStatisticsPolicy(),
+            manifest.goldenVectorDigest()));
         BundleCheck.RELEASE_IDENTITY_DIGEST.require(
             identity.equals(manifest.identityDigest()), identity);
+    }
+
+    /** 정규화 상수를 이름 순서로 편다. 순서가 달라도 같은 요약값이 나와야 한다. */
+    private static String normalizationText(
+        BundleManifest manifest
+    ) {
+        return manifest.normalizationConstants().entrySet().stream()
+            .sorted(Map.Entry.comparingByKey())
+            .map(constant -> constant.getKey() + "=" + constant.getValue())
+            .collect(Collectors.joining(","));
+    }
+
+    private static String firstDifferenceOf(
+        List<String> featureNames
+    ) {
+        List<String> expected = SeatForecastDesignMatrix.COLUMN_NAMES;
+        for (int index = 0; index < Math.min(expected.size(), featureNames.size()); index++) {
+            if (!expected.get(index).equals(featureNames.get(index))) {
+                return "%d번 열. 우리 %s, 계수 파일 %s"
+                    .formatted(index + 1, expected.get(index), featureNames.get(index));
+            }
+        }
+        return "개수만 다르다";
     }
 
     private static void checkTensorNames(

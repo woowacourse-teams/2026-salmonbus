@@ -29,7 +29,7 @@ final class BundleManifestReader {
         "sourceCommit", "routeReference", "routes", "horizonStops",
         "featureNames", "normalizationConstants", "timeSlotSource", "capacityPolicy",
         "cellStatisticsPolicy", "tensors", "weightsDigest", "identityDigest", "goldenVectorDigest",
-        "dataThrough");
+        "goldenVector", "dataThrough");
 
     private BundleManifestReader() {
     }
@@ -59,6 +59,7 @@ final class BundleManifestReader {
             textAt(root, "weightsDigest"),
             textAt(root, "identityDigest"),
             textAt(root, "goldenVectorDigest"),
+            goldenVectorOf(root.get("goldenVector")),
             textAt(root, "dataThrough"));
     }
 
@@ -142,6 +143,26 @@ final class BundleManifestReader {
             constants.put(field.getKey(), field.getValue().asDouble());
         }
         return Map.copyOf(constants);
+    }
+
+    private static BundleManifest.GoldenVector goldenVectorOf(
+        JsonNode node
+    ) {
+        if (node == null || !node.isObject()) {
+            throw BundleCheck.GOLDEN_VECTOR.reject("대조 사례가 없다");
+        }
+        List<Double> featureVector = new ArrayList<>();
+        for (JsonNode value : node.get("featureVector")) {
+            featureVector.add(value.asDouble());
+        }
+        return new BundleManifest.GoldenVector(
+            List.copyOf(featureVector),
+            textAt(node, "modelRoute"),
+            node.get("stopsAhead").asInt(),
+            node.get("currentSeats").asInt(),
+            node.get("capacity").asInt(),
+            node.get("expectedFullChance").asDouble(),
+            node.get("expectedSeats").asDouble());
     }
 
     private static Map<String, BundleManifest.TensorDeclaration> declarationsOf(

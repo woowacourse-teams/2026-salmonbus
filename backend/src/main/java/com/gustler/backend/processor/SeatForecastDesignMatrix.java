@@ -112,6 +112,47 @@ public final class SeatForecastDesignMatrix {
     /** 대상 정류장의 통계가 없어 이웃으로 메웠나. */
     private static final int FILLED_BY_NEIGHBOURS = 31;
 
+    /**
+     * 열 이름을 열 번호 순서대로. <b>계수 파일이 자기 열 이름을 적어 오면 이것과 대조한다.</b>
+     *
+     * <p>이름과 순서가 하나라도 다르면 그 계수는 다른 뜻의 입력에 학습된 것이다. 개수만 맞으면
+     * 값이 정상으로 보이면서 뜻이 없는 예보가 나가므로, 순서까지 글자 그대로 본다.
+     *
+     * <p>21번부터 28번까지 여덟 열은 위치 하나를 펴는 삼각 기저라 이름에 자리 번호가 붙는다.
+     */
+    public static final List<String> COLUMN_NAMES = List.of(
+        "constant",
+        "is_morning",
+        "is_evening",
+        "new_time_slot",
+        "seats_left_ratio",
+        "is_full",
+        "low_seat_band",
+        "crowd_level_1",
+        "crowd_level_2",
+        "crowd_level_3",
+        "crowd_level_4",
+        "maximum_seats_ratio",
+        "seat_slope",
+        "seat_slope_missing",
+        "full_seat_streak",
+        "preceding_vehicle_is_full",
+        "preceding_vehicle_seats_ratio",
+        "preceding_vehicle_missing",
+        "route",
+        "stop_position_on_route",
+        "stop_position_basis_0",
+        "stop_position_basis_1",
+        "stop_position_basis_2",
+        "stop_position_basis_3",
+        "stop_position_basis_4",
+        "stop_position_basis_5",
+        "stop_position_basis_6",
+        "stop_position_basis_7",
+        "fill_rate_score",
+        "net_boarding_segment_score",
+        "filled_by_neighbours");
+
     /** 지금 채우는 열. 재료에서 값이 나온다. {@link #CONSTANT} 만 재료 없이 늘 1이다. */
     public static final List<Integer> COLUMNS_FILLED_NOW = List.of(
         CONSTANT, IS_MORNING, IS_EVENING, SEATS_LEFT_RATIO, IS_FULL, LOW_SEAT_BAND,
