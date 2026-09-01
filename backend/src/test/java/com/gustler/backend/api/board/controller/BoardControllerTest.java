@@ -89,7 +89,7 @@ class BoardControllerTest {
             "기점",
             BoardDirection.UP,
             true,
-            List.of(new ApproachingVehicle.Forecast(null, 1, 0.8, null))
+            List.of(new ApproachingVehicle(null, 1, 0.8, null))
         );
         Board board = new Board(
             route,
