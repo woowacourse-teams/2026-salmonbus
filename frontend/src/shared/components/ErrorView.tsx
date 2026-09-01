@@ -19,7 +19,7 @@ export function ErrorView({ title, caption, onBack, onRetry }: ErrorViewProps) {
         )}
       </header>
       <main>
-        <img src={salmongCrying} aria-label="연어 버스 로고" />
+        <img src={salmongCrying} alt="연어 버스 로고" />
         <PageInfo title={title} caption={caption} />
         {onRetry && (
           <button type="button" onClick={onRetry}>
