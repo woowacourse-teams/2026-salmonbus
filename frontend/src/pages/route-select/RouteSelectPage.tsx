@@ -1,5 +1,5 @@
 import { RouteList } from "./components/RouteList";
-import salmongProud from "./assets/salmong-proud.png";
+import salmongProud from "@/shared/assets/images/salmong-logo/salmong-proud.png";
 import { PageInfo } from "@/shared/components/PageInfo";
 import { titleMock, captionMock, routesMock } from "./api/routeSelect.mock";
 
