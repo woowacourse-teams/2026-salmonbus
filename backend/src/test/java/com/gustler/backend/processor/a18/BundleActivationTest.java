@@ -100,7 +100,7 @@ class BundleActivationTest {
     }
 
     @Test
-    void 승격_뒤에_실수_31개가_좌석_71칸_분포가_된다() {
+    void 승격_뒤에_입력값_31개가_좌석_71칸_확률로_바뀐다() {
         // given
         activation().activate(DummyBundle.valid().writeTo(directory));
         RuntimeSnapshot snapshot = resolver().resolveActive().orElseThrow();
@@ -114,7 +114,7 @@ class BundleActivationTest {
     }
 
     @Test
-    void 승격_뒤에_나온_좌석_확률의_합이_1이다() {
+    void 승격_뒤에_나온_좌석_확률을_모두_더하면_1이다() {
         // given
         activation().activate(DummyBundle.valid().writeTo(directory));
         RuntimeSnapshot snapshot = resolver().resolveActive().orElseThrow();

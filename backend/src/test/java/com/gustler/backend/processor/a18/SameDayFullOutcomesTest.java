@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 class SameDayFullOutcomesTest {
 
     @Test
-    void 실제_만석_수가_확정된_예보_수를_넘으면_만들어지지_않는다() {
+    void 실제_만석_수가_도착이_확인된_예보_수보다_많으면_만들어지지_않는다() {
         // when & then
         assertThat(catchThrowable(() -> new SameDayFullOutcomes(10, 11, 0.5)))
             .isInstanceOf(IllegalArgumentException.class);
@@ -22,7 +22,7 @@ class SameDayFullOutcomesTest {
     }
 
     @Test
-    void 확정된_예보가_하나도_없는_묶음도_만들어진다() {
+    void 도착이_확인된_예보가_하나도_없어도_만들어진다() {
         // when
         SameDayFullOutcomes actual = new SameDayFullOutcomes(0, 0, 0.0);
 

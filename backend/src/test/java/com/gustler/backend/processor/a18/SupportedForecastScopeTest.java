@@ -14,7 +14,7 @@ class SupportedForecastScopeTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"1650", "3330"})
-    void 담는_노선은_범위_안이다(
+    void 계수_묶음이_담는_노선은_예보_범위_안이다(
         String modelRoute
     ) {
         // when
@@ -25,7 +25,7 @@ class SupportedForecastScopeTest {
     }
 
     @Test
-    void 안_담는_노선은_범위_밖이다() {
+    void 계수_묶음이_안_담는_노선은_예보_범위_밖이다() {
         // when
         final boolean actual = SCOPE.covers("9000", 1);
 
@@ -35,7 +35,7 @@ class SupportedForecastScopeTest {
 
     @ParameterizedTest
     @ValueSource(ints = {1, 12})
-    void 예보_거리가_1정류장_앞부터_12정류장_앞까지면_범위_안이다(
+    void 예보_거리가_1정류장_앞부터_12정류장_앞까지면_예보_범위_안이다(
         final int stopsAhead
     ) {
         // when
@@ -47,7 +47,7 @@ class SupportedForecastScopeTest {
 
     @ParameterizedTest
     @ValueSource(ints = {0, 13})
-    void 예보_거리가_0이거나_13정류장_앞이면_범위_밖이다(
+    void 예보_거리가_0이거나_13정류장_앞이면_예보_범위_밖이다(
         final int stopsAhead
     ) {
         // when

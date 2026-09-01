@@ -21,7 +21,7 @@ class ResidualDistributionTest {
     private static final int ALL_BINS_USABLE_CAPACITY = 70;
 
     @Test
-    void 잔차_칸은_91개다() {
+    void 어긋날_수_있는_경우를_91가지로_센다() {
         // when
         double[] actual = allFitted().chancesByResidual(CoefficientsFixture.ONE_FEATURE, 20, 44);
 
@@ -39,7 +39,7 @@ class ResidualDistributionTest {
     }
 
     @Test
-    void 방향_둘_다_미적합이면_모든_질량이_잔차_0으로_간다() {
+    void 양쪽_방향_다_학습이_안_됐으면_확률이_전부_중심_좌석에_모인다() {
         // given
         ResidualDistribution distribution = CoefficientsFixture.residuals(
             0.2, 0.5, CoefficientsFixture.noneFitted(), CoefficientsFixture.noneFitted());
@@ -52,7 +52,7 @@ class ResidualDistributionTest {
     }
 
     @Test
-    void 좌석이_중심보다_많아지는_방향이_미적합이면_그_질량이_잔차_0으로_간다() {
+    void 좌석이_중심보다_많아지는_쪽이_학습이_안_됐으면_그_확률이_중심_좌석으로_간다() {
         // given 같을 확률 0.2 · 중심보다 적을 확률 0.5 이므로 많을 확률이 0.3 이다
         ResidualDistribution distribution = CoefficientsFixture.residuals(
             0.2, 0.5, CoefficientsFixture.allFitted(), CoefficientsFixture.noneFitted());
@@ -66,7 +66,7 @@ class ResidualDistributionTest {
     }
 
     @Test
-    void 좌석이_중심보다_많아질_확률은_같음과_적음을_뺀_나머지다() {
+    void 좌석이_중심보다_많아질_확률은_나머지_둘을_1에서_뺀_값이다() {
         // given
         ResidualDistribution distribution = CoefficientsFixture.residuals(
             0.2, 0.5, CoefficientsFixture.allFitted(), CoefficientsFixture.allFitted());
@@ -85,7 +85,7 @@ class ResidualDistributionTest {
      * 사라지고 남은 여덟 묶음과 다른 방향이 그만큼 두꺼워진다. 파이썬 정본도 같다.
      */
     @Test
-    void 담을_잔차가_없는_묶음의_몫은_남은_칸들이_나눠_받는다() {
+    void 담을_것이_없는_구간의_몫은_남은_칸들이_나눠_받는다() {
         // given 늘어나는 방향이 미적합이라 잔차 0 이 0.2 더하기 0.3 을 받아야 하는데
         ResidualDistribution distribution = CoefficientsFixture.residuals(
             0.2, 0.5, CoefficientsFixture.allFitted(), CoefficientsFixture.noneFitted());
@@ -98,7 +98,7 @@ class ResidualDistributionTest {
     }
 
     @Test
-    void 같음과_적음을_더해_1을_넘어도_많아질_확률이_0이_되지_않는다() {
+    void 앞의_두_확률을_더해_1을_넘어도_많아질_확률이_0이_되지_않는다() {
         // given 둘을 더하면 1.8 이라 나머지가 음수가 된다
         ResidualDistribution distribution = CoefficientsFixture.residuals(
             0.9, 0.9, CoefficientsFixture.allFitted(), CoefficientsFixture.allFitted());
@@ -112,7 +112,7 @@ class ResidualDistributionTest {
     }
 
     @Test
-    void 한_묶음의_질량은_그_안의_정수_잔차에_고르게_나뉜다() {
+    void 한_구간의_확률은_그_구간이_담는_좌석_수에_고르게_나뉜다() {
         // given 중심 67석이면 첫 묶음이 잔차 1석과 2석 둘을 담는다
         ResidualDistribution distribution = CoefficientsFixture.residuals(
             0.2, 0.5, CoefficientsFixture.onlyFirstFitted(), CoefficientsFixture.noneFitted());
@@ -126,7 +126,7 @@ class ResidualDistributionTest {
     }
 
     @Test
-    void 적합되지_않은_묶음도_아주_작은_확률로_질량을_받는다() {
+    void 학습이_안_된_구간도_아주_작은_확률을_받는다() {
         // given 첫 묶음만 적합됐는데 나머지 묶음도 담는 잔차가 있다
         ResidualDistribution distribution = CoefficientsFixture.residuals(
             0.2, 0.5, CoefficientsFixture.onlyFirstFitted(), CoefficientsFixture.noneFitted());
@@ -139,7 +139,7 @@ class ResidualDistributionTest {
     }
 
     @Test
-    void 잔차_격자_아래로_밀린_질량은_가장자리_칸에_쌓인다() {
+    void 셀_수_있는_범위_밖으로_밀린_확률은_가장자리_칸에_쌓인다() {
         // given 정원 70석에 중심 3석이면 늘어나는 쪽 배율이 67 이라 크기 41석부터가 격자 밖이다
         ResidualDistribution distribution = CoefficientsFixture.residuals(
             0.2, 0.5, CoefficientsFixture.noneFitted(), CoefficientsFixture.allFitted());

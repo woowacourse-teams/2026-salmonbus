@@ -91,8 +91,8 @@ class ActiveForecastRuntimeResolverTest {
     }
 
     @Test
-    void 배포_행의_특징_계약_판이_올라온_계수와_다르면_아무것도_안_낸다() {
-        // given 계수는 같은데 입력을 만드는 규칙이 다르면 다른 좌표계에서 학습한 계수를 쓰게 된다
+    void 배포_행의_입력_규칙_버전이_올라온_계수와_다르면_아무것도_안_낸다() {
+        // given 계수는 같은데 입력을 만드는 규칙이 다르면 다른 뜻의 입력에 계수를 끼우게 된다
         LoadedBundle bundle = loaded();
         ActiveModelDeployment other = new ActiveModelDeployment(
             7L, "seat-feature-contract-v9", bundle.releaseId(), bundle.bundleDigest());

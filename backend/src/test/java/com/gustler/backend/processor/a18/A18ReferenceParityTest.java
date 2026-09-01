@@ -30,7 +30,7 @@ class A18ReferenceParityTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("대조_사례")
-    void 좌석_71칸이_파이썬_정본과_같다(
+    void 좌석_71칸의_확률이_파이썬_정본과_같다(
         ReferenceParityCase given
     ) {
         // when
@@ -63,7 +63,7 @@ class A18ReferenceParityTest {
     }
 
     @Test
-    void 만석이_아닐_질량이_안_남으면_파이썬_채점기는_0석_확률을_1로_만든다() {
+    void 만석이_아닐_확률이_한_칸도_안_남으면_파이썬_채점기는_만석을_100퍼센트로_만든다() {
         // given 서빙 계약과 갈리는 자리라 대조에서 뺀 사례다
         ReferenceParityCase given =
             ReferenceParityCase.named(ReferenceParityCase.NO_SEAT_LEFT_TO_SPREAD);
@@ -76,7 +76,7 @@ class A18ReferenceParityTest {
     }
 
     @Test
-    void 만석이_아닐_질량이_안_남으면_우리는_탈_수_있는_가장_가까운_좌석에_남긴다() {
+    void 만석이_아닐_확률이_한_칸도_안_남으면_우리는_탈_수_있는_가장_가까운_좌석에_남긴다() {
         // given
         ReferenceParityCase given =
             ReferenceParityCase.named(ReferenceParityCase.NO_SEAT_LEFT_TO_SPREAD);
@@ -95,7 +95,7 @@ class A18ReferenceParityTest {
      * 어긋난다. 우리는 밀린 크기 하나에 한 몫씩만 놓는다.
      */
     @Test
-    void 크기_묶음이_통째로_격자_밖이면_파이썬_채점기가_가장자리에_더_놓는다() {
+    void 구간_전체가_셀_수_있는_범위_밖이면_파이썬_채점기가_가장자리에_확률을_더_놓는다() {
         // given 중심 3석에서 잔차 -40 은 43석 칸이다
         ReferenceParityCase given =
             ReferenceParityCase.named(ReferenceParityCase.BIN_FULLY_UNDER_GRID);
@@ -109,7 +109,7 @@ class A18ReferenceParityTest {
     }
 
     @Test
-    void 크기_묶음이_통째로_격자_밖이어도_확률의_합은_1이다() {
+    void 구간_전체가_셀_수_있는_범위_밖이어도_확률의_합은_1이다() {
         // given
         ReferenceParityCase given =
             ReferenceParityCase.named(ReferenceParityCase.BIN_FULLY_UNDER_GRID);

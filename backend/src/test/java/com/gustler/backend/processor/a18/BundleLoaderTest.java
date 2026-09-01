@@ -88,7 +88,7 @@ class BundleLoaderTest {
     }
 
     @Test
-    void 번들_판_이름이_다르면_거절한다() {
+    void 계수_묶음_버전이_다르면_거절한다() {
         // when & then
         assertRejectedBy(
             BundleCheck.BUNDLE_SCHEMA_VERSION,
@@ -96,7 +96,7 @@ class BundleLoaderTest {
     }
 
     @Test
-    void 모델_판_이름이_다르면_거절한다() {
+    void 모델_버전이_다르면_거절한다() {
         // when & then
         assertRejectedBy(
             BundleCheck.MODEL_VERSION,
@@ -104,7 +104,7 @@ class BundleLoaderTest {
     }
 
     @Test
-    void 특징_계약_판_이름이_비어_있으면_거절한다() {
+    void 입력_규칙_버전이_비어_있으면_거절한다() {
         // when & then
         assertRejectedBy(
             BundleCheck.FEATURE_CONTRACT_VERSION,
@@ -136,7 +136,7 @@ class BundleLoaderTest {
     }
 
     @Test
-    void 특징_이름이_겹치면_거절한다() {
+    void 입력값_이름이_겹치면_거절한다() {
         // when & then
         assertRejectedBy(
             BundleCheck.FEATURE_NAMES,
@@ -154,7 +154,7 @@ class BundleLoaderTest {
     }
 
     @Test
-    void 쓰는_배열_하나가_없으면_거절한다() {
+    void 좌석_분포에_필요한_배열_하나가_없으면_거절한다() {
         // when & then
         assertRejectedBy(
             BundleCheck.REQUIRED_TENSORS_PRESENT,
@@ -162,8 +162,8 @@ class BundleLoaderTest {
     }
 
     @Test
-    void 배열의_크기가_계약과_다르면_거절한다() {
-        // given 중심 좌석 계수를 절편·기울기 둘이 아니라 셋으로 담는다
+    void 중심_좌석_계수가_절편과_기울기_둘이_아니면_거절한다() {
+        // given 중심 좌석 계수는 절편과 기울기 둘인데 셋으로 담는다
         DummyBundle given = DummyBundle.valid().withTensor(
             BundleTensor.ANCHOR.tensorName(), TensorDataType.FLOAT64,
             new int[] {2, 12, 3}, new double[2 * 12 * 3]);
@@ -173,7 +173,7 @@ class BundleLoaderTest {
     }
 
     @Test
-    void 계수를_단정밀도로_담으면_읽지_않는다() {
+    void 계수를_자릿수가_모자란_형식으로_담으면_읽지_않는다() {
         // given 자릿수가 모자라 같은 입력에서 다른 확률이 나온다
         byte[] given = weightsWithDataType("F32", 4);
 
@@ -201,7 +201,7 @@ class BundleLoaderTest {
     }
 
     @Test
-    void 적합_여부_표시에_2가_있으면_거절한다() {
+    void 학습됐는지_표시하는_값이_0도_1도_아니면_거절한다() {
         // when & then
         assertRejectedBy(
             BundleCheck.FITTED_FLAGS_ARE_ZERO_OR_ONE,
@@ -225,12 +225,12 @@ class BundleLoaderTest {
     }
 
     /**
-     * 계수 파일은 한 글자도 안 바뀌었는데 특징 계약 판만 바뀐 묶음이다. 계수 요약값 검사만으로는
-     * 안 걸린다. 신원 요약값이 특징 계약 판까지 묶고 있어서 여기서 걸린다.
+     * 계수 파일은 한 글자도 안 바뀌었는데 입력을 만드는 규칙만 바뀐 묶음이다. 계수 요약값 검사만으로는
+     * 안 걸린다. 신원 요약값이 그 규칙 버전까지 묶고 있어서 여기서 걸린다.
      */
     @Test
-    void 계수는_그대로인데_특징_계약_판만_바뀌면_거절한다() {
-        // given 안 바뀐 묶음의 신원 요약값을 그대로 달고 특징 계약 판만 바꾼다
+    void 계수는_그대로인데_입력_규칙_버전만_바뀌면_거절한다() {
+        // given 안 바뀐 묶음의 신원 요약값을 그대로 달고 입력 규칙 버전만 바꾼다
         final String unchanged = identityDigestOf(DummyBundle.valid());
         DummyBundle given = DummyBundle.valid()
             .put("featureContractVersion", "seat-feature-contract-v5")
@@ -241,8 +241,8 @@ class BundleLoaderTest {
     }
 
     @Test
-    void 특징_개수가_31이_아니어도_계수_길이만_맞으면_올라간다() {
-        // given 특징 계약이 아직 안 정해져서 열 개수가 바뀔 수 있다
+    void 입력값이_24개인_계수_묶음도_길이만_맞으면_올라간다() {
+        // given 입력을 만드는 규칙이 아직 안 정해져서 입력값 개수가 바뀔 수 있다
         DummyBundle given = DummyBundle.withFeatureCount(24);
 
         // when

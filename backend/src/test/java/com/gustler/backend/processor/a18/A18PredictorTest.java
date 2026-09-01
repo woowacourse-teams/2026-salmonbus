@@ -26,7 +26,7 @@ class A18PredictorTest {
     }
 
     @Test
-    void 모든_칸이_유한하다() {
+    void 어느_칸에도_NaN_이나_무한대가_없다() {
         // when
         SeatForecastResult actual = predictor().predict(input(20, 44, null));
 
@@ -50,7 +50,7 @@ class A18PredictorTest {
      * 구현이 틀려도 같은 값이 나와서 아무것도 못 잰다.
      */
     @Test
-    void 잔여석이_0석일_확률은_당일_성적으로_옮긴_값이다() {
+    void 잔여석이_0석일_확률은_오늘_성적으로_옮긴_만석_확률과_같다() {
         // given 확정된 예보 100건 중 90건이 만석이었는데 예보 평균은 10퍼센트였다
         SameDayFullOutcomes outcomes = new SameDayFullOutcomes(100, 90, 0.1);
         final double target = (90 + 200 * 0.1) / (100 + 200);
@@ -65,7 +65,7 @@ class A18PredictorTest {
     }
 
     @Test
-    void 당일_성적이_없으면_잔여석이_0석일_확률은_허들이_낸_원값이다() {
+    void 오늘_도착이_확인된_예보가_없으면_만석_확률을_안_옮긴다() {
         // when
         SeatForecastResult actual = predictor().predict(input(20, 44, null));
 
@@ -94,7 +94,7 @@ class A18PredictorTest {
 
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 44, 69, 70})
-    void 정원이_1석부터_70석까지_어디여도_분포가_나온다(
+    void 정원이_1석이든_70석이든_좌석_분포가_나온다(
         final int capacity
     ) {
         // when
@@ -116,7 +116,7 @@ class A18PredictorTest {
     }
 
     @Test
-    void 번들이_요구하는_특징_개수와_벡터_길이가_다르면_예보하지_않는다() {
+    void 계수가_요구하는_입력값_개수와_다르면_예보하지_않는다() {
         // given 계수는 한 칸인데 특징을 두 칸 넣는다
         A18PredictionInput given = new A18PredictionInput(
             new double[] {1.0, 1.0}, ROUTE, FOUR_STOPS_AHEAD, 20, 44, null);
@@ -127,7 +127,7 @@ class A18PredictorTest {
     }
 
     @Test
-    void 잔여석을_정원보다_많이_넣어도_분포가_나온다() {
+    void 지금_잔여석이_정원보다_많게_들어와도_좌석_분포가_나온다() {
         // given 정원 증거가 잔여석보다 작게 잡힌 관측이 실제로 온다
         SeatForecastResult actual = predictor().predict(input(30, 20, null));
 

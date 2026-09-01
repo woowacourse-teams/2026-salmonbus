@@ -32,7 +32,7 @@ class SafetensorsFileTest {
     }
 
     @Test
-    void 적합_여부_표시_배열을_적힌_크기대로_읽는다() {
+    void 학습_여부_표시_배열을_적힌_크기대로_읽는다() {
         // given
         byte[] given = new SafetensorsWriter()
             .with("bin_fitted", TensorDataType.UINT8, new int[] {3}, new double[] {1, 0, 1})
