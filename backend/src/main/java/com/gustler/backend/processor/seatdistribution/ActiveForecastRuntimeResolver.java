@@ -42,17 +42,8 @@ public final class ActiveForecastRuntimeResolver implements ForecastRuntime {
             return Optional.empty();
         }
         return bundles.find(deployment.get().bundleDigest())
-            .filter(bundle -> sameIdentity(deployment.get(), bundle))
+            .filter(bundle -> bundle.hasIdentityOf(deployment.get()))
             .map(bundle -> snapshotOf(deployment.get(), bundle));
-    }
-
-    private static boolean sameIdentity(
-        ActiveModelDeployment deployment,
-        LoadedBundle bundle
-    ) {
-        return deployment.releaseId().equals(bundle.releaseId())
-            && deployment.bundleDigest().equals(bundle.bundleDigest())
-            && deployment.calculationVersion().equals(bundle.featureContractVersion());
     }
 
     private static RuntimeSnapshot snapshotOf(

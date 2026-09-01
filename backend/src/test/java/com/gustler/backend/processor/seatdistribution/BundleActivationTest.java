@@ -123,6 +123,28 @@ class BundleActivationTest {
             .isEqualTo(before.releaseId());
     }
 
+    /**
+     * 계수 파일 요약값은 출시 식별자를 안 묶는다. 그래서 계수가 한 글자도 안 바뀌고 출시 식별자만
+     * 다시 붙은 파일은 요약값이 같다.
+     *
+     * <p>기동 적재가 요약값만 보면 그 파일을 "같은 것" 으로 보고 메모리에 올린다. 자리는 요약값이
+     * 열쇠라 <b>돌던 계수가 그 자리에서 밀려난다.</b> 그러면 도는 배포는 그대로인데 예보가 통째로
+     * 안 나간다.
+     */
+    @Test
+    void 출시_식별자만_다른_계수_파일로_다시_띄워도_돌던_계수가_그대로_돈다() {
+        // given A 가 돌고 있다
+        activation().activate(DummyBundle.valid().writeTo(directory));
+        RuntimeSnapshot before = resolver().resolveActive().orElseThrow();
+
+        // when 계수는 그대로고 출시 식별자만 다른 파일로 기동한다
+        startupLoaderOf(relabelledBundle()).loadConfiguredBundle();
+
+        // then
+        assertThat(resolver().resolveActive().orElseThrow().releaseId())
+            .isEqualTo(before.releaseId());
+    }
+
     @Test
     void 계수_파일이_실은_대조_사례를_재현_못_하면_배포_행을_안_남긴다() {
         // given 기대 잔여석만 한 석 어긋낸 묶음이다
@@ -230,6 +252,23 @@ class BundleActivationTest {
         return DummyBundle.valid()
             .put("modelVersion", "seat-distribution-a19-v1")
             .writeTo(directoryUnder("broken"));
+    }
+
+    /** 계수는 그대로고 출시 식별자만 다시 붙은 파일. 계수 파일 요약값은 앞엣것과 같다. */
+    private BundleFiles relabelledBundle() {
+        return DummyBundle.valid()
+            .put("releaseId", "dummy-release-0002")
+            .writeTo(directoryUnder("relabelled"));
+    }
+
+    private BundleStartupLoader startupLoaderOf(
+        BundleFiles files
+    ) {
+        return new BundleStartupLoader(
+            new ModelBundleProperties(files.manifest().getParent().toString(), false),
+            deployments,
+            bundles,
+            activation());
     }
 
     private BundleFiles otherBundle() {

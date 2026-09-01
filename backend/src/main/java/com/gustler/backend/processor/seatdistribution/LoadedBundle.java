@@ -1,5 +1,6 @@
 package com.gustler.backend.processor.seatdistribution;
 
+import com.gustler.backend.processor.ActiveModelDeployment;
 import com.gustler.backend.processor.SeatForecastResult;
 import java.util.UUID;
 
@@ -62,6 +63,23 @@ public record LoadedBundle(
         BundleCheck.GOLDEN_VECTOR.require(
             Math.abs(expected - actual) <= GOLDEN_TOLERANCE,
             "%s 가 다르다. 계수 파일 %s, 우리 계산 %s".formatted(name, expected, actual));
+    }
+
+    /**
+     * 이 묶음이 그 배포가 가리키는 바로 그 계수인지 본다.
+     *
+     * <p>계수 파일 요약값 하나로는 모자란다. 그 요약값은 출시 식별자와 계산 규칙 판을 안 묶어서,
+     * <b>같은 요약값에 다른 출시 식별자</b>가 가능하다. 그것을 같다고 보면 도는 배포는 A 인데
+     * 메모리에는 B 가 올라가고, 예보를 낼 때 신원이 안 맞아 batch 가 통째로 안 돈다.
+     *
+     * <p>고르는 쪽과 다시 올리는 쪽이 같은 것을 재야 해서 여기 한 군데에만 둔다.
+     */
+    public boolean hasIdentityOf(
+        ActiveModelDeployment deployment
+    ) {
+        return deployment.bundleDigest().equals(bundleDigest())
+            && deployment.releaseId().equals(releaseId())
+            && deployment.calculationVersion().equals(featureContractVersion());
     }
 
     public String releaseId() {

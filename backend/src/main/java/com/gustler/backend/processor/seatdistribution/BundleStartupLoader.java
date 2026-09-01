@@ -17,7 +17,10 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <ul>
  *   <li><b>도는 배포가 이 파일과 같은 신원이면</b> 계수만 메모리에 올린다. 다시 띄운 것뿐이라
- *       배포 행을 새로 만들지 않는다. 만들면 재기동할 때마다 배포가 하나씩 는다
+ *       배포 행을 새로 만들지 않는다. 만들면 재기동할 때마다 배포가 하나씩 는다.
+ *       신원은 예보가 고를 때 재는 것과 같은 것으로 잰다. 여기서 계수 파일 요약값만 보면
+ *       요약값은 같은데 출시 식별자가 다른 묶음이 올라가서, 고르는 쪽이 그것을 안 골라
+ *       예보가 통째로 안 나간다
  *   <li><b>도는 배포가 아예 없으면</b> 적재해서 올린다. 처음 켜는 자리다
  *   <li><b>도는 배포가 있는데 신원이 다르면</b> 올리지 않는다. 계수를 바꾸는 것은 재기동이 아니라
  *       사람이 하는 일이라, 파일을 갈아 끼우고 재기동했다고 자동으로 승격하면 배포가 조용히 바뀐다.
@@ -72,7 +75,7 @@ public class BundleStartupLoader {
         }
 
         LoadedBundle bundle = LoadedBundle.from(files);
-        if (active.get().bundleDigest().equals(bundle.bundleDigest())) {
+        if (bundle.hasIdentityOf(active.get())) {
             bundles.add(bundle);
             log.info("도는 배포의 계수를 다시 올렸다: {}", bundle.releaseId());
             return;
