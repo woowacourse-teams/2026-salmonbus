@@ -163,7 +163,7 @@ public class BoardQueryService {
     private ApproachingVehicle toApproachingVehicle(
         StoredPrediction prediction
     ) {
-        return new ApproachingVehicle(
+        return new ApproachingVehicle.Forecast(
             prediction.vehicleId(),
             prediction.stopsToTarget(),
             seatAvailableProbability(prediction.seatFullChance()),
