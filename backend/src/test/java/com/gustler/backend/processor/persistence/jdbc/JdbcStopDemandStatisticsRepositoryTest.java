@@ -203,6 +203,20 @@ class JdbcStopDemandStatisticsRepositoryTest {
     }
 
     @Test
+    void 셀이_없는_시간대도_그_세대의_번호를_그대로_받는다() {
+        // given 아침 셀만 있는 세대. 저녁은 아직 라벨이 안 쌓였다
+        jdbcStopDemandStatisticsRepository.replace(generationOf(FIRST_REVISION, CALCULATION_VERSION, List.of(
+            measurementOf(TimeSlot.MORNING, TARGET_STOP_ORDER))));
+
+        // when
+        StopDemandStatistics actual =
+            jdbcStopDemandStatisticsRepository.read(routeVersionId, TimeSlot.EVENING, CALCULATION_VERSION);
+
+        // then 세대가 아예 없는 것(0)과 구별돼야 예보 행에 무엇을 보고 냈는지가 남는다
+        assertThat(actual.revision()).isEqualTo(FIRST_REVISION);
+    }
+
+    @Test
     void 회수된_라벨을_정류장과_시각으로_묶어_합을_낸다() {
         // given
         insertSettledLabel(
