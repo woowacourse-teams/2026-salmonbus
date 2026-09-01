@@ -44,6 +44,16 @@ class ObservationBatchTableTest {
     }
 
     @Test
+    void 같은_시도_키의_판은_두_번_저장되지_않는다() {
+        // given
+        insertBatch("RESERVED", null, null);
+
+        // when & then
+        assertThatThrownBy(() -> insertBatch("RESERVED", null, null))
+            .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
     void 뜻을_모르는_결말의_판은_저장되지_않는다() {
         // when & then
         assertThatThrownBy(() -> insertBatch("TIMED_OUT", SCHEDULED_AT, null))
