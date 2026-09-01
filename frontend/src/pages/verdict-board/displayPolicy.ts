@@ -1,74 +1,60 @@
-import type { Board, Direction, StopState } from "@/shared/api/routeForecast.types";
+import type { Board, Direction, DirectionInfo, StopState } from "@/shared/api/routeForecast.types";
+import { arrivalViewsFor, representativeArrival, type ArrivalView } from "./arrivalPolicy";
+import type { SeatLevel } from "./seatGrade";
 
-export type SeatLevel = "high" | "low" | "veryLow";
-export type WaitingReason = "serviceEnded" | "routeHead" | "noVehicle";
+export type ServiceState = "running" | "outOfService";
+
+type ServicePhase = "before" | "running" | "ended";
 
 interface StopViewBase {
   sequence: number;
   stopId: string;
   name: string;
+  isTurnaround: boolean;
 }
 
 export interface BoardingStopView extends StopViewBase {
   kind: "boarding";
   level: SeatLevel;
+  arrivals: ArrivalView[];
 }
 
 export interface PassThroughStopView extends StopViewBase {
   kind: "passThrough";
 }
 
-export interface WaitingStopView extends StopViewBase {
-  kind: "waiting";
-  reason: WaitingReason;
+export interface NoForecastStopView extends StopViewBase {
+  kind: "noForecast";
 }
 
-export type StopView = BoardingStopView | PassThroughStopView | WaitingStopView;
+export type StopView = BoardingStopView | PassThroughStopView | NoForecastStopView;
 
 export interface DirectionView {
   id: Direction;
   label: string;
 }
 
-const SEAT_LEVEL_THRESHOLDS = {
-  high: 0.7,
-  low: 0.3,
-};
+const ISO_LOCAL_TIME = /T(\d{2}):(\d{2})[^Z]*$/;
+const CLOCK_TIME = /^(\d{1,2}):(\d{2})$/;
 
-const ROUTE_HEAD_MAX_SEQUENCE = 12;
-
-export function toSeatLevel(probability: number): SeatLevel {
-  if (probability >= SEAT_LEVEL_THRESHOLDS.high) return "high";
-  if (probability >= SEAT_LEVEL_THRESHOLDS.low) return "low";
-  return "veryLow";
-}
-
-export function toStopView(stop: StopState, vehiclesInService: number): StopView {
-  const { sequence, stopId, name } = stop;
-
-  if (!stop.boardingAllowed) {
-    return { kind: "passThrough", sequence, stopId, name };
+export function serviceStateFor(board: Board, direction: Direction): ServiceState {
+  const phase = servicePhaseOf(directionInfoOf(board, direction), board.observedAt);
+  if (phase !== "running") {
+    return "outOfService";
   }
 
-  const nearest = stop.approachingVehicles[0];
-  if (nearest !== undefined) {
-    return { kind: "boarding", sequence, stopId, name, level: toSeatLevel(nearest.seatAvailableProbability) };
-  }
-
-  return { kind: "waiting", sequence, stopId, name, reason: waitingReasonFor(sequence, vehiclesInService) };
-}
-
-function waitingReasonFor(sequence: number, vehiclesInService: number): WaitingReason {
-  if (vehiclesInService === 0) return "serviceEnded";
-  if (sequence <= ROUTE_HEAD_MAX_SEQUENCE) return "routeHead";
-  return "noVehicle";
+  // 시간표는 운행 중이라 해도 도는 차가 하나도 없으면 보여줄 예보가 없다.
+  // 관측이지 단정이 아니라서, 시간표가 운행 중이라고 말할 때만 이 값을 본다.
+  return board.vehiclesInService > 0 ? "running" : "outOfService";
 }
 
 export function stopViewsFor(board: Board, direction: Direction): StopView[] {
+  const { turnSequence } = board.route;
+
   return board.stops
     .filter((stop) => stop.direction === direction)
     .sort((left, right) => left.sequence - right.sequence)
-    .map((stop) => toStopView(stop, board.vehiclesInService));
+    .map((stop) => toStopView(stop, turnSequence));
 }
 
 export function directionViewsFor(board: Board): DirectionView[] {
@@ -78,14 +64,51 @@ export function directionViewsFor(board: Board): DirectionView[] {
   }));
 }
 
-export const SEAT_LEVEL_LABELS: Record<SeatLevel, string> = {
-  high: "탑승 가능성 높음",
-  low: "탑승 가능성 낮음",
-  veryLow: "탑승 가능성 매우 낮음",
-};
+function toStopView(stop: StopState, turnSequence: number | null): StopView {
+  const { sequence, stopId, name } = stop;
+  const isTurnaround = touchesTurnaround(sequence, turnSequence);
 
-export const WAITING_LABELS: Record<WaitingReason, string> = {
-  serviceEnded: "운행 종료",
-  routeHead: "출발 구간",
-  noVehicle: "곧 오는 버스 없음",
-};
+  if (!stop.boardingAllowed) {
+    return { kind: "passThrough", sequence, stopId, name, isTurnaround };
+  }
+
+  const arrivals = arrivalViewsFor(stop.approachingVehicles);
+  const representative = representativeArrival(arrivals);
+  if (representative === undefined) {
+    return { kind: "noForecast", sequence, stopId, name, isTurnaround };
+  }
+
+  return { kind: "boarding", sequence, stopId, name, isTurnaround, level: representative.level, arrivals };
+}
+
+// 회차 정류장은 상행의 마지막 순번이고, 하행은 그 다음 순번에서 시작한다. 양쪽에 표시한다.
+function touchesTurnaround(sequence: number, turnSequence: number | null): boolean {
+  if (turnSequence === null) return false;
+  return sequence === turnSequence || sequence === turnSequence + 1;
+}
+
+function directionInfoOf(board: Board, direction: Direction): DirectionInfo | undefined {
+  return board.route.directions.find((info) => info.id === direction);
+}
+
+function servicePhaseOf(info: DirectionInfo | undefined, observedAt: string): ServicePhase {
+  if (info === undefined) return "running";
+
+  const observed = minutesOf(ISO_LOCAL_TIME.exec(observedAt));
+  const first = minutesOf(CLOCK_TIME.exec(info.firstDepartureTime));
+  const last = minutesOf(CLOCK_TIME.exec(info.lastDepartureTime));
+  if (observed === null || first === null || last === null) return "running";
+
+  if (first > last) {
+    return observed > last && observed < first ? "ended" : "running";
+  }
+  if (observed < first) return "before";
+  return observed > last ? "ended" : "running";
+}
+
+function minutesOf(parsed: RegExpExecArray | null): number | null {
+  if (parsed === null) return null;
+  const [, hours, minutes] = parsed;
+  if (hours === undefined || minutes === undefined) return null;
+  return Number(hours) * 60 + Number(minutes);
+}
