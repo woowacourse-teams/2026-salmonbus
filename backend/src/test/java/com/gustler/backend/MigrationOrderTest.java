@@ -46,7 +46,7 @@ class MigrationOrderTest {
      * 어떤 계수 묶음이 도는지를 담는 model_deployment 는 V2 에 이미 있다.
      */
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
-        List.of("observation_vehicle_capacity_index", "stop_demand_generation_history");
+        List.of("forecast_settled_arrival_index");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";
