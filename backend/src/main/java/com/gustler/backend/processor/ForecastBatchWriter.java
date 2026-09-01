@@ -1,11 +1,13 @@
 package com.gustler.backend.processor;
 
 import com.gustler.backend.processor.seatdistribution.RuntimeSnapshot;
+import com.gustler.backend.processor.seatdistribution.SameDayFullOutcomes;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,7 +53,11 @@ public class ForecastBatchWriter {
         Instant generatedAt = clock.instant();
         TimeSlot timeSlot = ForecastTimeSlot.of(batch, clock);
         StopDemandStatistics statistics = stopDemandStatisticsOf(batch, runtime, timeSlot);
-        seatForecastRepository.save(forecastsOf(batch, stops, statistics, runtime, generatedAt));
+        Map<Integer, SameDayFullOutcomes> sameDayOutcomes =
+            seatForecastRepository.readSameDayFullOutcomes(
+                batch.routeVersionId(), batch.responseReceivedAt());
+        seatForecastRepository.save(
+            forecastsOf(batch, stops, statistics, sameDayOutcomes, runtime, generatedAt));
         seatForecastRepository.markForecastCompleted(batch.observationBatchId(), generatedAt);
     }
 
@@ -83,6 +89,7 @@ public class ForecastBatchWriter {
         PendingForecastBatch batch,
         RouteStops stops,
         StopDemandStatistics statistics,
+        Map<Integer, SameDayFullOutcomes> sameDayOutcomes,
         RuntimeSnapshot runtime,
         Instant generatedAt
     ) {
@@ -94,7 +101,13 @@ public class ForecastBatchWriter {
                     trajectory.vehicleObservationId(),
                     target,
                     model.predict(
-                        new SeatForecastInput(target, trajectory, statistics, stops, statistics.timeSlot())),
+                        new SeatForecastInput(
+                            target,
+                            trajectory,
+                            statistics,
+                            stops,
+                            statistics.timeSlot(),
+                            sameDayOutcomes.get(target.distance().stopCount()))),
                     runtime.deploymentId(),
                     statistics.revision(),
                     generatedAt));

@@ -14,8 +14,8 @@ import com.gustler.backend.processor.SeatForecastResult;
  * <p><b>DB 를 안 읽는다.</b> 어느 노선인지도 재료 안의 정류장 목록에서 꺼낸다. 그래서 과거 시점
  * 재료를 손으로 만들어 넣으면 그때의 예보가 그대로 다시 나온다.
  *
- * <p>당일 성적으로 만석 확률을 옮기는 자리는 아직 안 넘긴다. 그 값을 DB 에서 읽는 질의가 없어서,
- * 지금은 보정 없이 양 끝만 자른 확률이 나간다. 넘기기 시작하면 이 줄만 바뀐다.
+ * <p>오늘 이미 도착이 확인된 예보들의 성적도 그대로 넘긴다. 없으면 {@code null} 이고 그때는
+ * 만석 확률을 안 옮긴다. 자르는 것은 그 값을 읽는 쪽이 하고 여기서는 옮기기만 한다.
  */
 public final class SeatDistributionForecastModel implements SeatForecastModel {
 
@@ -37,6 +37,6 @@ public final class SeatDistributionForecastModel implements SeatForecastModel {
             input.target().distance().stopCount(),
             input.target().remainingSeats(),
             input.maximumSeatsEverObserved(),
-            null));
+            input.sameDayFullOutcomes()));
     }
 }

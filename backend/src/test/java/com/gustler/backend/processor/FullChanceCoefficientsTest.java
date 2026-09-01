@@ -1,5 +1,6 @@
 package com.gustler.backend.processor;
 
+import com.gustler.backend.processor.seatdistribution.SameDayFullOutcomes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
@@ -19,6 +20,9 @@ import org.junit.jupiter.api.Test;
  * 밖에서 배운 계수가 들어온다. 값이 맞는지는 그때 golden vector 가 본다.
  */
 class FullChanceCoefficientsTest {
+    /** 오늘 확정된 결과가 없는 자리. 그때는 만석 확률을 안 옮긴다. */
+    private static final SameDayFullOutcomes NO_SAME_DAY_OUTCOMES = null;
+
 
     private static final Clock KOREAN_CLOCK =
         Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneId.of("Asia/Seoul"));
@@ -122,7 +126,7 @@ class FullChanceCoefficientsTest {
             MAXIMUM_SEATS_44);
         VehicleStopTarget target = new VehicleStopTarget(
             observation, new RouteStop(ROUTE_VERSION_3330, TARGET_STOP_49, "20400049", true));
-        return new SeatForecastInput(target, trajectory, statistics(), stops(), TimeSlot.MORNING);
+        return new SeatForecastInput(target, trajectory, statistics(), stops(), TimeSlot.MORNING, NO_SAME_DAY_OUTCOMES);
     }
 
     private static StopDemandStatistics statistics() {

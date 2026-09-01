@@ -1,5 +1,6 @@
 package com.gustler.backend.processor;
 
+import com.gustler.backend.processor.seatdistribution.SameDayFullOutcomes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
@@ -20,6 +21,10 @@ import org.junit.jupiter.params.provider.ValueSource;
  * 어느 쪽이든 몇 열을 채우는지 다시 세야 한다.
  */
 class SeatForecastDesignMatrixTest {
+
+    /** 오늘 확정된 결과가 없는 자리. 그때는 만석 확률을 안 옮긴다. */
+    private static final SameDayFullOutcomes NO_SAME_DAY_OUTCOMES = null;
+
 
     private static final Clock KOREAN_CLOCK =
         Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneId.of("Asia/Seoul"));
@@ -412,7 +417,7 @@ class SeatForecastDesignMatrixTest {
     ) {
         VehicleStopTarget target = new VehicleStopTarget(
             trajectory.observation(), new RouteStop(ROUTE_VERSION_3330, TARGET_STOP_49, "20400049", true));
-        return new SeatForecastInput(target, trajectory, statistics, stops(), timeSlot);
+        return new SeatForecastInput(target, trajectory, statistics, stops(), timeSlot, NO_SAME_DAY_OUTCOMES);
     }
 
     private static ObservedVehicle observed(

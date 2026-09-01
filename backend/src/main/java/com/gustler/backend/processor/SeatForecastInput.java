@@ -1,5 +1,6 @@
 package com.gustler.backend.processor;
 
+import com.gustler.backend.processor.seatdistribution.SameDayFullOutcomes;
 import java.util.Objects;
 
 /**
@@ -14,6 +15,10 @@ import java.util.Objects;
  * <p>넷이 서로 다른 노선 판본의 것이면 여기서 멈춘다. 설계행렬은 넷을 한 줄에 섞어 놓기 때문에
  * 어긋난 채로 지나가면 그럴듯한 수가 나오고 아무도 못 알아챈다.
  *
+ * <p>오늘 이미 도착이 확인된 예보들의 성적도 재료에 든다. 만석 확률을 그 성적으로 옮기는데,
+ * 모델이 DB 를 안 읽으니 잘라 놓은 값을 받아야 한다. <b>없으면 {@code null} 이고 그때는 안 옮긴다.</b>
+ * 하루가 막 시작해 확정된 결과가 없을 때가 그 자리다.
+ *
  * <p><b>시간대도 하나만 든다.</b> 설계행렬의 아침·저녁 열과 셀 통계가 서로 다른 시간대를 쓰면
  * 한 예보 행이 두 시간대의 값을 섞는다. 셀 통계가 자기 시간대를 들고 있어서 여기서 대조한다.
  */
@@ -22,7 +27,8 @@ public record SeatForecastInput(
     VehicleTrajectory trajectory,
     StopDemandStatistics statistics,
     RouteStops stops,
-    TimeSlot timeSlot
+    TimeSlot timeSlot,
+    SameDayFullOutcomes sameDayFullOutcomes
 ) {
 
     public SeatForecastInput {

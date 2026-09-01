@@ -7,7 +7,10 @@ import com.gustler.backend.processor.ForecastSettlement;
 import com.gustler.backend.processor.PendingForecast;
 import com.gustler.backend.processor.SeatForecast;
 import com.gustler.backend.support.IntegrationTest;
+import com.gustler.backend.processor.seatdistribution.SameDayFullOutcomes;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -261,6 +264,74 @@ class JdbcSeatForecastRepositoryTest {
             0.38,
             12.5,
             generatedAt);
+    }
+
+    @Test
+    void 오늘_도착이_확인된_예보의_성적을_예보_거리마다_읽는다() {
+        // given 도착이 확인된 예보 하나를 만든다
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            vehicleObservationId,
+            TARGET_STOP_ORDER,
+            new ArrivalLabel.Settled(insertArrivalObservation(), SEATS_ON_ARRIVAL_WHEN_FULL),
+            SCORED_AT)));
+
+        // when 그 도착보다 뒤 시각으로 묻는다
+        Map<Integer, SameDayFullOutcomes> actual = jdbcSeatForecastRepository.readSameDayFullOutcomes(
+            routeVersionId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant().plusSeconds(60));
+
+        // then
+        assertThat(actual.get(STOPS_TO_TARGET))
+            .isEqualTo(new SameDayFullOutcomes(1, 1, 0.41));
+    }
+
+    @Test
+    void 예보_시각보다_뒤에_도착한_것은_성적에_안_센다() {
+        // given
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            vehicleObservationId,
+            TARGET_STOP_ORDER,
+            new ArrivalLabel.Settled(insertArrivalObservation(), SEATS_ON_ARRIVAL_WHEN_FULL),
+            SCORED_AT)));
+
+        // when 그 도착보다 앞선 시각으로 묻는다
+        Map<Integer, SameDayFullOutcomes> actual = jdbcSeatForecastRepository.readSameDayFullOutcomes(
+            routeVersionId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant().minusSeconds(60));
+
+        // then
+        assertThat(actual).isEmpty();
+    }
+
+    @Test
+    void 아직_도착이_확인_안_된_예보는_성적에_안_센다() {
+        // given 회수를 안 한 예보다
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+
+        // when
+        Map<Integer, SameDayFullOutcomes> actual = jdbcSeatForecastRepository.readSameDayFullOutcomes(
+            routeVersionId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant().plusSeconds(60));
+
+        // then
+        assertThat(actual).isEmpty();
+    }
+
+    @Test
+    void 어제_도착한_예보는_오늘_성적에_안_센다() {
+        // given
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            vehicleObservationId,
+            TARGET_STOP_ORDER,
+            new ArrivalLabel.Settled(insertArrivalObservation(), SEATS_ON_ARRIVAL_WHEN_FULL),
+            SCORED_AT)));
+
+        // when 한국 시각으로 다음 날에 묻는다
+        Map<Integer, SameDayFullOutcomes> actual = jdbcSeatForecastRepository.readSameDayFullOutcomes(
+            routeVersionId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant().plus(Duration.ofDays(1)));
+
+        // then
+        assertThat(actual).isEmpty();
     }
 
     /** 예보를 낸 뒤 다음 판에서 대상 정류소를 지난 그 차량의 관측. */

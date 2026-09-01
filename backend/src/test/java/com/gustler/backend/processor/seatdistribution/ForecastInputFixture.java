@@ -54,6 +54,7 @@ final class ForecastInputFixture {
                 1,
                 List.of(new StopDemandCell(TARGET_STOP_49, 0.5, 0.1, 30, 10))),
             new RouteStops(ROUTE_VERSION_3330, upstreamRouteId, List.of(target)),
-            TimeSlot.MORNING);
+            TimeSlot.MORNING,
+            null);
     }
 }

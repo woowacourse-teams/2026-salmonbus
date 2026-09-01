@@ -1,7 +1,9 @@
 package com.gustler.backend.processor;
 
 import java.time.Instant;
+import com.gustler.backend.processor.seatdistribution.SameDayFullOutcomes;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 예보 행을 쓰고 닫는 포트.
@@ -42,5 +44,21 @@ public interface SeatForecastRepository {
     /** 회수한 라벨을 예보 행에 채운다. */
     void settle(
         List<ForecastSettlement> settlements
+    );
+
+    /**
+     * 오늘 이미 도착이 확인된 예보들의 성적. 예보 거리마다 하나씩.
+     *
+     * <p>만석 확률을 당일 성적으로 옮기는 데 쓴다. 예보가 오늘따라 만석을 계속 놓치고 있으면
+     * 확률을 올리고 반대면 내린다.
+     *
+     * <p><b>예보 시각보다 뒤에 도착한 것과 다른 날짜 것은 안 센다.</b> 섞이면 아직 모르는 것을
+     * 알고 쓰는 셈이 된다. 자르는 것은 이 질의가 하고, 모델은 잘린 값만 받는다.
+     *
+     * @param predictionAt 이 시각까지 도착이 확인된 것만. 그 batch 가 상류에서 응답을 받은 시각이다
+     */
+    Map<Integer, SameDayFullOutcomes> readSameDayFullOutcomes(
+        long routeVersionId,
+        Instant predictionAt
     );
 }
