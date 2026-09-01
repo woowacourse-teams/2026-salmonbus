@@ -262,17 +262,17 @@ export const liveVehiclesRevisedMock = {
 export const errorResponseMocks = {
   INVALID_ROUTE_ID: {
     code: "INVALID_ROUTE_ID",
-    message: "routeId must be 9 digits",
+    message: "routeId는 9자리 숫자여야 합니다.",
     requestId: "req-01J9X2ABCD",
   },
   ROUTE_NOT_FOUND: {
     code: "ROUTE_NOT_FOUND",
-    message: "unknown routeId",
+    message: "등록되지 않은 노선입니다.",
     requestId: "req-01J9X2ABCE",
   },
   MODEL_OUT_OF_SCOPE: {
     code: "MODEL_OUT_OF_SCOPE",
-    message: "active bundle does not support this route reference",
+    message: "활성 모델 번들이 지원하지 않는 노선 판본입니다.",
     requestId: "req-01J9X2ABCG",
   },
   NO_RECENT_OBSERVATION: {
@@ -282,13 +282,13 @@ export const errorResponseMocks = {
   },
   SERVICE_UNAVAILABLE: {
     code: "SERVICE_UNAVAILABLE",
-    message: "temporary failure",
+    message: "일시적인 서버 장애가 발생했습니다.",
     requestId: "req-01J9X2ABCH",
   },
   INVALID_REQUEST: {
     code: "INVALID_REQUEST",
-    message: "invalid request",
-    requestId: "req-01J9X2ABCL",
+    message: "요청 형식이 올바르지 않습니다.",
+    requestId: "req-01J9X2ABCI",
   },
   ENDPOINT_NOT_FOUND: {
     code: "ENDPOINT_NOT_FOUND",
@@ -298,7 +298,7 @@ export const errorResponseMocks = {
   METHOD_NOT_ALLOWED: {
     code: "METHOD_NOT_ALLOWED",
     message: "이 경로에서 지원하지 않는 요청 방식입니다.",
-    requestId: "req-01J9X2ABCJ",
+    requestId: "req-01J9X2ABCK",
   },
   INTERNAL_ERROR: {
     code: "INTERNAL_ERROR",
