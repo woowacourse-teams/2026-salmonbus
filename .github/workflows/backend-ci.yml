@@ -46,9 +46,9 @@ jobs:
         run: ./gradlew build
 
       - name: Publish test report
-        if: ${{ !cancelled() && hashFiles('backend/build/test-results/test/TEST-*.xml') != '' }}
+        if: ${{ !cancelled() && hashFiles('backend/**/build/test-results/test/TEST-*.xml') != '' }}
         uses: mikepenz/action-junit-report@v6
         with:
-          report_paths: backend/build/test-results/test/TEST-*.xml
+          report_paths: 'backend/**/build/test-results/test/TEST-*.xml'
           check_name: 'BE 테스트 결과'
           detailed_summary: true
