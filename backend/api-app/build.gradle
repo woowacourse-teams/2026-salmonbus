@@ -24,6 +24,10 @@ dependencies {
     testAnnotationProcessor 'org.projectlombok:lombok'
 }
 
+springBoot {
+    buildInfo()
+}
+
 tasks.named('test') {
     dependsOn tasks.named('bootJar'), ':worker-app:bootJar'
     doFirst {
