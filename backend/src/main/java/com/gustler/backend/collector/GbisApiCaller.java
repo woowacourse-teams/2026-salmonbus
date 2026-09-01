@@ -64,7 +64,7 @@ public class GbisApiCaller {
                     .queryParam("serviceKey", "{serviceKey}")
                     .queryParam("routeId", "{routeId}")
                     .queryParam("format", "json")
-                    .build(properties.serviceKey(), routeId))   // <<<<<< 여기
+                    .build(properties.serviceKey(), routeId))
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, KEEP_ERROR_BODY)
                 .body(byte[].class);
