@@ -17,6 +17,9 @@ class SeatForecastInputTest {
 
     private static final long ROUTE_VERSION_3330 = 1L;
     private static final long ROUTE_VERSION_1650 = 2L;
+
+    private static final String UPSTREAM_ROUTE_3330 = "204000057";
+    private static final String UPSTREAM_ROUTE_1650 = "234000050";
     private static final long ANY_OBSERVATION_ID = 7L;
 
     private static final Instant MORNING_AT = Instant.parse("2026-08-19T08:30:00+09:00");
@@ -68,7 +71,9 @@ class SeatForecastInputTest {
     void 정류장_목록이_다른_노선_판본의_것이면_모델_입력을_만들_수_없다() {
         // given
         RouteStops otherVersion = new RouteStops(
-            ROUTE_VERSION_1650, List.of(new RouteStop(ROUTE_VERSION_1650, TARGET_STOP_49, "20400049", true)));
+            ROUTE_VERSION_1650,
+            UPSTREAM_ROUTE_1650,
+            List.of(new RouteStop(ROUTE_VERSION_1650, TARGET_STOP_49, "20400049", true)));
 
         // when, then
         assertThatThrownBy(() -> new SeatForecastInput(
@@ -125,6 +130,7 @@ class SeatForecastInputTest {
     private static RouteStops stops() {
         return new RouteStops(
             ROUTE_VERSION_3330,
+            UPSTREAM_ROUTE_3330,
             List.of(
                 new RouteStop(ROUTE_VERSION_3330, TARGET_STOP_49, "20400049", true),
                 new RouteStop(ROUTE_VERSION_3330, LAST_STOP_60, "20400060", true)));

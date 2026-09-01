@@ -15,12 +15,14 @@ class RouteStopsTest {
     private static final Integer CROWD_LEVEL_UNKNOWN = null;
 
     private static final long ROUTE_VERSION_3330 = 1L;
+
+    private static final String UPSTREAM_ROUTE_3330 = "204000057";
     private static final int SEATS_LEFT = 12;
 
     @Test
     void 승차할_수_있는_정류장만_예보_대상이_된다() {
         // given
-        RouteStops stops = new RouteStops(ROUTE_VERSION_3330, List.of(
+        RouteStops stops = new RouteStops(ROUTE_VERSION_3330, UPSTREAM_ROUTE_3330, List.of(
             boardingStop(1),
             passingStop(2),
             boardingStop(3)));
@@ -84,7 +86,7 @@ class RouteStopsTest {
     @Test
     void 경유_정류장도_지평을_한_칸으로_센다() {
         // given
-        RouteStops stops = new RouteStops(ROUTE_VERSION_3330, List.of(
+        RouteStops stops = new RouteStops(ROUTE_VERSION_3330, UPSTREAM_ROUTE_3330, List.of(
             boardingStop(1),
             boardingStop(2),
             passingStop(3),
@@ -100,7 +102,7 @@ class RouteStopsTest {
     @Test
     void 승차할_수_있는_정류장이_앞에_없으면_대상이_하나도_안_나온다() {
         // given
-        RouteStops stops = new RouteStops(ROUTE_VERSION_3330, List.of(
+        RouteStops stops = new RouteStops(ROUTE_VERSION_3330, UPSTREAM_ROUTE_3330, List.of(
             boardingStop(1),
             passingStop(2),
             passingStop(3)));
@@ -145,14 +147,14 @@ class RouteStopsTest {
             new RouteStop(otherRouteVersion, 2, "20402", true));
 
         // when & then
-        assertThatThrownBy(() -> new RouteStops(ROUTE_VERSION_3330, mixed))
+        assertThatThrownBy(() -> new RouteStops(ROUTE_VERSION_3330, UPSTREAM_ROUTE_3330, mixed))
             .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void 판본의_마지막_순번은_정류장_중_가장_큰_순번이다() {
         // given 경유 지점이 마지막 순번을 차지해도 그것까지 센다
-        RouteStops stops = new RouteStops(ROUTE_VERSION_3330, List.of(boardingStop(1), passingStop(60)));
+        RouteStops stops = new RouteStops(ROUTE_VERSION_3330, UPSTREAM_ROUTE_3330, List.of(boardingStop(1), passingStop(60)));
 
         // when
         final int actual = stops.largestStopOrder();
@@ -168,7 +170,7 @@ class RouteStopsTest {
         for (int stopOrder = 1; stopOrder <= lastStopOrder; stopOrder++) {
             stops.add(boardingStop(stopOrder));
         }
-        return new RouteStops(ROUTE_VERSION_3330, stops);
+        return new RouteStops(ROUTE_VERSION_3330, UPSTREAM_ROUTE_3330, stops);
     }
 
     private RouteStop boardingStop(

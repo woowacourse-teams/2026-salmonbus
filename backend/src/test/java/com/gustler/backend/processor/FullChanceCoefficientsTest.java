@@ -24,6 +24,8 @@ class FullChanceCoefficientsTest {
         Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneId.of("Asia/Seoul"));
 
     private static final long ROUTE_VERSION_3330 = 1L;
+
+    private static final String UPSTREAM_ROUTE_3330 = "204000057";
     private static final long ANY_OBSERVATION_ID = 7L;
     private static final Instant MORNING_AT = Instant.parse("2026-08-19T08:30:00+09:00");
 
@@ -133,6 +135,6 @@ class FullChanceCoefficientsTest {
         for (int stopOrder = 1; stopOrder <= LAST_STOP_60; stopOrder++) {
             stops.add(new RouteStop(ROUTE_VERSION_3330, stopOrder, "204000%02d".formatted(stopOrder), true));
         }
-        return new RouteStops(ROUTE_VERSION_3330, stops);
+        return new RouteStops(ROUTE_VERSION_3330, UPSTREAM_ROUTE_3330, stops);
     }
 }

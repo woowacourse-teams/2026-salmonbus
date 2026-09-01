@@ -12,7 +12,7 @@ public interface RouteVersionRepository {
     /** 지금 쓰는 판본. 유효 기간이 안 닫힌 것이다. */
     List<Long> findActiveVersionIds();
 
-    /** 그 판본이 지나는 정류장 전부. 순번 오름차순이다. */
+    /** 그 판본이 지나는 정류장 전부. 순번 오름차순이고 어느 Open API 노선인지를 같이 든다. */
     RouteStops readStops(
         long routeVersionId
     );

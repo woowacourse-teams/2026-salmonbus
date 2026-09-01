@@ -6,6 +6,9 @@ import java.util.List;
 /**
  * 한 노선 판본이 지나는 정류장 전부. 순번 오름차순이다.
  *
+ * <p>어느 Open API 노선인지를 같이 든다. 계수 묶음이 노선 이름으로 계수를 고르는데, 우리 DB 는
+ * 노선 판본 id 로 돌아서 그 사이를 이 값이 잇는다. 모델이 DB 를 안 읽고도 계수를 고를 수 있다.
+ *
  * <p>차량 하나를 주면 그 앞의 예보 대상을 골라 준다. 대상에서 빠지는 자리가 셋이고
  * 셋 다 여기서 걸린다.
  *
@@ -18,10 +21,14 @@ import java.util.List;
  */
 public record RouteStops(
     long routeVersionId,
+    String upstreamRouteId,
     List<RouteStop> stops
 ) {
 
     public RouteStops {
+        if (upstreamRouteId == null || upstreamRouteId.isBlank()) {
+            throw new IllegalArgumentException("정류장 목록에는 어느 Open API 노선인지가 있어야 한다");
+        }
         stops = List.copyOf(stops);
         for (RouteStop stop : stops) {
             if (stop.routeVersionId() != routeVersionId) {

@@ -16,6 +16,8 @@ class StopPositionOnRouteTest {
 
     private static final long ROUTE_VERSION_3330 = 1L;
 
+    private static final String UPSTREAM_ROUTE_3330 = "204000057";
+
     @Test
     void 정류장_60개짜리_판본의_30번_정류장은_0점5다() {
         // when
@@ -50,6 +52,6 @@ class StopPositionOnRouteTest {
         for (int stopOrder = 1; stopOrder <= lastStopOrder; stopOrder++) {
             stops.add(new RouteStop(ROUTE_VERSION_3330, stopOrder, "2040000%d".formatted(stopOrder), true));
         }
-        return new RouteStops(ROUTE_VERSION_3330, stops);
+        return new RouteStops(ROUTE_VERSION_3330, UPSTREAM_ROUTE_3330, stops);
     }
 }

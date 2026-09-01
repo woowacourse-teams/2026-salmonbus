@@ -46,6 +46,14 @@ public class JdbcRouteVersionRepository implements RouteVersionRepository {
         ORDER BY stop_order
         """;
 
+    /** 그 판본이 어느 Open API 노선인가. 계수 묶음이 노선 이름으로 계수를 고르는 데 쓴다. */
+    private static final String SELECT_UPSTREAM_ROUTE_ID = """
+        SELECT route.public_route_id
+        FROM route_version
+        JOIN route ON route.id = route_version.route_id
+        WHERE route_version.id = :routeVersionId
+        """;
+
     private final JdbcClient jdbcClient;
 
     public JdbcRouteVersionRepository(
@@ -73,6 +81,15 @@ public class JdbcRouteVersionRepository implements RouteVersionRepository {
                 resultSet.getString("stop_id"),
                 resultSet.getBoolean("boarding_allowed")))
             .list();
-        return new RouteStops(routeVersionId, stops);
+        return new RouteStops(routeVersionId, upstreamRouteIdOf(routeVersionId), stops);
+    }
+
+    private String upstreamRouteIdOf(
+        final long routeVersionId
+    ) {
+        return jdbcClient.sql(SELECT_UPSTREAM_ROUTE_ID)
+            .param("routeVersionId", routeVersionId)
+            .query(String.class)
+            .single();
     }
 }
