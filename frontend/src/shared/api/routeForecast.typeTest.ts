@@ -3,6 +3,7 @@ import type {
   ApproachingVehicle,
   Board,
   BoardRoute,
+  ErrorResponse,
   Observation,
   SeatInfo,
   StopState,
@@ -51,6 +52,11 @@ function rejectsLegacyForecastMeta(board: Board): unknown {
   return board.forecastMeta;
 }
 
+function rejectsLegacyRetryable(error: ErrorResponse): unknown {
+  // @ts-expect-error retryable은 v4-1에서 빠진 필드다 (재시도는 상태 코드와 Retry-After로 판단한다)
+  return error.retryable;
+}
+
 function rejectsExplicitUndefinedRemaining(): SeatInfo {
   const smuggled = { kind: "UNKNOWN" as const, remaining: undefined };
   // @ts-expect-error exactOptionalPropertyTypes 아래서는 remaining: undefined 주입되는 것도 막혀야 한다
@@ -58,7 +64,12 @@ function rejectsExplicitUndefinedRemaining(): SeatInfo {
   return seat;
 }
 
-// 이 함수만 정상 코드다. kind로 분기하면 remaining이 number로 좁혀지는지 확인한다.
+// 아래 둘은 정상 코드다.
+function usesBoardStaleAt(board: Board): string {
+  return board.staleAt.slice(0, 10);
+}
+
+// kind로 분기하면 remaining이 number로 좁혀지는지 확인한다.
 function narrowsSeatByKind(seat: SeatInfo): number {
   if (seat.kind === "EXACT") {
     return seat.remaining;

@@ -48,6 +48,7 @@ export const boardMock = {
     ],
   },
   observedAt: "2026-08-18T08:12:40+09:00",
+  staleAt: "2026-08-18T08:17:40+09:00",
   model: {
     releaseId: "A18",
     trainedThrough: "2026-08-18",
@@ -130,6 +131,7 @@ export const boardMock = {
 export const boardClosedMock = {
   route: boardMock.route,
   observedAt: "2026-08-18T23:58:20+09:00",
+  staleAt: "2026-08-19T00:03:20+09:00",
   model: boardMock.model,
   vehiclesInService: 0,
   stops: [
@@ -155,6 +157,7 @@ export const boardClosedMock = {
 export const boardQuietMock = {
   route: boardMock.route,
   observedAt: "2026-08-18T05:03:11+09:00",
+  staleAt: "2026-08-18T05:08:11+09:00",
   model: boardMock.model,
   vehiclesInService: 1,
   stops: [
@@ -183,7 +186,7 @@ export const liveVehiclesMock = {
   observation: {
     state: "VEHICLES_PRESENT",
     observedAt: "2026-08-18T08:12:31+09:00",
-    staleAt: "2026-08-18T08:13:31+09:00",
+    staleAt: "2026-08-18T08:17:31+09:00",
   },
   vehicles: [
     {
@@ -222,7 +225,7 @@ export const liveVehiclesEmptyMock = {
   observation: {
     state: "NO_VEHICLES_OBSERVED",
     observedAt: "2026-08-18T23:59:02+09:00",
-    staleAt: "2026-08-19T00:09:02+09:00",
+    staleAt: "2026-08-19T00:04:02+09:00",
   },
   vehicles: [],
 } satisfies LiveVehicles;
@@ -244,7 +247,7 @@ export const liveVehiclesRevisedMock = {
   observation: {
     state: "VEHICLES_PRESENT",
     observedAt: "2026-08-25T09:40:12+09:00",
-    staleAt: "2026-08-25T09:41:12+09:00",
+    staleAt: "2026-08-25T09:45:12+09:00",
   },
   vehicles: [
     {
@@ -264,30 +267,45 @@ export const errorResponseMocks = {
     code: "INVALID_ROUTE_ID",
     message: "노선 ID 형식이 올바르지 않다",
     requestId: "req-0f3c1a",
-    retryable: false,
   },
   ROUTE_NOT_FOUND: {
     code: "ROUTE_NOT_FOUND",
     message: "등록되지 않은 노선이다",
     requestId: "req-8b21d4",
-    retryable: false,
   },
   MODEL_OUT_OF_SCOPE: {
     code: "MODEL_OUT_OF_SCOPE",
     message: "이 노선은 아직 예보 대상이 아니다",
     requestId: "req-c77e02",
-    retryable: false,
   },
   NO_RECENT_OBSERVATION: {
     code: "NO_RECENT_OBSERVATION",
     message: "최근 관측이 없어 예보를 만들 수 없다",
     requestId: "req-53aa9e",
-    retryable: true,
   },
   SERVICE_UNAVAILABLE: {
     code: "SERVICE_UNAVAILABLE",
     message: "일시적으로 응답할 수 없다",
     requestId: "req-e19f60",
-    retryable: true,
+  },
+  INVALID_REQUEST: {
+    code: "INVALID_REQUEST",
+    message: "요청 형식이 올바르지 않습니다.",
+    requestId: "req-1a4c88",
+  },
+  ENDPOINT_NOT_FOUND: {
+    code: "ENDPOINT_NOT_FOUND",
+    message: "요청한 경로를 찾을 수 없습니다.",
+    requestId: "req-2b57d1",
+  },
+  METHOD_NOT_ALLOWED: {
+    code: "METHOD_NOT_ALLOWED",
+    message: "이 경로에서 지원하지 않는 요청 방식입니다.",
+    requestId: "req-3c69e2",
+  },
+  INTERNAL_ERROR: {
+    code: "INTERNAL_ERROR",
+    message: "요청을 처리하지 못했습니다.",
+    requestId: "req-4d7af3",
   },
 } satisfies Record<ErrorCode, ErrorResponse>;
