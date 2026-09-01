@@ -43,6 +43,9 @@ collection:
 model:
   bundle:
     directory: ${MODEL_BUNDLE_DIRECTORY:}
+    # 도는 배포와 계수 파일의 신원이 다를 때만 본다. 꺼져 있으면 안 올리고 경고만 남긴다.
+    # 계수를 갈아 끼우거나 옛 계수로 되돌릴 때 사람이 켠다. 켠 채로 두면 재기동마다 올라간다.
+    promote-on-start: ${MODEL_BUNDLE_PROMOTE_ON_START:false}
 
 # 예보 배치와 라벨 회수 배치. 계수 번들이 없어 도는 배포가 하나도 없으므로 꺼둔 채로 낸다.
 # 켜는 것은 배포 행이 선 뒤다. 수집(collection.enabled)과 같은 방식으로 끈다.

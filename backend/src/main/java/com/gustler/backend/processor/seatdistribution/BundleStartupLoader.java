@@ -72,12 +72,17 @@ public class BundleStartupLoader {
         }
 
         LoadedBundle bundle = LoadedBundle.from(files);
-        if (!active.get().bundleDigest().equals(bundle.bundleDigest())) {
-            log.warn("도는 배포와 계수 파일의 신원이 다르다. 재기동만으로는 안 올린다. "
-                + "도는 배포 {}, 파일 {}", active.get().releaseId(), bundle.releaseId());
+        if (active.get().bundleDigest().equals(bundle.bundleDigest())) {
+            bundles.add(bundle);
+            log.info("도는 배포의 계수를 다시 올렸다: {}", bundle.releaseId());
             return;
         }
-        bundles.add(bundle);
-        log.info("도는 배포의 계수를 다시 올렸다: {}", bundle.releaseId());
+        if (!properties.promoteOnStart()) {
+            log.warn("도는 배포와 계수 파일의 신원이 다르다. model.bundle.promote-on-start 가 꺼져 있어 "
+                + "안 올린다. 도는 배포 {}, 파일 {}", active.get().releaseId(), bundle.releaseId());
+            return;
+        }
+        log.warn("사람이 켜 둔 스위치로 계수를 갈아 끼운다. {} 에서 {} 로, 배포 {}",
+            active.get().releaseId(), bundle.releaseId(), activation.activate(files));
     }
 }

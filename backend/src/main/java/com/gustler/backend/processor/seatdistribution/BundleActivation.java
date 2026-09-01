@@ -31,6 +31,15 @@ public final class BundleActivation {
         this.bundles = bundles;
     }
 
+    /**
+     * 사람이 계수를 갈아 끼우는 자리.
+     *
+     * <p>기동 적재는 도는 배포와 신원이 다른 파일을 안 올린다. 재기동만으로 배포가 조용히 바뀌면
+     * 안 되기 때문이다. 그래서 <b>A 에서 B 로 가는 것도, B 에서 A 로 되돌리는 것도 여기를 거친다.</b>
+     * 되돌릴 때는 A 의 파일 자리를 주면 된다. 되돌리기가 곧 다시 올리기다.
+     *
+     * <p>이미 도는 것과 같은 신원이면 아무것도 안 한다. 같은 파일로 두 번 불러도 배포 행이 안 는다.
+     */
     public long activate(
         BundleFiles files
     ) {
