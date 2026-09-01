@@ -73,7 +73,7 @@ public class StopDemandStatisticsJob {
         }
         final int nextRevision = stopDemandStatisticsRepository.currentRevision(
             routeVersionId, CURRENT_CALCULATION_VERSION) + 1;
-        stopDemandStatisticsRepository.replace(new StopDemandGeneration(
+        stopDemandStatisticsRepository.append(new StopDemandGeneration(
             routeVersionId,
             CURRENT_CALCULATION_VERSION,
             nextRevision,

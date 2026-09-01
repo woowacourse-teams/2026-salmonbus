@@ -12,11 +12,17 @@ import java.util.List;
  */
 public interface StopDemandStatisticsRepository {
 
-    /** 한 노선 판본 · 한 시간대의 셀 전부. */
-    StopDemandStatistics read(
+    /**
+     * 그 관측 시각까지의 자료로 낸 세대 중 가장 최근 것.
+     *
+     * <p>지금 최신 세대가 아니라 <b>{@code observedAt} 시점에 쓸 수 있었던 세대</b>를 고른다.
+     * 그래야 밀린 batch 를 뒤늦게 처리해도 같은 값이 나온다.
+     */
+    StopDemandStatistics readAsOf(
         long routeVersionId,
         TimeSlot timeSlot,
-        String calculationVersion
+        String calculationVersion,
+        Instant observedAt
     );
 
     /** 지금 세대 번호. 한 번도 안 돌았으면 0 이다. */
@@ -36,8 +42,13 @@ public interface StopDemandStatisticsRepository {
         Instant dataUntil
     );
 
-    /** 한 세대를 덮어쓴다. */
-    void replace(
+    /**
+     * 한 세대를 더한다. 옛 세대는 안 지운다.
+     *
+     * <p>덮어쓰면 밀린 batch 를 뒤늦게 처리할 때 그 관측 시각보다 뒤의 라벨이 들어간 셀을 읽는다.
+     * 같은 batch 를 다시 처리해도 같은 값이 나오려면 그때 쓸 수 있었던 세대가 남아 있어야 한다.
+     */
+    void append(
         StopDemandGeneration generation
     );
 }

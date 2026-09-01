@@ -46,6 +46,9 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
      * 그중 한 시간대에 라벨이 아직 안 쌓여 셀이 없을 수 있다. 그 자리를 시간대로 걸러 세면
      * "N세대인데 이 시간대는 비었다" 가 "세대가 아예 없다" 와 같은 0으로 나온다.
      *
+     * <p>세대는 관측 시각까지의 자료로 낸 것 중 가장 최근 것을 고른다. 지금 최신 세대를 쓰면
+     * 밀린 batch 를 뒤늦게 처리할 때 그 관측 시각보다 뒤의 라벨이 들어간 셀을 읽는다.
+     *
      * <p>그래서 세대 번호를 먼저 잡고 셀을 LEFT JOIN 한다. 셀이 없어도 행 하나는 나오고
      * 그 행의 stop_order 가 비어 있다. 두 값을 한 조회에서 같이 가져오는 것이라
      * 그 사이에 세대가 교체될 자리도 없다.
@@ -62,6 +65,7 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
             FROM stop_demand_statistics
             WHERE route_version_id = :routeVersionId
               AND calculation_version = :calculationVersion
+              AND data_until <= :observedAt
         ) generation
         LEFT JOIN stop_demand_statistics cell
                ON cell.route_version_id = :routeVersionId
@@ -159,12 +163,6 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
      * <p>시간대를 안 본다. 한 판이 세 시간대를 다 다시 내기 때문에 한 시간대만 지우면
      * 라벨이 사라진 시간대의 옛 행이 그대로 남는다.
      */
-    private static final String DELETE_GENERATION = """
-        DELETE FROM stop_demand_statistics
-        WHERE route_version_id = :routeVersionId
-          AND calculation_version = :calculationVersion
-        """;
-
     /** 셀 한 줄. 세대 번호와 기준 시각과 계산 시각은 한 세대의 모든 행에 같은 값이 들어간다. */
     private static final String INSERT_CELL = """
         INSERT INTO stop_demand_statistics (
@@ -196,15 +194,17 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
      * 나오고 셀 목록만 비어 있다. 예보 행에 어느 세대를 보고 냈는지가 남아야 나중에 따질 수 있다.
      */
     @Override
-    public StopDemandStatistics read(
+    public StopDemandStatistics readAsOf(
         final long routeVersionId,
         TimeSlot timeSlot,
-        String calculationVersion
+        String calculationVersion,
+        Instant observedAt
     ) {
         List<CellOfGeneration> rows = jdbcClient.sql(SELECT_CELLS)
             .param("routeVersionId", routeVersionId)
             .param("timeSlot", storedTimeSlotOf(timeSlot))
             .param("calculationVersion", calculationVersion)
+            .param("observedAt", offsetOf(observedAt))
             .query((resultSet, rowNumber) -> new CellOfGeneration(
                 resultSet.getInt("revision"),
                 cellOf(resultSet)))
@@ -259,13 +259,9 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
      */
     @Override
     @Transactional
-    public void replace(
+    public void append(
         StopDemandGeneration generation
     ) {
-        jdbcClient.sql(DELETE_GENERATION)
-            .param("routeVersionId", generation.routeVersionId())
-            .param("calculationVersion", generation.calculationVersion())
-            .update();
         for (StopDemandMeasurement measurement : generation.measurements()) {
             insertCell(generation, measurement);
         }

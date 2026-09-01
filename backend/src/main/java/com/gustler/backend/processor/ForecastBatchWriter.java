@@ -65,14 +65,17 @@ public class ForecastBatchWriter {
      *
      * <p>시간대는 받아서 쓴다. 여기서 다시 정하면 설계행렬이 쓰는 시간대와 갈릴 수 있다.
      * 정하는 자리는 {@link ForecastTimeSlot} 하나다.
+     *
+     * <p><b>세대도 관측 시각으로 고른다.</b> 지금 최신 세대를 쓰면 밀린 batch 를 뒤늦게 처리할 때
+     * 그 관측 시각보다 뒤의 라벨이 들어간 셀을 읽어서, 같은 batch 를 다시 처리해도 값이 달라진다.
      */
     private StopDemandStatistics stopDemandStatisticsOf(
         PendingForecastBatch batch,
         ActiveModelDeployment deployment,
         TimeSlot timeSlot
     ) {
-        return stopDemandStatisticsRepository.read(
-            batch.routeVersionId(), timeSlot, deployment.calculationVersion());
+        return stopDemandStatisticsRepository.readAsOf(
+            batch.routeVersionId(), timeSlot, deployment.calculationVersion(), batch.responseReceivedAt());
     }
 
     private List<SeatForecast> forecastsOf(

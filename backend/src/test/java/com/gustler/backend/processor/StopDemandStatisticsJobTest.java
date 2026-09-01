@@ -98,7 +98,7 @@ class StopDemandStatisticsJobTest {
         job.recomputeStopDemand();
 
         // then
-        verify(stopDemandStatisticsRepository, never()).replace(any());
+        verify(stopDemandStatisticsRepository, never()).append(any());
     }
 
     @Test
@@ -142,7 +142,7 @@ class StopDemandStatisticsJobTest {
     }
 
     private StopDemandGeneration captured() {
-        verify(stopDemandStatisticsRepository).replace(generation.capture());
+        verify(stopDemandStatisticsRepository).append(generation.capture());
         return generation.getValue();
     }
 
