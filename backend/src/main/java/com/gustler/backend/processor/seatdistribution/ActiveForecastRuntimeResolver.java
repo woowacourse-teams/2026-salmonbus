@@ -8,6 +8,9 @@ import java.util.Optional;
 /**
  * 도는 배포 행과 올라온 계수 묶음을 한 덩어리로 낸다.
  *
+ * <p>도는 배포가 가리키는 계수 묶음 요약값으로 찾는다. 그래서 올리다 실패한 적재가 메모리에
+ * 남아 있어도 안 골라진다.
+ *
  * <p>둘의 신원이 다르면 아무것도 안 낸다. 다르다는 것은 DB 에 적힌 배포와 실제로 계산할 계수가
  * 어긋났다는 뜻이고, 그 상태로 낸 예보는 어느 계수로 낸 것인지 나중에 알 수 없다.
  * 예보를 안 내는 것은 이미 정상 상태다. 계수 번들이 없는 동안 예보 배치가 도는 방식과 같다.
@@ -36,7 +39,7 @@ public final class ActiveForecastRuntimeResolver {
         if (deployment.isEmpty()) {
             return Optional.empty();
         }
-        return bundles.current()
+        return bundles.find(deployment.get().bundleDigest())
             .filter(bundle -> sameIdentity(deployment.get(), bundle))
             .map(bundle -> snapshotOf(deployment.get(), bundle));
     }

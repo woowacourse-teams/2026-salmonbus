@@ -14,9 +14,9 @@ import java.util.UUID;
  * 아직 빈이 아니어서다. 빈이 아니면 프록시를 안 거쳐 애너테이션이 아무 일도 안 하는데, 달려 있으면
  * 걸린 줄 알게 된다. 예측기를 예보 경로에 붙일 때 빈으로 올리면서 같이 단다.
  *
- * <p>계수를 먼저 올리고 승격을 나중에 하는 순서인 이유는, 반대로 하면 ACTIVE 행은 새 배포인데
- * 메모리에는 아직 옛 계수인 순간이 생기기 때문이다. 그 순간에 도는 batch 가 어긋난 짝으로
- * 예보를 낸다. 이 순서면 그 사이에는 배포 행과 계수의 신원이 안 맞아 예보를 아예 안 낸다.
+ * <p>계수를 올리는 것이 도는 계수를 밀어내지 않는다. {@link LoadedBundleHolder} 가 신원별로 들고,
+ * 고르는 것은 도는 배포가 가리키는 요약값이다. 그래서 <b>승격에 실패한 B 가 돌고 있던 A 를
+ * 못 밀어낸다.</b> 실패하면 걷어내기까지 하지만, 안 걷어내도 A 가 그대로 골라진다.
  */
 public final class BundleActivation {
 
@@ -36,8 +36,9 @@ public final class BundleActivation {
     ) {
         LoadedBundle bundle = LoadedBundle.from(files);
         final long deploymentId = deployments.stage(stagedOf(bundle));
-        bundles.replaceWith(bundle);
+        bundles.add(bundle);
         if (!deployments.promoteToActive(deploymentId)) {
+            bundles.remove(bundle.bundleDigest());
             throw new BundleRejectedException(
                 "STAGED 에서 ACTIVE 로 못 올렸다. 그 사이 다른 적재가 먼저 올라갔다: " + deploymentId);
         }

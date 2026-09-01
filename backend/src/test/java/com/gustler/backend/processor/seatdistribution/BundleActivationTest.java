@@ -4,13 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
+import com.gustler.backend.processor.ActiveModelDeployment;
+import com.gustler.backend.processor.ModelDeploymentRepository;
 import com.gustler.backend.processor.SeatForecastResult;
 import com.gustler.backend.processor.StagedModelDeployment;
 import com.gustler.backend.processor.persistence.jdbc.JdbcModelDeploymentRepository;
 import com.gustler.backend.support.IntegrationTest;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -83,20 +87,56 @@ class BundleActivationTest {
     }
 
     @Test
-    void 검사에_걸린_묶음은_이미_올라온_계수를_안_밀어낸다() {
-        // given 정상 묶음을 먼저 올린다
+    void 검사에_걸린_묶음은_이미_돌던_계수를_안_밀어낸다() {
+        // given 정상 묶음을 먼저 올려 둔다
         activation().activate(DummyBundle.valid().writeTo(directory));
-        LoadedBundle before = bundles.current().orElseThrow();
+        RuntimeSnapshot before = resolver().resolveActive().orElseThrow();
 
         // when 어긋난 묶음을 올리려다 걸린다
-        Path broken = directory.resolve("broken");
-        broken.toFile().mkdirs();
-        assertThatThrownBy(() -> activation().activate(
-            DummyBundle.valid().put("modelVersion", "seat-distribution-a19-v1").writeTo(broken)))
+        assertThatThrownBy(() -> activation().activate(brokenBundle()))
             .isInstanceOf(BundleRejectedException.class);
 
+        // then 돌던 계수가 그대로다
+        assertThat(resolver().resolveActive().orElseThrow().bundleDigest())
+            .isEqualTo(before.bundleDigest());
+    }
+
+    /**
+     * 동키가 짚은 자리다. A 가 돌고 있는데 B 승격이 실패하면, 예전 구조에서는 메모리에 B 가 남아
+     * DB 는 A 인데 신원이 안 맞아 예보가 통째로 멈췄다.
+     *
+     * <p>지금은 도는 배포가 가리키는 요약값으로 계수를 찾는다. 그래서 실패한 B 가 남아 있어도
+     * A 가 그대로 골라진다.
+     */
+    @Test
+    void 승격에_실패한_묶음이_돌던_묶음을_못_밀어낸다() {
+        // given A 가 돌고 있다
+        activation().activate(DummyBundle.valid().writeTo(directory));
+        RuntimeSnapshot before = resolver().resolveActive().orElseThrow();
+
+        // when B 를 올리는데 승격 직전에 다른 적재가 먼저 ACTIVE 를 가져간다
+        assertThatThrownBy(() -> failingActivation().activate(otherBundle()))
+            .isInstanceOf(BundleRejectedException.class);
+
+        // then DB 도 메모리도 A 를 가리킨다
+        assertThat(resolver().resolveActive().orElseThrow().releaseId())
+            .isEqualTo(before.releaseId());
+    }
+
+    @Test
+    void 계수_파일이_실은_대조_사례를_재현_못_하면_배포_행을_안_남긴다() {
+        // given 기대 잔여석만 한 석 어긋낸 묶음이다
+        DummyBundle given = DummyBundle.valid();
+        Map<String, Object> golden = new LinkedHashMap<>(given.goldenVectorFrom());
+        golden.put("expectedSeats", ((double) golden.get("expectedSeats")) + 1.0);
+
+        // when
+        assertThatThrownBy(() -> activation().activate(given.put("goldenVector", golden).writeTo(directory)))
+            .isInstanceOf(BundleRejectedException.class)
+            .hasMessageContaining(BundleCheck.GOLDEN_VECTOR.name());
+
         // then
-        assertThat(bundles.current()).contains(before);
+        assertThat(deploymentCount()).isZero();
     }
 
     @Test
@@ -152,6 +192,51 @@ class BundleActivationTest {
 
     private BundleActivation activation() {
         return new BundleActivation(deployments, bundles);
+    }
+
+    /** 승격만 실패하는 적재. 적재와 STAGED 는 그대로 되고 마지막 한 걸음에서 못 올린다. */
+    private BundleActivation failingActivation() {
+        return new BundleActivation(new ModelDeploymentRepository() {
+
+            @Override
+            public Optional<ActiveModelDeployment> findActive() {
+                return deployments.findActive();
+            }
+
+            @Override
+            public long stage(
+                StagedModelDeployment staged
+            ) {
+                return deployments.stage(staged);
+            }
+
+            @Override
+            public boolean promoteToActive(
+                final long deploymentId
+            ) {
+                return false;
+            }
+        }, bundles);
+    }
+
+    private BundleFiles brokenBundle() {
+        return DummyBundle.valid()
+            .put("modelVersion", "seat-distribution-a19-v1")
+            .writeTo(directoryUnder("broken"));
+    }
+
+    private BundleFiles otherBundle() {
+        return DummyBundle.valid()
+            .put("sourceCommit", "0000000000000000000000000000000000000000")
+            .writeTo(directoryUnder("other"));
+    }
+
+    private Path directoryUnder(
+        String name
+    ) {
+        Path under = directory.resolve(name);
+        under.toFile().mkdirs();
+        return under;
     }
 
     private ActiveForecastRuntimeResolver resolver() {

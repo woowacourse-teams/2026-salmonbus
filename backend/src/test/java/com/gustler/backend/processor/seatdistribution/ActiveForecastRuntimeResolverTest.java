@@ -112,8 +112,8 @@ class ActiveForecastRuntimeResolverTest {
         RuntimeSnapshot taken =
             resolver(deploymentOf(first), bundles).resolveActive().orElseThrow();
 
-        // when 도중에 다른 계수로 갈아 끼운다
-        bundles.replaceWith(loadedInto(directory.resolve("next")));
+        // when 도중에 다른 계수가 올라온다
+        bundles.add(loadedInto(directory.resolve("next")));
 
         // then 이미 받아 든 것은 안 바뀐다
         assertThat(taken.predictor()).isSameAs(first.predictor());
@@ -163,7 +163,7 @@ class ActiveForecastRuntimeResolverTest {
         LoadedBundle bundle
     ) {
         LoadedBundleHolder bundles = new LoadedBundleHolder();
-        bundles.replaceWith(bundle);
+        bundles.add(bundle);
         return bundles;
     }
 
