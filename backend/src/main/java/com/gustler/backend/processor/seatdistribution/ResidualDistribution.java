@@ -10,9 +10,13 @@ package com.gustler.backend.processor.seatdistribution;
  * 행마다 다르기 때문에 이렇게만 해도 중심 좌석이 40석인 행과 3석인 행의 "크게 어긋남"이
  * 다른 뜻이 된다.
  *
- * <p>한 방향의 묶음 아홉 개가 모두 미적합이면 그 방향은 적합되지 않은 것으로 보고 질량을
+ * <p>한 방향의 묶음 아홉 개가 모두 미적합이면 그 방향은 적합되지 않은 것으로 보고 확률을
  * 잔차 0 으로 돌린다. 묶음 일부만 미적합이면 그 묶음의 확률만 아주 작은 값으로 두고
  * 나머지 묶음과 같이 정규화한다. 둘은 다른 상태다.
+ *
+ * <p><b>담을 잔차가 없는 묶음의 몫도 잔차 0 으로 돌린다.</b> 버리고 남은 묶음끼리 다시 나누면
+ * 안 된다. 무너지는 묶음은 언제나 작게 어긋나는 쪽이라, 다시 나누면 그 확률이 크게 어긋나는 쪽으로
+ * 밀려 올라간다. 중심 좌석이 작을수록 자주 생기는 자리다.
  */
 final class ResidualDistribution {
 
@@ -57,7 +61,11 @@ final class ResidualDistribution {
                 chances[SeatGrid.residualIndexOf(0)] += weight;
                 continue;
             }
-            spread(chances, featureVector, direction, weight, scaleOf(direction, anchorSeats, capacity));
+            final double allocated = spread(
+                chances, featureVector, direction, weight, scaleOf(direction, anchorSeats, capacity));
+            if (allocated < weight) {
+                chances[SeatGrid.residualIndexOf(0)] += weight - allocated;
+            }
         }
         return normalized(chances);
     }
@@ -107,10 +115,12 @@ final class ResidualDistribution {
      * 한 방향의 질량을 정수 잔차 칸에 뿌린다.
      *
      * <p>좌석이 중심보다 많은 쪽은 잔차가 음수인데, 크기 묶음은 잔차 격자의 위쪽 끝인 50 까지
-     * 잡는다. 그래서 격자 아래쪽 끝인 -40 을 넘어가는 크기가 나온다. 그 질량은 버리지 않고
+     * 잡는다. 그래서 격자 아래쪽 끝인 -40 을 넘어가는 크기가 나온다. 그 확률은 버리지 않고
      * 가장자리 칸에 눌러 담는다.
+     *
+     * @return 실제로 놓은 확률. 담을 잔차가 없는 묶음이 있으면 방향의 몫보다 작다
      */
-    private void spread(
+    private double spread(
         double[] chances,
         double[] featureVector,
         ResidualDirection direction,
@@ -119,11 +129,13 @@ final class ResidualDistribution {
     ) {
         double[] binChances = binChancesOf(featureVector, direction);
         ResidualBinRange[] ranges = ResidualBinRange.allOf(scale, relativeEdges);
+        double allocated = 0.0;
         for (int index = 0; index < ranges.length; index++) {
             ResidualBinRange range = ranges[index];
             if (!range.usable()) {
                 continue;
             }
+            allocated += weight * binChances[index];
             final double perResidual = weight * binChances[index] / range.magnitudeCount();
             for (int magnitude = range.lowest(); magnitude <= range.highest(); magnitude++) {
                 final int residual = direction == ResidualDirection.SEATS_BELOW_ANCHOR
@@ -134,6 +146,7 @@ final class ResidualDistribution {
                 chances[residualIndex] += perResidual;
             }
         }
+        return allocated;
     }
 
     private double[] binChancesOf(
