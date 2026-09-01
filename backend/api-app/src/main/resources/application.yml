@@ -1,0 +1,30 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: backend-api
+
+  web:
+    resources:
+      add-mappings: false # API 전용 서버라 정적 리소스를 서빙하지 않는다. 없는 경로가 예외로 올라온다.
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/salmonbus} # 기본값은 compose.yml 과 같다.
+    username: ${DB_USERNAME:salmonbus}
+    password: ${DB_PASSWORD:salmonbus}
+    hikari:
+      maximum-pool-size: 5
+
+  jpa:
+    hibernate:
+      ddl-auto: validate # 스키마의 주인은 Flyway 다. Hibernate 는 대조만 한다.
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never

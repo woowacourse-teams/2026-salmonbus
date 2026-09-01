@@ -1,1 +1,5 @@
 rootProject.name = 'backend'
+
+include 'common'
+include 'api-app'
+include 'worker-app'

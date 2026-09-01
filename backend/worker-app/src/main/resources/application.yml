@@ -1,0 +1,73 @@
+server:
+  port: 8081
+  address: 127.0.0.1
+
+spring:
+  application:
+    name: backend-worker
+
+  http:
+    clients:
+      connect-timeout: 3s # Open API 실측: 0.04~0.15초 (2026-08-19, 10회).
+      read-timeout: 5s
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/salmonbus} # 기본값은 compose.yml 과 같다.
+    username: ${DB_USERNAME:salmonbus}
+    password: ${DB_PASSWORD:salmonbus}
+    hikari:
+      maximum-pool-size: 3
+
+  jpa:
+    hibernate:
+      ddl-auto: validate # 스키마의 주인은 Flyway 다. Hibernate 는 대조만 한다.
+
+gbis:
+  base-url: https://apis.data.go.kr/6410000 # 경기도 버스정보시스템(GBIS) 실시간 조회 API
+  # 콜론 뒤를 비워 둔다. 환경변수가 없으면 빈 값이 되고 기동이 거기서 막힌다.
+  # 콜론이 없으면 안 풀린 자리표시자가 글자 그대로 값이 되는데, 비어 있지 않아서 검사를 통과한다.
+  # 그러면 키를 빠뜨린 채로 앱이 멀쩡히 뜨고 호출만 전부 거절당한다.
+  service-key: ${GBIS_SERVICE_KEY:}  # 인코딩본과 원래 판본 중 아무거나 넣으면 된다
+  daily-limit: 10000 # 활용신청한 API 하나에 걸리는 하루 한도. 두 노선 90초 수집 실측이 8,194회다.
+
+collection:
+  # 기본을 꺼둔 채로 두고 실제로 도는 곳에서만 켠다. 켜면 15초마다 상류로 실호출이 나가는데,
+  # 통합 테스트가 컨텍스트를 띄우는 내내 그게 나가면 하루 한도를 테스트가 깎는다.
+  # 데모서버에서 COLLECTION_ENABLED=true 로 켠다. 서비스키와 같은 자리에 둔다.
+  enabled: ${COLLECTION_ENABLED:false}
+  # 노선을 늘리면 하루 호출이 노선당 4,278회씩 는다. 두 노선 8,556회로 한도 10,000회의 86퍼센트이고
+  # 세 노선은 12,834회로 넘는다. 늘릴 때는 주기표도 같이 고쳐야 한다. 넘치면 기동 때 오류 로그가 뜬다.
+  route-ids:
+    - "204000057" # 3330 범계역 - 강남역
+
+# 계수 파일이 든 디렉터리. manifest.json 과 weights.safetensors 둘이 있어야 한다.
+# 비워 두면 아무것도 안 읽고 예보 배치가 batch 를 안 연다. 계수가 아직 없는 지금의 정상 상태다.
+model:
+  bundle:
+    directory: ${MODEL_BUNDLE_DIRECTORY:}
+    # 도는 배포와 계수 파일의 신원이 다를 때만 본다. 꺼져 있으면 안 올리고 경고만 남긴다.
+    # 계수를 갈아 끼우거나 옛 계수로 되돌릴 때 사람이 켠다. 켠 채로 두면 재기동마다 올라간다.
+    promote-on-start: ${MODEL_BUNDLE_PROMOTE_ON_START:false}
+
+# 예보 배치와 라벨 회수 배치. 계수 번들이 없어 도는 배포가 하나도 없으므로 꺼둔 채로 낸다.
+# 켜는 것은 배포 행이 선 뒤다. 수집(collection.enabled)과 같은 방식으로 끈다.
+forecast:
+  enabled: ${FORECAST_ENABLED:false}
+  interval: 10s # 예보가 안 붙은 판을 집으러 가는 주기. 수집이 첨두 15초라 그보다 짧게 둔다.
+  settlement-interval: 60s # 라벨 회수 주기. 예보와 다른 시계에서 돈다.
+  statistics-interval: 6h # 셀 통계 재계산 주기. 관측이 쌓여야 값이 바뀌어서 셋 중 제일 느리다.
+  batch-limit: 20 # 한 회차에 예보를 붙일 판의 수.
+  # 한 회차에 회수를 시도할 예보 줄 수. 노선당 하루 89만~98만 행이 들어오니 두 노선이면 약 187만 행이다.
+  # 60초마다 도니 하루 1,440회, 회차당 1,300행이면 겨우 맞고 여유가 없다. 세 배로 잡았다.
+  pending-limit: 3000
+  # 한 차량의 뒤 관측을 얼마나 읽나. 첨두 15초 수집이면 400개가 100분치라 지평 12의 중앙 소요 26.5분을 덮는다.
+  arrival-limit: 400
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
