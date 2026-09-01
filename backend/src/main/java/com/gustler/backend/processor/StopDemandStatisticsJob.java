@@ -8,13 +8,16 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 회수된 라벨로 셀 통계를 다시 내고 한 세대를 덮어쓴다.
+ * 회수된 라벨로 셀 통계를 다시 내고 한 세대를 더한다.
  *
  * <p><b>예보와 다른 시계에서 돈다.</b> 한 배치에 묶으면 통계가 한 번 돌 때마다 예보가 멈춘다.
  * 통계는 관측이 쌓이면 바뀌고 예보는 판마다 나가서 급한 정도가 다르다.
  *
- * <p>한 세대를 덮어쓰는 것은 포트 구현이 한 transaction 으로 한다. 여기서 걸면 자기 메서드 호출이라
- * 프록시를 안 거쳐 transaction 이 안 열린다.
+ * <p>옛 세대는 안 지운다. 밀린 batch 를 뒤늦게 처리할 때 그 관측 시각에 쓸 수 있었던 세대를
+ * 골라야 같은 batch 가 같은 값을 낸다.
+ *
+ * <p>세대 하나를 다 넣을 때까지 묶는 것은 포트 구현이 한 transaction 으로 한다. 여기서 걸면
+ * 자기 메서드 호출이라 프록시를 안 거쳐 transaction 이 안 열린다.
  */
 @Component
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
@@ -73,7 +76,7 @@ public class StopDemandStatisticsJob {
         }
         final int nextRevision = stopDemandStatisticsRepository.currentRevision(
             routeVersionId, CURRENT_CALCULATION_VERSION) + 1;
-        stopDemandStatisticsRepository.replace(new StopDemandGeneration(
+        stopDemandStatisticsRepository.append(new StopDemandGeneration(
             routeVersionId,
             CURRENT_CALCULATION_VERSION,
             nextRevision,

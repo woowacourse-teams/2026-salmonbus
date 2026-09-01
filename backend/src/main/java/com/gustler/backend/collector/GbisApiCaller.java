@@ -61,10 +61,10 @@ public class GbisApiCaller {
             byte[] raw = gbisRestClient.get()
                 .uri(builder -> builder
                     .path(path)
-                    .queryParam("serviceKey", properties.serviceKey())
-                    .queryParam("routeId", routeId)
+                    .queryParam("serviceKey", "{serviceKey}")
+                    .queryParam("routeId", "{routeId}")
                     .queryParam("format", "json")
-                    .build())
+                    .build(properties.serviceKey(), routeId))
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, KEEP_ERROR_BODY)
                 .body(byte[].class);

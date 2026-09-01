@@ -12,6 +12,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 class VehicleStopTargetTest {
 
     private static final Instant OBSERVED_AT = Instant.parse("2026-08-25T08:30:00Z");
+    /** 혼잡도를 안 준 관측. 이 테스트가 보는 것과 무관하다. */
+    private static final Integer CROWD_LEVEL_UNKNOWN = null;
+
     private static final long ROUTE_VERSION_3330 = 1L;
 
     @Test
@@ -97,7 +100,8 @@ class VehicleStopTargetTest {
         final int passedStopOrder,
         Integer remainingSeats
     ) {
-        return new ObservedVehicle("204000206", ROUTE_VERSION_3330, passedStopOrder, OBSERVED_AT, remainingSeats);
+        return new ObservedVehicle(
+            "204000206", ROUTE_VERSION_3330, passedStopOrder, OBSERVED_AT, remainingSeats, CROWD_LEVEL_UNKNOWN);
     }
 
     private RouteStop routeStop(

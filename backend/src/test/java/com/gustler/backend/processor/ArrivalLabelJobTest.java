@@ -27,6 +27,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ArrivalLabelJobTest {
 
+    /** 혼잡도를 안 준 관측. 라벨 회수는 혼잡도를 안 본다. */
+    private static final Integer CROWD_LEVEL_UNKNOWN = null;
+
     private static final long ROUTE_VERSION_3330 = 1L;
     private static final String VEHICLE_ID = "204000206";
     private static final Instant OBSERVED_AT = Instant.parse("2026-08-25T08:30:00Z");
@@ -259,7 +262,8 @@ class ArrivalLabelJobTest {
                 ROUTE_VERSION_3330,
                 passedStopOrder,
                 OBSERVED_AT.plusSeconds(secondsAfterObserved),
-                remainingSeats));
+                remainingSeats,
+                CROWD_LEVEL_UNKNOWN));
     }
 
     private ForecastProperties properties() {

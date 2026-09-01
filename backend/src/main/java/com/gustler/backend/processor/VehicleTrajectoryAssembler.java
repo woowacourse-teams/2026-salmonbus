@@ -25,19 +25,28 @@ public final class VehicleTrajectoryAssembler {
     private VehicleTrajectoryAssembler() {
     }
 
+    /**
+     * 차량마다 궤적 재료를 만든다.
+     *
+     * <p>보여 준 최대 잔여석만 30분 창 밖에서 온다. 이력 전부를 봐야 나오는 값이라 여기서
+     * 세지 않고 차량 아이디로 받는다. 잔여석을 한 번도 안 보여 준 차량은 그 목록에 없고
+     * 그때는 {@link VehicleTrajectory#SMALLEST_MAXIMUM_SEATS} 로 센다.
+     */
     public static List<VehicleTrajectory> assemble(
-        ObservationHistory history
+        ObservationHistory history,
+        Map<String, Integer> maximumSeatsByVehicle
     ) {
         List<VehicleTrajectory> trajectories = new ArrayList<>();
         for (TrajectoryObservation observation : history.targetBatch().observations()) {
-            trajectories.add(trajectoryOf(history, observation));
+            trajectories.add(trajectoryOf(history, observation, maximumSeatsByVehicle));
         }
         return List.copyOf(trajectories);
     }
 
     private static VehicleTrajectory trajectoryOf(
         ObservationHistory history,
-        TrajectoryObservation target
+        TrajectoryObservation target,
+        Map<String, Integer> maximumSeatsByVehicle
     ) {
         LinkedChain chain = chainOf(history, target);
         return new VehicleTrajectory(
@@ -46,7 +55,8 @@ public final class VehicleTrajectoryAssembler {
             target.seats(),
             slopeOf(chain),
             findPrecedingVehicle(history, target),
-            streakOf(chain));
+            streakOf(chain),
+            maximumSeatsByVehicle.getOrDefault(target.vehicleId(), VehicleTrajectory.SMALLEST_MAXIMUM_SEATS));
     }
 
     /**

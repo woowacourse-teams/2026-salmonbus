@@ -170,11 +170,87 @@ class JdbcVehicleTrajectoryRepositoryTest {
         // then
         assertThat(actual).containsExactly(new VehicleTrajectory(
             observationId,
-            new ObservedVehicle(VEHICLE_204000206, routeVersionId, STOP_6, LATER_POLL.toInstant(), 40),
+            new ObservedVehicle(
+                VEHICLE_204000206, routeVersionId, STOP_6, LATER_POLL.toInstant(), 40, CROWD_LEVEL_3),
             new ObservedSeats.Known(40),
             new SeatSlope.Known(-3),
             new PrecedingVehicle.Known(VEHICLE_204003542, NO_SEAT_LEFT, EARLIER_POLL.toInstant()),
-            new FullSeatStreak.SeenToEnd(0)));
+            new FullSeatStreak.SeenToEnd(0),
+            43));
+    }
+
+    @Test
+    void 줄곧_만석이던_차량도_최대_잔여석은_1석이다() {
+        // given
+        final long earlier = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
+        insertObservation(earlier, VEHICLE_204000206, STOP_5, NO_SEAT_LEFT);
+        final long later = insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
+        insertObservation(later, VEHICLE_204000206, STOP_6, NO_SEAT_LEFT);
+
+        // when
+        List<VehicleTrajectory> actual = repository.readTrajectories(later);
+
+        // then 0으로는 나눌 수 없어 셀 통계 집계와 같은 자리에서 1석을 바닥으로 둔다
+        assertThat(actual.getFirst().maximumSeatsEverObserved()).isEqualTo(1);
+    }
+
+    @Test
+    void 잔여석을_한_번도_안_보여_준_차량도_최대_잔여석은_1석이다() {
+        // given
+        final long batchId = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
+        insertObservationWithoutSeats(batchId, VEHICLE_204000206, STOP_6, REPORTED_UNKNOWN);
+
+        // when
+        List<VehicleTrajectory> actual = repository.readTrajectories(batchId);
+
+        // then
+        assertThat(actual.getFirst().maximumSeatsEverObserved()).isEqualTo(1);
+    }
+
+    @Test
+    void 최대_잔여석은_궤적을_잇는_30분_창_밖의_관측에서도_나온다() {
+        // given 궤적은 30분까지만 거슬러 보는데 정원은 그 창 밖에서도 온다
+        final long longAgoBatchId = insertBatch(
+            routeVersionId, LATER_POLL.minusMinutes(40), SUCCESS_ROWS, null);
+        insertObservation(longAgoBatchId, VEHICLE_204000206, STOP_5, 44);
+        final long later = insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
+        insertObservation(later, VEHICLE_204000206, STOP_6, 12);
+
+        // when
+        List<VehicleTrajectory> actual = repository.readTrajectories(later);
+
+        // then
+        assertThat(actual.getFirst().maximumSeatsEverObserved()).isEqualTo(44);
+    }
+
+    @Test
+    void 최대_잔여석은_예보를_내는_시각까지의_관측에서만_나온다() {
+        // given 나중에 더 큰 잔여석이 들어와도 예전 예보를 다시 계산하면 같은 값이 나와야 한다
+        final long targetBatchId = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
+        insertObservation(targetBatchId, VEHICLE_204000206, STOP_5, 12);
+        final long laterBatchId = insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
+        insertObservation(laterBatchId, VEHICLE_204000206, STOP_6, 44);
+
+        // when
+        List<VehicleTrajectory> actual = repository.readTrajectories(targetBatchId);
+
+        // then
+        assertThat(actual.getFirst().maximumSeatsEverObserved()).isEqualTo(12);
+    }
+
+    @Test
+    void 같은_시각의_뒤_batch_는_최대_잔여석에_안_들어간다() {
+        // given 시각이 같고 id 만 큰 batch 가 뒤에 하나 더 있다
+        final long targetBatchId = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
+        insertObservation(targetBatchId, VEHICLE_204000206, STOP_5, 12);
+        final long sameTimeLaterBatchId = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
+        insertObservation(sameTimeLaterBatchId, VEHICLE_204000206, STOP_6, 44);
+
+        // when
+        List<VehicleTrajectory> actual = repository.readTrajectories(targetBatchId);
+
+        // then 시각만으로 자르면 44가 새어 들어온다
+        assertThat(actual.getFirst().maximumSeatsEverObserved()).isEqualTo(12);
     }
 
     @Test

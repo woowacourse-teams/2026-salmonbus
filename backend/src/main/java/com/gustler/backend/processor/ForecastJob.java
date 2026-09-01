@@ -1,7 +1,10 @@
 package com.gustler.backend.processor;
 
+import jakarta.annotation.PostConstruct;
 import java.util.List;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -20,12 +23,26 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class ForecastJob {
 
+    private static final Logger log = LoggerFactory.getLogger(ForecastJob.class);
+
     private final VehicleTrajectoryRepository vehicleTrajectoryRepository;
     private final RouteVersionRepository routeVersionRepository;
     private final ModelDeploymentRepository modelDeploymentRepository;
     private final ForecastBatchWriter forecastBatchWriter;
     private final Optional<SeatForecastModel> seatForecastModel;
     private final ForecastProperties properties;
+
+    /**
+     * 모델이 없으면 켜져 있어도 아무것도 안 한다는 것을 한 번 남긴다.
+     *
+     * <p>안 남기면 예보가 조용히 0건인 상태와 batch 가 없어서 0건인 상태가 밖에서 같아 보인다.
+     */
+    @PostConstruct
+    void 예보를_낼_수_있는지_남긴다() {
+        if (seatForecastModel.isEmpty()) {
+            log.warn("예보 배치가 켜져 있는데 좌석 예보 모델이 없다. 계수가 붙기 전까지 batch 를 하나도 안 연다");
+        }
+    }
 
     public ForecastJob(
         VehicleTrajectoryRepository vehicleTrajectoryRepository,
@@ -45,8 +62,11 @@ public class ForecastJob {
 
     @Scheduled(fixedDelayString = "${forecast.interval}")
     public void writeForecasts() {
+        if (seatForecastModel.isEmpty()) {
+            return;
+        }
         Optional<ActiveModelDeployment> deployment = modelDeploymentRepository.findActive();
-        if (seatForecastModel.isEmpty() || deployment.isEmpty()) {
+        if (deployment.isEmpty()) {
             return;
         }
         for (Long routeVersionId : routeVersionRepository.findActiveVersionIds()) {

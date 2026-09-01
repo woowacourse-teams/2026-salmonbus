@@ -67,6 +67,9 @@ class JdbcStopDemandStatisticsRepositoryTest {
 
     private static final Instant SCORED_AT = Instant.parse("2026-08-19T03:00:00Z");
     private static final Instant DATA_UNTIL = Instant.parse("2026-08-19T04:00:00Z");
+
+    /** 세대의 기준 시각보다 뒤에 받은 관측. 그 세대를 쓸 수 있는 자리다. */
+    private static final Instant READ_AS_OF = Instant.parse("2026-08-19T06:00:00Z");
     private static final Instant SCORED_AFTER_DATA_UNTIL = Instant.parse("2026-08-19T05:00:00Z");
     private static final Instant COMPUTED_AT = Instant.parse("2026-08-19T04:00:03Z");
     private static final OffsetDateTime GENERATED_AT = OffsetDateTime.parse("2026-08-19T10:57:31+09:00");
@@ -138,14 +141,14 @@ class JdbcStopDemandStatisticsRepositoryTest {
     @Test
     void 한_세대의_셀을_정류장_순번_오름차순으로_읽는다() {
         // given
-        jdbcStopDemandStatisticsRepository.replace(generationOf(FIRST_REVISION, CALCULATION_VERSION, List.of(
+        jdbcStopDemandStatisticsRepository.append(generationOf(FIRST_REVISION, CALCULATION_VERSION, List.of(
             measurementOf(TimeSlot.MORNING, HIGHEST_CELL_STOP_ORDER),
             measurementOf(TimeSlot.MORNING, LOWEST_CELL_STOP_ORDER),
             measurementOf(TimeSlot.MORNING, MIDDLE_CELL_STOP_ORDER))));
 
         // when
         StopDemandStatistics actual =
-            jdbcStopDemandStatisticsRepository.read(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION);
+            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION, READ_AS_OF);
 
         // then
         assertThat(actual.cells())
@@ -157,7 +160,7 @@ class JdbcStopDemandStatisticsRepositoryTest {
     void 세대가_없는_노선_판본은_빈_셀_목록으로_답한다() {
         // when
         StopDemandStatistics actual =
-            jdbcStopDemandStatisticsRepository.read(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION);
+            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION, READ_AS_OF);
 
         // then
         assertThat(actual).isEqualTo(
@@ -177,12 +180,12 @@ class JdbcStopDemandStatisticsRepositoryTest {
     @Test
     void 계산_규칙_판이_다른_행은_안_읽는다() {
         // given
-        jdbcStopDemandStatisticsRepository.replace(generationOf(FIRST_REVISION, OTHER_CALCULATION_VERSION, List.of(
+        jdbcStopDemandStatisticsRepository.append(generationOf(FIRST_REVISION, OTHER_CALCULATION_VERSION, List.of(
             measurementOf(TimeSlot.MORNING, TARGET_STOP_ORDER))));
 
         // when
         StopDemandStatistics actual =
-            jdbcStopDemandStatisticsRepository.read(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION);
+            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION, READ_AS_OF);
 
         // then
         assertThat(actual.cells()).isEmpty();
@@ -191,15 +194,60 @@ class JdbcStopDemandStatisticsRepositoryTest {
     @Test
     void 시간대가_다른_행은_안_읽는다() {
         // given
-        jdbcStopDemandStatisticsRepository.replace(generationOf(FIRST_REVISION, CALCULATION_VERSION, List.of(
+        jdbcStopDemandStatisticsRepository.append(generationOf(FIRST_REVISION, CALCULATION_VERSION, List.of(
             measurementOf(TimeSlot.MORNING, TARGET_STOP_ORDER))));
 
         // when
         StopDemandStatistics actual =
-            jdbcStopDemandStatisticsRepository.read(routeVersionId, TimeSlot.EVENING, CALCULATION_VERSION);
+            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.EVENING, CALCULATION_VERSION, READ_AS_OF);
 
         // then
         assertThat(actual.cells()).isEmpty();
+    }
+
+    @Test
+    void 셀이_없는_시간대도_그_세대의_번호를_그대로_받는다() {
+        // given 아침 셀만 있는 세대. 저녁은 아직 라벨이 안 쌓였다
+        jdbcStopDemandStatisticsRepository.append(generationOf(FIRST_REVISION, CALCULATION_VERSION, List.of(
+            measurementOf(TimeSlot.MORNING, TARGET_STOP_ORDER))));
+
+        // when
+        StopDemandStatistics actual =
+            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.EVENING, CALCULATION_VERSION, READ_AS_OF);
+
+        // then 세대가 아예 없는 것(0)과 구별돼야 예보 행에 무엇을 보고 냈는지가 남는다
+        assertThat(actual.revision()).isEqualTo(FIRST_REVISION);
+    }
+
+    @Test
+    void 관측_시각_뒤에_난_세대는_안_읽는다() {
+        // given 08시에 받은 관측인데 정오까지의 라벨로 낸 세대가 그 뒤에 생겼다
+        jdbcStopDemandStatisticsRepository.append(generationOf(FIRST_REVISION, CALCULATION_VERSION, List.of(
+            measurementOf(TimeSlot.MORNING, TARGET_STOP_ORDER))));
+
+        // when 그 세대의 기준 시각보다 앞선 관측으로 읽는다
+        StopDemandStatistics actual = jdbcStopDemandStatisticsRepository.readAsOf(
+            routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION, DATA_UNTIL.minusSeconds(1));
+
+        // then 그때는 쓸 수 있는 세대가 없었다
+        assertThat(actual.revision()).isZero();
+    }
+
+    @Test
+    void 세대가_쌓여도_관측_시각까지의_것_중_가장_최근을_읽는다() {
+        // given 세대 둘. 둘째는 관측보다 뒤의 라벨까지 들어갔다
+        jdbcStopDemandStatisticsRepository.append(generationOf(FIRST_REVISION, CALCULATION_VERSION, List.of(
+            measurementOf(TimeSlot.MORNING, TARGET_STOP_ORDER))));
+        jdbcStopDemandStatisticsRepository.append(new StopDemandGeneration(
+            routeVersionId, CALCULATION_VERSION, FIRST_REVISION + 1, READ_AS_OF.plusSeconds(3600), COMPUTED_AT,
+            List.of(measurementOf(TimeSlot.MORNING, TARGET_STOP_ORDER))));
+
+        // when
+        StopDemandStatistics actual = jdbcStopDemandStatisticsRepository.readAsOf(
+            routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION, READ_AS_OF);
+
+        // then 덮어썼으면 둘째만 남아서 같은 batch 를 다시 처리할 때 값이 달라진다
+        assertThat(actual.revision()).isEqualTo(FIRST_REVISION);
     }
 
     @Test
@@ -341,17 +389,17 @@ class JdbcStopDemandStatisticsRepositoryTest {
     @Test
     void 한_세대를_덮어쓰면_지난_세대의_행이_안_남는다() {
         // given
-        jdbcStopDemandStatisticsRepository.replace(generationOf(FIRST_REVISION, CALCULATION_VERSION, List.of(
+        jdbcStopDemandStatisticsRepository.append(generationOf(FIRST_REVISION, CALCULATION_VERSION, List.of(
             measurementOf(TimeSlot.MORNING, LOWEST_CELL_STOP_ORDER),
             measurementOf(TimeSlot.MORNING, MIDDLE_CELL_STOP_ORDER))));
 
         // when
-        jdbcStopDemandStatisticsRepository.replace(generationOf(SECOND_REVISION, CALCULATION_VERSION, List.of(
+        jdbcStopDemandStatisticsRepository.append(generationOf(SECOND_REVISION, CALCULATION_VERSION, List.of(
             measurementOf(TimeSlot.MORNING, LOWEST_CELL_STOP_ORDER))));
 
         // then
         StopDemandStatistics actual =
-            jdbcStopDemandStatisticsRepository.read(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION);
+            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION, READ_AS_OF);
         assertThat(actual.cells())
             .extracting(StopDemandCell::stopOrder)
             .containsExactly(LOWEST_CELL_STOP_ORDER);
@@ -360,7 +408,7 @@ class JdbcStopDemandStatisticsRepositoryTest {
     @Test
     void 시간대는_소문자로_저장된다() {
         // when
-        jdbcStopDemandStatisticsRepository.replace(generationOf(FIRST_REVISION, CALCULATION_VERSION, List.of(
+        jdbcStopDemandStatisticsRepository.append(generationOf(FIRST_REVISION, CALCULATION_VERSION, List.of(
             measurementOf(TimeSlot.MORNING, TARGET_STOP_ORDER))));
 
         // then

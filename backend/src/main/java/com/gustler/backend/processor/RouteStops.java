@@ -33,6 +33,21 @@ public record RouteStops(
     }
 
     /**
+     * 이 판본의 마지막 정류장 순번.
+     *
+     * <p>정류장 위치를 0에서 1 사이로 정규화할 때 나누는 수다. 목록의 크기가 아니라 가장 큰 순번이다.
+     * 승차할 수 없는 경유 지점도 순번을 하나 차지하는데 목록에는 그것까지 들어 있어서 둘이 같아 보이지만,
+     * 순번이 건너뛴 판본이 오면 갈린다. 나누는 것은 순번이므로 순번의 최대값이 맞다.
+     */
+    public int largestStopOrder() {
+        return stops.stream()
+            .mapToInt(RouteStop::stopOrder)
+            .max()
+            .orElseThrow(() -> new IllegalStateException(
+                "정류장이 하나도 없는 노선 판본에는 마지막 순번이 없다: " + routeVersionId));
+    }
+
+    /**
      * 그 차량이 앞으로 지날 정류장 중 예보를 낼 곳.
      *
      * <p>잔여석을 모르는 차량은 설계행렬을 채울 수 없어 예보를 내지 않는다. 빈 목록으로 답한다.

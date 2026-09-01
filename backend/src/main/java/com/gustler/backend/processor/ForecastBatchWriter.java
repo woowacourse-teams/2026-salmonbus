@@ -48,35 +48,43 @@ public class ForecastBatchWriter {
         SeatForecastModel model
     ) {
         Instant generatedAt = clock.instant();
-        seatForecastRepository.save(
-            forecastsOf(batch, stops, deployment, model, generatedAt, demandStatisticsRevisionOf(batch, deployment)));
+        TimeSlot timeSlot = ForecastTimeSlot.of(batch, clock);
+        StopDemandStatistics statistics = stopDemandStatisticsOf(batch, deployment, timeSlot);
+        seatForecastRepository.save(forecastsOf(batch, stops, statistics, deployment, model, generatedAt));
         seatForecastRepository.markForecastCompleted(batch.observationBatchId(), generatedAt);
     }
 
     /**
-     * 이 예보가 읽은 셀 통계 세대.
+     * 이 batch 의 예보가 읽을 셀 통계. batch 하나에 한 번만 읽는다.
      *
-     * <p>배포가 든 계산 규칙 판과 같은 행만 읽는다. 자리가 찬 비율도 순승차 비율도 정원으로 나눈 값이라
-     * 규칙이 다르면 값의 뜻이 달라진다.
+     * <p>셀 하나만 집어 오는 길이 없다. z화도 이웃 폴백도 구간합도 같은 세대의 행 전부가 손에 있어야
+     * 닫힌다. 차량마다 다시 읽으면 같은 세대를 수십 번 읽게 된다.
      *
-     * <p>그 규칙으로 낸 세대가 아직 없으면 0 이다. 셀 통계가 비는 동안은 이웃 폴백만 도는데,
-     * 어느 세대도 안 읽었다는 것을 이 값이 남긴다. 노선 개편 직후 새 판본도 같은 자리다.
+     * <p><b>세대 번호를 따로 안 읽는다.</b> 값을 읽고 세대 번호를 다시 조회하면 그 사이에 집계가
+     * 교체됐을 때 N세대 값에 N+1 세대 번호가 붙는다. 읽어 온 통계가 자기 세대를 들고 있다.
+     *
+     * <p>시간대는 받아서 쓴다. 여기서 다시 정하면 설계행렬이 쓰는 시간대와 갈릴 수 있다.
+     * 정하는 자리는 {@link ForecastTimeSlot} 하나다.
+     *
+     * <p><b>세대도 관측 시각으로 고른다.</b> 지금 최신 세대를 쓰면 밀린 batch 를 뒤늦게 처리할 때
+     * 그 관측 시각보다 뒤의 라벨이 들어간 셀을 읽어서, 같은 batch 를 다시 처리해도 값이 달라진다.
      */
-    private int demandStatisticsRevisionOf(
+    private StopDemandStatistics stopDemandStatisticsOf(
         PendingForecastBatch batch,
-        ActiveModelDeployment deployment
+        ActiveModelDeployment deployment,
+        TimeSlot timeSlot
     ) {
-        return stopDemandStatisticsRepository.currentRevision(
-            batch.routeVersionId(), deployment.calculationVersion());
+        return stopDemandStatisticsRepository.readAsOf(
+            batch.routeVersionId(), timeSlot, deployment.calculationVersion(), batch.responseReceivedAt());
     }
 
     private List<SeatForecast> forecastsOf(
         PendingForecastBatch batch,
         RouteStops stops,
+        StopDemandStatistics statistics,
         ActiveModelDeployment deployment,
         SeatForecastModel model,
-        Instant generatedAt,
-        final int demandStatisticsRevision
+        Instant generatedAt
     ) {
         List<SeatForecast> forecasts = new ArrayList<>();
         for (VehicleTrajectory trajectory : vehicleTrajectoryRepository.readTrajectories(batch.observationBatchId())) {
@@ -84,9 +92,10 @@ public class ForecastBatchWriter {
                 forecasts.add(SeatForecast.of(
                     trajectory.vehicleObservationId(),
                     target,
-                    model.predict(target),
+                    model.predict(
+                        new SeatForecastInput(target, trajectory, statistics, stops, statistics.timeSlot())),
                     deployment,
-                    demandStatisticsRevision,
+                    statistics.revision(),
                     generatedAt));
             }
         }

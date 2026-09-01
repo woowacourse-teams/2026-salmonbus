@@ -31,7 +31,8 @@ public class JdbcArrivalObservationRepository implements ArrivalObservationRepos
                o.route_version_id,
                o.passed_stop_order,
                b.response_received_at,
-               o.remaining_seats
+               o.remaining_seats,
+               o.crowd_level
         FROM vehicle_observation o
         JOIN observation_batch b
           ON b.id = o.observation_batch_id
@@ -70,7 +71,8 @@ public class JdbcArrivalObservationRepository implements ArrivalObservationRepos
                     resultSet.getLong("route_version_id"),
                     resultSet.getInt("passed_stop_order"),
                     instantOf(resultSet.getObject("response_received_at", OffsetDateTime.class)),
-                    (Integer) resultSet.getObject("remaining_seats"))))
+                    (Integer) resultSet.getObject("remaining_seats"),
+                    (Integer) resultSet.getObject("crowd_level"))))
             .list();
     }
 

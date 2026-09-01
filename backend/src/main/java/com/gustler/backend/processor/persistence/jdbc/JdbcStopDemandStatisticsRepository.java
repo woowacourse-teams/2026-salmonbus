@@ -7,6 +7,8 @@ import com.gustler.backend.processor.StopDemandMeasurement;
 import com.gustler.backend.processor.StopDemandStatistics;
 import com.gustler.backend.processor.StopDemandStatisticsRepository;
 import com.gustler.backend.processor.TimeSlot;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -30,25 +32,41 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
     private static final int NO_GENERATION_YET = 0;
 
     /**
-     * 한 노선 판본 · 한 시간대의 셀 전부. 정류장 순번 오름차순으로 낸다.
-     *
-     * <p>세대 번호를 셀과 같은 질의에서 읽는다. 한 세대의 행은 이 값이 다 같아서 아무 행에서나
-     * 집으면 된다. 질의를 하나 더 두면 그 사이에 집계가 덮어써 셀과 세대 번호가 어긋날 수 있다.
+     * 그 계산 규칙 판의 세대 번호와, 그 세대에서 고른 시간대의 셀들. 정류장 순번 오름차순이다.
      *
      * <p>승차할 수 없는 정류장에는 셀이 없어서 순번이 건너뛴다. 행 수는 판본 정류장 수와 다르다.
+     *
+     * <p><b>세대 번호를 시간대로 안 거른다.</b> 한 세대는 세 시간대를 한꺼번에 내는데,
+     * 그중 한 시간대에 라벨이 아직 안 쌓여 셀이 없을 수 있다. 그 자리를 시간대로 걸러 세면
+     * "N세대인데 이 시간대는 비었다" 가 "세대가 아예 없다" 와 같은 0으로 나온다.
+     *
+     * <p>세대는 관측 시각까지의 자료로 낸 것 중 가장 최근 것을 고른다. 지금 최신 세대를 쓰면
+     * 밀린 batch 를 뒤늦게 처리할 때 그 관측 시각보다 뒤의 라벨이 들어간 셀을 읽는다.
+     *
+     * <p>그래서 세대 번호를 먼저 잡고 셀을 LEFT JOIN 한다. 셀이 없어도 행 하나는 나오고
+     * 그 행의 stop_order 가 비어 있다. 두 값을 한 조회에서 같이 가져오는 것이라
+     * 그 사이에 세대가 교체될 자리도 없다.
      */
     private static final String SELECT_CELLS = """
-        SELECT stop_order,
-               revision,
-               average_fill_rate,
-               average_net_boarding_rate,
-               sample_count,
-               day_count
-        FROM stop_demand_statistics
-        WHERE route_version_id = :routeVersionId
-          AND time_slot = :timeSlot
-          AND calculation_version = :calculationVersion
-        ORDER BY stop_order
+        SELECT generation.revision,
+               cell.stop_order,
+               cell.average_fill_rate,
+               cell.average_net_boarding_rate,
+               cell.sample_count,
+               cell.day_count
+        FROM (
+            SELECT COALESCE(MAX(revision), 0) AS revision
+            FROM stop_demand_statistics
+            WHERE route_version_id = :routeVersionId
+              AND calculation_version = :calculationVersion
+              AND data_until <= :observedAt
+        ) generation
+        LEFT JOIN stop_demand_statistics cell
+               ON cell.route_version_id = :routeVersionId
+              AND cell.calculation_version = :calculationVersion
+              AND cell.time_slot = :timeSlot
+              AND cell.revision = generation.revision
+        ORDER BY cell.stop_order
         """;
 
     /**
@@ -133,18 +151,6 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
         ORDER BY forecast.target_stop_order, arrived_hour_start
         """;
 
-    /**
-     * 같은 (노선 판본, 계산 규칙 판) 의 옛 행을 전부 지운다.
-     *
-     * <p>시간대를 안 본다. 한 판이 세 시간대를 다 다시 내기 때문에 한 시간대만 지우면
-     * 라벨이 사라진 시간대의 옛 행이 그대로 남는다.
-     */
-    private static final String DELETE_GENERATION = """
-        DELETE FROM stop_demand_statistics
-        WHERE route_version_id = :routeVersionId
-          AND calculation_version = :calculationVersion
-        """;
-
     /** 셀 한 줄. 세대 번호와 기준 시각과 계산 시각은 한 세대의 모든 행에 같은 값이 들어간다. */
     private static final String INSERT_CELL = """
         INSERT INTO stop_demand_statistics (
@@ -169,31 +175,33 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
     /**
      * 한 세대의 셀 전부.
      *
-     * <p>행이 하나도 없으면 세대 번호 0 에 빈 셀 목록으로 답한다. 예외로 알리지 않는다.
+     * <p>세대가 하나도 없으면 세대 번호 0 에 빈 셀 목록으로 답한다. 예외로 알리지 않는다.
      * 개편 직후 새 판본이 실제로 그 상태이고, 그때는 이웃 폴백만 돈다.
+     *
+     * <p><b>세대는 있는데 그 시간대의 셀만 없는 것은 다른 상태다.</b> 그때는 세대 번호가 그대로
+     * 나오고 셀 목록만 비어 있다. 예보 행에 어느 세대를 보고 냈는지가 남아야 나중에 따질 수 있다.
      */
     @Override
-    public StopDemandStatistics read(
+    public StopDemandStatistics readAsOf(
         final long routeVersionId,
         TimeSlot timeSlot,
-        String calculationVersion
+        String calculationVersion,
+        Instant observedAt
     ) {
         List<CellOfGeneration> rows = jdbcClient.sql(SELECT_CELLS)
             .param("routeVersionId", routeVersionId)
             .param("timeSlot", storedTimeSlotOf(timeSlot))
             .param("calculationVersion", calculationVersion)
+            .param("observedAt", offsetOf(observedAt))
             .query((resultSet, rowNumber) -> new CellOfGeneration(
                 resultSet.getInt("revision"),
-                new StopDemandCell(
-                    resultSet.getInt("stop_order"),
-                    resultSet.getDouble("average_fill_rate"),
-                    resultSet.getDouble("average_net_boarding_rate"),
-                    resultSet.getInt("sample_count"),
-                    resultSet.getInt("day_count"))))
+                cellOf(resultSet)))
             .list();
         List<StopDemandCell> cells = new ArrayList<>();
         for (CellOfGeneration row : rows) {
-            cells.add(row.cell());
+            if (row.cell() != null) {
+                cells.add(row.cell());
+            }
         }
         return new StopDemandStatistics(routeVersionId, timeSlot, revisionOf(rows), cells);
     }
@@ -229,23 +237,20 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
     }
 
     /**
-     * 한 세대를 통째로 갈아 끼운다. 지우고 넣는 둘이 한 transaction 안에서 돈다.
+     * 한 세대를 더한다. 옛 세대는 안 지운다.
      *
-     * <p>덮어쓰기만 하면 이번 판에서 라벨이 사라진 정류장의 옛 행이 남는다. 그 행이 다음 세대의
-     * z 모집단에 섞여 살아 있는 셀의 z 값을 통째로 밀어낸다. 그래서 지우고 다시 넣는다.
+     * <p><b>transaction 은 세대 하나를 다 넣을 때까지 아무도 못 읽게 하려고 건다.</b> 없으면 셀마다
+     * 자동 커밋되고, 첫 행이 커밋되는 순간 {@link #readAsOf} 가 그 revision 을 가장 최근 세대로 잡는다.
+     * 그러면 몇 줄만 들어간 세대로 z 모집단이 만들어져 살아 있는 셀의 z 값이 통째로 밀린다.
      *
-     * <p>transaction 을 부르는 배치가 아니라 여기에 건다. 배치가 자기 메서드를 부르는 구조라
-     * 거기서 걸면 프록시를 안 거쳐 transaction 이 안 열린다.
+     * <p>부르는 배치가 아니라 여기에 건다. 배치가 자기 메서드를 부르는 구조라 거기서 걸면
+     * 프록시를 안 거쳐 transaction 이 안 열린다.
      */
     @Override
     @Transactional
-    public void replace(
+    public void append(
         StopDemandGeneration generation
     ) {
-        jdbcClient.sql(DELETE_GENERATION)
-            .param("routeVersionId", generation.routeVersionId())
-            .param("calculationVersion", generation.calculationVersion())
-            .update();
         for (StopDemandMeasurement measurement : generation.measurements()) {
             insertCell(generation, measurement);
         }
@@ -271,6 +276,23 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
             .update();
     }
 
+    /** 그 시간대에 셀이 없으면 LEFT JOIN 이 빈 자리를 준다. 그때는 셀이 없다고 답한다. */
+    private static StopDemandCell cellOf(
+        ResultSet resultSet
+    ) throws SQLException {
+        Integer stopOrder = resultSet.getObject("stop_order", Integer.class);
+        if (stopOrder == null) {
+            return null;
+        }
+        return new StopDemandCell(
+            stopOrder,
+            resultSet.getDouble("average_fill_rate"),
+            resultSet.getDouble("average_net_boarding_rate"),
+            resultSet.getInt("sample_count"),
+            resultSet.getInt("day_count"));
+    }
+
+    /** LEFT JOIN 이라 행은 늘 하나 이상이다. 비어 있으면 조회가 아예 안 돈 것이다. */
     private static int revisionOf(
         List<CellOfGeneration> rows
     ) {
