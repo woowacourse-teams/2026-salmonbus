@@ -24,3 +24,13 @@ dependencies {
     testAnnotationProcessor 'org.projectlombok:lombok'
 }
 
+tasks.named('test') {
+    dependsOn tasks.named('bootJar'), ':worker-app:bootJar'
+    doFirst {
+        systemProperty 'api.boot.jar',
+            tasks.bootJar.archiveFile.get().asFile.absolutePath
+        systemProperty 'worker.boot.jar',
+            project(':worker-app').layout.buildDirectory
+                .file("libs/worker-app-${version}.jar").get().asFile.absolutePath
+    }
+}
