@@ -43,6 +43,24 @@ public class JdbcModelDeploymentRepository implements ModelDeploymentRepository 
         """;
 
     /**
+     * 승격을 한 줄로 세운다. transaction 이 끝나면 저절로 풀린다.
+     *
+     * <p>내리기와 올리기가 두 문장이라 그 사이에 다른 적재가 끼면 ACTIVE 가 잠깐 둘이 되고,
+     * ux_model_deployment_single_active 가 그 순간을 예외로 막는다. <b>그 예외를 잡아 실패로
+     * 바꾸는 것으로는 안 끝난다.</b> PostgreSQL 은 제약을 어긴 transaction 을 통째로 못 쓰게 만들어서
+     * 뒤이은 commit 이 또 실패한다. 기동 적재가 그 자리라 앱이 안 뜬다.
+     *
+     * <p>그래서 예외가 나기 전에 기다리게 한다. 읽기는 안 막는다. 예보가 도는 배포를 읽는 것은
+     * 그냥 SELECT 라 이 잠금과 안 부딪친다.
+     *
+     * <p>이 문장은 transaction 안에서만 된다. 밖에서 부르면 PostgreSQL 이 거절한다. 내리기와
+     * 올리기가 한 transaction 이어야 한다는 것이 어차피 이 저장소의 조건이라 그대로 둔다.
+     */
+    private static final String LOCK_DEPLOYMENTS = """
+        LOCK TABLE model_deployment IN EXCLUSIVE MODE
+        """;
+
+    /**
      * 먼저 돌던 배포를 내린다. 올릴 행이 아직 STAGED 일 때만 내린다.
      *
      * <p>내리기와 올리기를 한 문장에 못 담는 이유는 도는 배포가 하나뿐임을 강제하는 부분 인덱스다.
@@ -117,6 +135,7 @@ public class JdbcModelDeploymentRepository implements ModelDeploymentRepository 
     public boolean promoteToActive(
         final long deploymentId
     ) {
+        jdbcClient.sql(LOCK_DEPLOYMENTS).update();
         jdbcClient.sql(RETIRE_ACTIVE_DEPLOYMENT).param("deploymentId", deploymentId).update();
         return jdbcClient.sql(ACTIVATE_STAGED_DEPLOYMENT).param("deploymentId", deploymentId).update() == 1;
     }
