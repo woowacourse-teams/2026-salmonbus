@@ -286,6 +286,24 @@ class JdbcSeatForecastRepositoryTest {
     }
 
     @Test
+    void 예보_시각과_같은_순간에_도착한_것도_성적에_센다() {
+        // given 그 순간에 이미 확정된 과거 사건이라 미래를 보고 답하는 것이 아니다
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            vehicleObservationId,
+            TARGET_STOP_ORDER,
+            new ArrivalLabel.Settled(insertArrivalObservation(), SEATS_ON_ARRIVAL_WHEN_FULL),
+            SCORED_AT)));
+
+        // when 도착 시각과 같은 시각으로 묻는다
+        Map<Integer, SameDayFullOutcomes> actual = jdbcSeatForecastRepository.readSameDayFullOutcomes(
+            routeVersionId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant());
+
+        // then
+        assertThat(actual).containsKey(STOPS_TO_TARGET);
+    }
+
+    @Test
     void 예보_시각보다_뒤에_도착한_것은_성적에_안_센다() {
         // given
         jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));

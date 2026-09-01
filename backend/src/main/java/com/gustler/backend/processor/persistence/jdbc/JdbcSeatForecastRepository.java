@@ -130,8 +130,12 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
      *
      * <p>날짜는 KST 로 자른다. 하루가 바뀌면 성적도 새로 시작한다.
      *
-     * <p>예보 시각과 같은 순간에 도착한 것은 안 센다. 그 순간의 결과를 그 순간의 예보에 쓰면
-     * 자기가 낸 답을 보고 답하는 셈이다.
+     * <p>예보 시각과 같은 순간에 도착한 것까지 센다. 그 순간에 이미 확정된 과거 사건이라
+     * 미래를 보고 답하는 것이 아니다. 서빙 쪽 {@code arrived_at <= predicted_at} 과 같다.
+     *
+     * <p>노선 판본이 아니라 <b>Open API 노선</b>으로 묶는다. 노선이 개편되면 판본이 갈리는데,
+     * 판본으로 묶으면 개편된 날 성적이 0건에서 다시 시작한다. 만석이 얼마나 나는지는 개편과
+     * 상관없이 이어지는 성질이라 노선으로 묶는 편이 맞다.
      */
     private static final String SELECT_SAME_DAY_FULL_OUTCOMES = """
         SELECT forecast.stops_to_target,
@@ -143,10 +147,13 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
           ON arrival.id = forecast.arrival_observation_id
         JOIN observation_batch arrival_batch
           ON arrival_batch.id = arrival.observation_batch_id
-        WHERE forecast.route_version_id = :routeVersionId
+        JOIN route_version forecast_version
+          ON forecast_version.id = forecast.route_version_id
+        WHERE forecast_version.route_id = (
+                SELECT route_id FROM route_version WHERE id = :routeVersionId)
           AND forecast.scoring_state = 'SETTLED'
           AND forecast.seats_on_arrival IS NOT NULL
-          AND arrival_batch.response_received_at < :predictionAt
+          AND arrival_batch.response_received_at <= :predictionAt
           AND (arrival_batch.response_received_at AT TIME ZONE 'Asia/Seoul')::date
               = (CAST(:predictionAt AS timestamptz) AT TIME ZONE 'Asia/Seoul')::date
         GROUP BY forecast.stops_to_target
