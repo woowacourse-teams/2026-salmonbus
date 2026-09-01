@@ -13,7 +13,7 @@ export function ErrorView({ title, caption, onBack, onRetry }: ErrorViewProps) {
     <>
       <header>
         {onBack && (
-          <button type="button" onClick={onBack} aria-label="이전 페이지로 돌아가는 뒤로가기 버튼">
+          <button type="button" onClick={onBack} aria-label="뒤로가기 버튼">
             ←
           </button>
         )}
