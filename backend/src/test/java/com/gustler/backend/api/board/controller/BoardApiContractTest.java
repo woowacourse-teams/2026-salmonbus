@@ -107,17 +107,20 @@ class BoardApiContractTest {
             .andExpect(jsonPath("$.stops[1].boardingAllowed").value(false))
             .andExpect(jsonPath("$.stops[1].approachingVehicles").isEmpty())
             .andExpect(jsonPath("$.stops[2].approachingVehicles.length()").value(3))
-            .andExpect(jsonPath("$.stops[2].approachingVehicles[0]", aMapWithSize(4)))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0]", aMapWithSize(3)))
             .andExpect(jsonPath("$.stops[2].approachingVehicles[0].vehicleId")
-                .value("B"))
-            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].seatAvailableProbability")
-                .value(0.996))
-            .andExpect(jsonPath("$.stops[2].approachingVehicles[1]", aMapWithSize(3)))
-            .andExpect(jsonPath("$.stops[2].approachingVehicles[1].vehicleId").isEmpty())
-            .andExpect(jsonPath("$.stops[2].approachingVehicles[1].expectedSeats")
+                .value("0"))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].expectedSeats")
                 .doesNotExist())
-            .andExpect(jsonPath("$.stops[2].approachingVehicles[2].vehicleId")
-                .value("A"));
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[1]", aMapWithSize(4)))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[1].vehicleId")
+                .value("B"))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[1].seatAvailableProbability")
+                .value(0.996))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[2]", aMapWithSize(3)))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[2].vehicleId").isEmpty())
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[2].expectedSeats")
+                .doesNotExist());
     }
 
     @Test

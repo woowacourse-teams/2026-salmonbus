@@ -136,15 +136,38 @@ class BoardQueryServiceTest {
     }
 
     @Test
-    void 기대_잔여석이_비유한값이면_예보_행_전체를_제외한다() {
+    void 기대_잔여석이_비유한값이어도_차량은_보드에_남는다() {
         givenRoundTripBoard(List.of(
-            prediction(3, "INVALID", 1, 1, 0.2, Double.POSITIVE_INFINITY),
+            prediction(3, "INFINITE", 1, 1, 0.2, Double.POSITIVE_INFINITY),
             prediction(3, "VALID", 2, 2, 0.3, 10.0)
         ));
 
         assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
             .extracting(ApproachingVehicle::vehicleId)
-            .containsExactly("VALID");
+            .containsExactly("INFINITE", "VALID");
+    }
+
+    @Test
+    void 기대_잔여석이_비유한값인_차량은_기대_잔여석만_비운다() {
+        givenRoundTripBoard(List.of(
+            prediction(3, "INFINITE", 1, 1, 0.2, Double.POSITIVE_INFINITY)
+        ));
+
+        assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
+            .singleElement()
+            .satisfies(vehicle -> assertThat(vehicle.expectedSeats()).isNull());
+    }
+
+    @Test
+    void 기대_잔여석이_비유한값이어도_빈자리_확률은_그대로_낸다() {
+        givenRoundTripBoard(List.of(
+            prediction(3, "INFINITE", 1, 1, 0.2, Double.POSITIVE_INFINITY)
+        ));
+
+        assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
+            .singleElement()
+            .satisfies(vehicle ->
+                assertThat(vehicle.seatAvailableProbability()).isEqualTo(0.8d));
     }
 
     @ParameterizedTest

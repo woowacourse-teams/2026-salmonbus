@@ -150,14 +150,9 @@ public class BoardQueryService {
         StoredPrediction prediction
     ) {
         final double seatFullChance = prediction.seatFullChance();
-        if (!Double.isFinite(seatFullChance)
-            || seatFullChance < 0.0d
-            || seatFullChance > 1.0d) {
-            return false;
-        }
-        Double expectedSeats = prediction.expectedSeats();
-        return expectedSeats == null
-            || Double.isFinite(expectedSeats) && expectedSeats >= 0.0d;
+        return Double.isFinite(seatFullChance)
+            && seatFullChance >= 0.0d
+            && seatFullChance <= 1.0d;
     }
 
     private ApproachingVehicle toApproachingVehicle(
@@ -167,8 +162,26 @@ public class BoardQueryService {
             prediction.vehicleId(),
             prediction.stopsToTarget(),
             seatAvailableProbability(prediction.seatFullChance()),
-            prediction.expectedSeats()
+            reportableExpectedSeats(prediction.expectedSeats())
         );
+    }
+
+    /**
+     * 응답에 낼 수 있는 기대 잔여석. 낼 수 없으면 비운다.
+     *
+     * <p>기대 잔여석을 못 내는 것과 차량이 오고 있다는 것은 다른 말이다. 이 값이 이상하다고 차량을
+     * 통째로 빼면 화면에서 그 차량이 조용히 사라진다. api 문서가 이 값을 비울 수 있게 해 두었으므로
+     * 값만 비우고 차량은 남긴다.
+     *
+     * <p>실제로 걸리는 것은 무한대뿐이다. 음수와 NaN 은 {@code ck_forecast_expected_seats} 가 막는다.
+     */
+    private Double reportableExpectedSeats(
+        Double expectedSeats
+    ) {
+        if (expectedSeats == null || !Double.isFinite(expectedSeats) || expectedSeats < 0.0d) {
+            return null;
+        }
+        return expectedSeats;
     }
 
     private StopState toStopState(
