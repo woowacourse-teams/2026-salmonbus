@@ -51,6 +51,7 @@ public final class BundleLoader {
         checkIdentity(manifest);
         checkScope(manifest);
         checkWeightsDigest(manifest, weightsContent);
+        checkGoldenVectorDigest(manifest);
 
         SafetensorsFile weights = SafetensorsFile.of(weightsContent);
         checkTensorNames(weights);
@@ -151,6 +152,37 @@ public final class BundleLoader {
             }
         }
         return "개수만 다르다";
+    }
+
+    /**
+     * 대조 사례의 요약값이 그 사례 내용에서 나온 값인지 본다.
+     *
+     * <p>이걸 안 보면 요약값을 아무 수로나 적어 놓고 사례를 바꿔도 신원이 그대로다. 신원 요약값에
+     * 이 값을 묶어 둔 것만으로는 모자란다. 묶인 것은 <b>적힌 요약값</b>이지 <b>사례 내용</b>이 아니다.
+     *
+     * <p>사례를 이어 붙이는 순서가 계약이다. 만드는 쪽과 재는 쪽이 다르면 정상 묶음이 거절된다.
+     */
+    private static void checkGoldenVectorDigest(
+        BundleManifest manifest
+    ) {
+        final String measured = Sha256.of(goldenVectorText(manifest.goldenVector()));
+        BundleCheck.GOLDEN_VECTOR.require(
+            measured.equals(manifest.goldenVectorDigest()),
+            "적힌 요약값 %s, 사례 내용에서 잰 값 %s"
+                .formatted(manifest.goldenVectorDigest(), measured));
+    }
+
+    static String goldenVectorText(
+        BundleManifest.GoldenVector golden
+    ) {
+        return String.join("\n",
+            golden.featureVector().stream().map(String::valueOf).collect(Collectors.joining(",")),
+            golden.modelRoute(),
+            String.valueOf(golden.stopsAhead()),
+            String.valueOf(golden.currentSeats()),
+            String.valueOf(golden.capacity()),
+            String.valueOf(golden.expectedFullChance()),
+            String.valueOf(golden.expectedSeats()));
     }
 
     private static void checkTensorNames(

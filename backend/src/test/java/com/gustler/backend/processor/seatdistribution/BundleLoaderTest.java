@@ -11,6 +11,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import com.gustler.backend.processor.SeatForecastDesignMatrix;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -226,6 +228,27 @@ class BundleLoaderTest {
     }
 
     @Test
+    void 대조_사례_요약값이_사례_내용에서_나온_값이_아니면_거절한다() {
+        // given 사례는 그대로인데 요약값만 아무 수로 적어 둔다
+        assertRejectedBy(
+            BundleCheck.GOLDEN_VECTOR,
+            loading(DummyBundle.valid().put("goldenVectorDigest", "0".repeat(64))));
+    }
+
+    @Test
+    void 대조_사례를_바꾸고_요약값을_안_고치면_거절한다() {
+        // given 기대 잔여석만 한 석 어긋내고 요약값은 그대로 둔다
+        DummyBundle given = DummyBundle.valid();
+        Map<String, Object> golden = new LinkedHashMap<>(given.goldenVectorFrom());
+        final String unchanged = goldenVectorDigestOf(DummyBundle.valid());
+        golden.put("expectedSeats", ((double) golden.get("expectedSeats")) + 1.0);
+
+        // when & then
+        assertRejectedBy(BundleCheck.GOLDEN_VECTOR, loading(
+            given.put("goldenVector", golden).put("goldenVectorDigest", unchanged)));
+    }
+
+    @Test
     void 출시_식별자를_묶은_요약값이_다르면_거절한다() {
         // when & then
         assertRejectedBy(
@@ -257,6 +280,14 @@ class BundleLoaderTest {
     void 입력값이_24개인_계수_묶음은_거절한다() {
         // when & then
         assertRejectedBy(BundleCheck.FEATURE_NAMES, loading(DummyBundle.withFeatureCount(24)));
+    }
+
+    private static String goldenVectorDigestOf(
+        DummyBundle bundle
+    ) {
+        return new ObjectMapper().readTree(new String(bundle.manifestBytes(), StandardCharsets.UTF_8))
+            .get("goldenVectorDigest")
+            .stringValue();
     }
 
     private static String identityDigestOf(

@@ -92,7 +92,6 @@ final class DummyBundle {
         manifest.put("timeSlotSource", "observation_batch.response_received_at");
         manifest.put("capacityPolicy", "maximum-seats-ever-observed");
         manifest.put("cellStatisticsPolicy", "stop-demand-statistics");
-        manifest.put("goldenVectorDigest", "0".repeat(64));
         manifest.put("dataThrough", "2026-08-30T14:59:56Z");
     }
 
@@ -125,6 +124,29 @@ final class DummyBundle {
      *
      * <p>적재를 거쳐 만들면 자기를 다시 부르게 되므로 계수 묶음을 곧바로 세워 쓴다.
      */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> castGolden(
+        Object golden
+    ) {
+        return (Map<String, Object>) golden;
+    }
+
+    /** 적재 쪽이 재는 것과 같은 순서로 잇는다. 한쪽만 고치면 정상 묶음이 거절된다. */
+    @SuppressWarnings("unchecked")
+    private static String goldenVectorTextOf(
+        Map<String, Object> golden
+    ) {
+        return String.join("\n",
+            ((List<Double>) golden.get("featureVector")).stream()
+                .map(String::valueOf).collect(java.util.stream.Collectors.joining(",")),
+            String.valueOf(golden.get("modelRoute")),
+            String.valueOf(golden.get("stopsAhead")),
+            String.valueOf(golden.get("currentSeats")),
+            String.valueOf(golden.get("capacity")),
+            String.valueOf(golden.get("expectedFullChance")),
+            String.valueOf(golden.get("expectedSeats")));
+    }
+
     /** 정상 묶음이 실을 대조 사례. 어긋낸 사례를 만들어 보는 테스트가 여기서 가져간다. */
     Map<String, Object> goldenVectorFrom() {
         return goldenVectorOf(FEATURE_COUNT);
@@ -286,9 +308,13 @@ final class DummyBundle {
         written.put("normalizationConstants", manifest.containsKey("normalizationConstants")
             ? manifest.get("normalizationConstants")
             : Map.of("lowSeatBand", 20.0, "largestSeatCount", 68.0));
-        written.put("goldenVector", manifest.containsKey("goldenVector")
-            ? manifest.get("goldenVector")
-            : goldenVectorOf(featureNamesOf(written).size()));
+        Map<String, Object> golden = manifest.containsKey("goldenVector")
+            ? castGolden(manifest.get("goldenVector"))
+            : goldenVectorOf(featureNamesOf(written).size());
+        written.put("goldenVector", golden);
+        written.put("goldenVectorDigest", manifest.containsKey("goldenVectorDigest")
+            ? manifest.get("goldenVectorDigest")
+            : Sha256.of(goldenVectorTextOf(golden)));
         written.put("identityDigest", manifest.containsKey("identityDigest")
             ? manifest.get("identityDigest")
             : identityDigestOf(written));
