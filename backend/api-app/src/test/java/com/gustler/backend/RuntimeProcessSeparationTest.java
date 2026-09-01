@@ -48,19 +48,19 @@ class RuntimeProcessSeparationTest {
     private static int workerPort;
 
     @BeforeAll
-    static void 두_프로세스를_순서대로_띄운다() throws Exception {
+    static void 빈_DB_에_worker_를_먼저_두_프로세스를_띄운다() throws Exception {
         postgres = new PostgreSQLContainer<>(POSTGRES_IMAGE);
         postgres.start();
-
-        apiPort = freePort();
-        api = start(API_JAR, apiPort, Map.of(), Files.createTempFile("salmonbus-api", ".log"));
-        awaitHealthy(api, apiPort);
 
         workerPort = freePort();
         worker = start(WORKER_JAR, workerPort,
             Map.of("GBIS_SERVICE_KEY", SERVICE_KEY, "COLLECTION_ENABLED", "false"),
             Files.createTempFile("salmonbus-worker", ".log"));
         awaitHealthy(worker, workerPort);
+
+        apiPort = freePort();
+        api = start(API_JAR, apiPort, Map.of(), Files.createTempFile("salmonbus-api", ".log"));
+        awaitHealthy(api, apiPort);
     }
 
     @AfterAll
@@ -98,8 +98,7 @@ class RuntimeProcessSeparationTest {
     }
 
     @Test
-    void 스키마를_옮긴_쪽은_api_다() throws SQLException {
-        assertThat(worker.isAlive()).isTrue();
+    void 빈_DB_에_먼저_뜬_worker_가_스키마를_옮긴다() throws SQLException {
         assertThat(appliedMigrationCount()).isPositive();
     }
 
