@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # ValidateService. 여기서 실패하면 CodeDeploy 가 직전 판으로 되돌린다
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+# 같은 DEPLOYMENT_ID 라 그대로 통과한다. 실패했을 때 잠금을 풀려고 잡는다
+claim_deploy
 
 WAIT_SECONDS=90
 NEW_DIGEST="$(manifest_value "$MANIFEST" sourceDigest)"

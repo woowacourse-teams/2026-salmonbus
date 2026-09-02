@@ -63,6 +63,9 @@ claim_deploy() {
     tries=$((tries + 1))
     if mkdir "$MARKER" 2>/dev/null; then
       printf '%s %s %s\n' "$COMPONENT" "$DEPLOY_ID" "$(date +%s)" > "$MARKER/owner"
+      # 이 훅이 실패로 끝나면 잠금을 푼다. 성공이면 다음 훅이 쓰게 남긴다.
+      # 안 그러면 실패한 배포가 900초 동안 다른 서비스 배포까지 막는다
+      trap '_release_on_failure "$?"' EXIT
       return 0
     fi
     who=""; id=""; when=""
@@ -78,7 +81,10 @@ claim_deploy() {
       rm -rf "$MARKER"
       continue
     fi
-    age=$(( $(date +%s) - ${when:-0} ))
+    # 나이는 owner 파일이 아니라 잠금 디렉터리가 만들어진 시각으로 잰다.
+    # mkdir 과 owner 쓰기 사이의 찰나에 읽으면 owner 가 비는데,
+    # 그것을 아주 오래된 잠금으로 세면 남이 막 잡은 것을 뺏는다
+    age=$(( $(date +%s) - $(stat -c %Y "$MARKER" 2>/dev/null || date +%s) ))
     if [ "$age" -ge "$MARKER_STALE_SECONDS" ]; then
       log "${who:-알 수 없는} 배포 잠금이 ${age}초째 남아 있다. 버리고 다시 잡는다"
       rm -rf "$MARKER"
@@ -89,6 +95,11 @@ claim_deploy() {
   done
   log "배포 잠금을 못 잡았다"
   exit 1
+}
+
+_release_on_failure() {
+  [ "${1:-0}" -eq 0 ] || release_deploy
+  return 0
 }
 
 # 내가 잡은 잠금만 푼다. 남의 것을 풀면 겹침을 막는 뜻이 없어진다
