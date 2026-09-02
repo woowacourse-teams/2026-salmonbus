@@ -1,0 +1,46 @@
+version: 0.0
+os: linux
+
+# 받은 것을 바로 쓰는 자리에 풀지 않고 staging 에 푼다.
+# 판마다 폴더를 따로 두려면 목적지가 판마다 달라야 하는데 appspec 은 값을 못 받는다.
+# 그래서 install.sh 가 staging 에서 releases/<판> 으로 옮긴다
+files:
+  - source: /
+    destination: /opt/salmonbus/staging
+
+# 지난 배포가 안 놓은 파일이 목적지에 있으면 기본값(DISALLOW)은 배포를 실패시킨다.
+# staging 에는 우리 것만 있어서 덮어써도 된다.
+# env 파일은 /etc/salmonbus/ 에 있어서 이 설정이 안 닿는다
+file_exists_behavior: OVERWRITE
+
+permissions:
+  - object: /opt/salmonbus/staging
+    owner: root
+    group: root
+    mode: "755"
+    type:
+      - directory
+      - file
+
+# ApplicationStop 을 안 쓴다.
+# 여기서 두 서비스를 내리면 api 만 바뀐 배포에도 worker 가 멈춘다.
+# 지금 구조는 판마다 폴더가 따로라 옛 JAR 을 열어둔 프로세스가 그대로 돌아도 안전하다.
+# 그래서 start.sh 에서 바뀐 서비스만 systemctl restart 로 내렸다 올린다.
+# restart 는 내린 뒤에 올리니까 worker 가 두 벌 겹치는 구간이 안 생긴다
+hooks:
+  BeforeInstall:
+    - location: scripts/preflight.sh
+      timeout: 120
+      runas: root
+  AfterInstall:
+    - location: scripts/install.sh
+      timeout: 300
+      runas: root
+  ApplicationStart:
+    - location: scripts/start.sh
+      timeout: 300
+      runas: root
+  ValidateService:
+    - location: scripts/validate.sh
+      timeout: 300
+      runas: root
