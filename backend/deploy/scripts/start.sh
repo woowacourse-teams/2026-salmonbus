@@ -1,25 +1,36 @@
 #!/usr/bin/env bash
-# ApplicationStart. 바뀐 서비스만 내렸다 올린다
-source "$(dirname "$0")/common.sh"
-take_lock
+# ApplicationStart. 소스가 바뀐 서비스만 내렸다 올린다
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+claim_deploy
 
-changed="$(sed -n 's/^changed=//p' "$CURRENT/.changed" 2>/dev/null || true)"
-
-restart_one() {
-  local unit="$1"
-  # restart 는 내린 뒤에 올린다. worker 가 두 벌 겹치는 구간이 안 생긴다
-  log "$unit 재시작"
-  systemctl restart "$unit"
+# worker 는 두 벌이 겹치면 하루 호출 한도가 두 배로 나간다.
+# restart 대신 stop 하고 완전히 내려간 것을 본 뒤에 start 한다
+stop_unit() {
+  systemctl stop "$UNIT" || true
+  local deadline=$((SECONDS + 60))
+  while [ $SECONDS -lt $deadline ]; do
+    if ! systemctl is-active --quiet "$UNIT" && ! pgrep -f "$JAR" >/dev/null 2>&1; then
+      log "$UNIT 이 완전히 내려갔다"
+      return 0
+    fi
+    sleep 1
+  done
+  log "$UNIT 이 60초 안에 안 내려갔다"
+  return 1
 }
 
-case " $changed " in
-  *" api "*)    restart_one "$API_UNIT" ;;
-  *)            log "$API_UNIT 은 안 바뀌었다. 그대로 둔다"
-                systemctl is-active --quiet "$API_UNIT" || restart_one "$API_UNIT" ;;
-esac
+changed="$(sed -n 's/^changed=//p' "$CHANGED" 2>/dev/null || echo yes)"
 
-case " $changed " in
-  *" worker "*) restart_one "$WORKER_UNIT" ;;
-  *)            log "$WORKER_UNIT 은 안 바뀌었다. 그대로 둔다"
-                systemctl is-active --quiet "$WORKER_UNIT" || restart_one "$WORKER_UNIT" ;;
-esac
+if [ "$changed" = "no" ]; then
+  log "$COMPONENT 는 소스가 그대로라 재시작하지 않는다"
+  if ! systemctl is-active --quiet "$UNIT"; then
+    log "그런데 돌고 있지 않다. 올린다"
+    stop_unit
+    systemctl start "$UNIT"
+  fi
+  exit 0
+fi
+
+stop_unit
+systemctl start "$UNIT"
+log "$UNIT 올렸다"
