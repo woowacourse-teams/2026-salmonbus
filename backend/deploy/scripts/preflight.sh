@@ -14,6 +14,11 @@ id "$SERVICE_USER" >/dev/null 2>&1 || { log "$SERVICE_USER 사용자가 없다. 
 
 # 값은 안 찍는다. 줄이 있는지만 센다
 [ -f "$ENV_FILE" ] || { log "$ENV_FILE 이 없다. 사람이 한 번 만들어야 한다"; exit 1; }
+# systemd 가 이 파일을 앱 환경변수로 통째로 넣는다. 남이 읽을 수 있으면 안 된다
+env_mode="$(stat -c '%a' "$ENV_FILE")"
+env_owner="$(stat -c '%U:%G' "$ENV_FILE")"
+[ "$env_mode" = "600" ] || { log "$ENV_FILE 권한이 $env_mode 다. 600 이어야 한다"; exit 1; }
+[ "$env_owner" = "root:root" ] || { log "$ENV_FILE 주인이 $env_owner 다. root:root 여야 한다"; exit 1; }
 grep -qc '^DB_URL=' "$ENV_FILE" || { log "$ENV_FILE 에 DB_URL 이 없다"; exit 1; }
 if [ "$COMPONENT" = "worker" ]; then
   grep -qc '^GBIS_SERVICE_KEY=' "$ENV_FILE" || { log "$ENV_FILE 에 GBIS_SERVICE_KEY 가 없다"; exit 1; }
