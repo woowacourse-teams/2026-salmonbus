@@ -12,17 +12,17 @@ phases:
     commands:
       - cd "${CODEBUILD_SRC_DIR}/backend"
       - java -version
-      # post_build 의 지문 계산이 이 셋을 쓴다. 없으면 여기서 알아보게 세운다
-      - for c in unzip sha256sum awk; do command -v "$c" >/dev/null || { echo "$c 가 없다"; exit 1; }; done
+      # post_build 의 지문 계산이 이 넷을 쓴다. 없으면 여기서 알아보게 세운다
+      - for c in unzip sha256sum awk find; do command -v "$c" >/dev/null || { echo "$c 가 없다"; exit 1; }; done
       # backend-ci.yml 과 같은 검사다. 멀티모듈로 쪼갠 뒤 루트에 소스가 남으면 조용히 안 돈다
       - test ! -d src
 
   build:
     commands:
       - cd "${CODEBUILD_SRC_DIR}/backend"
-      # CI 와 같은 명령이다. 테스트 912개 중 35개 클래스가 Testcontainers 로 도커를 쓴다.
-      # 이 프로젝트에 특권 모드가 꺼져 있으면 여기서 실패한다
-      - ./gradlew clean build
+      # CI 와 같은 명령이다. Testcontainers 를 쓰는 35개 클래스와 boot JAR 두 개를 실제로 띄우는
+      # 테스트까지 다시 돈다. 프로젝트에 privileged mode 가 켜져 있어야 한다
+      - ./gradlew clean build --no-daemon
 
   post_build:
     commands:
@@ -32,51 +32,61 @@ phases:
       - |
         set -euo pipefail
 
+        # 재시작 여부는 JAR 지문으로 못 잰다. buildInfo() 가 넣는 build.time 때문에
+        # 같은 소스를 다시 빌드해도 JAR SHA-256 이 달라진다. 실측으로 확인했다.
+        # 그래서 런타임에 들어가는 소스 파일만 모아 센다.
+        # 테스트·문서·프론트만 바뀌면 이 값이 안 변해서 서비스를 안 건드린다
+        source_digest() {
+          find "$@" -type f -print0 2>/dev/null \
+            | LC_ALL=C sort -z \
+            | xargs -0 sha256sum \
+            | sha256sum | cut -d' ' -f1
+        }
+
+        COMMON="common/src/main common/build.gradle build.gradle settings.gradle gradle/wrapper/gradle-wrapper.properties"
+        API_DIGEST="$(source_digest api-app/src/main api-app/build.gradle $COMMON)"
+        WORKER_DIGEST="$(source_digest worker-app/src/main worker-app/build.gradle $COMMON)"
+
         # build 는 실행 못 하는 -plain.jar 도 같이 만든다. 이름으로 걸러낸다
         API_JAR="$(ls api-app/build/libs/api-app-*.jar | grep -v -- '-plain\.jar$')"
         WORKER_JAR="$(ls worker-app/build/libs/worker-app-*.jar | grep -v -- '-plain\.jar$')"
 
-        RELEASE=build/release
-        rm -rf "$RELEASE"
-        mkdir -p "$RELEASE/jars" "$RELEASE/scripts" "$RELEASE/systemd"
+        # 스키마 정본은 common 한 곳이라 두 앱이 같은 값을 싣는다
+        FLYWAY_MAX="$(ls common/src/main/resources/db/migration/V*__*.sql \
+          | sed 's#.*/V\([0-9][0-9]*\)__.*#\1#' | sort -n | tail -1)"
+        APP_VERSION="$(unzip -p "$API_JAR" META-INF/build-info.properties | sed -n 's/^build.version=//p')"
+        JAVA_VERSION="$(java -version 2>&1 | head -1 | sed 's/.*"\(.*\)".*/\1/')"
 
-        cp "$API_JAR"    "$RELEASE/jars/api-app.jar"
-        cp "$WORKER_JAR" "$RELEASE/jars/worker-app.jar"
-        cp deploy/appspec.yml   "$RELEASE/appspec.yml"
-        cp deploy/scripts/*.sh  "$RELEASE/scripts/"
-        cp deploy/systemd/*.service "$RELEASE/systemd/"
-        chmod +x "$RELEASE/scripts/"*.sh
-      - |
-        set -euo pipefail
-        RELEASE=build/release
-
-        # 같은 커밋을 두 번 빌드해도 JAR 지문이 달라진다. 다른 항목은 build-info.properties 하나뿐이고
-        # 거기 든 build.time 이 매번 바뀐다. 그 항목을 빼고 세면 지문이 재현된다
-        stable_digest() {
-          unzip -v "$1" \
-            | awk 'NF>=8 {print $7, $8}' \
-            | grep -v 'META-INF/build-info.properties' \
-            | sort | sha256sum | cut -d' ' -f1
+        pack() {
+          local component="$1" jar="$2" digest="$3"
+          local out="build/revision/$component"
+          rm -rf "$out"; mkdir -p "$out/jars" "$out/scripts" "$out/systemd"
+          cp "$jar" "$out/jars/$component-app.jar"
+          cp "deploy/appspec-$component.yml" "$out/appspec.yml"
+          cp deploy/scripts/*.sh "$out/scripts/"; chmod +x "$out/scripts/"*.sh
+          cp "deploy/systemd/salmonbus-$component.service" "$out/systemd/"
+          {
+            echo "component=$component"
+            echo "commit=${CODEBUILD_RESOLVED_SOURCE_VERSION}"
+            echo "sourceDigest=$digest"
+            echo "artifactSha256=$(sha256sum "$out/jars/$component-app.jar" | cut -d' ' -f1)"
+            echo "javaVersion=$JAVA_VERSION"
+            echo "appVersion=$APP_VERSION"
+            echo "flywayMaxVersion=$FLYWAY_MAX"
+            echo "builtAt=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > "$out/release-manifest.txt"
+          echo "--- $component ---"; cat "$out/release-manifest.txt"
         }
 
-        {
-          echo "commit=${CODEBUILD_RESOLVED_SOURCE_VERSION}"
-          echo "buildNumber=${CODEBUILD_BUILD_NUMBER}"
-          echo "builtAt=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          echo "apiJarSha256=$(sha256sum "$RELEASE/jars/api-app.jar" | cut -d' ' -f1)"
-          echo "workerJarSha256=$(sha256sum "$RELEASE/jars/worker-app.jar" | cut -d' ' -f1)"
-          echo "apiDigest=$(stable_digest "$RELEASE/jars/api-app.jar")"
-          echo "workerDigest=$(stable_digest "$RELEASE/jars/worker-app.jar")"
-        } > "$RELEASE/release-manifest.txt"
-
-        cat "$RELEASE/release-manifest.txt"
+        pack api    "$API_JAR"    "$API_DIGEST"
+        pack worker "$WORKER_JAR" "$WORKER_DIGEST"
       - |
         set -euo pipefail
         # 비밀이 배포판에 섞였는지 본다. 걸리면 여기서 세운다. 값은 안 찍는다
-        if find build/release -name '.env*' | grep -q .; then
-          echo "배포판에 env 파일이 들어 있다"; exit 1
+        if find build/revision -name '.env*' -o -name '*.pem' -o -name '*.jks' | grep -q .; then
+          echo "배포판에 비밀 파일이 들어 있다"; exit 1
         fi
-        for jar in build/release/jars/*.jar; do
+        for jar in build/revision/*/jars/*.jar; do
           if unzip -l "$jar" | grep -qiE '\.env|secret|\.pem|\.jks'; then
             echo "JAR 안에 비밀로 보이는 항목이 있다: $jar"; exit 1
           fi
@@ -84,7 +94,14 @@ phases:
         echo "비밀 검사 통과"
 
 artifacts:
-  # appspec.yml 은 배포판 압축 파일의 최상단에 있어야 한다. base-directory 가 그 최상단을 정한다
-  base-directory: backend/build/release
-  files:
-    - '**/*'
+  # CodeDeploy 배포 그룹이 둘이라 revision 도 둘로 낸다.
+  # 여기 이름은 CodeBuild 프로젝트의 secondary artifact 식별자와 같아야 한다
+  secondary-artifacts:
+    ApiRevision:
+      base-directory: backend/build/revision/api
+      files:
+        - '**/*'
+    WorkerRevision:
+      base-directory: backend/build/revision/worker
+      files:
+        - '**/*'
