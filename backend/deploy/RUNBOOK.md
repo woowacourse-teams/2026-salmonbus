@@ -53,8 +53,11 @@ FORECAST_ENABLED=false
 **`api.env` 에 `GBIS_SERVICE_KEY` 를 넣지 않는다.** API 는 그 값을 읽는 자리가 없다.
 빌드된 JAR 안에 `gbis` 라는 글자가 0개다. 넣으면 안 쓰는 곳에 비밀을 퍼뜨리는 것이다.
 
-자바 21 과 CodeDeploy agent 가 있어야 한다. 없으면 `preflight.sh` 가 배포를 세운다.
-systemd 유닛은 배포가 알아서 넣는다.
+`/usr/bin/java` 가 21 이어야 하고 CodeDeploy agent 가 있어야 한다.
+없으면 `preflight.sh` 가 배포를 세운다.
+
+**systemd 유닛은 배포가 알아서 넣고 `enable` 까지 한다.** 손으로 할 것이 없다.
+`validate.sh` 가 `is-enabled` 로 확인해서, 재부팅 뒤에 안 올라오는 상태면 배포가 실패한다.
 
 ### 비밀을 어디 둘지 먼저 한 번 재 본다
 
@@ -134,6 +137,13 @@ JAR 의 SHA-256 이 달라진다. 실측으로 확인했다. 소스 지문으로
 **대부분 자동으로 된다.** `validate.sh` 가 실패하면 CodeDeploy 가 그 배포 그룹의 직전 성공 판을
 다시 배포한다. `salmonbus-api-prod` 와 `salmonbus-worker-prod` 가 따로라
 **API 가 실패해도 Worker 는 안 건드린다.** 반대도 같다.
+
+되돌리기가 오면 그 판이 `previous` 로 이미 디스크에 있다. `install.sh` 는 **그것을 지우지 않고
+그대로 쓰고 `current` 만 옮긴다.** 지우고 다시 풀면 되돌릴 것이 없어진다.
+
+실패한 배포는 `validate.sh` 까지 못 가서 배포 잠금을 쥔 채 끝난다. 그래서 같은 서비스의
+다음 배포는 그 잠금을 **넘겨받는다.** 안 그러면 자동 롤백이 자기가 남긴 잠금에 막힌다.
+다른 서비스가 잡고 있으면 그때는 기다리지 않고 멈춘다.
 
 손으로 되돌릴 때는 한쪽만 고른다.
 
@@ -225,6 +235,27 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/api/v1/routes
 `db` · `diskSpace` · `ping` · `ssl` 같은 기본 항목뿐이라 API 와 응답이 같다.
 수집을 켠 뒤에는 `observation_batch` 의 최근 행을 보고 판단한다.
 
+```sql
+select max(started_at) from observation_batch;
+```
+
+## 후속으로 남긴 것
+
+**Worker 의 수집 신선도를 배포 확인에 넣는 일은 이 티켓에서 안 했다.**
+지금 `validate.sh` 는 프로세스와 DB 만 본다. 수집 작업이 멈추거나 Open API 호출이
+계속 실패해도 배포가 통과한다.
+
+첫 배포는 `COLLECTION_ENABLED=false` 로 나가서 볼 것이 없다.
+**넣는 시점은 수집을 켜는 때다.** 그때 둘 중 하나가 필요하다.
+
+| 무엇 | 어디를 고치나 |
+| --- | --- |
+| 최근 성공 시각을 보는 health 항목 | `worker-app` 에 `HealthIndicator` 를 하나 만든다 |
+| 스케줄러 heartbeat | 수집 회차마다 시각을 남기고 그것을 health 에 붙인다 |
+
+둘 다 애플리케이션 코드를 고치는 일이라 배포 티켓 밖으로 봤다.
+켜는 배포 전에 티켓을 세워야 한다.
+
 ## 훅 스크립트를 고칠 때
 
 **`set -x` 를 쓰지 마라.** 훅 로그가 인스턴스에 남는다. env 값이 찍히면 파일 권한이 소용없다.
@@ -237,7 +268,7 @@ bash backend/deploy/rehearsal/run.sh
 
 리눅스 컨테이너를 띄워 `systemctl` · `curl` · `java` 를 흉내로 바꿔 끼우고 배포를 여러 번 돌린다.
 첫 배포, api 만 바뀐 배포, 아무것도 안 바뀐 배포, 배포끼리 겹칠 때, 옛 프로세스가 응답할 때,
-health 가 안 오를 때, 그리고 되돌리기까지다. 검사 34개가 돈다.
+health 가 안 오를 때, 되돌리기, 손댄 배포판 목록까지다. 검사 42개가 돈다.
 
 흉내는 **모르는 입력에 실패한다.** `systemctl` 이 모르는 명령을 받거나 `curl` 이 모르는 주소를
 받으면 거기서 멈춘다. 훅이 포트나 경로를 틀리면 예행연습이 통과하지 않는다.
