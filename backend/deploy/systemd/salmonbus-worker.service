@@ -1,0 +1,30 @@
+[Unit]
+Description=salmonbus 수집·예보 Worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=salmonbus
+Group=salmonbus
+
+# 값을 유닛에 직접 쓰지 않는다. systemctl cat 과 systemctl show 가 그대로 찍는다.
+# 이 파일은 배포가 안 건드리는 자리에 있다
+EnvironmentFile=/etc/salmonbus/worker.env
+
+# current 는 바로가기다. 배포가 이걸 새 판으로 옮긴다
+ExecStart=/usr/bin/java -jar /opt/salmonbus/current/jars/worker-app.jar
+
+Restart=on-failure
+RestartSec=5
+SuccessExitStatus=143
+TimeoutStopSec=30
+
+# 앱이 쓸 일이 없는 곳을 막는다
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
