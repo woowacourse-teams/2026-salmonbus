@@ -1,0 +1,90 @@
+version: 0.2
+
+env:
+  shell: bash
+
+phases:
+  install:
+    runtime-versions:
+      java: corretto21
+
+  pre_build:
+    commands:
+      - cd "${CODEBUILD_SRC_DIR}/backend"
+      - java -version
+      # post_build 의 지문 계산이 이 셋을 쓴다. 없으면 여기서 알아보게 세운다
+      - for c in unzip sha256sum awk; do command -v "$c" >/dev/null || { echo "$c 가 없다"; exit 1; }; done
+      # backend-ci.yml 과 같은 검사다. 멀티모듈로 쪼갠 뒤 루트에 소스가 남으면 조용히 안 돈다
+      - test ! -d src
+
+  build:
+    commands:
+      - cd "${CODEBUILD_SRC_DIR}/backend"
+      # CI 와 같은 명령이다. 테스트 912개 중 35개 클래스가 Testcontainers 로 도커를 쓴다.
+      # 이 프로젝트에 특권 모드가 꺼져 있으면 여기서 실패한다
+      - ./gradlew clean build
+
+  post_build:
+    commands:
+      # build 가 실패해도 post_build 는 실행된다. 이 줄이 없으면 깨진 빌드가 배포로 나간다
+      - test "$CODEBUILD_BUILD_SUCCEEDING" = "1"
+      - cd "${CODEBUILD_SRC_DIR}/backend"
+      - |
+        set -euo pipefail
+
+        # build 는 실행 못 하는 -plain.jar 도 같이 만든다. 이름으로 걸러낸다
+        API_JAR="$(ls api-app/build/libs/api-app-*.jar | grep -v -- '-plain\.jar$')"
+        WORKER_JAR="$(ls worker-app/build/libs/worker-app-*.jar | grep -v -- '-plain\.jar$')"
+
+        RELEASE=build/release
+        rm -rf "$RELEASE"
+        mkdir -p "$RELEASE/jars" "$RELEASE/scripts" "$RELEASE/systemd"
+
+        cp "$API_JAR"    "$RELEASE/jars/api-app.jar"
+        cp "$WORKER_JAR" "$RELEASE/jars/worker-app.jar"
+        cp deploy/appspec.yml   "$RELEASE/appspec.yml"
+        cp deploy/scripts/*.sh  "$RELEASE/scripts/"
+        cp deploy/systemd/*.service "$RELEASE/systemd/"
+        chmod +x "$RELEASE/scripts/"*.sh
+      - |
+        set -euo pipefail
+        RELEASE=build/release
+
+        # 같은 커밋을 두 번 빌드해도 JAR 지문이 달라진다. 다른 항목은 build-info.properties 하나뿐이고
+        # 거기 든 build.time 이 매번 바뀐다. 그 항목을 빼고 세면 지문이 재현된다
+        stable_digest() {
+          unzip -v "$1" \
+            | awk 'NF>=8 {print $7, $8}' \
+            | grep -v 'META-INF/build-info.properties' \
+            | sort | sha256sum | cut -d' ' -f1
+        }
+
+        {
+          echo "commit=${CODEBUILD_RESOLVED_SOURCE_VERSION}"
+          echo "buildNumber=${CODEBUILD_BUILD_NUMBER}"
+          echo "builtAt=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "apiJarSha256=$(sha256sum "$RELEASE/jars/api-app.jar" | cut -d' ' -f1)"
+          echo "workerJarSha256=$(sha256sum "$RELEASE/jars/worker-app.jar" | cut -d' ' -f1)"
+          echo "apiDigest=$(stable_digest "$RELEASE/jars/api-app.jar")"
+          echo "workerDigest=$(stable_digest "$RELEASE/jars/worker-app.jar")"
+        } > "$RELEASE/release-manifest.txt"
+
+        cat "$RELEASE/release-manifest.txt"
+      - |
+        set -euo pipefail
+        # 비밀이 배포판에 섞였는지 본다. 걸리면 여기서 세운다. 값은 안 찍는다
+        if find build/release -name '.env*' | grep -q .; then
+          echo "배포판에 env 파일이 들어 있다"; exit 1
+        fi
+        for jar in build/release/jars/*.jar; do
+          if unzip -l "$jar" | grep -qiE '\.env|secret|\.pem|\.jks'; then
+            echo "JAR 안에 비밀로 보이는 항목이 있다: $jar"; exit 1
+          fi
+        done
+        echo "비밀 검사 통과"
+
+artifacts:
+  # appspec.yml 은 배포판 압축 파일의 최상단에 있어야 한다. base-directory 가 그 최상단을 정한다
+  base-directory: backend/build/release
+  files:
+    - '**/*'
