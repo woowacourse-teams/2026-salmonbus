@@ -5,8 +5,11 @@ claim_deploy
 
 log "$COMPONENT 배포 준비를 본다"
 
-command -v java >/dev/null || { log "자바가 없다"; exit 1; }
-java -version 2>&1 | head -1
+# 유닛이 /usr/bin/java 를 쓴다. PATH 의 java 를 봐도 그게 뜬다는 뜻이 아니다
+[ -x /usr/bin/java ] || { log "/usr/bin/java 가 없다"; exit 1; }
+java_major="$(/usr/bin/java -version 2>&1 | head -1 | sed -n 's/.*version "\([0-9]*\).*/\1/p')"
+[ "$java_major" = "21" ] || { log "/usr/bin/java 가 21 이 아니다 (${java_major:-읽기 실패})"; exit 1; }
+log "자바 $java_major"
 id "$SERVICE_USER" >/dev/null 2>&1 || { log "$SERVICE_USER 사용자가 없다. RUNBOOK 의 최초 1회 절차를 보라"; exit 1; }
 
 # 값은 안 찍는다. 줄이 있는지만 센다
@@ -19,10 +22,15 @@ if [ "$COMPONENT" = "worker" ]; then
   chown -R "$SERVICE_USER:$SERVICE_USER" /var/lib/salmonbus
 fi
 
-# 배포판 목록이 형식에 맞나. install.sh 가 이 값들로 판 이름을 짓는다
-for key in commit sourceDigest artifactSha256; do
+# 배포판 목록이 형식에 맞나. install.sh 가 이 값으로 판 이름을 짓는다
+for key in component commit sourceDigest artifactSha256; do
   [ -n "$(manifest_value "$MANIFEST" "$key")" ] || { log "배포판 목록에 $key 가 없다"; exit 1; }
 done
+
+# sourceDigest 는 root 권한 삭제와 이동 경로에 들어간다. 여기서 형식과 경로를 다 본다.
+# install.sh 가 쓰기 전에 걸러야 releases 밖을 건드리는 길이 안 생긴다
+checked="$(release_path "$(manifest_value "$MANIFEST" sourceDigest)")"
+log "판 경로 확인: $checked"
 
 # 받은 JAR 이 빌드 때와 같은 파일인가
 want="$(manifest_value "$MANIFEST" artifactSha256)"

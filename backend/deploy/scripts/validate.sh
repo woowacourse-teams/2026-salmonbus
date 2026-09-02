@@ -29,6 +29,11 @@ wait_for "$UNIT health"   "$ACTUATOR/health" '"status":"UP"'
 wait_for "$UNIT 소스 지문" "$ACTUATOR/info"   "\"sourcedigest\":\"$NEW_DIGEST\""
 wait_for "$UNIT component" "$ACTUATOR/info"   "\"component\":\"$COMPONENT\""
 
+# 재부팅 뒤에도 올라와야 한다. install.sh 가 enable 을 부르는데 그게 실제로 먹었는지 본다
+systemctl is-enabled --quiet "$UNIT" \
+  || { log "$UNIT 이 enable 되어 있지 않다. 재부팅하면 안 올라온다"; exit 1; }
+log "$UNIT enable 확인"
+
 if [ -n "$SMOKE" ]; then
   code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$SMOKE")"
   [ "$code" = "200" ] || { log "클라이언트 API 가 $code 로 온다: $SMOKE"; exit 1; }
