@@ -2,7 +2,7 @@
 # ValidateService. 여기서 실패하면 CodeDeploy 가 직전 판으로 되돌린다
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-DEADLINE=$((SECONDS + 150))
+WAIT_SECONDS=90
 NEW_DIGEST="$(manifest_value "$MANIFEST" sourceDigest)"
 NEW_COMMIT="$(manifest_value "$MANIFEST" commit)"
 
@@ -10,7 +10,10 @@ NEW_COMMIT="$(manifest_value "$MANIFEST" commit)"
 # DB 까지 보는 것은 /actuator/health 쪽이고 끊기면 503 DOWN 이 온다
 wait_for() {
   local what="$1" url="$2" want="$3" body
-  while [ $SECONDS -lt $DEADLINE ]; do
+  # 시한을 검사마다 새로 잡는다. 하나로 두면 앞 검사가 늦게 끝났을 때
+  # 뒤 검사가 시간을 못 받고 실패해서 멀쩡한 배포가 되돌아간다
+  local deadline=$((SECONDS + WAIT_SECONDS))
+  while [ $SECONDS -lt $deadline ]; do
     body="$(curl -fsS --max-time 5 "$url" 2>/dev/null || true)"
     case "$body" in
       *"$want"*) log "$what 확인"; return 0 ;;
