@@ -21,7 +21,7 @@ id salmonbus >/dev/null 2>&1 && ok "salmonbus 사용자" || bad "사용자 생�
 mkdir -p /etc/salmonbus "$WORK" /etc/systemd/system   # EC2 에는 systemd 가 있어서 이 디렉터리가 있다
 printf 'DB_URL=jdbc:postgresql://rds:5432/salmonbus\nDB_USERNAME=x\nDB_PASSWORD=y\n' > /etc/salmonbus/api.env
 printf 'DB_URL=jdbc:postgresql://rds:5432/salmonbus\nDB_USERNAME=x\nDB_PASSWORD=y\nGBIS_SERVICE_KEY=z\n' > /etc/salmonbus/worker.env
-chmod 600 /etc/salmonbus/*.env
+chmod 600 /etc/salmonbus/*.env; chown root:root /etc/salmonbus/*.env
 
 printf '#!/bin/sh\necho "openjdk version \\"21.0.12\\" 2026-08-18" >&2\n' > /usr/bin/java
 
@@ -268,6 +268,65 @@ after_count=$(/bin/ls -1d /opt/salmonbus/api/releases/*/ 2>/dev/null | wc -l)
 [ "$before_count" = "$after_count" ] \
   && ok "판 수가 안 바뀌었다" || bad "판이 $before_count 에서 $after_count 로 바뀌었다"
 rm -rf /opt/salmonbus/바깥
+
+sec "9-3. env 파일 권한이 헐거우면 막나"
+chmod 644 /etc/salmonbus/api.env
+make_revision api APIPERM ppppppp1111 1111aaaa2222bbbb3333cccc4444dddd5555eeee6666ffff7777000088889999 "2026-09-02T10:00:00Z"
+if bash "$ARCHIVE/api/scripts/preflight.sh" > "$WORK/perm.out" 2>&1; then
+  bad "644 인 env 파일이 통과했다"
+else
+  grep -q '권한이 644' "$WORK/perm.out" && ok "헐거운 권한을 막았다" || bad "막긴 했는데 이유가 다르다"
+fi
+chmod 600 /etc/salmonbus/api.env
+
+sec "9-4. 잠금을 둘이 동시에 잡으면 하나만 되나"
+rm -rf /opt/salmonbus/.deploying
+cat > "$WORK/race.sh" <<'RACE'
+#!/bin/bash
+export DEPLOYMENT_ID="$2"
+source /archive/$1/scripts/common.sh
+claim_deploy && echo "$1 잡았다" >> /work/race.out
+sleep 2
+RACE
+chmod +x "$WORK/race.sh"
+: > "$WORK/race.out"
+"$WORK/race.sh" api d-race-api > /dev/null 2>&1 &
+"$WORK/race.sh" worker d-race-worker > /dev/null 2>&1 &
+wait
+won=$(wc -l < "$WORK/race.out")
+[ "$won" = "1" ] && ok "둘이 동시에 잡으러 가서 하나만 잡았다" || bad "$won 개가 잡았다"
+rm -rf /opt/salmonbus/.deploying
+
+sec "9-5. 실패한 훅이 잠금을 남기나"
+rm -rf /opt/salmonbus/.deploying
+chmod 644 /etc/salmonbus/api.env
+bash "$ARCHIVE/api/scripts/preflight.sh" > /dev/null 2>&1 || true
+chmod 600 /etc/salmonbus/api.env
+[ ! -d /opt/salmonbus/.deploying ] \
+  && ok "실패한 훅이 잠금을 풀고 나갔다" || bad "잠금이 남았다"
+
+sec "9-6. 값이 박힌 JAR 을 배포판 검사가 막나"
+mkdir -p "$WORK/rev-ok/jars" "$WORK/rev-bad/jars"
+python3 /rehearse/makejar.py "$WORK/rev-ok/jars/api-app.jar" api-app   'spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/salmonbus}
+    password: ${DB_PASSWORD:salmonbus}
+' "2026-09-02T10:00:00Z"
+python3 /rehearse/makejar.py "$WORK/rev-bad/jars/api-app.jar" api-app   'spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/salmonbus}
+    password: ${DB_PASSWORD:salmonbus}
+  other:
+    password: 실제로박힌값1234
+' "2026-09-02T10:00:00Z"
+bash /deploy/verify-revision.sh "$WORK/rev-ok" > /dev/null 2>&1 \
+  && ok "자리표시자만 있는 JAR 은 통과한다" || bad "멀쩡한 JAR 을 막았다"
+if bash /deploy/verify-revision.sh "$WORK/rev-bad" > "$WORK/vr.out" 2>&1; then
+  bad "값이 박힌 JAR 이 통과했다"
+else
+  ok "값이 박힌 JAR 을 막았다"
+  grep -q '실제로박힌값' "$WORK/vr.out" && bad "오류 문구에 값이 찍혔다" || ok "오류 문구에 값이 안 찍혔다"
+fi
 
 sec "10. 훅 로그에 값이 새지 않았는가"
 if grep -rqE 'GBIS_SERVICE_KEY=[^$]|DB_PASSWORD=[^$]' "$WORK"/*.out 2>/dev/null; then
