@@ -29,11 +29,13 @@ cat > /usr/local/bin/systemctl <<'EOF'
 #!/bin/bash
 echo "$*" >> /work/systemctl.log
 case "$1" in
-  is-active) grep -qx "$3" /work/running 2>/dev/null && exit 0 || exit 3 ;;
-  stop)      grep -vx "$2" /work/running > /work/r.tmp 2>/dev/null; mv /work/r.tmp /work/running; exit 0 ;;
-  start)     grep -qx "$2" /work/running 2>/dev/null || echo "$2" >> /work/running; exit 0 ;;
+  is-active)     grep -qx "$3" /work/running 2>/dev/null && exit 0 || exit 3 ;;
+  stop)          grep -vx "$2" /work/running > /work/r.tmp 2>/dev/null || true; mv /work/r.tmp /work/running; exit 0 ;;
+  start)         grep -qx "$2" /work/running 2>/dev/null || echo "$2" >> /work/running; exit 0 ;;
+  daemon-reload) exit 0 ;;
+  # 흉내가 모르는 명령에 성공을 돌려주면 깨진 훅이 여기를 그냥 통과한다
+  *) echo "systemctl 흉내가 모르는 명령이다: $*" >&2; exit 64 ;;
 esac
-exit 0
 EOF
 
 # /actuator 를 흉내낸다. info 는 지금 도는 판의 release.env 를 읽어 답한다.
@@ -47,11 +49,16 @@ for a in "$@"; do
     '%{http_code}') want_code=1 ;;
   esac
 done
-state="$(cat /work/health 2>/dev/null || echo UP)"
-comp=""
+[ -n "$url" ] || { echo "curl 흉내: 주소가 없다" >&2; exit 2; }
+# 상태 파일이 없으면 UP 으로 넘기지 않는다. 준비가 빠진 것을 통과시키면 안 된다
+[ -f /work/health ] || { echo "curl 흉내: /work/health 가 없다" >&2; exit 2; }
+state="$(cat /work/health)"
+# 아는 주소만 답한다. 포트나 경로가 틀리면 여기서 걸린다
 case "$url" in
-  *:8082/*) comp=api ;;
-  *:8081/*) comp=worker ;;
+  http://127.0.0.1:8082/actuator/health|http://127.0.0.1:8082/actuator/info) comp=api ;;
+  http://127.0.0.1:8081/actuator/health|http://127.0.0.1:8081/actuator/info) comp=worker ;;
+  http://127.0.0.1:8080/api/v1/routes) comp=api ;;
+  *) echo "curl 흉내가 모르는 주소다: $url" >&2; exit 2 ;;
 esac
 if [ "$want_code" = "1" ]; then
   [ "$state" = "UP" ] && { echo 200; exit 0; }
@@ -68,7 +75,7 @@ case "$url" in
     echo "{\"sourcedigest\":\"$d\",\"component\":\"$c\",\"build\":{}}"
     exit 0 ;;
 esac
-exit 0
+echo "curl 흉내가 모르는 경로다: $url" >&2; exit 2
 EOF
 chmod +x /usr/local/bin/java /usr/local/bin/systemctl /usr/local/bin/curl
 echo UP > "$WORK/health"; : > "$WORK/running"; : > "$WORK/systemctl.log"; rm -f "$WORK/stale"
@@ -156,6 +163,13 @@ grep -q 'stop salmonbus-api' /work/systemctl.log \
   && ok "api 는 내렸다 올렸다" || bad "api 가 재시작 안 됐다"
 grep -q 'stop salmonbus-worker' /work/systemctl.log \
   && bad "worker 도 내렸다. 바뀐 것만 재시작이 안 된다" || ok "worker 는 안 건드렸다"
+# 겹침이 나는 길은 restart 를 쓰거나 stop 없이 start 하는 것이다
+grep -q '^restart ' /work/systemctl.log \
+  && bad "restart 를 썼다. 내렸다 올리는 것을 눈으로 못 본다" || ok "restart 를 안 쓴다"
+stop_line=$(grep -n '^stop salmonbus-api$' /work/systemctl.log | head -1 | cut -d: -f1)
+start_line=$(grep -n '^start salmonbus-api$' /work/systemctl.log | head -1 | cut -d: -f1)
+[ -n "$stop_line" ] && [ -n "$start_line" ] && [ "$stop_line" -lt "$start_line" ] \
+  && ok "stop 이 start 보다 먼저다" || bad "stop=$stop_line start=$start_line 순서가 아니다"
 [ "$(readlink -f /opt/salmonbus/api/previous)" = "/opt/salmonbus/api/releases/1111aaaa2222bbbb3333cccc4444dddd5555eeee6666ffff7777000088889999" ] \
   && ok "api previous 가 직전 판을 가리킨다" || bad "api previous=$(readlink -f /opt/salmonbus/api/previous 2>/dev/null)"
 
@@ -186,11 +200,28 @@ make_revision api APIv3 ddddddd4444 3333cccc4444dddd5555eeee6666ffff777700008888
 deploy api fail
 rm -f /work/stale
 
-sec "7. health 가 안 오르면 실패로 끝나는가 (되돌리기가 걸리는 자리)"
+sec "7. health 가 안 오르면 실패로 끝나는가"
 echo DOWN > /work/health
 make_revision api APIv4 eeeeeee5555 4444dddd5555eeee6666ffff7777000088889999aaaa1111bbbb2222cccc3333 "2026-09-02T05:00:00Z"
 deploy api fail
 echo UP > /work/health
+
+sec "7-2. 되돌리기가 실제로 도는가"
+# CodeDeploy 의 자동 롤백은 직전 성공 revision 을 다시 배포하는 것이다. 그것을 그대로 흉내낸다
+GOOD_DIGEST=2222bbbb3333cccc4444dddd5555eeee6666ffff7777000088889999aaaa1111
+before="$(readlink -f /opt/salmonbus/api/current)"
+[ "$before" != "/opt/salmonbus/api/releases/$GOOD_DIGEST" ] \
+  && ok "실패한 배포가 current 를 옮겨 놓은 상태다" || bad "실패 전후가 같아서 되돌릴 것이 없다"
+: > /work/systemctl.log
+make_revision api APIv2 bbbbbbb2222 "$GOOD_DIGEST" "2026-09-02T02:00:00Z"
+deploy api
+[ "$(readlink -f /opt/salmonbus/api/current)" = "/opt/salmonbus/api/releases/$GOOD_DIGEST" ] \
+  && ok "current 가 직전 성공 판으로 돌아왔다" || bad "current=$(readlink -f /opt/salmonbus/api/current)"
+grep -qx salmonbus-api /work/running \
+  && ok "되돌린 뒤에도 서비스가 돌고 있다" || bad "되돌렸는데 안 돈다"
+info_digest="$(sed -n 's/^INFO_SOURCEDIGEST=//p' /opt/salmonbus/api/current/release.env)"
+[ "$info_digest" = "$GOOD_DIGEST" ] \
+  && ok "info 가 직전 성공 판을 가리킨다" || bad "info=$info_digest"
 
 sec "8. 판을 셋만 남기는가"
 n=$(/bin/ls -1d /opt/salmonbus/api/releases/*/ 2>/dev/null | wc -l)
