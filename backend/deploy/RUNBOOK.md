@@ -6,7 +6,7 @@
 
 API 와 Worker 를 따로 배포한다. 배포판도 따로, systemd 서비스도 따로다.
 
-```
+```text
 /opt/salmonbus/api/releases/<소스지문>/       판마다 따로 쌓인다. 셋만 남긴다
 /opt/salmonbus/api/current                    지금 도는 판을 가리키는 바로가기
 /opt/salmonbus/api/previous                   직전 판
@@ -21,7 +21,7 @@ API 와 Worker 를 따로 배포한다. 배포판도 따로, systemd 서비스�
 
 ## 포트
 
-```
+```text
 8080   API 클라이언트.  밖에 열린다
 8082   API Actuator.    127.0.0.1 에만 묶인다
 8081   Worker.          127.0.0.1 에만 묶인다. Actuator 도 여기다
@@ -45,7 +45,7 @@ sudo vi /etc/salmonbus/worker.env    # 위 셋 + GBIS_SERVICE_KEY · COLLECTION_
 
 첫 배포는 수집과 예보를 끈 채로 한다.
 
-```
+```text
 COLLECTION_ENABLED=false
 FORECAST_ENABLED=false
 ```
@@ -69,22 +69,28 @@ aws ssm get-parameter --name /salmonbus/probe --with-decryption --region ap-nort
 
 ### 값을 적을 때 조심할 것
 
-env 파일 값은 셸이 읽는 규칙을 탄다. 실측으로 확인한 것이다.
+**이 파일을 읽는 쪽이 둘이고 규칙이 다르다.** systemd 252 와 bash 로 각각 재봤다.
 
-| 값에 든 것 | 결과 |
-| --- | --- |
-| `+` `/` `=` `%` | 그대로 간다. 공공데이터포털 인증키는 여기 해당한다 |
-| `$` | **뒤가 조용히 잘린다** |
-| 따옴표 | 파일 읽기가 통째로 깨진다 |
-| 줄 끝이 CRLF | 값 끝에 안 보이는 바이트가 붙는다. 13자가 14자가 된다 |
+| 값에 든 것 | **앱에 들어갈 때**(systemd `EnvironmentFile=`) | 확인 명령을 돌릴 때(`set -a; . 파일`) |
+| --- | --- | --- |
+| `+` `/` `=` `%` | 그대로 | 그대로 |
+| `$` | 그대로. systemd 는 안 푼다 | **뒤가 조용히 잘린다** |
+| 따옴표 하나 | 그대로 | **파일 읽기가 통째로 깨진다** |
+| 줄 끝이 CRLF | **CR 을 떼어낸다** | 값 끝에 안 보이는 바이트가 붙는다 |
+| 끝에 공백 | **떼어낸다** | 그대로 남는다 |
 
-`vi` 로 직접 치면 안 생기고, 다른 데서 붙여넣을 때 생긴다.
+**앱 쪽은 systemd 가 다 정리해 준다.** 지금 포털이 주는 인증키는 영문과 숫자 64자라
+어느 쪽으로도 안 깨진다.
+
+**문제가 되는 것은 아래 확인 명령 쪽이다.** 파일이 CRLF 로 저장돼 있으면
+`sha256sum` 으로 뜬 값이 포털 값과 달라진다. 앱은 멀쩡히 도는데 대조만 어긋나서
+키가 틀린 줄 알고 헛짚게 된다. 그럴 때는 `sed -i 's/\r$//'` 로 줄 끝을 먼저 고친다.
 
 ## 배포하기
 
 CodePipeline `salmonbus-backend-cd` 에서 `Release change` 를 누른다.
 
-```
+```text
 Source           GitHub dev 에서 코드를 받는다
 BuildAndTest     salmonbus-backend-build 가 backend/buildspec.yml 을 읽는다
                  ./gradlew clean build --no-daemon 으로 테스트를 전부 다시 돌리고
@@ -98,7 +104,7 @@ DeployWorker     run order 2
 
 승인 전에 Build 로그 끝에 찍힌 배포판 목록을 본다.
 
-```
+```text
 component=api
 commit=...
 sourceDigest=...        <-- 이 값이 그대로면 그 서비스는 재시작 안 한다
@@ -113,7 +119,7 @@ flywayMaxVersion=12
 
 `sourceDigest` 는 JAR 이 아니라 **런타임에 들어가는 소스 파일**을 센 값이다.
 
-```
+```text
 api     api-app/src/main · api-app/build.gradle
         + common/src/main · common/build.gradle · build.gradle · settings.gradle · gradle-wrapper.properties
 worker  worker-app/ 쪽으로 같은 목록
@@ -231,6 +237,23 @@ bash backend/deploy/rehearsal/run.sh
 
 리눅스 컨테이너를 띄워 `systemctl` · `curl` · `java` 를 흉내로 바꿔 끼우고 배포를 여러 번 돌린다.
 첫 배포, api 만 바뀐 배포, 아무것도 안 바뀐 배포, 배포끼리 겹칠 때, 옛 프로세스가 응답할 때,
-health 가 안 오를 때다. 검사 27개가 돈다.
+health 가 안 오를 때, 그리고 되돌리기까지다. 검사 34개가 돈다.
+
+흉내는 **모르는 입력에 실패한다.** `systemctl` 이 모르는 명령을 받거나 `curl` 이 모르는 주소를
+받으면 거기서 멈춘다. 훅이 포트나 경로를 틀리면 예행연습이 통과하지 않는다.
 
 `digest.sh` 의 `source_digest` 는 `buildspec.yml` 에 있는 것과 같은 함수다. **한쪽을 고치면 둘 다 고친다.**
+
+예행연습의 `systemctl` 은 흉내라서 systemd 가 실제로 유닛을 읽는 것은 못 본다.
+그쪽은 systemd 252 를 컨테이너에 띄워 따로 쟀고, 아래 아홉이 확인됐다.
+
+```text
+유닛이 systemd-analyze verify 를 통과한다
+salmonbus 사용자로 뜬다
+0600 root:root 인 /etc/salmonbus/api.env 가 읽힌다
+판별용 release.env 도 같이 읽힌다
+MANAGEMENT_SERVER_PORT 가 유닛에서 들어간다
+current 바로가기의 JAR 로 뜬다
+0 이 아닌 코드로 죽으면 Restart=on-failure 가 다시 띄운다
+143 으로 끝나면 SuccessExitStatus=143 이 성공으로 본다
+```
