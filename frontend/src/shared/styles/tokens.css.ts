@@ -22,6 +22,14 @@ export const vars = createGlobalTheme(":root", {
     forecastCardSurface: "#F7F7F5",
     forecastCardBorder: "#E3E2DE",
     noForecastRing: "#000000",
+    liveBus: "#C93C32",
+
+    remainingSeat: {
+      surface: "#FFFFFF",
+      border: "#000000",
+      label: "#6B6A6A",
+      value: "#000000",
+    },
 
     seat: {
       high: { ring: "#6F9276", surface: "#DCE8DE", text: "#31573A" },
@@ -40,6 +48,8 @@ export const vars = createGlobalTheme(":root", {
     caption: "10.5px",
     cardNotice: "13.5px",
     boardNotice: "14px",
+    remainingSeatLabel: "7px",
+    remainingSeatValue: "11.5px",
   },
   leading: {
     stopName: "1.35",
@@ -52,6 +62,7 @@ export const vars = createGlobalTheme(":root", {
     control: "10px",
     forecastCard: "10px",
     seatBadge: "12px",
+    remainingSeat: "6px",
     card: "10px",
     pill: "16px",
   },
