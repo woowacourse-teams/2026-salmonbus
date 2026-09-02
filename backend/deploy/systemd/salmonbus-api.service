@@ -2,25 +2,31 @@
 Description=salmonbus Client API
 After=network-online.target
 Wants=network-online.target
+# worker 와 서로 Requires 를 걸지 않는다. 한쪽 장애가 다른 쪽을 내리면 안 된다
 
 [Service]
 Type=simple
 User=salmonbus
 Group=salmonbus
 
-# 값을 유닛에 직접 쓰지 않는다. systemctl cat 과 systemctl show 가 그대로 찍는다.
-# 이 파일은 배포가 안 건드리는 자리에 있다
-EnvironmentFile=/etc/salmonbus/api.env
+# Actuator 를 클라이언트 포트에서 뗀다. 8080 은 밖에 열려 있고 8082 는 루프백에만 묶인다
+Environment=MANAGEMENT_SERVER_PORT=8082
+Environment=MANAGEMENT_SERVER_ADDRESS=127.0.0.1
 
-# current 는 바로가기다. 배포가 이걸 새 판으로 옮긴다
-ExecStart=/usr/bin/java -jar /opt/salmonbus/current/jars/api-app.jar
+# 값을 유닛에 직접 쓰지 않는다. systemctl cat 과 systemctl show 가 그대로 찍는다.
+# 이 파일은 배포가 안 건드리는 곳에 있다. 아래 Environment= 보다 뒤에 와서 필요하면 덮어쓴다
+EnvironmentFile=/etc/salmonbus/api.env
+# 배포가 판마다 새로 쓴다. /actuator/info 로 도는 판을 판별하는 값이 들어 있다
+EnvironmentFile=/opt/salmonbus/api/current/release.env
+
+# 첫 리허설에서 RSS 를 재고 조정한다
+ExecStart=/usr/bin/java -Xms128m -Xmx512m -jar /opt/salmonbus/api/current/jars/api-app.jar
 
 Restart=on-failure
 RestartSec=5
 SuccessExitStatus=143
 TimeoutStopSec=30
 
-# 앱이 쓸 일이 없는 곳을 막는다
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full

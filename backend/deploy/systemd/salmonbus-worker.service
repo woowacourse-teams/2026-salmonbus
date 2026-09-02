@@ -2,25 +2,30 @@
 Description=salmonbus 수집·예보 Worker
 After=network-online.target
 Wants=network-online.target
+# api 와 서로 Requires 를 걸지 않는다. 한쪽 장애가 다른 쪽을 내리면 안 된다
 
 [Service]
 Type=simple
 User=salmonbus
 Group=salmonbus
 
-# 값을 유닛에 직접 쓰지 않는다. systemctl cat 과 systemctl show 가 그대로 찍는다.
-# 이 파일은 배포가 안 건드리는 자리에 있다
-EnvironmentFile=/etc/salmonbus/worker.env
+# 계수 파일은 배포가 갈아엎는 곳 밖에 둔다. 사람이 손으로 갖다 놓는 파일이라 배포판에 없다.
+# promote-on-start 를 켠 채 두면 배포로 재기동할 때마다 디스크에 있는 계수가 올라간다
+Environment=MODEL_BUNDLE_DIRECTORY=/var/lib/salmonbus/model/current
+Environment=MODEL_BUNDLE_PROMOTE_ON_START=false
 
-# current 는 바로가기다. 배포가 이걸 새 판으로 옮긴다
-ExecStart=/usr/bin/java -jar /opt/salmonbus/current/jars/worker-app.jar
+# 값을 유닛에 직접 쓰지 않는다. 위 Environment= 보다 뒤에 와서 필요하면 덮어쓴다
+EnvironmentFile=/etc/salmonbus/worker.env
+EnvironmentFile=/opt/salmonbus/worker/current/release.env
+
+ExecStart=/usr/bin/java -Xms128m -Xmx640m -jar /opt/salmonbus/worker/current/jars/worker-app.jar
 
 Restart=on-failure
 RestartSec=5
 SuccessExitStatus=143
-TimeoutStopSec=30
+# 수집 한 회차가 끝날 여유를 준다. 두 벌이 겹치면 하루 호출 한도가 두 배로 나간다
+TimeoutStopSec=45
 
-# 앱이 쓸 일이 없는 곳을 막는다
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
