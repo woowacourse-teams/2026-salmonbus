@@ -37,6 +37,7 @@ sudo useradd -r -s /sbin/nologin salmonbus
 sudo mkdir -p /opt/salmonbus /etc/salmonbus /var/lib/salmonbus/model/current
 sudo chown -R salmonbus:salmonbus /var/lib/salmonbus
 
+# 권한 600 과 주인 root:root 를 preflight.sh 가 확인한다. 다르면 배포가 멈춘다
 sudo install -m 600 -o root -g root /dev/null /etc/salmonbus/api.env
 sudo install -m 600 -o root -g root /dev/null /etc/salmonbus/worker.env
 sudo vi /etc/salmonbus/api.env       # DB_URL · DB_USERNAME · DB_PASSWORD
@@ -118,7 +119,17 @@ flywayMaxVersion=12
 ## 바뀐 것만 다시 뜬다
 
 `install.sh` 가 새 배포판의 `sourceDigest` 와 지금 도는 판의 값을 대조한다.
-다르면 내렸다 올리고, 같으면 그대로 둔다.
+다르면 내렸다 올린다.
+
+**같아도 재시작하는 경우가 있다.** systemd 유닛 파일이 바뀌었을 때다.
+`MANAGEMENT_SERVER_PORT` · `Restart=` · `EnvironmentFile=` · 힙 크기는 소스가 아니라 유닛에 있어서
+`sourceDigest` 가 그대로여도 바뀔 수 있다. 그러면 다시 띄워야 새 설정이 먹는다.
+
+```text
+소스 지문이 다르다            내렸다 올린다
+소스 지문이 같고 유닛이 다르다   내렸다 올린다
+둘 다 같다                   그대로 둔다. 다만 안 돌고 있으면 올린다
+```
 
 `sourceDigest` 는 JAR 이 아니라 **런타임에 들어가는 소스 파일**을 센 값이다.
 
@@ -168,11 +179,13 @@ curl -s http://127.0.0.1:8081/actuator/info     # worker
 배포와 상관없이 언제든 할 수 있다. **파일을 고치는 것만으로는 안 바뀐다.**
 
 ```bash
-sudo vi /etc/salmonbus/worker.env
-sudo systemctl restart salmonbus-worker
+C=worker          # 또는 api
+sudo vi "/etc/salmonbus/${C}.env"
+sudo systemctl restart "salmonbus-${C}"
 ```
 
-환경변수는 프로세스가 뜰 때 한 번 붙는다.
+환경변수는 프로세스가 뜰 때 한 번 붙는다. **`api.env` 를 고쳤으면 `salmonbus-api` 를 띄워야 한다.**
+`worker` 만 재시작하면 API 는 옛 값을 계속 쓴다.
 
 **`salmonbus-worker` 를 두 벌 띄우지 마라.** 하루 호출 한도가 정확히 두 배로 나간다.
 한도 10,000회에 두 노선 수집이 8,556회를 쓴다. `start.sh` 는 `restart` 를 안 쓰고
@@ -268,7 +281,11 @@ bash backend/deploy/rehearsal/run.sh
 
 리눅스 컨테이너를 띄워 `systemctl` · `curl` · `java` 를 흉내로 바꿔 끼우고 배포를 여러 번 돌린다.
 첫 배포, api 만 바뀐 배포, 아무것도 안 바뀐 배포, 배포끼리 겹칠 때, 옛 프로세스가 응답할 때,
-health 가 안 오를 때, 되돌리기, 손댄 배포판 목록까지다. 검사 42개가 돈다.
+health 가 안 오를 때, 되돌리기, 손댄 배포판 목록, 잠금을 둘이 동시에 잡을 때까지다.
+검사 48개가 돈다.
+
+배포판에 비밀이 섞였는지 보는 `verify-revision.sh` 도 여기서 같이 돈다.
+**CodeBuild 가 부르는 것과 같은 파일이다.** `scripts/` 밖에 있어서 EC2 로는 안 나간다.
 
 흉내는 **모르는 입력에 실패한다.** `systemctl` 이 모르는 명령을 받거나 `curl` 이 모르는 주소를
 받으면 거기서 멈춘다. 훅이 포트나 경로를 틀리면 예행연습이 통과하지 않는다.
