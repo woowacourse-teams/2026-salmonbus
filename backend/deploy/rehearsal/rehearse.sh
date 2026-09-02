@@ -23,13 +23,15 @@ printf 'DB_URL=jdbc:postgresql://rds:5432/salmonbus\nDB_USERNAME=x\nDB_PASSWORD=
 printf 'DB_URL=jdbc:postgresql://rds:5432/salmonbus\nDB_USERNAME=x\nDB_PASSWORD=y\nGBIS_SERVICE_KEY=z\n' > /etc/salmonbus/worker.env
 chmod 600 /etc/salmonbus/*.env
 
-printf '#!/bin/sh\necho "openjdk version \\"21.0.12\\"" >&2\n' > /usr/local/bin/java
+printf '#!/bin/sh\necho "openjdk version \\"21.0.12\\" 2026-08-18" >&2\n' > /usr/bin/java
 
 cat > /usr/local/bin/systemctl <<'EOF'
 #!/bin/bash
 echo "$*" >> /work/systemctl.log
 case "$1" in
   is-active)     grep -qx "$3" /work/running 2>/dev/null && exit 0 || exit 3 ;;
+  enable)        grep -qx "$2" /work/enabled 2>/dev/null || echo "$2" >> /work/enabled; exit 0 ;;
+  is-enabled)    grep -qx "$3" /work/enabled 2>/dev/null && exit 0 || exit 1 ;;
   stop)          grep -vx "$2" /work/running > /work/r.tmp 2>/dev/null || true; mv /work/r.tmp /work/running; exit 0 ;;
   start)         grep -qx "$2" /work/running 2>/dev/null || echo "$2" >> /work/running; exit 0 ;;
   daemon-reload) exit 0 ;;
@@ -77,8 +79,9 @@ case "$url" in
 esac
 echo "curl 흉내가 모르는 경로다: $url" >&2; exit 2
 EOF
-chmod +x /usr/local/bin/java /usr/local/bin/systemctl /usr/local/bin/curl
-echo UP > "$WORK/health"; : > "$WORK/running"; : > "$WORK/systemctl.log"; rm -f "$WORK/stale"
+chmod +x /usr/bin/java /usr/local/bin/systemctl /usr/local/bin/curl
+echo UP > "$WORK/health"; : > "$WORK/running"; : > "$WORK/enabled"
+: > "$WORK/systemctl.log"; rm -f "$WORK/stale"
 ok "java · systemctl · curl 흉내"
 
 source /rehearse/digest.sh
@@ -105,9 +108,12 @@ make_revision() {
 }
 
 # CodeDeploy 흉내. Install 이벤트가 revision 을 staging 으로 복사한다
+DEPLOY_SEQ=0
 deploy() {
   local component="$1" expect="${2:-ok}"
   local a="$ARCHIVE/$component" rc=0
+  DEPLOY_SEQ=$((DEPLOY_SEQ + 1))
+  export DEPLOYMENT_ID="d-$component-$DEPLOY_SEQ" 
   for hook in preflight install start validate; do
     if [ "$hook" = "install" ]; then
       rm -rf "/opt/salmonbus/$component/staging"
@@ -151,7 +157,9 @@ deploy worker
   && ok "api current 가 소스 지문으로 이름 붙은 판을 가리킨다" || bad "api current=$(readlink -f /opt/salmonbus/api/current 2>/dev/null)"
 grep -qx salmonbus-api /work/running && grep -qx salmonbus-worker /work/running \
   && ok "둘 다 올라갔다" || bad "안 올라간 것이 있다"
-[ ! -f /opt/salmonbus/.deploying ] && ok "배포 표시가 지워졌다" || bad "배포 표시가 남았다"
+[ ! -d /opt/salmonbus/.deploying ] && ok "배포 잠금이 풀렸다" || bad "배포 잠금이 남았다"
+grep -qx salmonbus-api /work/enabled && grep -qx salmonbus-worker /work/enabled \
+  && ok "둘 다 enable 됐다. 재부팅해도 올라온다" || bad "enable 안 된 것이 있다"
 
 sec "3. api 소스만 바뀐 배포"
 : > /work/systemctl.log
@@ -185,13 +193,37 @@ grep -qE 'stop salmonbus' /work/systemctl.log \
   && ok "돌고 있는 판을 안 지웠다" || bad "돌고 있는 판이 사라졌다"
 
 sec "5. api 배포가 도는 중이면 worker 가 안 끼어드나"
-printf 'api %s\n' "$(date +%s)" > /opt/salmonbus/.deploying
+mkdir -p /opt/salmonbus/.deploying
+printf 'api d-api-999 %s\n' "$(date +%s)" > /opt/salmonbus/.deploying/owner
 if bash "$ARCHIVE/worker/scripts/preflight.sh" > "$WORK/lock.out" 2>&1; then
   bad "api 배포 중인데 worker 가 들어왔다"
 else
   grep -q '도는 중' "$WORK/lock.out" && ok "worker 가 막혔다" || bad "막히긴 했는데 이유가 다르다"
 fi
-rm -f /opt/salmonbus/.deploying
+rm -rf /opt/salmonbus/.deploying
+
+sec "5-2. 한 번 실패한 직후 바로 되돌리기 (CodeDeploy 가 하는 순서)"
+# 성공 -> 실패 -> 그 직전 판 재배포. 이때 current 는 실패한 판, previous 는 직전 성공 판이다
+RB_GOOD=aaaa1111bbbb2222cccc3333dddd4444eeee5555ffff6666777788889999aaaa
+RB_BAD=bbbb2222cccc3333dddd4444eeee5555ffff6666777788889999aaaabbbb1111
+make_revision api RBGOOD ggggggg0001 "$RB_GOOD" "2026-09-02T06:00:00Z"
+deploy api
+echo DOWN > /work/health
+make_revision api RBBAD bbbbbbb0002 "$RB_BAD" "2026-09-02T06:10:00Z"
+deploy api fail
+echo UP > /work/health
+[ "$(readlink -f /opt/salmonbus/api/current)" = "/opt/salmonbus/api/releases/$RB_BAD" ] \
+  && ok "실패한 판이 current 다" || bad "current=$(readlink -f /opt/salmonbus/api/current)"
+[ "$(readlink -f /opt/salmonbus/api/previous)" = "/opt/salmonbus/api/releases/$RB_GOOD" ] \
+  && ok "직전 성공 판이 previous 다" || bad "previous=$(readlink -f /opt/salmonbus/api/previous)"
+# CodeDeploy 의 자동 롤백은 직전 성공 revision 을 그대로 다시 배포하는 것이다
+: > /work/systemctl.log
+make_revision api RBGOOD ggggggg0001 "$RB_GOOD" "2026-09-02T06:00:00Z"
+deploy api
+[ "$(readlink -f /opt/salmonbus/api/current)" = "/opt/salmonbus/api/releases/$RB_GOOD" ] \
+  && ok "current 가 직전 성공 판으로 돌아왔다" || bad "current=$(readlink -f /opt/salmonbus/api/current)"
+grep -qx salmonbus-api /work/running \
+  && ok "되돌린 뒤에도 서비스가 돈다" || bad "되돌렸는데 안 돈다"
 
 sec "6. 옛 프로세스가 응답하면 validate 가 잡나"
 : > /work/systemctl.log
@@ -206,23 +238,6 @@ make_revision api APIv4 eeeeeee5555 4444dddd5555eeee6666ffff7777000088889999aaaa
 deploy api fail
 echo UP > /work/health
 
-sec "7-2. 되돌리기가 실제로 도는가"
-# CodeDeploy 의 자동 롤백은 직전 성공 revision 을 다시 배포하는 것이다. 그것을 그대로 흉내낸다
-GOOD_DIGEST=2222bbbb3333cccc4444dddd5555eeee6666ffff7777000088889999aaaa1111
-before="$(readlink -f /opt/salmonbus/api/current)"
-[ "$before" != "/opt/salmonbus/api/releases/$GOOD_DIGEST" ] \
-  && ok "실패한 배포가 current 를 옮겨 놓은 상태다" || bad "실패 전후가 같아서 되돌릴 것이 없다"
-: > /work/systemctl.log
-make_revision api APIv2 bbbbbbb2222 "$GOOD_DIGEST" "2026-09-02T02:00:00Z"
-deploy api
-[ "$(readlink -f /opt/salmonbus/api/current)" = "/opt/salmonbus/api/releases/$GOOD_DIGEST" ] \
-  && ok "current 가 직전 성공 판으로 돌아왔다" || bad "current=$(readlink -f /opt/salmonbus/api/current)"
-grep -qx salmonbus-api /work/running \
-  && ok "되돌린 뒤에도 서비스가 돌고 있다" || bad "되돌렸는데 안 돈다"
-info_digest="$(sed -n 's/^INFO_SOURCEDIGEST=//p' /opt/salmonbus/api/current/release.env)"
-[ "$info_digest" = "$GOOD_DIGEST" ] \
-  && ok "info 가 직전 성공 판을 가리킨다" || bad "info=$info_digest"
-
 sec "8. 판을 셋만 남기는가"
 n=$(/bin/ls -1d /opt/salmonbus/api/releases/*/ 2>/dev/null | wc -l)
 [ "$n" -le 3 ] && ok "api 판 $n 개" || bad "api 판이 $n 개다"
@@ -234,6 +249,25 @@ grep -qc '^GBIS_SERVICE_KEY=' /etc/salmonbus/worker.env \
   && ok "키 줄이 그대로 있다" || bad "키 줄이 없어졌다"
 [ -d /var/lib/salmonbus/model/current ] \
   && ok "계수 파일 자리가 배포 밖에 만들어졌다" || bad "계수 파일 자리가 없다"
+
+sec "9-2. 배포판 목록을 손대면 releases 밖을 건드리나"
+before_count=$(/bin/ls -1d /opt/salmonbus/api/releases/*/ 2>/dev/null | wc -l)
+mkdir -p /opt/salmonbus/바깥/지워지면안됨 && touch /opt/salmonbus/바깥/지워지면안됨/파일
+for evil in "../../../바깥/지워지면안됨" "짧은지문" "$(printf 'z%.0s' $(seq 1 64))"; do
+  make_revision api EVIL zzzzzzz9999 1111aaaa2222bbbb3333cccc4444dddd5555eeee6666ffff7777000088889999 "2026-09-02T09:00:00Z"
+  sed -i "s#^sourceDigest=.*#sourceDigest=$evil#" "$ARCHIVE/api/release-manifest.txt"
+  if bash "$ARCHIVE/api/scripts/preflight.sh" > "$WORK/evil.out" 2>&1; then
+    bad "손댄 목록이 preflight 를 통과했다: $evil"
+  else
+    ok "손댄 목록을 preflight 가 막았다"
+  fi
+done
+[ -f /opt/salmonbus/바깥/지워지면안됨/파일 ] \
+  && ok "releases 밖 파일이 그대로다" || bad "releases 밖이 지워졌다"
+after_count=$(/bin/ls -1d /opt/salmonbus/api/releases/*/ 2>/dev/null | wc -l)
+[ "$before_count" = "$after_count" ] \
+  && ok "판 수가 안 바뀌었다" || bad "판이 $before_count 에서 $after_count 로 바뀌었다"
+rm -rf /opt/salmonbus/바깥
 
 sec "10. 훅 로그에 값이 새지 않았는가"
 if grep -rqE 'GBIS_SERVICE_KEY=[^$]|DB_PASSWORD=[^$]' "$WORK"/*.out 2>/dev/null; then
