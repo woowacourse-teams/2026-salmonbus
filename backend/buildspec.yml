@@ -90,6 +90,20 @@ phases:
           if unzip -l "$jar" | grep -qiE '\.env|secret|\.pem|\.jks'; then
             echo "JAR 안에 비밀로 보이는 항목이 있다: $jar"; exit 1
           fi
+          # 항목 이름만 보면 application.yml 안에 값이 박힌 것을 못 잡는다.
+          # 자리표시자가 그대로 남아 있는지를 본다. 값이 박히면 ${...} 가 없어진다
+          for yml in $(unzip -Z1 "$jar" | grep -E '^BOOT-INF/classes/application.*\.(yml|yaml|properties)$'); do
+            body="$(unzip -p "$jar" "$yml")"
+            for key in DB_PASSWORD DB_USERNAME DB_URL; do
+              if printf '%s' "$body" | grep -q "$key" \
+                 && ! printf '%s' "$body" | grep -q "\${$key"; then
+                echo "$jar 의 $yml 에 $key 가 자리표시자가 아닌 값으로 들어 있다"; exit 1
+              fi
+            done
+            if printf '%s' "$body" | grep -qE 'service-key: *[A-Za-z0-9%+/=]{20,}'; then
+              echo "$jar 의 $yml 에 인증키로 보이는 값이 박혀 있다"; exit 1
+            fi
+          done
         done
         echo "비밀 검사 통과"
 
