@@ -26,7 +26,7 @@ export function StopRow({ stop, routePosition, expanded, onToggle }: StopRowProp
   if (stop.kind === "passThrough") {
     return (
       <li className={styles.waypointRow}>
-        <TimelineMarker routePosition={routePosition} tone="passThrough" band="waypoint" />
+        <TimelineMarker sequence={stop.sequence} routePosition={routePosition} tone="passThrough" band="waypoint" />
         <div className={styles.waypointHead}>
           <StopName name={stopNameLabel(stop)} muted />
           <span className={styles.caption}>{WAYPOINT_CAPTION}</span>
@@ -40,7 +40,7 @@ export function StopRow({ stop, routePosition, expanded, onToggle }: StopRowProp
 
   return (
     <li className={styles.stopRow}>
-      <TimelineMarker routePosition={routePosition} tone={tone} band="stop" />
+      <TimelineMarker sequence={stop.sequence} routePosition={routePosition} tone={tone} band="stop" />
       <button
         type="button"
         className={expanded ? styles.head.expanded : styles.head.collapsed}

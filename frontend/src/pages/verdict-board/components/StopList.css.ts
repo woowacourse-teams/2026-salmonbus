@@ -7,6 +7,29 @@ const listBase = style({
   listStyle: "none",
 });
 
+export const routeCanvas = style({
+  position: "relative",
+  minHeight: "100%",
+});
+
+export const liveVehicleOverlay = style({
+  position: "absolute",
+  zIndex: 2,
+  inset: 0,
+  overflow: "visible",
+  pointerEvents: "none",
+});
+
+export const liveVehicle = style({
+  position: "absolute",
+  top: 0,
+  left: vars.layout.axisX,
+  width: "30px",
+  height: "32px",
+  transitionProperty: "transform",
+  willChange: "transform",
+});
+
 const fadeIn = keyframes({
   from: { opacity: 0 },
   to: { opacity: 1 },
