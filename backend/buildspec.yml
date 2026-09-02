@@ -108,6 +108,11 @@ phases:
         echo "비밀 검사 통과"
 
 artifacts:
+  # secondary-artifacts 만 쓸 때도 CodeBuild 는 최상위 files 를 요구한다.
+  # 없으면 YAML 파싱은 되는데 산출물이 안 만들어진다
+  files:
+    - '**/*'
+  base-directory: backend/build/revision
   # CodeDeploy 배포 그룹이 둘이라 revision 도 둘로 낸다.
   # 여기 이름은 CodeBuild 프로젝트의 secondary artifact 식별자와 같아야 한다
   secondary-artifacts:
