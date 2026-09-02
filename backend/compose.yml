@@ -10,7 +10,10 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - salmonbus-db-data:/var/lib/postgresql/data
+      # postgres:18 은 자료를 /var/lib/postgresql/18/docker 에 둔다. 이미지가
+      # /var/lib/postgresql 자체를 볼륨으로 선언해서, 그 안쪽 data 에 또 붙이면
+      # 기동을 거부한다. 한 단계 위에 붙여야 뜬다.
+      - salmonbus-db-data:/var/lib/postgresql
 
 volumes:
   salmonbus-db-data:
