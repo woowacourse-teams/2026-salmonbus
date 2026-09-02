@@ -38,7 +38,7 @@ module.exports = merge(common, {
     proxy: [
       {
         context: ["/api"],
-        target: process.env.API_PROXY_TARGET ?? "http://localhost:8080",
+        target: process.env.API_PROXY_TARGET || "http://localhost:8080",
         changeOrigin: true,
       },
     ],
