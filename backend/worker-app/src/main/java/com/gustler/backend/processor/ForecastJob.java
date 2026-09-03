@@ -36,6 +36,17 @@ public class ForecastJob {
      */
     private static final Duration WARNING_INTERVAL = Duration.ofMinutes(1);
 
+    /**
+     * 밀려난 판을 창 뒤로 얼마나 더 거슬러 볼지.
+     *
+     * <p>창의 끝에서 재고 지금에서 재지 않는다. 지금에서 재면 보는 폭이 상한에서 창을 뺀 만큼이라
+     * 창을 넓힐수록 좁아지고, 창이 상한과 같아지면 폭이 0이 돼 밀린 판이 있어도 경고가 안 나간다.
+     *
+     * <p>폭은 창의 상한과 같은 값을 쓴다. 그보다 오래된 판은 창을 최대로 열어도 큐에 못 들어오니
+     * 밀린 것이 아니라 예보를 받을 일이 없는 판이다.
+     */
+    private static final Duration LEFT_BEHIND_LOOKBACK = ForecastProperties.MAX_STALENESS;
+
     private final VehicleTrajectoryRepository vehicleTrajectoryRepository;
     private final RouteVersionRepository routeVersionRepository;
     private final ForecastRuntime forecastRuntime;
@@ -85,7 +96,7 @@ public class ForecastJob {
         }
         Instant now = clock.instant();
         Instant notBefore = now.minus(properties.staleness());
-        Instant leftBehindFrom = now.minus(ForecastProperties.MAX_STALENESS);
+        Instant leftBehindFrom = notBefore.minus(LEFT_BEHIND_LOOKBACK);
         Instant oldestLeftBehind = null;
         for (Long routeVersionId : routeVersionRepository.findActiveVersionIds()) {
             writeForecastsOf(routeVersionId, notBefore, runtime.get());

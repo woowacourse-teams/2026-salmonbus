@@ -183,10 +183,10 @@ class ForecastJobStalenessTest {
 
     /**
      * 옮겨 넣은 관측은 완료 표시가 영영 안 찍혀서, 아래를 안 끊으면 이관 뒤에 경고가 계속 켜진다.
-     * 거슬러 보는 폭이 창의 상한까지라는 것을 여기서 잡는다.
+     * 그 아래 끝을 창의 끝에서 재는 것을 여기서 잡는다.
      */
     @Test
-    void 거슬러_보는_폭은_창의_상한까지다() {
+    void 거슬러_보는_폭은_창_뒤로_상한만큼이다() {
         // given
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
         when(routeVersionRepository.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
@@ -195,11 +195,66 @@ class ForecastJobStalenessTest {
         job.writeForecasts();
 
         // then
+        assertThat(capturedLeftBehindWindow()).isEqualTo(new LeftBehindWindow(
+            NOW.minus(STALENESS).minus(ForecastProperties.MAX_STALENESS), NOW.minus(STALENESS)));
+    }
+
+    /**
+     * 폭을 지금에서 재면 창이 상한과 같아질 때 두 끝이 한 시각이 돼 조건이 늘 거짓이 된다.
+     * 상한은 검증이 받아 주는 값이라 설정으로 닿는다.
+     */
+    @Test
+    void 창을_상한까지_넓혀도_보는_폭이_안_줄어든다() {
+        // given
+        ForecastJob widest = jobWith(ForecastProperties.MAX_STALENESS);
+        when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
+        when(routeVersionRepository.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
+
+        // when
+        widest.writeForecasts();
+
+        // then
+        LeftBehindWindow actual = capturedLeftBehindWindow();
+        assertThat(Duration.between(actual.from(), actual.until()))
+            .isEqualTo(ForecastProperties.MAX_STALENESS);
+    }
+
+    @Test
+    void 창이_상한일_때도_밀려난_판이_있으면_경고를_남긴다() {
+        // given
+        ForecastJob widest = jobWith(ForecastProperties.MAX_STALENESS);
+        Instant leftBehindAt = NOW.minus(ForecastProperties.MAX_STALENESS).minusSeconds(1);
+        when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
+        when(routeVersionRepository.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
+        when(vehicleTrajectoryRepository.findOldestLeftBehindAt(eq(ROUTE_VERSION_3330), any(), any()))
+            .thenReturn(Optional.of(leftBehindAt));
+
+        // when
+        widest.writeForecasts();
+
+        // then
+        assertThat(warningMessages()).singleElement()
+            .asString().contains(leftBehindAt.toString());
+    }
+
+    private LeftBehindWindow capturedLeftBehindWindow() {
         verify(vehicleTrajectoryRepository)
             .findOldestLeftBehindAt(anyLong(), leftBehindFrom.capture(), leftBehindUntil.capture());
-        assertThat(new LeftBehindWindow(leftBehindFrom.getValue(), leftBehindUntil.getValue()))
-            .isEqualTo(new LeftBehindWindow(
-                NOW.minus(ForecastProperties.MAX_STALENESS), NOW.minus(STALENESS)));
+        return new LeftBehindWindow(leftBehindFrom.getValue(), leftBehindUntil.getValue());
+    }
+
+    private ForecastJob jobWith(
+        Duration staleness
+    ) {
+        return new ForecastJob(
+            vehicleTrajectoryRepository,
+            routeVersionRepository,
+            forecastRuntime,
+            forecastBatchWriter,
+            new ForecastProperties(
+                true, Duration.ofSeconds(10), Duration.ofSeconds(60), Duration.ofHours(6),
+                staleness, 20, 3000, 400),
+            Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     private record LeftBehindWindow(
