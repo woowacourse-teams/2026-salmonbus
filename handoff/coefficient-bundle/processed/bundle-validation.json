@@ -1,0 +1,205 @@
+{
+  "all_reported_numbers_finite": true,
+  "classification": "NON_COMPLIANT_WITH_V4_1",
+  "data_through": "2026-08-23T14:59:56Z",
+  "dev_comparison": {
+    "dev_required_manifest_fields_missing": [
+      "bundleSchemaVersion",
+      "capacityPolicy",
+      "cellStatisticsPolicy",
+      "dataThrough",
+      "featureContractVersion",
+      "featureNames",
+      "goldenVector",
+      "goldenVectorDigest",
+      "horizonStops",
+      "identityDigest",
+      "modelVersion",
+      "normalizationConstants",
+      "releaseId",
+      "routeReference",
+      "sourceCommit",
+      "tensors",
+      "timeSlotSource",
+      "weightsDigest"
+    ],
+    "feature_names_equal": false,
+    "manifest_field_set_equal": false,
+    "production_extra_tensors_rejected_by_dev": [
+      "band_seen",
+      "cell_seen",
+      "cell_values",
+      "lead_seconds"
+    ],
+    "tensor_name_set_equal": false,
+    "top_level_camel_case_required_by_dev": true,
+    "top_level_snake_case_in_production": true
+  },
+  "dev_v4_1_drop_in_compatible": false,
+  "errors": [],
+  "files": {
+    "bundle_sha256_manifest_then_weights": "652ee361876e2ab38993472ea65fcd182f2737bc7d819c4bfdb8c8c3850f9335",
+    "manifest.json": {
+      "bytes": 61681,
+      "canonical_json": true,
+      "sha256": "2dce5eb26299ebe2ccbe02f02cdc97a7aa9b07ab319690f383b0928fd8b40405"
+    },
+    "weights.safetensors": {
+      "bytes": 235752,
+      "sha256": "680ef1823971d4a7ba102fd3b04259cc679b676502a0e6e425115fb33fd97be4"
+    }
+  },
+  "fit_rows_total": 1236608,
+  "production_contract_valid": true,
+  "release_id": "a18-a748cba6ca735e36",
+  "sensitive_hmac_values_in_manifest": false,
+  "source_dates": [
+    "2026-08-14",
+    "2026-08-15",
+    "2026-08-16",
+    "2026-08-17",
+    "2026-08-18",
+    "2026-08-19",
+    "2026-08-20",
+    "2026-08-21",
+    "2026-08-22",
+    "2026-08-23"
+  ],
+  "status": "PASS",
+  "tensors": {
+    "anchor_coefficients": {
+      "dtype": "float64",
+      "finite": true,
+      "maximum": 0.9892041327446616,
+      "maximum_absolute": 0.9892041327446616,
+      "mean": 0.47527402815577807,
+      "minimum": 0.009912751653924516,
+      "shape": [
+        2,
+        12,
+        2
+      ],
+      "values": 48,
+      "zero_values": 0
+    },
+    "band_seen": {
+      "counts": {
+        "1": 72
+      },
+      "dtype": "uint8",
+      "shape": [
+        2,
+        12,
+        3
+      ],
+      "values": 72
+    },
+    "bin_coefficients": {
+      "dtype": "float64",
+      "finite": true,
+      "maximum": 11.444352298755367,
+      "maximum_absolute": 15.179228455946038,
+      "mean": -0.18010734927708658,
+      "minimum": -15.179228455946038,
+      "shape": [
+        2,
+        12,
+        2,
+        9,
+        31
+      ],
+      "values": 13392,
+      "zero_values": 2319
+    },
+    "bin_fitted": {
+      "counts": {
+        "0": 46,
+        "1": 386
+      },
+      "dtype": "uint8",
+      "shape": [
+        2,
+        12,
+        2,
+        9
+      ],
+      "values": 432
+    },
+    "cell_seen": {
+      "counts": {
+        "0": 1404,
+        "1": 5004
+      },
+      "dtype": "uint8",
+      "shape": [
+        2,
+        12,
+        3,
+        89
+      ],
+      "values": 6408
+    },
+    "cell_values": {
+      "dtype": "float64",
+      "finite": true,
+      "maximum": 3.56317291855061,
+      "maximum_absolute": 6.795679831202341,
+      "mean": 3.014650535030856e-18,
+      "minimum": -6.795679831202341,
+      "shape": [
+        2,
+        12,
+        3,
+        89,
+        2
+      ],
+      "values": 12816,
+      "zero_values": 2808
+    },
+    "hurdle_coefficients": {
+      "dtype": "float64",
+      "finite": true,
+      "maximum": 2.901985960524037,
+      "maximum_absolute": 8.502404474627122,
+      "mean": -0.33667141529053074,
+      "minimum": -8.502404474627122,
+      "shape": [
+        2,
+        12,
+        31
+      ],
+      "values": 744,
+      "zero_values": 55
+    },
+    "lead_seconds": {
+      "dtype": "float64",
+      "finite": true,
+      "maximum": 1740.189,
+      "maximum_absolute": 1740.189,
+      "mean": 821.4678125,
+      "minimum": 90.104,
+      "shape": [
+        2,
+        12
+      ],
+      "values": 24,
+      "zero_values": 0
+    },
+    "sign_coefficients": {
+      "dtype": "float64",
+      "finite": true,
+      "maximum": 11.838951808579292,
+      "maximum_absolute": 11.838951808579292,
+      "mean": -0.10522023551516196,
+      "minimum": -9.795207012071197,
+      "shape": [
+        2,
+        12,
+        2,
+        31
+      ],
+      "values": 1488,
+      "zero_values": 110
+    }
+  }
+}

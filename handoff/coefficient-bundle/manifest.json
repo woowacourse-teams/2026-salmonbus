@@ -1,0 +1,236 @@
+{
+  "authority": {
+    "dev_v4_1_commit": "b239691512dc5c498ae7013cd786e0b627f0c010",
+    "producer_commit": "c5ff99da81ed0af9916bd5aa5115d89f49258e2c",
+    "site_support_commit": "a0924128467e59b54efa00421b8d6a1db5f6d5f0"
+  },
+  "bundle": {
+    "bundle_sha256": "652ee361876e2ab38993472ea65fcd182f2737bc7d819c4bfdb8c8c3850f9335",
+    "data_through": "2026-08-23T14:59:56Z",
+    "dev_drop_in_compatible": false,
+    "directory": "bundle/NON_COMPLIANT_WITH_V4_1_production-a18-a748cba6ca735e36",
+    "feature_count": 31,
+    "fit_row_count": 1236608,
+    "horizons": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "model_version": "seat-distribution-a18-v1",
+    "release_id": "a18-a748cba6ca735e36",
+    "routes": [
+      "1650",
+      "3330"
+    ],
+    "schema_version": "a18-live-bundle-v1",
+    "tensor_count": 9
+  },
+  "classification": "NON_COMPLIANT_WITH_V4_1",
+  "file_count_excluding_self": 25,
+  "files": [
+    {
+      "bytes": 11011,
+      "path": "CALCULATION.md",
+      "role": "handoff_documentation",
+      "sha256": "0e9fbab4dab9ae71b141619bc390a27478d03f47248ab5d186cc7dfe65172fd8"
+    },
+    {
+      "bytes": 15518,
+      "path": "CONTRACT-COMPLIANCE.md",
+      "role": "handoff_documentation",
+      "sha256": "5a8b5dc73a4dd38cf876089111e810d65834a0b242cc6cd9e4cd25aad478cb9d"
+    },
+    {
+      "bytes": 9832,
+      "path": "PROVENANCE.md",
+      "role": "handoff_documentation",
+      "sha256": "93600f151ef18e5b41f02b075befc08bd717861fcd7341dd5d16363135ddab12"
+    },
+    {
+      "bytes": 5025,
+      "path": "README.md",
+      "role": "handoff_documentation",
+      "sha256": "a113766f0b57655f2494757dd4719c0df2985440a0200eb9c3973f3a3230da5a"
+    },
+    {
+      "bytes": 7402,
+      "path": "VALIDATION.md",
+      "role": "handoff_documentation",
+      "sha256": "9aa2dad51eeb68c062cbd8bbd24b3efebfe23b6d466c7f800fb4df162b67a1c4"
+    },
+    {
+      "bytes": 555,
+      "path": "bundle/NON_COMPLIANT_WITH_V4_1_production-a18-a748cba6ca735e36/NON_COMPLIANT_WITH_V4_1.md",
+      "role": "actual_production_bundle",
+      "sha256": "ddb220a82759b11af3301e2a342a55faf8ed58d79ef90218d25e425ce69c9b04"
+    },
+    {
+      "bytes": 61681,
+      "data_period_kst": {
+        "from": "2026-08-14",
+        "through": "2026-08-23"
+      },
+      "path": "bundle/NON_COMPLIANT_WITH_V4_1_production-a18-a748cba6ca735e36/manifest.json",
+      "role": "actual_production_bundle",
+      "row_count": 1236608,
+      "sha256": "2dce5eb26299ebe2ccbe02f02cdc97a7aa9b07ab319690f383b0928fd8b40405"
+    },
+    {
+      "bytes": 235752,
+      "data_period_kst": {
+        "from": "2026-08-14",
+        "through": "2026-08-23"
+      },
+      "path": "bundle/NON_COMPLIANT_WITH_V4_1_production-a18-a748cba6ca735e36/weights.safetensors",
+      "role": "actual_production_bundle",
+      "row_count": 1236608,
+      "sha256": "680ef1823971d4a7ba102fd3b04259cc679b676502a0e6e425115fb33fd97be4"
+    },
+    {
+      "bytes": 4510,
+      "path": "processed/bundle-validation.json",
+      "role": "derived_validation_or_inventory",
+      "sha256": "3cfbfc453184d80873a20cb6fa399b67a4231fb06eece9b7a9eff52792f1279f"
+    },
+    {
+      "bytes": 3814,
+      "path": "processed/dev-consumer-contract.json",
+      "role": "derived_validation_or_inventory",
+      "sha256": "09157afde8f41e4b6fc359ecf5d00d34b121998f55f83f3b626ce8aa7598de31"
+    },
+    {
+      "bytes": 6175,
+      "path": "processed/infrastructure-observation.json",
+      "role": "derived_validation_or_inventory",
+      "sha256": "29e25a63020991dfbe63314e6e19f377086cc0034785be7793a8d52c940434f0"
+    },
+    {
+      "bytes": 1497,
+      "path": "processed/rebuild-diagnostics.json",
+      "role": "derived_validation_or_inventory",
+      "sha256": "13d8f773367e86971c117c668a7ade40b1029a7bc56ef3a9276121aaad28afca"
+    },
+    {
+      "bytes": 2630,
+      "path": "processed/rebuild-receipt.json",
+      "role": "derived_validation_or_inventory",
+      "sha256": "8f7871bdc065fd24beba4979ed57f869a445bb78fbc8e929900c158cc02b8838"
+    },
+    {
+      "bytes": 1012,
+      "path": "processed/rebuild-verification.json",
+      "role": "derived_validation_or_inventory",
+      "sha256": "18fe83ee7fc96e57519957f33954a6fb5fb4fcf73a22995cb53b8dfbb60de0f9"
+    },
+    {
+      "bytes": 2633,
+      "path": "processed/runtime-validation.json",
+      "role": "derived_validation_or_inventory",
+      "sha256": "5cff791b519d4822943aa0dcc905efacca5598a83b46f346749653d76bad4180"
+    },
+    {
+      "bytes": 10558,
+      "path": "processed/source-inventory.json",
+      "role": "derived_validation_or_inventory",
+      "sha256": "0151fa655fd374c3bd0f11b695dc775e3b7a2e8c8bf74f77310174bb11d57e43"
+    },
+    {
+      "bytes": 846,
+      "path": "raw/README.md",
+      "role": "safe_source_provenance",
+      "sha256": "797abe7eeb1e787076351ea73895c6e6ab976b660cf28c791d151914a9846971"
+    },
+    {
+      "bytes": 3461,
+      "data_period_kst": {
+        "from": "2026-08-14",
+        "through": "2026-08-23"
+      },
+      "path": "raw/aggregate-build-receipt.json",
+      "role": "safe_source_provenance",
+      "row_count": 1236608,
+      "sha256": "0a06a317f1aabfca8c4aea99d5788ddd674b968a42354a7d616af631df373fe0"
+    },
+    {
+      "bytes": 5445,
+      "path": "scripts/build-handoff-manifest.py",
+      "role": "reproduction_script",
+      "sha256": "aa2410cd18d21a6a222fb6d1b7831fa6da5746a049f8e78aae163a8a171d9a90"
+    },
+    {
+      "bytes": 3127,
+      "path": "scripts/download-production-bundle.sh",
+      "role": "reproduction_script",
+      "sha256": "22bf9456ace0f55323a8a524085685b8cea2f6d888dca9d56f019c7e4dcb3feb"
+    },
+    {
+      "bytes": 9090,
+      "path": "scripts/inventory-infrastructure.py",
+      "role": "reproduction_script",
+      "sha256": "70823d976e4744ed8c0159e249ceaa1ff2d1d58ef5c1ab4b636e4b39a44d036f"
+    },
+    {
+      "bytes": 5402,
+      "path": "scripts/inventory-source.py",
+      "role": "reproduction_script",
+      "sha256": "1c7198a1f5670ab0fca8af6a669d582c4b81f56a6b6e34f1d07d82ad8861457e"
+    },
+    {
+      "bytes": 2178,
+      "path": "scripts/rebuild-production-bundle.sh",
+      "role": "reproduction_script",
+      "sha256": "f9f1c18c79cb1a0201c53db3fbfe7230c6e5414a412b649e79d3a6297f6e0661"
+    },
+    {
+      "bytes": 8957,
+      "path": "scripts/validate-bundle.py",
+      "role": "reproduction_script",
+      "sha256": "539bb11a2061c75a55e414aa30311d759e693b180ee560e854dbd33045834d5e"
+    },
+    {
+      "bytes": 3254,
+      "path": "scripts/validate-production-runtime.sh",
+      "role": "reproduction_script",
+      "sha256": "a0b8589a8241c530e0c5cd3b0d9d1ffbea4e9b8515c2bbfaf7dea8d665d8e179"
+    }
+  ],
+  "generated_at_utc": "2026-09-02T03:50:18.940938+00:00",
+  "live_inventory_observation": {
+    "date_max": "2026-09-02",
+    "date_min": "2026-08-14",
+    "observed_at_utc": "2026-09-02T02:57:49.030914+00:00",
+    "raw_bytes": 487419569,
+    "raw_objects": 145535,
+    "record_bytes": 1776593699,
+    "record_objects": 145660
+  },
+  "manifest_self": {
+    "note": "self is intentionally excluded from the file digests",
+    "path": "manifest.json",
+    "sha256": null
+  },
+  "schema_version": "coefficient-bundle-handoff-v1",
+  "source": {
+    "combined_manifest_sha256": "3e1628f0240515db38c73f04dac6346596a28a663bac7d55e0ef84af25e15536",
+    "finalized_examples": 1236608,
+    "normalized_observations": 992866,
+    "point_events": 114945,
+    "raw_documents": 65095,
+    "record_documents": 65152,
+    "row_level_source_exclusion_reason": "private vehicle, plate, and HMAC fields",
+    "row_level_source_included": false,
+    "training_period_kst": {
+      "from": "2026-08-14",
+      "through": "2026-08-23"
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "schema_version": "safe-rebuild-diagnostics-v1",
+  "sensitive_values_emitted": false,
+  "attempts": [
+    {
+      "python": "3.13",
+      "status": "failed_closed",
+      "code": "unexpected_ValueError"
+    },
+    {
+      "python": "3.11.15",
+      "status": "failed_closed",
+      "code": "unexpected_ValueError"
+    }
+  ],
+  "safe_trace": {
+    "file": "final_bundle_adapter.py",
+    "function": "adapter_implementation_digest",
+    "line": 740,
+    "cause": "macOS /var and /private/var aliases made Path.relative_to reject an otherwise identical path",
+    "data_validation_failure": false,
+    "upstream_source_modified": false
+  },
+  "fix_in_reproduction_wrapper": {
+    "change": "resolve only the temporary extraction directory with pwd -P",
+    "producer_files_modified": false,
+    "calculation_modified": false
+  },
+  "digest_preflight_after_path_normalization": {
+    "adapter_sha256": "aefd2e800760d4e40c017a28734d481adf9179776f2b0edda8dd0246e7f0dfdd",
+    "expected_adapter_sha256": "aefd2e800760d4e40c017a28734d481adf9179776f2b0edda8dd0246e7f0dfdd",
+    "evaluator_sha256": "baa3b865a63dafea43e1403de3fb1515533adc13de2ee601a541325016f24c93",
+    "expected_evaluator_sha256": "baa3b865a63dafea43e1403de3fb1515533adc13de2ee601a541325016f24c93",
+    "status": "PASS"
+  },
+  "independent_last_day_probe": {
+    "date_kst": "2026-08-23",
+    "record_documents": 8556,
+    "raw_documents": 8552,
+    "point_events": 10498,
+    "finalized_examples": 114017,
+    "status": "PASS"
+  }
+}

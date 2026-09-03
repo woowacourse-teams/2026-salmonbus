@@ -1,0 +1,28 @@
+{
+  "byte_identical": {
+    "manifest.json": true,
+    "weights.safetensors": true
+  },
+  "production": {
+    "bundle_sha256": "652ee361876e2ab38993472ea65fcd182f2737bc7d819c4bfdb8c8c3850f9335",
+    "manifest_sha256": "2dce5eb26299ebe2ccbe02f02cdc97a7aa9b07ab319690f383b0928fd8b40405",
+    "weights_sha256": "680ef1823971d4a7ba102fd3b04259cc679b676502a0e6e425115fb33fd97be4"
+  },
+  "rebuilt": {
+    "bundle_sha256": "652ee361876e2ab38993472ea65fcd182f2737bc7d819c4bfdb8c8c3850f9335",
+    "manifest_sha256": "2dce5eb26299ebe2ccbe02f02cdc97a7aa9b07ab319690f383b0928fd8b40405",
+    "weights_sha256": "680ef1823971d4a7ba102fd3b04259cc679b676502a0e6e425115fb33fd97be4"
+  },
+  "runtime": {
+    "duration_seconds": 869.222,
+    "peak_rss_mib": 1512.859
+  },
+  "source": {
+    "combined_manifest_sha256": "3e1628f0240515db38c73f04dac6346596a28a663bac7d55e0ef84af25e15536",
+    "finalized_examples": 1236608,
+    "point_events": 114945,
+    "raw_documents": 65095,
+    "record_documents": 65152
+  },
+  "status": "PASS"
+}

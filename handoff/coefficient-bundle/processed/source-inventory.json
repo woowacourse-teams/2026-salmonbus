@@ -1,0 +1,418 @@
+{
+  "_inventory": {
+    "aws_operations": [
+      "s3:ListBucket",
+      "s3:GetObject"
+    ],
+    "bucket": "salmonbus-collector-827325854159-apne2",
+    "field_values_emitted": false,
+    "object_keys_emitted": false,
+    "observed_at_utc": "2026-09-02T02:57:49.030914+00:00",
+    "region": "ap-northeast-2"
+  },
+  "raw": {
+    "bytes": 487419569,
+    "date_max": "2026-09-02",
+    "date_min": "2026-08-14",
+    "latest_10_dates": [
+      {
+        "by_route": {
+          "1650": 4277,
+          "3330": 4278
+        },
+        "bytes": 32171631,
+        "date": "2026-08-24",
+        "objects": 8555
+      },
+      {
+        "by_route": {
+          "1650": 4278,
+          "3330": 4278
+        },
+        "bytes": 32954503,
+        "date": "2026-08-25",
+        "objects": 8556
+      },
+      {
+        "by_route": {
+          "1650": 4278,
+          "3330": 4278
+        },
+        "bytes": 33014737,
+        "date": "2026-08-26",
+        "objects": 8556
+      },
+      {
+        "by_route": {
+          "1650": 4278,
+          "3330": 4277
+        },
+        "bytes": 32888129,
+        "date": "2026-08-27",
+        "objects": 8555
+      },
+      {
+        "by_route": {
+          "1650": 4275,
+          "3330": 4277
+        },
+        "bytes": 33910914,
+        "date": "2026-08-28",
+        "objects": 8552
+      },
+      {
+        "by_route": {
+          "1650": 4277,
+          "3330": 4266
+        },
+        "bytes": 20528312,
+        "date": "2026-08-29",
+        "objects": 8543
+      },
+      {
+        "by_route": {
+          "1650": 4273,
+          "3330": 4252
+        },
+        "bytes": 18320255,
+        "date": "2026-08-30",
+        "objects": 8525
+      },
+      {
+        "by_route": {
+          "1650": 4276,
+          "3330": 4266
+        },
+        "bytes": 33668393,
+        "date": "2026-08-31",
+        "objects": 8542
+      },
+      {
+        "by_route": {
+          "1650": 4278,
+          "3330": 4274
+        },
+        "bytes": 33804365,
+        "date": "2026-09-01",
+        "objects": 8552
+      },
+      {
+        "by_route": {
+          "1650": 1753,
+          "3330": 1751
+        },
+        "bytes": 12538877,
+        "date": "2026-09-02",
+        "objects": 3504
+      }
+    ],
+    "newest_last_modified": "2026-09-02T02:58:17+00:00",
+    "objects": 145535,
+    "oldest_last_modified": "2026-08-14T07:38:46+00:00",
+    "sample": {
+      "bytes": 4433,
+      "date": "2026-09-02",
+      "last_modified": "2026-09-02T02:58:17+00:00",
+      "object_key_emitted": false,
+      "schema": {
+        "response": {
+          "comMsgHeader": "string",
+          "msgBody": {
+            "busLocationList": {
+              "item": {
+                "crowded": "int",
+                "lowPlate": "int",
+                "plateNo": "string",
+                "remainSeatCnt": "int",
+                "routeId": "int",
+                "routeTypeCd": "int",
+                "stateCd": "int",
+                "stationId": "int",
+                "stationSeq": "int",
+                "taglessCd": "int",
+                "vehId": "int"
+              },
+              "length": 22,
+              "type": "array"
+            }
+          },
+          "msgHeader": {
+            "queryTime": "string",
+            "resultCode": "int",
+            "resultMessage": "string"
+          }
+        }
+      },
+      "sensitive_field_paths": [
+        "$.response.msgBody.busLocationList[].lowPlate",
+        "$.response.msgBody.busLocationList[].plateNo",
+        "$.response.msgBody.busLocationList[].vehId"
+      ],
+      "values_emitted": false
+    }
+  },
+  "records": {
+    "bytes": 1776593699,
+    "date_max": "2026-09-02",
+    "date_min": "2026-08-14",
+    "latest_10_dates": [
+      {
+        "by_route": {
+          "1650": 4278,
+          "3330": 4278
+        },
+        "bytes": 115128125,
+        "date": "2026-08-24",
+        "objects": 8556
+      },
+      {
+        "by_route": {
+          "1650": 4278,
+          "3330": 4278
+        },
+        "bytes": 117508759,
+        "date": "2026-08-25",
+        "objects": 8556
+      },
+      {
+        "by_route": {
+          "1650": 4278,
+          "3330": 4278
+        },
+        "bytes": 117696315,
+        "date": "2026-08-26",
+        "objects": 8556
+      },
+      {
+        "by_route": {
+          "1650": 4278,
+          "3330": 4278
+        },
+        "bytes": 117309014,
+        "date": "2026-08-27",
+        "objects": 8556
+      },
+      {
+        "by_route": {
+          "1650": 4277,
+          "3330": 4278
+        },
+        "bytes": 120417717,
+        "date": "2026-08-28",
+        "objects": 8555
+      },
+      {
+        "by_route": {
+          "1650": 4279,
+          "3330": 4278
+        },
+        "bytes": 79708782,
+        "date": "2026-08-29",
+        "objects": 8557
+      },
+      {
+        "by_route": {
+          "1650": 4277,
+          "3330": 4278
+        },
+        "bytes": 72982872,
+        "date": "2026-08-30",
+        "objects": 8555
+      },
+      {
+        "by_route": {
+          "1650": 4279,
+          "3330": 4278
+        },
+        "bytes": 119688016,
+        "date": "2026-08-31",
+        "objects": 8557
+      },
+      {
+        "by_route": {
+          "1650": 4278,
+          "3330": 4278
+        },
+        "bytes": 120100831,
+        "date": "2026-09-01",
+        "objects": 8556
+      },
+      {
+        "by_route": {
+          "1650": 1752,
+          "3330": 1752
+        },
+        "bytes": 45203403,
+        "date": "2026-09-02",
+        "objects": 3504
+      }
+    ],
+    "newest_last_modified": "2026-09-02T02:57:57+00:00",
+    "objects": 145660,
+    "oldest_last_modified": "2026-08-14T07:38:46+00:00",
+    "sample": {
+      "bytes": 15498,
+      "date": "2026-09-02",
+      "last_modified": "2026-09-02T02:57:57+00:00",
+      "object_key_emitted": false,
+      "schema": {
+        "api": {
+          "msgHeader": {
+            "queryTime": "string",
+            "resultCode": "int",
+            "resultMessage": "string"
+          },
+          "queryTime": "string",
+          "resultCode": "int",
+          "resultMessage": "string"
+        },
+        "buses": {
+          "item": {
+            "crowded": "int",
+            "lowPlate": "int",
+            "plateNo": "string",
+            "pseudonyms": {
+              "plateNo_hmac": "string",
+              "vehId_hmac": "string"
+            },
+            "remainSeatCnt": "int",
+            "routeId": "int",
+            "routeTypeCd": "int",
+            "stateCd": "int",
+            "stationId": "int",
+            "stationSeq": "int",
+            "taglessCd": "int",
+            "vehId": "int"
+          },
+          "length": 22,
+          "type": "array"
+        },
+        "classification": {
+          "call_attempted": "bool",
+          "call_failed": "bool",
+          "error_type": "NoneType",
+          "type": "string",
+          "vehicle_count": "int",
+          "zero_vehicles": "bool"
+        },
+        "collection": {
+          "expected_daily_calls": "int",
+          "forced": "bool",
+          "period_minutes": "int",
+          "phase": "string",
+          "quota_mode": "string",
+          "reference_minute_kst": "string",
+          "round_index": "int",
+          "rounds_in_invocation": "int",
+          "schedule_expression": "string",
+          "schedule_id": "string",
+          "schedule_timezone": "string",
+          "scheduled_at": "string",
+          "source": "string",
+          "strategy_version": "string"
+        },
+        "http": {
+          "response_bytes": "int",
+          "response_headers": {
+            "content_length": "string",
+            "content_type": "string",
+            "date": "string"
+          },
+          "response_sha256": "string",
+          "status": "int"
+        },
+        "invocation_id": "string",
+        "privacy": {
+          "hmac_algorithm": "string",
+          "public_export_rule": "string",
+          "raw_identifiers_present_in_private_bucket": "bool"
+        },
+        "quota": {
+          "count_after_reservation": "int",
+          "counter_key": "string",
+          "daily_call_cap": "int",
+          "date_kst": "string",
+          "reservation_before_api_call": "bool"
+        },
+        "raw_response": {
+          "exact_http_body_preserved": "bool",
+          "s3_key": "string",
+          "sha256": "string"
+        },
+        "record_id": "string",
+        "request": {
+          "credential_source": "string",
+          "endpoint": "string",
+          "method": "string",
+          "parameters": {
+            "format": "string",
+            "routeId": "string"
+          }
+        },
+        "response_envelope": {
+          "response": {
+            "comMsgHeader": "string",
+            "msgBody": {
+              "busLocationList": {
+                "item": {
+                  "crowded": "int",
+                  "lowPlate": "int",
+                  "plateNo": "string",
+                  "remainSeatCnt": "int",
+                  "routeId": "int",
+                  "routeTypeCd": "int",
+                  "stateCd": "int",
+                  "stationId": "int",
+                  "stationSeq": "int",
+                  "taglessCd": "int",
+                  "vehId": "int"
+                },
+                "length": 22,
+                "type": "array"
+              }
+            },
+            "msgHeader": {
+              "queryTime": "string",
+              "resultCode": "int",
+              "resultMessage": "string"
+            }
+          }
+        },
+        "route": {
+          "name": "string",
+          "route_id": "string"
+        },
+        "schema_version": "string",
+        "timing": {
+          "duration_ms": "float",
+          "request_started_at": {
+            "kst": "string",
+            "utc": "string"
+          },
+          "response_headers_received_at": {
+            "kst": "string",
+            "utc": "string"
+          },
+          "response_received_at": {
+            "kst": "string",
+            "utc": "string"
+          }
+        }
+      },
+      "sensitive_field_paths": [
+        "$.buses[].lowPlate",
+        "$.buses[].plateNo",
+        "$.buses[].pseudonyms.plateNo_hmac",
+        "$.buses[].pseudonyms.vehId_hmac",
+        "$.buses[].vehId",
+        "$.classification.vehicle_count",
+        "$.classification.zero_vehicles",
+        "$.privacy.hmac_algorithm",
+        "$.response_envelope.response.msgBody.busLocationList[].lowPlate",
+        "$.response_envelope.response.msgBody.busLocationList[].plateNo",
+        "$.response_envelope.response.msgBody.busLocationList[].vehId"
+      ],
+      "values_emitted": false
+    }
+  }
+}

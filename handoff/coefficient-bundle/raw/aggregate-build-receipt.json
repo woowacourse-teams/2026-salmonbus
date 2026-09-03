@@ -1,0 +1,98 @@
+{
+  "schema_version": "1.0.0",
+  "kind": "a18-private-release-candidate",
+  "validated_on": "2026-08-24",
+  "status": "validated_not_deployed",
+  "previous_production": {
+    "release_id": "a18-a139a49de3e41907",
+    "data_through": "2026-08-20T14:59:56Z",
+    "bundle_sha256": "c63fc5c3a3b1727ba652e6c3d6f09be661f34b1ccb5eb7e0b0d5afab23e66c74"
+  },
+  "candidate": {
+    "release_id": "a18-a748cba6ca735e36",
+    "data_through": "2026-08-23T14:59:56Z",
+    "manifest_sha256": "2dce5eb26299ebe2ccbe02f02cdc97a7aa9b07ab319690f383b0928fd8b40405",
+    "weights_sha256": "680ef1823971d4a7ba102fd3b04259cc679b676502a0e6e425115fb33fd97be4",
+    "bundle_sha256": "652ee361876e2ab38993472ea65fcd182f2737bc7d819c4bfdb8c8c3850f9335",
+    "performance_claims": false
+  },
+  "source": {
+    "dates": 10,
+    "from_date": "2026-08-14",
+    "through_date": "2026-08-23",
+    "combined_manifest_sha256": "3e1628f0240515db38c73f04dac6346596a28a663bac7d55e0ef84af25e15536",
+    "record_documents": 65152,
+    "raw_documents": 65095,
+    "raw_less_failed_records": 57,
+    "normalized_observations": 992866,
+    "point_events": 114945,
+    "finalized_examples": 1236608,
+    "excluded_station_mismatch_records": 4,
+    "excluded_station_mismatch_observations": 4,
+    "sensitive_values_emitted": 0
+  },
+  "binding": {
+    "manifest_algorithm": "object-inventory-v1",
+    "protocol_sha256": "6f07e0ad38c1122922998da6228408fcf07fd08ecface56feb5d31fde6c08bab",
+    "route_reference_version": "gbis-2026-08-19",
+    "route_reference_sha256": "50568d9a10b567ea0b650cd79ceed39a86947648e303e0d8fd1093840bb54c5e",
+    "evaluator_sha256": "baa3b865a63dafea43e1403de3fb1515533adc13de2ee601a541325016f24c93",
+    "adapter_sha256": "aefd2e800760d4e40c017a28734d481adf9179776f2b0edda8dd0246e7f0dfdd"
+  },
+  "verification": {
+    "independent_builds": 2,
+    "manifest_byte_identical": true,
+    "weights_byte_identical": true,
+    "load_bundle_for_protocol": "passed",
+    "load_bundle": "passed",
+    "tests": {
+      "evaluator_and_model": 49,
+      "runtime": 217,
+      "infra": 89,
+      "frozen_benchmark": 5,
+      "vehicle_plate_boundary": 12,
+      "total": 372
+    },
+    "inference_grid": {
+      "contexts": 188400,
+      "invalid_outputs": 0,
+      "runtime_warnings": 0,
+      "median_full_probability_change": 0.0009669903478582009,
+      "p99_full_probability_change": 0.11824122964739764,
+      "median_expected_seats_change": 0.29429429488700976,
+      "p99_expected_seats_change": 2.775771752669452
+    },
+    "fit_warning_review": {
+      "numerical_runtime_warnings_observed_in_both_builds": true,
+      "all_tensors_finite": true,
+      "maximum_coefficient_absolute_value": 15.179228455946038,
+      "inference_grid_clean": true
+    },
+    "prequential_evaluation_through_2026_08_23": {
+      "protocol_version": "evaluation-v6",
+      "horizon_1": {
+        "score": 91.9,
+        "brier": 0.002816059,
+        "pr_auc": 0.911426720587
+      },
+      "horizon_8": {
+        "score": 75.6,
+        "brier": 0.007687504031,
+        "pr_auc": 0.574724341318
+      },
+      "horizon_12": {
+        "score": 70.0,
+        "brier": 0.009162902686,
+        "pr_auc": 0.467845026142
+      },
+      "regression_against_2026_08_22_scorecard": false
+    }
+  },
+  "privacy": {
+    "contains_secrets": false,
+    "contains_original_vehicle_identifiers": false,
+    "contains_vehicle_hmacs": false,
+    "contains_plate_values": false,
+    "contains_private_object_keys": false
+  }
+}

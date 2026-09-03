@@ -1,0 +1,202 @@
+{
+  "aws_profile_name": "salmonbus-admin",
+  "demo_ec2": {
+    "instance_id": "i-06dbf1dffbdb7fb24",
+    "instance_type": "t4g.small",
+    "launch_time": "2026-08-19T05:50:35+00:00",
+    "name": "salmonbus-demo-api",
+    "platform": "Amazon Linux",
+    "platform_version": "2023",
+    "ssm_last_ping": "2026-09-02T12:34:20.299000+09:00",
+    "ssm_ping_status": "Online",
+    "state": "running"
+  },
+  "lambdas": [
+    {
+      "architectures": [
+        "arm64"
+      ],
+      "code_sha256_base64": "EkdK2EVaQTdfth3ZbEKNJKP5CeLcru1k7MTbNJNOxjs=",
+      "code_size": 8683,
+      "environment_keys": [
+        "BUCKET_NAME",
+        "HMAC_KEY_PARAMETER",
+        "MIN_CALL_INTERVAL_SECONDS",
+        "QUOTA_MODE_PARAMETER",
+        "SERVICE_KEY_PARAMETER"
+      ],
+      "environment_values_emitted": false,
+      "last_modified": "2026-08-17T08:51:28.000+0000",
+      "last_update_status": "Successful",
+      "memory_mb": 256,
+      "name": "salmonbus-collector",
+      "runtime": "python3.13",
+      "state": "Active",
+      "timeout_seconds": 120
+    },
+    {
+      "architectures": [
+        "arm64"
+      ],
+      "code_sha256_base64": "Qo+wcTwUeKzD9LSYqzTrB7dhKJ6Lwf0oU5sDqhJ4SAc=",
+      "code_size": 50134501,
+      "environment_keys": [
+        "BUCKET",
+        "EVALUATION_PREFIX",
+        "START_DATE"
+      ],
+      "environment_values_emitted": false,
+      "last_modified": "2026-08-23T13:30:47.000+0000",
+      "last_update_status": "Successful",
+      "memory_mb": 4096,
+      "name": "salmonbus-model-evaluator",
+      "runtime": "python3.13",
+      "state": "Active",
+      "timeout_seconds": 900
+    },
+    {
+      "architectures": [
+        "arm64"
+      ],
+      "code_sha256_base64": "fwVge+vbV85RcSiTLGJhNqIn49d1/8esPRyZHAHbSBU=",
+      "code_size": 18226,
+      "environment_keys": [
+        "BUCKET",
+        "CACHE_TTL_SECONDS",
+        "FETCH_WORKERS",
+        "ROUTES"
+      ],
+      "environment_values_emitted": false,
+      "last_modified": "2026-08-23T11:22:00.000+0000",
+      "last_update_status": "Successful",
+      "memory_mb": 1024,
+      "name": "salmonbus-live",
+      "runtime": "python3.13",
+      "state": "Active",
+      "timeout_seconds": 120
+    }
+  ],
+  "latest_evaluation": {
+    "bytes": 403567,
+    "evaluation_id": "eval-20260826-7bd23c5aeeaf552f",
+    "generated_at": "2026-08-26T15:15:00+00:00",
+    "last_modified": "2026-08-26T15:19:22+00:00",
+    "observed_from": "2026-08-14T07:38:45.475000Z",
+    "observed_through": "2026-08-26T14:59:56.447000Z",
+    "protocol_version": "evaluation-v6",
+    "sample": {
+      "dates": 12,
+      "negatives": 158484,
+      "positive_dates": 12,
+      "positives": 2329,
+      "rows": 160813
+    },
+    "schema_version": "1.1.0"
+  },
+  "latest_lambda_log_event_utc": {
+    "salmonbus-collector": "2026-09-02T03:10:56.591000+00:00",
+    "salmonbus-live": "2026-08-19T14:32:55.408000+00:00",
+    "salmonbus-model-evaluator": "2026-09-01T16:03:36.377000+00:00"
+  },
+  "live_snapshot": {
+    "bytes": 14590888,
+    "generated_at": "2026-09-02T03:37:56.449000Z",
+    "last_modified": "2026-09-02T03:38:09+00:00",
+    "model_identity_values": {
+      "bundleDigest": [
+        "652ee361876e2ab38993472ea65fcd182f2737bc7d819c4bfdb8c8c3850f9335"
+      ],
+      "releaseId": [
+        "a18-a748cba6ca735e36"
+      ]
+    },
+    "snapshot_id": "snapshot-9d414c8ed6977d2652ef8755",
+    "snapshot_object_key_emitted": false,
+    "vehicle_or_plate_values_emitted": false
+  },
+  "observed_at_utc": "2026-09-02T03:38:18.219377+00:00",
+  "read_only_operations": true,
+  "recent_evaluator_failures": [
+    {
+      "fixed_failure_codes": [
+        "RuntimeError:horizon_refresh_requires_exact_completed_corpus"
+      ],
+      "last_event_utc": "2026-09-01T16:03:36.377000+00:00",
+      "raw_log_message_emitted": false
+    },
+    {
+      "fixed_failure_codes": [
+        "ValidationError:date_partition_mismatch"
+      ],
+      "last_event_utc": "2026-09-01T15:32:41.013000+00:00",
+      "raw_log_message_emitted": false
+    },
+    {
+      "fixed_failure_codes": [
+        "RuntimeError:horizon_refresh_requires_exact_completed_corpus"
+      ],
+      "last_event_utc": "2026-08-31T16:03:41.752000+00:00",
+      "raw_log_message_emitted": false
+    },
+    {
+      "fixed_failure_codes": [
+        "ValidationError:date_partition_mismatch"
+      ],
+      "last_event_utc": "2026-08-31T15:32:20.203000+00:00",
+      "raw_log_message_emitted": false
+    },
+    {
+      "fixed_failure_codes": [
+        "RuntimeError:horizon_refresh_requires_exact_completed_corpus"
+      ],
+      "last_event_utc": "2026-08-30T16:03:26.216000+00:00",
+      "raw_log_message_emitted": false
+    },
+    {
+      "fixed_failure_codes": [
+        "ValidationError:date_partition_mismatch"
+      ],
+      "last_event_utc": "2026-08-30T15:32:21.873000+00:00",
+      "raw_log_message_emitted": false
+    }
+  ],
+  "region": "ap-northeast-2",
+  "release_artifact": {
+    "bytes": 39583681,
+    "last_modified": "2026-08-23T19:49:42+00:00",
+    "metadata": {
+      "release": "c5ff99da81ed0af9916bd5aa5115d89f49258e2c",
+      "sha256": "0226182ff73a0cb82d735268afd92e019137acf677ce5b9f08f0bc6950dba8a0"
+    },
+    "object_key_emitted": false,
+    "version_id": "8KryPG.KVyrzvAWNvl34tBlREdS_Hruq"
+  },
+  "schedules": [
+    {
+      "expression": "cron(* * * * ? *)",
+      "group": "salmonbus-collector",
+      "last_modified": "2026-08-14T16:38:35.971000+09:00",
+      "name": "salmonbus-adaptive-heartbeat",
+      "retry_policy": {
+        "MaximumEventAgeInSeconds": 60,
+        "MaximumRetryAttempts": 0
+      },
+      "state": "ENABLED",
+      "target_arn": "arn:aws:lambda:ap-northeast-2:827325854159:function:salmonbus-collector",
+      "timezone": "Asia/Seoul"
+    },
+    {
+      "expression": "cron(15 0 * * ? *)",
+      "group": "default",
+      "last_modified": "2026-08-16T18:01:54.373000+09:00",
+      "name": "salmonbus-model-evaluation-daily",
+      "retry_policy": {
+        "MaximumEventAgeInSeconds": 7200,
+        "MaximumRetryAttempts": 2
+      },
+      "state": "ENABLED",
+      "target_arn": "arn:aws:lambda:ap-northeast-2:827325854159:function:salmonbus-model-evaluator",
+      "timezone": "Asia/Seoul"
+    }
+  ]
+}

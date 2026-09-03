@@ -1,0 +1,95 @@
+{
+  "bundle_digest": "652ee361876e2ab38993472ea65fcd182f2737bc7d819c4bfdb8c8c3850f9335",
+  "contexts": [
+    {
+      "all_probabilities_finite": true,
+      "all_probabilities_in_range": true,
+      "expected_seats_in_range": true,
+      "horizon": 1,
+      "p0_equals_p_full_within_1e_12": true,
+      "pmf_cells": 71,
+      "pmf_sum": 0.9999999999999999,
+      "pmf_sum_within_1e_12": true,
+      "route": "1650"
+    },
+    {
+      "all_probabilities_finite": true,
+      "all_probabilities_in_range": true,
+      "expected_seats_in_range": true,
+      "horizon": 4,
+      "p0_equals_p_full_within_1e_12": true,
+      "pmf_cells": 71,
+      "pmf_sum": 1.0,
+      "pmf_sum_within_1e_12": true,
+      "route": "1650"
+    },
+    {
+      "all_probabilities_finite": true,
+      "all_probabilities_in_range": true,
+      "expected_seats_in_range": true,
+      "horizon": 8,
+      "p0_equals_p_full_within_1e_12": true,
+      "pmf_cells": 71,
+      "pmf_sum": 1.0,
+      "pmf_sum_within_1e_12": true,
+      "route": "1650"
+    },
+    {
+      "all_probabilities_finite": true,
+      "all_probabilities_in_range": true,
+      "expected_seats_in_range": true,
+      "horizon": 12,
+      "p0_equals_p_full_within_1e_12": true,
+      "pmf_cells": 71,
+      "pmf_sum": 1.0000000000000002,
+      "pmf_sum_within_1e_12": true,
+      "route": "1650"
+    },
+    {
+      "all_probabilities_finite": true,
+      "all_probabilities_in_range": true,
+      "expected_seats_in_range": true,
+      "horizon": 1,
+      "p0_equals_p_full_within_1e_12": true,
+      "pmf_cells": 71,
+      "pmf_sum": 0.9999999999999998,
+      "pmf_sum_within_1e_12": true,
+      "route": "3330"
+    },
+    {
+      "all_probabilities_finite": true,
+      "all_probabilities_in_range": true,
+      "expected_seats_in_range": true,
+      "horizon": 4,
+      "p0_equals_p_full_within_1e_12": true,
+      "pmf_cells": 71,
+      "pmf_sum": 1.0,
+      "pmf_sum_within_1e_12": true,
+      "route": "3330"
+    },
+    {
+      "all_probabilities_finite": true,
+      "all_probabilities_in_range": true,
+      "expected_seats_in_range": true,
+      "horizon": 8,
+      "p0_equals_p_full_within_1e_12": true,
+      "pmf_cells": 71,
+      "pmf_sum": 1.0,
+      "pmf_sum_within_1e_12": true,
+      "route": "3330"
+    },
+    {
+      "all_probabilities_finite": true,
+      "all_probabilities_in_range": true,
+      "expected_seats_in_range": true,
+      "horizon": 12,
+      "p0_equals_p_full_within_1e_12": true,
+      "pmf_cells": 71,
+      "pmf_sum": 1.0,
+      "pmf_sum_within_1e_12": true,
+      "route": "3330"
+    }
+  ],
+  "release_id": "a18-a748cba6ca735e36",
+  "status": "PASS"
+}
