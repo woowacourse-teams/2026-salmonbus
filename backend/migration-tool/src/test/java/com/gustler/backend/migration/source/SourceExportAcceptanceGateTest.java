@@ -132,6 +132,16 @@ class SourceExportAcceptanceGateTest {
         List<Sample> samples,
         SourceAcceptancePolicy policy
     ) {
+        return build(output, samples, policy, 1, java.util.function.UnaryOperator.identity());
+    }
+
+    private SourceArchiveExporter.BuildResult build(
+        Path output,
+        List<Sample> samples,
+        SourceAcceptancePolicy policy,
+        int fetchThreads,
+        java.util.function.UnaryOperator<SourceObjectStore> decorator
+    ) {
         Path protocol = output.resolveSibling(output.getFileName() + "-protocol.json");
         CanonicalJson.writeCanonical(protocol, protocolDocument());
         InMemorySourceObjectStore store = new InMemorySourceObjectStore();
@@ -150,8 +160,8 @@ class SourceExportAcceptanceGateTest {
         }
         SourceInventory inventory = new SourceInventory(
             ACCOUNT, BUCKET, "ap-northeast-2", CUTOFF, null, null, entries, selected);
-        return new SourceArchiveExporter(store).build(
-            inventory, protocol, output, 10_000, null, policy, null);
+        return new SourceArchiveExporter(decorator.apply(store)).build(
+            inventory, protocol, output, 10_000, null, policy, null, fetchThreads);
     }
 
     private Objects objectsFor(
@@ -365,6 +375,149 @@ class SourceExportAcceptanceGateTest {
 
         @Override
         public void close() {
+        }
+    }
+
+    @Test
+    void producesTheSameArchiveWhetherObjectsAreFetchedOnOneThreadOrTwentyFour(
+        @TempDir Path directory
+    ) {
+        List<Sample> samples = new ArrayList<>();
+        for (int index = 0; index < 40; index++) {
+            String attempt = "p%06d".formatted(index);
+            samples.add(index % 7 == 3
+                ? Sample.quarantined(attempt, index)
+                : Sample.accepted(attempt, index));
+        }
+        SourceAcceptancePolicy policy = policy(34, 34, 6, 6);
+
+        SourceArchiveExporter.BuildResult sequential = build(
+            directory.resolve("one"), samples, policy, 1,
+            java.util.function.UnaryOperator.identity());
+        SourceArchiveExporter.BuildResult parallel = build(
+            directory.resolve("many"), samples, policy, 24,
+            java.util.function.UnaryOperator.identity());
+
+        assertThat(parallel.manifestSha256()).isEqualTo(sequential.manifestSha256());
+        assertThat(parallel.acceptedBatches()).isEqualTo(sequential.acceptedBatches());
+        assertThat(parallel.acceptedObservations()).isEqualTo(sequential.acceptedObservations());
+        assertThat(parallel.rejectsByCode()).isEqualTo(sequential.rejectsByCode());
+        assertThat(parallel.complete()).isEqualTo(sequential.complete());
+    }
+
+    @Test
+    void retriesATransientObjectFailureAndStillProducesTheSequentialArchive(
+        @TempDir Path directory
+    ) {
+        List<Sample> samples = List.of(
+            Sample.accepted("aaaaaaaa", 0),
+            Sample.accepted("bbbbbbbb", 1),
+            Sample.accepted("cccccccc", 2));
+        SourceAcceptancePolicy policy = policy(3, 3, 0, 0);
+
+        SourceArchiveExporter.BuildResult expected = build(
+            directory.resolve("clean"), samples, policy, 1,
+            java.util.function.UnaryOperator.identity());
+
+        FlakyStore.RESET.run();
+        SourceArchiveExporter.BuildResult retried = build(
+            directory.resolve("flaky"), samples, policy, 24, FlakyStore::new);
+
+        assertThat(retried.manifestSha256()).isEqualTo(expected.manifestSha256());
+        assertThat(retried.complete()).isTrue();
+        assertThat(FlakyStore.failures.get()).isEqualTo(2);
+    }
+
+    @Test
+    void failsClosedWithoutAManifestWhenAnObjectNeverLoads(
+        @TempDir Path directory
+    ) {
+        List<Sample> samples = List.of(
+            Sample.accepted("aaaaaaaa", 0),
+            Sample.accepted("bbbbbbbb", 1));
+        SourceAcceptancePolicy policy = policy(2, 2, 0, 0);
+        Path output = directory.resolve("broken");
+
+        assertThatThrownBy(() -> build(output, samples, policy, 24, DeadStore::new))
+            .isInstanceOf(MigrationException.class)
+            .hasMessage("SOURCE_S3_GET_FAILED");
+
+        assertThat(java.nio.file.Files.exists(output.resolve("manifest.json"))).isFalse();
+    }
+
+    /** 두 번째 요청까지 실패하고 세 번째에 성공한다. 지수 백오프 재시도를 증명한다. */
+    private static final class FlakyStore implements SourceObjectStore {
+
+        private static final java.util.concurrent.atomic.AtomicInteger failures =
+            new java.util.concurrent.atomic.AtomicInteger();
+        private static final Runnable RESET = () -> failures.set(0);
+        private static final String TARGET_MARKER = "bbbbbbbb";
+
+        private final SourceObjectStore delegate;
+        private final java.util.Map<String, Integer> attempts = new java.util.HashMap<>();
+
+        private FlakyStore(SourceObjectStore delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public String callerAccountId() {
+            return delegate.callerAccountId();
+        }
+
+        @Override
+        public List<ObjectInfo> list(String bucket, String prefix, Instant cutoffAt) {
+            return delegate.list(bucket, prefix, cutoffAt);
+        }
+
+        @Override
+        public synchronized LoadedObject get(String bucket, ObjectInfo expected) {
+            if (expected.key().startsWith("records/") && expected.key().contains(TARGET_MARKER)) {
+                int seen = attempts.merge(expected.key(), 1, Integer::sum);
+                if (seen <= 2) {
+                    failures.incrementAndGet();
+                    throw new MigrationException("SOURCE_S3_GET_FAILED");
+                }
+            }
+            return delegate.get(bucket, expected);
+        }
+
+        @Override
+        public void close() {
+            delegate.close();
+        }
+    }
+
+    /** 한 객체가 끝내 안 열린다. 부분 archive 를 남기지 않는지 본다. */
+    private static final class DeadStore implements SourceObjectStore {
+
+        private final SourceObjectStore delegate;
+
+        private DeadStore(SourceObjectStore delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public String callerAccountId() {
+            return delegate.callerAccountId();
+        }
+
+        @Override
+        public List<ObjectInfo> list(String bucket, String prefix, Instant cutoffAt) {
+            return delegate.list(bucket, prefix, cutoffAt);
+        }
+
+        @Override
+        public LoadedObject get(String bucket, ObjectInfo expected) {
+            if (expected.key().startsWith("records/") && expected.key().contains("bbbbbbbb")) {
+                throw new MigrationException("SOURCE_S3_GET_FAILED");
+            }
+            return delegate.get(bucket, expected);
+        }
+
+        @Override
+        public void close() {
+            delegate.close();
         }
     }
 }

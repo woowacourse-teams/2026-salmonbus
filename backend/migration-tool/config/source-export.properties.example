@@ -21,3 +21,6 @@ archive.previous-manifest-sha256=
 route-reference.file=<APPROVED_PROTOCOL_JSON_PATH>
 archive.output-directory=<LOCAL_PRIVATE_ARCHIVE_DIRECTORY>
 archive.max-batches-per-shard=10000
+# S3 객체를 몇 개씩 동시에 가져올지. 1~32, 기본 24. 가져오기만 병렬이고 소비는 항상 index 순서라
+# archive 내용과 manifest digest 는 이 값과 무관하다. 1 이면 예전 순차 동작과 같다.
+archive.fetch-threads=24

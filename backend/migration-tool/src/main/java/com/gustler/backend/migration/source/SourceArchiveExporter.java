@@ -23,6 +23,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import tools.jackson.databind.JsonNode;
 
 public final class SourceArchiveExporter {
@@ -34,6 +41,13 @@ public final class SourceArchiveExporter {
         "SOURCE_S3_GET_OR_KMS_DECRYPT_DENIED",
         "SOURCE_S3_GET_FAILED",
         "SOURCE_OBJECT_CHANGED_AFTER_INVENTORY");
+    /** 일시적 실패만 다시 부른다. 403 과 etag 불일치는 다시 불러도 같은 답이다. */
+    private static final String RETRYABLE_CODE = "SOURCE_S3_GET_FAILED";
+    private static final int FETCH_ATTEMPTS = 3;
+    private static final long FETCH_BACKOFF_MILLIS = 100;
+    public static final int DEFAULT_FETCH_THREADS = 24;
+    public static final int MAX_FETCH_THREADS = 32;
+    private static final int MAX_IN_FLIGHT_OBJECTS = 64;
 
     private final SourceObjectStore store;
 
@@ -52,6 +66,23 @@ public final class SourceArchiveExporter {
         SourceAcceptancePolicy acceptancePolicy,
         ArchiveManifest.TerminalFreeze terminalFreeze
     ) {
+        return build(inventory, protocolPath, outputDirectory, maxBatchesPerShard,
+            previousManifestSha256, acceptancePolicy, terminalFreeze, 1);
+    }
+
+    public BuildResult build(
+        SourceInventory inventory,
+        Path protocolPath,
+        Path outputDirectory,
+        int maxBatchesPerShard,
+        String previousManifestSha256,
+        SourceAcceptancePolicy acceptancePolicy,
+        ArchiveManifest.TerminalFreeze terminalFreeze,
+        int fetchThreads
+    ) {
+        if (fetchThreads < 1 || fetchThreads > MAX_FETCH_THREADS) {
+            throw new MigrationException("ARCHIVE_FETCH_THREADS_INVALID");
+        }
         requireFreshOutput(outputDirectory);
         if (!inventory.sourceAccountId().equals(store.callerAccountId())) {
             throw new MigrationException("SOURCE_AWS_ACCOUNT_MISMATCH");
@@ -82,19 +113,21 @@ public final class SourceArchiveExporter {
         String currentPartitionDate = null;
 
         SecureFiles.createPrivateDirectory(outputDirectory);
-        try (ShardWriter shards = new ShardWriter(outputDirectory, maxBatchesPerShard)) {
-            for (SourceObjectStore.ObjectInfo recordInfo : selectedRecords) {
+        try (ShardWriter shards = new ShardWriter(outputDirectory, maxBatchesPerShard);
+            ObjectPrefetch prefetch = new ObjectPrefetch(
+                store, inventory.bucket(), allByKey, selectedRecords, fetchThreads)) {
+            for (int index = 0; index < selectedRecords.size(); index++) {
+                SourceObjectStore.ObjectInfo recordInfo = selectedRecords.get(index);
                 String partitionDate = partitionDate(recordInfo.key());
                 if (currentPartitionDate != null && !currentPartitionDate.equals(partitionDate)) {
                     flushDate(dateRecords, shards, totals);
                 }
                 currentPartitionDate = partitionDate;
                 try {
-                    SourceObjectStore.LoadedObject record = store.get(inventory.bucket(), recordInfo);
+                    ObjectPrefetch.Pair fetched = prefetch.take(index);
+                    SourceObjectStore.LoadedObject record = fetched.record();
                     rememberEncryption(record, kmsObjects, kmsKeyDigests);
-                    String rawKey = SourceRecordValidator.expectedRawKeyOf(recordInfo.key());
-                    SourceObjectStore.ObjectInfo rawInfo = allByKey.get(rawKey);
-                    SourceObjectStore.LoadedObject raw = rawInfo == null ? null : store.get(inventory.bucket(), rawInfo);
+                    SourceObjectStore.LoadedObject raw = fetched.raw();
                     if (raw != null) {
                         rememberEncryption(raw, kmsObjects, kmsKeyDigests);
                     }
@@ -184,7 +217,9 @@ public final class SourceArchiveExporter {
             configuration.integer("archive.max-batches-per-shard", 10_000, 1, 10_000),
             configuration.optional("archive.previous-manifest-sha256"),
             SourceAcceptancePolicy.load(configuration),
-            terminalFreeze);
+            terminalFreeze,
+            configuration.integer(
+                "archive.fetch-threads", DEFAULT_FETCH_THREADS, 1, MAX_FETCH_THREADS));
     }
 
     private static List<RouteRoster> loadRosters(
@@ -402,6 +437,127 @@ public final class SourceArchiveExporter {
                 batchesPerDate,
                 observationsPerDate,
                 rejects);
+        }
+    }
+
+    /**
+     * record 와 그 raw 를 미리 가져온다. 가져오기만 병렬이고 소비는 index 순서 그대로다.
+     * 그래서 검증·중복 판정·shard 내용·manifest digest 는 스레드 수와 무관하다.
+     * 실패는 그 index 를 소비할 때 다시 던진다 — 순차 실행과 같은 순서로 드러난다.
+     */
+    private static final class ObjectPrefetch implements AutoCloseable {
+
+        private final SourceObjectStore store;
+        private final String bucket;
+        private final Map<String, SourceObjectStore.ObjectInfo> allByKey;
+        private final List<SourceObjectStore.ObjectInfo> records;
+        private final ExecutorService pool;
+        private final Map<Integer, Future<Pair>> inFlight = new HashMap<>();
+        private final int window;
+        private int submitted;
+
+        private ObjectPrefetch(
+            SourceObjectStore store,
+            String bucket,
+            Map<String, SourceObjectStore.ObjectInfo> allByKey,
+            List<SourceObjectStore.ObjectInfo> records,
+            int threads
+        ) {
+            this.store = store;
+            this.bucket = bucket;
+            this.allByKey = allByKey;
+            this.records = records;
+            this.window = Math.min(Math.max(threads * 2, 1), MAX_IN_FLIGHT_OBJECTS);
+            AtomicInteger sequence = new AtomicInteger();
+            ThreadFactory factory = runnable -> {
+                Thread thread = new Thread(runnable, "archive-fetch-" + sequence.incrementAndGet());
+                thread.setDaemon(true);
+                return thread;
+            };
+            this.pool = Executors.newFixedThreadPool(threads, factory);
+        }
+
+        private Pair take(
+            int index
+        ) {
+            fill(index);
+            Future<Pair> future = inFlight.remove(index);
+            try {
+                return future.get();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new MigrationException("SOURCE_S3_GET_FAILED", e);
+            } catch (ExecutionException e) {
+                Throwable cause = e.getCause();
+                if (cause instanceof MigrationException migration) {
+                    throw migration;
+                }
+                throw new MigrationException("SOURCE_S3_GET_FAILED", e);
+            }
+        }
+
+        private void fill(
+            int index
+        ) {
+            int limit = Math.min(index + window, records.size());
+            while (submitted < limit) {
+                int target = submitted++;
+                inFlight.put(target, pool.submit(() -> fetch(records.get(target))));
+            }
+        }
+
+        private Pair fetch(
+            SourceObjectStore.ObjectInfo recordInfo
+        ) {
+            SourceObjectStore.LoadedObject record = withRetry(recordInfo);
+            SourceObjectStore.ObjectInfo rawInfo =
+                allByKey.get(SourceRecordValidator.expectedRawKeyOf(recordInfo.key()));
+            return new Pair(record, rawInfo == null ? null : withRetry(rawInfo));
+        }
+
+        private SourceObjectStore.LoadedObject withRetry(
+            SourceObjectStore.ObjectInfo info
+        ) {
+            MigrationException last = null;
+            for (int attempt = 1; attempt <= FETCH_ATTEMPTS; attempt++) {
+                try {
+                    return store.get(bucket, info);
+                } catch (MigrationException e) {
+                    if (!RETRYABLE_CODE.equals(e.code()) || attempt == FETCH_ATTEMPTS) {
+                        throw e;
+                    }
+                    last = e;
+                    sleep(FETCH_BACKOFF_MILLIS << (attempt - 1));
+                }
+            }
+            throw last;
+        }
+
+        private static void sleep(
+            long millis
+        ) {
+            try {
+                Thread.sleep(millis);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new MigrationException("SOURCE_S3_GET_FAILED", e);
+            }
+        }
+
+        @Override
+        public void close() {
+            pool.shutdownNow();
+            try {
+                pool.awaitTermination(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        private record Pair(
+            SourceObjectStore.LoadedObject record,
+            SourceObjectStore.LoadedObject raw
+        ) {
         }
     }
 }
