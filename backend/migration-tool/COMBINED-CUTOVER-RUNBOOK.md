@@ -79,6 +79,11 @@ worker는 이 lock도 이 표도 읽지 않는다.
 확인 수단은 actuator skip counter가 아니다(그 계기는 fence와 함께 사라졌다). 위 세 max()가 2회차(≥120초)
 동안 멈춰 있는지, `observation_batch` 행 수가 계속 느는지, health가 UP인지를 본다.
 
+세 max()만으로는 부족하다. 그 검사는 "최근 120초에 파생 쓰기가 없었다"만 증명하고, 배차가 뜸해 판이 안
+잡혔거나 예보가 잠깐 밀린 것도 같은 모습이다. 따라서 `worker.env`에 `FORECAST_ENABLED=false`가 실제로
+들어갔는지와 systemd MainPID가 재기동으로 바뀌었는지를 함께 확인한다. 이 둘이 있어야 "쓰지 않기로 되어
+있고 그 설정으로 뜬 프로세스"임이 증명된다.
+
 board API는 raw 최신 batch가 아니라 `forecast_completed_at`이 있는 최신 batch를 읽는다
 (`JpaBoardQueryRepository.findLatestForecastCompleted`). freshness 창은 5분이다. 따라서 P0 재기동 직후에는
 기존 완료 batch로 200일 수 있지만 약 5분 뒤에는 수집이 계속되어도 `NO_RECENT_OBSERVATION` 503이 정상이다.
@@ -158,7 +163,7 @@ route의 observation 간격, `vehiclesInService`, API 요청량을 읽고 실제
 
 | 단계 | 승인·예상 | 반드시 남길 증거 | 실패 복구 |
 |---|---|---|---|
-| P0. `FORECAST_ENABLED=false` 재기동 | 별도 restart 승인, 3–8분 | health UP, `observation_batch` 증가 지속, 파생 쓰기 3종 max()가 2회차(≥120초) 정지 | env 되돌리고 재기동; 교체 창 시작 금지 |
+| P0. `FORECAST_ENABLED=false` 재기동 | 별도 restart 승인, 3–8분 | `worker.env`에 `FORECAST_ENABLED=false`가 실제로 들어갔음, systemd MainPID가 재기동으로 바뀌었음, health UP, `observation_batch` 증가 지속, 파생 쓰기 3종 max()가 2회차(≥120초) 정지 | env 되돌리고 재기동; 교체 창 시작 금지 |
 | P1. `temp-pause` | `ACADEMY_TEMP_CLEANUP`, 2–5분 | 정지 전제 검사 통과, pause=true, T/high-water, raw count 계속 증가 | temp sole ACTIVE면 승인된 recovery-unpause |
 | P2. freeze dry-run/apply | apply에 cleanup approval, 3–8분 | 같은 T/high-water, exact frozen generation set/SHA | `FORECAST_ENABLED=false` 유지, cleanup 금지 |
 | P3. cleanup dry-run | read-only, 3–8분 | exact temp forecast/cell target, observation invariant | 불일치 시 DELETE 금지 |

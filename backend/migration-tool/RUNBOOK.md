@@ -330,10 +330,13 @@ process exited, then start, so no half-written batch survives it.
 
 The activation-last sequence is:
 
-0. Set `FORECAST_ENABLED=false` in `worker.env` and restart the worker. Confirm health is UP, that
-   `observation_batch` keeps growing, and that `max(seat_forecast.generated_at)`,
+0. Set `FORECAST_ENABLED=false` in `worker.env` and restart the worker. Read `worker.env` back to
+   confirm the setting landed and confirm the systemd MainPID changed across the restart, then confirm
+   health is UP, that `observation_batch` keeps growing, and that `max(seat_forecast.generated_at)`,
    `max(seat_forecast.scored_at)` and `max(stop_demand_statistics.computed_at)` all stop advancing for
-   at least two cycles.
+   at least two cycles. The three clocks alone only show that nothing was written recently, which a
+   thin dispatch window also looks like; the env read-back and the new MainPID are what prove the
+   running process was started with forecasting off.
 1. Run `temp-pause`. It refuses with `TEMP_FORECAST_WRITES_NOT_QUIESCENT` unless those three clocks are
    already older than `clock_timestamp() - 120 seconds`, then fixes DB `FINAL_CUTOVER_AT` and the
    observation high-water in one transaction. It is a boundary ledger, not a fence: the advisory lock

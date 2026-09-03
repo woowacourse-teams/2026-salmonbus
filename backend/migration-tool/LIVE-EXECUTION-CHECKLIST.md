@@ -163,6 +163,10 @@ condition. Completing this file does not itself grant approval.
   `MODEL_BUNDLE_PROMOTE_ON_START=true`; the plan restores `false` immediately after the restart.
 - [ ] `FORECAST_ENABLED=false` is set in `worker.env` and the worker is restarted before anything else
   in this section; health is UP and `observation_batch` keeps growing, so collection never stopped.
+- [ ] `worker.env` is read back and actually carries `FORECAST_ENABLED=false`, and the systemd MainPID
+  changed across the restart. The three clocks below only prove that no derived write happened
+  recently, which a thin dispatch window looks identical to; these two prove the running process was
+  started under the setting.
 - [ ] `max(seat_forecast.generated_at)`, `max(seat_forecast.scored_at)` and
   `max(stop_demand_statistics.computed_at)` have all stopped advancing for at least two cycles.
 - [ ] `temp-pause` passes its quiescence gate and records DB `FINAL_CUTOVER_AT` and observation
