@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -35,7 +36,9 @@ public record RouteRoster(
         "boardingAllowed", "stopId", "stopOrder");
 
     public RouteRoster {
-        stations = Map.copyOf(new TreeMap<>(stations));
+        // Map.copyOf 의 순회 순서는 JVM 마다 달라진다(ImmutableCollections.SALT).
+        // manifest 는 이 순서를 그대로 적으므로 정렬을 유지해야 재현된다.
+        stations = Collections.unmodifiableMap(new TreeMap<>(stations));
         if (version == null || version.isBlank() || effectiveFrom == null
             || modelRoute == null || modelRoute.isBlank()
             || sourceRouteId == null || sourceRouteId.isBlank()
