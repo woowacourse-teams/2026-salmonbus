@@ -88,7 +88,7 @@ function touchesTurnaround(sequence: number, turnSequence: number | null): boole
 }
 
 function directionInfoOf(board: Board, direction: Direction): DirectionInfo | undefined {
-  return board.route.directions.find((info) => info.id === direction);
+  return board.route.directions.find((directionInfo) => directionInfo.id === direction);
 }
 
 function servicePhaseOf(info: DirectionInfo | undefined, observedAt: string): ServicePhase {
