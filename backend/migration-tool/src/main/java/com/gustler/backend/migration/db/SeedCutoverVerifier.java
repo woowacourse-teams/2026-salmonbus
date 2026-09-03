@@ -484,7 +484,7 @@ public final class SeedCutoverVerifier {
                    count(*) FILTER (WHERE NOT EXISTS (
                        SELECT 1 FROM stop_demand_statistics statistics
                        WHERE statistics.route_version_id=forecast.route_version_id
-                         AND statistics.calculation_version='observed-max-capacity-v1'
+                         AND statistics.calculation_version=?
                          AND statistics.revision=forecast.demand_statistics_revision)) AS unresolved,
                    count(*) FILTER (WHERE EXISTS (
                        SELECT 1 FROM stop_demand_statistics statistics
@@ -495,12 +495,12 @@ public final class SeedCutoverVerifier {
                         AND frozen.data_until=statistics.data_until
                         AND frozen.computed_at=statistics.computed_at
                        WHERE statistics.route_version_id=forecast.route_version_id
-                         AND statistics.calculation_version='observed-max-capacity-v1'
+                         AND statistics.calculation_version=?
                          AND statistics.revision=forecast.demand_statistics_revision)) AS frozen,
                    count(*) FILTER (WHERE EXISTS (
                        SELECT 1 FROM stop_demand_statistics statistics
                        WHERE statistics.route_version_id=forecast.route_version_id
-                         AND statistics.calculation_version='observed-max-capacity-v1'
+                         AND statistics.calculation_version=?
                          AND statistics.revision=forecast.demand_statistics_revision
                          AND statistics.data_until > prediction_batch.response_received_at)) AS future_data
             FROM seat_forecast forecast
@@ -508,7 +508,10 @@ public final class SeedCutoverVerifier {
             JOIN observation_batch prediction_batch ON prediction_batch.id=prediction.observation_batch_id
             WHERE forecast.model_deployment_id=?
             """)) {
-            statement.setLong(1, formalDeploymentId);
+            statement.setString(1, AggregateSeedReader.CALCULATION_VERSION);
+            statement.setString(2, AggregateSeedReader.CALCULATION_VERSION);
+            statement.setString(3, AggregateSeedReader.CALCULATION_VERSION);
+            statement.setLong(4, formalDeploymentId);
             try (ResultSet rows = statement.executeQuery()) {
                 rows.next();
                 forecasts = rows.getLong("forecasts");
@@ -525,17 +528,18 @@ public final class SeedCutoverVerifier {
                   AND (demand_statistics_revision < ? OR NOT EXISTS (
                       SELECT 1 FROM stop_demand_statistics statistics
                       WHERE statistics.route_version_id=seat_forecast.route_version_id
-                        AND statistics.calculation_version='observed-max-capacity-v1'
+                        AND statistics.calculation_version=?
                         AND statistics.revision=seat_forecast.demand_statistics_revision
                         AND statistics.data_until >= ?))
                 """)) {
                 statement.setLong(1, formalDeploymentId);
                 statement.setLong(2, entry.getKey());
                 statement.setInt(3, entry.getValue());
+                statement.setString(4, AggregateSeedReader.CALCULATION_VERSION);
                 Generation first = generations.stream()
                     .filter(value -> value.routeVersionId() == entry.getKey())
                     .findFirst().orElseThrow();
-                statement.setObject(4, offset(first.dataUntil()));
+                statement.setObject(5, offset(first.dataUntil()));
                 try (ResultSet rows = statement.executeQuery()) {
                     rows.next();
                     beforeOfficial += rows.getLong(1);

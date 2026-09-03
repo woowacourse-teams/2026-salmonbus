@@ -81,7 +81,8 @@ CREATE TABLE historical_import_dataset_seal (
     CONSTRAINT ck_historical_import_dataset_receipt CHECK (terminal_freeze_receipt_sha256 ~ '^[0-9a-f]{64}$')
 );
 
--- 수집은 건드리지 않고 forecast/settlement/statistics write만 원자 cutover 동안 멈춘다.
+-- 교체 경계 장부다. FINAL_CUTOVER_AT(paused_at)과 observation high-water를 한 transaction에 고정해
+-- freeze/cleanup/seed/unpause가 같은 경계를 읽게 한다. worker는 이 표를 읽지 않는다.
 CREATE TABLE forecast_cutover_control (
     singleton                       boolean      NOT NULL DEFAULT true,
     writes_paused                   boolean      NOT NULL DEFAULT false,

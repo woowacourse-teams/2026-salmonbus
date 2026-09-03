@@ -4,6 +4,7 @@ import com.gustler.backend.migration.CanonicalJson;
 import com.gustler.backend.migration.MigrationException;
 import com.gustler.backend.migration.SecureFiles;
 import com.gustler.backend.migration.Sha256;
+import com.gustler.backend.processor.StopDemandStatisticsJob;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -24,7 +25,8 @@ public final class TemporaryReleaseMaintenance {
     public static final String TEMPORARY_BUNDLE_DIGEST =
         "d57370be9195520ecf3b0ef125aa3611090ed5f41ade2963c33f38d99a29e89a";
     public static final String TEMPORARY_CALCULATION_VERSION = "seat-feature-contract-v4-1-2026-09-02";
-    public static final String CARRIER_CALCULATION_VERSION = "observed-max-capacity-v1";
+    public static final String CARRIER_CALCULATION_VERSION =
+        StopDemandStatisticsJob.CURRENT_CALCULATION_VERSION;
     public static final Instant TEMPORARY_ACTIVATED_AT =
         Instant.parse("2026-09-02T11:55:04.729493Z");
     public static final String FORMAL_RELEASE_ID = "v41b-8194bde56d86f365afd6";
@@ -33,15 +35,17 @@ public final class TemporaryReleaseMaintenance {
 
     private static final int LOCK_NAMESPACE = 1_920_224_641;
     private static final int LOCK_KEY = 4_041;
+    private static final int QUIESCENCE_GUARD_SECONDS = 120;
 
     public PauseResult pause(
         ImportSettings settings
     ) {
         return DatabaseConnections.transaction(settings.database(), connection -> {
             SqlSafety.setLocalTimeouts(connection, settings);
-            acquireExclusiveFence(connection);
+            acquireExclusiveToolLock(connection);
             requireTemporaryIdentity(connection, "ACTIVE");
             requireOnlyTemporaryDeploymentActive(connection);
+            requireDerivedWritesQuiescent(connection);
             long observationBatchHighWater = captureObservationBoundary(connection);
             UUID cutoverId = UUID.randomUUID();
             Instant pausedAt = pauseWrites(connection, cutoverId, observationBatchHighWater);
@@ -60,7 +64,7 @@ public final class TemporaryReleaseMaintenance {
             }
             SqlSafety.setLocalTimeouts(connection, settings);
             if (execute) {
-                acquireExclusiveFence(connection);
+                acquireExclusiveToolLock(connection);
             }
             CutoverBoundary boundary = requireControlPaused(connection);
             requireTemporaryIdentity(connection, "ACTIVE");
@@ -171,7 +175,7 @@ public final class TemporaryReleaseMaintenance {
     ) {
         DatabaseConnections.transaction(settings.database(), connection -> {
             SqlSafety.setLocalTimeouts(connection, settings);
-            acquireExclusiveFence(connection);
+            acquireExclusiveToolLock(connection);
             CutoverBoundary boundary = requireControlPaused(connection);
             UUID freezeId = latestFreezeId(connection);
             requireCleanupEmpty(connection, freezeId);
@@ -190,7 +194,7 @@ public final class TemporaryReleaseMaintenance {
     ) {
         DatabaseConnections.transaction(settings.database(), connection -> {
             SqlSafety.setLocalTimeouts(connection, settings);
-            acquireExclusiveFence(connection);
+            acquireExclusiveToolLock(connection);
             CutoverBoundary boundary = requireControlPaused(connection);
             requireTemporaryIdentity(connection, "ACTIVE");
             requireOnlyTemporaryDeploymentActive(connection);
@@ -232,7 +236,7 @@ public final class TemporaryReleaseMaintenance {
         return new CleanupPlan(freezeId, forecasts, statistics, before);
     }
 
-    private static void acquireExclusiveFence(
+    private static void acquireExclusiveToolLock(
         Connection connection
     ) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
@@ -241,6 +245,41 @@ public final class TemporaryReleaseMaintenance {
             statement.setInt(2, LOCK_KEY);
             statement.executeQuery().close();
         }
+    }
+
+    private static void requireDerivedWritesQuiescent(
+        Connection connection
+    ) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+            WITH forecast AS (
+                SELECT max(generated_at) AS generated_at, max(scored_at) AS scored_at
+                FROM seat_forecast)
+            SELECT clock_timestamp() - make_interval(secs => ?) AS threshold,
+                   forecast.generated_at AS forecast_generated_at,
+                   forecast.scored_at AS forecast_scored_at,
+                   (SELECT max(computed_at) FROM stop_demand_statistics) AS statistics_computed_at
+            FROM forecast
+            """)) {
+            statement.setInt(1, QUIESCENCE_GUARD_SECONDS);
+            try (ResultSet rows = statement.executeQuery()) {
+                rows.next();
+                OffsetDateTime threshold = rows.getObject("threshold", OffsetDateTime.class);
+                if (isWithin(rows, "forecast_generated_at", threshold)
+                    || isWithin(rows, "forecast_scored_at", threshold)
+                    || isWithin(rows, "statistics_computed_at", threshold)) {
+                    throw new MigrationException("TEMP_FORECAST_WRITES_NOT_QUIESCENT");
+                }
+            }
+        }
+    }
+
+    private static boolean isWithin(
+        ResultSet rows,
+        String column,
+        OffsetDateTime threshold
+    ) throws SQLException {
+        OffsetDateTime value = rows.getObject(column, OffsetDateTime.class);
+        return value != null && !value.isBefore(threshold);
     }
 
     private static long captureObservationBoundary(

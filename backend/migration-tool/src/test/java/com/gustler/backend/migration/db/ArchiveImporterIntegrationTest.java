@@ -86,7 +86,7 @@ class ArchiveImporterIntegrationTest extends PostgresMigrationTestSupport {
         assertThat(reconciled.continuity().get("3330").gapSeconds()).isEqualTo(7.07582);
         assertThat(reconciled.continuity().get("3330").sharedVehicleCount()).isPositive();
         assertImportedRowsHavePrivateIdentityButNoPlateOrForecast();
-        assertOnlineQueueContainsOnlyLiveRows(fixture);
+        assertOnlineQueueSkipsBackfillOutsideTheStalenessWindow(fixture);
         assertCurrentProcessorCrossesTheBoundary(fixture.live3330Batch());
         assertNoIdentifierLeaksThroughAggregateReceipt(reconciled);
 
@@ -227,14 +227,21 @@ class ArchiveImporterIntegrationTest extends PostgresMigrationTestSupport {
         }
     }
 
-    private static void assertOnlineQueueContainsOnlyLiveRows(
+    private static void assertOnlineQueueSkipsBackfillOutsideTheStalenessWindow(
         ArchiveTestFixture.Fixture fixture
     ) {
         JdbcVehicleTrajectoryRepository repository = trajectoryRepository();
-        assertThat(repository.findBatchesAwaitingForecast(fixture.version3330(), 100))
+        assertThat(repository.findBatchesAwaitingForecast(
+            fixture.version3330(), ArchiveTestFixture.FIRST_LIVE_3330, 100))
+            .isNotEmpty()
             .allMatch(batch -> !batch.responseReceivedAt().isBefore(ArchiveTestFixture.FIRST_LIVE_3330));
-        assertThat(repository.findBatchesAwaitingForecast(fixture.version1650(), 100))
+        assertThat(repository.findBatchesAwaitingForecast(
+            fixture.version1650(), ArchiveTestFixture.FIRST_LIVE_1650, 100))
+            .isNotEmpty()
             .allMatch(batch -> !batch.responseReceivedAt().isBefore(ArchiveTestFixture.FIRST_LIVE_1650));
+        assertThat(repository.findBatchesAwaitingForecast(
+            fixture.version3330(), Instant.EPOCH, 100))
+            .anyMatch(batch -> batch.responseReceivedAt().isBefore(ArchiveTestFixture.FIRST_LIVE_3330));
     }
 
     private static void assertCurrentProcessorCrossesTheBoundary(long liveBatchId) {

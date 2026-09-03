@@ -3,6 +3,7 @@ package com.gustler.backend.migration.db;
 import com.gustler.backend.migration.MigrationException;
 import com.gustler.backend.migration.SecureFiles;
 import com.gustler.backend.migration.Sha256;
+import com.gustler.backend.processor.StopDemandStatisticsJob;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -36,7 +37,7 @@ final class AggregateSeedReader {
         "15c221a149f241555e32a4133ed1f31b3d9eaeedc3062c5a454d6b9505489013";
     static final String SOURCE_PRIMARY_KEY_SHA256 =
         "30b2ffc79cc64decc7936efd0a03e51602e5e12424e0e8cbdb7ebf7d98a6a73d";
-    static final String CALCULATION_VERSION = "observed-max-capacity-v1";
+    static final String CALCULATION_VERSION = StopDemandStatisticsJob.CURRENT_CALCULATION_VERSION;
 
     private static final String SCHEMA = "stop-demand-hourly-aggregate-seed-v1";
     private static final String RECEIPT_SCHEMA = "stop-demand-hourly-aggregate-seed-receipt-v1";

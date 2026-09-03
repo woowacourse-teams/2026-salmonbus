@@ -3,10 +3,3 @@
 CREATE UNIQUE INDEX IF NOT EXISTS ux_observation_batch_historical_semantic
     ON observation_batch (semantic_batch_digest)
     WHERE semantic_batch_digest IS NOT NULL;
-
-CREATE INDEX IF NOT EXISTS ix_batch_live_awaiting_forecast
-    ON observation_batch (route_version_id, response_received_at)
-    WHERE ingestion_origin = 'LIVE'
-      AND forecast_completed_at IS NULL
-      AND response_received_at IS NOT NULL
-      AND outcome IN ('SUCCESS_ROWS', 'SUCCESS_EMPTY');

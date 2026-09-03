@@ -258,7 +258,7 @@ class AggregateSeedCutoverIntegrationTest extends PostgresMigrationTestSupport {
                 vehicle_observation_id, target_stop_order, route_version_id, stops_to_target,
                 model_deployment_id, demand_statistics_revision, seat_full_chance_raw,
                 seat_full_chance, expected_seats, generated_at, scoring_state)
-            VALUES (?, 2, ?, 1, 1, 0, 0.1, 0.1, 10.0, now(), 'PENDING')
+            VALUES (?, 2, ?, 1, 1, 0, 0.1, 0.1, 10.0, '2026-09-02T13:00:00Z', 'PENDING')
             """, observation, versions.get("3330"));
         for (long version : versions.values()) {
             execute(connection, """
@@ -351,7 +351,7 @@ class AggregateSeedCutoverIntegrationTest extends PostgresMigrationTestSupport {
         int expectedSamples
     ) {
         JdbcStopDemandStatisticsRepository repository = new JdbcStopDemandStatisticsRepository(
-            JdbcClient.create(dataSource()), () -> true);
+            JdbcClient.create(dataSource()));
         List<StopDemandHourlyTotals> totals = repository.readHourlyTotals(
             routeVersionId, dataUntil.plusSeconds(1));
         assertThat(totals.stream().mapToInt(StopDemandHourlyTotals::sampleCount).sum())

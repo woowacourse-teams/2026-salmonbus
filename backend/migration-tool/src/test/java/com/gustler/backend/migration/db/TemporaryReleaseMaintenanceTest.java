@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.gustler.backend.migration.CanonicalJson;
 import com.gustler.backend.migration.MigrationException;
 import com.gustler.backend.migration.SecureFiles;
-import com.gustler.backend.processor.persistence.jdbc.JdbcForecastWriteBarrier;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -16,10 +15,6 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.postgresql.ds.PGSimpleDataSource;
-import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
 
 class TemporaryReleaseMaintenanceTest extends PostgresMigrationTestSupport {
 
@@ -39,10 +34,10 @@ class TemporaryReleaseMaintenanceTest extends PostgresMigrationTestSupport {
         ImportSettings settings = settings(directory);
         TemporaryReleaseMaintenance maintenance = new TemporaryReleaseMaintenance();
 
+        assertPauseRefusesWhileDerivedWritesAreRecent(maintenance, settings);
+
         maintenance.pause(settings);
-        assertForecastWriteBarrier(false);
         maintenance.recoverTemporaryRelease(settings);
-        assertForecastWriteBarrier(true);
         assertPrePromotionRecoveryRetainsOpenExclusionWindow();
 
         TemporaryReleaseMaintenance.PauseResult paused = maintenance.pause(settings);
@@ -52,7 +47,6 @@ class TemporaryReleaseMaintenanceTest extends PostgresMigrationTestSupport {
         assertThat(frozen.observationBatchHighWater()).isEqualTo(paused.observationBatchHighWater());
         assertThat(frozen.generationCount()).isEqualTo(2);
         assertThat(frozen.rowCount()).isEqualTo(2);
-        assertForecastWriteBarrier(false);
 
         TemporaryReleaseMaintenance.CleanupResult dryRun =
             maintenance.cleanup(settings, false, 1, directory.resolve("cleanup-dry-run.json"), null);
@@ -79,7 +73,6 @@ class TemporaryReleaseMaintenanceTest extends PostgresMigrationTestSupport {
         assertThat(rerun.targetStatisticsRows()).isZero();
 
         maintenance.recoverTemporaryRelease(settings);
-        assertForecastWriteBarrier(true);
         assertPrePromotionRecoveryRetainsOpenExclusionWindow();
     }
 
@@ -168,6 +161,34 @@ class TemporaryReleaseMaintenanceTest extends PostgresMigrationTestSupport {
         }
     }
 
+    private static void assertPauseRefusesWhileDerivedWritesAreRecent(
+        TemporaryReleaseMaintenance maintenance,
+        ImportSettings settings
+    ) throws Exception {
+        Instant statisticsComputedAt =
+            TemporaryReleaseMaintenance.TEMPORARY_ACTIVATED_AT.plusSeconds(7200);
+        try (Connection connection = connection()) {
+            execute(connection, "UPDATE seat_forecast SET generated_at = clock_timestamp()");
+            assertThatThrownBy(() -> maintenance.pause(settings))
+                .isInstanceOf(MigrationException.class)
+                .hasMessage("TEMP_FORECAST_WRITES_NOT_QUIESCENT");
+            execute(connection,
+                "UPDATE seat_forecast SET generated_at = '2026-09-02T12:00:02Z'");
+
+            execute(connection, """
+                UPDATE stop_demand_statistics SET computed_at = clock_timestamp()
+                WHERE computed_at = '%s'
+                """.formatted(statisticsComputedAt));
+            assertThatThrownBy(() -> maintenance.pause(settings))
+                .isInstanceOf(MigrationException.class)
+                .hasMessage("TEMP_FORECAST_WRITES_NOT_QUIESCENT");
+            execute(connection, """
+                UPDATE stop_demand_statistics SET computed_at = '%s'
+                WHERE computed_at > '%s'
+                """.formatted(statisticsComputedAt, statisticsComputedAt));
+        }
+    }
+
     private static void assertTemporaryDeploymentAndObservationsRemain(Seed seed) throws Exception {
         try (Connection connection = connection(); PreparedStatement statement = connection.prepareStatement("""
             SELECT
@@ -204,17 +225,6 @@ class TemporaryReleaseMaintenanceTest extends PostgresMigrationTestSupport {
             assertThat(rows.getLong("open_window")).isOne();
             assertThat(rows.getBoolean("writes_paused")).isFalse();
         }
-    }
-
-    private static void assertForecastWriteBarrier(boolean expected) {
-        PGSimpleDataSource dataSource = new PGSimpleDataSource();
-        dataSource.setURL(postgres.getJdbcUrl());
-        dataSource.setUser(postgres.getUsername());
-        dataSource.setPassword(postgres.getPassword());
-        JdbcForecastWriteBarrier barrier = new JdbcForecastWriteBarrier(JdbcClient.create(dataSource));
-        Boolean actual = new TransactionTemplate(new DataSourceTransactionManager(dataSource))
-            .execute(status -> barrier.enter());
-        assertThat(actual).isEqualTo(expected);
     }
 
     private static ImportSettings settings(Path directory) {
