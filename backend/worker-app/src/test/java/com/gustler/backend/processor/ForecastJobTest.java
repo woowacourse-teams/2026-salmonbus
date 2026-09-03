@@ -36,10 +36,13 @@ import org.springframework.transaction.annotation.Transactional;
 // 스위치를 켜면 스케줄도 같이 선다. 주기를 한 시간으로 밀어 배경 스레드가 테스트 도중에
 // 안 돌게 한다. 지금은 픽스처가 커밋 전이라 그 스레드가 아무것도 못 보지만,
 // 커밋하는 테스트가 이 설정으로 붙으면 그때는 섞인다.
+// 픽스처의 관측 시각이 고정된 과거라서 신선도 창을 넉넉히 연다. 창 자체를 보는 것은
+// JdbcVehicleTrajectoryRepositoryTest 와 ForecastJobStalenessTest 다.
 @TestPropertySource(properties = {
     "forecast.enabled=true",
     "forecast.interval=1h",
-    "forecast.settlement-interval=1h"
+    "forecast.settlement-interval=1h",
+    "forecast.staleness=36500d"
 })
 @Import(ForecastJobTest.FixedSeatForecastModel.class)
 class ForecastJobTest {

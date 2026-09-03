@@ -15,12 +15,14 @@ public record ForecastProperties(
     Duration interval,
     Duration settlementInterval,
     Duration statisticsInterval,
+    Duration staleness,
     int batchLimit,
     int pendingLimit,
     int arrivalLimit
 ) {
 
     public ForecastProperties {
+        requirePositive("forecast.staleness", staleness);
         requirePositive("forecast.batch-limit", batchLimit);
         requirePositive("forecast.pending-limit", pendingLimit);
         requirePositive("forecast.arrival-limit", arrivalLimit);
@@ -32,6 +34,15 @@ public record ForecastProperties(
     ) {
         if (value <= 0) {
             throw new IllegalStateException("%s 는 1 이상이어야 한다: %d".formatted(name, value));
+        }
+    }
+
+    private static void requirePositive(
+        String name,
+        Duration value
+    ) {
+        if (value == null || value.isNegative() || value.isZero()) {
+            throw new IllegalStateException("%s 는 0보다 길어야 한다: %s".formatted(name, value));
         }
     }
 }

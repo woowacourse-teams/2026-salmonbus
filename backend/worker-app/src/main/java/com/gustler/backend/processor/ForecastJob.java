@@ -3,6 +3,8 @@ package com.gustler.backend.processor;
 import com.gustler.backend.processor.seatdistribution.RuntimeSnapshot;
 
 import jakarta.annotation.PostConstruct;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -32,6 +34,7 @@ public class ForecastJob {
     private final ForecastRuntime forecastRuntime;
     private final ForecastBatchWriter forecastBatchWriter;
     private final ForecastProperties properties;
+    private final Clock clock;
 
     /**
      * 모델이 없으면 켜져 있어도 아무것도 안 한다는 것을 한 번 남긴다.
@@ -51,33 +54,41 @@ public class ForecastJob {
         RouteVersionRepository routeVersionRepository,
         ForecastRuntime forecastRuntime,
         ForecastBatchWriter forecastBatchWriter,
-        ForecastProperties properties
+        ForecastProperties properties,
+        Clock clock
     ) {
         this.vehicleTrajectoryRepository = vehicleTrajectoryRepository;
         this.routeVersionRepository = routeVersionRepository;
         this.forecastRuntime = forecastRuntime;
         this.forecastBatchWriter = forecastBatchWriter;
         this.properties = properties;
+        this.clock = clock;
     }
 
+    /**
+     * 신선도 한계는 회차마다 한 번만 읽는다. 노선마다 다시 읽으면 같은 회차의 노선들이 서로 다른
+     * 한계로 잘려서, 어느 판이 빠졌는지가 노선 순서에 따라 달라진다.
+     */
     @Scheduled(fixedDelayString = "${forecast.interval}")
     public void writeForecasts() {
         Optional<RuntimeSnapshot> runtime = forecastRuntime.resolveActive();
         if (runtime.isEmpty()) {
             return;
         }
+        Instant notBefore = clock.instant().minus(properties.staleness());
         for (Long routeVersionId : routeVersionRepository.findActiveVersionIds()) {
-            writeForecastsOf(routeVersionId, runtime.get());
+            writeForecastsOf(routeVersionId, notBefore, runtime.get());
         }
     }
 
     private void writeForecastsOf(
         final long routeVersionId,
+        Instant notBefore,
         RuntimeSnapshot runtime
     ) {
         RouteStops stops = routeVersionRepository.readStops(routeVersionId);
-        List<PendingForecastBatch> batches =
-            vehicleTrajectoryRepository.findBatchesAwaitingForecast(routeVersionId, properties.batchLimit());
+        List<PendingForecastBatch> batches = vehicleTrajectoryRepository.findBatchesAwaitingForecast(
+            routeVersionId, notBefore, properties.batchLimit());
         for (PendingForecastBatch batch : batches) {
             forecastBatchWriter.writeForecastsOf(batch, stops, runtime);
         }

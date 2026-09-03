@@ -1,5 +1,6 @@
 package com.gustler.backend.processor;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -9,9 +10,10 @@ import java.util.List;
  */
 public interface VehicleTrajectoryRepository {
 
-    /** 예보가 아직 안 붙은 판을 오래된 것부터. */
+    /** 예보가 아직 안 붙은 판을 오래된 것부터. {@code notBefore} 보다 오래된 판은 안 준다. */
     List<PendingForecastBatch> findBatchesAwaitingForecast(
         long routeVersionId,
+        Instant notBefore,
         int limit
     );
 
