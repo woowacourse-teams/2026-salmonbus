@@ -5,8 +5,13 @@ env:
   variables:
     # cache.paths 는 셸을 안 거쳐서 $HOME 이 안 풀린다. 그래서 캐시로 담을 경로와
     # Gradle 이 실제로 쓰는 경로를 양쪽에 같은 글자로 적는다.
-    # 둘이 어긋나면 캐시가 없는 것처럼 아무 말 없이 그냥 돈다
-    GRADLE_USER_HOME: /root/.gradle
+    # 둘이 어긋나면 캐시가 없는 것처럼 아무 말 없이 그냥 돈다.
+    #
+    # 기본 자리인 /root/.gradle 을 안 쓴다. 빌드 이미지가 거기에 Gradle 8 계열 배포판을
+    # 1.1GB 얹어 두는데 우리는 9.5.1 을 쓴다. 첫 빌드가 1.1GB 를 찍고도
+    # gradle-9.5.1-bin.zip 을 내려받은 것으로 확인했다.
+    # 그 자리를 캐시에 담으면 S3 로 빌드마다 1.4GB 가 오간다. 여기로 옮기면 277MB 다
+    GRADLE_USER_HOME: /root/.gradle-ci
 
 phases:
   install:
@@ -20,6 +25,7 @@ phases:
       - |
         # 캐시를 진짜 썼는지는 이 줄로만 안다.
         # buildspec 에 적어도 CodeBuild 프로젝트에서 캐시를 안 켜면 매번 "없다" 가 찍힌다.
+        # 빌드 이미지가 안 쓰는 자리라 여기 있는 것은 전부 되살아난 캐시다.
         # 로컬 캐시는 이 경로를 심볼릭 링크로 걸어 준다. du 는 링크를 안 따라가서
         # -L 이 없으면 126MB 가 들어와 있어도 0B 로 찍힌다. 실제로 재봤다
         for d in wrapper/dists caches/modules-2; do
@@ -48,10 +54,34 @@ phases:
       - |
         # Gradle 문서가 의존성 캐시를 옮길 때 이 둘은 빼라고 한다.
         # *.lock 은 동시 접근을 막는 파일이고 gc.properties 는 캐시 청소 기준이다.
-        # 다른 빌드가 남긴 것이 되살아나면 어긋난다. 지워도 다음 빌드가 다시 만든다
-        if [ -d "$GRADLE_USER_HOME/caches/modules-2" ]; then
-          find "$GRADLE_USER_HOME/caches/modules-2" \
-            \( -name '*.lock' -o -name 'gc.properties' \) -delete
+        # 다른 빌드가 남긴 것이 되살아나면 어긋난다. 지워도 다음 빌드가 다시 만든다.
+        #
+        # -H 는 명령줄에 준 경로가 심볼릭 링크일 때 그것을 따라간다.
+        # 로컬 캐시는 이 경로를 링크로 걸어 주는데, -H 가 없으면 find 가 그 링크를
+        # 디렉터리로 안 보고 한 건도 못 찾는다. 실측으로 0건이었다.
+        # 건수를 찍는 이유도 같다. 0건이면 조용히 지나가는 대신 로그에 남는다.
+        #
+        # 세 갈래를 다 다른 문구로 남긴다. 같은 "0건" 으로 보이면 다음에 또 여기를 의심한다.
+        # 지웠다 · find 가 실패했다 · 지울 자리가 없다 가 서로 다른 일이다
+        CACHE="$GRADLE_USER_HOME/caches/modules-2"
+        if [ -d "$CACHE" ]; then
+          # 이 자리가 링크인지가 -H 를 붙인 이유다. 캐시 종류에 따라 갈려서 로그로 남긴다
+          if [ -L "$CACHE" ]; then echo "캐시가 심볼릭 링크로 걸려 있다"; else echo "캐시가 진짜 디렉터리다"; fi
+          # 파이프 끝이 tr 이라 pipefail 이 없으면 find 가 실패해도 0건으로 찍힌다.
+          # 그러면 링크 때문에 못 찾은 것과 구분이 안 된다
+          set -o pipefail
+          # -delete 를 -print 앞에 둔다. 뒤에 두면 지우기가 실패한 것까지 세어서
+          # 못 지운 파일이 지운 것으로 찍힌다. find 는 앞이 실패하면 뒤를 안 본다
+          if deleted="$(find -H "$CACHE" \
+              \( -name '*.lock' -o -name 'gc.properties' \) -delete -print | wc -l | tr -d ' ')"; then
+            echo "Gradle 제어 파일 ${deleted}건을 캐시에서 뺐다"
+          else
+            echo "Gradle 제어 파일을 못 셌다. find 가 실패했다"
+          fi
+          set +o pipefail
+        else
+          # 머지 뒤 첫 빌드가 이 경우다. 아무 말도 안 남기면 정리가 돌았는지 알 수 없다
+          echo "$CACHE 가 없다. 뺄 제어 파일이 없다"
         fi
       # build 가 실패해도 post_build 는 실행된다. 이 줄이 없으면 깨진 빌드가 배포로 나간다
       - test "$CODEBUILD_BUILD_SUCCEEDING" = "1"
@@ -116,10 +146,10 @@ cache:
   paths:
     # Gradle 9.5.1 배포판. gradle-wrapper.properties 의 distributionBase 가
     # GRADLE_USER_HOME 이라 여기로 풀린다
-    - '/root/.gradle/wrapper/dists/**/*'
+    - '/root/.gradle-ci/wrapper/dists/**/*'
     # 내려받은 의존성. Gradle 자기 것이 쌓이는 caches/9.5.1 은 안 담는다.
     # 이 둘만 되살리고 --offline 으로 clean testClasses 가 통과하는 것을 재봤다
-    - '/root/.gradle/caches/modules-2/**/*'
+    - '/root/.gradle-ci/caches/modules-2/**/*'
 
 artifacts:
   # secondary-artifacts 만 쓸 때도 CodeBuild 는 최상위 files 를 요구한다.
