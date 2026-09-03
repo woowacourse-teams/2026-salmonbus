@@ -1,0 +1,1 @@
+{"action":"RSYNC_ARCHIVE_TRANSFER","expiresAt":"<UTC_RFC3339>","manifestSha256":"<64_LOWERCASE_HEX>","schemaVersion":"salmonbus-transfer-approval-v1"}
