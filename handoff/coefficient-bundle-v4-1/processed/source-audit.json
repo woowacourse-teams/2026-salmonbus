@@ -1,0 +1,643 @@
+{
+  "classification": "V4_1_SOURCE_CANDIDATE_NOT_RELEASE_QUALIFIED_19D",
+  "daily": [
+    {
+      "accepted": {
+        "observations": 20145,
+        "raw_documents": 842,
+        "raw_less_records": 0,
+        "record_documents": 842,
+        "seat_missing_rows": 24,
+        "sha256": "b3e9314ce52882ea4ef670454fa29aba8a2964944dd70a5b4951305187e921e6"
+      },
+      "date": "2026-08-14",
+      "freeze_at_utc": "2026-08-14T15:15:00+00:00",
+      "invalid_records_by_code": {},
+      "inventory": {
+        "bytes": 18040620,
+        "raw_documents": 842,
+        "record_documents": 842,
+        "sha256": "b3e9314ce52882ea4ef670454fa29aba8a2964944dd70a5b4951305187e921e6"
+      },
+      "repaired_partition_crossings": 0,
+      "semantic_outcomes": {
+        "with_vehicles": 842
+      },
+      "station_mismatch_observations": 0,
+      "station_mismatch_records": 0,
+      "strategies": {
+        "adaptive-kst-v1.0.0": 842
+      },
+      "unaccepted_raw_documents": 0
+    },
+    {
+      "accepted": {
+        "observations": 42492,
+        "raw_documents": 3914,
+        "raw_less_records": 0,
+        "record_documents": 3914,
+        "seat_missing_rows": 31,
+        "sha256": "1bf2505f7492978ad739ae849b3901c37d0912c10fc62fc3dc3e18ac2cb226d5"
+      },
+      "date": "2026-08-15",
+      "freeze_at_utc": "2026-08-15T15:15:00+00:00",
+      "invalid_records_by_code": {},
+      "inventory": {
+        "bytes": 43972629,
+        "raw_documents": 3914,
+        "record_documents": 3914,
+        "sha256": "1bf2505f7492978ad739ae849b3901c37d0912c10fc62fc3dc3e18ac2cb226d5"
+      },
+      "repaired_partition_crossings": 0,
+      "semantic_outcomes": {
+        "failed": 18,
+        "with_vehicles": 3790,
+        "without_vehicles": 106
+      },
+      "station_mismatch_observations": 0,
+      "station_mismatch_records": 0,
+      "strategies": {
+        "adaptive-kst-v1.0.0": 1274,
+        "adaptive-kst-v1.0.1": 2640
+      },
+      "unaccepted_raw_documents": 0
+    },
+    {
+      "accepted": {
+        "observations": 41071,
+        "raw_documents": 3815,
+        "raw_less_records": 1,
+        "record_documents": 3816,
+        "seat_missing_rows": 22,
+        "sha256": "0f365ed673381112e1be48a9b836d70cf1b1e146297e71634835b5a521b15502"
+      },
+      "date": "2026-08-16",
+      "freeze_at_utc": "2026-08-16T15:15:00+00:00",
+      "invalid_records_by_code": {},
+      "inventory": {
+        "bytes": 42605987,
+        "raw_documents": 3815,
+        "record_documents": 3816,
+        "sha256": "0f365ed673381112e1be48a9b836d70cf1b1e146297e71634835b5a521b15502"
+      },
+      "repaired_partition_crossings": 0,
+      "semantic_outcomes": {
+        "failed": 8,
+        "with_vehicles": 3773,
+        "without_vehicles": 35
+      },
+      "station_mismatch_observations": 0,
+      "station_mismatch_records": 0,
+      "strategies": {
+        "adaptive-kst-v1.0.1": 3816
+      },
+      "unaccepted_raw_documents": 0
+    },
+    {
+      "accepted": {
+        "observations": 55180,
+        "raw_documents": 5244,
+        "raw_less_records": 0,
+        "record_documents": 5244,
+        "seat_missing_rows": 41,
+        "sha256": "a60186dc9e9eea3676ff6e16e9a0e9f79d585ea1eb48fbb434801bbaba32bc76"
+      },
+      "date": "2026-08-17",
+      "freeze_at_utc": "2026-08-17T15:15:00+00:00",
+      "invalid_records_by_code": {},
+      "inventory": {
+        "bytes": 57572661,
+        "raw_documents": 5244,
+        "record_documents": 5244,
+        "sha256": "a60186dc9e9eea3676ff6e16e9a0e9f79d585ea1eb48fbb434801bbaba32bc76"
+      },
+      "repaired_partition_crossings": 0,
+      "semantic_outcomes": {
+        "failed": 5,
+        "with_vehicles": 5204,
+        "without_vehicles": 35
+      },
+      "station_mismatch_observations": 0,
+      "station_mismatch_records": 0,
+      "strategies": {
+        "adaptive-kst-v1.0.1": 1912,
+        "adaptive-kst-v1.1.0": 508,
+        "adaptive-kst-v1.2.0": 2824
+      },
+      "unaccepted_raw_documents": 0
+    },
+    {
+      "accepted": {
+        "observations": 160143,
+        "raw_documents": 8556,
+        "raw_less_records": 0,
+        "record_documents": 8556,
+        "seat_missing_rows": 122,
+        "sha256": "cb00b7a624b4bfbee5dddfa34fb5bafdb64392d4ada43349f069c08f6155d237"
+      },
+      "date": "2026-08-18",
+      "freeze_at_utc": "2026-08-18T15:15:00+00:00",
+      "invalid_records_by_code": {},
+      "inventory": {
+        "bytes": 148558409,
+        "raw_documents": 8556,
+        "record_documents": 8556,
+        "sha256": "cb00b7a624b4bfbee5dddfa34fb5bafdb64392d4ada43349f069c08f6155d237"
+      },
+      "repaired_partition_crossings": 0,
+      "semantic_outcomes": {
+        "failed": 14,
+        "with_vehicles": 8285,
+        "without_vehicles": 257
+      },
+      "station_mismatch_observations": 0,
+      "station_mismatch_records": 0,
+      "strategies": {
+        "adaptive-kst-v1.2.0": 8556
+      },
+      "unaccepted_raw_documents": 0
+    },
+    {
+      "accepted": {
+        "observations": 160841,
+        "raw_documents": 8556,
+        "raw_less_records": 0,
+        "record_documents": 8556,
+        "seat_missing_rows": 67,
+        "sha256": "a7354bb07e4976ba34f56c32e6f93ea92cf9d17e0d9073f914e304858bc97b76"
+      },
+      "date": "2026-08-19",
+      "freeze_at_utc": "2026-08-19T15:15:00+00:00",
+      "invalid_records_by_code": {},
+      "inventory": {
+        "bytes": 149077505,
+        "raw_documents": 8556,
+        "record_documents": 8556,
+        "sha256": "a7354bb07e4976ba34f56c32e6f93ea92cf9d17e0d9073f914e304858bc97b76"
+      },
+      "repaired_partition_crossings": 0,
+      "semantic_outcomes": {
+        "failed": 73,
+        "with_vehicles": 8279,
+        "without_vehicles": 204
+      },
+      "station_mismatch_observations": 0,
+      "station_mismatch_records": 0,
+      "strategies": {
+        "adaptive-kst-v1.2.0": 8556
+      },
+      "unaccepted_raw_documents": 0
+    },
+    {
+      "accepted": {
+        "observations": 161614,
+        "raw_documents": 8543,
+        "raw_less_records": 13,
+        "record_documents": 8556,
+        "seat_missing_rows": 135,
+        "sha256": "ab11f8e242af0d97e2094fec29eb16d6ed5e85f6be1f3c113dd20e6d50b2202f"
+      },
+      "date": "2026-08-20",
+      "freeze_at_utc": "2026-08-20T15:15:00+00:00",
+      "invalid_records_by_code": {},
+      "inventory": {
+        "bytes": 149663070,
+        "raw_documents": 8543,
+        "record_documents": 8556,
+        "sha256": "ab11f8e242af0d97e2094fec29eb16d6ed5e85f6be1f3c113dd20e6d50b2202f"
+      },
+      "repaired_partition_crossings": 0,
+      "semantic_outcomes": {
+        "failed": 107,
+        "with_vehicles": 8278,
+        "without_vehicles": 171
+      },
+      "station_mismatch_observations": 0,
+      "station_mismatch_records": 0,
+      "strategies": {
+        "adaptive-kst-v1.2.0": 8556
+      },
+      "unaccepted_raw_documents": 0
+    },
+    {
+      "accepted": {
+        "observations": 163653,
+        "raw_documents": 8535,
+        "raw_less_records": 17,
+        "record_documents": 8552,
+        "seat_missing_rows": 89,
+        "sha256": "90605a886c7629baf4c3a22375664a77d21a52a36a8a2a9f30b5deb7a3d1f02e"
+      },
+      "date": "2026-08-21",
+      "freeze_at_utc": "2026-08-21T15:15:00+00:00",
+      "invalid_records_by_code": {},
+      "inventory": {
+        "bytes": 151323084,
+        "raw_documents": 8539,
+        "record_documents": 8556,
+        "sha256": "1576502eac84a50b3fca741919a1122bb668b941154802f5ddc65b146701aba4"
+      },
+      "repaired_partition_crossings": 0,
+      "semantic_outcomes": {
+        "failed": 100,
+        "with_vehicles": 8258,
+        "without_vehicles": 194
+      },
+      "station_mismatch_observations": 4,
+      "station_mismatch_records": 4,
+      "strategies": {
+        "adaptive-kst-v1.2.0": 8552
+      },
+      "unaccepted_raw_documents": 4
+    },
+    {
+      "accepted": {
+        "observations": 99977,
+        "raw_documents": 8534,
+        "raw_less_records": 22,
+        "record_documents": 8556,
+        "seat_missing_rows": 99,
+        "sha256": "a2b9256f49f10479cfd2b7555412fdb6ecba4e0bbd2808e7600938ac96e69e40"
+      },
+      "date": "2026-08-22",
+      "freeze_at_utc": "2026-08-22T15:15:00+00:00",
+      "invalid_records_by_code": {},
+      "inventory": {
+        "bytes": 101623699,
+        "raw_documents": 8534,
+        "record_documents": 8556,
+        "sha256": "a2b9256f49f10479cfd2b7555412fdb6ecba4e0bbd2808e7600938ac96e69e40"
+      },
+      "repaired_partition_crossings": 0,
+      "semantic_outcomes": {
+        "failed": 110,
+        "with_vehicles": 8282,
+        "without_vehicles": 164
+      },
+      "station_mismatch_observations": 0,
+      "station_mismatch_records": 0,
+      "strategies": {
+        "adaptive-kst-v1.2.0": 8556
+      },
+      "unaccepted_raw_documents": 0
+    },
+    {
+      "accepted": {
+        "observations": 87666,
+        "raw_documents": 8552,
+        "raw_less_records": 4,
+        "record_documents": 8556,
+        "seat_missing_rows": 113,
+        "sha256": "fa2713fc347106e7a69b1589e2b999adb9612a284892638b958d50bdf42b9d73"
+      },
+      "date": "2026-08-23",
+      "freeze_at_utc": "2026-08-23T15:15:00+00:00",
+      "invalid_records_by_code": {},
+      "inventory": {
+        "bytes": 92031654,
+        "raw_documents": 8552,
+        "record_documents": 8556,
+        "sha256": "fa2713fc347106e7a69b1589e2b999adb9612a284892638b958d50bdf42b9d73"
+      },
+      "repaired_partition_crossings": 0,
+      "semantic_outcomes": {
+        "failed": 113,
+        "with_vehicles": 8266,
+        "without_vehicles": 177
+      },
+      "station_mismatch_observations": 0,
+      "station_mismatch_records": 0,
+      "strategies": {
+        "adaptive-kst-v1.2.0": 8556
+      },
+      "unaccepted_raw_documents": 0
+    },
+    {
+      "accepted": {
+        "observations": 158180,
+        "raw_documents": 8538,
+        "raw_less_records": 1,
+        "record_documents": 8539,
+        "seat_missing_rows": 151,
+        "sha256": "f962287a38ffc345abf769acedc370b7a1d1ae156fd6280580e0f917ea01de5d"
+      },
+      "date": "2026-08-24",
+      "freeze_at_utc": "2026-08-24T15:15:00+00:00",
+      "invalid_records_by_code": {},
+      "inventory": {
+        "bytes": 147299756,
+        "raw_documents": 8555,
+        "record_documents": 8556,
+        "sha256": "edb8d77105c53936e4bd982793b3ab5587bc1507ac0e4805ec06bfd7f3b4b443"
+      },
+      "repaired_partition_crossings": 0,
+      "semantic_outcomes": {
+        "failed": 2,
+        "with_vehicles": 8266,
+        "without_vehicles": 271
+      },
+      "station_mismatch_observations": 17,
+      "station_mismatch_records": 17,
+      "strategies": {
+        "adaptive-kst-v1.2.0": 8539
+      },
+      "unaccepted_raw_documents": 17
+    },
+    {
+      "accepted": {
+        "observations": 162606,
+        "raw_documents": 8556,
+        "raw_less_records": 0,
+        "record_documents": 8556,
+        "seat_missing_rows": 100,
+        "sha256": "79f7309f4ef57b7b1b47d7d661f56e41a1413cd77ba1541921543406a0d3a52f"
+      },
+      "date": "2026-08-25",
+      "freeze_at_utc": "2026-08-25T15:15:00+00:00",
+      "invalid_records_by_code": {},
+      "inventory": {
+        "bytes": 150463262,
+        "raw_documents": 8556,
+        "record_documents": 8556,
+        "sha256": "79f7309f4ef57b7b1b47d7d661f56e41a1413cd77ba1541921543406a0d3a52f"
+      },
+      "repaired_partition_crossings": 0,
+      "semantic_outcomes": {
+        "failed": 47,
+        "with_vehicles": 8265,
+        "without_vehicles": 244
+      },
+      "station_mismatch_observations": 0,
+      "station_mismatch_records": 0,
+      "strategies": {
+        "adaptive-kst-v1.2.0": 8556
+      },
+      "unaccepted_raw_documents": 0
+    },
+    {
+      "accepted": {
+        "observations": 162912,
+        "raw_documents": 8556,
+        "raw_less_records": 0,
+        "record_documents": 8556,
+        "seat_missing_rows": 102,
+        "sha256": "64a6a9f0faa01a7bf6158b59468b72d7d06558247ec8649e148f7aa693a758ef"
+      },
+      "date": "2026-08-26",
+      "freeze_at_utc": "2026-08-26T15:15:00+00:00",
+      "invalid_records_by_code": {},
+      "inventory": {
+        "bytes": 150711052,
+        "raw_documents": 8556,
+        "record_documents": 8556,
+        "sha256": "64a6a9f0faa01a7bf6158b59468b72d7d06558247ec8649e148f7aa693a758ef"
+      },
+      "repaired_partition_crossings": 0,
+      "semantic_outcomes": {
+        "failed": 16,
+        "with_vehicles": 8285,
+        "without_vehicles": 255
+      },
+      "station_mismatch_observations": 0,
+      "station_mismatch_records": 0,
+      "strategies": {
+        "adaptive-kst-v1.2.0": 8556
+      },
+      "unaccepted_raw_documents": 0
+    },
+    {
+      "accepted": {
+        "observations": 162247,
+        "raw_documents": 8555,
+        "raw_less_records": 1,
+        "record_documents": 8556,
+        "seat_missing_rows": 117,
+        "sha256": "630d055049bf2bde8f9f2edaeed7a575262f5e622b14a4391a553f52357c08cb"
+      },
+      "date": "2026-08-27",
+      "freeze_at_utc": "2026-08-27T15:15:00+00:00",
+      "invalid_records_by_code": {},
+      "inventory": {
+        "bytes": 150197143,
+        "raw_documents": 8555,
+        "record_documents": 8556,
+        "sha256": "630d055049bf2bde8f9f2edaeed7a575262f5e622b14a4391a553f52357c08cb"
+      },
+      "repaired_partition_crossings": 1,
+      "semantic_outcomes": {
+        "failed": 17,
+        "with_vehicles": 8309,
+        "without_vehicles": 230
+      },
+      "station_mismatch_observations": 0,
+      "station_mismatch_records": 0,
+      "strategies": {
+        "adaptive-kst-v1.2.0": 8556
+      },
+      "unaccepted_raw_documents": 0
+    },
+    {
+      "accepted": {
+        "observations": 167548,
+        "raw_documents": 8552,
+        "raw_less_records": 3,
+        "record_documents": 8555,
+        "seat_missing_rows": 120,
+        "sha256": "21f7f6503909a6d2669bb134ddf23ac2246c63844948dfdd5d4496479e2ab0e0"
+      },
+      "date": "2026-08-28",
+      "freeze_at_utc": "2026-08-28T15:15:00+00:00",
+      "invalid_records_by_code": {},
+      "inventory": {
+        "bytes": 154328631,
+        "raw_documents": 8552,
+        "record_documents": 8555,
+        "sha256": "21f7f6503909a6d2669bb134ddf23ac2246c63844948dfdd5d4496479e2ab0e0"
+      },
+      "repaired_partition_crossings": 1,
+      "semantic_outcomes": {
+        "failed": 13,
+        "with_vehicles": 8298,
+        "without_vehicles": 244
+      },
+      "station_mismatch_observations": 0,
+      "station_mismatch_records": 0,
+      "strategies": {
+        "adaptive-kst-v1.2.0": 8555
+      },
+      "unaccepted_raw_documents": 0
+    },
+    {
+      "accepted": {
+        "observations": 98173,
+        "raw_documents": 8543,
+        "raw_less_records": 14,
+        "record_documents": 8557,
+        "seat_missing_rows": 78,
+        "sha256": "8ec2d119141338e0d1fc615a65c675d3a888274c7c4ebb3577d7a3fc320b49b1"
+      },
+      "date": "2026-08-29",
+      "freeze_at_utc": "2026-08-29T15:15:00+00:00",
+      "invalid_records_by_code": {},
+      "inventory": {
+        "bytes": 100237094,
+        "raw_documents": 8543,
+        "record_documents": 8557,
+        "sha256": "8ec2d119141338e0d1fc615a65c675d3a888274c7c4ebb3577d7a3fc320b49b1"
+      },
+      "repaired_partition_crossings": 0,
+      "semantic_outcomes": {
+        "failed": 65,
+        "with_vehicles": 8285,
+        "without_vehicles": 207
+      },
+      "station_mismatch_observations": 0,
+      "station_mismatch_records": 0,
+      "strategies": {
+        "adaptive-kst-v1.2.0": 8557
+      },
+      "unaccepted_raw_documents": 0
+    },
+    {
+      "accepted": {
+        "observations": 86722,
+        "raw_documents": 8525,
+        "raw_less_records": 30,
+        "record_documents": 8555,
+        "seat_missing_rows": 49,
+        "sha256": "17183b58ef0bfeac773eee78731b18914b5d354a5911c81b9930c5d1bce2120f"
+      },
+      "date": "2026-08-30",
+      "freeze_at_utc": "2026-08-30T15:15:00+00:00",
+      "invalid_records_by_code": {},
+      "inventory": {
+        "bytes": 91303127,
+        "raw_documents": 8525,
+        "record_documents": 8555,
+        "sha256": "17183b58ef0bfeac773eee78731b18914b5d354a5911c81b9930c5d1bce2120f"
+      },
+      "repaired_partition_crossings": 1,
+      "semantic_outcomes": {
+        "failed": 65,
+        "with_vehicles": 8262,
+        "without_vehicles": 228
+      },
+      "station_mismatch_observations": 0,
+      "station_mismatch_records": 0,
+      "strategies": {
+        "adaptive-kst-v1.2.0": 8555
+      },
+      "unaccepted_raw_documents": 0
+    },
+    {
+      "accepted": {
+        "observations": 166291,
+        "raw_documents": 8540,
+        "raw_less_records": 15,
+        "record_documents": 8555,
+        "seat_missing_rows": 109,
+        "sha256": "1b0cea4f2b032df10302e2429a58301b3e45eeb44019f6f57dda43f2eb9df5f0"
+      },
+      "date": "2026-08-31",
+      "freeze_at_utc": "2026-08-31T15:15:00+00:00",
+      "invalid_records_by_code": {},
+      "inventory": {
+        "bytes": 153356409,
+        "raw_documents": 8542,
+        "record_documents": 8557,
+        "sha256": "bcab17d398a48ac4ba691cb3169d94f33631922e61fb211536821535f6756c30"
+      },
+      "repaired_partition_crossings": 0,
+      "semantic_outcomes": {
+        "failed": 53,
+        "with_vehicles": 8256,
+        "without_vehicles": 246
+      },
+      "station_mismatch_observations": 2,
+      "station_mismatch_records": 2,
+      "strategies": {
+        "adaptive-kst-v1.2.0": 8555
+      },
+      "unaccepted_raw_documents": 2
+    },
+    {
+      "accepted": {
+        "observations": 166938,
+        "raw_documents": 8548,
+        "raw_less_records": 4,
+        "record_documents": 8552,
+        "seat_missing_rows": 101,
+        "sha256": "2f9477851fc75d1b88514be0f7e4557736359f38ba926a982b69ef8131efcb5d"
+      },
+      "date": "2026-09-01",
+      "freeze_at_utc": "2026-09-01T15:15:00+00:00",
+      "invalid_records_by_code": {},
+      "inventory": {
+        "bytes": 153905196,
+        "raw_documents": 8552,
+        "record_documents": 8556,
+        "sha256": "bc0a5e41dc9db91dc26fee63afc58d69153e6a737cf839be9b002646434642b7"
+      },
+      "repaired_partition_crossings": 1,
+      "semantic_outcomes": {
+        "failed": 32,
+        "with_vehicles": 8283,
+        "without_vehicles": 237
+      },
+      "station_mismatch_observations": 4,
+      "station_mismatch_records": 4,
+      "strategies": {
+        "adaptive-kst-v1.2.0": 8552
+      },
+      "unaccepted_raw_documents": 4
+    }
+  ],
+  "observed_at_utc": "2026-09-02T11:30:26.471507+00:00",
+  "privacy": {
+    "object_keys_emitted": false,
+    "original_vehicle_ids_emitted": false,
+    "plate_values_emitted": false,
+    "row_level_material_persisted": false,
+    "secrets_emitted": false,
+    "vehicle_hmacs_emitted": false
+  },
+  "runtime": {
+    "duration_seconds": 1858.572,
+    "workers": 8
+  },
+  "schema_version": "v4-1-source-audit-v1",
+  "source": {
+    "accepted_manifest_sha256": "3cbdc35f50236ca92c3545ac7262762fc05d57933a712fa713830e23771eb0f0",
+    "completed_dates": 19,
+    "freeze_time_kst": "00:15:00",
+    "from_date": "2026-08-14",
+    "inventory_algorithm": {
+      "encoding": "UTF-8",
+      "final_lf": true,
+      "line_format": "key<TAB>etag<TAB>size<LF>",
+      "ordering": "global_bytewise_key_ascending",
+      "version": "object-inventory-v1"
+    },
+    "routes": [
+      "1650",
+      "3330"
+    ],
+    "through_date": "2026-09-01"
+  },
+  "totals": {
+    "accepted_observations": 2324399,
+    "accepted_raw_documents": 142004,
+    "accepted_raw_less_records": 125,
+    "accepted_record_documents": 142129,
+    "invalid_records": 0,
+    "inventory_bytes": 2206270988,
+    "inventory_raw_documents": 142031,
+    "inventory_record_documents": 142156,
+    "quarantined_record_observations": 545,
+    "repaired_partition_crossings": 4,
+    "seat_missing_rows": 1670,
+    "station_mismatch_observations": 27,
+    "station_mismatch_records": 27,
+    "unaccepted_raw_documents": 27
+  }
+}

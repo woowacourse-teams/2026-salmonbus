@@ -1,0 +1,63 @@
+{
+  "authority": {
+    "sourceBaseThroughExclusiveUtcByRoute": {
+      "3330": "2026-09-02T10:27:52.390820Z",
+      "1650": "2026-09-02T12:49:33.041299Z"
+    },
+    "targetRdsFromInclusiveUtcByRoute": {
+      "3330": "2026-09-02T10:27:52.390820Z",
+      "1650": "2026-09-02T12:49:33.041299Z"
+    },
+    "targetRdsThroughExclusiveUtc": null,
+    "targetRdsThroughStatus": "freeze at formal cutover after jobs are quiesced"
+  },
+  "classification": "REQUIRED_PRE_CUTOVER_OBSERVATION_ONLY_DELTA_CONTRACT",
+  "input": {
+    "allowedTables": [
+      "route",
+      "route_version",
+      "route_stop",
+      "observation_batch",
+      "vehicle_observation"
+    ],
+    "forbiddenTables": [
+      "model_deployment",
+      "seat_forecast",
+      "stop_demand_statistics"
+    ],
+    "privateJourneyIdentity": "vehicle_observation.vehicle_id exact equality, in process only",
+    "retainSemanticFailureAndEmptyBatches": true,
+    "transaction": "REPEATABLE READ READ ONLY"
+  },
+  "output": {
+    "mergeWith": "cell-hourly-aggregate.json.gz",
+    "schemaVersion": "stop-demand-hourly-aggregate-seed-v1",
+    "requiredFields": [
+      "modelRoute",
+      "stopOrder",
+      "arrivalDateKst",
+      "arrivalHourStartUtc",
+      "fillRateTotal",
+      "netBoardingTotal",
+      "capacityTotal",
+      "sampleCount"
+    ],
+    "requiresDistinctDataRelease": true
+  },
+  "privacy": {
+    "emitVehicleId": false,
+    "emitPlate": false,
+    "emitForecastOrProbability": false,
+    "emitHmac": false,
+    "aggregateOnly": true
+  },
+  "replay": {
+    "featureContractVersion": "observed-max-capacity-v1",
+    "generatedAtGuardAndSettlementGuardMustMatchBaseSeed": true,
+    "openStructuralHorizonOneOnly": true,
+    "usePersistedTemporaryForecastOrStatistics": false,
+    "dedupeBoundary": "source < cutoff; target >= cutoff",
+    "formalCutoverBlockedUntilValidated": true
+  },
+  "schemaVersion": "v4-1-rds-observation-delta-contract-v1"
+}

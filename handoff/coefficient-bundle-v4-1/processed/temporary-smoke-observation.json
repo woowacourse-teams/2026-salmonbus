@@ -1,0 +1,25 @@
+{
+  "activatedAtUtc": "2026-09-02T11:55:04.729493Z",
+  "bundleDigest": "d57370be9195520ecf3b0ef125aa3611090ed5f41ade2963c33f38d99a29e89a",
+  "calculationVersion": "seat-feature-contract-v4-1-2026-09-02",
+  "classification": "TEMPORARY_SMOKE_ONLY_EXCLUDED_FROM_MODELING",
+  "deploymentId": 1,
+  "exclusion": {
+    "derivedCellsExcluded": true,
+    "forecastAndScoredRowsExcluded": true,
+    "observationsRetained": true,
+    "observedMaxCapacityGenerationsInActivationToCutoverWindowExcluded": true
+  },
+  "releaseId": "salmonbus-d57370be9195520e",
+  "remoteActionPerformedByThisWork": false,
+  "reportedSeatForecastRows": 151523,
+  "reportedSeatForecastRowsByRouteVersion": {
+    "1": 147125,
+    "2": 4398
+  },
+  "reportedSeatForecastSnapshotUtc": "2026-09-02T12:57:00Z",
+  "reportedSettledHorizonOneRows": 0,
+  "reportedStopDemandStatisticsRows": 0,
+  "schemaVersion": "temporary-smoke-observation-v1",
+  "source": "user-provided academy RDS smoke observation"
+}

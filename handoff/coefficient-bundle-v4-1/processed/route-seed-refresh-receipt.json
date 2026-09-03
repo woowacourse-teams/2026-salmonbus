@@ -1,0 +1,412 @@
+{
+  "coefficientOrQualityRowsOpenedFromCatchUp": 0,
+  "coefficientWeightsChanged": false,
+  "newSeed": {
+    "canonicalJsonSha256": "adcf0d04a4b67dc40bed6f3640f0f78697e9215bf794ff2b262f0ba0ec0a5ada",
+    "compressedBytes": 723046,
+    "compressedSha256": "7f3be7dc2c668d1ed4b8665c341c2cda24968d3fa2e6ed2755261a20c3826ec4",
+    "databaseWritePerformed": false,
+    "lastBackfilledGenerationUtc": "2026-09-02T09:00:00.000000Z",
+    "path": "seed/cell-hourly-aggregate.json.gz",
+    "requiresRdsObservationDeltaBeforeFormalCutover": true,
+    "routeCounts": {
+      "1650": {
+        "finalRevision": 77,
+        "hourlyRows": 20390,
+        "replay": {
+          "seedOnlyInvariantSettledTargets": 809563,
+          "seedOnlyStructuralTargets": 867013
+        },
+        "samples": 509435
+      },
+      "3330": {
+        "finalRevision": 77,
+        "hourlyRows": 24834,
+        "replay": {
+          "seedOnlyInvariantSettledTargets": 939567,
+          "seedOnlyStructuralTargets": 1003490
+        },
+        "samples": 521792
+      }
+    },
+    "rowCount": 45224,
+    "schemaVersion": "stop-demand-hourly-aggregate-seed-receipt-v1",
+    "sourceAuthorityThroughExclusiveUtcByRoute": {
+      "1650": "2026-09-02T12:49:33.041299Z",
+      "3330": "2026-09-02T10:27:52.390820Z"
+    },
+    "uncompressedBytes": 9450157
+  },
+  "oldSeed": {
+    "canonicalJsonSha256": "16bf75238b4a2b90cb163d8109faf137d94545e3416e14c02766d9432d60490d",
+    "compressedBytes": 721040,
+    "compressedSha256": "52c7f9319a2dfe98b02662c1ee449a3a161922bb60cd9be8b1783cc167565acb",
+    "databaseWritePerformed": false,
+    "lastBackfilledGenerationUtc": "2026-09-02T09:00:00.000000Z",
+    "path": "seed/cell-hourly-aggregate.json.gz",
+    "requiresRdsObservationDeltaBeforeFormalCutover": true,
+    "routeCounts": {
+      "1650": {
+        "finalRevision": 77,
+        "hourlyRows": 20278,
+        "replay": {
+          "catchupSeedInvariantSettledTargets": 42098,
+          "catchupSeedStructuralTargets": 44748
+        },
+        "samples": 504169
+      },
+      "3330": {
+        "finalRevision": 77,
+        "hourlyRows": 24834,
+        "replay": {
+          "catchupSeedInvariantSettledTargets": 46891,
+          "catchupSeedStructuralTargets": 49872
+        },
+        "samples": 521792
+      }
+    },
+    "rowCount": 45112,
+    "schemaVersion": "stop-demand-hourly-aggregate-seed-receipt-v1",
+    "sourceAuthorityThroughExclusiveUtc": "2026-09-02T10:27:52.390820Z",
+    "uncompressedBytes": 9426503
+  },
+  "remoteWriteOrTransfer": false,
+  "routeCatchUpAuditSha256": "b6835e195a643d95bed5357abab97096140a45f2fc33983d75db19d5c07bd658",
+  "runtime": {
+    "durationSeconds": 3664.488,
+    "peakRssMiB": 1066.234
+  },
+  "schemaVersion": "v4-1-route-specific-seed-refresh-receipt-v1",
+  "selectedGSeconds": 60,
+  "selectedSSeconds": 60,
+  "source": {
+    "acceptedManifestSha256": "3cbdc35f50236ca92c3545ac7262762fc05d57933a712fa713830e23771eb0f0",
+    "catchUpAuthority": {
+      "acceptedManifestSha256": "603e79d5b3deefbce97b2a802d6dd0dc2610f5e89bd7da154dfe236f946e1fef",
+      "acceptedObservations": 136909,
+      "acceptedRawDocuments": 7062,
+      "acceptedRecordDocuments": 7064,
+      "coefficientPredictionRowsOpened": 0,
+      "dateKst": "2026-09-02",
+      "normalizedObservations": 136909,
+      "quarantinedRecordObservations": 24,
+      "quarantinedRecords": 1,
+      "routes": {
+        "1650": {
+          "acceptedManifestSha256": "32147c67a0da53825dc21dbb52fc58349182d260ded45079ff7be199bce72ac3",
+          "acceptedObservations": 78675,
+          "acceptedRawDocuments": 3815,
+          "acceptedRecordDocuments": 3815,
+          "targetAuthorityFromUtcInclusive": "2026-09-02T12:49:33.041299Z"
+        },
+        "3330": {
+          "acceptedManifestSha256": "288c94b914a0f477645fc79bd24f124da4f0344a9a52320594544594d6127c5b",
+          "acceptedObservations": 58234,
+          "acceptedRawDocuments": 3247,
+          "acceptedRecordDocuments": 3249,
+          "targetAuthorityFromUtcInclusive": "2026-09-02T10:27:52.390820Z"
+        }
+      },
+      "seedStructuralPredictionsEnabled": true,
+      "stationMismatchRows": 1,
+      "targetAuthorityFromUtcInclusive": null
+    },
+    "daily": [
+      {
+        "acceptedManifestSha256": "b3e9314ce52882ea4ef670454fa29aba8a2964944dd70a5b4951305187e921e6",
+        "accepted_raw": 842,
+        "accepted_records": 842,
+        "date": "2026-08-14",
+        "invalidRecordsByCode": {},
+        "normalized_observations": 20145,
+        "repaired_partition_crossings": 0,
+        "response_date_seed_only_batches": 842,
+        "source_observations": 20145
+      },
+      {
+        "acceptedManifestSha256": "1bf2505f7492978ad739ae849b3901c37d0912c10fc62fc3dc3e18ac2cb226d5",
+        "accepted_raw": 3914,
+        "accepted_records": 3914,
+        "date": "2026-08-15",
+        "invalidRecordsByCode": {},
+        "normalized_observations": 42492,
+        "repaired_partition_crossings": 0,
+        "response_date_seed_only_batches": 3896,
+        "source_observations": 42492
+      },
+      {
+        "acceptedManifestSha256": "0f365ed673381112e1be48a9b836d70cf1b1e146297e71634835b5a521b15502",
+        "accepted_raw": 3815,
+        "accepted_records": 3816,
+        "date": "2026-08-16",
+        "invalidRecordsByCode": {},
+        "normalized_observations": 41071,
+        "repaired_partition_crossings": 0,
+        "response_date_seed_only_batches": 3808,
+        "source_observations": 41071
+      },
+      {
+        "acceptedManifestSha256": "a60186dc9e9eea3676ff6e16e9a0e9f79d585ea1eb48fbb434801bbaba32bc76",
+        "accepted_raw": 5244,
+        "accepted_records": 5244,
+        "date": "2026-08-17",
+        "invalidRecordsByCode": {},
+        "normalized_observations": 55180,
+        "repaired_partition_crossings": 0,
+        "response_date_seed_only_batches": 5239,
+        "source_observations": 55180
+      },
+      {
+        "acceptedManifestSha256": "cb00b7a624b4bfbee5dddfa34fb5bafdb64392d4ada43349f069c08f6155d237",
+        "accepted_raw": 8556,
+        "accepted_records": 8556,
+        "date": "2026-08-18",
+        "invalidRecordsByCode": {},
+        "normalized_observations": 160143,
+        "repaired_partition_crossings": 0,
+        "response_date_seed_only_batches": 8542,
+        "source_observations": 160143
+      },
+      {
+        "acceptedManifestSha256": "a7354bb07e4976ba34f56c32e6f93ea92cf9d17e0d9073f914e304858bc97b76",
+        "accepted_raw": 8556,
+        "accepted_records": 8556,
+        "date": "2026-08-19",
+        "invalidRecordsByCode": {},
+        "normalized_observations": 160841,
+        "repaired_partition_crossings": 0,
+        "response_date_seed_only_batches": 8483,
+        "source_observations": 160841
+      },
+      {
+        "acceptedManifestSha256": "ab11f8e242af0d97e2094fec29eb16d6ed5e85f6be1f3c113dd20e6d50b2202f",
+        "accepted_raw": 8543,
+        "accepted_records": 8556,
+        "date": "2026-08-20",
+        "invalidRecordsByCode": {},
+        "normalized_observations": 161614,
+        "repaired_partition_crossings": 0,
+        "response_date_seed_only_batches": 8449,
+        "source_observations": 161614
+      },
+      {
+        "acceptedManifestSha256": "90605a886c7629baf4c3a22375664a77d21a52a36a8a2a9f30b5deb7a3d1f02e",
+        "accepted_raw": 8535,
+        "accepted_records": 8552,
+        "date": "2026-08-21",
+        "invalidRecordsByCode": {},
+        "normalized_observations": 163653,
+        "quarantine_break_batches": 4,
+        "quarantined_record_observations": 84,
+        "repaired_partition_crossings": 0,
+        "response_date_seed_only_batches": 8452,
+        "source_observations": 163653,
+        "station_mismatch_observations": 4,
+        "station_mismatch_records": 4
+      },
+      {
+        "acceptedManifestSha256": "a2b9256f49f10479cfd2b7555412fdb6ecba4e0bbd2808e7600938ac96e69e40",
+        "accepted_raw": 8534,
+        "accepted_records": 8556,
+        "date": "2026-08-22",
+        "invalidRecordsByCode": {},
+        "normalized_observations": 99977,
+        "repaired_partition_crossings": 0,
+        "response_date_seed_only_batches": 8446,
+        "source_observations": 99977
+      },
+      {
+        "acceptedManifestSha256": "fa2713fc347106e7a69b1589e2b999adb9612a284892638b958d50bdf42b9d73",
+        "accepted_raw": 8552,
+        "accepted_records": 8556,
+        "date": "2026-08-23",
+        "invalidRecordsByCode": {},
+        "normalized_observations": 87666,
+        "repaired_partition_crossings": 0,
+        "response_date_seed_only_batches": 8443,
+        "source_observations": 87666
+      },
+      {
+        "acceptedManifestSha256": "f962287a38ffc345abf769acedc370b7a1d1ae156fd6280580e0f917ea01de5d",
+        "accepted_raw": 8538,
+        "accepted_records": 8539,
+        "date": "2026-08-24",
+        "invalidRecordsByCode": {},
+        "normalized_observations": 158180,
+        "quarantine_break_batches": 17,
+        "quarantined_record_observations": 343,
+        "repaired_partition_crossings": 0,
+        "response_date_seed_only_batches": 8537,
+        "source_observations": 158180,
+        "station_mismatch_observations": 17,
+        "station_mismatch_records": 17
+      },
+      {
+        "acceptedManifestSha256": "79f7309f4ef57b7b1b47d7d661f56e41a1413cd77ba1541921543406a0d3a52f",
+        "accepted_raw": 8556,
+        "accepted_records": 8556,
+        "date": "2026-08-25",
+        "invalidRecordsByCode": {},
+        "normalized_observations": 162606,
+        "repaired_partition_crossings": 0,
+        "response_date_seed_only_batches": 8509,
+        "source_observations": 162606
+      },
+      {
+        "acceptedManifestSha256": "64a6a9f0faa01a7bf6158b59468b72d7d06558247ec8649e148f7aa693a758ef",
+        "accepted_raw": 8556,
+        "accepted_records": 8556,
+        "date": "2026-08-26",
+        "invalidRecordsByCode": {},
+        "normalized_observations": 162912,
+        "repaired_partition_crossings": 0,
+        "response_date_seed_only_batches": 8540,
+        "source_observations": 162912
+      },
+      {
+        "acceptedManifestSha256": "630d055049bf2bde8f9f2edaeed7a575262f5e622b14a4391a553f52357c08cb",
+        "accepted_raw": 8555,
+        "accepted_records": 8556,
+        "date": "2026-08-27",
+        "invalidRecordsByCode": {},
+        "normalized_observations": 162247,
+        "repaired_partition_crossings": 1,
+        "response_date_seed_only_batches": 8539,
+        "source_observations": 162247
+      },
+      {
+        "acceptedManifestSha256": "21f7f6503909a6d2669bb134ddf23ac2246c63844948dfdd5d4496479e2ab0e0",
+        "accepted_raw": 8552,
+        "accepted_records": 8555,
+        "date": "2026-08-28",
+        "invalidRecordsByCode": {},
+        "normalized_observations": 167548,
+        "repaired_partition_crossings": 1,
+        "response_date_seed_only_batches": 8542,
+        "source_observations": 167548
+      },
+      {
+        "acceptedManifestSha256": "8ec2d119141338e0d1fc615a65c675d3a888274c7c4ebb3577d7a3fc320b49b1",
+        "accepted_raw": 8543,
+        "accepted_records": 8557,
+        "date": "2026-08-29",
+        "invalidRecordsByCode": {},
+        "normalized_observations": 98173,
+        "repaired_partition_crossings": 0,
+        "response_date_seed_only_batches": 8492,
+        "source_observations": 98173
+      },
+      {
+        "acceptedManifestSha256": "17183b58ef0bfeac773eee78731b18914b5d354a5911c81b9930c5d1bce2120f",
+        "accepted_raw": 8525,
+        "accepted_records": 8555,
+        "date": "2026-08-30",
+        "invalidRecordsByCode": {},
+        "normalized_observations": 86722,
+        "repaired_partition_crossings": 1,
+        "response_date_seed_only_batches": 8490,
+        "source_observations": 86722
+      },
+      {
+        "acceptedManifestSha256": "1b0cea4f2b032df10302e2429a58301b3e45eeb44019f6f57dda43f2eb9df5f0",
+        "accepted_raw": 8540,
+        "accepted_records": 8555,
+        "date": "2026-08-31",
+        "invalidRecordsByCode": {},
+        "normalized_observations": 166291,
+        "quarantine_break_batches": 2,
+        "quarantined_record_observations": 32,
+        "repaired_partition_crossings": 0,
+        "response_date_seed_only_batches": 8502,
+        "source_observations": 166291,
+        "station_mismatch_observations": 2,
+        "station_mismatch_records": 2
+      },
+      {
+        "acceptedManifestSha256": "2f9477851fc75d1b88514be0f7e4557736359f38ba926a982b69ef8131efcb5d",
+        "accepted_raw": 8548,
+        "accepted_records": 8552,
+        "date": "2026-09-01",
+        "invalidRecordsByCode": {},
+        "normalized_observations": 166938,
+        "quarantine_break_batches": 4,
+        "quarantined_record_observations": 86,
+        "repaired_partition_crossings": 1,
+        "response_date_seed_only_batches": 8520,
+        "source_observations": 166938,
+        "station_mismatch_observations": 4,
+        "station_mismatch_records": 4
+      }
+    ],
+    "dates": [
+      "2026-08-14",
+      "2026-08-15",
+      "2026-08-16",
+      "2026-08-17",
+      "2026-08-18",
+      "2026-08-19",
+      "2026-08-20",
+      "2026-08-21",
+      "2026-08-22",
+      "2026-08-23",
+      "2026-08-24",
+      "2026-08-25",
+      "2026-08-26",
+      "2026-08-27",
+      "2026-08-28",
+      "2026-08-29",
+      "2026-08-30",
+      "2026-08-31",
+      "2026-09-01"
+    ],
+    "labelOnlyWatermark": {
+      "acceptedManifestSha256": "59c0e9613510d22e8e27753b661cd2de3e3b28defe2958ff0d803683183db6f6",
+      "acceptedObservations": 1544,
+      "dateKst": "2026-09-02",
+      "watermarkAtUtc": "2026-09-01T17:15:00Z"
+    },
+    "privacy": {
+      "originalVehicleIdsPersisted": false,
+      "plateValuesPersisted": false,
+      "privateInProcessJourneyIdentity": "raw vehicle ID exact equality mapped to local integer",
+      "rawRowsPersisted": false,
+      "sourceHmacUse": "integrity validation only, not journey identity",
+      "temporaryRowsAreDerivedAndDeidentified": true,
+      "vehicleHmacsPersisted": false
+    },
+    "schemaVersion": "v4-1-private-source-load-v1",
+    "tieOrder": {
+      "1650": {
+        "batchesInTies": 0,
+        "maximumTieSize": 1,
+        "s3KeyOrderSensitivityRequired": false,
+        "sameTimestampGroups": 0
+      },
+      "3330": {
+        "batchesInTies": 0,
+        "maximumTieSize": 1,
+        "s3KeyOrderSensitivityRequired": false,
+        "sameTimestampGroups": 0
+      }
+    },
+    "totals": {
+      "accepted_raw": 142004,
+      "accepted_records": 142129,
+      "invalid_records": 0,
+      "normalized_observations": 2324399,
+      "quarantine_break_batches": 27,
+      "quarantined_record_observations": 545,
+      "repaired_partition_crossings": 4,
+      "response_date_seed_only_batches": 141271,
+      "source_observations": 2324399,
+      "station_mismatch_observations": 27,
+      "station_mismatch_records": 27
+    },
+    "vehicleAxisCardinality": {
+      "1650": 32,
+      "3330": 46
+    }
+  },
+  "status": "PASS",
+  "tempForecastOrStatisticsRead": false
+}

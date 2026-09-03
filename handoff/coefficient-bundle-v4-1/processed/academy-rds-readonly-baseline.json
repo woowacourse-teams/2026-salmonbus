@@ -1,0 +1,50 @@
+{
+  "access": {
+    "databaseWritePerformed": false,
+    "publicAccess": false,
+    "queryMode": "transaction_read_only=on",
+    "remoteBundleTransferPerformed": false
+  },
+  "classification": "ACADEMY_RDS_COLD_START_BASELINE",
+  "database": {
+    "engine": "PostgreSQL",
+    "instanceClass": "db.t4g.micro",
+    "schemaMigrations": {
+      "from": "V1",
+      "status": "all_success",
+      "through": "V12"
+    }
+  },
+  "observationPeriodUtc": {
+    "firstResponseReceivedAt": "2026-09-02T10:27:52.390820Z",
+    "lastResponseReceivedAt": "2026-09-02T11:43:58.008989Z"
+  },
+  "reportedAtSessionDateKst": "2026-09-02",
+  "rowCounts": {
+    "modelDeployment": 0,
+    "observationBatch": 303,
+    "seatForecast": 0,
+    "stopDemandStatistics": 0,
+    "vehicleObservation": 8896
+  },
+  "schemaVersion": "academy-rds-readonly-baseline-v1",
+  "source": "user-provided result of an EC2-internal read-only transaction",
+  "interpretation": {
+    "existingCoefficientDeploymentToMerge": false,
+    "existingForecastHistoryToMerge": false,
+    "existingStopDemandHistoryToMerge": false,
+    "seedImportStillRequiresBackendPathAndSeparateApproval": true
+  },
+  "temporarySmokeExclusion": {
+    "deploymentReleaseId": "salmonbus-d57370be9195520e",
+    "excludeDerivedScoredRows": true,
+    "excludeDerivedSeatForecastRows": true,
+    "excludedFrom": [
+      "coefficient training",
+      "cell backfill",
+      "calibration",
+      "holdout and quality evaluation"
+    ],
+    "structuralEnforcement": "the frozen training closure ends on 2026-09-01 and reads S3 collector records only; academy RDS is not a model input"
+  }
+}

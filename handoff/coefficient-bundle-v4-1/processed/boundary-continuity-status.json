@@ -1,0 +1,37 @@
+{
+  "authorityBoundary": {
+    "3330": {
+      "gapSeconds": 7.07582,
+      "sourceLastResponseUtc": "2026-09-02T10:27:45.315000Z",
+      "sourcePredicate": "response_received_at < 2026-09-02T10:27:52.390820Z",
+      "targetFirstResponseUtc": "2026-09-02T10:27:52.390820Z"
+    },
+    "1650": {
+      "gapSecondsRange": [
+        1.574299,
+        4.072364
+      ],
+      "sourceLastResponseUtc": "2026-09-02T12:49:31.467000Z",
+      "sourcePredicate": "response_received_at < 2026-09-02T12:49:33.041299Z",
+      "targetBoundaryBracketUtc": [
+        "2026-09-02T12:49:33.041299Z",
+        "2026-09-02T12:49:35.539364Z"
+      ],
+      "s3RecordsInsideBoundaryBracket": 0
+    }
+  },
+  "checks": {
+    "routeSpecificGapsWithinJavaLabelGap90Seconds": "PASS",
+    "routeSpecificGapsWithinTrajectoryWindow30Minutes": "PASS",
+    "halfOpenTimeOverlap": "PASS_ZERO_OVERLAP",
+    "privateIdentityRepresentationPolicy": "PASS_DIRECT_TEXT_EQUALITY",
+    "rawIdentityValuesEmitted": "PASS_NONE",
+    "sharedVehicleIdentityCountAcrossBoundary": "UNKNOWN_UNTIL_PRIVATE_IMPORT_OR_APPROVED_IN_PROCESS_TARGET_COMPARISON",
+    "sharedVehicleAndRouteVersionCount": "UNKNOWN_UNTIL_PRIVATE_IMPORT_OR_APPROVED_IN_PROCESS_TARGET_COMPARISON"
+  },
+  "interpretation": "temporal continuity and identity semantics are established; actual cross-system vehicle intersection cannot be claimed from aggregate-only evidence",
+  "requiredAcceptance": "compute only aggregate intersection counts over adjacent 30-minute windows without returning any vehicle value",
+  "remoteReadOrWritePerformedByThisWork": false,
+  "schemaVersion": "v4-1-source-target-boundary-continuity-status-v1",
+  "status": "PARTIAL_BLOCKED_ON_PRIVATE_TARGET_COMPARISON"
+}

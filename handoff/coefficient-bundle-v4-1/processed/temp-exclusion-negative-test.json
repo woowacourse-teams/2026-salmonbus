@@ -1,0 +1,34 @@
+{
+  "checks": {
+    "activationBaselineWasEmpty": true,
+    "calculationVersionOnlyDeletionProhibited": true,
+    "deploymentLineageRetained": true,
+    "exactPolicyIdentifiers": true,
+    "forecastCompletedAtResetForbidden": true,
+    "formalFeatureContractDiffersFromTemp": true,
+    "formalFeatureContractMatchesCurrentWriter": true,
+    "formalForecastBlockedUntilCleanSeedGeneration": true,
+    "noRemoteMutation": true,
+    "observationsRetained": true,
+    "s3ClosurePredatesTempActivation": true,
+    "seedContractMatchesFormalManifest": true,
+    "seedIsIndependentOfLiveStatistics": true,
+    "seedPolicyDiffersFromTemp": true,
+    "sharedFormalCalculationVersionContaminationRejected": true,
+    "sourceSeedRequiresObservationOnlyRdsDelta": true,
+    "temporaryForecastRejected": true,
+    "temporaryStatisticsRejectedByExactGenerationTuple": true,
+    "trainerDoesNotReadAcademyRds": true
+  },
+  "schemaVersion": "temporary-smoke-exclusion-negative-test-v1",
+  "status": "PASS",
+  "syntheticFixture": {
+    "eligibleForecastRows": 1,
+    "eligibleStatisticsRows": 3,
+    "inputForecastRows": 2,
+    "inputObservationRows": 2,
+    "inputStatisticsRows": 5,
+    "lockedContaminatedGenerations": 2,
+    "retainedObservationRows": 2
+  }
+}

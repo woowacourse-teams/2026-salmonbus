@@ -1,0 +1,100 @@
+{
+  "adoptedAudit": {
+    "acceptanceFixtureSha256": "85a50d4b72d2cbec225407b2e85ec9747ad6e0e4107baa0d3c654eb99908bbd1",
+    "auditMarkdownSha256": "fa6c5b93a0f0ee87df665e1dbad4a224303c801e1941aded5dbe0f1625ad3405",
+    "auditSummarySha256": "9dc9631e05f8ee1f20e4af6d48c2c00cefc8166dedac256a8f1c64c960fef527",
+    "fieldMappingSha256": "3a351916e1446a18be6cfa83c0a8946878fc5bf09ae041e0560c1c84633b382e",
+    "trainerReadContractSha256": "6002e32fcd05451d5536c9a2c7d108377c51a5227e5fadc4d616723b90e7489c"
+  },
+  "adoptedSourceClosure": {
+    "base": {
+      "acceptedObservations": 2324399,
+      "acceptedRawDocuments": 142004,
+      "acceptedRecordDocuments": 142129,
+      "dateRangeKstInclusive": [
+        "2026-08-14",
+        "2026-09-01"
+      ],
+      "manifestSha256": "3cbdc35f50236ca92c3545ac7262762fc05d57933a712fa713830e23771eb0f0"
+    },
+    "catchUp": {
+      "acceptedObservations": 123775,
+      "acceptedRawDocuments": 6495,
+      "acceptedRecordDocuments": 6497,
+      "manifestSha256": "a4f728417163370fe59977cb9c7645ce31394b9c47ecaa1025044e1711d64139",
+      "responsePredicate": "response_received_at < 2026-09-02T10:27:52.390820Z"
+    },
+    "targetAuthorityOverlapExcluded": {
+      "observations": 19502,
+      "rawDocuments": 752,
+      "recordDocuments": 752,
+      "reason": "target RDS authority begins at the half-open boundary"
+    },
+    "sourceTargetGapSeconds": 5.87682
+  },
+  "d856RouteSpecificRefresh": {
+    "snapshotAtUtc": "2026-09-02T13:00:00Z",
+    "acceptedCatchUpBatches": 7064,
+    "acceptedCatchUpObservations": 136909,
+    "fullAcceptedBatches": 149193,
+    "fullAcceptedObservations": 2461308,
+    "routes": {
+      "3330": {
+        "boundaryUtc": "2026-09-02T10:27:52.390820Z",
+        "catchUpManifestSha256": "288c94b914a0f477645fc79bd24f124da4f0344a9a52320594544594d6127c5b",
+        "catchUpRecords": 3249,
+        "catchUpObservations": 58234,
+        "lastSourceResponseUtc": "2026-09-02T10:27:45.315000Z"
+      },
+      "1650": {
+        "boundaryLowerUtc": "2026-09-02T12:49:33.041299Z",
+        "boundaryUpperUtc": "2026-09-02T12:49:35.539364Z",
+        "boundaryBracketS3Records": 0,
+        "catchUpManifestSha256": "32147c67a0da53825dc21dbb52fc58349182d260ded45079ff7be199bce72ac3",
+        "catchUpRecords": 3815,
+        "catchUpObservations": 78675,
+        "lastSourceResponseUtc": "2026-09-02T12:49:31.467000Z"
+      }
+    },
+    "receipt": "processed/route-catchup-audit.json"
+  },
+  "routeMapping": {
+    "mappingReportSha256": "5ca70dafc7fcf5c61ad5839d22e38b4a18f0f9c59adab5a56c2bac14501f2c34",
+    "sourceReferenceDigest": "50568d9a10b567ea0b650cd79ceed39a86947648e303e0d8fd1093840bb54c5e",
+    "sourceReferenceVersion": "gbis-2026-08-19",
+    "sourceReferenceUsedDirectlyForModeling": true,
+    "target3330ValidityUsedToDiscardHistoricalRows": false,
+    "target1650MissingButLoaderAxisStillRequired": false,
+    "bothTargetRoutesNowContentMatch": true,
+    "userApprovedValidityPolicy": "extend each current version backward to its route's earliest accepted source timestamp and preserve original valid_from in a rollback ledger",
+    "historicalDuplicateVersionRequired": false,
+    "validityIsPartOfMappingIdentity": true
+  },
+  "quarantine": {
+    "baseMismatchRecords": 27,
+    "baseMismatchRows": 27,
+    "baseWholeRecordObservationsExcluded": 545,
+    "catchUpMismatchRecords": 1,
+    "catchUpMismatchRows": 1,
+    "catchUpWholeRecordObservationsExcluded": 24,
+    "policy": "whole record fail-closed plus empty structural break batch",
+    "routeChangeInferred": false
+  },
+  "userIdentityPolicyOverride": {
+    "effectiveAfterAudit": true,
+    "rawVehicleIdMeaningMatchesAcademyVehicleId": true,
+    "privateInProcessJourneyJoinAllowed": true,
+    "durableBundleReceiptLogFixtureEmissionAllowed": false,
+    "plateBackfill": "excluded/null; source S3 only",
+    "sourceHmacTransfer": false,
+    "rawResponseTransfer": false,
+    "futureMigrationTransport": {
+      "archiveAndFileMode": "0600",
+      "directoryMode": "0700",
+      "encryptedSshRequired": true,
+      "archiveDeletionRequiresSeparateApproval": true
+    }
+  },
+  "temporaryModelExclusionPolicy": "processed/input-exclusion-policy.json",
+  "schemaVersion": "v4-1-migration-audit-adoption-v1"
+}

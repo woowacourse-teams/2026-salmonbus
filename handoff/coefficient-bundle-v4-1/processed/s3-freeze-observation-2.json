@@ -1,0 +1,59 @@
+{
+  "classification": "READ_ONLY_STABILITY_OBSERVATION",
+  "combined": {
+    "bytes": 140161072,
+    "documents": 15750,
+    "manifestSha256": "f0decee3446e0e787532c9682bd3c6c627ccf9f10cdba9a992829345fdefa86e"
+  },
+  "observedAtUtc": "2026-09-02T13:22:26Z",
+  "partitionDateKst": "2026-09-02",
+  "privacy": {
+    "objectKeysEmitted": false,
+    "plateValuesEmitted": false,
+    "rowLevelMaterialPersisted": false,
+    "rowLevelMaterialRead": false,
+    "vehicleHmacsEmitted": false,
+    "vehicleIdsEmitted": false
+  },
+  "routes": {
+    "1650": {
+      "bytes": 72689148,
+      "documents": 7876,
+      "kinds": {
+        "raw": {
+          "bytes": 16027216,
+          "documents": 3938,
+          "lastModifiedMaxUtc": "2026-09-02T13:20:02Z",
+          "manifestSha256": "5a2018fddceddfd2ecf9ed8f387cbcc20b0ee374d24d8cbe77e34b460ad9c51a"
+        },
+        "records": {
+          "bytes": 56661932,
+          "documents": 3938,
+          "lastModifiedMaxUtc": "2026-09-02T13:20:02Z",
+          "manifestSha256": "6089dea1428af127c7c4befdc672ceb5499ad7354741e90c38b13c2eeb09d0eb"
+        }
+      },
+      "manifestSha256": "7f30f719d2562cc1f0246e94509c5cb39974a5fa688d67ca92e64ea8cf872eae"
+    },
+    "3330": {
+      "bytes": 67471924,
+      "documents": 7874,
+      "kinds": {
+        "raw": {
+          "bytes": 14733520,
+          "documents": 3936,
+          "lastModifiedMaxUtc": "2026-09-02T13:20:01Z",
+          "manifestSha256": "dac27989c14729ac0ea22a566dfa1c46fc308cced70adb2d216ffbb5a663e7f6"
+        },
+        "records": {
+          "bytes": 52738404,
+          "documents": 3938,
+          "lastModifiedMaxUtc": "2026-09-02T13:20:01Z",
+          "manifestSha256": "da488ddc2da226fc8afe4075706d1617c31edfbf571ab366de67d2ba8a24b9a9"
+        }
+      },
+      "manifestSha256": "51d568ea3056c1a8be7d11755ef295bc9db87addf46a6b9203b851e76ff798fb"
+    }
+  },
+  "schemaVersion": "s3-freeze-inventory-observation-v1"
+}

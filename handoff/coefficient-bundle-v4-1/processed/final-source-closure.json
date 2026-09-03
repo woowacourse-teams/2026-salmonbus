@@ -1,0 +1,193 @@
+{
+  "classification": "FINAL_FREEZE_CLOSED",
+  "components": {
+    "baseAcceptedManifestSha256": "3cbdc35f50236ca92c3545ac7262762fc05d57933a712fa713830e23771eb0f0",
+    "baseRangeKst": [
+      "2026-08-14",
+      "2026-09-01"
+    ],
+    "catchUpAcceptedManifestSha256ByRoute": {
+      "1650": "32147c67a0da53825dc21dbb52fc58349182d260ded45079ff7be199bce72ac3",
+      "3330": "288c94b914a0f477645fc79bd24f124da4f0344a9a52320594544594d6127c5b"
+    },
+    "finalPartitionDateKst": "2026-09-02",
+    "finalPartitionFreezeAtUtc": "2026-09-02T13:22:26Z",
+    "finalPartitionInventorySha256": "f0decee3446e0e787532c9682bd3c6c627ccf9f10cdba9a992829345fdefa86e"
+  },
+  "integrity": {
+    "ambiguousBoundaryRecords": 0,
+    "lateAcceptedCatchUpObjects": 0,
+    "routes": {
+      "1650": {
+        "declaredRawLessRecords": 0,
+        "invalidRecords": 0,
+        "recordDocuments": 3938,
+        "recordRawBijection": true,
+        "referencedRawDocuments": 3937,
+        "status": "PASS",
+        "unreferencedRawDocuments": 0,
+        "validatedQuarantinedRawDocuments": 1
+      },
+      "3330": {
+        "declaredRawLessRecords": 2,
+        "invalidRecords": 0,
+        "recordDocuments": 3938,
+        "recordRawBijection": true,
+        "referencedRawDocuments": 3936,
+        "status": "PASS",
+        "unreferencedRawDocuments": 0,
+        "validatedQuarantinedRawDocuments": 0
+      }
+    },
+    "status": "PASS"
+  },
+  "inventory": {
+    "algorithm": "object-inventory-v1:key<TAB>etag<TAB>size<LF>, bytewise key order",
+    "bytes": 140161072,
+    "documents": 15750,
+    "freezeAtUtc": "2026-09-02T13:22:26Z",
+    "manifestSha256": "f0decee3446e0e787532c9682bd3c6c627ccf9f10cdba9a992829345fdefa86e",
+    "partitionDateKst": "2026-09-02"
+  },
+  "privacy": {
+    "aggregateOnly": true,
+    "objectKeysEmitted": false,
+    "plateValuesEmitted": false,
+    "rowLevelMaterialPersisted": false,
+    "secretsEmitted": false,
+    "vehicleHmacsEmitted": false,
+    "vehicleIdsEmitted": false
+  },
+  "receipts": {
+    "baseAudit": {
+      "path": "handoff/coefficient-bundle-v4-1/processed/source-audit.json",
+      "sha256": "b1a1992116287d56536df15f79bd4a122fb0f91d5bbf89a540b776baf377e158"
+    },
+    "finalContentAudit": {
+      "path": "handoff/coefficient-bundle-v4-1/processed/final-s3-freeze-closed.json",
+      "sha256": "b6835e195a643d95bed5357abab97096140a45f2fc33983d75db19d5c07bd658"
+    },
+    "observationOne": {
+      "path": "handoff/coefficient-bundle-v4-1/processed/s3-freeze-observation-1.json",
+      "sha256": "920fb702303446e04a345ea97ab65714dbe79a4295212e2193bb31386892d2ca"
+    },
+    "observationTwo": {
+      "path": "handoff/coefficient-bundle-v4-1/processed/s3-freeze-observation-2.json",
+      "sha256": "5837b7cfcdbd2b2a8f432cea36bc0e18c4275263caf76ffb7d390c8e565e1d14"
+    },
+    "priorRouteAudit": {
+      "path": "handoff/coefficient-bundle-v4-1/processed/route-catchup-audit.json",
+      "sha256": "cc240e18b7cde89f0fd6d7e49c9ee31f4cf098dd389a9e9878895c3f5f711ef6"
+    }
+  },
+  "remoteWritesPerformed": false,
+  "scheduler": {
+    "accountId": "827325854159",
+    "disabledAt": "2026-09-02T22:18:57.240+09:00",
+    "group": "salmonbus-collector",
+    "lambdaAndS3Preserved": true,
+    "name": "salmonbus-adaptive-heartbeat",
+    "readOnlyVerifiedAt": "2026-09-02T13:19:31Z",
+    "state": "DISABLED"
+  },
+  "schemaVersion": "v4-1-final-source-closure-v1",
+  "selection": {
+    "coefficientTraining": {
+      "acceptedManifestSha256": "3cbdc35f50236ca92c3545ac7262762fc05d57933a712fa713830e23771eb0f0",
+      "acceptedObservations": 2324399,
+      "rangeKst": [
+        "2026-08-14",
+        "2026-09-01"
+      ]
+    },
+    "rdsOverlap": {
+      "acceptedObservations": 14924,
+      "usage": "continuity/dedupe verification only; excluded from migration insert and coefficient training"
+    },
+    "routeCatchUpForSeedAndMigration": {
+      "acceptedObservations": 136909,
+      "routes": {
+        "1650": {
+          "boundaryLowerUtc": "2026-09-02T12:49:33.041299Z",
+          "boundaryUpperUtc": "2026-09-02T12:49:35.539364Z",
+          "catchUp": {
+            "acceptedManifestSha256": "32147c67a0da53825dc21dbb52fc58349182d260ded45079ff7be199bce72ac3",
+            "acceptedObservations": 78675,
+            "acceptedRawDocuments": 3815,
+            "acceptedRawLessRecords": 0,
+            "acceptedRecordDocuments": 3815,
+            "quarantinedObservationRows": 24,
+            "quarantinedRecords": 1,
+            "responseRangeUtcInclusive": [
+              "2026-09-01T15:00:16.516000+00:00",
+              "2026-09-02T12:49:31.467000+00:00"
+            ],
+            "stationMismatchRows": 1
+          },
+          "lateAcceptedCatchUpObjectsSincePriorAudit": 0,
+          "overlap": {
+            "acceptedManifestSha256": "5a534a7ba7b526f1be5c604b629c2fd47665f8d48d54dba8216bafc5a35cc635",
+            "acceptedObservations": 560,
+            "acceptedRawDocuments": 122,
+            "acceptedRawLessRecords": 0,
+            "acceptedRecordDocuments": 122,
+            "quarantinedObservationRows": 0,
+            "quarantinedRecords": 0,
+            "responseRangeUtcInclusive": [
+              "2026-09-02T12:49:46.470000+00:00",
+              "2026-09-02T13:20:01.561000+00:00"
+            ],
+            "stationMismatchRows": 0
+          }
+        },
+        "3330": {
+          "boundaryLowerUtc": "2026-09-02T10:27:52.390820Z",
+          "boundaryUpperUtc": "2026-09-02T10:27:52.390820Z",
+          "catchUp": {
+            "acceptedManifestSha256": "288c94b914a0f477645fc79bd24f124da4f0344a9a52320594544594d6127c5b",
+            "acceptedObservations": 58234,
+            "acceptedRawDocuments": 3247,
+            "acceptedRawLessRecords": 2,
+            "acceptedRecordDocuments": 3249,
+            "quarantinedObservationRows": 0,
+            "quarantinedRecords": 0,
+            "responseRangeUtcInclusive": [
+              "2026-09-01T15:00:15.346000+00:00",
+              "2026-09-02T10:27:45.315000+00:00"
+            ],
+            "stationMismatchRows": 0
+          },
+          "lateAcceptedCatchUpObjectsSincePriorAudit": 0,
+          "overlap": {
+            "acceptedManifestSha256": "b6d93d4ec6d8abd9352f56eba3b0bf849c1010a370982964628b2782b87f616b",
+            "acceptedObservations": 14364,
+            "acceptedRawDocuments": 689,
+            "acceptedRawLessRecords": 0,
+            "acceptedRecordDocuments": 689,
+            "quarantinedObservationRows": 0,
+            "quarantinedRecords": 0,
+            "responseRangeUtcInclusive": [
+              "2026-09-02T10:28:00.302000+00:00",
+              "2026-09-02T13:20:00.355000+00:00"
+            ],
+            "stationMismatchRows": 0
+          }
+        }
+      }
+    },
+    "sourceAuthorityObservations": 2461308
+  },
+  "sourceClosureSha256": "75fc9d3f27e73fe60dc63d2d6eea957acc3eab0fdc9c104f98624b3847605bc7",
+  "stability": {
+    "byteDelta": 0,
+    "inventoryChanged": false,
+    "lastModifiedMaxUtcByRoute": {
+      "1650": "2026-09-02T13:20:02Z",
+      "3330": "2026-09-02T13:20:01Z"
+    },
+    "objectDelta": 0,
+    "observationOneUtc": "2026-09-02T13:20:51Z",
+    "observationTwoUtc": "2026-09-02T13:22:26Z",
+    "separationSeconds": 95
+  }
+}

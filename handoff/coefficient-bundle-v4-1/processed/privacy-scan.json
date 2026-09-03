@@ -1,0 +1,26 @@
+{
+  "filesScanned": 45,
+  "findings": {
+    "awsAccessKey": [],
+    "hmacValue": [],
+    "placeholderWord": [],
+    "privateKey": [],
+    "rawObjectKey": [],
+    "rowVehicleValue": [],
+    "zeroDigest": []
+  },
+  "placeholdersPersisted": false,
+  "plateValuesPersisted": false,
+  "rawRowsPersisted": false,
+  "schemaVersion": "v4-1-durable-artifact-privacy-scan-v1",
+  "scope": [
+    "bundle/",
+    "processed/",
+    "seed/"
+  ],
+  "secretsPersisted": false,
+  "status": "PASS",
+  "uncompressedBytesScanned": 13422830,
+  "vehicleHmacsPersisted": false,
+  "vehicleIdentifiersPersisted": false
+}

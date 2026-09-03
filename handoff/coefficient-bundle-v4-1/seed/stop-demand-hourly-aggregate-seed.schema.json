@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stop-demand-hourly-aggregate-seed-v1",
+  "additionalProperties": false,
+  "properties": {
+    "backfillPolicyId": {
+      "const": "s3-lag60-settle60-kst6h-chronological-v1"
+    },
+    "classification": {
+      "const": "PRIVACY_SAFE_AGGREGATE_BACKFILL_SEED_DRY_RUN_ONLY"
+    },
+    "featureContractVersion": {
+      "const": "observed-max-capacity-v1"
+    },
+    "generatedAtGuardSeconds": {
+      "const": 60,
+      "type": "integer"
+    },
+    "lastBackfilledGenerationUtc": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "privacy": {
+      "additionalProperties": false,
+      "properties": {
+        "containsPlateValues": {
+          "const": false
+        },
+        "containsRawRows": {
+          "const": false
+        },
+        "containsVehicleHmacs": {
+          "const": false
+        },
+        "containsVehicleIdentifiers": {
+          "const": false
+        }
+      },
+      "required": [
+        "containsPlateValues",
+        "containsRawRows",
+        "containsVehicleHmacs",
+        "containsVehicleIdentifiers"
+      ],
+      "type": "object"
+    },
+    "rdsObservationDeltaContract": {
+      "const": "rds-observation-delta-contract.json"
+    },
+    "requiresRdsObservationDeltaBeforeFormalCutover": {
+      "const": true
+    },
+    "routeReference": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "version": {
+          "const": "gbis-2026-08-19"
+        }
+      },
+      "required": [
+        "digest",
+        "version"
+      ],
+      "type": "object"
+    },
+    "rows": {
+      "items": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "modelRoute": {
+                  "const": "1650"
+                }
+              },
+              "required": [
+                "modelRoute"
+              ]
+            },
+            "then": {
+              "properties": {
+                "stopOrder": {
+                  "maximum": 89
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "modelRoute": {
+                  "const": "3330"
+                }
+              },
+              "required": [
+                "modelRoute"
+              ]
+            },
+            "then": {
+              "properties": {
+                "stopOrder": {
+                  "maximum": 85
+                }
+              }
+            }
+          }
+        ],
+        "properties": {
+          "arrivalDateKst": {
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "type": "string"
+          },
+          "arrivalHourStartUtc": {
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T(?:[01][0-9]|2[0-3]):00:00Z$",
+            "type": "string"
+          },
+          "capacityTotal": {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "fillRateTotal": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "modelRoute": {
+            "enum": [
+              "1650",
+              "3330"
+            ],
+            "type": "string"
+          },
+          "netBoardingTotal": {
+            "type": "number"
+          },
+          "sampleCount": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "stopOrder": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "arrivalDateKst",
+          "arrivalHourStartUtc",
+          "capacityTotal",
+          "fillRateTotal",
+          "modelRoute",
+          "netBoardingTotal",
+          "sampleCount",
+          "stopOrder"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "schemaVersion": {
+      "const": "stop-demand-hourly-aggregate-seed-v1"
+    },
+    "scope": {
+      "const": "SOURCE_SIDE_THROUGH_TARGET_AUTHORITY"
+    },
+    "settlementAvailabilityGuardSeconds": {
+      "const": 60,
+      "type": "integer"
+    },
+    "sourceAuthorityThroughExclusiveUtcByRoute": {
+      "additionalProperties": false,
+      "properties": {
+        "1650": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "3330": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "1650",
+        "3330"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "backfillPolicyId",
+    "classification",
+    "featureContractVersion",
+    "generatedAtGuardSeconds",
+    "lastBackfilledGenerationUtc",
+    "privacy",
+    "rdsObservationDeltaContract",
+    "requiresRdsObservationDeltaBeforeFormalCutover",
+    "routeReference",
+    "rows",
+    "schemaVersion",
+    "scope",
+    "settlementAvailabilityGuardSeconds",
+    "sourceAuthorityThroughExclusiveUtcByRoute"
+  ],
+  "title": "Stop demand hourly aggregate seed v1",
+  "type": "object"
+}

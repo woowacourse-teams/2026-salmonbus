@@ -1,0 +1,31 @@
+{
+  "checks": {
+    "canonicalDigest": true,
+    "compressedDigest": true,
+    "contentPrivacyScan": true,
+    "dryRunOnly": true,
+    "privacyFlags": true,
+    "rowCount": true,
+    "schema": true
+  },
+  "databaseWritePerformed": false,
+  "privacyScan": {
+    "awsAccessKey": true,
+    "collectorObjectKey": true,
+    "hmacValue": true,
+    "rawVehicleField": true
+  },
+  "rates": {
+    "maximumHourlyAverageFill": 1.0,
+    "maximumHourlyNetBoardingRate": 0.7644628099173554,
+    "minimumHourlyAverageFill": 0.0,
+    "minimumHourlyNetBoardingRate": -0.6920926517571885
+  },
+  "routeSamples": {
+    "1650": 509435,
+    "3330": 521792
+  },
+  "rowCount": 45224,
+  "schemaVersion": "stop-demand-hourly-aggregate-seed-validation-v1",
+  "status": "PASS"
+}

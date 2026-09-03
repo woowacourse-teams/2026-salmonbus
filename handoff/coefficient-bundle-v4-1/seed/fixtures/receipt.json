@@ -1,0 +1,95 @@
+{
+  "checks": {
+    "canonicalOrder": true,
+    "containsPlateValues": false,
+    "containsRawRows": false,
+    "containsVehicleHmacs": false,
+    "containsVehicleIdentifiers": false,
+    "databaseWritesPerformed": false,
+    "metadataMatchesSource": {
+      "backfillPolicyId": true,
+      "classification": true,
+      "featureContractVersion": true,
+      "generatedAtGuardSeconds": true,
+      "lastBackfilledGenerationUtc": true,
+      "privacy": true,
+      "rdsObservationDeltaContract": true,
+      "requiresRdsObservationDeltaBeforeFormalCutover": true,
+      "routeReference": true,
+      "schemaVersion": true,
+      "scope": true,
+      "settlementAvailabilityGuardSeconds": true,
+      "sourceAuthorityThroughExclusiveUtcByRoute": true
+    },
+    "naturalKeyUnique": true
+  },
+  "classification": "TESTCONTAINERS_FIXTURE_NOT_FOR_PRODUCTION_APPLY",
+  "expectedAggregates": {
+    "global": {
+      "capacityTotal": "110996.0",
+      "fillRateTotal": "826.695249498400949544",
+      "netBoardingTotal": "-709.0",
+      "rowCount": 100,
+      "sampleCount": 2440
+    },
+    "routes": {
+      "1650": {
+        "capacityTotal": "61232.0",
+        "fillRateTotal": "571.00633889919610168",
+        "netBoardingTotal": "-350.0",
+        "rowCount": 50,
+        "sampleCount": 1378
+      },
+      "3330": {
+        "capacityTotal": "49764.0",
+        "fillRateTotal": "255.688910599204847864",
+        "netBoardingTotal": "-359.0",
+        "rowCount": 50,
+        "sampleCount": 1062
+      }
+    }
+  },
+  "fixture": {
+    "canonicalJsonHasFinalLf": false,
+    "canonicalJsonSha256": "4cd3985cc46d8a7032eae078fbec66c4afe9a294a19823689aa72b0a8d9cea0a",
+    "compressedBytes": 3001,
+    "compressedSha256": "0972303007e55b729c201dd760626e6cb986c554f80325b53a2e66e806638d94",
+    "gzipMtime": 0,
+    "gzipPath": "seed/fixtures/cell-hourly-aggregate.fixture.json.gz",
+    "jsonPath": "seed/fixtures/cell-hourly-aggregate.fixture.json",
+    "primaryKeySha256": "49cd771e06567b1050095f67f45aa9ff5d1efe9c62a8a1108798860e4417c56b",
+    "rowCount": 100,
+    "uncompressedBytes": 21753
+  },
+  "schemaVersion": "stop-demand-hourly-aggregate-seed-fixture-receipt-v1",
+  "selection": {
+    "algorithm": "per route, source rows in canonical order, index=floor(i*(routeRows-1)/49) for i=0..49",
+    "finalOrdering": [
+      "modelRoute",
+      "arrivalHourStartUtc",
+      "stopOrder"
+    ],
+    "routes": {
+      "1650": {
+        "firstIndex": 0,
+        "lastIndex": 20389,
+        "selectedRows": 50,
+        "sourceRows": 20390
+      },
+      "3330": {
+        "firstIndex": 0,
+        "lastIndex": 24833,
+        "selectedRows": 50,
+        "sourceRows": 24834
+      }
+    }
+  },
+  "source": {
+    "canonicalJsonSha256": "adcf0d04a4b67dc40bed6f3640f0f78697e9215bf794ff2b262f0ba0ec0a5ada",
+    "compressedSha256": "7f3be7dc2c668d1ed4b8665c341c2cda24968d3fa2e6ed2755261a20c3826ec4",
+    "path": "seed/cell-hourly-aggregate.json.gz",
+    "receiptPath": "seed/receipt.json",
+    "receiptSha256": "9985723799bc859cc22b4cda613a50922ff2191b15c7c155d8f1d7e177db8c26",
+    "rowCount": 45224
+  }
+}

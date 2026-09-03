@@ -1,0 +1,58 @@
+{
+  "activeAuthorityCommit": "d856d10819bf1d018ad43fa63714cc348f1fc643",
+  "changedFilesFromPredecessor": [
+    "backend/buildspec.yml",
+    "backend/deploy/rehearsal/rehearse.sh",
+    "backend/deploy/scripts/common.sh",
+    "backend/worker-app/src/main/resources/application.yml"
+  ],
+  "contractDiff": {
+    "databaseMigrationsChanged": false,
+    "featureBuilderChanged": false,
+    "labelResolverChanged": false,
+    "bundleLoaderChanged": false,
+    "seatDistributionPredictorChanged": false,
+    "stopDemandCalculationChanged": false,
+    "trajectoryChanged": false
+  },
+  "historicalPredecessorCommit": "ed2cf742b0db368d7cf6eae2556b36bc156a5e72",
+  "runtimeConfigurationDiff": {
+    "collectionRouteIdsAdded": [
+      "234000050"
+    ],
+    "collectionRoutesAfter": [
+      "204000057",
+      "234000050"
+    ],
+    "forecastInterval": "10s unchanged",
+    "settlementInterval": "60s unchanged",
+    "statisticsInterval": "6h unchanged",
+    "calculationContractChanged": false
+  },
+  "runtimeImpact": {
+    "modelRequiresBothRouteAxes": true,
+    "targetRdsHas1650RouteVersion": true,
+    "meaning": "configuration and live route/version state now cover both fixed loader axes",
+    "targetVersions": {
+      "3330": {
+        "id": 1,
+        "validFromUtc": "2026-09-02T10:27:51.330754Z"
+      },
+      "1650": {
+        "id": 2,
+        "validFromUtc": "2026-09-02T12:49:33.041299Z"
+      }
+    }
+  },
+  "deployedRuntimeObservation": {
+    "apiHealth": "UP",
+    "deployedAtUtc": "2026-09-02T12:49:00Z",
+    "temporaryBundleReloaded": true,
+    "workerHealth": "UP"
+  },
+  "finalArtifactsMustUseActiveAuthority": true,
+  "mergeTitle": "fix(SAL-121): CodeBuild 캐시 보존과 아무도 배포 중이 아닐 때 멈추던 판정 변경 (#57)",
+  "readOnlyImpactReportSha256": "9f548f14eef5ea49e70a040ec43757d056f1bfb610b3dba327cf3ce72414793c",
+  "remoteMutationPerformed": false,
+  "schemaVersion": "v4-1-dev-authority-update-v1"
+}

@@ -1,0 +1,12 @@
+{
+  "expectedFullChance": 0.8128253142730959,
+  "expectedSeats": 6.1348094202549195,
+  "goldenVectorDigest": "b98eafcef2803d8792cc1005fef642f78d8e9e7a61cf046ae06b9f2fb4e0ecda",
+  "identityDigest": "9bb1a5ac22a317931d409f98cb5e9b1935c1b346ae86e4ba05d084614c863632",
+  "manifestBeforeSha256": "6cd156ef5d273528817270c4948a27612b45f565106a5a1ff25322208b4bb26f",
+  "manifestSha256": "8a39fbf8a828e8e490d500d9b99b6235c8fe7cff896f1986e9f186ddee3c33e4",
+  "probeLog": "java-probe.log",
+  "schemaVersion": "v4-1-java-golden-finalization-v1",
+  "targetDevCommit": "d856d10819bf1d018ad43fa63714cc348f1fc643",
+  "weightsSha256": "5b906da96d7b3e4b45c5e9d970df41c499f0d457756b853b613f672f589a3228"
+}

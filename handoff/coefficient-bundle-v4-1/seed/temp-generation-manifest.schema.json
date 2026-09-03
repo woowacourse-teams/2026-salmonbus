@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://salmonbus.invalid/schemas/temp-generation-exclusion-manifest-v1.json",
+  "title": "Temporary model carrier-generation exclusion manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "temporary_deployment",
+    "window",
+    "baseline",
+    "generations",
+    "totals",
+    "privacy"
+  ],
+  "properties": {
+    "schema_version": {"const": "salmonbus-temp-generation-exclusion-v1"},
+    "temporary_deployment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "release_id", "bundle_digest", "calculation_version", "activated_at"],
+      "properties": {
+        "id": {"const": 1},
+        "release_id": {"const": "salmonbus-d57370be9195520e"},
+        "bundle_digest": {"const": "d57370be9195520ecf3b0ef125aa3611090ed5f41ade2963c33f38d99a29e89a"},
+        "calculation_version": {"const": "seat-feature-contract-v4-1-2026-09-02"},
+        "activated_at": {"const": "2026-09-02T11:55:04.729493Z"}
+      }
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from_inclusive", "through_exclusive"],
+      "properties": {
+        "from_inclusive": {"const": "2026-09-02T11:55:04.729493Z"},
+        "through_exclusive": {"type": "string", "format": "date-time"}
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stop_demand_statistics_rows_before_activation", "evidence"],
+      "properties": {
+        "stop_demand_statistics_rows_before_activation": {"const": 0},
+        "evidence": {"const": "user-provided read-only transaction"}
+      }
+    },
+    "generations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "route_version_id",
+          "calculation_version",
+          "revision",
+          "data_until",
+          "computed_at",
+          "row_count"
+        ],
+        "properties": {
+          "route_version_id": {"type": "integer", "minimum": 1},
+          "calculation_version": {
+            "type": "string",
+            "enum": [
+              "seat-feature-contract-v4-1-2026-09-02",
+              "observed-max-capacity-v1"
+            ]
+          },
+          "revision": {"type": "integer", "minimum": 1},
+          "data_until": {"type": "string", "format": "date-time"},
+          "computed_at": {"type": "string", "format": "date-time"},
+          "row_count": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generations", "rows"],
+      "properties": {
+        "generations": {"type": "integer", "minimum": 0},
+        "rows": {"type": "integer", "minimum": 0}
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contains_observation_rows", "contains_vehicle_or_plate_values", "contains_credentials"],
+      "properties": {
+        "contains_observation_rows": {"const": false},
+        "contains_vehicle_or_plate_values": {"const": false},
+        "contains_credentials": {"const": false}
+      }
+    }
+  }
+}

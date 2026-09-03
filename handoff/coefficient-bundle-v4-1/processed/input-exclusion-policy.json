@@ -1,0 +1,81 @@
+{
+  "enforcement": {
+    "academyRdsReadAsTrainingInput": false,
+    "frozenS3SourceThroughDateKst": "2026-09-01",
+    "inputFamily": "validated personal Lambda collector S3 records/raw only",
+    "temporaryDeploymentOccursAfterFrozenClosure": true
+  },
+  "contaminatedStatisticsPolicy": {
+    "baselineRowsAtActivation": 0,
+    "carrierLineage": "StopDemandStatisticsJob aggregates SETTLED temp seat_forecast rows even though it does not aggregate prediction probabilities",
+    "directTemporaryCalculationVersion": "seat-feature-contract-v4-1-2026-09-02",
+    "exactGenerationIdentityFields": [
+      "route_version_id",
+      "calculation_version",
+      "revision",
+      "data_until",
+      "computed_at"
+    ],
+    "formalWriterCalculationVersion": "observed-max-capacity-v1",
+    "lockWindowFromInclusiveUtc": "2026-09-02T11:55:04.729493Z",
+    "lockWindowUntilExclusiveUtc": null,
+    "lockWindowUntilStatus": "pending formal cutover; required before any cleanup dry-run",
+    "prohibitCalculationVersionOnlyDeletion": true,
+    "requireExactGenerationSetDryRunAndSeparateDeleteApproval": true,
+    "useLiveRdsStatisticsAsSeedInput": false
+  },
+  "formalContract": {
+    "bundleFeatureContractVersion": "observed-max-capacity-v1",
+    "currentWriterCalculationVersion": "observed-max-capacity-v1",
+    "versionsMatch": true,
+    "temporaryBundleCalculationVersionDiffers": true
+  },
+  "atomicCutover": {
+    "formalForecastMayStartBeforeCleanupAndSeed": false,
+    "order": [
+      "quiesce forecast settlement statistics jobs",
+      "freeze final cutover instant and exact contaminated generation set",
+      "obtain separate cleanup and import approval",
+      "remove only approved temp forecast and exact generations",
+      "replay target RDS observations only into an aggregate delta",
+      "connect source seed plus RDS observation delta and materialize formal first generation",
+      "activate formal deployment and retain temp deployment as RETIRED",
+      "resume worker after transaction commit"
+    ],
+    "reference": "seed/ATOMIC_CUTOVER.md",
+    "rdsObservationDeltaRequired": true,
+    "rdsObservationDeltaContract": "seed/rds-observation-delta-contract.json"
+  },
+  "excludedDeployment": {
+    "activatedAtUtc": "2026-09-02T11:55:04.729493Z",
+    "bundleDigest": "d57370be9195520ecf3b0ef125aa3611090ed5f41ade2963c33f38d99a29e89a",
+    "calculationVersion": "seat-feature-contract-v4-1-2026-09-02",
+    "deploymentId": 1,
+    "deleteDeploymentRow": false,
+    "releaseId": "salmonbus-d57370be9195520e",
+    "scope": "TEMPORARY_SMOKE_ONLY",
+    "observedSeatForecastRowsAtLatestReportedSnapshot": 151523,
+    "requiredPostReplacementState": "RETIRED"
+  },
+  "excludedMaterial": [
+    "model_deployment row for salmonbus-d57370be9195520e",
+    "seat_forecast rows produced by that deployment",
+    "settled/scored outcomes produced by that deployment",
+    "stop-demand statistics derived from those rows"
+  ],
+  "excludedUses": [
+    "coefficient training",
+    "historical cell backfill",
+    "OOF evaluation",
+    "calibration evaluation",
+    "holdout evaluation",
+    "quality claims"
+  ],
+  "observationPolicy": {
+    "excludeUnderlyingObservationRows": false,
+    "resetForecastCompletedAtToNull": false,
+    "rule": "retain observations; anti-join only forecast/scored/cell material attributable to deployment_id=1"
+  },
+  "remoteWriteOrDeploymentPerformedByThisWork": false,
+  "schemaVersion": "v4-1-input-exclusion-policy-v1"
+}

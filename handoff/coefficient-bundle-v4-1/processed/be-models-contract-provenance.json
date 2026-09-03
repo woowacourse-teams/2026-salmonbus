@@ -1,0 +1,30 @@
+{
+  "authority": "cross-spec subordinate to current dev consumer commit",
+  "files": [
+    {
+      "path": "validation/v4-1/source-to-feature.md",
+      "sha256": "3834afe64f2bbbb158febedf59eb6d8fff90357175ada1110ac8faa0d948c196"
+    },
+    {
+      "path": "validation/v4-1/deterministic-backfill-spec.md",
+      "sha256": "fe7479349350f933b6414ebc3b3a212a9c0385ff309a62ccb0209a27b0150be2"
+    },
+    {
+      "path": "validation/v4-1/bundle-and-fitting-contract.md",
+      "sha256": "993518f8683161fc891f51ccb70a0d681810ab33762ee13539734f0a34410770"
+    },
+    {
+      "path": "validation/v4-1/ExternalV41BundleContractTest.java",
+      "sha256": "50917bbfe1ba1dd7688890bf56143599f4d299c10f077441cc68d283dd25b2fc"
+    },
+    {
+      "path": "validation/v4-1/verify-with-dev-java.sh",
+      "sha256": "00fa3b130cd739345e2db7a1a52b01fa2fc7404905de779620671cf52ffe92c3"
+    }
+  ],
+  "repositoryHeadAtRead": "4ad46071f742138cb473e10c62f8a980eb611c5c",
+  "status": "files were uncommitted in the be-models worktree; SHA-256 is the as-of authority",
+  "originalCrossSpecBasisCommit": "ed2cf742b0db368d7cf6eae2556b36bc156a5e72",
+  "targetDevCommit": "d856d10819bf1d018ad43fa63714cc348f1fc643",
+  "schemaVersion": "v4-1-cross-spec-provenance-v1"
+}

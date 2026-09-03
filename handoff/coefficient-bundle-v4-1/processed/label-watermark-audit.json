@@ -1,0 +1,47 @@
+{
+  "accepted": {
+    "observations": 1544,
+    "observedFromUtc": "2026-09-01T15:00:15.346000+00:00",
+    "observedThroughUtc": "2026-09-01T17:10:16.541000+00:00",
+    "rawDocuments": 376,
+    "recordDocuments": 376,
+    "seatMissingRows": 1,
+    "sha256": "59c0e9613510d22e8e27753b661cd2de3e3b28defe2958ff0d803683183db6f6"
+  },
+  "classification": "LABEL_ONLY_NO_PREDICTION_DATE",
+  "dateKst": "2026-09-02",
+  "invalidRecordsByCode": {},
+  "inventory": {
+    "bytes": 2242992,
+    "rawDocuments": 376,
+    "recordDocuments": 376,
+    "sha256": "59c0e9613510d22e8e27753b661cd2de3e3b28defe2958ff0d803683183db6f6"
+  },
+  "predictionRowsOpened": 0,
+  "privacy": {
+    "objectKeysEmitted": false,
+    "originalVehicleIdsEmitted": false,
+    "plateValuesEmitted": false,
+    "rowLevelMaterialPersisted": false,
+    "secretsEmitted": false,
+    "vehicleHmacsEmitted": false
+  },
+  "repairedPartitionCrossings": 0,
+  "requiredBy": "last prediction date end + 2h + max(G=600s) + max(S=300s)",
+  "runtime": {
+    "durationSeconds": 6.298,
+    "workers": 8
+  },
+  "schemaVersion": "v4-1-label-only-watermark-audit-v1",
+  "semanticOutcomes": {
+    "failed": 3,
+    "with_vehicles": 323,
+    "without_vehicles": 50
+  },
+  "stationMismatchObservations": 0,
+  "stationMismatchRecords": 0,
+  "strategies": {
+    "adaptive-kst-v1.2.0": 376
+  },
+  "watermarkAtUtc": "2026-09-01T17:15:00Z"
+}

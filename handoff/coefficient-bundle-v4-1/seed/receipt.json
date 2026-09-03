@@ -1,0 +1,36 @@
+{
+  "canonicalJsonSha256": "adcf0d04a4b67dc40bed6f3640f0f78697e9215bf794ff2b262f0ba0ec0a5ada",
+  "compressedBytes": 723046,
+  "compressedSha256": "7f3be7dc2c668d1ed4b8665c341c2cda24968d3fa2e6ed2755261a20c3826ec4",
+  "databaseWritePerformed": false,
+  "lastBackfilledGenerationUtc": "2026-09-02T09:00:00.000000Z",
+  "path": "seed/cell-hourly-aggregate.json.gz",
+  "requiresRdsObservationDeltaBeforeFormalCutover": true,
+  "routeCounts": {
+    "1650": {
+      "finalRevision": 77,
+      "hourlyRows": 20390,
+      "replay": {
+        "seedOnlyInvariantSettledTargets": 809563,
+        "seedOnlyStructuralTargets": 867013
+      },
+      "samples": 509435
+    },
+    "3330": {
+      "finalRevision": 77,
+      "hourlyRows": 24834,
+      "replay": {
+        "seedOnlyInvariantSettledTargets": 939567,
+        "seedOnlyStructuralTargets": 1003490
+      },
+      "samples": 521792
+    }
+  },
+  "rowCount": 45224,
+  "schemaVersion": "stop-demand-hourly-aggregate-seed-receipt-v1",
+  "sourceAuthorityThroughExclusiveUtcByRoute": {
+    "1650": "2026-09-02T12:49:33.041299Z",
+    "3330": "2026-09-02T10:27:52.390820Z"
+  },
+  "uncompressedBytes": 9450157
+}

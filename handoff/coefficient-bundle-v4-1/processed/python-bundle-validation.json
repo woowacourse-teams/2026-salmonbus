@@ -1,0 +1,138 @@
+{
+  "checks": {
+    "canonicalJsonNoFinalLf": true,
+    "constantFeatureCoefficientsPositiveZero": true,
+    "deidentifiedRuntimeContexts": true,
+    "featureOrder": true,
+    "goldenDigest": true,
+    "goldenPmf71FiniteRangeSumP0": true,
+    "horizonOrder": true,
+    "identityDigest": true,
+    "modelVersion": true,
+    "normalization": true,
+    "pythonGoldenExpectedParity": true,
+    "pythonGoldenFullParity": true,
+    "routeOrder": true,
+    "routeReferenceDigestShape": true,
+    "schemaVersion": true,
+    "sourceCommitShape": true,
+    "tensorNames": true,
+    "topLevel19KnownFields": true,
+    "unfittedBinCoefficientsPositiveZero": true,
+    "weightsDigest": true
+  },
+  "golden": {
+    "expectedSeats": 6.134809420254914,
+    "pmf0": 0.8128253142730956,
+    "pmfSum": 1.0,
+    "rawFullChance": 0.8128253142730955
+  },
+  "manifestSha256": "8a39fbf8a828e8e490d500d9b99b6235c8fe7cff896f1986e9f186ddee3c33e4",
+  "releaseId": "v41b-8194bde56d86f365afd6",
+  "runtimeContexts": [
+    {
+      "context": 1,
+      "expectedSeats": 39.25605345398241,
+      "fullChance": 1.7198336727997533e-05,
+      "horizon": 1,
+      "pmfSum": 1.0,
+      "route": "1650",
+      "status": "PASS"
+    },
+    {
+      "context": 2,
+      "expectedSeats": 39.5180184005492,
+      "fullChance": 0.0004772829656721283,
+      "horizon": 6,
+      "pmfSum": 1.0,
+      "route": "1650",
+      "status": "PASS"
+    },
+    {
+      "context": 3,
+      "expectedSeats": 30.42009396488927,
+      "fullChance": 0.04156530233899158,
+      "horizon": 12,
+      "pmfSum": 1.0,
+      "route": "1650",
+      "status": "PASS"
+    },
+    {
+      "context": 4,
+      "expectedSeats": 32.22836484603725,
+      "fullChance": 1.5713068662731144e-10,
+      "horizon": 1,
+      "pmfSum": 1.0,
+      "route": "3330",
+      "status": "PASS"
+    },
+    {
+      "context": 5,
+      "expectedSeats": 34.66125750270617,
+      "fullChance": 5.04314761791087e-05,
+      "horizon": 6,
+      "pmfSum": 1.0,
+      "route": "3330",
+      "status": "PASS"
+    },
+    {
+      "context": 6,
+      "expectedSeats": 39.1973376112619,
+      "fullChance": 5.974200866321859e-08,
+      "horizon": 12,
+      "pmfSum": 1.0000000000000002,
+      "route": "3330",
+      "status": "PASS"
+    }
+  ],
+  "schemaVersion": "v4-1-independent-python-bundle-validation-v1",
+  "status": "PASS",
+  "tensors": {
+    "anchor_coefficients": {
+      "binary": true,
+      "dtype": true,
+      "finite": true,
+      "maximum": 0.9848870454035088,
+      "minimum": 0.013811977759044743,
+      "nonzero": 48,
+      "shape": true
+    },
+    "bin_coefficients": {
+      "binary": true,
+      "dtype": true,
+      "finite": true,
+      "maximum": 36.120058562477745,
+      "minimum": -30.51038380545472,
+      "nonzero": 8018,
+      "shape": true
+    },
+    "bin_fitted": {
+      "binary": true,
+      "dtype": true,
+      "finite": true,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "nonzero": 387,
+      "shape": true
+    },
+    "hurdle_coefficients": {
+      "binary": true,
+      "dtype": true,
+      "finite": true,
+      "maximum": 4.860636358335723,
+      "minimum": -12.93367499020148,
+      "nonzero": 504,
+      "shape": true
+    },
+    "sign_coefficients": {
+      "binary": true,
+      "dtype": true,
+      "finite": true,
+      "maximum": 25.335291679555134,
+      "minimum": -12.157270755515627,
+      "nonzero": 1008,
+      "shape": true
+    }
+  },
+  "weightsSha256": "5b906da96d7b3e4b45c5e9d970df41c499f0d457756b853b613f672f589a3228"
+}

@@ -1,0 +1,16 @@
+{
+  "activeAuthorityCommit": "d856d10819bf1d018ad43fa63714cc348f1fc643",
+  "contractDiffReceipt": "processed/dev-authority-update.json",
+  "historicalProcessLoadedCommit": "ed2cf742b0db368d7cf6eae2556b36bc156a5e72",
+  "identityGeneratedAfterCorrection": true,
+  "manifestAuthorityCorrectionSha256": "a5fe4aab6b0ce9430b274ae530fd531dfd888b76a559a3d14eaf02c8c9539247",
+  "manifestProvisionalAfterSha256": "6cd156ef5d273528817270c4948a27612b45f565106a5a1ff25322208b4bb26f",
+  "manifestProvisionalBeforeSha256": "53394b12ab42137b4d61a41a9359359d642b158d042d75d28b59c10bff825565",
+  "modelCalculationChangedBetweenCommits": false,
+  "modelReleaseIdChanged": false,
+  "remoteMutationPerformed": false,
+  "schemaVersion": "v4-1-dev-authority-finalization-v1",
+  "status": "PASS",
+  "weightsChanged": false,
+  "weightsSha256": "5b906da96d7b3e4b45c5e9d970df41c499f0d457756b853b613f672f589a3228"
+}

@@ -1,0 +1,131 @@
+{
+  "classification": "REFRESHED_ROUTE_SPECIFIC_SOURCE_TARGET_AUTHORITY",
+  "partitionDateKst": "2026-09-02",
+  "privacy": {
+    "objectKeysEmitted": false,
+    "plateValuesEmitted": false,
+    "rowLevelMaterialPersisted": false,
+    "vehicleHmacsEmitted": false,
+    "vehicleIdsEmitted": false
+  },
+  "routes": {
+    "1650": {
+      "boundaryLowerUtc": "2026-09-02T12:49:33.041299Z",
+      "boundaryUpperUtc": "2026-09-02T12:49:35.539364Z",
+      "cohorts": {
+        "ambiguous": {
+          "acceptedManifestSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "acceptedObservations": 0,
+          "acceptedRawDocuments": 0,
+          "acceptedRawLessRecords": 0,
+          "acceptedRecordDocuments": 0,
+          "quarantinedObservationRows": 0,
+          "quarantinedRecords": 0,
+          "responseRangeUtcInclusive": [
+            null,
+            null
+          ],
+          "stationMismatchRows": 0
+        },
+        "catchUp": {
+          "acceptedManifestSha256": "32147c67a0da53825dc21dbb52fc58349182d260ded45079ff7be199bce72ac3",
+          "acceptedObservations": 78675,
+          "acceptedRawDocuments": 3815,
+          "acceptedRawLessRecords": 0,
+          "acceptedRecordDocuments": 3815,
+          "quarantinedObservationRows": 24,
+          "quarantinedRecords": 1,
+          "responseRangeUtcInclusive": [
+            "2026-09-01T15:00:16.516000+00:00",
+            "2026-09-02T12:49:31.467000+00:00"
+          ],
+          "stationMismatchRows": 1
+        },
+        "overlap": {
+          "acceptedManifestSha256": "8099384547e32b40746da19a73467f32a60190cb358582eedb4777e878372d69",
+          "acceptedObservations": 560,
+          "acceptedRawDocuments": 41,
+          "acceptedRawLessRecords": 0,
+          "acceptedRecordDocuments": 41,
+          "quarantinedObservationRows": 0,
+          "quarantinedRecords": 0,
+          "responseRangeUtcInclusive": [
+            "2026-09-02T12:49:46.470000+00:00",
+            "2026-09-02T12:59:46.528000+00:00"
+          ],
+          "stationMismatchRows": 0
+        }
+      },
+      "invalidRecordsByCode": {},
+      "inventory": {
+        "bytes": 72476125,
+        "rawDocuments": 3857,
+        "recordDocuments": 3857,
+        "sha256": "2981fa2743c327c51f351fb2cb53adcb67a2232b45bcc7650ecca9119e29044c"
+      },
+      "membershipInvariantAcrossBoundaryBracket": true
+    },
+    "3330": {
+      "boundaryLowerUtc": "2026-09-02T10:27:52.390820Z",
+      "boundaryUpperUtc": "2026-09-02T10:27:52.390820Z",
+      "cohorts": {
+        "ambiguous": {
+          "acceptedManifestSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "acceptedObservations": 0,
+          "acceptedRawDocuments": 0,
+          "acceptedRawLessRecords": 0,
+          "acceptedRecordDocuments": 0,
+          "quarantinedObservationRows": 0,
+          "quarantinedRecords": 0,
+          "responseRangeUtcInclusive": [
+            null,
+            null
+          ],
+          "stationMismatchRows": 0
+        },
+        "catchUp": {
+          "acceptedManifestSha256": "288c94b914a0f477645fc79bd24f124da4f0344a9a52320594544594d6127c5b",
+          "acceptedObservations": 58234,
+          "acceptedRawDocuments": 3247,
+          "acceptedRawLessRecords": 2,
+          "acceptedRecordDocuments": 3249,
+          "quarantinedObservationRows": 0,
+          "quarantinedRecords": 0,
+          "responseRangeUtcInclusive": [
+            "2026-09-01T15:00:15.346000+00:00",
+            "2026-09-02T10:27:45.315000+00:00"
+          ],
+          "stationMismatchRows": 0
+        },
+        "overlap": {
+          "acceptedManifestSha256": "3d2bce1f62726cb87bebbb9853bd2402da252c3d064bdedf206b6189c19ab28d",
+          "acceptedObservations": 14364,
+          "acceptedRawDocuments": 608,
+          "acceptedRawLessRecords": 0,
+          "acceptedRecordDocuments": 608,
+          "quarantinedObservationRows": 0,
+          "quarantinedRecords": 0,
+          "responseRangeUtcInclusive": [
+            "2026-09-02T10:28:00.302000+00:00",
+            "2026-09-02T12:59:45.349000+00:00"
+          ],
+          "stationMismatchRows": 0
+        }
+      },
+      "invalidRecordsByCode": {},
+      "inventory": {
+        "bytes": 67258898,
+        "rawDocuments": 3855,
+        "recordDocuments": 3857,
+        "sha256": "6953a3038527af2c568a74f7924db0dbd7243051229ad290c4bc7b3a0ca2b9cd"
+      },
+      "membershipInvariantAcrossBoundaryBracket": true
+    }
+  },
+  "runtime": {
+    "durationSeconds": 87.756,
+    "workers": 8
+  },
+  "schemaVersion": "v4-1-route-specific-catch-up-audit-v1",
+  "snapshotAtUtc": "2026-09-02T13:00:00Z"
+}

@@ -1,0 +1,37 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.5.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :common:compileJava
+> Task :common:processResources
+> Task :common:classes
+> Task :common:jar
+> Task :common:compileTestFixturesJava
+> Task :common:processTestFixturesResources NO-SOURCE
+> Task :common:testFixturesClasses
+> Task :common:testFixturesJar
+> Task :worker-app:compileJava
+> Task :worker-app:bootBuildInfo
+> Task :worker-app:processResources
+> Task :worker-app:classes
+> Task :worker-app:compileTestJava
+> Task :worker-app:processTestResources
+> Task :worker-app:testClasses
+
+> Task :worker-app:test
+
+ExternalV41BundleContractTest > fixtureCanTraversePinnedLoader(Path) SKIPPED
+
+ExternalV41BundleContractTest > verifiesFinalBundleOrPrintsIndependentGoldenValues() STANDARD_OUT
+    V4_1_JAVA_VERIFY=PASS
+    V4_1_JAVA_EXPECTED_FULL_CHANCE=0.8128253142730959
+    V4_1_JAVA_EXPECTED_SEATS=6.1348094202549195
+
+ExternalV41BundleContractTest > verifiesFinalBundleOrPrintsIndependentGoldenValues() PASSED
+
+ExternalV41FeatureParityTest > exactDesignMatrixMatchesTheExporterFixture() STANDARD_OUT
+    V4_1_JAVA_FEATURE_PARITY=PASS
+
+ExternalV41FeatureParityTest > exactDesignMatrixMatchesTheExporterFixture() PASSED
+
+BUILD SUCCESSFUL in 13s
+11 actionable tasks: 11 executed
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.5.1/userguide/configuration_cache_enabling.html

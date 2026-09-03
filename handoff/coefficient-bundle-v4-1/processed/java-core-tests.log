@@ -1,0 +1,215 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.5.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :common:compileJava
+> Task :common:processResources
+> Task :common:classes
+> Task :common:jar
+> Task :common:compileTestFixturesJava
+> Task :common:processTestFixturesResources NO-SOURCE
+> Task :common:testFixturesClasses
+> Task :common:testFixturesJar
+> Task :worker-app:compileJava
+> Task :worker-app:bootBuildInfo
+> Task :worker-app:processResources
+> Task :worker-app:classes
+> Task :worker-app:compileTestJava
+> Task :worker-app:processTestResources
+> Task :worker-app:testClasses
+
+> Task :worker-app:test
+
+SeatForecastDesignMatrixTest > 대상_정류장의_셀이_없으면_이웃으로_메웠다고_남는다() PASSED
+
+SeatForecastDesignMatrixTest > 설계행렬은_31열이다() PASSED
+
+SeatForecastDesignMatrixTest > 직전_차량에_11석_남았으면_직전_잔여석_비율은_11을_44로_나눈_값이다() PASSED
+
+SeatForecastDesignMatrixTest > 계수를_기다리는_아홉_열은_재료가_달라져도_0이다() PASSED
+
+SeatForecastDesignMatrixTest > 같은_재료로_두_번_만들면_31열이_모두_같다() PASSED
+
+SeatForecastDesignMatrixTest > 셀_통계_두_열은_대상_정류장과_지나갈_구간에서_나온다() PASSED
+
+SeatForecastDesignMatrixTest > 잔여석이_0석이면_만석이_1이다() PASSED
+
+SeatForecastDesignMatrixTest > 직전_차량이_만석이었으면_직전_만석은_1이다() PASSED
+
+SeatForecastDesignMatrixTest > 만석이_3정류장째_이어지면_연속_만석은_3이다() PASSED
+
+SeatForecastDesignMatrixTest > 저녁으로_정해진_예보는_저녁_열이_1이다() PASSED
+
+SeatForecastDesignMatrixTest > 지금_채우는_열과_계수를_기다리는_열과_늘_0인_열이_31열을_빠짐없이_나눈다() PASSED
+
+SeatForecastDesignMatrixTest > 정류장_60개짜리_판본의_49번_정류장은_49를_60으로_나눈_자리다() PASSED
+
+SeatForecastDesignMatrixTest > 상류에서_3석_줄었으면_좌석_기울기는_마이너스_3이다() PASSED
+
+SeatForecastDesignMatrixTest > 혼잡도_1등급부터_4등급까지_그_등급의_열만_1이다(int) > [1] crowdLevel = 1 PASSED
+
+SeatForecastDesignMatrixTest > 혼잡도_1등급부터_4등급까지_그_등급의_열만_1이다(int) > [2] crowdLevel = 2 PASSED
+
+SeatForecastDesignMatrixTest > 혼잡도_1등급부터_4등급까지_그_등급의_열만_1이다(int) > [3] crowdLevel = 3 PASSED
+
+SeatForecastDesignMatrixTest > 혼잡도_1등급부터_4등급까지_그_등급의_열만_1이다(int) > [4] crowdLevel = 4 PASSED
+
+SeatForecastDesignMatrixTest > 지금_채우는_열은_스물한_개다() PASSED
+
+SeatForecastDesignMatrixTest > 최대_44석을_보인_차량에_12석_남았으면_잔여석_비율은_12를_44로_나눈_값이다() PASSED
+
+SeatForecastDesignMatrixTest > 노선은_노선마다_따로_배워서_0이다() PASSED
+
+SeatForecastDesignMatrixTest > 아침으로_정해진_예보는_아침_열이_1이다() PASSED
+
+SeatForecastDesignMatrixTest > 직전_차량을_모르면_직전_결측이_1이다() PASSED
+
+SeatForecastDesignMatrixTest > 아침도_저녁도_아닌_예보는_두_열이_모두_0이다() PASSED
+
+SeatForecastDesignMatrixTest > 상수는_재료와_무관하게_1이다() PASSED
+
+SeatForecastDesignMatrixTest > 최대_44석을_보인_차량은_최대_잔여석_비율이_44를_68로_나눈_값이다() PASSED
+
+SeatForecastDesignMatrixTest > 상류_좌석_기울기를_모르면_기울기_결측이_1이다() PASSED
+
+SeatForecastDesignMatrixTest > 잔여석이_20석보다_많이_남으면_낮은_좌석_구간은_1이다() PASSED
+
+SeatForecastDesignMatrixTest > 혼잡도를_모르면_혼잡도_네_열이_모두_0이다() PASSED
+
+BundleLoaderTest > 계수_파일에_읽을_줄_모르는_배열이_있으면_거절한다() PASSED
+
+BundleLoaderTest > 설명_파일_안쪽_항목의_순서가_이름순이_아니면_거절한다() PASSED
+
+BundleLoaderTest > 학습됐는지_표시하는_값이_0도_1도_아니면_거절한다() PASSED
+
+BundleLoaderTest > 설명_파일이_symlink_면_거절한다() PASSED
+
+BundleLoaderTest > 계수를_자릿수가_모자란_형식으로_담으면_읽지_않는다() PASSED
+
+BundleLoaderTest > 대조_사례에_특징_벡터가_없으면_거절한다() PASSED
+
+BundleLoaderTest > 대조_사례_요약값이_사례_내용에서_나온_값이_아니면_거절한다() PASSED
+
+BundleLoaderTest > 계수는_그대로인데_입력_규칙_버전만_바뀌면_거절한다() PASSED
+
+BundleLoaderTest > 입력값이_24개인_계수_묶음은_거절한다() PASSED
+
+BundleLoaderTest > 설명_파일에_모르는_항목이_있으면_거절한다() PASSED
+
+BundleLoaderTest > 설명_파일이_수를_문자열로_적으면_거절한다() PASSED
+
+BundleLoaderTest > 계수_묶음_버전이_다르면_거절한다() PASSED
+
+BundleLoaderTest > 입력값_이름이_우리_설계행렬에_없는_것이면_거절한다() PASSED
+
+BundleLoaderTest > 묶음이_놓인_자리가_symlink_면_거절한다() PASSED
+
+BundleLoaderTest > 좌석_분포에_필요한_배열_하나가_없으면_거절한다() PASSED
+
+BundleLoaderTest > 모델_버전이_다르면_거절한다() PASSED
+
+BundleLoaderTest > 설명_파일이_없으면_거절한다() PASSED
+
+BundleLoaderTest > 중심_좌석_계수가_절편과_기울기_둘이_아니면_거절한다() PASSED
+
+BundleLoaderTest > 설명_파일에_빈칸이_들어_있으면_거절한다() PASSED
+
+BundleLoaderTest > 계수_파일_요약값이_다르면_거절한다() PASSED
+
+BundleLoaderTest > 노선_참조_요약값이_64자리가_아니면_거절한다() PASSED
+
+BundleLoaderTest > 노선_순서가_뒤집히면_거절한다() PASSED
+
+BundleLoaderTest > 검사를_다_통과한_묶음은_노선과_거리로_계수를_꺼낼_수_있다() PASSED
+
+BundleLoaderTest > 설명_파일의_항목_순서가_이름순이_아니면_거절한다() PASSED
+
+BundleLoaderTest > 대조_사례를_바꾸고_요약값을_안_고치면_거절한다() PASSED
+
+BundleLoaderTest > 입력_규칙_버전이_비어_있으면_거절한다() PASSED
+
+BundleLoaderTest > 출시_식별자를_묶은_요약값이_다르면_거절한다() PASSED
+
+BundleLoaderTest > 계수_파일이_symlink_면_거절한다() PASSED
+
+BundleLoaderTest > 계수에_NaN_이_있으면_거절한다() PASSED
+
+BundleLoaderTest > 계수에_Infinity_가_있으면_거절한다() PASSED
+
+BundleLoaderTest > 입력값_이름의_순서가_바뀌면_거절한다() PASSED
+
+BundleLoaderTest > 예보_거리가_1부터_12까지가_아니면_거절한다() PASSED
+
+BundleLoaderTest > 설명_파일이_UTF_8_이_아니면_거절한다() PASSED
+
+ResidualBinRangeTest > 어긋날_수_있는_폭이_1석이면_앞_구간들은_담을_것이_없다() PASSED
+
+ResidualBinRangeTest > 첫_구간은_1석_어긋난_것부터_담는다() PASSED
+
+ResidualBinRangeTest > 마지막_구간은_50석_어긋난_것까지_담는다() PASSED
+
+ResidualBinRangeTest > 어긋난_정도를_아홉_구간으로_나눈다() PASSED
+
+ResidualBinRangeTest > 어긋날_수_있는_폭이_1석이면_마지막_구간_하나가_전부를_담는다() PASSED
+
+ResidualBinRangeTest > 어긋날_수_있는_폭이_67석이면_둘째_구간은_4석까지_담는다() PASSED
+
+ResidualBinRangeTest > 구간이_5석부터_8석까지면_어긋난_경우_네_가지를_담는다() PASSED
+
+ResidualBinRangeTest > 어긋날_수_있는_폭이_67석이면_마지막_구간은_담을_것이_없다() PASSED
+
+ResidualDistributionTest > 한_구간의_확률은_그_구간이_담는_좌석_수에_고르게_나뉜다() PASSED
+
+ResidualDistributionTest > 좌석이_중심보다_많아질_확률은_나머지_둘을_1에서_뺀_값이다() PASSED
+
+ResidualDistributionTest > 어긋날_수_있는_경우를_91가지로_센다() PASSED
+
+ResidualDistributionTest > 좌석이_중심보다_많아지는_쪽이_학습이_안_됐으면_그_확률이_중심_좌석으로_간다() PASSED
+
+ResidualDistributionTest > 학습이_안_된_구간도_아주_작은_확률을_받는다() PASSED
+
+ResidualDistributionTest > 셀_수_있는_범위_밖으로_밀린_확률은_가장자리_칸에_쌓인다() PASSED
+
+ResidualDistributionTest > 앞의_두_확률을_더해_1을_넘어도_많아질_확률이_0이_되지_않는다() PASSED
+
+ResidualDistributionTest > 확률을_모두_더하면_1이다() PASSED
+
+ResidualDistributionTest > 담을_것이_없는_구간의_몫은_남은_칸들이_나눠_받는다() PASSED
+
+ResidualDistributionTest > 양쪽_방향_다_학습이_안_됐으면_확률이_전부_중심_좌석에_모인다() PASSED
+
+SeatDistributionParityTest > 대조_사례는_여덟_개다() PASSED
+
+SeatDistributionParityTest > 좌석_71칸의_확률이_파이썬_정본과_같다(ReferenceParityCase) > ReferenceParityCase[name=보통, featureVector=[D@31ceba99, capacity=44, upstreamSeats=20, fullChance=0.02141596329135989, anchorIntercept=0.05, anchorSlope=0.8, sameSeatsCoefficients=[D@295bf2a, belowAnchorCoefficients=[D@bbf9e07, binCoefficients=[[[D@6ff6efdc, binFitted=[[Z@2b289ac9, anchorSeats=18, expectedProbabilities=[D@4eb1c69] PASSED
+
+SeatDistributionParityTest > 좌석_71칸의_확률이_파이썬_정본과_같다(ReferenceParityCase) > ReferenceParityCase[name=정원_1석, featureVector=[D@43a0a32d, capacity=1, upstreamSeats=0, fullChance=0.31, anchorIntercept=0.1, anchorSlope=0.7, sameSeatsCoefficients=[D@396ef8b2, belowAnchorCoefficients=[D@72825400, binCoefficients=[[[D@19ee1ae6, binFitted=[[Z@5f117b3d, anchorSeats=0, expectedProbabilities=[D@1174a305] PASSED
+
+SeatDistributionParityTest > 좌석_71칸의_확률이_파이썬_정본과_같다(ReferenceParityCase) > ReferenceParityCase[name=정원_70석, featureVector=[D@4cfa8227, capacity=70, upstreamSeats=70, fullChance=0.004, anchorIntercept=0.02, anchorSlope=0.95, sameSeatsCoefficients=[D@78226c36, belowAnchorCoefficients=[D@3f685162, binCoefficients=[[[D@11f406f8, binFitted=[[Z@987455b, anchorSeats=68, expectedProbabilities=[D@622fdb81] PASSED
+
+SeatDistributionParityTest > 좌석_71칸의_확률이_파이썬_정본과_같다(ReferenceParityCase) > ReferenceParityCase[name=격자_아래로_밀림, featureVector=[D@1d5d5621, capacity=70, upstreamSeats=3, fullChance=0.12, anchorIntercept=0.0, anchorSlope=0.9, sameSeatsCoefficients=[D@13275d8, belowAnchorCoefficients=[D@15b82644, binCoefficients=[[[D@20576557, binFitted=[[Z@574cd322, anchorSeats=3, expectedProbabilities=[D@45c2e0a6] PASSED
+
+SeatDistributionParityTest > 좌석_71칸의_확률이_파이썬_정본과_같다(ReferenceParityCase) > ReferenceParityCase[name=빈_구간_있음, featureVector=[D@3b1ed14b, capacity=40, upstreamSeats=12, fullChance=0.2, anchorIntercept=0.08, anchorSlope=0.6, sameSeatsCoefficients=[D@690bc15e, belowAnchorCoefficients=[D@1bc776b7, binCoefficients=[[[D@475646d4, binFitted=[[Z@a0f53fc, anchorSeats=10, expectedProbabilities=[D@3db972d2] PASSED
+
+SeatDistributionParityTest > 좌석_71칸의_확률이_파이썬_정본과_같다(ReferenceParityCase) > ReferenceParityCase[name=줄어드는_방향_미적합, featureVector=[D@181e72d3, capacity=44, upstreamSeats=20, fullChance=0.02, anchorIntercept=0.05, anchorSlope=0.8, sameSeatsCoefficients=[D@6ec7bce0, belowAnchorCoefficients=[D@2d272b0d, binCoefficients=[[[D@3727f0ee, binFitted=[[Z@5c448433, anchorSeats=18, expectedProbabilities=[D@fb713e7] PASSED
+
+SeatDistributionParityTest > 좌석_71칸의_확률이_파이썬_정본과_같다(ReferenceParityCase) > ReferenceParityCase[name=늘어나는_방향_미적합, featureVector=[D@6b69761b, capacity=44, upstreamSeats=20, fullChance=0.02, anchorIntercept=0.05, anchorSlope=0.8, sameSeatsCoefficients=[D@5c7668ba, belowAnchorCoefficients=[D@26221bad, binCoefficients=[[[D@158f4cfe, binFitted=[[Z@35f639fa, anchorSeats=18, expectedProbabilities=[D@5aaaa446] PASSED
+
+SeatDistributionParityTest > 좌석_71칸의_확률이_파이썬_정본과_같다(ReferenceParityCase) > ReferenceParityCase[name=만석이_아닐_확률이_안_남음, featureVector=[D@7d9ba6c, capacity=44, upstreamSeats=20, fullChance=0.4, anchorIntercept=0.0, anchorSlope=0.0, sameSeatsCoefficients=[D@8deb645, belowAnchorCoefficients=[D@7dd611c8, binCoefficients=[[[D@5d425813, binFitted=[[Z@1702830d, anchorSeats=0, expectedProbabilities=[D@6a937336] PASSED
+
+SeatDistributionParityTest > 중심_좌석이_파이썬_정본과_같다(ReferenceParityCase) > ReferenceParityCase[name=보통, featureVector=[D@1a2909ae, capacity=44, upstreamSeats=20, fullChance=0.02141596329135989, anchorIntercept=0.05, anchorSlope=0.8, sameSeatsCoefficients=[D@e042c99, belowAnchorCoefficients=[D@3f702946, binCoefficients=[[[D@42b6d0cc, binFitted=[[Z@1000d54d, anchorSeats=18, expectedProbabilities=[D@3f4f5330] PASSED
+
+SeatDistributionParityTest > 중심_좌석이_파이썬_정본과_같다(ReferenceParityCase) > ReferenceParityCase[name=정원_1석, featureVector=[D@63b3ee82, capacity=1, upstreamSeats=0, fullChance=0.31, anchorIntercept=0.1, anchorSlope=0.7, sameSeatsCoefficients=[D@2620e717, belowAnchorCoefficients=[D@7c8d5312, binCoefficients=[[[D@7636823f, binFitted=[[Z@a0db585, anchorSeats=0, expectedProbabilities=[D@2b34e38c] PASSED
+
+SeatDistributionParityTest > 중심_좌석이_파이썬_정본과_같다(ReferenceParityCase) > ReferenceParityCase[name=정원_70석, featureVector=[D@7fd26ad8, capacity=70, upstreamSeats=70, fullChance=0.004, anchorIntercept=0.02, anchorSlope=0.95, sameSeatsCoefficients=[D@1894593a, belowAnchorCoefficients=[D@14b0e127, binCoefficients=[[[D@10823d72, binFitted=[[Z@7cea0110, anchorSeats=68, expectedProbabilities=[D@468dda3e] PASSED
+
+SeatDistributionParityTest > 중심_좌석이_파이썬_정본과_같다(ReferenceParityCase) > ReferenceParityCase[name=격자_아래로_밀림, featureVector=[D@54cf7c6a, capacity=70, upstreamSeats=3, fullChance=0.12, anchorIntercept=0.0, anchorSlope=0.9, sameSeatsCoefficients=[D@78010562, belowAnchorCoefficients=[D@50756c76, binCoefficients=[[[D@38aafb53, binFitted=[[Z@1729ec00, anchorSeats=3, expectedProbabilities=[D@67f3d192] PASSED
+
+SeatDistributionParityTest > 중심_좌석이_파이썬_정본과_같다(ReferenceParityCase) > ReferenceParityCase[name=빈_구간_있음, featureVector=[D@73010765, capacity=40, upstreamSeats=12, fullChance=0.2, anchorIntercept=0.08, anchorSlope=0.6, sameSeatsCoefficients=[D@2b10ace9, belowAnchorCoefficients=[D@52169758, binCoefficients=[[[D@3eda0aeb, binFitted=[[Z@459b187a, anchorSeats=10, expectedProbabilities=[D@6b4283c4] PASSED
+
+SeatDistributionParityTest > 중심_좌석이_파이썬_정본과_같다(ReferenceParityCase) > ReferenceParityCase[name=줄어드는_방향_미적합, featureVector=[D@636bbbbb, capacity=44, upstreamSeats=20, fullChance=0.02, anchorIntercept=0.05, anchorSlope=0.8, sameSeatsCoefficients=[D@7eae3764, belowAnchorCoefficients=[D@10dc7d6, binCoefficients=[[[D@4f668f29, binFitted=[[Z@716e431d, anchorSeats=18, expectedProbabilities=[D@7e744f43] PASSED
+
+SeatDistributionParityTest > 중심_좌석이_파이썬_정본과_같다(ReferenceParityCase) > ReferenceParityCase[name=늘어나는_방향_미적합, featureVector=[D@6a4ccef7, capacity=44, upstreamSeats=20, fullChance=0.02, anchorIntercept=0.05, anchorSlope=0.8, sameSeatsCoefficients=[D@69391e08, belowAnchorCoefficients=[D@35eb4a3b, binCoefficients=[[[D@64b3b1ce, binFitted=[[Z@6884f0d9, anchorSeats=18, expectedProbabilities=[D@49ec6a9f] PASSED
+
+SeatDistributionParityTest > 중심_좌석이_파이썬_정본과_같다(ReferenceParityCase) > ReferenceParityCase[name=만석이_아닐_확률이_안_남음, featureVector=[D@5f7da3d3, capacity=44, upstreamSeats=20, fullChance=0.4, anchorIntercept=0.0, anchorSlope=0.0, sameSeatsCoefficients=[D@103082dd, belowAnchorCoefficients=[D@3a22bad6, binCoefficients=[[[D@56afdf9a, binFitted=[[Z@64fe9da7, anchorSeats=0, expectedProbabilities=[D@70cccd8f] PASSED
+
+BUILD SUCCESSFUL in 11s
+11 actionable tasks: 11 executed
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.5.1/userguide/configuration_cache_enabling.html

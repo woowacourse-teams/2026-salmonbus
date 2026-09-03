@@ -1,0 +1,59 @@
+{
+  "automaticModelInput": "catchUp only; overlap is evidence only",
+  "classification": "FULL_HISTORY_CATCH_UP_AND_RECONCILIATION_SPLIT",
+  "cohorts": {
+    "catchUp": {
+      "acceptedManifestSha256": "a4f728417163370fe59977cb9c7645ce31394b9c47ecaa1025044e1711d64139",
+      "acceptedObservations": 123775,
+      "acceptedRawDocuments": 6495,
+      "acceptedRawLessRecords": 2,
+      "acceptedRecordDocuments": 6497,
+      "failedRecords": 38,
+      "quarantinedObservationRows": 24,
+      "quarantinedRecords": 1,
+      "responseReceivedAtRangeUtcInclusive": [
+        "2026-09-01T15:00:15.346000+00:00",
+        "2026-09-02T10:27:46.514000+00:00"
+      ],
+      "stationMismatchRows": 1
+    },
+    "overlap": {
+      "acceptedManifestSha256": "f6fb0b94988e95b46a407938a2601a4e9e25e9355c7aab7fe99d3eb41cb71f15",
+      "acceptedObservations": 19502,
+      "acceptedRawDocuments": 752,
+      "acceptedRawLessRecords": 0,
+      "acceptedRecordDocuments": 752,
+      "failedRecords": 0,
+      "quarantinedObservationRows": 0,
+      "quarantinedRecords": 0,
+      "responseReceivedAtRangeUtcInclusive": [
+        "2026-09-02T10:28:00.302000+00:00",
+        "2026-09-02T12:01:46.511000+00:00"
+      ],
+      "stationMismatchRows": 0
+    }
+  },
+  "invalidRecordsByCode": {},
+  "inventory": {
+    "bytes": 131780145,
+    "rawDocuments": 7248,
+    "recordDocuments": 7250,
+    "sha256": "e8c77c1acbfd55dc335f18bcbac2aba5e1f074652c312d8287ee6c433f9e0875"
+  },
+  "partitionDateKst": "2026-09-02",
+  "privacy": {
+    "objectKeysEmitted": false,
+    "plateValuesEmitted": false,
+    "rowLevelMaterialPersisted": false,
+    "secretsEmitted": false,
+    "vehicleHmacsEmitted": false,
+    "vehicleIdsEmitted": false
+  },
+  "runtime": {
+    "durationSeconds": 88.33,
+    "workers": 8
+  },
+  "schemaVersion": "v4-1-s3-catch-up-authority-audit-v1",
+  "snapshotObservedAtUtc": "2026-09-02T12:01:52.931000Z",
+  "targetAuthorityFromUtcInclusive": "2026-09-02T10:27:52.390820Z"
+}

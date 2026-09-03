@@ -1,0 +1,86 @@
+{
+  "bundle": {
+    "bundleDigest": "9bb1a5ac22a317931d409f98cb5e9b1935c1b346ae86e4ba05d084614c863632",
+    "bundleDirectory": "bundle",
+    "goldenStatus": "PASS_EXACT_D856_JAVA",
+    "goldenVectorDigest": "b98eafcef2803d8792cc1005fef642f78d8e9e7a61cf046ae06b9f2fb4e0ecda",
+    "identityDigest": "9bb1a5ac22a317931d409f98cb5e9b1935c1b346ae86e4ba05d084614c863632",
+    "manifestProvisionalSha256": "6cd156ef5d273528817270c4948a27612b45f565106a5a1ff25322208b4bb26f",
+    "manifestSha256": "8a39fbf8a828e8e490d500d9b99b6235c8fe7cff896f1986e9f186ddee3c33e4",
+    "releaseId": "v41b-8194bde56d86f365afd6",
+    "weightsSha256": "5b906da96d7b3e4b45c5e9d970df41c499f0d457756b853b613f672f589a3228"
+  },
+  "classification": "V4_1_LOADER_COMPATIBLE_BACKFILLED_PROVISIONAL_19D",
+  "externalWrites": {
+    "awsWrites": false,
+    "databaseWrites": false,
+    "deployment": false
+  },
+  "identifiers": {
+    "dataReleaseId": "s3-b5b555015c46f124a6ac",
+    "featureContractVersion": "observed-max-capacity-v1",
+    "modelReleaseId": "v41b-8194bde56d86f365afd6",
+    "replayPolicyId": "s3-lag60-settle60-kst6h-chronological-v1",
+    "trainingReleaseId": "abf6ee628e52676eb1435704142f2477968b8974e748b0a18bb207f0acd8e09c"
+  },
+  "implementation": {
+    "activeAuthorityModelAndSchemaDiffFromTrainingBasis": "NONE",
+    "activeAuthorityUpdateReceipt": "processed/dev-authority-update.json",
+    "artifactCommitUnavailableBecauseCommitsAreForbidden": true,
+    "builderSha256": "142e22d4f21ac30702d153f3b49fd5d694a52b5ed7d5ce7c514a6fde9d110b83",
+    "numericalContractSha256": "d18fa57ef0e5ec319bfbb4b8801a1f0b892e1c78879e4e91347a0eafc8fde1ba",
+    "sourceCommitFieldUsesAuthoritativeConsumerCommit": true
+  },
+  "nextRequiredStep": "documentation and deterministic package only",
+  "privacy": {
+    "originalVehicleIdsPersisted": false,
+    "plateValuesPersisted": false,
+    "rawRowsPersisted": false,
+    "secretsPersisted": false,
+    "vehicleHmacsPersisted": false
+  },
+  "routeSpecificSeedRefresh": {
+    "receipt": "processed/route-seed-refresh-receipt.json",
+    "seedSha256": "7f3be7dc2c668d1ed4b8665c341c2cda24968d3fa2e6ed2755261a20c3826ec4",
+    "weightsChanged": false
+  },
+  "runtime": {
+    "durationSeconds": 6805.483,
+    "peakRssMiB": 2871.641
+  },
+  "schemaVersion": "v4-1-backfilled-bundle-build-receipt-v1",
+  "source": {
+    "acceptedManifestSha256": "3cbdc35f50236ca92c3545ac7262762fc05d57933a712fa713830e23771eb0f0",
+    "catchUpAcceptedManifestSha256": "a4f728417163370fe59977cb9c7645ce31394b9c47ecaa1025044e1711d64139",
+    "coefficientPredictionDatesExcludeCatchUpPartialDate": true,
+    "combinedSourceClosureSha256": "b5b555015c46f124a6acd38c830c312e4a1c979fc87d3e4f863caa751ef750f9",
+    "completeDates": 19,
+    "fromDate": "2026-08-14",
+    "seedReplayIncludesCatchUpPartialDate": true,
+    "targetAuthorityFromUtcInclusive": "2026-09-02T10:27:52.390820Z",
+    "throughDate": "2026-09-01"
+  },
+  "targetDevCommit": "d856d10819bf1d018ad43fa63714cc348f1fc643",
+  "training": {
+    "dataThrough": "2026-09-01T15:22:36.572000Z",
+    "releaseQualification": "FAIL_N_LT_30",
+    "selectedGSeconds": 60,
+    "selectedSSeconds": 60
+  },
+  "validation": {
+    "checks": {
+      "javaCore": "processed/java-core-tests.log",
+      "javaLoaderOnly": "processed/java-loader-only.log",
+      "javaProbe": "processed/java-probe.log",
+      "javaVerify": "processed/java-bundle-verify.log",
+      "privacy": "processed/privacy-scan.json",
+      "pythonBundle": "processed/python-bundle-validation.json",
+      "pythonContract": "processed/python-contract-tests.log",
+      "seed": "processed/seed-validation.json",
+      "temporarySmokeExclusion": "processed/temp-exclusion-negative-test.json"
+    },
+    "remoteWritesPerformed": false,
+    "status": "PASS",
+    "targetDevCommit": "d856d10819bf1d018ad43fa63714cc348f1fc643"
+  }
+}

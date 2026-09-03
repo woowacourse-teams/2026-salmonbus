@@ -1,0 +1,699 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "v4-1-seed-cutover-receipt-v1",
+  "$defs": {
+    "aggregateSet": {
+      "additionalProperties": false,
+      "properties": {
+        "global": {
+          "$ref": "#/$defs/aggregateTotals"
+        },
+        "routes": {
+          "additionalProperties": false,
+          "properties": {
+            "1650": {
+              "$ref": "#/$defs/aggregateTotals"
+            },
+            "3330": {
+              "$ref": "#/$defs/aggregateTotals"
+            }
+          },
+          "required": [
+            "1650",
+            "3330"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "global",
+        "routes"
+      ],
+      "type": "object"
+    },
+    "aggregateTotals": {
+      "additionalProperties": false,
+      "properties": {
+        "capacityTotal": {
+          "$ref": "#/$defs/decimal"
+        },
+        "fillRateTotal": {
+          "$ref": "#/$defs/decimal"
+        },
+        "netBoardingTotal": {
+          "$ref": "#/$defs/decimal"
+        },
+        "rowCount": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sampleCount": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "capacityTotal",
+        "fillRateTotal",
+        "netBoardingTotal",
+        "rowCount",
+        "sampleCount"
+      ],
+      "type": "object"
+    },
+    "decimal": {
+      "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+      "type": "string"
+    },
+    "digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "generationRoute": {
+      "additionalProperties": false,
+      "properties": {
+        "aggregateCellsSha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "cellCount": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "generationKeySha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "revision": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "routeVersionId": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "aggregateCellsSha256",
+        "cellCount",
+        "generationKeySha256",
+        "revision",
+        "routeVersionId"
+      ],
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "approval": {
+      "additionalProperties": false,
+      "properties": {
+        "cleanupApprovalSha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "dryRunReceiptSha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "promotionApprovalSha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "provisionalOverride": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "const": "APPROVAL.md"
+            },
+            "sha256": {
+              "const": "36e458cc607f55108fcd3fb9d2e298f96970bab8b3f943d597128e8d5884836c"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "seedApplyApprovalSha256": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "cleanupApprovalSha256",
+        "dryRunReceiptSha256",
+        "promotionApprovalSha256",
+        "provisionalOverride",
+        "seedApplyApprovalSha256"
+      ],
+      "type": "object"
+    },
+    "cleanup": {
+      "additionalProperties": false,
+      "properties": {
+        "forecastCompletedAtRowsChanged": {
+          "const": 0
+        },
+        "frozenGenerationSetSha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "lineageRowsDeleted": {
+          "const": 0
+        },
+        "noOpRerunDeleteCount": {
+          "const": 0
+        },
+        "observationRowsChanged": {
+          "const": 0
+        },
+        "temporaryForecastRowsDeleted": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "temporaryGenerationRowsDeleted": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "temporaryModelDeploymentId": {
+          "const": 1
+        }
+      },
+      "required": [
+        "forecastCompletedAtRowsChanged",
+        "frozenGenerationSetSha256",
+        "lineageRowsDeleted",
+        "noOpRerunDeleteCount",
+        "observationRowsChanged",
+        "temporaryForecastRowsDeleted",
+        "temporaryGenerationRowsDeleted",
+        "temporaryModelDeploymentId"
+      ],
+      "type": "object"
+    },
+    "databaseWrite": {
+      "additionalProperties": false,
+      "properties": {
+        "appliedRowCount": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "databaseMutationPerformed": {
+          "const": true
+        },
+        "mergedRowsSha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "readBackMatchesStaged": {
+          "const": true
+        },
+        "readBackRowCount": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "seedReleaseId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "stagedRowCount": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "transactionCommitted": {
+          "const": true
+        },
+        "unplannedRowsChanged": {
+          "const": 0
+        }
+      },
+      "required": [
+        "appliedRowCount",
+        "databaseMutationPerformed",
+        "mergedRowsSha256",
+        "readBackMatchesStaged",
+        "readBackRowCount",
+        "seedReleaseId",
+        "stagedRowCount",
+        "transactionCommitted",
+        "unplannedRowsChanged"
+      ],
+      "type": "object"
+    },
+    "deployment": {
+      "additionalProperties": false,
+      "properties": {
+        "activatedAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "activationPerformedAfterOfficialGeneration": {
+          "const": true
+        },
+        "bundleDigest": {
+          "const": "9bb1a5ac22a317931d409f98cb5e9b1935c1b346ae86e4ba05d084614c863632"
+        },
+        "formalDeploymentId": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "formalStateAfter": {
+          "const": "ACTIVE"
+        },
+        "promoteOnStartRestoredFalse": {
+          "const": true
+        },
+        "releaseId": {
+          "const": "v41b-8194bde56d86f365afd6"
+        },
+        "temporaryDeploymentId": {
+          "const": 1
+        },
+        "temporaryStateBefore": {
+          "const": "ACTIVE"
+        },
+        "temporaryStateAfter": {
+          "const": "RETIRED"
+        }
+      },
+      "required": [
+        "activatedAt",
+        "activationPerformedAfterOfficialGeneration",
+        "bundleDigest",
+        "formalDeploymentId",
+        "formalStateAfter",
+        "promoteOnStartRestoredFalse",
+        "releaseId",
+        "temporaryDeploymentId",
+        "temporaryStateAfter",
+        "temporaryStateBefore"
+      ],
+      "type": "object"
+    },
+    "finalCutoverAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "invariants": {
+      "additionalProperties": false,
+      "properties": {
+        "activationWasLastMutationPhase": {
+          "const": true
+        },
+        "cleanupMatchedFrozenSet": {
+          "const": true
+        },
+        "cleanupPrecededRdsReplayAndSeedWrite": {
+          "const": true
+        },
+        "finalCutoverAtCapturedAfterWriterDrain": {
+          "const": true
+        },
+        "firstGenerationPredatesActivation": {
+          "const": true
+        },
+        "firstGenerationWasCreatedAfterCleanup": {
+          "const": true
+        },
+        "mergedEqualsSourcePlusObservationReplayDelta": {
+          "const": true
+        },
+        "noFormalForecastBeforeCleanup": {
+          "const": true
+        },
+        "observationsAndMarkersPreserved": {
+          "const": true
+        },
+        "rdsReplayUpperBoundEqualsFinalCutoverAt": {
+          "const": true
+        },
+        "temporaryDeploymentRemainedActiveUntilFormalActivation": {
+          "const": true
+        },
+        "writerFenceHeldThroughActivation": {
+          "const": true
+        }
+      },
+      "required": [
+        "activationWasLastMutationPhase",
+        "cleanupMatchedFrozenSet",
+        "cleanupPrecededRdsReplayAndSeedWrite",
+        "finalCutoverAtCapturedAfterWriterDrain",
+        "firstGenerationPredatesActivation",
+        "firstGenerationWasCreatedAfterCleanup",
+        "mergedEqualsSourcePlusObservationReplayDelta",
+        "noFormalForecastBeforeCleanup",
+        "observationsAndMarkersPreserved",
+        "rdsReplayUpperBoundEqualsFinalCutoverAt",
+        "temporaryDeploymentRemainedActiveUntilFormalActivation",
+        "writerFenceHeldThroughActivation"
+      ],
+      "type": "object"
+    },
+    "mergedSeed": {
+      "additionalProperties": false,
+      "properties": {
+        "aggregates": {
+          "$ref": "#/$defs/aggregateSet"
+        },
+        "canonicalRowsSha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "matchesDryRunPlan": {
+          "const": true
+        },
+        "primaryKeySha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "rowCount": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "aggregates",
+        "canonicalRowsSha256",
+        "matchesDryRunPlan",
+        "primaryKeySha256",
+        "rowCount"
+      ],
+      "type": "object"
+    },
+    "officialGeneration": {
+      "additionalProperties": false,
+      "properties": {
+        "calculationVersion": {
+          "const": "observed-max-capacity-v1"
+        },
+        "dataUntil": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "frozenGenerationIntersectionCount": {
+          "const": 0
+        },
+        "mergedSeedCanonicalRowsSha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "routeCoverage": {
+          "const": [
+            "1650",
+            "3330"
+          ]
+        },
+        "routeCoverageComplete": {
+          "const": true
+        },
+        "routes": {
+          "additionalProperties": false,
+          "properties": {
+            "1650": {
+              "$ref": "#/$defs/generationRoute"
+            },
+            "3330": {
+              "$ref": "#/$defs/generationRoute"
+            }
+          },
+          "required": [
+            "1650",
+            "3330"
+          ],
+          "type": "object"
+        },
+        "seedReceiptDigestMatches": {
+          "const": true
+        },
+        "sourceSeedCompressedSha256": {
+          "const": "7f3be7dc2c668d1ed4b8665c341c2cda24968d3fa2e6ed2755261a20c3826ec4"
+        },
+        "sourceSeedReceiptSha256": {
+          "const": "9985723799bc859cc22b4cda613a50922ff2191b15c7c155d8f1d7e177db8c26"
+        }
+      },
+      "required": [
+        "calculationVersion",
+        "dataUntil",
+        "frozenGenerationIntersectionCount",
+        "mergedSeedCanonicalRowsSha256",
+        "routeCoverage",
+        "routeCoverageComplete",
+        "routes",
+        "seedReceiptDigestMatches",
+        "sourceSeedCompressedSha256",
+        "sourceSeedReceiptSha256"
+      ],
+      "type": "object"
+    },
+    "privacy": {
+      "additionalProperties": false,
+      "properties": {
+        "hmacEmitted": {
+          "const": false
+        },
+        "plateEmitted": {
+          "const": false
+        },
+        "rawRowsEmitted": {
+          "const": false
+        },
+        "secretsEmitted": {
+          "const": false
+        },
+        "vehicleIdentifiersEmitted": {
+          "const": false
+        }
+      },
+      "required": [
+        "hmacEmitted",
+        "plateEmitted",
+        "rawRowsEmitted",
+        "secretsEmitted",
+        "vehicleIdentifiersEmitted"
+      ],
+      "type": "object"
+    },
+    "rdsReplay": {
+      "additionalProperties": false,
+      "properties": {
+        "aggregateDelta": {
+          "$ref": "#/$defs/aggregateSet"
+        },
+        "capacityRestatedExistingKeyCount": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "changedKeyCount": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "finalReplayCanonicalRowsSha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "finalReplayRowCount": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "forbiddenForecastRowsRead": {
+          "const": 0
+        },
+        "forbiddenStatisticsRowsRead": {
+          "const": 0
+        },
+        "newKeyCount": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "snapshotReceiptSha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "sourceCutoffReplayCanonicalRowsSha256": {
+          "const": "15c221a149f241555e32a4133ed1f31b3d9eaeedc3062c5a454d6b9505489013"
+        },
+        "sourceCutoffReplayMatchesSeed": {
+          "const": true
+        },
+        "sourceAuthorityCutoffByRoute": {
+          "const": {
+            "1650": "2026-09-02T12:49:33.041299Z",
+            "3330": "2026-09-02T10:27:52.390820Z"
+          }
+        },
+        "transactionIsolation": {
+          "const": "REPEATABLE READ READ ONLY"
+        },
+        "upperBoundExclusiveUtc": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "aggregateDelta",
+        "capacityRestatedExistingKeyCount",
+        "changedKeyCount",
+        "finalReplayCanonicalRowsSha256",
+        "finalReplayRowCount",
+        "forbiddenForecastRowsRead",
+        "forbiddenStatisticsRowsRead",
+        "newKeyCount",
+        "snapshotReceiptSha256",
+        "sourceCutoffReplayCanonicalRowsSha256",
+        "sourceCutoffReplayMatchesSeed",
+        "sourceAuthorityCutoffByRoute",
+        "transactionIsolation",
+        "upperBoundExclusiveUtc"
+      ],
+      "type": "object"
+    },
+    "rollback": {
+      "additionalProperties": false,
+      "properties": {
+        "artifactPreserved": {
+          "const": true
+        },
+        "planSha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "status": {
+          "enum": [
+            "NOT_REQUIRED",
+            "AVAILABLE",
+            "EXECUTED_AND_VERIFIED"
+          ]
+        }
+      },
+      "required": [
+        "artifactPreserved",
+        "planSha256",
+        "status"
+      ],
+      "type": "object"
+    },
+    "schemaVersion": {
+      "const": "v4-1-seed-cutover-receipt-v1"
+    },
+    "serving": {
+      "additionalProperties": false,
+      "properties": {
+        "allReferencedDataUntilAtOrBeforeForecastObservation": {
+          "const": true
+        },
+        "allReferencedGenerationsOfficialOrLater": {
+          "const": true
+        },
+        "calculationVersion": {
+          "const": "observed-max-capacity-v1"
+        },
+        "frozenGenerationReferenceCount": {
+          "const": 0
+        },
+        "newForecastRowCount": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "releaseId": {
+          "const": "v41b-8194bde56d86f365afd6"
+        },
+        "routeCoverage": {
+          "const": [
+            "1650",
+            "3330"
+          ]
+        },
+        "status": {
+          "const": "PASS"
+        },
+        "unresolvedGenerationReferenceCount": {
+          "const": 0
+        }
+      },
+      "required": [
+        "allReferencedDataUntilAtOrBeforeForecastObservation",
+        "allReferencedGenerationsOfficialOrLater",
+        "calculationVersion",
+        "frozenGenerationReferenceCount",
+        "newForecastRowCount",
+        "releaseId",
+        "routeCoverage",
+        "status",
+        "unresolvedGenerationReferenceCount"
+      ],
+      "type": "object"
+    },
+    "sourceSeed": {
+      "additionalProperties": false,
+      "properties": {
+        "aggregates": {
+          "const": {
+            "global": {
+              "capacityTotal": "47783065.0",
+              "fillRateTotal": "257583.762455448373373720",
+              "netBoardingTotal": "-122929.0",
+              "rowCount": 45224,
+              "sampleCount": 1031227
+            },
+            "routes": {
+              "1650": {
+                "capacityTotal": "22641833.0",
+                "fillRateTotal": "134018.996217274785257864",
+                "netBoardingTotal": "-3567.0",
+                "rowCount": 20390,
+                "sampleCount": 509435
+              },
+              "3330": {
+                "capacityTotal": "25141232.0",
+                "fillRateTotal": "123564.766238173588115856",
+                "netBoardingTotal": "-119362.0",
+                "rowCount": 24834,
+                "sampleCount": 521792
+              }
+            }
+          }
+        },
+        "canonicalJsonSha256": {
+          "const": "adcf0d04a4b67dc40bed6f3640f0f78697e9215bf794ff2b262f0ba0ec0a5ada"
+        },
+        "compressedSha256": {
+          "const": "7f3be7dc2c668d1ed4b8665c341c2cda24968d3fa2e6ed2755261a20c3826ec4"
+        },
+        "primaryKeySha256": {
+          "const": "30b2ffc79cc64decc7936efd0a03e51602e5e12424e0e8cbdb7ebf7d98a6a73d"
+        },
+        "receiptSha256": {
+          "const": "9985723799bc859cc22b4cda613a50922ff2191b15c7c155d8f1d7e177db8c26"
+        },
+        "rowCount": {
+          "const": 45224
+        },
+        "rowsCanonicalSha256": {
+          "const": "15c221a149f241555e32a4133ed1f31b3d9eaeedc3062c5a454d6b9505489013"
+        }
+      },
+      "required": [
+        "aggregates",
+        "canonicalJsonSha256",
+        "compressedSha256",
+        "primaryKeySha256",
+        "receiptSha256",
+        "rowCount",
+        "rowsCanonicalSha256"
+      ],
+      "type": "object"
+    },
+    "status": {
+      "const": "PASS"
+    }
+  },
+  "required": [
+    "approval",
+    "cleanup",
+    "databaseWrite",
+    "deployment",
+    "finalCutoverAt",
+    "invariants",
+    "mergedSeed",
+    "officialGeneration",
+    "privacy",
+    "rdsReplay",
+    "rollback",
+    "schemaVersion",
+    "serving",
+    "sourceSeed",
+    "status"
+  ],
+  "title": "v4-1 seed cutover final receipt",
+  "type": "object"
+}
