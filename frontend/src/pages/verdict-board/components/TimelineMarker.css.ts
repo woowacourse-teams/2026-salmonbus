@@ -2,54 +2,82 @@ import { style, styleVariants } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 
 export const track = style({
+  gridColumn: 1,
+  gridRow: "1 / -1",
+  justifySelf: "end",
+  alignSelf: "stretch",
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
-  alignSelf: "stretch",
-  width: "16px",
-  flexShrink: 0,
+  width: vars.layout.ring,
 });
 
-export const line = style({
-  flex: 1,
-  width: "2px",
-  backgroundColor: vars.color.line,
+const line = style({
+  width: "1px",
+  backgroundColor: vars.color.axisLine,
 });
 
-export const hiddenLine = style([
-  line,
-  {
-    backgroundColor: "transparent",
-  },
-]);
+const hiddenLine = style([line, { backgroundColor: "transparent" }]);
 
-const dotBase = style({
+const headHeight = {
+  stop: `calc((${vars.layout.headHeight} - ${vars.layout.ring}) / 2)`,
+  waypoint: `calc((${vars.layout.compactHeight} - ${vars.layout.ringCompact}) / 2)`,
+};
+
+export const headSegment = styleVariants(headHeight, (height) => [line, { flex: "none", height }]);
+
+export const hiddenHeadSegment = styleVariants(headHeight, (height) => [hiddenLine, { flex: "none", height }]);
+
+export const tailSegment = style([line, { flex: 1 }]);
+
+export const hiddenTailSegment = style([hiddenLine, { flex: 1 }]);
+
+const ringBase = style({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flex: "none",
+  boxSizing: "border-box",
   borderStyle: "solid",
+  borderWidth: "2px",
   borderRadius: "50%",
-  backgroundColor: vars.color.surface,
-  flexShrink: 0,
 });
 
-const boardingDot = style([
-  dotBase,
+const stopRing = style([ringBase, { width: vars.layout.ring, height: vars.layout.ring }]);
+
+const seatRing = styleVariants(vars.color.seat, (tone) => [
+  stopRing,
   {
-    width: "12px",
-    height: "12px",
-    borderWidth: "2px",
+    borderColor: tone.ring,
+    backgroundColor: tone.surface,
   },
 ]);
 
-export const dot = styleVariants({
-  high: [boardingDot, { borderColor: vars.color.seatHigh }],
-  low: [boardingDot, { borderColor: vars.color.seatLow }],
-  veryLow: [boardingDot, { borderColor: vars.color.seatVeryLow }],
-  passThrough: [
-    dotBase,
-    {
-      width: "8px",
-      height: "8px",
-      borderWidth: "1.5px",
-      borderColor: vars.color.passThroughDot,
-    },
-  ],
+const noForecastRing = style([
+  stopRing,
+  {
+    borderColor: vars.color.noForecastRing,
+    backgroundColor: vars.color.surface,
+  },
+]);
+
+const waypointRing = style([
+  ringBase,
+  {
+    width: vars.layout.ringCompact,
+    height: vars.layout.ringCompact,
+    borderColor: vars.color.faint,
+    backgroundColor: vars.color.surface,
+  },
+]);
+
+export const ring = { ...seatRing, noForecast: noForecastRing, passThrough: waypointRing };
+
+const headingBase = style({
+  display: "block",
+  flex: "none",
 });
+
+const seatHeading = styleVariants(vars.color.seat, (tone) => [headingBase, { color: tone.ring }]);
+
+export const heading = { ...seatHeading, noForecast: style([headingBase, { color: vars.color.noForecastRing }]) };

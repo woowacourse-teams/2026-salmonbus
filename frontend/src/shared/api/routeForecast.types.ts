@@ -1,13 +1,13 @@
 export type ErrorCode =
   | "INVALID_ROUTE_ID"
-  | "ROUTE_NOT_FOUND"
-  | "MODEL_OUT_OF_SCOPE"
-  | "NO_RECENT_OBSERVATION"
-  | "SERVICE_UNAVAILABLE"
   | "INVALID_REQUEST"
+  | "ROUTE_NOT_FOUND"
   | "ENDPOINT_NOT_FOUND"
   | "METHOD_NOT_ALLOWED"
-  | "INTERNAL_ERROR";
+  | "INTERNAL_ERROR"
+  | "SERVICE_UNAVAILABLE"
+  | "MODEL_OUT_OF_SCOPE"
+  | "NO_RECENT_OBSERVATION";
 
 export interface ErrorResponse {
   code: ErrorCode;
@@ -45,7 +45,7 @@ export interface DirectionInfo {
 export interface BoardRoute extends RouteCore {
   turnSequence: number | null;
   referenceVersionId: string;
-  directions: DirectionInfo[];
+  directions: [DirectionInfo, ...DirectionInfo[]];
 }
 
 export interface ModelInfo {
@@ -72,6 +72,7 @@ export interface StopState {
 export interface Board {
   route: BoardRoute;
   observedAt: string;
+  staleAt: string;
   model: ModelInfo;
   vehiclesInService: number;
   stops: StopState[];
