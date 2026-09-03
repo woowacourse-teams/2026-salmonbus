@@ -114,7 +114,11 @@ remote="$MIGRATION_SSH_USER@$MIGRATION_SSH_HOST"
 # incoming은 검증 전 이름이다. remote final archive로 쓰는 rename은 별도 검증 단계가 한다.
 ssh "${ssh_options[@]}" "$remote" \
   "umask 077; mkdir -p -- '$MIGRATION_REMOTE_ARCHIVE_DIR.incoming'"
-rsync -a --partial --append-verify --partial-dir=.rsync-partial \
+# rsync 는 --append 계열과 --partial-dir 을 함께 못 쓴다("--append cannot be used with
+# --partial-dir"). --partial-dir 쪽을 남긴다. --append 는 목적지에 남은 앞부분이 source 의
+# 올바른 접두라고 가정하는데, .incoming 에 다른 archive 의 잔여물이 있으면 그 위에 이어붙는다.
+# 재개는 --partial/--partial-dir 로 충분하고, 전송 뒤 원격 digest 대조가 정본 검증이다.
+rsync -a --partial --partial-dir=.rsync-partial \
   --chmod=Du=rwx,Dgo=,Fu=rw,Fgo= \
   -e "ssh -i '$MIGRATION_SSH_IDENTITY_FILE' -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile='$MIGRATION_SSH_KNOWN_HOSTS'" \
   -- "$MIGRATION_ARCHIVE_DIR/" "$remote:$MIGRATION_REMOTE_ARCHIVE_DIR.incoming/"
