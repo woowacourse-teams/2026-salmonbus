@@ -151,6 +151,83 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
         ORDER BY forecast.target_stop_order, arrived_hour_start
         """;
 
+    private static final String SELECT_SEEDED_HOURLY_TOTALS = """
+        WITH active_seed AS (
+            SELECT final_cutover_at
+            FROM stop_demand_seed_import
+            WHERE status = 'APPLIED' AND calculation_version = :calculationVersion
+        ),
+        vehicle_capacity AS (
+            SELECT observation.vehicle_id,
+                   GREATEST(MAX(observation.remaining_seats), 1) AS capacity
+            FROM vehicle_observation observation
+            JOIN observation_batch capacity_batch
+              ON capacity_batch.id = observation.observation_batch_id
+            WHERE observation.route_version_id = :routeVersionId
+              AND observation.vehicle_id IS NOT NULL
+              AND observation.remaining_seats IS NOT NULL
+              AND capacity_batch.response_received_at <= :dataUntil
+            GROUP BY observation.vehicle_id
+        ),
+        live_hourly AS (
+            SELECT forecast.target_stop_order AS stop_order,
+                   date_trunc('hour', arrival_batch.response_received_at AT TIME ZONE 'UTC')
+                       AT TIME ZONE 'UTC' AS arrived_hour_start,
+                   SUM(1 - forecast.seats_on_arrival::double precision / vehicle_capacity.capacity)
+                       AS fill_rate_total,
+                   SUM(prediction.remaining_seats - forecast.seats_on_arrival)::double precision
+                       AS net_boarding_total,
+                   SUM(vehicle_capacity.capacity)::double precision AS capacity_total,
+                   COUNT(*) AS sample_count
+            FROM seat_forecast forecast
+            JOIN route_stop target_stop
+              ON target_stop.route_version_id = forecast.route_version_id
+             AND target_stop.stop_order = forecast.target_stop_order
+            JOIN vehicle_observation prediction
+              ON prediction.id = forecast.vehicle_observation_id
+            JOIN observation_batch prediction_batch
+              ON prediction_batch.id = prediction.observation_batch_id
+            JOIN vehicle_observation arrival
+              ON arrival.id = forecast.arrival_observation_id
+            JOIN observation_batch arrival_batch
+              ON arrival_batch.id = arrival.observation_batch_id
+            JOIN vehicle_capacity
+              ON vehicle_capacity.vehicle_id = prediction.vehicle_id
+            CROSS JOIN active_seed
+            WHERE forecast.route_version_id = :routeVersionId
+              AND forecast.scoring_state = 'SETTLED'
+              AND forecast.stops_to_target = 1
+              AND forecast.scored_at <= :dataUntil
+              AND prediction_batch.response_received_at >= active_seed.final_cutover_at
+              AND target_stop.boarding_allowed = true
+              AND prediction.remaining_seats IS NOT NULL
+            GROUP BY forecast.target_stop_order, arrived_hour_start
+        ),
+        combined AS (
+            SELECT seed.stop_order, seed.arrival_hour_start AS arrived_hour_start,
+                   seed.fill_rate_total, seed.net_boarding_total,
+                   seed.capacity_total, seed.sample_count
+            FROM active_stop_demand_seed_hourly_total seed
+            WHERE seed.route_version_id = :routeVersionId
+              AND seed.calculation_version = :calculationVersion
+            UNION ALL
+            SELECT stop_order, arrived_hour_start, fill_rate_total,
+                   net_boarding_total, capacity_total, sample_count
+            FROM live_hourly
+        )
+        SELECT stop_order, arrived_hour_start,
+               SUM(fill_rate_total) AS fill_rate_total,
+               SUM(net_boarding_total) AS net_boarding_total,
+               SUM(capacity_total) AS capacity_total,
+               SUM(sample_count)::integer AS sample_count
+        FROM combined
+        GROUP BY stop_order, arrived_hour_start
+        ORDER BY stop_order, arrived_hour_start
+        """;
+
+    private static final String SEED_SCHEMA = "public.stop_demand_seed_import";
+    private static final String CURRENT_CALCULATION_VERSION = "observed-max-capacity-v1";
+
     /** 셀 한 줄. 세대 번호와 기준 시각과 계산 시각은 한 세대의 모든 행에 같은 값이 들어간다. */
     private static final String INSERT_CELL = """
         INSERT INTO stop_demand_statistics (
@@ -165,6 +242,7 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
         """;
 
     private final JdbcClient jdbcClient;
+    private volatile boolean seedSchemaPresent;
 
     public JdbcStopDemandStatisticsRepository(
         JdbcClient jdbcClient
@@ -223,9 +301,15 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
         final long routeVersionId,
         Instant dataUntil
     ) {
-        return jdbcClient.sql(SELECT_HOURLY_TOTALS)
+        boolean seeded = hasAppliedAggregateSeed();
+        String query = seeded ? SELECT_SEEDED_HOURLY_TOTALS : SELECT_HOURLY_TOTALS;
+        JdbcClient.StatementSpec statement = jdbcClient.sql(query)
             .param("routeVersionId", routeVersionId)
-            .param("dataUntil", offsetOf(dataUntil))
+            .param("dataUntil", offsetOf(dataUntil));
+        if (seeded) {
+            statement = statement.param("calculationVersion", CURRENT_CALCULATION_VERSION);
+        }
+        return statement
             .query((resultSet, rowNumber) -> new StopDemandHourlyTotals(
                 resultSet.getInt("stop_order"),
                 instantOf(resultSet.getObject("arrived_hour_start", OffsetDateTime.class)),
@@ -234,6 +318,23 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
                 resultSet.getDouble("capacity_total"),
                 resultSet.getInt("sample_count")))
             .list();
+    }
+
+    private boolean hasAppliedAggregateSeed() {
+        if (!seedSchemaPresent) {
+            seedSchemaPresent = jdbcClient.sql("SELECT to_regclass(?) IS NOT NULL")
+                .param(SEED_SCHEMA)
+                .query(Boolean.class)
+                .single();
+        }
+        return seedSchemaPresent && jdbcClient.sql("""
+            SELECT EXISTS (
+                SELECT 1 FROM stop_demand_seed_import
+                WHERE status = 'APPLIED' AND calculation_version = ?)
+            """)
+            .param(CURRENT_CALCULATION_VERSION)
+            .query(Boolean.class)
+            .single();
     }
 
     /**
