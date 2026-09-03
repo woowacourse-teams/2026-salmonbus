@@ -45,7 +45,7 @@ export interface DirectionInfo {
 export interface BoardRoute extends RouteCore {
   turnSequence: number | null;
   referenceVersionId: string;
-  directions: DirectionInfo[];
+  directions: [DirectionInfo, ...DirectionInfo[]];
 }
 
 export interface ModelInfo {

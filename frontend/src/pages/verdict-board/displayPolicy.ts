@@ -4,7 +4,7 @@ import type { SeatLevel } from "./seatGrade";
 
 export type ServiceState = "running" | "outOfService";
 
-type ServicePhase = "before" | "running" | "ended";
+type ServicePhase = "before" | "running" | "ended" | "undetermined";
 
 interface StopViewBase {
   sequence: number;
@@ -37,15 +37,24 @@ export interface DirectionView {
 const ISO_LOCAL_TIME = /T(\d{2}):(\d{2})[^Z]*$/;
 const CLOCK_TIME = /^(\d{1,2}):(\d{2})$/;
 
-export function serviceStateFor(board: Board, direction: Direction): ServiceState {
-  const phase = servicePhaseOf(directionInfoOf(board, direction), board.observedAt);
-  if (phase !== "running") {
-    return "outOfService";
+export function serviceStateFor(board: Board, directionInfo: DirectionInfo): ServiceState {
+  switch (servicePhaseOf(directionInfo, board.observedAt)) {
+    case "before":
+    case "ended":
+      return "outOfService";
+    // 시간표는 운행 중이라 해도 도는 차가 하나도 없으면 보여줄 예보가 없다.
+    // 관측이지 단정이 아니라서, 시간표가 운행 중이라고 말할 때만 이 값을 본다.
+    // 시간표를 못 읽어 판정하지 못한 경우도 예보가 틀린 건 아니므로 보드는 보여주되 같은 기준으로 판단한다.
+    case "running":
+    case "undetermined":
+      return board.vehiclesInService > 0 ? "running" : "outOfService";
   }
+}
 
-  // 시간표는 운행 중이라 해도 도는 차가 하나도 없으면 보여줄 예보가 없다.
-  // 관측이지 단정이 아니라서, 시간표가 운행 중이라고 말할 때만 이 값을 본다.
-  return board.vehiclesInService > 0 ? "running" : "outOfService";
+// 선택한 방향이 이 노선에 있으면 그것, 없으면 첫 방향. 노선에 없는 방향이 화면에 남지 않게 한다.
+export function directionInfoFor(board: Board, preferred: Direction | null): DirectionInfo {
+  const { directions } = board.route;
+  return directions.find((directionInfo) => directionInfo.id === preferred) ?? directions[0];
 }
 
 export function stopViewsFor(board: Board, direction: Direction): StopView[] {
@@ -58,9 +67,9 @@ export function stopViewsFor(board: Board, direction: Direction): StopView[] {
 }
 
 export function directionViewsFor(board: Board): DirectionView[] {
-  return board.route.directions.map((info) => ({
-    id: info.id,
-    label: `${info.originStopName} → ${info.terminalStopName}`,
+  return board.route.directions.map((directionInfo) => ({
+    id: directionInfo.id,
+    label: `${directionInfo.originStopName} → ${directionInfo.terminalStopName}`,
   }));
 }
 
@@ -87,17 +96,11 @@ function touchesTurnaround(sequence: number, turnSequence: number | null): boole
   return sequence === turnSequence || sequence === turnSequence + 1;
 }
 
-function directionInfoOf(board: Board, direction: Direction): DirectionInfo | undefined {
-  return board.route.directions.find((directionInfo) => directionInfo.id === direction);
-}
-
-function servicePhaseOf(info: DirectionInfo | undefined, observedAt: string): ServicePhase {
-  if (info === undefined) return "running";
-
+function servicePhaseOf(directionInfo: DirectionInfo, observedAt: string): ServicePhase {
   const observed = minutesOf(ISO_LOCAL_TIME.exec(observedAt));
-  const first = minutesOf(CLOCK_TIME.exec(info.firstDepartureTime));
-  const last = minutesOf(CLOCK_TIME.exec(info.lastDepartureTime));
-  if (observed === null || first === null || last === null) return "running";
+  const first = minutesOf(CLOCK_TIME.exec(directionInfo.firstDepartureTime));
+  const last = minutesOf(CLOCK_TIME.exec(directionInfo.lastDepartureTime));
+  if (observed === null || first === null || last === null) return "undetermined";
 
   if (first > last) {
     return observed > last && observed < first ? "ended" : "running";
