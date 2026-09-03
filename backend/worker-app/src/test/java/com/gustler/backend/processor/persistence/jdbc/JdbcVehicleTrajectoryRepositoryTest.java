@@ -15,6 +15,7 @@ import com.gustler.backend.support.IntegrationTest;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -99,6 +100,31 @@ class JdbcVehicleTrajectoryRepositoryTest {
         assertThat(actual)
             .extracting(PendingForecastBatch::observationBatchId)
             .containsExactly(onTheEdge);
+    }
+
+    @Test
+    void 가장_오래된_대기_판은_창을_안_보고_준다() {
+        // given 창 밖에 두고 온 판이 남아 있는지 보는 자리라 창으로 거르면 안 된다
+        final long left = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
+        insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
+
+        // when
+        Optional<Instant> actual = repository.findOldestAwaitingForecastAt(routeVersionId);
+
+        // then
+        assertThat(actual).contains(readResponseReceivedAt(left));
+    }
+
+    @Test
+    void 대기하는_판이_없으면_가장_오래된_것도_없다() {
+        // given
+        insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, LATER_POLL);
+
+        // when
+        Optional<Instant> actual = repository.findOldestAwaitingForecastAt(routeVersionId);
+
+        // then
+        assertThat(actual).isEmpty();
     }
 
     @Test
@@ -506,6 +532,16 @@ class JdbcVehicleTrajectoryRepositoryTest {
             .param(batchId)
             .query(Integer.class)
             .single();
+    }
+
+    private Instant readResponseReceivedAt(
+        final long observationBatchId
+    ) {
+        return jdbcClient.sql("SELECT response_received_at FROM observation_batch WHERE id = ?")
+            .param(observationBatchId)
+            .query(OffsetDateTime.class)
+            .single()
+            .toInstant();
     }
 
     private static String stopIdOf(

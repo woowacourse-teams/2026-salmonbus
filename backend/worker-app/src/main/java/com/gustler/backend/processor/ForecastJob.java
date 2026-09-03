@@ -5,6 +5,7 @@ import com.gustler.backend.processor.seatdistribution.RuntimeSnapshot;
 import jakarta.annotation.PostConstruct;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -29,12 +30,19 @@ public class ForecastJob {
 
     private static final Logger log = LoggerFactory.getLogger(ForecastJob.class);
 
+    /**
+     * 창 밖 판을 두고 경고를 남기는 사이. 예보는 10초마다 도는데 밀린 상태는 한 회차에 안 풀려서,
+     * 회차마다 남기면 같은 사실이 로그를 덮는다.
+     */
+    private static final Duration WARNING_INTERVAL = Duration.ofMinutes(1);
+
     private final VehicleTrajectoryRepository vehicleTrajectoryRepository;
     private final RouteVersionRepository routeVersionRepository;
     private final ForecastRuntime forecastRuntime;
     private final ForecastBatchWriter forecastBatchWriter;
     private final ForecastProperties properties;
     private final Clock clock;
+    private Instant lastStaleWarningAt;
 
     /**
      * 모델이 없으면 켜져 있어도 아무것도 안 한다는 것을 한 번 남긴다.
@@ -75,10 +83,62 @@ public class ForecastJob {
         if (runtime.isEmpty()) {
             return;
         }
-        Instant notBefore = clock.instant().minus(properties.staleness());
+        Instant now = clock.instant();
+        Instant notBefore = now.minus(properties.staleness());
+        Instant oldestLeftBehind = null;
         for (Long routeVersionId : routeVersionRepository.findActiveVersionIds()) {
             writeForecastsOf(routeVersionId, notBefore, runtime.get());
+            oldestLeftBehind = olderOf(oldestLeftBehind, leftBehindAt(routeVersionId, notBefore));
         }
+        warnIfLeftBehind(oldestLeftBehind, now);
+    }
+
+    /**
+     * 이 노선에 창 밖으로 남은 판이 있으면 그중 가장 오래된 것의 관측 시각.
+     *
+     * <p>예보를 쓴 뒤에 묻는다. 먼저 물으면 이번 회차에 처리할 판까지 남은 것으로 센다.
+     */
+    private Optional<Instant> leftBehindAt(
+        final long routeVersionId,
+        Instant notBefore
+    ) {
+        return vehicleTrajectoryRepository.findOldestAwaitingForecastAt(routeVersionId)
+            .filter(oldest -> oldest.isBefore(notBefore));
+    }
+
+    /**
+     * 창 밖 판이 남았다는 것을 남긴다. 밀리기 시작하면 멀쩡한 관측을 버리는데 그 사이에 예보 수는
+     * 그냥 0으로 보여서, 안 남기면 밀린 것과 판이 없는 것이 밖에서 같아 보인다.
+     *
+     * <p>사라지면 기억을 지운다. 다음에 다시 밀릴 때 첫 회차에 바로 남기려는 것이다.
+     */
+    private void warnIfLeftBehind(
+        Instant oldestLeftBehind,
+        Instant now
+    ) {
+        if (oldestLeftBehind == null) {
+            lastStaleWarningAt = null;
+            return;
+        }
+        if (lastStaleWarningAt != null && now.isBefore(lastStaleWarningAt.plus(WARNING_INTERVAL))) {
+            return;
+        }
+        lastStaleWarningAt = now;
+        log.warn("신선도 창보다 오래돼서 예보 없이 두고 가는 판이 남아 있다. 그중 가장 오래된 판의 "
+            + "관측 시각={}", oldestLeftBehind);
+    }
+
+    private static Instant olderOf(
+        Instant kept,
+        Optional<Instant> candidate
+    ) {
+        if (candidate.isEmpty()) {
+            return kept;
+        }
+        if (kept == null || candidate.get().isBefore(kept)) {
+            return candidate.get();
+        }
+        return kept;
     }
 
     private void writeForecastsOf(

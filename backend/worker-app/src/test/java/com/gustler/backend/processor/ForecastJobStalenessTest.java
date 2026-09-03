@@ -9,6 +9,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.gustler.backend.processor.seatdistribution.RuntimeSnapshot;
 import java.time.Clock;
 import java.time.Duration;
@@ -16,9 +19,11 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.slf4j.LoggerFactory;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
@@ -31,6 +36,9 @@ class ForecastJobStalenessTest {
     private static final Duration STALENESS = Duration.ofMinutes(5);
     private static final long ROUTE_VERSION_3330 = 1L;
     private static final long ROUTE_VERSION_1650 = 2L;
+
+    /** 창 밖에 남은 판의 관측 시각. 한계보다 1초 앞이다. */
+    private static final Instant LEFT_BEHIND_AT = NOW.minus(STALENESS).minusSeconds(1);
 
     @Mock
     private VehicleTrajectoryRepository vehicleTrajectoryRepository;
@@ -51,9 +59,11 @@ class ForecastJobStalenessTest {
     private ArgumentCaptor<Instant> notBefore;
 
     private ForecastJob job;
+    private ListAppender<ILoggingEvent> forecastLog;
 
     @BeforeEach
     void 예보_배치를_멈춘_시계로_세운다() {
+        forecastLog = startCapturingForecastLog();
         job = new ForecastJob(
             vehicleTrajectoryRepository,
             routeVersionRepository,
@@ -109,6 +119,72 @@ class ForecastJobStalenessTest {
 
         // then
         verifyNoInteractions(forecastBatchWriter);
+    }
+
+    @AfterEach
+    void 로그_수집을_끝낸다() {
+        ((Logger) LoggerFactory.getLogger(ForecastJob.class)).detachAppender(forecastLog);
+    }
+
+    @Test
+    void 창_밖에_두고_온_판이_있으면_경고를_남긴다() {
+        // given
+        when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
+        when(routeVersionRepository.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
+        when(vehicleTrajectoryRepository.findOldestAwaitingForecastAt(ROUTE_VERSION_3330))
+            .thenReturn(Optional.of(LEFT_BEHIND_AT));
+
+        // when
+        job.writeForecasts();
+
+        // then
+        assertThat(warningMessages()).singleElement()
+            .asString().contains(LEFT_BEHIND_AT.toString());
+    }
+
+    @Test
+    void 창_안의_판만_남았으면_경고를_안_남긴다() {
+        // given
+        when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
+        when(routeVersionRepository.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
+        when(vehicleTrajectoryRepository.findOldestAwaitingForecastAt(ROUTE_VERSION_3330))
+            .thenReturn(Optional.of(NOW.minus(STALENESS).plusSeconds(1)));
+
+        // when
+        job.writeForecasts();
+
+        // then
+        assertThat(warningMessages()).isEmpty();
+    }
+
+    /** 밀린 상태는 한 회차에 안 풀린다. 회차마다 남기면 같은 사실이 로그를 덮는다. */
+    @Test
+    void 같은_상태가_이어지는_동안_경고를_거듭_남기지_않는다() {
+        // given
+        when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
+        when(routeVersionRepository.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
+        when(vehicleTrajectoryRepository.findOldestAwaitingForecastAt(ROUTE_VERSION_3330))
+            .thenReturn(Optional.of(LEFT_BEHIND_AT));
+
+        // when 멈춘 시계라 두 회차가 같은 순간에 돈다
+        job.writeForecasts();
+        job.writeForecasts();
+
+        // then
+        assertThat(warningMessages()).hasSize(1);
+    }
+
+    private List<String> warningMessages() {
+        return forecastLog.list.stream()
+            .map(ILoggingEvent::getFormattedMessage)
+            .toList();
+    }
+
+    private static ListAppender<ILoggingEvent> startCapturingForecastLog() {
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        ((Logger) LoggerFactory.getLogger(ForecastJob.class)).addAppender(appender);
+        return appender;
     }
 
     private ForecastProperties properties() {

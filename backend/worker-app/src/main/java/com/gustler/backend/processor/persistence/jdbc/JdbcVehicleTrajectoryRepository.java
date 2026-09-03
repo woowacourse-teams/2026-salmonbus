@@ -68,6 +68,22 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
         LIMIT :limit
         """;
 
+    /**
+     * 예보를 기다리는 판 가운데 가장 오래된 하나. 창 조건만 뺀 같은 조건이라 같은 부분 인덱스를 탄다.
+     *
+     * <p>가장 오래된 하나만 본다. 그것이 창 안이면 창 밖에 남은 판도 없다.
+     */
+    private static final String SELECT_OLDEST_BATCH_AWAITING_FORECAST = """
+        SELECT response_received_at
+        FROM observation_batch
+        WHERE route_version_id = :routeVersionId
+          AND forecast_completed_at IS NULL
+          AND response_received_at IS NOT NULL
+          AND outcome IN ('SUCCESS_ROWS', 'SUCCESS_EMPTY')
+        ORDER BY response_received_at
+        LIMIT 1
+        """;
+
     private static final String SELECT_TARGET_BATCH = """
         SELECT route_version_id, response_received_at
         FROM observation_batch
@@ -158,6 +174,17 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
                 resultSet.getLong("route_version_id"),
                 instantOf(resultSet.getObject("response_received_at", OffsetDateTime.class))))
             .list();
+    }
+
+    @Override
+    public Optional<Instant> findOldestAwaitingForecastAt(
+        final long routeVersionId
+    ) {
+        return jdbcClient.sql(SELECT_OLDEST_BATCH_AWAITING_FORECAST)
+            .param("routeVersionId", routeVersionId)
+            .query((resultSet, rowNumber) ->
+                instantOf(resultSet.getObject("response_received_at", OffsetDateTime.class)))
+            .optional();
     }
 
     @Override
