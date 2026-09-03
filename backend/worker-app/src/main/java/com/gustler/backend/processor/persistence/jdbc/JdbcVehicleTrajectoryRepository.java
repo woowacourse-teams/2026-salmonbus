@@ -48,17 +48,35 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
      * <p>실패 갈래는 SAL-85 가 붙인다. 그때 이 목록에 안 들어가야 실패한 판이 영영
      * 예보 대기로 남지 않는다. V1 의 ix_batch_forecast_ready 도 같은 두 값을 적고 있다.
      */
-    private static final List<String> FORECASTABLE_OUTCOMES = List.of("SUCCESS_ROWS", "SUCCESS_EMPTY");
-
     private static final String SELECT_BATCHES_AWAITING_FORECAST = """
         SELECT id, route_version_id, response_received_at
         FROM observation_batch
         WHERE route_version_id = :routeVersionId
           AND forecast_completed_at IS NULL
           AND response_received_at IS NOT NULL
-          AND outcome IN (:outcomes)
+          AND outcome IN ('SUCCESS_ROWS', 'SUCCESS_EMPTY')
         ORDER BY response_received_at
         LIMIT :limit
+        """;
+
+    private static final String SELECT_LIVE_BATCHES_AWAITING_FORECAST = """
+        SELECT id, route_version_id, response_received_at
+        FROM observation_batch
+        WHERE route_version_id = :routeVersionId
+          AND ingestion_origin = 'LIVE'
+          AND forecast_completed_at IS NULL
+          AND response_received_at IS NOT NULL
+          AND outcome IN ('SUCCESS_ROWS', 'SUCCESS_EMPTY')
+        ORDER BY response_received_at
+        LIMIT :limit
+        """;
+
+    private static final String HAS_INGESTION_ORIGIN = """
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'observation_batch'
+              AND column_name = 'ingestion_origin')
         """;
 
     private static final String SELECT_TARGET_BATCH = """
@@ -129,6 +147,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
         """;
 
     private final JdbcClient jdbcClient;
+    private volatile boolean ingestionOriginPresent;
 
     public JdbcVehicleTrajectoryRepository(
         JdbcClient jdbcClient
@@ -141,15 +160,27 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
         final long routeVersionId,
         final int limit
     ) {
-        return jdbcClient.sql(SELECT_BATCHES_AWAITING_FORECAST)
+        String query = hasIngestionOrigin()
+            ? SELECT_LIVE_BATCHES_AWAITING_FORECAST : SELECT_BATCHES_AWAITING_FORECAST;
+        return jdbcClient.sql(query)
             .param("routeVersionId", routeVersionId)
-            .param("outcomes", FORECASTABLE_OUTCOMES)
             .param("limit", limit)
             .query((resultSet, rowNumber) -> new PendingForecastBatch(
                 resultSet.getLong("id"),
                 resultSet.getLong("route_version_id"),
                 instantOf(resultSet.getObject("response_received_at", OffsetDateTime.class))))
             .list();
+    }
+
+    private boolean hasIngestionOrigin() {
+        if (ingestionOriginPresent) {
+            return true;
+        }
+        boolean present = jdbcClient.sql(HAS_INGESTION_ORIGIN).query(Boolean.class).single();
+        if (present) {
+            ingestionOriginPresent = true;
+        }
+        return present;
     }
 
     @Override

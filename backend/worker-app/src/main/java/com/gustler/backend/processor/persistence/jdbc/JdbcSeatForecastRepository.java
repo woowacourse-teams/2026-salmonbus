@@ -2,6 +2,7 @@ package com.gustler.backend.processor.persistence.jdbc;
 
 import com.gustler.backend.processor.ArrivalLabel;
 import com.gustler.backend.processor.ForecastSettlement;
+import com.gustler.backend.processor.ForecastWriteBarrier;
 import com.gustler.backend.processor.PendingForecast;
 import com.gustler.backend.processor.ScoringState;
 import com.gustler.backend.processor.SeatForecast;
@@ -160,11 +161,14 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
         """;
 
     private final JdbcClient jdbcClient;
+    private final ForecastWriteBarrier forecastWriteBarrier;
 
     public JdbcSeatForecastRepository(
-        JdbcClient jdbcClient
+        JdbcClient jdbcClient,
+        ForecastWriteBarrier forecastWriteBarrier
     ) {
         this.jdbcClient = jdbcClient;
+        this.forecastWriteBarrier = forecastWriteBarrier;
     }
 
     /**
@@ -235,6 +239,9 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
     public void settle(
         List<ForecastSettlement> settlements
     ) {
+        if (!forecastWriteBarrier.enter()) {
+            return;
+        }
         for (ForecastSettlement settlement : settlements) {
             ArrivalColumns arrival = arrivalColumnsOf(settlement.label());
             jdbcClient.sql(SETTLE_FORECAST)

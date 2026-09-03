@@ -30,17 +30,20 @@ public class ForecastBatchWriter {
     private final VehicleTrajectoryRepository vehicleTrajectoryRepository;
     private final SeatForecastRepository seatForecastRepository;
     private final StopDemandStatisticsRepository stopDemandStatisticsRepository;
+    private final ForecastWriteBarrier forecastWriteBarrier;
     private final Clock clock;
 
     public ForecastBatchWriter(
         VehicleTrajectoryRepository vehicleTrajectoryRepository,
         SeatForecastRepository seatForecastRepository,
         StopDemandStatisticsRepository stopDemandStatisticsRepository,
+        ForecastWriteBarrier forecastWriteBarrier,
         Clock clock
     ) {
         this.vehicleTrajectoryRepository = vehicleTrajectoryRepository;
         this.seatForecastRepository = seatForecastRepository;
         this.stopDemandStatisticsRepository = stopDemandStatisticsRepository;
+        this.forecastWriteBarrier = forecastWriteBarrier;
         this.clock = clock;
     }
 
@@ -50,6 +53,9 @@ public class ForecastBatchWriter {
         RouteStops stops,
         RuntimeSnapshot runtime
     ) {
+        if (!forecastWriteBarrier.enter()) {
+            return;
+        }
         Instant generatedAt = clock.instant();
         TimeSlot timeSlot = ForecastTimeSlot.of(batch, clock);
         StopDemandStatistics statistics = stopDemandStatisticsOf(batch, runtime, timeSlot);

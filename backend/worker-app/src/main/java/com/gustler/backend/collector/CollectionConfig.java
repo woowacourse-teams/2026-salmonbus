@@ -1,13 +1,18 @@
 package com.gustler.backend.collector;
 
 import java.time.Clock;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.DisposableBean;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
-import org.springframework.scheduling.annotation.SchedulingConfigurer;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.scheduling.config.ScheduledTask;
+import org.springframework.scheduling.config.ScheduledTaskHolder;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 
 @Configuration
@@ -26,12 +31,14 @@ public class CollectionConfig {
     @Configuration
     @EnableScheduling
     @ConditionalOnProperty(prefix = "collection", name = "enabled", havingValue = "true")
-    static class ScheduledCollection implements SchedulingConfigurer {
+    static class ScheduledCollection implements InitializingBean, DisposableBean, ScheduledTaskHolder {
 
         private final CollectionProperties properties;
         private final CollectionScheduler scheduler;
         private final Clock clock;
         private final int dailyLimit;
+        private final ThreadPoolTaskScheduler taskScheduler;
+        private ScheduledTaskRegistrar registrar;
 
         ScheduledCollection(
             CollectionProperties properties,
@@ -43,14 +50,37 @@ public class CollectionConfig {
             this.scheduler = scheduler;
             this.clock = clock;
             this.dailyLimit = gbisProperties.dailyLimit();
+            this.taskScheduler = new ThreadPoolTaskScheduler();
+            taskScheduler.setPoolSize(1);
+            taskScheduler.setThreadNamePrefix("salmonbus-collection-");
+            taskScheduler.setRemoveOnCancelPolicy(true);
         }
 
         @Override
-        public void configureTasks(
-            ScheduledTaskRegistrar registrar
-        ) {
+        public void afterPropertiesSet() {
             warnIfOverDailyLimit();
+            taskScheduler.initialize();
+            registrar = new ScheduledTaskRegistrar();
+            registrar.setTaskScheduler(taskScheduler);
             registrar.addTriggerTask(scheduler::collectAllRoutes, new AdaptiveCollectionTrigger(clock));
+            registrar.afterPropertiesSet();
+        }
+
+        @Override
+        public Set<ScheduledTask> getScheduledTasks() {
+            return registrar == null ? Set.of() : registrar.getScheduledTasks();
+        }
+
+        @Override
+        public void destroy() {
+            if (registrar != null) {
+                registrar.destroy();
+            }
+            taskScheduler.shutdown();
+        }
+
+        String threadNamePrefix() {
+            return taskScheduler.getThreadNamePrefix();
         }
 
         private void warnIfOverDailyLimit() {

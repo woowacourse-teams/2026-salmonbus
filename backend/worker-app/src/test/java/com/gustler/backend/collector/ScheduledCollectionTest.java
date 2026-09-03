@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.scheduling.config.ScheduledTaskHolder;
 
 /**
  * 돌 노선을 비워둔다. 켜자마자 첫 판이 도는데 노선이 없으면 아무것도 안 해서
@@ -18,14 +17,19 @@ import org.springframework.scheduling.config.ScheduledTaskHolder;
 class ScheduledCollectionTest {
 
     @Autowired
-    private ScheduledTaskHolder scheduledTaskHolder;
+    private CollectionConfig.ScheduledCollection scheduledCollection;
 
     @Test
     void 수집을_켜면_적응형_주기_작업이_걸린다() {
         // when
-        final int actual = scheduledTaskHolder.getScheduledTasks().size();
+        final int actual = scheduledCollection.getScheduledTasks().size();
 
         // then
         assertThat(actual).isEqualTo(1);
+    }
+
+    @Test
+    void 수집은_파생작업과_다른_전용_스케줄러를_쓴다() {
+        assertThat(scheduledCollection.threadNamePrefix()).isEqualTo("salmonbus-collection-");
     }
 }
