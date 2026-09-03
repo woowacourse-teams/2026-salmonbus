@@ -124,14 +124,15 @@ Application Flyway V1..V12 is not edited. The tool uses a separate
 - import batch, route boundary/binding, shard, record, and staging ledgers;
 - `migration_source_record` provenance;
 - `observation_batch.ingestion_origin` plus import/digest columns and constraints;
-- the partial LIVE pending-forecast index;
+- the partial unique index on the historical semantic batch digest;
 - terminal dataset seal;
-- forecast cutover control and advisory-lock fence;
+- the `forecast_cutover_control` boundary ledger, which pins `FINAL_CUTOVER_AT` and the observation
+  high-water mark in one transaction;
 - temporary-release and exact statistics-generation exclusion ledgers;
 - `training_eligible_seat_forecast` and `training_eligible_stop_demand_statistics` views.
 
-The worker's schema-compatibility probe uses a positive-only cache: it keeps checking while the
-column is absent and permanently selects the LIVE-only query after the first successful detection.
+The worker does not read `ingestion_origin`; its pending-forecast queue selects batches by a
+staleness window on `response_received_at`.
 
 The implementation's private archive record/manifest v2 is the executable format. The audit JSON
 schemas remain mapping evidence; they are not passed directly to the importer. The executable v2

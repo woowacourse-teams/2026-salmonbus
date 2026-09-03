@@ -93,8 +93,12 @@ record, the following become visible atomically:
 4. the ledger transition to `MERGED`.
 
 The merge must not write `seat_forecast`, `stop_demand_statistics`, or `model_deployment`. Imported
-batch `forecast_completed_at` remains null, and the worker pending-forecast query must return only
-LIVE batches.
+batch `forecast_completed_at` remains null. The worker pending-forecast query does not read
+`ingestion_origin`; it selects only batches whose `response_received_at` is at or after
+`now() - forecast.staleness` (`FORECAST_STALENESS`, default 5 minutes). Every imported row is older
+than that window, so the queue never selects one. Such rows keep `forecast_completed_at IS NULL`
+permanently, which is expected and gets no closing marker; they are identified by
+`forecast_completed_at IS NULL AND response_received_at < now() - interval '5 minutes'`.
 
 Concurrent LIVE inserts are allowed. A concurrent natural-key conflict is accepted only when the
 pre-existing provenance has the identical source UUID and semantic digest; otherwise merge fails.
@@ -159,8 +163,14 @@ Before and after rollback, these LIVE values must be identical:
 ## Temporary-derived cleanup reconciliation
 
 Observation import and temporary-derived cleanup are separate operations. The formal cutover must
-first pause forecast/settlement/statistics writers. After formal deployment activation, the freeze
-reads its authoritative `model_deployment.activated_at` and records every temporary-window
+first stop forecast, settlement, and statistics writing by restarting the worker with
+`FORECAST_ENABLED=false`; under `forecast.enabled=false` those beans do not start at all
+(`@ConditionalOnProperty`), while collection keeps running on `collection.enabled`. `temp-pause`
+follows only after `max(seat_forecast.generated_at)`, `max(seat_forecast.scored_at)`, and
+`max(stop_demand_statistics.computed_at)` have all stopped advancing; it fixes `FINAL_CUTOVER_AT`
+and the observation high-water in one transaction and is a cutover ledger, not a writer block.
+After formal deployment activation, the freeze reads its authoritative
+`model_deployment.activated_at` and records every temporary-window
 generation whose `computed_at` is in
 `[2026-09-02T11:55:04.729493Z, formal activated_at)`.
 

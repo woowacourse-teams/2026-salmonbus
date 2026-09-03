@@ -189,8 +189,15 @@ java -jar "$MIGRATION_JAR" schema \
   --approval "$ACADEMY_SCHEMA_APPROVAL"
 ```
 
-Application Flyway V1..V12 must remain unchanged. Verify the new history table reports V1, V2 and V3 and
-that the worker deployment containing the LIVE-origin queue guard is active before import.
+Application Flyway V1..V12 must remain unchanged. Verify the new history table reports V1, V2 and V3.
+
+Import needs no write fence. The importer inserts `S3_BACKFILL` batches whose latest
+`response_received_at` is earlier than 2026-09-02T13:20:01Z, and the worker's forecast queue predicate
+requires `response_received_at >= now() - forecast.staleness` (`FORECAST_STALENESS`, default `5m`).
+Every imported row is outside that window, so the online queue never picks one up. The isolation
+argument now rests on the staleness window, not on an origin predicate: the worker neither reads nor
+knows the `ingestion_origin` column. Reconciliation still asserts the real invariant, zero
+`seat_forecast` rows referencing imported observations.
 
 ## Phase 5: ACADEMY_IMPORT approval and base import
 
@@ -217,6 +224,39 @@ receipt/import/inventory identity.
 
 Do not declare RDS training-ready until the seal joins both COMPLETE imports and all reconciliation
 checks pass.
+
+## Phase 7: statement timeout headroom for seed replay
+
+`import.statement-timeout-seconds` is a config key (default 30, maximum 3600, `ImportSettings.java`)
+and the tool overrides the server value with `SET LOCAL` in every transaction, so this one key bounds
+every single statement it runs.
+
+Seed replay is one per-route
+`SELECT ... ORDER BY batch.response_received_at, batch.id, observation.source_row_number` read through
+a `setFetchSize(5000)` cursor with `autoCommit=false`, so the timeout clock resets on each fetch round
+and the elapsed time of the replay as a whole is not what the timeout measures. The exposed statement
+is the first Execute. If the plan has to materialize the ordering, it sorts roughly 1.18M observations
+for 3330 and 1.29M for 1650 after import, and at `work_mem=4MB` that becomes an external merge sort;
+if that sort exceeds the timeout the statement dies with `57014 query_canceled`. The failure lands in
+`seed-dry-run` or `seed-apply`, inside the cutover window.
+
+Run this after import completes and before the cutover window:
+
+1. In a read-only session, run `EXPLAIN (ANALYZE, BUFFERS)` on the same SQL shape and record time to
+   first row and `Sort Method`, including whether it is an external merge and how much disk it uses.
+   A preflight-time measurement over 60k rows proves nothing here; only the post-import 2.46M-row
+   table is valid evidence.
+2. Raise `import.statement-timeout-seconds` to a generous multiple of the measurement. Do not remove
+   the bound. This timeout is also one of the guards that keeps a stuck statement from holding the
+   cutover window open.
+3. Check whether an index already supplies the ordering, in which case the risk disappears.
+   `ix_batch_recent_history` covers `observation_batch (route_version_id, response_received_at)` and
+   `ux_observation_source_row` covers `vehicle_observation (observation_batch_id, source_row_number)`,
+   but `batch.id` is the second ORDER BY key and is in neither, so only the measured plan settles
+   whether a full sort, an incremental sort, or no sort runs.
+4. `reconcile` aggregates run under the same key, so review them at the chosen value too.
+5. Check whether raising `work_mem` for the session is safe against FreeableMemory headroom
+   (db.t4g.micro, server `work_mem=4096kB`).
 
 ## Throttle and stop conditions
 
@@ -282,11 +322,23 @@ The fixed candidate values are release ID `v41b-8194bde56d86f365afd6`, bundle di
 `5b906da96d7b3e4b45c5e9d970df41c499f0d457756b853b613f672f589a3228`, and aggregate seed gzip
 SHA-256 `7f3be7dc2c668d1ed4b8665c341c2cda24968d3fa2e6ed2755261a20c3826ec4`.
 
+Derived writes stop by restarting the worker, not by a write fence. With `forecast.enabled=false` the
+`ForecastScheduleConfig`, `ForecastJob`, `ForecastBatchWriter`, `ArrivalLabelJob` and
+`StopDemandStatisticsJob` beans do not start at all, while collection keeps running because it reads
+only `collection.enabled`. Each derived write is one transaction, and the restart is stop, confirm the
+process exited, then start, so no half-written batch survives it.
+
 The activation-last sequence is:
 
-1. Run `temp-pause`. It drains shared derived writers, captures DB `FINAL_CUTOVER_AT` and observation
-   high-water, and leaves collection on. Worker try-lock failures return immediately; actuator skip
-   counters must increase while raw observation counts continue increasing.
+0. Set `FORECAST_ENABLED=false` in `worker.env` and restart the worker. Confirm health is UP, that
+   `observation_batch` keeps growing, and that `max(seat_forecast.generated_at)`,
+   `max(seat_forecast.scored_at)` and `max(stop_demand_statistics.computed_at)` all stop advancing for
+   at least two cycles.
+1. Run `temp-pause`. It refuses with `TEMP_FORECAST_WRITES_NOT_QUIESCENT` unless those three clocks are
+   already older than `clock_timestamp() - 120 seconds`, then fixes DB `FINAL_CUTOVER_AT` and the
+   observation high-water in one transaction. It is a boundary ledger, not a fence: the advisory lock
+   it takes only serializes tool commands against each other, and the worker never reads
+   `forecast_cutover_control`.
 2. Freeze the exact temporary generation set at that boundary. Show the dry-run digest before the
    separately approved execute call.
 3. Dry-run and separately approve bounded cleanup. Delete only deployment-1 forecasts and the frozen
@@ -298,22 +350,38 @@ The activation-last sequence is:
 5. Under a plan-bound `ACADEMY_SEED_APPLY` approval, revalidate the plan, write exact `numeric` totals,
    read them back, and materialize one official `observed-max-capacity-v1` generation for each route
    with `data_until=FINAL_CUTOVER_AT`. Cell hashes and frozen-key intersection must pass.
-6. Only now run the separately approved one-shot formal promotion, verify the exact formal identity,
-   retain id 1 as RETIRED, and immediately restore `MODEL_BUNDLE_PROMOTE_ON_START=false`.
-7. Run normal `temp-unpause`; it links the formal deployment to the applied seed ledger before opening
-   writers.
-8. After each route has a new formal forecast, run `seed-verify` and require official-first-or-later
+6. Verify the first official generation while everything is still read-only: route coverage
+   `[1650, 3330]`, `data_until=FINAL_CUTOVER_AT`, and the receipt digests.
+7. Only now set `MODEL_BUNDLE_PROMOTE_ON_START=true` and `FORECAST_ENABLED=true` and restart under the
+   separate promotion approval. Verify the exact formal identity as sole ACTIVE, id 1 RETIRED, then
+   immediately restore `MODEL_BUNDLE_PROMOTE_ON_START=false` in `worker.env`; that restore needs no
+   further restart. Forecasting resumes at this restart.
+8. Run normal `temp-unpause`; it links the formal deployment to the applied seed ledger and closes the
+   boundary ledger.
+9. After each route has a new formal forecast, run `seed-verify` and require official-first-or-later
    non-frozen generation references, then require fresh board 200.
 
-There is no finally or watchdog that clears a durable pause. Before formal activation, any failure may
-use separately approved `temp-unpause --recovery true` only after confirming id 1 is still sole ACTIVE;
-that path rolls back an applied seed and marks the freeze aborted. After formal activation, keep the
-fence closed and obtain a separate approval to re-promote the temporary bundle. Never update ACTIVE or
-`writes_paused` manually.
+Board reads the newest batch carrying `forecast_completed_at` and its freshness window is five minutes,
+so roughly five minutes after the step 0 restart a `NO_RECENT_OBSERVATION` 503 is expected even though
+collection never stopped. After the step 7 restart the staleness window skips every batch that piled up
+during the cutover, so serving returns 200 within one cycle instead of waiting for a backlog to drain.
+Those skipped batches keep `forecast_completed_at IS NULL` permanently; that is intended, and they are
+identified by `forecast_completed_at IS NULL AND response_received_at < now() - interval '5 minutes'`.
+
+There is no finally or watchdog that clears a durable pause, and the pause no longer blocks the worker,
+so closing an interrupted run means checking both the ledger state and that the worker is still on
+`FORECAST_ENABLED=false`. Before formal activation, any failure may use separately approved
+`temp-unpause --recovery true` only after confirming id 1 is still sole ACTIVE; that path rolls back an
+applied seed and marks the freeze aborted. After formal activation, leave the worker on
+`FORECAST_ENABLED=false` and obtain a separate approval to re-promote the temporary bundle through the
+startup path. Never update ACTIVE or `writes_paused` manually.
 
 Example command shapes:
 
 ```bash
+<APPROVED_FORECAST_ENABLED_FALSE_RESTART>
+<VERIFY_HEALTH_UP_COLLECTION_ADVANCING_AND_DERIVED_CLOCKS_STOPPED>
+
 java -jar "$MIGRATION_JAR" temp-pause \
   --config "$CUTOVER_CONFIG" \
   --approval "$CUTOVER_APPROVAL"
@@ -348,7 +416,8 @@ java -jar "$MIGRATION_JAR" seed-apply \
   --seed-receipt "$SEED_SOURCE_RECEIPT" --plan "$SEED_PLAN" \
   --approval "$SEED_APPLY_APPROVAL"
 
-<APPROVED_ONE_SHOT_PROMOTION_AND_IMMEDIATE_FALSE_RESTORE>
+<APPROVED_PROMOTE_ON_START_TRUE_AND_FORECAST_ENABLED_TRUE_RESTART>
+<VERIFY_FORMAL_ACTIVE_AND_RESTORE_PROMOTE_ON_START_FALSE>
 
 java -jar "$MIGRATION_JAR" temp-unpause \
   --config "$CUTOVER_CONFIG" \

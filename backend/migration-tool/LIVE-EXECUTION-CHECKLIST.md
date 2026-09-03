@@ -9,10 +9,12 @@ condition. Completing this file does not itself grant approval.
 - [ ] `:migration-tool:test`, `:worker-app:test`, and `clean build` pass from a clean build directory.
 - [ ] Migration tests include base/terminal manifest chaining, interruption/resume, duplicate replay,
   concurrent LIVE insert, route validity rollback, terminal seal rollback, private-identity rejection,
-  nonblocking write-fence/collector continuity, persisted pause, fence DB-error fail-closed, skip
-  telemetry, positive-only schema cache concurrency, generic-plan partial-index use, populated-table
-  DDL lock timeout, provider seed replay/apply/rollback/reapply, final serving references, exact temp
-  cleanup, and cleanup idempotency.
+  additive schema without application Flyway history change, application checksum drift rejection,
+  default `LIVE` ingestion origin, canonical roster station order, populated-table DDL lock timeout,
+  full replay cutoff parity, persisted pause, cleanup dry-run receipt mismatch rejection, provider seed
+  replay/apply/rollback/reapply, final serving references, exact temp cleanup, and cleanup idempotency.
+- [ ] Worker tests cover the staleness window: `forecast.staleness` sets the queue's `notBefore` once
+  per cycle for every route, and a batch older than that bound is never handed out.
 - [ ] `git diff --check`, shell syntax, JSON parsing, and secret-pattern scans pass.
 - [ ] No commit, push, PR, merge, deploy, or remote mutation has occurred without its own approval.
 
@@ -96,8 +98,23 @@ condition. Completing this file does not itself grant approval.
 
 - [ ] A separate unexpired `ACADEMY_SCHEMA` receipt is bound to the database identity.
 - [ ] Tool Flyway V1/V2/V3 is reviewed as additive and uses `historical_import_schema_history`.
-- [ ] Worker code with LIVE pending-queue filtering and advisory shared fence is deployed before import.
+- [ ] Worker code carrying the staleness window is deployed before import: `forecast.staleness`
+  (`FORECAST_STALENESS`, default `5m`) is in effect and the pending-forecast queue applies
+  `response_received_at >= :notBefore`. Every imported row is older than
+  2026-09-02T13:20:01Z, so no backfill batch can fall inside the window.
 - [ ] Schema execution reports only the expected migrations; application Flyway history remains intact.
+- [ ] An index that already serves
+  `ORDER BY batch.response_received_at, batch.id, observation.source_row_number` is looked for first;
+  if one exists the seed replay needs no sort and the timeout question is closed on that evidence.
+- [ ] Otherwise `import.statement-timeout-seconds` is raised from measurement, not from guesswork:
+  after import, a read-only `EXPLAIN (ANALYZE, BUFFERS)` on the seed replay shape records time to
+  first row and `Sort Method`, including external merge and its disk use. The preflight run over
+  roughly 60k rows does not count; only the post-import 2.46M-row measurement does.
+- [ ] The raised value is a generous multiple of that measurement and stays finite. It is never set
+  unbounded, because the same timeout is what bounds the cutover window; a first Execute that exceeds
+  it fails with `57014 query_canceled` inside `seed-dry-run` or `seed-apply`.
+- [ ] `reconcile` aggregates run under the same value and are measured with it. Any session `work_mem`
+  raise above the db.t4g.micro default of 4096kB is checked against FreeableMemory headroom first.
 
 ## Base ACADEMY_IMPORT
 
@@ -117,7 +134,8 @@ condition. Completing this file does not itself grant approval.
 - [ ] Terminal reconciliation records all four closure digests and marks the import COMPLETE.
 - [ ] Exactly one dataset seal exists and joins the same terminal manifest, receipt, import batch, and
   full-history inventory.
-- [ ] LIVE rows are unchanged; no S3_BACKFILL batch appears in the online pending-forecast query.
+- [ ] LIVE rows are unchanged; no S3_BACKFILL batch appears in the online pending-forecast query,
+  because every imported `response_received_at` sits outside the five-minute staleness window.
 
 ## Rollback readiness
 
@@ -143,12 +161,23 @@ condition. Completing this file does not itself grant approval.
 - [ ] `PROVISIONAL_19D` and the 2026-09-03 01:15 user override are recorded; no integrity gate is waived.
 - [ ] Formal promotion has its own approval and uses one-shot
   `MODEL_BUNDLE_PROMOTE_ON_START=true`; the plan restores `false` immediately after the restart.
-- [ ] `temp-pause` records DB `FINAL_CUTOVER_AT` and observation high-water after draining shared writers.
-- [ ] During pause, raw observation counts continue increasing, forecast-derived writes do not change,
-  `/actuator/info` skip counters advance, and six consecutive skips produce WARN visibility.
-- [ ] Operators know board may return `NO_RECENT_OBSERVATION` 503 after the five-minute freshness window.
-- [ ] There is no finally/watchdog auto-unpause. A private, separately approved
-  `temp-unpause --recovery true` command is ready for every pre-activation failure.
+- [ ] `FORECAST_ENABLED=false` is set in `worker.env` and the worker is restarted before anything else
+  in this section; health is UP and `observation_batch` keeps growing, so collection never stopped.
+- [ ] `max(seat_forecast.generated_at)`, `max(seat_forecast.scored_at)` and
+  `max(stop_demand_statistics.computed_at)` have all stopped advancing for at least two cycles.
+- [ ] `temp-pause` passes its quiescence gate and records DB `FINAL_CUTOVER_AT` and observation
+  high-water. It is a boundary ledger, not a fence; its advisory lock only serializes tool commands and
+  the worker never reads `forecast_cutover_control`.
+- [ ] Throughout the window, raw observation counts keep increasing and the three derived-write clocks
+  stay frozen. Batches skipped by the staleness window keep `forecast_completed_at IS NULL` permanently
+  and are identified by `forecast_completed_at IS NULL AND response_received_at < now() - interval '5 minutes'`.
+- [ ] Operators know board returns `NO_RECENT_OBSERVATION` 503 roughly five minutes after the
+  `FORECAST_ENABLED=false` restart, and that it recovers within one cycle after the re-enable restart
+  because the staleness window skips the accumulated backlog rather than draining it.
+- [ ] There is no finally/watchdog auto-unpause, and the durable pause no longer blocks the worker, so
+  closing an interrupted run requires checking both the ledger and that the worker is still on
+  `FORECAST_ENABLED=false`. A private, separately approved `temp-unpause --recovery true` command is
+  ready for every pre-activation failure.
 - [ ] `temp-freeze` dry-run/execute bind the exact temporary generation set to T/high-water while temp id
   1 remains sole ACTIVE.
 - [ ] Cleanup dry-run identity/counts are shown to the user and a new deletion approval is bound to
@@ -161,13 +190,16 @@ condition. Completing this file does not itself grant approval.
   and binds exact numeric counts/key/row/aggregate SHA to a private plan.
 - [ ] `seed-apply` revalidates the same plan, reads back exact `numeric` rows, materializes exactly one
   official first generation per route with `data_until=T`, and finds frozen-key intersection zero.
-- [ ] Only after official-generation verification does one-shot formal activation run; formal release,
-  bundle digest, calculation version, predecessor id 1, ACTIVE/RETIRED states and false restoration match.
-- [ ] Normal `temp-unpause` links the formal deployment to the seed ledger and clears the fence.
+- [ ] Only after official-generation verification is the worker restarted with
+  `MODEL_BUNDLE_PROMOTE_ON_START=true` and `FORECAST_ENABLED=true`; formal release, bundle digest,
+  calculation version, predecessor id 1, ACTIVE/RETIRED states and the immediate restore of
+  `MODEL_BUNDLE_PROMOTE_ON_START=false` all match. The restore needs no further restart.
+- [ ] Normal `temp-unpause` links the formal deployment to the seed ledger and closes the boundary ledger.
 - [ ] `seed-verify` emits a private `v4-1-seed-cutover-receipt-v1`; each route has a new formal forecast
   referencing the official-first-or-later, non-frozen generation and board returns fresh 200.
-- [ ] If formal validation fails after activation, the fence stays closed and only a separately approved
-  temporary startup promotion may recover service; `--recovery true` is not used after activation.
+- [ ] If formal validation fails after activation, the worker stays on `FORECAST_ENABLED=false` and only
+  a separately approved temporary startup promotion may recover service; `--recovery true` is not used
+  after activation.
 
 ## Completion and retention
 

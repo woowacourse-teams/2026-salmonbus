@@ -173,8 +173,11 @@ digests, and source/provenance digests. They may not contain any row-level ident
 ## Ready/not-ready decision
 
 `RDS_SNAPSHOT_READY` requires a valid terminal seal, COMPLETE base and terminal imports, repeatable
-read receipt, correct route bindings, zero pending-queue leakage, and exact temporary lineage
-exclusion.
+read receipt, correct route bindings, zero forecast rows over imported batches, and exact temporary
+lineage exclusion. Imported batches stay out of the worker forecast queue because that queue admits
+only batches whose `response_received_at` is inside the `forecast.staleness` window (default 5
+minutes), not because of an origin predicate. They therefore keep `forecast_completed_at IS NULL`
+permanently; `reconcile` asserts both that count and the absence of imported-batch forecasts.
 
 `V4_1_BUNDLE_READY` additionally requires the data-analysis final identity, Java strict/golden and
 source-to-feature parity, holdout receipts, the aggregate seed contract, a passing seed plan and the
