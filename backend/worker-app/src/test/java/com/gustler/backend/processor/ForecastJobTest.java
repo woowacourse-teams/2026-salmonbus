@@ -3,8 +3,10 @@ package com.gustler.backend.processor;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.support.IntegrationTest;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -608,9 +610,24 @@ class ForecastJobTest {
 
         private static final Instant DATA_UNTIL = Instant.parse("2026-08-30T14:59:56Z");
 
+        /**
+         * 픽스처의 판을 신선도 창 안에 두는 시각. 두 판 중 늦은 것보다 1분쯤 뒤다.
+         *
+         * <p>실시계로 두면 고정된 과거인 픽스처가 기본 창 5분 밖이라 판이 하나도 안 열린다.
+         * 창을 넓혀서 비키면 그 값이 운영에서 쓸 수 없는 크기가 된다.
+         */
+        private static final Instant JUST_AFTER_FIXTURE = Instant.parse("2026-08-19T02:17:00Z");
+
         @Bean
         RecordingSeatForecastModel seatForecastModel() {
             return new RecordingSeatForecastModel();
+        }
+
+        /** 이름을 clock 으로 두면 ClockConfig 의 빈과 부딪힌다. 덮어쓰기가 꺼져 있어 이름을 가른다. */
+        @Bean
+        @Primary
+        Clock fixedClock() {
+            return Clock.fixed(JUST_AFTER_FIXTURE, ZoneId.of("Asia/Seoul"));
         }
 
         /**

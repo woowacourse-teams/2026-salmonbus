@@ -12,8 +12,10 @@ import com.gustler.backend.processor.SeatUnknownReason;
 import com.gustler.backend.processor.TrajectoryGap;
 import com.gustler.backend.processor.VehicleTrajectory;
 import com.gustler.backend.support.IntegrationTest;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,6 +52,9 @@ class JdbcVehicleTrajectoryRepositoryTest {
     private static final int STOP_6 = 6;
     private static final int HIGHEST_STOP_ORDER = 10;
     private static final int ENOUGH_BATCHES = 10;
+
+    /** 신선도 창을 안 보는 테스트가 쓰는 한계. 픽스처의 판이 전부 이보다 뒤다. */
+    private static final Instant ANY_AGE = Instant.parse("2000-01-01T00:00:00Z");
     private static final long MISSING_BATCH_ID = 9_999_999L;
 
     @Autowired
@@ -70,6 +75,87 @@ class JdbcVehicleTrajectoryRepositoryTest {
     }
 
     @Test
+    void 한계보다_오래된_판은_안_준다() {
+        // given
+        insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
+
+        // when
+        List<PendingForecastBatch> actual = repository.findBatchesAwaitingForecast(
+            routeVersionId, LATER_POLL.toInstant(), ENOUGH_BATCHES);
+
+        // then
+        assertThat(actual).isEmpty();
+    }
+
+    @Test
+    void 한계와_같은_시각의_판은_준다() {
+        // given
+        final long onTheEdge = insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
+
+        // when
+        List<PendingForecastBatch> actual = repository.findBatchesAwaitingForecast(
+            routeVersionId, LATER_POLL.toInstant(), ENOUGH_BATCHES);
+
+        // then
+        assertThat(actual)
+            .extracting(PendingForecastBatch::observationBatchId)
+            .containsExactly(onTheEdge);
+    }
+
+    @Test
+    void 창_밖으로_막_밀려난_판을_준다() {
+        // given
+        final long left = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
+
+        // when
+        Optional<Instant> actual = repository.findOldestLeftBehindAt(
+            routeVersionId, EARLIER_POLL.minusHours(1).toInstant(), LATER_POLL.toInstant());
+
+        // then
+        assertThat(actual).contains(readResponseReceivedAt(left));
+    }
+
+    /** 옮겨 넣은 관측이 이 자리다. 예보를 받을 일이 없어 완료 표시가 영영 안 찍힌다. */
+    @Test
+    void 거슬러_보는_폭보다_오래된_판은_안_준다() {
+        // given
+        insertBatch(routeVersionId, EARLIER_POLL.minusDays(1), SUCCESS_ROWS, null);
+
+        // when
+        Optional<Instant> actual = repository.findOldestLeftBehindAt(
+            routeVersionId, EARLIER_POLL.minusHours(1).toInstant(), LATER_POLL.toInstant());
+
+        // then
+        assertThat(actual).isEmpty();
+    }
+
+    @Test
+    void 아직_창_안에_있는_판은_안_준다() {
+        // given
+        insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
+
+        // when
+        Optional<Instant> actual = repository.findOldestLeftBehindAt(
+            routeVersionId, EARLIER_POLL.minusHours(1).toInstant(), LATER_POLL.toInstant());
+
+        // then
+        assertThat(actual).isEmpty();
+    }
+
+    @Test
+    void 예보가_끝난_판은_밀려난_것으로_안_센다() {
+        // given
+        insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, LATER_POLL);
+
+        // when
+        Optional<Instant> actual = repository.findOldestLeftBehindAt(
+            routeVersionId, EARLIER_POLL.minusHours(1).toInstant(), LATER_POLL.toInstant());
+
+        // then
+        assertThat(actual).isEmpty();
+    }
+
+    @Test
     void 예보가_안_붙은_판을_오래된_것부터_준다() {
         // given
         final long later = insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
@@ -77,7 +163,7 @@ class JdbcVehicleTrajectoryRepositoryTest {
 
         // when
         List<PendingForecastBatch> actual =
-            repository.findBatchesAwaitingForecast(routeVersionId, ENOUGH_BATCHES);
+            repository.findBatchesAwaitingForecast(routeVersionId, ANY_AGE, ENOUGH_BATCHES);
 
         // then
         assertThat(actual)
@@ -93,7 +179,7 @@ class JdbcVehicleTrajectoryRepositoryTest {
 
         // when
         List<PendingForecastBatch> actual =
-            repository.findBatchesAwaitingForecast(routeVersionId, ENOUGH_BATCHES);
+            repository.findBatchesAwaitingForecast(routeVersionId, ANY_AGE, ENOUGH_BATCHES);
 
         // then
         assertThat(actual)
@@ -108,7 +194,7 @@ class JdbcVehicleTrajectoryRepositoryTest {
 
         // when
         List<PendingForecastBatch> actual =
-            repository.findBatchesAwaitingForecast(routeVersionId, ENOUGH_BATCHES);
+            repository.findBatchesAwaitingForecast(routeVersionId, ANY_AGE, ENOUGH_BATCHES);
 
         // then
         assertThat(actual)
@@ -123,7 +209,7 @@ class JdbcVehicleTrajectoryRepositoryTest {
 
         // when
         List<PendingForecastBatch> actual =
-            repository.findBatchesAwaitingForecast(routeVersionId, ENOUGH_BATCHES);
+            repository.findBatchesAwaitingForecast(routeVersionId, ANY_AGE, ENOUGH_BATCHES);
 
         // then
         assertThat(actual).isEmpty();
@@ -136,7 +222,7 @@ class JdbcVehicleTrajectoryRepositoryTest {
 
         // when
         List<PendingForecastBatch> actual =
-            repository.findBatchesAwaitingForecast(routeVersionId, ENOUGH_BATCHES);
+            repository.findBatchesAwaitingForecast(routeVersionId, ANY_AGE, ENOUGH_BATCHES);
 
         // then
         assertThat(actual).isEmpty();
@@ -474,6 +560,16 @@ class JdbcVehicleTrajectoryRepositoryTest {
             .param(batchId)
             .query(Integer.class)
             .single();
+    }
+
+    private Instant readResponseReceivedAt(
+        final long observationBatchId
+    ) {
+        return jdbcClient.sql("SELECT response_received_at FROM observation_batch WHERE id = ?")
+            .param(observationBatchId)
+            .query(OffsetDateTime.class)
+            .single()
+            .toInstant();
     }
 
     private static String stopIdOf(
