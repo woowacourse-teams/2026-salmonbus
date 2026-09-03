@@ -15,7 +15,7 @@ class ForecastPropertiesTest {
     private static final int PENDING_LIMIT = 3000;
     private static final int ARRIVAL_LIMIT = 400;
 
-    private static final Duration LONGEST_ALLOWED_STALENESS = Duration.ofHours(1);
+    private static final Duration LONGEST_ALLOWED_STALENESS = ForecastProperties.MAX_STALENESS;
     private static final Duration TOO_LONG_STALENESS = LONGEST_ALLOWED_STALENESS.plusSeconds(1);
 
     @Test

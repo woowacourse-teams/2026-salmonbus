@@ -69,16 +69,20 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
         """;
 
     /**
-     * 예보를 기다리는 판 가운데 가장 오래된 하나. 창 조건만 뺀 같은 조건이라 같은 부분 인덱스를 탄다.
+     * 창 밖으로 밀려난 지 얼마 안 된 판 가운데 가장 오래된 하나.
      *
-     * <p>가장 오래된 하나만 본다. 그것이 창 안이면 창 밖에 남은 판도 없다.
+     * <p>큐와 같은 조건에 관측 시각의 아래위만 다르게 끊어서 V5 의 ix_batch_awaiting_forecast 를
+     * 그대로 탄다. 인덱스 둘째 열의 범위라 아래쪽 끝으로 바로 내려가고 한 줄에서 끊는다.
+     * 옮겨 넣은 관측은 그 아래에 있어서 읽지도 않는다.
      */
-    private static final String SELECT_OLDEST_BATCH_AWAITING_FORECAST = """
+    private static final String SELECT_OLDEST_BATCH_LEFT_BEHIND = """
         SELECT response_received_at
         FROM observation_batch
         WHERE route_version_id = :routeVersionId
           AND forecast_completed_at IS NULL
           AND response_received_at IS NOT NULL
+          AND response_received_at >= :from
+          AND response_received_at < :until
           AND outcome IN ('SUCCESS_ROWS', 'SUCCESS_EMPTY')
         ORDER BY response_received_at
         LIMIT 1
@@ -177,11 +181,15 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
     }
 
     @Override
-    public Optional<Instant> findOldestAwaitingForecastAt(
-        final long routeVersionId
+    public Optional<Instant> findOldestLeftBehindAt(
+        final long routeVersionId,
+        Instant from,
+        Instant until
     ) {
-        return jdbcClient.sql(SELECT_OLDEST_BATCH_AWAITING_FORECAST)
+        return jdbcClient.sql(SELECT_OLDEST_BATCH_LEFT_BEHIND)
             .param("routeVersionId", routeVersionId)
+            .param("from", offsetOf(from))
+            .param("until", offsetOf(until))
             .query((resultSet, rowNumber) ->
                 instantOf(resultSet.getObject("response_received_at", OffsetDateTime.class)))
             .optional();

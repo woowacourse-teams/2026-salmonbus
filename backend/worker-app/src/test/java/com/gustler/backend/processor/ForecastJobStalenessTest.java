@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -57,6 +58,12 @@ class ForecastJobStalenessTest {
 
     @Captor
     private ArgumentCaptor<Instant> notBefore;
+
+    @Captor
+    private ArgumentCaptor<Instant> leftBehindFrom;
+
+    @Captor
+    private ArgumentCaptor<Instant> leftBehindUntil;
 
     private ForecastJob job;
     private ListAppender<ILoggingEvent> forecastLog;
@@ -131,7 +138,7 @@ class ForecastJobStalenessTest {
         // given
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
         when(routeVersionRepository.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
-        when(vehicleTrajectoryRepository.findOldestAwaitingForecastAt(ROUTE_VERSION_3330))
+        when(vehicleTrajectoryRepository.findOldestLeftBehindAt(eq(ROUTE_VERSION_3330), any(), any()))
             .thenReturn(Optional.of(LEFT_BEHIND_AT));
 
         // when
@@ -143,12 +150,12 @@ class ForecastJobStalenessTest {
     }
 
     @Test
-    void 창_안의_판만_남았으면_경고를_안_남긴다() {
+    void 밀려난_판이_없으면_경고를_안_남긴다() {
         // given
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
         when(routeVersionRepository.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
-        when(vehicleTrajectoryRepository.findOldestAwaitingForecastAt(ROUTE_VERSION_3330))
-            .thenReturn(Optional.of(NOW.minus(STALENESS).plusSeconds(1)));
+        when(vehicleTrajectoryRepository.findOldestLeftBehindAt(eq(ROUTE_VERSION_3330), any(), any()))
+            .thenReturn(Optional.empty());
 
         // when
         job.writeForecasts();
@@ -163,7 +170,7 @@ class ForecastJobStalenessTest {
         // given
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
         when(routeVersionRepository.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
-        when(vehicleTrajectoryRepository.findOldestAwaitingForecastAt(ROUTE_VERSION_3330))
+        when(vehicleTrajectoryRepository.findOldestLeftBehindAt(eq(ROUTE_VERSION_3330), any(), any()))
             .thenReturn(Optional.of(LEFT_BEHIND_AT));
 
         // when 멈춘 시계라 두 회차가 같은 순간에 돈다
@@ -172,6 +179,33 @@ class ForecastJobStalenessTest {
 
         // then
         assertThat(warningMessages()).hasSize(1);
+    }
+
+    /**
+     * 옮겨 넣은 관측은 완료 표시가 영영 안 찍혀서, 아래를 안 끊으면 이관 뒤에 경고가 계속 켜진다.
+     * 거슬러 보는 폭이 창의 상한까지라는 것을 여기서 잡는다.
+     */
+    @Test
+    void 거슬러_보는_폭은_창의_상한까지다() {
+        // given
+        when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
+        when(routeVersionRepository.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
+
+        // when
+        job.writeForecasts();
+
+        // then
+        verify(vehicleTrajectoryRepository)
+            .findOldestLeftBehindAt(anyLong(), leftBehindFrom.capture(), leftBehindUntil.capture());
+        assertThat(new LeftBehindWindow(leftBehindFrom.getValue(), leftBehindUntil.getValue()))
+            .isEqualTo(new LeftBehindWindow(
+                NOW.minus(ForecastProperties.MAX_STALENESS), NOW.minus(STALENESS)));
+    }
+
+    private record LeftBehindWindow(
+        Instant from,
+        Instant until
+    ) {
     }
 
     private List<String> warningMessages() {

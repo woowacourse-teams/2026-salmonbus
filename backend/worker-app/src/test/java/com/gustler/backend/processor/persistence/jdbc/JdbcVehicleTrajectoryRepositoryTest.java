@@ -103,25 +103,53 @@ class JdbcVehicleTrajectoryRepositoryTest {
     }
 
     @Test
-    void 가장_오래된_대기_판은_창을_안_보고_준다() {
-        // given 창 밖에 두고 온 판이 남아 있는지 보는 자리라 창으로 거르면 안 된다
+    void 창_밖으로_막_밀려난_판을_준다() {
+        // given
         final long left = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
-        insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
 
         // when
-        Optional<Instant> actual = repository.findOldestAwaitingForecastAt(routeVersionId);
+        Optional<Instant> actual = repository.findOldestLeftBehindAt(
+            routeVersionId, EARLIER_POLL.minusHours(1).toInstant(), LATER_POLL.toInstant());
 
         // then
         assertThat(actual).contains(readResponseReceivedAt(left));
     }
 
+    /** 옮겨 넣은 관측이 이 자리다. 예보를 받을 일이 없어 완료 표시가 영영 안 찍힌다. */
     @Test
-    void 대기하는_판이_없으면_가장_오래된_것도_없다() {
+    void 거슬러_보는_폭보다_오래된_판은_안_준다() {
+        // given
+        insertBatch(routeVersionId, EARLIER_POLL.minusDays(1), SUCCESS_ROWS, null);
+
+        // when
+        Optional<Instant> actual = repository.findOldestLeftBehindAt(
+            routeVersionId, EARLIER_POLL.minusHours(1).toInstant(), LATER_POLL.toInstant());
+
+        // then
+        assertThat(actual).isEmpty();
+    }
+
+    @Test
+    void 아직_창_안에_있는_판은_안_준다() {
+        // given
+        insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
+
+        // when
+        Optional<Instant> actual = repository.findOldestLeftBehindAt(
+            routeVersionId, EARLIER_POLL.minusHours(1).toInstant(), LATER_POLL.toInstant());
+
+        // then
+        assertThat(actual).isEmpty();
+    }
+
+    @Test
+    void 예보가_끝난_판은_밀려난_것으로_안_센다() {
         // given
         insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, LATER_POLL);
 
         // when
-        Optional<Instant> actual = repository.findOldestAwaitingForecastAt(routeVersionId);
+        Optional<Instant> actual = repository.findOldestLeftBehindAt(
+            routeVersionId, EARLIER_POLL.minusHours(1).toInstant(), LATER_POLL.toInstant());
 
         // then
         assertThat(actual).isEmpty();

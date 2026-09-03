@@ -85,25 +85,30 @@ public class ForecastJob {
         }
         Instant now = clock.instant();
         Instant notBefore = now.minus(properties.staleness());
+        Instant leftBehindFrom = now.minus(ForecastProperties.MAX_STALENESS);
         Instant oldestLeftBehind = null;
         for (Long routeVersionId : routeVersionRepository.findActiveVersionIds()) {
             writeForecastsOf(routeVersionId, notBefore, runtime.get());
-            oldestLeftBehind = olderOf(oldestLeftBehind, leftBehindAt(routeVersionId, notBefore));
+            oldestLeftBehind = olderOf(
+                oldestLeftBehind, leftBehindAt(routeVersionId, leftBehindFrom, notBefore));
         }
         warnIfLeftBehind(oldestLeftBehind, now);
     }
 
     /**
-     * 이 노선에 창 밖으로 남은 판이 있으면 그중 가장 오래된 것의 관측 시각.
+     * 이 노선에 창 밖으로 밀려난 판이 있으면 그중 가장 오래된 것의 관측 시각.
      *
      * <p>예보를 쓴 뒤에 묻는다. 먼저 물으면 이번 회차에 처리할 판까지 남은 것으로 센다.
+     *
+     * <p>거슬러 보는 폭이 창의 상한이다. 그보다 오래된 것은 밀린 것이 아니라 예보를 받을 일이
+     * 없는 판이고, 옮겨 넣은 관측이 그 자리에 영영 남는다.
      */
     private Optional<Instant> leftBehindAt(
         final long routeVersionId,
-        Instant notBefore
+        Instant from,
+        Instant until
     ) {
-        return vehicleTrajectoryRepository.findOldestAwaitingForecastAt(routeVersionId)
-            .filter(oldest -> oldest.isBefore(notBefore));
+        return vehicleTrajectoryRepository.findOldestLeftBehindAt(routeVersionId, from, until);
     }
 
     /**
