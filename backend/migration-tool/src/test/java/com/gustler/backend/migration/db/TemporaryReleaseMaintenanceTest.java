@@ -11,6 +11,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -34,7 +35,7 @@ class TemporaryReleaseMaintenanceTest extends PostgresMigrationTestSupport {
         ImportSettings settings = settings(directory);
         TemporaryReleaseMaintenance maintenance = new TemporaryReleaseMaintenance();
 
-        assertPauseRefusesWhileDerivedWritesAreRecent(maintenance, settings);
+        assertPauseRefusesForEachRecentDerivedWriteClock(maintenance, settings);
 
         maintenance.pause(settings);
         maintenance.recoverTemporaryRelease(settings);
@@ -161,31 +162,36 @@ class TemporaryReleaseMaintenanceTest extends PostgresMigrationTestSupport {
         }
     }
 
-    private static void assertPauseRefusesWhileDerivedWritesAreRecent(
+    private static void assertPauseRefusesForEachRecentDerivedWriteClock(
         TemporaryReleaseMaintenance maintenance,
         ImportSettings settings
     ) throws Exception {
         Instant statisticsComputedAt =
             TemporaryReleaseMaintenance.TEMPORARY_ACTIVATED_AT.plusSeconds(7200);
-        try (Connection connection = connection()) {
-            execute(connection, "UPDATE seat_forecast SET generated_at = clock_timestamp()");
-            assertThatThrownBy(() -> maintenance.pause(settings))
-                .isInstanceOf(MigrationException.class)
-                .hasMessage("TEMP_FORECAST_WRITES_NOT_QUIESCENT");
-            execute(connection,
-                "UPDATE seat_forecast SET generated_at = '2026-09-02T12:00:02Z'");
-
-            execute(connection, """
+        List<DerivedWriteClock> clocks = List.of(
+            new DerivedWriteClock(
+                "UPDATE seat_forecast SET generated_at = clock_timestamp()",
+                "UPDATE seat_forecast SET generated_at = '2026-09-02T12:00:02Z'"),
+            new DerivedWriteClock(
+                "UPDATE seat_forecast SET scoring_state = 'SKIPPED', scored_at = clock_timestamp()",
+                "UPDATE seat_forecast SET scoring_state = 'PENDING', scored_at = NULL"),
+            new DerivedWriteClock(
+                """
                 UPDATE stop_demand_statistics SET computed_at = clock_timestamp()
                 WHERE computed_at = '%s'
-                """.formatted(statisticsComputedAt));
-            assertThatThrownBy(() -> maintenance.pause(settings))
-                .isInstanceOf(MigrationException.class)
-                .hasMessage("TEMP_FORECAST_WRITES_NOT_QUIESCENT");
-            execute(connection, """
+                """.formatted(statisticsComputedAt),
+                """
                 UPDATE stop_demand_statistics SET computed_at = '%s'
                 WHERE computed_at > '%s'
-                """.formatted(statisticsComputedAt, statisticsComputedAt));
+                """.formatted(statisticsComputedAt, statisticsComputedAt)));
+        try (Connection connection = connection()) {
+            for (DerivedWriteClock clock : clocks) {
+                execute(connection, clock.bump());
+                assertThatThrownBy(() -> maintenance.pause(settings))
+                    .isInstanceOf(MigrationException.class)
+                    .hasMessage("TEMP_FORECAST_WRITES_NOT_QUIESCENT");
+                execute(connection, clock.restore());
+            }
         }
     }
 
@@ -247,6 +253,9 @@ class TemporaryReleaseMaintenanceTest extends PostgresMigrationTestSupport {
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.executeUpdate();
         }
+    }
+
+    private record DerivedWriteClock(String bump, String restore) {
     }
 
     private record Seed(long batchId, long observationId, long routeVersionId) {
