@@ -1,6 +1,7 @@
 package com.gustler.backend.processor.persistence.jdbc;
 
 import com.gustler.backend.processor.StopDemandCell;
+import com.gustler.backend.processor.StopDemandStatisticsJob;
 import com.gustler.backend.processor.StopDemandGeneration;
 import com.gustler.backend.processor.StopDemandHourlyTotals;
 import com.gustler.backend.processor.StopDemandMeasurement;
@@ -226,7 +227,6 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
         """;
 
     private static final String SEED_SCHEMA = "public.stop_demand_seed_import";
-    private static final String CURRENT_CALCULATION_VERSION = "observed-max-capacity-v1";
 
     /** 셀 한 줄. 세대 번호와 기준 시각과 계산 시각은 한 세대의 모든 행에 같은 값이 들어간다. */
     private static final String INSERT_CELL = """
@@ -307,7 +307,7 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
             .param("routeVersionId", routeVersionId)
             .param("dataUntil", offsetOf(dataUntil));
         if (seeded) {
-            statement = statement.param("calculationVersion", CURRENT_CALCULATION_VERSION);
+            statement = statement.param("calculationVersion", StopDemandStatisticsJob.CURRENT_CALCULATION_VERSION);
         }
         return statement
             .query((resultSet, rowNumber) -> new StopDemandHourlyTotals(
@@ -332,7 +332,7 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
                 SELECT 1 FROM stop_demand_seed_import
                 WHERE status = 'APPLIED' AND calculation_version = ?)
             """)
-            .param(CURRENT_CALCULATION_VERSION)
+            .param(StopDemandStatisticsJob.CURRENT_CALCULATION_VERSION)
             .query(Boolean.class)
             .single();
     }
