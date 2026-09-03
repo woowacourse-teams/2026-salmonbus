@@ -192,12 +192,28 @@ java -jar "$MIGRATION_JAR" schema \
 Application Flyway V1..V12 must remain unchanged. Verify the new history table reports V1, V2 and V3.
 
 Import needs no write fence. The importer inserts `S3_BACKFILL` batches whose latest
-`response_received_at` is earlier than 2026-09-02T13:20:01Z, and the worker's forecast queue predicate
-requires `response_received_at >= now() - forecast.staleness` (`FORECAST_STALENESS`, default `5m`).
-Every imported row is outside that window, so the online queue never picks one up. The isolation
-argument now rests on the staleness window, not on an origin predicate: the worker neither reads nor
-knows the `ingestion_origin` column. Reconciliation still asserts the real invariant, zero
-`seat_forecast` rows referencing imported observations.
+`response_received_at` is earlier than 2026-09-02T13:20:01Z, and the worker's forecast queue predicate requires
+`response_received_at >= now() - forecast.staleness` (`FORECAST_STALENESS`, default `5m`). The bound is
+enforced in code, not requested by this document: `ForecastProperties` rejects any `forecast.staleness`
+above its `MAX_STALENESS` of one hour and the worker fails to start, so no configuration can widen the
+window past an hour while forecasting is enabled. Every imported row is hours older than that bound at cutover time, so the online
+queue cannot pick one up at any permitted value. The isolation argument rests on that enforced bound,
+not on an origin predicate: the worker neither reads nor knows the `ingestion_origin` column.
+Reconciliation still asserts the real invariant, zero `seat_forecast` rows referencing imported
+observations.
+
+Raising `FORECAST_STALENESS` still costs something below the cap. The queue is ordered by
+`response_received_at` ascending and each cycle takes at most `batch-limit` batches per active route
+(20 each, so 40 across the two configured routes), so a wider window lets the oldest eligible batches
+fill those slots ahead of ones that just arrived. Keep the operational value at minutes. The cap exists
+so the invariant does not depend on operator discipline; it is not headroom to spend.
+
+After import, `ForecastJob` warns once a minute that batches older than the window are being left
+without a forecast, naming the oldest one. Its query
+(`findOldestAwaitingForecastAt`) filters on outcome but not on `ingestion_origin`, so the batch it names
+is an imported August one and the warning does not clear. Treat it as expected after import rather than
+as a live backlog signal, and use the predicate below to see whether any LIVE batch is actually being
+left behind.
 
 ## Phase 5: ACADEMY_IMPORT approval and base import
 

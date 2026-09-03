@@ -90,8 +90,24 @@ board API는 raw 최신 batch가 아니라 `forecast_completed_at`이 있는 최
 P8 재기동 뒤에는 staleness 창(5분) 때문에 교체 창 동안 쌓인 판을 건너뛰고 새 판부터 예보하므로 backlog
 처리를 기다리지 않고 **1회차 안에 200으로 돌아온다**.
 
-건너뛴 판은 `forecast_completed_at IS NULL`로 영구히 남는다. 정상이며 종결 표시는 하지 않는다. 식별 SQL은
-`forecast_completed_at IS NULL AND response_received_at < now() - interval '5 minutes'`다.
+건너뛴 판은 `forecast_completed_at IS NULL`로 영구히 남는다. 정상이며 종결 표시는 하지 않는다.
+
+`ForecastJob`은 창보다 오래된 미처리 판이 남아 있으면 가장 오래된 판의 관측 시각을 찍어 1분에 한 번 WARN을
+남긴다. 그 조회(`findOldestAwaitingForecastAt`)는 outcome은 걸지만 `ingestion_origin`은 걸지 않으므로,
+**import 뒤에는 이 WARN이 8월 백필 판을 가리키며 영구히 그친다.** 교체 창과 무관하게 계속 뜨는 알림이니
+살아 있는 backlog 신호로 읽지 않는다.
+
+LIVE 판이 실제로 밀리는지는 큐 술어와 같은 조건으로 세어야 한다.
+
+```sql
+SELECT count(*) FROM observation_batch
+WHERE ingestion_origin = 'LIVE'
+  AND outcome IN ('SUCCESS_ROWS', 'SUCCESS_EMPTY')
+  AND forecast_completed_at IS NULL
+  AND response_received_at < now() - interval '5 minutes';
+```
+
+앞의 두 조건을 빼면 이관한 백필 149,193건과 실패 결말 판까지 함께 세어져 15만 건대 숫자가 나온다.
 
 ## 아침: 코드 통합과 worker 배포 1회
 
@@ -105,7 +121,11 @@ P8 재기동 뒤에는 staleness 창(5분) 때문에 교체 창 동안 쌓인 �
 
 worker는 `forecast_cutover_control`을 읽지 않으므로 historical Flyway V1–V3 적용 여부와 무관하게 평소처럼
 작동한다. 배포본에 staleness 창이 들어갔는지 확인한다: `forecast.staleness`(`FORECAST_STALENESS`, 기본
-`5m`)가 적용되고 큐 술어가 `response_received_at >= :notBefore`를 쓰는지. `ingestion_origin` 열은 도구와
+`5m`)가 적용되고 큐 술어가 `response_received_at >= :notBefore`를 쓰는지. 값이 1시간을 넘으면
+`ForecastProperties`가 기동을 거부하므로, 예보가 켜진 상태의 health UP은 창이 상한 안이라는 증거다.
+다만 이 검증은 `forecast.enabled=true`일 때만 돈다. `@EnableConfigurationProperties(ForecastProperties)`가
+`ForecastScheduleConfig`에 달려 있고 그 설정이 `@ConditionalOnProperty(forecast.enabled)`이라,
+`FORECAST_ENABLED=false`로 뜬 프로세스는 staleness 값을 바인딩조차 하지 않는다. `ingestion_origin` 열은 도구와
 trainer만 쓰므로 schema는 import 전에 적용하면 된다.
 
 2026-09-03 read-only preflight의 배포 기준선은 worker `d856d108`, api-app `ed2cf742`다. api-app은
@@ -136,11 +156,18 @@ source closure 정본은
 | D7. statement timeout 상향 | read-only 실측 + 설정 변경, 20–40분 | import 후 246만 행에서 잰 첫 행 시간과 `Sort Method`, 그 배수로 정한 `import.statement-timeout-seconds` | 실측 없이 올리지 않는다; 교체 창 시작 금지 |
 
 import에는 정지가 필요 없다. importer는 `S3_BACKFILL`로 넣고 collector JPA INSERT는 default `LIVE`지만,
-큐가 백필을 배제하는 근거는 origin 술어가 아니라 **staleness 창**이다. 백필 행의 최신
-`response_received_at`이 2026-09-02T13:20:01Z 이전이라 T=5분 창 밖이고, worker는 `ingestion_origin`을
-읽지도 않는다. reconciliation의 진짜 불변식은 그대로 "imported 행을 가리키는 `seat_forecast` 0건"이다.
-import 중 collection·forecast·board는 계속된다. route `valid_from` 확장은 exact current version gate 아래
-단일 transaction이며 별도 DB write 승인 대상이다.
+큐가 백필을 배제하는 근거는 origin 술어가 아니라 **staleness 창**이고, 그 창의 상한은 문서가 부탁하는
+것이 아니라 코드가 강제한다. `ForecastProperties`가 `MAX_STALENESS` 1시간을 넘는 `forecast.staleness`를
+거부해 worker가 기동에서 죽으므로, 설정으로 창을 1시간 너머로 넓힐 수 없다. 백필 행의 최신
+`response_received_at`도 2026-09-02T13:20:01Z 이전이고 교체 시점 기준 수 시간 이전이라 허용되는 어떤 값에서도
+창 밖이다. worker는 `ingestion_origin`을 읽지도 않는다. reconciliation의 진짜 불변식은 그대로
+"imported 행을 가리키는 `seat_forecast` 0건"이다. import 중 collection·forecast·board는 계속된다.
+route `valid_from` 확장은 exact current version gate 아래 단일 transaction이며 별도 DB write 승인 대상이다.
+
+상한 아래에서도 값을 올리는 데는 대가가 있다. 큐는 `response_received_at` 오름차순이고 회차마다
+**노선 판본별로** `batch-limit`(20)만큼의 판만 집으므로(두 노선이면 회차당 40판), 창을 넓히면 오래된 판이
+그 자리를 먼저 채워 방금 들어온 판이 밀린다. 운영값은 몇 분 단위로 둔다. 상한은 불변식이 운영자 주의력에
+기대지 않게 하려고 둔 것이지 올려 써도 되는 여유가 아니다.
 
 ## 교체 창 시작 전 go/no-go
 
@@ -172,6 +199,7 @@ route의 observation 간격, `vehiclesInService`, API 요청량을 읽고 실제
 | P6. seed apply | `ACADEMY_SEED_APPLY`, 5–20분 | plan 재검증, numeric read-back, 두 official generation cell SHA, frozen 교집합 0 | transaction rollback 또는 승인된 seed rollback |
 | P7. activation 전 generation 검증 | read-only, 2–5분 | route coverage `[1650,3330]`, `data_until=T`, receipt digests | promotion 금지 |
 | P8. `PROMOTE_ON_START=true`+`FORECAST_ENABLED=true` 재기동 | 별도 promotion/restart 승인, 8–15분 | 1회 재기동, formal sole ACTIVE, id 1 RETIRED, 즉시 promote 플래그 false 복원(재기동 불필요) | `FORECAST_ENABLED=false`로 되돌림; 별도 temp re-promotion 승인 |
+| P8 주의 | — | staleness 상한 검증이 여기서 처음 돈다. 교체 창 동안 `FORECAST_STALENESS`를 건드렸다면 이 재기동이 실패 지점이다 | 값을 되돌리고 재기동 |
 | P9. formal unpause | `ACADEMY_TEMP_CLEANUP`, 2–5분 | exact formal identity와 seed link 후 pause=false | 수동 UPDATE 금지 |
 | P10. serving verify | read-only, 2–10분 | 두 route 새 formal forecast, official-or-later revision, frozen 참조 0, board 200 | incident/fallback 승인; 삭제 재실행 금지 |
 

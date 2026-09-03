@@ -100,8 +100,20 @@ condition. Completing this file does not itself grant approval.
 - [ ] Tool Flyway V1/V2/V3 is reviewed as additive and uses `historical_import_schema_history`.
 - [ ] Worker code carrying the staleness window is deployed before import: `forecast.staleness`
   (`FORECAST_STALENESS`, default `5m`) is in effect and the pending-forecast queue applies
-  `response_received_at >= :notBefore`. Every imported row is older than
-  2026-09-02T13:20:01Z, so no backfill batch can fall inside the window.
+  `response_received_at >= :notBefore`.
+- [ ] The bound is enforced, not requested: `ForecastProperties` refuses a `forecast.staleness` above
+  its one-hour `MAX_STALENESS` and the worker fails to start, so a worker that is healthy *with
+  forecasting enabled* is itself evidence that the window is within the cap. No imported row is newer
+  than 2026-09-02T13:20:01Z, hours before the cutover, so no backfill batch falls inside the window at
+  any permitted value.
+- [ ] Operators know the bound is only checked while `forecast.enabled=true`, because
+  `@EnableConfigurationProperties(ForecastProperties.class)` sits on the `@ConditionalOnProperty`-gated
+  `ForecastScheduleConfig`. A worker started with `FORECAST_ENABLED=false` never binds the value, so if
+  `FORECAST_STALENESS` is edited during the cutover window the re-enable restart is where it fails.
+- [ ] Operators know that raising `FORECAST_STALENESS` below the cap still lets the oldest eligible
+  batches fill a cycle ahead of fresh ones, because the queue is ascending by `response_received_at`
+  and each cycle takes at most `batch-limit` batches per active route (20 each, 40 across both); the
+  operational value stays at minutes.
 - [ ] Schema execution reports only the expected migrations; application Flyway history remains intact.
 - [ ] An index that already serves
   `ORDER BY batch.response_received_at, batch.id, observation.source_row_number` is looked for first;
@@ -135,7 +147,8 @@ condition. Completing this file does not itself grant approval.
 - [ ] Exactly one dataset seal exists and joins the same terminal manifest, receipt, import batch, and
   full-history inventory.
 - [ ] LIVE rows are unchanged; no S3_BACKFILL batch appears in the online pending-forecast query,
-  because every imported `response_received_at` sits outside the five-minute staleness window.
+  because every imported `response_received_at` sits outside the staleness window, whose one-hour cap
+  `ForecastProperties` enforces at worker startup.
 
 ## Rollback readiness
 
@@ -173,8 +186,13 @@ condition. Completing this file does not itself grant approval.
   high-water. It is a boundary ledger, not a fence; its advisory lock only serializes tool commands and
   the worker never reads `forecast_cutover_control`.
 - [ ] Throughout the window, raw observation counts keep increasing and the three derived-write clocks
-  stay frozen. Batches skipped by the staleness window keep `forecast_completed_at IS NULL` permanently
-  and are identified by `forecast_completed_at IS NULL AND response_received_at < now() - interval '5 minutes'`.
+  stay frozen. Batches skipped by the staleness window keep `forecast_completed_at IS NULL` permanently.
+- [ ] Operators know `ForecastJob`'s once-a-minute stale-batch warning names an imported August batch and
+  never clears after import, because `findOldestAwaitingForecastAt` filters on outcome but not on
+  `ingestion_origin`. Counting LIVE batches actually left behind needs the queue's own conditions:
+  `ingestion_origin = 'LIVE' AND outcome IN ('SUCCESS_ROWS','SUCCESS_EMPTY') AND forecast_completed_at IS NULL
+  AND response_received_at < now() - interval '5 minutes'`; dropping the first two returns the 149,193
+  imported batches and every failed-outcome batch as well.
 - [ ] Operators know board returns `NO_RECENT_OBSERVATION` 503 roughly five minutes after the
   `FORECAST_ENABLED=false` restart, and that it recovers within one cycle after the re-enable restart
   because the staleness window skips the accumulated backlog rather than draining it.
