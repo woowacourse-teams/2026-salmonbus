@@ -1,0 +1,34 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot'
+}
+
+dependencies {
+    implementation project(':worker-app')
+    implementation platform('software.amazon.awssdk:bom:2.54.9')
+    implementation 'software.amazon.awssdk:s3'
+    implementation 'software.amazon.awssdk:sts'
+    implementation 'software.amazon.awssdk:url-connection-client'
+    implementation 'tools.jackson.core:jackson-databind'
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.postgresql:postgresql'
+    runtimeOnly 'org.flywaydb:flyway-database-postgresql'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.assertj:assertj-core'
+    testImplementation 'org.mockito:mockito-core'
+    testImplementation 'org.springframework.boot:spring-boot-starter-actuator'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation project(':common')
+    testImplementation 'org.springframework:spring-jdbc'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+springBoot {
+    mainClass = 'com.gustler.backend.migration.MigrationCli'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
