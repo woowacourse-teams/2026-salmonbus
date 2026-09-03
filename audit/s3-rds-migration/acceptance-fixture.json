@@ -1,0 +1,543 @@
+{
+  "schemaVersion": "salmonbus-s3-rds-acceptance-fixture-v1",
+  "classification": "SYNTHETIC_NON_SOURCE_DATA",
+  "warning": "All UUIDs, digests, timestamps, and observation values in this file are synthetic and outside the audited source time range.",
+  "archiveSchema": "archive-record.schema.json",
+  "sensitiveRuntimeFieldPolicy": {
+    "requiredArchiveField": "vehicle_id",
+    "valueStoredInFixture": false,
+    "validatorBehavior": "Inject a synthetic value in memory only, validate, then discard without stdout.",
+    "actualValueAllowedSurfaces": ["0600 transfer archive", "0600 staging file", "private RDS column"],
+    "actualValueForbiddenSurfaces": ["fixture", "documentation", "log", "stdout", "manifest", "receipt"]
+  },
+  "temporaryGenerationManifestSchema": "temp-generation-manifest.schema.json",
+  "temporaryCleanupDryRun": "scripts/temp_release_cleanup_dry_run.sql",
+  "targetPreflightReadOnly": "scripts/target_preflight_readonly.sql",
+  "boundaryContinuityReadOnly": "scripts/boundary_continuity_readonly.sql",
+  "cutoverReadiness": "cutover-readiness.json",
+  "terminalSourceFreezeEvidence": {
+    "listReceipts": ["source-freeze-confirmation-1.json", "source-freeze-confirmation-2.json"],
+    "byteAuditReceipts": ["continuity-window-final-1.json", "continuity-window-final-2.json"],
+    "canonicalContinuity": "continuity-window.json"
+  },
+  "routeMappingSummary": "route-mapping-summary.json",
+  "routeSeed1650": "route-seed-1650.json",
+  "routeMigrationReceiptSchema": "route-migration-receipt.schema.json",
+  "validRouteMigrationReceipt": {
+    "schema_version": "salmonbus-route-migration-receipt-v1",
+    "target_dev_commit": "d856d10819bf1d018ad43fa63714cc348f1fc643",
+    "status": "PLANNED",
+    "target_baseline": {
+      "route_rows": 2,
+      "route_version_rows": 2,
+      "route_stop_rows": 174,
+      "source": "user-provided academy read-only report",
+      "queried_by_audit": false
+    },
+    "route_3330": {
+      "precondition": {
+        "route_id": 1,
+        "route_version_id": 1,
+        "route_version_count": 1,
+        "valid_from": "2026-09-02T10:27:51.330754Z",
+        "valid_to": null,
+        "content_digest": "91749006e76e5f822c1c2e241b37fae4eba6941e217dcba2928c6e7e8ffdae5d",
+        "order_id_digest": "856b186bb616623d09afc17cfdadbf83551652ad2a8fe68a720f18fdf6ce57af",
+        "stop_count": 85,
+        "unique_stop_ids": 85,
+        "turn_sequence": 43,
+        "nonboarding_stops": 7,
+        "passed": true
+      },
+      "change": {
+        "operation": "UPDATE_VALID_FROM_ONLY",
+        "valid_from_before": "2026-09-02T10:27:51.330754Z",
+        "valid_from_after": "2026-08-14T07:38:45.475Z",
+        "valid_to_after": null,
+        "rows_updated": 0
+      }
+    },
+    "route_1650": {
+      "reference_evidence_sha256": "d2fd50643341a66165ba08543b861f9ab1aec7414ada157df3f138e3bac406e0",
+      "target_insert_performed": false,
+      "precondition": {
+        "route_id": 2,
+        "route_version_id": 2,
+        "route_version_count": 1,
+        "valid_from": "2026-09-02T12:49:33.041299Z",
+        "valid_to": null,
+        "content_digest": "f6b5a3b0fabd731dbbab36054826be26714061c42d66b862eac60b191b4b51bc",
+        "order_id_digest": "24a6ed132cb5b07cac03677d3e462cc11864cc7f68b12fd6fe1780c1fa9e3b71",
+        "stop_count": 89,
+        "unique_stop_ids": 89,
+        "turn_sequence": 44,
+        "nonboarding_stops": 24,
+        "passed": true
+      },
+      "change": {
+        "operation": "UPDATE_VALID_FROM_ONLY",
+        "valid_from_before": "2026-09-02T12:49:33.041299Z",
+        "valid_from_after": "2026-08-14T07:38:46.604Z",
+        "valid_to_after": null,
+        "rows_updated": 0
+      }
+    },
+    "import_ledger": {
+      "source_base_manifest_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "source_continuity_manifest_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "route_mapping_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "planned_batches": 149193,
+      "planned_observations": 2461308
+    },
+    "rollback": {
+      "restore_only_after_import_rollback": true,
+      "route_3330_restore_valid_from": "2026-09-02T10:27:51.330754Z",
+      "route_1650_restore_valid_from": "2026-09-02T12:49:33.041299Z",
+      "requires_separate_approval": true,
+      "performed": false
+    },
+    "privacy": {
+      "contains_vehicle_values": false,
+      "contains_plate_values": false,
+      "contains_credentials": false
+    }
+  },
+  "targetBaseline": {
+    "source": "user-provided read-only query from academy EC2",
+    "observationBatchRowsBeforeImport": 303,
+    "vehicleObservationRowsBeforeImport": 8896,
+    "routeRowsBeforeImport": 1,
+    "routeVersionRowsBeforeImport": 1,
+    "routeStopRowsBeforeImport": 85,
+    "firstResponseReceivedAtUtc": "2026-09-02T10:27:52.390820Z",
+    "lastResponseReceivedAtUtc": "2026-09-02T11:43:58.008989Z",
+    "seatForecastRowsBeforeImport": 0,
+    "stopDemandStatisticsRowsBeforeImport": 0,
+    "modelDeploymentRowsBeforeImport": 0,
+    "modelCountsSnapshotPredatesTemporaryActivation": true,
+    "latestLiveRouteState": {
+      "source": "user-provided d856 academy read-only route report",
+      "routeRows": 2,
+      "routeVersionRows": 2,
+      "routeStopRows": 174,
+      "routes": {
+        "3330": {"routeId": 1, "routeVersionId": 1, "validFromUtc": "2026-09-02T10:27:51.330754Z"},
+        "1650": {"routeId": 2, "routeVersionId": 2, "validFromUtc": "2026-09-02T12:49:33.041299Z"}
+      },
+      "bothReferenceExact": true,
+      "queriedByThisAudit": false
+    },
+    "subsequentTemporaryDeployment": {
+      "modelDeploymentId": 1,
+      "releaseId": "salmonbus-d57370be9195520e",
+      "bundleDigest": "d57370be9195520ecf3b0ef125aa3611090ed5f41ade2963c33f38d99a29e89a",
+      "calculationVersion": "seat-feature-contract-v4-1-2026-09-02",
+      "activatedAtUtc": "2026-09-02T11:55:04.729493Z",
+      "currentDerivedRowCounts": "UNKNOWN_NOT_INFERRED"
+    },
+    "directTargetAccessPerformedByAudit": false
+  },
+  "validTemporaryGenerationManifest": {
+    "schema_version": "salmonbus-temp-generation-exclusion-v1",
+    "temporary_deployment": {
+      "id": 1,
+      "release_id": "salmonbus-d57370be9195520e",
+      "bundle_digest": "d57370be9195520ecf3b0ef125aa3611090ed5f41ade2963c33f38d99a29e89a",
+      "calculation_version": "seat-feature-contract-v4-1-2026-09-02",
+      "activated_at": "2026-09-02T11:55:04.729493Z"
+    },
+    "window": {
+      "from_inclusive": "2026-09-02T11:55:04.729493Z",
+      "through_exclusive": "2099-01-01T00:00:00.000000Z"
+    },
+    "baseline": {
+      "stop_demand_statistics_rows_before_activation": 0,
+      "evidence": "user-provided read-only transaction"
+    },
+    "generations": [
+      {
+        "route_version_id": 1,
+        "calculation_version": "observed-max-capacity-v1",
+        "revision": 1,
+        "data_until": "2098-12-31T23:00:00.000000Z",
+        "computed_at": "2098-12-31T23:00:00.000000Z",
+        "row_count": 3
+      }
+    ],
+    "totals": {
+      "generations": 1,
+      "rows": 3
+    },
+    "privacy": {
+      "contains_observation_rows": false,
+      "contains_vehicle_or_plate_values": false,
+      "contains_credentials": false
+    }
+  },
+  "validLateDeltaManifest": {
+    "schema_version": "salmonbus-s3-rds-archive-manifest-v2",
+    "kind": "LATE_DELTA",
+    "source_account": "827325854159",
+    "target_account": "843255971531",
+    "data_classification": "PRIVATE_SENSITIVE_NORMALIZED",
+    "handling_controls": {
+      "transport": "RSYNC_OVER_SSH",
+      "file_mode": "0600",
+      "directory_mode": "0700",
+      "value_logging": false,
+      "deletion_requires_separate_approval": true
+    },
+    "base_cutoff_kst_date_inclusive": "2098-12-30",
+    "target_authority_by_route_utc": {
+      "1650": "2099-01-01T00:00:00.000000Z",
+      "3330": "2099-01-01T00:00:00.000000Z"
+    },
+    "target_authority_basis": "RDS_ROUTE_VERSION_VALID_FROM_CONSERVATIVE_NO_LIVE_ROW_OVERLAP",
+    "source_inventory_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "field_mapping_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "archive_record_schema_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+    "base_manifest_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+    "previous_delta_manifest_sha256": null,
+    "discovery_window": {
+      "after_utc_exclusive": "2099-01-01T00:00:00.000000Z",
+      "through_utc_inclusive": "2099-01-01T00:15:00.000000Z"
+    },
+    "shards": [
+      {
+        "kst_date": "2098-12-30",
+        "ordinal": 0,
+        "file_name": "dt=2098-12-30_000_sha256-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff.jsonl.zst",
+        "compressed_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "uncompressed_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "compressed_bytes": 123456,
+        "uncompressed_bytes": 1234567,
+        "record_documents": 2,
+        "observation_rows": 3,
+        "first_response_received_at_utc": "2098-12-30T00:00:00.000000Z",
+        "last_response_received_at_utc": "2098-12-30T00:01:00.000000Z"
+      }
+    ],
+    "totals": {
+      "shards": 1,
+      "compressed_bytes": 123456,
+      "uncompressed_bytes": 1234567,
+      "record_documents": 2,
+      "observation_rows": 3
+    },
+    "route_totals": {
+      "1650": {"record_documents": 1, "observation_rows": 1},
+      "3330": {"record_documents": 1, "observation_rows": 2}
+    },
+    "privacy": {
+      "contains_object_keys": false,
+      "contains_original_vehicle_ids": true,
+      "contains_only_normalized_sensitive_vehicle_id": true,
+      "contains_plate_values": false,
+      "contains_source_hmac_values": false,
+      "contains_raw_responses": false,
+      "contains_credentials": false
+    }
+  },
+  "archiveRecordsWithRuntimeSensitiveValueOmitted": [
+    {
+      "batch": {
+        "source_account": "827325854159",
+        "source_schema_version": "1.0.0",
+        "source_record_id": "00000000-0000-4000-8000-000000000001",
+        "semantic_batch_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "attempt_key": "s3v1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "route_name": "3330",
+        "source_route_id": "204000057",
+        "scheduled_at": "2000-01-01T00:00:00.000Z",
+        "requested_at": "2000-01-01T00:00:00.100Z",
+        "response_received_at": "2000-01-01T00:00:00.200Z",
+        "attempt_number": 1,
+        "http_status": 200,
+        "result_code": 0,
+        "outcome": "SUCCESS_ROWS",
+        "failure_code": null,
+        "provider_rows": 2,
+        "stored_rows": 2,
+        "excluded_rows": 0,
+        "normalization_version": "normalization-v1.0.0-s3-backfill",
+        "collection_strategy_version": "adaptive-kst-v1.2.0",
+        "ingestion_origin": "S3_BACKFILL"
+      },
+      "observations": [
+        {
+          "source_row_number": 0,
+          "stop_order": 1,
+          "stop_id": "000000001",
+          "passed_stop_order": 0,
+          "running_state": 1,
+          "remaining_seats": null,
+          "seat_unknown_reason": "REPORTED_UNKNOWN",
+          "crowd_level": null,
+          "vehicle_type": 0,
+          "route_type": 0,
+          "tagless": 0
+        },
+        {
+          "source_row_number": 1,
+          "stop_order": 2,
+          "stop_id": "000000002",
+          "passed_stop_order": 2,
+          "running_state": 2,
+          "remaining_seats": 7,
+          "seat_unknown_reason": null,
+          "crowd_level": 2,
+          "vehicle_type": 1,
+          "route_type": 1,
+          "tagless": null
+        }
+      ]
+    },
+    {
+      "batch": {
+        "source_account": "827325854159",
+        "source_schema_version": "1.0.0",
+        "source_record_id": "00000000-0000-4000-8000-000000000002",
+        "semantic_batch_digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "attempt_key": "s3v1:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "route_name": "1650",
+        "source_route_id": "234000050",
+        "scheduled_at": "2000-01-01T00:01:00.000Z",
+        "requested_at": "2000-01-01T00:01:00.100Z",
+        "response_received_at": "2000-01-01T00:01:00.200Z",
+        "attempt_number": 1,
+        "http_status": 200,
+        "result_code": 4,
+        "outcome": "SUCCESS_EMPTY",
+        "failure_code": null,
+        "provider_rows": 0,
+        "stored_rows": 0,
+        "excluded_rows": 0,
+        "normalization_version": "normalization-v1.0.0-s3-backfill",
+        "collection_strategy_version": "adaptive-kst-v1.2.0",
+        "ingestion_origin": "S3_BACKFILL"
+      },
+      "observations": []
+    }
+  ],
+  "sourceNormalizationCases": [
+    {
+      "name": "private-vehicle-identity-direct-copy",
+      "syntheticSourceShape": {"vehId": "non-empty scalar, value injected only in memory"},
+      "expectedRule": "target private vehicle field receives the same scalar text with no hash or pseudonym transform; target plate field is null"
+    },
+    {
+      "name": "arriving-at-first-stop",
+      "syntheticSource": {"stationSeq": 1, "stateCd": 1},
+      "expected": {"stop_order": 1, "passed_stop_order": 0, "running_state": 1, "storable": true}
+    },
+    {
+      "name": "negative-seat-sentinel",
+      "syntheticSource": {"remainSeatCnt": -1},
+      "expected": {"remaining_seats": null, "seat_unknown_reason": "REPORTED_UNKNOWN"}
+    },
+    {
+      "name": "missing-seat-value",
+      "syntheticSource": {"remainSeatCnt": null},
+      "expected": {"remaining_seats": null, "seat_unknown_reason": "NOT_REPORTED"}
+    },
+    {
+      "name": "crowd-zero-means-unreported",
+      "syntheticSource": {"crowded": 0},
+      "expected": {"crowd_level": null}
+    },
+    {
+      "name": "unknown-running-state-is-row-exclusion",
+      "syntheticSource": {"stationSeq": 2, "stationId": "000000002", "stateCd": 9},
+      "expected": {"storable": false, "exclusion": "UNKNOWN_RUNNING_STATE"}
+    }
+  ],
+  "negativeCases": [
+    {
+      "name": "forbidden-sensitive-field-in-archive",
+      "mutation": "Add any property named plate_number, vehId, plateNo, vehId_hmac, plateNo_hmac, raw_response, response_envelope, object_key, credential, or environment_value.",
+      "expected": "REJECT_BEFORE_TRANSFER"
+    },
+    {
+      "name": "missing-runtime-vehicle-id",
+      "mutation": "Attempt to serialize an observation without a non-empty vehicle_id after the memory-only fixture injection step.",
+      "expected": "REJECT_BEFORE_TRANSFER"
+    },
+    {
+      "name": "source-record-id-replay",
+      "mutation": "Submit the first valid record again without changing it.",
+      "expected": "IDEMPOTENT_NO_OP_WITH_IDENTICAL_DIGEST"
+    },
+    {
+      "name": "source-record-id-content-conflict",
+      "mutation": "Reuse the first source_record_id with a different semantic_batch_digest.",
+      "expected": "REJECT_AND_ROLL_BACK_SHARD"
+    },
+    {
+      "name": "semantic-duplicate-under-new-record-id",
+      "mutation": "Reuse the first semantic_batch_digest with a different source_record_id.",
+      "expected": "REJECT_AND_ROLL_BACK_SHARD"
+    },
+    {
+      "name": "live-attempt-key-shape",
+      "mutation": "Use an attempt_key that does not start with s3v1: followed by 64 lowercase hex characters.",
+      "expected": "REJECT_BEFORE_DATABASE_WRITE"
+    },
+    {
+      "name": "target-authority-overlap",
+      "mutation": "Set a 3330 response_received_at on or after 2026-09-02T10:27:51.330754Z or a 1650 response_received_at on or after 2026-09-02T12:49:33.041299Z in a source catch-up shard.",
+      "expected": "EXCLUDE_FROM_AUTOMATIC_IMPORT_AND_REPORT_AGGREGATE"
+    },
+    {
+      "name": "temporary-smoke-forecast",
+      "mutation": "Associate a synthetic seat_forecast row with the exact temporary tuple model_deployment.id=1, release_id salmonbus-d57370be9195520e, bundle_digest d57370be9195520ecf3b0ef125aa3611090ed5f41ade2963c33f38d99a29e89a, calculation_version seat-feature-contract-v4-1-2026-09-02, activated_at 2026-09-02T11:55:04.729493Z.",
+      "expected": "RETAIN_FORECAST_FOR_AUDIT_BUT_EXCLUDE_FROM_QUALITY_TRAINING_EVALUATION_AND_STOP_DEMAND_CELL_INPUT; KEEP_OBSERVATIONS"
+    },
+    {
+      "name": "temporary-carrier-observed-max-generation",
+      "mutation": "Create a synthetic observed-max-capacity-v1 generation with computed_at inside [2026-09-02T11:55:04.729493Z, formal_cutover_at) from a SETTLED temporary forecast carrier.",
+      "expected": "FREEZE_EXACT_GENERATION_IDENTITY_AND_EXCLUDE_FROM_OFFICIAL_TRAINER_EVALUATOR_CELL_SEED; NEVER_CLASSIFY_AS_CLEAN_FROM_PREDICTION_VALUE_ALONE"
+    }
+  ],
+  "databaseAcceptance": [
+    {
+      "id": "baseline-preserved",
+      "assertion": "The 303 pre-existing observation_batch rows and 8,896 pre-existing vehicle_observation rows remain byte-semantically untouched; no DELETE or UPDATE is part of import."
+    },
+    {
+      "id": "batch-accounting",
+      "assertion": "For every imported batch, provider_rows = stored_rows + excluded_rows and stored_rows equals the inserted observation count."
+    },
+    {
+      "id": "source-idempotency",
+      "assertion": "Every accepted (source_account, source_record_id) and (source_account, semantic_batch_digest) appears exactly once in migration_source_record."
+    },
+    {
+      "id": "row-idempotency",
+      "assertion": "Every imported batch has unique source_row_number values and no duplicate non-null vehicle_id."
+    },
+    {
+      "id": "route-context",
+      "assertion": "Every imported 3330 row resolves to current route_version_id=1 and every imported 1650 row to current route_version_id=2 after their exact valid_from-only extensions; each stop tuple matches the verified current roster."
+    },
+    {
+      "id": "route-version-identity-includes-validity",
+      "assertion": "Distinct validity intervals remain distinct even when content_digest is equal; content_digest alone is never route-version identity, and this migration creates no duplicate version."
+    },
+    {
+      "id": "route-3330-validity-extension",
+      "assertion": "After proving exactly one route/version with id=1, exact 85-stop/name-inclusive content digest, turn 43, nonboarding 7, original valid_from 2026-09-02T10:27:51.330754Z, and valid_to null, update only valid_from to the accepted source minimum 2026-08-14T07:38:45.475Z. Any mismatch performs no change."
+    },
+    {
+      "id": "route-3330-no-unproven-extension",
+      "assertion": "route_version id=1 valid_from is never earlier than 2026-08-14T07:38:45.475Z."
+    },
+    {
+      "id": "route-3330-rollback-receipt",
+      "assertion": "Before mutation, persist the original/new valid_from, route/version IDs, exact content/order digests, stop/turn/nonboarding counts, import ledger identity, and rollback order; rollback is not automatically authorized."
+    },
+    {
+      "id": "route-1650-validity-extension",
+      "assertion": "After proving exactly one current 1650 route/version with route id=2, version id=2, valid_from 2026-09-02T12:49:33.041299Z, valid_to null, 89 exact ordered stops, turn 44, nonboarding 24, order-id digest 24a6ed132cb5b07cac03677d3e462cc11864cc7f68b12fd6fe1780c1fa9e3b71, and content digest f6b5a3b0fabd731dbbab36054826be26714061c42d66b862eac60b191b4b51bc, update only valid_from to 2026-08-14T07:38:46.604Z. Any mismatch performs no change."
+    },
+    {
+      "id": "route-1650-reference-not-insert",
+      "assertion": "route-seed-1650.json remains sanitized reference evidence for the id=2 precondition. It is not an insert payload, and the migration inserts no route, route_version, or route_stop row."
+    },
+    {
+      "id": "route-counts-after-mapping",
+      "assertion": "Before and after validity extension and observation import, target route counts remain route=2, route_version=2, route_stop=174."
+    },
+    {
+      "id": "target-dev-d856-route-contract",
+      "assertion": "Target dev d856d108 configures both 204000057 and 234000050 and is live with both exact current versions. The other three changed files and all 113 Java processor/migration files leave mapping fields, 31-feature trainer/scoring, and schema contracts unchanged."
+    },
+    {
+      "id": "station-mismatch-quarantine-reason",
+      "assertion": "All 27 intermittent base mismatch rows are whole-record quarantined with reason STATION_ID_MISMATCH_AGAINST_GBIS_2026_08_19 and date/route/count receipt; they are not interpreted as a route change."
+    },
+    {
+      "id": "cutover-vehicle-continuity-per-route",
+      "assertion": "For each route independently, aggregate shared vehicle_id counts are measured across its source/live authority boundary without returning any identifier value. Imported/live 3330 must share route_version_id=1 and imported/live 1650 must share route_version_id=2."
+    },
+    {
+      "id": "route-specific-boundary-readonly-v2",
+      "assertion": "The boundary SQL reports source-last, target-first, observed gap, wrong-version batch counts, and shared private identity aggregates independently for 3330/id=1 and 1650/id=2. No all-route gap participates in executable acceptance."
+    },
+    {
+      "id": "per-route-authority-and-overlap",
+      "assertion": "The frozen manifest applies 3330 authority from 2026-09-02T10:27:51.330754Z and 1650 authority from 2026-09-02T12:49:33.041299Z. Every source row at or after its route boundary is excluded from automatic import and counted as overlap."
+    },
+    {
+      "id": "live-observations-preserved",
+      "assertion": "All pre-existing live observation_batch and vehicle_observation rows remain unchanged while direct vehicle_id equality connects eligible trajectories across the boundary."
+    },
+    {
+      "id": "online-backlog-isolation",
+      "assertion": "No S3_BACKFILL batch is returned by the online pending-forecast query."
+    },
+    {
+      "id": "derived-tables-unchanged-during-import",
+      "assertion": "seat_forecast, stop_demand_statistics, and model_deployment remain unchanged until an explicitly versioned trainer/backfill phase begins."
+    },
+    {
+      "id": "smoke-release-exclusion",
+      "assertion": "No forecast belonging to exact temporary model_deployment id=1 contributes to trainer, evaluator, cell backfill, migration measurement, or stop-demand generations; observation rows in that period remain eligible."
+    },
+    {
+      "id": "temporary-generation-freeze",
+      "assertion": "Immediately before formal cutover, every temporary-window generation is frozen by route_version_id, calculation_version, revision, data_until, computed_at, row count, and canonical manifest SHA-256. The set includes observed-max-capacity-v1 generations carried by temporary SETTLED forecasts."
+    },
+    {
+      "id": "official-input-generation-exclusion",
+      "assertion": "Official trainer, evaluator, cell backfill, formal seed, and migration measurement read zero rows from the frozen temporary generation set."
+    },
+    {
+      "id": "temporary-cleanup-approval-gate",
+      "assertion": "No live DELETE or file deletion occurs until a different-calculation-version formal replacement succeeds, exact temporary identities and dry-run counts are shown to the user, and separate approval is received."
+    },
+    {
+      "id": "temporary-cleanup-targets",
+      "assertion": "An approved cleanup deletes only seat_forecast rows for model_deployment_id=1 and stop_demand_statistics rows matching every column of the frozen temporary generation identities; model_deployment id=1 remains RETIRED."
+    },
+    {
+      "id": "no-calculation-version-wide-delete",
+      "assertion": "No stop_demand_statistics DELETE or final exclusion predicate is based on calculation_version alone; it must also match frozen route_version_id, revision, data_until, computed_at, and the activation/cutover window."
+    },
+    {
+      "id": "observation-reconciliation-across-temp-cleanup",
+      "assertion": "Before and after temporary-derived cleanup, observation_batch count, vehicle_observation count, minimum response_received_at, and maximum response_received_at are exactly identical."
+    },
+    {
+      "id": "forecast-completion-preserved",
+      "assertion": "Temporary-derived cleanup does not set any observation_batch.forecast_completed_at value to null."
+    },
+    {
+      "id": "formal-calculation-version-is-distinct",
+      "assertion": "The formal bundle and seed calculation_version is not seat-feature-contract-v4-1-2026-09-02."
+    },
+    {
+      "id": "terminal-source-freeze",
+      "assertion": "After the user disabled the personal schedule at 2026-09-02T13:18:57.240Z and the last in-flight write settled, two independent List points and two byte audits have identical full manifest SHA-256 ad7dca914792eb243008df549fef844e5a32d004a867d7c10c44b6c979b7fad8, LastModified 2026-09-02T13:20:02Z, active counts 7,876 record/7,874 raw, zero bijection errors, and zero base late objects."
+    },
+    {
+      "id": "dual-collector-quota-cutover",
+      "assertion": "The personal schedule remains disabled and academy EC2 is the sole intended collector. No audit code re-enables it; re-enable requires a separate decision."
+    },
+    {
+      "id": "post-midnight-collector-recovery",
+      "assertion": "After the next KST midnight upstream reset, both current routes must again produce successful EC2 observations, the board must recover from NO_RECENT_OBSERVATION, and personal S3 must remain unchanged after terminal LastModified before continuity is declared operationally restored."
+    },
+    {
+      "id": "privacy",
+      "assertion": "Only protected transfer archive/staging rows and private RDS may contain vehicle_id. Manifest, fixture, documentation, importer/rejected-row logs, stdout, and receipts contain no vehicle value; plate, source HMAC, raw response, credential, environment, and database secret values are absent everywhere outside original S3."
+    },
+    {
+      "id": "sensitive-archive-permissions",
+      "assertion": "Local and remote archive/staging directories are mode 0700, files and rsync partials are mode 0600 under umask 0077, transport is encrypted SSH, and any post-import archive deletion waits for separate approval."
+    },
+    {
+      "id": "shard-atomicity",
+      "assertion": "A shard receipt is committed only after compressed SHA-256, archive schema, row counts, and database transaction all pass; rerunning a committed shard is a no-op."
+    }
+  ]
+}

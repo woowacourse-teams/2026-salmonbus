@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://salmonbus.invalid/schemas/s3-rds-migration-archive-record-v1.json",
+  "title": "Sanitized S3 to RDS migration archive record",
+  "description": "One PRIVATE_SENSITIVE_NORMALIZED JSON Lines entry. It contains the source vehicle_id required for trajectory continuity, but no source object key, raw response, plate value, source HMAC/pseudonym, credential, or environment value.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["batch", "observations"],
+  "properties": {
+    "batch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_account",
+        "source_schema_version",
+        "source_record_id",
+        "semantic_batch_digest",
+        "attempt_key",
+        "route_name",
+        "source_route_id",
+        "scheduled_at",
+        "requested_at",
+        "response_received_at",
+        "attempt_number",
+        "http_status",
+        "result_code",
+        "outcome",
+        "failure_code",
+        "provider_rows",
+        "stored_rows",
+        "excluded_rows",
+        "normalization_version",
+        "collection_strategy_version",
+        "ingestion_origin"
+      ],
+      "properties": {
+        "source_account": {"const": "827325854159"},
+        "source_schema_version": {"const": "1.0.0"},
+        "source_record_id": {"type": "string", "format": "uuid"},
+        "semantic_batch_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "attempt_key": {"type": "string", "pattern": "^s3v1:[0-9a-f]{64}$"},
+        "route_name": {"type": "string", "enum": ["1650", "3330"]},
+        "source_route_id": {"type": "string", "pattern": "^[0-9]{1,30}$"},
+        "scheduled_at": {"type": "string", "format": "date-time"},
+        "requested_at": {"type": "string", "format": "date-time"},
+        "response_received_at": {"type": "string", "format": "date-time"},
+        "attempt_number": {"const": 1},
+        "http_status": {"type": ["integer", "null"]},
+        "result_code": {"type": ["integer", "null"]},
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "UNKNOWN_AFTER_DISPATCH",
+            "SUCCESS_ROWS",
+            "SUCCESS_EMPTY",
+            "FAILED_UPSTREAM",
+            "FAILED_UNREADABLE"
+          ]
+        },
+        "failure_code": {
+          "type": ["string", "null"],
+          "enum": [
+            "DAILY_QUOTA_EXCEEDED",
+            "PER_SECOND_QUOTA_EXCEEDED",
+            "UPSTREAM_ERROR",
+            null
+          ]
+        },
+        "provider_rows": {"type": "integer", "minimum": 0},
+        "stored_rows": {"type": "integer", "minimum": 0},
+        "excluded_rows": {"type": "integer", "minimum": 0},
+        "normalization_version": {"const": "normalization-v1.0.0-s3-backfill"},
+        "collection_strategy_version": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$"
+        },
+        "ingestion_origin": {"const": "S3_BACKFILL"}
+      }
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_row_number",
+          "vehicle_id",
+          "stop_order",
+          "stop_id",
+          "passed_stop_order",
+          "running_state",
+          "remaining_seats",
+          "seat_unknown_reason",
+          "crowd_level",
+          "vehicle_type",
+          "route_type",
+          "tagless"
+        ],
+        "properties": {
+          "source_row_number": {"type": "integer", "minimum": 0},
+          "vehicle_id": {"type": "string", "minLength": 1, "maxLength": 40},
+          "stop_order": {"type": "integer", "minimum": 1},
+          "stop_id": {"type": "string", "minLength": 1, "maxLength": 20},
+          "passed_stop_order": {"type": "integer", "minimum": 0},
+          "running_state": {"type": "integer", "enum": [0, 1, 2]},
+          "remaining_seats": {"type": ["integer", "null"], "minimum": 0},
+          "seat_unknown_reason": {
+            "type": ["string", "null"],
+            "enum": ["REPORTED_UNKNOWN", "NOT_REPORTED", null]
+          },
+          "crowd_level": {"type": ["integer", "null"], "minimum": 1, "maximum": 4},
+          "vehicle_type": {"type": ["integer", "null"]},
+          "route_type": {"type": ["integer", "null"]},
+          "tagless": {"type": ["integer", "null"]}
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"remaining_seats": {"type": "integer"}}},
+            "then": {"properties": {"seat_unknown_reason": {"type": "null"}}},
+            "else": {
+              "properties": {
+                "seat_unknown_reason": {
+                  "type": "string",
+                  "enum": ["REPORTED_UNKNOWN", "NOT_REPORTED"]
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

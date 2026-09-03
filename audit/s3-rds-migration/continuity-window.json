@@ -1,0 +1,522 @@
+{
+  "authority_policy": "RDS_ROUTE_VERSION_VALID_FROM_CONSERVATIVE_NO_LIVE_ROW_OVERLAP",
+  "aws_operations": [
+    "s3:ListBucket",
+    "s3:GetObject"
+  ],
+  "completed_at_utc": "2026-09-02T13:24:20.855Z",
+  "inventory": {
+    "bytes": 140161072,
+    "duplicate_raw_reference_extras": 0,
+    "last_modified_utc": "2026-09-02T13:20:02.000000Z",
+    "manifest_sha256_after": "f0decee3446e0e787532c9682bd3c6c627ccf9f10cdba9a992829345fdefa86e",
+    "manifest_sha256_before": "f0decee3446e0e787532c9682bd3c6c627ccf9f10cdba9a992829345fdefa86e",
+    "raw_documents": 7874,
+    "raw_last_modified_utc": "2026-09-02T13:20:02.000000Z",
+    "record_documents": 7876,
+    "record_last_modified_utc": "2026-09-02T13:20:02.000000Z",
+    "same_cutoff_stable": true,
+    "unreferenced_raw_documents": 0
+  },
+  "observed_at_utc": "2026-09-02T13:23:40.988Z",
+  "partition_date_kst": "2026-09-02",
+  "privacy": {
+    "credentials_or_environment_values_emitted": false,
+    "object_keys_emitted": false,
+    "original_vehicle_ids_emitted": false,
+    "plate_values_emitted": false,
+    "row_level_material_persisted": false,
+    "source_hmac_values_emitted": false
+  },
+  "record_errors": {},
+  "route_reference_protocol_sha256": "d6c5588b02eb4e7f80115af20293ccb23e8c5dbb060da90e64a119559d2084be",
+  "schema_version": "salmonbus-continuity-window-audit-v2",
+  "segments": {
+    "source_catch_up": {
+      "accepted_raw_documents": 7062,
+      "accepted_raw_less_records": 2,
+      "accepted_rds_storable_observations": 136909,
+      "accepted_record_documents": 7064,
+      "by_api_result_code": {
+        "0": 6806,
+        "4": 221
+      },
+      "by_classification": {
+        "INCOMPLETE_ENVELOPE": 36,
+        "SUCCESS_NO_VEHICLE": 221,
+        "SUCCESS_WITH_VEHICLES": 6806,
+        "TRANSPORT_ERROR": 2
+      },
+      "by_http_status": {
+        "200": 7063
+      },
+      "by_mapped_failure_code": {},
+      "by_mapped_outcome": {
+        "FAILED_UNREADABLE": 36,
+        "SUCCESS_EMPTY": 221,
+        "SUCCESS_ROWS": 6806,
+        "UNKNOWN_AFTER_DISPATCH": 2
+      },
+      "by_route": {
+        "1650": 3816,
+        "3330": 3249
+      },
+      "by_schema": {
+        "1.0.0": 7065
+      },
+      "classification_time_ranges": {
+        "INCOMPLETE_ENVELOPE": {
+          "first_response_received_at_utc": "2026-09-01T15:50:03.664Z",
+          "last_response_received_at_utc": "2026-09-01T19:50:02.579Z",
+          "records": 36
+        },
+        "SUCCESS_NO_VEHICLE": {
+          "first_response_received_at_utc": "2026-09-01T15:47:15.372Z",
+          "last_response_received_at_utc": "2026-09-01T19:50:35.361Z",
+          "records": 221
+        },
+        "SUCCESS_WITH_VEHICLES": {
+          "first_response_received_at_utc": "2026-09-01T15:00:15.346Z",
+          "last_response_received_at_utc": "2026-09-02T12:49:31.467Z",
+          "records": 6806
+        },
+        "TRANSPORT_ERROR": {
+          "first_response_received_at_utc": "2026-09-01T19:16:10.270Z",
+          "last_response_received_at_utc": "2026-09-01T19:45:10.274Z",
+          "records": 2
+        }
+      },
+      "first_response_received_at_utc": "2026-09-01T15:00:15.346Z",
+      "last_response_received_at_utc": "2026-09-02T12:49:31.467Z",
+      "provider_observations": 136933,
+      "quarantined_observations": 24,
+      "quarantined_records": 1,
+      "raw_bytes_referenced": 27719089,
+      "raw_documents_referenced": 7063,
+      "raw_less_records": 2,
+      "rds_storable_observations": 136933,
+      "record_bytes": 98583143,
+      "record_documents": 7065
+    },
+    "target_authority_overlap": {
+      "accepted_raw_documents": 811,
+      "accepted_raw_less_records": 0,
+      "accepted_rds_storable_observations": 14924,
+      "accepted_record_documents": 811,
+      "by_api_result_code": {
+        "0": 621
+      },
+      "by_classification": {
+        "HTTP_ERROR": 190,
+        "SUCCESS_WITH_VEHICLES": 621
+      },
+      "by_http_status": {
+        "200": 621,
+        "429": 190
+      },
+      "by_mapped_failure_code": {
+        "UPSTREAM_ERROR": 190
+      },
+      "by_mapped_outcome": {
+        "FAILED_UPSTREAM": 190,
+        "SUCCESS_ROWS": 621
+      },
+      "by_route": {
+        "1650": 122,
+        "3330": 689
+      },
+      "by_schema": {
+        "1.0.0": 811
+      },
+      "classification_time_ranges": {
+        "HTTP_ERROR": {
+          "first_response_received_at_utc": "2026-09-02T12:56:30.276Z",
+          "last_response_received_at_utc": "2026-09-02T13:20:01.561Z",
+          "records": 190
+        },
+        "SUCCESS_WITH_VEHICLES": {
+          "first_response_received_at_utc": "2026-09-02T10:28:00.302Z",
+          "last_response_received_at_utc": "2026-09-02T12:56:16.547Z",
+          "records": 621
+        }
+      },
+      "first_response_received_at_utc": "2026-09-02T10:28:00.302Z",
+      "last_response_received_at_utc": "2026-09-02T13:20:01.561Z",
+      "provider_observations": 14924,
+      "quarantined_observations": 0,
+      "quarantined_records": 0,
+      "raw_bytes_referenced": 3041647,
+      "raw_documents_referenced": 811,
+      "raw_less_records": 0,
+      "rds_storable_observations": 14924,
+      "record_bytes": 10817193,
+      "record_documents": 811
+    },
+    "unknown": {
+      "accepted_raw_documents": 0,
+      "accepted_raw_less_records": 0,
+      "accepted_rds_storable_observations": 0,
+      "accepted_record_documents": 0,
+      "by_api_result_code": {},
+      "by_classification": {},
+      "by_http_status": {},
+      "by_mapped_failure_code": {},
+      "by_mapped_outcome": {},
+      "by_route": {},
+      "by_schema": {},
+      "classification_time_ranges": {},
+      "first_response_received_at_utc": null,
+      "last_response_received_at_utc": null,
+      "provider_observations": 0,
+      "quarantined_observations": 0,
+      "quarantined_records": 0,
+      "raw_bytes_referenced": 0,
+      "raw_documents_referenced": 0,
+      "raw_less_records": 0,
+      "rds_storable_observations": 0,
+      "record_bytes": 0,
+      "record_documents": 0
+    }
+  },
+  "segments_by_route": {
+    "1650": {
+      "source_catch_up": {
+        "accepted_raw_documents": 3815,
+        "accepted_raw_less_records": 0,
+        "accepted_rds_storable_observations": 78675,
+        "accepted_record_documents": 3815,
+        "by_api_result_code": {
+          "0": 3766,
+          "4": 45
+        },
+        "by_classification": {
+          "INCOMPLETE_ENVELOPE": 5,
+          "SUCCESS_NO_VEHICLE": 45,
+          "SUCCESS_WITH_VEHICLES": 3766
+        },
+        "by_http_status": {
+          "200": 3816
+        },
+        "by_mapped_failure_code": {},
+        "by_mapped_outcome": {
+          "FAILED_UNREADABLE": 5,
+          "SUCCESS_EMPTY": 45,
+          "SUCCESS_ROWS": 3766
+        },
+        "by_route": {
+          "1650": 3816
+        },
+        "by_schema": {
+          "1.0.0": 3816
+        },
+        "classification_time_ranges": {
+          "INCOMPLETE_ENVELOPE": {
+            "first_response_received_at_utc": "2026-09-01T18:00:16.616Z",
+            "last_response_received_at_utc": "2026-09-01T19:11:09.718Z",
+            "records": 5
+          },
+          "SUCCESS_NO_VEHICLE": {
+            "first_response_received_at_utc": "2026-09-01T16:20:16.488Z",
+            "last_response_received_at_utc": "2026-09-01T19:11:16.432Z",
+            "records": 45
+          },
+          "SUCCESS_WITH_VEHICLES": {
+            "first_response_received_at_utc": "2026-09-01T15:00:16.516Z",
+            "last_response_received_at_utc": "2026-09-02T12:49:31.467Z",
+            "records": 3766
+          }
+        },
+        "first_response_received_at_utc": "2026-09-01T15:00:16.516Z",
+        "last_response_received_at_utc": "2026-09-02T12:49:31.467Z",
+        "provider_observations": 78699,
+        "quarantined_observations": 24,
+        "quarantined_records": 1,
+        "raw_bytes_referenced": 15891021,
+        "raw_documents_referenced": 3816,
+        "raw_less_records": 0,
+        "rds_storable_observations": 78699,
+        "record_bytes": 56036701,
+        "record_documents": 3816
+      },
+      "target_authority_overlap": {
+        "accepted_raw_documents": 122,
+        "accepted_raw_less_records": 0,
+        "accepted_rds_storable_observations": 560,
+        "accepted_record_documents": 122,
+        "by_api_result_code": {
+          "0": 27
+        },
+        "by_classification": {
+          "HTTP_ERROR": 95,
+          "SUCCESS_WITH_VEHICLES": 27
+        },
+        "by_http_status": {
+          "200": 27,
+          "429": 95
+        },
+        "by_mapped_failure_code": {
+          "UPSTREAM_ERROR": 95
+        },
+        "by_mapped_outcome": {
+          "FAILED_UPSTREAM": 95,
+          "SUCCESS_ROWS": 27
+        },
+        "by_route": {
+          "1650": 122
+        },
+        "by_schema": {
+          "1.0.0": 122
+        },
+        "classification_time_ranges": {
+          "HTTP_ERROR": {
+            "first_response_received_at_utc": "2026-09-02T12:56:31.454Z",
+            "last_response_received_at_utc": "2026-09-02T13:20:01.561Z",
+            "records": 95
+          },
+          "SUCCESS_WITH_VEHICLES": {
+            "first_response_received_at_utc": "2026-09-02T12:49:46.470Z",
+            "last_response_received_at_utc": "2026-09-02T12:56:16.547Z",
+            "records": 27
+          }
+        },
+        "first_response_received_at_utc": "2026-09-02T12:49:46.470Z",
+        "last_response_received_at_utc": "2026-09-02T13:20:01.561Z",
+        "provider_observations": 560,
+        "quarantined_observations": 0,
+        "quarantined_records": 0,
+        "raw_bytes_referenced": 136195,
+        "raw_documents_referenced": 122,
+        "raw_less_records": 0,
+        "rds_storable_observations": 560,
+        "record_bytes": 625231,
+        "record_documents": 122
+      },
+      "unknown": {
+        "accepted_raw_documents": 0,
+        "accepted_raw_less_records": 0,
+        "accepted_rds_storable_observations": 0,
+        "accepted_record_documents": 0,
+        "by_api_result_code": {},
+        "by_classification": {},
+        "by_http_status": {},
+        "by_mapped_failure_code": {},
+        "by_mapped_outcome": {},
+        "by_route": {},
+        "by_schema": {},
+        "classification_time_ranges": {},
+        "first_response_received_at_utc": null,
+        "last_response_received_at_utc": null,
+        "provider_observations": 0,
+        "quarantined_observations": 0,
+        "quarantined_records": 0,
+        "raw_bytes_referenced": 0,
+        "raw_documents_referenced": 0,
+        "raw_less_records": 0,
+        "rds_storable_observations": 0,
+        "record_bytes": 0,
+        "record_documents": 0
+      }
+    },
+    "3330": {
+      "source_catch_up": {
+        "accepted_raw_documents": 3247,
+        "accepted_raw_less_records": 2,
+        "accepted_rds_storable_observations": 58234,
+        "accepted_record_documents": 3249,
+        "by_api_result_code": {
+          "0": 3040,
+          "4": 176
+        },
+        "by_classification": {
+          "INCOMPLETE_ENVELOPE": 31,
+          "SUCCESS_NO_VEHICLE": 176,
+          "SUCCESS_WITH_VEHICLES": 3040,
+          "TRANSPORT_ERROR": 2
+        },
+        "by_http_status": {
+          "200": 3247
+        },
+        "by_mapped_failure_code": {},
+        "by_mapped_outcome": {
+          "FAILED_UNREADABLE": 31,
+          "SUCCESS_EMPTY": 176,
+          "SUCCESS_ROWS": 3040,
+          "UNKNOWN_AFTER_DISPATCH": 2
+        },
+        "by_route": {
+          "3330": 3249
+        },
+        "by_schema": {
+          "1.0.0": 3249
+        },
+        "classification_time_ranges": {
+          "INCOMPLETE_ENVELOPE": {
+            "first_response_received_at_utc": "2026-09-01T15:50:03.664Z",
+            "last_response_received_at_utc": "2026-09-01T19:50:02.579Z",
+            "records": 31
+          },
+          "SUCCESS_NO_VEHICLE": {
+            "first_response_received_at_utc": "2026-09-01T15:47:15.372Z",
+            "last_response_received_at_utc": "2026-09-01T19:50:35.361Z",
+            "records": 176
+          },
+          "SUCCESS_WITH_VEHICLES": {
+            "first_response_received_at_utc": "2026-09-01T15:00:15.346Z",
+            "last_response_received_at_utc": "2026-09-02T10:27:45.315Z",
+            "records": 3040
+          },
+          "TRANSPORT_ERROR": {
+            "first_response_received_at_utc": "2026-09-01T19:16:10.270Z",
+            "last_response_received_at_utc": "2026-09-01T19:45:10.274Z",
+            "records": 2
+          }
+        },
+        "first_response_received_at_utc": "2026-09-01T15:00:15.346Z",
+        "last_response_received_at_utc": "2026-09-02T10:27:45.315Z",
+        "provider_observations": 58234,
+        "quarantined_observations": 0,
+        "quarantined_records": 0,
+        "raw_bytes_referenced": 11828068,
+        "raw_documents_referenced": 3247,
+        "raw_less_records": 2,
+        "rds_storable_observations": 58234,
+        "record_bytes": 42546442,
+        "record_documents": 3249
+      },
+      "target_authority_overlap": {
+        "accepted_raw_documents": 689,
+        "accepted_raw_less_records": 0,
+        "accepted_rds_storable_observations": 14364,
+        "accepted_record_documents": 689,
+        "by_api_result_code": {
+          "0": 594
+        },
+        "by_classification": {
+          "HTTP_ERROR": 95,
+          "SUCCESS_WITH_VEHICLES": 594
+        },
+        "by_http_status": {
+          "200": 594,
+          "429": 95
+        },
+        "by_mapped_failure_code": {
+          "UPSTREAM_ERROR": 95
+        },
+        "by_mapped_outcome": {
+          "FAILED_UPSTREAM": 95,
+          "SUCCESS_ROWS": 594
+        },
+        "by_route": {
+          "3330": 689
+        },
+        "by_schema": {
+          "1.0.0": 689
+        },
+        "classification_time_ranges": {
+          "HTTP_ERROR": {
+            "first_response_received_at_utc": "2026-09-02T12:56:30.276Z",
+            "last_response_received_at_utc": "2026-09-02T13:20:00.355Z",
+            "records": 95
+          },
+          "SUCCESS_WITH_VEHICLES": {
+            "first_response_received_at_utc": "2026-09-02T10:28:00.302Z",
+            "last_response_received_at_utc": "2026-09-02T12:56:15.345Z",
+            "records": 594
+          }
+        },
+        "first_response_received_at_utc": "2026-09-02T10:28:00.302Z",
+        "last_response_received_at_utc": "2026-09-02T13:20:00.355Z",
+        "provider_observations": 14364,
+        "quarantined_observations": 0,
+        "quarantined_records": 0,
+        "raw_bytes_referenced": 2905452,
+        "raw_documents_referenced": 689,
+        "raw_less_records": 0,
+        "rds_storable_observations": 14364,
+        "record_bytes": 10191962,
+        "record_documents": 689
+      },
+      "unknown": {
+        "accepted_raw_documents": 0,
+        "accepted_raw_less_records": 0,
+        "accepted_rds_storable_observations": 0,
+        "accepted_record_documents": 0,
+        "by_api_result_code": {},
+        "by_classification": {},
+        "by_http_status": {},
+        "by_mapped_failure_code": {},
+        "by_mapped_outcome": {},
+        "by_route": {},
+        "by_schema": {},
+        "classification_time_ranges": {},
+        "first_response_received_at_utc": null,
+        "last_response_received_at_utc": null,
+        "provider_observations": 0,
+        "quarantined_observations": 0,
+        "quarantined_records": 0,
+        "raw_bytes_referenced": 0,
+        "raw_documents_referenced": 0,
+        "raw_less_records": 0,
+        "rds_storable_observations": 0,
+        "record_bytes": 0,
+        "record_documents": 0
+      }
+    }
+  },
+  "semantic_identity": {
+    "source_catch_up": {
+      "colliding_records_beyond_first": 0,
+      "collision_groups": 0,
+      "collision_rate": 0.0,
+      "eligible_records": 7065,
+      "unique_values": 7065
+    },
+    "target_authority_overlap": {
+      "colliding_records_beyond_first": 0,
+      "collision_groups": 0,
+      "collision_rate": 0.0,
+      "eligible_records": 811,
+      "unique_values": 811
+    }
+  },
+  "semantic_identity_by_route": {
+    "1650": {
+      "source_catch_up": {
+        "colliding_records_beyond_first": 0,
+        "collision_groups": 0,
+        "collision_rate": 0.0,
+        "eligible_records": 3816,
+        "unique_values": 3816
+      },
+      "target_authority_overlap": {
+        "colliding_records_beyond_first": 0,
+        "collision_groups": 0,
+        "collision_rate": 0.0,
+        "eligible_records": 122,
+        "unique_values": 122
+      }
+    },
+    "3330": {
+      "source_catch_up": {
+        "colliding_records_beyond_first": 0,
+        "collision_groups": 0,
+        "collision_rate": 0.0,
+        "eligible_records": 3249,
+        "unique_values": 3249
+      },
+      "target_authority_overlap": {
+        "colliding_records_beyond_first": 0,
+        "collision_groups": 0,
+        "collision_rate": 0.0,
+        "eligible_records": 689,
+        "unique_values": 689
+      }
+    }
+  },
+  "source_account": "827325854159",
+  "target_authority_by_route_utc": {
+    "1650": "2026-09-02T12:49:33.041299Z",
+    "3330": "2026-09-02T10:27:51.330754Z"
+  },
+  "target_authority_from_utc": null
+}

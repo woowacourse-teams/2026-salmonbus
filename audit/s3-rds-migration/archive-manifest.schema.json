@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://salmonbus.invalid/schemas/s3-rds-migration-archive-manifest-v2.json",
+  "title": "Content-addressed S3 to RDS archive manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "source_account",
+    "target_account",
+    "data_classification",
+    "handling_controls",
+    "base_cutoff_kst_date_inclusive",
+    "target_authority_by_route_utc",
+    "target_authority_basis",
+    "source_inventory_sha256",
+    "field_mapping_sha256",
+    "archive_record_schema_sha256",
+    "shards",
+    "totals",
+    "route_totals",
+    "privacy"
+  ],
+  "properties": {
+    "schema_version": {"const": "salmonbus-s3-rds-archive-manifest-v2"},
+    "kind": {"type": "string", "enum": ["BASE", "LATE_DELTA"]},
+    "source_account": {"const": "827325854159"},
+    "target_account": {"const": "843255971531"},
+    "data_classification": {"const": "PRIVATE_SENSITIVE_NORMALIZED"},
+    "handling_controls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transport", "file_mode", "directory_mode", "value_logging", "deletion_requires_separate_approval"],
+      "properties": {
+        "transport": {"type": "string", "enum": ["RSYNC_OVER_SSH", "PRESIGNED_HTTPS_GET"]},
+        "file_mode": {"const": "0600"},
+        "directory_mode": {"const": "0700"},
+        "value_logging": {"const": false},
+        "deletion_requires_separate_approval": {"const": true}
+      }
+    },
+    "base_cutoff_kst_date_inclusive": {"type": "string", "format": "date"},
+    "target_authority_by_route_utc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["1650", "3330"],
+      "properties": {
+        "1650": {"type": "string", "format": "date-time"},
+        "3330": {"type": "string", "format": "date-time"}
+      }
+    },
+    "target_authority_basis": {
+      "const": "RDS_ROUTE_VERSION_VALID_FROM_CONSERVATIVE_NO_LIVE_ROW_OVERLAP"
+    },
+    "source_inventory_sha256": {"$ref": "#/$defs/sha256"},
+    "field_mapping_sha256": {"$ref": "#/$defs/sha256"},
+    "archive_record_schema_sha256": {"$ref": "#/$defs/sha256"},
+    "base_manifest_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "previous_delta_manifest_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "discovery_window": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["after_utc_exclusive", "through_utc_inclusive"],
+      "properties": {
+        "after_utc_exclusive": {"type": "string", "format": "date-time"},
+        "through_utc_inclusive": {"type": "string", "format": "date-time"}
+      }
+    },
+    "shards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kst_date",
+          "ordinal",
+          "file_name",
+          "compressed_sha256",
+          "uncompressed_sha256",
+          "compressed_bytes",
+          "uncompressed_bytes",
+          "record_documents",
+          "observation_rows",
+          "first_response_received_at_utc",
+          "last_response_received_at_utc"
+        ],
+        "properties": {
+          "kst_date": {"type": "string", "format": "date"},
+          "ordinal": {"type": "integer", "minimum": 0},
+          "file_name": {
+            "type": "string",
+            "pattern": "^dt=[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{3}_sha256-[0-9a-f]{64}\\.jsonl\\.zst$"
+          },
+          "compressed_sha256": {"$ref": "#/$defs/sha256"},
+          "uncompressed_sha256": {"$ref": "#/$defs/sha256"},
+          "compressed_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216},
+          "uncompressed_bytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
+          "record_documents": {"type": "integer", "minimum": 1},
+          "observation_rows": {"type": "integer", "minimum": 0},
+          "first_response_received_at_utc": {"type": "string", "format": "date-time"},
+          "last_response_received_at_utc": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shards", "compressed_bytes", "uncompressed_bytes", "record_documents", "observation_rows"],
+      "properties": {
+        "shards": {"type": "integer", "minimum": 1},
+        "compressed_bytes": {"type": "integer", "minimum": 1},
+        "uncompressed_bytes": {"type": "integer", "minimum": 1},
+        "record_documents": {"type": "integer", "minimum": 1},
+        "observation_rows": {"type": "integer", "minimum": 0}
+      }
+    },
+    "route_totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["1650", "3330"],
+      "properties": {
+        "1650": {"$ref": "#/$defs/routeTotals"},
+        "3330": {"$ref": "#/$defs/routeTotals"}
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contains_object_keys",
+        "contains_original_vehicle_ids",
+        "contains_only_normalized_sensitive_vehicle_id",
+        "contains_plate_values",
+        "contains_source_hmac_values",
+        "contains_raw_responses",
+        "contains_credentials"
+      ],
+      "properties": {
+        "contains_object_keys": {"const": false},
+        "contains_original_vehicle_ids": {"const": true},
+        "contains_only_normalized_sensitive_vehicle_id": {"const": true},
+        "contains_plate_values": {"const": false},
+        "contains_source_hmac_values": {"const": false},
+        "contains_raw_responses": {"const": false},
+        "contains_credentials": {"const": false}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"kind": {"const": "BASE"}}},
+      "then": {
+        "properties": {
+          "base_manifest_sha256": {"type": "null"},
+          "previous_delta_manifest_sha256": {"type": "null"},
+          "discovery_window": {"type": "null"}
+        }
+      },
+      "else": {
+        "required": ["base_manifest_sha256", "discovery_window"],
+        "properties": {
+          "base_manifest_sha256": {"$ref": "#/$defs/sha256"},
+          "discovery_window": {"type": "object"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "routeTotals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record_documents", "observation_rows"],
+      "properties": {
+        "record_documents": {"type": "integer", "minimum": 0},
+        "observation_rows": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://salmonbus.invalid/schemas/route-migration-receipt-v1.json",
+  "title": "Fail-closed current-route validity extension and rollback receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "target_dev_commit",
+    "status",
+    "target_baseline",
+    "route_3330",
+    "route_1650",
+    "import_ledger",
+    "rollback",
+    "privacy"
+  ],
+  "properties": {
+    "schema_version": {"const": "salmonbus-route-migration-receipt-v1"},
+    "target_dev_commit": {"const": "d856d10819bf1d018ad43fa63714cc348f1fc643"},
+    "status": {"type": "string", "enum": ["PLANNED", "APPLIED", "ROLLED_BACK"]},
+    "target_baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route_rows", "route_version_rows", "route_stop_rows", "source", "queried_by_audit"],
+      "properties": {
+        "route_rows": {"const": 2},
+        "route_version_rows": {"const": 2},
+        "route_stop_rows": {"const": 174},
+        "source": {"const": "user-provided academy read-only report"},
+        "queried_by_audit": {"const": false}
+      }
+    },
+    "route_3330": {"$ref": "#/$defs/route3330"},
+    "route_1650": {"$ref": "#/$defs/route1650"},
+    "import_ledger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_base_manifest_sha256",
+        "source_continuity_manifest_sha256",
+        "route_mapping_sha256",
+        "planned_batches",
+        "planned_observations"
+      ],
+      "properties": {
+        "source_base_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "source_continuity_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "route_mapping_sha256": {"$ref": "#/$defs/sha256"},
+        "planned_batches": {"const": 149193},
+        "planned_observations": {"const": 2461308}
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "restore_only_after_import_rollback",
+        "route_3330_restore_valid_from",
+        "route_1650_restore_valid_from",
+        "requires_separate_approval",
+        "performed"
+      ],
+      "properties": {
+        "restore_only_after_import_rollback": {"const": true},
+        "route_3330_restore_valid_from": {"const": "2026-09-02T10:27:51.330754Z"},
+        "route_1650_restore_valid_from": {"const": "2026-09-02T12:49:33.041299Z"},
+        "requires_separate_approval": {"const": true},
+        "performed": {"type": "boolean"}
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contains_vehicle_values", "contains_plate_values", "contains_credentials"],
+      "properties": {
+        "contains_vehicle_values": {"const": false},
+        "contains_plate_values": {"const": false},
+        "contains_credentials": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "route3330": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["precondition", "change"],
+      "properties": {
+        "precondition": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "route_id", "route_version_id", "route_version_count", "valid_from", "valid_to",
+            "content_digest", "order_id_digest", "stop_count", "unique_stop_ids", "turn_sequence",
+            "nonboarding_stops", "passed"
+          ],
+          "properties": {
+            "route_id": {"const": 1},
+            "route_version_id": {"const": 1},
+            "route_version_count": {"const": 1},
+            "valid_from": {"const": "2026-09-02T10:27:51.330754Z"},
+            "valid_to": {"type": "null"},
+            "content_digest": {"const": "91749006e76e5f822c1c2e241b37fae4eba6941e217dcba2928c6e7e8ffdae5d"},
+            "order_id_digest": {"const": "856b186bb616623d09afc17cfdadbf83551652ad2a8fe68a720f18fdf6ce57af"},
+            "stop_count": {"const": 85},
+            "unique_stop_ids": {"const": 85},
+            "turn_sequence": {"const": 43},
+            "nonboarding_stops": {"const": 7},
+            "passed": {"type": "boolean"}
+          }
+        },
+        "change": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["operation", "valid_from_before", "valid_from_after", "valid_to_after", "rows_updated"],
+          "properties": {
+            "operation": {"const": "UPDATE_VALID_FROM_ONLY"},
+            "valid_from_before": {"const": "2026-09-02T10:27:51.330754Z"},
+            "valid_from_after": {"const": "2026-08-14T07:38:45.475Z"},
+            "valid_to_after": {"type": "null"},
+            "rows_updated": {"type": "integer", "minimum": 0, "maximum": 1}
+          }
+        }
+      }
+    },
+    "route1650": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reference_evidence_sha256", "target_insert_performed", "precondition", "change"],
+      "properties": {
+        "reference_evidence_sha256": {"$ref": "#/$defs/sha256"},
+        "target_insert_performed": {"const": false},
+        "precondition": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "route_id", "route_version_id", "route_version_count", "valid_from", "valid_to",
+            "content_digest", "order_id_digest", "stop_count", "unique_stop_ids", "turn_sequence",
+            "nonboarding_stops", "passed"
+          ],
+          "properties": {
+            "route_id": {"const": 2},
+            "route_version_id": {"const": 2},
+            "route_version_count": {"const": 1},
+            "valid_from": {"const": "2026-09-02T12:49:33.041299Z"},
+            "valid_to": {"type": "null"},
+            "content_digest": {"const": "f6b5a3b0fabd731dbbab36054826be26714061c42d66b862eac60b191b4b51bc"},
+            "order_id_digest": {"const": "24a6ed132cb5b07cac03677d3e462cc11864cc7f68b12fd6fe1780c1fa9e3b71"},
+            "stop_count": {"const": 89},
+            "unique_stop_ids": {"const": 89},
+            "turn_sequence": {"const": 44},
+            "nonboarding_stops": {"const": 24},
+            "passed": {"type": "boolean"}
+          }
+        },
+        "change": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["operation", "valid_from_before", "valid_from_after", "valid_to_after", "rows_updated"],
+          "properties": {
+            "operation": {"const": "UPDATE_VALID_FROM_ONLY"},
+            "valid_from_before": {"const": "2026-09-02T12:49:33.041299Z"},
+            "valid_from_after": {"const": "2026-08-14T07:38:46.604Z"},
+            "valid_to_after": {"type": "null"},
+            "rows_updated": {"type": "integer", "minimum": 0, "maximum": 1}
+          }
+        }
+      }
+    }
+  }
+}

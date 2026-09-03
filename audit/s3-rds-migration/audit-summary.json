@@ -1,0 +1,522 @@
+{
+  "schemaVersion": "salmonbus-s3-rds-migration-audit-summary-v1",
+  "status": "AUDIT_REFRESHED_TWO_ROUTE_AUTHORITY_CLOSED_IMPLEMENTATION_PREREQUISITES_OPEN",
+  "targetDevCommit": "d856d10819bf1d018ad43fa63714cc348f1fc643",
+  "previousAuditedCommit": "ed2cf742b0db368d7cf6eae2556b36bc156a5e72",
+  "contractSource": "target-dev-delta.json; unchanged V1..V12/entities/collector/processor contracts plus deployed d856 two-route live state",
+  "accounts": {
+    "sourceAccount": "827325854159",
+    "targetAccount": "843255971531",
+    "sourceProfileClass": "personal",
+    "academyAccessAttemptedByAudit": false
+  },
+  "sourceRuntime": {
+    "lambdaFunction": "salmonbus-collector",
+    "runtime": "python3.13",
+    "architecture": "arm64",
+    "memoryMiB": 256,
+    "timeoutSeconds": 120,
+    "collectorSchemaVersion": "1.0.0",
+    "codeSha256Base64": "EkdK2EVaQTdfth3ZbEKNJKP5CeLcru1k7MTbNJNOxjs=",
+    "bucketDefaultEncryption": {
+      "algorithm": "AES256",
+      "mode": "SSE-S3",
+      "kmsKeyConfigured": false
+    },
+    "bucketVersioningEnabled": false,
+    "bucketObjectLockEnabled": false,
+    "bucketLifecycleConfigured": false
+  },
+  "wholeBucketSnapshot": {
+    "observedAtUtc": "2026-09-02T13:05:43.890Z",
+    "objects": 299876,
+    "bytes": 2813453904,
+    "families": {
+      "records": {"objects": 149916, "bytes": 1840513748},
+      "raw": {"objects": 149789, "bytes": 505613240},
+      "derived": {"objects": 119, "bytes": 259681603},
+      "deployment": {"objects": 9, "bytes": 201039293},
+      "rehearsal": {"objects": 21, "bytes": 6598514},
+      "control": {"objects": 21, "bytes": 6673},
+      "audit": {"objects": 1, "bytes": 833}
+    },
+    "migrationScope": ["records", "raw"],
+    "otherFamiliesDisposition": "S3_ONLY"
+  },
+  "immutableBase": {
+    "partitionRangeKstInclusive": ["2026-08-14", "2026-09-01"],
+    "responseReceivedAtRangeUtcInclusive": [
+      "2026-08-14T07:38:45.475Z",
+      "2026-09-01T15:00:03.029Z"
+    ],
+    "freezeRule": "each KST date freezes at next-day 00:15:00 KST",
+    "inventory": {
+      "recordDocuments": 142156,
+      "rawDocuments": 142031,
+      "rawLessRecords": 125,
+      "objects": 284187,
+      "bytes": 2206270988,
+      "inventorySha256": "db47305386c77fd6d28411ce09b5e1633a029027bc15d41c8201139fb9d535b9"
+    },
+    "verifiedImportCandidate": {
+      "recordDocuments": 142129,
+      "rawDocuments": 142004,
+      "rawLessRecords": 125,
+      "observationRows": 2324399,
+      "acceptedManifestSha256": "3cbdc35f50236ca92c3545ac7262762fc05d57933a712fa713830e23771eb0f0"
+    },
+    "quality": {
+      "invalidOrCorruptRecords": 0,
+      "recordRawMissing": 0,
+      "recordRawDuplicateReferences": 0,
+      "unreferencedRawDocumentsBeforeQuarantine": 0,
+      "stationMismatchQuarantinedRecords": 27,
+      "stationMismatchRows": 27,
+      "wholeQuarantinedRecordObservationRows": 545,
+      "repairedMidnightPartitionCrossings": 4,
+      "lateObjectsAfterFreeze": 0,
+      "failedRecords": 964,
+      "failureClassifications": {
+        "API_ERROR": 124,
+        "HTTP_ERROR": 20,
+        "INCOMPLETE_ENVELOPE": 695,
+        "TRANSPORT_ERROR": 125
+      }
+    },
+    "observationsBeforeQuarantine": {
+      "rows": 2324944,
+      "rowNormalizationExclusions": 0,
+      "knownSeats": 2323274,
+      "reportedUnknownSeats": 1670,
+      "notReportedSeats": 0,
+      "crowdLevelPreserved": 2123093,
+      "crowdLevelFoldedToNull": 201851,
+      "allSourceVehicleIdsPresent": true,
+      "allSourcePlateValuesPresent": true,
+      "distinctPrivateVehicleIdentities": 78,
+      "vehicleToSourceHmacBidirectionalConflicts": 0,
+      "duplicateVehicleRowsWithinBatch": 0
+    },
+    "schemaDistribution": {
+      "declaredVersions": {"1.0.0": 142156},
+      "recordShapeFingerprints": 7,
+      "responseShapeFingerprints": 5,
+      "detailPath": "inventory.json"
+    },
+    "distributionPaths": {
+      "dailyRouteRecordsAndObservations": "inventory.json#/daily_route_distribution",
+      "dailyRouteObjectBytes": "inventory.json#/inventory/by_partition",
+      "schemaShapes": "inventory.json#/record_schemas",
+      "strategyVersions": "inventory.json#/collection_strategy_versions"
+    }
+  },
+  "continuityWindow": {
+    "schemaVersion": "salmonbus-continuity-window-audit-v2",
+    "detailPath": "continuity-window.json",
+    "snapshotObservedAtUtc": "2026-09-02T13:23:40.988Z",
+    "partitionDateKst": "2026-09-02",
+    "recordDocuments": 7876,
+    "rawDocuments": 7874,
+    "bytes": 140161072,
+    "lastModifiedUtc": "2026-09-02T13:20:02.000Z",
+    "terminalSourceResponseReceivedAtUtc": "2026-09-02T13:20:01.561Z",
+    "sameCutoffManifestStable": true,
+    "authorityPolicy": "RDS_ROUTE_VERSION_VALID_FROM_CONSERVATIVE_NO_LIVE_ROW_OVERLAP",
+    "targetAuthorityByRouteUtcInclusive": {
+      "3330": "2026-09-02T10:27:51.330754Z",
+      "1650": "2026-09-02T12:49:33.041299Z"
+    },
+    "sourceCatchUp": {
+      "responsePredicate": "response_received_at < targetAuthorityByRouteUtcInclusive[route]",
+      "inventoryRecordDocuments": 7065,
+      "acceptedRecordDocuments": 7064,
+      "acceptedRawDocuments": 7062,
+      "acceptedRawLessRecords": 2,
+      "acceptedObservationRows": 136909,
+      "quarantinedRecords": 1,
+      "quarantinedObservationRows": 24,
+      "responseReceivedAtRangeUtcInclusive": [
+        "2026-09-01T15:00:15.346Z",
+        "2026-09-02T12:49:31.467Z"
+      ],
+      "byRoute": {
+        "3330": {
+          "inventoryRecordDocuments": 3249,
+          "acceptedRecordDocuments": 3249,
+          "acceptedObservationRows": 58234,
+          "quarantinedRecords": 0,
+          "lastAcceptedResponseUtc": "2026-09-02T10:27:45.315Z"
+        },
+        "1650": {
+          "inventoryRecordDocuments": 3816,
+          "acceptedRecordDocuments": 3815,
+          "acceptedObservationRows": 78675,
+          "quarantinedRecords": 1,
+          "lastAcceptedResponseUtc": "2026-09-02T12:49:31.467Z"
+        }
+      },
+      "semanticIdentityCollisions": 0
+    },
+    "targetAuthorityOverlap": {
+      "automaticImport": false,
+      "recordDocuments": 811,
+      "rawDocuments": 811,
+      "observationRows": 14924,
+      "responseReceivedAtRangeUtcInclusive": [
+        "2026-09-02T10:28:00.302Z",
+        "2026-09-02T13:20:01.561Z"
+      ],
+      "byRoute": {
+        "3330": {"recordDocuments": 689, "observationRows": 14364},
+        "1650": {"recordDocuments": 122, "observationRows": 560}
+      },
+      "classifications": {"SUCCESS_WITH_VEHICLES": 621, "HTTP_ERROR": 190},
+      "httpStatus": {"200": 621, "429": 190},
+      "semanticIdentityCollisions": 0,
+      "disposition": "S3_ONLY_RECONCILIATION_EVIDENCE_UNLESS_TARGET_GAP_IS_PROVEN"
+    },
+    "boundaryEvidence": {
+      "3330SourceLastToKnownTargetFirstGapSeconds": 7.07582,
+      "1650SourceLastToVersionOpenGapSeconds": 1.574299,
+      "1650ExactTargetFirstResponse": "UNKNOWN_REQUIRES_ACADEMY_READ_ONLY_PREFLIGHT",
+      "executableScope": "ROUTE_SPECIFIC_ONLY",
+      "historicalBoundaryEvidenceLocation": "AUDIT.md"
+    }
+  },
+  "terminalSourceFreeze": {
+    "status": "CONFIRMED_AT_TWO_POST_DISABLE_LIST_AND_BYTE_AUDIT_POINTS",
+    "detail": "cutover-readiness.json",
+    "personalScheduleDisabledAtUtc": "2026-09-02T13:18:57.240Z",
+    "fullRecordRawObjects": 299937,
+    "recordObjects": 150032,
+    "rawObjects": 149905,
+    "bytes": 2346432060,
+    "lastModifiedUtc": "2026-09-02T13:20:02.000Z",
+    "terminalSourceResponseReceivedAtUtc": "2026-09-02T13:20:01.561Z",
+    "manifestSha256": "ad7dca914792eb243008df549fef844e5a32d004a867d7c10c44b6c979b7fad8",
+    "activePartitionManifestSha256": "f0decee3446e0e787532c9682bd3c6c627ccf9f10cdba9a992829345fdefa86e",
+    "recordRawBijectionErrors": 0,
+    "lateBaseObjects": 0,
+    "awsWritePerformedByAudit": false
+  },
+  "dualCollectorQuotaIncident": {
+    "status": "PERSONAL_SCHEDULE_DISABLED_BY_USER_EC2_SOLE_COLLECTOR_INTENDED",
+    "targetBoard": "both routes 503 NO_RECENT_OBSERVATION",
+    "targetServicesHealth": "UP",
+    "targetLastSuccessfulObservationAndForecastUtc": "2026-09-02T12:56:23Z",
+    "targetFailureAfter": "FAILED_UPSTREAM/DAILY_QUOTA_EXCEEDED",
+    "academyLocalReservedCalls": 764,
+    "sourceHttp429Records": 190,
+    "sourceLastSuccessByRouteUtc": {
+      "3330": "2026-09-02T12:56:15.345Z",
+      "1650": "2026-09-02T12:56:16.547Z"
+    },
+    "causeAssessment": "shared GBIS key total exhaustion, not academy local quota ledger",
+    "nextGate": "After KST midnight reset, verify EC2-only two-route success and no new personal S3 object."
+  },
+  "compositeSourceHistoryAsOfContinuitySnapshot": {
+    "recordDocuments": 150032,
+    "rawDocuments": 149905,
+    "recordAndRawBytes": 2346432060,
+    "verifiedAcceptedRecords": 150004,
+    "verifiedAcceptedRawDocuments": 149877,
+    "verifiedAcceptedRawLessRecords": 127,
+    "verifiedAcceptedObservationRows": 2476232,
+    "responseReceivedAtRangeUtcInclusive": [
+      "2026-08-14T07:38:45.475Z",
+      "2026-09-02T13:20:01.561Z"
+    ]
+  },
+  "maximumAutomaticImport": {
+    "countStatus": "REFRESHED_ROUTE_SPECIFIC_FAIL_CLOSED_AUTHORITY",
+    "authorityRange": "verified source records with response_received_at before the current route_version.valid_from for their route",
+    "authorityByRouteUtcInclusive": {
+      "3330": "2026-09-02T10:27:51.330754Z",
+      "1650": "2026-09-02T12:49:33.041299Z"
+    },
+    "scannedSource": {
+      "recordDocuments": 149221,
+      "rawDocuments": 149094,
+      "bytes": 2332573220
+    },
+    "importRows": {
+      "observation_batch": 149193,
+      "vehicle_observation": 2461308,
+      "vehicle_id_non_null": 2461308,
+      "plate_number_non_null": 0,
+      "byRoute": {
+        "3330": {"observation_batch": 74304, "vehicle_observation": 1175694},
+        "1650": {"observation_batch": 74889, "vehicle_observation": 1285614}
+      }
+    },
+    "rawPairEvidence": {
+      "acceptedRawDocuments": 149066,
+      "acceptedRawLessRecords": 127
+    },
+    "excluded": {
+      "stationMismatchRecords": 28,
+      "wholeQuarantinedRecordObservationRows": 569,
+      "targetAuthorityOverlapRecords": 811,
+      "targetAuthorityOverlapObservationRows": 14924
+    },
+    "intentionallyS3OnlyFields": [
+      "raw response and response envelope",
+      "source object key and raw reference location",
+      "original plate value and plate HMAC",
+      "vehicle HMAC and all pseudonym fields",
+      "request credential/configuration metadata",
+      "HTTP headers and result messages",
+      "quota counter/invocation details",
+      "schema-outside control, deployment, derived, rehearsal, and audit families"
+    ],
+    "sensitiveContinuityDecision": {
+      "status": "CLOSED_DIRECT_PRIVATE_IDENTITY",
+      "originalVehicleId": "copy to private vehicle_observation.vehicle_id in the same scalar-to-text form as the live collector",
+      "sourceVehicleHmac": "not copied",
+      "plateNumber": "set null in every historical backfill row and retain only in source S3",
+      "vehicleIdentityContinuity": "the representation is preserved by exact private vehicle_id equality across each route-specific boundary; aggregate target verification remains pending",
+      "endToEndTrajectoryCondition": "requires both exact current-version valid_from-only preconditions/updates and aggregate per-route boundary tests; no query bridge is needed because 3330 remains on id=1 and 1650 on id=2",
+      "valueEmissionAllowed": false
+    }
+  },
+  "targetBaselineAndExpectedCounts": {
+    "baselineEvidence": "user-provided academy EC2 read-only transaction; not queried by this audit",
+    "baseline": {
+      "observation_batch": 303,
+      "vehicle_observation": 8896,
+      "route": 1,
+      "route_version": 1,
+      "route_stop": 85,
+      "firstResponseReceivedAtUtc": "2026-09-02T10:27:52.390820Z",
+      "lastResponseReceivedAtUtc": "2026-09-02T11:43:58.008989Z"
+    },
+    "latestLiveRouteState": {
+      "route": 2,
+      "route_version": 2,
+      "route_stop": 174,
+      "routes": {
+        "3330": {"routeId": 1, "routeVersionId": 1, "validFromUtc": "2026-09-02T10:27:51.330754Z"},
+        "1650": {"routeId": 2, "routeVersionId": 2, "validFromUtc": "2026-09-02T12:49:33.041299Z"}
+      },
+      "bothSourceReferenceExact": true,
+      "evidence": "user-provided academy read-only report; not queried by this audit"
+    },
+    "anchoredMinimumAfterImport": {
+      "observation_batch": 149496,
+      "vehicle_observation": 2470204,
+      "route": 2,
+      "route_version": 2,
+      "route_stop": 174
+    },
+    "liveContinuityFormula": {
+      "observation_batch": "149496 + target live batches committed after the supplied 303-row baseline",
+      "vehicle_observation": "2470204 + target live observations committed after the supplied 8896-row baseline",
+      "note": "Current exact live row counts after the initial baseline were not supplied; route counts are current but observation totals remain an anchored formula."
+    },
+    "temporaryDerivedCleanupEffect": {
+      "observation_batchDelta": 0,
+      "vehicle_observationDelta": 0,
+      "firstResponseReceivedAt": "UNCHANGED",
+      "lastResponseReceivedAt": "UNCHANGED",
+      "frozenTemporaryGenerationRowsInOfficialReads": 0
+    }
+  },
+  "naturalIdentity": {
+    "recommended": {
+      "provenanceKey": ["sourceAccount", "sourceRecordId"],
+      "semanticUniqueKey": ["sourceAccount", "semanticBatchDigest"],
+      "rdsAttemptKey": "s3v1:<semanticBatchDigest>",
+      "baseCollisionRate": 0.0,
+      "reason": "independent of private object location, detects replay under a new object key, and is syntactically disjoint from the live collector attempt-key format",
+      "privacy": "vehicle_id and plate are not digest tuple fields; no reversible identifier encoding is permitted"
+    },
+    "measuredCandidates": {
+      "objectKey": {"collisionRate": 0.0, "rdsColumnExists": false},
+      "sourceRecordId": {"collisionRate": 0.0, "rdsColumnExists": false},
+      "routeAndRequestStartedAtMillisecond": {"collisionRate": 0.0},
+      "routeAndRequestStartedAtSecond": {"collisionRate": 0.0},
+      "routeAndScheduledAtAndRound": {"collisionRate": 0.000689402893, "collisionExtras": 98},
+      "invocationAndRouteAndRound": {"collisionRate": 0.000689383494, "collisionExtras": 98},
+      "rawResponseSha256": {"collisionRate": 0.005146763735, "collisionExtras": 731},
+      "semanticBatchDigest": {"collisionRate": 0.0}
+    },
+    "targetCollisionAnalysis": {
+      "batchTimeOverlapForAutomaticImport": false,
+      "attemptKeyNamespaceOverlap": false,
+      "vehicleUniqueConstraintScope": "within new observation_batch only",
+      "routeAndRouteVersionConflictStillRequiresDryRun": true
+    }
+  },
+  "routeMapping": {
+    "status": "MAPPING_PLAN_CLOSED_TWO_CURRENT_VALIDITY_EXTENSIONS_PENDING",
+    "machineReadableDetail": "route-mapping-summary.json",
+    "route3330": {
+      "targetCurrentVersionId": 1,
+      "targetValidFromUtc": "2026-09-02T10:27:51.330754Z",
+      "sourceOrderIdTurnPolicyAndNameDigestMatch": true,
+      "baseBlocker": "validity only",
+      "recommendedOperation": "extend route_version id=1 valid_from only",
+      "validFromAfterUtc": "2026-08-14T07:38:45.475Z",
+      "acceptedSourceEarliestResponseUtc": "2026-08-14T07:38:45.475Z",
+      "validFromBeforePreservedInRollbackReceipt": true,
+      "extensionBeforeAcceptedSourceForbidden": true
+    },
+    "route1650": {
+      "targetRouteExists": true,
+      "targetCurrentRouteId": 2,
+      "targetCurrentVersionId": 2,
+      "targetValidFromUtc": "2026-09-02T12:49:33.041299Z",
+      "configuredInTargetDev": true,
+      "validatedReferenceEvidence": "route-seed-1650.json",
+      "targetInsertAllowed": false,
+      "stops": 89,
+      "turnSequence": 44,
+      "nonboardingStops": 24,
+      "contentDigest": "f6b5a3b0fabd731dbbab36054826be26714061c42d66b862eac60b191b4b51bc",
+      "protocolMismatchCount": 0,
+      "firstMismatch": null,
+      "newApiCalls": 0,
+      "acceptedSourceEarliestResponseUtc": "2026-08-14T07:38:46.604Z",
+      "recommendedOperation": "extend route_version id=2 valid_from only",
+      "validFromAfterUtc": "2026-08-14T07:38:46.604Z",
+      "validFromBeforePreservedInRollbackReceipt": true,
+      "extensionBeforeAcceptedSourceForbidden": true
+    },
+    "identity": "route/public identity plus valid_from, valid_to, and content_digest; digest alone is insufficient",
+    "runtimeContinuityGate": "The two in-place validity extensions keep history/live 3330 on route_version_id=1 and history/live 1650 on route_version_id=2, matching current route_version_id-scoped processor queries."
+  },
+  "archive": {
+    "dataClassification": "PRIVATE_SENSITIVE_NORMALIZED",
+    "includedSensitiveFields": ["vehicle_id"],
+    "excludedSensitiveFields": ["plate_number", "source HMAC/pseudonym", "raw response", "credential material"],
+    "primaryTransfer": "resumable rsync-over-SSH",
+    "fallbackTransfer": "short-lived presigned HTTPS GET",
+    "remoteWritePerformed": false,
+    "handling": {
+      "transport": "encrypted SSH",
+      "fileMode": "0600",
+      "directoryMode": "0700",
+      "umask": "0077",
+      "vehicleIdForbiddenFrom": ["logs", "fixtures", "docs examples", "stdout", "manifest", "receipt"],
+      "archiveDeletionRequiresSeparateApproval": true
+    },
+    "format": "canonical JSON Lines with zstd level 3",
+    "baseDateShards": 19,
+    "catchUpDeltaShards": 1,
+    "measuredBase": {
+      "uncompressedBytes": 666925584,
+      "zstdLevel3Bytes": 19589490,
+      "gzipLevel6DateShardBytes": 24219244,
+      "maximumDateUncompressedBytes": 46725330,
+      "maximumDateGzipBytes": 1572956,
+      "measurementIncludesVehicleId": true,
+      "rowValuesPersistedOrEmitted": false
+    },
+    "estimatedCatchUp": {
+      "acceptedRecords": 7064,
+      "acceptedObservations": 136909,
+      "uncompressedBytesRange": [35000000, 45000000],
+      "zstdLevel3BytesRange": [950000, 1400000]
+    },
+    "hardShardBounds": {
+      "compressedBytes": 16777216,
+      "uncompressedBytes": 67108864,
+      "splitBatchAcrossShards": false
+    },
+    "academyEc2Limits": {
+      "singleShardStreaming": true,
+      "importerRssBytes": 268435456,
+      "decompressionBufferBytes": 8388608,
+      "jdbcBatchObservationRows": 1000,
+      "transactionObservationRows": 10000,
+      "concurrentShards": 1
+    }
+  },
+  "postgresSizing": {
+    "syntheticFlywayV1ToV12RelationBytes": 718446592,
+    "heapBytes": 321044480,
+    "indexBytes": 397279232,
+    "indexShare": 0.55297,
+    "currentSchemaPersistentBytesRange": [900000000, 1200000000],
+    "requiredProvenanceAndOriginIndexAdditionalBytesRange": [30000000, 100000000],
+    "projectedPersistentWithRequiredSchemaBytesRange": [930000000, 1300000000],
+    "walAndTemporaryHeadroomBytesRange": [1500000000, 4000000000],
+    "minimumFreeRdsStorageBeforeImportBytes": 5368709120,
+    "rdsImportMinutesExpected": [20, 90],
+    "degradedT4gMicroMinutesUpper": 240,
+    "detailPath": "postgres-sizing.json"
+  },
+  "temporaryModelExclusion": {
+    "modelDeploymentId": 1,
+    "releaseId": "salmonbus-d57370be9195520e",
+    "bundleDigest": "d57370be9195520ecf3b0ef125aa3611090ed5f41ade2963c33f38d99a29e89a",
+    "calculationVersion": "seat-feature-contract-v4-1-2026-09-02",
+    "activatedAtUtc": "2026-09-02T11:55:04.729493Z",
+    "excludeFrom": [
+      "trainer",
+      "evaluator",
+      "cell backfill and future cell history",
+      "migration size and time measurements"
+    ],
+    "carrierDerivedStatistics": {
+      "baselineRowsBeforeActivation": 0,
+      "calculationVersion": "observed-max-capacity-v1",
+      "temporaryWindow": "computed_at >= 2026-09-02T11:55:04.729493Z and computed_at < formal_cutover_at",
+      "lineageRule": "SETTLED temporary forecast is a contaminated carrier even though its prediction value is not aggregated",
+      "frozenGenerationIdentity": [
+        "route_version_id",
+        "calculation_version",
+        "revision",
+        "data_until",
+        "computed_at"
+      ],
+      "officialInputRowsAllowed": 0
+    },
+    "preserve": [
+      "all observation batches and vehicle observations",
+      "model_deployment id=1 as RETIRED lineage",
+      "all observation_batch.forecast_completed_at values"
+    ],
+    "futureApprovedCleanupOnly": [
+      "seat_forecast rows for model_deployment_id=1",
+      "stop_demand_statistics rows matching the frozen exact temporary-window generation manifest, including observed-max-capacity-v1 carrier generations"
+    ],
+    "calculationVersionOnlyStatisticsDeleteForbidden": true,
+    "currentDerivedCounts": "UNKNOWN_NOT_INFERRED",
+    "deletionPerformed": false
+  },
+  "requiredImplementationPrerequisites": [
+    "migration_source_record provenance table and dual source/semantic uniqueness",
+    "ingestion_origin guard before online forecast activation",
+    "aggregate per-route vehicle_id continuity tests retaining route_version_id=1 for 3330 and id=2 for 1650",
+    "fail-closed exact preconditions, valid_from-only updates, import ledger, and rollback receipt for both current versions",
+    "treat route-seed-1650.json as reference evidence only and reject every route/version/stop insert",
+    "target RDS/EBS encryption and at least 5 GiB free RDS storage attestation",
+    "temporary model exclusion in trainer/evaluator/cell SQL",
+    "pre-cutover freeze of exact temporary-window statistics generations and canonical manifest digest",
+    "different calculation_version for the formal bundle/seed",
+    "transactional shard receipt and idempotent retry implementation",
+    "after the next KST midnight reset, verify EC2-only collection succeeds for both routes and personal S3 stays frozen"
+  ],
+  "remainingUncertainties": [
+    "Route content and mapping plan are closed, but the 3330 id=1 and 1650 id=2 validity extensions have not been written or read-back verified in target RDS.",
+    "Target current attempt-key values and private-column aggregate null/distinct counts were not supplied; namespace safety is code-derived and must still be dry-run queried.",
+    "Target RDS storage allocation/free bytes, storage class/IOPS, encryption/KMS state, CPU-credit balance, and current load were not supplied.",
+    "Current temporary seat_forecast and stop_demand_statistics counts after 11:55 UTC were not supplied and are intentionally not inferred.",
+    "The exact first live 1650 observation and aggregate per-route vehicle_id/exact-version boundary results cannot be known until an academy read-only preflight and the approved private import.",
+    "The scheduler disable and academy quota incident facts were user-provided; this audit did not call Scheduler or academy APIs.",
+    "EC2-only recovery after the next KST midnight upstream reset is future state and requires observation.",
+    "No archive, SSH transfer, academy write, RDS import, DELETE, commit, push, PR, or deployment was performed."
+  ],
+  "privacy": {
+    "classification": "AUDIT_ARTIFACTS_AGGREGATE_ONLY_ARCHIVE_POLICY_PRIVATE_SENSITIVE_NORMALIZED",
+    "rowLevelActualDataPresent": false,
+    "sourceObjectKeysPresent": false,
+    "originalVehicleIdentifiersPresent": false,
+    "plateValuesPresent": false,
+    "sourceHmacValuesPresent": false,
+    "secretsOrEnvironmentValuesPresent": false,
+    "futureTransferArchiveContainsVehicleId": true,
+    "futureTransferArchiveContainsPlateOrHmacOrRaw": false
+  }
+}

@@ -1,0 +1,169 @@
+{
+  "schemaVersion": "salmonbus-s3-rds-audit-provenance-v1",
+  "backend": {
+    "targetDevCommit": "d856d10819bf1d018ad43fa63714cc348f1fc643",
+    "previousAuditedCommit": "ed2cf742b0db368d7cf6eae2556b36bc156a5e72",
+    "auditWorktreeHead": "ed2cf742b0db368d7cf6eae2556b36bc156a5e72",
+    "branchAtAudit": "data/s3-rds-migration-audit",
+    "targetContractReadMethod": "git object read-only without checkout",
+    "deltaArtifact": "target-dev-delta.json"
+  },
+  "sourceValidator": {
+    "analysisRepositoryCommit": "c5ff99da81ed0af9916bd5aa5115d89f49258e2c",
+    "exportCurrentSha256": "ea3a3e09701c59147c598f50dc44db1f8b76c8537c81fa24cf395f73cb70a9bb",
+    "reusedAuditSourceSha256": "a977b7a11b66f1bf405e88853d40baea297a82e0050bd2151ae997f58aacbafd",
+    "reusedRunWrapperSha256": "765fada6ccc3a6a62a1d3ea914e8f3d6c632da5aac54299eba7d0d66abe83c10",
+    "routeReferenceProtocolSha256": "d6c5588b02eb4e7f80115af20293ccb23e8c5dbb060da90e64a119559d2084be"
+  },
+  "routeSeedEvidence": {
+    "targetReadOnlyReportSha256": "f5cdc2dd81c8c862fc5ab70ec758c4b694183b7165c648bd2451c19198f9e75a",
+    "cacheOriginCommit": "10f53632054c26a81c9d756bca5a9aad81d9ce3f",
+    "cacheSha256": "12c7bd562af13f1bdb87895254cd8a1651147a1f98729750f17f7d43e046f851",
+    "runtimeReferenceSha256": "e59a6dd1e92ac5c788374704704d76785455f91d51c94f6e5f0753fc1a48cfd6",
+    "route1650ContentDigest": "f6b5a3b0fabd731dbbab36054826be26714061c42d66b862eac60b191b4b51bc",
+    "newGbisApiCalls": 0,
+    "targetWritePerformed": false
+  },
+  "sourceRuntime": {
+    "account": "827325854159",
+    "region": "ap-northeast-2",
+    "collectorLambdaCodeSha256Base64": "EkdK2EVaQTdfth3ZbEKNJKP5CeLcru1k7MTbNJNOxjs=",
+    "collectorSchemaVersion": "1.0.0",
+    "bucketEncryption": "SSE-S3 AES256",
+    "writeOperations": 0
+  },
+  "runs": [
+    {
+      "name": "immutable frozen byte validation",
+      "artifact": "source-validation-frozen.json",
+      "observedAtUtc": "2026-09-02T11:41:24.778236Z",
+      "durationSeconds": 984.833,
+      "workers": 16,
+      "awsOperations": ["s3:ListBucket", "s3:GetObject"]
+    },
+    {
+      "name": "base aggregate identity and compression audit",
+      "artifact": "inventory.json",
+      "observedAtUtc": "2026-09-02T11:48:55.905Z",
+      "completedAtUtc": "2026-09-02T11:58:19.461Z",
+      "workers": 16,
+      "awsOperations": ["s3:ListBucket", "s3:GetObject"]
+    },
+    {
+      "name": "initial global-boundary continuity window validation",
+      "artifact": "continuity-window.json",
+      "status": "SUPERSEDED_BY_TERMINAL_ROUTE_SPECIFIC_V2_RECEIPTS",
+      "observedAtUtc": "2026-09-02T12:01:52.931Z",
+      "completedAtUtc": "2026-09-02T12:02:28.761Z",
+      "workers": 16,
+      "awsOperations": ["s3:ListBucket", "s3:GetObject"]
+    },
+    {
+      "name": "terminal source freeze list confirmation 1",
+      "artifact": "source-freeze-confirmation-1.json",
+      "observedAtUtc": "2026-09-02T13:21:14.320Z",
+      "awsOperations": ["s3:ListBucket"],
+      "sourceMutationPerformed": false
+    },
+    {
+      "name": "terminal route-specific continuity byte validation 1",
+      "artifact": "continuity-window-final-1.json",
+      "observedAtUtc": "2026-09-02T13:21:57.421Z",
+      "completedAtUtc": "2026-09-02T13:22:34.926Z",
+      "awsOperations": ["s3:ListBucket", "s3:GetObject"],
+      "sourceMutationPerformed": false
+    },
+    {
+      "name": "terminal source freeze list confirmation 2",
+      "artifact": "source-freeze-confirmation-2.json",
+      "observedAtUtc": "2026-09-02T13:22:53.278Z",
+      "awsOperations": ["s3:ListBucket"],
+      "sourceMutationPerformed": false
+    },
+    {
+      "name": "terminal route-specific continuity byte validation 2",
+      "artifact": "continuity-window-final-2.json",
+      "canonicalArtifact": "continuity-window.json",
+      "observedAtUtc": "2026-09-02T13:23:40.988Z",
+      "completedAtUtc": "2026-09-02T13:24:20.855Z",
+      "awsOperations": ["s3:ListBucket", "s3:GetObject"],
+      "sourceMutationPerformed": false
+    },
+    {
+      "name": "PostgreSQL relation sizing",
+      "artifact": "postgres-sizing.json",
+      "sourceRowsUsed": false,
+      "syntheticRowsOnly": true,
+      "postgresVersion": "18.6 (Debian 18.6-1.pgdg13+2)"
+    },
+    {
+      "name": "private vehicle_id archive compression measurement",
+      "artifact": "inventory.json#/private_sensitive_archive_measurement",
+      "sourceAcceptedManifestSha256": "3cbdc35f50236ca92c3545ac7262762fc05d57933a712fa713830e23771eb0f0",
+      "eligibleRecords": 142129,
+      "eligibleObservations": 2324399,
+      "rowValuesPersistedOrEmitted": false,
+      "sameCutoffManifestStable": true
+    },
+    {
+      "name": "target preflight read-only local execution",
+      "artifact": "scripts/target_preflight_readonly.sql",
+      "targetQueried": false,
+      "sourceRowsUsed": false,
+      "emptyAndSyntheticRowsOnly": true,
+      "postgresVersion": "18.6 (Debian 18.6-1.pgdg13+2)",
+      "flywayVersionsApplied": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      "transactionReadOnly": true,
+      "result": "PASSED"
+    },
+    {
+      "name": "route-specific boundary continuity read-only local execution",
+      "artifact": "scripts/boundary_continuity_readonly.sql",
+      "targetQueried": false,
+      "sourceRowsUsed": false,
+      "emptyAndSyntheticRowsOnly": true,
+      "postgresVersion": "18.6 (Debian 18.6-1.pgdg13+2)",
+      "flywayVersionsApplied": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      "requiredIngestionOriginColumnAddedToDisposableDatabase": true,
+      "transactionReadOnly": true,
+      "routesValidated": ["3330", "1650"],
+      "result": "PASSED"
+    }
+  ],
+  "targetEvidence": {
+    "account": "843255971531",
+    "source": "user-provided aggregate from an academy EC2 internal read-only transaction",
+    "queriedByThisAudit": false,
+    "credentialsReceivedOrStored": false,
+    "remoteWritePerformed": false
+  },
+  "toolVersions": {
+    "python": "3.13.11",
+    "awsCli": "2.33.6",
+    "localPsql": "18.1",
+    "dockerPostgres": "18.6 (Debian 18.6-1.pgdg13+2)"
+  },
+  "privacy": {
+    "rowLevelActualDataPersisted": false,
+    "objectKeysEmitted": false,
+    "originalVehicleIdsEmitted": false,
+    "plateValuesEmitted": false,
+    "sourceHmacValuesEmitted": false,
+    "secretOrEnvironmentValuesEmitted": false,
+    "approvedFutureArchiveClassification": "PRIVATE_SENSITIVE_NORMALIZED_WITH_VEHICLE_ID",
+    "futureArchiveCreatedByThisAudit": false
+  },
+  "mutationsNotPerformed": [
+    "academy SSH",
+    "academy RDS connection",
+    "archive creation",
+    "rsync or presigned transfer",
+    "RDS import",
+    "live DELETE",
+    "file deletion on live systems",
+    "commit",
+    "push",
+    "pull request",
+    "deployment"
+  ]
+}

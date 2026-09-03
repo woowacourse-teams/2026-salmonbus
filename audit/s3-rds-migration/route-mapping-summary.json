@@ -1,0 +1,181 @@
+{
+  "schemaVersion": "salmonbus-s3-rds-route-mapping-v1",
+  "status": "MAPPING_PLAN_CLOSED_TWO_CURRENT_VERSION_EXTENSIONS_PENDING",
+  "targetDevCommit": "d856d10819bf1d018ad43fa63714cc348f1fc643",
+  "previousAuditedCommit": "ed2cf742b0db368d7cf6eae2556b36bc156a5e72",
+  "contractSource": "target-dev-delta.json, d856 live read-only route report, and cached GBIS route references",
+  "targetEvidence": {
+    "class": "USER_PROVIDED_ACADEMY_READ_ONLY_REPORT",
+    "path": "/Users/idonghun/paseo/workspaces/2026-salmonbus/study-dev-runtime/review-output/blocker-1/ROUTE-REFERENCE-MAPPING.md",
+    "sha256": "5ca70dafc7fcf5c61ad5839d22e38b4a18f0f9c59adab5a56c2bac14501f2c34",
+    "queriedByThisAudit": false
+  },
+  "liveDeployment": {
+    "targetDevCommit": "d856d10819bf1d018ad43fa63714cc348f1fc643",
+    "deployedAtUtcMinute": "2026-09-02T12:49Z",
+    "workerHealth": "UP",
+    "apiHealth": "UP",
+    "configuredRoutes": ["3330", "1650"],
+    "expectedDailyGbisCalls": 8556,
+    "dailyQuota": 10000,
+    "quotaShare": 0.8556,
+    "temporaryBundlePersistedAndReloaded": true,
+    "evidenceClass": "USER_PROVIDED_AND_LOCAL_READ_ONLY_HANDOFF",
+    "academyAccessByThisAudit": false
+  },
+  "sourceReference": {
+    "version": "gbis-2026-08-19",
+    "authority": "cached GBIS getBusRouteStationListv2 reference verified 2026-08-19",
+    "newApiCalls": 0,
+    "protocolSha256": "d6c5588b02eb4e7f80115af20293ccb23e8c5dbb060da90e64a119559d2084be"
+  },
+  "routes": {
+    "3330": {
+      "publicRouteId": "204000057",
+      "targetCurrent": {
+        "routeId": 1,
+        "routeVersionId": 1,
+        "validFromUtc": "2026-09-02T10:27:51.330754Z",
+        "validToUtc": null,
+        "stops": 85,
+        "turnSequence": 43,
+        "nonboardingStops": 7,
+        "contentDigest": "91749006e76e5f822c1c2e241b37fae4eba6941e217dcba2928c6e7e8ffdae5d",
+        "orderIdDigest": "856b186bb616623d09afc17cfdadbf83551652ad2a8fe68a720f18fdf6ce57af"
+      },
+      "sourceComparison": {
+        "orderIdMismatches": 0,
+        "firstOrderIdMismatch": null,
+        "turnMatches": true,
+        "boardingPolicyMatches": true,
+        "cachedNameInclusiveContentDigestMatchesTarget": true
+      },
+      "baseMappingFailure": "NO_COVERING_VERSION",
+      "recommendedTargetMapping": {
+        "operation": "EXTEND_EXISTING_ROUTE_VERSION_VALID_FROM_ONLY",
+        "routeVersionId": 1,
+        "validFromBeforeUtc": "2026-09-02T10:27:51.330754Z",
+        "validFromAfterUtc": "2026-08-14T07:38:45.475Z",
+        "acceptedSourceEarliestResponseUtc": "2026-08-14T07:38:45.475Z",
+        "validToRemains": null,
+        "columnsChanged": ["valid_from"],
+        "extensionBeforeAcceptedSourceForbidden": true,
+        "reason": "Keeping route_version_id=1 on both sides of the cutover preserves the current trajectory, capacity, and arrival query scope."
+      },
+      "failClosedPreconditions": {
+        "routeRowsForPublicId": 1,
+        "routeId": 1,
+        "routeVersionRowsForRoute": 1,
+        "routeVersionId": 1,
+        "validFromUtc": "2026-09-02T10:27:51.330754Z",
+        "validToUtc": null,
+        "contentDigest": "91749006e76e5f822c1c2e241b37fae4eba6941e217dcba2928c6e7e8ffdae5d",
+        "orderIdDigest": "856b186bb616623d09afc17cfdadbf83551652ad2a8fe68a720f18fdf6ce57af",
+        "stopCount": 85,
+        "uniqueStopIds": 85,
+        "turnSequence": 43,
+        "nonboardingStops": 7,
+        "sourceContentMismatches": 0,
+        "failureMode": "ROLLBACK_WITH_NO_CHANGE"
+      },
+      "rollbackReceipt": {
+        "required": true,
+        "preserveValidFromBeforeUtc": "2026-09-02T10:27:51.330754Z",
+        "preserveValidFromAfterUtc": "2026-08-14T07:38:45.475Z",
+        "preservePreconditionDigestAndCounts": true,
+        "rollbackOrder": "Remove dependent imported history under its separately approved import rollback, then restore valid_from using an exact before/after predicate.",
+        "automaticRollbackOrDeleteAuthorized": false
+      }
+    },
+    "1650": {
+      "publicRouteId": "234000050",
+      "targetCurrent": {
+        "routeId": 2,
+        "routeVersionId": 2,
+        "validFromUtc": "2026-09-02T12:49:33.041299Z",
+        "validToUtc": null,
+        "stops": 89,
+        "turnSequence": 44,
+        "nonboardingStops": 24,
+        "contentDigest": "f6b5a3b0fabd731dbbab36054826be26714061c42d66b862eac60b191b4b51bc",
+        "orderIdDigest": "24a6ed132cb5b07cac03677d3e462cc11864cc7f68b12fd6fe1780c1fa9e3b71"
+      },
+      "sourceComparison": {
+        "stops": 89,
+        "uniqueStopIds": 89,
+        "turnSequence": 44,
+        "upStops": 44,
+        "downStops": 45,
+        "nonboardingStops": 24,
+        "orderIdDigest": "24a6ed132cb5b07cac03677d3e462cc11864cc7f68b12fd6fe1780c1fa9e3b71",
+        "devContentDigest": "f6b5a3b0fabd731dbbab36054826be26714061c42d66b862eac60b191b4b51bc",
+        "protocolMismatches": 0,
+        "firstProtocolMismatch": null,
+        "cachedRepresentationMismatches": 0
+      },
+      "baseMappingFailure": "NO_COVERING_VERSION",
+      "validatedSeed": "route-seed-1650.json",
+      "validatedSeedDisposition": "REFERENCE_EVIDENCE_ONLY_TARGET_INSERT_FORBIDDEN_BECAUSE_EXACT_CURRENT_ROWS_EXIST",
+      "recommendedTargetMapping": {
+        "operation": "EXTEND_EXISTING_ROUTE_VERSION_VALID_FROM_ONLY",
+        "routeVersionId": 2,
+        "validFromBeforeUtc": "2026-09-02T12:49:33.041299Z",
+        "validFromAfterUtc": "2026-08-14T07:38:46.604Z",
+        "acceptedSourceEarliestResponseUtc": "2026-08-14T07:38:46.604Z",
+        "validToRemains": null,
+        "columnsChanged": ["valid_from"],
+        "extensionBeforeAcceptedSourceForbidden": true,
+        "reason": "Keeping route_version_id=2 on imported and live 1650 observations preserves current route-version-scoped processor queries."
+      },
+      "failClosedPreconditions": {
+        "routeRowsForPublicId": 1,
+        "routeId": 2,
+        "routeVersionRowsForRoute": 1,
+        "routeVersionId": 2,
+        "validFromUtc": "2026-09-02T12:49:33.041299Z",
+        "validToUtc": null,
+        "contentDigest": "f6b5a3b0fabd731dbbab36054826be26714061c42d66b862eac60b191b4b51bc",
+        "orderIdDigest": "24a6ed132cb5b07cac03677d3e462cc11864cc7f68b12fd6fe1780c1fa9e3b71",
+        "stopCount": 89,
+        "uniqueStopIds": 89,
+        "turnSequence": 44,
+        "nonboardingStops": 24,
+        "sourceContentMismatches": 0,
+        "failureMode": "ROLLBACK_WITH_NO_CHANGE"
+      },
+      "rollbackReceipt": {
+        "required": true,
+        "preserveValidFromBeforeUtc": "2026-09-02T12:49:33.041299Z",
+        "preserveValidFromAfterUtc": "2026-08-14T07:38:46.604Z",
+        "preservePreconditionDigestAndCounts": true,
+        "rollbackOrder": "Remove dependent imported history under its separately approved import rollback, then restore valid_from using an exact before/after predicate.",
+        "automaticRollbackOrDeleteAuthorized": false
+      }
+    }
+  },
+  "stationMismatchQuarantine": {
+    "mismatchRows": 27,
+    "acceptedObservationDenominator": 2324399,
+    "rate": 0.000011615906,
+    "percentRounded": 0.0012,
+    "interpretation": "INTERMITTENT_STATION_REFERENCE_ANOMALY_NOT_ROUTE_CHANGE",
+    "reasonCode": "STATION_ID_MISMATCH_AGAINST_GBIS_2026_08_19",
+    "wholeRecordPolicy": "QUARANTINE_RECORD_FAIL_CLOSED",
+    "days": [
+      {"date": "2026-08-21", "route": "3330", "mismatchRows": 4, "quarantinedRecordObservationRows": 84},
+      {"date": "2026-08-24", "route": "3330", "mismatchRows": 17, "quarantinedRecordObservationRows": 343},
+      {"date": "2026-08-31", "route": "3330", "mismatchRows": 2, "quarantinedRecordObservationRows": 32},
+      {"date": "2026-09-01", "route": "1650", "mismatchRows": 4, "quarantinedRecordObservationRows": 86}
+    ],
+    "reasonMustBePersistedInImportReceipt": true
+  },
+  "mappingIdentityRule": {
+    "key": ["public_route_id", "valid_from", "valid_to", "content_digest"],
+    "contentGates": ["order_id_digest", "turn_sequence", "nonboarding_count"],
+    "dateMapping": "Require exactly one version covering each accepted response_received_at; never extend before the route-specific accepted source minimum and never choose nearest/current as fallback.",
+    "adjacentEqualContentVersionsAllowedBySchema": true,
+    "adjacentDuplicateVersionsRecommended": false,
+    "reason": "An adjacent duplicate-content version would split route_version_id-bound history queries. Both exact current versions are extended in place only under their separately recorded one-version/content preconditions."
+  },
+  "mutationsPerformed": false
+}

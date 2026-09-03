@@ -1,0 +1,149 @@
+{
+  "schemaVersion": "salmonbus-postgres-sizing-v1",
+  "method": {
+    "classification": "SYNTHETIC_NO_SOURCE_ROWS",
+    "postgresVersion": "18.6 (Debian 18.6-1.pgdg13+2)",
+    "migrations": "backend Flyway V1 through V12 at target dev d856d108; byte/path set unchanged from ed2cf742",
+    "script": "scripts/synthetic_postgres_sizing.sql",
+    "inputRows": {
+      "observation_batch": 142129,
+      "vehicle_observation": 2324399
+    },
+    "caveats": [
+      "Synthetic value lengths and distributions approximate the current private vehicle_id path and omit plate_number.",
+      "The required migration provenance and ingestion_origin columns/indexes do not yet exist and are not included.",
+      "Local Docker timing is a lower bound, not an academy RDS performance result."
+    ]
+  },
+  "measured": {
+    "databaseBytes": 727226047,
+    "relationBytes": {
+      "heap": 321044480,
+      "indexes": 397279232,
+      "auxiliary": 122880,
+      "total": 718446592
+    },
+    "indexOverhead": {
+      "indexToHeapRatio": 1.237459,
+      "indexShareOfRelationTotal": 0.55297
+    },
+    "relations": {
+      "observation_batch": {
+        "averageTupleBytes": 241,
+        "heapBytes": 36388864,
+        "indexBytes": 37756928,
+        "totalBytes": 74178560,
+        "indexes": {
+          "pk_observation_batch": 3203072,
+          "ux_batch_attempt": 21020672,
+          "ux_batch_context": 4497408,
+          "ix_batch_forecast_ready": 8192,
+          "ix_batch_awaiting_forecast": 4513792,
+          "ix_batch_recent_history": 4513792
+        }
+      },
+      "vehicle_observation": {
+        "averageTupleBytes": 115,
+        "heapBytes": 284655616,
+        "indexBytes": 359522304,
+        "totalBytes": 644268032,
+        "indexes": {
+          "pk_vehicle_observation": 52224000,
+          "ux_observation_context": 73228288,
+          "ux_observation_source_row": 94732288,
+          "ux_observation_vehicle_per_batch": 120651776,
+          "ix_observation_vehicle_capacity": 18685952
+        }
+      }
+    },
+    "localInsertSecondsLowerBound": {
+      "observation_batch": 1.874654,
+      "vehicle_observation": 27.975291,
+      "combined": 29.849945
+    }
+  },
+  "projectedThroughTargetAuthorityBoundary": {
+    "sourceRowsToImport": {
+      "observation_batch": 149193,
+      "vehicle_observation": 2461308,
+      "vehicle_id_non_null": 2461308,
+      "plate_number_non_null": 0,
+      "derivation": "immutable base 142,129/2,324,399 plus route-specific terminal catch-up 7,064/136,909; terminal target-overlap and quota-failure S3 rows are excluded"
+    },
+    "targetRows": {
+      "observation_batchAnchoredMinimum": 149496,
+      "vehicle_observationAnchoredMinimum": 2470204,
+      "routeAnchoredMinimum": 2,
+      "routeVersionAnchoredMinimum": 2,
+      "routeStopAnchoredMinimum": 174,
+      "formula": "303 + 149,193 + live_batch_delta_after_supplied_baseline; 8,896 + 2,461,308 + live_observation_delta_after_supplied_baseline",
+      "temporaryDerivedCleanupDelta": {
+        "observation_batch": 0,
+        "vehicle_observation": 0,
+        "minimumResponseReceivedAt": "UNCHANGED",
+        "maximumResponseReceivedAt": "UNCHANGED"
+      }
+    },
+    "derivedRows": {
+      "temporarySeatForecastRowsInAllMigrationMeasurements": 0,
+      "frozenTemporaryWindowStatisticsRowsInAllMigrationMeasurements": 0,
+      "includesObservedMaxCapacityCarrierGenerations": true,
+      "afterApprovedTemporaryCleanup": {
+        "temporarySeatForecastRows": 0,
+        "frozenTemporaryWindowStatisticsRows": 0,
+        "modelDeploymentId1Rows": 1,
+        "modelDeploymentId1State": "RETIRED"
+      },
+      "formalForecastStatisticsAndDeploymentRows": "UNKNOWN_NOT_INFERRED"
+    },
+    "persistentBytesCurrentSchemaRange": {
+      "low": 900000000,
+      "high": 1200000000,
+      "includes": "measured heap/index size plus current rows, table free space, and moderate bloat",
+      "excludes": "WAL, backups, snapshots, temporary files, derived forecast/statistics tables, and required new provenance/origin indexes"
+    },
+    "additionalBytesForRequiredProvenanceAndOriginIndexesRange": {
+      "low": 30000000,
+      "high": 100000000
+    },
+    "peakTemporaryAndWalHeadroomBytesRange": {
+      "low": 1500000000,
+      "high": 4000000000
+    },
+    "minimumFreeRdsStorageBeforeImportBytes": 5368709120
+  },
+  "timeEnvelope": {
+    "sourceFullByteValidationObservedSeconds": 984.833,
+    "sourceRecordInventoryAndCompressionObservedMinutesApprox": 9.4,
+    "rsyncAndRemoteHashExpectedMinutes": {
+      "low": 1,
+      "high": 5,
+      "basis": "approximately 20-26 MB compressed base archive; actual SSH throughput not measured"
+    },
+    "rdsImportExpectedMinutes": {
+      "streamingCopyOrBatchedInsertLow": 20,
+      "streamingCopyOrBatchedInsertHigh": 90,
+      "degradedLiveLoadOrIoEnvelopeHigh": 240,
+      "basis": "2.61 million logical inserts, six current observation indexes, six current batch indexes, network/WAL/checkpoint overhead, and a burstable micro instance"
+    }
+  },
+  "t4gMicroRisks": [
+    "The burstable class has only 2 vCPUs and 1 GiB RAM. RDS runs db.t4g in Unlimited mode, so sustained load can consume surplus credits/cost while competing with live traffic; CPU credit metrics must be watched.",
+    "One GiB database memory makes cache churn and checkpoint/WAL pressure material at this index volume.",
+    "The current online pending-forecast query would see every imported successful batch unless ingestion_origin gating is implemented first.",
+    "The existing vehicle_id indexes already account for direct private identity, while the new provenance/origin indexes add further write amplification.",
+    "Large transactions increase WAL retention, recovery time, and rollback cost; commit at no more than 10,000 observation rows.",
+    "Import concurrency must remain one and must yield to live collection latency/connection-pool pressure."
+  ],
+  "academyEc2ImporterEnvelope": {
+    "providedDiskFreeBytesApprox": 28991029248,
+    "providedMemoryAvailableBytesApprox": 841482240,
+    "providedSwapBytes": 0,
+    "maximumImporterRssBytes": 268435456,
+    "maximumDecompressedReadBufferBytes": 8388608,
+    "maximumObservationRowsPerJdbcBatch": 1000,
+    "maximumObservationRowsPerTransaction": 10000,
+    "maximumConcurrentShards": 1,
+    "streamDecompressionRequired": true
+  }
+}

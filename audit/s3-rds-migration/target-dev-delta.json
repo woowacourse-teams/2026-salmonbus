@@ -1,0 +1,107 @@
+{
+  "schemaVersion": "salmonbus-target-dev-contract-delta-v1",
+  "previousCommit": "ed2cf742b0db368d7cf6eae2556b36bc156a5e72",
+  "targetDevCommit": "d856d10819bf1d018ad43fa63714cc348f1fc643",
+  "commitTitle": "fix(SAL-121): CodeBuild 캐시 보존과 아무도 배포 중이 아닐 때 멈추던 판정 변경 (#57)",
+  "commitTime": "2026-09-02T21:40:17+09:00",
+  "parent": "ed2cf742b0db368d7cf6eae2556b36bc156a5e72",
+  "changedFiles": [
+    {
+      "path": "backend/buildspec.yml",
+      "oldSha256": "5cca6807a4887c7601632900ffce4ffdb5094547e094fdad856b37a11da6cd2d",
+      "newSha256": "531ff099a2f9546eabf816cce1f1d1af042e36ff17c0f7d78640cd5278672f65",
+      "change": "Add deterministic Gradle cache paths, cache diagnostics, and lock/gc-file cleanup.",
+      "mappingImpact": "NONE",
+      "trainerImpact": "NONE",
+      "importAcceptanceImpact": "NONE"
+    },
+    {
+      "path": "backend/deploy/rehearsal/rehearse.sh",
+      "oldSha256": "3f3f282022284503e4230c58b66b01adf38e777f32a5fae0b17538b71e653615",
+      "newSha256": "d3fce13cf9bbd0efad7d863cbd39fe7f0fc8d641ec2e52f59abe91bad8673d66",
+      "change": "Add deployment-lock flicker/no-owner regression scenarios.",
+      "mappingImpact": "NONE",
+      "trainerImpact": "NONE",
+      "importAcceptanceImpact": "NONE"
+    },
+    {
+      "path": "backend/deploy/scripts/common.sh",
+      "oldSha256": "e55d01513650efec50587e966a14c1f6749728f8a66e0fcaae649177286d6f26",
+      "newSha256": "86d87837849910f7bd952da366f2fd0d08cce40272c087447ab7bd27fd5265a4",
+      "change": "Retry an ownerless deployment lock three times and suppress transient redirection errors.",
+      "mappingImpact": "NONE",
+      "trainerImpact": "NONE",
+      "importAcceptanceImpact": "NONE"
+    },
+    {
+      "path": "backend/worker-app/src/main/resources/application.yml",
+      "oldSha256": "6876baefbf448f62418f01089189d11a7917788ed0fabc2c7162bd772df39716",
+      "newSha256": "a02a1c65224f138b09894e86fd7e28b702fbcb8ab8719758a870933020ed3365",
+      "change": "Add source route 234000050 (1650) to collection.route-ids; 3330 remains configured.",
+      "mappingImpact": "POSITIVE_1650_IS_NOW_CURRENT_DEV_SUPPORTED",
+      "trainerImpact": "NONE_TO_SCHEMA_FEATURE_OR_AS_OF_CONTRACT",
+      "importAcceptanceImpact": "VERIFY_EXISTING_1650_ROUTE_VERSION_ID_2_AGAINST_THE_VALIDATED_REFERENCE_THEN_EXTEND_VALID_FROM_IN_PLACE"
+    }
+  ],
+  "unchangedContracts": {
+    "flywayVersions": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    "flywayPathSetSha256": "2f916703f633d73cce7de11f9e659bc21465f0a397892fce01c7a06266b28190",
+    "v1CollectorSha256": "3720f1110039c4a3c6ba25163e21c232fbe9a10913eb19df9365f309d07b70f3",
+    "javaProcessorAndMigrationFilesChecked": 113,
+    "migrationEntitiesAndProcessorSourceChanged": false,
+    "collectorNormalizationChanged": false,
+    "observationIdentityChanged": false,
+    "trainerFeatureContractChanged": false,
+    "bundleContractChanged": false,
+    "featureCount": 31,
+    "scoringContractChanged": false,
+    "databaseSchemaContractChanged": false
+  },
+  "effectiveContractImpact": {
+    "fieldMappingChangesRequired": false,
+    "historicalImportFieldMappingChangesRequired": false,
+    "sourceTargetWindowCountsMustBeRefreshed": true,
+    "naturalIdentityChangesRequired": false,
+    "trainerAsOfChangesRequired": false,
+    "routeAcceptanceChangesRequired": true,
+    "routeAcceptanceChange": "1650 is now an existing exact current route/version rather than an insert target. Both current versions are eligible only for fail-closed valid_from-only extension to their route-specific earliest accepted source timestamp."
+  },
+  "liveImpact": {
+    "deployedAtUtcMinute": "2026-09-02T12:49Z",
+    "workerHealth": "UP",
+    "apiHealth": "UP",
+    "temporaryBundlePersistedAndReloaded": true,
+    "configuredRoutes": ["3330", "1650"],
+    "expectedDailyGbisCalls": 8556,
+    "dailyQuota": 10000,
+    "quotaShare": 0.8556,
+    "targetRoutes": {
+      "3330": {
+        "routeId": 1,
+        "routeVersionId": 1,
+        "validFromUtc": "2026-09-02T10:27:51.330754Z",
+        "sourceReferenceExactMatch": true
+      },
+      "1650": {
+        "routeId": 2,
+        "routeVersionId": 2,
+        "validFromUtc": "2026-09-02T12:49:33.041299Z",
+        "sourceReferenceExactMatch": true
+      }
+    },
+    "temporaryForecastsCoverBothRoutes": true,
+    "temporaryForecastCleanupPredicateUnchanged": "seat_forecast.model_deployment_id = 1",
+    "quotaIncident": {
+      "lastSuccessfulObservationAndForecastUtc": "2026-09-02T12:56:23Z",
+      "subsequentOutcome": "FAILED_UPSTREAM",
+      "subsequentFailureCode": "DAILY_QUOTA_EXCEEDED",
+      "academyLocalReservedCalls": 764,
+      "assessment": "shared GBIS key exhaustion under dual collectors, not academy local quota",
+      "personalScheduleDisabledByUserAtUtc": "2026-09-02T13:18:57.240Z",
+      "terminalSourceFreezeConfirmed": true
+    },
+    "academyAccessByThisAudit": false
+  },
+  "evidenceMode": "LOCAL_GIT_OBJECT_READ_ONLY",
+  "remoteOrDataMutationPerformed": false
+}

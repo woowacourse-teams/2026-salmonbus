@@ -1,0 +1,232 @@
+{
+  "schemaVersion": "salmonbus-rds-trainer-read-contract-v1",
+  "targetDevCommit": "d856d10819bf1d018ad43fa63714cc348f1fc643",
+  "previousAuditedCommit": "ed2cf742b0db368d7cf6eae2556b36bc156a5e72",
+  "contractSource": "target-dev-delta.json; Flyway/entities/collector normalization/processor SQL unchanged, worker route configuration adds 1650",
+  "status": "REQUIRED_CONDITIONS_NOT_AN_IMPLEMENTATION",
+  "targetBaseline": {
+    "modelDeploymentRows": 0,
+    "seatForecastRows": 0,
+    "stopDemandStatisticsRows": 0,
+    "evidence": "user-provided academy read-only baseline",
+    "queriedByThisAudit": false
+  },
+  "history": {
+    "tables": [
+      "route",
+      "route_version",
+      "route_stop",
+      "observation_batch",
+      "vehicle_observation",
+      "migration_source_record"
+    ],
+    "batchInclusion": {
+      "successOutcomesForFeatureRows": ["SUCCESS_ROWS", "SUCCESS_EMPTY"],
+      "retainFailureBatchesForCadenceAndCensoring": true,
+      "requiredOrigins": ["LIVE", "S3_BACKFILL"],
+      "excludeQuarantinedSourceRecords": true
+    },
+    "forecastExclusion": {
+      "temporaryDeployment": {
+        "modelDeploymentId": 1,
+        "releaseId": "salmonbus-d57370be9195520e",
+        "bundleDigest": "d57370be9195520ecf3b0ef125aa3611090ed5f41ade2963c33f38d99a29e89a",
+        "calculationVersion": "seat-feature-contract-v4-1-2026-09-02",
+        "activatedAtUtc": "2026-09-02T11:55:04.729493Z"
+      },
+      "scope": [
+        "quality training",
+        "quality evaluation",
+        "stop-demand cell input",
+        "future stop-demand generation history"
+      ],
+      "observationRowsFromSamePeriodRemainEligible": true,
+      "forecastRowsRemainStoredUntilFormalReplacementCleanupIsApproved": true,
+      "minimumSqlBoundary": "Join seat_forecast.model_deployment_id to model_deployment.id and exclude model_deployment.id=1 after fail-closed verification of release_id, bundle_digest, calculation_version, and activated_at. Exclude statistics through the frozen exact generation manifest; calculation_version alone is never a deletion or final exclusion identity.",
+      "baselineContamination": "The supplied zero-row model/forecast/statistics snapshot predates activation; current temporary derived-row counts are unknown and must not be inferred.",
+      "carrierDerivedStatistics": {
+        "calculationVersion": "observed-max-capacity-v1",
+        "whyExcluded": "StopDemandStatisticsJob uses SETTLED temporary forecasts as carriers. Prediction values are not aggregated, but lineage is still temporary.",
+        "temporaryWindow": {
+          "fromInclusiveUtc": "2026-09-02T11:55:04.729493Z",
+          "throughExclusiveUtc": ":formal_cutover_at"
+        },
+        "generationIdentity": [
+          "route_version_id",
+          "calculation_version",
+          "revision",
+          "data_until",
+          "computed_at"
+        ],
+        "beforeCutover": "Exclude every observed-max-capacity-v1 row with computed_at at or after activation from official trainer/evaluator/seed reads.",
+        "atCutover": "Freeze exact generation tuples and a canonical digest before changing the active model.",
+        "afterCutover": "Exclude by frozen generation identity, not by calculation_version alone."
+      },
+      "formalReplacementCalculationVersionMustDiffer": true,
+      "postReplacementLifecycle": {
+        "deleteAfterSeparateApproval": [
+          "temporary deployment seat_forecast rows",
+          "only stop_demand_statistics rows matching the frozen temporary-window generation manifest"
+        ],
+        "retain": [
+          "all observations",
+          "model_deployment id=1 as RETIRED lineage"
+        ],
+        "doNotReset": ["observation_batch.forecast_completed_at"]
+      }
+    },
+    "observationRequirements": [
+      "response_received_at is the authoritative observation instant and is not replaced by GBIS queryTime.",
+      "source_row_number preserves deterministic source order within a batch.",
+      "passed_stop_order is persisted under its declared normalization_version.",
+      "route_version and route_stop must describe the roster effective at response_received_at.",
+      "The source vehicle_id is copied in the same text form as the current live collector so equality remains stable across the cutoff; plate_number is never a trainer identity.",
+      "Empty and failed batches remain in the time line so a collection gap is not confused with zero vehicles."
+    ],
+    "deterministicOrder": [
+      "observation_batch.response_received_at",
+      "observation_batch.id",
+      "vehicle_observation.source_row_number",
+      "vehicle_observation.id"
+    ],
+    "continuityMode": {
+      "selected": "DIRECT_PRIVATE_VEHICLE_ID",
+      "requirement": "Copy source vehId to private vehicle_observation.vehicle_id using the same scalar-to-text representation as the current live collector.",
+      "result": "Trajectories, prior capacity, preceding vehicle, and arrival labels may cross the source/target cutoff without an identity translation layer.",
+      "boundary": {
+        "authorityPolicy": "RDS_ROUTE_VERSION_VALID_FROM_CONSERVATIVE_NO_LIVE_ROW_OVERLAP",
+        "perRoute": {
+          "3330": {
+            "routeVersionId": 1,
+            "sourceLastResponseUtc": "2026-09-02T10:27:45.315Z",
+            "knownTargetFirstResponseUtc": "2026-09-02T10:27:52.390820Z",
+            "gapSeconds": 7.07582
+          },
+          "1650": {
+            "routeVersionId": 2,
+            "sourceLastResponseUtc": "2026-09-02T12:49:31.467Z",
+            "targetFirstResponseUtc": "UNKNOWN_REQUIRES_ACADEMY_READ_ONLY_PREFLIGHT",
+            "sourceLastToVersionOpenGapSeconds": 1.574299
+          }
+        },
+        "executableScope": "ROUTE_SPECIFIC_ONLY",
+        "acceptance": "For each route, aggregate the shared vehicle_id count across its 30-minute source/live windows without returning any value, require the exact current route version ID, and report source-last versus target-first independently."
+      },
+      "sensitiveHandling": "Trainer may use vehicle_id only inside the private transaction. Values never appear in model artifacts, feature exports, logs, fixtures, receipts, or stdout."
+    },
+    "routeVersionContinuity": {
+      "identityRule": "Equal content does not collapse distinct route validity intervals; this migration creates no duplicate version.",
+      "selectedMapping": "Extend current 3330 version id=1 and current 1650 version id=2 backward in place after exact preconditions; create no historical duplicate version.",
+      "historyCompatibilityRule": "Imported and live rows for one route use the same current route_version_id; content digest never substitutes for version identity.",
+      "target3330Boundary": "Imported and live 3330 observations both use route_version_id=1.",
+      "target1650Boundary": "Imported and live 1650 observations both use route_version_id=2.",
+      "requiredQueries": ["trajectory", "maximum capacity as-of", "arrival candidates"],
+      "acceptance": "scripts/boundary_continuity_readonly.sql"
+    }
+  },
+  "snapshot": {
+    "postgresTransaction": "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY",
+    "captureAtStart": [
+      "transaction_timestamp()",
+      "pg_current_snapshot()",
+      "maximum included (response_received_at, observation_batch.id)",
+      "row counts by ingestion_origin and outcome",
+      "ordered base/delta archive manifest SHA-256 values",
+      "Flyway maximum successful version and checksum set"
+    ],
+    "highWaterPredicate": "(response_received_at, observation_batch.id) <= (:data_until, :batch_id_tie_breaker)",
+    "sourceTargetBoundary": {
+      "sourceAutomaticImport": "response_received_at < route-specific authority: 3330 2026-09-02T10:27:51.330754Z; 1650 2026-09-02T12:49:33.041299Z",
+      "targetAuthority": "response_received_at >= the corresponding route-specific authority"
+    },
+    "terminalSourceFreeze": {
+      "fullRecordRawManifestSha256": "ad7dca914792eb243008df549fef844e5a32d004a867d7c10c44b6c979b7fad8",
+      "lastModifiedUtc": "2026-09-02T13:20:02.000Z",
+      "terminalSourceResponseReceivedAtUtc": "2026-09-02T13:20:01.561Z",
+      "confirmedAtTwoPostDisablePoints": true,
+      "trainerImportRows": {"observationBatch": 149193, "vehicleObservation": 2461308},
+      "overlapAndQuotaFailureRecordsExcluded": 811
+    },
+    "immutability": [
+      "A completed training run references content-addressed manifests; late deltas create a new dataset version instead of mutating the old receipt.",
+      "No shard with an uncommitted or failed import receipt is visible to the trainer.",
+      "The trainer records both logical data_until and the database snapshot identity."
+    ]
+  },
+  "causalAsOfRules": [
+    {
+      "name": "vehicle capacity",
+      "rule": "Maximum known remaining seats for that private vehicle_id within the exact current route version, using only batches at or before the prediction (response_received_at, batch id) cursor.",
+      "futureRowsAllowed": false,
+      "currentRuntimeAlignment": "JdbcVehicleTrajectoryRepository already uses the two-column cursor."
+    },
+    {
+      "name": "trajectory",
+      "rule": "Read every batch, including empty batches, in the 30-minute window ending at the prediction cursor; do not pre-filter gaps in SQL.",
+      "futureRowsAllowed": false,
+      "currentRuntimeAlignment": "VehicleTrajectoryAssembler receives the complete batch time line."
+    },
+    {
+      "name": "arrival label",
+      "rule": "Candidate observations must be strictly after the prediction instant, in order, for the same private vehicle_id and the same current route version; apply the versioned gap and sequence-jump censoring rules.",
+      "futureRowsAllowed": true,
+      "futureUse": "label only, never prediction features"
+    },
+    {
+      "name": "stop demand statistics",
+      "rule": "Choose only a statistics generation with data_until <= the prediction observation instant. Capacity observations and settled labels used to build that generation must also be bounded by its data_until.",
+      "futureRowsAllowed": false,
+      "currentRuntimeAlignment": "V11 and JdbcStopDemandStatisticsRepository implement generation history and as-of selection."
+    },
+    {
+      "name": "route roster",
+      "rule": "Resolve route_version by the observation instant and bind every stop_order/stop_id pair to that version before building route position or boarding features.",
+      "futureRowsAllowed": false
+    }
+  ],
+  "featureLineage": {
+    "timeFeatures": ["observation_batch.response_received_at"],
+    "seatFeatures": ["vehicle_observation.remaining_seats", "vehicle capacity as-of"],
+    "crowdFeatures": ["vehicle_observation.crowd_level"],
+    "trajectoryFeatures": ["vehicle_observation.vehicle_id", "vehicle_observation.passed_stop_order", "response_received_at", "empty-batch time line"],
+    "routePositionFeatures": ["route_version", "route_stop.stop_order", "route_stop.boarding_allowed"],
+    "demandFeatures": ["settled arrival labels as-of", "stop_demand_statistics generation as-of"]
+  },
+  "provenanceReceiptRequired": [
+    "trainer code commit and dependency lock digest",
+    "backend schema/Flyway versions and checksums",
+    "collector Lambda code digest and collector schema version",
+    "normalization version and collection strategy distribution",
+    "source account, base inventory digest, cutoff, and ordered late-delta manifest digests",
+    "terminal source freeze digest, two-point closure receipts, terminal LastModified, and route-specific authority boundaries",
+    "field mapping, archive record schema, and importer build digests",
+    "route reference version and digest",
+    "direct vehicle_id continuity policy version and aggregate boundary-test results, never identifier values",
+    "forecast exclusion policy version/digest and excluded counts by model release",
+    "exact temporary deployment forecast exclusion counts",
+    "frozen temporary-window statistics generation manifest, range summary, and SHA-256",
+    "database repeatable-read snapshot identity and high-water cursor",
+    "included/excluded/quarantined batch and observation counts by reason, date, route, and schema",
+    "feature contract version, training window, label window, and data_until",
+    "output model bundle digest"
+  ],
+  "privacy": {
+    "trainerMayReadRawVehicleIdInsidePrivateRdsTransaction": true,
+    "trainerMayEmitRawVehicleId": false,
+    "trainerMayReadPlateNumber": false,
+    "trainerMayReadSourceHmac": false,
+    "trainerMayReadRawResponse": false,
+    "trainerIdentity": "vehicle_observation.vehicle_id exact private equality",
+    "aggregateLogsOnly": true
+  },
+  "blockingGapsAtD856d108": [
+    "No RDS trainer implementation or trainer snapshot receipt exists in this repository.",
+    "The confirmed current schema has no migration_source_record or ingestion_origin.",
+    "The online pending-forecast query does not exclude imported history.",
+    "The stop-demand SQL does not currently exclude the temporary smoke model release.",
+    "stop_demand_statistics has no model_deployment foreign key, so temporary lineage must be frozen by generation identity and the baseline-zero time window.",
+    "vehicle_trip_key has no source mapping and the current collector leaves it null.",
+    "Authoritative route content is closed, but the exact valid_from-only extensions of current 3330 id=1 and 1650 id=2 are not written/read-back verified.",
+    "The exact first live 1650 observation and aggregate private vehicle_id continuity counts by route remain read-only preflight results."
+  ]
+}

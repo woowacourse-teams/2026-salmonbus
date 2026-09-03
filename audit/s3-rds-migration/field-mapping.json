@@ -1,0 +1,893 @@
+{
+  "schemaVersion": "salmonbus-s3-rds-field-mapping-v1",
+  "basis": {
+    "targetDevCommit": "d856d10819bf1d018ad43fa63714cc348f1fc643",
+    "previousAuditedCommit": "ed2cf742b0db368d7cf6eae2556b36bc156a5e72",
+    "contractSource": "target-dev-delta.json plus unchanged Flyway V1..V12/entities/collector/processor contracts and user-provided d856 live route state",
+    "collectorSchemaVersion": "1.0.0",
+    "collectorLambdaCodeSha256Base64": "EkdK2EVaQTdfth3ZbEKNJKP5CeLcru1k7MTbNJNOxjs=",
+    "routeReferenceProtocolCommit": "c5ff99da81ed0af9916bd5aa5115d89f49258e2c",
+    "academyStateDirectlyObservedByThisAudit": false,
+    "academyReadOnlyBaselineProvidedByUser": true
+  },
+  "accounts": {
+    "sourceAccount": "827325854159",
+    "targetAccount": "843255971531",
+    "sourceAccess": {
+      "profileClass": "personal",
+      "allowedAwsOperations": [
+        "lambda:ListFunctions",
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration",
+        "s3:ListBucket",
+        "s3:GetObject",
+        "s3:HeadObject",
+        "s3:GetEncryptionConfiguration"
+      ]
+    },
+    "targetAccess": {
+      "attempted": false,
+      "allowedDuringAudit": false,
+      "academyIamChangeAvailable": false
+    }
+  },
+  "targetBaseline": {
+    "evidenceClass": "USER_PROVIDED_READ_ONLY_QUERY_FROM_ACADEMY_EC2",
+    "independentlyQueriedByThisAudit": false,
+    "endpoint": "salmonbus-db.cqsc6pyqhwww.ap-northeast-2.rds.amazonaws.com",
+    "port": 5432,
+    "database": "postgres",
+    "databaseUser": "salmonbus",
+    "instanceClass": "db.t4g.micro",
+    "publiclyAccessible": false,
+    "allowedEc2SecurityGroup": "sg-017bc5d8159ac557e",
+    "transactionReadOnly": true,
+    "flywayVersionsSuccessful": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    "publicTables": [
+      "daily_call_quota",
+      "flyway_schema_history",
+      "model_deployment",
+      "observation_batch",
+      "route",
+      "route_stop",
+      "route_version",
+      "seat_forecast",
+      "stop_demand_statistics",
+      "vehicle_observation"
+    ],
+    "rowCounts": {
+      "route": 1,
+      "route_version": 1,
+      "route_stop": 85,
+      "observation_batch": 303,
+      "vehicle_observation": 8896,
+      "seat_forecast": 0,
+      "stop_demand_statistics": 0,
+      "model_deployment": 0
+    },
+    "latestLiveRouteState": {
+      "evidenceClass": "USER_PROVIDED_D856_ACADEMY_READ_ONLY_REPORT",
+      "routeRows": 2,
+      "routeVersionRows": 2,
+      "routeStopRows": 174,
+      "routes": {
+        "3330": {
+          "routeId": 1,
+          "routeVersionId": 1,
+          "validFromUtc": "2026-09-02T10:27:51.330754Z",
+          "referenceExact": true
+        },
+        "1650": {
+          "routeId": 2,
+          "routeVersionId": 2,
+          "validFromUtc": "2026-09-02T12:49:33.041299Z",
+          "referenceExact": true
+        }
+      },
+      "queriedByThisAudit": false
+    },
+    "rowCountSnapshotRelationToTemporaryDeployment": "The zero derived/model counts were observed before the temporary deployment activation below; current derived-row counts were not supplied and are not inferred.",
+    "subsequentTemporaryDeployment": {
+      "modelDeploymentId": 1,
+      "releaseId": "salmonbus-d57370be9195520e",
+      "bundleDigest": "d57370be9195520ecf3b0ef125aa3611090ed5f41ade2963c33f38d99a29e89a",
+      "calculationVersion": "seat-feature-contract-v4-1-2026-09-02",
+      "activatedAtUtc": "2026-09-02T11:55:04.729493Z",
+      "currentForecastAndStatisticsCounts": "UNKNOWN_NOT_INFERRED"
+    },
+    "responseReceivedAtRangeUtc": {
+      "firstInclusive": "2026-09-02T10:27:52.390820Z",
+      "lastInclusive": "2026-09-02T11:43:58.008989Z"
+    },
+    "vehicleObservationColumnsConfirmed": [
+      "id",
+      "observation_batch_id",
+      "route_version_id",
+      "source_row_number",
+      "vehicle_id",
+      "vehicle_trip_key",
+      "plate_number",
+      "stop_order",
+      "stop_id",
+      "passed_stop_order",
+      "running_state",
+      "remaining_seats",
+      "seat_unknown_reason",
+      "crowd_level",
+      "vehicle_type",
+      "route_type",
+      "tagless"
+    ],
+    "credentialsCaptured": false
+  },
+  "encryption": {
+    "sourceBucketObservedDefault": {
+      "algorithm": "AES256",
+      "mode": "SSE-S3",
+      "kmsKeyConfigured": false,
+      "bucketKeyEnabled": false
+    },
+    "transferRequirements": [
+      "SSH host identity must be pinned and transport encryption must remain enabled.",
+      "Every archive shard must be content-addressed and SHA-256 verified on academy EC2 before decompression.",
+      "The remote staging filesystem and RDS storage must be encrypted at rest.",
+      "No credential, SSH private key, presigned URL, database secret, source HMAC, or plate value may enter an archive, manifest, command transcript, or log; vehicle_id is allowed only inside protected archive/staging row content and private RDS."
+    ],
+    "targetKmsConditions": {
+      "observed": false,
+      "acceptanceGate": "Before import, an academy operator must attest that RDS storage, automated backups, snapshots, and the EC2 staging volume are encrypted.",
+      "ifCustomerManagedKms": [
+        "The key must be in the target region and enabled.",
+        "The RDS service and the existing academy execution principal must already have the required Encrypt, Decrypt, GenerateDataKey, DescribeKey, and grant permissions.",
+        "No source-account KMS permission is needed while the source bucket remains SSE-S3."
+      ],
+      "ifSourceChangesToKms": "The personal presigning/export principal and source key policy must permit decrypt; this is a future re-audit gate."
+    }
+  },
+  "transfer": {
+    "executionStatus": "DESIGN_ONLY_NO_REMOTE_WRITE",
+    "primary": {
+      "mode": "RESUMABLE_RSYNC_OVER_SSH",
+      "direction": "personal-side PRIVATE_SENSITIVE_NORMALIZED archive to academy EC2",
+      "dataClassification": "PRIVATE_SENSITIVE_NORMALIZED",
+      "archiveFormat": "canonical-jsonl.zst",
+      "sensitiveHandling": {
+        "includedSensitiveField": "vehicle_id only",
+        "transportEncryption": "SSH",
+        "localDirectoryMode": "0700",
+        "remoteDirectoryMode": "0700",
+        "localFileMode": "0600",
+        "remoteFileMode": "0600",
+        "requiredUmask": "0077",
+        "forbiddenSurfaces": ["logs", "fixtures", "documentation examples", "stdout", "manifests", "receipts"],
+        "archiveDeletion": "requires separate user approval after verified import"
+      },
+      "partitionOrder": [
+        "KST date ascending",
+        "semanticBatchDigest ascending"
+      ],
+      "shardPolicy": {
+        "primaryBoundary": "KST date",
+        "targetCompressedBytes": 2097152,
+        "hardMaximumCompressedBytes": 16777216,
+        "hardMaximumUncompressedBytes": 67108864,
+        "splitRule": "Do not split one batch. If a date exceeds either hard maximum, split before the first batch that would cross the bound; suffix shards with a zero-based ordinal.",
+        "lateDeltaRule": "A late-arrival delta is independently sharded by original KST partition date and ordered by semanticBatchDigest."
+      },
+      "measuredBaseArchive": {
+        "kstDateShards": 19,
+        "uncompressedBytes": 666925584,
+        "gzipLevel6SingleStreamBytes": 24190995,
+        "gzipLevel6DateShardBytesTotal": 24219244,
+        "zstdLevel3SingleStreamBytes": 19589490,
+        "smallestDateShardUncompressedBytes": 5470024,
+        "largestDateShardUncompressedBytes": 46725330,
+        "smallestDateShardGzipBytes": 233976,
+        "largestDateShardGzipBytes": 1572956,
+        "measurement": "actual private normalized serialization including vehicle_id streamed to discard; no archive or row-level material persisted"
+      },
+      "estimatedCatchUpArchive": {
+        "kstDateShards": 1,
+        "acceptedRecords": 7064,
+        "acceptedObservations": 136909,
+        "byRoute": {
+          "1650": {"acceptedRecords": 3815, "acceptedObservations": 78675},
+          "3330": {"acceptedRecords": 3249, "acceptedObservations": 58234}
+        },
+        "uncompressedBytesRange": [35000000, 45000000],
+        "zstdLevel3BytesRange": [950000, 1400000],
+        "basis": "actual route-specific verified catch-up counts at the refreshed S3 freeze, scaled by measured base serialization"
+      },
+      "resumeAndVerify": [
+        "Transfer to a temporary name with rsync partial-transfer retention enabled.",
+        "Rename only after the compressed shard SHA-256 equals the manifest.",
+        "Stream-decompress into the importer; do not materialize expanded JSONL on EC2.",
+        "Write only aggregate receipts after each committed shard."
+      ]
+    },
+    "fallback": {
+      "mode": "SHORT_LIVED_PRESIGNED_HTTPS_GET",
+      "role": "fallback only",
+      "requirements": [
+        "Stage the same private sensitive normalized content-addressed shards on the personal side with mode 0600 under a 0700 directory.",
+        "Use HTTPS and a short expiry sized to one shard retry.",
+        "Treat the URL as a bearer credential and never persist or log it.",
+        "Verify the compressed shard SHA-256 before import."
+      ]
+    },
+    "futureOption": {
+      "mode": "STS_ASSUME_ROLE",
+      "primary": false,
+      "currentlyAvailable": false,
+      "prerequisites": [
+        "An academy IAM role trust policy naming the approved personal principal.",
+        "A least-privilege source read policy and target import policy.",
+        "Any applicable source and target KMS key-policy grants."
+      ]
+    },
+    "observedAcademyEc2Envelope": {
+      "diskFreeBytesApprox": 28991029248,
+      "memoryTotalBytesApprox": 1932735283,
+      "memoryAvailableBytesApprox": 841482240,
+      "swapBytes": 0,
+      "importerLimits": {
+        "streamingRequired": true,
+        "maximumProcessRssBytes": 268435456,
+        "maximumDecompressedReadBufferBytes": 8388608,
+        "maximumObservationRowsPerJdbcBatch": 1000,
+        "maximumObservationRowsPerTransaction": 10000,
+        "maximumConcurrentShards": 1,
+        "minimumMemoryAvailableAbortBytes": 402653184,
+        "minimumDiskFreeAbortBytes": 5368709120
+      }
+    }
+  },
+  "authorityBoundary": {
+    "immutableBaseThroughKstDateInclusive": "2026-09-01",
+    "policy": "RDS_ROUTE_VERSION_VALID_FROM_CONSERVATIVE_NO_LIVE_ROW_OVERLAP",
+    "perRoute": {
+      "3330": {
+        "routeVersionId": 1,
+        "targetAuthorityFromUtcInclusive": "2026-09-02T10:27:51.330754Z",
+        "sourceCatchUpPredicate": "route=3330 and response_received_at < 2026-09-02T10:27:51.330754Z",
+        "refreshedAcceptedRecords": 3249,
+        "refreshedAcceptedObservations": 58234,
+        "sourceLastAcceptedResponseUtc": "2026-09-02T10:27:45.315Z",
+        "knownTargetFirstResponseUtc": "2026-09-02T10:27:52.390820Z",
+        "sourceLastToTargetFirstGapSeconds": 7.07582
+      },
+      "1650": {
+        "routeVersionId": 2,
+        "targetAuthorityFromUtcInclusive": "2026-09-02T12:49:33.041299Z",
+        "sourceCatchUpPredicate": "route=1650 and response_received_at < 2026-09-02T12:49:33.041299Z",
+        "refreshedAcceptedRecords": 3815,
+        "refreshedAcceptedObservations": 78675,
+        "sourceLastAcceptedResponseUtc": "2026-09-02T12:49:31.467Z",
+        "targetFirstResponseUtc": "UNKNOWN_REQUIRES_ACADEMY_READ_ONLY_PREFLIGHT",
+        "sourceLastToVersionOpenGapSeconds": 1.574299
+      }
+    },
+    "overlapPolicy": "For each route, do not automatically import S3 records at or after its current RDS route_version.valid_from. A later exact MIN(live response_received_at) may expand the source side only through a new content-addressed manifest and read-only proof of zero target overlap.",
+    "reason": "The route-version openings are known RDS lower bounds for live authority. Using them is fail-closed where the exact 1650 first live observation was not supplied.",
+    "executableBoundaryScope": "ROUTE_SPECIFIC_ONLY",
+    "continuityTest": {
+      "preserveExistingLiveRows": true,
+      "identity": "vehicle_observation.vehicle_id exact text equality",
+      "aggregateOnlyAssertions": [
+        "per-route pre/post boundary vehicle identity intersection count",
+        "3330 intersection retaining route_version_id=1",
+        "1650 intersection retaining route_version_id=2",
+        "no imported row at or after its route-specific target authority time",
+        "no update or delete of pre-existing live observation rows"
+      ],
+      "valueEmissionAllowed": false
+    }
+  },
+  "terminalSourceFreeze": {
+    "status": "CONFIRMED_AT_TWO_POST_DISABLE_POINTS",
+    "scheduleDisabledAtUtc": "2026-09-02T13:18:57.240Z",
+    "fullRecordRaw": {
+      "recordObjects": 150032,
+      "rawObjects": 149905,
+      "bytes": 2346432060,
+      "lastModifiedUtc": "2026-09-02T13:20:02.000Z",
+      "manifestSha256": "ad7dca914792eb243008df549fef844e5a32d004a867d7c10c44b6c979b7fad8"
+    },
+    "terminalResponseReceivedAtUtc": "2026-09-02T13:20:01.561Z",
+    "activePartitionManifestSha256": "f0decee3446e0e787532c9682bd3c6c627ccf9f10cdba9a992829345fdefa86e",
+    "bijectionErrors": 0,
+    "lateBaseObjects": 0,
+    "detail": "cutover-readiness.json",
+    "scheduleWritePerformedByAudit": false
+  },
+  "operationalContinuityIncident": {
+    "targetLastSuccessfulObservationAndForecastUtc": "2026-09-02T12:56:23Z",
+    "targetFailureAfter": "FAILED_UPSTREAM/DAILY_QUOTA_EXCEEDED",
+    "sourceHttp429Records": 190,
+    "sourceLastSuccessfulByRouteUtc": {
+      "3330": "2026-09-02T12:56:15.345Z",
+      "1650": "2026-09-02T12:56:16.547Z"
+    },
+    "assessment": "Both collectors shared one upstream GBIS key; the academy local ledger was only 764/10000, so the evidence is consistent with shared-key exhaustion rather than the academy local guard.",
+    "personalScheduleState": "DISABLED_BY_USER",
+    "intendedCollectorAfterReset": "ACADEMY_EC2_ONLY",
+    "postResetAcceptance": "Both routes produce successful live observations and no personal S3 object appears after the terminal LastModified."
+  },
+  "modelDataExclusions": [
+    {
+      "identityType": "exact temporary deployment tuple",
+      "identity": {
+        "modelDeploymentId": 1,
+        "releaseId": "salmonbus-d57370be9195520e",
+        "bundleDigest": "d57370be9195520ecf3b0ef125aa3611090ed5f41ade2963c33f38d99a29e89a",
+        "calculationVersion": "seat-feature-contract-v4-1-2026-09-02",
+        "activatedAtUtc": "2026-09-02T11:55:04.729493Z"
+      },
+      "classification": "TEMPORARY_SMOKE_MODEL",
+      "stopDemandCarrierContamination": {
+        "baselineRowsBeforeActivation": 0,
+        "carrierCalculationVersion": "observed-max-capacity-v1",
+        "mechanism": "StopDemandStatisticsJob aggregates SETTLED seat_forecast rows. The aggregate does not consume the prediction number, but its label carrier still belongs to the temporary deployment.",
+        "openWindowPredicateUntilCutover": "computed_at >= 2026-09-02T11:55:04.729493Z and computed_at < :formal_cutover_at",
+        "generationIdentity": [
+          "route_version_id",
+          "calculation_version",
+          "revision",
+          "data_until",
+          "computed_at"
+        ],
+        "freezeRequirement": "Immediately before formal cutover, freeze the exact generation tuples, row counts, min/max revision, min/max data_until, min/max computed_at, and a canonical manifest SHA-256.",
+        "lineageInferenceBoundary": "The inference relies on the user-provided zero-row baseline immediately before temporary activation and the half-open activation/cutover window."
+      },
+      "alwaysRetain": [
+        "all observation_batch rows from the same wall-clock period",
+        "all vehicle_observation rows from the same wall-clock period",
+        "model_deployment id=1 as a RETIRED audit/lineage row"
+      ],
+      "alwaysExcludeFromComputation": [
+        "quality-training examples derived from that deployment's seat_forecast rows",
+        "evaluation/quality metrics derived from those forecast rows",
+        "trainer, evaluator, cell-backfill, migration-size, and migration-time measurements",
+        "stop_demand_statistics input labels and future cell-history generations derived from those forecast rows",
+        "every frozen observed-max-capacity-v1 generation in the temporary activation/cutover window",
+        "every frozen temporary-calculation generation in the same window"
+      ],
+      "afterFormalReplacementCleanup": {
+        "precondition": "The formal replacement bundle and seed have succeeded and use a calculation_version different from seat-feature-contract-v4-1-2026-09-02.",
+        "deleteOnly": [
+          "seat_forecast rows whose model_deployment_id is 1 after the full deployment tuple is revalidated",
+          "stop_demand_statistics rows joined to the frozen exact generation manifest for calculation_version seat-feature-contract-v4-1-2026-09-02 or observed-max-capacity-v1 inside the temporary window"
+        ],
+        "neverDeleteOrReset": [
+          "observation_batch",
+          "vehicle_observation",
+          "model_deployment id=1",
+          "observation_batch.forecast_completed_at"
+        ],
+        "approvalGate": "Show exact target identities and dry-run counts to the user, then obtain separate approval before any live DELETE or file deletion.",
+        "forbiddenPredicate": "Never delete stop_demand_statistics by calculation_version alone.",
+        "requiredStatisticsDeleteMatch": "Match route_version_id, calculation_version, revision, data_until, and computed_at against the frozen manifest and reassert activation <= computed_at < formal cutover.",
+        "executionDuringThisAudit": false
+      },
+      "reconciliationInvariant": "Before and after approved temporary-derived cleanup, observation_batch count, vehicle_observation count, minimum response_received_at, and maximum response_received_at are exactly identical; official trainer/evaluator/seed input contains zero rows from the frozen temporary observed-max generation set.",
+      "currentCodeGap": "JdbcStopDemandStatisticsRepository.SELECT_HOURLY_TOTALS does not join model_deployment or filter this release identity.",
+      "minimumEnforcement": "Every trainer/evaluator/cell query over seat_forecast must join model_deployment on model_deployment_id, verify id=1 still has the exact tuple above, and exclude it. Statistics queries must exclude the frozen exact temporary-window generation set, including observed-max-capacity-v1 carriers; calculation_version alone is insufficient.",
+      "preferredEnforcement": "Add an explicit training_eligible flag or versioned exclusion-policy table and record its digest in every trainer/statistics receipt; seed this release as false."
+    }
+  ],
+  "verdictVocabulary": [
+    "COMPLETE",
+    "TRANSFORM",
+    "LOSS",
+    "SENSITIVE",
+    "UNSUPPORTED"
+  ],
+  "dispositionVocabulary": [
+    "MIGRATE",
+    "MIGRATE_DERIVED",
+    "VERIFY_ONLY",
+    "S3_ONLY"
+  ],
+  "requiredSchemaAdditions": [
+    {
+      "name": "migration_source_record",
+      "reason": "The current RDS schema has no durable source record identity, source account, semantic digest, archive digest, or import receipt.",
+      "minimumColumns": [
+        "source_account char(12) not null",
+        "source_record_id uuid not null",
+        "semantic_batch_digest char(64) not null",
+        "archive_sha256 char(64) not null",
+        "observation_batch_id bigint not null",
+        "source_schema_version varchar(40) not null",
+        "imported_at timestamptz not null"
+      ],
+      "minimumConstraints": [
+        "primary key (source_account, source_record_id)",
+        "unique (source_account, semantic_batch_digest)",
+        "unique (observation_batch_id)",
+        "foreign key (observation_batch_id) references observation_batch(id)"
+      ]
+    },
+    {
+      "name": "observation_batch.ingestion_origin",
+      "reason": "Every imported successful batch otherwise enters ix_batch_awaiting_forecast because forecast_completed_at is null, creating a historical online-forecast backlog.",
+      "minimumType": "varchar(20) not null default 'LIVE'",
+      "minimumValues": ["LIVE", "S3_BACKFILL"],
+      "requiredRuntimeChange": "The online pending-forecast query and its partial index must require ingestion_origin = 'LIVE'. Trainer/history queries may include both origins under an explicit as-of manifest.",
+      "blockingIfAbsent": "Keep forecast scheduling disabled through import and either add this guard before activation or explicitly accept the semantically weaker option of marking backfill batches completed without forecasts."
+    }
+  ],
+  "routeVersionPrerequisite": {
+    "status": "SOURCE_CONTENT_CLOSED_TWO_CURRENT_VALIDITY_EXTENSIONS_PENDING",
+    "sourceRouteReference": {
+      "version": "gbis-2026-08-19",
+      "coverageFrom": "2026-01-01",
+      "routeStopCounts": {
+        "1650": 89,
+        "3330": 85
+      }
+    },
+    "targetReadOnlyEvidence": {
+      "report": "/Users/idonghun/paseo/workspaces/2026-salmonbus/study-dev-runtime/review-output/blocker-1/ROUTE-REFERENCE-MAPPING.md",
+      "sha256": "5ca70dafc7fcf5c61ad5839d22e38b4a18f0f9c59adab5a56c2bac14501f2c34"
+    },
+    "route3330": {
+      "targetRouteVersionId": 1,
+      "targetValidFromUtc": "2026-09-02T10:27:51.330754Z",
+      "sourceOrderIdTurnAndPolicyMatch": true,
+      "sourceNameInclusiveContentDigestMatchesTarget": true,
+      "baseFailure": "NO_COVERING_VERSION",
+      "requiredAction": "After exact one-route/one-version/content/turn/policy preconditions, update only route_version id=1 valid_from from 2026-09-02T10:27:51.330754Z to 2026-08-14T07:38:45.475Z.",
+      "extensionBeforeAcceptedSourceForbidden": true,
+      "rollbackReceipt": "Preserve both valid_from values, all exact precondition digests/counts, import ledger identity, and rollback order before mutation.",
+      "runtimeContinuity": {
+        "currentCode": "JdbcVehicleTrajectoryRepository and capacity/arrival queries constrain one route_version_id.",
+        "resolution": "The in-place validity extension keeps imported and live 3330 rows on route_version_id=1, so no cross-version query bridge is required.",
+        "acceptance": "scripts/boundary_continuity_readonly.sql must report exact-version vehicle continuity without values."
+      }
+    },
+    "route1650": {
+      "targetRouteExists": true,
+      "configuredInTargetDev": true,
+      "targetRouteId": 2,
+      "targetRouteVersionId": 2,
+      "targetValidFromUtc": "2026-09-02T12:49:33.041299Z",
+      "targetValidToUtc": null,
+      "authoritativeReferenceEvidence": "route-seed-1650.json",
+      "referenceEvidenceIsInsertPayload": false,
+      "stopCount": 89,
+      "turnSequence": 44,
+      "nonboardingStops": 24,
+      "orderIdDigest": "24a6ed132cb5b07cac03677d3e462cc11864cc7f68b12fd6fe1780c1fa9e3b71",
+      "contentDigest": "f6b5a3b0fabd731dbbab36054826be26714061c42d66b862eac60b191b4b51bc",
+      "firstMismatch": null,
+      "newGbisCalls": 0,
+      "acceptedSourceEarliestResponseUtc": "2026-08-14T07:38:46.604Z",
+      "requiredAction": "After exact one-route/one-version/content/turn/policy preconditions, update only route_version id=2 valid_from from 2026-09-02T12:49:33.041299Z to 2026-08-14T07:38:46.604Z.",
+      "extensionBeforeAcceptedSourceForbidden": true,
+      "rollbackReceipt": "Preserve both valid_from values, all exact precondition digests/counts, import ledger identity, and rollback order before mutation.",
+      "runtimeContinuity": "Imported and live 1650 rows remain on route_version_id=2; no cross-version query bridge is needed."
+    },
+    "stationMismatchPolicy": {
+      "rows": 27,
+      "denominator": 2324399,
+      "percentRounded": 0.0012,
+      "days": ["2026-08-21", "2026-08-24", "2026-08-31", "2026-09-01"],
+      "interpretation": "intermittent anomaly, not a route change",
+      "action": "Quarantine the whole record and persist reason STATION_ID_MISMATCH_AGAINST_GBIS_2026_08_19."
+    },
+    "identityRule": "Route-version mapping identity includes route/public ID and the exact valid_from/valid_to interval plus content_digest. Equal content never collapses distinct validity intervals, and this migration creates no duplicate version.",
+    "acceptanceGate": "Dry-run both exact current-version in-place update preconditions and persist the rollback receipt before any separately authorized write; any mismatch leaves target unchanged.",
+    "conflictRisk": "Blind route/version/stop inserts now conflict with exact live rows. The reference seed is comparison evidence only; permitted route mutation is one exact valid_from update per current version."
+  },
+  "mappings": [
+    {
+      "sourcePaths": ["$object.key"],
+      "target": null,
+      "verdicts": ["UNSUPPORTED", "LOSS"],
+      "disposition": "VERIFY_ONLY",
+      "transform": "Use only inside the private inventory digest; never use as the RDS natural identity.",
+      "consumers": ["inventory reproducibility", "late-arrival detection"]
+    },
+    {
+      "sourcePaths": ["$object.etag", "$object.size", "$object.lastModified"],
+      "target": "archive manifest only",
+      "verdicts": ["TRANSFORM"],
+      "disposition": "VERIFY_ONLY",
+      "transform": "Fold into the canonical source inventory SHA-256 and aggregate byte/late-arrival counts.",
+      "consumers": ["source snapshot reconciliation", "delta manifest"]
+    },
+    {
+      "sourcePaths": ["$.schema_version"],
+      "target": "migration_source_record.source_schema_version",
+      "verdicts": ["COMPLETE", "UNSUPPORTED"],
+      "disposition": "MIGRATE",
+      "transform": "Exact string after allowlist validation. Requires the provenance table because current tables have no column.",
+      "consumers": ["import compatibility", "trainer provenance"]
+    },
+    {
+      "sourcePaths": ["$.record_id"],
+      "target": "migration_source_record.source_record_id",
+      "verdicts": ["COMPLETE", "UNSUPPORTED"],
+      "disposition": "MIGRATE",
+      "transform": "Parse as UUID and scope by sourceAccount.",
+      "consumers": ["idempotent re-import", "source provenance"]
+    },
+    {
+      "sourcePaths": ["$.route.route_id", "$.timing.request_started_at.utc", "$.timing.response_received_at.utc", "$.http.response_sha256", "$.collection.round_index"],
+      "target": "observation_batch.attempt_key and migration_source_record.semantic_batch_digest",
+      "verdicts": ["TRANSFORM"],
+      "disposition": "MIGRATE_DERIVED",
+      "transform": "SHA-256 over a versioned, length-prefixed canonical tuple including sourceAccount; use attempt_key 's3v1:' plus the 64 lowercase hex characters.",
+      "privacy": "The tuple contains no vehicle_id or plate value. response_sha256 is already a one-way body digest; never encode, truncate, or otherwise embed a reversible vehicle value in semantic/import identifiers.",
+      "consumers": ["cross-run idempotency", "live attempt-key namespace isolation", "copied-object duplicate detection"]
+    },
+    {
+      "sourcePaths": ["constant:1"],
+      "target": "observation_batch.attempt_number",
+      "verdicts": ["TRANSFORM"],
+      "disposition": "MIGRATE_DERIVED",
+      "transform": "Set to 1 because one immutable S3 record represents one completed attempt.",
+      "consumers": ["batch provenance"]
+    },
+    {
+      "sourcePaths": ["$.invocation_id"],
+      "target": null,
+      "verdicts": ["SENSITIVE", "UNSUPPORTED", "LOSS"],
+      "disposition": "S3_ONLY",
+      "transform": "Omit infrastructure execution identity.",
+      "consumers": []
+    },
+    {
+      "sourcePaths": ["$.route.name"],
+      "target": "route.display_name",
+      "verdicts": ["TRANSFORM"],
+      "disposition": "MIGRATE",
+      "transform": "Validate against the route allowlist and resolve to route.id; do not insert a second route solely by display name.",
+      "consumers": ["route lookup", "route-specific model scope"]
+    },
+    {
+      "sourcePaths": ["$.route.route_id", "$.request.parameters.routeId"],
+      "target": "route.public_route_id and route.source_route_id",
+      "verdicts": ["COMPLETE", "TRANSFORM"],
+      "disposition": "MIGRATE",
+      "transform": "Require both source values to be equal, then upsert/resolve the route by public_route_id. route.source_id is the constant GBIS source identifier.",
+      "consumers": ["collector route identity", "attempt-key derivation"]
+    },
+    {
+      "sourcePaths": ["$.request.method", "$.request.endpoint", "$.request.parameters.format"],
+      "target": null,
+      "verdicts": ["UNSUPPORTED", "LOSS"],
+      "disposition": "S3_ONLY",
+      "transform": "Retain only in the immutable private source; validate constants during export.",
+      "consumers": ["source audit only"]
+    },
+    {
+      "sourcePaths": ["$.request.credential_source"],
+      "target": null,
+      "verdicts": ["SENSITIVE", "UNSUPPORTED", "LOSS"],
+      "disposition": "S3_ONLY",
+      "transform": "Omit configuration and parameter-location metadata from the archive.",
+      "consumers": []
+    },
+    {
+      "sourcePaths": ["$.timing.request_started_at.utc"],
+      "target": "observation_batch.requested_at",
+      "verdicts": ["COMPLETE"],
+      "disposition": "MIGRATE",
+      "transform": "Parse as an instant and store as timestamptz.",
+      "consumers": ["dispatch provenance"]
+    },
+    {
+      "sourcePaths": ["$.timing.request_started_at.kst", "$.timing.response_received_at.kst", "$.timing.response_headers_received_at.kst"],
+      "target": null,
+      "verdicts": ["TRANSFORM", "LOSS"],
+      "disposition": "VERIFY_ONLY",
+      "transform": "Verify equality with the UTC instant and +09:00 offset, then omit the duplicate representation.",
+      "consumers": ["partition validation"]
+    },
+    {
+      "sourcePaths": ["$.timing.response_received_at.utc"],
+      "target": "observation_batch.response_received_at",
+      "verdicts": ["COMPLETE"],
+      "disposition": "MIGRATE",
+      "transform": "Parse as timestamptz. This is the authoritative observation time.",
+      "consumers": ["latest snapshot", "time slot", "trajectory ordering", "arrival labels", "as-of statistics"]
+    },
+    {
+      "sourcePaths": ["$.timing.response_headers_received_at.utc", "$.timing.duration_ms"],
+      "target": null,
+      "verdicts": ["UNSUPPORTED", "LOSS"],
+      "disposition": "S3_ONLY",
+      "transform": "No current batch columns exist.",
+      "consumers": ["source latency audit only"]
+    },
+    {
+      "sourcePaths": ["$.http.status"],
+      "target": "observation_batch.http_status",
+      "verdicts": ["COMPLETE"],
+      "disposition": "MIGRATE",
+      "transform": "Copy nullable integer with direct SQL/COPY; the current collector JPA entity does not map this existing column.",
+      "consumers": ["failure provenance"]
+    },
+    {
+      "sourcePaths": ["$.http.response_headers"],
+      "target": null,
+      "verdicts": ["UNSUPPORTED", "LOSS"],
+      "disposition": "S3_ONLY",
+      "transform": "Omit transport headers.",
+      "consumers": ["source audit only"]
+    },
+    {
+      "sourcePaths": ["$.http.response_bytes", "$.http.response_sha256", "$.raw_response.sha256", "raw.$object.metadata.sha256"],
+      "target": "migration_source_record.archive_sha256 plus import manifest evidence",
+      "verdicts": ["TRANSFORM", "UNSUPPORTED"],
+      "disposition": "VERIFY_ONLY",
+      "transform": "Require the source hash triplet and byte count to match the raw body. Persist the private normalized archive digest, not the raw-body digest, unless an additional provenance column is approved.",
+      "consumers": ["record/raw byte verification", "archive acceptance"]
+    },
+    {
+      "sourcePaths": ["$.classification.type", "$.classification.call_attempted", "$.classification.call_failed", "$.classification.zero_vehicles"],
+      "target": "observation_batch.outcome and observation_batch.failure_code",
+      "verdicts": ["TRANSFORM"],
+      "disposition": "MIGRATE_DERIVED",
+      "transform": "Map success-with-rows to SUCCESS_ROWS, both valid empty outcomes to SUCCESS_EMPTY, transport failure to UNKNOWN_AFTER_DISPATCH, unreadable/parse failure to FAILED_UNREADABLE, and upstream/API failure to FAILED_UPSTREAM. Preserve only failure codes representable by V6.",
+      "consumers": ["forecast eligibility", "gap semantics", "failure audit"]
+    },
+    {
+      "sourcePaths": ["$.classification.vehicle_count"],
+      "target": "observation_batch.provider_rows",
+      "verdicts": ["COMPLETE", "TRANSFORM"],
+      "disposition": "MIGRATE",
+      "transform": "Require equality with buses length; stored_rows and excluded_rows are recomputed under current normalization.",
+      "consumers": ["success-empty distinction", "data-quality accounting"]
+    },
+    {
+      "sourcePaths": ["$.classification.vehicle_count", "$.buses[]"],
+      "target": "observation_batch.stored_rows and observation_batch.excluded_rows",
+      "verdicts": ["TRANSFORM"],
+      "disposition": "MIGRATE_DERIVED",
+      "transform": "Re-run normalization-v1 rules. stored_rows is the count with known stop identity, stateCd in 0..2, and non-negative passed_stop_order; excluded_rows is provider_rows - stored_rows.",
+      "consumers": ["normalization audit"]
+    },
+    {
+      "sourcePaths": ["$.classification.error_type"],
+      "target": null,
+      "verdicts": ["UNSUPPORTED", "LOSS"],
+      "disposition": "S3_ONLY",
+      "transform": "Current failure_code cannot represent transport exception types.",
+      "consumers": ["source debugging only"]
+    },
+    {
+      "sourcePaths": ["$.api.resultCode", "$.api.msgHeader.resultCode"],
+      "target": "observation_batch.result_code",
+      "verdicts": ["COMPLETE", "TRANSFORM"],
+      "disposition": "MIGRATE",
+      "transform": "Require duplicate source values to agree, coerce an integral scalar to integer, and retain null when GBIS produced no code.",
+      "consumers": ["upstream outcome provenance"]
+    },
+    {
+      "sourcePaths": ["$.api.queryTime", "$.api.msgHeader.queryTime", "$.api.resultMessage", "$.api.msgHeader.resultMessage"],
+      "target": null,
+      "verdicts": ["UNSUPPORTED", "LOSS"],
+      "disposition": "S3_ONLY",
+      "transform": "The backend correctly uses response_received_at rather than queryTime; messages remain only in the source.",
+      "consumers": ["source audit only"]
+    },
+    {
+      "sourcePaths": ["$.buses[].vehId"],
+      "target": "vehicle_observation.vehicle_id",
+      "verdicts": ["COMPLETE", "SENSITIVE"],
+      "disposition": "MIGRATE",
+      "transform": "Convert the scalar to the same text representation used by the current collector and copy it to the private target column without hashing or pseudonym replacement.",
+      "necessity": "REQUIRED_FOR_CURRENT_TRAJECTORY_CAPACITY_AND_LABEL_PIPELINE_AND_APPROVED_FOR_PRIVATE_INTERNAL_TRANSFER",
+      "privacyClassification": "PRIVATE_SENSITIVE_INTERNAL",
+      "handling": "Present only inside 0600 archive/staging files under 0700 directories and encrypted SSH transport; never emit a value to logs, fixtures, docs, stdout, manifests, or receipts.",
+      "collisionBoundary": "The current unique index is scoped to observation_batch_id, so a new imported batch cannot collide with an existing live batch. Source-side duplicate-within-batch rate is measured in inventory.json.",
+      "consumers": ["trajectory grouping", "capacity history", "preceding vehicle", "arrival label", "stop-demand aggregation"]
+    },
+    {
+      "sourcePaths": ["$.buses[].pseudonyms.vehId_hmac"],
+      "target": null,
+      "verdicts": ["SENSITIVE", "UNSUPPORTED", "LOSS"],
+      "disposition": "S3_ONLY",
+      "transform": "Do not copy or derive a target identity from the source HMAC; direct vehicle_id continuity is authoritative.",
+      "consumers": []
+    },
+    {
+      "sourcePaths": [],
+      "target": "vehicle_observation.vehicle_trip_key",
+      "verdicts": ["UNSUPPORTED", "LOSS"],
+      "disposition": "S3_ONLY",
+      "transform": "No source field exists and the current collector JPA path also leaves this confirmed column null. Journey segmentation must be recomputed by an explicitly versioned trainer rule; do not invent a value during import.",
+      "consumers": ["future trip segmentation"]
+    },
+    {
+      "sourcePaths": ["$.buses[].plateNo", "$.buses[].pseudonyms.plateNo_hmac"],
+      "target": "vehicle_observation.plate_number",
+      "verdicts": ["SENSITIVE", "LOSS"],
+      "disposition": "S3_ONLY",
+      "transform": "Omit both raw plate and source plate HMAC. Import plate_number as null.",
+      "necessity": "NOT_REQUIRED_BY_CURRENT_MODEL_OR_PROCESSOR",
+      "collisionBoundary": "The confirmed current column has no unique constraint and is not part of the import identity.",
+      "consumers": []
+    },
+    {
+      "sourcePaths": ["$.buses[].routeId"],
+      "target": "route.source_route_id validation only",
+      "verdicts": ["TRANSFORM"],
+      "disposition": "VERIFY_ONLY",
+      "transform": "Require every observation routeId to equal the enclosing record route ID; do not duplicate it per vehicle row.",
+      "consumers": ["route integrity"]
+    },
+    {
+      "sourcePaths": ["$.buses[].routeTypeCd"],
+      "target": "vehicle_observation.route_type",
+      "verdicts": ["COMPLETE"],
+      "disposition": "MIGRATE",
+      "transform": "Copy nullable integral value.",
+      "consumers": []
+    },
+    {
+      "sourcePaths": ["$.buses[].stationId"],
+      "target": "vehicle_observation.stop_id",
+      "verdicts": ["COMPLETE", "TRANSFORM"],
+      "disposition": "MIGRATE",
+      "transform": "Convert scalar to text and validate against route_stop for the as-of route version.",
+      "consumers": ["route-stop foreign key", "live vehicle API"]
+    },
+    {
+      "sourcePaths": ["$.buses[].stationSeq"],
+      "target": "vehicle_observation.stop_order",
+      "verdicts": ["COMPLETE"],
+      "disposition": "MIGRATE",
+      "transform": "Copy integral value after route-version roster validation.",
+      "consumers": ["route position", "source ordering", "forecast horizon"]
+    },
+    {
+      "sourcePaths": ["$.buses[].stationSeq", "$.buses[].stateCd"],
+      "target": "vehicle_observation.passed_stop_order",
+      "verdicts": ["TRANSFORM"],
+      "disposition": "MIGRATE_DERIVED",
+      "transform": "stationSeq - 1 when stateCd is 1 (arriving); otherwise stationSeq. Reject a negative result.",
+      "consumers": ["trajectory progression", "stops_to_target", "arrival labels", "stop-demand events"]
+    },
+    {
+      "sourcePaths": ["$.buses[].stateCd"],
+      "target": "vehicle_observation.running_state",
+      "verdicts": ["COMPLETE", "TRANSFORM"],
+      "disposition": "MIGRATE",
+      "transform": "Keep only integral values 0, 1, or 2. Exclude the individual source row otherwise.",
+      "consumers": ["passed-stop derivation", "live vehicle phase"]
+    },
+    {
+      "sourcePaths": ["$.buses[].remainSeatCnt"],
+      "target": "vehicle_observation.remaining_seats and vehicle_observation.seat_unknown_reason",
+      "verdicts": ["TRANSFORM"],
+      "disposition": "MIGRATE_DERIVED",
+      "transform": "Non-negative integral value becomes remaining_seats; null becomes NOT_REPORTED; negative or non-integral reported value becomes REPORTED_UNKNOWN.",
+      "consumers": ["seat features", "capacity history", "arrival label", "stop-demand statistics"]
+    },
+    {
+      "sourcePaths": ["$.buses[].crowded"],
+      "target": "vehicle_observation.crowd_level",
+      "verdicts": ["TRANSFORM", "LOSS"],
+      "disposition": "MIGRATE_DERIVED",
+      "transform": "Keep only integral levels 1 through 4; fold 0, null, and out-of-range values to null.",
+      "consumers": ["crowd-level one-hot model features"]
+    },
+    {
+      "sourcePaths": ["$.buses[].lowPlate"],
+      "target": "vehicle_observation.vehicle_type",
+      "verdicts": ["COMPLETE"],
+      "disposition": "MIGRATE",
+      "transform": "Copy nullable integral value.",
+      "consumers": ["stored provenance; no current processor feature reads it"]
+    },
+    {
+      "sourcePaths": ["$.buses[].taglessCd"],
+      "target": "vehicle_observation.tagless",
+      "verdicts": ["COMPLETE"],
+      "disposition": "MIGRATE",
+      "transform": "Copy nullable integral value.",
+      "consumers": ["stored provenance; no current processor feature reads it"]
+    },
+    {
+      "sourcePaths": ["$.response_envelope", "raw.$"],
+      "target": null,
+      "verdicts": ["SENSITIVE", "UNSUPPORTED", "LOSS"],
+      "disposition": "S3_ONLY",
+      "transform": "Use for byte and normalized-row verification only. Never place raw response or envelope in the transfer archive or RDS.",
+      "consumers": ["source verification only"]
+    },
+    {
+      "sourcePaths": ["$.raw_response.s3_key", "$.raw_response.exact_http_body_preserved"],
+      "target": null,
+      "verdicts": ["SENSITIVE", "UNSUPPORTED", "LOSS"],
+      "disposition": "VERIFY_ONLY",
+      "transform": "Verify expected record/raw pairing and preservation flag, then omit the private object location.",
+      "consumers": ["record/raw bijection"]
+    },
+    {
+      "sourcePaths": ["$.quota.*"],
+      "target": null,
+      "verdicts": ["SENSITIVE", "UNSUPPORTED", "LOSS"],
+      "disposition": "S3_ONLY",
+      "transform": "Do not backfill daily_call_quota: it is the target collector's live reservation ledger, not historical source provenance. Omit counter keys and invocation linkage.",
+      "consumers": ["source quota audit only"]
+    },
+    {
+      "sourcePaths": ["$.collection.strategy_version"],
+      "target": "observation_batch.collection_strategy_version",
+      "verdicts": ["COMPLETE"],
+      "disposition": "MIGRATE",
+      "transform": "Copy after safe-version validation.",
+      "consumers": ["sampling-density provenance", "trainer cohorting"]
+    },
+    {
+      "sourcePaths": ["constant:normalization-v1.0.0-s3-backfill"],
+      "target": "observation_batch.normalization_version",
+      "verdicts": ["TRANSFORM"],
+      "disposition": "MIGRATE_DERIVED",
+      "transform": "Record the exact importer normalization contract; do not claim the live collector version because source validation and exclusion boundaries differ.",
+      "consumers": ["trainer reproducibility", "migration audit"]
+    },
+    {
+      "sourcePaths": ["constant:S3_BACKFILL"],
+      "target": "observation_batch.ingestion_origin (required addition)",
+      "verdicts": ["TRANSFORM", "UNSUPPORTED"],
+      "disposition": "MIGRATE_DERIVED",
+      "transform": "Mark historical rows so the online forecast queue excludes them without falsifying forecast_completed_at.",
+      "consumers": ["online backlog isolation", "trainer cohorting"]
+    },
+    {
+      "sourcePaths": ["$.collection.scheduled_at"],
+      "target": "observation_batch.scheduled_at",
+      "verdicts": ["COMPLETE", "TRANSFORM"],
+      "disposition": "MIGRATE",
+      "transform": "Use the parseable scheduler instant; otherwise use request_started_at and record the fallback count in the import receipt.",
+      "consumers": ["planned batch time", "natural-identity evaluation"]
+    },
+    {
+      "sourcePaths": ["$.collection.quota_mode", "$.collection.expected_daily_calls", "$.collection.schedule_id", "$.collection.schedule_expression", "$.collection.schedule_timezone", "$.collection.source", "$.collection.reference_minute_kst", "$.collection.phase", "$.collection.period_minutes", "$.collection.forced", "$.collection.round_index", "$.collection.rounds_in_invocation"],
+      "target": null,
+      "verdicts": ["UNSUPPORTED", "LOSS"],
+      "disposition": "S3_ONLY",
+      "transform": "The strategy version is migrated; detailed scheduler context remains in S3. round_index participates only in the semantic digest.",
+      "consumers": ["source cadence audit"]
+    },
+    {
+      "sourcePaths": ["$.privacy.*"],
+      "target": null,
+      "verdicts": ["SENSITIVE", "UNSUPPORTED", "LOSS"],
+      "disposition": "S3_ONLY",
+      "transform": "Enforce the policy during export; do not migrate the policy envelope as row data.",
+      "consumers": ["export privacy gate"]
+    }
+  ],
+  "currentModelConsumption": {
+    "directFeatureInputs": [
+      "observation_batch.response_received_at",
+      "vehicle_observation.remaining_seats",
+      "vehicle_observation.crowd_level",
+      "vehicle_observation.passed_stop_order",
+      "route_stop.stop_order"
+    ],
+    "historyAndLabelInputs": [
+      "vehicle_observation.vehicle_id",
+      "vehicle_observation.source_row_number",
+      "vehicle_observation.stop_id",
+      "observation_batch.outcome",
+      "observation_batch.collection_strategy_version",
+      "route_version valid-time interval",
+      "route_stop roster"
+    ],
+    "storedButNotCurrentlyConsumedAsFeatures": [
+      "vehicle_observation.vehicle_type",
+      "vehicle_observation.route_type",
+      "vehicle_observation.tagless",
+      "observation_batch.http_status",
+      "observation_batch.result_code"
+    ]
+  }
+}

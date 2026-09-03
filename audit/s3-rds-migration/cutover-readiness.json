@@ -1,0 +1,152 @@
+{
+  "schemaVersion": "salmonbus-personal-collector-cutover-readiness-v1",
+  "assessment": {
+    "preDisableDecision": "SAFE_TO_DISABLE_WITH_SEPARATE_APPROVAL_AND_POST_DISABLE_DRAIN_CHECK",
+    "executionState": "DISABLED_BY_USER",
+    "postDisableDecision": "TERMINAL_SOURCE_FREEZE_CONFIRMED",
+    "remainingSourceCatchUpOpen": false,
+    "safeForEc2SoleCollectorAtNextQuotaReset": true
+  },
+  "personalSchedule": {
+    "sourceAccount": "827325854159",
+    "group": "salmonbus-collector",
+    "name": "salmonbus-adaptive-heartbeat",
+    "expression": "cron(* * * * ? *)",
+    "timezone": "Asia/Seoul",
+    "target": "salmonbus-collector Lambda",
+    "disabledAt": "2026-09-02T22:18:57.240+09:00",
+    "disabledAtUtc": "2026-09-02T13:18:57.240Z",
+    "executionEvidence": "USER_PROVIDED",
+    "schedulerApiQueriedByAudit": false,
+    "writePerformedByAudit": false
+  },
+  "liveIncident": {
+    "evidence": "USER_PROVIDED_ACADEMY_READ_ONLY_AGGREGATES",
+    "boardStatusByRoute": {"3330": "503 NO_RECENT_OBSERVATION", "1650": "503 NO_RECENT_OBSERVATION"},
+    "serviceHealth": {"worker": "UP", "api": "UP"},
+    "lastSuccessfulObservationAndForecastUtc": "2026-09-02T12:56:23Z",
+    "subsequentBatchOutcome": "FAILED_UPSTREAM",
+    "subsequentFailureCode": "DAILY_QUOTA_EXCEEDED",
+    "academyLocalBusLocationReservedCalls": 764,
+    "academyLocalDailyLimit": 10000,
+    "sharedGbisKeyAcrossPersonalLambdaAndEc2": true,
+    "causeAssessment": "CONSISTENT_WITH_SHARED_UPSTREAM_KEY_DAILY_QUOTA_EXHAUSTION_NOT_ACADEMY_LOCAL_LEDGER",
+    "recurrenceWithoutSingleCollectorCutover": true,
+    "targetAccessByAudit": false
+  },
+  "sourceFailureEvidence": {
+    "http429Records": 190,
+    "mappedOutcome": "FAILED_UPSTREAM",
+    "firstHttp429ByRouteUtc": {
+      "3330": "2026-09-02T12:56:30.276Z",
+      "1650": "2026-09-02T12:56:31.454Z"
+    },
+    "lastSuccessfulSourceRecordByRouteUtc": {
+      "3330": "2026-09-02T12:56:15.345Z",
+      "1650": "2026-09-02T12:56:16.547Z"
+    },
+    "terminalSourceResponseReceivedAtUtc": "2026-09-02T13:20:01.561Z",
+    "interpretation": "The S3 collector independently changed from HTTP 200 success records to HTTP 429 failures at the same incident boundary. Exact DAILY_QUOTA_EXCEEDED naming is supplied by the target RDS finding."
+  },
+  "terminalFreeze": {
+    "baseThroughKstDateInclusive": "2026-09-01",
+    "terminalPartitionKstDate": "2026-09-02",
+    "confirmationPoints": [
+      {
+        "listObservedAtUtc": "2026-09-02T13:21:14.320Z",
+        "byteAuditObservedAtUtc": "2026-09-02T13:21:57.421Z",
+        "byteAuditCompletedAtUtc": "2026-09-02T13:22:34.926Z"
+      },
+      {
+        "listObservedAtUtc": "2026-09-02T13:22:53.278Z",
+        "byteAuditObservedAtUtc": "2026-09-02T13:23:40.988Z",
+        "byteAuditCompletedAtUtc": "2026-09-02T13:24:20.855Z"
+      }
+    ],
+    "stableAcrossBothListPoints": true,
+    "stableAcrossBothByteAudits": true,
+    "immutableBase": {
+      "recordObjects": 142156,
+      "rawObjects": 142031,
+      "objects": 284187,
+      "bytes": 2206270988,
+      "manifestSha256": "db47305386c77fd6d28411ce09b5e1633a029027bc15d41c8201139fb9d535b9",
+      "lastModifiedUtc": "2026-09-01T15:00:04.000Z",
+      "lateObjectsAfterNextDay0015Kst": 0
+    },
+    "terminalPartition": {
+      "recordObjects": 7876,
+      "rawObjects": 7874,
+      "objects": 15750,
+      "bytes": 140161072,
+      "manifestSha256": "f0decee3446e0e787532c9682bd3c6c627ccf9f10cdba9a992829345fdefa86e",
+      "lastModifiedUtc": "2026-09-02T13:20:02.000Z"
+    },
+    "fullRecordRawHistory": {
+      "recordObjects": 150032,
+      "rawObjects": 149905,
+      "objects": 299937,
+      "bytes": 2346432060,
+      "manifestSha256": "ad7dca914792eb243008df549fef844e5a32d004a867d7c10c44b6c979b7fad8",
+      "lastModifiedUtc": "2026-09-02T13:20:02.000Z"
+    },
+    "recordRawBijection": {
+      "recordDocuments": 7876,
+      "rawDocuments": 7874,
+      "rawLessRecords": 2,
+      "referencedRawMissing": 0,
+      "unreferencedRawDocuments": 0,
+      "duplicateRawReferenceExtras": 0,
+      "recordOrRawValidationErrors": 0
+    }
+  },
+  "routeAuthorityClosure": {
+    "policy": "RDS_ROUTE_VERSION_VALID_FROM_CONSERVATIVE_NO_LIVE_ROW_OVERLAP",
+    "authorityByRouteUtc": {
+      "3330": "2026-09-02T10:27:51.330754Z",
+      "1650": "2026-09-02T12:49:33.041299Z"
+    },
+    "automaticImport": {
+      "observationBatch": 149193,
+      "vehicleObservation": 2461308,
+      "byRoute": {
+        "3330": {"observationBatch": 74304, "vehicleObservation": 1175694},
+        "1650": {"observationBatch": 74889, "vehicleObservation": 1285614}
+      }
+    },
+    "terminalOverlapExcluded": {
+      "recordDocuments": 811,
+      "observationRows": 14924,
+      "byRoute": {
+        "3330": {"recordDocuments": 689, "observationRows": 14364},
+        "1650": {"recordDocuments": 122, "observationRows": 560}
+      }
+    },
+    "catchUpCountsUnchangedAcrossPreAndPostDisableAudits": true
+  },
+  "postDisableInvariant": {
+    "personalScheduleRemainsDisabled": true,
+    "ec2IsSoleCollector": true,
+    "verifyAfterKstMidnightReset": [
+      "both routes resume successful observations",
+      "board recovers from NO_RECENT_OBSERVATION",
+      "academy local quota ledger advances consistently",
+      "no new personal S3 record/raw object appears after terminal LastModified"
+    ],
+    "reenablePersonalScheduleRequiresSeparateDecision": true,
+    "deleteLambdaOrSourceArchive": false
+  },
+  "remainingUncertainties": [
+    "The disabled scheduler state and academy incident aggregates were supplied by the user and were not independently queried by this audit.",
+    "Recovery after the next KST midnight upstream reset is future state and is not claimed by this freeze receipt."
+  ],
+  "privacy": {
+    "rowLevelActualDataPresent": false,
+    "objectKeysPresent": false,
+    "vehicleOrPlateValuesPresent": false,
+    "hmacValuesPresent": false,
+    "credentialsOrEnvironmentValuesPresent": false
+  },
+  "awsWritePerformedByAudit": false,
+  "remoteWritePerformedByAudit": false
+}

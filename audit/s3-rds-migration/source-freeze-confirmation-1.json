@@ -1,0 +1,50 @@
+{
+  "aws_operations": [
+    "s3:ListBucket"
+  ],
+  "base_through_kst_date_inclusive": "2026-09-01",
+  "immutable_base": {
+    "bytes": 2206270988,
+    "last_modified_utc": "2026-09-01T15:00:04.000Z",
+    "manifest_sha256": "db47305386c77fd6d28411ce09b5e1633a029027bc15d41c8201139fb9d535b9",
+    "objects": 284187,
+    "raw_last_modified_utc": "2026-09-01T15:00:04.000Z",
+    "raw_objects": 142031,
+    "record_last_modified_utc": "2026-09-01T15:00:04.000Z",
+    "record_objects": 142156
+  },
+  "invalid_partition_paths": {},
+  "late_base_objects_after_next_day_00_15_kst": {},
+  "mutation_performed": false,
+  "observed_at_utc": "2026-09-02T13:21:14.320Z",
+  "privacy": {
+    "credentials_or_environment_values_emitted": false,
+    "hmac_values_emitted": false,
+    "object_keys_emitted": false,
+    "row_level_data_emitted": false,
+    "vehicle_or_plate_values_emitted": false
+  },
+  "schema_version": "salmonbus-terminal-source-freeze-list-v1",
+  "source_account": "827325854159",
+  "terminal_partition": {
+    "bytes": 140161072,
+    "last_modified_utc": "2026-09-02T13:20:02.000Z",
+    "manifest_sha256": "f0decee3446e0e787532c9682bd3c6c627ccf9f10cdba9a992829345fdefa86e",
+    "objects": 15750,
+    "raw_last_modified_utc": "2026-09-02T13:20:02.000Z",
+    "raw_objects": 7874,
+    "record_last_modified_utc": "2026-09-02T13:20:02.000Z",
+    "record_objects": 7876
+  },
+  "terminal_partition_kst_date": "2026-09-02",
+  "terminal_source_through_partition": {
+    "bytes": 2346432060,
+    "last_modified_utc": "2026-09-02T13:20:02.000Z",
+    "manifest_sha256": "ad7dca914792eb243008df549fef844e5a32d004a867d7c10c44b6c979b7fad8",
+    "objects": 299937,
+    "raw_last_modified_utc": "2026-09-02T13:20:02.000Z",
+    "raw_objects": 149905,
+    "record_last_modified_utc": "2026-09-02T13:20:02.000Z",
+    "record_objects": 150032
+  }
+}

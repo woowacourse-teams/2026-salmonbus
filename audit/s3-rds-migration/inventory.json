@@ -1,0 +1,2531 @@
+{
+  "audit_completed_at_utc": "2026-09-02T13:14:48.430Z",
+  "aws_operations": [
+    "s3:ListBucket",
+    "s3:GetObject"
+  ],
+  "base_cutoff_kst_date_inclusive": "2026-09-01",
+  "bucket": "salmonbus-collector-827325854159-apne2",
+  "bus_field_profiles": {
+    "crowded": {
+      "missing": 0,
+      "non_null": 2324944,
+      "null": 0,
+      "numeric_max": 4,
+      "numeric_min": 0,
+      "present": 2324944,
+      "types": {
+        "integer": 2324944
+      }
+    },
+    "lowPlate": {
+      "missing": 0,
+      "non_null": 2324944,
+      "null": 0,
+      "numeric_max": 5,
+      "numeric_min": 0,
+      "present": 2324944,
+      "types": {
+        "integer": 2324944
+      }
+    },
+    "plateNo": {
+      "missing": 0,
+      "non_null": 2324944,
+      "null": 0,
+      "numeric_max": null,
+      "numeric_min": null,
+      "present": 2324944,
+      "types": {
+        "string": 2324944
+      }
+    },
+    "remainSeatCnt": {
+      "missing": 0,
+      "non_null": 2324944,
+      "null": 0,
+      "numeric_max": 68,
+      "numeric_min": -1,
+      "present": 2324944,
+      "types": {
+        "integer": 2324944
+      }
+    },
+    "routeId": {
+      "missing": 0,
+      "non_null": 2324944,
+      "null": 0,
+      "numeric_max": 234000050,
+      "numeric_min": 204000057,
+      "present": 2324944,
+      "types": {
+        "integer": 2324944
+      }
+    },
+    "routeTypeCd": {
+      "missing": 0,
+      "non_null": 2324944,
+      "null": 0,
+      "numeric_max": 11,
+      "numeric_min": 11,
+      "present": 2324944,
+      "types": {
+        "integer": 2324944
+      }
+    },
+    "stateCd": {
+      "missing": 0,
+      "non_null": 2324944,
+      "null": 0,
+      "numeric_max": 2,
+      "numeric_min": 0,
+      "present": 2324944,
+      "types": {
+        "integer": 2324944
+      }
+    },
+    "stationId": {
+      "missing": 0,
+      "non_null": 2324944,
+      "null": 0,
+      "numeric_max": 277103313,
+      "numeric_min": 104000069,
+      "present": 2324944,
+      "types": {
+        "integer": 2324944
+      }
+    },
+    "stationSeq": {
+      "missing": 0,
+      "non_null": 2324944,
+      "null": 0,
+      "numeric_max": 88,
+      "numeric_min": 1,
+      "present": 2324944,
+      "types": {
+        "integer": 2324944
+      }
+    },
+    "taglessCd": {
+      "missing": 0,
+      "non_null": 2324944,
+      "null": 0,
+      "numeric_max": 1,
+      "numeric_min": 0,
+      "present": 2324944,
+      "types": {
+        "integer": 2324944
+      }
+    },
+    "vehId": {
+      "missing": 0,
+      "non_null": 2324944,
+      "null": 0,
+      "numeric_max": null,
+      "numeric_min": null,
+      "present": 2324944,
+      "types": {
+        "integer": 2324944
+      }
+    }
+  },
+  "classifications": {
+    "API_ERROR": 124,
+    "HTTP_ERROR": 20,
+    "INCOMPLETE_ENVELOPE": 695,
+    "SUCCESS_NO_VEHICLE": 3399,
+    "SUCCESS_WITH_VEHICLES": 137793,
+    "TRANSPORT_ERROR": 125
+  },
+  "collection_strategy_versions": {
+    "adaptive-kst-v1.0.0": 2116,
+    "adaptive-kst-v1.0.1": 8368,
+    "adaptive-kst-v1.1.0": 508,
+    "adaptive-kst-v1.2.0": 131164
+  },
+  "collector_schema_versions": {
+    "1.0.0": 142156
+  },
+  "daily_route_distribution": {
+    "2026-08-14": {
+      "1650": {
+        "invalid_records": 0,
+        "provider_observations": 10341,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 10341,
+        "record_documents": 421,
+        "station_mismatch_rows": 0
+      },
+      "3330": {
+        "invalid_records": 0,
+        "provider_observations": 9804,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 9804,
+        "record_documents": 421,
+        "station_mismatch_rows": 0
+      }
+    },
+    "2026-08-15": {
+      "1650": {
+        "invalid_records": 0,
+        "provider_observations": 19502,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 19502,
+        "record_documents": 1957,
+        "station_mismatch_rows": 0
+      },
+      "3330": {
+        "invalid_records": 0,
+        "provider_observations": 22990,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 22990,
+        "record_documents": 1957,
+        "station_mismatch_rows": 0
+      }
+    },
+    "2026-08-16": {
+      "1650": {
+        "invalid_records": 0,
+        "provider_observations": 18573,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 18573,
+        "record_documents": 1908,
+        "station_mismatch_rows": 0
+      },
+      "3330": {
+        "invalid_records": 0,
+        "provider_observations": 22498,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 22498,
+        "record_documents": 1908,
+        "station_mismatch_rows": 0
+      }
+    },
+    "2026-08-17": {
+      "1650": {
+        "invalid_records": 0,
+        "provider_observations": 24594,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 24594,
+        "record_documents": 2622,
+        "station_mismatch_rows": 0
+      },
+      "3330": {
+        "invalid_records": 0,
+        "provider_observations": 30586,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 30586,
+        "record_documents": 2622,
+        "station_mismatch_rows": 0
+      }
+    },
+    "2026-08-18": {
+      "1650": {
+        "invalid_records": 0,
+        "provider_observations": 84495,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 84495,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      },
+      "3330": {
+        "invalid_records": 0,
+        "provider_observations": 75648,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 75648,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      }
+    },
+    "2026-08-19": {
+      "1650": {
+        "invalid_records": 0,
+        "provider_observations": 84777,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 84777,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      },
+      "3330": {
+        "invalid_records": 0,
+        "provider_observations": 76064,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 76064,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      }
+    },
+    "2026-08-20": {
+      "1650": {
+        "invalid_records": 0,
+        "provider_observations": 84857,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 84857,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      },
+      "3330": {
+        "invalid_records": 0,
+        "provider_observations": 76757,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 76757,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      }
+    },
+    "2026-08-21": {
+      "1650": {
+        "invalid_records": 0,
+        "provider_observations": 85652,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 85652,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      },
+      "3330": {
+        "invalid_records": 0,
+        "provider_observations": 78085,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 78085,
+        "record_documents": 4278,
+        "station_mismatch_rows": 4
+      }
+    },
+    "2026-08-22": {
+      "1650": {
+        "invalid_records": 0,
+        "provider_observations": 50039,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 50039,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      },
+      "3330": {
+        "invalid_records": 0,
+        "provider_observations": 49938,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 49938,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      }
+    },
+    "2026-08-23": {
+      "1650": {
+        "invalid_records": 0,
+        "provider_observations": 43406,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 43406,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      },
+      "3330": {
+        "invalid_records": 0,
+        "provider_observations": 44260,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 44260,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      }
+    },
+    "2026-08-24": {
+      "1650": {
+        "invalid_records": 0,
+        "provider_observations": 83834,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 83834,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      },
+      "3330": {
+        "invalid_records": 0,
+        "provider_observations": 74689,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 74689,
+        "record_documents": 4278,
+        "station_mismatch_rows": 17
+      }
+    },
+    "2026-08-25": {
+      "1650": {
+        "invalid_records": 0,
+        "provider_observations": 86889,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 86889,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      },
+      "3330": {
+        "invalid_records": 0,
+        "provider_observations": 75717,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 75717,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      }
+    },
+    "2026-08-26": {
+      "1650": {
+        "invalid_records": 0,
+        "provider_observations": 86189,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 86189,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      },
+      "3330": {
+        "invalid_records": 0,
+        "provider_observations": 76723,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 76723,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      }
+    },
+    "2026-08-27": {
+      "1650": {
+        "invalid_records": 0,
+        "provider_observations": 85996,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 85996,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      },
+      "3330": {
+        "invalid_records": 0,
+        "provider_observations": 76251,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 76251,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      }
+    },
+    "2026-08-28": {
+      "1650": {
+        "invalid_records": 0,
+        "provider_observations": 88630,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 88630,
+        "record_documents": 4277,
+        "station_mismatch_rows": 0
+      },
+      "3330": {
+        "invalid_records": 0,
+        "provider_observations": 78918,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 78918,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      }
+    },
+    "2026-08-29": {
+      "1650": {
+        "invalid_records": 0,
+        "provider_observations": 49217,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 49217,
+        "record_documents": 4279,
+        "station_mismatch_rows": 0
+      },
+      "3330": {
+        "invalid_records": 0,
+        "provider_observations": 48956,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 48956,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      }
+    },
+    "2026-08-30": {
+      "1650": {
+        "invalid_records": 0,
+        "provider_observations": 42772,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 42772,
+        "record_documents": 4277,
+        "station_mismatch_rows": 0
+      },
+      "3330": {
+        "invalid_records": 0,
+        "provider_observations": 43950,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 43950,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      }
+    },
+    "2026-08-31": {
+      "1650": {
+        "invalid_records": 0,
+        "provider_observations": 88554,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 88554,
+        "record_documents": 4279,
+        "station_mismatch_rows": 0
+      },
+      "3330": {
+        "invalid_records": 0,
+        "provider_observations": 77769,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 77769,
+        "record_documents": 4278,
+        "station_mismatch_rows": 2
+      }
+    },
+    "2026-09-01": {
+      "1650": {
+        "invalid_records": 0,
+        "provider_observations": 88708,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 88708,
+        "record_documents": 4278,
+        "station_mismatch_rows": 4
+      },
+      "3330": {
+        "invalid_records": 0,
+        "provider_observations": 78316,
+        "rds_excluded_observations": 0,
+        "rds_storable_observations": 78316,
+        "record_documents": 4278,
+        "station_mismatch_rows": 0
+      }
+    }
+  },
+  "inventory": {
+    "by_family": {
+      "audit": {
+        "bytes": 833,
+        "objects": 1
+      },
+      "control": {
+        "bytes": 6673,
+        "objects": 21
+      },
+      "deployment": {
+        "bytes": 201039293,
+        "objects": 9
+      },
+      "derived": {
+        "bytes": 259681603,
+        "objects": 119
+      },
+      "raw": {
+        "bytes": 505613240,
+        "objects": 149789
+      },
+      "records": {
+        "bytes": 1840513748,
+        "objects": 149916
+      },
+      "rehearsal": {
+        "bytes": 6598514,
+        "objects": 21
+      }
+    },
+    "by_partition": {
+      "2026-08-14": {
+        "1650": {
+          "raw": {
+            "bytes": 2073886,
+            "late_objects": 0,
+            "objects": 421,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 7156118,
+            "late_objects": 0,
+            "objects": 421,
+            "relation_to_base_cutoff": "base"
+          }
+        },
+        "3330": {
+          "raw": {
+            "bytes": 1970072,
+            "late_objects": 0,
+            "objects": 421,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 6840544,
+            "late_objects": 0,
+            "objects": 421,
+            "relation_to_base_cutoff": "base"
+          }
+        }
+      },
+      "2026-08-15": {
+        "1650": {
+          "raw": {
+            "bytes": 4127008,
+            "late_objects": 0,
+            "objects": 1957,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 16499867,
+            "late_objects": 0,
+            "objects": 1957,
+            "relation_to_base_cutoff": "base"
+          }
+        },
+        "3330": {
+          "raw": {
+            "bytes": 4799509,
+            "late_objects": 0,
+            "objects": 1957,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 18546245,
+            "late_objects": 0,
+            "objects": 1957,
+            "relation_to_base_cutoff": "base"
+          }
+        }
+      },
+      "2026-08-16": {
+        "1650": {
+          "raw": {
+            "bytes": 3940361,
+            "late_objects": 0,
+            "objects": 1907,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 15830757,
+            "late_objects": 0,
+            "objects": 1908,
+            "relation_to_base_cutoff": "base"
+          }
+        },
+        "3330": {
+          "raw": {
+            "bytes": 4698355,
+            "late_objects": 0,
+            "objects": 1908,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 18136514,
+            "late_objects": 0,
+            "objects": 1908,
+            "relation_to_base_cutoff": "base"
+          }
+        }
+      },
+      "2026-08-17": {
+        "1650": {
+          "raw": {
+            "bytes": 5236162,
+            "late_objects": 0,
+            "objects": 2622,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 21211712,
+            "late_objects": 0,
+            "objects": 2622,
+            "relation_to_base_cutoff": "base"
+          }
+        },
+        "3330": {
+          "raw": {
+            "bytes": 6393309,
+            "late_objects": 0,
+            "objects": 2622,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 24731478,
+            "late_objects": 0,
+            "objects": 2622,
+            "relation_to_base_cutoff": "base"
+          }
+        }
+      },
+      "2026-08-18": {
+        "1650": {
+          "raw": {
+            "bytes": 17097155,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 60636854,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        },
+        "3330": {
+          "raw": {
+            "bytes": 15385284,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 55439116,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        }
+      },
+      "2026-08-19": {
+        "1650": {
+          "raw": {
+            "bytes": 17152599,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 60805249,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        },
+        "3330": {
+          "raw": {
+            "bytes": 15456726,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 55662931,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        }
+      },
+      "2026-08-20": {
+        "1650": {
+          "raw": {
+            "bytes": 17166955,
+            "late_objects": 0,
+            "objects": 4269,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 60847977,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        },
+        "3330": {
+          "raw": {
+            "bytes": 15586979,
+            "late_objects": 0,
+            "objects": 4274,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 56061159,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        }
+      },
+      "2026-08-21": {
+        "1650": {
+          "raw": {
+            "bytes": 17320678,
+            "late_objects": 0,
+            "objects": 4267,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 61314596,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        },
+        "3330": {
+          "raw": {
+            "bytes": 15844483,
+            "late_objects": 0,
+            "objects": 4272,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 56843327,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        }
+      },
+      "2026-08-22": {
+        "1650": {
+          "raw": {
+            "bytes": 10451984,
+            "late_objects": 0,
+            "objects": 4264,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 40417260,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        },
+        "3330": {
+          "raw": {
+            "bytes": 10419713,
+            "late_objects": 0,
+            "objects": 4270,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 40334742,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        }
+      },
+      "2026-08-23": {
+        "1650": {
+          "raw": {
+            "bytes": 9175474,
+            "late_objects": 0,
+            "objects": 4275,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 36532956,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        },
+        "3330": {
+          "raw": {
+            "bytes": 9322761,
+            "late_objects": 0,
+            "objects": 4277,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 37000463,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        }
+      },
+      "2026-08-24": {
+        "1650": {
+          "raw": {
+            "bytes": 16970943,
+            "late_objects": 0,
+            "objects": 4277,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 60251066,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        },
+        "3330": {
+          "raw": {
+            "bytes": 15200688,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 54877059,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        }
+      },
+      "2026-08-25": {
+        "1650": {
+          "raw": {
+            "bytes": 17556918,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 62033473,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        },
+        "3330": {
+          "raw": {
+            "bytes": 15397585,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 55475286,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        }
+      },
+      "2026-08-26": {
+        "1650": {
+          "raw": {
+            "bytes": 17424549,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 61632096,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        },
+        "3330": {
+          "raw": {
+            "bytes": 15590188,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 56064219,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        }
+      },
+      "2026-08-27": {
+        "1650": {
+          "raw": {
+            "bytes": 17387827,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 61519867,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        },
+        "3330": {
+          "raw": {
+            "bytes": 15500302,
+            "late_objects": 0,
+            "objects": 4277,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 55789147,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        }
+      },
+      "2026-08-28": {
+        "1650": {
+          "raw": {
+            "bytes": 17895455,
+            "late_objects": 0,
+            "objects": 4275,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 63061870,
+            "late_objects": 0,
+            "objects": 4277,
+            "relation_to_base_cutoff": "base"
+          }
+        },
+        "3330": {
+          "raw": {
+            "bytes": 16015459,
+            "late_objects": 0,
+            "objects": 4277,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 57355847,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        }
+      },
+      "2026-08-29": {
+        "1650": {
+          "raw": {
+            "bytes": 10294915,
+            "late_objects": 0,
+            "objects": 4277,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 39942883,
+            "late_objects": 0,
+            "objects": 4279,
+            "relation_to_base_cutoff": "base"
+          }
+        },
+        "3330": {
+          "raw": {
+            "bytes": 10233397,
+            "late_objects": 0,
+            "objects": 4266,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 39765899,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        }
+      },
+      "2026-08-30": {
+        "1650": {
+          "raw": {
+            "bytes": 9052940,
+            "late_objects": 0,
+            "objects": 4273,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 36158475,
+            "late_objects": 0,
+            "objects": 4277,
+            "relation_to_base_cutoff": "base"
+          }
+        },
+        "3330": {
+          "raw": {
+            "bytes": 9267315,
+            "late_objects": 0,
+            "objects": 4252,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 36824397,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        }
+      },
+      "2026-08-31": {
+        "1650": {
+          "raw": {
+            "bytes": 17880417,
+            "late_objects": 0,
+            "objects": 4276,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 63020653,
+            "late_objects": 0,
+            "objects": 4279,
+            "relation_to_base_cutoff": "base"
+          }
+        },
+        "3330": {
+          "raw": {
+            "bytes": 15787976,
+            "late_objects": 0,
+            "objects": 4266,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 56667363,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        }
+      },
+      "2026-09-01": {
+        "1650": {
+          "raw": {
+            "bytes": 17909223,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 63107615,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        },
+        "3330": {
+          "raw": {
+            "bytes": 15895142,
+            "late_objects": 0,
+            "objects": 4274,
+            "relation_to_base_cutoff": "base"
+          },
+          "records": {
+            "bytes": 56993216,
+            "late_objects": 0,
+            "objects": 4278,
+            "relation_to_base_cutoff": "base"
+          }
+        }
+      },
+      "2026-09-02": {
+        "1650": {
+          "raw": {
+            "bytes": 16013122,
+            "late_objects": 0,
+            "objects": 3880,
+            "relation_to_base_cutoff": "after_base_cutoff"
+          },
+          "records": {
+            "bytes": 56523491,
+            "late_objects": 0,
+            "objects": 3880,
+            "relation_to_base_cutoff": "after_base_cutoff"
+          }
+        },
+        "3330": {
+          "raw": {
+            "bytes": 14719426,
+            "late_objects": 0,
+            "objects": 3878,
+            "relation_to_base_cutoff": "after_base_cutoff"
+          },
+          "records": {
+            "bytes": 52599961,
+            "late_objects": 0,
+            "objects": 3880,
+            "relation_to_base_cutoff": "after_base_cutoff"
+          }
+        }
+      }
+    },
+    "bytes": 2813453904,
+    "invalid_partition_paths": {},
+    "late_objects_after_next_day_00_15_kst": {},
+    "object_creation_lag_from_key_timestamp_seconds": {
+      "raw": {
+        "max": 16.59,
+        "min": 0.043,
+        "p50": 0.642,
+        "p95": 0.96,
+        "p99": 6.739
+      },
+      "records": {
+        "max": 17.508,
+        "min": 0.086,
+        "p50": 0.647,
+        "p95": 1.092,
+        "p99": 7.58
+      }
+    },
+    "objects": 299876,
+    "selected_base_bytes": 2206270988,
+    "selected_base_objects": 284187,
+    "selected_base_sha256": "db47305386c77fd6d28411ce09b5e1633a029027bc15d41c8201139fb9d535b9",
+    "snapshot_sha256": "ee0ea2b30a5fd3cfe3105254d20bea203d49983fc6837a6ee7b71235ef9fa9cd",
+    "unpartitioned_objects": 171
+  },
+  "inventory_algorithm": {
+    "encoding": "UTF-8",
+    "final_lf": true,
+    "line_format": "key<TAB>etag<TAB>size<LF>",
+    "ordering": "global_bytewise_key_ascending",
+    "version": "object-inventory-v1"
+  },
+  "natural_identity_candidates": {
+    "invocation_route_round": {
+      "colliding_records_beyond_first": 98,
+      "collision_groups": 50,
+      "collision_rate": 0.000689383494,
+      "eligible_records": 142156,
+      "unique_values": 142058
+    },
+    "object_key": {
+      "caveat": "not stored by the current RDS schema and does not detect a copied record under another key",
+      "colliding_records_beyond_first": 0,
+      "collision_groups": 0,
+      "collision_rate": 0.0,
+      "eligible_records": 142156,
+      "unique_values": 142156
+    },
+    "record_body_sha256": {
+      "colliding_records_beyond_first": 0,
+      "collision_groups": 0,
+      "collision_rate": 0.0,
+      "eligible_records": 142156,
+      "unique_values": 142156
+    },
+    "response_body_sha256": {
+      "colliding_records_beyond_first": 731,
+      "collision_groups": 2,
+      "collision_rate": 0.005146763735,
+      "eligible_records": 142031,
+      "unique_values": 141300
+    },
+    "route_request_started_at_millisecond": {
+      "colliding_records_beyond_first": 0,
+      "collision_groups": 0,
+      "collision_rate": 0.0,
+      "eligible_records": 142156,
+      "unique_values": 142156
+    },
+    "route_request_started_at_second": {
+      "colliding_records_beyond_first": 0,
+      "collision_groups": 0,
+      "collision_rate": 0.0,
+      "eligible_records": 142156,
+      "unique_values": 142156
+    },
+    "route_response_received_at_millisecond": {
+      "colliding_records_beyond_first": 0,
+      "collision_groups": 0,
+      "collision_rate": 0.0,
+      "eligible_records": 142156,
+      "unique_values": 142156
+    },
+    "route_scheduled_at_round": {
+      "colliding_records_beyond_first": 98,
+      "collision_groups": 50,
+      "collision_rate": 0.000689402893,
+      "eligible_records": 142152,
+      "unique_values": 142054
+    },
+    "semantic_batch_digest": {
+      "colliding_records_beyond_first": 0,
+      "collision_groups": 0,
+      "collision_rate": 0.0,
+      "eligible_records": 142156,
+      "unique_values": 142156
+    },
+    "source_record_id": {
+      "colliding_records_beyond_first": 0,
+      "collision_groups": 0,
+      "collision_rate": 0.0,
+      "eligible_records": 142156,
+      "unique_values": 142156
+    }
+  },
+  "observed_at_utc": "2026-09-02T13:05:43.890Z",
+  "privacy": {
+    "credentials_or_environment_values_emitted": false,
+    "ephemeral_identity_counting_key_persisted": false,
+    "object_keys_emitted": false,
+    "original_vehicle_ids_emitted": false,
+    "plate_values_emitted": false,
+    "row_level_material_persisted": false,
+    "source_hmac_values_emitted": false
+  },
+  "private_sensitive_archive_measurement": {
+    "contains_plate_hmac_or_raw": false,
+    "contains_vehicle_id": true,
+    "data_classification": "PRIVATE_SENSITIVE_NORMALIZED",
+    "eligible_observation_rows": 2324399,
+    "eligible_record_documents": 142129,
+    "format": "canonical JSON Lines; one batch envelope with nested observations per line",
+    "gzip_level_6_bytes": 24190995,
+    "measurement_sink": "discarded in memory/pipe; no row-level archive persisted",
+    "route_day_units": [
+      {
+        "date": "2026-08-14",
+        "gzip_level_6_bytes": 114520,
+        "route": "1650",
+        "uncompressed_bytes": 2795913
+      },
+      {
+        "date": "2026-08-14",
+        "gzip_level_6_bytes": 119456,
+        "route": "3330",
+        "uncompressed_bytes": 2674111
+      },
+      {
+        "date": "2026-08-15",
+        "gzip_level_6_bytes": 292115,
+        "route": "1650",
+        "uncompressed_bytes": 6201291
+      },
+      {
+        "date": "2026-08-15",
+        "gzip_level_6_bytes": 329550,
+        "route": "3330",
+        "uncompressed_bytes": 7042567
+      },
+      {
+        "date": "2026-08-16",
+        "gzip_level_6_bytes": 283651,
+        "route": "1650",
+        "uncompressed_bytes": 5940539
+      },
+      {
+        "date": "2026-08-16",
+        "gzip_level_6_bytes": 321798,
+        "route": "3330",
+        "uncompressed_bytes": 6884679
+      },
+      {
+        "date": "2026-08-17",
+        "gzip_level_6_bytes": 364097,
+        "route": "1650",
+        "uncompressed_bytes": 7942427
+      },
+      {
+        "date": "2026-08-17",
+        "gzip_level_6_bytes": 414707,
+        "route": "3330",
+        "uncompressed_bytes": 9380340
+      },
+      {
+        "date": "2026-08-18",
+        "gzip_level_6_bytes": 766752,
+        "route": "1650",
+        "uncompressed_bytes": 23512176
+      },
+      {
+        "date": "2026-08-18",
+        "gzip_level_6_bytes": 776268,
+        "route": "3330",
+        "uncompressed_bytes": 21447872
+      },
+      {
+        "date": "2026-08-19",
+        "gzip_level_6_bytes": 769068,
+        "route": "1650",
+        "uncompressed_bytes": 23576877
+      },
+      {
+        "date": "2026-08-19",
+        "gzip_level_6_bytes": 777916,
+        "route": "3330",
+        "uncompressed_bytes": 21549169
+      },
+      {
+        "date": "2026-08-20",
+        "gzip_level_6_bytes": 768983,
+        "route": "1650",
+        "uncompressed_bytes": 23597764
+      },
+      {
+        "date": "2026-08-20",
+        "gzip_level_6_bytes": 779148,
+        "route": "3330",
+        "uncompressed_bytes": 21716784
+      },
+      {
+        "date": "2026-08-21",
+        "gzip_level_6_bytes": 767543,
+        "route": "1650",
+        "uncompressed_bytes": 23787998
+      },
+      {
+        "date": "2026-08-21",
+        "gzip_level_6_bytes": 786814,
+        "route": "3330",
+        "uncompressed_bytes": 22010598
+      },
+      {
+        "date": "2026-08-22",
+        "gzip_level_6_bytes": 609457,
+        "route": "1650",
+        "uncompressed_bytes": 15319451
+      },
+      {
+        "date": "2026-08-22",
+        "gzip_level_6_bytes": 641229,
+        "route": "3330",
+        "uncompressed_bytes": 15314990
+      },
+      {
+        "date": "2026-08-23",
+        "gzip_level_6_bytes": 578417,
+        "route": "1650",
+        "uncompressed_bytes": 13743522
+      },
+      {
+        "date": "2026-08-23",
+        "gzip_level_6_bytes": 615741,
+        "route": "3330",
+        "uncompressed_bytes": 13962971
+      },
+      {
+        "date": "2026-08-24",
+        "gzip_level_6_bytes": 763270,
+        "route": "1650",
+        "uncompressed_bytes": 23354618
+      },
+      {
+        "date": "2026-08-24",
+        "gzip_level_6_bytes": 770790,
+        "route": "3330",
+        "uncompressed_bytes": 21129029
+      },
+      {
+        "date": "2026-08-25",
+        "gzip_level_6_bytes": 776172,
+        "route": "1650",
+        "uncompressed_bytes": 24079568
+      },
+      {
+        "date": "2026-08-25",
+        "gzip_level_6_bytes": 775948,
+        "route": "3330",
+        "uncompressed_bytes": 21468294
+      },
+      {
+        "date": "2026-08-26",
+        "gzip_level_6_bytes": 773223,
+        "route": "1650",
+        "uncompressed_bytes": 23912620
+      },
+      {
+        "date": "2026-08-26",
+        "gzip_level_6_bytes": 782892,
+        "route": "3330",
+        "uncompressed_bytes": 21708640
+      },
+      {
+        "date": "2026-08-27",
+        "gzip_level_6_bytes": 773278,
+        "route": "1650",
+        "uncompressed_bytes": 23868069
+      },
+      {
+        "date": "2026-08-27",
+        "gzip_level_6_bytes": 781975,
+        "route": "3330",
+        "uncompressed_bytes": 21595310
+      },
+      {
+        "date": "2026-08-28",
+        "gzip_level_6_bytes": 780753,
+        "route": "1650",
+        "uncompressed_bytes": 24493848
+      },
+      {
+        "date": "2026-08-28",
+        "gzip_level_6_bytes": 792203,
+        "route": "3330",
+        "uncompressed_bytes": 22231482
+      },
+      {
+        "date": "2026-08-29",
+        "gzip_level_6_bytes": 609165,
+        "route": "1650",
+        "uncompressed_bytes": 15123149
+      },
+      {
+        "date": "2026-08-29",
+        "gzip_level_6_bytes": 639130,
+        "route": "3330",
+        "uncompressed_bytes": 15079685
+      },
+      {
+        "date": "2026-08-30",
+        "gzip_level_6_bytes": 578341,
+        "route": "1650",
+        "uncompressed_bytes": 13590503
+      },
+      {
+        "date": "2026-08-30",
+        "gzip_level_6_bytes": 615947,
+        "route": "3330",
+        "uncompressed_bytes": 13888217
+      },
+      {
+        "date": "2026-08-31",
+        "gzip_level_6_bytes": 777734,
+        "route": "1650",
+        "uncompressed_bytes": 24476670
+      },
+      {
+        "date": "2026-08-31",
+        "gzip_level_6_bytes": 785950,
+        "route": "3330",
+        "uncompressed_bytes": 21949665
+      },
+      {
+        "date": "2026-09-01",
+        "gzip_level_6_bytes": 779797,
+        "route": "1650",
+        "uncompressed_bytes": 24486978
+      },
+      {
+        "date": "2026-09-01",
+        "gzip_level_6_bytes": 785446,
+        "route": "3330",
+        "uncompressed_bytes": 22087200
+      }
+    ],
+    "uncompressed_bytes": 666925584,
+    "zstd_level_3_bytes": 19589490
+  },
+  "record_aggregate": {
+    "crowd_folded_to_null_rows": 201851,
+    "crowd_preserved_rows": 2123093,
+    "duplicate_vehicle_rows_within_batch": 0,
+    "private_archive_eligible_observations": 2324399,
+    "private_archive_eligible_records": 142129,
+    "provider_observations": 2324944,
+    "rds_excluded_observations": 0,
+    "rds_storable_observations": 2324944,
+    "record_bytes": 1731390296,
+    "record_documents": 142156,
+    "seat_known_rows": 2323274,
+    "seat_not_reported_rows": 0,
+    "seat_reported_unknown_rows": 1670,
+    "station_mismatch_rows": 27,
+    "station_unknown_rows": 0
+  },
+  "record_errors": {},
+  "record_raw_bijection": {
+    "byte_level_verification": "see source-validation-frozen.json",
+    "duplicate_raw_reference_extras": 0,
+    "duplicate_raw_reference_groups": 0,
+    "embedded_record_envelope_row_matches": 142156,
+    "raw_documents": 142031,
+    "raw_less_records": 125,
+    "raw_reference_path_matches": 142156,
+    "record_documents": 142156,
+    "records_declaring_raw": 142031,
+    "referenced_raw_missing": 0,
+    "referenced_raw_present": 142031,
+    "unreferenced_raw_documents": 0
+  },
+  "record_schemas": [
+    {
+      "records": 136782,
+      "schema_fingerprint": "d4576d7716b174a6df1318b5c11234b27841afe629b641f710a6a27c36e567af",
+      "shape": {
+        "api": {
+          "msgHeader": {
+            "queryTime": "string",
+            "resultCode": "integer",
+            "resultMessage": "string"
+          },
+          "queryTime": "string",
+          "resultCode": "integer",
+          "resultMessage": "string"
+        },
+        "buses": {
+          "item_shapes": [
+            {
+              "crowded": "integer",
+              "lowPlate": "integer",
+              "plateNo": "string",
+              "pseudonyms": {
+                "plateNo_hmac": "string",
+                "vehId_hmac": "string"
+              },
+              "remainSeatCnt": "integer",
+              "routeId": "integer",
+              "routeTypeCd": "integer",
+              "stateCd": "integer",
+              "stationId": "integer",
+              "stationSeq": "integer",
+              "taglessCd": "integer",
+              "vehId": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "classification": {
+          "call_attempted": "boolean",
+          "call_failed": "boolean",
+          "error_type": "null",
+          "type": "string",
+          "vehicle_count": "integer",
+          "zero_vehicles": "boolean"
+        },
+        "collection": {
+          "expected_daily_calls": "integer",
+          "forced": "boolean",
+          "period_minutes": "integer",
+          "phase": "string",
+          "quota_mode": "string",
+          "reference_minute_kst": "string",
+          "round_index": "integer",
+          "rounds_in_invocation": "integer",
+          "schedule_expression": "string",
+          "schedule_id": "string",
+          "schedule_timezone": "string",
+          "scheduled_at": "string",
+          "source": "string",
+          "strategy_version": "string"
+        },
+        "http": {
+          "response_bytes": "integer",
+          "response_headers": {
+            "content_length": "string",
+            "content_type": "string",
+            "date": "string"
+          },
+          "response_sha256": "string",
+          "status": "integer"
+        },
+        "invocation_id": "string",
+        "privacy": {
+          "hmac_algorithm": "string",
+          "public_export_rule": "string",
+          "raw_identifiers_present_in_private_bucket": "boolean"
+        },
+        "quota": {
+          "count_after_reservation": "integer",
+          "counter_key": "string",
+          "daily_call_cap": "integer",
+          "date_kst": "string",
+          "reservation_before_api_call": "boolean"
+        },
+        "raw_response": {
+          "exact_http_body_preserved": "boolean",
+          "s3_key": "string",
+          "sha256": "string"
+        },
+        "record_id": "string",
+        "request": {
+          "credential_source": "string",
+          "endpoint": "string",
+          "method": "string",
+          "parameters": {
+            "format": "string",
+            "routeId": "string"
+          }
+        },
+        "response_envelope": {
+          "response": {
+            "comMsgHeader": "string",
+            "msgBody": {
+              "busLocationList": {
+                "item_shapes": [
+                  {
+                    "crowded": "integer",
+                    "lowPlate": "integer",
+                    "plateNo": "string",
+                    "remainSeatCnt": "integer",
+                    "routeId": "integer",
+                    "routeTypeCd": "integer",
+                    "stateCd": "integer",
+                    "stationId": "integer",
+                    "stationSeq": "integer",
+                    "taglessCd": "integer",
+                    "vehId": "integer"
+                  }
+                ],
+                "type": "array"
+              }
+            },
+            "msgHeader": {
+              "queryTime": "string",
+              "resultCode": "integer",
+              "resultMessage": "string"
+            }
+          }
+        },
+        "route": {
+          "name": "string",
+          "route_id": "string"
+        },
+        "schema_version": "string",
+        "timing": {
+          "duration_ms": "number",
+          "request_started_at": {
+            "kst": "string",
+            "utc": "string"
+          },
+          "response_headers_received_at": {
+            "kst": "string",
+            "utc": "string"
+          },
+          "response_received_at": {
+            "kst": "string",
+            "utc": "string"
+          }
+        }
+      }
+    },
+    {
+      "records": 3505,
+      "schema_fingerprint": "28be0ed2da7721be437d49a7f07f41ccaa3385d74f942e6e8553d3a731f4ecb4",
+      "shape": {
+        "api": {
+          "msgHeader": {
+            "queryTime": "string",
+            "resultCode": "integer",
+            "resultMessage": "string"
+          },
+          "queryTime": "string",
+          "resultCode": "integer",
+          "resultMessage": "string"
+        },
+        "buses": {
+          "item_shapes": [],
+          "type": "array"
+        },
+        "classification": {
+          "call_attempted": "boolean",
+          "call_failed": "boolean",
+          "error_type": "null",
+          "type": "string",
+          "vehicle_count": "integer",
+          "zero_vehicles": "boolean"
+        },
+        "collection": {
+          "expected_daily_calls": "integer",
+          "forced": "boolean",
+          "period_minutes": "integer",
+          "phase": "string",
+          "quota_mode": "string",
+          "reference_minute_kst": "string",
+          "round_index": "integer",
+          "rounds_in_invocation": "integer",
+          "schedule_expression": "string",
+          "schedule_id": "string",
+          "schedule_timezone": "string",
+          "scheduled_at": "string",
+          "source": "string",
+          "strategy_version": "string"
+        },
+        "http": {
+          "response_bytes": "integer",
+          "response_headers": {
+            "content_length": "string",
+            "content_type": "string",
+            "date": "string"
+          },
+          "response_sha256": "string",
+          "status": "integer"
+        },
+        "invocation_id": "string",
+        "privacy": {
+          "hmac_algorithm": "string",
+          "public_export_rule": "string",
+          "raw_identifiers_present_in_private_bucket": "boolean"
+        },
+        "quota": {
+          "count_after_reservation": "integer",
+          "counter_key": "string",
+          "daily_call_cap": "integer",
+          "date_kst": "string",
+          "reservation_before_api_call": "boolean"
+        },
+        "raw_response": {
+          "exact_http_body_preserved": "boolean",
+          "s3_key": "string",
+          "sha256": "string"
+        },
+        "record_id": "string",
+        "request": {
+          "credential_source": "string",
+          "endpoint": "string",
+          "method": "string",
+          "parameters": {
+            "format": "string",
+            "routeId": "string"
+          }
+        },
+        "response_envelope": {
+          "response": {
+            "comMsgHeader": "string",
+            "msgHeader": {
+              "queryTime": "string",
+              "resultCode": "integer",
+              "resultMessage": "string"
+            }
+          }
+        },
+        "route": {
+          "name": "string",
+          "route_id": "string"
+        },
+        "schema_version": "string",
+        "timing": {
+          "duration_ms": "number",
+          "request_started_at": {
+            "kst": "string",
+            "utc": "string"
+          },
+          "response_headers_received_at": {
+            "kst": "string",
+            "utc": "string"
+          },
+          "response_received_at": {
+            "kst": "string",
+            "utc": "string"
+          }
+        }
+      }
+    },
+    {
+      "records": 1007,
+      "schema_fingerprint": "d65c7d888cd19b48de3b9797df84d221b42d5ab2e0b017e65c8729eb913646a5",
+      "shape": {
+        "api": {
+          "msgHeader": {
+            "queryTime": "string",
+            "resultCode": "integer",
+            "resultMessage": "string"
+          },
+          "queryTime": "string",
+          "resultCode": "integer",
+          "resultMessage": "string"
+        },
+        "buses": {
+          "item_shapes": [
+            {
+              "crowded": "integer",
+              "lowPlate": "integer",
+              "plateNo": "string",
+              "pseudonyms": {
+                "plateNo_hmac": "string",
+                "vehId_hmac": "string"
+              },
+              "remainSeatCnt": "integer",
+              "routeId": "integer",
+              "routeTypeCd": "integer",
+              "stateCd": "integer",
+              "stationId": "integer",
+              "stationSeq": "integer",
+              "taglessCd": "integer",
+              "vehId": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "classification": {
+          "call_attempted": "boolean",
+          "call_failed": "boolean",
+          "error_type": "null",
+          "type": "string",
+          "vehicle_count": "integer",
+          "zero_vehicles": "boolean"
+        },
+        "collection": {
+          "expected_daily_calls": "integer",
+          "forced": "boolean",
+          "period_minutes": "integer",
+          "phase": "string",
+          "quota_mode": "string",
+          "reference_minute_kst": "string",
+          "round_index": "integer",
+          "rounds_in_invocation": "integer",
+          "schedule_expression": "string",
+          "schedule_id": "string",
+          "schedule_timezone": "string",
+          "scheduled_at": "string",
+          "source": "string",
+          "strategy_version": "string"
+        },
+        "http": {
+          "response_bytes": "integer",
+          "response_headers": {
+            "content_length": "string",
+            "content_type": "string",
+            "date": "string"
+          },
+          "response_sha256": "string",
+          "status": "integer"
+        },
+        "invocation_id": "string",
+        "privacy": {
+          "hmac_algorithm": "string",
+          "public_export_rule": "string",
+          "raw_identifiers_present_in_private_bucket": "boolean"
+        },
+        "quota": {
+          "count_after_reservation": "integer",
+          "counter_key": "string",
+          "daily_call_cap": "integer",
+          "date_kst": "string",
+          "reservation_before_api_call": "boolean"
+        },
+        "raw_response": {
+          "exact_http_body_preserved": "boolean",
+          "s3_key": "string",
+          "sha256": "string"
+        },
+        "record_id": "string",
+        "request": {
+          "credential_source": "string",
+          "endpoint": "string",
+          "method": "string",
+          "parameters": {
+            "format": "string",
+            "routeId": "string"
+          }
+        },
+        "response_envelope": {
+          "response": {
+            "comMsgHeader": "string",
+            "msgBody": {
+              "busLocationList": {
+                "crowded": "integer",
+                "lowPlate": "integer",
+                "plateNo": "string",
+                "remainSeatCnt": "integer",
+                "routeId": "integer",
+                "routeTypeCd": "integer",
+                "stateCd": "integer",
+                "stationId": "integer",
+                "stationSeq": "integer",
+                "taglessCd": "integer",
+                "vehId": "integer"
+              }
+            },
+            "msgHeader": {
+              "queryTime": "string",
+              "resultCode": "integer",
+              "resultMessage": "string"
+            }
+          }
+        },
+        "route": {
+          "name": "string",
+          "route_id": "string"
+        },
+        "schema_version": "string",
+        "timing": {
+          "duration_ms": "number",
+          "request_started_at": {
+            "kst": "string",
+            "utc": "string"
+          },
+          "response_headers_received_at": {
+            "kst": "string",
+            "utc": "string"
+          },
+          "response_received_at": {
+            "kst": "string",
+            "utc": "string"
+          }
+        }
+      }
+    },
+    {
+      "records": 713,
+      "schema_fingerprint": "fa9f6be47f8b2c524b36e48be28c1933a41f8d5fd5ef643144dbcfe5ade3710e",
+      "shape": {
+        "api": {
+          "msgHeader": {},
+          "queryTime": "null",
+          "resultCode": "null",
+          "resultMessage": "null"
+        },
+        "buses": {
+          "item_shapes": [],
+          "type": "array"
+        },
+        "classification": {
+          "call_attempted": "boolean",
+          "call_failed": "boolean",
+          "error_type": "null",
+          "type": "string",
+          "vehicle_count": "integer",
+          "zero_vehicles": "boolean"
+        },
+        "collection": {
+          "expected_daily_calls": "integer",
+          "forced": "boolean",
+          "period_minutes": "integer",
+          "phase": "string",
+          "quota_mode": "string",
+          "reference_minute_kst": "string",
+          "round_index": "integer",
+          "rounds_in_invocation": "integer",
+          "schedule_expression": "string",
+          "schedule_id": "string",
+          "schedule_timezone": "string",
+          "scheduled_at": "string",
+          "source": "string",
+          "strategy_version": "string"
+        },
+        "http": {
+          "response_bytes": "integer",
+          "response_headers": {
+            "content_length": "string",
+            "content_type": "string",
+            "date": "string"
+          },
+          "response_sha256": "string",
+          "status": "integer"
+        },
+        "invocation_id": "string",
+        "privacy": {
+          "hmac_algorithm": "string",
+          "public_export_rule": "string",
+          "raw_identifiers_present_in_private_bucket": "boolean"
+        },
+        "quota": {
+          "count_after_reservation": "integer",
+          "counter_key": "string",
+          "daily_call_cap": "integer",
+          "date_kst": "string",
+          "reservation_before_api_call": "boolean"
+        },
+        "raw_response": {
+          "exact_http_body_preserved": "boolean",
+          "s3_key": "string",
+          "sha256": "string"
+        },
+        "record_id": "string",
+        "request": {
+          "credential_source": "string",
+          "endpoint": "string",
+          "method": "string",
+          "parameters": {
+            "format": "string",
+            "routeId": "string"
+          }
+        },
+        "response_envelope": {
+          "response": {
+            "comMsgHeader": "string"
+          }
+        },
+        "route": {
+          "name": "string",
+          "route_id": "string"
+        },
+        "schema_version": "string",
+        "timing": {
+          "duration_ms": "number",
+          "request_started_at": {
+            "kst": "string",
+            "utc": "string"
+          },
+          "response_headers_received_at": {
+            "kst": "string",
+            "utc": "string"
+          },
+          "response_received_at": {
+            "kst": "string",
+            "utc": "string"
+          }
+        }
+      }
+    },
+    {
+      "records": 125,
+      "schema_fingerprint": "1c9d8f246824e86174a8e5f3647263449b97412212ce058655df9b621a60d08e",
+      "shape": {
+        "api": {
+          "msgHeader": {},
+          "queryTime": "null",
+          "resultCode": "null",
+          "resultMessage": "null"
+        },
+        "buses": {
+          "item_shapes": [],
+          "type": "array"
+        },
+        "classification": {
+          "call_attempted": "boolean",
+          "call_failed": "boolean",
+          "error_type": "string",
+          "type": "string",
+          "vehicle_count": "integer",
+          "zero_vehicles": "boolean"
+        },
+        "collection": {
+          "expected_daily_calls": "integer",
+          "forced": "boolean",
+          "period_minutes": "integer",
+          "phase": "string",
+          "quota_mode": "string",
+          "reference_minute_kst": "string",
+          "round_index": "integer",
+          "rounds_in_invocation": "integer",
+          "schedule_expression": "string",
+          "schedule_id": "string",
+          "schedule_timezone": "string",
+          "scheduled_at": "string",
+          "source": "string",
+          "strategy_version": "string"
+        },
+        "http": {
+          "response_bytes": "integer",
+          "response_headers": {},
+          "response_sha256": "string",
+          "status": "null"
+        },
+        "invocation_id": "string",
+        "privacy": {
+          "hmac_algorithm": "string",
+          "public_export_rule": "string",
+          "raw_identifiers_present_in_private_bucket": "boolean"
+        },
+        "quota": {
+          "count_after_reservation": "integer",
+          "counter_key": "string",
+          "daily_call_cap": "integer",
+          "date_kst": "string",
+          "reservation_before_api_call": "boolean"
+        },
+        "raw_response": {
+          "exact_http_body_preserved": "boolean",
+          "s3_key": "null",
+          "sha256": "string"
+        },
+        "record_id": "string",
+        "request": {
+          "credential_source": "string",
+          "endpoint": "string",
+          "method": "string",
+          "parameters": {
+            "format": "string",
+            "routeId": "string"
+          }
+        },
+        "response_envelope": "null",
+        "route": {
+          "name": "string",
+          "route_id": "string"
+        },
+        "schema_version": "string",
+        "timing": {
+          "duration_ms": "number",
+          "request_started_at": {
+            "kst": "string",
+            "utc": "string"
+          },
+          "response_headers_received_at": "null",
+          "response_received_at": {
+            "kst": "string",
+            "utc": "string"
+          }
+        }
+      }
+    },
+    {
+      "records": 20,
+      "schema_fingerprint": "1c5148d2366d01169c44fdba7280f8e6144a6515e98f04c34ca8a420692063ae",
+      "shape": {
+        "api": {
+          "msgHeader": {},
+          "queryTime": "null",
+          "resultCode": "null",
+          "resultMessage": "null"
+        },
+        "buses": {
+          "item_shapes": [],
+          "type": "array"
+        },
+        "classification": {
+          "call_attempted": "boolean",
+          "call_failed": "boolean",
+          "error_type": "string",
+          "type": "string",
+          "vehicle_count": "integer",
+          "zero_vehicles": "boolean"
+        },
+        "collection": {
+          "expected_daily_calls": "integer",
+          "forced": "boolean",
+          "period_minutes": "integer",
+          "phase": "string",
+          "quota_mode": "string",
+          "reference_minute_kst": "string",
+          "round_index": "integer",
+          "rounds_in_invocation": "integer",
+          "schedule_expression": "string",
+          "schedule_id": "string",
+          "schedule_timezone": "string",
+          "scheduled_at": "string",
+          "source": "string",
+          "strategy_version": "string"
+        },
+        "http": {
+          "response_bytes": "integer",
+          "response_headers": {
+            "content_length": "string",
+            "content_type": "string",
+            "date": "null"
+          },
+          "response_sha256": "string",
+          "status": "integer"
+        },
+        "invocation_id": "string",
+        "privacy": {
+          "hmac_algorithm": "string",
+          "public_export_rule": "string",
+          "raw_identifiers_present_in_private_bucket": "boolean"
+        },
+        "quota": {
+          "count_after_reservation": "integer",
+          "counter_key": "string",
+          "daily_call_cap": "integer",
+          "date_kst": "string",
+          "reservation_before_api_call": "boolean"
+        },
+        "raw_response": {
+          "exact_http_body_preserved": "boolean",
+          "s3_key": "string",
+          "sha256": "string"
+        },
+        "record_id": "string",
+        "request": {
+          "credential_source": "string",
+          "endpoint": "string",
+          "method": "string",
+          "parameters": {
+            "format": "string",
+            "routeId": "string"
+          }
+        },
+        "response_envelope": {
+          "OpenAPI_ServiceResponse": {
+            "cmmMsgHeader": {
+              "errMsg": "string",
+              "returnAuthMsg": "string",
+              "returnReasonCode": "string"
+            }
+          }
+        },
+        "route": {
+          "name": "string",
+          "route_id": "string"
+        },
+        "schema_version": "string",
+        "timing": {
+          "duration_ms": "number",
+          "request_started_at": {
+            "kst": "string",
+            "utc": "string"
+          },
+          "response_headers_received_at": {
+            "kst": "string",
+            "utc": "string"
+          },
+          "response_received_at": {
+            "kst": "string",
+            "utc": "string"
+          }
+        }
+      }
+    },
+    {
+      "records": 4,
+      "schema_fingerprint": "c162346d24d4e867f60a63161e45c2635ff2e186e79eaddde3246613a232d0d6",
+      "shape": {
+        "api": {
+          "msgHeader": {
+            "queryTime": "string",
+            "resultCode": "integer",
+            "resultMessage": "string"
+          },
+          "queryTime": "string",
+          "resultCode": "integer",
+          "resultMessage": "string"
+        },
+        "buses": {
+          "item_shapes": [
+            {
+              "crowded": "integer",
+              "lowPlate": "integer",
+              "plateNo": "string",
+              "pseudonyms": {
+                "plateNo_hmac": "string",
+                "vehId_hmac": "string"
+              },
+              "remainSeatCnt": "integer",
+              "routeId": "integer",
+              "routeTypeCd": "integer",
+              "stateCd": "integer",
+              "stationId": "integer",
+              "stationSeq": "integer",
+              "taglessCd": "integer",
+              "vehId": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "classification": {
+          "call_attempted": "boolean",
+          "call_failed": "boolean",
+          "error_type": "null",
+          "type": "string",
+          "vehicle_count": "integer",
+          "zero_vehicles": "boolean"
+        },
+        "collection": {
+          "expected_daily_calls": "integer",
+          "forced": "boolean",
+          "period_minutes": "integer",
+          "phase": "string",
+          "quota_mode": "string",
+          "reference_minute_kst": "string",
+          "round_index": "integer",
+          "rounds_in_invocation": "integer",
+          "schedule_expression": "string",
+          "schedule_id": "string",
+          "schedule_timezone": "string",
+          "scheduled_at": "null",
+          "source": "string",
+          "strategy_version": "string"
+        },
+        "http": {
+          "response_bytes": "integer",
+          "response_headers": {
+            "content_length": "string",
+            "content_type": "string",
+            "date": "string"
+          },
+          "response_sha256": "string",
+          "status": "integer"
+        },
+        "invocation_id": "string",
+        "privacy": {
+          "hmac_algorithm": "string",
+          "public_export_rule": "string",
+          "raw_identifiers_present_in_private_bucket": "boolean"
+        },
+        "quota": {
+          "count_after_reservation": "integer",
+          "counter_key": "string",
+          "daily_call_cap": "integer",
+          "date_kst": "string",
+          "reservation_before_api_call": "boolean"
+        },
+        "raw_response": {
+          "exact_http_body_preserved": "boolean",
+          "s3_key": "string",
+          "sha256": "string"
+        },
+        "record_id": "string",
+        "request": {
+          "credential_source": "string",
+          "endpoint": "string",
+          "method": "string",
+          "parameters": {
+            "format": "string",
+            "routeId": "string"
+          }
+        },
+        "response_envelope": {
+          "response": {
+            "comMsgHeader": "string",
+            "msgBody": {
+              "busLocationList": {
+                "item_shapes": [
+                  {
+                    "crowded": "integer",
+                    "lowPlate": "integer",
+                    "plateNo": "string",
+                    "remainSeatCnt": "integer",
+                    "routeId": "integer",
+                    "routeTypeCd": "integer",
+                    "stateCd": "integer",
+                    "stationId": "integer",
+                    "stationSeq": "integer",
+                    "taglessCd": "integer",
+                    "vehId": "integer"
+                  }
+                ],
+                "type": "array"
+              }
+            },
+            "msgHeader": {
+              "queryTime": "string",
+              "resultCode": "integer",
+              "resultMessage": "string"
+            }
+          }
+        },
+        "route": {
+          "name": "string",
+          "route_id": "string"
+        },
+        "schema_version": "string",
+        "timing": {
+          "duration_ms": "number",
+          "request_started_at": {
+            "kst": "string",
+            "utc": "string"
+          },
+          "response_headers_received_at": {
+            "kst": "string",
+            "utc": "string"
+          },
+          "response_received_at": {
+            "kst": "string",
+            "utc": "string"
+          }
+        }
+      }
+    }
+  ],
+  "region": "ap-northeast-2",
+  "response_envelope_schemas": [
+    {
+      "records": 136786,
+      "schema_fingerprint": "d1b44b840e58f4fc1dea3c26f100a5c53a26973e47caf58009926371b40148ca",
+      "shape": {
+        "response": {
+          "comMsgHeader": "string",
+          "msgBody": {
+            "busLocationList": {
+              "item_shapes": [
+                {
+                  "crowded": "integer",
+                  "lowPlate": "integer",
+                  "plateNo": "string",
+                  "remainSeatCnt": "integer",
+                  "routeId": "integer",
+                  "routeTypeCd": "integer",
+                  "stateCd": "integer",
+                  "stationId": "integer",
+                  "stationSeq": "integer",
+                  "taglessCd": "integer",
+                  "vehId": "integer"
+                }
+              ],
+              "type": "array"
+            }
+          },
+          "msgHeader": {
+            "queryTime": "string",
+            "resultCode": "integer",
+            "resultMessage": "string"
+          }
+        }
+      }
+    },
+    {
+      "records": 3505,
+      "schema_fingerprint": "51f5c2eb83e533c4d43dbb0a8bb2e120324787a436b579e11a50f936bec14e2a",
+      "shape": {
+        "response": {
+          "comMsgHeader": "string",
+          "msgHeader": {
+            "queryTime": "string",
+            "resultCode": "integer",
+            "resultMessage": "string"
+          }
+        }
+      }
+    },
+    {
+      "records": 1007,
+      "schema_fingerprint": "038cf51dbc95866ca453e6620f6eabaf29cfa36e901f6356f5c456ded34af6d9",
+      "shape": {
+        "response": {
+          "comMsgHeader": "string",
+          "msgBody": {
+            "busLocationList": {
+              "crowded": "integer",
+              "lowPlate": "integer",
+              "plateNo": "string",
+              "remainSeatCnt": "integer",
+              "routeId": "integer",
+              "routeTypeCd": "integer",
+              "stateCd": "integer",
+              "stationId": "integer",
+              "stationSeq": "integer",
+              "taglessCd": "integer",
+              "vehId": "integer"
+            }
+          },
+          "msgHeader": {
+            "queryTime": "string",
+            "resultCode": "integer",
+            "resultMessage": "string"
+          }
+        }
+      }
+    },
+    {
+      "records": 713,
+      "schema_fingerprint": "34a217f89634f222660574d55d0753d977b406b0cba8e17c3e0406565deb841f",
+      "shape": {
+        "response": {
+          "comMsgHeader": "string"
+        }
+      }
+    },
+    {
+      "records": 20,
+      "schema_fingerprint": "488211d683323a89a1c571f0319e65b525fdd48541cc220bbcd7828b2ba853b5",
+      "shape": {
+        "OpenAPI_ServiceResponse": {
+          "cmmMsgHeader": {
+            "errMsg": "string",
+            "returnAuthMsg": "string",
+            "returnReasonCode": "string"
+          }
+        }
+      }
+    }
+  ],
+  "route_reference": {
+    "protocol_sha256": "d6c5588b02eb4e7f80115af20293ccb23e8c5dbb060da90e64a119559d2084be",
+    "protocol_version": "evaluation-v6",
+    "station_id_mismatch_policy": "fail",
+    "unknown_station_seq_policy": "exclude",
+    "versions": [
+      {
+        "effective_from": "2026-01-01",
+        "effective_through": null,
+        "route_reference_version_id": "gbis-2026-08-19",
+        "route_stop_counts": {
+          "1650": 89,
+          "3330": 85
+        }
+      }
+    ]
+  },
+  "schema_version": "salmonbus-s3-rds-audit-inventory-v1",
+  "snapshot_reconciliation": {
+    "immutable_data_manifest_sha256_after": "5d5849cab65c9a494315ea17c0df1a216b5397a9dfa79e49352cf6e0eed71ce2",
+    "immutable_data_manifest_sha256_before": "5d5849cab65c9a494315ea17c0df1a216b5397a9dfa79e49352cf6e0eed71ce2",
+    "immutable_data_same_cutoff_stable": true,
+    "objects_created_after_observed_at": 155,
+    "objects_created_after_observed_at_by_family_and_relation": [
+      {
+        "family": "control",
+        "objects": 1,
+        "relation": "unpartitioned"
+      },
+      {
+        "family": "raw",
+        "objects": 75,
+        "relation": "after_base_cutoff"
+      },
+      {
+        "family": "records",
+        "objects": 79,
+        "relation": "after_base_cutoff"
+      }
+    ],
+    "whole_bucket_caveat": "control counters are mutable and bucket versioning is not enabled; migration stability is asserted only for records/raw",
+    "whole_bucket_manifest_sha256_after": "bdabeef4e7854cb84c24a2a7573292d1593d4afce578fc5ffabe8510699a96b2",
+    "whole_bucket_manifest_sha256_before": "ee0ea2b30a5fd3cfe3105254d20bea203d49983fc6837a6ee7b71235ef9fa9cd",
+    "whole_bucket_same_cutoff_stable": false
+  },
+  "source_account": "827325854159",
+  "vehicle_identity_consistency": {
+    "bidirectional_mapping_conflicts": 0,
+    "distinct_private_hmac_tokens": 78,
+    "distinct_private_vehicle_tokens": 78,
+    "values_emitted": false
+  }
+}
