@@ -6,8 +6,10 @@ const common = require("./webpack.common.cjs");
 // 아래 devServer.proxy가 설정 시점에 process.env를 읽는다. webpack의 dotenv 옵션은 번들에만 값을 넣는다.
 try {
   process.loadEnvFile(path.resolve(__dirname, "../env/.env.development"));
-} catch {
-  // 파일이 없으면 기본값으로 간다
+} catch (error) {
+  if (error?.code !== "ENOENT") {
+    throw error;
+  }
 }
 
 module.exports = merge(common, {
