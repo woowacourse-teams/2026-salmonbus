@@ -26,7 +26,7 @@ const PHASE_RANK: Record<Phase, number> = {
 };
 
 const PHASE_MOTION_RULE: Record<Phase, PhaseMotionRule> = {
-  ARRIVING: { neighbor: "previous", startProgress: 0.55, endProgress: 0.9 },
+  ARRIVING: { neighbor: "previous", startProgress: 0.8, endProgress: 0.9 },
   DEPARTED: { neighbor: "next", startProgress: 0.08, endProgress: 0.3 },
   IN_TRANSIT: { neighbor: "next", startProgress: 0.35, endProgress: 0.8 },
 };
