@@ -36,6 +36,7 @@ export function liveVehicleViewsFor(
   liveVehicles: LiveVehicles | null | undefined,
   direction: Direction,
 ): LiveVehicleView[] {
+  if (liveVehicles === null || liveVehicles === undefined) return [];
   if (!canDisplayLiveVehicles(board, liveVehicles)) return [];
 
   const stopSequences = board.stops
@@ -56,13 +57,8 @@ export function liveVehicleViewsFor(
   }));
 }
 
-function canDisplayLiveVehicles(
-  board: Board,
-  liveVehicles: LiveVehicles | null | undefined,
-): liveVehicles is LiveVehicles {
+function canDisplayLiveVehicles(board: Board, liveVehicles: LiveVehicles): boolean {
   return (
-    liveVehicles !== null &&
-    liveVehicles !== undefined &&
     liveVehicles.observation.state === "VEHICLES_PRESENT" &&
     liveVehicles.routeId === board.route.id &&
     liveVehicles.referenceVersionId === board.route.referenceVersionId
