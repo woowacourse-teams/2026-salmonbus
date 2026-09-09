@@ -4,8 +4,7 @@ import type { ApiFailure, ApiResult } from "@/shared/api/client";
 import { fetchBoard, fetchLiveVehicles } from "@/shared/api/routeForecast.api";
 import { boardMock, liveVehiclesMock } from "@/shared/api/routeForecast.mock";
 import type { Board, Direction, DirectionInfo, LiveVehicles } from "@/shared/api/routeForecast.types";
-import type { ReferenceClock } from "@/shared/api/referenceClock";
-import { usePolledRequest } from "@/shared/api/usePolledRequest";
+import { usePolledRequest, type PolledResource } from "@/shared/api/usePolledRequest";
 import { directionInfoFor, directionViewsFor, serviceStateFor, stopViewsFor } from "./displayPolicy";
 import { liveVehicleViewsFor } from "./liveVehiclePolicy";
 import { BoardHeader } from "./components/BoardHeader";
@@ -33,13 +32,8 @@ function loadLiveVehicles(routeId: string, signal: AbortSignal): Promise<ApiResu
 export function VerdictBoardPage() {
   const { routeId = "" } = useParams<{ routeId: string }>();
   const { result: boardResult, body: boardBody } = usePolledRequest(loadBoard, routeId);
-  const {
-    result: liveVehicleResult,
-    body: liveVehicleBody,
-    clock: liveVehicleClock,
-    receivedAt: liveVehicleReceivedAt,
-  } = usePolledRequest(loadLiveVehicles, routeId);
-  const freshLiveVehicleBody = useFreshLiveVehicles(liveVehicleBody, liveVehicleClock, liveVehicleReceivedAt);
+  const liveVehicleResource = usePolledRequest(loadLiveVehicles, routeId);
+  const freshLiveVehicleBody = useFreshLiveVehicles(liveVehicleResource);
   const [preferredDirection, setPreferredDirection] = useState<Direction | null>(null);
   const [switched, setSwitched] = useState(false);
 
@@ -49,7 +43,7 @@ export function VerdictBoardPage() {
   const liveVehicles = USE_ROUTE_MOCKS ? liveVehiclesMock : freshLiveVehicleBody;
   const liveMotionDurationMs = USE_ROUTE_MOCKS
     ? DEFAULT_LIVE_MOTION_DURATION_MS
-    : liveMotionDurationOf(liveVehicleResult);
+    : liveMotionDurationOf(liveVehicleResource.result);
 
   function selectDirection(next: Direction) {
     if (state.status === "ready" && next !== state.direction.id) {
@@ -122,11 +116,11 @@ function renderBoard(
   }
 }
 
-function useFreshLiveVehicles(
-  body: LiveVehicles | null,
-  serverClock: ReferenceClock | null,
-  receivedAt: number | null,
-): LiveVehicles | null {
+function useFreshLiveVehicles({
+  body,
+  clock: serverClock,
+  receivedAt,
+}: PolledResource<LiveVehicles>): LiveVehicles | null {
   const staleAt = body?.observation.staleAt ?? null;
   const staleAtMillis = staleAt === null ? null : Date.parse(staleAt);
   const observationKey =
