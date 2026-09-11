@@ -36,14 +36,11 @@ export function StopRow({ stop, routePosition, expanded, onToggle }: StopRowProp
   }
 
   const forecast = stop.kind === "boarding" ? stop : null;
+  const tone = forecast === null ? "noForecast" : forecast.level;
 
   return (
     <li className={styles.stopRow}>
-      <TimelineMarker
-        routePosition={routePosition}
-        tone={forecast === null ? "noForecast" : forecast.level}
-        band="stop"
-      />
+      <TimelineMarker routePosition={routePosition} tone={tone} band="stop" />
       <button
         type="button"
         className={expanded ? styles.head.expanded : styles.head.collapsed}
@@ -54,7 +51,7 @@ export function StopRow({ stop, routePosition, expanded, onToggle }: StopRowProp
         <span className={styles.headStack}>
           <StopName name={stopNameLabel(stop)} />
           <span className={expanded ? styles.chipSlot.hidden : styles.chipSlot.shown} aria-hidden={expanded}>
-            <VerdictChip tone={forecast === null ? "noForecast" : forecast.level} />
+            <VerdictChip tone={tone} />
           </span>
         </span>
         <Chevron direction={expanded ? "up" : "right"} />
@@ -64,8 +61,8 @@ export function StopRow({ stop, routePosition, expanded, onToggle }: StopRowProp
         inert={!expanded}
         onClick={expanded ? onToggle : undefined}
       >
-        <div className={styles.detailInner}>
-          <ArrivalForecastCard id={panelId} arrivals={forecast?.arrivals ?? []} />
+        <div id={panelId} className={styles.detailInner}>
+          <ArrivalForecastCard arrivals={forecast?.arrivals ?? []} />
         </div>
       </div>
     </li>
