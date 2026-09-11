@@ -65,7 +65,9 @@ export function usePolledRequest<T>(
     };
 
     document.addEventListener("visibilitychange", onVisibilityChange);
-    load();
+    if (document.visibilityState === "visible") {
+      load();
+    }
 
     return () => {
       disposed = true;
