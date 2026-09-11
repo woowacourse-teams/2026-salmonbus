@@ -34,7 +34,8 @@ export interface DirectionView {
   label: string;
 }
 
-const ISO_LOCAL_TIME = /T(\d{2}):(\d{2})[^Z]*$/;
+// 관측 시각은 계약상 KST(+09:00)로 온다. 다른 오프셋이면 시각을 잘못 읽는 대신 판정을 포기한다.
+const KST_LOCAL_TIME = /T(\d{2}):(\d{2})[^Z]*\+09:00$/;
 const CLOCK_TIME = /^(\d{1,2}):(\d{2})$/;
 
 export function serviceStateFor(board: Board, directionInfo: DirectionInfo): ServiceState {
@@ -97,7 +98,7 @@ function touchesTurnaround(sequence: number, turnSequence: number | null): boole
 }
 
 function servicePhaseOf(directionInfo: DirectionInfo, observedAt: string): ServicePhase {
-  const observed = minutesOf(ISO_LOCAL_TIME.exec(observedAt));
+  const observed = minutesOf(KST_LOCAL_TIME.exec(observedAt));
   const first = minutesOf(CLOCK_TIME.exec(directionInfo.firstDepartureTime));
   const last = minutesOf(CLOCK_TIME.exec(directionInfo.lastDepartureTime));
   if (observed === null || first === null || last === null) return "undetermined";
