@@ -24,5 +24,5 @@ export function toSeatLevel(probability: number): SeatLevel {
 }
 
 export function toSeatEstimate(expectedSeats: number | undefined): SeatEstimate {
-  return expectedSeats === undefined ? { kind: "unknown" } : { kind: "count", seats: expectedSeats };
+  return expectedSeats === undefined ? { kind: "unknown" } : { kind: "count", seats: Math.floor(expectedSeats) };
 }

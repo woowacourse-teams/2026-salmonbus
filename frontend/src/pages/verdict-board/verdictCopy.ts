@@ -43,5 +43,5 @@ export function stopsAwayLabel(stopsAway: number): string {
 export function seatLabel(estimate: SeatEstimate): string {
   if (estimate.kind === "unknown") return SEAT_UNKNOWN_LABEL;
   if (estimate.seats === 0) return SEAT_EMPTY_LABEL;
-  return `도착 시 ${Math.floor(estimate.seats)}석 예상해요`;
+  return `도착 시 ${estimate.seats}석 예상해요`;
 }
