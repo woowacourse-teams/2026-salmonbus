@@ -12,6 +12,12 @@ type RoutesState = { status: "loading" } | { status: "error" } | { status: "read
 export function RouteSelectPage() {
   const [gate] = useState(createLatestRequestGate);
   const [state, setState] = useState<RoutesState>({ status: "loading" });
+  const [attempt, setAttempt] = useState(0);
+
+  const retry = () => {
+    setState({ status: "loading" });
+    setAttempt((current) => current + 1);
+  };
 
   useEffect(() => {
     const ticket = gate.issue();
@@ -22,7 +28,7 @@ export function RouteSelectPage() {
       setState(result.ok ? { status: "ready", routes: result.body.routes } : { status: "error" });
     });
     return () => ticket.abort();
-  }, [gate]);
+  }, [gate, attempt]);
 
   return (
     <>
@@ -30,17 +36,24 @@ export function RouteSelectPage() {
         <img src={salmongProud} alt="연어 버스 로고" />
         <PageInfo title={titleMock} caption={captionMock} />
       </header>
-      <main>{renderRoutes(state)}</main>
+      <main>{renderRoutes(state, retry)}</main>
     </>
   );
 }
 
-function renderRoutes(state: RoutesState) {
+function renderRoutes(state: RoutesState, onRetry: () => void) {
   switch (state.status) {
     case "loading":
       return <p>노선을 불러오는 중이에요</p>;
     case "error":
-      return <p>노선을 불러오지 못했어요</p>;
+      return (
+        <>
+          <p>노선을 불러오지 못했어요</p>
+          <button type="button" onClick={onRetry}>
+            다시 시도하기
+          </button>
+        </>
+      );
     case "ready":
       return <RouteList routes={state.routes} />;
   }
