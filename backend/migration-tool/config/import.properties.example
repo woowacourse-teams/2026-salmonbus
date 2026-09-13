@@ -1,0 +1,18 @@
+# LOCAL rehearsal: target.kind=LOCAL, 별도 테스트 env 파일을 가리킨다.
+# ACADEMY 실행: database.env-file은 /etc/salmonbus/worker.env만 허용되고 별도 승인 receipt가 필요하다.
+target.kind=LOCAL
+database.env-file=<ROOT_ONLY_ENV_FILE>
+archive.directory=<VERIFIED_ARCHIVE_DIRECTORY>
+import.target-authority-from.3330=2026-09-02T10:27:51.330754Z
+import.target-authority-from.1650=2026-09-02T12:49:33.041299Z
+import.route-validity-policy=EXTEND_EXACT_CURRENT_VERSION
+route.seed-1650-file=<VALIDATED_ROUTE_SEED_1650_JSON>
+import.batch-records=100
+import.jdbc-batch-rows=500
+import.max-transaction-observation-rows=10000
+import.throttle-millis=100
+import.lock-timeout-millis=2000
+import.statement-timeout-seconds=30
+import.minimum-local-free-bytes=5368709120
+import.confirmed-database-free-bytes=<OPERATOR_CONFIRMED_VALUE>
+import.receipt-output=<PRIVATE_RECEIPT_PATH>

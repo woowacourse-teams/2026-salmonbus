@@ -1,0 +1,700 @@
+{
+  "artifact_role": "REFERENCE_EVIDENCE_FOR_FAIL_CLOSED_TARGET_PRECONDITION",
+  "classification": "PUBLIC_ROUTE_REFERENCE_NO_PRIVATE_VEHICLE_DATA",
+  "privacy": {
+    "contains_credentials": false,
+    "contains_hmac_or_pseudonym_values": false,
+    "contains_plate_values": false,
+    "contains_raw_observation_rows": false,
+    "contains_vehicle_ids": false
+  },
+  "route": {
+    "display_name": "1650",
+    "end_stop_name": "안양역",
+    "public_route_id": "234000050",
+    "source_id": "GBIS",
+    "source_route_id": "234000050",
+    "start_stop_name": "구리수택차고지"
+  },
+  "route_stops": [
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "구리수택차고지",
+      "stop_id": "221000046",
+      "stop_order": 1
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "수택고교.SK신일.우남아파트",
+      "stop_id": "221000050",
+      "stop_order": 2
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "태영데시앙",
+      "stop_id": "221000055",
+      "stop_order": 3
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "구리여중고.청소년문화의집",
+      "stop_id": "221000085",
+      "stop_order": 4
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "동명빌라",
+      "stop_id": "221000084",
+      "stop_order": 5
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "구종점",
+      "stop_id": "221000041",
+      "stop_order": 6
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "벌말.돌섬",
+      "stop_id": "221000030",
+      "stop_order": 7
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "토평정수장",
+      "stop_id": "221000026",
+      "stop_order": 8
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "UP",
+      "name": "토평삼거리(경유)",
+      "stop_id": "277100104",
+      "stop_order": 9
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "UP",
+      "name": "아천IC(경유)",
+      "stop_id": "277103306",
+      "stop_order": 10
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "UP",
+      "name": "천호대교북단(경유)",
+      "stop_id": "277102674",
+      "stop_order": 11
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "UP",
+      "name": "올림픽대교북단(경유)",
+      "stop_id": "277103309",
+      "stop_order": 12
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "테크노마트앞.강변역(C)",
+      "stop_id": "104000279",
+      "stop_order": 13
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "UP",
+      "name": "잠실대교북단(경유)",
+      "stop_id": "277103308",
+      "stop_order": 14
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "UP",
+      "name": "잠실대교남단(경유)",
+      "stop_id": "277102302",
+      "stop_order": 15
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "잠실역.잠실대교남단(중)",
+      "stop_id": "123000002",
+      "stop_order": 16
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "UP",
+      "name": "석촌호수앞(경유)",
+      "stop_id": "277101950",
+      "stop_order": 17
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "석촌호수.한솔병원(중)",
+      "stop_id": "123000004",
+      "stop_order": 18
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "석촌역(중)",
+      "stop_id": "123000006",
+      "stop_order": 19
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "송파역(중)",
+      "stop_id": "123000008",
+      "stop_order": 20
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "가락시장.가락시장역(중)",
+      "stop_id": "123000010",
+      "stop_order": 21
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "문정로데오거리입구(중)",
+      "stop_id": "123000012",
+      "stop_order": 22
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "문정법조단지.건영아파트(중)",
+      "stop_id": "123000014",
+      "stop_order": 23
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "장지역.가든파이브(중)",
+      "stop_id": "123000016",
+      "stop_order": 24
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "UP",
+      "name": "송파IC진입(경유)",
+      "stop_id": "277103266",
+      "stop_order": 25
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "가천대",
+      "stop_id": "204000092",
+      "stop_order": 26
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "UP",
+      "name": "성남TG(경유)",
+      "stop_id": "277103272",
+      "stop_order": 27
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "UP",
+      "name": "판교JC(경유)",
+      "stop_id": "277102924",
+      "stop_order": 28
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "UP",
+      "name": "청계터널진입(경유)",
+      "stop_id": "277102599",
+      "stop_order": 29
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "의왕청계영업소",
+      "stop_id": "226000190",
+      "stop_order": 30
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "UP",
+      "name": "학의JC(경유)",
+      "stop_id": "277103157",
+      "stop_order": 31
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "농수산물시장",
+      "stop_id": "209000133",
+      "stop_order": 32
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "무궁화코오롱.건영아파트",
+      "stop_id": "209000021",
+      "stop_order": 33
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "무궁화한양아파트.방축사거리",
+      "stop_id": "209000020",
+      "stop_order": 34
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "목련마을",
+      "stop_id": "209000221",
+      "stop_order": 35
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "범계사거리",
+      "stop_id": "209000018",
+      "stop_order": 36
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "부흥고등학교",
+      "stop_id": "209000134",
+      "stop_order": 37
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "관악타운",
+      "stop_id": "209000179",
+      "stop_order": 38
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "이마트.비산사거리.평촌래미안푸르지오2문",
+      "stop_id": "209000178",
+      "stop_order": 39
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "안양역푸르지오더샵.비산대교",
+      "stop_id": "208000115",
+      "stop_order": 40
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "우체국사거리.안양초교.중화한방병원",
+      "stop_id": "208000114",
+      "stop_order": 41
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "남부시장",
+      "stop_id": "208000066",
+      "stop_order": 42
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "안양1번가.안양고용센터",
+      "stop_id": "208000065",
+      "stop_order": 43
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "UP",
+      "name": "안양역",
+      "stop_id": "208000069",
+      "stop_order": 44
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "DOWN",
+      "name": "원평노블레스5차(경유)",
+      "stop_id": "277101770",
+      "stop_order": 45
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "안양시외버스정류소.교보생명.댕리단길",
+      "stop_id": "208000158",
+      "stop_order": 46
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "포스빌.안양고용센터",
+      "stop_id": "208000254",
+      "stop_order": 47
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "벽산상가.2001아울렛",
+      "stop_id": "208000156",
+      "stop_order": 48
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "우체국사거리.안양초교.중화한방병원",
+      "stop_id": "208000095",
+      "stop_order": 49
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "래미안메가트리아상가앞.비산대교",
+      "stop_id": "208000252",
+      "stop_order": 50
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "비산농협",
+      "stop_id": "209000044",
+      "stop_order": 51
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "비산한화꿈에그린아파트.비산사거리",
+      "stop_id": "209000177",
+      "stop_order": 52
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "비산힐스테이트",
+      "stop_id": "209000176",
+      "stop_order": 53
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "부흥고등학교.임광아파트",
+      "stop_id": "209000147",
+      "stop_order": 54
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "범계사거리",
+      "stop_id": "209000016",
+      "stop_order": 55
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "내촌마을",
+      "stop_id": "209000015",
+      "stop_order": 56
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "평촌트리지아2단지.방축사거리",
+      "stop_id": "209000126",
+      "stop_order": 57
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "태영아파트",
+      "stop_id": "209000243",
+      "stop_order": 58
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "농수산물시장",
+      "stop_id": "209000129",
+      "stop_order": 59
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "DOWN",
+      "name": "학의JC(경유)",
+      "stop_id": "277103156",
+      "stop_order": 60
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "의왕청계영업소",
+      "stop_id": "226000191",
+      "stop_order": 61
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "DOWN",
+      "name": "청계터널출입(경유)",
+      "stop_id": "277102796",
+      "stop_order": 62
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "DOWN",
+      "name": "판교JC(경유)",
+      "stop_id": "277102925",
+      "stop_order": 63
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "DOWN",
+      "name": "성남TG(경유)",
+      "stop_id": "277103273",
+      "stop_order": 64
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "가천대",
+      "stop_id": "204000091",
+      "stop_order": 65
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "DOWN",
+      "name": "송파IC출입(경유)",
+      "stop_id": "277103267",
+      "stop_order": 66
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "복정역1번출구",
+      "stop_id": "123000215",
+      "stop_order": 67
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "장지역.가든파이브(중)",
+      "stop_id": "123000015",
+      "stop_order": 68
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "문정법조단지.건영아파트(중)",
+      "stop_id": "123000013",
+      "stop_order": 69
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "문정로데오거리입구(중)",
+      "stop_id": "123000011",
+      "stop_order": 70
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "가락시장.가락시장역(중)",
+      "stop_id": "123000009",
+      "stop_order": 71
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "송파역(중)",
+      "stop_id": "123000007",
+      "stop_order": 72
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "석촌역(중)",
+      "stop_id": "123000005",
+      "stop_order": 73
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "석촌호수.한솔병원(중)",
+      "stop_id": "123000003",
+      "stop_order": 74
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "DOWN",
+      "name": "석촌역교차로(경유)",
+      "stop_id": "277102839",
+      "stop_order": 75
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "잠실역.잠실대교남단(중)",
+      "stop_id": "123000001",
+      "stop_order": 76
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "DOWN",
+      "name": "잠실대교북단(경유)",
+      "stop_id": "277102301",
+      "stop_order": 77
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "테크노마트앞.강변역(D)",
+      "stop_id": "104000069",
+      "stop_order": 78
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "DOWN",
+      "name": "양지삼거리(경유)",
+      "stop_id": "277101910",
+      "stop_order": 79
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "DOWN",
+      "name": "천호대교북단(경유)",
+      "stop_id": "277102675",
+      "stop_order": 80
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "DOWN",
+      "name": "아천IC(경유)",
+      "stop_id": "277103307",
+      "stop_order": 81
+    },
+    {
+      "boarding_allowed": false,
+      "direction": "DOWN",
+      "name": "토평삼거리(경유)",
+      "stop_id": "277103313",
+      "stop_order": 82
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "토평정수장",
+      "stop_id": "221000025",
+      "stop_order": 83
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "벌말.돌섬",
+      "stop_id": "221000029",
+      "stop_order": 84
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "벌말삼거리.상록아파트",
+      "stop_id": "221000075",
+      "stop_order": 85
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "동명빌라",
+      "stop_id": "221000074",
+      "stop_order": 86
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "구리여중고.청소년문화의집.성광교회",
+      "stop_id": "221000073",
+      "stop_order": 87
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "수택고교.SK신일.우남아파트",
+      "stop_id": "221000049",
+      "stop_order": 88
+    },
+    {
+      "boarding_allowed": true,
+      "direction": "DOWN",
+      "name": "구리수택차고지",
+      "stop_id": "221000047",
+      "stop_order": 89
+    }
+  ],
+  "route_version": {
+    "accepted_source_earliest_response": "2026-08-14T07:38:46.604Z",
+    "content_digest": "f6b5a3b0fabd731dbbab36054826be26714061c42d66b862eac60b191b4b51bc",
+    "down_first_departure_time": "05:25",
+    "down_last_departure_time": "23:55",
+    "extension_before_accepted_source_forbidden": true,
+    "identity_fields": [
+      "route.public_route_id",
+      "route_version.valid_from",
+      "route_version.valid_to",
+      "route_version.content_digest"
+    ],
+    "recommended_valid_from_after": "2026-08-14T07:38:46.604Z",
+    "target_operation": "EXTEND_EXISTING_ROUTE_VERSION_VALID_FROM_ONLY",
+    "target_route_id": 2,
+    "target_route_version_id": 2,
+    "target_valid_from_before": "2026-09-02T12:49:33.041299Z",
+    "target_valid_to_remains": null,
+    "turn_sequence": 44,
+    "up_first_departure_time": "04:10",
+    "up_last_departure_time": "22:35",
+    "validity_status": "PLANNED_REQUIRES_EXACT_TARGET_PRECONDITION_AND_WRITE_APPROVAL"
+  },
+  "schema_version": "salmonbus-rds-route-seed-v1",
+  "source": {
+    "analysis_commit": "c5ff99da81ed0af9916bd5aa5115d89f49258e2c",
+    "authority": "GBIS getBusRouteStationListv2 verified 2026-08-19",
+    "cache_origin_commit": "10f53632054c26a81c9d756bca5a9aad81d9ce3f",
+    "cache_path": "source/rule5/lab/data/routes.json",
+    "cache_sha256": "12c7bd562af13f1bdb87895254cd8a1651147a1f98729750f17f7d43e046f851",
+    "external_api_calls_for_this_audit": 0,
+    "protocol_path": "server/evaluator/current_public/evaluation/protocol.json",
+    "protocol_sha256": "d6c5588b02eb4e7f80115af20293ccb23e8c5dbb060da90e64a119559d2084be",
+    "reference_version_id": "gbis-2026-08-19",
+    "runtime_reference_path": "server/runtime/src/salmonbus_runtime/resources/route_reference.json",
+    "runtime_reference_sha256": "e59a6dd1e92ac5c788374704704d76785455f91d51c94f6e5f0753fc1a48cfd6"
+  },
+  "status": "VALIDATED_REFERENCE_TARGET_VERSION_EXISTS_NO_INSERT",
+  "target_insert_allowed": false,
+  "validation": {
+    "boarding_policy": "not stop_id startsWith 277",
+    "boarding_policy_mismatches": 0,
+    "continuous_stop_orders": true,
+    "dev_content_digest": "f6b5a3b0fabd731dbbab36054826be26714061c42d66b862eac60b191b4b51bc",
+    "down_stops": 45,
+    "first_protocol_station_mismatch": null,
+    "independent_cached_representation_mismatches": 0,
+    "maximum_stop_name_length": 21,
+    "nonboarding_stops": 24,
+    "order_id_digest": "24a6ed132cb5b07cac03677d3e462cc11864cc7f68b12fd6fe1780c1fa9e3b71",
+    "protocol_station_mismatches": 0,
+    "stop_count": 89,
+    "turn_sequence": 44,
+    "unique_stop_ids": 89,
+    "up_stops": 44
+  }
+}

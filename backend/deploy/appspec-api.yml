@@ -1,0 +1,44 @@
+version: 0.0
+os: linux
+
+# 받은 것을 바로 쓰는 자리에 풀지 않고 staging 에 푼다.
+# 판마다 폴더를 따로 두려면 목적지가 판마다 달라야 하는데 appspec 은 값을 못 받는다.
+# 그래서 install.sh 가 staging 에서 releases/<소스지문> 으로 옮긴다
+files:
+  - source: /
+    destination: /opt/salmonbus/api/staging
+
+# 지난 배포가 안 놓은 파일이 목적지에 있으면 기본값(DISALLOW)은 배포를 실패시킨다.
+# staging 에는 우리 것만 있어서 덮어써도 된다.
+# 비밀은 /etc/salmonbus/, 계수 파일은 /var/lib/salmonbus/ 에 있어서 이 설정이 안 닿는다
+file_exists_behavior: OVERWRITE
+
+permissions:
+  - object: /opt/salmonbus/api/staging
+    owner: root
+    group: root
+    mode: "755"
+    type:
+      - directory
+      - file
+
+# ApplicationStop 을 안 쓴다. 그 훅은 이전 revision 의 스크립트가 도는 자리라
+# 새 배포 로직을 두면 옛 판이 새 규칙을 모르는 채로 실행한다.
+# 서비스를 내리는 것은 start.sh 가 한다
+hooks:
+  BeforeInstall:
+    - location: scripts/preflight.sh
+      timeout: 180
+      runas: root
+  AfterInstall:
+    - location: scripts/install.sh
+      timeout: 300
+      runas: root
+  ApplicationStart:
+    - location: scripts/start.sh
+      timeout: 300
+      runas: root
+  ValidateService:
+    - location: scripts/validate.sh
+      timeout: 300
+      runas: root

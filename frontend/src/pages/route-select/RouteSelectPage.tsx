@@ -4,8 +4,10 @@ import { fetchRoutes } from "@/shared/api/routeForecast.api";
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
 import { RouteList } from "./components/RouteList";
 import salmongProud from "@/shared/assets/images/salmong-logo/salmong-proud.png";
+import salmonbusWordmark from "@/shared/assets/images/salmonbus-wordmark.webp";
 import { PageInfo } from "@/shared/components/PageInfo";
 import { titleMock, captionMock } from "./api/routeSelect.mock";
+import * as styles from "./RouteSelectPage.css";
 
 type RoutesState = { status: "loading" } | { status: "error" } | { status: "ready"; routes: RouteSummary[] };
 
@@ -31,13 +33,18 @@ export function RouteSelectPage() {
   }, [gate, attempt]);
 
   return (
-    <>
-      <header>
-        <img src={salmongProud} alt="연어 버스 로고" />
-        <PageInfo title={titleMock} caption={captionMock} />
+    <div className={styles.page}>
+      <header className={styles.header}>
+        <div className={styles.brandLockup}>
+          <img className={styles.mascot} src={salmongProud} alt="연어 버스 로고" />
+          <img className={styles.wordmark} src={salmonbusWordmark} width={272} height={70} alt="연어 버스 글자 로고" />
+        </div>
+        <div className={styles.intro}>
+          <PageInfo title={titleMock} caption={captionMock} />
+        </div>
       </header>
-      <main>{renderRoutes(state, retry)}</main>
-    </>
+      <main className={styles.main}>{renderRoutes(state, retry)}</main>
+    </div>
   );
 }
 

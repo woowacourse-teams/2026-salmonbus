@@ -1,0 +1,26 @@
+# 실제 값으로 복사한 파일은 커밋하지 않는다. source export는 별도 승인 receipt가 있어야 실행된다.
+source.account=000000000000
+source.bucket=<PERSONAL_COLLECTOR_BUCKET>
+source.region=ap-northeast-2
+source.routes=1650,3330
+source.from-date=<YYYY-MM-DD>
+source.through-date=<YYYY-MM-DD>
+source.cutoff-at=<UTC_RFC3339>
+source.target-authority-from.3330=2026-09-02T10:27:51.330754Z
+source.target-authority-from.1650=2026-09-02T12:49:33.041299Z
+# BASE=142129/2324399/27/545/0/0, TERMINAL_DELTA=7064/136909/1/24/811/14924
+source.expected-accepted-batches=<PHASE_ACCEPTED_BATCHES>
+source.expected-accepted-observations=<PHASE_ACCEPTED_OBSERVATIONS>
+source.expected-quarantined-batches=<PHASE_QUARANTINED_BATCHES>
+source.expected-quarantined-observations=<PHASE_QUARANTINED_OBSERVATIONS>
+source.expected-overlap-batches=<PHASE_OVERLAP_BATCHES>
+source.expected-overlap-observations=<PHASE_OVERLAP_OBSERVATIONS>
+source.previous-inventory=
+source.terminal-freeze-receipt=
+archive.previous-manifest-sha256=
+route-reference.file=<APPROVED_PROTOCOL_JSON_PATH>
+archive.output-directory=<LOCAL_PRIVATE_ARCHIVE_DIRECTORY>
+archive.max-batches-per-shard=10000
+# S3 객체를 몇 개씩 동시에 가져올지. 1~32, 기본 24. 가져오기만 병렬이고 소비는 항상 index 순서라
+# archive 내용과 manifest digest 는 이 값과 무관하다. 1 이면 예전 순차 동작과 같다.
+archive.fetch-threads=24
