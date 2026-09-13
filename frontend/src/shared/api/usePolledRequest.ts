@@ -43,13 +43,13 @@ export function usePolledRequest<T>(
         }
 
         setState((previous) => {
-          if (result.ok) {
-            return { key, result, body: result.body };
-          }
+          const retained = previous?.key === key ? previous : EMPTY;
 
-          const body = previous?.key === key ? previous.body : null;
-
-          return { key, result, body };
+          return {
+            key,
+            result,
+            body: result.ok ? result.body : retained.body,
+          };
         });
 
         const decision = nextPollFrom(result);
