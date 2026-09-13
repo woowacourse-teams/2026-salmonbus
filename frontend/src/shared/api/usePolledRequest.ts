@@ -42,11 +42,15 @@ export function usePolledRequest<T>(
           return;
         }
 
-        setState((previous) => ({
-          key,
-          result,
-          body: result.ok ? result.body : previous?.key === key ? previous.body : null,
-        }));
+        setState((previous) => {
+          if (result.ok) {
+            return { key, result, body: result.body };
+          }
+
+          const body = previous?.key === key ? previous.body : null;
+
+          return { key, result, body };
+        });
 
         const decision = nextPollFrom(result);
         if (decision.kind === "again" && document.visibilityState === "visible") {
