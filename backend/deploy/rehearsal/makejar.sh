@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# 배포 리허설용 가짜 JAR이다. 실제 bootJar나 컴파일된 클래스를 만들지 않는다.
-# 같은 인자는 같은 ZIP이 되도록 항목 순서·내용·시각·파일 권한을 고정한다.
+# 배포 리허설에 쓸 테스트용 JAR을 만든다. 실제 bootJar나 컴파일된 클래스를 만들지 않는다.
+# 같은 인자로 실행하면 같은 ZIP이 나오도록 항목 순서·내용·시각·파일 권한을 고정한다.
 set -euo pipefail
 
 if [ "$#" -ne 4 ]; then
@@ -24,7 +24,7 @@ scratch_root="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
 scratch="$(mktemp -d "$scratch_root/salmonbus-makejar.XXXXXXXX")"
 cleanup() {
   local status=$?
-  # 이 실행이 mktemp로 만든 경로만 지운다. 상위 임시 디렉터리는 대상이 아니다.
+  # 이번 실행에서 mktemp로 만든 경로만 지운다. 상위 임시 디렉터리는 지우지 않는다.
   case "$scratch" in
     "$scratch_root"/salmonbus-makejar.*)
       [ ! -L "$scratch" ] && rm -rf -- "$scratch" ;;
@@ -65,5 +65,5 @@ trap 'exit 143' TERM
   zip -q -X archive.zip "${entries[@]}"
 )
 
-# 기존 ZIP을 갱신하면 불필요한 옛 항목이 남는다. 새 ZIP으로 파일 자체를 교체한다.
+# 기존 ZIP을 갱신하면 불필요한 옛 항목이 남으므로 새 ZIP 파일로 교체한다.
 mv -f "$scratch/archive.zip" "$output"

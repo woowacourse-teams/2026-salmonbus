@@ -30,8 +30,8 @@ fail() { echo "실패: $*" >&2; exit 1; }
 
 run_hook() {
   local body="$1" component="${2:-api}" deployment="${3:-d-api-1}"
-  # 호출마다 별도 bash를 띄운다. 첫 훅의 EXIT trap이 다음 훅에 승계되지 않아야 한다.
-  # 출력은 파일로 받아 파이프 버퍼로 인한 대기를 막고, 실행은 10초로 제한한다.
+  # 호출마다 별도 bash 프로세스를 실행한다. 다음 훅이 첫 훅의 EXIT trap을 이어받지 않도록 해야 한다.
+  # 파이프 버퍼 때문에 대기하지 않도록 출력을 파일로 받는다. 실행은 10초로 제한한다.
   if "$TIMEOUT" --kill-after=1s 10s bash -c '
     set -euo pipefail
     ROOT="$1"; COMPONENT="$2"; DEPLOYMENT_ID="$3"
