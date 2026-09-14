@@ -2,9 +2,12 @@ import { useState } from "react";
 import { useParams } from "react-router";
 import type { ApiFailure, ApiResult } from "@/shared/api/client";
 import { fetchBoard } from "@/shared/api/routeForecast.api";
-import type { Board, Direction, DirectionInfo } from "@/shared/api/routeForecast.types";
+import { boardMock, liveVehiclesMock } from "@/shared/api/routeForecast.mock";
+import type { Board, Direction, DirectionInfo, LiveVehicles } from "@/shared/api/routeForecast.types";
 import { usePolledRequest } from "@/shared/api/usePolledRequest";
 import { directionInfoFor, directionViewsFor, serviceStateFor, stopViewsFor } from "./displayPolicy";
+import { liveVehicleViewsFor } from "./liveVehiclePolicy";
+import { DEFAULT_LIVE_MOTION_DURATION_MS, useLiveVehicles } from "./useLiveVehicles";
 import { BoardHeader } from "./components/BoardHeader";
 import { DirectionTabs } from "./components/DirectionTabs";
 import { StopBoard } from "./components/StopBoard";
@@ -15,17 +18,24 @@ type BoardState =
   | { status: "error"; failure: ApiFailure }
   | { status: "ready"; board: Board; direction: DirectionInfo };
 
+const USE_ROUTE_MOCKS = false;
+
 function loadBoard(routeId: string, signal: AbortSignal): Promise<ApiResult<Board>> {
   return fetchBoard(routeId, { signal });
 }
 
 export function VerdictBoardPage() {
   const { routeId = "" } = useParams<{ routeId: string }>();
-  const { result, body } = usePolledRequest(loadBoard, routeId);
+  const { result: boardResult, body: boardBody } = usePolledRequest(loadBoard, routeId);
+  const liveVehicleState = useLiveVehicles(routeId);
   const [preferredDirection, setPreferredDirection] = useState<Direction | null>(null);
   const [switched, setSwitched] = useState(false);
 
-  const state = boardStateOf(body, result, preferredDirection);
+  const state: BoardState = USE_ROUTE_MOCKS
+    ? boardStateOf(boardMock, boardResult, preferredDirection)
+    : boardStateOf(boardBody, boardResult, preferredDirection);
+  const liveVehicles = USE_ROUTE_MOCKS ? liveVehiclesMock : liveVehicleState.liveVehicles;
+  const liveMotionDurationMs = USE_ROUTE_MOCKS ? DEFAULT_LIVE_MOTION_DURATION_MS : liveVehicleState.motionDurationMs;
 
   function selectDirection(next: Direction) {
     if (state.status === "ready" && next !== state.direction.id) {
@@ -48,7 +58,7 @@ export function VerdictBoardPage() {
             />
           )}
         </div>
-        {renderBoard(state, switched)}
+        {renderBoard(state, switched, liveVehicles, liveMotionDurationMs)}
       </main>
     </div>
   );
@@ -68,22 +78,32 @@ function boardStateOf(
   return { status: "loading" };
 }
 
-function renderBoard(state: BoardState, switched: boolean) {
+function renderBoard(
+  state: BoardState,
+  switched: boolean,
+  liveVehicles: LiveVehicles | null,
+  liveMotionDurationMs: number,
+) {
   switch (state.status) {
     case "loading":
       return <StopBoard status="loading" />;
     case "error":
       return <StopBoard status="error" />;
-    case "ready":
-      return serviceStateFor(state.board, state.direction) === "outOfService" ? (
-        <StopBoard status="outOfService" />
-      ) : (
+    case "ready": {
+      if (serviceStateFor(state.board, state.direction) === "outOfService") {
+        return <StopBoard status="outOfService" />;
+      }
+
+      return (
         <StopBoard
           key={state.direction.id}
           status="ready"
           stops={stopViewsFor(state.board, state.direction.id)}
+          liveVehicleViews={liveVehicleViewsFor(state.board, liveVehicles, state.direction.id)}
+          liveMotionDurationMs={liveMotionDurationMs}
           entering={switched}
         />
       );
+    }
   }
 }
