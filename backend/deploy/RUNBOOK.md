@@ -178,7 +178,7 @@ readiness 그룹을 `management.endpoint.health.probes.add-additional-paths`로 
 [06:11:50] 배포 전: PID=894172 지문=2222bbbb3333
 [06:11:50] DB 진단(배포 전): 새 연결 성공. 312ms host=salmonbus-db.cqsc6pyqhwww.ap-northeast-2.rds.amazonaws.com db=salmonbus
 [06:12:01] api 를 재시작한다. 이유=소스 지문 변경 2222bbbb3333 -> 3333cccc4444 PID=894172
-[06:12:02] salmonbus-api 이 완전히 내려갔다
+[06:12:02] salmonbus-api 이 완전히 멈췄다
 [06:12:02] salmonbus-api 시작했다. PID=901234
 [06:12:03] health 시도 1: http=000 curl=7 경과=0초
 [06:12:06] health 시도 2: http=503 curl=0 status=DOWN 경과=3초
