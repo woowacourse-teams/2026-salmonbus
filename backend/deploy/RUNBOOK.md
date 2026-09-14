@@ -92,21 +92,20 @@ aws ssm get-parameter --name /salmonbus/probe --with-decryption --region ap-nort
 
 ## 배포하기
 
-CodePipeline `salmonbus-backend-cd`에서 `Release change`를 누른다.
+CodePipeline `salmonbus-backend-cd`에서 `변경 사항 릴리스`를 누른다. **수동 승인 단계는 없다.**
+누르면 Source → Build → Deploy가 멈추지 않고 이어진다. (2026-09-15 콘솔에서 확인)
 
 ```text
-Source           GitHub dev에서 코드를 가져온다
-BuildAndTest     salmonbus-backend-build가 backend/buildspec.yml을 읽는다
-                 ./gradlew clean build --no-daemon 으로 전체 테스트를 다시 실행하고
-                 ApiRevision · WorkerRevision 두 배포 패키지를 생성한다
-ManualApproval   담당자가 승인 버튼을 누른다
-DeployApi        run order 1
-DeployWorker     run order 2
+Source   GitHub dev에서 코드를 가져온다
+Build    salmonbus-backend-build가 backend/buildspec.yml을 읽는다
+         ./gradlew clean build --no-daemon 으로 전체 테스트를 다시 실행하고
+         ApiRevision · WorkerRevision 두 배포 패키지를 생성한다
+Deploy   DeployApi(run order 1) → DeployWorker(run order 2). 한 스테이지 안에서 차례로 실행된다
 ```
 
 **API를 먼저 배포하고 검증한 뒤 Worker를 배포한다.** 두 프로세스를 동시에 재시작하지 않는다.
 
-승인 전에 Build 로그 끝에 출력된 배포 메타데이터를 확인한다.
+배포 메타데이터는 Build 로그 끝에 찍힌다. 승인 단계가 없으므로 배포를 멈추는 용도가 아니라 무엇이 나갔는지 확인하는 용도다.
 
 ```text
 component=api
@@ -334,7 +333,7 @@ bash backend/deploy/rehearsal/run.sh
 리눅스 컨테이너에서 `systemctl` · `curl` · `java`를 모의 구현으로 대체하고 배포 시나리오를 검증한다.
 첫 배포, api만 변경된 배포, 변경 없는 배포, 동시 배포, 이전 프로세스의 응답,
 health 실패, 관리 포트 연결 실패, 8080만 응답하지 않는 경우, 전체 시간 상한, DB 진단 실패와 무응답,
-롤백, 변조된 배포 메타데이터, 잠금을 동시에 잡는 상황을 검사한다.
+롤백, DB가 계속 죽어 있어 롤백도 실패하는 경우, 변조된 배포 메타데이터, 잠금을 동시에 잡는 상황을 검사한다.
 validate 실패 시나리오는 `VALIDATE_CHECK_SECONDS` 같은 환경변수로 상한을 몇 초로 줄여 실행한다.
 CodeDeploy 환경에는 이 변수가 없으므로 운영에서는 기본값이 쓰인다.
 리허설은 Bash로 실행하며 테스트용 JAR은 `makejar.sh`가 `zip`으로 만든다.
@@ -364,6 +363,11 @@ docker run --rm -v "$PWD/backend/deploy:/deploy:ro" amazonlinux:2023 \
 받으면 실패로 종료한다. 훅의 포트나 경로가 잘못되면 리허설을 통과하지 못한다.
 
 `digest.sh`의 `source_digest`는 `buildspec.yml`에 있는 것과 같은 함수다. **수정할 때는 두 파일에 모두 반영한다.**
+
+**훅 스크립트를 바꾼 뒤 첫 배포가 실패하면 롤백은 직전 성공 패키지에 든 옛 스크립트로 실행된다.**
+배포 패키지에 `scripts/`가 같이 들어 있고 롤백은 그 패키지를 다시 배포하는 것이기 때문이다. 롤백 로그가 옛 모양이어도 정상이다.
+그래서 훅이 남기는 파일(`.changed`, `.deploying`, `release.env`)의 형식을 바꿀 때는 옛 스크립트가 그대로 읽을 수 있도록
+**줄을 더하기만 하고 기존 줄의 의미는 바꾸지 않는다.** `.changed`에 `reason=` 줄을 더한 것이 그 예다.
 
 리허설의 `systemctl`은 모의 구현이므로 systemd가 실제로 유닛을 읽는지 확인할 수 없다.
 systemd 252를 컨테이너에 띄워 아래 아홉을 따로 확인했다.

@@ -287,6 +287,29 @@ deploy api
 grep -qx salmonbus-api /work/running \
   && ok "롤백한 뒤에도 서비스가 실행 중이다" || bad "롤백했는데 서비스가 실행 중이 아니다"
 
+sec "5-3. DB 가 계속 죽어 있으면 롤백도 실패로 끝나는가"
+# 9월 14일 순서다. 원배포가 health 에서 실패하고 CodeDeploy 가 직전 성공 revision 을 다시 배포하는데 DB 는 그대로다.
+# 롤백도 실패로 끝나야 하고, 두 validate 로그에 DB 진단이 남고, 잠금은 안 남아야 한다
+export VALIDATE_CHECK_SECONDS=4 VALIDATE_RETRY_SECONDS=1
+echo DOWN > /work/health; echo DOWN > /work/db
+RB_BAD2=cccc3333dddd4444eeee5555ffff6666777788889999aaaabbbb1111cccc2222
+make_revision api RBBAD2 bbbbbbb0003 "$RB_BAD2" "2026-09-02T06:20:00Z"
+deploy api fail
+grep -q 'DB 진단(health 실패): 새 연결 실패' /work/api-validate.out \
+  && ok "원배포 실패 로그에 DB 가 안 붙는다고 남는다" || { bad "원배포 로그에 DB 진단이 없다"; sed 's/^/      /' /work/api-validate.out; }
+: > /work/systemctl.log
+make_revision api RBGOOD ggggggg0001 "$RB_GOOD" "2026-09-02T06:00:00Z"     # 롤백 = 직전 성공 revision 재배포
+deploy api fail
+grep -q 'DB 진단(health 실패): 새 연결 실패' /work/api-validate.out \
+  && ok "롤백 실패 로그에도 DB 가 안 붙는다고 남는다" || { bad "롤백 로그에 DB 진단이 없다"; sed 's/^/      /' /work/api-validate.out; }
+grep -q 'stop salmonbus-api' /work/systemctl.log \
+  && ok "롤백이 재시작은 했다" || bad "롤백이 재시작을 건너뛰었다"
+[ "$(readlink -f /opt/salmonbus/api/current)" = "/opt/salmonbus/api/releases/$RB_GOOD" ] \
+  && ok "current 는 직전 성공 배포 버전이다" || bad "current=$(readlink -f /opt/salmonbus/api/current)"
+[ ! -d /opt/salmonbus/.deploying ] && ok "롤백이 실패해도 잠금이 안 남는다" || bad "잠금이 남았다"
+echo UP > /work/health; rm -f /work/db
+unset VALIDATE_CHECK_SECONDS VALIDATE_RETRY_SECONDS
+
 # 6 부터 7-4 까지는 validate 가 실패하는 시나리오라 상한을 몇 초로 줄인다. CodeDeploy 환경에는 없는 변수다
 export VALIDATE_CHECK_SECONDS=4 VALIDATE_RETRY_SECONDS=1
 
