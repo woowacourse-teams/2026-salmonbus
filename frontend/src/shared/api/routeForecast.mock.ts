@@ -48,6 +48,7 @@ export const boardMock = {
     ],
   },
   observedAt: "2026-08-18T08:12:40+09:00",
+  staleAt: "2026-08-18T08:17:40+09:00",
   model: {
     releaseId: "A18",
     trainedThrough: "2026-08-18",
@@ -130,6 +131,7 @@ export const boardMock = {
 export const boardClosedMock = {
   route: boardMock.route,
   observedAt: "2026-08-18T23:58:20+09:00",
+  staleAt: "2026-08-19T00:03:20+09:00",
   model: boardMock.model,
   vehiclesInService: 0,
   stops: [
@@ -155,6 +157,7 @@ export const boardClosedMock = {
 export const boardQuietMock = {
   route: boardMock.route,
   observedAt: "2026-08-18T05:03:11+09:00",
+  staleAt: "2026-08-18T05:08:11+09:00",
   model: boardMock.model,
   vehiclesInService: 1,
   stops: [
@@ -183,7 +186,7 @@ export const liveVehiclesMock = {
   observation: {
     state: "VEHICLES_PRESENT",
     observedAt: "2026-08-18T08:12:31+09:00",
-    staleAt: "2026-08-18T08:13:31+09:00",
+    staleAt: "2026-08-18T08:17:31+09:00",
   },
   vehicles: [
     {
@@ -222,7 +225,7 @@ export const liveVehiclesEmptyMock = {
   observation: {
     state: "NO_VEHICLES_OBSERVED",
     observedAt: "2026-08-18T23:59:02+09:00",
-    staleAt: "2026-08-19T00:09:02+09:00",
+    staleAt: "2026-08-19T00:04:02+09:00",
   },
   vehicles: [],
 } satisfies LiveVehicles;
@@ -244,7 +247,7 @@ export const liveVehiclesRevisedMock = {
   observation: {
     state: "VEHICLES_PRESENT",
     observedAt: "2026-08-25T09:40:12+09:00",
-    staleAt: "2026-08-25T09:41:12+09:00",
+    staleAt: "2026-08-25T09:45:12+09:00",
   },
   vehicles: [
     {

@@ -6,13 +6,19 @@ import type { ErrorCode, ErrorResponse } from "./routeForecast.types";
 const REQUEST_TIMEOUT_MS = 10_000;
 const TIMEOUT_REASON = "timeout";
 
-const ERROR_CODES: ReadonlySet<string> = new Set<ErrorCode>([
-  "INVALID_ROUTE_ID",
-  "ROUTE_NOT_FOUND",
-  "MODEL_OUT_OF_SCOPE",
-  "NO_RECENT_OBSERVATION",
-  "SERVICE_UNAVAILABLE",
-]);
+const ERROR_CODE_KEYS: Record<ErrorCode, true> = {
+  INVALID_ROUTE_ID: true,
+  INVALID_REQUEST: true,
+  ROUTE_NOT_FOUND: true,
+  ENDPOINT_NOT_FOUND: true,
+  METHOD_NOT_ALLOWED: true,
+  INTERNAL_ERROR: true,
+  SERVICE_UNAVAILABLE: true,
+  MODEL_OUT_OF_SCOPE: true,
+  NO_RECENT_OBSERVATION: true,
+};
+
+const ERROR_CODES: ReadonlySet<string> = new Set(Object.keys(ERROR_CODE_KEYS));
 
 export interface ApiSuccess<T> {
   ok: true;
@@ -26,7 +32,6 @@ export interface ApiSuccess<T> {
 export type ApiFailure =
   | { kind: "contract"; error: ErrorResponse; status: number; retryAfterMs: number | null }
   | { kind: "rateLimited"; retryAfterMs: number | null; requestId: string | null }
-  | { kind: "methodNotAllowed"; requestId: string | null }
   | { kind: "malformed"; status: number; requestId: string | null }
   | { kind: "timeout" }
   | { kind: "aborted" }
@@ -83,9 +88,6 @@ function infrastructureFailureOf(response: Response, clock: ReferenceClock | nul
   if (response.status === 429) {
     return { kind: "rateLimited", retryAfterMs: retryAfterMsOf(response, clock), requestId: requestIdOf(response) };
   }
-  if (response.status === 405) {
-    return { kind: "methodNotAllowed", requestId: requestIdOf(response) };
-  }
   return null;
 }
 
@@ -125,8 +127,7 @@ function isErrorResponse(value: unknown): value is ErrorResponse {
     typeof candidate.code === "string" &&
     ERROR_CODES.has(candidate.code) &&
     typeof candidate.message === "string" &&
-    typeof candidate.requestId === "string" &&
-    typeof candidate.retryable === "boolean"
+    typeof candidate.requestId === "string"
   );
 }
 
