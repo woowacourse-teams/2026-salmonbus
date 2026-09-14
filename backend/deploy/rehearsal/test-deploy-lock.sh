@@ -24,6 +24,9 @@ TESTS=(
   failure_cleanup_preserves_another_owner
   other_component_is_rejected
   same_component_takeover_keeps_cleanup
+  stale_lock_of_other_component_is_taken_over
+  live_lock_of_other_component_is_not_taken_over
+  following_hook_refreshes_lock_age
 )
 
 fail() { echo "실패: $*" >&2; exit 1; }
@@ -160,6 +163,41 @@ same_component_takeover_keeps_cleanup() {
   run_hook $'claim_deploy\nexit 47' api d-api-rollback
   assert_exit 47
   assert_released
+}
+
+# 잠금 디렉터리의 mtime 을 과거로 돌린다. 나이 판정이 이 값을 본다
+age_lock() { touch -d "-$1 seconds" "$MARKER"; }
+
+stale_lock_of_other_component_is_taken_over() {
+  claim_first_hook
+  age_lock 1200
+  run_hook 'claim_deploy' worker d-worker-1
+  assert_exit 0
+  assert_owner worker d-worker-1
+  grep -q '버리고 다시 잡는다' "$HOOK_OUTPUT" || fail "오래된 잠금을 버렸다는 로그가 없다"
+}
+
+live_lock_of_other_component_is_not_taken_over() {
+  claim_first_hook
+  age_lock 1200
+  # 잠금은 20분 전에 만들었지만 api 의 다음 훅이 방금 왔다 갔다. 살아 있는 배포다
+  run_hook 'claim_deploy' api d-api-1
+  assert_exit 0
+  run_hook 'claim_deploy' worker d-worker-1
+  assert_exit 1
+  assert_owner api d-api-1
+  grep -q '진행 중이다' "$HOOK_OUTPUT" || fail "살아 있는 배포라서 멈췄다는 로그가 없다"
+}
+
+following_hook_refreshes_lock_age() {
+  claim_first_hook
+  age_lock 1200
+  local before after
+  before="$(stat -c %Y "$MARKER")"
+  run_hook 'claim_deploy' api d-api-1
+  assert_exit 0
+  after="$(stat -c %Y "$MARKER")"
+  [ "$after" -gt "$before" ] || fail "후속 훅이 잠금 mtime 을 갱신하지 않았다 (전=$before 후=$after)"
 }
 
 if [ "${1:-}" = "--case" ]; then

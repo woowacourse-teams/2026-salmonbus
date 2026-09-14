@@ -55,7 +55,7 @@ unit_pid() { systemctl show -p MainPID --value "$UNIT" 2>/dev/null || echo 0; }
 # flock 은 스크립트가 끝나면 풀려서 훅과 훅 사이를 못 잠근다. 그래서 디렉터리로 잠근다.
 # mkdir은 디렉터리가 이미 있으면 실패한다. 확인과 생성을 한 동작으로 처리해 사이에 틈이 없다.
 MARKER="$ROOT/.deploying"
-MARKER_STALE_SECONDS=900
+MARKER_STALE_SECONDS=900    # 마지막 훅이 시작한 뒤 이만큼 조용하면 죽은 배포로 본다. 훅 상한 300초의 세 배
 # 잠금은 있는데 owner를 못 읽었다면 다른 배포가 막 잡고 아직 안 썼거나 잡았다 방금 놓은 순간이다.
 # 한 번 보고 단정하지 않고 잠깐 자고 다시 본다
 MARKER_CLAIM_TRIES=3
@@ -80,7 +80,9 @@ claim_deploy() {
     # 셸이 내는 리디렉션 오류를 못 막아서 훅 로그에 그대로 남는다
     read -r who id when 2>/dev/null < "$MARKER/owner" || true
     # 같은 배포의 다음 훅은 기존 잠금을 쓴다. 훅마다 새 셸에서 실행되므로 실패 정리도 다시 등록한다.
+    # touch 로 "아직 살아 있다"는 표시를 남긴다. 아래 나이 계산이 이 시각을 본다
     if [ "$id" = "$DEPLOY_ID" ]; then
+      touch "$MARKER" 2>/dev/null || true
       trap '_release_on_failure "$?"' EXIT
       return 0
     fi
@@ -93,9 +95,11 @@ claim_deploy() {
       rm -rf "$MARKER"
       continue
     fi
-    # 나이는 owner 파일이 아니라 잠금 디렉터리가 만들어진 시각으로 잰다.
-    # mkdir과 owner 쓰기 사이에 읽으면 owner가 비어 있다.
-    # 이때 아주 오래된 잠금으로 판단하면 다른 배포가 막 잡은 잠금을 뺏는다.
+    # 나이는 잠금 디렉터리의 mtime 으로 잰다. 잡을 때 생기고 훅이 시작할 때마다 touch 로 갱신되니까
+    # "마지막 훅이 시작한 뒤 지난 시간"이다. 훅 하나는 길어야 300초라 900초 조용하면 죽은 배포다.
+    # 살아 있는 배포는 15분을 넘겨도 그 사이 훅이 갱신해서 안 뺏긴다.
+    # owner 파일이 아니라 디렉터리를 보는 이유: mkdir 과 owner 쓰기 사이에 읽으면 owner 가 비어 있는데
+    # 그걸 아주 오래된 잠금으로 치면 다른 배포가 막 잡은 잠금을 뺏는다
     age=$(( $(date +%s) - $(stat -c %Y "$MARKER" 2>/dev/null || date +%s) ))
     if [ "$age" -ge "$MARKER_STALE_SECONDS" ]; then
       log "${who:-알 수 없는} 배포 잠금이 ${age}초째 남아 있다. 버리고 다시 잡는다"
