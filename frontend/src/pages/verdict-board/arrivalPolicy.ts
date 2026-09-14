@@ -16,8 +16,6 @@ export function arrivalViewsFor(vehicles: readonly ApproachingVehicle[]): Arriva
     .map(toArrivalView);
 }
 
-// 접힘 행은 가장 먼저 도착할 버스로 판단한다. 계약에 도착 시각이 없어 거리로 대신하며,
-// 맨 앞 항목이 실제로 가장 먼저 도착하는 비율은 96.68%다.
 export function representativeArrival(arrivals: readonly ArrivalView[]): ArrivalView | undefined {
   return arrivals[0];
 }

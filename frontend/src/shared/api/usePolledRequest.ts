@@ -20,7 +20,6 @@ interface PolledState<T> extends PolledResource<T> {
 
 const EMPTY = { result: null, body: null, clock: null, receivedAt: null };
 
-// 다음 호출 시각은 서버가 Cache-Control에 담아 보낸다. 화면이 주기를 계산하지 않는다.
 export function usePolledRequest<T>(
   request: (key: string, signal: AbortSignal) => Promise<ApiResult<T>>,
   key: string,
@@ -67,7 +66,6 @@ export function usePolledRequest<T>(
       });
     };
 
-    // 배경으로 열려만 있는 화면은 부르지 않는다. 돌아오면 바로 한 번 부른다.
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         load();

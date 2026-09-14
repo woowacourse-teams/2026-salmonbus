@@ -34,7 +34,7 @@ export interface DirectionView {
   label: string;
 }
 
-// 관측 시각은 계약상 KST(+09:00)로 온다. 다른 오프셋이면 시각을 잘못 읽는 대신 판정을 포기한다.
+// 관측 시각은 계약상 KST(+09:00)로 계산하여 보여준다.
 const KST_LOCAL_TIME = /T(\d{2}):(\d{2})[^Z]*\+09:00$/;
 const CLOCK_TIME = /^(\d{1,2}):(\d{2})$/;
 
@@ -42,17 +42,16 @@ export function serviceStateFor(board: Board, directionInfo: DirectionInfo): Ser
   switch (servicePhaseOf(directionInfo, board.observedAt)) {
     case "before":
     case "ended":
+      // 실제 운영 시간이라고 하더라도 운행 중인 차량이 하나도 없으면 예측 화면을 보여주지 않는다.
       return "outOfService";
-    // 시간표는 운행 중이라 해도 도는 차가 하나도 없으면 보여줄 예보가 없다.
-    // 관측이지 단정이 아니라서, 시간표가 운행 중이라고 말할 때만 이 값을 본다.
-    // 시간표를 못 읽어 판정하지 못한 경우도 예보가 틀린 건 아니므로 보드는 보여주되 같은 기준으로 판단한다.
+    // 관측한 값일 뿐 계산된 판정이 아니라서, 실제 운영 중 시간대에서만 이 값을 보여준다.
     case "running":
+    // 시간표를 못 읽어 판정하지 못한 경우도 예보가 틀린 건 아니므로 판정화면을 보여주되 같은 기준으로 판단한다.
     case "undetermined":
       return board.vehiclesInService > 0 ? "running" : "outOfService";
   }
 }
 
-// 선택한 방향이 이 노선에 있으면 그것, 없으면 첫 방향. 노선에 없는 방향이 화면에 남지 않게 한다.
 export function directionInfoFor(board: Board, preferred: Direction | null): DirectionInfo {
   const { directions } = board.route;
   return directions.find((directionInfo) => directionInfo.id === preferred) ?? directions[0];
