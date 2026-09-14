@@ -65,12 +65,17 @@ else
   log "current -> $release"
 fi
 
-if [ "$NEW_DIGEST" = "$OLD_DIGEST" ]; then
-  # 소스가 그대로다. 유닛이 바뀌었을 때만 다시 띄운다
-  echo "changed=$unit_changed" > "$CHANGED"
-  log "$COMPONENT 소스 지문이 그대로다. 재시작=$unit_changed"
+# start.sh 가 읽는다. 왜 재시작하는지도 같이 적는다. 로그에 이유가 없으면 나중에 journal 을 뒤져야 한다
+old_short="${OLD_DIGEST:0:12}"
+if [ "$NEW_DIGEST" != "$OLD_DIGEST" ]; then
+  printf 'changed=yes\nreason=소스 지문 변경 %s -> %s\n' "${old_short:-없음}" "${NEW_DIGEST:0:12}" > "$CHANGED"
+elif [ "$unit_changed" = "yes" ]; then
+  # 소스는 그대로인데 유닛이 바뀌었다. 다시 띄워야 새 ExecStart 와 EnvironmentFile 이 먹는다
+  printf 'changed=yes\nreason=유닛 변경\n' > "$CHANGED"
+  log "$COMPONENT 소스 지문이 그대로다. 유닛이 바뀌어 재시작한다"
 else
-  echo "changed=yes" > "$CHANGED"
+  printf 'changed=no\nreason=변경 없음\n' > "$CHANGED"
+  log "$COMPONENT 소스 지문이 그대로다. 재시작하지 않는다"
 fi
 
 # 판마다 52MB 다. 셋만 남긴다. 지금 쓰는 것과 직전 것은 안 지운다

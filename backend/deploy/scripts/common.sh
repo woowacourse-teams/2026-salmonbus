@@ -48,6 +48,9 @@ ENV_FILE="/etc/salmonbus/$COMPONENT.env"
 MODEL_DIRECTORY=/var/lib/salmonbus/model/current
 JAR="$CURRENT/jars/$COMPONENT-app.jar"
 
+# 유닛의 MainPID. 안 돌고 있으면 0. 재시작이 정말 됐는지 전후로 견주려고 훅마다 찍는다
+unit_pid() { systemctl show -p MainPID --value "$UNIT" 2>/dev/null || echo 0; }
+
 # api 와 worker 배포가 겹치지 않게 하는 잠금이다.
 # flock 은 스크립트가 끝나면 풀려서 훅과 훅 사이를 못 잠근다. 그래서 디렉터리로 잠근다.
 # mkdir은 디렉터리가 이미 있으면 실패한다. 확인과 생성을 한 동작으로 처리해 사이에 틈이 없다.
@@ -146,4 +149,42 @@ release_path() {
     *) log "배포 버전 경로가 releases 밖을 가리킨다"; exit 1 ;;
   esac
   printf '%s' "$resolved"
+}
+
+# DB 에 새 연결을 하나 열어 본다. 앱이 쥔 풀을 안 거치는 별개 연결이다.
+# 9월 14일에 health 는 죽었는데 psql 은 바로 붙었다. DB 가 죽은 건지 앱 풀만 굳은 건지 이걸로 가른다.
+# 로그에만 남기고 배포는 안 막는다. 비밀번호는 PGPASSWORD 로 psql 에만 준다. 명령줄에 실으면 ps 에 보인다
+DB_PROBE_SECONDS=15
+db_probe() {
+  local label="$1" url user pass host port name t0 ms out rc=0
+  command -v psql >/dev/null 2>&1 || { log "DB 진단($label) 생략: psql 이 없다"; return 0; }
+  url="$(sed -n 's/^DB_URL=//p' "$ENV_FILE" 2>/dev/null | head -1 || true)"
+  user="$(sed -n 's/^DB_USERNAME=//p' "$ENV_FILE" 2>/dev/null | head -1 || true)"
+  pass="$(sed -n 's/^DB_PASSWORD=//p' "$ENV_FILE" 2>/dev/null | head -1 || true)"
+  # jdbc:postgresql://호스트:포트/디비?옵션 을 psql 이 받는 모양으로 쪼갠다. 포트가 없으면 5432
+  host="${url#jdbc:postgresql://}"; host="${host%%/*}"
+  name="${url#jdbc:postgresql://*/}"; name="${name%%\?*}"
+  port="${host##*:}"; [ "$port" != "$host" ] || port=5432; host="${host%%:*}"
+  if [ -z "$host" ] || [ -z "$name" ] || [ -z "$user" ]; then
+    log "DB 진단($label) 생략: $ENV_FILE 의 DB_URL 을 못 읽었다"
+    return 0
+  fi
+  t0=$(date +%s%3N)
+  out="$(PGPASSWORD="$pass" timeout "$DB_PROBE_SECONDS" psql \
+    "host=$host port=$port dbname=$name user=$user sslmode=require connect_timeout=10" \
+    -Atqc 'select 1' 2>&1)" || rc=$?
+  ms=$(( $(date +%s%3N) - t0 ))
+  if [ "$rc" -eq 0 ]; then
+    log "DB 진단($label): 새 연결 성공. ${ms}ms host=$host db=$name"
+    return 0
+  fi
+  # 오류 문구에 비밀번호가 섞일 일은 없지만 한 번 더 지운다
+  [ -z "$pass" ] || out="${out//"$pass"/***}"
+  out="$(printf '%s' "$out" | head -1 | cut -c1-200)"
+  if [ "$rc" -eq 124 ]; then
+    log "DB 진단($label): 새 연결 실패. ${DB_PROBE_SECONDS}초 안에 응답이 없다 host=$host db=$name. 배포는 계속한다"
+  else
+    log "DB 진단($label): 새 연결 실패. ${ms}ms rc=$rc host=$host db=$name: ${out:-출력 없음}. 배포는 계속한다"
+  fi
+  return 0
 }

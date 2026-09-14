@@ -19,8 +19,8 @@ useradd -r -s /sbin/nologin salmonbus 2>/dev/null || true
 id salmonbus >/dev/null 2>&1 && ok "salmonbus 사용자" || bad "사용자 생성 실패"
 
 mkdir -p /etc/salmonbus "$WORK" /etc/systemd/system   # EC2 에는 systemd 가 있어서 이 디렉터리가 있다
-printf 'DB_URL=jdbc:postgresql://rds:5432/salmonbus\nDB_USERNAME=x\nDB_PASSWORD=y\n' > /etc/salmonbus/api.env
-printf 'DB_URL=jdbc:postgresql://rds:5432/salmonbus\nDB_USERNAME=x\nDB_PASSWORD=y\nGBIS_SERVICE_KEY=z\n' > /etc/salmonbus/worker.env
+printf 'DB_URL=jdbc:postgresql://rds:5432/salmonbus\nDB_USERNAME=x\nDB_PASSWORD=rehearsal-secret-7f3a\n' > /etc/salmonbus/api.env
+printf 'DB_URL=jdbc:postgresql://rds:5432/salmonbus\nDB_USERNAME=x\nDB_PASSWORD=rehearsal-secret-7f3a\nGBIS_SERVICE_KEY=z\n' > /etc/salmonbus/worker.env
 chmod 600 /etc/salmonbus/*.env; chown root:root /etc/salmonbus/*.env
 
 printf '#!/bin/sh\necho "openjdk version \\"21.0.12\\" 2026-08-18" >&2\n' > /usr/bin/java
@@ -33,7 +33,12 @@ case "$1" in
   enable)        grep -qx "$2" /work/enabled 2>/dev/null || echo "$2" >> /work/enabled; exit 0 ;;
   is-enabled)    grep -qx "$3" /work/enabled 2>/dev/null && exit 0 || exit 1 ;;
   stop)          grep -vx "$2" /work/running > /work/r.tmp 2>/dev/null || true; mv /work/r.tmp /work/running; exit 0 ;;
-  start)         grep -qx "$2" /work/running 2>/dev/null || echo "$2" >> /work/running; exit 0 ;;
+  start)         if ! grep -qx "$2" /work/running 2>/dev/null; then
+                   echo "$2" >> /work/running
+                   # start 할 때마다 PID 를 하나 올린다. 재시작했는지를 PID 로 본다
+                   n=$(( $(cat /work/pidseq 2>/dev/null || echo 1000) + 1 )); echo "$n" > /work/pidseq; echo "$n" > "/work/pid.$2"
+                 fi; exit 0 ;;
+  show)          u="${*: -1}"; grep -qx "$u" /work/running 2>/dev/null && cat "/work/pid.$u" || echo 0; exit 0 ;;
   daemon-reload) exit 0 ;;
   # 모의 구현이 모르는 명령에 성공을 돌려주면 깨진 훅이 여기를 그냥 통과한다
   *) echo "systemctl 모의 구현이 모르는 명령이다: $*" >&2; exit 64 ;;
@@ -46,7 +51,7 @@ EOF
 #   /work/ready 가 DOWN    8080 /readyz 만 503 을 낸다. 관리 포트는 멀쩡하다
 #   /work/refuse 가 있으면  연결 자체가 안 된다 (curl 종료 코드 7, 상태 코드 000)
 #   /work/stale 이 있으면   옛 프로세스가 아직 응답하는 상황을 재현한다
-# 부른 주소는 /work/curl.log 에 남겨 validate 가 무엇을 물었는지 검사한다
+# 부른 주소는 /work/curl.log 에 쌓는다. validate 가 뭘 물었는지 여기서 본다
 cat > /usr/local/bin/curl <<'EOF'
 #!/bin/bash
 url=""; fmt=""
@@ -92,10 +97,24 @@ case "$url" in
 esac
 echo "curl 모의 구현이 모르는 경로다: $url" >&2; exit 2
 EOF
-chmod +x /usr/bin/java /usr/local/bin/systemctl /usr/local/bin/curl
+# psql 모의 구현. 받은 인자를 /work/psql.log 에 쌓는다. PGPASSWORD 가 없거나 비밀번호가 인자에 보이면 실패다.
+# /work/db 가 DOWN 이면 인증 실패, HANG 이면 답을 안 한다. 훅의 timeout 이 죽여야 한다
+cat > /usr/local/bin/psql <<'EOF'
+#!/bin/bash
+printf '%s\n' "$*" >> /work/psql.log
+[ -n "${PGPASSWORD:-}" ] || { echo "psql 모의 구현: PGPASSWORD 가 없다" >&2; exit 2; }
+case "$*" in *"$PGPASSWORD"*) echo "psql 모의 구현: 비밀번호가 명령줄에 있다" >&2; exit 2 ;; esac
+case "$(cat /work/db 2>/dev/null || echo UP)" in
+  UP)   echo 1; exit 0 ;;
+  HANG) exec sleep 60 ;;
+  *)    echo 'psql: error: connection to server at "rds" (10.0.0.5), port 5432 failed: FATAL:  password authentication failed for user "x"' >&2; exit 2 ;;
+esac
+EOF
+chmod +x /usr/bin/java /usr/local/bin/systemctl /usr/local/bin/curl /usr/local/bin/psql
 echo UP > "$WORK/health"; : > "$WORK/running"; : > "$WORK/enabled"
-: > "$WORK/systemctl.log"; : > "$WORK/curl.log"; rm -f "$WORK/stale" "$WORK/ready" "$WORK/refuse"
-ok "java · systemctl · curl 모의 구현"
+: > "$WORK/systemctl.log"; : > "$WORK/curl.log"; : > "$WORK/psql.log"
+rm -f "$WORK/stale" "$WORK/ready" "$WORK/refuse" "$WORK/db" "$WORK/pidseq"
+ok "java · systemctl · curl · psql 모의 구현"
 
 source /rehearse/digest.sh
 
@@ -182,8 +201,14 @@ grep -q '/api/v1/routes' /work/curl.log \
   && ok "worker validate 는 8080 을 안 본다" || bad "8080 /readyz 를 $(grep -c '8080/readyz' /work/curl.log) 번 물었다"
 grep -q 'readyz 확인\. 시도=1 소요=[0-9]*초 http=200' /work/api-validate.out \
   && ok "검사마다 시도 횟수와 HTTP 상태가 남는다" || { bad "readyz 로그가 다르다"; sed 's/^/      /' /work/api-validate.out; }
-grep -q '배포 검증 끝\. component=api commit=aaaaaaa1111 경과=[0-9]*초 종료 코드=0' /work/api-validate.out \
-  && ok "요약에 경과와 종료 코드가 남는다" || { bad "요약이 다르다"; grep '배포 검증' /work/api-validate.out | sed 's/^/      /'; }
+grep -q '배포 검증 끝\. component=api commit=aaaaaaa1111 PID=[1-9][0-9]* 경과=[0-9]*초 종료 코드=0' /work/api-validate.out \
+  && ok "요약에 PID·경과·종료 코드가 남는다" || { bad "요약이 다르다"; grep '배포 검증' /work/api-validate.out | sed 's/^/      /'; }
+grep -q '배포 전: PID=0 지문=없음' /work/api-preflight.out \
+  && ok "첫 배포 전 상태를 남긴다" || { bad "배포 전 상태 로그가 다르다"; sed 's/^/      /' /work/api-preflight.out; }
+grep -q 'DB 진단(배포 전): 새 연결 성공\. [0-9]*ms host=rds db=salmonbus' /work/api-preflight.out \
+  && ok "preflight 가 DB 에 새 연결을 붙여 봤다" || { bad "DB 진단 로그가 다르다"; sed 's/^/      /' /work/api-preflight.out; }
+grep -q 'salmonbus-api 시작했다\. PID=[1-9][0-9]*' /work/api-start.out \
+  && ok "start 가 새 PID 를 남긴다" || { bad "start 로그가 다르다"; sed 's/^/      /' /work/api-start.out; }
 
 sec "3. api 소스만 바뀐 배포"
 : > /work/systemctl.log
@@ -204,6 +229,17 @@ start_line=$(grep -n '^start salmonbus-api$' /work/systemctl.log | head -1 | cut
   && ok "stop 이 start 보다 먼저다" || bad "stop=$stop_line start=$start_line 순서가 아니다"
 [ "$(readlink -f /opt/salmonbus/api/previous)" = "/opt/salmonbus/api/releases/1111aaaa2222bbbb3333cccc4444dddd5555eeee6666ffff7777000088889999" ] \
   && ok "api previous 가 직전 배포 버전을 가리킨다" || bad "api previous=$(readlink -f /opt/salmonbus/api/previous 2>/dev/null)"
+before=$(sed -n 's/.*api 를 재시작한다\. 이유=소스 지문 변경 1111aaaa2222 -> 2222bbbb3333 PID=\([0-9]*\)$/\1/p' /work/api-start.out)
+after=$(sed -n 's/.*salmonbus-api 시작했다\. PID=\([0-9]*\)$/\1/p' /work/api-start.out)
+if [ -n "$before" ] && [ -n "$after" ] && [ "$before" != "$after" ]; then
+  ok "재시작 이유와 전후 PID($before -> $after)가 남는다"
+else
+  bad "재시작 이유나 PID 로그가 다르다"; sed 's/^/      /' /work/api-start.out
+fi
+grep -q "PID=$after 경과=" /work/api-validate.out \
+  && ok "validate 요약의 PID 가 새 프로세스다" || bad "validate 요약의 PID 가 다르다"
+grep -q 'worker 는 재시작하지 않는다\. 이유=변경 없음 PID=[1-9][0-9]* 그대로' /work/worker-start.out \
+  && ok "worker 는 이유와 PID 를 남기고 재시작하지 않는다" || { bad "worker start 로그가 다르다"; sed 's/^/      /' /work/worker-start.out; }
 
 sec "4. 아무 소스도 안 바뀐 배포"
 : > /work/systemctl.log
@@ -215,6 +251,8 @@ grep -qE 'stop salmonbus' /work/systemctl.log \
   && bad "안 바뀌었는데 중지됐다" || ok "둘 다 재시작하지 않았다"
 [ -d /opt/salmonbus/api/releases/2222bbbb3333cccc4444dddd5555eeee6666ffff7777000088889999aaaa1111 ] \
   && ok "실행 중인 배포 버전을 안 지웠다" || bad "실행 중인 배포 버전이 사라졌다"
+grep -q 'api 는 재시작하지 않는다\. 이유=변경 없음 PID=[1-9][0-9]* 그대로' /work/api-start.out \
+  && ok "api 도 이유와 PID 를 남기고 재시작하지 않는다" || { bad "api start 로그가 다르다"; sed 's/^/      /' /work/api-start.out; }
 
 sec "5. api 배포가 진행 중이면 worker 가 안 끼어드나"
 mkdir -p /opt/salmonbus/.deploying
@@ -274,11 +312,13 @@ grep -q 'health 시도 1: http=503 curl=0 status=DOWN 경과=' /work/api-validat
   && ok "시도마다 HTTP 상태와 status 가 남는다" || { bad "시도 로그가 다르다"; sed 's/^/      /' /work/api-validate.out; }
 tries=$(grep -c '^\[[0-9:]*\] health 시도 ' /work/api-validate.out)
 [ "$tries" -ge 3 ] && ok "상한 4초 동안 $tries 번 다시 물었다" || bad "$tries 번밖에 안 물었다"
-grep -q '단계=health 사유=시간 초과(검사 상한 4초) 시도='"$tries"' 마지막=http=503 status=DOWN 경과=' /work/api-validate.out \
+grep -q '단계=health 사유=시간 초과(검사 상한 4초) 시도='"$tries"' 마지막=http=503 status=DOWN PID=[1-9][0-9]* 경과=' /work/api-validate.out \
   && ok "요약의 시도 횟수가 실제 시도와 같다" || { bad "요약이 다르다"; grep '배포 검증' /work/api-validate.out | sed 's/^/      /'; }
+grep -q 'DB 진단(health 실패): 새 연결 성공' /work/api-validate.out \
+  && ok "health 가 죽은 직후에 DB 는 붙는다고 남긴다" || { bad "health 실패 후 DB 진단이 없다"; sed 's/^/      /' /work/api-validate.out; }
 [ ! -d /opt/salmonbus/.deploying ] && ok "실패한 validate 가 잠금을 풀었다" || bad "잠금이 남았다"
 
-sec "7-2. 관리 포트에 연결이 안 되면 그 사실이 남는가"
+sec "7-2. 8082 에 연결이 안 되면 그게 로그에 남는가"
 touch /work/refuse
 make_revision api APIv5 fffffff6666 5555eeee6666ffff7777000088889999aaaa1111bbbb2222cccc3333dddd4444 "2026-09-02T05:10:00Z"
 deploy api fail
@@ -288,13 +328,13 @@ grep -q 'health 시도 1: http=000 curl=7 경과=' /work/api-validate.out \
 grep -q '단계=health 사유=시간 초과(검사 상한 4초) 시도=[0-9]* 마지막=연결 실패(curl=7)' /work/api-validate.out \
   && ok "사유가 연결 실패다" || { bad "사유가 다르다"; grep '배포 검증' /work/api-validate.out | sed 's/^/      /'; }
 
-sec "7-3. 관리 포트는 UP 인데 8080 이 응답을 안 하면 실패로 끝나는가"
+sec "7-3. 8082 는 UP 인데 8080 이 안 되면 실패로 끝나는가"
 echo DOWN > /work/ready
 make_revision api APIv6 ggggggg7777 6666ffff7777000088889999aaaa1111bbbb2222cccc3333dddd4444eeee5555 "2026-09-02T05:20:00Z"
 deploy api fail
 rm -f /work/ready
 grep -q 'enable 확인\.' /work/api-validate.out \
-  && ok "관리 포트 검사와 enable 은 통과했다" || { bad "앞 검사가 통과하지 않았다"; sed 's/^/      /' /work/api-validate.out; }
+  && ok "8082 검사와 enable 은 통과했다" || { bad "앞 검사가 통과하지 않았다"; sed 's/^/      /' /work/api-validate.out; }
 grep -q 'readyz 시도 1: http=503 curl=0 status=OUT_OF_SERVICE' /work/api-validate.out \
   && ok "8080 의 503 이 status 와 함께 남는다" || { bad "readyz 시도 로그가 다르다"; sed 's/^/      /' /work/api-validate.out; }
 grep -q '단계=readyz 사유=시간 초과' /work/api-validate.out \
@@ -310,16 +350,32 @@ dt=$((SECONDS - t0))
 rm -f /work/stale
 unset VALIDATE_TOTAL_SECONDS
 grep -q '단계=sourcedigest 사유=시간 초과(전체 3초 중 남은 [0-9]초)' /work/api-validate.out \
-  && ok "검사 상한 90초 대신 전체 잔여를 썼다" || { bad "사유가 다르다"; grep '배포 검증' /work/api-validate.out | sed 's/^/      /'; }
+  && ok "검사 상한 90초 대신 전체에서 남은 시간을 썼다" || { bad "사유가 다르다"; grep '배포 검증' /work/api-validate.out | sed 's/^/      /'; }
 [ "$dt" -le 20 ] && ok "배포가 ${dt}초 만에 끝났다" || bad "검사 상한 90초를 기다렸다 (${dt}초)"
 unset VALIDATE_CHECK_SECONDS VALIDATE_RETRY_SECONDS
 
-# 기본 전체 상한이 appspec 의 ValidateService timeout 보다 짧은지 파일에서 대조한다.
-# 길면 CodeDeploy 가 먼저 훅을 죽여서 요약 로그도 잠금 정리도 없이 끝난다
+sec "7-5. DB 가 안 붙거나 답이 없어도 배포는 가나"
+echo DOWN > /work/db
+make_revision api APIv8 iiiiiii9999 88889999aaaa1111bbbb2222cccc3333dddd4444eeee5555ffff666677770000 "2026-09-02T05:40:00Z"
+deploy api
+grep -q 'DB 진단(배포 전): 새 연결 실패\. [0-9]*ms rc=2 host=rds db=salmonbus: psql: error: .* 배포는 계속한다' /work/api-preflight.out \
+  && ok "인증 실패해도 rc 와 오류 문구만 남기고 배포는 간다" || { bad "DB 진단 실패 로그가 다르다"; sed 's/^/      /' /work/api-preflight.out; }
+echo HANG > /work/db
+make_revision api APIv9 jjjjjjj0000 9999aaaa1111bbbb2222cccc3333dddd4444eeee5555ffff6666777700008888 "2026-09-02T05:50:00Z"
+t0=$SECONDS
+deploy api
+dt=$((SECONDS - t0))
+rm -f /work/db
+grep -q 'DB 진단(배포 전): 새 연결 실패\. 15초 안에 응답이 없다 host=rds db=salmonbus\. 배포는 계속한다' /work/api-preflight.out \
+  && ok "답이 없으면 15초에 끊고 배포는 간다" || { bad "무응답 로그가 다르다"; sed 's/^/      /' /work/api-preflight.out; }
+[ "$dt" -ge 14 ] && [ "$dt" -le 40 ] && ok "끊는 데 ${dt}초 걸렸다" || bad "15초에 안 끊고 ${dt}초 걸렸다"
+
+# validate.sh 의 전체 상한 기본값이 appspec 의 ValidateService timeout 보다 짧은지 두 파일을 읽어 본다.
+# 길면 CodeDeploy 가 먼저 죽여서 요약도 잠금 정리도 없이 끝난다
 hook_timeout=$(awk '/ValidateService:/{f=1} f && /timeout:/{print $2; exit}' /deploy/appspec-api.yml)
 total_default=$(sed -n 's/.*VALIDATE_TOTAL_SECONDS:-\([0-9]*\)}.*/\1/p' /deploy/scripts/validate.sh)
 if [ -n "$total_default" ] && [ -n "$hook_timeout" ] && [ "$total_default" -lt "$hook_timeout" ]; then
-  ok "기본 전체 상한 ${total_default}초가 ValidateService timeout ${hook_timeout}초보다 짧다"
+  ok "전체 상한 기본값 ${total_default}초 < ValidateService timeout ${hook_timeout}초"
 else
   bad "전체 상한(${total_default:-?})이 훅 timeout(${hook_timeout:-?})보다 짧지 않다"
 fi
@@ -489,6 +545,13 @@ if grep -q '"groups"\|"build":{}' "$WORK"/*-validate.out 2>/dev/null; then
 else
   ok "validate 로그에 응답 본문이 안 찍힌다"
 fi
+if grep -rq 'rehearsal-secret-7f3a' "$WORK"/*.out "$WORK"/psql.log 2>/dev/null; then
+  bad "DB 비밀번호가 훅 출력이나 psql 명령줄에 찍혔다"
+else
+  ok "DB 비밀번호가 훅 출력과 psql 명령줄에 없다"
+fi
+grep -q 'sslmode=require' "$WORK/psql.log" \
+  && ok "psql 에 sslmode=require 를 준다" || bad "psql 에 sslmode=require 가 없다"
 
 echo; echo "======== 결과: 통과 $PASS · 실패 $FAIL ========"
 exit $([ "$FAIL" -eq 0 ] && echo 0 || echo 1)

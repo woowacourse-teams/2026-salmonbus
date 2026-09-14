@@ -27,6 +27,12 @@ if [ "$COMPONENT" = "worker" ]; then
   chown -R "$SERVICE_USER:$SERVICE_USER" /var/lib/salmonbus
 fi
 
+# 지금 실행 중인 것. start 와 validate 가 찍는 PID 와 견주면 재시작이 정말 됐는지 보인다
+current_short="$(manifest_value "$CURRENT/release-manifest.txt" sourceDigest)"; current_short="${current_short:0:12}"
+log "배포 전: PID=$(unit_pid) 지문=${current_short:-없음}"
+# DB 에 새 연결이 붙나 미리 본다. 안 붙어도 배포는 간다. 뒤에서 health 가 죽으면 이 결과와 견준다
+db_probe "배포 전"
+
 # 배포판 목록이 형식에 맞나. install.sh 가 이 값으로 판 이름을 짓는다
 for key in component commit sourceDigest artifactSha256; do
   [ -n "$(manifest_value "$MANIFEST" "$key")" ] || { log "배포판 목록에 $key 가 없다"; exit 1; }

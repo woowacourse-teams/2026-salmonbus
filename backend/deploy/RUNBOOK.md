@@ -119,7 +119,8 @@ flywayMaxVersion=12
 ## 변경된 서비스만 재시작
 
 `install.sh`가 새 배포 패키지의 `sourceDigest`와 현재 실행 중인 배포 버전의 값을 대조한다.
-다르면 서비스를 중지한 뒤 다시 시작한다.
+다르면 서비스를 중지한 뒤 다시 시작한다. `start.sh`는 재시작 여부와 이유(소스 지문 변경 · 유닛 변경 · 변경 없음),
+전후 PID를 훅 로그에 남긴다.
 
 **소스 지문이 같아도 systemd 유닛 파일이 바뀌면 재시작한다.**
 `MANAGEMENT_SERVER_PORT` · `Restart=` · `EnvironmentFile=` · 힙 크기는 소스가 아니라 유닛에 있으므로
@@ -159,15 +160,26 @@ readyz        api만. 8080 /readyz가 200 UP이다. 기동이 끝나 트래픽 �
 데이터 사정으로 정상 배포가 롤백될 수 있다. 8080은 `/readyz`로만 본다. `/readyz`는 Spring Boot Actuator의
 readiness 그룹을 `management.endpoint.health.probes.add-additional-paths`로 8080에 연 것이다.
 
-시간 상한은 세 겹이다. 전체 240초, 검사 하나 90초, 요청 하나 5초. 검사는 3초 간격으로 다시 묻되
+시간 상한은 셋이다. 전체 240초, 검사 하나 90초, 요청 하나 5초. 검사는 3초 간격으로 다시 묻되
 남은 시간을 넘기는 요청이나 대기는 하지 않는다. **전체 상한은 appspec의 `ValidateService` timeout(300초)보다
 짧아야 한다.** CodeDeploy가 먼저 훅을 종료하면 아래 요약 로그가 남지 않고 배포 잠금도 풀리지 않는다.
-리허설이 이 관계를 파일에서 대조한다.
+리허설이 두 값을 읽어 확인한다.
 
 훅 로그에는 검사마다 시도 횟수·HTTP 상태·curl 종료 코드·경과 시간이 남고 끝에 한 줄 요약이 남는다.
 응답 본문은 기록하지 않는다. 최상위 `status`와 `sourcedigest`·`component` 값만 남긴다.
 
+배포 전후 상태도 같은 로그에 남는다. `preflight.sh`가 배포 전 PID와 지문을 찍고, 앱이 쥔 연결 풀을 거치지 않는
+**새 DB 연결**이 붙는지 `psql`로 한 번 확인한다. `start.sh`가 재시작 이유와 전후 PID를 찍고, `validate.sh`가
+끝에 PID를 다시 찍는다. health가 실패하면 그 직후 새 DB 연결을 한 번 더 열어 DB가 안 되는 것인지
+앱의 풀만 굳은 것인지 갈라 둔다. **DB 진단은 기록만 하고 배포를 막지 않는다.** 비밀번호는 `psql` 환경변수로만
+넘기고 명령줄과 로그에 남기지 않는다. 15초 안에 응답이 없으면 끊는다.
+
 ```text
+[06:11:50] 배포 전: PID=894172 지문=2222bbbb3333
+[06:11:50] DB 진단(배포 전): 새 연결 성공. 312ms host=salmonbus-db.cqsc6pyqhwww.ap-northeast-2.rds.amazonaws.com db=salmonbus
+[06:12:01] api 를 재시작한다. 이유=소스 지문 변경 2222bbbb3333 -> 3333cccc4444 PID=894172
+[06:12:02] salmonbus-api 이 완전히 내려갔다
+[06:12:02] salmonbus-api 시작했다. PID=901234
 [06:12:03] health 시도 1: http=000 curl=7 경과=0초
 [06:12:06] health 시도 2: http=503 curl=0 status=DOWN 경과=3초
 [06:12:09] health 확인. 시도=3 소요=6초 http=200
@@ -175,10 +187,10 @@ readiness 그룹을 `management.endpoint.health.probes.add-additional-paths`로 
 [06:12:09] component 확인. 시도=1 소요=0초 http=200
 [06:12:09] enable 확인. 경과=6초
 [06:12:09] readyz 확인. 시도=1 소요=0초 http=200
-[06:12:09] 배포 검증 끝. component=api commit=... 경과=6초 종료 코드=0
+[06:12:09] 배포 검증 끝. component=api commit=... PID=901234 경과=6초 종료 코드=0
 ```
 
-실패하면 `배포 검증 실패. 단계=... 사유=... 경과=...초 종료 코드=1` 한 줄로 단계와 사유를 남긴다.
+실패하면 `배포 검증 실패. 단계=... 사유=... PID=... 경과=...초 종료 코드=1` 한 줄로 단계와 사유를 남긴다.
 사유에는 시간 상한, 시도 횟수, 마지막 응답의 HTTP 상태 또는 curl 종료 코드가 들어간다.
 
 ## 롤백
@@ -320,8 +332,8 @@ bash backend/deploy/rehearsal/run.sh
 
 리눅스 컨테이너에서 `systemctl` · `curl` · `java`를 모의 구현으로 대체하고 배포 시나리오를 검증한다.
 첫 배포, api만 변경된 배포, 변경 없는 배포, 동시 배포, 이전 프로세스의 응답,
-health 실패, 관리 포트 연결 실패, 8080만 응답하지 않는 경우, 전체 시간 상한, 롤백,
-변조된 배포 메타데이터, 잠금을 동시에 잡는 상황을 검사한다.
+health 실패, 관리 포트 연결 실패, 8080만 응답하지 않는 경우, 전체 시간 상한, DB 진단 실패와 무응답,
+롤백, 변조된 배포 메타데이터, 잠금을 동시에 잡는 상황을 검사한다.
 validate 실패 시나리오는 `VALIDATE_CHECK_SECONDS` 같은 환경변수로 상한을 몇 초로 줄여 실행한다.
 CodeDeploy 환경에는 이 변수가 없으므로 운영에서는 기본값이 쓰인다.
 리허설은 Bash로 실행하며 테스트용 JAR은 `makejar.sh`가 `zip`으로 만든다.

@@ -19,18 +19,24 @@ stop_unit() {
   return 1
 }
 
+# install.sh 가 적어 둔 것. 파일이 없으면 재시작하는 쪽으로 간다
 changed="$(sed -n 's/^changed=//p' "$CHANGED" 2>/dev/null || echo yes)"
+reason="$(sed -n 's/^reason=//p' "$CHANGED" 2>/dev/null || true)"
+before="$(unit_pid)"
 
 if [ "$changed" = "no" ]; then
-  log "$COMPONENT 는 소스가 그대로라 재시작하지 않는다"
-  if ! systemctl is-active --quiet "$UNIT"; then
-    log "그런데 돌고 있지 않다. 올린다"
-    stop_unit
-    systemctl start "$UNIT"
+  if systemctl is-active --quiet "$UNIT"; then
+    log "$COMPONENT 는 재시작하지 않는다. 이유=${reason:-변경 없음} PID=$before 그대로"
+    exit 0
   fi
+  log "$COMPONENT 는 변경이 없는데 실행 중이 아니다. 시작한다"
+  stop_unit
+  systemctl start "$UNIT"
+  log "$UNIT 시작했다. PID=$(unit_pid)"
   exit 0
 fi
 
+log "$COMPONENT 를 재시작한다. 이유=${reason:-소스 변경} PID=$before"
 stop_unit
 systemctl start "$UNIT"
-log "$UNIT 올렸다"
+log "$UNIT 시작했다. PID=$(unit_pid)"
