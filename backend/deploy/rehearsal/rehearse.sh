@@ -40,48 +40,61 @@ case "$1" in
 esac
 EOF
 
-# /actuator 를 모의한다. info 는 현재 실행 중인 배포 버전의 release.env 를 읽어 답한다.
-# /work/stale이 있으면 옛 프로세스가 아직 응답하는 상황을 재현한다.
+# /actuator 와 8080 /readyz 를 모의한다. info 는 현재 실행 중인 배포 버전의 release.env 를 읽어 답한다.
+# validate 가 -f 를 안 쓰니 503 도 종료 코드 0 으로 돌려준다.
+#   /work/health 가 DOWN   관리 포트가 503 {"status":"DOWN"} 을 낸다
+#   /work/ready 가 DOWN    8080 /readyz 만 503 을 낸다. 관리 포트는 멀쩡하다
+#   /work/refuse 가 있으면  연결 자체가 안 된다 (curl 종료 코드 7, 상태 코드 000)
+#   /work/stale 이 있으면   옛 프로세스가 아직 응답하는 상황을 재현한다
+# 부른 주소는 /work/curl.log 에 남겨 validate 가 무엇을 물었는지 검사한다
 cat > /usr/local/bin/curl <<'EOF'
 #!/bin/bash
-url=""; want_code=0
-for a in "$@"; do
-  case "$a" in
-    http*) url="$a" ;;
-    '%{http_code}') want_code=1 ;;
+url=""; fmt=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -w) fmt="$2"; shift ;;
+    -o|--max-time) shift ;;
+    http*) url="$1" ;;
   esac
+  shift
 done
 [ -n "$url" ] || { echo "curl 모의 구현: 주소가 없다" >&2; exit 2; }
+echo "$url" >> /work/curl.log
 # 상태 파일이 없으면 UP 으로 넘기지 않는다. 준비가 빠진 것을 통과시키면 안 된다
 [ -f /work/health ] || { echo "curl 모의 구현: /work/health 가 없다" >&2; exit 2; }
-state="$(cat /work/health)"
 # 아는 주소만 답한다. 포트나 경로가 틀리면 여기서 걸린다
 case "$url" in
-  http://127.0.0.1:8082/actuator/health|http://127.0.0.1:8082/actuator/info) comp=api ;;
-  http://127.0.0.1:8081/actuator/health|http://127.0.0.1:8081/actuator/info) comp=worker ;;
-  http://127.0.0.1:8080/api/v1/routes) comp=api ;;
+  http://127.0.0.1:8082/actuator/health|http://127.0.0.1:8082/actuator/info) comp=api;    state="$(cat /work/health)" ;;
+  http://127.0.0.1:8081/actuator/health|http://127.0.0.1:8081/actuator/info) comp=worker; state="$(cat /work/health)" ;;
+  http://127.0.0.1:8080/readyz) comp=api; state="$(cat /work/ready 2>/dev/null || echo UP)" ;;
   *) echo "curl 모의 구현이 모르는 주소다: $url" >&2; exit 2 ;;
 esac
-if [ "$want_code" = "1" ]; then
-  [ "$state" = "UP" ] && { echo 200; exit 0; }
-  echo 503; exit 0
+# 본문을 쓰고, -w 에 %{http_code} 가 있으면 진짜 curl 처럼 줄바꿈 뒤에 상태 코드를 붙인다
+answer() {
+  [ -n "$2" ] && printf '%s' "$2"
+  case "$fmt" in *'%{http_code}'*) printf '\n%s' "$1" ;; esac
+  exit "$3"
+}
+[ -f /work/refuse ] && answer 000 '' 7
+if [ "$state" != "UP" ]; then
+  case "$url" in */readyz) answer 503 '{"status":"OUT_OF_SERVICE"}' 0 ;; esac
+  answer 503 '{"status":"DOWN"}' 0
 fi
-[ "$state" = "UP" ] || { echo '{"status":"DOWN"}'; exit 22; }
 case "$url" in
-  */health) echo '{"groups":["liveness","readiness"],"status":"UP"}'; exit 0 ;;
+  */health) answer 200 '{"groups":["liveness","readiness"],"status":"UP"}' 0 ;;
+  */readyz) answer 200 '{"status":"UP"}' 0 ;;
   */info)
     envf="/opt/salmonbus/$comp/current/release.env"
     d="$(sed -n 's/^INFO_SOURCEDIGEST=//p' "$envf" 2>/dev/null)"
     c="$(sed -n 's/^INFO_COMPONENT=//p' "$envf" 2>/dev/null)"
     [ -f /work/stale ] && d="$(cat /work/stale)"
-    echo "{\"sourcedigest\":\"$d\",\"component\":\"$c\",\"build\":{}}"
-    exit 0 ;;
+    answer 200 "{\"sourcedigest\":\"$d\",\"component\":\"$c\",\"build\":{}}" 0 ;;
 esac
 echo "curl 모의 구현이 모르는 경로다: $url" >&2; exit 2
 EOF
 chmod +x /usr/bin/java /usr/local/bin/systemctl /usr/local/bin/curl
 echo UP > "$WORK/health"; : > "$WORK/running"; : > "$WORK/enabled"
-: > "$WORK/systemctl.log"; rm -f "$WORK/stale"
+: > "$WORK/systemctl.log"; : > "$WORK/curl.log"; rm -f "$WORK/stale" "$WORK/ready" "$WORK/refuse"
 ok "java · systemctl · curl 모의 구현"
 
 source /rehearse/digest.sh
@@ -149,6 +162,7 @@ d4="$(cd "$WORK/src1" && source_digest main)"
 
 sec "2. 첫 배포. api 먼저, worker 나중"
 rm -rf /opt/salmonbus
+: > /work/curl.log
 make_revision api    APIv1    aaaaaaa1111 1111aaaa2222bbbb3333cccc4444dddd5555eeee6666ffff7777000088889999 "2026-09-02T01:00:00Z"
 make_revision worker WORKERv1 aaaaaaa1111 9999888877776666555544443333222211110000ffffeeeeddddccccbbbbaaaa "2026-09-02T01:00:00Z"
 deploy api
@@ -160,6 +174,16 @@ grep -qx salmonbus-api /work/running && grep -qx salmonbus-worker /work/running 
 [ ! -d /opt/salmonbus/.deploying ] && ok "배포 잠금이 풀렸다" || bad "배포 잠금이 남았다"
 grep -qx salmonbus-api /work/enabled && grep -qx salmonbus-worker /work/enabled \
   && ok "둘 다 enable 됐다. 재부팅해도 자동 시작한다" || bad "enable 안 된 것이 있다"
+grep -q 'http://127.0.0.1:8080/readyz' /work/curl.log \
+  && ok "api validate 가 8080 /readyz 를 물었다" || bad "8080 /readyz 를 안 물었다"
+grep -q '/api/v1/routes' /work/curl.log \
+  && bad "업무 API 를 아직 부른다" || ok "업무 API 는 부르지 않는다"
+[ "$(grep -c '8080/readyz' /work/curl.log)" = "1" ] \
+  && ok "worker validate 는 8080 을 안 본다" || bad "8080 /readyz 를 $(grep -c '8080/readyz' /work/curl.log) 번 물었다"
+grep -q 'readyz 확인\. 시도=1 소요=[0-9]*초 http=200' /work/api-validate.out \
+  && ok "검사마다 시도 횟수와 HTTP 상태가 남는다" || { bad "readyz 로그가 다르다"; sed 's/^/      /' /work/api-validate.out; }
+grep -q '배포 검증 끝\. component=api commit=aaaaaaa1111 경과=[0-9]*초 종료 코드=0' /work/api-validate.out \
+  && ok "요약에 경과와 종료 코드가 남는다" || { bad "요약이 다르다"; grep '배포 검증' /work/api-validate.out | sed 's/^/      /'; }
 
 sec "3. api 소스만 바뀐 배포"
 : > /work/systemctl.log
@@ -225,18 +249,80 @@ deploy api
 grep -qx salmonbus-api /work/running \
   && ok "롤백한 뒤에도 서비스가 실행 중이다" || bad "롤백했는데 서비스가 실행 중이 아니다"
 
+# 6 부터 7-4 까지는 validate 가 실패하는 시나리오라 상한을 몇 초로 줄인다. CodeDeploy 환경에는 없는 변수다
+export VALIDATE_CHECK_SECONDS=4 VALIDATE_RETRY_SECONDS=1
+
 sec "6. 옛 프로세스가 응답하면 validate 가 잡나"
 : > /work/systemctl.log
 echo "2222bbbb3333cccc4444dddd5555eeee6666ffff7777000088889999aaaa1111" > /work/stale     # 새 배포 버전을 시작했는데 옛 프로세스가 응답하는 상황
 make_revision api APIv3 ddddddd4444 3333cccc4444dddd5555eeee6666ffff7777000088889999aaaa1111bbbb2222 "2026-09-02T04:00:00Z"
 deploy api fail
 rm -f /work/stale
+grep -q 'health 확인\. 시도=1 ' /work/api-validate.out \
+  && ok "health 는 통과했다" || bad "health 로그가 없다"
+grep -q 'sourcedigest 시도 1: http=200 curl=0 sourcedigest=2222bbbb' /work/api-validate.out \
+  && ok "옛 프로세스가 답한 지문이 시도마다 남는다" || { bad "응답한 지문이 로그에 없다"; sed 's/^/      /' /work/api-validate.out; }
+grep -q '배포 검증 실패\. 단계=sourcedigest 사유=시간 초과(검사 상한 4초) 시도=[0-9]* 마지막=응답이 다르다 (sourcedigest=2222bbbb' /work/api-validate.out \
+  && ok "요약 한 줄에 단계·사유·시도·마지막 응답이 있다" || { bad "요약이 다르다"; grep '배포 검증' /work/api-validate.out | sed 's/^/      /'; }
 
 sec "7. health 가 안 오르면 실패로 끝나는가"
 echo DOWN > /work/health
 make_revision api APIv4 eeeeeee5555 4444dddd5555eeee6666ffff7777000088889999aaaa1111bbbb2222cccc3333 "2026-09-02T05:00:00Z"
 deploy api fail
 echo UP > /work/health
+grep -q 'health 시도 1: http=503 curl=0 status=DOWN 경과=' /work/api-validate.out \
+  && ok "시도마다 HTTP 상태와 status 가 남는다" || { bad "시도 로그가 다르다"; sed 's/^/      /' /work/api-validate.out; }
+tries=$(grep -c '^\[[0-9:]*\] health 시도 ' /work/api-validate.out)
+[ "$tries" -ge 3 ] && ok "상한 4초 동안 $tries 번 다시 물었다" || bad "$tries 번밖에 안 물었다"
+grep -q '단계=health 사유=시간 초과(검사 상한 4초) 시도='"$tries"' 마지막=http=503 status=DOWN 경과=' /work/api-validate.out \
+  && ok "요약의 시도 횟수가 실제 시도와 같다" || { bad "요약이 다르다"; grep '배포 검증' /work/api-validate.out | sed 's/^/      /'; }
+[ ! -d /opt/salmonbus/.deploying ] && ok "실패한 validate 가 잠금을 풀었다" || bad "잠금이 남았다"
+
+sec "7-2. 관리 포트에 연결이 안 되면 그 사실이 남는가"
+touch /work/refuse
+make_revision api APIv5 fffffff6666 5555eeee6666ffff7777000088889999aaaa1111bbbb2222cccc3333dddd4444 "2026-09-02T05:10:00Z"
+deploy api fail
+rm -f /work/refuse
+grep -q 'health 시도 1: http=000 curl=7 경과=' /work/api-validate.out \
+  && ok "연결 실패가 http=000 curl=7 로 남는다" || { bad "연결 실패 로그가 다르다"; sed 's/^/      /' /work/api-validate.out; }
+grep -q '단계=health 사유=시간 초과(검사 상한 4초) 시도=[0-9]* 마지막=연결 실패(curl=7)' /work/api-validate.out \
+  && ok "사유가 연결 실패다" || { bad "사유가 다르다"; grep '배포 검증' /work/api-validate.out | sed 's/^/      /'; }
+
+sec "7-3. 관리 포트는 UP 인데 8080 이 응답을 안 하면 실패로 끝나는가"
+echo DOWN > /work/ready
+make_revision api APIv6 ggggggg7777 6666ffff7777000088889999aaaa1111bbbb2222cccc3333dddd4444eeee5555 "2026-09-02T05:20:00Z"
+deploy api fail
+rm -f /work/ready
+grep -q 'enable 확인\.' /work/api-validate.out \
+  && ok "관리 포트 검사와 enable 은 통과했다" || { bad "앞 검사가 통과하지 않았다"; sed 's/^/      /' /work/api-validate.out; }
+grep -q 'readyz 시도 1: http=503 curl=0 status=OUT_OF_SERVICE' /work/api-validate.out \
+  && ok "8080 의 503 이 status 와 함께 남는다" || { bad "readyz 시도 로그가 다르다"; sed 's/^/      /' /work/api-validate.out; }
+grep -q '단계=readyz 사유=시간 초과' /work/api-validate.out \
+  && ok "8080 만 안 되면 배포가 실패한다" || bad "8080 실패가 요약에 없다"
+
+sec "7-4. 전체 상한이 검사 상한보다 먼저 오면 거기서 멈추나"
+export VALIDATE_TOTAL_SECONDS=3 VALIDATE_CHECK_SECONDS=90
+echo "6666ffff7777000088889999aaaa1111bbbb2222cccc3333dddd4444eeee5555" > /work/stale
+make_revision api APIv7 hhhhhhh8888 7777000088889999aaaa1111bbbb2222cccc3333dddd4444eeee5555ffff6666 "2026-09-02T05:30:00Z"
+t0=$SECONDS
+deploy api fail
+dt=$((SECONDS - t0))
+rm -f /work/stale
+unset VALIDATE_TOTAL_SECONDS
+grep -q '단계=sourcedigest 사유=시간 초과(전체 3초 중 남은 [0-9]초)' /work/api-validate.out \
+  && ok "검사 상한 90초 대신 전체 잔여를 썼다" || { bad "사유가 다르다"; grep '배포 검증' /work/api-validate.out | sed 's/^/      /'; }
+[ "$dt" -le 20 ] && ok "배포가 ${dt}초 만에 끝났다" || bad "검사 상한 90초를 기다렸다 (${dt}초)"
+unset VALIDATE_CHECK_SECONDS VALIDATE_RETRY_SECONDS
+
+# 기본 전체 상한이 appspec 의 ValidateService timeout 보다 짧은지 파일에서 대조한다.
+# 길면 CodeDeploy 가 먼저 훅을 죽여서 요약 로그도 잠금 정리도 없이 끝난다
+hook_timeout=$(awk '/ValidateService:/{f=1} f && /timeout:/{print $2; exit}' /deploy/appspec-api.yml)
+total_default=$(sed -n 's/.*VALIDATE_TOTAL_SECONDS:-\([0-9]*\)}.*/\1/p' /deploy/scripts/validate.sh)
+if [ -n "$total_default" ] && [ -n "$hook_timeout" ] && [ "$total_default" -lt "$hook_timeout" ]; then
+  ok "기본 전체 상한 ${total_default}초가 ValidateService timeout ${hook_timeout}초보다 짧다"
+else
+  bad "전체 상한(${total_default:-?})이 훅 timeout(${hook_timeout:-?})보다 짧지 않다"
+fi
 
 sec "8. 배포 버전을 셋만 남기는가"
 n=$(/bin/ls -1d /opt/salmonbus/api/releases/*/ 2>/dev/null | wc -l)
@@ -397,6 +483,11 @@ if grep -rqE 'GBIS_SERVICE_KEY=[^$]|DB_PASSWORD=[^$]' "$WORK"/*.out 2>/dev/null;
   bad "훅 출력에 값이 찍혔다"
 else
   ok "훅 출력에 값이 안 찍혔다"
+fi
+if grep -q '"groups"\|"build":{}' "$WORK"/*-validate.out 2>/dev/null; then
+  bad "validate 로그에 응답 본문이 통째로 찍혔다"
+else
+  ok "validate 로그에 응답 본문이 안 찍힌다"
 fi
 
 echo; echo "======== 결과: 통과 $PASS · 실패 $FAIL ========"

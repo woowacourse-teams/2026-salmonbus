@@ -21,12 +21,12 @@ case "$COMPONENT" in
   api)
     CLIENT_PORT=8080
     ACTUATOR="http://127.0.0.1:8082/actuator"    # 관리 포트를 클라이언트 포트와 분리했다
-    SMOKE="http://127.0.0.1:8080/api/v1/routes"
+    READINESS="http://127.0.0.1:8080/readyz"      # 클라이언트 포트가 트래픽 받을 상태인지 본다
     ;;
   worker)
     CLIENT_PORT=8081
     ACTUATOR="http://127.0.0.1:8081/actuator"    # worker 는 이미 루프백에 묶여 있다
-    SMOKE=""
+    READINESS=""                                   # worker 는 포트가 8081 하나라 위 health 검사가 같은 포트를 본다
     ;;
   *)
     echo "release-manifest.txt 의 component 를 못 읽었다: '${COMPONENT}'" >&2

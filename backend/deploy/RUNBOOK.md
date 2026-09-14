@@ -22,7 +22,7 @@ API와 Worker를 따로 배포한다. 배포 패키지와 systemd 서비스도 �
 ## 포트
 
 ```text
-8080   API 클라이언트.  외부 접근을 허용한다
+8080   API 클라이언트.  외부 접근을 허용한다. 배포 검증용 /readyz도 여기 있다
 8082   API Actuator.    127.0.0.1에만 바인딩한다
 8081   Worker.          127.0.0.1에만 바인딩한다. Actuator도 이 포트를 사용한다
 ```
@@ -143,6 +143,44 @@ worker  worker-app/에 같은 목록을 적용한다
 JAR의 SHA-256이 달라진다. 실측으로 확인했다. 소스 지문을 쓰면 테스트·문서·프론트만 바뀐 배포에서는
 서비스를 재시작하지 않는다.
 
+## 배포 검증
+
+`validate.sh`가 다섯 가지를 순서대로 확인한다. 하나라도 실패하면 거기서 멈추고 CodeDeploy가 롤백한다.
+
+```text
+health        8082 /actuator/health가 UP이다. DB 연결까지 본다
+sourcedigest  8082 /actuator/info의 sourcedigest가 방금 놓은 배포 버전과 같다. 옛 프로세스가 살아 있으면 여기서 걸린다
+component     8082 /actuator/info의 component가 이 배포 그룹의 것이다
+enable        systemctl is-enabled. 재부팅 뒤에도 자동 시작한다
+readyz        api만. 8080 /readyz가 200 UP이다. 기동이 끝나 트래픽 받을 상태라는 뜻이고 DB는 보지 않는다
+```
+
+**업무 API(`/api/v1/routes`)로 배포를 검증하지 않는다.** 그 응답은 노선 데이터와 모델 상태에 따라 바뀌므로
+데이터 사정으로 정상 배포가 롤백될 수 있다. 8080은 `/readyz`로만 본다. `/readyz`는 Spring Boot Actuator의
+readiness 그룹을 `management.endpoint.health.probes.add-additional-paths`로 8080에 연 것이다.
+
+시간 상한은 세 겹이다. 전체 240초, 검사 하나 90초, 요청 하나 5초. 검사는 3초 간격으로 다시 묻되
+남은 시간을 넘기는 요청이나 대기는 하지 않는다. **전체 상한은 appspec의 `ValidateService` timeout(300초)보다
+짧아야 한다.** CodeDeploy가 먼저 훅을 종료하면 아래 요약 로그가 남지 않고 배포 잠금도 풀리지 않는다.
+리허설이 이 관계를 파일에서 대조한다.
+
+훅 로그에는 검사마다 시도 횟수·HTTP 상태·curl 종료 코드·경과 시간이 남고 끝에 한 줄 요약이 남는다.
+응답 본문은 기록하지 않는다. 최상위 `status`와 `sourcedigest`·`component` 값만 남긴다.
+
+```text
+[06:12:03] health 시도 1: http=000 curl=7 경과=0초
+[06:12:06] health 시도 2: http=503 curl=0 status=DOWN 경과=3초
+[06:12:09] health 확인. 시도=3 소요=6초 http=200
+[06:12:09] sourcedigest 확인. 시도=1 소요=0초 http=200
+[06:12:09] component 확인. 시도=1 소요=0초 http=200
+[06:12:09] enable 확인. 경과=6초
+[06:12:09] readyz 확인. 시도=1 소요=0초 http=200
+[06:12:09] 배포 검증 끝. component=api commit=... 경과=6초 종료 코드=0
+```
+
+실패하면 `배포 검증 실패. 단계=... 사유=... 경과=...초 종료 코드=1` 한 줄로 단계와 사유를 남긴다.
+사유에는 시간 상한, 시도 횟수, 마지막 응답의 HTTP 상태 또는 curl 종료 코드가 들어간다.
+
 ## 롤백
 
 **롤백은 대부분 자동으로 된다.** `validate.sh`가 실패하면 CodeDeploy가 해당 배포 그룹에서 직전에 성공한 버전을
@@ -237,12 +275,13 @@ curl -s http://127.0.0.1:8082/actuator/health    # api
 curl -s http://127.0.0.1:8082/actuator/info      # component · commit · sourcedigest
 curl -s http://127.0.0.1:8081/actuator/health    # worker
 curl -s http://127.0.0.1:8081/actuator/info
-curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/api/v1/routes
+curl -s http://127.0.0.1:8080/readyz              # api 8080이 트래픽 받을 상태인지. DB는 보지 않는다
 ```
 
-**`/actuator/health/readiness`를 쓰면 안 된다.** DB 연결이 끊겨도 200 `UP`을 반환한다.
+**`/actuator/health/readiness`를 DB 확인에 쓰면 안 된다.** DB 연결이 끊겨도 200 `UP`을 반환한다.
 이 그룹에는 `readinessState`만 들어 있다. DB 연결까지 확인하는 경로는 `/actuator/health`이며
-연결이 끊기면 503 `DOWN`을 반환한다. `validate.sh`도 이 경로를 확인한다.
+연결이 끊기면 503 `DOWN`을 반환한다. 8080의 `/readyz`는 이 readiness 그룹을 8080에 연 것이라 성질이 같다.
+`validate.sh`는 DB를 `/actuator/health`로, 8080이 트래픽 받을 상태인지를 `/readyz`로 나눠 확인한다.
 
 **health만으로는 수집이 실제로 실행되는지 확인할 수 없다.** 현재 Worker의 health에는
 `db` · `diskSpace` · `ping` · `ssl` 같은 기본 항목뿐이라 API와 응답이 같다.
@@ -281,7 +320,10 @@ bash backend/deploy/rehearsal/run.sh
 
 리눅스 컨테이너에서 `systemctl` · `curl` · `java`를 모의 구현으로 대체하고 배포 시나리오를 검증한다.
 첫 배포, api만 변경된 배포, 변경 없는 배포, 동시 배포, 이전 프로세스의 응답,
-health 실패, 롤백, 변조된 배포 메타데이터, 잠금을 동시에 잡는 상황을 검사한다.
+health 실패, 관리 포트 연결 실패, 8080만 응답하지 않는 경우, 전체 시간 상한, 롤백,
+변조된 배포 메타데이터, 잠금을 동시에 잡는 상황을 검사한다.
+validate 실패 시나리오는 `VALIDATE_CHECK_SECONDS` 같은 환경변수로 상한을 몇 초로 줄여 실행한다.
+CodeDeploy 환경에는 이 변수가 없으므로 운영에서는 기본값이 쓰인다.
 리허설은 Bash로 실행하며 테스트용 JAR은 `makejar.sh`가 `zip`으로 만든다.
 Python이나 호스트 JDK는 필요하지 않다. 필요한 Linux 도구는 컨테이너 안에 설치한다.
 
