@@ -76,8 +76,11 @@ claim_deploy() {
     # 2>/dev/null 을 입력 리디렉션보다 앞에 둔다. 뒤에 두면 owner 가 없을 때
     # 셸이 내는 리디렉션 오류를 못 막아서 훅 로그에 그대로 남는다
     read -r who id when 2>/dev/null < "$MARKER/owner" || true
-    # 같은 배포의 다음 훅이면 그대로 쓴다
-    [ "$id" = "$DEPLOY_ID" ] && return 0
+    # 같은 배포의 다음 훅이면 그대로 쓴다. 훅마다 새 셸이라 실패 정리도 다시 등록한다.
+    if [ "$id" = "$DEPLOY_ID" ]; then
+      trap '_release_on_failure "$?"' EXIT
+      return 0
+    fi
     # 같은 서비스의 다른 배포면 넘겨받는다.
     # 실패한 배포는 validate 까지 못 가서 잠금을 쥔 채 끝난다. 그대로 두면
     # CodeDeploy 가 바로 거는 롤백이 자기가 남긴 잠금에 막힌다.

@@ -14,7 +14,7 @@ WORK=/work
 ARCHIVE=/archive
 
 sec "0. 서버 흉내 준비"
-dnf -q install -y unzip findutils util-linux shadow-utils python3 diffutils procps-ng >/dev/null 2>&1
+dnf -q install -y zip unzip findutils util-linux shadow-utils diffutils procps-ng >/dev/null 2>&1
 useradd -r -s /sbin/nologin salmonbus 2>/dev/null || true
 id salmonbus >/dev/null 2>&1 && ok "salmonbus 사용자" || bad "사용자 생성 실패"
 
@@ -91,7 +91,7 @@ make_revision() {
   local component="$1" body="$2" commit="$3" digest="$4" stamp="$5"
   local a="$ARCHIVE/$component"
   rm -rf "$a"; mkdir -p "$a/jars" "$a/scripts" "$a/systemd"
-  python3 /rehearse/makejar.py "$a/jars/$component-app.jar" "$component-app" "$body" "$stamp"
+  bash /rehearse/makejar.sh "$a/jars/$component-app.jar" "$component-app" "$body" "$stamp"
   cp "$DEPLOY/appspec-$component.yml" "$a/appspec.yml"
   cp "$DEPLOY/scripts/"*.sh "$a/scripts/"; chmod +x "$a/scripts/"*.sh
   cp "$DEPLOY/systemd/salmonbus-$component.service" "$a/systemd/"
@@ -305,6 +305,14 @@ chmod 600 /etc/salmonbus/api.env
 [ ! -d /opt/salmonbus/.deploying ] \
   && ok "실패한 훅이 잠금을 풀고 나갔다" || bad "잠금이 남았다"
 
+sec "9-5-2. 별도 셸에서 실행된 후속 훅도 실패 시 잠금을 푸나"
+if bash "$DEPLOY/rehearsal/test-deploy-lock.sh" > "$WORK/lock-regression.out" 2>&1; then
+  ok "후속 훅 실패 정리·종료 코드·잠금 소유권 회귀 통과"
+else
+  bad "후속 훅 잠금 회귀 실패"
+  sed 's/^/      /' "$WORK/lock-regression.out"
+fi
+
 sec "9-6. 잠금이 찰나에 비어 있을 때"
 # 첫 배포에서 실제로 났다. Deploy 액션 둘이 같이 돌아서
 # 한쪽이 잠금을 잡자마자 놓는 사이에 다른 쪽이 읽었다.
@@ -363,12 +371,12 @@ rm -rf /opt/salmonbus/.deploying
 
 sec "9-7. 값이 박힌 JAR 을 배포판 검사가 막나"
 mkdir -p "$WORK/rev-ok/jars" "$WORK/rev-bad/jars"
-python3 /rehearse/makejar.py "$WORK/rev-ok/jars/api-app.jar" api-app   'spring:
+bash /rehearse/makejar.sh "$WORK/rev-ok/jars/api-app.jar" api-app   'spring:
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/salmonbus}
     password: ${DB_PASSWORD:salmonbus}
 ' "2026-09-02T10:00:00Z"
-python3 /rehearse/makejar.py "$WORK/rev-bad/jars/api-app.jar" api-app   'spring:
+bash /rehearse/makejar.sh "$WORK/rev-bad/jars/api-app.jar" api-app   'spring:
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/salmonbus}
     password: ${DB_PASSWORD:salmonbus}

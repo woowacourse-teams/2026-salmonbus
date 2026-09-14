@@ -282,7 +282,25 @@ bash backend/deploy/rehearsal/run.sh
 리눅스 컨테이너를 띄워 `systemctl` · `curl` · `java` 를 흉내로 바꿔 끼우고 배포를 여러 번 돌린다.
 첫 배포, api 만 바뀐 배포, 아무것도 안 바뀐 배포, 배포끼리 겹칠 때, 옛 프로세스가 응답할 때,
 health 가 안 오를 때, 되돌리기, 손댄 배포판 목록, 잠금을 둘이 동시에 잡을 때까지다.
-검사 48개가 돈다.
+리허설은 Bash로 실행하며, 가짜 JAR은 `makejar.sh`가 `zip`으로 만든다.
+Python이나 호스트 JDK는 필요하지 않다. 필요한 Linux 도구는 컨테이너 안에 설치한다.
+
+`test-deploy-lock.sh`는 실제 `common.sh`의 잠금 구간을 읽어 12개 회귀 테스트를 실행한다.
+검사마다 임시 폴더를 사용하고 훅마다 별도 Bash 프로세스를 띄운다. 후속 훅 실패 정리,
+성공 시 잠금 유지, 종료 코드 보존, 다른 배포 소유권을 검사한다. 각 훅은 10초로 제한한다.
+이 12개는 전체 리허설 결과에서 한 항목으로 집계된다.
+전체 리허설은 `run.sh`로 실행한다. `rehearse.sh`를 호스트에서 직접 실행하면 안 된다.
+`/usr/bin/java`, `/etc`, `/opt/salmonbus`를 모의 환경으로 바꾸기 때문이다.
+
+잠금 검사만 빠르게 실행하려면 프로젝트 루트에서 다음을 실행한다.
+
+```bash
+docker run --rm -v "$PWD/backend/deploy:/deploy:ro" amazonlinux:2023 \
+  bash /deploy/rehearsal/test-deploy-lock.sh
+```
+
+이 리허설을 GitHub CI·CodeBuild에서 자동 실행하는 연결은 아직 없다.
+`rehearsal/`은 CodeDeploy 배포 패키지에 포함하지 않는다.
 
 배포판에 비밀이 섞였는지 보는 `verify-revision.sh` 도 여기서 같이 돈다.
 **CodeBuild 가 부르는 것과 같은 파일이다.** `scripts/` 밖에 있어서 EC2 로는 안 나간다.
