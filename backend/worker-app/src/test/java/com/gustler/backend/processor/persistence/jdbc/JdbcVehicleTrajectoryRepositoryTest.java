@@ -1,6 +1,7 @@
 package com.gustler.backend.processor.persistence.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.groups.Tuple.tuple;
 
 import com.gustler.backend.processor.FullSeatStreak;
 import com.gustler.backend.processor.ObservedSeats;
@@ -337,6 +338,51 @@ class JdbcVehicleTrajectoryRepositoryTest {
 
         // then 시각만으로 자르면 44가 새어 들어온다
         assertThat(actual.getFirst().maximumSeatsEverObserved()).isEqualTo(12);
+    }
+
+    @Test
+    void 여러_차량의_최대값은_각각_구하고_다른_판본의_값은_제외한다() {
+        // given
+        final long earlier = insertBatch(routeVersionId, EARLIER_POLL.minusHours(1), SUCCESS_ROWS, null);
+        insertObservation(earlier, VEHICLE_204000206, STOP_5, 44);
+        insertObservation(earlier, VEHICLE_204003542, STOP_6, 52);
+
+        final long otherVersion = insertRouteVersion(ROUTE_204000121);
+        final long otherBatch = insertBatch(otherVersion, EARLIER_POLL, SUCCESS_ROWS, null);
+        insertObservation(otherVersion, otherBatch, VEHICLE_204000206, STOP_5, 68);
+
+        final long target = insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
+        insertObservation(target, VEHICLE_204000206, STOP_5, 12);
+        insertObservation(target, VEHICLE_204003542, STOP_6, 20);
+        insertObservation(target, VEHICLE_204001188, STOP_5, NO_SEAT_LEFT);
+
+        // when
+        List<VehicleTrajectory> actual = repository.readTrajectories(target);
+
+        // then
+        assertThat(actual)
+            .extracting(trajectory -> tuple(
+                trajectory.observation().vehicleId(), trajectory.maximumSeatsEverObserved()))
+            .containsExactlyInAnyOrder(
+                tuple(VEHICLE_204000206, 44),
+                tuple(VEHICLE_204003542, 52));
+    }
+
+    @Test
+    void 같은_최대값이_여러_관측에_있어도_차량은_한_번만_반환한다() {
+        // given
+        final long earlier = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
+        insertObservation(earlier, VEHICLE_204000206, STOP_5, 44);
+
+        final long target = insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
+        insertObservation(target, VEHICLE_204000206, STOP_6, 44);
+
+        // when
+        List<VehicleTrajectory> actual = repository.readTrajectories(target);
+
+        // then
+        assertThat(actual).hasSize(1);
+        assertThat(actual.getFirst().maximumSeatsEverObserved()).isEqualTo(44);
     }
 
     @Test
