@@ -25,6 +25,10 @@ import org.springframework.context.annotation.Import;
  * <p>관리 포트가 부트 기본 응답을 내는 것도 같이 고정한다. 그것이 <b>지금 정한 범위</b>이고,
  * 누가 자식 컨텍스트에 우리 것을 등록하면 이 테스트가 먼저 알려 준다. 범위를 바꾸기로 하면
  * 이 테스트를 뒤집으면 된다.
+ *
+ * <p>공개 포트에 있는 Actuator 는 {@code add-additional-paths} 로 연 {@code /livez}·{@code /readyz}
+ * 뿐이다. 배포 검증({@code validate.sh})이 8080 이 트래픽 받을 상태인지 {@code /readyz} 로 본다.
+ * 나머지 Actuator 가 공개 포트로 새지 않는 것도 같이 고정한다.
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -62,6 +66,25 @@ class ManagementPortSeparationTest {
     @Test
     void 두_포트가_서로_다른_포트다() {
         assertThat(managementPort).isNotEqualTo(publicPort);
+    }
+
+    @Test
+    void 공개_포트의_readyz_가_UP_이다() throws IOException {
+        // when validate.sh 가 8080 이 트래픽 받을 상태인지 이걸로 본다
+        String actual = send(publicPort, "GET /readyz HTTP/1.1");
+
+        // then
+        assertThat(actual).startsWith("HTTP/1.1 200");
+        assertThat(actual).contains("\"status\":\"UP\"");
+    }
+
+    @Test
+    void 공개_포트에_actuator_경로가_없다() throws IOException {
+        // when
+        String actual = send(publicPort, "GET /actuator/health HTTP/1.1");
+
+        // then /livez·/readyz 말고는 관리 포트에만 있다
+        assertThat(actual).startsWith("HTTP/1.1 404");
     }
 
     private String send(

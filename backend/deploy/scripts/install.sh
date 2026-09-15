@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# AfterInstall. staging 에 풀린 것을 판 폴더로 놓고 바로가기를 세운다
+# AfterInstall. staging 에 풀린 것을 배포 버전 디렉터리로 옮기고 current 링크를 바꾼다
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 claim_deploy
 
@@ -7,7 +7,7 @@ NEW_DIGEST="$(manifest_value "$MANIFEST" sourceDigest)"
 OLD_DIGEST="$(manifest_value "$CURRENT/release-manifest.txt" sourceDigest)"
 release="$(release_path "$NEW_DIGEST")"
 
-# 유닛을 갈아 끼운다. 소스가 그대로여도 유닛이 바뀌었으면 다시 띄워야
+# 유닛 파일을 교체한다. 소스가 그대로여도 유닛이 바뀌었으면 다시 시작해야
 # 새 ExecStart 와 EnvironmentFile 이 먹는다
 install_unit() {
   local unit_file="$1" target="/etc/systemd/system/$UNIT.service"
@@ -22,22 +22,22 @@ install_unit() {
 }
 
 if [ -d "$release" ]; then
-  # 이미 있는 판이다. 되돌리기가 여기로 온다.
+  # 이미 있는 배포 버전이다. 롤백이 여기로 온다.
   # CodeDeploy 의 자동 롤백은 직전 성공 revision 을 그대로 다시 배포하는 것이라
-  # 그 판이 previous 로 남아 있다. 지우고 다시 풀면 되돌릴 것이 없어진다.
+  # 그 배포 버전이 previous 로 남아 있다. 지우고 다시 풀면 롤백할 것이 없어진다.
   # 있는 것을 그대로 쓰고 current 만 옮긴다
-  log "이미 있는 판이다. 다시 안 풀고 그대로 쓴다: $release"
+  log "이미 있는 배포 버전이다. 다시 안 풀고 그대로 쓴다: $release"
   unit_changed="$(install_unit "$STAGING/systemd/$UNIT.service")"
   rm -rf "$STAGING"
 else
-  log "판 $release 을 놓는다"
+  log "배포 버전 $release 을 놓는다"
   mkdir -p "$RELEASES"
   mv "$STAGING" "$release"
   unit_changed="$(install_unit "$release/systemd/$UNIT.service")"
 fi
 
-# 도는 배포를 /actuator/info 로 판별하게 한다. systemd 가 이 파일을 같이 읽는다.
-# 배포판 목록은 지금 배포하는 revision 것을 쓴다. 되돌리기면 옛 commit 이 들어가는 게 맞다
+# 실행 중인 배포 버전을 /actuator/info 로 알아보게 한다. systemd 가 이 파일을 같이 읽는다.
+# 배포 메타데이터는 지금 배포하는 revision 것을 쓴다. 롤백이면 옛 commit 이 들어가는 게 맞다
 {
   echo "MANAGEMENT_INFO_ENV_ENABLED=true"
   echo "INFO_COMPONENT=$COMPONENT"
@@ -57,7 +57,7 @@ systemctl enable "$UNIT" >/dev/null 2>&1 || { log "$UNIT enable 실패"; exit 1;
 
 current_now="$(readlink -f "$CURRENT" 2>/dev/null || true)"
 if [ "$current_now" = "$release" ]; then
-  # 지금 도는 판을 그대로 다시 배포한 것이다. 바로가기를 안 건드린다
+  # 실행 중인 배포 버전을 그대로 다시 배포한 것이다. 링크를 안 건드린다
   log "current 가 이미 $release 다"
 else
   [ -n "$current_now" ] && ln -sfn "$current_now" "$PREVIOUS"
@@ -65,15 +65,20 @@ else
   log "current -> $release"
 fi
 
-if [ "$NEW_DIGEST" = "$OLD_DIGEST" ]; then
-  # 소스가 그대로다. 유닛이 바뀌었을 때만 다시 띄운다
-  echo "changed=$unit_changed" > "$CHANGED"
-  log "$COMPONENT 소스 지문이 그대로다. 재시작=$unit_changed"
+# start.sh 가 읽는다. 왜 재시작하는지도 같이 적는다. 로그에 이유가 없으면 나중에 journal 을 뒤져야 한다
+old_short="${OLD_DIGEST:0:12}"
+if [ "$NEW_DIGEST" != "$OLD_DIGEST" ]; then
+  printf 'changed=yes\nreason=소스 지문 변경 %s -> %s\n' "${old_short:-없음}" "${NEW_DIGEST:0:12}" > "$CHANGED"
+elif [ "$unit_changed" = "yes" ]; then
+  # 소스는 그대로인데 유닛이 바뀌었다. 다시 시작해야 새 ExecStart 와 EnvironmentFile 이 먹는다
+  printf 'changed=yes\nreason=유닛 변경\n' > "$CHANGED"
+  log "$COMPONENT 소스 지문이 그대로다. 유닛이 바뀌어 재시작한다"
 else
-  echo "changed=yes" > "$CHANGED"
+  printf 'changed=no\nreason=변경 없음\n' > "$CHANGED"
+  log "$COMPONENT 소스 지문이 그대로다. 재시작하지 않는다"
 fi
 
-# 판마다 52MB 다. 셋만 남긴다. 지금 쓰는 것과 직전 것은 안 지운다
+# 배포 버전마다 52MB 다. 셋만 남긴다. 지금 쓰는 것과 직전 것은 안 지운다
 keep_current="$(readlink -f "$CURRENT" 2>/dev/null || true)"
 keep_previous="$(readlink -f "$PREVIOUS" 2>/dev/null || true)"
 ls -1dt "$RELEASES"/*/ 2>/dev/null | tail -n +4 | while read -r old; do

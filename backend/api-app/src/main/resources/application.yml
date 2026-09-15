@@ -34,3 +34,6 @@ management:
   endpoint:
     health:
       show-details: never
+      # 8080 에 /readyz 를 연다. 배포 검증이 8080 이 트래픽 받을 상태인지 이걸로 본다
+      probes:
+        add-additional-paths: true
