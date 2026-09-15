@@ -62,5 +62,5 @@ export default tseslint.config(
     },
   },
   prettierConfig,
-  storybook.configs["flat/recommended"]
+  storybook.configs["flat/recommended"],
 );

@@ -1,5 +1,5 @@
 allowBuilds:
-  '@swc/core': true
+  "@swc/core": true
   core-js-pure: false
   esbuild: true
 engineStrict: true
