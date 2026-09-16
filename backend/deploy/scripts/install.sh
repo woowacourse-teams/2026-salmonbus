@@ -17,7 +17,7 @@ install_unit() {
   fi
   install -m 644 -o root -g root "$unit_file" "$target"
   systemctl daemon-reload
-  log "유닛 갱신: $UNIT.service"
+  log "유닛 갱신: $UNIT.service" >&2
   echo yes
 }
 
