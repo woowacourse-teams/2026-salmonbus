@@ -1,182 +1,232 @@
 # 배포와 복구 절차
 
-담당자가 아닌 사람이 이 문서만 보고 배포와 되돌리기를 할 수 있어야 한다.
+담당자가 아니어도 이 문서만 보고 배포와 롤백을 할 수 있어야 한다.
 
-## 무엇이 어디 있나
+## 배포 파일과 설정 경로
 
-API 와 Worker 를 따로 배포한다. 배포판도 따로, systemd 서비스도 따로다.
+API와 Worker를 따로 배포한다. 배포 패키지와 systemd 서비스도 각각 나눈다.
 
 ```text
-/opt/salmonbus/api/releases/<소스지문>/       판마다 따로 쌓인다. 셋만 남긴다
-/opt/salmonbus/api/current                    지금 도는 판을 가리키는 바로가기
-/opt/salmonbus/api/previous                   직전 판
-/opt/salmonbus/worker/...                     같은 모양으로 하나 더
+/opt/salmonbus/api/releases/<소스지문>/       배포 버전별 디렉터리. 최근 세 개를 보관한다
+/opt/salmonbus/api/current                    현재 실행 중인 배포 버전을 가리키는 심볼릭 링크
+/opt/salmonbus/api/previous                   직전 배포 버전
+/opt/salmonbus/worker/...                     Worker도 같은 디렉터리 구조를 사용한다
 
-/etc/salmonbus/api.env                        API 가 읽는 값
-/etc/salmonbus/worker.env                     Worker 가 읽는 값
-/var/lib/salmonbus/model/current/             계수 파일. 사람이 갖다 놓는다
+/etc/salmonbus/api.env                        API 환경변수
+/etc/salmonbus/worker.env                     Worker 환경변수
+/var/lib/salmonbus/model/current/             모델 계수 파일. 수동으로 배치한다
 ```
 
-**배포는 `/opt/salmonbus/` 만 갈아엎는다.** `/etc/salmonbus/` 와 `/var/lib/salmonbus/` 는 손대지 않는다.
+**배포는 `/opt/salmonbus/` 아래만 교체한다.** `/etc/salmonbus/`와 `/var/lib/salmonbus/`는 변경하지 않는다.
 
 ## 포트
 
 ```text
-8080   API 클라이언트.  밖에 열린다
-8082   API Actuator.    127.0.0.1 에만 묶인다
-8081   Worker.          127.0.0.1 에만 묶인다. Actuator 도 여기다
+8080   API 클라이언트.  외부 접근을 허용한다. 배포 검증용 /readyz도 여기 있다
+8082   API Actuator.    127.0.0.1에만 바인딩한다
+8081   Worker.          127.0.0.1에만 바인딩한다. Actuator도 이 포트를 사용한다
 ```
 
-**API 의 Actuator 를 클라이언트 포트에서 뗐다.** systemd 유닛의 `MANAGEMENT_SERVER_PORT` 와
-`MANAGEMENT_SERVER_ADDRESS` 로 옮긴 것이라 `application.yml` 은 안 고쳤다.
+**API의 Actuator를 클라이언트 포트와 분리했다.** systemd 유닛의 `MANAGEMENT_SERVER_PORT`와
+`MANAGEMENT_SERVER_ADDRESS`로 관리 포트를 설정했으므로 `application.yml`은 수정하지 않았다.
 
-## 최초 1회. 서버에서 사람이 한다
+## 최초 1회 수동 설정
 
 ```bash
 sudo useradd -r -s /sbin/nologin salmonbus
 sudo mkdir -p /opt/salmonbus /etc/salmonbus /var/lib/salmonbus/model/current
 sudo chown -R salmonbus:salmonbus /var/lib/salmonbus
 
-# 권한 600 과 주인 root:root 를 preflight.sh 가 확인한다. 다르면 배포가 멈춘다
+# preflight.sh가 권한 600과 소유자 root:root를 확인한다. 다르면 배포를 중단한다.
 sudo install -m 600 -o root -g root /dev/null /etc/salmonbus/api.env
 sudo install -m 600 -o root -g root /dev/null /etc/salmonbus/worker.env
 sudo vi /etc/salmonbus/api.env       # DB_URL · DB_USERNAME · DB_PASSWORD
 sudo vi /etc/salmonbus/worker.env    # 위 셋 + GBIS_SERVICE_KEY · COLLECTION_ENABLED · FORECAST_ENABLED
 ```
 
-첫 배포는 수집과 예보를 끈 채로 한다.
+첫 배포에서는 수집과 예보를 비활성화한다.
 
 ```text
 COLLECTION_ENABLED=false
 FORECAST_ENABLED=false
 ```
 
-**`api.env` 에 `GBIS_SERVICE_KEY` 를 넣지 않는다.** API 는 그 값을 읽는 자리가 없다.
-빌드된 JAR 안에 `gbis` 라는 글자가 0개다. 넣으면 안 쓰는 곳에 비밀을 퍼뜨리는 것이다.
+**`api.env`에 `GBIS_SERVICE_KEY`를 넣지 않는다.** API는 그 값을 읽지 않는다.
+빌드된 JAR에서 `gbis` 문자열은 0개다. 이 값을 넣으면 사용하지 않는 API에도 인증 정보가 저장된다.
 
-`/usr/bin/java` 가 21 이어야 하고 CodeDeploy agent 가 있어야 한다.
-없으면 `preflight.sh` 가 배포를 세운다.
+`/usr/bin/java`는 21이어야 하고 CodeDeploy agent가 설치돼 있어야 한다.
+조건을 충족하지 않으면 `preflight.sh`가 배포를 중단한다.
 
-**systemd 유닛은 배포가 알아서 넣고 `enable` 까지 한다.** 손으로 할 것이 없다.
-`validate.sh` 가 `is-enabled` 로 확인해서, 재부팅 뒤에 안 올라오는 상태면 배포가 실패한다.
+**배포 과정에서 systemd 유닛을 설치하고 `enable`까지 실행한다.** 별도로 수동 설정할 필요는 없다.
+`validate.sh`가 `is-enabled`로 확인하며 재부팅 후 자동 시작하지 않는 상태면 배포가 실패한다.
 
-### 비밀을 어디 둘지 먼저 한 번 재 본다
+### 인증 정보 저장 위치 확인
 
-인스턴스 역할이 Parameter Store 를 읽을 수 있으면 그쪽이 낫다. 서버에서 한 번만 재면 된다.
+인스턴스 역할에 Parameter Store 읽기 권한이 있으면 그쪽을 쓰는 편이 낫다. 서버에서 한 번만 확인하면 된다.
 
 ```bash
 aws ssm get-parameter --name /salmonbus/probe --with-decryption --region ap-northeast-2
 ```
 
-`ParameterNotFound` 가 오면 **권한은 있는 것이다.** `AccessDeniedException` 이 오면 없는 것이고,
-그때는 아래 env 파일 방식으로 간다. 지금 이 문서는 env 파일을 전제로 쓰여 있다.
+`ParameterNotFound`가 오면 **권한이 있다.** `AccessDeniedException`이 오면 권한이 없으므로
+아래 env 파일 방식을 쓴다. 이 문서는 env 파일을 기준으로 설명한다.
 
-### 값을 적을 때 조심할 것
+### 환경변수 파일을 작성할 때 주의할 점
 
-**이 파일을 읽는 쪽이 둘이고 규칙이 다르다.** systemd 252 와 bash 로 각각 재봤다.
+**systemd와 bash는 환경변수 파일을 읽는 규칙이 다르다.** systemd 252와 bash에서 각각 확인했다.
 
-| 값에 든 것 | **앱에 들어갈 때**(systemd `EnvironmentFile=`) | 확인 명령을 돌릴 때(`set -a; . 파일`) |
+| 값에 포함된 문자 | **앱에 전달할 때**(systemd `EnvironmentFile=`) | 확인 명령을 실행할 때(`set -a; . 파일`) |
 | --- | --- | --- |
 | `+` `/` `=` `%` | 그대로 | 그대로 |
-| `$` | 그대로. systemd 는 안 푼다 | **뒤가 조용히 잘린다** |
-| 따옴표 하나 | 그대로 | **파일 읽기가 통째로 깨진다** |
-| 줄 끝이 CRLF | **CR 을 떼어낸다** | 값 끝에 안 보이는 바이트가 붙는다 |
-| 끝에 공백 | **떼어낸다** | 그대로 남는다 |
+| `$` | 그대로. systemd는 변수 치환을 하지 않는다 | **별도 오류 없이 뒤쪽 값이 잘린다** |
+| 따옴표 하나 | 그대로 | **파일 읽기가 실패한다** |
+| 줄 끝이 CRLF | **CR을 제거한다** | 값 끝에 CR 바이트가 남는다 |
+| 끝에 공백 | **제거한다** | 그대로 남는다 |
 
-**앱 쪽은 systemd 가 다 정리해 준다.** 지금 포털이 주는 인증키는 영문과 숫자 64자라
-어느 쪽으로도 안 깨진다.
+**앱에 전달하는 값은 systemd가 위 규칙에 따라 처리한다.** 현재 포털에서 제공하는 인증키는 영문과 숫자 64자라
+두 방식 모두 값을 변형하지 않는다.
 
-**문제가 되는 것은 아래 확인 명령 쪽이다.** 파일이 CRLF 로 저장돼 있으면
-`sha256sum` 으로 뜬 값이 포털 값과 달라진다. 앱은 멀쩡히 도는데 대조만 어긋나서
-키가 틀린 줄 알고 헛짚게 된다. 그럴 때는 `sed -i 's/\r$//'` 로 줄 끝을 먼저 고친다.
+**아래 확인 명령을 사용할 때는 줄 끝 형식에 주의한다.** 파일이 CRLF로 저장돼 있으면
+`sha256sum`으로 구한 값이 포털 값과 달라진다. 앱은 정상 작동해도 대조 결과가 달라
+키가 잘못됐다고 오인할 수 있다. 이 경우 `sed -i 's/\r$//'`로 줄 끝을 먼저 수정한다.
 
 ## 배포하기
 
-CodePipeline `salmonbus-backend-cd` 에서 `Release change` 를 누른다.
+CodePipeline `salmonbus-backend-cd`에서 `변경 사항 릴리스`를 누른다. **수동 승인 단계는 없다.**
+누르면 Source → Build → Deploy가 멈추지 않고 이어진다. (2026-09-15 콘솔에서 확인)
 
 ```text
-Source           GitHub dev 에서 코드를 받는다
-BuildAndTest     salmonbus-backend-build 가 backend/buildspec.yml 을 읽는다
-                 ./gradlew clean build --no-daemon 으로 테스트를 전부 다시 돌리고
-                 ApiRevision · WorkerRevision 두 벌을 낸다
-ManualApproval   사람이 승인 버튼을 누른다
-DeployApi        run order 1
-DeployWorker     run order 2
+Source   GitHub dev에서 코드를 가져온다
+Build    salmonbus-backend-build가 backend/buildspec.yml을 읽는다
+         ./gradlew clean build --no-daemon 으로 전체 테스트를 다시 실행하고
+         ApiRevision · WorkerRevision 두 배포 패키지를 생성한다
+Deploy   DeployApi(run order 1) → DeployWorker(run order 2). 한 스테이지 안에서 차례로 실행된다
 ```
 
-**API 를 먼저 올리고 확인한 뒤에 Worker 가 나간다.** 두 프로세스를 같이 재시작하지 않는다.
+**API를 먼저 배포하고 검증한 뒤 Worker를 배포한다.** 두 프로세스를 동시에 재시작하지 않는다.
 
-승인 전에 Build 로그 끝에 찍힌 배포판 목록을 본다.
+배포 메타데이터는 Build 로그 끝에 찍힌다. 승인 단계가 없으므로 배포를 멈추는 용도가 아니라 무엇이 나갔는지 확인하는 용도다.
 
 ```text
 component=api
 commit=...
-sourceDigest=...        <-- 이 값이 그대로면 그 서비스는 재시작 안 한다
+sourceDigest=...        <-- 이 값이 같으면 해당 서비스를 재시작하지 않는다
 artifactSha256=...      <-- 무결성 확인용
 flywayMaxVersion=12
 ```
 
-## 바뀐 것만 다시 뜬다
+## 변경된 서비스만 재시작
 
-`install.sh` 가 새 배포판의 `sourceDigest` 와 지금 도는 판의 값을 대조한다.
-다르면 내렸다 올린다.
+`install.sh`가 새 배포 패키지의 `sourceDigest`와 현재 실행 중인 배포 버전의 값을 대조한다.
+다르면 서비스를 중지한 뒤 다시 시작한다. `start.sh`는 재시작 여부와 이유(소스 지문 변경 · 유닛 변경 · 변경 없음),
+전후 PID를 훅 로그에 남긴다.
 
-**같아도 재시작하는 경우가 있다.** systemd 유닛 파일이 바뀌었을 때다.
-`MANAGEMENT_SERVER_PORT` · `Restart=` · `EnvironmentFile=` · 힙 크기는 소스가 아니라 유닛에 있어서
-`sourceDigest` 가 그대로여도 바뀔 수 있다. 그러면 다시 띄워야 새 설정이 먹는다.
+**소스 지문이 같아도 systemd 유닛 파일이 바뀌면 재시작한다.**
+`MANAGEMENT_SERVER_PORT` · `Restart=` · `EnvironmentFile=` · 힙 크기는 소스가 아니라 유닛에 있으므로
+`sourceDigest`가 같아도 바뀔 수 있다. 새 설정을 적용하려면 서비스를 재시작해야 한다.
 
 ```text
-소스 지문이 다르다            내렸다 올린다
-소스 지문이 같고 유닛이 다르다   내렸다 올린다
-둘 다 같다                   그대로 둔다. 다만 안 돌고 있으면 올린다
+소스 지문이 다르다                 중지 후 다시 시작한다
+소스 지문이 같고 유닛이 다르다      중지 후 다시 시작한다
+둘 다 같다                        실행 중이면 유지하고 중지 상태면 시작한다
 ```
 
-`sourceDigest` 는 JAR 이 아니라 **런타임에 들어가는 소스 파일**을 센 값이다.
+`sourceDigest`는 JAR이 아니라 **런타임에 사용하는 소스 파일**로 계산한 지문이다.
 
 ```text
 api     api-app/src/main · api-app/build.gradle
         + common/src/main · common/build.gradle · build.gradle · settings.gradle · gradle-wrapper.properties
-worker  worker-app/ 쪽으로 같은 목록
+worker  worker-app/에 같은 목록을 적용한다
 ```
 
-**JAR 지문으로는 못 잰다.** `buildInfo()` 가 넣는 `build.time` 때문에 같은 소스를 다시 빌드해도
-JAR 의 SHA-256 이 달라진다. 실측으로 확인했다. 소스 지문으로 재면 테스트·문서·프론트만 바뀐 배포에
-서비스를 안 건드린다.
+**JAR 지문으로는 소스 변경 여부를 판단할 수 없다.** `buildInfo()`가 추가하는 `build.time` 때문에 같은 소스를 다시 빌드해도
+JAR의 SHA-256이 달라진다. 실측으로 확인했다. 소스 지문을 쓰면 테스트·문서·프론트만 바뀐 배포에서는
+서비스를 재시작하지 않는다.
 
-## 되돌리기
+## 배포 검증
 
-**대부분 자동으로 된다.** `validate.sh` 가 실패하면 CodeDeploy 가 그 배포 그룹의 직전 성공 판을
-다시 배포한다. `salmonbus-api-prod` 와 `salmonbus-worker-prod` 가 따로라
-**API 가 실패해도 Worker 는 안 건드린다.** 반대도 같다.
+`validate.sh`가 다섯 가지를 순서대로 확인한다. 하나라도 실패하면 거기서 멈추고 CodeDeploy가 롤백한다.
 
-되돌리기가 오면 그 판이 `previous` 로 이미 디스크에 있다. `install.sh` 는 **그것을 지우지 않고
-그대로 쓰고 `current` 만 옮긴다.** 지우고 다시 풀면 되돌릴 것이 없어진다.
+```text
+health        8082 /actuator/health가 UP이다. DB 연결까지 본다
+sourcedigest  8082 /actuator/info의 sourcedigest가 방금 놓은 배포 버전과 같다. 옛 프로세스가 살아 있으면 여기서 걸린다
+component     8082 /actuator/info의 component가 이 배포 그룹의 것이다
+enable        systemctl is-enabled. 재부팅 뒤에도 자동 시작한다
+readyz        api만. 8080 /readyz가 200 UP이다. 기동이 끝나 트래픽 받을 상태라는 뜻이고 DB는 보지 않는다
+```
 
-실패한 배포는 `validate.sh` 까지 못 가서 배포 잠금을 쥔 채 끝난다. 그래서 같은 서비스의
-다음 배포는 그 잠금을 **넘겨받는다.** 안 그러면 자동 롤백이 자기가 남긴 잠금에 막힌다.
-다른 서비스가 잡고 있으면 그때는 기다리지 않고 멈춘다.
+**업무 API(`/api/v1/routes`)로 배포를 검증하지 않는다.** 그 응답은 노선 데이터와 모델 상태에 따라 바뀌므로
+데이터 사정으로 정상 배포가 롤백될 수 있다. 8080은 `/readyz`로만 본다. `/readyz`는 Spring Boot Actuator의
+readiness 그룹을 `management.endpoint.health.probes.add-additional-paths`로 8080에 연 것이다.
 
-손으로 되돌릴 때는 한쪽만 고른다.
+시간 상한은 셋이다. 전체 240초, 검사 하나 90초, 요청 하나 5초. 검사는 3초 간격으로 다시 묻되
+남은 시간을 넘기는 요청이나 대기는 하지 않는다. **전체 상한은 appspec의 `ValidateService` timeout(300초)보다
+짧아야 한다.** CodeDeploy가 먼저 훅을 종료하면 아래 요약 로그가 남지 않고 배포 잠금도 풀리지 않는다.
+리허설이 두 값을 읽어 확인한다.
+
+훅 로그에는 검사마다 시도 횟수·HTTP 상태·curl 종료 코드·경과 시간이 남고 끝에 한 줄 요약이 남는다.
+응답 본문은 기록하지 않는다. 최상위 `status`와 `sourcedigest`·`component` 값만 남긴다.
+
+배포 전후 상태도 같은 로그에 남는다. `preflight.sh`가 배포 전 PID와 지문을 찍고, 앱이 쥔 연결 풀을 거치지 않는
+**새 DB 연결**이 붙는지 `psql`로 한 번 확인한다. `start.sh`가 재시작 이유와 전후 PID를 찍고, `validate.sh`가
+끝에 PID를 다시 찍는다. health가 실패하면 그 직후 새 DB 연결을 한 번 더 열어 DB가 안 되는 것인지
+앱의 풀만 굳은 것인지 갈라 둔다. **DB 진단은 기록만 하고 배포를 막지 않는다.** 비밀번호는 `psql` 환경변수로만
+넘기고 명령줄과 로그에 남기지 않는다. 15초 안에 응답이 없으면 끊는다.
+
+```text
+[06:11:50] 배포 전: PID=894172 지문=2222bbbb3333
+[06:11:50] DB 진단(배포 전): 새 연결 성공. 312ms host=salmonbus-db.cqsc6pyqhwww.ap-northeast-2.rds.amazonaws.com db=salmonbus
+[06:12:01] api 를 재시작한다. 이유=소스 지문 변경 2222bbbb3333 -> 3333cccc4444 PID=894172
+[06:12:02] salmonbus-api 이 완전히 멈췄다
+[06:12:02] salmonbus-api 시작했다. PID=901234
+[06:12:03] health 시도 1: http=000 curl=7 경과=0초
+[06:12:06] health 시도 2: http=503 curl=0 status=DOWN 경과=3초
+[06:12:09] health 확인. 시도=3 소요=6초 http=200
+[06:12:09] sourcedigest 확인. 시도=1 소요=0초 http=200
+[06:12:09] component 확인. 시도=1 소요=0초 http=200
+[06:12:09] enable 확인. 경과=6초
+[06:12:09] readyz 확인. 시도=1 소요=0초 http=200
+[06:12:09] 배포 검증 끝. component=api commit=... PID=901234 경과=6초 종료 코드=0
+```
+
+실패하면 `배포 검증 실패. 단계=... 사유=... PID=... 경과=...초 종료 코드=1` 한 줄로 단계와 사유를 남긴다.
+사유에는 시간 상한, 시도 횟수, 마지막 응답의 HTTP 상태 또는 curl 종료 코드가 들어간다.
+
+## 롤백
+
+**롤백은 대부분 자동으로 된다.** `validate.sh`가 실패하면 CodeDeploy가 해당 배포 그룹에서 직전에 성공한 버전을
+다시 배포한다. `salmonbus-api-prod`와 `salmonbus-worker-prod`는 별도 배포 그룹이므로
+**API 배포가 실패해도 Worker는 변경하지 않는다.** 반대도 같다.
+
+롤백할 버전은 `previous`가 가리키는 경로에 이미 저장돼 있다. `install.sh`는 **해당 버전을 삭제하지 않고
+그대로 사용하며 `current`가 가리키는 경로만 변경한다.** 삭제 후 다시 압축을 풀면 롤백할 파일이 없어진다.
+
+훅이 실패로 끝나면 그 훅이 배포 잠금을 푼다. 훅이 강제로 종료돼(CodeDeploy timeout, 재부팅) 잠금이 남으면
+같은 서비스의 다음 배포는 그 잠금을 **넘겨받는다.** 그렇지 않으면 자동 롤백이 앞선 배포가 남긴 잠금 때문에 차단된다.
+다른 서비스의 잠금이면 마지막 훅이 시작한 뒤 15분이 지났을 때만 죽은 배포로 보고 회수한다. 15분이 안 됐으면
+진행 중인 배포로 보고 대기하지 않고 배포를 중단한다. 진행 중인 배포는 훅마다 잠금을 갱신하므로 15분을 넘겨도 뺏기지 않는다.
+
+수동으로 롤백할 때는 대상 서비스를 하나만 선택한다.
 
 ```bash
 C=api            # 또는 worker
 sudo ln -sfn "$(readlink -f /opt/salmonbus/$C/previous)" /opt/salmonbus/$C/current
 sudo systemctl restart salmonbus-$C
-curl -s http://127.0.0.1:8082/actuator/info     # api. 지금 도는 판을 확인한다
+curl -s http://127.0.0.1:8082/actuator/info     # api. 현재 실행 중인 배포 버전을 확인한다
 curl -s http://127.0.0.1:8081/actuator/info     # worker
 ```
 
-**스키마는 안 돌아온다.** Flyway 마이그레이션은 앞으로만 간다.
-새 판이 `V13` 을 돌린 뒤에 되돌리면 코드는 옛 판인데 스키마는 `V13` 이다.
-두 앱 다 `ddl-auto: validate` 라 **열을 지우거나 이름을 바꾼 마이그레이션이었으면 되돌린 쪽도 안 뜬다.**
+**스키마는 롤백되지 않는다.** Flyway 마이그레이션은 새 버전을 적용하는 방향으로만 실행한다.
+새 배포 버전에서 `V13`을 실행한 뒤 롤백하면 코드는 이전 버전이지만 스키마는 `V13`이다.
+두 앱 모두 `ddl-auto: validate`를 사용하므로 **열을 삭제하거나 이름을 바꾼 마이그레이션이면 롤백한 앱도 시작하지 못한다.**
 
-그래서 한 배포에 들어가는 마이그레이션은 **직전 API 와 직전 Worker 가 그대로 뜰 수 있는 것만** 낸다.
-열·테이블·제약을 지우거나 이름을 바꾸는 것은, 옛 코드가 그것을 안 쓰게 만든 배포를 먼저 낸 뒤
-다음 배포에서 따로 한다.
+따라서 한 배포에는 **직전 API와 직전 Worker가 그대로 실행될 수 있는 마이그레이션만** 포함한다.
+열·테이블·제약을 삭제하거나 이름을 바꾸려면 이전 코드가 해당 항목을 사용하지 않도록 먼저 배포한 뒤
+다음 배포에서 처리한다.
 
-## 값을 바꿀 때
+## 환경변수 변경
 
-배포와 상관없이 언제든 할 수 있다. **파일을 고치는 것만으로는 안 바뀐다.**
+환경변수는 배포와 별개로 언제든 변경할 수 있다. **파일 수정만으로 실행 중인 프로세스에 반영되지는 않는다.**
 
 ```bash
 C=worker          # 또는 api
@@ -184,37 +234,37 @@ sudo vi "/etc/salmonbus/${C}.env"
 sudo systemctl restart "salmonbus-${C}"
 ```
 
-환경변수는 프로세스가 뜰 때 한 번 붙는다. **`api.env` 를 고쳤으면 `salmonbus-api` 를 띄워야 한다.**
-`worker` 만 재시작하면 API 는 옛 값을 계속 쓴다.
+환경변수는 프로세스를 시작할 때 한 번 적용된다. **`api.env`를 수정했으면 `salmonbus-api`를 재시작해야 한다.**
+`worker`만 재시작하면 API는 이전 값을 계속 사용한다.
 
-**`salmonbus-worker` 를 두 벌 띄우지 마라.** 하루 호출 한도가 정확히 두 배로 나간다.
-한도 10,000회에 두 노선 수집이 8,556회를 쓴다. `start.sh` 는 `restart` 를 안 쓰고
-`stop` 한 뒤 프로세스가 완전히 사라진 것을 보고 나서 `start` 한다.
+**`salmonbus-worker` 프로세스 두 개를 동시에 실행하면 안 된다.** 일일 API 호출 한도 소모량이 정확히 두 배가 된다.
+한도 10,000회 중 두 노선 수집에 8,556회를 사용한다. `start.sh`는 `restart`를 사용하지 않고
+`stop` 후 프로세스가 완전히 종료됐는지 확인한 다음 `start`를 실행한다.
 
-## 수집을 켜고 끄기
+## 수집 활성화·비활성화
 
 ```bash
 sudo sed -i 's/^COLLECTION_ENABLED=.*/COLLECTION_ENABLED=true/' /etc/salmonbus/worker.env
 sudo systemctl restart salmonbus-worker
 ```
 
-**켜면 15초마다 Open API 로 실호출이 나간다.** 켠 뒤에는 Worker 배포를 KST 01:00~04:00 에 한다.
-다른 시간대는 수집 간격이 15~20초라 Worker 가 내려가 있는 동안 관측이 빈다.
+**수집을 활성화하면 15초마다 Open API를 실제로 호출한다.** 활성화 후에는 Worker를 KST 01:00~04:00에 배포한다.
+다른 시간대는 수집 간격이 15~20초이므로 Worker가 중지된 동안 관측 데이터가 누락된다.
 
-## 계수 파일 갈아 끼우기
+## 모델 계수 파일 교체
 
 ```bash
 sudo -u salmonbus cp manifest.json weights.safetensors /var/lib/salmonbus/model/current/
 sudo sed -i 's/^MODEL_BUNDLE_PROMOTE_ON_START=.*/MODEL_BUNDLE_PROMOTE_ON_START=true/' /etc/salmonbus/worker.env
 sudo systemctl restart salmonbus-worker
-# 올라간 것을 확인한 뒤 반드시 다시 끈다
+# 모델 계수 적용을 확인한 뒤 반드시 다시 비활성화한다.
 sudo sed -i 's/^MODEL_BUNDLE_PROMOTE_ON_START=.*/MODEL_BUNDLE_PROMOTE_ON_START=false/' /etc/salmonbus/worker.env
 ```
 
-**켠 채로 두면 배포로 재기동할 때마다 디스크에 있는 계수가 올라간다.**
-운영 기본값은 `false` 이고 systemd 유닛에도 그렇게 박혀 있다.
+**활성화한 채로 두면 배포로 재시작할 때마다 디스크의 모델 계수가 적용된다.**
+운영 기본값은 `false`이며 systemd 유닛에도 같은 값이 설정돼 있다.
 
-## 값을 안 찍고 확인하기
+## 인증 정보를 출력하지 않고 확인하기
 
 ```bash
 stat -c '%a' /etc/salmonbus/worker.env                          # 600 이어야 한다
@@ -222,12 +272,12 @@ grep -c '^GBIS_SERVICE_KEY=' /etc/salmonbus/worker.env          # 1 이어야 �
 grep '^GBIS_SERVICE_KEY=' /etc/salmonbus/worker.env | cut -d= -f2- | tr -d '\n' | sha256sum | cut -c1-8
 ```
 
-마지막 줄의 앞 8자를 포털 화면의 값과 대조한다. `grep -c` 의 `-c` 를 빼면 값이 그대로 찍힌다.
+마지막 명령의 출력에서 앞 8자를 포털 화면의 값과 대조한다. `grep -c`의 `-c`를 빼면 값이 그대로 출력된다.
 
-**앱이 떴다는 것은 키가 맞다는 증거가 못 된다.** 틀린 키로도 4초에 뜨고 health 가 200 으로 온다.
-게다가 노선 버전이 없는 DB 에서는 수집이 Open API 를 부르지도 않아서 오류도 안 난다.
+**앱이 시작됐다는 사실만으로 인증키가 올바르다고 판단할 수 없다.** 잘못된 키로도 4초 만에 시작하고 health는 200을 반환한다.
+노선 버전이 없는 DB에서는 수집이 Open API를 호출하지 않으므로 오류도 발생하지 않는다.
 
-## 상태 보기
+## 상태 확인
 
 ```bash
 systemctl status salmonbus-api salmonbus-worker
@@ -237,71 +287,98 @@ curl -s http://127.0.0.1:8082/actuator/health    # api
 curl -s http://127.0.0.1:8082/actuator/info      # component · commit · sourcedigest
 curl -s http://127.0.0.1:8081/actuator/health    # worker
 curl -s http://127.0.0.1:8081/actuator/info
-curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/api/v1/routes
+curl -s http://127.0.0.1:8080/readyz              # api 8080이 트래픽 받을 상태인지. DB는 보지 않는다
 ```
 
-**`/actuator/health/readiness` 를 쓰지 마라.** DB 가 끊겨도 200 `UP` 이 온다.
-그 그룹에는 `readinessState` 하나만 들어 있다. DB 까지 보는 것은 `/actuator/health` 쪽이고
-끊기면 503 `DOWN` 이 온다. `validate.sh` 도 그쪽을 본다.
+**`/actuator/health/readiness`를 DB 확인에 쓰면 안 된다.** DB 연결이 끊겨도 200 `UP`을 반환한다.
+이 그룹에는 `readinessState`만 들어 있다. DB 연결까지 확인하는 경로는 `/actuator/health`이며
+연결이 끊기면 503 `DOWN`을 반환한다. 8080의 `/readyz`는 이 readiness 그룹을 8080에 연 것이라 성질이 같다.
+`validate.sh`는 DB를 `/actuator/health`로, 8080이 트래픽 받을 상태인지를 `/readyz`로 나눠 확인한다.
 
-**수집이 실제로 도는지는 health 가 말해주지 않는다.** 지금 Worker 의 health 에는
-`db` · `diskSpace` · `ping` · `ssl` 같은 기본 항목뿐이라 API 와 응답이 같다.
-수집을 켠 뒤에는 `observation_batch` 의 최근 행을 보고 판단한다.
+**health만으로는 수집이 실제로 실행되는지 확인할 수 없다.** 현재 Worker의 health에는
+`db` · `diskSpace` · `ping` · `ssl` 같은 기본 항목뿐이라 API와 응답이 같다.
+수집을 활성화한 뒤에는 `observation_batch`의 최근 행을 확인한다.
 
 ```sql
 select max(started_at) from observation_batch;
 ```
 
-## 후속으로 남긴 것
+## 후속 작업
 
-**Worker 의 수집 신선도를 배포 확인에 넣는 일은 이 티켓에서 안 했다.**
-지금 `validate.sh` 는 프로세스와 DB 만 본다. 수집 작업이 멈추거나 Open API 호출이
-계속 실패해도 배포가 통과한다.
+**Worker의 수집 데이터가 최신인지 확인하는 검사는 이 티켓에서 추가하지 않았다.**
+현재 `validate.sh`는 프로세스와 DB만 확인한다. 수집 작업이 중단되거나 Open API 호출이
+계속 실패해도 배포 검증은 통과한다.
 
-첫 배포는 `COLLECTION_ENABLED=false` 로 나가서 볼 것이 없다.
-**넣는 시점은 수집을 켜는 때다.** 그때 둘 중 하나가 필요하다.
+첫 배포는 `COLLECTION_ENABLED=false`라 확인할 수집 결과가 없다.
+**수집을 활성화할 때 이 검사를 추가한다.** 다음 두 방식 중 하나가 필요하다.
 
-| 무엇 | 어디를 고치나 |
+| 확인 방식 | 수정 대상 |
 | --- | --- |
-| 최근 성공 시각을 보는 health 항목 | `worker-app` 에 `HealthIndicator` 를 하나 만든다 |
-| 스케줄러 heartbeat | 수집 회차마다 시각을 남기고 그것을 health 에 붙인다 |
+| 최근 성공 시각을 확인하는 health 항목 | `worker-app`에 `HealthIndicator`를 하나 추가한다 |
+| 스케줄러 heartbeat | 수집 회차마다 시각을 기록하고 health에 반영한다 |
 
-둘 다 애플리케이션 코드를 고치는 일이라 배포 티켓 밖으로 봤다.
-켜는 배포 전에 티켓을 세워야 한다.
+두 방식 모두 애플리케이션 코드 수정이 필요하므로 배포 티켓 범위에서 제외했다.
+수집을 활성화하는 배포 전에 별도 티켓을 만들어야 한다.
 
 ## 훅 스크립트를 고칠 때
 
-**`set -x` 를 쓰지 마라.** 훅 로그가 인스턴스에 남는다. env 값이 찍히면 파일 권한이 소용없다.
+**`set -x`를 쓰면 안 된다.** 훅 로그는 인스턴스에 남는다. env 값이 로그에 출력되면 파일 권한만으로 보호할 수 없다.
 
-AWS 없이 돌려볼 수 있다. 도커만 있으면 된다.
+AWS에 접근하지 않고 Docker에서 검증할 수 있다.
 
 ```bash
 bash backend/deploy/rehearsal/run.sh
 ```
 
-리눅스 컨테이너를 띄워 `systemctl` · `curl` · `java` 를 흉내로 바꿔 끼우고 배포를 여러 번 돌린다.
-첫 배포, api 만 바뀐 배포, 아무것도 안 바뀐 배포, 배포끼리 겹칠 때, 옛 프로세스가 응답할 때,
-health 가 안 오를 때, 되돌리기, 손댄 배포판 목록, 잠금을 둘이 동시에 잡을 때까지다.
-검사 48개가 돈다.
+리눅스 컨테이너에서 `systemctl` · `curl` · `java`를 모의 구현으로 대체하고 배포 시나리오를 검증한다.
+첫 배포, api만 변경된 배포, 변경 없는 배포, 동시 배포, 이전 프로세스의 응답,
+health 실패, 관리 포트 연결 실패, 8080만 응답하지 않는 경우, 전체 시간 상한, DB 진단 실패와 무응답,
+롤백, DB가 계속 죽어 있어 롤백도 실패하는 경우, 변조된 배포 메타데이터, 잠금을 동시에 잡는 상황을 검사한다.
+validate 실패 시나리오는 `VALIDATE_CHECK_SECONDS` 같은 환경변수로 상한을 몇 초로 줄여 실행한다.
+CodeDeploy 환경에는 이 변수가 없으므로 운영에서는 기본값이 쓰인다.
+리허설은 Bash로 실행하며 테스트용 JAR은 `makejar.sh`가 `zip`으로 만든다.
+Python이나 호스트 JDK는 필요하지 않다. 필요한 Linux 도구는 컨테이너 안에 설치한다.
 
-배포판에 비밀이 섞였는지 보는 `verify-revision.sh` 도 여기서 같이 돈다.
-**CodeBuild 가 부르는 것과 같은 파일이다.** `scripts/` 밖에 있어서 EC2 로는 안 나간다.
+`test-deploy-lock.sh`는 실제 `common.sh`의 잠금 구간을 읽어 15개 회귀 테스트를 실행한다.
+검사마다 임시 폴더를 사용하고 훅마다 별도 bash 프로세스를 실행한다. 후속 훅 실패 정리,
+성공 시 잠금 유지, 종료 코드 보존, 다른 배포 소유권, 오래된 잠금 회수와 진행 중인 잠금 보존을 검사한다.
+각 훅은 10초로 제한한다. 전체 리허설 결과에서는 이 15개를 한 항목으로 집계한다.
+전체 리허설은 `run.sh`로 실행한다. `rehearse.sh`를 호스트에서 직접 실행하면 안 된다.
+`/usr/bin/java`, `/etc`, `/opt/salmonbus`를 모의 환경으로 바꾸기 때문이다.
 
-흉내는 **모르는 입력에 실패한다.** `systemctl` 이 모르는 명령을 받거나 `curl` 이 모르는 주소를
-받으면 거기서 멈춘다. 훅이 포트나 경로를 틀리면 예행연습이 통과하지 않는다.
+잠금 검사만 빠르게 실행하려면 프로젝트 루트에서 다음을 실행한다.
 
-`digest.sh` 의 `source_digest` 는 `buildspec.yml` 에 있는 것과 같은 함수다. **한쪽을 고치면 둘 다 고친다.**
+```bash
+docker run --rm -v "$PWD/backend/deploy:/deploy:ro" amazonlinux:2023 \
+  bash /deploy/rehearsal/test-deploy-lock.sh
+```
 
-예행연습의 `systemctl` 은 흉내라서 systemd 가 실제로 유닛을 읽는 것은 못 본다.
-그쪽은 systemd 252 를 컨테이너에 띄워 따로 쟀고, 아래 아홉이 확인됐다.
+이 리허설을 GitHub CI·CodeBuild에서 자동으로 실행하도록 아직 연결하지 않았다.
+`rehearsal/`은 CodeDeploy 배포 패키지에 포함하지 않는다.
+
+배포 패키지에 민감 정보가 포함됐는지 검사하는 `verify-revision.sh`도 함께 실행한다.
+**CodeBuild에서 실행하는 것과 같은 파일이다.** `scripts/` 밖에 있으며 EC2 배포 패키지에는 포함되지 않는다.
+
+모의 구현은 **지원하지 않는 입력을 받으면 실패한다.** `systemctl`이 지원하지 않는 명령을 받거나 `curl`이 등록되지 않은 주소를
+받으면 실패로 종료한다. 훅의 포트나 경로가 잘못되면 리허설을 통과하지 못한다.
+
+`digest.sh`의 `source_digest`는 `buildspec.yml`에 있는 것과 같은 함수다. **수정할 때는 두 파일에 모두 반영한다.**
+
+**훅 스크립트를 바꾼 뒤 첫 배포가 실패하면 롤백은 직전 성공 패키지에 든 옛 스크립트로 실행된다.**
+배포 패키지에 `scripts/`가 같이 들어 있고 롤백은 그 패키지를 다시 배포하는 것이기 때문이다. 롤백 로그가 옛 모양이어도 정상이다.
+그래서 훅이 남기는 파일(`.changed`, `.deploying`, `release.env`)의 형식을 바꿀 때는 옛 스크립트가 그대로 읽을 수 있도록
+**줄을 더하기만 하고 기존 줄의 의미는 바꾸지 않는다.** `.changed`에 `reason=` 줄을 더한 것이 그 예다.
+
+리허설의 `systemctl`은 모의 구현이므로 systemd가 실제로 유닛을 읽는지 확인할 수 없다.
+systemd 252를 컨테이너에 띄워 아래 아홉을 따로 확인했다.
 
 ```text
-유닛이 systemd-analyze verify 를 통과한다
-salmonbus 사용자로 뜬다
-0600 root:root 인 /etc/salmonbus/api.env 가 읽힌다
-판별용 release.env 도 같이 읽힌다
-MANAGEMENT_SERVER_PORT 가 유닛에서 들어간다
-current 바로가기의 JAR 로 뜬다
-0 이 아닌 코드로 죽으면 Restart=on-failure 가 다시 띄운다
-143 으로 끝나면 SuccessExitStatus=143 이 성공으로 본다
+유닛이 systemd-analyze verify를 통과한다
+salmonbus 사용자로 실행된다
+권한 0600, 소유자 root:root인 /etc/salmonbus/api.env를 읽는다
+배포 버전 식별용 release.env도 함께 읽는다
+유닛의 MANAGEMENT_SERVER_PORT 설정이 적용된다
+current 심볼릭 링크가 가리키는 JAR로 실행된다
+0이 아닌 코드로 종료하면 Restart=on-failure가 재시작한다
+143으로 종료하면 SuccessExitStatus=143이 성공으로 처리한다
 ```

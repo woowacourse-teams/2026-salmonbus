@@ -33,6 +33,7 @@ class RuntimeProcessSeparationTest {
     private static final String SERVICE_KEY = "fake-service-key-for-test";
     private static final String CLIENT_API_PATH = "/api/v1/routes";
     private static final String HEALTH_PATH = "/actuator/health";
+    private static final String READYZ_PATH = "/readyz";
     private static final Duration BOOT_TIMEOUT = Duration.ofMinutes(3);
     private static final Duration POLL = Duration.ofMillis(500);
     private static final int LOG_TAIL = 4000;
@@ -95,6 +96,12 @@ class RuntimeProcessSeparationTest {
     @Test
     void worker_는_클라이언트_API_를_안_내준다() {
         assertThat(statusOf(workerPort, CLIENT_API_PATH)).isEqualTo(404);
+    }
+
+    @Test
+    void api_는_서버_포트에_readyz_를_내준다() {
+        assertThat(statusOf(apiPort, READYZ_PATH)).isEqualTo(200);
+        assertThat(bodyOf(apiPort, READYZ_PATH)).contains("\"status\":\"UP\"");
     }
 
     @Test
