@@ -140,19 +140,29 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
      * <p><b>줄곧 만석이던 차량은 결과에 안 담는다.</b> 최대 잔여석이 0석이라 정원을 모르는 것이고,
      * 1석으로 꾸며 내면 값은 나오는데 뜻이 없는 예보가 나간다. 잔여석을 한 번도 안 보여 준 차량이
      * 애초에 결과에 없는 것과 같은 자리다. 그 차량들은 궤적이 안 만들어져 예보도 안 나간다.
+     *
+     * <p>차량마다 기존 잔여석 인덱스를 역순으로 읽어 조건에 맞는 첫 양수 값을 선택한다.
+     * 기준 시각 검사는 LIMIT 전에 수행해야 미래 관측을 제외한 최대값을 얻을 수 있다.
      */
     private static final String SELECT_MAXIMUM_SEATS_EVER_OBSERVED = """
-        SELECT observation.vehicle_id,
-               MAX(observation.remaining_seats) AS maximum_seats
-        FROM vehicle_observation observation
-        JOIN observation_batch batch
-          ON batch.id = observation.observation_batch_id
-        WHERE observation.route_version_id = :routeVersionId
-          AND observation.vehicle_id IN (:vehicleIds)
-          AND observation.remaining_seats IS NOT NULL
-          AND (batch.response_received_at, batch.id) <= (:until, :observationBatchId)
-        GROUP BY observation.vehicle_id
-        HAVING MAX(observation.remaining_seats) > 0
+        WITH vehicles AS (
+            SELECT unnest(ARRAY[:vehicleIds]::text[]) AS vehicle_id
+        )
+        SELECT capacity.vehicle_id, capacity.maximum_seats
+        FROM vehicles vehicle
+        CROSS JOIN LATERAL (
+            SELECT observation.vehicle_id,
+                   observation.remaining_seats AS maximum_seats
+            FROM vehicle_observation observation
+            JOIN observation_batch batch
+              ON batch.id = observation.observation_batch_id
+            WHERE observation.route_version_id = :routeVersionId
+              AND observation.vehicle_id = vehicle.vehicle_id
+              AND observation.remaining_seats > 0
+              AND (batch.response_received_at, batch.id) <= (:until, :observationBatchId)
+            ORDER BY observation.remaining_seats DESC
+            LIMIT 1
+        ) capacity
         """;
 
     private final JdbcClient jdbcClient;
