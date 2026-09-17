@@ -30,7 +30,7 @@ public interface SameDayFullOutcomesRepository {
         SettledForecast settled
     );
 
-    /** 집계를 거치지 않고 예보 표에서 직접 센다. */
+    /** 집계를 거치지 않고 seat_forecast 에서 직접 센다. */
     List<SameDayFullOutcomeCount> countFromSource(
         long routeId,
         SeoulDay day,
