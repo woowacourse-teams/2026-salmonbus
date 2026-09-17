@@ -75,7 +75,7 @@ public class JdbcSameDayFullOutcomesRepository implements SameDayFullOutcomesRep
      * 회수가 도착 후보를 예보와 같은 판본에서만 찾으니 예보 쪽 판본으로 골라도 같은 행이 나온다.
      *
      * <p>날짜를 {@code ::date} 로 비교하지 않고 자정 경계 두 개로 자른다. 열에 함수를 씌우면
-     * 그 인덱스를 못 타고 판 표를 통째로 읽는다.
+     * 그 인덱스를 못 타고 observation_batch 를 통째로 읽는다.
      */
     private static final String COUNT_FROM_SOURCE = """
         SELECT forecast.stops_to_target,
