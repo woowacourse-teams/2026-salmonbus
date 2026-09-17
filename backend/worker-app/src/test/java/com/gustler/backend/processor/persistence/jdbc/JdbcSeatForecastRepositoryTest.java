@@ -69,6 +69,7 @@ class JdbcSeatForecastRepositoryTest {
     @Autowired
     private JdbcClient jdbcClient;
 
+    private long routeId;
     private long routeVersionId;
     private long modelDeploymentId;
     private long observationBatchId;
@@ -76,7 +77,7 @@ class JdbcSeatForecastRepositoryTest {
 
     @BeforeEach
     void 노선_판본과_정류소와_모델과_관측을_먼저_저장한다() {
-        final long routeId = insertRoute();
+        routeId = insertRoute();
         routeVersionId = insertRouteVersion(routeId);
         insertRouteStop(PASSED_STOP_ORDER);
         insertRouteStop(TARGET_STOP_ORDER);
@@ -246,6 +247,106 @@ class JdbcSeatForecastRepositoryTest {
         // then
         StoredLabel actual = readStoredLabel(TARGET_STOP_ORDER);
         assertThat(actual).isEqualTo(new StoredLabel("SKIPPED", null, null, SCORED_AT));
+    }
+
+    @Test
+    void 만석으로_회수하면_당일_성적_집계가_바로_는다() {
+        // given
+        final long arrivalObservationId = insertArrivalObservation();
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+
+        // when
+        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            vehicleObservationId,
+            TARGET_STOP_ORDER,
+            new ArrivalLabel.Settled(arrivalObservationId, SEATS_ON_ARRIVAL_WHEN_FULL),
+            SCORED_AT)));
+
+        // then
+        StoredOutcome actual = readStoredOutcome(STOPS_TO_TARGET);
+        assertThat(actual).isEqualTo(
+            new StoredOutcome(1, 1, 0.41, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant()));
+    }
+
+    @Test
+    void 자리가_남은_채_회수하면_건수만_늘고_만석_수는_안_는다() {
+        // given
+        final long arrivalObservationId = insertArrivalObservation();
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+
+        // when
+        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrivalObservationId, 7), SCORED_AT)));
+
+        // then
+        StoredOutcome actual = readStoredOutcome(STOPS_TO_TARGET);
+        assertThat(actual).isEqualTo(
+            new StoredOutcome(1, 0, 0.41, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant()));
+    }
+
+    @Test
+    void 같은_예보_거리의_회수가_쌓이면_한_줄에_더해진다() {
+        // given 같은 거리의 예보 둘. 하나는 만석, 하나는 자리 남음
+        final long arrivalObservationId = insertArrivalObservation();
+        final long secondObservationId = insertObservation(observationBatchId, "204000207", 1, PASSED_STOP_ORDER);
+        jdbcSeatForecastRepository.save(List.of(
+            forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT),
+            new SeatForecast(
+                secondObservationId, routeVersionId, TARGET_STOP_ORDER, STOPS_TO_TARGET,
+                modelDeploymentId, DEMAND_STATISTICS_REVISION, 0.21, 0.20, 12.5, GENERATED_AT)));
+
+        // when
+        jdbcSeatForecastRepository.settle(List.of(
+            new ForecastSettlement(
+                vehicleObservationId, TARGET_STOP_ORDER,
+                new ArrivalLabel.Settled(arrivalObservationId, SEATS_ON_ARRIVAL_WHEN_FULL), SCORED_AT),
+            new ForecastSettlement(
+                secondObservationId, TARGET_STOP_ORDER,
+                new ArrivalLabel.Settled(arrivalObservationId, 7), SCORED_AT)));
+
+        // then
+        StoredOutcome actual = readStoredOutcome(STOPS_TO_TARGET);
+        assertThat(actual).isEqualTo(
+            new StoredOutcome(2, 1, 0.62, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant()));
+    }
+
+    @Test
+    void 좌석_결측이나_건너뜀으로_회수하면_당일_성적_집계는_안_생긴다() {
+        // given
+        final long arrivalObservationId = insertArrivalObservation();
+        jdbcSeatForecastRepository.save(List.of(
+            forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT),
+            forecastOf(NEXT_TARGET_STOP_ORDER, STOPS_TO_NEXT_TARGET, NEXT_GENERATED_AT)));
+
+        // when
+        jdbcSeatForecastRepository.settle(List.of(
+            new ForecastSettlement(
+                vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.SeatMissing(arrivalObservationId), SCORED_AT),
+            new ForecastSettlement(
+                vehicleObservationId, NEXT_TARGET_STOP_ORDER, new ArrivalLabel.Skipped(), SCORED_AT)));
+
+        // then
+        assertThat(countStoredOutcomes()).isZero();
+    }
+
+    @Test
+    void 이미_닫힌_예보를_다시_회수해도_당일_성적_집계는_두_번_안_는다() {
+        // given
+        final long arrivalObservationId = insertArrivalObservation();
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+        ForecastSettlement settlement = new ForecastSettlement(
+            vehicleObservationId,
+            TARGET_STOP_ORDER,
+            new ArrivalLabel.Settled(arrivalObservationId, SEATS_ON_ARRIVAL_WHEN_FULL),
+            SCORED_AT);
+        jdbcSeatForecastRepository.settle(List.of(settlement));
+
+        // when
+        jdbcSeatForecastRepository.settle(List.of(settlement));
+
+        // then
+        StoredOutcome actual = readStoredOutcome(STOPS_TO_TARGET);
+        assertThat(actual.rowCount()).isEqualTo(1);
     }
 
     private SeatForecast forecastOf(
@@ -515,12 +616,45 @@ class JdbcSeatForecastRepositoryTest {
         return "20500%04d".formatted(stopOrder);
     }
 
+    private StoredOutcome readStoredOutcome(
+        final int stopsToTarget
+    ) {
+        return jdbcClient.sql("""
+                SELECT row_count, actual_full_count, raw_full_chance_sum, settled_through
+                FROM same_day_full_outcomes
+                WHERE route_id = ?
+                  AND stops_to_target = ?
+                """)
+            .params(routeId, stopsToTarget)
+            .query((resultSet, rowNumber) -> new StoredOutcome(
+                resultSet.getInt("row_count"),
+                resultSet.getInt("actual_full_count"),
+                resultSet.getDouble("raw_full_chance_sum"),
+                instantOf(resultSet.getObject("settled_through", OffsetDateTime.class))))
+            .single();
+    }
+
+    private long countStoredOutcomes() {
+        return jdbcClient.sql("SELECT count(*) FROM same_day_full_outcomes WHERE route_id = ?")
+            .param(routeId)
+            .query(Long.class)
+            .single();
+    }
+
     /** 예보 행에 남은 회수 결과 네 열. */
     private record StoredLabel(
         String scoringState,
         Long arrivalObservationId,
         Integer seatsOnArrival,
         Instant scoredAt
+    ) {
+    }
+
+    private record StoredOutcome(
+        int rowCount,
+        int actualFullCount,
+        double rawFullChanceSum,
+        Instant settledThrough
     ) {
     }
 }

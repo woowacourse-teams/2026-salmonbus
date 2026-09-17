@@ -14,6 +14,7 @@ import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -35,6 +36,8 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
      * <p>V8 의 ck_forecast_scored_at_presence 가 이 상태의 행에만 회수 시각이 비어 있기를 요구한다.
      */
     private static final String NOT_SETTLED_YET = ScoringState.PENDING.name();
+
+    private static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
 
     /**
      * 예보 한 줄. 같은 (관측, 대상 순번) 이 이미 있으면 예보 값만 덮어쓴다.
@@ -120,6 +123,42 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
             scored_at = :scoredAt
         WHERE vehicle_observation_id = :vehicleObservationId
           AND target_stop_order = :targetStopOrder
+        """;
+
+    private static final String SETTLE_PENDING_FORECAST = """
+        UPDATE seat_forecast
+        SET scoring_state = :scoringState,
+            arrival_observation_id = :arrivalObservationId,
+            seats_on_arrival = :seatsOnArrival,
+            scored_at = :scoredAt
+        WHERE vehicle_observation_id = :vehicleObservationId
+          AND target_stop_order = :targetStopOrder
+          AND scoring_state = 'PENDING'
+        RETURNING route_version_id, stops_to_target, seat_full_chance_raw
+        """;
+
+    private static final String SELECT_ARRIVAL_OF_SETTLED = """
+        SELECT forecast_version.route_id, arrival_batch.response_received_at
+        FROM vehicle_observation arrival
+        JOIN observation_batch arrival_batch
+          ON arrival_batch.id = arrival.observation_batch_id
+        CROSS JOIN route_version forecast_version
+        WHERE arrival.id = :arrivalObservationId
+          AND forecast_version.id = :routeVersionId
+        """;
+
+    private static final String ADD_SAME_DAY_OUTCOME = """
+        INSERT INTO same_day_full_outcomes (
+            route_id, outcome_date, stops_to_target,
+            row_count, actual_full_count, raw_full_chance_sum, settled_through
+        ) VALUES (
+            :routeId, :outcomeDate, :stopsToTarget, 1, :fullCount, :rawFullChance, :arrivedAt
+        )
+        ON CONFLICT (route_id, outcome_date, stops_to_target) DO UPDATE SET
+            row_count = same_day_full_outcomes.row_count + 1,
+            actual_full_count = same_day_full_outcomes.actual_full_count + EXCLUDED.actual_full_count,
+            raw_full_chance_sum = same_day_full_outcomes.raw_full_chance_sum + EXCLUDED.raw_full_chance_sum,
+            settled_through = GREATEST(same_day_full_outcomes.settled_through, EXCLUDED.settled_through)
         """;
 
     /**
@@ -236,6 +275,10 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
         List<ForecastSettlement> settlements
     ) {
         for (ForecastSettlement settlement : settlements) {
+            if (settlement.label() instanceof ArrivalLabel.Settled settled) {
+                settleAndAddSameDayOutcome(settlement, settled);
+                continue;
+            }
             ArrivalColumns arrival = arrivalColumnsOf(settlement.label());
             jdbcClient.sql(SETTLE_FORECAST)
                 .param("scoringState", settlement.label().scoringState().name())
@@ -246,6 +289,42 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
                 .param("targetStopOrder", settlement.targetStopOrder())
                 .update();
         }
+    }
+
+    private void settleAndAddSameDayOutcome(
+        ForecastSettlement settlement,
+        ArrivalLabel.Settled settled
+    ) {
+        Optional<SettledForecast> forecast = jdbcClient.sql(SETTLE_PENDING_FORECAST)
+            .param("scoringState", ScoringState.SETTLED.name())
+            .param("arrivalObservationId", settled.arrivalObservationId())
+            .param("seatsOnArrival", settled.seatsOnArrival())
+            .param("scoredAt", offsetOf(settlement.scoredAt()))
+            .param("vehicleObservationId", settlement.vehicleObservationId())
+            .param("targetStopOrder", settlement.targetStopOrder())
+            .query((resultSet, rowNumber) -> new SettledForecast(
+                resultSet.getLong("route_version_id"),
+                resultSet.getInt("stops_to_target"),
+                resultSet.getDouble("seat_full_chance_raw")))
+            .optional();
+        if (forecast.isEmpty()) {
+            return;
+        }
+        ArrivalOfSettled arrival = jdbcClient.sql(SELECT_ARRIVAL_OF_SETTLED)
+            .param("arrivalObservationId", settled.arrivalObservationId())
+            .param("routeVersionId", forecast.get().routeVersionId())
+            .query((resultSet, rowNumber) -> new ArrivalOfSettled(
+                resultSet.getLong("route_id"),
+                instantOf(resultSet.getObject("response_received_at", OffsetDateTime.class))))
+            .single();
+        jdbcClient.sql(ADD_SAME_DAY_OUTCOME)
+            .param("routeId", arrival.routeId())
+            .param("outcomeDate", arrival.arrivedAt().atZone(KOREA).toLocalDate())
+            .param("stopsToTarget", forecast.get().stopsToTarget())
+            .param("fullCount", settled.seatsOnArrival() == 0 ? 1 : 0)
+            .param("rawFullChance", forecast.get().rawFullChance())
+            .param("arrivedAt", offsetOf(arrival.arrivedAt()))
+            .update();
     }
 
     /**
@@ -279,6 +358,19 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
         Instant timestamp
     ) {
         return timestamp.atOffset(ZoneOffset.UTC);
+    }
+
+    private record SettledForecast(
+        long routeVersionId,
+        int stopsToTarget,
+        double rawFullChance
+    ) {
+    }
+
+    private record ArrivalOfSettled(
+        long routeId,
+        Instant arrivedAt
+    ) {
     }
 
     /** 회수 결과가 채우는 두 열. 둘 다 비는 갈래가 있어서 값이 없는 상태를 담는다. */
