@@ -349,6 +349,76 @@ class JdbcSeatForecastRepositoryTest {
         assertThat(actual.rowCount()).isEqualTo(1);
     }
 
+    @Test
+    void 집계가_없으면_원본에서_채워_넣고_그_값을_돌려준다() {
+        // given 정산은 됐는데 집계 표가 비어 있다. 이 표가 생기기 전 정산된 행이 그렇다
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            vehicleObservationId,
+            TARGET_STOP_ORDER,
+            new ArrivalLabel.Settled(insertArrivalObservation(), SEATS_ON_ARRIVAL_WHEN_FULL),
+            SCORED_AT)));
+        jdbcClient.sql("DELETE FROM same_day_full_outcomes").update();
+
+        // when
+        Map<Integer, SameDayFullOutcomes> actual = jdbcSeatForecastRepository.readSameDayFullOutcomes(
+            routeId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant().plusSeconds(60));
+
+        // then 값도 돌려주고 표도 다시 채워져 있다
+        assertThat(actual.get(STOPS_TO_TARGET)).isEqualTo(new SameDayFullOutcomes(1, 1, 0.41));
+        assertThat(readStoredOutcome(STOPS_TO_TARGET)).isEqualTo(
+            new StoredOutcome(1, 1, 0.41, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant()));
+    }
+
+    @Test
+    void 예보_시각이_집계에_반영된_도착보다_앞이면_표는_두고_원본에서_그_시각_기준으로_센다() {
+        // given
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            vehicleObservationId,
+            TARGET_STOP_ORDER,
+            new ArrivalLabel.Settled(insertArrivalObservation(), SEATS_ON_ARRIVAL_WHEN_FULL),
+            SCORED_AT)));
+
+        // when 도착보다 앞선 시각의 batch 가 뒤늦게 예보를 받는다
+        Map<Integer, SameDayFullOutcomes> actual = jdbcSeatForecastRepository.readSameDayFullOutcomes(
+            routeId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant().minusSeconds(60));
+
+        // then 그 시각엔 도착이 없었고, 표의 값은 그대로다
+        assertThat(actual).isEmpty();
+        assertThat(readStoredOutcome(STOPS_TO_TARGET).rowCount()).isEqualTo(1);
+    }
+
+    @Test
+    void 같은_노선의_다른_판본에서_난_예보도_한_성적으로_센다() {
+        // given 첫 판본의 예보 하나와, 개편된 판본의 예보 하나가 둘 다 도착까지 확인됐다
+        final long arrivalObservationId = insertArrivalObservation();
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            vehicleObservationId, TARGET_STOP_ORDER,
+            new ArrivalLabel.Settled(arrivalObservationId, SEATS_ON_ARRIVAL_WHEN_FULL), SCORED_AT)));
+
+        final long laterVersionId = insertLaterRouteVersion();
+        final long laterObservationId = insertObservation(
+            insertObservationBatch(laterVersionId, "2026-08-19T11:30", RESPONSE_RECEIVED_AT.plusMinutes(16)),
+            laterVersionId, VEHICLE_204000206, 0, PASSED_STOP_ORDER);
+        final long laterArrivalId = insertObservation(
+            insertObservationBatch(laterVersionId, "2026-08-19T11:36", ARRIVAL_RESPONSE_RECEIVED_AT.plusMinutes(16)),
+            laterVersionId, VEHICLE_204000206, 0, ARRIVAL_STOP_ORDER);
+        jdbcSeatForecastRepository.save(List.of(new SeatForecast(
+            laterObservationId, laterVersionId, TARGET_STOP_ORDER, STOPS_TO_TARGET,
+            modelDeploymentId, DEMAND_STATISTICS_REVISION, 0.21, 0.20, 12.5, NEXT_GENERATED_AT)));
+        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            laterObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(laterArrivalId, 7), SCORED_AT)));
+
+        // when 어느 판본으로 묻든
+        Map<Integer, SameDayFullOutcomes> actual = jdbcSeatForecastRepository.readSameDayFullOutcomes(
+            routeId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant().plus(Duration.ofMinutes(20)));
+
+        // then 노선 하나의 성적으로 합쳐진다
+        assertThat(actual.get(STOPS_TO_TARGET)).isEqualTo(new SameDayFullOutcomes(2, 1, 0.31));
+    }
+
     private SeatForecast forecastOf(
         final int targetStopOrder,
         final int stopsToTarget,
@@ -379,7 +449,7 @@ class JdbcSeatForecastRepositoryTest {
 
         // when 그 도착보다 뒤 시각으로 묻는다
         Map<Integer, SameDayFullOutcomes> actual = jdbcSeatForecastRepository.readSameDayFullOutcomes(
-            routeVersionId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant().plusSeconds(60));
+            routeId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant().plusSeconds(60));
 
         // then
         assertThat(actual.get(STOPS_TO_TARGET))
@@ -398,7 +468,7 @@ class JdbcSeatForecastRepositoryTest {
 
         // when 도착 시각과 같은 시각으로 묻는다
         Map<Integer, SameDayFullOutcomes> actual = jdbcSeatForecastRepository.readSameDayFullOutcomes(
-            routeVersionId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant());
+            routeId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant());
 
         // then
         assertThat(actual).containsKey(STOPS_TO_TARGET);
@@ -416,7 +486,7 @@ class JdbcSeatForecastRepositoryTest {
 
         // when 그 도착보다 앞선 시각으로 묻는다
         Map<Integer, SameDayFullOutcomes> actual = jdbcSeatForecastRepository.readSameDayFullOutcomes(
-            routeVersionId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant().minusSeconds(60));
+            routeId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant().minusSeconds(60));
 
         // then
         assertThat(actual).isEmpty();
@@ -429,7 +499,7 @@ class JdbcSeatForecastRepositoryTest {
 
         // when
         Map<Integer, SameDayFullOutcomes> actual = jdbcSeatForecastRepository.readSameDayFullOutcomes(
-            routeVersionId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant().plusSeconds(60));
+            routeId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant().plusSeconds(60));
 
         // then
         assertThat(actual).isEmpty();
@@ -447,7 +517,7 @@ class JdbcSeatForecastRepositoryTest {
 
         // when 한국 시각으로 다음 날에 묻는다
         Map<Integer, SameDayFullOutcomes> actual = jdbcSeatForecastRepository.readSameDayFullOutcomes(
-            routeVersionId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant().plus(Duration.ofDays(1)));
+            routeId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant().plus(Duration.ofDays(1)));
 
         // then
         assertThat(actual).isEmpty();
@@ -566,7 +636,39 @@ class JdbcSeatForecastRepositoryTest {
             .single();
     }
 
+    private long insertLaterRouteVersion() {
+        jdbcClient.sql("UPDATE route_version SET valid_to = ? WHERE id = ?")
+            .params(RESPONSE_RECEIVED_AT.plusMinutes(15), routeVersionId)
+            .update();
+        final long laterVersionId = jdbcClient.sql("""
+                INSERT INTO route_version (route_id, content_digest, valid_from)
+                VALUES (?, ?, ?)
+                RETURNING id
+                """)
+            .params(routeId, "1".repeat(64), RESPONSE_RECEIVED_AT.plusMinutes(15))
+            .query(Long.class)
+            .single();
+        for (int stopOrder : List.of(PASSED_STOP_ORDER, TARGET_STOP_ORDER, NEXT_TARGET_STOP_ORDER)) {
+            jdbcClient.sql("""
+                    INSERT INTO route_stop (
+                        route_version_id, stop_order, stop_id, name, direction, boarding_allowed
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """)
+                .params(laterVersionId, stopOrder, stopIdOf(stopOrder), "정류소 " + stopOrder, "UP", true)
+                .update();
+        }
+        return laterVersionId;
+    }
+
     private long insertObservationBatch(
+        String attemptKey,
+        OffsetDateTime responseReceivedAt
+    ) {
+        return insertObservationBatch(routeVersionId, attemptKey, responseReceivedAt);
+    }
+
+    private long insertObservationBatch(
+        final long versionId,
         String attemptKey,
         OffsetDateTime responseReceivedAt
     ) {
@@ -579,7 +681,7 @@ class JdbcSeatForecastRepositoryTest {
                 RETURNING id
                 """)
             .params(
-                routeVersionId, responseReceivedAt, 1, ROUTE_204000057 + "-" + attemptKey,
+                versionId, responseReceivedAt, 1, ROUTE_204000057 + "-" + attemptKey,
                 responseReceivedAt, responseReceivedAt, "SUCCESS_ROWS",
                 NORMALIZATION_VERSION, COLLECTION_STRATEGY_VERSION
             )
@@ -593,6 +695,16 @@ class JdbcSeatForecastRepositoryTest {
         final int sourceRowNumber,
         final int stopOrder
     ) {
+        return insertObservation(batchId, routeVersionId, vehicleId, sourceRowNumber, stopOrder);
+    }
+
+    private long insertObservation(
+        final long batchId,
+        final long versionId,
+        String vehicleId,
+        final int sourceRowNumber,
+        final int stopOrder
+    ) {
         return jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
                     observation_batch_id, route_version_id, source_row_number,
@@ -602,7 +714,7 @@ class JdbcSeatForecastRepositoryTest {
                 RETURNING id
                 """)
             .params(
-                batchId, routeVersionId, sourceRowNumber,
+                batchId, versionId, sourceRowNumber,
                 vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
                 RUNNING_STATE_DEPARTED, SEATS_LEFT
             )

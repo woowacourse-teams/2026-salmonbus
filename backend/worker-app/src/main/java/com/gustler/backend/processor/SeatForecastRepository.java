@@ -58,7 +58,7 @@ public interface SeatForecastRepository {
      * @param predictionAt 이 시각까지 도착이 확인된 것만. 그 batch 가 상류에서 응답을 받은 시각이다
      */
     Map<Integer, SameDayFullOutcomes> readSameDayFullOutcomes(
-        long routeVersionId,
+        long routeId,
         Instant predictionAt
     );
 }

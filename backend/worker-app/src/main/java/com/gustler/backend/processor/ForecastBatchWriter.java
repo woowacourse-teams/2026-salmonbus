@@ -55,7 +55,7 @@ public class ForecastBatchWriter {
         StopDemandStatistics statistics = stopDemandStatisticsOf(batch, runtime, timeSlot);
         Map<Integer, SameDayFullOutcomes> sameDayOutcomes =
             seatForecastRepository.readSameDayFullOutcomes(
-                batch.routeVersionId(), batch.responseReceivedAt());
+                batch.routeId(), batch.responseReceivedAt());
         seatForecastRepository.save(
             forecastsOf(batch, stops, statistics, sameDayOutcomes, runtime, generatedAt));
         seatForecastRepository.markForecastCompleted(batch.observationBatchId(), generatedAt);
