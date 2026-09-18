@@ -17,7 +17,7 @@ public final class HistoricalSchema {
     public static final String HISTORY_TABLE = "historical_import_schema_history";
     private static final String LOCATION = "classpath:db/historical-migration";
     private static final List<Integer> REQUIRED_APPLICATION_VERSIONS =
-        List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
+        List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13);
 
     public MigrateResult migrate(
         DatabaseEnvironment database
