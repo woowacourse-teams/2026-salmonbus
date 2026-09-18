@@ -22,7 +22,7 @@ function failureOf(result: ApiResult<unknown>): ApiFailure {
 
 describe("requestJson", () => {
   describe("오류 응답을 받으면", () => {
-    it("계약에 있는 code일 경우 retryable 필드가 있어도 contract로 분류한다", async () => {
+    it("계약에 있는 code면 retryable 필드 없이도 contract로 분류한다", async () => {
       respondWith(503, { code: "MODEL_OUT_OF_SCOPE", message: "지원하지 않는 판본", requestId: "req-contract" });
       const failure = failureOf(await requestJson("/api/v1/routes/R1/board"));
       expect(failure).toMatchObject({ kind: "contract", status: 503, error: { code: "MODEL_OUT_OF_SCOPE" } });
@@ -34,12 +34,6 @@ describe("requestJson", () => {
       expect(failure).toMatchObject({ kind: "malformed", status: 500 });
     });
 
-    it("본문이 JSON이 아니라면 malformed로 분류한다", async () => {
-      respondText(200, "<html>gateway</html>");
-      const failure = failureOf(await requestJson("/api/v1/routes"));
-      expect(failure).toMatchObject({ kind: "malformed", status: 200 });
-    });
-
     it("서버가 503과 함께 Retry-After 헤더를 보내면 초를 ms로 바꾼다음 retryAfterMs에 넣는다", async () => {
       respondWith(
         503,
@@ -48,6 +42,14 @@ describe("requestJson", () => {
       );
       const failure = failureOf(await requestJson("/api/v1/routes/R1/board"));
       expect(failure).toMatchObject({ kind: "contract", status: 503, retryAfterMs: 30_000 });
+    });
+  });
+
+  describe("본문이 JSON이 아니면", () => {
+    it("상태 코드가 200이어도 malformed로 분류한다", async () => {
+      respondText(200, "<html>gateway</html>");
+      const failure = failureOf(await requestJson("/api/v1/routes"));
+      expect(failure).toMatchObject({ kind: "malformed", status: 200 });
     });
   });
 

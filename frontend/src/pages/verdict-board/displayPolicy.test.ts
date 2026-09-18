@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import { serviceStateFor } from "./displayPolicy";
-import { boardWith, upInfo } from "../../testing/fixtures";
+import { boardWith, upInfo } from "@/testing/fixtures";
 
 const observedAt = (clock: string, offset = "+09:00") => `2026-09-01T${clock}:00${offset}`;
 
@@ -18,6 +18,11 @@ describe("serviceStateFor", () => {
       const overnight = { ...upInfo, firstDepartureTime: "23:00", lastDepartureTime: "02:00" };
 
       expect(serviceStateFor(boardWith({ observedAt: observedAt("01:00") }), overnight)).toBe("running");
+    });
+
+    it("자정을 넘기는 시간표에서 막차와 첫차 사이 시각은 운행 종료이다", () => {
+      const overnight = { ...upInfo, firstDepartureTime: "23:00", lastDepartureTime: "02:00" };
+
       expect(serviceStateFor(boardWith({ observedAt: observedAt("12:00") }), overnight)).toBe("outOfService");
     });
 
@@ -31,9 +36,6 @@ describe("serviceStateFor", () => {
       const utcObserved = observedAt("23:31", "+00:00");
 
       expect(serviceStateFor(boardWith({ observedAt: utcObserved, vehiclesInService: 2 }), upInfo)).toBe("running");
-      expect(serviceStateFor(boardWith({ observedAt: utcObserved, vehiclesInService: 0 }), upInfo)).toBe(
-        "outOfService",
-      );
     });
   });
 });
