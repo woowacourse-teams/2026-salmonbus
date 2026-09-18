@@ -69,10 +69,10 @@ public class JdbcSameDayFullOutcomesRepository implements SameDayFullOutcomesRep
      * <p>예보 시각과 같은 순간에 도착한 것까지 센다. 그 순간에 이미 확정된 과거 사건이라
      * 미래를 보고 답하는 것이 아니다.
      *
-     * <p><b>노선 판본이 아니라 노선으로 묶는다.</b> 노선이 개편되면 판본이 갈리는데, 판본으로 묶으면
-     * 개편된 날 성적이 0건에서 다시 시작한다. 만석이 얼마나 나는지는 개편과 상관없이 이어진다.
-     * 판본을 도착 batch 쪽에서 고르는 것은 V1 의 ix_batch_recent_history 첫 열이 판본이라서다.
-     * 회수가 도착 후보를 예보와 같은 판본에서만 찾으니 예보 쪽 판본으로 골라도 같은 행이 나온다.
+     * <p><b>route_version 이 아니라 route 로 묶는다.</b> 노선이 개편되면 route_version 이 갈리는데,
+     * 그것으로 묶으면 개편된 날 성적이 0건에서 다시 시작한다. 만석이 얼마나 나는지는 개편과 상관없이 이어진다.
+     * route_version 을 도착 batch 쪽에서 고르는 것은 V1 의 ix_batch_recent_history 첫 열이라서다.
+     * 회수가 도착 후보를 예보와 같은 route_version 에서만 찾으니 예보 쪽에서 골라도 같은 행이 나온다.
      *
      * <p>날짜를 {@code ::date} 로 비교하지 않고 자정 경계 두 개로 자른다. 열에 함수를 씌우면
      * 그 인덱스를 못 타고 observation_batch 를 통째로 읽는다.
