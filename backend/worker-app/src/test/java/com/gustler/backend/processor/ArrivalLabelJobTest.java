@@ -41,6 +41,9 @@ class ArrivalLabelJobTest {
     private SeatForecastRepository seatForecastRepository;
 
     @Mock
+    private SameDayFullOutcomesService sameDayFullOutcomesService;
+
+    @Mock
     private ArrivalObservationRepository arrivalObservationRepository;
 
     @Captor
@@ -52,6 +55,7 @@ class ArrivalLabelJobTest {
     void 회수_배치를_멈춘_시계로_세운다() {
         job = new ArrivalLabelJob(
             seatForecastRepository,
+            sameDayFullOutcomesService,
             arrivalObservationRepository,
             properties(),
             Clock.fixed(SETTLED_AT, ZoneOffset.UTC));

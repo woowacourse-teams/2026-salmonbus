@@ -27,17 +27,20 @@ import org.springframework.transaction.annotation.Transactional;
 public class ArrivalLabelJob {
 
     private final SeatForecastRepository seatForecastRepository;
+    private final SameDayFullOutcomesService sameDayFullOutcomesService;
     private final ArrivalObservationRepository arrivalObservationRepository;
     private final ForecastProperties properties;
     private final Clock clock;
 
     public ArrivalLabelJob(
         SeatForecastRepository seatForecastRepository,
+        SameDayFullOutcomesService sameDayFullOutcomesService,
         ArrivalObservationRepository arrivalObservationRepository,
         ForecastProperties properties,
         Clock clock
     ) {
         this.seatForecastRepository = seatForecastRepository;
+        this.sameDayFullOutcomesService = sameDayFullOutcomesService;
         this.arrivalObservationRepository = arrivalObservationRepository;
         this.properties = properties;
         this.clock = clock;
@@ -57,7 +60,7 @@ public class ArrivalLabelJob {
         for (Long routeVersionId : seatForecastRepository.findRouteVersionIdsWithPendingForecasts()) {
             settlements.addAll(settlementsOf(routeVersionId, now));
         }
-        seatForecastRepository.settle(settlements);
+        sameDayFullOutcomesService.record(seatForecastRepository.settle(settlements));
     }
 
     private List<ForecastSettlement> settlementsOf(

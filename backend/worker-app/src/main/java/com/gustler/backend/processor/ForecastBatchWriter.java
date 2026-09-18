@@ -29,17 +29,20 @@ public class ForecastBatchWriter {
 
     private final VehicleTrajectoryRepository vehicleTrajectoryRepository;
     private final SeatForecastRepository seatForecastRepository;
+    private final SameDayFullOutcomesService sameDayFullOutcomesService;
     private final StopDemandStatisticsRepository stopDemandStatisticsRepository;
     private final Clock clock;
 
     public ForecastBatchWriter(
         VehicleTrajectoryRepository vehicleTrajectoryRepository,
         SeatForecastRepository seatForecastRepository,
+        SameDayFullOutcomesService sameDayFullOutcomesService,
         StopDemandStatisticsRepository stopDemandStatisticsRepository,
         Clock clock
     ) {
         this.vehicleTrajectoryRepository = vehicleTrajectoryRepository;
         this.seatForecastRepository = seatForecastRepository;
+        this.sameDayFullOutcomesService = sameDayFullOutcomesService;
         this.stopDemandStatisticsRepository = stopDemandStatisticsRepository;
         this.clock = clock;
     }
@@ -54,8 +57,7 @@ public class ForecastBatchWriter {
         TimeSlot timeSlot = ForecastTimeSlot.of(batch, clock);
         StopDemandStatistics statistics = stopDemandStatisticsOf(batch, runtime, timeSlot);
         Map<Integer, SameDayFullOutcomes> sameDayOutcomes =
-            seatForecastRepository.readSameDayFullOutcomes(
-                batch.routeVersionId(), batch.responseReceivedAt());
+            sameDayFullOutcomesService.outcomesFor(batch.routeId(), batch.responseReceivedAt());
         seatForecastRepository.save(
             forecastsOf(batch, stops, statistics, sameDayOutcomes, runtime, generatedAt));
         seatForecastRepository.markForecastCompleted(batch.observationBatchId(), generatedAt);
