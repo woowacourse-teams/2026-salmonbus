@@ -1,7 +1,7 @@
 package com.gustler.backend.processor.seatdistribution;
 
 import com.gustler.backend.processor.ActiveModelDeployment;
-import com.gustler.backend.processor.SeatForecastModel;
+import com.gustler.backend.forecast.model.SeatForecastModel;
 import java.time.Instant;
 
 /**

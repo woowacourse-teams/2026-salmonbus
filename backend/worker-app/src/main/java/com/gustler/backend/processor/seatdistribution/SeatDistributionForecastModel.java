@@ -2,7 +2,7 @@ package com.gustler.backend.processor.seatdistribution;
 
 import com.gustler.backend.processor.SeatForecastDesignMatrix;
 import com.gustler.backend.processor.SeatForecastInput;
-import com.gustler.backend.processor.SeatForecastModel;
+import com.gustler.backend.forecast.model.SeatForecastModel;
 import com.gustler.backend.processor.SeatForecastResult;
 
 /**

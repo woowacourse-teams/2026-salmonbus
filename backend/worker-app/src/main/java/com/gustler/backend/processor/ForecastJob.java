@@ -1,5 +1,7 @@
 package com.gustler.backend.processor;
 
+import com.gustler.backend.forecast.prediction.ForecastBatchWriter;
+
 import com.gustler.backend.processor.seatdistribution.RuntimeSnapshot;
 
 import jakarta.annotation.PostConstruct;

@@ -1,5 +1,7 @@
 package com.gustler.backend.processor.seatdistribution;
 
+import com.gustler.backend.forecast.model.SeatRangeException;
+
 /**
  * 예보 한 건의 입력.
  *
@@ -38,12 +40,10 @@ public record SeatDistributionInput(
             throw new IllegalArgumentException("계수를 고르려면 노선 이름이 있어야 한다");
         }
         if (currentSeats < 0 || currentSeats > SeatGrid.LARGEST_SEATS) {
-            throw new IllegalArgumentException(
-                "잔여석은 0석부터 %d석까지다: %d".formatted(SeatGrid.LARGEST_SEATS, currentSeats));
+            throw new SeatRangeException("currentSeats", currentSeats, 0, SeatGrid.LARGEST_SEATS);
         }
         if (capacity < 1 || capacity > SeatGrid.LARGEST_SEATS) {
-            throw new IllegalArgumentException(
-                "정원은 1석부터 %d석까지다: %d".formatted(SeatGrid.LARGEST_SEATS, capacity));
+            throw new SeatRangeException("capacity", capacity, 1, SeatGrid.LARGEST_SEATS);
         }
         featureVector = featureVector.clone();
     }

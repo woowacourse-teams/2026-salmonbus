@@ -1,5 +1,9 @@
 package com.gustler.backend.processor;
 
+import com.gustler.backend.forecast.model.SeatForecastModel;
+
+import com.gustler.backend.forecast.prediction.ForecastBatchWriter;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.support.IntegrationTest;

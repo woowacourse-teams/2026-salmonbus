@@ -1,13 +1,25 @@
-package com.gustler.backend.processor;
+package com.gustler.backend.forecast.prediction;
 
+import com.gustler.backend.forecast.model.SeatRangeException;
+import com.gustler.backend.processor.ForecastTimeSlot;
+import com.gustler.backend.processor.PendingForecastBatch;
+import com.gustler.backend.processor.RouteStops;
+import com.gustler.backend.processor.SeatForecast;
+import com.gustler.backend.processor.SeatForecastInput;
+import com.gustler.backend.processor.SeatForecastRepository;
+import com.gustler.backend.processor.StopDemandStatistics;
+import com.gustler.backend.processor.StopDemandStatisticsRepository;
+import com.gustler.backend.processor.TimeSlot;
+import com.gustler.backend.processor.VehicleTrajectory;
+import com.gustler.backend.processor.VehicleTrajectoryRepository;
 import com.gustler.backend.processor.seatdistribution.RuntimeSnapshot;
 import com.gustler.backend.processor.seatdistribution.SameDayFullOutcomes;
-
 import java.time.Clock;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +38,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class ForecastBatchWriter {
+
+    private static final Logger log = LoggerFactory.getLogger(ForecastBatchWriter.class);
 
     private final VehicleTrajectoryRepository vehicleTrajectoryRepository;
     private final SeatForecastRepository seatForecastRepository;
@@ -93,26 +107,54 @@ public class ForecastBatchWriter {
         RuntimeSnapshot runtime,
         Instant generatedAt
     ) {
-        List<SeatForecast> forecasts = new ArrayList<>();
-        SeatForecastModel model = runtime.model();
-        for (VehicleTrajectory trajectory : vehicleTrajectoryRepository.readTrajectories(batch.observationBatchId())) {
-            for (VehicleStopTarget target : stops.targetsAheadOf(trajectory.observation())) {
-                forecasts.add(SeatForecast.of(
-                    trajectory.vehicleObservationId(),
-                    target,
-                    model.predict(
-                        new SeatForecastInput(
-                            target,
-                            trajectory,
-                            statistics,
-                            stops,
-                            statistics.timeSlot(),
-                            sameDayOutcomes.get(target.distance().stopCount()))),
-                    runtime.deploymentId(),
-                    statistics.revision(),
-                    generatedAt));
-            }
+        return vehicleTrajectoryRepository.readTrajectories(batch.observationBatchId()).stream()
+            .flatMap(trajectory -> forecastsOfVehicleOrEmpty(
+                batch, trajectory, stops, statistics, sameDayOutcomes, runtime, generatedAt).stream())
+            .toList();
+    }
+
+    /** 좌석 범위 오류만 차량 단위로 생략한다. 일반 계산·저장 오류는 배치를 실패시킨다. */
+    private List<SeatForecast> forecastsOfVehicleOrEmpty(
+        PendingForecastBatch batch,
+        VehicleTrajectory trajectory,
+        RouteStops stops,
+        StopDemandStatistics statistics,
+        Map<Integer, SameDayFullOutcomes> sameDayOutcomes,
+        RuntimeSnapshot runtime,
+        Instant generatedAt
+    ) {
+        try {
+            return forecastsOfVehicle(trajectory, stops, statistics, sameDayOutcomes, runtime, generatedAt);
+        } catch (SeatRangeException e) {
+            log.warn("event=forecast_vehicle_skipped reason=MODEL_INPUT_OUT_OF_RANGE "
+                    + "batchId={} vehicleObservationId={} modelDeploymentId={} "
+                    + "currentSeats={} capacity={} field={} value={} minimum={} maximum={}",
+                batch.observationBatchId(), trajectory.vehicleObservationId(), runtime.deploymentId(),
+                trajectory.observation().remainingSeats(), trajectory.maximumSeatsEverObserved(),
+                e.inputField(), e.inputValue(), e.minimum(), e.maximum());
+            return List.of();
         }
-        return forecasts;
+    }
+
+    /** 목록을 완성한 뒤 반환해, 도중에 실패한 차량의 일부 예보가 배치에 섞이지 않게 한다. */
+    private List<SeatForecast> forecastsOfVehicle(
+        VehicleTrajectory trajectory,
+        RouteStops stops,
+        StopDemandStatistics statistics,
+        Map<Integer, SameDayFullOutcomes> sameDayOutcomes,
+        RuntimeSnapshot runtime,
+        Instant generatedAt
+    ) {
+        return stops.targetsAheadOf(trajectory.observation()).stream()
+            .map(target -> SeatForecast.of(
+                trajectory.vehicleObservationId(),
+                target,
+                runtime.model().predict(new SeatForecastInput(
+                    target, trajectory, statistics, stops, statistics.timeSlot(),
+                    sameDayOutcomes.get(target.distance().stopCount()))),
+                runtime.deploymentId(),
+                statistics.revision(),
+                generatedAt))
+            .toList();
     }
 }

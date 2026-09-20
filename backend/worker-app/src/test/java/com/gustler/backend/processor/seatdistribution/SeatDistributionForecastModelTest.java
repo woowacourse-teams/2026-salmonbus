@@ -4,34 +4,40 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.Assertions.within;
 
+import com.gustler.backend.forecast.model.SeatRangeException;
+import com.gustler.backend.processor.SeatForecastInput;
 import com.gustler.backend.processor.SeatForecastResult;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/**
- * 예보 재료가 계수 계산까지 실제로 흘러가는지 본다.
- *
- * <p>여기가 이어지기 전에는 계수를 다 읽어 놓고도 예보가 한 줄도 안 나갔다.
- */
+/** 예보 재료가 실제 계수 계산과 모델 입력 검증까지 연결되는지 확인한다. */
 class SeatDistributionForecastModelTest {
 
     @TempDir
     Path directory;
 
     @Test
-    void 예보_재료_하나가_좌석_71칸_확률이_된다() {
+    void 모델이_지원하는_각_잔여석_수의_확률을_계산한다() {
+        // given
+        SeatDistributionForecastModel model = model();
+        SeatForecastInput input = ForecastInputFixture.of("204000057");
+
         // when
-        SeatForecastResult actual = model().predict(ForecastInputFixture.of("204000057"));
+        SeatForecastResult actual = model.predict(input);
 
         // then
-        assertThat(actual.distribution().chanceBySeats()).hasSize(71);
+        assertThat(actual.distribution().chanceBySeats()).hasSize(SeatGrid.SEAT_COUNT);
     }
 
     @Test
-    void 예보_재료로_낸_좌석_확률을_모두_더하면_1이다() {
+    void 계산한_잔여석별_확률을_모두_더하면_1이다() {
+        // given
+        SeatDistributionForecastModel model = model();
+        SeatForecastInput input = ForecastInputFixture.of("204000057");
+
         // when
-        SeatForecastResult actual = model().predict(ForecastInputFixture.of("204000057"));
+        SeatForecastResult actual = model.predict(input);
 
         // then
         assertThat(actual.distribution().chanceBySeats().stream()
@@ -39,10 +45,34 @@ class SeatDistributionForecastModelTest {
     }
 
     @Test
-    void 계수_묶음이_안_담는_노선이면_예보하지_않는다() {
-        // given 목록에 없는 GBIS 노선의 정류장 목록이 들어온다
-        assertThat(catchThrowable(() -> model().predict(ForecastInputFixture.of("999999999"))))
-            .isInstanceOf(IllegalArgumentException.class);
+    void 계수_묶음이_지원하지_않는_노선이면_예보를_거부한다() {
+        // given
+        SeatDistributionForecastModel model = model();
+        SeatForecastInput input = ForecastInputFixture.of("999999999");
+
+        // when
+        Throwable actual = catchThrowable(() -> model.predict(input));
+
+        // then
+        assertThat(actual).isExactlyInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 현재_잔여석이_허용_범위여도_과거_최대값이_모델_상한을_넘으면_거부한다() {
+        // given
+        SeatDistributionForecastModel model = model();
+        int currentSeats = SeatGrid.LARGEST_SEATS / 2;
+        int historicalMaximum = SeatGrid.LARGEST_SEATS + 1;
+        SeatForecastInput input = ForecastInputFixture.of("204000057", currentSeats, historicalMaximum);
+
+        // when
+        Throwable actual = catchThrowable(() -> model.predict(input));
+
+        // then
+        assertThat(actual).isInstanceOfSatisfying(SeatRangeException.class, e -> {
+            assertThat(e.inputField()).isEqualTo("capacity");
+            assertThat(e.inputValue()).isEqualTo(historicalMaximum);
+        });
     }
 
     private SeatDistributionForecastModel model() {
