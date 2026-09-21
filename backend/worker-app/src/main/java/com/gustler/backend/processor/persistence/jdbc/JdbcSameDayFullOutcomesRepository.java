@@ -39,16 +39,6 @@ public class JdbcSameDayFullOutcomesRepository implements SameDayFullOutcomesRep
             settled_through = EXCLUDED.settled_through
         """;
 
-    private static final String SELECT_ARRIVAL_OF_SETTLED = """
-        SELECT forecast_version.route_id, arrival_batch.response_received_at
-        FROM vehicle_observation arrival
-        JOIN observation_batch arrival_batch
-          ON arrival_batch.id = arrival.observation_batch_id
-        CROSS JOIN route_version forecast_version
-        WHERE arrival.id = :arrivalObservationId
-          AND forecast_version.id = :routeVersionId
-        """;
-
     private static final String ADD_TO_COUNT = """
         INSERT INTO same_day_full_outcomes (
             route_id, outcome_date, stops_to_target,
@@ -142,20 +132,13 @@ public class JdbcSameDayFullOutcomesRepository implements SameDayFullOutcomesRep
     public void add(
         SettledForecast settled
     ) {
-        Arrival arrival = jdbcClient.sql(SELECT_ARRIVAL_OF_SETTLED)
-            .param("arrivalObservationId", settled.arrivalObservationId())
-            .param("routeVersionId", settled.routeVersionId())
-            .query((resultSet, rowNumber) -> new Arrival(
-                resultSet.getLong("route_id"),
-                instantOf(resultSet.getObject("response_received_at", OffsetDateTime.class))))
-            .single();
         jdbcClient.sql(ADD_TO_COUNT)
-            .param("routeId", arrival.routeId())
-            .param("outcomeDate", SeoulDay.containing(arrival.arrivedAt()).date())
+            .param("routeId", settled.routeId())
+            .param("outcomeDate", SeoulDay.containing(settled.arrivedAt()).date())
             .param("stopsToTarget", settled.stopsToTarget())
             .param("fullCount", settled.wasFull() ? 1 : 0)
             .param("rawFullChance", settled.rawFullChance())
-            .param("arrivedAt", offsetOf(arrival.arrivedAt()))
+            .param("arrivedAt", offsetOf(settled.arrivedAt()))
             .update();
     }
 
@@ -196,11 +179,5 @@ public class JdbcSameDayFullOutcomesRepository implements SameDayFullOutcomesRep
         Instant timestamp
     ) {
         return timestamp.atOffset(ZoneOffset.UTC);
-    }
-
-    private record Arrival(
-        long routeId,
-        Instant arrivedAt
-    ) {
     }
 }

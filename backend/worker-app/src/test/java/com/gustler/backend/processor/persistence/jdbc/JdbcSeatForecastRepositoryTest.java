@@ -67,6 +67,7 @@ class JdbcSeatForecastRepositoryTest {
     @Autowired
     private JdbcClient jdbcClient;
 
+    private long routeId;
     private long routeVersionId;
     private long modelDeploymentId;
     private long observationBatchId;
@@ -74,7 +75,7 @@ class JdbcSeatForecastRepositoryTest {
 
     @BeforeEach
     void 노선_판본과_정류소와_모델과_관측을_먼저_저장한다() {
-        final long routeId = insertRoute();
+        routeId = insertRoute();
         routeVersionId = insertRouteVersion(routeId);
         insertRouteStop(PASSED_STOP_ORDER);
         insertRouteStop(TARGET_STOP_ORDER);
@@ -247,7 +248,7 @@ class JdbcSeatForecastRepositoryTest {
     }
 
     @Test
-    void 만석으로_회수하면_닫힌_예보의_판본과_거리와_확률을_돌려준다() {
+    void 만석으로_회수하면_닫힌_예보의_노선과_거리와_확률과_도착_시각을_돌려준다() {
         // given
         final long arrivalObservationId = insertArrivalObservation();
         jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
@@ -261,7 +262,7 @@ class JdbcSeatForecastRepositoryTest {
 
         // then
         assertThat(actual).containsExactly(new SettledForecast(
-            routeVersionId, STOPS_TO_TARGET, 0.41, arrivalObservationId, SEATS_ON_ARRIVAL_WHEN_FULL));
+            routeId, STOPS_TO_TARGET, 0.41, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant(), SEATS_ON_ARRIVAL_WHEN_FULL));
     }
 
     @Test

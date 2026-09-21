@@ -1,11 +1,13 @@
 package com.gustler.backend.processor;
 
+import java.time.Instant;
+
 /** 잔여석을 아는 채로 닫힌 예보 한 줄. 당일 성적 집계에 더할 재료다. */
 public record SettledForecast(
-    long routeVersionId,
+    long routeId,
     int stopsToTarget,
     double rawFullChance,
-    long arrivalObservationId,
+    Instant arrivedAt,
     int seatsOnArrival
 ) {
 

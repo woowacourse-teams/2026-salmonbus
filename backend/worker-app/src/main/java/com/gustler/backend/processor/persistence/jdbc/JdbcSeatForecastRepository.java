@@ -122,15 +122,22 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
         """;
 
     private static final String SETTLE_PENDING_FORECAST = """
-        UPDATE seat_forecast
+        UPDATE seat_forecast forecast
         SET scoring_state = :scoringState,
             arrival_observation_id = :arrivalObservationId,
             seats_on_arrival = :seatsOnArrival,
             scored_at = :scoredAt
-        WHERE vehicle_observation_id = :vehicleObservationId
-          AND target_stop_order = :targetStopOrder
-          AND scoring_state = 'PENDING'
-        RETURNING route_version_id, stops_to_target, seat_full_chance_raw
+        FROM route_version forecast_version,
+             vehicle_observation arrival
+             JOIN observation_batch arrival_batch
+               ON arrival_batch.id = arrival.observation_batch_id
+        WHERE forecast.vehicle_observation_id = :vehicleObservationId
+          AND forecast.target_stop_order = :targetStopOrder
+          AND forecast.scoring_state = 'PENDING'
+          AND forecast_version.id = forecast.route_version_id
+          AND arrival.id = :arrivalObservationId
+        RETURNING forecast_version.route_id, forecast.stops_to_target,
+                  forecast.seat_full_chance_raw, arrival_batch.response_received_at
         """;
 
     private final JdbcClient jdbcClient;
@@ -240,10 +247,10 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
             .param("vehicleObservationId", settlement.vehicleObservationId())
             .param("targetStopOrder", settlement.targetStopOrder())
             .query((resultSet, rowNumber) -> new SettledForecast(
-                resultSet.getLong("route_version_id"),
+                resultSet.getLong("route_id"),
                 resultSet.getInt("stops_to_target"),
                 resultSet.getDouble("seat_full_chance_raw"),
-                label.arrivalObservationId(),
+                resultSet.getObject("response_received_at", OffsetDateTime.class).toInstant(),
                 label.seatsOnArrival()))
             .optional();
     }

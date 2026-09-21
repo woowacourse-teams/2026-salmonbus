@@ -112,8 +112,8 @@ class SameDayFullOutcomesServiceTest {
     @Test
     void 정산된_예보를_하나씩_집계에_더한다() {
         // given
-        SettledForecast full = new SettledForecast(1L, STOPS_TO_TARGET, 0.41, 10L, 0);
-        SettledForecast notFull = new SettledForecast(1L, STOPS_TO_TARGET, 0.21, 11L, 7);
+        SettledForecast full = new SettledForecast(ROUTE_3330, STOPS_TO_TARGET, 0.41, SETTLED_THROUGH, 0);
+        SettledForecast notFull = new SettledForecast(ROUTE_3330, STOPS_TO_TARGET, 0.21, SETTLED_THROUGH, 7);
 
         // when
         service.record(List.of(full, notFull));
