@@ -11,6 +11,7 @@ import java.time.Instant;
 public record PendingForecastBatch(
     long observationBatchId,
     long routeVersionId,
+    long routeId,
     Instant responseReceivedAt
 ) {
 }

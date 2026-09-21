@@ -10,7 +10,12 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - salmonbus-db-data:/var/lib/postgresql/data
+      - salmonbus-db-18:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U salmonbus -d salmonbus"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
-  salmonbus-db-data:
+  salmonbus-db-18:

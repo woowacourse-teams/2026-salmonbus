@@ -6,14 +6,13 @@ import com.gustler.backend.processor.PendingForecast;
 import com.gustler.backend.processor.ScoringState;
 import com.gustler.backend.processor.SeatForecast;
 import com.gustler.backend.processor.SeatForecastRepository;
-import com.gustler.backend.processor.seatdistribution.SameDayFullOutcomes;
+import com.gustler.backend.processor.SettledForecast;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.time.ZoneId;
-import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -122,41 +121,23 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
           AND target_stop_order = :targetStopOrder
         """;
 
-    /**
-     * 오늘 이미 도착이 확인된 예보들의 성적. 예보 거리마다 한 줄이다.
-     *
-     * <p>도착 시각은 도착 관측이 실린 batch 가 상류에서 응답을 받은 시각이다. 채점한 시각을 쓰면
-     * 회수 배치가 늦게 돌 때 <b>아직 도착 안 한 것까지 세게 된다.</b>
-     *
-     * <p>날짜는 KST 로 자른다. 하루가 바뀌면 성적도 새로 시작한다.
-     *
-     * <p>예보 시각과 같은 순간에 도착한 것까지 센다. 그 순간에 이미 확정된 과거 사건이라
-     * 미래를 보고 답하는 것이 아니다. 서빙 쪽 {@code arrived_at <= predicted_at} 과 같다.
-     *
-     * <p>노선 판본이 아니라 <b>Open API 노선</b>으로 묶는다. 노선이 개편되면 판본이 갈리는데,
-     * 판본으로 묶으면 개편된 날 성적이 0건에서 다시 시작한다. 만석이 얼마나 나는지는 개편과
-     * 상관없이 이어지는 성질이라 노선으로 묶는 편이 맞다.
-     */
-    private static final String SELECT_SAME_DAY_FULL_OUTCOMES = """
-        SELECT forecast.stops_to_target,
-               count(*)                                              AS row_count,
-               count(*) FILTER (WHERE forecast.seats_on_arrival = 0)  AS actual_full_count,
-               avg(forecast.seat_full_chance_raw)                     AS average_raw_full_chance
-        FROM seat_forecast forecast
-        JOIN vehicle_observation arrival
-          ON arrival.id = forecast.arrival_observation_id
-        JOIN observation_batch arrival_batch
-          ON arrival_batch.id = arrival.observation_batch_id
-        JOIN route_version forecast_version
-          ON forecast_version.id = forecast.route_version_id
-        WHERE forecast_version.route_id = (
-                SELECT route_id FROM route_version WHERE id = :routeVersionId)
-          AND forecast.scoring_state = 'SETTLED'
-          AND forecast.seats_on_arrival IS NOT NULL
-          AND arrival_batch.response_received_at <= :predictionAt
-          AND (arrival_batch.response_received_at AT TIME ZONE 'Asia/Seoul')::date
-              = (CAST(:predictionAt AS timestamptz) AT TIME ZONE 'Asia/Seoul')::date
-        GROUP BY forecast.stops_to_target
+    private static final String SETTLE_PENDING_FORECAST = """
+        UPDATE seat_forecast forecast
+        SET scoring_state = :scoringState,
+            arrival_observation_id = :arrivalObservationId,
+            seats_on_arrival = :seatsOnArrival,
+            scored_at = :scoredAt
+        FROM route_version forecast_version,
+             vehicle_observation arrival
+             JOIN observation_batch arrival_batch
+               ON arrival_batch.id = arrival.observation_batch_id
+        WHERE forecast.vehicle_observation_id = :vehicleObservationId
+          AND forecast.target_stop_order = :targetStopOrder
+          AND forecast.scoring_state = 'PENDING'
+          AND forecast_version.id = forecast.route_version_id
+          AND arrival.id = :arrivalObservationId
+        RETURNING forecast_version.route_id, forecast.stops_to_target,
+                  forecast.seat_full_chance_raw, arrival_batch.response_received_at
         """;
 
     private final JdbcClient jdbcClient;
@@ -232,10 +213,15 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
     }
 
     @Override
-    public void settle(
+    public List<SettledForecast> settle(
         List<ForecastSettlement> settlements
     ) {
+        List<SettledForecast> settled = new ArrayList<>();
         for (ForecastSettlement settlement : settlements) {
+            if (settlement.label() instanceof ArrivalLabel.Settled label) {
+                settlePending(settlement, label).ifPresent(settled::add);
+                continue;
+            }
             ArrivalColumns arrival = arrivalColumnsOf(settlement.label());
             jdbcClient.sql(SETTLE_FORECAST)
                 .param("scoringState", settlement.label().scoringState().name())
@@ -246,6 +232,27 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
                 .param("targetStopOrder", settlement.targetStopOrder())
                 .update();
         }
+        return List.copyOf(settled);
+    }
+
+    private Optional<SettledForecast> settlePending(
+        ForecastSettlement settlement,
+        ArrivalLabel.Settled label
+    ) {
+        return jdbcClient.sql(SETTLE_PENDING_FORECAST)
+            .param("scoringState", ScoringState.SETTLED.name())
+            .param("arrivalObservationId", label.arrivalObservationId())
+            .param("seatsOnArrival", label.seatsOnArrival())
+            .param("scoredAt", offsetOf(settlement.scoredAt()))
+            .param("vehicleObservationId", settlement.vehicleObservationId())
+            .param("targetStopOrder", settlement.targetStopOrder())
+            .query((resultSet, rowNumber) -> new SettledForecast(
+                resultSet.getLong("route_id"),
+                resultSet.getInt("stops_to_target"),
+                resultSet.getDouble("seat_full_chance_raw"),
+                resultSet.getObject("response_received_at", OffsetDateTime.class).toInstant(),
+                label.seatsOnArrival()))
+            .optional();
     }
 
     /**
@@ -286,24 +293,6 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
         Long arrivalObservationId,
         Integer seatsOnArrival
     ) {
-    }
-    @Override
-    public Map<Integer, SameDayFullOutcomes> readSameDayFullOutcomes(
-        final long routeVersionId,
-        Instant predictionAt
-    ) {
-        Map<Integer, SameDayFullOutcomes> byStopsAhead = new LinkedHashMap<>();
-        jdbcClient.sql(SELECT_SAME_DAY_FULL_OUTCOMES)
-            .param("routeVersionId", routeVersionId)
-            .param("predictionAt", OffsetDateTime.ofInstant(predictionAt, ZoneOffset.UTC))
-            .query((resultSet, rowNumber) -> byStopsAhead.put(
-                resultSet.getInt("stops_to_target"),
-                new SameDayFullOutcomes(
-                    resultSet.getInt("row_count"),
-                    resultSet.getInt("actual_full_count"),
-                    resultSet.getDouble("average_raw_full_chance"))))
-            .list();
-        return Map.copyOf(byStopsAhead);
     }
 
 }
