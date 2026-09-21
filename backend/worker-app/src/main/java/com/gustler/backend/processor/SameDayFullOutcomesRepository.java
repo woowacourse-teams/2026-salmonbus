@@ -14,7 +14,7 @@ public interface SameDayFullOutcomesRepository {
     );
 
     /** 센 값으로 덮어쓴다. 원본이 진실이라 더하지 않는다. */
-    void replaceCounts(
+    void upsertCounts(
         long routeId,
         SeoulDay day,
         List<SameDayFullOutcomeCount> counts

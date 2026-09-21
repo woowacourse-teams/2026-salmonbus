@@ -73,7 +73,7 @@ public class SameDayFullOutcomesService {
     ) {
         List<SameDayFullOutcomeCount> counted = repository.countFromSource(routeId, day, day.end());
         if (!counted.isEmpty()) {
-            repository.replaceCounts(routeId, day, counted);
+            repository.upsertCounts(routeId, day, counted);
         }
         return counted;
     }

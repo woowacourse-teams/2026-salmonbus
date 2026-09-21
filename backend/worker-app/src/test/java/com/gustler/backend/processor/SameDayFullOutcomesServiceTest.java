@@ -66,7 +66,7 @@ class SameDayFullOutcomesServiceTest {
 
         // then
         assertThat(actual).containsKey(STOPS_TO_TARGET);
-        verify(repository).replaceCounts(ROUTE_3330, DAY, List.of(TALLY));
+        verify(repository).upsertCounts(ROUTE_3330, DAY, List.of(TALLY));
     }
 
     @Test
@@ -80,7 +80,7 @@ class SameDayFullOutcomesServiceTest {
 
         // then
         assertThat(actual).isEmpty();
-        verify(repository, never()).replaceCounts(anyLong(), any(), any());
+        verify(repository, never()).upsertCounts(anyLong(), any(), any());
     }
 
     @Test
@@ -95,7 +95,7 @@ class SameDayFullOutcomesServiceTest {
 
         // then
         assertThat(actual).isEmpty();
-        verify(repository, never()).replaceCounts(anyLong(), any(), any());
+        verify(repository, never()).upsertCounts(anyLong(), any(), any());
     }
 
     @Test
@@ -137,7 +137,7 @@ class SameDayFullOutcomesServiceTest {
         service.record(List.of(settledOn(ROUTE_3330, SETTLED_THROUGH, 0)));
 
         // then
-        verify(repository).replaceCounts(ROUTE_3330, DAY, List.of(TALLY));
+        verify(repository).upsertCounts(ROUTE_3330, DAY, List.of(TALLY));
         verify(repository, never()).add(any());
     }
 
@@ -155,7 +155,7 @@ class SameDayFullOutcomesServiceTest {
 
         // then
         verify(repository).add(on3330);
-        verify(repository).replaceCounts(ROUTE_1650, DAY, List.of(TALLY));
+        verify(repository).upsertCounts(ROUTE_1650, DAY, List.of(TALLY));
         verify(repository, never()).add(on1650);
     }
 
@@ -175,7 +175,7 @@ class SameDayFullOutcomesServiceTest {
 
         // then
         verify(repository).add(today);
-        verify(repository).replaceCounts(ROUTE_3330, yesterday, List.of(TALLY));
+        verify(repository).upsertCounts(ROUTE_3330, yesterday, List.of(TALLY));
         verify(repository, never()).add(lateSettled);
     }
 

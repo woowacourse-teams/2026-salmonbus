@@ -24,7 +24,7 @@ public class JdbcSameDayFullOutcomesRepository implements SameDayFullOutcomesRep
         ORDER BY stops_to_target
         """;
 
-    private static final String REPLACE_COUNT = """
+    private static final String UPSERT_COUNT = """
         INSERT INTO same_day_full_outcomes (
             route_id, outcome_date, stops_to_target,
             row_count, actual_full_count, raw_full_chance_sum, settled_through
@@ -110,13 +110,13 @@ public class JdbcSameDayFullOutcomesRepository implements SameDayFullOutcomesRep
     }
 
     @Override
-    public void replaceCounts(
+    public void upsertCounts(
         final long routeId,
         SeoulDay day,
         List<SameDayFullOutcomeCount> counts
     ) {
         for (SameDayFullOutcomeCount count : counts) {
-            jdbcClient.sql(REPLACE_COUNT)
+            jdbcClient.sql(UPSERT_COUNT)
                 .param("routeId", routeId)
                 .param("outcomeDate", day.date())
                 .param("stopsToTarget", count.stopsToTarget())

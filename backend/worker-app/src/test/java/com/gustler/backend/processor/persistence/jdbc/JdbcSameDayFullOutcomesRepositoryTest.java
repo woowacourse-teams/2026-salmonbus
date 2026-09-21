@@ -140,7 +140,7 @@ class JdbcSameDayFullOutcomesRepositoryTest {
         SameDayFullOutcomeCount count = new SameDayFullOutcomeCount(STOPS_TO_TARGET, 5, 2, 1.7, ARRIVED_AT);
 
         // when
-        repository.replaceCounts(routeId, ARRIVAL_DAY, List.of(count));
+        repository.upsertCounts(routeId, ARRIVAL_DAY, List.of(count));
 
         // then
         assertThat(repository.findCounts(routeId, ARRIVAL_DAY)).containsExactly(count);
