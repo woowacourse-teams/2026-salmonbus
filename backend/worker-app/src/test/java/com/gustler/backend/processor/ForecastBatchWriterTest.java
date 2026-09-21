@@ -38,7 +38,7 @@ class ForecastBatchWriterTest {
 
     private static final Instant NOW = Instant.parse("2026-09-21T02:00:00Z");
     private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
-    private static final PendingForecastBatch BATCH = new PendingForecastBatch(100, 1, NOW);
+    private static final PendingForecastBatch BATCH = new PendingForecastBatch(100, 1, 1, NOW);
     private static final RouteStops STOPS = new RouteStops(1, "204000057", List.of(
         new RouteStop(1, 4, "stop-4", true), new RouteStop(1, 5, "stop-5", true)));
     private static final StopDemandStatistics STATISTICS = new StopDemandStatistics(
@@ -51,14 +51,15 @@ class ForecastBatchWriterTest {
     private final StopDemandStatisticsRepository statistics = mock(StopDemandStatisticsRepository.class);
     private final TripQualityRepository quality =
         mock(TripQualityRepository.class);
-    private final ForecastBatchWriter writer = new ForecastBatchWriter(trajectories, forecasts, statistics, CLOCK,
+    private final SameDayFullOutcomesService outcomes = mock(SameDayFullOutcomesService.class);
+    private final ForecastBatchWriter writer = new ForecastBatchWriter(trajectories, forecasts, outcomes, statistics, CLOCK,
         quality);
     private final ListAppender<ILoggingEvent> logs = new ListAppender<>();
 
     @BeforeEach
     void setUp() {
         when(statistics.readAsOf(1, STATISTICS.timeSlot(), "feature-v1", NOW)).thenReturn(STATISTICS);
-        when(forecasts.readSameDayFullOutcomes(1, NOW)).thenReturn(Map.of());
+        when(outcomes.outcomesFor(1, NOW)).thenReturn(Map.of());
         logs.start();
         ((Logger) LoggerFactory.getLogger(ForecastBatchWriter.class)).addAppender(logs);
     }
@@ -245,9 +246,9 @@ class ForecastBatchWriterTest {
         when(routes.readStops(1)).thenReturn(STOPS);
         when(routes.readStops(2)).thenReturn(new RouteStops(2, "234000050", List.of()));
         when(trajectories.findBatchesAwaitingForecast(1, NOW.minusSeconds(300), 20))
-            .thenReturn(List.of(BATCH, new PendingForecastBatch(101, 1, NOW)));
+            .thenReturn(List.of(BATCH, new PendingForecastBatch(101, 1, 1, NOW)));
         when(trajectories.findBatchesAwaitingForecast(2, NOW.minusSeconds(300), 20))
-            .thenReturn(List.of(new PendingForecastBatch(102, 2, NOW)));
+            .thenReturn(List.of(new PendingForecastBatch(102, 2, 2, NOW)));
         when(trajectories.readTrajectories(100)).thenReturn(List.of(vehicle(11, 43, 82)));
         when(trajectories.readTrajectories(101)).thenReturn(List.of(vehicle(10, 12, 44)));
         when(trajectories.readTrajectories(102)).thenReturn(List.of());

@@ -2,19 +2,16 @@ package com.gustler.backend.processor.persistence.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.gustler.backend.processor.TripQualityRepository;
 import com.gustler.backend.processor.ArrivalLabel;
 import com.gustler.backend.processor.ForecastSettlement;
 import com.gustler.backend.processor.PendingForecast;
 import com.gustler.backend.processor.SeatForecast;
-import com.gustler.backend.processor.seatdistribution.SameDayFullOutcomes;
-import com.gustler.backend.support.ConfirmedTripFixture;
+import com.gustler.backend.processor.SettledForecast;
 import com.gustler.backend.support.IntegrationTest;
-import java.time.Duration;
+import com.gustler.backend.support.ConfirmedTripFixture;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -71,6 +68,7 @@ class JdbcSeatForecastRepositoryTest {
     @Autowired
     private JdbcClient jdbcClient;
 
+    private long routeId;
     private long routeVersionId;
     private long modelDeploymentId;
     private long observationBatchId;
@@ -78,7 +76,7 @@ class JdbcSeatForecastRepositoryTest {
 
     @BeforeEach
     void 노선_판본과_정류소와_모델과_관측을_먼저_저장한다() {
-        final long routeId = insertRoute();
+        routeId = insertRoute();
         routeVersionId = insertRouteVersion(routeId);
         insertRouteStop(PASSED_STOP_ORDER);
         insertRouteStop(TARGET_STOP_ORDER);
@@ -250,6 +248,62 @@ class JdbcSeatForecastRepositoryTest {
         assertThat(actual).isEqualTo(new StoredLabel("SKIPPED", null, null, SCORED_AT));
     }
 
+    @Test
+    void 만석으로_회수하면_닫힌_예보의_노선과_거리와_확률과_도착_시각을_돌려준다() {
+        // given
+        final long arrivalObservationId = insertArrivalObservation();
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+
+        // when
+        List<SettledForecast> actual = jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            vehicleObservationId,
+            TARGET_STOP_ORDER,
+            new ArrivalLabel.Settled(arrivalObservationId, SEATS_ON_ARRIVAL_WHEN_FULL),
+            SCORED_AT)));
+
+        // then
+        assertThat(actual).containsExactly(new SettledForecast(
+            routeId, STOPS_TO_TARGET, 0.41, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant(), SEATS_ON_ARRIVAL_WHEN_FULL));
+    }
+
+    @Test
+    void 좌석_결측이나_건너뜀으로_회수한_예보는_돌려주지_않는다() {
+        // given
+        final long arrivalObservationId = insertArrivalObservation();
+        jdbcSeatForecastRepository.save(List.of(
+            forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT),
+            forecastOf(NEXT_TARGET_STOP_ORDER, STOPS_TO_NEXT_TARGET, NEXT_GENERATED_AT)));
+
+        // when
+        List<SettledForecast> actual = jdbcSeatForecastRepository.settle(List.of(
+            new ForecastSettlement(
+                vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.SeatMissing(arrivalObservationId), SCORED_AT),
+            new ForecastSettlement(
+                vehicleObservationId, NEXT_TARGET_STOP_ORDER, new ArrivalLabel.Skipped(), SCORED_AT)));
+
+        // then
+        assertThat(actual).isEmpty();
+    }
+
+    @Test
+    void 이미_닫힌_예보를_다시_회수하면_아무것도_돌려주지_않는다() {
+        // given
+        final long arrivalObservationId = insertArrivalObservation();
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+        ForecastSettlement settlement = new ForecastSettlement(
+            vehicleObservationId,
+            TARGET_STOP_ORDER,
+            new ArrivalLabel.Settled(arrivalObservationId, SEATS_ON_ARRIVAL_WHEN_FULL),
+            SCORED_AT);
+        jdbcSeatForecastRepository.settle(List.of(settlement));
+
+        // when
+        List<SettledForecast> actual = jdbcSeatForecastRepository.settle(List.of(settlement));
+
+        // then
+        assertThat(actual).isEmpty();
+    }
+
     private SeatForecast forecastOf(
         final int targetStopOrder,
         final int stopsToTarget,
@@ -268,114 +322,69 @@ class JdbcSeatForecastRepositoryTest {
             generatedAt);
     }
 
-    @Test
-    void 오늘_도착이_확인된_예보의_성적을_예보_거리마다_읽는다() {
-        // given 도착이 확인된 예보 하나를 만든다
-        // given
-        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
-        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
-            vehicleObservationId,
-            TARGET_STOP_ORDER,
-            new ArrivalLabel.Settled(insertArrivalObservation(), SEATS_ON_ARRIVAL_WHEN_FULL),
-            SCORED_AT)));
-
-        // when 그 도착보다 뒤 시각으로 묻는다
-        Map<Integer, SameDayFullOutcomes> actual = jdbcSeatForecastRepository.readSameDayFullOutcomes(
-            routeVersionId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant().plusSeconds(60));
-
-        // then
-        assertThat(actual.get(STOPS_TO_TARGET))
-            .isEqualTo(new SameDayFullOutcomes(1, 1, 0.41));
-    }
-
-    @Test
-    void 예보_시각과_같은_순간에_도착한_것도_성적에_센다() {
-        // given 그 순간에 이미 확정된 과거 사건이라 미래를 보고 답하는 것이 아니다
-        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
-        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
-            vehicleObservationId,
-            TARGET_STOP_ORDER,
-            new ArrivalLabel.Settled(insertArrivalObservation(), SEATS_ON_ARRIVAL_WHEN_FULL),
-            SCORED_AT)));
-
-        // when 도착 시각과 같은 시각으로 묻는다
-        Map<Integer, SameDayFullOutcomes> actual = jdbcSeatForecastRepository.readSameDayFullOutcomes(
-            routeVersionId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant());
-
-        // then
-        assertThat(actual).containsKey(STOPS_TO_TARGET);
-    }
-
-    @Test
-    void 예보_시각보다_뒤에_도착한_것은_성적에_안_센다() {
-        // given
-        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
-        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
-            vehicleObservationId,
-            TARGET_STOP_ORDER,
-            new ArrivalLabel.Settled(insertArrivalObservation(), SEATS_ON_ARRIVAL_WHEN_FULL),
-            SCORED_AT)));
-
-        // when 그 도착보다 앞선 시각으로 묻는다
-        Map<Integer, SameDayFullOutcomes> actual = jdbcSeatForecastRepository.readSameDayFullOutcomes(
-            routeVersionId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant().minusSeconds(60));
-
-        // then
-        assertThat(actual).isEmpty();
-    }
-
-    @Test
-    void 아직_도착이_확인_안_된_예보는_성적에_안_센다() {
-        // given 회수를 안 한 예보다
-        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
-
-        // when
-        Map<Integer, SameDayFullOutcomes> actual = jdbcSeatForecastRepository.readSameDayFullOutcomes(
-            routeVersionId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant().plusSeconds(60));
-
-        // then
-        assertThat(actual).isEmpty();
-    }
-
-    @Test
-    void 어제_도착한_예보는_오늘_성적에_안_센다() {
-        // given
-        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
-        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
-            vehicleObservationId,
-            TARGET_STOP_ORDER,
-            new ArrivalLabel.Settled(insertArrivalObservation(), SEATS_ON_ARRIVAL_WHEN_FULL),
-            SCORED_AT)));
-
-        // when 한국 시각으로 다음 날에 묻는다
-        Map<Integer, SameDayFullOutcomes> actual = jdbcSeatForecastRepository.readSameDayFullOutcomes(
-            routeVersionId, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant().plus(Duration.ofDays(1)));
-
-        // then
-        assertThat(actual).isEmpty();
-    }
-
-    @Test
-    void 계산_자료_버전을_올리면_기존_예측을_당일_보정에서_제외하고_저장된_행은_유지한다() {
-        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
-        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(vehicleObservationId, TARGET_STOP_ORDER,
-            new ArrivalLabel.Settled(insertArrivalObservation(), SEATS_ON_ARRIVAL_WHEN_FULL), SCORED_AT)));
-        assertThat(jdbcSeatForecastRepository.readSameDayFullOutcomes(routeVersionId,
-            ARRIVAL_RESPONSE_RECEIVED_AT.toInstant())).isNotEmpty();
-        var quality = new TripQualityRepository(jdbcClient);
-        quality.lockRoute(routeVersionId);
-
-        // when
-        quality.invalidateDerivedInputs(routeVersionId);
-
-        // then
-        assertThat(jdbcSeatForecastRepository.readSameDayFullOutcomes(routeVersionId,
-            ARRIVAL_RESPONSE_RECEIVED_AT.toInstant())).isEmpty();
-        assertThat(jdbcClient.sql("SELECT count(*) FROM seat_forecast WHERE vehicle_observation_id = ?")
-            .param(vehicleObservationId).query(Integer.class).single()).isEqualTo(1);
-    }
-
     /** 예보를 낸 뒤 다음 판에서 대상 정류소를 지난 그 차량의 관측. */
+    @Test
+    void 이전_판정_버전의_예보는_도착_좌석을_저장하되_후보정_증분에는_포함하지_않는다() {
+        // given
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+        long arrival = insertArrivalObservation();
+        jdbcClient.sql("UPDATE route SET quality_revision = quality_revision + 1 WHERE id = ?")
+            .param(routeId).update();
+
+        // when
+        List<SettledForecast> actual = jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
+
+        // then
+        assertThat(actual).isEmpty();
+        assertThat(jdbcClient.sql("SELECT scoring_state FROM seat_forecast WHERE vehicle_observation_id = ?")
+            .param(vehicleObservationId).query(String.class).single()).isEqualTo("SETTLED");
+        assertThat(jdbcClient.sql("SELECT seats_on_arrival FROM seat_forecast WHERE vehicle_observation_id = ?")
+            .param(vehicleObservationId).query(Integer.class).single()).isZero();
+    }
+
+    @Test
+    void 편도가_제외된_뒤에는_도착_결과와_후보정_증분을_저장하지_않는다() {
+        // given
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+        long arrival = insertArrivalObservation();
+        jdbcClient.sql("UPDATE vehicle_one_way_trip SET status = 'EXCLUDED' WHERE start_observation_id = ?")
+            .param(vehicleObservationId).update();
+
+        // when
+        List<SettledForecast> actual = jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
+
+        // then
+        assertThat(actual).isEmpty();
+        assertThat(jdbcClient.sql("SELECT scoring_state FROM seat_forecast WHERE vehicle_observation_id = ?")
+            .param(vehicleObservationId).query(String.class).single()).isEqualTo("PENDING");
+    }
+
+    @Test
+    void 다른_편도의_도착_관측으로_예보를_닫지_않는다() {
+        // given
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+        long arrival = insertArrivalObservation();
+        jdbcClient.sql("""
+            INSERT INTO vehicle_one_way_trip(id, start_observation_id, route_version_id, vehicle_id,
+                status, boundary, rule_version)
+            SELECT CAST(id AS varchar), id, route_version_id, vehicle_id, 'ELIGIBLE', 'DEPARTURE', 'test'
+            FROM vehicle_observation WHERE id = ?
+            """).param(arrival).update();
+        jdbcClient.sql("UPDATE vehicle_observation SET vehicle_trip_key = CAST(id AS varchar) WHERE id = ?")
+            .param(arrival).update();
+
+        // when
+        List<SettledForecast> actual = jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
+
+        // then
+        assertThat(actual).isEmpty();
+        assertThat(jdbcClient.sql("SELECT scoring_state FROM seat_forecast WHERE vehicle_observation_id = ?")
+            .param(vehicleObservationId).query(String.class).single()).isEqualTo("PENDING");
+    }
+
     private long insertArrivalObservation() {
         final long arrivalBatchId = insertObservationBatch("2026-08-19T11:20", ARRIVAL_RESPONSE_RECEIVED_AT);
         return insertObservation(arrivalBatchId, VEHICLE_204000206, 0, ARRIVAL_STOP_ORDER);

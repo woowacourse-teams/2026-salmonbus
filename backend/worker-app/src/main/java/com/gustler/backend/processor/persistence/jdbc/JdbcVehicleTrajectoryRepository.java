@@ -59,14 +59,16 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
      * 그 인덱스 둘째 열의 범위라 정렬 없이 앞에서부터 읽고 끊는다.
      */
     private static final String SELECT_BATCHES_AWAITING_FORECAST = """
-        SELECT id, route_version_id, response_received_at
-        FROM observation_batch
-        WHERE route_version_id = :routeVersionId
-          AND forecast_completed_at IS NULL
-          AND response_received_at IS NOT NULL
-          AND response_received_at >= :notBefore
-          AND outcome IN ('SUCCESS_ROWS', 'SUCCESS_EMPTY')
-        ORDER BY response_received_at
+        SELECT batch.id, batch.route_version_id, version.route_id, batch.response_received_at
+        FROM observation_batch batch
+        JOIN route_version version
+          ON version.id = batch.route_version_id
+        WHERE batch.route_version_id = :routeVersionId
+          AND batch.forecast_completed_at IS NULL
+          AND batch.response_received_at IS NOT NULL
+          AND batch.response_received_at >= :notBefore
+          AND batch.outcome IN ('SUCCESS_ROWS', 'SUCCESS_EMPTY')
+        ORDER BY batch.response_received_at
         LIMIT :limit
         """;
 
@@ -192,6 +194,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
             .query((resultSet, rowNumber) -> new PendingForecastBatch(
                 resultSet.getLong("id"),
                 resultSet.getLong("route_version_id"),
+                resultSet.getLong("route_id"),
                 instantOf(resultSet.getObject("response_received_at", OffsetDateTime.class))))
             .list();
     }

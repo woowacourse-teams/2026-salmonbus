@@ -1,4 +1,4 @@
--- V14는 병행 작업 SAL-132의 당일 집계 변경에 예약되어 있다.
+-- V14(SAL-132)의 당일 집계에도 같은 품질 판정 버전을 적용한다.
 -- 원본 좌석/위치/시각과 예측값은 덮어쓰지 않는다. 기존 행은 판정 전까지 사용 보류한다.
 -- 작은 설정/버전은 기존 노선 행에 둔다. 관측마다 연결 행을 추가하지 않는다.
 ALTER TABLE route ADD COLUMN quality_revision bigint NOT NULL DEFAULT 1 CHECK (quality_revision > 0);
@@ -24,6 +24,7 @@ CREATE INDEX ix_one_way_trip_vehicle ON vehicle_one_way_trip(route_version_id, v
 -- vehicle_trip_key는 기존의 nullable 파생 열이다. 원본 좌석/위치/시각은 변경하지 않는다.
 ALTER TABLE seat_forecast ADD COLUMN quality_revision bigint NOT NULL DEFAULT 0;
 ALTER TABLE stop_demand_statistics ADD COLUMN quality_revision bigint NOT NULL DEFAULT 0;
+ALTER TABLE same_day_full_outcomes ADD COLUMN quality_revision bigint NOT NULL DEFAULT 0;
 
 -- 과거 자료를 정리하는 동안 해당 판본의 계산 입력을 잠근다. 커서는 batch 단위로 커밋한다.
 CREATE TABLE trip_quality_rebuild (

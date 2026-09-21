@@ -1,8 +1,8 @@
 # SAL-133 D — 변경 범위와 DB 작업 축소 후 설명
 
-- 기준: `256a88d8060172f669aff599dfdd2398dd4085b7` 이후 미커밋 D 작업과 패키지 이동 원복.
+- 기준: `256a88d8060172f669aff599dfdd2398dd4085b7` 이후 D 작업, 패키지 이동 원복, 최신 dev `6f70826`(SAL-132) 통합.
 - 유지한 기능: 70 초과 편도 전체 제외, 정상 차량/다음 편도 유지, 기존 예측 제공 중단, 보정·통계·학습 재사용 차단, 과거 재판정.
-- 상태: 로컬 코드와 격리 PostgreSQL 검증. 운영 DB 접속·운영 마이그레이션·커밋·배포 없음.
+- 상태: 코드 커밋과 최신 dev 통합, 격리 PostgreSQL 검증. 운영 DB 접속·운영 마이그레이션·배포 없음.
 - 아래 숫자는 합성 테스트와 코드 비교다. RDS의 실제 처리 시간·메모리·CPU 감소율이 아니다.
 
 ## 1. 저장 구조: 새 테이블 5개에서 2개로
@@ -85,6 +85,20 @@ API의 예측 조회는 `forecast_eligible_observation` 조건을 유지한다. 
 
 이전 구현의 보수적 정책도 유지했다. 편도 제외 시 같은 노선의 이전 보정/통계 버전을 사용하지 않으며, 편도별 근거가 없는 seed 합계는 섞지 않는다. 이 정책 때문에 정상 자료의 재사용도 일부 보류될 수 있다. 저장 구조를 줄였다고 그 영향까지 없어진 것은 아니다. 기존 모델의 자동 재학습과 이미 전달한 응답의 회수는 구현하지 않았다.
 
+### 최신 dev의 당일 집계와 연결
+
+`dev`의 SAL-132는 당일 결과를 `same_day_full_outcomes`에 누적한다. 예측할 때 이 작은 집계를 읽는 방식은 유지했다. `ForecastBatchWriter`는 `SameDayFullOutcomesService`를 사용하고, `PendingForecastBatch`의 `routeId`로 노선 단위 집계를 읽는다.
+
+그대로 합치면 제외 전 쌓인 집계가 계속 사용될 수 있다. V15에서 이 집계에도 `quality_revision`을 추가했고, `JdbcSameDayFullOutcomesRepository`는 현재 노선 판정 버전과 같은 집계만 읽는다. 이전 버전의 집계에 새 버전의 건수를 더하지 않는다. 집계를 다시 만들 때도 적격 편도와 현재 버전의 예측만 센다.
+
+합성 예시: 버전 1에서 만석 결과 5건을 집계한 뒤 한 편도가 제외되어 버전 2가 되면, 5건 집계는 읽지 않는다. 버전 2의 유효한 결과 1건이 들어오면 이전 5건과 합쳐 6건으로 만들지 않는다. 같은 노선의 정상 자료도 이전 버전이면 후보정 재사용을 보류하는 보수적 정책이다.
+
+`JdbcSeatForecastRepository.settle`은 회수 대상 노선을 id 순으로 한 SQL에서 잠근다. 예보 생성·편도 제외와 같은 노선 잠금을 사용하며, 기존 `ArrivalLabelJob`의 트랜잭션 안에서 결과 저장과 집계 갱신을 완료한다. 과거 버전의 예보도 적격 편도의 실제 도착 좌석은 저장하지만 후보정에 더할 결과에서는 제외한다.
+
+집계가 없거나 과거 시각의 예측을 처리할 때는 dev와 같이 원본 재집계가 남는다. 유효한 집계가 계속 비어 있으면 조회 때마다 재집계할 수 있으므로 모든 조회 비용이 일정하거나 DB 추가 부하가 0이라고 보장하지 않는다. 노선 잠금의 운영 대기 시간도 아직 측정하지 않았다.
+
+관련: `SameDayFullOutcomesService`, `JdbcSameDayFullOutcomesRepository`, `JdbcSeatForecastRepository`, V14/V15. API의 `forecast` 구조는 유지한다.
+
 ## 7. 과거 자료: 같은 판정기로 제한된 묶음만 처리
 
 `TripQualityMaintenance`와 `MigrationCli`의 preview/rebuild/status는 유지한다. 최대 100묶음 처리, 진행 위치 저장, 롤백 후 재개, 같은 요청의 완료 후 무변경, 진행 중 정책 변경 거부를 유지한다.
@@ -95,7 +109,7 @@ API의 예측 조회는 `forecast_eligible_observation` 조건을 유지한다. 
 
 ## 8. 패키지와 테스트
 
-`ForecastBatchWriter`, `SeatForecastModel`은 기존 `processor`로 복귀했다. 신규 `SeatRangeException`, `OneWayTripClassifier`, `TripQualityRepository`와 대응 테스트도 기존 processor 패키지에 둔다. 구체 모델의 `processor.seatdistribution`은 그대로다. 삭제한 이전 경로와 복귀한 경로를 함께 커밋해야 한다.
+`ForecastBatchWriter`, `SeatForecastModel`은 기존 `processor`로 복귀했다. 신규 `SeatRangeException`, `OneWayTripClassifier`, `TripQualityRepository`와 대응 테스트도 기존 processor 패키지에 둔다. 구체 모델의 `processor.seatdistribution`은 그대로다. 삭제한 이전 경로와 복귀한 경로를 함께 커밋했다.
 
 `ConfirmedTripFixture`는 다른 기능 테스트의 적격 편도 준비를 돕는 용도로 유지하고, 연결 INSERT를 키 UPDATE로 바꿨다. 이 도우미가 실제 편도 판정의 정확성을 보장하지는 않는다. 품질 규칙은 판정기/저장소 테스트에서 별도로 확인한다.
 
@@ -109,4 +123,4 @@ Java 21과 캐시 JAR의 javac/JUnit으로 순차 실행한다. DB 검증은 운
 
 SQL 호출 수 테스트는 차량 1대/30대의 합성 자료다. 실행 계획은 500묶음 × 30대 = 15,000개 합성 관측에서 기존 차량과 처음 나타난 차량을 별도로 확인한다. 한 쿼리의 실행 시간/정렬 메모리를 RDS 전체 부하나 쿼리 전체 메모리로 확대 해석하지 않는다.
 
-운영 규모의 긴 관측 공백·대량 과거 재판정·동시 수집과 잠금 대기, 전체 Gradle 빌드, 기존 운영 DB의 V14/V15 적용 순서는 미검증이다. 기능에 필요한 새 관측 키 저장·편도 상태 조회·잠금이 있으므로 추가 DB 비용이 0이라고 주장하지 않는다. 현재 검증 결과는 [변경 이력의 최신 항목](2026-09-21-SAL-133.md)에 기록한다.
+운영 규모의 긴 관측 공백·대량 과거 재판정·동시 수집과 잠금 대기, 전체 Gradle 빌드, 기존 운영 DB에서의 적용은 미검증이다. V14 적용 후 V15를 올리는 순서는 격리 DB에서 확인했다. 기능에 필요한 새 관측 키 저장·편도 상태 조회·잠금이 있으므로 추가 DB 비용이 0이라고 주장하지 않는다. 현재 검증 결과는 [변경 이력의 최신 항목](2026-09-21-SAL-133.md)에 기록한다.

@@ -19,6 +19,7 @@ class ForecastTimeSlotTest {
 
     private static final long ANY_BATCH_ID = 7L;
     private static final long ROUTE_VERSION_3330 = 1L;
+    private static final long ROUTE_3330 = 1L;
 
     @Test
     void 시간대는_관측을_받은_시각으로_정해진다() {
@@ -60,6 +61,6 @@ class ForecastTimeSlotTest {
     private static PendingForecastBatch batchReceivedAt(
         Instant responseReceivedAt
     ) {
-        return new PendingForecastBatch(ANY_BATCH_ID, ROUTE_VERSION_3330, responseReceivedAt);
+        return new PendingForecastBatch(ANY_BATCH_ID, ROUTE_VERSION_3330, ROUTE_3330, responseReceivedAt);
     }
 }
