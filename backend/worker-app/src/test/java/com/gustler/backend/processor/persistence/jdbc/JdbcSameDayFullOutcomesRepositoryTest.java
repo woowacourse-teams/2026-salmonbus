@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.gustler.backend.processor.ArrivalLabel;
 import com.gustler.backend.processor.ForecastSettlement;
 import com.gustler.backend.processor.SameDayFullOutcomeCount;
+import com.gustler.backend.processor.SameDayFullOutcomesService;
 import com.gustler.backend.processor.SeatForecast;
 import com.gustler.backend.processor.SeoulDay;
 import com.gustler.backend.processor.SettledForecast;
@@ -60,6 +61,9 @@ class JdbcSameDayFullOutcomesRepositoryTest {
     private JdbcSeatForecastRepository seatForecastRepository;
 
     @Autowired
+    private SameDayFullOutcomesService service;
+
+    @Autowired
     private JdbcClient jdbcClient;
 
     private long routeId;
@@ -107,6 +111,23 @@ class JdbcSameDayFullOutcomesRepositoryTest {
         // when
         repository.add(settleAsFull(vehicleObservationId, RAW_FULL_CHANCE));
         repository.add(settleWithSeats(otherObservationId, OTHER_RAW_FULL_CHANCE, SEATS_ON_ARRIVAL_WHEN_NOT_FULL));
+
+        // then
+        assertThat(repository.findCounts(routeId, ARRIVAL_DAY)).containsExactly(
+            new SameDayFullOutcomeCount(STOPS_TO_TARGET, 2, 1, RAW_FULL_CHANCE + OTHER_RAW_FULL_CHANCE, ARRIVED_AT));
+    }
+
+    @Test
+    void 집계가_없을_때_정산분을_더하면_그_전에_닫힌_예보까지_센다() {
+        // given 집계 테이블이 생기기 전에 닫힌 예보가 원본에 있다
+        settleAsFull(vehicleObservationId, RAW_FULL_CHANCE);
+        final long otherObservationId =
+            insertObservation(observationBatchId, routeVersionId, VEHICLE_204000207, 1, PASSED_STOP_ORDER);
+        SettledForecast settledAfter =
+            settleWithSeats(otherObservationId, OTHER_RAW_FULL_CHANCE, SEATS_ON_ARRIVAL_WHEN_NOT_FULL);
+
+        // when
+        service.record(List.of(settledAfter));
 
         // then
         assertThat(repository.findCounts(routeId, ARRIVAL_DAY)).containsExactly(

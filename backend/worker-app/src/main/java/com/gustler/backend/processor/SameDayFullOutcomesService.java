@@ -2,6 +2,7 @@ package com.gustler.backend.processor;
 
 import com.gustler.backend.processor.seatdistribution.SameDayFullOutcomes;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,9 +45,26 @@ public class SameDayFullOutcomesService {
     public void record(
         List<SettledForecast> settled
     ) {
-        for (SettledForecast forecast : settled) {
-            repository.add(forecast);
+        for (Map.Entry<RouteDay, List<SettledForecast>> group : groupByRouteDay(settled).entrySet()) {
+            RouteDay key = group.getKey();
+            if (repository.findCounts(key.routeId(), key.day()).isEmpty()) {
+                seed(key.routeId(), key.day());
+                continue;
+            }
+            for (SettledForecast forecast : group.getValue()) {
+                repository.add(forecast);
+            }
         }
+    }
+
+    private static Map<RouteDay, List<SettledForecast>> groupByRouteDay(
+        List<SettledForecast> settled
+    ) {
+        Map<RouteDay, List<SettledForecast>> byRouteDay = new LinkedHashMap<>();
+        for (SettledForecast forecast : settled) {
+            byRouteDay.computeIfAbsent(RouteDay.of(forecast), key -> new ArrayList<>()).add(forecast);
+        }
+        return byRouteDay;
     }
 
     private List<SameDayFullOutcomeCount> seed(
@@ -80,5 +98,17 @@ public class SameDayFullOutcomesService {
             byStopsAhead.put(count.stopsToTarget(), count.outcomes());
         }
         return Map.copyOf(byStopsAhead);
+    }
+
+    private record RouteDay(
+        long routeId,
+        SeoulDay day
+    ) {
+
+        static RouteDay of(
+            SettledForecast forecast
+        ) {
+            return new RouteDay(forecast.routeId(), SeoulDay.containing(forecast.arrivedAt()));
+        }
     }
 }

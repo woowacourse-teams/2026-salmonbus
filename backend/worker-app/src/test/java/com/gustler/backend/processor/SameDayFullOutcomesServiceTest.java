@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gustler.backend.processor.seatdistribution.SameDayFullOutcomes;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class SameDayFullOutcomesServiceTest {
 
     private static final long ROUTE_3330 = 1L;
+    private static final long ROUTE_1650 = 2L;
     private static final int STOPS_TO_TARGET = 3;
 
     /** 한국 시각 8월 19일 11시 20분에 도착이 확인됐다. */
@@ -110,10 +112,11 @@ class SameDayFullOutcomesServiceTest {
     }
 
     @Test
-    void 정산된_예보를_하나씩_집계에_더한다() {
+    void 집계가_있으면_정산된_예보를_하나씩_더한다() {
         // given
-        SettledForecast full = new SettledForecast(ROUTE_3330, STOPS_TO_TARGET, 0.41, SETTLED_THROUGH, 0);
-        SettledForecast notFull = new SettledForecast(ROUTE_3330, STOPS_TO_TARGET, 0.21, SETTLED_THROUGH, 7);
+        when(repository.findCounts(ROUTE_3330, DAY)).thenReturn(List.of(TALLY));
+        SettledForecast full = settledOn(ROUTE_3330, SETTLED_THROUGH, 0);
+        SettledForecast notFull = settledOn(ROUTE_3330, SETTLED_THROUGH, 7);
 
         // when
         service.record(List.of(full, notFull));
@@ -121,5 +124,66 @@ class SameDayFullOutcomesServiceTest {
         // then
         verify(repository).add(full);
         verify(repository).add(notFull);
+        verify(repository, never()).countFromSource(anyLong(), any(), any());
+    }
+
+    @Test
+    void 집계가_비어_있으면_원본에서_하루치를_세서_넣고_정산분은_따로_더하지_않는다() {
+        // given 배포 전에 닫힌 예보가 원본에만 있다
+        when(repository.findCounts(ROUTE_3330, DAY)).thenReturn(List.of());
+        when(repository.countFromSource(ROUTE_3330, DAY, DAY.end())).thenReturn(List.of(TALLY));
+
+        // when
+        service.record(List.of(settledOn(ROUTE_3330, SETTLED_THROUGH, 0)));
+
+        // then
+        verify(repository).replaceCounts(ROUTE_3330, DAY, List.of(TALLY));
+        verify(repository, never()).add(any());
+    }
+
+    @Test
+    void 노선이_다른_정산분은_노선마다_따로_판단한다() {
+        // given 3330 은 집계가 있고 1650 은 없다
+        when(repository.findCounts(ROUTE_3330, DAY)).thenReturn(List.of(TALLY));
+        when(repository.findCounts(ROUTE_1650, DAY)).thenReturn(List.of());
+        when(repository.countFromSource(ROUTE_1650, DAY, DAY.end())).thenReturn(List.of(TALLY));
+        SettledForecast on3330 = settledOn(ROUTE_3330, SETTLED_THROUGH, 0);
+        SettledForecast on1650 = settledOn(ROUTE_1650, SETTLED_THROUGH, 7);
+
+        // when
+        service.record(List.of(on3330, on1650));
+
+        // then
+        verify(repository).add(on3330);
+        verify(repository).replaceCounts(ROUTE_1650, DAY, List.of(TALLY));
+        verify(repository, never()).add(on1650);
+    }
+
+    @Test
+    void 도착_날짜가_다른_정산분은_날짜마다_따로_판단한다() {
+        // given 오늘 집계는 있고 어제 집계는 없다
+        Instant yesterdayArrival = SETTLED_THROUGH.minus(Duration.ofDays(1));
+        SeoulDay yesterday = SeoulDay.containing(yesterdayArrival);
+        when(repository.findCounts(ROUTE_3330, DAY)).thenReturn(List.of(TALLY));
+        when(repository.findCounts(ROUTE_3330, yesterday)).thenReturn(List.of());
+        when(repository.countFromSource(ROUTE_3330, yesterday, yesterday.end())).thenReturn(List.of(TALLY));
+        SettledForecast today = settledOn(ROUTE_3330, SETTLED_THROUGH, 0);
+        SettledForecast lateSettled = settledOn(ROUTE_3330, yesterdayArrival, 0);
+
+        // when
+        service.record(List.of(today, lateSettled));
+
+        // then
+        verify(repository).add(today);
+        verify(repository).replaceCounts(ROUTE_3330, yesterday, List.of(TALLY));
+        verify(repository, never()).add(lateSettled);
+    }
+
+    private static SettledForecast settledOn(
+        final long routeId,
+        Instant arrivedAt,
+        final int seatsOnArrival
+    ) {
+        return new SettledForecast(routeId, STOPS_TO_TARGET, 0.41, arrivedAt, seatsOnArrival);
     }
 }
