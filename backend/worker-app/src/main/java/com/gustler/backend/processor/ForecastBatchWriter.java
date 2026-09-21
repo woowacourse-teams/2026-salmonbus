@@ -1,20 +1,9 @@
-package com.gustler.backend.forecast.prediction;
+package com.gustler.backend.processor;
 
-import com.gustler.backend.forecast.model.SeatRangeException;
-import com.gustler.backend.processor.ForecastTimeSlot;
-import com.gustler.backend.processor.PendingForecastBatch;
-import com.gustler.backend.processor.RouteStops;
-import com.gustler.backend.processor.SeatForecast;
-import com.gustler.backend.processor.SeatForecastInput;
-import com.gustler.backend.processor.SeatForecastRepository;
-import com.gustler.backend.processor.StopDemandStatistics;
-import com.gustler.backend.processor.StopDemandStatisticsRepository;
-import com.gustler.backend.processor.TimeSlot;
-import com.gustler.backend.processor.VehicleTrajectory;
-import com.gustler.backend.processor.VehicleTrajectoryRepository;
 import com.gustler.backend.processor.seatdistribution.RuntimeSnapshot;
 import com.gustler.backend.processor.seatdistribution.SameDayFullOutcomes;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -45,17 +34,26 @@ public class ForecastBatchWriter {
     private final SeatForecastRepository seatForecastRepository;
     private final StopDemandStatisticsRepository stopDemandStatisticsRepository;
     private final Clock clock;
+    private final TripQualityRepository tripQuality;
 
     public ForecastBatchWriter(
         VehicleTrajectoryRepository vehicleTrajectoryRepository,
         SeatForecastRepository seatForecastRepository,
         StopDemandStatisticsRepository stopDemandStatisticsRepository,
-        Clock clock
+        Clock clock,
+        TripQualityRepository tripQuality
     ) {
         this.vehicleTrajectoryRepository = vehicleTrajectoryRepository;
         this.seatForecastRepository = seatForecastRepository;
         this.stopDemandStatisticsRepository = stopDemandStatisticsRepository;
         this.clock = clock;
+        this.tripQuality = tripQuality;
+    }
+
+    /** 모델 적재 전에 실행한다. 판정 저장은 각 묶음의 독립 transaction이다. */
+    public void assessRecentBatches() {
+        tripQuality.findRecentUnassessedBatches(clock.instant().minus(Duration.ofMinutes(5)))
+            .forEach(tripQuality::assessBatch);
     }
 
     @Transactional
@@ -64,6 +62,8 @@ public class ForecastBatchWriter {
         RouteStops stops,
         RuntimeSnapshot runtime
     ) {
+        tripQuality.assessBatch(batch.observationBatchId());
+        tripQuality.lockRoute(batch.routeVersionId());
         Instant generatedAt = clock.instant();
         TimeSlot timeSlot = ForecastTimeSlot.of(batch, clock);
         StopDemandStatistics statistics = stopDemandStatisticsOf(batch, runtime, timeSlot);

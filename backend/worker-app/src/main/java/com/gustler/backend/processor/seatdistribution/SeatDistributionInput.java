@@ -1,6 +1,6 @@
 package com.gustler.backend.processor.seatdistribution;
 
-import com.gustler.backend.forecast.model.SeatRangeException;
+import com.gustler.backend.processor.SeatRangeException;
 
 /**
  * 예보 한 건의 입력.

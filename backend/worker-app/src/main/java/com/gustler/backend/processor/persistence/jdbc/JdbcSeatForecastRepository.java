@@ -10,7 +10,6 @@ import com.gustler.backend.processor.seatdistribution.SameDayFullOutcomes;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,11 +47,13 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
         INSERT INTO seat_forecast (
             vehicle_observation_id, target_stop_order, route_version_id, stops_to_target,
             model_deployment_id, demand_statistics_revision,
-            seat_full_chance_raw, seat_full_chance, expected_seats, generated_at, scoring_state
+            seat_full_chance_raw, seat_full_chance, expected_seats, generated_at, scoring_state, quality_revision
         ) VALUES (
             :vehicleObservationId, :targetStopOrder, :routeVersionId, :stopsToTarget,
             :modelDeploymentId, :demandStatisticsRevision,
-            :seatFullChanceRaw, :seatFullChance, :expectedSeats, :generatedAt, :scoringState
+            :seatFullChanceRaw, :seatFullChance, :expectedSeats, :generatedAt, :scoringState,
+            (SELECT q.quality_revision FROM route_version v
+             JOIN route q ON q.id = v.route_id WHERE v.id = :routeVersionId)
         )
         ON CONFLICT (vehicle_observation_id, target_stop_order) DO UPDATE SET
             route_version_id = EXCLUDED.route_version_id,
@@ -62,7 +63,8 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
             seat_full_chance_raw = EXCLUDED.seat_full_chance_raw,
             seat_full_chance = EXCLUDED.seat_full_chance,
             expected_seats = EXCLUDED.expected_seats,
-            generated_at = EXCLUDED.generated_at
+            generated_at = EXCLUDED.generated_at,
+            quality_revision = EXCLUDED.quality_revision
         """;
 
     /** 그 판의 예보를 다 썼다는 표시. 차가 0대라 예보 행이 하나도 없어도 찍는다. */
@@ -88,9 +90,10 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
                observation.vehicle_id,
                forecast.stops_to_target,
                batch.response_received_at,
-               forecast.generated_at
-        FROM seat_forecast forecast
-        JOIN vehicle_observation observation
+               forecast.generated_at,
+               observation.quality_trip_id
+        FROM quality_eligible_seat_forecast forecast
+        JOIN forecast_eligible_observation observation
           ON observation.id = forecast.vehicle_observation_id
         JOIN observation_batch batch
           ON batch.id = observation.observation_batch_id
@@ -107,7 +110,7 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
      */
     private static final String SELECT_ROUTE_VERSIONS_AWAITING_LABEL = """
         SELECT DISTINCT route_version_id
-        FROM seat_forecast
+        FROM quality_eligible_seat_forecast
         WHERE scoring_state = 'PENDING'
         """;
 
@@ -120,6 +123,13 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
             scored_at = :scoredAt
         WHERE vehicle_observation_id = :vehicleObservationId
           AND target_stop_order = :targetStopOrder
+          AND scoring_state = 'PENDING'
+          AND EXISTS (SELECT 1 FROM forecast_eligible_observation source
+                      WHERE source.id = :vehicleObservationId
+                        AND (CAST(:arrivalObservationId AS bigint) IS NULL OR EXISTS (
+                            SELECT 1 FROM forecast_eligible_observation arrival
+                            WHERE arrival.id = :arrivalObservationId
+                              AND arrival.quality_trip_id = source.quality_trip_id)))
         """;
 
     /**
@@ -142,7 +152,7 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
                count(*)                                              AS row_count,
                count(*) FILTER (WHERE forecast.seats_on_arrival = 0)  AS actual_full_count,
                avg(forecast.seat_full_chance_raw)                     AS average_raw_full_chance
-        FROM seat_forecast forecast
+        FROM quality_calibration_seat_forecast forecast
         JOIN vehicle_observation arrival
           ON arrival.id = forecast.arrival_observation_id
         JOIN observation_batch arrival_batch
@@ -220,7 +230,8 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
                 resultSet.getString("vehicle_id"),
                 resultSet.getInt("stops_to_target"),
                 instantOf(resultSet.getObject("response_received_at", OffsetDateTime.class)),
-                instantOf(resultSet.getObject("generated_at", OffsetDateTime.class))))
+                instantOf(resultSet.getObject("generated_at", OffsetDateTime.class)),
+                resultSet.getObject("quality_trip_id", Long.class)))
             .list();
     }
 

@@ -1,5 +1,6 @@
 package com.gustler.backend.api.board.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.aMapWithSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -262,6 +263,35 @@ class BoardApiContractTest {
             .andExpect(jsonPath("$.vehicles[0].seat.kind").value("EXACT"))
             .andExpect(jsonPath("$.vehicles[0].seat.remaining").value(82))
             .andExpect(jsonPath("$.vehicles[0].forecast").doesNotExist());
+    }
+
+    @Test
+    void 이미_예보가_있어도_제외된_편도는_UNAVAILABLE이고_현재_좌석은_보존한다() throws Exception {
+        // given
+        OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
+        RouteContext route = insertRoundTripRoute(now.minusDays(1));
+        long model = fixture.insertModel("model-quality", "ACTIVE", now.minusDays(1));
+        long batch = fixture.insertBatch(route, now, now, "SUCCESS_ROWS", 1);
+        long observation = fixture.insertObservation(route, batch, 1, "A", 2, "STOP-2", now);
+        fixture.insertForecast(route, observation, 3, 1, model, 0.2, 40.0, now);
+        jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats = 82, seat_unknown_reason = NULL WHERE id = ?")
+            .param(observation).update();
+        jdbcClient.sql("UPDATE vehicle_one_way_trip SET status = 'EXCLUDED', evidence_observation_id = ? WHERE id = CAST(? AS text)")
+            .param(observation).param(observation).update();
+
+        // when
+        var boardResponse = mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID));
+        var vehiclesResponse = mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID));
+
+        // then
+        boardResponse.andExpect(status().isOk())
+            .andExpect(jsonPath("$.stops[2].approachingVehicles.length()").value(1))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast", aMapWithSize(1)))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast.status").value("UNAVAILABLE"));
+        vehiclesResponse.andExpect(status().isOk())
+            .andExpect(jsonPath("$.vehicles[0].seat.remaining").value(82));
+        assertThat(jdbcClient.sql("SELECT count(*) FROM seat_forecast WHERE vehicle_observation_id = ?")
+            .param(observation).query(Integer.class).single()).isEqualTo(1);
     }
 
     private RouteContext insertRoundTripRoute(OffsetDateTime validFrom) {

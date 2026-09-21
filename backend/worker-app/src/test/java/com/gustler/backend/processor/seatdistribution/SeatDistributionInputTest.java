@@ -3,7 +3,7 @@ package com.gustler.backend.processor.seatdistribution;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
-import com.gustler.backend.forecast.model.SeatRangeException;
+import com.gustler.backend.processor.SeatRangeException;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.Assertions.within;
 
-import com.gustler.backend.forecast.model.SeatRangeException;
+import com.gustler.backend.processor.SeatRangeException;
 import com.gustler.backend.processor.SeatForecastInput;
 import com.gustler.backend.processor.SeatForecastResult;
 import java.nio.file.Path;

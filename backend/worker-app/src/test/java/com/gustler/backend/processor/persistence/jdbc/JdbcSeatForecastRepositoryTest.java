@@ -2,17 +2,19 @@ package com.gustler.backend.processor.persistence.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gustler.backend.processor.TripQualityRepository;
 import com.gustler.backend.processor.ArrivalLabel;
 import com.gustler.backend.processor.ForecastSettlement;
 import com.gustler.backend.processor.PendingForecast;
 import com.gustler.backend.processor.SeatForecast;
-import com.gustler.backend.support.IntegrationTest;
 import com.gustler.backend.processor.seatdistribution.SameDayFullOutcomes;
+import com.gustler.backend.support.ConfirmedTripFixture;
+import com.gustler.backend.support.IntegrationTest;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Map;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -269,6 +271,7 @@ class JdbcSeatForecastRepositoryTest {
     @Test
     void 오늘_도착이_확인된_예보의_성적을_예보_거리마다_읽는다() {
         // given 도착이 확인된 예보 하나를 만든다
+        // given
         jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
         jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
             vehicleObservationId,
@@ -350,6 +353,26 @@ class JdbcSeatForecastRepositoryTest {
 
         // then
         assertThat(actual).isEmpty();
+    }
+
+    @Test
+    void 계산_자료_버전을_올리면_기존_예측을_당일_보정에서_제외하고_저장된_행은_유지한다() {
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(vehicleObservationId, TARGET_STOP_ORDER,
+            new ArrivalLabel.Settled(insertArrivalObservation(), SEATS_ON_ARRIVAL_WHEN_FULL), SCORED_AT)));
+        assertThat(jdbcSeatForecastRepository.readSameDayFullOutcomes(routeVersionId,
+            ARRIVAL_RESPONSE_RECEIVED_AT.toInstant())).isNotEmpty();
+        var quality = new TripQualityRepository(jdbcClient);
+        quality.lockRoute(routeVersionId);
+
+        // when
+        quality.invalidateDerivedInputs(routeVersionId);
+
+        // then
+        assertThat(jdbcSeatForecastRepository.readSameDayFullOutcomes(routeVersionId,
+            ARRIVAL_RESPONSE_RECEIVED_AT.toInstant())).isEmpty();
+        assertThat(jdbcClient.sql("SELECT count(*) FROM seat_forecast WHERE vehicle_observation_id = ?")
+            .param(vehicleObservationId).query(Integer.class).single()).isEqualTo(1);
     }
 
     /** 예보를 낸 뒤 다음 판에서 대상 정류소를 지난 그 차량의 관측. */
@@ -492,7 +515,7 @@ class JdbcSeatForecastRepositoryTest {
         final int sourceRowNumber,
         final int stopOrder
     ) {
-        return jdbcClient.sql("""
+        return ConfirmedTripFixture.include(jdbcClient, jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
                     observation_batch_id, route_version_id, source_row_number,
                     vehicle_id, stop_order, stop_id, passed_stop_order,
@@ -506,7 +529,7 @@ class JdbcSeatForecastRepositoryTest {
                 RUNNING_STATE_DEPARTED, SEATS_LEFT
             )
             .query(Long.class)
-            .single();
+            .single());
     }
 
     private static String stopIdOf(

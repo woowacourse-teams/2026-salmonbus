@@ -17,12 +17,12 @@ public class PackageBoundaryTest {
     static final ArchRule collectorShouldNotDependOnProcessor = noClasses()
         .that().resideInAPackage("com.gustler.backend.collector..")
         .should().dependOnClassesThat()
-        .resideInAnyPackage("com.gustler.backend.processor..", "com.gustler.backend.forecast..")
+        .resideInAPackage("com.gustler.backend.processor..")
         .because("collector는 processor를 모른다");
 
     @ArchTest
     static final ArchRule processorShouldNotDependOnCollector = noClasses()
-        .that().resideInAnyPackage("com.gustler.backend.processor..", "com.gustler.backend.forecast..")
+        .that().resideInAPackage("com.gustler.backend.processor..")
         .should().dependOnClassesThat()
         .resideInAPackage("com.gustler.backend.collector..")
         .because("processor는 collector를 모른다");

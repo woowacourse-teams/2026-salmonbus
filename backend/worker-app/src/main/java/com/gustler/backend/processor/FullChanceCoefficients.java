@@ -1,7 +1,5 @@
 package com.gustler.backend.processor;
 
-import com.gustler.backend.forecast.model.SeatForecastModel;
-
 import java.util.List;
 
 /**

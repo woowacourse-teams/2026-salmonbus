@@ -1,4 +1,4 @@
-package com.gustler.backend.forecast.model;
+package com.gustler.backend.processor;
 
 /** 모델이 지원하는 좌석 입력 범위를 벗어났다. 차량의 실제 제원 오류를 뜻하지는 않는다. */
 public final class SeatRangeException extends IllegalArgumentException {

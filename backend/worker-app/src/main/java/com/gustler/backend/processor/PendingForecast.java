@@ -19,8 +19,14 @@ public record PendingForecast(
     String vehicleId,
     int stopsToTarget,
     Instant observedAt,
-    Instant generatedAt
+    Instant generatedAt,
+    Long qualityTripId
 ) {
+
+    public PendingForecast(long observationId, int target, long version, String vehicle,
+                           int distance, Instant observedAt, Instant generatedAt) {
+        this(observationId, target, version, vehicle, distance, observedAt, generatedAt, null);
+    }
 
     public PendingForecast {
         if (!ForecastDistance.covers(stopsToTarget)) {

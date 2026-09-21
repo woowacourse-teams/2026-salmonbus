@@ -43,7 +43,7 @@ class StopDemandStatisticsJobTest {
     void 집계_배치를_멈춘_시계로_세운다() {
         job = new StopDemandStatisticsJob(
             routeVersionRepository,
-            stopDemandStatisticsRepository,
+            new StopDemandStatisticsWriter(stopDemandStatisticsRepository, Clock.fixed(COMPUTED_AT, ZoneId.of("Asia/Seoul"))),
             Clock.fixed(COMPUTED_AT, ZoneId.of("Asia/Seoul")));
         when(routeVersionRepository.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
     }

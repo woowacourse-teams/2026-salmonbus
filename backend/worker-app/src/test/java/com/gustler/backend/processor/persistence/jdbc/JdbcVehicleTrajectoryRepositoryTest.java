@@ -3,6 +3,7 @@ package com.gustler.backend.processor.persistence.jdbc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.groups.Tuple.tuple;
 
+import com.gustler.backend.processor.TripQualityRepository;
 import com.gustler.backend.processor.FullSeatStreak;
 import com.gustler.backend.processor.ObservedSeats;
 import com.gustler.backend.processor.ObservedVehicle;
@@ -12,6 +13,7 @@ import com.gustler.backend.processor.SeatSlope;
 import com.gustler.backend.processor.SeatUnknownReason;
 import com.gustler.backend.processor.TrajectoryGap;
 import com.gustler.backend.processor.VehicleTrajectory;
+import com.gustler.backend.support.ConfirmedTripFixture;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -19,6 +21,8 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
@@ -487,6 +491,97 @@ class JdbcVehicleTrajectoryRepositoryTest {
         assertThat(actual).isEmpty();
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void 같은_편도에서_82석을_발견하면_앞선_관측도_예측에서_제외하고_다른_차량은_유지한다(boolean configured) {
+        // given
+        if (configured) {
+            qualityPolicy();
+        }
+        long first = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
+        long badStart = insertObservation(first, VEHICLE_204000206, 1, 44);
+        insertObservation(first, VEHICLE_204003542, 1, 44);
+        long later = insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
+        insertObservation(later, VEHICLE_204000206, 2, 82);
+        insertObservation(later, VEHICLE_204003542, 2, 43);
+        clearSyntheticMemberships();
+        var quality = new TripQualityRepository(jdbcClient);
+        quality.assessBatch(first);
+        assertThat(repository.readTrajectories(first)).hasSize(2);
+
+        // when
+        quality.assessBatch(later);
+
+        // then
+        assertThat(repository.readTrajectories(first)).extracting(VehicleTrajectory::vehicleObservationId)
+            .doesNotContain(badStart).hasSize(1);
+        assertThat(repository.readTrajectories(later)).hasSize(1);
+        assertThat(jdbcClient.sql("SELECT remaining_seats FROM vehicle_observation WHERE id = ?")
+            .param(badStart).query(Integer.class).single()).isEqualTo(44);
+        assertThat(jdbcClient.sql("SELECT quality_revision FROM route").query(Long.class).single()).isEqualTo(2);
+
+        // when: 같은 관측 묶음을 다시 판정한다.
+        quality.assessBatch(later);
+
+        // then: 계산 자료 버전을 중복 증가시키지 않는다.
+        assertThat(jdbcClient.sql("SELECT quality_revision FROM route").query(Long.class).single()).isEqualTo(2);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void 잔여석이_82석인_편도_이후_회차지에서_44석으로_출발하면_최대_잔여석은_44다(boolean configured) {
+        // given
+        if (configured) {
+            qualityPolicy();
+        }
+        jdbcClient.sql("UPDATE route_version SET turn_sequence = 5 WHERE id = ?").param(routeVersionId).update();
+        long first = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
+        insertObservation(first, VEHICLE_204000206, 1, 82);
+        long next = insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
+        insertObservation(next, VEHICLE_204000206, 5, 44);
+        clearSyntheticMemberships();
+        var quality = new TripQualityRepository(jdbcClient);
+
+        // when
+        quality.assessBatch(first);
+        quality.assessBatch(next);
+
+        // then
+        assertThat(repository.readTrajectories(first)).isEmpty();
+        assertThat(repository.readTrajectories(next)).singleElement()
+            .extracting(VehicleTrajectory::maximumSeatsEverObserved).isEqualTo(44);
+    }
+
+    @Test
+    void 관측_간격이_60초_설정을_초과하면_이전_좌석_관측이_있어도_예측_대상에서_제외한다() {
+        // given
+        qualityPolicy();
+        long first = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
+        insertObservation(first, VEHICLE_204000206, 1, 44);
+        long gap = insertBatch(routeVersionId, EARLIER_POLL.plusMinutes(10), SUCCESS_ROWS, null);
+        insertObservation(gap, VEHICLE_204000206, 3, 40);
+        clearSyntheticMemberships();
+        var quality = new TripQualityRepository(jdbcClient);
+
+        // when
+        quality.assessBatch(first);
+        quality.assessBatch(gap);
+
+        // then
+        assertThat(repository.readTrajectories(gap)).isEmpty();
+    }
+
+    private void qualityPolicy() {
+        // 합성 입력의 기준이며 운영 설정값이 아니다.
+        jdbcClient.sql("UPDATE route_version SET maximum_observation_gap_seconds = 60, observation_gap_evidence = 'synthetic test' WHERE id = ?")
+            .param(routeVersionId).update();
+    }
+
+    private void clearSyntheticMemberships() {
+        jdbcClient.sql("UPDATE vehicle_observation SET vehicle_trip_key = NULL").update();
+        jdbcClient.sql("DELETE FROM vehicle_one_way_trip").update();
+    }
+
     private long insertRouteVersion(
         String publicRouteId
     ) {
@@ -582,7 +677,7 @@ class JdbcVehicleTrajectoryRepositoryTest {
         Integer remainingSeats,
         String seatUnknownReason
     ) {
-        return jdbcClient.sql("""
+        return ConfirmedTripFixture.include(jdbcClient, jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
                     observation_batch_id, route_version_id, source_row_number,
                     vehicle_id, stop_order, stop_id, passed_stop_order,
@@ -596,7 +691,7 @@ class JdbcVehicleTrajectoryRepositoryTest {
                 RUNNING_STATE_DEPARTED, remainingSeats, seatUnknownReason, CROWD_LEVEL_3
             )
             .query(Long.class)
-            .single();
+            .single());
     }
 
     private int nextRowNumber(

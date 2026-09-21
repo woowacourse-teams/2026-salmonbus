@@ -1,10 +1,11 @@
 package com.gustler.backend.migration;
 
 import com.gustler.backend.migration.archive.ArchiveVerifier;
+import com.gustler.backend.migration.db.AggregateSeedCutover;
 import com.gustler.backend.migration.db.ArchiveImportValidator;
 import com.gustler.backend.migration.db.ArchiveMerger;
 import com.gustler.backend.migration.db.ArchiveStager;
-import com.gustler.backend.migration.db.AggregateSeedCutover;
+import com.gustler.backend.migration.db.DatabaseConnections;
 import com.gustler.backend.migration.db.DatabasePreflight;
 import com.gustler.backend.migration.db.HistoricalSchema;
 import com.gustler.backend.migration.db.ImportReconciler;
@@ -12,14 +13,18 @@ import com.gustler.backend.migration.db.ImportRollback;
 import com.gustler.backend.migration.db.ImportSettings;
 import com.gustler.backend.migration.db.SeedCutoverVerifier;
 import com.gustler.backend.migration.db.TemporaryReleaseMaintenance;
+import com.gustler.backend.migration.quality.TripQualityMaintenance;
 import com.gustler.backend.migration.source.AwsSourceObjectStore;
 import com.gustler.backend.migration.source.SourceArchiveExporter;
 import com.gustler.backend.migration.source.SourceInventory;
 import com.gustler.backend.migration.source.SourceInventoryBuilder;
+import com.gustler.backend.migration.source.SourceObjectStore;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.util.LinkedHashMap;
+import java.time.Instant;
 import java.util.Map;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
 public final class MigrationCli {
 
@@ -47,6 +52,7 @@ public final class MigrationCli {
         CliArguments arguments
     ) {
         return switch (arguments.command()) {
+            case "quality-preview", "quality-rebuild", "quality-status" -> quality(arguments);
             case "inventory" -> inventory(arguments);
             case "archive-build" -> archiveBuild(arguments);
             case "archive-verify" -> archiveVerify(arguments.requiredPath("archive"));
@@ -69,6 +75,32 @@ public final class MigrationCli {
         };
     }
 
+    private static Object quality(CliArguments arguments) {
+        Configuration configuration = Configuration.load(arguments.requiredPath("config"));
+        DatabaseEnvironment environment = DatabaseEnvironment.load(configuration);
+        long version = Long.parseLong(arguments.required("route-version"));
+        boolean write = arguments.command().equals("quality-rebuild");
+        if (write && environment.targetKind() != DatabaseEnvironment.TargetKind.LOCAL) {
+            approval(arguments, "ACADEMY_TRIP_QUALITY_REBUILD", null, environment.identitySha256());
+        }
+        return DatabaseConnections.transaction(environment, connection -> {
+            connection.setReadOnly(!write);
+            try (var statement = connection.createStatement()) {
+                statement.execute("SET LOCAL lock_timeout = '3s'");
+                statement.execute("SET LOCAL statement_timeout = '30s'");
+            }
+            var jdbc = JdbcClient.create(
+                new SingleConnectionDataSource(connection, true));
+            var maintenance = new TripQualityMaintenance(jdbc);
+            if (arguments.command().equals("quality-status")) {
+                return maintenance.status(version);
+            }
+            var until = Instant.parse(arguments.required("until"));
+            return write ? maintenance.applyChunk(version, until, Integer.parseInt(arguments.required("batch-limit")))
+                : maintenance.preview(version, until);
+        });
+    }
+
     private static Object inventory(
         CliArguments arguments
     ) {
@@ -79,8 +111,8 @@ public final class MigrationCli {
             inventory.writeTo(arguments.requiredPath("output"));
             return Map.of(
                 "inventorySha256", inventory.inventorySha256(),
-                "recordObjects", inventory.count(com.gustler.backend.migration.source.SourceObjectStore.Kind.RECORD),
-                "rawObjects", inventory.count(com.gustler.backend.migration.source.SourceObjectStore.Kind.RAW));
+                "recordObjects", inventory.count(SourceObjectStore.Kind.RECORD),
+                "rawObjects", inventory.count(SourceObjectStore.Kind.RAW));
         }
     }
 

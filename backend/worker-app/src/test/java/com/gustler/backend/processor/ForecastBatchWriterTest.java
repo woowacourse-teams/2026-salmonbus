@@ -1,4 +1,4 @@
-package com.gustler.backend.forecast.prediction;
+package com.gustler.backend.processor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -16,32 +17,6 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.AppenderBase;
 import ch.qos.logback.core.read.ListAppender;
-import com.gustler.backend.forecast.model.SeatForecastModel;
-import com.gustler.backend.forecast.model.SeatRangeException;
-import com.gustler.backend.processor.ActiveModelDeployment;
-import com.gustler.backend.processor.ForecastJob;
-import com.gustler.backend.processor.ForecastProperties;
-import com.gustler.backend.processor.ForecastRuntime;
-import com.gustler.backend.processor.ForecastTimeSlot;
-import com.gustler.backend.processor.FullSeatStreak;
-import com.gustler.backend.processor.ObservedSeats;
-import com.gustler.backend.processor.ObservedVehicle;
-import com.gustler.backend.processor.PendingForecastBatch;
-import com.gustler.backend.processor.PrecedingVehicle;
-import com.gustler.backend.processor.RouteStop;
-import com.gustler.backend.processor.RouteStops;
-import com.gustler.backend.processor.RouteVersionRepository;
-import com.gustler.backend.processor.SeatDistribution;
-import com.gustler.backend.processor.SeatForecast;
-import com.gustler.backend.processor.SeatForecastInput;
-import com.gustler.backend.processor.SeatForecastRepository;
-import com.gustler.backend.processor.SeatForecastResult;
-import com.gustler.backend.processor.SeatSlope;
-import com.gustler.backend.processor.StopDemandStatistics;
-import com.gustler.backend.processor.StopDemandStatisticsRepository;
-import com.gustler.backend.processor.TrajectoryGap;
-import com.gustler.backend.processor.VehicleTrajectory;
-import com.gustler.backend.processor.VehicleTrajectoryRepository;
 import com.gustler.backend.processor.seatdistribution.RuntimeSnapshot;
 import com.gustler.backend.processor.seatdistribution.SeatDistributionInput;
 import java.time.Clock;
@@ -74,7 +49,10 @@ class ForecastBatchWriterTest {
     private final VehicleTrajectoryRepository trajectories = mock(VehicleTrajectoryRepository.class);
     private final SeatForecastRepository forecasts = mock(SeatForecastRepository.class);
     private final StopDemandStatisticsRepository statistics = mock(StopDemandStatisticsRepository.class);
-    private final ForecastBatchWriter writer = new ForecastBatchWriter(trajectories, forecasts, statistics, CLOCK);
+    private final TripQualityRepository quality =
+        mock(TripQualityRepository.class);
+    private final ForecastBatchWriter writer = new ForecastBatchWriter(trajectories, forecasts, statistics, CLOCK,
+        quality);
     private final ListAppender<ILoggingEvent> logs = new ListAppender<>();
 
     @BeforeEach
@@ -89,6 +67,21 @@ class ForecastBatchWriterTest {
     void detachLogAppender() {
         ((Logger) LoggerFactory.getLogger(ForecastBatchWriter.class)).detachAppender(logs);
         logs.stop();
+    }
+
+    @Test
+    void 편도_판정과_노선_잠금을_순서대로_수행한_뒤_통계를_조회한다() {
+        // given
+        var snapshot = runtime(input -> RESULT);
+
+        // when
+        writer.writeForecastsOf(BATCH, STOPS, snapshot);
+
+        // then
+        var order = inOrder(quality, statistics, forecasts);
+        order.verify(quality).assessBatch(BATCH.observationBatchId());
+        order.verify(quality).lockRoute(BATCH.routeVersionId());
+        order.verify(statistics).readAsOf(1, STATISTICS.timeSlot(), "feature-v1", NOW);
     }
 
     @Test

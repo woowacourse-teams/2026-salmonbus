@@ -6,6 +6,7 @@ plugins {
 dependencies {
     api 'org.springframework:spring-context'
 
+    testFixturesApi 'org.springframework:spring-jdbc'
     testFixturesApi 'org.springframework.boot:spring-boot-test'
     testFixturesApi 'org.springframework.boot:spring-boot-testcontainers'
     testFixturesApi 'org.testcontainers:postgresql'

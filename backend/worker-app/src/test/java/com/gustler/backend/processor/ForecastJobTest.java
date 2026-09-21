@@ -1,11 +1,10 @@
 package com.gustler.backend.processor;
 
-import com.gustler.backend.forecast.model.SeatForecastModel;
-
-import com.gustler.backend.forecast.prediction.ForecastBatchWriter;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gustler.backend.processor.seatdistribution.RuntimeSnapshot;
+import com.gustler.backend.processor.seatdistribution.SupportedForecastScope;
+import com.gustler.backend.support.ConfirmedTripFixture;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.Clock;
 import java.time.Instant;
@@ -13,19 +12,17 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
-import com.gustler.backend.processor.seatdistribution.RuntimeSnapshot;
-import com.gustler.backend.processor.seatdistribution.SupportedForecastScope;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -99,6 +96,10 @@ class ForecastJobTest {
         OffsetDateTime.parse("2026-08-19T11:16:04.911+09:00");
     private static final OffsetDateTime ALREADY_FORECAST_COMPLETED_AT =
         OffsetDateTime.parse("2026-08-19T11:14:07.000+09:00");
+
+    // 편도 판정/별도 transaction은 전용 테스트에서 검증한다. 이 테스트의 미커밋 fixture를 유지한다.
+    @MockitoBean
+    private TripQualityRepository tripQuality;
 
     @Autowired
     private ForecastJob forecastJob;
@@ -563,7 +564,7 @@ class ForecastJobTest {
         Integer remainingSeats,
         String seatUnknownReason
     ) {
-        return jdbcClient.sql("""
+        return ConfirmedTripFixture.include(jdbcClient, jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
                     observation_batch_id, route_version_id, source_row_number,
                     vehicle_id, stop_order, stop_id, passed_stop_order,
@@ -577,7 +578,7 @@ class ForecastJobTest {
                 RUNNING_STATE_DEPARTED, remainingSeats, seatUnknownReason
             )
             .query(Long.class)
-            .single();
+            .single());
     }
 
     private static String stopIdOf(

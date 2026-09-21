@@ -19,6 +19,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -116,19 +118,23 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
      * 스키마가 그 열을 NULL 허용으로 두고 있어서 실제로 생길 수 있다.
      */
     private static final String SELECT_OBSERVATIONS_IN_BATCHES = """
-        SELECT id, observation_batch_id, route_version_id, vehicle_id,
-               vehicle_trip_key, passed_stop_order, remaining_seats, seat_unknown_reason, crowd_level
-        FROM vehicle_observation
-        WHERE observation_batch_id IN (:observationBatchIds)
-          AND vehicle_id IS NOT NULL
-        ORDER BY observation_batch_id, source_row_number
+        SELECT o.id, o.observation_batch_id, o.route_version_id, o.vehicle_id,
+               o.vehicle_trip_key, o.passed_stop_order,
+               CASE WHEN eligible.id IS NOT NULL THEN o.remaining_seats END AS remaining_seats,
+               CASE WHEN eligible.id IS NULL THEN 'QUALITY_WITHHELD' ELSE o.seat_unknown_reason END AS seat_unknown_reason,
+               o.crowd_level
+        FROM vehicle_observation o
+        LEFT JOIN forecast_eligible_observation eligible ON eligible.id = o.id
+        WHERE o.observation_batch_id IN (:observationBatchIds)
+          AND o.vehicle_id IS NOT NULL
+        ORDER BY o.observation_batch_id, o.source_row_number
         """;
 
     /**
-     * 차량마다 지금까지 보여 준 가장 많은 잔여석.
+     * 차량마다 현재 사용 가능한 편도에서 지금까지 보여 준 가장 많은 잔여석.
      *
      * <p><b>궤적을 잇는 30분 창을 안 쓴다.</b> 셀 통계 집계가 같은 값을 그 차량의 관측 전부에서
-     * 세고 있어서, 창으로 자르면 집계 쪽 분모와 서빙 쪽 분모가 갈린다. 그러면 설계행렬의
+     * 세고 있어서, 창으로 자르면 집계 쪽 분모와 서빙 쪽 분모가 갈린다. 양쪽 모두 제외/보류 편도는 사용하지 않는다. 그러면 설계행렬의
      * 잔여석 비율과 셀 통계의 z값이 서로 다른 수로 나눈 값이 된다.
      *
      * <p>기준 시각으로 자르는 것도 집계와 같다. 자르지 않으면 나중에 더 큰 잔여석이 들어올 때
@@ -153,7 +159,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
         CROSS JOIN LATERAL (
             SELECT observation.vehicle_id,
                    observation.remaining_seats AS maximum_seats
-            FROM vehicle_observation observation
+            FROM forecast_eligible_observation observation
             JOIN observation_batch batch
               ON batch.id = observation.observation_batch_id
             WHERE observation.route_version_id = :routeVersionId
@@ -214,8 +220,11 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
             return List.of();
         }
         ObservationHistory history = historyEndingAt(target.get());
-        return VehicleTrajectoryAssembler.assemble(
-            history, maximumSeatsEverObservedOf(target.get(), history));
+        Set<Long> eligibleIds = history.targetBatch().observations().stream()
+            .filter(JdbcVehicleTrajectoryRepository::isEligible)
+            .map(TrajectoryObservation::vehicleObservationId).collect(Collectors.toSet());
+        return VehicleTrajectoryAssembler.assemble(history, maximumSeatsEverObservedOf(target.get(), history))
+            .stream().filter(trajectory -> eligibleIds.contains(trajectory.vehicleObservationId())).toList();
     }
 
     /**
@@ -229,6 +238,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
         ObservationHistory history
     ) {
         List<String> vehicleIds = history.targetBatch().observations().stream()
+            .filter(JdbcVehicleTrajectoryRepository::isEligible)
             .map(TrajectoryObservation::vehicleId)
             .distinct()
             .toList();
@@ -327,6 +337,11 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
                 .add(row.toObservation(observedAtByBatch.get(row.observationBatchId())));
         }
         return observationsByBatch;
+    }
+
+    private static boolean isEligible(TrajectoryObservation observation) {
+        return !(observation.seats() instanceof ObservedSeats.Unknown unknown
+            && unknown.reason() == SeatUnknownReason.QUALITY_WITHHELD);
     }
 
     private static Instant instantOf(

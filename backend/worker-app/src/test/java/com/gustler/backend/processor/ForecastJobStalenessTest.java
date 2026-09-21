@@ -1,7 +1,5 @@
 package com.gustler.backend.processor;
 
-import com.gustler.backend.forecast.prediction.ForecastBatchWriter;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -9,7 +7,8 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Logger;
@@ -127,7 +126,22 @@ class ForecastJobStalenessTest {
         job.writeForecasts();
 
         // then
-        verifyNoInteractions(forecastBatchWriter);
+        verify(forecastBatchWriter, never()).writeForecastsOf(any(), any(), any());
+    }
+
+    @Test
+    void 활성_모델이_없어도_관측_품질은_먼저_판정한다() {
+        // given
+        when(forecastRuntime.resolveActive()).thenReturn(Optional.empty());
+
+        // when
+        job.writeForecasts();
+
+        // then
+        var order = inOrder(forecastBatchWriter, forecastRuntime);
+        order.verify(forecastBatchWriter).assessRecentBatches();
+        order.verify(forecastRuntime).resolveActive();
+        verify(forecastBatchWriter, never()).writeForecastsOf(any(), any(), any());
     }
 
     @AfterEach

@@ -1,7 +1,4 @@
-package com.gustler.backend.forecast.model;
-
-import com.gustler.backend.processor.SeatForecastInput;
-import com.gustler.backend.processor.SeatForecastResult;
+package com.gustler.backend.processor;
 
 /**
  * 재료를 받아 좌석 분포를 내는 모델.
