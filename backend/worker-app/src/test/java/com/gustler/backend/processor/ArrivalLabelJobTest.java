@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -30,6 +32,7 @@ class ArrivalLabelJobTest {
     /** 혼잡도를 안 준 관측. 라벨 회수는 혼잡도를 안 본다. */
     private static final Integer CROWD_LEVEL_UNKNOWN = null;
 
+    private static final long ROUTE_3330 = 10L;
     private static final long ROUTE_VERSION_3330 = 1L;
     private static final String VEHICLE_ID = "204000206";
     private static final Instant OBSERVED_AT = Instant.parse("2026-08-25T08:30:00Z");
@@ -72,6 +75,21 @@ class ArrivalLabelJobTest {
 
         // then
         assertThat(settledLabels()).containsExactly(new ArrivalLabel.Settled(ARRIVAL_OBSERVATION_ID, 0));
+    }
+
+    @Test
+    void 만석으로_닫힌_예보를_당일_성적에_더한다() {
+        givenPendingOn(ROUTE_VERSION_3330, pending(100L, 40));
+        givenArrivals(passedAt(TARGET_STOP_ORDER, 60, 0));
+        SettledForecast full = new SettledForecast(
+            ROUTE_3330, TARGET_STOP_ORDER - 40, 0.41, OBSERVED_AT.plusSeconds(60), 0);
+        when(seatForecastRepository.settle(any())).thenReturn(List.of(full));
+
+        job.settleArrivalLabels();
+
+        InOrder inOrder = inOrder(seatForecastRepository, sameDayFullOutcomesService);
+        inOrder.verify(seatForecastRepository).settle(any());
+        inOrder.verify(sameDayFullOutcomesService).record(List.of(full));
     }
 
     @Test
