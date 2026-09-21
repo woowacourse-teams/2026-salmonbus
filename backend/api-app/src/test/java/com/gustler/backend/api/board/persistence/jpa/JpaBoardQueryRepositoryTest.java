@@ -16,18 +16,30 @@ class JpaBoardQueryRepositoryTest {
 
     private BoardRouteVersionEntityRepository routeVersionRepository;
     private JpaBoardQueryRepository repository;
+    private BoardVehicleObservationEntityRepository vehicleObservationRepository;
 
     @BeforeEach
     void setUp() {
         routeVersionRepository = mock(BoardRouteVersionEntityRepository.class);
+        vehicleObservationRepository = mock(BoardVehicleObservationEntityRepository.class);
         repository = new JpaBoardQueryRepository(
             Clock.systemUTC(),
             routeVersionRepository,
             mock(BoardObservationBatchEntityRepository.class),
             mock(BoardRouteStopEntityRepository.class),
             mock(SeatForecastEntityRepository.class),
+            vehicleObservationRepository,
             mock(ModelDeploymentEntityRepository.class)
         );
+    }
+
+    @Test
+    void 차량_관측_DB_조회_장애를_예보_없음으로_처리하지_않는다() {
+        given(vehicleObservationRepository.findAllByBatchIdAndRouteVersionId(100L, 1L))
+            .willThrow(new DataAccessResourceFailureException("database unavailable"));
+
+        assertThatThrownBy(() -> repository.findObservedVehicles(100L, 1L))
+            .isInstanceOf(ServiceUnavailableException.class);
     }
 
     @Test
