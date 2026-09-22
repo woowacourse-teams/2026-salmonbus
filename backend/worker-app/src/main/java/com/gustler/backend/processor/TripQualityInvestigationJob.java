@@ -8,7 +8,6 @@ import org.springframework.jdbc.UncategorizedSQLException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** 예보 시작 전에 과거를 조사하지 않는다. 등록된 이상 차량 하나를 제한된 양만 처리한다. */
 @Component
 public class TripQualityInvestigationJob {
     private static final Logger log = LoggerFactory.getLogger(TripQualityInvestigationJob.class);
@@ -22,7 +21,6 @@ public class TripQualityInvestigationJob {
         } catch (QueryTimeoutException | PessimisticLockingFailureException e) {
             deferred(e);
         } catch (UncategorizedSQLException e) {
-            // JDBC 드라이버/예외 변환기에 따라 PostgreSQL lock_timeout이 이 타입으로 전달된다.
             if (!"55P03".equals(e.getSQLException().getSQLState())) { throw e; }
             deferred(e);
         }

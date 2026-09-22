@@ -4,9 +4,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 
-/** 좌석 초기화를 추정하지 않는다. 관측을 연결할 근거와 모델 입력 사용 여부만 판정한다. */
 public final class OneWayTripClassifier {
-    public static final String RULE_VERSION = "one-way-seat-range-v1";
+    public static final String RULE_VERSION = "one-way-seat-range-v2";
+    public static final Duration DEFAULT_MAXIMUM_GAP = Duration.ofMinutes(10);
 
     public enum Status { ELIGIBLE, BOUNDARY_UNCONFIRMED, EXCLUDED }
     public enum Boundary { DEPARTURE, DIRECTION_CHANGE, CONTINUATION, UNCONFIRMED }
@@ -14,7 +14,8 @@ public final class OneWayTripClassifier {
                               Integer runningState, Integer seats) { }
     public record Route(int firstStop, int lastStop, Integer turnStop, Duration maximumGap) {
         public Route {
-            if (firstStop >= lastStop || (maximumGap != null && (maximumGap.isZero() || maximumGap.isNegative()))) {
+            maximumGap = maximumGap == null ? DEFAULT_MAXIMUM_GAP : maximumGap;
+            if (firstStop >= lastStop || maximumGap.isZero() || maximumGap.isNegative()) {
                 throw new IllegalArgumentException("정류장 범위와 관측 연결 간격을 확인해야 한다");
             }
         }
@@ -34,9 +35,7 @@ public final class OneWayTripClassifier {
             && Objects.equals(previous.observation().vehicleId(), current.vehicleId())
             && !current.at().isBefore(previous.observation().at());
         boolean connected = comparable
-            // GBIS 순번/출발 상태로 연결하고, 검토된 시간 기준이 있을 때만 추가로 공백을 제한한다.
-            && (route.maximumGap() == null
-                || Duration.between(previous.observation().at(), current.at()).compareTo(route.maximumGap()) <= 0);
+            && Duration.between(previous.observation().at(), current.at()).compareTo(route.maximumGap()) <= 0;
         boolean departure = current.vehicleId() != null && isDeparture(route, current);
         boolean repeatedDeparture = connected && departure
             && previous.observation().stopOrder() == current.stopOrder()
@@ -50,7 +49,6 @@ public final class OneWayTripClassifier {
         } else if (comparable) {
             int before = direction(route, previous.start().stopOrder(), previous.start().runningState());
             int after = direction(route, current);
-            // 같은 정류장에서 운행 상태만 반복되어도 편도 방향을 되돌리지 않는다.
             if (current.stopOrder() == previous.observation().stopOrder()) {
                 after = before;
             }

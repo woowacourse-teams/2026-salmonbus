@@ -1,6 +1,3 @@
--- V14(SAL-132)의 당일 집계에도 같은 품질 판정 버전을 적용한다.
--- 원본 좌석/위치/시각과 예측값은 덮어쓰지 않는다. 이상 발견 전의 관측은 사전 편도 판정 없이 사용한다.
--- 작은 설정/버전은 기존 노선 행에 둔다. 관측마다 연결 행을 추가하지 않는다.
 ALTER TABLE route ADD COLUMN quality_revision bigint NOT NULL DEFAULT 1 CHECK (quality_revision > 0);
 ALTER TABLE route_version
     ADD COLUMN maximum_observation_gap_seconds integer CHECK (maximum_observation_gap_seconds > 0),
@@ -19,17 +16,13 @@ CREATE TABLE vehicle_one_way_trip (
     evidence_observation_id bigint REFERENCES vehicle_observation(id),
     assessed_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
--- 차량의 판정된 편도가 없으면 큰 관측 이력 탐색을 생략한다. 편도 생성 때만 인덱스에 추가한다.
 CREATE INDEX ix_one_way_trip_vehicle ON vehicle_one_way_trip(route_version_id, vehicle_id);
--- vehicle_trip_key는 기존의 nullable 파생 열이다. 원본 좌석/위치/시각은 변경하지 않는다.
 ALTER TABLE seat_forecast ADD COLUMN quality_revision bigint NOT NULL DEFAULT 1;
 ALTER TABLE stop_demand_statistics ADD COLUMN quality_revision bigint NOT NULL DEFAULT 1;
 ALTER TABLE same_day_full_outcomes ADD COLUMN quality_revision bigint NOT NULL DEFAULT 1;
 
--- 과거 자료를 정리하는 동안 해당 판본의 계산 입력을 잠근다. 커서는 batch 단위로 커밋한다.
 CREATE TABLE trip_quality_rebuild (
     route_version_id bigint NOT NULL REFERENCES route_version(id),
-    -- 빈 차량 ID는 수동 과거 자료의 이상 발견 커서다. 실제 차량의 조사는 별도 행이다.
     vehicle_id varchar(40) NOT NULL DEFAULT '',
     last_batch_at timestamptz,
     last_batch_id bigint NOT NULL DEFAULT 0,
@@ -47,8 +40,6 @@ CREATE TABLE trip_quality_rebuild (
     PRIMARY KEY(route_version_id, vehicle_id)
 );
 
--- 정상 관측에 판정 행을 만들지 않는다. 조사 중인 차량과 확정 제외 편도만 차단한다.
--- quality_direction은 편도 ID가 아니다. 결과 연결의 방향 검사이며 기존 시간/순번 검사를 함께 사용한다.
 CREATE VIEW forecast_observation_quality AS
 SELECT observation.*,
        CASE WHEN version.turn_sequence IS NOT NULL AND (
@@ -68,7 +59,6 @@ LEFT JOIN route_version version ON version.id = observation.route_version_id;
 CREATE VIEW forecast_eligible_observation AS
 SELECT * FROM forecast_observation_quality WHERE forecast_eligible;
 
--- 표시는 해당 차량의 판정을 따른다. 보정 재사용은 의존 입력의 유효성도 확인한다.
 CREATE VIEW quality_eligible_seat_forecast AS
 SELECT forecast.*
 FROM seat_forecast forecast
@@ -84,11 +74,9 @@ JOIN route_version version ON version.id = forecast.route_version_id
 JOIN route quality ON quality.id = version.route_id
 WHERE forecast.quality_revision = quality.quality_revision;
 
--- 원본이 적격이어도 이전 통계/입력으로 만든 예측은 학습 후보에 넣지 않는다.
 CREATE VIEW quality_training_seat_forecast AS
 SELECT * FROM quality_calibration_seat_forecast WHERE scoring_state = 'SETTLED';
 
--- 기존 historical schema가 있을 때도, 나중에 설치될 때도 같은 정의를 적용한다.
 CREATE FUNCTION refresh_trip_quality_training_views() RETURNS void LANGUAGE plpgsql AS $body$
 BEGIN
     IF to_regclass('public.training_model_release_exclusion') IS NOT NULL THEN
@@ -126,8 +114,6 @@ AND NOT EXISTS (
       AND excluded_generation.computed_at = statistics.computed_at
 )
 AND NOT EXISTS (
-    -- current worker의 임시 모델 경유 기본 집계. final_cutover_at이 아직 없으면 activation 이후를
-    -- 전부 fail-closed로 제외한다. freeze가 끝난 뒤에는 cutover 미만 exact window만 제외한다.
     SELECT 1
     FROM training_model_release_exclusion temporary
     WHERE temporary.classification = 'TEMPORARY_RELEASE'

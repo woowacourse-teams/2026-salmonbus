@@ -85,7 +85,6 @@ public class JpaObservationRepository implements ObservationRepository {
         var stored = vehicleObservationRepository.saveAll(collected.storableRows().stream()
             .map(row -> toEntity(batch, row))
             .toList());
-        // 동기 이벤트는 관측 저장 transaction 안에서 처리된다. 정상 관측은 추가 SQL이 없다.
         events.publishEvent(new VehicleObservationsStored(batchId, batch.getRouteVersionId(),
             responseReceivedAt.toInstant(), stored.stream().map(VehicleObservationJpaEntity::storedRow).toList()));
     }

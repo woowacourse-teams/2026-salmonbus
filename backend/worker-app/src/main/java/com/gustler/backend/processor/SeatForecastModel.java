@@ -12,7 +12,6 @@ package com.gustler.backend.processor;
  */
 public interface SeatForecastModel {
 
-    /** @throws SeatRangeException 좌석 입력이 이 모델의 지원 범위를 벗어난 경우 */
     SeatForecastResult predict(
         SeatForecastInput input
     );

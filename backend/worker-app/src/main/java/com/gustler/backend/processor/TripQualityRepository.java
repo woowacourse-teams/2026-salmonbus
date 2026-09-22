@@ -23,7 +23,6 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 정상 관측은 메모리에서 검사만 한다. 이상 차량만 기록하고 제한된 페이지로 조사한다. */
 @Repository
 public class TripQualityRepository {
     public static final int INVESTIGATION_BATCH_LIMIT = 32;
@@ -31,7 +30,6 @@ public class TripQualityRepository {
 
     public TripQualityRepository(JdbcClient jdbc) { this.jdbc = jdbc; }
 
-    /** 관측과 조사 요청을 같은 transaction에 저장하여 프로세스 중단에도 발견 사실을 잃지 않는다. */
     @EventListener
     @Transactional(propagation = Propagation.MANDATORY)
     public void observationsStored(VehicleObservationsStored event) {
@@ -39,9 +37,8 @@ public class TripQualityRepository {
             .filter(row -> row.vehicleId() != null && !row.vehicleId().isBlank()
                 && row.remainingSeats() != null && row.remainingSeats() > 70).toList();
         if (anomalies.isEmpty()) {
-            return; // 정상 수집: 추가 SQL/잠금/쓰기 0회
+            return;
         }
-        // 조사 완료와 새 이상 관측 저장을 직렬화한다. 조사 중의 동일 차량은 새 요청을 만들지 않는다.
         lockRoute(event.routeVersionId());
         var active = jdbc.sql("SELECT vehicle_id FROM trip_quality_rebuild WHERE route_version_id = ? AND NOT completed")
             .param(event.routeVersionId()).query(String.class).list();
@@ -51,7 +48,7 @@ public class TripQualityRepository {
             jdbc.sql("""
                 INSERT INTO trip_quality_rebuild(route_version_id, vehicle_id, last_batch_at, last_batch_id,
                     until_at, maximum_gap_seconds, completed, phase, evidence_observation_id, anchor_observation_id)
-                SELECT ?, ?, ?, ?, ?, maximum_observation_gap_seconds, false, 'SEARCH_START', ?, ?
+                SELECT ?, ?, ?, ?, ?, COALESCE(maximum_observation_gap_seconds, ?), false, 'SEARCH_START', ?, ?
                 FROM route_version WHERE id = ?
                 ON CONFLICT(route_version_id, vehicle_id) DO UPDATE SET
                     last_batch_at = EXCLUDED.last_batch_at, last_batch_id = EXCLUDED.last_batch_id,
@@ -61,14 +58,14 @@ public class TripQualityRepository {
                     include_cursor = false, can_release = false, investigated_at = CURRENT_TIMESTAMP,
                     started_at = CURRENT_TIMESTAMP
                 """).param(event.routeVersionId()).param(row.vehicleId()).param(offset(event.observedAt()))
-                .param(event.batchId()).param(offset(event.observedAt())).param(row.observationId())
+                .param(event.batchId()).param(offset(event.observedAt()))
+                .param(OneWayTripClassifier.DEFAULT_MAXIMUM_GAP.toSeconds()).param(row.observationId())
                 .param(row.observationId()).param(event.routeVersionId()).update();
             changed = true;
         }
         if (changed) { invalidateDerivedInputs(event.routeVersionId()); }
     }
 
-    /** 한 번에 차량 한 대, 최대 32묶음. 정상 시에는 작은 조사 표의 빈 상태만 확인한다. */
     @Transactional(timeout = 2)
     public boolean investigateNext() {
         var keys = jdbc.sql("""
@@ -76,7 +73,6 @@ public class TripQualityRepository {
             WHERE NOT completed AND vehicle_id <> '' ORDER BY investigated_at, route_version_id, vehicle_id LIMIT 1
             """).query((rs, n) -> new Key(rs.getLong(1), rs.getString(2))).list();
         if (keys.isEmpty()) { return false; }
-        // 이 transaction에만 적용한다. 시간 초과 시 롤백하고 다음 실행에서 같은 커서부터 재개한다.
         jdbc.sql("SELECT set_config('statement_timeout', '500ms', true), set_config('lock_timeout', '100ms', true)")
             .query().singleRow();
         investigateLocked(keys.getFirst().version(), keys.getFirst().vehicle());
@@ -157,7 +153,6 @@ public class TripQualityRepository {
         if (complete) { invalidateDerivedInputs(version); }
     }
 
-    /** 차량 검색 전에 묶음 수를 제한한다. 차량이 전혀 없는 기간도 최대 32묶음에서 멈춘다. */
     public List<ScanRow> readPage(long version, String vehicle, Instant at, long batch, boolean backwards, boolean include) {
         String comparison = backwards ? "<" : include ? ">=" : ">";
         String order = backwards ? "DESC" : "ASC";

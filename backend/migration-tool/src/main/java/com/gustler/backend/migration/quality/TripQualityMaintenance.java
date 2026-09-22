@@ -11,13 +11,11 @@ import java.util.Map;
 import java.util.Objects;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
-/** 과거 자료는 제한된 묶음에서 이상만 발견한다. 전체 COUNT/종료 후 대량 UPDATE를 수행하지 않는다. */
 public final class TripQualityMaintenance {
     private final JdbcClient jdbc;
     private final TripQualityRepository quality;
     public TripQualityMaintenance(JdbcClient jdbc) { this.jdbc = jdbc; this.quality = new TripQualityRepository(jdbc); }
 
-    /** 최근 32묶음의 표본이다. 전체 자료 수나 전체 이상 발생 수로 해석하지 않는다. */
     public Map<String, Object> preview(long version, Instant until) {
         return jdbc.sql("""
             WITH sample AS MATERIALIZED (
@@ -30,7 +28,6 @@ public final class TripQualityMaintenance {
             """).param(version).param(offset(until)).query().singleRow();
     }
 
-    /** 1~100묶음에서 발견한 차량만 조사 요청한다. 같은 호출에서 조사 페이지도 최대 한 번 처리한다. */
     public Map<String, Object> applyChunk(long version, Instant until, int limit) {
         if (limit < 1 || limit > 100) { throw new IllegalArgumentException("한 번에 1~100개 관측 묶음만 처리할 수 있다"); }
         quality.lockRoute(version);
@@ -61,7 +58,6 @@ public final class TripQualityMaintenance {
                 """).param(version).param(offset(until)).param(cursor.at()).param(cursor.id()).param(limit)
                 .query((rs, n) -> new Batch(rs.getLong(1), rs.getObject(2, OffsetDateTime.class))).list();
             if (!batches.isEmpty()) {
-                // 차량마다 이 범위의 첫 이상만 요청한다. 반복 이상은 진행 중인 같은 조사를 사용한다.
                 var anomalies = jdbc.sql("""
                     SELECT o.observation_batch_id, o.id, o.vehicle_id, o.remaining_seats
                     FROM vehicle_observation o LEFT JOIN vehicle_one_way_trip t ON t.id = o.vehicle_trip_key
@@ -98,7 +94,6 @@ public final class TripQualityMaintenance {
             "completed", discoveryComplete && !investigating);
     }
 
-    /** 큰 관측 표를 세지 않고 조사 기록과 상태만 반환한다. */
     public List<Map<String, Object>> status(long version) {
         return jdbc.sql("""
             SELECT vehicle_id, phase, completed, evidence_observation_id, last_batch_at, last_batch_id,

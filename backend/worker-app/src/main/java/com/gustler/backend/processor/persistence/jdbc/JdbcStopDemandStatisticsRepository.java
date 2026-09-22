@@ -156,7 +156,6 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
         ORDER BY forecast.target_stop_order, arrived_hour_start
         """;
 
-    // 가져온 합계에는 편도별 원본 연결이 없으므로 품질 판정 후 집계에 섞지 않는다.
 
     /** 셀 한 줄. 세대 번호와 기준 시각과 계산 시각은 한 세대의 모든 행에 같은 값이 들어간다. */
     private static final String INSERT_CELL = """
@@ -232,7 +231,6 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
         final long routeVersionId,
         Instant dataUntil
     ) {
-        // read→aggregate→append 동안 판정 변경을 막는다. 호출 writer가 노선별 transaction을 연다.
         jdbcClient.sql("SELECT id FROM route WHERE id = (SELECT route_id FROM route_version WHERE id = ?) FOR UPDATE")
             .param(routeVersionId).query(Long.class).single();
         JdbcClient.StatementSpec statement = jdbcClient.sql(SELECT_HOURLY_TOTALS)

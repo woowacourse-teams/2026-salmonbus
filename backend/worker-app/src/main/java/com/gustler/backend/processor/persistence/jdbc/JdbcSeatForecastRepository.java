@@ -236,7 +236,6 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
             .list();
     }
 
-    /** 호출한 회수 작업의 transaction은 당일 집계 갱신까지 이어져야 한다. */
     @Override
     @Transactional
     public List<SettledForecast> settle(
@@ -245,7 +244,6 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
         if (settlements.isEmpty()) {
             return List.of();
         }
-        // 품질 변경/예보 생성과 같은 노선 잠금을 공유한다. 여러 노선은 id 순서로 잠근다.
         jdbcClient.sql("""
             SELECT id FROM route WHERE id IN (
                 SELECT v.route_id FROM vehicle_observation o
@@ -272,7 +270,6 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
         return List.copyOf(settled);
     }
 
-    /** 이전 품질 버전의 실제 도착 라벨도 보존하되 후보정에 더할 결과에서는 뺀다. */
     private Optional<SettledForecast> settlePending(
         ForecastSettlement settlement,
         ArrivalLabel.Settled label

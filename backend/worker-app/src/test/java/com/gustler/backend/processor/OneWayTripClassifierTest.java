@@ -13,17 +13,76 @@ import com.gustler.backend.processor.OneWayTripClassifier.Status;
 import java.time.Duration;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class OneWayTripClassifierTest {
     private static final Instant T = Instant.parse("2026-09-21T00:00:00Z");
     // 합성 입력의 60초는 운영 권장 기준이 아니다.
     private static final Route ROUTE = new Route(1, 20, 10, Duration.ofSeconds(60));
-    private static final Route GBIS_ONLY = new Route(1, 20, 10, null);
+    private static final Route DEFAULT_ROUTE = new Route(1, 20, 10, null);
     private Observation row(long id, int stop, int state, int seats) {
         return new Observation(id, "bus", T.plusSeconds(id), stop, state, seats);
     }
     private Previous previous(Observation row, long trip, Status status) {
         return new Previous(row, trip, status);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {599, 600})
+    void 노선별_간격이_미설정이면_10분_이하의_관측을_같은_편도로_연결한다(int seconds) {
+        // given
+        var before = previous(row(1, 5, 2, 71), 1, Status.EXCLUDED);
+        var current = new Observation(2, "bus", T.plusSeconds(1 + seconds), 6, 2, 44);
+
+        // when
+        var actual = classify(DEFAULT_ROUTE, before, current);
+
+        // then
+        assertThat(actual).isEqualTo(new Decision(1, Status.EXCLUDED, Boundary.CONTINUATION));
+    }
+
+    @Test
+    void 노선별_간격이_미설정이면_10분_1초_뒤의_관측은_이전_편도와_연결하지_않고_경계_미확인으로_판정한다() {
+        // given
+        var before = previous(row(1, 5, 2, 71), 1, Status.EXCLUDED);
+        var current = new Observation(2, "bus", T.plusSeconds(602), 6, 2, 44);
+
+        // when
+        var actual = classify(DEFAULT_ROUTE, before, current);
+
+        // then
+        assertThat(actual).isEqualTo(new Decision(2, Status.BOUNDARY_UNCONFIRMED, Boundary.UNCONFIRMED));
+    }
+
+    @Test
+    void 기본_10분을_초과해도_회차지_출발이나_방향_전환이_확인되면_새_편도를_사용한다() {
+        // given
+        var before = previous(row(1, 9, 2, 71), 1, Status.EXCLUDED);
+        var departure = new Observation(2, "bus", T.plusSeconds(602), 10, 2, 44);
+        var afterTurn = new Observation(3, "bus", T.plusSeconds(602), 11, 0, 44);
+
+        // when
+        var departed = classify(DEFAULT_ROUTE, before, departure);
+        var turned = classify(DEFAULT_ROUTE, before, afterTurn);
+
+        // then
+        assertThat(departed).isEqualTo(new Decision(2, Status.ELIGIBLE, Boundary.DEPARTURE));
+        assertThat(turned).isEqualTo(new Decision(3, Status.ELIGIBLE, Boundary.DIRECTION_CHANGE));
+    }
+
+    @Test
+    void 노선별_간격이_20분이면_기본_10분보다_노선_설정을_우선한다() {
+        // given
+        var route = new Route(1, 20, 10, Duration.ofMinutes(20));
+        var before = previous(row(1, 5, 2, 44), 1, Status.ELIGIBLE);
+        var current = new Observation(2, "bus", T.plusSeconds(602), 6, 2, 44);
+
+        // when
+        var actual = classify(route, before, current);
+
+        // then
+        assertThat(actual).isEqualTo(new Decision(1, Status.ELIGIBLE, Boundary.CONTINUATION));
     }
 
     @Test
@@ -192,7 +251,7 @@ class OneWayTripClassifierTest {
         var current = row(2, 6, 2, 42);
 
         // when
-        var actual = classify(GBIS_ONLY, before, current);
+        var actual = classify(DEFAULT_ROUTE, before, current);
 
         // then
         assertThat(actual).isEqualTo(new Decision(1, Status.ELIGIBLE, Boundary.CONTINUATION));
@@ -257,7 +316,7 @@ class OneWayTripClassifierTest {
         var current = row(1, 1, 2, 44);
 
         // when
-        var actual = classify(GBIS_ONLY, null, current);
+        var actual = classify(DEFAULT_ROUTE, null, current);
 
         // then
         assertThat(actual).isEqualTo(new Decision(1, Status.ELIGIBLE, Boundary.DEPARTURE));
@@ -286,11 +345,11 @@ class OneWayTripClassifierTest {
         var nextDeparture = row(5, 10, 2, 44);
 
         // when
-        var start = classify(GBIS_ONLY, null, departure);
-        var increase = classify(GBIS_ONLY, previous(departure, start.tripId(), start.status()), increased);
-        var excluded = classify(GBIS_ONLY, previous(increased, increase.tripId(), increase.status()), aboveRange);
-        var arrived = classify(GBIS_ONLY, previous(aboveRange, excluded.tripId(), excluded.status()), arrival);
-        var nextTrip = classify(GBIS_ONLY, previous(arrival, arrived.tripId(), arrived.status()), nextDeparture);
+        var start = classify(DEFAULT_ROUTE, null, departure);
+        var increase = classify(DEFAULT_ROUTE, previous(departure, start.tripId(), start.status()), increased);
+        var excluded = classify(DEFAULT_ROUTE, previous(increased, increase.tripId(), increase.status()), aboveRange);
+        var arrived = classify(DEFAULT_ROUTE, previous(aboveRange, excluded.tripId(), excluded.status()), arrival);
+        var nextTrip = classify(DEFAULT_ROUTE, previous(arrival, arrived.tripId(), arrived.status()), nextDeparture);
 
         // then
         assertThat(increase).isEqualTo(new Decision(1, Status.ELIGIBLE, Boundary.CONTINUATION));
@@ -306,7 +365,7 @@ class OneWayTripClassifierTest {
         var current = row(2, 11, 0, 44);
 
         // when
-        var actual = classify(GBIS_ONLY, before, current);
+        var actual = classify(DEFAULT_ROUTE, before, current);
 
         // then
         assertThat(actual).isEqualTo(new Decision(2, Status.ELIGIBLE, Boundary.DIRECTION_CHANGE));
@@ -319,7 +378,7 @@ class OneWayTripClassifierTest {
         var current = row(3, 10, 2, 44);
 
         // when
-        var actual = classify(GBIS_ONLY, before, current);
+        var actual = classify(DEFAULT_ROUTE, before, current);
 
         // then
         assertThat(actual).isEqualTo(new Decision(1, Status.EXCLUDED, Boundary.CONTINUATION));
@@ -333,8 +392,8 @@ class OneWayTripClassifierTest {
         var reversed = row(2, 5, 2, 44);
 
         // when
-        var first = classify(GBIS_ONLY, null, firstObservation);
-        var backward = classify(GBIS_ONLY, before, reversed);
+        var first = classify(DEFAULT_ROUTE, null, firstObservation);
+        var backward = classify(DEFAULT_ROUTE, before, reversed);
 
         // then
         assertThat(first.status()).isEqualTo(Status.BOUNDARY_UNCONFIRMED);

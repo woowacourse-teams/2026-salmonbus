@@ -1,7 +1,3 @@
--- psql 변수: route_version_id, from_at, until_at. 시각에는 +09:00 같은 시간대 오프셋을 지정한다.
--- 아래 쿼리는 기존 원본 테이블만 읽는다. V15 적용/제품 배포가 필요하지 않다.
--- 최초에는 노선 판본 하나, 6시간 범위로 실행한다. SQL은 로컬 검토만 했으며 DB 실행은 미검증이다.
--- 실제 정류소 통과 시각이 아니라 GBIS 응답 수신 시각 사이의 간격이다.
 \set ON_ERROR_STOP on
 BEGIN READ ONLY;
 SET LOCAL statement_timeout = '15s';
@@ -10,7 +6,6 @@ SET LOCAL max_parallel_workers_per_gather = 0;
 SET LOCAL work_mem = '8MB';
 SET LOCAL TIME ZONE 'Asia/Seoul';
 
--- 1. 같은 차량을 다시 관측하기까지의 간격. 기준값 선택의 직접 대상이다.
 WITH route_context AS (
     SELECT v.id, v.turn_sequence, min(s.stop_order) AS first_stop
     FROM route_version v JOIN route_stop s ON s.route_version_id = v.id
@@ -43,7 +38,6 @@ SELECT date_trunc('hour', at) AS hour_kst,
 FROM ordered WHERE previous_at IS NOT NULL
 GROUP BY 1 ORDER BY 1;
 
--- 2. 연속 정류소의 최초 관측 진입 간격. 조회 시작에 잘린 첫 방문은 제외한다.
 WITH route_context AS (
     SELECT v.id, v.turn_sequence, min(s.stop_order) AS first_stop
     FROM route_version v JOIN route_stop s ON s.route_version_id = v.id
@@ -84,10 +78,6 @@ SELECT direction, count(*) AS samples, round(avg(minutes), 3) AS avg_minutes,
        min(minutes) AS min_minutes, max(minutes) AS max_minutes
 FROM durations GROUP BY direction ORDER BY direction;
 
--- 3. 회차지 출발 간격. 같은 순번에서 state=2가 반복돼도 한 방문으로 센다.
--- ONE_WAY는 반대 회차지 출발까지이므로 종점 대기시간도 포함한다.
--- ROUND_TRIP은 A→B→A 출발을 모두 관측한 후보이며 누락/순번 오류 가능성은 남는다.
--- SAME_TERMINAL은 반대편 출발을 관측하지 못했으므로 왕복 소요시간으로 단정하지 않는다.
 WITH route_context AS (
     SELECT v.id, v.turn_sequence, min(s.stop_order) AS first_stop
     FROM route_version v JOIN route_stop s ON s.route_version_id = v.id
@@ -151,7 +141,6 @@ SELECT kind, from_stop, to_stop, count(*) AS samples,
        max(extract(epoch FROM until_at - from_at) / 60.0) AS max_minutes
 FROM intervals GROUP BY kind, from_stop, to_stop ORDER BY kind, from_stop, to_stop;
 
--- 4. 가장 짧은 왕복 후보 10건. 관측 공백이 큰 후보는 상세 확인 후 해석한다.
 WITH route_context AS (
     SELECT v.id, v.turn_sequence, min(s.stop_order) AS first_stop
     FROM route_version v JOIN route_stop s ON s.route_version_id = v.id

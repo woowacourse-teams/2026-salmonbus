@@ -12,7 +12,6 @@ public enum SeatUnknownReason {
     REPORTED_UNKNOWN,
     /** 상류가 값을 아예 안 줬다 */
     NOT_REPORTED,
-    /** 원본은 보존하고 모델 입력에서만 사용을 보류한다. DB 원본 사유에는 쓰지 않는다. */
     QUALITY_WITHHELD,
     ;
 }

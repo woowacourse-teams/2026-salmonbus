@@ -88,6 +88,8 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
             c.commit();
 
             // then: bus-1만 보류하고 정상 bus-2는 유지한다.
+            assertThat(jdbc.sql("SELECT maximum_gap_seconds FROM trip_quality_rebuild")
+                .query(Integer.class).single()).isEqualTo(configured ? 60 : 600);
             assertThat(jdbc.sql("SELECT DISTINCT vehicle_id FROM forecast_eligible_observation").query(String.class).list()).containsExactly("bus-2");
             assertThat(jdbc.sql("SELECT count(*) FROM vehicle_observation WHERE vehicle_trip_key IS NOT NULL").query(Integer.class).single()).isZero();
 
@@ -197,6 +199,8 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
             // then
             assertThat(result).containsEntry("completed", true);
             assertThat(repeated).containsEntry("completed", true).containsEntry("processedBatches", 0);
+            assertThat(jdbc.sql("SELECT maximum_gap_seconds FROM trip_quality_rebuild")
+                .query(Integer.class).list()).containsOnly(600);
             assertThat(jdbc.sql("SELECT count(*) FROM forecast_eligible_observation").query(Integer.class).single()).isEqualTo(1);
             assertThat(jdbc.sql("SELECT count(*) FROM vehicle_observation").query(Integer.class).single()).isEqualTo(3);
             assertThatThrownBy(() -> maintenance.applyChunk(version, START.plusSeconds(70), 1)).isInstanceOf(IllegalArgumentException.class);
@@ -263,6 +267,49 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
                 .query(Long.class).list()).containsExactly(next);
             assertThat(jdbc.sql("SELECT count(*) FROM vehicle_observation").query(Integer.class).single()).isEqualTo(4);
             c.rollback();
+        }
+    }
+
+    @Test
+    void 기본_10분을_초과한_관측은_경계_미확인으로_보류하고_다음_회차지_출발에서_복귀한다() throws Exception {
+        // given
+        try (var c = connection()) {
+            var jdbc = jdbc(c);
+            long version = route(jdbc);
+            batch(jdbc, version, 1, 1, 1, 44);
+            long bad = batch(jdbc, version, 2, 2, 1, 71);
+            long disconnected = batch(jdbc, version, 63, 3, 1, 44);
+            c.setAutoCommit(false);
+            var quality = new TripQualityRepository(jdbc);
+            quality.observationsStored(event(jdbc, version, bad));
+            c.commit();
+
+            // when
+            quality.investigateNext(); c.commit();
+            quality.investigateNext(); c.commit();
+
+            // then
+            assertThat(jdbc.sql("SELECT completed FROM trip_quality_rebuild")
+                .query(Boolean.class).single()).isFalse();
+            assertThat(jdbc.sql("""
+                SELECT t.status FROM vehicle_observation o JOIN vehicle_one_way_trip t ON t.id=o.vehicle_trip_key
+                WHERE o.observation_batch_id=?
+                """).param(disconnected).query(String.class).single()).isEqualTo("BOUNDARY_UNCONFIRMED");
+            assertThat(jdbc.sql("SELECT count(*) FROM forecast_eligible_observation")
+                .query(Integer.class).single()).isZero();
+
+            // when
+            long next = batch(jdbc, version, 64, 4, 1, 44);
+            c.commit();
+            quality.investigateNext(); c.commit();
+
+            // then
+            assertThat(jdbc.sql("SELECT completed FROM trip_quality_rebuild")
+                .query(Boolean.class).single()).isTrue();
+            assertThat(jdbc.sql("SELECT observation_batch_id FROM forecast_eligible_observation")
+                .query(Long.class).list()).containsExactly(next);
+            assertThat(jdbc.sql("SELECT remaining_seats FROM vehicle_observation ORDER BY id")
+                .query(Integer.class).list()).containsExactly(44, 71, 44, 44);
         }
     }
 
