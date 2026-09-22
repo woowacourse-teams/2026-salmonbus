@@ -30,6 +30,7 @@ public class TripQualityRepository {
 
     public TripQualityRepository(JdbcClient jdbc) { this.jdbc = jdbc; }
 
+    /** 관측과 조사 요청을 같은 transaction에 저장하여 프로세스 중단에도 발견 사실을 잃지 않는다. */
     @EventListener
     @Transactional(propagation = Propagation.MANDATORY)
     public void observationsStored(VehicleObservationsStored event) {
@@ -39,6 +40,7 @@ public class TripQualityRepository {
         if (anomalies.isEmpty()) {
             return;
         }
+        // 조사 완료와 새 이상 관측 저장을 직렬화한다. 조사 중의 동일 차량은 새 요청을 만들지 않는다.
         lockRoute(event.routeVersionId());
         var active = jdbc.sql("SELECT vehicle_id FROM trip_quality_rebuild WHERE route_version_id = ? AND NOT completed")
             .param(event.routeVersionId()).query(String.class).list();
@@ -153,6 +155,7 @@ public class TripQualityRepository {
         if (complete) { invalidateDerivedInputs(version); }
     }
 
+    /** 차량 검색 전에 묶음 수를 제한한다. 차량이 전혀 없는 기간도 최대 32묶음에서 멈춘다. */
     public List<ScanRow> readPage(long version, String vehicle, Instant at, long batch, boolean backwards, boolean include) {
         String comparison = backwards ? "<" : include ? ">=" : ">";
         String order = backwards ? "DESC" : "ASC";

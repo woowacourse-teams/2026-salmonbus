@@ -49,6 +49,7 @@ public final class OneWayTripClassifier {
         } else if (comparable) {
             int before = direction(route, previous.start().stopOrder(), previous.start().runningState());
             int after = direction(route, current);
+            // 같은 정류장에서 운행 상태만 반복되어도 편도 방향을 되돌리지 않는다.
             if (current.stopOrder() == previous.observation().stopOrder()) {
                 after = before;
             }

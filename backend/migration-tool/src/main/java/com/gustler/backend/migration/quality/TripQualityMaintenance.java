@@ -16,6 +16,7 @@ public final class TripQualityMaintenance {
     private final TripQualityRepository quality;
     public TripQualityMaintenance(JdbcClient jdbc) { this.jdbc = jdbc; this.quality = new TripQualityRepository(jdbc); }
 
+    /** 최근 32묶음의 표본이다. 전체 자료 수나 전체 이상 발생 수로 해석하지 않는다. */
     public Map<String, Object> preview(long version, Instant until) {
         return jdbc.sql("""
             WITH sample AS MATERIALIZED (

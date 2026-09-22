@@ -21,6 +21,7 @@ public class TripQualityInvestigationJob {
         } catch (QueryTimeoutException | PessimisticLockingFailureException e) {
             deferred(e);
         } catch (UncategorizedSQLException e) {
+            // JDBC 드라이버/예외 변환기에 따라 PostgreSQL lock_timeout이 이 타입으로 전달된다.
             if (!"55P03".equals(e.getSQLException().getSQLState())) { throw e; }
             deferred(e);
         }

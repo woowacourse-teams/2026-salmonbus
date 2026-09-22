@@ -129,6 +129,7 @@ public class ForecastBatchWriter {
         }
     }
 
+    /** 목록을 완성한 뒤 반환해, 도중에 실패한 차량의 일부 예보가 배치에 섞이지 않게 한다. */
     private List<SeatForecast> forecastsOfVehicle(
         VehicleTrajectory trajectory,
         RouteStops stops,

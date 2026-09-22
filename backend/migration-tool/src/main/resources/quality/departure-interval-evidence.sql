@@ -1,3 +1,5 @@
+-- 2026-09-21 사용자 제공 조회 범위. 노선 1650=판본2, 3330=판본1.
+-- 원본 테이블 읽기 전용. 상태 표시 반복은 정류소 방문 단위로 합친다.
 BEGIN READ ONLY;
 SET LOCAL statement_timeout = '15s';
 SET LOCAL max_parallel_workers_per_gather = 0;

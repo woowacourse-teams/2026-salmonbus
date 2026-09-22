@@ -23,6 +23,7 @@ ALTER TABLE same_day_full_outcomes ADD COLUMN quality_revision bigint NOT NULL D
 
 CREATE TABLE trip_quality_rebuild (
     route_version_id bigint NOT NULL REFERENCES route_version(id),
+    -- 빈 차량 ID는 수동 과거 자료의 이상 발견 커서다. 실제 차량의 조사는 별도 행이다.
     vehicle_id varchar(40) NOT NULL DEFAULT '',
     last_batch_at timestamptz,
     last_batch_id bigint NOT NULL DEFAULT 0,
@@ -40,6 +41,8 @@ CREATE TABLE trip_quality_rebuild (
     PRIMARY KEY(route_version_id, vehicle_id)
 );
 
+-- 정상 관측에 판정 행을 만들지 않는다. 조사 중인 차량과 확정 제외 편도만 차단한다.
+-- quality_direction은 편도 ID가 아니다. 결과 연결의 방향 검사이며 기존 시간/순번 검사를 함께 사용한다.
 CREATE VIEW forecast_observation_quality AS
 SELECT observation.*,
        CASE WHEN version.turn_sequence IS NOT NULL AND (
@@ -77,6 +80,7 @@ WHERE forecast.quality_revision = quality.quality_revision;
 CREATE VIEW quality_training_seat_forecast AS
 SELECT * FROM quality_calibration_seat_forecast WHERE scoring_state = 'SETTLED';
 
+-- 기존 historical schema가 있을 때도, 나중에 설치될 때도 같은 정의를 적용한다.
 CREATE FUNCTION refresh_trip_quality_training_views() RETURNS void LANGUAGE plpgsql AS $body$
 BEGIN
     IF to_regclass('public.training_model_release_exclusion') IS NOT NULL THEN
@@ -114,6 +118,8 @@ AND NOT EXISTS (
       AND excluded_generation.computed_at = statistics.computed_at
 )
 AND NOT EXISTS (
+    -- current worker의 임시 모델 경유 기본 집계. final_cutover_at이 아직 없으면 activation 이후를
+    -- 전부 fail-closed로 제외한다. freeze가 끝난 뒤에는 cutover 미만 exact window만 제외한다.
     SELECT 1
     FROM training_model_release_exclusion temporary
     WHERE temporary.classification = 'TEMPORARY_RELEASE'
