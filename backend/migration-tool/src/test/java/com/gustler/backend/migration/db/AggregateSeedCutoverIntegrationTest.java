@@ -79,7 +79,7 @@ class AggregateSeedCutoverIntegrationTest extends PostgresMigrationTestSupport {
         assertThat(applied.planSha256()).isEqualTo(dryRun.planSha256());
         assertThat(applied.alreadyApplied()).isFalse();
         assertProviderReceiptMatchesDatabaseReadBack();
-        assertSeedVisibleToWorker(routeVersions.get("3330"), paused.pausedAt(), 1_062);
+        assertSeedExcludedFromReaggregation(routeVersions.get("3330"), paused.pausedAt());
 
         AggregateSeedCutover.RollbackResult rollbackDryRun = cutover.rollback(
             settings, applied.planSha256(), false, directory.resolve("rollback-dry-run.json"));
@@ -345,17 +345,20 @@ class AggregateSeedCutoverIntegrationTest extends PostgresMigrationTestSupport {
         }
     }
 
-    private static void assertSeedVisibleToWorker(
+    private static void assertSeedExcludedFromReaggregation(
         long routeVersionId,
-        Instant dataUntil,
-        int expectedSamples
+        Instant dataUntil
     ) {
+        // given: 가져온 합계는 DB에 보존하지만 원본 편도를 확인할 수 없다.
         JdbcStopDemandStatisticsRepository repository = new JdbcStopDemandStatisticsRepository(
             JdbcClient.create(dataSource()));
+
+        // when
         List<StopDemandHourlyTotals> totals = repository.readHourlyTotals(
             routeVersionId, dataUntil.plusSeconds(1));
-        assertThat(totals.stream().mapToInt(StopDemandHourlyTotals::sampleCount).sum())
-            .isEqualTo(expectedSamples);
+
+        // then: SAL-133의 품질 정책에 따라 원본 근거 없는 seed를 새 통계에 섞지 않는다.
+        assertThat(totals).isEmpty();
     }
 
     private static void assertProviderReceiptMatchesDatabaseReadBack() throws Exception {
