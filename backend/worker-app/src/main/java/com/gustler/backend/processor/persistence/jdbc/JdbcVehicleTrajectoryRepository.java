@@ -122,11 +122,10 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
     private static final String SELECT_OBSERVATIONS_IN_BATCHES = """
         SELECT o.id, o.observation_batch_id, o.route_version_id, o.vehicle_id,
                o.vehicle_trip_key, o.passed_stop_order,
-               CASE WHEN eligible.id IS NOT NULL THEN o.remaining_seats END AS remaining_seats,
-               CASE WHEN eligible.id IS NULL THEN 'QUALITY_WITHHELD' ELSE o.seat_unknown_reason END AS seat_unknown_reason,
+               CASE WHEN o.forecast_eligible THEN o.remaining_seats END AS remaining_seats,
+               CASE WHEN NOT o.forecast_eligible THEN 'QUALITY_WITHHELD' ELSE o.seat_unknown_reason END AS seat_unknown_reason,
                o.crowd_level
-        FROM vehicle_observation o
-        LEFT JOIN forecast_eligible_observation eligible ON eligible.id = o.id
+        FROM forecast_observation_quality o
         WHERE o.observation_batch_id IN (:observationBatchIds)
           AND o.vehicle_id IS NOT NULL
         ORDER BY o.observation_batch_id, o.source_row_number
@@ -150,7 +149,8 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
      * 애초에 결과에 없는 것과 같은 자리다. 그 차량들은 궤적이 안 만들어져 예보도 안 나간다.
      *
      * <p>차량마다 기존 잔여석 인덱스를 역순으로 읽어 조건에 맞는 첫 양수 값을 선택한다.
-     * 기준 시각 검사는 LIMIT 전에 수행해야 미래 관측을 제외한 최대값을 얻을 수 있다.
+     * 기준 시각과 품질 검사는 LIMIT 전에 수행해야 미래/제외 관측을 제외한 최대값을 얻는다.
+     * 품질은 후보 ID로 확인하여 편도 view 조인이 잔여석 순서의 인덱스 탐색을 깨지 않게 한다.
      */
     private static final String SELECT_MAXIMUM_SEATS_EVER_OBSERVED = """
         WITH vehicles AS (
@@ -161,12 +161,14 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
         CROSS JOIN LATERAL (
             SELECT observation.vehicle_id,
                    observation.remaining_seats AS maximum_seats
-            FROM forecast_eligible_observation observation
+            FROM vehicle_observation observation
             JOIN observation_batch batch
               ON batch.id = observation.observation_batch_id
             WHERE observation.route_version_id = :routeVersionId
               AND observation.vehicle_id = vehicle.vehicle_id
-              AND observation.remaining_seats > 0
+              AND observation.remaining_seats > 0 AND observation.remaining_seats <= 70
+              AND (SELECT quality.forecast_eligible FROM forecast_observation_quality quality
+                   WHERE quality.id = observation.id)
               AND (batch.response_received_at, batch.id) <= (:until, :observationBatchId)
             ORDER BY observation.remaining_seats DESC
             LIMIT 1

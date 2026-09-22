@@ -19,12 +19,12 @@ public record SameDayFullOutcomeCount(
 ) {
 
     public SameDayFullOutcomeCount {
-        if (rowCount < 1) {
-            throw new IllegalArgumentException("집계 한 줄은 확정된 예보가 하나는 있어야 한다: " + rowCount);
+        if (rowCount < 0 || (rowCount == 0 && (stopsToTarget != 0 || actualFullCount != 0 || rawFullChanceSum != 0))) {
+            throw new IllegalArgumentException("빈 집계 표시는 거리·건수·합계가 모두 0이어야 한다: " + rowCount);
         }
     }
 
     public SameDayFullOutcomes outcomes() {
-        return new SameDayFullOutcomes(rowCount, actualFullCount, rawFullChanceSum / rowCount);
+        return new SameDayFullOutcomes(rowCount, actualFullCount, rowCount == 0 ? 0 : rawFullChanceSum / rowCount);
     }
 }

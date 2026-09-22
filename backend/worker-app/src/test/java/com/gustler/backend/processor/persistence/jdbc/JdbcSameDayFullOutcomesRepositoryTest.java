@@ -1,6 +1,9 @@
 package com.gustler.backend.processor.persistence.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import com.gustler.backend.processor.ArrivalLabel;
 import com.gustler.backend.processor.ForecastSettlement;
@@ -9,8 +12,8 @@ import com.gustler.backend.processor.SameDayFullOutcomesService;
 import com.gustler.backend.processor.SeatForecast;
 import com.gustler.backend.processor.SeoulDay;
 import com.gustler.backend.processor.SettledForecast;
-import com.gustler.backend.support.IntegrationTest;
 import com.gustler.backend.support.ConfirmedTripFixture;
+import com.gustler.backend.support.IntegrationTest;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -283,6 +286,42 @@ class JdbcSameDayFullOutcomesRepositoryTest {
 
         // then
         assertThat(counts).isEmpty();
+    }
+
+    @Test
+    void 원본이_비어_있으면_같은_날짜와_품질_버전에서는_한번만_원본을_센다() {
+        // given
+        var observedRepository = spy(new JdbcSameDayFullOutcomesRepository(jdbcClient));
+        var observedService = new SameDayFullOutcomesService(observedRepository);
+
+        // when
+        var first = observedService.outcomesFor(routeId, ARRIVED_AT);
+        var second = observedService.outcomesFor(routeId, ARRIVED_AT.plusSeconds(10));
+
+        // then
+        assertThat(first).isEmpty();
+        assertThat(second).isEmpty();
+        verify(observedRepository, times(1)).countFromSource(routeId, ARRIVAL_DAY, ARRIVAL_DAY.end());
+        assertThat(repository.findCounts(routeId, ARRIVAL_DAY)).singleElement()
+            .extracting(SameDayFullOutcomeCount::rowCount).isEqualTo(0);
+    }
+
+    @Test
+    void 빈_집계를_기록한_뒤_첫_실제_결과가_들어오면_원본_재집계_없이_한건을_더한다() {
+        // given
+        var observedRepository = spy(new JdbcSameDayFullOutcomesRepository(jdbcClient));
+        var observedService = new SameDayFullOutcomesService(observedRepository);
+        observedService.outcomesFor(routeId, ARRIVED_AT);
+        var settled = settleAsFull(vehicleObservationId, RAW_FULL_CHANCE);
+
+        // when
+        observedService.record(List.of(settled));
+        var outcomes = observedService.outcomesFor(routeId, ARRIVED_AT);
+
+        // then
+        assertThat(outcomes).hasSize(1);
+        assertThat(outcomes.get(STOPS_TO_TARGET).rowCount()).isEqualTo(1);
+        verify(observedRepository, times(1)).countFromSource(routeId, ARRIVAL_DAY, ARRIVAL_DAY.end());
     }
 
     private SettledForecast settleAsFull(

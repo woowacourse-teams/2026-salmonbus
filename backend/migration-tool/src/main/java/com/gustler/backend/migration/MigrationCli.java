@@ -86,8 +86,8 @@ public final class MigrationCli {
         return DatabaseConnections.transaction(environment, connection -> {
             connection.setReadOnly(!write);
             try (var statement = connection.createStatement()) {
-                statement.execute("SET LOCAL lock_timeout = '3s'");
-                statement.execute("SET LOCAL statement_timeout = '30s'");
+                statement.execute("SET LOCAL lock_timeout = '100ms'");
+                statement.execute("SET LOCAL statement_timeout = '500ms'");
             }
             var jdbc = JdbcClient.create(
                 new SingleConnectionDataSource(connection, true));

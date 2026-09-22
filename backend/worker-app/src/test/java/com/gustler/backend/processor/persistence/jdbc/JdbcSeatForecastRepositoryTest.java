@@ -7,8 +7,8 @@ import com.gustler.backend.processor.ForecastSettlement;
 import com.gustler.backend.processor.PendingForecast;
 import com.gustler.backend.processor.SeatForecast;
 import com.gustler.backend.processor.SettledForecast;
-import com.gustler.backend.support.IntegrationTest;
 import com.gustler.backend.support.ConfirmedTripFixture;
+import com.gustler.backend.support.IntegrationTest;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -362,18 +362,12 @@ class JdbcSeatForecastRepositoryTest {
     }
 
     @Test
-    void 다른_편도의_도착_관측으로_예보를_닫지_않는다() {
+    void 다른_방향의_도착_관측으로_예보를_닫지_않는다() {
         // given
         jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
         long arrival = insertArrivalObservation();
-        jdbcClient.sql("""
-            INSERT INTO vehicle_one_way_trip(id, start_observation_id, route_version_id, vehicle_id,
-                status, boundary, rule_version)
-            SELECT CAST(id AS varchar), id, route_version_id, vehicle_id, 'ELIGIBLE', 'DEPARTURE', 'test'
-            FROM vehicle_observation WHERE id = ?
-            """).param(arrival).update();
-        jdbcClient.sql("UPDATE vehicle_observation SET vehicle_trip_key = CAST(id AS varchar) WHERE id = ?")
-            .param(arrival).update();
+        jdbcClient.sql("UPDATE route_version SET turn_sequence = 8 WHERE id = ?")
+            .param(routeVersionId).update();
 
         // when
         List<SettledForecast> actual = jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(

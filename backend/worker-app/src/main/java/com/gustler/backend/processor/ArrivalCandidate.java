@@ -10,7 +10,7 @@ import java.time.Instant;
 public record ArrivalCandidate(
     long observationId,
     ObservedVehicle vehicle,
-    Long qualityTripId,
+    Long qualityDirection,
     boolean qualityAssessed
 ) {
 

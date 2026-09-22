@@ -3,7 +3,7 @@ package com.gustler.backend.processor.persistence.jdbc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.groups.Tuple.tuple;
 
-import com.gustler.backend.processor.TripQualityRepository;
+import com.gustler.backend.observation.VehicleObservationsStored;
 import com.gustler.backend.processor.FullSeatStreak;
 import com.gustler.backend.processor.ObservedSeats;
 import com.gustler.backend.processor.ObservedVehicle;
@@ -12,6 +12,7 @@ import com.gustler.backend.processor.PrecedingVehicle;
 import com.gustler.backend.processor.SeatSlope;
 import com.gustler.backend.processor.SeatUnknownReason;
 import com.gustler.backend.processor.TrajectoryGap;
+import com.gustler.backend.processor.TripQualityRepository;
 import com.gustler.backend.processor.VehicleTrajectory;
 import com.gustler.backend.support.ConfirmedTripFixture;
 import com.gustler.backend.support.IntegrationTest;
@@ -506,11 +507,11 @@ class JdbcVehicleTrajectoryRepositoryTest {
         insertObservation(later, VEHICLE_204003542, 2, 43);
         clearSyntheticMemberships();
         var quality = new TripQualityRepository(jdbcClient);
-        quality.assessBatch(first);
+        signal(quality, first);
         assertThat(repository.readTrajectories(first)).hasSize(2);
 
         // when
-        quality.assessBatch(later);
+        signal(quality, later);
 
         // then
         assertThat(repository.readTrajectories(first)).extracting(VehicleTrajectory::vehicleObservationId)
@@ -518,13 +519,13 @@ class JdbcVehicleTrajectoryRepositoryTest {
         assertThat(repository.readTrajectories(later)).hasSize(1);
         assertThat(jdbcClient.sql("SELECT remaining_seats FROM vehicle_observation WHERE id = ?")
             .param(badStart).query(Integer.class).single()).isEqualTo(44);
-        assertThat(jdbcClient.sql("SELECT quality_revision FROM route").query(Long.class).single()).isEqualTo(2);
+        assertThat(jdbcClient.sql("SELECT quality_revision FROM route WHERE id=(SELECT route_id FROM route_version WHERE id=?)").param(routeVersionId).query(Long.class).single()).isEqualTo(2);
 
         // when: 같은 관측 묶음을 다시 판정한다.
-        quality.assessBatch(later);
+        signal(quality, later);
 
         // then: 계산 자료 버전을 중복 증가시키지 않는다.
-        assertThat(jdbcClient.sql("SELECT quality_revision FROM route").query(Long.class).single()).isEqualTo(2);
+        assertThat(jdbcClient.sql("SELECT quality_revision FROM route WHERE id=(SELECT route_id FROM route_version WHERE id=?)").param(routeVersionId).query(Long.class).single()).isEqualTo(2);
     }
 
     @ParameterizedTest
@@ -543,8 +544,10 @@ class JdbcVehicleTrajectoryRepositoryTest {
         var quality = new TripQualityRepository(jdbcClient);
 
         // when
-        quality.assessBatch(first);
-        quality.assessBatch(next);
+        signal(quality, first);
+        signal(quality, next);
+        quality.investigateLocked(routeVersionId, VEHICLE_204000206);
+        quality.investigateLocked(routeVersionId, VEHICLE_204000206);
 
         // then
         assertThat(repository.readTrajectories(first)).isEmpty();
@@ -553,7 +556,7 @@ class JdbcVehicleTrajectoryRepositoryTest {
     }
 
     @Test
-    void 관측_간격이_60초_설정을_초과하면_이전_좌석_관측이_있어도_예측_대상에서_제외한다() {
+    void 정상_차량은_관측_간격이_길어도_사전_편도_판정으로_제외하지_않는다() {
         // given
         qualityPolicy();
         long first = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
@@ -564,11 +567,19 @@ class JdbcVehicleTrajectoryRepositoryTest {
         var quality = new TripQualityRepository(jdbcClient);
 
         // when
-        quality.assessBatch(first);
-        quality.assessBatch(gap);
+        signal(quality, first);
+        signal(quality, gap);
 
         // then
-        assertThat(repository.readTrajectories(gap)).isEmpty();
+        assertThat(repository.readTrajectories(gap)).hasSize(1);
+    }
+
+    private void signal(TripQualityRepository quality, long batch) {
+        var at = jdbcClient.sql("SELECT response_received_at FROM observation_batch WHERE id = ?")
+            .param(batch).query(OffsetDateTime.class).single();
+        var rows = jdbcClient.sql("SELECT id, vehicle_id, remaining_seats FROM vehicle_observation WHERE observation_batch_id = ?")
+            .param(batch).query((rs, n) -> new VehicleObservationsStored.Row(rs.getLong(1), rs.getString(2), rs.getObject(3, Integer.class))).list();
+        quality.observationsStored(new VehicleObservationsStored(batch, routeVersionId, at.toInstant(), rows));
     }
 
     private void qualityPolicy() {

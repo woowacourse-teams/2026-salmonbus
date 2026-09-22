@@ -71,7 +71,7 @@ class ForecastBatchWriterTest {
     }
 
     @Test
-    void 편도_판정과_노선_잠금을_순서대로_수행한_뒤_통계를_조회한다() {
+    void 예보_생성은_편도_조사_없이_노선_잠금_후_통계를_조회한다() {
         // given
         var snapshot = runtime(input -> RESULT);
 
@@ -80,7 +80,6 @@ class ForecastBatchWriterTest {
 
         // then
         var order = inOrder(quality, statistics, forecasts);
-        order.verify(quality).assessBatch(BATCH.observationBatchId());
         order.verify(quality).lockRoute(BATCH.routeVersionId());
         order.verify(statistics).readAsOf(1, STATISTICS.timeSlot(), "feature-v1", NOW);
     }

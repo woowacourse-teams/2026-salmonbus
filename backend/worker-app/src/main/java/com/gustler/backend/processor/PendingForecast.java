@@ -20,7 +20,7 @@ public record PendingForecast(
     int stopsToTarget,
     Instant observedAt,
     Instant generatedAt,
-    Long qualityTripId
+    Long qualityDirection
 ) {
 
     public PendingForecast(long observationId, int target, long version, String vehicle,

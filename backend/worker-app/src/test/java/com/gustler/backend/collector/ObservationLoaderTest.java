@@ -289,6 +289,39 @@ class ObservationLoaderTest {
             .isEqualTo(CollectedObservations.CURRENT_NORMALIZATION_VERSION);
     }
 
+    @Test
+    void 잔여석_71을_저장하면_같은_트랜잭션에서_조사를_등록하고_정상_차량은_유지한다() {
+        // given
+        var buses = List.of(busWithSeats(71), busAt(VEHICLE_204003542, 2, STOP_277103149, RUNNING_STATE_MOVING));
+
+        // when
+        loadBuses(buses);
+        entityManager.flush();
+
+        // then
+        assertThat(jdbcClient.sql("SELECT vehicle_id FROM trip_quality_rebuild WHERE route_version_id=?")
+            .param(routeVersionId).query(String.class).list()).containsExactly(VEHICLE_204000206);
+        assertThat(jdbcClient.sql("SELECT vehicle_id FROM forecast_eligible_observation WHERE route_version_id=?")
+            .param(routeVersionId).query(String.class).list()).containsExactly(VEHICLE_204003542);
+        assertThat(observationCountOf(batchId)).isEqualTo(2);
+    }
+
+    @Test
+    void 정상_관측을_저장하면_편도와_조사_기록을_만들지_않는다() {
+        // given
+        var buses = List.of(busWithSeats(44));
+
+        // when
+        loadBuses(buses);
+        entityManager.flush();
+
+        // then
+        assertThat(jdbcClient.sql("SELECT count(*) FROM trip_quality_rebuild WHERE route_version_id=?")
+            .param(routeVersionId).query(Integer.class).single()).isZero();
+        assertThat(jdbcClient.sql("SELECT vehicle_trip_key FROM vehicle_observation WHERE observation_batch_id=?")
+            .param(batchId).query(String.class).list()).containsExactly((String) null);
+    }
+
     private record StoredSeats(
         Integer remainingSeats,
         String seatUnknownReason

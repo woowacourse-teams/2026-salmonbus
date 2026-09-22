@@ -25,11 +25,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.slf4j.LoggerFactory;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 
 @ExtendWith(MockitoExtension.class)
 class ForecastJobStalenessTest {
@@ -130,7 +130,7 @@ class ForecastJobStalenessTest {
     }
 
     @Test
-    void 활성_모델이_없어도_관측_품질은_먼저_판정한다() {
+    void 활성_모델이_없으면_예보_작업에서_과거_관측을_조회하지_않는다() {
         // given
         when(forecastRuntime.resolveActive()).thenReturn(Optional.empty());
 
@@ -139,7 +139,6 @@ class ForecastJobStalenessTest {
 
         // then
         var order = inOrder(forecastBatchWriter, forecastRuntime);
-        order.verify(forecastBatchWriter).assessRecentBatches();
         order.verify(forecastRuntime).resolveActive();
         verify(forecastBatchWriter, never()).writeForecastsOf(any(), any(), any());
     }

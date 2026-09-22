@@ -4,8 +4,8 @@ import com.gustler.backend.processor.seatdistribution.RuntimeSnapshot;
 
 import jakarta.annotation.PostConstruct;
 import java.time.Clock;
-import java.time.Instant;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
  * <p>예보 쓰기는 관측을 저장하고 커밋한 뒤 별도 transaction 이다. 수집 사다리에 추론 시간이 섞이면
  * 예보가 실패할 때 관측까지 되돌아가고, 놓친 순간은 되살릴 수 없다.
  *
- * <p>품질 판정을 먼저 저장한 뒤, 도는 배포가 없거나 모델 구현이 없으면 예보 계산은 시작하지 않는다. 계수 번들이 없는 동안의 정상
+ * <p>관측 저장 시 이상을 기록한다. 도는 배포가 없거나 모델 구현이 없으면 예보 계산은 시작하지 않는다. 계수 번들이 없는 동안의 정상
  * 상태이고, 응답이 그 노선을 아직 준비 중이라고 답하는 자리와 같다. 반쯤 채운 판을 남기는 것보다
  * 아무 판도 안 여는 편이 낫다. 예보가 안 붙은 판은 조회가 건너뛴다.
  */
@@ -90,7 +90,6 @@ public class ForecastJob {
      */
     @Scheduled(fixedDelayString = "${forecast.interval}")
     public void writeForecasts() {
-        forecastBatchWriter.assessRecentBatches();
         Optional<RuntimeSnapshot> runtime = forecastRuntime.resolveActive();
         if (runtime.isEmpty()) {
             return;

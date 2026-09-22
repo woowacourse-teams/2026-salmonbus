@@ -3,7 +3,6 @@ package com.gustler.backend.processor;
 import com.gustler.backend.processor.seatdistribution.RuntimeSnapshot;
 import com.gustler.backend.processor.seatdistribution.SameDayFullOutcomes;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -53,19 +52,12 @@ public class ForecastBatchWriter {
         this.tripQuality = tripQuality;
     }
 
-    /** 모델 적재 전에 실행한다. 판정 저장은 각 묶음의 독립 transaction이다. */
-    public void assessRecentBatches() {
-        tripQuality.findRecentUnassessedBatches(clock.instant().minus(Duration.ofMinutes(5)))
-            .forEach(tripQuality::assessBatch);
-    }
-
     @Transactional
     public void writeForecastsOf(
         PendingForecastBatch batch,
         RouteStops stops,
         RuntimeSnapshot runtime
     ) {
-        tripQuality.assessBatch(batch.observationBatchId());
         tripQuality.lockRoute(batch.routeVersionId());
         Instant generatedAt = clock.instant();
         TimeSlot timeSlot = ForecastTimeSlot.of(batch, clock);

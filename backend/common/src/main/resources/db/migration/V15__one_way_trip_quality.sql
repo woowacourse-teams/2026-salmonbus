@@ -1,5 +1,5 @@
 -- V14(SAL-132)의 당일 집계에도 같은 품질 판정 버전을 적용한다.
--- 원본 좌석/위치/시각과 예측값은 덮어쓰지 않는다. 기존 행은 판정 전까지 사용 보류한다.
+-- 원본 좌석/위치/시각과 예측값은 덮어쓰지 않는다. 이상 발견 전의 관측은 사전 편도 판정 없이 사용한다.
 -- 작은 설정/버전은 기존 노선 행에 둔다. 관측마다 연결 행을 추가하지 않는다.
 ALTER TABLE route ADD COLUMN quality_revision bigint NOT NULL DEFAULT 1 CHECK (quality_revision > 0);
 ALTER TABLE route_version
@@ -22,29 +22,51 @@ CREATE TABLE vehicle_one_way_trip (
 -- 차량의 판정된 편도가 없으면 큰 관측 이력 탐색을 생략한다. 편도 생성 때만 인덱스에 추가한다.
 CREATE INDEX ix_one_way_trip_vehicle ON vehicle_one_way_trip(route_version_id, vehicle_id);
 -- vehicle_trip_key는 기존의 nullable 파생 열이다. 원본 좌석/위치/시각은 변경하지 않는다.
-ALTER TABLE seat_forecast ADD COLUMN quality_revision bigint NOT NULL DEFAULT 0;
-ALTER TABLE stop_demand_statistics ADD COLUMN quality_revision bigint NOT NULL DEFAULT 0;
-ALTER TABLE same_day_full_outcomes ADD COLUMN quality_revision bigint NOT NULL DEFAULT 0;
+ALTER TABLE seat_forecast ADD COLUMN quality_revision bigint NOT NULL DEFAULT 1;
+ALTER TABLE stop_demand_statistics ADD COLUMN quality_revision bigint NOT NULL DEFAULT 1;
+ALTER TABLE same_day_full_outcomes ADD COLUMN quality_revision bigint NOT NULL DEFAULT 1;
 
 -- 과거 자료를 정리하는 동안 해당 판본의 계산 입력을 잠근다. 커서는 batch 단위로 커밋한다.
 CREATE TABLE trip_quality_rebuild (
-    route_version_id bigint PRIMARY KEY REFERENCES route_version(id),
+    route_version_id bigint NOT NULL REFERENCES route_version(id),
+    -- 빈 차량 ID는 수동 과거 자료의 이상 발견 커서다. 실제 차량의 조사는 별도 행이다.
+    vehicle_id varchar(40) NOT NULL DEFAULT '',
     last_batch_at timestamptz,
     last_batch_id bigint NOT NULL DEFAULT 0,
     until_at timestamptz NOT NULL,
     maximum_gap_seconds integer,
     completed boolean NOT NULL DEFAULT false,
-    started_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
+    phase varchar(20) NOT NULL DEFAULT 'DISCOVER' CHECK (phase IN ('DISCOVER','SEARCH_START','REPLAY','DONE')),
+    evidence_observation_id bigint,
+    anchor_observation_id bigint,
+    previous_observation_id bigint,
+    include_cursor boolean NOT NULL DEFAULT false,
+    can_release boolean NOT NULL DEFAULT false,
+    investigated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    started_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(route_version_id, vehicle_id)
 );
 
--- 판정 행이 없어도 사용을 보류한다. 현재 좌석 API는 이 view 대신 원본을 읽는다.
-CREATE VIEW forecast_eligible_observation AS
-SELECT observation.*, trip.start_observation_id AS quality_trip_id
-FROM vehicle_observation observation
-JOIN vehicle_one_way_trip trip ON trip.id = observation.vehicle_trip_key
-WHERE trip.status = 'ELIGIBLE'
+-- 정상 관측에 판정 행을 만들지 않는다. 조사 중인 차량과 확정 제외 편도만 차단한다.
+-- quality_direction은 편도 ID가 아니다. 결과 연결의 방향 검사이며 기존 시간/순번 검사를 함께 사용한다.
+CREATE VIEW forecast_observation_quality AS
+SELECT observation.*,
+       CASE WHEN version.turn_sequence IS NOT NULL AND (
+           observation.stop_order > version.turn_sequence
+           OR (observation.stop_order = version.turn_sequence AND observation.running_state = 2)
+           OR (observation.stop_order = 1 AND observation.running_state <> 2))
+           THEN 1 ELSE 0 END::bigint AS quality_direction,
+       ((trip.status IS NULL OR trip.status = 'ELIGIBLE')
+  AND (observation.remaining_seats IS NULL OR observation.remaining_seats <= 70)
   AND NOT EXISTS (SELECT 1 FROM trip_quality_rebuild rebuild
-                  WHERE rebuild.route_version_id = observation.route_version_id AND NOT rebuild.completed);
+                  WHERE rebuild.route_version_id = observation.route_version_id AND NOT rebuild.completed
+                    AND (rebuild.vehicle_id = '' OR rebuild.vehicle_id = observation.vehicle_id))) AS forecast_eligible
+FROM vehicle_observation observation
+LEFT JOIN vehicle_one_way_trip trip ON trip.id = observation.vehicle_trip_key
+LEFT JOIN route_version version ON version.id = observation.route_version_id;
+
+CREATE VIEW forecast_eligible_observation AS
+SELECT * FROM forecast_observation_quality WHERE forecast_eligible;
 
 -- 표시는 해당 차량의 판정을 따른다. 보정 재사용은 의존 입력의 유효성도 확인한다.
 CREATE VIEW quality_eligible_seat_forecast AS
@@ -52,7 +74,9 @@ SELECT forecast.*
 FROM seat_forecast forecast
 JOIN forecast_eligible_observation source ON source.id = forecast.vehicle_observation_id
 LEFT JOIN forecast_eligible_observation arrival ON arrival.id = forecast.arrival_observation_id
-WHERE forecast.arrival_observation_id IS NULL OR arrival.quality_trip_id = source.quality_trip_id;
+WHERE forecast.arrival_observation_id IS NULL OR (arrival.id IS NOT NULL AND arrival.route_version_id = source.route_version_id
+    AND arrival.vehicle_id IS NOT DISTINCT FROM source.vehicle_id
+    AND arrival.quality_direction = source.quality_direction);
 
 CREATE VIEW quality_calibration_seat_forecast AS
 SELECT forecast.* FROM quality_eligible_seat_forecast forecast

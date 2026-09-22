@@ -70,7 +70,7 @@ class SameDayFullOutcomesServiceTest {
     }
 
     @Test
-    void 원본에도_없으면_빈_값을_돌려주고_표는_안_건드린다() {
+    void 원본에도_없으면_빈_집계를_기록하고_예측값은_반환하지_않는다() {
         // given
         when(repository.findCounts(ROUTE_3330, DAY)).thenReturn(List.of());
         when(repository.countFromSource(ROUTE_3330, DAY, DAY.end())).thenReturn(List.of());
@@ -80,7 +80,7 @@ class SameDayFullOutcomesServiceTest {
 
         // then
         assertThat(actual).isEmpty();
-        verify(repository, never()).upsertCounts(anyLong(), any(), any());
+        verify(repository).upsertCounts(ROUTE_3330, DAY, List.of(new SameDayFullOutcomeCount(0, 0, 0, 0, DAY.start())));
     }
 
     @Test

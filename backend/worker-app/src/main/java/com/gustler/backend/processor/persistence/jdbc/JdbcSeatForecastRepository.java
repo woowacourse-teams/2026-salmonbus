@@ -93,7 +93,7 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
                forecast.stops_to_target,
                batch.response_received_at,
                forecast.generated_at,
-               observation.quality_trip_id
+               observation.quality_direction
         FROM quality_eligible_seat_forecast forecast
         JOIN forecast_eligible_observation observation
           ON observation.id = forecast.vehicle_observation_id
@@ -131,7 +131,9 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
                         AND (CAST(:arrivalObservationId AS bigint) IS NULL OR EXISTS (
                             SELECT 1 FROM forecast_eligible_observation arrival
                             WHERE arrival.id = :arrivalObservationId
-                              AND arrival.quality_trip_id = source.quality_trip_id)))
+                              AND arrival.quality_direction = source.quality_direction
+                              AND arrival.vehicle_id IS NOT DISTINCT FROM source.vehicle_id
+                              AND arrival.route_version_id = source.route_version_id)))
         """;
 
     private static final String SETTLE_PENDING_FORECAST = """
@@ -151,7 +153,9 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
           AND arrival.id = :arrivalObservationId
           AND EXISTS (SELECT 1 FROM forecast_eligible_observation source
                       JOIN forecast_eligible_observation eligible_arrival
-                        ON eligible_arrival.quality_trip_id = source.quality_trip_id
+                        ON eligible_arrival.quality_direction = source.quality_direction
+                       AND eligible_arrival.vehicle_id IS NOT DISTINCT FROM source.vehicle_id
+                       AND eligible_arrival.route_version_id = source.route_version_id
                       WHERE source.id = :vehicleObservationId AND eligible_arrival.id = :arrivalObservationId)
         RETURNING forecast_version.route_id, forecast.stops_to_target,
                   forecast.seat_full_chance_raw, arrival_batch.response_received_at,
@@ -221,7 +225,7 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
                 resultSet.getInt("stops_to_target"),
                 instantOf(resultSet.getObject("response_received_at", OffsetDateTime.class)),
                 instantOf(resultSet.getObject("generated_at", OffsetDateTime.class)),
-                resultSet.getObject("quality_trip_id", Long.class)))
+                resultSet.getObject("quality_direction", Long.class)))
             .list();
     }
 
