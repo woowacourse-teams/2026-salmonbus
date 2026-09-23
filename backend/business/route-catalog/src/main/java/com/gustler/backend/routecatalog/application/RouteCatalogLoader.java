@@ -32,7 +32,7 @@ public class RouteCatalogLoader implements CurrentRouteVersion {
     private static final Logger log = LoggerFactory.getLogger(RouteCatalogLoader.class);
 
     private final CurrentRouteVersionRepository currentRouteVersionRepository;
-    private final ApiCallQuota callQuotaLedger;
+    private final ApiCallQuota apiCallQuota;
     private final RouteSource routeSource;
     private final RouteRegistry routeRegistry;
     private final RouteVersionLoader routeVersionLoader;
@@ -40,14 +40,14 @@ public class RouteCatalogLoader implements CurrentRouteVersion {
 
     public RouteCatalogLoader(
         CurrentRouteVersionRepository currentRouteVersionRepository,
-        ApiCallQuota callQuotaLedger,
+        ApiCallQuota apiCallQuota,
         RouteSource routeSource,
         RouteRegistry routeRegistry,
         RouteVersionLoader routeVersionLoader,
         TransactionTemplate transactionTemplate
     ) {
         this.currentRouteVersionRepository = currentRouteVersionRepository;
-        this.callQuotaLedger = callQuotaLedger;
+        this.apiCallQuota = apiCallQuota;
         this.routeSource = routeSource;
         this.routeRegistry = routeRegistry;
         this.routeVersionLoader = routeVersionLoader;
@@ -57,24 +57,24 @@ public class RouteCatalogLoader implements CurrentRouteVersion {
     /** 현재 노선 버전을 반환한다. 없으면 상류에서 받아 생성하고, 생성하지 못하면 빈 결과를 반환한다. */
     @Override
     public Optional<RouteReference> currentVersionOf(
-        String upstreamRouteId,
+        String sourceRouteId,
         OffsetDateTime readAt
     ) {
-        OptionalLong opened = currentRouteVersionRepository.findIdOf(upstreamRouteId);
+        OptionalLong opened = currentRouteVersionRepository.findIdOf(sourceRouteId);
         if (opened.isPresent()) {
             return Optional.of(new RouteReference(opened.getAsLong()));
         }
-        OptionalLong created = openFromUpstream(upstreamRouteId, readAt);
+        OptionalLong created = openFromUpstream(sourceRouteId, readAt);
         return created.isPresent() ? Optional.of(new RouteReference(created.getAsLong())) : Optional.empty();
     }
 
     private OptionalLong openFromUpstream(
-        String upstreamRouteId,
+        String sourceRouteId,
         OffsetDateTime readAt
     ) {
-        if (!callQuotaLedger.reserveRouteCatalog(readAt, routeSource.requiredCallsPerRead())) {
+        if (!apiCallQuota.reserveRouteCatalog(readAt, routeSource.requiredCallsPerRead())) {
             log.warn("하루 호출 한도가 남지 않아 노선정보를 못 받았다. 이 노선은 수집을 못 한다. 노선={}",
-                upstreamRouteId);
+                sourceRouteId);
             return OptionalLong.empty();
         }
 
@@ -82,9 +82,9 @@ public class RouteCatalogLoader implements CurrentRouteVersion {
         // 예약을 취소하려 해도 이미 전송한 호출에 해당하는지 여기서는 확인할 수 없다.
         // 노선 버전이 없을 때만 실행하므로 자주 발생하지 않는다.
 
-        return switch (routeSource.read(upstreamRouteId)) {
+        return switch (routeSource.read(sourceRouteId)) {
             case Failed failed -> {
-                log.warn("노선정보를 읽지 못해 판본을 못 열었다. 노선={} 사유={}", upstreamRouteId, failed.reason());
+                log.warn("노선정보를 읽지 못해 판본을 못 열었다. 노선={} 사유={}", sourceRouteId, failed.reason());
                 yield OptionalLong.empty();
             }
             case Success success -> OptionalLong.of(open(success.route(), readAt));

@@ -1,14 +1,14 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
-import com.gustler.backend.forecasting.domain.publication.RouteStop;
-import com.gustler.backend.forecasting.domain.publication.RouteStops;
+import com.gustler.backend.forecasting.domain.model.RouteStop;
+import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.publication.RouteVersionRepository;
 import java.util.List;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * 노선 판본과 경유 정류장을 SQL 로 직접 읽는다. collector 의 JPA 엔티티를 쓰지 않는다.
+ * 노선 판본과 경유 정류장을 SQL 로 직접 읽는다. route-catalog 의 JPA 엔티티를 쓰지 않는다.
  *
  * <p>route_version 과 route_stop 을 매핑한 엔티티가 다른 패키지에 이미 있다. 여기서 엔티티를
  * 하나 더 만들면 Hibernate 가 같은 테이블을 두 번 매핑했다며 뜨지 않는다.
@@ -37,7 +37,7 @@ public class JdbcRouteVersionRepository implements RouteVersionRepository {
      * <p>승차할 수 없는 경유 지점도 빼지 않고 준다. 예보 대상에서 거르는 판정은 RouteStops 가
      * boarding_allowed 를 보고 한다. 여기서 걸러 버리면 도메인이 그 자리를 아예 못 본다.
      *
-     * <p>name 과 direction 은 안 읽는다. processor 의 RouteStop 이 그 둘을 들지 않는다.
+     * <p>name 과 direction 은 안 읽는다. forecasting 의 RouteStop 이 그 둘을 들지 않는다.
      */
     private static final String SELECT_STOPS_OF_VERSION = """
         SELECT route_version_id, stop_order, stop_id, boarding_allowed
@@ -47,7 +47,7 @@ public class JdbcRouteVersionRepository implements RouteVersionRepository {
         """;
 
     /** 그 판본이 어느 Open API 노선인가. 계수 묶음이 노선 이름으로 계수를 고르는 데 쓴다. */
-    private static final String SELECT_UPSTREAM_ROUTE_ID = """
+    private static final String SELECT_SOURCE_ROUTE_ID = """
         SELECT route.public_route_id
         FROM route_version
         JOIN route ON route.id = route_version.route_id
@@ -81,13 +81,13 @@ public class JdbcRouteVersionRepository implements RouteVersionRepository {
                 resultSet.getString("stop_id"),
                 resultSet.getBoolean("boarding_allowed")))
             .list();
-        return new RouteStops(routeVersionId, upstreamRouteIdOf(routeVersionId), stops);
+        return new RouteStops(routeVersionId, sourceRouteIdOf(routeVersionId), stops);
     }
 
-    private String upstreamRouteIdOf(
+    private String sourceRouteIdOf(
         final long routeVersionId
     ) {
-        return jdbcClient.sql(SELECT_UPSTREAM_ROUTE_ID)
+        return jdbcClient.sql(SELECT_SOURCE_ROUTE_ID)
             .param("routeVersionId", routeVersionId)
             .query(String.class)
             .single();

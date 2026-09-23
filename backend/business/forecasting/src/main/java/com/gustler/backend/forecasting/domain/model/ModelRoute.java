@@ -13,7 +13,7 @@ import java.util.Map;
  */
 public final class ModelRoute {
 
-    private static final Map<String, String> BY_UPSTREAM_ROUTE_ID = Map.of(
+    private static final Map<String, String> BY_SOURCE_ROUTE_ID = Map.of(
         "234000050", "1650",
         "204000057", "3330");
 
@@ -21,19 +21,19 @@ public final class ModelRoute {
     }
 
     public static String of(
-        String upstreamRouteId
+        String sourceRouteId
     ) {
-        String modelRoute = BY_UPSTREAM_ROUTE_ID.get(upstreamRouteId);
+        String modelRoute = BY_SOURCE_ROUTE_ID.get(sourceRouteId);
         if (modelRoute == null) {
             throw new IllegalArgumentException(
-                "계수 묶음이 안 담는 GBIS 노선이다: " + upstreamRouteId);
+                "계수 묶음이 안 담는 GBIS 노선이다: " + sourceRouteId);
         }
         return modelRoute;
     }
 
     public static boolean covers(
-        String upstreamRouteId
+        String sourceRouteId
     ) {
-        return BY_UPSTREAM_ROUTE_ID.containsKey(upstreamRouteId);
+        return BY_SOURCE_ROUTE_ID.containsKey(sourceRouteId);
     }
 }

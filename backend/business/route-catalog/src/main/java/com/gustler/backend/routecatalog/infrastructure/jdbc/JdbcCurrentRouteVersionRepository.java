@@ -7,7 +7,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * route 를 조인해야 해서 JdbcClient 로 읽는다. collector 에 route 엔티티가 없다.
+ * route 를 조인해야 해서 JdbcClient 로 읽는다. route-catalog 에 route 엔티티가 없다.
  * valid_to 가 비어 있는 판본이 지금 쓰는 판본이다.
  */
 @Repository
@@ -32,10 +32,10 @@ public class JdbcCurrentRouteVersionRepository implements CurrentRouteVersionRep
 
     @Override
     public OptionalLong findIdOf(
-        String upstreamRouteId
+        String sourceRouteId
     ) {
         Optional<Long> found = jdbcClient.sql(FIND_CURRENT_VERSION)
-            .param(upstreamRouteId)
+            .param(sourceRouteId)
             .query(Long.class)
             .optional();
         return found.map(OptionalLong::of).orElseGet(OptionalLong::empty);

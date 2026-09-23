@@ -40,7 +40,7 @@ public class JdbcRouteRegistry implements RouteRegistry {
     ) {
         return jdbcClient.sql(REGISTER)
             .params(
-                route.upstreamRouteId(), SOURCE_ID, route.upstreamRouteId(),
+                route.sourceRouteId(), SOURCE_ID, route.sourceRouteId(),
                 route.displayName(), route.startStopName(), route.endStopName())
             .query(Long.class)
             .single();
