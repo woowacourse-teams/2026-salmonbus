@@ -9,7 +9,14 @@ export const upInfo: DirectionInfo = {
   lastDepartureTime: "23:30",
 };
 
-export const downInfo: DirectionInfo = { ...upInfo, id: "DOWN", name: "도촌동 방면", firstDepartureTime: "05:00" };
+export const downInfo: DirectionInfo = {
+  id: "DOWN",
+  name: "도촌동 방면",
+  originStopName: "안양역",
+  terminalStopName: "도촌동9단지앞",
+  firstDepartureTime: "05:00",
+  lastDepartureTime: "23:30",
+};
 
 export function stopAt(sequence: number, overrides: Partial<StopState> = {}): StopState {
   return {
