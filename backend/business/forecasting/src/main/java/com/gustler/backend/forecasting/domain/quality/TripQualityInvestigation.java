@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /** 시작점 탐색과 순방향 재판정의 커서를 별도로 보존하는 차량별 조사. */
 public final class TripQualityInvestigation {
@@ -18,6 +19,7 @@ public final class TripQualityInvestigation {
     private final long routeVersionId;
     private final String vehicleId;
     private final Instant evidenceAt;
+    private final long evidenceObservationId;
     private final Duration maximumGap;
     private Instant cursorAt;
     private long cursorBatchId;
@@ -26,24 +28,47 @@ public final class TripQualityInvestigation {
     private Long previousObservationId;
     private boolean includeCursor;
     private boolean canRelease;
+    private boolean completed;
     private Long boundaryCandidateObservationId;
 
     public TripQualityInvestigation(final long routeVersionId, final String vehicleId, final Instant cursorAt,
-        final long cursorBatchId, final Instant evidenceAt, final Phase phase, final long anchorObservationId,
+        final long cursorBatchId, final Instant evidenceAt, final long evidenceObservationId, final Phase phase, final long anchorObservationId,
         final Long previousObservationId, final boolean includeCursor, final boolean canRelease,
-        final Duration maximumGap, final Long boundaryCandidateObservationId) {
+        final Duration maximumGap, final Long boundaryCandidateObservationId, final boolean completed) {
         this.routeVersionId = routeVersionId;
         this.vehicleId = vehicleId;
         this.cursorAt = cursorAt;
         this.cursorBatchId = cursorBatchId;
         this.evidenceAt = evidenceAt;
+        this.evidenceObservationId = evidenceObservationId;
         this.phase = phase;
         this.anchorObservationId = anchorObservationId;
         this.previousObservationId = previousObservationId;
         this.includeCursor = includeCursor;
         this.canRelease = canRelease;
+        this.completed = completed;
         this.maximumGap = maximumGap == null ? OneWayTripClassifier.DEFAULT_MAXIMUM_GAP : maximumGap;
         this.boundaryCandidateObservationId = boundaryCandidateObservationId;
+    }
+
+    public static TripQualityInvestigation start(final QualityObservationBatch batch,
+        final QualityObservationBatch.Row anomaly, final Duration maximumGap) {
+        if (!OneWayTripAssessment.requiresInvestigation(anomaly.vehicleId(), anomaly.remainingSeats())) {
+            throw new IllegalArgumentException("조사는 차량을 식별할 수 있는 이상 관측으로 시작해야 한다");
+        }
+        return new TripQualityInvestigation(batch.routeVersionId(), anomaly.vehicleId(), batch.observedAt(),
+            batch.batchId(), batch.observedAt(), anomaly.observationId(), Phase.SEARCH_START, anomaly.observationId(),
+            null, false, false, maximumGap, null, false);
+    }
+
+    /** 진행 중인 조사는 새 이상 관측이 와도 커서와 근거를 유지한다. */
+    public Optional<TripQualityInvestigation> restart(final QualityObservationBatch batch,
+        final QualityObservationBatch.Row anomaly, final Duration maximumGap) {
+        if (routeVersionId != batch.routeVersionId() || !vehicleId.equals(anomaly.vehicleId())) {
+            throw new IllegalArgumentException("기존 조사와 노선 버전 및 차량이 같아야 한다");
+        }
+        if (!completed()) { return Optional.empty(); }
+        return Optional.of(start(batch, anomaly, maximumGap));
     }
 
     public void searchStart(final Route configured, final List<BatchObservations> page,
@@ -91,7 +116,7 @@ public final class TripQualityInvestigation {
             cursorBatchId = page.getLast().batch();
         }
         includeCursor = false;
-        if (page.size() < BATCH_LIMIT && canRelease) { phase = Phase.DONE; }
+        if (page.size() < BATCH_LIMIT && canRelease) { phase = Phase.DONE; completed = true; }
         return List.copyOf(assessments);
     }
 
@@ -103,6 +128,9 @@ public final class TripQualityInvestigation {
     }
     public long routeVersionId() { return routeVersionId; }
     public String vehicleId() { return vehicleId; }
+    public Instant evidenceAt() { return evidenceAt; }
+    public long evidenceObservationId() { return evidenceObservationId; }
+    public Duration maximumGap() { return maximumGap; }
     public Instant cursorAt() { return cursorAt; }
     public long cursorBatchId() { return cursorBatchId; }
     public Phase phase() { return phase; }
@@ -111,5 +139,5 @@ public final class TripQualityInvestigation {
     public boolean includeCursor() { return includeCursor; }
     public boolean canRelease() { return canRelease; }
     public Long boundaryCandidateObservationId() { return boundaryCandidateObservationId; }
-    public boolean completed() { return phase == Phase.DONE; }
+    public boolean completed() { return completed; }
 }

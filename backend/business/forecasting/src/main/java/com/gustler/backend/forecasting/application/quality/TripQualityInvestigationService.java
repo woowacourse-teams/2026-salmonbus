@@ -1,9 +1,13 @@
 package com.gustler.backend.forecasting.application.quality;
 
 import com.gustler.backend.forecasting.domain.quality.QualityObservationBatch;
+import com.gustler.backend.forecasting.domain.quality.TripQualityInvestigation;
 import com.gustler.backend.forecasting.domain.quality.TripQualityInvestigation.Phase;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,9 +27,23 @@ public class TripQualityInvestigationService {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void observationsStored(final QualityObservationBatch batch) {
-        if (batch.anomalies().isEmpty()) { return; }
+        final var anomalies = batch.firstAnomalies();
+        if (anomalies.isEmpty()) { return; }
         quality.lock(batch.routeVersionId());
-        final var evidenceIds = store.registerAnomalies(batch);
+        final var existing = store.findForVehicles(batch.routeVersionId(),
+                anomalies.stream().map(QualityObservationBatch.Row::vehicleId).toList()).stream()
+            .collect(Collectors.toMap(TripQualityInvestigation::vehicleId, Function.identity()));
+        final var maximumGap = store.maximumObservationGap(batch.routeVersionId()).orElse(null);
+        final List<Long> evidenceIds = new ArrayList<>();
+        for (final var anomaly : anomalies) {
+            final var previous = existing.get(anomaly.vehicleId());
+            final var started = previous == null
+                ? Optional.of(TripQualityInvestigation.start(batch, anomaly, maximumGap))
+                : previous.restart(batch, anomaly, maximumGap);
+            if (started.isEmpty()) { continue; }
+            store.saveStart(started.get());
+            evidenceIds.add(started.get().evidenceObservationId());
+        }
         if (!evidenceIds.isEmpty()) {
             retention.confirmObservations(evidenceIds);
             quality.invalidate(batch.routeVersionId());

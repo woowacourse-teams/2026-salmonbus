@@ -8,7 +8,6 @@ import com.gustler.backend.forecasting.domain.quality.OneWayTripClassifier.Previ
 import com.gustler.backend.forecasting.domain.quality.OneWayTripClassifier.Route;
 import com.gustler.backend.forecasting.domain.quality.OneWayTripClassifier.Start;
 import com.gustler.backend.forecasting.domain.quality.OneWayTripClassifier.Status;
-import com.gustler.backend.forecasting.domain.quality.QualityObservationBatch;
 import com.gustler.backend.forecasting.domain.quality.TripQualityInvestigation;
 import com.gustler.backend.forecasting.domain.quality.TripQualityInvestigation.BatchObservations;
 import com.gustler.backend.forecasting.domain.quality.TripQualityInvestigation.Phase;
@@ -20,7 +19,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -44,46 +42,71 @@ public class JdbcTripQualityStore implements TripQualityStore {
     }
 
     @Override
-    public List<Long> registerAnomalies(final QualityObservationBatch batch) {
-        final var active = new HashSet<>(jdbc.sql("SELECT vehicle_id FROM trip_quality_rebuild WHERE route_version_id = ? AND NOT completed")
-            .param(batch.routeVersionId()).query(String.class).list());
-        final List<Long> evidenceIds = new ArrayList<>();
-        for (final var row : batch.anomalies()) {
-            if (!active.add(row.vehicleId())) { continue; }
-            jdbc.sql("""
-                INSERT INTO trip_quality_rebuild(route_version_id, vehicle_id, last_batch_at, last_batch_id,
-                    until_at, maximum_gap_seconds, completed, phase, evidence_observation_id, anchor_observation_id)
-                SELECT v.id, ?, ?, ?, ?, COALESCE(p.maximum_observation_gap_seconds, ?), false, 'SEARCH_START', ?, ?
-                FROM route_version v LEFT JOIN route_version_quality_policy p ON p.route_version_id = v.id WHERE v.id = ?
-                ON CONFLICT(route_version_id, vehicle_id) DO UPDATE SET
-                    last_batch_at = EXCLUDED.last_batch_at, last_batch_id = EXCLUDED.last_batch_id,
-                    until_at = EXCLUDED.until_at, maximum_gap_seconds = EXCLUDED.maximum_gap_seconds,
-                    completed = false, phase = 'SEARCH_START', evidence_observation_id = EXCLUDED.evidence_observation_id,
-                    anchor_observation_id = EXCLUDED.anchor_observation_id, previous_observation_id = NULL,
-                    boundary_candidate_observation_id = NULL,
-                    include_cursor = false, can_release = false, investigated_at = CURRENT_TIMESTAMP,
-                    started_at = CURRENT_TIMESTAMP
-                """).param(row.vehicleId()).param(offset(batch.observedAt())).param(batch.batchId())
-                .param(offset(batch.observedAt())).param(OneWayTripClassifier.DEFAULT_MAXIMUM_GAP.toSeconds())
-                .param(row.observationId()).param(row.observationId()).param(batch.routeVersionId()).update();
-            evidenceIds.add(row.observationId());
-        }
-        return List.copyOf(evidenceIds);
+    public List<TripQualityInvestigation> findForVehicles(final long version, final List<String> vehicles) {
+        if (vehicles.isEmpty()) { return List.of(); }
+        return jdbc.sql("""
+            SELECT route_version_id, vehicle_id, last_batch_at, last_batch_id, until_at, phase,
+                   evidence_observation_id, anchor_observation_id, previous_observation_id,
+                   include_cursor, can_release, maximum_gap_seconds, boundary_candidate_observation_id, completed
+            FROM trip_quality_rebuild WHERE route_version_id = :version AND vehicle_id IN (:vehicles)
+            """).param("version", version).param("vehicles", vehicles).query((rs, n) -> investigation(rs)).list();
+    }
+
+    @Override
+    public Optional<Duration> maximumObservationGap(final long version) {
+        return jdbc.sql("""
+            SELECT p.maximum_observation_gap_seconds
+            FROM route_version v LEFT JOIN route_version_quality_policy p ON p.route_version_id = v.id
+            WHERE v.id = ?
+            """).param(version).query((rs, n) -> Optional.ofNullable(rs.getObject(1, Integer.class))
+                .map(seconds -> Duration.ofSeconds(seconds))).single();
+    }
+
+    @Override
+    public void saveStart(final TripQualityInvestigation investigation) {
+        jdbc.sql("""
+            INSERT INTO trip_quality_rebuild(route_version_id, vehicle_id, last_batch_at, last_batch_id,
+                until_at, maximum_gap_seconds, completed, phase, evidence_observation_id, anchor_observation_id,
+                previous_observation_id, boundary_candidate_observation_id, include_cursor, can_release)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(route_version_id, vehicle_id) DO UPDATE SET
+                last_batch_at = EXCLUDED.last_batch_at, last_batch_id = EXCLUDED.last_batch_id,
+                until_at = EXCLUDED.until_at, maximum_gap_seconds = EXCLUDED.maximum_gap_seconds,
+                completed = EXCLUDED.completed, phase = EXCLUDED.phase,
+                evidence_observation_id = EXCLUDED.evidence_observation_id,
+                anchor_observation_id = EXCLUDED.anchor_observation_id,
+                previous_observation_id = EXCLUDED.previous_observation_id,
+                boundary_candidate_observation_id = EXCLUDED.boundary_candidate_observation_id,
+                include_cursor = EXCLUDED.include_cursor, can_release = EXCLUDED.can_release,
+                investigated_at = CURRENT_TIMESTAMP, started_at = CURRENT_TIMESTAMP
+            """).param(investigation.routeVersionId()).param(investigation.vehicleId())
+            .param(offset(investigation.cursorAt())).param(investigation.cursorBatchId())
+            .param(offset(investigation.evidenceAt())).param(investigation.maximumGap().toSeconds())
+            .param(investigation.completed()).param(investigation.phase().name())
+            .param(investigation.evidenceObservationId()).param(investigation.anchorObservationId())
+            .param(investigation.previousObservationId()).param(investigation.boundaryCandidateObservationId())
+            .param(investigation.includeCursor()).param(investigation.canRelease()).update();
     }
 
     @Override
     public Optional<TripQualityInvestigation> findPending(final long version, final String vehicle) {
         return jdbc.sql("""
-            SELECT last_batch_at, last_batch_id, until_at, phase, anchor_observation_id,
-                   previous_observation_id, include_cursor, can_release, maximum_gap_seconds, boundary_candidate_observation_id
+            SELECT route_version_id, vehicle_id, last_batch_at, last_batch_id, until_at, phase,
+                   evidence_observation_id, anchor_observation_id, previous_observation_id,
+                   include_cursor, can_release, maximum_gap_seconds, boundary_candidate_observation_id, completed
             FROM trip_quality_rebuild WHERE route_version_id = ? AND vehicle_id = ? AND NOT completed
-            """).param(version).param(vehicle).query((rs, n) -> {
-                final Integer seconds = rs.getObject(9, Integer.class);
-                return new TripQualityInvestigation(version, vehicle, rs.getObject(1, OffsetDateTime.class).toInstant(),
-                    rs.getLong(2), rs.getObject(3, OffsetDateTime.class).toInstant(), Phase.valueOf(rs.getString(4)), rs.getLong(5),
-                    rs.getObject(6, Long.class), rs.getBoolean(7), rs.getBoolean(8),
-                    seconds == null ? null : Duration.ofSeconds(seconds), rs.getObject(10, Long.class));
-            }).optional();
+            """).param(version).param(vehicle).query((rs, n) -> investigation(rs)).optional();
+    }
+
+    private static TripQualityInvestigation investigation(final ResultSet rs) throws SQLException {
+        final Integer seconds = rs.getObject("maximum_gap_seconds", Integer.class);
+        return new TripQualityInvestigation(rs.getLong("route_version_id"), rs.getString("vehicle_id"),
+            rs.getObject("last_batch_at", OffsetDateTime.class).toInstant(), rs.getLong("last_batch_id"),
+            rs.getObject("until_at", OffsetDateTime.class).toInstant(), rs.getLong("evidence_observation_id"),
+            Phase.valueOf(rs.getString("phase")), rs.getLong("anchor_observation_id"),
+            rs.getObject("previous_observation_id", Long.class), rs.getBoolean("include_cursor"), rs.getBoolean("can_release"),
+            seconds == null ? null : Duration.ofSeconds(seconds), rs.getObject("boundary_candidate_observation_id", Long.class),
+            rs.getBoolean("completed"));
     }
 
     @Override
