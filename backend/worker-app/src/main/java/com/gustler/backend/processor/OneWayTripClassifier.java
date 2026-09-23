@@ -1,5 +1,6 @@
 package com.gustler.backend.processor;
 
+import com.gustler.backend.processor.seatdistribution.SeatGrid;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
@@ -65,7 +66,7 @@ public final class OneWayTripClassifier {
                 boundary = Boundary.CONTINUATION;
             }
         }
-        if (current.seats() != null && current.seats() > 70) {
+        if (current.seats() != null && current.seats() > SeatGrid.LARGEST_SEATS) {
             status = Status.EXCLUDED;
         }
         return new Decision(tripId, status, boundary);

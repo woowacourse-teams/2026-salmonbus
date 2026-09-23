@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.gustler.backend.migration.quality.TripQualityMaintenance;
 import com.gustler.backend.observation.VehicleObservationsStored;
 import com.gustler.backend.processor.TripQualityRepository;
+import com.gustler.backend.processor.seatdistribution.SeatGrid;
 import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -79,7 +80,7 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
     void 정상_관측은_차량이_1대든_30대든_추가_SQL과_판정_저장이_없다(int vehicles) throws Exception {
         // given
         try (var c = connection()) {
-            var jdbc = jdbc(c); long version = route(jdbc); long batch = batch(jdbc, version, 1, 1, vehicles, 44);
+            var jdbc = jdbc(c); long version = route(jdbc); long batch = batch(jdbc, version, 1, 1, vehicles, SeatGrid.LARGEST_SEATS);
             var event = event(jdbc, version, batch);
             var calls = new AtomicInteger(); var counted = counted(c, calls);
 
@@ -95,12 +96,34 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
     }
 
     @Test
+    void DB_조회도_모델_상한의_잔여석은_허용하고_상한보다_1석_크면_제외한다() throws Exception {
+        // given
+        try (var c = connection()) {
+            var jdbc = jdbc(c);
+            long version = route(jdbc);
+            long allowed = batch(jdbc, version, 1, 1, 1, SeatGrid.LARGEST_SEATS);
+            long rejected = batch(jdbc, version, 2, 2, 1, SeatGrid.LARGEST_SEATS + 1);
+
+            // when
+            var eligible = jdbc.sql("SELECT observation_batch_id FROM forecast_eligible_observation")
+                .query(Long.class).list();
+            var preview = new TripQualityMaintenance(jdbc).preview(version, START.plusSeconds(20));
+
+            // then
+            assertThat(eligible).containsExactly(allowed).doesNotContain(rejected);
+            assertThat(((Number) preview.get("sampled_above_range")).intValue()).isEqualTo(1);
+            assertThat(jdbc.sql("SELECT remaining_seats FROM vehicle_observation ORDER BY id")
+                .query(Integer.class).list()).containsExactly(SeatGrid.LARGEST_SEATS, SeatGrid.LARGEST_SEATS + 1);
+        }
+    }
+
+    @Test
     void 이상_관측의_저장과_조사_요청은_함께_롤백된다() throws Exception {
         // given
         try (var c = connection()) {
             var jdbc = jdbc(c); long version = route(jdbc);
             c.setAutoCommit(false);
-            long batch = batch(jdbc, version, 1, 1, 1, 71);
+            long batch = batch(jdbc, version, 1, 1, 1, SeatGrid.LARGEST_SEATS + 1);
             new TripQualityRepository(jdbc).observationsStored(event(jdbc, version, batch));
             assertThat(jdbc.sql("SELECT count(*) FROM trip_quality_rebuild").query(Integer.class).single()).isEqualTo(1);
 

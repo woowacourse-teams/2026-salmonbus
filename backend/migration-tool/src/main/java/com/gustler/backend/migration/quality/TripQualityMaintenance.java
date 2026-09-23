@@ -2,6 +2,7 @@ package com.gustler.backend.migration.quality;
 
 import com.gustler.backend.observation.VehicleObservationsStored;
 import com.gustler.backend.processor.TripQualityRepository;
+import com.gustler.backend.processor.seatdistribution.SeatGrid;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -24,9 +25,9 @@ public final class TripQualityMaintenance {
                 ORDER BY response_received_at DESC, id DESC LIMIT 32
             )
             SELECT 'LAST_32_BATCHES_SAMPLE' AS scope, (SELECT count(*) FROM sample) AS sampled_batches,
-                count(*) AS sampled_observations, count(*) FILTER (WHERE remaining_seats > 70) AS sampled_above_range
+                count(*) AS sampled_observations, count(*) FILTER (WHERE remaining_seats > ?) AS sampled_above_range
             FROM vehicle_observation WHERE observation_batch_id IN (SELECT id FROM sample)
-            """).param(version).param(offset(until)).query().singleRow();
+            """).param(version).param(offset(until)).param(SeatGrid.LARGEST_SEATS).query().singleRow();
     }
 
     public Map<String, Object> applyChunk(long version, Instant until, int limit) {
@@ -62,10 +63,11 @@ public final class TripQualityMaintenance {
                 var anomalies = jdbc.sql("""
                     SELECT o.observation_batch_id, o.id, o.vehicle_id, o.remaining_seats
                     FROM vehicle_observation o LEFT JOIN vehicle_one_way_trip t ON t.id = o.vehicle_trip_key
-                    WHERE o.observation_batch_id IN (:batches) AND o.remaining_seats > 70 AND o.vehicle_id IS NOT NULL
+                    WHERE o.observation_batch_id IN (:batches) AND o.remaining_seats > :maximumSeats AND o.vehicle_id IS NOT NULL
                       AND (t.status IS NULL OR t.status <> 'EXCLUDED')
                     ORDER BY o.observation_batch_id, o.source_row_number
                     """).param("batches", batches.stream().map(Batch::id).toList())
+                    .param("maximumSeats", SeatGrid.LARGEST_SEATS)
                     .query((rs, n) -> new Signal(rs.getLong(1), new VehicleObservationsStored.Row(rs.getLong(2), rs.getString(3), rs.getInt(4)))).list();
                 Map<String, Signal> first = new LinkedHashMap<>();
                 anomalies.forEach(signal -> first.putIfAbsent(signal.row().vehicleId(), signal));

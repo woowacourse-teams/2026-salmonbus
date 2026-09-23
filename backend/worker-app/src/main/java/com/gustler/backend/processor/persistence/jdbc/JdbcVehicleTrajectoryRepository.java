@@ -10,6 +10,7 @@ import com.gustler.backend.processor.TrajectoryObservation;
 import com.gustler.backend.processor.VehicleTrajectory;
 import com.gustler.backend.processor.VehicleTrajectoryAssembler;
 import com.gustler.backend.processor.VehicleTrajectoryRepository;
+import com.gustler.backend.processor.seatdistribution.SeatGrid;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -166,7 +167,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
               ON batch.id = observation.observation_batch_id
             WHERE observation.route_version_id = :routeVersionId
               AND observation.vehicle_id = vehicle.vehicle_id
-              AND observation.remaining_seats > 0 AND observation.remaining_seats <= 70
+              AND observation.remaining_seats > 0 AND observation.remaining_seats <= :maximumSeats
               AND (SELECT quality.forecast_eligible FROM forecast_observation_quality quality
                    WHERE quality.id = observation.id)
               AND (batch.response_received_at, batch.id) <= (:until, :observationBatchId)
@@ -251,6 +252,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
             return Map.of();
         }
         List<VehicleMaximumSeats> rows = jdbcClient.sql(SELECT_MAXIMUM_SEATS_EVER_OBSERVED)
+            .param("maximumSeats", SeatGrid.LARGEST_SEATS)
             .param("routeVersionId", target.routeVersionId())
             .param("vehicleIds", vehicleIds)
             .param("until", offsetOf(target.responseReceivedAt()))

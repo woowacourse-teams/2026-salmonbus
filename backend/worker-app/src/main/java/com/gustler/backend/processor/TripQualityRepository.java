@@ -7,6 +7,7 @@ import com.gustler.backend.processor.OneWayTripClassifier.Previous;
 import com.gustler.backend.processor.OneWayTripClassifier.Route;
 import com.gustler.backend.processor.OneWayTripClassifier.Start;
 import com.gustler.backend.processor.OneWayTripClassifier.Status;
+import com.gustler.backend.processor.seatdistribution.SeatGrid;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Duration;
@@ -39,7 +40,7 @@ public class TripQualityRepository {
     public void observationsStored(VehicleObservationsStored event) {
         var anomalies = event.rows().stream()
             .filter(row -> row.vehicleId() != null && !row.vehicleId().isBlank()
-                && row.remainingSeats() != null && row.remainingSeats() > 70).toList();
+                && row.remainingSeats() != null && row.remainingSeats() > SeatGrid.LARGEST_SEATS).toList();
         if (anomalies.isEmpty()) {
             return;
         }
