@@ -88,8 +88,8 @@ class ObservationCollectorTest {
     @BeforeEach
     void 상류_대역과_시계를_세운다() {
         given(clock.getZone()).willReturn(KOREA);
-        given(clock.instant()).willReturn(TICK);
         given(routeSource.requiredCallsPerRead()).willReturn(2);
+        given(clock.instant()).willReturn(TICK);
         given(routeSource.read(ROUTE_3330)).willReturn(new RouteSourceResult.Success(upstreamRoute()));
         given(locationSource.read(ROUTE_3330)).willReturn(new Success(QUERY_TIME, List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217))));

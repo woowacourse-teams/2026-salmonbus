@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.application.statistics;
 
 import com.gustler.backend.forecasting.domain.publication.RouteVersionRepository;
-import com.gustler.backend.forecasting.domain.statistics.StopDemandGeneration;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandHourlyTotals;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
 
@@ -40,7 +40,7 @@ class StopDemandStatisticsJobTest {
     private StopDemandStatisticsRepository stopDemandStatisticsRepository;
 
     @Captor
-    private ArgumentCaptor<StopDemandGeneration> generation;
+    private ArgumentCaptor<DemandStatisticsVersion> generation;
 
     private RefreshDemandStatisticsService job;
 
@@ -146,7 +146,7 @@ class StopDemandStatisticsJobTest {
         when(stopDemandStatisticsRepository.currentRevision(anyLong(), anyString())).thenReturn(revision);
     }
 
-    private StopDemandGeneration captured() {
+    private DemandStatisticsVersion captured() {
         verify(stopDemandStatisticsRepository).append(generation.capture());
         return generation.getValue();
     }

@@ -1,17 +1,17 @@
 package com.gustler.backend.observations.infrastructure.jpa;
 
+import jakarta.persistence.LockModeType;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
-/**
- * 이름 앞의 Collector 는 조회 쪽에 같은 표를 보는 리포지터리가 따로 있어서 붙였다.
- * Spring Data 인터페이스는 빈이고 빈 이름이 단순 클래스 이름에서 나온다.
- * 이름이 겹치면 BeanDefinitionOverrideException 으로 앱이 안 뜬다.
- */
 public interface CollectorObservationBatchRepository extends JpaRepository<ObservationBatchJpaEntity, Long> {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<ObservationBatchJpaEntity> findByRouteVersionIdAndAttemptKey(long routeVersionId, String attemptKey);
 
-    Optional<ObservationBatchJpaEntity> findByRouteVersionIdAndAttemptKey(
-        long routeVersionId,
-        String attemptKey
-    );
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select batch from CollectorObservationBatch batch where batch.id = :id")
+    Optional<ObservationBatchJpaEntity> lockById(@Param("id") long id);
 }

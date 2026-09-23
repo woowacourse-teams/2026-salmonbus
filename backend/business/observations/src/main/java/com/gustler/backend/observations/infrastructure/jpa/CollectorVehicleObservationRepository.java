@@ -1,11 +1,14 @@
 package com.gustler.backend.observations.infrastructure.jpa;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface CollectorVehicleObservationRepository extends JpaRepository<VehicleObservationJpaEntity, Long> {
+
+    List<VehicleObservationJpaEntity> findByObservationBatchIdOrderBySourceRowNumber(long observationBatchId);
 
     /**
      * 같은 계획을 다시 부를 때 지난 시도가 쌓아둔 관측을 비운다.

@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 /**
  * 예보의 시간대를 무엇으로 정하는지 본다.
  *
- * <p>몇 시가 아침인지는 수요 통계 시간대 테스트 가 본다. 여기서 보는 것은 <b>어느 시각을 보느냐</b>다.
+ * <p>몇 시가 아침인지는 {@link TimeSlotTest} 가 본다. 여기서 보는 것은 <b>어느 시각을 보느냐</b>다.
  */
 class ForecastTimeSlotTest {
 
@@ -64,6 +64,6 @@ class ForecastTimeSlotTest {
     private static PendingForecastBatch batchReceivedAt(
         Instant responseReceivedAt
     ) {
-        return new PendingForecastBatch(ANY_BATCH_ID, ROUTE_VERSION_3330, ROUTE_3330, responseReceivedAt);
+        return new PendingForecastBatch(ANY_BATCH_ID, ROUTE_VERSION_3330, ROUTE_3330, responseReceivedAt, 1);
     }
 }

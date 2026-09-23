@@ -15,15 +15,15 @@ import java.nio.file.Path;
  * 디렉터리에 걸리는 쪽이 흔하다. 자리가 연결이면 설명 파일을 읽은 뒤 연결이 옮겨 갔을 때
  * 다른 계수 파일을 읽게 되고, 그때 요약값이 안 맞아 적재가 실패한다.
  */
-public record BundleFiles(
+record BundleFiles(
     Path manifest,
     Path weights
 ) {
 
-    public static final String MANIFEST_NAME = "manifest.json";
-    public static final String WEIGHTS_NAME = "weights.safetensors";
+    static final String MANIFEST_NAME = "manifest.json";
+    static final String WEIGHTS_NAME = "weights.safetensors";
 
-    public static BundleFiles under(
+    static BundleFiles under(
         Path directory
     ) {
         BundleCheck.BUNDLE_DIRECTORY_IS_NOT_SYMBOLIC_LINK.require(
@@ -31,12 +31,12 @@ public record BundleFiles(
         return new BundleFiles(directory.resolve(MANIFEST_NAME), directory.resolve(WEIGHTS_NAME));
     }
 
-    public byte[] readManifest() {
+    byte[] readManifest() {
         requireRegularFile(manifest, BundleCheck.MANIFEST_IS_REGULAR_FILE);
         return read(manifest);
     }
 
-    public byte[] readWeights() {
+    byte[] readWeights() {
         requireRegularFile(weights, BundleCheck.WEIGHTS_IS_REGULAR_FILE);
         return read(weights);
     }

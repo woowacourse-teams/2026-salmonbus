@@ -16,7 +16,7 @@ import java.util.Map;
  *
  * <p>바뀌지 않는다. 승격으로 계수가 바뀌면 새 묶음이 생기지 이 묶음의 값이 갈리지 않는다.
  */
-public final class CoefficientBundle implements CoefficientLookup {
+final class CoefficientBundle implements CoefficientLookup {
 
     private final BundleManifest manifest;
     private final Map<BundleTensor, Tensor> tensors;
@@ -29,7 +29,7 @@ public final class CoefficientBundle implements CoefficientLookup {
         this.tensors = Map.copyOf(tensors);
     }
 
-    public BundleManifest manifest() {
+    BundleManifest manifest() {
         return manifest;
     }
 

@@ -73,8 +73,9 @@ class BoardDatabaseFailureContractTest {
         fixture.insertStop(route, 1, "STOP-1", "기점", "UP", true);
         fixture.insertStop(route, 2, "STOP-2", "회차점", "UP", true);
         fixture.insertStop(route, 3, "STOP-3", "종점", "DOWN", true);
-        fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
-        fixture.insertBatch(route, now.minusMinutes(1), now, "SUCCESS_EMPTY", 0);
+        long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        long batch = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
+        fixture.insertPublication(batch, model, now, now);
 
         mockMvc.perform(get("/api/v1/routes/204000057/board"))
             .andExpect(status().isOk());

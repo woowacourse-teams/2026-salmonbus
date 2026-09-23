@@ -29,12 +29,35 @@ springBoot {
 }
 
 tasks.named('test') {
-    dependsOn tasks.named('bootJar'), ':worker-app:bootJar'
-    doFirst {
-        systemProperty 'api.boot.jar',
-            tasks.bootJar.archiveFile.get().asFile.absolutePath
-        systemProperty 'worker.boot.jar',
-            project(':worker-app').layout.buildDirectory
-                .file("libs/worker-app-${version}.jar").get().asFile.absolutePath
+    def apiJar = tasks.named('bootJar').flatMap { it.archiveFile }
+    // Worker 프로젝트가 구성된 뒤 실제 Boot JAR 출력 파일을 조회한다.
+    def workerJar = providers.provider {
+        project(':worker-app').tasks.named('bootJar').get().archiveFile.get()
     }
+    dependsOn tasks.named('bootJar'), ':worker-app:bootJar'
+    inputs.files(apiJar, workerJar)
+        .withPropertyName('runtimeJars')
+        .withPathSensitivity(PathSensitivity.NONE)
+    doFirst {
+        systemProperty 'api.boot.jar', apiJar.get().asFile.absolutePath
+        systemProperty 'worker.boot.jar', workerJar.get().asFile.absolutePath
+    }
+}
+
+// API 실행 경로에 쓰기 업무나 다른 실행 앱이 간접 의존으로 들어오지 않게 확인한다.
+tasks.register('verifyRuntimeProjects') {
+    doLast {
+        def projects = configurations.runtimeClasspath.incoming.resolutionResult.allComponents
+            .findAll { it.id instanceof org.gradle.api.artifacts.component.ProjectComponentIdentifier }
+            .collect { it.id.projectPath }
+            .toSet()
+        def expected = [':api-app', ':common'] as Set
+        if (projects != expected) {
+            throw new GradleException("API runtime project dependencies must be ${expected}, but were ${projects}")
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('verifyRuntimeProjects')
 }

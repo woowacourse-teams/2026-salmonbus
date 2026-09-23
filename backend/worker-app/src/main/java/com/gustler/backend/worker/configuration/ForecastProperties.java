@@ -1,5 +1,6 @@
 package com.gustler.backend.worker.configuration;
 
+import com.gustler.backend.forecasting.api.ForecastPolicy;
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -28,7 +29,7 @@ public record ForecastProperties(
      * 관측의 나이를 넘는 순간 한 회차가 그것으로 다 차서 방금 들어온 판이 한 개도 안 들어가고,
      * 옮겨 온 관측에 예보가 붙어 되돌리기까지 막힌다. 운영으로 쓸 값이 몇 분 단위라 한 시간이면 넉넉하다.
      */
-    public static final Duration MAX_STALENESS = Duration.ofHours(1);
+    public static final Duration MAX_STALENESS = ForecastPolicy.MAX_STALENESS;
 
     public ForecastProperties {
         requirePositive("forecast.staleness", staleness);

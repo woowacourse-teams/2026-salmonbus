@@ -1,28 +1,17 @@
 package com.gustler.backend.observations.domain;
 
-import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-/**
- * 한 판에서 상류가 준 차량을 쌓을 것과 뺀 것으로 가른 결과.
- *
- * <p>운행 상태의 뜻을 모르는 차량은 그 행만 뺀다. 한 대 때문에 그 판을 통째로 버리지 않는다.
- * 상류가 모르는 값을 줄 때 수집을 세우지 않는 것이 이 표의 규칙이고,
- * station_id 에 FK 를 걸지 않은 것도 같은 이유다.
- */
+/** 정규화한 관측을 저장 가능한 행과 제외할 행으로 구분한 결과. */
 public record CollectedObservations(
     List<UpstreamObservationRow> storableRows,
     List<UpstreamObservationRow> excludedRows
 ) {
 
-    /**
-     * 지금 도는 정규화 규칙의 판. 규칙이 바뀌면 올린다.
-     * 응답 원문을 따로 안 남겨서 관측이 사실상 원본이고, 이 값이 있어야
-     * 나중에 어느 규칙으로 접힌 값인지 되짚는다.
-     */
+    /** 원문 대신 보존하는 관측에 적용한 정규화 규칙의 버전. */
     public static final String CURRENT_NORMALIZATION_VERSION = "normalization-v1.0.0";
 
     public CollectedObservations {
@@ -30,8 +19,8 @@ public record CollectedObservations(
         excludedRows = List.copyOf(excludedRows);
     }
 
-    public static CollectedObservations from(
-        List<BusLocation> buses
+    public static CollectedObservations fromObservations(
+        List<VehicleObservation> buses
     ) {
         Map<Boolean, List<UpstreamObservationRow>> rowsByStorable = IntStream.range(0, buses.size())
             .mapToObj(rowNumber -> toRow(rowNumber, buses.get(rowNumber)))
@@ -40,17 +29,17 @@ public record CollectedObservations(
         return new CollectedObservations(rowsByStorable.get(true), rowsByStorable.get(false));
     }
 
-    /** 상류가 준 행 수. 뺀 행까지 센다. */
+    /** 저장 대상에서 제외한 행을 포함한 상류 응답의 행 수. */
     public int providerRows() {
         return storableRows.size() + excludedRows.size();
     }
 
     /**
-     * 쌓을 수 있는 관측인가. 저장할 때 비울 수 없는 값이 다 있어야 한다.
+     * 필수값이 모두 있어 저장할 수 있는 관측인지 확인한다.
      *
-     * <p>하나라도 비면 그 행의 INSERT 가 거절되는데, 묶음과 관측이 한 트랜잭션이라
-     * 그 판이 통째로 되감긴다. 차 하나 때문에 나머지 열여섯의 관측과
-     * "수집했다" 는 기록까지 같이 사라진다.
+     * <p>필수값이 하나라도 없으면 해당 행의 INSERT가 실패한다. 수집 배치와 관측은 같은 트랜잭션에
+     * 저장되므로 배치 전체가 롤백된다. 차량 하나의 누락으로 나머지 열여섯 차량의 관측과
+     * 수집 완료 기록까지 함께 사라진다.
      */
     private static boolean isStorable(
         UpstreamObservationRow row
@@ -61,8 +50,8 @@ public record CollectedObservations(
 
     private static UpstreamObservationRow toRow(
         final int rowNumber,
-        BusLocation bus
+        VehicleObservation bus
     ) {
-        return new UpstreamObservationRow(rowNumber, VehicleObservation.from(bus));
+        return new UpstreamObservationRow(rowNumber, bus);
     }
 }

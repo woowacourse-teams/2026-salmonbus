@@ -64,17 +64,17 @@ class BoardApiContractTest {
         final long completedBatchId = fixture.insertBatch(
             route,
             observedAt,
-            observedAt.plusSeconds(2),
             "SUCCESS_ROWS",
             5
         );
         fixture.insertBatch(
             route,
             now,
-            null,
             "SUCCESS_ROWS",
             1
         );
+        fixture.insertPublication(completedBatchId, snapshotModelId,
+            observedAt.plusSeconds(1), observedAt.plusSeconds(2));
         insertPredictions(route, completedBatchId, snapshotModelId, observedAt);
 
         String cacheControl = "max-age="
@@ -134,17 +134,19 @@ class BoardApiContractTest {
         final long firstBatch = fixture.insertBatch(
             route,
             observedAt,
-            observedAt.plusSeconds(1),
             "SUCCESS_ROWS",
             1
         );
         final long secondBatch = fixture.insertBatch(
             route,
             observedAt,
-            observedAt.plusSeconds(2),
             "SUCCESS_ROWS",
             2
         );
+        fixture.insertPublication(firstBatch, firstModel,
+            observedAt.plusSeconds(1), observedAt.plusSeconds(1));
+        fixture.insertPublication(secondBatch, secondModel,
+            observedAt.plusSeconds(1), observedAt.plusSeconds(2));
         insertSinglePrediction(route, firstBatch, firstModel, "FIRST", observedAt);
         insertSinglePrediction(route, secondBatch, secondModel, "SECOND", observedAt);
 
@@ -160,13 +162,50 @@ class BoardApiContractTest {
     void ACTIVE_모델이_없으면_MODEL_OUT_OF_SCOPE_503이다() throws Exception {
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         RouteContext route = insertRoundTripRoute(now.minusDays(1));
-        fixture.insertBatch(route, now.minusMinutes(1), now, "SUCCESS_EMPTY", 0);
+        long retiredModel = fixture.insertModel("model-retired", "RETIRED", now.minusDays(1));
+        long batch = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
+        fixture.insertPublication(batch, retiredModel, now, now);
 
         mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
             .andExpect(status().isServiceUnavailable())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
             .andExpect(jsonPath("$", aMapWithSize(3)))
             .andExpect(jsonPath("$.code").value("MODEL_OUT_OF_SCOPE"));
+    }
+
+    @Test
+    void 모델_기록이_없는_이관된_빈_발행은_현재_ACTIVE_모델로_응답한다() throws Exception {
+        // given
+        OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
+        OffsetDateTime observedAt = now.minusMinutes(1);
+        RouteContext route = insertRoundTripRoute(now.minusDays(1));
+        fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        long batch = fixture.insertBatch(route, observedAt, "SUCCESS_EMPTY", 0);
+        jdbcClient.sql("""
+                INSERT INTO forecast_publication (
+                    source_batch_id, source_attempt_number, route_version_id,
+                    observed_at, published_at, prediction_count, provenance
+                )
+                SELECT id, attempt_number, route_version_id,
+                       response_received_at, :publishedAt, 0, 'LEGACY_UNKNOWN'
+                FROM observation_batch WHERE id = :batchId
+                """)
+            .param("batchId", batch)
+            .param("publishedAt", now)
+            .update();
+        jdbcClient.sql("UPDATE observation_batch SET input_confirmed_at = :publishedAt WHERE id = :batchId")
+            .param("batchId", batch)
+            .param("publishedAt", now)
+            .update();
+
+        // when & then
+        mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.observedAt")
+                .value(DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(observedAt)))
+            .andExpect(jsonPath("$.model.releaseId").value("model-active"))
+            .andExpect(jsonPath("$.vehiclesInService").value(0))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles").isEmpty());
     }
 
     @Test
@@ -186,14 +225,14 @@ class BoardApiContractTest {
     void 예보_완료_관측_묶음이_5분을_넘으면_NO_RECENT_OBSERVATION_503이다() throws Exception {
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         RouteContext route = insertRoundTripRoute(now.minusDays(1));
-        fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
-        fixture.insertBatch(
+        long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        long batch = fixture.insertBatch(
             route,
             now.minusMinutes(5).minusSeconds(1),
-            now.minusMinutes(5),
             "SUCCESS_EMPTY",
             0
         );
+        fixture.insertPublication(batch, model, now.minusMinutes(5), now.minusMinutes(5));
 
         mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
             .andExpect(status().isServiceUnavailable())
@@ -223,7 +262,8 @@ class BoardApiContractTest {
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         RouteContext route = insertRoundTripRoute(now.minusDays(1));
         long modelId = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
-        long batchId = fixture.insertBatch(route, now.minusMinutes(1), now, "SUCCESS_ROWS", 2);
+        long batchId = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_ROWS", 2);
+        fixture.insertPublication(batchId, modelId, now.plusSeconds(1), now.plusSeconds(1));
         fixture.insertObservation(route, batchId, 1, "A", 2, "STOP-2", now);
         insertPrediction(route, batchId, modelId, 2, "B", 2, "STOP-2", 3, 1, 1.0, 0.0, now);
 
@@ -243,8 +283,9 @@ class BoardApiContractTest {
     void 모든_차량에_예보가_없어도_관측된_차량을_반환한다() throws Exception {
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         RouteContext route = insertRoundTripRoute(now.minusDays(1));
-        fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
-        long batchId = fixture.insertBatch(route, now.minusMinutes(1), now, "SUCCESS_ROWS", 1);
+        long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        long batchId = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_ROWS", 1);
+        fixture.insertPublication(batchId, model, now, now);
         long observationId = fixture.insertObservation(route, batchId, 1, "A", 2, "STOP-2", now);
         // 실제 운영 관측이 아닌 회귀 테스트용 82석 입력이다.
         jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats = 82, seat_unknown_reason = NULL WHERE id = :id")
@@ -271,7 +312,8 @@ class BoardApiContractTest {
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         RouteContext route = insertRoundTripRoute(now.minusDays(1));
         long model = fixture.insertModel("model-quality", "ACTIVE", now.minusDays(1));
-        long batch = fixture.insertBatch(route, now, now, "SUCCESS_ROWS", 1);
+        long batch = fixture.insertBatch(route, now, "SUCCESS_ROWS", 1);
+        fixture.insertPublication(batch, model, now, now);
         long observation = fixture.insertObservation(route, batch, 1, "A", 2, "STOP-2", now);
         fixture.insertForecast(route, observation, 3, 1, model, 0.2, 40.0, now);
         jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats = 82, seat_unknown_reason = NULL WHERE id = ?")

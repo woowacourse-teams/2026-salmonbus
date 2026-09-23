@@ -6,7 +6,7 @@ import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.UpstreamRoute;
 import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
 import com.gustler.backend.routecatalog.domain.RouteSourceResult;
-import com.gustler.backend.routecatalog.infrastructure.gbis.GbisRouteSource;
+import com.gustler.backend.routecatalog.domain.RouteSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
@@ -14,6 +14,7 @@ import static org.mockito.BDDMockito.given;
 import com.gustler.backend.gbis.api.GbisLocationResult.Success;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
 import com.gustler.backend.support.PostgresTestContainer;
+import com.gustler.backend.worker.configuration.CollectionRuntimeConfiguration;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,7 +32,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  * 이 테스트가 겹쳐 무엇이 쌓은 행인지 흐려진다. 스케줄이 걸리는지는 ScheduledCollectionTest 가 본다.
  */
 @SpringBootTest(properties = "collection.route-ids[0]=204000057")
-@Import(PostgresTestContainer.class)
+@Import({PostgresTestContainer.class, CollectionRuntimeConfiguration.class})
 class CollectionSchedulerRoutesTest {
 
     private static final String ROUTE_3330 = "204000057";
@@ -42,7 +43,7 @@ class CollectionSchedulerRoutesTest {
     private static final String QUERY_TIME = "2026-08-28 11:14:04.9";
 
     @MockitoBean
-    private GbisRouteSource routeSource;
+    private RouteSource routeSource;
 
     @MockitoBean
     private GbisLocationSource locationSource;

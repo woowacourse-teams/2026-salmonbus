@@ -3,16 +3,16 @@ package com.gustler.backend.forecasting.domain.publication;
 import java.util.List;
 
 /**
- * 노선 판본과 그 경유 정류장를 processor 자기 형으로 읽는 포트.
+ * 노선 버전과 경유 정류장을 예보용 모델로 읽는 포트.
  *
- * <p>collector 의 코드를 부르지 않는다. 같은 route_stop 을 읽어도 형이 따로 있다.
+ * <p>수집 구현을 직접 호출하지 않는다. 같은 route_stop을 읽더라도 별도의 조회 모델을 사용한다.
  */
 public interface RouteVersionRepository {
 
-    /** 지금 쓰는 판본. 유효 기간이 안 닫힌 것이다. */
+    /** 유효 기간이 종료되지 않은 현재 노선 버전 ID를 조회한다. */
     List<Long> findActiveVersionIds();
 
-    /** 그 판본이 지나는 정류장 전부. 순번 오름차순이고 어느 Open API 노선인지를 같이 든다. */
+    /** 해당 버전의 전체 정류장을 순번 오름차순으로 읽고 Open API 노선 ID를 함께 반환한다. */
     RouteStops readStops(
         long routeVersionId
     );

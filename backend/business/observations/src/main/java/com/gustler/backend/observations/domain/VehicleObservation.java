@@ -1,6 +1,5 @@
 package com.gustler.backend.observations.domain;
 
-import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
 import java.util.Objects;
 
 public record VehicleObservation(
@@ -23,36 +22,21 @@ public record VehicleObservation(
     private static final int DEPARTED_FROM_STOP = 2;
 
     public VehicleObservation {
-        Objects.requireNonNull(remainingSeats, "잔여석은 아는 것이든 모르는 것이든 있어야 한다");
-    }
-
-    public static VehicleObservation from(
-        BusLocation bus
-    ) {
-        return new VehicleObservation(
-            bus.vehicleId(),
-            bus.plateNumber(),
-            bus.stopSequence(),
-            bus.stopId(),
-            bus.runningStatus(),
-            RemainingSeats.from(bus.remainingSeatCount()),
-            crowdLevelOf(bus.crowdLevel()),
-            bus.vehicleType(),
-            bus.routeType(),
-            bus.taglessCode());
+        Objects.requireNonNull(remainingSeats, "잔여석 값이나 알 수 없는 사유가 필요하다");
+        crowdLevel = crowdLevelOf(crowdLevel);
     }
 
     /**
-     * 이 관측이 어느 정류소의 것인지 아는가.
-     * 순번과 정류소 ID 가 둘 다 있어야 쌓을 수 있다. 둘 다 저장할 때 비울 수 없는 값이다.
+     * 관측한 정류소를 식별할 수 있는지 확인한다.
+     * 순번과 정류소 ID는 모두 필수값이므로 둘 다 있어야 저장할 수 있다.
      */
     public boolean hasKnownStop() {
         return stopSequence != null && stopId != null;
     }
 
     /**
-     * 상류가 준 운행 상태가 우리가 뜻을 아는 값인가.
-     * 0 이동 중 · 1 도착 중 · 2 지나감 셋뿐이고, 그 밖의 값은 무슨 상황인지 모른다.
+     * 상류에서 받은 운행 상태가 해석 가능한 값인지 확인한다.
+     * 0 이동 중 · 1 도착 중 · 2 지나감만 해석하며, 그 밖의 값은 상태를 알 수 없다.
      */
     public boolean hasKnownRunningState() {
         if (runningState == null) {

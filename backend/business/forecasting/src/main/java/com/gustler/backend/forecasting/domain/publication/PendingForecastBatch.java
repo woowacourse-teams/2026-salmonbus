@@ -2,16 +2,12 @@ package com.gustler.backend.forecasting.domain.publication;
 
 import java.time.Instant;
 
-/**
- * 예보가 아직 안 붙은 판.
- *
- * <p>/board 는 forecast_completed_at 이 찍힌 판만 본다. 그 열을 채우는 것이 예보 쪽 몫이라,
- * 무엇이 아직 안 됐는지가 이 값으로 나온다.
- */
+/** 아직 예보가 발행되지 않은 수집 배치와 조회 당시의 수집 시도. */
 public record PendingForecastBatch(
     long observationBatchId,
     long routeVersionId,
     long routeId,
-    Instant responseReceivedAt
+    Instant responseReceivedAt,
+    int attemptNumber
 ) {
 }

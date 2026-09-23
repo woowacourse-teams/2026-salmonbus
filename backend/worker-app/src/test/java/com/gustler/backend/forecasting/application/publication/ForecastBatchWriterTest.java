@@ -2,6 +2,7 @@ package com.gustler.backend.forecasting.application.publication;
 
 import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesService;
 import com.gustler.backend.forecasting.domain.model.ActiveModelDeployment;
+import com.gustler.backend.forecasting.domain.model.ModelIdentity;
 import com.gustler.backend.forecasting.domain.model.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.model.ForecastTimeSlot;
 import com.gustler.backend.forecasting.domain.model.SeatDistribution;
@@ -18,20 +19,23 @@ import com.gustler.backend.forecasting.domain.publication.RouteStop;
 import com.gustler.backend.forecasting.domain.publication.RouteStops;
 import com.gustler.backend.forecasting.domain.publication.RouteVersionRepository;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
-import com.gustler.backend.forecasting.domain.publication.SeatForecastRepository;
+import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
+import com.gustler.backend.forecasting.domain.publication.ForecastPublicationRepository;
+import com.gustler.backend.forecasting.domain.publication.PublishedForecast;
+import com.gustler.backend.observations.api.CollectionInput;
+import com.gustler.backend.observations.api.CollectionInputs;
 import com.gustler.backend.forecasting.domain.publication.SeatSlope;
 import com.gustler.backend.forecasting.domain.publication.TrajectoryGap;
 import com.gustler.backend.forecasting.domain.publication.VehicleTrajectory;
 import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryRepository;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
-import com.gustler.backend.forecasting.infrastructure.quality.TripQualityRepository;
+import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.api.ForecastPolicy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -66,7 +70,7 @@ class ForecastBatchWriterTest {
 
     private static final Instant NOW = Instant.parse("2026-09-21T02:00:00Z");
     private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
-    private static final PendingForecastBatch BATCH = new PendingForecastBatch(100, 1, 1, NOW);
+    private static final PendingForecastBatch BATCH = new PendingForecastBatch(100, 1, 1, NOW, 1);
     private static final RouteStops STOPS = new RouteStops(1, "204000057", List.of(
         new RouteStop(1, 4, "stop-4", true), new RouteStop(1, 5, "stop-5", true)));
     private static final StopDemandStatistics STATISTICS = new StopDemandStatistics(
@@ -75,17 +79,27 @@ class ForecastBatchWriterTest {
         new SeatDistribution(List.of(0.4, 0.6)), 0.4);
 
     private final VehicleTrajectoryRepository trajectories = mock(VehicleTrajectoryRepository.class);
-    private final SeatForecastRepository forecasts = mock(SeatForecastRepository.class);
+    private final ForecastPublicationRepository forecasts = mock(ForecastPublicationRepository.class);
     private final StopDemandStatisticsRepository statistics = mock(StopDemandStatisticsRepository.class);
-    private final TripQualityRepository quality =
-        mock(TripQualityRepository.class);
+    private final RouteDataQualityAccess quality =
+        mock(RouteDataQualityAccess.class);
     private final SameDayFullOutcomesService outcomes = mock(SameDayFullOutcomesService.class);
+    private final CollectionInputs inputs = mock(CollectionInputs.class);
     private final ForecastBatchWriter writer = new ForecastBatchWriter(trajectories, forecasts, outcomes, statistics, CLOCK,
-        quality);
+        quality, inputs);
     private final ListAppender<ILoggingEvent> logs = new ListAppender<>();
 
     @BeforeEach
     void setUp() {
+        when(quality.lock(anyLong())).thenReturn(1L);
+        when(inputs.lockForForecast(anyLong())).thenAnswer(invocation -> {
+            long batchId = invocation.getArgument(0);
+            return new CollectionInput(batchId, batchId == 102 ? 2 : 1, 1, NOW, true, false);
+        });
+        when(forecasts.save(any())).thenAnswer(invocation -> {
+            ForecastPublication publication = invocation.getArgument(0);
+            return new PublishedForecast(publication.sourceBatchId(), publication.predictionCount());
+        });
         when(statistics.readAsOf(1, STATISTICS.timeSlot(), "feature-v1", NOW)).thenReturn(STATISTICS);
         when(outcomes.outcomesFor(1, NOW)).thenReturn(Map.of());
         logs.start();
@@ -107,8 +121,9 @@ class ForecastBatchWriterTest {
         writer.writeForecastsOf(BATCH, STOPS, snapshot);
 
         // then
-        var order = inOrder(quality, statistics, forecasts);
-        order.verify(quality).lockRoute(BATCH.routeVersionId());
+        var order = inOrder(quality, inputs, statistics, forecasts);
+        order.verify(quality).lock(BATCH.routeVersionId());
+        order.verify(inputs).lockForForecast(BATCH.observationBatchId());
         order.verify(statistics).readAsOf(1, STATISTICS.timeSlot(), "feature-v1", NOW);
     }
 
@@ -123,7 +138,7 @@ class ForecastBatchWriterTest {
         // then
         assertThat(saved()).containsExactlyInAnyOrder(
             expected(10, 4), expected(10, 5), expected(11, 4), expected(11, 5));
-        verify(forecasts).markForecastCompleted(100, NOW);
+        verify(inputs).confirmInput(100, 1, NOW);
         assertThat(logs.list).isEmpty();
     }
 
@@ -140,7 +155,7 @@ class ForecastBatchWriterTest {
 
         // then
         assertThat(saved()).containsExactlyInAnyOrder(expected(10, 4), expected(10, 5));
-        verify(forecasts).markForecastCompleted(100, NOW);
+        verify(inputs).confirmInput(100, 1, NOW);
         assertThat(logs.list).singleElement().satisfies(event -> assertThat(event.getFormattedMessage())
             .contains("event=forecast_vehicle_skipped", "batchId=100", "vehicleObservationId=11",
                 "modelDeploymentId=7", "currentSeats=43", "capacity=82", "field=capacity",
@@ -177,7 +192,7 @@ class ForecastBatchWriterTest {
 
         // then
         assertThat(saved()).isEmpty();
-        verify(forecasts).markForecastCompleted(100, NOW);
+        verify(inputs).confirmInput(100, 1, NOW);
         assertThat(logs.list).hasSize(2);
     }
 
@@ -191,7 +206,7 @@ class ForecastBatchWriterTest {
 
         // then
         assertThat(saved()).isEmpty();
-        verify(forecasts).markForecastCompleted(100, NOW);
+        verify(inputs).confirmInput(100, 1, NOW);
         assertThat(logs.list).isEmpty();
     }
 
@@ -213,17 +228,17 @@ class ForecastBatchWriterTest {
         // then
         assertThat(actual).isSameAs(failure);
 
-        verify(forecasts, never()).save(anyList());
-        verify(forecasts, never()).markForecastCompleted(anyLong(), any());
+        verify(forecasts, never()).save(any());
+        verify(inputs, never()).confirmInput(anyLong(), org.mockito.ArgumentMatchers.anyInt(), any());
         assertThat(logs.list).isEmpty();
     }
 
     @Test
-    void 예보_저장에_실패하면_오류를_전파하고_처리_완료_시각을_기록하지_않는다() {
+    void 예보_저장에_실패하면_트랜잭션이_롤백되도록_오류를_전파한다() {
         // given
         when(trajectories.readTrajectories(100)).thenReturn(List.of(vehicle(10, 12, 44)));
         IllegalStateException failure = new IllegalStateException("database unavailable");
-        doThrow(failure).when(forecasts).save(anyList());
+        doThrow(failure).when(forecasts).save(any());
 
         // when
         Throwable actual = catchThrowable(() ->
@@ -232,7 +247,7 @@ class ForecastBatchWriterTest {
         // then
         assertThat(actual).isSameAs(failure);
 
-        verify(forecasts, never()).markForecastCompleted(anyLong(), any());
+        verify(inputs).confirmInput(100, 1, NOW);
         assertThat(logs.list).isEmpty();
     }
 
@@ -256,7 +271,7 @@ class ForecastBatchWriterTest {
 
             // then
             assertThat(saved()).containsExactlyInAnyOrder(expected(10, 4), expected(10, 5));
-            verify(forecasts).markForecastCompleted(100, NOW);
+            verify(inputs).confirmInput(100, 1, NOW);
         } finally {
             logger.detachAppender(brokenAppender);
             brokenAppender.stop();
@@ -273,9 +288,9 @@ class ForecastBatchWriterTest {
         when(routes.readStops(1)).thenReturn(STOPS);
         when(routes.readStops(2)).thenReturn(new RouteStops(2, "234000050", List.of()));
         when(trajectories.findBatchesAwaitingForecast(1, NOW.minusSeconds(300), 20))
-            .thenReturn(List.of(BATCH, new PendingForecastBatch(101, 1, 1, NOW)));
+            .thenReturn(List.of(BATCH, new PendingForecastBatch(101, 1, 1, NOW, 1)));
         when(trajectories.findBatchesAwaitingForecast(2, NOW.minusSeconds(300), 20))
-            .thenReturn(List.of(new PendingForecastBatch(102, 2, 2, NOW)));
+            .thenReturn(List.of(new PendingForecastBatch(102, 2, 2, NOW, 1)));
         when(trajectories.readTrajectories(100)).thenReturn(List.of(vehicle(11, 43, 82)));
         when(trajectories.readTrajectories(101)).thenReturn(List.of(vehicle(10, 12, 44)));
         when(trajectories.readTrajectories(102)).thenReturn(List.of());
@@ -288,11 +303,55 @@ class ForecastBatchWriterTest {
         job.writeForecasts();
 
         // then
-        verify(forecasts).save(List.of(expected(10, 4), expected(10, 5)));
-        verify(forecasts, times(2)).save(List.of());
-        verify(forecasts).markForecastCompleted(100, NOW);
-        verify(forecasts).markForecastCompleted(101, NOW);
-        verify(forecasts).markForecastCompleted(102, NOW);
+        ArgumentCaptor<ForecastPublication> publications = ArgumentCaptor.forClass(ForecastPublication.class);
+        verify(forecasts, times(3)).save(publications.capture());
+        assertThat(publications.getAllValues()).extracting(ForecastPublication::predictionCount)
+            .containsExactly(0, 2, 0);
+        verify(inputs).confirmInput(100, 1, NOW);
+        verify(inputs).confirmInput(101, 1, NOW);
+        verify(inputs).confirmInput(102, 1, NOW);
+    }
+
+    @Test
+    void 이미_발행한_배치는_재계산하지_않고_기존_발행을_반환한다() {
+        PublishedForecast published = new PublishedForecast(70, 2);
+        when(forecasts.findBySourceBatchId(100)).thenReturn(Optional.of(published));
+
+        var actual = writer.writeForecastsOf(BATCH, STOPS, runtime(input -> {
+            throw new AssertionError("이미 발행한 예보를 다시 계산하면 안 된다");
+        }));
+
+        assertThat(actual).contains(published);
+        verify(trajectories, never()).readTrajectories(anyLong());
+        verify(forecasts, never()).save(any());
+        verify(inputs, never()).confirmInput(anyLong(), org.mockito.ArgumentMatchers.anyInt(), any());
+    }
+
+    @Test
+    void 조회_이후_수집_시도가_바뀌었으면_예보를_발행하지_않는다() {
+        when(inputs.lockForForecast(100)).thenReturn(new CollectionInput(100, 1, 2, NOW, true, false));
+
+        var actual = writer.writeForecastsOf(BATCH, STOPS, runtime(input -> RESULT));
+
+        assertThat(actual).isEmpty();
+        verify(statistics, never()).readAsOf(anyLong(), any(), any(), any());
+        verify(trajectories, never()).readTrajectories(anyLong());
+        verify(forecasts, never()).save(any());
+        verify(inputs, never()).confirmInput(anyLong(), org.mockito.ArgumentMatchers.anyInt(), any());
+    }
+
+    @Test
+    void 평가_근거로_이미_확정한_수집_배치도_아직_발행하지_않았다면_발행한다() {
+        when(inputs.lockForForecast(100)).thenReturn(new CollectionInput(100, 1, 1, NOW, true, true));
+
+        writer.writeForecastsOf(BATCH, STOPS, runtime(input -> RESULT));
+
+        ForecastPublication publication = savedPublication();
+        assertThat(publication.predictionCount()).isZero();
+        assertThat(publication.modelDeploymentId()).isEqualTo(7);
+        assertThat(publication.demandStatisticsRevision()).isEqualTo(3);
+        assertThat(publication.qualityRevision()).isEqualTo(1);
+        verify(inputs).confirmInput(100, 1, NOW);
     }
 
     private SeatForecastResult predictWithSeatValidation(SeatForecastInput input) {
@@ -303,7 +362,8 @@ class ForecastBatchWriterTest {
     }
 
     private RuntimeSnapshot runtime(SeatForecastModel model) {
-        return new RuntimeSnapshot(new ActiveModelDeployment(7, "feature-v1", "release", "0".repeat(64)),
+        return new RuntimeSnapshot(new ActiveModelDeployment(7, new ModelIdentity("release", "seat", "v1", "0".repeat(64),
+            "seat-v1", "feature-v1", "0".repeat(64), NOW.minusSeconds(60))),
             null, model, NOW.minusSeconds(60));
     }
 
@@ -318,9 +378,12 @@ class ForecastBatchWriterTest {
         return new SeatForecast(observationId, 1, stopOrder, stopOrder - 3, 7, 3, 0.4, 0.4, 0.6, NOW);
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     private List<SeatForecast> saved() {
-        ArgumentCaptor<List<SeatForecast>> captured = ArgumentCaptor.forClass((Class) List.class);
+        return savedPublication().predictions();
+    }
+
+    private ForecastPublication savedPublication() {
+        ArgumentCaptor<ForecastPublication> captured = ArgumentCaptor.forClass(ForecastPublication.class);
         verify(forecasts).save(captured.capture());
         return captured.getValue();
     }

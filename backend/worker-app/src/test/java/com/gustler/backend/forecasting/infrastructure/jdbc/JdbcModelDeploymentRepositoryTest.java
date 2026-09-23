@@ -1,11 +1,15 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gustler.backend.forecasting.domain.model.ActiveModelDeployment;
+import com.gustler.backend.forecasting.domain.model.ActiveModelSlot;
+import com.gustler.backend.forecasting.domain.model.ModelActivation;
+import com.gustler.backend.forecasting.domain.model.ModelIdentity;
 import com.gustler.backend.forecasting.domain.model.StagedModelDeployment;
 import com.gustler.backend.support.IntegrationTest;
-import java.time.OffsetDateTime;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -17,21 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 class JdbcModelDeploymentRepositoryTest {
 
-    private static final String STAGED = "STAGED";
-    private static final String ACTIVE = "ACTIVE";
-    private static final String RETIRED = "RETIRED";
-
-    private static final String CALCULATION_VERSION_IN_USE = "calculation-v1.2.0";
-    private static final String CALCULATION_VERSION_WAITING = "calculation-v1.3.0";
-    private static final String CALCULATION_VERSION_RETIRED = "calculation-v1.1.0";
-
-    private static final String RELEASE_ID = "release-2026-08-19";
-    private static final String MODEL_KEY = "seat-forecast";
-    private static final String MODEL_VERSION = "model-v1.0.0";
-    private static final String BUNDLE_DIGEST = "0".repeat(64);
-    private static final String PREDICTION_TARGET_VERSION = "remaining-seats-v1";
-    private static final String SUPPORTED_SCOPE_DIGEST = "1".repeat(64);
-    private static final OffsetDateTime DATA_UNTIL = OffsetDateTime.parse("2026-08-19T00:00+09:00");
+    private static final Instant DATA_UNTIL = Instant.parse("2026-08-18T15:00:00Z");
 
     @Autowired
     private JdbcClient jdbcClient;
@@ -40,24 +30,25 @@ class JdbcModelDeploymentRepositoryTest {
     private JdbcModelDeploymentRepository repository;
 
     @Test
-    void 도는_배포가_하나면_그것을_읽는다() {
+    void 활성_배포의_모든_식별_정보를_함께_조회한다() {
         // given
-        insertDeployment(RETIRED, CALCULATION_VERSION_RETIRED);
-        final long activeDeploymentId = insertDeployment(ACTIVE, CALCULATION_VERSION_IN_USE);
-        insertDeployment(STAGED, CALCULATION_VERSION_WAITING);
+        insertDeployment("RETIRED", identity("retired", "calculation-v1.1.0"));
+        ModelIdentity identity = identity("active", "calculation-v1.2.0");
+        final long activeId = insertDeployment("ACTIVE", identity);
+        insertDeployment("STAGED", identity("waiting", "calculation-v1.3.0"));
 
         // when
         Optional<ActiveModelDeployment> actual = repository.findActive();
 
         // then
-        assertThat(actual).map(ActiveModelDeployment::id).contains(activeDeploymentId);
+        assertThat(actual).contains(new ActiveModelDeployment(activeId, identity));
     }
 
     @Test
-    void 도는_배포가_없으면_비어_있다() {
+    void 활성_배포가_없으면_비어_있다() {
         // given
-        insertDeployment(STAGED, CALCULATION_VERSION_WAITING);
-        insertDeployment(RETIRED, CALCULATION_VERSION_RETIRED);
+        insertDeployment("STAGED", identity("waiting", "calculation-v1.3.0"));
+        insertDeployment("RETIRED", identity("retired", "calculation-v1.1.0"));
 
         // when
         Optional<ActiveModelDeployment> actual = repository.findActive();
@@ -67,149 +58,115 @@ class JdbcModelDeploymentRepositoryTest {
     }
 
     @Test
-    void 배포에서_계산_규칙_판과_신원을_같이_읽는다() {
-        // given 신원을 같이 안 읽으면 올라온 계수가 이 행의 계수인지 대조할 수 없다
-        final long activeDeploymentId = insertDeployment(ACTIVE, CALCULATION_VERSION_IN_USE);
+    void 준비한_배포는_활성화하기_전까지_STAGED로_남는다() {
+        // given
+        ModelIdentity identity = identity("waiting", "calculation-v1.3.0");
 
         // when
-        Optional<ActiveModelDeployment> actual = repository.findActive();
+        final long deploymentId = repository.stage(staged(identity));
 
         // then
-        assertThat(actual).contains(new ActiveModelDeployment(
-            activeDeploymentId, CALCULATION_VERSION_IN_USE, RELEASE_ID, BUNDLE_DIGEST));
-    }
-
-    @Test
-    void 적재_영수증은_STAGED_로_남는다() {
-        // when
-        final long actual = repository.stage(staged());
-
-        // then
-        assertThat(stateOf(actual)).isEqualTo(STAGED);
-    }
-
-    @Test
-    void 적재만_해서는_도는_배포가_되지_않는다() {
-        // when
-        repository.stage(staged());
-
-        // then
+        assertThat(stateOf(deploymentId)).isEqualTo("STAGED");
         assertThat(repository.findActive()).isEmpty();
+        assertThat(repository.findActiveSlot()).isEqualTo(new ActiveModelSlot(0, Optional.empty()));
     }
 
     @Test
-    void STAGED_를_ACTIVE_로_올린다() {
+    void 처음_활성화하면_슬롯의_배포와_버전이_함께_바뀐다() {
         // given
-        final long deploymentId = repository.stage(staged());
+        ModelIdentity identity = identity("first", "calculation-v1.2.0");
+        final long deploymentId = repository.stage(staged(identity));
+        ActiveModelSlot previous = repository.lockActiveSlot();
 
         // when
-        repository.promoteToActive(deploymentId);
+        repository.activate(deploymentId, previous, previous.version() + 1);
 
         // then
-        assertThat(stateOf(deploymentId)).isEqualTo(ACTIVE);
+        assertThat(stateOf(deploymentId)).isEqualTo("ACTIVE");
+        assertThat(repository.findActiveSlot()).isEqualTo(new ActiveModelSlot(1,
+            Optional.of(new ActiveModelDeployment(deploymentId, identity))));
+        assertThat(jdbcClient.sql("SELECT predecessor_deployment_id IS NULL FROM model_deployment WHERE id = ?")
+            .param(deploymentId).query(Boolean.class).single()).isTrue();
     }
 
     @Test
-    void 먼저_돌던_배포는_RETIRED_가_된다() {
+    void 새_배포를_활성화하면_이전_배포를_종료하고_연결을_남긴다() {
         // given
-        final long earlier = insertDeployment(ACTIVE, CALCULATION_VERSION_IN_USE);
-        final long later = repository.stage(staged());
+        final long previousId = activate(identity("first", "calculation-v1.2.0"));
+        ModelIdentity nextIdentity = identity("next", "calculation-v1.3.0");
+        final long nextId = repository.stage(staged(nextIdentity));
+        ActiveModelSlot previous = repository.lockActiveSlot();
 
         // when
-        repository.promoteToActive(later);
+        repository.activate(nextId, previous, previous.version() + 1);
 
         // then
-        assertThat(stateOf(earlier)).isEqualTo(RETIRED);
+        assertThat(stateOf(previousId)).isEqualTo("RETIRED");
+        assertThat(stateOf(nextId)).isEqualTo("ACTIVE");
+        assertThat(jdbcClient.sql("SELECT predecessor_deployment_id FROM model_deployment WHERE id = ?")
+            .param(nextId).query(Long.class).single()).isEqualTo(previousId);
+        assertThat(repository.findActiveSlot()).isEqualTo(new ActiveModelSlot(2,
+            Optional.of(new ActiveModelDeployment(nextId, nextIdentity))));
+        assertThat(jdbcClient.sql("SELECT count(*) FROM model_deployment WHERE state = 'ACTIVE'")
+            .query(Integer.class).single()).isOne();
     }
 
     @Test
-    void 올린_배포는_먼저_돌던_배포를_앞선_배포로_가리킨다() {
+    void 준비_상태가_아닌_배포는_활성화하지_못한다() {
         // given
-        final long earlier = insertDeployment(ACTIVE, CALCULATION_VERSION_IN_USE);
-        final long later = repository.stage(staged());
+        final long retiredId = insertDeployment("RETIRED", identity("retired", "calculation-v1.1.0"));
+        ActiveModelSlot previous = repository.lockActiveSlot();
+
+        // when, then
+        assertThatThrownBy(() -> repository.activate(retiredId, previous, 1))
+            .isInstanceOf(org.springframework.dao.InvalidDataAccessApiUsageException.class)
+            .hasRootCauseInstanceOf(IllegalStateException.class)
+            .hasRootCauseMessage("활성 모델 변경 중 저장 상태가 달라졌습니다");
+        assertThat(repository.findActive()).isEmpty();
+        assertThat(repository.findActiveSlot()).isEqualTo(previous);
+    }
+
+    @Test
+    void 요청_기록에서_입력과_확정된_결과를_모두_복원한다() {
+        // given
+        ModelIdentity identity = identity("recorded", "calculation-v1.2.0");
+        final long deploymentId = activate(identity);
+        ModelActivation activation = new ModelActivation(UUID.randomUUID(), 0,
+            new ActiveModelDeployment(deploymentId, identity), 1,
+            Instant.parse("2026-09-23T01:02:03.123456Z"));
 
         // when
-        repository.promoteToActive(later);
+        repository.recordActivation(activation);
 
         // then
-        assertThat(predecessorOf(later)).isEqualTo(earlier);
+        assertThat(repository.findActivation(activation.requestId())).contains(activation);
+        assertThat(repository.findActivation(UUID.randomUUID())).isEmpty();
     }
 
-    @Test
-    void 이미_ACTIVE_인_배포를_다시_올리면_아무_행도_안_바뀐다() {
-        // given
-        final long deploymentId = repository.stage(staged());
-        repository.promoteToActive(deploymentId);
-
-        // when
-        final boolean actual = repository.promoteToActive(deploymentId);
-
-        // then
-        assertThat(actual).isFalse();
+    private long activate(ModelIdentity identity) {
+        ActiveModelSlot previous = repository.lockActiveSlot();
+        final long id = repository.stage(staged(identity));
+        repository.activate(id, previous, previous.version() + 1);
+        return id;
     }
 
-    @Test
-    void 이미_ACTIVE_인_배포를_다시_올려도_먼저_돌던_배포가_안_내려간다() {
-        // given
-        final long earlier = insertDeployment(ACTIVE, CALCULATION_VERSION_IN_USE);
-        final long later = repository.stage(staged());
-        repository.promoteToActive(later);
-
-        // when 이미 올라간 것을 한 번 더 올린다
-        repository.promoteToActive(later);
-
-        // then 도는 배포는 여전히 하나다
-        assertThat(activeCount()).isOne();
+    private ModelIdentity identity(String releaseId, String calculationVersion) {
+        return new ModelIdentity(releaseId, "seat-forecast", "model-v1.0.0", "0".repeat(64),
+            "remaining-seats-v1", calculationVersion, "1".repeat(64), DATA_UNTIL);
     }
 
-    @Test
-    void STAGED_가_아닌_식별자를_올리면_못_올렸다고_답한다() {
-        // given
-        final long retired = insertDeployment(RETIRED, CALCULATION_VERSION_RETIRED);
-
-        // when
-        final boolean actual = repository.promoteToActive(retired);
-
-        // then
-        assertThat(actual).isFalse();
+    private StagedModelDeployment staged(ModelIdentity identity) {
+        return new StagedModelDeployment(UUID.randomUUID(), identity.releaseId(), identity.modelKey(),
+            identity.modelVersion(), identity.bundleDigest(), identity.predictionTargetVersion(),
+            identity.calculationVersion(), identity.supportedScopeDigest(), identity.dataUntil());
     }
 
-    private StagedModelDeployment staged() {
-        return new StagedModelDeployment(
-            UUID.randomUUID(), RELEASE_ID, MODEL_KEY, MODEL_VERSION, BUNDLE_DIGEST,
-            PREDICTION_TARGET_VERSION, CALCULATION_VERSION_WAITING, SUPPORTED_SCOPE_DIGEST,
-            DATA_UNTIL.toInstant());
-    }
-
-    private String stateOf(
-        final long deploymentId
-    ) {
+    private String stateOf(long id) {
         return jdbcClient.sql("SELECT state FROM model_deployment WHERE id = ?")
-            .param(deploymentId)
-            .query(String.class)
-            .single();
+            .param(id).query(String.class).single();
     }
 
-    private long predecessorOf(
-        final long deploymentId
-    ) {
-        return jdbcClient.sql("SELECT predecessor_deployment_id FROM model_deployment WHERE id = ?")
-            .param(deploymentId)
-            .query(Long.class)
-            .single();
-    }
-
-    private int activeCount() {
-        return jdbcClient.sql("SELECT count(*) FROM model_deployment WHERE state = 'ACTIVE'")
-            .query(Integer.class)
-            .single();
-    }
-
-    /** 배포 키는 행마다 달라야 한다. ux_model_deployment_key 가 같은 값을 두 번 못 넣게 막는다. */
-    private long insertDeployment(
-        String state,
-        String calculationVersion
-    ) {
+    private long insertDeployment(String state, ModelIdentity identity) {
         return jdbcClient.sql("""
                 INSERT INTO model_deployment (
                     deployment_key, release_id, model_key, model_version, bundle_digest,
@@ -218,12 +175,9 @@ class JdbcModelDeploymentRepositoryTest {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
-            .params(
-                UUID.randomUUID(), RELEASE_ID, MODEL_KEY, MODEL_VERSION, BUNDLE_DIGEST,
-                PREDICTION_TARGET_VERSION, calculationVersion, SUPPORTED_SCOPE_DIGEST,
-                DATA_UNTIL, state
-            )
-            .query(Long.class)
-            .single();
+            .params(UUID.randomUUID(), identity.releaseId(), identity.modelKey(), identity.modelVersion(),
+                identity.bundleDigest(), identity.predictionTargetVersion(), identity.calculationVersion(),
+                identity.supportedScopeDigest(), java.sql.Timestamp.from(identity.dataUntil()), state)
+            .query(Long.class).single();
     }
 }

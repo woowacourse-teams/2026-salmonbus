@@ -2,7 +2,7 @@ package com.gustler.backend.forecasting.application.quality;
 
 import com.gustler.backend.forecasting.api.quality.InvestigateTripQuality;
 
-import com.gustler.backend.forecasting.infrastructure.quality.TripQualityRepository;
+
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,8 +14,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class InvestigateTripQualityService implements InvestigateTripQuality {
     private static final Logger log = LoggerFactory.getLogger(InvestigateTripQualityService.class);
-    private final TripQualityRepository quality;
-    public InvestigateTripQualityService(TripQualityRepository quality) { this.quality = quality; }
+    private final TripQualityInvestigationService quality;
+    public InvestigateTripQualityService(TripQualityInvestigationService quality) { this.quality = quality; }
 
     public void investigate() {
         try {

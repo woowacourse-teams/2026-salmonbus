@@ -1,5 +1,7 @@
 package com.gustler.backend.observations.domain;
 
+import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
@@ -36,7 +38,7 @@ class CollectedObservationsTest {
             bus(VEHICLE_204000139, RUNNING_STATE_DEPARTED));
 
         // when
-        CollectedObservations actual = CollectedObservations.from(buses);
+        CollectedObservations actual = GbisObservationMapper.collect(buses);
 
         // then
         assertThat(actual.providerRows()).isEqualTo(3);
@@ -51,7 +53,7 @@ class CollectedObservationsTest {
             bus(VEHICLE_204000139, RUNNING_STATE_DEPARTED));
 
         // when
-        CollectedObservations actual = CollectedObservations.from(buses);
+        CollectedObservations actual = GbisObservationMapper.collect(buses);
 
         // then
         assertThat(actual.storableRows())
@@ -68,7 +70,7 @@ class CollectedObservationsTest {
             bus(VEHICLE_204000139, null));
 
         // when
-        CollectedObservations actual = CollectedObservations.from(buses);
+        CollectedObservations actual = GbisObservationMapper.collect(buses);
 
         // then
         assertThat(actual.excludedRows()).hasSize(2);
@@ -83,7 +85,7 @@ class CollectedObservationsTest {
             bus(VEHICLE_204000139, RUNNING_STATE_DEPARTED));
 
         // when
-        CollectedObservations actual = CollectedObservations.from(buses);
+        CollectedObservations actual = GbisObservationMapper.collect(buses);
 
         // then
         assertThat(actual.storableRows())
@@ -99,7 +101,7 @@ class CollectedObservationsTest {
             busWithoutStopSequence(VEHICLE_204003542));
 
         // when
-        CollectedObservations actual = CollectedObservations.from(buses);
+        CollectedObservations actual = GbisObservationMapper.collect(buses);
 
         // then
         assertThat(actual.storableRows())
@@ -110,7 +112,7 @@ class CollectedObservationsTest {
     @Test
     void 차량이_한_대도_없으면_쌓을_관측도_없다() {
         // when
-        CollectedObservations actual = CollectedObservations.from(List.of());
+        CollectedObservations actual = GbisObservationMapper.collect(List.of());
 
         // then
         assertThat(actual.storableRows()).isEmpty();

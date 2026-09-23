@@ -10,7 +10,7 @@ public enum TrajectoryGap {
 
     /** 이력 창에서 이 차를 처음 봤다. 앞에 댈 관측이 없다 */
     NO_EARLIER_OBSERVATION,
-    /** 직전 판에 이 차가 없다. 그 판에 차가 없었거나 상류가 이 차를 안 줬다 */
+    /** 직전 수집 배치에 해당 차량이 없다. 관측 차량이 없었거나 외부 API가 해당 차량을 반환하지 않았다. */
     OBSERVATION_BATCH_MISSING,
     /** 통과 순번이 2 이상 뛰었다. 사이 정류소에서 무슨 일이 있었는지 모른다 */
     STOP_ORDER_JUMPED,
@@ -22,7 +22,7 @@ public enum TrajectoryGap {
     SEATS_UNKNOWN,
     /** 그 정류소를 앞서 지난 차가 이력 창에 없다 */
     NO_VEHICLE_AHEAD,
-    /** 그 순번에 같은 판으로 들어온 차가 있어 누가 앞인지 가릴 수 없다 */
+    /** 같은 수집 배치에서 해당 순번에 진입한 차량이 있어 통과 순서를 구분할 수 없다. */
     ARRIVAL_ORDER_UNKNOWN,
     ;
 }

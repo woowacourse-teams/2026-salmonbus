@@ -6,9 +6,9 @@ import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabelResolver;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationRepository;
-import com.gustler.backend.forecasting.domain.evaluation.ForecastSettlement;
+import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
-import com.gustler.backend.forecasting.domain.publication.SeatForecastRepository;
+import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluationRepository;
 import com.gustler.backend.forecasting.api.ForecastPolicy;
 
 import java.time.Clock;
@@ -21,43 +21,33 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * 아직 라벨을 못 채운 예보를 집어 그 차량의 뒤 관측으로 닫는다.
- *
- * <p>예보 배치와 다른 시계에서 돈다. 한 배치에 묶으면 회수 한 번 돌 때마다 예보가 멈춘다.
- *
- * <p><b>지금 쓰는 판본만 보지 않는다.</b> 안 닫힌 예보가 남은 판본을 물어서 돈다. 노선이 개편되면
- * 옛 판본의 예보가 그대로 남는데, 지금 쓰는 판본만 보면 그 행들이 영영 안 닫히고 쌓인다.
- *
- * <p>한 차량의 뒤 관측을 예보마다 다시 읽지 않는다. 같은 판에서 낸 예보 열두 줄이 같은 차량을
- * 가리키므로 차량으로 묶어 한 번만 읽고 예보마다 자기 시각 뒤만 잘라 쓴다.
- */
+/** 예측 이후의 관측으로 평가하고, 확정 결과와 당일 보정을 같은 트랜잭션에 반영한다. */
 @Component
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class EvaluateForecastsService implements EvaluateForecasts {
 
-    private final SeatForecastRepository seatForecastRepository;
+    private final ForecastEvaluationRepository evaluationRepository;
     private final SameDayFullOutcomesService sameDayFullOutcomesService;
     private final ArrivalObservationRepository arrivalObservationRepository;
-    private final ForecastPolicy properties;
+    private final ForecastPolicy policy;
     private final Clock clock;
 
     public EvaluateForecastsService(
-        SeatForecastRepository seatForecastRepository,
+        ForecastEvaluationRepository evaluationRepository,
         SameDayFullOutcomesService sameDayFullOutcomesService,
         ArrivalObservationRepository arrivalObservationRepository,
-        ForecastPolicy properties,
+        ForecastPolicy policy,
         Clock clock
     ) {
-        this.seatForecastRepository = seatForecastRepository;
+        this.evaluationRepository = evaluationRepository;
         this.sameDayFullOutcomesService = sameDayFullOutcomesService;
         this.arrivalObservationRepository = arrivalObservationRepository;
-        this.properties = properties;
+        this.policy = policy;
         this.clock = clock;
     }
 
     /**
-     * 한 회차를 한 transaction 으로 닫는다.
+     * 한 회차의 평가 결과와 당일 보정을 같은 트랜잭션에서 저장한다.
      *
      * <p>회차 안에서는 시각을 한 번만 읽는다. 회차 도중에 시각이 흐르면 앞뒤 예보가 서로 다른
      * 기준으로 기다림을 재게 된다.
@@ -65,29 +55,29 @@ public class EvaluateForecastsService implements EvaluateForecasts {
     @Transactional
     public void settleArrivalLabels() {
         Instant now = clock.instant();
-        List<ForecastSettlement> settlements = new ArrayList<>();
-        for (Long routeVersionId : seatForecastRepository.findRouteVersionIdsWithPendingForecasts()) {
-            settlements.addAll(settlementsOf(routeVersionId, now));
+        List<ForecastEvaluation> evaluations = new ArrayList<>();
+        for (Long routeVersionId : evaluationRepository.findRouteVersionIdsWithPendingForecasts()) {
+            evaluations.addAll(evaluationsOf(routeVersionId, now));
         }
-        sameDayFullOutcomesService.record(seatForecastRepository.settle(settlements));
+        sameDayFullOutcomesService.record(evaluationRepository.settle(evaluations));
     }
 
-    private List<ForecastSettlement> settlementsOf(
+    private List<ForecastEvaluation> evaluationsOf(
         final long routeVersionId,
         Instant now
     ) {
         List<PendingForecast> pending =
-            seatForecastRepository.findPending(routeVersionId, properties.pendingLimit());
-        List<ForecastSettlement> settlements = new ArrayList<>();
+            evaluationRepository.findPending(routeVersionId, policy.pendingLimit());
+        List<ForecastEvaluation> evaluations = new ArrayList<>();
         for (Map.Entry<String, List<PendingForecast>> byVehicle : groupByVehicle(pending).entrySet()) {
-            settlements.addAll(settlementsOf(routeVersionId, byVehicle.getKey(), byVehicle.getValue(), now));
+            evaluations.addAll(evaluationsOf(routeVersionId, byVehicle.getKey(), byVehicle.getValue(), now));
         }
-        return settlements;
+        return evaluations;
     }
 
     /**
      * 차량 아이디가 없는 예보는 도착을 찾을 길이 없다. 그래도 판정은 도메인에 맡긴다.
-     * 여기서 미리 걸러 내면 같은 규칙이 두 곳에 생긴다.
+     * 여기서 미리 걸러 내면 판정 규칙이 중복된다.
      */
     private Map<String, List<PendingForecast>> groupByVehicle(
         List<PendingForecast> pending
@@ -99,23 +89,23 @@ public class EvaluateForecastsService implements EvaluateForecasts {
         return byVehicle;
     }
 
-    private List<ForecastSettlement> settlementsOf(
+    private List<ForecastEvaluation> evaluationsOf(
         final long routeVersionId,
         String vehicleId,
         List<PendingForecast> forecasts,
         Instant now
     ) {
         List<ArrivalCandidate> candidates = readCandidates(routeVersionId, vehicleId, forecasts);
-        List<ForecastSettlement> settlements = new ArrayList<>();
+        List<ForecastEvaluation> evaluations = new ArrayList<>();
         for (PendingForecast forecast : forecasts) {
             ArrivalLabel label =
                 ArrivalLabelResolver.resolve(forecast, observedAfterForecast(candidates, forecast), now);
             if (!(label instanceof ArrivalLabel.NotArrivedYet)) {
-                settlements.add(new ForecastSettlement(
+                evaluations.add(ForecastEvaluation.completed(
                     forecast.vehicleObservationId(), forecast.targetStopOrder(), label, now));
             }
         }
-        return settlements;
+        return evaluations;
     }
 
     private List<ArrivalCandidate> readCandidates(
@@ -127,7 +117,7 @@ public class EvaluateForecastsService implements EvaluateForecasts {
             return List.of();
         }
         return arrivalObservationRepository.findAfter(
-            routeVersionId, vehicleId, earliestGeneratedAt(forecasts), properties.arrivalLimit());
+            routeVersionId, vehicleId, earliestGeneratedAt(forecasts), policy.arrivalLimit());
     }
 
     /**

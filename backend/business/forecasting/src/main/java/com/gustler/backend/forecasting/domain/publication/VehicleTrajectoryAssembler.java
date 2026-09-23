@@ -64,8 +64,8 @@ public final class VehicleTrajectoryAssembler {
     }
 
     /**
-     * 대상 관측에서 판을 하나씩 거슬러 올라가며 이어지는 관측을 모은다. 최신이 앞이다.
-     * 끊긴 자리에서 멈추고 왜 멈췄는지를 같이 든다.
+     * 대상 관측부터 수집 배치를 역순으로 읽어 연속된 관측을 모은다. 최신 관측이 앞에 온다.
+     * 연결이 끊기면 중단하고 그 사유를 함께 기록한다.
      */
     private static LinkedChain chainOf(
         ObservationHistory history,
@@ -134,7 +134,7 @@ public final class VehicleTrajectoryAssembler {
 
     /**
      * 이어진 관측을 최신부터 훑으며 만석이 몇 정류장째인지 센다.
-     * 같은 정류소를 여러 판에서 봐도 정류장 하나로 센다.
+     * 같은 정류소가 여러 수집 배치에 나타나도 정류장 하나로 센다.
      */
     private static FullSeatStreak streakOf(
         LinkedChain chain
@@ -163,9 +163,9 @@ public final class VehicleTrajectoryAssembler {
      * 같은 정류소를 나보다 앞서 지난 차. 그 순번에 처음 들어온 시각으로 앞뒤를 가리고,
      * 나보다 먼저 들어온 차 중 가장 늦게 들어온 차를 고른다.
      *
-     * <p>한 판 안에서는 앞뒤를 못 가린다. 그 판의 차는 관측 시각이 다 같고, 상류가 준 행 순서는
-     * 통과 순서가 아니다. 그래서 나와 같은 판으로 그 순번에 들어온 차가 있으면 모른다고 답한다.
-     * 그렇게 해야 두 차가 서로를 앞차로 지목하는 일이 안 생긴다.
+     * <p>같은 수집 배치의 차량은 관측 시각이 같아 통과 순서를 구분할 수 없다.
+     * 외부 API의 행 순서도 통과 순서를 뜻하지 않는다. 같은 배치에서 해당 순번에 진입한 차량이 있으면
+     * 앞차를 알 수 없는 것으로 처리해 두 차량이 서로를 앞차로 선택하지 않게 한다.
      */
     private static PrecedingVehicle findPrecedingVehicle(
         ObservationHistory history,
@@ -193,8 +193,8 @@ public final class VehicleTrajectoryAssembler {
     }
 
     /**
-     * 차량마다 그 순번에 처음 들어온 판을 찾는다. 판이 오래된 것부터 늘어서 있어서
-     * 처음 넣은 것이 곧 처음 들어온 시점이다.
+     * 차량마다 해당 순번에 처음 진입한 수집 배치를 찾는다. 배치가 시각 오름차순으로 정렬돼 있으므로
+     * 처음 기록한 관측이 최초 진입 시점이다.
      */
     private static Map<String, StopEntry> stopEntriesAt(
         ObservationHistory history,

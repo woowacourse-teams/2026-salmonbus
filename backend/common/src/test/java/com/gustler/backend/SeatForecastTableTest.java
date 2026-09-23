@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 예보 행이 닫히는 규칙을 DB 가 지키는지 본다.
  *
- * <p>V8__forecast_settlement.sql 이 건 검사들이라 SQL 을 직접 넣어서 막히는지 확인한다.
+ * <p>발행과 분리한 forecast_evaluation의 검사들이라 SQL 을 직접 넣어서 막히는지 확인한다.
  * 저장소를 거치면 저장소가 못 만드는 조합은 시험할 수가 없다.
  */
 @IntegrationTest
@@ -55,6 +55,7 @@ class SeatForecastTableTest {
     private long modelDeploymentId;
     private long vehicleObservationId;
     private long arrivalObservationId;
+    private long publicationId;
 
     @BeforeEach
     void 예보가_가리키는_행을_먼저_저장한다() {
@@ -66,6 +67,15 @@ class SeatForecastTableTest {
 
         final long batchId = insertObservationBatch("2026-08-19T11:14", RESPONSE_RECEIVED_AT);
         vehicleObservationId = insertObservation(batchId, PASSED_STOP_ORDER);
+        publicationId = jdbcClient.sql("""
+            INSERT INTO forecast_publication(source_batch_id, source_attempt_number, route_version_id,
+                model_deployment_id, demand_statistics_revision, quality_revision,
+                observed_at, generated_at, published_at, prediction_count)
+            VALUES (?, 1, ?, ?, ?, 1, ?, ?, ?, 1) RETURNING id
+            """)
+            .params(batchId, routeVersionId, modelDeploymentId, DEMAND_STATISTICS_REVISION,
+                RESPONSE_RECEIVED_AT, GENERATED_AT, GENERATED_AT)
+            .query(Long.class).single();
 
         final long arrivalBatchId = insertObservationBatch("2026-08-19T11:20", ARRIVAL_RESPONSE_RECEIVED_AT);
         arrivalObservationId = insertObservation(arrivalBatchId, TARGET_STOP_ORDER);
@@ -119,15 +129,32 @@ class SeatForecastTableTest {
                     vehicle_observation_id, target_stop_order, route_version_id, stops_to_target,
                     model_deployment_id, demand_statistics_revision,
                     seat_full_chance_raw, seat_full_chance, expected_seats, generated_at,
-                    scoring_state, arrival_observation_id, seats_on_arrival, scored_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    publication_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """)
             .params(
                 vehicleObservationId, TARGET_STOP_ORDER, routeVersionId, STOPS_TO_TARGET,
                 modelDeploymentId, DEMAND_STATISTICS_REVISION,
                 0.41, 0.38, 12.5, GENERATED_AT,
-                scoringState, arrivalId, seatsOnArrival, scoredAt
+                publicationId
             )
+            .update();
+        jdbcClient.sql("""
+                INSERT INTO forecast_evaluation(vehicle_observation_id, target_stop_order, route_version_id,
+                    scoring_state, arrival_observation_id, seats_on_arrival, scored_at,
+                    arrived_at, arrival_route_version_id, arrival_vehicle_id, arrival_stop_order,
+                    arrival_running_state, arrival_remaining_seats, arrival_quality_direction)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """)
+            .params(vehicleObservationId, TARGET_STOP_ORDER, routeVersionId,
+                scoringState, arrivalId, seatsOnArrival, scoredAt,
+                arrivalId == null ? null : ARRIVAL_RESPONSE_RECEIVED_AT,
+                arrivalId == null ? null : routeVersionId,
+                arrivalId == null ? null : VEHICLE_204000206,
+                arrivalId == null ? null : TARGET_STOP_ORDER,
+                arrivalId == null ? null : RUNNING_STATE_DEPARTED,
+                arrivalId == null ? null : SEATS_ON_ARRIVAL,
+                arrivalId == null ? null : 0L)
             .update();
     }
 

@@ -1,5 +1,7 @@
 package com.gustler.backend.observations.domain;
 
+import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -38,7 +40,7 @@ class VehicleObservationTest {
         BusLocation bus = busWithSeats(SEATS_43);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.remainingSeats()).isEqualTo(new Known(SEATS_43));
@@ -50,7 +52,7 @@ class VehicleObservationTest {
         BusLocation bus = busWithSeats(0);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.remainingSeats()).isEqualTo(new Known(0));
@@ -65,7 +67,7 @@ class VehicleObservationTest {
         BusLocation bus = busWithSeats(remainingSeatCount);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.remainingSeats())
@@ -78,7 +80,7 @@ class VehicleObservationTest {
         BusLocation bus = busWithSeats(null);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.remainingSeats())
@@ -125,7 +127,7 @@ class VehicleObservationTest {
         BusLocation bus = busWithCrowdLevel(crowdLevel);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.crowdLevel()).isEqualTo(crowdLevel);
@@ -141,7 +143,7 @@ class VehicleObservationTest {
         BusLocation bus = busWithCrowdLevel(crowdLevel);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.crowdLevel()).isNull();
@@ -153,7 +155,7 @@ class VehicleObservationTest {
         BusLocation bus = bus(STOP_SEQUENCE_6, RUNNING_STATE_DEPARTED, -1, CROWD_LEVEL_3, NORMAL_BUS);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.remainingSeats()).isInstanceOf(Unknown.class);
@@ -166,7 +168,7 @@ class VehicleObservationTest {
         BusLocation bus = bus(STOP_SEQUENCE_6, RUNNING_STATE_DEPARTED, SEATS_43, 0, NORMAL_BUS);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.crowdLevel()).isNull();
@@ -179,7 +181,7 @@ class VehicleObservationTest {
         BusLocation bus = bus(STOP_SEQUENCE_6, RUNNING_STATE_DEPARTED, SEATS_43, CROWD_LEVEL_3, DOUBLE_DECKER_BUS);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.vehicleType()).isEqualTo(DOUBLE_DECKER_BUS);
@@ -192,7 +194,7 @@ class VehicleObservationTest {
         BusLocation bus = busAt(STOP_SEQUENCE_6, RUNNING_STATE_DEPARTED);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.stopSequence()).isEqualTo(STOP_SEQUENCE_6);
@@ -204,7 +206,7 @@ class VehicleObservationTest {
         BusLocation bus = busAt(STOP_SEQUENCE_6, RUNNING_STATE_ARRIVED);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.stopSequence()).isEqualTo(STOP_SEQUENCE_6);
@@ -216,7 +218,7 @@ class VehicleObservationTest {
         BusLocation bus = busAt(FIRST_STOP_SEQUENCE, RUNNING_STATE_ARRIVED);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.stopSequence()).isEqualTo(FIRST_STOP_SEQUENCE);
@@ -228,7 +230,7 @@ class VehicleObservationTest {
         BusLocation bus = busAt(STOP_SEQUENCE_6, RUNNING_STATE_DEPARTED);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.passedStopOrder()).isEqualTo(STOP_SEQUENCE_6);
@@ -240,7 +242,7 @@ class VehicleObservationTest {
         BusLocation bus = busAt(STOP_SEQUENCE_6, RUNNING_STATE_ARRIVED);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.passedStopOrder()).isEqualTo(STOP_SEQUENCE_6 - 1);
@@ -252,7 +254,7 @@ class VehicleObservationTest {
         BusLocation bus = busAt(FIRST_STOP_SEQUENCE, RUNNING_STATE_ARRIVED);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.passedStopOrder()).isZero();
@@ -264,7 +266,7 @@ class VehicleObservationTest {
         BusLocation bus = bus(STOP_SEQUENCE_6, null, SEATS_43, CROWD_LEVEL_3, NORMAL_BUS);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.passedStopOrder()).isNull();
@@ -276,7 +278,7 @@ class VehicleObservationTest {
         BusLocation bus = busAt(STOP_SEQUENCE_6, RUNNING_STATE_DEPARTED);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.hasKnownStop()).isTrue();
@@ -288,7 +290,7 @@ class VehicleObservationTest {
         BusLocation bus = bus(null, RUNNING_STATE_DEPARTED, SEATS_43, CROWD_LEVEL_3, NORMAL_BUS);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.hasKnownStop()).isFalse();
@@ -303,7 +305,7 @@ class VehicleObservationTest {
         BusLocation bus = busAt(STOP_SEQUENCE_6, runningState);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.hasKnownRunningState()).isTrue();
@@ -315,7 +317,7 @@ class VehicleObservationTest {
         BusLocation bus = bus(STOP_SEQUENCE_6, null, SEATS_43, CROWD_LEVEL_3, NORMAL_BUS);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.hasKnownRunningState()).isFalse();
@@ -327,7 +329,7 @@ class VehicleObservationTest {
         BusLocation bus = busAt(STOP_SEQUENCE_6, RUNNING_STATE_NEVER_OBSERVED);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.hasKnownRunningState()).isFalse();
@@ -339,7 +341,7 @@ class VehicleObservationTest {
         BusLocation bus = busAt(STOP_SEQUENCE_6, RUNNING_STATE_DEPARTED);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.vehicleId()).isEqualTo(VEHICLE_204000206);
@@ -351,7 +353,7 @@ class VehicleObservationTest {
         BusLocation bus = busAt(STOP_SEQUENCE_6, RUNNING_STATE_DEPARTED);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual.plateNumber()).isEqualTo(PLATE_NUMBER);
@@ -363,7 +365,7 @@ class VehicleObservationTest {
         BusLocation bus = bus(STOP_SEQUENCE_6, RUNNING_STATE_DEPARTED, SEATS_43, CROWD_LEVEL_3, DOUBLE_DECKER_BUS);
 
         // when
-        VehicleObservation actual = VehicleObservation.from(bus);
+        VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
         assertThat(actual).isEqualTo(new VehicleObservation(

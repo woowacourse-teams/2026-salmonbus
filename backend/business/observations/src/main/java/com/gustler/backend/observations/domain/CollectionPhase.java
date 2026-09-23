@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.util.Arrays;
 
 /**
- * 시각대마다 수집을 얼마나 자주 부르는가.
+ * 시간대별 수집 간격.
  *
  * <p>균일 주기로는 안 된다. 라벨 조건이 "연속 관측 간격 90초 이하" 라 첨두를 느리게 하면
  * 학습에 쓸 관측이 자주 탈락하고, 반대로 심야까지 촘촘히 부르면 하루 한도 10,000회 안에
@@ -19,14 +19,14 @@ import java.util.Arrays;
  */
 public enum CollectionPhase {
 
-    /** 심야. 쿼터를 아끼는 자리다. */
+    /** 심야에는 호출 한도를 아끼도록 수집 간격을 늘린다. */
     DEEP_NIGHT(1, 4, 600),
     EARLY_MORNING(4, 7, 20),
     MORNING_PEAK(7, 9, 15),
     DAYTIME(9, 17, 20),
     EVENING_PEAK(17, 20, 15),
     LATE_EVENING(20, 23, 15),
-    /** 심야 꼬리. 23시에 시작해 자정을 넘어 1시에 끝난다. */
+    /** 자정을 지나는 심야 구간. 23시에 시작해 다음 날 1시에 끝난다. */
     NIGHT_TAIL(23, 1, 20),
     ;
 
@@ -68,7 +68,7 @@ public enum CollectionPhase {
         return intervalSeconds;
     }
 
-    /** 이 단계만 하루 종일 돈다면 노선 하나를 몇 번 부르나. */
+    /** 하루 중 이 단계가 적용되는 시간 동안 노선 하나를 호출하는 횟수. */
     public int dailyCallsPerRoute() {
         return coveredHours() * SECONDS_PER_HOUR / intervalSeconds;
     }

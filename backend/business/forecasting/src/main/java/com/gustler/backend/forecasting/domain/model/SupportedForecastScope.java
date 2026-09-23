@@ -4,13 +4,13 @@ import com.gustler.backend.forecasting.domain.model.ForecastDistance;
 import java.util.List;
 
 /**
- * 이 계수 묶음이 예보할 수 있는 범위.
+ * 모델 계수가 지원하는 예보 범위.
  *
- * <p>노선 목록은 묶음이 들고, 몇 정류장 앞까지인지는 {@link ForecastDistance} 가 이미 안다.
- * 거리 판정을 여기에 한 번 더 적으면 한쪽만 고쳐질 자리가 생긴다.
+ * <p>지원 노선 목록을 보관하며 예보 거리의 허용 범위는 {@link ForecastDistance}에서 검사한다.
+ * 거리 판정 규칙을 중복 구현하지 않는다.
  *
- * <p>요약값을 낸다. {@code model_deployment.supported_scope_digest} 에 그대로 들어가고,
- * 조회가 이 노선 판본을 담는 배포인지 판정하는 데 쓴다.
+ * <p>digest는 {@code model_deployment.supported_scope_digest}에 기록되며,
+ * 해당 노선 버전을 지원하는 배포인지 확인할 때 사용한다.
  */
 public record SupportedForecastScope(
     List<String> modelRoutes

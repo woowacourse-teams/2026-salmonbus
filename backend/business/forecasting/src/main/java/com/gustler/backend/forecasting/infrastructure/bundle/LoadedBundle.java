@@ -6,15 +6,12 @@ import com.gustler.backend.forecasting.domain.model.SupportedForecastScope;
 
 import com.gustler.backend.forecasting.domain.model.ActiveModelDeployment;
 import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
-import java.util.UUID;
+import java.time.Instant;
+import com.gustler.backend.forecasting.domain.model.ModelIdentity;
+import com.gustler.backend.forecasting.domain.model.ModelRelease;
+import com.gustler.backend.forecasting.domain.model.SeatDistributionForecastModel;
 
-/**
- * 검사를 통과해 메모리에 올라온 계수 묶음 하나.
- *
- * <p>DB 에 아직 안 올라갔을 수도 있고 이미 도는 중일 수도 있다. 어느 쪽이든 <b>계수와 신원이
- * 여기서 갈리지 않는다.</b> 예측기를 이 묶음에서만 만들기 때문에, 예측기를 손에 넣었다는 것이
- * 곧 그 신원의 계수를 쓰고 있다는 뜻이 된다.
- */
+/** 파일 구조와 대조 계산을 검증한 모델 계수다. */
 public record LoadedBundle(
     CoefficientBundle coefficients,
     SeatDistributionPredictor predictor
@@ -69,21 +66,20 @@ public record LoadedBundle(
             "%s 가 다르다. 계수 파일 %s, 우리 계산 %s".formatted(name, expected, actual));
     }
 
-    /**
-     * 이 묶음이 그 배포가 가리키는 바로 그 계수인지 본다.
-     *
-     * <p>계수 파일 요약값 하나로는 모자란다. 그 요약값은 출시 식별자와 계산 규칙 판을 안 묶어서,
-     * <b>같은 요약값에 다른 출시 식별자</b>가 가능하다. 그것을 같다고 보면 도는 배포는 A 인데
-     * 메모리에는 B 가 올라가고, 예보를 낼 때 신원이 안 맞아 batch 가 통째로 안 돈다.
-     *
-     * <p>고르는 쪽과 다시 올리는 쪽이 같은 것을 재야 해서 여기 한 군데에만 둔다.
-     */
-    public boolean hasIdentityOf(
-        ActiveModelDeployment deployment
-    ) {
-        return deployment.bundleDigest().equals(bundleDigest())
-            && deployment.releaseId().equals(releaseId())
-            && deployment.calculationVersion().equals(featureContractVersion());
+    /** DB 배포와 준비된 모델의 모든 식별 정보를 비교한다. */
+    public boolean hasIdentityOf(ActiveModelDeployment deployment) {
+        return identity().equals(deployment.identity());
+    }
+
+    public ModelIdentity identity() {
+        BundleManifest manifest = coefficients.manifest();
+        return new ModelIdentity(manifest.releaseId(), "seat-distribution-a18", manifest.modelVersion(),
+            manifest.identityDigest(), "seat-distribution-0-70", manifest.featureContractVersion(),
+            scope().digest(), Instant.parse(manifest.dataThrough()));
+    }
+
+    public ModelRelease release() {
+        return new ModelRelease(identity(), scope(), new SeatDistributionForecastModel(predictor));
     }
 
     public String releaseId() {
@@ -102,9 +98,4 @@ public record LoadedBundle(
         return new SupportedForecastScope(coefficients.routes());
     }
 
-    public ModelDeploymentReceipt receiptWith(
-        UUID deploymentKey
-    ) {
-        return ModelDeploymentReceipt.of(coefficients.manifest(), scope(), deploymentKey);
-    }
 }

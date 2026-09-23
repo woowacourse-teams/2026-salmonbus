@@ -3,7 +3,8 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.groups.Tuple.tuple;
 
-import com.gustler.backend.observations.api.VehicleObservationsStored;
+import com.gustler.backend.forecasting.application.quality.TripQualityInvestigationService;
+import com.gustler.backend.forecasting.domain.quality.QualityObservationBatch;
 import com.gustler.backend.forecasting.domain.publication.FullSeatStreak;
 import com.gustler.backend.forecasting.domain.publication.ObservedSeats;
 import com.gustler.backend.forecasting.domain.publication.ObservedVehicle;
@@ -12,7 +13,8 @@ import com.gustler.backend.forecasting.domain.publication.PrecedingVehicle;
 import com.gustler.backend.forecasting.domain.publication.SeatSlope;
 import com.gustler.backend.forecasting.domain.publication.SeatUnknownReason;
 import com.gustler.backend.forecasting.domain.publication.TrajectoryGap;
-import com.gustler.backend.forecasting.infrastructure.quality.TripQualityRepository;
+import com.gustler.backend.forecasting.infrastructure.quality.JdbcRouteDataQualityAccess;
+import com.gustler.backend.forecasting.infrastructure.quality.JdbcTripQualityStore;
 import com.gustler.backend.forecasting.domain.publication.VehicleTrajectory;
 import com.gustler.backend.support.ConfirmedTripFixture;
 import com.gustler.backend.support.IntegrationTest;
@@ -191,6 +193,24 @@ class JdbcVehicleTrajectoryRepositoryTest {
         assertThat(actual)
             .extracting(PendingForecastBatch::observationBatchId)
             .containsExactly(awaiting);
+    }
+
+    @Test
+    void 예보_대상에_현재_수집_시도_번호를_포함한다() {
+        // given
+        final long batchId = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
+        jdbcClient.sql("UPDATE observation_batch SET attempt_number = 2 WHERE id = ?")
+            .param(batchId).update();
+
+        // when
+        List<PendingForecastBatch> actual =
+            repository.findBatchesAwaitingForecast(routeVersionId, ANY_AGE, ENOUGH_BATCHES);
+
+        // then
+        assertThat(actual).singleElement().satisfies(batch -> {
+            assertThat(batch.observationBatchId()).isEqualTo(batchId);
+            assertThat(batch.attemptNumber()).isEqualTo(2);
+        });
     }
 
     @Test
@@ -506,7 +526,7 @@ class JdbcVehicleTrajectoryRepositoryTest {
         insertObservation(later, VEHICLE_204000206, 2, 82);
         insertObservation(later, VEHICLE_204003542, 2, 43);
         clearSyntheticMemberships();
-        var quality = new TripQualityRepository(jdbcClient);
+        var quality = quality();
         signal(quality, first);
         assertThat(repository.readTrajectories(first)).hasSize(2);
 
@@ -519,13 +539,13 @@ class JdbcVehicleTrajectoryRepositoryTest {
         assertThat(repository.readTrajectories(later)).hasSize(1);
         assertThat(jdbcClient.sql("SELECT remaining_seats FROM vehicle_observation WHERE id = ?")
             .param(badStart).query(Integer.class).single()).isEqualTo(44);
-        assertThat(jdbcClient.sql("SELECT quality_revision FROM route WHERE id=(SELECT route_id FROM route_version WHERE id=?)").param(routeVersionId).query(Long.class).single()).isEqualTo(2);
+        assertThat(jdbcClient.sql("SELECT quality_revision FROM route_data_quality WHERE route_id=(SELECT route_id FROM route_version WHERE id=?)").param(routeVersionId).query(Long.class).single()).isEqualTo(2);
 
         // when: 같은 관측 묶음을 다시 판정한다.
         signal(quality, later);
 
         // then: 계산 자료 버전을 중복 증가시키지 않는다.
-        assertThat(jdbcClient.sql("SELECT quality_revision FROM route WHERE id=(SELECT route_id FROM route_version WHERE id=?)").param(routeVersionId).query(Long.class).single()).isEqualTo(2);
+        assertThat(jdbcClient.sql("SELECT quality_revision FROM route_data_quality WHERE route_id=(SELECT route_id FROM route_version WHERE id=?)").param(routeVersionId).query(Long.class).single()).isEqualTo(2);
     }
 
     @ParameterizedTest
@@ -541,7 +561,7 @@ class JdbcVehicleTrajectoryRepositoryTest {
         long next = insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
         insertObservation(next, VEHICLE_204000206, 5, 44);
         clearSyntheticMemberships();
-        var quality = new TripQualityRepository(jdbcClient);
+        var quality = quality();
 
         // when
         signal(quality, first);
@@ -564,7 +584,7 @@ class JdbcVehicleTrajectoryRepositoryTest {
         long gap = insertBatch(routeVersionId, EARLIER_POLL.plusMinutes(10), SUCCESS_ROWS, null);
         insertObservation(gap, VEHICLE_204000206, 3, 40);
         clearSyntheticMemberships();
-        var quality = new TripQualityRepository(jdbcClient);
+        var quality = quality();
 
         // when
         signal(quality, first);
@@ -574,22 +594,30 @@ class JdbcVehicleTrajectoryRepositoryTest {
         assertThat(repository.readTrajectories(gap)).hasSize(1);
     }
 
-    private void signal(TripQualityRepository quality, long batch) {
+    private TripQualityInvestigationService quality() {
+        return new TripQualityInvestigationService(new JdbcTripQualityStore(jdbcClient),
+            new JdbcRouteDataQualityAccess(jdbcClient), ids -> { });
+    }
+
+    private void signal(TripQualityInvestigationService quality, long batch) {
         var at = jdbcClient.sql("SELECT response_received_at FROM observation_batch WHERE id = ?")
             .param(batch).query(OffsetDateTime.class).single();
         var rows = jdbcClient.sql("SELECT id, vehicle_id, remaining_seats FROM vehicle_observation WHERE observation_batch_id = ?")
-            .param(batch).query((rs, n) -> new VehicleObservationsStored.Row(rs.getLong(1), rs.getString(2), rs.getObject(3, Integer.class))).list();
-        quality.observationsStored(new VehicleObservationsStored(batch, routeVersionId, at.toInstant(), rows));
+            .param(batch).query((rs, n) -> new QualityObservationBatch.Row(rs.getLong(1), rs.getString(2), rs.getObject(3, Integer.class))).list();
+        quality.observationsStored(new QualityObservationBatch(batch, routeVersionId, at.toInstant(), rows));
     }
 
     private void qualityPolicy() {
         // 합성 입력의 기준이며 운영 설정값이 아니다.
-        jdbcClient.sql("UPDATE route_version SET maximum_observation_gap_seconds = 60, observation_gap_evidence = 'synthetic test' WHERE id = ?")
-            .param(routeVersionId).update();
+        jdbcClient.sql("""
+                INSERT INTO route_version_quality_policy(route_version_id,maximum_observation_gap_seconds,observation_gap_evidence)
+                VALUES (?,60,'synthetic test') ON CONFLICT(route_version_id) DO UPDATE
+                SET maximum_observation_gap_seconds=60,observation_gap_evidence='synthetic test'
+                """).param(routeVersionId).update();
     }
 
     private void clearSyntheticMemberships() {
-        jdbcClient.sql("UPDATE vehicle_observation SET vehicle_trip_key = NULL").update();
+        jdbcClient.sql("DELETE FROM observation_trip_assignment").update();
         jdbcClient.sql("DELETE FROM vehicle_one_way_trip").update();
     }
 
@@ -632,23 +660,34 @@ class JdbcVehicleTrajectoryRepositoryTest {
         final long versionId,
         OffsetDateTime responseReceivedAt,
         String outcome,
-        OffsetDateTime forecastCompletedAt
+        OffsetDateTime publishedAt
     ) {
-        return jdbcClient.sql("""
+        final long batchId = jdbcClient.sql("""
                 INSERT INTO observation_batch (
                     route_version_id, scheduled_at, attempt_number, attempt_key, requested_at,
-                    response_received_at, forecast_completed_at, outcome, normalization_version,
+                    response_received_at, input_confirmed_at, outcome, normalization_version,
                     collection_strategy_version
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
             .params(
                 versionId, EARLIER_POLL, 1, "%s-%d".formatted(ROUTE_204000057, insertedBatchCount++),
-                EARLIER_POLL, responseReceivedAt, forecastCompletedAt, outcome, NORMALIZATION_VERSION,
+                EARLIER_POLL, responseReceivedAt, publishedAt, outcome, NORMALIZATION_VERSION,
                 STRATEGY_VERSION
             )
             .query(Long.class)
             .single();
+        if (publishedAt != null) {
+            jdbcClient.sql("""
+                    INSERT INTO forecast_publication (
+                        source_batch_id, source_attempt_number, route_version_id, observed_at,
+                        published_at, prediction_count, provenance
+                    ) VALUES (?, 1, ?, ?, ?, 0, 'LEGACY_UNKNOWN')
+                    """)
+                .params(batchId, versionId, responseReceivedAt, publishedAt)
+                .update();
+        }
+        return batchId;
     }
 
     private long insertObservation(

@@ -1,7 +1,8 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
+import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandCell;
-import com.gustler.backend.forecasting.domain.statistics.StopDemandGeneration;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandHourlyTotals;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandMeasurement;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
@@ -19,36 +20,21 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * 셀 통계를 SQL 로 직접 읽고 쓴다. JPA 엔티티를 두지 않는다.
- *
- * <p>재료가 되는 예보 · 관측 · 관측 판은 collector 가 소유한 표에 있지만 여기서 직접 조인한다.
- * collector 코드를 부르면 패키지 경계 검사가 막는다.
- */
+/** 통계 버전과 해당 정류장·시간대의 집계값을 함께 저장하고 조회한다. */
 @Repository
 public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsRepository {
 
-    /** 집계가 한 번도 안 돈 상태. 행이 하나도 없는 것이 곧 이 상태다. */
-    private static final int NO_GENERATION_YET = 0;
+    /** 아직 사용할 통계 버전이 없는 상태. */
+    private static final int NO_STATISTICS_YET = 0;
 
     /**
-     * 그 계산 규칙 판의 세대 번호와, 그 세대에서 고른 시간대의 셀들. 정류장 순번 오름차순이다.
+     * 관측 시각까지의 자료로 계산한 최신 통계를 읽는다.
      *
-     * <p>승차할 수 없는 정류장에는 셀이 없어서 순번이 건너뛴다. 행 수는 판본 정류장 수와 다르다.
-     *
-     * <p><b>세대 번호를 시간대로 안 거른다.</b> 한 세대는 세 시간대를 한꺼번에 내는데,
-     * 그중 한 시간대에 라벨이 아직 안 쌓여 셀이 없을 수 있다. 그 자리를 시간대로 걸러 세면
-     * "N세대인데 이 시간대는 비었다" 가 "세대가 아예 없다" 와 같은 0으로 나온다.
-     *
-     * <p>세대는 관측 시각까지의 자료로 낸 것 중 가장 최근 것을 고른다. 지금 최신 세대를 쓰면
-     * 밀린 batch 를 뒤늦게 처리할 때 그 관측 시각보다 뒤의 라벨이 들어간 셀을 읽는다.
-     *
-     * <p>그래서 세대 번호를 먼저 잡고 셀을 LEFT JOIN 한다. 셀이 없어도 행 하나는 나오고
-     * 그 행의 stop_order 가 비어 있다. 두 값을 한 조회에서 같이 가져오는 것이라
-     * 그 사이에 세대가 교체될 자리도 없다.
+     * <p>시간대에 해당하는 셀이 없어도 버전 번호는 유지한다. 버전 정보와 셀을 한 SQL로
+     * 조회하므로, 읽는 도중 새 통계가 저장되어도 서로 다른 버전이 섞이지 않는다.
      */
     private static final String SELECT_CELLS = """
-        SELECT generation.revision,
+        SELECT version.revision,
                cell.stop_order,
                cell.average_fill_rate,
                cell.average_net_boarding_rate,
@@ -56,61 +42,38 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
                cell.day_count
         FROM (
             SELECT COALESCE(MAX(revision), 0) AS revision
-            FROM stop_demand_statistics
+            FROM demand_statistics_version
             WHERE route_version_id = :routeVersionId
               AND calculation_version = :calculationVersion
               AND data_until <= :observedAt
               AND quality_revision = (
                   SELECT q.quality_revision FROM route_version v
-                  JOIN route q ON q.id = v.route_id WHERE v.id = :routeVersionId)
+                  JOIN route_data_quality q ON q.route_id = v.route_id WHERE v.id = :routeVersionId)
               AND NOT EXISTS (SELECT 1 FROM trip_quality_rebuild r
                               WHERE r.route_version_id = :routeVersionId AND NOT r.completed)
-        ) generation
+        ) version
         LEFT JOIN stop_demand_statistics cell
                ON cell.route_version_id = :routeVersionId
               AND cell.calculation_version = :calculationVersion
               AND cell.time_slot = :timeSlot
-              AND cell.revision = generation.revision
+              AND cell.revision = version.revision
         ORDER BY cell.stop_order
         """;
 
-    /**
-     * 지금 세대 번호.
-     *
-     * <p>시간대를 안 본다. 한 판이 세 시간대를 같은 번호로 한꺼번에 쓰기 때문에 시간대별로 세면
-     * 라벨이 한 시간대에만 있던 판에서 번호가 갈린다.
-     */
+    /** 품질 판정이 바뀌어 조회 대상에서 제외된 통계도 번호 할당 이력에는 포함한다. */
     private static final String SELECT_CURRENT_REVISION = """
         SELECT COALESCE(MAX(revision), 0)
-        FROM stop_demand_statistics
+        FROM demand_statistics_version
         WHERE route_version_id = :routeVersionId
           AND calculation_version = :calculationVersion
         """;
 
     /**
-     * 회수된 라벨을 (정류장, 한 시각) 으로 묶어 더한다.
+     * 평가가 완료된 예보를 정류장과 도착 시간별로 집계한다.
      *
-     * <p>평균이 아니라 합을 낸다. 순승차 비율이 평균의 비율이지 비율의 평균이 아니라서,
-     * 여기서 미리 나누면 접을 때 값이 달라진다. 접는 것은 StopDemandAggregator 가 한다.
-     *
-     * <p>정원은 열이 아니라 관측에서 유도한다. <b>그 차량이 보여 준 최대 잔여석</b>이 정원이다.
-     * 아무도 안 탄 순간이 관측에 한 번이라도 잡히면 그 잔여석이 곧 좌석 수다.
-     * 최소 1 로 막는 것은 잔여석이 내내 0 이던 차량에서 0 으로 나누지 않으려는 것이다.
-     *
-     * <p><b>지평 1 짜리 예보만 센다.</b> 한 통과 사건이 지평 열둘에 걸쳐 예보 행 열둘을 만들어서,
-     * 안 거르면 같은 사건이 열두 번 세어진다.
-     *
-     * <p>시각은 UTC 로 못박아 자른다. date_trunc 를 timestamptz 에 그냥 걸면 세션 타임존을 따라간다.
-     * 한국시는 정각 오프셋이라 UTC 로 잘라도 시각 경계가 같고, 이렇게 두면 세션 설정에 안 흔들린다.
-     * <b>시간대와 날짜 판정은 SQL 이 안 한다.</b> 그 규칙은 TimeSlot 과 주입받은 시계가 가진다.
-     * 여기서 같이 판정하면 규칙이 두 벌이 되고 어긋나는 순간을 아무도 못 잡는다.
-     *
-     * <p>도착 시각은 도착 관측이 딸린 판의 response_received_at 이다. 관측 시각의 권위가 거기 있다.
-     * 라벨은 응답을 받은 판에서만 나와서 그 시각이 비지 않는다.
-     *
-     * <p><b>정원도 기준 시각에 걸린다.</b> 정원이 그 차량이 보여 준 최대 잔여석이라, 기준 시각 뒤에 더 큰
-     * 잔여석이 들어오면 예전 라벨의 분모가 달라진다. 그러면 같은 기준 시각으로 다시 돌려도 다른 값이 나와서
-     * 세대를 고정한다는 말이 성립하지 않는다. 그래서 정원을 세는 관측도 판을 조인해 같은 시각으로 자른다.
+     * <p>같은 도착을 중복해서 세지 않도록 한 정류장 앞의 예보만 사용한다. 정원은 기준 시각까지
+     * 확인한 차량별 최대 잔여석으로 계산하고, 집계 대상은 현재 품질 조건을 통과한 자료로 제한한다.
+     * 도착 시각은 평가할 때 보관한 값을 사용한다. 날짜와 시간대 분류는 도메인 집계기가 담당한다.
      */
     private static final String SELECT_HOURLY_TOTALS = """
         WITH vehicle_capacity AS (
@@ -126,7 +89,7 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
             GROUP BY observation.vehicle_id
         )
         SELECT forecast.target_stop_order AS stop_order,
-               date_trunc('hour', arrival_batch.response_received_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+               date_trunc('hour', evaluation.arrived_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
                    AS arrived_hour_start,
                SUM(1 - forecast.seats_on_arrival::double precision / vehicle_capacity.capacity)
                    AS fill_rate_total,
@@ -140,10 +103,9 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
          AND target_stop.stop_order = forecast.target_stop_order
         JOIN vehicle_observation prediction
           ON prediction.id = forecast.vehicle_observation_id
-        JOIN vehicle_observation arrival
-          ON arrival.id = forecast.arrival_observation_id
-        JOIN observation_batch arrival_batch
-          ON arrival_batch.id = arrival.observation_batch_id
+        JOIN forecast_evaluation evaluation
+          ON evaluation.vehicle_observation_id = forecast.vehicle_observation_id
+         AND evaluation.target_stop_order = forecast.target_stop_order
         JOIN vehicle_capacity
           ON vehicle_capacity.vehicle_id = prediction.vehicle_id
         WHERE forecast.route_version_id = :routeVersionId
@@ -157,7 +119,17 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
         """;
 
 
-    /** 셀 한 줄. 세대 번호와 기준 시각과 계산 시각은 한 세대의 모든 행에 같은 값이 들어간다. */
+    private static final String INSERT_VERSION = """
+        INSERT INTO demand_statistics_version (
+            route_version_id, calculation_version, revision, data_until, computed_at,
+            quality_revision, cell_count, input_checkpoint
+        ) VALUES (
+            :routeVersionId, :calculationVersion, :revision, :dataUntil, :computedAt,
+            :qualityRevision, :cellCount, NULL
+        )
+        """;
+
+    /** 같은 버전에 속한 통계는 기준 시각과 품질 버전이 같다. */
     private static final String INSERT_CELL = """
         INSERT INTO stop_demand_statistics (
             route_version_id, stop_order, time_slot, calculation_version, revision,
@@ -166,29 +138,22 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
         ) VALUES (
             :routeVersionId, :stopOrder, :timeSlot, :calculationVersion, :revision,
             :averageFillRate, :averageNetBoardingRate, :sampleCount, :dayCount,
-            :dataUntil, :computedAt,
-            (SELECT q.quality_revision FROM route_version v
-             JOIN route q ON q.id = v.route_id WHERE v.id = :routeVersionId)
+            :dataUntil, :computedAt, :qualityRevision
         )
         """;
 
     private final JdbcClient jdbcClient;
+    private final RouteDataQualityAccess qualityAccess;
 
     public JdbcStopDemandStatisticsRepository(
-        JdbcClient jdbcClient
+        JdbcClient jdbcClient,
+        RouteDataQualityAccess qualityAccess
     ) {
         this.jdbcClient = jdbcClient;
+        this.qualityAccess = qualityAccess;
     }
 
-    /**
-     * 한 세대의 셀 전부.
-     *
-     * <p>세대가 하나도 없으면 세대 번호 0 에 빈 셀 목록으로 답한다. 예외로 알리지 않는다.
-     * 개편 직후 새 판본이 실제로 그 상태이고, 그때는 이웃 폴백만 돈다.
-     *
-     * <p><b>세대는 있는데 그 시간대의 셀만 없는 것은 다른 상태다.</b> 그때는 세대 번호가 그대로
-     * 나오고 셀 목록만 비어 있다. 예보 행에 어느 세대를 보고 냈는지가 남아야 나중에 따질 수 있다.
-     */
+    /** 사용할 통계가 없으면 버전 0과 빈 목록을 반환한다. */
     @Override
     public StopDemandStatistics readAsOf(
         final long routeVersionId,
@@ -196,17 +161,17 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
         String calculationVersion,
         Instant observedAt
     ) {
-        List<CellOfGeneration> rows = jdbcClient.sql(SELECT_CELLS)
+        List<VersionedCell> rows = jdbcClient.sql(SELECT_CELLS)
             .param("routeVersionId", routeVersionId)
             .param("timeSlot", storedTimeSlotOf(timeSlot))
             .param("calculationVersion", calculationVersion)
             .param("observedAt", offsetOf(observedAt))
-            .query((resultSet, rowNumber) -> new CellOfGeneration(
+            .query((resultSet, rowNumber) -> new VersionedCell(
                 resultSet.getInt("revision"),
                 cellOf(resultSet)))
             .list();
         List<StopDemandCell> cells = new ArrayList<>();
-        for (CellOfGeneration row : rows) {
+        for (VersionedCell row : rows) {
             if (row.cell() != null) {
                 cells.add(row.cell());
             }
@@ -231,9 +196,8 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
         final long routeVersionId,
         Instant dataUntil
     ) {
-        // read→aggregate→append 동안 판정 변경을 막는다. 호출 writer가 노선별 transaction을 연다.
-        jdbcClient.sql("SELECT id FROM route WHERE id = (SELECT route_id FROM route_version WHERE id = ?) FOR UPDATE")
-            .param(routeVersionId).query(Long.class).single();
+        // 호출한 응용 서비스의 트랜잭션이 끝날 때까지 품질 변경과 다른 통계 생성을 막는다.
+        qualityAccess.lock(routeVersionId);
         JdbcClient.StatementSpec statement = jdbcClient.sql(SELECT_HOURLY_TOTALS)
             .param("routeVersionId", routeVersionId)
             .param("dataUntil", offsetOf(dataUntil));
@@ -248,43 +212,46 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
             .list();
     }
 
-    /**
-     * 한 세대를 더한다. 옛 세대는 안 지운다.
-     *
-     * <p><b>transaction 은 세대 하나를 다 넣을 때까지 아무도 못 읽게 하려고 건다.</b> 없으면 셀마다
-     * 자동 커밋되고, 첫 행이 커밋되는 순간 {@link #readAsOf} 가 그 revision 을 가장 최근 세대로 잡는다.
-     * 그러면 몇 줄만 들어간 세대로 z 모집단이 만들어져 살아 있는 셀의 z 값이 통째로 밀린다.
-     *
-     * <p>부르는 배치가 아니라 여기에 건다. 배치가 자기 메서드를 부르는 구조라 거기서 걸면
-     * 프록시를 안 거쳐 transaction 이 안 열린다.
-     */
+    /** 버전 정보와 모든 셀을 같은 트랜잭션으로 저장해 일부만 공개되는 것을 막는다. */
     @Override
     @Transactional
     public void append(
-        StopDemandGeneration generation
+        DemandStatisticsVersion version
     ) {
-        for (StopDemandMeasurement measurement : generation.measurements()) {
-            insertCell(generation, measurement);
+        final long qualityRevision = qualityAccess.lock(version.routeVersionId());
+        jdbcClient.sql(INSERT_VERSION)
+            .param("routeVersionId", version.routeVersionId())
+            .param("calculationVersion", version.calculationVersion())
+            .param("revision", version.revision())
+            .param("dataUntil", offsetOf(version.dataUntil()))
+            .param("computedAt", offsetOf(version.computedAt()))
+            .param("qualityRevision", qualityRevision)
+            .param("cellCount", version.measurements().size())
+            .update();
+        for (StopDemandMeasurement measurement : version.measurements()) {
+            insertCell(version, measurement, qualityRevision);
         }
     }
 
     private void insertCell(
-        StopDemandGeneration generation,
-        StopDemandMeasurement measurement
+        DemandStatisticsVersion version,
+        StopDemandMeasurement measurement,
+        final long qualityRevision
     ) {
         StopDemandCell cell = measurement.cell();
         jdbcClient.sql(INSERT_CELL)
-            .param("routeVersionId", generation.routeVersionId())
+            .param("routeVersionId", version.routeVersionId())
             .param("stopOrder", cell.stopOrder())
             .param("timeSlot", storedTimeSlotOf(measurement.timeSlot()))
-            .param("calculationVersion", generation.calculationVersion())
-            .param("revision", generation.revision())
+            .param("calculationVersion", version.calculationVersion())
+            .param("revision", version.revision())
             .param("averageFillRate", cell.averageFillRate())
             .param("averageNetBoardingRate", cell.averageNetBoardingRate())
             .param("sampleCount", cell.sampleCount())
             .param("dayCount", cell.dayCount())
-            .param("dataUntil", offsetOf(generation.dataUntil()))
-            .param("computedAt", offsetOf(generation.computedAt()))
+            .param("dataUntil", offsetOf(version.dataUntil()))
+            .param("computedAt", offsetOf(version.computedAt()))
+            .param("qualityRevision", qualityRevision)
             .update();
     }
 
@@ -304,12 +271,12 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
             resultSet.getInt("day_count"));
     }
 
-    /** LEFT JOIN 이라 행은 늘 하나 이상이다. 비어 있으면 조회가 아예 안 돈 것이다. */
+    /** 조회 결과에 포함된 버전 번호를 반환한다. */
     private static int revisionOf(
-        List<CellOfGeneration> rows
+        List<VersionedCell> rows
     ) {
         if (rows.isEmpty()) {
-            return NO_GENERATION_YET;
+            return NO_STATISTICS_YET;
         }
         return rows.getFirst().revision();
     }
@@ -338,8 +305,8 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
         return timestamp.atOffset(ZoneOffset.UTC);
     }
 
-    /** 읽어 온 셀 하나와 그 셀이 속한 세대 번호. 한 세대의 행은 세대 번호가 다 같다. */
-    private record CellOfGeneration(
+    /** 통계 버전 번호와 해당 버전에 속한 셀. */
+    private record VersionedCell(
         int revision,
         StopDemandCell cell
     ) {

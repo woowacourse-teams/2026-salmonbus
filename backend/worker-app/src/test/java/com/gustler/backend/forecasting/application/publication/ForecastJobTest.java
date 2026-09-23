@@ -6,9 +6,11 @@ import com.gustler.backend.forecasting.domain.model.SeatDistribution;
 import com.gustler.backend.forecasting.domain.model.SeatForecastInput;
 import com.gustler.backend.forecasting.domain.model.SeatForecastModel;
 import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
-import com.gustler.backend.forecasting.infrastructure.quality.TripQualityRepository;
+import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.when;
 
 import com.gustler.backend.forecasting.domain.model.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.model.SupportedForecastScope;
@@ -34,10 +36,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 예보 배치가 판 하나를 예보로 채우고 닫는 것을 DB 까지 본다.
+ * 수집 배치의 예보 발행과 저장 결과를 함께 검증한다.
  *
- * <p>계수 번들이 없어 {@link SeatForecastModel} 구현이 아직 없다. 늘 같은 값을 내는 구현을
- * 테스트가 직접 올려서 예보 행의 값이 실행마다 달라지지 않게 한다.
+ * <p>테스트용 {@link SeatForecastModel}이 일정한 값을 반환하게 해 발행 결과를 확인한다.
  *
  * <p>{@code forecast.enabled} 를 켜야 배치 빈이 선다. 테스트 자신이 {@code @Transactional} 이고
  * {@link ForecastBatchWriter} 는 기본 전파라 바깥 transaction 에 참여한다. 테스트가 끝나면 같이 되돌아간다.
@@ -102,12 +103,12 @@ class ForecastJobTest {
         OffsetDateTime.parse("2026-08-19T11:14:04.911+09:00");
     private static final OffsetDateTime EMPTY_RESPONSE_RECEIVED_AT =
         OffsetDateTime.parse("2026-08-19T11:16:04.911+09:00");
-    private static final OffsetDateTime ALREADY_FORECAST_COMPLETED_AT =
+    private static final OffsetDateTime PREVIOUSLY_PUBLISHED_AT =
         OffsetDateTime.parse("2026-08-19T11:14:07.000+09:00");
 
-    // 편도 판정/별도 transaction은 전용 테스트에서 검증한다. 이 테스트의 미커밋 fixture를 유지한다.
+    // 품질 잠금은 전용 테스트에서 검증하고, 여기서는 발행에 기록할 품질 버전을 고정한다.
     @MockitoBean
-    private TripQualityRepository tripQuality;
+    private RouteDataQualityAccess routeDataQuality;
 
     @Autowired
     private PublishPendingForecastsService forecastJob;
@@ -126,7 +127,10 @@ class ForecastJobTest {
     @BeforeEach
     void 노선_판본과_정류장과_도는_배포와_관측을_먼저_저장한다() {
         seatForecastModel.forgetReceivedInputs();
+        when(routeDataQuality.lock(anyLong())).thenReturn(1L);
         final long routeId = insertRoute();
+        jdbcClient.sql("INSERT INTO route_data_quality(route_id, quality_revision) VALUES (?, 1)")
+            .param(routeId).update();
         routeVersionId = insertRouteVersion(routeId);
         for (int stopOrder = FIRST_STOP_ORDER; stopOrder <= LAST_STOP_ORDER; stopOrder++) {
             insertRouteStop(stopOrder);
@@ -154,19 +158,28 @@ class ForecastJobTest {
     }
 
     @Test
-    void 예보를_다_쓰면_판에_예보_완료_시각이_찍힌다() {
+    void 예보를_발행하면_발행_정보와_입력_확정_시각을_기록한다() {
         // when
         forecastJob.writeForecasts();
 
         // then
-        Instant actual = readForecastCompletedAt(observationBatchId);
-        assertThat(actual).isNotNull();
+        StoredPublication publication = readPublication(observationBatchId);
+        assertThat(publication.sourceAttemptNumber()).isEqualTo(1);
+        assertThat(publication.modelDeploymentId()).isEqualTo(modelDeploymentId);
+        assertThat(publication.statisticsRevision())
+            .isEqualTo(seatForecastModel.firstReceivedInput().statistics().revision());
+        assertThat(publication.qualityRevision()).isEqualTo(1);
+        assertThat(publication.observedAt()).isEqualTo(RESPONSE_RECEIVED_AT.toInstant());
+        assertThat(publication.predictionCount()).isEqualTo(TARGET_COUNT_AHEAD_OF_PASSED_STOP);
+        assertThat(readDistinctGeneratedAt()).containsExactly(publication.generatedAt());
+        assertThat(publication.publishedAt()).isNotNull();
+        assertThat(readInputConfirmedAt(observationBatchId)).isNotNull();
     }
 
     @Test
     void 이미_예보가_붙은_판은_다시_안_연다() {
         // given
-        markForecastCompleted(observationBatchId, ALREADY_FORECAST_COMPLETED_AT);
+        insertLegacyPublication(observationBatchId, PREVIOUSLY_PUBLISHED_AT);
 
         // when
         forecastJob.writeForecasts();
@@ -230,7 +243,7 @@ class ForecastJobTest {
     }
 
     @Test
-    void 차량이_한_대도_없던_판도_예보_완료로_닫힌다() {
+    void 차량이_없는_수집_배치도_사용한_모델과_함께_발행한다() {
         // given
         final long emptyBatchId =
             insertObservationBatch("11:16", EMPTY_RESPONSE_RECEIVED_AT, OUTCOME_WITHOUT_ROWS);
@@ -239,8 +252,14 @@ class ForecastJobTest {
         forecastJob.writeForecasts();
 
         // then
-        Instant actual = readForecastCompletedAt(emptyBatchId);
-        assertThat(actual).isNotNull();
+        StoredPublication publication = readPublication(emptyBatchId);
+        assertThat(publication.modelDeploymentId()).isEqualTo(modelDeploymentId);
+        assertThat(publication.qualityRevision()).isEqualTo(1);
+        assertThat(publication.predictionCount()).isZero();
+        assertThat(publication.observedAt()).isEqualTo(EMPTY_RESPONSE_RECEIVED_AT.toInstant());
+        assertThat(publication.generatedAt()).isNotNull();
+        assertThat(publication.publishedAt()).isNotNull();
+        assertThat(readInputConfirmedAt(emptyBatchId)).isNotNull();
     }
 
     @Test
@@ -253,7 +272,7 @@ class ForecastJobTest {
 
         // then
         UntouchedBatch actual =
-            new UntouchedBatch(countForecasts(), readForecastCompletedAt(observationBatchId));
+            new UntouchedBatch(countForecasts(), readPublishedAt(observationBatchId));
         assertThat(actual).isEqualTo(new UntouchedBatch(NO_FORECAST_ROW, null));
     }
 
@@ -378,20 +397,47 @@ class ForecastJobTest {
             .single();
     }
 
-    /** 아직 안 닫힌 판은 이 열이 비어 있다. 행은 하나뿐이므로 비어 있으면 값이 NULL 이라는 뜻이다. */
-    private Instant readForecastCompletedAt(
+    /** 아직 발행하지 않은 수집 배치는 발행 기록이 없다. */
+    private Instant readPublishedAt(
         final long batchId
     ) {
         return jdbcClient.sql("""
-                SELECT forecast_completed_at
-                FROM observation_batch
-                WHERE id = ?
+                SELECT published_at
+                FROM forecast_publication
+                WHERE source_batch_id = ?
                 """)
             .param(batchId)
             .query((resultSet, rowNumber) ->
-                instantOf(resultSet.getObject("forecast_completed_at", OffsetDateTime.class)))
+                instantOf(resultSet.getObject("published_at", OffsetDateTime.class)))
             .optional()
             .orElse(null);
+    }
+
+    private StoredPublication readPublication(final long batchId) {
+        return jdbcClient.sql("""
+                SELECT source_attempt_number, model_deployment_id, demand_statistics_revision,
+                       quality_revision, observed_at, generated_at, published_at, prediction_count
+                FROM forecast_publication WHERE source_batch_id = ?
+                """)
+            .param(batchId)
+            .query((resultSet, rowNumber) -> new StoredPublication(
+                resultSet.getInt("source_attempt_number"),
+                resultSet.getLong("model_deployment_id"),
+                resultSet.getInt("demand_statistics_revision"),
+                resultSet.getLong("quality_revision"),
+                instantOf(resultSet.getObject("observed_at", OffsetDateTime.class)),
+                instantOf(resultSet.getObject("generated_at", OffsetDateTime.class)),
+                instantOf(resultSet.getObject("published_at", OffsetDateTime.class)),
+                resultSet.getInt("prediction_count")))
+            .single();
+    }
+
+    private Instant readInputConfirmedAt(final long batchId) {
+        return jdbcClient.sql("SELECT input_confirmed_at FROM observation_batch WHERE id = ?")
+            .param(batchId)
+            .query((resultSet, rowNumber) ->
+                instantOf(resultSet.getObject("input_confirmed_at", OffsetDateTime.class)))
+            .single();
     }
 
     @Test
@@ -424,14 +470,22 @@ class ForecastJobTest {
         assertThat(actual.maximumSeatsEverObserved()).isEqualTo(SEATS_LEFT);
     }
 
-    private void markForecastCompleted(
+    private void insertLegacyPublication(
         final long batchId,
         OffsetDateTime completedAt
     ) {
         jdbcClient.sql("""
-                UPDATE observation_batch
-                SET forecast_completed_at = ?
-                WHERE id = ?
+                UPDATE observation_batch SET input_confirmed_at = ? WHERE id = ?
+                """)
+            .params(completedAt, batchId)
+            .update();
+        jdbcClient.sql("""
+                INSERT INTO forecast_publication (
+                    source_batch_id, source_attempt_number, route_version_id, observed_at,
+                    published_at, prediction_count, provenance
+                )
+                SELECT id, attempt_number, route_version_id, response_received_at, ?, 0, 'LEGACY_UNKNOWN'
+                FROM observation_batch WHERE id = ?
                 """)
             .params(completedAt, batchId)
             .update();
@@ -595,6 +649,18 @@ class ForecastJobTest {
         return "20500%04d".formatted(stopOrder);
     }
 
+    private record StoredPublication(
+        int sourceAttemptNumber,
+        long modelDeploymentId,
+        int statisticsRevision,
+        long qualityRevision,
+        Instant observedAt,
+        Instant generatedAt,
+        Instant publishedAt,
+        int predictionCount
+    ) {
+    }
+
     /** 차량 한 대에 쌓인 예보 줄 수. */
     private record VehicleForecastCount(
         long vehicleObservationId,
@@ -602,10 +668,10 @@ class ForecastJobTest {
     ) {
     }
 
-    /** 예보를 안 연 판의 상태. 예보 줄 수와 판의 예보 완료 시각 둘 다 본다. */
+    /** 발행하지 않은 수집 배치의 예측 건수와 발행 기록을 확인한다. */
     private record UntouchedBatch(
         long forecastCount,
-        Instant forecastCompletedAt
+        Instant publishedAt
     ) {
     }
 

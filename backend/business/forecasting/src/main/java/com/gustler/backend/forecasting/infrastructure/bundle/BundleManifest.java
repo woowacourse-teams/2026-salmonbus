@@ -17,7 +17,7 @@ import java.util.Map;
  * @param tensorDeclarations 계수 파일이 담은 배열의 이름과 크기·자료형. 코드가 아니라 여기가 정한다
  * @param dataThrough 이 계수를 학습한 자료가 어디까지인가. 응답의 trainedThrough 로 나간다
  */
-public record BundleManifest(
+record BundleManifest(
     String bundleSchemaVersion,
     String modelVersion,
     String releaseId,

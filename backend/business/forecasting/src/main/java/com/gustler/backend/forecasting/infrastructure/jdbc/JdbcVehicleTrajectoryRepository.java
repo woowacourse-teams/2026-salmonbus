@@ -45,46 +45,27 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
      */
     private static final Duration TRAJECTORY_HISTORY_WINDOW = Duration.ofMinutes(30);
 
-    /**
-     * 예보를 붙일 수 있는 판의 결말. 상류를 부르는 데 성공한 판만 예보 대상이다.
-     *
-     * <p>실패 갈래는 SAL-85 가 붙인다. 그때 이 목록에 안 들어가야 실패한 판이 영영
-     * 예보 대기로 남지 않는다. V1 의 ix_batch_forecast_ready 도 같은 두 값을 적고 있다.
-     *
-     * <p>{@code notBefore} 보다 오래된 판은 안 집는다. 관측한 지 오래된 판에 예보를 붙여도
-     * 회수 배치가 도착 후보를 예보를 낸 시각 뒤에서만 찾고, 그 간격이 90초를 넘으면 라벨이
-     * 전부 끊긴 것으로 닫혀서 학습에 남는 것이 없다. 조회 쪽도 5분이 지난 판을 안 쓴다.
-     * 두 쓸모가 모두 없는 판을 계산하면 예보 표에 끊긴 행만 쌓인다.
-     *
-     * <p>조건이 V5 의 ix_batch_awaiting_forecast 부분 조건과 글자가 같다. 더 붙인 조건은
-     * 그 인덱스 둘째 열의 범위라 정렬 없이 앞에서부터 읽고 끊는다.
-     */
+    /** 성공한 수집 배치 중 발행이 없고 신선도 기준을 만족하는 현재 시도를 읽는다. */
     private static final String SELECT_BATCHES_AWAITING_FORECAST = """
-        SELECT batch.id, batch.route_version_id, version.route_id, batch.response_received_at
+        SELECT batch.id, batch.route_version_id, version.route_id, batch.response_received_at, batch.attempt_number
         FROM observation_batch batch
         JOIN route_version version
           ON version.id = batch.route_version_id
         WHERE batch.route_version_id = :routeVersionId
-          AND batch.forecast_completed_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM forecast_publication p WHERE p.source_batch_id = batch.id)
           AND batch.response_received_at IS NOT NULL
           AND batch.response_received_at >= :notBefore
           AND batch.outcome IN ('SUCCESS_ROWS', 'SUCCESS_EMPTY')
-        ORDER BY batch.response_received_at
+        ORDER BY batch.response_received_at, batch.id
         LIMIT :limit
         """;
 
-    /**
-     * 창 밖으로 밀려난 지 얼마 안 된 판 가운데 가장 오래된 하나.
-     *
-     * <p>큐와 같은 조건에 관측 시각의 아래위만 다르게 끊어서 V5 의 ix_batch_awaiting_forecast 를
-     * 그대로 탄다. 인덱스 둘째 열의 범위라 아래쪽 끝으로 바로 내려가고 한 줄에서 끊는다.
-     * 옮겨 넣은 관측은 그 아래에 있어서 읽지도 않는다.
-     */
+    /** 최근 처리 범위에서 신선도 기준을 지난 미발행 배치의 가장 오래된 관측 시각. */
     private static final String SELECT_OLDEST_BATCH_LEFT_BEHIND = """
-        SELECT response_received_at
-        FROM observation_batch
-        WHERE route_version_id = :routeVersionId
-          AND forecast_completed_at IS NULL
+        SELECT batch.response_received_at
+        FROM observation_batch batch
+        WHERE batch.route_version_id = :routeVersionId
+          AND NOT EXISTS (SELECT 1 FROM forecast_publication p WHERE p.source_batch_id = batch.id)
           AND response_received_at IS NOT NULL
           AND response_received_at >= :from
           AND response_received_at < :until
@@ -198,7 +179,8 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
                 resultSet.getLong("id"),
                 resultSet.getLong("route_version_id"),
                 resultSet.getLong("route_id"),
-                instantOf(resultSet.getObject("response_received_at", OffsetDateTime.class))))
+                instantOf(resultSet.getObject("response_received_at", OffsetDateTime.class)),
+                resultSet.getInt("attempt_number")))
             .list();
     }
 

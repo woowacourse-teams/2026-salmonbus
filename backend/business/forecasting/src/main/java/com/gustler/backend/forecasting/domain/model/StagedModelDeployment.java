@@ -3,12 +3,7 @@ package com.gustler.backend.forecasting.domain.model;
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * 아직 안 도는 계수 배포 한 줄. 적재는 끝났고 승격을 기다린다.
- *
- * <p>열 이름과 같은 말로 담는다. 이 값을 만드는 것은 계수 묶음을 읽은 쪽이고,
- * 여기서는 어느 열에 무엇이 들어가는지만 안다.
- */
+/** 검증을 마치고 활성화를 기다리는 배포의 저장 정보다. */
 public record StagedModelDeployment(
     UUID deploymentKey,
     String releaseId,
@@ -23,13 +18,13 @@ public record StagedModelDeployment(
 
     public StagedModelDeployment {
         if (deploymentKey == null) {
-            throw new IllegalArgumentException("적재마다 다른 키가 있어야 한다");
+            throw new IllegalArgumentException("배포 요청마다 식별 키가 필요합니다");
         }
         if (bundleDigest == null || bundleDigest.length() != 64) {
-            throw new IllegalArgumentException("계수 묶음 요약값은 64자리다: " + bundleDigest);
+            throw new IllegalArgumentException("계수 파일의 SHA-256 값은 64자리여야 합니다: " + bundleDigest);
         }
         if (dataUntil == null) {
-            throw new IllegalArgumentException("학습 자료가 어디까지인지 있어야 한다");
+            throw new IllegalArgumentException("학습 자료의 기준 시각이 필요합니다");
         }
     }
 }

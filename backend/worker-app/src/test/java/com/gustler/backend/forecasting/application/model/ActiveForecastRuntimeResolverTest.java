@@ -1,188 +1,96 @@
 package com.gustler.backend.forecasting.application.model;
 
-import com.gustler.backend.forecasting.domain.model.RuntimeSnapshot;
-import com.gustler.backend.forecasting.infrastructure.bundle.DummyBundle;
-import com.gustler.backend.forecasting.infrastructure.bundle.LoadedBundle;
-
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.gustler.backend.forecasting.domain.model.ActiveModelDeployment;
 import com.gustler.backend.forecasting.domain.model.ModelDeploymentRepository;
-import com.gustler.backend.forecasting.domain.model.StagedModelDeployment;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import com.gustler.backend.forecasting.domain.model.ModelIdentity;
+import com.gustler.backend.forecasting.domain.model.ModelRelease;
+import com.gustler.backend.forecasting.domain.model.SeatForecastModel;
+import com.gustler.backend.forecasting.domain.model.SupportedForecastScope;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
-/**
- * 도는 배포와 올라온 계수의 신원이 안 섞이는지 본다.
- *
- * <p>동키가 PR #47 에 남긴 우려가 이 자리다. 둘을 따로 읽으면 승격 순간에 ACTIVE 행은 B 인데
- * 계산은 A 계수로 하고 DB 에는 B 예보라고 적는 상태가 된다.
- */
 class ActiveForecastRuntimeResolverTest {
-
-    @TempDir
-    Path directory;
+    private static final SupportedForecastScope SCOPE = new SupportedForecastScope(List.of("1650", "3330"));
+    private static final ModelIdentity IDENTITY = new ModelIdentity("release-A", "seat-distribution-a18", "model-v1",
+        "a".repeat(64), "seat-distribution-0-70", "feature-v1", SCOPE.digest(), Instant.parse("2026-09-01T00:00:00Z"));
 
     @Test
-    void 도는_배포가_없으면_아무것도_안_낸다() {
-        // given
-        LoadedBundleHolder bundles = holderOf(loaded());
-
-        // when
-        Optional<RuntimeSnapshot> actual = resolver(null, bundles).resolveActive();
-
-        // then
-        assertThat(actual).isEmpty();
+    void 활성_배포가_없으면_모델을_반환하지_않는다() {
+        var holder = new LoadedModelRegistry();
+        holder.register(release(IDENTITY));
+        assertThat(resolver(null, holder).resolveActive()).isEmpty();
     }
 
     @Test
-    void 계수가_안_올라와_있으면_아무것도_안_낸다() {
-        // given
-        LoadedBundle bundle = loaded();
-
-        // when
-        Optional<RuntimeSnapshot> actual =
-            resolver(deploymentOf(bundle), new LoadedBundleHolder()).resolveActive();
-
-        // then
-        assertThat(actual).isEmpty();
+    void 활성_배포가_있어도_모델이_준비되지_않으면_반환하지_않는다() {
+        assertThat(resolver(new ActiveModelDeployment(7, IDENTITY), new LoadedModelRegistry()).resolveActive()).isEmpty();
     }
 
     @Test
-    void 배포_행과_계수의_신원이_같으면_한_덩어리로_낸다() {
-        // given
-        LoadedBundle bundle = loaded();
+    void 전체_식별_정보가_같으면_해당_모델을_반환한다() {
+        var release = release(IDENTITY);
+        var holder = new LoadedModelRegistry();
+        holder.register(release);
+        var result = resolver(new ActiveModelDeployment(7, IDENTITY), holder).resolveActive().orElseThrow();
+        assertThat(result.deploymentId()).isEqualTo(7);
+        assertThat(result.model()).isSameAs(release.model());
+        assertThat(result.dataUntil()).isEqualTo(IDENTITY.dataUntil());
+    }
 
-        // when
-        Optional<RuntimeSnapshot> actual =
-            resolver(deploymentOf(bundle), holderOf(bundle)).resolveActive();
-
-        // then
-        assertThat(actual).map(RuntimeSnapshot::bundleDigest).contains(bundle.bundleDigest());
+    @ParameterizedTest
+    @MethodSource("differentIdentities")
+    void 식별_정보의_어느_항목이라도_다르면_대체_모델을_사용하지_않는다(ModelIdentity identity) {
+        var holder = new LoadedModelRegistry();
+        holder.register(release(IDENTITY));
+        assertThat(resolver(new ActiveModelDeployment(7, identity), holder).resolveActive()).isEmpty();
     }
 
     @Test
-    void 배포_행의_출시_식별자가_올라온_계수와_다르면_아무것도_안_낸다() {
-        // given ACTIVE 행은 B 인데 메모리에는 A 계수가 올라와 있는 상태다
-        LoadedBundle bundle = loaded();
-        ActiveModelDeployment other = new ActiveModelDeployment(
-            7L, bundle.featureContractVersion(), "other-release-0002", bundle.bundleDigest());
+    void 같은_digest의_다른_모델을_준비해도_기존_모델과_계산_참조를_유지한다() {
+        var holder = new LoadedModelRegistry();
+        var first = release(IDENTITY);
+        holder.register(first);
+        var resolver = resolver(new ActiveModelDeployment(7, IDENTITY), holder);
+        var snapshot = resolver.resolveActive().orElseThrow();
+        var nextIdentity = differentIdentities().findFirst().orElseThrow();
 
-        // when
-        Optional<RuntimeSnapshot> actual = resolver(other, holderOf(bundle)).resolveActive();
+        holder.register(release(nextIdentity));
 
-        // then
-        assertThat(actual).isEmpty();
+        assertThat(holder.size()).isEqualTo(2);
+        assertThat(holder.find(IDENTITY)).contains(first);
+        assertThat(snapshot.model()).isSameAs(first.model());
+        assertThat(resolver.resolveActive().orElseThrow().model()).isSameAs(snapshot.model());
     }
 
-    @Test
-    void 배포_행의_계수_요약값이_올라온_계수와_다르면_아무것도_안_낸다() {
-        // given
-        LoadedBundle bundle = loaded();
-        ActiveModelDeployment other = new ActiveModelDeployment(
-            7L, bundle.featureContractVersion(), bundle.releaseId(), "a".repeat(64));
-
-        // when
-        Optional<RuntimeSnapshot> actual = resolver(other, holderOf(bundle)).resolveActive();
-
-        // then
-        assertThat(actual).isEmpty();
+    private static Stream<ModelIdentity> differentIdentities() {
+        var i = IDENTITY;
+        return Stream.of(
+            new ModelIdentity("release-B", i.modelKey(), i.modelVersion(), i.bundleDigest(), i.predictionTargetVersion(), i.calculationVersion(), i.supportedScopeDigest(), i.dataUntil()),
+            new ModelIdentity(i.releaseId(), "other-model", i.modelVersion(), i.bundleDigest(), i.predictionTargetVersion(), i.calculationVersion(), i.supportedScopeDigest(), i.dataUntil()),
+            new ModelIdentity(i.releaseId(), i.modelKey(), "model-v2", i.bundleDigest(), i.predictionTargetVersion(), i.calculationVersion(), i.supportedScopeDigest(), i.dataUntil()),
+            new ModelIdentity(i.releaseId(), i.modelKey(), i.modelVersion(), "b".repeat(64), i.predictionTargetVersion(), i.calculationVersion(), i.supportedScopeDigest(), i.dataUntil()),
+            new ModelIdentity(i.releaseId(), i.modelKey(), i.modelVersion(), i.bundleDigest(), "other-target", i.calculationVersion(), i.supportedScopeDigest(), i.dataUntil()),
+            new ModelIdentity(i.releaseId(), i.modelKey(), i.modelVersion(), i.bundleDigest(), i.predictionTargetVersion(), "feature-v2", i.supportedScopeDigest(), i.dataUntil()),
+            new ModelIdentity(i.releaseId(), i.modelKey(), i.modelVersion(), i.bundleDigest(), i.predictionTargetVersion(), i.calculationVersion(), "b".repeat(64), i.dataUntil()),
+            new ModelIdentity(i.releaseId(), i.modelKey(), i.modelVersion(), i.bundleDigest(), i.predictionTargetVersion(), i.calculationVersion(), i.supportedScopeDigest(), i.dataUntil().plusSeconds(1)));
     }
 
-    @Test
-    void 배포_행의_입력_규칙_버전이_올라온_계수와_다르면_아무것도_안_낸다() {
-        // given 계수는 같은데 입력을 만드는 규칙이 다르면 다른 뜻의 입력에 계수를 끼우게 된다
-        LoadedBundle bundle = loaded();
-        ActiveModelDeployment other = new ActiveModelDeployment(
-            7L, "seat-feature-contract-v9", bundle.releaseId(), bundle.bundleDigest());
-
-        // when
-        Optional<RuntimeSnapshot> actual = resolver(other, holderOf(bundle)).resolveActive();
-
-        // then
-        assertThat(actual).isEmpty();
+    private static ModelRelease release(ModelIdentity identity) {
+        return new ModelRelease(identity, SCOPE, mock(SeatForecastModel.class));
     }
 
-    @Test
-    void 승격이_일어나도_먼저_받아_든_것은_같은_계수를_가리킨다() {
-        // given
-        LoadedBundle first = loaded();
-        LoadedBundleHolder bundles = holderOf(first);
-        RuntimeSnapshot taken =
-            resolver(deploymentOf(first), bundles).resolveActive().orElseThrow();
-
-        // when 도중에 다른 계수가 올라온다
-        bundles.add(loadedInto(directory.resolve("next")));
-
-        // then 이미 받아 든 것은 안 바뀐다
-        assertThat(taken.bundleDigest()).isEqualTo(first.bundleDigest());
-    }
-
-    private ActiveForecastRuntimeResolver resolver(
-        ActiveModelDeployment deployment,
-        LoadedBundleHolder bundles
-    ) {
-        return new ActiveForecastRuntimeResolver(repositoryOf(deployment), bundles);
-    }
-
-    private static ModelDeploymentRepository repositoryOf(
-        ActiveModelDeployment deployment
-    ) {
-        return new ModelDeploymentRepository() {
-
-            @Override
-            public Optional<ActiveModelDeployment> findActive() {
-                return Optional.ofNullable(deployment);
-            }
-
-            @Override
-            public long stage(
-                StagedModelDeployment staged
-            ) {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public boolean promoteToActive(
-                final long deploymentId
-            ) {
-                throw new UnsupportedOperationException();
-            }
-        };
-    }
-
-    private static ActiveModelDeployment deploymentOf(
-        LoadedBundle bundle
-    ) {
-        return new ActiveModelDeployment(
-            7L, bundle.featureContractVersion(), bundle.releaseId(), bundle.bundleDigest());
-    }
-
-    private static LoadedBundleHolder holderOf(
-        LoadedBundle bundle
-    ) {
-        LoadedBundleHolder bundles = new LoadedBundleHolder();
-        bundles.add(bundle);
-        return bundles;
-    }
-
-    private LoadedBundle loaded() {
-        return loadedInto(directory.resolve("current"));
-    }
-
-    private static LoadedBundle loadedInto(
-        Path directory
-    ) {
-        try {
-            Files.createDirectories(directory);
-        } catch (IOException error) {
-            throw new UncheckedIOException(error);
-        }
-        return LoadedBundle.from(DummyBundle.valid().writeTo(directory));
+    private static ActiveForecastRuntimeResolver resolver(ActiveModelDeployment deployment, LoadedModelRegistry holder) {
+        ModelDeploymentRepository repository = mock(ModelDeploymentRepository.class);
+        when(repository.findActive()).thenReturn(Optional.ofNullable(deployment));
+        return new ActiveForecastRuntimeResolver(repository, holder);
     }
 }

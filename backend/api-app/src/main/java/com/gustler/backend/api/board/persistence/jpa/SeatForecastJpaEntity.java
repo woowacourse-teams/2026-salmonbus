@@ -20,6 +20,10 @@ public class SeatForecastJpaEntity {
     private SeatForecastJpaId id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "publication_id", nullable = false)
+    private ForecastPublicationJpaEntity publication;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(
         name = "vehicle_observation_id",
         insertable = false,

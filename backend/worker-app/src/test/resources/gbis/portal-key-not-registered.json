@@ -1,9 +1,0 @@
-{
-  "OpenAPI_ServiceResponse": {
-    "cmmMsgHeader": {
-      "errMsg": "SERVICE_KEY_IS_NOT_REGISTERED_ERROR",
-      "returnAuthMsg": "등록되지 않은 서비스키",
-      "returnReasonCode": "30"
-    }
-  }
-}

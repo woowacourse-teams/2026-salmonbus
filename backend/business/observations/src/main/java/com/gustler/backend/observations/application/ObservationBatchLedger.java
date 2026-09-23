@@ -1,107 +1,75 @@
 package com.gustler.backend.observations.application;
 
 import com.gustler.backend.gbis.api.GbisLocationResult;
-import com.gustler.backend.observations.domain.ObservationAttempt;
+import com.gustler.backend.gbis.api.GbisLocationResult.NoVehicles;
+import com.gustler.backend.gbis.api.GbisLocationResult.Success;
+import com.gustler.backend.observations.domain.CollectionAttemptToken;
+import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.domain.ObservationBatchConclusion;
 import com.gustler.backend.observations.domain.ObservationBatchReservation;
 import com.gustler.backend.observations.domain.ObservationRepository;
 import com.gustler.backend.quota.api.ApiCallQuota;
-
-import com.gustler.backend.gbis.api.GbisLocationResult.NoVehicles;
-import com.gustler.backend.gbis.api.GbisLocationResult.Success;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * 위치정보 호출 한 판의 사다리.
- *
- * <p>자리를 잡고 → 보내고 → 닫는다. 각 칸이 묶음 행에 남아서, 프로세스가 중간에 죽어도
- * 그 판이 어디까지 갔는지 알아본다. 특히 "자리를 잡았는데 안 보냈다"는 죽은 프로세스가
- * 남길 수 없는 기록이라, 행을 미리 열어두는 것 말고는 남길 방법이 없다.
- */
+/** 외부 호출 전 예약과 전송 기록, 호출 후 결과 저장의 트랜잭션을 관리한다. */
 @Component
 public class ObservationBatchLedger {
+    private final ApiCallQuota callQuota;
+    private final ObservationRepository observations;
+    private final ObservationLoader loader;
+    private final CollectionResponseMapper responses;
 
-    private final ApiCallQuota callQuotaLedger;
-    private final ObservationRepository observationRepository;
-    private final ObservationLoader observationLoader;
-
-    public ObservationBatchLedger(
-        ApiCallQuota callQuotaLedger,
-        ObservationRepository observationRepository,
-        ObservationLoader observationLoader
-    ) {
-        this.callQuotaLedger = callQuotaLedger;
-        this.observationRepository = observationRepository;
-        this.observationLoader = observationLoader;
+    public ObservationBatchLedger(ApiCallQuota callQuota, ObservationRepository observations,
+                                  ObservationLoader loader, CollectionResponseMapper responses) {
+        this.callQuota = callQuota;
+        this.observations = observations;
+        this.loader = loader;
+        this.responses = responses;
     }
 
-    /**
-     * 자리를 먼저 잡고 판을 연다. 못 잡으면 안 보냈다는 판을 열고 거짓을 준다.
-     *
-     * <p>제 트랜잭션에서 돈다. 자리와 판이 같이 커밋되므로 "쓴 횟수는 올랐는데 판이 없다" 가 안 생긴다.
-     * 판 id 를 받기 전에는 호출을 못 보내니 여기까지 되돌아가도 상류를 부른 적이 없다.
-     * 커밋된 뒤로는 되돌리지 않는다. 안 보냈을 수도 있는 호출을 안 썼다고 치면 다음 시도가 같은 자리를 또 쓴다.
-     */
+    /** 수집 계획과 호출 횟수를 함께 예약한다. 실패하면 두 변경 모두 롤백한다. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public ObservationBatchReservation reserve(
-        ObservationAttempt attempt,
-        OffsetDateTime reservedAt
-    ) {
-        if (callQuotaLedger.reserveLocation(reservedAt)) {
-            return new ObservationBatchReservation(observationRepository.openReserved(attempt), true);
+    public ObservationBatchReservation reserve(CollectionPlan plan, OffsetDateTime reservedAt) {
+        observations.lockPlan(plan);
+        if (callQuota.reserveLocation(reservedAt)) {
+            return new ObservationBatchReservation(observations.openReserved(plan), true);
         }
-        return new ObservationBatchReservation(observationRepository.openNotReserved(attempt), false);
+        return new ObservationBatchReservation(observations.openNotReserved(plan), false);
     }
 
-    /**
-     * 보내기 직전. 자리를 잡은 뒤 한국 자정이 지났으면 새 날짜 자리를 다시 잡는다.
-     * 못 잡으면 보내지 않고 거짓을 준다. 그 판은 자리를 잡고 그만둔 것으로 닫는다.
-     */
+    /** 한국 자정을 지났으면 새 날짜의 한도도 확보한 뒤 전송 사실을 별도로 커밋한다. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean markDispatching(
-        final long batchId,
-        OffsetDateTime reservedAt,
-        OffsetDateTime requestedAt
-    ) {
-        if (!callQuotaLedger.ensureLocationReservation(reservedAt, requestedAt)) {
-            observationRepository.abandonBeforeSend(batchId);
+    public boolean markDispatching(CollectionAttemptToken token, OffsetDateTime reservedAt,
+                                   OffsetDateTime requestedAt) {
+        if (!observations.isAwaitingDispatch(token)) {
             return false;
         }
-        observationRepository.markDispatching(batchId, requestedAt);
+        if (!callQuota.ensureLocationReservation(reservedAt, requestedAt)) {
+            observations.abandonBeforeSend(token);
+            return false;
+        }
+        observations.markDispatching(token, requestedAt);
         return true;
     }
 
     @Transactional
-    public void abandonBeforeSend(
-        final long batchId
-    ) {
-        observationRepository.abandonBeforeSend(batchId);
+    public void abandonBeforeSend(CollectionAttemptToken token) {
+        observations.abandonBeforeSend(token);
     }
 
-    /**
-     * 응답을 결말로 옮겨 판을 닫는다. 응답이 온 판은 어느 갈래든 여기 하나로 들어온다.
-     *
-     * <p>상류가 정상으로 답했으면 관측까지 같이 쌓는다. 그 순간 차가 한 대도 없었어도
-     * "상류가 준 행이 0" 이라는 사실은 남겨야 해서 빈 목록으로 같은 길을 탄다.
-     */
+    /** 관측 저장과 수집 완료, 필요한 품질 조사 등록을 한 트랜잭션에서 수행한다. */
     @Transactional
-    public void conclude(
-        final long batchId,
-        GbisLocationResult result,
-        OffsetDateTime responseReceivedAt
-    ) {
-        ObservationBatchConclusion conclusion = ObservationBatchConclusion.from(result);
-
+    public void conclude(CollectionAttemptToken token, GbisLocationResult result,
+                         OffsetDateTime responseReceivedAt) {
+        ObservationBatchConclusion conclusion = responses.conclusionOf(result);
         switch (result) {
-            case Success success ->
-                observationLoader.load(batchId, conclusion, success.buses(), responseReceivedAt);
-            case NoVehicles ignored ->
-                observationLoader.load(batchId, conclusion, List.of(), responseReceivedAt);
-            default -> observationRepository.concludeWithoutRows(batchId, conclusion, responseReceivedAt);
+            case Success success -> loader.load(token, conclusion, success.buses(), responseReceivedAt);
+            case NoVehicles ignored -> loader.load(token, conclusion, List.of(), responseReceivedAt);
+            default -> observations.concludeWithoutRows(token, conclusion, responseReceivedAt);
         }
     }
 }

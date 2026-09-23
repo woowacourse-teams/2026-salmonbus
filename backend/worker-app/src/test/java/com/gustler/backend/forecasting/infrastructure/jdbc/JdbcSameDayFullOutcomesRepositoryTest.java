@@ -5,8 +5,9 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
-import com.gustler.backend.forecasting.domain.evaluation.ForecastSettlement;
+import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomeCount;
 import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesService;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
@@ -62,13 +63,16 @@ class JdbcSameDayFullOutcomesRepositoryTest {
     private JdbcSameDayFullOutcomesRepository repository;
 
     @Autowired
-    private JdbcSeatForecastRepository seatForecastRepository;
+    private JdbcForecastEvaluationRepository evaluationRepository;
 
     @Autowired
     private SameDayFullOutcomesService service;
 
     @Autowired
     private JdbcClient jdbcClient;
+
+    @Autowired
+    private RouteDataQualityAccess qualityAccess;
 
     private long routeId;
     private long routeVersionId;
@@ -80,6 +84,7 @@ class JdbcSameDayFullOutcomesRepositoryTest {
     void 노선_판본과_정류소와_모델과_관측을_먼저_저장한다() {
         routeId = insertRoute();
         routeVersionId = insertRouteVersion(routeId, CONTENT_DIGEST, RESPONSE_RECEIVED_AT);
+        qualityAccess.lockByRoute(routeId);
         insertRouteStops(routeVersionId);
         modelDeploymentId = insertModelDeployment();
         observationBatchId = insertObservationBatch(routeVersionId, "2026-08-19T11:14", RESPONSE_RECEIVED_AT);
@@ -192,7 +197,7 @@ class JdbcSameDayFullOutcomesRepositoryTest {
     @Test
     void 아직_도착이_확인_안_된_예보는_안_센다() {
         // given
-        seatForecastRepository.save(List.of(forecastOf(vehicleObservationId, routeVersionId, RAW_FULL_CHANCE)));
+        saveForecasts(List.of(forecastOf(vehicleObservationId, routeVersionId, RAW_FULL_CHANCE)));
 
         // when
         List<SameDayFullOutcomeCount> actual =
@@ -227,8 +232,8 @@ class JdbcSameDayFullOutcomesRepositoryTest {
         final long laterArrivalId = insertObservation(
             insertObservationBatch(laterVersionId, "2026-08-19T11:36", ARRIVAL_RESPONSE_RECEIVED_AT.plusMinutes(16)),
             laterVersionId, VEHICLE_204000206, 0, TARGET_STOP_ORDER);
-        seatForecastRepository.save(List.of(forecastOf(laterObservationId, laterVersionId, OTHER_RAW_FULL_CHANCE)));
-        seatForecastRepository.settle(List.of(new ForecastSettlement(
+        saveForecasts(List.of(forecastOf(laterObservationId, laterVersionId, OTHER_RAW_FULL_CHANCE)));
+        evaluationRepository.settle(List.of(ForecastEvaluation.completed(
             laterObservationId, TARGET_STOP_ORDER,
             new ArrivalLabel.Settled(laterArrivalId, SEATS_ON_ARRIVAL_WHEN_NOT_FULL), SCORED_AT)));
 
@@ -248,7 +253,7 @@ class JdbcSameDayFullOutcomesRepositoryTest {
         assertThat(repository.findCounts(routeId, ARRIVAL_DAY)).hasSize(1);
 
         // when
-        jdbcClient.sql("UPDATE route SET quality_revision = quality_revision + 1 WHERE id = ?")
+        jdbcClient.sql("UPDATE route_data_quality SET quality_revision = quality_revision + 1 WHERE route_id = ?")
             .param(routeId).update();
 
         // then
@@ -261,9 +266,11 @@ class JdbcSameDayFullOutcomesRepositoryTest {
     void 새_판정_버전의_결과를_더할_때_이전_버전의_건수는_합산하지_않는다() {
         // given
         repository.add(settleAsFull(vehicleObservationId, RAW_FULL_CHANCE));
-        jdbcClient.sql("UPDATE route SET quality_revision = quality_revision + 1 WHERE id = ?")
-            .param(routeId).update();
-        long other = insertObservation(observationBatchId, routeVersionId, VEHICLE_204000207, 1, PASSED_STOP_ORDER);
+        assertThat(jdbcClient.sql("UPDATE route_data_quality SET quality_revision = quality_revision + 1 WHERE route_id = ?")
+            .param(routeId).update()).isEqualTo(1);
+        // 품질 변경 후의 예측은 새 수집 배치로 발행한다. 기존 발행의 품질 버전은 변경하지 않는다.
+        final long currentBatch = insertObservationBatch(routeVersionId, "quality-revised", RESPONSE_RECEIVED_AT);
+        final long other = insertObservation(currentBatch, routeVersionId, VEHICLE_204000207, 0, PASSED_STOP_ORDER);
         SettledForecast current = settleWithSeats(other, OTHER_RAW_FULL_CHANCE, SEATS_ON_ARRIVAL_WHEN_NOT_FULL);
 
         // when
@@ -291,7 +298,7 @@ class JdbcSameDayFullOutcomesRepositoryTest {
     @Test
     void 원본이_비어_있으면_같은_날짜와_품질_버전에서는_한번만_원본을_센다() {
         // given
-        var observedRepository = spy(new JdbcSameDayFullOutcomesRepository(jdbcClient));
+        var observedRepository = spy(new JdbcSameDayFullOutcomesRepository(jdbcClient, qualityAccess));
         var observedService = new SameDayFullOutcomesService(observedRepository);
 
         // when
@@ -309,7 +316,7 @@ class JdbcSameDayFullOutcomesRepositoryTest {
     @Test
     void 빈_집계를_기록한_뒤_첫_실제_결과가_들어오면_원본_재집계_없이_한건을_더한다() {
         // given
-        var observedRepository = spy(new JdbcSameDayFullOutcomesRepository(jdbcClient));
+        var observedRepository = spy(new JdbcSameDayFullOutcomesRepository(jdbcClient, qualityAccess));
         var observedService = new SameDayFullOutcomesService(observedRepository);
         observedService.outcomesFor(routeId, ARRIVED_AT);
         var settled = settleAsFull(vehicleObservationId, RAW_FULL_CHANCE);
@@ -337,15 +344,19 @@ class JdbcSameDayFullOutcomesRepositoryTest {
         final double rawFullChance,
         final int seatsOnArrival
     ) {
-        seatForecastRepository.save(List.of(forecastOf(observationId, routeVersionId, rawFullChance)));
+        saveForecasts(List.of(forecastOf(observationId, routeVersionId, rawFullChance)));
         final long arrivalBatchId = insertObservationBatch(
             routeVersionId, "2026-08-19T11:20-" + observationId, ARRIVAL_RESPONSE_RECEIVED_AT);
         final long arrivalObservationId =
             insertObservation(arrivalBatchId, routeVersionId, jdbcClient.sql("SELECT vehicle_id FROM vehicle_observation WHERE id = ?")
                 .param(observationId).query(String.class).single(), 0, TARGET_STOP_ORDER);
-        return seatForecastRepository.settle(List.of(new ForecastSettlement(
+        return evaluationRepository.settle(List.of(ForecastEvaluation.completed(
             observationId, TARGET_STOP_ORDER,
             new ArrivalLabel.Settled(arrivalObservationId, seatsOnArrival), SCORED_AT))).getFirst();
+    }
+
+    private void saveForecasts(List<SeatForecast> forecasts) {
+        ForecastEvaluationTestData.saveForecasts(jdbcClient, forecasts);
     }
 
     private SeatForecast forecastOf(

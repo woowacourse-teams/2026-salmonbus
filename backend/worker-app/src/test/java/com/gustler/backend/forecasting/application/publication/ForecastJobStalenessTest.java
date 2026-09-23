@@ -271,7 +271,8 @@ class ForecastJobStalenessTest {
             routeVersionRepository,
             forecastRuntime,
             forecastBatchWriter,
-            new ForecastPolicy(staleness, 20, 3000, 400),
+            new ForecastPolicy(
+                staleness, 20, 3000, 400),
             Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
@@ -295,6 +296,7 @@ class ForecastJobStalenessTest {
     }
 
     private ForecastPolicy properties() {
-        return new ForecastPolicy(STALENESS, 20, 3000, 400);
+        return new ForecastPolicy(
+            STALENESS, 20, 3000, 400);
     }
 }

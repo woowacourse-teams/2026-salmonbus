@@ -1,7 +1,7 @@
 package com.gustler.backend.quota.application;
 
-import com.gustler.backend.quota.domain.CallQuota;
 import com.gustler.backend.quota.api.ApiCallQuota;
+import com.gustler.backend.quota.domain.CallQuota;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -183,6 +183,20 @@ class CallQuotaLedgerTest {
     }
 
     @Test
+    void 자정_재예약도_호출자_트랜잭션과_함께_롤백하고_전날_예약은_보존한다() {
+        ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
+
+        transactionTemplate.executeWithoutResult(status -> {
+            assertThat(ledger.ensureLocationReservation(KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT))
+                .isTrue();
+            status.setRollbackOnly();
+        });
+
+        assertThat(reservedCallsOn(KOREA_8_28, CallQuota.BUS_LOCATION)).isEqualTo(1);
+        assertThat(quotaRowCountOn(KOREA_8_29, CallQuota.BUS_LOCATION)).isZero();
+    }
+
+    @Test
     void 한_번에_두_자리를_잡으면_쓴_횟수가_2가_된다() {
         // when
         ledger.reserveRouteCatalog(KOREA_8_28_LATE_NIGHT, TWO_CALLS);
@@ -213,6 +227,22 @@ class CallQuotaLedgerTest {
 
         // then
         assertThat(reservedCallsOn(KOREA_8_28, CallQuota.BUS_ROUTE)).isEqualTo(NO_SEAT_LEFT);
+    }
+
+    @Test
+    void 기존_장부는_첫_예약의_한도를_계속_사용한다() {
+        insertQuota(CallQuota.BUS_ROUTE, KOREA_8_28, 0, TWO_CALLS);
+
+        assertThat(ledger.reserveRouteCatalog(KOREA_8_28_LATE_NIGHT, TWO_CALLS)).isTrue();
+        assertThat(ledger.reserveRouteCatalog(KOREA_8_28_LATE_NIGHT, 1)).isFalse();
+
+        assertThat(reservedCallsOn(KOREA_8_28, CallQuota.BUS_ROUTE)).isEqualTo(TWO_CALLS);
+        assertThat(jdbcClient.sql("""
+                SELECT daily_limit FROM daily_call_quota
+                WHERE provider = ? AND api_service = ? AND kst_date = ?
+                """)
+            .params(CallQuota.BUS_ROUTE.provider(), CallQuota.BUS_ROUTE.apiService(), KOREA_8_28)
+            .query(Integer.class).single()).isEqualTo(TWO_CALLS);
     }
 
     @Test
@@ -249,6 +279,14 @@ class CallQuotaLedgerTest {
 
         // then
         assertThat(reservedCallsOn(KOREA_8_28, CallQuota.BUS_LOCATION)).isEqualTo(ONE_SEAT_LEFT);
+    }
+
+    @Test
+    void 빈_장부에_동시에_예약해도_한_행에서_두_호출을_센다() throws Exception {
+        assertThat(reserveAtTheSameMoment()).containsExactly(true, true);
+
+        assertThat(quotaRowCountOn(KOREA_8_28, CallQuota.BUS_LOCATION)).isEqualTo(1);
+        assertThat(reservedCallsOn(KOREA_8_28, CallQuota.BUS_LOCATION)).isEqualTo(2);
     }
 
     private List<Boolean> reserveAtTheSameMoment() throws Exception {

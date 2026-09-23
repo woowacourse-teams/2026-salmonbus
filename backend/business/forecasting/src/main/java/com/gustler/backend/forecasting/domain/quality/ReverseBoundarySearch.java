@@ -5,20 +5,20 @@ import com.gustler.backend.forecasting.domain.quality.OneWayTripClassifier.Route
 import java.time.Duration;
 import java.util.Objects;
 
-public final class ReverseBoundarySearch {
+final class ReverseBoundarySearch {
     private final Route route;
     private Observation anchor;
     private Observation candidate;
     private boolean boundaryConfirmed;
 
-    public ReverseBoundarySearch(Route route, Observation anchor, Observation candidate) {
+    ReverseBoundarySearch(Route route, Observation anchor, Observation candidate) {
         this.route = route;
         this.anchor = anchor;
         this.candidate = candidate != null ? candidate
             : OneWayTripClassifier.isDeparture(route, anchor) ? anchor : null;
     }
 
-    public void inspect(Observation older) {
+    void inspect(Observation older) {
         if (boundaryConfirmed || older == null) { return; }
         if (!Objects.equals(older.vehicleId(), anchor.vehicleId()) || older.at().isAfter(anchor.at())
             || Duration.between(older.at(), anchor.at()).compareTo(route.maximumGap()) > 0) {
@@ -54,10 +54,10 @@ public final class ReverseBoundarySearch {
         if (OneWayTripClassifier.isDeparture(route, older)) { candidate = older; }
     }
 
-    public Observation anchor() { return anchor; }
-    public Observation candidate() { return candidate; }
-    public Observation replayStart() { return candidate == null ? anchor : candidate; }
-    public boolean boundaryConfirmed() { return boundaryConfirmed; }
+    Observation anchor() { return anchor; }
+    Observation candidate() { return candidate; }
+    Observation replayStart() { return candidate == null ? anchor : candidate; }
+    boolean boundaryConfirmed() { return boundaryConfirmed; }
 
     private boolean isTerminal(Observation observation) {
         return observation.stopOrder() == route.firstStop()

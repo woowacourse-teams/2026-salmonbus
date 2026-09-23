@@ -1,6 +1,6 @@
 package com.gustler.backend.gbis.api;
 
-import com.gustler.backend.gbis.api.GbisClientOptions;
+import com.gustler.backend.worker.configuration.GbisProperties;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
@@ -33,9 +33,10 @@ class GbisApiCallerTest {
     ) {
         RestClient.Builder builder = RestClient.builder().baseUrl(BASE_URL);
         openApi = MockRestServiceServer.bindTo(builder).build();
+        GbisProperties properties = new GbisProperties(BASE_URL, serviceKey, DAILY_LIMIT);
         caller = new GbisApiCaller(
             builder.build(),
-            new GbisClientOptions(BASE_URL, serviceKey),
+            new GbisClientOptions(properties.baseUrl(), properties.serviceKey()),
             new ObjectMapper());
     }
 

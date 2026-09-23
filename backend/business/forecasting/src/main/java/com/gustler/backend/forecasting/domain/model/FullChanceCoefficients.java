@@ -3,18 +3,14 @@ package com.gustler.backend.forecasting.domain.model;
 import java.util.List;
 
 /**
- * 만석 확률을 내는 계수 한 묶음. 설계행렬 열마다 계수 하나다.
+ * 만석 확률을 계산하는 계수. 설계행렬의 각 열에 계수 하나가 대응한다.
  *
  * <p>A18 의 1단계다. 좌석이 몇 석 남을지를 보기 전에 <b>만석인지 아닌지만 먼저 가른다.</b>
  * 문서는 이 단계를 허들이라고 적었다.
  *
- * <p><b>계수를 주입받는 자리가 여기다.</b> 계수는 서버가 만들지 않는다. 밖에서 배운 것을 받아
- * 쓴다. 노선 2개와 지평 12개마다 따로 배워서 묶음이 24개고 이 단계에만 실수가 744개다.
- * 그 묶음을 (노선 판본, 지평)으로 찾아 주는 포트는 계수를 적재하고 승격하는 쪽이 만든다.
- * 그때까지 이 값은 손으로 만들어 넣는다.
- *
- * <p>계수가 없으면 만석 확률을 낼 수 없다. 그래서 지금 {@link SeatForecastModel} 구현체가
- * 하나도 없고 예보 배치가 batch 를 하나도 안 연다.
+ * <p>서버에서 계수를 학습하지 않고 외부 학습 결과를 받아 사용한다.
+ * 노선 2개와 예보 거리 12개에 각각 학습하므로 계수 집합은 24개이며 이 단계의 실수 계수는 744개다.
+ * 이 객체는 전달받은 열별 계수로 보정 전 확률을 계산한다.
  */
 public record FullChanceCoefficients(
     List<Double> byColumn
@@ -32,8 +28,9 @@ public record FullChanceCoefficients(
     /**
      * 설계행렬 한 줄에 이 계수를 적용한 만석 확률.
      *
-     * <p><b>그날 회수한 라벨로 보정하기 전 값이다.</b> 보정하는 층은 아직 없다. seat_forecast 의
-     * seat_full_chance_raw 열과 {@link SeatForecastResult#fullChanceRaw()} 가 같은 값을 든다.
+     * <p><b>당일 평가 결과로 보정하기 전 확률이다.</b> 실제 예측 경로의 당일 보정은
+     * {@link SeatDistributionPredictor}에서 별도로 수행한다. seat_forecast의
+     * seat_full_chance_raw 열과 {@link SeatForecastResult#fullChanceRaw()}는 보정 전 확률을 담는다.
      */
     public double fullChanceBeforeCorrectionOf(
         SeatForecastDesignMatrix matrix

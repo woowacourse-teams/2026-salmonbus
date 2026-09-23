@@ -1,6 +1,6 @@
 package com.gustler.backend.worker.configuration;
 
-import com.gustler.backend.observations.domain.CollectionSchedule;
+import com.gustler.backend.observations.api.CollectionTiming;
 import com.gustler.backend.worker.scheduling.AdaptiveCollectionTrigger;
 import com.gustler.backend.worker.scheduling.CollectionScheduler;
 
@@ -59,9 +59,9 @@ public class CollectionConfig {
 
         private void warnIfOverDailyLimit() {
             final int routeCount = properties.routeIds().size();
-            if (!CollectionSchedule.fitsDailyLimit(routeCount, dailyLimit)) {
+            if (!CollectionTiming.fitsDailyLimit(routeCount, dailyLimit)) {
                 log.error("이 주기로 {}개 노선을 돌면 하루 {}회라 한도 {}회를 넘는다. 주기표나 노선 수를 고쳐라.",
-                    routeCount, CollectionSchedule.dailyCallsFor(routeCount), dailyLimit);
+                    routeCount, CollectionTiming.dailyCallsFor(routeCount), dailyLimit);
             }
         }
     }

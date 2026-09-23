@@ -80,6 +80,6 @@ class SeatDistributionForecastModelTest {
 
     private SeatDistributionForecastModel model() {
         return new SeatDistributionForecastModel(
-            LoadedBundle.from(DummyBundle.valid().writeTo(directory)).predictor());
+            DummyBundle.valid().loadAt(directory).predictor());
     }
 }

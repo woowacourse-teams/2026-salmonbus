@@ -6,7 +6,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConditionalOnExpression("${forecast.enabled:false} or ${collection.enabled:false}")
+@ConditionalOnExpression("${forecast.quality-enabled:${forecast.enabled:false} or ${collection.enabled:false}}")
 public class TripQualityInvestigationJob {
     private final InvestigateTripQuality service;
 

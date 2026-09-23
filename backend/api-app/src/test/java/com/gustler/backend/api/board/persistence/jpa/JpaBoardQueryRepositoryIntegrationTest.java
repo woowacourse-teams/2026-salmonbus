@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.gustler.backend.api.board.application.BoardVehicleObservation;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture.RouteContext;
+import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.OffsetDateTime;
 import org.junit.jupiter.api.Test;
@@ -28,9 +29,9 @@ class JpaBoardQueryRepositoryIntegrationTest {
         OffsetDateTime now = OffsetDateTime.now();
         RouteContext route = route(fixture, "204000057", now);
         RouteContext otherRoute = route(fixture, "234000050", now);
-        long batch = fixture.insertBatch(route, now, now, "SUCCESS_ROWS", 2);
-        long otherBatch = fixture.insertBatch(route, now.minusMinutes(1), now, "SUCCESS_ROWS", 1);
-        long otherRouteBatch = fixture.insertBatch(otherRoute, now, now, "SUCCESS_ROWS", 1);
+        long batch = fixture.insertBatch(route, now, "SUCCESS_ROWS", 2);
+        long otherBatch = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_ROWS", 1);
+        long otherRouteBatch = fixture.insertBatch(otherRoute, now, "SUCCESS_ROWS", 1);
         long observation = fixture.insertObservation(route, batch, 1, null, 1, "STOP-1", now);
         fixture.insertObservation(route, batch, 2, null, 1, "STOP-1", now);
         fixture.insertObservation(route, otherBatch, 1, "OLD", 1, "STOP-1", now);
@@ -44,6 +45,35 @@ class JpaBoardQueryRepositoryIntegrationTest {
                 new BoardVehicleObservation(null, 2, 1));
         assertThat(repository.findObservedVehicles(batch, otherRoute.routeVersionId())).isEmpty();
         assertThat(repository.findPredictions(batch)).isEmpty();
+    }
+
+    @Test
+    void 미발행_배치는_제외하고_관측_시각이_가장_최근인_빈_발행을_선택한다() {
+        // given
+        BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbcClient);
+        OffsetDateTime now = OffsetDateTime.now().withNano(0);
+        RouteContext route = route(fixture, "204000057", now);
+        fixture.insertStop(route, 2, "STOP-2", "다음 정류장", "UP", true);
+        long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        long earlierBatch = fixture.insertBatch(route, now.minusMinutes(2), "SUCCESS_ROWS", 1);
+        long observation = fixture.insertObservation(route, earlierBatch, 1, "OLD", 1, "STOP-1", now);
+        // 발행 시각이 늦어도 이전 관측이 최신 빈 발행을 대신하지 않는다.
+        fixture.insertPublication(earlierBatch, model, now.minusSeconds(10), now.minusSeconds(5));
+        fixture.insertForecast(route, observation, 2, 1, model, 0.2, 20.0, now.minusSeconds(10));
+        long emptyBatch = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
+        fixture.insertPublication(emptyBatch, model, now.minusSeconds(50), now.minusSeconds(50));
+        fixture.insertBatch(route, now, "SUCCESS_ROWS", 1);
+
+        // when
+        var selected = repository.findSnapshot(new RouteId(route.sourceRouteId()))
+            .orElseThrow().observation().orElseThrow();
+
+        // then
+        assertThat(selected.batchId()).isEqualTo(emptyBatch);
+        assertThat(selected.observedAt().toInstant()).isEqualTo(now.minusMinutes(1).toInstant());
+        assertThat(selected.vehiclesInService()).isZero();
+        assertThat(repository.findPredictions(earlierBatch)).hasSize(1);
+        assertThat(repository.findPredictions(selected.batchId())).isEmpty();
     }
 
     private RouteContext route(BoardDatabaseFixture fixture, String id, OffsetDateTime now) {

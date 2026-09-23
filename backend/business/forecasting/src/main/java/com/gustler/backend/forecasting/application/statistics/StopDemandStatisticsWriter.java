@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.application.statistics;
 
 import com.gustler.backend.forecasting.domain.statistics.StopDemandAggregator;
-import com.gustler.backend.forecasting.domain.statistics.StopDemandGeneration;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandHourlyTotals;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
 
@@ -12,7 +12,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 노선 하나의 입력 조회부터 세대 저장까지 묶어, 판정 변경과 통계 계산이 섞이지 않게 한다. */
+/** 노선별로 입력 조회와 통계 저장을 한 트랜잭션으로 처리한다. */
 @Component
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class StopDemandStatisticsWriter {
@@ -25,14 +25,14 @@ public class StopDemandStatisticsWriter {
     }
 
     @Transactional
-    public void recompute(long routeVersionId, Instant computedAt) {
+    public void recompute(final long routeVersionId, Instant computedAt) {
         List<StopDemandHourlyTotals> totals = repository.readHourlyTotals(routeVersionId, computedAt);
         if (totals.isEmpty()) {
             return;
         }
         String calculationVersion = RefreshDemandStatisticsService.CURRENT_CALCULATION_VERSION;
-        int revision = repository.currentRevision(routeVersionId, calculationVersion) + 1;
-        repository.append(new StopDemandGeneration(routeVersionId, calculationVersion, revision,
+        final int revision = Math.incrementExact(repository.currentRevision(routeVersionId, calculationVersion));
+        repository.append(new DemandStatisticsVersion(routeVersionId, calculationVersion, revision,
             computedAt, computedAt, StopDemandAggregator.aggregate(totals, clock)));
     }
 }

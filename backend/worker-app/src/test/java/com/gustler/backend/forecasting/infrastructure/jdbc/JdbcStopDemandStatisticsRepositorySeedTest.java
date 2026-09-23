@@ -17,15 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * seed 가 서 있을 때 시간별 합을 역사와 실시간에서 함께 읽는지 본다.
- *
- * <p>seed 표는 이관 도구의 Flyway 가 만든다. worker 테스트에는 V1~V12 만 적용돼서 여기서 직접
- * 세운다. 도구가 나중에 표를 바꾸면 이 테스트가 아니라 도구 쪽 통합 테스트가 먼저 깨진다.
- *
- * <p>저장소를 주입받지 않고 테스트마다 새로 만든다. seed 표가 있는지 본 결과를 인스턴스가
- * 기억해서, 컨텍스트를 함께 쓰는 다른 테스트에 그 기억이 넘어가면 안 된다.
- */
+/** 과거 이관 집계가 DB에 남아 있어도 현재 품질 판정을 받은 원본 평가만 집계하는지 확인한다. */
 @IntegrationTest
 @Transactional
 class JdbcStopDemandStatisticsRepositorySeedTest {
@@ -92,13 +84,13 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
     @Autowired
     private JdbcClient jdbcClient;
 
+    @Autowired
     private JdbcStopDemandStatisticsRepository repository;
     private long routeVersionId;
     private long modelDeploymentId;
 
     @BeforeEach
     void 노선과_모델과_seed_표를_먼저_세운다() {
-        repository = new JdbcStopDemandStatisticsRepository(jdbcClient);
         routeVersionId = insertRouteVersion(insertRoute());
         for (int stopOrder = FIRST_STOP_ORDER; stopOrder <= LAST_STOP_ORDER; stopOrder++) {
             insertRouteStop(stopOrder);
@@ -273,20 +265,11 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
             arrivedAt.minusMinutes(MINUTES_BEFORE_ARRIVAL));
         final long arrivalObservationId = insertObservation(
             vehicleId, TARGET_STOP_ORDER, SEATS_ON_ARRIVAL, arrivedAt);
-        jdbcClient.sql("""
-                INSERT INTO seat_forecast (
-                    vehicle_observation_id, target_stop_order, route_version_id, stops_to_target,
-                    model_deployment_id, demand_statistics_revision,
-                    seat_full_chance_raw, seat_full_chance, expected_seats, generated_at,
-                    scoring_state, arrival_observation_id, seats_on_arrival, scored_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'SETTLED', ?, ?, ?)
-                """)
-            .params(
-                predictionObservationId, TARGET_STOP_ORDER, routeVersionId, NEXT_STOP_AHEAD,
-                modelDeploymentId, DEMAND_STATISTICS_REVISION,
-                SEAT_FULL_CHANCE_RAW, SEAT_FULL_CHANCE, EXPECTED_SEATS, GENERATED_AT,
-                arrivalObservationId, SEATS_ON_ARRIVAL, SCORED_AT.atOffset(ZoneOffset.UTC))
-            .update();
+        StatisticsForecastFixture.insertPending(jdbcClient, predictionObservationId, TARGET_STOP_ORDER,
+            NEXT_STOP_AHEAD, modelDeploymentId, DEMAND_STATISTICS_REVISION, SEAT_FULL_CHANCE_RAW,
+            SEAT_FULL_CHANCE, EXPECTED_SEATS, GENERATED_AT);
+        StatisticsForecastFixture.settle(jdbcClient, predictionObservationId, TARGET_STOP_ORDER,
+            arrivalObservationId, SCORED_AT.atOffset(ZoneOffset.UTC));
     }
 
     private long insertObservation(

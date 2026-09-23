@@ -1,6 +1,6 @@
 package com.gustler.backend.worker.configuration;
 
-import com.gustler.backend.forecasting.application.evaluation.EvaluateForecastsService;
+import com.gustler.backend.worker.scheduling.ArrivalLabelJob;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,7 +27,7 @@ class ForecastScheduleConfigTest {
     @Test
     void 예보_스위치를_켜면_라벨_회수_배치가_선다() {
         // when
-        EvaluateForecastsService actual = applicationContext.getBeanProvider(EvaluateForecastsService.class).getIfAvailable();
+        ArrivalLabelJob actual = applicationContext.getBeanProvider(ArrivalLabelJob.class).getIfAvailable();
 
         // then
         assertThat(actual).isNotNull();

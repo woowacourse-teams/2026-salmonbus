@@ -29,9 +29,6 @@ public class ObservationBatchJpaEntity {
     @Column(name = "response_received_at")
     private OffsetDateTime responseReceivedAt;
 
-    @Column(name = "forecast_completed_at")
-    private OffsetDateTime forecastCompletedAt;
-
     @Column(name = "outcome", nullable = false, length = 32)
     private String outcome;
 

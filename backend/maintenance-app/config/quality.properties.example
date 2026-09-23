@@ -1,0 +1,4 @@
+# LOCAL은 loopback 주소의 DB만 허용한다.
+target.kind=LOCAL
+# DB_URL, DB_USERNAME, DB_PASSWORD가 든 비공개 파일의 절대 경로.
+database.env-file=/absolute/path/maintenance.env

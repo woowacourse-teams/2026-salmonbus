@@ -93,7 +93,7 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
         RouteVersionJpaEntity routeVersion
     ) {
         Optional<SnapshotObservation> observation = observationBatchRepository
-            .findLatestForecastCompleted(routeVersion, FIRST_RESULT)
+            .findLatestPublished(routeVersion, FIRST_RESULT)
             .stream()
             .findFirst()
             .map(batch -> batch.toDomain(clock.getZone()));

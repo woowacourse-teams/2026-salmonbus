@@ -1,7 +1,12 @@
 package com.gustler.backend.observations.application;
 
+import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
+
 import com.gustler.backend.observations.domain.CollectedObservations;
-import com.gustler.backend.observations.domain.ObservationAttempt;
+import com.gustler.backend.observations.domain.CollectionAttemptToken;
+import com.gustler.backend.observations.domain.ConflictingCollectionResultException;
+import com.gustler.backend.observations.domain.StaleCollectionAttemptException;
+import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.domain.ObservationBatchConclusion;
 import com.gustler.backend.observations.domain.ObservationRepository;
 import com.gustler.backend.routecatalog.application.RouteVersionLoader;
@@ -10,6 +15,7 @@ import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gustler.backend.gbis.api.GbisLocationResult.Success;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
@@ -77,13 +83,16 @@ class ObservationLoaderTest {
 
     private long routeVersionId;
     private long batchId;
+    private CollectionAttemptToken token;
 
     @BeforeEach
     void 노선과_판본과_정류소를_적재하고_묶음을_열어둔다() {
         final long routeId = insertRoute();
         routeVersionId = routeVersionLoader.load(routeId, threeStops(), TIMETABLE_3330, SCHEDULED_AT);
-        batchId = observationRepository.openReserved(
-            new ObservationAttempt(routeVersionId, SCHEDULED_AT, ATTEMPT_KEY));
+        token = observationRepository.openReserved(
+            new CollectionPlan(routeVersionId, SCHEDULED_AT, ATTEMPT_KEY));
+        batchId = token.batchId();
+        observationRepository.markDispatching(token, SCHEDULED_AT.plusSeconds(1));
     }
 
     @Test
@@ -282,7 +291,7 @@ class ObservationLoaderTest {
 
         // when
         observationRepository.openReserved(
-            new ObservationAttempt(routeVersionId, SCHEDULED_AT, ATTEMPT_KEY));
+            new CollectionPlan(routeVersionId, SCHEDULED_AT, ATTEMPT_KEY));
 
         // then
         assertThat(observationCountOf(batchId)).isZero();
@@ -331,6 +340,55 @@ class ObservationLoaderTest {
             .param(batchId).query(String.class).list()).containsExactly((String) null);
     }
 
+    @Test
+    void 같은_성공_응답을_다시_저장해도_관측을_추가하거나_교체하지_않는다() {
+        // given
+        final List<BusLocation> buses = List.of(busWithSeats(SEATS_43));
+        loadBuses(buses);
+        final List<Long> originalIds = observationIdsOf(batchId);
+
+        // when
+        loadBuses(buses);
+
+        // then
+        assertThat(observationIdsOf(batchId)).containsExactlyElementsOf(originalIds);
+        assertThat(observationCountOf(batchId)).isEqualTo(1);
+        assertThat(storedSeatsOf(batchId)).isEqualTo(new StoredSeats(SEATS_43, null));
+    }
+
+    @Test
+    void 같은_시도의_응답이라도_잔여석이_다르면_기존_관측을_덮어쓰지_않는다() {
+        // given
+        loadBuses(List.of(busWithSeats(SEATS_43)));
+        final List<Long> originalIds = observationIdsOf(batchId);
+
+        // when & then
+        assertThatThrownBy(() -> loadBuses(List.of(busWithSeats(44))))
+            .isInstanceOf(ConflictingCollectionResultException.class);
+        assertThat(observationIdsOf(batchId)).containsExactlyElementsOf(originalIds);
+        assertThat(storedSeatsOf(batchId)).isEqualTo(new StoredSeats(SEATS_43, null));
+        assertThat(outcomeOf(batchId)).isEqualTo("SUCCESS_ROWS");
+    }
+
+    @Test
+    void 이전_시도의_늦은_성공_응답은_새_시도에_관측을_저장하지_못한다() {
+        // given
+        CollectionAttemptToken previous = token;
+        token = observationRepository.openReserved(
+            new CollectionPlan(routeVersionId, SCHEDULED_AT, ATTEMPT_KEY));
+        observationRepository.markDispatching(token, SCHEDULED_AT.plusSeconds(2));
+        final List<BusLocation> buses = List.of(busWithSeats(SEATS_43));
+
+        // when & then
+        assertThatThrownBy(() -> loader.load(
+            previous, GbisObservationMapper.from(new Success(QUERY_TIME, buses)), buses, RESPONSE_RECEIVED_AT))
+            .isInstanceOf(StaleCollectionAttemptException.class);
+        assertThat(observationCountOf(batchId)).isZero();
+        assertThat(outcomeOf(batchId)).isEqualTo("DISPATCHING");
+        assertThat(queryForInt("SELECT attempt_number FROM observation_batch WHERE id = ?", batchId))
+            .isEqualTo(token.attemptNumber());
+    }
+
     private record StoredSeats(
         Integer remainingSeats,
         String seatUnknownReason
@@ -342,8 +400,8 @@ class ObservationLoaderTest {
         List<BusLocation> buses
     ) {
         loader.load(
-            batchId,
-            ObservationBatchConclusion.from(new Success(QUERY_TIME, buses)),
+            token,
+            GbisObservationMapper.from(new Success(QUERY_TIME, buses)),
             buses,
             RESPONSE_RECEIVED_AT);
     }
@@ -489,6 +547,20 @@ class ObservationLoaderTest {
                 """)
             .param(batchId)
             .query(Integer.class)
+            .list();
+    }
+
+    private List<Long> observationIdsOf(
+        final long batchId
+    ) {
+        entityManager.flush();
+        return jdbcClient.sql("""
+                SELECT id FROM vehicle_observation
+                WHERE observation_batch_id = ?
+                ORDER BY source_row_number
+                """)
+            .param(batchId)
+            .query(Long.class)
             .list();
     }
 

@@ -18,8 +18,10 @@ public final class ConfirmedTripFixture {
             SELECT CAST(? AS text), ?, route_version_id, vehicle_id, 'ELIGIBLE', 'DEPARTURE', 'test-confirmed-trip'
             FROM vehicle_observation WHERE id = ? ON CONFLICT DO NOTHING
             """).param(trip).param(trip).param(observationId).update();
-        jdbc.sql("UPDATE vehicle_observation SET vehicle_trip_key = ? WHERE id = ?")
-            .param(Long.toString(trip)).param(observationId).update();
+        jdbc.sql("""
+            INSERT INTO observation_trip_assignment(observation_id, trip_id) VALUES (?, ?)
+            ON CONFLICT(observation_id) DO UPDATE SET trip_id = EXCLUDED.trip_id
+            """).param(observationId).param(Long.toString(trip)).update();
         return observationId;
     }
 }

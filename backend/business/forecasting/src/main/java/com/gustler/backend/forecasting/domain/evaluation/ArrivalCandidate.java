@@ -5,9 +5,9 @@ import com.gustler.backend.forecasting.domain.publication.ObservedVehicle;
 import java.time.Instant;
 
 /**
- * 예보를 낸 뒤 그 차량이 남긴 관측 하나. 이 중 대상 정류장를 지난 것이 라벨이 된다.
+ * 예보 이후 같은 차량의 관측. 대상 정류장을 지난 관측을 평가 결과에 사용한다.
  *
- * <p>회수한 라벨은 어느 관측에서 왔는지를 예보 행에 남겨야 해서 관측의 행 번호를 같이 든다.
+ * <p>평가 결과의 근거를 기록할 수 있도록 관측 ID를 함께 보관한다.
  */
 public record ArrivalCandidate(
     long observationId,

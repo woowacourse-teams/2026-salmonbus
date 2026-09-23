@@ -18,8 +18,12 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.jar.JarFile;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -30,12 +34,19 @@ class RuntimeProcessSeparationTest {
     private static final String POSTGRES_IMAGE = "postgres:18";
     private static final String API_JAR = "api.boot.jar";
     private static final String WORKER_JAR = "worker.boot.jar";
-    private static final String SERVICE_KEY = "fake-service-key-for-test";
     private static final String CLIENT_API_PATH = "/api/v1/routes";
     private static final String HEALTH_PATH = "/actuator/health";
     private static final String READYZ_PATH = "/readyz";
+    private static final String SCHEDULED_TASKS_PATH = "/actuator/scheduledtasks";
+    private static final String DISABLED_WORKER_APPLICATION_NAME = "runtime-disabled-worker";
     private static final Duration BOOT_TIMEOUT = Duration.ofMinutes(3);
     private static final Duration POLL = Duration.ofMillis(500);
+    private static final Duration DISABLED_JOB_OBSERVATION = Duration.ofSeconds(2);
+    private static final Set<String> PROJECT_MODULES = Set.of(
+        "api-app", "worker-app", "maintenance-app", "common", "route-catalog",
+        "observations", "forecasting", "api-call-quota", "gbis-client",
+        "migration-tool", "forecast-math", "upstream-budget"
+    );
     private static final int LOG_TAIL = 4000;
 
     private static final HttpClient HTTP = HttpClient.newBuilder()
@@ -49,19 +60,32 @@ class RuntimeProcessSeparationTest {
     private static int workerPort;
 
     @BeforeAll
-    static void 빈_DB_에_worker_를_먼저_두_프로세스를_띄운다() throws Exception {
+    static void api_가_빈_DB_를_V18_로_옮긴_다음_worker_를_띄운다() throws Exception {
         postgres = new PostgreSQLContainer<>(POSTGRES_IMAGE);
         postgres.start();
 
-        workerPort = freePort();
-        worker = start(WORKER_JAR, workerPort,
-            Map.of("GBIS_SERVICE_KEY", SERVICE_KEY, "COLLECTION_ENABLED", "false"),
-            Files.createTempFile("salmonbus-worker", ".log"));
-        awaitHealthy(worker, workerPort);
-
+        Path apiLog = Files.createTempFile("salmonbus-api", ".log");
         apiPort = freePort();
-        api = start(API_JAR, apiPort, Map.of(), Files.createTempFile("salmonbus-api", ".log"));
-        awaitHealthy(api, apiPort);
+        api = start(API_JAR, apiPort, Map.of(), apiLog);
+        awaitHealthy(api, apiPort, apiLog);
+        assertFinalSchema();
+        assertThat(statusOf(apiPort, CLIENT_API_PATH)).isEqualTo(200);
+        assertThat(statusOf(apiPort, READYZ_PATH)).isEqualTo(200);
+
+        // API가 만든 최종 스키마에 설치한다. Worker 기동 중 롤백된 쓰기도 기록한다.
+        installWriteAudit();
+        Path workerLog = Files.createTempFile("salmonbus-worker", ".log");
+        workerPort = freePort();
+        worker = start(WORKER_JAR, workerPort, Map.of(
+            "DB_URL", postgres.getJdbcUrl() + (postgres.getJdbcUrl().contains("?") ? "&" : "?")
+                + "ApplicationName=" + DISABLED_WORKER_APPLICATION_NAME,
+            "MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE", "health,info,scheduledtasks",
+            "FORECAST_INTERVAL", "100ms",
+            "FORECAST_SETTLEMENT_INTERVAL", "100ms",
+            "FORECAST_STATISTICS_INTERVAL", "100ms",
+            "FORECAST_QUALITY_INVESTIGATION_INTERVAL", "100ms"
+        ), workerLog);
+        awaitHealthy(worker, workerPort, workerLog);
     }
 
     @AfterAll
@@ -105,8 +129,33 @@ class RuntimeProcessSeparationTest {
     }
 
     @Test
-    void 빈_DB_에_먼저_뜬_worker_가_스키마를_옮긴다() throws SQLException {
-        assertThat(appliedMigrationCount()).isPositive();
+    void api_가_적용한_V18_스키마에_기존_완료_평가_품질_컬럼이_없다() throws SQLException {
+        assertFinalSchema();
+    }
+
+    @Test
+    void 실행_JAR_에는_각_프로세스가_사용하는_프로젝트_라이브러리만_들어간다() throws IOException {
+        assertThat(projectLibraries(API_JAR)).containsExactly("common");
+        assertThat(projectLibraries(WORKER_JAR)).containsExactlyInAnyOrder(
+            "common", "route-catalog", "observations", "forecasting", "api-call-quota", "gbis-client"
+        );
+    }
+
+    @Test
+    void 수집_예보_품질_조사를_끄면_worker_는_스케줄을_등록하거나_DB에_쓰지_않는다()
+        throws SQLException, InterruptedException {
+        assertDisabledWorkerConnection();
+        assertNoScheduledTasks();
+        assertNoWrites();
+
+        // 예보 관련 간격은 100ms다. 등록된 스케줄 확인과 여러 실행 간격의 쓰기 감사를 함께 한다.
+        Thread.sleep(DISABLED_JOB_OBSERVATION.toMillis());
+
+        assertThat(worker.isAlive()).isTrue();
+        assertThat(statusOf(workerPort, HEALTH_PATH)).isEqualTo(200);
+        assertDisabledWorkerConnection();
+        assertNoScheduledTasks();
+        assertNoWrites();
     }
 
     @Test
@@ -135,11 +184,17 @@ class RuntimeProcessSeparationTest {
             "-jar",
             jarAt(jarProperty));
         Map<String, String> environment = builder.environment();
-        environment.remove("GBIS_SERVICE_KEY");
+        environment.keySet().removeIf(name -> name.startsWith("GBIS_")
+            || name.startsWith("MODEL_") || name.startsWith("COLLECTION_")
+            || name.startsWith("FORECAST_") || name.startsWith("MANAGEMENT_")
+            || name.equals("SPRING_APPLICATION_JSON"));
         environment.put("SERVER_PORT", String.valueOf(port));
         environment.put("DB_URL", postgres.getJdbcUrl());
         environment.put("DB_USERNAME", postgres.getUsername());
         environment.put("DB_PASSWORD", postgres.getPassword());
+        environment.put("COLLECTION_ENABLED", "false");
+        environment.put("FORECAST_ENABLED", "false");
+        environment.put("FORECAST_QUALITY_ENABLED", "false");
         environment.putAll(extra);
         builder.redirectErrorStream(true);
         builder.redirectOutput(log.toFile());
@@ -149,19 +204,20 @@ class RuntimeProcessSeparationTest {
 
     private static void awaitHealthy(
         Process process,
-        int port
+        int port,
+        Path log
     ) throws InterruptedException {
         final long deadline = System.nanoTime() + BOOT_TIMEOUT.toNanos();
         while (System.nanoTime() < deadline) {
             if (!process.isAlive()) {
-                fail("기동 중에 죽었다. 종료코드=%d".formatted(process.exitValue()));
+                fail("기동 중에 죽었다. 종료코드=%d, 로그=%s".formatted(process.exitValue(), tailOf(log)));
             }
             if (statusOf(port, HEALTH_PATH) == 200) {
                 return;
             }
             Thread.sleep(POLL.toMillis());
         }
-        fail("%s 안에 health 가 안 떴다".formatted(BOOT_TIMEOUT));
+        fail("%s 안에 health 가 안 떴다. 로그=%s".formatted(BOOT_TIMEOUT, tailOf(log)));
     }
 
     private static int statusOf(
@@ -202,14 +258,109 @@ class RuntimeProcessSeparationTest {
             .build();
     }
 
-    private static int appliedMigrationCount() throws SQLException {
-        try (Connection connection = DriverManager.getConnection(
-                postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
-            Statement statement = connection.createStatement();
-            ResultSet rows = statement.executeQuery("select count(*) from flyway_schema_history")) {
-            rows.next();
+    private static void assertFinalSchema() throws SQLException {
+        assertThat(queryStrings("""
+            SELECT version FROM flyway_schema_history WHERE version = '18' AND success
+            """)).containsExactly("18");
+        assertThat(queryStrings("""
+            SELECT table_name || '.' || column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND (
+                (table_name = 'observation_batch' AND column_name = 'forecast_completed_at')
+                OR (table_name = 'seat_forecast'
+                    AND column_name IN ('scoring_state', 'arrival_observation_id', 'seats_on_arrival', 'scored_at'))
+                OR (table_name = 'route' AND column_name = 'quality_revision')
+                OR (table_name = 'route_version'
+                    AND column_name IN ('maximum_observation_gap_seconds', 'observation_gap_evidence'))
+            )
+            """)).as("V18에서 제거한 기존 저장 컬럼").isEmpty();
+    }
 
-            return rows.getInt(1);
+    private static void installWriteAudit() throws SQLException {
+        try (Connection connection = databaseConnection(); Statement statement = connection.createStatement()) {
+            statement.execute("CREATE SEQUENCE public.runtime_test_write_attempt");
+            statement.execute("""
+                CREATE FUNCTION public.record_runtime_test_write() RETURNS trigger LANGUAGE plpgsql AS $body$
+                BEGIN
+                    IF current_setting('application_name') = '%s' THEN
+                        PERFORM nextval('public.runtime_test_write_attempt');
+                    END IF;
+                    RETURN NULL;
+                END;
+                $body$
+                """.formatted(DISABLED_WORKER_APPLICATION_NAME));
+            statement.execute("""
+                DO $body$
+                DECLARE audited_table text;
+                BEGIN
+                    FOR audited_table IN
+                        SELECT tablename FROM pg_tables
+                        WHERE schemaname = 'public' AND tablename <> 'flyway_schema_history'
+                    LOOP
+                        EXECUTE format(
+                            'CREATE TRIGGER runtime_test_write_audit BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE'
+                            ' ON public.%I FOR EACH STATEMENT EXECUTE FUNCTION public.record_runtime_test_write()',
+                            audited_table);
+                    END LOOP;
+                END;
+                $body$
+                """);
+        }
+        assertThat(queryStrings("""
+            SELECT DISTINCT event_object_table FROM information_schema.triggers
+            WHERE trigger_schema = 'public' AND trigger_name = 'runtime_test_write_audit'
+            """)).contains("observation_batch", "forecast_publication", "forecast_evaluation", "route",
+                "route_data_quality", "trip_quality_rebuild", "daily_call_quota", "model_active_slot");
+        assertNoWrites();
+    }
+
+    private static void assertNoWrites() throws SQLException {
+        assertThat(queryStrings("""
+            SELECT CASE WHEN is_called THEN 'writes=' || last_value ELSE 'no writes' END
+            FROM public.runtime_test_write_attempt
+            """)).as("Worker 기동 이후 커밋 또는 롤백된 쓰기 시도").containsExactly("no writes");
+    }
+
+    private static void assertDisabledWorkerConnection() throws SQLException {
+        assertThat(queryStrings("""
+            SELECT DISTINCT application_name FROM pg_stat_activity
+            WHERE datname = current_database() AND application_name = '%s'
+            """.formatted(DISABLED_WORKER_APPLICATION_NAME)))
+            .as("쓰기 감사 대상으로 식별한 Worker의 실제 DB 연결")
+            .containsExactly(DISABLED_WORKER_APPLICATION_NAME);
+    }
+
+    private static void assertNoScheduledTasks() {
+        assertThat(statusOf(workerPort, SCHEDULED_TASKS_PATH)).isEqualTo(200);
+        assertThat(bodyOf(workerPort, SCHEDULED_TASKS_PATH).replaceAll("\\s", ""))
+            .contains("\"cron\":[]", "\"fixedDelay\":[]", "\"fixedRate\":[]", "\"custom\":[]");
+    }
+
+    private static List<String> queryStrings(String sql) throws SQLException {
+        try (Connection connection = databaseConnection();
+            Statement statement = connection.createStatement();
+            ResultSet rows = statement.executeQuery(sql)) {
+            List<String> result = new ArrayList<>();
+            while (rows.next()) {
+                result.add(rows.getString(1));
+            }
+            return result;
+        }
+    }
+
+    private static Connection databaseConnection() throws SQLException {
+        return DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+    }
+
+    private static List<String> projectLibraries(String jarProperty) throws IOException {
+        try (JarFile jar = new JarFile(jarAt(jarProperty))) {
+            return jar.stream()
+                .map(entry -> entry.getName())
+                .filter(name -> name.startsWith("BOOT-INF/lib/") && name.endsWith(".jar"))
+                .flatMap(name -> PROJECT_MODULES.stream()
+                    .filter(module -> name.startsWith("BOOT-INF/lib/" + module + "-")))
+                .sorted()
+                .toList();
         }
     }
 

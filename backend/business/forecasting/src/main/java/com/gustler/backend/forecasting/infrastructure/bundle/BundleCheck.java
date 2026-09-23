@@ -9,7 +9,7 @@ package com.gustler.backend.forecasting.infrastructure.bundle;
  *
  * <p>상수 이름이 곧 거절 사유다. 무엇이 어긋나 안 올렸는지가 로그에 이 이름으로 남는다.
  */
-public enum BundleCheck {
+enum BundleCheck {
 
     BUNDLE_DIRECTORY_IS_NOT_SYMBOLIC_LINK("계수 묶음 자리가 symlink 다"),
     MANIFEST_IS_REGULAR_FILE("설명 파일이 일반 파일이 아니다"),

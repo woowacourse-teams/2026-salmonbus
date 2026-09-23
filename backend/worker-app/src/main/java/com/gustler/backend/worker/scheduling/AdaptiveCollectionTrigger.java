@@ -1,6 +1,6 @@
 package com.gustler.backend.worker.scheduling;
 
-import com.gustler.backend.observations.domain.CollectionPhase;
+import com.gustler.backend.observations.api.CollectionTiming;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -34,6 +34,6 @@ public class AdaptiveCollectionTrigger implements Trigger {
         if (lastCompletion == null) {
             return clock.instant();
         }
-        return lastCompletion.plusSeconds(CollectionPhase.at(lastCompletion, clock).intervalSeconds());
+        return lastCompletion.plusSeconds(CollectionTiming.intervalSeconds(lastCompletion, clock));
     }
 }

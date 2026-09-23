@@ -1,8 +1,9 @@
 package com.gustler.backend.routecatalog.infrastructure.gbis;
 
+import com.gustler.backend.routecatalog.domain.RouteSourceResult;
+
 import com.gustler.backend.gbis.api.GbisApiCaller;
 import com.gustler.backend.routecatalog.domain.RouteStop;
-import com.gustler.backend.routecatalog.domain.RouteSourceResult;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.StopDirection;
 import com.gustler.backend.routecatalog.domain.UpstreamRoute;

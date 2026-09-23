@@ -1,11 +1,10 @@
 package com.gustler.backend.worker.scheduling;
 
-import com.gustler.backend.observations.application.ObservationCollector;
+import com.gustler.backend.observations.api.CollectObservations;
 import com.gustler.backend.worker.configuration.CollectionProperties;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 
 /**
  * 설정에 적힌 노선을 한 바퀴 돈다.
@@ -13,17 +12,16 @@ import org.springframework.stereotype.Component;
  * <p>한 노선이 터져도 나머지를 계속 돈다. 한 노선 때문에 다른 노선까지 그 판을 통째로 건너뛰면
  * 구멍이 두 배가 된다.
  */
-@Component
 public class CollectionScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(CollectionScheduler.class);
 
     private final CollectionProperties properties;
-    private final ObservationCollector collector;
+    private final CollectObservations collector;
 
     public CollectionScheduler(
         CollectionProperties properties,
-        ObservationCollector collector
+        CollectObservations collector
     ) {
         this.properties = properties;
         this.collector = collector;

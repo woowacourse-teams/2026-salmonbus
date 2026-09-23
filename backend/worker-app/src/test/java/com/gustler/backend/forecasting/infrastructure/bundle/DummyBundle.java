@@ -28,16 +28,16 @@ import java.util.Random;
  */
 public final class DummyBundle {
 
-    public static final String BUNDLE_SCHEMA_VERSION = "a18-live-bundle-v1";
-    public static final String MODEL_VERSION = "seat-distribution-a18-v1";
-    public static final String FEATURE_CONTRACT_VERSION = "seat-feature-contract-v4-1-draft";
-    public static final String SOURCE_COMMIT = "e6fe12dc0eb66851b435b2203b6ae8580e141009";
-    public static final String ROUTE_REFERENCE_VERSION = "gbis-2026-08-19";
-    public static final String ROUTE_REFERENCE_DIGEST =
+    static final String BUNDLE_SCHEMA_VERSION = "a18-live-bundle-v1";
+    static final String MODEL_VERSION = "seat-distribution-a18-v1";
+    static final String FEATURE_CONTRACT_VERSION = "seat-feature-contract-v4-1-draft";
+    static final String SOURCE_COMMIT = "e6fe12dc0eb66851b435b2203b6ae8580e141009";
+    static final String ROUTE_REFERENCE_VERSION = "gbis-2026-08-19";
+    static final String ROUTE_REFERENCE_DIGEST =
         "50568d9a10b567ea0b650cd79ceed39a86947648e303e0d8fd1093840bb54c5e";
-    public static final List<String> ROUTES = List.of("1650", "3330");
-    public static final int FEATURE_COUNT = SeatForecastDesignMatrix.COLUMN_NAMES.size();
-    public static final int HORIZON_COUNT = 12;
+    static final List<String> ROUTES = List.of("1650", "3330");
+    static final int FEATURE_COUNT = SeatForecastDesignMatrix.COLUMN_NAMES.size();
+    static final int HORIZON_COUNT = 12;
 
     private static final String GOLDEN_ROUTE = "3330";
     private static final int GOLDEN_STOPS_AHEAD = 4;
@@ -48,6 +48,10 @@ public final class DummyBundle {
     private final SafetensorsWriter weights = new SafetensorsWriter();
 
     private DummyBundle() {
+    }
+
+    public LoadedBundle loadAt(Path directory) {
+        return LoadedBundle.from(writeTo(directory));
     }
 
     public static DummyBundle valid() {
@@ -153,7 +157,7 @@ public final class DummyBundle {
     }
 
     /** 정상 묶음이 실을 대조 사례. 어긋낸 사례를 만들어 보는 테스트가 여기서 가져간다. */
-    public Map<String, Object> goldenVectorFrom() {
+    Map<String, Object> goldenVectorFrom() {
         return goldenVectorOf(FEATURE_COUNT);
     }
 
@@ -241,7 +245,7 @@ public final class DummyBundle {
         return boxed;
     }
 
-    public DummyBundle put(
+    DummyBundle put(
         String field,
         Object value
     ) {
@@ -395,7 +399,7 @@ public final class DummyBundle {
         return axes;
     }
 
-    public BundleFiles writeTo(
+    BundleFiles writeTo(
         Path directory
     ) {
         try {

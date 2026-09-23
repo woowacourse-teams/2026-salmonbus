@@ -106,6 +106,12 @@ public class VehicleObservationJpaEntity {
         return new VehicleObservationsStored.Row(id, vehicleId, remainingSeats);
     }
 
+    public UpstreamObservationRow toDomain() {
+        RemainingSeats seats = remainingSeats == null ? new Unknown(seatUnknownReason) : new Known(remainingSeats);
+        return new UpstreamObservationRow(sourceRowNumber, new VehicleObservation(vehicleId, plateNumber,
+            stopOrder, stopId, runningState, seats, crowdLevel, vehicleType, routeType, tagless));
+    }
+
     /** 잔여석은 아는 값이거나 모르는 사유다. 둘 중 하나만 채운다. DB 도 CHECK 로 같은 것을 막는다. */
     private void applySeats(
         RemainingSeats seats

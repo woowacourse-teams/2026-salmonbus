@@ -2,9 +2,9 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.gustler.backend.forecasting.infrastructure.quality.TripQualityRepository;
+import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandCell;
-import com.gustler.backend.forecasting.domain.statistics.StopDemandGeneration;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandHourlyTotals;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandMeasurement;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
@@ -127,6 +127,9 @@ class JdbcStopDemandStatisticsRepositoryTest {
     @Autowired
     private JdbcClient jdbcClient;
 
+    @Autowired
+    private RouteDataQualityAccess qualityAccess;
+
     private long routeVersionId;
     private long modelDeploymentId;
 
@@ -237,11 +240,11 @@ class JdbcStopDemandStatisticsRepositoryTest {
 
     @Test
     void 세대가_쌓여도_관측_시각까지의_것_중_가장_최근을_읽는다() {
-        // given 세대 둘. 둘째는 관측보다 뒤의 라벨까지 들어갔다
+        // given 둘째 통계는 관측보다 늦은 자료까지 포함하며, 계산 시각도 그 이후다.
         jdbcStopDemandStatisticsRepository.append(generationOf(FIRST_REVISION, CALCULATION_VERSION, List.of(
             measurementOf(TimeSlot.MORNING, TARGET_STOP_ORDER))));
-        jdbcStopDemandStatisticsRepository.append(new StopDemandGeneration(
-            routeVersionId, CALCULATION_VERSION, FIRST_REVISION + 1, READ_AS_OF.plusSeconds(3600), COMPUTED_AT,
+        jdbcStopDemandStatisticsRepository.append(new DemandStatisticsVersion(
+            routeVersionId, CALCULATION_VERSION, FIRST_REVISION + 1, READ_AS_OF.plusSeconds(3600), READ_AS_OF.plusSeconds(3603),
             List.of(measurementOf(TimeSlot.MORNING, TARGET_STOP_ORDER))));
 
         // when
@@ -294,6 +297,32 @@ class JdbcStopDemandStatisticsRepositoryTest {
         assertThat(actual).singleElement()
             .extracting(StopDemandHourlyTotals::sampleCount)
             .isEqualTo(SINGLE_SAMPLE_COUNT);
+    }
+
+    @Test
+    void 도착_배치의_시각이_달라져도_평가할_때_보관한_시각으로_집계한다() {
+        // given
+        insertSettledLabel(
+            VEHICLE_204000206, TARGET_STOP_ORDER, NEXT_STOP_AHEAD,
+            SEATS_ON_PREDICTION, SEATS_ON_FIRST_ARRIVAL, FIRST_ARRIVED_AT, SCORED_AT);
+        jdbcClient.sql("""
+                UPDATE observation_batch SET response_received_at = ?
+                WHERE id IN (
+                    SELECT observation_batch_id FROM vehicle_observation
+                    WHERE route_version_id = ? AND vehicle_id = ? AND stop_order = ?
+                )
+                """)
+            .params(RESPONSE_RECEIVED_AFTER_DATA_UNTIL, routeVersionId, VEHICLE_204000206, TARGET_STOP_ORDER)
+            .update();
+
+        // when
+        List<StopDemandHourlyTotals> actual =
+            jdbcStopDemandStatisticsRepository.readHourlyTotals(routeVersionId, DATA_UNTIL);
+
+        // then
+        assertThat(actual).singleElement().isEqualTo(new StopDemandHourlyTotals(
+            TARGET_STOP_ORDER, ARRIVED_HOUR_START, FILL_RATE_WITH_CAPACITY_40,
+            SEATS_ON_PREDICTION - SEATS_ON_FIRST_ARRIVAL, SEATS_ON_PREDICTION, SINGLE_SAMPLE_COUNT));
     }
 
     @Test
@@ -423,9 +452,8 @@ class JdbcStopDemandStatisticsRepositoryTest {
         // given
         jdbcStopDemandStatisticsRepository.append(generationOf(FIRST_REVISION, CALCULATION_VERSION,
             List.of(measurementOf(TimeSlot.MORNING, TARGET_STOP_ORDER))));
-        var quality = new TripQualityRepository(jdbcClient);
-        quality.lockRoute(routeVersionId);
-        quality.invalidateDerivedInputs(routeVersionId);
+        qualityAccess.lock(routeVersionId);
+        qualityAccess.invalidate(routeVersionId);
 
         // when
         var totals = jdbcStopDemandStatisticsRepository.readHourlyTotals(routeVersionId, DATA_UNTIL);
@@ -440,12 +468,12 @@ class JdbcStopDemandStatisticsRepositoryTest {
             .isEqualTo(FIRST_REVISION);
     }
 
-    private StopDemandGeneration generationOf(
+    private DemandStatisticsVersion generationOf(
         final int revision,
         String calculationVersion,
         List<StopDemandMeasurement> measurements
     ) {
-        return new StopDemandGeneration(
+        return new DemandStatisticsVersion(
             routeVersionId, calculationVersion, revision, DATA_UNTIL, COMPUTED_AT, measurements);
     }
 
@@ -479,21 +507,11 @@ class JdbcStopDemandStatisticsRepositoryTest {
             arrivedAt.minusMinutes(MINUTES_BEFORE_ARRIVAL));
         final long arrivalObservationId = insertObservation(
             vehicleId, targetStopOrder, seatsOnArrival, arrivedAt);
-        jdbcClient.sql("""
-                INSERT INTO seat_forecast (
-                    vehicle_observation_id, target_stop_order, route_version_id, stops_to_target,
-                    model_deployment_id, demand_statistics_revision,
-                    seat_full_chance_raw, seat_full_chance, expected_seats, generated_at,
-                    scoring_state, arrival_observation_id, seats_on_arrival, scored_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'SETTLED', ?, ?, ?)
-                """)
-            .params(
-                predictionObservationId, targetStopOrder, routeVersionId, stopsToTarget,
-                modelDeploymentId, DEMAND_STATISTICS_REVISION,
-                SEAT_FULL_CHANCE_RAW, SEAT_FULL_CHANCE, EXPECTED_SEATS, GENERATED_AT,
-                arrivalObservationId, seatsOnArrival, scoredAt.atOffset(ZoneOffset.UTC)
-            )
-            .update();
+        StatisticsForecastFixture.insertPending(jdbcClient, predictionObservationId, targetStopOrder,
+            stopsToTarget, modelDeploymentId, DEMAND_STATISTICS_REVISION, SEAT_FULL_CHANCE_RAW,
+            SEAT_FULL_CHANCE, EXPECTED_SEATS, GENERATED_AT);
+        StatisticsForecastFixture.settle(jdbcClient, predictionObservationId, targetStopOrder,
+            arrivalObservationId, scoredAt.atOffset(ZoneOffset.UTC));
     }
 
     /** 아직 라벨을 못 채운 예보. 도착 관측과 도착 잔여석과 회수 시각 셋이 다 비어 있어야 V8 검사를 통과한다. */
@@ -504,19 +522,9 @@ class JdbcStopDemandStatisticsRepositoryTest {
     ) {
         final long predictionObservationId = insertObservation(
             vehicleId, targetStopOrder - NEXT_STOP_AHEAD, SEATS_ON_PREDICTION, observedAt);
-        jdbcClient.sql("""
-                INSERT INTO seat_forecast (
-                    vehicle_observation_id, target_stop_order, route_version_id, stops_to_target,
-                    model_deployment_id, demand_statistics_revision,
-                    seat_full_chance_raw, seat_full_chance, expected_seats, generated_at, scoring_state
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
-                """)
-            .params(
-                predictionObservationId, targetStopOrder, routeVersionId, NEXT_STOP_AHEAD,
-                modelDeploymentId, DEMAND_STATISTICS_REVISION,
-                SEAT_FULL_CHANCE_RAW, SEAT_FULL_CHANCE, EXPECTED_SEATS, GENERATED_AT
-            )
-            .update();
+        StatisticsForecastFixture.insertPending(jdbcClient, predictionObservationId, targetStopOrder,
+            NEXT_STOP_AHEAD, modelDeploymentId, DEMAND_STATISTICS_REVISION, SEAT_FULL_CHANCE_RAW,
+            SEAT_FULL_CHANCE, EXPECTED_SEATS, GENERATED_AT);
     }
 
     private String readStoredTimeSlot(
