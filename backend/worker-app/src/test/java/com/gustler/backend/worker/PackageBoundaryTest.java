@@ -6,8 +6,11 @@ import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.sli
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.Dependency;
+import com.tngtech.archunit.core.domain.JavaAccess;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaMethodCall;
+import com.tngtech.archunit.core.domain.JavaMethodReference;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.gustler.backend.config.ClockConfig;
@@ -38,6 +41,31 @@ class PackageBoundaryTest {
     static final ArchRule applicationUsesPersistencePorts = noClasses()
         .that().resideInAPackage("..application..")
         .should().dependOnClassesThat().resideInAPackage("..infrastructure..");
+
+    @ArchTest
+    static final ArchRule businessLogicDoesNotUseProviderTypes = noClasses()
+        .that().resideInAnyPackage("..application..", "..domain..")
+        .should().dependOnClassesThat().resideInAPackage(PREFIX + "gbis..");
+
+    @ArchTest
+    static final ArchRule persistenceDoesNotRunPublicUseCases = classes()
+        .that().resideInAnyPackage("..infrastructure.jpa..", "..infrastructure.jdbc..")
+        .should(new ArchCondition<>("저장 어댑터에서 업무 모듈의 공개 기능을 실행하지 않는다") {
+            @Override
+            public void check(JavaClass source, ConditionEvents events) {
+                for (JavaAccess<?> access : source.getAccessesFromSelf()) {
+                    if (!(access instanceof JavaMethodCall) && !(access instanceof JavaMethodReference)) {
+                        continue;
+                    }
+                    JavaClass target = access.getTarget().getOwner();
+                    String targetModule = moduleOf(target);
+                    if (targetModule != null && target.isInterface()
+                        && inPackage(target, PREFIX + targetModule + ".api")) {
+                        events.add(SimpleConditionEvent.violated(access, access.getDescription()));
+                    }
+                }
+            }
+        });
 
     @ArchTest
     static final ArchRule librariesDoNotDependOnExecutableApps = noClasses()

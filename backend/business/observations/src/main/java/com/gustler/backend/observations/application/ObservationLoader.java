@@ -1,64 +1,62 @@
 package com.gustler.backend.observations.application;
 
+import com.gustler.backend.observations.api.CollectionQualityHook;
+import com.gustler.backend.observations.api.ObservedSeatValue;
+import com.gustler.backend.observations.api.VehicleObservationsStored;
 import com.gustler.backend.observations.domain.CollectedObservations;
+import com.gustler.backend.observations.domain.CollectionAttemptToken;
 import com.gustler.backend.observations.domain.ObservationBatchConclusion;
 import com.gustler.backend.observations.domain.ObservationRepository;
+import com.gustler.backend.observations.domain.RemainingSeats;
+import com.gustler.backend.observations.domain.StoredObservations;
 import com.gustler.backend.observations.domain.UpstreamObservationRow;
-
-import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
 import java.time.OffsetDateTime;
-import com.gustler.backend.observations.domain.CollectionAttemptToken;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 외부 응답을 정규화하고 현재 시도의 관측과 결과를 함께 저장한다. */
+/** 관측 저장과 필요한 품질 잠금·조사 등록을 같은 트랜잭션에서 조율한다. */
 @Component
 public class ObservationLoader {
-
     private static final Logger log = LoggerFactory.getLogger(ObservationLoader.class);
+    private final ObservationRepository observations;
+    private final List<CollectionQualityHook> qualityHooks;
 
-    private final ObservationRepository observationRepository;
-    private final CollectionResponseMapper responses;
-
-    public ObservationLoader(
-        ObservationRepository observationRepository,
-        CollectionResponseMapper responses
-    ) {
-        this.observationRepository = observationRepository;
-        this.responses = responses;
+    public ObservationLoader(ObservationRepository observations, List<CollectionQualityHook> qualityHooks) {
+        this.observations = observations;
+        this.qualityHooks = List.copyOf(qualityHooks);
     }
 
     @Transactional
-    public void load(
-        CollectionAttemptToken token,
-        ObservationBatchConclusion conclusion,
-        List<BusLocation> buses,
-        OffsetDateTime responseReceivedAt
-    ) {
-        CollectedObservations collected = responses.observationsOf(buses);
+    public void load(CollectionAttemptToken token, ObservationBatchConclusion conclusion,
+                     CollectedObservations collected, OffsetDateTime responseReceivedAt) {
         logExcludedRows(token.batchId(), collected);
-
-        observationRepository.concludeWithRows(token, conclusion, collected, responseReceivedAt);
+        final long routeVersionId = observations.routeVersionOf(token.batchId());
+        List<ObservedSeatValue> seatValues = collected.storableRows().stream().map(row -> {
+            var observation = row.observation();
+            Integer seats = observation.remainingSeats() instanceof RemainingSeats.Known known ? known.seats() : null;
+            return new ObservedSeatValue(observation.vehicleId(), seats);
+        }).toList();
+        // 품질 → 수집 배치 잠금 순서를 지킨다. 정상 관측의 훅은 추가 SQL 없이 반환한다.
+        qualityHooks.forEach(hook -> hook.beforeRowsStored(routeVersionId, seatValues));
+        observations.concludeWithRows(token, conclusion, collected, responseReceivedAt)
+            .ifPresent(this::registerQualityInvestigation);
     }
 
-    /**
-     * 제외한 행은 필요한 필드만 로그에 남긴다. 응답 원문에는 번호판이 포함되므로 전체를 기록하지 않는다.
-     * 차량 아이디와 번호판은 로그에서 제외한다.
-     */
-    private void logExcludedRows(
-        final long batchId,
-        CollectedObservations collected
-    ) {
+    private void registerQualityInvestigation(StoredObservations stored) {
+        var event = new VehicleObservationsStored(stored.batchId(), stored.routeVersionId(), stored.observedAt(),
+            stored.rows().stream().map(row -> new VehicleObservationsStored.Row(
+                row.observationId(), row.vehicleId(), row.remainingSeats())).toList());
+        qualityHooks.forEach(hook -> hook.observationsStored(event));
+    }
+
+    /** 응답 원문에 포함된 차량 ID와 번호판은 로그에서 제외한다. */
+    private void logExcludedRows(final long batchId, CollectedObservations collected) {
         for (UpstreamObservationRow row : collected.excludedRows()) {
-            log.warn(
-                "필수값이 없는 관측을 저장 대상에서 제외했다. 배치={} 응답행={} 운행상태={} 정류소순번={}",
-                batchId,
-                row.sourceRowNumber(),
-                row.observation().runningState(),
-                row.observation().stopSequence());
+            log.warn("필수값이 없는 관측을 저장 대상에서 제외했다. 배치={} 응답행={} 운행상태={} 정류소순번={}",
+                batchId, row.sourceRowNumber(), row.observation().runningState(), row.observation().stopSequence());
         }
     }
 }

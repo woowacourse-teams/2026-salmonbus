@@ -1,16 +1,12 @@
 package com.gustler.backend.observations.application;
 
-import com.gustler.backend.gbis.api.GbisLocationResult;
-import com.gustler.backend.gbis.api.GbisLocationResult.NoVehicles;
-import com.gustler.backend.gbis.api.GbisLocationResult.Success;
 import com.gustler.backend.observations.domain.CollectionAttemptToken;
 import com.gustler.backend.observations.domain.CollectionPlan;
-import com.gustler.backend.observations.domain.ObservationBatchConclusion;
+import com.gustler.backend.observations.domain.ObservationResponse;
 import com.gustler.backend.observations.domain.ObservationBatchReservation;
 import com.gustler.backend.observations.domain.ObservationRepository;
 import com.gustler.backend.quota.api.ApiCallQuota;
 import java.time.OffsetDateTime;
-import java.util.List;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,14 +17,12 @@ public class ObservationBatchLedger {
     private final ApiCallQuota callQuota;
     private final ObservationRepository observations;
     private final ObservationLoader loader;
-    private final CollectionResponseMapper responses;
 
     public ObservationBatchLedger(ApiCallQuota callQuota, ObservationRepository observations,
-                                  ObservationLoader loader, CollectionResponseMapper responses) {
+                                  ObservationLoader loader) {
         this.callQuota = callQuota;
         this.observations = observations;
         this.loader = loader;
-        this.responses = responses;
     }
 
     /** 수집 계획과 호출 횟수를 함께 예약한다. 실패하면 두 변경 모두 롤백한다. */
@@ -63,13 +57,11 @@ public class ObservationBatchLedger {
 
     /** 관측 저장과 수집 완료, 필요한 품질 조사 등록을 한 트랜잭션에서 수행한다. */
     @Transactional
-    public void conclude(CollectionAttemptToken token, GbisLocationResult result,
-                         OffsetDateTime responseReceivedAt) {
-        ObservationBatchConclusion conclusion = responses.conclusionOf(result);
-        switch (result) {
-            case Success success -> loader.load(token, conclusion, success.buses(), responseReceivedAt);
-            case NoVehicles ignored -> loader.load(token, conclusion, List.of(), responseReceivedAt);
-            default -> observations.concludeWithoutRows(token, conclusion, responseReceivedAt);
+    public void conclude(CollectionAttemptToken token, ObservationResponse response) {
+        if (response.observations().isPresent()) {
+            loader.load(token, response.conclusion(), response.observations().orElseThrow(), response.receivedAt());
+        } else {
+            observations.concludeWithoutRows(token, response.conclusion(), response.receivedAt());
         }
     }
 }

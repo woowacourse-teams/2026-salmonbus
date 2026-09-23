@@ -1,5 +1,7 @@
 package com.gustler.backend.observations.application;
 
+import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
+
 import com.gustler.backend.observations.api.CollectionInputs;
 import com.gustler.backend.observations.api.CollectionQualityHook;
 import com.gustler.backend.observations.api.ObservedSeatValue;
@@ -9,6 +11,7 @@ import com.gustler.backend.observations.domain.ConflictingCollectionResultExcept
 import com.gustler.backend.observations.domain.InputAlreadyConfirmedException;
 import com.gustler.backend.observations.domain.StaleCollectionAttemptException;
 import com.gustler.backend.observations.domain.CollectionPlan;
+import com.gustler.backend.observations.domain.ObservationResponse;
 import com.gustler.backend.quota.domain.CallQuota;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,7 +36,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -93,6 +95,8 @@ class ObservationBatchLedgerTest {
     @AfterEach
     void 쌓인_것을_비운다() {
         failingQualityHook.fail = false;
+        failingQualityHook.beforeCalls = 0;
+        failingQualityHook.afterCalls = 0;
         jdbcClient.sql("""
                 TRUNCATE vehicle_observation, observation_batch, route_stop, route_version, route,
                     daily_call_quota RESTART IDENTITY CASCADE
@@ -200,7 +204,7 @@ class ObservationBatchLedgerTest {
         final long batchId = token.batchId();
 
         // when
-        ledger.conclude(token, new NoResponse("I/O error on GET request"), RESPONSE_RECEIVED_AT);
+        ledger.conclude(token, GbisObservationMapper.response(new NoResponse("I/O error on GET request"), RESPONSE_RECEIVED_AT));
 
         // then
         assertThat(outcomeOf(batchId)).isEqualTo("UNKNOWN_AFTER_DISPATCH");
@@ -213,7 +217,7 @@ class ObservationBatchLedgerTest {
         final long batchId = token.batchId();
 
         // when
-        ledger.conclude(token, new NoVehicles(QUERY_TIME), RESPONSE_RECEIVED_AT);
+        ledger.conclude(token, GbisObservationMapper.response(new NoVehicles(QUERY_TIME), RESPONSE_RECEIVED_AT));
 
         // then
         assertThat(responseReceivedAtOf(batchId)).isEqualTo(RESPONSE_RECEIVED_AT);
@@ -226,7 +230,7 @@ class ObservationBatchLedgerTest {
         final long batchId = token.batchId();
 
         // when
-        ledger.conclude(token, new GbisSystemError(QUERY_TIME, "시스템 오류가 발생하였습니다."), RESPONSE_RECEIVED_AT);
+        ledger.conclude(token, GbisObservationMapper.response(new GbisSystemError(QUERY_TIME, "시스템 오류가 발생하였습니다."), RESPONSE_RECEIVED_AT));
 
         // then
         assertThat(failureCodeOf(batchId)).isEqualTo("UPSTREAM_ERROR");
@@ -239,7 +243,7 @@ class ObservationBatchLedgerTest {
         final long batchId = token.batchId();
 
         // when
-        ledger.conclude(token, new NoVehicles(QUERY_TIME), RESPONSE_RECEIVED_AT);
+        ledger.conclude(token, GbisObservationMapper.response(new NoVehicles(QUERY_TIME), RESPONSE_RECEIVED_AT));
 
         // then
         assertThat(providerRowsOf(batchId)).isZero();
@@ -382,7 +386,7 @@ class ObservationBatchLedgerTest {
         ledger.markDispatching(current, RESERVED_AT, REQUESTED_AT.plusSeconds(1));
 
         // when & then
-        assertThatThrownBy(() -> ledger.conclude(previous, new NoVehicles(QUERY_TIME), RESPONSE_RECEIVED_AT))
+        assertThatThrownBy(() -> ledger.conclude(previous, GbisObservationMapper.response(new NoVehicles(QUERY_TIME), RESPONSE_RECEIVED_AT)))
             .isInstanceOf(StaleCollectionAttemptException.class);
         assertThat(outcomeOf(current.batchId())).isEqualTo("DISPATCHING");
         assertThat(attemptNumberOf(current.batchId())).isEqualTo(current.attemptNumber());
@@ -435,10 +439,10 @@ class ObservationBatchLedgerTest {
     void 같은_빈_응답을_다시_전달해도_최초_결과가_유지된다() {
         // given
         CollectionAttemptToken token = dispatchedBatch();
-        ledger.conclude(token, new NoVehicles(QUERY_TIME), RESPONSE_RECEIVED_AT);
+        ledger.conclude(token, GbisObservationMapper.response(new NoVehicles(QUERY_TIME), RESPONSE_RECEIVED_AT));
 
         // when
-        ledger.conclude(token, new NoVehicles(QUERY_TIME), RESPONSE_RECEIVED_AT);
+        ledger.conclude(token, GbisObservationMapper.response(new NoVehicles(QUERY_TIME), RESPONSE_RECEIVED_AT));
 
         // then
         assertThat(outcomeOf(token.batchId())).isEqualTo("SUCCESS_EMPTY");
@@ -447,13 +451,36 @@ class ObservationBatchLedgerTest {
     }
 
     @Test
+    void 같은_성공_응답을_다시_전달하면_품질_잠금은_확인하고_조사_등록은_반복하지_않는다() {
+        // given
+        insertStop();
+        CollectionAttemptToken token = dispatchedBatch();
+        BusLocation bus = new BusLocation(
+            "경기70아0001", VEHICLE_ID, 0, ROUTE_204000057, 11,
+            STOP_ID, 1, 2, 43, 3, 1);
+        ObservationResponse response = GbisObservationMapper.response(
+            new Success(QUERY_TIME, List.of(bus)), RESPONSE_RECEIVED_AT);
+        ledger.conclude(token, response);
+
+        // when
+        ledger.conclude(token, response);
+
+        // then
+        assertThat(failingQualityHook.beforeCalls).isEqualTo(2);
+        assertThat(failingQualityHook.afterCalls).isEqualTo(1);
+        assertThat(outcomeOf(token.batchId())).isEqualTo("SUCCESS_ROWS");
+        assertThat(jdbcClient.sql("SELECT count(*) FROM vehicle_observation WHERE observation_batch_id = ?")
+            .param(token.batchId()).query(Integer.class).single()).isEqualTo(1);
+    }
+
+    @Test
     void 완료한_시도에_다른_결과를_전달하면_기존_결과를_유지하고_거절한다() {
         // given
         CollectionAttemptToken token = dispatchedBatch();
-        ledger.conclude(token, new NoVehicles(QUERY_TIME), RESPONSE_RECEIVED_AT);
+        ledger.conclude(token, GbisObservationMapper.response(new NoVehicles(QUERY_TIME), RESPONSE_RECEIVED_AT));
 
         // when & then
-        assertThatThrownBy(() -> ledger.conclude(token, new NoResponse("timeout"), RESPONSE_RECEIVED_AT))
+        assertThatThrownBy(() -> ledger.conclude(token, GbisObservationMapper.response(new NoResponse("timeout"), RESPONSE_RECEIVED_AT)))
             .isInstanceOf(ConflictingCollectionResultException.class);
         assertThat(outcomeOf(token.batchId())).isEqualTo("SUCCESS_EMPTY");
         assertThat(responseReceivedAtOf(token.batchId())).isEqualTo(RESPONSE_RECEIVED_AT);
@@ -463,10 +490,10 @@ class ObservationBatchLedgerTest {
     void 같은_결과라도_완료_시각이_다르면_기존_결과를_덮어쓰지_않는다() {
         // given
         CollectionAttemptToken token = dispatchedBatch();
-        ledger.conclude(token, new NoVehicles(QUERY_TIME), RESPONSE_RECEIVED_AT);
+        ledger.conclude(token, GbisObservationMapper.response(new NoVehicles(QUERY_TIME), RESPONSE_RECEIVED_AT));
 
         // when & then
-        assertThatThrownBy(() -> ledger.conclude(token, new NoVehicles(QUERY_TIME), RESPONSE_RECEIVED_AT.plusSeconds(1)))
+        assertThatThrownBy(() -> ledger.conclude(token, GbisObservationMapper.response(new NoVehicles(QUERY_TIME), RESPONSE_RECEIVED_AT.plusSeconds(1))))
             .isInstanceOf(ConflictingCollectionResultException.class);
         assertThat(responseReceivedAtOf(token.batchId())).isEqualTo(RESPONSE_RECEIVED_AT);
     }
@@ -488,7 +515,7 @@ class ObservationBatchLedgerTest {
     void 재수집을_시작한_뒤에는_이전_시도의_입력을_확정할_수_없다() {
         // given
         CollectionAttemptToken previous = dispatchedBatch();
-        ledger.conclude(previous, new NoVehicles(QUERY_TIME), RESPONSE_RECEIVED_AT);
+        ledger.conclude(previous, GbisObservationMapper.response(new NoVehicles(QUERY_TIME), RESPONSE_RECEIVED_AT));
         CollectionAttemptToken current = ledger.reserve(plan(), RESERVED_AT).token();
 
         // when & then
@@ -509,10 +536,9 @@ class ObservationBatchLedgerTest {
             STOP_ID, 1, 2, 71, 3, 1);
 
         // when & then
-        assertThatThrownBy(() -> ledger.conclude(token, new Success(QUERY_TIME, List.of(bus)), RESPONSE_RECEIVED_AT))
-            .isInstanceOf(InvalidDataAccessApiUsageException.class)
-            .hasRootCauseInstanceOf(IllegalStateException.class)
-            .hasRootCauseMessage("품질 처리 실패");
+        assertThatThrownBy(() -> ledger.conclude(token, GbisObservationMapper.response(new Success(QUERY_TIME, List.of(bus)), RESPONSE_RECEIVED_AT)))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("품질 처리 실패");
         assertThat(outcomeOf(token.batchId())).isEqualTo("DISPATCHING");
         assertThat(requestedAtOf(token.batchId())).isEqualTo(REQUESTED_AT);
         assertThat(responseReceivedAtOf(token.batchId())).isNull();
@@ -555,13 +581,17 @@ class ObservationBatchLedgerTest {
     static class FailingQualityHook implements CollectionQualityHook {
 
         private boolean fail;
+        private int beforeCalls;
+        private int afterCalls;
 
         @Override
         public void beforeRowsStored(final long routeVersionId, List<ObservedSeatValue> rows) {
+            beforeCalls++;
         }
 
         @Override
         public void observationsStored(VehicleObservationsStored observations) {
+            afterCalls++;
             if (fail) {
                 throw new IllegalStateException("품질 처리 실패");
             }
@@ -587,7 +617,7 @@ class ObservationBatchLedgerTest {
 
     private CollectionAttemptToken confirmSuccessfulInput() {
         CollectionAttemptToken token = dispatchedBatch();
-        ledger.conclude(token, new NoVehicles(QUERY_TIME), RESPONSE_RECEIVED_AT);
+        ledger.conclude(token, GbisObservationMapper.response(new NoVehicles(QUERY_TIME), RESPONSE_RECEIVED_AT));
         confirmInput(token, RESPONSE_RECEIVED_AT.plusSeconds(1));
         return token;
     }

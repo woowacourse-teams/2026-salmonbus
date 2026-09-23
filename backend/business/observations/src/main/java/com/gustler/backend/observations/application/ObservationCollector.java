@@ -1,7 +1,6 @@
 package com.gustler.backend.observations.application;
 
-import com.gustler.backend.gbis.api.GbisLocationResult;
-import com.gustler.backend.gbis.api.GbisLocationSource;
+import com.gustler.backend.observations.domain.ObservationSource;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.domain.ObservationBatchReservation;
 import com.gustler.backend.routecatalog.api.CurrentRouteVersion;
@@ -23,18 +22,18 @@ public class ObservationCollector implements com.gustler.backend.observations.ap
 
     private final CurrentRouteVersion routeCatalogLoader;
     private final ObservationBatchLedger batchLedger;
-    private final GbisLocationSource locationSource;
+    private final ObservationSource observationSource;
     private final Clock clock;
 
     public ObservationCollector(
         CurrentRouteVersion routeCatalogLoader,
         ObservationBatchLedger batchLedger,
-        GbisLocationSource locationSource,
+        ObservationSource observationSource,
         Clock clock
     ) {
         this.routeCatalogLoader = routeCatalogLoader;
         this.batchLedger = batchLedger;
-        this.locationSource = locationSource;
+        this.observationSource = observationSource;
         this.clock = clock;
     }
 
@@ -72,20 +71,7 @@ public class ObservationCollector implements com.gustler.backend.observations.ap
             return;
         }
 
-        batchLedger.conclude(reservation.token(), readOrGiveUp(upstreamRouteId), now());
-    }
-
-    /** HTTP 처리 중 예상하지 못한 예외가 나도 응답을 확인하지 못했다는 결과를 남긴다. */
-    private GbisLocationResult readOrGiveUp(
-        String upstreamRouteId
-    ) {
-        try {
-            return locationSource.read(upstreamRouteId);
-        } catch (final RuntimeException e) {
-            log.error("외부 호출 중 예외가 발생해 응답을 확인하지 못했다. 노선={}",
-                upstreamRouteId, e);
-            return new GbisLocationResult.NoResponse(e.getMessage());
-        }
+        batchLedger.conclude(reservation.token(), observationSource.read(upstreamRouteId));
     }
 
     /** 같은 초에 계획한 동일 노선의 수집은 같은 배치로 처리한다. */

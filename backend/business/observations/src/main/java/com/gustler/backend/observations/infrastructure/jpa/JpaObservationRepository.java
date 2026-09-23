@@ -1,8 +1,6 @@
 package com.gustler.backend.observations.infrastructure.jpa;
 
-import com.gustler.backend.observations.api.CollectionQualityHook;
-import com.gustler.backend.observations.api.ObservedSeatValue;
-import com.gustler.backend.observations.api.VehicleObservationsStored;
+import com.gustler.backend.observations.domain.StoredObservations;
 import com.gustler.backend.observations.domain.CollectedObservations;
 import com.gustler.backend.observations.domain.CollectionAttemptToken;
 import com.gustler.backend.observations.domain.CollectionBatch;
@@ -10,9 +8,8 @@ import com.gustler.backend.observations.domain.ConflictingCollectionResultExcept
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.domain.ObservationBatchConclusion;
 import com.gustler.backend.observations.domain.ObservationRepository;
-import com.gustler.backend.observations.domain.RemainingSeats;
 import java.time.OffsetDateTime;
-import java.util.List;
+import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
@@ -25,15 +22,13 @@ public class JpaObservationRepository implements ObservationRepository {
     private final CollectorObservationBatchRepository batches;
     private final CollectorVehicleObservationRepository observations;
     private final JdbcClient jdbc;
-    private final List<CollectionQualityHook> qualityHooks;
 
     public JpaObservationRepository(CollectorObservationBatchRepository batches,
                                     CollectorVehicleObservationRepository observations,
-                                    JdbcClient jdbc, List<CollectionQualityHook> qualityHooks) {
+                                    JdbcClient jdbc) {
         this.batches = batches;
         this.observations = observations;
         this.jdbc = jdbc;
-        this.qualityHooks = List.copyOf(qualityHooks);
     }
 
     @Override
@@ -87,18 +82,16 @@ public class JpaObservationRepository implements ObservationRepository {
     }
 
     @Override
-    public void concludeWithRows(CollectionAttemptToken token, ObservationBatchConclusion conclusion,
-                                 CollectedObservations collected, OffsetDateTime responseReceivedAt) {
-        // 품질 잠금이 필요한 자료라면 품질 → 수집 배치 순서를 지킨다.
-        final long routeVersionId = jdbc.sql("SELECT route_version_id FROM observation_batch WHERE id = ?")
-            .param(token.batchId()).query(Long.class).single();
-        List<ObservedSeatValue> seatValues = collected.storableRows().stream().map(row -> {
-            var observation = row.observation();
-            Integer seats = observation.remainingSeats() instanceof RemainingSeats.Known known ? known.seats() : null;
-            return new ObservedSeatValue(observation.vehicleId(), seats);
-        }).toList();
-        qualityHooks.forEach(hook -> hook.beforeRowsStored(routeVersionId, seatValues));
+    public long routeVersionOf(final long batchId) {
+        return jdbc.sql("SELECT route_version_id FROM observation_batch WHERE id = ?")
+            .param(batchId).query(Long.class).single();
+    }
 
+    @Override
+    public Optional<StoredObservations> concludeWithRows(CollectionAttemptToken token,
+                                                        ObservationBatchConclusion conclusion,
+                                                        CollectedObservations collected,
+                                                        OffsetDateTime responseReceivedAt) {
         ObservationBatchJpaEntity entity = batchOf(token);
         CollectionBatch batch = entity.toDomain();
         final boolean changed = batch.completeAttempt(token, conclusion, responseReceivedAt,
@@ -109,16 +102,17 @@ public class JpaObservationRepository implements ObservationRepository {
             if (!existingRows.equals(collected.storableRows())) {
                 throw new ConflictingCollectionResultException(token.batchId());
             }
-            return;
+            return Optional.empty();
         }
+        final long routeVersionId = batch.state().routeVersionId();
         entity.apply(batch);
         // JDBC 품질 처리가 같은 트랜잭션에서 새 수집 상태와 생성 ID를 조회할 수 있게 반영한다.
         batches.flush();
         var stored = observations.saveAllAndFlush(collected.storableRows().stream()
             .map(row -> new VehicleObservationJpaEntity(token.batchId(), routeVersionId, row)).toList());
-        var event = new VehicleObservationsStored(token.batchId(), routeVersionId, batch.state().responseReceivedAt().toInstant(),
-            stored.stream().map(VehicleObservationJpaEntity::storedRow).toList());
-        qualityHooks.forEach(hook -> hook.observationsStored(event));
+        return Optional.of(new StoredObservations(token.batchId(), routeVersionId,
+            batch.state().responseReceivedAt().toInstant(),
+            stored.stream().map(VehicleObservationJpaEntity::storedRow).toList()));
     }
 
     private CollectionAttemptToken open(CollectionPlan plan, final boolean reserved) {

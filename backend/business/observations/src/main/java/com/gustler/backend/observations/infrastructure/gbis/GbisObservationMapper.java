@@ -10,7 +10,8 @@ import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.gbis.api.GbisResultCode;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
 import java.util.List;
-import com.gustler.backend.observations.application.CollectionResponseMapper;
+import java.time.OffsetDateTime;
+import com.gustler.backend.observations.domain.ObservationResponse;
 
 import com.gustler.backend.gbis.api.GbisLocationResult.DailyQuotaExceeded;
 import com.gustler.backend.gbis.api.GbisLocationResult.GatewayRejected;
@@ -25,15 +26,17 @@ import com.gustler.backend.gbis.api.GbisLocationResult.UnreadableResponse;
 
 
 /** GBIS 응답을 수집 업무의 결과와 관측 값으로 변환한다. */
-public final class GbisObservationMapper implements CollectionResponseMapper {
-    @Override
-    public ObservationBatchConclusion conclusionOf(GbisLocationResult response) {
-        return from(response);
+public final class GbisObservationMapper {
+    private GbisObservationMapper() {
     }
 
-    @Override
-    public CollectedObservations observationsOf(List<BusLocation> rows) {
-        return collect(rows);
+    public static ObservationResponse response(GbisLocationResult result, OffsetDateTime receivedAt) {
+        ObservationBatchConclusion conclusion = from(result);
+        return switch (result) {
+            case Success success -> ObservationResponse.received(conclusion, collect(success.buses()), receivedAt);
+            case NoVehicles ignored -> ObservationResponse.received(conclusion, collect(List.of()), receivedAt);
+            default -> ObservationResponse.failed(conclusion, receivedAt);
+        };
     }
 
     public static ObservationBatchConclusion from(

@@ -280,6 +280,18 @@ class ObservationCollectorTest {
     }
 
     @Test
+    void 정규화에_실패한_응답을_미수신으로_바꾸지_않는다() {
+        // given
+        given(locationSource.read(ROUTE_3330)).willReturn(new Success(QUERY_TIME, null));
+
+        // when & then
+        assertThatThrownBy(() -> collector.collectOnce(ROUTE_3330)).isInstanceOf(NullPointerException.class);
+        assertThat(onlyBatchColumn("outcome", String.class)).isEqualTo("DISPATCHING");
+        assertThat(onlyBatchColumn("response_received_at IS NULL", Boolean.class)).isTrue();
+        assertThat(observationCount()).isZero();
+    }
+
+    @Test
     void 위치정보_한도가_없으면_판이_NOT_RESERVED로_남는다() {
         // given
         useUpQuotaOf(CallQuota.BUS_LOCATION);

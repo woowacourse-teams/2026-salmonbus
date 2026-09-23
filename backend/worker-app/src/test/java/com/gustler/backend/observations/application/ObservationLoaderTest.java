@@ -343,9 +343,9 @@ class ObservationLoaderTest {
     @Test
     void 같은_성공_응답을_다시_저장해도_관측을_추가하거나_교체하지_않는다() {
         // given
-        final List<BusLocation> buses = List.of(busWithSeats(SEATS_43));
+        List<BusLocation> buses = List.of(busWithSeats(SEATS_43));
         loadBuses(buses);
-        final List<Long> originalIds = observationIdsOf(batchId);
+        List<Long> originalIds = observationIdsOf(batchId);
 
         // when
         loadBuses(buses);
@@ -360,7 +360,7 @@ class ObservationLoaderTest {
     void 같은_시도의_응답이라도_잔여석이_다르면_기존_관측을_덮어쓰지_않는다() {
         // given
         loadBuses(List.of(busWithSeats(SEATS_43)));
-        final List<Long> originalIds = observationIdsOf(batchId);
+        List<Long> originalIds = observationIdsOf(batchId);
 
         // when & then
         assertThatThrownBy(() -> loadBuses(List.of(busWithSeats(44))))
@@ -377,11 +377,12 @@ class ObservationLoaderTest {
         token = observationRepository.openReserved(
             new CollectionPlan(routeVersionId, SCHEDULED_AT, ATTEMPT_KEY));
         observationRepository.markDispatching(token, SCHEDULED_AT.plusSeconds(2));
-        final List<BusLocation> buses = List.of(busWithSeats(SEATS_43));
+        List<BusLocation> buses = List.of(busWithSeats(SEATS_43));
 
         // when & then
         assertThatThrownBy(() -> loader.load(
-            previous, GbisObservationMapper.from(new Success(QUERY_TIME, buses)), buses, RESPONSE_RECEIVED_AT))
+            previous, GbisObservationMapper.from(new Success(QUERY_TIME, buses)),
+            GbisObservationMapper.collect(buses), RESPONSE_RECEIVED_AT))
             .isInstanceOf(StaleCollectionAttemptException.class);
         assertThat(observationCountOf(batchId)).isZero();
         assertThat(outcomeOf(batchId)).isEqualTo("DISPATCHING");
@@ -402,7 +403,7 @@ class ObservationLoaderTest {
         loader.load(
             token,
             GbisObservationMapper.from(new Success(QUERY_TIME, buses)),
-            buses,
+            GbisObservationMapper.collect(buses),
             RESPONSE_RECEIVED_AT);
     }
 

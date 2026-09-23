@@ -6,7 +6,7 @@ import com.gustler.backend.observations.domain.RemainingSeats;
 import com.gustler.backend.observations.domain.SeatUnknownReason;
 import com.gustler.backend.observations.domain.UpstreamObservationRow;
 import com.gustler.backend.observations.domain.VehicleObservation;
-import com.gustler.backend.observations.api.VehicleObservationsStored;
+import com.gustler.backend.observations.domain.StoredObservations;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -102,8 +102,8 @@ public class VehicleObservationJpaEntity {
         applySeats(observation.remainingSeats());
     }
 
-    public VehicleObservationsStored.Row storedRow() {
-        return new VehicleObservationsStored.Row(id, vehicleId, remainingSeats);
+    public StoredObservations.Row storedRow() {
+        return new StoredObservations.Row(id, vehicleId, remainingSeats);
     }
 
     public UpstreamObservationRow toDomain() {

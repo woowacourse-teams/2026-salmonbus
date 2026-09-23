@@ -1,5 +1,7 @@
 package com.gustler.backend.observations.application;
 
+import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -205,7 +207,7 @@ class CollectionInputConcurrencyTest {
     private CollectionAttemptToken successfulAttempt() {
         CollectionAttemptToken token = ledger.reserve(plan(), SCHEDULED_AT).token();
         ledger.markDispatching(token, SCHEDULED_AT, REQUESTED_AT);
-        ledger.conclude(token, new NoVehicles("2026-08-19 11:14:02"), RECEIVED_AT);
+        ledger.conclude(token, GbisObservationMapper.response(new NoVehicles("2026-08-19 11:14:02"), RECEIVED_AT));
         return token;
     }
 
