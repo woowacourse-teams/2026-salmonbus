@@ -567,7 +567,8 @@ forecasting/
    │  ├─ evaluation/      평가 상태·결과·당일 보정 누계
    │  ├─ quality/         편도 판정·조사 진행·품질 버전·사용 조건
    │  ├─ statistics/      세대·셀·계산 정책
-   │  └─ model/           모델 식별 정보·릴리스·활성 슬롯·예측 전략과 그 입력 값
+   │  ├─ deployment/      모델 식별 정보·릴리스·활성 슬롯·활성화 요청·적재한 런타임
+   │  └─ model/           예측 전략과 계산, 그 입력 값
    │                      (관측 차량·노선 정류장·목표 선택·궤적·좌석 기울기)
    ├─ configuration/      Spring 빈 구성(ForecastingConfiguration·ForecastingModelConfiguration·
    │                      QualityMaintenanceConfiguration)
@@ -578,11 +579,13 @@ forecasting/
       └─ bundle/          파일·manifest·safetensors·메모리 적재
 ```
 
-`domain` 안의 개념 패키지는 한 방향으로만 의존한다. `statistics ← model ← {publication, evaluation, quality}`이며
+`domain` 안의 개념 패키지는 한 방향으로만 의존한다. `statistics ← model ← {publication, evaluation, quality, deployment}`이며
 `publication → statistics`도 같은 방향이다. 예측에 넣는 입력 값을 `model`에 두어 `model`과 `publication`이
 서로를 참조하지 않게 했다. `PackageBoundaryTest`의 `domainConceptsHaveNoCycles`가 이를 검사한다.
 최초 설계안이 적었던 `sharedvalue` 패키지는 두지 않았다. 대신 `model`이 예측 입력 값을 함께 들고 공유 커널 역할을 겸한다.
 패키지 하나를 덜 만드는 대신 `model`의 범위가 넓어지는 것이 그 대가다.
+학습 산출물의 수명주기는 `deployment`로 따로 뒀다. `model`이라는 낱말이 예측 계산과 학습 산출물 두 뜻으로
+쓰이던 것을 갈라, 예보 규칙을 고치는 사람이 배포 이력까지 함께 읽지 않게 했다.
 
 모듈과 계층 사이의 의존은 다음 규칙을 따른다.
 
@@ -747,6 +750,28 @@ token의 revision에는 기존 `attempt_number`를 사용한다. 이 값은 begi
 | route_data_quality, route_version_quality_policy | 탑승 예보의 품질 관리 | 현재 route.quality_revision과 관측 연결 간격·근거의 저장 책임 이관. 노선 버전 식별자는 카탈로그 계약을 사용 |
 | historical import audit/staging | 운영 보존 자료 | 일회성 이관 코드는 제거. 완료된 실행 기록과 DB 자료의 보존·정리는 코드 삭제와 구분 |
 | historical seed hourly totals·cutover 장부 | 운영 보존 자료 | seed 이관·임시 모델 교체 코드는 제거. 온라인 통계는 seed 합계를 사용하지 않으며, 남은 학습 view·모델 제외 기록의 의존은 별도 확인 |
+
+Flyway 파일은 `common/src/main/resources/db/migration` 한 곳에 둔다. 모든 앱이 같은 DB를 쓰므로 적용 순서를
+하나로 유지해야 하기 때문이다. 대신 파일이 어느 컨텍스트의 구조를 바꾸는지는 위 표로 판단한다.
+새 마이그레이션을 더할 때는 바꾸는 테이블의 소유 컨텍스트를 확인하고, 다른 컨텍스트의 테이블을 바꾸면
+그 컨텍스트의 담당자와 함께 검토한다.
+
+### 13.2 공개 조회 계약
+
+다른 컨텍스트가 읽는 view는 공개 계약이다. 정의를 바꾸면 읽는 쪽이 함께 바뀐다.
+
+| view | 소유 | 무엇을 거르는가 |
+| --- | --- | --- |
+| `forecast_observation_quality` | 탑승 예보 | 원 관측에 편도 방향과 예보 사용 가능 여부를 붙인다 |
+| `forecast_eligible_observation` | 탑승 예보 | 위 view에서 예보에 쓸 수 있는 관측만 남긴다 |
+| `quality_eligible_seat_forecast` | 탑승 예보 | 현재 품질 버전을 통과한 예측 |
+| `quality_calibration_seat_forecast` | 탑승 예보 | 당일 보정에 쓸 수 있는 예측 |
+| `quality_training_seat_forecast` | 탑승 예보 | 학습에 쓸 수 있는 예측 |
+| `training_eligible_seat_forecast` | 탑승 예보 | 외부 학습 저장소가 읽는 예측 |
+| `training_eligible_stop_demand_statistics` | 탑승 예보 | 외부 학습 저장소가 읽는 통계 셀 |
+
+view 안에는 업무 판정이 들어 있다. 같은 판정을 Java 도메인도 들고 있으면 두 벌이 되므로,
+새 판정을 view에 더할 때는 도메인 쪽에 같은 규칙이 있는지 먼저 확인한다.
 
 주요 테이블 변경은 다음 업무 모델에서 나온다.
 

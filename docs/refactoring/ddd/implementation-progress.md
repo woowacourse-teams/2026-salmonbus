@@ -24,11 +24,11 @@ cd backend
 ./gradlew build --no-daemon --console=plain --max-workers=1
 ```
 
-JUnit XML을 실제 9개 프로젝트의 `test`와 common의 `sal134MigrationTest`에서 집계했다. 삭제한 migration-tool의 이전 build 산출물은 집계하지 않았다. 총 **1,364개 테스트**, 실패·오류·스킵은 모두 **0개**다. `clean build`로 68개 작업을 모두 실행했고 결과는 `BUILD SUCCESSFUL`이다. 아래 분포는 업무 테스트를 소유 모듈로 옮긴 뒤의 값이다.
+JUnit XML을 실제 9개 프로젝트의 `test`와 common의 `sal134MigrationTest`에서 집계했다. 삭제한 migration-tool의 이전 build 산출물은 집계하지 않았다. 총 **1,370개 테스트**, 실패·오류·스킵은 모두 **0개**다. `clean build`로 68개 작업을 모두 실행했고 결과는 `BUILD SUCCESSFUL`이다. 아래 분포는 업무 테스트를 소유 모듈로 옮긴 뒤의 값이다.
 
 | 검증 대상 | 테스트 수 |
 | --- | ---: |
-| api-app | 197 |
+| api-app | 203 |
 | worker-app | 51 |
 | maintenance-app | 32 |
 | common | 49 |
@@ -38,7 +38,7 @@ JUnit XML을 실제 9개 프로젝트의 `test`와 common의 `sal134MigrationTes
 | route-catalog | 58 |
 | api-call-quota | 37 |
 | gbis-client | 30 |
-| 합계 | 1,364 |
+| 합계 | 1,370 |
 
 구현 착수 전의 기준 빌드 1,158개와 위 결과는 다른 시점의 결과다. 이관 전용 테스트를 제거하고 업무 규칙·동시성·실행 검증을 추가했으므로 두 수치의 차이를 신규 테스트 수로 해석하지 않는다. 업무 테스트를 소유 모듈로 옮기기 전 같은 명령의 결과는 1,355개였다.
 
@@ -100,6 +100,8 @@ Docker 배포 hook 리허설은 **154개 통과, 실패 0개**다. 새 업무 �
 | `1c2a92e` | 호출 한도를 API별로 모델링 |
 | `bdbd652` | 노선 식별자 이름을 sourceRouteId로 통일 |
 | `9cec703` | 수집 단계와 통계 규칙 버전을 도메인에 배치 |
+| `582ab93` | 조회 API를 경계 검사 안으로 |
+| `0cddaa2` | 모델 배포 수명주기를 별도 개념으로 분리 |
 
 모듈 이동만 반영한 중간 상태는 1,110개 테스트, GBIS·호출 한도 분리는 관련 298개, 노선 변경은 관련 248개 테스트로 확인했다. 수집·품질·발행·평가·통계의 순수 모델도 각 단계에서 검사했다. 첫 통합 검증은 1,311개였고 DDD 책임 분리를 보완한 뒤 `f749b9f`에서 1,355개였다. 업무 테스트 이관 뒤 1,356개였고, 도메인 개념 순환 검사와 새로 만든 계약을 고정하는 테스트를 더한 최종 결과가 위 1,364개다. 문서 커밋에는 이 기록과 설계·운영 문서의 구현 대조 결과를 담는다.
 
@@ -140,7 +142,7 @@ worker-app에 남아 있던 업무 테스트를 각 업무 모듈로 옮겼다. 
 - 이관 직후 api-call-quota의 테스트 구성이 자동구성을 손으로 나열하면서 Testcontainers 접속 정보를 등록하는 `ServiceConnectionAutoConfiguration`과 `TestcontainersPropertySourceAutoConfiguration`을 빠뜨려 `CallQuotaLedgerTest` 20개가 컨텍스트 적재에 실패했다. 두 자동구성을 넣어 해소했고, 아래 감사 반영에서 형제 모듈과 같은 `@EnableAutoConfiguration` 방식으로 다시 맞췄다.
 - 이관이 들여온 불필요한 `project(':common')` 직접 의존 3건을 지우고, 컴파일에서 참조하지 않는 `spring-boot-flyway`를 `testRuntimeOnly`로 내렸다. `RuntimeProcessSeparationTest`의 모듈 목록에서 존재하지 않는 이름 3개를 뺐다. 옮기고 남은 빈 디렉터리도 정리했다.
 
-전체 빌드는 1,364개 통과, 실패·오류·스킵 0이다. 한 차례 forecasting의 `ModelActivationBoundaryTest` 3개가 테스트용 PostgreSQL 접속 시간초과로 실패했고, 코드를 바꾸지 않고 다시 실행해 692개 전부 통과했다. 실패 원인을 코드 결함이 아니라고 단정하지 않고 재실행 결과를 함께 남긴다.
+전체 빌드는 1,370개 통과, 실패·오류·스킵 0이다. 한 차례 forecasting의 `ModelActivationBoundaryTest` 3개가 테스트용 PostgreSQL 접속 시간초과로 실패했고, 코드를 바꾸지 않고 다시 실행해 692개 전부 통과했다. 실패 원인을 코드 결함이 아니라고 단정하지 않고 재실행 결과를 함께 남긴다.
 
 ## 전수 감사 지적 반영
 
@@ -172,6 +174,19 @@ worker-app에 남아 있던 업무 테스트를 각 업무 모듈로 옮겼다. 
 - `ObservationBatchLedger.abandonBeforeSend`는 두 테스트가 전송 전 포기 경로를 직접 검사한다.
 - `RouteDataQualityAccess.lock`을 `currentRevisionOf`로 바꾸자는 제안은 받지 않았다. 이름에서 잠금이라는 사실이 사라진다. 같은 패키지에 있는 `TripQualityStore`·`TripQualityMaintenanceStore`도 같은 자리에 있어 이 포트만 옮기면 오히려 어긋난다.
 - `ApiCallQuota`의 세 메서드를 하나로 줄이자는 제안도 받지 않았다. 자정 재예약 규칙이 호출자인 수집 쪽으로 새어 나간다.
+
+## DDD 관점 평가 후 구조 보완
+
+다섯 관점(전략 설계·전술 설계·계층 순수성·유비쿼터스 언어·비판적 검토)으로 다시 평가하고, 그중 **동작을 바꾸지 않는 구조 항목만** 반영했다.
+
+- 조회 API가 경계 검사 밖에 있었다. `PackageBoundaryTest`는 worker의 클래스패스를 읽으므로 api-app 클래스를 한 줄도 보지 않는다. 생산 코드 98개가 규칙 없이 남아 있었고, 지금 계층이 지켜지는 것은 규약이 아니라 우연이었다. api-app에 `ApiPackageBoundaryTest`를 두어 도메인의 기술 의존, 도메인의 바깥 계층 의존, 응용의 저장·HTTP 의존, 업무 쓰기 모듈 의존을 막는다. 검사 대상이 비어 통과하는 일이 없도록 세 기능의 네 계층이 실제로 잡히는지도 확인한다. 규칙을 넣기 전에 위반이 0건임을 확인했고, 위반을 넣으면 실패하는 것도 확인했다.
+- api-app의 `persistence` 패키지를 `infrastructure`로 바꿔 업무 모듈과 같은 어휘를 쓴다. 이름이 달라 계층 규칙의 `..infrastructure..` 패턴에 잡히지 않던 문제도 함께 없어진다.
+- `forecasting.domain.model`이 50개로 형제 패키지 합(42)보다 컸다. "모델"이 예측 계산과 학습 산출물 두 뜻으로 함께 쓰이고 있었다. 학습 산출물의 수명주기 11개를 `domain.deployment`로 옮겼다. DB 테이블 이름 `model_deployment`와 맞는다. `deployment → model` 한 방향이며 역참조는 없다.
+- 설계안에 공개 조회 계약 절을 더해 품질 view 7개의 소유와 거르는 기준을 적었다. Flyway 파일을 한 곳에 두는 이유와, 새 마이그레이션이 다른 컨텍스트의 테이블을 바꿀 때의 절차도 적었다.
+- 용어집에 "판"을 더했다. 수집 배치와 모델 배포 버전을 한국어로 같은 낱말로 부르고 있었다.
+- `JdbcRouteVersionRepository`의 주석이 "엔티티를 하나 더 만들면 Hibernate가 같은 테이블을 두 번 매핑했다며 뜨지 않는다"고 적었는데 사실과 달랐다. api-app이 `vehicle_observation`·`route_stop`·`observation_batch`를 각각 두 번 매핑하고 정상 기동한다. JDBC를 쓰는 진짜 이유인 컨텍스트 경계로 문장을 바꿨다.
+
+평가에서 나온 것 중 **동작이나 정책이 바뀌는 것은 반영하지 않았다.** 편도 방향과 정원 산출이 Java와 SQL에 두 벌이고 이미 값이 어긋난 문제, `FORECAST_STALENESS`가 환경변수만으로 보드와 어긋나는 문제가 그렇다. 둘 다 고치면 계산 결과나 운영 동작이 달라진다.
 
 ## 운영 적용 전에 확인할 것
 
