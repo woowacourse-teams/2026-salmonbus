@@ -429,15 +429,15 @@ PR #70 병합 커밋의 production Java 목록과 대조해 330개 파일이 중
 | 현재 모듈 | Java 파일 수 | 경로 |
 | --- | ---: | --- |
 | `route-catalog` | 31 | `backend/business/route-catalog/src/main/java` |
-| `observations` | 41 | `backend/business/observations/src/main/java` |
-| `forecasting` | 157 | `backend/business/forecasting/src/main/java` |
+| `observations` | 44 | `backend/business/observations/src/main/java` |
+| `forecasting` | 159 | `backend/business/forecasting/src/main/java` |
 | `api-call-quota` | 8 | `backend/business/api-call-quota/src/main/java` |
 | `gbis-client` | 13 | `backend/integrations/gbis-client/src/main/java` |
 | `api-app` | 98 | `backend/api-app/src/main/java` |
 | `worker-app` | 19 | `backend/worker-app/src/main/java` |
 | `maintenance-app` | 11 | `backend/maintenance-app/src/main/java` |
 | `common` | 1 | `backend/common/src/main/java` |
-| **합계** | **379** | Gradle 9개 모듈 |
+| **합계** | **384** | Gradle 9개 모듈 |
 
 오프라인 전환 실행기 `backend/deploy/migrations/SAL-134/src/main/java`의 Java 1개는 이 집계 밖이다. maintenance-app의 현재 11개와 기준 소스에서 남기기로 한 CLI 지원 10개도 같은 수치가 아니다. 새 실행 구성이 추가되고 기존 책임이 재편된 결과다.
 
@@ -445,10 +445,12 @@ PR #70 병합 커밋의 production Java 목록과 대조해 330개 파일이 중
 | --- | --- | --- |
 | 노선 확보 | 수집 → CurrentRouteVersion → RouteCatalogLoader → Route·RouteRepository | [공개 노선 계약](../../../backend/business/route-catalog/src/main/java/com/gustler/backend/routecatalog/api/CurrentRouteVersion.java), [Route](../../../backend/business/route-catalog/src/main/java/com/gustler/backend/routecatalog/domain/Route.java) |
 | 수집 상태 | CollectionPlan → CollectionBatch → CollectionAttemptToken → 저장소 | [CollectionBatch](../../../backend/business/observations/src/main/java/com/gustler/backend/observations/domain/CollectionBatch.java), [CollectionPlan](../../../backend/business/observations/src/main/java/com/gustler/backend/observations/domain/CollectionPlan.java) |
+| 외부 관측 조회 | ObservationCollector → ObservationSource → GbisObservationSource·Mapper → ObservationResponse | [GBIS 조회 어댑터](../../../backend/business/observations/src/main/java/com/gustler/backend/observations/infrastructure/gbis/GbisObservationSource.java) |
+| 조사 시작 정책 | QualityObservationBatch.firstAnomalies → TripQualityInvestigation.start/restart → 응용 서비스의 저장·근거 확정 | [조사 도메인](../../../backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/domain/quality/TripQualityInvestigation.java) |
 | 영역 간 입력 확정 | forecasting → CollectionInputs → JpaCollectionInputs | [CollectionInputs](../../../backend/business/observations/src/main/java/com/gustler/backend/observations/api/CollectionInputs.java) |
-| 수집과 품질 연동 | CollectionQualityHook → CollectionQualityAdapter → TripQualityInvestigationService | [품질 어댑터](../../../backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/observations/CollectionQualityAdapter.java) |
+| 수집과 품질 연동 | ObservationLoader → 저장 전 훅 → 관측 저장 → 새 StoredObservations의 저장 후 훅 | [품질 어댑터](../../../backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/observations/CollectionQualityAdapter.java) |
 | 발행 | PublishPendingForecasts → PublishPendingForecastsService → ForecastBatchWriter → ForecastPublicationRepository | [발행 응용 서비스](../../../backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/application/publication/ForecastBatchWriter.java) |
-| 평가 | EvaluateForecasts → EvaluateForecastsService → ForecastEvaluationRepository | [평가 저장소](../../../backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcForecastEvaluationRepository.java) |
+| 평가 | EvaluateForecastsService → ForecastEvaluationWriter → 입력 확정·평가 저장소·당일 보정 | [평가 Writer](../../../backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/application/evaluation/ForecastEvaluationWriter.java), [평가 저장소](../../../backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcForecastEvaluationRepository.java) |
 | 통계 | RefreshDemandStatistics → StopDemandStatisticsWriter → DemandStatisticsVersion | [통계 버전](../../../backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/domain/statistics/DemandStatisticsVersion.java) |
 | 모델 활성화 | ActivateModel → ModelActivationService → TransactionalModelActivation | [활성화 명령](../../../backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/api/model/ActivateModelCommand.java) |
 | 품질 정비 | MaintenanceApplication → 공개 품질 유스케이스 → forecasting 저장소 | [정비 실행 앱](../../../backend/maintenance-app/src/main/java/com/gustler/backend/maintenance/MaintenanceApplication.java) |
@@ -457,3 +459,5 @@ PR #70 병합 커밋의 production Java 목록과 대조해 330개 파일이 중
 노선·관측 이력은 forecasting의 JDBC 조회 어댑터가 공유 DB의 테이블·view를 읽는다. 모든 읽기를 Java 공개 API 호출로 바꾼 구조는 아니다. 입력 잠금·확정과 수집 저장의 품질 연동은 공개 인터페이스를 사용한다. API 앱은 common 외의 업무 모듈을 runtime 의존에 넣지 않고 별도의 조회 모델을 유지한다.
 
 이 절은 소스의 이름·경로·연결을 확인한 결과다. 전체 테스트와 JAR·배포 검증의 최종 결과는 진행 기록에서 관리하며 운영 DB 전환 완료를 뜻하지 않는다.
+
+이번 책임 보완에서는 application의 CollectionResponseMapper를 제거하고 GBIS 조회·변환을 infrastructure로 옮겼다. 새 ObservationSource·ObservationResponse·StoredObservations와 ForecastEvaluationWriter는 현재 집계에 포함한다. 기준 330개 이동·삭제 기록은 이 추가 변경과 구분해 유지한다.

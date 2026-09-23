@@ -201,12 +201,13 @@ PR #70에서 이미 보강한 부분과 전면 재설계에서 추가할 책임�
 
 ## 9. 현재 구현과 대조한 내용
 
-- 수집 계획과 시도는 `CollectionPlan`·`CollectionAttemptToken`이며 상태 규칙은 `CollectionBatch`가 담당한다. `CollectionInputs`는 같은 TX에서 배치를 잠그고 입력을 확정한다.
-- 발행은 `ForecastPublicationRepository`, 평가는 `ForecastEvaluationRepository`로 나눴다. 평가의 도착 관측뿐 아니라 품질 조사의 근거·탐색 위치도 입력 확정으로 보호한다.
+- 수집 계획과 시도는 `CollectionPlan`·`CollectionAttemptToken`이며 상태 규칙은 `CollectionBatch`가 담당한다. 응용 서비스는 `ObservationSource`의 `ObservationResponse`를 사용하고 GBIS 타입은 infrastructure에서만 해석한다. 외부 조회 직후 기록한 수신 시각을 정규화 뒤에도 유지한다.
+- 발행은 `ForecastPublicationRepository`, 평가는 `ForecastEvaluationRepository`로 나눴다. `ForecastEvaluationWriter`가 노선별 품질 잠금, 완료 가능 여부, 도착 입력 확정, CAS와 보정을 조율한다. 평가 저장 어댑터는 `CollectionInputs`를 호출하지 않는다. `ArrivalLabelResolver`는 생성 시각과 같거나 이전인 후보를 제외한다.
 - V17은 발행·평가·통계 버전·품질·모델 활성화·영구 학습 제외 저장 구조를 추가하고 V18은 새 조회 정의로 전환한다. 원본 값과 기존 migration 이력은 보존한다.
 - 실제 평가 근거는 forecast_evaluation에 함께 저장한다. 수집 시도 revision이나 별도 판정 이유 컬럼을 추가한 구조는 아니다. 통계 input_checkpoint는 현재 NULL이며 체크포인트 기반 중복 산출 방지를 구현했다고 보지 않는다.
-- 품질 저장 연동은 Spring EventListener 대신 명시적인 CollectionQualityHook 호출을 사용한다. 모델의 전체 식별 정보와 요청 ID·기대 활성 버전은 실제 비교하지만 featureContractVersion 선언과 특징 정책의 의미 일치 강제는 남은 한계다.
+- 품질 저장 연동은 `ObservationLoader`의 명시적인 `CollectionQualityHook` 호출로 진행한다. 저장소가 새 `StoredObservations`를 반환한 경우에만 저장 후 조사를 등록한다. 조사 시작·재시작과 차량별 첫 이상 선택은 `TripQualityInvestigation`·`QualityObservationBatch`의 정책이다.
+- 응용·도메인 계층의 GBIS 타입 의존과 저장 어댑터의 공개 유스케이스 호출을 구조 검사로 제한한다. 모델 전체 식별 정보와 요청 ID·기대 활성 버전은 비교하지만 featureContractVersion 선언과 실제 특징 정책의 의미 일치 강제는 남은 한계다.
 - maintenance-app은 최소 Spring context에서 품질 명령 하나를 실행한다. Flyway·스케줄·모델 기동은 실행하지 않으며 별도 DB 스키마 사전 안내 기능은 없다.
 - 프론트엔드의 중첩 forecast 계약 불일치는 이번 변경에서 수정하지 않았다. 실제 예보 입력의 별도 저장도 제외해 과거 계산의 정확한 재현을 보장하지 않는다.
 
-현재 코드를 확인할 때는 [V17](../../../backend/common/src/main/resources/db/migration/V17__ddd_storage_expansion.sql), [V18](../../../backend/common/src/main/resources/db/migration/V18__ddd_storage_cutover.sql), [CollectionInputs](../../../backend/business/observations/src/main/java/com/gustler/backend/observations/api/CollectionInputs.java), [ForecastBatchWriter](../../../backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/application/publication/ForecastBatchWriter.java), [평가 저장소](../../../backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcForecastEvaluationRepository.java)를 사용한다. 최종 테스트 수와 실행 결과는 [진행 기록](implementation-progress.md)에서 확인한다.
+현재 코드를 확인할 때는 [V17](../../../backend/common/src/main/resources/db/migration/V17__ddd_storage_expansion.sql), [V18](../../../backend/common/src/main/resources/db/migration/V18__ddd_storage_cutover.sql), [CollectionInputs](../../../backend/business/observations/src/main/java/com/gustler/backend/observations/api/CollectionInputs.java), [ForecastBatchWriter](../../../backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/application/publication/ForecastBatchWriter.java), [평가 응용 서비스](../../../backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/application/evaluation/ForecastEvaluationWriter.java), [평가 저장소](../../../backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcForecastEvaluationRepository.java)를 사용한다. 최종 테스트 수와 실행 결과는 [진행 기록](implementation-progress.md)에서 확인한다.

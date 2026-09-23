@@ -51,6 +51,8 @@
 
 공개 진입점은 PublishPendingForecasts·EvaluateForecasts·RefreshDemandStatistics·ActivateModel 등 실제 타입을 기준으로 설명한다. 수집의 내부 시도 식별자는 CollectionAttemptToken이며, 발행·평가·품질 조사의 근거는 CollectionInputs의 입력 확정 계약으로 보호한다. 저장 구조에는 V17·V18과 새 발행·평가·통계·품질·모델 활성화 테이블이 반영돼 있다.
 
+DDD 책임을 보완하면서 외부 관측 조회는 ObservationSource를 통해 받고 GBIS 변환은 infrastructure로 옮겼다. 수집 저장과 품질 훅의 순서는 ObservationLoader, 평가 입력 확정·저장·보정 순서는 ForecastEvaluationWriter가 담당한다. 품질 조사의 시작·재시작과 첫 이상 관측 선택은 도메인에서 판단한다. 관련 클래스 수와 연결은 배치표의 현재 구현 절에 반영했다.
+
 실제 예보 입력의 별도 스냅샷은 저장하지 않는다. featureContractVersion의 선언과 Java 특징 정책이 같은 의미인지 강제하는 검증은 기존 미구현 범위로 남아 있다. 프론트엔드의 중첩 forecast 응답 불일치도 이번 변경에서는 수정하지 않았다. 백엔드 검증 결과를 이러한 범위의 완료로 넓혀 설명하지 않는다.
 
 최종 테스트 수, 실제 JAR·배포 실행 결과와 운영 전환 여부는 [진행 기록](ddd/implementation-progress.md)을 확인한다. 문서 사이트는 이번 로컬 정합성 작업에서 갱신하지 않았다.

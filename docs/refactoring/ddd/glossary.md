@@ -9,6 +9,8 @@
 | 노선과 버전 | `Route`, `RouteVersion` | `Route.accept`가 유지·시간표 수정·새 버전 개설을 결정한다. |
 | 노선 내 정류장 | `RouteStop` | 버전별 목록 안에서 순번으로 구분한다. 별도 RouteStopPosition 클래스는 만들지 않았다. |
 | 수집 계획 | `CollectionPlan` | routeVersionId·scheduledAt·attemptKey를 담는다. 같은 계획을 재시도할 때 attemptKey를 유지한다. |
+| 관측 조회 계약 | `ObservationSource`, `ObservationResponse` | 외부 조회를 도메인값으로 받는다. 응답에는 결론·정규화한 관측·수신 시각이 포함된다. |
+| 새 관측 저장 결과 | `StoredObservations` | 이번에 새로 저장한 관측의 ID·차량·좌석 정보를 전달한다. 같은 결과의 재전달이면 저장소가 빈 Optional을 반환한다. |
 | 수집 배치 | `CollectionBatch` | 현재 시도와 예약·전송·완료 상태, 행 수, 입력 확정을 관리한다. |
 | 현재 시도 식별 | `CollectionAttemptToken` | batchId·attemptNumber로 이전 응답과 현재 시도를 구분한다. 공개 입력 계약은 `CollectionInput`과 `CollectionInputs`다. |
 | 입력 확정 | `inputConfirmedAt`, `confirmInput` | 발행·평가·품질 조사의 근거로 사용한 배치가 재수집으로 교체되지 않게 한다. 사후 품질 사용 조건은 별도로 바뀔 수 있다. |
@@ -21,7 +23,8 @@
 | 당일 보정 | `SameDayFullOutcomeCount`, `SameDayFullOutcomes` | 저장 누계와 모델에 전달할 보정 입력을 표현한다. 별도 DailyCalibration 애그리거트는 만들지 않았다. |
 | 호출 한도 | `DailyCallQuota`, `ApiCallQuota` | 날짜·API별 예약 규칙과 공개 예약 기능을 구분한다. |
 | 노선 자료 품질 | `RouteDataQuality` | 노선별 계산 자료의 사용 조건과 revision을 관리한다. |
-| 편도 조사·발견 | `TripQualityInvestigation`, `TripQualityDiscovery` | 차량별 역탐색·재판정과 수동 정비의 자료 발견 진행을 구분한다. |
+| 편도 조사·발견 | `TripQualityInvestigation`, `TripQualityDiscovery` | 차량별 역탐색·재판정과 수동 정비의 자료 발견 진행을 구분한다. start/restart가 새 조사·재시작을 결정하며 진행 중 조사는 유지한다. |
+| 품질 판단 입력 | `QualityObservationBatch` | firstAnomalies가 같은 배치의 차량별 첫 이상 관측을 고른다. |
 | 편도 판정 | `OneWayTripAssessment` | 조사한 편도의 상태와 근거를 기록한다. 정상 관측마다 판정 행을 만들지는 않는다. |
 | 모델 식별·선택 | `ModelIdentity`, `ModelRelease`, `ActiveModelSlot`, `ModelActivation` | 전체 식별 정보, 배포 이력, 현재 선택, 활성화 요청 결과를 구분한다. |
 
@@ -39,7 +42,7 @@
 | 기동 모델 적재 | `LoadConfiguredModel.load` | Worker 기동 구성 |
 | 모델 활성화 | `ActivateModel.activate` | 모델 활성화 응용 서비스 |
 
-수집 배치의 실제 행동은 `startAttempt`, `dispatch`, `completeAttempt`, `abandonBeforeSend`, `confirmInput`이다. 일반적인 예시 이름과 실제 메서드를 구분한다. getter는 값 조회, `require…`는 조건 검증, `find…`는 조회, 변경 동사는 업무 행동을 나타낸다. JPA·DTO의 접근자는 매핑과 직렬화 계약도 함께 따른다.
+수집 배치의 실제 행동은 `startAttempt`, `dispatch`, `completeAttempt`, `abandonBeforeSend`, `confirmInput`이다. 수집과 품질 연동 순서는 `ObservationLoader`, 평가의 품질 잠금·입력 확정·저장·보정 순서는 `ForecastEvaluationWriter`가 맡는다. 일반적인 예시 이름과 실제 메서드를 구분한다. getter는 값 조회, `require…`는 조건 검증, `find…`는 조회, 변경 동사는 업무 행동을 나타낸다. JPA·DTO의 접근자는 매핑과 직렬화 계약도 함께 따른다.
 
 ## 버전과 식별 정보
 
