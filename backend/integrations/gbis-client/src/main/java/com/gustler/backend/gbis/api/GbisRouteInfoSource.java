@@ -32,8 +32,6 @@ public class GbisRouteInfoSource {
     private static final String ROUTE_INFO_PATH = "/busrouteservice/v2/getBusRouteInfoItemv2";
     private static final String ROUTE_STATION_PATH = "/busrouteservice/v2/getBusRouteStationListv2";
 
-    private static final int RESULT_CODE_SUCCESS = 0;
-
     private final GbisApiCaller caller;
     private final ObjectMapper objectMapper;
 
@@ -66,7 +64,7 @@ public class GbisRouteInfoSource {
         if (response == null
             || response.response() == null
             || response.response().header() == null
-            || response.response().header().resultCode() != RESULT_CODE_SUCCESS
+            || GbisResultCode.from(response.response().header().resultCode()) != GbisResultCode.SUCCESS
             || response.response().body() == null) {
             return null;
         }
@@ -80,7 +78,7 @@ public class GbisRouteInfoSource {
         if (response == null
             || response.response() == null
             || response.response().header() == null
-            || response.response().header().resultCode() != RESULT_CODE_SUCCESS
+            || GbisResultCode.from(response.response().header().resultCode()) != GbisResultCode.SUCCESS
             || response.response().body() == null) {
             return null;
         }

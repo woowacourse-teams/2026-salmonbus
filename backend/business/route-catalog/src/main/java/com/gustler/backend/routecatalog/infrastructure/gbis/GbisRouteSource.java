@@ -147,8 +147,4 @@ public class GbisRouteSource implements RouteSource {
             routeInfo.downFirstDepartureTime(),
             routeInfo.downLastDepartureTime());
     }
-
-
-
-
 }
