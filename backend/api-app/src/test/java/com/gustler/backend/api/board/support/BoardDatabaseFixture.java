@@ -36,11 +36,11 @@ public class BoardDatabaseFixture {
                 INSERT INTO route (
                     public_route_id, source_id, source_route_id,
                     display_name, start_stop_name, end_stop_name
-                ) VALUES (:publicRouteId, 'GBIS', :sourceRouteId,
+                ) VALUES (:sourceRouteId, 'GBIS', :sourceRouteId,
                           :displayName, :startStopName, :endStopName)
                 RETURNING id
                 """)
-            .param("publicRouteId", sourceRouteId)
+            .param("sourceRouteId", sourceRouteId)
             .param("sourceRouteId", sourceRouteId)
             .param("displayName", displayName)
             .param("startStopName", startStopName)

@@ -8,7 +8,11 @@ dependencies {
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.springframework.boot:spring-boot-flyway'
+    testImplementation 'org.springframework:spring-web'
     testImplementation testFixtures(project(':common'))
+    testRuntimeOnly 'org.flywaydb:flyway-database-postgresql'
+    testRuntimeOnly 'org.postgresql:postgresql'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     implementation project(':api-call-quota')
     implementation project(':gbis-client')

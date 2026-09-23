@@ -44,8 +44,7 @@ class RuntimeProcessSeparationTest {
     private static final Duration DISABLED_JOB_OBSERVATION = Duration.ofSeconds(2);
     private static final Set<String> PROJECT_MODULES = Set.of(
         "api-app", "worker-app", "maintenance-app", "common", "route-catalog",
-        "observations", "forecasting", "api-call-quota", "gbis-client",
-        "migration-tool", "forecast-math", "upstream-budget"
+        "observations", "forecasting", "api-call-quota", "gbis-client"
     );
     private static final int LOG_TAIL = 4000;
 
