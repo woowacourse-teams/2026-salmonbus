@@ -1,6 +1,6 @@
 # SAL-134 백엔드 DDD 재설계 제안
 
-기준 코드는 `9f9c75d`이며 2026-09-23에 [코로구의 PR #70(SAL-133)](https://github.com/woowacourse-teams/2026-salmonbus/pull/70)까지 반영해 검토했다. 최초 작성일은 2026-09-22다. 이 문서는 승인된 구현의 목표 설계다. 재설계 코드의 구현·검증 상태와 운영 반영 여부는 진행 기록에서 별도로 관리한다. PR #70에서 이미 구현한 동작과 앞으로 바꿀 구조를 구분해 설명한다.
+기준 코드는 `9f9c75d`이며 2026-09-23에 [코로구의 PR #70(SAL-133)](https://github.com/woowacourse-teams/2026-salmonbus/pull/70)까지 반영해 검토했다. 최초 작성일은 2026-09-22다. 이 문서는 승인된 설계와 현재 소스의 구현을 함께 설명한다. 재설계 전 동작은 기준 커밋으로 구분하고, 전체 검증 결과와 운영 반영 여부는 진행 기록에서 관리한다. PR #70에서 이미 구현한 동작과 이번에 바꾼 구조를 구분해 설명한다.
 
 구현이 승인된 범위는 백엔드 전면 재설계와 완료된 S3 이관 코드 제거다. 현재 [용어집](glossary.md)을 이름의 기준으로 사용하고, 실제 구현·검증 상태는 [진행 기록](implementation-progress.md)에서 관리한다. 운영 데이터 전환은 쓰기를 중지한 정비 시간에 일괄 수행한다. 구·신 앱의 혼합 운영과 이중 쓰기는 적용하지 않는다. 실제 예보 입력의 별도 스냅샷 저장과 프론트엔드 수정은 이번 범위에서 제외한다.
 
@@ -17,7 +17,7 @@
 - 11~14절: 모듈 구성, 처리 흐름, 데이터 구조와 작성 원칙을 제시한다.
 - 15~16절: 기존 D안과의 차이, 팀에서 합의할 정책을 정리한다.
 
-실제 코드와 유지할 동작은 [근거와 보존 계약](01-evidence.md), 구현·스키마 변경·배포 순서는 [전환 계획](02-migration-plan.md)에 있다. 기존 Java 파일 330개를 어디에 배치할지는 [전체 클래스 배치표](03-class-map.md)에 정리했다. 문서에 새로 등장하는 클래스와 메서드는 별도 표시가 없는 한 목표 설계의 이름이다.
+실제 코드와 유지할 동작은 [근거와 보존 계약](01-evidence.md), 구현·스키마 변경·배포 순서는 [전환 계획](02-migration-plan.md)에 있다. 기존 Java 파일 330개를 어디에 배치할지는 [전체 클래스 배치표](03-class-map.md)에 정리했다. 본문의 구현 이름은 현재 소스에 맞췄다. 초기 이동·삭제 계획은 클래스 배치표에 보존하고, 같은 문서의 현재 구현 절에서 실제 모듈과 주요 연결을 확인할 수 있다.
 
 ## 0. DDD를 이해하기 위한 기초
 
@@ -170,9 +170,9 @@ PR #70으로 문제 차량의 편도를 조사하고 해당 자료를 예보·�
 | --- | --- | --- |
 | 노선 | `Route` | 외부 노선 식별자와 서비스 노선의 관계, 현재 버전 교체를 책임지는 객체 |
 | 노선 버전 | `RouteVersion` | 그 버전에서의 정류장 순서와 경로. 시간표 수정 정책은 별도로 명시 |
-| 노선 내 정류장 위치 | `RouteStopPosition` | `routeVersionId + stopOrder`. 같은 정류장 ID가 왕복 경로에 여러 번 나올 수 있음 |
-| 수집 계획 | `CollectionPlanKey` | `routeVersionId + attemptKey`. 실제 HTTP 호출 한 번과 다름 |
-| 현재 수집 시도 | `AttemptToken` | `batchId + revision`. 늦게 도착한 이전 응답을 구분하는 식별자 |
+| 노선 내 정류장 위치 | `RouteStop` | `routeVersionId + stopOrder`. 같은 정류장 ID가 왕복 경로에 여러 번 나올 수 있음 |
+| 수집 계획 | `CollectionPlan` | `routeVersionId + attemptKey`. 실제 HTTP 호출 한 번과 다름 |
+| 현재 수집 시도 | `CollectionAttemptToken` | `batchId + attemptNumber`. 늦게 도착한 이전 응답을 구분하는 식별자 |
 | 수집 배치 | `CollectionBatch` | 같은 계획의 현재 시도와 관측 행, 실패·정상 빈 응답을 함께 관리 |
 | 입력 확정 | `inputConfirmedAt`, `confirmInput` | 예보 입력으로 확정한 수집 배치의 재열기·원 관측 교체를 막는 상태와 행동. 이후 품질 사용 조건의 변경과 구분 |
 | 예보 발행 | `ForecastPublication` | 수집 배치 하나에 대한 예측 결과 전체와 계산 근거를 원자적으로 공개한 사실 |
@@ -180,13 +180,13 @@ PR #70으로 문제 차량의 편도를 조사하고 해당 자료를 예보·�
 | 예보 평가 | `ForecastEvaluation` | 발행한 예측의 평가 대기와 결과 확정을 관리 |
 | 평가 결과 | `EvaluationResult` | 좌석 확인·좌석 정보 없음·건너뜀·추적 중단 등을 구분하는 값 |
 | 통계 버전 | `DemandStatisticsVersion` | 동일 자료 기준으로 계산해 함께 공개한 셀 통계 묶음 |
-| 당일 보정 | `DailyCalibration` | 노선·서울 날짜·예보 거리별 새 평가 결과의 누계 |
+| 당일 보정 | `SameDayFullOutcomeCount`, `SameDayFullOutcomes` | 노선·서울 날짜·예보 거리별 새 평가 결과의 누계 |
 | 모델 식별 정보 | `ModelIdentity` | 릴리스 ID, 번들 digest, 특징 계산 계약 등 실제 계산을 구분하는 값 |
-| 편도 | `OneWayTrip` | 기점·회차지 출발이나 방향 전환으로 구분한 한 방향의 운행. 관측 간격만으로 확정하지 않음 |
+| 편도 | 편도 판정과 관측 연결 | 기점·회차지 출발이나 방향 전환으로 구분한 한 방향의 운행. 관측 간격만으로 확정하지 않음 |
 | 편도 품질 판정 | `OneWayTripAssessment` | 조사한 편도를 사용 가능·경계 미확정·제외로 판단한 기록 |
 | 품질 조사 | `TripQualityInvestigation` | 이상 차량의 편도 시작을 찾고 이후 관측을 다시 판정하는, 재개 가능한 작업 |
-| 품질 버전 | `QualityRevision` | 노선의 자료 사용 조건이 바뀌었음을 구분하는 값. 수집 시도 번호·통계 세대 번호와 별개 |
-| 예보 제공 상태 | `ForecastAvailability` | 화면에서 예보를 제공할 수 있는지 나타내는 AVAILABLE/UNAVAILABLE. 확률 0과 구분 |
+| 품질 버전 | `RouteDataQuality.revision` | 노선의 자료 사용 조건이 바뀌었음을 구분하는 값. 수집 시도 번호·통계 세대 번호와 별개 |
+| 예보 제공 상태 | `ForecastResponse.Status` | 화면에서 예보를 제공할 수 있는지 나타내는 AVAILABLE/UNAVAILABLE. 확률 0과 구분 |
 
 `ArrivalLabel`은 대상 정류장을 통과하거나 출발한 뒤의 관측으로 실제 결과를 판정한다. 단순히 정류장에 접근했다는 뜻으로 사용하지 않는다. 기존 이름을 바꾸는 경우에도 이 의미를 먼저 팀에서 맞춘다.
 
@@ -277,13 +277,13 @@ JSON 변환은 응답의 형식을 읽는 일이다. 변환 계층은 읽은 값
 
 여기서 **공개 계약**은 다른 코드가 기능을 사용할 때 기대할 수 있는 입력·결과·오류·처리 규칙을 뜻한다. Java 인터페이스의 메서드 형태뿐 아니라 어떤 데이터를 돌려주는지까지 포함한다. 예를 들어 ‘최신 관측 조회’라는 이름만으로는 실패한 최신 시도를 반환하는지, 마지막 정상 결과를 반환하는지 알 수 없으므로 그 기준도 정해야 한다.
 
-카탈로그는 노선 버전과 정류장 정보를, 관측은 수집 결과와 이력을 공개한다. 예보는 이를 계산에 필요한 형태로 변환한다. 다른 영역의 JPA 엔티티를 직접 가져오거나 해당 테이블을 임의로 수정하지 않는다.
+카탈로그의 `CurrentRouteVersion`은 수집에 사용할 버전을 제공한다. 예보의 입력 잠금·확정은 관측의 `CollectionInputs`를 호출한다. 노선·관측 이력 조회는 예보 영역의 JDBC 어댑터가 같은 DB의 테이블과 품질 view를 읽어 계산용 모델로 바꾼다. 다른 영역의 JPA 엔티티를 공유하지 않지만 SQL 조회는 스키마 계약에 의존한다.
 
 API는 같은 PostgreSQL의 공개 조회 규칙을 사용한다. 조회에 필요한 열과 필터의 의미를 담당 업무 영역이 관리하고, 필요하면 버전이 있는 SQL view로 제공한다. 같은 DB를 사용하는 만큼 스키마 변경의 영향은 남으며 이관·호환성 검사로 관리한다.
 
 모든 기술 설정을 공유 도메인 모델로 만들지는 않는다. `common`은 Clock·Flyway·테스트 기반을 두는 기술 모듈로 유지한다.
 
-PR #70의 `VehicleObservationsStored`는 현재 common에 있지만 업무 사건이므로 목표 구조에서는 `observations.api`의 공개 계약으로 옮긴다. 예보 어댑터가 이 계약을 받아 품질 조사 요청을 등록한다. 관측 모듈이 예보의 JDBC 구현체를 직접 참조하지 않도록 수집 저장 전후의 연동을 명시적인 포트로 정의한다.
+PR #70에서 common에 있던 `VehicleObservationsStored`는 `observations.api`로 옮겼다. `CollectionQualityHook`의 저장 전 호출은 품질 잠금을, 저장 후 호출은 조사 등록을 연결한다. forecasting의 `CollectionQualityAdapter`가 이 포트를 구현하므로 관측 코드가 예보의 JDBC 구현체를 직접 참조하지 않는다.
 
 ## 5. 엔티티와 값 객체: 같은 대상을 어떻게 구분할 것인가
 
@@ -310,16 +310,15 @@ DB에서 A를 두 번 읽으면 메모리에는 서로 다른 Java 객체가 만
 | 값 객체 | 담는 의미 | 필요한 이유 |
 | --- | --- | --- |
 | `RemainingSeats` | 알려진 잔여석 또는 알 수 없는 이유 | 실제 0석과 정보 부재를 구분 |
-| `RouteStopPosition` | 노선 버전과 그 안의 정류장 순번 | 왕복 경로에서 같은 정류장 ID가 반복되는 경우 구분 |
-| `AttemptToken` | 배치 ID와 현재 시도 번호 | 이전 시도의 늦은 응답을 식별 |
+| `RouteStop` | 노선 버전과 그 안의 정류장 순번 | 왕복 경로에서 같은 정류장 ID가 반복되는 경우 구분 |
+| `CollectionAttemptToken` | 배치 ID와 현재 시도 번호 | 이전 시도의 늦은 응답을 식별 |
 | `ModelIdentity` | 릴리스 ID·digest·특징 계산 계약 | 실제 계산에 사용한 모델을 구분 |
 | `ForecastDistance` | 예측 대상까지의 정류장 거리 | 계산에 사용하는 거리의 의미와 허용 범위를 관리 |
-| `QualityRevision` | 자료 사용 조건의 버전 | 같은 원 관측이라도 품질 판정 전후의 사용 기준을 구분 |
-| `TripConnectionPolicy` | 노선 버전별 관측 연결 간격과 판정 규칙 버전 | 기본 10분 정책과 설정 근거를 명시하고 조사 재개 시 같은 기준 유지 |
+| `OneWayTripClassifier.Route` | 노선 버전별 관측 연결 간격과 판정 규칙 버전 | 기본 10분 정책과 설정 근거를 명시하고 조사 재개 시 같은 기준 유지 |
 
 원 관측의 `RemainingSeats`와 모델 입력의 좌석 범위는 구분한다. 외부에서 받은 82석을 모델 상한에 맞춰 70석으로 잘라 저장하거나, 수집 단계에서 없던 값으로 바꾸지 않는다. 예보용 입력을 만들 때 현재 지원 범위를 검사하고 해당 차량의 처리 결과를 결정한다.
 
-`AttemptToken`에 ID가 들어 있다고 해서 token 자체가 엔티티인 것은 아니다. 배치 ID와 시도 번호가 같은 token은 같은 시도를 가리키는 값이며 별도의 수명주기를 관리하지 않는다.
+`CollectionAttemptToken`에 ID가 들어 있다고 해서 token 자체가 엔티티인 것은 아니다. 배치 ID와 시도 번호가 같은 token은 같은 시도를 가리키는 값이며 별도의 수명주기를 관리하지 않는다.
 
 Java record는 이런 값 객체를 구현하는 데 사용할 수 있다. 다만 모든 record가 도메인 값 객체는 아니다. 단순 전달용 DTO와 구분해, 업무상 같은 값인지 판단하는 기준과 검증 규칙을 가진 경우에 값 객체로 다룬다.
 
@@ -357,7 +356,7 @@ DDD의 엔티티와 JPA의 `@Entity`도 같은 분류가 아니다. 전자는 �
 
 이 차이가 두 애그리거트로 나누는 이유다. 발행할 때는 예측들이 함께 완성돼야 하지만, 발행 후에는 예측별로 실제 결과가 서로 다른 시점에 확인된다. 같은 시점에 함께 변경해야 하는 정보와 나중에 따로 바뀌는 정보를 구분한 것이다.
 
-평가에는 발행된 불변 예측의 식별값만 보관한다. 발행 애그리거트 내부의 예측 객체를 직접 참조해 수정하지 않는다. 아래 점선도 이 식별값의 연결을 뜻하며, 두 애그리거트가 가변 객체를 공유한다는 의미는 아니다.
+평가는 발행된 예측 객체 대신 그 식별값을 참조하며 평가 결과와 근거를 별도로 저장한다. 발행 애그리거트 내부의 예측 객체를 직접 참조해 수정하지 않는다. 아래 점선도 이 식별값의 연결을 뜻하며, 두 애그리거트가 가변 객체를 공유한다는 의미는 아니다.
 
 ```mermaid
 flowchart LR
@@ -371,16 +370,16 @@ flowchart LR
   O -. "예측 ID로 참조" .-> L
 ```
 
-이 기준으로 변경 단위를 다음과 같이 정한다. 표의 메서드는 목표 설계의 행동 이름이다.
+현재 구현의 주요 변경 단위와 책임은 다음과 같다. 메서드가 있는 경우 이름을 적고, 불변 record는 생성 시 검증과 저장소의 책임을 설명한다.
 
 | 변경 경계 | 책임과 주요 행동 | 저장소에서 지킬 규칙 |
 | --- | --- | --- |
-| `Route` + 현재 버전·정류장 | `openVersion`, `replaceVersion`, `reviseTimetable`; 버전 기간이 겹치지 않고 현재 버전은 하나 | route 단위 직렬화 + 기존 exclusion 제약. 종료할 버전, 새 버전, 정류장을 같은 TX로 저장 |
-| `CollectionBatch` + 현재 시도의 관측 행 | `beginAttempt`, `dispatch`, `complete`, `abandon`, `confirmInput`; 시도 번호·상태·행수 일치, 확정한 수집 배치는 재열기 금지 | 계획 유일키, revision 조건부 갱신, 동일 행 잠금, 배치와 관측 행의 원자 저장 |
-| `DailyCallBudget` | 공급자·API·서울 날짜별 허용 횟수 예약 | SQL 조건부 증가. 전체 사용 이력을 객체로 읽지 않음 |
-| `ForecastPublication` + 불변 예측 행 | `publish`; source revision·모델·계산 시각이 같은 결과를 한 번 공개. 0행도 발행 | source batch 유일키, 헤더·행·사용 확정을 같은 TX로 커밋. 재요청은 기존 발행 반환 |
-| `ForecastEvaluation` | `settle`, `markLost`, `markSkipped`, `markSeatMissing`; PENDING에서 종결 상태로 한 번만 | 모든 종결에 조건부 UPDATE. 확정된 결과를 일반 재시도가 덮지 않음 |
-| `DemandStatisticsVersion` + 셀 | 완성된 같은 세대 전체를 공개하고 과거 세대 유지 | 세대 할당 직렬화, 입력 체크포인트 중복 방지, metadata+cells 원자 저장 |
+| `Route` + 현재 버전·정류장 | `Route.accept`, `RouteVersion.closeAt`, `reviseTimetable`; 버전 기간이 겹치지 않고 현재 버전은 하나 | route 단위 직렬화 + 기존 exclusion 제약. 종료할 버전, 새 버전, 정류장을 같은 TX로 저장 |
+| `CollectionBatch` + 현재 시도의 관측 행 | `startAttempt`, `dispatch`, `completeAttempt`, `abandonBeforeSend`, `confirmInput`; 시도 번호·상태·행수 일치, 확정한 수집 배치는 재열기 금지 | 계획 유일키, revision 조건부 갱신, 동일 행 잠금, 배치와 관측 행의 원자 저장 |
+| `DailyCallQuota` | 공급자·API·서울 날짜별 허용 횟수 예약 | SQL 조건부 증가. 전체 사용 이력을 객체로 읽지 않음 |
+| `ForecastPublication` + 불변 예측 행 | 생성자에서 source·모델·계산 시각이 같은 예측 묶음을 검증. 저장소가 한 번만 발행하며 0행도 기록 | source batch 유일키, 헤더·행·사용 확정을 같은 TX로 커밋. 재요청은 기존 발행 반환 |
+| `ForecastEvaluation` | `ForecastEvaluation.complete`와 `EvaluationResult`; PENDING에서 종결 상태로 한 번만 | 모든 종결에 조건부 UPDATE. 확정된 결과를 일반 재시도가 덮지 않음 |
+| `DemandStatisticsVersion` + 셀 | 완성된 같은 세대 전체를 공개하고 과거 세대 유지 | 품질 잠금 아래 revision 할당, metadata와 cells의 원자 저장 |
 | `ModelRelease`, `ActiveModelSlot` | 준비된 모델의 활성화, 이전 ACTIVE 교체, 동일 명령 중복 방지 | 활성 슬롯 잠금·버전 검사, 단일 ACTIVE 제약, 배포 이력 |
 | `TripQualityInvestigation` | 이상 차량의 조사 등록, 시작점 탐색, 정방향 재판정, 중단 후 재개 | 노선 버전·차량별 진행 상태, 실제 탐색 위치와 잠정 경계 후보를 같은 TX에 저장 |
 | `OneWayTripAssessment` | 조사한 편도의 상태와 판정 근거 관리 | 원 관측을 지우지 않고 연결 관계·판정 상태·규칙 버전을 기록 |
@@ -396,7 +395,7 @@ flowchart LR
 
 이 설계에는 애그리거트나 컨텍스트를 넘는 로컬 트랜잭션도 있다. 호출 횟수 예약과 수집 배치 기록, 관측의 사용 확정과 예보 발행, 평가 확정과 당일 보정은 함께 성공해야 한다. 현재의 같은 DB·프로세스 조건에서 이 원자성을 유지하는 선택이다. 서버나 DB를 나누면 이 선택을 그대로 유지할 수 있는지 다시 설계해야 한다.
 
-`DailyCalibration`은 평가 결과로 다시 계산할 수 있는 누계 모델로 둔다. 평가 확정과 새 집계값 반영을 함께 처리하되 모든 평가와 누계를 하나의 애그리거트로 묶지 않는다.
+당일 보정 누계는 평가 결과로 다시 계산할 수 있는 누계 모델로 둔다. 평가 확정과 새 집계값 반영을 함께 처리하되 모든 평가와 누계를 하나의 애그리거트로 묶지 않는다.
 
 도메인 객체의 검사만으로는 두 작업의 동시 변경을 막지 못한다. 예상한 상태일 때만 갱신하는 CAS, 같은 자료의 변경을 직렬화하는 guard 잠금, DB 유일키·외래키·CHECK 제약을 함께 사용한다. 구체적인 잠금 순서와 실패 처리는 [전환 계획](02-migration-plan.md)에 정리했다.
 
@@ -414,7 +413,7 @@ flowchart LR
 
 현재의 대상 정류장 선정, 차량 궤적 조합, 도착 결과 판정, 통계 계산이 이런 역할에 가깝다. 이 설계에서는 입력을 받아 결과를 만드는 순수 계산으로 유지한다. SQL이나 HTTP 처리를 이 계산에 섞지 않는다.
 
-`OneWayTripClassifier`는 순수한 품질 판정 정책으로, `ReverseBoundarySearch`는 탐색 상태를 가진 도메인 보조 객체로 둔다. 둘 다 SQL이나 Spring에 의존하지 않는다. 현재 `TripQualityRepository`에 모인 이벤트 수신·조사 순서·SQL은 각각 어댑터, 응용 서비스, 저장소 구현으로 나눈다. 분류기가 편도를 판단하는 일과 스케줄러가 관측 32묶음을 읽어 조사를 이어가는 일은 책임이 다르다.
+`OneWayTripClassifier`는 순수한 품질 판정 정책으로, `ReverseBoundarySearch`는 탐색 상태를 가진 도메인 보조 객체로 둔다. 둘 다 SQL이나 Spring에 의존하지 않는다. PR #70의 `TripQualityRepository`에 모여 있던 저장 연동·조사 순서·SQL을 어댑터, 응용 서비스, 저장소 구현으로 나눴다. 분류기가 편도를 판단하는 일과 스케줄러가 관측 32묶음을 읽어 조사를 이어가는 일은 책임이 다르다.
 
 예를 들어 후속 관측으로 실제 결과를 판정하려면 원래 예측한 대상 정류장과 그 뒤의 관측들을 함께 봐야 한다. 어느 관측 하나의 상태만 바꾸는 행동으로 표현하기 어렵기 때문에 별도의 판정 기능으로 둔다. 이 기능이 어떤 입력을 받아 어떤 결과를 내야 하는지가 도메인 서비스의 책임이다.
 
@@ -426,7 +425,7 @@ flowchart LR
 
 | 해야 할 일 | 담당 | 현재 코드와 목표 구조 |
 | --- | --- | --- |
-| 처리할 배치를 선택하고 입력을 잠가 읽기 | 응용 서비스와 저장소 | ForecastJob·ForecastBatchWriter의 흐름을 `PublishForecast`로 정리 |
+| 처리할 배치를 선택하고 입력을 잠가 읽기 | 응용 서비스와 저장소 | `PublishPendingForecastsService`가 후보를 고르고 `ForecastBatchWriter`가 배치 하나를 발행 |
 | 앞의 정류장 중 예측 대상을 고르기 | 도메인 규칙 | `RouteStops`와 목표 선택 로직 유지 |
 | 관측 이력으로 궤적을 구성하기 | 도메인 서비스 | `VehicleTrajectoryAssembler` 유지 |
 | 특징을 계산하고 모델로 확률을 구하기 | 도메인 서비스·예측 전략 | `SeatForecastDesignMatrix`와 순수 예측 계산 |
@@ -446,15 +445,15 @@ flowchart LR
 
 여기서 추상화한다는 말은 호출하는 코드가 SQL과 테이블 저장 순서를 모두 알지 않아도 되도록, 필요한 저장 동작만 드러낸다는 뜻이다. 발행을 진행하는 코드는 저장소에 완성된 발행 객체를 전달하고, 저장소 구현은 그 객체를 DB에 기록한다.
 
-목표 설계의 `PublicationStore`는 발행 결과를 하나의 단위로 저장한다. 내부에서 여러 테이블을 쓰더라도 응용 서비스는 저장 순서마다 SQL을 직접 작성하지 않는다. 저장소 구현이 헤더와 예측의 원자 저장, 중복 발행 검사 같은 약속을 지킨다.
+`ForecastPublicationRepository`는 발행 결과를 하나의 단위로 저장한다. 내부에서 여러 테이블을 쓰더라도 응용 서비스는 저장 순서마다 SQL을 직접 작성하지 않는다. 저장소 구현이 헤더와 예측의 원자 저장, 중복 발행 검사 같은 약속을 지킨다.
 
-관측 이력을 읽거나 화면 정보를 조합하는 기능은 조회 포트로 둔다. `ObservationHistoryReader`나 기존 `BoardQueryRepository`가 있다는 이유로 이들 모두를 애그리거트 리포지토리로 해석하지 않는다. 무엇을 저장하고 읽는 인터페이스인지 구분한다.
+관측 이력을 읽거나 화면 정보를 조합하는 기능은 조회 포트로 둔다. `VehicleTrajectoryRepository`나 기존 `BoardQueryRepository`가 있다는 이유로 이들 모두를 애그리거트 리포지토리로 해석하지 않는다. 무엇을 저장하고 읽는 인터페이스인지 구분한다.
 
 ### 8.2 포트와 어댑터
 
 포트(Port)는 업무 쪽에서 필요한 외부 기능을 정의한 인터페이스이며, 어댑터(Adapter)는 이를 SQL·HTTP·파일 등으로 구현한 코드다. 이 구조는 DDD와 함께 사용하는 아키텍처 선택이다.
 
-예를 들어 예보 코드는 관측 이력을 읽는 포트를 호출한다. 어댑터가 관측 영역의 공개 인터페이스에서 이력을 가져와 예보용 모델로 변환한다. 예측 계산은 이력이 어느 테이블에서 왔는지 알 필요가 없다.
+예를 들어 예보 코드는 관측 이력을 읽는 포트를 호출한다. 현재 JDBC 어댑터는 관측 테이블과 품질 view에서 이력을 읽어 예보용 모델로 변환한다. 배치 잠금과 입력 확정은 별도의 `CollectionInputs` 공개 인터페이스를 사용한다. 예측 계산은 이력이 어느 테이블에서 왔는지 알 필요가 없다.
 
 ```mermaid
 flowchart LR
@@ -473,7 +472,7 @@ flowchart LR
 | 계층 | 맡는 일 | 이번 설계의 예 |
 | --- | --- | --- |
 | `domain` | 업무 상태, 값, 변경 규칙, 계산 | CollectionBatch, ForecastPublication, 순수 예측 계산 |
-| `application` | 유스케이스 진행과 트랜잭션 | PublishForecast, EvaluateForecasts |
+| `application` | 유스케이스 진행과 트랜잭션 | PublishPendingForecasts, EvaluateForecasts |
 | `infrastructure` | 저장소·외부 시스템·파일 구현 | JDBC 저장, GBIS 변환, 번들 적재 |
 | 모듈의 `api` | 다른 모듈이 사용할 공개 인터페이스와 전달값 | 카탈로그·관측의 공개 조회 기능 |
 | 실행 앱 | HTTP와 스케줄 실행, 설정과 의존성 구성 | api-app, worker-app |
@@ -515,15 +514,15 @@ PR #70 이후에는 **다가오는 차량과 제공 가능한 예보도 별도�
 
 **도메인 이벤트(Domain Event)는 업무에서 발생한 의미 있는 사실을 표현한다.** [DDD Reference의 Domain Events](https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf)
 
-`PublishForecast`는 발행하라는 요청이고 `ForecastPublished`는 발행이 끝났다는 사실이다. 요청은 실패할 수 있으므로 성공 사실과 구분한다.
+`PublishPendingForecasts`는 발행하라는 요청이고 `ForecastPublished`는 발행이 끝났다는 사실이다. 요청은 실패할 수 있으므로 성공 사실과 구분한다.
 
 A의 예보 발행 트랜잭션이 실패하면 발행은 완료되지 않는다. 앞서 커밋한 수집 결과는 그대로 남는다. 발행 완료를 알리려면 예보 저장의 성공까지 확인해야 한다. 이벤트를 메모리에서 전달할지, DB에 남길지, 메시지 브로커로 보낼지는 이 사실을 전달하는 방법에 관한 별도 선택이다.
 
-`ObservationAccepted`, `ForecastPublished`, `ForecastOutcomeSettled`, `ModelActivated`는 업무에서 일어난 사건을 표현하는 이름이다. 모든 사건을 메시지 브로커로 전달하는 방식은 이번 기본안에 포함하지 않는다.
+`ObservationAccepted`, `ForecastPublished`, `ForecastOutcomeSettled`, `ModelActivated`는 사건을 설명하기 위한 이름이며 각각의 이벤트 클래스를 구현한 것은 아니다. 실제 저장 연동에는 `VehicleObservationsStored`를 사용한다. 메시지 브로커는 도입하지 않았다.
 
 예보 후보를 찾는 기본 방식은 폴링이며 업무 처리는 동기 유스케이스로 실행한다. 정산과 당일 보정은 같은 TX 안에서 직접 처리한다. PR #70의 관측 저장 이벤트도 동기 처리이며, 수집 저장과 품질 조사 요청 등록을 같은 TX에서 커밋한다. 목표 구조에서도 이 보장을 유지한다. 조사 요청이 DB에 남아야 프로세스가 중단돼도 이어서 처리할 수 있다.
 
-현재 `@EventListener`와 `Propagation.MANDATORY`가 이 계약을 구현한다. 이벤트를 단순한 비동기 알림이나 커밋 후 메모리 콜백으로 바꾸면 관측만 저장되고 조사 요청이 빠지는 구간이 생긴다. 전달 방식을 바꾸는 경우에는 영속 전달과 재처리까지 함께 설계해야 한다.
+PR #70의 `@EventListener` 경로는 현재 명시적인 `CollectionQualityHook` 호출로 바뀌었다. forecasting 어댑터의 `Propagation.MANDATORY`가 호출자의 트랜잭션 참여를 요구한다. 이를 비동기 알림이나 커밋 후 메모리 콜백으로 바꾸려면 조사 요청의 누락을 막을 영속 전달과 재처리가 별도로 필요하다.
 
 알림이나 외부 소비자, 별도 읽기 저장소가 생기면 원본 변경과 outbox를 같은 TX에 저장하고 전달 중복·순서·재생 방법을 설계한다. 보드를 비동기로 투영하는 경우에는 조회 지연 정책도 필요하므로 별도 확장으로 다룬다. 현재 3개 조회 계약은 같은 DB에서 유지한다.
 
@@ -558,31 +557,30 @@ backend/
 forecasting/
 └─ com.gustler.backend.forecasting
    ├─ api/                공개 유스케이스 인터페이스·불변 계약값
-   ├─ application/        PublishForecast, EvaluateForecasts,
-   │                      InvestigateTripQuality, BuildDemandStatisticsVersion, PromoteModel
+   ├─ application/        PublishPendingForecastsService, EvaluateForecastsService,
+   │                      TripQualityInvestigationService, StopDemandStatisticsWriter,
+   │                      ModelActivationService
    ├─ domain/
-   │  ├─ publication/     발행·예측·입력 식별 정보
-   │  ├─ evaluation/      평가 상태·결과 근거 데이터·전이 규칙
-   │  ├─ trajectory/      시간 순서·궤적·목표 선택 규칙
+   │  ├─ publication/     발행·예측·관측 이력·궤적·목표 선택
+   │  ├─ evaluation/      평가 상태·결과·당일 보정 누계
    │  ├─ quality/         편도 판정·조사 진행·품질 버전·사용 조건
    │  ├─ statistics/      세대·셀·계산 정책
-   │  ├─ calibration/     당일 보정 입력과 정책
    │  ├─ sharedvalue/     평가·통계 등에서 함께 쓰는 예보 내부 값
    │  └─ model/           모델 식별 정보·릴리스·활성 슬롯·예측 전략
    └─ infrastructure/
-      ├─ persistence/     JDBC·SQL·매핑·잠금·조건부 갱신
-      ├─ observation/     관측 공개 계약 → 예보 입력 변환
-      ├─ catalog/         카탈로그 공개 계약 → 예보 노선 변환
+      ├─ jdbc/            JDBC·SQL·매핑·잠금·조건부 갱신
+      ├─ observations/    관측 입력 확정·품질 저장 연동
+      ├─ quality/         품질 조사·노선 품질 상태의 JDBC 구현
       └─ bundle/          파일·manifest·safetensors·메모리 적재
 ```
 
 모듈과 계층 사이의 의존은 다음 규칙을 따른다.
 
 - 업무 모듈의 `domain`은 Java와 명시한 순수 계산 라이브러리만 사용한다. Spring·JPA·Jackson·GBIS 응답형은 금지한다.
-- `application`은 업무 순서와 트랜잭션을 맡고 외부 기능은 자기 영역의 포트로 호출한다.
+- `application`은 업무 순서와 트랜잭션을 맡는다. 저장소 포트와 다른 영역의 공개 API를 호출하되 해당 영역의 내부 구현은 사용하지 않는다.
 - `infrastructure`는 그 포트를 구현한다. 다른 업무의 `api`에서 받은 값은 해당 영역의 형으로 변환한다.
 - 다른 모듈은 공개 `api` 이외의 업무 구현을 참조하지 않는다. 공개 계약에는 JPA 엔티티나 타 모듈 내부 도메인형을 노출하지 않는다.
-- 관측 어댑터는 카탈로그 `api`를, 예보 어댑터는 카탈로그·관측 `api`를 사용한다. 역방향 의존은 없다.
+- 관측은 카탈로그·호출 한도·GBIS의 공개 계약을 사용한다. 예보는 관측의 입력 확정 API를 사용하며 노선·관측 조회는 JDBC 어댑터에서 수행한다. 관측에서 예보 구현으로 향하는 역방향 의존은 없다.
 - GBIS 클라이언트는 업무 모듈에 의존하지 않는다. 카탈로그와 관측의 변환 어댑터가 외부 결과를 받아 각 업무에 맞게 해석한다.
 - 호출 한도 모듈도 두 업무에 의존하지 않는다. 다만 예약 구현은 호출자와 같은 DataSource/TX에 참여해야 한다.
 - API는 쓰기 업무 모듈을 기동하지 않는다. 공개 DB 읽기 계약을 사용하는 전용 조회 구현과 `common`으로 실행한다.
@@ -597,7 +595,7 @@ Gradle 모듈을 나눠도 Java public 클래스에는 접근할 수 있으므�
 
 기존 `migration-tool`에서 일회성 이관 전용 38개 파일을 제거한다. `TripQualityMaintenance`의 업무 흐름과 SQL은 forecasting으로 옮기고, 나머지 CLI 지원 10개는 `maintenance-app`의 명령·설정·DB 연결·정비 권한 확인 역할로 재구성한다. PR #70의 `quality-preview`, `quality-rebuild`, `quality-status`가 수행하던 품질 정비 기능은 유지한다.
 
-품질 정비의 공개 유스케이스는 forecasting에 두고 CLI 어댑터가 호출한다. 유스케이스는 한 chunk를 하나의 트랜잭션으로 처리하며 온라인 작업과 같은 품질 guard를 사용한다. `maintenance-app`은 필요한 빈만 명시적으로 구성하고 `WebApplicationType.NONE`으로 실행한다. 이 설정만으로 스케줄러나 Flyway가 꺼지는 것은 아니므로 두 기능의 자동 실행을 별도로 제외하고 읽기 전용 스키마 사전 검사를 수행한다.
+품질 정비의 공개 유스케이스는 forecasting에 두고 CLI 어댑터가 호출한다. 유스케이스는 한 chunk를 하나의 트랜잭션으로 처리하며 온라인 작업과 같은 품질 guard를 사용한다. `maintenance-app`은 `AnnotationConfigApplicationContext`에 DB 연결·트랜잭션·품질 정비·관측 입력 보존 구성만 등록한다. Boot 자동 구성, 스케줄러, 모델 적재, Flyway는 실행하지 않는다. 지원 DB 스키마를 미리 검사해 안내하는 별도 기능은 없으며 스키마가 맞지 않으면 조회·처리 오류로 종료한다.
 
 일회성 DDD 전환 작업은 `backend/deploy/migrations/<change-id>`에 두고 상시 품질 CLI와 분리한다. 스키마 DDL은 기존 Flyway 순서와 적용 이력을 보존해 관리한다. 전환 코드의 백필·대조·실행 순서를 같은 DDL의 별도 관리 경로로 만들지 않는다.
 
@@ -619,7 +617,7 @@ sequenceDiagram
   O->>O: 계획 확보·sealed 확인·revision 증가
   O->>B: reserve(provider, API, SeoulDate, calls)
   Note over O,B: 예약과 배치 기록 같은 TX · 먼저 커밋
-  O-->>W: AttemptToken(batchId, revision)
+  O-->>W: CollectionAttemptToken(batchId, attemptNumber)
   W->>O: dispatch(token, requestedAt)
   Note over O,B: 날짜 재확인 · 전송 직전 상태 별도 커밋
   W->>G: 실제 HTTP 호출
@@ -634,7 +632,7 @@ token의 revision에는 기존 `attempt_number`를 사용한다. 이 값은 begi
 
 같은 token의 완료가 중복 도착하면 이미 기록한 결과를 반환한다. 같은 token으로 다른 결과가 들어온 경우에는 기존 값을 덮어쓰지 않는다. 지난 시도의 token은 충돌로 처리하며 현재 배치는 그대로 둔다.
 
-GBIS DTO·오류코드·Jackson 처리는 어댑터에 둔다. 어댑터가 이를 `ObservedVehicles`, `NoVehicles`, `SourceFailure` 같은 도메인 계약으로 변환한다. 외부에서 받은 행은 있지만 저장할 수 있는 행이 0인 경우에는 차량이 없다는 응답과 구분한다.
+GBIS DTO·오류코드·Jackson 처리는 어댑터에 둔다. `CollectionResponseMapper`가 응답을 `CollectedObservations`와 `ObservationBatchConclusion`으로 변환한다. 외부에서 받은 행은 있지만 저장할 수 있는 행이 0인 경우에는 차량이 없다는 응답과 구분한다.
 
 위치 호출의 자정 재검사는 유지한다. 노선 조회에서 수행하는 두 HTTP 호출에도 같은 날짜 기준의 호출 한도 규칙을 적용하면 현재보다 검사 범위가 넓어지므로 별도로 검증한다.
 
@@ -644,7 +642,7 @@ GBIS DTO·오류코드·Jackson 처리는 어댑터에 둔다. 어댑터가 이�
 
 같은 발행 요청을 다시 처리해도 이미 완료한 발행 결과를 반환하고 중복 발행을 만들지 않는다. 이처럼 반복 요청의 효과를 한 번 처리한 것과 같게 유지하는 것을 **멱등성**이라고 한다. 실제 외부 API를 다시 호출하고 호출 횟수를 사용하는 수집 재시도와는 구분한다.
 
-1. 후보의 `batchId + revision`을 받는다. 후보를 조회한 뒤에도 다른 작업이 처리할 수 있으므로 잠금과 상태 확인이 필요하다.
+1. 후보의 `batchId + attemptNumber`을 받는다. 후보를 조회한 뒤에도 다른 작업이 처리할 수 있으므로 잠금과 상태 확인이 필요하다.
 2. 노선의 품질 guard를 먼저 확보한 뒤 관측 영역의 공개 기능으로 해당 배치를 잠그고 현재 revision과 성공 상태를 다시 확인한다.
 3. 해당 source로 이미 발행을 마쳤으면 저장된 결과를 반환한다. 예측값을 UPSERT로 덮어쓰지 않는다.
 4. 같은 트랜잭션에서 품질 조건을 적용한 관측 이력·노선·통계·당일 보정값을 읽고 품질 버전과 메모리에 준비된 모델 식별 정보를 고정한다.
@@ -652,9 +650,9 @@ GBIS DTO·오류코드·Jackson 처리는 어댑터에 둔다. 어댑터가 이�
 6. 관측 영역에서 배치의 사용을 확정하고 예보 영역에서 발행 헤더·예측행·초기 평가 상태와 모델·통계·품질 식별 정보를 기록한다.
 7. 모두 함께 커밋한다. 중간 실패면 모두 롤백되어 미발행 상태로 남는다.
 
-수집 배치를 다시 열 때도 같은 잠금 규칙을 따른다. 재수집이 먼저 끝났다면 revision이 달라지므로 이전 시도에 대한 예보 계산을 버린다. 발행이 먼저 끝났다면 사용이 확정된 배치이므로 재열기를 거부한다. `REPEATABLE_READ`에서 직렬화 실패가 발생하면 트랜잭션 전체를 재시도한다.
+수집 배치를 다시 열 때도 같은 잠금 규칙을 따른다. 재수집이 먼저 끝났다면 revision이 달라지므로 이전 시도에 대한 예보 계산을 버린다. 발행이 먼저 끝났다면 사용이 확정된 배치이므로 재열기를 거부한다. 현재 발행 메서드는 격리 수준을 따로 지정하지 않은 `@Transactional`을 사용한다. 품질 guard와 배치 잠금으로 변경을 직렬화하며, 전체 입력 조회가 REPEATABLE_READ 스냅샷이라고 설명하지 않는다.
 
-이 과정에서는 **관측 영역의 사용 확정과 예보 영역의 발행을 같은 TX로 묶는다.** 현재처럼 같은 DB와 프로세스를 사용하는 조건에서 발행 근거가 교체되지 않도록 하기 위한 선택이다. 나중에 서버나 DB를 분리한다면 분산 트랜잭션을 포함한 일관성 처리 방식을 다시 설계해야 한다.
+이 과정에서는 **관측 영역의 사용 확정과 예보 영역의 발행을 같은 TX로 묶는다.** 현재처럼 관련 쓰기를 같은 DB와 Worker에서 수행하는 조건에서 발행 근거가 교체되지 않도록 하기 위한 선택이다. 나중에 서버나 DB를 분리한다면 분산 트랜잭션을 포함한 일관성 처리 방식을 다시 설계해야 한다.
 
 계산이 길어져 잠금 시간이 허용치를 넘는다면 불변 입력 복사, 작업 임대, fencing token을 사용하는 방식으로 확장한다. 임대 프로토콜은 그때 별도로 설계하며 기본안에는 포함하지 않는다.
 
@@ -676,17 +674,21 @@ GBIS DTO·오류코드·Jackson 처리는 어댑터에 둔다. 어댑터가 이�
 
 보정값은 **노선·날짜 순으로 guard 확보 → 기존 확정 결과로 미초기화 누계 생성 → PENDING 결과 CAS → 새로 확정한 결과의 집계값 증가** 순서로 갱신한다. 이 순서를 지켜야 새 결과가 초기 집계와 증분에 두 번 포함되지 않는다. 별도로 재집계하는 작업도 같은 guard를 사용한다.
 
-평가에 사용한 후속 관측은 아직 예보에 쓰이지 않아 재수집 대상이 될 수 있다. 따라서 평가 근거 데이터에 실제 사용한 관측값·응답시각·버전·revision·판정 이유를 복사해 불변으로 보관한다.
+평가에 사용한 후속 관측은 자기 예보가 아직 없을 수 있다. 평가 저장소는 `CollectionInputs.lockForObservation`으로 해당 배치를 잠그고 입력을 확정한 뒤 평가를 저장한다. 도착 관측의 값·시각·노선 버전·차량·정류장·운행 상태·좌석 정보·편도·방향은 `forecast_evaluation`에 함께 보관한다. 수집 시도 번호나 별도 판정 이유를 평가 근거 컬럼으로 추가한 구조는 아니다.
 
-변경 가능한 관측행을 참조하는 평가 FK는 근거 데이터와 모든 소비자를 전환한 뒤 제거한다. **불변으로 복사한 평가 근거에도 현재 품질 조건을 적용해야 한다.** 이미 제외한 편도가 보정·통계·학습에서 다시 사용돼서는 안 된다. PR #70의 편도 시작·근거 관측 FK와 조사 커서도 원 관측을 참조하므로, 평가 FK 하나를 없앴다고 재수집 DELETE가 안전해지는 것은 아니다. 참조와 판정 근거를 보존하는 전환이 끝나기 전에는 해당 자료의 교체를 허용하지 않는다.
+변경 가능한 관측행을 참조하는 평가 FK는 근거 데이터와 모든 소비자를 전환한 뒤 제거한다. **불변으로 복사한 평가 근거에도 현재 품질 조건을 적용해야 한다.** 이미 제외한 편도가 보정·통계·학습에서 다시 사용돼서는 안 된다. PR #70의 편도 시작·근거 관측 FK와 조사 커서도 원 관측을 참조하므로, 평가 FK 하나를 없앴다고 재수집 DELETE가 안전해지는 것은 아니다. 현재 구현은 평가 근거뿐 아니라 품질 조사의 시작·제외 근거, 이전 관측, anchor·잠정 경계 후보가 속한 배치도 입력 확정으로 보호한다. 이 자료는 참조를 유지한 채 재수집에 의한 교체를 거절한다.
 
-### 12.4 모델: 활성 DB 행과 실제 실행 가능한 모델을 구분한다
+### 12.4 모델: 활성 상태와 실행 가능한 모델을 맞춘다
 
-`ModelIdentity`를 메모리 레지스트리·DB·배포 결과 기록·발행에서 공통으로 사용한다. digest가 같더라도 릴리스가 다르면 구분해 저장하고 기존 객체를 덮어쓰지 않는다.
+`ModelIdentity`는 `releaseId`, `modelKey`, `modelVersion`, `bundleDigest`, `predictionTargetVersion`, `calculationVersion`, `supportedScopeDigest`, `dataUntil`을 함께 비교한다. 메모리 레지스트리와 DB의 활성 모델도 같은 전체 식별 정보를 사용한다. 시간은 PostgreSQL의 마이크로초 정밀도에 맞춘다.
 
-번들 읽기와 구조 검사, golden 검사, 전체 특징 계산 계약 검증을 마친 뒤 활성 슬롯을 변경한다. `PromoteModel(commandId, expectedActiveVersion, modelIdentity)`는 같은 명령에 같은 결과를 반환한다. 명령이 전제한 활성 버전이 이미 바뀌었다면 충돌로 처리한다.
+활성화 요청은 `ActivateModelCommand(requestId, expectedActiveVersion, directory)`다. 파일을 읽고 검증해 메모리에 준비한 뒤 DB 트랜잭션을 시작한다. 활성 슬롯을 잠그고 같은 요청 ID의 기존 결과를 확인한다. 이전 요청의 기대 버전과 모델 식별 정보까지 같을 때만 같은 결과를 반환한다. 새 요청은 현재 슬롯 버전이 기대 버전과 맞아야 한다.
 
-활성 슬롯은 짧은 TX에서 변경한다. 메모리에 준비한 모델은 변경되지 않는 식별 정보로 보관하고 커밋된 ACTIVE만 실행 대상으로 선택한다. 이미 처리 중인 배치는 처음 선택한 모델을 끝까지 사용한다. DB의 ACTIVE 상태만으로는 다른 프로세스의 모델 적재 완료 여부까지 알 수 없다.
+같은 모델을 다시 선택하면 활성 버전은 증가하지 않지만 요청 기록은 남는다. 다른 모델로 바꾸면 배포 기록·ACTIVE 교체·요청 기록을 함께 커밋한다. 진행 중인 예보는 처음 확보한 runtime을 끝까지 사용한다.
+
+기동 적재는 `LoadConfiguredModel`로 분리했다. 설정 없음, 같은 모델 준비 완료, 활성화 미허용 불일치, 최초 활성화와 활성화 경쟁을 구분한다. ACTIVE가 없으면 최초 활성화는 `promoteOnStart=false`에서도 수행한다.
+
+번들의 구조·계수 digest·특징 이름과 순서·노선·예보 거리·golden 계산을 검사한다. 다만 `featureContractVersion` 문자열은 비어 있지 않은지 확인할 뿐 지원 버전 목록과 대조하지 않는다. 선언한 계약 버전과 실제 Java 특징 정책의 의미가 일치하는지 강제하는 검증은 기존에 미구현된 범위로 남아 있다.
 
 ### 12.5 품질 조사: 원본을 남기고 사용 범위를 다시 판단한다
 
@@ -716,23 +718,23 @@ GBIS DTO·오류코드·Jackson 처리는 어댑터에 둔다. 어댑터가 이�
 | route, route_version, route_stop | 노선 카탈로그 | route 잠금과 버전 교체 규칙을 담당. 물리 테이블 유지 |
 | observation_batch, vehicle_observation | 관측 수집 | revision token과 사용 확정 상태 추가. 예보 영역이 발행 완료를 직접 쓰는 경로 제거 |
 | daily_call_quota | 호출 한도 | 원자 증가 SQL을 유지하고 공개 예약 계약으로 제공 |
-| 신규 forecast_publication | 탑승 예보 | source batch 유일키, source revision, 모델·통계·보정 식별 정보, 원 관측 시각, generated/published 시각, 행수 |
+| 신규 forecast_publication | 탑승 예보 | source batch 유일키, source attempt number, 모델 배포 ID·통계 revision·품질 revision, observed/generated/published 시각, prediction count·provenance |
 | seat_forecast | 탑승 예보 | publication FK 추가. 발행 후 확률·기대좌석·모델·generatedAt 불변 |
-| 신규 forecast_outcome + outcome evidence | 탑승 예보 | 예측 FK, PENDING/종결 상태, 불변 평가 근거 데이터·시각. 기존 평가 열과 live 관측 FK를 단계적으로 이관 |
-| 신규 demand_statistics_generation + 기존 stop_demand_statistics | 탑승 예보 | 세대 metadata root와 셀. 세대 번호를 안전하게 할당하고 완성된 세대만 조회 |
+| 신규 forecast_evaluation | 탑승 예보 | 예측 FK, PENDING/종결 상태, 평가 시각과 도착 관측값을 같은 행에 보관. 도착 근거 배치는 입력 확정으로 보호 |
+| 신규 demand_statistics_version + 기존 stop_demand_statistics | 탑승 예보 | 통계 metadata와 기존 셀을 같은 TX로 저장. 품질 잠금 아래 revision을 할당하며 현재 input_checkpoint는 NULL |
 | same_day_full_outcomes | 탑승 예보 | 평가 결과에 따른 누계. 초기화와 증분의 동시 처리 제어 |
-| model_deployment + 활성 슬롯 | 탑승 예보 | 기존 배포 ID 유지. 모델 식별 정보·명령 ID·기대 버전 검사 보강 |
+| model_deployment, model_active_slot, model_activation_request | 탑승 예보 | 기존 배포 ID 유지. 전체 모델 식별 정보·요청 ID·기대 버전 검사 |
 | vehicle_one_way_trip, trip_quality_rebuild | 탑승 예보의 품질 관리 | 기존 판정·조사 상태와 두 탐색 위치를 이관. 조사 대상의 원본과 정상 차량을 보존 |
 | 신규 observation_trip_assignment | 탑승 예보의 품질 관리 | 기존 vehicle_trip_key 연결을 옮겨 원 관측과 품질 판정의 쓰기 책임을 분리 |
-| 신규 route_forecast_quality, 노선 버전별 품질 정책 | 탑승 예보의 품질 관리 | 현재 route.quality_revision과 관측 연결 간격·근거의 저장 책임 이관. 노선 버전 식별자는 카탈로그 계약을 사용 |
+| route_data_quality, route_version_quality_policy | 탑승 예보의 품질 관리 | 현재 route.quality_revision과 관측 연결 간격·근거의 저장 책임 이관. 노선 버전 식별자는 카탈로그 계약을 사용 |
 | historical import audit/staging | 운영 보존 자료 | 일회성 이관 코드는 제거. 완료된 실행 기록과 DB 자료의 보존·정리는 코드 삭제와 구분 |
 | historical seed hourly totals·cutover 장부 | 운영 보존 자료 | seed 이관·임시 모델 교체 코드는 제거. 온라인 통계는 seed 합계를 사용하지 않으며, 남은 학습 view·모델 제외 기록의 의존은 별도 확인 |
 
 주요 테이블 변경은 다음 업무 모델에서 나온다.
 
 - **예보 발행:** 한 수집 결과로 계산한 예보 전체가 언제, 어떤 모델과 입력으로 확정됐는지 기록한다. 예측행이 0개인 경우에도 발행 사실은 남아야 하므로 `forecast_publication`을 둔다. 전환이 끝나면 수집 테이블의 `forecast_completed_at`을 없애고, 관측 영역에는 재수집 허용 여부를 판단할 사용 확정 상태를 남긴다.
-- **예보 평가:** 발행한 예측값은 고정되지만 실제 도착 결과를 확인하는 평가는 나중에 진행된다. 이 차이를 `forecast_outcome`으로 표현하고, 평가에 사용한 관측값과 시각도 별도로 보관한다. 관련 조회를 모두 옮긴 뒤 기존 예측 테이블의 평가 컬럼과 변경 가능한 관측행을 가리키는 평가 FK를 제거한다.
-- **수요 통계:** 한 번 계산해 공개한 통계 묶음의 입력 범위와 계산 버전을 기록한다. `demand_statistics_generation`에 이 정보를 두고 개별 통계값을 연결해, 완성된 통계 묶음을 선택할 수 있게 한다.
+- **예보 평가:** 발행한 예측값은 고정되지만 실제 도착 결과를 확인하는 평가는 나중에 진행된다. 이 차이를 `forecast_evaluation`으로 표현하고, 평가에 사용한 관측값과 시각도 별도로 보관한다. 관련 조회를 모두 옮긴 뒤 기존 예측 테이블의 평가 컬럼과 변경 가능한 관측행을 가리키는 평가 FK를 제거한다.
+- **수요 통계:** 한 번 계산해 공개한 통계 묶음의 입력 범위와 계산 버전을 기록한다. `demand_statistics_version`에 이 정보를 두고 개별 통계값을 연결해, 완성된 통계 묶음을 선택할 수 있게 한다.
 - **모델 활성화:** 배포된 모델의 이력과 지금 실행 대상으로 선택한 모델을 구분한다. 배포 기록과 활성 슬롯을 나누어 관리하고, 활성 버전 검사와 명령의 중복 처리 방지에 필요한 정보를 저장한다.
 
 노선·노선 버전·정류장 테이블은 노선의 식별과 버전별 구성을 표현하는 데 사용할 수 있어 유지하는 안을 선택했다. 대신 버전 교체 규칙과 쓰기 책임을 노선 카탈로그에 모은다. 테이블 추가와 삭제도 이처럼 목표 모델을 저장하기 위한 구체적인 선택으로 설명한다.
@@ -747,7 +749,7 @@ GBIS DTO·오류코드·Jackson 처리는 어댑터에 둔다. 어댑터가 이�
 
 발행 결과의 원 관측 시각과 계산 시각을 구분한다. `observedAt`은 응답을 받은 시각, `generatedAt`은 예보 계산 시각, `scoredAt`은 평가 시각, `dataUntil`은 통계에 포함된 자료의 시간 경계다. 자료의 발생 시각과 실제로 사용할 수 있게 된 시각도 같은 의미로 취급하지 않는다.
 
-발행에는 수집 배치 ID와 시도 번호, 노선 버전, 전체 모델 식별 정보, 사용한 통계 버전과 품질 버전, 계산·발행 시각을 기록한다. 기존 원 관측·예측값·평가 근거와 모델 배포 이력을 보존해 어느 자료와 구현을 사용했는지 확인할 수 있게 한다.
+발행에는 수집 배치 ID와 시도 번호, 노선 버전, 모델 배포 ID, 사용한 통계 revision과 품질 revision, 관측·계산·발행 시각을 기록한다. 전체 모델 식별 정보는 모델 배포 ID로 연결된 배포 이력에서 확인한다. 보정 식별 정보는 별도로 저장하지 않는다. 기존 원 관측·예측값·평가 근거와 모델 배포 이력을 보존해 어느 자료와 구현을 사용했는지 확인할 수 있게 한다.
 
 이번 구현에서는 실제 예보 입력·특징 벡터·당일 보정값의 별도 스냅샷을 저장하지 않는다. 이를 위한 `ForecastInputEvidence` 모델이나 저장소도 만들지 않는다. 따라서 식별 정보만으로 당시 계산을 정확히 재현할 수 있다고 보장하지 않는다. 과거에 참고한 이력이 바뀌었거나 당시 보정값을 복원할 수 없다면 확인 가능한 범위가 제한된다.
 
@@ -822,7 +824,7 @@ GBIS가 잔여석 필드의 이름이나 JSON 배치를 변경했다고 가정�
 
 ### 17.3 늦게 도착한 응답이 재시도 결과를 덮으려 할 때
 
-재시도 작업을 추가하거나 같은 수집 계획을 여러 작업이 처리하도록 확장하는 상황을 생각할 수 있다. 아직 예보에 사용되지 않은 배치 A에서 다음 순서가 발생했다고 하자.
+재시도 작업을 추가하거나 같은 수집 계획을 여러 작업이 처리하도록 확장하는 상황을 생각할 수 있다. 아직 발행·평가·품질 근거로 입력이 확정되지 않은 배치 A에서 다음 순서가 발생했다고 하자.
 
 1. 첫 번째 시도가 외부 API를 호출했지만 응답이 늦어진다.
 2. 재시도가 허용되는 조건에서 두 번째 시도를 시작한다.
@@ -831,7 +833,7 @@ GBIS가 잔여석 필드의 이름이나 JSON 배치를 변경했다고 가정�
 
 저장 명령에 배치 ID만 있으면 두 응답이 같은 A를 가리킨다. 어느 시도의 응답인지 구분해 검사하지 않으면 늦은 응답이 최신 결과를 덮을 수 있다.
 
-제안한 `AttemptToken`은 배치 ID와 시도 번호를 함께 전달한다. 결과를 저장할 때도 현재 시도 번호와 일치하는지 원자적으로 확인하므로, 첫 번째 시도의 응답은 두 번째 시도의 결과를 변경하지 못한다. 이 규칙은 응답을 받는 코드에만 두지 않고 `CollectionBatch`의 상태 변경과 저장소의 조건부 갱신에 함께 적용한다.
+제안한 `CollectionAttemptToken`은 배치 ID와 시도 번호를 함께 전달한다. 결과를 저장할 때도 현재 시도 번호와 일치하는지 원자적으로 확인하므로, 첫 번째 시도의 응답은 두 번째 시도의 결과를 변경하지 못한다. 이 규칙은 응답을 받는 코드에만 두지 않고 `CollectionBatch`의 상태 변경과 저장소의 조건부 갱신에 함께 적용한다.
 
 같은 배치를 두 작업이 예보 대상으로 선택하는 경우에도 별도의 보호가 필요하다. source 잠금과 발행 유일키, 이미 완료된 발행의 반환 규칙을 적용해 새 예측으로 기존 결과를 덮지 않도록 한다.
 

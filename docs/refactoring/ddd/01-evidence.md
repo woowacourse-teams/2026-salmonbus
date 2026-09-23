@@ -1,6 +1,8 @@
-# 조사 근거와 변경하면 안 되는 의미
+# 기준 소스의 조사 근거와 구현 대조
 
 기준은 PR #70(SAL-133)이 병합된 `9f9c75d`이며, 확인일은 2026-09-23이다. 최초 기준인 `6f70826`과 비교해 코드·SQL·관련 테스트에서 달라진 동작을 반영했다. 소스 조사 당시에는 빌드·테스트·실서버 검증을 실행하지 않았다. 이후 구현 착수 전 같은 기준 코드의 1158개 테스트가 통과했다. 이 기준선 결과와 재설계 구현의 검증 결과는 [진행 기록](implementation-progress.md)에서 구분한다. 경쟁 상황에 관한 설계 판단도 운영 장애를 재현한 결과는 아니다.
+
+아래 1~7절의 소스 사실과 링크는 재설계 전 `9f9c75d`를 기준으로 한다. 그때의 이름·동작을 현재 구현으로 읽지 않도록 구분한다. 현재 소스와의 차이는 마지막 절과 [용어집](glossary.md)에 정리했다.
 
 [설계안](00-design.md)에서는 이 근거를 DDD 개념과 연결해 설명한다. 수집 결과의 구분은 유비쿼터스 언어, 수집 시도와 모델의 식별은 엔티티·값 객체, 함께 저장해야 하는 규칙은 애그리거트, API별 조회 조건은 CQRS 설계의 근거로 사용한다. 이 문서는 각 선택이 실제 코드의 어떤 동작에서 나왔는지 확인하는 자료다.
 
@@ -196,3 +198,15 @@ PR #70에서 이미 보강한 부분과 전면 재설계에서 추가할 책임�
 목표 모듈은 9개이며 호출 한도는 `api-call-quota`, 상시 품질 정비는 `maintenance-app`이 맡는다. 기존 migration-tool의 49개 중 이관 전용 38개는 삭제하고 품질 업무 구현 1개는 forecasting, CLI 지원 10개는 maintenance-app으로 재구성한다. 상세 클래스 배치는 구현 완료 후 다시 대조한다.
 
 운영 전환은 모든 관련 쓰기를 중지한 상태에서 한 번에 수행한다. 이전에 검토한 이중 쓰기·구/신 앱 혼합 운영·앱별 독립 롤백은 채택하지 않았다. 기존 DB 데이터와 적용 이력을 보존하며 실패 시 DB와 대응 앱 릴리스를 함께 복구한다. 실제 예보 입력의 별도 스냅샷 저장과 프론트엔드 수정도 이번 구현에서 제외한다.
+
+## 9. 현재 구현과 대조한 내용
+
+- 수집 계획과 시도는 `CollectionPlan`·`CollectionAttemptToken`이며 상태 규칙은 `CollectionBatch`가 담당한다. `CollectionInputs`는 같은 TX에서 배치를 잠그고 입력을 확정한다.
+- 발행은 `ForecastPublicationRepository`, 평가는 `ForecastEvaluationRepository`로 나눴다. 평가의 도착 관측뿐 아니라 품질 조사의 근거·탐색 위치도 입력 확정으로 보호한다.
+- V17은 발행·평가·통계 버전·품질·모델 활성화·영구 학습 제외 저장 구조를 추가하고 V18은 새 조회 정의로 전환한다. 원본 값과 기존 migration 이력은 보존한다.
+- 실제 평가 근거는 forecast_evaluation에 함께 저장한다. 수집 시도 revision이나 별도 판정 이유 컬럼을 추가한 구조는 아니다. 통계 input_checkpoint는 현재 NULL이며 체크포인트 기반 중복 산출 방지를 구현했다고 보지 않는다.
+- 품질 저장 연동은 Spring EventListener 대신 명시적인 CollectionQualityHook 호출을 사용한다. 모델의 전체 식별 정보와 요청 ID·기대 활성 버전은 실제 비교하지만 featureContractVersion 선언과 특징 정책의 의미 일치 강제는 남은 한계다.
+- maintenance-app은 최소 Spring context에서 품질 명령 하나를 실행한다. Flyway·스케줄·모델 기동은 실행하지 않으며 별도 DB 스키마 사전 안내 기능은 없다.
+- 프론트엔드의 중첩 forecast 계약 불일치는 이번 변경에서 수정하지 않았다. 실제 예보 입력의 별도 저장도 제외해 과거 계산의 정확한 재현을 보장하지 않는다.
+
+현재 코드를 확인할 때는 [V17](../../../backend/common/src/main/resources/db/migration/V17__ddd_storage_expansion.sql), [V18](../../../backend/common/src/main/resources/db/migration/V18__ddd_storage_cutover.sql), [CollectionInputs](../../../backend/business/observations/src/main/java/com/gustler/backend/observations/api/CollectionInputs.java), [ForecastBatchWriter](../../../backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/application/publication/ForecastBatchWriter.java), [평가 저장소](../../../backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcForecastEvaluationRepository.java)를 사용한다. 최종 테스트 수와 실행 결과는 [진행 기록](implementation-progress.md)에서 확인한다.

@@ -123,6 +123,6 @@ Worker의 자동 품질 조사는 별도 실행 경로다. 기본 간격은 10�
 
 ## 검증과 과거 기록
 
-SAL-134에서는 실제 정비 Boot JAR와 격리된 PostgreSQL 18로 `MaintenanceProcessTest` 5개를 실행했고 모두 통과했다. 폐기 명령 거절, 조회 명령이 데이터를 변경하지 않는지, 페이지별 재개와 완료 후 재호출, 원 관측 보존, 빈 DB의 자동 마이그레이션 방지, 다른 실행 앱·Flyway·이관 SQL·AWS SDK 미포함을 확인했다. 전체 빌드와 다른 테스트의 최종 결과는 [구현·검증 기록](../../../../../../docs/refactoring/ddd/implementation-progress.md)에서 관리한다.
+SAL-134에서는 실제 정비 Boot JAR와 격리된 PostgreSQL 18로 `MaintenanceProcessTest` 5개를 실행했고 모두 통과했다. 폐기 명령 거절, 조회 명령의 읽기 전용 처리, 페이지별 재개와 완료 후 재호출, 원 관측 보존, 빈 DB의 자동 마이그레이션 방지, 다른 실행 앱·Flyway·이관 SQL·AWS SDK 미포함을 확인했다. 전체 빌드와 다른 테스트의 최종 결과는 [구현·검증 기록](../../../../../../docs/refactoring/ddd/implementation-progress.md)에서 관리한다.
 
 운영 DB 적용과 운영 규모의 처리 시간은 이번 검증에 포함하지 않는다. SAL-133 당시의 정책 근거, V15 작성 경위와 당시 테스트 수치는 [2026-09-22 변경 이력](../../../../../history/2026-09-22-SAL-133.md)에 남아 있다. 그 기록의 배포 상태와 수치는 당시 시점의 기록이다.

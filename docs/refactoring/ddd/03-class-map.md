@@ -1,6 +1,6 @@
-# 전체 클래스 배치표 — 기존 production Java 330개
+# 기준 소스의 이동·삭제 계획과 현재 구현 연결
 
-기준: PR #70(SAL-133) 병합 커밋 `9f9c75d`, 2026-09-23. [설계안](00-design.md)에 따라 기존 클래스의 위치와 책임을 정리한 **설계 배정**이다. 완료된 S3→RDS 일회성 이관 코드는 삭제 대상으로, 현재 품질 정비에 필요한 코드는 유지 대상으로 구분했다. 의존 규칙에 맞추려면 책임을 나눠야 하는 클래스도 표시했다. 이 문서는 기준 소스의 이동·삭제 계획이며 구현 완료 목록이 아니다. 실제 진행과 검증 결과는 [진행 기록](implementation-progress.md), 승인된 이름은 [용어집](glossary.md)을 기준으로 한다.
+기준: PR #70(SAL-133) 병합 커밋 `9f9c75d`, 2026-09-23. [설계안](00-design.md)에 따라 기존 클래스의 위치와 책임을 정리한 **설계 배정**이다. 완료된 S3→RDS 일회성 이관 코드는 삭제 대상으로, 현재 품질 정비에 필요한 코드는 유지 대상으로 구분했다. 의존 규칙에 맞추려면 책임을 나눠야 하는 클래스도 표시했다. 1~5절은 기준 소스 330개의 이동·삭제를 검토한 기록이다. 당시 후보 이름과 분해 계획을 보존하며 최종 파일 목록으로 취급하지 않는다. 6절은 이 브랜치의 src/main 코드에서 다시 확인한 모듈 집계와 주요 연결이다. 검증 결과는 [진행 기록](implementation-progress.md), 현재 구현 이름은 [용어집](glossary.md)에서 확인한다.
 
 클래스를 옮기는 이유는 설계안의 개념별 설명에서 확인할 수 있다. 업무 영역은 경계 컨텍스트, 상태와 값의 구분은 엔티티·값 객체, 계산과 실행 순서의 분리는 도메인 서비스·응용 서비스로 설명했다. 아래 배정은 그 책임 구분을 코드 위치에 반영한 결과이며, 패키지 이동만으로 도메인 설계가 끝난다는 뜻은 아니다.
 
@@ -395,9 +395,9 @@ API 97개는 전용 읽기 모델을 유지한다. api-app은 `common`과 공개
 7. **운영 정비**: 기존 migration-tool의 이관 전용 38개는 삭제한다. `TripQualityMaintenance`의 업무 흐름과 SQL은 forecasting으로 옮기고 CLI 지원 10개는 maintenance-app에서 재구성한다. 유지할 품질 preview·처리 재개·상태 조회는 typed command/result로 연결한다. 한 chunk의 TX와 품질 guard는 forecasting 유스케이스가 책임진다. CLI는 필요한 빈만 등록하고 스케줄러·Flyway 자동 실행을 제외하며, 일회성 전환 코드는 `backend/deploy/migrations/<change-id>`에서 별도로 관리한다.
 8. **품질**: `VehicleObservationsStored`는 observations.api에 둔다. forecasting의 동기 수신은 관측 저장과 같은 TX에서 조사 요청을 남긴다. 편도 판정·역방향 탐색은 순수 계산, 조사 cursor·chunk·잠금은 응용 흐름과 저장 구현으로 나눈다. 원 관측 조회는 observations가, 자료를 예보·평가·보정·학습에 사용할 수 있는지 판단하는 규칙은 forecasting이 책임진다. 원 관측 보존과 품질 판정 이후의 제외를 함께 유지한다.
 
-## 4. 예상 신규 책임 — 330개 집계 밖
+## 4. 설계 당시의 신규 책임 후보 — 330개 집계 밖
 
-아래 객체와 계약은 기존 파일의 위치를 옮기는 작업과 별도로 설계할 대상이다. 이름은 제안이며, 항목마다 인터페이스가 필요한지는 구현할 때 판단한다. 기존 파일을 분해하거나 대체하면서 책임이 겹치면 함께 정리한다.
+아래는 설계 단계에서 검토한 책임과 이름이다. 이후 구현하면서 일부 이름과 분해 방식이 달라졌다. 현재 타입은 용어집과 6절을 기준으로 하며, 아래 후보가 모두 별도 클래스로 생성됐다는 뜻은 아니다.
 
 | 소유 모듈 | 예상 신규 객체·계약 | 목적 |
 | --- | --- | --- |
@@ -420,4 +420,40 @@ API 97개는 전용 읽기 모델을 유지한다. api-app은 `common`과 공개
 
 ## 5. 배치표 검증
 
-PR #70 병합 커밋의 production Java 목록과 대조해 330개 파일이 중복 없이 모두 포함되어 있는지 확인했다. 추가된 13개도 각 파일의 기존 위치와 목표 책임을 기록했다. 각 파일은 9개 모듈 중 하나 또는 삭제 대상으로 배정했다. forecasting은 기존 배정 104개와 품질 업무 구현 1개를 합한 105개다. migration-tool 49개는 forecasting으로 옮길 1개, maintenance-app에서 재구성할 CLI 지원 10개, 삭제 38개로 나눴다. 링크는 같은 커밋의 소스 경로와 대조했다. 이번 검토는 배치표의 누락과 연결 경로를 확인한 범위까지다. 구현 착수 전 9f 기준 1158개 테스트가 통과했으며 재설계 후 검증은 별도다. 최종 클래스 이름·분해·경로는 구현 완료 후 실제 코드와 대조한다. 이 표의 계획을 구현 완료로 취급하지 않는다.
+PR #70 병합 커밋의 production Java 목록과 대조해 330개 파일이 중복 없이 모두 포함되어 있는지 확인했다. 추가된 13개도 각 파일의 기존 위치와 목표 책임을 기록했다. 각 파일은 9개 모듈 중 하나 또는 삭제 대상으로 배정했다. forecasting은 기존 배정 104개와 품질 업무 구현 1개를 합한 105개다. migration-tool 49개는 forecasting으로 옮길 1개, maintenance-app에서 재구성할 CLI 지원 10개, 삭제 38개로 나눴다. 링크는 같은 커밋의 소스 경로와 대조했다. 이번 검토는 배치표의 누락과 연결 경로를 확인한 범위까지다. 구현 착수 전 9f 기준 1158개 테스트가 통과했으며 재설계 후 검증은 별도다. 이 표의 330개는 기준 소스의 계획 검토 수치다. 현재 파일 수와 주요 연결은 아래에서 별도로 대조했다.
+
+## 6. 현재 구현의 모듈과 주요 연결
+
+아래 집계는 이 브랜치의 `src/main/java` 파일을 다시 센 결과다. 기준 소스 330개에 대한 이동·삭제 배정과 달리 신규 도메인·공개 API·저장소·구성 클래스를 포함한다. 테스트·중첩 타입·생성 코드·SQL은 세지 않았다.
+
+| 현재 모듈 | Java 파일 수 | 경로 |
+| --- | ---: | --- |
+| `route-catalog` | 31 | `backend/business/route-catalog/src/main/java` |
+| `observations` | 41 | `backend/business/observations/src/main/java` |
+| `forecasting` | 157 | `backend/business/forecasting/src/main/java` |
+| `api-call-quota` | 8 | `backend/business/api-call-quota/src/main/java` |
+| `gbis-client` | 13 | `backend/integrations/gbis-client/src/main/java` |
+| `api-app` | 98 | `backend/api-app/src/main/java` |
+| `worker-app` | 19 | `backend/worker-app/src/main/java` |
+| `maintenance-app` | 11 | `backend/maintenance-app/src/main/java` |
+| `common` | 1 | `backend/common/src/main/java` |
+| **합계** | **379** | Gradle 9개 모듈 |
+
+오프라인 전환 실행기 `backend/deploy/migrations/SAL-134/src/main/java`의 Java 1개는 이 집계 밖이다. maintenance-app의 현재 11개와 기준 소스에서 남기기로 한 CLI 지원 10개도 같은 수치가 아니다. 새 실행 구성이 추가되고 기존 책임이 재편된 결과다.
+
+| 책임 | 현재 연결 | 코드 |
+| --- | --- | --- |
+| 노선 확보 | 수집 → CurrentRouteVersion → RouteCatalogLoader → Route·RouteRepository | [공개 노선 계약](../../../backend/business/route-catalog/src/main/java/com/gustler/backend/routecatalog/api/CurrentRouteVersion.java), [Route](../../../backend/business/route-catalog/src/main/java/com/gustler/backend/routecatalog/domain/Route.java) |
+| 수집 상태 | CollectionPlan → CollectionBatch → CollectionAttemptToken → 저장소 | [CollectionBatch](../../../backend/business/observations/src/main/java/com/gustler/backend/observations/domain/CollectionBatch.java), [CollectionPlan](../../../backend/business/observations/src/main/java/com/gustler/backend/observations/domain/CollectionPlan.java) |
+| 영역 간 입력 확정 | forecasting → CollectionInputs → JpaCollectionInputs | [CollectionInputs](../../../backend/business/observations/src/main/java/com/gustler/backend/observations/api/CollectionInputs.java) |
+| 수집과 품질 연동 | CollectionQualityHook → CollectionQualityAdapter → TripQualityInvestigationService | [품질 어댑터](../../../backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/observations/CollectionQualityAdapter.java) |
+| 발행 | PublishPendingForecasts → PublishPendingForecastsService → ForecastBatchWriter → ForecastPublicationRepository | [발행 응용 서비스](../../../backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/application/publication/ForecastBatchWriter.java) |
+| 평가 | EvaluateForecasts → EvaluateForecastsService → ForecastEvaluationRepository | [평가 저장소](../../../backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcForecastEvaluationRepository.java) |
+| 통계 | RefreshDemandStatistics → StopDemandStatisticsWriter → DemandStatisticsVersion | [통계 버전](../../../backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/domain/statistics/DemandStatisticsVersion.java) |
+| 모델 활성화 | ActivateModel → ModelActivationService → TransactionalModelActivation | [활성화 명령](../../../backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/api/model/ActivateModelCommand.java) |
+| 품질 정비 | MaintenanceApplication → 공개 품질 유스케이스 → forecasting 저장소 | [정비 실행 앱](../../../backend/maintenance-app/src/main/java/com/gustler/backend/maintenance/MaintenanceApplication.java) |
+| 오프라인 전환 | run.sh → Sal134Migration → V17·backfill·verify·V18 | [전환 실행 안내](../../../backend/deploy/migrations/SAL-134/README.md) |
+
+노선·관측 이력은 forecasting의 JDBC 조회 어댑터가 공유 DB의 테이블·view를 읽는다. 모든 읽기를 Java 공개 API 호출로 바꾼 구조는 아니다. 입력 잠금·확정과 수집 저장의 품질 연동은 공개 인터페이스를 사용한다. API 앱은 common 외의 업무 모듈을 runtime 의존에 넣지 않고 별도의 조회 모델을 유지한다.
+
+이 절은 소스의 이름·경로·연결을 확인한 결과다. 전체 테스트와 JAR·배포 검증의 최종 결과는 진행 기록에서 관리하며 운영 DB 전환 완료를 뜻하지 않는다.
