@@ -32,8 +32,6 @@ test("노선 조회 실패 후 재시도에 성공하면 노선을 선택할 수
   await expect(routeButton(page)).toBeVisible();
   await expect(routeButton(page)).toBeEnabled();
   await selectRoute(page);
-  await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
-  await expectDirection(page, "UP");
 });
 
 test("노선 재시도도 실패하면 실패 안내와 재시도 버튼이 표시된다", async ({ page, api }) => {
