@@ -1,5 +1,6 @@
-package com.gustler.backend.forecasting.domain.model;
+package com.gustler.backend.forecasting.domain.deployment;
 
+import com.gustler.backend.forecasting.domain.model.SeatForecastModel;
 import java.util.Objects;
 
 /** 검증을 마친 모델과 계산에 필요한 불변 참조를 함께 보관한다. */

@@ -1,11 +1,11 @@
 package com.gustler.backend.forecasting.application.model;
 
-import com.gustler.backend.forecasting.domain.model.ActiveModelDeployment;
-import com.gustler.backend.forecasting.domain.model.ActiveModelSlot;
-import com.gustler.backend.forecasting.domain.model.ModelActivation;
-import com.gustler.backend.forecasting.domain.model.ModelDeploymentRepository;
-import com.gustler.backend.forecasting.domain.model.ModelIdentity;
-import com.gustler.backend.forecasting.domain.model.StagedModelDeployment;
+import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
+import com.gustler.backend.forecasting.domain.deployment.ActiveModelSlot;
+import com.gustler.backend.forecasting.domain.deployment.ModelActivation;
+import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
+import com.gustler.backend.forecasting.domain.deployment.ModelIdentity;
+import com.gustler.backend.forecasting.domain.deployment.StagedModelDeployment;
 import java.time.Clock;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;

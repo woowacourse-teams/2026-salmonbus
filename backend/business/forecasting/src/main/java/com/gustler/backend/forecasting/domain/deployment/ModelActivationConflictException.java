@@ -1,4 +1,4 @@
-package com.gustler.backend.forecasting.domain.model;
+package com.gustler.backend.forecasting.domain.deployment;
 
 public final class ModelActivationConflictException extends RuntimeException {
     public ModelActivationConflictException(String message) {

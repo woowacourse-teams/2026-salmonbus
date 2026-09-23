@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.application.model;
 
-import com.gustler.backend.forecasting.domain.model.ModelIdentity;
-import com.gustler.backend.forecasting.domain.model.ModelRelease;
+import com.gustler.backend.forecasting.domain.deployment.ModelIdentity;
+import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;

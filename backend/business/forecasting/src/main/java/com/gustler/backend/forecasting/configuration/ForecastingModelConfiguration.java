@@ -6,7 +6,7 @@ import com.gustler.backend.forecasting.application.model.ModelActivationService;
 import com.gustler.backend.forecasting.application.model.ModelBundleLoader;
 import com.gustler.backend.forecasting.application.model.ModelStartupService;
 import com.gustler.backend.forecasting.application.model.TransactionalModelActivation;
-import com.gustler.backend.forecasting.domain.model.ModelDeploymentRepository;
+import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
 import com.gustler.backend.forecasting.infrastructure.bundle.FileModelBundleLoader;
 import java.time.Clock;
 import org.springframework.context.annotation.Bean;

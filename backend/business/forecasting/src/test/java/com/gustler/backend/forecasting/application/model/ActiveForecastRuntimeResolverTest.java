@@ -4,12 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.gustler.backend.forecasting.domain.model.ActiveModelDeployment;
-import com.gustler.backend.forecasting.domain.model.ModelDeploymentRepository;
-import com.gustler.backend.forecasting.domain.model.ModelIdentity;
-import com.gustler.backend.forecasting.domain.model.ModelRelease;
+import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
+import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
+import com.gustler.backend.forecasting.domain.deployment.ModelIdentity;
+import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import com.gustler.backend.forecasting.domain.model.SeatForecastModel;
-import com.gustler.backend.forecasting.domain.model.SupportedForecastScope;
+import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;

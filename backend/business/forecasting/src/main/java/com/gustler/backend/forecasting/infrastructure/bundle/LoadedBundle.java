@@ -2,13 +2,13 @@ package com.gustler.backend.forecasting.infrastructure.bundle;
 
 import com.gustler.backend.forecasting.domain.model.SeatDistributionInput;
 import com.gustler.backend.forecasting.domain.model.SeatDistributionPredictor;
-import com.gustler.backend.forecasting.domain.model.SupportedForecastScope;
+import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
 
-import com.gustler.backend.forecasting.domain.model.ActiveModelDeployment;
+import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
 import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
 import java.time.Instant;
-import com.gustler.backend.forecasting.domain.model.ModelIdentity;
-import com.gustler.backend.forecasting.domain.model.ModelRelease;
+import com.gustler.backend.forecasting.domain.deployment.ModelIdentity;
+import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import com.gustler.backend.forecasting.domain.model.SeatDistributionForecastModel;
 
 /** 파일 구조와 대조 계산을 검증한 모델 계수다. */

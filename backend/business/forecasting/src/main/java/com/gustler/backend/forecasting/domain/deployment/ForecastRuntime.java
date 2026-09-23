@@ -1,4 +1,4 @@
-package com.gustler.backend.forecasting.domain.model;
+package com.gustler.backend.forecasting.domain.deployment;
 
 import java.util.Optional;
 

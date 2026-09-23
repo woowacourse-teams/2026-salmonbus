@@ -4,8 +4,8 @@ import com.gustler.backend.forecasting.api.model.LoadConfiguredModel;
 import com.gustler.backend.forecasting.api.model.LoadConfiguredModelCommand;
 import com.gustler.backend.forecasting.api.model.ModelLoadResult;
 import com.gustler.backend.forecasting.api.model.ModelLoadResult.Status;
-import com.gustler.backend.forecasting.domain.model.ModelActivationConflictException;
-import com.gustler.backend.forecasting.domain.model.ModelDeploymentRepository;
+import com.gustler.backend.forecasting.domain.deployment.ModelActivationConflictException;
+import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
 import java.util.UUID;
 
 public class ModelStartupService implements LoadConfiguredModel {

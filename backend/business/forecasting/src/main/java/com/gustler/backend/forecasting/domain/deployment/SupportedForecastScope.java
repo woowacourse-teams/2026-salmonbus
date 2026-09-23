@@ -1,5 +1,7 @@
-package com.gustler.backend.forecasting.domain.model;
+package com.gustler.backend.forecasting.domain.deployment;
 
+import com.gustler.backend.forecasting.domain.model.ForecastDistance;
+import com.gustler.backend.forecasting.domain.model.Sha256;
 import java.util.List;
 
 /**

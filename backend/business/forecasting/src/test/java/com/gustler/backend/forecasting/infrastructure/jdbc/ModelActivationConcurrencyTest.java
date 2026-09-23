@@ -7,11 +7,11 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 
 import com.gustler.backend.forecasting.application.model.TransactionalModelActivation;
-import com.gustler.backend.forecasting.domain.model.ActiveModelDeployment;
-import com.gustler.backend.forecasting.domain.model.ActiveModelSlot;
-import com.gustler.backend.forecasting.domain.model.ModelActivation;
-import com.gustler.backend.forecasting.domain.model.ModelActivationConflictException;
-import com.gustler.backend.forecasting.domain.model.ModelIdentity;
+import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
+import com.gustler.backend.forecasting.domain.deployment.ActiveModelSlot;
+import com.gustler.backend.forecasting.domain.deployment.ModelActivation;
+import com.gustler.backend.forecasting.domain.deployment.ModelActivationConflictException;
+import com.gustler.backend.forecasting.domain.deployment.ModelIdentity;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import java.time.Clock;
 import java.time.Instant;

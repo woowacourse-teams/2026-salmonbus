@@ -1,5 +1,6 @@
-package com.gustler.backend.forecasting.domain.model;
+package com.gustler.backend.forecasting.domain.deployment;
 
+import com.gustler.backend.forecasting.domain.model.SeatForecastModel;
 import java.time.Instant;
 
 /**

@@ -3,8 +3,8 @@ package com.gustler.backend.forecasting.application.model;
 import com.gustler.backend.forecasting.api.model.ActivateModel;
 import com.gustler.backend.forecasting.api.model.ActivateModelCommand;
 import com.gustler.backend.forecasting.api.model.ModelActivationResult;
-import com.gustler.backend.forecasting.domain.model.ModelActivation;
-import com.gustler.backend.forecasting.domain.model.ModelRelease;
+import com.gustler.backend.forecasting.domain.deployment.ModelActivation;
+import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 
 public class ModelActivationService implements ActivateModel {
     private final ModelBundleLoader loader;

@@ -3,11 +3,11 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.gustler.backend.forecasting.domain.model.ActiveModelDeployment;
-import com.gustler.backend.forecasting.domain.model.ActiveModelSlot;
-import com.gustler.backend.forecasting.domain.model.ModelActivation;
-import com.gustler.backend.forecasting.domain.model.ModelIdentity;
-import com.gustler.backend.forecasting.domain.model.StagedModelDeployment;
+import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
+import com.gustler.backend.forecasting.domain.deployment.ActiveModelSlot;
+import com.gustler.backend.forecasting.domain.deployment.ModelActivation;
+import com.gustler.backend.forecasting.domain.deployment.ModelIdentity;
+import com.gustler.backend.forecasting.domain.deployment.StagedModelDeployment;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import java.time.Instant;
 import java.util.Optional;

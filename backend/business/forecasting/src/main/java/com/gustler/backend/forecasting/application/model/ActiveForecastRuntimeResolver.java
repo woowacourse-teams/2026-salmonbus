@@ -1,8 +1,8 @@
 package com.gustler.backend.forecasting.application.model;
 
-import com.gustler.backend.forecasting.domain.model.ForecastRuntime;
-import com.gustler.backend.forecasting.domain.model.ModelDeploymentRepository;
-import com.gustler.backend.forecasting.domain.model.RuntimeSnapshot;
+import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
+import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
+import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import java.util.Optional;
 
 public final class ActiveForecastRuntimeResolver implements ForecastRuntime {

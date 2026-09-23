@@ -1,6 +1,6 @@
 package com.gustler.backend.forecasting.application.publication;
 
-import com.gustler.backend.forecasting.domain.model.ForecastRuntime;
+import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.publication.RouteVersionRepository;
 import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryRepository;
 import com.gustler.backend.forecasting.api.ForecastPolicy;
@@ -19,7 +19,7 @@ import static org.mockito.Mockito.when;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import com.gustler.backend.forecasting.domain.model.RuntimeSnapshot;
+import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;

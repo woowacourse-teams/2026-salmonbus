@@ -10,8 +10,8 @@ import org.springframework.stereotype.Repository;
 /**
  * 노선 판본과 경유 정류장을 SQL 로 직접 읽는다. route-catalog 의 JPA 엔티티를 쓰지 않는다.
  *
- * <p>route_version 과 route_stop 을 매핑한 엔티티가 다른 패키지에 이미 있다. 여기서 엔티티를
- * 하나 더 만들면 Hibernate 가 같은 테이블을 두 번 매핑했다며 뜨지 않는다.
+ * <p>route_version 과 route_stop 을 매핑한 엔티티는 route-catalog 가 자기 컨텍스트에서 쓰려고 만든 것이다.
+ * 예보가 그 엔티티를 가져다 쓰면 컨텍스트 경계가 없어지므로 필요한 열만 SQL 로 읽는다.
  */
 @Repository
 public class JdbcRouteVersionRepository implements RouteVersionRepository {

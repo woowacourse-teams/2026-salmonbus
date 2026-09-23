@@ -2,14 +2,14 @@ package com.gustler.backend.forecasting.application.publication;
 
 import com.gustler.backend.forecasting.api.publication.PublishPendingForecasts;
 
-import com.gustler.backend.forecasting.domain.model.ForecastRuntime;
+import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.publication.RouteVersionRepository;
 import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryRepository;
 import com.gustler.backend.forecasting.api.ForecastPolicy;
 
-import com.gustler.backend.forecasting.domain.model.RuntimeSnapshot;
+import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 
 import jakarta.annotation.PostConstruct;
 import java.time.Clock;

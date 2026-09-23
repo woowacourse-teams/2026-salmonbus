@@ -19,7 +19,7 @@ import com.gustler.backend.forecasting.application.quality.RouteDataQualityAcces
 import com.gustler.backend.observations.api.CollectionInput;
 import com.gustler.backend.observations.api.CollectionInputs;
 
-import com.gustler.backend.forecasting.domain.model.RuntimeSnapshot;
+import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.model.SameDayFullOutcomes;
 import java.time.Clock;
 import java.time.Instant;

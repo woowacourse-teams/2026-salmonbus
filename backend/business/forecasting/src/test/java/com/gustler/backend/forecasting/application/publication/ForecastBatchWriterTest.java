@@ -1,9 +1,9 @@
 package com.gustler.backend.forecasting.application.publication;
 
 import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesService;
-import com.gustler.backend.forecasting.domain.model.ActiveModelDeployment;
-import com.gustler.backend.forecasting.domain.model.ModelIdentity;
-import com.gustler.backend.forecasting.domain.model.ForecastRuntime;
+import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
+import com.gustler.backend.forecasting.domain.deployment.ModelIdentity;
+import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.publication.ForecastTimeSlot;
 import com.gustler.backend.forecasting.domain.model.SeatDistribution;
 import com.gustler.backend.forecasting.domain.model.SeatForecastInput;
@@ -49,7 +49,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.AppenderBase;
 import ch.qos.logback.core.read.ListAppender;
-import com.gustler.backend.forecasting.domain.model.RuntimeSnapshot;
+import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.model.SeatDistributionInput;
 import java.time.Clock;
 import java.time.Duration;

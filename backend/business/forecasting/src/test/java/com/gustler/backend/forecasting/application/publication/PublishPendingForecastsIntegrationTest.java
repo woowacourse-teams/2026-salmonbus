@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.application.publication;
 
-import com.gustler.backend.forecasting.domain.model.ForecastRuntime;
-import com.gustler.backend.forecasting.domain.model.ModelDeploymentRepository;
+import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
+import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
 import com.gustler.backend.forecasting.domain.model.SeatDistribution;
 import com.gustler.backend.forecasting.domain.model.SeatForecastInput;
 import com.gustler.backend.forecasting.domain.model.SeatForecastModel;
@@ -12,8 +12,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
-import com.gustler.backend.forecasting.domain.model.RuntimeSnapshot;
-import com.gustler.backend.forecasting.domain.model.SupportedForecastScope;
+import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
+import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
 import com.gustler.backend.support.ConfirmedTripFixture;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import java.time.Clock;
