@@ -44,6 +44,9 @@ sudo vi /etc/salmonbus/api.env       # DB_URL · DB_USERNAME · DB_PASSWORD
 sudo vi /etc/salmonbus/worker.env    # 위 셋 + GBIS_SERVICE_KEY · COLLECTION_ENABLED · FORECAST_ENABLED
 ```
 
+`FORECAST_STALENESS`는 넣지 않는다. 예보 신선도 창은 api-app이 `/board`에서 약속한 창과 짝이라
+worker 쪽만 바꾸면 조용히 어긋난다. 이 변수를 넣으면 Worker가 기동에서 멈춘다.
+
 첫 배포에서는 수집과 예보를 비활성화한다.
 
 ```text

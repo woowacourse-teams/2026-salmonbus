@@ -29,6 +29,7 @@
 | 품질 판단 입력 | `QualityObservationBatch` | — | firstAnomalies가 같은 배치의 차량별 첫 이상 관측을 고른다. |
 | 편도 판정 | `OneWayTripAssessment` | `vehicle_one_way_trip` | 조사한 편도의 상태와 근거를 기록한다. 정상 관측마다 판정 행을 만들지는 않는다. |
 | 모델 식별·선택 | `ModelIdentity`, `ModelRelease`, `ActiveModelSlot`, `ModelActivation` | `model_deployment`, `model_active_slot`, `model_activation_request` | 전체 식별 정보, 배포 이력, 현재 선택, 활성화 요청 결과를 구분한다. |
+| 관측 신선도 창 | `ForecastPolicy.staleness`(예보) / `BoardFreshnessPolicy.FRESHNESS_WINDOW`(조회) | `observation_batch.response_received_at` | 같은 5분이지만 결정이 둘이다. 예보는 어떤 판에 계산할 값어치가 있는지를 정하고, 조회는 발행된 판을 언제까지 보여줄지와 `staleAt`으로 무엇을 약속할지를 정한다. 관계는 등호가 아니라 **예보 창 ≥ 조회 창**이다. 좁히면 그 사이 판이 영영 발행되지 않아 503이 나가고, 넓히면 오래된 판이 회차를 채워 새 판이 밀린다. `BoardFreshnessContractTest`가 worker 실행 JAR을 읽어 고정하고, 환경변수 경로는 Worker가 기동에서 막는다. `/vehicles`의 `VehicleFreshnessPolicy` 5분은 발행이 없는 판에도 답해야 하는 다른 질문이라 묶지 않는다. |
 | 학습 제외 기록 | — | `model_training_exclusion`, `statistics_training_exclusion` | 학습에서 빼기로 한 배포와 통계 셀을 남긴다. 현재 쓰기는 전환 도구만 한다. |
 
 저장 테이블이 `—`인 것은 값 객체나 포트라 행으로 남지 않는다. 컬럼을 적은 것은 그 개념이 테이블 하나가 아니라

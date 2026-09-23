@@ -24,12 +24,12 @@ cd backend
 ./gradlew build --no-daemon --console=plain --max-workers=1
 ```
 
-JUnit XML을 실제 9개 프로젝트의 `test`와 common의 `sal134MigrationTest`에서 집계했다. 삭제한 migration-tool의 이전 build 산출물은 집계하지 않았다. 총 **1,370개 테스트**, 실패·오류·스킵은 모두 **0개**다. `clean build`로 68개 작업을 모두 실행했고 결과는 `BUILD SUCCESSFUL`이다. 아래 분포는 업무 테스트를 소유 모듈로 옮긴 뒤의 값이다.
+JUnit XML을 실제 9개 프로젝트의 `test`와 common의 `sal134MigrationTest`에서 집계했다. 삭제한 migration-tool의 이전 build 산출물은 집계하지 않았다. 총 **1,374개 테스트**, 실패·오류·스킵은 모두 **0개**다. `clean build`로 68개 작업을 모두 실행했고 결과는 `BUILD SUCCESSFUL`이다. 아래 분포는 업무 테스트를 소유 모듈로 옮긴 뒤의 값이다.
 
 | 검증 대상 | 테스트 수 |
 | --- | ---: |
-| api-app | 203 |
-| worker-app | 51 |
+| api-app | 205 |
+| worker-app | 53 |
 | maintenance-app | 32 |
 | common | 49 |
 | SAL-134 전환 실행기 | 13 |
@@ -38,7 +38,7 @@ JUnit XML을 실제 9개 프로젝트의 `test`와 common의 `sal134MigrationTes
 | route-catalog | 58 |
 | api-call-quota | 37 |
 | gbis-client | 30 |
-| 합계 | 1,370 |
+| 합계 | 1,374 |
 
 구현 착수 전의 기준 빌드 1,158개와 위 결과는 다른 시점의 결과다. 이관 전용 테스트를 제거하고 업무 규칙·동시성·실행 검증을 추가했으므로 두 수치의 차이를 신규 테스트 수로 해석하지 않는다. 업무 테스트를 소유 모듈로 옮기기 전 같은 명령의 결과는 1,355개였다.
 
@@ -102,6 +102,7 @@ Docker 배포 hook 리허설은 **154개 통과, 실패 0개**다. 새 업무 �
 | `9cec703` | 수집 단계와 통계 규칙 버전을 도메인에 배치 |
 | `582ab93` | 조회 API를 경계 검사 안으로 |
 | `0cddaa2` | 모델 배포 수명주기를 별도 개념으로 분리 |
+| `75ecbbc` | 용어집에 저장 테이블 열 추가 |
 
 모듈 이동만 반영한 중간 상태는 1,110개 테스트, GBIS·호출 한도 분리는 관련 298개, 노선 변경은 관련 248개 테스트로 확인했다. 수집·품질·발행·평가·통계의 순수 모델도 각 단계에서 검사했다. 첫 통합 검증은 1,311개였고 DDD 책임 분리를 보완한 뒤 `f749b9f`에서 1,355개였다. 업무 테스트 이관 뒤 1,356개였고, 도메인 개념 순환 검사와 새로 만든 계약을 고정하는 테스트를 더한 최종 결과가 위 1,364개다. 문서 커밋에는 이 기록과 설계·운영 문서의 구현 대조 결과를 담는다.
 
@@ -142,7 +143,7 @@ worker-app에 남아 있던 업무 테스트를 각 업무 모듈로 옮겼다. 
 - 이관 직후 api-call-quota의 테스트 구성이 자동구성을 손으로 나열하면서 Testcontainers 접속 정보를 등록하는 `ServiceConnectionAutoConfiguration`과 `TestcontainersPropertySourceAutoConfiguration`을 빠뜨려 `CallQuotaLedgerTest` 20개가 컨텍스트 적재에 실패했다. 두 자동구성을 넣어 해소했고, 아래 감사 반영에서 형제 모듈과 같은 `@EnableAutoConfiguration` 방식으로 다시 맞췄다.
 - 이관이 들여온 불필요한 `project(':common')` 직접 의존 3건을 지우고, 컴파일에서 참조하지 않는 `spring-boot-flyway`를 `testRuntimeOnly`로 내렸다. `RuntimeProcessSeparationTest`의 모듈 목록에서 존재하지 않는 이름 3개를 뺐다. 옮기고 남은 빈 디렉터리도 정리했다.
 
-전체 빌드는 1,370개 통과, 실패·오류·스킵 0이다. 한 차례 forecasting의 `ModelActivationBoundaryTest` 3개가 테스트용 PostgreSQL 접속 시간초과로 실패했고, 코드를 바꾸지 않고 다시 실행해 692개 전부 통과했다. 실패 원인을 코드 결함이 아니라고 단정하지 않고 재실행 결과를 함께 남긴다.
+전체 빌드는 1,374개 통과, 실패·오류·스킵 0이다. 한 차례 forecasting의 `ModelActivationBoundaryTest` 3개가 테스트용 PostgreSQL 접속 시간초과로 실패했고, 코드를 바꾸지 않고 다시 실행해 692개 전부 통과했다. 실패 원인을 코드 결함이 아니라고 단정하지 않고 재실행 결과를 함께 남긴다.
 
 ## 전수 감사 지적 반영
 
@@ -186,7 +187,15 @@ worker-app에 남아 있던 업무 테스트를 각 업무 모듈로 옮겼다. 
 - 용어집 표에 저장 테이블 열을 더해 업무 용어·클래스·테이블이 한 줄에 보이게 했다. 값 객체와 포트는 `—`로 구분한다. 차량 관측과 학습 제외 기록 행도 더했다.
 - `JdbcRouteVersionRepository`의 주석이 "엔티티를 하나 더 만들면 Hibernate가 같은 테이블을 두 번 매핑했다며 뜨지 않는다"고 적었는데 사실과 달랐다. api-app이 `vehicle_observation`·`route_stop`·`observation_batch`를 각각 두 번 매핑하고 정상 기동한다. JDBC를 쓰는 진짜 이유인 컨텍스트 경계로 문장을 바꿨다.
 
-평가에서 나온 것 중 **동작이나 정책이 바뀌는 것은 반영하지 않았다.** 편도 방향과 정원 산출이 Java와 SQL에 두 벌이고 이미 값이 어긋난 문제, `FORECAST_STALENESS`가 환경변수만으로 보드와 어긋나는 문제가 그렇다. 둘 다 고치면 계산 결과나 운영 동작이 달라진다.
+평가에서 나온 것 중 편도 방향과 정원 산출이 Java와 SQL에 두 벌이고 이미 값이 어긋난 문제는 **반영하지 않았다.** 맞추면 계산 결과가 달라진다.
+
+관측 신선도 창은 승인을 받아 이번에 정리했다. 예보의 `forecast.staleness`와 조회의 `BoardFreshnessPolicy.FRESHNESS_WINDOW`는 같은 5분이지만 결정이 둘이고, 관계는 등호가 아니라 **예보 창 ≥ 조회 창**이다. 좁히면 그 사이 판이 영영 발행되지 않아 발행이 밀렸다 돌아올 때 보드가 집을 최신 발행이 없어 503이 나간다. 넓히면 오래된 판이 회차를 채워 새 판이 밀린다. 즉 안전하게 돌릴 수 있는 범위가 없는 설정이었다.
+
+- `FORECAST_STALENESS` 자리표시자를 없애고 설정 파일 값으로 고정했다. 자리표시자만 지우면 Spring의 느슨한 이름 규칙이 환경변수를 그대로 바인딩하므로, 환경변수로 들어온 값이면 Worker가 기동을 멈춘다. 조용히 무시하면 운영자는 바꿨다고 믿게 된다.
+- api-app에 소비자 쪽 계약 테스트를 뒀다. worker 실행 JAR의 설정을 읽어 예보 창이 보드 창보다 짧지 않은지, 자리표시자가 다시 들어오지 않았는지 확인한다. 이 테스트는 이미 worker bootJar에 의존하던 기존 배선을 쓰므로 build.gradle은 바뀌지 않았다.
+- 값을 `common`으로 올려 공유하지 않았다. 두 컨텍스트는 이미 발행 사실로 이어져 있고, 공유 커널로 묶으면 등호가 아닌 관계를 등호로 만들면서 두 앱의 배포를 서로 묶는다. 판단 기준은 [설계안 13.3](00-design.md)에 적었다.
+- `/vehicles`의 `VehicleFreshnessPolicy` 5분은 묶지 않았다. 발행이 없는 판에도 답해야 하고 `UNKNOWN`과 503은 다른 반응이라 별개 질문이다.
+- 배포 설정 어디에도 `FORECAST_STALENESS`가 없어 기존 배포는 영향받지 않는다. RUNBOOK에 넣지 말라고 적었다.
 
 ## 운영 적용 전에 확인할 것
 
