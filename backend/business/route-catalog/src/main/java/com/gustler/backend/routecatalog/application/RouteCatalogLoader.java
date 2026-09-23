@@ -1,7 +1,6 @@
 package com.gustler.backend.routecatalog.application;
 
-import com.gustler.backend.quota.application.CallQuotaLedger;
-import com.gustler.backend.quota.domain.CallQuota;
+import com.gustler.backend.quota.api.ApiCallQuota;
 import com.gustler.backend.routecatalog.domain.CurrentRouteVersionRepository;
 import com.gustler.backend.routecatalog.domain.RouteRegistry;
 import com.gustler.backend.routecatalog.domain.UpstreamRoute;
@@ -30,7 +29,7 @@ public class RouteCatalogLoader {
     private static final Logger log = LoggerFactory.getLogger(RouteCatalogLoader.class);
 
     private final CurrentRouteVersionRepository currentRouteVersionRepository;
-    private final CallQuotaLedger callQuotaLedger;
+    private final ApiCallQuota callQuotaLedger;
     private final GbisRouteSource routeSource;
     private final RouteRegistry routeRegistry;
     private final RouteVersionLoader routeVersionLoader;
@@ -38,7 +37,7 @@ public class RouteCatalogLoader {
 
     public RouteCatalogLoader(
         CurrentRouteVersionRepository currentRouteVersionRepository,
-        CallQuotaLedger callQuotaLedger,
+        ApiCallQuota callQuotaLedger,
         GbisRouteSource routeSource,
         RouteRegistry routeRegistry,
         RouteVersionLoader routeVersionLoader,
@@ -68,7 +67,7 @@ public class RouteCatalogLoader {
         String upstreamRouteId,
         OffsetDateTime readAt
     ) {
-        if (!callQuotaLedger.reserve(CallQuota.BUS_ROUTE, readAt, GbisRouteSource.UPSTREAM_CALLS_PER_READ)) {
+        if (!callQuotaLedger.reserveRouteCatalog(readAt, GbisRouteSource.UPSTREAM_CALLS_PER_READ)) {
             log.warn("하루 호출 한도가 남지 않아 노선정보를 못 받았다. 이 노선은 수집을 못 한다. 노선={}",
                 upstreamRouteId);
             return OptionalLong.empty();

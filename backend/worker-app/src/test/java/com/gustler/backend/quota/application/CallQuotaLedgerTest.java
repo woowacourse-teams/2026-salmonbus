@@ -1,6 +1,7 @@
 package com.gustler.backend.quota.application;
 
 import com.gustler.backend.quota.domain.CallQuota;
+import com.gustler.backend.quota.api.ApiCallQuota;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -36,7 +37,7 @@ class CallQuotaLedgerTest {
     private static final int TWO_CALLS = 2;
 
     @Autowired
-    private CallQuotaLedger ledger;
+    private ApiCallQuota ledger;
 
     @Autowired
     private JdbcClient jdbcClient;
@@ -52,7 +53,7 @@ class CallQuotaLedgerTest {
     @Test
     void 자리가_남은_장부는_예약을_받아준다() {
         // when
-        final boolean actual = ledger.reserve(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT);
+        final boolean actual = ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
 
         // then
         assertThat(actual).isTrue();
@@ -61,9 +62,9 @@ class CallQuotaLedgerTest {
     @Test
     void 예약할_때마다_쓴_횟수가_하나씩_오른다() {
         // when
-        ledger.reserve(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT);
-        ledger.reserve(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT);
-        ledger.reserve(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT);
+        ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
+        ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
+        ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
 
         // then
         assertThat(reservedCallsOn(KOREA_8_28, CallQuota.BUS_LOCATION)).isEqualTo(3);
@@ -75,7 +76,7 @@ class CallQuotaLedgerTest {
         insertQuota(CallQuota.BUS_LOCATION, KOREA_8_28, ALREADY_USED_UP, ALREADY_USED_UP);
 
         // when
-        final boolean actual = ledger.reserve(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT);
+        final boolean actual = ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
 
         // then
         assertThat(actual).isFalse();
@@ -87,7 +88,7 @@ class CallQuotaLedgerTest {
         insertQuota(CallQuota.BUS_LOCATION, KOREA_8_28, ALREADY_USED_UP, ALREADY_USED_UP);
 
         // when
-        ledger.reserve(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT);
+        ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
 
         // then
         assertThat(reservedCallsOn(KOREA_8_28, CallQuota.BUS_LOCATION)).isEqualTo(ALREADY_USED_UP);
@@ -96,11 +97,11 @@ class CallQuotaLedgerTest {
     @Test
     void 한국_날짜가_바뀌면_쓴_횟수를_다시_0부터_센다() {
         // given
-        ledger.reserve(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT);
-        ledger.reserve(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT);
+        ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
+        ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
 
         // when
-        ledger.reserve(CallQuota.BUS_LOCATION, KOREA_8_29_MIDNIGHT);
+        ledger.reserveLocation(KOREA_8_29_MIDNIGHT);
 
         // then
         assertThat(reservedCallsOn(KOREA_8_29, CallQuota.BUS_LOCATION)).isEqualTo(1);
@@ -109,8 +110,8 @@ class CallQuotaLedgerTest {
     @Test
     void 세계_표준시로_같은_날이어도_한국_날짜가_다르면_장부가_갈린다() {
         // when
-        ledger.reserve(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT);
-        ledger.reserve(CallQuota.BUS_LOCATION, KOREA_8_29_MIDNIGHT);
+        ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
+        ledger.reserveLocation(KOREA_8_29_MIDNIGHT);
 
         // then
         assertThat(ledgerDates()).containsExactly(KOREA_8_28, KOREA_8_29);
@@ -122,7 +123,7 @@ class CallQuotaLedgerTest {
         insertQuota(CallQuota.BUS_LOCATION, KOREA_8_28, ALREADY_USED_UP, ALREADY_USED_UP);
 
         // when
-        final boolean actual = ledger.reserve(CallQuota.BUS_ROUTE, KOREA_8_28_LATE_NIGHT);
+        final boolean actual = ledger.reserveRouteCatalog(KOREA_8_28_LATE_NIGHT, 1);
 
         // then
         assertThat(actual).isTrue();
@@ -136,7 +137,7 @@ class CallQuotaLedgerTest {
     void 예약은_부른_쪽_트랜잭션에_합류한다() {
         // when
         transactionTemplate.executeWithoutResult(status -> {
-            ledger.reserve(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT);
+            ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
             status.setRollbackOnly();
         });
 
@@ -147,10 +148,10 @@ class CallQuotaLedgerTest {
     @Test
     void 자리를_잡은_날과_보내는_날이_같으면_이미_잡은_자리를_쓴다() {
         // given
-        ledger.reserve(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT);
+        ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
 
         // when
-        ledger.holdsSeatAt(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT, KOREA_8_28_LATE_NIGHT);
+        ledger.ensureLocationReservation(KOREA_8_28_LATE_NIGHT, KOREA_8_28_LATE_NIGHT);
 
         // then
         assertThat(reservedCallsOn(KOREA_8_28, CallQuota.BUS_LOCATION)).isEqualTo(1);
@@ -159,10 +160,10 @@ class CallQuotaLedgerTest {
     @Test
     void 자리를_잡고_보내기_전에_한국_자정이_지나면_다음_날_자리를_새로_잡는다() {
         // given 한국 시각 23:59:59 에 잡고 00:00:00 에 보낸다
-        ledger.reserve(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT);
+        ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
 
         // when
-        ledger.holdsSeatAt(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT);
+        ledger.ensureLocationReservation(KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT);
 
         // then
         assertThat(reservedCallsOn(KOREA_8_29, CallQuota.BUS_LOCATION)).isEqualTo(1);
@@ -175,7 +176,7 @@ class CallQuotaLedgerTest {
 
         // when
         final boolean actual =
-            ledger.holdsSeatAt(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT);
+            ledger.ensureLocationReservation(KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT);
 
         // then
         assertThat(actual).isFalse();
@@ -184,7 +185,7 @@ class CallQuotaLedgerTest {
     @Test
     void 한_번에_두_자리를_잡으면_쓴_횟수가_2가_된다() {
         // when
-        ledger.reserve(CallQuota.BUS_ROUTE, KOREA_8_28_LATE_NIGHT, TWO_CALLS);
+        ledger.reserveRouteCatalog(KOREA_8_28_LATE_NIGHT, TWO_CALLS);
 
         // then
         assertThat(reservedCallsOn(KOREA_8_28, CallQuota.BUS_ROUTE)).isEqualTo(TWO_CALLS);
@@ -196,7 +197,7 @@ class CallQuotaLedgerTest {
         insertQuota(CallQuota.BUS_ROUTE, KOREA_8_28, NO_SEAT_LEFT, ONE_SEAT_LEFT);
 
         // when
-        final boolean actual = ledger.reserve(CallQuota.BUS_ROUTE, KOREA_8_28_LATE_NIGHT, TWO_CALLS);
+        final boolean actual = ledger.reserveRouteCatalog(KOREA_8_28_LATE_NIGHT, TWO_CALLS);
 
         // then
         assertThat(actual).isFalse();
@@ -208,7 +209,7 @@ class CallQuotaLedgerTest {
         insertQuota(CallQuota.BUS_ROUTE, KOREA_8_28, NO_SEAT_LEFT, ONE_SEAT_LEFT);
 
         // when
-        ledger.reserve(CallQuota.BUS_ROUTE, KOREA_8_28_LATE_NIGHT, TWO_CALLS);
+        ledger.reserveRouteCatalog(KOREA_8_28_LATE_NIGHT, TWO_CALLS);
 
         // then
         assertThat(reservedCallsOn(KOREA_8_28, CallQuota.BUS_ROUTE)).isEqualTo(NO_SEAT_LEFT);
@@ -218,7 +219,7 @@ class CallQuotaLedgerTest {
     void 자리를_여럿_잡는_예약도_부른_쪽_트랜잭션에_합류한다() {
         // when
         transactionTemplate.executeWithoutResult(status -> {
-            ledger.reserve(CallQuota.BUS_ROUTE, KOREA_8_28_LATE_NIGHT, TWO_CALLS);
+            ledger.reserveRouteCatalog(KOREA_8_28_LATE_NIGHT, TWO_CALLS);
             status.setRollbackOnly();
         });
 
@@ -266,7 +267,7 @@ class CallQuotaLedgerTest {
         CountDownLatch startTogether
     ) throws InterruptedException {
         startTogether.await();
-        return ledger.reserve(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT);
+        return ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
     }
 
     private void insertQuota(

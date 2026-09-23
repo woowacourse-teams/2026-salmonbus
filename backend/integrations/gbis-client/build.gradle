@@ -3,12 +3,8 @@ plugins {
 }
 
 dependencies {
-    implementation project(':common')
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-restclient'
-    compileOnly 'org.projectlombok:lombok'
-    annotationProcessor 'org.projectlombok:lombok'
+    implementation 'tools.jackson.core:jackson-databind'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation testFixtures(project(':common'))
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }

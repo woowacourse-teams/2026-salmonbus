@@ -5,8 +5,7 @@ import com.gustler.backend.observations.domain.ObservationAttempt;
 import com.gustler.backend.observations.domain.ObservationBatchConclusion;
 import com.gustler.backend.observations.domain.ObservationBatchReservation;
 import com.gustler.backend.observations.domain.ObservationRepository;
-import com.gustler.backend.quota.application.CallQuotaLedger;
-import com.gustler.backend.quota.domain.CallQuota;
+import com.gustler.backend.quota.api.ApiCallQuota;
 
 import com.gustler.backend.gbis.api.GbisLocationResult.NoVehicles;
 import com.gustler.backend.gbis.api.GbisLocationResult.Success;
@@ -26,12 +25,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class ObservationBatchLedger {
 
-    private final CallQuotaLedger callQuotaLedger;
+    private final ApiCallQuota callQuotaLedger;
     private final ObservationRepository observationRepository;
     private final ObservationLoader observationLoader;
 
     public ObservationBatchLedger(
-        CallQuotaLedger callQuotaLedger,
+        ApiCallQuota callQuotaLedger,
         ObservationRepository observationRepository,
         ObservationLoader observationLoader
     ) {
@@ -52,7 +51,7 @@ public class ObservationBatchLedger {
         ObservationAttempt attempt,
         OffsetDateTime reservedAt
     ) {
-        if (callQuotaLedger.reserve(CallQuota.BUS_LOCATION, reservedAt)) {
+        if (callQuotaLedger.reserveLocation(reservedAt)) {
             return new ObservationBatchReservation(observationRepository.openReserved(attempt), true);
         }
         return new ObservationBatchReservation(observationRepository.openNotReserved(attempt), false);
@@ -68,7 +67,7 @@ public class ObservationBatchLedger {
         OffsetDateTime reservedAt,
         OffsetDateTime requestedAt
     ) {
-        if (!callQuotaLedger.holdsSeatAt(CallQuota.BUS_LOCATION, reservedAt, requestedAt)) {
+        if (!callQuotaLedger.ensureLocationReservation(reservedAt, requestedAt)) {
             observationRepository.abandonBeforeSend(batchId);
             return false;
         }

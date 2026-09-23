@@ -1,0 +1,10 @@
+{
+    "response": {
+        "comMsgHeader": "",
+        "msgHeader": {
+            "queryTime": "2026-08-21 19:43:51.069",
+            "resultCode": 2,
+            "resultMessage": "필수 요청 Parameter 가 존재하지 않습니다."
+        }
+    }
+}

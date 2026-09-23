@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OpenAPI_ServiceResponse>
+<cmmMsgHeader>
+  <errMsg>SERVICE_KEY_IS_NOT_REGISTERED_ERROR</errMsg>
+  <returnAuthMsg>등록되지 않은 서비스키</returnAuthMsg>
+  <returnReasonCode>30</returnReasonCode>
+</cmmMsgHeader>
+</OpenAPI_ServiceResponse>

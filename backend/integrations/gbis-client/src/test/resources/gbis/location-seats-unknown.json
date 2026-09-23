@@ -1,0 +1,27 @@
+{
+  "response": {
+    "comMsgHeader": "",
+    "msgHeader": {
+      "queryTime": "2026-08-19 11:14:04.911",
+      "resultCode": 0,
+      "resultMessage": "정상적으로 처리되었습니다."
+    },
+    "msgBody": {
+      "busLocationList": [
+        {
+          "crowded": 0,
+          "lowPlate": 0,
+          "plateNo": "경기70아0017",
+          "remainSeatCnt": -1,
+          "routeId": 204000057,
+          "routeTypeCd": 11,
+          "stateCd": 2,
+          "stationId": 206000728,
+          "stationSeq": 76,
+          "taglessCd": 1,
+          "vehId": 204001354
+        }
+      ]
+    }
+  }
+}

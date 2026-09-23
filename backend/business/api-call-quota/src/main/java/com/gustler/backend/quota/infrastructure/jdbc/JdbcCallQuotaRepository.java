@@ -1,8 +1,7 @@
 package com.gustler.backend.quota.infrastructure.jdbc;
 
-import com.gustler.backend.quota.domain.CallQuota;
 import com.gustler.backend.quota.domain.CallQuotaRepository;
-import java.time.LocalDate;
+import com.gustler.backend.quota.domain.DailyCallQuota;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -43,13 +42,13 @@ public class JdbcCallQuotaRepository implements CallQuotaRepository {
 
     @Override
     public boolean reserve(
-        CallQuota quota,
-        LocalDate kstDate,
-        final int calls,
-        final int dailyLimit
+        DailyCallQuota.Reservation reservation
     ) {
+        DailyCallQuota quota = reservation.quota();
+        int calls = reservation.calls();
         return jdbcClient.sql(RESERVE)
-            .params(quota.provider(), quota.apiService(), kstDate, calls, dailyLimit, calls, calls)
+            .params(quota.service().provider(), quota.service().apiService(), quota.koreanDate(),
+                calls, quota.dailyLimit(), calls, calls)
             .update() == ONE_ROW_CHANGED;
     }
 }

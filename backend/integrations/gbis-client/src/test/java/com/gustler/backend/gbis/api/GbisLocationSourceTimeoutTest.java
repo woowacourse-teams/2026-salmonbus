@@ -22,7 +22,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-@SpringBootTest(classes = {GbisClientConfig.class, GbisApiCaller.class, GbisLocationSource.class, GbisLocationSourceTimeoutTest.Options.class})
+@SpringBootTest(classes = {GbisClientConfig.class, GbisApiCaller.class, GbisLocationSource.class, GbisLocationSourceTimeoutTest.ClientOptions.class})
 @ImportAutoConfiguration({
     HttpClientAutoConfiguration.class,
     ImperativeHttpClientAutoConfiguration.class,
@@ -73,9 +73,10 @@ class GbisLocationSourceTimeoutTest {
             noResponse -> assertThat(noResponse.message()).doesNotContain(FAKE_SERVICE_KEY));
     }
 
-    static class Options {
+    @org.springframework.boot.test.context.TestConfiguration
+    static class ClientOptions {
         @org.springframework.context.annotation.Bean
-        GbisClientOptions options() {
+        GbisClientOptions gbisClientOptions() {
             return new GbisClientOptions("http://localhost:" + SLOW_OPEN_API.getAddress().getPort(), FAKE_SERVICE_KEY);
         }
     }
