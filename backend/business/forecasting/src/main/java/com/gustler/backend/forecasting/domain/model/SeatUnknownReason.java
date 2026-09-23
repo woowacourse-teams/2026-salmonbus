@@ -1,9 +1,9 @@
-package com.gustler.backend.forecasting.domain.publication;
+package com.gustler.backend.forecasting.domain.model;
 
 /**
  * 잔여석을 모를 때 왜 모르는지.
  *
- * <p>collector 에 같은 뜻의 형이 따로 있다. 형을 공유하지 않고 열의 값으로만 만난다.
+ * <p>observations 에 같은 뜻의 형이 따로 있다. 형을 공유하지 않고 열의 값으로만 만난다.
  * 원본 사유 둘은 V4의 CHECK를 따른다. QUALITY_WITHHELD는 조회 후 모델 입력에서만 쓰며 원본에 저장하지 않는다.
  */
 public enum SeatUnknownReason {

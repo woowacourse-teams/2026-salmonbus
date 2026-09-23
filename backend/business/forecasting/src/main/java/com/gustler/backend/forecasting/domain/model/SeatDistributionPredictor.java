@@ -1,7 +1,5 @@
 package com.gustler.backend.forecasting.domain.model;
 
-import com.gustler.backend.forecasting.domain.model.SeatDistribution;
-import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
 import java.util.ArrayList;
 import java.util.List;
 

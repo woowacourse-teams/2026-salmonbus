@@ -1,4 +1,4 @@
-package com.gustler.backend.forecasting.domain.publication;
+package com.gustler.backend.forecasting.domain.model;
 
 /**
  * 정류장이 노선의 어디쯤인가. 기점에 가까울수록 0에 가깝고 마지막 정류장이 1이다.

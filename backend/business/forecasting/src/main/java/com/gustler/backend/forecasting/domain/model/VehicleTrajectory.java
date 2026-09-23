@@ -1,4 +1,4 @@
-package com.gustler.backend.forecasting.domain.publication;
+package com.gustler.backend.forecasting.domain.model;
 
 /**
  * 차량 한 대의 관측과 그에 딸린 궤적 재료들.

@@ -2,7 +2,7 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationRepository;
-import com.gustler.backend.forecasting.domain.publication.ObservedVehicle;
+import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -11,7 +11,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * 예보를 낸 뒤 그 차량이 남긴 관측을 SQL 로 직접 읽는다. collector 의 JPA 엔티티를 쓰지 않는다.
+ * 예보를 낸 뒤 그 차량이 남긴 관측을 SQL 로 직접 읽는다. observations 의 JPA 엔티티를 쓰지 않는다.
  *
  * <p>관측 시각은 vehicle_observation 에 없다. observation_batch.response_received_at 이
  * 관측 시각의 권위라서 판을 조인해 채운다.

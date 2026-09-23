@@ -4,7 +4,7 @@ import com.gustler.backend.forecasting.api.publication.PublishPendingForecasts;
 
 import com.gustler.backend.forecasting.domain.model.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
-import com.gustler.backend.forecasting.domain.publication.RouteStops;
+import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.publication.RouteVersionRepository;
 import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryRepository;
 import com.gustler.backend.forecasting.api.ForecastPolicy;

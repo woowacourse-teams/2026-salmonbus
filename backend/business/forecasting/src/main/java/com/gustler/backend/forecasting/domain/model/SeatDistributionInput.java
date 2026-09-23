@@ -1,6 +1,5 @@
 package com.gustler.backend.forecasting.domain.model;
 
-import com.gustler.backend.forecasting.domain.model.SeatRangeException;
 
 /**
  * 예보 한 건의 입력.

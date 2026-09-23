@@ -2,12 +2,12 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.domain.publication.ObservationHistory;
 import com.gustler.backend.forecasting.domain.publication.ObservedBatch;
-import com.gustler.backend.forecasting.domain.publication.ObservedSeats;
-import com.gustler.backend.forecasting.domain.publication.ObservedVehicle;
+import com.gustler.backend.forecasting.domain.model.ObservedSeats;
+import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
-import com.gustler.backend.forecasting.domain.publication.SeatUnknownReason;
+import com.gustler.backend.forecasting.domain.model.SeatUnknownReason;
 import com.gustler.backend.forecasting.domain.publication.TrajectoryObservation;
-import com.gustler.backend.forecasting.domain.publication.VehicleTrajectory;
+import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
 import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryAssembler;
 import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryRepository;
 import com.gustler.backend.forecasting.domain.model.SeatGrid;
@@ -26,7 +26,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * 관측 표를 SQL 로 직접 읽는다. collector 의 JPA 엔티티를 쓰지 않는다.
+ * 관측 표를 SQL 로 직접 읽는다. observations 의 JPA 엔티티를 쓰지 않는다.
  *
  * <p>관측 시각은 vehicle_observation 에 없다. observation_batch.response_received_at 이
  * 관측 시각의 권위라서 판을 조인해 채운다.

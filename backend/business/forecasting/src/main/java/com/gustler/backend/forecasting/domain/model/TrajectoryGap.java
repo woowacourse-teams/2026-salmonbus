@@ -1,4 +1,4 @@
-package com.gustler.backend.forecasting.domain.publication;
+package com.gustler.backend.forecasting.domain.model;
 
 /**
  * 궤적이 끊긴 사유.

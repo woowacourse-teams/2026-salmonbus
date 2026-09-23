@@ -79,6 +79,11 @@ class PackageBoundaryTest {
         .should().beFreeOfCycles();
 
     @ArchTest
+    static final ArchRule domainConceptsHaveNoCycles = slices()
+        .matching("com.gustler.backend.(*).domain.(*)..")
+        .should().beFreeOfCycles();
+
+    @ArchTest
     static final ArchRule otherModulesUsePublicContracts = classes()
         .that().resideInAnyPackage(MODULES.stream().map(name -> PREFIX + name + "..").toArray(String[]::new))
         .should(new ArchCondition<>("다른 업무 모듈의 공개 계약만 사용한다") {

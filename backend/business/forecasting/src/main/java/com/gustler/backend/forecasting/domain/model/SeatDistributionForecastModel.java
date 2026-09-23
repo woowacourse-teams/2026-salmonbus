@@ -1,9 +1,5 @@
 package com.gustler.backend.forecasting.domain.model;
 
-import com.gustler.backend.forecasting.domain.model.SeatForecastDesignMatrix;
-import com.gustler.backend.forecasting.domain.model.SeatForecastInput;
-import com.gustler.backend.forecasting.domain.model.SeatForecastModel;
-import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
 
 /**
  * 예보 재료를 설계행렬 31열로 펴서 좌석 분포 계산에 넘긴다.
@@ -33,7 +29,7 @@ public final class SeatDistributionForecastModel implements SeatForecastModel {
     ) {
         return predictor.predict(new SeatDistributionInput(
             SeatForecastDesignMatrix.of(input).toArray(),
-            ModelRoute.of(input.stops().upstreamRouteId()),
+            ModelRoute.of(input.stops().sourceRouteId()),
             input.target().distance().stopCount(),
             input.target().remainingSeats(),
             input.maximumSeatsEverObserved(),

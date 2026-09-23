@@ -1,5 +1,11 @@
 package com.gustler.backend.forecasting.domain.publication;
 
+import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
+import com.gustler.backend.forecasting.domain.model.TrajectoryGap;
+import com.gustler.backend.forecasting.domain.model.ObservedSeats;
+import com.gustler.backend.forecasting.domain.model.PrecedingVehicle;
+import com.gustler.backend.forecasting.domain.model.SeatSlope;
+import com.gustler.backend.forecasting.domain.model.FullSeatStreak;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

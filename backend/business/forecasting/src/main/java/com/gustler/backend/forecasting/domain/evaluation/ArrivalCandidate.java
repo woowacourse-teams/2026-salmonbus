@@ -1,6 +1,6 @@
 package com.gustler.backend.forecasting.domain.evaluation;
 
-import com.gustler.backend.forecasting.domain.publication.ObservedVehicle;
+import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
 
 import java.time.Instant;
 

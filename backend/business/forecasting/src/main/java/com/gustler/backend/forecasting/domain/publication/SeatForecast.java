@@ -1,5 +1,6 @@
 package com.gustler.backend.forecasting.domain.publication;
 
+import com.gustler.backend.forecasting.domain.model.VehicleStopTarget;
 import com.gustler.backend.forecasting.domain.model.ForecastDistance;
 import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
 

@@ -1,6 +1,5 @@
-package com.gustler.backend.forecasting.domain.model;
+package com.gustler.backend.forecasting.domain.publication;
 
-import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
 
 import java.time.Clock;

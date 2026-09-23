@@ -1,7 +1,5 @@
 package com.gustler.backend.forecasting.domain.statistics;
 
-import com.gustler.backend.forecasting.domain.publication.VehicleStopTarget;
-
 /**
  * 예보 대상 정류장이 평소 얼마나 붐볐나. 셀 통계에서 이 예보에 필요한 것만 뽑는다.
  *
@@ -22,12 +20,12 @@ public record TargetStopDemand(
 
     public static TargetStopDemand of(
         StopDemandStatistics statistics,
-        VehicleStopTarget target
+        final int targetStopOrder,
+        final int stopsToTarget
     ) {
-        final int targetStopOrder = target.stopOrder();
         return new TargetStopDemand(
             statistics.fillRateScoreAt(targetStopOrder),
-            statistics.netBoardingSegmentScoreOf(targetStopOrder, target.distance().stopCount()),
+            statistics.netBoardingSegmentScoreOf(targetStopOrder, stopsToTarget),
             statistics.isFilledByNeighboursAt(targetStopOrder));
     }
 }

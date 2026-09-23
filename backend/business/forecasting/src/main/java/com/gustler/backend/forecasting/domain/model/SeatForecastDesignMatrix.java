@@ -1,9 +1,5 @@
 package com.gustler.backend.forecasting.domain.model;
 
-import com.gustler.backend.forecasting.domain.publication.ObservedVehicle;
-import com.gustler.backend.forecasting.domain.publication.PrecedingVehicle;
-import com.gustler.backend.forecasting.domain.publication.SeatSlope;
-import com.gustler.backend.forecasting.domain.publication.StopPositionOnRoute;
 import com.gustler.backend.forecasting.domain.statistics.TargetStopDemand;
 import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
 
@@ -17,7 +13,7 @@ import java.util.stream.Stream;
  * 배열 자리는 하나 작다. 기본 20열 · 정류장 위치 8열 · 정류장 통계 3열로 나뉜다.
  *
  * <p><b>재료 밖에서 오는 값이 없다.</b> {@link SeatForecastInput} 하나만 받는다. 시계도 안 받아서
- * 시간대를 여기서 정할 수 없다. 그 결정은 {@link ForecastTimeSlot} 한 자리에 있다.
+ * 시간대를 여기서 정할 수 없다. 그 결정은 ForecastTimeSlot 한 자리에 있다.
  * 그래서 과거 시점 재료를 손으로 만들어 넣으면 그때의 설계행렬이 그대로 다시 나온다.
  *
  * <h2>지금 채우는 열과 못 채우는 열</h2>
@@ -217,7 +213,8 @@ public final class SeatForecastDesignMatrix {
         putPrecedingVehicle(columns, input.trajectory().precedingVehicle(), maximumSeats);
         putColumn(columns, STOP_POSITION_ON_ROUTE,
             StopPositionOnRoute.of(input.target().stopOrder(), input.stops()));
-        putTargetStopDemand(columns, TargetStopDemand.of(input.statistics(), input.target()));
+        putTargetStopDemand(columns, TargetStopDemand.of(input.statistics(), input.target().stopOrder(),
+            input.target().distance().stopCount()));
         return new SeatForecastDesignMatrix(columns);
     }
 

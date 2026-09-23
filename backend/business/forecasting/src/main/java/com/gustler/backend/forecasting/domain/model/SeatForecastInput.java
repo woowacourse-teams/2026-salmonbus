@@ -1,13 +1,8 @@
 package com.gustler.backend.forecasting.domain.model;
 
-import com.gustler.backend.forecasting.domain.publication.ObservedVehicle;
-import com.gustler.backend.forecasting.domain.publication.RouteStops;
-import com.gustler.backend.forecasting.domain.publication.VehicleStopTarget;
-import com.gustler.backend.forecasting.domain.publication.VehicleTrajectory;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
 import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
 
-import com.gustler.backend.forecasting.domain.model.SameDayFullOutcomes;
 import java.util.Objects;
 
 /**

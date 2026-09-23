@@ -1,6 +1,5 @@
-package com.gustler.backend.forecasting.domain.publication;
+package com.gustler.backend.forecasting.domain.model;
 
-import com.gustler.backend.forecasting.domain.model.ForecastDistance;
 
 public record VehicleStopTarget(
     ObservedVehicle observation,

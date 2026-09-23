@@ -1,5 +1,6 @@
 package com.gustler.backend.forecasting.domain.publication;
 
+import com.gustler.backend.forecasting.domain.model.RouteStops;
 import java.util.List;
 
 /**

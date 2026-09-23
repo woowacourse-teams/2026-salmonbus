@@ -1,4 +1,4 @@
-package com.gustler.backend.forecasting.domain.publication;
+package com.gustler.backend.forecasting.domain.model;
 
 import java.util.Objects;
 

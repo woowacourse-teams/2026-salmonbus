@@ -1,6 +1,5 @@
-package com.gustler.backend.forecasting.domain.publication;
+package com.gustler.backend.forecasting.domain.model;
 
-import com.gustler.backend.forecasting.domain.model.ForecastDistance;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,12 +22,12 @@ import java.util.List;
  */
 public record RouteStops(
     long routeVersionId,
-    String upstreamRouteId,
+    String sourceRouteId,
     List<RouteStop> stops
 ) {
 
     public RouteStops {
-        if (upstreamRouteId == null || upstreamRouteId.isBlank()) {
+        if (sourceRouteId == null || sourceRouteId.isBlank()) {
             throw new IllegalArgumentException("정류장 목록에는 어느 Open API 노선인지가 있어야 한다");
         }
         stops = List.copyOf(stops);

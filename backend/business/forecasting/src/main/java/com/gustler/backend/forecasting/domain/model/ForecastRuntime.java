@@ -1,6 +1,5 @@
 package com.gustler.backend.forecasting.domain.model;
 
-import com.gustler.backend.forecasting.domain.model.RuntimeSnapshot;
 import java.util.Optional;
 
 /**

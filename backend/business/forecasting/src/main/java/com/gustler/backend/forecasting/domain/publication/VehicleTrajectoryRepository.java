@@ -1,5 +1,6 @@
 package com.gustler.backend.forecasting.domain.publication;
 
+import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;

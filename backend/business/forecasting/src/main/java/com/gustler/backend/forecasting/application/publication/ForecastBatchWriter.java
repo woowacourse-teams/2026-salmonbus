@@ -1,16 +1,16 @@
 package com.gustler.backend.forecasting.application.publication;
 
 import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesService;
-import com.gustler.backend.forecasting.domain.model.ForecastTimeSlot;
+import com.gustler.backend.forecasting.domain.publication.ForecastTimeSlot;
 import com.gustler.backend.forecasting.domain.model.SeatForecastInput;
 import com.gustler.backend.forecasting.domain.model.SeatRangeException;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
-import com.gustler.backend.forecasting.domain.publication.RouteStops;
+import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
 import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
 import com.gustler.backend.forecasting.domain.publication.ForecastPublicationRepository;
 import com.gustler.backend.forecasting.domain.publication.PublishedForecast;
-import com.gustler.backend.forecasting.domain.publication.VehicleTrajectory;
+import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
 import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryRepository;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
