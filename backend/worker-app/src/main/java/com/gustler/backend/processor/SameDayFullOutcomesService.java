@@ -72,9 +72,11 @@ public class SameDayFullOutcomesService {
         SeoulDay day
     ) {
         List<SameDayFullOutcomeCount> counted = repository.countFromSource(routeId, day, day.end());
-        if (!counted.isEmpty()) {
-            repository.upsertCounts(routeId, day, counted);
+        if (counted.isEmpty()) {
+            // 거리 0은 실제 예보가 아니다. 이 날짜/품질 버전에서 원본이 비었음을 한 번만 기록한다.
+            counted = List.of(new SameDayFullOutcomeCount(0, 0, 0, 0, day.start()));
         }
+        repository.upsertCounts(routeId, day, counted);
         return counted;
     }
 
@@ -95,7 +97,7 @@ public class SameDayFullOutcomesService {
     ) {
         Map<Integer, SameDayFullOutcomes> byStopsAhead = new LinkedHashMap<>();
         for (SameDayFullOutcomeCount count : counts) {
-            byStopsAhead.put(count.stopsToTarget(), count.outcomes());
+            if (count.rowCount() > 0) { byStopsAhead.put(count.stopsToTarget(), count.outcomes()); }
         }
         return Map.copyOf(byStopsAhead);
     }

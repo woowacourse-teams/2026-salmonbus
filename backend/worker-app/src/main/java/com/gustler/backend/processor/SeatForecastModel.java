@@ -6,9 +6,9 @@ package com.gustler.backend.processor;
  * <p><b>DB 를 읽지 않는다.</b> 필요한 것을 전부 {@link SeatForecastInput} 으로 받아 계산만 한다.
  * 그래야 과거 시점 재료를 손으로 만들어 넣는 백테스트가 된다.
  *
- * <p>구현체가 아직 없다. 좌석 분포를 만드는 네 단계(기준점 · 부호 · 크기 구간 · 합치기)가
- * 전부 밖에서 배운 계수를 쓰는데 그 계수가 아직 없다. 구현체가 없는 동안 예보 배치는
- * batch 를 하나도 안 연다.
+ * <p>좌석 입력이 모델의 지원 범위를 벗어나면 {@link SeatRangeException} 으로 구별한다.
+ * 지원 범위는 각 모델이 결정하며 호출자가 구체 모델의 상한을 복제하지 않는다.
+ * 그 밖의 계산·설정 오류는 좌석 범위 오류로 바꾸지 않는다.
  */
 public interface SeatForecastModel {
 

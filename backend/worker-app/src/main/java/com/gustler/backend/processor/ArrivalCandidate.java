@@ -9,8 +9,14 @@ import java.time.Instant;
  */
 public record ArrivalCandidate(
     long observationId,
-    ObservedVehicle vehicle
+    ObservedVehicle vehicle,
+    Long qualityDirection,
+    boolean qualityAssessed
 ) {
+
+    public ArrivalCandidate(long observationId, ObservedVehicle vehicle) {
+        this(observationId, vehicle, null, true);
+    }
 
     public int passedStopOrder() {
         return vehicle.passedStopOrder();

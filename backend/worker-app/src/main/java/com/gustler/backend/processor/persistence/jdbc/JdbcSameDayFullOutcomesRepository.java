@@ -21,36 +21,48 @@ public class JdbcSameDayFullOutcomesRepository implements SameDayFullOutcomesRep
         FROM same_day_full_outcomes
         WHERE route_id = :routeId
           AND outcome_date = :outcomeDate
+          AND quality_revision = (SELECT quality_revision FROM route WHERE id = :routeId)
         ORDER BY stops_to_target
         """;
 
     private static final String UPSERT_COUNT = """
         INSERT INTO same_day_full_outcomes (
             route_id, outcome_date, stops_to_target,
-            row_count, actual_full_count, raw_full_chance_sum, settled_through
+            row_count, actual_full_count, raw_full_chance_sum, settled_through, quality_revision
         ) VALUES (
             :routeId, :outcomeDate, :stopsToTarget,
-            :rowCount, :actualFullCount, :rawFullChanceSum, :settledThrough
+            :rowCount, :actualFullCount, :rawFullChanceSum, :settledThrough,
+            (SELECT quality_revision FROM route WHERE id = :routeId)
         )
         ON CONFLICT (route_id, outcome_date, stops_to_target) DO UPDATE SET
             row_count = EXCLUDED.row_count,
             actual_full_count = EXCLUDED.actual_full_count,
             raw_full_chance_sum = EXCLUDED.raw_full_chance_sum,
-            settled_through = EXCLUDED.settled_through
+            settled_through = EXCLUDED.settled_through,
+            quality_revision = EXCLUDED.quality_revision
         """;
 
     private static final String ADD_TO_COUNT = """
         INSERT INTO same_day_full_outcomes (
             route_id, outcome_date, stops_to_target,
-            row_count, actual_full_count, raw_full_chance_sum, settled_through
+            row_count, actual_full_count, raw_full_chance_sum, settled_through, quality_revision
         ) VALUES (
-            :routeId, :outcomeDate, :stopsToTarget, 1, :fullCount, :rawFullChance, :arrivedAt
+            :routeId, :outcomeDate, :stopsToTarget, 1, :fullCount, :rawFullChance, :arrivedAt,
+            (SELECT quality_revision FROM route WHERE id = :routeId)
         )
         ON CONFLICT (route_id, outcome_date, stops_to_target) DO UPDATE SET
-            row_count = same_day_full_outcomes.row_count + 1,
-            actual_full_count = same_day_full_outcomes.actual_full_count + EXCLUDED.actual_full_count,
-            raw_full_chance_sum = same_day_full_outcomes.raw_full_chance_sum + EXCLUDED.raw_full_chance_sum,
-            settled_through = GREATEST(same_day_full_outcomes.settled_through, EXCLUDED.settled_through)
+            row_count = CASE WHEN same_day_full_outcomes.quality_revision = EXCLUDED.quality_revision
+                THEN same_day_full_outcomes.row_count + 1 ELSE 1 END,
+            actual_full_count = CASE WHEN same_day_full_outcomes.quality_revision = EXCLUDED.quality_revision
+                THEN same_day_full_outcomes.actual_full_count + EXCLUDED.actual_full_count
+                ELSE EXCLUDED.actual_full_count END,
+            raw_full_chance_sum = CASE WHEN same_day_full_outcomes.quality_revision = EXCLUDED.quality_revision
+                THEN same_day_full_outcomes.raw_full_chance_sum + EXCLUDED.raw_full_chance_sum
+                ELSE EXCLUDED.raw_full_chance_sum END,
+            settled_through = CASE WHEN same_day_full_outcomes.quality_revision = EXCLUDED.quality_revision
+                THEN GREATEST(same_day_full_outcomes.settled_through, EXCLUDED.settled_through)
+                ELSE EXCLUDED.settled_through END,
+            quality_revision = EXCLUDED.quality_revision
         """;
 
     /**
@@ -76,7 +88,7 @@ public class JdbcSameDayFullOutcomesRepository implements SameDayFullOutcomesRep
         FROM observation_batch arrival_batch
         JOIN vehicle_observation arrival
           ON arrival.observation_batch_id = arrival_batch.id
-        JOIN seat_forecast forecast
+        JOIN quality_calibration_seat_forecast forecast
           ON forecast.arrival_observation_id = arrival.id
         WHERE arrival_batch.route_version_id IN (
                 SELECT id FROM route_version WHERE route_id = :routeId)

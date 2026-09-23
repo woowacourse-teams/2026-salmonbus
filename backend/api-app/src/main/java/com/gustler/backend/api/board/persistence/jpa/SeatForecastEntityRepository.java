@@ -14,6 +14,8 @@ public interface SeatForecastEntityRepository
         JOIN FETCH forecast.vehicleObservation observation
         JOIN FETCH forecast.modelDeployment
         WHERE observation.observationBatch.id = :batchId
+          AND EXISTS (SELECT eligible.id FROM BoardForecastEligibleObservation eligible
+                      WHERE eligible.id = observation.id AND eligible.observationBatchId = :batchId)
         """)
     List<SeatForecastJpaEntity> findAllByBatchId(@Param("batchId") long batchId);
 }

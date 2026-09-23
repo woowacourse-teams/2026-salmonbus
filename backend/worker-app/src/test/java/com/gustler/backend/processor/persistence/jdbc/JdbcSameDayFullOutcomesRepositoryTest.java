@@ -1,6 +1,9 @@
 package com.gustler.backend.processor.persistence.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import com.gustler.backend.processor.ArrivalLabel;
 import com.gustler.backend.processor.ForecastSettlement;
@@ -9,6 +12,7 @@ import com.gustler.backend.processor.SameDayFullOutcomesService;
 import com.gustler.backend.processor.SeatForecast;
 import com.gustler.backend.processor.SeoulDay;
 import com.gustler.backend.processor.SettledForecast;
+import com.gustler.backend.support.ConfirmedTripFixture;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.Duration;
 import java.time.Instant;
@@ -237,6 +241,89 @@ class JdbcSameDayFullOutcomesRepositoryTest {
             STOPS_TO_TARGET, 2, 1, RAW_FULL_CHANCE + OTHER_RAW_FULL_CHANCE, ARRIVED_AT.plus(Duration.ofMinutes(16))));
     }
 
+    @Test
+    void 편도_제외로_판정_버전이_바뀌면_기존_집계와_예측값을_후보정에_재사용하지_않는다() {
+        // given
+        service.record(List.of(settleAsFull(vehicleObservationId, RAW_FULL_CHANCE)));
+        assertThat(repository.findCounts(routeId, ARRIVAL_DAY)).hasSize(1);
+
+        // when
+        jdbcClient.sql("UPDATE route SET quality_revision = quality_revision + 1 WHERE id = ?")
+            .param(routeId).update();
+
+        // then
+        assertThat(repository.findCounts(routeId, ARRIVAL_DAY)).isEmpty();
+        assertThat(repository.countFromSource(routeId, ARRIVAL_DAY, ARRIVED_AT)).isEmpty();
+        assertThat(service.outcomesFor(routeId, ARRIVED_AT)).isEmpty();
+    }
+
+    @Test
+    void 새_판정_버전의_결과를_더할_때_이전_버전의_건수는_합산하지_않는다() {
+        // given
+        repository.add(settleAsFull(vehicleObservationId, RAW_FULL_CHANCE));
+        jdbcClient.sql("UPDATE route SET quality_revision = quality_revision + 1 WHERE id = ?")
+            .param(routeId).update();
+        long other = insertObservation(observationBatchId, routeVersionId, VEHICLE_204000207, 1, PASSED_STOP_ORDER);
+        SettledForecast current = settleWithSeats(other, OTHER_RAW_FULL_CHANCE, SEATS_ON_ARRIVAL_WHEN_NOT_FULL);
+
+        // when
+        repository.add(current);
+
+        // then
+        assertThat(repository.findCounts(routeId, ARRIVAL_DAY)).containsExactly(
+            new SameDayFullOutcomeCount(STOPS_TO_TARGET, 1, 0, OTHER_RAW_FULL_CHANCE, ARRIVED_AT));
+    }
+
+    @Test
+    void 집계를_다시_만들_때_제외된_편도의_예보는_세지_않는다() {
+        // given
+        settleAsFull(vehicleObservationId, RAW_FULL_CHANCE);
+        jdbcClient.sql("UPDATE vehicle_one_way_trip SET status = 'EXCLUDED' WHERE start_observation_id = ?")
+            .param(vehicleObservationId).update();
+
+        // when
+        List<SameDayFullOutcomeCount> counts = repository.countFromSource(routeId, ARRIVAL_DAY, ARRIVED_AT);
+
+        // then
+        assertThat(counts).isEmpty();
+    }
+
+    @Test
+    void 원본이_비어_있으면_같은_날짜와_품질_버전에서는_한번만_원본을_센다() {
+        // given
+        var observedRepository = spy(new JdbcSameDayFullOutcomesRepository(jdbcClient));
+        var observedService = new SameDayFullOutcomesService(observedRepository);
+
+        // when
+        var first = observedService.outcomesFor(routeId, ARRIVED_AT);
+        var second = observedService.outcomesFor(routeId, ARRIVED_AT.plusSeconds(10));
+
+        // then
+        assertThat(first).isEmpty();
+        assertThat(second).isEmpty();
+        verify(observedRepository, times(1)).countFromSource(routeId, ARRIVAL_DAY, ARRIVAL_DAY.end());
+        assertThat(repository.findCounts(routeId, ARRIVAL_DAY)).singleElement()
+            .extracting(SameDayFullOutcomeCount::rowCount).isEqualTo(0);
+    }
+
+    @Test
+    void 빈_집계를_기록한_뒤_첫_실제_결과가_들어오면_원본_재집계_없이_한건을_더한다() {
+        // given
+        var observedRepository = spy(new JdbcSameDayFullOutcomesRepository(jdbcClient));
+        var observedService = new SameDayFullOutcomesService(observedRepository);
+        observedService.outcomesFor(routeId, ARRIVED_AT);
+        var settled = settleAsFull(vehicleObservationId, RAW_FULL_CHANCE);
+
+        // when
+        observedService.record(List.of(settled));
+        var outcomes = observedService.outcomesFor(routeId, ARRIVED_AT);
+
+        // then
+        assertThat(outcomes).hasSize(1);
+        assertThat(outcomes.get(STOPS_TO_TARGET).rowCount()).isEqualTo(1);
+        verify(observedRepository, times(1)).countFromSource(routeId, ARRIVAL_DAY, ARRIVAL_DAY.end());
+    }
+
     private SettledForecast settleAsFull(
         final long observationId,
         final double rawFullChance
@@ -254,7 +341,8 @@ class JdbcSameDayFullOutcomesRepositoryTest {
         final long arrivalBatchId = insertObservationBatch(
             routeVersionId, "2026-08-19T11:20-" + observationId, ARRIVAL_RESPONSE_RECEIVED_AT);
         final long arrivalObservationId =
-            insertObservation(arrivalBatchId, routeVersionId, VEHICLE_204000206, 0, TARGET_STOP_ORDER);
+            insertObservation(arrivalBatchId, routeVersionId, jdbcClient.sql("SELECT vehicle_id FROM vehicle_observation WHERE id = ?")
+                .param(observationId).query(String.class).single(), 0, TARGET_STOP_ORDER);
         return seatForecastRepository.settle(List.of(new ForecastSettlement(
             observationId, TARGET_STOP_ORDER,
             new ArrivalLabel.Settled(arrivalObservationId, seatsOnArrival), SCORED_AT))).getFirst();
@@ -370,7 +458,7 @@ class JdbcSameDayFullOutcomesRepositoryTest {
         final int sourceRowNumber,
         final int stopOrder
     ) {
-        return jdbcClient.sql("""
+        return ConfirmedTripFixture.include(jdbcClient, jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
                     observation_batch_id, route_version_id, source_row_number,
                     vehicle_id, stop_order, stop_id, passed_stop_order,
@@ -384,7 +472,7 @@ class JdbcSameDayFullOutcomesRepositoryTest {
                 RUNNING_STATE_DEPARTED, SEATS_LEFT
             )
             .query(Long.class)
-            .single();
+            .single());
     }
 
     private static String stopIdOf(

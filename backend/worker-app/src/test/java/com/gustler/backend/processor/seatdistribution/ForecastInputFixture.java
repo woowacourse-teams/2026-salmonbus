@@ -35,19 +35,23 @@ final class ForecastInputFixture {
     static SeatForecastInput of(
         String upstreamRouteId
     ) {
+        return of(upstreamRouteId, SEATS_LEFT, MAXIMUM_SEATS_EVER_OBSERVED);
+    }
+
+    static SeatForecastInput of(String upstreamRouteId, int remainingSeats, int maximumSeats) {
         ObservedVehicle observation = new ObservedVehicle(
-            "204000206", ROUTE_VERSION_3330, PASSED_STOP_44, MORNING_AT, SEATS_LEFT, CROWD_LEVEL_3);
+            "204000206", ROUTE_VERSION_3330, PASSED_STOP_44, MORNING_AT, remainingSeats, CROWD_LEVEL_3);
         RouteStop target = new RouteStop(ROUTE_VERSION_3330, TARGET_STOP_49, "20400049", true);
         return new SeatForecastInput(
             new VehicleStopTarget(observation, target),
             new VehicleTrajectory(
                 OBSERVATION_ID,
                 observation,
-                new ObservedSeats.Known(SEATS_LEFT),
+                new ObservedSeats.Known(remainingSeats),
                 new SeatSlope.Known(-3),
                 new PrecedingVehicle.Unknown(TrajectoryGap.NO_VEHICLE_AHEAD),
                 new FullSeatStreak.SeenToEnd(0),
-                MAXIMUM_SEATS_EVER_OBSERVED),
+                maximumSeats),
             new StopDemandStatistics(
                 ROUTE_VERSION_3330,
                 TimeSlot.MORNING,

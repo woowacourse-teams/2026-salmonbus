@@ -1,11 +1,12 @@
 package com.gustler.backend.collector.persistence.jpa;
 
-import com.gustler.backend.collector.RemainingSeats;
 import com.gustler.backend.collector.RemainingSeats.Known;
 import com.gustler.backend.collector.RemainingSeats.Unknown;
+import com.gustler.backend.collector.RemainingSeats;
 import com.gustler.backend.collector.SeatUnknownReason;
 import com.gustler.backend.collector.UpstreamObservationRow;
 import com.gustler.backend.collector.VehicleObservation;
+import com.gustler.backend.observation.VehicleObservationsStored;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -21,8 +22,8 @@ import lombok.NoArgsConstructor;
  * 조회 쪽도 이 표를 매핑한다. 같은 물리 컬럼에 논리명이 둘이면 Hibernate 가
  * DuplicateMappingException 을 내고 앱이 안 뜬다. 그래서 전 필드에 @Column(name) 을 명시한다.
  *
- * <p>vehicle_trip_key 는 매핑하지 않는다. 여정을 어디서 가를지 문턱값이 아직 없어서
- * 지금 채우면 뜻이 없는 값이 들어간다. 열은 NULL 허용으로 이미 있다.
+ * <p>vehicle_trip_key 는 수집 엔티티에 매핑하지 않는다. 이상 차량의 제한된 조사에서만
+ * 이 nullable 파생 열에 편도 키를 기록한다.
  */
 @Entity(name = "CollectorVehicleObservation")
 @Table(name = "vehicle_observation")
@@ -99,6 +100,10 @@ public class VehicleObservationJpaEntity {
         this.routeType = observation.routeType();
         this.tagless = observation.tagless();
         applySeats(observation.remainingSeats());
+    }
+
+    public VehicleObservationsStored.Row storedRow() {
+        return new VehicleObservationsStored.Row(id, vehicleId, remainingSeats);
     }
 
     /** 잔여석은 아는 값이거나 모르는 사유다. 둘 중 하나만 채운다. DB 도 CHECK 로 같은 것을 막는다. */

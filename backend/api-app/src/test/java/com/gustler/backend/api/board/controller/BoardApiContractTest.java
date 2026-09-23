@@ -1,5 +1,6 @@
 package com.gustler.backend.api.board.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.aMapWithSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -110,16 +111,16 @@ class BoardApiContractTest {
             .andExpect(jsonPath("$.stops[2].approachingVehicles[0]", aMapWithSize(3)))
             .andExpect(jsonPath("$.stops[2].approachingVehicles[0].vehicleId")
                 .value("0"))
-            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].expectedSeats")
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast.expectedSeats")
                 .doesNotExist())
-            .andExpect(jsonPath("$.stops[2].approachingVehicles[1]", aMapWithSize(4)))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[1]", aMapWithSize(3)))
             .andExpect(jsonPath("$.stops[2].approachingVehicles[1].vehicleId")
                 .value("B"))
-            .andExpect(jsonPath("$.stops[2].approachingVehicles[1].seatAvailableProbability")
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[1].forecast.seatAvailableProbability")
                 .value(0.996))
             .andExpect(jsonPath("$.stops[2].approachingVehicles[2]", aMapWithSize(3)))
             .andExpect(jsonPath("$.stops[2].approachingVehicles[2].vehicleId").isEmpty())
-            .andExpect(jsonPath("$.stops[2].approachingVehicles[2].expectedSeats")
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[2].forecast.expectedSeats")
                 .doesNotExist());
     }
 
@@ -215,6 +216,82 @@ class BoardApiContractTest {
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
             .andExpect(jsonPath("$", aMapWithSize(3)))
             .andExpect(jsonPath("$.code").value("ROUTE_NOT_FOUND"));
+    }
+
+    @Test
+    void 예보가_없는_차량과_확률_0인_차량을_함께_반환한다() throws Exception {
+        OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
+        RouteContext route = insertRoundTripRoute(now.minusDays(1));
+        long modelId = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        long batchId = fixture.insertBatch(route, now.minusMinutes(1), now, "SUCCESS_ROWS", 2);
+        fixture.insertObservation(route, batchId, 1, "A", 2, "STOP-2", now);
+        insertPrediction(route, batchId, modelId, 2, "B", 2, "STOP-2", 3, 1, 1.0, 0.0, now);
+
+        mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.stops[2].approachingVehicles.length()").value(2))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].vehicleId").value("A"))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast", aMapWithSize(1)))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast.status").value("UNAVAILABLE"))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[1].vehicleId").value("B"))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[1].forecast.status").value("AVAILABLE"))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[1].forecast.seatAvailableProbability").value(0.0))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[1].forecast.expectedSeats").value(0.0));
+    }
+
+    @Test
+    void 모든_차량에_예보가_없어도_관측된_차량을_반환한다() throws Exception {
+        OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
+        RouteContext route = insertRoundTripRoute(now.minusDays(1));
+        fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        long batchId = fixture.insertBatch(route, now.minusMinutes(1), now, "SUCCESS_ROWS", 1);
+        long observationId = fixture.insertObservation(route, batchId, 1, "A", 2, "STOP-2", now);
+        // 실제 운영 관측이 아닌 회귀 테스트용 82석 입력이다.
+        jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats = 82, seat_unknown_reason = NULL WHERE id = :id")
+            .param("id", observationId).update();
+
+        mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.stops[2].approachingVehicles.length()").value(1))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].vehicleId").value("A"))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast", aMapWithSize(1)))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast.status").value("UNAVAILABLE"));
+
+        mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.vehicles[0].vehicleId").value("A"))
+            .andExpect(jsonPath("$.vehicles[0].seat.kind").value("EXACT"))
+            .andExpect(jsonPath("$.vehicles[0].seat.remaining").value(82))
+            .andExpect(jsonPath("$.vehicles[0].forecast").doesNotExist());
+    }
+
+    @Test
+    void 이미_예보가_있어도_제외된_편도는_UNAVAILABLE이고_현재_좌석은_보존한다() throws Exception {
+        // given
+        OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
+        RouteContext route = insertRoundTripRoute(now.minusDays(1));
+        long model = fixture.insertModel("model-quality", "ACTIVE", now.minusDays(1));
+        long batch = fixture.insertBatch(route, now, now, "SUCCESS_ROWS", 1);
+        long observation = fixture.insertObservation(route, batch, 1, "A", 2, "STOP-2", now);
+        fixture.insertForecast(route, observation, 3, 1, model, 0.2, 40.0, now);
+        jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats = 82, seat_unknown_reason = NULL WHERE id = ?")
+            .param(observation).update();
+        jdbcClient.sql("UPDATE vehicle_one_way_trip SET status = 'EXCLUDED', evidence_observation_id = ? WHERE id = CAST(? AS text)")
+            .param(observation).param(observation).update();
+
+        // when
+        var boardResponse = mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID));
+        var vehiclesResponse = mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID));
+
+        // then
+        boardResponse.andExpect(status().isOk())
+            .andExpect(jsonPath("$.stops[2].approachingVehicles.length()").value(1))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast", aMapWithSize(1)))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast.status").value("UNAVAILABLE"));
+        vehiclesResponse.andExpect(status().isOk())
+            .andExpect(jsonPath("$.vehicles[0].seat.remaining").value(82));
+        assertThat(jdbcClient.sql("SELECT count(*) FROM seat_forecast WHERE vehicle_observation_id = ?")
+            .param(observation).query(Integer.class).single()).isEqualTo(1);
     }
 
     private RouteContext insertRoundTripRoute(OffsetDateTime validFrom) {

@@ -5,6 +5,8 @@ plugins {
 
 dependencies {
     implementation project(':worker-app')
+    implementation project(':common')
+    implementation 'org.springframework:spring-jdbc'
     implementation platform('software.amazon.awssdk:bom:2.54.9')
     implementation 'software.amazon.awssdk:s3'
     implementation 'software.amazon.awssdk:sts'
@@ -20,8 +22,6 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-actuator'
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:postgresql'
-    testImplementation project(':common')
-    testImplementation 'org.springframework:spring-jdbc'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

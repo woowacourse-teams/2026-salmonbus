@@ -12,9 +12,11 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 예보 표를 SQL 로 직접 읽고 쓴다. JPA 엔티티를 두지 않는다.
@@ -47,11 +49,13 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
         INSERT INTO seat_forecast (
             vehicle_observation_id, target_stop_order, route_version_id, stops_to_target,
             model_deployment_id, demand_statistics_revision,
-            seat_full_chance_raw, seat_full_chance, expected_seats, generated_at, scoring_state
+            seat_full_chance_raw, seat_full_chance, expected_seats, generated_at, scoring_state, quality_revision
         ) VALUES (
             :vehicleObservationId, :targetStopOrder, :routeVersionId, :stopsToTarget,
             :modelDeploymentId, :demandStatisticsRevision,
-            :seatFullChanceRaw, :seatFullChance, :expectedSeats, :generatedAt, :scoringState
+            :seatFullChanceRaw, :seatFullChance, :expectedSeats, :generatedAt, :scoringState,
+            (SELECT q.quality_revision FROM route_version v
+             JOIN route q ON q.id = v.route_id WHERE v.id = :routeVersionId)
         )
         ON CONFLICT (vehicle_observation_id, target_stop_order) DO UPDATE SET
             route_version_id = EXCLUDED.route_version_id,
@@ -61,7 +65,8 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
             seat_full_chance_raw = EXCLUDED.seat_full_chance_raw,
             seat_full_chance = EXCLUDED.seat_full_chance,
             expected_seats = EXCLUDED.expected_seats,
-            generated_at = EXCLUDED.generated_at
+            generated_at = EXCLUDED.generated_at,
+            quality_revision = EXCLUDED.quality_revision
         """;
 
     /** 그 판의 예보를 다 썼다는 표시. 차가 0대라 예보 행이 하나도 없어도 찍는다. */
@@ -87,9 +92,10 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
                observation.vehicle_id,
                forecast.stops_to_target,
                batch.response_received_at,
-               forecast.generated_at
-        FROM seat_forecast forecast
-        JOIN vehicle_observation observation
+               forecast.generated_at,
+               observation.quality_direction
+        FROM quality_eligible_seat_forecast forecast
+        JOIN forecast_eligible_observation observation
           ON observation.id = forecast.vehicle_observation_id
         JOIN observation_batch batch
           ON batch.id = observation.observation_batch_id
@@ -106,7 +112,7 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
      */
     private static final String SELECT_ROUTE_VERSIONS_AWAITING_LABEL = """
         SELECT DISTINCT route_version_id
-        FROM seat_forecast
+        FROM quality_eligible_seat_forecast
         WHERE scoring_state = 'PENDING'
         """;
 
@@ -119,6 +125,15 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
             scored_at = :scoredAt
         WHERE vehicle_observation_id = :vehicleObservationId
           AND target_stop_order = :targetStopOrder
+          AND scoring_state = 'PENDING'
+          AND EXISTS (SELECT 1 FROM forecast_eligible_observation source
+                      WHERE source.id = :vehicleObservationId
+                        AND (CAST(:arrivalObservationId AS bigint) IS NULL OR EXISTS (
+                            SELECT 1 FROM forecast_eligible_observation arrival
+                            WHERE arrival.id = :arrivalObservationId
+                              AND arrival.quality_direction = source.quality_direction
+                              AND arrival.vehicle_id IS NOT DISTINCT FROM source.vehicle_id
+                              AND arrival.route_version_id = source.route_version_id)))
         """;
 
     private static final String SETTLE_PENDING_FORECAST = """
@@ -136,8 +151,16 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
           AND forecast.scoring_state = 'PENDING'
           AND forecast_version.id = forecast.route_version_id
           AND arrival.id = :arrivalObservationId
+          AND EXISTS (SELECT 1 FROM forecast_eligible_observation source
+                      JOIN forecast_eligible_observation eligible_arrival
+                        ON eligible_arrival.quality_direction = source.quality_direction
+                       AND eligible_arrival.vehicle_id IS NOT DISTINCT FROM source.vehicle_id
+                       AND eligible_arrival.route_version_id = source.route_version_id
+                      WHERE source.id = :vehicleObservationId AND eligible_arrival.id = :arrivalObservationId)
         RETURNING forecast_version.route_id, forecast.stops_to_target,
-                  forecast.seat_full_chance_raw, arrival_batch.response_received_at
+                  forecast.seat_full_chance_raw, arrival_batch.response_received_at,
+                  forecast.quality_revision = (SELECT quality_revision FROM route
+                      WHERE id = forecast_version.route_id) AS usable_for_calibration
         """;
 
     private final JdbcClient jdbcClient;
@@ -201,7 +224,8 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
                 resultSet.getString("vehicle_id"),
                 resultSet.getInt("stops_to_target"),
                 instantOf(resultSet.getObject("response_received_at", OffsetDateTime.class)),
-                instantOf(resultSet.getObject("generated_at", OffsetDateTime.class))))
+                instantOf(resultSet.getObject("generated_at", OffsetDateTime.class)),
+                resultSet.getObject("quality_direction", Long.class)))
             .list();
     }
 
@@ -212,10 +236,23 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
             .list();
     }
 
+    /** 호출한 회수 작업의 transaction은 당일 집계 갱신까지 이어져야 한다. */
     @Override
+    @Transactional
     public List<SettledForecast> settle(
         List<ForecastSettlement> settlements
     ) {
+        if (settlements.isEmpty()) {
+            return List.of();
+        }
+        // 품질 변경/예보 생성과 같은 노선 잠금을 공유한다. 여러 노선은 id 순서로 잠근다.
+        jdbcClient.sql("""
+            SELECT id FROM route WHERE id IN (
+                SELECT v.route_id FROM vehicle_observation o
+                JOIN route_version v ON v.id = o.route_version_id WHERE o.id IN (:sourceIds))
+            ORDER BY id FOR UPDATE
+            """).param("sourceIds", settlements.stream().map(ForecastSettlement::vehicleObservationId).distinct().toList())
+            .query(Long.class).list();
         List<SettledForecast> settled = new ArrayList<>();
         for (ForecastSettlement settlement : settlements) {
             if (settlement.label() instanceof ArrivalLabel.Settled label) {
@@ -235,6 +272,7 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
         return List.copyOf(settled);
     }
 
+    /** 이전 품질 버전의 실제 도착 라벨도 보존하되 후보정에 더할 결과에서는 뺀다. */
     private Optional<SettledForecast> settlePending(
         ForecastSettlement settlement,
         ArrivalLabel.Settled label
@@ -246,13 +284,13 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
             .param("scoredAt", offsetOf(settlement.scoredAt()))
             .param("vehicleObservationId", settlement.vehicleObservationId())
             .param("targetStopOrder", settlement.targetStopOrder())
-            .query((resultSet, rowNumber) -> new SettledForecast(
+            .query((resultSet, rowNumber) -> resultSet.getBoolean("usable_for_calibration") ? new SettledForecast(
                 resultSet.getLong("route_id"),
                 resultSet.getInt("stops_to_target"),
                 resultSet.getDouble("seat_full_chance_raw"),
                 resultSet.getObject("response_received_at", OffsetDateTime.class).toInstant(),
-                label.seatsOnArrival()))
-            .optional();
+                label.seatsOnArrival()) : null)
+            .list().stream().filter(Objects::nonNull).findFirst();
     }
 
     /**

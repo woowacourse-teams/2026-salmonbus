@@ -10,6 +10,7 @@ import com.gustler.backend.processor.TrajectoryObservation;
 import com.gustler.backend.processor.VehicleTrajectory;
 import com.gustler.backend.processor.VehicleTrajectoryAssembler;
 import com.gustler.backend.processor.VehicleTrajectoryRepository;
+import com.gustler.backend.processor.seatdistribution.SeatGrid;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -19,6 +20,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -118,19 +121,22 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
      * 스키마가 그 열을 NULL 허용으로 두고 있어서 실제로 생길 수 있다.
      */
     private static final String SELECT_OBSERVATIONS_IN_BATCHES = """
-        SELECT id, observation_batch_id, route_version_id, vehicle_id,
-               vehicle_trip_key, passed_stop_order, remaining_seats, seat_unknown_reason, crowd_level
-        FROM vehicle_observation
-        WHERE observation_batch_id IN (:observationBatchIds)
-          AND vehicle_id IS NOT NULL
-        ORDER BY observation_batch_id, source_row_number
+        SELECT o.id, o.observation_batch_id, o.route_version_id, o.vehicle_id,
+               o.vehicle_trip_key, o.passed_stop_order,
+               CASE WHEN o.forecast_eligible THEN o.remaining_seats END AS remaining_seats,
+               CASE WHEN NOT o.forecast_eligible THEN 'QUALITY_WITHHELD' ELSE o.seat_unknown_reason END AS seat_unknown_reason,
+               o.crowd_level
+        FROM forecast_observation_quality o
+        WHERE o.observation_batch_id IN (:observationBatchIds)
+          AND o.vehicle_id IS NOT NULL
+        ORDER BY o.observation_batch_id, o.source_row_number
         """;
 
     /**
-     * 차량마다 지금까지 보여 준 가장 많은 잔여석.
+     * 차량마다 현재 사용 가능한 편도에서 지금까지 보여 준 가장 많은 잔여석.
      *
      * <p><b>궤적을 잇는 30분 창을 안 쓴다.</b> 셀 통계 집계가 같은 값을 그 차량의 관측 전부에서
-     * 세고 있어서, 창으로 자르면 집계 쪽 분모와 서빙 쪽 분모가 갈린다. 그러면 설계행렬의
+     * 세고 있어서, 창으로 자르면 집계 쪽 분모와 서빙 쪽 분모가 갈린다. 양쪽 모두 제외/보류 편도는 사용하지 않는다. 그러면 설계행렬의
      * 잔여석 비율과 셀 통계의 z값이 서로 다른 수로 나눈 값이 된다.
      *
      * <p>기준 시각으로 자르는 것도 집계와 같다. 자르지 않으면 나중에 더 큰 잔여석이 들어올 때
@@ -144,7 +150,8 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
      * 애초에 결과에 없는 것과 같은 자리다. 그 차량들은 궤적이 안 만들어져 예보도 안 나간다.
      *
      * <p>차량마다 기존 잔여석 인덱스를 역순으로 읽어 조건에 맞는 첫 양수 값을 선택한다.
-     * 기준 시각 검사는 LIMIT 전에 수행해야 미래 관측을 제외한 최대값을 얻을 수 있다.
+     * 기준 시각과 품질 검사는 LIMIT 전에 수행해야 미래/제외 관측을 제외한 최대값을 얻는다.
+     * 품질은 후보 ID로 확인하여 편도 view 조인이 잔여석 순서의 인덱스 탐색을 깨지 않게 한다.
      */
     private static final String SELECT_MAXIMUM_SEATS_EVER_OBSERVED = """
         WITH vehicles AS (
@@ -160,7 +167,9 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
               ON batch.id = observation.observation_batch_id
             WHERE observation.route_version_id = :routeVersionId
               AND observation.vehicle_id = vehicle.vehicle_id
-              AND observation.remaining_seats > 0
+              AND observation.remaining_seats > 0 AND observation.remaining_seats <= :maximumSeats
+              AND (SELECT quality.forecast_eligible FROM forecast_observation_quality quality
+                   WHERE quality.id = observation.id)
               AND (batch.response_received_at, batch.id) <= (:until, :observationBatchId)
             ORDER BY observation.remaining_seats DESC
             LIMIT 1
@@ -217,8 +226,11 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
             return List.of();
         }
         ObservationHistory history = historyEndingAt(target.get());
-        return VehicleTrajectoryAssembler.assemble(
-            history, maximumSeatsEverObservedOf(target.get(), history));
+        Set<Long> eligibleIds = history.targetBatch().observations().stream()
+            .filter(JdbcVehicleTrajectoryRepository::isEligible)
+            .map(TrajectoryObservation::vehicleObservationId).collect(Collectors.toSet());
+        return VehicleTrajectoryAssembler.assemble(history, maximumSeatsEverObservedOf(target.get(), history))
+            .stream().filter(trajectory -> eligibleIds.contains(trajectory.vehicleObservationId())).toList();
     }
 
     /**
@@ -232,6 +244,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
         ObservationHistory history
     ) {
         List<String> vehicleIds = history.targetBatch().observations().stream()
+            .filter(JdbcVehicleTrajectoryRepository::isEligible)
             .map(TrajectoryObservation::vehicleId)
             .distinct()
             .toList();
@@ -239,6 +252,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
             return Map.of();
         }
         List<VehicleMaximumSeats> rows = jdbcClient.sql(SELECT_MAXIMUM_SEATS_EVER_OBSERVED)
+            .param("maximumSeats", SeatGrid.LARGEST_SEATS)
             .param("routeVersionId", target.routeVersionId())
             .param("vehicleIds", vehicleIds)
             .param("until", offsetOf(target.responseReceivedAt()))
@@ -330,6 +344,11 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
                 .add(row.toObservation(observedAtByBatch.get(row.observationBatchId())));
         }
         return observationsByBatch;
+    }
+
+    private static boolean isEligible(TrajectoryObservation observation) {
+        return !(observation.seats() instanceof ObservedSeats.Unknown unknown
+            && unknown.reason() == SeatUnknownReason.QUALITY_WITHHELD);
     }
 
     private static Instant instantOf(

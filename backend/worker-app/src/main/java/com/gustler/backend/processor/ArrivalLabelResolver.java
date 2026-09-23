@@ -20,9 +20,9 @@ import java.util.List;
  * 영영 안 닫힌다. 운행을 끝낸 차량이 그렇다. 안 닫힌 행이 쌓이면 회수 대상 조회가 그 행들로 채워져서
  * 뒤에 온 예보가 조회에 못 들어온다. 그래서 {@link #LONGEST_WAIT_FOR_ARRIVAL} 이 지나면 끊긴 것으로 닫는다.
  *
- * <p>여정은 여정 키로 안 잇는다. 적재가 그 열을 아직 안 채워서 늘 비어 있고, 티켓대로 하면
- * 모든 예보 행이 끊김으로 닫힌다. 대신 같은 차량으로 잇고 순번 되돌림과 관측 공백으로 끊는다.
- * 궤적 조립이 쓰는 규칙과 같다. 여정 키가 채워지면 이 판정을 다시 봐야 한다.
+ * <p>운행 방향이 바뀌거나 사용 불가 관측을 만나면 결과 연결을 끊는다.
+ * 정상 관측은 사전 편도 판정 없이 사용한다. 기존의 90초 관측 공백과
+ * 순번 되돌림 규칙도 유지한다. 90초는 편도 구분 정책값이 아니다.
  */
 public final class ArrivalLabelResolver {
 
@@ -60,6 +60,13 @@ public final class ArrivalLabelResolver {
         int passedStopOrder = forecast.passedStopOrder();
         Instant previousObservedAt = forecast.observedAt();
         for (ArrivalCandidate candidate : laterObservations) {
+            if (!candidate.qualityAssessed()) {
+                return waitedTooLong(forecast, now) ? new ArrivalLabel.Lost() : new ArrivalLabel.NotArrivedYet();
+            }
+            if (forecast.qualityDirection() != null
+                && !forecast.qualityDirection().equals(candidate.qualityDirection())) {
+                return new ArrivalLabel.Lost();
+            }
             if (isGapTooLong(previousObservedAt, candidate.observedAt())) {
                 return new ArrivalLabel.Lost();
             }

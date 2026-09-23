@@ -7,6 +7,7 @@ import com.gustler.backend.processor.ForecastSettlement;
 import com.gustler.backend.processor.PendingForecast;
 import com.gustler.backend.processor.SeatForecast;
 import com.gustler.backend.processor.SettledForecast;
+import com.gustler.backend.support.ConfirmedTripFixture;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -322,6 +323,62 @@ class JdbcSeatForecastRepositoryTest {
     }
 
     /** 예보를 낸 뒤 다음 판에서 대상 정류소를 지난 그 차량의 관측. */
+    @Test
+    void 이전_판정_버전의_예보는_도착_좌석을_저장하되_후보정_증분에는_포함하지_않는다() {
+        // given
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+        long arrival = insertArrivalObservation();
+        jdbcClient.sql("UPDATE route SET quality_revision = quality_revision + 1 WHERE id = ?")
+            .param(routeId).update();
+
+        // when
+        List<SettledForecast> actual = jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
+
+        // then
+        assertThat(actual).isEmpty();
+        assertThat(jdbcClient.sql("SELECT scoring_state FROM seat_forecast WHERE vehicle_observation_id = ?")
+            .param(vehicleObservationId).query(String.class).single()).isEqualTo("SETTLED");
+        assertThat(jdbcClient.sql("SELECT seats_on_arrival FROM seat_forecast WHERE vehicle_observation_id = ?")
+            .param(vehicleObservationId).query(Integer.class).single()).isZero();
+    }
+
+    @Test
+    void 편도가_제외된_뒤에는_도착_결과와_후보정_증분을_저장하지_않는다() {
+        // given
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+        long arrival = insertArrivalObservation();
+        jdbcClient.sql("UPDATE vehicle_one_way_trip SET status = 'EXCLUDED' WHERE start_observation_id = ?")
+            .param(vehicleObservationId).update();
+
+        // when
+        List<SettledForecast> actual = jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
+
+        // then
+        assertThat(actual).isEmpty();
+        assertThat(jdbcClient.sql("SELECT scoring_state FROM seat_forecast WHERE vehicle_observation_id = ?")
+            .param(vehicleObservationId).query(String.class).single()).isEqualTo("PENDING");
+    }
+
+    @Test
+    void 다른_방향의_도착_관측으로_예보를_닫지_않는다() {
+        // given
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+        long arrival = insertArrivalObservation();
+        jdbcClient.sql("UPDATE route_version SET turn_sequence = 8 WHERE id = ?")
+            .param(routeVersionId).update();
+
+        // when
+        List<SettledForecast> actual = jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
+
+        // then
+        assertThat(actual).isEmpty();
+        assertThat(jdbcClient.sql("SELECT scoring_state FROM seat_forecast WHERE vehicle_observation_id = ?")
+            .param(vehicleObservationId).query(String.class).single()).isEqualTo("PENDING");
+    }
+
     private long insertArrivalObservation() {
         final long arrivalBatchId = insertObservationBatch("2026-08-19T11:20", ARRIVAL_RESPONSE_RECEIVED_AT);
         return insertObservation(arrivalBatchId, VEHICLE_204000206, 0, ARRIVAL_STOP_ORDER);
@@ -461,7 +518,7 @@ class JdbcSeatForecastRepositoryTest {
         final int sourceRowNumber,
         final int stopOrder
     ) {
-        return jdbcClient.sql("""
+        return ConfirmedTripFixture.include(jdbcClient, jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
                     observation_batch_id, route_version_id, source_row_number,
                     vehicle_id, stop_order, stop_id, passed_stop_order,
@@ -475,7 +532,7 @@ class JdbcSeatForecastRepositoryTest {
                 RUNNING_STATE_DEPARTED, SEATS_LEFT
             )
             .query(Long.class)
-            .single();
+            .single());
     }
 
     private static String stopIdOf(
