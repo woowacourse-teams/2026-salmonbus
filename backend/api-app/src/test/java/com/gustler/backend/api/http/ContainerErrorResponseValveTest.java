@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.gustler.backend.api.error.ErrorCode;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import org.apache.catalina.connector.Response;

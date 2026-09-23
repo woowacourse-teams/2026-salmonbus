@@ -8,8 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.gustler.backend.api.error.ServiceUnavailableException;
 import com.gustler.backend.api.http.ApiExceptionHandler;
-import com.gustler.backend.api.http.ServiceUnavailableException;
 import com.gustler.backend.api.route.application.RouteOverview;
 import com.gustler.backend.api.route.application.RouteQueryService;
 import com.gustler.backend.api.route.domain.Route;

@@ -1,4 +1,4 @@
-package com.gustler.backend.api.http;
+package com.gustler.backend.api.error;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;

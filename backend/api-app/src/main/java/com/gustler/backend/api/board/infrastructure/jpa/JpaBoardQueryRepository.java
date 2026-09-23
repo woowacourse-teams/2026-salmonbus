@@ -8,7 +8,7 @@ import com.gustler.backend.api.board.application.SnapshotObservation;
 import com.gustler.backend.api.board.application.StoredPrediction;
 import com.gustler.backend.api.board.domain.BoardStop;
 import com.gustler.backend.api.board.domain.ForecastModel;
-import com.gustler.backend.api.http.ServiceUnavailableException;
+import com.gustler.backend.api.error.ServiceUnavailableException;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.infrastructure.jpa.ModelDeploymentEntityRepository;
 import com.gustler.backend.api.route.infrastructure.jpa.ModelDeploymentJpaEntity;

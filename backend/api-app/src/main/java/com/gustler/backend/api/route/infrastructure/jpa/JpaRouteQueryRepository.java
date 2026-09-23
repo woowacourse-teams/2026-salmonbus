@@ -1,6 +1,6 @@
 package com.gustler.backend.api.route.infrastructure.jpa;
 
-import com.gustler.backend.api.http.ServiceUnavailableException;
+import com.gustler.backend.api.error.ServiceUnavailableException;
 import com.gustler.backend.api.route.application.RouteQueryRepository;
 import com.gustler.backend.api.route.domain.Route;
 import java.util.List;

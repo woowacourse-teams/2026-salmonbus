@@ -1,4 +1,4 @@
-package com.gustler.backend.api.http;
+package com.gustler.backend.api.error;
 
 public class ServiceUnavailableException extends ApiException {
 

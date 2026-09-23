@@ -1,7 +1,7 @@
 package com.gustler.backend.api.board;
 
-import com.gustler.backend.api.http.ApiException;
-import com.gustler.backend.api.http.ErrorCode;
+import com.gustler.backend.api.error.ApiException;
+import com.gustler.backend.api.error.ErrorCode;
 import java.time.Duration;
 
 public class NoRecentObservationException extends ApiException {

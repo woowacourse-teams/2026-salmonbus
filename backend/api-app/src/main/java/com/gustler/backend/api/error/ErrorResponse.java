@@ -1,4 +1,4 @@
-package com.gustler.backend.api.http;
+package com.gustler.backend.api.error;
 
 import java.util.Objects;
 

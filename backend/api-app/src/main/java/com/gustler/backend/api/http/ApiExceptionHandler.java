@@ -1,5 +1,8 @@
 package com.gustler.backend.api.http;
 
+import com.gustler.backend.api.error.ApiException;
+import com.gustler.backend.api.error.ErrorCode;
+import com.gustler.backend.api.error.ErrorResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;

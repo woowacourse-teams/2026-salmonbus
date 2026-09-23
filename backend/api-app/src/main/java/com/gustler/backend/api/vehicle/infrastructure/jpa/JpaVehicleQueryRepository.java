@@ -1,6 +1,6 @@
 package com.gustler.backend.api.vehicle.infrastructure.jpa;
 
-import com.gustler.backend.api.http.ServiceUnavailableException;
+import com.gustler.backend.api.error.ServiceUnavailableException;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.infrastructure.jpa.RouteVersionJpaEntity;
 import com.gustler.backend.api.vehicle.application.VehicleQueryRepository;
