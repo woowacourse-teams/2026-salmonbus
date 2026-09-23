@@ -6,6 +6,14 @@ const observedAt = (clock: string, offset = "+09:00") => `2026-09-01T${clock}:00
 
 describe("serviceStateFor", () => {
   describe("시간표를 읽을 수 있는 상황이면", () => {
+    it("관측 시각이 첫차 시각 이전이면 운행 시간이 아니다", () => {
+      expect(serviceStateFor(boardWith({ observedAt: observedAt("04:49") }), upInfo)).toBe("outOfService");
+    });
+
+    it("관측 시각이 첫차 시각과 같으면 이미 운행중이다", () => {
+      expect(serviceStateFor(boardWith({ observedAt: observedAt("04:50") }), upInfo)).toBe("running");
+    });
+
     it("관측 시각이 막차 시각과 같으면 아직 운행중이다", () => {
       expect(serviceStateFor(boardWith({ observedAt: observedAt("23:30") }), upInfo)).toBe("running");
     });
