@@ -1,7 +1,6 @@
 import { apiPaths } from "./fixtures/mock-data";
 import { test, expect } from "./fixtures/api";
 import { routeButton, selectRoute } from "./utils/route-select";
-import { expectDirection } from "./utils/verdict-board";
 
 test.use({
   viewport: { width: 390, height: 844 },
