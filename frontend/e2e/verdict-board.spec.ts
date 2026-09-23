@@ -42,10 +42,6 @@ test("판정 보드 최초 조회 실패는 운행 없음이나 예측 없음과
 });
 
 test("유효기간 안의 자동 갱신 실패 시 마지막 예측을 유지한다 (현재 구현)", async ({ page, api }) => {
-  test.info().annotations.push({
-    type: "관련 이슈",
-    description: "https://higgs95.atlassian.net/browse/SAL-131 — 정책 확정·구현 후 기대 결과 수정",
-  });
   await openBoard(page);
   const stop = targetStop(page, "UP");
   await stop.scrollIntoViewIfNeeded();
