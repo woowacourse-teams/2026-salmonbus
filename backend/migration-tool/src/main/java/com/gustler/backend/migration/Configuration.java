@@ -4,10 +4,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
-import java.time.format.DateTimeParseException;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Properties;
 
 public final class Configuration {
@@ -45,78 +41,10 @@ public final class Configuration {
         return value.strip();
     }
 
-    public String optional(
-        String name
-    ) {
-        String value = values.getProperty(name);
-        return value == null || value.isBlank() ? null : value.strip();
-    }
-
     public Path requiredPath(
         String name
     ) {
         return Path.of(required(name)).toAbsolutePath().normalize();
-    }
-
-    public Instant requiredInstant(
-        String name
-    ) {
-        try {
-            return Instant.parse(required(name));
-        } catch (DateTimeParseException e) {
-            throw new MigrationException("CONFIG_INVALID_" + codeOf(name), e);
-        }
-    }
-
-    public int integer(
-        String name,
-        int defaultValue,
-        int minimum,
-        int maximum
-    ) {
-        String value = optional(name);
-        int parsed;
-        try {
-            parsed = value == null ? defaultValue : Integer.parseInt(value);
-        } catch (NumberFormatException e) {
-            throw new MigrationException("CONFIG_INVALID_" + codeOf(name), e);
-        }
-        if (parsed < minimum || parsed > maximum) {
-            throw new MigrationException("CONFIG_OUT_OF_RANGE_" + codeOf(name));
-        }
-        return parsed;
-    }
-
-    public long longValue(
-        String name,
-        long defaultValue,
-        long minimum
-    ) {
-        String value = optional(name);
-        long parsed;
-        try {
-            parsed = value == null ? defaultValue : Long.parseLong(value);
-        } catch (NumberFormatException e) {
-            throw new MigrationException("CONFIG_INVALID_" + codeOf(name), e);
-        }
-        if (parsed < minimum) {
-            throw new MigrationException("CONFIG_OUT_OF_RANGE_" + codeOf(name));
-        }
-        return parsed;
-    }
-
-    public List<String> commaSeparated(
-        String name
-    ) {
-        List<String> entries = Arrays.stream(required(name).split(","))
-            .map(String::strip)
-            .filter(value -> !value.isBlank())
-            .distinct()
-            .toList();
-        if (entries.isEmpty()) {
-            throw new MigrationException("CONFIG_REQUIRED_" + codeOf(name));
-        }
-        return entries;
     }
 
     private static String codeOf(

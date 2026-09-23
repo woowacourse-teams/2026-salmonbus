@@ -24,19 +24,13 @@ public final class CanonicalJson {
     private CanonicalJson() {
     }
 
-    public static byte[] bytesOf(
-        Object value
-    ) {
-        return WRITER.writeValueAsBytes(value);
-    }
-
     public static String stringOf(
         Object value
     ) {
         return WRITER.writeValueAsString(value);
     }
 
-    public static JsonNode parse(
+    private static JsonNode parse(
         byte[] bytes,
         String errorCode
     ) {
@@ -64,13 +58,6 @@ public final class CanonicalJson {
             throw new MigrationException("NON_CANONICAL_JSON");
         }
         return root;
-    }
-
-    public static void writeCanonical(
-        Path path,
-        Object value
-    ) {
-        SecureFiles.writeNew(path, bytesOf(value));
     }
 
     private static String strictUtf8(

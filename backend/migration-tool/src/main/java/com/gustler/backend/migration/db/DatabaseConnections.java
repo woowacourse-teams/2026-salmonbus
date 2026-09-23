@@ -18,7 +18,7 @@ public final class DatabaseConnections {
         Properties properties = new Properties();
         properties.setProperty("user", environment.username());
         properties.setProperty("password", environment.password());
-        properties.setProperty("ApplicationName", "salmonbus-historical-migration");
+        properties.setProperty("ApplicationName", "salmonbus-quality-maintenance");
         try {
             return DriverManager.getConnection(environment.jdbcUrl(), properties);
         } catch (SQLException e) {

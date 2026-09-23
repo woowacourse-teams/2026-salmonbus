@@ -9,13 +9,7 @@ import tools.jackson.databind.JsonNode;
 
 public final class ApprovalGate {
 
-    public static final String SOURCE_EXPORT = "SOURCE_EXPORT";
-    public static final String ACADEMY_SCHEMA = "ACADEMY_SCHEMA";
-    public static final String ACADEMY_IMPORT = "ACADEMY_IMPORT";
-    public static final String ACADEMY_ROLLBACK = "ACADEMY_ROLLBACK";
-    public static final String ACADEMY_TEMP_CLEANUP = "ACADEMY_TEMP_CLEANUP";
-    public static final String ACADEMY_SEED_APPLY = "ACADEMY_SEED_APPLY";
-    public static final String ACADEMY_SEED_ROLLBACK = "ACADEMY_SEED_ROLLBACK";
+    public static final String ACADEMY_TRIP_QUALITY_REBUILD = "ACADEMY_TRIP_QUALITY_REBUILD";
 
     private static final String SCHEMA = "salmonbus-migration-approval-v1";
     private static final Set<String> KNOWN_FIELDS = Set.of(

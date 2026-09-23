@@ -56,9 +56,4 @@ final class CliArguments {
         return Path.of(required(name)).toAbsolutePath().normalize();
     }
 
-    String optional(
-        String name
-    ) {
-        return options.get(name);
-    }
 }
