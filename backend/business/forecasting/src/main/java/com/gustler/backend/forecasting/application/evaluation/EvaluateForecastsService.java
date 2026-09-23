@@ -107,7 +107,7 @@ public class EvaluateForecastsService implements EvaluateForecasts {
         for (PendingForecast forecast : forecasts) {
             ArrivalLabel label =
                 ArrivalLabelResolver.resolve(forecast, candidates, now);
-            if (!(label instanceof ArrivalLabel.NotArrivedYet)) {
+            if (label.settles()) {
                 evaluations.add(ForecastEvaluation.completed(
                     forecast.vehicleObservationId(), forecast.targetStopOrder(), label, now));
             }

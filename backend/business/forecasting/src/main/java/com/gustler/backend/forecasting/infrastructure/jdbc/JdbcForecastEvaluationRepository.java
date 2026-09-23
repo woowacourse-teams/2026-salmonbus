@@ -32,6 +32,12 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
         LIMIT :limit
         """;
 
+    /** 도착 후보 적격 판정. 아래 두 SQL이 같은 규칙을 써야 하므로 한 곳에 둔다. */
+    private static final String ARRIVAL_MATCHES_SOURCE = """
+        arrival.quality_direction = source.quality_direction
+        AND arrival.vehicle_id IS NOT DISTINCT FROM source.vehicle_id
+        AND arrival.route_version_id = source.route_version_id""";
+
     private static final String CAN_COMPLETE = """
         SELECT EXISTS (
             SELECT 1 FROM forecast_evaluation evaluation
@@ -42,10 +48,8 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
               AND (CAST(:arrivalObservationId AS bigint) IS NULL OR EXISTS (
                   SELECT 1 FROM forecast_eligible_observation arrival
                   WHERE arrival.id = :arrivalObservationId
-                    AND arrival.quality_direction = source.quality_direction
-                    AND arrival.vehicle_id IS NOT DISTINCT FROM source.vehicle_id
-                    AND arrival.route_version_id = source.route_version_id)))
-        """;
+                    AND %s)))
+        """.formatted(ARRIVAL_MATCHES_SOURCE);
 
     /** 근거의 정류장 순번은 원 관측의 stop_order다. 평가 판정에 사용하는 passed_stop_order와 구분한다. */
     private static final String COMPLETE = """
@@ -75,13 +79,11 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
           AND forecast.vehicle_observation_id = evaluation.vehicle_observation_id
           AND forecast.target_stop_order = evaluation.target_stop_order
           AND (CAST(:arrivalObservationId AS bigint) IS NULL OR (
-              arrival.id IS NOT NULL AND arrival.quality_direction = source.quality_direction
-              AND arrival.vehicle_id IS NOT DISTINCT FROM source.vehicle_id
-              AND arrival.route_version_id = source.route_version_id))
+              arrival.id IS NOT NULL AND %s))
         RETURNING version.route_id, forecast.stops_to_target, forecast.seat_full_chance_raw,
                   evaluation.arrived_at, evaluation.seats_on_arrival, evaluation.scoring_state,
                   forecast.quality_revision = quality.quality_revision AS usable_for_calibration
-        """;
+        """.formatted(ARRIVAL_MATCHES_SOURCE);
 
     private final JdbcClient jdbcClient;
 
@@ -146,7 +148,7 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
                 .param("seatsOnArrival", evaluation.result().seatsOnArrival())
                 .param("scoredAt", offsetOf(evaluation.scoredAt()))
                 .query((row, index) -> {
-                    if (!ScoringState.SETTLED.name().equals(row.getString("scoring_state"))
+                    if (!ScoringState.valueOf(row.getString("scoring_state")).scorable()
                         || !row.getBoolean("usable_for_calibration")) {
                         return null;
                     }

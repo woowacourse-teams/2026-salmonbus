@@ -11,6 +11,11 @@ public sealed interface ArrivalLabel {
 
     ScoringState scoringState();
 
+    /** 이 판정으로 평가를 확정할 수 있는지 여부. 아직 도착하지 않았으면 확정하지 않는다. */
+    default boolean settles() {
+        return scoringState() != ScoringState.PENDING;
+    }
+
     /** 대상 정류장을 지난 관측에서 잔여석을 확인했다. 0석이면 만석으로 평가한다. */
     record Settled(
         long arrivalObservationId,
