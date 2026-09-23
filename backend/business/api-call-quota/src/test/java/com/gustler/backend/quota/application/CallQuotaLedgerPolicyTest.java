@@ -15,7 +15,7 @@ class CallQuotaLedgerPolicyTest {
     private static final OffsetDateTime REQUESTED_AT = OffsetDateTime.parse("2026-08-28T14:59:59Z");
 
     private final CallQuotaRepository repository = mock(CallQuotaRepository.class);
-    private final CallQuotaLedger ledger = new CallQuotaLedger(repository, new CallQuotaPolicy(1));
+    private final CallQuotaLedger ledger = new CallQuotaLedger(repository, CallQuotaPolicy.sameForEveryApi(1));
 
     @Test
     void 두_호출을_예약할_수_없는_설정이면_저장소를_변경하지_않는다() {

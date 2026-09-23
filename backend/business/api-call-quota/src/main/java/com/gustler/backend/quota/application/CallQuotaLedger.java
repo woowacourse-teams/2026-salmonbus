@@ -28,14 +28,14 @@ public class CallQuotaLedger implements ApiCallQuota {
     private static final int ONE_CALL = 1;
 
     private final CallQuotaRepository callQuotaRepository;
-    private final int dailyLimit;
+    private final CallQuotaPolicy policy;
 
     public CallQuotaLedger(
         CallQuotaRepository callQuotaRepository,
         CallQuotaPolicy policy
     ) {
         this.callQuotaRepository = callQuotaRepository;
-        this.dailyLimit = policy.dailyLimit();
+        this.policy = policy;
     }
 
     /** 호출 한 번을 예약한다. 위치정보는 한 batch가 호출 한 번이다. */
@@ -62,7 +62,7 @@ public class CallQuotaLedger implements ApiCallQuota {
         OffsetDateTime requestedAt,
         final int calls
     ) {
-        return DailyCallQuota.at(quota, requestedAt, dailyLimit)
+        return DailyCallQuota.at(quota, requestedAt, policy.limitOf(quota))
             .reservationFor(calls)
             .map(callQuotaRepository::reserve)
             .orElse(false);
@@ -81,7 +81,8 @@ public class CallQuotaLedger implements ApiCallQuota {
         OffsetDateTime reservedAt,
         OffsetDateTime dispatchAt
     ) {
-        if (DailyCallQuota.at(CallQuota.BUS_LOCATION, reservedAt, dailyLimit).covers(dispatchAt)) {
+        if (DailyCallQuota.at(CallQuota.BUS_LOCATION, reservedAt, policy.limitOf(CallQuota.BUS_LOCATION))
+            .covers(dispatchAt)) {
             return true;
         }
         return reserveCalls(CallQuota.BUS_LOCATION, dispatchAt, ONE_CALL);

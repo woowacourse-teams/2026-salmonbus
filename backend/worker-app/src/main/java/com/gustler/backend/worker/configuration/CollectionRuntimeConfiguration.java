@@ -24,6 +24,6 @@ public class CollectionRuntimeConfiguration {
 
     @Bean
     CallQuotaPolicy callQuotaPolicy(GbisProperties properties) {
-        return new CallQuotaPolicy(properties.dailyLimit());
+        return CallQuotaPolicy.sameForEveryApi(properties.dailyLimit());
     }
 }
