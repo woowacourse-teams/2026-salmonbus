@@ -32,10 +32,15 @@
 - 컨벤션 수치는 정규식 집계다. 경계 사례가 몇 건 섞일 수 있어 경향을 보는 용도이고, 예시는 파일을 직접 읽고 골랐다.
 - 스택·라이브러리 버전 정보는 학습 노트 13장 §1 전수표(로컬)에서 인용했고 다시 조사하지 않았다.
 
-## 용어
+## 최초 조사에서 쓴 용어
+
+01~05 문서가 쓰는 어휘다. 기준은 최초 조사 시점의 코드이며, SAL-134 재설계로 이름이 바뀐 것들이 있다.
+현재 이름은 [용어집](ddd/glossary.md)에서 확인한다.
 
 - 포트: 도메인 쪽이 정의한 인터페이스. `processor.SeatForecastRepository`, `api.board.application.BoardQueryRepository` 같은 것.
-- 어댑터: 포트 구현. `Jdbc*`, `Jpa*`, `Aws*` 접두 클래스.
+  `processor.SeatForecastRepository`는 지금 없다. 발행과 평가의 저장은 `ForecastPublicationRepository`와
+  `ForecastEvaluationRepository`로 나뉘었다.
+- 어댑터: 포트 구현. `Jdbc*`, `Jpa*`, `Aws*` 접두 클래스. `Aws*`는 이관 코드를 지우면서 함께 사라졌다.
 - 순환: A → B → A 로 되돌아오는 의존. 패키지 수준과 클래스 수준을 구분한다.
 - 동작 변경 없는 PR: 클래스 이동·이름 변경·규칙 추가만 있고, 테스트가 그대로 통과하며 응답·DB 쓰기·로그 형식이 바뀌지 않는 PR.
 

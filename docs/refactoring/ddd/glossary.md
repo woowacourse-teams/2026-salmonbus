@@ -7,6 +7,7 @@
 | 업무 의미 | 현재 구현 | 책임 |
 | --- | --- | --- |
 | 노선과 버전 | `Route`, `RouteVersion` | `Route.accept`가 유지·시간표 수정·새 버전 개설을 결정한다. |
+| 노선 식별자 | `sourceRouteId` | 상류 Open API가 주는 노선 ID다. 수집 설정부터 노선 조회·관측 조회·모델 노선 선택까지 이 값 하나가 흐른다. DB의 `public_route_id`와 `source_route_id`는 지금 같은 값이며 `V1__collector.sql` 14~15행이 공개 ID가 확정되면 둘 중 하나를 지운다고 적는다. 현재 판본 조회는 `public_route_id`로 한다. |
 | 노선 내 정류장 | `RouteStop` | 버전별 목록 안에서 순번으로 구분한다. 별도 RouteStopPosition 클래스는 만들지 않았다. |
 | 수집 계획 | `CollectionPlan` | routeVersionId·scheduledAt·attemptKey를 담는다. 같은 계획을 재시도할 때 attemptKey를 유지한다. |
 | 관측 조회 계약 | `ObservationSource`, `ObservationResponse` | 외부 조회를 도메인값으로 받는다. 응답에는 결론·정규화한 관측·수신 시각이 포함된다. |

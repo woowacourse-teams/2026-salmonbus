@@ -563,18 +563,26 @@ forecasting/
    │                      TripQualityInvestigationService, StopDemandStatisticsWriter,
    │                      ModelActivationService
    ├─ domain/
-   │  ├─ publication/     발행·예측·관측 이력·궤적·목표 선택
+   │  ├─ publication/     발행·예측·발행 대상 묶음·궤적 조립·예보 시간대 결정
    │  ├─ evaluation/      평가 상태·결과·당일 보정 누계
    │  ├─ quality/         편도 판정·조사 진행·품질 버전·사용 조건
    │  ├─ statistics/      세대·셀·계산 정책
-   │  ├─ sharedvalue/     평가·통계 등에서 함께 쓰는 예보 내부 값
-   │  └─ model/           모델 식별 정보·릴리스·활성 슬롯·예측 전략
+   │  └─ model/           모델 식별 정보·릴리스·활성 슬롯·예측 전략과 그 입력 값
+   │                      (관측 차량·노선 정류장·목표 선택·궤적·좌석 기울기)
+   ├─ configuration/      Spring 빈 구성(ForecastingConfiguration·ForecastingModelConfiguration·
+   │                      QualityMaintenanceConfiguration)
    └─ infrastructure/
       ├─ jdbc/            JDBC·SQL·매핑·잠금·조건부 갱신
       ├─ observations/    관측 입력 확정·품질 저장 연동
       ├─ quality/         품질 조사·노선 품질 상태의 JDBC 구현
       └─ bundle/          파일·manifest·safetensors·메모리 적재
 ```
+
+`domain` 안의 개념 패키지는 한 방향으로만 의존한다. `statistics ← model ← {publication, evaluation, quality}`이며
+`publication → statistics`도 같은 방향이다. 예측에 넣는 입력 값을 `model`에 두어 `model`과 `publication`이
+서로를 참조하지 않게 했다. `PackageBoundaryTest`의 `domainConceptsHaveNoCycles`가 이를 검사한다.
+최초 설계안이 적었던 `sharedvalue` 패키지는 두지 않았다. 대신 `model`이 예측 입력 값을 함께 들고 공유 커널 역할을 겸한다.
+패키지 하나를 덜 만드는 대신 `model`의 범위가 넓어지는 것이 그 대가다.
 
 모듈과 계층 사이의 의존은 다음 규칙을 따른다.
 
