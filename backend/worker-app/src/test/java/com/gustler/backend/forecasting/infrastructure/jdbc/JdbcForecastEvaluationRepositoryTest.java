@@ -261,27 +261,6 @@ class JdbcForecastEvaluationRepositoryTest {
     }
 
     @Test
-    void 이미_완료한_평가의_재요청은_새_도착_배치를_확정하지_않는다() {
-        // given
-        saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
-        evaluationRepository.settle(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Skipped(), SCORED_AT)));
-        final long arrivalId = insertArrivalObservation();
-
-        // when
-        evaluationRepository.settle(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrivalId, 0), SCORED_AT.plusSeconds(60))));
-
-        // then
-        assertThat(jdbcClient.sql("""
-            SELECT batch.input_confirmed_at IS NULL FROM observation_batch batch
-            JOIN vehicle_observation observation ON observation.observation_batch_id = batch.id
-            WHERE observation.id = ?
-            """).param(arrivalId).query(Boolean.class).single()).isTrue();
-        assertThat(readStoredLabel(TARGET_STOP_ORDER)).isEqualTo(new StoredLabel("SKIPPED", null, null, SCORED_AT));
-    }
-
-    @Test
     void 좌석_결측으로_확정한_평가는_나중에_좌석을_채우지_않는다() {
         // given
         final long arrivalId = insertArrivalObservation();
@@ -299,7 +278,7 @@ class JdbcForecastEvaluationRepositoryTest {
     }
 
     @Test
-    void 도착_근거를_복사하고_해당_수집_배치의_입력을_확정한다() {
+    void 도착_근거의_시각과_차량을_복사한다() {
         // given
         final long arrivalId = insertArrivalObservation();
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
@@ -319,11 +298,7 @@ class JdbcForecastEvaluationRepositoryTest {
             WHERE vehicle_observation_id = ? AND target_stop_order = ?
             """).params(vehicleObservationId, TARGET_STOP_ORDER).query(String.class).single())
             .isEqualTo(VEHICLE_204000206);
-        assertThat(jdbcClient.sql("""
-            SELECT batch.input_confirmed_at FROM observation_batch batch
-            JOIN vehicle_observation observation ON observation.observation_batch_id = batch.id
-            WHERE observation.id = ?
-            """).param(arrivalId).query(OffsetDateTime.class).single().toInstant()).isEqualTo(SCORED_AT);
+
     }
 
     @Test

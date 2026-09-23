@@ -46,7 +46,7 @@ public final class ArrivalLabelResolver {
     }
 
     /**
-     * @param laterObservations 예보를 낸 뒤인 같은 차량의 관측. 시각 오름차순이어야 한다
+     * @param laterObservations 같은 차량의 관측 후보. 시각 오름차순이어야 하며 계산 시각 이전과 같은 시각은 제외한다
      * @param now 지금 시각. 기다림을 언제 그만둘지 재는 데만 쓴다
      */
     public static ArrivalLabel resolve(
@@ -60,6 +60,9 @@ public final class ArrivalLabelResolver {
         int passedStopOrder = forecast.passedStopOrder();
         Instant previousObservedAt = forecast.observedAt();
         for (ArrivalCandidate candidate : laterObservations) {
+            if (!candidate.observedAt().isAfter(forecast.generatedAt())) {
+                continue;
+            }
             if (!candidate.qualityAssessed()) {
                 return waitedTooLong(forecast, now) ? new ArrivalLabel.Lost() : new ArrivalLabel.NotArrivedYet();
             }

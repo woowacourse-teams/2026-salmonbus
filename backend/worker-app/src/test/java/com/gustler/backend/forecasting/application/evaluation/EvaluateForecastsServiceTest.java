@@ -5,7 +5,8 @@ import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationRepository;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
-import com.gustler.backend.forecasting.domain.evaluation.SettledForecast;
+import com.gustler.backend.forecasting.domain.evaluation.EvaluationRoute;
+import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.publication.ObservedVehicle;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluationRepository;
 import com.gustler.backend.forecasting.api.ForecastPolicy;
@@ -54,7 +55,10 @@ class EvaluateForecastsServiceTest {
     private ForecastEvaluationRepository evaluationRepository;
 
     @Mock
-    private SameDayFullOutcomesService sameDayFullOutcomesService;
+    private ForecastEvaluationWriter writer;
+
+    @Mock
+    private RouteDataQualityAccess quality;
 
     @Mock
     private ArrivalObservationRepository arrivalObservationRepository;
@@ -68,7 +72,8 @@ class EvaluateForecastsServiceTest {
     void 회수_배치를_멈춘_시계로_세운다() {
         job = new EvaluateForecastsService(
             evaluationRepository,
-            sameDayFullOutcomesService,
+            writer,
+            quality,
             arrivalObservationRepository,
             properties(),
             Clock.fixed(SETTLED_AT, ZoneOffset.UTC));
@@ -88,18 +93,32 @@ class EvaluateForecastsServiceTest {
     }
 
     @Test
-    void 만석으로_닫힌_예보를_당일_성적에_더한다() {
+    void 품질을_잠근_뒤_후보를_조회하고_확정_작업을_호출한다() {
         givenPendingOn(ROUTE_VERSION_3330, pending(100L, 40));
         givenArrivals(passedAt(TARGET_STOP_ORDER, 60, 0));
-        SettledForecast full = new SettledForecast(
-            ROUTE_3330, TARGET_STOP_ORDER - 40, 0.41, OBSERVED_AT.plusSeconds(60), 0);
-        when(evaluationRepository.settle(any())).thenReturn(List.of(full));
 
         job.settleArrivalLabels();
 
-        InOrder inOrder = inOrder(evaluationRepository, sameDayFullOutcomesService);
-        inOrder.verify(evaluationRepository).settle(any());
-        inOrder.verify(sameDayFullOutcomesService).record(List.of(full));
+        InOrder order = inOrder(quality, evaluationRepository, arrivalObservationRepository, writer);
+        order.verify(quality).lockByRoute(ROUTE_3330);
+        order.verify(evaluationRepository).findPending(eq(ROUTE_VERSION_3330), anyInt());
+        order.verify(arrivalObservationRepository).findAfter(anyLong(), anyString(), any(), anyInt());
+        order.verify(writer).complete(any());
+    }
+
+    @Test
+    void 여러_노선은_노선_ID_순서로_잠근_뒤_평가한다() {
+        when(evaluationRepository.findRoutesWithPendingForecasts()).thenReturn(List.of(
+            new EvaluationRoute(20L, 4L), new EvaluationRoute(10L, 3L), new EvaluationRoute(10L, 2L)));
+
+        job.settleArrivalLabels();
+
+        InOrder order = inOrder(quality, evaluationRepository);
+        order.verify(quality).lockByRoute(10L);
+        order.verify(quality).lockByRoute(20L);
+        order.verify(evaluationRepository).findPending(eq(4L), anyInt());
+        order.verify(evaluationRepository).findPending(eq(3L), anyInt());
+        order.verify(evaluationRepository).findPending(eq(2L), anyInt());
     }
 
     @Test
@@ -239,8 +258,8 @@ class EvaluateForecastsServiceTest {
         final long routeVersionId,
         PendingForecast... forecasts
     ) {
-        when(evaluationRepository.findRouteVersionIdsWithPendingForecasts())
-            .thenReturn(List.of(routeVersionId));
+        when(evaluationRepository.findRoutesWithPendingForecasts())
+            .thenReturn(List.of(new EvaluationRoute(ROUTE_3330, routeVersionId)));
         when(evaluationRepository.findPending(anyLong(), anyInt())).thenReturn(List.of(forecasts));
     }
 
@@ -262,7 +281,7 @@ class EvaluateForecastsServiceTest {
     }
 
     private List<ForecastEvaluation> captured() {
-        verify(evaluationRepository).settle(settlements.capture());
+        verify(writer).complete(settlements.capture());
         return settlements.getValue();
     }
 

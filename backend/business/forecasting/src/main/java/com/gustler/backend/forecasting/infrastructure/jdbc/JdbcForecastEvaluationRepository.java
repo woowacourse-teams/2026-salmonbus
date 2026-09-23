@@ -1,13 +1,11 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
-import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
+import com.gustler.backend.forecasting.domain.evaluation.EvaluationRoute;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluationRepository;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import com.gustler.backend.forecasting.domain.evaluation.ScoringState;
 import com.gustler.backend.forecasting.domain.evaluation.SettledForecast;
-import com.gustler.backend.observations.api.CollectionInput;
-import com.gustler.backend.observations.api.CollectionInputs;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -16,6 +14,7 @@ import java.util.List;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 /** 평가 상태와 당시 도착 관측의 근거 값을 예측과 별도로 저장한다. */
 @Repository
@@ -85,36 +84,41 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
         """;
 
     private final JdbcClient jdbcClient;
-    private final RouteDataQualityAccess qualityAccess;
-    private final CollectionInputs collectionInputs;
 
-    public JdbcForecastEvaluationRepository(
-        JdbcClient jdbcClient,
-        RouteDataQualityAccess qualityAccess,
-        CollectionInputs collectionInputs
-    ) {
+    public JdbcForecastEvaluationRepository(JdbcClient jdbcClient) {
         this.jdbcClient = jdbcClient;
-        this.qualityAccess = qualityAccess;
-        this.collectionInputs = collectionInputs;
     }
 
     @Override
-    public List<Long> findRouteVersionIdsWithPendingForecasts() {
-        List<RouteVersion> versions = jdbcClient.sql("""
+    public List<EvaluationRoute> findRoutesWithPendingForecasts() {
+        return jdbcClient.sql("""
             SELECT DISTINCT version.id, version.route_id
             FROM quality_eligible_seat_forecast forecast
             JOIN route_version version ON version.id = forecast.route_version_id
             WHERE forecast.scoring_state = 'PENDING'
             ORDER BY version.route_id, version.id
-            """).query((row, index) -> new RouteVersion(row.getLong("id"), row.getLong("route_id"))).list();
-        // 여러 노선의 평가도 같은 순서로 잠가 교착을 피한다. 호출 응용 서비스가 트랜잭션을 연다.
-        versions.stream().map(RouteVersion::routeId).distinct().forEach(qualityAccess::lockByRoute);
-        return versions.stream().map(RouteVersion::versionId).toList();
+            """).query((row, index) -> new EvaluationRoute(row.getLong("route_id"), row.getLong("id"))).list();
+    }
+
+    @Override
+    public List<Long> findRouteIdsForObservations(List<Long> observationIds) {
+        if (observationIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbcClient.sql("""
+            SELECT DISTINCT version.route_id FROM vehicle_observation source
+            JOIN route_version version ON version.id = source.route_version_id
+            WHERE source.id IN (:sourceIds) ORDER BY version.route_id
+            """).param("sourceIds", observationIds).query(Long.class).list();
+    }
+
+    @Override
+    public boolean canComplete(ForecastEvaluation evaluation) {
+        return parameters(CAN_COMPLETE, evaluation).query(Boolean.class).single();
     }
 
     @Override
     public List<PendingForecast> findPending(final long routeVersionId, final int limit) {
-        qualityAccess.lock(routeVersionId);
         return jdbcClient.sql(SELECT_PENDING)
             .param("routeVersionId", routeVersionId).param("limit", limit)
             .query((row, index) -> new PendingForecast(
@@ -127,29 +131,15 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
     }
 
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.MANDATORY)
     public List<SettledForecast> settle(List<ForecastEvaluation> evaluations) {
         if (evaluations.isEmpty()) {
             return List.of();
         }
-        jdbcClient.sql("""
-            SELECT DISTINCT version.route_id FROM vehicle_observation source
-            JOIN route_version version ON version.id = source.route_version_id
-            WHERE source.id IN (:sourceIds) ORDER BY version.route_id
-            """).param("sourceIds", evaluations.stream().map(ForecastEvaluation::vehicleObservationId).distinct().toList())
-            .query(Long.class).list().forEach(qualityAccess::lockByRoute);
         List<SettledForecast> newlySettled = new ArrayList<>();
         for (ForecastEvaluation evaluation : evaluations) {
             if (evaluation.state() == ScoringState.PENDING) {
                 throw new IllegalArgumentException("완료된 평가만 저장할 수 있다");
-            }
-            if (!parameters(CAN_COMPLETE, evaluation).query(Boolean.class).single()) {
-                continue;
-            }
-            Long arrivalId = evaluation.result().arrivalObservationId();
-            if (arrivalId != null) {
-                CollectionInput input = collectionInputs.lockForObservation(arrivalId);
-                collectionInputs.confirmInput(input.batchId(), input.attemptNumber(), evaluation.scoredAt());
             }
             newlySettled.addAll(parameters(COMPLETE, evaluation)
                 .param("scoringState", evaluation.state().name())
@@ -178,6 +168,4 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
         return timestamp.atOffset(ZoneOffset.UTC);
     }
 
-    private record RouteVersion(long versionId, long routeId) {
-    }
 }

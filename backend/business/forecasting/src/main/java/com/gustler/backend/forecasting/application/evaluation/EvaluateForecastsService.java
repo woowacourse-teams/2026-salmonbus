@@ -1,6 +1,8 @@
 package com.gustler.backend.forecasting.application.evaluation;
 
 import com.gustler.backend.forecasting.api.evaluation.EvaluateForecasts;
+import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
+import com.gustler.backend.forecasting.domain.evaluation.EvaluationRoute;
 
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
@@ -27,20 +29,23 @@ import org.springframework.transaction.annotation.Transactional;
 public class EvaluateForecastsService implements EvaluateForecasts {
 
     private final ForecastEvaluationRepository evaluationRepository;
-    private final SameDayFullOutcomesService sameDayFullOutcomesService;
+    private final ForecastEvaluationWriter writer;
+    private final RouteDataQualityAccess quality;
     private final ArrivalObservationRepository arrivalObservationRepository;
     private final ForecastPolicy policy;
     private final Clock clock;
 
     public EvaluateForecastsService(
         ForecastEvaluationRepository evaluationRepository,
-        SameDayFullOutcomesService sameDayFullOutcomesService,
+        ForecastEvaluationWriter writer,
+        RouteDataQualityAccess quality,
         ArrivalObservationRepository arrivalObservationRepository,
         ForecastPolicy policy,
         Clock clock
     ) {
         this.evaluationRepository = evaluationRepository;
-        this.sameDayFullOutcomesService = sameDayFullOutcomesService;
+        this.writer = writer;
+        this.quality = quality;
         this.arrivalObservationRepository = arrivalObservationRepository;
         this.policy = policy;
         this.clock = clock;
@@ -55,11 +60,13 @@ public class EvaluateForecastsService implements EvaluateForecasts {
     @Transactional
     public void settleArrivalLabels() {
         Instant now = clock.instant();
+        List<EvaluationRoute> routes = evaluationRepository.findRoutesWithPendingForecasts();
+        routes.stream().map(EvaluationRoute::routeId).distinct().sorted().forEach(quality::lockByRoute);
         List<ForecastEvaluation> evaluations = new ArrayList<>();
-        for (Long routeVersionId : evaluationRepository.findRouteVersionIdsWithPendingForecasts()) {
-            evaluations.addAll(evaluationsOf(routeVersionId, now));
+        for (EvaluationRoute route : routes) {
+            evaluations.addAll(evaluationsOf(route.routeVersionId(), now));
         }
-        sameDayFullOutcomesService.record(evaluationRepository.settle(evaluations));
+        writer.complete(evaluations);
     }
 
     private List<ForecastEvaluation> evaluationsOf(
@@ -99,7 +106,7 @@ public class EvaluateForecastsService implements EvaluateForecasts {
         List<ForecastEvaluation> evaluations = new ArrayList<>();
         for (PendingForecast forecast : forecasts) {
             ArrivalLabel label =
-                ArrivalLabelResolver.resolve(forecast, observedAfterForecast(candidates, forecast), now);
+                ArrivalLabelResolver.resolve(forecast, candidates, now);
             if (!(label instanceof ArrivalLabel.NotArrivedYet)) {
                 evaluations.add(ForecastEvaluation.completed(
                     forecast.vehicleObservationId(), forecast.targetStopOrder(), label, now));
@@ -138,16 +145,4 @@ public class EvaluateForecastsService implements EvaluateForecasts {
         return earliest;
     }
 
-    private static List<ArrivalCandidate> observedAfterForecast(
-        List<ArrivalCandidate> candidates,
-        PendingForecast forecast
-    ) {
-        List<ArrivalCandidate> later = new ArrayList<>();
-        for (ArrivalCandidate candidate : candidates) {
-            if (candidate.observedAt().isAfter(forecast.generatedAt())) {
-                later.add(candidate);
-            }
-        }
-        return later;
-    }
 }

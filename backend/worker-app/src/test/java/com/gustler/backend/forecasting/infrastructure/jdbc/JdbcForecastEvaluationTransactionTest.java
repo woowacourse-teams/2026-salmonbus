@@ -3,6 +3,7 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.gustler.backend.forecasting.application.evaluation.ForecastEvaluationWriter;
 import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesService;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
@@ -13,6 +14,7 @@ import com.gustler.backend.forecasting.domain.evaluation.SeoulDay;
 import com.gustler.backend.forecasting.domain.evaluation.SettledForecast;
 import com.gustler.backend.forecasting.domain.model.SameDayFullOutcomes;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
+import com.gustler.backend.observations.api.CollectionInputs;
 import com.gustler.backend.support.ConfirmedTripFixture;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.Instant;
@@ -51,6 +53,12 @@ class JdbcForecastEvaluationTransactionTest {
 
     @Autowired
     private JdbcForecastEvaluationRepository evaluations;
+
+    @Autowired
+    private ForecastEvaluationWriter evaluationWriter;
+
+    @Autowired
+    private CollectionInputs collectionInputs;
 
     @Autowired
     private JdbcSameDayFullOutcomesRepository outcomeRepository;
@@ -136,17 +144,35 @@ class JdbcForecastEvaluationTransactionTest {
         // given 실제 집계 저장까지 수행한 뒤 실패시킨다.
         SameDayFullOutcomesService failingOutcomes =
             new SameDayFullOutcomesService(new FailingOutcomeRepository(outcomeRepository));
+        ForecastEvaluationWriter failingWriter =
+            new ForecastEvaluationWriter(evaluations, qualityAccess, collectionInputs, failingOutcomes);
 
         // when
-        assertThatThrownBy(() -> inTransaction(() -> {
-            List<SettledForecast> settled = evaluations.settle(List.of(completedEvaluation()));
-            assertThat(settled).hasSize(1);
-            failingOutcomes.record(settled);
-            return null;
-        })).isInstanceOf(CalibrationWriteFailure.class);
+        assertThatThrownBy(() -> inTransaction(() -> failingWriter.complete(List.of(completedEvaluation()))))
+            .isInstanceOf(CalibrationWriteFailure.class);
 
         // then
         assertThat(evaluationState()).isEqualTo("PENDING");
+        assertThat(jdbc.sql("SELECT input_confirmed_at IS NULL FROM observation_batch WHERE id = ?")
+            .param(arrivalBatchId).query(Boolean.class).single()).isTrue();
+        assertThat(jdbc.sql("SELECT count(*) FROM same_day_full_outcomes WHERE route_id = ?")
+            .param(routeId).query(Long.class).single()).isZero();
+    }
+
+    @Test
+    void 이미_완료한_평가를_다시_요청해도_다른_도착_배치의_입력을_확정하지_않는다() {
+        // given 도착 관측 없이 완료된 평가는 다른 결과로 덮어쓸 수 없다.
+        evaluationWriter.complete(List.of(ForecastEvaluation.completed(sourceObservationId, TARGET_STOP_ORDER,
+            new ArrivalLabel.Skipped(), SCORED_AT)));
+
+        // when
+        List<SettledForecast> repeated = evaluationWriter.complete(List.of(ForecastEvaluation.completed(
+            sourceObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrivalObservationId, 0),
+            SCORED_AT.plusSeconds(60))));
+
+        // then
+        assertThat(repeated).isEmpty();
+        assertThat(evaluationState()).isEqualTo("SKIPPED");
         assertThat(jdbc.sql("SELECT input_confirmed_at IS NULL FROM observation_batch WHERE id = ?")
             .param(arrivalBatchId).query(Boolean.class).single()).isTrue();
         assertThat(jdbc.sql("SELECT count(*) FROM same_day_full_outcomes WHERE route_id = ?")
@@ -233,9 +259,7 @@ class JdbcForecastEvaluationTransactionTest {
     }
 
     private int settleAndRecord() {
-        List<SettledForecast> settled = evaluations.settle(List.of(completedEvaluation()));
-        outcomes.record(settled);
-        return settled.size();
+        return evaluationWriter.complete(List.of(completedEvaluation())).size();
     }
 
     private void assertCountedOnce() {
