@@ -17,6 +17,18 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  backend-deploy-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify deployment hooks and runtime source inputs
+        run: bash backend/deploy/rehearsal/run.sh
+
   backend-build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -49,9 +61,9 @@ jobs:
         run: ./gradlew build
 
       - name: Publish test report
-        if: ${{ !cancelled() && hashFiles('backend/**/build/test-results/test/TEST-*.xml') != '' }}
+        if: ${{ !cancelled() && hashFiles('backend/**/build/test-results/*/TEST-*.xml') != '' }}
         uses: mikepenz/action-junit-report@v6
         with:
-          report_paths: 'backend/**/build/test-results/test/TEST-*.xml'
+          report_paths: 'backend/**/build/test-results/*/TEST-*.xml'
           check_name: 'BE 테스트 결과'
           detailed_summary: true

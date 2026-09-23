@@ -179,6 +179,76 @@ mkdir -p "$WORK/src1/test"; echo "t" > "$WORK/src1/test/T.java"
 d4="$(cd "$WORK/src1" && source_digest main)"
 [ "$d3" = "$d4" ] && ok "테스트만 늘어도 지문이 안 바뀐다" || bad "테스트가 지문을 바꾼다"
 
+sec "1-2. 각 실행 JAR의 실제 모듈 경로를 소스 지문에 포함하나"
+RUNTIME_FIXTURE="$WORK/runtime-project/backend"
+mkdir -p "$RUNTIME_FIXTURE/gradle/wrapper" "$RUNTIME_FIXTURE/deploy"
+cp "$DEPLOY/runtime-source-inputs.sh" "$RUNTIME_FIXTURE/deploy/"
+printf 'root build\n' > "$RUNTIME_FIXTURE/build.gradle"
+printf 'project settings\n' > "$RUNTIME_FIXTURE/settings.gradle"
+printf 'wrapper version\n' > "$RUNTIME_FIXTURE/gradle/wrapper/gradle-wrapper.properties"
+for runtime_module in common api-app worker-app; do
+  mkdir -p "$RUNTIME_FIXTURE/$runtime_module/src/main/java"
+  printf 'initial source\n' > "$RUNTIME_FIXTURE/$runtime_module/src/main/java/Marker.java"
+  printf 'module build\n' > "$RUNTIME_FIXTURE/$runtime_module/build.gradle"
+done
+if runtime_source_digest api "$RUNTIME_FIXTURE" >/dev/null \
+  && runtime_source_digest worker "$RUNTIME_FIXTURE" >/dev/null; then
+  ok "아직 옮기지 않은 모듈 디렉터리가 없어도 기존 소스 지문을 계산한다"
+else
+  bad "모듈 디렉터리가 없을 때 소스 지문 계산이 실패했다"
+fi
+
+check_runtime_change() {
+  local relative_path="$1" expected_api="$2" expected_worker="$3"
+  local before_api before_worker after_api after_worker api_result=unchanged worker_result=unchanged
+  before_api="$(runtime_source_digest api "$RUNTIME_FIXTURE")" || { bad "API 지문 계산 실패"; return 1; }
+  before_worker="$(runtime_source_digest worker "$RUNTIME_FIXTURE")" || { bad "Worker 지문 계산 실패"; return 1; }
+  mkdir -p "$(dirname "$RUNTIME_FIXTURE/$relative_path")"
+  printf '\nchanged input\n' >> "$RUNTIME_FIXTURE/$relative_path"
+  after_api="$(runtime_source_digest api "$RUNTIME_FIXTURE")" || { bad "API 지문 계산 실패"; return 1; }
+  after_worker="$(runtime_source_digest worker "$RUNTIME_FIXTURE")" || { bad "Worker 지문 계산 실패"; return 1; }
+  [ "$before_api" = "$after_api" ] || api_result=changed
+  [ "$before_worker" = "$after_worker" ] || worker_result=changed
+  if [ "$api_result" = "$expected_api" ] && [ "$worker_result" = "$expected_worker" ]; then
+    ok "$relative_path 변경: api=$api_result worker=$worker_result"
+  else
+    bad "$relative_path 변경: api=$api_result worker=$worker_result (기대: $expected_api/$expected_worker)"
+  fi
+}
+
+# 중앙 목록에서 경로를 얻어 테스트하면 빠뜨린 모듈도 함께 빠진다. 목표 경로를 독립적으로 확인한다.
+for runtime_module in worker-app business/route-catalog business/observations \
+  business/forecasting business/api-call-quota integrations/gbis-client; do
+  check_runtime_change "$runtime_module/src/main/java/Marker.java" unchanged changed
+  check_runtime_change "$runtime_module/src/main/resources/module.properties" unchanged changed
+  check_runtime_change "$runtime_module/build.gradle" unchanged changed
+done
+for runtime_path in api-app/src/main/java/Marker.java api-app/src/main/resources/application.yml api-app/build.gradle; do
+  check_runtime_change "$runtime_path" changed unchanged
+done
+for runtime_path in common/src/main/java/Marker.java common/src/main/resources/db/migration/V17__fixture.sql \
+  common/build.gradle build.gradle settings.gradle gradle.properties gradle/wrapper/gradle-wrapper.properties \
+  gradle/libs.versions.toml deploy/runtime-source-inputs.sh; do
+  check_runtime_change "$runtime_path" changed changed
+done
+for runtime_path in maintenance-app/src/main/java/Marker.java maintenance-app/src/main/resources/maintenance.properties \
+  maintenance-app/build.gradle worker-app/src/test/java/MarkerTest.java \
+  business/forecasting/src/test/java/MarkerTest.java business/forecasting/src/testFixtures/java/Fixture.java \
+  ../docs/design.md ../frontend/src/page.ts; do
+  check_runtime_change "$runtime_path" unchanged unchanged
+done
+check_runtime_change "business/forecasting/src/main/resources/file with spaces.properties" unchanged changed
+
+mkdir -p "$WORK/another-checkout"
+cp -a "$RUNTIME_FIXTURE" "$WORK/another-checkout/backend"
+[ "$(runtime_source_digest worker "$RUNTIME_FIXTURE")" = "$(runtime_source_digest worker "$WORK/another-checkout/backend")" ] \
+  && ok "checkout 위치가 달라도 같은 입력의 지문은 같다" || bad "checkout 위치가 소스 지문에 영향을 준다"
+if runtime_source_digest maintenance "$RUNTIME_FIXTURE" > "$WORK/unknown-component.out" 2>&1; then
+  bad "배포하지 않는 컴포넌트의 서버 지문을 허용했다"
+else
+  ok "서버 배포 지문은 api와 worker만 허용한다"
+fi
+
 sec "2. 첫 배포. api 먼저, worker 나중"
 rm -rf /opt/salmonbus
 : > /work/curl.log
@@ -254,6 +324,40 @@ grep -qE 'stop salmonbus' /work/systemctl.log \
 grep -q 'api 는 재시작하지 않는다\. 이유=변경 없음 PID=[1-9][0-9]* 그대로' /work/api-start.out \
   && ok "api 도 이유와 PID 를 남기고 재시작하지 않는다" || { bad "api start 로그가 다르다"; sed 's/^/      /' /work/api-start.out; }
 
+sec "4-2. 업무 모듈만 변경한 JAR을 기존 배포 버전으로 오인하지 않나"
+module_digest_before="$(runtime_source_digest worker "$RUNTIME_FIXTURE")"
+make_revision worker MODULEv1 module00001 "$module_digest_before" "2026-09-23T01:00:00Z"
+deploy worker
+module_jar_before="$(sha256sum /opt/salmonbus/worker/current/jars/worker-app.jar | cut -d' ' -f1)"
+module_api_pid="$(cat /work/pid.salmonbus-api)"
+printf '\nnew forecasting behavior\n' >> "$RUNTIME_FIXTURE/business/forecasting/src/main/java/Marker.java"
+module_digest_after="$(runtime_source_digest worker "$RUNTIME_FIXTURE")"
+make_revision worker MODULEv2 module00002 "$module_digest_after" "2026-09-23T02:00:00Z"
+module_expected_jar="$(sha256sum "$ARCHIVE/worker/jars/worker-app.jar" | cut -d' ' -f1)"
+: > /work/systemctl.log
+deploy worker
+[ "$module_digest_before" != "$module_digest_after" ] \
+  && ok "forecasting만 바뀌어도 Worker 배포 버전이 달라진다" || bad "forecasting 변경을 같은 배포 버전으로 오인했다"
+[ "$(sha256sum /opt/salmonbus/worker/current/jars/worker-app.jar | cut -d' ' -f1)" = "$module_expected_jar" ] \
+  && ok "새 업무 코드가 들어간 JAR을 설치했다" || bad "새 JAR을 버리고 기존 release의 JAR을 재사용했다"
+[ "$module_jar_before" != "$module_expected_jar" ] \
+  && ok "회귀 검사가 서로 다른 두 JAR을 비교했다" || bad "회귀 검사의 JAR이 같다"
+[ "$(readlink -f /opt/salmonbus/worker/current)" = "/opt/salmonbus/worker/releases/$module_digest_after" ] \
+  && ok "Worker current가 새 업무 소스 지문을 가리킨다" || bad "Worker current가 새 배포 버전이 아니다"
+grep -q '^stop salmonbus-worker$' /work/systemctl.log \
+  && ok "업무 모듈 변경 후 Worker를 다시 시작했다" || bad "업무 모듈 변경 후 Worker를 다시 시작하지 않았다"
+[ "$(cat /work/pid.salmonbus-api)" = "$module_api_pid" ] \
+  && ok "Worker 업무 변경으로 API를 재시작하지 않았다" || bad "Worker 업무 변경이 API PID를 바꿨다"
+
+# build.time만 다른 재빌드는 같은 release를 유지한다. 이를 막으려고 JAR SHA를 sourceDigest 대신 쓰지 않는다.
+make_revision worker MODULEv2 module00003 "$module_digest_after" "2026-09-23T03:00:00Z"
+: > /work/systemctl.log
+deploy worker
+[ "$(sha256sum /opt/salmonbus/worker/current/jars/worker-app.jar | cut -d' ' -f1)" = "$module_expected_jar" ] \
+  && ok "같은 소스의 재빌드는 기존 JAR을 유지한다" || bad "같은 소스의 재빌드가 기존 JAR을 바꿨다"
+grep -q '^stop salmonbus-worker$' /work/systemctl.log \
+  && bad "빌드 시각만 바뀌었는데 Worker를 재시작했다" || ok "빌드 시각만 바뀌면 Worker를 재시작하지 않는다"
+
 sec "5. api 배포가 진행 중이면 worker 가 안 끼어드나"
 mkdir -p /opt/salmonbus/.deploying
 printf 'api d-api-999 %s\n' "$(date +%s)" > /opt/salmonbus/.deploying/owner
@@ -265,6 +369,7 @@ fi
 rm -rf /opt/salmonbus/.deploying
 
 sec "5-2. 한 번 실패한 직후 바로 롤백 (CodeDeploy 가 하는 순서)"
+# 아래는 훅의 기존 JAR 재배포 동작만 검사한다. 정비 전환 실패 시에는 DB 백업과 구 JAR을 함께 복원한다.
 # 성공 -> 실패 -> 직전 배포 버전 재배포. 이때 current 는 실패한 쪽, previous 는 직전 성공 버전이다
 RB_GOOD=aaaa1111bbbb2222cccc3333dddd4444eeee5555ffff6666777788889999aaaa
 RB_BAD=bbbb2222cccc3333dddd4444eeee5555ffff6666777788889999aaaabbbb1111
