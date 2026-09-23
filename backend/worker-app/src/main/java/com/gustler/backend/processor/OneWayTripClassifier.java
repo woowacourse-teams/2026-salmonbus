@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.util.Objects;
 
 public final class OneWayTripClassifier {
-    public static final String RULE_VERSION = "one-way-seat-range-v2";
+    public static final String RULE_VERSION = "one-way-seat-range-v3";
     public static final Duration DEFAULT_MAXIMUM_GAP = Duration.ofMinutes(10);
 
     public enum Status { ELIGIBLE, BOUNDARY_UNCONFIRMED, EXCLUDED }
@@ -71,13 +71,13 @@ public final class OneWayTripClassifier {
         return new Decision(tripId, status, boundary);
     }
 
-    private static boolean isDeparture(Route route, Observation observation) {
+    static boolean isDeparture(Route route, Observation observation) {
         return Integer.valueOf(2).equals(observation.runningState())
             && (observation.stopOrder() == route.firstStop()
                 || Objects.equals(observation.stopOrder(), route.turnStop()));
     }
 
-    private static int direction(Route route, Observation observation) {
+    static int direction(Route route, Observation observation) {
         return direction(route, observation.stopOrder(), observation.runningState());
     }
 

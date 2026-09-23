@@ -1,6 +1,7 @@
 package com.gustler.backend.migration.db;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gustler.backend.migration.quality.TripQualityMaintenance;
@@ -15,9 +16,11 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -29,6 +32,46 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
     @BeforeEach
     void 이전_테스트가_커밋한_자료를_비운다() throws Exception {
         try (var c = connection(); var s = c.createStatement()) { s.execute("TRUNCATE route CASCADE"); }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"1, 0", "1, 1", "4, 0", "4, 1"})
+    void 기점이나_회차지에서_출발이_반복되면_첫_출발부터_같은_편도의_잔여석을_예측_입력에서_제외한다(
+        int terminal, int intermediateState
+    ) throws Exception {
+        // given
+        try (var c = connection()) {
+            var jdbc = jdbc(c);
+            long version = route(jdbc);
+            long first = batch(jdbc, version, 1, terminal, 2, 44);
+            long middle = batch(jdbc, version, 2, terminal, 2, 60);
+            jdbc.sql("UPDATE vehicle_observation SET running_state=? WHERE observation_batch_id=? AND vehicle_id='bus-1'")
+                .param(intermediateState).param(middle).update();
+            batch(jdbc, version, 3, terminal, 2, 60);
+            long bad = batch(jdbc, version, 4, terminal + 1, 2, 72);
+            long next = batch(jdbc, version, 5, terminal == 1 ? 4 : 1, 2, 44);
+            var quality = new TripQualityRepository(jdbc);
+            c.setAutoCommit(false);
+            quality.observationsStored(event(jdbc, version, bad));
+
+            // when
+            quality.investigateLocked(version, "bus-1");
+            quality.investigateLocked(version, "bus-1");
+
+            // then
+            assertThat(jdbc.sql("SELECT completed FROM trip_quality_rebuild").query(Boolean.class).single()).isTrue();
+            assertThat(jdbc.sql("SELECT observation_batch_id FROM forecast_eligible_observation WHERE vehicle_id='bus-1'")
+                .query(Long.class).list()).containsExactly(next);
+            assertThat(jdbc.sql("SELECT count(*) FROM forecast_eligible_observation WHERE vehicle_id='bus-2'")
+                .query(Integer.class).single()).isEqualTo(5);
+            assertThat(jdbc.sql("SELECT remaining_seats FROM vehicle_observation WHERE vehicle_id='bus-1' ORDER BY id")
+                .query(Integer.class).list()).containsExactly(44, 60, 60, 72, 44);
+            assertThat(jdbc.sql("""
+                SELECT t.status FROM vehicle_observation o JOIN vehicle_one_way_trip t ON t.id=o.vehicle_trip_key
+                WHERE o.observation_batch_id=? AND o.vehicle_id='bus-1'
+                """).param(first).query(String.class).single()).isEqualTo("EXCLUDED");
+            c.rollback();
+        }
     }
 
     @ParameterizedTest
@@ -310,6 +353,148 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
                 .query(Long.class).list()).containsExactly(next);
             assertThat(jdbc.sql("SELECT remaining_seats FROM vehicle_observation ORDER BY id")
                 .query(Integer.class).list()).containsExactly(44, 71, 44, 44);
+        }
+    }
+
+    @Test
+    void 회차지_도착_뒤_출발하면_이전_편도의_도착_잔여석은_예측_입력에서_제외하지_않는다() throws Exception {
+        // given
+        try (var c = connection()) {
+            var jdbc = jdbc(c);
+            long version = route(jdbc);
+            long arrival = batch(jdbc, version, 1, 4, 1, 44);
+            jdbc.sql("UPDATE vehicle_observation SET running_state=1 WHERE observation_batch_id=?").param(arrival).update();
+            batch(jdbc, version, 2, 4, 1, 44);
+            long bad = batch(jdbc, version, 3, 5, 1, 72);
+            long next = batch(jdbc, version, 4, 1, 1, 44);
+            var quality = new TripQualityRepository(jdbc);
+            c.setAutoCommit(false);
+            quality.observationsStored(event(jdbc, version, bad));
+
+            // when
+            quality.investigateLocked(version, "bus-1");
+            quality.investigateLocked(version, "bus-1");
+
+            // then
+            assertThat(jdbc.sql("SELECT observation_batch_id FROM forecast_eligible_observation ORDER BY observation_batch_id")
+                .query(Long.class).list()).containsExactly(arrival, next);
+            c.rollback();
+        }
+    }
+
+    @Test
+    void 반복_출발_구간이_32묶음과_10분을_넘어도_후보를_복원해_첫_출발부터_잔여석을_제외한다() throws Exception {
+        // given
+        try (var c = connection()) {
+            var jdbc = jdbc(c);
+            long version = route(jdbc);
+            long first = batch(jdbc, version, 1, 4, 1, 44);
+            IntStream.rangeClosed(2, 70).forEach(step -> {
+                long b = batch(jdbc, version, step, 4, 1, 60);
+                jdbc.sql("UPDATE vehicle_observation SET running_state=0 WHERE observation_batch_id=?").param(b).update();
+            });
+            long repeated = batch(jdbc, version, 71, 4, 1, 60);
+            long bad = batch(jdbc, version, 72, 5, 1, 72);
+            long next = batch(jdbc, version, 73, 1, 1, 44);
+            c.setAutoCommit(false);
+            new TripQualityRepository(jdbc).observationsStored(event(jdbc, version, bad));
+            c.commit();
+            var calls = new AtomicInteger();
+            var quality = new TripQualityRepository(counted(c, calls));
+
+            // when
+            quality.investigateNext();
+
+            // then: 기존과 같은 8개 SQL로 최대 32묶음을 조사하고 후보도 함께 저장한다.
+            assertThat(calls.get()).isEqualTo(8);
+            assertThat(jdbc.sql("SELECT phase FROM trip_quality_rebuild").query(String.class).single()).isEqualTo("SEARCH_START");
+            assertThat(jdbc.sql("""
+                SELECT o.observation_batch_id FROM trip_quality_rebuild r
+                JOIN vehicle_observation o ON o.id=r.boundary_candidate_observation_id
+                """).query(Long.class).single()).isEqualTo(repeated);
+            assertThat(jdbc.sql("SELECT last_batch_at FROM trip_quality_rebuild")
+                .query(OffsetDateTime.class).single().toInstant()).isEqualTo(START.plusSeconds(400));
+
+            // when: 후보와 탐색 위치를 함께 롤백한 후 새 객체로 다시 실행한다.
+            c.rollback();
+
+            // then
+            assertThat(jdbc.sql("SELECT boundary_candidate_observation_id FROM trip_quality_rebuild")
+                .query().singleRow().get("boundary_candidate_observation_id")).isNull();
+            assertThat(jdbc.sql("SELECT last_batch_id FROM trip_quality_rebuild").query(Long.class).single()).isEqualTo(bad);
+
+            // when: 각 실행마다 저장된 진행 정보만으로 복원한다.
+            IntStream.range(0, 6).forEach(ignored -> {
+                new TripQualityRepository(jdbc).investigateLocked(version, "bus-1");
+                assertThatCode(c::commit).doesNotThrowAnyException();
+            });
+
+            // then
+            assertThat(jdbc.sql("SELECT completed FROM trip_quality_rebuild").query(Boolean.class).single()).isTrue();
+            assertThat(jdbc.sql("SELECT observation_batch_id FROM forecast_eligible_observation")
+                .query(Long.class).list()).containsExactly(next);
+            assertThat(jdbc.sql("""
+                SELECT count(*) FROM vehicle_observation o JOIN vehicle_one_way_trip t ON t.id=o.vehicle_trip_key
+                WHERE t.start_observation_id=(SELECT id FROM vehicle_observation WHERE observation_batch_id=?)
+                  AND t.status='EXCLUDED'
+                """).param(first).query(Integer.class).single()).isEqualTo(72);
+            assertThat(jdbc.sql("SELECT count(*) FROM vehicle_observation").query(Integer.class).single()).isEqualTo(73);
+        }
+    }
+
+    @Test
+    void 첫_출발부터_같은_편도의_관측으로_만든_기존_예보는_보류_중과_조사_완료_후에_조회되지_않는다() throws Exception {
+        // given
+        try (var c = connection()) {
+            var jdbc = jdbc(c);
+            long version = route(jdbc);
+            batch(jdbc, version, 1, 4, 2, 44);
+            long middle = batch(jdbc, version, 2, 4, 2, 60);
+            jdbc.sql("UPDATE vehicle_observation SET running_state=0 WHERE observation_batch_id=? AND vehicle_id='bus-1'")
+                .param(middle).update();
+            batch(jdbc, version, 3, 4, 2, 60);
+            long bad = batch(jdbc, version, 4, 5, 2, 72);
+            long next = batch(jdbc, version, 5, 1, 2, 44);
+            long deployment = jdbc.sql("""
+                INSERT INTO model_deployment(deployment_key,release_id,model_key,model_version,bundle_digest,
+                    prediction_target_version,calculation_version,supported_scope_digest,data_until,state)
+                VALUES (gen_random_uuid(),'test','test','test',repeat('0',64),'test','test',repeat('0',64),
+                    '2026-09-20T00:00:00Z','STAGED') RETURNING id
+                """).query(Long.class).single();
+            jdbc.sql("""
+                INSERT INTO seat_forecast(vehicle_observation_id,target_stop_order,route_version_id,stops_to_target,
+                    model_deployment_id,demand_statistics_revision,seat_full_chance_raw,seat_full_chance,
+                    expected_seats,generated_at,scoring_state)
+                SELECT id,stop_order+1,route_version_id,1,?,0,0.1,0.1,40,'2026-09-21T00:01:00Z','PENDING'
+                FROM vehicle_observation WHERE route_version_id=?
+                """).param(deployment).param(version).update();
+            c.setAutoCommit(false);
+            var quality = new TripQualityRepository(jdbc);
+
+            // when
+            quality.observationsStored(event(jdbc, version, bad));
+
+            // then
+            assertThat(jdbc.sql("""
+                SELECT count(*) FROM quality_eligible_seat_forecast f
+                JOIN vehicle_observation o ON o.id=f.vehicle_observation_id WHERE o.vehicle_id='bus-1'
+                """).query(Integer.class).single()).isZero();
+
+            // when
+            quality.investigateLocked(version, "bus-1");
+            quality.investigateLocked(version, "bus-1");
+
+            // then
+            assertThat(jdbc.sql("""
+                SELECT o.observation_batch_id FROM quality_eligible_seat_forecast f
+                JOIN vehicle_observation o ON o.id=f.vehicle_observation_id WHERE o.vehicle_id='bus-1'
+                """).query(Long.class).list()).containsExactly(next);
+            assertThat(jdbc.sql("""
+                SELECT count(*) FROM quality_eligible_seat_forecast f
+                JOIN vehicle_observation o ON o.id=f.vehicle_observation_id WHERE o.vehicle_id='bus-2'
+                """).query(Integer.class).single()).isEqualTo(5);
+            assertThat(jdbc.sql("SELECT count(*) FROM seat_forecast").query(Integer.class).single()).isEqualTo(10);
+            c.rollback();
         }
     }
 

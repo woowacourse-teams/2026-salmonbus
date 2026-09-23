@@ -44,7 +44,7 @@ class MigrationOrderTest {
      * <p>이 브랜치는 편도 판정과 계산 재사용의 품질 조건을 더한다.
      */
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
-        List.of("one_way_trip_quality");
+        List.of("one_way_trip_quality", "trip_quality_boundary_candidate");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";

@@ -1,7 +1,6 @@
 package com.gustler.backend.processor;
 
 import com.gustler.backend.observation.VehicleObservationsStored;
-import com.gustler.backend.processor.OneWayTripClassifier.Boundary;
 import com.gustler.backend.processor.OneWayTripClassifier.Decision;
 import com.gustler.backend.processor.OneWayTripClassifier.Observation;
 import com.gustler.backend.processor.OneWayTripClassifier.Previous;
@@ -17,6 +16,10 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -57,6 +60,7 @@ public class TripQualityRepository {
                     until_at = EXCLUDED.until_at, maximum_gap_seconds = EXCLUDED.maximum_gap_seconds,
                     completed = false, phase = 'SEARCH_START', evidence_observation_id = EXCLUDED.evidence_observation_id,
                     anchor_observation_id = EXCLUDED.anchor_observation_id, previous_observation_id = NULL,
+                    boundary_candidate_observation_id = NULL,
                     include_cursor = false, can_release = false, investigated_at = CURRENT_TIMESTAMP,
                     started_at = CURRENT_TIMESTAMP
                 """).param(event.routeVersionId()).param(row.vehicleId()).param(offset(event.observedAt()))
@@ -85,12 +89,12 @@ public class TripQualityRepository {
         lockRoute(version);
         var jobs = jdbc.sql("""
             SELECT last_batch_at, last_batch_id, until_at, phase, anchor_observation_id,
-                   previous_observation_id, include_cursor, can_release, maximum_gap_seconds
+                   previous_observation_id, include_cursor, can_release, maximum_gap_seconds, boundary_candidate_observation_id
             FROM trip_quality_rebuild WHERE route_version_id = ? AND vehicle_id = ? AND NOT completed
             """).param(version).param(vehicle).query((rs, n) -> new Job(
                 rs.getObject(1, OffsetDateTime.class).toInstant(), rs.getLong(2),
                 rs.getObject(3, OffsetDateTime.class).toInstant(), rs.getString(4), rs.getLong(5),
-                rs.getObject(6, Long.class), rs.getBoolean(7), rs.getBoolean(8), rs.getObject(9, Integer.class))).list();
+                rs.getObject(6, Long.class), rs.getBoolean(7), rs.getBoolean(8), rs.getObject(9, Integer.class), rs.getObject(10, Long.class))).list();
         if (jobs.isEmpty()) { return; }
         Job job = jobs.getFirst();
         Route configured = readRoute(version);
@@ -99,34 +103,28 @@ public class TripQualityRepository {
         boolean backwards = job.phase().equals("SEARCH_START");
         List<ScanRow> rows = readPage(version, vehicle, job.at(), job.batch(), backwards, job.include());
         if (backwards) {
-            ScanRow anchor = observation(job.anchor());
-            boolean found = false;
-            for (ScanRow row : rows) {
-                if (row.observation() == null) { continue; }
-                Decision decision = OneWayTripClassifier.classify(route,
-                    new Previous(row.observation(), row.observation().id(), Status.ELIGIBLE), anchor.observation());
-                if (decision.boundary() == Boundary.DEPARTURE || decision.boundary() == Boundary.DIRECTION_CHANGE
-                    || decision.boundary() == Boundary.UNCONFIRMED) {
-                    found = true;
-                    break;
-                }
-                anchor = row;
-            }
-            if (found || rows.size() < INVESTIGATION_BATCH_LIMIT) {
-                jdbc.sql("""
-                    UPDATE trip_quality_rebuild SET phase = 'REPLAY', last_batch_at = ?, last_batch_id = ?,
-                        anchor_observation_id = ?, include_cursor = true, investigated_at = CURRENT_TIMESTAMP
-                    WHERE route_version_id = ? AND vehicle_id = ?
-                    """).param(offset(anchor.at())).param(anchor.batch()).param(anchor.observation().id())
-                    .param(version).param(vehicle).update();
-            } else {
-                ScanRow cursor = rows.getLast();
-                jdbc.sql("""
-                    UPDATE trip_quality_rebuild SET last_batch_at = ?, last_batch_id = ?, anchor_observation_id = ?,
-                        investigated_at = CURRENT_TIMESTAMP WHERE route_version_id = ? AND vehicle_id = ?
-                    """).param(offset(cursor.at())).param(cursor.batch()).param(anchor.observation().id())
-                    .param(version).param(vehicle).update();
-            }
+            Map<Long, ScanRow> observations = observations(job.anchor(), job.boundaryCandidate());
+            ScanRow savedCandidate = observations.get(job.boundaryCandidate());
+            var search = new ReverseBoundarySearch(route, observations.get(job.anchor()).observation(),
+                savedCandidate == null ? null : savedCandidate.observation());
+            rows.stream().filter(row -> row.observation() != null)
+                .takeWhile(row -> !search.boundaryConfirmed())
+                .forEachOrdered(row -> {
+                    observations.put(row.observation().id(), row);
+                    search.inspect(row.observation());
+                });
+            boolean found = search.boundaryConfirmed() || rows.size() < INVESTIGATION_BATCH_LIMIT;
+            ScanRow anchor = observations.get(found ? search.replayStart().id() : search.anchor().id());
+            ScanRow cursor = found ? anchor : rows.getLast();
+            jdbc.sql("""
+                UPDATE trip_quality_rebuild SET phase = ?, last_batch_at = ?, last_batch_id = ?,
+                    anchor_observation_id = ?, boundary_candidate_observation_id = ?, include_cursor = ?,
+                    investigated_at = CURRENT_TIMESTAMP
+                WHERE route_version_id = ? AND vehicle_id = ?
+                """).param(found ? "REPLAY" : "SEARCH_START").param(offset(cursor.at())).param(cursor.batch())
+                .param(anchor.observation().id())
+                .param(found || search.candidate() == null ? null : search.candidate().id())
+                .param(found).param(version).param(vehicle).update();
             return;
         }
         Previous previous = job.previous() == null ? null : previous(job.previous());
@@ -177,10 +175,16 @@ public class TripQualityRepository {
     }
 
     private ScanRow observation(long id) {
+        return observations(id, null).get(id);
+    }
+
+    private Map<Long, ScanRow> observations(long anchor, Long candidate) {
+        var ids = Stream.of(anchor, candidate).filter(Objects::nonNull).distinct().toList();
         return jdbc.sql("""
             SELECT b.id AS batch_id, b.response_received_at, o.id, o.vehicle_id, o.stop_order, o.running_state, o.remaining_seats
-            FROM vehicle_observation o JOIN observation_batch b ON b.id = o.observation_batch_id WHERE o.id = ?
-            """).param(id).query((rs, n) -> scanRow(rs)).single();
+            FROM vehicle_observation o JOIN observation_batch b ON b.id = o.observation_batch_id WHERE o.id IN (:ids)
+            """).param("ids", ids).query((rs, n) -> scanRow(rs)).list().stream()
+            .collect(Collectors.toMap(row -> row.observation().id(), row -> row));
     }
 
     private Previous previous(long id) {
@@ -271,6 +275,6 @@ public class TripQualityRepository {
     private record Input(Observation current, Previous previous) { }
     private record Key(long version, String vehicle) { }
     private record Job(Instant at, long batch, Instant evidenceAt, String phase, long anchor, Long previous,
-                       boolean include, boolean canRelease, Integer gap) { }
+                       boolean include, boolean canRelease, Integer gap, Long boundaryCandidate) { }
     public record ScanRow(long batch, Instant at, Observation observation) { }
 }
