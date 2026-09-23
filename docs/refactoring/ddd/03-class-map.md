@@ -432,12 +432,12 @@ PR #70 병합 커밋의 production Java 목록과 대조해 330개 파일이 중
 | `observations` | 44 | `backend/business/observations/src/main/java` |
 | `forecasting` | 159 | `backend/business/forecasting/src/main/java` |
 | `api-call-quota` | 8 | `backend/business/api-call-quota/src/main/java` |
-| `gbis-client` | 13 | `backend/integrations/gbis-client/src/main/java` |
+| `gbis-client` | 15 | `backend/integrations/gbis-client/src/main/java` |
 | `api-app` | 98 | `backend/api-app/src/main/java` |
 | `worker-app` | 19 | `backend/worker-app/src/main/java` |
 | `maintenance-app` | 11 | `backend/maintenance-app/src/main/java` |
 | `common` | 1 | `backend/common/src/main/java` |
-| **합계** | **384** | Gradle 9개 모듈 |
+| **합계** | **386** | Gradle 9개 모듈 |
 
 오프라인 전환 실행기 `backend/deploy/migrations/SAL-134/src/main/java`의 Java 1개는 이 집계 밖이다. maintenance-app의 현재 11개와 기준 소스에서 남기기로 한 CLI 지원 10개도 같은 수치가 아니다. 새 실행 구성이 추가되고 기존 책임이 재편된 결과다.
 
