@@ -34,6 +34,6 @@ public class AdaptiveCollectionTrigger implements Trigger {
         if (lastCompletion == null) {
             return clock.instant();
         }
-        return lastCompletion.plusSeconds(CollectionTiming.intervalSeconds(lastCompletion, clock));
+        return lastCompletion.plusSeconds(CollectionTiming.intervalSeconds(lastCompletion));
     }
 }

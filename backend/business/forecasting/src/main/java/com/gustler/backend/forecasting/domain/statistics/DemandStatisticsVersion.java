@@ -23,6 +23,9 @@ public record DemandStatisticsVersion(
     List<StopDemandMeasurement> measurements
 ) {
 
+    /** 차량별 최대 잔여석을 정원으로 사용하는 계산 규칙의 버전. 계산식을 바꾸면 이 값도 바꾼다. */
+    public static final String CURRENT_CALCULATION_VERSION = "observed-max-capacity-v1";
+
     private static final int FIRST_REVISION = 1;
 
     public DemandStatisticsVersion {

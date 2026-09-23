@@ -30,7 +30,7 @@ public class StopDemandStatisticsWriter {
         if (totals.isEmpty()) {
             return;
         }
-        String calculationVersion = RefreshDemandStatisticsService.CURRENT_CALCULATION_VERSION;
+        String calculationVersion = DemandStatisticsVersion.CURRENT_CALCULATION_VERSION;
         final int revision = Math.incrementExact(repository.currentRevision(routeVersionId, calculationVersion));
         repository.append(new DemandStatisticsVersion(routeVersionId, calculationVersion, revision,
             computedAt, computedAt, StopDemandAggregator.aggregate(totals, clock)));

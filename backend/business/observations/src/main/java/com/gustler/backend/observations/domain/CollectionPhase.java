@@ -1,7 +1,7 @@
 package com.gustler.backend.observations.domain;
 
-import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Arrays;
 
 /**
@@ -30,6 +30,7 @@ public enum CollectionPhase {
     NIGHT_TAIL(23, 1, 20),
     ;
 
+    private static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
     private static final int SECONDS_PER_HOUR = 3600;
     private static final int HOURS_PER_DAY = 24;
 
@@ -49,10 +50,9 @@ public enum CollectionPhase {
 
     /** 한국 시각으로 고른다. 서버 타임존이나 세계 표준시 날짜와 다르다. */
     public static CollectionPhase at(
-        Instant at,
-        Clock clock
+        Instant at
     ) {
-        return atHour(at.atZone(clock.getZone()).getHour());
+        return atHour(at.atZone(KOREA).getHour());
     }
 
     static CollectionPhase atHour(
