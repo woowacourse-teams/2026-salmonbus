@@ -102,7 +102,8 @@ phases:
 
         COMMON="common/src/main common/build.gradle build.gradle settings.gradle gradle/wrapper/gradle-wrapper.properties"
         API_DIGEST="$(source_digest api-app/src/main api-app/build.gradle $COMMON)"
-        WORKER_DIGEST="$(source_digest worker-app/src/main worker-app/build.gradle $COMMON)"
+        WORKER_MODULES="business/route-catalog/src/main business/route-catalog/build.gradle business/observations/src/main business/observations/build.gradle business/forecasting/src/main business/forecasting/build.gradle business/api-call-quota/src/main business/api-call-quota/build.gradle integrations/gbis-client/src/main integrations/gbis-client/build.gradle"
+        WORKER_DIGEST="$(source_digest worker-app/src/main worker-app/build.gradle $WORKER_MODULES $COMMON)"
 
         # build 는 실행 못 하는 -plain.jar 도 같이 만든다. 이름으로 걸러낸다
         API_JAR="$(ls api-app/build/libs/api-app-*.jar | grep -v -- '-plain\.jar$')"

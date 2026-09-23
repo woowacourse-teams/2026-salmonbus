@@ -5,6 +5,11 @@ plugins {
 
 dependencies {
     implementation project(':common')
+    implementation project(':route-catalog')
+    implementation project(':observations')
+    implementation project(':forecasting')
+    implementation project(':api-call-quota')
+    implementation project(':gbis-client')
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-restclient'
