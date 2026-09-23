@@ -72,6 +72,55 @@ test("유효기간 안의 자동 갱신 실패 시 마지막 예측을 유지한
   await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
 });
 
+test("자동 갱신 실패 시 기존 예측을 유지하고 다음 요청 성공 시 새 예측으로 교체한다", async ({ page, api }) => {
+  await openBoard(page);
+  const stop = targetStop(page, "UP");
+  await stop.scrollIntoViewIfNeeded();
+  await stop.click();
+
+  const arrivals = targetRow(page, "UP").getByRole("listitem");
+  await expect(arrivals).toHaveText([/3정류장 전\s*도착 시 5석 예상해요/, /7정류장 전\s*도착 시 2석 예상해요/]);
+  const previousForecast = await arrivals.allTextContents();
+  const requestsBeforeFailure = api.requests.board;
+  api.mode.board = "network-error";
+
+  const failedRequest = page.waitForEvent(
+    "requestfailed",
+    (request) => new URL(request.url()).pathname === apiPaths.board,
+  );
+  await page.clock.fastForward(pollIntervalMs);
+  await failedRequest;
+  await page.clock.runFor(1);
+  expect(api.requests.board).toBeGreaterThan(requestsBeforeFailure);
+  expect(await page.evaluate(() => Date.now())).toBeLessThan(Date.parse(api.data.board.staleAt));
+
+  await expect(stop).toHaveAttribute("aria-expanded", "true");
+  await expect(arrivals).toHaveText(previousForecast);
+  await expect(arrivals.nth(0)).toBeVisible();
+  await expect(arrivals.nth(1)).toBeVisible();
+
+  // 이전 화면의 유지와 새 응답의 반영을 구분하도록 예측 값과 항목 수를 바꾼다.
+  const stopData = api.data.board.stops.find((stop) => stop.name === targetStopNames.UP);
+  if (stopData === undefined) throw new Error("상행 목표 정류장 fixture가 필요합니다");
+  stopData.approachingVehicles = [
+    { vehicleId: "bus-1", horizonStops: 2, seatAvailableProbability: 0.9, expectedSeats: 9 },
+  ];
+  api.mode.board = "success";
+  const requestsBeforeRecovery = api.requests.board;
+
+  const recoveredResponse = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.board && response.status() === 200,
+  );
+  await page.clock.fastForward(pollIntervalMs);
+  await (await recoveredResponse).finished();
+  expect(api.requests.board).toBeGreaterThan(requestsBeforeRecovery);
+  expect(await page.evaluate(() => Date.now())).toBeLessThan(Date.parse(api.data.board.staleAt));
+
+  await expect(stop).toHaveAttribute("aria-expanded", "true");
+  await expect(arrivals).toHaveText([/2정류장 전\s*도착 시 9석 예상해요/]);
+  await expect(arrivals.nth(0)).toBeVisible();
+});
+
 test("운행 중인 차량이 없으면 운행 없음 안내를 표시한다", async ({ page, api }) => {
   api.data.board.vehiclesInService = 0;
   api.data.vehicles.observation.state = "NO_VEHICLES_OBSERVED";
