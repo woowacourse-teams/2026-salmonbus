@@ -1,7 +1,9 @@
-package com.gustler.backend.routecatalog.infrastructure.source;
+package com.gustler.backend.routecatalog.infrastructure.gbis;
 
 import com.gustler.backend.gbis.api.GbisApiCaller;
 import com.gustler.backend.routecatalog.domain.RouteStops;
+import com.gustler.backend.routecatalog.domain.RouteSource;
+import com.gustler.backend.routecatalog.domain.RouteSourceResult;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.UpstreamRoute;
 import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
@@ -9,8 +11,8 @@ import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
 import com.gustler.backend.gbis.api.GbisRawResponse.NotReceived;
 import com.gustler.backend.gbis.api.GbisRawResponse.PortalRejected;
 import com.gustler.backend.gbis.api.GbisRawResponse.Received;
-import com.gustler.backend.routecatalog.infrastructure.source.GbisRouteResult.Failed;
-import com.gustler.backend.routecatalog.infrastructure.source.GbisRouteResult.Success;
+import com.gustler.backend.routecatalog.domain.RouteSourceResult.Failed;
+import com.gustler.backend.routecatalog.domain.RouteSourceResult.Success;
 import com.gustler.backend.gbis.api.dto.BusRouteInfoResponse;
 import com.gustler.backend.gbis.api.dto.BusRouteInfoResponse.RouteInfoItem;
 import com.gustler.backend.gbis.api.dto.BusRouteStationResponse;
@@ -31,7 +33,7 @@ import tools.jackson.databind.ObjectMapper;
  * <b>회차 순번</b>은 노선정류소 조회에 있다. 그래서 한 노선을 읽는 데 호출을 두 번 쓴다.
  */
 @Component
-public class GbisRouteSource {
+public class GbisRouteSource implements RouteSource {
 
     private static final Logger log = LoggerFactory.getLogger(GbisRouteSource.class);
 
@@ -54,7 +56,13 @@ public class GbisRouteSource {
         this.objectMapper = objectMapper;
     }
 
-    public GbisRouteResult read(
+    @Override
+    public int requiredCallsPerRead() {
+        return UPSTREAM_CALLS_PER_READ;
+    }
+
+    @Override
+    public RouteSourceResult read(
         final String routeId
     ) {
         RouteInfoItem routeInfo = readRouteInfo(routeId);
@@ -70,7 +78,7 @@ public class GbisRouteSource {
         return toSuccess(routeId, routeInfo, stations);
     }
 
-    private GbisRouteResult toSuccess(
+    private RouteSourceResult toSuccess(
         String routeId,
         RouteInfoItem routeInfo,
         List<RouteStationItem> stations

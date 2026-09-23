@@ -1,7 +1,7 @@
 package com.gustler.backend.routecatalog.domain;
 
 /**
- * 상류가 알려준 노선 한 건. 노선 행에 넣을 이름들과 판본을 여는 데 필요한 것이 다 들어 있다.
+ * 상류에서 받은 노선 한 건. 노선 행에 저장할 이름과 버전 생성에 필요한 정보를 담는다.
  */
 public record UpstreamRoute(
     String upstreamRouteId,

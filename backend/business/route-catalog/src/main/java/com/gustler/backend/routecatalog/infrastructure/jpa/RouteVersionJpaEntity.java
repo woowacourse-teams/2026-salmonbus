@@ -3,6 +3,7 @@ package com.gustler.backend.routecatalog.infrastructure.jpa;
 import com.gustler.backend.routecatalog.domain.RouteContentDigest;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.RouteVersionContent;
+import com.gustler.backend.routecatalog.domain.RouteVersion;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -67,19 +68,13 @@ public class RouteVersionJpaEntity {
         applyTimetable(content.timetable());
     }
 
-    public void closeAt(
-        OffsetDateTime closedAt
-    ) {
-        if (validTo != null) {
-            throw new IllegalStateException("판본 %d 는 %s 에 이미 닫혔다".formatted(id, validTo));
-        }
-        this.validTo = closedAt;
+    public RouteVersion toDomain() {
+        return new RouteVersion(id, validFrom, validTo, content());
     }
 
-    public void revise(
-        RouteTimetable timetable
-    ) {
-        applyTimetable(timetable);
+    public void apply(RouteVersion version) {
+        this.validTo = version.validTo();
+        applyTimetable(version.content().timetable());
     }
 
     public RouteVersionContent content() {

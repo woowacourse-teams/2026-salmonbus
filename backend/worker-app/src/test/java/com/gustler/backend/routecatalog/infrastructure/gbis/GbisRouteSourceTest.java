@@ -1,7 +1,8 @@
-package com.gustler.backend.routecatalog.infrastructure.source;
+package com.gustler.backend.routecatalog.infrastructure.gbis;
 
 import com.gustler.backend.gbis.api.GbisApiCaller;
 import com.gustler.backend.routecatalog.domain.RouteStop;
+import com.gustler.backend.routecatalog.domain.RouteSourceResult;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.StopDirection;
 import com.gustler.backend.routecatalog.domain.UpstreamRoute;
@@ -11,8 +12,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-import com.gustler.backend.routecatalog.infrastructure.source.GbisRouteResult.Failed;
-import com.gustler.backend.routecatalog.infrastructure.source.GbisRouteResult.Success;
+import com.gustler.backend.routecatalog.domain.RouteSourceResult.Failed;
+import com.gustler.backend.routecatalog.domain.RouteSourceResult.Success;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -89,7 +90,7 @@ class GbisRouteSourceTest {
         respondWith(ROUTE_INFO_JSON.formatted(0), THREE_STATIONS_JSON);
 
         // when
-        final GbisRouteResult actual = source.read(ROUTE_3330);
+        final RouteSourceResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(((Success) actual).route().stops().stops())
@@ -103,7 +104,7 @@ class GbisRouteSourceTest {
         respondWith(ROUTE_INFO_JSON.formatted(0), THREE_STATIONS_JSON);
 
         // when
-        final GbisRouteResult actual = source.read(ROUTE_3330);
+        final RouteSourceResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(((Success) actual).route())
@@ -117,7 +118,7 @@ class GbisRouteSourceTest {
         respondWith(ROUTE_INFO_JSON.formatted(0), THREE_STATIONS_JSON);
 
         // when
-        final GbisRouteResult actual = source.read(ROUTE_3330);
+        final RouteSourceResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(((Success) actual).route().timetable())
@@ -130,7 +131,7 @@ class GbisRouteSourceTest {
         respondWith(ROUTE_INFO_JSON.formatted(0), THREE_STATIONS_JSON);
 
         // when
-        final GbisRouteResult actual = source.read(ROUTE_3330);
+        final RouteSourceResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(((Success) actual).route().stops().stops())
@@ -146,7 +147,7 @@ class GbisRouteSourceTest {
                 .replace(",\"turnSeq\":2,\"turnYn\":\"Y\"", ""));
 
         // when
-        final GbisRouteResult actual = source.read(ROUTE_3330);
+        final RouteSourceResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(((Success) actual).route().stops().turnSequence()).isNull();
@@ -159,7 +160,7 @@ class GbisRouteSourceTest {
             THREE_STATIONS_JSON.replace("\"turnYn\":\"Y\"", "\"turnYn\":\"N\""));
 
         // when
-        final GbisRouteResult actual = source.read(ROUTE_3330);
+        final RouteSourceResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(((Success) actual).route().stops().turnSequence()).isNull();
@@ -173,7 +174,7 @@ class GbisRouteSourceTest {
                 "\"stationSeq\":3,\"turnSeq\":2,\"turnYn\":\"Y\""));
 
         // when
-        final GbisRouteResult actual = source.read(ROUTE_3330);
+        final RouteSourceResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(((Success) actual).route().stops().turnSequence()).isNull();
@@ -186,7 +187,7 @@ class GbisRouteSourceTest {
             THREE_STATIONS_JSON.replace("\"stationSeq\":1,\"turnSeq\":2,", "\"stationSeq\":1,"));
 
         // when
-        final GbisRouteResult actual = source.read(ROUTE_3330);
+        final RouteSourceResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(((Success) actual).route().stops().turnSequence()).isNull();
@@ -200,7 +201,7 @@ class GbisRouteSourceTest {
                 "\"stationSeq\":1,\"turnSeq\":3,"));
 
         // when
-        final GbisRouteResult actual = source.read(ROUTE_3330);
+        final RouteSourceResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(((Success) actual).route().stops().turnSequence()).isNull();
@@ -216,7 +217,7 @@ class GbisRouteSourceTest {
                     "\"stationSeq\":3,\"turnSeq\":2,\"turnYn\":\"Y\""));
 
         // when
-        final GbisRouteResult actual = source.read(ROUTE_3330);
+        final RouteSourceResult actual = source.read(ROUTE_3330);
 
         // then 잘못 고른 순번으로 판본을 열면 정류소 절반의 방향이 뒤집힌다
         assertThat(((Success) actual).route().stops().turnSequence()).isNull();
@@ -229,7 +230,7 @@ class GbisRouteSourceTest {
             .andRespond(withSuccess(ROUTE_INFO_JSON.formatted(1), MediaType.APPLICATION_JSON));
 
         // when
-        final GbisRouteResult actual = source.read(ROUTE_3330);
+        final RouteSourceResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(((Failed) actual).reason()).contains("기본 정보를 읽지 못했다");
@@ -241,7 +242,7 @@ class GbisRouteSourceTest {
         respondWith(ROUTE_INFO_JSON.formatted(0), NO_STATIONS_JSON);
 
         // when
-        final GbisRouteResult actual = source.read(ROUTE_3330);
+        final RouteSourceResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(((Failed) actual).reason()).contains("경유 정류소를 읽지 못했다");
@@ -253,7 +254,7 @@ class GbisRouteSourceTest {
         respondWith(ROUTE_INFO_JSON.formatted(0), REPEATED_SEQUENCE_JSON);
 
         // when
-        final GbisRouteResult actual = source.read(ROUTE_3330);
+        final RouteSourceResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(((Failed) actual).reason()).contains("정류소 목록이 성립하지 않는다");
@@ -266,7 +267,7 @@ class GbisRouteSourceTest {
             .andRespond(withSuccess(PORTAL_ERROR_XML, MediaType.APPLICATION_XML));
 
         // when
-        final GbisRouteResult actual = source.read(ROUTE_3330);
+        final RouteSourceResult actual = source.read(ROUTE_3330);
 
         // then
         assertThat(((Failed) actual).reason()).contains("기본 정보를 읽지 못했다");

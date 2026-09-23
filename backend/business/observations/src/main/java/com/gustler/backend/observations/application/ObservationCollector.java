@@ -4,12 +4,13 @@ import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.gbis.api.GbisLocationSource;
 import com.gustler.backend.observations.domain.ObservationAttempt;
 import com.gustler.backend.observations.domain.ObservationBatchReservation;
-import com.gustler.backend.routecatalog.application.RouteCatalogLoader;
+import com.gustler.backend.routecatalog.api.CurrentRouteVersion;
+import com.gustler.backend.routecatalog.api.RouteReference;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.OptionalLong;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -28,13 +29,13 @@ public class ObservationCollector {
 
     private static final Logger log = LoggerFactory.getLogger(ObservationCollector.class);
 
-    private final RouteCatalogLoader routeCatalogLoader;
+    private final CurrentRouteVersion routeCatalogLoader;
     private final ObservationBatchLedger batchLedger;
     private final GbisLocationSource locationSource;
     private final Clock clock;
 
     public ObservationCollector(
-        RouteCatalogLoader routeCatalogLoader,
+        CurrentRouteVersion routeCatalogLoader,
         ObservationBatchLedger batchLedger,
         GbisLocationSource locationSource,
         Clock clock
@@ -50,13 +51,13 @@ public class ObservationCollector {
     ) {
         OffsetDateTime scheduledAt = now();
 
-        OptionalLong routeVersionId = routeCatalogLoader.currentVersionOf(upstreamRouteId, scheduledAt);
+        Optional<RouteReference> routeVersionId = routeCatalogLoader.currentVersionOf(upstreamRouteId, scheduledAt);
         if (routeVersionId.isEmpty()) {
             log.warn("지금 쓰는 노선 판본이 없어 수집을 건너뛴다. 노선={}", upstreamRouteId);
             return;
         }
 
-        collectOn(routeVersionId.getAsLong(), upstreamRouteId, scheduledAt);
+        collectOn(routeVersionId.orElseThrow().routeVersionId(), upstreamRouteId, scheduledAt);
     }
 
     private void collectOn(

@@ -4,7 +4,7 @@ import java.util.OptionalLong;
 
 public interface CurrentRouteVersionRepository {
 
-    /** 그 노선이 지금 쓰는 판본. 아직 연 적이 없으면 비어 있다. */
+    /** 현재 사용하는 노선 버전의 ID. 생성된 버전이 없으면 빈 결과를 반환한다. */
     OptionalLong findIdOf(
         String upstreamRouteId
     );

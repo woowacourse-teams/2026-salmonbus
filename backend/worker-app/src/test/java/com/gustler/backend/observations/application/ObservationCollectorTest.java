@@ -7,8 +7,8 @@ import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.UpstreamRoute;
 import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
-import com.gustler.backend.routecatalog.infrastructure.source.GbisRouteResult;
-import com.gustler.backend.routecatalog.infrastructure.source.GbisRouteSource;
+import com.gustler.backend.routecatalog.domain.RouteSourceResult;
+import com.gustler.backend.routecatalog.infrastructure.gbis.GbisRouteSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -89,7 +89,8 @@ class ObservationCollectorTest {
     void 상류_대역과_시계를_세운다() {
         given(clock.getZone()).willReturn(KOREA);
         given(clock.instant()).willReturn(TICK);
-        given(routeSource.read(ROUTE_3330)).willReturn(new GbisRouteResult.Success(upstreamRoute()));
+        given(routeSource.requiredCallsPerRead()).willReturn(2);
+        given(routeSource.read(ROUTE_3330)).willReturn(new RouteSourceResult.Success(upstreamRoute()));
         given(locationSource.read(ROUTE_3330)).willReturn(new Success(QUERY_TIME, List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217))));
         collectorLog = startCapturingCollectorLog();
@@ -257,7 +258,7 @@ class ObservationCollectorTest {
     void 노선_행_확보와_판본_열기가_한_트랜잭션에서_끝난다() {
         // given 정류소 이름이 열 길이를 넘어 판본의 정류소를 넣는 데서 터진다
         given(routeSource.read(ROUTE_3330))
-            .willReturn(new GbisRouteResult.Success(routeWithTooLongStopName()));
+            .willReturn(new RouteSourceResult.Success(routeWithTooLongStopName()));
 
         // when
         assertThatThrownBy(() -> collector.collectOnce(ROUTE_3330)).isInstanceOf(RuntimeException.class);
@@ -329,7 +330,7 @@ class ObservationCollectorTest {
     @Test
     void 노선정보를_못_읽으면_판을_열지_않는다() {
         // given
-        given(routeSource.read(ROUTE_3330)).willReturn(new GbisRouteResult.Failed("상류가 답하지 않았다"));
+        given(routeSource.read(ROUTE_3330)).willReturn(new RouteSourceResult.Failed("상류가 답하지 않았다"));
 
         // when
         collector.collectOnce(ROUTE_3330);
@@ -341,7 +342,7 @@ class ObservationCollectorTest {
     @Test
     void 노선정보를_못_읽으면_위치정보_한도를_안_쓴다() {
         // given
-        given(routeSource.read(ROUTE_3330)).willReturn(new GbisRouteResult.Failed("상류가 답하지 않았다"));
+        given(routeSource.read(ROUTE_3330)).willReturn(new RouteSourceResult.Failed("상류가 답하지 않았다"));
 
         // when
         collector.collectOnce(ROUTE_3330);

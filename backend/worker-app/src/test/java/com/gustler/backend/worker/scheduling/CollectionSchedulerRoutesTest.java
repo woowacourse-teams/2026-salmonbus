@@ -5,8 +5,8 @@ import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.UpstreamRoute;
 import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
-import com.gustler.backend.routecatalog.infrastructure.source.GbisRouteResult;
-import com.gustler.backend.routecatalog.infrastructure.source.GbisRouteSource;
+import com.gustler.backend.routecatalog.domain.RouteSourceResult;
+import com.gustler.backend.routecatalog.infrastructure.gbis.GbisRouteSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
@@ -55,7 +55,8 @@ class CollectionSchedulerRoutesTest {
 
     @BeforeEach
     void 상류_대역을_세운다() {
-        given(routeSource.read(ROUTE_3330)).willReturn(new GbisRouteResult.Success(upstreamRoute()));
+        given(routeSource.requiredCallsPerRead()).willReturn(2);
+        given(routeSource.read(ROUTE_3330)).willReturn(new RouteSourceResult.Success(upstreamRoute()));
         given(locationSource.read(ROUTE_3330)).willReturn(new Success(QUERY_TIME, List.of(
             new BusLocation("경기70아0001", "204000206", 0, ROUTE_3330, 11,
                 STOP_205000217, 1, 2, 43, 3, 1))));

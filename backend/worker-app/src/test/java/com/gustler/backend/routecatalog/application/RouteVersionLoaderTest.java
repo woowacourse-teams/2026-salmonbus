@@ -197,6 +197,35 @@ class RouteVersionLoaderTest {
         assertThat(actual).isInstanceOf(IllegalStateException.class);
     }
 
+    @Test
+    void 종료된_판본과_정류소가_같아도_그_판본의_시간표를_수정하지_않는다() {
+        long versionId = loader.load(routeId, threeStops(), TIMETABLE_1650, FIRST_READ_AT);
+        entityManager.flush();
+        jdbcClient.sql("UPDATE route_version SET valid_to = ? WHERE id = ?")
+            .params(SECOND_READ_AT, versionId).update();
+        entityManager.clear();
+
+        Throwable failure = catchThrowable(
+            () -> loader.load(routeId, threeStops(), TIMETABLE_1650_LAST_BUS_MOVED, THIRD_READ_AT));
+
+        assertThat(failure).isInstanceOf(IllegalStateException.class);
+        assertThat(upLastDepartureTimeOf(versionId)).isEqualTo(TIMETABLE_1650.upLastDepartureTime());
+    }
+
+    @Test
+    void 종료된_판본과_내용이_같아도_현재_판본으로_반환하지_않는다() {
+        long versionId = loader.load(routeId, threeStops(), TIMETABLE_1650, FIRST_READ_AT);
+        entityManager.flush();
+        jdbcClient.sql("UPDATE route_version SET valid_to = ? WHERE id = ?")
+            .params(SECOND_READ_AT, versionId).update();
+        entityManager.clear();
+
+        Throwable failure = catchThrowable(
+            () -> loader.load(routeId, threeStops(), TIMETABLE_1650, THIRD_READ_AT));
+
+        assertThat(failure).isInstanceOf(IllegalStateException.class);
+    }
+
     private void insertClosedVersion() {
         jdbcClient.sql("""
                 INSERT INTO route_version (route_id, content_digest, valid_from, valid_to)
