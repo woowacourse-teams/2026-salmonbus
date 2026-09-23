@@ -3,6 +3,7 @@ package com.gustler.backend.routecatalog.infrastructure.gbis;
 import com.gustler.backend.routecatalog.domain.RouteSourceResult;
 
 import com.gustler.backend.gbis.api.GbisApiCaller;
+import com.gustler.backend.gbis.api.GbisRouteInfoSource;
 import com.gustler.backend.routecatalog.domain.RouteStop;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.StopDirection;
@@ -77,12 +78,12 @@ class GbisRouteSourceTest {
         final RestClient.Builder builder = RestClient.builder().baseUrl(BASE_URL);
         openApi = MockRestServiceServer.bindTo(builder).build();
         ObjectMapper objectMapper = new ObjectMapper();
-        source = new GbisRouteSource(
+        source = new GbisRouteSource(new GbisRouteInfoSource(
             new GbisApiCaller(
                 builder.build(),
                 new GbisClientOptions(BASE_URL, SERVICE_KEY),
                 objectMapper),
-            objectMapper);
+            objectMapper));
     }
 
     @Test

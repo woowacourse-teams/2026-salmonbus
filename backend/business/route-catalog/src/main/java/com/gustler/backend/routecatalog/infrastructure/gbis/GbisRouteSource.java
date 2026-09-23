@@ -1,6 +1,7 @@
 package com.gustler.backend.routecatalog.infrastructure.gbis;
 
-import com.gustler.backend.gbis.api.GbisApiCaller;
+import com.gustler.backend.gbis.api.GbisRouteInfoSource;
+import com.gustler.backend.gbis.api.GbisRouteResult;
 import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteSource;
 import com.gustler.backend.routecatalog.domain.RouteSourceResult;
@@ -8,14 +9,9 @@ import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.UpstreamRoute;
 import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
 
-import com.gustler.backend.gbis.api.GbisRawResponse.NotReceived;
-import com.gustler.backend.gbis.api.GbisRawResponse.PortalRejected;
-import com.gustler.backend.gbis.api.GbisRawResponse.Received;
 import com.gustler.backend.routecatalog.domain.RouteSourceResult.Failed;
 import com.gustler.backend.routecatalog.domain.RouteSourceResult.Success;
-import com.gustler.backend.gbis.api.dto.BusRouteInfoResponse;
 import com.gustler.backend.gbis.api.dto.BusRouteInfoResponse.RouteInfoItem;
-import com.gustler.backend.gbis.api.dto.BusRouteStationResponse;
 import com.gustler.backend.gbis.api.dto.BusRouteStationResponse.RouteStationItem;
 import java.util.HashSet;
 import java.util.List;
@@ -23,59 +19,44 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.ObjectMapper;
 
 /**
- * 노선 하나의 기본 정보와 경유 정류소를 상류에서 읽는다.
+ * 상류가 준 노선 값을 카탈로그가 쓰는 업무 값으로 바꾼다.
  *
- * <p>상류가 둘을 따로 준다. 표시명 · 기점 · 종점 · 첫차 · 막차는 노선정보에 있고, 정류소 목록과
- * <b>회차 순번</b>은 노선정류소 조회에 있다. 그래서 한 노선을 읽는 데 호출을 두 번 쓴다.
+ * <p>통신과 응답 해석은 gbis-client 의 {@link GbisRouteInfoSource} 가 맡는다. 여기서는 회차 순번을
+ * 고르고 정류소 목록과 시간표를 만든다. 성립하지 않는 응답은 판본을 열지 않고 사유를 남긴다.
  */
 @Component
 public class GbisRouteSource implements RouteSource {
 
     private static final Logger log = LoggerFactory.getLogger(GbisRouteSource.class);
 
-    /** 한 노선을 읽는 데 드는 상류 호출 수. 장부에서 이만큼 자리를 잡고 부른다. */
-    public static final int UPSTREAM_CALLS_PER_READ = 2;
-
-    private static final String ROUTE_INFO_PATH = "/busrouteservice/v2/getBusRouteInfoItemv2";
-    private static final String ROUTE_STATION_PATH = "/busrouteservice/v2/getBusRouteStationListv2";
-
-    private static final int RESULT_CODE_SUCCESS = 0;
-
-    private final GbisApiCaller caller;
-    private final ObjectMapper objectMapper;
+    private final GbisRouteInfoSource routes;
 
     public GbisRouteSource(
-        GbisApiCaller caller,
-        ObjectMapper objectMapper
+        GbisRouteInfoSource routes
     ) {
-        this.caller = caller;
-        this.objectMapper = objectMapper;
+        this.routes = routes;
     }
 
     @Override
     public int requiredCallsPerRead() {
-        return UPSTREAM_CALLS_PER_READ;
+        return GbisRouteInfoSource.UPSTREAM_CALLS_PER_READ;
     }
 
     @Override
     public RouteSourceResult read(
         final String routeId
     ) {
-        RouteInfoItem routeInfo = readRouteInfo(routeId);
-        if (routeInfo == null) {
-            return new Failed("노선 %s 의 기본 정보를 읽지 못했다".formatted(routeId));
-        }
-
-        List<RouteStationItem> stations = readStations(routeId);
-        if (stations == null || stations.isEmpty()) {
-            return new Failed("노선 %s 의 경유 정류소를 읽지 못했다".formatted(routeId));
-        }
-
-        return toSuccess(routeId, routeInfo, stations);
+        return switch (routes.read(routeId)) {
+            case GbisRouteResult.RouteInfoUnavailable ignored ->
+                new Failed("노선 %s 의 기본 정보를 읽지 못했다".formatted(routeId));
+            case GbisRouteResult.StationsUnavailable ignored ->
+                new Failed("노선 %s 의 경유 정류소를 읽지 못했다".formatted(routeId));
+            case GbisRouteResult.Success read when read.stations().isEmpty() ->
+                new Failed("노선 %s 의 경유 정류소를 읽지 못했다".formatted(routeId));
+            case GbisRouteResult.Success read -> toSuccess(routeId, read.routeInfo(), read.stations());
+        };
     }
 
     private RouteSourceResult toSuccess(
@@ -167,55 +148,7 @@ public class GbisRouteSource implements RouteSource {
             routeInfo.downLastDepartureTime());
     }
 
-    private RouteInfoItem readRouteInfo(
-        String routeId
-    ) {
-        BusRouteInfoResponse response = read(ROUTE_INFO_PATH, routeId, BusRouteInfoResponse.class);
-        if (response == null
-            || response.response() == null
-            || response.response().header() == null
-            || response.response().header().resultCode() != RESULT_CODE_SUCCESS
-            || response.response().body() == null) {
-            return null;
-        }
-        return response.response().body().routeInfo();
-    }
 
-    private List<RouteStationItem> readStations(
-        String routeId
-    ) {
-        BusRouteStationResponse response = read(ROUTE_STATION_PATH, routeId, BusRouteStationResponse.class);
-        if (response == null
-            || response.response() == null
-            || response.response().header() == null
-            || response.response().header().resultCode() != RESULT_CODE_SUCCESS
-            || response.response().body() == null) {
-            return null;
-        }
-        return response.response().body().stations();
-    }
 
-    /** 응답이 안 왔거나 포털이 막았거나 읽지 못하면 비운다. 부른 쪽이 그 노선을 건너뛴다. */
-    private <T> T read(
-        String path,
-        String routeId,
-        Class<T> responseType
-    ) {
-        return switch (caller.get(path, routeId)) {
-            case NotReceived ignored -> null;
-            case PortalRejected ignored -> null;
-            case Received received -> parse(received.body(), responseType);
-        };
-    }
 
-    private <T> T parse(
-        String body,
-        Class<T> responseType
-    ) {
-        try {
-            return objectMapper.readValue(body, responseType);
-        } catch (final JacksonException e) {
-            return null;
-        }
-    }
 }
