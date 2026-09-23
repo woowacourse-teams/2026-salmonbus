@@ -24,11 +24,11 @@ cd backend
 ./gradlew build --no-daemon --console=plain --max-workers=1
 ```
 
-JUnit XML을 실제 9개 프로젝트의 `test`와 common의 `sal134MigrationTest`에서 집계했다. 삭제한 migration-tool의 이전 build 산출물은 집계하지 않았다. 총 **1,374개 테스트**, 실패·오류·스킵은 모두 **0개**다. `clean build`로 68개 작업을 모두 실행했고 결과는 `BUILD SUCCESSFUL`이다. 아래 분포는 업무 테스트를 소유 모듈로 옮긴 뒤의 값이다.
+JUnit XML을 실제 9개 프로젝트의 `test`와 common의 `sal134MigrationTest`에서 집계했다. 삭제한 migration-tool의 이전 build 산출물은 집계하지 않았다. 총 **1,380개 테스트**, 실패·오류·스킵은 모두 **0개**다. `clean build`로 68개 작업을 모두 실행했고 결과는 `BUILD SUCCESSFUL`이다. 아래 분포는 업무 테스트를 소유 모듈로 옮긴 뒤의 값이다.
 
 | 검증 대상 | 테스트 수 |
 | --- | ---: |
-| api-app | 205 |
+| api-app | 211 |
 | worker-app | 53 |
 | maintenance-app | 32 |
 | common | 49 |
@@ -38,7 +38,7 @@ JUnit XML을 실제 9개 프로젝트의 `test`와 common의 `sal134MigrationTes
 | route-catalog | 58 |
 | api-call-quota | 37 |
 | gbis-client | 30 |
-| 합계 | 1,374 |
+| 합계 | 1,380 |
 
 구현 착수 전의 기준 빌드 1,158개와 위 결과는 다른 시점의 결과다. 이관 전용 테스트를 제거하고 업무 규칙·동시성·실행 검증을 추가했으므로 두 수치의 차이를 신규 테스트 수로 해석하지 않는다. 업무 테스트를 소유 모듈로 옮기기 전 같은 명령의 결과는 1,355개였다.
 
@@ -143,7 +143,7 @@ worker-app에 남아 있던 업무 테스트를 각 업무 모듈로 옮겼다. 
 - 이관 직후 api-call-quota의 테스트 구성이 자동구성을 손으로 나열하면서 Testcontainers 접속 정보를 등록하는 `ServiceConnectionAutoConfiguration`과 `TestcontainersPropertySourceAutoConfiguration`을 빠뜨려 `CallQuotaLedgerTest` 20개가 컨텍스트 적재에 실패했다. 두 자동구성을 넣어 해소했고, 아래 감사 반영에서 형제 모듈과 같은 `@EnableAutoConfiguration` 방식으로 다시 맞췄다.
 - 이관이 들여온 불필요한 `project(':common')` 직접 의존 3건을 지우고, 컴파일에서 참조하지 않는 `spring-boot-flyway`를 `testRuntimeOnly`로 내렸다. `RuntimeProcessSeparationTest`의 모듈 목록에서 존재하지 않는 이름 3개를 뺐다. 옮기고 남은 빈 디렉터리도 정리했다.
 
-전체 빌드는 1,374개 통과, 실패·오류·스킵 0이다. 한 차례 forecasting의 `ModelActivationBoundaryTest` 3개가 테스트용 PostgreSQL 접속 시간초과로 실패했고, 코드를 바꾸지 않고 다시 실행해 692개 전부 통과했다. 실패 원인을 코드 결함이 아니라고 단정하지 않고 재실행 결과를 함께 남긴다.
+전체 빌드는 1,380개 통과, 실패·오류·스킵 0이다. 한 차례 forecasting의 `ModelActivationBoundaryTest` 3개가 테스트용 PostgreSQL 접속 시간초과로 실패했고, 코드를 바꾸지 않고 다시 실행해 692개 전부 통과했다. 실패 원인을 코드 결함이 아니라고 단정하지 않고 재실행 결과를 함께 남긴다.
 
 ## 전수 감사 지적 반영
 
@@ -206,6 +206,23 @@ worker-app에 남아 있던 업무 테스트를 각 업무 모듈로 옮겼다. 
 - 한 노선을 읽는 데 드는 상류 호출 수도 프로토콜 사실이라 `gbis-client`로 옮겼다.
 - route-catalog의 `jackson-databind`가 `src/main`에서 쓰이지 않게 되어 `testImplementation`으로 내렸다. 책임이 옮겨진 것을 의존으로도 확인할 수 있다.
 - 기존 `GbisRouteSourceTest` 15개는 생성자 한 줄만 바꿔 그대로 둔다. HTTP 응답부터 업무 값까지 한 번에 검증하므로 단언을 하나도 줄이지 않았다.
+
+## API 오류를 계약과 요청 처리 장치로 가름
+
+`api.http` 한 패키지가 밖으로 나가는 계약과 그 계약을 요청·응답에 싣는 장치를 함께 담고 있었다. 그래서 조회 계층이 무엇까지 알아도 되는지를 패키지로 말할 수 없었다. 계층 규칙 `applicationDoesNotDependOnHttp`는 이름이 Http였지만 실제로 보는 것은 `..controller..`와 `..dto..`뿐이어서, 같은 이름의 `api.http`는 어느 규칙의 그물에도 없었다. 응용이 `ServiceUnavailableException`을, 저장 어댑터 셋이 같은 예외를 던지는 것을 아무것도 붙잡지 않았다.
+
+- 계약 4개(`ApiException`, `ErrorCode`, `ErrorResponse`, `ServiceUnavailableException`)를 `com.gustler.backend.api.error`로 옮겼다. [제안서](../04-제안서.md)의 PR 6과 [계층안 검토](../05-도메인주도-계층안-검토.md)의 V1이 정한 이름과 구성 그대로다.
+- `api.http`에는 요청 처리 장치 일곱이 남는다. 예외 처리기, 오류 컨트롤러, 컨테이너 Valve와 그 설정, 요청 ID와 필터, 오류 헤더다.
+- 계층 규칙 다섯을 더했다. 요청 처리 장치는 자기 패키지 밖에서 쓰이지 않는다, 조회 세 계층은 웹 기술을 직접 다루지 않는다, 계약 패키지에는 요청 처리가 들어오지 않는다, `api` 아래 `*Exception`은 모두 `ApiException`을 상속한다, 기능 루트는 계층 클래스나 프레임워크 타입을 참조하지 않는다.
+- 이름이 약속을 못 지키던 `applicationDoesNotDependOnHttp`는 `readLayersDoNotDependOnWebAdapters`로 고치고 대상을 응용 하나에서 조회 세 계층으로 넓혔다. 저장 계층만 `..controller..`·`..dto..`로 나가는 길이 열려 있었다.
+- 규칙 다섯 각각에 위반을 실제로 심어 실패하는 것을 확인하고 지웠다. 통과만으로는 공허한 규칙과 구분되지 않는다.
+- 분석 범위를 `com.gustler.backend.api`에서 `com.gustler.backend`로 넓혔다. 역방향 의존을 보는 규칙은 범위 밖 의존자를 못 보는데, `ApiApplication`이 바로 그 범위 밖에 있다. 넓힌 뒤 실행 앱 패키지에서 `RequestId`를 부르는 클래스를 심어 규칙이 잡는 것을 확인했다.
+- `ErrorCode`는 `HttpStatus`를 그대로 든다. 도메인 순수성 규칙을 api-app까지 넓힐지는 갈림길 G11이고 결정은 worker-app만이다.
+- `ServiceUnavailableException`은 이름도 잡는 범위도 바꾸지 않았다. 어댑터의 예외 변환 통일은 갈림길 G7에서 별도 티켓으로 정해져 있다.
+
+main 12파일·test 7파일의 import가 바뀌었고 자바 코드의 다른 변경은 없다. HTTP 상태코드·JSON 필드·`code` 문자열·헤더가 만들어지는 경로를 한 줄도 고치지 않았다.
+
+작업 중에 `readPathDoesNotUseBusinessWriteModules`를 "업무 모듈이 클래스패스에 없어 언제나 공허하게 통과한다"는 이유로 한 번 지웠다가 되살렸다. 근거가 틀렸다. ArchUnit은 참조하는 쪽 바이트코드에서 타입 이름을 읽으므로 대상이 클래스패스에 없어도 위반을 잡는다. 그리고 대체 장치로 지목한 `verifyRuntimeProjects`는 런타임 클래스패스만 보므로 `compileOnly`로 들어온 의존을 통과시킨다. 실제로 `compileOnly project(':forecasting')`를 넣고 돌려 gradle 검사는 통과하고 ArchUnit 규칙만 잡는 것을 확인했다. 둘 다 둔다.
 
 ## 운영 적용 전에 확인할 것
 
