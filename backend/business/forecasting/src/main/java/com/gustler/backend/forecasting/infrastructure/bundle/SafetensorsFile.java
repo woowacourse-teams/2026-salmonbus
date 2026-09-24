@@ -1,11 +1,8 @@
 package com.gustler.backend.forecasting.infrastructure.bundle;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -42,16 +39,6 @@ final class SafetensorsFile {
         Map<String, Tensor> tensors
     ) {
         this.tensors = tensors;
-    }
-
-    static SafetensorsFile readFrom(
-        Path path
-    ) {
-        try {
-            return of(Files.readAllBytes(path));
-        } catch (IOException error) {
-            throw new BundleRejectedException("계수 파일을 읽지 못했다: " + path, error);
-        }
     }
 
     static SafetensorsFile of(

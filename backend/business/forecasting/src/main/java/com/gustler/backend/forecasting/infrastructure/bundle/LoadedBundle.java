@@ -67,9 +67,6 @@ public record LoadedBundle(
     }
 
     /** DB 배포와 준비된 모델의 모든 식별 정보를 비교한다. */
-    public boolean hasIdentityOf(ActiveModelDeployment deployment) {
-        return identity().equals(deployment.identity());
-    }
 
     public ModelIdentity identity() {
         BundleManifest manifest = coefficients.manifest();

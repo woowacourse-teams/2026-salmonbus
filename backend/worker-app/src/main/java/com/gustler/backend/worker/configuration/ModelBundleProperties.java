@@ -24,7 +24,4 @@ public record ModelBundleProperties(
     boolean promoteOnStart
 ) {
 
-    public boolean configured() {
-        return directory != null && !directory.isBlank();
-    }
 }

@@ -88,7 +88,7 @@ class ApiPackageBoundaryTest {
      * 조회 계층은 요청·응답 기술을 직접 다루지 않는다.
      *
      * <p>{@code org.springframework.http}까지 함께 막는다. 컨트롤러는 {@code CacheControl}과
-     * {@code ResponseEntity}를 쓰지만 그 아래 세 계층은 쓰지 않으며, 상태코드를 아는 자리가
+     * {@code ResponseEntity}를 쓰지만 그 아래 세 계층은 쓰지 않는다. 상태코드를 아는 코드가
      * 경계 밖으로 내려오지 않게 한다.
      */
     @ArchTest
@@ -114,7 +114,7 @@ class ApiPackageBoundaryTest {
         .that().haveSimpleNameEndingWith("Exception").and().resideInAPackage(PREFIX + ".")
         .should().beAssignableTo(ApiException.class);
 
-    /** 기능 루트는 그 기능의 경계 어휘만 둔다. 계층 클래스나 프레임워크 타입이 오면 자리를 잘못 잡은 것이다. */
+    /** 기능 루트는 그 기능의 경계 어휘만 둔다. 계층 클래스나 프레임워크 타입이 오면 잘못 놓인 것이다. */
     @ArchTest
     static final ArchRule featureRootsHoldOnlyBoundaryVocabulary = noClasses()
         .that().resideInAnyPackage(FEATURES.stream().map(PREFIX::concat).toArray(String[]::new))
