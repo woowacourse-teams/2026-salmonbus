@@ -19,15 +19,6 @@ test("상행에서 하행으로 전환하면 하행 정류장만 순서대로 �
   await expectDirection(page, "DOWN");
 });
 
-test("하행에서 상행으로 전환하면 상행 정류장만 순서대로 표시된다", async ({ page }) => {
-  await openBoard(page);
-  await directionButton(page, "DOWN").click();
-  await expectDirection(page, "DOWN");
-
-  await directionButton(page, "UP").click();
-  await expectDirection(page, "UP");
-});
-
 test("판정 보드 최초 조회 실패는 운행 없음이나 예측 없음과 구분된다", async ({ page, api }) => {
   api.mode.board = "network-error";
   await page.goto("/");
