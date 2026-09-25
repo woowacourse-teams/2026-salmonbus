@@ -2,6 +2,10 @@ server:
   port: 8081
   address: 127.0.0.1
 
+logging:
+  pattern:
+    dateformat: "yyyy-MM-dd'T'HH:mm:ss.SSSXXX,Asia/Seoul"
+
 spring:
   application:
     name: backend-worker
