@@ -1,6 +1,8 @@
 package com.gustler.backend.migration.db;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import com.gustler.backend.migration.MigrationException;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -18,7 +20,7 @@ class HistoricalSchemaTest extends PostgresMigrationTestSupport {
     @Test
     void additiveSchemaAppliesWithoutChangingApplicationFlywayHistory() throws Exception {
         try (Connection connection = connection(); Statement statement = connection.createStatement()) {
-            assertThat(count(statement, "SELECT count(*) FROM flyway_schema_history WHERE success")).isEqualTo(21);
+            assertThat(count(statement, "SELECT count(*) FROM flyway_schema_history WHERE success")).isEqualTo(22);
             assertThat(count(statement,
                 "SELECT count(*) FROM historical_import_schema_history WHERE success AND type = 'SQL'"))
                 .isEqualTo(4);
@@ -56,6 +58,31 @@ class HistoricalSchemaTest extends PostgresMigrationTestSupport {
                 rows.next();
                 assertThat(rows.getString("column_default")).contains("LIVE");
                 assertThat(rows.getString("is_nullable")).isEqualTo("NO");
+            }
+        }
+    }
+
+    @Test
+    void legacyWritesAreRejectedAfterIncrementalProcessingStarts() throws Exception {
+        var schema = new HistoricalSchema();
+        schema.requireNoIncrementalStatistics(database);
+        try (Connection connection = connection(); Statement statement = connection.createStatement()) {
+            statement.execute("""
+                INSERT INTO route(public_route_id,source_id,source_route_id,display_name,start_stop_name,end_stop_name)
+                VALUES('guard-test','GBIS','guard-test','test','start','end')
+                """);
+            long version;
+            try (ResultSet rows = statement.executeQuery("""
+                INSERT INTO route_version(route_id,content_digest,valid_from)
+                SELECT id,repeat('0',64),CURRENT_TIMESTAMP FROM route WHERE public_route_id='guard-test' RETURNING id
+                """)) { rows.next(); version = rows.getLong(1); }
+            statement.execute("INSERT INTO stop_demand_baseline(route_version_id) VALUES (" + version + ")");
+            try {
+                assertThatThrownBy(() -> schema.requireNoIncrementalStatistics(database))
+                    .isInstanceOf(MigrationException.class)
+                    .hasMessage("INCREMENTAL_STATISTICS_ACTIVE_LEGACY_WRITE_UNSUPPORTED");
+            } finally {
+                statement.execute("DELETE FROM stop_demand_baseline WHERE route_version_id=" + version);
             }
         }
     }

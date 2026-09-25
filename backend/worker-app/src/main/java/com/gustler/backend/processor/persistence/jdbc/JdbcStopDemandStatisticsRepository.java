@@ -55,15 +55,26 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
                cell.sample_count,
                cell.day_count
         FROM (
-            SELECT COALESCE(MAX(revision), 0) AS revision
-            FROM stop_demand_statistics
-            WHERE route_version_id = :routeVersionId
-              AND calculation_version = :calculationVersion
-              AND data_until <= :observedAt
-              AND quality_revision = (
-                  SELECT q.quality_revision FROM route_version v
-                  JOIN route q ON q.id = v.route_id WHERE v.id = :routeVersionId)
-              AND NOT EXISTS (SELECT 1 FROM trip_quality_rebuild r
+            SELECT COALESCE(MAX(revision), 0) AS revision FROM (
+                SELECT MAX(legacy.revision) AS revision FROM stop_demand_statistics legacy
+                WHERE route_version_id = :routeVersionId AND calculation_version = :calculationVersion
+                  AND data_until <= :observedAt
+                  AND quality_revision = (
+                      SELECT q.quality_revision FROM route_version v
+                      JOIN route q ON q.id = v.route_id WHERE v.id = :routeVersionId)
+                  AND NOT EXISTS(SELECT 1 FROM stop_demand_publication publication
+                      WHERE publication.route_version_id=legacy.route_version_id
+                        AND publication.calculation_version=legacy.calculation_version
+                        AND publication.revision=legacy.revision)
+                UNION ALL
+                SELECT MAX(revision) FROM stop_demand_publication
+                WHERE route_version_id = :routeVersionId AND calculation_version = :calculationVersion
+                  AND data_until <= :observedAt AND computed_at <= :observedAt
+                  AND quality_revision = (
+                      SELECT q.quality_revision FROM route_version v
+                      JOIN route q ON q.id = v.route_id WHERE v.id = :routeVersionId)
+            ) candidates
+            WHERE NOT EXISTS (SELECT 1 FROM trip_quality_rebuild r
                               WHERE r.route_version_id = :routeVersionId AND NOT r.completed)
         ) generation
         LEFT JOIN stop_demand_statistics cell
@@ -81,10 +92,13 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
      * 라벨이 한 시간대에만 있던 판에서 번호가 갈린다.
      */
     private static final String SELECT_CURRENT_REVISION = """
-        SELECT COALESCE(MAX(revision), 0)
-        FROM stop_demand_statistics
-        WHERE route_version_id = :routeVersionId
-          AND calculation_version = :calculationVersion
+        SELECT COALESCE(MAX(revision),0) FROM (
+            SELECT MAX(revision) AS revision FROM stop_demand_statistics
+            WHERE route_version_id=:routeVersionId AND calculation_version=:calculationVersion
+            UNION ALL
+            SELECT MAX(revision) FROM stop_demand_publication
+            WHERE route_version_id=:routeVersionId AND calculation_version=:calculationVersion
+        ) generations
         """;
 
     /**

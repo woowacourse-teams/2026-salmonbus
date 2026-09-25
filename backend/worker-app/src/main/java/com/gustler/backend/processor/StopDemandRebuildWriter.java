@@ -140,7 +140,10 @@ public class StopDemandRebuildWriter {
                 SELECT route_version_id,vehicle_id,arrived_hour_start,target_stop_order,sample_count,arrival_seats_sum,net_boarding_sum FROM page
                 ON CONFLICT(route_version_id,vehicle_id,arrived_hour_start,target_stop_order) DO UPDATE SET
                     sample_count=EXCLUDED.sample_count,arrival_seats_sum=EXCLUDED.arrival_seats_sum,net_boarding_sum=EXCLUDED.net_boarding_sum
-                RETURNING 1
+                RETURNING route_version_id,vehicle_id
+            ), registered AS (
+                INSERT INTO stop_demand_vehicle SELECT DISTINCT route_version_id,vehicle_id FROM copied
+                ON CONFLICT DO NOTHING RETURNING 1
             ) SELECT count(*) AS size, COALESCE(max(id),:cursor) AS cursor FROM page
             """).param("request", p.request()).param("cursor", p.cursor())
             .query((rs,n) -> new Page(rs.getInt("size"),rs.getLong("cursor"))).single();

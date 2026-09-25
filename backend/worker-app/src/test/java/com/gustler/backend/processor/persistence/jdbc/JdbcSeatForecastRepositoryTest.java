@@ -7,6 +7,15 @@ import com.gustler.backend.processor.ArrivalLabel;
 import com.gustler.backend.processor.StopDemandAccumulationWriter;
 import com.gustler.backend.processor.StopDemandRebuildWriter;
 import com.gustler.backend.processor.TripQualityRepository;
+import com.gustler.backend.processor.StopDemandPipeline;
+import com.gustler.backend.processor.StopDemandAggregator;
+import com.gustler.backend.processor.StopDemandStatisticsJob;
+import com.gustler.backend.processor.StopDemandGeneration;
+import com.gustler.backend.processor.TimeSlot;
+import java.time.Clock;
+import java.time.ZoneId;
+import static org.mockito.Mockito.when;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import com.gustler.backend.processor.ForecastSettlement;
 import com.gustler.backend.processor.PendingForecast;
 import com.gustler.backend.processor.SeatForecast;
@@ -80,6 +89,9 @@ class JdbcSeatForecastRepositoryTest {
 
     @Autowired private StopDemandRebuildWriter rebuild;
     @Autowired private TripQualityRepository quality;
+    @Autowired private StopDemandPipeline pipeline;
+    @MockitoBean private Clock clock;
+    private static final Instant PIPELINE_NOW = Instant.parse("2026-09-25T00:00:00Z");
 
     private long routeId;
     private long routeVersionId;
@@ -89,6 +101,8 @@ class JdbcSeatForecastRepositoryTest {
 
     @BeforeEach
     void 노선_판본과_정류소와_모델과_관측을_먼저_저장한다() {
+        when(clock.instant()).thenReturn(PIPELINE_NOW);
+        when(clock.getZone()).thenReturn(ZoneId.of("Asia/Seoul"));
         routeId = insertRoute();
         routeVersionId = insertRouteVersion(routeId);
         insertRouteStop(PASSED_STOP_ORDER);
@@ -572,6 +586,146 @@ class JdbcSeatForecastRepositoryTest {
             if (!rebuild.step(routeVersionId, vehicle)) { return; }
         }
         throw new AssertionError("정정이 100번의 작은 처리 안에 완료되지 않음");
+    }
+
+    @Test
+    void 초기_이관_중에는_기존_정상_통계를_쓰고_완성된_동일_결과로_교체한다() {
+        givenStatisticsSample();
+        var statistics = new JdbcStopDemandStatisticsRepository(jdbcClient);
+        var expected = StopDemandAggregator.aggregate(statistics.readHourlyTotals(routeVersionId, SCORED_AT), clock);
+        statistics.append(new StopDemandGeneration(routeVersionId, StopDemandStatisticsJob.CURRENT_CALCULATION_VERSION,
+            1, SCORED_AT, SCORED_AT, expected));
+
+        pipeline.step(routeVersionId);
+        assertThat(statistics.readAsOf(routeVersionId, TimeSlot.OTHER,
+            StopDemandStatisticsJob.CURRENT_CALCULATION_VERSION, PIPELINE_NOW).revision()).isEqualTo(1);
+        finishPipeline();
+
+        var actual = statistics.readAsOf(routeVersionId, TimeSlot.OTHER,
+            StopDemandStatisticsJob.CURRENT_CALCULATION_VERSION, PIPELINE_NOW);
+        assertThat(actual.revision()).isEqualTo(2);
+        assertThat(actual.cells()).containsExactly(expected.getFirst().cell());
+        assertThat(pendingSampleCount()).isZero();
+    }
+
+    @Test
+    void 누적_세대의_입력을_고정하면_도중에_정산된_자료는_다음_세대에서만_반영된다() {
+        givenStatisticsSample();
+        finishPipeline();
+        when(clock.instant()).thenReturn(PIPELINE_NOW.plusSeconds(21600));
+        addLateSample("before-capture",1);
+        for(int i=0;i<100;i++) {
+            if(pipeline.step(routeVersionId).status().equals("STARTED")) { break; }
+            if(i==99) { throw new AssertionError("통계 범위 고정에 도달하지 못함"); }
+        }
+        addLateSample("after-capture",2);
+
+        finishPipeline();
+
+        assertThat(jdbcClient.sql("SELECT sample_count FROM stop_demand_current_total WHERE route_version_id=?")
+            .param(routeVersionId).query(Long.class).single()).isEqualTo(2);
+        assertThat(jdbcClient.sql("SELECT count(*) FROM stop_demand_pending_sample WHERE route_version_id=?")
+            .param(routeVersionId).query(Integer.class).single()).isEqualTo(1);
+        when(clock.instant()).thenReturn(PIPELINE_NOW.plusSeconds(43200));
+        finishPipeline();
+        assertThat(jdbcClient.sql("SELECT sample_count FROM stop_demand_current_total WHERE route_version_id=?")
+            .param(routeVersionId).query(Long.class).single()).isEqualTo(3);
+    }
+
+    @Test
+    void 발행_도중_실패하면_통계와_완료_표시가_함께_취소된다() {
+        givenStatisticsSample();
+        for(int i=0;i<100;i++) {
+            pipeline.step(routeVersionId);
+            var phases=jdbcClient.sql("SELECT phase FROM stop_demand_run WHERE route_version_id=?")
+                .param(routeVersionId).query(String.class).list();
+            if(phases.contains("PUBLISH")) { break; }
+            if(i==99) { throw new AssertionError("발행 단계에 도달하지 못함"); }
+        }
+        jdbcClient.sql("ALTER TABLE stop_demand_publication ADD CONSTRAINT test_reject_publication CHECK(revision<0)").update();
+        jdbcClient.sql("SAVEPOINT before_publication").update();
+
+        assertThatThrownBy(()->pipeline.step(routeVersionId)).isInstanceOf(DataIntegrityViolationException.class);
+        jdbcClient.sql("ROLLBACK TO SAVEPOINT before_publication").update();
+
+        assertThat(jdbcClient.sql("SELECT count(*) FROM stop_demand_statistics WHERE route_version_id=?")
+            .param(routeVersionId).query(Integer.class).single()).isZero();
+        jdbcClient.sql("ALTER TABLE stop_demand_publication DROP CONSTRAINT test_reject_publication").update();
+        assertThat(pipeline.step(routeVersionId).status()).isEqualTo("COMPLETED");
+    }
+
+    @Test
+    void 빈_세대도_완료를_표현하고_완료_이전_관측에는_새_세대를_노출하지_않는다() {
+        finishPipeline();
+        var statistics=new JdbcStopDemandStatisticsRepository(jdbcClient);
+        var ready=statistics.readAsOf(routeVersionId,TimeSlot.MORNING,
+            StopDemandStatisticsJob.CURRENT_CALCULATION_VERSION,PIPELINE_NOW);
+        assertThat(ready.revision()).isEqualTo(1);
+        assertThat(ready.cells()).isEmpty();
+        jdbcClient.sql("UPDATE stop_demand_publication SET computed_at=? WHERE route_version_id=?")
+            .params(PIPELINE_NOW.plusSeconds(30).atOffset(java.time.ZoneOffset.UTC),routeVersionId).update();
+        assertThat(statistics.readAsOf(routeVersionId,TimeSlot.MORNING,
+            StopDemandStatisticsJob.CURRENT_CALCULATION_VERSION,PIPELINE_NOW).revision()).isZero();
+    }
+
+    @Test
+    void 여러_페이지와_날짜의_통계도_전체_SQL의_날짜_균등가중_결과와_같다() {
+        for(int stop=11;stop<=80;stop++) { insertRouteStop(stop); }
+        for(int day=0;day<2;day++) {
+            for(int stop=11;stop<=80;stop++) {
+                addStatisticsAt("page-"+day+"-"+stop,stop,
+                    OffsetDateTime.parse("2026-08-20T07:05:00+09:00").plusDays(day),
+                    day==0 ? 24 : 40,day==0 ? 6 : 20);
+            }
+        }
+        addStatisticsAt("extra-day-two",11,OffsetDateTime.parse("2026-08-21T07:10:00+09:00"),40,10);
+        var repository=new JdbcStopDemandStatisticsRepository(jdbcClient);
+        var expected=StopDemandAggregator.aggregate(repository.readHourlyTotals(routeVersionId,PIPELINE_NOW),clock);
+
+        finishPipeline();
+
+        var actual=repository.readAsOf(routeVersionId,TimeSlot.MORNING,
+            StopDemandStatisticsJob.CURRENT_CALCULATION_VERSION,PIPELINE_NOW);
+        assertThat(actual.cells()).hasSize(70);
+        for(var cell:actual.cells()) {
+            var reference=expected.stream().filter(x->x.cell().stopOrder()==cell.stopOrder()).findFirst().orElseThrow().cell();
+            assertThat(cell.sampleCount()).isEqualTo(reference.sampleCount());
+            assertThat(cell.dayCount()).isEqualTo(reference.dayCount());
+            assertThat(cell.averageFillRate()).isCloseTo(reference.averageFillRate(),org.assertj.core.data.Offset.offset(1e-12));
+            assertThat(cell.averageNetBoardingRate()).isCloseTo(reference.averageNetBoardingRate(),org.assertj.core.data.Offset.offset(1e-12));
+        }
+        assertThat(actual.cells().getFirst().averageFillRate()).isCloseTo(0.7375,org.assertj.core.data.Offset.offset(1e-12));
+    }
+
+    private void addStatisticsAt(String key,int stop,OffsetDateTime at,int before,int after) {
+        long sourceBatch=insertObservationBatch(key+"-source",at.minusSeconds(15));
+        long source=insertObservation(sourceBatch,"synthetic-bus",0,stop-1);
+        long arrivalBatch=insertObservationBatch(key+"-arrival",at);
+        long arrival=insertObservation(arrivalBatch,"synthetic-bus",0,stop);
+        jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats=? WHERE id=?").params(before,source).update();
+        jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats=? WHERE id=?").params(after,arrival).update();
+        jdbcSeatForecastRepository.save(List.of(new SeatForecast(source,routeVersionId,stop,1,
+            modelDeploymentId,DEMAND_STATISTICS_REVISION,0.41,0.38,12.5,at.minusSeconds(14).toInstant())));
+        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(source,stop,
+            new ArrivalLabel.Settled(arrival,after),at.plusSeconds(60).toInstant())));
+    }
+
+    private void finishPipeline() {
+        for(int i=0;i<200;i++) {
+            if(pipeline.step(routeVersionId).status().equals("COMPLETED")) { return; }
+        }
+        throw new AssertionError("통계가 200번의 작은 처리 안에 완료되지 않음");
+    }
+
+    private void addLateSample(String key,int seconds) {
+        long batch=insertObservationBatch(key,RESPONSE_RECEIVED_AT.plusSeconds(seconds));
+        long source=insertObservation(batch,VEHICLE_204000206,0,PASSED_STOP_ORDER);
+        jdbcSeatForecastRepository.save(List.of(new SeatForecast(source,routeVersionId,TARGET_STOP_ORDER,1,
+            modelDeploymentId,DEMAND_STATISTICS_REVISION,0.41,0.38,12.5,GENERATED_AT)));
+        long arrival=jdbcClient.sql("SELECT arrival_observation_id FROM seat_forecast WHERE vehicle_observation_id=? AND target_stop_order=?")
+            .params(vehicleObservationId,TARGET_STOP_ORDER).query(Long.class).single();
+        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(source,TARGET_STOP_ORDER,
+            new ArrivalLabel.Settled(arrival,0),SCORED_AT)));
     }
 
     private void givenStatisticsSample() {

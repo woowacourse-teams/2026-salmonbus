@@ -20,8 +20,7 @@ public class StopDemandAccumulationWriter {
 
     @Transactional(timeout = 2)
     public Result apply(long version, String vehicle, long afterInputId, long inputUntilId, Instant dataUntil) {
-        jdbc.sql("SELECT set_config('statement_timeout', '500ms', true), set_config('lock_timeout', '100ms', true)")
-            .query().singleRow();
+        StopDemandRebuildWriter.limits(jdbc);
         quality.lockRoute(version);
         boolean waiting = jdbc.sql("""
             SELECT EXISTS (
@@ -64,6 +63,10 @@ public class StopDemandAccumulationWriter {
                               arrival_seats_sum = total.arrival_seats_sum + EXCLUDED.arrival_seats_sum,
                               net_boarding_sum = total.net_boarding_sum + EXCLUDED.net_boarding_sum
                 RETURNING 1
+            ), registered AS (
+                INSERT INTO stop_demand_vehicle(route_version_id,vehicle_id)
+                SELECT :version,:vehicle WHERE EXISTS(SELECT 1 FROM applied)
+                ON CONFLICT DO NOTHING RETURNING 1
             ), removed AS (
                 DELETE FROM stop_demand_pending_sample pending USING page
                 WHERE pending.id = page.id AND page.scored_at <= :dataUntil
