@@ -18,4 +18,13 @@ describe("liveVehicleViewsFor", () => {
     expect(moving).toHaveLength(1);
     expect(arriving[0]?.key).toBe(moving[0]?.key);
   });
+
+  it("ID가 없는 차량 두 대가 같은 정류장에 같은 phase로 있어도 둘 다 그리고 key는 서로 다르다", () => {
+    const anonymous = liveVehiclesWith([vehicleAt(2, { vehicleId: null }), vehicleAt(2, { vehicleId: null })]);
+
+    const views = liveVehicleViewsFor(board, anonymous, "UP");
+
+    expect(views).toHaveLength(2);
+    expect(views[0]?.key).not.toBe(views[1]?.key);
+  });
 });
