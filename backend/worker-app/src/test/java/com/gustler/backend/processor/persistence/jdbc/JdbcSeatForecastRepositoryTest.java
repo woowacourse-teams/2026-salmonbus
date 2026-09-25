@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gustler.backend.processor.ArrivalLabel;
+import com.gustler.backend.processor.StopDemandAccumulationWriter;
 import com.gustler.backend.processor.ForecastSettlement;
 import com.gustler.backend.processor.PendingForecast;
 import com.gustler.backend.processor.SeatForecast;
@@ -71,6 +72,9 @@ class JdbcSeatForecastRepositoryTest {
 
     @Autowired
     private JdbcClient jdbcClient;
+
+    @Autowired
+    private StopDemandAccumulationWriter accumulation;
 
     private long routeId;
     private long routeVersionId;
@@ -409,6 +413,101 @@ class JdbcSeatForecastRepositoryTest {
 
         assertThat(readStoredLabel(target).scoringState()).isEqualTo("SETTLED");
         assertThat(pendingSampleCount()).isZero();
+    }
+
+    @Test
+    void 누적은_한_페이지씩_진행하고_재시도해도_합계가_늘지_않는다() {
+        givenStatisticsSample();
+        // 한 SQL 페이지보다 큰 합성 입력. 처리량 제한과 이어하기를 확인한다.
+        jdbcClient.sql("""
+            INSERT INTO stop_demand_pending_sample(route_version_id, prediction_observation_id,
+                arrival_observation_id, vehicle_id, target_stop_order, arrived_at, scored_at,
+                prediction_remaining_seats, arrival_remaining_seats)
+            SELECT route_version_id, prediction_observation_id, arrival_observation_id, vehicle_id,
+                target_stop_order, arrived_at, scored_at, prediction_remaining_seats, arrival_remaining_seats
+            FROM stop_demand_pending_sample CROSS JOIN generate_series(1, 128)
+            """).update();
+
+        var first = accumulation.apply(routeVersionId, VEHICLE_204000206, 0, Long.MAX_VALUE, SCORED_AT);
+        assertThat(first.applied()).isEqualTo(128);
+        assertThat(pendingSampleCount()).isEqualTo(1);
+        var second = accumulation.apply(routeVersionId, VEHICLE_204000206, first.nextInputId(), Long.MAX_VALUE, SCORED_AT);
+        assertThat(second.applied()).isEqualTo(1);
+        accumulation.apply(routeVersionId, VEHICLE_204000206, 0, Long.MAX_VALUE, SCORED_AT);
+
+        assertThat(jdbcClient.sql("SELECT sample_count FROM stop_demand_current_total WHERE route_version_id=?")
+            .param(routeVersionId).query(Long.class).single()).isEqualTo(129);
+        assertThat(jdbcClient.sql("SELECT net_boarding_sum FROM stop_demand_current_total WHERE route_version_id=?")
+            .param(routeVersionId).query(Long.class).single()).isEqualTo(129L * SEATS_LEFT);
+    }
+
+    @Test
+    void 하차로_잔여석이_늘어도_원합은_기존_통계와_같은_값을_복원한다() {
+        long arrival = insertArrivalObservation();
+        jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats=20 WHERE id=?").param(arrival).update();
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, 1, GENERATED_AT)));
+        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 20), SCORED_AT)));
+        var original = new JdbcStopDemandStatisticsRepository(jdbcClient)
+            .readHourlyTotals(routeVersionId, SCORED_AT).getFirst();
+
+        accumulation.apply(routeVersionId, VEHICLE_204000206, 0, Long.MAX_VALUE, SCORED_AT);
+
+        var sums = jdbcClient.sql("SELECT sample_count, arrival_seats_sum, net_boarding_sum FROM stop_demand_current_total WHERE route_version_id=?")
+            .param(routeVersionId).query((rs, n) -> new long[]{rs.getLong(1), rs.getLong(2), rs.getLong(3)}).single();
+        assertThat(sums).containsExactly(1, 20, -8);
+        assertThat(sums[0] - sums[1] / 20.0).isEqualTo(original.fillRateTotal());
+        assertThat((double) sums[2]).isEqualTo(original.netBoardingTotal());
+        assertThat(sums[0] * 20.0).isEqualTo(original.capacityTotal());
+    }
+
+    @Test
+    void 누적_롤백은_합계와_대기_자료를_함께_되돌린다() {
+        givenStatisticsSample();
+        jdbcClient.sql("SAVEPOINT before_accumulation").update();
+        accumulation.apply(routeVersionId, VEHICLE_204000206, 0, Long.MAX_VALUE, SCORED_AT);
+        assertThat(pendingSampleCount()).isZero();
+
+        jdbcClient.sql("ROLLBACK TO SAVEPOINT before_accumulation").update();
+
+        assertThat(pendingSampleCount()).isEqualTo(1);
+        assertThat(jdbcClient.sql("SELECT count(*) FROM stop_demand_current_total WHERE route_version_id=?")
+            .param(routeVersionId).query(Integer.class).single()).isZero();
+    }
+
+    @Test
+    void 누적_직전_품질이_바뀌면_자료를_남기고_정정을_요청한다() {
+        givenStatisticsSample();
+        jdbcClient.sql("UPDATE vehicle_one_way_trip SET status='EXCLUDED' WHERE start_observation_id=?")
+            .param(vehicleObservationId).update();
+
+        var result = accumulation.apply(routeVersionId, VEHICLE_204000206, 0, Long.MAX_VALUE, SCORED_AT);
+
+        assertThat(result.waitingForRebuild()).isTrue();
+        assertThat(result.applied()).isZero();
+        assertThat(pendingSampleCount()).isEqualTo(1);
+        assertThat(jdbcClient.sql("SELECT count(*) FROM stop_demand_rebuild_request WHERE route_version_id=?")
+            .param(routeVersionId).query(Integer.class).single()).isEqualTo(1);
+        assertThat(accumulation.apply(routeVersionId, VEHICLE_204000206, 0, Long.MAX_VALUE, SCORED_AT).selected()).isZero();
+    }
+
+    @Test
+    void 고정한_입력_범위나_기준시각_밖의_자료는_다음_처리를_위해_남긴다() {
+        givenStatisticsSample();
+        long id = jdbcClient.sql("SELECT id FROM stop_demand_pending_sample WHERE prediction_observation_id=?")
+            .param(vehicleObservationId).query(Long.class).single();
+
+        assertThat(accumulation.apply(routeVersionId, VEHICLE_204000206, 0, id - 1, SCORED_AT).applied()).isZero();
+        assertThat(accumulation.apply(routeVersionId, VEHICLE_204000206, 0, id, SCORED_AT.minusSeconds(1)).applied()).isZero();
+        assertThat(pendingSampleCount()).isEqualTo(1);
+        assertThat(accumulation.apply(routeVersionId, VEHICLE_204000206, 0, id, SCORED_AT).applied()).isEqualTo(1);
+    }
+
+    private void givenStatisticsSample() {
+        long arrival = insertArrivalObservation();
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, 1, GENERATED_AT)));
+        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
     }
 
     private int pendingSampleCount() {
