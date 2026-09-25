@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gustler.backend.support.IntegrationTest;
+import com.gustler.backend.support.ConfirmedTripFixture;
+import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -15,6 +17,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -59,6 +63,39 @@ class LiveVehicleApiContractTest {
         mockMvc = MockMvcBuilders
             .webAppContextSetup(applicationContext)
             .build();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"above_range", "excluded_trip", "unconfirmed_trip", "investigating"})
+    void 품질이_확인되지_않은_잔여석은_숨기고_차량_위치는_유지한다(String reason) throws Exception {
+        RouteContext route = insertCurrentRoute();
+        insertStop(route, 5, "205000005", "상행 다섯 번째", "UP");
+        long batch = insertSuccessfulBatch(route, NOW.minusSeconds(20), "SUCCESS_ROWS", 2);
+        int seats = reason.equals("above_range") ? 82 : 40;
+        insertObservation(batch, route, 0, "test-bus", 5, "205000005", 2, seats);
+        insertObservation(batch, route, 1, "normal-bus", 5, "205000005", 2, 12);
+        long observation = jdbcClient.sql("SELECT id FROM vehicle_observation WHERE observation_batch_id=? AND source_row_number=0")
+            .param(batch).query(Long.class).single();
+        if (reason.equals("excluded_trip") || reason.equals("unconfirmed_trip")) {
+            ConfirmedTripFixture.include(jdbcClient, observation);
+            jdbcClient.sql("UPDATE vehicle_one_way_trip SET status=? WHERE start_observation_id=?")
+                .params(reason.equals("excluded_trip") ? "EXCLUDED" : "BOUNDARY_UNCONFIRMED", observation).update();
+        }
+        if (reason.equals("investigating")) {
+            jdbcClient.sql("INSERT INTO trip_quality_rebuild(route_version_id, vehicle_id, until_at) VALUES (?, ?, ?)")
+                .params(route.routeVersionId(), "test-bus", NOW).update();
+        }
+
+        mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.vehicles.length()").value(2))
+            .andExpect(jsonPath("$.vehicles[0].vehicleId").value("test-bus"))
+            .andExpect(jsonPath("$.vehicles[0].currentStopSequence").value(5))
+            .andExpect(jsonPath("$.vehicles[0].seat.kind").value("UNKNOWN"))
+            .andExpect(jsonPath("$.vehicles[0].seat.remaining").doesNotExist())
+            .andExpect(jsonPath("$.vehicles[1].seat.remaining").value(12));
+        assertThat(jdbcClient.sql("SELECT remaining_seats FROM vehicle_observation WHERE id=?")
+            .param(observation).query(Integer.class).single()).isEqualTo(seats);
     }
 
     @Test

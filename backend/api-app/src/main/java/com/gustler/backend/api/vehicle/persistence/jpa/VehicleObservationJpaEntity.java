@@ -14,9 +14,11 @@ import jakarta.persistence.JoinColumns;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.util.Optional;
+import org.hibernate.annotations.Immutable;
 
 @Entity
-@Table(name = "vehicle_observation")
+@Table(name = "forecast_observation_quality")
+@Immutable
 public class VehicleObservationJpaEntity {
 
     @Id
@@ -48,6 +50,9 @@ public class VehicleObservationJpaEntity {
     @Column(name = "remaining_seats")
     private Integer remainingSeats;
 
+    @Column(name = "forecast_eligible")
+    private boolean forecastEligible;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumns({
         @JoinColumn(
@@ -77,7 +82,7 @@ public class VehicleObservationJpaEntity {
                 stopId,
                 routeStop.name(),
                 phase,
-                VehicleSeat.from(remainingSeats)
+                VehicleSeat.from(forecastEligible ? remainingSeats : null)
             ));
     }
 }
