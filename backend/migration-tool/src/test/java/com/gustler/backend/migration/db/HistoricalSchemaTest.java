@@ -18,7 +18,7 @@ class HistoricalSchemaTest extends PostgresMigrationTestSupport {
     @Test
     void additiveSchemaAppliesWithoutChangingApplicationFlywayHistory() throws Exception {
         try (Connection connection = connection(); Statement statement = connection.createStatement()) {
-            assertThat(count(statement, "SELECT count(*) FROM flyway_schema_history WHERE success")).isEqualTo(18);
+            assertThat(count(statement, "SELECT count(*) FROM flyway_schema_history WHERE success")).isEqualTo(19);
             assertThat(count(statement,
                 "SELECT count(*) FROM historical_import_schema_history WHERE success AND type = 'SQL'"))
                 .isEqualTo(4);
@@ -29,6 +29,18 @@ class HistoricalSchemaTest extends PostgresMigrationTestSupport {
                 "SELECT count(*) FROM information_schema.tables "
                     + "WHERE table_schema='public' AND table_name='stop_demand_seed_import'"))
                 .isEqualTo(1);
+        }
+    }
+
+    @Test
+    void forecastVacuumThresholdHasAnAbsoluteCap() throws Exception {
+        try (Connection connection = connection(); Statement statement = connection.createStatement();
+            ResultSet rows = statement.executeQuery("SELECT reloptions FROM pg_class WHERE oid='seat_forecast'::regclass")) {
+            rows.next();
+            assertThat((String[]) rows.getArray(1).getArray()).contains(
+                "autovacuum_vacuum_scale_factor=0.01",
+                "autovacuum_vacuum_threshold=50",
+                "autovacuum_vacuum_max_threshold=10000");
         }
     }
 
