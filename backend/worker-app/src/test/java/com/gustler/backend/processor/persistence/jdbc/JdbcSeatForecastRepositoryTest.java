@@ -1,6 +1,7 @@
 package com.gustler.backend.processor.persistence.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gustler.backend.processor.ArrivalLabel;
 import com.gustler.backend.processor.ForecastSettlement;
@@ -15,6 +16,9 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,7 +39,7 @@ class JdbcSeatForecastRepositoryTest {
     private static final String ROUTE_204000057 = "204000057";
     private static final String CONTENT_DIGEST = "0".repeat(64);
     private static final String VEHICLE_204000206 = "204000206";
-    private static final int PASSED_STOP_ORDER = 6;
+    private static final int PASSED_STOP_ORDER = 8;
     private static final int TARGET_STOP_ORDER = 9;
     private static final int NEXT_TARGET_STOP_ORDER = 10;
     private static final int ARRIVAL_STOP_ORDER = 9;
@@ -283,6 +287,7 @@ class JdbcSeatForecastRepositoryTest {
 
         // then
         assertThat(actual).isEmpty();
+        assertThat(pendingSampleCount()).isZero();
     }
 
     @Test
@@ -302,6 +307,113 @@ class JdbcSeatForecastRepositoryTest {
 
         // then
         assertThat(actual).isEmpty();
+    }
+
+    @Test
+    void 정산과_함께_통계에_쓸_원본_값과_도착시각을_기록한다() {
+        long arrival = insertArrivalObservation();
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, 1, GENERATED_AT)));
+
+        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
+
+        assertThat(jdbcClient.sql("""
+            SELECT route_version_id, prediction_observation_id, arrival_observation_id,
+                   vehicle_id, target_stop_order, arrived_at, scored_at,
+                   prediction_remaining_seats, arrival_remaining_seats
+            FROM stop_demand_pending_sample WHERE prediction_observation_id = ?
+            """).param(vehicleObservationId).query((rs, n) -> List.of(
+                rs.getLong("route_version_id"), rs.getLong("prediction_observation_id"),
+                rs.getLong("arrival_observation_id"), rs.getString("vehicle_id"),
+                rs.getInt("target_stop_order"), rs.getObject("arrived_at", OffsetDateTime.class).toInstant(),
+                rs.getObject("scored_at", OffsetDateTime.class).toInstant(),
+                rs.getInt("prediction_remaining_seats"), rs.getInt("arrival_remaining_seats"))).single())
+            .containsExactly(routeVersionId, vehicleObservationId, arrival, VEHICLE_204000206,
+                TARGET_STOP_ORDER, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant(), SCORED_AT, SEATS_LEFT, 0);
+    }
+
+    @Test
+    void 정산_재시도는_처리_대상을_중복_기록하지_않는다() {
+        long arrival = insertArrivalObservation();
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, 1, GENERATED_AT)));
+        var settlement = new ForecastSettlement(
+            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT);
+
+        jdbcSeatForecastRepository.settle(List.of(settlement));
+        jdbcSeatForecastRepository.settle(List.of(settlement));
+        assertThat(pendingSampleCount()).isEqualTo(1);
+
+        // 누적 완료 후 처리 대상을 지운 경우에도 정산 상태가 재기록을 막는다.
+        jdbcClient.sql("DELETE FROM stop_demand_pending_sample WHERE prediction_observation_id = ?")
+            .param(vehicleObservationId).update();
+        jdbcSeatForecastRepository.settle(List.of(settlement));
+        assertThat(pendingSampleCount()).isZero();
+    }
+
+    @Test
+    void 처리_대상_저장에_실패하면_정산도_취소된다() {
+        long arrival = insertArrivalObservation();
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, 1, GENERATED_AT)));
+        // 이 테스트 transaction 안에서만 INSERT 실패를 유발한다.
+        jdbcClient.sql("""
+            ALTER TABLE stop_demand_pending_sample ADD CONSTRAINT test_reject_sample
+            CHECK (prediction_remaining_seats < 0)
+            """).update();
+        jdbcClient.sql("SAVEPOINT before_settlement").update();
+
+        assertThatThrownBy(() -> jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT))))
+            .isInstanceOf(DataIntegrityViolationException.class);
+
+        jdbcClient.sql("ROLLBACK TO SAVEPOINT before_settlement").update();
+        assertThat(readStoredLabel(TARGET_STOP_ORDER)).isEqualTo(new StoredLabel("PENDING", null, null, null));
+        assertThat(pendingSampleCount()).isZero();
+    }
+
+    @Test
+    void 후속_작업의_롤백은_정산과_처리_대상을_함께_되돌린다() {
+        long arrival = insertArrivalObservation();
+        jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, 1, GENERATED_AT)));
+        var settlement = new ForecastSettlement(
+            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT);
+        jdbcClient.sql("SAVEPOINT before_settlement").update();
+        jdbcSeatForecastRepository.settle(List.of(settlement));
+        assertThat(pendingSampleCount()).isEqualTo(1);
+
+        jdbcClient.sql("ROLLBACK TO SAVEPOINT before_settlement").update();
+
+        assertThat(readStoredLabel(TARGET_STOP_ORDER)).isEqualTo(new StoredLabel("PENDING", null, null, null));
+        assertThat(pendingSampleCount()).isZero();
+        jdbcSeatForecastRepository.settle(List.of(settlement));
+        assertThat(pendingSampleCount()).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"distant", "non_boarding", "missing_seats"})
+    void 통계_입력_조건을_벗어난_정산은_처리_대상에_넣지_않는다(String excludedReason) {
+        long arrival = insertArrivalObservation();
+        int target = excludedReason.equals("distant") ? NEXT_TARGET_STOP_ORDER : TARGET_STOP_ORDER;
+        int horizon = excludedReason.equals("distant") ? STOPS_TO_NEXT_TARGET : 1;
+        jdbcSeatForecastRepository.save(List.of(forecastOf(target, horizon, GENERATED_AT)));
+        if (excludedReason.equals("non_boarding")) {
+            jdbcClient.sql("UPDATE route_stop SET boarding_allowed = false WHERE route_version_id = ? AND stop_order = ?")
+                .params(routeVersionId, target).update();
+        }
+        if (excludedReason.equals("missing_seats")) {
+            jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats = NULL, seat_unknown_reason = 'NOT_REPORTED' WHERE id = ?")
+                .param(vehicleObservationId).update();
+        }
+
+        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            vehicleObservationId, target, new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
+
+        assertThat(readStoredLabel(target).scoringState()).isEqualTo("SETTLED");
+        assertThat(pendingSampleCount()).isZero();
+    }
+
+    private int pendingSampleCount() {
+        return jdbcClient.sql("SELECT count(*) FROM stop_demand_pending_sample WHERE prediction_observation_id = ?")
+            .param(vehicleObservationId).query(Integer.class).single();
     }
 
     private SeatForecast forecastOf(
@@ -341,6 +453,8 @@ class JdbcSeatForecastRepositoryTest {
             .param(vehicleObservationId).query(String.class).single()).isEqualTo("SETTLED");
         assertThat(jdbcClient.sql("SELECT seats_on_arrival FROM seat_forecast WHERE vehicle_observation_id = ?")
             .param(vehicleObservationId).query(Integer.class).single()).isZero();
+        // 6시간 통계는 후보정과 달리 예보의 이전 quality_revision 자체를 제외하지 않는다.
+        assertThat(pendingSampleCount()).isEqualTo(1);
     }
 
     @Test
@@ -359,6 +473,7 @@ class JdbcSeatForecastRepositoryTest {
         assertThat(actual).isEmpty();
         assertThat(jdbcClient.sql("SELECT scoring_state FROM seat_forecast WHERE vehicle_observation_id = ?")
             .param(vehicleObservationId).query(String.class).single()).isEqualTo("PENDING");
+        assertThat(pendingSampleCount()).isZero();
     }
 
     @Test
@@ -366,7 +481,7 @@ class JdbcSeatForecastRepositoryTest {
         // given
         jdbcSeatForecastRepository.save(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
         long arrival = insertArrivalObservation();
-        jdbcClient.sql("UPDATE route_version SET turn_sequence = 8 WHERE id = ?")
+        jdbcClient.sql("UPDATE route_version SET turn_sequence = 9 WHERE id = ?")
             .param(routeVersionId).update();
 
         // when
@@ -377,6 +492,7 @@ class JdbcSeatForecastRepositoryTest {
         assertThat(actual).isEmpty();
         assertThat(jdbcClient.sql("SELECT scoring_state FROM seat_forecast WHERE vehicle_observation_id = ?")
             .param(vehicleObservationId).query(String.class).single()).isEqualTo("PENDING");
+        assertThat(pendingSampleCount()).isZero();
     }
 
     private long insertArrivalObservation() {

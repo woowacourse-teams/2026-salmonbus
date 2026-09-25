@@ -136,31 +136,58 @@ public class JdbcSeatForecastRepository implements SeatForecastRepository {
                               AND arrival.route_version_id = source.route_version_id)))
         """;
 
+    /** 정산된 행만 처리 대상으로 기록한다. 기록 실패는 같은 SQL의 정산도 취소한다. */
     private static final String SETTLE_PENDING_FORECAST = """
-        UPDATE seat_forecast forecast
-        SET scoring_state = :scoringState,
-            arrival_observation_id = :arrivalObservationId,
-            seats_on_arrival = :seatsOnArrival,
-            scored_at = :scoredAt
-        FROM route_version forecast_version,
-             vehicle_observation arrival
-             JOIN observation_batch arrival_batch
-               ON arrival_batch.id = arrival.observation_batch_id
-        WHERE forecast.vehicle_observation_id = :vehicleObservationId
-          AND forecast.target_stop_order = :targetStopOrder
-          AND forecast.scoring_state = 'PENDING'
-          AND forecast_version.id = forecast.route_version_id
-          AND arrival.id = :arrivalObservationId
-          AND EXISTS (SELECT 1 FROM forecast_eligible_observation source
-                      JOIN forecast_eligible_observation eligible_arrival
-                        ON eligible_arrival.quality_direction = source.quality_direction
-                       AND eligible_arrival.vehicle_id IS NOT DISTINCT FROM source.vehicle_id
-                       AND eligible_arrival.route_version_id = source.route_version_id
-                      WHERE source.id = :vehicleObservationId AND eligible_arrival.id = :arrivalObservationId)
-        RETURNING forecast_version.route_id, forecast.stops_to_target,
-                  forecast.seat_full_chance_raw, arrival_batch.response_received_at,
-                  forecast.quality_revision = (SELECT quality_revision FROM route
-                      WHERE id = forecast_version.route_id) AS usable_for_calibration
+        WITH settled AS (
+            UPDATE seat_forecast forecast
+            SET scoring_state = :scoringState,
+                arrival_observation_id = :arrivalObservationId,
+                seats_on_arrival = :seatsOnArrival,
+                scored_at = :scoredAt
+            FROM route_version forecast_version,
+                 vehicle_observation arrival
+                 JOIN observation_batch arrival_batch
+                   ON arrival_batch.id = arrival.observation_batch_id
+            WHERE forecast.vehicle_observation_id = :vehicleObservationId
+              AND forecast.target_stop_order = :targetStopOrder
+              AND forecast.scoring_state = 'PENDING'
+              AND forecast_version.id = forecast.route_version_id
+              AND arrival.id = :arrivalObservationId
+              AND EXISTS (SELECT 1 FROM forecast_eligible_observation source
+                          JOIN forecast_eligible_observation eligible_arrival
+                            ON eligible_arrival.quality_direction = source.quality_direction
+                           AND eligible_arrival.vehicle_id IS NOT DISTINCT FROM source.vehicle_id
+                           AND eligible_arrival.route_version_id = source.route_version_id
+                          WHERE source.id = :vehicleObservationId AND eligible_arrival.id = :arrivalObservationId)
+            RETURNING forecast.route_version_id, forecast.vehicle_observation_id,
+                      forecast.arrival_observation_id, forecast.target_stop_order,
+                      forecast.seats_on_arrival, forecast.scored_at,
+                      forecast_version.route_id, forecast.stops_to_target,
+                      forecast.seat_full_chance_raw, arrival_batch.response_received_at,
+                      forecast.quality_revision = (SELECT quality_revision FROM route
+                          WHERE id = forecast_version.route_id) AS usable_for_calibration
+        ), recorded AS (
+            INSERT INTO stop_demand_pending_sample (
+                route_version_id, prediction_observation_id, arrival_observation_id,
+                vehicle_id, target_stop_order, arrived_at, scored_at,
+                prediction_remaining_seats, arrival_remaining_seats
+            )
+            SELECT settled.route_version_id, settled.vehicle_observation_id,
+                   settled.arrival_observation_id, prediction.vehicle_id,
+                   settled.target_stop_order, settled.response_received_at, settled.scored_at,
+                   prediction.remaining_seats, settled.seats_on_arrival
+            FROM settled
+            JOIN vehicle_observation prediction ON prediction.id = settled.vehicle_observation_id
+            JOIN route_stop target_stop
+              ON target_stop.route_version_id = settled.route_version_id
+             AND target_stop.stop_order = settled.target_stop_order
+            WHERE settled.stops_to_target = 1
+              AND target_stop.boarding_allowed = true
+              AND prediction.vehicle_id IS NOT NULL
+              AND prediction.remaining_seats IS NOT NULL
+            RETURNING id
+        )
+        SELECT * FROM settled
         """;
 
     private final JdbcClient jdbcClient;
