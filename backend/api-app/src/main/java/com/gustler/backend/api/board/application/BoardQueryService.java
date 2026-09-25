@@ -10,6 +10,7 @@ import com.gustler.backend.api.board.domain.BoardStop;
 import com.gustler.backend.api.board.domain.DirectionInfo;
 import com.gustler.backend.api.board.domain.ForecastModel;
 import com.gustler.backend.api.board.domain.StopState;
+import com.gustler.backend.api.board.domain.VehicleForecast;
 import com.gustler.backend.api.http.ServiceUnavailableException;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.RouteNotFoundException;
@@ -39,13 +40,11 @@ public class BoardQueryService {
     private static final Pattern DEPARTURE_TIME_FORMAT = Pattern.compile(
         "([01][0-9]|2[0-3]):[0-5][0-9]"
     );
-    private static final Comparator<StoredPrediction> PREDICTION_ORDER = Comparator
-        .comparingInt(StoredPrediction::stopsToTarget)
-        .thenComparing(
-            StoredPrediction::vehicleId,
-            Comparator.nullsLast(Comparator.naturalOrder())
-        )
-        .thenComparingInt(StoredPrediction::sourceRowNumber);
+    private static final int MAX_HORIZON_STOPS = 12;
+    private static final Comparator<BoardVehicleObservation> VEHICLE_ORDER = Comparator
+        .comparingInt(BoardVehicleObservation::passedStopOrder).reversed()
+        .thenComparing(BoardVehicleObservation::vehicleId, Comparator.nullsLast(Comparator.naturalOrder()))
+        .thenComparingInt(BoardVehicleObservation::sourceRowNumber);
 
     private final BoardQueryRepository boardQueryRepository;
     private final BoardFreshnessPolicy freshnessPolicy;
@@ -80,11 +79,13 @@ public class BoardQueryService {
             observation.batchId()
         );
         ForecastModel model = modelOf(predictions, activeModel);
-        Map<Integer, List<ApproachingVehicle>> predictionsByStop = groupPredictions(
-            predictions
-        );
+        List<BoardVehicleObservation> vehicles = boardQueryRepository.findObservedVehicles(
+            observation.batchId(), snapshot.routeVersionId());
+        Map<Integer, Map<Integer, StoredPrediction>> predictionsByStop = predictions.stream()
+            .collect(Collectors.groupingBy(StoredPrediction::targetStopOrder,
+                Collectors.toMap(StoredPrediction::sourceRowNumber, Function.identity())));
         List<StopState> stopStates = stops.stream()
-            .map(stop -> toStopState(stop, predictionsByStop))
+            .map(stop -> toStopState(stop, vehicles, predictionsByStop.getOrDefault(stop.sequence(), Map.of())))
             .toList();
 
         Board board = new Board(
@@ -125,27 +126,6 @@ public class BoardQueryService {
         return models.getFirst();
     }
 
-    private Map<Integer, List<ApproachingVehicle>> groupPredictions(
-        List<StoredPrediction> predictions
-    ) {
-        return predictions.stream()
-            .filter(this::hasValidForecastValues)
-            .sorted(Comparator
-                .comparingInt(StoredPrediction::targetStopOrder)
-                .thenComparing(PREDICTION_ORDER))
-            .collect(Collectors.groupingBy(
-                StoredPrediction::targetStopOrder,
-                LinkedHashMap::new,
-                Collectors.collectingAndThen(
-                    Collectors.toList(),
-                    rows -> rows.stream()
-                        .limit(MAX_APPROACHING_VEHICLES)
-                        .map(this::toApproachingVehicle)
-                        .toList()
-                )
-            ));
-    }
-
     private boolean hasValidForecastValues(
         StoredPrediction prediction
     ) {
@@ -155,15 +135,13 @@ public class BoardQueryService {
             && seatFullChance <= 1.0d;
     }
 
-    private ApproachingVehicle toApproachingVehicle(
-        StoredPrediction prediction
-    ) {
-        return new ApproachingVehicle(
-            prediction.vehicleId(),
-            prediction.stopsToTarget(),
+    private VehicleForecast forecastOf(StoredPrediction prediction) {
+        if (prediction == null || !hasValidForecastValues(prediction)) {
+            return new VehicleForecast.Unavailable();
+        }
+        return new VehicleForecast.Available(
             seatAvailableProbability(prediction.seatFullChance()),
-            reportableExpectedSeats(prediction.expectedSeats())
-        );
+            reportableExpectedSeats(prediction.expectedSeats()));
     }
 
     /**
@@ -186,10 +164,21 @@ public class BoardQueryService {
 
     private StopState toStopState(
         BoardStop stop,
-        Map<Integer, List<ApproachingVehicle>> predictionsByStop
+        List<BoardVehicleObservation> vehicles,
+        Map<Integer, StoredPrediction> predictionsBySourceRow
     ) {
         List<ApproachingVehicle> approachingVehicles = stop.boardingAllowed()
-            ? predictionsByStop.getOrDefault(stop.sequence(), List.of())
+            ? vehicles.stream()
+                .filter(vehicle -> {
+                    int horizon = stop.sequence() - vehicle.passedStopOrder();
+                    return horizon >= 1 && horizon <= MAX_HORIZON_STOPS;
+                })
+                .sorted(VEHICLE_ORDER)
+                .limit(MAX_APPROACHING_VEHICLES)
+                .map(vehicle -> new ApproachingVehicle(
+                    vehicle.vehicleId(), stop.sequence() - vehicle.passedStopOrder(),
+                    forecastOf(predictionsBySourceRow.get(vehicle.sourceRowNumber()))))
+                .toList()
             : List.of();
         return new StopState(
             stop.sequence(),

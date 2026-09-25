@@ -1,6 +1,7 @@
 package com.gustler.backend.api.board.controller;
 
 import static org.mockito.BDDMockito.given;
+import static org.hamcrest.Matchers.aMapWithSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -18,6 +19,7 @@ import com.gustler.backend.api.board.domain.BoardRoute;
 import com.gustler.backend.api.board.domain.DirectionInfo;
 import com.gustler.backend.api.board.domain.ForecastModel;
 import com.gustler.backend.api.board.domain.StopState;
+import com.gustler.backend.api.board.domain.VehicleForecast;
 import com.gustler.backend.api.http.ApiExceptionHandler;
 import com.gustler.backend.api.route.domain.RouteStatus;
 import java.time.Duration;
@@ -46,7 +48,7 @@ class BoardControllerTest {
 
     @Test
     void v4_Board와_적응형_캐시를_반환한다() throws Exception {
-        given(boardQueryService.getBoard(any())).willReturn(overview());
+        given(boardQueryService.getBoard(any())).willReturn(overview(new VehicleForecast.Available(0.8, null)));
 
         mockMvc.perform(get("/api/v1/routes/204000057/board"))
             .andExpect(status().isOk())
@@ -65,7 +67,43 @@ class BoardControllerTest {
                 .doesNotExist());
     }
 
-    private BoardOverview overview() {
+    @Test
+    void 접근_차량_응답에_forecast_필드를_포함한다() throws Exception {
+        given(boardQueryService.getBoard(any())).willReturn(overview(new VehicleForecast.Available(0.8, null)));
+
+        mockMvc.perform(get("/api/v1/routes/204000057/board"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.stops[0].approachingVehicles[0]", aMapWithSize(3)))
+            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast", aMapWithSize(2)))
+            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.expectedSeats").doesNotExist())
+            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].seatAvailableProbability").doesNotExist());
+    }
+
+    @Test
+    void 예보가_있으면_forecast에_AVAILABLE과_예측값을_포함한다() throws Exception {
+        given(boardQueryService.getBoard(any())).willReturn(overview(new VehicleForecast.Available(0.0, 0.0)));
+
+        mockMvc.perform(get("/api/v1/routes/204000057/board"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast", aMapWithSize(3)))
+            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.status").value("AVAILABLE"))
+            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.seatAvailableProbability").value(0.0))
+            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.expectedSeats").value(0.0));
+    }
+
+    @Test
+    void 예보가_없으면_forecast에_UNAVAILABLE만_포함한다() throws Exception {
+        given(boardQueryService.getBoard(any())).willReturn(overview(new VehicleForecast.Unavailable()));
+
+        mockMvc.perform(get("/api/v1/routes/204000057/board"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast", aMapWithSize(1)))
+            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.status").value("UNAVAILABLE"))
+            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.seatAvailableProbability").doesNotExist())
+            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.expectedSeats").doesNotExist());
+    }
+
+    private BoardOverview overview(VehicleForecast forecast) {
         BoardRoute route = new BoardRoute(
             "204000057",
             "3330",
@@ -89,7 +127,7 @@ class BoardControllerTest {
             "기점",
             BoardDirection.UP,
             true,
-            List.of(new ApproachingVehicle(null, 1, 0.8, null))
+            List.of(new ApproachingVehicle(null, 1, forecast))
         );
         Board board = new Board(
             route,

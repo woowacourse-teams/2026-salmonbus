@@ -3,6 +3,7 @@ package com.gustler.backend.processor.persistence.jdbc;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.processor.ArrivalCandidate;
+import com.gustler.backend.support.ConfirmedTripFixture;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -334,7 +335,7 @@ class JdbcArrivalObservationRepositoryTest {
         Integer remainingSeats,
         String seatUnknownReason
     ) {
-        return jdbcClient.sql("""
+        return ConfirmedTripFixture.include(jdbcClient, jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
                     observation_batch_id, route_version_id, source_row_number,
                     vehicle_id, stop_order, stop_id, passed_stop_order,
@@ -348,7 +349,7 @@ class JdbcArrivalObservationRepositoryTest {
                 runningState, remainingSeats, seatUnknownReason
             )
             .query(Long.class)
-            .single();
+            .single());
     }
 
     private static String stopIdOf(

@@ -1,5 +1,6 @@
 package com.gustler.backend.api.board.support;
 
+import com.gustler.backend.support.ConfirmedTripFixture;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -184,7 +185,7 @@ public class BoardDatabaseFixture {
         String stopId,
         OffsetDateTime observedAt
     ) {
-        return jdbcClient.sql("""
+        return ConfirmedTripFixture.include(jdbcClient, jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
                     observation_batch_id, route_version_id, source_row_number,
                     vehicle_id, stop_order, stop_id,
@@ -205,7 +206,7 @@ public class BoardDatabaseFixture {
             .param("runningState", RUNNING_STATE_DEPARTED)
             .param("seatUnknownReason", NOT_REPORTED)
             .query(Long.class)
-            .single();
+            .single());
     }
 
     public void insertForecast(

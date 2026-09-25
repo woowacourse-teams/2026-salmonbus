@@ -7,7 +7,9 @@ import com.gustler.backend.collector.ObservationBatchFailureCode;
 import com.gustler.backend.collector.ObservationBatchOutcome;
 import com.gustler.backend.collector.ObservationRepository;
 import com.gustler.backend.collector.UpstreamObservationRow;
+import com.gustler.backend.observation.VehicleObservationsStored;
 import java.time.OffsetDateTime;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -16,12 +18,16 @@ public class JpaObservationRepository implements ObservationRepository {
     private final CollectorObservationBatchRepository observationBatchRepository;
     private final CollectorVehicleObservationRepository vehicleObservationRepository;
 
+    private final ApplicationEventPublisher events;
+
     public JpaObservationRepository(
         CollectorObservationBatchRepository observationBatchRepository,
-        CollectorVehicleObservationRepository vehicleObservationRepository
+        CollectorVehicleObservationRepository vehicleObservationRepository,
+        ApplicationEventPublisher events
     ) {
         this.observationBatchRepository = observationBatchRepository;
         this.vehicleObservationRepository = vehicleObservationRepository;
+        this.events = events;
     }
 
     @Override
@@ -76,9 +82,12 @@ public class JpaObservationRepository implements ObservationRepository {
         batch.conclude(conclusion, responseReceivedAt);
         batch.countRows(collected);
 
-        vehicleObservationRepository.saveAll(collected.storableRows().stream()
+        var stored = vehicleObservationRepository.saveAll(collected.storableRows().stream()
             .map(row -> toEntity(batch, row))
             .toList());
+        // 동기 이벤트는 관측 저장 transaction 안에서 처리된다. 정상 관측은 추가 SQL이 없다.
+        events.publishEvent(new VehicleObservationsStored(batchId, batch.getRouteVersionId(),
+            responseReceivedAt.toInstant(), stored.stream().map(VehicleObservationJpaEntity::storedRow).toList()));
     }
 
     /**

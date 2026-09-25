@@ -2,7 +2,6 @@ package com.gustler.backend.processor;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -16,8 +15,7 @@ import org.springframework.stereotype.Component;
  * <p>옛 세대는 안 지운다. 밀린 batch 를 뒤늦게 처리할 때 그 관측 시각에 쓸 수 있었던 세대를
  * 골라야 같은 batch 가 같은 값을 낸다.
  *
- * <p>세대 하나를 다 넣을 때까지 묶는 것은 포트 구현이 한 transaction 으로 한다. 여기서 걸면
- * 자기 메서드 호출이라 프록시를 안 거쳐 transaction 이 안 열린다.
+ * <p>입력 조회부터 세대 저장까지 별도 writer가 노선별 transaction으로 묶는다.
  */
 @Component
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
@@ -38,50 +36,25 @@ public class StopDemandStatisticsJob {
     public static final String CURRENT_CALCULATION_VERSION = "observed-max-capacity-v1";
 
     private final RouteVersionRepository routeVersionRepository;
-    private final StopDemandStatisticsRepository stopDemandStatisticsRepository;
+    private final StopDemandStatisticsWriter writer;
     private final Clock clock;
 
     public StopDemandStatisticsJob(
         RouteVersionRepository routeVersionRepository,
-        StopDemandStatisticsRepository stopDemandStatisticsRepository,
+        StopDemandStatisticsWriter writer,
         Clock clock
     ) {
         this.routeVersionRepository = routeVersionRepository;
-        this.stopDemandStatisticsRepository = stopDemandStatisticsRepository;
+        this.writer = writer;
         this.clock = clock;
     }
 
     @Scheduled(fixedDelayString = "${forecast.statistics-interval}")
     public void recomputeStopDemand() {
         Instant computedAt = clock.instant();
-        for (Long routeVersionId : routeVersionRepository.findActiveVersionIds()) {
-            recomputeStopDemandOf(routeVersionId, computedAt);
+        for (Long routeVersionId : routeVersionRepository.findActiveVersionIds().stream().sorted().toList()) {
+            writer.recompute(routeVersionId, computedAt);
         }
     }
 
-    /**
-     * 회수된 라벨이 하나도 없으면 세대를 안 올린다.
-     *
-     * <p>빈 세대를 남기면 그 세대를 읽은 예보가 이웃 폴백만 돌았다는 사실이 안 남고,
-     * 세대 번호만 올라 채점이 헛되이 갈린다. 개편 직후 새 판본이 이 자리다.
-     */
-    private void recomputeStopDemandOf(
-        final long routeVersionId,
-        Instant computedAt
-    ) {
-        List<StopDemandHourlyTotals> hourlyTotals =
-            stopDemandStatisticsRepository.readHourlyTotals(routeVersionId, computedAt);
-        if (hourlyTotals.isEmpty()) {
-            return;
-        }
-        final int nextRevision = stopDemandStatisticsRepository.currentRevision(
-            routeVersionId, CURRENT_CALCULATION_VERSION) + 1;
-        stopDemandStatisticsRepository.append(new StopDemandGeneration(
-            routeVersionId,
-            CURRENT_CALCULATION_VERSION,
-            nextRevision,
-            computedAt,
-            computedAt,
-            StopDemandAggregator.aggregate(hourlyTotals, clock)));
-    }
 }

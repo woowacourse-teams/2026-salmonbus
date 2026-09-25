@@ -2,12 +2,14 @@ package com.gustler.backend.processor.persistence.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gustler.backend.processor.TripQualityRepository;
 import com.gustler.backend.processor.StopDemandCell;
 import com.gustler.backend.processor.StopDemandGeneration;
 import com.gustler.backend.processor.StopDemandHourlyTotals;
 import com.gustler.backend.processor.StopDemandMeasurement;
 import com.gustler.backend.processor.StopDemandStatistics;
 import com.gustler.backend.processor.TimeSlot;
+import com.gustler.backend.support.ConfirmedTripFixture;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -416,6 +418,28 @@ class JdbcStopDemandStatisticsRepositoryTest {
         assertThat(actual).isEqualTo("morning");
     }
 
+    @Test
+    void 계산_자료_버전이_변경되고_집계_표본이_없으면_이전_통계_대신_빈_통계를_반환한다() {
+        // given
+        jdbcStopDemandStatisticsRepository.append(generationOf(FIRST_REVISION, CALCULATION_VERSION,
+            List.of(measurementOf(TimeSlot.MORNING, TARGET_STOP_ORDER))));
+        var quality = new TripQualityRepository(jdbcClient);
+        quality.lockRoute(routeVersionId);
+        quality.invalidateDerivedInputs(routeVersionId);
+
+        // when
+        var totals = jdbcStopDemandStatisticsRepository.readHourlyTotals(routeVersionId, DATA_UNTIL);
+        var actual = jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING,
+            CALCULATION_VERSION, READ_AS_OF);
+
+        // then
+        assertThat(totals).isEmpty();
+        assertThat(actual.revision()).isZero();
+        assertThat(actual.cells()).isEmpty();
+        assertThat(jdbcStopDemandStatisticsRepository.currentRevision(routeVersionId, CALCULATION_VERSION))
+            .isEqualTo(FIRST_REVISION);
+    }
+
     private StopDemandGeneration generationOf(
         final int revision,
         String calculationVersion,
@@ -575,7 +599,7 @@ class JdbcStopDemandStatisticsRepositoryTest {
         OffsetDateTime responseReceivedAt
     ) {
         final long observationBatchId = insertObservationBatch(responseReceivedAt);
-        return jdbcClient.sql("""
+        return ConfirmedTripFixture.include(jdbcClient, jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
                     observation_batch_id, route_version_id, source_row_number,
                     vehicle_id, stop_order, stop_id, passed_stop_order,
@@ -589,7 +613,7 @@ class JdbcStopDemandStatisticsRepositoryTest {
                 RUNNING_STATE_DEPARTED, remainingSeats
             )
             .query(Long.class)
-            .single();
+            .single());
     }
 
     private long insertObservationBatch(

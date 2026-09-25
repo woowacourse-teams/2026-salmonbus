@@ -1,5 +1,6 @@
 package com.gustler.backend.api.board.persistence.jpa;
 
+import com.gustler.backend.api.board.application.BoardVehicleObservation;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -28,6 +29,12 @@ public class VehicleObservationJpaEntity {
     @Column(name = "vehicle_id", length = 40)
     private String vehicleId;
 
+    @Column(name = "route_version_id", nullable = false)
+    private Long routeVersionId;
+
+    @Column(name = "passed_stop_order", nullable = false)
+    private Integer passedStopOrder;
+
     protected VehicleObservationJpaEntity() {
     }
 
@@ -37,5 +44,9 @@ public class VehicleObservationJpaEntity {
 
     public String vehicleId() {
         return vehicleId;
+    }
+
+    public BoardVehicleObservation toDomain() {
+        return new BoardVehicleObservation(vehicleId, sourceRowNumber, passedStopOrder);
     }
 }

@@ -7,7 +7,8 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Logger;
@@ -24,11 +25,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.slf4j.LoggerFactory;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 
 @ExtendWith(MockitoExtension.class)
 class ForecastJobStalenessTest {
@@ -125,7 +126,21 @@ class ForecastJobStalenessTest {
         job.writeForecasts();
 
         // then
-        verifyNoInteractions(forecastBatchWriter);
+        verify(forecastBatchWriter, never()).writeForecastsOf(any(), any(), any());
+    }
+
+    @Test
+    void 활성_모델이_없으면_예보_작업에서_과거_관측을_조회하지_않는다() {
+        // given
+        when(forecastRuntime.resolveActive()).thenReturn(Optional.empty());
+
+        // when
+        job.writeForecasts();
+
+        // then
+        var order = inOrder(forecastBatchWriter, forecastRuntime);
+        order.verify(forecastRuntime).resolveActive();
+        verify(forecastBatchWriter, never()).writeForecastsOf(any(), any(), any());
     }
 
     @AfterEach

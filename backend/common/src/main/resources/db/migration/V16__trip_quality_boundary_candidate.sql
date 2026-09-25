@@ -1,0 +1,1 @@
+ALTER TABLE trip_quality_rebuild ADD COLUMN boundary_candidate_observation_id bigint;

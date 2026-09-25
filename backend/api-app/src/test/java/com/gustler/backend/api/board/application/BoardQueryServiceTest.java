@@ -12,6 +12,7 @@ import com.gustler.backend.api.board.domain.BoardDirection;
 import com.gustler.backend.api.board.domain.BoardStop;
 import com.gustler.backend.api.board.domain.ForecastModel;
 import com.gustler.backend.api.board.domain.StopState;
+import com.gustler.backend.api.board.domain.VehicleForecast;
 import com.gustler.backend.api.http.ServiceUnavailableException;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.domain.Route;
@@ -116,7 +117,7 @@ class BoardQueryServiceTest {
             .approachingVehicles()
             .getFirst();
 
-        assertThat(vehicle.seatAvailableProbability()).isEqualTo(0.996d);
+        assertThat(((VehicleForecast.Available) vehicle.forecast()).seatAvailableProbability()).isEqualTo(0.996d);
     }
 
     @Test
@@ -131,7 +132,7 @@ class BoardQueryServiceTest {
 
         assertThat(vehicles).singleElement().satisfies(vehicle -> {
             assertThat(vehicle.vehicleId()).isEqualTo("A");
-            assertThat(vehicle.expectedSeats()).isNull();
+            assertThat(((VehicleForecast.Available) vehicle.forecast()).expectedSeats()).isNull();
         });
     }
 
@@ -155,7 +156,7 @@ class BoardQueryServiceTest {
 
         assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
             .singleElement()
-            .satisfies(vehicle -> assertThat(vehicle.expectedSeats()).isNull());
+            .satisfies(vehicle -> assertThat(((VehicleForecast.Available) vehicle.forecast()).expectedSeats()).isNull());
     }
 
     @Test
@@ -167,12 +168,12 @@ class BoardQueryServiceTest {
         assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
             .singleElement()
             .satisfies(vehicle ->
-                assertThat(vehicle.seatAvailableProbability()).isEqualTo(0.8d));
+                assertThat(((VehicleForecast.Available) vehicle.forecast()).seatAvailableProbability()).isEqualTo(0.8d));
     }
 
     @ParameterizedTest
     @ValueSource(doubles = {-0.1, 1.1, Double.NaN, Double.POSITIVE_INFINITY})
-    void 만석_확률이_범위_밖이거나_비유한값이면_예보_행_전체를_제외한다(
+    void 만석_확률이_범위_밖이거나_비유한값이면_차량을_유지하고_예보만_미제공한다(
         final double invalidSeatFullChance
     ) {
         givenRoundTripBoard(List.of(
@@ -182,7 +183,9 @@ class BoardQueryServiceTest {
 
         assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
             .extracting(ApproachingVehicle::vehicleId)
-            .containsExactly("VALID");
+            .containsExactly("INVALID", "VALID");
+        assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles().getFirst().forecast())
+            .isInstanceOf(VehicleForecast.Unavailable.class);
     }
 
     @Test
@@ -295,6 +298,62 @@ class BoardQueryServiceTest {
             .isInstanceOf(ServiceUnavailableException.class);
     }
 
+    @Test
+    void 예보가_없는_차량도_거리순_최대_3대에_포함한다() {
+        givenRoundTripBoard(List.of(prediction(3, "FAR", 4, 2, 0.2, 10.0)));
+        given(repository.findObservedVehicles(100L, 1L)).willReturn(List.of(
+            new BoardVehicleObservation("FAR", 4, 1),
+            new BoardVehicleObservation("C", 3, 2),
+            new BoardVehicleObservation("B", 2, 2),
+            new BoardVehicleObservation("A", 1, 2)));
+
+        List<ApproachingVehicle> vehicles = service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles();
+
+        assertThat(vehicles).extracting(ApproachingVehicle::vehicleId).containsExactly("A", "B", "C");
+        assertThat(vehicles).allSatisfy(vehicle ->
+            assertThat(vehicle.forecast()).isInstanceOf(VehicleForecast.Unavailable.class));
+    }
+
+    @Test
+    void 모든_예보가_없어도_관측된_접근_차량을_유지한다() {
+        givenRoundTripBoard(List.of());
+        given(repository.findObservedVehicles(100L, 1L)).willReturn(List.of(
+            new BoardVehicleObservation("A", 1, 2)));
+
+        assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
+            .containsExactly(new ApproachingVehicle("A", 1, new VehicleForecast.Unavailable()));
+    }
+
+    @Test
+    void 차량_ID가_없거나_같아도_원본_행_번호로_예보를_연결한다() {
+        givenRoundTripBoard(List.of(prediction(3, null, 2, 1, 1.0, 0.0)));
+        given(repository.findObservedVehicles(100L, 1L)).willReturn(List.of(
+            new BoardVehicleObservation(null, 1, 2), new BoardVehicleObservation(null, 2, 2)));
+
+        assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
+            .containsExactly(
+                new ApproachingVehicle(null, 1, new VehicleForecast.Unavailable()),
+                new ApproachingVehicle(null, 1, new VehicleForecast.Available(0.0, 0.0)));
+    }
+
+    @Test
+    void 통과_정류장_기준_앞쪽_1부터_12정류장까지만_접근_차량을_표시한다() {
+        givenRoundTripBoard(List.of());
+        given(repository.findStops(1L)).willReturn(List.of(
+            stop(1, "기점", BoardDirection.UP, true),
+            stop(2, "회차점", BoardDirection.UP, false),
+            stop(13, "종점", BoardDirection.DOWN, true)));
+        given(repository.findObservedVehicles(100L, 1L)).willReturn(List.of(
+            new BoardVehicleObservation("PAST", 1, 14),
+            new BoardVehicleObservation("HERE", 2, 13),
+            new BoardVehicleObservation("NEAR", 3, 12),
+            new BoardVehicleObservation("BOUNDARY", 4, 1),
+            new BoardVehicleObservation("TOO_FAR", 5, 0)));
+
+        assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
+            .extracting(ApproachingVehicle::vehicleId).containsExactly("NEAR", "BOUNDARY");
+    }
+
     private BoardSnapshot roundTripSnapshot() {
         return new BoardSnapshot(
             1L,
@@ -312,6 +371,10 @@ class BoardQueryServiceTest {
         given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(roundTripSnapshot()));
         given(repository.findStops(1L)).willReturn(roundTripStops());
         given(repository.findPredictions(100L)).willReturn(predictions);
+        given(repository.findObservedVehicles(100L, 1L)).willReturn(predictions.stream()
+            .map(p -> new BoardVehicleObservation(p.vehicleId(), p.sourceRowNumber(),
+                p.targetStopOrder() - p.stopsToTarget()))
+            .distinct().toList());
     }
 
     private Route route() {

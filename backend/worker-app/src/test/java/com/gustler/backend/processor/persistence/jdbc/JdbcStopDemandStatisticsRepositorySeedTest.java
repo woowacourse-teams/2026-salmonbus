@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.processor.StopDemandHourlyTotals;
 import com.gustler.backend.processor.StopDemandStatisticsJob;
+import com.gustler.backend.support.ConfirmedTripFixture;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -107,7 +108,7 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
     }
 
     @Test
-    void seed_가_서_있으면_역사_합과_경계_뒤_실시간_합을_더한다() {
+    void 원본_편도를_확인할_수_없는_seed_합계를_제외하고_ELIGIBLE_편도의_라벨만_집계한다() {
         // given
         final UUID seedImportId = insertAppliedSeedImport();
         insertSeedHourlyTotal(seedImportId);
@@ -120,15 +121,15 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
         assertThat(actual).singleElement().isEqualTo(new StopDemandHourlyTotals(
             TARGET_STOP_ORDER,
             ARRIVED_HOUR_START,
-            SEED_FILL_RATE + LIVE_FILL_RATE,
-            SEED_NET_BOARDING + LIVE_NET_BOARDING,
-            SEED_CAPACITY + LIVE_CAPACITY,
-            SEED_SAMPLE_COUNT + LIVE_SAMPLE_COUNT));
+            LIVE_FILL_RATE,
+            LIVE_NET_BOARDING,
+            LIVE_CAPACITY,
+            LIVE_SAMPLE_COUNT));
     }
 
-    /** 경계 앞은 역사 합이 이미 담고 있다. 실시간에서 또 세면 그 라벨이 두 번 들어간다. */
+    /** seed를 섞지 않으므로 판정된 원본은 cutover 이전이라도 센다. */
     @Test
-    void 경계_앞_실시간_라벨은_역사_합과_겹쳐서_안_센다() {
+    void seed_집계_기준_시각_이전이라도_ELIGIBLE_편도의_라벨은_집계한다() {
         // given
         final UUID seedImportId = insertAppliedSeedImport();
         insertSeedHourlyTotal(seedImportId);
@@ -141,14 +142,14 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
         assertThat(actual).singleElement().isEqualTo(new StopDemandHourlyTotals(
             TARGET_STOP_ORDER,
             ARRIVED_HOUR_START,
-            SEED_FILL_RATE,
-            SEED_NET_BOARDING,
-            SEED_CAPACITY,
-            SEED_SAMPLE_COUNT));
+            LIVE_FILL_RATE,
+            LIVE_NET_BOARDING,
+            LIVE_CAPACITY,
+            LIVE_SAMPLE_COUNT));
     }
 
     @Test
-    void 경계와_같은_시각에_받은_판의_라벨은_센다() {
+    void seed_집계_기준과_같은_시각의_ELIGIBLE_라벨을_seed_합계_없이_집계한다() {
         // given
         final UUID seedImportId = insertAppliedSeedImport();
         insertSeedHourlyTotal(seedImportId);
@@ -160,7 +161,7 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
         // then
         assertThat(actual).singleElement()
             .extracting(StopDemandHourlyTotals::sampleCount)
-            .isEqualTo(SEED_SAMPLE_COUNT + LIVE_SAMPLE_COUNT);
+            .isEqualTo(LIVE_SAMPLE_COUNT);
     }
 
     /** seed 표만 있고 선 세대가 없으면 예전 길로 간다. 역사 합이 없으니 더할 것도 없다. */
@@ -295,7 +296,7 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
         OffsetDateTime responseReceivedAt
     ) {
         final long observationBatchId = insertObservationBatch(responseReceivedAt);
-        return jdbcClient.sql("""
+        return ConfirmedTripFixture.include(jdbcClient, jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
                     observation_batch_id, route_version_id, source_row_number,
                     vehicle_id, stop_order, stop_id, passed_stop_order,
@@ -308,7 +309,7 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
                 vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
                 RUNNING_STATE_DEPARTED, remainingSeats)
             .query(Long.class)
-            .single();
+            .single());
     }
 
     private long insertObservationBatch(
