@@ -54,6 +54,8 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
             var quality = new TripQualityRepository(jdbc);
             c.setAutoCommit(false);
             quality.observationsStored(event(jdbc, version, bad));
+            String requestBefore = jdbc.sql("SELECT request_id::text FROM stop_demand_rebuild_request")
+                .query(String.class).single();
 
             // when
             quality.investigateLocked(version, "bus-1");
@@ -61,6 +63,8 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
 
             // then
             assertThat(jdbc.sql("SELECT completed FROM trip_quality_rebuild").query(Boolean.class).single()).isTrue();
+            assertThat(jdbc.sql("SELECT request_id::text FROM stop_demand_rebuild_request")
+                .query(String.class).single()).isNotEqualTo(requestBefore);
             assertThat(jdbc.sql("SELECT observation_batch_id FROM forecast_eligible_observation WHERE vehicle_id='bus-1'")
                 .query(Long.class).list()).containsExactly(next);
             assertThat(jdbc.sql("SELECT count(*) FROM forecast_eligible_observation WHERE vehicle_id='bus-2'")
@@ -126,6 +130,7 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
             long batch = batch(jdbc, version, 1, 1, 1, SeatGrid.LARGEST_SEATS + 1);
             new TripQualityRepository(jdbc).observationsStored(event(jdbc, version, batch));
             assertThat(jdbc.sql("SELECT count(*) FROM trip_quality_rebuild").query(Integer.class).single()).isEqualTo(1);
+            assertThat(jdbc.sql("SELECT count(*) FROM stop_demand_rebuild_request").query(Integer.class).single()).isEqualTo(1);
 
             // when
             c.rollback();
@@ -133,6 +138,7 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
             // then
             assertThat(jdbc.sql("SELECT count(*) FROM vehicle_observation").query(Integer.class).single()).isZero();
             assertThat(jdbc.sql("SELECT count(*) FROM trip_quality_rebuild").query(Integer.class).single()).isZero();
+            assertThat(jdbc.sql("SELECT count(*) FROM stop_demand_rebuild_request").query(Integer.class).single()).isZero();
         }
     }
 
