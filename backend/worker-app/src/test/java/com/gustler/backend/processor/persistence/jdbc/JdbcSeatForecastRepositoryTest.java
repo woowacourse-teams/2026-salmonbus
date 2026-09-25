@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gustler.backend.processor.ArrivalLabel;
 import com.gustler.backend.processor.StopDemandAccumulationWriter;
+import com.gustler.backend.processor.StopDemandRebuildWriter;
+import com.gustler.backend.processor.TripQualityRepository;
 import com.gustler.backend.processor.ForecastSettlement;
 import com.gustler.backend.processor.PendingForecast;
 import com.gustler.backend.processor.SeatForecast;
@@ -75,6 +77,9 @@ class JdbcSeatForecastRepositoryTest {
 
     @Autowired
     private StopDemandAccumulationWriter accumulation;
+
+    @Autowired private StopDemandRebuildWriter rebuild;
+    @Autowired private TripQualityRepository quality;
 
     private long routeId;
     private long routeVersionId;
@@ -501,6 +506,72 @@ class JdbcSeatForecastRepositoryTest {
         assertThat(accumulation.apply(routeVersionId, VEHICLE_204000206, 0, id, SCORED_AT.minusSeconds(1)).applied()).isZero();
         assertThat(pendingSampleCount()).isEqualTo(1);
         assertThat(accumulation.apply(routeVersionId, VEHICLE_204000206, 0, id, SCORED_AT).applied()).isEqualTo(1);
+    }
+
+    @Test
+    void 정정은_이상_편도의_기여분을_제거하고_빈_완료도_표현한다() {
+        givenStatisticsSample();
+        accumulation.apply(routeVersionId, VEHICLE_204000206, 0, Long.MAX_VALUE, SCORED_AT);
+        jdbcClient.sql("UPDATE vehicle_one_way_trip SET status='EXCLUDED' WHERE start_observation_id=?")
+            .param(vehicleObservationId).update();
+        quality.requestStatisticsRebuild(routeVersionId, "");
+
+        finishRebuild("");
+
+        assertThat(jdbcClient.sql("SELECT count(*) FROM stop_demand_current_total WHERE route_version_id=?")
+            .param(routeVersionId).query(Integer.class).single()).isZero();
+        assertThat(jdbcClient.sql("SELECT initialized FROM stop_demand_baseline WHERE route_version_id=?")
+            .param(routeVersionId).query(Boolean.class).single()).isTrue();
+    }
+
+    @Test
+    void 정정_시작_뒤의_정산은_이번_교체에서_제외하고_다음_누적에_한번만_쓴다() {
+        givenStatisticsSample();
+        long batch = insertObservationBatch("late-source", RESPONSE_RECEIVED_AT.plusSeconds(1));
+        long source = insertObservation(batch, VEHICLE_204000206, 0, PASSED_STOP_ORDER);
+        jdbcSeatForecastRepository.save(List.of(new SeatForecast(source, routeVersionId, TARGET_STOP_ORDER, 1,
+            modelDeploymentId, DEMAND_STATISTICS_REVISION, 0.41, 0.38, 12.5, GENERATED_AT)));
+        quality.requestStatisticsRebuild(routeVersionId, VEHICLE_204000206);
+        rebuild.step(routeVersionId, VEHICLE_204000206); // 범위 고정
+        long arrival = jdbcClient.sql("SELECT arrival_observation_id FROM stop_demand_pending_sample WHERE prediction_observation_id=?")
+            .param(vehicleObservationId).query(Long.class).single();
+        jdbcSeatForecastRepository.settle(List.of(new ForecastSettlement(
+            source, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
+
+        finishRebuild(VEHICLE_204000206);
+
+        assertThat(jdbcClient.sql("SELECT sample_count FROM stop_demand_current_total WHERE route_version_id=?")
+            .param(routeVersionId).query(Long.class).single()).isEqualTo(1);
+        assertThat(jdbcClient.sql("SELECT count(*) FROM stop_demand_pending_sample WHERE route_version_id=?")
+            .param(routeVersionId).query(Integer.class).single()).isEqualTo(1);
+        accumulation.apply(routeVersionId, VEHICLE_204000206, 0, Long.MAX_VALUE, SCORED_AT);
+        assertThat(jdbcClient.sql("SELECT sample_count FROM stop_demand_current_total WHERE route_version_id=?")
+            .param(routeVersionId).query(Long.class).single()).isEqualTo(2);
+    }
+
+    @Test
+    void 정정_페이지의_중간_실패와_재요청에도_합계가_중복되지_않는다() {
+        givenStatisticsSample();
+        quality.requestStatisticsRebuild(routeVersionId, VEHICLE_204000206);
+        rebuild.step(routeVersionId, VEHICLE_204000206);
+        jdbcClient.sql("SAVEPOINT before_rebuild_page").update();
+        rebuild.step(routeVersionId, VEHICLE_204000206);
+        jdbcClient.sql("ROLLBACK TO SAVEPOINT before_rebuild_page").update();
+        rebuild.step(routeVersionId, VEHICLE_204000206);
+        quality.requestStatisticsRebuild(routeVersionId, VEHICLE_204000206);
+
+        finishRebuild(VEHICLE_204000206);
+
+        assertThat(jdbcClient.sql("SELECT sample_count FROM stop_demand_current_total WHERE route_version_id=?")
+            .param(routeVersionId).query(Long.class).single()).isEqualTo(1);
+        assertThat(pendingSampleCount()).isZero();
+    }
+
+    private void finishRebuild(String vehicle) {
+        for (int i = 0; i < 100; i++) {
+            if (!rebuild.step(routeVersionId, vehicle)) { return; }
+        }
+        throw new AssertionError("정정이 100번의 작은 처리 안에 완료되지 않음");
     }
 
     private void givenStatisticsSample() {
