@@ -61,6 +61,7 @@ forecast:
   enabled: ${FORECAST_ENABLED:false}
   interval: 10s # 예보가 안 붙은 판을 집으러 가는 주기. 수집이 첨두 15초라 그보다 짧게 둔다.
   settlement-interval: 60s # 라벨 회수 주기. 예보와 다른 시계에서 돈다.
+  statistics-step-interval: 100ms # 한 번에 한 노선의 작은 처리만 수행한 뒤 스레드를 반환한다.
   statistics-interval: 6h # 셀 통계 재계산 주기. 관측이 쌓여야 값이 바뀌어서 셋 중 제일 느리다.
   # 이보다 오래된 판에는 예보를 안 붙인다. 앵커가 둘이다.
   # 학습: 회수가 도착 후보를 예보 낸 시각 뒤에서만 찾는데 관측과 90초 넘게 벌어지면 전부 끊김으로 닫힌다.

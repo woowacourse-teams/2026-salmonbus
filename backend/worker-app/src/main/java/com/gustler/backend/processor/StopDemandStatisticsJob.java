@@ -7,7 +7,6 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
@@ -55,7 +54,7 @@ public class StopDemandStatisticsJob {
         this.clock = clock;
     }
 
-    @Scheduled(fixedDelayString = "${forecast.statistics-interval}")
+    /** 이전 전체 조회의 비교 검증용 진입점. 운영 scheduler에는 등록하지 않는다. */
     public void recomputeStopDemand() {
         Instant computedAt = clock.instant();
         String computedAtLocal = computedAt.atZone(clock.getZone())
