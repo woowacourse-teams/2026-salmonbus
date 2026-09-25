@@ -1,7 +1,6 @@
 package com.gustler.backend.processor;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.jdbc.UncategorizedSQLException;
@@ -10,14 +9,18 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class TripQualityInvestigationJob {
-    private static final Logger log = LoggerFactory.getLogger(TripQualityInvestigationJob.class);
     private final TripQualityRepository quality;
     public TripQualityInvestigationJob(TripQualityRepository quality) { this.quality = quality; }
 
     @Scheduled(fixedDelayString = "${forecast.quality-investigation-interval:10s}")
     public void investigate() {
+        WorkerOperationLog.run("quality_investigation", "all", this::investigateOnce);
+    }
+
+    private void investigateOnce() {
         try {
             quality.investigateNext();
+            WorkerOperationLog.recovered("quality_investigation", "all");
         } catch (QueryTimeoutException | PessimisticLockingFailureException e) {
             deferred(e);
         } catch (UncategorizedSQLException e) {
@@ -28,6 +31,6 @@ public class TripQualityInvestigationJob {
     }
 
     private static void deferred(Exception exception) {
-        log.warn("event=forecast_trip_investigation_deferred reason=DB_TIME_BUDGET exception={}", exception.getClass().getSimpleName());
+        WorkerOperationLog.warn("quality_investigation", "all", "DB_TIME_BUDGET_" + exception.getClass().getSimpleName());
     }
 }

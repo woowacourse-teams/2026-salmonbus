@@ -1,5 +1,6 @@
 package com.gustler.backend.processor;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -55,12 +56,18 @@ public class ArrivalLabelJob {
     @Scheduled(fixedDelayString = "${forecast.settlement-interval}")
     @Transactional
     public void settleArrivalLabels() {
+        WorkerOperationLog.run("settlement_tick", "all", this::settleOnce);
+    }
+
+    private void settleOnce() {
         Instant now = clock.instant();
         List<ForecastSettlement> settlements = new ArrayList<>();
-        for (Long routeVersionId : seatForecastRepository.findRouteVersionIdsWithPendingForecasts()) {
+        for (Long routeVersionId : WorkerOperationLog.measure("settlement_pending_routes", "all",
+            seatForecastRepository::findRouteVersionIdsWithPendingForecasts)) {
             settlements.addAll(settlementsOf(routeVersionId, now));
         }
-        sameDayFullOutcomesService.record(seatForecastRepository.settle(settlements));
+        var settled = WorkerOperationLog.measure("settlement_save", "all", () -> seatForecastRepository.settle(settlements));
+        WorkerOperationLog.run("same_day_record", "all", () -> sameDayFullOutcomesService.record(settled));
     }
 
     private List<ForecastSettlement> settlementsOf(
@@ -68,7 +75,8 @@ public class ArrivalLabelJob {
         Instant now
     ) {
         List<PendingForecast> pending =
-            seatForecastRepository.findPending(routeVersionId, properties.pendingLimit());
+            WorkerOperationLog.measure("settlement_pending_forecasts", routeVersionId,
+                () -> seatForecastRepository.findPending(routeVersionId, properties.pendingLimit()));
         List<ForecastSettlement> settlements = new ArrayList<>();
         for (Map.Entry<String, List<PendingForecast>> byVehicle : groupByVehicle(pending).entrySet()) {
             settlements.addAll(settlementsOf(routeVersionId, byVehicle.getKey(), byVehicle.getValue(), now));
@@ -117,8 +125,9 @@ public class ArrivalLabelJob {
         if (vehicleId == null) {
             return List.of();
         }
-        return arrivalObservationRepository.findAfter(
-            routeVersionId, vehicleId, earliestGeneratedAt(forecasts), properties.arrivalLimit());
+        return WorkerOperationLog.measure("settlement_arrival_candidates", routeVersionId,
+            () -> arrivalObservationRepository.findAfter(
+                routeVersionId, vehicleId, earliestGeneratedAt(forecasts), properties.arrivalLimit()));
     }
 
     /**

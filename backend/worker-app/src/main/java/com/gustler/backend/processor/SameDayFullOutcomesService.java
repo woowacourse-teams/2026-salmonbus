@@ -1,5 +1,6 @@
 package com.gustler.backend.processor;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.processor.seatdistribution.SameDayFullOutcomes;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -32,12 +33,13 @@ public class SameDayFullOutcomesService {
         Instant predictionAt
     ) {
         SeoulDay day = SeoulDay.containing(predictionAt);
-        List<SameDayFullOutcomeCount> counts = repository.findCounts(routeId, day);
+        List<SameDayFullOutcomeCount> counts = WorkerOperationLog.measure("same_day_read", routeId, () -> repository.findCounts(routeId, day));
         if (counts.isEmpty()) {
             counts = seed(routeId, day);
         }
         if (predictionAt.isBefore(settledThroughOf(counts))) {
-            return outcomesOf(repository.countFromSource(routeId, day, predictionAt));
+            return outcomesOf(WorkerOperationLog.measure("same_day_asof_source", routeId,
+                () -> repository.countFromSource(routeId, day, predictionAt)));
         }
         return outcomesOf(counts);
     }
@@ -71,12 +73,14 @@ public class SameDayFullOutcomesService {
         final long routeId,
         SeoulDay day
     ) {
-        List<SameDayFullOutcomeCount> counted = repository.countFromSource(routeId, day, day.end());
+        List<SameDayFullOutcomeCount> counted = WorkerOperationLog.measure("same_day_seed_source", routeId,
+            () -> repository.countFromSource(routeId, day, day.end()));
         if (counted.isEmpty()) {
             // 거리 0은 실제 예보가 아니다. 이 날짜/품질 버전에서 원본이 비었음을 한 번만 기록한다.
             counted = List.of(new SameDayFullOutcomeCount(0, 0, 0, 0, day.start()));
         }
-        repository.upsertCounts(routeId, day, counted);
+        List<SameDayFullOutcomeCount> toSave = counted;
+        WorkerOperationLog.run("same_day_seed_save", routeId, () -> repository.upsertCounts(routeId, day, toSave));
         return counted;
     }
 

@@ -1,5 +1,6 @@
 package com.gustler.backend.processor;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
@@ -37,7 +38,7 @@ public class StopDemandPipelineJob {
         Instant now=clock.instant();
         if(!now.isBefore(refreshAt)) {
             refreshAt=now.plusSeconds(10);
-            versions=routes.findActiveVersionIds().stream().sorted().toList();
+            versions=WorkerOperationLog.measure("statistics_routes", "all", routes::findActiveVersionIds).stream().sorted().toList();
             retryAt.keySet().retainAll(versions);
             failures.keySet().retainAll(versions);
             progressAt.keySet().retainAll(versions);
@@ -47,7 +48,7 @@ public class StopDemandPipelineJob {
             if(now.isBefore(retryAt.getOrDefault(version,Instant.MIN))) { continue; }
             long started=System.nanoTime();
             try {
-                var result=pipeline.step(version); // 프록시가 commit한 뒤만 성공/진행을 기록한다.
+                var result=WorkerOperationLog.measure("statistics_step_and_commit", version, () -> pipeline.step(version)); // 프록시가 commit한 뒤만 성공/진행을 기록한다.
                 failures.remove(version);
                 retryAt.put(version,now.plusSeconds(result.status().equals("IDLE") || result.status().equals("COMPLETED") ? 10
                     : result.status().equals("WAITING") ? 1 : 0));
@@ -62,8 +63,6 @@ public class StopDemandPipelineJob {
                 int attempts=failures.merge(version,1,Integer::sum);
                 long delay=Math.min(60,1L<<Math.min(attempts,6));
                 retryAt.put(version,now.plusSeconds(delay));
-                log.error("event=stop_demand_statistics status=FAILED routeVersionId={} stepDurationMs={} retryAfterSeconds={} exceptionType={}",
-                    version,elapsed(started),delay,exception.getClass().getSimpleName());
                 throw exception;
             }
             return;

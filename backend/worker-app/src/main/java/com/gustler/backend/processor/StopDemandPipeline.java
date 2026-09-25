@@ -1,5 +1,6 @@
 package com.gustler.backend.processor;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -36,7 +37,7 @@ public class StopDemandPipeline {
     @Transactional(timeout = 2)
     public Step step(long version) {
         StopDemandRebuildWriter.limits(jdbc);
-        quality.lockRoute(version);
+        WorkerOperationLog.run("statistics_route_lock", version, () -> quality.lockRoute(version));
         jdbc.sql("INSERT INTO stop_demand_baseline(route_version_id) VALUES (?) ON CONFLICT DO NOTHING").param(version).update();
         boolean initialized=jdbc.sql("SELECT initialized FROM stop_demand_baseline WHERE route_version_id=?")
             .param(version).query(Boolean.class).single();
@@ -47,7 +48,8 @@ public class StopDemandPipeline {
             .param(version).query(String.class).list();
         if (!requests.isEmpty()) {
             jdbc.sql("UPDATE stop_demand_run SET phase='STALE' WHERE route_version_id=?").param(version).update();
-            boolean advanced=rebuild.step(version,requests.getFirst());
+            boolean advanced=WorkerOperationLog.measure("statistics_rebuild", version,
+                () -> rebuild.step(version,requests.getFirst()));
             return new Step(advanced ? "PROGRESSED" : "WAITING","REBUILD",null);
         }
         long revision=jdbc.sql("SELECT quality_revision FROM route WHERE id=(SELECT route_id FROM route_version WHERE id=?)")
@@ -79,19 +81,21 @@ public class StopDemandPipeline {
             return new Step("PROGRESSED","CLEAN",now);
         }
         Run run=runs.getFirst();
-        switch(run.phase()) {
-            case "CLEAN" -> clean(version);
-            case "CAPTURE" -> { return capture(version,run); }
-            case "ACCUMULATE" -> accumulate(version,run);
-            case "FOLD" -> fold(version);
-            case "REDUCE" -> reduce(version);
-            case "PUBLISH" -> {
-                publish(version,run);
-                return new Step("COMPLETED","DONE",run.until());
+        return WorkerOperationLog.measure("statistics_" + run.phase().toLowerCase(Locale.ROOT), version, () -> {
+            switch(run.phase()) {
+                case "CLEAN" -> clean(version);
+                case "CAPTURE" -> { return capture(version,run); }
+                case "ACCUMULATE" -> accumulate(version,run);
+                case "FOLD" -> fold(version);
+                case "REDUCE" -> reduce(version);
+                case "PUBLISH" -> {
+                    publish(version,run);
+                    return new Step("COMPLETED","DONE",run.until());
+                }
+                default -> throw new IllegalStateException("알 수 없는 통계 단계: "+run.phase());
             }
-            default -> throw new IllegalStateException("알 수 없는 통계 단계: "+run.phase());
-        }
-        return new Step("PROGRESSED",run.phase(),run.until());
+            return new Step("PROGRESSED",run.phase(),run.until());
+        });
     }
 
     private void clean(long version) {

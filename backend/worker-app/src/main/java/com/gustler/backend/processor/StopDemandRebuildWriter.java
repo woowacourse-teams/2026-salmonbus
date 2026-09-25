@@ -1,5 +1,6 @@
 package com.gustler.backend.processor;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -59,37 +60,39 @@ public class StopDemandRebuildWriter {
             return true;
         }
         Progress p = progress.getFirst();
-        switch (p.phase()) {
-            case "SCAN" -> scan(version, vehicle, p);
-            case "CLEAR" -> {
-                int removed = jdbc.sql("""
-                    DELETE FROM stop_demand_current_total WHERE (route_version_id,vehicle_id,arrived_hour_start,target_stop_order) IN (
-                        SELECT route_version_id,vehicle_id,arrived_hour_start,target_stop_order FROM stop_demand_current_total
-                        WHERE route_version_id=? AND (?='' OR vehicle_id=?) LIMIT 128)
-                    """).params(version, vehicle, vehicle).update();
-                if (removed == 0) { move(version, vehicle, "COPY", 0); }
-            }
-            case "COPY" -> copy(version, vehicle, p);
-            case "ACK" -> acknowledge(version, vehicle, p);
-            case "CLEAN" -> {
-                int removed = jdbc.sql("DELETE FROM stop_demand_rebuild_total WHERE id IN (SELECT id FROM stop_demand_rebuild_total WHERE request_id=? LIMIT 128)")
-                    .param(request).update();
-                if (removed == 0) {
-                    jdbc.sql("DELETE FROM stop_demand_rebuild_request WHERE route_version_id=? AND vehicle_id=? AND request_id=?")
-                        .params(version, vehicle, request).update();
-                    jdbc.sql("DELETE FROM stop_demand_rebuild_progress WHERE route_version_id=? AND vehicle_id=?")
-                        .params(version, vehicle).update();
-                    jdbc.sql("""
-                        INSERT INTO stop_demand_baseline(route_version_id,initialized,data_until) VALUES (?, ?, ?)
-                        ON CONFLICT(route_version_id) DO UPDATE SET
-                          initialized=stop_demand_baseline.initialized OR EXCLUDED.initialized,
-                          data_until=GREATEST(stop_demand_baseline.data_until,EXCLUDED.data_until)
-                        """).params(version, vehicle.isEmpty(), p.until()).update();
+        return WorkerOperationLog.measure("statistics_rebuild_" + p.phase().toLowerCase(java.util.Locale.ROOT), version, () -> {
+            switch (p.phase()) {
+                case "SCAN" -> scan(version, vehicle, p);
+                case "CLEAR" -> {
+                    int removed = jdbc.sql("""
+                        DELETE FROM stop_demand_current_total WHERE (route_version_id,vehicle_id,arrived_hour_start,target_stop_order) IN (
+                            SELECT route_version_id,vehicle_id,arrived_hour_start,target_stop_order FROM stop_demand_current_total
+                            WHERE route_version_id=? AND (?='' OR vehicle_id=?) LIMIT 128)
+                        """).params(version, vehicle, vehicle).update();
+                    if (removed == 0) { move(version, vehicle, "COPY", 0); }
                 }
+                case "COPY" -> copy(version, vehicle, p);
+                case "ACK" -> acknowledge(version, vehicle, p);
+                case "CLEAN" -> {
+                    int removed = jdbc.sql("DELETE FROM stop_demand_rebuild_total WHERE id IN (SELECT id FROM stop_demand_rebuild_total WHERE request_id=? LIMIT 128)")
+                        .param(request).update();
+                    if (removed == 0) {
+                        jdbc.sql("DELETE FROM stop_demand_rebuild_request WHERE route_version_id=? AND vehicle_id=? AND request_id=?")
+                            .params(version, vehicle, request).update();
+                        jdbc.sql("DELETE FROM stop_demand_rebuild_progress WHERE route_version_id=? AND vehicle_id=?")
+                            .params(version, vehicle).update();
+                        jdbc.sql("""
+                            INSERT INTO stop_demand_baseline(route_version_id,initialized,data_until) VALUES (?, ?, ?)
+                            ON CONFLICT(route_version_id) DO UPDATE SET
+                              initialized=stop_demand_baseline.initialized OR EXCLUDED.initialized,
+                              data_until=GREATEST(stop_demand_baseline.data_until,EXCLUDED.data_until)
+                            """).params(version, vehicle.isEmpty(), p.until()).update();
+                    }
+                }
+                default -> throw new IllegalStateException("알 수 없는 통계 정정 단계: " + p.phase());
             }
-            default -> throw new IllegalStateException("알 수 없는 통계 정정 단계: " + p.phase());
-        }
-        return true;
+            return true;
+        });
     }
 
     private void scan(long version, String vehicle, Progress p) {
