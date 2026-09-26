@@ -35,6 +35,7 @@ export const vars = createGlobalTheme(":root", {
       high: { ring: "#6F9276", surface: "#DCE8DE", text: "#31573A" },
       low: { ring: "#C3A34C", surface: "#EEE6C9", text: "#6D5B1D" },
       veryLow: { ring: "#B9655E", surface: "#E9D7D5", text: "#7D352F" },
+      unknown: { ring: "#AAB2BC", surface: "#EDEDEB", text: "#6B6A6A" },
     },
   },
   font: {

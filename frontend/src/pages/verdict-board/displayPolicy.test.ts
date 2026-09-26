@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
-import { serviceStateFor } from "./displayPolicy";
-import { boardWith, upInfo } from "@/testing/fixtures";
+import { serviceStateFor, stopViewsFor } from "./displayPolicy";
+import { boardWith, stopAt, upInfo } from "@/testing/fixtures";
+import { forecastFixtures } from "@/testing/forecastFixtures";
 
 const observedAt = (clock: string, offset = "+09:00") => `2026-09-01T${clock}:00${offset}`;
 
@@ -45,5 +46,31 @@ describe("serviceStateFor", () => {
 
       expect(serviceStateFor(boardWith({ observedAt: utcObserved, vehiclesInService: 2 }), upInfo)).toBe("running");
     });
+  });
+});
+
+describe("stopViewsFor", () => {
+  it("가장 가까운 차량의 예측이 없어도 접근 차량과 대표 판정에 남긴다", () => {
+    const board = boardWith({
+      stops: [
+        stopAt(2, {
+          approachingVehicles: [{ ...forecastFixtures.available, horizonStops: 7 }, forecastFixtures.unavailable],
+        }),
+        stopAt(3),
+      ],
+    });
+
+    expect(stopViewsFor(board, "UP")).toMatchObject([
+      {
+        sequence: 2,
+        kind: "boarding",
+        level: "unknown",
+        arrivals: [
+          { stopsAway: 1, level: "unknown", seatEstimate: { kind: "unknown" } },
+          { stopsAway: 7, level: "high", seatEstimate: { kind: "count", seats: 5 } },
+        ],
+      },
+      { sequence: 3, kind: "noForecast" },
+    ]);
   });
 });

@@ -21,9 +21,18 @@ export function representativeArrival(arrivals: readonly ArrivalView[]): Arrival
 }
 
 function toArrivalView(vehicle: ApproachingVehicle): ArrivalView {
+  const { horizonStops, forecast } = vehicle;
+  if (forecast.status === "UNAVAILABLE") {
+    return {
+      stopsAway: horizonStops,
+      level: "unknown",
+      seatEstimate: { kind: "unknown" },
+    };
+  }
+
   return {
-    stopsAway: vehicle.horizonStops,
-    level: toSeatLevel(vehicle.seatAvailableProbability),
-    seatEstimate: toSeatEstimate(vehicle.expectedSeats),
+    stopsAway: horizonStops,
+    level: toSeatLevel(forecast.seatAvailableProbability),
+    seatEstimate: toSeatEstimate(forecast.expectedSeats),
   };
 }
