@@ -325,6 +325,29 @@ SELECT api_service, key_alias, reserved_calls, daily_limit
 
 `reserved_calls`는 보내기 전에 예약한 호출 수다. 포털이 센 호출 수와 다를 수 있다.
 
+### 포털이 거절한 키
+
+위치정보 호출에 포털이 22(하루 한도 초과), 30(등록되지 않은 키), 31(기한 만료)로 답하면 Worker는 그 키의
+그날 장부를 한도까지 채운다. 그 키는 한국 자정까지 쓰지 않고, ERROR 로그를 한 줄 남긴다.
+**키가 1개면 22를 받은 뒤로 그날 위치정보 수집이 멈춘다.** 그 뒤의 묶음은 `NOT_RESERVED`로 남는다.
+
+```bash
+journalctl -u salmonbus-worker --no-pager | grep 'GBIS 키를 거절' | tail -5
+```
+
+로그의 `채우기 전 사용량`은 채우기 직전의 `reserved_calls`다.
+**채우기 전 사용량은 장부에 남지 않고 이 로그에만 있다.** 잘못 제외해서 그날 다시 써야 하면
+아래에서 `764`를 로그의 `채우기 전 사용량`으로, `'b'`를 로그의 `슬롯`으로 바꿔 실행한다.
+
+```sql
+UPDATE daily_call_quota
+   SET reserved_calls = 764
+ WHERE provider = 'GBIS' AND api_service = 'BUS_LOCATION' AND key_alias = 'b'
+   AND kst_date = (now() AT TIME ZONE 'Asia/Seoul')::date;
+```
+
+재시작하지 않아도 다음 수집부터 그 키를 다시 쓴다. 포털이 같은 코드로 다시 답하면 또 제외한다.
+
 ## 상태 확인
 
 ```bash

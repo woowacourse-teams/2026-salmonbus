@@ -6,6 +6,7 @@ import com.gustler.backend.support.IntegrationTest;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -299,6 +300,23 @@ class CallQuotaLedgerTest {
         assertThat(actual).isEmpty();
     }
 
+    @Test
+    void 키를_빼면_그_키의_그날_장부를_한도까지_채우고_채우기_전_사용량을_돌려준다() {
+        // given
+        insertQuotaOf(KEY_ALIAS_B, KOREA_8_28, TWO_CALLS, DAILY_LIMIT_10000);
+        insertQuotaOf(GbisKey.PRIMARY, KOREA_8_29, ALREADY_USED_UP, DAILY_LIMIT_10000);
+        insertQuotaOf(KEY_ALIAS_B, KOREA_8_29, TWO_CALLS, DAILY_LIMIT_10000);
+
+        // when
+        Optional<Integer> actual = ledger.exclude(CallQuota.BUS_LOCATION, KEY_ALIAS_B, KOREA_8_29_MIDNIGHT);
+
+        // then
+        assertThat(actual).contains(TWO_CALLS);
+        assertThat(reservedCallsByKeyOn(KOREA_8_29)).containsExactly(
+            Map.entry(GbisKey.PRIMARY, ALREADY_USED_UP), Map.entry(KEY_ALIAS_B, DAILY_LIMIT_10000));
+        assertThat(reservedCallsByKeyOn(KOREA_8_28)).containsExactly(Map.entry(KEY_ALIAS_B, TWO_CALLS));
+    }
+
     private CallQuotaLedger ledgerOverTwoKeys() {
         return new CallQuotaLedger(
             callQuotaRepository,
@@ -378,6 +396,19 @@ class CallQuotaLedgerTest {
             .params(quota.provider(), quota.apiService(), kstDate)
             .query(Integer.class)
             .single();
+    }
+
+    private List<Map.Entry<String, Integer>> reservedCallsByKeyOn(
+        LocalDate kstDate
+    ) {
+        return jdbcClient.sql("""
+                SELECT key_alias, reserved_calls FROM daily_call_quota
+                WHERE kst_date = ?
+                ORDER BY key_alias
+                """)
+            .param(kstDate)
+            .query((rs, n) -> Map.entry(rs.getString(1), rs.getInt(2)))
+            .list();
     }
 
     private List<LocalDate> ledgerDates() {

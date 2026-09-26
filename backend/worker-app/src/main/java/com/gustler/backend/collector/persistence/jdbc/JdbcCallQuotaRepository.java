@@ -3,6 +3,7 @@ package com.gustler.backend.collector.persistence.jdbc;
 import com.gustler.backend.collector.CallQuota;
 import com.gustler.backend.collector.CallQuotaRepository;
 import java.time.LocalDate;
+import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -31,6 +32,13 @@ public class JdbcCallQuotaRepository implements CallQuotaRepository {
             WHERE daily_call_quota.reserved_calls + ? <= daily_call_quota.daily_limit
         """;
 
+    private static final String EXCLUDE = """
+        UPDATE daily_call_quota
+            SET reserved_calls = daily_limit
+            WHERE provider = ? AND api_service = ? AND kst_date = ? AND key_alias = ?
+        RETURNING old.reserved_calls
+        """;
+
     private static final int ONE_ROW_CHANGED = 1;
 
     private final JdbcClient jdbcClient;
@@ -52,5 +60,17 @@ public class JdbcCallQuotaRepository implements CallQuotaRepository {
         return jdbcClient.sql(RESERVE)
             .params(quota.provider(), quota.apiService(), kstDate, keyAlias, calls, dailyLimit, calls, calls)
             .update() == ONE_ROW_CHANGED;
+    }
+
+    @Override
+    public Optional<Integer> exclude(
+        CallQuota quota,
+        String keyAlias,
+        LocalDate kstDate
+    ) {
+        return jdbcClient.sql(EXCLUDE)
+            .params(quota.provider(), quota.apiService(), kstDate, keyAlias)
+            .query(Integer.class)
+            .optional();
     }
 }

@@ -122,6 +122,15 @@ public class CallQuotaLedger {
         return reserveCalls(quota, keyAlias, dispatchAt, ONE_CALL);
     }
 
+    @Transactional
+    public Optional<Integer> exclude(
+        CallQuota quota,
+        String keyAlias,
+        OffsetDateTime requestedAt
+    ) {
+        return callQuotaRepository.exclude(quota, keyAlias, koreanDateOf(requestedAt));
+    }
+
     private LocalDate koreanDateOf(
         OffsetDateTime requestedAt
     ) {
