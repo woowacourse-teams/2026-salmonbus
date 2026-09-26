@@ -10,4 +10,8 @@ describe("seatLabel", () => {
   it("toSeatEstimate가 예상 좌석 수 없이 만든 결과를 받으면 빈자리 없음과 구분해서 예측 불가 문구를 만든다", () => {
     expect(seatLabel(toSeatEstimate(undefined))).toBe("좌석을 예측하기 어려워요");
   });
+
+  it("toSeatEstimate가 예상 좌석 0석으로 만든 결과를 받으면 예측 불가와 구분해서 빈자리 없음 문구를 만든다", () => {
+    expect(seatLabel(toSeatEstimate(0))).toBe("도착 시 빈자리가 없어요");
+  });
 });
