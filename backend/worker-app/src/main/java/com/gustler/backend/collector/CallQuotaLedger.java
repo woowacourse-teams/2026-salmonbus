@@ -3,6 +3,9 @@ package com.gustler.backend.collector;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +33,8 @@ public class CallQuotaLedger {
 
     private final CallQuotaRepository callQuotaRepository;
     private final int dailyLimit;
+    private final List<GbisKey> keys;
+    private final AtomicInteger nextKeyPosition = new AtomicInteger();
 
     public CallQuotaLedger(
         CallQuotaRepository callQuotaRepository,
@@ -37,6 +42,7 @@ public class CallQuotaLedger {
     ) {
         this.callQuotaRepository = callQuotaRepository;
         this.dailyLimit = properties.dailyLimit();
+        this.keys = properties.keys();
     }
 
     /** 자리 하나를 예약한다. 위치정보는 한 batch 가 호출 한 번이다. */
@@ -45,7 +51,7 @@ public class CallQuotaLedger {
         CallQuota quota,
         OffsetDateTime requestedAt
     ) {
-        return reserveCalls(quota, requestedAt, ONE_CALL);
+        return reserveCalls(quota, GbisKey.PRIMARY, requestedAt, ONE_CALL);
     }
 
     /** 자리를 원하는 만큼 잡는다. 노선정보는 한 노선을 읽는 데 호출 두 번이 든다. */
@@ -55,18 +61,45 @@ public class CallQuotaLedger {
         OffsetDateTime requestedAt,
         final int calls
     ) {
-        return reserveCalls(quota, requestedAt, calls);
+        return reserveCalls(quota, GbisKey.PRIMARY, requestedAt, calls);
+    }
+
+    @Transactional
+    public Optional<String> reserveNextKey(
+        CallQuota quota,
+        OffsetDateTime requestedAt
+    ) {
+        final int start = nextKeyPosition.get();
+        for (int offset = 0; offset < keys.size(); offset++) {
+            final int position = (start + offset) % keys.size();
+            String keyAlias = keys.get(position).alias();
+            if (reserveCalls(quota, keyAlias, requestedAt, ONE_CALL)) {
+                nextKeyPosition.set((position + 1) % keys.size());
+                return Optional.of(keyAlias);
+            }
+        }
+        return Optional.empty();
     }
 
     private boolean reserveCalls(
         CallQuota quota,
+        String keyAlias,
         OffsetDateTime requestedAt,
         final int calls
     ) {
         if (calls > dailyLimit) {
             return false;
         }
-        return callQuotaRepository.reserve(quota, koreanDateOf(requestedAt), calls, dailyLimit);
+        return callQuotaRepository.reserve(quota, keyAlias, koreanDateOf(requestedAt), calls, dailyLimit);
+    }
+
+    @Transactional
+    public boolean holdsSeatAt(
+        CallQuota quota,
+        OffsetDateTime reservedAt,
+        OffsetDateTime dispatchAt
+    ) {
+        return holdsSeatAt(quota, GbisKey.PRIMARY, reservedAt, dispatchAt);
     }
 
     /**
@@ -79,13 +112,23 @@ public class CallQuotaLedger {
     @Transactional
     public boolean holdsSeatAt(
         CallQuota quota,
+        String keyAlias,
         OffsetDateTime reservedAt,
         OffsetDateTime dispatchAt
     ) {
         if (koreanDateOf(reservedAt).equals(koreanDateOf(dispatchAt))) {
             return true;
         }
-        return reserveCalls(quota, dispatchAt, ONE_CALL);
+        return reserveCalls(quota, keyAlias, dispatchAt, ONE_CALL);
+    }
+
+    @Transactional
+    public Optional<Integer> exclude(
+        CallQuota quota,
+        String keyAlias,
+        OffsetDateTime requestedAt
+    ) {
+        return callQuotaRepository.exclude(quota, keyAlias, koreanDateOf(requestedAt));
     }
 
     private LocalDate koreanDateOf(

@@ -1,6 +1,7 @@
 package com.gustler.backend.collector;
 
 import java.time.Clock;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -31,6 +32,7 @@ public class CollectionConfig {
         private final CollectionProperties properties;
         private final CollectionScheduler scheduler;
         private final Clock clock;
+        private final List<String> keyAliases;
         private final int dailyLimit;
 
         ScheduledCollection(
@@ -42,13 +44,16 @@ public class CollectionConfig {
             this.properties = properties;
             this.scheduler = scheduler;
             this.clock = clock;
-            this.dailyLimit = gbisProperties.dailyLimit();
+            this.keyAliases = gbisProperties.keys().stream().map(GbisKey::alias).toList();
+            this.dailyLimit = gbisProperties.dailyLimit() * keyAliases.size();
         }
 
         @Override
         public void configureTasks(
             ScheduledTaskRegistrar registrar
         ) {
+            log.info("GBIS 키 슬롯 {}개로 수집한다. 슬롯={} 하루 한도 합={}",
+                keyAliases.size(), String.join(",", keyAliases), dailyLimit);
             warnIfOverDailyLimit();
             registrar.addTriggerTask(scheduler::collectAllRoutes, new AdaptiveCollectionTrigger(clock));
         }

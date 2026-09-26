@@ -3,6 +3,7 @@ package com.gustler.backend.collector.persistence.jdbc;
 import com.gustler.backend.collector.CallQuota;
 import com.gustler.backend.collector.CallQuotaRepository;
 import java.time.LocalDate;
+import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -24,11 +25,18 @@ public class JdbcCallQuotaRepository implements CallQuotaRepository {
      * 설정을 바꿔도 그날 장부는 처음 정한 한도로 끝까지 센다.
      */
     private static final String RESERVE = """
-        INSERT INTO daily_call_quota (provider, api_service, kst_date, reserved_calls, daily_limit)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO daily_call_quota (provider, api_service, kst_date, key_alias, reserved_calls, daily_limit)
+        VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT ON CONSTRAINT pk_daily_call_quota DO UPDATE
             SET reserved_calls = daily_call_quota.reserved_calls + ?
             WHERE daily_call_quota.reserved_calls + ? <= daily_call_quota.daily_limit
+        """;
+
+    private static final String EXCLUDE = """
+        UPDATE daily_call_quota
+            SET reserved_calls = daily_limit
+            WHERE provider = ? AND api_service = ? AND kst_date = ? AND key_alias = ?
+        RETURNING old.reserved_calls
         """;
 
     private static final int ONE_ROW_CHANGED = 1;
@@ -44,12 +52,25 @@ public class JdbcCallQuotaRepository implements CallQuotaRepository {
     @Override
     public boolean reserve(
         CallQuota quota,
+        String keyAlias,
         LocalDate kstDate,
         final int calls,
         final int dailyLimit
     ) {
         return jdbcClient.sql(RESERVE)
-            .params(quota.provider(), quota.apiService(), kstDate, calls, dailyLimit, calls, calls)
+            .params(quota.provider(), quota.apiService(), kstDate, keyAlias, calls, dailyLimit, calls, calls)
             .update() == ONE_ROW_CHANGED;
+    }
+
+    @Override
+    public Optional<Integer> exclude(
+        CallQuota quota,
+        String keyAlias,
+        LocalDate kstDate
+    ) {
+        return jdbcClient.sql(EXCLUDE)
+            .params(quota.provider(), quota.apiService(), kstDate, keyAlias)
+            .query(Integer.class)
+            .optional();
     }
 }

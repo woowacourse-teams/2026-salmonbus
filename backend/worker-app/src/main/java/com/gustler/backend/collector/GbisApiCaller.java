@@ -52,10 +52,18 @@ public class GbisApiCaller {
         this.objectMapper = objectMapper;
     }
 
-    // TODO 로깅 혹은 저장 시 serviceKey 를 마스킹해야 한다.
     public GbisRawResponse get(
         String path,
         String routeId
+    ) {
+        return get(path, routeId, GbisKey.PRIMARY);
+    }
+
+    // TODO 로깅 혹은 저장 시 serviceKey 를 마스킹해야 한다.
+    public GbisRawResponse get(
+        String path,
+        String routeId,
+        String keyAlias
     ) {
         try {
             byte[] raw = gbisRestClient.get()
@@ -64,7 +72,7 @@ public class GbisApiCaller {
                     .queryParam("serviceKey", "{serviceKey}")
                     .queryParam("routeId", "{routeId}")
                     .queryParam("format", "json")
-                    .build(properties.serviceKey(), routeId))
+                    .build(properties.serviceKeyOf(keyAlias), routeId))
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, KEEP_ERROR_BODY)
                 .body(byte[].class);

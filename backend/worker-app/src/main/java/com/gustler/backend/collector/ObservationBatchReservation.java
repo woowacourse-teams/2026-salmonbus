@@ -8,6 +8,7 @@ package com.gustler.backend.collector;
  */
 public record ObservationBatchReservation(
     long batchId,
-    boolean reserved
+    boolean reserved,
+    String keyAlias
 ) {
 }

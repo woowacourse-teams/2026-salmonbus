@@ -9,6 +9,7 @@ import com.gustler.backend.collector.GbisLocationResult.NoVehicles;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,6 +43,7 @@ class ObservationBatchLedgerTest {
     private static final OffsetDateTime KOREA_8_28_LATE_NIGHT = OffsetDateTime.parse("2026-08-28T14:59:59Z");
     private static final OffsetDateTime KOREA_8_29_MIDNIGHT = OffsetDateTime.parse("2026-08-28T15:00:00Z");
     private static final LocalDate KOREA_8_29 = LocalDate.of(2026, 8, 29);
+    private static final String KEY_ALIAS_B = "b";
 
     @Autowired
     private ObservationBatchLedger ledger;
@@ -231,6 +233,18 @@ class ObservationBatchLedgerTest {
 
         // then
         assertThat(reservedCallsOn(KOREA_8_29)).isEqualTo(1);
+    }
+
+    @Test
+    void 보내기_전에_한국_자정이_지나면_예약한_키의_다음_날_장부에_센다() {
+        // given
+        final long batchId = ledger.reserve(attempt(), KOREA_8_28_LATE_NIGHT).batchId();
+
+        // when
+        ledger.markDispatching(batchId, KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT, KEY_ALIAS_B);
+
+        // then
+        assertThat(keyAliasesOn(KOREA_8_29)).containsExactly(KEY_ALIAS_B);
     }
 
     @Test
@@ -458,6 +472,15 @@ class ObservationBatchLedgerTest {
             .param(attemptKey)
             .query(Integer.class)
             .single();
+    }
+
+    private List<String> keyAliasesOn(
+        LocalDate kstDate
+    ) {
+        return jdbcClient.sql("SELECT key_alias FROM daily_call_quota WHERE api_service = ? AND kst_date = ?")
+            .params(CallQuota.BUS_LOCATION.apiService(), kstDate)
+            .query(String.class)
+            .list();
     }
 
     private int reservedCallsOn(

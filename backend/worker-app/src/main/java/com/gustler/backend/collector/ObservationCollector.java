@@ -1,8 +1,11 @@
 package com.gustler.backend.collector;
 
+import com.gustler.backend.collector.GbisLocationResult.DailyQuotaExceeded;
+import com.gustler.backend.collector.GbisLocationResult.GatewayRejected;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 import java.util.OptionalLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,19 +25,26 @@ public class ObservationCollector {
 
     private static final Logger log = LoggerFactory.getLogger(ObservationCollector.class);
 
+    private static final String DAILY_QUOTA_EXCEEDED_CODE = "22";
+    private static final String UNREGISTERED_KEY_CODE = "30";
+    private static final String EXPIRED_KEY_CODE = "31";
+
     private final RouteCatalogLoader routeCatalogLoader;
     private final ObservationBatchLedger batchLedger;
+    private final CallQuotaLedger callQuotaLedger;
     private final GbisLocationSource locationSource;
     private final Clock clock;
 
     public ObservationCollector(
         RouteCatalogLoader routeCatalogLoader,
         ObservationBatchLedger batchLedger,
+        CallQuotaLedger callQuotaLedger,
         GbisLocationSource locationSource,
         Clock clock
     ) {
         this.routeCatalogLoader = routeCatalogLoader;
         this.batchLedger = batchLedger;
+        this.callQuotaLedger = callQuotaLedger;
         this.locationSource = locationSource;
         this.clock = clock;
     }
@@ -68,13 +78,43 @@ public class ObservationCollector {
             return;
         }
 
-        if (!batchLedger.markDispatching(reservation.batchId(), scheduledAt, now())) {
+        OffsetDateTime requestedAt = now();
+        if (!batchLedger.markDispatching(reservation.batchId(), scheduledAt, requestedAt, reservation.keyAlias())) {
             log.warn("자리를 잡고 보내기 전에 한국 자정이 지났는데 다음 날 한도가 없다. 이 batch 는 안 보낸다. "
                 + "노선={} 묶음={}", upstreamRouteId, reservation.batchId());
             return;
         }
 
-        batchLedger.conclude(reservation.batchId(), readOrGiveUp(upstreamRouteId), now());
+        GbisLocationResult result = readOrGiveUp(upstreamRouteId, reservation.keyAlias());
+        batchLedger.conclude(reservation.batchId(), result, now());
+        excludeKeyIfRejected(reservation.keyAlias(), result, requestedAt);
+    }
+
+    private void excludeKeyIfRejected(
+        String keyAlias,
+        GbisLocationResult result,
+        OffsetDateTime requestedAt
+    ) {
+        Optional<String> reasonCode = keyRejectionCodeOf(result);
+        if (reasonCode.isEmpty()) {
+            return;
+        }
+        callQuotaLedger.exclude(CallQuota.BUS_LOCATION, keyAlias, requestedAt).ifPresent(reservedCallsBefore ->
+            log.error("포털이 GBIS 키를 거절해 그 키를 한국 자정까지 쓰지 않는다. 슬롯={} 사유={} 채우기 전 사용량={}",
+                keyAlias, reasonCode.get(), reservedCallsBefore));
+    }
+
+    private Optional<String> keyRejectionCodeOf(
+        GbisLocationResult result
+    ) {
+        if (result instanceof DailyQuotaExceeded) {
+            return Optional.of(DAILY_QUOTA_EXCEEDED_CODE);
+        }
+        if (result instanceof GatewayRejected rejected
+            && (UNREGISTERED_KEY_CODE.equals(rejected.reasonCode()) || EXPIRED_KEY_CODE.equals(rejected.reasonCode()))) {
+            return Optional.of(rejected.reasonCode());
+        }
+        return Optional.empty();
     }
 
     /**
@@ -85,10 +125,11 @@ public class ObservationCollector {
      * 응답이 안 온 것과 같은 자리(UNKNOWN_AFTER_DISPATCH)로 닫는다.
      */
     private GbisLocationResult readOrGiveUp(
-        String upstreamRouteId
+        String upstreamRouteId,
+        String keyAlias
     ) {
         try {
-            return locationSource.read(upstreamRouteId);
+            return locationSource.read(upstreamRouteId, keyAlias);
         } catch (final RuntimeException e) {
             log.error("상류를 부른 뒤 뜻밖의 예외가 났다. 보낸 것은 맞고 결과만 모른다. 노선={}",
                 upstreamRouteId, e);

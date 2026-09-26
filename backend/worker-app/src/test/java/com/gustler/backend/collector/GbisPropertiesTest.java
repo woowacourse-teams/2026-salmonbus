@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
@@ -25,6 +26,8 @@ class GbisPropertiesTest {
     private static final String ORIGINAL_KEY = "ab+cd/ef=";
     private static final String PERCENT_KEY = "ab%2Bcd%2Fef%3D";
     private static final String KEY_TAIL = "SECRETTAIL";
+    private static final String KEY_B = "fake-key-b";
+    private static final String KEY_D = "fake-key-d";
 
     @Test
     void 퍼센트로_바뀐_인증키를_원래_값으로_되돌린다() {
@@ -84,6 +87,12 @@ class GbisPropertiesTest {
      * Environment 를 만들어 application.yml 만 얹고 자리표시자가 무엇으로 풀리는지 본다.
      */
     private String serviceKeyWithoutEnvironmentVariable() {
+        return propertyWithoutEnvironmentVariable("gbis.service-key");
+    }
+
+    private String propertyWithoutEnvironmentVariable(
+        String name
+    ) {
         StandardEnvironment environment = new StandardEnvironment();
         environment.getPropertySources()
             .remove(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME);
@@ -94,7 +103,7 @@ class GbisPropertiesTest {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
-        return environment.getProperty("gbis.service-key");
+        return environment.getProperty(name);
     }
 
     @Test
@@ -120,12 +129,102 @@ class GbisPropertiesTest {
             .run(context -> assertThat(context).hasNotFailed());
     }
 
+    @Test
+    void 값이_있는_슬롯만_a부터_순서대로_쓴다() {
+        // given
+        GbisProperties properties = new GbisProperties(BASE_URL, ORIGINAL_KEY, KEY_B, "   ", KEY_D, DAILY_LIMIT);
+
+        // when
+        List<String> aliases = aliasesOf(properties);
+
+        // then
+        assertThat(aliases).containsExactly(GbisKey.PRIMARY, "b", "d");
+    }
+
+    @Test
+    void 추가_슬롯의_인증키도_퍼센트를_원래_값으로_되돌린다() {
+        // given
+        GbisProperties properties = new GbisProperties(BASE_URL, KEY_B, PERCENT_KEY, null, null, DAILY_LIMIT);
+
+        // when
+        String serviceKey = properties.serviceKeyOf("b");
+
+        // then
+        assertThat(serviceKey).isEqualTo(ORIGINAL_KEY);
+    }
+
+    @Test
+    void 추가_슬롯의_퍼센트_형식이_깨지면_기동을_막는다() {
+        // when & then
+        assertThatThrownBy(
+            () -> new GbisProperties(BASE_URL, ORIGINAL_KEY, "ab%G0" + KEY_TAIL, null, null, DAILY_LIMIT))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("gbis.service-key-b")
+            .hasMessageNotContaining(KEY_TAIL);
+    }
+
+    @Test
+    void 설정에_없는_슬롯의_키는_꺼내지_못한다() {
+        // given
+        GbisProperties properties = new GbisProperties(BASE_URL, ORIGINAL_KEY, DAILY_LIMIT);
+
+        // when & then
+        assertThatThrownBy(() -> properties.serviceKeyOf("b"))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 문자열로_바꾸면_모든_슬롯의_인증키를_가린다() {
+        // given
+        GbisProperties properties = new GbisProperties(BASE_URL, ORIGINAL_KEY, KEY_B, null, KEY_D, DAILY_LIMIT);
+
+        // when
+        String actual = properties.toString();
+
+        // then
+        assertThat(actual)
+            .doesNotContain(ORIGINAL_KEY)
+            .doesNotContain(KEY_B)
+            .doesNotContain(KEY_D);
+    }
+
+    @Test
+    void 추가_키를_설정하면_애플리케이션_컨텍스트가_슬롯을_읽는다() {
+        // when & then
+        contextRunner()
+            .withPropertyValues(
+                "gbis.base-url=" + BASE_URL,
+                "gbis.service-key=" + PERCENT_KEY,
+                "gbis.service-key-b=" + KEY_B,
+                "gbis.daily-limit=" + DAILY_LIMIT)
+            .run(context -> assertThat(aliasesOf(context.getBean(GbisProperties.class)))
+                .containsExactly(GbisKey.PRIMARY, "b"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"gbis.service-key-b", "gbis.service-key-c", "gbis.service-key-d"})
+    void 환경변수가_없으면_추가_슬롯은_빈_값으로_풀린다(
+        String property
+    ) {
+        // when
+        String resolved = propertyWithoutEnvironmentVariable(property);
+
+        // then
+        assertThat(resolved).isEmpty();
+    }
+
     private ApplicationContextRunner contextRunner() {
         return new ApplicationContextRunner()
             .withConfiguration(
                 org.springframework.boot.autoconfigure.AutoConfigurations.of(
                     ConfigurationPropertiesAutoConfiguration.class))
             .withUserConfiguration(EnableGbisProperties.class);
+    }
+
+    private static List<String> aliasesOf(
+        GbisProperties properties
+    ) {
+        return properties.keys().stream().map(GbisKey::alias).toList();
     }
 
     private Throwable catchThrowableOf(

@@ -1,6 +1,7 @@
 package com.gustler.backend.collector;
 
 import java.time.LocalDate;
+import java.util.Optional;
 
 public interface CallQuotaRepository {
 
@@ -12,8 +13,15 @@ public interface CallQuotaRepository {
      */
     boolean reserve(
         CallQuota quota,
+        String keyAlias,
         LocalDate kstDate,
         int calls,
         int dailyLimit
+    );
+
+    Optional<Integer> exclude(
+        CallQuota quota,
+        String keyAlias,
+        LocalDate kstDate
     );
 }
