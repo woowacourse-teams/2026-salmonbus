@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import type { ApiFailure, ApiResult } from "./client";
 import { nextPollFrom } from "./pollSchedule";
+import type { ErrorCode } from "./routeForecast.types";
 
 function success(lifetime: {
   maxAgeSeconds: number | null;
@@ -21,12 +22,12 @@ function failed(failure: ApiFailure): ApiResult<unknown> {
   return { ok: false, failure };
 }
 
-function contract(status: number, retryAfterMs: number | null = null): ApiFailure {
+function contract(status: number, code: ErrorCode, retryAfterMs: number | null = null): ApiFailure {
   return {
     kind: "contract",
     status,
     retryAfterMs,
-    error: { code: "SERVICE_UNAVAILABLE", message: "", requestId: "req-contract" },
+    error: { code, message: "", requestId: "req-contract" },
   };
 }
 
@@ -53,9 +54,9 @@ describe("nextPollFrom", () => {
     // prettier-ignore
     it.each([
       ["취소되면 멈춘다", failed({ kind: "aborted" }), { kind: "stop" }],
-      ["4xx 오류라면 어차피 다시 불러도 같은 상황이 반복되므로 멈춘다", failed(contract(404)), { kind: "stop" }],
-      ["5xx 오류에 Retry-After가 있으면 그만큼 기다린다", failed(contract(503, 30_000)), { kind: "again", delayMs: 30_000 }],
-      ["5xx 오류에 Retry-After가 없다면 60초를 기다린다", failed(contract(503)), { kind: "again", delayMs: 60_000 }],
+      ["4xx 오류라면 어차피 다시 불러도 같은 상황이 반복되므로 멈춘다", failed(contract(404, "ROUTE_NOT_FOUND")), { kind: "stop" }],
+      ["5xx 오류에 Retry-After가 있으면 그만큼 기다린다", failed(contract(503, "SERVICE_UNAVAILABLE", 30_000)), { kind: "again", delayMs: 30_000 }],
+      ["5xx 오류에 Retry-After가 없다면 60초를 기다린다", failed(contract(503, "SERVICE_UNAVAILABLE")), { kind: "again", delayMs: 60_000 }],
       ["시간 초과면 60초를 기다린다", failed({ kind: "timeout" }), { kind: "again", delayMs: 60_000 }],
       ["네트워크 오류면 60초를 기다린다", failed({ kind: "network", cause: null }), { kind: "again", delayMs: 60_000 }],
       ["형식 오류면 60초를 기다린다", failed({ kind: "malformed", status: 500, requestId: null }), { kind: "again", delayMs: 60_000 }],
