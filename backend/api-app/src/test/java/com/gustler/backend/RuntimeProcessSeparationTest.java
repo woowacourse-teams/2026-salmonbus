@@ -136,6 +136,9 @@ class RuntimeProcessSeparationTest {
             jarAt(jarProperty));
         Map<String, String> environment = builder.environment();
         environment.remove("GBIS_SERVICE_KEY");
+        environment.remove("GBIS_SERVICE_KEY_B");
+        environment.remove("GBIS_SERVICE_KEY_C");
+        environment.remove("GBIS_SERVICE_KEY_D");
         environment.put("SERVER_PORT", String.valueOf(port));
         environment.put("DB_URL", postgres.getJdbcUrl());
         environment.put("DB_USERNAME", postgres.getUsername());

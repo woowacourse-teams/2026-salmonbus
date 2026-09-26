@@ -28,6 +28,9 @@ gbis:
   # 콜론이 없으면 안 풀린 자리표시자가 글자 그대로 값이 되는데, 비어 있지 않아서 검사를 통과한다.
   # 그러면 키를 빠뜨린 채로 앱이 멀쩡히 뜨고 호출만 전부 거절당한다.
   service-key: ${GBIS_SERVICE_KEY:}  # 인코딩본과 원래 판본 중 아무거나 넣으면 된다
+  service-key-b: ${GBIS_SERVICE_KEY_B:}
+  service-key-c: ${GBIS_SERVICE_KEY_C:}
+  service-key-d: ${GBIS_SERVICE_KEY_D:}
   daily-limit: 10000 # 활용신청한 API 하나에 걸리는 하루 한도. 두 노선 90초 수집 실측이 8,194회다.
 
 collection:

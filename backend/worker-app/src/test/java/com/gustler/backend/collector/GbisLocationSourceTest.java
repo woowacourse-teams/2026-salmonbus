@@ -32,6 +32,7 @@ class GbisLocationSourceTest {
 
     private static final String BASE_URL = "https://gbis.test";
     private static final String SERVICE_KEY = "fake-service-key-for-test";
+    private static final String SERVICE_KEY_B = "fake-service-key-b-for-test";
     private static final int DAILY_LIMIT = 10_000;
     private static final String ROUTE_3330 = "204000057";
     private static final String QUERY_TIME_IN_FIXTURE = "2026-08-19 11:14:04.911";
@@ -96,6 +97,28 @@ class GbisLocationSourceTest {
 
         // then
         openApi.verify();
+    }
+
+    @Test
+    void 별칭을_주면_그_슬롯의_키로_부른다() {
+        // given
+        RestClient.Builder builder = RestClient.builder().baseUrl(BASE_URL);
+        MockRestServiceServer twoKeysApi = MockRestServiceServer.bindTo(builder).build();
+        ObjectMapper objectMapper = new ObjectMapper();
+        GbisLocationSource twoKeys = new GbisLocationSource(
+            new GbisApiCaller(
+                builder.build(),
+                new GbisProperties(BASE_URL, SERVICE_KEY, SERVICE_KEY_B, null, null, DAILY_LIMIT),
+                objectMapper),
+            objectMapper);
+        twoKeysApi.expect(queryParam("serviceKey", SERVICE_KEY_B))
+            .andRespond(withSuccess(fixture("location-two-vehicles.json"), MediaType.APPLICATION_JSON));
+
+        // when
+        twoKeys.read(ROUTE_3330, "b");
+
+        // then
+        twoKeysApi.verify();
     }
 
     @Test

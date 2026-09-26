@@ -42,7 +42,14 @@ public class GbisLocationSource {
     public GbisLocationResult read(
         String routeId
     ) {
-        return switch (caller.get(BUS_LOCATION_PATH, routeId)) {
+        return read(routeId, GbisKey.PRIMARY);
+    }
+
+    public GbisLocationResult read(
+        String routeId,
+        String keyAlias
+    ) {
+        return switch (caller.get(BUS_LOCATION_PATH, routeId, keyAlias)) {
             case NotReceived notReceived -> new NoResponse(notReceived.message());
             case PortalRejected rejected -> portalResultOf(rejected);
             case Received received -> interpretGbisResponse(received.body());
