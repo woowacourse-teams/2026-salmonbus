@@ -6,6 +6,7 @@ import com.gustler.backend.support.IntegrationTest;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -33,6 +34,12 @@ class CallQuotaLedgerTest {
     private static final int ALREADY_USED_UP = 3;
     private static final int TWO_CALLS = 2;
 
+    private static final String BASE_URL = "https://gbis.test";
+    private static final String KEY_A = "fake-key-a";
+    private static final String KEY_B = "fake-key-b";
+    private static final String KEY_ALIAS_B = "b";
+    private static final int DAILY_LIMIT_10000 = 10_000;
+
     @Autowired
     private CallQuotaLedger ledger;
 
@@ -41,6 +48,9 @@ class CallQuotaLedgerTest {
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private CallQuotaRepository callQuotaRepository;
 
     @AfterEach
     void 장부를_비운다() {
@@ -246,6 +256,69 @@ class CallQuotaLedgerTest {
 
         // then
         assertThat(reservedCallsOn(KOREA_8_28, CallQuota.BUS_LOCATION)).isEqualTo(ONE_SEAT_LEFT);
+    }
+
+    @Test
+    void 키가_둘이면_예약할_때마다_다음_키로_넘어간다() {
+        // given
+        CallQuotaLedger twoKeys = ledgerOverTwoKeys();
+
+        // when
+        List<Optional<String>> actual = List.of(
+            twoKeys.reserveNextKey(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT),
+            twoKeys.reserveNextKey(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT),
+            twoKeys.reserveNextKey(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT));
+
+        // then
+        assertThat(actual).containsExactly(
+            Optional.of(GbisKey.PRIMARY), Optional.of(KEY_ALIAS_B), Optional.of(GbisKey.PRIMARY));
+    }
+
+    @Test
+    void 한도가_찬_키는_건너뛰고_다음_키로_예약한다() {
+        // given
+        insertQuotaOf(GbisKey.PRIMARY, KOREA_8_28, ALREADY_USED_UP, ALREADY_USED_UP);
+
+        // when
+        Optional<String> actual = ledgerOverTwoKeys().reserveNextKey(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT);
+
+        // then
+        assertThat(actual).contains(KEY_ALIAS_B);
+    }
+
+    @Test
+    void 모든_키의_한도가_차면_예약하지_않는다() {
+        // given
+        insertQuotaOf(GbisKey.PRIMARY, KOREA_8_28, ALREADY_USED_UP, ALREADY_USED_UP);
+        insertQuotaOf(KEY_ALIAS_B, KOREA_8_28, ALREADY_USED_UP, ALREADY_USED_UP);
+
+        // when
+        Optional<String> actual = ledgerOverTwoKeys().reserveNextKey(CallQuota.BUS_LOCATION, KOREA_8_28_LATE_NIGHT);
+
+        // then
+        assertThat(actual).isEmpty();
+    }
+
+    private CallQuotaLedger ledgerOverTwoKeys() {
+        return new CallQuotaLedger(
+            callQuotaRepository,
+            new GbisProperties(BASE_URL, KEY_A, KEY_B, null, null, DAILY_LIMIT_10000));
+    }
+
+    private void insertQuotaOf(
+        String keyAlias,
+        LocalDate kstDate,
+        final int reservedCalls,
+        final int dailyLimit
+    ) {
+        jdbcClient.sql("""
+                INSERT INTO daily_call_quota (provider, api_service, kst_date, key_alias, reserved_calls, daily_limit)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """)
+            .params(
+                CallQuota.BUS_LOCATION.provider(), CallQuota.BUS_LOCATION.apiService(),
+                kstDate, keyAlias, reservedCalls, dailyLimit)
+            .update();
     }
 
     private List<Boolean> reserveAtTheSameMoment() throws Exception {

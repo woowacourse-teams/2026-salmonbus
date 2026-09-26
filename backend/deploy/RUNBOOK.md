@@ -277,6 +277,54 @@ grep '^GBIS_SERVICE_KEY=' /etc/salmonbus/worker.env | cut -d= -f2- | tr -d '\n' 
 **앱이 시작됐다는 사실만으로 인증키가 올바르다고 판단할 수 없다.** 잘못된 키로도 4초 만에 시작하고 health는 200을 반환한다.
 노선 버전이 없는 DB에서는 수집이 Open API를 호출하지 않으므로 오류도 발생하지 않는다.
 
+## GBIS 키 여러 개 쓰기
+
+Worker는 버스 위치정보 API를 키 최대 4개로 나눠 호출한다. 호출마다 다음 키로 넘어가고, 그날 한도가 찬 키는 건너뛴다.
+노선정보 API는 슬롯 a만 쓴다.
+
+| 슬롯 | `worker.env` 변수 |
+| --- | --- |
+| a | `GBIS_SERVICE_KEY`. 반드시 있어야 한다 |
+| b | `GBIS_SERVICE_KEY_B` |
+| c | `GBIS_SERVICE_KEY_C` |
+| d | `GBIS_SERVICE_KEY_D` |
+
+**모든 키의 하루 한도를 같은 10,000회(`gbis.daily-limit`)로 센다.** 포털에서 한도 10,000회를 받은 키만 넣는다.
+값이 빈 슬롯은 쓰지 않는다. **같은 키를 두 슬롯에 넣지 않는다.** Worker가 막지 않으므로 그 키의 한도를 두 배로 센다.
+
+### 키 추가
+
+```bash
+sudo vi /etc/salmonbus/worker.env    # GBIS_SERVICE_KEY_B= 줄을 추가한다. C·D도 같다
+sudo systemctl restart salmonbus-worker
+journalctl -u salmonbus-worker --no-pager | grep 'GBIS 키 슬롯' | tail -1
+```
+
+마지막 명령의 출력에서 슬롯 목록과 한도 합을 확인한다. 키가 4개면 `GBIS 키 슬롯 4개로 수집한다. 슬롯=a,b,c,d 하루 한도 합=40000`이다.
+이 로그는 수집을 활성화한 Worker에서만 남는다. 넣은 키는 "인증 정보를 출력하지 않고 확인하기"의 명령에서
+`^GBIS_SERVICE_KEY=`를 `^GBIS_SERVICE_KEY_B=`처럼 바꿔 포털 값과 대조한다.
+
+### 키 1개로 되돌리기
+
+```bash
+sudo sed -i '/^GBIS_SERVICE_KEY_[BCD]=/d' /etc/salmonbus/worker.env
+sudo systemctl restart salmonbus-worker
+```
+
+**`GBIS_SERVICE_KEY` 줄은 지우지 않는다.** 슬롯 a가 없으면 Worker가 시작하지 않는다.
+재시작한 뒤에는 슬롯 a만 쓴다. 장부의 b~d 행은 그날 남아 있지만 더 늘지 않는다.
+
+### 키별 사용량
+
+```sql
+SELECT api_service, key_alias, reserved_calls, daily_limit
+  FROM daily_call_quota
+ WHERE provider = 'GBIS' AND kst_date = (now() AT TIME ZONE 'Asia/Seoul')::date
+ ORDER BY api_service, key_alias;
+```
+
+`reserved_calls`는 보내기 전에 예약한 호출 수다. 포털이 센 호출 수와 다를 수 있다.
+
 ## 상태 확인
 
 ```bash

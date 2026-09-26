@@ -80,7 +80,7 @@ class ObservationCollectorTest {
         given(clock.getZone()).willReturn(KOREA);
         given(clock.instant()).willReturn(TICK);
         given(routeSource.read(ROUTE_3330)).willReturn(new GbisRouteResult.Success(upstreamRoute()));
-        given(locationSource.read(ROUTE_3330)).willReturn(new Success(QUERY_TIME, List.of(
+        given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME, List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217))));
         collectorLog = startCapturingCollectorLog();
     }
@@ -137,7 +137,7 @@ class ObservationCollectorTest {
     @Test
     void 상류가_정상으로_답한_판은_본_차량만큼_관측을_쌓는다() {
         // given
-        given(locationSource.read(ROUTE_3330)).willReturn(new Success(QUERY_TIME, List.of(
+        given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME, List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217),
             busAt(VEHICLE_204003542, 3, STOP_208000069))));
 
@@ -151,7 +151,7 @@ class ObservationCollectorTest {
     @Test
     void 운행_차량이_없다는_응답도_판을_SUCCESS_EMPTY로_닫는다() {
         // given
-        given(locationSource.read(ROUTE_3330)).willReturn(new NoVehicles(QUERY_TIME));
+        given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new NoVehicles(QUERY_TIME));
 
         // when
         collector.collectOnce(ROUTE_3330);
@@ -163,7 +163,7 @@ class ObservationCollectorTest {
     @Test
     void 상류가_오류로_답한_판은_FAILED_UPSTREAM으로_닫힌다() {
         // given
-        given(locationSource.read(ROUTE_3330))
+        given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY))
             .willReturn(new GbisSystemError(QUERY_TIME, "시스템 에러가 발생했습니다."));
 
         // when
@@ -229,13 +229,13 @@ class ObservationCollectorTest {
     @Test
     void 같은_초에_두_번_부르면_관측도_마지막_시도의_것만_남는다() {
         // given 첫 시도에는 차량이 둘이었다
-        given(locationSource.read(ROUTE_3330)).willReturn(new Success(QUERY_TIME, List.of(
+        given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME, List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217),
             busAt(VEHICLE_204003542, 3, STOP_208000069))));
         collector.collectOnce(ROUTE_3330);
 
         // when 다시 부르니 차량이 하나다
-        given(locationSource.read(ROUTE_3330)).willReturn(new Success(QUERY_TIME, List.of(
+        given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME, List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217))));
         collector.collectOnce(ROUTE_3330);
 
@@ -259,7 +259,7 @@ class ObservationCollectorTest {
     @Test
     void 상류를_부른_뒤_뜻밖의_예외가_나도_묶음이_DISPATCHING으로_안_남는다() {
         // given RestClientException 이 아닌 것이라 GbisLocationSource 가 안 접어준다
-        given(locationSource.read(ROUTE_3330)).willThrow(new IllegalStateException("파서가 터졌다"));
+        given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willThrow(new IllegalStateException("파서가 터졌다"));
 
         // when
         collector.collectOnce(ROUTE_3330);

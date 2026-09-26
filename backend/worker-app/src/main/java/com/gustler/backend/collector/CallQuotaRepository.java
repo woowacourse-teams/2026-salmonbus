@@ -12,6 +12,7 @@ public interface CallQuotaRepository {
      */
     boolean reserve(
         CallQuota quota,
+        String keyAlias,
         LocalDate kstDate,
         int calls,
         int dailyLimit

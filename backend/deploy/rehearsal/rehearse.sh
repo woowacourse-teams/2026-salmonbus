@@ -20,7 +20,7 @@ id salmonbus >/dev/null 2>&1 && ok "salmonbus 사용자" || bad "사용자 생�
 
 mkdir -p /etc/salmonbus "$WORK" /etc/systemd/system   # EC2 에는 systemd 가 있어서 이 디렉터리가 있다
 printf 'DB_URL=jdbc:postgresql://rds:5432/salmonbus\nDB_USERNAME=x\nDB_PASSWORD=rehearsal-secret-7f3a\n' > /etc/salmonbus/api.env
-printf 'DB_URL=jdbc:postgresql://rds:5432/salmonbus\nDB_USERNAME=x\nDB_PASSWORD=rehearsal-secret-7f3a\nGBIS_SERVICE_KEY=z\n' > /etc/salmonbus/worker.env
+printf 'DB_URL=jdbc:postgresql://rds:5432/salmonbus\nDB_USERNAME=x\nDB_PASSWORD=rehearsal-secret-7f3a\nGBIS_SERVICE_KEY=z\nGBIS_SERVICE_KEY_B=y\n' > /etc/salmonbus/worker.env
 chmod 600 /etc/salmonbus/*.env; chown root:root /etc/salmonbus/*.env
 
 printf '#!/bin/sh\necho "openjdk version \\"21.0.12\\" 2026-08-18" >&2\n' > /usr/bin/java
@@ -558,7 +558,7 @@ else
 fi
 
 sec "10. 훅 로그에 값이 새지 않았는가"
-if grep -rqE 'GBIS_SERVICE_KEY=[^$]|DB_PASSWORD=[^$]' "$WORK"/*.out 2>/dev/null; then
+if grep -rqE 'GBIS_SERVICE_KEY(_[A-Z])?=[^$]|DB_PASSWORD=[^$]' "$WORK"/*.out 2>/dev/null; then
   bad "훅 출력에 값이 찍혔다"
 else
   ok "훅 출력에 값이 안 찍혔다"
