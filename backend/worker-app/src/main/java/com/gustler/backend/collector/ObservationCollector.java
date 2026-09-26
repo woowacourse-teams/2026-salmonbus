@@ -1,5 +1,6 @@
 package com.gustler.backend.collector;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
@@ -44,12 +45,14 @@ public class ObservationCollector {
     ) {
         OffsetDateTime scheduledAt = now();
 
-        OptionalLong routeVersionId = routeCatalogLoader.currentVersionOf(upstreamRouteId, scheduledAt);
+        OptionalLong routeVersionId = WorkerOperationLog.measure("collection_route_version", upstreamRouteId,
+            () -> routeCatalogLoader.currentVersionOf(upstreamRouteId, scheduledAt));
         if (routeVersionId.isEmpty()) {
-            log.warn("지금 쓰는 노선 판본이 없어 수집을 건너뛴다. 노선={}", upstreamRouteId);
+            WorkerOperationLog.warn("collection_route_version", upstreamRouteId, "NO_ROUTE_VERSION");
             return;
         }
 
+        WorkerOperationLog.recovered("collection_route_version", upstreamRouteId);
         collectOn(routeVersionId.getAsLong(), upstreamRouteId, scheduledAt);
     }
 
@@ -58,23 +61,25 @@ public class ObservationCollector {
         String upstreamRouteId,
         OffsetDateTime scheduledAt
     ) {
-        ObservationBatchReservation reservation = batchLedger.reserve(
+        ObservationBatchReservation reservation = WorkerOperationLog.measure("collection_reserve", upstreamRouteId, () -> batchLedger.reserve(
             new ObservationAttempt(routeVersionId, scheduledAt, attemptKeyOf(upstreamRouteId, scheduledAt)),
-            scheduledAt);
+            scheduledAt));
 
         if (!reservation.reserved()) {
-            log.warn("하루 호출 한도가 남지 않아 수집을 건너뛴다. 이 판은 관측이 비어 있다. 노선={} 묶음={}",
-                upstreamRouteId, reservation.batchId());
+            WorkerOperationLog.warn("collection_quota", upstreamRouteId, "DAILY_LIMIT");
             return;
         }
 
-        if (!batchLedger.markDispatching(reservation.batchId(), scheduledAt, now())) {
-            log.warn("자리를 잡고 보내기 전에 한국 자정이 지났는데 다음 날 한도가 없다. 이 batch 는 안 보낸다. "
-                + "노선={} 묶음={}", upstreamRouteId, reservation.batchId());
+        if (!WorkerOperationLog.measure("collection_dispatch", upstreamRouteId,
+            () -> batchLedger.markDispatching(reservation.batchId(), scheduledAt, now()))) {
+            WorkerOperationLog.warn("collection_quota", upstreamRouteId, "NEXT_DAY_LIMIT");
             return;
         }
 
-        batchLedger.conclude(reservation.batchId(), readOrGiveUp(upstreamRouteId), now());
+        WorkerOperationLog.recovered("collection_quota", upstreamRouteId);
+        var result = readOrGiveUp(upstreamRouteId);
+        WorkerOperationLog.run("collection_save_and_commit", upstreamRouteId,
+            () -> batchLedger.conclude(reservation.batchId(), result, now()));
     }
 
     /**
@@ -88,7 +93,7 @@ public class ObservationCollector {
         String upstreamRouteId
     ) {
         try {
-            return locationSource.read(upstreamRouteId);
+            return WorkerOperationLog.measure("collection_upstream", upstreamRouteId, () -> locationSource.read(upstreamRouteId));
         } catch (final RuntimeException e) {
             log.error("상류를 부른 뒤 뜻밖의 예외가 났다. 보낸 것은 맞고 결과만 모른다. 노선={}",
                 upstreamRouteId, e);

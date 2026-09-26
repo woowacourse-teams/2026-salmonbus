@@ -47,7 +47,7 @@ public final class TripQualityMaintenance {
         if (existing.isEmpty()) {
             jdbc.sql("INSERT INTO trip_quality_rebuild(route_version_id, until_at, maximum_gap_seconds) VALUES (?, ?, ?)")
                 .param(version).param(offset(until)).param(seconds).update();
-            quality.invalidateDerivedInputs(version);
+            quality.invalidateDerivedInputs(version); quality.requestStatisticsRebuild(version, "");
         }
         Progress cursor = existing.isEmpty() ? new Progress(offset(Instant.EPOCH), 0, offset(until), false, seconds) : existing.getFirst();
         int processed = 0;
@@ -84,7 +84,7 @@ public final class TripQualityMaintenance {
                 WHERE route_version_id = ? AND vehicle_id = ''
                 """).param(last.at()).param(last.id()).param(discoveryComplete).param(discoveryComplete ? "DONE" : "DISCOVER")
                 .param(version).update();
-            if (discoveryComplete) { quality.invalidateDerivedInputs(version); }
+            if (discoveryComplete) { quality.invalidateDerivedInputs(version); quality.requestStatisticsRebuild(version, ""); }
         }
         var pending = jdbc.sql("""
             SELECT vehicle_id FROM trip_quality_rebuild WHERE route_version_id = ? AND vehicle_id <> '' AND NOT completed

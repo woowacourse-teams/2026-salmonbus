@@ -348,10 +348,12 @@ public final class MigrationCli {
         String action,
         String artifactSha256
     ) {
-        if (settings.database().targetKind() == DatabaseEnvironment.TargetKind.LOCAL) {
-            return;
+        if (settings.database().targetKind() != DatabaseEnvironment.TargetKind.LOCAL) {
+            approval(arguments, action, artifactSha256, settings.database().identitySha256());
         }
-        approval(arguments, action, artifactSha256, settings.database().identitySha256());
+        if (!ApprovalGate.ACADEMY_SCHEMA.equals(action)) {
+            new HistoricalSchema().requireNoIncrementalStatistics(settings.database());
+        }
     }
 
     private static void approval(

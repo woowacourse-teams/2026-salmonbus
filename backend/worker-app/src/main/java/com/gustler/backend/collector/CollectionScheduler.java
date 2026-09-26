@@ -1,5 +1,6 @@
 package com.gustler.backend.collector;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -36,7 +37,7 @@ public class CollectionScheduler {
         String routeId
     ) {
         try {
-            collector.collectOnce(routeId);
+            WorkerOperationLog.run("collection_route", routeId, () -> collector.collectOnce(routeId));
         } catch (final RuntimeException e) {
             log.error("수집 한 판이 실패했다. 다음 노선을 이어서 돈다. 노선={}", routeId, e);
         }

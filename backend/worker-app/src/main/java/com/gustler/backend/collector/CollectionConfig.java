@@ -1,6 +1,8 @@
 package com.gustler.backend.collector;
 
 import java.time.Clock;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.scheduling.TaskScheduler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -32,17 +34,20 @@ public class CollectionConfig {
         private final CollectionScheduler scheduler;
         private final Clock clock;
         private final int dailyLimit;
+        private final TaskScheduler collectionTaskScheduler;
 
         ScheduledCollection(
             CollectionProperties properties,
             CollectionScheduler scheduler,
             Clock clock,
-            GbisProperties gbisProperties
+            GbisProperties gbisProperties,
+            @Qualifier("collectionTaskScheduler") TaskScheduler collectionTaskScheduler
         ) {
             this.properties = properties;
             this.scheduler = scheduler;
             this.clock = clock;
             this.dailyLimit = gbisProperties.dailyLimit();
+            this.collectionTaskScheduler = collectionTaskScheduler;
         }
 
         @Override
@@ -50,7 +55,7 @@ public class CollectionConfig {
             ScheduledTaskRegistrar registrar
         ) {
             warnIfOverDailyLimit();
-            registrar.addTriggerTask(scheduler::collectAllRoutes, new AdaptiveCollectionTrigger(clock));
+            collectionTaskScheduler.schedule(scheduler::collectAllRoutes, new AdaptiveCollectionTrigger(clock));
         }
 
         private void warnIfOverDailyLimit() {

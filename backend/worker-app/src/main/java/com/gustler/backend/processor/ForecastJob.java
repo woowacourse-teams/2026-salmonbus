@@ -1,5 +1,6 @@
 package com.gustler.backend.processor;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.processor.seatdistribution.RuntimeSnapshot;
 
 import jakarta.annotation.PostConstruct;
@@ -90,7 +91,11 @@ public class ForecastJob {
      */
     @Scheduled(fixedDelayString = "${forecast.interval}")
     public void writeForecasts() {
-        Optional<RuntimeSnapshot> runtime = forecastRuntime.resolveActive();
+        WorkerOperationLog.run("forecast_tick", "all", this::writeForecastsOnce);
+    }
+
+    private void writeForecastsOnce() {
+        Optional<RuntimeSnapshot> runtime = WorkerOperationLog.measure("forecast_active_model", "all", forecastRuntime::resolveActive);
         if (runtime.isEmpty()) {
             return;
         }
@@ -98,7 +103,7 @@ public class ForecastJob {
         Instant notBefore = now.minus(properties.staleness());
         Instant leftBehindFrom = notBefore.minus(LEFT_BEHIND_LOOKBACK);
         Instant oldestLeftBehind = null;
-        for (Long routeVersionId : routeVersionRepository.findActiveVersionIds()) {
+        for (Long routeVersionId : WorkerOperationLog.measure("forecast_routes", "all", routeVersionRepository::findActiveVersionIds)) {
             writeForecastsOf(routeVersionId, notBefore, runtime.get());
             oldestLeftBehind = olderOf(
                 oldestLeftBehind, leftBehindAt(routeVersionId, leftBehindFrom, notBefore));
@@ -119,7 +124,8 @@ public class ForecastJob {
         Instant from,
         Instant until
     ) {
-        return vehicleTrajectoryRepository.findOldestLeftBehindAt(routeVersionId, from, until);
+        return WorkerOperationLog.measure("forecast_stale_batches", routeVersionId,
+            () -> vehicleTrajectoryRepository.findOldestLeftBehindAt(routeVersionId, from, until));
     }
 
     /**
@@ -141,7 +147,7 @@ public class ForecastJob {
         }
         lastStaleWarningAt = now;
         log.warn("신선도 창보다 오래돼서 예보 없이 두고 가는 판이 남아 있다. 그중 가장 오래된 판의 "
-            + "관측 시각={}", oldestLeftBehind);
+            + "관측 시각={}", oldestLeftBehind.atZone(clock.getZone()));
     }
 
     private static Instant olderOf(
@@ -162,11 +168,13 @@ public class ForecastJob {
         Instant notBefore,
         RuntimeSnapshot runtime
     ) {
-        RouteStops stops = routeVersionRepository.readStops(routeVersionId);
-        List<PendingForecastBatch> batches = vehicleTrajectoryRepository.findBatchesAwaitingForecast(
-            routeVersionId, notBefore, properties.batchLimit());
+        RouteStops stops = WorkerOperationLog.measure("forecast_stops", routeVersionId,
+            () -> routeVersionRepository.readStops(routeVersionId));
+        List<PendingForecastBatch> batches = WorkerOperationLog.measure("forecast_pending_batches", routeVersionId,
+            () -> vehicleTrajectoryRepository.findBatchesAwaitingForecast(routeVersionId, notBefore, properties.batchLimit()));
         for (PendingForecastBatch batch : batches) {
-            forecastBatchWriter.writeForecastsOf(batch, stops, runtime);
+            WorkerOperationLog.run("forecast_write_and_commit", routeVersionId,
+                () -> forecastBatchWriter.writeForecastsOf(batch, stops, runtime));
         }
     }
 }

@@ -41,10 +41,12 @@ class MigrationOrderTest {
      * 번호가 거꾸로 배정돼도 그 가정에 맞춰 다른 파일을 빼게 되고, 결국 늘 순서가 맞아서 통과한다.
      * 이름으로 고르고, 그 파일들이 정말 마지막 번호인지는 아래에서 따로 단언한다.
      *
-     * <p>이 브랜치는 편도 판정과 계산 재사용의 품질 조건을 더한다.
+     * <p>이 브랜치는 통계 누적/정정/발행과 vacuum 기준을 변경한다.
      */
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
-        List.of("one_way_trip_quality", "trip_quality_boundary_candidate");
+        List.of("stop_demand_pending_sample", "stop_demand_rebuild_request",
+            "forecast_vacuum_threshold", "stop_demand_current_total",
+            "stop_demand_rebuild_progress", "stop_demand_publication");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";

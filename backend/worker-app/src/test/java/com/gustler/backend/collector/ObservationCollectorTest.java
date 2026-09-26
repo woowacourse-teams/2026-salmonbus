@@ -6,6 +6,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
 import ch.qos.logback.classic.Logger;
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.gustler.backend.collector.GbisLocationResult.GbisSystemError;
@@ -82,11 +83,14 @@ class ObservationCollectorTest {
         given(routeSource.read(ROUTE_3330)).willReturn(new GbisRouteResult.Success(upstreamRoute()));
         given(locationSource.read(ROUTE_3330)).willReturn(new Success(QUERY_TIME, List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217))));
+        WorkerOperationLog.recovered("collection_quota", ROUTE_3330);
         collectorLog = startCapturingCollectorLog();
     }
 
     @AfterEach
     void 쌓인_것을_비운다() {
+        ((Logger) LoggerFactory.getLogger(WorkerOperationLog.class)).detachAppender(collectorLog);
+        collectorLog.stop();
         jdbcClient.sql("""
                 TRUNCATE vehicle_observation, observation_batch, route_stop, route_version, route,
                     daily_call_quota RESTART IDENTITY CASCADE
@@ -313,7 +317,7 @@ class ObservationCollectorTest {
         collector.collectOnce(ROUTE_3330);
 
         // then
-        assertThat(warningMessages()).anyMatch(message -> message.contains("하루 호출 한도가 남지 않아"));
+        assertThat(warningMessages()).anyMatch(message -> message.contains("operation=collection_quota") && message.contains("reason=DAILY_LIMIT"));
     }
 
     @Test
@@ -382,7 +386,7 @@ class ObservationCollectorTest {
     private ListAppender<ILoggingEvent> startCapturingCollectorLog() {
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
-        ((Logger) LoggerFactory.getLogger(ObservationCollector.class)).addAppender(appender);
+        ((Logger) LoggerFactory.getLogger(WorkerOperationLog.class)).addAppender(appender);
         return appender;
     }
 

@@ -17,7 +17,7 @@ public final class HistoricalSchema {
     public static final String HISTORY_TABLE = "historical_import_schema_history";
     private static final String LOCATION = "classpath:db/historical-migration";
     private static final List<Integer> REQUIRED_APPLICATION_VERSIONS =
-        List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16);
+        List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22);
 
     public MigrateResult migrate(
         DatabaseEnvironment database
@@ -40,6 +40,25 @@ public final class HistoricalSchema {
         requireApplicationSchema(database);
         if (flyway(database, 2_000, 30).info().pending().length != 0) {
             throw new MigrationException("HISTORICAL_SCHEMA_MIGRATION_PENDING");
+        }
+    }
+
+    /** 이전 이관 도구는 누적 원합을 정정하지 못한다. 활성 상태에서 원본만 바꾸는 작업을 막는다. */
+    public void requireNoIncrementalStatistics(DatabaseEnvironment database) {
+        try (Connection connection = DatabaseConnections.open(database);
+             PreparedStatement exists = connection.prepareStatement("SELECT to_regclass('stop_demand_baseline') IS NOT NULL");
+             ResultSet tables = exists.executeQuery()) {
+            tables.next();
+            if (!tables.getBoolean(1)) { return; }
+            try (PreparedStatement statement = connection.prepareStatement("SELECT EXISTS(SELECT 1 FROM stop_demand_baseline)");
+                 ResultSet rows = statement.executeQuery()) {
+                rows.next();
+                if (rows.getBoolean(1)) {
+                    throw new MigrationException("INCREMENTAL_STATISTICS_ACTIVE_LEGACY_WRITE_UNSUPPORTED");
+                }
+            }
+        } catch (SQLException e) {
+            throw new MigrationException("INCREMENTAL_STATISTICS_STATE_UNREADABLE", e);
         }
     }
 

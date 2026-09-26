@@ -19,6 +19,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.springframework.context.event.EventListener;
@@ -68,6 +69,7 @@ public class TripQualityRepository {
                 .param(event.batchId()).param(offset(event.observedAt()))
                 .param(OneWayTripClassifier.DEFAULT_MAXIMUM_GAP.toSeconds()).param(row.observationId())
                 .param(row.observationId()).param(event.routeVersionId()).update();
+            requestStatisticsRebuild(event.routeVersionId(), row.vehicleId());
             changed = true;
         }
         if (changed) { invalidateDerivedInputs(event.routeVersionId()); }
@@ -151,7 +153,10 @@ public class TripQualityRepository {
             """).param(offset(cursor == null ? job.at() : cursor.at())).param(cursor == null ? job.batch() : cursor.batch())
             .param(previous == null ? null : previous.observation().id()).param(canRelease).param(complete)
             .param(complete ? "DONE" : "REPLAY").param(version).param(vehicle).update();
-        if (complete) { invalidateDerivedInputs(version); }
+        if (complete) {
+            invalidateDerivedInputs(version);
+            requestStatisticsRebuild(version, vehicle);
+        }
     }
 
     /** 차량 검색 전에 묶음 수를 제한한다. 차량이 전혀 없는 기간도 최대 32묶음에서 멈춘다. */
@@ -257,6 +262,16 @@ public class TripQualityRepository {
     public void lockRoute(long version) {
         jdbc.sql("SELECT id FROM route WHERE id = (SELECT route_id FROM route_version WHERE id = ?) FOR UPDATE")
             .param(version).query(Long.class).single();
+    }
+
+    /** 호출자와 같은 transaction에 저장한다. 새 요청은 이전 처리의 완료로 지우면 안 된다. */
+    public void requestStatisticsRebuild(long version, String vehicle) {
+        jdbc.sql("""
+            INSERT INTO stop_demand_rebuild_request(route_version_id, vehicle_id, request_id)
+            VALUES (?, ?, ?)
+            ON CONFLICT(route_version_id, vehicle_id) DO UPDATE SET
+                request_id = EXCLUDED.request_id, requested_at = CURRENT_TIMESTAMP
+            """).param(version).param(vehicle).param(UUID.randomUUID()).update();
     }
 
     public void invalidateDerivedInputs(long version) {
