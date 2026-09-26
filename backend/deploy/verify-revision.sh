@@ -26,7 +26,7 @@ for jar in "${jars[@]}"; do
   for yml in $(unzip -Z1 "$jar" | grep -E '^BOOT-INF/classes/application.*\.(ya?ml|properties)$' || true); do
     # 줄마다 본다. 파일 전체로 보면 같은 열이 다른 줄에서 자리표시자를 쓰는 것만으로 통과한다
     offending="$(unzip -p "$jar" "$yml" \
-      | grep -E '^[[:space:]]*(url|username|password|service-key)[[:space:]]*:' \
+      | grep -E '^[[:space:]]*(url|username|password|service-key(-[a-z])?)[[:space:]]*:' \
       | grep -v '\${' || true)"
     if [ -n "$offending" ]; then
       keys="$(printf '%s\n' "$offending" \
