@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.api.board.ModelOutOfScopeException;
 import com.gustler.backend.api.board.NoRecentObservationException;
+import com.gustler.backend.api.error.ApiException;
+import com.gustler.backend.api.error.ErrorCode;
+import com.gustler.backend.api.error.ErrorResponse;
+import com.gustler.backend.api.error.ServiceUnavailableException;
 import com.gustler.backend.api.route.InvalidRouteIdException;
 import com.gustler.backend.api.route.RouteNotFoundException;
 import java.time.Duration;

@@ -1,0 +1,17 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'tools.jackson.core:jackson-databind'
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.springframework.boot:spring-boot-flyway'
+    testRuntimeOnly 'org.flywaydb:flyway-database-postgresql'
+    testRuntimeOnly 'org.postgresql:postgresql'
+    testImplementation testFixtures(project(':common'))
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    implementation project(':observations')
+}

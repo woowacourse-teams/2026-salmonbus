@@ -5,6 +5,11 @@ plugins {
 
 dependencies {
     implementation project(':common')
+    implementation project(':route-catalog')
+    implementation project(':observations')
+    implementation project(':forecasting')
+    implementation project(':api-call-quota')
+    implementation project(':gbis-client')
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-restclient'
@@ -15,14 +20,9 @@ dependencies {
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
     annotationProcessor 'org.projectlombok:lombok'
-    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
-    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
-    testImplementation 'org.testcontainers:junit-jupiter'
-    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation testFixtures(project(':common'))
-    testCompileOnly 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    testAnnotationProcessor 'org.projectlombok:lombok'
 }
 
 tasks.named('test') {

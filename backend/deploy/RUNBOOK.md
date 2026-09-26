@@ -44,6 +44,9 @@ sudo vi /etc/salmonbus/api.env       # DB_URL · DB_USERNAME · DB_PASSWORD
 sudo vi /etc/salmonbus/worker.env    # 위 셋 + GBIS_SERVICE_KEY · COLLECTION_ENABLED · FORECAST_ENABLED
 ```
 
+`FORECAST_STALENESS`는 넣지 않는다. 예보 신선도 창은 api-app이 `/board`에서 약속한 창과 짝이라
+worker 쪽만 바꾸면 조용히 어긋난다. 이 변수를 넣으면 Worker가 기동에서 멈춘다.
+
 첫 배포에서는 수집과 예보를 비활성화한다.
 
 ```text
@@ -134,14 +137,22 @@ flywayMaxVersion=12
 `sourceDigest`는 JAR이 아니라 **런타임에 사용하는 소스 파일**로 계산한 지문이다.
 
 ```text
-api     api-app/src/main · api-app/build.gradle
-        + common/src/main · common/build.gradle · build.gradle · settings.gradle · gradle-wrapper.properties
-worker  worker-app/에 같은 목록을 적용한다
+공통    build.gradle · settings.gradle · gradle.properties · gradle.lockfile
+        gradle/wrapper/gradle-wrapper.properties · gradle/libs.versions.toml
+        deploy/runtime-source-inputs.sh
+api     common · api-app
+worker  common · worker-app · business/route-catalog · business/observations
+        business/forecasting · business/api-call-quota · integrations/gbis-client
+모듈마다 src/main · build.gradle · gradle.lockfile 을 입력으로 넣는다.
 ```
+
+정본 목록은 `deploy/runtime-source-inputs.sh`의 `runtime_source_inputs()`다. 목록에 적혀 있어도 아직 없는 파일은
+건너뛰고, 그 파일이 생기는 순간부터 지문에 들어간다. `maintenance-app`과 `src/test`는 어느 지문에도 들어가지 않는다.
 
 **JAR 지문으로는 소스 변경 여부를 판단할 수 없다.** `buildInfo()`가 추가하는 `build.time` 때문에 같은 소스를 다시 빌드해도
 JAR의 SHA-256이 달라진다. 실측으로 확인했다. 소스 지문을 쓰면 테스트·문서·프론트만 바뀐 배포에서는
-서비스를 재시작하지 않는다.
+서비스를 재시작하지 않는다. 다만 `build.gradle`은 지문 입력이라 테스트 전용 의존만 바꿔도 지문이 달라진다.
+테스트만 손본 변경이라도 `build.gradle`을 건드렸으면 재시작을 전제한다.
 
 ## 배포 검증
 
@@ -353,7 +364,8 @@ docker run --rm -v "$PWD/backend/deploy:/deploy:ro" amazonlinux:2023 \
   bash /deploy/rehearsal/test-deploy-lock.sh
 ```
 
-이 리허설을 GitHub CI·CodeBuild에서 자동으로 실행하도록 아직 연결하지 않았다.
+GitHub CI의 `backend-deploy-contract` job(`.github/workflows/backend-ci.yml`)이 `deploy/rehearsal/run.sh`를 실행한다.
+CodeBuild에는 아직 연결하지 않았다.
 `rehearsal/`은 CodeDeploy 배포 패키지에 포함하지 않는다.
 
 배포 패키지에 민감 정보가 포함됐는지 검사하는 `verify-revision.sh`도 함께 실행한다.
@@ -362,7 +374,8 @@ docker run --rm -v "$PWD/backend/deploy:/deploy:ro" amazonlinux:2023 \
 모의 구현은 **지원하지 않는 입력을 받으면 실패한다.** `systemctl`이 지원하지 않는 명령을 받거나 `curl`이 등록되지 않은 주소를
 받으면 실패로 종료한다. 훅의 포트나 경로가 잘못되면 리허설을 통과하지 못한다.
 
-`digest.sh`의 `source_digest`는 `buildspec.yml`에 있는 것과 같은 함수다. **수정할 때는 두 파일에 모두 반영한다.**
+입력 목록과 `source_digest`·`runtime_source_digest`는 `deploy/runtime-source-inputs.sh` 한 곳에만 있다.
+`rehearsal/digest.sh`와 `buildspec.yml`은 이 파일을 `source` 한다. **고칠 때는 이 파일만 고친다.**
 
 **훅 스크립트를 바꾼 뒤 첫 배포가 실패하면 롤백은 직전 성공 패키지에 든 옛 스크립트로 실행된다.**
 배포 패키지에 `scripts/`가 같이 들어 있고 롤백은 그 패키지를 다시 배포하는 것이기 때문이다. 롤백 로그가 옛 모양이어도 정상이다.

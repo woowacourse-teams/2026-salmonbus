@@ -1,0 +1,4 @@
+jdbc.url=jdbc:postgresql://127.0.0.1:5432/salmonbus
+jdbc.user=salmonbus_migration
+jdbc.expected-database=salmonbus
+jdbc.password-env=SAL134_DB_PASSWORD

@@ -36,11 +36,11 @@ public class BoardDatabaseFixture {
                 INSERT INTO route (
                     public_route_id, source_id, source_route_id,
                     display_name, start_stop_name, end_stop_name
-                ) VALUES (:publicRouteId, 'GBIS', :sourceRouteId,
+                ) VALUES (:sourceRouteId, 'GBIS', :sourceRouteId,
                           :displayName, :startStopName, :endStopName)
                 RETURNING id
                 """)
-            .param("publicRouteId", sourceRouteId)
+            .param("sourceRouteId", sourceRouteId)
             .param("sourceRouteId", sourceRouteId)
             .param("displayName", displayName)
             .param("startStopName", startStopName)
@@ -71,6 +71,13 @@ public class BoardDatabaseFixture {
             .param("validFrom", validFrom)
             .query(Long.class)
             .single();
+
+        jdbcClient.sql("INSERT INTO route_data_quality (route_id) VALUES (:routeId)")
+            .param("routeId", routeId)
+            .update();
+        jdbcClient.sql("INSERT INTO route_version_quality_policy (route_version_id) VALUES (:routeVersionId)")
+            .param("routeVersionId", routeVersionId)
+            .update();
 
         return new RouteContext(routeId, routeVersionId, sourceRouteId);
     }
@@ -137,19 +144,18 @@ public class BoardDatabaseFixture {
     public long insertBatch(
         RouteContext route,
         OffsetDateTime responseReceivedAt,
-        OffsetDateTime forecastCompletedAt,
         String outcome,
         Integer storedRows
     ) {
         return jdbcClient.sql("""
                 INSERT INTO observation_batch (
                     route_version_id, scheduled_at, attempt_number, attempt_key,
-                    requested_at, response_received_at, forecast_completed_at,
+                    requested_at, response_received_at,
                     completed_at, outcome, provider_rows, stored_rows, excluded_rows,
                     normalization_version, collection_strategy_version
                 ) VALUES (
                     :routeVersionId, :scheduledAt, 1, :attemptKey,
-                    :requestedAt, :responseReceivedAt, :forecastCompletedAt,
+                    :requestedAt, :responseReceivedAt,
                     :completedAt, :outcome, :providerRows, :storedRows, 0,
                     :normalizationVersion, :collectionStrategyVersion
                 )
@@ -160,7 +166,6 @@ public class BoardDatabaseFixture {
             .param("attemptKey", "board-test-" + UUID.randomUUID())
             .param("requestedAt", responseReceivedAt.minusSeconds(1))
             .param("responseReceivedAt", responseReceivedAt)
-            .param("forecastCompletedAt", forecastCompletedAt)
             .param("completedAt", responseReceivedAt)
             .param("outcome", outcome)
             .param("providerRows", storedRows)
@@ -169,6 +174,37 @@ public class BoardDatabaseFixture {
             .param("collectionStrategyVersion", COLLECTION_STRATEGY_VERSION)
             .query(Long.class)
             .single();
+    }
+
+    public long insertPublication(
+        final long batchId,
+        final long modelDeploymentId,
+        OffsetDateTime generatedAt,
+        OffsetDateTime publishedAt
+    ) {
+        final long publicationId = jdbcClient.sql("""
+                INSERT INTO forecast_publication (
+                    source_batch_id, source_attempt_number, route_version_id,
+                    model_deployment_id, demand_statistics_revision, quality_revision,
+                    observed_at, generated_at, published_at, prediction_count
+                )
+                SELECT id, attempt_number, route_version_id,
+                       :modelDeploymentId, 1, 1,
+                       response_received_at, :generatedAt, :publishedAt, 0
+                FROM observation_batch WHERE id = :batchId
+                RETURNING id
+                """)
+            .param("batchId", batchId)
+            .param("modelDeploymentId", modelDeploymentId)
+            .param("generatedAt", generatedAt)
+            .param("publishedAt", publishedAt)
+            .query(Long.class)
+            .single();
+        jdbcClient.sql("UPDATE observation_batch SET input_confirmed_at = :publishedAt WHERE id = :batchId")
+            .param("batchId", batchId)
+            .param("publishedAt", publishedAt)
+            .update();
+        return publicationId;
     }
 
     /**
@@ -219,19 +255,34 @@ public class BoardDatabaseFixture {
         Double expectedSeats,
         OffsetDateTime generatedAt
     ) {
+        final long publicationId = jdbcClient.sql("""
+                SELECT publication.id
+                FROM forecast_publication publication
+                JOIN vehicle_observation observation
+                    ON observation.observation_batch_id = publication.source_batch_id
+                WHERE observation.id = :observationId
+                  AND publication.model_deployment_id = :modelDeploymentId
+                  AND publication.generated_at = :generatedAt
+                """)
+            .param("observationId", observationId)
+            .param("modelDeploymentId", modelDeploymentId)
+            .param("generatedAt", generatedAt)
+            .query(Long.class)
+            .single();
         jdbcClient.sql("""
                 INSERT INTO seat_forecast (
-                    vehicle_observation_id, target_stop_order, route_version_id,
+                    publication_id, vehicle_observation_id, target_stop_order, route_version_id,
                     stops_to_target, model_deployment_id, demand_statistics_revision,
                     seat_full_chance_raw, seat_full_chance, expected_seats,
-                    generated_at, scoring_state
+                    generated_at, quality_revision
                 ) VALUES (
-                    :observationId, :targetStopOrder, :routeVersionId,
+                    :publicationId, :observationId, :targetStopOrder, :routeVersionId,
                     :stopsToTarget, :modelDeploymentId, 1,
                     :seatFullChance, :seatFullChance, :expectedSeats,
-                    :generatedAt, 'PENDING'
+                    :generatedAt, 1
                 )
                 """)
+            .param("publicationId", publicationId)
             .param("observationId", observationId)
             .param("targetStopOrder", targetStopOrder)
             .param("routeVersionId", route.routeVersionId())
@@ -240,6 +291,18 @@ public class BoardDatabaseFixture {
             .param("seatFullChance", seatFullChance)
             .param("expectedSeats", expectedSeats)
             .param("generatedAt", generatedAt)
+            .update();
+        jdbcClient.sql("""
+                INSERT INTO forecast_evaluation (
+                    vehicle_observation_id, target_stop_order, route_version_id, scoring_state
+                ) VALUES (:observationId, :targetStopOrder, :routeVersionId, 'PENDING')
+                """)
+            .param("observationId", observationId)
+            .param("targetStopOrder", targetStopOrder)
+            .param("routeVersionId", route.routeVersionId())
+            .update();
+        jdbcClient.sql("UPDATE forecast_publication SET prediction_count = prediction_count + 1 WHERE id = :publicationId")
+            .param("publicationId", publicationId)
             .update();
     }
 

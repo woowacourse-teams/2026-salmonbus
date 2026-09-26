@@ -14,7 +14,7 @@ class ApiApplicationTests {
 
     @Test
     void 수집기_클래스는_클래스패스에_아예_없다() {
-        assertThatThrownBy(() -> Class.forName("com.gustler.backend.collector.CollectionScheduler"))
+        assertThatThrownBy(() -> Class.forName("com.gustler.backend.worker.scheduling.CollectionScheduler"))
             .isInstanceOf(ClassNotFoundException.class);
     }
 }

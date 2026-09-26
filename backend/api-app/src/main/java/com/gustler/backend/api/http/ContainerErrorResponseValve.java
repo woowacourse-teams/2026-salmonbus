@@ -1,5 +1,6 @@
 package com.gustler.backend.api.http;
 
+import com.gustler.backend.api.error.ErrorCode;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.Writer;

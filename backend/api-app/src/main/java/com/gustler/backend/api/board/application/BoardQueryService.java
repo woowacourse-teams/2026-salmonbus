@@ -11,7 +11,7 @@ import com.gustler.backend.api.board.domain.DirectionInfo;
 import com.gustler.backend.api.board.domain.ForecastModel;
 import com.gustler.backend.api.board.domain.StopState;
 import com.gustler.backend.api.board.domain.VehicleForecast;
-import com.gustler.backend.api.http.ServiceUnavailableException;
+import com.gustler.backend.api.error.ServiceUnavailableException;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.RouteNotFoundException;
 import com.gustler.backend.api.route.domain.Route;

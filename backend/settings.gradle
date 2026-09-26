@@ -1,6 +1,17 @@
 rootProject.name = 'backend'
 
-include 'common'
+include 'route-catalog'
+include 'observations'
+include 'forecasting'
+include 'api-call-quota'
+include 'gbis-client'
 include 'api-app'
 include 'worker-app'
-include 'migration-tool'
+include 'maintenance-app'
+include 'common'
+
+project(':route-catalog').projectDir = file('business/route-catalog')
+project(':observations').projectDir = file('business/observations')
+project(':forecasting').projectDir = file('business/forecasting')
+project(':api-call-quota').projectDir = file('business/api-call-quota')
+project(':gbis-client').projectDir = file('integrations/gbis-client')

@@ -3,6 +3,24 @@ plugins {
     id 'java-test-fixtures'
 }
 
+sourceSets {
+    sal134Migration {
+        java.srcDir rootProject.file('deploy/migrations/SAL-134/src/main/java')
+        resources.srcDirs rootProject.file('deploy/migrations/SAL-134/src/main/resources'),
+            file('src/main/resources')
+    }
+    sal134MigrationTest {
+        java.srcDir rootProject.file('deploy/migrations/SAL-134/src/test/java')
+        compileClasspath += sourceSets.sal134Migration.output
+        runtimeClasspath += sourceSets.sal134Migration.output
+    }
+}
+
+configurations {
+    sal134MigrationTestImplementation.extendsFrom sal134MigrationImplementation
+    sal134MigrationTestRuntimeOnly.extendsFrom sal134MigrationRuntimeOnly
+}
+
 dependencies {
     api 'org.springframework:spring-context'
 
@@ -21,4 +39,47 @@ dependencies {
     testRuntimeOnly 'org.flywaydb:flyway-database-postgresql'
     testRuntimeOnly 'org.postgresql:postgresql'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    sal134MigrationImplementation 'org.flywaydb:flyway-core'
+    sal134MigrationRuntimeOnly 'org.flywaydb:flyway-database-postgresql'
+    sal134MigrationRuntimeOnly 'org.postgresql:postgresql'
+    sal134MigrationTestImplementation 'org.junit.jupiter:junit-jupiter'
+    sal134MigrationTestImplementation 'org.assertj:assertj-core'
+    sal134MigrationTestImplementation 'org.testcontainers:junit-jupiter'
+    sal134MigrationTestImplementation 'org.testcontainers:postgresql'
+    sal134MigrationTestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
+
+tasks.register('sal134MigrationTest', Test) {
+    description = 'Verifies the offline SAL-134 database transition.'
+    group = 'verification'
+    testClassesDirs = sourceSets.sal134MigrationTest.output.classesDirs
+    classpath = sourceSets.sal134MigrationTest.runtimeClasspath
+    useJUnitPlatform()
+    shouldRunAfter tasks.named('test')
+}
+
+tasks.register('sal134MigrationJar', Jar) {
+    archiveBaseName = 'sal134-migration'
+    from sourceSets.sal134Migration.output
+    manifest.attributes('Main-Class': 'com.gustler.backend.migration.Sal134Migration')
+}
+
+tasks.register('sal134MigrationZip', Zip) {
+    description = 'Packages the one-time offline database transition separately from service JARs.'
+    group = 'distribution'
+    archiveBaseName = 'sal134-migration'
+    destinationDirectory = layout.buildDirectory.dir('distributions')
+    into('lib') {
+        from tasks.named('sal134MigrationJar')
+        from configurations.sal134MigrationRuntimeClasspath
+    }
+    from(rootProject.file('deploy/migrations/SAL-134/run.sh')) {
+        filePermissions { unix('rwxr-xr-x') }
+    }
+    from rootProject.file('deploy/migrations/SAL-134/README.md')
+    from rootProject.file('deploy/migrations/SAL-134/database.properties.example')
+}
+
+tasks.named('check') { dependsOn tasks.named('sal134MigrationTest') }
+tasks.named('assemble') { dependsOn tasks.named('sal134MigrationZip') }

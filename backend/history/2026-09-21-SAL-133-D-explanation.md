@@ -23,7 +23,7 @@
 
 현재 구현도 각 새 관측의 편도 키는 저장한다. 관측마다 별도 연결 INSERT를 호출하는 대신 한 묶음의 UPDATE로 처리하며, 같은 키는 다시 쓰지 않는다. SQL 호출 감소가 수정하는 관측 행 수를 0으로 만든다는 뜻은 아니다.
 
-관련: [V15](../common/src/main/resources/db/migration/V15__one_way_trip_quality.sql), [TripQualityRepository](../worker-app/src/main/java/com/gustler/backend/processor/TripQualityRepository.java).
+관련: [V15](../common/src/main/resources/db/migration/V15__one_way_trip_quality.sql), [TripQualityRepository](https://github.com/woowacourse-teams/2026-salmonbus/blob/9f9c75db16fcdefc0944f0c6a40fa7c09e4e1d94/backend/worker-app/src/main/java/com/gustler/backend/processor/TripQualityRepository.java).
 
 ## 2. 실행 흐름: 별도 스케줄러 제거, 모델과 판정의 독립성 유지
 
@@ -39,7 +39,7 @@ ForecastJob.writeForecasts
 
 모델이 없어도 먼저 품질을 판정한다. 예측 직전의 재확인도 유지하되 이미 판정한 묶음은 조회 1회로 반환한다. 모델 계산 오류가 나더라도 먼저 커밋된 제외 판정은 유지한다. 일반 SQL/계산 오류를 차량 범위 오류로 바꾸거나 무시하지 않는다.
 
-관련: [ForecastJob](../worker-app/src/main/java/com/gustler/backend/processor/ForecastJob.java), [ForecastBatchWriter](../worker-app/src/main/java/com/gustler/backend/processor/ForecastBatchWriter.java).
+관련: [ForecastJob](https://github.com/woowacourse-teams/2026-salmonbus/blob/9f9c75db16fcdefc0944f0c6a40fa7c09e4e1d94/backend/worker-app/src/main/java/com/gustler/backend/processor/ForecastJob.java), [ForecastBatchWriter](https://github.com/woowacourse-teams/2026-salmonbus/blob/9f9c75db16fcdefc0944f0c6a40fa7c09e4e1d94/backend/worker-app/src/main/java/com/gustler/backend/processor/ForecastBatchWriter.java).
 
 ## 3. 판정 저장: 차량별 SQL 호출을 묶는다
 
@@ -64,7 +64,7 @@ ForecastJob.writeForecasts
 
 시간 정책은 여전히 미설정이며 60초/300초를 운영 기본값으로 넣지 않았다. 시간 기준이 없고 전체 왕복 관측이 빠진 경우 같은 방향의 뒤쪽 순번을 이전 편도로 연결할 가능성은 남는다. 편도 경계 확인은 단말기 초기화 확인과 다르다.
 
-관련: [판정기](../worker-app/src/main/java/com/gustler/backend/processor/OneWayTripClassifier.java), [판정 테스트](../worker-app/src/test/java/com/gustler/backend/processor/OneWayTripClassifierTest.java).
+관련: [판정기](https://github.com/woowacourse-teams/2026-salmonbus/blob/9f9c75db16fcdefc0944f0c6a40fa7c09e4e1d94/backend/worker-app/src/main/java/com/gustler/backend/processor/OneWayTripClassifier.java), [판정 테스트](https://github.com/woowacourse-teams/2026-salmonbus/blob/9f9c75db16fcdefc0944f0c6a40fa7c09e4e1d94/backend/worker-app/src/test/java/com/gustler/backend/processor/OneWayTripClassifierTest.java).
 
 ## 5. 예측 입력과 API: 적격 조건 유지, 중복 조회 감소
 
@@ -107,7 +107,7 @@ API의 예측 조회는 `forecast_eligible_observation` 조건을 유지한다. 
 
 연결 테이블 조회/삭제를 기존 관측 키의 조회/해제로 바꿨다. 종료 시각 뒤의 기존 연결은 해제하여 재판정하도록 한다. 원본 좌석과 저장 예측은 삭제하지 않는다. 시간 설정을 읽는 JDBC 정수 타입 오류를 실제 DB 테스트에서 발견해 수정했다.
 
-과거 정리 중 해당 노선 판본은 사용을 보류한다. 통계는 기존 정기 작업으로 다시 만들며 과거 예측을 자동 재발행하지 않는다. 자세한 운영 절차는 [quality README](../migration-tool/src/main/resources/quality/README.md)에 있다.
+과거 정리 중 해당 노선 판본은 사용을 보류한다. 통계는 기존 정기 작업으로 다시 만들며 과거 예측을 자동 재발행하지 않는다. 자세한 운영 절차는 [quality README](../maintenance-app/src/main/resources/quality/README.md)에 있다.
 
 ## 8. 패키지와 테스트
 

@@ -91,18 +91,11 @@ phases:
 
         # 재시작 여부는 JAR 지문으로 못 잰다. buildInfo() 가 넣는 build.time 때문에
         # 같은 소스를 다시 빌드해도 JAR SHA-256 이 달라진다. 실측으로 확인했다.
-        # 그래서 런타임에 들어가는 소스 파일만 모아 센다.
-        # 테스트·문서·프론트만 바뀌면 이 값이 안 변해서 서비스를 안 건드린다
-        source_digest() {
-          find "$@" -type f -print0 2>/dev/null \
-            | LC_ALL=C sort -z \
-            | xargs -0 sha256sum \
-            | sha256sum | cut -d' ' -f1
-        }
-
-        COMMON="common/src/main common/build.gradle build.gradle settings.gradle gradle/wrapper/gradle-wrapper.properties"
-        API_DIGEST="$(source_digest api-app/src/main api-app/build.gradle $COMMON)"
-        WORKER_DIGEST="$(source_digest worker-app/src/main worker-app/build.gradle $COMMON)"
+        # 업무 모듈·GBIS까지 포함한 입력 목록을 리허설과 공유한다.
+        # 테스트·문서·프론트·maintenance 전용 변경은 두 서버를 재시작하지 않는다.
+        source deploy/runtime-source-inputs.sh
+        API_DIGEST="$(runtime_source_digest api)"
+        WORKER_DIGEST="$(runtime_source_digest worker)"
 
         # build 는 실행 못 하는 -plain.jar 도 같이 만든다. 이름으로 걸러낸다
         API_JAR="$(ls api-app/build/libs/api-app-*.jar | grep -v -- '-plain\.jar$')"

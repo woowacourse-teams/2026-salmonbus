@@ -1,5 +1,7 @@
 package com.gustler.backend.api.http;
 
+import com.gustler.backend.api.error.ErrorCode;
+import com.gustler.backend.api.error.ErrorResponse;
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
