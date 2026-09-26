@@ -4,6 +4,7 @@ import com.gustler.backend.collector.GbisLocationResult.NoVehicles;
 import com.gustler.backend.collector.GbisLocationResult.Success;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,10 +45,20 @@ public class ObservationBatchLedger {
         ObservationAttempt attempt,
         OffsetDateTime reservedAt
     ) {
-        if (callQuotaLedger.reserve(CallQuota.BUS_LOCATION, reservedAt)) {
-            return new ObservationBatchReservation(observationRepository.openReserved(attempt), true);
+        Optional<String> keyAlias = callQuotaLedger.reserveNextKey(CallQuota.BUS_LOCATION, reservedAt);
+        if (keyAlias.isPresent()) {
+            return new ObservationBatchReservation(observationRepository.openReserved(attempt), true, keyAlias.get());
         }
-        return new ObservationBatchReservation(observationRepository.openNotReserved(attempt), false);
+        return new ObservationBatchReservation(observationRepository.openNotReserved(attempt), false, null);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean markDispatching(
+        final long batchId,
+        OffsetDateTime reservedAt,
+        OffsetDateTime requestedAt
+    ) {
+        return markDispatching(batchId, reservedAt, requestedAt, GbisKey.PRIMARY);
     }
 
     /**
@@ -58,9 +69,10 @@ public class ObservationBatchLedger {
     public boolean markDispatching(
         final long batchId,
         OffsetDateTime reservedAt,
-        OffsetDateTime requestedAt
+        OffsetDateTime requestedAt,
+        String keyAlias
     ) {
-        if (!callQuotaLedger.holdsSeatAt(CallQuota.BUS_LOCATION, reservedAt, requestedAt)) {
+        if (!callQuotaLedger.holdsSeatAt(CallQuota.BUS_LOCATION, keyAlias, reservedAt, requestedAt)) {
             observationRepository.abandonBeforeSend(batchId);
             return false;
         }

@@ -1,6 +1,7 @@
 package com.gustler.backend.collector;
 
 import java.time.Clock;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.TaskScheduler;
 import org.slf4j.Logger;
@@ -33,6 +34,7 @@ public class CollectionConfig {
         private final CollectionProperties properties;
         private final CollectionScheduler scheduler;
         private final Clock clock;
+        private final List<String> keyAliases;
         private final int dailyLimit;
         private final TaskScheduler collectionTaskScheduler;
 
@@ -46,12 +48,15 @@ public class CollectionConfig {
             this.properties = properties;
             this.scheduler = scheduler;
             this.clock = clock;
-            this.dailyLimit = gbisProperties.dailyLimit();
+            this.keyAliases = gbisProperties.keys().stream().map(GbisKey::alias).toList();
+            this.dailyLimit = gbisProperties.dailyLimit() * keyAliases.size();
             this.collectionTaskScheduler = collectionTaskScheduler;
         }
 
         @Bean
         ScheduledTaskRegistrar collectionTaskRegistrar() {
+            log.info("GBIS 키 슬롯 {}개로 수집한다. 슬롯={} 하루 한도 합={}",
+                keyAliases.size(), String.join(",", keyAliases), dailyLimit);
             warnIfOverDailyLimit();
             ScheduledTaskRegistrar registrar = new ScheduledTaskRegistrar();
             registrar.setTaskScheduler(collectionTaskScheduler);

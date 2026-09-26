@@ -20,7 +20,7 @@ class HistoricalSchemaTest extends PostgresMigrationTestSupport {
     @Test
     void additiveSchemaAppliesWithoutChangingApplicationFlywayHistory() throws Exception {
         try (Connection connection = connection(); Statement statement = connection.createStatement()) {
-            assertThat(count(statement, "SELECT count(*) FROM flyway_schema_history WHERE success")).isEqualTo(23);
+            assertThat(count(statement, "SELECT count(*) FROM flyway_schema_history WHERE success")).isEqualTo(24);
             assertThat(count(statement,
                 "SELECT count(*) FROM historical_import_schema_history WHERE success AND type = 'SQL'"))
                 .isEqualTo(4);

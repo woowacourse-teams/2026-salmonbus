@@ -71,13 +71,14 @@ public class ObservationCollector {
         }
 
         if (!WorkerOperationLog.measure("collection_dispatch", upstreamRouteId,
-            () -> batchLedger.markDispatching(reservation.batchId(), scheduledAt, now()))) {
+            () -> batchLedger.markDispatching(
+                reservation.batchId(), scheduledAt, now(), reservation.keyAlias()))) {
             WorkerOperationLog.warn("collection_quota", upstreamRouteId, "NEXT_DAY_LIMIT");
             return;
         }
 
         WorkerOperationLog.recovered("collection_quota", upstreamRouteId);
-        var result = readOrGiveUp(upstreamRouteId);
+        var result = readOrGiveUp(upstreamRouteId, reservation.keyAlias());
         WorkerOperationLog.run("collection_save_and_commit", upstreamRouteId,
             () -> batchLedger.conclude(reservation.batchId(), result, now()));
     }
@@ -90,10 +91,12 @@ public class ObservationCollector {
      * 응답이 안 온 것과 같은 자리(UNKNOWN_AFTER_DISPATCH)로 닫는다.
      */
     private GbisLocationResult readOrGiveUp(
-        String upstreamRouteId
+        String upstreamRouteId,
+        String keyAlias
     ) {
         try {
-            return WorkerOperationLog.measure("collection_upstream", upstreamRouteId, () -> locationSource.read(upstreamRouteId));
+            return WorkerOperationLog.measure("collection_upstream", upstreamRouteId,
+                () -> locationSource.read(upstreamRouteId, keyAlias));
         } catch (final RuntimeException e) {
             log.error("상류를 부른 뒤 뜻밖의 예외가 났다. 보낸 것은 맞고 결과만 모른다. 노선={}",
                 upstreamRouteId, e);

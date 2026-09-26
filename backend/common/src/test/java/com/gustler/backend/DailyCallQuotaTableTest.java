@@ -19,6 +19,8 @@ class DailyCallQuotaTableTest {
     private static final String API_SERVICE_BUS_LOCATION = "BUS_LOCATION";
     private static final LocalDate KST_DATE = LocalDate.of(2026, 8, 28);
     private static final int DAILY_LIMIT_10000 = 10_000;
+    private static final int ONE_CALL = 1;
+    private static final String KEY_ALIAS_A = "a";
 
     @Autowired
     private JdbcClient jdbcClient;
@@ -51,6 +53,37 @@ class DailyCallQuotaTableTest {
         // when & then
         assertThatThrownBy(() -> insertQuota(0, 0))
             .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void 키_별칭을_모르는_이전_예약_문장도_슬롯_a_장부에_센다() {
+        // when
+        reserveWithoutKeyAlias();
+        reserveWithoutKeyAlias();
+
+        // then
+        assertThat(reservedCallsOf(KEY_ALIAS_A)).isEqualTo(2);
+    }
+
+    private void reserveWithoutKeyAlias() {
+        jdbcClient.sql("""
+                INSERT INTO daily_call_quota (provider, api_service, kst_date, reserved_calls, daily_limit)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT ON CONSTRAINT pk_daily_call_quota DO UPDATE
+                    SET reserved_calls = daily_call_quota.reserved_calls + ?
+                    WHERE daily_call_quota.reserved_calls + ? <= daily_call_quota.daily_limit
+                """)
+            .params(PROVIDER_GBIS, API_SERVICE_BUS_LOCATION, KST_DATE, ONE_CALL, DAILY_LIMIT_10000, ONE_CALL, ONE_CALL)
+            .update();
+    }
+
+    private int reservedCallsOf(
+        String keyAlias
+    ) {
+        return jdbcClient.sql("SELECT reserved_calls FROM daily_call_quota WHERE kst_date = ? AND key_alias = ?")
+            .params(KST_DATE, keyAlias)
+            .query(Integer.class)
+            .single();
     }
 
     private void insertQuota(

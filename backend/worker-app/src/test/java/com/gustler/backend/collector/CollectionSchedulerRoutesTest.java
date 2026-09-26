@@ -48,7 +48,7 @@ class CollectionSchedulerRoutesTest {
     @BeforeEach
     void 상류_대역을_세운다() {
         given(routeSource.read(ROUTE_3330)).willReturn(new GbisRouteResult.Success(upstreamRoute()));
-        given(locationSource.read(ROUTE_3330)).willReturn(new Success(QUERY_TIME, List.of(
+        given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME, List.of(
             new BusLocation("경기70아0001", "204000206", 0, ROUTE_3330, 11,
                 STOP_205000217, 1, 2, 43, 3, 1))));
     }
