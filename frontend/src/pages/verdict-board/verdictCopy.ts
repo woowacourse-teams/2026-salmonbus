@@ -7,6 +7,7 @@ const CHIP_LABELS: Record<ChipTone, string> = {
   high: "탑승 확률 높음",
   low: "탑승 확률 낮음",
   veryLow: "탑승 확률 매우 낮음",
+  unknown: "좌석 예측 정보가 없어요",
   noForecast: "지금 오는 차량이 없어요",
 };
 

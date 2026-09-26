@@ -19,6 +19,7 @@ const chipMinWidth: Record<keyof typeof vars.color.seat, string> = {
   high: "73px",
   low: "73px",
   veryLow: "96px",
+  unknown: "118px",
 };
 
 const seatChip = styleVariants(vars.color.seat, (tone, level) => [
