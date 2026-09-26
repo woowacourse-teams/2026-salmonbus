@@ -2,6 +2,7 @@ import { apiPaths, pollIntervalMs, targetStopNames } from "./fixtures/mock-data"
 import { test, expect } from "./fixtures/api";
 import { selectRoute } from "./utils/route-select";
 import { directionButton, expectDirection, openBoard, targetRow, targetStop } from "./utils/verdict-board";
+import { forecastFixtures } from "../src/testing/forecastFixtures";
 
 test.use({
   viewport: { width: 390, height: 844 },
@@ -123,7 +124,7 @@ test("운행 중인 차량이 없으면 운행 없음 안내를 표시한다", a
   await expect(page.getByText(/도착 시 .*석 예상해요/)).toHaveCount(0);
 });
 
-test("운행 중인 노선의 특정 정류장에 예측이 없으면 예측 없음 안내를 표시한다", async ({ page, api }) => {
+test("운행 중인 노선의 특정 정류장에 접근 차량이 없으면 차량 없음 안내를 표시한다", async ({ page, api }) => {
   const stopData = api.data.board.stops.find((stop) => stop.name === targetStopNames.UP);
   if (stopData === undefined) throw new Error("상행 목표 정류장 fixture가 필요합니다");
   stopData.approachingVehicles = [];
@@ -140,3 +141,52 @@ test("운행 중인 노선의 특정 정류장에 예측이 없으면 예측 없
   await expect(page.getByText("정보를 불러오지 못했어요", { exact: true })).not.toBeVisible();
   await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).not.toBeVisible();
 });
+
+for (const { name, vehicle, chip, seatLabel } of [
+  {
+    name: "예측값이 있으면 좌석 수와 탑승 확률을 표시한다",
+    vehicle: forecastFixtures.available,
+    chip: "탑승 확률 높음",
+    seatLabel: "도착 시 5석 예상해요",
+  },
+  {
+    name: "예상 좌석만 생략되면 탑승 확률을 유지한다",
+    vehicle: forecastFixtures.withoutExpectedSeats,
+    chip: "탑승 확률 높음",
+    seatLabel: "좌석을 예측하기 어려워요",
+  },
+  {
+    name: "확률과 예상 좌석이 0이면 빈자리 없음으로 표시한다",
+    vehicle: forecastFixtures.zeroSeats,
+    chip: "탑승 확률 매우 낮음",
+    seatLabel: "도착 시 빈자리가 없어요",
+  },
+  {
+    name: "현재 잔여석을 알아도 도착 예측이 없으면 예측 불가로 표시한다",
+    vehicle: forecastFixtures.unavailable,
+    chip: "좌석 예측 정보가 없어요",
+    seatLabel: "좌석을 예측하기 어려워요",
+  },
+]) {
+  test(name, async ({ page, api }) => {
+    const stopData = api.data.board.stops.find((stop) => stop.name === targetStopNames.UP);
+    if (stopData === undefined) throw new Error("상행 목표 정류장 fixture가 필요합니다");
+    stopData.approachingVehicles = [{ ...vehicle, vehicleId: "bus-1", horizonStops: 3 }];
+
+    // 같은 차량의 현재 좌석이 도착 예측을 대신하지 않는지 확인한다.
+    const liveVehicle = api.data.vehicles.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1");
+    if (liveVehicle === undefined) throw new Error("bus-1 실시간 차량 fixture가 필요합니다");
+    liveVehicle.seat = { kind: "EXACT", remaining: 28 };
+
+    await openBoard(page);
+    const stop = targetStop(page, "UP");
+    const row = targetRow(page, "UP");
+    await stop.scrollIntoViewIfNeeded();
+    await expect(row.getByText(chip, { exact: true })).toBeVisible();
+    await stop.click();
+
+    await expect(row.getByRole("listitem")).toHaveText([`3정류장 전${seatLabel}`]);
+    await expect(row.getByText("지금 오는 차량이 없어요", { exact: true })).toHaveCount(0);
+    await expect(row.getByText("도착 시 28석 예상해요", { exact: true })).toHaveCount(0);
+  });
+}
