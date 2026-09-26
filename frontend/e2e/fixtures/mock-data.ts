@@ -100,10 +100,24 @@ export function createApiData(): { routes: RouteListResponse; board: Board; vehi
             : direction === "UP"
               ? [
                   // 정렬도 검증하도록 먼 버스를 먼저 응답한다.
-                  { vehicleId: "bus-2", horizonStops: 7, seatAvailableProbability: 0.5, expectedSeats: 2 },
-                  { vehicleId: "bus-1", horizonStops: 3, seatAvailableProbability: 0.8, expectedSeats: 5 },
+                  {
+                    vehicleId: "bus-2",
+                    horizonStops: 7,
+                    forecast: { status: "AVAILABLE", seatAvailableProbability: 0.5, expectedSeats: 2 },
+                  },
+                  {
+                    vehicleId: "bus-1",
+                    horizonStops: 3,
+                    forecast: { status: "AVAILABLE", seatAvailableProbability: 0.8, expectedSeats: 5 },
+                  },
                 ]
-              : [{ vehicleId: "bus-3", horizonStops: 2, seatAvailableProbability: 0.9, expectedSeats: 8 }],
+              : [
+                  {
+                    vehicleId: "bus-3",
+                    horizonStops: 2,
+                    forecast: { status: "AVAILABLE", seatAvailableProbability: 0.9, expectedSeats: 8 },
+                  },
+                ],
       })),
     ),
   };

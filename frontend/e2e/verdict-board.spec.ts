@@ -89,7 +89,11 @@ test("자동 갱신 실패 후 다음 요청이 성공하면 새 예측으로 �
   const stopData = api.data.board.stops.find((stop) => stop.name === targetStopNames.UP);
   if (stopData === undefined) throw new Error("상행 목표 정류장 fixture가 필요합니다");
   stopData.approachingVehicles = [
-    { vehicleId: "bus-1", horizonStops: 2, seatAvailableProbability: 0.9, expectedSeats: 9 },
+    {
+      vehicleId: "bus-1",
+      horizonStops: 2,
+      forecast: { status: "AVAILABLE", seatAvailableProbability: 0.9, expectedSeats: 9 },
+    },
   ];
   api.mode.board = "success";
   const requestsBeforeRecovery = api.requests.board;
