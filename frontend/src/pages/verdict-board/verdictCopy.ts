@@ -11,7 +11,7 @@ const CHIP_LABELS: Record<ChipTone, string> = {
   noForecast: "지금 오는 차량이 없어요",
 };
 
-const SEAT_UNKNOWN_LABEL = "좌석을 예측하기 어려워요";
+const SEAT_UNKNOWN_LABEL = "예상 좌석 정보 없음";
 const SEAT_EMPTY_LABEL = "도착 시 빈자리가 없어요";
 
 const WAYPOINT_SUFFIX = "(경유)";

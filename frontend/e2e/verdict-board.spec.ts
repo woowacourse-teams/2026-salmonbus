@@ -153,7 +153,7 @@ for (const { name, vehicle, chip, seatLabel } of [
     name: "예상 좌석만 생략되면 탑승 확률을 유지한다",
     vehicle: forecastFixtures.withoutExpectedSeats,
     chip: "탑승 확률 높음",
-    seatLabel: "좌석을 예측하기 어려워요",
+    seatLabel: "예상 좌석 정보 없음",
   },
   {
     name: "확률과 예상 좌석이 0이면 빈자리 없음으로 표시한다",
@@ -165,7 +165,7 @@ for (const { name, vehicle, chip, seatLabel } of [
     name: "현재 잔여석을 알아도 도착 예측이 없으면 예측 불가로 표시한다",
     vehicle: forecastFixtures.unavailable,
     chip: "좌석 예측 정보가 없어요",
-    seatLabel: "좌석을 예측하기 어려워요",
+    seatLabel: "예상 좌석 정보 없음",
   },
 ]) {
   test(name, async ({ page, api }) => {
