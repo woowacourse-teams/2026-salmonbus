@@ -1,5 +1,6 @@
 import type { ArrivalView } from "../arrivalPolicy";
-import { NO_VEHICLE_NOTICE, seatLabel, stopsAwayLabel } from "../verdictCopy";
+import { arrivalToneFor } from "../displayPolicy";
+import { NO_VEHICLE_NOTICE, arrivalSeatLabel, stopsAwayLabel } from "../verdictCopy";
 import { SeatCountBadge } from "./SeatCountBadge";
 import * as styles from "./ArrivalForecastCard.css";
 
@@ -22,7 +23,7 @@ export function ArrivalForecastCard({ arrivals }: ArrivalForecastCardProps) {
         {arrivals.map((arrival, index) => (
           <li key={index} className={styles.row}>
             <span className={styles.distance}>{stopsAwayLabel(arrival.stopsAway)}</span>
-            <SeatCountBadge level={arrival.level} label={seatLabel(arrival.seatEstimate)} />
+            <SeatCountBadge tone={arrivalToneFor(arrival)} label={arrivalSeatLabel(arrival)} />
           </li>
         ))}
       </ul>

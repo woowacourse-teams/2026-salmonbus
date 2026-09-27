@@ -2,6 +2,8 @@ import type { Board, Direction, DirectionInfo, StopState } from "@/shared/api/ro
 import { arrivalViewsFor, representativeArrival, type ArrivalView } from "./arrivalPolicy";
 import type { SeatLevel } from "./seatGrade";
 
+export type ArrivalTone = SeatLevel | "unavailable";
+
 export type ServiceState = "running" | "outOfService";
 
 type ServicePhase = "before" | "running" | "ended" | "undetermined";
@@ -15,7 +17,7 @@ interface StopViewBase {
 
 export interface BoardingStopView extends StopViewBase {
   kind: "boarding";
-  level: SeatLevel;
+  tone: ArrivalTone;
   arrivals: ArrivalView[];
 }
 
@@ -66,6 +68,10 @@ export function stopViewsFor(board: Board, direction: Direction): StopView[] {
     .map((stop) => toStopView(stop, turnSequence));
 }
 
+export function arrivalToneFor(arrival: ArrivalView): ArrivalTone {
+  return arrival.kind === "forecast" ? arrival.level : "unavailable";
+}
+
 export function directionViewsFor(board: Board): DirectionView[] {
   return board.route.directions.map((directionInfo) => ({
     id: directionInfo.id,
@@ -87,7 +93,7 @@ function toStopView(stop: StopState, turnSequence: number | null): StopView {
     return { kind: "noVehicle", sequence, stopId, name, isTurnaround };
   }
 
-  return { kind: "boarding", sequence, stopId, name, isTurnaround, level: representative.level, arrivals };
+  return { kind: "boarding", sequence, stopId, name, isTurnaround, tone: arrivalToneFor(representative), arrivals };
 }
 
 // 회차 정류장은 상행의 마지막 순번이고, 하행은 그 다음 순번에서 시작한다. 양쪽에 표시한다.

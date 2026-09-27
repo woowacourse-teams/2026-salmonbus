@@ -1,4 +1,4 @@
-export type SeatLevel = "high" | "low" | "veryLow" | "unknown";
+export type SeatLevel = "high" | "low" | "veryLow";
 
 export interface CountedSeats {
   kind: "count";

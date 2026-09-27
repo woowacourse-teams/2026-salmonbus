@@ -64,10 +64,10 @@ describe("stopViewsFor", () => {
       {
         sequence: 2,
         kind: "boarding",
-        level: "unknown",
+        tone: "unavailable",
         arrivals: [
-          { stopsAway: 1, level: "unknown", seatEstimate: { kind: "unknown" } },
-          { stopsAway: 7, level: "high", seatEstimate: { kind: "count", seats: 5 } },
+          { kind: "unavailable", stopsAway: 1 },
+          { kind: "forecast", stopsAway: 7, level: "high", seatEstimate: { kind: "count", seats: 5 } },
         ],
       },
       { sequence: 3, kind: "noVehicle" },

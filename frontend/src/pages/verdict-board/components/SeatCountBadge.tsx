@@ -1,11 +1,11 @@
-import type { SeatLevel } from "../seatGrade";
+import type { ArrivalTone } from "../displayPolicy";
 import * as styles from "./SeatCountBadge.css";
 
 interface SeatCountBadgeProps {
-  level: SeatLevel;
+  tone: ArrivalTone;
   label: string;
 }
 
-export function SeatCountBadge({ level, label }: SeatCountBadgeProps) {
-  return <span className={styles.badge[level]}>{label}</span>;
+export function SeatCountBadge({ tone, label }: SeatCountBadgeProps) {
+  return <span className={styles.badge[tone]}>{label}</span>;
 }

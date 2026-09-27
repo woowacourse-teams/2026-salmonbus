@@ -1,13 +1,14 @@
-import type { StopView } from "./displayPolicy";
-import type { SeatEstimate, SeatLevel } from "./seatGrade";
+import type { ArrivalView } from "./arrivalPolicy";
+import type { ArrivalTone, StopView } from "./displayPolicy";
+import type { SeatEstimate } from "./seatGrade";
 
-export type ChipTone = SeatLevel | "noVehicle";
+export type ChipTone = ArrivalTone | "noVehicle";
 
 const CHIP_LABELS: Record<ChipTone, string> = {
   high: "탑승 확률 높음",
   low: "탑승 확률 낮음",
   veryLow: "탑승 확률 매우 낮음",
-  unknown: "좌석 예측 정보가 없어요",
+  unavailable: "좌석 예측 정보가 없어요",
   noVehicle: "지금 오는 차량이 없어요",
 };
 
@@ -39,6 +40,10 @@ function withoutWaypointSuffix(name: string): string {
 
 export function stopsAwayLabel(stopsAway: number): string {
   return `${stopsAway}정류장 전`;
+}
+
+export function arrivalSeatLabel(arrival: ArrivalView): string {
+  return arrival.kind === "forecast" ? seatLabel(arrival.seatEstimate) : SEAT_UNKNOWN_LABEL;
 }
 
 export function seatLabel(estimate: SeatEstimate): string {
