@@ -50,6 +50,20 @@ describe("serviceStateFor", () => {
 });
 
 describe("stopViewsFor", () => {
+  it("예상 좌석 수를 몰라도 확률이 있으면 그 등급으로 표시한다", () => {
+    const board = boardWith({
+      stops: [stopAt(2, { approachingVehicles: [forecastFixtures.withoutExpectedSeats] })],
+    });
+
+    expect(stopViewsFor(board, "UP")).toMatchObject([
+      {
+        kind: "boarding",
+        tone: "high",
+        arrivals: [{ kind: "forecast", level: "high", seatEstimate: { kind: "unknown" } }],
+      },
+    ]);
+  });
+
   it("가장 가까운 차량의 예측이 없어도 접근 차량과 대표 판정에 남긴다", () => {
     const board = boardWith({
       stops: [
