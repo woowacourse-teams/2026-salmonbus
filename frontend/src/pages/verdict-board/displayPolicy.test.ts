@@ -70,7 +70,7 @@ describe("stopViewsFor", () => {
           { stopsAway: 7, level: "high", seatEstimate: { kind: "count", seats: 5 } },
         ],
       },
-      { sequence: 3, kind: "noForecast" },
+      { sequence: 3, kind: "noVehicle" },
     ]);
   });
 });

@@ -1,5 +1,5 @@
 import type { ArrivalView } from "../arrivalPolicy";
-import { NO_FORECAST_NOTICE, seatLabel, stopsAwayLabel } from "../verdictCopy";
+import { NO_VEHICLE_NOTICE, seatLabel, stopsAwayLabel } from "../verdictCopy";
 import { SeatCountBadge } from "./SeatCountBadge";
 import * as styles from "./ArrivalForecastCard.css";
 
@@ -11,7 +11,7 @@ export function ArrivalForecastCard({ arrivals }: ArrivalForecastCardProps) {
   if (arrivals.length === 0) {
     return (
       <div className={styles.card}>
-        <p className={styles.notice}>{NO_FORECAST_NOTICE}</p>
+        <p className={styles.notice}>{NO_VEHICLE_NOTICE}</p>
       </div>
     );
   }

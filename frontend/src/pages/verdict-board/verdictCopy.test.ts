@@ -20,6 +20,6 @@ describe("chipLabel", () => {
   it("예측 불가는 탑승 확률이 낮거나 접근 차량이 없는 상태와 구분한다", () => {
     expect(chipLabel("unknown")).toBe("좌석 예측 정보가 없어요");
     expect(chipLabel("veryLow")).toBe("탑승 확률 매우 낮음");
-    expect(chipLabel("noForecast")).toBe("지금 오는 차량이 없어요");
+    expect(chipLabel("noVehicle")).toBe("지금 오는 차량이 없어요");
   });
 });

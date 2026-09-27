@@ -23,11 +23,11 @@ export interface PassThroughStopView extends StopViewBase {
   kind: "passThrough";
 }
 
-export interface NoForecastStopView extends StopViewBase {
-  kind: "noForecast";
+export interface NoVehicleStopView extends StopViewBase {
+  kind: "noVehicle";
 }
 
-export type StopView = BoardingStopView | PassThroughStopView | NoForecastStopView;
+export type StopView = BoardingStopView | PassThroughStopView | NoVehicleStopView;
 
 export interface DirectionView {
   id: Direction;
@@ -84,7 +84,7 @@ function toStopView(stop: StopState, turnSequence: number | null): StopView {
   const arrivals = arrivalViewsFor(stop.approachingVehicles);
   const representative = representativeArrival(arrivals);
   if (representative === undefined) {
-    return { kind: "noForecast", sequence, stopId, name, isTurnaround };
+    return { kind: "noVehicle", sequence, stopId, name, isTurnaround };
   }
 
   return { kind: "boarding", sequence, stopId, name, isTurnaround, level: representative.level, arrivals };

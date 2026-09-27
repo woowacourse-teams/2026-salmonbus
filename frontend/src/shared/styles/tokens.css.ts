@@ -21,7 +21,7 @@ export const vars = createGlobalTheme(":root", {
     mutedChipSurface: "#EDEDEB",
     forecastCardSurface: "#F7F7F5",
     forecastCardBorder: "#E3E2DE",
-    noForecastRing: "#000000",
+    noVehicleRing: "#000000",
     liveBus: "#C93C32",
 
     remainingSeat: {

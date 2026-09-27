@@ -36,7 +36,7 @@ export function StopRow({ stop, routePosition, expanded, onToggle }: StopRowProp
   }
 
   const forecast = stop.kind === "boarding" ? stop : null;
-  const tone = forecast === null ? "noForecast" : forecast.level;
+  const tone = forecast === null ? "noVehicle" : forecast.level;
 
   return (
     <li className={styles.stopRow}>
