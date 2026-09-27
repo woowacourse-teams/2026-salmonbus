@@ -22,7 +22,7 @@ export function representativeArrival(arrivals: readonly ArrivalView[]): Arrival
 
 function toArrivalView(vehicle: ApproachingVehicle): ArrivalView {
   const { horizonStops, forecast } = vehicle;
-  if (forecast.status === "UNAVAILABLE") {
+  if (forecast.status !== "AVAILABLE") {
     return {
       stopsAway: horizonStops,
       level: "unknown",

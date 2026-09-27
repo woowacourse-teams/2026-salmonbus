@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
+import type { ApproachingVehicle } from "@/shared/api/routeForecast.types";
 import { forecastFixtures } from "@/testing/forecastFixtures";
 import { arrivalViewsFor, representativeArrival } from "./arrivalPolicy";
 
@@ -13,6 +14,16 @@ describe("arrivalViewsFor", () => {
     expect(arrivalViewsFor([{ ...forecastFixtures.unavailable, horizonStops: 7 }])).toEqual([
       { stopsAway: 7, level: "unknown", seatEstimate: { kind: "unknown" } },
     ]);
+  });
+
+  it("알 수 없는 예측 상태는 모름으로 표시한다", () => {
+    const vehicle = {
+      ...forecastFixtures.unavailable,
+      horizonStops: 7,
+      forecast: { status: "UNKNOWN_STATUS" },
+    } as unknown as ApproachingVehicle;
+
+    expect(arrivalViewsFor([vehicle])).toEqual([{ stopsAway: 7, level: "unknown", seatEstimate: { kind: "unknown" } }]);
   });
 
   it("예상 좌석만 생략되면 탑승 확률 등급은 유지한다", () => {
