@@ -16,7 +16,8 @@ import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.domain.model.PrecedingVehicle;
 import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
-import com.gustler.backend.forecasting.domain.publication.RouteVersionRepository;
+import com.gustler.backend.forecasting.domain.publication.RouteStopsQuery;
+import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
 import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
 import com.gustler.backend.forecasting.domain.publication.ForecastPublicationRepository;
@@ -293,12 +294,13 @@ class ForecastBatchWriterTest {
     @Test
     void 좌석_범위를_초과한_차량이_있어도_다음_관측_묶음과_다른_노선을_처리한다() {
         // given
-        RouteVersionRepository routes = mock(RouteVersionRepository.class);
+        RouteVersionQuery routes = mock(RouteVersionQuery.class);
+        RouteStopsQuery stops = mock(RouteStopsQuery.class);
         ForecastRuntime runtimeProvider = mock(ForecastRuntime.class);
         when(runtimeProvider.resolveActive()).thenReturn(Optional.of(runtime(this::predictWithSeatValidation)));
         when(routes.findActiveVersionIds()).thenReturn(List.of(1L, 2L));
-        when(routes.readStops(1)).thenReturn(STOPS);
-        when(routes.readStops(2)).thenReturn(new RouteStops(2, "234000050", List.of()));
+        when(stops.readStops(1)).thenReturn(STOPS);
+        when(stops.readStops(2)).thenReturn(new RouteStops(2, "234000050", List.of()));
         when(trajectories.findBatchesAwaitingForecast(1, NOW.minusSeconds(300), 20))
             .thenReturn(List.of(BATCH, new PendingForecastBatch(101, 1, 1, NOW)));
         when(trajectories.findBatchesAwaitingForecast(2, NOW.minusSeconds(300), 20))
@@ -309,7 +311,8 @@ class ForecastBatchWriterTest {
         when(statistics.readAsOf(2, STATISTICS.timeSlot(), "feature-v1", NOW))
             .thenReturn(new StopDemandStatistics(2, STATISTICS.timeSlot(), 3, List.of()));
         ForecastPolicy properties = new ForecastPolicy(Duration.ofMinutes(5), 20, 3000, 400);
-        PublishPendingForecastsService job = new PublishPendingForecastsService(trajectories, routes, runtimeProvider, writer, properties, CLOCK);
+        PublishPendingForecastsService job = new PublishPendingForecastsService(trajectories, routes, stops, runtimeProvider, writer,
+            properties, CLOCK);
 
         // when
         job.writeForecasts();

@@ -1,10 +1,10 @@
 package com.gustler.backend.forecasting.configuration;
 
-import com.gustler.backend.forecasting.application.model.ActiveForecastRuntimeResolver;
-import com.gustler.backend.forecasting.application.model.BundleActivation;
-import com.gustler.backend.forecasting.application.model.LoadedModelRegistry;
-import com.gustler.backend.forecasting.application.model.ModelBundleLoader;
-import com.gustler.backend.forecasting.application.model.ModelStartupService;
+import com.gustler.backend.forecasting.application.deployment.ActiveForecastRuntimeResolver;
+import com.gustler.backend.forecasting.application.deployment.BundleActivation;
+import com.gustler.backend.forecasting.application.deployment.LoadedModelRegistry;
+import com.gustler.backend.forecasting.application.deployment.ModelBundleLoader;
+import com.gustler.backend.forecasting.application.deployment.ModelStartupService;
 import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
 import com.gustler.backend.forecasting.infrastructure.bundle.FileModelBundleLoader;
 import org.springframework.context.annotation.Bean;

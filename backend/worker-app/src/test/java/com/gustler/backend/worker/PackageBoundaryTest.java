@@ -82,7 +82,7 @@ class PackageBoundaryTest {
 
     @ArchTest
     static final ArchRule domainConceptsHaveNoCycles = slices()
-        .matching("com.gustler.backend.(*).domain.(*)..")
+        .matching("com.gustler.backend.(*).[domain|application].(*)..")
         .should().beFreeOfCycles();
 
     @ArchTest

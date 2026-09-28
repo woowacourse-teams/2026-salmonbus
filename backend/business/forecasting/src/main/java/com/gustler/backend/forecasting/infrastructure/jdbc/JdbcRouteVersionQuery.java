@@ -2,7 +2,8 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
-import com.gustler.backend.forecasting.domain.publication.RouteVersionRepository;
+import com.gustler.backend.forecasting.domain.publication.RouteStopsQuery;
+import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
 import java.util.List;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -14,7 +15,7 @@ import org.springframework.stereotype.Repository;
  * 예보가 그 엔티티를 가져다 쓰면 컨텍스트 경계가 없어지므로 필요한 열만 SQL 로 읽는다.
  */
 @Repository
-public class JdbcRouteVersionRepository implements RouteVersionRepository {
+public class JdbcRouteVersionQuery implements RouteVersionQuery, RouteStopsQuery {
 
     /**
      * 유효 기간이 안 닫힌 판본. 노선 하나에 valid_to 가 NULL 인 행이 지금 쓰는 판본이다.
@@ -56,7 +57,7 @@ public class JdbcRouteVersionRepository implements RouteVersionRepository {
 
     private final JdbcClient jdbcClient;
 
-    public JdbcRouteVersionRepository(
+    public JdbcRouteVersionQuery(
         JdbcClient jdbcClient
     ) {
         this.jdbcClient = jdbcClient;

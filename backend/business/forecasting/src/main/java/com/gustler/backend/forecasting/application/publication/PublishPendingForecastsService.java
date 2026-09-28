@@ -6,7 +6,8 @@ import com.gustler.backend.forecasting.api.publication.PublishPendingForecasts;
 import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
-import com.gustler.backend.forecasting.domain.publication.RouteVersionRepository;
+import com.gustler.backend.forecasting.domain.publication.RouteStopsQuery;
+import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
 import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryRepository;
 import com.gustler.backend.forecasting.api.ForecastPolicy;
 
@@ -34,7 +35,8 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
     private static final Duration LEFT_BEHIND_LOOKBACK = ForecastPolicy.MAX_STALENESS;
 
     private final VehicleTrajectoryRepository vehicleTrajectoryRepository;
-    private final RouteVersionRepository routeVersionRepository;
+    private final RouteVersionQuery routeVersions;
+    private final RouteStopsQuery routeStops;
     private final ForecastRuntime forecastRuntime;
     private final ForecastBatchWriter forecastBatchWriter;
     private final ForecastPolicy properties;
@@ -51,14 +53,16 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
 
     public PublishPendingForecastsService(
         VehicleTrajectoryRepository vehicleTrajectoryRepository,
-        RouteVersionRepository routeVersionRepository,
+        RouteVersionQuery routeVersions,
+        RouteStopsQuery routeStops,
         ForecastRuntime forecastRuntime,
         ForecastBatchWriter forecastBatchWriter,
         ForecastPolicy properties,
         Clock clock
     ) {
         this.vehicleTrajectoryRepository = vehicleTrajectoryRepository;
-        this.routeVersionRepository = routeVersionRepository;
+        this.routeVersions = routeVersions;
+        this.routeStops = routeStops;
         this.forecastRuntime = forecastRuntime;
         this.forecastBatchWriter = forecastBatchWriter;
         this.properties = properties;
@@ -82,7 +86,7 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
         Instant leftBehindFrom = notBefore.minus(LEFT_BEHIND_LOOKBACK);
         Instant oldestLeftBehind = null;
         for (Long routeVersionId : WorkerOperationLog.measure("forecast_routes", "all",
-            routeVersionRepository::findActiveVersionIds)) {
+            routeVersions::findActiveVersionIds)) {
             writeForecastsOf(routeVersionId, notBefore, runtime.get());
             oldestLeftBehind = olderOf(
                 oldestLeftBehind, leftBehindAt(routeVersionId, leftBehindFrom, notBefore));
@@ -134,7 +138,7 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
         RuntimeSnapshot runtime
     ) {
         RouteStops stops = WorkerOperationLog.measure("forecast_stops", routeVersionId,
-            () -> routeVersionRepository.readStops(routeVersionId));
+            () -> routeStops.readStops(routeVersionId));
         List<PendingForecastBatch> batches = WorkerOperationLog.measure("forecast_pending_batches", routeVersionId,
             () -> vehicleTrajectoryRepository.findBatchesAwaitingForecast(routeVersionId, notBefore,
                 properties.batchLimit()));

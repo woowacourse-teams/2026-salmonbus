@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.bundle;
 
-import com.gustler.backend.forecasting.application.model.ModelBundleFiles;
-import com.gustler.backend.forecasting.application.model.ModelBundleLoader;
+import com.gustler.backend.forecasting.application.deployment.ModelBundleFiles;
+import com.gustler.backend.forecasting.application.deployment.ModelBundleLoader;
 import java.nio.file.Path;
 
 public final class FileModelBundleLoader implements ModelBundleLoader {

@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @ForecastingIntegrationTest
 @Transactional
-class JdbcRouteVersionRepositoryTest {
+class JdbcRouteVersionQueryTest {
 
     private static final String SOURCE_ID = "GBIS";
     private static final String ROUTE_204000057 = "204000057";
@@ -33,7 +33,7 @@ class JdbcRouteVersionRepositoryTest {
     private JdbcClient jdbcClient;
 
     @Autowired
-    private JdbcRouteVersionRepository repository;
+    private JdbcRouteVersionQuery repository;
 
     @Test
     void 지금_쓰는_판본만_읽는다() {

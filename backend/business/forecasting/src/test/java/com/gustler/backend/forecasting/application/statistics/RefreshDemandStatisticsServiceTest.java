@@ -1,6 +1,6 @@
 package com.gustler.backend.forecasting.application.statistics;
 
-import com.gustler.backend.forecasting.domain.publication.RouteVersionRepository;
+import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandHourlyTotals;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
@@ -34,7 +34,7 @@ class RefreshDemandStatisticsServiceTest {
     private static final int STOP_ORDER = 44;
 
     @Mock
-    private RouteVersionRepository routeVersionRepository;
+    private RouteVersionQuery routeVersions;
 
     @Mock
     private StopDemandStatisticsRepository stopDemandStatisticsRepository;
@@ -47,10 +47,10 @@ class RefreshDemandStatisticsServiceTest {
     @BeforeEach
     void 집계_배치를_멈춘_시계로_세운다() {
         job = new RefreshDemandStatisticsService(
-            routeVersionRepository,
+            routeVersions,
             new StopDemandStatisticsWriter(stopDemandStatisticsRepository, Clock.fixed(COMPUTED_AT, ZoneId.of("Asia/Seoul"))),
             Clock.fixed(COMPUTED_AT, ZoneId.of("Asia/Seoul")));
-        when(routeVersionRepository.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
+        when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
     }
 
     @Test

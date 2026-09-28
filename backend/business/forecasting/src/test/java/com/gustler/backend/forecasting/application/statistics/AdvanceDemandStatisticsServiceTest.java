@@ -5,7 +5,7 @@ import static org.mockito.Mockito.*;
 
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline.Step;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline.Step.Status;
-import com.gustler.backend.forecasting.domain.publication.RouteVersionRepository;
+import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -16,7 +16,7 @@ class AdvanceDemandStatisticsServiceTest {
     @Test
     void 한_호출에_한_노선만_처리하고_다음_호출은_다른_노선으로_넘긴다() {
         var pipeline=mock(DemandStatisticsPipeline.class);
-        var routes=mock(RouteVersionRepository.class);
+        var routes=mock(RouteVersionQuery.class);
         var now=Instant.parse("2026-09-25T00:00:00Z");
         var service=new AdvanceDemandStatisticsService(pipeline,routes,Clock.fixed(now,ZoneId.of("Asia/Seoul")));
         when(routes.findActiveVersionIds()).thenReturn(List.of(2L,1L));
@@ -32,7 +32,7 @@ class AdvanceDemandStatisticsServiceTest {
     @Test
     void 실패한_노선은_즉시_재시도하지_않고_다른_노선을_처리한다() {
         var pipeline=mock(DemandStatisticsPipeline.class);
-        var routes=mock(RouteVersionRepository.class);
+        var routes=mock(RouteVersionQuery.class);
         var now=Instant.parse("2026-09-25T00:00:00Z");
         var service=new AdvanceDemandStatisticsService(pipeline,routes,Clock.fixed(now,ZoneId.of("Asia/Seoul")));
         when(routes.findActiveVersionIds()).thenReturn(List.of(1L,2L));

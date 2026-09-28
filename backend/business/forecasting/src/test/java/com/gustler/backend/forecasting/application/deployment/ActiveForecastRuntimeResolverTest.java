@@ -1,4 +1,4 @@
-package com.gustler.backend.forecasting.application.model;
+package com.gustler.backend.forecasting.application.deployment;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

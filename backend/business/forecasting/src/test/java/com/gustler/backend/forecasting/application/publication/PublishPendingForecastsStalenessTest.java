@@ -1,7 +1,8 @@
 package com.gustler.backend.forecasting.application.publication;
 
 import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
-import com.gustler.backend.forecasting.domain.publication.RouteVersionRepository;
+import com.gustler.backend.forecasting.domain.publication.RouteStopsQuery;
+import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
 import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryRepository;
 import com.gustler.backend.forecasting.api.ForecastPolicy;
 
@@ -51,7 +52,13 @@ class PublishPendingForecastsStalenessTest {
     private VehicleTrajectoryRepository vehicleTrajectoryRepository;
 
     @Mock
-    private RouteVersionRepository routeVersionRepository;
+
+    private RouteVersionQuery routeVersions;
+
+
+    @Mock
+
+    private RouteStopsQuery routeStops;
 
     @Mock
     private ForecastRuntime forecastRuntime;
@@ -79,7 +86,8 @@ class PublishPendingForecastsStalenessTest {
         forecastLog = startCapturingForecastLog();
         job = new PublishPendingForecastsService(
             vehicleTrajectoryRepository,
-            routeVersionRepository,
+            routeVersions,
+            routeStops,
             forecastRuntime,
             forecastBatchWriter,
             properties(),
@@ -90,7 +98,7 @@ class PublishPendingForecastsStalenessTest {
     void 신선도_한계를_지금에서_뒤로_물려_묻는다() {
         // given
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
-        when(routeVersionRepository.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
+        when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
 
         // when
         job.writeForecasts();
@@ -105,7 +113,7 @@ class PublishPendingForecastsStalenessTest {
     void 한_회차의_노선들이_같은_한계를_쓴다() {
         // given
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
-        when(routeVersionRepository.findActiveVersionIds())
+        when(routeVersions.findActiveVersionIds())
             .thenReturn(List.of(ROUTE_VERSION_3330, ROUTE_VERSION_1650));
 
         // when
@@ -123,7 +131,7 @@ class PublishPendingForecastsStalenessTest {
     void 창_밖_판만_남으면_판을_하나도_안_연다() {
         // given
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
-        when(routeVersionRepository.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
+        when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
         when(vehicleTrajectoryRepository.findBatchesAwaitingForecast(anyLong(), any(), anyInt()))
             .thenReturn(List.of());
 
@@ -157,7 +165,7 @@ class PublishPendingForecastsStalenessTest {
     void 창_밖에_두고_온_판이_있으면_경고를_남긴다() {
         // given
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
-        when(routeVersionRepository.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
+        when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
         when(vehicleTrajectoryRepository.findOldestLeftBehindAt(eq(ROUTE_VERSION_3330), any(), any()))
             .thenReturn(Optional.of(LEFT_BEHIND_AT));
 
@@ -173,7 +181,7 @@ class PublishPendingForecastsStalenessTest {
     void 밀려난_판이_없으면_경고를_안_남긴다() {
         // given
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
-        when(routeVersionRepository.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
+        when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
         when(vehicleTrajectoryRepository.findOldestLeftBehindAt(eq(ROUTE_VERSION_3330), any(), any()))
             .thenReturn(Optional.empty());
 
@@ -189,7 +197,7 @@ class PublishPendingForecastsStalenessTest {
     void 같은_상태가_이어지는_동안_경고를_거듭_남기지_않는다() {
         // given
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
-        when(routeVersionRepository.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
+        when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
         when(vehicleTrajectoryRepository.findOldestLeftBehindAt(eq(ROUTE_VERSION_3330), any(), any()))
             .thenReturn(Optional.of(LEFT_BEHIND_AT));
 
@@ -209,7 +217,7 @@ class PublishPendingForecastsStalenessTest {
     void 거슬러_보는_폭은_창_뒤로_상한만큼이다() {
         // given
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
-        when(routeVersionRepository.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
+        when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
 
         // when
         job.writeForecasts();
@@ -228,7 +236,7 @@ class PublishPendingForecastsStalenessTest {
         // given
         PublishPendingForecastsService widest = jobWith(ForecastPolicy.MAX_STALENESS);
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
-        when(routeVersionRepository.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
+        when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
 
         // when
         widest.writeForecasts();
@@ -245,7 +253,7 @@ class PublishPendingForecastsStalenessTest {
         PublishPendingForecastsService widest = jobWith(ForecastPolicy.MAX_STALENESS);
         Instant leftBehindAt = NOW.minus(ForecastPolicy.MAX_STALENESS).minusSeconds(1);
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
-        when(routeVersionRepository.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
+        when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
         when(vehicleTrajectoryRepository.findOldestLeftBehindAt(eq(ROUTE_VERSION_3330), any(), any()))
             .thenReturn(Optional.of(leftBehindAt));
 
@@ -268,7 +276,8 @@ class PublishPendingForecastsStalenessTest {
     ) {
         return new PublishPendingForecastsService(
             vehicleTrajectoryRepository,
-            routeVersionRepository,
+            routeVersions,
+            routeStops,
             forecastRuntime,
             forecastBatchWriter,
             new ForecastPolicy(

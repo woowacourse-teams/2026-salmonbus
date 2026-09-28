@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import com.gustler.backend.forecasting.domain.publication.RouteVersionRepository;
+import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -28,7 +28,7 @@ import org.springframework.transaction.TransactionSystemException;
 class RefreshDemandStatisticsServiceLoggingTest {
     private static final Instant COMPUTED_AT = Instant.parse("2026-09-25T00:00:00Z");
 
-    @Mock private RouteVersionRepository routes;
+    @Mock private RouteVersionQuery routes;
     @Mock private StopDemandStatisticsWriter writer;
 
     private final ListAppender<ILoggingEvent> logs = new ListAppender<>();

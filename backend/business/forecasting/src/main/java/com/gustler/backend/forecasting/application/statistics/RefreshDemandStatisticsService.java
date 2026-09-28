@@ -1,6 +1,6 @@
 package com.gustler.backend.forecasting.application.statistics;
 
-import com.gustler.backend.forecasting.domain.publication.RouteVersionRepository;
+import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -18,16 +18,16 @@ public class RefreshDemandStatisticsService {
 
     private static final Logger log = LoggerFactory.getLogger(RefreshDemandStatisticsService.class);
 
-    private final RouteVersionRepository routeVersionRepository;
+    private final RouteVersionQuery routeVersions;
     private final StopDemandStatisticsWriter writer;
     private final Clock clock;
 
     public RefreshDemandStatisticsService(
-        RouteVersionRepository routeVersionRepository,
+        RouteVersionQuery routeVersions,
         StopDemandStatisticsWriter writer,
         Clock clock
     ) {
-        this.routeVersionRepository = routeVersionRepository;
+        this.routeVersions = routeVersions;
         this.writer = writer;
         this.clock = clock;
     }
@@ -37,7 +37,7 @@ public class RefreshDemandStatisticsService {
         Instant computedAt = clock.instant();
         String computedAtLocal = computedAt.atZone(clock.getZone())
             .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
-        for (Long routeVersionId : routeVersionRepository.findActiveVersionIds().stream().sorted().toList()) {
+        for (Long routeVersionId : routeVersions.findActiveVersionIds().stream().sorted().toList()) {
             long startedAt = System.nanoTime();
             log.info("event=stop_demand_statistics status=STARTED routeVersionId={} computedAt={}",
                 routeVersionId, computedAtLocal);

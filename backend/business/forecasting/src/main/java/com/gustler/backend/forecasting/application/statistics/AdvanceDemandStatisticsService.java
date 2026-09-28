@@ -4,7 +4,7 @@ import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.api.statistics.AdvanceDemandStatistics;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline.Step;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline.Step.Status;
-import com.gustler.backend.forecasting.domain.publication.RouteVersionRepository;
+import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
@@ -25,7 +25,7 @@ public class AdvanceDemandStatisticsService implements AdvanceDemandStatistics {
     private static final Logger log = LoggerFactory.getLogger(AdvanceDemandStatisticsService.class);
 
     private final DemandStatisticsPipeline pipeline;
-    private final RouteVersionRepository routes;
+    private final RouteVersionQuery routes;
     private final Clock clock;
     private List<Long> versions = List.of();
     private Instant refreshAt = Instant.MIN;
@@ -34,7 +34,7 @@ public class AdvanceDemandStatisticsService implements AdvanceDemandStatistics {
     private final Map<Long, Integer> failures = new HashMap<>();
     private final Map<Long, Instant> progressAt = new HashMap<>();
 
-    public AdvanceDemandStatisticsService(final DemandStatisticsPipeline pipeline, final RouteVersionRepository routes,
+    public AdvanceDemandStatisticsService(final DemandStatisticsPipeline pipeline, final RouteVersionQuery routes,
         final Clock clock) {
         this.pipeline = pipeline;
         this.routes = routes;

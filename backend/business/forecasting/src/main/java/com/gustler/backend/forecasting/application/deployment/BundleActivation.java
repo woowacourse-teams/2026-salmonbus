@@ -1,4 +1,4 @@
-package com.gustler.backend.forecasting.application.model;
+package com.gustler.backend.forecasting.application.deployment;
 
 import com.gustler.backend.forecasting.api.model.ModelLoadException;
 import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
