@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
@@ -330,6 +332,44 @@ class JdbcForecastEvaluationRepositoryTest {
             """).params(vehicleObservationId, TARGET_STOP_ORDER)
             .query((row, index) -> List.of(row.getInt("arrival_stop_order"), row.getInt("arrival_running_state")))
             .single()).containsExactly(rawStopOrder, approaching);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"정상", "차량 조사", "전체 조사", "제외 편도"})
+    void 품질_보류된_관측의_예보는_정산_대상에서_제외한다(String condition) {
+        saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+        if (condition.equals("제외 편도")) {
+            jdbcClient.sql("UPDATE vehicle_one_way_trip SET status = 'EXCLUDED' WHERE start_observation_id = ?")
+                .param(vehicleObservationId).update();
+        } else if (!condition.equals("정상")) {
+            jdbcClient.sql("INSERT INTO trip_quality_rebuild(route_version_id, vehicle_id, until_at) VALUES (?, ?, ?)")
+                .params(routeVersionId, condition.equals("전체 조사") ? "" : VEHICLE_204000206, RESPONSE_RECEIVED_AT)
+                .update();
+        }
+
+        assertThat(evaluationRepository.findPending(routeVersionId, READ_LIMIT))
+            .hasSize(condition.equals("정상") ? 1 : 0);
+    }
+
+    @Test
+    void 정산_대상은_품질을_통과한_노선의_미정산_예보만_오래된_순서로_제한한다() {
+        saveForecasts(List.of(
+            forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT),
+            forecastOf(NEXT_TARGET_STOP_ORDER, STOPS_TO_NEXT_TARGET, NEXT_GENERATED_AT)));
+        long excluded = insertObservation(observationBatchId, "excluded-test", 1, PASSED_STOP_ORDER);
+        saveForecasts(List.of(new SeatForecast(
+            excluded, routeVersionId, TARGET_STOP_ORDER, STOPS_TO_TARGET,
+            modelDeploymentId, DEMAND_STATISTICS_REVISION, 0.41, 0.38, 12.5, GENERATED_AT.minusSeconds(1))));
+        jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats = 82 WHERE id = ?").param(excluded).update();
+
+        assertThat(evaluationRepository.findPending(routeVersionId, 1))
+            .extracting(PendingForecast::targetStopOrder).containsExactly(TARGET_STOP_ORDER);
+        assertThat(evaluationRepository.findPending(-1L, READ_LIMIT)).isEmpty();
+
+        evaluationRepository.settle(List.of(ForecastEvaluation.completed(
+            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Skipped(), SCORED_AT)));
+        assertThat(evaluationRepository.findPending(routeVersionId, 1))
+            .extracting(PendingForecast::targetStopOrder).containsExactly(NEXT_TARGET_STOP_ORDER);
     }
 
     private SeatForecast forecastOf(
