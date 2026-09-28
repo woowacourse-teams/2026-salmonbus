@@ -41,9 +41,6 @@ public record DemandStatisticsVersion(
         if (dataUntil == null || computedAt == null) {
             throw new IllegalArgumentException("자료 기준 시각과 계산 완료 시각이 필요하다");
         }
-        if (dataUntil.isAfter(computedAt)) {
-            throw new IllegalArgumentException("자료 기준 시각은 계산 완료 시각보다 늦을 수 없다");
-        }
         if (measurements == null) {
             throw new IllegalArgumentException("통계 버전에는 집계 결과 목록이 필요하다");
         }

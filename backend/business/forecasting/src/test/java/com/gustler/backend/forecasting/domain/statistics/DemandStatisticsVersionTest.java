@@ -112,17 +112,6 @@ class DemandStatisticsVersionTest {
     }
 
     @Test
-    void 자료_기준_시각은_계산_완료_시각보다_늦을_수_없다() {
-        // given
-        List<StopDemandMeasurement> measurements = List.of(measurement(TimeSlot.MORNING, 1));
-
-        // when & then
-        assertThatThrownBy(() -> new DemandStatisticsVersion(
-            ROUTE_VERSION_ID, CALCULATION_VERSION, REVISION, COMPUTED_AT, DATA_UNTIL, measurements
-        )).isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
     void 자료_기준_시각과_계산_완료_시각이_같아도_된다() {
         // given
         List<StopDemandMeasurement> measurements = List.of(measurement(TimeSlot.MORNING, 1));

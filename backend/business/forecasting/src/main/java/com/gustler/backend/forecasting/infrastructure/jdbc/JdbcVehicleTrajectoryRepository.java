@@ -56,7 +56,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
           AND batch.response_received_at IS NOT NULL
           AND batch.response_received_at >= :notBefore
           AND batch.outcome IN ('SUCCESS_ROWS', 'SUCCESS_EMPTY')
-        ORDER BY batch.response_received_at, batch.id
+        ORDER BY batch.response_received_at
         LIMIT :limit
         """;
 

@@ -130,7 +130,7 @@ public class DemandStatisticsPipeline {
         run.captured(fixed, samples.lastSampleId());
         store.stageCapacities(run.routeVersionId(), run.dataUntil(), run.inputUntilId());
         runs.save(run);
-        return new Step(Status.STARTED, "ACCUMULATE", fixed);
+        return new Step(Status.STARTED, "ACCUMULATE", runs.find(run.routeVersionId()).orElseThrow().dataUntil());
     }
 
     private void accumulate(final DemandStatisticsRun run) {
