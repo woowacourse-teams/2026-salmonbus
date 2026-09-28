@@ -4,7 +4,7 @@ import com.gustler.backend.quota.api.CallQuota;
 import java.time.LocalDate;
 import java.util.Optional;
 
-public interface CallQuotaRepository {
+public interface CallQuotaStore {
 
     /**
      * 해당 날짜의 한도에서 요청한 호출 횟수를 예약한다. 전부 예약하면 참, 한도가 부족하면 거짓을 반환한다.

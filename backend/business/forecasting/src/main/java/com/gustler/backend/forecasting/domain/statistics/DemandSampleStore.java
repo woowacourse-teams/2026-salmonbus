@@ -2,7 +2,7 @@ package com.gustler.backend.forecasting.domain.statistics;
 
 import java.util.List;
 
-public interface DemandSampleRepository {
+public interface DemandSampleStore {
 
     void record(List<DemandSample> samples);
 

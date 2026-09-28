@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @ForecastingIntegrationTest
 @Transactional
-class JdbcArrivalObservationRepositoryTest {
+class JdbcArrivalObservationQueryTest {
 
     private static final String SOURCE_ID = "GBIS";
     private static final String ROUTE_204000057 = "204000057";
@@ -63,7 +63,7 @@ class JdbcArrivalObservationRepositoryTest {
     private static final int READ_LIMIT_TWO = 2;
 
     @Autowired
-    private JdbcArrivalObservationRepository jdbcArrivalObservationRepository;
+    private JdbcArrivalObservationQuery jdbcArrivalObservationQuery;
 
     @Autowired
     private JdbcClient jdbcClient;
@@ -91,7 +91,7 @@ class JdbcArrivalObservationRepositoryTest {
             insertBatch(FIRST_POLL_AFTER_FORECAST), VEHICLE_204000206, STOP_6);
 
         // when
-        List<ArrivalCandidate> actual = jdbcArrivalObservationRepository.findAfter(
+        List<ArrivalCandidate> actual = jdbcArrivalObservationQuery.findAfter(
             routeVersionId, VEHICLE_204000206, FORECAST_OBSERVED_AT.toInstant(), READ_LIMIT);
 
         // then
@@ -106,7 +106,7 @@ class JdbcArrivalObservationRepositoryTest {
         insertDepartedObservation(insertBatch(FORECAST_OBSERVED_AT), VEHICLE_204000206, STOP_6);
 
         // when
-        List<ArrivalCandidate> actual = jdbcArrivalObservationRepository.findAfter(
+        List<ArrivalCandidate> actual = jdbcArrivalObservationQuery.findAfter(
             routeVersionId, VEHICLE_204000206, FORECAST_OBSERVED_AT.toInstant(), READ_LIMIT);
 
         // then
@@ -121,7 +121,7 @@ class JdbcArrivalObservationRepositoryTest {
         insertDepartedObservation(batchId, VEHICLE_204003542, STOP_6);
 
         // when
-        List<ArrivalCandidate> actual = jdbcArrivalObservationRepository.findAfter(
+        List<ArrivalCandidate> actual = jdbcArrivalObservationQuery.findAfter(
             routeVersionId, VEHICLE_204000206, FORECAST_OBSERVED_AT.toInstant(), READ_LIMIT);
 
         // then
@@ -142,7 +142,7 @@ class JdbcArrivalObservationRepositoryTest {
             STOP_6);
 
         // when
-        List<ArrivalCandidate> actual = jdbcArrivalObservationRepository.findAfter(
+        List<ArrivalCandidate> actual = jdbcArrivalObservationQuery.findAfter(
             routeVersionId, VEHICLE_204000206, FORECAST_OBSERVED_AT.toInstant(), READ_LIMIT);
 
         // then
@@ -157,7 +157,7 @@ class JdbcArrivalObservationRepositoryTest {
         insertDepartedObservation(insertBatch(FIRST_POLL_AFTER_FORECAST), VEHICLE_204000206, STOP_6);
 
         // when
-        List<ArrivalCandidate> actual = jdbcArrivalObservationRepository.findAfter(
+        List<ArrivalCandidate> actual = jdbcArrivalObservationQuery.findAfter(
             routeVersionId, VEHICLE_204000206, FORECAST_OBSERVED_AT.toInstant(), READ_LIMIT);
 
         // then
@@ -175,7 +175,7 @@ class JdbcArrivalObservationRepositoryTest {
             insertBatch(FIRST_POLL_AFTER_FORECAST), VEHICLE_204000206, ARRIVING_STOP_ORDER);
 
         // when
-        List<ArrivalCandidate> actual = jdbcArrivalObservationRepository.findAfter(
+        List<ArrivalCandidate> actual = jdbcArrivalObservationQuery.findAfter(
             routeVersionId, VEHICLE_204000206, FORECAST_OBSERVED_AT.toInstant(), READ_LIMIT);
 
         // then
@@ -190,7 +190,7 @@ class JdbcArrivalObservationRepositoryTest {
         insertSeatUnknownObservation(insertBatch(FIRST_POLL_AFTER_FORECAST), VEHICLE_204000206, STOP_6);
 
         // when
-        List<ArrivalCandidate> actual = jdbcArrivalObservationRepository.findAfter(
+        List<ArrivalCandidate> actual = jdbcArrivalObservationQuery.findAfter(
             routeVersionId, VEHICLE_204000206, FORECAST_OBSERVED_AT.toInstant(), READ_LIMIT);
 
         // then
@@ -210,7 +210,7 @@ class JdbcArrivalObservationRepositoryTest {
         insertDepartedObservation(insertBatch(THIRD_POLL_AFTER_FORECAST), VEHICLE_204000206, STOP_6);
 
         // when
-        List<ArrivalCandidate> actual = jdbcArrivalObservationRepository.findAfter(
+        List<ArrivalCandidate> actual = jdbcArrivalObservationQuery.findAfter(
             routeVersionId, VEHICLE_204000206, FORECAST_OBSERVED_AT.toInstant(), READ_LIMIT_TWO);
 
         // then

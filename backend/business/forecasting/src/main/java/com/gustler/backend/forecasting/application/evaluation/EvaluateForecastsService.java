@@ -6,7 +6,7 @@ import com.gustler.backend.forecasting.api.evaluation.EvaluateForecasts;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabelResolver;
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationRepository;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationQuery;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluationRepository;
@@ -29,20 +29,20 @@ public class EvaluateForecastsService implements EvaluateForecasts {
 
     private final ForecastEvaluationRepository evaluationRepository;
     private final ForecastEvaluationWriter writer;
-    private final ArrivalObservationRepository arrivalObservationRepository;
+    private final ArrivalObservationQuery arrivalObservationQuery;
     private final ForecastPolicy policy;
     private final Clock clock;
 
     public EvaluateForecastsService(
         ForecastEvaluationRepository evaluationRepository,
         ForecastEvaluationWriter writer,
-        ArrivalObservationRepository arrivalObservationRepository,
+        ArrivalObservationQuery arrivalObservationQuery,
         ForecastPolicy policy,
         Clock clock
     ) {
         this.evaluationRepository = evaluationRepository;
         this.writer = writer;
-        this.arrivalObservationRepository = arrivalObservationRepository;
+        this.arrivalObservationQuery = arrivalObservationQuery;
         this.policy = policy;
         this.clock = clock;
     }
@@ -123,7 +123,7 @@ public class EvaluateForecastsService implements EvaluateForecasts {
             return List.of();
         }
         return WorkerOperationLog.measure("settlement_arrival_candidates", routeVersionId,
-            () -> arrivalObservationRepository.findAfter(
+            () -> arrivalObservationQuery.findAfter(
                 routeVersionId, vehicleId, earliestGeneratedAt(forecasts), policy.arrivalLimit()));
     }
 

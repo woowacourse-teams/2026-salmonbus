@@ -9,12 +9,12 @@ import com.gustler.backend.forecasting.application.quality.RouteDataQualityAcces
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomeCount;
-import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomesRepository;
+import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomesStore;
 import com.gustler.backend.forecasting.domain.evaluation.SeoulDay;
 import com.gustler.backend.forecasting.domain.evaluation.SettledForecast;
 import com.gustler.backend.forecasting.domain.model.SameDayFullOutcomes;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
-import com.gustler.backend.forecasting.domain.statistics.DemandSampleRepository;
+import com.gustler.backend.forecasting.domain.statistics.DemandSampleStore;
 import com.gustler.backend.support.ConfirmedTripFixture;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import java.time.Instant;
@@ -58,7 +58,7 @@ class JdbcForecastEvaluationTransactionTest {
     private ForecastEvaluationWriter evaluationWriter;
 
     @Autowired
-    private JdbcSameDayFullOutcomesRepository outcomeRepository;
+    private JdbcSameDayFullOutcomesStore outcomeRepository;
 
     @Autowired
     private SameDayFullOutcomesService outcomes;
@@ -67,7 +67,7 @@ class JdbcForecastEvaluationTransactionTest {
     private RouteDataQualityAccess qualityAccess;
 
     @Autowired
-    private DemandSampleRepository demandSamples;
+    private DemandSampleStore demandSamples;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -356,11 +356,11 @@ class JdbcForecastEvaluationTransactionTest {
     }
 
     /** DB에 실제 집계가 저장된 직후 발생하는 후속 처리 실패를 재현한다. */
-    private static final class FailingOutcomeRepository implements SameDayFullOutcomesRepository {
+    private static final class FailingOutcomeRepository implements SameDayFullOutcomesStore {
 
-        private final SameDayFullOutcomesRepository delegate;
+        private final SameDayFullOutcomesStore delegate;
 
-        private FailingOutcomeRepository(SameDayFullOutcomesRepository delegate) {
+        private FailingOutcomeRepository(SameDayFullOutcomesStore delegate) {
             this.delegate = delegate;
         }
 

@@ -12,7 +12,7 @@ import com.gustler.backend.forecasting.domain.publication.SeatForecast;
 import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
 import com.gustler.backend.forecasting.domain.publication.ForecastPublicationRepository;
 import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
-import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryRepository;
+import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryQuery;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
 import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
@@ -38,7 +38,7 @@ public class ForecastBatchWriter {
 
     private static final Logger log = LoggerFactory.getLogger(ForecastBatchWriter.class);
 
-    private final VehicleTrajectoryRepository vehicleTrajectoryRepository;
+    private final VehicleTrajectoryQuery vehicleTrajectoryQuery;
     private final ForecastPublicationRepository publications;
     private final ForecastEvaluationRepository evaluations;
     private final SameDayFullOutcomesService sameDayFullOutcomesService;
@@ -48,7 +48,7 @@ public class ForecastBatchWriter {
     private final CollectionInputs collectionInputs;
 
     public ForecastBatchWriter(
-        VehicleTrajectoryRepository vehicleTrajectoryRepository,
+        VehicleTrajectoryQuery vehicleTrajectoryQuery,
         ForecastPublicationRepository publications,
         ForecastEvaluationRepository evaluations,
         SameDayFullOutcomesService sameDayFullOutcomesService,
@@ -57,7 +57,7 @@ public class ForecastBatchWriter {
         RouteDataQualityAccess quality,
         CollectionInputs collectionInputs
     ) {
-        this.vehicleTrajectoryRepository = vehicleTrajectoryRepository;
+        this.vehicleTrajectoryQuery = vehicleTrajectoryQuery;
         this.publications = publications;
         this.evaluations = evaluations;
         this.sameDayFullOutcomesService = sameDayFullOutcomesService;
@@ -107,7 +107,7 @@ public class ForecastBatchWriter {
         RuntimeSnapshot runtime,
         Instant generatedAt
     ) {
-        return vehicleTrajectoryRepository.readTrajectories(batch.observationBatchId()).stream()
+        return vehicleTrajectoryQuery.readTrajectories(batch.observationBatchId()).stream()
             .flatMap(trajectory -> forecastsOfVehicleOrEmpty(
                 batch, trajectory, stops, statistics, sameDayOutcomes, runtime, generatedAt).stream())
             .toList();

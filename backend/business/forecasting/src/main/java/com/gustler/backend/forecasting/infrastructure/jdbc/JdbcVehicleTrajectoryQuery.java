@@ -9,7 +9,7 @@ import com.gustler.backend.forecasting.domain.model.SeatUnknownReason;
 import com.gustler.backend.forecasting.domain.publication.TrajectoryObservation;
 import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
 import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryAssembler;
-import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryRepository;
+import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryQuery;
 import com.gustler.backend.forecasting.domain.model.SeatGrid;
 import java.time.Duration;
 import java.time.Instant;
@@ -35,7 +35,7 @@ import org.springframework.stereotype.Repository;
  * 창을 SQL 에서 걸러내면 판 결손과 구분이 안 된다.
  */
 @Repository
-public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryRepository {
+public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
 
     /**
      * 궤적을 잇는 데 거슬러 볼 시간.
@@ -159,7 +159,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
 
     private final JdbcClient jdbcClient;
 
-    public JdbcVehicleTrajectoryRepository(
+    public JdbcVehicleTrajectoryQuery(
         JdbcClient jdbcClient
     ) {
         this.jdbcClient = jdbcClient;
@@ -208,7 +208,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
         }
         ObservationHistory history = historyEndingAt(target.get());
         Set<Long> eligibleIds = history.targetBatch().observations().stream()
-            .filter(JdbcVehicleTrajectoryRepository::isEligible)
+            .filter(JdbcVehicleTrajectoryQuery::isEligible)
             .map(TrajectoryObservation::vehicleObservationId).collect(Collectors.toSet());
         return VehicleTrajectoryAssembler.assemble(history, maximumSeatsEverObservedOf(target.get(), history))
             .stream().filter(trajectory -> eligibleIds.contains(trajectory.vehicleObservationId())).toList();
@@ -225,7 +225,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
         ObservationHistory history
     ) {
         List<String> vehicleIds = history.targetBatch().observations().stream()
-            .filter(JdbcVehicleTrajectoryRepository::isEligible)
+            .filter(JdbcVehicleTrajectoryQuery::isEligible)
             .map(TrajectoryObservation::vehicleId)
             .distinct()
             .toList();

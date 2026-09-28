@@ -6,7 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.gustler.backend.quota.api.CallQuotaPolicy;
-import com.gustler.backend.quota.domain.CallQuotaRepository;
+import com.gustler.backend.quota.domain.CallQuotaStore;
 import java.time.OffsetDateTime;
 import org.junit.jupiter.api.Test;
 
@@ -14,7 +14,7 @@ class CallQuotaLedgerPolicyTest {
 
     private static final OffsetDateTime REQUESTED_AT = OffsetDateTime.parse("2026-08-28T14:59:59Z");
 
-    private final CallQuotaRepository repository = mock(CallQuotaRepository.class);
+    private final CallQuotaStore repository = mock(CallQuotaStore.class);
     private final CallQuotaLedger ledger = new CallQuotaLedger(repository, CallQuotaPolicy.sameForEveryApi(1));
 
     @Test

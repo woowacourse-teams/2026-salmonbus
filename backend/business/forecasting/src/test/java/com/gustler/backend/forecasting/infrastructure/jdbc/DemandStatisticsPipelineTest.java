@@ -17,7 +17,7 @@ import com.gustler.backend.forecasting.application.statistics.DemandStatisticsSt
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
-import com.gustler.backend.forecasting.domain.statistics.DemandSampleRepository;
+import com.gustler.backend.forecasting.domain.statistics.DemandSampleStore;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuildRepository;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion;
 import com.gustler.backend.forecasting.domain.statistics.RebuildScope;
@@ -99,7 +99,7 @@ class DemandStatisticsPipelineTest {
     private DemandStatisticsStore statisticsStore;
 
     @Autowired
-    private DemandSampleRepository samples;
+    private DemandSampleStore samples;
 
     @Autowired
     private RouteDataQualityAccess qualityAccess;

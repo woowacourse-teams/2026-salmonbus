@@ -2,7 +2,7 @@ package com.gustler.backend.forecasting.application.evaluation;
 
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationRepository;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationQuery;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
@@ -53,7 +53,7 @@ class EvaluateForecastsServiceTest {
     private ForecastEvaluationWriter writer;
 
     @Mock
-    private ArrivalObservationRepository arrivalObservationRepository;
+    private ArrivalObservationQuery arrivalObservationQuery;
 
     @Captor
     private ArgumentCaptor<List<ForecastEvaluation>> settlements;
@@ -65,7 +65,7 @@ class EvaluateForecastsServiceTest {
         job = new EvaluateForecastsService(
             evaluationRepository,
             writer,
-            arrivalObservationRepository,
+            arrivalObservationQuery,
             properties(),
             Clock.fixed(SETTLED_AT, ZoneOffset.UTC));
     }
@@ -134,7 +134,7 @@ class EvaluateForecastsServiceTest {
         job.settleArrivalLabels();
 
         // then
-        verify(arrivalObservationRepository, times(1)).findAfter(anyLong(), anyString(), any(), anyInt());
+        verify(arrivalObservationQuery, times(1)).findAfter(anyLong(), anyString(), any(), anyInt());
     }
 
     @Test
@@ -147,7 +147,7 @@ class EvaluateForecastsServiceTest {
         job.settleArrivalLabels();
 
         // then
-        verify(arrivalObservationRepository, never()).findAfter(anyLong(), anyString(), any(), anyInt());
+        verify(arrivalObservationQuery, never()).findAfter(anyLong(), anyString(), any(), anyInt());
     }
 
     @Test
@@ -186,7 +186,7 @@ class EvaluateForecastsServiceTest {
         job.settleArrivalLabels();
 
         // then
-        verify(arrivalObservationRepository)
+        verify(arrivalObservationQuery)
             .findAfter(anyLong(), anyString(), eq(OBSERVED_AT.plusSeconds(90)), anyInt());
     }
 
@@ -227,7 +227,7 @@ class EvaluateForecastsServiceTest {
     private void givenArrivals(
         ArrivalCandidate... candidates
     ) {
-        when(arrivalObservationRepository.findAfter(anyLong(), anyString(), any(), anyInt()))
+        when(arrivalObservationQuery.findAfter(anyLong(), anyString(), any(), anyInt()))
             .thenReturn(List.of(candidates));
     }
 

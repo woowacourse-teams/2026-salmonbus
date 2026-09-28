@@ -1,7 +1,7 @@
 package com.gustler.backend.quota.infrastructure.jdbc;
 
 import com.gustler.backend.quota.api.CallQuota;
-import com.gustler.backend.quota.domain.CallQuotaRepository;
+import com.gustler.backend.quota.domain.CallQuotaStore;
 import com.gustler.backend.quota.domain.DailyCallQuota;
 import java.time.LocalDate;
 import java.util.Optional;
@@ -19,7 +19,7 @@ import org.springframework.stereotype.Repository;
  * 언제 보이는지가 흐려진다. 한도는 그 시점이 전부다.
  */
 @Repository
-public class JdbcCallQuotaRepository implements CallQuotaRepository {
+public class JdbcCallQuotaStore implements CallQuotaStore {
 
     /**
      * 그날 행이 이미 있으면 daily_limit 은 안 건드린다.
@@ -44,7 +44,7 @@ public class JdbcCallQuotaRepository implements CallQuotaRepository {
 
     private final JdbcClient jdbcClient;
 
-    public JdbcCallQuotaRepository(
+    public JdbcCallQuotaStore(
         JdbcClient jdbcClient
     ) {
         this.jdbcClient = jdbcClient;

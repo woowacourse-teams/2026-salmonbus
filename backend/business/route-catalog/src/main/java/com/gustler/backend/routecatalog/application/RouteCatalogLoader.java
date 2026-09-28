@@ -3,7 +3,7 @@ package com.gustler.backend.routecatalog.application;
 import com.gustler.backend.quota.api.ApiCallQuota;
 import com.gustler.backend.routecatalog.api.CurrentRouteVersion;
 import com.gustler.backend.routecatalog.api.RouteReference;
-import com.gustler.backend.routecatalog.domain.CurrentRouteVersionRepository;
+import com.gustler.backend.routecatalog.domain.CurrentRouteVersionQuery;
 import com.gustler.backend.routecatalog.domain.RouteRegistry;
 import com.gustler.backend.routecatalog.domain.UpstreamRoute;
 import com.gustler.backend.routecatalog.domain.RouteSource;
@@ -31,7 +31,7 @@ public class RouteCatalogLoader implements CurrentRouteVersion {
 
     private static final Logger log = LoggerFactory.getLogger(RouteCatalogLoader.class);
 
-    private final CurrentRouteVersionRepository currentRouteVersionRepository;
+    private final CurrentRouteVersionQuery currentRouteVersionQuery;
     private final ApiCallQuota apiCallQuota;
     private final RouteSource routeSource;
     private final RouteRegistry routeRegistry;
@@ -39,14 +39,14 @@ public class RouteCatalogLoader implements CurrentRouteVersion {
     private final TransactionTemplate transactionTemplate;
 
     public RouteCatalogLoader(
-        CurrentRouteVersionRepository currentRouteVersionRepository,
+        CurrentRouteVersionQuery currentRouteVersionQuery,
         ApiCallQuota apiCallQuota,
         RouteSource routeSource,
         RouteRegistry routeRegistry,
         RouteVersionLoader routeVersionLoader,
         TransactionTemplate transactionTemplate
     ) {
-        this.currentRouteVersionRepository = currentRouteVersionRepository;
+        this.currentRouteVersionQuery = currentRouteVersionQuery;
         this.apiCallQuota = apiCallQuota;
         this.routeSource = routeSource;
         this.routeRegistry = routeRegistry;
@@ -60,7 +60,7 @@ public class RouteCatalogLoader implements CurrentRouteVersion {
         String sourceRouteId,
         OffsetDateTime readAt
     ) {
-        OptionalLong opened = currentRouteVersionRepository.findIdOf(sourceRouteId);
+        OptionalLong opened = currentRouteVersionQuery.findIdOf(sourceRouteId);
         if (opened.isPresent()) {
             return Optional.of(new RouteReference(opened.getAsLong()));
         }

@@ -14,7 +14,7 @@ import com.gustler.backend.forecasting.domain.evaluation.ScoringState;
 import com.gustler.backend.forecasting.domain.evaluation.SettledEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.SettledForecast;
 import com.gustler.backend.forecasting.domain.statistics.DemandSample;
-import com.gustler.backend.forecasting.domain.statistics.DemandSampleRepository;
+import com.gustler.backend.forecasting.domain.statistics.DemandSampleStore;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,7 +41,7 @@ class ForecastEvaluationWriterTest {
     private SameDayFullOutcomesService outcomes;
 
     @Mock
-    private DemandSampleRepository samples;
+    private DemandSampleStore samples;
 
     private ForecastEvaluationWriter writer;
 

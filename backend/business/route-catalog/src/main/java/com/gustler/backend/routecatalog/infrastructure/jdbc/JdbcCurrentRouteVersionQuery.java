@@ -1,6 +1,6 @@
 package com.gustler.backend.routecatalog.infrastructure.jdbc;
 
-import com.gustler.backend.routecatalog.domain.CurrentRouteVersionRepository;
+import com.gustler.backend.routecatalog.domain.CurrentRouteVersionQuery;
 import java.util.Optional;
 import java.util.OptionalLong;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -11,7 +11,7 @@ import org.springframework.stereotype.Repository;
  * valid_to 가 비어 있는 판본이 지금 쓰는 판본이다.
  */
 @Repository
-public class JdbcCurrentRouteVersionRepository implements CurrentRouteVersionRepository {
+public class JdbcCurrentRouteVersionQuery implements CurrentRouteVersionQuery {
 
     private static final String FIND_CURRENT_VERSION = """
         SELECT route_version.id
@@ -24,7 +24,7 @@ public class JdbcCurrentRouteVersionRepository implements CurrentRouteVersionRep
 
     private final JdbcClient jdbcClient;
 
-    public JdbcCurrentRouteVersionRepository(
+    public JdbcCurrentRouteVersionQuery(
         JdbcClient jdbcClient
     ) {
         this.jdbcClient = jdbcClient;

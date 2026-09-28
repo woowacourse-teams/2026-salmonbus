@@ -35,7 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @ForecastingIntegrationTest
 @Transactional
-class JdbcVehicleTrajectoryRepositoryTest {
+class JdbcVehicleTrajectoryQueryTest {
 
     private static final String SOURCE_ID = "GBIS";
     private static final String ROUTE_204000057 = "204000057";
@@ -72,7 +72,7 @@ class JdbcVehicleTrajectoryRepositoryTest {
     private JdbcClient jdbcClient;
 
     @Autowired
-    private JdbcVehicleTrajectoryRepository repository;
+    private JdbcVehicleTrajectoryQuery repository;
 
     private long routeVersionId;
 

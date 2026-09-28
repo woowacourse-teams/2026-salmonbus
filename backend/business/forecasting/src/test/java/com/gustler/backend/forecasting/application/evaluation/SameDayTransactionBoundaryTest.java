@@ -17,7 +17,7 @@ import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationRepository;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationQuery;
 import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomeCount;
 import com.gustler.backend.forecasting.domain.evaluation.SeoulDay;
 import com.gustler.backend.forecasting.domain.model.FullSeatStreak;
@@ -35,12 +35,12 @@ import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
 import com.gustler.backend.forecasting.domain.publication.ForecastTimeSlot;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
-import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryRepository;
+import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryQuery;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
 import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcForecastEvaluationRepository;
 import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcForecastPublicationRepository;
-import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcSameDayFullOutcomesRepository;
+import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcSameDayFullOutcomesStore;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import com.gustler.backend.support.ConfirmedTripFixture;
 import java.time.Clock;
@@ -100,15 +100,15 @@ class SameDayTransactionBoundaryTest {
     @Autowired
     JdbcClient jdbc;
     @MockitoSpyBean
-    JdbcSameDayFullOutcomesRepository countsSpy;
+    JdbcSameDayFullOutcomesStore countsSpy;
     @MockitoSpyBean
     JdbcForecastPublicationRepository publicationsSpy;
     @MockitoSpyBean
     JdbcForecastEvaluationRepository evaluationsSpy;
     @MockitoBean
-    ArrivalObservationRepository arrivals;
+    ArrivalObservationQuery arrivals;
     @MockitoBean
-    VehicleTrajectoryRepository trajectories;
+    VehicleTrajectoryQuery trajectories;
     @MockitoBean
     StopDemandStatisticsRepository statistics;
     EvaluateForecastsService settlement;

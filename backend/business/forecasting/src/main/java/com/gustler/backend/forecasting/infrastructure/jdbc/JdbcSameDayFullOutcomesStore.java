@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomeCount;
-import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomesRepository;
+import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomesStore;
 import com.gustler.backend.forecasting.domain.evaluation.SeoulDay;
 import com.gustler.backend.forecasting.domain.evaluation.SettledForecast;
 import java.sql.ResultSet;
@@ -14,7 +14,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public class JdbcSameDayFullOutcomesRepository implements SameDayFullOutcomesRepository {
+public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
 
     private static final String SELECT_COUNTS = """
         SELECT stops_to_target, row_count, actual_full_count, raw_full_chance_sum, settled_through
@@ -103,7 +103,7 @@ public class JdbcSameDayFullOutcomesRepository implements SameDayFullOutcomesRep
 
     private final JdbcClient jdbcClient;
 
-    public JdbcSameDayFullOutcomesRepository(JdbcClient jdbcClient) {
+    public JdbcSameDayFullOutcomesStore(JdbcClient jdbcClient) {
         this.jdbcClient = jdbcClient;
     }
 
@@ -121,7 +121,7 @@ public class JdbcSameDayFullOutcomesRepository implements SameDayFullOutcomesRep
         return jdbcClient.sql(SELECT_COUNTS)
             .param("routeId", routeId)
             .param("outcomeDate", day.date())
-            .query(JdbcSameDayFullOutcomesRepository::countOf)
+            .query(JdbcSameDayFullOutcomesStore::countOf)
             .list();
     }
 
@@ -169,7 +169,7 @@ public class JdbcSameDayFullOutcomesRepository implements SameDayFullOutcomesRep
             .param("dayStart", offsetOf(day.start()))
             .param("dayEnd", offsetOf(day.end()))
             .param("until", offsetOf(until))
-            .query(JdbcSameDayFullOutcomesRepository::countOf)
+            .query(JdbcSameDayFullOutcomesStore::countOf)
             .list();
     }
 

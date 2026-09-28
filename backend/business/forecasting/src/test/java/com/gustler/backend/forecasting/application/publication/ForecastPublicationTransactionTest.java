@@ -27,7 +27,7 @@ import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.model.SeatSlope;
 import com.gustler.backend.forecasting.domain.model.TrajectoryGap;
 import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
-import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryRepository;
+import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryQuery;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
@@ -77,7 +77,7 @@ class ForecastPublicationTransactionTest {
     private JdbcClient jdbc;
 
     @MockitoBean
-    private VehicleTrajectoryRepository trajectories;
+    private VehicleTrajectoryQuery trajectories;
 
     @MockitoBean
     private StopDemandStatisticsRepository statistics;

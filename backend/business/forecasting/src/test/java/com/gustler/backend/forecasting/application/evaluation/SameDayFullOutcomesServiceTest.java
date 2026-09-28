@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.application.evaluation;
 
 import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomeCount;
-import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomesRepository;
+import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomesStore;
 import com.gustler.backend.forecasting.domain.evaluation.SeoulDay;
 import com.gustler.backend.forecasting.domain.evaluation.SettledForecast;
 
@@ -38,7 +38,7 @@ class SameDayFullOutcomesServiceTest {
         new SameDayFullOutcomeCount(STOPS_TO_TARGET, 2, 1, 0.62, SETTLED_THROUGH);
 
     @Mock
-    private SameDayFullOutcomesRepository repository;
+    private SameDayFullOutcomesStore repository;
 
     private SameDayFullOutcomesService service;
 

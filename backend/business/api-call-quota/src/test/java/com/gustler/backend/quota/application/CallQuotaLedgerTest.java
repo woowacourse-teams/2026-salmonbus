@@ -3,7 +3,7 @@ package com.gustler.backend.quota.application;
 import com.gustler.backend.quota.api.ApiCallQuota;
 import com.gustler.backend.quota.api.CallQuotaPolicy;
 import com.gustler.backend.quota.api.CallQuota;
-import com.gustler.backend.quota.domain.CallQuotaRepository;
+import com.gustler.backend.quota.domain.CallQuotaStore;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -46,7 +46,7 @@ class CallQuotaLedgerTest {
     private ApiCallQuota ledger;
 
     @Autowired
-    private CallQuotaRepository callQuotaRepository;
+    private CallQuotaStore callQuotaStore;
 
     @Autowired
     private JdbcClient jdbcClient;
@@ -424,7 +424,7 @@ class CallQuotaLedgerTest {
 
     private CallQuotaLedger ledgerOverTwoKeys() {
         return new CallQuotaLedger(
-            callQuotaRepository,
+            callQuotaStore,
             CallQuotaPolicy.sameForEveryApi(DAILY_LIMIT_10000, List.of(CallQuotaPolicy.PRIMARY_KEY_ALIAS, KEY_ALIAS_B)));
     }
 

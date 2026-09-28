@@ -6,7 +6,7 @@ import com.gustler.backend.forecasting.application.quality.RouteDataQualityAcces
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsStore.FoldRow;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline.Step.Status;
 import com.gustler.backend.forecasting.domain.statistics.DailyStopDemand;
-import com.gustler.backend.forecasting.domain.statistics.DemandSampleRepository;
+import com.gustler.backend.forecasting.domain.statistics.DemandSampleStore;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsBaseline;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRunRepository;
@@ -39,7 +39,7 @@ public class DemandStatisticsPipeline {
     private final DemandStatisticsRebuilder rebuilder;
     private final DemandAccumulator accumulator;
     private final DemandStatisticsStore store;
-    private final DemandSampleRepository samples;
+    private final DemandSampleStore samples;
     private final StopDemandStatisticsRepository statistics;
     private final RouteDataQualityAccess quality;
     private final DemandStatisticsPolicy policy;
@@ -47,7 +47,7 @@ public class DemandStatisticsPipeline {
 
     public DemandStatisticsPipeline(final DemandStatisticsRunRepository runs,
         final DemandStatisticsRebuildRequests requests, final DemandStatisticsRebuilder rebuilder,
-        final DemandAccumulator accumulator, final DemandStatisticsStore store, final DemandSampleRepository samples,
+        final DemandAccumulator accumulator, final DemandStatisticsStore store, final DemandSampleStore samples,
         final StopDemandStatisticsRepository statistics, final RouteDataQualityAccess quality,
         final DemandStatisticsPolicy policy, final Clock clock) {
         this.runs = runs;

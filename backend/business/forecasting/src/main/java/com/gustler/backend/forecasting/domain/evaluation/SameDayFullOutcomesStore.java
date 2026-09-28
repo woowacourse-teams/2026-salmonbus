@@ -7,7 +7,7 @@ import java.util.List;
 /**
  * 당일 평가 집계의 조회·초기화·증분 저장을 담당한다.
  */
-public interface SameDayFullOutcomesRepository {
+public interface SameDayFullOutcomesStore {
 
     List<Long> findActiveRouteIds();
 

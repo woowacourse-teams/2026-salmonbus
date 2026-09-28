@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationRepository;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationQuery;
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -23,7 +23,7 @@ import org.springframework.stereotype.Repository;
  * SQL 이 대상 순번의 행만 집어 오면 순번 되돌림과 관측 공백이 구분되지 않는다.
  */
 @Repository
-public class JdbcArrivalObservationRepository implements ArrivalObservationRepository {
+public class JdbcArrivalObservationQuery implements ArrivalObservationQuery {
 
     private static final String SELECT_OBSERVATIONS_AFTER = """
         SELECT o.id,
@@ -47,7 +47,7 @@ public class JdbcArrivalObservationRepository implements ArrivalObservationRepos
 
     private final JdbcClient jdbcClient;
 
-    public JdbcArrivalObservationRepository(
+    public JdbcArrivalObservationQuery(
         JdbcClient jdbcClient
     ) {
         this.jdbcClient = jdbcClient;

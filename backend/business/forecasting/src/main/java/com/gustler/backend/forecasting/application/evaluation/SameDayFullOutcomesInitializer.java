@@ -2,7 +2,7 @@ package com.gustler.backend.forecasting.application.evaluation;
 
 import com.gustler.backend.forecasting.api.evaluation.SameDayInitializationPolicy;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
-import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomesRepository;
+import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomesStore;
 import com.gustler.backend.forecasting.domain.evaluation.SeoulDay;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -15,12 +15,12 @@ import org.springframework.transaction.annotation.Transactional;
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class SameDayFullOutcomesInitializer {
     private final SameDayFullOutcomesService service;
-    private final SameDayFullOutcomesRepository repository;
+    private final SameDayFullOutcomesStore repository;
     private final RouteDataQualityAccess quality;
     private final QueryTimeLimits limits;
     private final SameDayInitializationPolicy policy;
 
-    public SameDayFullOutcomesInitializer(SameDayFullOutcomesService service, SameDayFullOutcomesRepository repository,
+    public SameDayFullOutcomesInitializer(SameDayFullOutcomesService service, SameDayFullOutcomesStore repository,
         RouteDataQualityAccess quality, QueryTimeLimits limits, SameDayInitializationPolicy policy) {
         this.service = service;
         this.repository = repository;

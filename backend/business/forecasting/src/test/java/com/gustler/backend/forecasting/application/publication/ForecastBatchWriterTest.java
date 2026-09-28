@@ -28,7 +28,7 @@ import com.gustler.backend.observations.api.CollectionInputs;
 import com.gustler.backend.forecasting.domain.model.SeatSlope;
 import com.gustler.backend.forecasting.domain.model.TrajectoryGap;
 import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
-import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryRepository;
+import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryQuery;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
@@ -81,7 +81,7 @@ class ForecastBatchWriterTest {
     private static final SeatForecastResult RESULT = new SeatForecastResult(
         new SeatDistribution(List.of(0.4, 0.6)), 0.4);
 
-    private final VehicleTrajectoryRepository trajectories = mock(VehicleTrajectoryRepository.class);
+    private final VehicleTrajectoryQuery trajectories = mock(VehicleTrajectoryQuery.class);
     private final ForecastPublicationRepository forecasts = mock(ForecastPublicationRepository.class);
     private final ForecastEvaluationRepository evaluations = mock(ForecastEvaluationRepository.class);
     private final StopDemandStatisticsRepository statistics = mock(StopDemandStatisticsRepository.class);

@@ -3,7 +3,7 @@ package com.gustler.backend.forecasting.application.publication;
 import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.publication.RouteStopsQuery;
 import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
-import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryRepository;
+import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryQuery;
 import com.gustler.backend.forecasting.api.ForecastPolicy;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -49,7 +49,7 @@ class PublishPendingForecastsStalenessTest {
     private static final Instant LEFT_BEHIND_AT = NOW.minus(STALENESS).minusSeconds(1);
 
     @Mock
-    private VehicleTrajectoryRepository vehicleTrajectoryRepository;
+    private VehicleTrajectoryQuery vehicleTrajectoryQuery;
 
     @Mock
 
@@ -85,7 +85,7 @@ class PublishPendingForecastsStalenessTest {
     void 예보_배치를_멈춘_시계로_세운다() {
         forecastLog = startCapturingForecastLog();
         job = new PublishPendingForecastsService(
-            vehicleTrajectoryRepository,
+            vehicleTrajectoryQuery,
             routeVersions,
             routeStops,
             forecastRuntime,
@@ -104,7 +104,7 @@ class PublishPendingForecastsStalenessTest {
         job.writeForecasts();
 
         // then
-        verify(vehicleTrajectoryRepository)
+        verify(vehicleTrajectoryQuery)
             .findBatchesAwaitingForecast(anyLong(), notBefore.capture(), anyInt());
         assertThat(notBefore.getValue()).isEqualTo(NOW.minus(STALENESS));
     }
@@ -120,7 +120,7 @@ class PublishPendingForecastsStalenessTest {
         job.writeForecasts();
 
         // then
-        verify(vehicleTrajectoryRepository, times(2))
+        verify(vehicleTrajectoryQuery, times(2))
             .findBatchesAwaitingForecast(anyLong(), notBefore.capture(), anyInt());
         assertThat(notBefore.getAllValues()).containsExactly(
             NOW.minus(STALENESS), NOW.minus(STALENESS));
@@ -132,7 +132,7 @@ class PublishPendingForecastsStalenessTest {
         // given
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
         when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
-        when(vehicleTrajectoryRepository.findBatchesAwaitingForecast(anyLong(), any(), anyInt()))
+        when(vehicleTrajectoryQuery.findBatchesAwaitingForecast(anyLong(), any(), anyInt()))
             .thenReturn(List.of());
 
         // when
@@ -166,7 +166,7 @@ class PublishPendingForecastsStalenessTest {
         // given
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
         when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
-        when(vehicleTrajectoryRepository.findOldestLeftBehindAt(eq(ROUTE_VERSION_3330), any(), any()))
+        when(vehicleTrajectoryQuery.findOldestLeftBehindAt(eq(ROUTE_VERSION_3330), any(), any()))
             .thenReturn(Optional.of(LEFT_BEHIND_AT));
 
         // when
@@ -182,7 +182,7 @@ class PublishPendingForecastsStalenessTest {
         // given
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
         when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
-        when(vehicleTrajectoryRepository.findOldestLeftBehindAt(eq(ROUTE_VERSION_3330), any(), any()))
+        when(vehicleTrajectoryQuery.findOldestLeftBehindAt(eq(ROUTE_VERSION_3330), any(), any()))
             .thenReturn(Optional.empty());
 
         // when
@@ -198,7 +198,7 @@ class PublishPendingForecastsStalenessTest {
         // given
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
         when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
-        when(vehicleTrajectoryRepository.findOldestLeftBehindAt(eq(ROUTE_VERSION_3330), any(), any()))
+        when(vehicleTrajectoryQuery.findOldestLeftBehindAt(eq(ROUTE_VERSION_3330), any(), any()))
             .thenReturn(Optional.of(LEFT_BEHIND_AT));
 
         // when 멈춘 시계라 두 회차가 같은 순간에 돈다
@@ -254,7 +254,7 @@ class PublishPendingForecastsStalenessTest {
         Instant leftBehindAt = NOW.minus(ForecastPolicy.MAX_STALENESS).minusSeconds(1);
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
         when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
-        when(vehicleTrajectoryRepository.findOldestLeftBehindAt(eq(ROUTE_VERSION_3330), any(), any()))
+        when(vehicleTrajectoryQuery.findOldestLeftBehindAt(eq(ROUTE_VERSION_3330), any(), any()))
             .thenReturn(Optional.of(leftBehindAt));
 
         // when
@@ -266,7 +266,7 @@ class PublishPendingForecastsStalenessTest {
     }
 
     private LeftBehindWindow capturedLeftBehindWindow() {
-        verify(vehicleTrajectoryRepository)
+        verify(vehicleTrajectoryQuery)
             .findOldestLeftBehindAt(anyLong(), leftBehindFrom.capture(), leftBehindUntil.capture());
         return new LeftBehindWindow(leftBehindFrom.getValue(), leftBehindUntil.getValue());
     }
@@ -275,7 +275,7 @@ class PublishPendingForecastsStalenessTest {
         Duration staleness
     ) {
         return new PublishPendingForecastsService(
-            vehicleTrajectoryRepository,
+            vehicleTrajectoryQuery,
             routeVersions,
             routeStops,
             forecastRuntime,

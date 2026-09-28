@@ -7,7 +7,7 @@ import static org.mockito.Mockito.doAnswer;
 
 import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesInitializer;
 import com.gustler.backend.forecasting.domain.evaluation.SeoulDay;
-import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcSameDayFullOutcomesRepository;
+import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcSameDayFullOutcomesStore;
 import com.gustler.backend.support.PostgresTestContainer;
 import com.gustler.backend.worker.configuration.BusinessConfiguration;
 import java.time.Instant;
@@ -44,7 +44,7 @@ class SameDayInitializationTimeoutTest {
     @Autowired
     JdbcClient jdbc;
     @MockitoSpyBean
-    JdbcSameDayFullOutcomesRepository countsSpy;
+    JdbcSameDayFullOutcomesStore countsSpy;
     long routeId;
 
     @BeforeEach

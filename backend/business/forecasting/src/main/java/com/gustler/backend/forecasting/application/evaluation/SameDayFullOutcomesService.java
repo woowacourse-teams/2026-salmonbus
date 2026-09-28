@@ -2,7 +2,7 @@ package com.gustler.backend.forecasting.application.evaluation;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomeCount;
-import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomesRepository;
+import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomesStore;
 import com.gustler.backend.forecasting.domain.evaluation.SeoulDay;
 import com.gustler.backend.forecasting.domain.evaluation.SettledForecast;
 
@@ -21,10 +21,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class SameDayFullOutcomesService {
 
-    private final SameDayFullOutcomesRepository repository;
+    private final SameDayFullOutcomesStore repository;
 
     public SameDayFullOutcomesService(
-        SameDayFullOutcomesRepository repository
+        SameDayFullOutcomesStore repository
     ) {
         this.repository = repository;
     }

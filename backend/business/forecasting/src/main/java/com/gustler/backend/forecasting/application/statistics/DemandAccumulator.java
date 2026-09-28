@@ -2,7 +2,7 @@ package com.gustler.backend.forecasting.application.statistics;
 
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.statistics.DemandSamplePage;
-import com.gustler.backend.forecasting.domain.statistics.DemandSampleRepository;
+import com.gustler.backend.forecasting.domain.statistics.DemandSampleStore;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun;
 import com.gustler.backend.forecasting.domain.statistics.DemandSamplePage.PendingSample;
 import com.gustler.backend.forecasting.domain.statistics.RebuildScope;
@@ -16,11 +16,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class DemandAccumulator {
 
     private final DemandStatisticsStore store;
-    private final DemandSampleRepository samples;
+    private final DemandSampleStore samples;
     private final DemandStatisticsRebuildRequests requests;
     private final RouteDataQualityAccess quality;
 
-    public DemandAccumulator(final DemandStatisticsStore store, final DemandSampleRepository samples,
+    public DemandAccumulator(final DemandStatisticsStore store, final DemandSampleStore samples,
         final DemandStatisticsRebuildRequests requests, final RouteDataQualityAccess quality) {
         this.store = store;
         this.samples = samples;

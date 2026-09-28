@@ -8,7 +8,7 @@ import com.gustler.backend.forecasting.domain.evaluation.ScoringState;
 import com.gustler.backend.forecasting.domain.evaluation.SettledEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.SettledForecast;
 import com.gustler.backend.forecasting.domain.statistics.DemandSample;
-import com.gustler.backend.forecasting.domain.statistics.DemandSampleRepository;
+import com.gustler.backend.forecasting.domain.statistics.DemandSampleStore;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Optional;
@@ -22,13 +22,13 @@ public class ForecastEvaluationWriter {
     private final ForecastEvaluationRepository evaluations;
     private final RouteDataQualityAccess quality;
     private final SameDayFullOutcomesService outcomes;
-    private final DemandSampleRepository samples;
+    private final DemandSampleStore samples;
 
     public ForecastEvaluationWriter(
         ForecastEvaluationRepository evaluations,
         RouteDataQualityAccess quality,
         SameDayFullOutcomesService outcomes,
-        DemandSampleRepository samples
+        DemandSampleStore samples
     ) {
         this.evaluations = evaluations;
         this.quality = quality;

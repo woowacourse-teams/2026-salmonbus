@@ -74,7 +74,7 @@ class JdbcForecastEvaluationRepositoryTest {
     private JdbcClient jdbcClient;
 
     @Autowired
-    private JdbcArrivalObservationRepository arrivalObservations;
+    private JdbcArrivalObservationQuery arrivalObservations;
 
     private long routeId;
     private long routeVersionId;

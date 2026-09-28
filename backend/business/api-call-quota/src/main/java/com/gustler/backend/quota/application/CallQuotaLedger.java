@@ -3,7 +3,7 @@ package com.gustler.backend.quota.application;
 import com.gustler.backend.quota.api.ApiCallQuota;
 import com.gustler.backend.quota.api.CallQuotaPolicy;
 import com.gustler.backend.quota.api.CallQuota;
-import com.gustler.backend.quota.domain.CallQuotaRepository;
+import com.gustler.backend.quota.domain.CallQuotaStore;
 import com.gustler.backend.quota.domain.DailyCallQuota;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -30,15 +30,15 @@ public class CallQuotaLedger implements ApiCallQuota {
 
     private static final int ONE_CALL = 1;
 
-    private final CallQuotaRepository callQuotaRepository;
+    private final CallQuotaStore callQuotaStore;
     private final CallQuotaPolicy policy;
     private final AtomicInteger nextKeyPosition = new AtomicInteger();
 
     public CallQuotaLedger(
-        CallQuotaRepository callQuotaRepository,
+        CallQuotaStore callQuotaStore,
         CallQuotaPolicy policy
     ) {
-        this.callQuotaRepository = callQuotaRepository;
+        this.callQuotaStore = callQuotaStore;
         this.policy = policy;
     }
 
@@ -79,7 +79,7 @@ public class CallQuotaLedger implements ApiCallQuota {
     ) {
         return DailyCallQuota.at(quota, keyAlias, requestedAt, policy.limitOf(quota))
             .reservationFor(calls)
-            .map(callQuotaRepository::reserve)
+            .map(callQuotaStore::reserve)
             .orElse(false);
     }
 
@@ -112,6 +112,6 @@ public class CallQuotaLedger implements ApiCallQuota {
     ) {
         DailyCallQuota quota = DailyCallQuota.at(
             CallQuota.BUS_LOCATION, keyAlias, requestedAt, policy.limitOf(CallQuota.BUS_LOCATION));
-        return callQuotaRepository.exclude(quota.service(), quota.koreanDate(), quota.keyAlias());
+        return callQuotaStore.exclude(quota.service(), quota.koreanDate(), quota.keyAlias());
     }
 }

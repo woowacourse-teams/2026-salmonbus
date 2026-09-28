@@ -2,7 +2,7 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.domain.statistics.DemandSample;
 import com.gustler.backend.forecasting.domain.statistics.DemandSamplePage;
-import com.gustler.backend.forecasting.domain.statistics.DemandSampleRepository;
+import com.gustler.backend.forecasting.domain.statistics.DemandSampleStore;
 import com.gustler.backend.forecasting.domain.statistics.DemandSamplePage.PendingSample;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -12,7 +12,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public class JdbcDemandSampleRepository implements DemandSampleRepository {
+public class JdbcDemandSampleStore implements DemandSampleStore {
 
     private static final String INSERT = """
         INSERT INTO stop_demand_pending_sample (
@@ -44,7 +44,7 @@ public class JdbcDemandSampleRepository implements DemandSampleRepository {
 
     private final JdbcClient jdbc;
 
-    public JdbcDemandSampleRepository(final JdbcClient jdbc) {
+    public JdbcDemandSampleStore(final JdbcClient jdbc) {
         this.jdbc = jdbc;
     }
 

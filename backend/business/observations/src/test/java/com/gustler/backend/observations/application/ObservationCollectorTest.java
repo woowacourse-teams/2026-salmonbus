@@ -4,7 +4,7 @@ import com.gustler.backend.gbis.api.GbisKey;
 import com.gustler.backend.gbis.api.GbisLocationSource;
 import com.gustler.backend.observations.domain.CollectionSchedule;
 import com.gustler.backend.quota.api.CallQuota;
-import com.gustler.backend.quota.domain.CallQuotaRepository;
+import com.gustler.backend.quota.domain.CallQuotaStore;
 import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.UpstreamRoute;
@@ -86,7 +86,7 @@ class ObservationCollectorTest {
     private GbisLocationSource locationSource;
 
     @MockitoSpyBean
-    private CallQuotaRepository callQuotaRepository;
+    private CallQuotaStore callQuotaStore;
 
     @Autowired
     private ObservationCollector collector;
@@ -205,7 +205,7 @@ class ObservationCollectorTest {
         given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new DailyQuotaExceeded());
         doThrow(firstExclusionFailure)
             .doCallRealMethod()
-            .when(callQuotaRepository)
+            .when(callQuotaStore)
             .exclude(CallQuota.BUS_LOCATION, KOREA_8_28, GbisKey.PRIMARY);
 
         // when 첫 제외만 실패한다
@@ -221,7 +221,7 @@ class ObservationCollectorTest {
         collector.collectOnce(ROUTE_3330);
 
         // then 제외를 다시 시도해 그날 장부를 한도까지 채운다
-        then(callQuotaRepository).should(times(2))
+        then(callQuotaStore).should(times(2))
             .exclude(CallQuota.BUS_LOCATION, KOREA_8_28, GbisKey.PRIMARY);
         assertThat(batchCount()).isEqualTo(2);
         assertThat(reservedCallsOf(CallQuota.BUS_LOCATION)).isEqualTo(GBIS_DAILY_LIMIT);
