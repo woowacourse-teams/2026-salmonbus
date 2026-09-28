@@ -3,7 +3,7 @@ package com.gustler.backend.routecatalog.domain;
 import java.time.OffsetDateTime;
 import java.util.Objects;
 
-/** 저장 매핑과 분리한 노선 버전. 종료된 버전의 시간표나 기간은 다시 바꾸지 않는다. */
+/** 저장 매핑과 분리한 노선 버전. 종료된 버전의 기간은 다시 바꾸지 않는다. */
 public record RouteVersion(
     Long id,
     OffsetDateTime validFrom,
@@ -17,16 +17,13 @@ public record RouteVersion(
         if (id != null && id < 1) {
             throw new IllegalArgumentException("노선 버전 ID는 양수여야 한다");
         }
-        if (validTo != null && !validTo.isAfter(validFrom)) {
-            throw new IllegalArgumentException("노선 버전은 시작한 뒤에 종료해야 한다");
-        }
     }
 
     public static RouteVersion open(RouteVersionContent content, OffsetDateTime at) {
         return new RouteVersion(null, at, null, content);
     }
 
-    public void requireCurrent() {
+    private void requireCurrent() {
         if (validTo != null) {
             throw new IllegalStateException("노선 버전 %s는 %s에 이미 종료됐다".formatted(id, validTo));
         }
@@ -41,8 +38,7 @@ public record RouteVersion(
     }
 
     public RouteVersion reviseTimetable(RouteTimetable timetable) {
-        requireCurrent();
-        return new RouteVersion(id, validFrom, null,
+        return new RouteVersion(id, validFrom, validTo,
             new RouteVersionContent(content.contentDigest(), timetable));
     }
 }

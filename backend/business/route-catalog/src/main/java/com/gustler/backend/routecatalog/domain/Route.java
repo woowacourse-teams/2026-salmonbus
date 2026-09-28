@@ -25,7 +25,6 @@ public final class Route {
             openVersion(stops, incoming, at);
             return;
         }
-        currentVersion.requireCurrent();
         switch (currentVersion.content().decideFor(incoming)) {
             case OPEN_NEW_VERSION -> {
                 closedVersion = currentVersion.closeAt(at);
