@@ -23,6 +23,7 @@ import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import java.util.List;
+import org.springframework.stereotype.Repository;
 
 @AnalyzeClasses(packages = "com.gustler.backend", importOptions = ImportOption.DoNotIncludeTests.class)
 class PackageBoundaryTest {
@@ -51,7 +52,8 @@ class PackageBoundaryTest {
 
     @ArchTest
     static final ArchRule persistenceDoesNotRunPublicUseCases = classes()
-        .that().resideInAnyPackage("..infrastructure.jpa..", "..infrastructure.jdbc..")
+        .that().areAnnotatedWith(Repository.class)
+        .or().resideInAnyPackage("..infrastructure.jpa..", "..infrastructure.jdbc..")
         .should(new ArchCondition<>("저장 어댑터에서 업무 모듈의 공개 기능을 실행하지 않는다") {
             @Override
             public void check(JavaClass source, ConditionEvents events) {
@@ -106,9 +108,18 @@ class PackageBoundaryTest {
 
     @ArchTest
     static final ArchRule workerRunsOnlyPublicUseCases = noClasses()
-        .that().resideInAnyPackage(PREFIX + "worker.scheduling..", PREFIX + "worker.startup..")
+        .that().resideInAPackage(PREFIX + "worker..")
         .should().dependOnClassesThat().resideInAnyPackage(
             "..domain..", "..application..", "..infrastructure..");
+
+    @ArchTest
+    static void workerTestsStayInWorkerPackages(JavaClasses ignored) {
+        JavaClasses tests = new ClassFileImporter().withImportOption(new ImportOption.OnlyIncludeTests())
+            .importPackages("com.gustler.backend");
+        assertThat(tests.stream().anyMatch(type -> type.getName().equals(PackageBoundaryTest.class.getName())))
+            .as("worker 테스트 클래스가 검사 대상에 있어야 한다").isTrue();
+        classes().should().resideInAPackage(PREFIX + "worker..").check(tests);
+    }
 
     @ArchTest
     static void businessPackagesAreActuallyInspected(JavaClasses classes) {

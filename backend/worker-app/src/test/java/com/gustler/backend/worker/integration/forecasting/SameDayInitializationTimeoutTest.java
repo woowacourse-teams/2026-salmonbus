@@ -1,10 +1,11 @@
-package com.gustler.backend.forecasting.application.evaluation;
+package com.gustler.backend.worker.integration.forecasting;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 
+import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesInitializer;
 import com.gustler.backend.forecasting.domain.evaluation.SeoulDay;
 import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcSameDayFullOutcomesRepository;
 import com.gustler.backend.support.PostgresTestContainer;
@@ -12,6 +13,8 @@ import com.gustler.backend.worker.configuration.BusinessConfiguration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,20 +61,23 @@ class SameDayInitializationTimeoutTest {
 
     @Test
     void 초기화는_2초를_넘긴_조회도_25초_SQL과_30초_트랜잭션_예산_안에서_완료한다() {
-        var attempt = new SameDayInitializationAttempt();
+        var sourceQueryMs = new AtomicLong();
         doAnswer(call -> {
+            long started = System.nanoTime();
             assertThat(jdbc.sql("SHOW statement_timeout").query(String.class).single()).isEqualTo("25s");
             assertThat(jdbc.sql("SHOW lock_timeout").query(String.class).single()).isEqualTo("100ms");
             var holder = (ConnectionHolder) TransactionSynchronizationManager.getResource(dataSource);
             assertThat(holder.getTimeToLiveInMillis()).isGreaterThan(25_000L).isLessThanOrEqualTo(30_000L);
             // 과거 트랜잭션 제한 2초를 실제 DB 호출로 넘긴다. 운영 데이터 부하는 재현하지 않는다.
             jdbc.sql("SELECT pg_sleep(2.1)").query().singleRow();
-            return call.callRealMethod();
+            Object counted = call.callRealMethod();
+            sourceQueryMs.set(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
+            return counted;
         }).when(countsSpy).countFromSource(anyLong(), any(), any());
 
         assertThat(context.getBean(SameDayFullOutcomesInitializer.class)
-            .initialize(routeId, SeoulDay.containing(NOW), attempt)).isTrue();
-        assertThat(attempt.sourceQueryMs()).isGreaterThanOrEqualTo(2_000L);
+            .initialize(routeId, SeoulDay.containing(NOW))).isTrue();
+        assertThat(sourceQueryMs.get()).isGreaterThanOrEqualTo(2_000L);
         assertThat(count("same_day_full_outcomes")).isEqualTo(1);
     }
 
