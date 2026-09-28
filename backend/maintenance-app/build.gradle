@@ -5,7 +5,6 @@ plugins {
 
 dependencies {
     implementation project(':forecasting')
-    implementation project(':observations')
     implementation 'org.springframework:spring-context'
     implementation 'org.springframework:spring-jdbc'
     implementation 'tools.jackson.core:jackson-databind'
