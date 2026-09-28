@@ -103,7 +103,7 @@ public final class TripQualityInvestigation {
             cursorBatchId = page.getLast().batch();
         }
         includeCursor = false;
-        if (page.size() < BATCH_LIMIT && canRelease) { phase = Phase.DONE; completed = true; }
+        if (page.size() < BATCH_LIMIT && canRelease) { phase = Phase.DONE; completed = true; } else { phase = Phase.REPLAY; }
         return List.copyOf(assessments);
     }
 

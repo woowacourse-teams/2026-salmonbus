@@ -184,6 +184,7 @@ class TripQualityInvestigationTest {
         // then
         assertThat(actual).hasSize(1);
         assertThat(pending.completed()).isFalse();
+        assertThat(pending.phase()).isEqualTo(Phase.REPLAY);
     }
 
     private static TripQualityInvestigation investigation(final Phase phase, final BatchObservations anchor,

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.forecasting.application.quality.TripQualityInvestigationService;
 import com.gustler.backend.forecasting.domain.quality.QualityObservationBatch;
+import com.gustler.backend.forecasting.domain.quality.TripQualityInvestigation.Phase;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -81,6 +82,19 @@ class JdbcTripQualityStoreTest {
             JOIN vehicle_observation observation ON observation.id=assignment.observation_id
             WHERE observation.route_version_id=?
             """).param(fixture.version()).query(Integer.class).single()).isZero();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"REPLAY", "DONE", "DISCOVER"})
+    void 시작점_탐색이_아닌_단계명의_미완료_조사는_순방향_재판정으로_읽는다(String phase) {
+        // given
+        final var fixture = existingInvestigation(phase, false);
+
+        // when
+        final var pending = new JdbcTripQualityStore(jdbc).findPending(fixture.version(), VEHICLE).orElseThrow();
+
+        // then
+        assertThat(pending.phase()).isEqualTo(Phase.REPLAY);
     }
 
     private TripQualityInvestigationService service() {

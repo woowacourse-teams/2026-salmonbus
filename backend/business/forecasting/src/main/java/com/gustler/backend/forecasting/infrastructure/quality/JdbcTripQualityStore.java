@@ -98,7 +98,7 @@ public class JdbcTripQualityStore implements TripQualityStore {
         return new TripQualityInvestigation(rs.getLong("route_version_id"), rs.getString("vehicle_id"),
             rs.getObject("last_batch_at", OffsetDateTime.class).toInstant(), rs.getLong("last_batch_id"),
             rs.getObject("until_at", OffsetDateTime.class).toInstant(), rs.getLong("evidence_observation_id"),
-            Phase.valueOf(rs.getString("phase")), rs.getLong("anchor_observation_id"),
+            "SEARCH_START".equals(rs.getString("phase")) ? Phase.SEARCH_START : Phase.REPLAY, rs.getLong("anchor_observation_id"),
             rs.getObject("previous_observation_id", Long.class), rs.getBoolean("include_cursor"), rs.getBoolean("can_release"),
             seconds == null ? null : Duration.ofSeconds(seconds), rs.getObject("boundary_candidate_observation_id", Long.class),
             rs.getBoolean("completed"));
