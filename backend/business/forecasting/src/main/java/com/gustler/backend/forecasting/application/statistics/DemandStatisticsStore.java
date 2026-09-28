@@ -3,7 +3,6 @@ package com.gustler.backend.forecasting.application.statistics;
 import com.gustler.backend.forecasting.domain.statistics.DailyStopDemand;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsBaseline;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun.FoldCursor;
-import com.gustler.backend.forecasting.domain.statistics.RebuildScope;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun.ReduceCursor;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandCellTotals;
 import com.gustler.backend.forecasting.domain.statistics.VehicleHourlyDemand;
@@ -17,8 +16,6 @@ public interface DemandStatisticsStore {
     }
 
     void limitStatementTime();
-
-    boolean qualityRebuildPending(long routeVersionId, RebuildScope scope);
 
     DemandStatisticsBaseline baseline(long routeVersionId);
 

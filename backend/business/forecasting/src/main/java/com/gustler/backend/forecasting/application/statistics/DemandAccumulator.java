@@ -33,7 +33,7 @@ public class DemandAccumulator {
         final long inputUntilId, final Instant dataUntil) {
         store.limitStatementTime();
         quality.lock(routeVersionId);
-        if (store.qualityRebuildPending(routeVersionId, RebuildScope.vehicle(vehicleId))
+        if (quality.investigationPending(routeVersionId, vehicleId)
             || requests.blocksAccumulation(routeVersionId, vehicleId)) {
             return Result.waiting(afterInputId);
         }

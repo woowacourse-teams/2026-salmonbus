@@ -35,4 +35,18 @@ public class JdbcRouteDataQualityAccess implements RouteDataQualityAccess {
         jdbc.sql("UPDATE route_data_quality SET quality_revision = ? WHERE route_id = ?")
             .param(quality.revision()).param(quality.routeId()).update();
     }
+
+    @Override
+    public boolean anyInvestigationPending(final long version) {
+        return jdbc.sql("SELECT EXISTS(SELECT 1 FROM trip_quality_rebuild WHERE route_version_id = ? AND NOT completed)")
+            .param(version).query(Boolean.class).single();
+    }
+
+    @Override
+    public boolean investigationPending(final long version, final String vehicleId) {
+        return jdbc.sql("""
+            SELECT EXISTS(SELECT 1 FROM trip_quality_rebuild
+                WHERE route_version_id = ? AND NOT completed AND vehicle_id IN ('', ?))
+            """).params(version, vehicleId).query(Boolean.class).single();
+    }
 }

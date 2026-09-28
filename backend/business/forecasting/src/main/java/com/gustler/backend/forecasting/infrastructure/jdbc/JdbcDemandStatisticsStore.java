@@ -4,7 +4,6 @@ import com.gustler.backend.forecasting.application.statistics.DemandStatisticsSt
 import com.gustler.backend.forecasting.domain.statistics.DailyStopDemand;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsBaseline;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun.FoldCursor;
-import com.gustler.backend.forecasting.domain.statistics.RebuildScope;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun.ReduceCursor;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandCellTotals;
 import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
@@ -37,14 +36,6 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
             SELECT set_config('statement_timeout','500ms',true),set_config('lock_timeout','100ms',true),
                    set_config('work_mem','1MB',true),set_config('max_parallel_workers_per_gather','0',true)
             """).query().singleRow();
-    }
-
-    @Override
-    public boolean qualityRebuildPending(final long routeVersionId, final RebuildScope scope) {
-        return jdbc.sql("""
-            SELECT EXISTS(SELECT 1 FROM trip_quality_rebuild WHERE route_version_id = :version AND NOT completed
-              AND (:vehicle = '' OR vehicle_id IN ('', :vehicle)))
-            """).param("version", routeVersionId).param("vehicle", scope.vehicleId()).query(Boolean.class).single();
     }
 
     @Override

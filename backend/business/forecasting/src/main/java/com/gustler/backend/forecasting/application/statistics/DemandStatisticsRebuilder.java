@@ -53,7 +53,8 @@ public class DemandStatisticsRebuilder {
         if (!scope.isWholeRoute() && requests.isPending(routeVersionId, RebuildScope.wholeRoute())) {
             return false;
         }
-        if (store.qualityRebuildPending(routeVersionId, scope)) {
+        if (scope.isWholeRoute() ? quality.anyInvestigationPending(routeVersionId)
+            : quality.investigationPending(routeVersionId, scope.vehicleId())) {
             return false;
         }
         final Optional<UUID> request = requests.current(routeVersionId, scope);
