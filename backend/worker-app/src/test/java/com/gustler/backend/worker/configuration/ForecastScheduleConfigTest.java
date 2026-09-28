@@ -1,14 +1,17 @@
 package com.gustler.backend.worker.configuration;
 
 import com.gustler.backend.worker.scheduling.ArrivalLabelJob;
+import com.gustler.backend.worker.scheduling.TripQualityInvestigationJob;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.support.IntegrationTest;
 import java.time.Duration;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
+import org.springframework.scheduling.config.ScheduledTaskHolder;
 import org.springframework.test.context.TestPropertySource;
 
 @IntegrationTest
@@ -53,5 +56,17 @@ class ForecastScheduleConfigTest {
 
         // then
         assertThat(actual.settlementInterval()).isEqualTo(Duration.ofSeconds(60));
+    }
+
+    @Test
+    void 수집을_꺼도_예보를_켜면_이상_차량의_편도_조사를_등록한다() {
+        // when
+        List<String> registeredTasks = applicationContext.getBeansOfType(ScheduledTaskHolder.class).values().stream()
+            .flatMap(holder -> holder.getScheduledTasks().stream())
+            .map(scheduled -> scheduled.getTask().toString())
+            .toList();
+
+        // then
+        assertThat(registeredTasks).contains(TripQualityInvestigationJob.class.getName() + ".investigate");
     }
 }

@@ -143,7 +143,7 @@ class RuntimeProcessSeparationTest {
     }
 
     @Test
-    void 수집_예보_품질_조사를_끄면_worker_는_스케줄을_등록하거나_DB에_쓰지_않는다()
+    void 수집과_예보를_끄면_worker_는_스케줄을_등록하거나_DB에_쓰지_않는다()
         throws SQLException, InterruptedException {
         assertDisabledWorkerConnection();
         assertNoScheduledTasks();
@@ -195,7 +195,6 @@ class RuntimeProcessSeparationTest {
         environment.put("DB_PASSWORD", postgres.getPassword());
         environment.put("COLLECTION_ENABLED", "false");
         environment.put("FORECAST_ENABLED", "false");
-        environment.put("FORECAST_QUALITY_ENABLED", "false");
         environment.putAll(extra);
         builder.redirectErrorStream(true);
         builder.redirectOutput(log.toFile());
