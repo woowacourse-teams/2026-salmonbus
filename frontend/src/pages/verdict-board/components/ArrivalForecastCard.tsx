@@ -1,5 +1,4 @@
-import type { ArrivalView } from "../arrivalPolicy";
-import { arrivalToneFor } from "../displayPolicy";
+import { arrivalToneFor, type ArrivalView } from "../arrivalPolicy";
 import { NO_VEHICLE_NOTICE, arrivalSeatLabel, stopsAwayLabel } from "../verdictCopy";
 import { SeatCountBadge } from "./SeatCountBadge";
 import * as styles from "./ArrivalForecastCard.css";

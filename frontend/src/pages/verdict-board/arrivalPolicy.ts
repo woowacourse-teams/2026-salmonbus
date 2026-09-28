@@ -16,6 +16,7 @@ export interface UnavailableArrival {
 }
 
 export type ArrivalView = AvailableArrival | UnavailableArrival;
+export type ArrivalTone = SeatLevel | "unavailable";
 
 const MAX_ARRIVALS = 3;
 
@@ -28,6 +29,10 @@ export function arrivalViewsFor(vehicles: readonly ApproachingVehicle[]): Arriva
 
 export function representativeArrival(arrivals: readonly ArrivalView[]): ArrivalView | undefined {
   return arrivals[0];
+}
+
+export function arrivalToneFor(arrival: ArrivalView): ArrivalTone {
+  return arrival.kind === "available" ? arrival.level : "unavailable";
 }
 
 function toArrivalView(vehicle: ApproachingVehicle): ArrivalView {

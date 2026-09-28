@@ -1,5 +1,5 @@
-import type { ArrivalView } from "./arrivalPolicy";
-import type { ArrivalTone, StopView } from "./displayPolicy";
+import type { ArrivalView, ArrivalTone } from "./arrivalPolicy";
+import type { StopView } from "./displayPolicy";
 import type { SeatEstimate } from "./seatGrade";
 
 export type ChipTone = ArrivalTone | "noVehicle";

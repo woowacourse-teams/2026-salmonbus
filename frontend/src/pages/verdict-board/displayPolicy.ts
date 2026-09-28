@@ -1,8 +1,11 @@
 import type { Board, Direction, DirectionInfo, StopState } from "@/shared/api/routeForecast.types";
-import { arrivalViewsFor, representativeArrival, type ArrivalView } from "./arrivalPolicy";
-import type { SeatLevel } from "./seatGrade";
-
-export type ArrivalTone = SeatLevel | "unavailable";
+import {
+  arrivalViewsFor,
+  representativeArrival,
+  arrivalToneFor,
+  type ArrivalView,
+  type ArrivalTone,
+} from "./arrivalPolicy";
 
 export type ServiceState = "running" | "outOfService";
 
@@ -66,10 +69,6 @@ export function stopViewsFor(board: Board, direction: Direction): StopView[] {
     .filter((stop) => stop.direction === direction)
     .sort((left, right) => left.sequence - right.sequence)
     .map((stop) => toStopView(stop, turnSequence));
-}
-
-export function arrivalToneFor(arrival: ArrivalView): ArrivalTone {
-  return arrival.kind === "available" ? arrival.level : "unavailable";
 }
 
 export function directionViewsFor(board: Board): DirectionView[] {
