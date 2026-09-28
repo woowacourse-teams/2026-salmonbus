@@ -45,7 +45,7 @@ sudo vi /etc/salmonbus/worker.env    # 위 셋 + GBIS_SERVICE_KEY · COLLECTION_
 ```
 
 `FORECAST_STALENESS`는 넣지 않는다. 예보 신선도 창은 api-app이 `/board`에서 약속한 창과 짝이라
-worker 쪽만 바꾸면 조용히 어긋난다. 이 변수를 넣으면 Worker가 기동에서 멈춘다.
+worker 쪽만 바꾸면 조용히 어긋난다. 예보를 켠 Worker(`FORECAST_ENABLED=true`)는 이 변수가 있으면 기동에서 멈춘다.
 
 첫 배포에서는 수집과 예보를 비활성화한다.
 
