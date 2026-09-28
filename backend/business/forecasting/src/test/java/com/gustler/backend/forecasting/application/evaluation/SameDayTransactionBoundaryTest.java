@@ -192,11 +192,10 @@ class SameDayTransactionBoundaryTest {
         savePending();
         initializeEmptyDay();
         var bothReadPending = new CyclicBarrier(2);
-        doAnswer(call -> {
-            Object routes = call.callRealMethod();
+        when(arrivals.findAfter(anyLong(), anyString(), any(), anyInt())).thenAnswer(call -> {
             bothReadPending.await(5, TimeUnit.SECONDS);
-            return routes;
-        }).when(evaluationsSpy).findRoutesWithPendingForecasts();
+            return List.of(arrival());
+        });
         Future<?> first = workers.submit(settlement::settleArrivalLabels);
         Future<?> second = workers.submit(settlement::settleArrivalLabels);
         first.get(10, TimeUnit.SECONDS);

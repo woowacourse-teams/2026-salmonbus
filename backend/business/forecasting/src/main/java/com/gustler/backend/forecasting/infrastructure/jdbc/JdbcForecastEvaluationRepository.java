@@ -1,7 +1,6 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
-import com.gustler.backend.forecasting.domain.evaluation.EvaluationRoute;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluationRepository;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import com.gustler.backend.forecasting.domain.evaluation.ScoringState;
@@ -81,14 +80,12 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
     }
 
     @Override
-    public List<EvaluationRoute> findRoutesWithPendingForecasts() {
+    public List<Long> findRouteVersionIdsWithPendingForecasts() {
         return jdbcClient.sql("""
-            SELECT DISTINCT version.id, version.route_id
-            FROM quality_eligible_seat_forecast forecast
-            JOIN route_version version ON version.id = forecast.route_version_id
-            WHERE forecast.scoring_state = 'PENDING'
-            ORDER BY version.route_id, version.id
-            """).query((row, index) -> new EvaluationRoute(row.getLong("route_id"), row.getLong("id"))).list();
+            SELECT DISTINCT route_version_id
+            FROM quality_eligible_seat_forecast
+            WHERE scoring_state = 'PENDING'
+            """).query(Long.class).list();
     }
 
     @Override

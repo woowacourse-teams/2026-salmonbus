@@ -13,7 +13,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 저장된 당일 성적만 예보 보정에 사용한다. 미초기화/과거 시점 예보는 당일 보정을 생략한다.
@@ -43,11 +42,9 @@ public class SameDayFullOutcomesService {
         return outcomesOf(counts);
     }
 
-    @Transactional
     public void record(
         List<SettledForecast> settled
     ) {
-        settled.stream().map(SettledForecast::routeId).distinct().sorted().forEach(repository::lockRoute);
         for (Map.Entry<RouteDay, List<SettledForecast>> group : groupByRouteDay(settled).entrySet()) {
             RouteDay key = group.getKey();
             if (repository.findCounts(key.routeId(), key.day()).isEmpty()) {

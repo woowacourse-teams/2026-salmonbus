@@ -2,8 +2,6 @@ package com.gustler.backend.forecasting.application.evaluation;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.api.evaluation.EvaluateForecasts;
-import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
-import com.gustler.backend.forecasting.domain.evaluation.EvaluationRoute;
 
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
@@ -31,7 +29,6 @@ public class EvaluateForecastsService implements EvaluateForecasts {
 
     private final ForecastEvaluationRepository evaluationRepository;
     private final ForecastEvaluationWriter writer;
-    private final RouteDataQualityAccess quality;
     private final ArrivalObservationRepository arrivalObservationRepository;
     private final ForecastPolicy policy;
     private final Clock clock;
@@ -39,14 +36,12 @@ public class EvaluateForecastsService implements EvaluateForecasts {
     public EvaluateForecastsService(
         ForecastEvaluationRepository evaluationRepository,
         ForecastEvaluationWriter writer,
-        RouteDataQualityAccess quality,
         ArrivalObservationRepository arrivalObservationRepository,
         ForecastPolicy policy,
         Clock clock
     ) {
         this.evaluationRepository = evaluationRepository;
         this.writer = writer;
-        this.quality = quality;
         this.arrivalObservationRepository = arrivalObservationRepository;
         this.policy = policy;
         this.clock = clock;
@@ -65,12 +60,10 @@ public class EvaluateForecastsService implements EvaluateForecasts {
 
     private void settleOnce() {
         Instant now = clock.instant();
-        List<EvaluationRoute> routes = WorkerOperationLog.measure("settlement_pending_routes", "all",
-            evaluationRepository::findRoutesWithPendingForecasts);
-        routes.stream().map(EvaluationRoute::routeId).distinct().sorted().forEach(quality::lockByRoute);
         List<ForecastEvaluation> evaluations = new ArrayList<>();
-        for (EvaluationRoute route : routes) {
-            evaluations.addAll(evaluationsOf(route.routeVersionId(), now));
+        for (Long routeVersionId : WorkerOperationLog.measure("settlement_pending_routes", "all",
+            evaluationRepository::findRouteVersionIdsWithPendingForecasts)) {
+            evaluations.addAll(evaluationsOf(routeVersionId, now));
         }
         writer.complete(evaluations);
     }
