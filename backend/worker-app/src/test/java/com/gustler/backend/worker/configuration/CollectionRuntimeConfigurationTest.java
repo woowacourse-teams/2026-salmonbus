@@ -27,4 +27,17 @@ class CollectionRuntimeConfigurationTest {
         // then
         assertThat(quotaAliases).containsExactly(GbisKey.PRIMARY, "b", "d").isEqualTo(clientAliases);
     }
+
+    @Test
+    void 인증키가_공백으로_풀려도_GBIS_클라이언트_설정을_만든다() {
+        // given
+        GbisProperties properties = new GbisProperties(BASE_URL, "%20", DAILY_LIMIT);
+        CollectionRuntimeConfiguration configuration = new CollectionRuntimeConfiguration();
+
+        // when
+        String actual = configuration.gbisClientOptions(properties).serviceKeyOf(GbisKey.PRIMARY);
+
+        // then
+        assertThat(actual).isEqualTo(" ");
+    }
 }

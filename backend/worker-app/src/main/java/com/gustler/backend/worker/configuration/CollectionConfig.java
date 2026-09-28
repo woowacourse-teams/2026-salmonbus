@@ -19,7 +19,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 
 @Configuration
-@EnableConfigurationProperties(CollectionProperties.class)
+@EnableConfigurationProperties({CollectionProperties.class, GbisProperties.class})
 public class CollectionConfig {
 
     private static final Logger log = LoggerFactory.getLogger(CollectionConfig.class);

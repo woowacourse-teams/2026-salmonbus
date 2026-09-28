@@ -34,6 +34,7 @@ class RuntimeProcessSeparationTest {
     private static final String POSTGRES_IMAGE = "postgres:18";
     private static final String API_JAR = "api.boot.jar";
     private static final String WORKER_JAR = "worker.boot.jar";
+    private static final String SERVICE_KEY = "fake-service-key-for-test";
     private static final String CLIENT_API_PATH = "/api/v1/routes";
     private static final String HEALTH_PATH = "/actuator/health";
     private static final String READYZ_PATH = "/readyz";
@@ -76,6 +77,7 @@ class RuntimeProcessSeparationTest {
         Path workerLog = Files.createTempFile("salmonbus-worker", ".log");
         workerPort = freePort();
         worker = start(WORKER_JAR, workerPort, Map.of(
+            "GBIS_SERVICE_KEY", SERVICE_KEY,
             "DB_URL", postgres.getJdbcUrl() + (postgres.getJdbcUrl().contains("?") ? "&" : "?")
                 + "ApplicationName=" + DISABLED_WORKER_APPLICATION_NAME,
             "MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE", "health,info,scheduledtasks",

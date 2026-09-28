@@ -203,12 +203,44 @@ class GbisPropertiesTest {
         assertThat(resolved).isEmpty();
     }
 
+    @Test
+    void 수집을_꺼도_인증키가_없으면_애플리케이션_컨텍스트가_뜨지_않는다() {
+        // when & then
+        collectionConfigRunner()
+            .withPropertyValues(
+                "collection.enabled=false",
+                "gbis.base-url=" + BASE_URL,
+                "gbis.service-key=",
+                "gbis.daily-limit=" + DAILY_LIMIT)
+            .run(context -> assertThat(context).hasFailed());
+    }
+
+    @Test
+    void 수집을_꺼도_인증키를_읽는다() {
+        // when & then
+        collectionConfigRunner()
+            .withPropertyValues(
+                "collection.enabled=false",
+                "gbis.base-url=" + BASE_URL,
+                "gbis.service-key=" + PERCENT_KEY,
+                "gbis.daily-limit=" + DAILY_LIMIT)
+            .run(context -> assertThat(context.getBean(GbisProperties.class).serviceKey()).isEqualTo(ORIGINAL_KEY));
+    }
+
     private ApplicationContextRunner contextRunner() {
         return new ApplicationContextRunner()
             .withConfiguration(
                 org.springframework.boot.autoconfigure.AutoConfigurations.of(
                     ConfigurationPropertiesAutoConfiguration.class))
             .withUserConfiguration(EnableGbisProperties.class);
+    }
+
+    private ApplicationContextRunner collectionConfigRunner() {
+        return new ApplicationContextRunner()
+            .withConfiguration(
+                org.springframework.boot.autoconfigure.AutoConfigurations.of(
+                    ConfigurationPropertiesAutoConfiguration.class))
+            .withUserConfiguration(CollectionConfig.class);
     }
 
     private static List<String> aliasesOf(
