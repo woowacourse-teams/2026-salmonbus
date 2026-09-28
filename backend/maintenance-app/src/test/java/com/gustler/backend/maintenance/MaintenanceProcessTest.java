@@ -94,7 +94,7 @@ class MaintenanceProcessTest {
         long next = batch(jdbc, version, 3, 4, 44);
 
         ChunkOutput firstPage = rebuild(database, version);
-        assertThat(firstPage.result()).isEqualTo(new Chunk(1, false, false, false));
+        assertThat(firstPage.result()).isEqualTo(new Chunk(1, false, false));
         assertThat(discoveryCursor(jdbc, version)).isEqualTo(first);
         ChunkOutput secondPage = rebuild(database, version);
         assertThat(secondPage.result().processedBatches()).isEqualTo(1);
@@ -120,7 +120,7 @@ class MaintenanceProcessTest {
         assertThat(status.result()).allMatch(StatusRow::completed);
         Map<String, String> completed = state(jdbc);
         ChunkOutput repeated = rebuild(database, version);
-        assertThat(repeated.result()).isEqualTo(new Chunk(0, true, true, false));
+        assertThat(repeated.result()).isEqualTo(new Chunk(0, true, true));
         assertThat(state(jdbc)).isEqualTo(completed);
     }
 
@@ -322,7 +322,7 @@ class MaintenanceProcessTest {
     private record Preview(String scope, @JsonProperty("sampled_batches") long sampledBatches,
         @JsonProperty("sampled_observations") long sampledObservations, @JsonProperty("sampled_above_range") long sampledAboveRange) { }
     private record ChunkOutput(String status, Chunk result) { }
-    private record Chunk(int processedBatches, boolean discoveryCompleted, boolean completed, boolean waitingForObservations) { }
+    private record Chunk(int processedBatches, boolean discoveryCompleted, boolean completed) { }
     private record StatusOutput(String status, List<StatusRow> result) { }
     private record StatusRow(@JsonProperty("vehicle_id") String vehicleId, String phase, boolean completed,
         @JsonProperty("evidence_observation_id") Long evidenceObservationId, @JsonProperty("last_batch_at") Instant lastBatchAt,

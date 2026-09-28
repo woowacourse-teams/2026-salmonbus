@@ -36,7 +36,6 @@ public class TripQualityMaintenanceService implements PreviewTripQuality, Proces
     @Override
     @Transactional(readOnly = true)
     public TripQualityPreview preview(final long version, final Instant until) {
-        validateRange(version, until);
         store.applyTimeBudget();
         return maintenance.preview(version, until);
     }
@@ -44,7 +43,6 @@ public class TripQualityMaintenanceService implements PreviewTripQuality, Proces
     @Override
     @Transactional
     public TripQualityChunkResult applyChunk(final long version, final Instant until, final int limit) {
-        validateRange(version, until);
         if (limit < 1 || limit > 100) { throw new IllegalArgumentException("한 번에 1~100개 관측 묶음만 처리할 수 있다"); }
         store.applyTimeBudget();
         quality.lock(version);
@@ -82,21 +80,15 @@ public class TripQualityMaintenanceService implements PreviewTripQuality, Proces
             }
         }
         final var pending = maintenance.nextPendingVehicle(version);
-        final boolean advanced = pending.isPresent() && investigations.investigateLocked(version, pending.get());
+        pending.ifPresent(vehicle -> investigations.investigateLocked(version, vehicle));
         final boolean investigating = maintenance.hasPendingVehicles(version);
-        return new TripQualityChunkResult(processed, discovery.completed(), discovery.completed() && !investigating,
-            discovery.completed() && investigating && !advanced);
+        return new TripQualityChunkResult(processed, discovery.completed(), discovery.completed() && !investigating);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<TripQualityStatus> status(final long version) {
-        if (version <= 0) { throw new IllegalArgumentException("노선 버전 ID는 양수여야 한다"); }
         store.applyTimeBudget();
         return maintenance.status(version);
-    }
-
-    private static void validateRange(final long version, final Instant until) {
-        if (version <= 0 || until == null) { throw new IllegalArgumentException("노선 버전과 조사 종료 시각이 필요하다"); }
     }
 }

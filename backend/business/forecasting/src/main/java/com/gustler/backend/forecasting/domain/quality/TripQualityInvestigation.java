@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /** 시작점 탐색과 순방향 재판정의 커서를 별도로 보존하는 차량별 조사. */
 public final class TripQualityInvestigation {
@@ -61,22 +60,11 @@ public final class TripQualityInvestigation {
             null, false, false, maximumGap, null, false);
     }
 
-    /** 진행 중인 조사는 새 이상 관측이 와도 커서와 근거를 유지한다. */
-    public Optional<TripQualityInvestigation> restart(final QualityObservationBatch batch,
-        final QualityObservationBatch.Row anomaly, final Duration maximumGap) {
-        if (routeVersionId != batch.routeVersionId() || !vehicleId.equals(anomaly.vehicleId())) {
-            throw new IllegalArgumentException("기존 조사와 노선 버전 및 차량이 같아야 한다");
-        }
-        if (!completed()) { return Optional.empty(); }
-        return Optional.of(start(batch, anomaly, maximumGap));
-    }
-
     public void searchStart(final Route configured, final List<BatchObservations> page,
         final Map<Long, BatchObservations> retained) {
         requirePhase(Phase.SEARCH_START);
         final Map<Long, BatchObservations> observations = new HashMap<>(retained);
         final BatchObservations anchor = observations.get(anchorObservationId);
-        if (anchor == null) { throw new IllegalStateException("조사 시작 관측이 없다"); }
         final BatchObservations candidate = observations.get(boundaryCandidateObservationId);
         final ReverseBoundarySearch search = new ReverseBoundarySearch(route(configured), anchor.observation(),
             candidate == null ? null : candidate.observation());
@@ -100,7 +88,6 @@ public final class TripQualityInvestigation {
 
     public List<OneWayTripAssessment> replay(final Route configured, final List<BatchObservations> page,
         final Previous retainedPrevious) {
-        requirePhase(Phase.REPLAY);
         final List<OneWayTripAssessment> assessments = new ArrayList<>();
         Previous previous = retainedPrevious;
         for (final BatchObservations row : page) {

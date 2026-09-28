@@ -14,7 +14,7 @@ public final class DatabaseConnections {
         DriverManagerDataSource source = new DriverManagerDataSource(
             environment.jdbcUrl(), environment.username(), environment.password());
         Properties properties = new Properties();
-        properties.setProperty("ApplicationName", "salmonbus-quality-maintenance");
+        properties.setProperty("ApplicationName", "salmonbus-historical-migration");
         source.setConnectionProperties(properties);
         return source;
     }

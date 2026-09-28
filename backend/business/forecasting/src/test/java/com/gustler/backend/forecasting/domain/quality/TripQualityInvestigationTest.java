@@ -15,11 +15,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.LongStream;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 
 class TripQualityInvestigationTest {
     private static final Instant AT = Instant.parse("2026-09-23T00:00:00Z");
@@ -65,94 +62,6 @@ class TripQualityInvestigationTest {
             assertThatIllegalArgumentException().isThrownBy(
                 () -> TripQualityInvestigation.start(batch, observation, Duration.ofMinutes(10)));
         }
-    }
-
-    @ParameterizedTest
-    @EnumSource(value = Phase.class, names = {"SEARCH_START", "REPLAY"})
-    void 진행_중_새_이상_관측이_들어와도_기존_조사_위치와_기준을_유지한다(final Phase phase) {
-        // given
-        final QualityObservationBatch.Row original = new QualityObservationBatch.Row(51, "bus", 71);
-        final TripQualityInvestigation investigation = TripQualityInvestigation.start(
-            new QualityObservationBatch(5, 1, AT, List.of(original)), original, Duration.ofMinutes(10));
-        if (phase == Phase.REPLAY) {
-            final BatchObservations anchor = new BatchObservations(5, AT,
-                new Observation(51, "bus", AT, 3, 0, 71));
-            investigation.searchStart(ROUTE, List.of(), Map.of(51L, anchor));
-        }
-        final InvestigationState before = stateOf(investigation);
-        final QualityObservationBatch.Row laterAnomaly = new QualityObservationBatch.Row(61, "bus", 80);
-        final QualityObservationBatch laterBatch = new QualityObservationBatch(6, 1, AT.plusSeconds(30), List.of(laterAnomaly));
-
-        // when
-        final Optional<TripQualityInvestigation> restarted = investigation.restart(
-            laterBatch, laterAnomaly, Duration.ofMinutes(20));
-
-        // then
-        assertThat(restarted).isEmpty();
-        assertThat(stateOf(investigation)).isEqualTo(before);
-    }
-
-    @Test
-    void 완료_후_새_이상_관측이_들어오면_이전_조사를_보존하고_새_시작점_탐색을_만든다() {
-        // given
-        final TripQualityInvestigation completed = investigation(Phase.DONE, row(1, 1, 2, 44), true);
-        final InvestigationState before = stateOf(completed);
-        final QualityObservationBatch.Row anomaly = new QualityObservationBatch.Row(61, "bus", 80);
-        final Instant discoveredAt = AT.plusSeconds(30);
-        final QualityObservationBatch batch = new QualityObservationBatch(6, 1, discoveredAt, List.of(anomaly));
-        final Duration maximumGap = Duration.ofMinutes(20);
-
-        // when
-        final TripQualityInvestigation restarted = completed.restart(batch, anomaly, maximumGap).orElseThrow();
-
-        // then
-        assertThat(restarted).isNotSameAs(completed);
-        assertThat(stateOf(completed)).isEqualTo(before);
-        assertThat(restarted.phase()).isEqualTo(Phase.SEARCH_START);
-        assertThat(restarted.cursorAt()).isEqualTo(discoveredAt);
-        assertThat(restarted.cursorBatchId()).isEqualTo(6);
-        assertThat(restarted.evidenceAt()).isEqualTo(discoveredAt);
-        assertThat(restarted.evidenceObservationId()).isEqualTo(61);
-        assertThat(restarted.anchorObservationId()).isEqualTo(61);
-        assertThat(restarted.previousObservationId()).isNull();
-        assertThat(restarted.boundaryCandidateObservationId()).isNull();
-        assertThat(restarted.includeCursor()).isFalse();
-        assertThat(restarted.canRelease()).isFalse();
-        assertThat(restarted.maximumGap()).isEqualTo(maximumGap);
-    }
-
-    @ParameterizedTest
-    @EnumSource(Phase.class)
-    void 다른_노선_버전이나_차량의_이상_관측으로_기존_조사를_다시_시작할_수_없다(final Phase phase) {
-        // given
-        final TripQualityInvestigation investigation = investigation(phase, row(1, 1, 2, 44), false);
-        final InvestigationState before = stateOf(investigation);
-        final QualityObservationBatch.Row sameVehicle = new QualityObservationBatch.Row(61, "bus", 71);
-        final QualityObservationBatch otherRouteVersion = new QualityObservationBatch(6, 2, AT, List.of(sameVehicle));
-        final QualityObservationBatch.Row otherVehicle = new QualityObservationBatch.Row(62, "other-bus", 71);
-        final QualityObservationBatch sameRouteVersion = new QualityObservationBatch(6, 1, AT, List.of(otherVehicle));
-
-        // when, then
-        assertThatIllegalArgumentException().isThrownBy(
-            () -> investigation.restart(otherRouteVersion, sameVehicle, Duration.ofMinutes(10)));
-        assertThatIllegalArgumentException().isThrownBy(
-            () -> investigation.restart(sameRouteVersion, otherVehicle, Duration.ofMinutes(10)));
-        assertThat(stateOf(investigation)).isEqualTo(before);
-    }
-
-    @Test
-    void 과거_조사의_단계명과_완료_표시가_다르면_완료_표시를_기준으로_재시작한다() {
-        // given
-        final var anomaly = new QualityObservationBatch.Row(61, "bus", 71);
-        final var batch = new QualityObservationBatch(6, 1, AT.plusSeconds(30), List.of(anomaly));
-        final var completed = new TripQualityInvestigation(1, "bus", AT, 5, AT, 51, Phase.REPLAY,
-            51, 52L, false, true, Duration.ofMinutes(10), null, true);
-        final var pending = new TripQualityInvestigation(1, "bus", AT, 5, AT, 51, Phase.DONE,
-            51, 52L, false, true, Duration.ofMinutes(10), null, false);
-
-        // when, then
-        assertThat(completed.restart(batch, anomaly, Duration.ofMinutes(10))).isPresent();
-        assertThat(pending.restart(batch, anomaly, Duration.ofMinutes(10))).isEmpty();
     }
 
     @Test
@@ -250,18 +159,31 @@ class TripQualityInvestigationTest {
     }
 
     @Test
-    void 시작점_탐색과_재판정은_각각의_단계에서만_진행한다() {
+    void 시작점_탐색은_시작점_탐색_단계에서만_진행한다() {
         // given
         final BatchObservations anchor = row(1, 1, 2, 44);
-        final TripQualityInvestigation searching = investigation(Phase.SEARCH_START, anchor, false);
         final TripQualityInvestigation replaying = investigation(Phase.REPLAY, anchor, false);
         final TripQualityInvestigation completed = investigation(Phase.DONE, anchor, true);
 
         // when, then
-        assertThatIllegalStateException().isThrownBy(() -> searching.replay(ROUTE, List.of(), null));
         assertThatIllegalStateException().isThrownBy(() -> replaying.searchStart(ROUTE, List.of(), Map.of()));
-        assertThatIllegalStateException().isThrownBy(() -> completed.replay(ROUTE, List.of(), null));
         assertThatIllegalStateException().isThrownBy(() -> completed.searchStart(ROUTE, List.of(), Map.of()));
+    }
+
+    @Test
+    void 과거_조사의_단계명이_DONE이어도_완료_전이면_재판정한다() {
+        // given
+        final BatchObservations anchor = row(1, 1, 2, 44);
+        final TripQualityInvestigation pending = new TripQualityInvestigation(1, "bus", anchor.at(), anchor.batch(),
+            anchor.at(), anchor.observation().id(), Phase.DONE, anchor.observation().id(), null, true, false,
+            Duration.ofMinutes(10), null, false);
+
+        // when
+        final List<OneWayTripAssessment> actual = pending.replay(ROUTE, List.of(row(2, 2, 2, 44)), null);
+
+        // then
+        assertThat(actual).hasSize(1);
+        assertThat(pending.completed()).isFalse();
     }
 
     private static TripQualityInvestigation investigation(final Phase phase, final BatchObservations anchor,
@@ -278,16 +200,4 @@ class TripQualityInvestigationTest {
     private static BatchObservations emptyBatch(final long id) {
         return new BatchObservations(id, AT.plusSeconds(id), null);
     }
-
-    private static InvestigationState stateOf(final TripQualityInvestigation investigation) {
-        return new InvestigationState(investigation.routeVersionId(), investigation.vehicleId(), investigation.cursorAt(),
-            investigation.cursorBatchId(), investigation.evidenceAt(), investigation.evidenceObservationId(),
-            investigation.phase(), investigation.anchorObservationId(), investigation.previousObservationId(),
-            investigation.includeCursor(), investigation.canRelease(), investigation.maximumGap(),
-            investigation.boundaryCandidateObservationId());
-    }
-
-    private record InvestigationState(long routeVersionId, String vehicleId, Instant cursorAt, long cursorBatchId,
-        Instant evidenceAt, long evidenceObservationId, Phase phase, long anchorObservationId, Long previousObservationId,
-        boolean includeCursor, boolean canRelease, Duration maximumGap, Long boundaryCandidateObservationId) { }
 }

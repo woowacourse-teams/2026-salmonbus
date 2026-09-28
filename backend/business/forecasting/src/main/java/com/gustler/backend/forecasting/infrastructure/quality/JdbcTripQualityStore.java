@@ -42,14 +42,9 @@ public class JdbcTripQualityStore implements TripQualityStore {
     }
 
     @Override
-    public List<TripQualityInvestigation> findForVehicles(final long version, final List<String> vehicles) {
-        if (vehicles.isEmpty()) { return List.of(); }
-        return jdbc.sql("""
-            SELECT route_version_id, vehicle_id, last_batch_at, last_batch_id, until_at, phase,
-                   evidence_observation_id, anchor_observation_id, previous_observation_id,
-                   include_cursor, can_release, maximum_gap_seconds, boundary_candidate_observation_id, completed
-            FROM trip_quality_rebuild WHERE route_version_id = :version AND vehicle_id IN (:vehicles)
-            """).param("version", version).param("vehicles", vehicles).query((rs, n) -> investigation(rs)).list();
+    public List<String> activeVehicleIds(final long version) {
+        return jdbc.sql("SELECT vehicle_id FROM trip_quality_rebuild WHERE route_version_id = ? AND NOT completed")
+            .param(version).query(String.class).list();
     }
 
     @Override
@@ -203,8 +198,11 @@ public class JdbcTripQualityStore implements TripQualityStore {
                 ) AS excluded(id, evidence) WHERE t.id = excluded.id AND t.status <> 'EXCLUDED'
                 """).params(exclusions).update();
         }
-        jdbc.sql("INSERT INTO observation_trip_assignment(observation_id, trip_id) VALUES "
+        jdbc.sql("INSERT INTO observation_trip_assignment(observation_id, trip_id)"
+            + " SELECT link.observation_id, link.trip_id FROM (VALUES "
             + values(links.size() / 2, "(CAST(? AS bigint), CAST(? AS varchar))")
+            + ") AS link(observation_id, trip_id)"
+            + " JOIN vehicle_observation observation ON observation.id = link.observation_id"
             + " ON CONFLICT(observation_id) DO UPDATE SET trip_id = EXCLUDED.trip_id"
             + " WHERE observation_trip_assignment.trip_id IS DISTINCT FROM EXCLUDED.trip_id")
             .params(links).update();

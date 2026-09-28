@@ -15,7 +15,7 @@ public interface TripQualityStore {
     record Key(long routeVersionId, String vehicleId) { }
     Optional<Key> nextPending();
     Optional<TripQualityInvestigation> findPending(long routeVersionId, String vehicleId);
-    List<TripQualityInvestigation> findForVehicles(long routeVersionId, List<String> vehicleIds);
+    List<String> activeVehicleIds(long routeVersionId);
     Optional<Duration> maximumObservationGap(long routeVersionId);
     void saveStart(TripQualityInvestigation investigation);
     Route readRoute(long routeVersionId);

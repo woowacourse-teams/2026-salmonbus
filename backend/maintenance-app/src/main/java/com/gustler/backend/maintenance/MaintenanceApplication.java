@@ -9,7 +9,7 @@ import com.gustler.backend.forecasting.api.quality.TripQualityStatus;
 import com.gustler.backend.maintenance.configuration.MaintenanceConfiguration;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
@@ -66,8 +66,7 @@ public final class MaintenanceApplication {
                 TripQualityChunkResult result = context.getBean(ProcessTripQualityChunk.class)
                     .applyChunk(version, until, Integer.parseInt(arguments.required("batch-limit")));
                 return Map.of("processedBatches", result.processedBatches(),
-                    "discoveryCompleted", result.discoveryCompleted(), "completed", result.completed(),
-                    "waitingForObservations", result.waitingForObservations());
+                    "discoveryCompleted", result.discoveryCompleted(), "completed", result.completed());
             }
             TripQualityPreview result = context.getBean(PreviewTripQuality.class).preview(version, until);
             return Map.of("scope", result.scope(), "sampled_batches", result.sampledBatches(),
@@ -87,11 +86,11 @@ public final class MaintenanceApplication {
         result.put("phase", status.phase());
         result.put("completed", status.completed());
         result.put("evidence_observation_id", status.evidenceObservationId());
-        result.put("last_batch_at", status.lastBatchAt() == null ? null : status.lastBatchAt().atOffset(ZoneOffset.UTC));
+        result.put("last_batch_at", status.lastBatchAt() == null ? null : Date.from(status.lastBatchAt()));
         result.put("last_batch_id", status.lastBatchId());
         result.put("can_release", status.canRelease());
-        result.put("started_at", status.startedAt() == null ? null : status.startedAt().atOffset(ZoneOffset.UTC));
-        result.put("investigated_at", status.investigatedAt() == null ? null : status.investigatedAt().atOffset(ZoneOffset.UTC));
+        result.put("started_at", status.startedAt() == null ? null : Date.from(status.startedAt()));
+        result.put("investigated_at", status.investigatedAt() == null ? null : Date.from(status.investigatedAt()));
         return result;
     }
 }

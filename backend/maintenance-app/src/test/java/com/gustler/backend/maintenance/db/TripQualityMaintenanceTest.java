@@ -302,7 +302,7 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
     }
 
     @Test
-    void 정비_작업은_추가_관측을_기다리는_상태를_알리고_다음_편도에서_완료한다() throws Exception {
+    void 정비_작업은_추가_관측이_저장된_뒤_다음_편도에서_완료한다() throws Exception {
         // given
         try (var c = connection()) {
             var jdbc = jdbc(c);
@@ -323,7 +323,6 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
             assertThat(waiting.processedBatches()).isZero();
             assertThat(waiting.discoveryCompleted()).isTrue();
             assertThat(waiting.completed()).isFalse();
-            assertThat(waiting.waitingForObservations()).isTrue();
             assertThat(jdbc.sql("SELECT count(*) FROM forecast_eligible_observation")
                 .query(Integer.class).single()).isZero();
 
@@ -335,7 +334,6 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
 
             // then
             assertThat(completed.completed()).isTrue();
-            assertThat(completed.waitingForObservations()).isFalse();
             assertThat(jdbc.sql("SELECT observation_batch_id FROM forecast_eligible_observation")
                 .query(Long.class).list()).containsExactly(next);
         }

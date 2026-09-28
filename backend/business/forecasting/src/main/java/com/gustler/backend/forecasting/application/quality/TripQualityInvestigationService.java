@@ -3,9 +3,6 @@ package com.gustler.backend.forecasting.application.quality;
 import com.gustler.backend.forecasting.domain.quality.QualityObservationBatch;
 import com.gustler.backend.forecasting.domain.quality.TripQualityInvestigation;
 import com.gustler.backend.forecasting.domain.quality.TripQualityInvestigation.Phase;
-import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,18 +25,12 @@ public class TripQualityInvestigationService {
         final var anomalies = batch.firstAnomalies();
         if (anomalies.isEmpty()) { return; }
         quality.lock(batch.routeVersionId());
-        final var existing = store.findForVehicles(batch.routeVersionId(),
-                anomalies.stream().map(QualityObservationBatch.Row::vehicleId).toList()).stream()
-            .collect(Collectors.toMap(TripQualityInvestigation::vehicleId, Function.identity()));
+        final var active = store.activeVehicleIds(batch.routeVersionId());
         final var maximumGap = store.maximumObservationGap(batch.routeVersionId()).orElse(null);
         boolean changed = false;
         for (final var anomaly : anomalies) {
-            final var previous = existing.get(anomaly.vehicleId());
-            final var started = previous == null
-                ? Optional.of(TripQualityInvestigation.start(batch, anomaly, maximumGap))
-                : previous.restart(batch, anomaly, maximumGap);
-            if (started.isEmpty()) { continue; }
-            store.saveStart(started.get());
+            if (active.contains(anomaly.vehicleId())) { continue; }
+            store.saveStart(TripQualityInvestigation.start(batch, anomaly, maximumGap));
             statistics.requestVehicle(batch.routeVersionId(), anomaly.vehicleId());
             changed = true;
         }
@@ -58,10 +49,10 @@ public class TripQualityInvestigationService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public boolean investigateLocked(final long version, final String vehicle) {
+    public void investigateLocked(final long version, final String vehicle) {
         quality.lock(version);
         final var pending = store.findPending(version, vehicle);
-        if (pending.isEmpty()) { return false; }
+        if (pending.isEmpty()) { return; }
         final var investigation = pending.get();
         final var route = store.readRoute(version);
         final boolean backwards = investigation.phase() == Phase.SEARCH_START;
@@ -81,6 +72,5 @@ public class TripQualityInvestigationService {
             quality.invalidate(version);
             statistics.requestVehicle(version, vehicle);
         }
-        return !rows.isEmpty() || investigation.completed() || backwards;
     }
 }
