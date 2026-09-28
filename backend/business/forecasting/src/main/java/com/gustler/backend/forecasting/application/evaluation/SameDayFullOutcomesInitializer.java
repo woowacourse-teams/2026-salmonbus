@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.application.evaluation;
 
 import com.gustler.backend.forecasting.api.evaluation.SameDayInitializationPolicy;
+import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomesRepository;
 import com.gustler.backend.forecasting.domain.evaluation.SeoulDay;
 import java.util.List;
@@ -15,13 +16,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class SameDayFullOutcomesInitializer {
     private final SameDayFullOutcomesService service;
     private final SameDayFullOutcomesRepository repository;
+    private final RouteDataQualityAccess quality;
     private final QueryTimeLimits limits;
     private final SameDayInitializationPolicy policy;
 
     public SameDayFullOutcomesInitializer(SameDayFullOutcomesService service, SameDayFullOutcomesRepository repository,
-        QueryTimeLimits limits, SameDayInitializationPolicy policy) {
+        RouteDataQualityAccess quality, QueryTimeLimits limits, SameDayInitializationPolicy policy) {
         this.service = service;
         this.repository = repository;
+        this.quality = quality;
         this.limits = limits;
         this.policy = policy;
     }
@@ -35,7 +38,7 @@ public class SameDayFullOutcomesInitializer {
     @Transactional(propagation = Propagation.REQUIRES_NEW, timeout = 30)
     public boolean initialize(long routeId, SeoulDay day, SameDayInitializationAttempt attempt) {
         attempt.run(SameDayInitializationAttempt.Stage.CONFIGURE, this::configureTimeouts);
-        attempt.run(SameDayInitializationAttempt.Stage.LOCK, () -> repository.lockRoute(routeId));
+        attempt.run(SameDayInitializationAttempt.Stage.LOCK, () -> quality.lockByRoute(routeId));
         // 잠금을 기다리는 동안 준비됐을 수 있으므로 잠금 획득 후 다시 확인한다.
         boolean initialized = service.initializeIfAbsent(routeId, day, attempt);
         attempt.awaitingCommit();

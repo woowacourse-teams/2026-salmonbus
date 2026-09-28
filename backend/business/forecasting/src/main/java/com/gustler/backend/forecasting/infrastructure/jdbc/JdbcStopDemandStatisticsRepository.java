@@ -196,7 +196,7 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
         final long routeVersionId,
         Instant dataUntil
     ) {
-        // 호출한 응용 서비스의 트랜잭션이 끝날 때까지 품질 변경과 다른 통계 생성을 막는다.
+        // read→aggregate→append 동안 판정 변경을 막는다. 호출 writer가 노선별 transaction을 연다.
         qualityAccess.lock(routeVersionId);
         JdbcClient.StatementSpec statement = jdbcClient.sql(SELECT_HOURLY_TOTALS)
             .param("routeVersionId", routeVersionId)

@@ -304,7 +304,7 @@ class JdbcSameDayFullOutcomesRepositoryTest {
     @Test
     void 원본이_비어_있으면_별도_초기화는_날짜와_품질_버전마다_한번만_완료한다() {
         // given
-        var observedRepository = spy(new JdbcSameDayFullOutcomesRepository(jdbcClient, qualityAccess));
+        var observedRepository = spy(new JdbcSameDayFullOutcomesRepository(jdbcClient));
         var observedService = new SameDayFullOutcomesService(observedRepository);
 
         // when
@@ -322,7 +322,7 @@ class JdbcSameDayFullOutcomesRepositoryTest {
     @Test
     void 빈_초기화_완료_뒤_첫_정산은_원본_재조회_없이_한건을_더한다() {
         // given
-        var observedRepository = spy(new JdbcSameDayFullOutcomesRepository(jdbcClient, qualityAccess));
+        var observedRepository = spy(new JdbcSameDayFullOutcomesRepository(jdbcClient));
         var observedService = new SameDayFullOutcomesService(observedRepository);
         observedService.initializeIfAbsent(routeId, ARRIVAL_DAY);
         var settled = settleAsFull(vehicleObservationId, RAW_FULL_CHANCE);

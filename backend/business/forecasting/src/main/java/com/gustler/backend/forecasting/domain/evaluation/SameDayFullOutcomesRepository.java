@@ -9,9 +9,6 @@ import java.util.List;
  */
 public interface SameDayFullOutcomesRepository {
 
-    /** 초기화와 증분 반영을 같은 노선 품질 잠금으로 직렬화한다. */
-    void lockRoute(long routeId);
-
     List<Long> findActiveRouteIds();
 
     List<SameDayFullOutcomeCount> findCounts(

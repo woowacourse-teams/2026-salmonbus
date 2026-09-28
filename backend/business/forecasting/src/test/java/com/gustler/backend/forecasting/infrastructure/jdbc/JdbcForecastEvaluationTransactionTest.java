@@ -365,11 +365,6 @@ class JdbcForecastEvaluationTransactionTest {
         }
 
         @Override
-        public void lockRoute(final long routeId) {
-            delegate.lockRoute(routeId);
-        }
-
-        @Override
         public List<Long> findActiveRouteIds() {
             return delegate.findActiveRouteIds();
         }

@@ -1,6 +1,5 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
-import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomeCount;
 import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomesRepository;
 import com.gustler.backend.forecasting.domain.evaluation.SeoulDay;
@@ -103,16 +102,9 @@ public class JdbcSameDayFullOutcomesRepository implements SameDayFullOutcomesRep
         """.formatted(EligibleObservationSql.ARRIVAL_MATCHES_SOURCE);
 
     private final JdbcClient jdbcClient;
-    private final RouteDataQualityAccess qualityAccess;
 
-    public JdbcSameDayFullOutcomesRepository(JdbcClient jdbcClient, RouteDataQualityAccess qualityAccess) {
+    public JdbcSameDayFullOutcomesRepository(JdbcClient jdbcClient) {
         this.jdbcClient = jdbcClient;
-        this.qualityAccess = qualityAccess;
-    }
-
-    @Override
-    public void lockRoute(final long routeId) {
-        qualityAccess.lockByRoute(routeId);
     }
 
     @Override
