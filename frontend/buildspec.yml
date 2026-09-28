@@ -14,6 +14,8 @@ phases:
       - corepack enable
   pre_build:
     commands:
+      # Amplitude 키 없이 빌드하면 운영에서 행동 이벤트가 하나도 쌓이지 않으므로 배포 전에 멈춘다
+      - test -n "$WEBPACK_AMPLITUDE_API_KEY"
       - cd "${CODEBUILD_SRC_DIR}/frontend"
       - pnpm install --frozen-lockfile
       - pnpm typecheck
