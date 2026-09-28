@@ -64,6 +64,6 @@ class ForecastTimeSlotTest {
     private static PendingForecastBatch batchReceivedAt(
         Instant responseReceivedAt
     ) {
-        return new PendingForecastBatch(ANY_BATCH_ID, ROUTE_VERSION_3330, ROUTE_3330, responseReceivedAt, 1);
+        return new PendingForecastBatch(ANY_BATCH_ID, ROUTE_VERSION_3330, ROUTE_3330, responseReceivedAt);
     }
 }

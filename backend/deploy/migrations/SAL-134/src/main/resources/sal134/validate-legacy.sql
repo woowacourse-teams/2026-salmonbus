@@ -35,28 +35,6 @@ LEFT JOIN vehicle_observation arrival ON arrival.id = forecast.arrival_observati
 LEFT JOIN observation_batch batch ON batch.id = arrival.observation_batch_id
 WHERE forecast.arrival_observation_id IS NOT NULL AND (arrival.id IS NULL OR batch.response_received_at IS NULL)
 -- next-statement
--- 품질 판정과 조사 커서가 참조하는 관측을 찾을 수 없으면 전환을 중단한다.
-WITH quality_references AS (
-    SELECT reference.observation_id, trip.assessed_at AS referenced_at
-    FROM vehicle_one_way_trip trip
-    CROSS JOIN LATERAL (VALUES (trip.start_observation_id), (trip.evidence_observation_id)) reference(observation_id)
-    WHERE reference.observation_id IS NOT NULL
-    UNION ALL
-    SELECT reference.observation_id, investigation.investigated_at AS referenced_at
-    FROM trip_quality_rebuild investigation
-    CROSS JOIN LATERAL (VALUES (investigation.anchor_observation_id), (investigation.previous_observation_id),
-        (investigation.boundary_candidate_observation_id), (investigation.evidence_observation_id)) reference(observation_id)
-    WHERE reference.observation_id IS NOT NULL
-), missing AS (
-    SELECT DISTINCT reference.observation_id
-    FROM quality_references reference
-    LEFT JOIN vehicle_observation observation ON observation.id = reference.observation_id
-    WHERE observation.id IS NULL
-)
-SELECT count(*), (SELECT string_agg(observation_id::text, ', ' ORDER BY observation_id)
-    FROM (SELECT observation_id FROM missing ORDER BY observation_id LIMIT 10) examples)
-FROM missing
--- next-statement
 SELECT count(*) FROM stop_demand_publication publication
 JOIN stop_demand_statistics cell ON cell.route_version_id = publication.route_version_id
     AND cell.calculation_version = publication.calculation_version AND cell.revision = publication.revision

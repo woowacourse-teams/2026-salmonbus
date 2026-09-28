@@ -15,7 +15,6 @@ import com.gustler.backend.forecasting.domain.evaluation.SettledForecast;
 import com.gustler.backend.forecasting.domain.model.SameDayFullOutcomes;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
 import com.gustler.backend.forecasting.domain.statistics.DemandSampleRepository;
-import com.gustler.backend.observations.api.CollectionInputs;
 import com.gustler.backend.support.ConfirmedTripFixture;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import java.time.Instant;
@@ -57,9 +56,6 @@ class JdbcForecastEvaluationTransactionTest {
 
     @Autowired
     private ForecastEvaluationWriter evaluationWriter;
-
-    @Autowired
-    private CollectionInputs collectionInputs;
 
     @Autowired
     private JdbcSameDayFullOutcomesRepository outcomeRepository;
@@ -144,13 +140,13 @@ class JdbcForecastEvaluationTransactionTest {
     }
 
     @Test
-    void 보정_집계_저장에_실패하면_평가와_도착_입력_확정도_함께_취소한다() {
+    void 보정_집계_저장에_실패하면_평가도_함께_취소한다() {
         // given 실제 집계 저장까지 수행한 뒤 실패시킨다.
         initializeSameDayOutcomes();
         SameDayFullOutcomesService failingOutcomes =
             new SameDayFullOutcomesService(new FailingOutcomeRepository(outcomeRepository));
         ForecastEvaluationWriter failingWriter = new ForecastEvaluationWriter(evaluations, qualityAccess,
-            collectionInputs, failingOutcomes, demandSamples);
+            failingOutcomes, demandSamples);
 
         // when
         assertThatThrownBy(() -> inTransaction(() -> failingWriter.complete(List.of(completedEvaluation()))))
@@ -158,14 +154,12 @@ class JdbcForecastEvaluationTransactionTest {
 
         // then
         assertThat(evaluationState()).isEqualTo("PENDING");
-        assertThat(jdbc.sql("SELECT input_confirmed_at IS NULL FROM observation_batch WHERE id = ?")
-            .param(arrivalBatchId).query(Boolean.class).single()).isTrue();
         assertThat(jdbc.sql("SELECT sum(row_count) FROM same_day_full_outcomes WHERE route_id = ?")
             .param(routeId).query(Long.class).single()).isZero();
     }
 
     @Test
-    void 이미_완료한_평가를_다시_요청해도_다른_도착_배치의_입력을_확정하지_않는다() {
+    void 이미_완료한_평가를_다시_요청해도_결과를_바꾸지_않는다() {
         // given 도착 관측 없이 완료된 평가는 다른 결과로 덮어쓸 수 없다.
         evaluationWriter.complete(List.of(ForecastEvaluation.completed(sourceObservationId, TARGET_STOP_ORDER,
             new ArrivalLabel.Skipped(), SCORED_AT)));
@@ -178,8 +172,6 @@ class JdbcForecastEvaluationTransactionTest {
         // then
         assertThat(repeated).isEmpty();
         assertThat(evaluationState()).isEqualTo("SKIPPED");
-        assertThat(jdbc.sql("SELECT input_confirmed_at IS NULL FROM observation_batch WHERE id = ?")
-            .param(arrivalBatchId).query(Boolean.class).single()).isTrue();
         assertThat(jdbc.sql("SELECT count(*) FROM same_day_full_outcomes WHERE route_id = ?")
             .param(routeId).query(Long.class).single()).isZero();
     }
@@ -282,8 +274,6 @@ class JdbcForecastEvaluationTransactionTest {
             Map.of(STOPS_TO_TARGET, new SameDayFullOutcomes(1, 1, RAW_FULL_CHANCE)));
         assertThat(jdbc.sql("SELECT sum(row_count) FROM same_day_full_outcomes WHERE route_id = ?")
             .param(routeId).query(Long.class).single()).isEqualTo(1);
-        assertThat(jdbc.sql("SELECT input_confirmed_at FROM observation_batch WHERE id = ?")
-            .param(arrivalBatchId).query(OffsetDateTime.class).single().toInstant()).isEqualTo(SCORED_AT);
     }
 
     private String evaluationState() {

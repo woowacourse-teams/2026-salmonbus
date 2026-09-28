@@ -1,7 +1,6 @@
 package com.gustler.backend.maintenance.configuration;
 
 import com.gustler.backend.forecasting.configuration.QualityMaintenanceConfiguration;
-import com.gustler.backend.observations.configuration.CollectionInputConfiguration;
 import java.time.Clock;
 import com.gustler.backend.maintenance.DatabaseEnvironment;
 import com.gustler.backend.maintenance.db.DatabaseConnections;
@@ -16,7 +15,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 /** 정비 명령에 필요한 DB 연결과 품질 기능만 구성한다. */
 @Configuration(proxyBeanMethods = false)
-@Import({QualityMaintenanceConfiguration.class, CollectionInputConfiguration.class})
+@Import(QualityMaintenanceConfiguration.class)
 @EnableTransactionManagement(proxyTargetClass = true)
 public class MaintenanceConfiguration {
 

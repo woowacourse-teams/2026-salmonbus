@@ -1,6 +1,6 @@
 -- 각 질의의 결과는 0이어야 한다. ID뿐 아니라 모든 이전 대상 값을 양방향 대조한다.
 WITH expected AS (
-SELECT batch.id AS source_batch_id, batch.attempt_number AS source_attempt_number, batch.route_version_id,
+SELECT batch.id AS source_batch_id, batch.route_version_id,
        min(forecast.model_deployment_id) AS model_deployment_id,
        min(forecast.demand_statistics_revision) AS demand_statistics_revision,
        min(forecast.quality_revision) AS quality_revision, batch.response_received_at AS observed_at,
@@ -26,34 +26,7 @@ JOIN vehicle_observation observation ON observation.id = forecast.vehicle_observ
 LEFT JOIN forecast_publication publication ON publication.source_batch_id = observation.observation_batch_id
 WHERE forecast.publication_id IS DISTINCT FROM publication.id OR publication.id IS NULL
 -- next-statement
-WITH quality_references AS (
-    SELECT reference.observation_id, trip.assessed_at AS referenced_at
-    FROM vehicle_one_way_trip trip
-    CROSS JOIN LATERAL (VALUES (trip.start_observation_id), (trip.evidence_observation_id)) reference(observation_id)
-    WHERE reference.observation_id IS NOT NULL
-    UNION ALL
-    SELECT reference.observation_id, investigation.investigated_at AS referenced_at
-    FROM trip_quality_rebuild investigation
-    CROSS JOIN LATERAL (VALUES (investigation.anchor_observation_id), (investigation.previous_observation_id),
-        (investigation.boundary_candidate_observation_id), (investigation.evidence_observation_id)) reference(observation_id)
-    WHERE reference.observation_id IS NOT NULL
-),
-quality_confirmations AS (
-    SELECT observation.observation_batch_id, min(reference.referenced_at) AS confirmed_at
-    FROM quality_references reference
-    JOIN vehicle_observation observation ON observation.id = reference.observation_id
-    GROUP BY observation.observation_batch_id
-),
-confirmations AS (
-    SELECT batch.id, coalesce(batch.forecast_completed_at, min(forecast.scored_at), min(quality.confirmed_at)) AS confirmed_at
-    FROM observation_batch batch
-    LEFT JOIN vehicle_observation arrival ON arrival.observation_batch_id = batch.id
-    LEFT JOIN seat_forecast forecast ON forecast.arrival_observation_id = arrival.id
-    LEFT JOIN quality_confirmations quality ON quality.observation_batch_id = batch.id
-    GROUP BY batch.id
-)
-SELECT count(*) FROM observation_batch batch JOIN confirmations ON confirmations.id = batch.id
-WHERE batch.input_confirmed_at IS DISTINCT FROM confirmations.confirmed_at
+SELECT count(*) FROM observation_batch WHERE input_confirmed_at IS DISTINCT FROM forecast_completed_at
 -- next-statement
 WITH expected AS (
 SELECT forecast.vehicle_observation_id, forecast.target_stop_order, forecast.route_version_id,

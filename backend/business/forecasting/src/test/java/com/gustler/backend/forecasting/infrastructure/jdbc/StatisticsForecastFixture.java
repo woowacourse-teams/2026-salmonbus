@@ -23,11 +23,11 @@ final class StatisticsForecastFixture {
     ) {
         final long publicationId = jdbc.sql("""
                 INSERT INTO forecast_publication (
-                    source_batch_id, source_attempt_number, route_version_id, model_deployment_id,
+                    source_batch_id, route_version_id, model_deployment_id,
                     demand_statistics_revision, quality_revision, observed_at, generated_at,
                     published_at, prediction_count
                 )
-                SELECT batch.id, batch.attempt_number, batch.route_version_id, ?, ?,
+                SELECT batch.id, batch.route_version_id, ?, ?,
                        COALESCE(quality.quality_revision, 1), batch.response_received_at, ?, ?, 1
                 FROM vehicle_observation observation
                 JOIN observation_batch batch ON batch.id = observation.observation_batch_id

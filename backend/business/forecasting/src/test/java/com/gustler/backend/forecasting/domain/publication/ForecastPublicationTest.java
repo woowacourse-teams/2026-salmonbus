@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test;
 class ForecastPublicationTest {
 
     private static final long SOURCE_BATCH_ID = 100;
-    private static final int SOURCE_ATTEMPT_NUMBER = 2;
     private static final long ROUTE_VERSION_ID = 10;
     private static final long MODEL_DEPLOYMENT_ID = 20;
     private static final int STATISTICS_REVISION = 3;
@@ -97,7 +96,7 @@ class ForecastPublicationTest {
     }
 
     @Test
-    void 예측이_없어도_수집_시도와_계산에_사용한_버전을_발행_정보에_남긴다() {
+    void 예측이_없어도_수집_배치와_계산에_사용한_버전을_발행_정보에_남긴다() {
         // when
         ForecastPublication publication = publish(List.of());
 
@@ -105,7 +104,6 @@ class ForecastPublicationTest {
         assertThat(publication.predictions()).isEmpty();
         assertThat(publication.predictionCount()).isZero();
         assertThat(publication.sourceBatchId()).isEqualTo(SOURCE_BATCH_ID);
-        assertThat(publication.sourceAttemptNumber()).isEqualTo(SOURCE_ATTEMPT_NUMBER);
         assertThat(publication.routeVersionId()).isEqualTo(ROUTE_VERSION_ID);
         assertThat(publication.modelDeploymentId()).isEqualTo(MODEL_DEPLOYMENT_ID);
         assertThat(publication.demandStatisticsRevision()).isEqualTo(STATISTICS_REVISION);
@@ -117,7 +115,7 @@ class ForecastPublicationTest {
 
     private ForecastPublication publish(List<SeatForecast> predictions) {
         return new ForecastPublication(
-            SOURCE_BATCH_ID, SOURCE_ATTEMPT_NUMBER, ROUTE_VERSION_ID, MODEL_DEPLOYMENT_ID,
+            SOURCE_BATCH_ID, ROUTE_VERSION_ID, MODEL_DEPLOYMENT_ID,
             STATISTICS_REVISION, QUALITY_REVISION, OBSERVED_AT, GENERATED_AT, PUBLISHED_AT, predictions);
     }
 

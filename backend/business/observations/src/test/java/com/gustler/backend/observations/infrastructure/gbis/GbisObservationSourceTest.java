@@ -3,9 +3,7 @@ package com.gustler.backend.observations.infrastructure.gbis;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -17,13 +15,12 @@ import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
 import com.gustler.backend.observations.domain.ObservationBatchFailureCode;
 import com.gustler.backend.observations.domain.ObservationBatchOutcome;
 import com.gustler.backend.observations.domain.ObservationResponse;
-import java.time.Clock;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -35,21 +32,15 @@ class GbisObservationSourceTest {
     private static final Instant RECEIVED = Instant.parse("2026-09-23T03:00:00Z");
     private static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
     private final GbisLocationSource source = mock(GbisLocationSource.class);
-    private final Clock clock = mock(Clock.class);
-    private final GbisObservationSource observations = new GbisObservationSource(source, clock);
-
-    @BeforeEach
-    void 수신_시각을_준비한다() {
-        given(clock.instant()).willReturn(RECEIVED);
-        given(clock.getZone()).willReturn(KOREA);
-    }
+    private static final OffsetDateTime RECEIVED_AT = RECEIVED.atZone(KOREA).toOffsetDateTime();
+    private final GbisObservationSource observations = new GbisObservationSource(source);
 
     @Test
     void 정상_응답을_업무_관측으로_바꾸고_저장할_수_없는_행을_구분한다() {
         given(source.read(ROUTE_ID, "a")).willReturn(new GbisLocationResult.Success("query time",
             List.of(bus(1, "stop-1", 43), bus(null, "stop-2", 12))));
 
-        ObservationResponse result = observations.read(ROUTE_ID, "a");
+        ObservationResponse result = observations.read(ROUTE_ID, "a").interpret(RECEIVED_AT);
 
         assertThat(result.conclusion().outcome()).isEqualTo(ObservationBatchOutcome.SUCCESS_ROWS);
         assertThat(result.conclusion().upstreamResultCode()).isZero();
@@ -65,7 +56,7 @@ class GbisObservationSourceTest {
     void 운행_차량이_없는_응답도_행수가_영인_정상_수집으로_반환한다() {
         given(source.read(ROUTE_ID, "a")).willReturn(new GbisLocationResult.NoVehicles("query time"));
 
-        ObservationResponse result = observations.read(ROUTE_ID, "a");
+        ObservationResponse result = observations.read(ROUTE_ID, "a").interpret(RECEIVED_AT);
 
         assertThat(result.conclusion().outcome()).isEqualTo(ObservationBatchOutcome.SUCCESS_EMPTY);
         assertThat(result.conclusion().upstreamResultCode()).isEqualTo(4);
@@ -78,7 +69,7 @@ class GbisObservationSourceTest {
         ObservationBatchOutcome outcome, ObservationBatchFailureCode failureCode, Integer resultCode) {
         given(source.read(ROUTE_ID, "a")).willReturn(response);
 
-        ObservationResponse result = observations.read(ROUTE_ID, "a");
+        ObservationResponse result = observations.read(ROUTE_ID, "a").interpret(RECEIVED_AT);
 
         assertThat(result.conclusion().outcome()).isEqualTo(outcome);
         assertThat(result.conclusion().failureCode()).isEqualTo(failureCode);
@@ -90,11 +81,11 @@ class GbisObservationSourceTest {
     void 예상하지_못한_조회_예외는_응답을_확인하지_못한_결과로_반환한다() {
         given(source.read(ROUTE_ID, "a")).willThrow(new IllegalStateException("connection failed"));
 
-        ObservationResponse result = observations.read(ROUTE_ID, "a");
+        ObservationResponse result = observations.read(ROUTE_ID, "a").interpret(RECEIVED_AT);
 
         assertThat(result.conclusion().outcome()).isEqualTo(ObservationBatchOutcome.UNKNOWN_AFTER_DISPATCH);
         assertThat(result.observations()).isEmpty();
-        assertThat(result.receivedAt().toInstant()).isEqualTo(RECEIVED);
+        assertThat(result.receivedAt()).isEqualTo(RECEIVED_AT);
     }
 
     @Test
@@ -119,28 +110,15 @@ class GbisObservationSourceTest {
     void 정규화_오류는_응답_미수신으로_바꾸지_않고_전파한다() {
         given(source.read(ROUTE_ID, "a")).willReturn(new GbisLocationResult.Success("query time", null));
 
-        assertThatThrownBy(() -> observations.read(ROUTE_ID, "a")).isInstanceOf(NullPointerException.class);
-        verify(clock).instant();
-    }
-
-    @Test
-    void 수신_시각은_외부_조회가_끝난_뒤_기록한다() {
-        given(source.read(ROUTE_ID, "a")).willReturn(new GbisLocationResult.NoVehicles("untrusted query time"));
-
-        ObservationResponse result = observations.read(ROUTE_ID, "a");
-
-        var order = inOrder(source, clock);
-        order.verify(source).read(ROUTE_ID, "a");
-        order.verify(clock).instant();
-        order.verify(clock).getZone();
-        assertThat(result.receivedAt()).isEqualTo(RECEIVED.atZone(KOREA).toOffsetDateTime());
+        assertThatThrownBy(() -> observations.read(ROUTE_ID, "a").interpret(RECEIVED_AT))
+            .isInstanceOf(NullPointerException.class);
     }
 
     @Test
     void 원본_응답_목록이_바뀌어도_정규화한_결과는_바뀌지_않는다() {
         var rows = new ArrayList<>(List.of(bus(1, "stop-1", 43)));
         given(source.read(ROUTE_ID, "a")).willReturn(new GbisLocationResult.Success("query time", rows));
-        ObservationResponse result = observations.read(ROUTE_ID, "a");
+        ObservationResponse result = observations.read(ROUTE_ID, "a").interpret(RECEIVED_AT);
 
         rows.clear();
 

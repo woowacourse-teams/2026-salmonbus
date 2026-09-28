@@ -390,7 +390,7 @@ class SameDayTransactionBoundaryTest {
 
     void publish(long batch, Instant observedAt, SeatForecast prediction) {
         new TransactionTemplate(context.getBean(PlatformTransactionManager.class)).executeWithoutResult(status ->
-            publicationsSpy.save(new ForecastPublication(batch, 1, versionId, modelId, 1,
+            publicationsSpy.save(new ForecastPublication(batch, versionId, modelId, 1,
                 context.getBean(RouteDataQualityAccess.class).lock(versionId), observedAt,
                 prediction.generatedAt(), prediction.generatedAt(), List.of(prediction))));
     }
@@ -403,7 +403,7 @@ class SameDayTransactionBoundaryTest {
                 null, input -> new SeatForecastResult(new SeatDistribution(List.of(.4, .6)), .4), OBSERVED_AT));
     }
 
-    PendingForecastBatch batch() { return new PendingForecastBatch(batchId, versionId, routeId, OBSERVED_AT, 1); }
+    PendingForecastBatch batch() { return new PendingForecastBatch(batchId, versionId, routeId, OBSERVED_AT); }
 
     ArrivalCandidate arrival() {
         long direction = jdbc.sql("SELECT quality_direction FROM forecast_observation_quality WHERE id=?")

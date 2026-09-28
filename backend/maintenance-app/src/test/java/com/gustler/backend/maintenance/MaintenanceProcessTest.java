@@ -113,8 +113,6 @@ class MaintenanceProcessTest {
             .query(Integer.class).list()).containsExactly(44, 71, 44);
         assertThat(jdbc.sql("SELECT observation_batch_id FROM forecast_eligible_observation ORDER BY observation_batch_id")
             .query(Long.class).list()).containsExactly(next);
-        assertThat(jdbc.sql("SELECT count(*) FROM observation_batch WHERE input_confirmed_at IS NOT NULL")
-            .query(Long.class).single()).isPositive();
 
         StatusOutput status = read(command(database, "quality-status", version).stdout(), StatusOutput.class);
         assertThat(status.status()).isEqualTo("succeeded");

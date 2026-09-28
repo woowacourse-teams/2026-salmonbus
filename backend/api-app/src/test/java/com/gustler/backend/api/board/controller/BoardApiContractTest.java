@@ -183,10 +183,10 @@ class BoardApiContractTest {
         long batch = fixture.insertBatch(route, observedAt, "SUCCESS_EMPTY", 0);
         jdbcClient.sql("""
                 INSERT INTO forecast_publication (
-                    source_batch_id, source_attempt_number, route_version_id,
+                    source_batch_id, route_version_id,
                     observed_at, published_at, prediction_count, provenance
                 )
-                SELECT id, attempt_number, route_version_id,
+                SELECT id, route_version_id,
                        response_received_at, :publishedAt, 0, 'LEGACY_UNKNOWN'
                 FROM observation_batch WHERE id = :batchId
                 """)

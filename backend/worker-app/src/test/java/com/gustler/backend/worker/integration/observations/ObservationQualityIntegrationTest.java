@@ -6,11 +6,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.gustler.backend.gbis.api.GbisLocationResult.Success;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
 import com.gustler.backend.observations.api.CollectionQualityHook;
-import com.gustler.backend.observations.api.ObservedSeatValue;
 import com.gustler.backend.observations.api.VehicleObservationsStored;
 import com.gustler.backend.observations.application.ObservationBatchLedger;
 import com.gustler.backend.observations.application.ObservationLoader;
-import com.gustler.backend.observations.domain.CollectionAttemptToken;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
 import com.gustler.backend.quota.domain.CallQuota;
@@ -63,7 +61,6 @@ class ObservationQualityIntegrationTest {
 
     private long routeVersionId;
     private long batchId;
-    private CollectionAttemptToken token;
 
     @BeforeEach
     void 노선과_정류소를_저장하고_수집_전송을_기록한다() {
@@ -82,9 +79,9 @@ class ObservationQualityIntegrationTest {
                        (?, 3, '208000069', '안양역', 'DOWN', true)
                 """).params(routeVersionId, STOP_205000217, routeVersionId, STOP_277103149, routeVersionId).update();
 
-        token = ledger.reserve(new CollectionPlan(routeVersionId, SCHEDULED_AT, "quality-integration"), RESERVED_AT).token();
-        batchId = token.batchId();
-        ledger.markDispatching(token, RESERVED_AT, REQUESTED_AT, "a");
+        batchId = ledger.reserve(new CollectionPlan(routeVersionId, SCHEDULED_AT, "quality-integration"), RESERVED_AT)
+            .batchId();
+        ledger.markDispatching(batchId, RESERVED_AT, REQUESTED_AT, "a");
     }
 
     @AfterEach
@@ -136,8 +133,9 @@ class ObservationQualityIntegrationTest {
         BusLocation bus = bus(VEHICLE_204000206, 1, STOP_205000217, 2, 71);
 
         // when & then
-        assertThatThrownBy(() -> ledger.conclude(token,
-            GbisObservationMapper.response(new Success(QUERY_TIME, List.of(bus)), RESPONSE_RECEIVED_AT)))
+        assertThatThrownBy(() -> ledger.conclude(batchId,
+            receivedAt -> GbisObservationMapper.response(new Success(QUERY_TIME, List.of(bus)), receivedAt),
+            RESPONSE_RECEIVED_AT))
             .isInstanceOf(IllegalStateException.class)
             .hasMessage("품질 처리 실패");
         assertThat(columnOf("outcome", String.class)).isEqualTo("DISPATCHING");
@@ -154,7 +152,7 @@ class ObservationQualityIntegrationTest {
     }
 
     private void loadBuses(List<BusLocation> buses) {
-        loader.load(token, GbisObservationMapper.from(new Success(QUERY_TIME, buses)),
+        loader.load(batchId, GbisObservationMapper.from(new Success(QUERY_TIME, buses)),
             GbisObservationMapper.collect(buses), RESPONSE_RECEIVED_AT);
     }
 
@@ -187,10 +185,6 @@ class ObservationQualityIntegrationTest {
     static class FailingQualityHook implements CollectionQualityHook {
 
         private boolean fail;
-
-        @Override
-        public void beforeRowsStored(final long routeVersionId, List<ObservedSeatValue> rows) {
-        }
 
         @Override
         public void observationsStored(VehicleObservationsStored observations) {

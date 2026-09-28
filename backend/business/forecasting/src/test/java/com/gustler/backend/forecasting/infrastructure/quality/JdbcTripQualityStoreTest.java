@@ -10,7 +10,6 @@ import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -39,8 +38,7 @@ class JdbcTripQualityStoreTest {
         changeGap(fixture.version(), 120);
         final var before = investigation(fixture.version());
         final var rawBefore = rawObservations(fixture.version());
-        final List<Long> retained = new ArrayList<>();
-        final var service = service(retained);
+        final var service = service();
 
         // when
         service.observationsStored(event(fixture.version(), newest));
@@ -49,7 +47,6 @@ class JdbcTripQualityStoreTest {
         // then
         assertThat(investigation(fixture.version())).isEqualTo(before);
         assertThat(qualityRevision(fixture.route())).isEqualTo(11);
-        assertThat(retained).isEmpty();
         assertThat(rawObservations(fixture.version())).isEqualTo(rawBefore);
     }
 
@@ -63,8 +60,7 @@ class JdbcTripQualityStoreTest {
         final var rawBefore = rawObservations(fixture.version());
         final Instant changedAt = jdbc.sql("SELECT CURRENT_TIMESTAMP")
             .query(OffsetDateTime.class).single().toInstant();
-        final List<Long> retained = new ArrayList<>();
-        final var service = service(retained);
+        final var service = service();
         final var event = event(fixture.version(), newest);
 
         // when
@@ -79,7 +75,6 @@ class JdbcTripQualityStoreTest {
             changedAt, changedAt));
         assertThat(investigation(fixture.version())).isEqualTo(restarted);
         assertThat(qualityRevision(fixture.route())).isEqualTo(12);
-        assertThat(retained).containsExactly(newest.observationId());
         assertThat(rawObservations(fixture.version())).isEqualTo(rawBefore);
         assertThat(jdbc.sql("""
             SELECT count(*) FROM observation_trip_assignment assignment
@@ -88,9 +83,9 @@ class JdbcTripQualityStoreTest {
             """).param(fixture.version()).query(Integer.class).single()).isZero();
     }
 
-    private TripQualityInvestigationService service(List<Long> retained) {
+    private TripQualityInvestigationService service() {
         return new TripQualityInvestigationService(new JdbcTripQualityStore(jdbc),
-            new JdbcRouteDataQualityAccess(jdbc), retained::addAll, new JdbcDemandStatisticsRebuildRequests(jdbc));
+            new JdbcRouteDataQualityAccess(jdbc), new JdbcDemandStatisticsRebuildRequests(jdbc));
     }
 
     private Fixture existingInvestigation(String phase, final boolean completed) {

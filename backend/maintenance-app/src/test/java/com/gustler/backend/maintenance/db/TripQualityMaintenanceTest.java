@@ -9,7 +9,6 @@ import com.gustler.backend.forecasting.api.quality.TripQualityChunkResult;
 import com.gustler.backend.forecasting.application.quality.TripQualityInvestigationService;
 import com.gustler.backend.forecasting.application.quality.TripQualityMaintenanceService;
 import com.gustler.backend.forecasting.configuration.QualityMaintenanceConfiguration;
-import com.gustler.backend.observations.configuration.CollectionInputConfiguration;
 import com.gustler.backend.forecasting.domain.quality.QualityObservationBatch;
 import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcDemandStatisticsRebuildRequests;
 import com.gustler.backend.forecasting.infrastructure.quality.JdbcRouteDataQualityAccess;
@@ -188,36 +187,10 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
                     .query(Long.class).single()).isEqualTo(1);
                 assertThat(jdbc.sql("SELECT count(*) FROM vehicle_observation")
                     .query(Integer.class).single()).isOne();
-                assertThat(jdbc.sql("SELECT count(*) FROM observation_batch WHERE input_confirmed_at IS NOT NULL")
-                    .query(Integer.class).single()).isZero();
             } finally {
                 jdbc.sql("DROP TRIGGER fail_quality_change ON route_data_quality").update();
                 jdbc.sql("DROP FUNCTION fail_quality_change()").update();
             }
-        }
-    }
-
-    @Test
-    void 정비가_조사_근거로_사용한_수집_배치만_확정하고_관계없는_정상_관측은_그대로_둔다() throws Exception {
-        // given
-        try (var c = connection(); var context = qualityContext()) {
-            var jdbc = jdbc(c);
-            long version = route(jdbc);
-            long normal = batch(jdbc, version, 1, 1, 1, 44);
-            jdbc.sql("UPDATE vehicle_observation SET vehicle_id='other' WHERE observation_batch_id=?")
-                .param(normal).update();
-            long anomaly = batch(jdbc, version, 2, 2, 1, 71);
-
-            // when
-            context.getBean(ProcessTripQualityChunk.class).applyChunk(version, START.plusSeconds(60), 100);
-
-            // then
-            assertThat(jdbc.sql("SELECT input_confirmed_at FROM observation_batch WHERE id=?")
-                .param(anomaly).query(OffsetDateTime.class).single().toInstant()).isEqualTo(START.plusSeconds(60));
-            assertThat(jdbc.sql("SELECT input_confirmed_at FROM observation_batch WHERE id=?")
-                .param(normal).query().singleRow().get("input_confirmed_at")).isNull();
-            assertThat(jdbc.sql("SELECT remaining_seats FROM vehicle_observation ORDER BY id")
-                .query(Integer.class).list()).containsExactly(44, 71);
         }
     }
 
@@ -614,10 +587,10 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
                     '2026-09-20T00:00:00Z','STAGED') RETURNING id
                 """).query(Long.class).single();
             jdbc.sql("""
-                INSERT INTO forecast_publication(source_batch_id,source_attempt_number,route_version_id,
+                INSERT INTO forecast_publication(source_batch_id,route_version_id,
                     model_deployment_id,demand_statistics_revision,quality_revision,observed_at,
                     generated_at,published_at,prediction_count)
-                SELECT b.id,b.attempt_number,b.route_version_id,?,0,1,b.response_received_at,
+                SELECT b.id,b.route_version_id,?,0,1,b.response_received_at,
                     '2026-09-21T00:01:00Z','2026-09-21T00:01:00Z',count(o.id)
                 FROM observation_batch b JOIN vehicle_observation o ON o.observation_batch_id=b.id
                 WHERE b.route_version_id=? GROUP BY b.id
@@ -673,8 +646,7 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
         context.registerBean(PlatformTransactionManager.class,
             () -> new JdbcTransactionManager(context.getBean(DataSource.class)));
         context.registerBean(Clock.class, () -> Clock.fixed(START.plusSeconds(60), ZoneOffset.UTC));
-        context.register(QualityMaintenanceConfiguration.class, CollectionInputConfiguration.class,
-            QualityTransactionConfiguration.class);
+        context.register(QualityMaintenanceConfiguration.class, QualityTransactionConfiguration.class);
         context.refresh();
         return context;
     }
@@ -684,7 +656,7 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
     static class QualityTransactionConfiguration { }
 
     private static TripQualityInvestigationService quality(JdbcClient jdbc) {
-        return new TripQualityInvestigationService(new JdbcTripQualityStore(jdbc), new JdbcRouteDataQualityAccess(jdbc), ids -> { },
+        return new TripQualityInvestigationService(new JdbcTripQualityStore(jdbc), new JdbcRouteDataQualityAccess(jdbc),
             new JdbcDemandStatisticsRebuildRequests(jdbc));
     }
 
@@ -693,7 +665,7 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
         var guard = new JdbcRouteDataQualityAccess(jdbc);
         var statistics = new JdbcDemandStatisticsRebuildRequests(jdbc);
         return new TripQualityMaintenanceService(new JdbcTripQualityMaintenanceStore(jdbc),
-            new TripQualityInvestigationService(store, guard, ids -> { }, statistics), guard, store, statistics);
+            new TripQualityInvestigationService(store, guard, statistics), guard, store, statistics);
     }
 
     private static JdbcClient jdbc(Connection c) { return JdbcClient.create(new SingleConnectionDataSource(c, true)); }

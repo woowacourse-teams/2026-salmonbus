@@ -1,8 +1,8 @@
 WITH bounds AS (SELECT ?::jsonb AS lower_key, ?::jsonb AS upper_key)
-INSERT INTO forecast_publication(source_batch_id, source_attempt_number, route_version_id,
+INSERT INTO forecast_publication(source_batch_id, route_version_id,
     model_deployment_id, demand_statistics_revision, quality_revision, observed_at, generated_at,
     published_at, prediction_count, provenance)
-SELECT batch.id, batch.attempt_number, batch.route_version_id,
+SELECT batch.id, batch.route_version_id,
        min(forecast.model_deployment_id), min(forecast.demand_statistics_revision), min(forecast.quality_revision),
        batch.response_received_at, min(forecast.generated_at), batch.forecast_completed_at,
        count(forecast.vehicle_observation_id),

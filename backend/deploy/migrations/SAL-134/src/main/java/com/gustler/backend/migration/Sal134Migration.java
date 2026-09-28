@@ -579,9 +579,7 @@ public final class Sal134Migration {
         try (Statement statement = connection.createStatement(); ResultSet rows = statement.executeQuery(sql)) {
             require(rows.next(), message + ": 검사 결과가 없습니다.");
             final long difference = rows.getLong(1);
-            final String examples = rows.getMetaData().getColumnCount() > 1 ? rows.getString(2) : null;
-            require(difference == 0, message + ": 불일치 " + difference + "건"
-                    + (examples == null ? "" : ", 관측 ID 예시: " + examples));
+            require(difference == 0, message + ": 불일치 " + difference + "건");
         }
     }
 

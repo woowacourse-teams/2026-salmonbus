@@ -23,7 +23,6 @@ import com.gustler.backend.forecasting.domain.model.ObservedSeats;
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.domain.model.PrecedingVehicle;
-import com.gustler.backend.forecasting.domain.publication.PublishedForecast;
 import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.model.SeatSlope;
@@ -43,11 +42,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,7 +50,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
-import org.springframework.dao.InvalidDataAccessApiUsageException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
@@ -74,6 +68,8 @@ class ForecastPublicationTransactionTest {
     private static final long MISSING_OBSERVATION_ID = Long.MAX_VALUE;
     private static final SeatForecastResult RESULT =
         new SeatForecastResult(new SeatDistribution(List.of(0.4, 0.6)), 0.4);
+    private static final SeatForecastResult SECOND_RESULT =
+        new SeatForecastResult(new SeatDistribution(List.of(0.7, 0.3)), 0.7);
 
     @Autowired
     private ForecastBatchWriter writer;
@@ -145,7 +141,7 @@ class ForecastPublicationTransactionTest {
                 ) VALUES (?, ?, 0, 'vehicle-1', 3, 'stop-3', 3, 2, 12) RETURNING id
                 """)
             .params(batchId, routeVersionId).query(Long.class).single();
-        batch = new PendingForecastBatch(batchId, routeVersionId, routeId, OBSERVED_AT, ATTEMPT_NUMBER);
+        batch = new PendingForecastBatch(batchId, routeVersionId, routeId, OBSERVED_AT);
         stops = new RouteStops(routeVersionId, routeKey, List.of(
             new RouteStop(routeVersionId, 4, "stop-4", true),
             new RouteStop(routeVersionId, 5, "stop-5", true)));
@@ -176,16 +172,15 @@ class ForecastPublicationTransactionTest {
     }
 
     @Test
-    void 발행과_예측과_평가를_함께_저장하고_재요청은_기존_발행을_반환한다() {
+    void 발행과_예측과_평가를_함께_저장하고_같은_배치를_다시_발행하면_새_계산으로_덮어쓴다() {
         // when
-        PublishedForecast published = writer.writeForecastsOf(batch, stops, runtime).orElseThrow();
+        writer.writeForecastsOf(batch, stops, runtime);
 
         // then
         StoredPublication publication = readPublication();
         List<StoredPrediction> predictions = readPredictions();
-        assertThat(published).isEqualTo(new PublishedForecast(publication.id(), 2));
         assertThat(publication.modelDeploymentId()).isEqualTo(runtime.deploymentId());
-        assertThat(publication.sourceAttemptNumber()).isEqualTo(ATTEMPT_NUMBER);
+        assertThat(publication.publishedAt()).isEqualTo(GENERATED_AT);
         assertThat(publication.predictionCount()).isEqualTo(2);
         assertThat(predictions).containsExactly(
             new StoredPrediction(publication.id(), observationId, 4, runtime.deploymentId(), 0.4, 0.6, GENERATED_AT),
@@ -193,18 +188,20 @@ class ForecastPublicationTransactionTest {
         assertThat(readEvaluationStates()).containsExactly("PENDING", "PENDING");
         assertThat(readCounts()).isEqualTo(new StoredCounts(1, 2, 2, true));
 
-        // given: 새 모델로 같은 수집 배치를 다시 요청해도 계산하지 않는다.
-        RuntimeSnapshot replacement = runtime("second-release", input -> {
-            throw new AssertionError("이미 발행한 수집 배치의 예측을 다시 계산했다");
-        });
+        // given
+        RuntimeSnapshot replacement = runtime("second-release", input -> SECOND_RESULT);
 
         // when
-        PublishedForecast repeated = writer.writeForecastsOf(batch, stops, replacement).orElseThrow();
+        writer.writeForecastsOf(batch, stops, replacement);
 
         // then
-        assertThat(repeated).isEqualTo(published);
-        assertThat(readPublication()).isEqualTo(publication);
-        assertThat(readPredictions()).isEqualTo(predictions);
+        StoredPublication republished = readPublication();
+        assertThat(republished.id()).isEqualTo(publication.id());
+        assertThat(republished.modelDeploymentId()).isEqualTo(replacement.deploymentId());
+        assertThat(republished.predictionCount()).isEqualTo(2);
+        assertThat(readPredictions()).containsExactly(
+            new StoredPrediction(publication.id(), observationId, 4, replacement.deploymentId(), 0.7, 0.3, GENERATED_AT),
+            new StoredPrediction(publication.id(), observationId, 5, replacement.deploymentId(), 0.7, 0.3, GENERATED_AT));
         assertThat(readEvaluationStates()).containsExactly("PENDING", "PENDING");
         assertThat(readCounts()).isEqualTo(new StoredCounts(1, 2, 2, true));
     }
@@ -217,48 +214,8 @@ class ForecastPublicationTransactionTest {
 
         // when & then
         assertThatThrownBy(() -> writer.writeForecastsOf(batch, stops, runtime))
-            .isInstanceOf(InvalidDataAccessApiUsageException.class)
-            .hasRootCauseInstanceOf(IllegalArgumentException.class)
-            .hasRootCauseMessage("예측의 원 관측이 발행 대상 수집 배치에 속하지 않는다: " + MISSING_OBSERVATION_ID);
+            .isInstanceOf(DataIntegrityViolationException.class);
         assertThat(readCounts()).isEqualTo(new StoredCounts(0, 0, 0, false));
-    }
-
-    @Test
-    void 같은_수집_배치를_동시에_발행해도_한_발행만_저장하고_같은_결과를_반환한다() throws Exception {
-        // given: 두 트랜잭션이 수집 배치 잠금 직전까지 함께 진입하게 한다.
-        CountDownLatch entered = new CountDownLatch(2);
-        when(quality.lock(routeVersionId)).thenAnswer(invocation -> {
-            entered.countDown();
-            if (!entered.await(10, TimeUnit.SECONDS)) {
-                throw new IllegalStateException("두 발행 요청이 제한 시간 안에 진입하지 않았다");
-            }
-            return 1L;
-        });
-        CountDownLatch start = new CountDownLatch(1);
-
-        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
-            Future<PublishedForecast> first = executor.submit(() -> publishAfter(start));
-            Future<PublishedForecast> second = executor.submit(() -> publishAfter(start));
-
-            // when
-            start.countDown();
-            PublishedForecast firstResult = first.get(15, TimeUnit.SECONDS);
-            PublishedForecast secondResult = second.get(15, TimeUnit.SECONDS);
-
-            // then
-            assertThat(secondResult).isEqualTo(firstResult);
-            assertThat(firstResult.predictionCount()).isEqualTo(2);
-            assertThat(readPublication().id()).isEqualTo(firstResult.publicationId());
-            assertThat(readCounts()).isEqualTo(new StoredCounts(1, 2, 2, true));
-            assertThat(readEvaluationStates()).containsExactly("PENDING", "PENDING");
-        }
-    }
-
-    private PublishedForecast publishAfter(CountDownLatch start) throws InterruptedException {
-        if (!start.await(10, TimeUnit.SECONDS)) {
-            throw new IllegalStateException("발행 요청 시작 신호를 받지 못했다");
-        }
-        return writer.writeForecastsOf(batch, stops, runtime).orElseThrow();
     }
 
     private RuntimeSnapshot runtime(String releaseId, SeatForecastModel model) {
@@ -288,12 +245,11 @@ class ForecastPublicationTransactionTest {
 
     private StoredPublication readPublication() {
         return jdbc.sql("""
-                SELECT id, source_attempt_number, model_deployment_id, generated_at, published_at, prediction_count
+                SELECT id, model_deployment_id, generated_at, published_at, prediction_count
                 FROM forecast_publication WHERE source_batch_id = ?
                 """)
             .param(batchId)
-            .query((row, index) -> new StoredPublication(row.getLong("id"), row.getInt("source_attempt_number"),
-                row.getLong("model_deployment_id"), row.getObject("generated_at", OffsetDateTime.class).toInstant(),
+            .query((row, index) -> new StoredPublication(row.getLong("id"), row.getLong("model_deployment_id"), row.getObject("generated_at", OffsetDateTime.class).toInstant(),
                 row.getObject("published_at", OffsetDateTime.class).toInstant(), row.getInt("prediction_count")))
             .single();
     }
@@ -339,7 +295,7 @@ class ForecastPublicationTransactionTest {
         return instant.atOffset(ZoneOffset.UTC);
     }
 
-    private record StoredPublication(long id, int sourceAttemptNumber, long modelDeploymentId,
+    private record StoredPublication(long id, long modelDeploymentId,
                                      Instant generatedAt, Instant publishedAt, int predictionCount) { }
 
     private record StoredPrediction(long publicationId, long observationId, int targetStopOrder,

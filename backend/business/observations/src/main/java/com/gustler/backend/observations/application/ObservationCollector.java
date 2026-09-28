@@ -4,6 +4,7 @@ import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.observations.domain.ObservationSource;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.domain.ObservationBatchReservation;
+import com.gustler.backend.observations.domain.ObservationReply;
 import com.gustler.backend.observations.domain.ObservationResponse;
 import com.gustler.backend.quota.api.ApiCallQuota;
 import com.gustler.backend.routecatalog.api.CurrentRouteVersion;
@@ -76,15 +77,15 @@ public class ObservationCollector implements com.gustler.backend.observations.ap
 
         OffsetDateTime requestedAt = now();
         if (!WorkerOperationLog.measure("collection_dispatch", sourceRouteId,
-            () -> batchLedger.markDispatching(reservation.token(), scheduledAt, requestedAt, reservation.keyAlias()))) {
+            () -> batchLedger.markDispatching(reservation.batchId(), scheduledAt, requestedAt, reservation.keyAlias()))) {
             WorkerOperationLog.warn("collection_quota", sourceRouteId, "NEXT_DAY_LIMIT");
             return;
         }
 
         WorkerOperationLog.recovered("collection_quota", sourceRouteId);
-        ObservationResponse response = observationSource.read(sourceRouteId, reservation.keyAlias());
-        WorkerOperationLog.run("collection_save_and_commit", sourceRouteId,
-            () -> batchLedger.conclude(reservation.token(), response));
+        ObservationReply reply = observationSource.read(sourceRouteId, reservation.keyAlias());
+        ObservationResponse response = WorkerOperationLog.measure("collection_save_and_commit", sourceRouteId,
+            () -> batchLedger.conclude(reservation.batchId(), reply, now()));
         excludeKeyIfRejected(reservation.keyAlias(), response, requestedAt);
     }
 

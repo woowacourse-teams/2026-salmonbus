@@ -11,7 +11,6 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import com.gustler.backend.observations.domain.CollectionAttemptToken;
 import com.gustler.backend.observations.domain.ObservationBatchConclusion;
 import com.gustler.backend.observations.domain.ObservationBatchFailureCode;
 import com.gustler.backend.observations.domain.ObservationBatchOutcome;
@@ -43,7 +42,7 @@ class ObservationCollectorKeyTest {
 
     private static final String ROUTE_3330 = "204000057";
     private static final long ROUTE_VERSION_ID = 1L;
-    private static final CollectionAttemptToken TOKEN = new CollectionAttemptToken(1L, 1);
+    private static final long BATCH_ID = 1L;
     private static final String KEY_ALIAS_B = "b";
     private static final Clock KOREA_NOON =
         Clock.fixed(Instant.parse("2026-08-28T03:00:00Z"), ZoneId.of("Asia/Seoul"));
@@ -149,9 +148,10 @@ class ObservationCollectorKeyTest {
         given(currentRouteVersion.currentVersionOf(eq(ROUTE_3330), any()))
             .willReturn(Optional.of(new RouteReference(ROUTE_VERSION_ID)));
         given(batchLedger.reserve(any(), any()))
-            .willReturn(new ObservationBatchReservation(TOKEN, true, KEY_ALIAS_B));
-        given(batchLedger.markDispatching(eq(TOKEN), any(), any(), eq(KEY_ALIAS_B))).willReturn(true);
-        given(observationSource.read(ROUTE_3330, KEY_ALIAS_B)).willReturn(response);
+            .willReturn(new ObservationBatchReservation(BATCH_ID, true, KEY_ALIAS_B));
+        given(batchLedger.markDispatching(eq(BATCH_ID), any(), any(), eq(KEY_ALIAS_B))).willReturn(true);
+        given(observationSource.read(ROUTE_3330, KEY_ALIAS_B)).willReturn(receivedAt -> response);
+        given(batchLedger.conclude(eq(BATCH_ID), any(), any())).willReturn(response);
         return new ObservationCollector(currentRouteVersion, batchLedger, callQuota, observationSource, KOREA_NOON);
     }
 

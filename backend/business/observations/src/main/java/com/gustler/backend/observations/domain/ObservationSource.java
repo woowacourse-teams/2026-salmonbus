@@ -1,6 +1,6 @@
 package com.gustler.backend.observations.domain;
 
-/** 노선의 차량 관측을 조회하고 수집 업무의 값으로 반환한다. */
+/** 노선의 차량 관측을 조회한다. 응답은 결과를 저장할 때 수집 업무의 값으로 해석한다. */
 public interface ObservationSource {
-    ObservationResponse read(String sourceRouteId, String keyAlias);
+    ObservationReply read(String sourceRouteId, String keyAlias);
 }

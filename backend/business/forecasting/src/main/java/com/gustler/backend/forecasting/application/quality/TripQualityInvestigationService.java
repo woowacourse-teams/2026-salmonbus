@@ -3,8 +3,6 @@ package com.gustler.backend.forecasting.application.quality;
 import com.gustler.backend.forecasting.domain.quality.QualityObservationBatch;
 import com.gustler.backend.forecasting.domain.quality.TripQualityInvestigation;
 import com.gustler.backend.forecasting.domain.quality.TripQualityInvestigation.Phase;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -16,14 +14,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class TripQualityInvestigationService {
     private final TripQualityStore store;
     private final RouteDataQualityAccess quality;
-    private final QualityInputRetention retention;
     private final DemandStatisticsRebuildTrigger statistics;
 
     public TripQualityInvestigationService(final TripQualityStore store, final RouteDataQualityAccess quality,
-        final QualityInputRetention retention, final DemandStatisticsRebuildTrigger statistics) {
+        final DemandStatisticsRebuildTrigger statistics) {
         this.store = store;
         this.quality = quality;
-        this.retention = retention;
         this.statistics = statistics;
     }
 
@@ -36,7 +32,7 @@ public class TripQualityInvestigationService {
                 anomalies.stream().map(QualityObservationBatch.Row::vehicleId).toList()).stream()
             .collect(Collectors.toMap(TripQualityInvestigation::vehicleId, Function.identity()));
         final var maximumGap = store.maximumObservationGap(batch.routeVersionId()).orElse(null);
-        final List<Long> evidenceIds = new ArrayList<>();
+        boolean changed = false;
         for (final var anomaly : anomalies) {
             final var previous = existing.get(anomaly.vehicleId());
             final var started = previous == null
@@ -45,10 +41,9 @@ public class TripQualityInvestigationService {
             if (started.isEmpty()) { continue; }
             store.saveStart(started.get());
             statistics.requestVehicle(batch.routeVersionId(), anomaly.vehicleId());
-            evidenceIds.add(started.get().evidenceObservationId());
+            changed = true;
         }
-        if (!evidenceIds.isEmpty()) {
-            retention.confirmObservations(evidenceIds);
+        if (changed) {
             quality.invalidate(batch.routeVersionId());
         }
     }
@@ -79,18 +74,8 @@ public class TripQualityInvestigationService {
             final var previous = investigation.previousObservationId() == null ? null
                 : store.previous(investigation.previousObservationId());
             final var assessments = investigation.replay(route, rows, previous);
-            final List<Long> evidence = new ArrayList<>();
-            for (final var assessment : assessments) {
-                if (assessment.startsTrip() || assessment.excludesExistingTrip()) { evidence.add(assessment.observation().id()); }
-            }
-            if (investigation.previousObservationId() != null) { evidence.add(investigation.previousObservationId()); }
-            retention.confirmObservations(evidence);
             store.saveAssessments(version, assessments);
         }
-        final List<Long> retained = new ArrayList<>();
-        retained.add(investigation.anchorObservationId());
-        if (investigation.boundaryCandidateObservationId() != null) { retained.add(investigation.boundaryCandidateObservationId()); }
-        retention.confirmObservations(retained);
         store.save(investigation);
         if (investigation.completed()) {
             quality.invalidate(version);

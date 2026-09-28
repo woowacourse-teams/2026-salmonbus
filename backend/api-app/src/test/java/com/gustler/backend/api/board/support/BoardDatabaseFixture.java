@@ -184,11 +184,11 @@ public class BoardDatabaseFixture {
     ) {
         final long publicationId = jdbcClient.sql("""
                 INSERT INTO forecast_publication (
-                    source_batch_id, source_attempt_number, route_version_id,
+                    source_batch_id, route_version_id,
                     model_deployment_id, demand_statistics_revision, quality_revision,
                     observed_at, generated_at, published_at, prediction_count
                 )
-                SELECT id, attempt_number, route_version_id,
+                SELECT id, route_version_id,
                        :modelDeploymentId, 1, 1,
                        response_received_at, :generatedAt, :publishedAt, 0
                 FROM observation_batch WHERE id = :batchId

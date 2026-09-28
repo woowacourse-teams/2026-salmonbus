@@ -47,7 +47,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
 
     /** 성공한 수집 배치 중 발행이 없고 신선도 기준을 만족하는 현재 시도를 읽는다. */
     private static final String SELECT_BATCHES_AWAITING_FORECAST = """
-        SELECT batch.id, batch.route_version_id, version.route_id, batch.response_received_at, batch.attempt_number
+        SELECT batch.id, batch.route_version_id, version.route_id, batch.response_received_at
         FROM observation_batch batch
         JOIN route_version version
           ON version.id = batch.route_version_id
@@ -179,8 +179,7 @@ public class JdbcVehicleTrajectoryRepository implements VehicleTrajectoryReposit
                 resultSet.getLong("id"),
                 resultSet.getLong("route_version_id"),
                 resultSet.getLong("route_id"),
-                instantOf(resultSet.getObject("response_received_at", OffsetDateTime.class)),
-                resultSet.getInt("attempt_number")))
+                instantOf(resultSet.getObject("response_received_at", OffsetDateTime.class))))
             .list();
     }
 

@@ -9,14 +9,12 @@ import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
 import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
 import com.gustler.backend.forecasting.domain.publication.ForecastPublicationRepository;
-import com.gustler.backend.forecasting.domain.publication.PublishedForecast;
 import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
 import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryRepository;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
 import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
-import com.gustler.backend.observations.api.CollectionInput;
 import com.gustler.backend.observations.api.CollectionInputs;
 
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
@@ -25,14 +23,13 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 수집 시도 하나의 입력 확인, 예측 계산과 발행을 한 트랜잭션으로 처리한다. */
+/** 수집 배치 하나의 예측 계산과 발행을 한 트랜잭션으로 처리한다. */
 @Component
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class ForecastBatchWriter {
@@ -66,41 +63,22 @@ public class ForecastBatchWriter {
     }
 
     @Transactional
-    public Optional<PublishedForecast> writeForecastsOf(
+    public void writeForecastsOf(
         PendingForecastBatch batch,
         RouteStops stops,
         RuntimeSnapshot runtime
     ) {
         final long qualityRevision = quality.lock(batch.routeVersionId());
-        CollectionInput input = collectionInputs.lockForForecast(batch.observationBatchId());
-        Optional<PublishedForecast> existing = publications.findBySourceBatchId(batch.observationBatchId());
-        if (existing.isPresent()) {
-            return existing;
-        }
-        if (!isCurrentSuccessfulAttempt(batch, input)) {
-            log.info("event=forecast_batch_skipped reason=COLLECTION_ATTEMPT_CHANGED batchId={} attemptNumber={}",
-                batch.observationBatchId(), batch.attemptNumber());
-            return Optional.empty();
-        }
         Instant generatedAt = clock.instant();
         TimeSlot timeSlot = ForecastTimeSlot.of(batch, clock);
         StopDemandStatistics statistics = stopDemandStatisticsOf(batch, runtime, timeSlot);
         Map<Integer, SameDayFullOutcomes> sameDayOutcomes =
             sameDayFullOutcomesService.outcomesFor(batch.routeId(), batch.responseReceivedAt());
         List<SeatForecast> predictions = forecastsOf(batch, stops, statistics, sameDayOutcomes, runtime, generatedAt);
-        ForecastPublication publication = new ForecastPublication(
-            batch.observationBatchId(), batch.attemptNumber(), batch.routeVersionId(), runtime.deploymentId(),
-            statistics.revision(), qualityRevision, batch.responseReceivedAt(), generatedAt, clock.instant(), predictions);
-        collectionInputs.confirmInput(batch.observationBatchId(), batch.attemptNumber(), publication.publishedAt());
-        return Optional.of(publications.save(publication));
-    }
-
-    private static boolean isCurrentSuccessfulAttempt(PendingForecastBatch batch, CollectionInput input) {
-        return input.successful()
-            && input.batchId() == batch.observationBatchId()
-            && input.routeVersionId() == batch.routeVersionId()
-            && input.attemptNumber() == batch.attemptNumber()
-            && batch.responseReceivedAt().equals(input.observedAt());
+        publications.save(new ForecastPublication(
+            batch.observationBatchId(), batch.routeVersionId(), runtime.deploymentId(), statistics.revision(),
+            qualityRevision, batch.responseReceivedAt(), generatedAt, generatedAt, predictions));
+        collectionInputs.confirmInput(batch.observationBatchId(), generatedAt);
     }
 
     /** 관측 시점에 사용할 수 있었던 통계 값과 버전을 함께 읽는다. */

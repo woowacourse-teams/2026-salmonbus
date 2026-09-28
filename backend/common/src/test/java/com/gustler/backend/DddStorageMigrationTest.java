@@ -168,15 +168,15 @@ class DddStorageMigrationTest {
         migrate("25");
 
         execute("""
-            INSERT INTO forecast_publication(source_batch_id, source_attempt_number, route_version_id,
+            INSERT INTO forecast_publication(source_batch_id, route_version_id,
                 observed_at, published_at, prediction_count, provenance)
-            VALUES (3, 1, 1, '2026-09-01T00:02:00Z', '2026-09-01T00:02:01Z', 0, 'LEGACY_UNKNOWN')
+            VALUES (3, 1, '2026-09-01T00:02:00Z', '2026-09-01T00:02:01Z', 0, 'LEGACY_UNKNOWN')
             """);
         assertThat(number("SELECT COUNT(*) FROM forecast_publication WHERE model_deployment_id IS NULL")).isOne();
         assertThatThrownBy(() -> execute("""
-            INSERT INTO forecast_publication(source_batch_id, source_attempt_number, route_version_id,
+            INSERT INTO forecast_publication(source_batch_id, route_version_id,
                 observed_at, published_at, prediction_count, provenance)
-            VALUES (2, 1, 1, '2026-09-01T00:01:00Z', '2026-09-01T00:01:01Z', 0, 'RECORDED')
+            VALUES (2, 1, '2026-09-01T00:01:00Z', '2026-09-01T00:01:01Z', 0, 'RECORDED')
             """)).isInstanceOf(SQLException.class);
     }
 
@@ -223,11 +223,11 @@ class DddStorageMigrationTest {
             INSERT INTO demand_statistics_version(route_version_id,calculation_version,revision,data_until,computed_at,quality_revision,cell_count)
             SELECT route_version_id,calculation_version,revision,data_until,computed_at,quality_revision,count(*)
             FROM stop_demand_statistics GROUP BY route_version_id,calculation_version,revision,data_until,computed_at,quality_revision;
-            INSERT INTO forecast_publication(source_batch_id,source_attempt_number,route_version_id,model_deployment_id,
+            INSERT INTO forecast_publication(source_batch_id,route_version_id,model_deployment_id,
                 demand_statistics_revision,quality_revision,observed_at,generated_at,published_at,prediction_count)
-            VALUES(1,1,1,1,1,7,'2026-09-01T00:00:00Z','2026-09-01T00:00:01Z','2026-09-01T00:00:01Z',1);
-            INSERT INTO forecast_publication(source_batch_id,source_attempt_number,route_version_id,observed_at,published_at,prediction_count,provenance)
-            VALUES(3,1,1,'2026-09-01T00:02:00Z','2026-09-01T00:02:01Z',0,'LEGACY_UNKNOWN');
+            VALUES(1,1,1,1,7,'2026-09-01T00:00:00Z','2026-09-01T00:00:01Z','2026-09-01T00:00:01Z',1);
+            INSERT INTO forecast_publication(source_batch_id,route_version_id,observed_at,published_at,prediction_count,provenance)
+            VALUES(3,1,'2026-09-01T00:02:00Z','2026-09-01T00:02:01Z',0,'LEGACY_UNKNOWN');
             UPDATE seat_forecast SET publication_id = 1;
             INSERT INTO forecast_evaluation(vehicle_observation_id,target_stop_order,route_version_id,scoring_state,
                 arrival_observation_id,seats_on_arrival,scored_at,arrived_at,arrival_route_version_id,arrival_vehicle_id,

@@ -196,24 +196,6 @@ class JdbcVehicleTrajectoryRepositoryTest {
     }
 
     @Test
-    void 예보_대상에_현재_수집_시도_번호를_포함한다() {
-        // given
-        final long batchId = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
-        jdbcClient.sql("UPDATE observation_batch SET attempt_number = 2 WHERE id = ?")
-            .param(batchId).update();
-
-        // when
-        List<PendingForecastBatch> actual =
-            repository.findBatchesAwaitingForecast(routeVersionId, ANY_AGE, ENOUGH_BATCHES);
-
-        // then
-        assertThat(actual).singleElement().satisfies(batch -> {
-            assertThat(batch.observationBatchId()).isEqualTo(batchId);
-            assertThat(batch.attemptNumber()).isEqualTo(2);
-        });
-    }
-
-    @Test
     void 차가_한_대도_없던_판도_예보_대상으로_준다() {
         // given
         final long empty = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_EMPTY, null);
@@ -596,7 +578,7 @@ class JdbcVehicleTrajectoryRepositoryTest {
 
     private TripQualityInvestigationService quality() {
         return new TripQualityInvestigationService(new JdbcTripQualityStore(jdbcClient),
-            new JdbcRouteDataQualityAccess(jdbcClient), ids -> { }, new JdbcDemandStatisticsRebuildRequests(jdbcClient));
+            new JdbcRouteDataQualityAccess(jdbcClient), new JdbcDemandStatisticsRebuildRequests(jdbcClient));
     }
 
     private void signal(TripQualityInvestigationService quality, long batch) {
@@ -680,9 +662,9 @@ class JdbcVehicleTrajectoryRepositoryTest {
         if (publishedAt != null) {
             jdbcClient.sql("""
                     INSERT INTO forecast_publication (
-                        source_batch_id, source_attempt_number, route_version_id, observed_at,
+                        source_batch_id, route_version_id, observed_at,
                         published_at, prediction_count, provenance
-                    ) VALUES (?, 1, ?, ?, ?, 0, 'LEGACY_UNKNOWN')
+                    ) VALUES (?, ?, ?, ?, 0, 'LEGACY_UNKNOWN')
                     """)
                 .params(batchId, versionId, responseReceivedAt, publishedAt)
                 .update();

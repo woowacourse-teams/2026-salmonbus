@@ -3,10 +3,8 @@ package com.gustler.backend.observations.infrastructure.gbis;
 import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.gbis.api.GbisLocationSource;
-import com.gustler.backend.observations.domain.ObservationResponse;
+import com.gustler.backend.observations.domain.ObservationReply;
 import com.gustler.backend.observations.domain.ObservationSource;
-import java.time.Clock;
-import java.time.OffsetDateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,29 +12,30 @@ import org.slf4j.LoggerFactory;
 public class GbisObservationSource implements ObservationSource {
     private static final Logger log = LoggerFactory.getLogger(GbisObservationSource.class);
     private final GbisLocationSource locationSource;
-    private final Clock clock;
 
-    public GbisObservationSource(GbisLocationSource locationSource, Clock clock) {
+    public GbisObservationSource(GbisLocationSource locationSource) {
         this.locationSource = locationSource;
-        this.clock = clock;
     }
 
+    /**
+     * 보낸 뒤에 뜻밖의 예외가 나도 그 묶음을 열어둔 채로 끝내지 않는다.
+     *
+     * <p>GbisLocationSource 가 RestClientException 은 NoResponse 로 접어주는데 그 밖의 것은 그대로 올라온다.
+     * 그러면 conclude 까지 못 가고 묶음이 DISPATCHING 으로 굳는다. 보낸 것은 맞고 결과만 모르는 상태라
+     * 응답이 안 온 것과 같은 자리(UNKNOWN_AFTER_DISPATCH)로 닫는다.
+     */
     @Override
-    public ObservationResponse read(String sourceRouteId, String keyAlias) {
-        GbisLocationResult response;
+    public ObservationReply read(String sourceRouteId, String keyAlias) {
+        GbisLocationResult result;
         try {
-            response = WorkerOperationLog.measure("collection_upstream", sourceRouteId,
+            result = WorkerOperationLog.measure("collection_upstream", sourceRouteId,
                 () -> locationSource.read(sourceRouteId, keyAlias));
-        } catch (RuntimeException exception) {
-            log.error("외부 호출 중 예외가 발생해 응답을 확인하지 못했다. 노선={}", sourceRouteId, exception);
-            return ObservationResponse.unconfirmed(now());
+        } catch (final RuntimeException e) {
+            log.error("상류를 부른 뒤 뜻밖의 예외가 났다. 보낸 것은 맞고 결과만 모른다. 노선={}",
+                sourceRouteId, e);
+            result = new GbisLocationResult.NoResponse(e.getMessage());
         }
-        OffsetDateTime receivedAt = now();
-        // 정규화 오류는 응답 미수신으로 바꾸지 않는다. 저장을 중단하고 원래 오류를 호출자에 전달한다.
-        return GbisObservationMapper.response(response, receivedAt);
-    }
-
-    private OffsetDateTime now() {
-        return clock.instant().atZone(clock.getZone()).toOffsetDateTime();
+        GbisLocationResult received = result;
+        return receivedAt -> GbisObservationMapper.response(received, receivedAt);
     }
 }

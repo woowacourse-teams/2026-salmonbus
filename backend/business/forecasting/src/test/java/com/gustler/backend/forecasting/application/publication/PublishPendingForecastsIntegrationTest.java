@@ -155,7 +155,6 @@ class PublishPendingForecastsIntegrationTest {
 
         // then
         StoredPublication publication = readPublication(observationBatchId);
-        assertThat(publication.sourceAttemptNumber()).isEqualTo(1);
         assertThat(publication.modelDeploymentId()).isEqualTo(modelDeploymentId);
         assertThat(publication.statisticsRevision())
             .isEqualTo(seatForecastModel.firstReceivedInput().statistics().revision());
@@ -163,8 +162,8 @@ class PublishPendingForecastsIntegrationTest {
         assertThat(publication.observedAt()).isEqualTo(RESPONSE_RECEIVED_AT.toInstant());
         assertThat(publication.predictionCount()).isEqualTo(TARGET_COUNT_AHEAD_OF_PASSED_STOP);
         assertThat(readDistinctGeneratedAt()).containsExactly(publication.generatedAt());
-        assertThat(publication.publishedAt()).isNotNull();
-        assertThat(readInputConfirmedAt(observationBatchId)).isNotNull();
+        assertThat(publication.publishedAt()).isEqualTo(publication.generatedAt());
+        assertThat(readInputConfirmedAt(observationBatchId)).isEqualTo(publication.generatedAt());
     }
 
     @Test
@@ -406,13 +405,12 @@ class PublishPendingForecastsIntegrationTest {
 
     private StoredPublication readPublication(final long batchId) {
         return jdbcClient.sql("""
-                SELECT source_attempt_number, model_deployment_id, demand_statistics_revision,
+                SELECT model_deployment_id, demand_statistics_revision,
                        quality_revision, observed_at, generated_at, published_at, prediction_count
                 FROM forecast_publication WHERE source_batch_id = ?
                 """)
             .param(batchId)
             .query((resultSet, rowNumber) -> new StoredPublication(
-                resultSet.getInt("source_attempt_number"),
                 resultSet.getLong("model_deployment_id"),
                 resultSet.getInt("demand_statistics_revision"),
                 resultSet.getLong("quality_revision"),
@@ -472,10 +470,10 @@ class PublishPendingForecastsIntegrationTest {
             .update();
         jdbcClient.sql("""
                 INSERT INTO forecast_publication (
-                    source_batch_id, source_attempt_number, route_version_id, observed_at,
+                    source_batch_id, route_version_id, observed_at,
                     published_at, prediction_count, provenance
                 )
-                SELECT id, attempt_number, route_version_id, response_received_at, ?, 0, 'LEGACY_UNKNOWN'
+                SELECT id, route_version_id, response_received_at, ?, 0, 'LEGACY_UNKNOWN'
                 FROM observation_batch WHERE id = ?
                 """)
             .params(completedAt, batchId)
@@ -641,7 +639,6 @@ class PublishPendingForecastsIntegrationTest {
     }
 
     private record StoredPublication(
-        int sourceAttemptNumber,
         long modelDeploymentId,
         int statisticsRevision,
         long qualityRevision,

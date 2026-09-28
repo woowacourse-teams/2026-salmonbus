@@ -1,13 +1,10 @@
 package com.gustler.backend.observations.application;
 
 import com.gustler.backend.observations.api.CollectionQualityHook;
-import com.gustler.backend.observations.api.ObservedSeatValue;
 import com.gustler.backend.observations.api.VehicleObservationsStored;
 import com.gustler.backend.observations.domain.CollectedObservations;
-import com.gustler.backend.observations.domain.CollectionAttemptToken;
 import com.gustler.backend.observations.domain.ObservationBatchConclusion;
 import com.gustler.backend.observations.domain.ObservationRepository;
-import com.gustler.backend.observations.domain.RemainingSeats;
 import com.gustler.backend.observations.domain.StoredObservations;
 import com.gustler.backend.observations.domain.UpstreamObservationRow;
 import java.time.OffsetDateTime;
@@ -17,7 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 관측 저장과 필요한 품질 잠금·조사 등록을 같은 트랜잭션에서 조율한다. */
+/** 관측 저장과 품질 조사 등록을 같은 트랜잭션에서 조율한다. */
 @Component
 public class ObservationLoader {
     private static final Logger log = LoggerFactory.getLogger(ObservationLoader.class);
@@ -30,32 +27,23 @@ public class ObservationLoader {
     }
 
     @Transactional
-    public void load(CollectionAttemptToken token, ObservationBatchConclusion conclusion,
+    public void load(final long batchId, ObservationBatchConclusion conclusion,
                      CollectedObservations collected, OffsetDateTime responseReceivedAt) {
-        logExcludedRows(token.batchId(), collected);
-        final long routeVersionId = observations.routeVersionOf(token.batchId());
-        List<ObservedSeatValue> seatValues = collected.storableRows().stream().map(row -> {
-            var observation = row.observation();
-            Integer seats = observation.remainingSeats() instanceof RemainingSeats.Known known ? known.seats() : null;
-            return new ObservedSeatValue(observation.vehicleId(), seats);
-        }).toList();
-        // 품질 → 수집 배치 잠금 순서를 지킨다. 정상 관측의 훅은 추가 SQL 없이 반환한다.
-        qualityHooks.forEach(hook -> hook.beforeRowsStored(routeVersionId, seatValues));
-        observations.concludeWithRows(token, conclusion, collected, responseReceivedAt)
-            .ifPresent(this::registerQualityInvestigation);
-    }
-
-    private void registerQualityInvestigation(StoredObservations stored) {
+        logExcludedRows(batchId, collected);
+        StoredObservations stored = observations.concludeWithRows(batchId, conclusion, collected, responseReceivedAt);
         var event = new VehicleObservationsStored(stored.batchId(), stored.routeVersionId(), stored.observedAt(),
             stored.rows().stream().map(row -> new VehicleObservationsStored.Row(
                 row.observationId(), row.vehicleId(), row.remainingSeats())).toList());
         qualityHooks.forEach(hook -> hook.observationsStored(event));
     }
 
-    /** 응답 원문에 포함된 차량 ID와 번호판은 로그에서 제외한다. */
+    /**
+     * 뺀 행은 값 하나하나를 남긴다. 응답 원문을 통째로 찍으면 번호판이 로그로 샌다.
+     * 차량 아이디와 번호판은 찍지 않는다.
+     */
     private void logExcludedRows(final long batchId, CollectedObservations collected) {
         for (UpstreamObservationRow row : collected.excludedRows()) {
-            log.warn("필수값이 없는 관측을 저장 대상에서 제외했다. 배치={} 응답행={} 운행상태={} 정류소순번={}",
+            log.warn("쌓을 수 없는 관측을 뺐다. 묶음={} 상류행={} 운행상태={} 정류소순번={}",
                 batchId, row.sourceRowNumber(), row.observation().runningState(), row.observation().stopSequence());
         }
     }

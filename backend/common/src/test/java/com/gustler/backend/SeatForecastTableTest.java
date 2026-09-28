@@ -68,10 +68,10 @@ class SeatForecastTableTest {
         final long batchId = insertObservationBatch("2026-08-19T11:14", RESPONSE_RECEIVED_AT);
         vehicleObservationId = insertObservation(batchId, PASSED_STOP_ORDER);
         publicationId = jdbcClient.sql("""
-            INSERT INTO forecast_publication(source_batch_id, source_attempt_number, route_version_id,
+            INSERT INTO forecast_publication(source_batch_id, route_version_id,
                 model_deployment_id, demand_statistics_revision, quality_revision,
                 observed_at, generated_at, published_at, prediction_count)
-            VALUES (?, 1, ?, ?, ?, 1, ?, ?, ?, 1) RETURNING id
+            VALUES (?, ?, ?, ?, 1, ?, ?, ?, 1) RETURNING id
             """)
             .params(batchId, routeVersionId, modelDeploymentId, DEMAND_STATISTICS_REVISION,
                 RESPONSE_RECEIVED_AT, GENERATED_AT, GENERATED_AT)

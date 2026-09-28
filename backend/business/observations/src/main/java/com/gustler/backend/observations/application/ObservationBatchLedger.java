@@ -1,7 +1,7 @@
 package com.gustler.backend.observations.application;
 
-import com.gustler.backend.observations.domain.CollectionAttemptToken;
 import com.gustler.backend.observations.domain.CollectionPlan;
+import com.gustler.backend.observations.domain.ObservationReply;
 import com.gustler.backend.observations.domain.ObservationResponse;
 import com.gustler.backend.observations.domain.ObservationBatchReservation;
 import com.gustler.backend.observations.domain.ObservationRepository;
@@ -29,7 +29,6 @@ public class ObservationBatchLedger {
     /** 수집 계획과 호출 횟수를 함께 예약한다. 실패하면 두 변경 모두 롤백한다. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ObservationBatchReservation reserve(CollectionPlan plan, OffsetDateTime reservedAt) {
-        observations.lockPlan(plan);
         Optional<String> keyAlias = callQuota.reserveLocation(reservedAt);
         if (keyAlias.isPresent()) {
             return new ObservationBatchReservation(observations.openReserved(plan), true, keyAlias.get());
@@ -39,31 +38,30 @@ public class ObservationBatchLedger {
 
     /** 한국 자정을 지났으면 새 날짜의 한도도 확보한 뒤 전송 사실을 별도로 커밋한다. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean markDispatching(CollectionAttemptToken token, OffsetDateTime reservedAt,
+    public boolean markDispatching(final long batchId, OffsetDateTime reservedAt,
                                    OffsetDateTime requestedAt, String keyAlias) {
-        if (!observations.isAwaitingDispatch(token)) {
-            return false;
-        }
         if (!callQuota.ensureLocationReservation(keyAlias, reservedAt, requestedAt)) {
-            observations.abandonBeforeSend(token);
+            observations.abandonBeforeSend(batchId);
             return false;
         }
-        observations.markDispatching(token, requestedAt);
+        observations.markDispatching(batchId, requestedAt);
         return true;
     }
 
     @Transactional
-    public void abandonBeforeSend(CollectionAttemptToken token) {
-        observations.abandonBeforeSend(token);
+    public void abandonBeforeSend(final long batchId) {
+        observations.abandonBeforeSend(batchId);
     }
 
     /** 관측 저장과 수집 완료, 필요한 품질 조사 등록을 한 트랜잭션에서 수행한다. */
     @Transactional
-    public void conclude(CollectionAttemptToken token, ObservationResponse response) {
+    public ObservationResponse conclude(final long batchId, ObservationReply reply, OffsetDateTime receivedAt) {
+        ObservationResponse response = reply.interpret(receivedAt);
         if (response.observations().isPresent()) {
-            loader.load(token, response.conclusion(), response.observations().orElseThrow(), response.receivedAt());
+            loader.load(batchId, response.conclusion(), response.observations().orElseThrow(), receivedAt);
         } else {
-            observations.concludeWithoutRows(token, response.conclusion(), response.receivedAt());
+            observations.concludeWithoutRows(batchId, response.conclusion(), receivedAt);
         }
+        return response;
     }
 }

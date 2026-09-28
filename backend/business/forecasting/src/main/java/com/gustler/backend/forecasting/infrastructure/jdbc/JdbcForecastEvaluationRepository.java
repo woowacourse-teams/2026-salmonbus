@@ -34,19 +34,6 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
         LIMIT :limit
         """;
 
-    private static final String CAN_COMPLETE = """
-        SELECT EXISTS (
-            SELECT 1 FROM forecast_evaluation evaluation
-            JOIN forecast_eligible_observation source ON source.id = evaluation.vehicle_observation_id
-            WHERE evaluation.vehicle_observation_id = :vehicleObservationId
-              AND evaluation.target_stop_order = :targetStopOrder
-              AND evaluation.scoring_state = 'PENDING'
-              AND (CAST(:arrivalObservationId AS bigint) IS NULL OR EXISTS (
-                  SELECT 1 FROM forecast_eligible_observation arrival
-                  WHERE arrival.id = :arrivalObservationId
-                    AND %s)))
-        """.formatted(EligibleObservationSql.ARRIVAL_MATCHES_SOURCE);
-
     /** 근거의 정류장 순번은 원 관측의 stop_order다. 평가 판정에 사용하는 passed_stop_order와 구분한다. */
     private static final String COMPLETE = """
         UPDATE forecast_evaluation evaluation
@@ -114,11 +101,6 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
             JOIN route_version version ON version.id = source.route_version_id
             WHERE source.id IN (:sourceIds) ORDER BY version.route_id
             """).param("sourceIds", observationIds).query(Long.class).list();
-    }
-
-    @Override
-    public boolean canComplete(ForecastEvaluation evaluation) {
-        return parameters(CAN_COMPLETE, evaluation).query(Boolean.class).single();
     }
 
     @Override

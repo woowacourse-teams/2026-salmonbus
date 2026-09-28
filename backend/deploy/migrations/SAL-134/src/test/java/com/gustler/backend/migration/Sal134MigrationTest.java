@@ -45,7 +45,7 @@ class Sal134MigrationTest {
 
         assertThat(number("SELECT count(*) FROM sal134_transition WHERE verified_at IS NOT NULL")).isOne();
         assertThat(number("SELECT count(*) FROM information_schema.columns WHERE table_name = 'seat_forecast' AND column_name = 'scoring_state'")).isOne();
-        assertThat(number("SELECT count(*) FROM observation_batch WHERE input_confirmed_at IS NOT NULL")).isEqualTo(3);
+        assertThat(number("SELECT count(*) FROM observation_batch WHERE input_confirmed_at IS NOT NULL")).isEqualTo(2);
         assertThat(number("SELECT count(*) FROM forecast_publication WHERE provenance = 'LEGACY_UNKNOWN' AND model_deployment_id IS NULL")).isOne();
         assertThat(number("SELECT count(*) FROM observation_trip_assignment")).isZero();
 
@@ -192,51 +192,6 @@ class Sal134MigrationTest {
         assertThat(number("SELECT count(*) FROM forecast_evaluation WHERE scoring_state = 'SETTLED'")).isOne();
         assertThat(number("SELECT count(*) FROM quality_training_seat_forecast")).isZero();
         assertThat(number("SELECT count(*) FROM training_eligible_seat_forecast")).isZero();
-    }
-
-    @Test
-    void 품질_판정과_조사가_실제로_참조한_배치만_입력을_확정한다() throws Exception {
-        execute("""
-            INSERT INTO observation_batch(route_version_id,scheduled_at,attempt_number,attempt_key,response_received_at,
-                outcome,normalization_version,collection_strategy_version)
-            SELECT 1, '2026-09-01T00:00:00Z'::timestamptz + number * interval '1 minute', 1,
-                'quality-' || number, '2026-09-01T00:00:00Z'::timestamptz + number * interval '1 minute',
-                'SUCCESS_ROWS','n1','c1'
-            FROM generate_series(4,10) number;
-            INSERT INTO vehicle_observation(observation_batch_id,route_version_id,source_row_number,vehicle_id,
-                stop_order,stop_id,running_state,remaining_seats,passed_stop_order)
-            SELECT id,1,0,'bus2',2,'stop2',2,10,2 FROM observation_batch WHERE id BETWEEN 4 AND 10 ORDER BY id;
-            INSERT INTO vehicle_one_way_trip(id,start_observation_id,route_version_id,vehicle_id,status,boundary,
-                rule_version,evidence_observation_id,assessed_at)
-            VALUES('quality-reference',3,1,'bus2','ELIGIBLE','CONFIRMED','quality1',4,'2026-09-01T00:20:00Z'),
-                ('earlier-reference',3,1,'bus2','ELIGIBLE','CONFIRMED','quality1',NULL,'2026-09-01T00:15:00Z');
-            INSERT INTO trip_quality_rebuild(route_version_id,vehicle_id,until_at,anchor_observation_id,
-                previous_observation_id,boundary_candidate_observation_id,evidence_observation_id,investigated_at)
-            VALUES(1,'bus2','2026-09-01T01:00:00Z',5,6,7,8,'2026-09-01T00:30:00Z');
-            """);
-        run("prepare");
-        run("backfill");
-        run("finalize");
-
-        assertThat(number("SELECT count(*) FROM observation_batch WHERE id = 4 AND input_confirmed_at = '2026-09-01T00:15:00Z'")).isOne();
-        assertThat(number("SELECT count(*) FROM observation_batch WHERE id = 5 AND input_confirmed_at = '2026-09-01T00:20:00Z'")).isOne();
-        assertThat(number("SELECT count(*) FROM observation_batch WHERE id BETWEEN 6 AND 9 AND input_confirmed_at = '2026-09-01T00:30:00Z'")).isEqualTo(4);
-        assertThat(number("SELECT count(*) FROM observation_batch WHERE id = 10 AND input_confirmed_at IS NULL")).isOne();
-        assertThat(number("SELECT count(*) FROM vehicle_observation")).isEqualTo(9);
-    }
-
-    @Test
-    void 품질_조사가_없는_관측을_참조하면_ID를_알리고_전환을_중단한다() throws Exception {
-        execute("""
-            INSERT INTO trip_quality_rebuild(route_version_id,vehicle_id,until_at,anchor_observation_id)
-            VALUES(1,'bus2','2026-09-01T01:00:00Z',999999)
-            """);
-        run("prepare");
-
-        assertThatThrownBy(() -> run("backfill")).hasMessageContaining("validate-legacy.sql 검사 7")
-                .hasMessageContaining("999999");
-        assertThat(number("SELECT count(*) FROM sal134_transition_progress")).isZero();
-        assertThat(number("SELECT count(*) FROM observation_batch WHERE input_confirmed_at IS NOT NULL")).isZero();
     }
 
     @Test

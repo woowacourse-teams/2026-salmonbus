@@ -2,9 +2,7 @@ package com.gustler.backend.observations.api;
 
 import java.time.Instant;
 
-/** 예보와 평가가 사용하는 관측 입력을 같은 트랜잭션에서 조회하고 확정한다. */
+/** 예보가 끝난 수집 배치를 입력으로 확정한다. 확정한 배치는 다시 수집하지 않는다. */
 public interface CollectionInputs {
-    CollectionInput lockForForecast(long batchId);
-    CollectionInput lockForObservation(long observationId);
-    void confirmInput(long batchId, int attemptNumber, Instant confirmedAt);
+    void confirmInput(long batchId, Instant confirmedAt);
 }

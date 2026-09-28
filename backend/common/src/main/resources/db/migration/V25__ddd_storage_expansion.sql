@@ -16,13 +16,10 @@ CREATE TABLE sal134_transition_progress (
 );
 
 ALTER TABLE observation_batch ADD COLUMN input_confirmed_at timestamptz;
--- 평가 근거로 사용한 배치도 확인할 수 있도록 전환 중에만 쓰는 인덱스다.
-CREATE INDEX ix_sal134_forecast_arrival ON seat_forecast(arrival_observation_id);
 
 CREATE TABLE forecast_publication (
     id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     source_batch_id bigint NOT NULL UNIQUE,
-    source_attempt_number integer NOT NULL CHECK (source_attempt_number > 0),
     route_version_id bigint NOT NULL REFERENCES route_version(id),
     model_deployment_id bigint REFERENCES model_deployment(id),
     demand_statistics_revision integer,
@@ -71,6 +68,7 @@ CREATE TABLE forecast_evaluation (
         REFERENCES vehicle_observation(id, route_version_id),
     CONSTRAINT fk_evaluation_forecast FOREIGN KEY(vehicle_observation_id, target_stop_order)
         REFERENCES seat_forecast(vehicle_observation_id, target_stop_order),
+    CONSTRAINT fk_evaluation_arrival FOREIGN KEY(arrival_observation_id) REFERENCES vehicle_observation(id),
     CONSTRAINT ck_evaluation_state CHECK (scoring_state IN ('PENDING','SETTLED','SKIPPED','LOST','SEAT_MISSING')),
     CONSTRAINT ck_evaluation_arrival CHECK ((arrival_observation_id IS NOT NULL) = (scoring_state IN ('SETTLED','SEAT_MISSING'))),
     CONSTRAINT ck_evaluation_seats CHECK ((seats_on_arrival IS NOT NULL) = (scoring_state = 'SETTLED')),

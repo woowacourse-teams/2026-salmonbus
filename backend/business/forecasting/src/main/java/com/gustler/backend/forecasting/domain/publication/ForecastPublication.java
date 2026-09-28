@@ -9,7 +9,6 @@ import java.util.Set;
 /** 하나의 수집 시도로 계산한 예보. 발행한 예측과 계산에 사용한 버전은 바꾸지 않는다. */
 public record ForecastPublication(
     long sourceBatchId,
-    int sourceAttemptNumber,
     long routeVersionId,
     long modelDeploymentId,
     int demandStatisticsRevision,
@@ -21,8 +20,8 @@ public record ForecastPublication(
 ) {
 
     public ForecastPublication {
-        if (sourceBatchId <= 0 || sourceAttemptNumber <= 0 || routeVersionId <= 0 || modelDeploymentId <= 0) {
-            throw new IllegalArgumentException("발행에는 수집 배치·시도·노선 버전·모델 식별 정보가 필요하다");
+        if (sourceBatchId <= 0 || routeVersionId <= 0 || modelDeploymentId <= 0) {
+            throw new IllegalArgumentException("발행에는 수집 배치·노선 버전·모델 식별 정보가 필요하다");
         }
         if (demandStatisticsRevision < 0 || qualityRevision <= 0) {
             throw new IllegalArgumentException("통계 버전은 0 이상, 품질 버전은 1 이상이어야 한다");
