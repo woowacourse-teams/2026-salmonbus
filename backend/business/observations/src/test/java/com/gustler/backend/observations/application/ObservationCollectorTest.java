@@ -1,8 +1,10 @@
 package com.gustler.backend.observations.application;
 
+import com.gustler.backend.gbis.api.GbisKey;
 import com.gustler.backend.gbis.api.GbisLocationSource;
 import com.gustler.backend.observations.domain.CollectionSchedule;
 import com.gustler.backend.quota.domain.CallQuota;
+import com.gustler.backend.quota.domain.CallQuotaRepository;
 import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.UpstreamRoute;
@@ -14,10 +16,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.gustler.backend.gbis.api.GbisLocationResult.DailyQuotaExceeded;
 import com.gustler.backend.gbis.api.GbisLocationResult.GbisSystemError;
 import com.gustler.backend.gbis.api.GbisLocationResult.NoVehicles;
 import com.gustler.backend.gbis.api.GbisLocationResult.Success;
@@ -35,6 +40,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
  * 설정에 노선을 적고 수집을 한 판 돌리면 판본이 열리고 관측이 쌓이는지 본다.
@@ -67,6 +73,7 @@ class ObservationCollectorTest {
     private static final int RUNNING_STATE_DEPARTED = 2;
 
     private static final int ALREADY_USED_UP = 3;
+    private static final int GBIS_DAILY_LIMIT = 10_000;
 
     @MockitoBean
     private Clock clock;
@@ -76,6 +83,9 @@ class ObservationCollectorTest {
 
     @MockitoBean
     private GbisLocationSource locationSource;
+
+    @MockitoSpyBean
+    private CallQuotaRepository callQuotaRepository;
 
     @Autowired
     private ObservationCollector collector;
@@ -91,7 +101,7 @@ class ObservationCollectorTest {
         given(routeSource.requiredCallsPerRead()).willReturn(2);
         given(clock.instant()).willReturn(TICK);
         given(routeSource.read(ROUTE_3330)).willReturn(new RouteSourceResult.Success(upstreamRoute()));
-        given(locationSource.read(ROUTE_3330)).willReturn(new Success(QUERY_TIME, List.of(
+        given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME, List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217))));
         collectorLog = startCapturingCollectorLog();
     }
@@ -148,7 +158,7 @@ class ObservationCollectorTest {
     @Test
     void 상류가_정상으로_답한_판은_본_차량만큼_관측을_쌓는다() {
         // given
-        given(locationSource.read(ROUTE_3330)).willReturn(new Success(QUERY_TIME, List.of(
+        given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME, List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217),
             busAt(VEHICLE_204003542, 3, STOP_208000069))));
 
@@ -162,7 +172,7 @@ class ObservationCollectorTest {
     @Test
     void 운행_차량이_없다는_응답도_판을_SUCCESS_EMPTY로_닫는다() {
         // given
-        given(locationSource.read(ROUTE_3330)).willReturn(new NoVehicles(QUERY_TIME));
+        given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new NoVehicles(QUERY_TIME));
 
         // when
         collector.collectOnce(ROUTE_3330);
@@ -174,7 +184,7 @@ class ObservationCollectorTest {
     @Test
     void 상류가_오류로_답한_판은_FAILED_UPSTREAM으로_닫힌다() {
         // given
-        given(locationSource.read(ROUTE_3330))
+        given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY))
             .willReturn(new GbisSystemError(QUERY_TIME, "시스템 에러가 발생했습니다."));
 
         // when
@@ -182,6 +192,35 @@ class ObservationCollectorTest {
 
         // then
         assertThat(onlyBatchColumn("outcome", String.class)).isEqualTo("FAILED_UPSTREAM");
+    }
+
+    @Test
+    void 키_제외가_실패해도_수집_결과를_유지하고_다음_거절에서_제외를_다시_시도한다() {
+        // given
+        IllegalStateException firstExclusionFailure = new IllegalStateException("키 제외 실패");
+        given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new DailyQuotaExceeded());
+        doThrow(firstExclusionFailure)
+            .doCallRealMethod()
+            .when(callQuotaRepository)
+            .exclude(CallQuota.BUS_LOCATION, KOREA_8_28, GbisKey.PRIMARY);
+
+        // when 첫 제외만 실패한다
+        assertThatThrownBy(() -> collector.collectOnce(ROUTE_3330)).hasRootCause(firstExclusionFailure);
+
+        // then 수집 결과와 사용량은 먼저 커밋되어 있다
+        assertThat(onlyBatchColumn("outcome", String.class)).isEqualTo("FAILED_UPSTREAM");
+        assertThat(onlyBatchColumn("failure_code", String.class)).isEqualTo("DAILY_QUOTA_EXCEEDED");
+        assertThat(reservedCallsOf(CallQuota.BUS_LOCATION)).isEqualTo(1);
+
+        // when 다음 슬롯 차례에도 같은 키가 거절된다
+        given(clock.instant()).willReturn(NEXT_TICK);
+        collector.collectOnce(ROUTE_3330);
+
+        // then 제외를 다시 시도해 그날 장부를 한도까지 채운다
+        then(callQuotaRepository).should(times(2))
+            .exclude(CallQuota.BUS_LOCATION, KOREA_8_28, GbisKey.PRIMARY);
+        assertThat(batchCount()).isEqualTo(2);
+        assertThat(reservedCallsOf(CallQuota.BUS_LOCATION)).isEqualTo(GBIS_DAILY_LIMIT);
     }
 
     @Test
@@ -240,13 +279,13 @@ class ObservationCollectorTest {
     @Test
     void 같은_초에_두_번_부르면_관측도_마지막_시도의_것만_남는다() {
         // given 첫 시도에는 차량이 둘이었다
-        given(locationSource.read(ROUTE_3330)).willReturn(new Success(QUERY_TIME, List.of(
+        given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME, List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217),
             busAt(VEHICLE_204003542, 3, STOP_208000069))));
         collector.collectOnce(ROUTE_3330);
 
         // when 다시 부르니 차량이 하나다
-        given(locationSource.read(ROUTE_3330)).willReturn(new Success(QUERY_TIME, List.of(
+        given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME, List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217))));
         collector.collectOnce(ROUTE_3330);
 
@@ -270,7 +309,7 @@ class ObservationCollectorTest {
     @Test
     void 상류를_부른_뒤_뜻밖의_예외가_나도_묶음이_DISPATCHING으로_안_남는다() {
         // given RestClientException 이 아닌 것이라 GbisLocationSource 가 안 접어준다
-        given(locationSource.read(ROUTE_3330)).willThrow(new IllegalStateException("파서가 터졌다"));
+        given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willThrow(new IllegalStateException("파서가 터졌다"));
 
         // when
         collector.collectOnce(ROUTE_3330);
@@ -282,7 +321,7 @@ class ObservationCollectorTest {
     @Test
     void 정규화에_실패한_응답을_미수신으로_바꾸지_않는다() {
         // given
-        given(locationSource.read(ROUTE_3330)).willReturn(new Success(QUERY_TIME, null));
+        given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME, null));
 
         // when & then
         assertThatThrownBy(() -> collector.collectOnce(ROUTE_3330)).isInstanceOf(NullPointerException.class);

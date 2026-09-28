@@ -3,6 +3,8 @@ package com.gustler.backend.observations.application;
 import com.gustler.backend.observations.domain.ObservationSource;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.domain.ObservationBatchReservation;
+import com.gustler.backend.observations.domain.ObservationResponse;
+import com.gustler.backend.quota.api.ApiCallQuota;
 import com.gustler.backend.routecatalog.api.CurrentRouteVersion;
 import com.gustler.backend.routecatalog.api.RouteReference;
 
@@ -22,17 +24,20 @@ public class ObservationCollector implements com.gustler.backend.observations.ap
 
     private final CurrentRouteVersion currentRouteVersion;
     private final ObservationBatchLedger batchLedger;
+    private final ApiCallQuota callQuota;
     private final ObservationSource observationSource;
     private final Clock clock;
 
     public ObservationCollector(
         CurrentRouteVersion currentRouteVersion,
         ObservationBatchLedger batchLedger,
+        ApiCallQuota callQuota,
         ObservationSource observationSource,
         Clock clock
     ) {
         this.currentRouteVersion = currentRouteVersion;
         this.batchLedger = batchLedger;
+        this.callQuota = callQuota;
         this.observationSource = observationSource;
         this.clock = clock;
     }
@@ -66,12 +71,26 @@ public class ObservationCollector implements com.gustler.backend.observations.ap
             return;
         }
 
-        if (!batchLedger.markDispatching(reservation.token(), scheduledAt, now())) {
+        OffsetDateTime requestedAt = now();
+        if (!batchLedger.markDispatching(reservation.token(), scheduledAt, requestedAt, reservation.keyAlias())) {
             log.warn("전송 상태 또는 호출 한도 조건을 만족하지 않아 요청을 보내지 않는다. 노선={} 배치={}", sourceRouteId, reservation.batchId());
             return;
         }
 
-        batchLedger.conclude(reservation.token(), observationSource.read(sourceRouteId));
+        ObservationResponse response = observationSource.read(sourceRouteId, reservation.keyAlias());
+        batchLedger.conclude(reservation.token(), response);
+        excludeKeyIfRejected(reservation.keyAlias(), response, requestedAt);
+    }
+
+    private void excludeKeyIfRejected(
+        String keyAlias,
+        ObservationResponse response,
+        OffsetDateTime requestedAt
+    ) {
+        response.keyRejectionCode().ifPresent(reasonCode ->
+            callQuota.excludeLocationKey(keyAlias, requestedAt).ifPresent(reservedCallsBefore ->
+                log.error("포털이 GBIS 키를 거절해 그 키를 한국 자정까지 쓰지 않는다. 슬롯={} 사유={} 채우기 전 사용량={}",
+                    keyAlias, reasonCode, reservedCallsBefore)));
     }
 
     /** 같은 초에 계획한 동일 노선의 수집은 같은 배치로 처리한다. */

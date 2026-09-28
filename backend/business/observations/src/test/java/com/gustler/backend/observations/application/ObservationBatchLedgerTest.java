@@ -69,6 +69,7 @@ class ObservationBatchLedgerTest {
     private static final OffsetDateTime KOREA_8_28_LATE_NIGHT = OffsetDateTime.parse("2026-08-28T14:59:59Z");
     private static final OffsetDateTime KOREA_8_29_MIDNIGHT = OffsetDateTime.parse("2026-08-28T15:00:00Z");
     private static final LocalDate KOREA_8_29 = LocalDate.of(2026, 8, 29);
+    private static final String KEY_ALIAS_B = "b";
 
     @Autowired
     private ObservationBatchLedger ledger;
@@ -165,7 +166,7 @@ class ObservationBatchLedgerTest {
         final long batchId = token.batchId();
 
         // when
-        ledger.markDispatching(token, RESERVED_AT, REQUESTED_AT);
+        ledger.markDispatching(token, RESERVED_AT, REQUESTED_AT, "a");
 
         // then
         assertThat(outcomeOf(batchId)).isEqualTo("DISPATCHING");
@@ -178,7 +179,7 @@ class ObservationBatchLedgerTest {
         final long batchId = token.batchId();
 
         // when
-        ledger.markDispatching(token, RESERVED_AT, REQUESTED_AT);
+        ledger.markDispatching(token, RESERVED_AT, REQUESTED_AT, "a");
 
         // then
         assertThat(requestedAtOf(batchId)).isEqualTo(REQUESTED_AT);
@@ -273,10 +274,22 @@ class ObservationBatchLedgerTest {
         CollectionAttemptToken token = ledger.reserve(plan(), KOREA_8_28_LATE_NIGHT).token();
 
         // when
-        ledger.markDispatching(token, KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT);
+        ledger.markDispatching(token, KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT, "a");
 
         // then
         assertThat(reservedCallsOn(KOREA_8_29)).isEqualTo(1);
+    }
+
+    @Test
+    void 보내기_전에_한국_자정이_지나면_예약한_키의_다음_날_장부에_센다() {
+        // given
+        CollectionAttemptToken token = ledger.reserve(plan(), KOREA_8_28_LATE_NIGHT).token();
+
+        // when
+        ledger.markDispatching(token, KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT, KEY_ALIAS_B);
+
+        // then
+        assertThat(keyAliasesOn(KOREA_8_29)).containsExactly(KEY_ALIAS_B);
     }
 
     @Test
@@ -286,7 +299,7 @@ class ObservationBatchLedgerTest {
         useUpQuotaOn(KOREA_8_29);
 
         // when
-        final boolean actual = ledger.markDispatching(token, KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT);
+        final boolean actual = ledger.markDispatching(token, KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT, "a");
 
         // then
         assertThat(actual).isFalse();
@@ -300,7 +313,7 @@ class ObservationBatchLedgerTest {
         useUpQuotaOn(KOREA_8_29);
 
         // when
-        ledger.markDispatching(token, KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT);
+        ledger.markDispatching(token, KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT, "a");
 
         // then
         assertThat(outcomeOf(batchId)).isEqualTo("ABANDONED_BEFORE_SEND");
@@ -383,7 +396,7 @@ class ObservationBatchLedgerTest {
         // given
         CollectionAttemptToken previous = dispatchedBatch();
         CollectionAttemptToken current = ledger.reserve(plan(), RESERVED_AT).token();
-        ledger.markDispatching(current, RESERVED_AT, REQUESTED_AT.plusSeconds(1));
+        ledger.markDispatching(current, RESERVED_AT, REQUESTED_AT.plusSeconds(1), "a");
 
         // when & then
         assertThatThrownBy(() -> ledger.conclude(previous, GbisObservationMapper.response(new NoVehicles(QUERY_TIME), RESPONSE_RECEIVED_AT)))
@@ -414,7 +427,7 @@ class ObservationBatchLedgerTest {
         CollectionAttemptToken current = ledger.reserve(plan(), KOREA_8_28_LATE_NIGHT).token();
 
         // when & then
-        assertThatThrownBy(() -> ledger.markDispatching(previous, KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT))
+        assertThatThrownBy(() -> ledger.markDispatching(previous, KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT, "a"))
             .isInstanceOf(StaleCollectionAttemptException.class);
         assertThat(quotaRowCount()).isEqualTo(1);
         assertThat(outcomeOf(current.batchId())).isEqualTo("RESERVED");
@@ -425,10 +438,10 @@ class ObservationBatchLedgerTest {
     void 자정을_넘긴_전송_기록을_다시_요청해도_호출_횟수는_늘지_않는다() {
         // given
         CollectionAttemptToken token = ledger.reserve(plan(), KOREA_8_28_LATE_NIGHT).token();
-        ledger.markDispatching(token, KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT);
+        ledger.markDispatching(token, KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT, "a");
 
         // when
-        ledger.markDispatching(token, KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT);
+        ledger.markDispatching(token, KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT, "a");
 
         // then
         assertThat(reservedCallsOn(KOREA_8_29)).isEqualTo(1);
@@ -555,7 +568,7 @@ class ObservationBatchLedgerTest {
 
     private CollectionAttemptToken dispatchedBatch() {
         CollectionAttemptToken token = ledger.reserve(plan(), RESERVED_AT).token();
-        ledger.markDispatching(token, RESERVED_AT, REQUESTED_AT);
+        ledger.markDispatching(token, RESERVED_AT, REQUESTED_AT, "a");
         return token;
     }
 
@@ -724,6 +737,15 @@ class ObservationBatchLedgerTest {
             .param(attemptKey)
             .query(Integer.class)
             .single();
+    }
+
+    private List<String> keyAliasesOn(
+        LocalDate kstDate
+    ) {
+        return jdbcClient.sql("SELECT key_alias FROM daily_call_quota WHERE api_service = ? AND kst_date = ?")
+            .params(CallQuota.BUS_LOCATION.apiService(), kstDate)
+            .query(String.class)
+            .list();
     }
 
     private int reservedCallsOn(

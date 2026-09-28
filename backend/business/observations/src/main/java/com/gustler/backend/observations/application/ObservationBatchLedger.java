@@ -7,6 +7,7 @@ import com.gustler.backend.observations.domain.ObservationBatchReservation;
 import com.gustler.backend.observations.domain.ObservationRepository;
 import com.gustler.backend.quota.api.ApiCallQuota;
 import java.time.OffsetDateTime;
+import java.util.Optional;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,20 +30,21 @@ public class ObservationBatchLedger {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ObservationBatchReservation reserve(CollectionPlan plan, OffsetDateTime reservedAt) {
         observations.lockPlan(plan);
-        if (callQuota.reserveLocation(reservedAt)) {
-            return new ObservationBatchReservation(observations.openReserved(plan), true);
+        Optional<String> keyAlias = callQuota.reserveLocation(reservedAt);
+        if (keyAlias.isPresent()) {
+            return new ObservationBatchReservation(observations.openReserved(plan), true, keyAlias.get());
         }
-        return new ObservationBatchReservation(observations.openNotReserved(plan), false);
+        return new ObservationBatchReservation(observations.openNotReserved(plan), false, null);
     }
 
     /** 한국 자정을 지났으면 새 날짜의 한도도 확보한 뒤 전송 사실을 별도로 커밋한다. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean markDispatching(CollectionAttemptToken token, OffsetDateTime reservedAt,
-                                   OffsetDateTime requestedAt) {
+                                   OffsetDateTime requestedAt, String keyAlias) {
         if (!observations.isAwaitingDispatch(token)) {
             return false;
         }
-        if (!callQuota.ensureLocationReservation(reservedAt, requestedAt)) {
+        if (!callQuota.ensureLocationReservation(keyAlias, reservedAt, requestedAt)) {
             observations.abandonBeforeSend(token);
             return false;
         }

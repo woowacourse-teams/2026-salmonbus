@@ -41,10 +41,10 @@ class GbisObservationSourceTest {
 
     @Test
     void 정상_응답을_업무_관측으로_바꾸고_저장할_수_없는_행을_구분한다() {
-        given(source.read(ROUTE_ID)).willReturn(new GbisLocationResult.Success("query time",
+        given(source.read(ROUTE_ID, "a")).willReturn(new GbisLocationResult.Success("query time",
             List.of(bus(1, "stop-1", 43), bus(null, "stop-2", 12))));
 
-        ObservationResponse result = observations.read(ROUTE_ID);
+        ObservationResponse result = observations.read(ROUTE_ID, "a");
 
         assertThat(result.conclusion().outcome()).isEqualTo(ObservationBatchOutcome.SUCCESS_ROWS);
         assertThat(result.conclusion().upstreamResultCode()).isZero();
@@ -58,9 +58,9 @@ class GbisObservationSourceTest {
 
     @Test
     void 운행_차량이_없는_응답도_행수가_영인_정상_수집으로_반환한다() {
-        given(source.read(ROUTE_ID)).willReturn(new GbisLocationResult.NoVehicles("query time"));
+        given(source.read(ROUTE_ID, "a")).willReturn(new GbisLocationResult.NoVehicles("query time"));
 
-        ObservationResponse result = observations.read(ROUTE_ID);
+        ObservationResponse result = observations.read(ROUTE_ID, "a");
 
         assertThat(result.conclusion().outcome()).isEqualTo(ObservationBatchOutcome.SUCCESS_EMPTY);
         assertThat(result.conclusion().upstreamResultCode()).isEqualTo(4);
@@ -71,9 +71,9 @@ class GbisObservationSourceTest {
     @MethodSource("failedResponses")
     void 외부_실패_유형과_원본_결과_코드를_보존한다(GbisLocationResult response,
         ObservationBatchOutcome outcome, ObservationBatchFailureCode failureCode, Integer resultCode) {
-        given(source.read(ROUTE_ID)).willReturn(response);
+        given(source.read(ROUTE_ID, "a")).willReturn(response);
 
-        ObservationResponse result = observations.read(ROUTE_ID);
+        ObservationResponse result = observations.read(ROUTE_ID, "a");
 
         assertThat(result.conclusion().outcome()).isEqualTo(outcome);
         assertThat(result.conclusion().failureCode()).isEqualTo(failureCode);
@@ -83,9 +83,9 @@ class GbisObservationSourceTest {
 
     @Test
     void 예상하지_못한_조회_예외는_응답을_확인하지_못한_결과로_반환한다() {
-        given(source.read(ROUTE_ID)).willThrow(new IllegalStateException("connection failed"));
+        given(source.read(ROUTE_ID, "a")).willThrow(new IllegalStateException("connection failed"));
 
-        ObservationResponse result = observations.read(ROUTE_ID);
+        ObservationResponse result = observations.read(ROUTE_ID, "a");
 
         assertThat(result.conclusion().outcome()).isEqualTo(ObservationBatchOutcome.UNKNOWN_AFTER_DISPATCH);
         assertThat(result.observations()).isEmpty();
@@ -94,20 +94,20 @@ class GbisObservationSourceTest {
 
     @Test
     void 정규화_오류는_응답_미수신으로_바꾸지_않고_전파한다() {
-        given(source.read(ROUTE_ID)).willReturn(new GbisLocationResult.Success("query time", null));
+        given(source.read(ROUTE_ID, "a")).willReturn(new GbisLocationResult.Success("query time", null));
 
-        assertThatThrownBy(() -> observations.read(ROUTE_ID)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> observations.read(ROUTE_ID, "a")).isInstanceOf(NullPointerException.class);
         verify(clock).instant();
     }
 
     @Test
     void 수신_시각은_외부_조회가_끝난_뒤_기록한다() {
-        given(source.read(ROUTE_ID)).willReturn(new GbisLocationResult.NoVehicles("untrusted query time"));
+        given(source.read(ROUTE_ID, "a")).willReturn(new GbisLocationResult.NoVehicles("untrusted query time"));
 
-        ObservationResponse result = observations.read(ROUTE_ID);
+        ObservationResponse result = observations.read(ROUTE_ID, "a");
 
         var order = inOrder(source, clock);
-        order.verify(source).read(ROUTE_ID);
+        order.verify(source).read(ROUTE_ID, "a");
         order.verify(clock).instant();
         order.verify(clock).getZone();
         assertThat(result.receivedAt()).isEqualTo(RECEIVED.atZone(KOREA).toOffsetDateTime());
@@ -116,8 +116,8 @@ class GbisObservationSourceTest {
     @Test
     void 원본_응답_목록이_바뀌어도_정규화한_결과는_바뀌지_않는다() {
         var rows = new ArrayList<>(List.of(bus(1, "stop-1", 43)));
-        given(source.read(ROUTE_ID)).willReturn(new GbisLocationResult.Success("query time", rows));
-        ObservationResponse result = observations.read(ROUTE_ID);
+        given(source.read(ROUTE_ID, "a")).willReturn(new GbisLocationResult.Success("query time", rows));
+        ObservationResponse result = observations.read(ROUTE_ID, "a");
 
         rows.clear();
 

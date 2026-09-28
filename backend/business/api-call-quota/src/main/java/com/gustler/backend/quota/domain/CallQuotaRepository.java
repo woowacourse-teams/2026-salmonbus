@@ -1,5 +1,8 @@
 package com.gustler.backend.quota.domain;
 
+import java.time.LocalDate;
+import java.util.Optional;
+
 public interface CallQuotaRepository {
 
     /**
@@ -9,4 +12,6 @@ public interface CallQuotaRepository {
      * 일부만 예약하지 않는다. 호출 두 번이 필요한데 한 번만 예약하면 두 번째 호출이 한도를 초과한다.
      */
     boolean reserve(DailyCallQuota.Reservation reservation);
+
+    Optional<Integer> exclude(CallQuota service, LocalDate koreanDate, String keyAlias);
 }

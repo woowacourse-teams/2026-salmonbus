@@ -6,25 +6,35 @@ import java.util.Optional;
 
 /** 외부 조회를 분류한 결과와 정규화한 관측. 실패한 조회에는 정상 응답의 행 수를 기록하지 않는다. */
 public record ObservationResponse(ObservationBatchConclusion conclusion,
-                                  Optional<CollectedObservations> observations, OffsetDateTime receivedAt) {
+                                  Optional<CollectedObservations> observations, OffsetDateTime receivedAt,
+                                  Optional<String> keyRejectionCode) {
     public ObservationResponse {
         Objects.requireNonNull(conclusion);
         Objects.requireNonNull(observations);
+        Objects.requireNonNull(keyRejectionCode);
         Objects.requireNonNull(receivedAt);
         final boolean successful = conclusion.outcome() == ObservationBatchOutcome.SUCCESS_ROWS
             || conclusion.outcome() == ObservationBatchOutcome.SUCCESS_EMPTY;
         if (successful != observations.isPresent()) {
             throw new IllegalArgumentException("정상 수집 응답에는 정규화한 관측 결과가 필요하다");
         }
+        if (successful && keyRejectionCode.isPresent()) {
+            throw new IllegalArgumentException("정상 수집 응답에는 키 거절 사유가 없다");
+        }
     }
 
     public static ObservationResponse received(ObservationBatchConclusion conclusion,
                                                 CollectedObservations observations, OffsetDateTime receivedAt) {
-        return new ObservationResponse(conclusion, Optional.of(observations), receivedAt);
+        return new ObservationResponse(conclusion, Optional.of(observations), receivedAt, Optional.empty());
     }
 
     public static ObservationResponse failed(ObservationBatchConclusion conclusion, OffsetDateTime receivedAt) {
-        return new ObservationResponse(conclusion, Optional.empty(), receivedAt);
+        return new ObservationResponse(conclusion, Optional.empty(), receivedAt, Optional.empty());
+    }
+
+    public static ObservationResponse failedByRejectedKey(ObservationBatchConclusion conclusion, OffsetDateTime receivedAt,
+                                                          String keyRejectionCode) {
+        return new ObservationResponse(conclusion, Optional.empty(), receivedAt, Optional.of(keyRejectionCode));
     }
 
     public static ObservationResponse unconfirmed(OffsetDateTime receivedAt) {

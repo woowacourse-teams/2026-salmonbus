@@ -84,7 +84,7 @@ class ObservationQualityIntegrationTest {
 
         token = ledger.reserve(new CollectionPlan(routeVersionId, SCHEDULED_AT, "quality-integration"), RESERVED_AT).token();
         batchId = token.batchId();
-        ledger.markDispatching(token, RESERVED_AT, REQUESTED_AT);
+        ledger.markDispatching(token, RESERVED_AT, REQUESTED_AT, "a");
     }
 
     @AfterEach

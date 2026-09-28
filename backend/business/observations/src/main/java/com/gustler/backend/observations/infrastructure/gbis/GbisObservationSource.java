@@ -21,10 +21,10 @@ public class GbisObservationSource implements ObservationSource {
     }
 
     @Override
-    public ObservationResponse read(String sourceRouteId) {
+    public ObservationResponse read(String sourceRouteId, String keyAlias) {
         GbisLocationResult response;
         try {
-            response = locationSource.read(sourceRouteId);
+            response = locationSource.read(sourceRouteId, keyAlias);
         } catch (RuntimeException exception) {
             log.error("외부 호출 중 예외가 발생해 응답을 확인하지 못했다. 노선={}", sourceRouteId, exception);
             return ObservationResponse.unconfirmed(now());

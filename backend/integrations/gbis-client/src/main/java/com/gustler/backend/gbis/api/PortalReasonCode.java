@@ -7,6 +7,8 @@ public enum PortalReasonCode {
 
     DAILY_QUOTA_EXCEEDED("22"),
     PER_SECOND_QUOTA_EXCEEDED("23"),
+    UNREGISTERED_KEY("30"),
+    EXPIRED_KEY("31"),
     OTHER(null);
 
     private final String code;
@@ -15,6 +17,10 @@ public enum PortalReasonCode {
         String code
     ) {
         this.code = code;
+    }
+
+    public String code() {
+        return code;
     }
 
     public static PortalReasonCode from(

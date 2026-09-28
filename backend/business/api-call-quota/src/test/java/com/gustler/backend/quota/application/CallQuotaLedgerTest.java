@@ -1,7 +1,9 @@
 package com.gustler.backend.quota.application;
 
 import com.gustler.backend.quota.api.ApiCallQuota;
+import com.gustler.backend.quota.api.CallQuotaPolicy;
 import com.gustler.backend.quota.domain.CallQuota;
+import com.gustler.backend.quota.domain.CallQuotaRepository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -9,6 +11,8 @@ import com.gustler.backend.quota.support.QuotaIntegrationTest;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -35,9 +39,14 @@ class CallQuotaLedgerTest {
     private static final int NO_SEAT_LEFT = 0;
     private static final int ALREADY_USED_UP = 3;
     private static final int TWO_CALLS = 2;
+    private static final String KEY_ALIAS_B = "b";
+    private static final int DAILY_LIMIT_10000 = 10_000;
 
     @Autowired
     private ApiCallQuota ledger;
+
+    @Autowired
+    private CallQuotaRepository callQuotaRepository;
 
     @Autowired
     private JdbcClient jdbcClient;
@@ -53,7 +62,7 @@ class CallQuotaLedgerTest {
     @Test
     void 자리가_남은_장부는_예약을_받아준다() {
         // when
-        final boolean actual = ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
+        final boolean actual = ledger.reserveLocation(KOREA_8_28_LATE_NIGHT).isPresent();
 
         // then
         assertThat(actual).isTrue();
@@ -76,7 +85,7 @@ class CallQuotaLedgerTest {
         insertQuota(CallQuota.BUS_LOCATION, KOREA_8_28, ALREADY_USED_UP, ALREADY_USED_UP);
 
         // when
-        final boolean actual = ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
+        final boolean actual = ledger.reserveLocation(KOREA_8_28_LATE_NIGHT).isPresent();
 
         // then
         assertThat(actual).isFalse();
@@ -151,7 +160,7 @@ class CallQuotaLedgerTest {
         ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
 
         // when
-        ledger.ensureLocationReservation(KOREA_8_28_LATE_NIGHT, KOREA_8_28_LATE_NIGHT);
+        ledger.ensureLocationReservation("a", KOREA_8_28_LATE_NIGHT, KOREA_8_28_LATE_NIGHT);
 
         // then
         assertThat(reservedCallsOn(KOREA_8_28, CallQuota.BUS_LOCATION)).isEqualTo(1);
@@ -163,7 +172,7 @@ class CallQuotaLedgerTest {
         ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
 
         // when
-        ledger.ensureLocationReservation(KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT);
+        ledger.ensureLocationReservation("a", KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT);
 
         // then
         assertThat(reservedCallsOn(KOREA_8_29, CallQuota.BUS_LOCATION)).isEqualTo(1);
@@ -176,7 +185,7 @@ class CallQuotaLedgerTest {
 
         // when
         final boolean actual =
-            ledger.ensureLocationReservation(KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT);
+            ledger.ensureLocationReservation("a", KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT);
 
         // then
         assertThat(actual).isFalse();
@@ -187,7 +196,7 @@ class CallQuotaLedgerTest {
         ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
 
         transactionTemplate.executeWithoutResult(status -> {
-            assertThat(ledger.ensureLocationReservation(KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT))
+            assertThat(ledger.ensureLocationReservation("a", KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT))
                 .isTrue();
             status.setRollbackOnly();
         });
@@ -305,7 +314,7 @@ class CallQuotaLedgerTest {
         CountDownLatch startTogether
     ) throws InterruptedException {
         startTogether.await();
-        return ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
+        return ledger.reserveLocation(KOREA_8_28_LATE_NIGHT).isPresent();
     }
 
     private void insertQuota(
@@ -351,6 +360,100 @@ class CallQuotaLedgerTest {
     private List<LocalDate> ledgerDates() {
         return jdbcClient.sql("SELECT kst_date FROM daily_call_quota ORDER BY kst_date")
             .query(LocalDate.class)
+            .list();
+    }
+
+    @Test
+    void 키가_둘이면_예약할_때마다_다음_키로_넘어간다() {
+        // given
+        CallQuotaLedger twoKeys = ledgerOverTwoKeys();
+
+        // when
+        List<Optional<String>> actual = List.of(
+            twoKeys.reserveLocation(KOREA_8_28_LATE_NIGHT),
+            twoKeys.reserveLocation(KOREA_8_28_LATE_NIGHT),
+            twoKeys.reserveLocation(KOREA_8_28_LATE_NIGHT));
+
+        // then
+        assertThat(actual).containsExactly(
+            Optional.of(CallQuotaPolicy.PRIMARY_KEY_ALIAS), Optional.of(KEY_ALIAS_B),
+            Optional.of(CallQuotaPolicy.PRIMARY_KEY_ALIAS));
+    }
+
+    @Test
+    void 한도가_찬_키는_건너뛰고_다음_키로_예약한다() {
+        // given
+        insertQuotaOf(CallQuotaPolicy.PRIMARY_KEY_ALIAS, KOREA_8_28, ALREADY_USED_UP, ALREADY_USED_UP);
+
+        // when
+        Optional<String> actual = ledgerOverTwoKeys().reserveLocation(KOREA_8_28_LATE_NIGHT);
+
+        // then
+        assertThat(actual).contains(KEY_ALIAS_B);
+    }
+
+    @Test
+    void 모든_키의_한도가_차면_예약하지_않는다() {
+        // given
+        insertQuotaOf(CallQuotaPolicy.PRIMARY_KEY_ALIAS, KOREA_8_28, ALREADY_USED_UP, ALREADY_USED_UP);
+        insertQuotaOf(KEY_ALIAS_B, KOREA_8_28, ALREADY_USED_UP, ALREADY_USED_UP);
+
+        // when
+        Optional<String> actual = ledgerOverTwoKeys().reserveLocation(KOREA_8_28_LATE_NIGHT);
+
+        // then
+        assertThat(actual).isEmpty();
+    }
+
+    @Test
+    void 키를_빼면_그_키의_그날_장부를_한도까지_채우고_채우기_전_사용량을_돌려준다() {
+        // given
+        insertQuotaOf(KEY_ALIAS_B, KOREA_8_28, TWO_CALLS, DAILY_LIMIT_10000);
+        insertQuotaOf(CallQuotaPolicy.PRIMARY_KEY_ALIAS, KOREA_8_29, ALREADY_USED_UP, DAILY_LIMIT_10000);
+        insertQuotaOf(KEY_ALIAS_B, KOREA_8_29, TWO_CALLS, DAILY_LIMIT_10000);
+
+        // when
+        Optional<Integer> actual = ledger.excludeLocationKey(KEY_ALIAS_B, KOREA_8_29_MIDNIGHT);
+
+        // then
+        assertThat(actual).contains(TWO_CALLS);
+        assertThat(reservedCallsByKeyOn(KOREA_8_29)).containsExactly(
+            Map.entry(CallQuotaPolicy.PRIMARY_KEY_ALIAS, ALREADY_USED_UP), Map.entry(KEY_ALIAS_B, DAILY_LIMIT_10000));
+        assertThat(reservedCallsByKeyOn(KOREA_8_28)).containsExactly(Map.entry(KEY_ALIAS_B, TWO_CALLS));
+    }
+
+    private CallQuotaLedger ledgerOverTwoKeys() {
+        return new CallQuotaLedger(
+            callQuotaRepository,
+            CallQuotaPolicy.sameForEveryApi(DAILY_LIMIT_10000, List.of(CallQuotaPolicy.PRIMARY_KEY_ALIAS, KEY_ALIAS_B)));
+    }
+
+    private void insertQuotaOf(
+        String keyAlias,
+        LocalDate kstDate,
+        final int reservedCalls,
+        final int dailyLimit
+    ) {
+        jdbcClient.sql("""
+                INSERT INTO daily_call_quota (provider, api_service, kst_date, key_alias, reserved_calls, daily_limit)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """)
+            .params(
+                CallQuota.BUS_LOCATION.provider(), CallQuota.BUS_LOCATION.apiService(),
+                kstDate, keyAlias, reservedCalls, dailyLimit)
+            .update();
+    }
+
+    private List<Map.Entry<String, Integer>> reservedCallsByKeyOn(
+        LocalDate kstDate
+    ) {
+        return jdbcClient.sql("""
+                SELECT key_alias, reserved_calls FROM daily_call_quota
+                WHERE kst_date = ?
+                ORDER BY key_alias
+                """)
+            .param(kstDate)
+            .query((rs, n) -> Map.entry(rs.getString(1), rs.getInt(2)))
             .list();
     }
 }

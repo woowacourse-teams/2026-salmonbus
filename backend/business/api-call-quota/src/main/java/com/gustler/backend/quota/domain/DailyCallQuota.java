@@ -7,23 +7,26 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * 서비스와 한국 날짜로 구분하는 호출 한도 및 예약 규칙.
+ * 서비스, 한국 날짜, 키로 구분하는 호출 한도 및 예약 규칙.
  * 신규 장부의 한도는 설정값을 사용하고, 기존 장부의 잔여 한도는 저장소가 원자적으로 판정한다.
  */
-public record DailyCallQuota(CallQuota service, LocalDate koreanDate, int dailyLimit) {
+public record DailyCallQuota(CallQuota service, LocalDate koreanDate, String keyAlias, int dailyLimit) {
 
     private static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
 
     public DailyCallQuota {
         Objects.requireNonNull(service, "호출 서비스가 필요하다");
         Objects.requireNonNull(koreanDate, "한국 날짜가 필요하다");
+        if (keyAlias == null || keyAlias.isBlank()) {
+            throw new IllegalArgumentException("키 별칭이 필요하다");
+        }
         if (dailyLimit <= 0) {
             throw new IllegalArgumentException("하루 호출 한도는 1 이상이어야 한다");
         }
     }
 
-    public static DailyCallQuota at(CallQuota service, OffsetDateTime requestedAt, int dailyLimit) {
-        return new DailyCallQuota(service, koreanDateOf(requestedAt), dailyLimit);
+    public static DailyCallQuota at(CallQuota service, String keyAlias, OffsetDateTime requestedAt, int dailyLimit) {
+        return new DailyCallQuota(service, koreanDateOf(requestedAt), keyAlias, dailyLimit);
     }
 
     /** 요청 전체가 설정 한도 안에 있을 때만 저장소에 전달할 예약을 만든다. */

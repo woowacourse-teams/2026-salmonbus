@@ -6,6 +6,9 @@ import com.gustler.backend.quota.domain.CallQuota;
 import com.gustler.backend.quota.domain.CallQuotaRepository;
 import com.gustler.backend.quota.domain.DailyCallQuota;
 import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +32,7 @@ public class CallQuotaLedger implements ApiCallQuota {
 
     private final CallQuotaRepository callQuotaRepository;
     private final CallQuotaPolicy policy;
+    private final AtomicInteger nextKeyPosition = new AtomicInteger();
 
     public CallQuotaLedger(
         CallQuotaRepository callQuotaRepository,
@@ -41,10 +45,20 @@ public class CallQuotaLedger implements ApiCallQuota {
     /** 호출 한 번을 예약한다. 위치정보는 한 batch가 호출 한 번이다. */
     @Override
     @Transactional
-    public boolean reserveLocation(
+    public Optional<String> reserveLocation(
         OffsetDateTime requestedAt
     ) {
-        return reserveCalls(CallQuota.BUS_LOCATION, requestedAt, ONE_CALL);
+        List<String> keyAliases = policy.locationKeyAliases();
+        final int start = nextKeyPosition.get();
+        for (int offset = 0; offset < keyAliases.size(); offset++) {
+            final int position = (start + offset) % keyAliases.size();
+            String keyAlias = keyAliases.get(position);
+            if (reserveCalls(CallQuota.BUS_LOCATION, keyAlias, requestedAt, ONE_CALL)) {
+                nextKeyPosition.set((position + 1) % keyAliases.size());
+                return Optional.of(keyAlias);
+            }
+        }
+        return Optional.empty();
     }
 
     /** 요청한 호출 횟수를 예약한다. 노선정보는 한 노선을 읽는 데 호출 두 번이 든다. */
@@ -54,15 +68,16 @@ public class CallQuotaLedger implements ApiCallQuota {
         OffsetDateTime requestedAt,
         final int calls
     ) {
-        return reserveCalls(CallQuota.BUS_ROUTE, requestedAt, calls);
+        return reserveCalls(CallQuota.BUS_ROUTE, CallQuotaPolicy.PRIMARY_KEY_ALIAS, requestedAt, calls);
     }
 
     private boolean reserveCalls(
         CallQuota quota,
+        String keyAlias,
         OffsetDateTime requestedAt,
         final int calls
     ) {
-        return DailyCallQuota.at(quota, requestedAt, policy.limitOf(quota))
+        return DailyCallQuota.at(quota, keyAlias, requestedAt, policy.limitOf(quota))
             .reservationFor(calls)
             .map(callQuotaRepository::reserve)
             .orElse(false);
@@ -78,13 +93,25 @@ public class CallQuotaLedger implements ApiCallQuota {
     @Override
     @Transactional
     public boolean ensureLocationReservation(
+        String keyAlias,
         OffsetDateTime reservedAt,
         OffsetDateTime dispatchAt
     ) {
-        if (DailyCallQuota.at(CallQuota.BUS_LOCATION, reservedAt, policy.limitOf(CallQuota.BUS_LOCATION))
+        if (DailyCallQuota.at(CallQuota.BUS_LOCATION, keyAlias, reservedAt, policy.limitOf(CallQuota.BUS_LOCATION))
             .covers(dispatchAt)) {
             return true;
         }
-        return reserveCalls(CallQuota.BUS_LOCATION, dispatchAt, ONE_CALL);
+        return reserveCalls(CallQuota.BUS_LOCATION, keyAlias, dispatchAt, ONE_CALL);
+    }
+
+    @Override
+    @Transactional
+    public Optional<Integer> excludeLocationKey(
+        String keyAlias,
+        OffsetDateTime requestedAt
+    ) {
+        DailyCallQuota quota = DailyCallQuota.at(
+            CallQuota.BUS_LOCATION, keyAlias, requestedAt, policy.limitOf(CallQuota.BUS_LOCATION));
+        return callQuotaRepository.exclude(quota.service(), quota.koreanDate(), quota.keyAlias());
     }
 }

@@ -8,8 +8,10 @@ import com.gustler.backend.observations.domain.RemainingSeats;
 import com.gustler.backend.observations.domain.VehicleObservation;
 import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.gbis.api.GbisResultCode;
+import com.gustler.backend.gbis.api.PortalReasonCode;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
 import java.util.List;
+import java.util.Optional;
 import java.time.OffsetDateTime;
 import com.gustler.backend.observations.domain.ObservationResponse;
 
@@ -35,7 +37,20 @@ public final class GbisObservationMapper {
         return switch (result) {
             case Success success -> ObservationResponse.received(conclusion, collect(success.buses()), receivedAt);
             case NoVehicles ignored -> ObservationResponse.received(conclusion, collect(List.of()), receivedAt);
-            default -> ObservationResponse.failed(conclusion, receivedAt);
+            default -> keyRejectionCodeOf(result)
+                .map(code -> ObservationResponse.failedByRejectedKey(conclusion, receivedAt, code))
+                .orElseGet(() -> ObservationResponse.failed(conclusion, receivedAt));
+        };
+    }
+
+    static Optional<String> keyRejectionCodeOf(GbisLocationResult result) {
+        return switch (result) {
+            case DailyQuotaExceeded ignored -> Optional.of(PortalReasonCode.DAILY_QUOTA_EXCEEDED.code());
+            case GatewayRejected rejected -> switch (PortalReasonCode.from(rejected.reasonCode())) {
+                case UNREGISTERED_KEY, EXPIRED_KEY -> Optional.of(rejected.reasonCode());
+                default -> Optional.empty();
+            };
+            default -> Optional.empty();
         };
     }
 

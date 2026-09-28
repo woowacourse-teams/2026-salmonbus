@@ -33,7 +33,7 @@ class CallQuotaLedgerPolicyTest {
 
     @Test
     void 같은_한국_날짜의_전송은_추가_예약하지_않는다() {
-        assertThat(ledger.ensureLocationReservation(REQUESTED_AT,
+        assertThat(ledger.ensureLocationReservation("a", REQUESTED_AT,
             OffsetDateTime.parse("2026-08-28T23:59:59+09:00"))).isTrue();
 
         verifyNoInteractions(repository);

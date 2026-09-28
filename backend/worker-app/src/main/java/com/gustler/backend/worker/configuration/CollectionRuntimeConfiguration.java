@@ -1,6 +1,7 @@
 package com.gustler.backend.worker.configuration;
 
 import com.gustler.backend.gbis.api.GbisClientOptions;
+import com.gustler.backend.gbis.api.GbisKey;
 import com.gustler.backend.gbis.configuration.GbisConfiguration;
 import com.gustler.backend.observations.configuration.ObservationsConfiguration;
 import com.gustler.backend.quota.api.CallQuotaPolicy;
@@ -19,11 +20,12 @@ public class CollectionRuntimeConfiguration {
 
     @Bean
     GbisClientOptions gbisClientOptions(GbisProperties properties) {
-        return new GbisClientOptions(properties.baseUrl(), properties.serviceKey());
+        return new GbisClientOptions(properties.baseUrl(), properties.keys());
     }
 
     @Bean
     CallQuotaPolicy callQuotaPolicy(GbisProperties properties) {
-        return CallQuotaPolicy.sameForEveryApi(properties.dailyLimit());
+        return CallQuotaPolicy.sameForEveryApi(properties.dailyLimit(),
+            properties.keys().stream().map(GbisKey::alias).toList());
     }
 }

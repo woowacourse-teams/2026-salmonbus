@@ -206,7 +206,7 @@ class CollectionInputConcurrencyTest {
 
     private CollectionAttemptToken successfulAttempt() {
         CollectionAttemptToken token = ledger.reserve(plan(), SCHEDULED_AT).token();
-        ledger.markDispatching(token, SCHEDULED_AT, REQUESTED_AT);
+        ledger.markDispatching(token, SCHEDULED_AT, REQUESTED_AT, "a");
         ledger.conclude(token, GbisObservationMapper.response(new NoVehicles("2026-08-19 11:14:02"), RECEIVED_AT));
         return token;
     }

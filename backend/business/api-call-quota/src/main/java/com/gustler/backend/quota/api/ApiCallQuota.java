@@ -1,6 +1,7 @@
 package com.gustler.backend.quota.api;
 
 import java.time.OffsetDateTime;
+import java.util.Optional;
 
 /**
  * 외부 API를 호출하기 전에 해당 서비스의 한국 날짜별 한도를 예약한다.
@@ -8,14 +9,16 @@ import java.time.OffsetDateTime;
  */
 public interface ApiCallQuota {
 
-    boolean reserveLocation(OffsetDateTime requestedAt);
+    Optional<String> reserveLocation(OffsetDateTime requestedAt);
 
     /**
      * 이미 예약한 위치 조회를 전송할 때 한국 날짜가 바뀌었다면 새 날짜의 한도를 예약한다.
      * 호출자는 전송 대기 상태 확인과 상태 변경을 같은 트랜잭션에서 수행해야 한다.
      * 전날 확정한 예약은 환급하지 않는다.
      */
-    boolean ensureLocationReservation(OffsetDateTime reservedAt, OffsetDateTime requestedAt);
+    boolean ensureLocationReservation(String keyAlias, OffsetDateTime reservedAt, OffsetDateTime requestedAt);
+
+    Optional<Integer> excludeLocationKey(String keyAlias, OffsetDateTime requestedAt);
 
     /** 노선 조회에 필요한 호출을 전부 예약하거나 하나도 예약하지 않는다. */
     boolean reserveRouteCatalog(OffsetDateTime requestedAt, int calls);
