@@ -1,6 +1,6 @@
 package com.gustler.backend.quota.infrastructure.jdbc;
 
-import com.gustler.backend.quota.domain.CallQuota;
+import com.gustler.backend.quota.api.CallQuota;
 import com.gustler.backend.quota.domain.CallQuotaRepository;
 import com.gustler.backend.quota.domain.DailyCallQuota;
 import java.time.LocalDate;

@@ -1,5 +1,6 @@
 package com.gustler.backend.quota.domain;
 
+import com.gustler.backend.quota.api.CallQuota;
 import java.time.LocalDate;
 import java.util.Optional;
 

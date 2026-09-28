@@ -8,7 +8,7 @@ import com.gustler.backend.observations.api.VehicleObservationsStored;
 import com.gustler.backend.observations.domain.InputAlreadyConfirmedException;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.domain.ObservationReply;
-import com.gustler.backend.quota.domain.CallQuota;
+import com.gustler.backend.quota.api.CallQuota;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

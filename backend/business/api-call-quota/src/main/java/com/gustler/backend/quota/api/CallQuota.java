@@ -1,4 +1,4 @@
-package com.gustler.backend.quota.domain;
+package com.gustler.backend.quota.api;
 
 /**
  * 호출 횟수를 예약할 API별 한도.

@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.gustler.backend.quota.domain.CallQuota;
 import java.util.EnumMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;

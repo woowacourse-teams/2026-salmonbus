@@ -1,6 +1,5 @@
 package com.gustler.backend.quota.api;
 
-import com.gustler.backend.quota.domain.CallQuota;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;

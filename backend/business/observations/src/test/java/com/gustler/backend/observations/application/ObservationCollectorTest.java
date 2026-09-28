@@ -3,7 +3,7 @@ package com.gustler.backend.observations.application;
 import com.gustler.backend.gbis.api.GbisKey;
 import com.gustler.backend.gbis.api.GbisLocationSource;
 import com.gustler.backend.observations.domain.CollectionSchedule;
-import com.gustler.backend.quota.domain.CallQuota;
+import com.gustler.backend.quota.api.CallQuota;
 import com.gustler.backend.quota.domain.CallQuotaRepository;
 import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;

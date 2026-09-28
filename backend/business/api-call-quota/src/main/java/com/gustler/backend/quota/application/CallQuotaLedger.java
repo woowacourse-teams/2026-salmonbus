@@ -2,7 +2,7 @@ package com.gustler.backend.quota.application;
 
 import com.gustler.backend.quota.api.ApiCallQuota;
 import com.gustler.backend.quota.api.CallQuotaPolicy;
-import com.gustler.backend.quota.domain.CallQuota;
+import com.gustler.backend.quota.api.CallQuota;
 import com.gustler.backend.quota.domain.CallQuotaRepository;
 import com.gustler.backend.quota.domain.DailyCallQuota;
 import java.time.OffsetDateTime;

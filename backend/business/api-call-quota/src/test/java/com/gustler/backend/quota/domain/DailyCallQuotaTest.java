@@ -1,5 +1,6 @@
 package com.gustler.backend.quota.domain;
 
+import com.gustler.backend.quota.api.CallQuota;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 

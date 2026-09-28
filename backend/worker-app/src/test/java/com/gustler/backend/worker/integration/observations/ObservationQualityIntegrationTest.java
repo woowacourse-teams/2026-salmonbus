@@ -11,7 +11,7 @@ import com.gustler.backend.observations.application.ObservationBatchLedger;
 import com.gustler.backend.observations.application.ObservationLoader;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
-import com.gustler.backend.quota.domain.CallQuota;
+import com.gustler.backend.quota.api.CallQuota;
 import com.gustler.backend.support.PostgresTestContainer;
 import com.gustler.backend.worker.WorkerApplication;
 import com.gustler.backend.worker.configuration.CollectionRuntimeConfiguration;
