@@ -34,12 +34,6 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
         LIMIT :limit
         """;
 
-    /** 도착 후보 적격 판정. 아래 두 SQL이 같은 규칙을 써야 하므로 한 곳에 둔다. */
-    private static final String ARRIVAL_MATCHES_SOURCE = """
-        arrival.quality_direction = source.quality_direction
-        AND arrival.vehicle_id IS NOT DISTINCT FROM source.vehicle_id
-        AND arrival.route_version_id = source.route_version_id""";
-
     private static final String CAN_COMPLETE = """
         SELECT EXISTS (
             SELECT 1 FROM forecast_evaluation evaluation
@@ -51,7 +45,7 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
                   SELECT 1 FROM forecast_eligible_observation arrival
                   WHERE arrival.id = :arrivalObservationId
                     AND %s)))
-        """.formatted(ARRIVAL_MATCHES_SOURCE);
+        """.formatted(EligibleObservationSql.ARRIVAL_MATCHES_SOURCE);
 
     /** 근거의 정류장 순번은 원 관측의 stop_order다. 평가 판정에 사용하는 passed_stop_order와 구분한다. */
     private static final String COMPLETE = """
@@ -91,7 +85,7 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
                   COALESCE((SELECT target_stop.boarding_allowed FROM route_stop target_stop
                       WHERE target_stop.route_version_id = forecast.route_version_id
                         AND target_stop.stop_order = forecast.target_stop_order), false) AS target_boarding_allowed
-        """.formatted(ARRIVAL_MATCHES_SOURCE);
+        """.formatted(EligibleObservationSql.ARRIVAL_MATCHES_SOURCE);
 
     private final JdbcClient jdbcClient;
 

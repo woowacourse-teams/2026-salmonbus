@@ -35,14 +35,12 @@ public class JdbcDemandSampleRepository implements DemandSampleRepository {
         SELECT page.*, EXISTS (
             SELECT 1 FROM forecast_eligible_observation source
             JOIN forecast_eligible_observation arrival ON arrival.id = page.arrival_observation_id
-              AND arrival.route_version_id = source.route_version_id
-              AND arrival.vehicle_id IS NOT DISTINCT FROM source.vehicle_id
-              AND arrival.quality_direction = source.quality_direction
+              AND %s
             WHERE source.id = page.prediction_observation_id
         ) AS usable
         FROM page
         ORDER BY page.id
-        """;
+        """.formatted(EligibleObservationSql.ARRIVAL_MATCHES_SOURCE);
 
     private final JdbcClient jdbc;
 

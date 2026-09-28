@@ -97,12 +97,10 @@ public class JdbcSameDayFullOutcomesRepository implements SameDayFullOutcomesRep
           AND EXISTS (
               SELECT 1 FROM forecast_eligible_observation source
               WHERE source.id = evaluation.vehicle_observation_id
-                AND source.route_version_id = arrival.route_version_id
-                AND source.vehicle_id IS NOT DISTINCT FROM arrival.vehicle_id
-                AND source.quality_direction = arrival.quality_direction)
+                AND %s)
         GROUP BY forecast.stops_to_target
         ORDER BY forecast.stops_to_target
-        """;
+        """.formatted(EligibleObservationSql.ARRIVAL_MATCHES_SOURCE);
 
     private final JdbcClient jdbcClient;
     private final RouteDataQualityAccess qualityAccess;

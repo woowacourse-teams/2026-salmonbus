@@ -33,6 +33,8 @@ import java.util.UUID;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -600,6 +602,52 @@ class DemandStatisticsPipelineTest {
             assertThat(cell.averageNetBoardingRate()).isCloseTo(reference.averageNetBoardingRate(), Offset.offset(1e-12));
         }
         assertThat(actual.cells().getFirst().averageFillRate()).isCloseTo(0.7375, Offset.offset(1e-12));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"distant", "non_boarding", "missing_seats"})
+    void 통계_입력_조건을_벗어난_정산은_정정_재계산에도_넣지_않는다(String excludedReason) {
+        givenStatisticsSample();
+        settleOutsideStatisticsInput(excludedReason);
+        accumulator.apply(routeVersionId, VEHICLE_204000206, 0, Long.MAX_VALUE, PIPELINE_NOW);
+        var accumulated = currentTotals();
+
+        rebuildRequests.request(routeVersionId, RebuildScope.wholeRoute());
+        finishRebuild("");
+
+        assertThat(currentTotals()).isEqualTo(accumulated);
+        assertRebuiltSamples(1);
+    }
+
+    private void settleOutsideStatisticsInput(String excludedReason) {
+        int passed = excludedReason.equals("non_boarding") ? TARGET_STOP_ORDER : PASSED_STOP_ORDER;
+        int target = excludedReason.equals("missing_seats") ? TARGET_STOP_ORDER : NEXT_TARGET_STOP_ORDER;
+        long source = insertObservation(insertObservationBatch(excludedReason + "-source",
+            RESPONSE_RECEIVED_AT.plusSeconds(1)), VEHICLE_204000206, 0, passed);
+        long arrival = insertObservation(insertObservationBatch(excludedReason + "-arrival",
+            ARRIVAL_RESPONSE_RECEIVED_AT.plusSeconds(60)), VEHICLE_204000206, 0, target);
+        saveForecasts(List.of(new SeatForecast(source, routeVersionId, target, target - passed,
+            modelDeploymentId, DEMAND_STATISTICS_REVISION, 0.41, 0.38, 12.5, GENERATED_AT)));
+        if (excludedReason.equals("non_boarding")) {
+            jdbcClient.sql("UPDATE route_stop SET boarding_allowed=false WHERE route_version_id=? AND stop_order=?")
+                .params(routeVersionId, target).update();
+        }
+        if (excludedReason.equals("missing_seats")) {
+            jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats=NULL, seat_unknown_reason='NOT_REPORTED' WHERE id=?")
+                .param(source).update();
+        }
+        evaluationWriter.complete(List.of(ForecastEvaluation.completed(source, target,
+            new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
+    }
+
+    private List<List<Object>> currentTotals() {
+        return jdbcClient.sql("""
+            SELECT vehicle_id, arrived_hour_start, target_stop_order, sample_count, arrival_seats_sum, net_boarding_sum
+            FROM stop_demand_current_total WHERE route_version_id=?
+            ORDER BY vehicle_id, arrived_hour_start, target_stop_order
+            """).param(routeVersionId).query((rs, n) -> List.<Object>of(rs.getString(1),
+                rs.getObject(2, OffsetDateTime.class).toInstant(), rs.getInt(3), rs.getLong(4), rs.getLong(5),
+                rs.getLong(6))).list();
     }
 
     private void assertRebuiltSamples(long expected) {

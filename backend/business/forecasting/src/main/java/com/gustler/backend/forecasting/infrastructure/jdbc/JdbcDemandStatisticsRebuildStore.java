@@ -55,9 +55,7 @@ public class JdbcDemandStatisticsRebuildStore implements DemandStatisticsRebuild
             JOIN forecast_evaluation evaluation ON evaluation.vehicle_observation_id=forecast.vehicle_observation_id
               AND evaluation.target_stop_order=forecast.target_stop_order
             JOIN forecast_eligible_observation arrival ON arrival.id=evaluation.arrival_observation_id
-              AND arrival.route_version_id=source.route_version_id
-              AND arrival.vehicle_id IS NOT DISTINCT FROM source.vehicle_id
-              AND arrival.quality_direction=source.quality_direction
+              AND %s
             JOIN route_stop stop ON stop.route_version_id=forecast.route_version_id AND stop.stop_order=forecast.target_stop_order
             WHERE source.route_version_id=:version AND (:vehicle='' OR source.vehicle_id=:vehicle)
               AND source.vehicle_id IS NOT NULL AND source.remaining_seats IS NOT NULL
@@ -73,7 +71,7 @@ public class JdbcDemandStatisticsRebuildStore implements DemandStatisticsRebuild
                 net_boarding_sum=total.net_boarding_sum+EXCLUDED.net_boarding_sum
             RETURNING 1
         ) SELECT count(*) FROM added
-        """;
+        """.formatted(EligibleObservationSql.ARRIVAL_MATCHES_SOURCE);
 
     private static final String COPY = """
         WITH page AS MATERIALIZED (
