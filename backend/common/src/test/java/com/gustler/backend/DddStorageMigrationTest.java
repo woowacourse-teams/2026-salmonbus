@@ -63,6 +63,15 @@ class DddStorageMigrationTest {
     }
 
     @Test
+    void 예보_표의_vacuum_시작_기준은_최종_구조에도_남는다() throws SQLException {
+        migrate("26");
+
+        assertThat(scalar("SELECT array_to_string(reloptions, ',') FROM pg_class WHERE oid = 'seat_forecast'::regclass"))
+            .isEqualTo("autovacuum_vacuum_scale_factor=0.01,autovacuum_vacuum_threshold=50,"
+                + "autovacuum_vacuum_max_threshold=10000");
+    }
+
+    @Test
     void 검증_이후_통계_누적_자료가_바뀌어도_검증_완료를_취소한다() throws SQLException {
         migrate("24");
         insertRoute();
