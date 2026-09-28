@@ -206,6 +206,35 @@ class DemandStatisticsPipelineTest {
     }
 
     @Test
+    void 빈_차량_ID의_대기_자료가_있어도_누적을_마친다() {
+        givenStatisticsSample();
+        finishPipeline();
+        when(clock.instant()).thenReturn(PIPELINE_NOW.plusSeconds(21600));
+        addLateSample("blank-vehicle", 1);
+        jdbcClient.sql("UPDATE stop_demand_pending_sample SET vehicle_id='' WHERE route_version_id=?")
+            .param(routeVersionId).update();
+
+        finishPipeline();
+
+        assertThat(jdbcClient.sql("SELECT count(*) FROM stop_demand_pending_sample WHERE route_version_id=?")
+            .param(routeVersionId).query(Integer.class).single()).isZero();
+    }
+
+    @Test
+    void 빈_차량_ID의_대기_자료가_정정을_요구하면_노선_전체_정정을_요청한다() {
+        givenStatisticsSample();
+        jdbcClient.sql("UPDATE stop_demand_pending_sample SET vehicle_id='' WHERE route_version_id=?")
+            .param(routeVersionId).update();
+        jdbcClient.sql("UPDATE vehicle_one_way_trip SET status='EXCLUDED' WHERE start_observation_id=?")
+            .param(vehicleObservationId).update();
+
+        var result = accumulator.apply(routeVersionId, "", 0, Long.MAX_VALUE, SCORED_AT);
+
+        assertThat(result.waitingForRebuild()).isTrue();
+        assertThat(rebuildRequest("")).isNotNull();
+    }
+
+    @Test
     void 고정한_입력_범위나_기준시각_밖의_자료는_다음_처리를_위해_남긴다() {
         givenStatisticsSample();
         long id = jdbcClient.sql("SELECT id FROM stop_demand_pending_sample WHERE prediction_observation_id=?")

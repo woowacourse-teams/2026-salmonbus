@@ -40,7 +40,7 @@ public class DemandAccumulator {
         final DemandSamplePage page = samples.lockPage(routeVersionId, vehicleId, afterInputId, inputUntilId,
             DemandStatisticsRun.PAGE_SIZE);
         if (page.requiresRebuild()) {
-            requests.request(routeVersionId, RebuildScope.vehicle(vehicleId));
+            requests.request(routeVersionId, new RebuildScope(vehicleId));
             return new Result(page.size(), 0, true, page.nextInputId(afterInputId));
         }
         final List<PendingSample> applicable = page.applicableUntil(dataUntil);
