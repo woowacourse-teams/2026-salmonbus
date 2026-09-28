@@ -1,7 +1,7 @@
 import type { EventMap } from "@/shared/analytics/events";
 import type { Board, Direction } from "@/shared/api/routeForecast.types";
-import { stopViewsFor } from "./displayPolicy";
-import type { SeatLevel } from "./seatGrade";
+import { stopViewsFor } from "../displayPolicy";
+import type { SeatLevel } from "../seatGrade";
 
 interface BoardViewTiming {
   now: number;
