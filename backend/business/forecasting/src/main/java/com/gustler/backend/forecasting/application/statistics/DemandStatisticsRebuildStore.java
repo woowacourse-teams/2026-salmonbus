@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface DemandRebuildStore {
+public interface DemandStatisticsRebuildStore {
 
     record BatchPosition(Instant at, long id) {
     }

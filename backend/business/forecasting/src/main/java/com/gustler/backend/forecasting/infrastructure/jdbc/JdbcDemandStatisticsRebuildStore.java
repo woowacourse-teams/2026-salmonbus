@@ -1,6 +1,6 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
-import com.gustler.backend.forecasting.application.statistics.DemandRebuildStore;
+import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuildStore;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuild;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuild.ScanWindow;
 import com.gustler.backend.forecasting.domain.statistics.RebuildScope;
@@ -14,7 +14,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public class JdbcDemandRebuildStore implements DemandRebuildStore {
+public class JdbcDemandStatisticsRebuildStore implements DemandStatisticsRebuildStore {
 
     private static final String GROUP_END = """
         SELECT id,response_received_at FROM (
@@ -104,7 +104,7 @@ public class JdbcDemandRebuildStore implements DemandRebuildStore {
 
     private final JdbcClient jdbc;
 
-    public JdbcDemandRebuildStore(final JdbcClient jdbc) {
+    public JdbcDemandStatisticsRebuildStore(final JdbcClient jdbc) {
         this.jdbc = jdbc;
     }
 
@@ -136,7 +136,7 @@ public class JdbcDemandRebuildStore implements DemandRebuildStore {
     public Optional<BatchPosition> nextGroupEnd(final long routeVersionId, final ScanWindow window,
         final int groupSize) {
         return jdbc.sql(GROUP_END).param("version", routeVersionId).param("upper", window.batchUntilId())
-            .param("afterAt", window.after().map(JdbcDemandRebuildStore::offsetOf).orElse(null))
+            .param("afterAt", window.after().map(JdbcDemandStatisticsRebuildStore::offsetOf).orElse(null))
             .param("afterId", window.afterBatchId()).param("groupSize", groupSize)
             .query((rs, row) -> new BatchPosition(rs.getObject("response_received_at", OffsetDateTime.class).toInstant(),
                 rs.getLong("id")))
@@ -148,7 +148,7 @@ public class JdbcDemandRebuildStore implements DemandRebuildStore {
         final RebuildScope scope, final long afterObservationId, final long observationUntilId, final int groupSize,
         final int limit) {
         return jdbc.sql(GROUP_OBSERVATIONS).param("version", routeVersionId).param("batchUpper", window.batchUntilId())
-            .param("afterAt", window.after().map(JdbcDemandRebuildStore::offsetOf).orElse(null))
+            .param("afterAt", window.after().map(JdbcDemandStatisticsRebuildStore::offsetOf).orElse(null))
             .param("afterId", window.afterBatchId())
             .param("endAt", offsetOf(window.groupEndAt())).param("endId", window.groupEndId())
             .param("groupSize", groupSize).param("vehicle", scope.vehicleId()).param("cursor", afterObservationId)

@@ -1,7 +1,5 @@
 package com.gustler.backend.forecasting.application.statistics;
 
-import com.gustler.backend.forecasting.api.statistics.RefreshDemandStatistics;
-
 import com.gustler.backend.forecasting.domain.publication.RouteVersionRepository;
 
 import java.time.Clock;
@@ -16,7 +14,7 @@ import org.springframework.stereotype.Component;
 /** 활성 노선의 통계를 갱신한다. 각 노선의 계산과 저장은 별도 트랜잭션으로 처리한다. */
 @Component
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
-public class RefreshDemandStatisticsService implements RefreshDemandStatistics {
+public class RefreshDemandStatisticsService {
 
     private static final Logger log = LoggerFactory.getLogger(RefreshDemandStatisticsService.class);
 

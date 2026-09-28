@@ -2,7 +2,8 @@ package com.gustler.backend.forecasting.application.statistics;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.api.statistics.AdvanceDemandStatistics;
-import com.gustler.backend.forecasting.application.statistics.StatisticsStep.Status;
+import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline.Step;
+import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline.Step.Status;
 import com.gustler.backend.forecasting.domain.publication.RouteVersionRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -59,7 +60,7 @@ public class AdvanceDemandStatisticsService implements AdvanceDemandStatistics {
             final long started = System.nanoTime();
             try {
                 // 프록시가 commit한 뒤만 성공/진행을 기록한다.
-                final StatisticsStep result = WorkerOperationLog.measure("statistics_step_and_commit", version,
+                final Step result = WorkerOperationLog.measure("statistics_step_and_commit", version,
                     () -> pipeline.step(version));
                 failures.remove(version);
                 retryAt.put(version, now.plusSeconds(retryDelaySeconds(result.status())));

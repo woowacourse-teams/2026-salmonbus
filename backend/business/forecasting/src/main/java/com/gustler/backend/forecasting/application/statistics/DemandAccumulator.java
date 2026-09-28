@@ -29,19 +29,19 @@ public class DemandAccumulator {
     }
 
     @Transactional(timeout = 2)
-    public AccumulationResult apply(final long routeVersionId, final String vehicleId, final long afterInputId,
+    public Result apply(final long routeVersionId, final String vehicleId, final long afterInputId,
         final long inputUntilId, final Instant dataUntil) {
         store.limitStatementTime();
         quality.lock(routeVersionId);
         if (store.qualityRebuildPending(routeVersionId, RebuildScope.vehicle(vehicleId))
             || requests.blocksAccumulation(routeVersionId, vehicleId)) {
-            return AccumulationResult.waiting(afterInputId);
+            return Result.waiting(afterInputId);
         }
         final DemandSamplePage page = samples.lockPage(routeVersionId, vehicleId, afterInputId, inputUntilId,
             DemandStatisticsRun.PAGE_SIZE);
         if (page.requiresRebuild()) {
             requests.request(routeVersionId, RebuildScope.vehicle(vehicleId));
-            return new AccumulationResult(page.size(), 0, true, page.nextInputId(afterInputId));
+            return new Result(page.size(), 0, true, page.nextInputId(afterInputId));
         }
         final List<PendingSample> applicable = page.applicableUntil(dataUntil);
         if (!applicable.isEmpty()) {
@@ -49,6 +49,13 @@ public class DemandAccumulator {
             store.registerVehicle(routeVersionId, vehicleId);
             samples.remove(applicable.stream().map(PendingSample::id).toList());
         }
-        return new AccumulationResult(page.size(), applicable.size(), false, page.nextInputId(afterInputId));
+        return new Result(page.size(), applicable.size(), false, page.nextInputId(afterInputId));
+    }
+
+    public record Result(int selected, int applied, boolean waitingForRebuild, long nextInputId) {
+
+        static Result waiting(final long afterInputId) {
+            return new Result(0, 0, true, afterInputId);
+        }
     }
 }

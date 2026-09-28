@@ -3,7 +3,8 @@ package com.gustler.backend.forecasting.application.statistics;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
-import com.gustler.backend.forecasting.application.statistics.StatisticsStep.Status;
+import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline.Step;
+import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline.Step.Status;
 import com.gustler.backend.forecasting.domain.publication.RouteVersionRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -19,7 +20,7 @@ class AdvanceDemandStatisticsServiceTest {
         var now=Instant.parse("2026-09-25T00:00:00Z");
         var service=new AdvanceDemandStatisticsService(pipeline,routes,Clock.fixed(now,ZoneId.of("Asia/Seoul")));
         when(routes.findActiveVersionIds()).thenReturn(List.of(2L,1L));
-        when(pipeline.step(anyLong())).thenReturn(new StatisticsStep(Status.PROGRESSED,"FOLD",now));
+        when(pipeline.step(anyLong())).thenReturn(new Step(Status.PROGRESSED,"FOLD",now));
 
         service.advance();
         verify(pipeline).step(1L);
@@ -37,7 +38,7 @@ class AdvanceDemandStatisticsServiceTest {
         when(routes.findActiveVersionIds()).thenReturn(List.of(1L,2L));
         var failure=new IllegalStateException("synthetic failure");
         when(pipeline.step(1L)).thenThrow(failure);
-        when(pipeline.step(2L)).thenReturn(new StatisticsStep(Status.PROGRESSED,"FOLD",now));
+        when(pipeline.step(2L)).thenReturn(new Step(Status.PROGRESSED,"FOLD",now));
 
         assertThatThrownBy(service::advance).isSameAs(failure);
         service.advance();

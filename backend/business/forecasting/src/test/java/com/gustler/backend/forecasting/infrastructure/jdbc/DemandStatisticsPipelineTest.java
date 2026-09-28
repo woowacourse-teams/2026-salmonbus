@@ -7,12 +7,11 @@ import static org.mockito.Mockito.when;
 import com.gustler.backend.forecasting.application.evaluation.ForecastEvaluationWriter;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.application.statistics.DemandAccumulator;
-import com.gustler.backend.forecasting.application.statistics.DemandRebuildStore;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuildRequests;
+import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuildStore;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuilder;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsStore;
-import com.gustler.backend.forecasting.application.statistics.StatisticsStep;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
@@ -90,7 +89,7 @@ class DemandStatisticsPipelineTest {
     private DemandStatisticsRebuildRepository rebuilds;
 
     @Autowired
-    private DemandRebuildStore rebuildStore;
+    private DemandStatisticsRebuildStore rebuildStore;
 
     @Autowired
     private DemandStatisticsStore statisticsStore;
@@ -481,7 +480,7 @@ class DemandStatisticsPipelineTest {
         when(clock.instant()).thenReturn(PIPELINE_NOW.plusSeconds(21600));
         addLateSample("before-capture", 1);
         for (int i = 0; i < 100; i++) {
-            if (pipeline.step(routeVersionId).status() == StatisticsStep.Status.STARTED) {
+            if (pipeline.step(routeVersionId).status() == DemandStatisticsPipeline.Step.Status.STARTED) {
                 break;
             }
             if (i == 99) {
@@ -527,7 +526,7 @@ class DemandStatisticsPipelineTest {
         assertThat(jdbcClient.sql("SELECT count(*) FROM demand_statistics_version WHERE route_version_id=?")
             .param(routeVersionId).query(Integer.class).single()).isZero();
         jdbcClient.sql("ALTER TABLE stop_demand_run DROP CONSTRAINT test_reject_completion").update();
-        assertThat(pipeline.step(routeVersionId).status()).isEqualTo(StatisticsStep.Status.COMPLETED);
+        assertThat(pipeline.step(routeVersionId).status()).isEqualTo(DemandStatisticsPipeline.Step.Status.COMPLETED);
     }
 
     @Test
@@ -610,7 +609,7 @@ class DemandStatisticsPipelineTest {
 
     private void finishPipeline() {
         for (int i = 0; i < 200; i++) {
-            if (pipeline.step(routeVersionId).status() == StatisticsStep.Status.COMPLETED) {
+            if (pipeline.step(routeVersionId).status() == DemandStatisticsPipeline.Step.Status.COMPLETED) {
                 return;
             }
         }

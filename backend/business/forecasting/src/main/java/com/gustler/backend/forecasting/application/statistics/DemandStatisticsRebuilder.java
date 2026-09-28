@@ -2,8 +2,8 @@ package com.gustler.backend.forecasting.application.statistics;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
-import com.gustler.backend.forecasting.application.statistics.DemandRebuildStore.BatchPosition;
-import com.gustler.backend.forecasting.application.statistics.DemandRebuildStore.Page;
+import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuildStore.BatchPosition;
+import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuildStore.Page;
 import com.gustler.backend.forecasting.domain.statistics.DemandSampleRepository;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuild;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuildRepository;
@@ -25,14 +25,14 @@ public class DemandStatisticsRebuilder {
 
     private final DemandStatisticsRebuildRepository rebuilds;
     private final DemandStatisticsRebuildRequests requests;
-    private final DemandRebuildStore rebuildStore;
+    private final DemandStatisticsRebuildStore rebuildStore;
     private final DemandStatisticsStore store;
     private final DemandSampleRepository samples;
     private final RouteDataQualityAccess quality;
     private final Clock clock;
 
     public DemandStatisticsRebuilder(final DemandStatisticsRebuildRepository rebuilds,
-        final DemandStatisticsRebuildRequests requests, final DemandRebuildStore rebuildStore,
+        final DemandStatisticsRebuildRequests requests, final DemandStatisticsRebuildStore rebuildStore,
         final DemandStatisticsStore store, final DemandSampleRepository samples, final RouteDataQualityAccess quality,
         final Clock clock) {
         this.rebuilds = rebuilds;

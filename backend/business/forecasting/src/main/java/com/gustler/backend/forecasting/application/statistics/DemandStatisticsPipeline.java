@@ -4,7 +4,7 @@ import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.api.statistics.DemandStatisticsPolicy;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsStore.FoldRow;
-import com.gustler.backend.forecasting.application.statistics.StatisticsStep.Status;
+import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline.Step.Status;
 import com.gustler.backend.forecasting.domain.statistics.DailyStopDemand;
 import com.gustler.backend.forecasting.domain.statistics.DemandSampleRepository;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsBaseline;
@@ -63,7 +63,7 @@ public class DemandStatisticsPipeline {
     }
 
     @Transactional(timeout = 2)
-    public StatisticsStep step(final long routeVersionId) {
+    public Step step(final long routeVersionId) {
         store.limitStatementTime();
         final long currentRevision = WorkerOperationLog.measure("statistics_route_lock", routeVersionId,
             () -> quality.lock(routeVersionId));
@@ -79,12 +79,12 @@ public class DemandStatisticsPipeline {
             });
             final boolean advanced = WorkerOperationLog.measure("statistics_rebuild", routeVersionId,
                 () -> rebuilder.step(routeVersionId, request.get().vehicleId()));
-            return new StatisticsStep(advanced ? Status.PROGRESSED : Status.WAITING, REBUILD, null);
+            return new Step(advanced ? Status.PROGRESSED : Status.WAITING, REBUILD, null);
         }
         final Optional<DemandStatisticsRun> found = runs.find(routeVersionId);
         final Instant now = clock.instant();
         if (found.isPresent() && found.get().isUpToDate(currentRevision, now, policy.refreshInterval())) {
-            return new StatisticsStep(Status.IDLE, "DONE", found.get().dataUntil());
+            return new Step(Status.IDLE, "DONE", found.get().dataUntil());
         }
         if (found.isEmpty() || found.get().requiresRestart(currentRevision)) {
             final DemandStatisticsRun run = found.orElseGet(
@@ -93,7 +93,7 @@ public class DemandStatisticsPipeline {
                 run.restart(UUID.randomUUID(), currentRevision, now);
             }
             runs.save(run);
-            return new StatisticsStep(Status.PROGRESSED, "CLEAN", now);
+            return new Step(Status.PROGRESSED, "CLEAN", now);
         }
         final DemandStatisticsRun run = found.get();
         final String phase = run.phase().name();
@@ -109,11 +109,11 @@ public class DemandStatisticsPipeline {
                 case REDUCE -> reduce(run);
                 case PUBLISH -> {
                     publish(run);
-                    return new StatisticsStep(Status.COMPLETED, "DONE", dataUntil);
+                    return new Step(Status.COMPLETED, "DONE", dataUntil);
                 }
                 default -> throw new IllegalStateException("알 수 없는 통계 단계: " + run.phase());
             }
-            return new StatisticsStep(Status.PROGRESSED, phase, dataUntil);
+            return new Step(Status.PROGRESSED, phase, dataUntil);
         });
     }
 
@@ -125,12 +125,12 @@ public class DemandStatisticsPipeline {
         runs.save(run);
     }
 
-    private StatisticsStep capture(final DemandStatisticsRun run) {
+    private Step capture(final DemandStatisticsRun run) {
         final Instant fixed = store.baseline(run.routeVersionId()).fixUntil(run.captureUntil(clock.instant()));
         run.captured(fixed, samples.lastSampleId());
         store.stageCapacities(run.routeVersionId(), run.dataUntil(), run.inputUntilId());
         runs.save(run);
-        return new StatisticsStep(Status.STARTED, "ACCUMULATE", fixed);
+        return new Step(Status.STARTED, "ACCUMULATE", fixed);
     }
 
     private void accumulate(final DemandStatisticsRun run) {
@@ -141,7 +141,7 @@ public class DemandStatisticsPipeline {
             runs.save(run);
             return;
         }
-        final AccumulationResult result = accumulator.apply(run.routeVersionId(), vehicle.get(),
+        final DemandAccumulator.Result result = accumulator.apply(run.routeVersionId(), vehicle.get(),
             run.accumulationStartAfter(vehicle.get()), run.inputUntilId(), run.dataUntil());
         if (result.waitingForRebuild()) {
             return;
@@ -186,5 +186,10 @@ public class DemandStatisticsPipeline {
             store.stagedCells(run.routeVersionId()).stream().map(StopDemandCellTotals::toMeasurement).toList()));
         run.published(computedAt);
         runs.save(run);
+    }
+
+    public record Step(Status status, String phase, Instant dataUntil) {
+
+        public enum Status { IDLE, WAITING, PROGRESSED, STARTED, COMPLETED }
     }
 }

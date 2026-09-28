@@ -3,9 +3,9 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 import com.gustler.backend.forecasting.application.evaluation.QueryTimeLimits;
 import java.time.Duration;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Repository;
 
-@Component
+@Repository
 public class JdbcQueryTimeLimits implements QueryTimeLimits {
 
     private final JdbcClient jdbc;
