@@ -1,7 +1,7 @@
 import type { EventMap } from "@/shared/analytics/events";
 import type { Board, Direction } from "@/shared/api/routeForecast.types";
+import type { ArrivalTone } from "../arrivalPolicy";
 import { stopViewsFor } from "../displayPolicy";
-import type { SeatLevel } from "../seatGrade";
 
 interface BoardViewTiming {
   now: number;
@@ -14,10 +14,11 @@ export function boardViewedPropertiesOf(
   { now, loadMs }: BoardViewTiming,
 ): EventMap["board_viewed"] {
   const stops = stopViewsFor(board, direction);
-  const forecastStops = stops.filter((stop) => stop.kind === "boarding");
-  const levelCounts: Record<SeatLevel, number> = { high: 0, low: 0, veryLow: 0 };
-  for (const stop of forecastStops) {
-    levelCounts[stop.level] += 1;
+  const toneCounts: Record<ArrivalTone, number> = { high: 0, low: 0, veryLow: 0, unavailable: 0 };
+  for (const stop of stops) {
+    if (stop.kind === "boarding") {
+      toneCounts[stop.tone] += 1;
+    }
   }
 
   return {
@@ -27,10 +28,11 @@ export function boardViewedPropertiesOf(
     forecast_age_sec: Math.round((now - Date.parse(board.observedAt)) / 1000),
     vehicles_in_service: board.vehiclesInService,
     boarding_stop_count: stops.filter((stop) => stop.kind !== "passThrough").length,
-    forecast_stop_count: forecastStops.length,
-    high_count: levelCounts.high,
-    low_count: levelCounts.low,
-    very_low_count: levelCounts.veryLow,
+    forecast_stop_count: toneCounts.high + toneCounts.low + toneCounts.veryLow,
+    high_count: toneCounts.high,
+    low_count: toneCounts.low,
+    very_low_count: toneCounts.veryLow,
+    unavailable_count: toneCounts.unavailable,
     load_ms: Math.round(loadMs),
   };
 }

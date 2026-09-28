@@ -28,6 +28,7 @@ export interface EventMap {
     high_count: number;
     low_count: number;
     very_low_count: number;
+    unavailable_count: number;
     load_ms: number;
   };
 
