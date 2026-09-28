@@ -18,13 +18,13 @@ public record StagedModelDeployment(
 
     public StagedModelDeployment {
         if (deploymentKey == null) {
-            throw new IllegalArgumentException("배포 요청마다 식별 키가 필요합니다");
+            throw new IllegalArgumentException("적재마다 다른 키가 있어야 한다");
         }
         if (bundleDigest == null || bundleDigest.length() != 64) {
-            throw new IllegalArgumentException("계수 파일의 SHA-256 값은 64자리여야 합니다: " + bundleDigest);
+            throw new IllegalArgumentException("계수 묶음 요약값은 64자리다: " + bundleDigest);
         }
         if (dataUntil == null) {
-            throw new IllegalArgumentException("학습 자료의 기준 시각이 필요합니다");
+            throw new IllegalArgumentException("학습 자료가 어디까지인지 있어야 한다");
         }
     }
 }

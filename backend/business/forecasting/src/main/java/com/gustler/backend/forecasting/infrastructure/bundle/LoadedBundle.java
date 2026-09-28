@@ -4,12 +4,8 @@ import com.gustler.backend.forecasting.domain.model.SeatDistributionInput;
 import com.gustler.backend.forecasting.domain.model.SeatDistributionPredictor;
 import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
 
-import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
 import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
-import java.time.Instant;
-import com.gustler.backend.forecasting.domain.deployment.ModelIdentity;
 import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
-import com.gustler.backend.forecasting.domain.model.SeatDistributionForecastModel;
 
 /** 파일 구조와 대조 계산을 검증한 모델 계수다. */
 public record LoadedBundle(
@@ -66,17 +62,10 @@ public record LoadedBundle(
             "%s 가 다르다. 계수 파일 %s, 우리 계산 %s".formatted(name, expected, actual));
     }
 
-    /** DB 배포와 준비된 모델의 모든 식별 정보를 비교한다. */
-
-    public ModelIdentity identity() {
-        BundleManifest manifest = coefficients.manifest();
-        return new ModelIdentity(manifest.releaseId(), "seat-distribution-a18", manifest.modelVersion(),
-            manifest.identityDigest(), "seat-distribution-0-70", manifest.featureContractVersion(),
-            scope().digest(), Instant.parse(manifest.dataThrough()));
-    }
-
     public ModelRelease release() {
-        return new ModelRelease(identity(), scope(), new SeatDistributionForecastModel(predictor));
+        BundleManifest manifest = coefficients.manifest();
+        return new ModelRelease(manifest.releaseId(), manifest.modelVersion(), manifest.identityDigest(),
+            manifest.featureContractVersion(), manifest.dataThrough(), scope(), predictor);
     }
 
     public String releaseId() {

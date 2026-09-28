@@ -16,10 +16,10 @@ public record RuntimeSnapshot(
 
     public RuntimeSnapshot {
         if (deployment == null) {
-            throw new IllegalArgumentException("활성 배포가 필요합니다");
+            throw new IllegalArgumentException("도는 배포가 있어야 한다");
         }
         if (model == null) {
-            throw new IllegalArgumentException("좌석 분포를 계산할 모델이 필요합니다");
+            throw new IllegalArgumentException("배포에는 좌석 분포를 낼 모델이 있어야 한다");
         }
     }
 

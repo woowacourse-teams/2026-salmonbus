@@ -48,7 +48,6 @@ class DddStorageMigrationTest {
             + "'route_data_quality','route_version_quality_policy','observation_trip_assignment')")).isEqualTo(6);
         assertThat(number("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = '" + schema
             + "' AND table_name = 'seat_forecast' AND column_name = 'scoring_state'")).isZero();
-        assertThat(number("SELECT COUNT(*) FROM model_active_slot WHERE model_deployment_id IS NULL AND version = 0")).isOne();
     }
 
     @Test
@@ -233,8 +232,7 @@ class DddStorageMigrationTest {
                 arrival_observation_id,seats_on_arrival,scored_at,arrived_at,arrival_route_version_id,arrival_vehicle_id,
                 arrival_stop_order,arrival_running_state,arrival_remaining_seats,arrival_vehicle_trip_key,arrival_quality_direction)
             VALUES(1,2,1,'SETTLED',2,9,'2026-09-01T00:01:30Z','2026-09-01T00:01:00Z',1,'bus1',2,2,9,'legacy-unassigned',0);
-            UPDATE observation_batch SET input_confirmed_at = COALESCE(forecast_completed_at,'2026-09-01T00:01:30Z');
-            UPDATE model_active_slot SET model_deployment_id=1,version=1 WHERE id=1
+            UPDATE observation_batch SET input_confirmed_at = COALESCE(forecast_completed_at,'2026-09-01T00:01:30Z')
             """);
     }
 

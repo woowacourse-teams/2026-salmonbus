@@ -12,7 +12,7 @@ BEGIN
         'seat_forecast','stop_demand_statistics','same_day_full_outcomes','model_deployment',
         'vehicle_one_way_trip','trip_quality_rebuild','forecast_publication','forecast_evaluation',
         'demand_statistics_version','route_data_quality','route_version_quality_policy','observation_trip_assignment',
-        'model_active_slot','model_activation_request','model_training_exclusion','statistics_training_exclusion',
+        'model_training_exclusion','statistics_training_exclusion',
         'training_model_release_exclusion','training_statistics_generation_exclusion',
         'historical_import_batch','historical_import_dataset_seal','historical_import_route_boundary',
         'historical_import_route_binding','historical_import_shard','historical_import_record','migration_source_record',
@@ -25,12 +25,7 @@ BEGIN
     ] LOOP
         IF to_regclass(format('%I.%I', current_schema(), table_name)) IS NOT NULL THEN
             EXECUTE format('LOCK TABLE %I IN ACCESS EXCLUSIVE MODE', table_name);
-            -- V25가 만든 비어 있는 활성 슬롯은 새 DB에도 존재한다.
-            IF table_name = 'model_active_slot' THEN
-                SELECT EXISTS(SELECT 1 FROM model_active_slot WHERE model_deployment_id IS NOT NULL OR version <> 0) INTO has_rows;
-            ELSE
-                EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I)', table_name) INTO has_rows;
-            END IF;
+            EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I)', table_name) INTO has_rows;
             source_empty := source_empty AND NOT has_rows;
         END IF;
     END LOOP;

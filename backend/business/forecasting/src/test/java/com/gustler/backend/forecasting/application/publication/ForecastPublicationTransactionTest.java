@@ -12,7 +12,6 @@ import com.gustler.backend.forecasting.application.quality.RouteDataQualityAcces
 import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
 import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.publication.ForecastTimeSlot;
-import com.gustler.backend.forecasting.domain.deployment.ModelIdentity;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.model.SeatDistribution;
 import com.gustler.backend.forecasting.domain.model.SeatForecastModel;
@@ -219,21 +218,20 @@ class ForecastPublicationTransactionTest {
     }
 
     private RuntimeSnapshot runtime(String releaseId, SeatForecastModel model) {
-        ModelIdentity identity = new ModelIdentity(releaseId, "seat-full-chance", "1.0.0", DIGEST,
-            "SEAT_FULL_CHANCE_V1", CALCULATION_VERSION, DIGEST, OBSERVED_AT.minusSeconds(60));
+        Instant dataUntil = OBSERVED_AT.minusSeconds(60);
         final long deploymentId = jdbc.sql("""
                 INSERT INTO model_deployment (
                     deployment_key, release_id, model_key, model_version, bundle_digest,
                     prediction_target_version, calculation_version, supported_scope_digest, data_until, state
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'STAGED') RETURNING id
                 """)
-            .params(UUID.randomUUID(), identity.releaseId(), identity.modelKey(), identity.modelVersion(),
-                identity.bundleDigest(), identity.predictionTargetVersion(), identity.calculationVersion(),
-                identity.supportedScopeDigest(), offset(identity.dataUntil()))
+            .params(UUID.randomUUID(), releaseId, "seat-full-chance", "1.0.0",
+                DIGEST, "SEAT_FULL_CHANCE_V1", CALCULATION_VERSION,
+                DIGEST, offset(dataUntil))
             .query(Long.class).single();
         deploymentIds.add(deploymentId);
-        return new RuntimeSnapshot(new ActiveModelDeployment(deploymentId, identity),
-            new SupportedForecastScope(List.of("3330")), model, identity.dataUntil());
+        return new RuntimeSnapshot(new ActiveModelDeployment(deploymentId, CALCULATION_VERSION, releaseId, DIGEST),
+            new SupportedForecastScope(List.of("3330")), model, dataUntil);
     }
 
     private VehicleTrajectory trajectory(final long sourceObservationId) {

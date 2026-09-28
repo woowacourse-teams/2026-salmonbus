@@ -90,7 +90,7 @@ public final class Sal134Migration {
     private static final List<String> STEPS = List.of(
             "route-quality", "quality-policy", "trip-assignment", "publication", "forecast-publication-link",
             "input-confirmation", "evaluation",
-            "statistics-version", "model-exclusion", "statistics-exclusion", "active-model");
+            "statistics-version", "model-exclusion", "statistics-exclusion");
 
     private Sal134Migration() {
     }
@@ -252,12 +252,10 @@ public final class Sal134Migration {
     private static void assertEmptyTargets(final Connection connection) throws SQLException {
         for (final String table : List.of("forecast_publication", "forecast_evaluation", "demand_statistics_version",
                 "observation_trip_assignment", "route_data_quality", "route_version_quality_policy",
-                "model_training_exclusion", "statistics_training_exclusion", "model_activation_request")) {
+                "model_training_exclusion", "statistics_training_exclusion")) {
             assertZero(connection, "SELECT count(*) FROM " + table,
                     "전환 준비 이전에 대상 테이블에 데이터가 존재합니다: " + table);
         }
-        assertZero(connection, "SELECT count(*) FROM model_active_slot WHERE model_deployment_id IS NOT NULL OR version <> 0",
-                "전환 준비 이전에 활성 모델이 변경되었습니다.");
     }
 
     private static void backfill(final Connection connection, final int chunkSize, final int maxChunks)
@@ -381,8 +379,7 @@ public final class Sal134Migration {
         SOURCES.forEach(source -> tables.add(source.table()));
         tables.addAll(List.of("forecast_publication", "forecast_evaluation", "demand_statistics_version",
                 "route_data_quality", "route_version_quality_policy", "observation_trip_assignment",
-                "model_active_slot", "model_activation_request", "model_training_exclusion",
-                "statistics_training_exclusion", "sal134_transition_progress"));
+                "model_training_exclusion", "statistics_training_exclusion", "sal134_transition_progress"));
         for (final String table : tables) {
             try (PreparedStatement query = connection.prepareStatement("""
                     SELECT EXISTS (SELECT 1 FROM pg_class WHERE oid = to_regclass(?) AND relkind IN ('r', 'p'))

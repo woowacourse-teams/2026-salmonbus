@@ -14,7 +14,6 @@ import com.gustler.backend.forecasting.application.quality.DemandStatisticsRebui
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuilder;
 import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
-import com.gustler.backend.forecasting.domain.deployment.ModelIdentity;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationRepository;
@@ -397,8 +396,7 @@ class SameDayTransactionBoundaryTest {
     void writeForecast() {
         forecast.writeForecastsOf(batch(), new RouteStops(versionId, "fixture", List.of(
             new RouteStop(versionId, 1, "stop-1", true), new RouteStop(versionId, 2, "stop-2", true))),
-            new RuntimeSnapshot(new ActiveModelDeployment(modelId, new ModelIdentity("fixture", "fixture", "fixture",
-                "0".repeat(64), "fixture", "feature-v1", "0".repeat(64), OBSERVED_AT)),
+            new RuntimeSnapshot(new ActiveModelDeployment(modelId, "feature-v1", "fixture", "0".repeat(64)),
                 null, input -> new SeatForecastResult(new SeatDistribution(List.of(.4, .6)), .4), OBSERVED_AT));
     }
 

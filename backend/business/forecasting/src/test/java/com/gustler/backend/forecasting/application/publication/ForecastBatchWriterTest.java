@@ -2,7 +2,6 @@ package com.gustler.backend.forecasting.application.publication;
 
 import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesService;
 import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
-import com.gustler.backend.forecasting.domain.deployment.ModelIdentity;
 import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.publication.ForecastTimeSlot;
 import com.gustler.backend.forecasting.domain.model.SeatDistribution;
@@ -309,8 +308,7 @@ class ForecastBatchWriterTest {
     }
 
     private RuntimeSnapshot runtime(SeatForecastModel model) {
-        return new RuntimeSnapshot(new ActiveModelDeployment(7, new ModelIdentity("release", "seat", "v1", "0".repeat(64),
-            "seat-v1", "feature-v1", "0".repeat(64), NOW.minusSeconds(60))),
+        return new RuntimeSnapshot(new ActiveModelDeployment(7, "feature-v1", "release", "0".repeat(64)),
             null, model, NOW.minusSeconds(60));
     }
 

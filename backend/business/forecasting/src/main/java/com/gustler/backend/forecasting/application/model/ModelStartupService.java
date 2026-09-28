@@ -2,51 +2,66 @@ package com.gustler.backend.forecasting.application.model;
 
 import com.gustler.backend.forecasting.api.model.LoadConfiguredModel;
 import com.gustler.backend.forecasting.api.model.LoadConfiguredModelCommand;
+import com.gustler.backend.forecasting.api.model.ModelLoadException;
 import com.gustler.backend.forecasting.api.model.ModelLoadResult;
-import com.gustler.backend.forecasting.api.model.ModelLoadResult.Status;
-import com.gustler.backend.forecasting.domain.deployment.ModelActivationConflictException;
+import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
 import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
-import java.util.UUID;
+import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
+import java.util.Optional;
+import org.springframework.transaction.annotation.Transactional;
 
 public class ModelStartupService implements LoadConfiguredModel {
-    private final ModelBundleLoader loader;
-    private final LoadedModelRegistry models;
-    private final ModelDeploymentRepository deployments;
-    private final TransactionalModelActivation activation;
 
-    public ModelStartupService(ModelBundleLoader loader, LoadedModelRegistry models,
-                               ModelDeploymentRepository deployments, TransactionalModelActivation activation) {
+    private final ModelBundleLoader loader;
+    private final ModelDeploymentRepository deployments;
+    private final LoadedModelRegistry bundles;
+    private final BundleActivation activation;
+
+    public ModelStartupService(
+        ModelBundleLoader loader,
+        ModelDeploymentRepository deployments,
+        LoadedModelRegistry bundles,
+        BundleActivation activation
+    ) {
         this.loader = loader;
-        this.models = models;
         this.deployments = deployments;
+        this.bundles = bundles;
         this.activation = activation;
     }
 
     @Override
-    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
-    public ModelLoadResult load(LoadConfiguredModelCommand command) {
+    @Transactional
+    public ModelLoadResult load(
+        LoadConfiguredModelCommand command
+    ) {
         if (command.directory() == null || command.directory().isBlank()) {
-            return new ModelLoadResult(Status.NOT_CONFIGURED, null, 0);
-        }
-        var release = loader.load(command.directory());
-        models.register(release);
-        var slot = deployments.findActiveSlot();
-        if (slot.contains(release.identity())) {
-            return new ModelLoadResult(Status.READY, slot.deployment().orElseThrow().id(), slot.version());
-        }
-        if (slot.deployment().isPresent() && !command.promoteOnStart()) {
-            return new ModelLoadResult(Status.IDENTITY_MISMATCH, slot.deployment().get().id(), slot.version());
+            return new ModelLoadResult.NotConfigured();
         }
         try {
-            var result = activation.activate(UUID.randomUUID(), slot.version(), release.identity());
-            return new ModelLoadResult(Status.ACTIVATED, result.target().id(), result.resultingActiveVersion());
-        } catch (ModelActivationConflictException conflict) {
-            var latest = deployments.findActiveSlot();
-            if (latest.contains(release.identity())) {
-                return new ModelLoadResult(Status.READY, latest.deployment().orElseThrow().id(), latest.version());
-            }
-            return new ModelLoadResult(Status.ACTIVATION_CONFLICT,
-                latest.deployment().map(active -> active.id()).orElse(null), latest.version());
+            return load(loader.filesUnder(command.directory()), command.promoteOnStart());
+        } catch (ModelLoadException error) {
+            return new ModelLoadResult.Rejected(error.getMessage());
         }
+    }
+
+    private ModelLoadResult load(
+        ModelBundleFiles files,
+        final boolean promoteOnStart
+    ) {
+        Optional<ActiveModelDeployment> active = deployments.findActive();
+        if (active.isEmpty()) {
+            return new ModelLoadResult.Activated(activation.activate(files));
+        }
+
+        ModelRelease bundle = files.load();
+        if (bundle.hasIdentityOf(active.get())) {
+            bundles.add(bundle);
+            return new ModelLoadResult.Reloaded(bundle.releaseId());
+        }
+        if (!promoteOnStart) {
+            return new ModelLoadResult.IdentityMismatch(active.get().releaseId(), bundle.releaseId());
+        }
+        return new ModelLoadResult.Promoted(
+            active.get().releaseId(), bundle.releaseId(), activation.activate(files));
     }
 }

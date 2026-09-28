@@ -120,20 +120,6 @@ CREATE TABLE observation_trip_assignment (
 );
 CREATE INDEX ix_trip_assignment_trip ON observation_trip_assignment(trip_id);
 
-CREATE TABLE model_active_slot (
-    id smallint PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-    model_deployment_id bigint REFERENCES model_deployment(id),
-    version bigint NOT NULL DEFAULT 0 CHECK (version >= 0)
-);
-INSERT INTO model_active_slot(id) VALUES(1);
-CREATE TABLE model_activation_request (
-    request_id uuid PRIMARY KEY,
-    expected_active_version bigint NOT NULL CHECK(expected_active_version >= 0),
-    target_deployment_id bigint NOT NULL REFERENCES model_deployment(id),
-    resulting_active_version bigint NOT NULL CHECK(resulting_active_version >= expected_active_version),
-    activated_at timestamptz NOT NULL
-);
-
 -- 이관 장부를 참조하지 않는 영구 학습 제외 기록. 기존 장부는 감사 자료로 보존한다.
 CREATE TABLE model_training_exclusion (
     release_id varchar(80) NOT NULL,
@@ -179,7 +165,7 @@ BEGIN
         'seat_forecast','stop_demand_statistics','same_day_full_outcomes','model_deployment',
         'vehicle_one_way_trip','trip_quality_rebuild','forecast_publication','forecast_evaluation',
         'demand_statistics_version','route_data_quality','route_version_quality_policy','observation_trip_assignment',
-        'model_active_slot','model_activation_request','model_training_exclusion','statistics_training_exclusion',
+        'model_training_exclusion','statistics_training_exclusion',
         'training_model_release_exclusion','training_statistics_generation_exclusion',
         'historical_import_batch','historical_import_dataset_seal','historical_import_route_boundary',
         'historical_import_route_binding','historical_import_shard','historical_import_record','migration_source_record',

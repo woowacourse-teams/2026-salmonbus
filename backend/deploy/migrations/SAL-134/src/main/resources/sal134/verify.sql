@@ -105,17 +105,3 @@ FROM vehicle_observation observation JOIN vehicle_one_way_trip trip ON trip.id =
     EXCEPT SELECT to_jsonb(expected) FROM expected
 )
 SELECT (SELECT count(*) FROM missing) + (SELECT count(*) FROM extra)
--- next-statement
-WITH expected AS (
-SELECT 1::smallint AS id, (SELECT id FROM model_deployment WHERE state = 'ACTIVE') AS model_deployment_id,
-       CASE WHEN EXISTS (SELECT 1 FROM model_deployment WHERE state = 'ACTIVE') THEN 1 ELSE 0 END::bigint AS version
-), missing AS (
-    SELECT to_jsonb(expected) AS value FROM expected
-    EXCEPT SELECT to_jsonb(target) FROM model_active_slot target
-), extra AS (
-    SELECT to_jsonb(target) AS value FROM model_active_slot target
-    EXCEPT SELECT to_jsonb(expected) FROM expected
-)
-SELECT (SELECT count(*) FROM missing) + (SELECT count(*) FROM extra)
--- next-statement
-SELECT count(*) FROM model_activation_request

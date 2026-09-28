@@ -44,7 +44,8 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
     @PostConstruct
     void reportModelAvailability() {
         if (forecastRuntime.resolveActive().isEmpty()) {
-            log.warn("예보 작업이 활성화됐지만 실행 가능한 모델이 없어 발행을 보류한다");
+            log.warn("예보 배치가 켜져 있는데 쓸 계수가 없다. 도는 배포와 올라온 계수의 신원이 맞을 때까지 "
+                + "batch 를 하나도 안 연다");
         }
     }
 
@@ -110,8 +111,8 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
             return;
         }
         lastStaleWarningAt = now;
-        log.warn("예보 신선도 한계를 지나 발행하지 못한 수집 배치가 있다. 가장 오래된 관측 시각={}",
-            oldestLeftBehind.atZone(clock.getZone()));
+        log.warn("신선도 창보다 오래돼서 예보 없이 두고 가는 판이 남아 있다. 그중 가장 오래된 판의 "
+            + "관측 시각={}", oldestLeftBehind.atZone(clock.getZone()));
     }
 
     private static Instant olderOf(
