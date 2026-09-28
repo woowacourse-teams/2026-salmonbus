@@ -367,6 +367,24 @@ class ObservationBatchLedgerTest {
     }
 
     @Test
+    void 같은_계획을_다시_열면_지난_시도의_관측이_지워진다() {
+        // given
+        insertStop();
+        final long batchId = dispatchedBatch();
+        BusLocation bus = new BusLocation(
+            "경기70아0001", VEHICLE_ID, 0, ROUTE_204000057, 11,
+            STOP_ID, 1, 2, 43, 3, 1);
+        ledger.conclude(batchId, reply(new Success(QUERY_TIME, List.of(bus))), RESPONSE_RECEIVED_AT);
+
+        // when
+        ledger.reserve(plan(), RESERVED_AT);
+
+        // then
+        assertThat(jdbcClient.sql("SELECT count(*) FROM vehicle_observation WHERE observation_batch_id = ?")
+            .param(batchId).query(Integer.class).single()).isZero();
+    }
+
+    @Test
     void 재시도로_다시_연_판은_지난_시도의_보낸_시각을_들고_있지_않는다() {
         // given
         final long batchId = dispatchedBatch();

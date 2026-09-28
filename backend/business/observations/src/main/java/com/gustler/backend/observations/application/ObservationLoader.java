@@ -3,8 +3,9 @@ package com.gustler.backend.observations.application;
 import com.gustler.backend.observations.api.CollectionQualityHook;
 import com.gustler.backend.observations.api.VehicleObservationsStored;
 import com.gustler.backend.observations.domain.CollectedObservations;
+import com.gustler.backend.observations.domain.CollectionBatch;
+import com.gustler.backend.observations.domain.CollectionBatchRepository;
 import com.gustler.backend.observations.domain.ObservationBatchConclusion;
-import com.gustler.backend.observations.domain.ObservationRepository;
 import com.gustler.backend.observations.domain.StoredObservations;
 import com.gustler.backend.observations.domain.UpstreamObservationRow;
 import java.time.OffsetDateTime;
@@ -18,11 +19,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class ObservationLoader {
     private static final Logger log = LoggerFactory.getLogger(ObservationLoader.class);
-    private final ObservationRepository observations;
+    private final CollectionBatchRepository batches;
     private final List<CollectionQualityHook> qualityHooks;
 
-    public ObservationLoader(ObservationRepository observations, List<CollectionQualityHook> qualityHooks) {
-        this.observations = observations;
+    public ObservationLoader(CollectionBatchRepository batches, List<CollectionQualityHook> qualityHooks) {
+        this.batches = batches;
         this.qualityHooks = List.copyOf(qualityHooks);
     }
 
@@ -30,11 +31,17 @@ public class ObservationLoader {
     public void load(final long batchId, ObservationBatchConclusion conclusion,
                      CollectedObservations collected, OffsetDateTime responseReceivedAt) {
         logExcludedRows(batchId, collected);
-        StoredObservations stored = observations.concludeWithRows(batchId, conclusion, collected, responseReceivedAt);
+        CollectionBatch batch = batches.getById(batchId);
+        batch.conclude(conclusion, responseReceivedAt);
+        batch.countRows(collected);
+        StoredObservations stored = new StoredObservations(batchId, batch.routeVersionId(),
+            responseReceivedAt.toInstant(), batches.saveObservations(batch, collected.storableRows()));
         var event = new VehicleObservationsStored(stored.batchId(), stored.routeVersionId(), stored.observedAt(),
             stored.rows().stream().map(row -> new VehicleObservationsStored.Row(
                 row.observationId(), row.vehicleId(), row.remainingSeats())).toList());
+        // 동기 이벤트는 관측 저장 transaction 안에서 처리된다. 정상 관측은 추가 SQL이 없다.
         qualityHooks.forEach(hook -> hook.observationsStored(event));
+        batches.save(batch);
     }
 
     /**

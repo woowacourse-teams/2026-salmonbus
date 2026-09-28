@@ -93,6 +93,14 @@ public final class CollectionBatch {
         inputConfirmedAt = confirmedAt;
     }
 
+    public Long id() {
+        return id;
+    }
+
+    public long routeVersionId() {
+        return routeVersionId;
+    }
+
     public State state() {
         return new State(id, routeVersionId, scheduledAt, attemptKey, attemptNumber, requestedAt,
             responseReceivedAt, inputConfirmedAt, outcome, failureCode, resultCode, providerRows,

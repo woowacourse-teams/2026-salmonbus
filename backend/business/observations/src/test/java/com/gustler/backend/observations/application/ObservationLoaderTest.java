@@ -3,9 +3,10 @@ package com.gustler.backend.observations.application;
 import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
 
 import com.gustler.backend.observations.domain.CollectedObservations;
+import com.gustler.backend.observations.domain.CollectionBatch;
+import com.gustler.backend.observations.domain.CollectionBatchRepository;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.domain.ObservationBatchConclusion;
-import com.gustler.backend.observations.domain.ObservationRepository;
 import com.gustler.backend.routecatalog.application.RouteVersionLoader;
 import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
@@ -67,7 +68,7 @@ class ObservationLoaderTest {
     private ObservationLoader loader;
 
     @Autowired
-    private ObservationRepository observationRepository;
+    private CollectionBatchRepository batches;
 
     @Autowired
     private RouteVersionLoader routeVersionLoader;
@@ -85,9 +86,11 @@ class ObservationLoaderTest {
     void 노선과_판본과_정류소를_적재하고_묶음을_열어둔다() {
         final long routeId = insertRoute();
         routeVersionId = routeVersionLoader.load(routeId, threeStops(), TIMETABLE_3330, SCHEDULED_AT);
-        batchId = observationRepository.openReserved(
-            new CollectionPlan(routeVersionId, SCHEDULED_AT, ATTEMPT_KEY));
-        observationRepository.markDispatching(batchId, SCHEDULED_AT.plusSeconds(1));
+        batchId = batches.save(CollectionBatch.start(
+            new CollectionPlan(routeVersionId, SCHEDULED_AT, ATTEMPT_KEY), true));
+        CollectionBatch batch = batches.getById(batchId);
+        batch.dispatch(SCHEDULED_AT.plusSeconds(1));
+        batches.save(batch);
     }
 
     @Test
@@ -275,21 +278,6 @@ class ObservationLoaderTest {
 
         // then
         assertThat(sourceRowNumbersOf(batchId)).containsExactly(1);
-    }
-
-    @Test
-    void 같은_계획을_다시_열면_지난_시도의_관측이_지워진다() {
-        // given
-        loadBuses(List.of(
-            busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_DEPARTED),
-            busAt(VEHICLE_204003542, 2, STOP_277103149, RUNNING_STATE_MOVING)));
-
-        // when
-        observationRepository.openReserved(
-            new CollectionPlan(routeVersionId, SCHEDULED_AT, ATTEMPT_KEY));
-
-        // then
-        assertThat(observationCountOf(batchId)).isZero();
     }
 
     @Test

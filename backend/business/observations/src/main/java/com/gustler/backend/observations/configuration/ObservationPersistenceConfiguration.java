@@ -6,9 +6,11 @@ import org.springframework.context.annotation.FilterType;
 import org.springframework.boot.context.TypeExcludeFilter;
 import org.springframework.boot.autoconfigure.AutoConfigurationExcludeFilter;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import com.gustler.backend.observations.application.CollectionInputService;
 
-/** 예보와 품질 판정이 기존 관측을 읽고 입력을 확정할 때 사용하는 저장 구성. */
+/** 수집 배치 저장소와 예보가 수집 배치를 입력으로 확정할 때 사용하는 기능을 등록한다. */
 @Configuration
 @ComponentScan(basePackages = "com.gustler.backend.observations.infrastructure.jpa", excludeFilters = {
     @ComponentScan.Filter(type = FilterType.CUSTOM, classes = TypeExcludeFilter.class),
@@ -16,5 +18,6 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 })
 @EntityScan("com.gustler.backend.observations.infrastructure.jpa")
 @EnableJpaRepositories("com.gustler.backend.observations.infrastructure.jpa")
+@Import(CollectionInputService.class)
 public class ObservationPersistenceConfiguration {
 }
