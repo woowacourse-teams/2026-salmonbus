@@ -14,6 +14,7 @@ import com.gustler.backend.forecasting.domain.quality.QualityObservationBatch;
 import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcDemandStatisticsRebuildRequests;
 import com.gustler.backend.forecasting.infrastructure.quality.JdbcRouteDataQualityAccess;
 import com.gustler.backend.forecasting.infrastructure.quality.JdbcRouteDataQualityRepository;
+import com.gustler.backend.forecasting.infrastructure.quality.JdbcTripQualityInvestigationRepository;
 import com.gustler.backend.forecasting.infrastructure.quality.JdbcTripQualityMaintenanceStore;
 import com.gustler.backend.forecasting.infrastructure.quality.JdbcTripQualityStore;
 import com.gustler.backend.forecasting.domain.model.SeatGrid;
@@ -656,8 +657,8 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
     static class QualityTransactionConfiguration { }
 
     private static TripQualityInvestigationService quality(JdbcClient jdbc) {
-        return new TripQualityInvestigationService(new JdbcTripQualityStore(jdbc), new JdbcRouteDataQualityAccess(jdbc),
-            changes(jdbc));
+        return new TripQualityInvestigationService(new JdbcTripQualityInvestigationRepository(jdbc),
+            new JdbcTripQualityStore(jdbc), new JdbcRouteDataQualityAccess(jdbc), changes(jdbc));
     }
 
     private static TripQualityMaintenanceService maintenance(JdbcClient jdbc) {
@@ -665,7 +666,8 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
         var guard = new JdbcRouteDataQualityAccess(jdbc);
         var changes = changes(jdbc);
         return new TripQualityMaintenanceService(new JdbcTripQualityMaintenanceStore(jdbc),
-            new TripQualityInvestigationService(store, guard, changes), guard, store, changes);
+            new TripQualityInvestigationService(new JdbcTripQualityInvestigationRepository(jdbc), store, guard, changes),
+            guard, store, changes);
     }
 
     private static RouteDataQualityChanges changes(JdbcClient jdbc) {

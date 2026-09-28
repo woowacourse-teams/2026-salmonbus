@@ -92,14 +92,16 @@ class JdbcTripQualityStoreTest {
         final var fixture = existingInvestigation(phase, false);
 
         // when
-        final var pending = new JdbcTripQualityStore(jdbc).findPending(fixture.version(), VEHICLE).orElseThrow();
+        final var pending = new JdbcTripQualityInvestigationRepository(jdbc).findPending(fixture.version(), VEHICLE)
+            .orElseThrow();
 
         // then
         assertThat(pending.phase()).isEqualTo(Phase.REPLAY);
     }
 
     private TripQualityInvestigationService service() {
-        return new TripQualityInvestigationService(new JdbcTripQualityStore(jdbc), new JdbcRouteDataQualityAccess(jdbc),
+        return new TripQualityInvestigationService(new JdbcTripQualityInvestigationRepository(jdbc),
+            new JdbcTripQualityStore(jdbc), new JdbcRouteDataQualityAccess(jdbc),
             new RouteDataQualityChanges(new JdbcRouteDataQualityRepository(jdbc), new JdbcDemandStatisticsRebuildRequests(jdbc)));
     }
 

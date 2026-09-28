@@ -3,6 +3,7 @@ package com.gustler.backend.forecasting.application.quality;
 import com.gustler.backend.forecasting.domain.quality.QualityObservationBatch;
 import com.gustler.backend.forecasting.domain.quality.TripQualityInvestigation;
 import com.gustler.backend.forecasting.domain.quality.TripQualityInvestigation.Phase;
+import com.gustler.backend.forecasting.domain.quality.TripQualityInvestigationRepository;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -11,12 +12,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TripQualityInvestigationService {
+    private final TripQualityInvestigationRepository investigations;
     private final TripQualityStore store;
     private final RouteDataQualityAccess quality;
     private final RouteDataQualityChanges changes;
 
-    public TripQualityInvestigationService(final TripQualityStore store, final RouteDataQualityAccess quality,
-        final RouteDataQualityChanges changes) {
+    public TripQualityInvestigationService(final TripQualityInvestigationRepository investigations,
+        final TripQualityStore store, final RouteDataQualityAccess quality, final RouteDataQualityChanges changes) {
+        this.investigations = investigations;
         this.store = store;
         this.quality = quality;
         this.changes = changes;
@@ -28,12 +31,12 @@ public class TripQualityInvestigationService {
         if (anomalies.isEmpty()) { return; }
         // 조사 완료와 새 이상 관측 저장을 직렬화한다. 조사 중의 동일 차량은 새 요청을 만들지 않는다.
         quality.lock(batch.routeVersionId());
-        final var active = store.activeVehicleIds(batch.routeVersionId());
+        final var active = investigations.activeVehicleIds(batch.routeVersionId());
         final var maximumGap = store.maximumObservationGap(batch.routeVersionId()).orElse(null);
         final List<String> started = new ArrayList<>();
         for (final var anomaly : anomalies) {
             if (active.contains(anomaly.vehicleId())) { continue; }
-            store.saveStart(TripQualityInvestigation.start(batch, anomaly, maximumGap));
+            investigations.saveStart(TripQualityInvestigation.start(batch, anomaly, maximumGap));
             started.add(anomaly.vehicleId());
         }
         changes.vehiclesChanged(batch.routeVersionId(), started);
@@ -41,7 +44,7 @@ public class TripQualityInvestigationService {
 
     @Transactional(timeout = 2)
     public boolean investigateNext() {
-        final var pending = store.nextPending();
+        final var pending = investigations.nextPending();
         if (pending.isEmpty()) { return false; }
         store.applyTimeBudget();
         investigateLocked(pending.get().routeVersionId(), pending.get().vehicleId());
@@ -51,7 +54,7 @@ public class TripQualityInvestigationService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void investigateLocked(final long version, final String vehicle) {
         quality.lock(version);
-        final var pending = store.findPending(version, vehicle);
+        final var pending = investigations.findPending(version, vehicle);
         if (pending.isEmpty()) { return; }
         final var investigation = pending.get();
         final var route = store.readRoute(version);
@@ -67,7 +70,7 @@ public class TripQualityInvestigationService {
             final var assessments = investigation.replay(route, rows, previous);
             store.saveAssessments(version, assessments);
         }
-        store.save(investigation);
+        investigations.save(investigation);
         if (investigation.completed()) {
             changes.vehiclesChanged(version, List.of(vehicle));
         }
