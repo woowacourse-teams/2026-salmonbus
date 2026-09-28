@@ -1,3 +1,4 @@
+import type { ApiFailure } from "@/shared/api/client";
 import type { Board, Direction, DirectionInfo, StopState } from "@/shared/api/routeForecast.types";
 import {
   arrivalViewsFor,
@@ -8,6 +9,12 @@ import {
 } from "./arrivalPolicy";
 
 export type ServiceState = "running" | "outOfService";
+
+export type BoardScreen =
+  | { kind: "loading" }
+  | { kind: "forecast"; board: Board; direction: Direction }
+  | { kind: "outOfService"; board: Board }
+  | { kind: "error"; failure: ApiFailure };
 
 type ServicePhase = "before" | "running" | "ended" | "undetermined";
 

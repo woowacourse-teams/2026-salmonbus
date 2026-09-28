@@ -5,12 +5,13 @@ import { fetchBoard } from "@/shared/api/routeForecast.api";
 import { boardMock, liveVehiclesMock } from "@/shared/api/routeForecast.mock";
 import type { Board, Direction, DirectionInfo, LiveVehicles } from "@/shared/api/routeForecast.types";
 import { usePolledRequest } from "@/shared/api/usePolledRequest";
-import { directionInfoFor, directionViewsFor, serviceStateFor, stopViewsFor } from "./displayPolicy";
+import { directionInfoFor, directionViewsFor, serviceStateFor, stopViewsFor, type BoardScreen } from "./displayPolicy";
 import { liveVehicleViewsFor } from "./liveVehiclePolicy";
 import { DEFAULT_LIVE_MOTION_DURATION_MS, useLiveVehicles } from "./useLiveVehicles";
 import { BoardHeader } from "./components/BoardHeader";
 import { DirectionTabs } from "./components/DirectionTabs";
 import { StopBoard } from "./components/StopBoard";
+import { useBoardVisitEvents } from "./analytics/useBoardVisitEvents";
 import * as styles from "./VerdictBoardPage.css";
 
 type BoardState =
@@ -26,7 +27,12 @@ function loadBoard(routeId: string, signal: AbortSignal): Promise<ApiResult<Boar
 
 export function VerdictBoardPage() {
   const { routeId = "" } = useParams<{ routeId: string }>();
-  const { result: boardResult, body: boardBody } = usePolledRequest(loadBoard, routeId);
+  const {
+    result: boardResult,
+    body: boardBody,
+    clock: boardClock,
+    receivedAt: boardReceivedAt,
+  } = usePolledRequest(loadBoard, routeId);
   const liveVehicleState = useLiveVehicles(routeId);
   const [preferredDirection, setPreferredDirection] = useState<Direction | null>(null);
   const [switched, setSwitched] = useState(false);
@@ -36,6 +42,10 @@ export function VerdictBoardPage() {
     : boardStateOf(boardBody, boardResult, preferredDirection);
   const liveVehicles = USE_ROUTE_MOCKS ? liveVehiclesMock : liveVehicleState.liveVehicles;
   const liveMotionDurationMs = USE_ROUTE_MOCKS ? DEFAULT_LIVE_MOTION_DURATION_MS : liveVehicleState.motionDurationMs;
+
+  const screen = boardScreenOf(state);
+
+  useBoardVisitEvents({ routeId, screen, receivedAt: boardReceivedAt, clock: boardClock });
 
   function selectDirection(next: Direction) {
     if (state.status === "ready" && next !== state.direction.id) {
@@ -58,7 +68,7 @@ export function VerdictBoardPage() {
             />
           )}
         </div>
-        {renderBoard(state, switched, liveVehicles, liveMotionDurationMs)}
+        {renderBoard(screen, switched, liveVehicles, liveMotionDurationMs)}
       </main>
     </div>
   );
@@ -78,32 +88,42 @@ function boardStateOf(
   return { status: "loading" };
 }
 
+function boardScreenOf(state: BoardState): BoardScreen {
+  switch (state.status) {
+    case "loading":
+      return { kind: "loading" };
+    case "error":
+      return { kind: "error", failure: state.failure };
+    case "ready":
+      return serviceStateFor(state.board, state.direction) === "outOfService"
+        ? { kind: "outOfService", board: state.board }
+        : { kind: "forecast", board: state.board, direction: state.direction.id };
+  }
+}
+
 function renderBoard(
-  state: BoardState,
+  screen: BoardScreen,
   switched: boolean,
   liveVehicles: LiveVehicles | null,
   liveMotionDurationMs: number,
 ) {
-  switch (state.status) {
+  switch (screen.kind) {
     case "loading":
       return <StopBoard status="loading" />;
     case "error":
       return <StopBoard status="error" />;
-    case "ready": {
-      if (serviceStateFor(state.board, state.direction) === "outOfService") {
-        return <StopBoard status="outOfService" />;
-      }
-
+    case "outOfService":
+      return <StopBoard status="outOfService" />;
+    case "forecast":
       return (
         <StopBoard
-          key={state.direction.id}
+          key={screen.direction}
           status="ready"
-          stops={stopViewsFor(state.board, state.direction.id)}
-          liveVehicleViews={liveVehicleViewsFor(state.board, liveVehicles, state.direction.id)}
+          stops={stopViewsFor(screen.board, screen.direction)}
+          liveVehicleViews={liveVehicleViewsFor(screen.board, liveVehicles, screen.direction)}
           liveMotionDurationMs={liveMotionDurationMs}
           entering={switched}
         />
       );
-    }
   }
 }
