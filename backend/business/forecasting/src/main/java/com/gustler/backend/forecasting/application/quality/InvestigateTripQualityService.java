@@ -1,11 +1,10 @@
 package com.gustler.backend.forecasting.application.quality;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.api.quality.InvestigateTripQuality;
 
 
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.jdbc.UncategorizedSQLException;
@@ -13,13 +12,17 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class InvestigateTripQualityService implements InvestigateTripQuality {
-    private static final Logger log = LoggerFactory.getLogger(InvestigateTripQualityService.class);
     private final TripQualityInvestigationService quality;
     public InvestigateTripQualityService(TripQualityInvestigationService quality) { this.quality = quality; }
 
     public void investigate() {
+        WorkerOperationLog.run("quality_investigation", "all", this::investigateOnce);
+    }
+
+    private void investigateOnce() {
         try {
             quality.investigateNext();
+            WorkerOperationLog.recovered("quality_investigation", "all");
         } catch (QueryTimeoutException | PessimisticLockingFailureException e) {
             deferred(e);
         } catch (UncategorizedSQLException e) {
@@ -30,6 +33,6 @@ public class InvestigateTripQualityService implements InvestigateTripQuality {
     }
 
     private static void deferred(Exception exception) {
-        log.warn("event=forecast_trip_investigation_deferred reason=DB_TIME_BUDGET exception={}", exception.getClass().getSimpleName());
+        WorkerOperationLog.warn("quality_investigation", "all", "DB_TIME_BUDGET_" + exception.getClass().getSimpleName());
     }
 }

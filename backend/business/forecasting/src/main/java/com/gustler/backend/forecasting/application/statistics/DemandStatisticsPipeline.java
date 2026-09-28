@@ -1,5 +1,6 @@
 package com.gustler.backend.forecasting.application.statistics;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.api.statistics.DemandStatisticsPolicy;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsStore.FoldRow;
@@ -18,6 +19,7 @@ import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRep
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -63,7 +65,8 @@ public class DemandStatisticsPipeline {
     @Transactional(timeout = 2)
     public StatisticsStep step(final long routeVersionId) {
         store.limitStatementTime();
-        final long currentRevision = quality.lock(routeVersionId);
+        final long currentRevision = WorkerOperationLog.measure("statistics_route_lock", routeVersionId,
+            () -> quality.lock(routeVersionId));
         final DemandStatisticsBaseline baseline = store.baseline(routeVersionId);
         if (!baseline.initialized() && !requests.isPending(routeVersionId, RebuildScope.wholeRoute())) {
             requests.request(routeVersionId, RebuildScope.wholeRoute());
@@ -74,7 +77,8 @@ public class DemandStatisticsPipeline {
                 run.markStale();
                 runs.save(run);
             });
-            final boolean advanced = rebuilder.step(routeVersionId, request.get().vehicleId());
+            final boolean advanced = WorkerOperationLog.measure("statistics_rebuild", routeVersionId,
+                () -> rebuilder.step(routeVersionId, request.get().vehicleId()));
             return new StatisticsStep(advanced ? Status.PROGRESSED : Status.WAITING, REBUILD, null);
         }
         final Optional<DemandStatisticsRun> found = runs.find(routeVersionId);
@@ -94,21 +98,23 @@ public class DemandStatisticsPipeline {
         final DemandStatisticsRun run = found.get();
         final String phase = run.phase().name();
         final Instant dataUntil = run.dataUntil();
-        switch (run.phase()) {
-            case CLEAN -> clean(run);
-            case CAPTURE -> {
-                return capture(run);
+        return WorkerOperationLog.measure("statistics_" + phase.toLowerCase(Locale.ROOT), routeVersionId, () -> {
+            switch (run.phase()) {
+                case CLEAN -> clean(run);
+                case CAPTURE -> {
+                    return capture(run);
+                }
+                case ACCUMULATE -> accumulate(run);
+                case FOLD -> fold(run);
+                case REDUCE -> reduce(run);
+                case PUBLISH -> {
+                    publish(run);
+                    return new StatisticsStep(Status.COMPLETED, "DONE", dataUntil);
+                }
+                default -> throw new IllegalStateException("알 수 없는 통계 단계: " + run.phase());
             }
-            case ACCUMULATE -> accumulate(run);
-            case FOLD -> fold(run);
-            case REDUCE -> reduce(run);
-            case PUBLISH -> {
-                publish(run);
-                return new StatisticsStep(Status.COMPLETED, "DONE", dataUntil);
-            }
-            default -> throw new IllegalStateException("알 수 없는 통계 단계: " + run.phase());
-        }
-        return new StatisticsStep(Status.PROGRESSED, phase, dataUntil);
+            return new StatisticsStep(Status.PROGRESSED, phase, dataUntil);
+        });
     }
 
     private void clean(final DemandStatisticsRun run) {

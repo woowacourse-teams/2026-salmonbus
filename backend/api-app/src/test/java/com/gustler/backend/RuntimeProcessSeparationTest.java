@@ -44,7 +44,7 @@ class RuntimeProcessSeparationTest {
     private static final Duration DISABLED_JOB_OBSERVATION = Duration.ofSeconds(2);
     private static final Set<String> PROJECT_MODULES = Set.of(
         "api-app", "worker-app", "maintenance-app", "common", "route-catalog",
-        "observations", "forecasting", "api-call-quota", "gbis-client"
+        "observations", "forecasting", "api-call-quota", "gbis-client", "operation-log"
     );
     private static final int LOG_TAIL = 4000;
 
@@ -136,7 +136,7 @@ class RuntimeProcessSeparationTest {
     void 실행_JAR_에는_각_프로세스가_사용하는_프로젝트_라이브러리만_들어간다() throws IOException {
         assertThat(projectLibraries(API_JAR)).containsExactly("common");
         assertThat(projectLibraries(WORKER_JAR)).containsExactlyInAnyOrder(
-            "common", "route-catalog", "observations", "forecasting", "api-call-quota", "gbis-client"
+            "common", "route-catalog", "observations", "forecasting", "api-call-quota", "gbis-client", "operation-log"
         );
     }
 

@@ -11,7 +11,7 @@ runtime_source_inputs() {
       ;;
     worker)
       modules+=(worker-app business/route-catalog business/observations
-        business/forecasting business/api-call-quota integrations/gbis-client)
+        business/forecasting business/api-call-quota integrations/gbis-client libraries/operation-log)
       ;;
     *)
       printf '소스 지문을 계산할 서버는 api 또는 worker여야 한다: %s\n' "$component" >&2

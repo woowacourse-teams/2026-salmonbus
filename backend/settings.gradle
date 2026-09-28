@@ -5,6 +5,7 @@ include 'observations'
 include 'forecasting'
 include 'api-call-quota'
 include 'gbis-client'
+include 'operation-log'
 include 'api-app'
 include 'worker-app'
 include 'maintenance-app'
@@ -15,3 +16,4 @@ project(':observations').projectDir = file('business/observations')
 project(':forecasting').projectDir = file('business/forecasting')
 project(':api-call-quota').projectDir = file('business/api-call-quota')
 project(':gbis-client').projectDir = file('integrations/gbis-client')
+project(':operation-log').projectDir = file('libraries/operation-log')

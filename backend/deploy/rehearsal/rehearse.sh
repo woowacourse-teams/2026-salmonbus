@@ -218,7 +218,7 @@ check_runtime_change() {
 
 # 중앙 목록에서 경로를 얻어 테스트하면 빠뜨린 모듈도 함께 빠진다. 목표 경로를 독립적으로 확인한다.
 for runtime_module in worker-app business/route-catalog business/observations \
-  business/forecasting business/api-call-quota integrations/gbis-client; do
+  business/forecasting business/api-call-quota integrations/gbis-client libraries/operation-log; do
   check_runtime_change "$runtime_module/src/main/java/Marker.java" unchanged changed
   check_runtime_change "$runtime_module/src/main/resources/module.properties" unchanged changed
   check_runtime_change "$runtime_module/build.gradle" unchanged changed

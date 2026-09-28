@@ -15,4 +15,5 @@ dependencies {
     implementation project(':route-catalog')
     implementation project(':api-call-quota')
     implementation project(':gbis-client')
+    implementation project(':operation-log')
 }

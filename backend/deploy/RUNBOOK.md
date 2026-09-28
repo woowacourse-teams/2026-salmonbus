@@ -143,6 +143,7 @@ flywayMaxVersion=12
 api     common · api-app
 worker  common · worker-app · business/route-catalog · business/observations
         business/forecasting · business/api-call-quota · integrations/gbis-client
+        libraries/operation-log
 모듈마다 src/main · build.gradle · gradle.lockfile 을 입력으로 넣는다.
 ```
 

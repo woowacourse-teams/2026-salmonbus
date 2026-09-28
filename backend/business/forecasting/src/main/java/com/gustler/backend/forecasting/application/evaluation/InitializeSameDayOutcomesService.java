@@ -1,5 +1,6 @@
 package com.gustler.backend.forecasting.application.evaluation;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.api.evaluation.InitializeSameDayOutcomes;
 import com.gustler.backend.forecasting.api.evaluation.SameDayInitializationPolicy;
 import com.gustler.backend.forecasting.domain.evaluation.SeoulDay;
@@ -44,7 +45,8 @@ public class InitializeSameDayOutcomesService implements InitializeSameDayOutcom
             retryAt.clear();
             lastRouteId = Long.MIN_VALUE;
         }
-        List<Long> routes = initializer.activeRouteIds().stream().distinct().sorted().toList();
+        List<Long> routes = WorkerOperationLog.measure("same_day_initialization_routes", "all",
+            initializer::activeRouteIds).stream().distinct().sorted().toList();
         retryAt.keySet().retainAll(routes);
         List<Long> due = routes.stream()
             .filter(route -> !now.isBefore(retryAt.getOrDefault(route, Instant.MIN))).toList();

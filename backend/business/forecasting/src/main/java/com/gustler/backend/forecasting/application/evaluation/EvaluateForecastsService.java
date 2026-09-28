@@ -1,5 +1,6 @@
 package com.gustler.backend.forecasting.application.evaluation;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.api.evaluation.EvaluateForecasts;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationRoute;
@@ -59,22 +60,27 @@ public class EvaluateForecastsService implements EvaluateForecasts {
      */
     @Transactional
     public void settleArrivalLabels() {
+        WorkerOperationLog.run("settlement_tick", "all", this::settleOnce);
+    }
+
+    private void settleOnce() {
         Instant now = clock.instant();
-        List<EvaluationRoute> routes = evaluationRepository.findRoutesWithPendingForecasts();
+        List<EvaluationRoute> routes = WorkerOperationLog.measure("settlement_pending_routes", "all",
+            evaluationRepository::findRoutesWithPendingForecasts);
         routes.stream().map(EvaluationRoute::routeId).distinct().sorted().forEach(quality::lockByRoute);
         List<ForecastEvaluation> evaluations = new ArrayList<>();
         for (EvaluationRoute route : routes) {
             evaluations.addAll(evaluationsOf(route.routeVersionId(), now));
         }
-        writer.complete(evaluations);
+        WorkerOperationLog.measure("settlement_save", "all", () -> writer.complete(evaluations));
     }
 
     private List<ForecastEvaluation> evaluationsOf(
         final long routeVersionId,
         Instant now
     ) {
-        List<PendingForecast> pending =
-            evaluationRepository.findPending(routeVersionId, policy.pendingLimit());
+        List<PendingForecast> pending = WorkerOperationLog.measure("settlement_pending_forecasts", routeVersionId,
+            () -> evaluationRepository.findPending(routeVersionId, policy.pendingLimit()));
         List<ForecastEvaluation> evaluations = new ArrayList<>();
         for (Map.Entry<String, List<PendingForecast>> byVehicle : groupByVehicle(pending).entrySet()) {
             evaluations.addAll(evaluationsOf(routeVersionId, byVehicle.getKey(), byVehicle.getValue(), now));
@@ -123,8 +129,9 @@ public class EvaluateForecastsService implements EvaluateForecasts {
         if (vehicleId == null) {
             return List.of();
         }
-        return arrivalObservationRepository.findAfter(
-            routeVersionId, vehicleId, earliestGeneratedAt(forecasts), policy.arrivalLimit());
+        return WorkerOperationLog.measure("settlement_arrival_candidates", routeVersionId,
+            () -> arrivalObservationRepository.findAfter(
+                routeVersionId, vehicleId, earliestGeneratedAt(forecasts), policy.arrivalLimit()));
     }
 
     /**

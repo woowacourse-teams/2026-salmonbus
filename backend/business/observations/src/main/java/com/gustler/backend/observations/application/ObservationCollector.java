@@ -1,5 +1,6 @@
 package com.gustler.backend.observations.application;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.observations.domain.ObservationSource;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.domain.ObservationBatchReservation;
@@ -47,12 +48,14 @@ public class ObservationCollector implements com.gustler.backend.observations.ap
     ) {
         OffsetDateTime scheduledAt = now();
 
-        Optional<RouteReference> routeVersionId = currentRouteVersion.currentVersionOf(sourceRouteId, scheduledAt);
+        Optional<RouteReference> routeVersionId = WorkerOperationLog.measure("collection_route_version", sourceRouteId,
+            () -> currentRouteVersion.currentVersionOf(sourceRouteId, scheduledAt));
         if (routeVersionId.isEmpty()) {
-            log.warn("현재 노선 버전이 없어 수집을 건너뛴다. 노선={}", sourceRouteId);
+            WorkerOperationLog.warn("collection_route_version", sourceRouteId, "NO_ROUTE_VERSION");
             return;
         }
 
+        WorkerOperationLog.recovered("collection_route_version", sourceRouteId);
         collectOn(routeVersionId.orElseThrow().routeVersionId(), sourceRouteId, scheduledAt);
     }
 
@@ -61,24 +64,28 @@ public class ObservationCollector implements com.gustler.backend.observations.ap
         String sourceRouteId,
         OffsetDateTime scheduledAt
     ) {
-        ObservationBatchReservation reservation = batchLedger.reserve(
-            new CollectionPlan(routeVersionId, scheduledAt, attemptKeyOf(sourceRouteId, scheduledAt)),
-            scheduledAt);
+        ObservationBatchReservation reservation = WorkerOperationLog.measure("collection_reserve", sourceRouteId,
+            () -> batchLedger.reserve(
+                new CollectionPlan(routeVersionId, scheduledAt, attemptKeyOf(sourceRouteId, scheduledAt)),
+                scheduledAt));
 
         if (!reservation.reserved()) {
-            log.warn("하루 호출 한도가 남지 않아 수집을 건너뛴다. 노선={} 배치={}",
-                sourceRouteId, reservation.batchId());
+            WorkerOperationLog.warn("collection_quota", sourceRouteId, "DAILY_LIMIT");
             return;
         }
 
         OffsetDateTime requestedAt = now();
-        if (!batchLedger.markDispatching(reservation.token(), scheduledAt, requestedAt, reservation.keyAlias())) {
-            log.warn("전송 상태 또는 호출 한도 조건을 만족하지 않아 요청을 보내지 않는다. 노선={} 배치={}", sourceRouteId, reservation.batchId());
+        if (!WorkerOperationLog.measure("collection_dispatch", sourceRouteId,
+            () -> batchLedger.markDispatching(reservation.token(), scheduledAt, requestedAt, reservation.keyAlias()))) {
+            WorkerOperationLog.warn("collection_quota", sourceRouteId, "NEXT_DAY_LIMIT");
             return;
         }
 
-        ObservationResponse response = observationSource.read(sourceRouteId, reservation.keyAlias());
-        batchLedger.conclude(reservation.token(), response);
+        WorkerOperationLog.recovered("collection_quota", sourceRouteId);
+        ObservationResponse response = WorkerOperationLog.measure("collection_upstream", sourceRouteId,
+            () -> observationSource.read(sourceRouteId, reservation.keyAlias()));
+        WorkerOperationLog.run("collection_save_and_commit", sourceRouteId,
+            () -> batchLedger.conclude(reservation.token(), response));
         excludeKeyIfRejected(reservation.keyAlias(), response, requestedAt);
     }
 

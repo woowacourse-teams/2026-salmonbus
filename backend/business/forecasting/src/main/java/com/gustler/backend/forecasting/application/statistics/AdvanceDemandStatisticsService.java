@@ -1,5 +1,6 @@
 package com.gustler.backend.forecasting.application.statistics;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.api.statistics.AdvanceDemandStatistics;
 import com.gustler.backend.forecasting.application.statistics.StatisticsStep.Status;
 import com.gustler.backend.forecasting.domain.publication.RouteVersionRepository;
@@ -44,7 +45,8 @@ public class AdvanceDemandStatisticsService implements AdvanceDemandStatistics {
         final Instant now = clock.instant();
         if (!now.isBefore(refreshAt)) {
             refreshAt = now.plusSeconds(10);
-            versions = routes.findActiveVersionIds().stream().sorted().toList();
+            versions = WorkerOperationLog.measure("statistics_routes", "all", routes::findActiveVersionIds).stream()
+                .sorted().toList();
             retryAt.keySet().retainAll(versions);
             failures.keySet().retainAll(versions);
             progressAt.keySet().retainAll(versions);
@@ -57,7 +59,8 @@ public class AdvanceDemandStatisticsService implements AdvanceDemandStatistics {
             final long started = System.nanoTime();
             try {
                 // 프록시가 commit한 뒤만 성공/진행을 기록한다.
-                final StatisticsStep result = pipeline.step(version);
+                final StatisticsStep result = WorkerOperationLog.measure("statistics_step_and_commit", version,
+                    () -> pipeline.step(version));
                 failures.remove(version);
                 retryAt.put(version, now.plusSeconds(retryDelaySeconds(result.status())));
                 final boolean progress = result.status() == Status.PROGRESSED

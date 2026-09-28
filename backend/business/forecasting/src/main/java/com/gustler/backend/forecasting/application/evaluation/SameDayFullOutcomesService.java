@@ -1,5 +1,6 @@
 package com.gustler.backend.forecasting.application.evaluation;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomeCount;
 import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomesRepository;
 import com.gustler.backend.forecasting.domain.evaluation.SeoulDay;
@@ -34,7 +35,8 @@ public class SameDayFullOutcomesService {
         Instant predictionAt
     ) {
         SeoulDay day = SeoulDay.containing(predictionAt);
-        List<SameDayFullOutcomeCount> counts = repository.findCounts(routeId, day);
+        List<SameDayFullOutcomeCount> counts = WorkerOperationLog.measure("same_day_read", routeId,
+            () -> repository.findCounts(routeId, day));
         if (counts.isEmpty() || predictionAt.isBefore(settledThroughOf(counts))) {
             return Map.of();
         }

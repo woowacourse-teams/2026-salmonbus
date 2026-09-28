@@ -1,5 +1,6 @@
 package com.gustler.backend.forecasting.application.statistics;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.application.statistics.DemandRebuildStore.BatchPosition;
 import com.gustler.backend.forecasting.application.statistics.DemandRebuildStore.Page;
@@ -10,6 +11,7 @@ import com.gustler.backend.forecasting.domain.statistics.RebuildScanWindow;
 import com.gustler.backend.forecasting.domain.statistics.RebuildScope;
 import java.time.Clock;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -69,6 +71,13 @@ public class DemandStatisticsRebuilder {
             return true;
         }
         final DemandStatisticsRebuild rebuild = progress.get();
+        return WorkerOperationLog.measure("statistics_rebuild_" + rebuild.phase().name().toLowerCase(Locale.ROOT),
+            routeVersionId, () -> advance(rebuild));
+    }
+
+    private boolean advance(final DemandStatisticsRebuild rebuild) {
+        final long routeVersionId = rebuild.routeVersionId();
+        final RebuildScope scope = rebuild.scope();
         switch (rebuild.phase()) {
             case SCAN -> scan(rebuild);
             case CLEAR -> rebuild.cleared(rebuildStore.clearCurrentTotals(routeVersionId, scope, PAGE_SIZE));

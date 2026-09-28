@@ -14,6 +14,7 @@ import com.tngtech.archunit.core.domain.JavaMethodReference;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.gustler.backend.config.ClockConfig;
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.gbis.api.GbisApiCaller;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
@@ -35,7 +36,8 @@ class PackageBoundaryTest {
         .should().dependOnClassesThat().resideInAnyPackage(
             "org.springframework..", "jakarta.persistence..", "java.sql..", "javax.sql..",
             "java.net.http..", "org.apache.hc..", "okhttp3..",
-            "tools.jackson..", "com.fasterxml.jackson..", "..infrastructure..", "..application..", "..configuration..");
+            "tools.jackson..", "com.fasterxml.jackson..", "..infrastructure..", "..application..", "..configuration..",
+            PREFIX + "diagnostics..");
 
     @ArchTest
     static final ArchRule applicationUsesPersistencePorts = noClasses()
@@ -130,6 +132,9 @@ class PackageBoundaryTest {
         verifyLibrary(GbisApiCaller.class, "gbis-client", List.of(
             PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "quota..",
             PREFIX + "worker..", PREFIX + "maintenance..", PREFIX + "api.."));
+        verifyLibrary(WorkerOperationLog.class, "operation-log", List.of(
+            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "quota..",
+            PREFIX + "gbis..", PREFIX + "worker..", PREFIX + "maintenance..", PREFIX + "api.."));
     }
 
     private static void verifyLibrary(Class<?> entry, String name, List<String> forbiddenPackages) {

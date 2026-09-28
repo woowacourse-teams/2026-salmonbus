@@ -1,5 +1,6 @@
 package com.gustler.backend.forecasting.application.evaluation;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluationRepository;
@@ -74,7 +75,7 @@ public class ForecastEvaluationWriter {
         }
         List<SettledForecast> newlySettled = List.copyOf(settled);
         if (!newlySettled.isEmpty()) {
-            outcomes.record(newlySettled);
+            WorkerOperationLog.run("same_day_record", "all", () -> outcomes.record(newlySettled));
         }
         return newlySettled;
     }
