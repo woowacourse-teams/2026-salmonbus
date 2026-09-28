@@ -21,3 +21,7 @@ export function initAnalytics() {
     sessionReplay: { sampleRate: 1 },
   });
 }
+
+export function isAnalyticsEnabled() {
+  return initialized;
+}
