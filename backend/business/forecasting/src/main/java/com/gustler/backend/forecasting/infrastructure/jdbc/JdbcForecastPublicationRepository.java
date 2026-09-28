@@ -55,12 +55,6 @@ public class JdbcForecastPublicationRepository implements ForecastPublicationRep
             quality_revision = EXCLUDED.quality_revision
         """;
 
-    private static final String INSERT_PENDING_EVALUATION = """
-        INSERT INTO forecast_evaluation (vehicle_observation_id, target_stop_order, route_version_id)
-        VALUES (?, ?, ?)
-        ON CONFLICT (vehicle_observation_id, target_stop_order) DO NOTHING
-        """;
-
     private static final String COUNT_PREDICTIONS = """
         UPDATE forecast_publication SET prediction_count = (
             SELECT count(*) FROM seat_forecast forecast
@@ -98,9 +92,6 @@ public class JdbcForecastPublicationRepository implements ForecastPublicationRep
                     prediction.demandStatisticsRevision(), prediction.seatFullChanceRaw(),
                     prediction.seatFullChance(), prediction.expectedSeats(), offset(prediction.generatedAt()),
                     publication.qualityRevision())
-                .update();
-            jdbc.sql(INSERT_PENDING_EVALUATION)
-                .params(prediction.vehicleObservationId(), prediction.targetStopOrder(), prediction.routeVersionId())
                 .update();
         }
         existing.ifPresent(id -> jdbc.sql(COUNT_PREDICTIONS).params(publication.sourceBatchId(), id).update());

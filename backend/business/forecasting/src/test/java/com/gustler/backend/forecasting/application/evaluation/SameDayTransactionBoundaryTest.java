@@ -13,6 +13,7 @@ import com.gustler.backend.forecasting.application.publication.ForecastBatchWrit
 import com.gustler.backend.forecasting.application.quality.DemandStatisticsRebuildTrigger;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuilder;
+import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
@@ -387,10 +388,13 @@ class SameDayTransactionBoundaryTest {
     }
 
     void publish(long batch, Instant observedAt, SeatForecast prediction) {
-        new TransactionTemplate(context.getBean(PlatformTransactionManager.class)).executeWithoutResult(status ->
+        new TransactionTemplate(context.getBean(PlatformTransactionManager.class)).executeWithoutResult(status -> {
             publicationsSpy.save(new ForecastPublication(batch, versionId, modelId, 1,
                 context.getBean(RouteDataQualityAccess.class).lock(versionId), observedAt,
-                prediction.generatedAt(), prediction.generatedAt(), List.of(prediction))));
+                prediction.generatedAt(), prediction.generatedAt(), List.of(prediction)));
+            evaluationsSpy.addPending(versionId, List.of(
+                ForecastEvaluation.pending(prediction.vehicleObservationId(), prediction.targetStopOrder())));
+        });
     }
 
     void writeForecast() {

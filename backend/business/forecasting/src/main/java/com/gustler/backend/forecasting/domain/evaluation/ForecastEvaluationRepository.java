@@ -13,6 +13,9 @@ public interface ForecastEvaluationRepository {
 
     List<PendingForecast> findPending(long routeVersionId, int limit);
 
+    /** 발행한 예측의 평가를 대기 상태로 만든다. 이미 있는 평가는 바꾸지 않는다. */
+    void addPending(long routeVersionId, List<ForecastEvaluation> evaluations);
+
     /** PENDING에서 새로 확정한 결과를 반환한다. */
     List<SettledEvaluation> settle(List<ForecastEvaluation> evaluations);
 }

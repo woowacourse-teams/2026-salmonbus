@@ -19,6 +19,12 @@ import org.springframework.transaction.annotation.Propagation;
 @Repository
 public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepository {
 
+    private static final String INSERT_PENDING = """
+        INSERT INTO forecast_evaluation (vehicle_observation_id, target_stop_order, route_version_id)
+        VALUES (?, ?, ?)
+        ON CONFLICT (vehicle_observation_id, target_stop_order) DO NOTHING
+        """;
+
     private static final String SELECT_PENDING = """
         SELECT forecast.vehicle_observation_id, forecast.target_stop_order, forecast.route_version_id,
                source.vehicle_id, forecast.stops_to_target, batch.response_received_at,
@@ -111,6 +117,16 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
                 row.getObject("generated_at", OffsetDateTime.class).toInstant(),
                 row.getObject("quality_direction", Long.class)))
             .list();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void addPending(final long routeVersionId, List<ForecastEvaluation> evaluations) {
+        for (ForecastEvaluation evaluation : evaluations) {
+            jdbcClient.sql(INSERT_PENDING)
+                .params(evaluation.vehicleObservationId(), evaluation.targetStopOrder(), routeVersionId)
+                .update();
+        }
     }
 
     @Override

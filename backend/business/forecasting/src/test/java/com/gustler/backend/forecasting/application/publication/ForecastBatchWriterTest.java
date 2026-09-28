@@ -20,6 +20,9 @@ import com.gustler.backend.forecasting.domain.publication.RouteVersionRepository
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
 import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
 import com.gustler.backend.forecasting.domain.publication.ForecastPublicationRepository;
+import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
+import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluationRepository;
+import com.gustler.backend.forecasting.domain.evaluation.ScoringState;
 import com.gustler.backend.observations.api.CollectionInputs;
 import com.gustler.backend.forecasting.domain.model.SeatSlope;
 import com.gustler.backend.forecasting.domain.model.TrajectoryGap;
@@ -32,8 +35,10 @@ import com.gustler.backend.forecasting.api.ForecastPolicy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -77,13 +82,14 @@ class ForecastBatchWriterTest {
 
     private final VehicleTrajectoryRepository trajectories = mock(VehicleTrajectoryRepository.class);
     private final ForecastPublicationRepository forecasts = mock(ForecastPublicationRepository.class);
+    private final ForecastEvaluationRepository evaluations = mock(ForecastEvaluationRepository.class);
     private final StopDemandStatisticsRepository statistics = mock(StopDemandStatisticsRepository.class);
     private final RouteDataQualityAccess quality =
         mock(RouteDataQualityAccess.class);
     private final SameDayFullOutcomesService outcomes = mock(SameDayFullOutcomesService.class);
     private final CollectionInputs inputs = mock(CollectionInputs.class);
-    private final ForecastBatchWriter writer = new ForecastBatchWriter(trajectories, forecasts, outcomes, statistics, CLOCK,
-        quality, inputs);
+    private final ForecastBatchWriter writer = new ForecastBatchWriter(trajectories, forecasts, evaluations, outcomes,
+        statistics, CLOCK, quality, inputs);
     private final ListAppender<ILoggingEvent> logs = new ListAppender<>();
 
     @BeforeEach
@@ -128,6 +134,24 @@ class ForecastBatchWriterTest {
             expected(10, 4), expected(10, 5), expected(11, 4), expected(11, 5));
         verify(inputs).confirmInput(100, NOW);
         assertThat(logs.list).isEmpty();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void 발행한_예측마다_평가를_대기_상태로_만든다() {
+        // given
+        when(trajectories.readTrajectories(100)).thenReturn(List.of(vehicle(10, 12, 44), vehicle(11, 20, 44)));
+
+        // when
+        writer.writeForecastsOf(BATCH, STOPS, runtime(this::predictWithSeatValidation));
+
+        // then
+        ArgumentCaptor<List<ForecastEvaluation>> pending = ArgumentCaptor.forClass(List.class);
+        verify(evaluations).addPending(eq(BATCH.routeVersionId()), pending.capture());
+        assertThat(pending.getValue())
+            .extracting(ForecastEvaluation::vehicleObservationId, ForecastEvaluation::targetStopOrder)
+            .containsExactlyInAnyOrder(tuple(10L, 4), tuple(10L, 5), tuple(11L, 4), tuple(11L, 5));
+        assertThat(pending.getValue()).extracting(ForecastEvaluation::state).containsOnly(ScoringState.PENDING);
     }
 
     @ParameterizedTest

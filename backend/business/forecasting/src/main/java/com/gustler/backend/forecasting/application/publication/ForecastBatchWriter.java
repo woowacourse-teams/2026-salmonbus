@@ -1,6 +1,8 @@
 package com.gustler.backend.forecasting.application.publication;
 
 import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesService;
+import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
+import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluationRepository;
 import com.gustler.backend.forecasting.domain.publication.ForecastTimeSlot;
 import com.gustler.backend.forecasting.domain.model.SeatForecastInput;
 import com.gustler.backend.forecasting.domain.model.SeatRangeException;
@@ -38,6 +40,7 @@ public class ForecastBatchWriter {
 
     private final VehicleTrajectoryRepository vehicleTrajectoryRepository;
     private final ForecastPublicationRepository publications;
+    private final ForecastEvaluationRepository evaluations;
     private final SameDayFullOutcomesService sameDayFullOutcomesService;
     private final StopDemandStatisticsRepository stopDemandStatisticsRepository;
     private final Clock clock;
@@ -47,6 +50,7 @@ public class ForecastBatchWriter {
     public ForecastBatchWriter(
         VehicleTrajectoryRepository vehicleTrajectoryRepository,
         ForecastPublicationRepository publications,
+        ForecastEvaluationRepository evaluations,
         SameDayFullOutcomesService sameDayFullOutcomesService,
         StopDemandStatisticsRepository stopDemandStatisticsRepository,
         Clock clock,
@@ -55,6 +59,7 @@ public class ForecastBatchWriter {
     ) {
         this.vehicleTrajectoryRepository = vehicleTrajectoryRepository;
         this.publications = publications;
+        this.evaluations = evaluations;
         this.sameDayFullOutcomesService = sameDayFullOutcomesService;
         this.stopDemandStatisticsRepository = stopDemandStatisticsRepository;
         this.clock = clock;
@@ -78,6 +83,9 @@ public class ForecastBatchWriter {
         publications.save(new ForecastPublication(
             batch.observationBatchId(), batch.routeVersionId(), runtime.deploymentId(), statistics.revision(),
             qualityRevision, batch.responseReceivedAt(), generatedAt, generatedAt, predictions));
+        evaluations.addPending(batch.routeVersionId(), predictions.stream()
+            .map(prediction -> ForecastEvaluation.pending(prediction.vehicleObservationId(), prediction.targetStopOrder()))
+            .toList());
         collectionInputs.confirmInput(batch.observationBatchId(), generatedAt);
     }
 
