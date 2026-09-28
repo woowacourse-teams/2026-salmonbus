@@ -6,7 +6,7 @@ import { arrivalViewsFor, representativeArrival } from "./arrivalPolicy";
 describe("arrivalViewsFor", () => {
   it("forecast 안의 확률과 예상 좌석으로 도착 예측을 만든다", () => {
     expect(arrivalViewsFor([forecastFixtures.available])).toEqual([
-      { kind: "forecast", stopsAway: 1, level: "high", seatEstimate: { kind: "count", seats: 5 } },
+      { kind: "available", stopsAway: 1, level: "high", seatEstimate: { kind: "count", seats: 5 } },
     ]);
   });
 
@@ -28,13 +28,13 @@ describe("arrivalViewsFor", () => {
 
   it("예상 좌석만 생략되면 탑승 확률 등급은 유지한다", () => {
     expect(arrivalViewsFor([forecastFixtures.withoutExpectedSeats])).toEqual([
-      { kind: "forecast", stopsAway: 1, level: "high", seatEstimate: { kind: "unknown" } },
+      { kind: "available", stopsAway: 1, level: "high", seatEstimate: { kind: "unknown" } },
     ]);
   });
 
   it("확률과 좌석이 0이면 예측 불가와 구분한다", () => {
     expect(arrivalViewsFor([forecastFixtures.zeroSeats])).toEqual([
-      { kind: "forecast", stopsAway: 1, level: "veryLow", seatEstimate: { kind: "count", seats: 0 } },
+      { kind: "available", stopsAway: 1, level: "veryLow", seatEstimate: { kind: "count", seats: 0 } },
     ]);
   });
 

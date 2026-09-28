@@ -1,8 +1,8 @@
 import type { ApproachingVehicle } from "@/shared/api/routeForecast.types";
 import { toSeatEstimate, toSeatLevel, type SeatEstimate, type SeatLevel } from "./seatGrade";
 
-export interface ForecastArrival {
-  kind: "forecast";
+export interface AvailableArrival {
+  kind: "available";
   stopsAway: number;
   level: SeatLevel;
   seatEstimate: SeatEstimate;
@@ -15,7 +15,7 @@ export interface UnavailableArrival {
   seatEstimate?: never;
 }
 
-export type ArrivalView = ForecastArrival | UnavailableArrival;
+export type ArrivalView = AvailableArrival | UnavailableArrival;
 
 const MAX_ARRIVALS = 3;
 
@@ -40,7 +40,7 @@ function toArrivalView(vehicle: ApproachingVehicle): ArrivalView {
   }
 
   return {
-    kind: "forecast",
+    kind: "available",
     stopsAway: horizonStops,
     level: toSeatLevel(forecast.seatAvailableProbability),
     seatEstimate: toSeatEstimate(forecast.expectedSeats),

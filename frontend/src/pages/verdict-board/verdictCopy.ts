@@ -43,7 +43,7 @@ export function stopsAwayLabel(stopsAway: number): string {
 }
 
 export function arrivalSeatLabel(arrival: ArrivalView): string {
-  return arrival.kind === "forecast" ? seatLabel(arrival.seatEstimate) : SEAT_UNKNOWN_LABEL;
+  return arrival.kind === "available" ? seatLabel(arrival.seatEstimate) : SEAT_UNKNOWN_LABEL;
 }
 
 export function seatLabel(estimate: SeatEstimate): string {

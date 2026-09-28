@@ -69,7 +69,7 @@ export function stopViewsFor(board: Board, direction: Direction): StopView[] {
 }
 
 export function arrivalToneFor(arrival: ArrivalView): ArrivalTone {
-  return arrival.kind === "forecast" ? arrival.level : "unavailable";
+  return arrival.kind === "available" ? arrival.level : "unavailable";
 }
 
 export function directionViewsFor(board: Board): DirectionView[] {
