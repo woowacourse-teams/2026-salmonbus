@@ -52,6 +52,31 @@ class DddStorageMigrationTest {
     }
 
     @Test
+    void 최종_구조에서는_통계_발행_기록을_세대_표로_합치고_평가_표의_vacuum_기준을_낮춘다() throws SQLException {
+        migrate("26");
+
+        assertThat(number("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '" + schema
+            + "' AND table_name = 'stop_demand_publication'")).isZero();
+        assertThat(scalar("SELECT array_to_string(reloptions, ',') FROM pg_class WHERE oid = 'forecast_evaluation'::regclass"))
+            .isEqualTo("autovacuum_vacuum_scale_factor=0.01,autovacuum_vacuum_threshold=50,"
+                + "autovacuum_vacuum_max_threshold=10000");
+    }
+
+    @Test
+    void 검증_이후_통계_누적_자료가_바뀌어도_검증_완료를_취소한다() throws SQLException {
+        migrate("24");
+        insertRoute();
+        execute("INSERT INTO route_version(route_id,content_digest,valid_from) VALUES(1,repeat('0',64),'2026-01-01T00:00:00Z')");
+        migrate("25");
+        execute("INSERT INTO sal134_transition(backup_id, verified_at) VALUES ('stopped-writer-backup', now())");
+
+        execute("INSERT INTO stop_demand_baseline(route_version_id) VALUES (1)");
+
+        assertThat(number("SELECT COUNT(*) FROM sal134_transition WHERE verified_at IS NOT NULL")).isZero();
+        assertThatThrownBy(() -> migrate("26")).hasMessageContaining("backfill 검증");
+    }
+
+    @Test
     void 검증하지_않은_기존_DB에서는_컬럼을_삭제하기_전에_전환을_거절한다() throws SQLException {
         migrate("24");
         insertRoute();

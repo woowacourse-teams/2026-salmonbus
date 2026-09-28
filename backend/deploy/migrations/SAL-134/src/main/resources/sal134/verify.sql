@@ -81,6 +81,15 @@ SELECT route_version_id, calculation_version, revision,
        count(*)::integer AS cell_count, NULL::bigint AS input_checkpoint
 FROM stop_demand_statistics
 GROUP BY route_version_id, calculation_version, revision
+UNION ALL
+SELECT publication.route_version_id, publication.calculation_version, publication.revision,
+       publication.data_until, publication.computed_at, publication.quality_revision,
+       0 AS cell_count, NULL::bigint AS input_checkpoint
+FROM stop_demand_publication publication
+WHERE NOT EXISTS (SELECT 1 FROM stop_demand_statistics cell
+    WHERE cell.route_version_id = publication.route_version_id
+      AND cell.calculation_version = publication.calculation_version
+      AND cell.revision = publication.revision)
 ), missing AS (
     SELECT to_jsonb(expected) AS value FROM expected
     EXCEPT SELECT to_jsonb(target) FROM demand_statistics_version target

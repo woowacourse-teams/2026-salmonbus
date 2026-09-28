@@ -17,7 +17,11 @@ BEGIN
         'historical_import_batch','historical_import_dataset_seal','historical_import_route_boundary',
         'historical_import_route_binding','historical_import_shard','historical_import_record','migration_source_record',
         'forecast_cutover_control','temporary_statistics_generation_freeze','sal134_transition_progress',
-        'stop_demand_seed_import','stop_demand_seed_hourly_total','stop_demand_seed_generation'
+        'stop_demand_seed_import','stop_demand_seed_hourly_total','stop_demand_seed_generation',
+        'stop_demand_pending_sample','stop_demand_rebuild_request','stop_demand_current_total','stop_demand_baseline',
+        'stop_demand_rebuild_progress','stop_demand_rebuild_total','stop_demand_vehicle','stop_demand_run',
+        'stop_demand_capacity_stage','stop_demand_day_stage','stop_demand_cell_stage','stop_demand_publication',
+        'stop_demand_rebuild_scan'
     ] LOOP
         IF to_regclass(format('%I.%I', current_schema(), table_name)) IS NOT NULL THEN
             EXECUTE format('LOCK TABLE %I IN ACCESS EXCLUSIVE MODE', table_name);
@@ -166,6 +170,7 @@ ALTER TABLE seat_forecast
     DROP COLUMN scored_at;
 ALTER TABLE observation_batch DROP COLUMN forecast_completed_at;
 ALTER TABLE route DROP COLUMN quality_revision;
+DROP TABLE stop_demand_publication;
 ALTER TABLE route_version
     DROP COLUMN maximum_observation_gap_seconds,
     DROP COLUMN observation_gap_evidence;

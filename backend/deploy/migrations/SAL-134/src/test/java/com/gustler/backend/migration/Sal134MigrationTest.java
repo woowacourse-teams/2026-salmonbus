@@ -240,6 +240,35 @@ class Sal134MigrationTest {
     }
 
     @Test
+    void 셀_없이_끝난_발행_기록도_통계_세대로_옮기고_최종_전환에서_표를_지운다() throws Exception {
+        execute("""
+            INSERT INTO stop_demand_publication(route_version_id,calculation_version,revision,data_until,computed_at,quality_revision)
+            VALUES(1,'calc1',1,'2026-08-31T00:00:00Z','2026-08-31T01:00:00Z',7),
+                  (1,'calc1',2,'2026-09-01T00:00:00Z','2026-09-01T01:00:00Z',7)
+            """);
+        run("prepare");
+        run("backfill");
+        run("verify");
+        run("finalize");
+
+        assertThat(number("SELECT cell_count FROM demand_statistics_version WHERE revision = 1")).isOne();
+        assertThat(number("SELECT cell_count FROM demand_statistics_version WHERE revision = 2")).isZero();
+        assertThat(number("SELECT count(*) FROM information_schema.tables WHERE table_name = 'stop_demand_publication'")).isZero();
+    }
+
+    @Test
+    void 발행_기록과_셀의_기준_시각이_다르면_세대를_합치지_않는다() throws Exception {
+        execute("""
+            INSERT INTO stop_demand_publication(route_version_id,calculation_version,revision,data_until,computed_at,quality_revision)
+            VALUES(1,'calc1',1,'2026-08-30T00:00:00Z','2026-08-31T01:00:00Z',7)
+            """);
+        run("prepare");
+
+        assertThatThrownBy(() -> run("backfill")).hasMessageContaining("validate-legacy.sql");
+        assertThat(number("SELECT count(*) FROM demand_statistics_version")).isZero();
+    }
+
+    @Test
     void 빈_DB에서도_전환_명령을_끝까지_실행할_수_있다() throws Exception {
         Flyway.configure().dataSource(settings.url(), settings.user(), settings.password())
                 .cleanDisabled(false).load().clean();

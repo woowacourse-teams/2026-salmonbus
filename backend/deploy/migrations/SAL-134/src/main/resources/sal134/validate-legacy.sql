@@ -56,3 +56,9 @@ WITH quality_references AS (
 SELECT count(*), (SELECT string_agg(observation_id::text, ', ' ORDER BY observation_id)
     FROM (SELECT observation_id FROM missing ORDER BY observation_id LIMIT 10) examples)
 FROM missing
+-- next-statement
+SELECT count(*) FROM stop_demand_publication publication
+JOIN stop_demand_statistics cell ON cell.route_version_id = publication.route_version_id
+    AND cell.calculation_version = publication.calculation_version AND cell.revision = publication.revision
+WHERE cell.data_until <> publication.data_until OR cell.computed_at <> publication.computed_at
+   OR cell.quality_revision <> publication.quality_revision

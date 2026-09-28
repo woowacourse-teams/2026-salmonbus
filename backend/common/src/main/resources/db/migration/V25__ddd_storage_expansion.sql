@@ -86,6 +86,10 @@ CREATE TABLE forecast_evaluation (
             AND arrival_running_state IS NOT NULL AND arrival_quality_direction IS NOT NULL
             AND ((arrival_remaining_seats IS NULL) <> (arrival_seat_unknown_reason IS NULL)))
     )
+) WITH (
+    autovacuum_vacuum_scale_factor = 0.01,
+    autovacuum_vacuum_threshold = 50,
+    autovacuum_vacuum_max_threshold = 10000
 );
 CREATE INDEX ix_evaluation_pending ON forecast_evaluation(route_version_id, vehicle_observation_id) WHERE scoring_state = 'PENDING';
 CREATE INDEX ix_evaluation_settled_arrival ON forecast_evaluation(arrived_at, vehicle_observation_id) WHERE scoring_state = 'SETTLED';
@@ -182,7 +186,11 @@ BEGIN
         'historical_import_batch','historical_import_dataset_seal','historical_import_route_boundary',
         'historical_import_route_binding','historical_import_shard','historical_import_record','migration_source_record',
         'forecast_cutover_control','temporary_statistics_generation_freeze','sal134_transition_progress',
-        'stop_demand_seed_import','stop_demand_seed_hourly_total','stop_demand_seed_generation'
+        'stop_demand_seed_import','stop_demand_seed_hourly_total','stop_demand_seed_generation',
+        'stop_demand_pending_sample','stop_demand_rebuild_request','stop_demand_current_total','stop_demand_baseline',
+        'stop_demand_rebuild_progress','stop_demand_rebuild_total','stop_demand_vehicle','stop_demand_run',
+        'stop_demand_capacity_stage','stop_demand_day_stage','stop_demand_cell_stage','stop_demand_publication',
+        'stop_demand_rebuild_scan'
     ] LOOP
         IF to_regclass(format('%I.%I', current_schema(), table_name)) IS NOT NULL THEN
             EXECUTE format('CREATE TRIGGER invalidate_sal134_verification AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON %I FOR EACH STATEMENT EXECUTE FUNCTION invalidate_sal134_verification()', table_name);
