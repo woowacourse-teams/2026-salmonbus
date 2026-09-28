@@ -619,6 +619,52 @@ class DemandStatisticsPipelineTest {
         assertRebuiltSamples(1);
     }
 
+    @Test
+    void 이전_형식으로_남은_단계_커서에서도_같은_통계를_발행한다() {
+        for (int stop = 11; stop <= 80; stop++) {
+            insertRouteStop(stop);
+        }
+        for (int day = 0; day < 2; day++) {
+            for (int stop = 11; stop <= 80; stop++) {
+                addStatisticsAt("legacy-" + day + "-" + stop, stop,
+                    OffsetDateTime.parse("2026-08-20T07:05:00+09:00").plusDays(day),
+                    day == 0 ? 24 : 40, day == 0 ? 6 : 20);
+            }
+        }
+        var expected = StopDemandAggregator.aggregate(statistics.readHourlyTotals(routeVersionId, PIPELINE_NOW), clock);
+
+        finishPipelineLeavingLegacyCursors();
+
+        var actual = statistics.readAsOf(routeVersionId, TimeSlot.MORNING,
+            DemandStatisticsVersion.CURRENT_CALCULATION_VERSION, PIPELINE_NOW);
+        assertThat(actual.cells()).hasSize(70);
+        for (var cell : actual.cells()) {
+            var reference = expected.stream().filter(x -> x.cell().stopOrder() == cell.stopOrder())
+                .findFirst().orElseThrow().cell();
+            assertThat(cell.sampleCount()).isEqualTo(reference.sampleCount());
+            assertThat(cell.dayCount()).isEqualTo(reference.dayCount());
+            assertThat(cell.averageFillRate()).isCloseTo(reference.averageFillRate(), Offset.offset(1e-12));
+            assertThat(cell.averageNetBoardingRate()).isCloseTo(reference.averageNetBoardingRate(), Offset.offset(1e-12));
+        }
+    }
+
+    private void finishPipelineLeavingLegacyCursors() {
+        for (int i = 0; i < 200; i++) {
+            if (pipeline.step(routeVersionId).status() == DemandStatisticsPipeline.Step.Status.COMPLETED) {
+                return;
+            }
+            jdbcClient.sql("""
+                UPDATE stop_demand_run SET vehicle_cursor='synthetic-bus', hour_cursor=?
+                WHERE route_version_id=? AND phase IN ('REDUCE','PUBLISH')
+                """).params(OffsetDateTime.parse("2026-08-21T07:00:00+09:00"), routeVersionId).update();
+            jdbcClient.sql("""
+                UPDATE stop_demand_run SET stop_cursor=80, slot_cursor='morning', day_cursor=DATE '2026-08-21'
+                WHERE route_version_id=? AND phase='PUBLISH'
+                """).param(routeVersionId).update();
+        }
+        throw new AssertionError("통계가 200번의 작은 처리 안에 완료되지 않음");
+    }
+
     private void settleOutsideStatisticsInput(String excludedReason) {
         int passed = excludedReason.equals("non_boarding") ? TARGET_STOP_ORDER : PASSED_STOP_ORDER;
         int target = excludedReason.equals("missing_seats") ? TARGET_STOP_ORDER : NEXT_TARGET_STOP_ORDER;
