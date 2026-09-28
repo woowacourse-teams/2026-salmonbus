@@ -3,7 +3,7 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 import com.gustler.backend.forecasting.domain.statistics.DemandSample;
 import com.gustler.backend.forecasting.domain.statistics.DemandSamplePage;
 import com.gustler.backend.forecasting.domain.statistics.DemandSampleRepository;
-import com.gustler.backend.forecasting.domain.statistics.PendingDemandSample;
+import com.gustler.backend.forecasting.domain.statistics.DemandSamplePage.PendingSample;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -73,7 +73,7 @@ public class JdbcDemandSampleRepository implements DemandSampleRepository {
         return new DemandSamplePage(jdbc.sql(LOCK_PAGE)
             .param("version", routeVersionId).param("vehicle", vehicleId)
             .param("afterInputId", afterInputId).param("inputUntilId", inputUntilId).param("limit", limit)
-            .query((rs, row) -> new PendingDemandSample(rs.getLong("id"), new DemandSample(
+            .query((rs, row) -> new PendingSample(rs.getLong("id"), new DemandSample(
                 rs.getLong("route_version_id"), rs.getLong("prediction_observation_id"),
                 rs.getLong("arrival_observation_id"), rs.getString("vehicle_id"), rs.getInt("target_stop_order"),
                 rs.getObject("arrived_at", OffsetDateTime.class).toInstant(),

@@ -11,9 +11,9 @@ import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsBaselin
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRunRepository;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion;
-import com.gustler.backend.forecasting.domain.statistics.FoldCursor;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun.FoldCursor;
 import com.gustler.backend.forecasting.domain.statistics.RebuildScope;
-import com.gustler.backend.forecasting.domain.statistics.ReduceCursor;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun.ReduceCursor;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandCellTotals;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
 import java.time.Clock;

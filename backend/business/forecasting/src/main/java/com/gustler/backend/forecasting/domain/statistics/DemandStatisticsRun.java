@@ -2,6 +2,7 @@ package com.gustler.backend.forecasting.domain.statistics;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -10,11 +11,26 @@ public final class DemandStatisticsRun {
 
     public static final int PAGE_SIZE = 128;
     private static final String NO_VEHICLE = "";
+    public enum Phase { STALE, CLEAN, CAPTURE, ACCUMULATE, FOLD, REDUCE, PUBLISH, DONE }
+
+    public record FoldCursor(String vehicleId, Instant arrivedHourStart, int targetStopOrder) {
+        public FoldCursor {
+            Objects.requireNonNull(vehicleId, "차량 ID가 필요하다");
+            Objects.requireNonNull(arrivedHourStart, "도착 시간대가 필요하다");
+        }
+    }
+
+    public record ReduceCursor(int stopOrder, TimeSlot timeSlot, LocalDate arrivalDate) {
+        public ReduceCursor {
+            Objects.requireNonNull(timeSlot, "시간대가 필요하다");
+            Objects.requireNonNull(arrivalDate, "도착 날짜가 필요하다");
+        }
+    }
 
     private final long routeVersionId;
     private UUID runId;
     private long qualityRevision;
-    private RunPhase phase;
+    private Phase phase;
     private Instant dataUntil;
     private long inputUntilId;
     private String vehicleCursor;
@@ -24,7 +40,7 @@ public final class DemandStatisticsRun {
     private Instant completedAt;
 
     public DemandStatisticsRun(final long routeVersionId, final UUID runId, final long qualityRevision,
-        final RunPhase phase, final Instant dataUntil, final long inputUntilId, final String vehicleCursor,
+        final Phase phase, final Instant dataUntil, final long inputUntilId, final String vehicleCursor,
         final long inputCursor, final FoldCursor foldCursor, final ReduceCursor reduceCursor, final Instant completedAt) {
         this.routeVersionId = routeVersionId;
         this.runId = Objects.requireNonNull(runId, "계산 식별자가 필요하다");
@@ -41,14 +57,14 @@ public final class DemandStatisticsRun {
 
     public static DemandStatisticsRun start(final long routeVersionId, final UUID runId, final long qualityRevision,
         final Instant now) {
-        return new DemandStatisticsRun(routeVersionId, runId, qualityRevision, RunPhase.CLEAN, now, 0, NO_VEHICLE, 0,
+        return new DemandStatisticsRun(routeVersionId, runId, qualityRevision, Phase.CLEAN, now, 0, NO_VEHICLE, 0,
             null, null, null);
     }
 
     public void restart(final UUID nextRunId, final long currentRevision, final Instant now) {
         runId = Objects.requireNonNull(nextRunId, "계산 식별자가 필요하다");
         qualityRevision = currentRevision;
-        phase = RunPhase.CLEAN;
+        phase = Phase.CLEAN;
         dataUntil = now.isAfter(dataUntil) ? now : dataUntil;
         inputUntilId = 0;
         vehicleCursor = NO_VEHICLE;
@@ -58,21 +74,21 @@ public final class DemandStatisticsRun {
     }
 
     public boolean isUpToDate(final long currentRevision, final Instant now, final Duration refreshInterval) {
-        return phase == RunPhase.DONE && qualityRevision == currentRevision && completedAt != null
+        return phase == Phase.DONE && qualityRevision == currentRevision && completedAt != null
             && now.isBefore(completedAt.plus(refreshInterval));
     }
 
     public boolean requiresRestart(final long currentRevision) {
-        return phase == RunPhase.DONE || phase == RunPhase.STALE || qualityRevision != currentRevision;
+        return phase == Phase.DONE || phase == Phase.STALE || qualityRevision != currentRevision;
     }
 
     public void markStale() {
-        phase = RunPhase.STALE;
+        phase = Phase.STALE;
     }
 
     public void cleaned() {
-        requirePhase(RunPhase.CLEAN);
-        phase = RunPhase.CAPTURE;
+        requirePhase(Phase.CLEAN);
+        phase = Phase.CAPTURE;
     }
 
     public Instant captureUntil(final Instant now) {
@@ -80,10 +96,10 @@ public final class DemandStatisticsRun {
     }
 
     public void captured(final Instant fixedDataUntil, final long lastInputId) {
-        requirePhase(RunPhase.CAPTURE);
+        requirePhase(Phase.CAPTURE);
         dataUntil = fixedDataUntil;
         inputUntilId = lastInputId;
-        phase = RunPhase.ACCUMULATE;
+        phase = Phase.ACCUMULATE;
     }
 
     public long accumulationStartAfter(final String vehicleId) {
@@ -91,45 +107,45 @@ public final class DemandStatisticsRun {
     }
 
     public void accumulated(final String vehicleId, final long nextInputId) {
-        requirePhase(RunPhase.ACCUMULATE);
+        requirePhase(Phase.ACCUMULATE);
         vehicleCursor = vehicleId;
         inputCursor = nextInputId;
     }
 
     public void accumulationFinished() {
-        requirePhase(RunPhase.ACCUMULATE);
+        requirePhase(Phase.ACCUMULATE);
         vehicleCursor = NO_VEHICLE;
         inputCursor = 0;
-        phase = RunPhase.FOLD;
+        phase = Phase.FOLD;
     }
 
     public void folded(final FoldCursor last) {
-        requirePhase(RunPhase.FOLD);
+        requirePhase(Phase.FOLD);
         foldCursor = Objects.requireNonNull(last, "마지막으로 접은 합계가 필요하다");
     }
 
     public void foldFinished() {
-        requirePhase(RunPhase.FOLD);
-        phase = RunPhase.REDUCE;
+        requirePhase(Phase.FOLD);
+        phase = Phase.REDUCE;
     }
 
     public void reduced(final ReduceCursor last) {
-        requirePhase(RunPhase.REDUCE);
+        requirePhase(Phase.REDUCE);
         reduceCursor = Objects.requireNonNull(last, "마지막으로 줄인 날짜 합계가 필요하다");
     }
 
     public void reduceFinished() {
-        requirePhase(RunPhase.REDUCE);
-        phase = RunPhase.PUBLISH;
+        requirePhase(Phase.REDUCE);
+        phase = Phase.PUBLISH;
     }
 
     public void published(final Instant computedAt) {
-        requirePhase(RunPhase.PUBLISH);
-        phase = RunPhase.DONE;
+        requirePhase(Phase.PUBLISH);
+        phase = Phase.DONE;
         completedAt = Objects.requireNonNull(computedAt, "계산 완료 시각이 필요하다");
     }
 
-    private void requirePhase(final RunPhase expected) {
+    private void requirePhase(final Phase expected) {
         if (phase != expected) {
             throw new IllegalStateException("통계 계산 단계가 %s가 아니다: %s".formatted(expected, phase));
         }
@@ -138,7 +154,7 @@ public final class DemandStatisticsRun {
     public long routeVersionId() { return routeVersionId; }
     public UUID runId() { return runId; }
     public long qualityRevision() { return qualityRevision; }
-    public RunPhase phase() { return phase; }
+    public Phase phase() { return phase; }
     public Instant dataUntil() { return dataUntil; }
     public long inputUntilId() { return inputUntilId; }
     public String vehicleCursor() { return vehicleCursor; }

@@ -7,7 +7,7 @@ import com.gustler.backend.forecasting.application.statistics.DemandRebuildStore
 import com.gustler.backend.forecasting.domain.statistics.DemandSampleRepository;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuild;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuildRepository;
-import com.gustler.backend.forecasting.domain.statistics.RebuildScanWindow;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuild.ScanWindow;
 import com.gustler.backend.forecasting.domain.statistics.RebuildScope;
 import java.time.Clock;
 import java.util.List;
@@ -110,7 +110,7 @@ public class DemandStatisticsRebuilder {
             rebuild.scannedObservations(ids);
             return;
         }
-        RebuildScanWindow window = rebuild.scan().orElseThrow();
+        ScanWindow window = rebuild.scan().orElseThrow();
         if (!window.hasOpenGroup()) {
             final Optional<BatchPosition> end = rebuildStore.nextGroupEnd(rebuild.routeVersionId(), window,
                 DemandStatisticsRebuild.BATCH_GROUP_SIZE);

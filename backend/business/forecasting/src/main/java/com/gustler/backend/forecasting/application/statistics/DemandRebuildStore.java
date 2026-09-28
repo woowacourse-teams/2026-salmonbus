@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.application.statistics;
 
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuild;
-import com.gustler.backend.forecasting.domain.statistics.RebuildScanWindow;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuild.ScanWindow;
 import com.gustler.backend.forecasting.domain.statistics.RebuildScope;
 import java.time.Instant;
 import java.util.List;
@@ -24,9 +24,9 @@ public interface DemandRebuildStore {
 
     List<Long> observationPage(long afterObservationId, long observationUntilId, int limit);
 
-    Optional<BatchPosition> nextGroupEnd(long routeVersionId, RebuildScanWindow window, int groupSize);
+    Optional<BatchPosition> nextGroupEnd(long routeVersionId, ScanWindow window, int groupSize);
 
-    List<Long> groupObservationPage(long routeVersionId, RebuildScanWindow window, RebuildScope scope,
+    List<Long> groupObservationPage(long routeVersionId, ScanWindow window, RebuildScope scope,
         long afterObservationId, long observationUntilId, int groupSize, int limit);
 
     void addRebuildTotals(DemandStatisticsRebuild rebuild, List<Long> observationIds);

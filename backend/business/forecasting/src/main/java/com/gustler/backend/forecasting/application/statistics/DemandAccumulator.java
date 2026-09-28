@@ -4,7 +4,7 @@ import com.gustler.backend.forecasting.application.quality.RouteDataQualityAcces
 import com.gustler.backend.forecasting.domain.statistics.DemandSamplePage;
 import com.gustler.backend.forecasting.domain.statistics.DemandSampleRepository;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun;
-import com.gustler.backend.forecasting.domain.statistics.PendingDemandSample;
+import com.gustler.backend.forecasting.domain.statistics.DemandSamplePage.PendingSample;
 import com.gustler.backend.forecasting.domain.statistics.RebuildScope;
 import java.time.Instant;
 import java.util.List;
@@ -43,11 +43,11 @@ public class DemandAccumulator {
             requests.request(routeVersionId, RebuildScope.vehicle(vehicleId));
             return new AccumulationResult(page.size(), 0, true, page.nextInputId(afterInputId));
         }
-        final List<PendingDemandSample> applicable = page.applicableUntil(dataUntil);
+        final List<PendingSample> applicable = page.applicableUntil(dataUntil);
         if (!applicable.isEmpty()) {
             store.addToCurrentTotals(routeVersionId, page.totalsUntil(dataUntil));
             store.registerVehicle(routeVersionId, vehicleId);
-            samples.remove(applicable.stream().map(PendingDemandSample::id).toList());
+            samples.remove(applicable.stream().map(PendingSample::id).toList());
         }
         return new AccumulationResult(page.size(), applicable.size(), false, page.nextInputId(afterInputId));
     }

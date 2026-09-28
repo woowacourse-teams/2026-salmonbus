@@ -2,9 +2,9 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRunRepository;
-import com.gustler.backend.forecasting.domain.statistics.FoldCursor;
-import com.gustler.backend.forecasting.domain.statistics.ReduceCursor;
-import com.gustler.backend.forecasting.domain.statistics.RunPhase;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun.FoldCursor;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun.ReduceCursor;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun.Phase;
 import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -59,9 +59,9 @@ public class JdbcDemandStatisticsRunRepository implements DemandStatisticsRunRep
 
     @Override
     public void save(final DemandStatisticsRun run) {
-        final RunPhase phase = run.phase();
-        final Optional<FoldCursor> fold = phase == RunPhase.FOLD ? run.foldCursor() : Optional.empty();
-        final Optional<ReduceCursor> reduce = phase == RunPhase.REDUCE ? run.reduceCursor() : Optional.empty();
+        final Phase phase = run.phase();
+        final Optional<FoldCursor> fold = phase == Phase.FOLD ? run.foldCursor() : Optional.empty();
+        final Optional<ReduceCursor> reduce = phase == Phase.REDUCE ? run.reduceCursor() : Optional.empty();
         jdbc.sql(UPSERT)
             .param("version", run.routeVersionId())
             .param("runId", run.runId())
@@ -69,9 +69,9 @@ public class JdbcDemandStatisticsRunRepository implements DemandStatisticsRunRep
             .param("phase", phase.name())
             .param("dataUntil", offsetOf(run.dataUntil()))
             .param("inputUntilId", run.inputUntilId())
-            .param("vehicleCursor", phase == RunPhase.ACCUMULATE ? run.vehicleCursor()
+            .param("vehicleCursor", phase == Phase.ACCUMULATE ? run.vehicleCursor()
                 : fold.map(FoldCursor::vehicleId).orElse(NO_VEHICLE))
-            .param("cursorId", phase == RunPhase.ACCUMULATE ? run.inputCursor() : 0)
+            .param("cursorId", phase == Phase.ACCUMULATE ? run.inputCursor() : 0)
             .param("hourCursor", fold.map(cursor -> offsetOf(cursor.arrivedHourStart())).orElse(null))
             .param("stopCursor", fold.map(FoldCursor::targetStopOrder)
                 .or(() -> reduce.map(ReduceCursor::stopOrder)).orElse(0))
@@ -82,14 +82,14 @@ public class JdbcDemandStatisticsRunRepository implements DemandStatisticsRunRep
     }
 
     private static DemandStatisticsRun runOf(final long routeVersionId, final ResultSet rs) throws SQLException {
-        final RunPhase phase = RunPhase.valueOf(rs.getString("phase"));
+        final Phase phase = Phase.valueOf(rs.getString("phase"));
         final OffsetDateTime hour = rs.getObject("hour_cursor", OffsetDateTime.class);
         final LocalDate day = rs.getObject("day_cursor", LocalDate.class);
         final OffsetDateTime completedAt = rs.getObject("completed_at", OffsetDateTime.class);
-        final boolean accumulating = phase == RunPhase.ACCUMULATE;
-        final FoldCursor fold = phase == RunPhase.FOLD && hour != null
+        final boolean accumulating = phase == Phase.ACCUMULATE;
+        final FoldCursor fold = phase == Phase.FOLD && hour != null
             ? new FoldCursor(rs.getString("vehicle_cursor"), hour.toInstant(), rs.getInt("stop_cursor")) : null;
-        final ReduceCursor reduce = phase == RunPhase.REDUCE && day != null
+        final ReduceCursor reduce = phase == Phase.REDUCE && day != null
             ? new ReduceCursor(rs.getInt("stop_cursor"), timeSlotOf(rs.getString("slot_cursor")), day) : null;
         return new DemandStatisticsRun(routeVersionId, rs.getObject("run_id", UUID.class),
             rs.getLong("quality_revision"), phase, rs.getObject("data_until", OffsetDateTime.class).toInstant(),

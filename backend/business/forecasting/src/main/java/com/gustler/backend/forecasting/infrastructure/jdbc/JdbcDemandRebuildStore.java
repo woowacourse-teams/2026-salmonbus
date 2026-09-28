@@ -2,7 +2,7 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.application.statistics.DemandRebuildStore;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuild;
-import com.gustler.backend.forecasting.domain.statistics.RebuildScanWindow;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuild.ScanWindow;
 import com.gustler.backend.forecasting.domain.statistics.RebuildScope;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -133,7 +133,7 @@ public class JdbcDemandRebuildStore implements DemandRebuildStore {
     }
 
     @Override
-    public Optional<BatchPosition> nextGroupEnd(final long routeVersionId, final RebuildScanWindow window,
+    public Optional<BatchPosition> nextGroupEnd(final long routeVersionId, final ScanWindow window,
         final int groupSize) {
         return jdbc.sql(GROUP_END).param("version", routeVersionId).param("upper", window.batchUntilId())
             .param("afterAt", window.after().map(JdbcDemandRebuildStore::offsetOf).orElse(null))
@@ -144,7 +144,7 @@ public class JdbcDemandRebuildStore implements DemandRebuildStore {
     }
 
     @Override
-    public List<Long> groupObservationPage(final long routeVersionId, final RebuildScanWindow window,
+    public List<Long> groupObservationPage(final long routeVersionId, final ScanWindow window,
         final RebuildScope scope, final long afterObservationId, final long observationUntilId, final int groupSize,
         final int limit) {
         return jdbc.sql(GROUP_OBSERVATIONS).param("version", routeVersionId).param("batchUpper", window.batchUntilId())

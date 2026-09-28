@@ -2,9 +2,9 @@ package com.gustler.backend.forecasting.application.statistics;
 
 import com.gustler.backend.forecasting.domain.statistics.DailyStopDemand;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsBaseline;
-import com.gustler.backend.forecasting.domain.statistics.FoldCursor;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun.FoldCursor;
 import com.gustler.backend.forecasting.domain.statistics.RebuildScope;
-import com.gustler.backend.forecasting.domain.statistics.ReduceCursor;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun.ReduceCursor;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandCellTotals;
 import com.gustler.backend.forecasting.domain.statistics.VehicleHourlyDemand;
 import java.time.Instant;

@@ -2,8 +2,8 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuild;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuildRepository;
-import com.gustler.backend.forecasting.domain.statistics.RebuildPhase;
-import com.gustler.backend.forecasting.domain.statistics.RebuildScanWindow;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuild.Phase;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuild.ScanWindow;
 import com.gustler.backend.forecasting.domain.statistics.RebuildScope;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -93,13 +93,13 @@ public class JdbcDemandStatisticsRebuildRepository implements DemandStatisticsRe
 
     private static DemandStatisticsRebuild rebuildOf(final long routeVersionId, final RebuildScope scope,
         final ResultSet rs) throws SQLException {
-        final RebuildScanWindow scan = rs.getBoolean("has_scan") ? new RebuildScanWindow(rs.getLong("batch_until_id"),
+        final ScanWindow scan = rs.getBoolean("has_scan") ? new ScanWindow(rs.getLong("batch_until_id"),
             instantOrNull(rs.getObject("after_at", OffsetDateTime.class)), rs.getLong("after_batch_id"),
             instantOrNull(rs.getObject("group_end_at", OffsetDateTime.class)), rs.getLong("group_end_id")) : null;
         return new DemandStatisticsRebuild(routeVersionId, scope, rs.getObject("request_id", UUID.class),
             rs.getLong("quality_revision"), rs.getObject("data_until", OffsetDateTime.class).toInstant(),
             rs.getLong("input_until_id"), rs.getLong("observation_until_id"), rs.getLong("cursor_id"),
-            RebuildPhase.valueOf(rs.getString("phase")), scan);
+            Phase.valueOf(rs.getString("phase")), scan);
     }
 
     private static Instant instantOrNull(final OffsetDateTime value) {
