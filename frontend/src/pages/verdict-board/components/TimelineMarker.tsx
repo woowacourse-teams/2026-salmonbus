@@ -1,8 +1,8 @@
-import type { SeatLevel } from "../seatGrade";
+import type { ChipTone } from "../verdictCopy";
 import * as styles from "./TimelineMarker.css";
 
 export type RoutePosition = "start" | "middle" | "end" | "only";
-export type MarkerTone = SeatLevel | "noForecast" | "passThrough";
+export type MarkerTone = ChipTone | "passThrough";
 export type MarkerBand = "stop" | "waypoint";
 
 interface TimelineMarkerProps {

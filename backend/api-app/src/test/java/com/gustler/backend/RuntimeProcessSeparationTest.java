@@ -259,8 +259,8 @@ class RuntimeProcessSeparationTest {
 
     private static void assertFinalSchema() throws SQLException {
         assertThat(queryStrings("""
-            SELECT version FROM flyway_schema_history WHERE version = '18' AND success
-            """)).containsExactly("18");
+            SELECT version FROM flyway_schema_history WHERE version = '26' AND success
+            """)).containsExactly("26");
         assertThat(queryStrings("""
             SELECT table_name || '.' || column_name
             FROM information_schema.columns
@@ -272,7 +272,7 @@ class RuntimeProcessSeparationTest {
                 OR (table_name = 'route_version'
                     AND column_name IN ('maximum_observation_gap_seconds', 'observation_gap_evidence'))
             )
-            """)).as("V18에서 제거한 기존 저장 컬럼").isEmpty();
+            """)).as("V26에서 제거한 기존 저장 컬럼").isEmpty();
     }
 
     private static void installWriteAudit() throws SQLException {

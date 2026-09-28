@@ -35,8 +35,8 @@ export function StopRow({ stop, routePosition, expanded, onToggle }: StopRowProp
     );
   }
 
-  const forecast = stop.kind === "boarding" ? stop : null;
-  const tone = forecast === null ? "noForecast" : forecast.level;
+  const boardingStop = stop.kind === "boarding" ? stop : null;
+  const tone = boardingStop === null ? "noVehicle" : boardingStop.tone;
 
   return (
     <li className={styles.stopRow}>
@@ -62,7 +62,7 @@ export function StopRow({ stop, routePosition, expanded, onToggle }: StopRowProp
         onClick={expanded ? onToggle : undefined}
       >
         <div id={panelId} className={styles.detailInner}>
-          <ArrivalForecastCard arrivals={forecast?.arrivals ?? []} />
+          <ArrivalForecastCard arrivals={boardingStop?.arrivals ?? []} />
         </div>
       </div>
     </li>

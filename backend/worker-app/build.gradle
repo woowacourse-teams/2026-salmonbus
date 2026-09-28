@@ -27,6 +27,9 @@ dependencies {
 
 tasks.named('test') {
     environment 'GBIS_SERVICE_KEY', 'fake-service-key-for-test'
+    environment 'GBIS_SERVICE_KEY_B', ''
+    environment 'GBIS_SERVICE_KEY_C', ''
+    environment 'GBIS_SERVICE_KEY_D', ''
 }
 
 springBoot {

@@ -1,6 +1,11 @@
 import type { Board, Direction, DirectionInfo, StopState } from "@/shared/api/routeForecast.types";
-import { arrivalViewsFor, representativeArrival, type ArrivalView } from "./arrivalPolicy";
-import type { SeatLevel } from "./seatGrade";
+import {
+  arrivalViewsFor,
+  representativeArrival,
+  arrivalToneFor,
+  type ArrivalView,
+  type ArrivalTone,
+} from "./arrivalPolicy";
 
 export type ServiceState = "running" | "outOfService";
 
@@ -15,7 +20,7 @@ interface StopViewBase {
 
 export interface BoardingStopView extends StopViewBase {
   kind: "boarding";
-  level: SeatLevel;
+  tone: ArrivalTone;
   arrivals: ArrivalView[];
 }
 
@@ -23,11 +28,11 @@ export interface PassThroughStopView extends StopViewBase {
   kind: "passThrough";
 }
 
-export interface NoForecastStopView extends StopViewBase {
-  kind: "noForecast";
+export interface NoVehicleStopView extends StopViewBase {
+  kind: "noVehicle";
 }
 
-export type StopView = BoardingStopView | PassThroughStopView | NoForecastStopView;
+export type StopView = BoardingStopView | PassThroughStopView | NoVehicleStopView;
 
 export interface DirectionView {
   id: Direction;
@@ -84,10 +89,10 @@ function toStopView(stop: StopState, turnSequence: number | null): StopView {
   const arrivals = arrivalViewsFor(stop.approachingVehicles);
   const representative = representativeArrival(arrivals);
   if (representative === undefined) {
-    return { kind: "noForecast", sequence, stopId, name, isTurnaround };
+    return { kind: "noVehicle", sequence, stopId, name, isTurnaround };
   }
 
-  return { kind: "boarding", sequence, stopId, name, isTurnaround, level: representative.level, arrivals };
+  return { kind: "boarding", sequence, stopId, name, isTurnaround, tone: arrivalToneFor(representative), arrivals };
 }
 
 // 회차 정류장은 상행의 마지막 순번이고, 하행은 그 다음 순번에서 시작한다. 양쪽에 표시한다.

@@ -21,7 +21,7 @@ BEGIN
     ] LOOP
         IF to_regclass(format('%I.%I', current_schema(), table_name)) IS NOT NULL THEN
             EXECUTE format('LOCK TABLE %I IN ACCESS EXCLUSIVE MODE', table_name);
-            -- V17이 만든 비어 있는 활성 슬롯은 새 DB에도 존재한다.
+            -- V25가 만든 비어 있는 활성 슬롯은 새 DB에도 존재한다.
             IF table_name = 'model_active_slot' THEN
                 SELECT EXISTS(SELECT 1 FROM model_active_slot WHERE model_deployment_id IS NOT NULL OR version <> 0) INTO has_rows;
             ELSE

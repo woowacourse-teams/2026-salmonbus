@@ -19,6 +19,7 @@ const chipMinWidth: Record<keyof typeof vars.color.seat, string> = {
   high: "73px",
   low: "73px",
   veryLow: "96px",
+  unavailable: "118px",
 };
 
 const seatChip = styleVariants(vars.color.seat, (tone, level) => [
@@ -30,7 +31,7 @@ const seatChip = styleVariants(vars.color.seat, (tone, level) => [
   },
 ]);
 
-const noForecastChip = style([
+const noVehicleChip = style([
   chipBase,
   {
     minWidth: "118px",
@@ -39,4 +40,4 @@ const noForecastChip = style([
   },
 ]);
 
-export const chip = { ...seatChip, noForecast: noForecastChip };
+export const chip = { ...seatChip, noVehicle: noVehicleChip };

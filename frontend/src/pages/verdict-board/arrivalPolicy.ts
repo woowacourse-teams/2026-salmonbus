@@ -1,11 +1,22 @@
 import type { ApproachingVehicle } from "@/shared/api/routeForecast.types";
 import { toSeatEstimate, toSeatLevel, type SeatEstimate, type SeatLevel } from "./seatGrade";
 
-export interface ArrivalView {
+export interface AvailableArrival {
+  kind: "available";
   stopsAway: number;
   level: SeatLevel;
   seatEstimate: SeatEstimate;
 }
+
+export interface UnavailableArrival {
+  kind: "unavailable";
+  stopsAway: number;
+  level?: never;
+  seatEstimate?: never;
+}
+
+export type ArrivalView = AvailableArrival | UnavailableArrival;
+export type ArrivalTone = SeatLevel | "unavailable";
 
 const MAX_ARRIVALS = 3;
 
@@ -20,10 +31,23 @@ export function representativeArrival(arrivals: readonly ArrivalView[]): Arrival
   return arrivals[0];
 }
 
+export function arrivalToneFor(arrival: ArrivalView): ArrivalTone {
+  return arrival.kind === "available" ? arrival.level : "unavailable";
+}
+
 function toArrivalView(vehicle: ApproachingVehicle): ArrivalView {
+  const { horizonStops, forecast } = vehicle;
+  if (forecast.status !== "AVAILABLE") {
+    return {
+      kind: "unavailable",
+      stopsAway: horizonStops,
+    };
+  }
+
   return {
-    stopsAway: vehicle.horizonStops,
-    level: toSeatLevel(vehicle.seatAvailableProbability),
-    seatEstimate: toSeatEstimate(vehicle.expectedSeats),
+    kind: "available",
+    stopsAway: horizonStops,
+    level: toSeatLevel(forecast.seatAvailableProbability),
+    seatEstimate: toSeatEstimate(forecast.expectedSeats),
   };
 }

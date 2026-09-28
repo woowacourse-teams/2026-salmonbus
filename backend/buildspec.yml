@@ -45,7 +45,32 @@ phases:
       - cd "${CODEBUILD_SRC_DIR}/backend"
       # CI 와 같은 명령이다. Testcontainers 를 쓰는 35개 클래스와 boot JAR 두 개를 실제로 띄우는
       # 테스트까지 다시 돈다. 프로젝트에 privileged mode 가 켜져 있어야 한다
-      - ./gradlew clean build --no-daemon
+      - |
+        if ./gradlew clean build --no-daemon; then
+          :
+        else
+          build_status=$?
+          # 기본 콘솔 출력에서 생략되는 원인 예외와 테스트 로그를 남긴다.
+          # 진단 출력이 실패해도 Gradle의 원래 종료 코드를 유지한다.
+          shopt -s nullglob globstar
+          failed_reports=0
+          for report in **/build/test-results/*/TEST-*.xml; do
+            if grep -Eq '<(failure|error)([[:space:]>])' "$report"; then
+              failed_reports=$((failed_reports + 1))
+              printf '\n--- 실패한 테스트 결과: %s ---\n' "$report"
+              cat "$report" || printf '테스트 결과를 읽지 못했습니다: %s\n' "$report"
+            else
+              report_status=$?
+              if [ "$report_status" -gt 1 ]; then
+                printf '테스트 결과를 검사하지 못했습니다: %s\n' "$report"
+              fi
+            fi
+          done
+          if [ "$failed_reports" -eq 0 ]; then
+            echo '실패한 테스트 XML을 찾지 못했습니다. 위 Gradle 실패 로그를 확인하세요.'
+          fi
+          exit "$build_status"
+        fi
 
   post_build:
     commands:

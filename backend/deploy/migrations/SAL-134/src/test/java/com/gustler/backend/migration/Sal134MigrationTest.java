@@ -28,7 +28,7 @@ class Sal134MigrationTest {
         Flyway.configure().dataSource(settings.url(), settings.user(), settings.password())
                 .cleanDisabled(false).load().clean();
         Flyway.configure().dataSource(settings.url(), settings.user(), settings.password())
-                .target("16").load().migrate();
+                .target("24").load().migrate();
         insertLegacyData();
     }
 
@@ -53,7 +53,7 @@ class Sal134MigrationTest {
         run("finalize");
         assertThat(number("SELECT count(*) FROM information_schema.columns WHERE table_name = 'seat_forecast' AND column_name = 'scoring_state'")).isZero();
         assertThat(number("SELECT count(*) FROM quality_training_seat_forecast")).isOne();
-        assertThat(number("SELECT max(version::integer) FROM flyway_schema_history")).isEqualTo(18);
+        assertThat(number("SELECT max(version::integer) FROM flyway_schema_history")).isEqualTo(26);
     }
 
     @Test
@@ -107,7 +107,7 @@ class Sal134MigrationTest {
 
         assertThat(number("SELECT count(*) FROM sal134_transition WHERE verified_at IS NOT NULL")).isZero();
         assertThatThrownBy(() -> Flyway.configure().dataSource(settings.url(), settings.user(), settings.password())
-                .target("18").load().migrate()).hasMessageContaining("backfill 검증");
+                .target("26").load().migrate()).hasMessageContaining("backfill 검증");
         assertThat(number("SELECT count(*) FROM information_schema.columns WHERE table_name = 'seat_forecast' AND column_name = 'scoring_state'")).isOne();
     }
 
@@ -131,7 +131,7 @@ class Sal134MigrationTest {
     void 중지_확인과_동일한_백업_식별이_없으면_변경하지_않는다() throws Exception {
         assertThatThrownBy(() -> Sal134Migration.run(new Sal134Migration.Options("prepare", Path.of("unused"),
                 false, "backup-after-stop", 1000, 0), settings)).hasMessageContaining("writers-stopped");
-        assertThat(number("SELECT max(version::integer) FROM flyway_schema_history")).isEqualTo(16);
+        assertThat(number("SELECT max(version::integer) FROM flyway_schema_history")).isEqualTo(24);
         run("prepare");
 
         assertThatThrownBy(() -> Sal134Migration.run(new Sal134Migration.Options("backfill", Path.of("unused"),
@@ -145,13 +145,13 @@ class Sal134MigrationTest {
 
         assertThatThrownBy(() -> Sal134Migration.run(new Sal134Migration.Options("prepare", Path.of("unused"),
                 true, "backup-after-stop", 1000, 0), wrongTarget)).hasMessageContaining("DB 이름이 다릅니다");
-        assertThat(number("SELECT max(version::integer) FROM flyway_schema_history")).isEqualTo(16);
+        assertThat(number("SELECT max(version::integer) FROM flyway_schema_history")).isEqualTo(24);
     }
 
     @Test
     void 기존_학습_제외_기록과_조회_결과를_보존한다() throws Exception {
         Flyway.configure().dataSource(settings.url(), settings.user(), settings.password())
-                .target("17").load().migrate();
+                .target("25").load().migrate();
         // historical 전체 이관 도구를 테스트 의존성으로 다시 포함하지 않는다.
         // 기존 장부의 컬럼·값과 동일한 최소 fixture를 사용한다.
         execute("""
@@ -244,7 +244,7 @@ class Sal134MigrationTest {
         Flyway.configure().dataSource(settings.url(), settings.user(), settings.password())
                 .cleanDisabled(false).load().clean();
         Flyway.configure().dataSource(settings.url(), settings.user(), settings.password())
-                .target("16").load().migrate();
+                .target("24").load().migrate();
 
         run("prepare");
         run("backfill");

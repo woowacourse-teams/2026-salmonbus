@@ -30,7 +30,7 @@ public final class Sal134Migration {
     private static final String EMPTY_CURSOR = "{}";
     private static final Set<String> COMMANDS = Set.of("inspect", "prepare", "backfill", "verify", "finalize");
     private static final List<Source> SOURCES = List.of(
-            new Source("daily_call_quota", "to_jsonb(t)", "provider, api_service, kst_date"),
+            new Source("daily_call_quota", "to_jsonb(t)", "provider, api_service, kst_date, key_alias"),
             new Source("route", "to_jsonb(t)", "id"),
             new Source("route_version", "to_jsonb(t)", "id"),
             new Source("route_stop", "to_jsonb(t)", "route_version_id, stop_order"),
@@ -106,16 +106,16 @@ public final class Sal134Migration {
             }
             options.requireWriteAttestation();
             if ("prepare".equals(options.command())) {
-                requireVersion(connection, 16, 17);
-                migrate(settings, "17");
+                requireVersion(connection, 24, 25);
+                migrate(settings, "25");
                 prepare(connection, options.backupId());
                 return;
             }
-            requireVersion(connection, 17, "finalize".equals(options.command()) ? 18 : 17);
+            requireVersion(connection, 25, "finalize".equals(options.command()) ? 26 : 25);
             requireBackup(connection, options.backupId());
-            if (schemaVersion(connection) == 18) {
+            if (schemaVersion(connection) == 26) {
                 verifyTrainingViews(connection);
-                System.out.println("FINALIZED: 이미 적용한 V18의 품질·학습 조회 대조 완료.");
+                System.out.println("FINALIZED: 이미 적용한 V26의 품질·학습 조회 대조 완료.");
                 return;
             }
             switch (options.command()) {
@@ -124,9 +124,9 @@ public final class Sal134Migration {
                 case "finalize" -> {
                     // 검증 이후 원본이 바뀌었거나 전환 자료가 손상된 경우 최종 DDL을 실행하지 않는다.
                     verify(connection);
-                    migrate(settings, "18");
+                    migrate(settings, "26");
                     verifyTrainingViews(connection);
-                    System.out.println("FINALIZED: V18 적용과 학습 조회 대조 완료. 앱 재기동 전 운영 확인이 필요합니다.");
+                    System.out.println("FINALIZED: V26 적용과 학습 조회 대조 완료. 앱 재기동 전 운영 확인이 필요합니다.");
                 }
                 default -> throw new IllegalArgumentException("지원하지 않는 명령");
             }
@@ -391,10 +391,10 @@ public final class Sal134Migration {
         try {
             try (Statement statement = connection.createStatement()) {
                 statement.executeUpdate("UPDATE sal134_transition SET verified_at = CURRENT_TIMESTAMP WHERE singleton");
-                statement.execute(classpathResource("/db/migration/V18__ddd_storage_cutover.sql"));
+                statement.execute(classpathResource("/db/migration/V26__ddd_storage_cutover.sql"));
             }
-            // 실제 V18을 같은 TX 안에서 실행해 바뀐 조회 결과를 전수 대조한다.
-            // 아래 rollback으로 컬럼/뷰/트리거를 V17 상태로 복구한다. Flyway 이력은 건드리지 않는다.
+            // 실제 V26을 같은 TX 안에서 실행해 바뀐 조회 결과를 전수 대조한다.
+            // 아래 rollback으로 컬럼/뷰/트리거를 V25 상태로 복구한다. Flyway 이력은 건드리지 않는다.
             compareSnapshots(connection, true);
         } finally {
             connection.rollback(preview);
@@ -484,7 +484,7 @@ public final class Sal134Migration {
                     require(rows.next(), "prepare 기록이 없습니다.");
                     final Snapshot expected = new Snapshot(rows.getBoolean(1), rows.getLong(2),
                             rows.getString(3), rows.getString(4));
-                    // historical 이관이 없던 새 설치에서는 학습 view가 V18에 처음 생긴다.
+                    // historical 이관이 없던 새 설치에서는 학습 view가 V26에 처음 생긴다.
                     if (trainingOnly && !expected.exists()) {
                         continue;
                     }

@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Test;
  */
 class SeatCapContractTest {
 
-    private static final String CUTOVER = "db/migration/V18__ddd_storage_cutover.sql";
+    private static final String CUTOVER = "db/migration/V26__ddd_storage_cutover.sql";
     private static final Pattern SEAT_CAP = Pattern.compile("remaining_seats\\s*<=\\s*(\\d+)");
     private static final int VIEW_OCCURRENCES = 2;
 

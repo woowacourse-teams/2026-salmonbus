@@ -1,4 +1,3 @@
-// For more info, see https://github.com/storybookjs/eslint-plugin-storybook#configuration-flat-config-format
 import storybook from "eslint-plugin-storybook";
 
 import js from "@eslint/js";
@@ -8,7 +7,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import prettierConfig from "eslint-config-prettier";
 
 export default tseslint.config(
-  { ignores: ["dist/", "node_modules/"] },
+  { ignores: ["dist/", "node_modules/", "playwright-report/", "test-results/"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   reactHooks.configs.flat["recommended-latest"],

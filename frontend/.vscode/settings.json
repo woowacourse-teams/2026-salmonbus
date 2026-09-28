@@ -1,6 +1,7 @@
 {
   "explorer.fileNesting.enabled": true,
   "explorer.fileNesting.patterns": {
-    "*.tsx": "${capture}.css.ts, ${capture}.stories.tsx"
+    "*.tsx": "${capture}.css.ts, ${capture}.stories.tsx, ${capture}.test.tsx",
+    "*.ts": "${capture}.test.ts"
   }
 }

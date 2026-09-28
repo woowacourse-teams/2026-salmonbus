@@ -41,7 +41,7 @@ class DddStorageMigrationTest {
 
     @Test
     void 빈_DB는_별도_데이터_이관_없이_최종_구조로_설치한다() throws SQLException {
-        migrate("18");
+        migrate("26");
 
         assertThat(number("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '" + schema
             + "' AND table_name IN ('forecast_publication','forecast_evaluation','demand_statistics_version',"
@@ -53,11 +53,11 @@ class DddStorageMigrationTest {
 
     @Test
     void 검증하지_않은_기존_DB에서는_컬럼을_삭제하기_전에_전환을_거절한다() throws SQLException {
-        migrate("16");
+        migrate("24");
         insertRoute();
-        migrate("17");
+        migrate("25");
 
-        assertThatThrownBy(() -> migrate("18")).hasMessageContaining("backfill 검증");
+        assertThatThrownBy(() -> migrate("26")).hasMessageContaining("backfill 검증");
         assertThat(number("SELECT quality_revision FROM route WHERE id = 1")).isEqualTo(7);
         assertThat(number("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = '" + schema
             + "' AND table_name = 'seat_forecast' AND column_name = 'scoring_state'")).isOne();
@@ -65,29 +65,29 @@ class DddStorageMigrationTest {
 
     @Test
     void 검증_이후_변경이_발생하면_검증_완료를_취소한다() throws SQLException {
-        migrate("16");
+        migrate("24");
         insertRoute();
-        migrate("17");
+        migrate("25");
         execute("INSERT INTO sal134_transition(backup_id, verified_at) VALUES ('stopped-writer-backup', now())");
 
         execute("UPDATE route SET display_name = '변경된 노선' WHERE id = 1");
 
         assertThat(number("SELECT COUNT(*) FROM sal134_transition WHERE verified_at IS NOT NULL")).isZero();
-        assertThatThrownBy(() -> migrate("18")).hasMessageContaining("backfill 검증");
+        assertThatThrownBy(() -> migrate("26")).hasMessageContaining("backfill 검증");
     }
 
     @Test
     void 예측_평가와_품질을_분리해도_원관측과_학습_조회_값을_보존한다() throws SQLException {
-        migrate("16");
+        migrate("24");
         insertLegacyData();
         String observationBefore = scalar("SELECT string_agg(row_to_json(o)::text, ',' ORDER BY id) FROM vehicle_observation o");
         String viewColumnsBefore = viewColumns();
         String forecastsBefore = scalar("SELECT string_agg(row_to_json(f)::text, ',' ORDER BY vehicle_observation_id,target_stop_order) FROM quality_training_seat_forecast f");
-        migrate("17");
+        migrate("25");
         copyLegacyData();
         execute("INSERT INTO sal134_transition(backup_id, verified_at) VALUES ('stopped-writer-backup', now())");
 
-        migrate("18");
+        migrate("26");
 
         assertThat(scalar("SELECT string_agg(row_to_json(o)::text, ',' ORDER BY id) FROM vehicle_observation o")).isEqualTo(observationBefore);
         assertThat(scalar("SELECT string_agg(row_to_json(f)::text, ',' ORDER BY vehicle_observation_id,target_stop_order) FROM quality_training_seat_forecast f")).isEqualTo(forecastsBefore);
@@ -101,12 +101,12 @@ class DddStorageMigrationTest {
 
     @Test
     void 평가_근거를_보존하면서_도착_관측의_최신_편도_판정을_조회에_반영한다() throws SQLException {
-        migrate("16");
+        migrate("24");
         insertLegacyData();
-        migrate("17");
+        migrate("25");
         copyLegacyData();
         execute("INSERT INTO sal134_transition(backup_id, verified_at) VALUES ('stopped-writer-backup', now())");
-        migrate("18");
+        migrate("26");
 
         execute("""
             INSERT INTO vehicle_one_way_trip(id,start_observation_id,route_version_id,vehicle_id,status,boundary,rule_version)
@@ -129,9 +129,9 @@ class DddStorageMigrationTest {
 
     @Test
     void 과거_빈_발행은_모델을_추정하지_않고_출처를_모름으로_기록한다() throws SQLException {
-        migrate("16");
+        migrate("24");
         insertLegacyData();
-        migrate("17");
+        migrate("25");
 
         execute("""
             INSERT INTO forecast_publication(source_batch_id, source_attempt_number, route_version_id,

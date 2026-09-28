@@ -1,5 +1,5 @@
 -- SAL-134: 운영 앱을 중지한 뒤 전환 도구가 이 버전까지만 적용한다.
--- 기존 행을 복사하거나 기존 컬럼을 삭제하지 않는다. V18은 검증 완료를 확인한다.
+-- 기존 행을 복사하거나 기존 컬럼을 삭제하지 않는다. V26은 검증 완료를 확인한다.
 CREATE TABLE sal134_transition (
     singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
     backup_id text NOT NULL CHECK (length(trim(backup_id)) > 0),

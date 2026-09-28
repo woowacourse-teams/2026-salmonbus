@@ -8,6 +8,7 @@ import type {
   SeatInfo,
   StopState,
   Vehicle,
+  VehicleForecast,
 } from "./routeForecast.types";
 
 // 아래 함수들은 일부러 틀리게 쓴 코드이다. 타입이 제대로라면 각 줄에서 에러가 나고, @ts-expect-error가 그걸 삼킨다.
@@ -21,9 +22,33 @@ function rejectsSeatCountOnUnknown(): SeatInfo {
 }
 
 function rejectsUncheckedExpectedSeats(approaching: ApproachingVehicle): number {
+  if (approaching.forecast.status !== "AVAILABLE") return 0;
   // @ts-expect-error expectedSeats는 없을 수 있는 필드라, 있는지 확인 없이 바로 쓰면 막혀야 한다
-  const seats: number = approaching.expectedSeats;
+  const seats: number = approaching.forecast.expectedSeats;
   return seats;
+}
+
+function rejectsLegacyExpectedSeats(approaching: ApproachingVehicle): unknown {
+  // @ts-expect-error 예상 좌석은 차량 최상위가 아니라 forecast 안에 있다
+  return approaching.expectedSeats;
+}
+
+function rejectsLegacySeatProbability(approaching: ApproachingVehicle): unknown {
+  // @ts-expect-error 탑승 확률은 차량 최상위가 아니라 forecast 안에 있다
+  return approaching.seatAvailableProbability;
+}
+
+function rejectsUncheckedForecastProbability(forecast: VehicleForecast): number {
+  // @ts-expect-error UNAVAILABLE에는 확률이 없으므로 status 확인 없이 number로 사용할 수 없다
+  const probability: number = forecast.seatAvailableProbability;
+  return probability;
+}
+
+function rejectsValuesOnUnavailableForecast(): VehicleForecast {
+  const smuggled = { status: "UNAVAILABLE" as const, seatAvailableProbability: 0.8, expectedSeats: 5 };
+  // @ts-expect-error 예측 불가 응답에는 예측값을 넣을 수 없다
+  const forecast: VehicleForecast = smuggled;
+  return forecast;
 }
 
 function rejectsUncheckedVehicleId(vehicle: Vehicle): string {
@@ -64,7 +89,7 @@ function rejectsExplicitUndefinedRemaining(): SeatInfo {
   return seat;
 }
 
-// 아래 둘은 정상 코드다.
+// 아래 함수들은 정상 코드다.
 function usesBoardStaleAt(board: Board): string {
   return board.staleAt.slice(0, 10);
 }
@@ -73,6 +98,13 @@ function usesBoardStaleAt(board: Board): string {
 function narrowsSeatByKind(seat: SeatInfo): number {
   if (seat.kind === "EXACT") {
     return seat.remaining;
+  }
+  return 0;
+}
+
+function narrowsForecastByStatus(forecast: VehicleForecast): number {
+  if (forecast.status === "AVAILABLE") {
+    return forecast.seatAvailableProbability;
   }
   return 0;
 }

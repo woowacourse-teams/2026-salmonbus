@@ -18,6 +18,7 @@ phases:
       - pnpm install --frozen-lockfile
       - pnpm typecheck
       - pnpm lint
+      - pnpm test
   build:
     commands:
       - cd "${CODEBUILD_SRC_DIR}/frontend"

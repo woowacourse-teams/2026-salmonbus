@@ -50,9 +50,7 @@ export interface RequestOptions {
 }
 
 export async function requestJson<T>(url: string, options: RequestOptions = {}): Promise<ApiResult<T>> {
-  if (options.signal?.aborted) {
-    return failed({ kind: "aborted" });
-  }
+  if (options.signal?.aborted) return failed({ kind: "aborted" });
 
   const controller = new AbortController();
   const forwardAbort = () => controller.abort(options.signal?.reason);

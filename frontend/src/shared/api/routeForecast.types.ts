@@ -53,11 +53,24 @@ export interface ModelInfo {
   trainedThrough: string;
 }
 
+export interface AvailableForecast {
+  status: "AVAILABLE";
+  seatAvailableProbability: number;
+  expectedSeats?: number;
+}
+
+export interface UnavailableForecast {
+  status: "UNAVAILABLE";
+  seatAvailableProbability?: never;
+  expectedSeats?: never;
+}
+
+export type VehicleForecast = AvailableForecast | UnavailableForecast;
+
 export interface ApproachingVehicle {
   vehicleId: string | null;
   horizonStops: number;
-  seatAvailableProbability: number;
-  expectedSeats?: number;
+  forecast: VehicleForecast;
 }
 
 export interface StopState {

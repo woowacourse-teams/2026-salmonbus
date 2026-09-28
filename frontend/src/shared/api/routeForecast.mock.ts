@@ -372,12 +372,17 @@ function approachingVehiclesAt(stop: MockStop): ApproachingVehicle[] {
       const horizonStops = stop.sequence - vehicle.currentStopSequence;
       if (horizonStops <= 0 || horizonStops > MAX_MOCK_FORECAST_HORIZON) return [];
 
+      // 현재 좌석을 알아도 도착 예측은 제공하지 못하는 사례다.
+      if (vehicle.vehicleId === "V-3330-UP-02B") {
+        return [{ vehicleId: vehicle.vehicleId, horizonStops, forecast: { status: "UNAVAILABLE" } }];
+      }
+
       if (vehicle.seat.kind === "UNKNOWN") {
         return [
           {
             vehicleId: vehicle.vehicleId,
             horizonStops,
-            seatAvailableProbability: 0.5,
+            forecast: { status: "AVAILABLE", seatAvailableProbability: 0.5 },
           },
         ];
       }
@@ -387,8 +392,11 @@ function approachingVehiclesAt(stop: MockStop): ApproachingVehicle[] {
         {
           vehicleId: vehicle.vehicleId,
           horizonStops,
-          seatAvailableProbability: seatProbabilityFor(expectedSeats),
-          expectedSeats,
+          forecast: {
+            status: "AVAILABLE",
+            seatAvailableProbability: seatProbabilityFor(expectedSeats),
+            expectedSeats,
+          },
         },
       ];
     })
