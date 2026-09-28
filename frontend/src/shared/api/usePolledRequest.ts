@@ -10,7 +10,7 @@ export interface PolledResource<T> {
   body: T | null;
   // body를 받은 성공 응답의 서버 기준 시계. 갱신 실패 뒤에도 body와 함께 남는다.
   clock: ReferenceClock | null;
-  // 서버 Date 헤더가 없을 때만 쓰는 로컬 수신 시각.
+  // body를 받은 로컬 수신 시각. 서버 Date 헤더가 없을 때 시계 대신 쓰고, 새 응답이 왔는지 가릴 때도 쓴다.
   receivedAt: number | null;
 }
 
