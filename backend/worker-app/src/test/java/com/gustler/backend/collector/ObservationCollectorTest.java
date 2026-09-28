@@ -4,11 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
 
 import ch.qos.logback.classic.Logger;
 import com.gustler.backend.diagnostics.WorkerOperationLog;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.gustler.backend.collector.GbisLocationResult.DailyQuotaExceeded;
 import com.gustler.backend.collector.GbisLocationResult.GbisSystemError;
 import com.gustler.backend.collector.GbisLocationResult.NoVehicles;
 import com.gustler.backend.collector.GbisLocationResult.Success;
@@ -26,6 +29,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
  * 설정에 노선을 적고 수집을 한 판 돌리면 판본이 열리고 관측이 쌓이는지 본다.
@@ -58,6 +62,7 @@ class ObservationCollectorTest {
     private static final int RUNNING_STATE_DEPARTED = 2;
 
     private static final int ALREADY_USED_UP = 3;
+    private static final int GBIS_DAILY_LIMIT = 10_000;
 
     @MockitoBean
     private Clock clock;
@@ -67,6 +72,9 @@ class ObservationCollectorTest {
 
     @MockitoBean
     private GbisLocationSource locationSource;
+
+    @MockitoSpyBean
+    private CallQuotaRepository callQuotaRepository;
 
     @Autowired
     private ObservationCollector collector;
@@ -175,6 +183,35 @@ class ObservationCollectorTest {
 
         // then
         assertThat(onlyBatchColumn("outcome", String.class)).isEqualTo("FAILED_UPSTREAM");
+    }
+
+    @Test
+    void 키_제외가_실패해도_수집_결과를_유지하고_다음_거절에서_제외를_다시_시도한다() {
+        // given
+        IllegalStateException firstExclusionFailure = new IllegalStateException("키 제외 실패");
+        given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new DailyQuotaExceeded());
+        doThrow(firstExclusionFailure)
+            .doCallRealMethod()
+            .when(callQuotaRepository)
+            .exclude(CallQuota.BUS_LOCATION, GbisKey.PRIMARY, KOREA_8_28);
+
+        // when 첫 제외만 실패한다
+        assertThatThrownBy(() -> collector.collectOnce(ROUTE_3330)).hasRootCause(firstExclusionFailure);
+
+        // then 수집 결과와 사용량은 먼저 커밋되어 있다
+        assertThat(onlyBatchColumn("outcome", String.class)).isEqualTo("FAILED_UPSTREAM");
+        assertThat(onlyBatchColumn("failure_code", String.class)).isEqualTo("DAILY_QUOTA_EXCEEDED");
+        assertThat(reservedCallsOf(CallQuota.BUS_LOCATION)).isEqualTo(1);
+
+        // when 다음 슬롯 차례에도 같은 키가 거절된다
+        given(clock.instant()).willReturn(NEXT_TICK);
+        collector.collectOnce(ROUTE_3330);
+
+        // then 제외를 다시 시도해 그날 장부를 한도까지 채운다
+        then(callQuotaRepository).should(times(2))
+            .exclude(CallQuota.BUS_LOCATION, GbisKey.PRIMARY, KOREA_8_28);
+        assertThat(batchCount()).isEqualTo(2);
+        assertThat(reservedCallsOf(CallQuota.BUS_LOCATION)).isEqualTo(GBIS_DAILY_LIMIT);
     }
 
     @Test
