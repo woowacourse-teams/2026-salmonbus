@@ -22,6 +22,12 @@ function failureOf(result: ApiResult<unknown>): ApiFailure {
 
 describe("requestJson", () => {
   describe("오류 응답을 받으면", () => {
+    it("429 응답이면 rateLimited로 분류하고 상태 코드를 함께 담는다", async () => {
+      respondWith(429, {});
+      const failure = failureOf(await requestJson("/api/v1/routes/R1/board"));
+      expect(failure).toMatchObject({ kind: "rateLimited", status: 429 });
+    });
+
     it("계약에 있는 code면 retryable 필드 없이도 contract로 분류한다", async () => {
       respondWith(503, { code: "MODEL_OUT_OF_SCOPE", message: "지원하지 않는 판본", requestId: "req-contract" });
       const failure = failureOf(await requestJson("/api/v1/routes/R1/board"));

@@ -34,8 +34,10 @@ describe("failurePropertiesOf", () => {
     });
   });
 
-  it("요청이 너무 많아 Too many request로 막히면 429를 남긴다", () => {
-    expect(failurePropertiesOf({ kind: "rateLimited", retryAfterMs: 1000, requestId: null })).toStrictEqual({
+  it("요청이 너무 많아 Too Many Requests로 막히면 429를 남긴다", () => {
+    expect(
+      failurePropertiesOf({ kind: "rateLimited", status: 429, retryAfterMs: 1000, requestId: null }),
+    ).toStrictEqual({
       error_kind: "rateLimited",
       http_status: 429,
     });

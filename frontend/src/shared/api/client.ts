@@ -31,7 +31,7 @@ export interface ApiSuccess<T> {
 
 export type ApiFailure =
   | { kind: "contract"; error: ErrorResponse; status: number; retryAfterMs: number | null }
-  | { kind: "rateLimited"; retryAfterMs: number | null; requestId: string | null }
+  | { kind: "rateLimited"; status: number; retryAfterMs: number | null; requestId: string | null }
   | { kind: "malformed"; status: number; requestId: string | null }
   | { kind: "timeout" }
   | { kind: "aborted" }
@@ -84,7 +84,12 @@ export async function requestJson<T>(url: string, options: RequestOptions = {}):
 
 function infrastructureFailureOf(response: Response, clock: ReferenceClock | null): ApiFailure | null {
   if (response.status === 429) {
-    return { kind: "rateLimited", retryAfterMs: retryAfterMsOf(response, clock), requestId: requestIdOf(response) };
+    return {
+      kind: "rateLimited",
+      status: response.status,
+      retryAfterMs: retryAfterMsOf(response, clock),
+      requestId: requestIdOf(response),
+    };
   }
   return null;
 }
