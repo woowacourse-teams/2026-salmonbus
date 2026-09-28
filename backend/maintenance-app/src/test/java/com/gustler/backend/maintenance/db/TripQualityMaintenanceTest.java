@@ -6,12 +6,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gustler.backend.forecasting.api.quality.ProcessTripQualityChunk;
 import com.gustler.backend.forecasting.api.quality.TripQualityChunkResult;
+import com.gustler.backend.forecasting.application.quality.RouteDataQualityChanges;
 import com.gustler.backend.forecasting.application.quality.TripQualityInvestigationService;
 import com.gustler.backend.forecasting.application.quality.TripQualityMaintenanceService;
 import com.gustler.backend.forecasting.configuration.QualityMaintenanceConfiguration;
 import com.gustler.backend.forecasting.domain.quality.QualityObservationBatch;
 import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcDemandStatisticsRebuildRequests;
 import com.gustler.backend.forecasting.infrastructure.quality.JdbcRouteDataQualityAccess;
+import com.gustler.backend.forecasting.infrastructure.quality.JdbcRouteDataQualityRepository;
 import com.gustler.backend.forecasting.infrastructure.quality.JdbcTripQualityMaintenanceStore;
 import com.gustler.backend.forecasting.infrastructure.quality.JdbcTripQualityStore;
 import com.gustler.backend.forecasting.domain.model.SeatGrid;
@@ -655,15 +657,20 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
 
     private static TripQualityInvestigationService quality(JdbcClient jdbc) {
         return new TripQualityInvestigationService(new JdbcTripQualityStore(jdbc), new JdbcRouteDataQualityAccess(jdbc),
-            new JdbcDemandStatisticsRebuildRequests(jdbc));
+            changes(jdbc));
     }
 
     private static TripQualityMaintenanceService maintenance(JdbcClient jdbc) {
         var store = new JdbcTripQualityStore(jdbc);
         var guard = new JdbcRouteDataQualityAccess(jdbc);
-        var statistics = new JdbcDemandStatisticsRebuildRequests(jdbc);
+        var changes = changes(jdbc);
         return new TripQualityMaintenanceService(new JdbcTripQualityMaintenanceStore(jdbc),
-            new TripQualityInvestigationService(store, guard, statistics), guard, store, statistics);
+            new TripQualityInvestigationService(store, guard, changes), guard, store, changes);
+    }
+
+    private static RouteDataQualityChanges changes(JdbcClient jdbc) {
+        return new RouteDataQualityChanges(new JdbcRouteDataQualityRepository(jdbc),
+            new JdbcDemandStatisticsRebuildRequests(jdbc));
     }
 
     private static JdbcClient jdbc(Connection c) { return JdbcClient.create(new SingleConnectionDataSource(c, true)); }

@@ -6,6 +6,8 @@ import static org.mockito.Mockito.when;
 
 import com.gustler.backend.forecasting.application.evaluation.ForecastEvaluationWriter;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
+import com.gustler.backend.forecasting.domain.quality.RouteDataQuality;
+import com.gustler.backend.forecasting.domain.quality.RouteDataQualityRepository;
 import com.gustler.backend.forecasting.application.statistics.DemandAccumulator;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuildRequests;
@@ -101,6 +103,9 @@ class DemandStatisticsPipelineTest {
 
     @Autowired
     private RouteDataQualityAccess qualityAccess;
+
+    @Autowired
+    private RouteDataQualityRepository qualities;
 
     @Autowired
     private DemandStatisticsPipeline pipeline;
@@ -413,7 +418,7 @@ class DemandStatisticsPipelineTest {
         advanceRebuildTo(VEHICLE_204000206, "CLEAR");
         UUID original = rebuildRequest(VEHICLE_204000206);
         rebuildRequests.request(routeVersionId, RebuildScope.vehicle("other-vehicle"));
-        qualityAccess.invalidate(routeVersionId);
+        changeEligibility();
 
         rebuilder.step(routeVersionId, VEHICLE_204000206);
 
@@ -477,7 +482,7 @@ class DemandStatisticsPipelineTest {
         jdbcClient.sql("UPDATE vehicle_one_way_trip SET status='EXCLUDED' WHERE start_observation_id=?")
             .param(vehicleObservationId).update();
         rebuildRequests.request(routeVersionId, RebuildScope.vehicle(VEHICLE_204000206));
-        qualityAccess.invalidate(routeVersionId);
+        changeEligibility();
 
         finishRebuild("");
 
@@ -907,5 +912,11 @@ class DemandStatisticsPipelineTest {
         final int stopOrder
     ) {
         return "20500%04d".formatted(stopOrder);
+    }
+
+    private void changeEligibility() {
+        RouteDataQuality quality = qualities.findForUpdate(routeVersionId);
+        quality.changeEligibility();
+        qualities.save(quality);
     }
 }

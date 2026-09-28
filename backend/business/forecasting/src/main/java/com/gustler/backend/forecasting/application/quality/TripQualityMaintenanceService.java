@@ -21,16 +21,16 @@ public class TripQualityMaintenanceService implements PreviewTripQuality, Proces
     private final TripQualityInvestigationService investigations;
     private final RouteDataQualityAccess quality;
     private final TripQualityStore store;
-    private final DemandStatisticsRebuildTrigger statistics;
+    private final RouteDataQualityChanges changes;
 
     public TripQualityMaintenanceService(final TripQualityMaintenanceStore maintenance,
         final TripQualityInvestigationService investigations, final RouteDataQualityAccess quality, final TripQualityStore store,
-        final DemandStatisticsRebuildTrigger statistics) {
+        final RouteDataQualityChanges changes) {
         this.maintenance = maintenance;
         this.investigations = investigations;
         this.quality = quality;
         this.store = store;
-        this.statistics = statistics;
+        this.changes = changes;
     }
 
     @Override
@@ -52,8 +52,7 @@ public class TripQualityMaintenanceService implements PreviewTripQuality, Proces
         discovery.verifyResume(until, seconds);
         if (existing.isEmpty()) {
             maintenance.startDiscovery(version, discovery);
-            quality.invalidate(version);
-            statistics.requestRoute(version);
+            changes.routeChanged(version);
         }
         int processed = 0;
         if (!discovery.completed()) {
@@ -75,8 +74,7 @@ public class TripQualityMaintenanceService implements PreviewTripQuality, Proces
                 last == null ? discovery.cursorBatchId() : last.id(), processed, limit);
             maintenance.saveDiscovery(version, discovery);
             if (discovery.completed()) {
-                quality.invalidate(version);
-                statistics.requestRoute(version);
+                changes.routeChanged(version);
             }
         }
         final var pending = maintenance.nextPendingVehicle(version);

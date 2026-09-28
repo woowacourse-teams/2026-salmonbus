@@ -3,6 +3,8 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
+import com.gustler.backend.forecasting.domain.quality.RouteDataQuality;
+import com.gustler.backend.forecasting.domain.quality.RouteDataQualityRepository;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandCell;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandHourlyTotals;
@@ -129,6 +131,9 @@ class JdbcStopDemandStatisticsRepositoryTest {
 
     @Autowired
     private RouteDataQualityAccess qualityAccess;
+
+    @Autowired
+    private RouteDataQualityRepository qualities;
 
     private long routeVersionId;
     private long modelDeploymentId;
@@ -453,7 +458,7 @@ class JdbcStopDemandStatisticsRepositoryTest {
         jdbcStopDemandStatisticsRepository.append(generationOf(FIRST_REVISION, CALCULATION_VERSION,
             List.of(measurementOf(TimeSlot.MORNING, TARGET_STOP_ORDER))));
         qualityAccess.lock(routeVersionId);
-        qualityAccess.invalidate(routeVersionId);
+        changeEligibility();
 
         // when
         var totals = jdbcStopDemandStatisticsRepository.readHourlyTotals(routeVersionId, DATA_UNTIL);
@@ -648,5 +653,11 @@ class JdbcStopDemandStatisticsRepositoryTest {
         final int stopOrder
     ) {
         return "20500%04d".formatted(stopOrder);
+    }
+
+    private void changeEligibility() {
+        RouteDataQuality quality = qualities.findForUpdate(routeVersionId);
+        quality.changeEligibility();
+        qualities.save(quality);
     }
 }

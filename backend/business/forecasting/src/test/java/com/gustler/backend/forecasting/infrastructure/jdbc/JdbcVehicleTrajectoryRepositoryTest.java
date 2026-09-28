@@ -3,6 +3,7 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.groups.Tuple.tuple;
 
+import com.gustler.backend.forecasting.application.quality.RouteDataQualityChanges;
 import com.gustler.backend.forecasting.application.quality.TripQualityInvestigationService;
 import com.gustler.backend.forecasting.domain.quality.QualityObservationBatch;
 import com.gustler.backend.forecasting.domain.model.FullSeatStreak;
@@ -14,6 +15,7 @@ import com.gustler.backend.forecasting.domain.model.SeatSlope;
 import com.gustler.backend.forecasting.domain.model.SeatUnknownReason;
 import com.gustler.backend.forecasting.domain.model.TrajectoryGap;
 import com.gustler.backend.forecasting.infrastructure.quality.JdbcRouteDataQualityAccess;
+import com.gustler.backend.forecasting.infrastructure.quality.JdbcRouteDataQualityRepository;
 import com.gustler.backend.forecasting.infrastructure.quality.JdbcTripQualityStore;
 import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
 import com.gustler.backend.support.ConfirmedTripFixture;
@@ -578,7 +580,8 @@ class JdbcVehicleTrajectoryRepositoryTest {
 
     private TripQualityInvestigationService quality() {
         return new TripQualityInvestigationService(new JdbcTripQualityStore(jdbcClient),
-            new JdbcRouteDataQualityAccess(jdbcClient), new JdbcDemandStatisticsRebuildRequests(jdbcClient));
+            new JdbcRouteDataQualityAccess(jdbcClient), new RouteDataQualityChanges(
+                new JdbcRouteDataQualityRepository(jdbcClient), new JdbcDemandStatisticsRebuildRequests(jdbcClient)));
     }
 
     private void signal(TripQualityInvestigationService quality, long batch) {

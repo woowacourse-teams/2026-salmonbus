@@ -4,6 +4,7 @@ import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcDemandStatisticsR
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gustler.backend.forecasting.application.quality.RouteDataQualityChanges;
 import com.gustler.backend.forecasting.application.quality.TripQualityInvestigationService;
 import com.gustler.backend.forecasting.domain.quality.QualityObservationBatch;
 import com.gustler.backend.forecasting.domain.quality.TripQualityInvestigation.Phase;
@@ -98,8 +99,8 @@ class JdbcTripQualityStoreTest {
     }
 
     private TripQualityInvestigationService service() {
-        return new TripQualityInvestigationService(new JdbcTripQualityStore(jdbc),
-            new JdbcRouteDataQualityAccess(jdbc), new JdbcDemandStatisticsRebuildRequests(jdbc));
+        return new TripQualityInvestigationService(new JdbcTripQualityStore(jdbc), new JdbcRouteDataQualityAccess(jdbc),
+            new RouteDataQualityChanges(new JdbcRouteDataQualityRepository(jdbc), new JdbcDemandStatisticsRebuildRequests(jdbc)));
     }
 
     private Fixture existingInvestigation(String phase, final boolean completed) {
