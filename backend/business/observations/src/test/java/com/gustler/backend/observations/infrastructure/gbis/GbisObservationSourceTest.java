@@ -7,6 +7,10 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.gbis.api.GbisLocationSource;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
@@ -24,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.slf4j.LoggerFactory;
 
 class GbisObservationSourceTest {
     private static final String ROUTE_ID = "204000057";
@@ -90,6 +95,24 @@ class GbisObservationSourceTest {
         assertThat(result.conclusion().outcome()).isEqualTo(ObservationBatchOutcome.UNKNOWN_AFTER_DISPATCH);
         assertThat(result.observations()).isEmpty();
         assertThat(result.receivedAt().toInstant()).isEqualTo(RECEIVED);
+    }
+
+    @Test
+    void 예상하지_못한_조회_예외는_상류_호출_실패로_운영_로그에_남긴다() {
+        given(source.read(ROUTE_ID, "a")).willThrow(new IllegalStateException("connection failed"));
+        Logger operationLog = (Logger) LoggerFactory.getLogger(WorkerOperationLog.class);
+        ListAppender<ILoggingEvent> events = new ListAppender<>();
+        events.start();
+        operationLog.addAppender(events);
+
+        try {
+            observations.read(ROUTE_ID, "a");
+        } finally {
+            operationLog.detachAppender(events);
+        }
+
+        assertThat(events.list).extracting(ILoggingEvent::getFormattedMessage).singleElement().asString()
+            .contains("status=FAILED operation=collection_upstream route=" + ROUTE_ID);
     }
 
     @Test

@@ -72,7 +72,7 @@ public class EvaluateForecastsService implements EvaluateForecasts {
         for (EvaluationRoute route : routes) {
             evaluations.addAll(evaluationsOf(route.routeVersionId(), now));
         }
-        WorkerOperationLog.measure("settlement_save", "all", () -> writer.complete(evaluations));
+        writer.complete(evaluations);
     }
 
     private List<ForecastEvaluation> evaluationsOf(

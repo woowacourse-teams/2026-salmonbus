@@ -49,6 +49,14 @@ public class ForecastEvaluationWriter {
         if (completed.stream().anyMatch(evaluation -> evaluation.state() == ScoringState.PENDING)) {
             throw new IllegalArgumentException("완료된 평가만 저장할 수 있다");
         }
+        List<SettledForecast> newlySettled = WorkerOperationLog.measure("settlement_save", "all", () -> settle(completed));
+        if (!newlySettled.isEmpty()) {
+            WorkerOperationLog.run("same_day_record", "all", () -> outcomes.record(newlySettled));
+        }
+        return newlySettled;
+    }
+
+    private List<SettledForecast> settle(List<ForecastEvaluation> completed) {
         List<Long> observationIds = completed.stream().map(ForecastEvaluation::vehicleObservationId).distinct().toList();
         evaluations.findRouteIdsForObservations(observationIds).stream().distinct().sorted()
             .forEach(quality::lockByRoute);
@@ -73,11 +81,7 @@ public class ForecastEvaluationWriter {
         if (!demandSamples.isEmpty()) {
             samples.record(demandSamples);
         }
-        List<SettledForecast> newlySettled = List.copyOf(settled);
-        if (!newlySettled.isEmpty()) {
-            WorkerOperationLog.run("same_day_record", "all", () -> outcomes.record(newlySettled));
-        }
-        return newlySettled;
+        return List.copyOf(settled);
     }
 
     private static Optional<DemandSample> demandSampleOf(SettledEvaluation result) {

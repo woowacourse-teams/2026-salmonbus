@@ -1,5 +1,6 @@
 package com.gustler.backend.observations.infrastructure.gbis;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.gbis.api.GbisLocationSource;
 import com.gustler.backend.observations.domain.ObservationResponse;
@@ -24,7 +25,8 @@ public class GbisObservationSource implements ObservationSource {
     public ObservationResponse read(String sourceRouteId, String keyAlias) {
         GbisLocationResult response;
         try {
-            response = locationSource.read(sourceRouteId, keyAlias);
+            response = WorkerOperationLog.measure("collection_upstream", sourceRouteId,
+                () -> locationSource.read(sourceRouteId, keyAlias));
         } catch (RuntimeException exception) {
             log.error("외부 호출 중 예외가 발생해 응답을 확인하지 못했다. 노선={}", sourceRouteId, exception);
             return ObservationResponse.unconfirmed(now());

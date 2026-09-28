@@ -82,8 +82,7 @@ public class ObservationCollector implements com.gustler.backend.observations.ap
         }
 
         WorkerOperationLog.recovered("collection_quota", sourceRouteId);
-        ObservationResponse response = WorkerOperationLog.measure("collection_upstream", sourceRouteId,
-            () -> observationSource.read(sourceRouteId, reservation.keyAlias()));
+        ObservationResponse response = observationSource.read(sourceRouteId, reservation.keyAlias());
         WorkerOperationLog.run("collection_save_and_commit", sourceRouteId,
             () -> batchLedger.conclude(reservation.token(), response));
         excludeKeyIfRejected(reservation.keyAlias(), response, requestedAt);
