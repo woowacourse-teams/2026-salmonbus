@@ -86,8 +86,7 @@ class SameDayFullOutcomesInitializerTest extends SameDayTransactionBoundaryTest 
         assertThatThrownBy(() -> initializer.initialize(routeId, day)).isInstanceOf(QueryTimeoutException.class);
         assertThat(count("same_day_full_outcomes")).isZero();
         new TransactionTemplate(new DataSourceTransactionManager(dataSource)).executeWithoutResult(status ->
-            jdbc.sql("SELECT quality_revision FROM route_data_quality WHERE route_id = ? FOR UPDATE NOWAIT")
-                .param(routeId).query(Long.class).single());
+            jdbc.sql("SELECT id FROM route WHERE id = ? FOR UPDATE NOWAIT").param(routeId).query(Long.class).single());
     }
 
     @Test

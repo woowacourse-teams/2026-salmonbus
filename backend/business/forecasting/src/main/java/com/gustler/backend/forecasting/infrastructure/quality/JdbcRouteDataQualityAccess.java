@@ -19,9 +19,10 @@ public class JdbcRouteDataQualityAccess implements RouteDataQualityAccess {
 
     @Override
     public long lockByRoute(final long routeId) {
+        jdbc.sql("SELECT id FROM route WHERE id = ? FOR UPDATE").param(routeId).query(Long.class).single();
         jdbc.sql("INSERT INTO route_data_quality(route_id) VALUES (?) ON CONFLICT(route_id) DO NOTHING")
             .param(routeId).update();
-        return jdbc.sql("SELECT quality_revision FROM route_data_quality WHERE route_id = ? FOR UPDATE")
+        return jdbc.sql("SELECT quality_revision FROM route_data_quality WHERE route_id = ?")
             .param(routeId).query(Long.class).single();
     }
 
