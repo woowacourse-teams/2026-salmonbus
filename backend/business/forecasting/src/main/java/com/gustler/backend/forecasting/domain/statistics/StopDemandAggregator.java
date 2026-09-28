@@ -3,6 +3,7 @@ package com.gustler.backend.forecasting.domain.statistics;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,82 +33,41 @@ public final class StopDemandAggregator {
         List<StopDemandHourlyTotals> hourlyTotals,
         Clock clock
     ) {
-        Map<CellKey, Map<LocalDate, DayTotals>> byCell = groupByCellAndDay(hourlyTotals, clock);
+        Map<CellKey, Map<LocalDate, DailyStopDemand>> byCell = groupByCellAndDay(hourlyTotals, clock);
         List<StopDemandMeasurement> measurements = new ArrayList<>();
-        for (Map.Entry<CellKey, Map<LocalDate, DayTotals>> cell : byCell.entrySet()) {
-            measurements.add(measurementOf(cell.getKey(), cell.getValue().values()));
+        for (Map<LocalDate, DailyStopDemand> days : byCell.values()) {
+            measurements.add(measurementOf(days.values()));
         }
         return List.copyOf(measurements);
     }
 
-    private static Map<CellKey, Map<LocalDate, DayTotals>> groupByCellAndDay(
+    private static Map<CellKey, Map<LocalDate, DailyStopDemand>> groupByCellAndDay(
         List<StopDemandHourlyTotals> hourlyTotals,
         Clock clock
     ) {
-        Map<CellKey, Map<LocalDate, DayTotals>> byCell = new LinkedHashMap<>();
+        Map<CellKey, Map<LocalDate, DailyStopDemand>> byCell = new LinkedHashMap<>();
         for (StopDemandHourlyTotals hour : hourlyTotals) {
-            CellKey key = new CellKey(hour.stopOrder(), TimeSlot.of(hour.arrivedHourStart(), clock));
-            LocalDate day = hour.arrivedHourStart().atZone(clock.getZone()).toLocalDate();
-            byCell.computeIfAbsent(key, cell -> new LinkedHashMap<>())
-                .computeIfAbsent(day, date -> new DayTotals())
-                .add(hour);
+            DailyStopDemand day = DailyStopDemand.of(hour, clock);
+            byCell.computeIfAbsent(new CellKey(day.stopOrder(), day.timeSlot()), cell -> new LinkedHashMap<>())
+                .merge(day.arrivalDate(), day, DailyStopDemand::plus);
         }
         return byCell;
     }
 
     private static StopDemandMeasurement measurementOf(
-        CellKey key,
-        Iterable<DayTotals> days
+        Collection<DailyStopDemand> days
     ) {
-        double fillRateTotal = 0;
-        double netBoardingRateTotal = 0;
-        int sampleCount = 0;
-        int dayCount = 0;
-        for (DayTotals day : days) {
-            fillRateTotal += day.fillRate();
-            netBoardingRateTotal += day.netBoardingRate();
-            sampleCount += day.sampleCount;
-            dayCount++;
+        StopDemandCellTotals cell = null;
+        for (DailyStopDemand day : days) {
+            StopDemandCellTotals contribution = StopDemandCellTotals.ofDay(day);
+            cell = cell == null ? contribution : cell.plus(contribution);
         }
-        return new StopDemandMeasurement(
-            key.timeSlot(),
-            new StopDemandCell(
-                key.stopOrder(),
-                fillRateTotal / dayCount,
-                netBoardingRateTotal / dayCount,
-                sampleCount,
-                dayCount));
+        return cell.toMeasurement();
     }
 
     private record CellKey(
         int stopOrder,
         TimeSlot timeSlot
     ) {
-    }
-
-    /** 하루치 합. 하루 안에서는 관측 수로 가중한다. 그날 실제로 그만큼 지나갔기 때문이다. */
-    private static final class DayTotals {
-
-        private double fillRateTotal;
-        private double netBoardingTotal;
-        private double capacityTotal;
-        private int sampleCount;
-
-        private void add(
-            StopDemandHourlyTotals hour
-        ) {
-            fillRateTotal += hour.fillRateTotal();
-            netBoardingTotal += hour.netBoardingTotal();
-            capacityTotal += hour.capacityTotal();
-            sampleCount += hour.sampleCount();
-        }
-
-        private double fillRate() {
-            return fillRateTotal / sampleCount;
-        }
-
-        private double netBoardingRate() {
-            return netBoardingTotal / capacityTotal;
-        }
     }
 }

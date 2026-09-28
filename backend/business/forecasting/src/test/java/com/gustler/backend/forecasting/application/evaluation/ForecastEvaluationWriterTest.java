@@ -12,7 +12,11 @@ import com.gustler.backend.forecasting.application.quality.RouteDataQualityAcces
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluationRepository;
+import com.gustler.backend.forecasting.domain.evaluation.ScoringState;
+import com.gustler.backend.forecasting.domain.evaluation.SettledEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.SettledForecast;
+import com.gustler.backend.forecasting.domain.statistics.DemandSample;
+import com.gustler.backend.forecasting.domain.statistics.DemandSampleRepository;
 import com.gustler.backend.observations.api.CollectionInput;
 import com.gustler.backend.observations.api.CollectionInputs;
 import java.time.Instant;
@@ -43,11 +47,14 @@ class ForecastEvaluationWriterTest {
     @Mock
     private SameDayFullOutcomesService outcomes;
 
+    @Mock
+    private DemandSampleRepository samples;
+
     private ForecastEvaluationWriter writer;
 
     @BeforeEach
     void 평가_저장_서비스를_준비한다() {
-        writer = new ForecastEvaluationWriter(evaluations, quality, collectionInputs, outcomes);
+        writer = new ForecastEvaluationWriter(evaluations, quality, collectionInputs, outcomes, samples);
     }
 
     @Test
@@ -66,8 +73,8 @@ class ForecastEvaluationWriterTest {
             .thenReturn(new CollectionInput(601L, 91L, 4, ARRIVED_AT, true, false));
         when(collectionInputs.lockForObservation(400L))
             .thenReturn(new CollectionInput(602L, 92L, 2, ARRIVED_AT, true, false));
-        when(evaluations.settle(List.of(first))).thenReturn(List.of(newlySettled.get(0)));
-        when(evaluations.settle(List.of(second))).thenReturn(List.of(newlySettled.get(1)));
+        when(evaluations.settle(List.of(first))).thenReturn(List.of(settledFrom(newlySettled.get(0))));
+        when(evaluations.settle(List.of(second))).thenReturn(List.of(settledFrom(newlySettled.get(1))));
 
         // when
         List<SettledForecast> actual = writer.complete(completed);
@@ -135,7 +142,7 @@ class ForecastEvaluationWriterTest {
         when(evaluations.canComplete(repeated)).thenReturn(false);
         when(collectionInputs.lockForObservation(300L))
             .thenReturn(new CollectionInput(601L, 91L, 4, ARRIVED_AT, true, false));
-        when(evaluations.settle(List.of(first))).thenReturn(List.of(newlySettled));
+        when(evaluations.settle(List.of(first))).thenReturn(List.of(settledFrom(newlySettled)));
 
         // when
         List<SettledForecast> actual = writer.complete(List.of(first, repeated));
@@ -151,6 +158,34 @@ class ForecastEvaluationWriterTest {
         ordered.verify(outcomes).record(List.of(newlySettled));
         verify(collectionInputs, never()).lockForObservation(400L);
         verify(evaluations, never()).settle(List.of(repeated));
+    }
+
+    @Test
+    void 승차_정류장_한_곳_앞의_정산은_통계_입력으로_기록한다() {
+        // given
+        ForecastEvaluation settled = settledEvaluation(200L, 300L, SCORED_AT);
+        when(evaluations.findRouteIdsForObservations(List.of(200L))).thenReturn(List.of(8L));
+        when(evaluations.canComplete(settled)).thenReturn(true);
+        when(collectionInputs.lockForObservation(300L))
+            .thenReturn(new CollectionInput(601L, 91L, 4, ARRIVED_AT, true, false));
+        when(evaluations.settle(List.of(settled))).thenReturn(List.of(new SettledEvaluation(8L, 11L, 200L,
+            TARGET_STOP_ORDER, 1, 0.4, ScoringState.SETTLED, 300L, 0, ARRIVED_AT, SCORED_AT, true, "bus-1", 12,
+            true)));
+
+        // when
+        writer.complete(List.of(settled));
+
+        // then
+        verify(samples).record(List.of(new DemandSample(11L, 200L, 300L, "bus-1", TARGET_STOP_ORDER, ARRIVED_AT,
+            SCORED_AT, 12, 0)));
+    }
+
+    private static SettledEvaluation settledFrom(
+        SettledForecast forecast
+    ) {
+        return new SettledEvaluation(forecast.routeId(), 11L, 200L, TARGET_STOP_ORDER, forecast.stopsToTarget(),
+            forecast.rawFullChance(), ScoringState.SETTLED, 300L, forecast.seatsOnArrival(), forecast.arrivedAt(),
+            SCORED_AT, true, null, null, false);
     }
 
     private static ForecastEvaluation settledEvaluation(

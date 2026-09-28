@@ -61,39 +61,24 @@ class SameDayFullOutcomesServiceTest {
     }
 
     @Test
-    void 표가_비어_있으면_원본에서_하루치를_세서_표에_넣고_그_값을_쓴다() {
+    void 집계가_없으면_원본을_조회하지_않고_당일_보정_없이_반환한다() {
         // given
         when(repository.findCounts(ROUTE_3330, DAY)).thenReturn(List.of());
-        when(repository.countFromSource(ROUTE_3330, DAY, DAY.end())).thenReturn(List.of(TALLY));
-
-        // when
-        Map<Integer, SameDayFullOutcomes> actual = service.outcomesFor(ROUTE_3330, SETTLED_THROUGH.plusSeconds(60));
-
-        // then
-        assertThat(actual).containsKey(STOPS_TO_TARGET);
-        verify(repository).upsertCounts(ROUTE_3330, DAY, List.of(TALLY));
-    }
-
-    @Test
-    void 원본에도_없으면_빈_집계를_기록하고_예측값은_반환하지_않는다() {
-        // given
-        when(repository.findCounts(ROUTE_3330, DAY)).thenReturn(List.of());
-        when(repository.countFromSource(ROUTE_3330, DAY, DAY.end())).thenReturn(List.of());
 
         // when
         Map<Integer, SameDayFullOutcomes> actual = service.outcomesFor(ROUTE_3330, SETTLED_THROUGH.plusSeconds(60));
 
         // then
         assertThat(actual).isEmpty();
-        verify(repository).upsertCounts(ROUTE_3330, DAY, List.of(new SameDayFullOutcomeCount(0, 0, 0, 0, DAY.start())));
+        verify(repository, never()).upsertCounts(anyLong(), any(), any());
+        verify(repository, never()).countFromSource(anyLong(), any(), any());
     }
 
     @Test
-    void 예보_시각이_표에_반영된_도착보다_앞이면_표를_두고_원본에서_그_시각_기준으로_센다() {
+    void 예보_시각보다_미래인_성적은_원본_재조회_없이_보정에서_제외한다() {
         // given 장애 뒤 밀린 batch 다
         Instant earlierBatch = SETTLED_THROUGH.minusSeconds(60);
         when(repository.findCounts(ROUTE_3330, DAY)).thenReturn(List.of(TALLY));
-        when(repository.countFromSource(ROUTE_3330, DAY, earlierBatch)).thenReturn(List.of());
 
         // when
         Map<Integer, SameDayFullOutcomes> actual = service.outcomesFor(ROUTE_3330, earlierBatch);
@@ -101,6 +86,7 @@ class SameDayFullOutcomesServiceTest {
         // then
         assertThat(actual).isEmpty();
         verify(repository, never()).upsertCounts(anyLong(), any(), any());
+        verify(repository, never()).countFromSource(anyLong(), any(), any());
     }
 
     @Test
@@ -133,25 +119,24 @@ class SameDayFullOutcomesServiceTest {
     }
 
     @Test
-    void 집계가_비어_있으면_원본에서_하루치를_세서_넣고_정산분은_따로_더하지_않는다() {
+    void 미초기화_날짜의_정산은_초기화하거나_부분_집계를_만들지_않는다() {
         // given 배포 전에 닫힌 예보가 원본에만 있다
         when(repository.findCounts(ROUTE_3330, DAY)).thenReturn(List.of());
-        when(repository.countFromSource(ROUTE_3330, DAY, DAY.end())).thenReturn(List.of(TALLY));
 
         // when
         service.record(List.of(settledOn(ROUTE_3330, SETTLED_THROUGH, 0)));
 
         // then
-        verify(repository).upsertCounts(ROUTE_3330, DAY, List.of(TALLY));
+        verify(repository, never()).upsertCounts(anyLong(), any(), any());
+        verify(repository, never()).countFromSource(anyLong(), any(), any());
         verify(repository, never()).add(any());
     }
 
     @Test
-    void 노선이_다른_정산분은_노선마다_따로_판단한다() {
+    void 노선별_초기화_여부에_따라_준비된_집계에만_정산분을_더한다() {
         // given 3330 은 집계가 있고 1650 은 없다
         when(repository.findCounts(ROUTE_3330, DAY)).thenReturn(List.of(TALLY));
         when(repository.findCounts(ROUTE_1650, DAY)).thenReturn(List.of());
-        when(repository.countFromSource(ROUTE_1650, DAY, DAY.end())).thenReturn(List.of(TALLY));
         SettledForecast on3330 = settledOn(ROUTE_3330, SETTLED_THROUGH, 0);
         SettledForecast on1650 = settledOn(ROUTE_1650, SETTLED_THROUGH, 7);
 
@@ -160,18 +145,18 @@ class SameDayFullOutcomesServiceTest {
 
         // then
         verify(repository).add(on3330);
-        verify(repository).upsertCounts(ROUTE_1650, DAY, List.of(TALLY));
+        verify(repository, never()).upsertCounts(anyLong(), any(), any());
+        verify(repository, never()).countFromSource(anyLong(), any(), any());
         verify(repository, never()).add(on1650);
     }
 
     @Test
-    void 도착_날짜가_다른_정산분은_날짜마다_따로_판단한다() {
+    void 도착_날짜별_초기화_여부에_따라_준비된_집계에만_정산분을_더한다() {
         // given 오늘 집계는 있고 어제 집계는 없다
         Instant yesterdayArrival = SETTLED_THROUGH.minus(Duration.ofDays(1));
         SeoulDay yesterday = SeoulDay.containing(yesterdayArrival);
         when(repository.findCounts(ROUTE_3330, DAY)).thenReturn(List.of(TALLY));
         when(repository.findCounts(ROUTE_3330, yesterday)).thenReturn(List.of());
-        when(repository.countFromSource(ROUTE_3330, yesterday, yesterday.end())).thenReturn(List.of(TALLY));
         SettledForecast today = settledOn(ROUTE_3330, SETTLED_THROUGH, 0);
         SettledForecast lateSettled = settledOn(ROUTE_3330, yesterdayArrival, 0);
 
@@ -180,7 +165,8 @@ class SameDayFullOutcomesServiceTest {
 
         // then
         verify(repository).add(today);
-        verify(repository).upsertCounts(ROUTE_3330, yesterday, List.of(TALLY));
+        verify(repository, never()).upsertCounts(anyLong(), any(), any());
+        verify(repository, never()).countFromSource(anyLong(), any(), any());
         verify(repository, never()).add(lateSettled);
     }
 

@@ -5,7 +5,7 @@ import com.gustler.backend.forecasting.domain.evaluation.EvaluationRoute;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluationRepository;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import com.gustler.backend.forecasting.domain.evaluation.ScoringState;
-import com.gustler.backend.forecasting.domain.evaluation.SettledForecast;
+import com.gustler.backend.forecasting.domain.evaluation.SettledEvaluation;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -24,10 +24,12 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
         SELECT forecast.vehicle_observation_id, forecast.target_stop_order, forecast.route_version_id,
                source.vehicle_id, forecast.stops_to_target, batch.response_received_at,
                forecast.generated_at, source.quality_direction
-        FROM quality_eligible_seat_forecast forecast
-        JOIN forecast_eligible_observation source ON source.id = forecast.vehicle_observation_id
+        FROM forecast_evaluation evaluation
+        JOIN seat_forecast forecast ON forecast.vehicle_observation_id = evaluation.vehicle_observation_id
+         AND forecast.target_stop_order = evaluation.target_stop_order
+        JOIN forecast_eligible_observation source ON source.id = evaluation.vehicle_observation_id
         JOIN observation_batch batch ON batch.id = source.observation_batch_id
-        WHERE forecast.scoring_state = 'PENDING' AND forecast.route_version_id = :routeVersionId
+        WHERE evaluation.scoring_state = 'PENDING' AND evaluation.route_version_id = :routeVersionId
         ORDER BY forecast.generated_at, forecast.vehicle_observation_id, forecast.target_stop_order
         LIMIT :limit
         """;
@@ -80,9 +82,15 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
           AND forecast.target_stop_order = evaluation.target_stop_order
           AND (CAST(:arrivalObservationId AS bigint) IS NULL OR (
               arrival.id IS NOT NULL AND %s))
-        RETURNING version.route_id, forecast.stops_to_target, forecast.seat_full_chance_raw,
-                  evaluation.arrived_at, evaluation.seats_on_arrival, evaluation.scoring_state,
-                  forecast.quality_revision = quality.quality_revision AS usable_for_calibration
+        RETURNING version.route_id, forecast.route_version_id, evaluation.vehicle_observation_id,
+                  evaluation.target_stop_order, forecast.stops_to_target, forecast.seat_full_chance_raw,
+                  evaluation.arrival_observation_id, evaluation.arrived_at, evaluation.seats_on_arrival,
+                  evaluation.scoring_state, evaluation.scored_at,
+                  forecast.quality_revision = quality.quality_revision AS usable_for_calibration,
+                  source.vehicle_id AS prediction_vehicle_id, source.remaining_seats AS prediction_remaining_seats,
+                  COALESCE((SELECT target_stop.boarding_allowed FROM route_stop target_stop
+                      WHERE target_stop.route_version_id = forecast.route_version_id
+                        AND target_stop.stop_order = forecast.target_stop_order), false) AS target_boarding_allowed
         """.formatted(ARRIVAL_MATCHES_SOURCE);
 
     private final JdbcClient jdbcClient;
@@ -134,11 +142,11 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public List<SettledForecast> settle(List<ForecastEvaluation> evaluations) {
+    public List<SettledEvaluation> settle(List<ForecastEvaluation> evaluations) {
         if (evaluations.isEmpty()) {
             return List.of();
         }
-        List<SettledForecast> newlySettled = new ArrayList<>();
+        List<SettledEvaluation> newlySettled = new ArrayList<>();
         for (ForecastEvaluation evaluation : evaluations) {
             if (evaluation.state() == ScoringState.PENDING) {
                 throw new IllegalArgumentException("완료된 평가만 저장할 수 있다");
@@ -147,15 +155,17 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
                 .param("scoringState", evaluation.state().name())
                 .param("seatsOnArrival", evaluation.result().seatsOnArrival())
                 .param("scoredAt", offsetOf(evaluation.scoredAt()))
-                .query((row, index) -> {
-                    if (!ScoringState.valueOf(row.getString("scoring_state")).scorable()
-                        || !row.getBoolean("usable_for_calibration")) {
-                        return null;
-                    }
-                    return new SettledForecast(row.getLong("route_id"), row.getInt("stops_to_target"),
-                        row.getDouble("seat_full_chance_raw"), row.getObject("arrived_at", OffsetDateTime.class).toInstant(),
-                        row.getInt("seats_on_arrival"));
-                }).list().stream().filter(java.util.Objects::nonNull).toList());
+                .query((row, index) -> new SettledEvaluation(row.getLong("route_id"), row.getLong("route_version_id"),
+                    row.getLong("vehicle_observation_id"), row.getInt("target_stop_order"),
+                    row.getInt("stops_to_target"), row.getDouble("seat_full_chance_raw"),
+                    ScoringState.valueOf(row.getString("scoring_state")),
+                    row.getObject("arrival_observation_id", Long.class), row.getObject("seats_on_arrival", Integer.class),
+                    instantOrNull(row.getObject("arrived_at", OffsetDateTime.class)),
+                    row.getObject("scored_at", OffsetDateTime.class).toInstant(),
+                    row.getBoolean("usable_for_calibration"), row.getString("prediction_vehicle_id"),
+                    row.getObject("prediction_remaining_seats", Integer.class),
+                    row.getBoolean("target_boarding_allowed")))
+                .list());
         }
         return List.copyOf(newlySettled);
     }
@@ -164,6 +174,10 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
         return jdbcClient.sql(sql).param("vehicleObservationId", evaluation.vehicleObservationId())
             .param("targetStopOrder", evaluation.targetStopOrder())
             .param("arrivalObservationId", evaluation.result().arrivalObservationId());
+    }
+
+    private static Instant instantOrNull(OffsetDateTime timestamp) {
+        return timestamp == null ? null : timestamp.toInstant();
     }
 
     private static OffsetDateTime offsetOf(Instant timestamp) {

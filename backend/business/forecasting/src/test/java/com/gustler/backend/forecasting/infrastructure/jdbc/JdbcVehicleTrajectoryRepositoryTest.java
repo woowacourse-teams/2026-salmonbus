@@ -596,7 +596,7 @@ class JdbcVehicleTrajectoryRepositoryTest {
 
     private TripQualityInvestigationService quality() {
         return new TripQualityInvestigationService(new JdbcTripQualityStore(jdbcClient),
-            new JdbcRouteDataQualityAccess(jdbcClient), ids -> { });
+            new JdbcRouteDataQualityAccess(jdbcClient), ids -> { }, new JdbcDemandStatisticsRebuildRequests(jdbcClient));
     }
 
     private void signal(TripQualityInvestigationService quality, long batch) {

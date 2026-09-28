@@ -2,6 +2,8 @@ package com.gustler.backend.forecasting.support;
 
 import com.gustler.backend.config.ClockConfig;
 import com.gustler.backend.forecasting.api.ForecastPolicy;
+import com.gustler.backend.forecasting.api.evaluation.SameDayInitializationPolicy;
+import com.gustler.backend.forecasting.api.statistics.DemandStatisticsPolicy;
 import com.gustler.backend.forecasting.configuration.ForecastingConfiguration;
 import com.gustler.backend.observations.configuration.ObservationPersistenceConfiguration;
 import com.gustler.backend.support.PostgresTestContainer;
@@ -27,5 +29,21 @@ class ForecastingTestConfiguration {
         @Value("${forecast.arrival-limit}") int arrivalLimit
     ) {
         return new ForecastPolicy(staleness, batchLimit, pendingLimit, arrivalLimit);
+    }
+
+    @Bean
+    DemandStatisticsPolicy demandStatisticsPolicy(
+        @Value("${forecast.statistics-interval:6h}") Duration refreshInterval
+    ) {
+        return new DemandStatisticsPolicy(refreshInterval);
+    }
+
+    @Bean
+    SameDayInitializationPolicy sameDayInitializationPolicy(
+        @Value("${forecast.same-day-initialization.retry-interval:60s}") Duration retryInterval,
+        @Value("${forecast.same-day-initialization.statement-timeout:25s}") Duration statementTimeout,
+        @Value("${forecast.same-day-initialization.lock-timeout:100ms}") Duration lockTimeout
+    ) {
+        return new SameDayInitializationPolicy(retryInterval, statementTimeout, lockTimeout);
     }
 }

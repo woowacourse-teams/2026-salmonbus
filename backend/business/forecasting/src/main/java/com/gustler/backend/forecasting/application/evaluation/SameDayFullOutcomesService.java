@@ -15,11 +15,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 당일 확정된 평가를 모아 만석 확률 보정에 필요한 집계를 제공한다.
- *
- * <p>일반 조회에서는 저장된 집계를 사용한다. 집계가 없으면 평가 결과로 초기화하고,
- * 과거 수집 배치를 처리할 때는 해당 관측 시각까지 도착한 결과만 다시 센다.
- * 초기화와 새 평가의 반영은 같은 노선 잠금 안에서 처리한다.
+ * 저장된 당일 성적만 예보 보정에 사용한다. 미초기화/과거 시점 예보는 당일 보정을 생략한다.
+ * 원본 계산은 별도 초기화 트랜잭션에서만 수행하며, 준비 전 정산도 원본에는 남는다.
  */
 @Component
 public class SameDayFullOutcomesService {
@@ -32,19 +29,14 @@ public class SameDayFullOutcomesService {
         this.repository = repository;
     }
 
-    @Transactional
     public Map<Integer, SameDayFullOutcomes> outcomesFor(
         final long routeId,
         Instant predictionAt
     ) {
-        repository.lockRoute(routeId);
         SeoulDay day = SeoulDay.containing(predictionAt);
         List<SameDayFullOutcomeCount> counts = repository.findCounts(routeId, day);
-        if (counts.isEmpty()) {
-            counts = initializeCounts(routeId, day);
-        }
-        if (predictionAt.isBefore(settledThroughOf(counts))) {
-            return outcomesOf(repository.countFromSource(routeId, day, predictionAt));
+        if (counts.isEmpty() || predictionAt.isBefore(settledThroughOf(counts))) {
+            return Map.of();
         }
         return outcomesOf(counts);
     }
@@ -57,7 +49,7 @@ public class SameDayFullOutcomesService {
         for (Map.Entry<RouteDay, List<SettledForecast>> group : groupByRouteDay(settled).entrySet()) {
             RouteDay key = group.getKey();
             if (repository.findCounts(key.routeId(), key.day()).isEmpty()) {
-                initializeCounts(key.routeId(), key.day());
+                // 부분 합계를 만들면 초기화 완료로 오인한다. 원본은 이후 초기화에서 함께 센다.
                 continue;
             }
             for (SettledForecast forecast : group.getValue()) {
@@ -76,16 +68,33 @@ public class SameDayFullOutcomesService {
         return byRouteDay;
     }
 
-    private List<SameDayFullOutcomeCount> initializeCounts(
+    /** 호출자가 같은 노선 잠금을 유지하는 트랜잭션 안에서 사용한다. */
+    public boolean initializeIfAbsent(long routeId, SeoulDay day) {
+        return initializeIfAbsent(routeId, day, new SameDayInitializationAttempt());
+    }
+
+    boolean initializeIfAbsent(long routeId, SeoulDay day, SameDayInitializationAttempt attempt) {
+        if (!attempt.measure(SameDayInitializationAttempt.Stage.CHECK,
+            () -> repository.findCounts(routeId, day)).isEmpty()) {
+            return false;
+        }
+        seed(routeId, day, attempt);
+        return true;
+    }
+
+    private List<SameDayFullOutcomeCount> seed(
         final long routeId,
-        SeoulDay day
+        SeoulDay day,
+        SameDayInitializationAttempt attempt
     ) {
-        List<SameDayFullOutcomeCount> counted = repository.countFromSource(routeId, day, day.end());
+        List<SameDayFullOutcomeCount> counted = attempt.measure(SameDayInitializationAttempt.Stage.SOURCE,
+            () -> repository.countFromSource(routeId, day, day.end()));
         if (counted.isEmpty()) {
             // 거리 0은 실제 예보가 아니다. 이 날짜/품질 버전에서 원본이 비었음을 한 번만 기록한다.
             counted = List.of(new SameDayFullOutcomeCount(0, 0, 0, 0, day.start()));
         }
-        repository.upsertCounts(routeId, day, counted);
+        List<SameDayFullOutcomeCount> toSave = counted;
+        attempt.run(SameDayInitializationAttempt.Stage.SAVE, () -> repository.upsertCounts(routeId, day, toSave));
         return counted;
     }
 

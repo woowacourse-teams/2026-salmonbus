@@ -44,8 +44,8 @@ public record DemandStatisticsVersion(
         if (dataUntil.isAfter(computedAt)) {
             throw new IllegalArgumentException("자료 기준 시각은 계산 완료 시각보다 늦을 수 없다");
         }
-        if (measurements == null || measurements.isEmpty()) {
-            throw new IllegalArgumentException("통계 버전에는 집계 결과가 하나 이상 필요하다");
+        if (measurements == null) {
+            throw new IllegalArgumentException("통계 버전에는 집계 결과 목록이 필요하다");
         }
 
         Set<MeasurementKey> keys = new HashSet<>();

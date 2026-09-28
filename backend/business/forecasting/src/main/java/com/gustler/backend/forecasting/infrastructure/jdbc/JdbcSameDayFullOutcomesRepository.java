@@ -72,23 +72,34 @@ public class JdbcSameDayFullOutcomesRepository implements SameDayFullOutcomesRep
      * <p>현재 품질 조건을 통과하고 발행 당시 품질 버전도 일치하는 결과만 사용한다.
      * 같은 노선의 이전 노선 버전도 포함하며, 지정한 기준 시각과 같은 순간의 도착은 포함한다.
      */
+    // FK가 예보↔예측 관측, 도착 관측↔batch의 판본 일치를 보장한다.
+    // 아래 EXISTS가 예측↔도착 판본도 일치시키므로 품질 버전은 대상 route에서 한 번 읽을 수 있다.
     private static final String COUNT_FROM_SOURCE = """
         SELECT forecast.stops_to_target,
                count(*) AS row_count,
                count(*) FILTER (WHERE evaluation.seats_on_arrival = 0) AS actual_full_count,
                sum(forecast.seat_full_chance_raw) AS raw_full_chance_sum,
                max(evaluation.arrived_at) AS settled_through
-        FROM quality_calibration_seat_forecast forecast
-        JOIN forecast_evaluation evaluation
-          ON evaluation.vehicle_observation_id = forecast.vehicle_observation_id
-         AND evaluation.target_stop_order = forecast.target_stop_order
-        JOIN route_version version ON version.id = evaluation.route_version_id
-        WHERE version.route_id = :routeId
+        FROM forecast_evaluation evaluation
+        JOIN seat_forecast forecast
+          ON forecast.vehicle_observation_id = evaluation.vehicle_observation_id
+         AND forecast.target_stop_order = evaluation.target_stop_order
+        JOIN forecast_eligible_observation arrival
+          ON arrival.id = evaluation.arrival_observation_id
+        WHERE evaluation.route_version_id IN (
+                SELECT id FROM route_version WHERE route_id = :routeId)
           AND evaluation.arrived_at >= :dayStart
           AND evaluation.arrived_at < :dayEnd
           AND evaluation.arrived_at <= :until
           AND evaluation.scoring_state = 'SETTLED'
           AND evaluation.seats_on_arrival IS NOT NULL
+          AND forecast.quality_revision = (SELECT quality_revision FROM route_data_quality WHERE route_id = :routeId)
+          AND EXISTS (
+              SELECT 1 FROM forecast_eligible_observation source
+              WHERE source.id = evaluation.vehicle_observation_id
+                AND source.route_version_id = arrival.route_version_id
+                AND source.vehicle_id IS NOT DISTINCT FROM arrival.vehicle_id
+                AND source.quality_direction = arrival.quality_direction)
         GROUP BY forecast.stops_to_target
         ORDER BY forecast.stops_to_target
         """;
@@ -104,6 +115,12 @@ public class JdbcSameDayFullOutcomesRepository implements SameDayFullOutcomesRep
     @Override
     public void lockRoute(final long routeId) {
         qualityAccess.lockByRoute(routeId);
+    }
+
+    @Override
+    public List<Long> findActiveRouteIds() {
+        return jdbcClient.sql("SELECT DISTINCT route_id FROM route_version WHERE valid_to IS NULL ORDER BY route_id")
+            .query(Long.class).list();
     }
 
     @Override

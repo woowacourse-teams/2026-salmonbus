@@ -8,6 +8,7 @@ import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabelResolver;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
+import com.gustler.backend.forecasting.domain.evaluation.SettledEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.SettledForecast;
 import com.gustler.backend.support.ConfirmedTripFixture;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
@@ -196,11 +197,11 @@ class JdbcForecastEvaluationRepositoryTest {
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
 
         // when
-        List<SettledForecast> actual = evaluationRepository.settle(List.of(ForecastEvaluation.completed(
+        List<SettledForecast> actual = calibrationOutcomes(evaluationRepository.settle(List.of(ForecastEvaluation.completed(
             vehicleObservationId,
             TARGET_STOP_ORDER,
             new ArrivalLabel.Settled(arrivalObservationId, SEATS_ON_ARRIVAL_WHEN_FULL),
-            SCORED_AT)));
+            SCORED_AT))));
 
         // then
         assertThat(actual).containsExactly(new SettledForecast(
@@ -216,11 +217,11 @@ class JdbcForecastEvaluationRepositoryTest {
             forecastOf(NEXT_TARGET_STOP_ORDER, STOPS_TO_NEXT_TARGET, GENERATED_AT)));
 
         // when
-        List<SettledForecast> actual = evaluationRepository.settle(List.of(
+        List<SettledForecast> actual = calibrationOutcomes(evaluationRepository.settle(List.of(
             ForecastEvaluation.completed(
                 vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.SeatMissing(arrivalObservationId), SCORED_AT),
             ForecastEvaluation.completed(
-                vehicleObservationId, NEXT_TARGET_STOP_ORDER, new ArrivalLabel.Skipped(), SCORED_AT)));
+                vehicleObservationId, NEXT_TARGET_STOP_ORDER, new ArrivalLabel.Skipped(), SCORED_AT))));
 
         // then
         assertThat(actual).isEmpty();
@@ -239,7 +240,7 @@ class JdbcForecastEvaluationRepositoryTest {
         evaluationRepository.settle(List.of(settlement));
 
         // when
-        List<SettledForecast> actual = evaluationRepository.settle(List.of(settlement));
+        List<SettledForecast> actual = calibrationOutcomes(evaluationRepository.settle(List.of(settlement)));
 
         // then
         assertThat(actual).isEmpty();
@@ -359,8 +360,8 @@ class JdbcForecastEvaluationRepositoryTest {
             .param(routeId).update();
 
         // when
-        List<SettledForecast> actual = evaluationRepository.settle(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
+        List<SettledForecast> actual = calibrationOutcomes(evaluationRepository.settle(List.of(ForecastEvaluation.completed(
+            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT))));
 
         // then
         assertThat(actual).isEmpty();
@@ -379,8 +380,8 @@ class JdbcForecastEvaluationRepositoryTest {
             .param(vehicleObservationId).update();
 
         // when
-        List<SettledForecast> actual = evaluationRepository.settle(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
+        List<SettledForecast> actual = calibrationOutcomes(evaluationRepository.settle(List.of(ForecastEvaluation.completed(
+            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT))));
 
         // then
         assertThat(actual).isEmpty();
@@ -397,8 +398,8 @@ class JdbcForecastEvaluationRepositoryTest {
             .param(routeVersionId).update();
 
         // when
-        List<SettledForecast> actual = evaluationRepository.settle(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
+        List<SettledForecast> actual = calibrationOutcomes(evaluationRepository.settle(List.of(ForecastEvaluation.completed(
+            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT))));
 
         // then
         assertThat(actual).isEmpty();
@@ -565,5 +566,11 @@ class JdbcForecastEvaluationRepositoryTest {
         Integer seatsOnArrival,
         Instant scoredAt
     ) {
+    }
+
+    private static List<SettledForecast> calibrationOutcomes(
+        List<SettledEvaluation> settled
+    ) {
+        return settled.stream().flatMap(result -> result.calibrationOutcome().stream()).toList();
     }
 }

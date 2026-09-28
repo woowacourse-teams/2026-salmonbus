@@ -45,7 +45,7 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
             FROM demand_statistics_version
             WHERE route_version_id = :routeVersionId
               AND calculation_version = :calculationVersion
-              AND data_until <= :observedAt
+              AND data_until <= :observedAt AND computed_at <= :observedAt
               AND quality_revision = (
                   SELECT q.quality_revision FROM route_version v
                   JOIN route_data_quality q ON q.route_id = v.route_id WHERE v.id = :routeVersionId)

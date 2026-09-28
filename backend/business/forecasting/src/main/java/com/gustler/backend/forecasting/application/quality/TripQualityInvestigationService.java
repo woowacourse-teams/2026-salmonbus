@@ -17,12 +17,14 @@ public class TripQualityInvestigationService {
     private final TripQualityStore store;
     private final RouteDataQualityAccess quality;
     private final QualityInputRetention retention;
+    private final DemandStatisticsRebuildTrigger statistics;
 
     public TripQualityInvestigationService(final TripQualityStore store, final RouteDataQualityAccess quality,
-        final QualityInputRetention retention) {
+        final QualityInputRetention retention, final DemandStatisticsRebuildTrigger statistics) {
         this.store = store;
         this.quality = quality;
         this.retention = retention;
+        this.statistics = statistics;
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -42,6 +44,7 @@ public class TripQualityInvestigationService {
                 : previous.restart(batch, anomaly, maximumGap);
             if (started.isEmpty()) { continue; }
             store.saveStart(started.get());
+            statistics.requestVehicle(batch.routeVersionId(), anomaly.vehicleId());
             evidenceIds.add(started.get().evidenceObservationId());
         }
         if (!evidenceIds.isEmpty()) {
@@ -89,7 +92,10 @@ public class TripQualityInvestigationService {
         if (investigation.boundaryCandidateObservationId() != null) { retained.add(investigation.boundaryCandidateObservationId()); }
         retention.confirmObservations(retained);
         store.save(investigation);
-        if (investigation.completed()) { quality.invalidate(version); }
+        if (investigation.completed()) {
+            quality.invalidate(version);
+            statistics.requestVehicle(version, vehicle);
+        }
         return !rows.isEmpty() || investigation.completed() || backwards;
     }
 }

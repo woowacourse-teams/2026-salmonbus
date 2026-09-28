@@ -16,6 +16,6 @@ public interface ForecastEvaluationRepository {
 
     List<PendingForecast> findPending(long routeVersionId, int limit);
 
-    /** PENDING에서 새로 확정한 결과 중 현재 당일 보정에 사용할 수 있는 결과만 반환한다. */
-    List<SettledForecast> settle(List<ForecastEvaluation> evaluations);
+    /** PENDING에서 새로 확정한 결과를 반환한다. */
+    List<SettledEvaluation> settle(List<ForecastEvaluation> evaluations);
 }

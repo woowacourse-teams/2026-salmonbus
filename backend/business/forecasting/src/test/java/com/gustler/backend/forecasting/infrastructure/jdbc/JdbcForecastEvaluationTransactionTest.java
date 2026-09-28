@@ -14,6 +14,7 @@ import com.gustler.backend.forecasting.domain.evaluation.SeoulDay;
 import com.gustler.backend.forecasting.domain.evaluation.SettledForecast;
 import com.gustler.backend.forecasting.domain.model.SameDayFullOutcomes;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
+import com.gustler.backend.forecasting.domain.statistics.DemandSampleRepository;
 import com.gustler.backend.observations.api.CollectionInputs;
 import com.gustler.backend.support.ConfirmedTripFixture;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
@@ -68,6 +69,9 @@ class JdbcForecastEvaluationTransactionTest {
 
     @Autowired
     private RouteDataQualityAccess qualityAccess;
+
+    @Autowired
+    private DemandSampleRepository demandSamples;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -142,10 +146,11 @@ class JdbcForecastEvaluationTransactionTest {
     @Test
     void 보정_집계_저장에_실패하면_평가와_도착_입력_확정도_함께_취소한다() {
         // given 실제 집계 저장까지 수행한 뒤 실패시킨다.
+        initializeSameDayOutcomes();
         SameDayFullOutcomesService failingOutcomes =
             new SameDayFullOutcomesService(new FailingOutcomeRepository(outcomeRepository));
-        ForecastEvaluationWriter failingWriter =
-            new ForecastEvaluationWriter(evaluations, qualityAccess, collectionInputs, failingOutcomes);
+        ForecastEvaluationWriter failingWriter = new ForecastEvaluationWriter(evaluations, qualityAccess,
+            collectionInputs, failingOutcomes, demandSamples);
 
         // when
         assertThatThrownBy(() -> inTransaction(() -> failingWriter.complete(List.of(completedEvaluation()))))
@@ -155,7 +160,7 @@ class JdbcForecastEvaluationTransactionTest {
         assertThat(evaluationState()).isEqualTo("PENDING");
         assertThat(jdbc.sql("SELECT input_confirmed_at IS NULL FROM observation_batch WHERE id = ?")
             .param(arrivalBatchId).query(Boolean.class).single()).isTrue();
-        assertThat(jdbc.sql("SELECT count(*) FROM same_day_full_outcomes WHERE route_id = ?")
+        assertThat(jdbc.sql("SELECT sum(row_count) FROM same_day_full_outcomes WHERE route_id = ?")
             .param(routeId).query(Long.class).single()).isZero();
     }
 
@@ -182,6 +187,7 @@ class JdbcForecastEvaluationTransactionTest {
     @Test
     void 같은_평가를_동시에_확정해도_당일_집계에는_한_번만_반영한다() throws Exception {
         // given 빈 집계가 먼저 만들어진 경우에는 새 결과만 더한다.
+        initializeSameDayOutcomes();
         assertThat(outcomes.outcomesFor(routeId, SCORED_AT)).isEmpty();
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
@@ -220,6 +226,7 @@ class JdbcForecastEvaluationTransactionTest {
                 qualityAccess.lockByRoute(routeId);
                 initializationLocked.countDown();
                 await(finishInitialization);
+                outcomes.initializeIfAbsent(routeId, SeoulDay.containing(SCORED_AT));
                 return outcomes.outcomesFor(routeId, SCORED_AT);
             }));
             var settled = executor.submit(() -> {
@@ -248,6 +255,13 @@ class JdbcForecastEvaluationTransactionTest {
             finishInitialization.countDown();
             stop(executor);
         }
+    }
+
+    private void initializeSameDayOutcomes() {
+        inTransaction(() -> {
+            qualityAccess.lockByRoute(routeId);
+            return outcomes.initializeIfAbsent(routeId, SeoulDay.containing(SCORED_AT));
+        });
     }
 
     private int settleAfter(CountDownLatch ready, CountDownLatch start) {
@@ -363,6 +377,11 @@ class JdbcForecastEvaluationTransactionTest {
         @Override
         public void lockRoute(final long routeId) {
             delegate.lockRoute(routeId);
+        }
+
+        @Override
+        public List<Long> findActiveRouteIds() {
+            return delegate.findActiveRouteIds();
         }
 
         @Override

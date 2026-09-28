@@ -12,7 +12,7 @@ import java.util.List;
 public interface StopDemandStatisticsRepository {
 
     /**
-     * 자료 기준 시각이 관측 시각 이하인 통계 중 가장 최근 버전을 조회한다.
+     * 자료 기준 시각과 계산 완료 시각이 모두 관측 시각 이하인 통계 중 가장 최근 버전을 조회한다.
      *
      * <p>수집 배치를 늦게 처리하더라도 관측 시각 이후의 자료로 계산한 통계를 사용하지 않는다.
      */

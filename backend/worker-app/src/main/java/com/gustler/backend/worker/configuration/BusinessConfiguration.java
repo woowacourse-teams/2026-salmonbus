@@ -4,6 +4,8 @@ import com.gustler.backend.config.ClockConfig;
 import com.gustler.backend.observations.configuration.ObservationPersistenceConfiguration;
 import com.gustler.backend.forecasting.configuration.ForecastingConfiguration;
 import com.gustler.backend.forecasting.api.ForecastPolicy;
+import com.gustler.backend.forecasting.api.evaluation.SameDayInitializationPolicy;
+import com.gustler.backend.forecasting.api.statistics.DemandStatisticsPolicy;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,7 +16,7 @@ import org.springframework.core.env.StandardEnvironment;
 
 @Configuration
 @Import({ClockConfig.class, ObservationPersistenceConfiguration.class, ForecastingConfiguration.class})
-@EnableConfigurationProperties(ForecastProperties.class)
+@EnableConfigurationProperties({ForecastProperties.class, SameDayInitializationProperties.class})
 public class BusinessConfiguration {
 
     private static final String STALENESS = "forecast.staleness";
@@ -27,6 +29,17 @@ public class BusinessConfiguration {
         requireStalenessFromConfigurationFile(environment);
         return new ForecastPolicy(properties.staleness(), properties.batchLimit(), properties.pendingLimit(),
             properties.arrivalLimit());
+    }
+
+    @Bean
+    DemandStatisticsPolicy demandStatisticsPolicy(ForecastProperties properties) {
+        return new DemandStatisticsPolicy(properties.statisticsInterval());
+    }
+
+    @Bean
+    SameDayInitializationPolicy sameDayInitializationPolicy(SameDayInitializationProperties properties) {
+        return new SameDayInitializationPolicy(properties.retryInterval(), properties.statementTimeout(),
+            properties.lockTimeout());
     }
 
     /**

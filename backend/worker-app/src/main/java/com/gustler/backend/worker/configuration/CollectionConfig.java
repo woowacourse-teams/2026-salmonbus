@@ -9,11 +9,13 @@ import java.time.Clock;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.annotation.EnableScheduling;
-import org.springframework.scheduling.annotation.SchedulingConfigurer;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 
 @Configuration
@@ -32,35 +34,39 @@ public class CollectionConfig {
     @Configuration
     @EnableScheduling
     @ConditionalOnProperty(prefix = "collection", name = "enabled", havingValue = "true")
-    static class ScheduledCollection implements SchedulingConfigurer {
+    static class ScheduledCollection {
 
         private final CollectionProperties properties;
         private final CollectionScheduler scheduler;
         private final Clock clock;
         private final List<String> keyAliases;
         private final int dailyLimit;
+        private final TaskScheduler collectionTaskScheduler;
 
         ScheduledCollection(
             CollectionProperties properties,
             CollectionScheduler scheduler,
             Clock clock,
-            GbisProperties gbisProperties
+            GbisProperties gbisProperties,
+            @Qualifier("collectionTaskScheduler") TaskScheduler collectionTaskScheduler
         ) {
             this.properties = properties;
             this.scheduler = scheduler;
             this.clock = clock;
             this.keyAliases = gbisProperties.keys().stream().map(GbisKey::alias).toList();
             this.dailyLimit = gbisProperties.dailyLimit() * keyAliases.size();
+            this.collectionTaskScheduler = collectionTaskScheduler;
         }
 
-        @Override
-        public void configureTasks(
-            ScheduledTaskRegistrar registrar
-        ) {
+        @Bean
+        ScheduledTaskRegistrar collectionTaskRegistrar() {
             log.info("GBIS 키 슬롯 {}개로 수집한다. 슬롯={} 하루 한도 합={}",
                 keyAliases.size(), String.join(",", keyAliases), dailyLimit);
             warnIfOverDailyLimit();
+            ScheduledTaskRegistrar registrar = new ScheduledTaskRegistrar();
+            registrar.setTaskScheduler(collectionTaskScheduler);
             registrar.addTriggerTask(scheduler::collectAllRoutes, new AdaptiveCollectionTrigger(clock));
+            return registrar;
         }
 
         private void warnIfOverDailyLimit() {

@@ -21,13 +21,16 @@ public class TripQualityMaintenanceService implements PreviewTripQuality, Proces
     private final TripQualityInvestigationService investigations;
     private final RouteDataQualityAccess quality;
     private final TripQualityStore store;
+    private final DemandStatisticsRebuildTrigger statistics;
 
     public TripQualityMaintenanceService(final TripQualityMaintenanceStore maintenance,
-        final TripQualityInvestigationService investigations, final RouteDataQualityAccess quality, final TripQualityStore store) {
+        final TripQualityInvestigationService investigations, final RouteDataQualityAccess quality, final TripQualityStore store,
+        final DemandStatisticsRebuildTrigger statistics) {
         this.maintenance = maintenance;
         this.investigations = investigations;
         this.quality = quality;
         this.store = store;
+        this.statistics = statistics;
     }
 
     @Override
@@ -52,6 +55,7 @@ public class TripQualityMaintenanceService implements PreviewTripQuality, Proces
         if (existing.isEmpty()) {
             maintenance.startDiscovery(version, discovery);
             quality.invalidate(version);
+            statistics.requestRoute(version);
         }
         int processed = 0;
         if (!discovery.completed()) {
@@ -72,7 +76,10 @@ public class TripQualityMaintenanceService implements PreviewTripQuality, Proces
             discovery.advance(last == null ? discovery.cursorAt() : last.observedAt(),
                 last == null ? discovery.cursorBatchId() : last.id(), processed, limit);
             maintenance.saveDiscovery(version, discovery);
-            if (discovery.completed()) { quality.invalidate(version); }
+            if (discovery.completed()) {
+                quality.invalidate(version);
+                statistics.requestRoute(version);
+            }
         }
         final var pending = maintenance.nextPendingVehicle(version);
         final boolean advanced = pending.isPresent() && investigations.investigateLocked(version, pending.get());
