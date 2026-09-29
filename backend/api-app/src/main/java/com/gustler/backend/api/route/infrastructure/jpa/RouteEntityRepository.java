@@ -1,10 +1,10 @@
 package com.gustler.backend.api.route.infrastructure.jpa;
 
 import java.util.List;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.Repository;
 
-public interface RouteEntityRepository extends JpaRepository<RouteJpaEntity, Long> {
+public interface RouteEntityRepository extends Repository<RouteJpaEntity, Long> {
 
     @Query("""
         SELECT version.route
