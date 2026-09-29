@@ -38,7 +38,7 @@ export function VerdictBoardPage() {
   const [switched, setSwitched] = useState(false);
 
   const state: BoardState = USE_ROUTE_MOCKS
-    ? boardStateOf(boardMock, boardResult, preferredDirection)
+    ? boardStateOf(boardMock, null, preferredDirection)
     : boardStateOf(boardBody, boardResult, preferredDirection);
   const liveVehicles = USE_ROUTE_MOCKS ? liveVehiclesMock : liveVehicleState.liveVehicles;
   const liveMotionDurationMs = USE_ROUTE_MOCKS ? DEFAULT_LIVE_MOTION_DURATION_MS : liveVehicleState.motionDurationMs;
