@@ -17,7 +17,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /** 수집 배치의 저장 매핑. 상태 전이 규칙은 CollectionBatch가 관리한다. */
-@Entity(name = "CollectorObservationBatch")
+@Entity(name = "ObservationBatch")
 @Table(name = "observation_batch")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

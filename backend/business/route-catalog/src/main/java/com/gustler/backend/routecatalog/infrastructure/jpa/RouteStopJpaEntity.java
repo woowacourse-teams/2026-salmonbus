@@ -12,7 +12,7 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.springframework.data.domain.Persistable;
 
-@Entity(name = "CollectorRouteStop")
+@Entity(name = "RouteStop")
 @Table(name = "route_stop")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RouteStopJpaEntity implements Persistable<RouteStopJpaId> {

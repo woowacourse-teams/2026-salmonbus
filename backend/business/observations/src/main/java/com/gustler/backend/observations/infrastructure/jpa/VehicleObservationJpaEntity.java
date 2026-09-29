@@ -25,7 +25,7 @@ import lombok.NoArgsConstructor;
  * <p>vehicle_trip_key 는 수집 엔티티에 매핑하지 않는다. 이상 차량의 제한된 조사에서만
  * 이 nullable 파생 열에 편도 키를 기록한다.
  */
-@Entity(name = "CollectorVehicleObservation")
+@Entity(name = "VehicleObservation")
 @Table(name = "vehicle_observation")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class VehicleObservationJpaEntity {

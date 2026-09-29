@@ -5,7 +5,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface CollectorVehicleObservationRepository extends JpaRepository<VehicleObservationJpaEntity, Long> {
+public interface VehicleObservationEntityRepository extends JpaRepository<VehicleObservationJpaEntity, Long> {
 
     /**
      * 같은 계획을 다시 부를 때 지난 시도가 쌓아둔 관측을 비운다.
@@ -13,7 +13,7 @@ public interface CollectorVehicleObservationRepository extends JpaRepository<Veh
      * 안 비우면 상류 행 번호가 겹쳐 ux_observation_source_row 에 걸린다.
      */
     @Modifying
-    @Query("delete from CollectorVehicleObservation observation "
+    @Query("delete from VehicleObservation observation "
         + "where observation.observationBatchId = :observationBatchId")
     void deleteByObservationBatchId(
         @Param("observationBatchId") long observationBatchId

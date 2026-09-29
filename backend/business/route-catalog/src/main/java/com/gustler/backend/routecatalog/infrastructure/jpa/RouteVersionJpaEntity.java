@@ -17,7 +17,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-@Entity(name = "CollectorRouteVersion")
+@Entity(name = "RouteVersion")
 @Table(name = "route_version")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

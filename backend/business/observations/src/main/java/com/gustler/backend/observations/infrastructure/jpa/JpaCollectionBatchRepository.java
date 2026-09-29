@@ -14,11 +14,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 @Transactional(propagation = Propagation.MANDATORY)
 public class JpaCollectionBatchRepository implements CollectionBatchRepository {
-    private final CollectorObservationBatchRepository batches;
-    private final CollectorVehicleObservationRepository observations;
+    private final ObservationBatchEntityRepository batches;
+    private final VehicleObservationEntityRepository observations;
 
-    public JpaCollectionBatchRepository(CollectorObservationBatchRepository batches,
-                                        CollectorVehicleObservationRepository observations) {
+    public JpaCollectionBatchRepository(ObservationBatchEntityRepository batches,
+                                        VehicleObservationEntityRepository observations) {
         this.batches = batches;
         this.observations = observations;
     }
