@@ -1,13 +1,18 @@
-import type { ApiFailure } from "@/shared/api/client";
 import type { Direction, ErrorCode, RouteStatus } from "@/shared/api/routeForecast.types";
 
-type FailureKind = Exclude<ApiFailure["kind"], "aborted">;
-
-export interface FailureProperties {
-  error_kind: FailureKind;
-  http_status?: number;
-  error_code?: Extract<ErrorCode, "MODEL_OUT_OF_SCOPE">;
-}
+export type FailureProperties =
+  | {
+      error_kind: "contract";
+      http_status: number;
+      error_code?: Extract<ErrorCode, "MODEL_OUT_OF_SCOPE">;
+    }
+  | {
+      error_kind: "rateLimited" | "malformed";
+      http_status: number;
+    }
+  | {
+      error_kind: "timeout" | "network";
+    };
 
 export interface EventMap {
   route_selected: {
