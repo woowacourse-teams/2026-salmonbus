@@ -1,0 +1,114 @@
+{
+  "availability": {
+    "routeId": "204000057",
+    "displayName": "3330",
+    "historySize": 50,
+    "maxBodyCodePoints": 200
+  },
+  "clientFrames": {
+    "session.start": {
+      "v": 1,
+      "type": "session.start",
+      "clientSessionId": "0f8fad5b-d9cb-469f-a165-70867728950e"
+    },
+    "message.send": {
+      "v": 1,
+      "type": "message.send",
+      "clientMessageId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "body": "지금 자리 여유 있어요"
+    }
+  },
+  "serverFrames": {
+    "session.ready": {
+      "v": 1,
+      "type": "session.ready",
+      "authorId": "Y4O3sB0Z_Y8WQm7ywwBqHA",
+      "nickname": "졸린 범계역",
+      "maxBodyCodePoints": 200
+    },
+    "history.batch": {
+      "v": 1,
+      "type": "history.batch",
+      "messages": [
+        {
+          "id": "68db00000000000000000001",
+          "authorId": "q2Xl9Rk3TbS1c0vYmN8wJA",
+          "nickname": "수다스러운 안양역",
+          "body": "야탑역에서 방금 탔어요",
+          "createdAt": "2026-09-29T13:20:02Z"
+        },
+        {
+          "id": "68db00000000000000000002",
+          "authorId": "Y4O3sB0Z_Y8WQm7ywwBqHA",
+          "nickname": "졸린 범계역",
+          "body": "뒤쪽은 자리 있나요?",
+          "createdAt": "2026-09-29T13:20:41.503Z"
+        }
+      ]
+    },
+    "history.end": {
+      "v": 1,
+      "type": "history.end"
+    },
+    "message.ack": {
+      "v": 1,
+      "type": "message.ack",
+      "clientMessageId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "duplicate": false,
+      "message": {
+        "id": "68db00000000000000000003",
+        "authorId": "Y4O3sB0Z_Y8WQm7ywwBqHA",
+        "nickname": "졸린 범계역",
+        "body": "지금 자리 여유 있어요",
+        "createdAt": "2026-09-29T13:21:34.127Z"
+      }
+    },
+    "message.created": {
+      "v": 1,
+      "type": "message.created",
+      "message": {
+        "id": "68db00000000000000000003",
+        "authorId": "Y4O3sB0Z_Y8WQm7ywwBqHA",
+        "nickname": "졸린 범계역",
+        "body": "지금 자리 여유 있어요",
+        "createdAt": "2026-09-29T13:21:34.127Z"
+      }
+    },
+    "error.rateLimited": {
+      "v": 1,
+      "type": "error",
+      "requestId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "code": "RATE_LIMITED",
+      "message": "잠시 후 다시 보내 주세요.",
+      "retryAfterMs": 1000,
+      "fatal": false
+    },
+    "error.invalidBody": {
+      "v": 1,
+      "type": "error",
+      "requestId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "code": "INVALID_BODY",
+      "message": "메시지는 1자 이상 200자 이하여야 합니다.",
+      "retryAfterMs": null,
+      "fatal": false
+    },
+    "error.unavailable": {
+      "v": 1,
+      "type": "error",
+      "requestId": null,
+      "code": "CHAT_UNAVAILABLE",
+      "message": "채팅을 잠시 사용할 수 없습니다.",
+      "retryAfterMs": null,
+      "fatal": false
+    },
+    "error.helloRequired": {
+      "v": 1,
+      "type": "error",
+      "requestId": null,
+      "code": "HELLO_REQUIRED",
+      "message": "세션 시작 시간이 지났습니다.",
+      "retryAfterMs": null,
+      "fatal": true
+    }
+  }
+}
