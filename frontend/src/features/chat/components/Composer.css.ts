@@ -7,6 +7,7 @@ const CONTROL_RADIUS = "14px";
 const TEXTAREA_MAX_HEIGHT = "104px";
 const ICON_SIZE = "20px";
 const COUNT_RIGHT = "69px";
+const PRESS = 0.97;
 
 export const composer = style({
   position: "relative",
@@ -43,7 +44,6 @@ export const textarea = style({
   selectors: {
     "&::placeholder": { color: vars.color.textSubtle },
     "&:focus": { borderColor: vars.color.ink, outline: "none", background: vars.color.surface },
-    "&:focus-visible": { boxShadow: `0 0 0 2px ${vars.color.focusRing}` },
   },
 });
 
@@ -59,7 +59,14 @@ export const sendButton = style({
   background: vars.color.ink,
   color: vars.color.onInk,
   cursor: "pointer",
+  transition: `scale ${vars.duration.fast} ease`,
+  "@media": {
+    "(prefers-reduced-motion: reduce)": {
+      transition: "none",
+    },
+  },
   selectors: {
+    '&:not([aria-disabled="true"]):active': { scale: `${PRESS}` },
     '&[aria-disabled="true"]': { background: vars.color.mutedChipSurface, color: vars.color.faint, cursor: "default" },
     "&:focus-visible": { outline: `2px solid ${vars.color.focusRing}`, outlineOffset: "2px" },
   },

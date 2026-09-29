@@ -4,8 +4,8 @@ import { DESKTOP_MEDIA } from "./chatLayout";
 const LAYER_MAX_WIDTH = "430px";
 const DESKTOP_TOP = "128px";
 const DESKTOP_BOTTOM = "32px";
-const DESKTOP_LEFT = "calc(50% + 239px)";
-const DESKTOP_WIDTH = "360px";
+const DESKTOP_LEFT = "calc(50% + 221px)";
+const DESKTOP_WIDTH = "394px";
 
 export const layer = style({
   position: "fixed",

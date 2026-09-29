@@ -1,106 +1,118 @@
 import { describe, expect, it } from "@jest/globals";
 import {
-  draggedSheetOffset,
+  draggedSheetHeight,
   halfSheetHeight,
-  releaseVelocity,
-  sheetOffset,
-  sheetPositionAfterRelease,
+  nextLargerSnap,
+  quarterSheetHeight,
+  settleSheet,
+  sheetHeight,
+  sheetPosition,
 } from "./sheetPolicy";
 
 const VIEWPORT = 844;
+const HALF = 439;
+const QUARTER = 220;
 
 describe("halfSheetHeight", () => {
-  it("뷰포트의 52%를 280~560px로 자르고 위로 120px을 남긴다", () => {
-    expect(halfSheetHeight(844)).toBeCloseTo(438.88);
-    expect(halfSheetHeight(553)).toBeCloseTo(287.56);
+  it("뷰포트의 52%를 280~560px로 자르고 위로 120px을 남긴 뒤 정수 px로 반올림한다", () => {
+    expect(halfSheetHeight(844)).toBe(HALF);
+    expect(halfSheetHeight(553)).toBe(288);
     expect(halfSheetHeight(1400)).toBe(560);
     expect(halfSheetHeight(390)).toBe(270);
     expect(halfSheetHeight(256)).toBe(136);
   });
 });
 
-describe("sheetOffset", () => {
-  it("전체는 0, 절반은 뷰포트에서 절반 높이를 뺀 값, 접힘은 뷰포트 높이만큼 내린다", () => {
-    expect(sheetOffset("full", VIEWPORT)).toBe(0);
-    expect(sheetOffset("half", VIEWPORT)).toBeCloseTo(405.12);
-    expect(sheetOffset("collapsed", VIEWPORT)).toBe(VIEWPORT);
+describe("quarterSheetHeight", () => {
+  it("반 높이의 절반이되 216px보다 낮추지 않는다", () => {
+    expect(quarterSheetHeight(844)).toBe(QUARTER);
+    expect(quarterSheetHeight(664)).toBe(216);
+  });
+
+  it("반 높이가 216px보다 낮으면 반 높이와 같다", () => {
+    expect(quarterSheetHeight(256)).toBe(136);
   });
 });
 
-describe("draggedSheetOffset", () => {
-  it("손가락을 그대로 따라간다", () => {
-    expect(draggedSheetOffset("half", VIEWPORT, -100)).toBeCloseTo(305.12);
-    expect(draggedSheetOffset("full", VIEWPORT, 120)).toBe(120);
+describe("sheetHeight", () => {
+  it("전체는 보이는 영역 높이, 반과 반의 반은 각 높이다", () => {
+    expect(sheetHeight("full", VIEWPORT)).toBe(VIEWPORT);
+    expect(sheetHeight("half", VIEWPORT)).toBe(HALF);
+    expect(sheetHeight("quarter", VIEWPORT)).toBe(QUARTER);
   });
 
-  it("전체보다 위로는 1/4만, 최대 24px까지 따라간다", () => {
-    expect(draggedSheetOffset("full", VIEWPORT, -40)).toBe(-10);
-    expect(draggedSheetOffset("full", VIEWPORT, -400)).toBe(-24);
-  });
-
-  it("뷰포트 아래로는 더 내려가지 않는다", () => {
-    expect(draggedSheetOffset("half", VIEWPORT, 1_000)).toBe(VIEWPORT);
+  it("보이는 영역이 줄면 그 높이로 다시 계산한다", () => {
+    expect(sheetHeight("full", 544)).toBe(544);
+    expect(sheetHeight("half", 544)).toBe(283);
   });
 });
 
-describe("releaseVelocity", () => {
-  it("놓기 전 100ms 안의 움직임으로 속도를 구한다", () => {
-    // given
-    const samples = [
-      { time: 0, y: 500 },
-      { time: 50, y: 480 },
-      { time: 120, y: 440 },
-    ];
-
-    // when
-    const velocity = releaseVelocity(samples, { time: 150, y: 430 });
-
-    // then
-    expect(velocity).toBeCloseTo(-0.5);
-  });
-
-  it("100ms 넘게 멈췄다 놓으면 속도는 0이다", () => {
-    expect(releaseVelocity([{ time: 0, y: 500 }], { time: 300, y: 400 })).toBe(0);
+describe("sheetPosition", () => {
+  it("닫혀 있으면 단계와 관계없이 접힘이고, 열려 있으면 그 단계다", () => {
+    expect(sheetPosition({ open: false, snap: "full" })).toBe("collapsed");
+    expect(sheetPosition({ open: true, snap: "quarter" })).toBe("quarter");
+    expect(sheetPosition({ open: true, snap: "full" })).toBe("full");
   });
 });
 
-describe("sheetPositionAfterRelease", () => {
-  it("빠르게 튕기면 그 방향으로 한 단계만 간다", () => {
-    expect(sheetPositionAfterRelease({ from: "half", viewportHeight: VIEWPORT, distanceY: -40, velocityY: -0.5 })).toBe(
-      "full",
-    );
-    expect(sheetPositionAfterRelease({ from: "half", viewportHeight: VIEWPORT, distanceY: 40, velocityY: 0.5 })).toBe(
-      "collapsed",
-    );
-    expect(sheetPositionAfterRelease({ from: "full", viewportHeight: VIEWPORT, distanceY: 100, velocityY: 0.9 })).toBe(
-      "half",
-    );
-    expect(sheetPositionAfterRelease({ from: "full", viewportHeight: VIEWPORT, distanceY: -10, velocityY: -0.9 })).toBe(
-      "full",
-    );
+describe("nextLargerSnap", () => {
+  it("반의 반 다음은 반, 반 다음은 전체, 전체 다음은 없다", () => {
+    expect(nextLargerSnap("quarter")).toBe("half");
+    expect(nextLargerSnap("half")).toBe("full");
+    expect(nextLargerSnap("full")).toBeNull();
+  });
+});
+
+describe("draggedSheetHeight", () => {
+  it("손가락을 1:1로 따라간다", () => {
+    expect(draggedSheetHeight(HALF, VIEWPORT, -100)).toBe(539);
+    expect(draggedSheetHeight(HALF, VIEWPORT, 100)).toBe(339);
   });
 
-  it("속도가 0.4px/ms 이하면 중간선 기준 가까운 단계로 간다", () => {
-    expect(sheetPositionAfterRelease({ from: "half", viewportHeight: VIEWPORT, distanceY: -150, velocityY: 0.4 })).toBe(
-      "half",
-    );
-    expect(
-      sheetPositionAfterRelease({ from: "half", viewportHeight: VIEWPORT, distanceY: -250, velocityY: -0.1 }),
-    ).toBe("full");
-    expect(sheetPositionAfterRelease({ from: "half", viewportHeight: VIEWPORT, distanceY: 150, velocityY: 0.1 })).toBe(
-      "half",
-    );
-    expect(sheetPositionAfterRelease({ from: "half", viewportHeight: VIEWPORT, distanceY: 250, velocityY: 0 })).toBe(
-      "collapsed",
-    );
+  it("보이는 영역보다 위로는 1/4만, 최대 24px까지 따라간다", () => {
+    expect(draggedSheetHeight(VIEWPORT, VIEWPORT, -40)).toBe(854);
+    expect(draggedSheetHeight(VIEWPORT, VIEWPORT, -400)).toBe(868);
   });
 
-  it("빠르더라도 뷰포트의 40% 이상 움직였으면 가까운 단계로 간다", () => {
-    expect(sheetPositionAfterRelease({ from: "full", viewportHeight: VIEWPORT, distanceY: 700, velocityY: 2 })).toBe(
-      "collapsed",
-    );
-    expect(sheetPositionAfterRelease({ from: "full", viewportHeight: VIEWPORT, distanceY: 350, velocityY: 2 })).toBe(
-      "half",
-    );
+  it("0보다 낮아지지 않는다", () => {
+    expect(draggedSheetHeight(HALF, VIEWPORT, 1_000)).toBe(0);
+  });
+});
+
+describe("settleSheet", () => {
+  const release = (startHeight: number, height: number) =>
+    settleSheet({ startHeight, height, viewportHeight: VIEWPORT });
+
+  it("24px 넘게 끌면 끈 방향의 다음 단계로 간다", () => {
+    expect(release(HALF, HALF + 30)).toEqual({ open: true, snap: "full" });
+    expect(release(HALF, HALF - 30)).toEqual({ open: true, snap: "quarter" });
+    expect(release(VIEWPORT, VIEWPORT - 30)).toEqual({ open: true, snap: "half" });
+    expect(release(QUARTER, QUARTER + 30)).toEqual({ open: true, snap: "half" });
+  });
+
+  it("반의 반에서 24px 넘게 내리면 접힌다", () => {
+    expect(release(QUARTER, QUARTER - 30)).toEqual({ open: false, snap: "quarter" });
+  });
+
+  it("24px보다 적게 끌면 출발 단계로 돌아간다", () => {
+    expect(release(HALF, HALF + 20)).toEqual({ open: true, snap: "half" });
+    expect(release(HALF, HALF - 20)).toEqual({ open: true, snap: "half" });
+  });
+
+  it("멀리 끌면 끈 방향의 단계 가운데 놓은 곳에서 가장 가까운 단계로 가고, 반대 방향으로는 가지 않는다", () => {
+    expect(release(QUARTER, 700)).toEqual({ open: true, snap: "full" });
+    expect(release(QUARTER, 470)).toEqual({ open: true, snap: "half" });
+    expect(release(VIEWPORT, 300)).toEqual({ open: true, snap: "quarter" });
+    expect(release(HALF, 180)).toEqual({ open: true, snap: "quarter" });
+    expect(release(HALF, 100)).toEqual({ open: false, snap: "quarter" });
+  });
+
+  it("전체에서 더 올리면 전체에 머문다", () => {
+    expect(release(VIEWPORT, VIEWPORT + 20)).toEqual({ open: true, snap: "full" });
+  });
+
+  it("반의 반이 반과 같은 작은 뷰포트에서는 반에서 내리면 접힌다", () => {
+    expect(settleSheet({ startHeight: 136, height: 100, viewportHeight: 256 })).toEqual({ open: false, snap: "half" });
+    expect(settleSheet({ startHeight: 136, height: 170, viewportHeight: 256 })).toEqual({ open: true, snap: "full" });
   });
 });

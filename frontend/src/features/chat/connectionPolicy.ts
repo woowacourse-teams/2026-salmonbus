@@ -10,3 +10,7 @@ export function reconnectDelayMs(attempt: number): number | null {
 export function shouldReconnect(closeCode: number): boolean {
   return !FINAL_CLOSE_CODES.has(closeCode);
 }
+
+export function isConnectionStalled(connection: ConnectionState | "idle"): boolean {
+  return connection === "failed" || connection === "unavailable";
+}

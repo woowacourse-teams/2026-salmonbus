@@ -10,6 +10,7 @@ interface MessageListProps {
   listRef: RefObject<HTMLDivElement | null>;
   displayName: string;
   historyComplete: boolean;
+  stalled: boolean;
   messages: ChatMessage[];
   pending: PendingMessage[];
   authorId: string | null;
@@ -22,6 +23,7 @@ export function MessageList({
   listRef,
   displayName,
   historyComplete,
+  stalled,
   messages,
   pending,
   authorId,
@@ -40,7 +42,7 @@ export function MessageList({
       onScroll={onScroll}
     >
       {!historyComplete && messages.length === 0 ? (
-        <MessageSkeleton />
+        !stalled && <MessageSkeleton />
       ) : messages.length === 0 && pending.length === 0 ? (
         <EmptyRoom />
       ) : (

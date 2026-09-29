@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ChatAvailability } from "./chatAvailability";
+import { isConnectionStalled } from "./connectionPolicy";
 import { useChatConnection } from "./useChatConnection";
 import { useChatSheet } from "./useChatSheet";
 import { useIsDesktop } from "./useIsDesktop";
@@ -25,8 +26,8 @@ export function ChatWidget({ availability }: ChatWidgetProps) {
   const [started, setStarted] = useState(false);
   const isDesktop = useIsDesktop();
   const layerRef = useRef<HTMLDivElement | null>(null);
-  useVisualViewport(layerRef);
-  const sheet = useChatSheet(isDesktop);
+  const sheet = useChatSheet();
+  useVisualViewport(layerRef, sheet.snap);
   const scroll = useMessageScroll(sheet.position);
   const chat = useChatConnection({
     routeId: availability.routeId,
@@ -34,7 +35,7 @@ export function ChatWidget({ availability }: ChatWidgetProps) {
     started,
     onIncoming: scroll.countIncoming,
   });
-  useFollowNewest(scroll, chat.historyComplete, chat.messages.length, chat.pending.length);
+  useFollowNewest(scroll, chat.historyComplete, chat.messages, chat.pending);
   const modal = sheet.position === "full" && !isDesktop;
   useModalSheet(modal);
 
@@ -64,14 +65,16 @@ export function ChatWidget({ availability }: ChatWidgetProps) {
         dragEnabled={!isDesktop}
         displayName={availability.displayName}
         nickname={chat.nickname}
-        onMove={sheet.move}
+        onSettle={sheet.settle}
         onToggleSize={sheet.toggleSize}
+        onCollapse={sheet.collapse}
       >
         <StatusBanner notice={chat.notice} connection={chat.connection} onReconnect={chat.reconnect} />
         <MessageList
           listRef={scroll.listRef}
           displayName={availability.displayName}
           historyComplete={chat.historyComplete}
+          stalled={isConnectionStalled(chat.connection)}
           messages={chat.messages}
           pending={chat.pending}
           authorId={chat.authorId}
@@ -85,7 +88,6 @@ export function ChatWidget({ availability }: ChatWidgetProps) {
           rateLimited={chat.rateLimited}
           maxBodyCodePoints={chat.maxBodyCodePoints}
           onSend={chat.sendMessage}
-          onFocus={sheet.expandForInput}
         />
       </ChatSheet>
     </div>,

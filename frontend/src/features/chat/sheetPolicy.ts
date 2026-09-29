@@ -1,73 +1,95 @@
-export type SheetPosition = "collapsed" | "half" | "full";
-export type OpenSheetPosition = Exclude<SheetPosition, "collapsed">;
+export type SheetSnap = "quarter" | "half" | "full";
+export type SheetPosition = "collapsed" | SheetSnap;
 
-export interface PointerSample {
-  time: number;
-  y: number;
+export interface SheetLayout {
+  open: boolean;
+  snap: SheetSnap;
 }
 
 export interface SheetRelease {
-  from: OpenSheetPosition;
+  startHeight: number;
+  height: number;
   viewportHeight: number;
-  distanceY: number;
-  velocityY: number;
 }
 
 export const DRAG_START_DISTANCE_PX = 6;
-export const VELOCITY_WINDOW_MS = 100;
 
 const HALF_MIN_PX = 280;
 const HALF_MAX_PX = 560;
 const HALF_VIEWPORT_RATIO = 0.52;
 const HALF_TOP_CLEARANCE_PX = 120;
+const QUARTER_MIN_PX = 216;
+const INTENT_DISTANCE_PX = 24;
 const OVERDRAG_RATIO = 0.25;
 const OVERDRAG_MAX_PX = 24;
-const FLICK_VELOCITY_PX_PER_MS = 0.4;
-const FLICK_MAX_DISTANCE_RATIO = 0.4;
-const POSITIONS_TOP_DOWN: readonly SheetPosition[] = ["full", "half", "collapsed"];
+const SNAPS_BOTTOM_UP: readonly SheetSnap[] = ["quarter", "half", "full"];
 
 export function halfSheetHeight(viewportHeight: number): number {
   const preferred = Math.min(Math.max(HALF_MIN_PX, viewportHeight * HALF_VIEWPORT_RATIO), HALF_MAX_PX);
-  return Math.max(0, Math.min(preferred, viewportHeight - HALF_TOP_CLEARANCE_PX));
+  return Math.round(Math.max(0, Math.min(preferred, viewportHeight - HALF_TOP_CLEARANCE_PX)));
 }
 
-export function sheetOffset(position: SheetPosition, viewportHeight: number): number {
-  switch (position) {
+export function quarterSheetHeight(viewportHeight: number): number {
+  const half = halfSheetHeight(viewportHeight);
+  return Math.max(Math.min(QUARTER_MIN_PX, half), Math.round(half / 2));
+}
+
+export function sheetHeight(snap: SheetSnap, viewportHeight: number): number {
+  switch (snap) {
     case "full":
-      return 0;
+      return Math.round(viewportHeight);
     case "half":
-      return viewportHeight - halfSheetHeight(viewportHeight);
-    case "collapsed":
-      return viewportHeight;
+      return halfSheetHeight(viewportHeight);
+    case "quarter":
+      return quarterSheetHeight(viewportHeight);
   }
 }
 
-export function draggedSheetOffset(from: OpenSheetPosition, viewportHeight: number, distanceY: number): number {
-  const offset = sheetOffset(from, viewportHeight) + distanceY;
-  if (offset < 0) return -Math.min(OVERDRAG_MAX_PX, -offset * OVERDRAG_RATIO);
-  return Math.min(offset, viewportHeight);
+export function sheetPosition({ open, snap }: SheetLayout): SheetPosition {
+  return open ? snap : "collapsed";
 }
 
-export function releaseVelocity(samples: readonly PointerSample[], release: PointerSample): number {
-  const first = samples.find((sample) => release.time - sample.time <= VELOCITY_WINDOW_MS);
-  if (first === undefined) return 0;
-  const elapsed = release.time - first.time;
-  return elapsed > 0 ? (release.y - first.y) / elapsed : 0;
+export function nextLargerSnap(snap: SheetSnap): SheetSnap | null {
+  return SNAPS_BOTTOM_UP[SNAPS_BOTTOM_UP.indexOf(snap) + 1] ?? null;
 }
 
-export function sheetPositionAfterRelease({ from, viewportHeight, distanceY, velocityY }: SheetRelease): SheetPosition {
-  const flicked =
-    Math.abs(velocityY) > FLICK_VELOCITY_PX_PER_MS && Math.abs(distanceY) < viewportHeight * FLICK_MAX_DISTANCE_RATIO;
-  if (flicked) {
-    const index = POSITIONS_TOP_DOWN.indexOf(from) + (velocityY > 0 ? 1 : -1);
-    return POSITIONS_TOP_DOWN[Math.min(Math.max(index, 0), POSITIONS_TOP_DOWN.length - 1)] ?? from;
+export function draggedSheetHeight(startHeight: number, viewportHeight: number, distanceY: number): number {
+  const height = startHeight - distanceY;
+  if (height <= viewportHeight) return Math.round(Math.max(height, 0));
+  return Math.round(viewportHeight + Math.min(OVERDRAG_MAX_PX, (height - viewportHeight) * OVERDRAG_RATIO));
+}
+
+export function settleSheet({ startHeight, height, viewportHeight }: SheetRelease): SheetLayout {
+  const stops = sheetStops(viewportHeight);
+  const start = nearestStopIndex(stops, startHeight, stops.keys());
+  const moved = height - startHeight;
+  let index = start;
+  if (Math.abs(moved) >= INTENT_DISTANCE_PX) {
+    const ahead = [...stops.keys()].filter((candidate) => (moved > 0 ? candidate > start : candidate < start));
+    if (ahead.length > 0) index = nearestStopIndex(stops, height, ahead);
   }
+  const snap = stops[index]!.snap;
+  return snap === null ? { open: false, snap: stops[1]!.snap! } : { open: true, snap };
+}
 
-  const offset = Math.min(Math.max(sheetOffset(from, viewportHeight) + distanceY, 0), viewportHeight);
-  let nearest: SheetPosition = from;
-  for (const position of POSITIONS_TOP_DOWN) {
-    const distance = Math.abs(sheetOffset(position, viewportHeight) - offset);
-    if (distance < Math.abs(sheetOffset(nearest, viewportHeight) - offset)) nearest = position;
+interface SheetStop {
+  snap: SheetSnap | null;
+  height: number;
+}
+
+function sheetStops(viewportHeight: number): SheetStop[] {
+  const opened = SNAPS_BOTTOM_UP.filter(
+    (snap) => snap !== "quarter" || quarterSheetHeight(viewportHeight) < halfSheetHeight(viewportHeight),
+  ).map((snap) => ({ snap, height: sheetHeight(snap, viewportHeight) }));
+  return [{ snap: null, height: 0 }, ...opened];
+}
+
+function nearestStopIndex(stops: readonly SheetStop[], height: number, candidates: Iterable<number>): number {
+  let nearest = -1;
+  for (const index of candidates) {
+    if (nearest < 0 || Math.abs(stops[index]!.height - height) < Math.abs(stops[nearest]!.height - height)) {
+      nearest = index;
+    }
   }
   return nearest;
 }

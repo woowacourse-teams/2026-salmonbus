@@ -9,12 +9,11 @@ interface ComposerProps {
   rateLimited: boolean;
   maxBodyCodePoints: number;
   onSend: (body: string) => boolean;
-  onFocus: () => void;
 }
 
 const CHARACTER_COUNT_VISIBLE_FROM = 150;
 
-export function Composer({ connection, rateLimited, maxBodyCodePoints, onSend, onFocus }: ComposerProps) {
+export function Composer({ connection, rateLimited, maxBodyCodePoints, onSend }: ComposerProps) {
   const [draft, setDraft] = useState("");
   const draftLength = codePointLength(draft);
   const canSend = connection === "ready" && !rateLimited && normalizedBody(draft, maxBodyCodePoints) !== null;
@@ -40,7 +39,6 @@ export function Composer({ connection, rateLimited, maxBodyCodePoints, onSend, o
           enterKeyHint="send"
           onChange={(event) => setDraft(limitCodePoints(event.target.value, maxBodyCodePoints))}
           onKeyDown={submitOnEnter}
-          onFocus={onFocus}
         />
         <button
           type="submit"

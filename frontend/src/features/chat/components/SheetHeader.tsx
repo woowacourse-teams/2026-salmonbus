@@ -7,6 +7,7 @@ interface SheetHeaderProps {
   position: SheetPosition;
   displayName: string;
   nickname: string | null;
+  stalled: boolean;
   dragHandlers: SheetDragHandlers;
   onToggleSize: () => void;
   onCollapse: () => void;
@@ -16,10 +17,13 @@ export function SheetHeader({
   position,
   displayName,
   nickname,
+  stalled,
   dragHandlers,
   onToggleSize,
   onCollapse,
 }: SheetHeaderProps) {
+  const subtitle = nicknameLabel(nickname, stalled);
+
   return (
     <header className={styles.header} {...dragHandlers}>
       <div className={styles.grabberRow[position]}>
@@ -32,7 +36,7 @@ export function SheetHeader({
           <h2 className={styles.title}>
             <span>{displayName}</span> {CHAT_NAME}
           </h2>
-          <p className={styles.subtitle}>{nicknameLabel(nickname)}</p>
+          {subtitle !== null && <p className={styles.subtitle}>{subtitle}</p>}
         </div>
         <button type="button" className={styles.collapseButton} aria-label={COLLAPSE_LABEL} onClick={onCollapse}>
           <ChevronDownIcon />

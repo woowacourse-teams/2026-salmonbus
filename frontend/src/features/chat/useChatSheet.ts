@@ -1,8 +1,13 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { SheetPosition } from "./sheetPolicy";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { vars } from "@/shared/styles/tokens.css";
+import { nextLargerSnap, sheetPosition, type SheetLayout } from "./sheetPolicy";
+import { stopSheetHeightTransition, transitionSheetHeight } from "./useSheetDrag";
 
-export function useChatSheet(isDesktop: boolean) {
-  const [position, setPosition] = useState<SheetPosition>("collapsed");
+const CLOSED: SheetLayout = { open: false, snap: "half" };
+
+export function useChatSheet() {
+  const [layout, setLayout] = useState<SheetLayout>(CLOSED);
+  const position = sheetPosition(layout);
   const sheetRef = useRef<HTMLElement | null>(null);
   const launcherRef = useRef<HTMLButtonElement | null>(null);
   const positionRef = useRef(position);
@@ -11,33 +16,47 @@ export function useChatSheet(isDesktop: boolean) {
     positionRef.current = position;
   }, [position]);
 
+  const collapse = useCallback(() => {
+    const sheet = sheetRef.current;
+    if (sheet !== null) stopSheetHeightTransition(sheet);
+    setLayout((current) => ({ ...current, open: false }));
+    window.setTimeout(() => launcherRef.current?.focus(), 0);
+  }, []);
+
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || positionRef.current === "collapsed") return;
-      setPosition("collapsed");
-      window.setTimeout(() => launcherRef.current?.focus(), 0);
+      collapse();
     };
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, []);
+  }, [collapse]);
 
   function open() {
-    setPosition("half");
+    const sheet = sheetRef.current;
+    if (sheet !== null) {
+      stopSheetHeightTransition(sheet);
+      sheet.style.removeProperty("height");
+    }
+    setLayout({ open: true, snap: "half" });
     window.setTimeout(() => sheetRef.current?.focus({ preventScroll: true }), 0);
   }
 
-  function move(next: SheetPosition) {
-    setPosition(next);
-    if (next === "collapsed") window.setTimeout(() => launcherRef.current?.focus(), 0);
+  function settle(next: SheetLayout) {
+    setLayout(next);
+    if (!next.open) window.setTimeout(() => launcherRef.current?.focus(), 0);
   }
 
   function toggleSize() {
-    setPosition(position === "full" ? "half" : "full");
+    const larger = nextLargerSnap(layout.snap);
+    if (!layout.open || larger === null) {
+      collapse();
+      return;
+    }
+    const sheet = sheetRef.current;
+    if (sheet !== null) transitionSheetHeight(sheet, vars.duration.spring);
+    setLayout({ open: true, snap: larger });
   }
 
-  function expandForInput() {
-    if (position === "half" && !isDesktop) setPosition("full");
-  }
-
-  return { position, sheetRef, launcherRef, open, move, toggleSize, expandForInput };
+  return { position, snap: layout.snap, sheetRef, launcherRef, open, settle, collapse, toggleSize };
 }

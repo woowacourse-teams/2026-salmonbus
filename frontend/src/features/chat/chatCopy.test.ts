@@ -79,16 +79,22 @@ describe("launcherLabel", () => {
 });
 
 describe("sizeToggleLabel", () => {
-  it("전체로 열려 있으면 절반으로, 그 밖에는 크게 보기로 안내한다", () => {
-    expect(sizeToggleLabel("full")).toBe("채팅 절반으로 보기");
+  it("전체로 열려 있으면 접기로, 그 밖에는 크게 보기로 안내한다", () => {
+    expect(sizeToggleLabel("full")).toBe("채팅 접기");
     expect(sizeToggleLabel("half")).toBe("채팅 크게 보기");
+    expect(sizeToggleLabel("quarter")).toBe("채팅 크게 보기");
   });
 });
 
 describe("nicknameLabel", () => {
-  it("이름을 받기 전에는 준비 중으로, 받은 뒤에는 내 이름으로 보여 준다", () => {
-    expect(nicknameLabel(null)).toBe("익명 이름을 준비하고 있어요");
-    expect(nicknameLabel("수다스러운 야탑역")).toBe("내 이름 수다스러운 야탑역");
+  it("이름을 받기 전에는 준비 중으로, 받은 뒤에는 그 이름으로 참여 중이라고 보여 준다", () => {
+    expect(nicknameLabel(null, false)).toBe("익명 이름을 준비하고 있어요");
+    expect(nicknameLabel("수다스러운 야탑역", false)).toBe("수다스러운 야탑역 님으로 참여 중");
+  });
+
+  it("이름을 받기 전에 연결이 멈추면 부제를 비우고, 이미 받은 이름은 그대로 보여 준다", () => {
+    expect(nicknameLabel(null, true)).toBeNull();
+    expect(nicknameLabel("수다스러운 야탑역", true)).toBe("수다스러운 야탑역 님으로 참여 중");
   });
 });
 

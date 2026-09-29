@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import type { SheetPosition } from "./sheetPolicy";
 
 interface ScrollAnchor {
@@ -11,9 +11,34 @@ const BOTTOM_TOLERANCE_PX = 40;
 export function useMessageScroll(position: SheetPosition) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const atBottomRef = useRef(true);
+  const distanceFromBottomRef = useRef(0);
   const positionRef = useRef(position);
   const [unread, setUnread] = useState(0);
   const [unreadBelow, setUnreadBelow] = useState(0);
+
+  useEffect(() => {
+    const list = listRef.current;
+    if (list === null) return;
+    const listObserver = new ResizeObserver(() => {
+      const distance = atBottomRef.current ? 0 : distanceFromBottomRef.current;
+      list.scrollTop = list.scrollHeight - list.clientHeight - distance;
+    });
+    const contentObserver = new ResizeObserver(() => {
+      if (atBottomRef.current) list.scrollTop = list.scrollHeight - list.clientHeight;
+    });
+    const observeContent = () => {
+      for (const child of list.children) contentObserver.observe(child);
+    };
+    const childObserver = new MutationObserver(observeContent);
+    listObserver.observe(list);
+    observeContent();
+    childObserver.observe(list, { childList: true });
+    return () => {
+      listObserver.disconnect();
+      contentObserver.disconnect();
+      childObserver.disconnect();
+    };
+  }, []);
 
   useLayoutEffect(() => {
     const opened = positionRef.current === "collapsed" && position !== "collapsed";
@@ -35,7 +60,9 @@ export function useMessageScroll(position: SheetPosition) {
   function handleScroll() {
     const list = listRef.current;
     if (list === null) return;
-    const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < BOTTOM_TOLERANCE_PX;
+    const distance = list.scrollHeight - list.scrollTop - list.clientHeight;
+    const atBottom = distance < BOTTOM_TOLERANCE_PX;
+    distanceFromBottomRef.current = distance;
     atBottomRef.current = atBottom;
     if (atBottom) setUnreadBelow(0);
   }
@@ -59,8 +86,8 @@ export function useMessageScroll(position: SheetPosition) {
 export function useFollowNewest(
   { listRef, atBottomRef }: ScrollAnchor,
   historyComplete: boolean,
-  messageCount: number,
-  pendingCount: number,
+  messages: readonly unknown[],
+  pending: readonly unknown[],
 ) {
   useLayoutEffect(() => {
     const list = listRef.current;
@@ -71,8 +98,8 @@ export function useFollowNewest(
   useLayoutEffect(() => {
     const list = listRef.current;
     if (list === null || !atBottomRef.current) return;
-    scrollToBottom(list, true);
-  }, [atBottomRef, listRef, messageCount, pendingCount]);
+    scrollToBottom(list, false);
+  }, [atBottomRef, listRef, messages, pending]);
 }
 
 function scrollToBottom(element: HTMLElement, smooth: boolean) {

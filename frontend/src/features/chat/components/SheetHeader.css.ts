@@ -18,6 +18,8 @@ export const header = style({
   background: vars.color.surface,
   touchAction: "none",
   userSelect: "none",
+  WebkitUserSelect: "none",
+  WebkitTouchCallout: "none",
 });
 
 const grabberRowBase = style({
@@ -32,6 +34,7 @@ const grabberRowBase = style({
 
 export const grabberRow = styleVariants({
   collapsed: [grabberRowBase],
+  quarter: [grabberRowBase],
   half: [grabberRowBase],
   full: [
     grabberRowBase,
@@ -75,7 +78,10 @@ export const titleRow = style({
   height: TITLE_ROW_HEIGHT,
   alignItems: "center",
   gap: "4px",
-  padding: "0 6px 4px 18px",
+  padding: "0 18px 4px",
+  "@media": {
+    [DESKTOP_MEDIA]: { padding: "0 6px 4px 18px" },
+  },
 });
 
 export const titleBlock = style({ minWidth: 0, flex: 1 });
@@ -91,7 +97,7 @@ export const title = style({
 export const subtitle = style({
   overflow: "hidden",
   margin: "2px 0 0",
-  color: vars.color.textMuted,
+  color: vars.color.textSubtle,
   fontSize: "11.5px",
   fontWeight: 500,
   textOverflow: "ellipsis",
@@ -99,7 +105,7 @@ export const subtitle = style({
 });
 
 export const collapseButton = style({
-  display: "grid",
+  display: "none",
   flexShrink: 0,
   width: BUTTON_SIZE,
   height: BUTTON_SIZE,
@@ -113,6 +119,9 @@ export const collapseButton = style({
   selectors: {
     "&:hover": { background: vars.color.compactRowSurface, color: vars.color.ink },
     "&:focus-visible": { outline: `2px solid ${vars.color.focusRing}`, outlineOffset: "-2px" },
+  },
+  "@media": {
+    [DESKTOP_MEDIA]: { display: "grid" },
   },
 });
 

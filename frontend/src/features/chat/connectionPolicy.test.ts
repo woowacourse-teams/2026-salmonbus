@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { reconnectDelayMs, shouldReconnect } from "./connectionPolicy";
+import { isConnectionStalled, reconnectDelayMs, shouldReconnect } from "./connectionPolicy";
 
 describe("reconnectDelayMs", () => {
   it("재연결은 1, 2, 4, 8, 16초 뒤 다섯 번만 시도한다", () => {
@@ -15,5 +15,18 @@ describe("shouldReconnect", () => {
 
   it("연결 수 초과, 서버 재시작, 서버 오류, 비활성, 네트워크 끊김으로 닫히면 다시 잇는다", () => {
     expect([1013, 1001, 1011, 4500, 1006].map(shouldReconnect)).toEqual([true, true, true, true, true]);
+  });
+});
+
+describe("isConnectionStalled", () => {
+  it("연결 실패와 사용 불가만 멈춘 연결로 본다", () => {
+    expect(isConnectionStalled("failed")).toBe(true);
+    expect(isConnectionStalled("unavailable")).toBe(true);
+    expect((["idle", "connecting", "reconnecting", "ready"] as const).map(isConnectionStalled)).toEqual([
+      false,
+      false,
+      false,
+      false,
+    ]);
   });
 });

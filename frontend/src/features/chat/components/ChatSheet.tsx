@@ -1,7 +1,7 @@
 import type { ReactNode, RefObject } from "react";
 import { sheetLabel } from "../chatCopy";
-import type { ConnectionState } from "../connectionPolicy";
-import type { SheetPosition } from "../sheetPolicy";
+import { isConnectionStalled, type ConnectionState } from "../connectionPolicy";
+import type { SheetLayout, SheetPosition } from "../sheetPolicy";
 import { useSheetDrag } from "../useSheetDrag";
 import { SheetHeader } from "./SheetHeader";
 import * as styles from "./ChatSheet.css";
@@ -17,8 +17,9 @@ interface ChatSheetProps {
   dragEnabled: boolean;
   displayName: string;
   nickname: string | null;
-  onMove: (next: SheetPosition) => void;
+  onSettle: (next: SheetLayout) => void;
   onToggleSize: () => void;
+  onCollapse: () => void;
   children: ReactNode;
 }
 
@@ -31,11 +32,12 @@ export function ChatSheet({
   dragEnabled,
   displayName,
   nickname,
-  onMove,
+  onSettle,
   onToggleSize,
+  onCollapse,
   children,
 }: ChatSheetProps) {
-  const dragHandlers = useSheetDrag({ sheetRef, position, enabled: dragEnabled, onSettle: onMove });
+  const dragHandlers = useSheetDrag({ sheetRef, position, enabled: dragEnabled, onSettle });
 
   return (
     <section
@@ -50,14 +52,15 @@ export function ChatSheet({
       data-position={position}
       data-connection={connection}
     >
-      <div className={styles.content[position]}>
+      <div className={styles.content}>
         <SheetHeader
           position={position}
           displayName={displayName}
           nickname={nickname}
+          stalled={isConnectionStalled(connection)}
           dragHandlers={dragHandlers}
           onToggleSize={onToggleSize}
-          onCollapse={() => onMove("collapsed")}
+          onCollapse={onCollapse}
         />
         {children}
       </div>

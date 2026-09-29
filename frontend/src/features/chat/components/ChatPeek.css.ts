@@ -12,6 +12,8 @@ const PEEK_FONT = "600 13px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', s
 const ICON_SIZE = "15px";
 const BADGE_SIZE = "17px";
 const BADGE_RADIUS = "9px";
+const PRESS = 0.97;
+const HOVER_MEDIA = "(hover: hover) and (pointer: fine)";
 
 export const slot = style({
   position: "absolute",
@@ -22,7 +24,7 @@ export const slot = style({
   alignItems: "flex-start",
   pointerEvents: "auto",
   "@media": {
-    [DESKTOP_MEDIA]: { right: 0, bottom: 0 },
+    [DESKTOP_MEDIA]: { right: "auto", bottom: 0, left: 0, alignItems: "flex-end" },
   },
 });
 
@@ -43,13 +45,17 @@ export const launcher = style({
   cursor: "pointer",
   WebkitTapHighlightColor: "transparent",
   selectors: {
-    "&:hover": { borderColor: vars.color.iconMuted, transform: "translateY(-1px)" },
-    "&:active": { transform: "translateY(0)" },
+    "&:active": { scale: `${PRESS}` },
     "&:focus-visible": { outline: `2px solid ${vars.color.focusRing}`, outlineOffset: "2px" },
   },
   "@media": {
+    [HOVER_MEDIA]: {
+      selectors: {
+        "&:hover": { borderColor: vars.color.iconMuted },
+      },
+    },
     [MOTION_MEDIA]: {
-      transition: `transform ${vars.duration.fast}, border-color ${vars.duration.fast}`,
+      transition: `scale ${vars.duration.fast} ease, border-color ${vars.duration.fast} ease`,
     },
   },
 });

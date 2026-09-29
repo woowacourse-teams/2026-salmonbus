@@ -1,6 +1,6 @@
 import { useLayoutEffect, type RefObject } from "react";
-import { HALF_OFFSET_VAR, VIEWPORT_HEIGHT_VAR, VIEWPORT_TOP_VAR } from "./chatLayout";
-import { sheetOffset } from "./sheetPolicy";
+import { SHEET_HEIGHT_VAR, VIEWPORT_HEIGHT_VAR, VIEWPORT_TOP_VAR } from "./chatLayout";
+import { sheetHeight, type SheetSnap } from "./sheetPolicy";
 
 export interface ViewportMetrics {
   height: number;
@@ -13,16 +13,16 @@ export function readViewport(): ViewportMetrics {
   return { height: viewport.height, offsetTop: viewport.offsetTop };
 }
 
-export function useVisualViewport(targetRef: RefObject<HTMLElement | null>) {
+export function useVisualViewport(targetRef: RefObject<HTMLElement | null>, snap: SheetSnap) {
   useLayoutEffect(() => {
     const target = targetRef.current;
     if (target === null) return;
 
     const update = () => {
       const { height, offsetTop } = readViewport();
-      target.style.setProperty(VIEWPORT_HEIGHT_VAR, `${height}px`);
-      target.style.setProperty(VIEWPORT_TOP_VAR, `${offsetTop}px`);
-      target.style.setProperty(HALF_OFFSET_VAR, `${sheetOffset("half", height)}px`);
+      writeProperty(target, VIEWPORT_HEIGHT_VAR, `${height}px`);
+      writeProperty(target, VIEWPORT_TOP_VAR, `${offsetTop}px`);
+      writeProperty(target, SHEET_HEIGHT_VAR, `${sheetHeight(snap, height)}px`);
     };
 
     update();
@@ -37,5 +37,9 @@ export function useVisualViewport(targetRef: RefObject<HTMLElement | null>) {
       viewport.removeEventListener("resize", update);
       viewport.removeEventListener("scroll", update);
     };
-  }, [targetRef]);
+  }, [snap, targetRef]);
+}
+
+function writeProperty(target: HTMLElement, name: string, value: string) {
+  if (target.style.getPropertyValue(name) !== value) target.style.setProperty(name, value);
 }

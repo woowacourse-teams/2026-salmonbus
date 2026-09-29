@@ -76,11 +76,12 @@ export function messageLogLabel(displayName: string): string {
 }
 
 export function sizeToggleLabel(position: SheetPosition): string {
-  return position === "full" ? "채팅 절반으로 보기" : "채팅 크게 보기";
+  return position === "full" ? COLLAPSE_LABEL : "채팅 크게 보기";
 }
 
-export function nicknameLabel(nickname: string | null): string {
-  return nickname === null ? "익명 이름을 준비하고 있어요" : `내 이름 ${nickname}`;
+export function nicknameLabel(nickname: string | null, stalled: boolean): string | null {
+  if (nickname !== null) return `${nickname} 님으로 참여 중`;
+  return stalled ? null : "익명 이름을 준비하고 있어요";
 }
 
 export function deliveryLabel(delivery: Delivery): string {
