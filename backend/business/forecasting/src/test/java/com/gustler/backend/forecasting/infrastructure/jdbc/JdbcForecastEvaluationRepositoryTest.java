@@ -372,6 +372,57 @@ class JdbcForecastEvaluationRepositoryTest {
             .extracting(PendingForecast::targetStopOrder).containsExactly(NEXT_TARGET_STOP_ORDER);
     }
 
+    @Test
+    void 미정산_평가가_남은_노선_버전을_정산할_노선으로_한_번만_읽는다() {
+        // given
+        saveForecasts(List.of(
+            forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT),
+            forecastOf(NEXT_TARGET_STOP_ORDER, STOPS_TO_NEXT_TARGET, GENERATED_AT)));
+
+        // when
+        List<Long> actual = evaluationRepository.findRouteVersionIdsWithPendingForecasts();
+
+        // then
+        assertThat(actual).containsOnlyOnce(routeVersionId);
+    }
+
+    @Test
+    void 평가가_모두_닫힌_노선_버전은_정산할_노선으로_읽지_않는다() {
+        // given
+        saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+        evaluationRepository.settle(List.of(ForecastEvaluation.completed(
+            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Skipped(), SCORED_AT)));
+
+        // when
+        List<Long> actual = evaluationRepository.findRouteVersionIdsWithPendingForecasts();
+
+        // then
+        assertThat(actual).doesNotContain(routeVersionId);
+    }
+
+    @Test
+    void 이전_노선_버전에_남은_미정산_평가도_정산할_노선으로_읽는다() {
+        // given
+        saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+        jdbcClient.sql("UPDATE route_version SET valid_to = ? WHERE id = ?")
+            .params(ARRIVAL_RESPONSE_RECEIVED_AT, routeVersionId)
+            .update();
+        long nextRouteVersionId = jdbcClient.sql("""
+                INSERT INTO route_version (route_id, content_digest, valid_from)
+                VALUES (?, ?, ?)
+                RETURNING id
+                """)
+            .params(routeId, "1".repeat(64), ARRIVAL_RESPONSE_RECEIVED_AT)
+            .query(Long.class)
+            .single();
+
+        // when
+        List<Long> actual = evaluationRepository.findRouteVersionIdsWithPendingForecasts();
+
+        // then
+        assertThat(actual).contains(routeVersionId).doesNotContain(nextRouteVersionId);
+    }
+
     private SeatForecast forecastOf(
         final int targetStopOrder,
         final int stopsToTarget,

@@ -89,7 +89,7 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
     public List<Long> findRouteVersionIdsWithPendingForecasts() {
         return jdbcClient.sql("""
             SELECT DISTINCT route_version_id
-            FROM quality_eligible_seat_forecast
+            FROM forecast_evaluation
             WHERE scoring_state = 'PENDING'
             """).query(Long.class).list();
     }
