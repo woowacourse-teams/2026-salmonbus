@@ -4,6 +4,7 @@ import com.gustler.backend.api.error.ServiceUnavailableException;
 import com.gustler.backend.api.route.application.RouteQueryRepository;
 import com.gustler.backend.api.route.domain.Route;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.stereotype.Repository;
@@ -31,6 +32,15 @@ public class JpaRouteQueryRepository implements RouteQueryRepository {
     public boolean existsActiveModel() {
         try {
             return modelDeploymentRepository.existsByState(ModelDeploymentState.ACTIVE);
+        } catch (DataAccessResourceFailureException exception) {
+            throw new ServiceUnavailableException();
+        }
+    }
+
+    @Override
+    public Set<String> findForecastPublishedRouteIds() {
+        try {
+            return Set.copyOf(routeRepository.findForecastPublishedRouteIds());
         } catch (DataAccessResourceFailureException exception) {
             throw new ServiceUnavailableException();
         }

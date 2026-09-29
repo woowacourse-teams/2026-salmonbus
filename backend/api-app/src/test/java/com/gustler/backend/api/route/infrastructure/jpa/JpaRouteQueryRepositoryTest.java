@@ -58,4 +58,16 @@ class JpaRouteQueryRepositoryTest {
             .isInstanceOf(ServiceUnavailableException.class)
             .hasMessage("일시적인 서버 장애가 발생했습니다.");
     }
+
+    @Test
+    void 발행된_예보가_있는_노선_조회_중_DB_장애가_발생하면_서비스_불가_예외로_변환한다() {
+        // given
+        given(routeRepository.findForecastPublishedRouteIds())
+            .willThrow(new DataAccessResourceFailureException("database unavailable"));
+
+        // when & then
+        assertThatThrownBy(repository::findForecastPublishedRouteIds)
+            .isInstanceOf(ServiceUnavailableException.class)
+            .hasMessage("일시적인 서버 장애가 발생했습니다.");
+    }
 }

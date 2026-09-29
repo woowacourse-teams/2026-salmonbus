@@ -78,7 +78,7 @@ class RouteApiContractTest {
     }
 
     @Test
-    void 활성_모델이_있으면_현재_노선을_FORECAST_READY로_반환한다() throws Exception {
+    void 활성_모델이_있어도_현재_판본에_발행된_예보가_없으면_PREPARING으로_반환한다() throws Exception {
         // given
         final long routeId = insertRoute(
             "204000057",
@@ -92,7 +92,96 @@ class RouteApiContractTest {
         // when & then
         mockMvc.perform(get("/api/v1/routes"))
             .andExpect(status().isOk())
+            .andExpect(jsonPath("$.routes[0].status").value("PREPARING"));
+    }
+
+    @Test
+    void 활성_모델이_있고_현재_판본에_발행된_예보가_있으면_FORECAST_READY로_반환한다() throws Exception {
+        // given
+        final long routeId = insertRoute(
+            "204000057",
+            "3330",
+            "도촌동9단지앞",
+            "안양역"
+        );
+        insertCurrentVersionWithStop(routeId, FIRST_DIGEST, "205000001");
+        insertModelDeployment("ACTIVE");
+        insertPublication(currentVersionIdOf(routeId));
+
+        // when & then
+        mockMvc.perform(get("/api/v1/routes"))
+            .andExpect(status().isOk())
             .andExpect(jsonPath("$.routes[0].status").value("FORECAST_READY"));
+    }
+
+    @Test
+    void 활성_모델이_없으면_현재_판본에_발행된_예보가_있어도_PREPARING으로_반환한다() throws Exception {
+        // given
+        final long routeId = insertRoute(
+            "204000057",
+            "3330",
+            "도촌동9단지앞",
+            "안양역"
+        );
+        insertCurrentVersionWithStop(routeId, FIRST_DIGEST, "205000001");
+        insertModelDeployment("STAGED");
+        insertPublication(currentVersionIdOf(routeId));
+
+        // when & then
+        mockMvc.perform(get("/api/v1/routes"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.routes[0].status").value("PREPARING"));
+    }
+
+    @Test
+    void 종료된_판본에만_발행된_예보가_있으면_PREPARING으로_반환한다() throws Exception {
+        // given
+        final long routeId = insertRoute(
+            "204000057",
+            "3330",
+            "도촌동9단지앞",
+            "안양역"
+        );
+        insertExpiredVersionWithStop(routeId, FIRST_DIGEST, "205000001");
+        insertCurrentVersionWithStop(routeId, SECOND_DIGEST, "205000002");
+        insertModelDeployment("ACTIVE");
+        insertPublication(expiredVersionIdOf(routeId));
+
+        // when & then
+        mockMvc.perform(get("/api/v1/routes"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.routes.length()").value(1))
+            .andExpect(jsonPath("$.routes[0].status").value("PREPARING"));
+    }
+
+    @Test
+    void 노선마다_현재_판본의_발행_여부로_상태가_갈린다() throws Exception {
+        // given
+        final long forecastRouteId = insertRoute(
+            "204000057",
+            "3330",
+            "도촌동9단지앞",
+            "안양역"
+        );
+        final long newRouteId = insertRoute(
+            "204000070",
+            "9007",
+            "새 노선 기점",
+            "새 노선 종점"
+        );
+        insertCurrentVersionWithStop(forecastRouteId, FIRST_DIGEST, "205000001");
+        insertCurrentVersionWithStop(newRouteId, SECOND_DIGEST, "205000002");
+        insertModelDeployment("ACTIVE");
+        insertPublication(currentVersionIdOf(forecastRouteId));
+
+        // when & then
+        mockMvc.perform(get("/api/v1/routes"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.routes.length()").value(2))
+            .andExpect(jsonPath("$.routes[0].id").value("204000057"))
+            .andExpect(jsonPath("$.routes[0].status").value("FORECAST_READY"))
+            .andExpect(jsonPath("$.routes[1].id").value("204000070"))
+            .andExpect(jsonPath("$.routes[1].status").value("PREPARING"));
     }
 
     @Test
@@ -224,5 +313,65 @@ class RouteApiContractTest {
                 SECOND_VERSION_AT
             )
             .update();
+    }
+
+    private long currentVersionIdOf(final long routeId) {
+        return jdbcClient.sql("""
+                SELECT id FROM route_version WHERE route_id = ? AND valid_to IS NULL
+                """)
+            .params(routeId)
+            .query(Long.class)
+            .single();
+    }
+
+    private long expiredVersionIdOf(final long routeId) {
+        return jdbcClient.sql("""
+                SELECT id FROM route_version WHERE route_id = ? AND valid_to IS NOT NULL
+                """)
+            .params(routeId)
+            .query(Long.class)
+            .single();
+    }
+
+    private void insertPublication(final long routeVersionId) {
+        final long batchId = jdbcClient.sql("""
+                INSERT INTO observation_batch (
+                    route_version_id, scheduled_at, attempt_number, attempt_key,
+                    requested_at, response_received_at,
+                    completed_at, outcome, provider_rows, stored_rows, excluded_rows,
+                    normalization_version, collection_strategy_version
+                ) VALUES (?, ?, 1, ?, ?, ?, ?, 'SUCCESS_EMPTY', 0, 0, 0, ?, ?)
+                RETURNING id
+                """)
+            .params(
+                routeVersionId,
+                SECOND_VERSION_AT,
+                "route-contract-test-" + routeVersionId,
+                SECOND_VERSION_AT,
+                SECOND_VERSION_AT,
+                SECOND_VERSION_AT,
+                "normalization-v1.0.0",
+                "adaptive-kst-v1.0.1"
+            )
+            .query(Long.class)
+            .single();
+        jdbcClient.sql("""
+                INSERT INTO forecast_publication (
+                    source_batch_id, route_version_id,
+                    model_deployment_id, demand_statistics_revision, quality_revision,
+                    observed_at, generated_at, published_at, prediction_count
+                )
+                SELECT batch.id, batch.route_version_id,
+                       deployment.id, 1, 1,
+                       batch.response_received_at, batch.response_received_at, batch.response_received_at, 0
+                FROM observation_batch batch
+                CROSS JOIN model_deployment deployment
+                WHERE batch.id = ?
+                  AND deployment.release_id = 'route-contract-test'
+                RETURNING id
+                """)
+            .params(batchId)
+            .query(Long.class)
+            .single();
     }
 }

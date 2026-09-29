@@ -16,7 +16,7 @@ public record RouteListResponse(
     public static RouteListResponse from(RouteOverview overview) {
         List<RouteSummary> routes = overview.routes()
             .stream()
-            .map(route -> RouteSummary.from(route, overview.status()))
+            .map(currentRoute -> RouteSummary.from(currentRoute.route(), currentRoute.status()))
             .toList();
 
         return new RouteListResponse(routes);

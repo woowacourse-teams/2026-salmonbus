@@ -12,6 +12,7 @@ import com.gustler.backend.api.error.ServiceUnavailableException;
 import com.gustler.backend.api.http.ApiExceptionHandler;
 import com.gustler.backend.api.route.application.RouteOverview;
 import com.gustler.backend.api.route.application.RouteQueryService;
+import com.gustler.backend.api.route.domain.CurrentRoute;
 import com.gustler.backend.api.route.domain.Route;
 import com.gustler.backend.api.route.domain.RouteStatus;
 import java.util.List;
@@ -51,10 +52,10 @@ class RouteControllerTest {
             "구리수택차고지",
             "안양역"
         );
-        given(routeQueryService.getRouteOverview()).willReturn(new RouteOverview(
-            List.of(firstRoute, secondRoute),
-            RouteStatus.FORECAST_READY
-        ));
+        given(routeQueryService.getRouteOverview()).willReturn(new RouteOverview(List.of(
+            new CurrentRoute(firstRoute, RouteStatus.FORECAST_READY),
+            new CurrentRoute(secondRoute, RouteStatus.FORECAST_READY)
+        )));
 
         // when & then
         mockMvc.perform(get("/api/v1/routes"))

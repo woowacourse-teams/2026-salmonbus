@@ -7,9 +7,10 @@ public enum RouteStatus {
     ;
 
     public static RouteStatus from(
-        final boolean activeModelExists
+        final boolean activeModelExists,
+        final boolean forecastPublished
     ) {
-        if (activeModelExists) {
+        if (activeModelExists && forecastPublished) {
             return FORECAST_READY;
         }
         return PREPARING;
