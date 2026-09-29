@@ -25,6 +25,15 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
         ON CONFLICT (vehicle_observation_id, target_stop_order) DO NOTHING
         """;
 
+    private static final String SELECT_PENDING_KEYS = """
+        SELECT vehicle_observation_id, target_stop_order
+        FROM forecast_evaluation
+        WHERE scoring_state = 'PENDING' AND route_version_id = :routeVersionId
+          AND (vehicle_observation_id, target_stop_order) > (:afterObservationId, :afterStopOrder)
+        ORDER BY vehicle_observation_id, target_stop_order
+        LIMIT :limit
+        """;
+
     private static final String SELECT_PENDING = """
         SELECT forecast.vehicle_observation_id, forecast.target_stop_order, forecast.route_version_id,
                source.vehicle_id, forecast.stops_to_target, batch.response_received_at,
@@ -35,8 +44,11 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
         JOIN forecast_eligible_observation source ON source.id = evaluation.vehicle_observation_id
         JOIN observation_batch batch ON batch.id = source.observation_batch_id
         WHERE evaluation.scoring_state = 'PENDING' AND evaluation.route_version_id = :routeVersionId
+          AND (evaluation.vehicle_observation_id, evaluation.target_stop_order)
+              > (:afterObservationId, :afterStopOrder)
+          AND (evaluation.vehicle_observation_id, evaluation.target_stop_order)
+              <= (:lastObservationId, :lastStopOrder)
         ORDER BY evaluation.vehicle_observation_id, evaluation.target_stop_order
-        LIMIT :limit
         """;
 
     /** 근거의 정류장 순번은 원 관측의 stop_order다. 평가 판정에 사용하는 passed_stop_order와 구분한다. */
@@ -108,8 +120,37 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
 
     @Override
     public List<PendingForecast> findPending(final long routeVersionId, final int limit) {
+        List<PendingForecast> pending = new ArrayList<>();
+        PendingKey after = PendingKey.BEFORE_FIRST;
+        while (pending.size() < limit) {
+            List<PendingKey> keys = findPendingKeys(routeVersionId, after, limit - pending.size());
+            if (keys.isEmpty()) {
+                break;
+            }
+            PendingKey last = keys.getLast();
+            pending.addAll(findEligiblePending(routeVersionId, after, last));
+            after = last;
+        }
+        return pending;
+    }
+
+    private List<PendingKey> findPendingKeys(final long routeVersionId, PendingKey after, final int limit) {
+        return jdbcClient.sql(SELECT_PENDING_KEYS)
+            .param("routeVersionId", routeVersionId)
+            .param("afterObservationId", after.vehicleObservationId())
+            .param("afterStopOrder", after.targetStopOrder())
+            .param("limit", limit)
+            .query((row, index) -> new PendingKey(row.getLong("vehicle_observation_id"), row.getInt("target_stop_order")))
+            .list();
+    }
+
+    private List<PendingForecast> findEligiblePending(final long routeVersionId, PendingKey after, PendingKey last) {
         return jdbcClient.sql(SELECT_PENDING)
-            .param("routeVersionId", routeVersionId).param("limit", limit)
+            .param("routeVersionId", routeVersionId)
+            .param("afterObservationId", after.vehicleObservationId())
+            .param("afterStopOrder", after.targetStopOrder())
+            .param("lastObservationId", last.vehicleObservationId())
+            .param("lastStopOrder", last.targetStopOrder())
             .query((row, index) -> new PendingForecast(
                 row.getLong("vehicle_observation_id"), row.getInt("target_stop_order"),
                 row.getLong("route_version_id"), row.getString("vehicle_id"), row.getInt("stops_to_target"),
@@ -171,6 +212,11 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
 
     private static OffsetDateTime offsetOf(Instant timestamp) {
         return timestamp.atOffset(ZoneOffset.UTC);
+    }
+
+    private record PendingKey(long vehicleObservationId, int targetStopOrder) {
+
+        private static final PendingKey BEFORE_FIRST = new PendingKey(0L, 0);
     }
 
 }

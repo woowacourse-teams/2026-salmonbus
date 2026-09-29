@@ -392,6 +392,28 @@ class JdbcForecastEvaluationRepositoryTest {
     }
 
     @Test
+    void 품질_보류된_예보가_앞에_있어도_다음_예보로_정산_대상을_채운다() {
+        // given
+        long laterObservationId = insertObservation(observationBatchId, "204000207", 1, PASSED_STOP_ORDER);
+        saveForecasts(List.of(
+            forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT),
+            new SeatForecast(
+                laterObservationId, routeVersionId, TARGET_STOP_ORDER, STOPS_TO_TARGET,
+                modelDeploymentId, DEMAND_STATISTICS_REVISION, 0.41, 0.38, 12.5, NEXT_GENERATED_AT)));
+        jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats = 82 WHERE id = ?")
+            .param(vehicleObservationId)
+            .update();
+
+        // when
+        List<PendingForecast> actual = evaluationRepository.findPending(routeVersionId, 1);
+
+        // then
+        assertThat(actual)
+            .extracting(PendingForecast::vehicleObservationId)
+            .containsExactly(laterObservationId);
+    }
+
+    @Test
     void 미정산_평가가_남은_노선_버전을_정산할_노선으로_한_번만_읽는다() {
         // given
         saveForecasts(List.of(
