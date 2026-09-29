@@ -373,6 +373,25 @@ class JdbcForecastEvaluationRepositoryTest {
     }
 
     @Test
+    void 정산_대상은_관측_순서로_오래된_예보부터_고른다() {
+        // given
+        long laterObservationId = insertObservation(observationBatchId, "204000207", 1, PASSED_STOP_ORDER);
+        saveForecasts(List.of(
+            forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, NEXT_GENERATED_AT),
+            new SeatForecast(
+                laterObservationId, routeVersionId, TARGET_STOP_ORDER, STOPS_TO_TARGET,
+                modelDeploymentId, DEMAND_STATISTICS_REVISION, 0.41, 0.38, 12.5, GENERATED_AT)));
+
+        // when
+        List<PendingForecast> actual = evaluationRepository.findPending(routeVersionId, 1);
+
+        // then
+        assertThat(actual)
+            .extracting(PendingForecast::vehicleObservationId)
+            .containsExactly(vehicleObservationId);
+    }
+
+    @Test
     void 미정산_평가가_남은_노선_버전을_정산할_노선으로_한_번만_읽는다() {
         // given
         saveForecasts(List.of(

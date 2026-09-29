@@ -35,7 +35,7 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
         JOIN forecast_eligible_observation source ON source.id = evaluation.vehicle_observation_id
         JOIN observation_batch batch ON batch.id = source.observation_batch_id
         WHERE evaluation.scoring_state = 'PENDING' AND evaluation.route_version_id = :routeVersionId
-        ORDER BY forecast.generated_at
+        ORDER BY evaluation.vehicle_observation_id, evaluation.target_stop_order
         LIMIT :limit
         """;
 
