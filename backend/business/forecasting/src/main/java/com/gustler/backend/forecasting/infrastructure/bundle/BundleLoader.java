@@ -35,7 +35,9 @@ public final class BundleLoader {
     private static final String MODEL_VERSION = "seat-distribution-a18-v1";
 
     /** 노선 순서가 계약이다. 뒤집으면 다른 노선 계수로 예보한다. */
-    private static final List<String> ROUTES = List.of("1650", "3330");
+    private static final List<List<String>> ROUTE_ORDERS = List.of(
+        List.of("1650", "3330"),
+        List.of("1650", "3330", "9007", "9300", "6011", "3000", "5600", "3500"));
 
     private static final int SMALLEST_STOPS_AHEAD = 1;
     private static final int LARGEST_STOPS_AHEAD = 12;
@@ -78,7 +80,7 @@ public final class BundleLoader {
     private static void checkScope(
         BundleManifest manifest
     ) {
-        BundleCheck.ROUTE_ORDER.require(ROUTES.equals(manifest.routes()), manifest.routes().toString());
+        BundleCheck.ROUTE_ORDER.require(ROUTE_ORDERS.contains(manifest.routes()), manifest.routes().toString());
         BundleCheck.HORIZON_STOPS.require(
             expectedHorizonStops().equals(manifest.horizonStops()), manifest.horizonStops().toString());
         BundleCheck.FEATURE_NAMES.require(

@@ -10,7 +10,11 @@ import org.junit.jupiter.params.provider.CsvSource;
 class ModelRouteTest {
 
     @ParameterizedTest
-    @CsvSource({"234000050, 1650", "204000057, 3330"})
+    @CsvSource({
+        "234000050, 1650", "204000057, 3330",
+        "204000070, 9007", "234000886, 9300", "233000392, 6011",
+        "227000038, 3000", "228000184, 5600", "234000051, 3500"
+    })
     void GBIS_노선_id_를_계수_묶음이_쓰는_노선_이름으로_옮긴다(
         String sourceRouteId,
         String expected

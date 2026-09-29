@@ -95,6 +95,30 @@ class PublishPendingForecastsRouteCoverageTest {
         verify(vehicleTrajectoryQuery, never()).findOldestLeftBehindAt(eq(ROUTE_VERSION_9007), any(), any());
     }
 
+    @Test
+    void 여덟_노선_계수_묶음이면_새_노선도_예보한다() {
+        // given
+        final RuntimeSnapshot eightRouteRuntime = new RuntimeSnapshot(
+            new ActiveModelDeployment(2L, "feature-v1", "release-2", "1".repeat(64)),
+            new SupportedForecastScope(List.of("1650", "3330", "9007", "9300", "6011", "3000", "5600", "3500")),
+            input -> null,
+            NOW);
+        final PendingForecastBatch batch = new PendingForecastBatch(20L, ROUTE_VERSION_9007, 3L, NOW.minusSeconds(20));
+        when(forecastRuntime.resolveActive()).thenReturn(Optional.of(eightRouteRuntime));
+        when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_9007));
+        when(routeStops.readStops(ROUTE_VERSION_9007)).thenReturn(STOPS_9007);
+        when(vehicleTrajectoryQuery.findBatchesAwaitingForecast(eq(ROUTE_VERSION_9007), any(), anyInt()))
+            .thenReturn(List.of(batch));
+        when(vehicleTrajectoryQuery.findOldestLeftBehindAt(eq(ROUTE_VERSION_9007), any(), any()))
+            .thenReturn(Optional.empty());
+
+        // when
+        job.writeForecasts();
+
+        // then
+        verify(forecastBatchWriter).writeForecastsOf(batch, STOPS_9007, eightRouteRuntime);
+    }
+
     private static RouteStops stopsOf(final long routeVersionId, String sourceRouteId) {
         return new RouteStops(routeVersionId, sourceRouteId, List.of(new RouteStop(routeVersionId, 1, "stop-1", true)));
     }

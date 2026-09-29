@@ -46,8 +46,12 @@ public final class DummyBundle {
 
     private final Map<String, Object> manifest = new LinkedHashMap<>();
     private final SafetensorsWriter weights = new SafetensorsWriter();
+    private final List<String> routes;
 
-    private DummyBundle() {
+    private DummyBundle(
+        List<String> routes
+    ) {
+        this.routes = routes;
     }
 
     public LoadedBundle loadAt(Path directory) {
@@ -55,7 +59,13 @@ public final class DummyBundle {
     }
 
     public static DummyBundle valid() {
-        DummyBundle bundle = new DummyBundle();
+        return withRoutes(ROUTES);
+    }
+
+    static DummyBundle withRoutes(
+        List<String> routes
+    ) {
+        DummyBundle bundle = new DummyBundle(routes);
         bundle.fillTensors(FEATURE_COUNT);
         bundle.fillManifest(FEATURE_COUNT);
         return bundle;
@@ -66,7 +76,7 @@ public final class DummyBundle {
     ) {
         Random values = new Random(20260901L);
         for (BundleTensor tensor : BundleTensor.values()) {
-            int[] shape = tensor.shapeOf(ROUTES.size(), HORIZON_COUNT, featureCount);
+            int[] shape = tensor.shapeOf(routes.size(), HORIZON_COUNT, featureCount);
             weights.with(tensor.tensorName(), tensor.dataType(), shape,
                 valuesOf(tensor, Tensor.valueCountOf(shape), values));
         }
@@ -95,7 +105,7 @@ public final class DummyBundle {
         manifest.put("sourceCommit", SOURCE_COMMIT);
         manifest.put("routeReferenceVersion", ROUTE_REFERENCE_VERSION);
         manifest.put("routeReferenceDigest", ROUTE_REFERENCE_DIGEST);
-        manifest.put("routes", ROUTES);
+        manifest.put("routes", routes);
         manifest.put("horizonStops", horizonStops());
         manifest.put("featureNames", featureNames(featureCount));
         manifest.put("timeSlotSource", "observation_batch.response_received_at");
@@ -230,7 +240,7 @@ public final class DummyBundle {
             new BundleManifest(
                 BUNDLE_SCHEMA_VERSION, MODEL_VERSION, "dummy-release-0001",
                 FEATURE_CONTRACT_VERSION, SOURCE_COMMIT, ROUTE_REFERENCE_VERSION,
-                ROUTE_REFERENCE_DIGEST, ROUTES, horizonStops(), featureNames(featureCount),
+                ROUTE_REFERENCE_DIGEST, routes, horizonStops(), featureNames(featureCount),
                 Map.of(), "", "", "", Map.of(), "", "", "", null, "2026-08-30T14:59:56Z"),
             tensors);
     }
@@ -293,7 +303,7 @@ public final class DummyBundle {
     static DummyBundle withFeatureCount(
         final int featureCount
     ) {
-        DummyBundle bundle = new DummyBundle();
+        DummyBundle bundle = new DummyBundle(ROUTES);
         bundle.fillTensors(featureCount);
         bundle.fillManifest(featureCount);
         return bundle;

@@ -15,6 +15,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.io.TempDir;
 import tools.jackson.databind.ObjectMapper;
 
@@ -25,6 +27,9 @@ import tools.jackson.databind.ObjectMapper;
  * 뜻만 없다. 화면에서도 로그에서도 구분되지 않아서, 막히는지를 여기서 고정해 둬야 한다.
  */
 class BundleLoaderTest {
+
+    private static final List<String> EIGHT_ROUTES =
+        List.of("1650", "3330", "9007", "9300", "6011", "3000", "5600", "3500");
 
     @TempDir
     Path directory;
@@ -197,6 +202,47 @@ class BundleLoaderTest {
         assertRejectedBy(
             BundleCheck.ROUTE_ORDER,
             loading(DummyBundle.valid().put("routes", List.of("3330", "1650"))));
+    }
+
+    @Test
+    void 여덟_노선_묶음도_검사를_통과하고_새_노선의_계수를_꺼낼_수_있다() {
+        // when
+        CoefficientBundle actual = BundleLoader.load(DummyBundle.withRoutes(EIGHT_ROUTES).writeTo(directory));
+
+        // then
+        assertThat(actual.at("3500", 12).featureCount()).isEqualTo(DummyBundle.FEATURE_COUNT);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "234000050", "204000057", "204000070", "234000886", "233000392", "227000038", "228000184", "234000051"
+    })
+    void 여덟_노선_묶음을_올리면_모든_수집_노선이_예보_범위_안이다(
+        String sourceRouteId
+    ) {
+        // when
+        final boolean actual = DummyBundle.withRoutes(EIGHT_ROUTES).loadAt(directory).scope()
+            .coversSourceRoute(sourceRouteId);
+
+        // then
+        assertThat(actual).isTrue();
+    }
+
+    @Test
+    void 여덟_노선_묶음의_순서가_계약과_다르면_거절한다() {
+        // when & then
+        assertRejectedBy(
+            BundleCheck.ROUTE_ORDER,
+            loading(DummyBundle.withRoutes(
+                List.of("1650", "3330", "9300", "9007", "6011", "3000", "5600", "3500"))));
+    }
+
+    @Test
+    void 계약에_없는_노선_목록은_거절한다() {
+        // when & then
+        assertRejectedBy(
+            BundleCheck.ROUTE_ORDER,
+            loading(DummyBundle.withRoutes(List.of("1650", "3330", "9007"))));
     }
 
     @Test
