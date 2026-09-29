@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.application.quality.DemandStatisticsRebuildTrigger;
-import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuildRequests;
+import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuildRequestStore;
 import com.gustler.backend.forecasting.domain.statistics.RebuildScope;
 import java.util.Optional;
 import java.util.UUID;
@@ -9,11 +9,11 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public class JdbcDemandStatisticsRebuildRequests implements DemandStatisticsRebuildRequests, DemandStatisticsRebuildTrigger {
+public class JdbcDemandStatisticsRebuildRequestStore implements DemandStatisticsRebuildRequestStore, DemandStatisticsRebuildTrigger {
 
     private final JdbcClient jdbc;
 
-    public JdbcDemandStatisticsRebuildRequests(final JdbcClient jdbc) {
+    public JdbcDemandStatisticsRebuildRequestStore(final JdbcClient jdbc) {
         this.jdbc = jdbc;
     }
 

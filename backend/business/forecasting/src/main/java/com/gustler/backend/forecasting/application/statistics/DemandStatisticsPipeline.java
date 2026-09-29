@@ -35,7 +35,7 @@ public class DemandStatisticsPipeline {
     private static final String REBUILD = "REBUILD";
 
     private final DemandStatisticsRunRepository runs;
-    private final DemandStatisticsRebuildRequests requests;
+    private final DemandStatisticsRebuildRequestStore requests;
     private final DemandStatisticsRebuilder rebuilder;
     private final DemandAccumulator accumulator;
     private final DemandStatisticsStore store;
@@ -46,7 +46,7 @@ public class DemandStatisticsPipeline {
     private final Clock clock;
 
     public DemandStatisticsPipeline(final DemandStatisticsRunRepository runs,
-        final DemandStatisticsRebuildRequests requests, final DemandStatisticsRebuilder rebuilder,
+        final DemandStatisticsRebuildRequestStore requests, final DemandStatisticsRebuilder rebuilder,
         final DemandAccumulator accumulator, final DemandStatisticsStore store, final DemandSampleStore samples,
         final StopDemandStatisticsRepository statistics, final RouteDataQualityAccess quality,
         final DemandStatisticsPolicy policy, final Clock clock) {

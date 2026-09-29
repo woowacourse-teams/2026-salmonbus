@@ -14,10 +14,6 @@ import com.gustler.backend.forecasting.domain.model.PrecedingVehicle;
 import com.gustler.backend.forecasting.domain.model.SeatSlope;
 import com.gustler.backend.forecasting.domain.model.SeatUnknownReason;
 import com.gustler.backend.forecasting.domain.model.TrajectoryGap;
-import com.gustler.backend.forecasting.infrastructure.quality.JdbcRouteDataQualityAccess;
-import com.gustler.backend.forecasting.infrastructure.quality.JdbcRouteDataQualityRepository;
-import com.gustler.backend.forecasting.infrastructure.quality.JdbcTripQualityInvestigationRepository;
-import com.gustler.backend.forecasting.infrastructure.quality.JdbcTripQualityStore;
 import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
 import com.gustler.backend.support.ConfirmedTripFixture;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
@@ -583,7 +579,7 @@ class JdbcVehicleTrajectoryQueryTest {
         return new TripQualityInvestigationService(new JdbcTripQualityInvestigationRepository(jdbcClient),
             new JdbcTripQualityStore(jdbcClient),
             new JdbcRouteDataQualityAccess(jdbcClient), new RouteDataQualityChanges(
-                new JdbcRouteDataQualityRepository(jdbcClient), new JdbcDemandStatisticsRebuildRequests(jdbcClient)));
+                new JdbcRouteDataQualityRepository(jdbcClient), new JdbcDemandStatisticsRebuildRequestStore(jdbcClient)));
     }
 
     private void signal(TripQualityInvestigationService quality, long batch) {

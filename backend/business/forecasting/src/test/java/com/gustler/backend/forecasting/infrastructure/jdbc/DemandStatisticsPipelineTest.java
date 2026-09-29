@@ -10,7 +10,7 @@ import com.gustler.backend.forecasting.domain.quality.RouteDataQuality;
 import com.gustler.backend.forecasting.domain.quality.RouteDataQualityRepository;
 import com.gustler.backend.forecasting.application.statistics.DemandAccumulator;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline;
-import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuildRequests;
+import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuildRequestStore;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuildStore;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuilder;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsStore;
@@ -87,7 +87,7 @@ class DemandStatisticsPipelineTest {
     private DemandStatisticsRebuilder rebuilder;
 
     @Autowired
-    private DemandStatisticsRebuildRequests rebuildRequests;
+    private DemandStatisticsRebuildRequestStore rebuildRequests;
 
     @Autowired
     private DemandStatisticsRebuildRepository rebuilds;

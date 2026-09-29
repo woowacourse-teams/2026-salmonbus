@@ -1,4 +1,4 @@
-package com.gustler.backend.forecasting.infrastructure.quality;
+package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import org.springframework.jdbc.core.simple.JdbcClient;

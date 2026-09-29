@@ -4,7 +4,7 @@ import com.gustler.backend.forecasting.domain.statistics.RebuildScope;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface DemandStatisticsRebuildRequests {
+public interface DemandStatisticsRebuildRequestStore {
 
     /** 호출자와 같은 transaction에 저장한다. 새 요청은 이전 처리의 완료로 지우면 안 된다. */
     void request(long routeVersionId, RebuildScope scope);

@@ -17,11 +17,11 @@ public class DemandAccumulator {
 
     private final DemandStatisticsStore store;
     private final DemandSampleStore samples;
-    private final DemandStatisticsRebuildRequests requests;
+    private final DemandStatisticsRebuildRequestStore requests;
     private final RouteDataQualityAccess quality;
 
     public DemandAccumulator(final DemandStatisticsStore store, final DemandSampleStore samples,
-        final DemandStatisticsRebuildRequests requests, final RouteDataQualityAccess quality) {
+        final DemandStatisticsRebuildRequestStore requests, final RouteDataQualityAccess quality) {
         this.store = store;
         this.samples = samples;
         this.requests = requests;

@@ -24,7 +24,7 @@ public class DemandStatisticsRebuilder {
     private static final int PAGE_SIZE = DemandStatisticsRebuild.PAGE_SIZE;
 
     private final DemandStatisticsRebuildRepository rebuilds;
-    private final DemandStatisticsRebuildRequests requests;
+    private final DemandStatisticsRebuildRequestStore requests;
     private final DemandStatisticsRebuildStore rebuildStore;
     private final DemandStatisticsStore store;
     private final DemandSampleStore samples;
@@ -32,7 +32,7 @@ public class DemandStatisticsRebuilder {
     private final Clock clock;
 
     public DemandStatisticsRebuilder(final DemandStatisticsRebuildRepository rebuilds,
-        final DemandStatisticsRebuildRequests requests, final DemandStatisticsRebuildStore rebuildStore,
+        final DemandStatisticsRebuildRequestStore requests, final DemandStatisticsRebuildStore rebuildStore,
         final DemandStatisticsStore store, final DemandSampleStore samples, final RouteDataQualityAccess quality,
         final Clock clock) {
         this.rebuilds = rebuilds;

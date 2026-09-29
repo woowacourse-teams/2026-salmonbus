@@ -11,12 +11,12 @@ import com.gustler.backend.forecasting.application.quality.TripQualityInvestigat
 import com.gustler.backend.forecasting.application.quality.TripQualityMaintenanceService;
 import com.gustler.backend.forecasting.configuration.QualityMaintenanceConfiguration;
 import com.gustler.backend.forecasting.domain.quality.QualityObservationBatch;
-import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcDemandStatisticsRebuildRequests;
-import com.gustler.backend.forecasting.infrastructure.quality.JdbcRouteDataQualityAccess;
-import com.gustler.backend.forecasting.infrastructure.quality.JdbcRouteDataQualityRepository;
-import com.gustler.backend.forecasting.infrastructure.quality.JdbcTripQualityInvestigationRepository;
-import com.gustler.backend.forecasting.infrastructure.quality.JdbcTripQualityMaintenanceStore;
-import com.gustler.backend.forecasting.infrastructure.quality.JdbcTripQualityStore;
+import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcDemandStatisticsRebuildRequestStore;
+import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcRouteDataQualityAccess;
+import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcRouteDataQualityRepository;
+import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcTripQualityInvestigationRepository;
+import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcTripQualityMaintenanceStore;
+import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcTripQualityStore;
 import com.gustler.backend.forecasting.domain.model.SeatGrid;
 import java.lang.reflect.Proxy;
 import java.sql.Connection;
@@ -672,7 +672,7 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
 
     private static RouteDataQualityChanges changes(JdbcClient jdbc) {
         return new RouteDataQualityChanges(new JdbcRouteDataQualityRepository(jdbc),
-            new JdbcDemandStatisticsRebuildRequests(jdbc));
+            new JdbcDemandStatisticsRebuildRequestStore(jdbc));
     }
 
     private static JdbcClient jdbc(Connection c) { return JdbcClient.create(new SingleConnectionDataSource(c, true)); }
