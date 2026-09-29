@@ -208,7 +208,7 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
         }
         ObservationHistory history = historyEndingAt(target.get());
         Set<Long> eligibleIds = history.targetBatch().observations().stream()
-            .filter(JdbcVehicleTrajectoryQuery::isEligible)
+            .filter(TrajectoryObservation::isForecastEligible)
             .map(TrajectoryObservation::vehicleObservationId).collect(Collectors.toSet());
         return VehicleTrajectoryAssembler.assemble(history, maximumSeatsEverObservedOf(target.get(), history))
             .stream().filter(trajectory -> eligibleIds.contains(trajectory.vehicleObservationId())).toList();
@@ -225,7 +225,7 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
         ObservationHistory history
     ) {
         List<String> vehicleIds = history.targetBatch().observations().stream()
-            .filter(JdbcVehicleTrajectoryQuery::isEligible)
+            .filter(TrajectoryObservation::isForecastEligible)
             .map(TrajectoryObservation::vehicleId)
             .distinct()
             .toList();
@@ -325,11 +325,6 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
                 .add(row.toObservation(observedAtByBatch.get(row.observationBatchId())));
         }
         return observationsByBatch;
-    }
-
-    private static boolean isEligible(TrajectoryObservation observation) {
-        return !(observation.seats() instanceof ObservedSeats.Unknown unknown
-            && unknown.reason() == SeatUnknownReason.QUALITY_WITHHELD);
     }
 
     private static Instant instantOf(

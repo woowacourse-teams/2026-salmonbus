@@ -2,6 +2,7 @@ package com.gustler.backend.forecasting.domain.publication;
 
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
 import com.gustler.backend.forecasting.domain.model.ObservedSeats;
+import com.gustler.backend.forecasting.domain.model.SeatUnknownReason;
 /**
  * 궤적을 잇는 데 쓰는 관측 한 건.
  *
@@ -31,5 +32,10 @@ public record TrajectoryObservation(
     /** 만석인가. 좌석을 모르는 관측은 만석도 아니고 여유도 아니다. */
     public boolean isFull() {
         return seats instanceof ObservedSeats.Known known && known.seats() == NO_SEAT_LEFT;
+    }
+
+    public boolean isForecastEligible() {
+        return !(seats instanceof ObservedSeats.Unknown unknown
+            && unknown.reason() == SeatUnknownReason.QUALITY_WITHHELD);
     }
 }
