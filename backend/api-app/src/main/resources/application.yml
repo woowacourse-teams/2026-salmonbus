@@ -1,6 +1,11 @@
 server:
   port: 8080
 
+chat:
+  enabled: ${CHAT_ENABLED:false}
+  mongodb-uri: ${CHAT_MONGODB_URI:}
+  allowed-origins: ${CHAT_ALLOWED_ORIGINS:https://www.salmonbus.com}
+
 spring:
   application:
     name: backend-api
