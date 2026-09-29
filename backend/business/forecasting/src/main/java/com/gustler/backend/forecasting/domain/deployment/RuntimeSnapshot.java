@@ -18,6 +18,9 @@ public record RuntimeSnapshot(
         if (deployment == null) {
             throw new IllegalArgumentException("도는 배포가 있어야 한다");
         }
+        if (scope == null) {
+            throw new IllegalArgumentException("배포에는 계수 묶음이 담는 예보 범위가 있어야 한다");
+        }
         if (model == null) {
             throw new IllegalArgumentException("배포에는 좌석 분포를 낼 모델이 있어야 한다");
         }
@@ -38,5 +41,9 @@ public record RuntimeSnapshot(
 
     public String featureContractVersion() {
         return deployment.calculationVersion();
+    }
+
+    public boolean covers(String sourceRouteId) {
+        return scope.coversSourceRoute(sourceRouteId);
     }
 }

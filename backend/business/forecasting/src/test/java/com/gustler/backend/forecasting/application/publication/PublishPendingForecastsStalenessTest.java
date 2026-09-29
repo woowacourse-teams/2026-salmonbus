@@ -20,7 +20,11 @@ import static org.mockito.Mockito.when;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
+import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
+import com.gustler.backend.forecasting.domain.model.RouteStop;
+import com.gustler.backend.forecasting.domain.model.RouteStops;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -56,9 +60,7 @@ class PublishPendingForecastsStalenessTest {
     private RouteVersionQuery routeVersions;
 
 
-    @Mock
-
-    private RouteStopsQuery routeStops;
+    private final RouteStopsQuery routeStops = PublishPendingForecastsStalenessTest::stopsOf;
 
     @Mock
     private ForecastRuntime forecastRuntime;
@@ -66,8 +68,11 @@ class PublishPendingForecastsStalenessTest {
     @Mock
     private ForecastBatchWriter forecastBatchWriter;
 
-    @Mock
-    private RuntimeSnapshot runtime;
+    private final RuntimeSnapshot runtime = new RuntimeSnapshot(
+        new ActiveModelDeployment(1L, "feature-v1", "release-1", "0".repeat(64)),
+        new SupportedForecastScope(List.of("1650", "3330")),
+        input -> null,
+        NOW);
 
     @Captor
     private ArgumentCaptor<Instant> notBefore;
@@ -307,5 +312,10 @@ class PublishPendingForecastsStalenessTest {
     private ForecastPolicy properties() {
         return new ForecastPolicy(
             STALENESS, 20, 3000, 400);
+    }
+
+    private static RouteStops stopsOf(final long routeVersionId) {
+        String sourceRouteId = routeVersionId == ROUTE_VERSION_1650 ? "234000050" : "204000057";
+        return new RouteStops(routeVersionId, sourceRouteId, List.of(new RouteStop(routeVersionId, 1, "stop-1", true)));
     }
 }

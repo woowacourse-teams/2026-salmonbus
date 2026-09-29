@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.domain.deployment;
 
 import com.gustler.backend.forecasting.domain.model.ForecastDistance;
+import com.gustler.backend.forecasting.domain.model.ModelRoute;
 import com.gustler.backend.forecasting.domain.model.Sha256;
 import java.util.List;
 
@@ -29,6 +30,12 @@ public record SupportedForecastScope(
         final int stopsAhead
     ) {
         return modelRoutes.contains(modelRoute) && ForecastDistance.covers(stopsAhead);
+    }
+
+    public boolean coversSourceRoute(
+        String sourceRouteId
+    ) {
+        return ModelRoute.covers(sourceRouteId) && modelRoutes.contains(ModelRoute.of(sourceRouteId));
     }
 
     /** 노선 순서까지 담는다. 순서가 곧 계수 배열의 자리라 뒤집히면 다른 범위다. */

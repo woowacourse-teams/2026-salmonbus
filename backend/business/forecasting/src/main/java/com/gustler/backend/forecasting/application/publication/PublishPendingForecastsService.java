@@ -87,7 +87,12 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
         Instant oldestLeftBehind = null;
         for (Long routeVersionId : WorkerOperationLog.measure("forecast_routes", "all",
             routeVersions::findActiveVersionIds)) {
-            writeForecastsOf(routeVersionId, notBefore, runtime.get());
+            RouteStops stops = WorkerOperationLog.measure("forecast_stops", routeVersionId,
+                () -> routeStops.readStops(routeVersionId));
+            if (!runtime.get().covers(stops.sourceRouteId())) {
+                continue;
+            }
+            writeForecastsOf(routeVersionId, stops, notBefore, runtime.get());
             oldestLeftBehind = olderOf(
                 oldestLeftBehind, leftBehindAt(routeVersionId, leftBehindFrom, notBefore));
         }
@@ -134,11 +139,10 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
 
     private void writeForecastsOf(
         final long routeVersionId,
+        RouteStops stops,
         Instant notBefore,
         RuntimeSnapshot runtime
     ) {
-        RouteStops stops = WorkerOperationLog.measure("forecast_stops", routeVersionId,
-            () -> routeStops.readStops(routeVersionId));
         List<PendingForecastBatch> batches = WorkerOperationLog.measure("forecast_pending_batches", routeVersionId,
             () -> vehicleTrajectoryQuery.findBatchesAwaitingForecast(routeVersionId, notBefore,
                 properties.batchLimit()));

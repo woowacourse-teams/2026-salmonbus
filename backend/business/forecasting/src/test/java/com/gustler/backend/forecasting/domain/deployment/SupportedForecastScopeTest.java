@@ -65,4 +65,34 @@ class SupportedForecastScopeTest {
         // then
         assertThat(actual).isNotEqualTo(SCOPE.digest());
     }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"234000050", "204000057"})
+    void 계수_묶음이_담는_GBIS_노선은_예보_범위_안이다(
+        String sourceRouteId
+    ) {
+        // when
+        final boolean actual = SCOPE.coversSourceRoute(sourceRouteId);
+
+        // then
+        assertThat(actual).isTrue();
+    }
+
+    @Test
+    void 모델_노선_매핑이_있어도_계수_묶음이_안_담는_GBIS_노선은_예보_범위_밖이다() {
+        // when
+        final boolean actual = new SupportedForecastScope(List.of("1650")).coversSourceRoute("204000057");
+
+        // then
+        assertThat(actual).isFalse();
+    }
+
+    @Test
+    void 모델_노선_매핑이_없는_GBIS_노선은_예보_범위_밖이다() {
+        // when
+        final boolean actual = SCOPE.coversSourceRoute("204000070");
+
+        // then
+        assertThat(actual).isFalse();
+    }
 }

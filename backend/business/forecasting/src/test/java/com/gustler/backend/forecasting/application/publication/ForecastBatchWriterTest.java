@@ -53,6 +53,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.AppenderBase;
 import ch.qos.logback.core.read.ListAppender;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
+import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
 import com.gustler.backend.forecasting.domain.model.SeatDistributionInput;
 import java.time.Clock;
 import java.time.Duration;
@@ -336,7 +337,7 @@ class ForecastBatchWriterTest {
 
     private RuntimeSnapshot runtime(SeatForecastModel model) {
         return new RuntimeSnapshot(new ActiveModelDeployment(7, "feature-v1", "release", "0".repeat(64)),
-            null, model, NOW.minusSeconds(60));
+            new SupportedForecastScope(List.of("1650", "3330")), model, NOW.minusSeconds(60));
     }
 
     private VehicleTrajectory vehicle(long id, int seats, int maximumSeats) {

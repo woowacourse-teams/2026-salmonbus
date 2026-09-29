@@ -16,6 +16,7 @@ import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRe
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
+import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationQuery;
 import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomeCount;
@@ -401,7 +402,7 @@ class SameDayTransactionBoundaryTest {
         forecast.writeForecastsOf(batch(), new RouteStops(versionId, "fixture", List.of(
             new RouteStop(versionId, 1, "stop-1", true), new RouteStop(versionId, 2, "stop-2", true))),
             new RuntimeSnapshot(new ActiveModelDeployment(modelId, "feature-v1", "fixture", "0".repeat(64)),
-                null, input -> new SeatForecastResult(new SeatDistribution(List.of(.4, .6)), .4), OBSERVED_AT));
+                new SupportedForecastScope(List.of("3330")), input -> new SeatForecastResult(new SeatDistribution(List.of(.4, .6)), .4), OBSERVED_AT));
     }
 
     PendingForecastBatch batch() { return new PendingForecastBatch(batchId, versionId, routeId, OBSERVED_AT); }
