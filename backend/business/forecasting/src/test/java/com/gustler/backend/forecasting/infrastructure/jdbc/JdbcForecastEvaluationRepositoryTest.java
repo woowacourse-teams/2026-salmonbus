@@ -414,6 +414,31 @@ class JdbcForecastEvaluationRepositoryTest {
     }
 
     @Test
+    void 정산_대상은_묶음으로_이어_읽어도_요청한_개수를_넘지_않는다() {
+        // given
+        saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+        jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats = 82 WHERE id = ?")
+            .param(vehicleObservationId)
+            .update();
+        long second = insertObservation(observationBatchId, "204000207", 1, PASSED_STOP_ORDER);
+        long third = insertObservation(observationBatchId, "204000208", 2, PASSED_STOP_ORDER);
+        long fourth = insertObservation(observationBatchId, "204000209", 3, PASSED_STOP_ORDER);
+        saveForecasts(List.of(second, third, fourth).stream()
+            .map(observationId -> new SeatForecast(
+                observationId, routeVersionId, TARGET_STOP_ORDER, STOPS_TO_TARGET,
+                modelDeploymentId, DEMAND_STATISTICS_REVISION, 0.41, 0.38, 12.5, GENERATED_AT))
+            .toList());
+
+        // when
+        List<PendingForecast> actual = evaluationRepository.findPending(routeVersionId, 2);
+
+        // then
+        assertThat(actual)
+            .extracting(PendingForecast::vehicleObservationId)
+            .containsExactly(second, third);
+    }
+
+    @Test
     void 미정산_평가가_남은_노선_버전을_정산할_노선으로_한_번만_읽는다() {
         // given
         saveForecasts(List.of(

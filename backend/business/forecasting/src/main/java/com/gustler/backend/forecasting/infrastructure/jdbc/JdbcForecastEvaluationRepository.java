@@ -123,12 +123,13 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
         List<PendingForecast> pending = new ArrayList<>();
         PendingKey after = PendingKey.BEFORE_FIRST;
         while (pending.size() < limit) {
-            List<PendingKey> keys = findPendingKeys(routeVersionId, after, limit - pending.size());
+            List<PendingKey> keys = findPendingKeys(routeVersionId, after, limit);
             if (keys.isEmpty()) {
                 break;
             }
             PendingKey last = keys.getLast();
-            pending.addAll(findEligiblePending(routeVersionId, after, last));
+            List<PendingForecast> eligible = findEligiblePending(routeVersionId, after, last);
+            pending.addAll(eligible.subList(0, Math.min(eligible.size(), limit - pending.size())));
             after = last;
         }
         return pending;
