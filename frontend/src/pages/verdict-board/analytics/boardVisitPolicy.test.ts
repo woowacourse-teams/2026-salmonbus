@@ -9,6 +9,7 @@ const board = boardWith({ vehiclesInService: 3 });
 const loading: BoardScreen = { kind: "loading" };
 const forecast: BoardScreen = { kind: "forecast", board, direction: "UP" };
 const outOfService: BoardScreen = { kind: "outOfService", board };
+const timedOut: BoardScreen = { kind: "error", failure: { kind: "timeout" } };
 
 function observed(overrides: Partial<BoardObservation>): BoardObservation {
   return {
@@ -142,5 +143,34 @@ describe("nextBoardVisitStep", () => {
     ]);
 
     expect(namesOf(events)).toEqual(["board_viewed", "board_viewed"]);
+  });
+
+  it("첫 요청이 실패한 채 30분 넘게 숨겼다 열면 이전 오류 대신 새 요청의 실패를 보낸다", () => {
+    const events = eventsOf([
+      observed({ screen: timedOut, wallNow: 0 }),
+      observed({ screen: timedOut, visible: false, wallNow: MINUTE_MS }),
+      observed({ screen: timedOut, wallNow: 31 * MINUTE_MS }),
+      observed({
+        screen: { kind: "error", failure: { kind: "network", cause: new TypeError("Failed to fetch") } },
+        wallNow: 31 * MINUTE_MS,
+      }),
+    ]);
+
+    expect(namesOf(events)).toEqual(["board_unavailable:error", "board_unavailable:error"]);
+    expect(events.map((event) => event.properties)).toEqual([
+      { route_id: "R1", reason: "error", error_kind: "timeout" },
+      { route_id: "R1", reason: "error", error_kind: "network" },
+    ]);
+  });
+
+  it("첫 요청이 실패한 채 30분 넘게 숨겼다 열었다가 새 요청이 성공하면 board_viewed만 더 보낸다", () => {
+    const events = eventsOf([
+      observed({ screen: timedOut, wallNow: 0 }),
+      observed({ screen: timedOut, visible: false, wallNow: MINUTE_MS }),
+      observed({ screen: timedOut, wallNow: 31 * MINUTE_MS }),
+      observed({ screen: forecast, receivedAt: 1_000, wallNow: 31 * MINUTE_MS }),
+    ]);
+
+    expect(namesOf(events)).toEqual(["board_unavailable:error", "board_viewed"]);
   });
 });

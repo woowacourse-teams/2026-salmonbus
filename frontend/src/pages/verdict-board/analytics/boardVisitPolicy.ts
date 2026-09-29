@@ -1,5 +1,6 @@
 import type { EventMap } from "@/shared/analytics/events";
 import { failurePropertiesOf } from "@/shared/analytics/failureProperties";
+import type { ApiFailure } from "@/shared/api/client";
 import type { BoardScreen } from "../displayPolicy";
 import { boardViewedPropertiesOf } from "./boardEventPolicy";
 
@@ -21,6 +22,7 @@ export interface BoardVisit {
   routeId: string;
   startedAt: number;
   staleReceivedAt: number | null;
+  staleFailure: ApiFailure | null;
   hiddenSince: number | null;
   viewed: boolean;
   unavailableReasons: readonly UnavailableReason[];
@@ -45,19 +47,28 @@ export function nextBoardVisitStep(visit: BoardVisit | null, observation: BoardO
 }
 
 function currentVisitOf(visit: BoardVisit | null, observation: BoardObservation): BoardVisit {
-  if (visit === null || visit.routeId !== observation.routeId) return newVisitOf(observation, null);
+  if (visit === null || visit.routeId !== observation.routeId) return newVisitOf(observation, null, null);
   if (visit.hiddenSince === null || !observation.visible) return visit;
   if (observation.wallNow - visit.hiddenSince >= NEW_VISIT_AFTER_HIDDEN_MS) {
-    return newVisitOf(observation, observation.receivedAt);
+    return newVisitOf(observation, observation.receivedAt, failureOf(observation.screen));
   }
   return { ...visit, hiddenSince: null };
 }
 
-function newVisitOf({ routeId, elapsedNow }: BoardObservation, staleReceivedAt: number | null): BoardVisit {
+function failureOf(screen: BoardScreen): ApiFailure | null {
+  return screen.kind === "error" ? screen.failure : null;
+}
+
+function newVisitOf(
+  { routeId, elapsedNow }: BoardObservation,
+  staleReceivedAt: number | null,
+  staleFailure: ApiFailure | null,
+): BoardVisit {
   return {
     routeId,
     startedAt: elapsedNow,
     staleReceivedAt,
+    staleFailure,
     hiddenSince: null,
     viewed: false,
     unavailableReasons: [],
@@ -87,6 +98,7 @@ function eventStepOf(visit: BoardVisit, observation: BoardObservation): BoardVis
         vehicles_in_service: screen.board.vehiclesInService,
       });
     case "error": {
+      if (screen.failure === visit.staleFailure) return { visit, event: null };
       const failureProperties = failurePropertiesOf(screen.failure);
       if (failureProperties === null) return { visit, event: null };
       return unavailableStepOf(visit, { route_id: visit.routeId, reason: "error", ...failureProperties });
