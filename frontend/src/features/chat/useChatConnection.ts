@@ -21,7 +21,6 @@ import { chatDataReducer, initialChatDataState, type PendingMessage } from "./me
 interface ChatConnectionOptions {
   routeId: string;
   initialMaxBodyCodePoints: number;
-  started: boolean;
   onIncoming(): void;
 }
 
@@ -41,7 +40,7 @@ const ACK_TIMEOUT_MS = 10_000;
 const RECONNECTED_NOTICE_MS = 2_000;
 const DEFAULT_RETRY_AFTER_MS = 1_000;
 
-export function useChatConnection({ routeId, initialMaxBodyCodePoints, started, onIncoming }: ChatConnectionOptions) {
+export function useChatConnection({ routeId, initialMaxBodyCodePoints, onIncoming }: ChatConnectionOptions) {
   const [connection, setConnection] = useState<ConnectionState>("connecting");
   const [historyComplete, setHistoryComplete] = useState(false);
   const [authorId, setAuthorId] = useState<string | null>(null);
@@ -68,8 +67,6 @@ export function useChatConnection({ routeId, initialMaxBodyCodePoints, started, 
   }, []);
 
   useEffect(() => {
-    if (!started) return;
-
     const ackTimers = ackTimersRef.current;
     let disposed = false;
     let retryTimer: number | null = null;
@@ -174,7 +171,7 @@ export function useChatConnection({ routeId, initialMaxBodyCodePoints, started, 
       socket.addEventListener("error", () => socket.close());
     };
 
-    openSocket();
+    retryTimer = window.setTimeout(openSocket, 0);
     return () => {
       disposed = true;
       if (retryTimer !== null) window.clearTimeout(retryTimer);
@@ -183,7 +180,7 @@ export function useChatConnection({ routeId, initialMaxBodyCodePoints, started, 
       if (socket !== null && socket.readyState < WebSocket.CLOSING) socket.close();
       clearAllAckTimers(ackTimers);
     };
-  }, [markPendingFailed, onIncoming, reconnectKey, routeId, sessionId, started]);
+  }, [markPendingFailed, onIncoming, reconnectKey, routeId, sessionId]);
 
   function sendBody(body: string, clientMessageId: string) {
     const socket = socketRef.current;

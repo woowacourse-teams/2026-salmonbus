@@ -7,18 +7,19 @@ interface ChatPeekProps {
   sheetId: string;
   displayName: string;
   unread: number;
+  teaser: string | null;
   onOpen: () => void;
 }
 
 const MAX_UNREAD_BADGE = 99;
 
-export function ChatPeek({ launcherRef, sheetId, displayName, unread, onOpen }: ChatPeekProps) {
+export function ChatPeek({ launcherRef, sheetId, displayName, unread, teaser, onOpen }: ChatPeekProps) {
   return (
     <div className={styles.slot}>
       <button
         ref={launcherRef}
         type="button"
-        className={styles.launcher}
+        className={styles.launcher[teaser === null ? "plain" : "teasing"]}
         aria-haspopup="dialog"
         aria-controls={sheetId}
         aria-label={launcherLabel(displayName, unread)}
@@ -26,8 +27,14 @@ export function ChatPeek({ launcherRef, sheetId, displayName, unread, onOpen }: 
       >
         <MessageIcon />
         <span className={styles.route}>{displayName}</span>
-        <span>{CHAT_NAME}</span>
-        <span className={styles.spacer} />
+        {teaser === null ? (
+          <>
+            <span>{CHAT_NAME}</span>
+            <span className={styles.spacer} />
+          </>
+        ) : (
+          <span className={styles.teaser}>{teaser}</span>
+        )}
         {unread > 0 && <span className={styles.unreadBadge}>{Math.min(unread, MAX_UNREAD_BADGE)}</span>}
       </button>
     </div>

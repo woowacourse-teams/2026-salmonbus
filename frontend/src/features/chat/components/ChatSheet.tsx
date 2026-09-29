@@ -6,14 +6,12 @@ import { useSheetDrag } from "../useSheetDrag";
 import { SheetHeader } from "./SheetHeader";
 import * as styles from "./ChatSheet.css";
 
-type SheetConnection = ConnectionState | "idle";
-
 interface ChatSheetProps {
   sheetRef: RefObject<HTMLElement | null>;
   id: string;
   position: SheetPosition;
   modal: boolean;
-  connection: SheetConnection;
+  connection: ConnectionState;
   dragEnabled: boolean;
   displayName: string;
   nickname: string | null;

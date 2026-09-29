@@ -103,3 +103,11 @@ export function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): 
     return timeDifference === 0 ? left.id.localeCompare(right.id) : timeDifference;
   });
 }
+
+export function latestIncomingBody(messages: readonly ChatMessage[], authorId: string | null): string | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]!;
+    if (message.authorId !== authorId) return message.body;
+  }
+  return null;
+}

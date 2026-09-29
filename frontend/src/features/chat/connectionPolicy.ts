@@ -11,6 +11,6 @@ export function shouldReconnect(closeCode: number): boolean {
   return !FINAL_CLOSE_CODES.has(closeCode);
 }
 
-export function isConnectionStalled(connection: ConnectionState | "idle"): boolean {
+export function isConnectionStalled(connection: ConnectionState): boolean {
   return connection === "failed" || connection === "unavailable";
 }

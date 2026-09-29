@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import type { ChatMessage } from "./chatProtocol";
-import { chatDataReducer, initialChatDataState } from "./messagePolicy";
+import { chatDataReducer, initialChatDataState, latestIncomingBody } from "./messagePolicy";
 
 const saved: ChatMessage = {
   id: "message-1",
@@ -65,5 +65,25 @@ describe("chatDataReducer", () => {
     expect(rekeyed.pending).toEqual([
       { clientMessageId: "fresh", body: saved.body, createdAt: saved.createdAt, delivery: "sending" },
     ]);
+  });
+});
+
+describe("latestIncomingBody", () => {
+  const message = (id: string, authorId: string, body: string) => ({
+    id,
+    authorId,
+    nickname: "졸린 범계역",
+    body,
+    createdAt: "2026-09-30T00:00:00Z",
+  });
+
+  it("내가 보낸 것을 건너뛰고 남이 보낸 마지막 메시지 본문을 돌려준다", () => {
+    const messages = [message("1", "other", "야탑역에서 방금 탔어요"), message("2", "me", "저도 타요")];
+    expect(latestIncomingBody(messages, "me")).toBe("야탑역에서 방금 탔어요");
+  });
+
+  it("남이 보낸 메시지가 없으면 null이다", () => {
+    expect(latestIncomingBody([message("1", "me", "저도 타요")], "me")).toBeNull();
+    expect(latestIncomingBody([], null)).toBeNull();
   });
 });

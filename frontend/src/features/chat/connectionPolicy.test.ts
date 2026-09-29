@@ -22,11 +22,6 @@ describe("isConnectionStalled", () => {
   it("연결 실패와 사용 불가만 멈춘 연결로 본다", () => {
     expect(isConnectionStalled("failed")).toBe(true);
     expect(isConnectionStalled("unavailable")).toBe(true);
-    expect((["idle", "connecting", "reconnecting", "ready"] as const).map(isConnectionStalled)).toEqual([
-      false,
-      false,
-      false,
-      false,
-    ]);
+    expect((["connecting", "reconnecting", "ready"] as const).map(isConnectionStalled)).toEqual([false, false, false]);
   });
 });

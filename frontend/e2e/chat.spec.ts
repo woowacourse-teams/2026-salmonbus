@@ -147,7 +147,12 @@ async function waitForLauncher(page: Page) {
 }
 
 async function waitForSessionStart(page: Page, sockets: ChatSocket[]) {
-  await expect.poll(() => sockets.length).toBe(1);
+  await expect
+    .poll(async () => {
+      await page.clock.runFor(10);
+      return sockets.length;
+    })
+    .toBe(1);
   const socket = sockets[0]!;
   expect(socket.path).toBe(chatPaths.stream);
   await expect
@@ -259,24 +264,22 @@ test("채팅이 켜져 있으면 알약으로 열어 이력을 받고, 보낸 �
   chat.enabled = true;
   let socket!: ChatSocket;
 
-  await test.step("켜짐 응답이 오면 채팅 청크를 받아 알약을 그리지만 WebSocket은 열지 않는다", async () => {
+  await test.step("켜짐 응답이 오면 채팅 청크를 받아 알약을 그리고, 곧바로 WebSocket을 열어 session.start를 보낸다", async () => {
     await openChatRouteBoard(page, 200);
     await waitForLauncher(page);
     await expect(launcher(page)).toBeVisible();
     await expect(sheet(page)).toHaveAttribute("data-position", "collapsed");
-    await expect(sheet(page)).toHaveAttribute("data-connection", "idle");
     expect(chat.scripts.filter(isChatChunk)).toHaveLength(1);
-    expect(chat.sockets).toEqual([]);
+    socket = await waitForSessionStart(page, chat.sockets);
   });
 
-  await test.step("알약을 누르면 반 높이로 열리고 session.start를 보낸다", async () => {
+  await test.step("알약을 누르면 반 높이로 열리고 연결하는 중과 불러오는 중이 보인다", async () => {
     await launcher(page).click();
     await expect(sheet(page)).toHaveAttribute("data-position", "half");
     await expect(page.getByRole("dialog", { name: `${chatAvailability.displayName} 채팅`, exact: true })).toBeVisible();
     await expect(launcher(page)).toHaveCount(0);
     await expect(statusBand(page)).toHaveText("대화방에 연결하는 중이에요");
     await expect(page.getByLabel("최근 대화를 불러오는 중", { exact: true })).toBeVisible();
-    socket = await waitForSessionStart(page, chat.sockets);
   });
 
   await test.step("session.ready와 이력을 받으면 내 이름과 이력 두 개가 보인다", async () => {
@@ -721,4 +724,31 @@ test.describe("1440px 화면에서 접었을 때", () => {
       })
       .toBeLessThanOrEqual(1);
   });
+});
+
+test("채팅을 열지 않아도 남이 보낸 새 메시지가 오면 알약에 안 읽은 수와 마지막 메시지가 살짝 보인다", async ({
+  page,
+  chat,
+}) => {
+  // given
+  chat.enabled = true;
+  await openChatRouteBoard(page, 200);
+  await waitForLauncher(page);
+  const socket = await waitForSessionStart(page, chat.sockets);
+  socket.send(serverFrames["session.ready"]);
+  sendHistory(socket, history.length);
+  await expect(sheet(page)).toHaveAttribute("data-connection", "ready");
+  await expect(launcher(page)).not.toContainText(history[0]!.body);
+  const incoming = { ...serverFrames["message.created"].message, id: "68db00000000000000009001", authorId: "other" };
+
+  // when
+  socket.send({ ...serverFrames["message.created"], message: incoming });
+
+  // then
+  const unreadLauncher = page.getByRole("button", {
+    name: `${chatAvailability.displayName} 채팅 열기, 안 읽은 메시지 1개`,
+    exact: true,
+  });
+  await expect(unreadLauncher).toBeVisible();
+  await expect(unreadLauncher).toContainText(incoming.body);
 });

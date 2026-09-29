@@ -1,7 +1,8 @@
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { createPortal } from "react-dom";
 import type { ChatAvailability } from "./chatAvailability";
 import { isConnectionStalled } from "./connectionPolicy";
+import { latestIncomingBody } from "./messagePolicy";
 import { useChatConnection } from "./useChatConnection";
 import { useChatSheet } from "./useChatSheet";
 import { useIsDesktop } from "./useIsDesktop";
@@ -23,7 +24,6 @@ interface ChatWidgetProps {
 const SHEET_ID = "route-chat-dialog";
 
 export function ChatWidget({ availability }: ChatWidgetProps) {
-  const [started, setStarted] = useState(false);
   const isDesktop = useIsDesktop();
   const layerRef = useRef<HTMLDivElement | null>(null);
   const sheet = useChatSheet();
@@ -32,7 +32,6 @@ export function ChatWidget({ availability }: ChatWidgetProps) {
   const chat = useChatConnection({
     routeId: availability.routeId,
     initialMaxBodyCodePoints: availability.maxBodyCodePoints,
-    started,
     onIncoming: scroll.countIncoming,
   });
   useFollowNewest(scroll, chat.historyComplete, chat.messages, chat.pending);
@@ -40,7 +39,6 @@ export function ChatWidget({ availability }: ChatWidgetProps) {
   useModalSheet(modal);
 
   function openChat() {
-    setStarted(true);
     sheet.open();
     scroll.clearUnread();
   }
@@ -53,6 +51,7 @@ export function ChatWidget({ availability }: ChatWidgetProps) {
           sheetId={SHEET_ID}
           displayName={availability.displayName}
           unread={scroll.unread}
+          teaser={scroll.unread > 0 ? latestIncomingBody(chat.messages, chat.authorId) : null}
           onOpen={openChat}
         />
       )}
@@ -61,7 +60,7 @@ export function ChatWidget({ availability }: ChatWidgetProps) {
         id={SHEET_ID}
         position={sheet.position}
         modal={modal}
-        connection={started ? chat.connection : "idle"}
+        connection={chat.connection}
         dragEnabled={!isDesktop}
         displayName={availability.displayName}
         nickname={chat.nickname}

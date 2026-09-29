@@ -1,10 +1,11 @@
-import { style } from "@vanilla-extract/css";
+import { keyframes, style, styleVariants } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 import { DESKTOP_MEDIA, MOTION_MEDIA } from "../chatLayout";
 
 const SLOT_RIGHT = "18px";
 const SLOT_HEIGHT = "44px";
 const PEEK_WIDTH = "168px";
+const TEASER_PEEK_MAX_WIDTH = "min(260px, calc(100vw - 36px))";
 const PEEK_HEIGHT = "36px";
 const PEEK_RADIUS = "18px";
 const PEEK_SHADOW = "0 4px 16px rgba(17, 17, 17, 0.12)";
@@ -28,10 +29,9 @@ export const slot = style({
   },
 });
 
-export const launcher = style({
+const launcherBase = style({
   display: "flex",
   alignItems: "center",
-  width: PEEK_WIDTH,
   height: PEEK_HEIGHT,
   gap: "5px",
   margin: 0,
@@ -56,6 +56,32 @@ export const launcher = style({
     },
     [MOTION_MEDIA]: {
       transition: `scale ${vars.duration.fast} ease, border-color ${vars.duration.fast} ease`,
+    },
+  },
+});
+
+export const launcher = styleVariants({
+  plain: [launcherBase, { width: PEEK_WIDTH }],
+  teasing: [launcherBase, { minWidth: PEEK_WIDTH, maxWidth: TEASER_PEEK_MAX_WIDTH }],
+});
+
+const teaserIn = keyframes({
+  from: { opacity: 0 },
+  to: { opacity: 1 },
+});
+
+export const teaser = style({
+  overflow: "hidden",
+  minWidth: 0,
+  flex: 1,
+  color: vars.color.textSubtle,
+  fontWeight: 500,
+  textAlign: "left",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  "@media": {
+    [MOTION_MEDIA]: {
+      animation: `${teaserIn} ${vars.duration.base} ease-out`,
     },
   },
 });
