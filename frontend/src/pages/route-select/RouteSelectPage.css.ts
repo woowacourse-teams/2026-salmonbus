@@ -1,4 +1,4 @@
-import { globalStyle, style } from "@vanilla-extract/css";
+import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 
 const ink = "#292A2D";
 const mutedInk = "#66625E";
@@ -61,6 +61,41 @@ export const mascot = style({
   objectFit: "contain",
 });
 
+// 스프링(감쇠비 0.595, 응답 617ms)으로 8px를 한 번 튀게 계산한 값
+const mascotHop = keyframes({
+  "0%": { translate: "0 0" },
+  "1.7%": { translate: "0 -1.83px" },
+  "3.3%": { translate: "0 -3.38px" },
+  "5%": { translate: "0 -4.67px" },
+  "6.7%": { translate: "0 -5.72px" },
+  "8.3%": { translate: "0 -6.55px" },
+  "10%": { translate: "0 -7.17px" },
+  "11.7%": { translate: "0 -7.6px" },
+  "15%": { translate: "0 -7.99px" },
+  "18.3%": { translate: "0 -7.86px" },
+  "23.3%": { translate: "0 -6.99px" },
+  "33.3%": { translate: "0 -4.19px" },
+  "41.7%": { translate: "0 -1.95px" },
+  "48.3%": { translate: "0 -0.62px" },
+  "55%": { translate: "0 0.23px" },
+  "63.3%": { translate: "0 0.72px" },
+  "75%": { translate: "0 0.71px" },
+  "100%": { translate: "0 0" },
+});
+
+export const hoppingMascot = style([
+  mascot,
+  {
+    animation: `${mascotHop} 727ms linear 300ms`,
+
+    "@media": {
+      "(prefers-reduced-motion: reduce)": {
+        animation: "none",
+      },
+    },
+  },
+]);
+
 export const wordmark = style({
   position: "absolute",
   top: "11px",
@@ -112,6 +147,14 @@ export const main = style({
   zIndex: 1,
   width: "calc(100% - 40px)",
   margin: "17px 20px 0",
+});
+
+const revealAfterDelay = keyframes({
+  from: { visibility: "hidden" },
+});
+
+export const loadingMessage = style({
+  animation: `${revealAfterDelay} 0s 200ms both`,
 });
 
 export const routeList = style({

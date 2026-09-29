@@ -36,7 +36,11 @@ export function RouteSelectPage() {
     <div className={styles.page}>
       <header className={styles.header}>
         <div className={styles.brandLockup}>
-          <img className={styles.mascot} src={salmongProud} alt="연어 버스 로고" />
+          <img
+            className={state.status === "ready" ? styles.hoppingMascot : styles.mascot}
+            src={salmongProud}
+            alt="연어 버스 로고"
+          />
           <img className={styles.wordmark} src={salmonbusWordmark} width={272} height={70} alt="연어 버스 글자 로고" />
         </div>
         <div className={styles.intro}>
@@ -51,7 +55,7 @@ export function RouteSelectPage() {
 function renderRoutes(state: RoutesState, onRetry: () => void) {
   switch (state.status) {
     case "loading":
-      return <p>노선을 불러오는 중이에요</p>;
+      return <p className={styles.loadingMessage}>노선을 불러오는 중이에요</p>;
     case "error":
       return (
         <>
