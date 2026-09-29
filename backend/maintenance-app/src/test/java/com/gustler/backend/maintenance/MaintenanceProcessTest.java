@@ -3,6 +3,7 @@ package com.gustler.backend.maintenance;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
@@ -21,6 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -37,6 +39,7 @@ class MaintenanceProcessTest {
     private static final Instant START = Instant.parse("2026-09-21T00:00:00Z");
     private static final Instant UNTIL = START.plusSeconds(60);
     private static final AtomicInteger DATABASE_SEQUENCE = new AtomicInteger();
+    private static LoopbackRelay loopback;
     private static final JsonMapper JSON = JsonMapper.builder()
         .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
         .enable(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES)
@@ -222,6 +225,20 @@ class MaintenanceProcessTest {
         }
     }
 
+    private static synchronized int loopbackPort() throws IOException {
+        if (loopback == null) {
+            loopback = new LoopbackRelay(POSTGRES.getHost(), POSTGRES.getMappedPort(5432));
+        }
+        return loopback.port();
+    }
+
+    @AfterAll
+    static void closeLoopback() throws IOException {
+        if (loopback != null) {
+            loopback.close();
+        }
+    }
+
     private Database database(boolean migrate) throws Exception {
         String name = "maintenance_process_" + DATABASE_SEQUENCE.incrementAndGet();
         try (var connection = DriverManager.getConnection(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
@@ -233,7 +250,8 @@ class MaintenanceProcessTest {
             Flyway.configure().dataSource(url, POSTGRES.getUsername(), POSTGRES.getPassword()).load().migrate();
         }
         Path env = directory.resolve(name + ".env");
-        Files.writeString(env, "DB_URL=" + url + "\nDB_USERNAME=" + POSTGRES.getUsername()
+        String processUrl = "jdbc:postgresql://127.0.0.1:" + loopbackPort() + "/" + name;
+        Files.writeString(env, "DB_URL=" + processUrl + "\nDB_USERNAME=" + POSTGRES.getUsername()
             + "\nDB_PASSWORD=" + POSTGRES.getPassword() + "\n");
         Files.setPosixFilePermissions(env, Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
         Path configuration = directory.resolve(name + ".properties");
