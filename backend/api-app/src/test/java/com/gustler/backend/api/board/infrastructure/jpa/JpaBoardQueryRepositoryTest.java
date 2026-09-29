@@ -29,7 +29,8 @@ class JpaBoardQueryRepositoryTest {
             mock(BoardRouteStopEntityRepository.class),
             mock(SeatForecastEntityRepository.class),
             vehicleObservationRepository,
-            mock(ModelDeploymentEntityRepository.class)
+            mock(ModelDeploymentEntityRepository.class),
+            mock(BoardForecastPublicationEntityRepository.class)
         );
     }
 

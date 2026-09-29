@@ -2,7 +2,10 @@ package com.gustler.backend.api.board.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import com.gustler.backend.api.board.ModelOutOfScopeException;
 import com.gustler.backend.api.board.NoRecentObservationException;
@@ -16,6 +19,7 @@ import com.gustler.backend.api.board.domain.VehicleForecast;
 import com.gustler.backend.api.error.ServiceUnavailableException;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.domain.Route;
+import com.gustler.backend.api.route.domain.RouteStatus;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -240,7 +244,7 @@ class BoardQueryServiceTest {
     }
 
     @Test
-    void 예보_완료_관측_묶음이_없으면_최근_관측_없음_오류다() {
+    void 발행된_예보도_정상_관측도_없으면_최근_관측_없음_오류다() {
         BoardSnapshot snapshot = new BoardSnapshot(
             1L,
             route(),
@@ -354,6 +358,67 @@ class BoardQueryServiceTest {
             .extracting(ApproachingVehicle::vehicleId).containsExactly("NEAR", "BOUNDARY");
     }
 
+    @Test
+    void 발행되지_않은_관측이면_예보를_조회하지_않고_모든_차량을_예보_없음으로_둔_준비_중_보드를_만든다() {
+        // given
+        given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(snapshotObserving(
+            new SnapshotObservation(100L, OBSERVED_AT, 2, false))));
+        given(repository.findStops(1L)).willReturn(roundTripStops());
+        given(repository.findObservedVehicles(100L, 1L)).willReturn(List.of(
+            new BoardVehicleObservation("A", 1, 2),
+            new BoardVehicleObservation("B", 2, 1)));
+
+        // when
+        final BoardOverview actual = service.getBoard(ROUTE_ID);
+
+        // then
+        assertThat(actual.board().route().status()).isEqualTo(RouteStatus.PREPARING);
+        assertThat(actual.board().model()).isEqualTo(ACTIVE_MODEL);
+        assertThat(actual.board().observedAt()).isEqualTo(OBSERVED_AT);
+        assertThat(actual.board().vehiclesInService()).isEqualTo(2);
+        assertThat(actual.cacheMaxAge()).isEqualTo(Duration.ofSeconds(15));
+        assertThat(actual.board().stops().get(2).approachingVehicles())
+            .extracting(ApproachingVehicle::forecast)
+            .containsExactly(new VehicleForecast.Unavailable(), new VehicleForecast.Unavailable());
+        verify(repository, never()).findPredictions(anyLong());
+    }
+
+    @Test
+    void 발행된_관측이면_예보가_준비된_보드를_만든다() {
+        // given
+        givenRoundTripBoard(List.of(prediction(3, "A", 1, 1, 0.2, 10.0)));
+
+        // when
+        final Board actual = service.getBoard(ROUTE_ID).board();
+
+        // then
+        assertThat(actual.route().status()).isEqualTo(RouteStatus.FORECAST_READY);
+    }
+
+    @Test
+    void 발행되지_않은_관측도_5분을_넘으면_최근_관측_없음_오류다() {
+        // given
+        given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(snapshotObserving(
+            new SnapshotObservation(100L, OBSERVED_AT.minusMinutes(1), 2, false))));
+
+        // when & then
+        assertThatThrownBy(() -> service.getBoard(ROUTE_ID))
+            .isInstanceOf(NoRecentObservationException.class);
+    }
+
+    private BoardSnapshot snapshotObserving(
+        SnapshotObservation observation
+    ) {
+        return new BoardSnapshot(
+            1L,
+            route(),
+            2,
+            schedule(),
+            Optional.of(observation),
+            Optional.of(ACTIVE_MODEL)
+        );
+    }
+
     private BoardSnapshot roundTripSnapshot() {
         return new BoardSnapshot(
             1L,
@@ -386,7 +451,7 @@ class BoardQueryServiceTest {
     }
 
     private SnapshotObservation observation() {
-        return new SnapshotObservation(100L, OBSERVED_AT, 4);
+        return new SnapshotObservation(100L, OBSERVED_AT, 4, true);
     }
 
     private List<BoardStop> roundTripStops() {

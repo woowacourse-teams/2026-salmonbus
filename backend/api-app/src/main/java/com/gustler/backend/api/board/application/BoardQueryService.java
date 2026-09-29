@@ -75,9 +75,9 @@ public class BoardQueryService {
             throw new ServiceUnavailableException();
         }
 
-        List<StoredPrediction> predictions = boardQueryRepository.findPredictions(
-            observation.batchId()
-        );
+        List<StoredPrediction> predictions = observation.forecastPublished()
+            ? boardQueryRepository.findPredictions(observation.batchId())
+            : List.of();
         ForecastModel model = modelOf(predictions, activeModel);
         List<BoardVehicleObservation> vehicles = boardQueryRepository.findObservedVehicles(
             observation.batchId(), snapshot.routeVersionId());
@@ -88,8 +88,12 @@ public class BoardQueryService {
             .map(stop -> toStopState(stop, vehicles, predictionsByStop.getOrDefault(stop.sequence(), Map.of())))
             .toList();
 
+        RouteStatus status = RouteStatus.from(
+            snapshot.activeModel().isPresent(),
+            observation.forecastPublished()
+        );
         Board board = new Board(
-            toBoardRoute(snapshot, stops),
+            toBoardRoute(snapshot, stops, status),
             observation.observedAt(),
             freshnessPolicy.staleAt(observation.observedAt()),
             model,
@@ -192,7 +196,8 @@ public class BoardQueryService {
 
     private BoardRoute toBoardRoute(
         BoardSnapshot snapshot,
-        List<BoardStop> stops
+        List<BoardStop> stops,
+        RouteStatus status
     ) {
         Route route = snapshot.route();
         return new BoardRoute(
@@ -200,7 +205,7 @@ public class BoardQueryService {
             route.displayName(),
             route.startStopName(),
             route.endStopName(),
-            RouteStatus.FORECAST_READY,
+            status,
             snapshot.turnSequence(),
             directionsOf(snapshot, stops),
             String.valueOf(snapshot.routeVersionId())

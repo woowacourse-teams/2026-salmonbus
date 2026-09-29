@@ -29,4 +29,18 @@ public interface BoardObservationBatchEntityRepository
         @Param("routeVersion") RouteVersionJpaEntity routeVersion,
         Pageable pageable
     );
+
+    @Query("""
+        SELECT batch
+        FROM BoardObservationBatchJpaEntity batch
+        WHERE batch.routeVersion = :routeVersion
+          AND batch.outcome IN ('SUCCESS_ROWS', 'SUCCESS_EMPTY')
+          AND batch.responseReceivedAt IS NOT NULL
+        ORDER BY batch.responseReceivedAt DESC,
+                 batch.id DESC
+        """)
+    List<ObservationBatchJpaEntity> findLatestObserved(
+        @Param("routeVersion") RouteVersionJpaEntity routeVersion,
+        Pageable pageable
+    );
 }

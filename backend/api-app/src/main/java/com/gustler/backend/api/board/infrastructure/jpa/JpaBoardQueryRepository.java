@@ -36,6 +36,7 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
     private final SeatForecastEntityRepository seatForecastRepository;
     private final BoardVehicleObservationEntityRepository vehicleObservationRepository;
     private final ModelDeploymentEntityRepository modelDeploymentRepository;
+    private final BoardForecastPublicationEntityRepository forecastPublicationRepository;
 
     @Override
     public Optional<BoardSnapshot> findSnapshot(
@@ -92,11 +93,11 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
     private BoardSnapshot toSnapshot(
         RouteVersionJpaEntity routeVersion
     ) {
-        Optional<SnapshotObservation> observation = observationBatchRepository
-            .findLatestPublished(routeVersion, FIRST_RESULT)
+        final boolean forecastPublished = forecastPublicationRepository.existsByRouteVersionId(routeVersion.id());
+        Optional<SnapshotObservation> observation = latestObservationOf(routeVersion, forecastPublished)
             .stream()
             .findFirst()
-            .map(batch -> batch.toDomain(clock.getZone()));
+            .map(batch -> batch.toDomain(clock.getZone(), forecastPublished));
         Optional<ForecastModel> activeModel = modelDeploymentRepository
             .findByState(ModelDeploymentState.ACTIVE)
             .map(this::toModel);
@@ -114,6 +115,16 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
             observation,
             activeModel
         );
+    }
+
+    private List<ObservationBatchJpaEntity> latestObservationOf(
+        RouteVersionJpaEntity routeVersion,
+        final boolean forecastPublished
+    ) {
+        if (forecastPublished) {
+            return observationBatchRepository.findLatestPublished(routeVersion, FIRST_RESULT);
+        }
+        return observationBatchRepository.findLatestObserved(routeVersion, FIRST_RESULT);
     }
 
     private ForecastModel toModel(

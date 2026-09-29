@@ -76,6 +76,49 @@ class JpaBoardQueryRepositoryIntegrationTest {
         assertThat(repository.findPredictions(selected.batchId())).isEmpty();
     }
 
+    @Test
+    void 발행된_예보가_없는_판본은_최신_정상_묶음을_발행되지_않은_관측으로_고른다() {
+        // given
+        BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbcClient);
+        OffsetDateTime now = OffsetDateTime.now().withNano(0);
+        RouteContext route = route(fixture, "204000057", now);
+        RouteContext otherRoute = route(fixture, "234000050", now);
+        final long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        final long otherRouteBatch = fixture.insertBatch(otherRoute, now.minusSeconds(10), "SUCCESS_EMPTY", 0);
+        fixture.insertPublication(otherRouteBatch, model, now.minusSeconds(10), now.minusSeconds(10));
+        fixture.insertBatch(route, now.minusMinutes(2), "SUCCESS_ROWS", 1);
+        final long latestNormalBatch = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
+        fixture.insertBatch(route, now.minusSeconds(30), "FAILED_UNREADABLE", null);
+
+        // when
+        var selected = repository.findSnapshot(new RouteId(route.sourceRouteId()))
+            .orElseThrow().observation().orElseThrow();
+
+        // then
+        assertThat(selected.batchId()).isEqualTo(latestNormalBatch);
+        assertThat(selected.forecastPublished()).isFalse();
+    }
+
+    @Test
+    void 발행된_예보가_있는_판본은_최신_발행_묶음을_발행된_관측으로_고른다() {
+        // given
+        BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbcClient);
+        OffsetDateTime now = OffsetDateTime.now().withNano(0);
+        RouteContext route = route(fixture, "204000057", now);
+        final long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        final long publishedBatch = fixture.insertBatch(route, now.minusMinutes(2), "SUCCESS_EMPTY", 0);
+        fixture.insertPublication(publishedBatch, model, now.minusMinutes(2), now.minusMinutes(2));
+        fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
+
+        // when
+        var selected = repository.findSnapshot(new RouteId(route.sourceRouteId()))
+            .orElseThrow().observation().orElseThrow();
+
+        // then
+        assertThat(selected.batchId()).isEqualTo(publishedBatch);
+        assertThat(selected.forecastPublished()).isTrue();
+    }
+
     private RouteContext route(BoardDatabaseFixture fixture, String id, OffsetDateTime now) {
         RouteContext route = fixture.insertRoute(id, "노선", "기점", "종점", null,
             "05:00", "23:00", null, null, now.minusDays(1));

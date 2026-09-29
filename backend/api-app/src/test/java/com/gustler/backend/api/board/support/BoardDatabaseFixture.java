@@ -82,6 +82,41 @@ public class BoardDatabaseFixture {
         return new RouteContext(routeId, routeVersionId, sourceRouteId);
     }
 
+    public RouteContext insertNextVersion(
+        RouteContext route,
+        OffsetDateTime validFrom
+    ) {
+        jdbcClient.sql("UPDATE route_version SET valid_to = :validFrom WHERE id = :routeVersionId")
+            .param("validFrom", validFrom)
+            .param("routeVersionId", route.routeVersionId())
+            .update();
+        final long routeVersionId = jdbcClient.sql("""
+                INSERT INTO route_version (
+                    route_id, turn_sequence,
+                    up_first_departure_time, up_last_departure_time,
+                    down_first_departure_time, down_last_departure_time,
+                    content_digest, valid_from
+                )
+                SELECT route_id, turn_sequence,
+                       up_first_departure_time, up_last_departure_time,
+                       down_first_departure_time, down_last_departure_time,
+                       :contentDigest, :validFrom
+                FROM route_version
+                WHERE id = :previousRouteVersionId
+                RETURNING id
+                """)
+            .param("contentDigest", "d".repeat(64))
+            .param("validFrom", validFrom)
+            .param("previousRouteVersionId", route.routeVersionId())
+            .query(Long.class)
+            .single();
+        jdbcClient.sql("INSERT INTO route_version_quality_policy (route_version_id) VALUES (:routeVersionId)")
+            .param("routeVersionId", routeVersionId)
+            .update();
+
+        return new RouteContext(route.routeId(), routeVersionId, route.sourceRouteId());
+    }
+
     public void insertStop(
         RouteContext route,
         final int sequence,

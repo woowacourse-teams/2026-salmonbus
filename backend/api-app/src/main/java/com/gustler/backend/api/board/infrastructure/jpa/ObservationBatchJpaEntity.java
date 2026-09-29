@@ -39,12 +39,14 @@ public class ObservationBatchJpaEntity {
     }
 
     public SnapshotObservation toDomain(
-        ZoneId zoneId
+        ZoneId zoneId,
+        final boolean forecastPublished
     ) {
         return new SnapshotObservation(
             id,
             responseReceivedAt.atZoneSameInstant(zoneId).toOffsetDateTime(),
-            storedRows
+            storedRows,
+            forecastPublished
         );
     }
 }

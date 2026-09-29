@@ -6,7 +6,8 @@ import java.util.Objects;
 public record SnapshotObservation(
     long batchId,
     OffsetDateTime observedAt,
-    Integer vehiclesInService
+    Integer vehiclesInService,
+    boolean forecastPublished
 ) {
 
     public SnapshotObservation {
