@@ -91,7 +91,10 @@ export function useSheetDrag({ sheetRef, position, enabled, onSettle }: SheetDra
   function onPointerDown(event: ReactPointerEvent<HTMLElement>) {
     const sheet = sheetRef.current;
     if (!enabled || position === "collapsed" || !event.isPrimary || sheet === null) return;
-    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (event.pointerType === "mouse") {
+      if (event.button !== 0) return;
+      event.preventDefault();
+    }
     if (sessionRef.current !== null) releaseSheet();
     const height = holdSheetHeight(sheet);
     sessionRef.current = {
