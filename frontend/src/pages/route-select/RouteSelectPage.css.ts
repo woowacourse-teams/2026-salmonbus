@@ -4,10 +4,9 @@ const ink = "#292A2D";
 const mutedInk = "#66625E";
 const coral = "#F47F73";
 const border = "#E8D8D2";
+const lightInk = "#B9B2AC";
 
 export const page = style({
-  position: "relative",
-  isolation: "isolate",
   width: "100%",
   maxWidth: "425px",
   minHeight: "844px",
@@ -15,19 +14,6 @@ export const page = style({
   overflow: "hidden",
   borderRadius: "26px",
   backgroundColor: "#FFFFFF",
-
-  selectors: {
-    "&::before": {
-      position: "absolute",
-      zIndex: -1,
-      top: "512px",
-      left: "20px",
-      width: "calc(100% - 40px)",
-      height: "248px",
-      backgroundColor: "#FFFDFC",
-      content: "",
-    },
-  },
 
   "@media": {
     "screen and (max-width: 424px)": {
@@ -38,26 +24,21 @@ export const page = style({
 });
 
 export const header = style({
-  position: "relative",
-  zIndex: 1,
-  width: "100%",
-  height: "207px",
+  display: "flex",
+  flexDirection: "column",
+  gap: "14px",
+  padding: "14px 20px 0",
 });
 
 export const brandLockup = style({
-  position: "absolute",
-  top: "11px",
-  left: "20px",
-  width: "calc(100% - 40px)",
-  height: "91px",
+  display: "flex",
+  alignItems: "center",
+  gap: "2px",
 });
 
 export const mascot = style({
-  position: "absolute",
-  top: 0,
-  left: "-10px",
-  width: "98px",
-  height: "98px",
+  width: "60px",
+  height: "60px",
   objectFit: "contain",
 });
 
@@ -97,36 +78,24 @@ export const hoppingMascot = style([
 ]);
 
 export const wordmark = style({
-  position: "absolute",
-  top: "11px",
-  left: "78px",
-  width: "272px",
-  height: "70px",
+  width: "175px",
+  height: "45px",
   objectFit: "contain",
 });
 
-export const intro = style({
-  position: "absolute",
-  top: "119px",
-  left: "20px",
-  width: "calc(100% - 40px)",
-  height: "88px",
-});
+export const intro = style({});
 
 globalStyle(`${intro} > div`, {
   display: "flex",
   flexDirection: "column",
-  gap: "8px",
+  gap: "6px",
 });
 
 globalStyle(`${intro} h1`, {
-  display: "flex",
-  alignItems: "center",
-  height: "34px",
   margin: 0,
   color: ink,
   fontFamily: "'Nanum Gothic', 'Apple SD Gothic Neo', sans-serif",
-  fontSize: "25px",
+  fontSize: "22px",
   fontWeight: 800,
   lineHeight: 1.25,
   letterSpacing: "-0.6px",
@@ -143,10 +112,8 @@ globalStyle(`${intro} p`, {
 });
 
 export const main = style({
-  position: "relative",
-  zIndex: 1,
   width: "calc(100% - 40px)",
-  margin: "17px 20px 0",
+  margin: "18px 20px 0",
 });
 
 const revealAfterDelay = keyframes({
@@ -160,7 +127,7 @@ export const loadingMessage = style({
 export const routeList = style({
   display: "flex",
   flexDirection: "column",
-  gap: "12px",
+  gap: "8px",
   margin: 0,
   padding: 0,
   listStyle: "none",
@@ -168,19 +135,21 @@ export const routeList = style({
 
 export const routeItem = style({
   width: "100%",
-  height: "128px",
+  height: "70px",
 });
 
 export const routeButton = style({
   position: "relative",
-  display: "block",
+  display: "flex",
+  alignItems: "center",
+  gap: "14px",
   width: "100%",
-  height: "128px",
+  height: "70px",
   margin: 0,
-  padding: 0,
+  padding: "0 17px 0 18px",
   overflow: "hidden",
   border: `1px solid ${border}`,
-  borderRadius: "16px",
+  borderRadius: "14px",
   backgroundColor: "#FFFFFF",
   color: ink,
   fontFamily: "inherit",
@@ -192,26 +161,20 @@ export const routeButton = style({
   selectors: {
     "&::before": {
       position: "absolute",
-      top: "19px",
+      top: "20px",
       left: "-1px",
       width: "4px",
-      height: "36px",
+      height: "28px",
       borderRadius: "0 3px 3px 0",
       backgroundColor: coral,
       content: "",
     },
     "&::after": {
-      position: "absolute",
-      right: "25px",
-      bottom: "23px",
-      display: "grid",
-      placeItems: "center",
-      width: "22px",
-      height: "22px",
+      flexShrink: 0,
       color: coral,
       fontSize: "15px",
       fontWeight: 500,
-      lineHeight: 1,
+      lineHeight: 1.2,
       content: "↗",
     },
     "&:hover": {
@@ -229,28 +192,81 @@ export const routeButton = style({
 });
 
 export const routeNumber = style({
-  position: "absolute",
-  top: "7px",
-  left: "19px",
+  flexShrink: 0,
+  minWidth: "78px",
   color: ink,
   fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-  fontSize: "52px",
+  fontSize: "30px",
   fontWeight: 800,
   lineHeight: 1.2,
-  letterSpacing: "-2.5px",
+  letterSpacing: "-1.4px",
 });
 
 export const routeDirection = style({
-  position: "absolute",
-  bottom: "23px",
-  left: "19px",
-  maxWidth: "calc(100% - 92px)",
+  display: "flex",
+  flex: 1,
+  alignItems: "center",
+  gap: "8px",
+  minWidth: 0,
+});
+
+export const routeLine = style({
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "space-between",
+  flexShrink: 0,
+  width: "7px",
+  height: "27px",
+  background: `linear-gradient(${border}, ${border}) center / 1.5px calc(100% - 14px) no-repeat`,
+
+  selectors: {
+    "&::before": {
+      width: "7px",
+      height: "7px",
+      border: `1.5px solid ${lightInk}`,
+      borderRadius: "50%",
+      content: "",
+    },
+    "&::after": {
+      width: "7px",
+      height: "7px",
+      borderRadius: "50%",
+      backgroundColor: coral,
+      content: "",
+    },
+  },
+});
+
+export const stopNames = style({
+  display: "flex",
+  flex: 1,
+  flexDirection: "column",
+  gap: "3px",
+  minWidth: 0,
+});
+
+const stopName = style({
   overflow: "hidden",
-  color: mutedInk,
   fontFamily: "'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif",
-  fontSize: "15px",
-  fontWeight: 700,
-  lineHeight: "22px",
+  lineHeight: 1.3,
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 });
+
+export const startStopName = style([
+  stopName,
+  {
+    color: mutedInk,
+    fontSize: "12.5px",
+    fontWeight: 500,
+  },
+]);
+
+export const endStopName = style([
+  stopName,
+  {
+    color: ink,
+    fontSize: "13.5px",
+    fontWeight: 700,
+  },
+]);

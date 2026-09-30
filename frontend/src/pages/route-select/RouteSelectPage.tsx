@@ -41,7 +41,7 @@ export function RouteSelectPage() {
             src={salmongProud}
             alt="연어 버스 로고"
           />
-          <img className={styles.wordmark} src={salmonbusWordmark} width={272} height={70} alt="연어 버스 글자 로고" />
+          <img className={styles.wordmark} src={salmonbusWordmark} width={175} height={45} alt="연어 버스 글자 로고" />
         </div>
         <div className={styles.intro}>
           <PageInfo title={titleMock} caption={captionMock} />

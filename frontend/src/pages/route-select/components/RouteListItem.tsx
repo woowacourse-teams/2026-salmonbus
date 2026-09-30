@@ -17,7 +17,11 @@ export function RouteListItem({ route, onSelect }: RouteListItemProps) {
       >
         <span className={styles.routeNumber}>{route.displayName}</span>
         <span className={styles.routeDirection}>
-          {route.startStopName} ↔ {route.endStopName}
+          <span className={styles.routeLine} />
+          <span className={styles.stopNames}>
+            <span className={styles.startStopName}>{route.startStopName}</span>
+            <span className={styles.endStopName}>{route.endStopName}</span>
+          </span>
         </span>
       </button>
     </li>
