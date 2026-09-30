@@ -43,7 +43,7 @@ class ChatConnectionLimitTest {
         new ChatIdentityService(),
         new ChatService(new EmptyRepository(), clock),
         new ChatFrameCodec(JsonMapper.builder().build()),
-        new ChatConnectionLimiter(),
+        new ChatConnectionLimiter(100, 5),
         clock
     );
 

@@ -5,6 +5,8 @@ chat:
   enabled: ${CHAT_ENABLED:false}
   mongodb-uri: ${CHAT_MONGODB_URI:}
   allowed-origins: ${CHAT_ALLOWED_ORIGINS:https://www.salmonbus.com}
+  max-connections: ${CHAT_MAX_CONNECTIONS:1000}
+  max-connections-per-address: ${CHAT_MAX_CONNECTIONS_PER_ADDRESS:30}
 
 spring:
   application:

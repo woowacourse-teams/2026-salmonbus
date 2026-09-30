@@ -576,7 +576,7 @@ class ChatWebSocketHandlerTest {
             new ChatIdentityService(),
             new ChatService(repository, clock),
             new ChatFrameCodec(JsonMapper.builder().findAndAddModules().build()),
-            new ChatConnectionLimiter(),
+            new ChatConnectionLimiter(100, 5),
             clock
         );
     }

@@ -82,8 +82,8 @@ public class ChatConfiguration {
     }
 
     @Bean
-    ChatConnectionLimiter chatConnectionLimiter() {
-        return new ChatConnectionLimiter();
+    ChatConnectionLimiter chatConnectionLimiter(ChatProperties properties) {
+        return new ChatConnectionLimiter(properties.getMaxConnections(), properties.getMaxConnectionsPerAddress());
     }
 
     @Bean

@@ -626,7 +626,7 @@ mongod는 `enabled`라서 재부팅하면 다시 뜬다. 원인을 볼 때까지
 | --- | --- | --- |
 | 채팅이 "지금은 채팅을 쓸 수 없어요"를 띄우고 다시 연결을 되풀이한다 | `systemctl is-active mongod`, `mongod.log`, api 1분 요약의 `저장오류` | mongod가 멈춰 있으면 `systemctl start mongod`. mongod가 다시 뜨면 화면은 저절로 다시 붙는다 |
 | mongod가 죽고 다시 뜨기를 되풀이한다 | `memory.events`의 `oom_kill`, `journalctl -u mongod` | `oom_kill`이 늘었으면 400M 상한에 걸린 것이다. 채팅을 끄고 원인을 본다 |
-| 채팅이 다시 연결을 되풀이한다 | 브라우저 개발자 도구 Network의 WS 항목과 종료 코드, api 1분 요약의 `연결초과` | 1013이면 api의 연결 수 상한에 걸린 것이다. 상한은 서버 전체와 IP마다 있고, 바꾸려면 코드를 고쳐 배포한다 |
+| 채팅이 다시 연결을 되풀이한다 | 브라우저 개발자 도구 Network의 WS 항목과 종료 코드, api 1분 요약의 `연결초과` | 1013이면 api의 연결 수 상한에 걸린 것이다. 상한은 서버 전체(`CHAT_MAX_CONNECTIONS`, 기본 1000)와 IP마다(`CHAT_MAX_CONNECTIONS_PER_ADDRESS`, 기본 30) 있고, 바꾸려면 api.env에 값을 넣고 api를 재시작한다 |
 | 보드 API가 느리거나 끊긴다 | `free -m`, 커널 OOM | 위 순서 1~3 |
 
 채팅이 켜진 상태에서 mongod가 멈춰도 api는 뜨고 `/readyz`와 health는 `UP`이다. 채팅만 `CHAT_UNAVAILABLE`로 실패한다.

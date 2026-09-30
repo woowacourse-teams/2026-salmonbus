@@ -9,6 +9,8 @@ public final class ChatProperties {
 
     private String mongodbUri;
     private List<String> allowedOrigins = new ArrayList<>();
+    private int maxConnections = 1_000;
+    private int maxConnectionsPerAddress = 30;
 
     public String getMongodbUri() {
         return mongodbUri;
@@ -24,5 +26,21 @@ public final class ChatProperties {
 
     public void setAllowedOrigins(List<String> allowedOrigins) {
         this.allowedOrigins = new ArrayList<>(allowedOrigins);
+    }
+
+    public int getMaxConnections() {
+        return maxConnections;
+    }
+
+    public void setMaxConnections(final int maxConnections) {
+        this.maxConnections = maxConnections;
+    }
+
+    public int getMaxConnectionsPerAddress() {
+        return maxConnectionsPerAddress;
+    }
+
+    public void setMaxConnectionsPerAddress(final int maxConnectionsPerAddress) {
+        this.maxConnectionsPerAddress = maxConnectionsPerAddress;
     }
 }

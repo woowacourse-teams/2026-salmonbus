@@ -140,6 +140,28 @@ class ChatConfigurationConditionTest {
         assertThat(output.getOut()).doesNotContain(MISSING_URI_WARNING);
     }
 
+    @Test
+    void 연결_수_상한은_설정값으로_바꿀_수_있다() throws IOException {
+        // given
+        String uri = "mongodb://127.0.0.1:" + closedPort() + "/?serverSelectionTimeoutMS=60000";
+
+        // when & then
+        contextRunner.withPropertyValues(
+                "chat.enabled=true",
+                "chat.mongodb-uri=" + uri,
+                "chat.max-connections=3",
+                "chat.max-connections-per-address=2"
+            )
+            .run(context -> {
+                ChatConnectionLimiter limiter = context.getBean(ChatConnectionLimiter.class);
+                assertThat(limiter.tryAcquire("a", "198.51.100.1")).isTrue();
+                assertThat(limiter.tryAcquire("b", "198.51.100.1")).isTrue();
+                assertThat(limiter.tryAcquire("c", "198.51.100.1")).isFalse();
+                assertThat(limiter.tryAcquire("d", "198.51.100.2")).isTrue();
+                assertThat(limiter.tryAcquire("e", "198.51.100.3")).isFalse();
+            });
+    }
+
     private void assertChatIsOff(AssertableWebApplicationContext context) {
         assertThat(context).doesNotHaveBean(ChatConfiguration.class);
         assertThat(context).doesNotHaveBean(ChatProperties.class);
