@@ -2,7 +2,8 @@ import { keyframes, style, styleVariants } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 import { DESKTOP_MEDIA, MOTION_MEDIA } from "../chatLayout";
 
-const SLOT_RIGHT = "18px";
+const SLOT_RIGHT = "30px";
+const SLOT_BOTTOM = "36px";
 const SLOT_HEIGHT = "44px";
 const PEEK_WIDTH = "168px";
 const TEASER_PEEK_MAX_WIDTH = "min(260px, calc(100vw - 36px))";
@@ -19,7 +20,7 @@ const HOVER_MEDIA = "(hover: hover) and (pointer: fine)";
 export const slot = style({
   position: "absolute",
   right: SLOT_RIGHT,
-  bottom: "calc(env(safe-area-inset-bottom, 0px) + 4px)",
+  bottom: `calc(env(safe-area-inset-bottom, 0px) + ${SLOT_BOTTOM})`,
   display: "flex",
   height: SLOT_HEIGHT,
   alignItems: "flex-start",
