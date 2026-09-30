@@ -9,8 +9,8 @@ interface SheetHeaderProps {
   nickname: string | null;
   stalled: boolean;
   dragHandlers: SheetDragHandlers;
-  onToggleSize: () => void;
-  onCollapse: () => void;
+  onToggleSize: (restoreFocus: boolean) => void;
+  onCollapse: (restoreFocus: boolean) => void;
 }
 
 export function SheetHeader({
@@ -27,7 +27,12 @@ export function SheetHeader({
   return (
     <header className={styles.header} {...dragHandlers}>
       <div className={styles.grabberRow[position]}>
-        <button type="button" className={styles.grabber} aria-label={sizeToggleLabel(position)} onClick={onToggleSize}>
+        <button
+          type="button"
+          className={styles.grabber}
+          aria-label={sizeToggleLabel(position)}
+          onClick={(event) => onToggleSize(event.detail === 0)}
+        >
           <span className={styles.grabberBar} aria-hidden="true" />
         </button>
       </div>
@@ -38,7 +43,12 @@ export function SheetHeader({
           </h2>
           {subtitle !== null && <p className={styles.subtitle}>{subtitle}</p>}
         </div>
-        <button type="button" className={styles.collapseButton} aria-label={COLLAPSE_LABEL} onClick={onCollapse}>
+        <button
+          type="button"
+          className={styles.collapseButton}
+          aria-label={COLLAPSE_LABEL}
+          onClick={(event) => onCollapse(event.detail === 0)}
+        >
           <ChevronDownIcon />
         </button>
       </div>

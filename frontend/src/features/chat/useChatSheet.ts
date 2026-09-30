@@ -16,17 +16,17 @@ export function useChatSheet() {
     positionRef.current = position;
   }, [position]);
 
-  const collapse = useCallback(() => {
+  const collapse = useCallback((restoreFocus: boolean) => {
     const sheet = sheetRef.current;
     if (sheet !== null) stopSheetHeightTransition(sheet);
     setLayout((current) => ({ ...current, open: false }));
-    window.setTimeout(() => launcherRef.current?.focus(), 0);
+    if (restoreFocus) window.setTimeout(() => launcherRef.current?.focus(), 0);
   }, []);
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || positionRef.current === "collapsed") return;
-      collapse();
+      collapse(true);
     };
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
@@ -44,13 +44,12 @@ export function useChatSheet() {
 
   function settle(next: SheetLayout) {
     setLayout(next);
-    if (!next.open) window.setTimeout(() => launcherRef.current?.focus(), 0);
   }
 
-  function toggleSize() {
+  function toggleSize(restoreFocus: boolean) {
     const larger = nextLargerSnap(layout.snap);
     if (!layout.open || larger === null) {
-      collapse();
+      collapse(restoreFocus);
       return;
     }
     const sheet = sheetRef.current;

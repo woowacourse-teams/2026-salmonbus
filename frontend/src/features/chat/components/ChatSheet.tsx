@@ -16,8 +16,8 @@ interface ChatSheetProps {
   displayName: string;
   nickname: string | null;
   onSettle: (next: SheetLayout) => void;
-  onToggleSize: () => void;
-  onCollapse: () => void;
+  onToggleSize: (restoreFocus: boolean) => void;
+  onCollapse: (restoreFocus: boolean) => void;
   children: ReactNode;
 }
 
