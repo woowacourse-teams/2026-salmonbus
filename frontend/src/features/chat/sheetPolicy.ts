@@ -1,4 +1,4 @@
-export type SheetSnap = "quarter" | "half" | "full";
+export type SheetSnap = "half" | "full";
 export type SheetPosition = "collapsed" | SheetSnap;
 
 export interface SheetLayout {
@@ -18,20 +18,14 @@ const HALF_MIN_PX = 280;
 const HALF_MAX_PX = 560;
 const HALF_VIEWPORT_RATIO = 0.52;
 const HALF_TOP_CLEARANCE_PX = 120;
-const QUARTER_MIN_PX = 216;
 const INTENT_DISTANCE_PX = 24;
 const OVERDRAG_RATIO = 0.25;
 const OVERDRAG_MAX_PX = 24;
-const SNAPS_BOTTOM_UP: readonly SheetSnap[] = ["quarter", "half", "full"];
+const SNAPS_BOTTOM_UP: readonly SheetSnap[] = ["half", "full"];
 
 export function halfSheetHeight(viewportHeight: number): number {
   const preferred = Math.min(Math.max(HALF_MIN_PX, viewportHeight * HALF_VIEWPORT_RATIO), HALF_MAX_PX);
   return Math.round(Math.max(0, Math.min(preferred, viewportHeight - HALF_TOP_CLEARANCE_PX)));
-}
-
-export function quarterSheetHeight(viewportHeight: number): number {
-  const half = halfSheetHeight(viewportHeight);
-  return Math.max(Math.min(QUARTER_MIN_PX, half), Math.round(half / 2));
 }
 
 export function sheetHeight(snap: SheetSnap, viewportHeight: number): number {
@@ -40,8 +34,6 @@ export function sheetHeight(snap: SheetSnap, viewportHeight: number): number {
       return Math.round(viewportHeight);
     case "half":
       return halfSheetHeight(viewportHeight);
-    case "quarter":
-      return quarterSheetHeight(viewportHeight);
   }
 }
 
@@ -78,9 +70,7 @@ interface SheetStop {
 }
 
 function sheetStops(viewportHeight: number): SheetStop[] {
-  const opened = SNAPS_BOTTOM_UP.filter(
-    (snap) => snap !== "quarter" || quarterSheetHeight(viewportHeight) < halfSheetHeight(viewportHeight),
-  ).map((snap) => ({ snap, height: sheetHeight(snap, viewportHeight) }));
+  const opened = SNAPS_BOTTOM_UP.map((snap) => ({ snap, height: sheetHeight(snap, viewportHeight) }));
   return [{ snap: null, height: 0 }, ...opened];
 }
 

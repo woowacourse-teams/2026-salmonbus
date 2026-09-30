@@ -82,7 +82,6 @@ describe("sizeToggleLabel", () => {
   it("전체로 열려 있으면 접기로, 그 밖에는 크게 보기로 안내한다", () => {
     expect(sizeToggleLabel("full")).toBe("채팅 접기");
     expect(sizeToggleLabel("half")).toBe("채팅 크게 보기");
-    expect(sizeToggleLabel("quarter")).toBe("채팅 크게 보기");
   });
 });
 

@@ -34,7 +34,6 @@ const grabberRowBase = style({
 
 export const grabberRow = styleVariants({
   collapsed: [grabberRowBase],
-  quarter: [grabberRowBase],
   half: [grabberRowBase],
   full: [
     grabberRowBase,

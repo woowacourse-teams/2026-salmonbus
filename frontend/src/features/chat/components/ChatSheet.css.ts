@@ -71,7 +71,6 @@ const openSheet = style([
 ]);
 
 export const sheet = styleVariants({
-  quarter: [openSheet],
   half: [openSheet],
   full: [
     sheetBase,
