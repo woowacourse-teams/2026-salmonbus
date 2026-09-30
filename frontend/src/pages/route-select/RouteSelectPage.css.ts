@@ -193,13 +193,13 @@ export const routeButton = style({
 
 export const routeNumber = style({
   flexShrink: 0,
-  minWidth: "78px",
+  minWidth: "94px",
   color: ink,
   fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-  fontSize: "30px",
+  fontSize: "36px",
   fontWeight: 800,
   lineHeight: 1.2,
-  letterSpacing: "-1.4px",
+  letterSpacing: "-1.7px",
 });
 
 export const routeDirection = style({
