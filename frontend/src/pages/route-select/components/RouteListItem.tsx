@@ -19,8 +19,8 @@ export function RouteListItem({ route, onSelect }: RouteListItemProps) {
         <span className={styles.routeDirection}>
           <span className={styles.routeLine} />
           <span className={styles.stopNames}>
-            <span className={styles.startStopName}>{route.startStopName}</span>
-            <span className={styles.endStopName}>{route.endStopName}</span>
+            <span className={styles.stopName}>{route.startStopName}</span>
+            <span className={styles.stopName}>{route.endStopName}</span>
           </span>
         </span>
       </button>

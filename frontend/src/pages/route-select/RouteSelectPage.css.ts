@@ -245,28 +245,13 @@ export const stopNames = style({
   minWidth: 0,
 });
 
-const stopName = style({
+export const stopName = style({
   overflow: "hidden",
+  color: mutedInk,
   fontFamily: "'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif",
+  fontSize: "12.5px",
+  fontWeight: 500,
   lineHeight: 1.3,
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 });
-
-export const startStopName = style([
-  stopName,
-  {
-    color: mutedInk,
-    fontSize: "12.5px",
-    fontWeight: 500,
-  },
-]);
-
-export const endStopName = style([
-  stopName,
-  {
-    color: ink,
-    fontSize: "13.5px",
-    fontWeight: 700,
-  },
-]);
