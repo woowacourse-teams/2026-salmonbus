@@ -11,7 +11,7 @@ import {
   type ChatFrame,
   type ChatSocket,
 } from "./fixtures/chat";
-import { routeId as nonChatRouteId } from "./fixtures/mock-data";
+import { routeId as unsupportedRouteId } from "./fixtures/mock-data";
 
 const phoneViewport = { width: 390, height: 844 };
 
@@ -244,17 +244,17 @@ test("채팅 대상 노선에서 켜짐 확인이 404면 채팅 화면, 청크, 
   expect(chat.sockets).toEqual([]);
 });
 
-test("채팅 대상이 아닌 노선에서는 켜짐 확인을 요청하지 않는다", async ({ page, api, chat }) => {
+test("서버가 지원하지 않는 노선은 켜짐 확인 뒤 채팅을 숨긴다", async ({ page, api, chat }) => {
   // given
   chat.enabled = true;
 
   // when
-  await page.goto(`/routes/${nonChatRouteId}`);
+  await page.goto(`/routes/${unsupportedRouteId}`);
   await expect(page.getByRole("heading", { name: api.data.board.route.displayName, exact: true })).toBeVisible();
   await settleAfterLoad(page);
 
   // then
-  expect(chat.requests).toEqual([]);
+  expect(new Set(chat.requests)).toEqual(new Set([`GET /api/chat/rooms/${unsupportedRouteId}`]));
   await expect(chatElements(page)).toHaveCount(0);
   expect(chat.scripts.filter(isChatChunk)).toEqual([]);
   expect(chat.sockets).toEqual([]);
@@ -752,3 +752,75 @@ test("채팅을 열지 않아도 남이 보낸 새 메시지가 오면 알약에
   await expect(unreadLauncher).toBeVisible();
   await expect(unreadLauncher).toContainText(incoming.body);
 });
+
+for (const [routeId, displayName] of [
+  ["204000070", "9007"],
+  ["234000886", "9300"],
+  ["233000392", "6011"],
+  ["227000038", "3000"],
+  ["228000184", "5600"],
+  ["234000051", "3500"],
+]) {
+  test(`${displayName} 노선도 서버 응답으로 채팅을 열고 메시지를 보낸다`, async ({ page, api, chat }) => {
+    await page.route("**/api/**", async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      const prefix = `/api/v1/routes/${routeId}`;
+      if (path === `/api/chat/rooms/${routeId}`) {
+        await route.fulfill({
+          status: 200,
+          headers: { "Cache-Control": "no-store" },
+          json: { ...chatAvailability, routeId, displayName },
+        });
+      } else if (path === `${prefix}/board` || path === `${prefix}/vehicles`) {
+        const now = await page.evaluate(() => Date.now());
+        await route.fulfill({
+          status: 200,
+          headers: { Date: new Date(now).toUTCString(), "Cache-Control": "public, max-age=60" },
+          json:
+            path === `${prefix}/board`
+              ? { ...api.data.board, route: { ...api.data.board.route, id: routeId, displayName } }
+              : { ...api.data.vehicles, routeId },
+        });
+      } else {
+        await route.fallback();
+      }
+    });
+
+    await page.goto(`/routes/${routeId}`);
+    const button = page.getByRole("button", { name: `${displayName} 채팅 열기`, exact: true });
+    await expect
+      .poll(async () => {
+        await page.clock.runFor(100);
+        return button.count();
+      })
+      .toBe(1);
+    await expect(button).toBeVisible();
+    await expect
+      .poll(async () => {
+        await page.clock.runFor(10);
+        return chat.sockets.length;
+      })
+      .toBe(1);
+    const socket = chat.sockets[0]!;
+    expect(socket.path).toBe(`/api/chat/rooms/${routeId}/stream`);
+    await expect
+      .poll(async () => {
+        await page.clock.runFor(10);
+        return socket.received.length;
+      })
+      .toBe(1);
+    expect(socket.received[0]).toMatchObject({ v: 1, type: "session.start" });
+    socket.send(serverFrames["session.ready"]);
+    socket.send(serverFrames["history.end"]);
+    await expect(sheet(page)).toHaveAttribute("data-connection", "ready");
+    await button.click();
+    await page.getByRole("textbox", { name: "메시지", exact: true }).fill(sentBody);
+    await page.getByRole("button", { name: "메시지 보내기", exact: true }).click();
+    await expect.poll(() => socket.received.length).toBe(2);
+    const sent = socket.received[1] as { clientMessageId: string; body: string };
+    expect(sent.body).toBe(sentBody);
+    socket.send({ ...serverFrames["message.ack"], clientMessageId: sent.clientMessageId });
+    await expect(page.getByRole("log", { name: `${displayName} 채팅 메시지`, exact: true })).toContainText(sentBody);
+    await expect(sheet(page).getByText("보내는 중", { exact: true })).toHaveCount(0);
+  });
+}

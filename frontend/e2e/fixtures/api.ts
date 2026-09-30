@@ -29,6 +29,10 @@ export const test = base.extend<{ api: MockApi }>({
       await page.route("**/api/**", async (route) => {
         const request = route.request();
         const path = new URL(request.url()).pathname;
+        if (request.method() === "GET" && /^\/api\/chat\/rooms\/[^/]+$/.test(path)) {
+          await route.fulfill({ status: 404, headers: { "Cache-Control": "no-store" } });
+          return;
+        }
         const endpoint = (Object.keys(apiPaths) as Endpoint[]).find((key) => apiPaths[key] === path);
         if (endpoint === undefined || request.method() !== "GET") {
           unexpectedRequests.push(`${request.method()} ${path}`);

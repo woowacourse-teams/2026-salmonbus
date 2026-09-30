@@ -20,8 +20,6 @@ const ChatWidget = lazy(async () => {
   return { default: module.ChatWidget };
 });
 
-const CHAT_ROUTE_IDS = new Set(["204000057", "234000050"]);
-
 export function ChatGate() {
   return (
     <ChatErrorBoundary>
@@ -34,7 +32,7 @@ function ChatRouteGate() {
   const match = useMatch(paths.board);
   const routeId = match?.params.routeId ?? null;
 
-  if (routeId === null || !CHAT_ROUTE_IDS.has(routeId)) return null;
+  if (routeId === null) return null;
   return <ChatAvailabilityGate key={routeId} routeId={routeId} />;
 }
 
