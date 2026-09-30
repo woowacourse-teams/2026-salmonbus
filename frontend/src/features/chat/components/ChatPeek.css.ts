@@ -1,17 +1,17 @@
 import { keyframes, style, styleVariants } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 import { DESKTOP_MEDIA, MOTION_MEDIA } from "../chatLayout";
+import { REVEAL_DELAY_MS, REVEAL_FADE_MS, RESIZING_ATTRIBUTE } from "../peekMotion";
 
 const SLOT_RIGHT = "30px";
 const SLOT_BOTTOM = "36px";
 const SLOT_HEIGHT = "44px";
-const PEEK_WIDTH = "168px";
-const TEASER_PEEK_MAX_WIDTH = "min(260px, calc(100vw - 36px))";
+const PEEK_MAX_WIDTH = "min(260px, calc(100vw - 36px))";
 const PEEK_HEIGHT = "36px";
 const PEEK_RADIUS = "18px";
 const PEEK_SHADOW = "0 4px 16px rgba(17, 17, 17, 0.12)";
 const PEEK_FONT = "600 13px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-const ICON_SIZE = "15px";
+const ICON_SIZE = "18px";
 const BADGE_SIZE = "17px";
 const BADGE_RADIUS = "9px";
 const PRESS = 0.97;
@@ -33,10 +33,11 @@ export const slot = style({
 const launcherBase = style({
   display: "flex",
   alignItems: "center",
+  maxWidth: PEEK_MAX_WIDTH,
   height: PEEK_HEIGHT,
   gap: "5px",
   margin: 0,
-  padding: "0 10px 0 12px",
+  overflow: "hidden",
   border: `1px solid ${vars.color.cardBorder}`,
   borderRadius: PEEK_RADIUS,
   background: vars.color.surface,
@@ -46,6 +47,7 @@ const launcherBase = style({
   cursor: "pointer",
   WebkitTapHighlightColor: "transparent",
   selectors: {
+    [`&[${RESIZING_ATTRIBUTE}]`]: { maxWidth: "none" },
     "&:active": { scale: `${PRESS}` },
     "&:focus-visible": { outline: `2px solid ${vars.color.focusRing}`, outlineOffset: "2px" },
   },
@@ -62,32 +64,45 @@ const launcherBase = style({
 });
 
 export const launcher = styleVariants({
-  plain: [launcherBase, { width: PEEK_WIDTH }],
-  teasing: [launcherBase, { minWidth: PEEK_WIDTH, maxWidth: TEASER_PEEK_MAX_WIDTH }],
+  plain: [launcherBase, { padding: "0 13px 0 10px" }],
+  unread: [launcherBase, { padding: "0 10px" }],
 });
 
-const teaserIn = keyframes({
+const fadeIn = keyframes({
   from: { opacity: 0 },
   to: { opacity: 1 },
 });
 
-export const teaser = style({
+const WHILE_RESIZING = `[${RESIZING_ATTRIBUTE}] &`;
+const REVEAL_AFTER_RESIZE = `${fadeIn} ${REVEAL_FADE_MS}ms linear ${REVEAL_DELAY_MS}ms both`;
+
+export const label = style({
   overflow: "hidden",
   minWidth: 0,
-  flex: 1,
-  color: vars.color.textSubtle,
-  fontWeight: 500,
+  flex: "0 1 auto",
   textAlign: "left",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
-  "@media": {
-    [MOTION_MEDIA]: {
-      animation: `${teaserIn} ${vars.duration.base} ease-out`,
-    },
-  },
 });
 
+export const teaser = style([
+  label,
+  {
+    color: vars.color.textSubtle,
+    fontWeight: 500,
+    "@media": {
+      [MOTION_MEDIA]: {
+        animation: `${fadeIn} ${vars.duration.base} ease-out`,
+        selectors: {
+          [WHILE_RESIZING]: { animation: REVEAL_AFTER_RESIZE },
+        },
+      },
+    },
+  },
+]);
+
 export const icon = style({
+  flexShrink: 0,
   width: ICON_SIZE,
   height: ICON_SIZE,
   fill: "none",
@@ -95,12 +110,10 @@ export const icon = style({
   strokeWidth: 1.9,
 });
 
-export const route = style({ fontVariantNumeric: "tabular-nums" });
-
-export const spacer = style({ flex: 1 });
-
 export const unreadBadge = style({
   display: "grid",
+  flexShrink: 0,
+  marginLeft: "auto",
   minWidth: BADGE_SIZE,
   height: BADGE_SIZE,
   padding: "0 5px",
@@ -110,4 +123,11 @@ export const unreadBadge = style({
   color: vars.color.onInk,
   fontSize: "11px",
   fontWeight: 700,
+  "@media": {
+    [MOTION_MEDIA]: {
+      selectors: {
+        [WHILE_RESIZING]: { animation: REVEAL_AFTER_RESIZE },
+      },
+    },
+  },
 });

@@ -1,5 +1,6 @@
-import type { RefObject } from "react";
+import { useRef, type RefObject } from "react";
 import { CHAT_NAME, launcherLabel } from "../chatCopy";
+import { usePeekResize } from "../usePeekResize";
 import * as styles from "./ChatPeek.css";
 
 interface ChatPeekProps {
@@ -14,27 +15,25 @@ interface ChatPeekProps {
 const MAX_UNREAD_BADGE = 99;
 
 export function ChatPeek({ launcherRef, sheetId, displayName, unread, teaser, onOpen }: ChatPeekProps) {
+  const labelRef = useRef<HTMLSpanElement | null>(null);
+  const label = teaser ?? CHAT_NAME;
+  usePeekResize(launcherRef, labelRef, `${label}:${unread}`);
+
   return (
     <div className={styles.slot}>
       <button
         ref={launcherRef}
         type="button"
-        className={styles.launcher[teaser === null ? "plain" : "teasing"]}
+        className={styles.launcher[unread > 0 ? "unread" : "plain"]}
         aria-haspopup="dialog"
         aria-controls={sheetId}
         aria-label={launcherLabel(displayName, unread)}
         onClick={onOpen}
       >
         <MessageIcon />
-        <span className={styles.route}>{displayName}</span>
-        {teaser === null ? (
-          <>
-            <span>{CHAT_NAME}</span>
-            <span className={styles.spacer} />
-          </>
-        ) : (
-          <span className={styles.teaser}>{teaser}</span>
-        )}
+        <span key={label} ref={labelRef} className={teaser === null ? styles.label : styles.teaser}>
+          {label}
+        </span>
         {unread > 0 && <span className={styles.unreadBadge}>{Math.min(unread, MAX_UNREAD_BADGE)}</span>}
       </button>
     </div>
