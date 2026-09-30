@@ -5,7 +5,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.gustler.backend.api.chat.application.ChatRoomCatalog;
+import com.gustler.backend.api.chat.application.ChatTestRoutes;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -20,7 +20,7 @@ class ChatAvailabilityControllerTest {
 
     @BeforeEach
     void setUp() {
-        ChatAvailabilityHandler handler = new ChatAvailabilityHandler(new ChatRoomCatalog());
+        ChatAvailabilityHandler handler = new ChatAvailabilityHandler(ChatTestRoutes.catalog());
         mockMvc = MockMvcBuilders.routerFunctions(
             RouterFunctions.route()
                 .GET("/api/chat/rooms/{routeId}", handler::availability)

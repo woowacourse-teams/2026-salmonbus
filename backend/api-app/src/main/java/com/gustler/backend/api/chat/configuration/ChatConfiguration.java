@@ -3,12 +3,14 @@ package com.gustler.backend.api.chat.configuration;
 import com.gustler.backend.api.chat.application.ChatIdentityService;
 import com.gustler.backend.api.chat.application.ChatMessageRepository;
 import com.gustler.backend.api.chat.application.ChatRoomCatalog;
+import com.gustler.backend.api.chat.application.ChatRouteSource;
 import com.gustler.backend.api.chat.application.ChatService;
 import com.gustler.backend.api.chat.controller.ChatAvailabilityHandler;
 import com.gustler.backend.api.chat.controller.ChatClientAddressInterceptor;
 import com.gustler.backend.api.chat.controller.ChatConnectionLimiter;
 import com.gustler.backend.api.chat.controller.ChatFrameCodec;
 import com.gustler.backend.api.chat.controller.ChatWebSocketHandler;
+import com.gustler.backend.api.chat.infrastructure.jdbc.JdbcChatRouteSource;
 import com.gustler.backend.api.chat.infrastructure.mongo.ChatMongoClientSettings;
 import com.gustler.backend.api.chat.infrastructure.mongo.MongoChatMessageRepository;
 import com.mongodb.client.MongoClient;
@@ -20,6 +22,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
@@ -54,8 +57,13 @@ public class ChatConfiguration {
     }
 
     @Bean
-    ChatRoomCatalog chatRoomCatalog() {
-        return new ChatRoomCatalog();
+    JdbcChatRouteSource chatRouteSource(JdbcClient jdbcClient) {
+        return new JdbcChatRouteSource(jdbcClient);
+    }
+
+    @Bean
+    ChatRoomCatalog chatRoomCatalog(ChatRouteSource chatRouteSource, Clock clock) {
+        return new ChatRoomCatalog(chatRouteSource, clock);
     }
 
     @Bean

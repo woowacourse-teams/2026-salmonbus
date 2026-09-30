@@ -10,7 +10,7 @@ import static org.mockito.Mockito.verify;
 
 import com.gustler.backend.api.chat.application.ChatIdentityService;
 import com.gustler.backend.api.chat.application.ChatMessageRepository;
-import com.gustler.backend.api.chat.application.ChatRoomCatalog;
+import com.gustler.backend.api.chat.application.ChatTestRoutes;
 import com.gustler.backend.api.chat.application.ChatService;
 import com.gustler.backend.api.chat.domain.ChatMessage;
 import jakarta.websocket.Session;
@@ -572,7 +572,7 @@ class ChatWebSocketHandlerTest {
 
     private ChatWebSocketHandler handler(ChatMessageRepository repository, Clock clock) {
         return new ChatWebSocketHandler(
-            new ChatRoomCatalog(),
+            ChatTestRoutes.catalog(),
             new ChatIdentityService(),
             new ChatService(repository, clock),
             new ChatFrameCodec(JsonMapper.builder().findAndAddModules().build()),

@@ -3,6 +3,7 @@ package com.gustler.backend.api.chat.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.gustler.backend.api.chat.configuration.ChatTestRoutesConfiguration;
 import com.gustler.backend.support.PostgresTestContainer;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -23,7 +24,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.socket.CloseStatus;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import(PostgresTestContainer.class)
+@Import({PostgresTestContainer.class, ChatTestRoutesConfiguration.class})
 @DirtiesContext
 class ChatMongoUnavailableIntegrationTest {
 

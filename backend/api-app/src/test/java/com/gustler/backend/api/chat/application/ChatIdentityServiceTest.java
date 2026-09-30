@@ -19,7 +19,7 @@ class ChatIdentityServiceTest {
     );
 
     private final ChatIdentityService service = new ChatIdentityService();
-    private final ChatRoomCatalog catalog = new ChatRoomCatalog();
+    private final ChatRoomCatalog catalog = ChatTestRoutes.catalog();
 
     @Test
     void 같은_노선과_세션은_같은_익명_신원을_만든다() {

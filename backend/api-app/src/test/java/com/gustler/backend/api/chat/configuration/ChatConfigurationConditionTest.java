@@ -24,6 +24,7 @@ import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.core.env.MapPropertySource;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.server.standard.ServletServerContainerFactoryBean;
 import tools.jackson.databind.ObjectMapper;
@@ -39,6 +40,7 @@ class ChatConfigurationConditionTest {
         .withUserConfiguration(ChatConfiguration.class)
         .withBean(ObjectMapper.class, () -> JsonMapper.builder().build())
         .withBean(Clock.class, Clock::systemUTC)
+        .withBean(JdbcClient.class, () -> mock(JdbcClient.class))
         .withInitializer(context -> context.getServletContext()
             .setAttribute(ServerContainer.class.getName(), mock(ServerContainer.class)));
 

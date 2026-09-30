@@ -3,6 +3,7 @@ package com.gustler.backend.api.chat.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.api.chat.application.ChatMessageRepository;
+import com.gustler.backend.api.chat.configuration.ChatTestRoutesConfiguration;
 import com.gustler.backend.api.chat.domain.ChatMessage;
 import com.gustler.backend.api.chat.infrastructure.mongo.ChatMongoContainer;
 import com.gustler.backend.support.PostgresTestContainer;
@@ -31,7 +32,7 @@ import tools.jackson.databind.JsonNode;
 
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import(PostgresTestContainer.class)
+@Import({PostgresTestContainer.class, ChatTestRoutesConfiguration.class})
 @DirtiesContext
 class ChatWebSocketMongoIntegrationTest {
 

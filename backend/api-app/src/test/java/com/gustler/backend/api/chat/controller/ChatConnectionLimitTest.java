@@ -8,7 +8,7 @@ import static org.mockito.Mockito.mock;
 
 import com.gustler.backend.api.chat.application.ChatIdentityService;
 import com.gustler.backend.api.chat.application.ChatMessageRepository;
-import com.gustler.backend.api.chat.application.ChatRoomCatalog;
+import com.gustler.backend.api.chat.application.ChatTestRoutes;
 import com.gustler.backend.api.chat.application.ChatService;
 import com.gustler.backend.api.chat.domain.ChatMessage;
 import java.net.URI;
@@ -39,7 +39,7 @@ class ChatConnectionLimitTest {
     private final Map<String, CloseStatus> closed = new ConcurrentHashMap<>();
     private final MutableClock clock = new MutableClock(Instant.parse("2026-09-29T13:21:34.127Z"));
     private final ChatWebSocketHandler handler = new ChatWebSocketHandler(
-        new ChatRoomCatalog(),
+        ChatTestRoutes.catalog(),
         new ChatIdentityService(),
         new ChatService(new EmptyRepository(), clock),
         new ChatFrameCodec(JsonMapper.builder().build()),
