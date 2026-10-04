@@ -1,14 +1,13 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { track } from "@/shared/analytics/track";
-import type { ReferenceClock } from "@/shared/api/referenceClock";
+import type { LastSuccess } from "@/shared/api/polledResource";
 import type { BoardScreen } from "../displayPolicy";
 import { nextBoardVisitStep, type BoardVisit } from "./boardVisitPolicy";
 
 interface Params {
   routeId: string;
   screen: BoardScreen;
-  receivedAt: number | null;
-  clock: ReferenceClock | null;
+  lastSuccess: LastSuccess<unknown> | null;
 }
 
 function subscribeVisibility(onChange: () => void) {
@@ -20,7 +19,7 @@ function isDocumentVisible() {
   return document.visibilityState === "visible";
 }
 
-export function useBoardVisitEvents({ routeId, screen, receivedAt, clock }: Params) {
+export function useBoardVisitEvents({ routeId, screen, lastSuccess }: Params) {
   const visible = useSyncExternalStore(subscribeVisibility, isDocumentVisible);
   const visitRef = useRef<BoardVisit | null>(null);
 
@@ -28,9 +27,9 @@ export function useBoardVisitEvents({ routeId, screen, receivedAt, clock }: Para
     const step = nextBoardVisitStep(visitRef.current, {
       routeId,
       screen,
-      receivedAt,
+      receivedAt: lastSuccess?.receivedAt ?? null,
       visible,
-      serverNow: clock?.now() ?? Date.now(),
+      serverNow: lastSuccess?.clock?.now() ?? Date.now(),
       elapsedNow: performance.now(),
       wallNow: Date.now(),
     });
@@ -39,5 +38,5 @@ export function useBoardVisitEvents({ routeId, screen, receivedAt, clock }: Para
     if (step.event !== null) {
       track(step.event.name, step.event.properties);
     }
-  }, [routeId, screen, receivedAt, clock, visible]);
+  }, [routeId, screen, lastSuccess, visible]);
 }

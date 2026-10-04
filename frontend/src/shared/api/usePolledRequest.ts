@@ -2,23 +2,12 @@ import { useEffect, useState } from "react";
 import type { ApiResult } from "./client";
 import { createLatestRequestGate } from "./latestRequestGate";
 import { nextPollFrom } from "./pollSchedule";
-import type { ReferenceClock } from "./referenceClock";
+import { nextResourceFrom, PENDING_RESOURCE, type PolledResource } from "./polledResource";
 
-export interface PolledResource<T> {
-  result: ApiResult<T> | null;
-  // 마지막으로 성공한 본문. 갱신이 실패해도 남는다.
-  body: T | null;
-  // body를 받은 성공 응답의 서버 기준 시계. 갱신 실패 뒤에도 body와 함께 남는다.
-  clock: ReferenceClock | null;
-  // body를 받은 로컬 수신 시각. 서버 Date 헤더가 없을 때 시계 대신 쓰고, 새 응답이 왔는지 가릴 때도 쓴다.
-  receivedAt: number | null;
-}
-
-interface PolledState<T> extends PolledResource<T> {
+interface PolledState<T> {
   key: string;
+  resource: PolledResource<T>;
 }
-
-const EMPTY = { result: null, body: null, clock: null, receivedAt: null };
 
 export function usePolledRequest<T>(
   request: (key: string, signal: AbortSignal) => Promise<ApiResult<T>>,
@@ -47,17 +36,10 @@ export function usePolledRequest<T>(
         }
 
         const receivedAt = Date.now();
-        setState((previous) => {
-          const retained = previous?.key === key ? previous : EMPTY;
-
-          return {
-            key,
-            result,
-            body: result.ok ? result.body : retained.body,
-            clock: result.ok ? result.clock : retained.clock,
-            receivedAt: result.ok ? receivedAt : retained.receivedAt,
-          };
-        });
+        setState((previous) => ({
+          key,
+          resource: nextResourceFrom(previous?.key === key ? previous.resource : PENDING_RESOURCE, result, receivedAt),
+        }));
 
         const decision = nextPollFrom(result);
         if (decision.kind === "again" && document.visibilityState === "visible") {
@@ -87,5 +69,5 @@ export function usePolledRequest<T>(
     };
   }, [request, key]);
 
-  return state?.key === key ? state : EMPTY;
+  return state?.key === key ? state.resource : PENDING_RESOURCE;
 }
