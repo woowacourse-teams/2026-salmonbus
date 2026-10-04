@@ -1,3 +1,4 @@
+import { errorTrackingRootOptions } from "@/app/initErrorTracking";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "@/shared/styles/reset.css";
@@ -11,7 +12,7 @@ if (!container) {
 
 initAnalytics();
 
-createRoot(container).render(
+createRoot(container, errorTrackingRootOptions).render(
   <StrictMode>
     <App />
   </StrictMode>,
