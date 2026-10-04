@@ -5,6 +5,11 @@ env:
   variables:
     S3_BASE: "s3://techcourse-project-2026/salmonbus"
     CLOUDFRONT_DISTRIBUTION_ID: "E1SSFHW3MNNQB8"
+    WEBPACK_SENTRY_DSN: "https://4eb32e04e084d18d6d72c204ddc65c5e@o4512197658083328.ingest.us.sentry.io/4512197664833536"
+    WEBPACK_SENTRY_ENVIRONMENT: "production"
+    SENTRY_ORG: "salmonbus"
+    SENTRY_PROJECT: "salmonbus-fe"
+    SENTRY_UPLOAD_SOURCEMAPS: "true"
 
 phases:
   install:
@@ -16,6 +21,8 @@ phases:
     commands:
       # Amplitude 키 없이 빌드하면 운영에서 행동 이벤트가 하나도 쌓이지 않으므로 배포 전에 멈춘다
       - test -n "$WEBPACK_AMPLITUDE_API_KEY"
+      # 인증 토큰은 CodeBuild의 비밀 환경변수로 설정한다. 값은 로그에 출력하지 않는다.
+      - test -n "$SENTRY_AUTH_TOKEN"
       - cd "${CODEBUILD_SRC_DIR}/frontend"
       - pnpm install --frozen-lockfile
       - pnpm typecheck
@@ -33,7 +40,7 @@ phases:
       - cd "${CODEBUILD_SRC_DIR}/frontend"
       - APP_VERSION="$(echo "$CODEBUILD_RESOLVED_SOURCE_VERSION" | cut -c1-7)"
       # 업로드 순서 (SAL-100 결정2): assets → releases 사본 → index.html → CloudFront 무효화
-      - aws s3 sync dist/assets "${S3_BASE}/assets" --cache-control "public, max-age=31536000, immutable"
+      - aws s3 sync dist/assets "${S3_BASE}/assets" --exclude "*.map" --cache-control "public, max-age=31536000, immutable"
       - aws s3 cp "dist/index.html" "${S3_BASE}/releases/index-${APP_VERSION}.html" --cache-control "no-cache" --content-type "text/html"
       - aws s3 cp "dist/index.html" "${S3_BASE}/index.html" --cache-control "no-cache" --content-type "text/html"
       - aws cloudfront create-invalidation --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}" --paths "/*"
