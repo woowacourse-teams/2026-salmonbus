@@ -44,13 +44,47 @@ export interface ApiError {
 
 export type ApiResult<T> = ApiSuccess<T> | ApiError;
 
+export interface ApiFailureDetails {
+  endpoint?: string;
+  tags?: Record<string, string>;
+  abortReason?: unknown;
+  responseBody?: string;
+  contentType?: string | null;
+}
+
+export type ApiFailureReporter = (url: string, failure: ApiFailure, details: ApiFailureDetails) => void;
+
+let failureReporter: ApiFailureReporter | null = null;
+
+// 앱 초기화에서 연결한다. 로컬 개발·테스트에서는 기본적으로 보고하지 않는다.
+export function initApiFailureReporter(reporter: ApiFailureReporter | null): void {
+  failureReporter = reporter;
+}
+
 export interface RequestOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
+  errorContext?: Pick<ApiFailureDetails, "endpoint" | "tags">;
 }
 
 export async function requestJson<T>(url: string, options: RequestOptions = {}): Promise<ApiResult<T>> {
-  if (options.signal?.aborted) return failed({ kind: "aborted" });
+  let responseBody: string | undefined;
+  let contentType: string | null = null;
+  const requestFailureReport = (result: ApiResult<T>): ApiResult<T> => {
+    if (!result.ok && failureReporter) {
+      try {
+        failureReporter(url, result.failure, {
+          ...options.errorContext,
+          abortReason: options.signal?.reason,
+          ...(result.failure.kind === "malformed" && responseBody !== undefined ? { responseBody, contentType } : {}),
+        });
+      } catch {
+        // 수집 실패가 원래 요청 결과나 재시도 동작을 바꾸면 안 된다.
+      }
+    }
+    return result;
+  };
+  if (options.signal?.aborted) return requestFailureReport(failed({ kind: "aborted" }));
 
   const controller = new AbortController();
   const forwardAbort = () => controller.abort(options.signal?.reason);
@@ -60,22 +94,28 @@ export async function requestJson<T>(url: string, options: RequestOptions = {}):
   let response: Response | null = null;
   try {
     response = await fetch(url, { headers: { Accept: "application/json" }, signal: controller.signal });
+    contentType = response.headers.get("content-type");
     const clock = referenceClockFrom(response.headers);
     const infrastructureFailure = infrastructureFailureOf(response, clock);
     if (infrastructureFailure !== null) {
-      return failed(infrastructureFailure);
+      return requestFailureReport(failed(infrastructureFailure));
     }
 
-    const body: unknown = await response.json();
-    return interpret<T>(response, body, clock);
+    responseBody = await response.text();
+    const body: unknown = JSON.parse(responseBody);
+    return requestFailureReport(interpret<T>(response, body, clock));
   } catch (cause) {
     if (controller.signal.aborted) {
-      return failed(controller.signal.reason === TIMEOUT_REASON ? { kind: "timeout" } : { kind: "aborted" });
+      return requestFailureReport(
+        failed(controller.signal.reason === TIMEOUT_REASON ? { kind: "timeout" } : { kind: "aborted" }),
+      );
     }
     if (response !== null) {
-      return failed({ kind: "malformed", status: response.status, requestId: requestIdOf(response) });
+      return requestFailureReport(
+        failed({ kind: "malformed", status: response.status, requestId: requestIdOf(response) }),
+      );
     }
-    return failed({ kind: "network", cause });
+    return requestFailureReport(failed({ kind: "network", cause }));
   } finally {
     clearTimeout(timeout);
     options.signal?.removeEventListener("abort", forwardAbort);

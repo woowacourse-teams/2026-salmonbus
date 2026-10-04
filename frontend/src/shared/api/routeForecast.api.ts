@@ -8,9 +8,15 @@ export function fetchRoutes(options?: RequestOptions): Promise<ApiResult<RouteLi
 }
 
 export function fetchBoard(routeId: string, options?: RequestOptions): Promise<ApiResult<Board>> {
-  return requestJson<Board>(`${API_BASE}/routes/${encodeURIComponent(routeId)}/board`, options);
+  return requestJson<Board>(`${API_BASE}/routes/${encodeURIComponent(routeId)}/board`, {
+    ...options,
+    errorContext: { endpoint: "/api/v1/routes/:routeId/board", tags: { route_id: routeId } },
+  });
 }
 
 export function fetchLiveVehicles(routeId: string, options?: RequestOptions): Promise<ApiResult<LiveVehicles>> {
-  return requestJson<LiveVehicles>(`${API_BASE}/routes/${encodeURIComponent(routeId)}/vehicles`, options);
+  return requestJson<LiveVehicles>(`${API_BASE}/routes/${encodeURIComponent(routeId)}/vehicles`, {
+    ...options,
+    errorContext: { endpoint: "/api/v1/routes/:routeId/vehicles", tags: { route_id: routeId } },
+  });
 }
