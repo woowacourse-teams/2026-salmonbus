@@ -46,7 +46,6 @@ export type ApiResult<T> = ApiSuccess<T> | ApiError;
 
 export interface RequestOptions {
   signal?: AbortSignal;
-  timeoutMs?: number;
 }
 
 export async function requestJson<T>(url: string, options: RequestOptions = {}): Promise<ApiResult<T>> {
@@ -55,7 +54,7 @@ export async function requestJson<T>(url: string, options: RequestOptions = {}):
   const controller = new AbortController();
   const forwardAbort = () => controller.abort(options.signal?.reason);
   options.signal?.addEventListener("abort", forwardAbort, { once: true });
-  const timeout = setTimeout(() => controller.abort(TIMEOUT_REASON), options.timeoutMs ?? REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(TIMEOUT_REASON), REQUEST_TIMEOUT_MS);
 
   let response: Response | null = null;
   try {
