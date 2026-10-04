@@ -3,13 +3,21 @@ const { merge } = require("webpack-merge");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const CssMinimizerPlugin = require("css-minimizer-webpack-plugin");
 const common = require("./webpack.common.cjs");
+const { sentryWebpackPlugin } = require("@sentry/webpack-plugin");
+
+const uploadSourceMaps = process.env.SENTRY_UPLOAD_SOURCEMAPS === "true";
+if (uploadSourceMaps) {
+  for (const variable of ["SENTRY_AUTH_TOKEN", "APP_VERSION", "WEBPACK_SENTRY_DSN"]) {
+    if (!process.env[variable]) throw new Error(variable + " is required for the monitored production deployment");
+  }
+}
 
 module.exports = merge(common, {
   mode: "production",
   dotenv: {
     dir: path.resolve(__dirname, "../env"),
   },
-  devtool: "source-map",
+  devtool: "hidden-source-map",
   output: {
     path: path.resolve(__dirname, "../dist"),
     publicPath: "/",
@@ -45,5 +53,20 @@ module.exports = merge(common, {
     new MiniCssExtractPlugin({
       filename: "assets/css/[name].[contenthash:8].css",
     }),
+    ...(uploadSourceMaps
+      ? [
+          sentryWebpackPlugin({
+            org: process.env.SENTRY_ORG ?? "salmonbus",
+            project: process.env.SENTRY_PROJECT ?? "salmonbus-fe",
+            authToken: process.env.SENTRY_AUTH_TOKEN,
+            telemetry: false,
+            release: { name: "salmonbus-fe@" + process.env.APP_VERSION, inject: false },
+            sourcemaps: {
+              assets: "./dist/assets/**",
+              filesToDeleteAfterUpload: ["./dist/**/*.map"],
+            },
+          }),
+        ]
+      : []),
   ],
 });
