@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@amplitude/unified": "^1.1.29",
+    "@sentry/react": "^11.4.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.3.0"
@@ -41,6 +42,7 @@
     "@jest/globals": "^30.5.1",
     "@playwright/test": "^1.63.0",
     "@pmmmwh/react-refresh-webpack-plugin": "^0.6.2",
+    "@sentry/webpack-plugin": "^5.4.0",
     "@storybook/addon-a11y": "^10.6.0",
     "@storybook/addon-docs": "^10.6.0",
     "@storybook/addon-webpack5-compiler-swc": "latest",
