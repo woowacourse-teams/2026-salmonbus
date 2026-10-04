@@ -12,6 +12,7 @@ Group=salmonbus
 # Actuator 를 클라이언트 포트에서 뗀다. 8080 은 밖에 열려 있고 8082 는 루프백에만 묶인다
 Environment=MANAGEMENT_SERVER_PORT=8082
 Environment=MANAGEMENT_SERVER_ADDRESS=127.0.0.1
+Environment=SPRING_PROFILES_INCLUDE=observability
 
 # 값을 유닛에 직접 쓰지 않는다. systemctl cat 과 systemctl show 가 그대로 찍는다.
 # 이 파일은 배포가 안 건드리는 곳에 있다. 아래 Environment= 보다 뒤에 와서 필요하면 덮어쓴다

@@ -100,6 +100,22 @@ class PublishPendingForecastsStalenessTest {
     }
 
     @Test
+    void 저장이_실패해도_처리대상_관측을_먼저_계측한다() {
+        var telemetry = org.mockito.Mockito.mock(com.gustler.backend.forecasting.api.ForecastTelemetry.class);
+        job.setTelemetry(telemetry);
+        when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
+        when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
+        var batch = new com.gustler.backend.forecasting.domain.publication.PendingForecastBatch(
+            10L, ROUTE_VERSION_3330, 1L, NOW.minusSeconds(30));
+        when(vehicleTrajectoryQuery.findBatchesAwaitingForecast(anyLong(), any(), anyInt())).thenReturn(List.of(batch));
+        when(forecastBatchWriter.writeForecastsOf(any(), any(), any())).thenThrow(new IllegalStateException("commit failed"));
+        org.assertj.core.api.Assertions.assertThatThrownBy(job::writeForecasts).isInstanceOf(IllegalStateException.class);
+        var order = inOrder(telemetry, forecastBatchWriter);
+        order.verify(telemetry).pending(ROUTE_VERSION_3330, NOW.minusSeconds(30));
+        order.verify(forecastBatchWriter).writeForecastsOf(any(), any(), any());
+    }
+
+    @Test
     void 신선도_한계를_지금에서_뒤로_물려_묻는다() {
         // given
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));

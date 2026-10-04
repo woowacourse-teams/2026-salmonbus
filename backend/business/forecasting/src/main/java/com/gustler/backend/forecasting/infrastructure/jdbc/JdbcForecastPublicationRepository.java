@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class JdbcForecastPublicationRepository implements ForecastPublicationRepository {
 
     private static final String INSERT_PUBLICATION = """
+        /* salmonbus:forecast_publication.insert_publication */
         INSERT INTO forecast_publication (
             source_batch_id, route_version_id, model_deployment_id,
             demand_statistics_revision, quality_revision, observed_at, generated_at,
@@ -25,6 +26,7 @@ public class JdbcForecastPublicationRepository implements ForecastPublicationRep
         """;
 
     private static final String UPDATE_PUBLICATION = """
+        /* salmonbus:forecast_publication.update_publication */
         UPDATE forecast_publication
         SET model_deployment_id = ?, demand_statistics_revision = ?, quality_revision = ?, observed_at = ?,
             generated_at = ?, published_at = ?, provenance = 'RECORDED'
@@ -37,6 +39,7 @@ public class JdbcForecastPublicationRepository implements ForecastPublicationRep
      * <p>재시도가 같은 판을 두 번 열어도 행이 하나만 남는다.
      */
     private static final String UPSERT_PREDICTION = """
+        /* salmonbus:forecast_publication.upsert_prediction */
         INSERT INTO seat_forecast (
             publication_id, vehicle_observation_id, target_stop_order, route_version_id, stops_to_target,
             model_deployment_id, demand_statistics_revision, seat_full_chance_raw, seat_full_chance,
@@ -56,6 +59,7 @@ public class JdbcForecastPublicationRepository implements ForecastPublicationRep
         """;
 
     private static final String COUNT_PREDICTIONS = """
+        /* salmonbus:forecast_publication.count_predictions */
         UPDATE forecast_publication SET prediction_count = (
             SELECT count(*) FROM seat_forecast forecast
             JOIN vehicle_observation observation ON observation.id = forecast.vehicle_observation_id

@@ -3,6 +3,7 @@ plugins {
 }
 
 dependencies {
+    implementation 'io.micrometer:micrometer-core'
     implementation 'org.springframework.boot:spring-boot-starter-jdbc'
     implementation 'tools.jackson.core:jackson-databind'
     compileOnly 'org.projectlombok:lombok'

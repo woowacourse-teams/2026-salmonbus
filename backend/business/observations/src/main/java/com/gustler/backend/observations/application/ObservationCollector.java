@@ -47,46 +47,72 @@ public class ObservationCollector implements com.gustler.backend.observations.ap
     public void collectOnce(
         String sourceRouteId
     ) {
-        OffsetDateTime scheduledAt = now();
-
-        Optional<RouteReference> routeVersionId = WorkerOperationLog.measure("collection_route_version", sourceRouteId,
-            () -> currentRouteVersion.currentVersionOf(sourceRouteId, scheduledAt));
-        if (routeVersionId.isEmpty()) {
-            WorkerOperationLog.warn("collection_route_version", sourceRouteId, "NO_ROUTE_VERSION");
-            return;
+        try (CollectionAttemptLog attempt = new CollectionAttemptLog(sourceRouteId)) {
+            OffsetDateTime scheduledAt = now();
+            WorkerOperationLog.collectionAttempted(sourceRouteId, scheduledAt.toEpochSecond());
+            try {
+                attempt.stage("ROUTE_VERSION");
+                Optional<RouteReference> reference = WorkerOperationLog.measure("collection_route_version", sourceRouteId,
+                    () -> currentRouteVersion.currentVersionOf(sourceRouteId, scheduledAt));
+                if (reference.isEmpty()) {
+                    WorkerOperationLog.warn("collection_route_version", sourceRouteId, "NO_ROUTE_VERSION");
+                    attempt.finish("DEFERRED", "NO_ROUTE_VERSION");
+                    return;
+                }
+                WorkerOperationLog.recovered("collection_route_version", sourceRouteId);
+                attempt.routeVersion(reference.orElseThrow().routeVersionId());
+                collectOn(reference.orElseThrow().routeVersionId(), sourceRouteId, scheduledAt, attempt);
+            } catch (RuntimeException failure) {
+                attempt.failed(failure);
+                throw failure;
+            }
         }
-
-        WorkerOperationLog.recovered("collection_route_version", sourceRouteId);
-        collectOn(routeVersionId.orElseThrow().routeVersionId(), sourceRouteId, scheduledAt);
     }
 
-    private void collectOn(
-        final long routeVersionId,
-        String sourceRouteId,
-        OffsetDateTime scheduledAt
-    ) {
+    private void collectOn(long routeVersionId, String sourceRouteId, OffsetDateTime scheduledAt,
+                           CollectionAttemptLog attempt) {
+        attempt.stage("RESERVE");
         ObservationBatchReservation reservation = WorkerOperationLog.measure("collection_reserve", sourceRouteId,
             () -> batchLedger.reserve(
-                new CollectionPlan(routeVersionId, scheduledAt, attemptKeyOf(sourceRouteId, scheduledAt)),
-                scheduledAt));
-
+                new CollectionPlan(routeVersionId, scheduledAt, attemptKeyOf(sourceRouteId, scheduledAt)), scheduledAt));
+        attempt.batch(reservation.batchId());
         if (!reservation.reserved()) {
             WorkerOperationLog.warn("collection_quota", sourceRouteId, "DAILY_LIMIT");
+            attempt.finish("DEFERRED", "DAILY_LIMIT");
             return;
         }
-
         OffsetDateTime requestedAt = now();
+        attempt.stage("DISPATCH");
         if (!WorkerOperationLog.measure("collection_dispatch", sourceRouteId,
             () -> batchLedger.markDispatching(reservation.batchId(), scheduledAt, requestedAt, reservation.keyAlias()))) {
             WorkerOperationLog.warn("collection_quota", sourceRouteId, "NEXT_DAY_LIMIT");
+            attempt.finish("DEFERRED", "NEXT_DAY_LIMIT");
             return;
         }
-
         WorkerOperationLog.recovered("collection_quota", sourceRouteId);
+        attempt.stage("UPSTREAM");
+        attempt.resetUpstream();
         ObservationReply reply = observationSource.read(sourceRouteId, reservation.keyAlias());
+        attempt.reply(reply);
+        ObservationReply diagnosed = receivedAt -> {
+            attempt.stage("NORMALIZE");
+            ObservationResponse response = reply.interpret(receivedAt);
+            attempt.response(response);
+            attempt.stage("SAVE_AND_COMMIT");
+            return response;
+        };
+        attempt.stage("SAVE_AND_COMMIT");
         ObservationResponse response = WorkerOperationLog.measure("collection_save_and_commit", sourceRouteId,
-            () -> batchLedger.conclude(reservation.batchId(), reply, now()));
+            () -> batchLedger.conclude(reservation.batchId(), diagnosed, now()));
+        attempt.committed();
+        response.observations().filter(rows -> rows.providerRows() == 0 || !rows.storableRows().isEmpty())
+            .ifPresent(rows -> WorkerOperationLog.collectionCommitted(sourceRouteId,
+                response.receivedAt().toEpochSecond(), rows.storableRows().size()));
+        attempt.stage("KEY_EXCLUSION");
         excludeKeyIfRejected(reservation.keyAlias(), response, requestedAt);
+        attempt.stage(response.observations().isPresent() ? "COMPLETE" : "UPSTREAM_RESULT");
+        attempt.finish(response.observations().isPresent() ? "SUCCESS" : "FAILED",
+            response.conclusion().outcome().name());
     }
 
     private void excludeKeyIfRejected(

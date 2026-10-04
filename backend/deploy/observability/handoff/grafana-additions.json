@@ -1,0 +1,1421 @@
+{
+  "id": null,
+  "uid": "salmonbus-forecast-quality-v1",
+  "title": "Salmonbus 추가 · 예보 품질과 수집 상태",
+  "schemaVersion": 39,
+  "version": 0,
+  "tags": [
+    "salmonbus",
+    "additive-observability"
+  ],
+  "timezone": "Asia/Seoul",
+  "refresh": "1m",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus",
+        "label": "Prometheus 데이터 소스"
+      },
+      {
+        "name": "DS_LOKI",
+        "type": "datasource",
+        "query": "loki",
+        "label": "Loki 데이터 소스"
+      },
+      {
+        "name": "route",
+        "label": "노선 번호 (정규식)",
+        "type": "textbox",
+        "query": ".*",
+        "current": {
+          "text": ".*",
+          "value": ".*"
+        }
+      },
+      {
+        "name": "stop",
+        "label": "정류장 이름 (정규식)",
+        "type": "textbox",
+        "query": ".*",
+        "current": {
+          "text": ".*",
+          "value": ".*"
+        }
+      },
+      {
+        "name": "distance",
+        "label": "예측 거리: 1-3 / 4-6 / 7-12",
+        "type": "textbox",
+        "query": ".*",
+        "current": {
+          "text": ".*",
+          "value": ".*"
+        }
+      },
+      {
+        "name": "model",
+        "label": "모델 배포 ID",
+        "type": "textbox",
+        "query": ".*",
+        "current": {
+          "text": ".*",
+          "value": ".*"
+        }
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "노선별 마지막 배치 커밋 이후",
+      "type": "timeseries",
+      "description": "빈 예보도 포함한 배치 완료. 재시작 후 첫 커밋까지 알 수 없음. 야간 운행 중단과 장애를 구분한다.",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - salmonbus_forecast_last_commit_timestamp{job=\"salmonbus/worker\",route_name=~\"${route:raw}\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{route_name}}번"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "노선별 실제 예보 생성 이후",
+      "type": "timeseries",
+      "description": "예보가 1행 이상인 커밋만 포함한다. 배치 완료와 구분한다.",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - salmonbus_forecast_last_nonempty_timestamp{job=\"salmonbus/worker\",route_name=~\"${route:raw}\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{route_name}}번"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "노선별 최근 예보 입력 관측의 나이",
+      "type": "timeseries",
+      "description": "현재 시각 - 마지막 비어 있지 않은 예보에 사용한 관측 시각. 개별 정류장 신선도 보장은 아님.",
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - salmonbus_forecast_last_input_timestamp{job=\"salmonbus/worker\",route_name=~\"${route:raw}\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{route_name}}번"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "worker 작업별 p95",
+      "type": "timeseries",
+      "description": "계측된 전체 호출의 근사 p95. 중첩 작업 시간을 서로 더하지 않는다. returned는 커밋 성공을 뜻하지 않는다.",
+      "gridPos": {
+        "x": 12,
+        "y": 9,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, operation) (rate(salmonbus_worker_operation_seconds_bucket{job=\"salmonbus/worker\"}[$__rate_interval])))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{operation}} {{outcome}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "worker 작업별 평균",
+      "type": "timeseries",
+      "description": "",
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (operation) (rate(salmonbus_worker_operation_seconds_sum{job=\"salmonbus/worker\"}[$__rate_interval])) / sum by (operation) (rate(salmonbus_worker_operation_seconds_count{job=\"salmonbus/worker\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{operation}} {{outcome}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "수집 대상 상태",
+      "type": "timeseries",
+      "description": "0은 scrape 실패. 시계열 자체 소실은 별도 absent 알림 필요.",
+      "gridPos": {
+        "x": 12,
+        "y": 18,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=~\"salmonbus/(api|worker)\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{job}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "worker 스케줄러 heartbeat 경과",
+      "type": "timeseries",
+      "description": "60초 주기. 증가하면 스케줄러 지연 또는 수집 문제를 함께 확인한다.",
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - salmonbus_monitoring_heartbeat_timestamp{job=\"salmonbus/worker\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{operation}} {{outcome}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "집계 누락 표본 누적",
+      "type": "timeseries",
+      "description": "메모리 그룹 한도 초과/부가 데이터 누락. 재시작 시 0으로 초기화. 값 증가 시 정확도 해석을 중단한다.",
+      "gridPos": {
+        "x": 12,
+        "y": 27,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "salmonbus_accuracy_dropped_samples{job=\"salmonbus/worker\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{operation}} {{outcome}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "정류장별 평균 좌석 오차 (MAE)",
+      "type": "table",
+      "description": "0에 가까울수록 좌석 오차가 작다. 유효 expected_seats가 있는 평가만 포함. 완료 표본·누락을 함께 본다.",
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (routeId,routeVersionId,stopOrder,routeName,stopName,stopId,direction,modelDeploymentId,distance) (sum_over_time({unit=\"salmonbus-worker.service\"} |= \"event=forecast_accuracy \" | logfmt | routeName=~\"${route:raw}\" | stopName=~\"${stop:raw}\" | distance=~\"${distance:raw}\" | modelDeploymentId=~\"${model:raw}\" | unwrap absoluteErrorSum | __error__=\"\" [$__range])) / (sum by (routeId,routeVersionId,stopOrder,routeName,stopName,stopId,direction,modelDeploymentId,distance) (sum_over_time({unit=\"salmonbus-worker.service\"} |= \"event=forecast_accuracy \" | logfmt | routeName=~\"${route:raw}\" | stopName=~\"${stop:raw}\" | distance=~\"${distance:raw}\" | modelDeploymentId=~\"${model:raw}\" | unwrap maeCount | __error__=\"\" [$__range])) > 0)",
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "instant": true,
+          "range": false,
+          "legendFormat": "{{operation}} {{outcome}}",
+          "queryType": "instant",
+          "maxLines": 100,
+          "direction": "backward",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "routeName"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "노선 번호"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "stopName"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "정류장 이름"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "stopId"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "정류장 번호"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "direction"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "방향"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "modelDeploymentId"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "모델"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "distance"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "예측 거리"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "routeId"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "routeVersionId"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "stopOrder"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "정류장별 만석 확률 오차 (Brier)",
+      "type": "table",
+      "description": "표시된 만석 확률과 실제 만석 여부의 제곱 오차. 낮을수록 좋으며 순수한 확률 보정 지표는 아니다.",
+      "gridPos": {
+        "x": 12,
+        "y": 36,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (routeId,routeVersionId,stopOrder,routeName,stopName,stopId,direction,modelDeploymentId,distance) (sum_over_time({unit=\"salmonbus-worker.service\"} |= \"event=forecast_accuracy \" | logfmt | routeName=~\"${route:raw}\" | stopName=~\"${stop:raw}\" | distance=~\"${distance:raw}\" | modelDeploymentId=~\"${model:raw}\" | unwrap brierSum | __error__=\"\" [$__range])) / (sum by (routeId,routeVersionId,stopOrder,routeName,stopName,stopId,direction,modelDeploymentId,distance) (sum_over_time({unit=\"salmonbus-worker.service\"} |= \"event=forecast_accuracy \" | logfmt | routeName=~\"${route:raw}\" | stopName=~\"${stop:raw}\" | distance=~\"${distance:raw}\" | modelDeploymentId=~\"${model:raw}\" | unwrap probabilityCount | __error__=\"\" [$__range])) > 0)",
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "instant": true,
+          "range": false,
+          "legendFormat": "{{operation}} {{outcome}}",
+          "queryType": "instant",
+          "maxLines": 100,
+          "direction": "backward",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "routeName"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "노선 번호"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "stopName"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "정류장 이름"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "stopId"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "정류장 번호"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "direction"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "방향"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "modelDeploymentId"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "모델"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "distance"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "예측 거리"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "routeId"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "routeVersionId"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "stopOrder"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "정산 완료분 중 좌석 평가 가능 비율",
+      "type": "table",
+      "description": "전체 발행 예보의 평가 커버리지가 아니다. Writer가 전달한 완료분만 분모이며 PENDING 및 별도 일괄 품질 제외는 포함하지 않는다.",
+      "gridPos": {
+        "x": 0,
+        "y": 45,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (routeId,routeVersionId,stopOrder,routeName,stopName,stopId,direction,modelDeploymentId,distance) (sum_over_time({unit=\"salmonbus-worker.service\"} |= \"event=forecast_accuracy \" | logfmt | routeName=~\"${route:raw}\" | stopName=~\"${stop:raw}\" | distance=~\"${distance:raw}\" | modelDeploymentId=~\"${model:raw}\" | unwrap maeCount | __error__=\"\" [$__range])) / (sum by (routeId,routeVersionId,stopOrder,routeName,stopName,stopId,direction,modelDeploymentId,distance) (sum_over_time({unit=\"salmonbus-worker.service\"} |= \"event=forecast_accuracy \" | logfmt | routeName=~\"${route:raw}\" | stopName=~\"${stop:raw}\" | distance=~\"${distance:raw}\" | modelDeploymentId=~\"${model:raw}\" | unwrap completed | __error__=\"\" [$__range])) > 0)",
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "instant": true,
+          "range": false,
+          "legendFormat": "{{operation}} {{outcome}}",
+          "queryType": "instant",
+          "maxLines": 100,
+          "direction": "backward",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "routeName"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "노선 번호"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "stopName"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "정류장 이름"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "stopId"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "정류장 번호"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "direction"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "방향"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "modelDeploymentId"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "모델"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "distance"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "예측 거리"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "routeId"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "routeVersionId"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "stopOrder"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "정류장별 좌석 평가 표본 수",
+      "type": "table",
+      "description": "선택 기간에 출력된 집계. 동일 차량의 반복 예보도 각 평가 단위로 센다.",
+      "gridPos": {
+        "x": 12,
+        "y": 45,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (routeId,routeVersionId,stopOrder,routeName,stopName,stopId,direction,modelDeploymentId,distance) (sum_over_time({unit=\"salmonbus-worker.service\"} |= \"event=forecast_accuracy \" | logfmt | routeName=~\"${route:raw}\" | stopName=~\"${stop:raw}\" | distance=~\"${distance:raw}\" | modelDeploymentId=~\"${model:raw}\" | unwrap maeCount | __error__=\"\" [$__range]))",
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "instant": true,
+          "range": false,
+          "legendFormat": "{{operation}} {{outcome}}",
+          "queryType": "instant",
+          "maxLines": 100,
+          "direction": "backward",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "routeName"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "노선 번호"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "stopName"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "정류장 이름"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "stopId"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "정류장 번호"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "direction"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "방향"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "modelDeploymentId"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "모델"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "distance"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "예측 거리"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "routeId"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "routeVersionId"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "stopOrder"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "정류장별 만석 확률 평가 표본 수",
+      "type": "table",
+      "description": "",
+      "gridPos": {
+        "x": 0,
+        "y": 54,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (routeId,routeVersionId,stopOrder,routeName,stopName,stopId,direction,modelDeploymentId,distance) (sum_over_time({unit=\"salmonbus-worker.service\"} |= \"event=forecast_accuracy \" | logfmt | routeName=~\"${route:raw}\" | stopName=~\"${stop:raw}\" | distance=~\"${distance:raw}\" | modelDeploymentId=~\"${model:raw}\" | unwrap probabilityCount | __error__=\"\" [$__range]))",
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "instant": true,
+          "range": false,
+          "legendFormat": "{{operation}} {{outcome}}",
+          "queryType": "instant",
+          "maxLines": 100,
+          "direction": "backward",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "routeName"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "노선 번호"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "stopName"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "정류장 이름"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "stopId"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "정류장 번호"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "direction"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "방향"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "modelDeploymentId"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "모델"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "distance"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "예측 거리"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "routeId"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "routeVersionId"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "stopOrder"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "집계 원문 (노선·정류장 이름)",
+      "type": "logs",
+      "description": "5분마다 출력. 표본이 없으면 No data가 정상일 수 있다. 실제 도착시각이 아닌 집계 출력시각으로 검색된다.",
+      "gridPos": {
+        "x": 12,
+        "y": 54,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{unit=\"salmonbus-worker.service\"} |= \"event=forecast_accuracy \" | logfmt | routeName=~\"${route:raw}\" | stopName=~\"${stop:raw}\" | distance=~\"${distance:raw}\" | modelDeploymentId=~\"${model:raw}\"",
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{operation}} {{outcome}}",
+          "queryType": "range",
+          "maxLines": 100,
+          "direction": "backward"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true
+      }
+    },
+    {
+      "id": 15,
+      "title": "노선 이름이 붙은 worker 지연·실패",
+      "type": "logs",
+      "description": "기존 로그 필드를 보존하고 해석 가능한 작업에 routeName만 추가. 모든 노선 공통 작업과 오래된 버전은 이름이 없을 수 있다.",
+      "gridPos": {
+        "x": 0,
+        "y": 63,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{unit=\"salmonbus-worker.service\"} |= \"event=worker_operation \" | logfmt | routeName=~\"${route:raw}\"",
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{operation}} {{outcome}}",
+          "queryType": "range",
+          "maxLines": 100,
+          "direction": "backward"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true
+      }
+    },
+    {
+      "id": 16,
+      "title": "worker 로그 heartbeat",
+      "type": "timeseries",
+      "description": "최근 5분. 없음은 0으로 강제하지 않는다. worker/Alloy/Loki 경로를 함께 점검한다.",
+      "gridPos": {
+        "x": 12,
+        "y": 63,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({unit=\"salmonbus-worker.service\"} |= \"event=monitoring_heartbeat \" [5m]))",
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{operation}} {{outcome}}",
+          "queryType": "range",
+          "maxLines": 100,
+          "direction": "backward"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    }
+  ],
+  "description": "기존 대시보드 수정 없이 추가. 신규 배포 후 데이터만 관측. 정류장별 통계는 진단용 요약이며 장기 정확도 원장이 아니다."
+}

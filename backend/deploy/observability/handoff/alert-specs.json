@@ -1,0 +1,7 @@
+{
+  "format": "superseded-alert-proposal",
+  "current_rules": "../diagnostics/alert-rules.paused.json",
+  "state": "Four rules registered paused; activate only after deployment and failure/recovery verification",
+  "receiver": "salmonbus-service-discord",
+  "existing_rules": "Preserved; review duplicate notifications before activation"
+}

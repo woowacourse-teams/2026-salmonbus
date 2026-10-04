@@ -1,0 +1,57 @@
+# Merge into the existing exporter only after prepare_postgres.py succeeds.
+# Statistics only: no business table scans, SQL text or bind values exported.
+salmonbus_pg_app:
+  query: |
+    SELECT CASE WHEN application_name IN ('salmonbus-api','salmonbus-worker')
+      THEN application_name ELSE 'other' END AS application,
+      CASE WHEN state IN ('active','idle','idle in transaction','idle in transaction (aborted)')
+      THEN state ELSE 'other' END AS state,
+      count(*) AS connections,
+      count(*) FILTER (WHERE wait_event_type='Lock') AS lock_waiters,
+      count(*) FILTER (WHERE wait_event_type='IO') AS io_waiters,
+      coalesce(max(extract(epoch FROM clock_timestamp()-xact_start)),0) AS oldest_transaction_seconds
+    FROM pg_stat_activity WHERE datname=current_database()
+      AND backend_type='client backend' AND usename IS DISTINCT FROM current_user
+    GROUP BY 1,2
+  metrics:
+    - application: {usage: LABEL, description: "JDBC ApplicationName; other is not attributed"}
+    - state: {usage: LABEL, description: "PostgreSQL session state, not Hikari state"}
+    - connections: {usage: GAUGE, description: "Client sessions"}
+    - lock_waiters: {usage: GAUGE, description: "Lock waiters"}
+    - io_waiters: {usage: GAUGE, description: "IO waiters"}
+    - oldest_transaction_seconds: {usage: GAUGE, description: "Oldest currently open transaction"}
+
+salmonbus_pg_blocking:
+  query: |
+    WITH waiting AS (
+      SELECT pid, query_start FROM pg_stat_activity
+      WHERE datname=current_database() AND wait_event_type='Lock'
+      AND usename IS DISTINCT FROM current_user LIMIT 20
+    ), blockers AS (
+      SELECT DISTINCT unnest(pg_blocking_pids(pid)) AS pid FROM waiting
+    )
+    SELECT count(*) AS blockers,
+      coalesce(max(extract(epoch FROM clock_timestamp()-a.xact_start)),0) AS oldest_blocker_transaction_seconds,
+      count(*) FILTER (WHERE a.state LIKE 'idle in transaction%') AS idle_transaction_blockers
+    FROM blockers b JOIN pg_stat_activity a USING(pid)
+  metrics:
+    - blockers: {usage: GAUGE, description: "Distinct blockers sampled from at most 20 waiting sessions"}
+    - oldest_blocker_transaction_seconds: {usage: GAUGE, description: "Age of oldest blocking transaction"}
+    - idle_transaction_blockers: {usage: GAUGE, description: "Blockers idle within a transaction"}
+
+salmonbus_pg_running:
+  query: |
+    SELECT CASE WHEN application_name IN ('salmonbus-api','salmonbus-worker')
+      THEN application_name ELSE 'other' END AS application,
+      coalesce(substring(query from '/\* salmonbus:([a-z_.]+) \*/'), 'untagged') AS query_origin,
+      CASE WHEN wait_event_type IN ('Lock','IO','Client','LWLock','IPC') THEN wait_event_type
+        WHEN wait_event_type IS NULL THEN 'not_waiting' ELSE 'other' END AS wait_type,
+      count(*) AS active_sessions
+    FROM pg_stat_activity WHERE datname=current_database() AND state='active'
+      AND backend_type='client backend' AND usename IS DISTINCT FROM current_user
+    GROUP BY 1,2,3
+  metrics:
+    - application: {usage: LABEL, description: "JDBC ApplicationName"}
+    - query_origin: {usage: LABEL, description: "Static source-code query tag; no SQL text"}
+    - wait_type: {usage: LABEL, description: "Current sampled wait, not cumulative execution time"}
+    - active_sessions: {usage: GAUGE, description: "Sampled active statements; short executions can be missed"}

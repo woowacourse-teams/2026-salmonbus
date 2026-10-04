@@ -1,0 +1,2697 @@
+{
+  "uid": "salmonbus-db-diagnostics",
+  "title": "Salmonbus DB 원인 분석",
+  "schemaVersion": 42,
+  "version": 0,
+  "editable": true,
+  "tags": [
+    "salmonbus",
+    "diagnostics"
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timezone": "Asia/Seoul",
+  "refresh": "1m",
+  "graphTooltip": 1,
+  "links": [
+    {
+      "type": "link",
+      "title": "기존 운영 화면",
+      "url": "/d/salmonbus-prod",
+      "keepTime": true
+    },
+    {
+      "type": "link",
+      "title": "노선과 예보",
+      "url": "/d/salmonbus-service",
+      "keepTime": true
+    }
+  ],
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "01 사용자 영향과 DB 연결",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 2,
+      "title": "API 5xx 비율",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "100 * (sum(rate(http_server_requests_seconds_count{job=\"salmonbus/api\",status=~\"5..\"}[5m])) or (0 * sum(rate(http_server_requests_seconds_count{job=\"salmonbus/api\"}[5m])))) / sum(rate(http_server_requests_seconds_count{job=\"salmonbus/api\"}[5m]))",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "legendFormat": "5xx",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "title": "DB 접속 가능 여부",
+      "description": "",
+      "type": "state-timeline",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "pg_up{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "legendFormat": "DB 접속",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "접속 실패",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "접속 가능",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "title": "연결을 기다리는 요청",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "hikaricp_connections_pending{job=~\"salmonbus/(api|worker)\"}",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{application}} {{pool}}",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "title": "빌려간 연결 / 최대 연결",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "hikaricp_connections_active{job=~\"salmonbus/(api|worker)\"}",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{application}} {{pool}} {{__name__}}",
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "hikaricp_connections_max{job=~\"salmonbus/(api|worker)\"}",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{application}} {{pool}} {{__name__}}",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "title": "연결 획득 평균 시간",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "rate(hikaricp_connections_acquire_seconds_sum{job=~\"salmonbus/(api|worker)\"}[5m]) / rate(hikaricp_connections_acquire_seconds_count{job=~\"salmonbus/(api|worker)\"}[5m])",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{application}} {{pool}}",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "title": "연결 사용 평균 시간",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 15,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "rate(hikaricp_connections_usage_seconds_sum{job=~\"salmonbus/(api|worker)\"}[5m]) / rate(hikaricp_connections_usage_seconds_count{job=~\"salmonbus/(api|worker)\"}[5m])",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{application}} {{pool}}",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 8,
+      "type": "row",
+      "title": "02 읽기와 쓰기 / 디스크 성능",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 9,
+      "title": "읽기 / 쓰기 처리량",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "last_over_time(aws_rds_read_throughput_average{dimension_DBInstanceIdentifier=\"salmonbus-db\"}[15m])",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{__name__}}",
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "last_over_time(aws_rds_write_throughput_average{dimension_DBInstanceIdentifier=\"salmonbus-db\"}[15m])",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{__name__}}",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 10,
+      "title": "읽기 / 쓰기 지연",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 23,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "last_over_time(aws_rds_read_latency_average{dimension_DBInstanceIdentifier=\"salmonbus-db\"}[15m])",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{__name__}}",
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "last_over_time(aws_rds_write_latency_average{dimension_DBInstanceIdentifier=\"salmonbus-db\"}[15m])",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{__name__}}",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 11,
+      "title": "읽기 / 쓰기 횟수",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 30,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "last_over_time(aws_rds_read_iops_average{dimension_DBInstanceIdentifier=\"salmonbus-db\"}[15m])",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{__name__}}",
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "last_over_time(aws_rds_write_iops_average{dimension_DBInstanceIdentifier=\"salmonbus-db\"}[15m])",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{__name__}}",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "iops",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 12,
+      "title": "디스크 대기열",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 30,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "last_over_time(aws_rds_disk_queue_depth_maximum{dimension_DBInstanceIdentifier=\"salmonbus-db\"}[15m])",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "legendFormat": "대기 IO",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 13,
+      "title": "EBS 처리량 크레딧 잔량",
+      "description": "",
+      "type": "gauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 37,
+        "w": 12,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "last_over_time(aws_rds_ebsbyte_balance_percent_minimum{dimension_DBInstanceIdentifier=\"salmonbus-db\"}[15m])",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "legendFormat": "ByteBalance",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          },
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 14,
+      "title": "EBS IO 횟수 크레딧 잔량",
+      "description": "",
+      "type": "gauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 37,
+        "w": 12,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "last_over_time(aws_rds_ebsiobalance_percent_minimum{dimension_DBInstanceIdentifier=\"salmonbus-db\"}[15m])",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "legendFormat": "IOBalance",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          },
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 15,
+      "type": "row",
+      "title": "03 쓰기와 커밋 / 잠금 / 백그라운드 정리",
+      "collapsed": true,
+      "panels": [
+        {
+          "id": 16,
+          "title": "커밋 / 롤백 속도",
+          "description": "",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 43,
+            "w": 12,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "rate(salmonbus_pg_database_commits_total{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}[5m])",
+              "editorMode": "code",
+              "instant": false,
+              "range": true,
+              "legendFormat": "{{__name__}}",
+              "format": "time_series"
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "rate(salmonbus_pg_database_rollbacks_total{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}[5m])",
+              "editorMode": "code",
+              "instant": false,
+              "range": true,
+              "legendFormat": "{{__name__}}",
+              "format": "time_series"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "noValue": "미수집 / 미확인",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 17,
+          "title": "WAL 생성량",
+          "description": "",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 43,
+            "w": 12,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "rate(salmonbus_pg_wal_bytes_total{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}[5m])",
+              "editorMode": "code",
+              "instant": false,
+              "range": true,
+              "legendFormat": "WAL",
+              "format": "time_series"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "Bps",
+              "noValue": "미수집 / 미확인",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 18,
+          "title": "앱별 잠금 / IO 대기",
+          "description": "",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 50,
+            "w": 12,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "salmonbus_pg_app_lock_waiters{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}",
+              "editorMode": "code",
+              "instant": false,
+              "range": true,
+              "legendFormat": "{{application}} {{state}} {{__name__}}",
+              "format": "time_series"
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "salmonbus_pg_app_io_waiters{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}",
+              "editorMode": "code",
+              "instant": false,
+              "range": true,
+              "legendFormat": "{{application}} {{state}} {{__name__}}",
+              "format": "time_series"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "미수집 / 미확인",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 19,
+          "title": "다른 작업을 막는 트랜잭션의 나이",
+          "description": "",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 50,
+            "w": 12,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "salmonbus_pg_blocking_oldest_blocker_transaction_seconds{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}",
+              "editorMode": "code",
+              "instant": false,
+              "range": true,
+              "legendFormat": "최장 차단 트랜잭션",
+              "format": "time_series"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "noValue": "미수집 / 미확인",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 20,
+          "title": "잠금 충돌 / 임시 파일",
+          "description": "",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 57,
+            "w": 12,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "increase(salmonbus_pg_database_deadlocks_total{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}[5m])",
+              "editorMode": "code",
+              "instant": false,
+              "range": true,
+              "legendFormat": "{{__name__}}",
+              "format": "time_series"
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "increase(salmonbus_pg_database_temp_files_total{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}[5m])",
+              "editorMode": "code",
+              "instant": false,
+              "range": true,
+              "legendFormat": "{{__name__}}",
+              "format": "time_series"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "미수집 / 미확인",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 21,
+          "title": "테이블별 수정 속도",
+          "description": "",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 57,
+            "w": 12,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "rate(salmonbus_pg_table_updates_total{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}[5m])",
+              "editorMode": "code",
+              "instant": false,
+              "range": true,
+              "legendFormat": "{{table}} {{__name__}}",
+              "format": "time_series"
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "rate(salmonbus_pg_table_inserts_total{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}[5m])",
+              "editorMode": "code",
+              "instant": false,
+              "range": true,
+              "legendFormat": "{{table}} {{__name__}}",
+              "format": "time_series"
+            },
+            {
+              "refId": "C",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "rate(salmonbus_pg_table_deletes_total{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}[5m])",
+              "editorMode": "code",
+              "instant": false,
+              "range": true,
+              "legendFormat": "{{table}} {{__name__}}",
+              "format": "time_series"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "noValue": "미수집 / 미확인",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 22,
+          "title": "테이블별 dead 행 추정",
+          "description": "",
+          "type": "bargauge",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 64,
+            "w": 12,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "salmonbus_pg_table_dead_rows_estimate{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}",
+              "editorMode": "code",
+              "instant": true,
+              "range": false,
+              "legendFormat": "{{table}}",
+              "format": "time_series"
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "미수집 / 미확인",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 23,
+          "title": "자동 vacuum 경과",
+          "description": "",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 64,
+            "w": 12,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "time() - (salmonbus_pg_table_last_autovacuum_timestamp_seconds{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"} > 0)",
+              "editorMode": "code",
+              "instant": false,
+              "range": true,
+              "legendFormat": "{{table}}",
+              "format": "time_series"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "noValue": "미수집 / 미확인",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 42,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 24,
+      "type": "row",
+      "title": "04 메모리 / 저장 공간 / 재시작",
+      "collapsed": true,
+      "panels": [
+        {
+          "id": 25,
+          "title": "가용 메모리 / swap",
+          "description": "",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 72,
+            "w": 12,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "last_over_time(aws_rds_freeable_memory_minimum{dimension_DBInstanceIdentifier=\"salmonbus-db\"}[15m])",
+              "editorMode": "code",
+              "instant": false,
+              "range": true,
+              "legendFormat": "{{__name__}}",
+              "format": "time_series"
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "last_over_time(aws_rds_swap_usage_maximum{dimension_DBInstanceIdentifier=\"salmonbus-db\"}[15m])",
+              "editorMode": "code",
+              "instant": false,
+              "range": true,
+              "legendFormat": "{{__name__}}",
+              "format": "time_series"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "noValue": "미수집 / 미확인",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 26,
+          "title": "DB 저장 공간 여유",
+          "description": "",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 72,
+            "w": 12,
+            "h": 5
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "last_over_time(aws_rds_free_storage_space_minimum{dimension_DBInstanceIdentifier=\"salmonbus-db\"}[15m])",
+              "editorMode": "code",
+              "instant": true,
+              "range": false,
+              "legendFormat": "디스크 여유",
+              "format": "time_series"
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "noValue": "미수집 / 미확인",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 27,
+          "title": "RDS CPU 사용률",
+          "description": "",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 79,
+            "w": 12,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "last_over_time(aws_rds_cpuutilization_maximum{dimension_DBInstanceIdentifier=\"salmonbus-db\"}[15m])",
+              "editorMode": "code",
+              "instant": false,
+              "range": true,
+              "legendFormat": "CPU",
+              "format": "time_series"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "noValue": "미수집 / 미확인",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 28,
+          "title": "선택 기간 DB 시작 시각 변경 횟수",
+          "description": "",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 79,
+            "w": 12,
+            "h": 5
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "changes(salmonbus_pg_database_start_timestamp_seconds{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}[$__range])",
+              "editorMode": "code",
+              "instant": true,
+              "range": false,
+              "legendFormat": "관측된 변경",
+              "format": "time_series"
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "미수집 / 미확인",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 71,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 29,
+      "type": "row",
+      "title": "05 어떤 SQL과 업무인가? 선택한 시간 범위의 증가량",
+      "collapsed": true,
+      "panels": [
+        {
+          "id": 30,
+          "title": "버퍼 읽기 상위 SQL",
+          "description": "",
+          "type": "bargauge",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 87,
+            "w": 12,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "topk(10, increase(salmonbus_pg_statement_blocks_read_total{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}[$__range]))",
+              "editorMode": "code",
+              "instant": true,
+              "range": false,
+              "legendFormat": "{{query_origin}} | {{query_id}}",
+              "format": "time_series"
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "미수집 / 미확인",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 31,
+          "title": "버퍼 수정 상위 SQL",
+          "description": "",
+          "type": "bargauge",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 87,
+            "w": 12,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "topk(10, increase(salmonbus_pg_statement_blocks_dirtied_total{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}[$__range]))",
+              "editorMode": "code",
+              "instant": true,
+              "range": false,
+              "legendFormat": "{{query_origin}} | {{query_id}}",
+              "format": "time_series"
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "미수집 / 미확인",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 32,
+          "title": "실행 시간 상위 SQL",
+          "description": "",
+          "type": "bargauge",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 94,
+            "w": 12,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "topk(10, increase(salmonbus_pg_statement_execution_seconds_total{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}[$__range]))",
+              "editorMode": "code",
+              "instant": true,
+              "range": false,
+              "legendFormat": "{{query_origin}} | {{query_id}}",
+              "format": "time_series"
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "noValue": "미수집 / 미확인",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 33,
+          "title": "WAL 생성 상위 SQL",
+          "description": "",
+          "type": "bargauge",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 94,
+            "w": 12,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "topk(10, increase(salmonbus_pg_statement_wal_bytes_total{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}[$__range]))",
+              "editorMode": "code",
+              "instant": true,
+              "range": false,
+              "legendFormat": "{{query_origin}} | {{query_id}}",
+              "format": "time_series"
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "noValue": "미수집 / 미확인",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 34,
+          "title": "임시 파일 쓰기 상위 SQL",
+          "description": "",
+          "type": "bargauge",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 101,
+            "w": 12,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "topk(10, increase(salmonbus_pg_statement_temp_blocks_written_total{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}[$__range]))",
+              "editorMode": "code",
+              "instant": true,
+              "range": false,
+              "legendFormat": "{{query_origin}} | {{query_id}}",
+              "format": "time_series"
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "미수집 / 미확인",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 35,
+          "title": "실행 횟수 상위 SQL",
+          "description": "",
+          "type": "bargauge",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 101,
+            "w": 12,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "topk(10, increase(salmonbus_pg_statement_calls_total{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}[$__range]))",
+              "editorMode": "code",
+              "instant": true,
+              "range": false,
+              "legendFormat": "{{query_origin}} | {{query_id}}",
+              "format": "time_series"
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "미수집 / 미확인",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 36,
+          "title": "현재 실행 중인 업무와 대기",
+          "description": "",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 108,
+            "w": 12,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "salmonbus_pg_running_active_sessions{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}",
+              "editorMode": "code",
+              "instant": false,
+              "range": true,
+              "legendFormat": "{{application}} {{query_origin}} {{wait_type}}",
+              "format": "time_series"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "lastNotNull",
+                "max"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "미수집 / 미확인",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 37,
+          "title": "상한 때문에 제외된 SQL 수",
+          "description": "",
+          "type": "stat",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 108,
+            "w": 12,
+            "h": 5
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "grafanacloud-prom"
+              },
+              "expr": "salmonbus_pg_statement_coverage_not_exported{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"}",
+              "editorMode": "code",
+              "instant": true,
+              "range": false,
+              "legendFormat": "미수집 SQL",
+              "format": "time_series"
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "미수집 / 미확인",
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 8,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 86,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 38,
+      "type": "row",
+      "title": "06 노선별 수집과 예보 / 원인 로그",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 115,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 39,
+      "title": "마지막 정상 관측의 나이",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 116,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "time() - salmonbus_collection_last_success_timestamp{job=\"salmonbus/worker\"}",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{route_name}}번",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 40,
+      "title": "미발행 관측의 나이",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 116,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "salmonbus_forecast_pending_age_seconds{job=\"salmonbus/worker\"}",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{route_name}}번",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 41,
+      "type": "logs",
+      "title": "API 실패 원인",
+      "datasource": {
+        "type": "loki",
+        "uid": "grafanacloud-logs"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 123,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{unit=\"salmonbus-api.service\"} |= \"event=api_failure \"",
+          "queryType": "range",
+          "direction": "backward",
+          "maxLines": 100,
+          "datasource": {
+            "type": "loki",
+            "uid": "grafanacloud-logs"
+          }
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLevel": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none",
+        "enableLogDetails": true
+      }
+    },
+    {
+      "id": 42,
+      "type": "logs",
+      "title": "DB 저장과 작업 실패",
+      "datasource": {
+        "type": "loki",
+        "uid": "grafanacloud-logs"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 131,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{unit=\"salmonbus-worker.service\"} |~ \"event=(worker_operation|collection_attempt) .*status=FAILED\"",
+          "queryType": "range",
+          "direction": "backward",
+          "maxLines": 100,
+          "datasource": {
+            "type": "loki",
+            "uid": "grafanacloud-logs"
+          }
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLevel": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none",
+        "enableLogDetails": true
+      }
+    },
+    {
+      "id": 43,
+      "type": "row",
+      "title": "07 수집 상태 / 빈 화면과 정상 0 구분",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 139,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 44,
+      "title": "API 지표 수집",
+      "description": "",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 140,
+        "w": 12,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "min(up{job=\"salmonbus/api\"})",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "legendFormat": "API up",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "수집 실패",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "수집 정상",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 45,
+      "title": "worker 지표 수집",
+      "description": "",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 140,
+        "w": 12,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "min(up{job=\"salmonbus/worker\"})",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "legendFormat": "worker up",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "수집 실패",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "수집 정상",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 46,
+      "title": "추가 RDS 원본 표본 경과",
+      "description": "",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 145,
+        "w": 12,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "time() - max_over_time(timestamp(aws_rds_read_throughput_average{dimension_DBInstanceIdentifier=\"salmonbus-db\"})[30m:1m])",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "legendFormat": "원본 표본 나이",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 47,
+      "title": "SQL 통계 표본 경과",
+      "description": "",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 145,
+        "w": 12,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "time() - timestamp(salmonbus_pg_statement_coverage_statements{job=\"salmonbus/postgres\",instance=\"salmonbus-db\"})",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "legendFormat": "SQL 표본 나이",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 48,
+      "type": "row",
+      "title": "도움말과 적용 상태",
+      "collapsed": true,
+      "panels": [
+        {
+          "id": 49,
+          "type": "text",
+          "title": "해석과 적용 상태",
+          "gridPos": {
+            "x": 0,
+            "y": 151,
+            "w": 24,
+            "h": 18
+          },
+          "options": {
+            "mode": "markdown",
+            "content": "### 읽는 순서\n사용자 영향 → 연결 대기 → 읽기와 쓰기 → 잠금 → 메모리 → SQL과 업무 순서로 같은 시간을 선택합니다.\n\n### 아직 미검증인 것\n추가 RDS 지표와 PostgreSQL 진단 쿼리는 서버 적용 전입니다. 빈 패널은 0이나 정상으로 해석하지 않습니다. SQL별 지표는 pg_stat_statements 활성화와 권한 확인 후 수집합니다.\n\n### 해석의 한계\n- EBS 잔량은 요청 크기 제한이 아닙니다. 잔량 감소만으로 장애 원인을 확정하지 않습니다.\n- SQL 버퍼 읽기는 물리 디스크 읽기가 아닙니다. 버퍼 수정과 WAL 생성량도 실제 디스크 쓰기량과 다릅니다.\n- query_origin은 소스 코드에 붙인 업무 태그입니다. 동일 SQL이 여러 업무에서 쓰이면 pg_stat_statements가 합칠 수 있습니다. 현재 실행 중인 업무 표본과 앱 로그를 함께 봅니다.\n- SQL 상위 표는 수집된 최대 100개 SQL의 기간 증가량입니다. 제외, 통계 초기화, 재시작, 수집 누락 때 전체 순위를 보장하지 않습니다. 짧은 SQL은 60초 활동 표본에 안 잡힐 수 있습니다.\n- 연결 사용 시간은 연결을 빌린 전체 시간이며 SQL 실행이나 순수 커밋 시간과 같지 않습니다. DB idle은 앱이 연결을 반납했다는 뜻이 아닙니다.\n- 노선별 관측 값은 재시작 후 메모리에서 다시 시작합니다. 미발행 나이는 한 회차 전 조회 결과일 수 있고 지원 모델이 조회한 범위만 나타냅니다.\n- 새 알림은 일시 정지 상태로 준비합니다. 배포, 지표 수집, 장애/복구 검증 후 활성화합니다. 테스트 알림은 발송하지 않았습니다.\n\n### 비용과 복구\n정상 SQL 원문/바인딩 값은 보내지 않습니다. DB 통계 60초, 추가 AWS 지표 5분, 로그 패널 최대 100줄입니다. SQL은 매 수집 시 최대 100개이며 기간 전체의 시계열 수 상한은 아닙니다. 기존 사용량과 합산해야 합니다. AWS 조회와 전송 비용은 별도입니다.\n문제 시 새 수집 블록만 제거하고 Alloy 검증 후 reload합니다. SQL 태그와 ApplicationName은 진단 표식이며 업무 결과를 바꾸지 않습니다. 재시작/확장 설치는 자동 실행하지 않습니다.\n"
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 150,
+        "w": 24,
+        "h": 1
+      }
+    }
+  ]
+}

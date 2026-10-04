@@ -4,8 +4,6 @@ import com.gustler.backend.api.error.ErrorCode;
 import com.gustler.backend.api.error.ErrorResponse;
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.http.HttpServletRequest;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.boot.webmvc.error.ErrorController;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -46,7 +44,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class ApiErrorController implements ErrorController {
 
-    private static final Logger log = LoggerFactory.getLogger(ApiErrorController.class);
 
     @RequestMapping("${server.error.path:/error}")
     public ResponseEntity<ErrorResponse> handleContainerError(
@@ -55,8 +52,8 @@ public class ApiErrorController implements ErrorController {
         HttpStatus status = statusOf(request);
         ErrorCode code = ErrorCode.of(status);
         String requestId = RequestId.of(request);
-        log.warn("컨테이너가 오류로 넘긴 요청이다. 상태={} 오류코드={} requestId={}",
-            status.value(), code.name(), requestId);
+        Object cause = request.getAttribute(RequestDispatcher.ERROR_EXCEPTION);
+        ApiFailureLog.write(status.value(), code, requestId, cause instanceof Throwable t ? t : null);
 
         return ResponseEntity.status(status)
             .headers(ErrorHeaders.of(MediaType.APPLICATION_JSON))

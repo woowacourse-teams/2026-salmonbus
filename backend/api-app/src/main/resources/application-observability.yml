@@ -1,0 +1,17 @@
+# Alloy가 같은 EC2의 관리 포트에서 수집한다. 공개 API 포트에는 노출하지 않는다.
+management:
+  server:
+    port: 8082
+    address: 127.0.0.1
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      # 고정 10개 경계로 집계 가능한 히스토그램을 만든다.
+      # 자동 percentile histogram을 함께 켜면 버킷과 시계열 수가 더 늘어난다.
+      slo:
+        http.server.requests: 10ms,25ms,50ms,100ms,250ms,500ms,1s,2s,5s,10s

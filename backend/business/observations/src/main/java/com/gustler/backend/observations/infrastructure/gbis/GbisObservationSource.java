@@ -5,6 +5,11 @@ import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.gbis.api.GbisLocationSource;
 import com.gustler.backend.observations.domain.ObservationReply;
 import com.gustler.backend.observations.domain.ObservationSource;
+import java.time.OffsetDateTime;
+import java.util.Objects;
+import java.util.Optional;
+import com.gustler.backend.observations.domain.ObservationResponse;
+import org.slf4j.MDC;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,11 +36,39 @@ public class GbisObservationSource implements ObservationSource {
             result = WorkerOperationLog.measure("collection_upstream", sourceRouteId,
                 () -> locationSource.read(sourceRouteId, keyAlias));
         } catch (final RuntimeException e) {
-            log.error("상류를 부른 뒤 뜻밖의 예외가 났다. 보낸 것은 맞고 결과만 모른다. 노선={}",
-                sourceRouteId, e);
+            log.error("상류를 부른 뒤 뜻밖의 예외가 났다. 보낸 것은 맞고 결과만 모른다. 노선={} exceptionType={}",
+                sourceRouteId, e.getClass().getSimpleName());
+            if (MDC.get("collectionAttemptId") != null) {
+                MDC.put("collectionTransport", "UNEXPECTED_EXCEPTION");
+                MDC.put("collectionTransportCause", e.getClass().getSimpleName());
+            }
             result = new GbisLocationResult.NoResponse(e.getMessage());
         }
+        if (MDC.get("collectionAttemptId") != null) {
+            MDC.put("collectionUpstreamResult", result.getClass().getSimpleName());
+            if (result instanceof GbisLocationResult.Success success && success.buses() != null) {
+                long mismatches = success.buses().stream()
+                    .filter(bus -> !Objects.equals(sourceRouteId, bus.routeId())).count();
+                MDC.put("collectionRouteMismatchRows", Long.toString(mismatches));
+            }
+        }
         GbisLocationResult received = result;
-        return receivedAt -> GbisObservationMapper.response(received, receivedAt);
+        return new ObservationReply() {
+            @Override public ObservationResponse interpret(OffsetDateTime receivedAt) {
+                return GbisObservationMapper.response(received, receivedAt);
+            }
+
+            @Override public Optional<StopReference> sourceReference(int stopOrder, String stopId) {
+                if (received instanceof GbisLocationResult.Success success && success.buses() != null) {
+                    for (int index = 0; index < success.buses().size(); index++) {
+                        var bus = success.buses().get(index);
+                        if (Objects.equals(bus.stopSequence(), stopOrder) && Objects.equals(bus.stopId(), stopId)) {
+                            return Optional.of(new StopReference(index, bus.routeId(), bus.stopSequence(), bus.stopId()));
+                        }
+                    }
+                }
+                return Optional.empty();
+            }
+        };
     }
 }

@@ -1,0 +1,128 @@
+// Add once after validation. Does NOT duplicate the existing EBS credit collector.
+// Fixed DB, 5-minute intervals, source timestamps; missing data is not zero.
+prometheus.exporter.cloudwatch "salmonbus_rds_diagnostics" {
+  sts_region = "ap-northeast-2"
+  static "salmonbus_db_diagnostics" {
+    regions = ["ap-northeast-2"]
+    namespace = "AWS/RDS"
+    dimensions = { "DBInstanceIdentifier" = "salmonbus-db" }
+    nil_to_zero = false
+    metric {
+      name = "ReadThroughput"
+      statistics = ["Average"]
+      period = "5m"
+      length = "15m"
+      add_cloudwatch_timestamp = true
+    }
+    metric {
+      name = "WriteThroughput"
+      statistics = ["Average"]
+      period = "5m"
+      length = "15m"
+      add_cloudwatch_timestamp = true
+    }
+    metric {
+      name = "ReadIOPS"
+      statistics = ["Average"]
+      period = "5m"
+      length = "15m"
+      add_cloudwatch_timestamp = true
+    }
+    metric {
+      name = "WriteIOPS"
+      statistics = ["Average"]
+      period = "5m"
+      length = "15m"
+      add_cloudwatch_timestamp = true
+    }
+    metric {
+      name = "ReadLatency"
+      statistics = ["Average"]
+      period = "5m"
+      length = "15m"
+      add_cloudwatch_timestamp = true
+    }
+    metric {
+      name = "WriteLatency"
+      statistics = ["Average"]
+      period = "5m"
+      length = "15m"
+      add_cloudwatch_timestamp = true
+    }
+    metric {
+      name = "DiskQueueDepth"
+      statistics = ["Maximum"]
+      period = "5m"
+      length = "15m"
+      add_cloudwatch_timestamp = true
+    }
+    metric {
+      name = "FreeableMemory"
+      statistics = ["Minimum"]
+      period = "5m"
+      length = "15m"
+      add_cloudwatch_timestamp = true
+    }
+    metric {
+      name = "SwapUsage"
+      statistics = ["Maximum"]
+      period = "5m"
+      length = "15m"
+      add_cloudwatch_timestamp = true
+    }
+    metric {
+      name = "FreeStorageSpace"
+      statistics = ["Minimum"]
+      period = "5m"
+      length = "15m"
+      add_cloudwatch_timestamp = true
+    }
+    metric {
+      name = "CPUUtilization"
+      statistics = ["Maximum"]
+      period = "5m"
+      length = "15m"
+      add_cloudwatch_timestamp = true
+    }
+    metric {
+      name = "DatabaseConnections"
+      statistics = ["Maximum"]
+      period = "5m"
+      length = "15m"
+      add_cloudwatch_timestamp = true
+    }
+    metric {
+      name = "CPUCreditBalance"
+      statistics = ["Minimum"]
+      period = "5m"
+      length = "15m"
+      add_cloudwatch_timestamp = true
+    }
+  }
+}
+
+discovery.relabel "salmonbus_rds_diagnostics" {
+  targets = prometheus.exporter.cloudwatch.salmonbus_rds_diagnostics.targets
+  rule {
+    target_label = "job"
+    replacement = "salmonbus/rds-diagnostics"
+  }
+}
+prometheus.scrape "salmonbus_rds_diagnostics" {
+  targets = discovery.relabel.salmonbus_rds_diagnostics.output
+  scrape_interval = "5m"
+  scrape_timeout = "30s"
+  forward_to = [prometheus.relabel.salmonbus_rds_diagnostics.receiver]
+}
+prometheus.relabel "salmonbus_rds_diagnostics" {
+  rule {
+    source_labels = ["__name__"]
+    regex = "aws_rds_.*|up|scrape_duration_seconds"
+    action = "keep"
+  }
+  rule {
+    regex = "account_id|account_alias|arn"
+    action = "labeldrop"
+  }
+  forward_to = [prometheus.remote_write.user_stack.receiver]
+}

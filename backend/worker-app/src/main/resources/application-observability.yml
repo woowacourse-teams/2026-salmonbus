@@ -1,0 +1,9 @@
+# worker 서버 자체가 application.yml에서 127.0.0.1:8081에 묶여 있다.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
