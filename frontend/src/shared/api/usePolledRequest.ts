@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import type { ApiResult } from "./client";
 import { createLatestRequestGate } from "./latestRequestGate";
 import { nextPollFrom } from "./pollSchedule";
@@ -14,6 +14,7 @@ export function usePolledRequest<T>(
   key: string,
 ): PolledResource<T> {
   const [state, setState] = useState<PolledState<T> | null>(null);
+  const requestResource = useEffectEvent(request);
 
   useEffect(() => {
     const gate = createLatestRequestGate();
@@ -30,7 +31,7 @@ export function usePolledRequest<T>(
     const load = () => {
       clearTimer();
       const ticket = gate.issue();
-      void request(key, ticket.signal).then((result) => {
+      void requestResource(key, ticket.signal).then((result) => {
         if (disposed || !ticket.isLatest()) {
           return;
         }
@@ -67,7 +68,7 @@ export function usePolledRequest<T>(
       document.removeEventListener("visibilitychange", onVisibilityChange);
       gate.close();
     };
-  }, [request, key]);
+  }, [key]);
 
   return state?.key === key ? state.resource : PENDING_RESOURCE;
 }
