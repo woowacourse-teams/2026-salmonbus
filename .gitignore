@@ -12,6 +12,8 @@
 *.jks
 secrets/
 /.local/
+/dev/wiremock-extension/.gradle/
+/dev/wiremock-extension/build/
 
 ### Backend ###
 ### IntelliJ IDEA ###

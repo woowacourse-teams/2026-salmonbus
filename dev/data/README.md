@@ -19,4 +19,4 @@
 
 모델은 학습 없이 정한 개발용 계수를 사용합니다. `a18-live-bundle-v2`, `stop-direction-time-stats-v1`의 50개 입력 특징과 `observed-max-capacity-v1` 통계 계약을 따릅니다. 모든 노선과 1~12정류장 앞을 지원하고, 모델 파일 지문·정류장 기준·대조 계산을 실제 로더로 검증합니다. `dataThrough`는 개발 입력의 기준 날짜이며 실제 학습 기간을 뜻하지 않습니다. 통계·좌석·방향 등에 따라 결과가 달라져 화면과 처리 흐름을 반복 확인할 수 있지만 실제 예보 정확도의 근거로 사용할 수 없습니다.
 
-준비 코드는 `dev/data/java`에 있으며 로컬 전용 Gradle init script가 worker의 기존 라이브러리를 사용해 실행합니다. backend의 기본 Gradle 모듈이나 운영 JAR에는 등록하지 않습니다. 생성된 모델은 로컬 `model-data` 볼륨에만 보관합니다. 초기 준비 자체는 모델 배포 행을 만들거나 활성화하지 않습니다.
+준비 코드는 `dev/data/java`에 있으며 `local-data.init`을 Gradle init script로 전달해 worker의 기존 라이브러리를 사용합니다. `dev/data`는 독립 Gradle 프로젝트가 아니므로 IntelliJ에서 Gradle 프로젝트로 연결하지 않습니다. Gradle 빌드 루트는 `backend`와 독립 확장인 `dev/wiremock-extension`입니다. backend의 기본 Gradle 모듈이나 운영 JAR에는 등록하지 않습니다. 생성된 모델은 로컬 `model-data` 볼륨에만 보관합니다. 초기 준비 자체는 모델 배포 행을 만들거나 활성화하지 않습니다.

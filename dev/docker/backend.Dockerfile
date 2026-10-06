@@ -15,6 +15,6 @@ RUN case "$DEV_COMPONENT" in api-app|worker-app) ;; *) exit 1 ;; esac \
     && ./gradlew ":${DEV_COMPONENT}:bootJar" --no-daemon --console=plain
 COPY --chown=developer:developer dev/data/ /local/data/
 RUN if [ "$DEV_COMPONENT" = worker-app ]; then \
-        ./gradlew --init-script /local/data/tasks.gradle :worker-app:localDataClasses --no-daemon --console=plain; \
+        ./gradlew --init-script /local/data/local-data.init :worker-app:localDataClasses --no-daemon --console=plain; \
     fi
 ENTRYPOINT ["run-backend"]
