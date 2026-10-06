@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "local-route-provenance-v1",
+  "snapshotAt": "2026-10-06T15:26:48.302959+00:00",
+  "snapshotSha256": "1882902b00c896bf5ef02b9ac884a6b62978ceef0a3f0814397a73bd768479bc",
+  "routesFileSha256": "a7dea7fd5aaccbee29e343b932bc658fb20e4131847fd50370e8f5305492513d",
+  "routeCount": 8,
+  "stopCount": 643,
+  "scope": "route and stop metadata only; synthetic observations, statistics and model are prepared locally"
+}

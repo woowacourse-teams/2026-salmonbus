@@ -8,6 +8,8 @@
 !dev/docker/**
 !dev/config/
 !dev/config/**
+!dev/data/
+!dev/data/**
 **/.env*
 **/build/
 **/.gradle/

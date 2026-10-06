@@ -1,0 +1,14 @@
+gradle.projectsEvaluated {
+    def worker = gradle.rootProject.project(':worker-app')
+    worker.sourceSets.create('localData') {
+        java.srcDirs = ['/local/data/java']
+        compileClasspath += worker.sourceSets.main.runtimeClasspath
+        runtimeClasspath += worker.sourceSets.main.runtimeClasspath
+    }
+    worker.tasks.register('prepareLocalData', JavaExec) {
+        dependsOn worker.tasks.named('localDataClasses')
+        classpath = worker.sourceSets.localData.runtimeClasspath
+        mainClass = 'com.gustler.localdata.LocalData'
+        args '/local/data/routes.json', '/local/models/development-v1'
+    }
+}

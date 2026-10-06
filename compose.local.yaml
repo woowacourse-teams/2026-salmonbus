@@ -67,6 +67,23 @@ services:
             - .gradle/
     networks: [access, local]
 
+  local-init:
+    profiles: [data]
+    build:
+      context: .
+      dockerfile: dev/docker/backend.Dockerfile
+      args:
+        DEV_COMPONENT: worker-app
+    env_file: .local/env/worker.env
+    entrypoint: [./gradlew, --offline, --init-script, /local/data/tasks.gradle, ':worker-app:prepareLocalData', --no-daemon, --console=plain]
+    volumes:
+      - ./dev/data:/local/data:ro
+      - model-data:/local/models
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [local]
+
   worker:
     profiles: [worker]
     build:
@@ -80,6 +97,7 @@ services:
       SPRING_CONFIG_ADDITIONAL_LOCATION: file:/local/config/worker.yml
     volumes:
       - ./dev/config/worker.yml:/local/config/worker.yml:ro
+      - model-data:/local/models:ro
     depends_on:
       api:
         condition: service_healthy
@@ -145,3 +163,4 @@ networks:
 volumes:
   postgres-data:
   mongodb-data:
+  model-data:

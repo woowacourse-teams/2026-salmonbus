@@ -93,13 +93,19 @@ compose() {
 command=${1:-help}
 case $command in
   init) init_settings ;;
-  check|build|up|status|stop|logs)
+  check|build|prepare|up|status|stop|logs)
     check_settings
     check_docker
     shift
     case $command in
       check) compose config --quiet ;;
       build) compose build ;;
+      prepare)
+        [[ $# == 0 ]] || fail 'prepare 뒤에는 인자를 넣지 않습니다.'
+        compose up --detach --build --wait api
+        compose --profile data build local-init
+        compose --profile data run --no-deps --rm local-init
+        ;;
       up)
         case ${1:-} in
           '') compose up --detach --build ;;
@@ -107,16 +113,16 @@ case $command in
           *) fail 'up 또는 up --watch로 실행해 주세요.' ;;
         esac
         ;;
-      status) compose --profile worker ps ;;
-      stop) compose --profile worker stop ;;
+      status) compose --profile worker --profile data ps ;;
+      stop) compose --profile worker --profile data stop ;;
       logs)
         case ${1:-} in
-          api|worker|frontend|postgres|mongodb) compose --profile worker logs --tail 100 "$1" ;;
+          api|worker|frontend|postgres|mongodb|local-init) compose --profile worker --profile data logs --tail 100 "$1" ;;
           *) fail 'logs 뒤에 서비스 이름을 적어 주세요.' ;;
         esac
         ;;
     esac
     ;;
-  help) printf '%s\n' './dev/local.sh init | check | build | up [--watch] | status | logs <서비스> | stop' ;;
+  help) printf '%s\n' './dev/local.sh init | check | build | prepare | up [--watch] | status | logs <서비스> | stop' ;;
   *) fail '지원하지 않는 명령입니다. help를 확인해 주세요.' ;;
 esac

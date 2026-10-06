@@ -7,9 +7,14 @@ RUN apt-get update \
 WORKDIR /workspace/backend
 COPY --chown=developer:developer backend/ ./
 COPY --chmod=755 dev/docker/run-backend.sh /usr/local/bin/run-backend
-RUN chown -R developer:developer /workspace/backend
+RUN chown -R developer:developer /workspace/backend \
+    && mkdir -p /local/models && chown developer:developer /local/models
 USER developer
 ARG DEV_COMPONENT=api-app
 RUN case "$DEV_COMPONENT" in api-app|worker-app) ;; *) exit 1 ;; esac \
     && ./gradlew ":${DEV_COMPONENT}:bootJar" --no-daemon --console=plain
+COPY --chown=developer:developer dev/data/ /local/data/
+RUN if [ "$DEV_COMPONENT" = worker-app ]; then \
+        ./gradlew --init-script /local/data/tasks.gradle :worker-app:localDataClasses --no-daemon --console=plain; \
+    fi
 ENTRYPOINT ["run-backend"]
