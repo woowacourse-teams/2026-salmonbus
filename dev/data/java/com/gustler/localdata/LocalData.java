@@ -32,7 +32,8 @@ public final class LocalData {
     public static void main(String[] args) {
         String step = "INPUT";
         try {
-            require(args.length == 2 && args[0].equals("/local/data/routes.json")
+            final boolean recover = args.length == 3 && args[2].equals("--recover-collector-only");
+            require((args.length == 2 || recover) && args[0].equals("/local/data/routes.json")
                 && args[1].equals("/local/models/development-v1"), "LOCAL_PATHS");
             require(URL.equals(System.getenv("DB_URL")) && USER.equals(System.getenv("DB_USERNAME")), "LOCAL_DATABASE_ONLY");
             String password = System.getenv("DB_PASSWORD");
@@ -72,10 +73,14 @@ public final class LocalData {
                             WHERE singleton AND version=? AND route_digest=? AND bundle_digest=?
                             """, DevelopmentBundle.VERSION, routeDigest, inspection.bundleDigest()).equals("1"), "FIXTURE_VERSION_CHANGED");
                     } else {
-                        require(scalar(connection, "SELECT count(*) FROM route").equals("0")
-                            && scalar(connection, "SELECT count(*) FROM model_deployment").equals("0"), "UNOWNED_LOCAL_DATA");
                         step = "SEED";
-                        seed(connection, data);
+                        if (recover) {
+                            recoverCollectorOnly(connection, data);
+                        } else {
+                            require(scalar(connection, "SELECT count(*) FROM route").equals("0")
+                                && scalar(connection, "SELECT count(*) FROM model_deployment").equals("0"), "UNOWNED_LOCAL_DATA");
+                            seed(connection, data);
+                        }
                         execute(connection, "INSERT INTO local_development_fixture VALUES (true, ?, ?, ?, CURRENT_TIMESTAMP)",
                             DevelopmentBundle.VERSION, routeDigest, inspection.bundleDigest());
                     }
@@ -88,7 +93,7 @@ public final class LocalData {
                 }
             }
             System.out.println(new String(DevelopmentBundle.bytes(Map.of("status", "ok",
-                "result", existing ? "preserved" : "prepared", "routeCount", data.routes().size(),
+                "result", existing ? "preserved" : recover ? "recovered" : "prepared", "routeCount", data.routes().size(),
                 "stopCount", data.routes().stream().mapToInt(route -> route.stops().size()).sum(),
                 "statisticsCellCount", data.routes().stream().flatMap(route -> route.stops().stream()).filter(RouteDataset.Stop::boardingAllowed).count() * 3,
                 "featureContract", inspection.featureContractVersion(), "bundleDigest", inspection.bundleDigest(),
@@ -145,6 +150,51 @@ public final class LocalData {
         }
     }
 
+    private static void recoverCollectorOnly(Connection connection, RouteDataset data) throws Exception {
+        require(scalar(connection, "SELECT count(*) FROM model_deployment").equals("0")
+            && scalar(connection, "SELECT count(*) FROM seat_forecast").equals("0")
+            && scalar(connection, "SELECT count(*) FROM forecast_publication").equals("0")
+            && scalar(connection, "SELECT count(*) FROM stop_demand_statistics").equals("0"), "RECOVERY_STATE_UNSUPPORTED");
+        require(scalar(connection, """
+            SELECT count(*) FROM vehicle_observation
+            WHERE vehicle_id IS NULL OR plate_number IS NULL
+               OR vehicle_id !~ '^L[0-9a-f]{8}-[0-9]{9}-[0-9]+[UD]$'
+               OR plate_number !~ '^LOCAL-[0-9]+-[UD]$'
+            """).equals("0") && !scalar(connection, "SELECT count(*) FROM vehicle_observation").equals("0"), "RECOVERY_REQUIRES_MOCK_OBSERVATIONS");
+        require(scalar(connection, "SELECT count(*) FROM route_data_quality WHERE quality_revision<>1").equals("0")
+            && scalar(connection, "SELECT count(*) FROM trip_quality_rebuild WHERE NOT completed").equals("0")
+            && scalar(connection, "SELECT count(*) FROM demand_statistics_version WHERE cell_count<>0 OR calculation_version<>?", STATISTICS).equals("0"), "RECOVERY_STATE_UNSUPPORTED");
+        verify(connection, data, "/local/models/development-v1", false);
+        for (int index = 0; index < data.routes().size(); index++) {
+            RouteDataset.Route route = data.routes().get(index);
+            final long versionId = Long.parseLong(scalar(connection, """
+                SELECT v.id FROM route r JOIN route_version v ON v.route_id=r.id
+                WHERE r.source_route_id=? AND v.valid_to IS NULL
+                """, route.routeId()));
+            final int revision = Integer.parseInt(scalar(connection,
+                "SELECT COALESCE(MAX(revision),0)+1 FROM demand_statistics_version WHERE route_version_id=? AND calculation_version=?",
+                versionId, STATISTICS));
+            final long cellCount = route.stops().stream().filter(RouteDataset.Stop::boardingAllowed).count() * 3;
+            execute(connection, """
+                INSERT INTO demand_statistics_version(route_version_id,calculation_version,revision,data_until,
+                    computed_at,quality_revision,cell_count) VALUES (?,?,?,?,?,1,?)
+                """, versionId, STATISTICS, revision, BASELINE.minusDays(1), BASELINE, cellCount);
+            for (RouteDataset.Stop stop : route.stops()) {
+                if (!stop.boardingAllowed()) {
+                    continue;
+                }
+                for (TimeSlot slot : TimeSlot.values()) {
+                    execute(connection, """
+                        INSERT INTO stop_demand_statistics(route_version_id,stop_order,time_slot,calculation_version,
+                            revision,average_fill_rate,average_net_boarding_rate,sample_count,day_count,data_until,computed_at,quality_revision)
+                        VALUES (?,?,?,?,?,?,?,120,7,?,?,1)
+                        """, versionId, stop.sequence(), slot.name().toLowerCase(java.util.Locale.ROOT), STATISTICS,
+                        revision, fillRate(route, stop, slot, index), netBoarding(route, stop, slot), BASELINE.minusDays(1), BASELINE);
+                }
+            }
+        }
+    }
+
     private static double fillRate(RouteDataset.Route route, RouteDataset.Stop stop, TimeSlot slot, final int index) {
         final double position = (stop.sequence() - 1.0) / (route.stops().size() - 1.0);
         return .25 + .25 * Math.sin(position * Math.PI) + index * .01 + slot.ordinal() * .05;
@@ -156,6 +206,10 @@ public final class LocalData {
     }
 
     private static void verify(Connection connection, RouteDataset data, String modelDirectory) throws Exception {
+        verify(connection, data, modelDirectory, true);
+    }
+
+    private static void verify(Connection connection, RouteDataset data, String modelDirectory, final boolean verifyStatistics) throws Exception {
         require(scalar(connection, "SELECT count(*) FROM route").equals("8"), "ROUTE_DATA_CHANGED");
         JdbcClient jdbc = JdbcClient.create(new SingleConnectionDataSource(connection, true));
         var statistics = new JdbcStopDemandStatisticsRepository(jdbc, new JdbcRouteDataQualityAccess(jdbc));
@@ -202,11 +256,18 @@ public final class LocalData {
             }
             release.routeReference().requireMatches(new com.gustler.backend.forecasting.domain.model.RouteStops(
                 versionId, route.routeId(), modelStops, route.displayName()));
+            if (!verifyStatistics) {
+                continue;
+            }
+            final int fixtureRevision = Integer.parseInt(scalar(connection, """
+                SELECT revision FROM demand_statistics_version WHERE route_version_id=? AND calculation_version=?
+                AND data_until=? AND computed_at=? AND quality_revision=1
+                """, versionId, STATISTICS, BASELINE.minusDays(1), BASELINE));
             require(statistics.readAsOf(versionId, TimeSlot.OTHER, STATISTICS, BASELINE.minusSeconds(1).toInstant())
                 .revision() == 0, "STATISTICS_AS_OF");
             for (TimeSlot slot : TimeSlot.values()) {
                 var cells = statistics.readAsOf(versionId, slot, STATISTICS, BASELINE.plusSeconds(1).toInstant());
-                require(cells.revision() == 1
+                require(cells.revision() == fixtureRevision
                     && cells.cells().size() == route.stops().stream().filter(RouteDataset.Stop::boardingAllowed).count(), "STATISTICS_FIXTURE_CHANGED");
                 for (var cell : cells.cells()) {
                     RouteDataset.Stop stop = route.stops().get(cell.stopOrder() - 1);

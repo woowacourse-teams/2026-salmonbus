@@ -10,6 +10,9 @@ gradle.projectsEvaluated {
         classpath = worker.sourceSets.localData.runtimeClasspath
         mainClass = 'com.gustler.localdata.LocalData'
         args '/local/data/routes.json', '/local/models/development-v1'
+        if (worker.findProperty('recoverCollectorOnly') == 'true') {
+            args '--recover-collector-only'
+        }
     }
     worker.tasks.register('verifyLocalGbis', JavaExec) {
         dependsOn worker.tasks.named('localDataClasses')
