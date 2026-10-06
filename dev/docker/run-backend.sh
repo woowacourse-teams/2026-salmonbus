@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+source /local-tools/settings.sh
+case ${LOCAL_COMPONENT:-} in
+  api-app) load_settings api ;;
+  worker-app) load_settings worker ;;
+  *) fail '로컬 백엔드 서비스를 확인해 주세요.' ;;
+esac
+
 fail() {
   printf '%s\n' '로컬 백엔드 설정을 확인해 주세요.' >&2
   exit 1

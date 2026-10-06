@@ -4,18 +4,17 @@
 
 Docker와 Docker Compose Watch를 지원하는 Compose가 필요합니다. 프론트는 접속용 네트워크, DB와 worker는 프로젝트 전용 내부 네트워크를 사용합니다. API는 두 네트워크에 연결됩니다. 초기 이미지 빌드에서는 의존성을 내려받습니다.
 
-실행 스크립트는 Bash·OpenSSL·shasum을 사용합니다. 현재 macOS의 로컬 Docker Desktop에서 확인했습니다. 기본 이미지는 Linux arm64·amd64를 지원하며 다른 호스트 환경의 실제 실행은 아직 확인하지 않았습니다.
+현재 macOS의 로컬 Docker Desktop에서 확인했습니다. 기본 이미지는 Linux arm64·amd64를 지원하며 다른 호스트 환경의 실제 실행은 아직 확인하지 않았습니다.
 
 ## 처음 실행
 
 ```sh
-./dev/local.sh init
-./dev/local.sh check
-./dev/local.sh prepare
-./dev/local.sh up --watch
+docker compose up --watch
 ```
 
-화면은 http://localhost:3000, API는 http://localhost:8080에서 확인합니다. 다른 프로세스가 이 포트를 사용 중이면 먼저 충돌을 확인해 주세요. 스크립트가 다른 컨테이너나 프로세스를 종료하지는 않습니다.
+처음 실행해도 별도 `init`·`prepare` 명령은 필요하지 않습니다. Compose가 개발 계정 준비 → DB 시작 → API migration → 노선·통계·모델 준비 → 프론트 시작 순서로 진행합니다. 처음에는 이미지 빌드와 의존성 다운로드 시간이 필요합니다. 변경한 Dockerfile·의존성까지 다시 빌드하려면 `docker compose up --build --watch`를 사용합니다.
+
+화면은 http://localhost:3000, API는 http://localhost:8080에서 확인합니다. 다른 프로세스가 이 포트를 사용 중이면 먼저 충돌을 확인해 주세요. 다른 컨테이너나 프로세스를 자동 종료하지 않습니다.
 
 프론트는 로컬 API로만 연결하고 운영 env 파일을 읽지 않습니다. Amplitude도 초기화하지 않습니다. PostgreSQL·MongoDB 포트는 호스트에 공개하지 않습니다.
 
@@ -23,27 +22,29 @@ Docker와 Docker Compose Watch를 지원하는 Compose가 필요합니다. 프�
 
 ## 개발 데이터
 
-`prepare`는 API를 먼저 기동해 Flyway migration을 적용한 뒤 일회성 작업으로 노선·정류장·좌표와 가상 통계를 저장합니다. 1650·3330·9007·9300·6011·3000·5600·3500의 실제 노선 구조와 정류장 643개를 사용합니다. 노선 목록이 보여도 아직 차량·예보가 준비된 상태는 아닙니다.
+`local-init` 서비스는 API의 Flyway migration 완료 후 노선·정류장·좌표와 가상 통계를 준비하고 종료합니다. 1650·3330·9007·9300·6011·3000·5600·3500의 실제 노선 구조와 정류장 643개를 사용합니다. 노선 목록이 보여도 아직 차량·예보가 준비된 상태는 아닙니다.
 
 통계와 모델 계수는 개발용 가상 값입니다. 실제 모델 로더로 8개 노선·1~12정류장 앞 예보·50개 입력 특징 계약을 검증하지만 운영 모델의 정확도를 평가하는 자료는 아닙니다. 모델 파일은 `model-data` 볼륨에 생성하며 이 단계에서는 모델을 활성화하지 않습니다. 상세 범위는 [데이터 안내](data/README.md)를 참고하세요.
 
-같은 데이터로 `prepare`를 다시 실행하면 기존 내용을 검증하고 유지합니다. 다른 버전이나 초기 준비와 맞지 않는 데이터가 있으면 중단합니다. 자동 덮어쓰기·삭제는 하지 않습니다. 일반 종료 후에도 DB와 모델 파일은 남습니다.
+다시 `up`하면 초기 준비 서비스가 기존 설정·데이터를 검증하고 유지합니다. 다른 버전이나 초기 준비와 맞지 않는 데이터가 있으면 중단합니다. 자동 덮어쓰기·삭제는 하지 않습니다. 일반 종료 후에도 DB와 모델 파일은 남습니다.
 
 ## 상태 확인과 종료
 
 ```sh
-./dev/local.sh status
-./dev/local.sh logs api
-./dev/local.sh logs frontend
-./dev/local.sh stop
+docker compose ps --all
+docker compose logs api
+docker compose logs frontend
+docker compose stop
 ```
 
-종료해도 DB 데이터와 로컬 설정은 남습니다. 다시 실행할 때 `init`은 기존 설정을 유지합니다. `.local/env`의 파일을 삭제하거나 다른 DB 주소·실제 GBIS 키로 바꾸지 마세요. DB 볼륨의 계정과 설정 파일이 달라지면 접속이 실패할 수 있습니다.
+개발 계정은 `settings-data` 볼륨의 권한 600인 파일에 보관하고 앱과 DB는 읽기 전용으로 사용합니다. 이 볼륨만 없애면 기존 DB의 계정과 달라질 수 있으므로 따로 삭제하지 마세요. 이전 단계의 `.local/env` 파일은 현재 Compose에서 읽지 않습니다.
+
+프로젝트 이름은 Compose 기본값인 디렉터리 이름을 사용합니다. `./dev/local.sh up --watch`도 같은 프로젝트를 실행하는 편의 명령이며 별도 초기 준비가 필요하지 않습니다. 커스텀 프로젝트 이름을 쓰는 경우에는 `docker compose -p <이름>`을 실행·조회·종료에 일관되게 사용하세요.
 
 ## 코드 수정
 
-`up --watch`는 프론트 소스를 동기화해 HMR로 반영합니다. API 소스는 동기화 후 컨테이너를 재시작하고 Gradle로 다시 컴파일합니다. API 재시작 중에는 요청·채팅 연결이 잠시 끊길 수 있습니다. 이미지 자동 재빌드는 사용하지 않습니다. 의존성·Dockerfile·개발 설정을 변경했다면 `build` 후 다시 실행해 주세요.
+`up --watch`는 프론트 소스를 동기화해 HMR로 반영합니다. API 소스는 동기화 후 컨테이너를 재시작하고 Gradle로 다시 컴파일합니다. API 재시작 중에는 요청·채팅 연결이 잠시 끊길 수 있습니다. 이미지 자동 재빌드는 사용하지 않습니다. 의존성·Dockerfile·개발 설정을 변경했다면 `--build`로 다시 실행해 주세요.
 
 ## 저장소와 배포
 
-Compose·개발 설정·실행 도구는 저장소로 공유합니다. 생성된 계정 값과 데이터는 `.local/` 또는 Docker 볼륨에 보관합니다. 이 도구는 기존 backend Gradle 모듈과 서버 배포 묶음에 등록하지 않습니다.
+Compose·개발 설정·실행 도구는 저장소로 공유합니다. 생성된 계정 값과 데이터는 프로젝트 전용 Docker 볼륨에 보관합니다. 이 도구는 기존 backend Gradle 모듈과 서버 배포 묶음에 등록하지 않습니다.

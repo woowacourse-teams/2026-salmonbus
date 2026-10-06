@@ -1,11 +1,24 @@
 services:
+  settings-init:
+    image: postgres:18@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+    entrypoint: [bash, /local-tools/init-settings.sh]
+    volumes:
+      - ./dev/docker:/local-tools:ro
+      - settings-data:/local-settings
+    network_mode: none
+
   postgres:
     image: postgres:18@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
-    env_file: .local/env/postgres.env
+    entrypoint: [bash, /local-tools/run-database.sh, postgres]
     volumes:
+      - ./dev/docker:/local-tools:ro
+      - settings-data:/local-settings:ro
       - postgres-data:/var/lib/postgresql
+    depends_on:
+      settings-init:
+        condition: service_completed_successfully
     healthcheck:
-      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      test: [CMD, pg_isready, -U, salmonbus_local, -d, salmonbus_local]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -13,9 +26,14 @@ services:
 
   mongodb:
     image: mongo:8.0@sha256:4968f22d0c6c10ef29952f3e807f62872ba22b3312f25803564fbfc08255efc2
-    env_file: .local/env/mongodb.env
+    entrypoint: [bash, /local-tools/run-database.sh, mongodb]
     volumes:
+      - ./dev/docker:/local-tools:ro
+      - settings-data:/local-settings:ro
       - mongodb-data:/data/db
+    depends_on:
+      settings-init:
+        condition: service_completed_successfully
     healthcheck:
       test: [CMD, mongosh, --quiet, --eval, "quit(db.adminCommand('ping').ok === 1 ? 0 : 1)"]
       interval: 5s
@@ -29,11 +47,13 @@ services:
       dockerfile: dev/docker/backend.Dockerfile
       args:
         DEV_COMPONENT: api-app
-    env_file: .local/env/api.env
+    entrypoint: [bash, /local-tools/run-backend.sh]
     environment:
       LOCAL_COMPONENT: api-app
       SPRING_CONFIG_ADDITIONAL_LOCATION: file:/local/config/api.yml
     volumes:
+      - ./dev/docker:/local-tools:ro
+      - settings-data:/local-settings:ro
       - ./dev/config/api.yml:/local/config/api.yml:ro
     ports:
       - "127.0.0.1:8080:8080"
@@ -68,15 +88,15 @@ services:
     networks: [access, local]
 
   local-init:
-    profiles: [data]
     build:
       context: .
       dockerfile: dev/docker/backend.Dockerfile
       args:
         DEV_COMPONENT: worker-app
-    env_file: .local/env/worker.env
-    entrypoint: [./gradlew, --offline, --init-script, /local/data/tasks.gradle, ':worker-app:prepareLocalData', --no-daemon, --console=plain]
+    entrypoint: [bash, /local-tools/run-local-data.sh]
     volumes:
+      - ./dev/docker:/local-tools:ro
+      - settings-data:/local-settings:ro
       - ./dev/data:/local/data:ro
       - model-data:/local/models
     depends_on:
@@ -91,16 +111,18 @@ services:
       dockerfile: dev/docker/backend.Dockerfile
       args:
         DEV_COMPONENT: worker-app
-    env_file: .local/env/worker.env
+    entrypoint: [bash, /local-tools/run-backend.sh]
     environment:
       LOCAL_COMPONENT: worker-app
       SPRING_CONFIG_ADDITIONAL_LOCATION: file:/local/config/worker.yml
     volumes:
+      - ./dev/docker:/local-tools:ro
+      - settings-data:/local-settings:ro
       - ./dev/config/worker.yml:/local/config/worker.yml:ro
       - model-data:/local/models:ro
     depends_on:
-      api:
-        condition: service_healthy
+      local-init:
+        condition: service_completed_successfully
     develop:
       watch:
         - action: sync+restart
@@ -131,6 +153,8 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      local-init:
+        condition: service_completed_successfully
     healthcheck:
       test: [CMD, node, -e, "fetch('http://127.0.0.1:3000').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 5s
@@ -161,6 +185,7 @@ networks:
     internal: true
 
 volumes:
+  settings-data:
   postgres-data:
   mongodb-data:
   model-data:
