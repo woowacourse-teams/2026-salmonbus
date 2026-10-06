@@ -1,0 +1,147 @@
+services:
+  postgres:
+    image: postgres:18@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+    env_file: .local/env/postgres.env
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [local]
+
+  mongodb:
+    image: mongo:8.0@sha256:4968f22d0c6c10ef29952f3e807f62872ba22b3312f25803564fbfc08255efc2
+    env_file: .local/env/mongodb.env
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test: [CMD, mongosh, --quiet, --eval, "quit(db.adminCommand('ping').ok === 1 ? 0 : 1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [local]
+
+  api:
+    build:
+      context: .
+      dockerfile: dev/docker/backend.Dockerfile
+      args:
+        DEV_COMPONENT: api-app
+    env_file: .local/env/api.env
+    environment:
+      LOCAL_COMPONENT: api-app
+      SPRING_CONFIG_ADDITIONAL_LOCATION: file:/local/config/api.yml
+    volumes:
+      - ./dev/config/api.yml:/local/config/api.yml:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, --output, /dev/null, http://127.0.0.1:8080/actuator/health]
+      interval: 5s
+      timeout: 5s
+      start_period: 90s
+      retries: 30
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./backend
+          target: /workspace/backend
+          initial_sync: true
+          ignore:
+            - worker-app/
+            - maintenance-app/
+            - deploy/
+            - '**/src/test/'
+            - '**/build/'
+            - '**/build.gradle'
+            - settings.gradle
+            - gradle.properties
+            - gradle/
+            - .gradle/
+    networks: [access, local]
+
+  worker:
+    profiles: [worker]
+    build:
+      context: .
+      dockerfile: dev/docker/backend.Dockerfile
+      args:
+        DEV_COMPONENT: worker-app
+    env_file: .local/env/worker.env
+    environment:
+      LOCAL_COMPONENT: worker-app
+      SPRING_CONFIG_ADDITIONAL_LOCATION: file:/local/config/worker.yml
+    volumes:
+      - ./dev/config/worker.yml:/local/config/worker.yml:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./backend
+          target: /workspace/backend
+          initial_sync: true
+          ignore:
+            - api-app/
+            - maintenance-app/
+            - deploy/
+            - '**/src/test/'
+            - '**/build/'
+            - '**/build.gradle'
+            - settings.gradle
+            - gradle.properties
+            - gradle/
+            - .gradle/
+    networks: [local]
+
+  frontend:
+    build:
+      context: .
+      dockerfile: dev/docker/frontend.Dockerfile
+    environment:
+      APP_VERSION: local
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      retries: 20
+    develop:
+      watch:
+        - action: sync
+          path: ./frontend
+          target: /workspace/frontend
+          initial_sync: true
+          ignore:
+            - node_modules/
+            - dist/
+            - coverage/
+            - playwright-report/
+            - test-results/
+            - env/
+            - package.json
+            - pnpm-lock.yaml
+    networks: [access]
+
+networks:
+  access:
+    driver: bridge
+  local:
+    internal: true
+
+volumes:
+  postgres-data:
+  mongodb-data:

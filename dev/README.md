@@ -1,0 +1,40 @@
+# 로컬 개발 환경
+
+현재 단계에서는 PostgreSQL·MongoDB·API·프론트를 로컬에서 실행합니다. 노선 데이터와 WireMock·모델은 다음 단계에서 연결하므로 노선 목록은 비어 있습니다. worker 설정은 준비돼 있지만 기본 실행에는 포함하지 않고 수집·예보도 꺼두었습니다.
+
+Docker와 Docker Compose Watch를 지원하는 Compose가 필요합니다. 프론트는 접속용 네트워크, DB와 worker는 프로젝트 전용 내부 네트워크를 사용합니다. API는 두 네트워크에 연결됩니다. 초기 이미지 빌드에서는 의존성을 내려받습니다.
+
+실행 스크립트는 Bash·OpenSSL·shasum을 사용합니다. 현재 macOS의 로컬 Docker Desktop에서 확인했습니다. 기본 이미지는 Linux arm64·amd64를 지원하며 다른 호스트 환경의 실제 실행은 아직 확인하지 않았습니다.
+
+## 처음 실행
+
+```sh
+./dev/local.sh init
+./dev/local.sh check
+./dev/local.sh up --watch
+```
+
+화면은 http://localhost:3000, API는 http://localhost:8080에서 확인합니다. 다른 프로세스가 이 포트를 사용 중이면 먼저 충돌을 확인해 주세요. 스크립트가 다른 컨테이너나 프로세스를 종료하지는 않습니다.
+
+프론트는 로컬 API로만 연결하고 운영 env 파일을 읽지 않습니다. Amplitude도 초기화하지 않습니다. PostgreSQL·MongoDB 포트는 호스트에 공개하지 않습니다.
+
+프론트와 API는 인터넷으로 요청을 보낼 수 있지만 기본 연결 대상은 로컬 API·DB입니다. worker는 내부망에만 연결됩니다. 로컬 접속에 Nginx를 사용하지 않습니다.
+
+## 상태 확인과 종료
+
+```sh
+./dev/local.sh status
+./dev/local.sh logs api
+./dev/local.sh logs frontend
+./dev/local.sh stop
+```
+
+종료해도 DB 데이터와 로컬 설정은 남습니다. 다시 실행할 때 `init`은 기존 설정을 유지합니다. `.local/env`의 파일을 삭제하거나 다른 DB 주소·실제 GBIS 키로 바꾸지 마세요. DB 볼륨의 계정과 설정 파일이 달라지면 접속이 실패할 수 있습니다.
+
+## 코드 수정
+
+`up --watch`는 프론트 소스를 동기화해 HMR로 반영합니다. API 소스는 동기화 후 컨테이너를 재시작하고 Gradle로 다시 컴파일합니다. API 재시작 중에는 요청·채팅 연결이 잠시 끊길 수 있습니다. 이미지 자동 재빌드는 사용하지 않습니다. 의존성·Dockerfile·개발 설정을 변경했다면 `build` 후 다시 실행해 주세요.
+
+## 저장소와 배포
+
+Compose·개발 설정·실행 도구는 저장소로 공유합니다. 생성된 계정 값과 데이터는 `.local/` 또는 Docker 볼륨에 보관합니다. 이 도구는 기존 backend Gradle 모듈과 서버 배포 묶음에 등록하지 않습니다.

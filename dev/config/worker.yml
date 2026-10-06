@@ -1,0 +1,14 @@
+gbis:
+  base-url: http://gbis-mock:8080
+
+collection:
+  enabled: false
+  route-ids: []
+
+forecast:
+  enabled: false
+
+model:
+  bundle:
+    directory: ''
+    promote-on-start: false
