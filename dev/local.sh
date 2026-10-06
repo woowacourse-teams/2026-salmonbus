@@ -48,11 +48,11 @@ case $command in
           *) fail 'up 또는 up --watch로 실행해 주세요.' ;;
         esac
         ;;
-      status) compose --profile worker ps ;;
-      stop) compose --profile worker stop ;;
+      status) compose ps ;;
+      stop) compose stop ;;
       logs)
         case ${1:-} in
-          api|worker|frontend|postgres|mongodb|local-init|settings-init|gbis-mock) compose --profile worker logs --tail 100 "$1" ;;
+          api|worker|frontend|postgres|mongodb|local-init|settings-init|gbis-mock) compose logs --tail 100 "$1" ;;
           *) fail 'logs 뒤에 서비스 이름을 적어 주세요.' ;;
         esac
         ;;

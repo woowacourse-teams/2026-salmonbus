@@ -1,14 +1,26 @@
 gbis:
   base-url: http://gbis-mock:8080
+  daily-limit: 100000
 
 collection:
-  enabled: false
-  route-ids: []
+  enabled: true
+  fixed-interval: 20s
+  route-ids:
+    - '234000050'
+    - '204000057'
+    - '204000070'
+    - '234000886'
+    - '233000392'
+    - '227000038'
+    - '228000184'
+    - '234000051'
 
 forecast:
-  enabled: false
+  enabled: true
+  interval: 5s
+  settlement-interval: 10s
 
 model:
   bundle:
-    directory: ''
+    directory: /local/models/development-v1
     promote-on-start: false

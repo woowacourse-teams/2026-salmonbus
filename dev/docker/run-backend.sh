@@ -23,6 +23,11 @@ case ${LOCAL_COMPONENT:-} in
     ;;
   worker-app)
     [[ ${GBIS_SERVICE_KEY:-} == local-only-placeholder ]] || fail
+    for key in GBIS_SERVICE_KEY_B GBIS_SERVICE_KEY_C GBIS_SERVICE_KEY_D; do
+      [[ -z ${!key:-} ]] || fail
+    done
+    [[ ${GBIS_BASE_URL:-http://gbis-mock:8080} == http://gbis-mock:8080 ]] || fail
+    [[ ${MODEL_BUNDLE_DIRECTORY:-/local/models/development-v1} == /local/models/development-v1 ]] || fail
     ;;
   *) fail ;;
 esac

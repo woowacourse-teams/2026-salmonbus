@@ -117,7 +117,6 @@ services:
     networks: [local]
 
   worker:
-    profiles: [worker]
     build:
       context: .
       dockerfile: dev/docker/backend.Dockerfile
@@ -135,6 +134,14 @@ services:
     depends_on:
       local-init:
         condition: service_completed_successfully
+      gbis-mock:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, --output, /dev/null, http://127.0.0.1:8081/actuator/health]
+      interval: 5s
+      timeout: 5s
+      start_period: 90s
+      retries: 30
     develop:
       watch:
         - action: sync+restart
