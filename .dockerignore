@@ -10,6 +10,12 @@
 !dev/config/**
 !dev/data/
 !dev/data/**
+!dev/scenarios/
+!dev/scenarios/**
+!dev/wiremock/
+!dev/wiremock/**
+!dev/wiremock-extension/
+!dev/wiremock-extension/**
 **/.env*
 **/build/
 **/.gradle/

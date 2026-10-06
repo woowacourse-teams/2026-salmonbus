@@ -26,13 +26,17 @@ compose() {
 
 command=${1:-help}
 case $command in
-  init|check|build|prepare|up|status|stop|logs)
+  init|check|build|prepare|up|status|stop|logs|scenario)
     check_docker
     shift
     case $command in
       init) compose run --rm settings-init ;;
       check) compose config --quiet ;;
       build) compose build ;;
+      scenario)
+        [[ $# -ge 1 && $# -le 2 ]] || fail 'scenario <normal|empty|unknown-seat|upstream-error> [노선|all]로 실행해 주세요.'
+        compose exec -T gbis-mock java -cp '/var/wiremock/lib/*:/var/wiremock/extensions/*' com.gustler.localgbis.ScenarioControl "$@"
+        ;;
       prepare)
         [[ $# == 0 ]] || fail 'prepare 뒤에는 인자를 넣지 않습니다.'
         compose up --detach --build --wait local-init
@@ -48,12 +52,12 @@ case $command in
       stop) compose --profile worker stop ;;
       logs)
         case ${1:-} in
-          api|worker|frontend|postgres|mongodb|local-init|settings-init) compose --profile worker logs --tail 100 "$1" ;;
+          api|worker|frontend|postgres|mongodb|local-init|settings-init|gbis-mock) compose --profile worker logs --tail 100 "$1" ;;
           *) fail 'logs 뒤에 서비스 이름을 적어 주세요.' ;;
         esac
         ;;
     esac
     ;;
-  help) printf '%s\n' './dev/local.sh init | check | build | prepare | up [--watch] | status | logs <서비스> | stop' ;;
+  help) printf '%s\n' './dev/local.sh up [--watch] | status | logs <서비스> | stop | scenario <모드> [노선|all]' ;;
   *) fail '지원하지 않는 명령입니다. help를 확인해 주세요.' ;;
 esac

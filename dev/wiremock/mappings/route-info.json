@@ -1,0 +1,26 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/busrouteservice/v2/getBusRouteInfoItemv2",
+    "queryParameters": {
+      "serviceKey": {
+        "equalTo": "local-only-placeholder"
+      },
+      "format": {
+        "equalTo": "json"
+      },
+      "routeId": {
+        "matches": "(234000050|204000057|204000070|234000886|233000392|227000038|228000184|234000051)"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "transformers": [
+      "gbis-replay"
+    ],
+    "transformerParameters": {
+      "operation": "route-info"
+    }
+  }
+}

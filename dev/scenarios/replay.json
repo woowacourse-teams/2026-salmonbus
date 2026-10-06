@@ -1,0 +1,5 @@
+{
+  "version": "local-replay-v1",
+  "stepSeconds": 30,
+  "idleSeconds": 60
+}
