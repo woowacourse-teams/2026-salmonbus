@@ -1,56 +1,25 @@
-# 로컬 개발 환경
+# 로컬 실행
 
-PostgreSQL·MongoDB·API·worker·프론트·WireMock을 함께 실행합니다. 전체 8개 노선에서 실제 worker가 개발 차량을 수집하고 가상 통계·모델로 예보와 도착 평가를 처리합니다. 프론트는 실제 로컬 API와 채팅 WebSocket을 사용합니다. 외부 GBIS 응답만 WireMock으로 대신합니다.
-
-Docker와 Docker Compose Watch를 지원하는 Compose가 필요합니다. 프론트는 접속용 네트워크, DB와 worker는 프로젝트 전용 내부 네트워크를 사용합니다. API는 두 네트워크에 연결됩니다. 초기 이미지 빌드에서는 의존성을 내려받습니다.
-
-현재 macOS의 로컬 Docker Desktop에서 확인했습니다. 기본 이미지는 Linux arm64·amd64를 지원하며 다른 호스트 환경의 실제 실행은 아직 확인하지 않았습니다.
-
-## 처음 실행
+Docker Desktop을 켠 뒤 저장소 루트에서 실행합니다.
 
 ```sh
-docker compose up --watch
+docker compose up --build --watch
 ```
 
-처음 실행해도 별도 `init`·`prepare` 명령은 필요하지 않습니다. Compose가 개발 계정 준비 → DB 시작 → API migration → 노선·통계·모델 준비 → worker·프론트 실행을 진행합니다. worker는 WireMock이 준비된 뒤 기동합니다. 처음에는 이미지 빌드와 의존성 다운로드 시간이 필요합니다. 변경한 Dockerfile·의존성까지 다시 빌드하려면 `docker compose up --build --watch`를 사용합니다.
+화면은 http://localhost:3000, API는 http://localhost:8080입니다. DB·계정·초기 데이터는 자동 준비하며 첫 예보까지 잠시 걸릴 수 있습니다. 프론트 소스 수정은 HMR로 반영하고, API·worker 수정은 해당 컨테이너를 재시작해 반영합니다.
 
-화면은 http://localhost:3000, API는 http://localhost:8080에서 확인합니다. 다른 프로세스가 이 포트를 사용 중이면 먼저 충돌을 확인해 주세요. 다른 컨테이너나 프로세스를 자동 종료하지 않습니다.
-
-프론트는 로컬 API로만 연결하고 운영 env 파일을 읽지 않습니다. Amplitude도 초기화하지 않습니다. PostgreSQL·MongoDB 포트는 호스트에 공개하지 않습니다.
-
-프론트와 API는 인터넷으로 요청을 보낼 수 있지만 기본 연결 대상은 로컬 API·DB입니다. worker는 내부망에만 연결됩니다. 로컬 접속에 Nginx를 사용하지 않습니다.
-
-## 개발 데이터
-
-`local-init` 서비스는 API의 Flyway migration 완료 후 노선·정류장·좌표와 가상 통계를 준비하고 종료합니다. 1650·3330·9007·9300·6011·3000·5600·3500의 실제 노선 구조와 정류장 643개를 사용합니다. worker가 시작하면 로컬 DB에서 개발용 모델을 활성화하고 관측·예보·평가 결과를 직접 생성합니다. 결과 행을 초기 데이터로 넣지 않습니다.
-
-통계와 모델 계수는 개발용 가상 값입니다. 실제 모델 로더로 8개 노선·1~12정류장 앞 예보·50개 입력 특징 계약을 검증하지만 운영 모델의 정확도를 평가하는 자료는 아닙니다. 모델 파일은 `model-data` 볼륨에 생성하고 운영 모델을 가져오지 않습니다. 상세 범위는 [데이터 안내](data/README.md)를 참고하세요.
-
-로컬 수집은 시간대와 관계없이 20초 간격, 예보는 5초, 도착 평가는 10초 간격으로 실행합니다. 운영의 시간대별 수집 기본값은 유지합니다. 로컬의 GBIS 장부 한도 100,000은 가짜 키로 mock을 반복 호출하기 위한 설정이며 실제 키의 호출 한도를 뜻하지 않습니다.
-
-첫 관측과 예보가 발행되기 전에는 목록에 `PREPARING`이 표시될 수 있습니다. 컨테이너의 healthy 상태와 첫 예보 완료는 별개입니다. 정상 발행 후 `FORECAST_READY`와 차량·예보를 확인할 수 있고, 운행 사이의 쉬는 구간에는 차량이 없을 수 있습니다.
-
-다시 `up`하면 초기 준비 서비스가 기존 설정·데이터를 검증하고 유지합니다. 다른 버전이나 초기 준비와 맞지 않는 데이터가 있으면 중단합니다. 자동 덮어쓰기·삭제는 하지 않습니다. 일반 종료 후에도 DB와 모델 파일은 남습니다.
-
-## 상태 확인과 종료
-
-WireMock의 정상·차량 없음·좌석 정보 없음·상류 오류 응답은 [시나리오 안내](scenarios/README.md)를 참고하세요. WireMock은 내부망에서만 실행하고 포트는 호스트에 공개하지 않습니다.
+같은 구성의 재실행은 `docker compose up --watch`를 사용합니다. Dockerfile·의존성·개발 설정을 바꾸면 `--build`를 붙입니다.
 
 ```sh
+./dev/local.sh scenario list
+./dev/local.sh scenario showcase
+./dev/local.sh scenario mixed 9007
+./dev/local.sh scenario normal all
 docker compose ps --all
-docker compose logs api
-docker compose logs frontend
+docker compose logs worker
 docker compose stop
 ```
 
-개발 계정은 `settings-data` 볼륨의 권한 600인 파일에 보관하고 앱과 DB는 읽기 전용으로 사용합니다. 이 볼륨만 없애면 기존 DB의 계정과 달라질 수 있으므로 따로 삭제하지 마세요. 이전 단계의 `.local/env` 파일은 현재 Compose에서 읽지 않습니다.
+시나리오는 실행 중인 환경에서 다른 터미널로 선택합니다. 기존 8개 노선의 차량·좌석·통계는 개발 데이터이고, 신규 33개 노선은 목록·정류장만 제공합니다. 선택은 다음 수집(20초 간격)부터 반영합니다. 프론트의 운행 시간 판단은 유지하므로 새벽에는 운행 종료로 표시될 수 있습니다.
 
-프로젝트 이름은 Compose 기본값인 디렉터리 이름을 사용합니다. `./dev/local.sh up --watch`도 같은 프로젝트를 실행하는 편의 명령이며 별도 초기 준비가 필요하지 않습니다. 커스텀 프로젝트 이름을 쓰는 경우에는 `docker compose -p <이름>`을 실행·조회·종료에 일관되게 사용하세요.
-
-## 코드 수정
-
-`up --watch`는 프론트 소스를 동기화해 HMR로 반영합니다. API·worker 소스는 해당 컨테이너에 동기화한 후 재시작하고 Gradle로 다시 컴파일합니다. API 재시작 중에는 요청·채팅 연결이 잠시 끊길 수 있습니다. 이미지 자동 재빌드는 사용하지 않습니다. 의존성·Dockerfile·개발 설정·WireMock 확장을 변경했다면 `--build`로 다시 실행해 주세요.
-
-## 저장소와 배포
-
-Compose·개발 설정·실행 도구는 저장소로 공유합니다. 생성된 계정 값과 데이터는 프로젝트 전용 Docker 볼륨에 보관합니다. 이 도구는 기존 backend Gradle 모듈과 서버 배포 묶음에 등록하지 않습니다.
+`stop` 후에도 DB·계정·모델은 볼륨에 유지됩니다. `settings-data` 볼륨만 따로 삭제하지 마세요. 초기 데이터 버전이나 모델이 맞지 않으면 자동으로 덮어쓰지 않고 중단합니다.
