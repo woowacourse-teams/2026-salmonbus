@@ -30,6 +30,7 @@ services:
     volumes:
       - ./dev/docker:/local-tools:ro
       - settings-data:/local-settings:ro
+      - ./dev/config/mongodb.yml:/local/config/mongodb.yml:ro
       - mongodb-data:/data/db
     depends_on:
       settings-init:

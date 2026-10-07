@@ -1,0 +1,10 @@
+systemLog:
+  quiet: true
+
+setParameter:
+  enableDetailedConnectionHealthMetricLogLines: false
+
+storage:
+  wiredTiger:
+    engineConfig:
+      configString: "verbose=[recovery_progress:1,checkpoint_progress:0,compact_progress:1]"
