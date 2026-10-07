@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ApiResult } from "@/shared/api/client";
-import { lastSuccessOf, type LastSuccess, type PolledResource } from "@/shared/api/polledResource";
+import { latestSuccessOf, type LatestSuccess, type PolledResource } from "@/shared/api/polledResource";
 import { fetchLiveVehicles } from "@/shared/api/routeForecast.api";
 import type { LiveVehicles } from "@/shared/api/routeForecast.types";
 import { usePolledRequest } from "@/shared/api/usePolledRequest";
@@ -14,20 +14,20 @@ function loadLiveVehicles(routeId: string, signal: AbortSignal): Promise<ApiResu
 
 export function useLiveVehicles(routeId: string) {
   const liveVehicleResource = usePolledRequest(loadLiveVehicles, routeId);
-  const liveVehicles = useFreshLiveVehicles(lastSuccessOf(liveVehicleResource));
+  const liveVehicles = useFreshLiveVehicles(latestSuccessOf(liveVehicleResource));
   const motionDurationMs = liveMotionDurationOf(liveVehicleResource);
 
   return { liveVehicles, motionDurationMs };
 }
 
-function useFreshLiveVehicles(lastSuccess: LastSuccess<LiveVehicles> | null): LiveVehicles | null {
-  const staleAt = lastSuccess?.body.observation.staleAt ?? null;
+function useFreshLiveVehicles(latestSuccess: LatestSuccess<LiveVehicles> | null): LiveVehicles | null {
+  const staleAt = latestSuccess?.body.observation.staleAt ?? null;
   const staleAtMillis = staleAt === null ? null : Date.parse(staleAt);
-  const serverClock = lastSuccess?.clock ?? null;
+  const serverClock = latestSuccess?.clock ?? null;
   const observationKey =
-    lastSuccess === null || staleAt === null
+    latestSuccess === null || staleAt === null
       ? null
-      : JSON.stringify([lastSuccess.body.routeId, lastSuccess.body.referenceVersionId, staleAt]);
+      : JSON.stringify([latestSuccess.body.routeId, latestSuccess.body.referenceVersionId, staleAt]);
   const [expiredObservationKey, setExpiredObservationKey] = useState<string | null>(null);
 
   useEffect(() => {
@@ -40,12 +40,12 @@ function useFreshLiveVehicles(lastSuccess: LastSuccess<LiveVehicles> | null): Li
     return () => window.clearTimeout(expiryTimer);
   }, [observationKey, serverClock, staleAtMillis]);
 
-  if (lastSuccess === null || staleAtMillis === null) return null;
+  if (latestSuccess === null || staleAtMillis === null) return null;
 
-  const referenceAtReceipt = lastSuccess.clock?.servedAt ?? lastSuccess.receivedAt;
+  const referenceAtReceipt = latestSuccess.clock?.servedAt ?? latestSuccess.receivedAt;
   const expiredBeforeReceipt = Number.isNaN(staleAtMillis) || staleAtMillis <= referenceAtReceipt;
 
-  return !expiredBeforeReceipt && expiredObservationKey !== observationKey ? lastSuccess.body : null;
+  return !expiredBeforeReceipt && expiredObservationKey !== observationKey ? latestSuccess.body : null;
 }
 
 function liveMotionDurationOf(resource: PolledResource<LiveVehicles>): number {

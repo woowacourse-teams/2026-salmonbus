@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams } from "react-router";
 import type { ApiFailure, ApiResult } from "@/shared/api/client";
-import { lastSuccessOf, type PolledResource } from "@/shared/api/polledResource";
+import { latestSuccessOf, type PolledResource } from "@/shared/api/polledResource";
 import { fetchBoard } from "@/shared/api/routeForecast.api";
 import { boardMock, liveVehiclesMock } from "@/shared/api/routeForecast.mock";
 import type { Board, Direction, DirectionInfo, LiveVehicles } from "@/shared/api/routeForecast.types";
@@ -41,7 +41,7 @@ export function VerdictBoardPage() {
 
   const screen = boardScreenOf(state);
 
-  useBoardVisitEvents({ routeId, screen, lastSuccess: lastSuccessOf(boardResource) });
+  useBoardVisitEvents({ routeId, screen, latestSuccess: latestSuccessOf(boardResource) });
 
   function selectDirection(next: Direction) {
     if (state.status === "ready" && next !== state.direction.id) {
@@ -78,7 +78,7 @@ function boardStateOf(resource: PolledResource<Board>, preferredDirection: Direc
       return { status: "error", failure: resource.failure };
     case "success":
     case "refetchError":
-      return readyStateOf(resource.lastSuccess.body, preferredDirection);
+      return readyStateOf(resource.latestSuccess.body, preferredDirection);
   }
 }
 

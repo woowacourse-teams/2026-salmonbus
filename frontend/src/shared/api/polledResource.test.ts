@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import type { ApiFailure, ApiResult } from "./client";
-import { lastSuccessOf, nextResourceFrom, PENDING_RESOURCE, type PolledResource } from "./polledResource";
+import { latestSuccessOf, nextResourceFrom, PENDING_RESOURCE, type PolledResource } from "./polledResource";
 import type { ReferenceClock } from "./referenceClock";
 
 const lifetime = { noStore: false, maxAgeSeconds: 15, ageSeconds: 0 };
@@ -21,7 +21,7 @@ describe("nextResourceFrom", () => {
   it("처음 응답이 성공이면 본문, 서버 시계, 수신 시각을 담은 성공이 된다", () => {
     expect(nextResourceFrom(PENDING_RESOURCE, succeeded("보드A", clockA), 1_000)).toEqual({
       status: "success",
-      lastSuccess: { body: "보드A", clock: clockA, receivedAt: 1_000 },
+      latestSuccess: { body: "보드A", clock: clockA, receivedAt: 1_000 },
       lifetime,
     });
   });
@@ -39,7 +39,7 @@ describe("nextResourceFrom", () => {
     expect(nextResourceFrom(success, failed(networkFailure), 2_000)).toEqual({
       status: "refetchError",
       failure: networkFailure,
-      lastSuccess: { body: "보드A", clock: clockA, receivedAt: 1_000 },
+      latestSuccess: { body: "보드A", clock: clockA, receivedAt: 1_000 },
     });
   });
 
@@ -50,7 +50,7 @@ describe("nextResourceFrom", () => {
     expect(nextResourceFrom(firstFailure, failed(timeoutFailure), 3_000)).toEqual({
       status: "refetchError",
       failure: timeoutFailure,
-      lastSuccess: { body: "보드A", clock: clockA, receivedAt: 1_000 },
+      latestSuccess: { body: "보드A", clock: clockA, receivedAt: 1_000 },
     });
   });
 
@@ -60,26 +60,26 @@ describe("nextResourceFrom", () => {
 
     expect(nextResourceFrom(refetchError, succeeded("보드B", clockB), 3_000)).toEqual({
       status: "success",
-      lastSuccess: { body: "보드B", clock: clockB, receivedAt: 3_000 },
+      latestSuccess: { body: "보드B", clock: clockB, receivedAt: 3_000 },
       lifetime,
     });
   });
 });
 
-describe("lastSuccessOf", () => {
-  const lastSuccess = { body: "보드A", clock: null, receivedAt: 1_000 };
+describe("latestSuccessOf", () => {
+  const latestSuccess = { body: "보드A", clock: null, receivedAt: 1_000 };
 
   it.each<[string, PolledResource<string>]>([
     ["pending", PENDING_RESOURCE],
     ["loadingError", { status: "loadingError", failure: networkFailure }],
   ])("%s 상태에서는 성공한 적이 없어 null을 돌려준다", (_status, resource) => {
-    expect(lastSuccessOf(resource)).toBeNull();
+    expect(latestSuccessOf(resource)).toBeNull();
   });
 
   it.each<[string, PolledResource<string>]>([
-    ["success", { status: "success", lastSuccess, lifetime }],
-    ["refetchError", { status: "refetchError", failure: networkFailure, lastSuccess }],
-  ])("%s 상태에서는 마지막 성공을 돌려준다", (_status, resource) => {
-    expect(lastSuccessOf(resource)).toEqual(lastSuccess);
+    ["success", { status: "success", latestSuccess, lifetime }],
+    ["refetchError", { status: "refetchError", failure: networkFailure, latestSuccess }],
+  ])("%s 상태에서는 가장 최근 성공을 돌려준다", (_status, resource) => {
+    expect(latestSuccessOf(resource)).toEqual(latestSuccess);
   });
 });
