@@ -27,7 +27,7 @@ case ${LOCAL_COMPONENT:-} in
       [[ -z ${!key:-} ]] || fail
     done
     [[ ${GBIS_BASE_URL:-http://gbis-mock:8080} == http://gbis-mock:8080 ]] || fail
-    [[ ${MODEL_BUNDLE_DIRECTORY:-/local/models/development-v1} == /local/models/development-v1 ]] || fail
+    [[ ${MODEL_BUNDLE_DIRECTORY:-/local/models/reference-20261002} == /local/models/reference-20261002 ]] || fail
     ;;
   *) fail ;;
 esac

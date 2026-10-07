@@ -18,15 +18,38 @@ record RouteDataset(String version, List<RouteDataset.Route> routes) {
     static final List<String> MODEL_ROUTES = List.of("1650", "3330", "9007", "9300", "6011", "3000", "5600", "3500");
 
     static RouteDataset read(Path path) throws Exception {
-        LocalData.require(!Files.isSymbolicLink(path) && Files.size(path) < 1_048_576, "ROUTES_FILE");
-        var mapper = JsonMapper.builder().enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
-            .enable(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES)
-            .enable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES).build();
-        RouteDataset data = mapper.readValue(Files.readAllBytes(path), RouteDataset.class);
+        RouteDataset data = readFile(path);
         LocalData.require("local-routes-v1".equals(data.version()), "ROUTES_VERSION");
         LocalData.require(data.routes().stream().map(Route::displayName).toList().equals(MODEL_ROUTES), "ROUTES_ORDER");
         for (Route route : data.routes()) {
             LocalData.require(ModelRoute.of(route.routeId()).equals(route.displayName()), "ROUTE_ID");
+        }
+        validate(data);
+        return data;
+    }
+
+    static RouteDataset readCatalog(Path path) throws Exception {
+        RouteDataset data = readFile(path);
+        LocalData.require("local-catalog-v1".equals(data.version()), "CATALOG_VERSION");
+        LocalData.require(data.routes().stream().noneMatch(route -> ModelRoute.covers(route.routeId())), "CATALOG_MODEL_OVERLAP");
+        validate(data);
+        return data;
+    }
+
+    private static RouteDataset readFile(Path path) throws Exception {
+        LocalData.require(!Files.isSymbolicLink(path) && Files.size(path) < 1_048_576, "ROUTES_FILE");
+        var mapper = JsonMapper.builder().enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+            .enable(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES)
+            .enable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES).build();
+        return mapper.readValue(Files.readAllBytes(path), RouteDataset.class);
+    }
+
+    private static void validate(RouteDataset data) {
+        LocalData.require(data.routes().stream().map(Route::routeId).distinct().count() == data.routes().size()
+            && data.routes().stream().map(Route::displayName).distinct().count() == data.routes().size(), "ROUTE_DUPLICATE");
+        for (Route route : data.routes()) {
+            LocalData.require(route.routeId().matches("[0-9]{9}") && !route.displayName().isBlank()
+                && !route.startStopName().isBlank() && !route.endStopName().isBlank(), "ROUTE_IDENTITY");
             LocalData.require(route.stops().size() >= 2 && route.stops().size() <= 512
                 && route.turnSequence() > 1 && route.turnSequence() < route.stops().size(), "ROUTE_SIZE");
             for (int index = 0; index < route.stops().size(); index++) {
@@ -43,7 +66,6 @@ record RouteDataset(String version, List<RouteDataset.Route> routes) {
                 LocalData.require(time == null || time.matches("(?:[01][0-9]|2[0-3]):[0-5][0-9]"), "TIMETABLE");
             }
         }
-        return data;
     }
 
     record Route(String routeId, String displayName, String startStopName, String endStopName,

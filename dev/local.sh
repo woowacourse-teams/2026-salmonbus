@@ -34,7 +34,7 @@ case $command in
       check) compose config --quiet ;;
       build) compose build ;;
       scenario)
-        [[ $# -ge 1 && $# -le 2 ]] || fail 'scenario <normal|empty|unknown-seat|upstream-error> [노선|all]로 실행해 주세요.'
+        [[ $# -ge 1 && $# -le 2 ]] || fail 'scenario list 또는 scenario <모드|showcase> [노선|all]로 실행해 주세요.'
         compose exec -T gbis-mock java -cp '/var/wiremock/lib/*:/var/wiremock/extensions/*' com.gustler.localgbis.ScenarioControl "$@"
         ;;
       prepare)

@@ -11,8 +11,16 @@ public final class GbisReplayTransformer implements ResponseDefinitionTransforme
     private final ReplayEngine engine;
 
     public GbisReplayTransformer() {
+        this(loadEngine());
+    }
+
+    GbisReplayTransformer(ReplayEngine engine) {
+        this.engine = engine;
+    }
+
+    private static ReplayEngine loadEngine() {
         try {
-            engine = new ReplayEngine(Path.of("/local/data/routes.json"), Path.of("/local/scenarios/replay.json"));
+            return new ReplayEngine(Path.of("/local/data/routes.json"), Path.of("/local/scenarios/replay.json"));
         } catch (Exception error) {
             throw new IllegalStateException("개발 노선과 재생 설정을 읽지 못했습니다.", error);
         }
@@ -23,7 +31,7 @@ public final class GbisReplayTransformer implements ResponseDefinitionTransforme
         var parameters = event.getTransformerParameters();
         var reply = engine.response(parameters.getString("operation"),
             (String) parameters.getOrDefault("mode", "normal"), event.getRequest().queryParameter("routeId").firstValue());
-        return new ResponseDefinitionBuilder().withStatus(reply.status()).withBody(Json.write(reply.body()))
+        return ResponseDefinitionBuilder.like(event.getResponseDefinition()).withStatus(reply.status()).withBody(Json.write(reply.body()))
             .withHeader("Content-Type", "application/json; charset=utf-8").withHeader("Cache-Control", "no-store").build();
     }
 

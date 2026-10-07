@@ -22,5 +22,5 @@ forecast:
 
 model:
   bundle:
-    directory: /local/models/development-v1
+    directory: /local/models/reference-20261002
     promote-on-start: false

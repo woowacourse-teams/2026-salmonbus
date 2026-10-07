@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "local-catalog-provenance-v1",
+  "metadataRetrievedAt": "2026-10-07",
+  "observationValidationAt": "2026-10-07T02:59:37.005368+00:00",
+  "coordinateFallback": {
+    "capturedAt": "2026-09-28T12:20:07.048771+09:00",
+    "source": "GBIS route-station API snapshot from existing route research",
+    "sha256": "061137107e91c0744e197c195769ec52f81c8f1e386a5e877deaf172ecc49698",
+    "rows": 578,
+    "uniqueStationIds": 204
+  },
+  "scope": "Pangyo station/Baekhyeon and Techno Valley 1/Sampyeong; metadata only; no synthetic vehicle/statistics/model for catalog-only routes",
+  "catalogRouteCount": 33,
+  "catalogStopCount": 2572,
+  "existingReplayModelRouteCount": 8,
+  "totalRouteCount": 41,
+  "catalogRoutesSha256": "0c1d09aec2660e03475c7a82930fc3632432c177b148c7b7d7689f74ffd3997a",
+  "selection": "Authenticated GBIS snapshot: all observed vehicles report known seats and valid route/vehicle/phase/station reference; excludes morning-only 5700A",
+  "excluded": [
+    "8106: one observed vehicle reports unknown seats",
+    "8302: no observed vehicles",
+    "9000-1: morning-only timetable and no observed vehicles",
+    "9401 / 9401-1 / 9409: all observed seats unknown",
+    "5700A: morning-only timetable"
+  ],
+  "sources": [
+    {
+      "file": "GGD_RouteInfo_M.xlsx",
+      "source": "https://www.gbis.go.kr/service/adm/banner/download.action?cmd=download&fName=GGD_RouteInfo_M.xlsx",
+      "status": 200,
+      "contentType": "application/x-msdownload",
+      "lastModified": null,
+      "capturedAt": "2026-10-07T01:54:47.196990+00:00",
+      "bytes": 304100,
+      "sha256": "4a4079bfebbc797023f89f1a67890f3d6c258d3fb45dbb45d4dcedac4bdee71a"
+    },
+    {
+      "file": "GGD_RouteStationInfo_M.xlsx",
+      "source": "https://www.gbis.go.kr/service/adm/banner/download.action?cmd=download&fName=GGD_RouteStationInfo_M.xlsx",
+      "status": 200,
+      "contentType": "application/x-msdownload",
+      "lastModified": null,
+      "capturedAt": "2026-10-07T01:54:47.956561+00:00",
+      "bytes": 7646263,
+      "sha256": "219c336927b2b3798527272a83c39b0b42df398095f45c3ea1d3c53db3d8368c"
+    },
+    {
+      "file": "GGD_StationInfo_M.xlsx",
+      "source": "https://www.gbis.go.kr/service/adm/banner/download.action?cmd=download&fName=GGD_StationInfo_M.xlsx",
+      "status": 200,
+      "contentType": "application/x-msdownload",
+      "lastModified": null,
+      "capturedAt": "2026-10-07T01:54:48.358496+00:00",
+      "bytes": 3648079,
+      "sha256": "a60abac307467c97b8b1969e96203c171e160ca96869a2b4715b043f93230544"
+    }
+  ],
+  "authenticatedObservationSummarySha256": "e5b680fe2d5e88e1c8266fd3bc5ea2b421eaf4156b958fccc502f4555d116829"
+}

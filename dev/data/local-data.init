@@ -9,7 +9,7 @@ gradle.projectsEvaluated {
         dependsOn worker.tasks.named('localDataClasses')
         classpath = worker.sourceSets.localData.runtimeClasspath
         mainClass = 'com.gustler.localdata.LocalData'
-        args '/local/data/routes.json', '/local/models/development-v1'
+        args '/local/data/routes.json', '/local/models/reference-20261002'
         if (worker.findProperty('recoverCollectorOnly') == 'true') {
             args '--recover-collector-only'
         }
@@ -19,5 +19,10 @@ gradle.projectsEvaluated {
         classpath = worker.sourceSets.localData.runtimeClasspath
         mainClass = 'com.gustler.localdata.GbisContractCheck'
         args worker.findProperty('localScenario') ?: 'normal'
+    }
+    worker.tasks.register('verifyReferenceModel', JavaExec) {
+        dependsOn worker.tasks.named('localDataClasses')
+        classpath = worker.sourceSets.localData.runtimeClasspath
+        mainClass = 'com.gustler.localdata.ModelParityCheck'
     }
 }
