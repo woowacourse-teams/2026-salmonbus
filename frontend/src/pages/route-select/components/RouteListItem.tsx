@@ -1,9 +1,9 @@
-import type { RouteCore } from "../api/routeSelect.type";
+import type { RouteSummary } from "@/shared/api/routeForecast.types";
 import * as styles from "../RouteSelectPage.css";
 
 interface RouteListItemProps {
-  route: RouteCore;
-  onSelect: (routeId: RouteCore["id"]) => void;
+  route: RouteSummary;
+  onSelect: (routeId: RouteSummary["id"]) => void;
 }
 
 export function RouteListItem({ route, onSelect }: RouteListItemProps) {

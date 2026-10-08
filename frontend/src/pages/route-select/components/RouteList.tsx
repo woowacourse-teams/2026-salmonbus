@@ -1,17 +1,17 @@
 import { useNavigate } from "react-router";
 import { track } from "@/shared/analytics/track";
 import { boardPathFor } from "@/shared/routing/paths";
-import type { RouteCore } from "../api/routeSelect.type";
+import type { RouteSummary } from "@/shared/api/routeForecast.types";
 import { RouteListItem } from "./RouteListItem";
 import * as styles from "../RouteSelectPage.css";
 
 interface RouteListProps {
-  routes: RouteCore[];
+  routes: RouteSummary[];
 }
 
 export function RouteList({ routes }: RouteListProps) {
   const navigate = useNavigate();
-  const handleSelect = (route: RouteCore, index: number) => {
+  const handleSelect = (route: RouteSummary, index: number) => {
     track("route_selected", {
       route_id: route.id,
       route_status: route.status,
