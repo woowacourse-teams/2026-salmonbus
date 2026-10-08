@@ -401,7 +401,7 @@ class JdbcSameDayFullOutcomesStoreTest {
                 long laterVersion = insertLaterRouteVersion();
                 long laterBatch = insertObservationBatch(laterVersion, "different-version", ARRIVAL_RESPONSE_RECEIVED_AT);
                 long laterArrival = insertObservation(laterBatch, laterVersion, VEHICLE_204000206, 0, TARGET_STOP_ORDER);
-                jdbcClient.sql("UPDATE forecast_evaluation SET arrival_observation_id = ? WHERE vehicle_observation_id = ?")
+                jdbcClient.sql("UPDATE forecast_evaluation_result SET arrival_observation_id = ? WHERE vehicle_observation_id = ?")
                     .params(laterArrival, vehicleObservationId).update();
             }
             case "다른 방향" -> jdbcClient.sql("UPDATE route_version SET turn_sequence = ? WHERE id = ?")
@@ -461,7 +461,7 @@ class JdbcSameDayFullOutcomesStoreTest {
         long laterSource = insertObservation(laterBatch, routeVersionId, VEHICLE_204000206, 0, PASSED_STOP_ORDER);
         settleAsFull(laterSource, OTHER_RAW_FULL_CHANCE);
         jdbcClient.sql("""
-            UPDATE forecast_evaluation SET arrival_observation_id = (
+            UPDATE forecast_evaluation_result SET arrival_observation_id = (
                 SELECT arrival_observation_id FROM forecast_evaluation WHERE vehicle_observation_id = ?
             ) WHERE vehicle_observation_id = ?
             """).params(vehicleObservationId, laterSource).update();

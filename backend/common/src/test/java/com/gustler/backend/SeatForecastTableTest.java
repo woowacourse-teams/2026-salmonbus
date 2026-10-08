@@ -140,7 +140,7 @@ class SeatForecastTableTest {
             )
             .update();
         jdbcClient.sql("""
-                INSERT INTO forecast_evaluation(vehicle_observation_id, target_stop_order, route_version_id,
+                INSERT INTO forecast_evaluation_result(vehicle_observation_id, target_stop_order, route_version_id,
                     scoring_state, arrival_observation_id, seats_on_arrival, scored_at,
                     arrived_at, arrival_route_version_id, arrival_vehicle_id, arrival_stop_order,
                     arrival_running_state, arrival_remaining_seats, arrival_quality_direction)

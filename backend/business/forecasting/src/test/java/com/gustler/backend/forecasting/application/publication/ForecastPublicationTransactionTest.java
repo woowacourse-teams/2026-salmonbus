@@ -154,7 +154,8 @@ class ForecastPublicationTransactionTest {
     @AfterEach
     void 이_테스트에서_저장한_자료를_정리한다() {
         if (routeVersionId != 0) {
-            jdbc.sql("DELETE FROM forecast_evaluation WHERE route_version_id = ?").param(routeVersionId).update();
+            jdbc.sql("DELETE FROM forecast_evaluation_pending WHERE route_version_id = ?").param(routeVersionId).update();
+            jdbc.sql("DELETE FROM forecast_evaluation_result WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM seat_forecast WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM forecast_publication WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM vehicle_observation WHERE route_version_id = ?").param(routeVersionId).update();

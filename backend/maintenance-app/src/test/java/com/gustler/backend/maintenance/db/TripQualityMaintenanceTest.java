@@ -605,7 +605,7 @@ class TripQualityMaintenanceTest extends PostgresMigrationTestSupport {
                 WHERE o.route_version_id=?
                 """).param(deployment).param(version).update();
             jdbc.sql("""
-                INSERT INTO forecast_evaluation(vehicle_observation_id,target_stop_order,route_version_id)
+                INSERT INTO forecast_evaluation_pending(vehicle_observation_id,target_stop_order,route_version_id)
                 SELECT vehicle_observation_id,target_stop_order,route_version_id FROM seat_forecast
                 WHERE route_version_id=?
                 """).param(version).update();

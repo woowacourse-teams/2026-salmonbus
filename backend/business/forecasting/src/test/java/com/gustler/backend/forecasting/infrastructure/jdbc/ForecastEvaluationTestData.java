@@ -50,7 +50,7 @@ final class ForecastEvaluationTestData {
                 .param("seats", forecast.expectedSeats()).param("generatedAt", OffsetDateTime.ofInstant(forecast.generatedAt(), ZoneOffset.UTC))
                 .param("publication", publicationId).update();
             jdbc.sql("""
-                INSERT INTO forecast_evaluation(vehicle_observation_id, target_stop_order, route_version_id)
+                INSERT INTO forecast_evaluation_pending(vehicle_observation_id, target_stop_order, route_version_id)
                 VALUES(:observation, :target, :version)
                 """).param("observation", forecast.vehicleObservationId()).param("target", forecast.targetStopOrder())
                 .param("version", forecast.routeVersionId()).update();
