@@ -5,12 +5,15 @@ const mutedInk = "#66625E";
 const coral = "#F47F73";
 const border = "#E8D8D2";
 const lightInk = "#B9B2AC";
+const SAFE_AREA_TOP = "env(safe-area-inset-top, 0px)";
+const SAFE_AREA_BOTTOM = "env(safe-area-inset-bottom, 0px)";
 
 export const page = style({
   width: "100%",
   maxWidth: "425px",
   minHeight: "844px",
   margin: "0 auto",
+  paddingBottom: SAFE_AREA_BOTTOM,
   overflow: "hidden",
   borderRadius: "26px",
   backgroundColor: "#FFFFFF",
@@ -27,7 +30,7 @@ export const header = style({
   display: "flex",
   flexDirection: "column",
   gap: "14px",
-  padding: "14px 20px 0",
+  padding: `calc(14px + ${SAFE_AREA_TOP}) 20px 0`,
 });
 
 export const brandLockup = style({
