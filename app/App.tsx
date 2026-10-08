@@ -15,7 +15,11 @@ const WEB_URL = readWebUrl();
 export default function App() {
   return (
     <>
-      <WebView source={{ uri: WEB_URL }} style={styles.webView} />
+      <WebView
+        source={{ uri: WEB_URL }}
+        style={styles.webView}
+        allowsBackForwardNavigationGestures
+      />
       <StatusBar style="auto" />
     </>
   );
