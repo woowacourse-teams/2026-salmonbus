@@ -35,6 +35,7 @@ module.exports = merge(common, {
   },
   plugins: [
     new ReactRefreshWebpackPlugin(),
+    // 로컬에서는 Amplitude 키 없이 실행하고 이벤트를 전송하지 않는다.
     new webpack.DefinePlugin({ "process.env.WEBPACK_AMPLITUDE_API_KEY": JSON.stringify("") }),
   ],
 });
