@@ -6,7 +6,7 @@ Docker Desktop을 켠 뒤 저장소 루트에서 실행합니다.
 docker compose up --build --watch
 ```
 
-화면은 http://localhost:3000, API는 http://localhost:8080입니다. DB·계정·초기 데이터는 자동 준비하며 첫 예보까지 잠시 걸릴 수 있습니다. 프론트 소스 수정은 HMR로 반영하고, API·worker 수정은 해당 컨테이너를 재시작해 반영합니다.
+화면은 http://localhost:3000, API는 http://localhost:8080입니다. DB·계정·초기 데이터를 준비하고 첫 예보를 확인한 뒤 프론트를 시작합니다. 프론트 소스 수정은 HMR로 반영하고, API·worker 수정은 해당 컨테이너를 재시작해 반영합니다.
 
 같은 구성의 재실행은 `docker compose up --watch`를 사용합니다. Dockerfile·의존성·개발 설정을 바꾸면 `--build`를 붙입니다.
 
