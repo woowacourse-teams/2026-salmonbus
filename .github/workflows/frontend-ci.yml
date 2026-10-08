@@ -5,12 +5,18 @@ on:
     branches: ["dev", "main"]
     paths:
       - "frontend/**"
+      - "dev/docker/frontend.Dockerfile"
+      - "compose*.yaml"
+      - ".dockerignore"
       - ".github/workflows/frontend-ci.yml"
 
   pull_request:
     branches: ["dev", "main"]
     paths:
       - "frontend/**"
+      - "dev/docker/frontend.Dockerfile"
+      - "compose*.yaml"
+      - ".dockerignore"
       - ".github/workflows/frontend-ci.yml"
 
 permissions:
@@ -62,6 +68,11 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Build local frontend
+        env:
+          APP_VERSION: local
+        run: pnpm exec webpack --config webpack/webpack.local.cjs --output-path "$RUNNER_TEMP/local-frontend-build"
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps

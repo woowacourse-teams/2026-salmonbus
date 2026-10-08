@@ -1,0 +1,5920 @@
+{
+  "version": "local-routes-v1",
+  "routes": [
+    {
+      "routeId": "234000050",
+      "displayName": "1650",
+      "startStopName": "구리수택차고지",
+      "endStopName": "안양역",
+      "turnSequence": 44,
+      "contentDigest": "f6b5a3b0fabd731dbbab36054826be26714061c42d66b862eac60b191b4b51bc",
+      "timetable": {
+        "upFirstDepartureTime": "04:10",
+        "upLastDepartureTime": "22:35",
+        "downFirstDepartureTime": "05:25",
+        "downLastDepartureTime": "23:55"
+      },
+      "stops": [
+        {
+          "sequence": 1,
+          "stationId": "221000046",
+          "name": "구리수택차고지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1563667,
+          "y": 37.5936667
+        },
+        {
+          "sequence": 2,
+          "stationId": "221000050",
+          "name": "수택고교.SK신일.우남아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1536833,
+          "y": 37.5938833
+        },
+        {
+          "sequence": 3,
+          "stationId": "221000055",
+          "name": "태영데시앙",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1504,
+          "y": 37.5935833
+        },
+        {
+          "sequence": 4,
+          "stationId": "221000085",
+          "name": "구리여중고.청소년문화의집",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1497333,
+          "y": 37.5917333
+        },
+        {
+          "sequence": 5,
+          "stationId": "221000084",
+          "name": "동명빌라",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1486833,
+          "y": 37.5889
+        },
+        {
+          "sequence": 6,
+          "stationId": "221000041",
+          "name": "구종점",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1474833,
+          "y": 37.5856
+        },
+        {
+          "sequence": 7,
+          "stationId": "221000030",
+          "name": "벌말.돌섬",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1467333,
+          "y": 37.5838
+        },
+        {
+          "sequence": 8,
+          "stationId": "221000026",
+          "name": "토평정수장",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1459167,
+          "y": 37.5800333
+        },
+        {
+          "sequence": 9,
+          "stationId": "277100104",
+          "name": "토평삼거리(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1450333,
+          "y": 37.5769667
+        },
+        {
+          "sequence": 10,
+          "stationId": "277103306",
+          "name": "아천IC(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1285333,
+          "y": 37.5732667
+        },
+        {
+          "sequence": 11,
+          "stationId": "277102674",
+          "name": "천호대교북단(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1072,
+          "y": 37.5441
+        },
+        {
+          "sequence": 12,
+          "stationId": "277103309",
+          "name": "올림픽대교북단(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0994667,
+          "y": 37.5377333
+        },
+        {
+          "sequence": 13,
+          "stationId": "104000279",
+          "name": "테크노마트앞.강변역(C)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.09385,
+          "y": 37.5366333
+        },
+        {
+          "sequence": 14,
+          "stationId": "277103308",
+          "name": "잠실대교북단(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0878167,
+          "y": 37.5297333
+        },
+        {
+          "sequence": 15,
+          "stationId": "277102302",
+          "name": "잠실대교남단(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0935667,
+          "y": 37.5215
+        },
+        {
+          "sequence": 16,
+          "stationId": "123000002",
+          "name": "잠실역.잠실대교남단(중)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.0995667,
+          "y": 37.5137333
+        },
+        {
+          "sequence": 17,
+          "stationId": "277101950",
+          "name": "석촌호수앞(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1014,
+          "y": 37.5111833
+        },
+        {
+          "sequence": 18,
+          "stationId": "123000004",
+          "name": "석촌호수.한솔병원(중)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1052833,
+          "y": 37.5071833
+        },
+        {
+          "sequence": 19,
+          "stationId": "123000006",
+          "name": "석촌역(중)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1083667,
+          "y": 37.5038333
+        },
+        {
+          "sequence": 20,
+          "stationId": "123000008",
+          "name": "송파역(중)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1112,
+          "y": 37.5006667
+        },
+        {
+          "sequence": 21,
+          "stationId": "123000010",
+          "name": "가락시장.가락시장역(중)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.11655,
+          "y": 37.4948333
+        },
+        {
+          "sequence": 22,
+          "stationId": "123000012",
+          "name": "문정로데오거리입구(중)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1205833,
+          "y": 37.4893167
+        },
+        {
+          "sequence": 23,
+          "stationId": "123000014",
+          "name": "문정법조단지.건영아파트(중)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1238,
+          "y": 37.48315
+        },
+        {
+          "sequence": 24,
+          "stationId": "123000016",
+          "name": "장지역.가든파이브(중)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1254,
+          "y": 37.4799833
+        },
+        {
+          "sequence": 25,
+          "stationId": "277103266",
+          "name": "송파IC진입(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1258667,
+          "y": 37.4729833
+        },
+        {
+          "sequence": 26,
+          "stationId": "204000092",
+          "name": "가천대",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.12575,
+          "y": 37.4509667
+        },
+        {
+          "sequence": 27,
+          "stationId": "277103272",
+          "name": "성남TG(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1221833,
+          "y": 37.4365333
+        },
+        {
+          "sequence": 28,
+          "stationId": "277102924",
+          "name": "판교JC(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.09505,
+          "y": 37.40605
+        },
+        {
+          "sequence": 29,
+          "stationId": "277102599",
+          "name": "청계터널진입(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0542667,
+          "y": 37.39655
+        },
+        {
+          "sequence": 30,
+          "stationId": "226000190",
+          "name": "의왕청계영업소",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.02325,
+          "y": 37.3931333
+        },
+        {
+          "sequence": 31,
+          "stationId": "277103157",
+          "name": "학의JC(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0018,
+          "y": 37.3875833
+        },
+        {
+          "sequence": 32,
+          "stationId": "209000133",
+          "name": "농수산물시장",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9679,
+          "y": 37.3819333
+        },
+        {
+          "sequence": 33,
+          "stationId": "209000021",
+          "name": "무궁화코오롱.건영아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9548667,
+          "y": 37.37935
+        },
+        {
+          "sequence": 34,
+          "stationId": "209000020",
+          "name": "무궁화한양아파트.방축사거리",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.95345,
+          "y": 37.3819667
+        },
+        {
+          "sequence": 35,
+          "stationId": "209000221",
+          "name": "목련마을",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.95135,
+          "y": 37.3858167
+        },
+        {
+          "sequence": 36,
+          "stationId": "209000018",
+          "name": "범계사거리",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9491667,
+          "y": 37.3885333
+        },
+        {
+          "sequence": 37,
+          "stationId": "209000134",
+          "name": "부흥고등학교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9452,
+          "y": 37.3916833
+        },
+        {
+          "sequence": 38,
+          "stationId": "209000179",
+          "name": "관악타운",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9415,
+          "y": 37.3946
+        },
+        {
+          "sequence": 39,
+          "stationId": "209000178",
+          "name": "이마트.비산사거리.평촌래미안푸르지오2문",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.93885,
+          "y": 37.3966833
+        },
+        {
+          "sequence": 40,
+          "stationId": "208000115",
+          "name": "안양역푸르지오더샵.비산대교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9306167,
+          "y": 37.3971333
+        },
+        {
+          "sequence": 41,
+          "stationId": "208000114",
+          "name": "우체국사거리.안양초교.중화한방병원",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9261833,
+          "y": 37.3947833
+        },
+        {
+          "sequence": 42,
+          "stationId": "208000066",
+          "name": "남부시장",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9239167,
+          "y": 37.3960833
+        },
+        {
+          "sequence": 43,
+          "stationId": "208000065",
+          "name": "안양1번가.안양고용센터",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9214667,
+          "y": 37.399
+        },
+        {
+          "sequence": 44,
+          "stationId": "208000069",
+          "name": "안양역",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9222333,
+          "y": 37.40145
+        },
+        {
+          "sequence": 45,
+          "stationId": "277101770",
+          "name": "원평노블레스5차(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 126.9202333,
+          "y": 37.4037167
+        },
+        {
+          "sequence": 46,
+          "stationId": "208000158",
+          "name": "안양시외버스정류소.교보생명.댕리단길",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.919,
+          "y": 37.40145
+        },
+        {
+          "sequence": 47,
+          "stationId": "208000254",
+          "name": "포스빌.안양고용센터",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9214833,
+          "y": 37.3984333
+        },
+        {
+          "sequence": 48,
+          "stationId": "208000156",
+          "name": "벽산상가.2001아울렛",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9231667,
+          "y": 37.3963667
+        },
+        {
+          "sequence": 49,
+          "stationId": "208000095",
+          "name": "우체국사거리.안양초교.중화한방병원",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.92635,
+          "y": 37.3945167
+        },
+        {
+          "sequence": 50,
+          "stationId": "208000252",
+          "name": "래미안메가트리아상가앞.비산대교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9307167,
+          "y": 37.3969167
+        },
+        {
+          "sequence": 51,
+          "stationId": "209000044",
+          "name": "비산농협",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.93265,
+          "y": 37.3979333
+        },
+        {
+          "sequence": 52,
+          "stationId": "209000177",
+          "name": "비산한화꿈에그린아파트.비산사거리",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9371833,
+          "y": 37.3969167
+        },
+        {
+          "sequence": 53,
+          "stationId": "209000176",
+          "name": "비산힐스테이트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9411333,
+          "y": 37.3942333
+        },
+        {
+          "sequence": 54,
+          "stationId": "209000147",
+          "name": "부흥고등학교.임광아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9454833,
+          "y": 37.3908
+        },
+        {
+          "sequence": 55,
+          "stationId": "209000016",
+          "name": "범계사거리",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9487667,
+          "y": 37.3882333
+        },
+        {
+          "sequence": 56,
+          "stationId": "209000015",
+          "name": "내촌마을",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.951,
+          "y": 37.3853333
+        },
+        {
+          "sequence": 57,
+          "stationId": "209000126",
+          "name": "평촌트리지아2단지.방축사거리",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9527833,
+          "y": 37.3820167
+        },
+        {
+          "sequence": 58,
+          "stationId": "209000243",
+          "name": "태영아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9586,
+          "y": 37.3792833
+        },
+        {
+          "sequence": 59,
+          "stationId": "209000129",
+          "name": "농수산물시장",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9675667,
+          "y": 37.3812167
+        },
+        {
+          "sequence": 60,
+          "stationId": "277103156",
+          "name": "학의JC(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.0011667,
+          "y": 37.3869833
+        },
+        {
+          "sequence": 61,
+          "stationId": "226000191",
+          "name": "의왕청계영업소",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.0261667,
+          "y": 37.39245
+        },
+        {
+          "sequence": 62,
+          "stationId": "277102796",
+          "name": "청계터널출입(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.0549833,
+          "y": 37.3961167
+        },
+        {
+          "sequence": 63,
+          "stationId": "277102925",
+          "name": "판교JC(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.0935833,
+          "y": 37.4052167
+        },
+        {
+          "sequence": 64,
+          "stationId": "277103273",
+          "name": "성남TG(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.12385,
+          "y": 37.4350833
+        },
+        {
+          "sequence": 65,
+          "stationId": "204000091",
+          "name": "가천대",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1262,
+          "y": 37.45065
+        },
+        {
+          "sequence": 66,
+          "stationId": "277103267",
+          "name": "송파IC출입(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1285833,
+          "y": 37.4738833
+        },
+        {
+          "sequence": 67,
+          "stationId": "123000215",
+          "name": "복정역1번출구",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1271167,
+          "y": 37.4723667
+        },
+        {
+          "sequence": 68,
+          "stationId": "123000015",
+          "name": "장지역.가든파이브(중)",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1261833,
+          "y": 37.4788833
+        },
+        {
+          "sequence": 69,
+          "stationId": "123000013",
+          "name": "문정법조단지.건영아파트(중)",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1245667,
+          "y": 37.48195
+        },
+        {
+          "sequence": 70,
+          "stationId": "123000011",
+          "name": "문정로데오거리입구(중)",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.12145,
+          "y": 37.4882333
+        },
+        {
+          "sequence": 71,
+          "stationId": "123000009",
+          "name": "가락시장.가락시장역(중)",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1171333,
+          "y": 37.4944167
+        },
+        {
+          "sequence": 72,
+          "stationId": "123000007",
+          "name": "송파역(중)",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1118,
+          "y": 37.50025
+        },
+        {
+          "sequence": 73,
+          "stationId": "123000005",
+          "name": "석촌역(중)",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1091167,
+          "y": 37.5032
+        },
+        {
+          "sequence": 74,
+          "stationId": "123000003",
+          "name": "석촌호수.한솔병원(중)",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1057833,
+          "y": 37.50685
+        },
+        {
+          "sequence": 75,
+          "stationId": "277102839",
+          "name": "석촌역교차로(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1037667,
+          "y": 37.5093167
+        },
+        {
+          "sequence": 76,
+          "stationId": "123000001",
+          "name": "잠실역.잠실대교남단(중)",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.0984833,
+          "y": 37.51555
+        },
+        {
+          "sequence": 77,
+          "stationId": "277102301",
+          "name": "잠실대교북단(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.09045,
+          "y": 37.5293333
+        },
+        {
+          "sequence": 78,
+          "stationId": "104000069",
+          "name": "테크노마트앞.강변역(D)",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.0939333,
+          "y": 37.5366667
+        },
+        {
+          "sequence": 79,
+          "stationId": "277101910",
+          "name": "양지삼거리(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.0944333,
+          "y": 37.54015
+        },
+        {
+          "sequence": 80,
+          "stationId": "277102675",
+          "name": "천호대교북단(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1077,
+          "y": 37.5439167
+        },
+        {
+          "sequence": 81,
+          "stationId": "277103307",
+          "name": "아천IC(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1279167,
+          "y": 37.5726333
+        },
+        {
+          "sequence": 82,
+          "stationId": "277103313",
+          "name": "토평삼거리(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.14505,
+          "y": 37.57665
+        },
+        {
+          "sequence": 83,
+          "stationId": "221000025",
+          "name": "토평정수장",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1462167,
+          "y": 37.5801333
+        },
+        {
+          "sequence": 84,
+          "stationId": "221000029",
+          "name": "벌말.돌섬",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1470667,
+          "y": 37.5843333
+        },
+        {
+          "sequence": 85,
+          "stationId": "221000075",
+          "name": "벌말삼거리.상록아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1482667,
+          "y": 37.5868833
+        },
+        {
+          "sequence": 86,
+          "stationId": "221000074",
+          "name": "동명빌라",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.14905,
+          "y": 37.5889833
+        },
+        {
+          "sequence": 87,
+          "stationId": "221000073",
+          "name": "구리여중고.청소년문화의집.성광교회",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1503167,
+          "y": 37.5925167
+        },
+        {
+          "sequence": 88,
+          "stationId": "221000049",
+          "name": "수택고교.SK신일.우남아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1542,
+          "y": 37.5935167
+        },
+        {
+          "sequence": 89,
+          "stationId": "221000047",
+          "name": "구리수택차고지",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.15655,
+          "y": 37.5935667
+        }
+      ]
+    },
+    {
+      "routeId": "204000057",
+      "displayName": "3330",
+      "startStopName": "도촌동9단지앞",
+      "endStopName": "안양역",
+      "turnSequence": 43,
+      "contentDigest": "91749006e76e5f822c1c2e241b37fae4eba6941e217dcba2928c6e7e8ffdae5d",
+      "timetable": {
+        "upFirstDepartureTime": "04:50",
+        "upLastDepartureTime": "23:30",
+        "downFirstDepartureTime": "05:00",
+        "downLastDepartureTime": "23:30"
+      },
+      "stops": [
+        {
+          "sequence": 1,
+          "stationId": "205000227",
+          "name": "도촌동9단지앞",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1627833,
+          "y": 37.4118167
+        },
+        {
+          "sequence": 2,
+          "stationId": "205000220",
+          "name": "도촌7단지.8단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1616,
+          "y": 37.4120167
+        },
+        {
+          "sequence": 3,
+          "stationId": "205000221",
+          "name": "도촌초등학교.도촌종합사회복지관",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1575667,
+          "y": 37.4139333
+        },
+        {
+          "sequence": 4,
+          "stationId": "205000222",
+          "name": "동분당포레스트.스위첸파티오1단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1530667,
+          "y": 37.4146
+        },
+        {
+          "sequence": 5,
+          "stationId": "205000231",
+          "name": "동강프라자앞",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1506833,
+          "y": 37.41435
+        },
+        {
+          "sequence": 6,
+          "stationId": "205000217",
+          "name": "도촌1.2단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1487833,
+          "y": 37.4146333
+        },
+        {
+          "sequence": 7,
+          "stationId": "205000098",
+          "name": "분재단지.도촌동1단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1449833,
+          "y": 37.4145833
+        },
+        {
+          "sequence": 8,
+          "stationId": "205000175",
+          "name": "매화마을주공3단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.14155,
+          "y": 37.4145
+        },
+        {
+          "sequence": 9,
+          "stationId": "205000210",
+          "name": "매화마을3단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1384167,
+          "y": 37.4150667
+        },
+        {
+          "sequence": 10,
+          "stationId": "206000726",
+          "name": "야탑119안전센터",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1362,
+          "y": 37.4163
+        },
+        {
+          "sequence": 11,
+          "stationId": "206000729",
+          "name": "연꽃마을4단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1344833,
+          "y": 37.4167833
+        },
+        {
+          "sequence": 12,
+          "stationId": "205000173",
+          "name": "야탑중학교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1317167,
+          "y": 37.41705
+        },
+        {
+          "sequence": 13,
+          "stationId": "206000361",
+          "name": "동부.코오롱아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1285167,
+          "y": 37.4158833
+        },
+        {
+          "sequence": 14,
+          "stationId": "206000157",
+          "name": "야탑역.종합버스터미널(전면)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1285,
+          "y": 37.4114167
+        },
+        {
+          "sequence": 15,
+          "stationId": "206000392",
+          "name": "쌍용아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1284333,
+          "y": 37.4068667
+        },
+        {
+          "sequence": 16,
+          "stationId": "206000055",
+          "name": "성남아트센터.태원고교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1281333,
+          "y": 37.40165
+        },
+        {
+          "sequence": 17,
+          "stationId": "206000054",
+          "name": "이매역",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1280833,
+          "y": 37.39675
+        },
+        {
+          "sequence": 18,
+          "stationId": "206000053",
+          "name": "송림고교.이매촌성지아파트.청구아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1280167,
+          "y": 37.3930333
+        },
+        {
+          "sequence": 19,
+          "stationId": "206000316",
+          "name": "이매촌한신.서현역.AK프라자",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1246333,
+          "y": 37.3884833
+        },
+        {
+          "sequence": 20,
+          "stationId": "206000530",
+          "name": "성남역.백현마을2단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1182333,
+          "y": 37.3921167
+        },
+        {
+          "sequence": 21,
+          "stationId": "206000531",
+          "name": "백현마을1단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1145,
+          "y": 37.3919667
+        },
+        {
+          "sequence": 22,
+          "stationId": "206000532",
+          "name": "판교역.낙생육교.현대백화점",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1118833,
+          "y": 37.3918667
+        },
+        {
+          "sequence": 23,
+          "stationId": "277103149",
+          "name": "판교TG(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1031667,
+          "y": 37.39595
+        },
+        {
+          "sequence": 24,
+          "stationId": "277102599",
+          "name": "청계터널진입(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0542667,
+          "y": 37.39655
+        },
+        {
+          "sequence": 25,
+          "stationId": "226000190",
+          "name": "의왕청계영업소",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.02325,
+          "y": 37.3931333
+        },
+        {
+          "sequence": 26,
+          "stationId": "277103157",
+          "name": "학의JC(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0018,
+          "y": 37.3875833
+        },
+        {
+          "sequence": 27,
+          "stationId": "209000133",
+          "name": "농수산물시장",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9679,
+          "y": 37.3819333
+        },
+        {
+          "sequence": 28,
+          "stationId": "209000160",
+          "name": "귀인중학교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9651333,
+          "y": 37.3843333
+        },
+        {
+          "sequence": 29,
+          "stationId": "209000057",
+          "name": "초원대림아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9634333,
+          "y": 37.3875
+        },
+        {
+          "sequence": 30,
+          "stationId": "209000132",
+          "name": "한림대병원후문",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9614333,
+          "y": 37.39115
+        },
+        {
+          "sequence": 31,
+          "stationId": "209000097",
+          "name": "안양시청",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.95865,
+          "y": 37.39395
+        },
+        {
+          "sequence": 32,
+          "stationId": "209000131",
+          "name": "동안구청",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9531,
+          "y": 37.3920333
+        },
+        {
+          "sequence": 33,
+          "stationId": "209000094",
+          "name": "동안경찰서.범계역",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9496667,
+          "y": 37.3906667
+        },
+        {
+          "sequence": 34,
+          "stationId": "209000093",
+          "name": "안양우편물류센터",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9470667,
+          "y": 37.3884167
+        },
+        {
+          "sequence": 35,
+          "stationId": "209000119",
+          "name": "효성티앤씨.진영레미콘",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.94295,
+          "y": 37.3851833
+        },
+        {
+          "sequence": 36,
+          "stationId": "208000005",
+          "name": "명학대교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9385833,
+          "y": 37.3836
+        },
+        {
+          "sequence": 37,
+          "stationId": "208000004",
+          "name": "성결대학교.안양아트센터.명학역",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.93365,
+          "y": 37.3844167
+        },
+        {
+          "sequence": 38,
+          "stationId": "208000003",
+          "name": "만안구청",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9312167,
+          "y": 37.3873
+        },
+        {
+          "sequence": 39,
+          "stationId": "208000002",
+          "name": "안양센트럴헤센.KCC스위첸",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9289,
+          "y": 37.3901
+        },
+        {
+          "sequence": 40,
+          "stationId": "208000001",
+          "name": "서안양우체국.국제나은병원",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9259667,
+          "y": 37.39365
+        },
+        {
+          "sequence": 41,
+          "stationId": "208000066",
+          "name": "남부시장",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9239167,
+          "y": 37.3960833
+        },
+        {
+          "sequence": 42,
+          "stationId": "208000065",
+          "name": "안양1번가.안양고용센터",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9214667,
+          "y": 37.399
+        },
+        {
+          "sequence": 43,
+          "stationId": "208000069",
+          "name": "안양역",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9222333,
+          "y": 37.40145
+        },
+        {
+          "sequence": 44,
+          "stationId": "277101770",
+          "name": "원평노블레스5차(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 126.9202333,
+          "y": 37.4037167
+        },
+        {
+          "sequence": 45,
+          "stationId": "208000158",
+          "name": "안양시외버스정류소.교보생명.댕리단길",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.919,
+          "y": 37.40145
+        },
+        {
+          "sequence": 46,
+          "stationId": "208000254",
+          "name": "포스빌.안양고용센터",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9214833,
+          "y": 37.3984333
+        },
+        {
+          "sequence": 47,
+          "stationId": "208000156",
+          "name": "벽산상가.2001아울렛",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9231667,
+          "y": 37.3963667
+        },
+        {
+          "sequence": 48,
+          "stationId": "208000155",
+          "name": "서안양우체국.국제나은병원",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9261,
+          "y": 37.3929
+        },
+        {
+          "sequence": 49,
+          "stationId": "208000087",
+          "name": "안양센트럴헤센.KCC스위첸",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.92875,
+          "y": 37.38975
+        },
+        {
+          "sequence": 50,
+          "stationId": "208000086",
+          "name": "만안구청",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9310833,
+          "y": 37.3869
+        },
+        {
+          "sequence": 51,
+          "stationId": "208000281",
+          "name": "성결대학교.안양아트센터.명학역",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9326833,
+          "y": 37.3850167
+        },
+        {
+          "sequence": 52,
+          "stationId": "208000084",
+          "name": "명학대교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9390667,
+          "y": 37.3833167
+        },
+        {
+          "sequence": 53,
+          "stationId": "209000118",
+          "name": "효성티앤씨.진영레미콘",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9432167,
+          "y": 37.3849667
+        },
+        {
+          "sequence": 54,
+          "stationId": "209000110",
+          "name": "안양우편물류센터",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9472,
+          "y": 37.3881167
+        },
+        {
+          "sequence": 55,
+          "stationId": "209000135",
+          "name": "롯데백화점.범계역",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9500333,
+          "y": 37.3903
+        },
+        {
+          "sequence": 56,
+          "stationId": "209000109",
+          "name": "문화의거리",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9530667,
+          "y": 37.3916
+        },
+        {
+          "sequence": 57,
+          "stationId": "209000108",
+          "name": "안양시청",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.95765,
+          "y": 37.39315
+        },
+        {
+          "sequence": 58,
+          "stationId": "209000130",
+          "name": "중앙공원",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9611833,
+          "y": 37.3908333
+        },
+        {
+          "sequence": 59,
+          "stationId": "209000072",
+          "name": "향촌현대아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.963,
+          "y": 37.3874833
+        },
+        {
+          "sequence": 60,
+          "stationId": "209000159",
+          "name": "귀인중학교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9647167,
+          "y": 37.3842333
+        },
+        {
+          "sequence": 61,
+          "stationId": "209000129",
+          "name": "농수산물시장",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9675667,
+          "y": 37.3812167
+        },
+        {
+          "sequence": 62,
+          "stationId": "277103156",
+          "name": "학의JC(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.0011667,
+          "y": 37.3869833
+        },
+        {
+          "sequence": 63,
+          "stationId": "226000191",
+          "name": "의왕청계영업소",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.0261667,
+          "y": 37.39245
+        },
+        {
+          "sequence": 64,
+          "stationId": "277102796",
+          "name": "청계터널출입(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.0549833,
+          "y": 37.3961167
+        },
+        {
+          "sequence": 65,
+          "stationId": "277103148",
+          "name": "판교TG(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1021333,
+          "y": 37.3956667
+        },
+        {
+          "sequence": 66,
+          "stationId": "206000535",
+          "name": "판교역.낙생육교.현대백화점",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1117,
+          "y": 37.3914833
+        },
+        {
+          "sequence": 67,
+          "stationId": "206000536",
+          "name": "백현마을4단지",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1156833,
+          "y": 37.3916667
+        },
+        {
+          "sequence": 68,
+          "stationId": "206000537",
+          "name": "성남역.백현마을3단지",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.11815,
+          "y": 37.3917833
+        },
+        {
+          "sequence": 69,
+          "stationId": "206000239",
+          "name": "이매촌한신.서현역.AK프라자",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1242333,
+          "y": 37.3883167
+        },
+        {
+          "sequence": 70,
+          "stationId": "206000028",
+          "name": "송림고등학교.이매촌청구아파트.동신아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1284667,
+          "y": 37.3919833
+        },
+        {
+          "sequence": 71,
+          "stationId": "206000227",
+          "name": "이매역.진흥아파트.동신아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1287667,
+          "y": 37.3976
+        },
+        {
+          "sequence": 72,
+          "stationId": "206000226",
+          "name": "성남아트센터.태원고교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1287167,
+          "y": 37.4014667
+        },
+        {
+          "sequence": 73,
+          "stationId": "206000441",
+          "name": "경남아너스빌",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.12895,
+          "y": 37.4073333
+        },
+        {
+          "sequence": 74,
+          "stationId": "206000784",
+          "name": "야탑역.종합버스터미널(광역버스)",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1289667,
+          "y": 37.4127167
+        },
+        {
+          "sequence": 75,
+          "stationId": "206000057",
+          "name": "야탑중학교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1305667,
+          "y": 37.4168
+        },
+        {
+          "sequence": 76,
+          "stationId": "206000728",
+          "name": "매화마을1단지",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1348167,
+          "y": 37.4165
+        },
+        {
+          "sequence": 77,
+          "stationId": "206000478",
+          "name": "매화마을3단지",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1378833,
+          "y": 37.4150833
+        },
+        {
+          "sequence": 78,
+          "stationId": "206000264",
+          "name": "매화마을주공3단지",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1408333,
+          "y": 37.4144333
+        },
+        {
+          "sequence": 79,
+          "stationId": "205000097",
+          "name": "도촌동1단지앞",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1449333,
+          "y": 37.41425
+        },
+        {
+          "sequence": 80,
+          "stationId": "205000211",
+          "name": "도촌1.2단지",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.14865,
+          "y": 37.4145333
+        },
+        {
+          "sequence": 81,
+          "stationId": "205000230",
+          "name": "도촌2단지.근로복지공단",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1507,
+          "y": 37.4142
+        },
+        {
+          "sequence": 82,
+          "stationId": "205000212",
+          "name": "동분당포레스트.스위첸파티오1단지",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1534833,
+          "y": 37.4144667
+        },
+        {
+          "sequence": 83,
+          "stationId": "205000213",
+          "name": "도촌초등학교.도촌종합사회복지관",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1577667,
+          "y": 37.4137667
+        },
+        {
+          "sequence": 84,
+          "stationId": "205000214",
+          "name": "도촌7단지.8단지",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1618,
+          "y": 37.4117833
+        },
+        {
+          "sequence": 85,
+          "stationId": "205000226",
+          "name": "도촌동9단지앞",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.16305,
+          "y": 37.41195
+        }
+      ]
+    },
+    {
+      "routeId": "204000070",
+      "displayName": "9007",
+      "startStopName": "운중동먹거리촌",
+      "endStopName": "서울역버스환승센터(5번승강장)(중)",
+      "turnSequence": 37,
+      "contentDigest": "efb1417c9fea037a132bc464bcb878e5c98c6443f915aee83697995d4ba9c9ed",
+      "timetable": {
+        "upFirstDepartureTime": "05:00",
+        "upLastDepartureTime": "22:50",
+        "downFirstDepartureTime": "06:00",
+        "downLastDepartureTime": "23:50"
+      },
+      "stops": [
+        {
+          "sequence": 1,
+          "stationId": "206000010",
+          "name": "운중동먹거리촌",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.0582333,
+          "y": 37.3914
+        },
+        {
+          "sequence": 2,
+          "stationId": "206000009",
+          "name": "운중동푸르지오하임",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.0611,
+          "y": 37.3919333
+        },
+        {
+          "sequence": 3,
+          "stationId": "206000658",
+          "name": "라이트온교회.월든힐스아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.0639667,
+          "y": 37.39205
+        },
+        {
+          "sequence": 4,
+          "stationId": "206000558",
+          "name": "운중초등학교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.0665667,
+          "y": 37.39135
+        },
+        {
+          "sequence": 5,
+          "stationId": "206000007",
+          "name": "운중중학교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.07305,
+          "y": 37.3916
+        },
+        {
+          "sequence": 6,
+          "stationId": "206000006",
+          "name": "운중동행정복지센터",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.0776667,
+          "y": 37.3915
+        },
+        {
+          "sequence": 7,
+          "stationId": "206000005",
+          "name": "뫼루니육교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.0828833,
+          "y": 37.3910167
+        },
+        {
+          "sequence": 8,
+          "stationId": "206000004",
+          "name": "판교원마을1.2단지.판교도서관",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.0879333,
+          "y": 37.3898167
+        },
+        {
+          "sequence": 9,
+          "stationId": "206000555",
+          "name": "판교유스센터.판교종합사회복지관",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.0919333,
+          "y": 37.3889833
+        },
+        {
+          "sequence": 10,
+          "stationId": "206000609",
+          "name": "판교동행정복지센터",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.0977,
+          "y": 37.3892167
+        },
+        {
+          "sequence": 11,
+          "stationId": "206000607",
+          "name": "낙생초등학교.판교원마을10단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.0984167,
+          "y": 37.3931
+        },
+        {
+          "sequence": 12,
+          "stationId": "206000605",
+          "name": "불꽃교회",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.0979167,
+          "y": 37.3967333
+        },
+        {
+          "sequence": 13,
+          "stationId": "206000603",
+          "name": "판교원마을11단지.낙원중",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.0956667,
+          "y": 37.3989167
+        },
+        {
+          "sequence": 14,
+          "stationId": "206000551",
+          "name": "성내미육교.판교박물관",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.0956333,
+          "y": 37.4001333
+        },
+        {
+          "sequence": 15,
+          "stationId": "206000567",
+          "name": "SK플래닛.판교디지털센터",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.10315,
+          "y": 37.4030167
+        },
+        {
+          "sequence": 16,
+          "stationId": "206000565",
+          "name": "유라코퍼레이션.SK케미칼",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1076833,
+          "y": 37.4030667
+        },
+        {
+          "sequence": 17,
+          "stationId": "206000678",
+          "name": "H스퀘어.삼환하이펙스",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.10945,
+          "y": 37.40185
+        },
+        {
+          "sequence": 18,
+          "stationId": "206000731",
+          "name": "엔씨.안랩",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1094667,
+          "y": 37.3994667
+        },
+        {
+          "sequence": 19,
+          "stationId": "206000679",
+          "name": "판교역북편",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1113833,
+          "y": 37.3961167
+        },
+        {
+          "sequence": 20,
+          "stationId": "206000637",
+          "name": "판교역동편",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1127,
+          "y": 37.3953833
+        },
+        {
+          "sequence": 21,
+          "stationId": "206000532",
+          "name": "판교역.낙생육교.현대백화점",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1118833,
+          "y": 37.3918667
+        },
+        {
+          "sequence": 22,
+          "stationId": "277103149",
+          "name": "판교TG(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1031667,
+          "y": 37.39595
+        },
+        {
+          "sequence": 23,
+          "stationId": "277103679",
+          "name": "금토JC(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0853167,
+          "y": 37.4152833
+        },
+        {
+          "sequence": 24,
+          "stationId": "277103441",
+          "name": "서울진입(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0665833,
+          "y": 37.43385
+        },
+        {
+          "sequence": 25,
+          "stationId": "277104177",
+          "name": "청계산입구역(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0542,
+          "y": 37.4483667
+        },
+        {
+          "sequence": 26,
+          "stationId": "277103388",
+          "name": "양재IC(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0403167,
+          "y": 37.4634
+        },
+        {
+          "sequence": 27,
+          "stationId": "277103390",
+          "name": "서초IC(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0263333,
+          "y": 37.4831333
+        },
+        {
+          "sequence": 28,
+          "stationId": "277103391",
+          "name": "반포IC(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0188667,
+          "y": 37.50285
+        },
+        {
+          "sequence": 29,
+          "stationId": "277100065",
+          "name": "삼호가든사거리(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0102833,
+          "y": 37.5051833
+        },
+        {
+          "sequence": 30,
+          "stationId": "121900201",
+          "name": "호남고속.신세계",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.0033,
+          "y": 37.5058833
+        },
+        {
+          "sequence": 31,
+          "stationId": "102000058",
+          "name": "국군재정관리단",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9869667,
+          "y": 37.5371667
+        },
+        {
+          "sequence": 32,
+          "stationId": "101000049",
+          "name": "남산3호터널.정화예술대학교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9827,
+          "y": 37.5595
+        },
+        {
+          "sequence": 33,
+          "stationId": "101000043",
+          "name": "명동.롯데영플라자",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9820833,
+          "y": 37.5630333
+        },
+        {
+          "sequence": 34,
+          "stationId": "101000303",
+          "name": "서울시청",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9807667,
+          "y": 37.56615
+        },
+        {
+          "sequence": 35,
+          "stationId": "277104283",
+          "name": "시청교차로(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 126.9767667,
+          "y": 37.56455
+        },
+        {
+          "sequence": 36,
+          "stationId": "101000128",
+          "name": "신한은행본점",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9755167,
+          "y": 37.5611167
+        },
+        {
+          "sequence": 37,
+          "stationId": "101000005",
+          "name": "서울역버스환승센터(5번승강장)(중)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9726833,
+          "y": 37.55515
+        },
+        {
+          "sequence": 38,
+          "stationId": "277101742",
+          "name": "서울역교차로(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 126.9726333,
+          "y": 37.5571
+        },
+        {
+          "sequence": 39,
+          "stationId": "101000026",
+          "name": "숭례문",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9744,
+          "y": 37.5587833
+        },
+        {
+          "sequence": 40,
+          "stationId": "277102115",
+          "name": "숭례문교차로(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 126.9754333,
+          "y": 37.5603667
+        },
+        {
+          "sequence": 41,
+          "stationId": "101000031",
+          "name": "남대문시장.신세계앞",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9800167,
+          "y": 37.5612167
+        },
+        {
+          "sequence": 42,
+          "stationId": "101000048",
+          "name": "남산3호터널",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9826833,
+          "y": 37.5585333
+        },
+        {
+          "sequence": 43,
+          "stationId": "102000057",
+          "name": "해방촌",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9865,
+          "y": 37.53775
+        },
+        {
+          "sequence": 44,
+          "stationId": "121000020",
+          "name": "고속터미널(중)",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.0037833,
+          "y": 37.5057833
+        },
+        {
+          "sequence": 45,
+          "stationId": "277103392",
+          "name": "반포IC(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.0184333,
+          "y": 37.5028167
+        },
+        {
+          "sequence": 46,
+          "stationId": "277103389",
+          "name": "서초IC(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.0256667,
+          "y": 37.48365
+        },
+        {
+          "sequence": 47,
+          "stationId": "277103387",
+          "name": "양재IC(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.0394333,
+          "y": 37.46365
+        },
+        {
+          "sequence": 48,
+          "stationId": "277104178",
+          "name": "청계산입구역(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.0538333,
+          "y": 37.4481833
+        },
+        {
+          "sequence": 49,
+          "stationId": "277103440",
+          "name": "성남진입(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.0661833,
+          "y": 37.43355
+        },
+        {
+          "sequence": 50,
+          "stationId": "277103678",
+          "name": "금토JC(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.08445,
+          "y": 37.4155
+        },
+        {
+          "sequence": 51,
+          "stationId": "277103148",
+          "name": "판교TG(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1021333,
+          "y": 37.3956667
+        },
+        {
+          "sequence": 52,
+          "stationId": "206000635",
+          "name": "판교역동편",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1131833,
+          "y": 37.3947833
+        },
+        {
+          "sequence": 53,
+          "stationId": "206000680",
+          "name": "판교역북편",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1111667,
+          "y": 37.3963
+        },
+        {
+          "sequence": 54,
+          "stationId": "206000640",
+          "name": "동안교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1098667,
+          "y": 37.39725
+        },
+        {
+          "sequence": 55,
+          "stationId": "206000730",
+          "name": "엔씨.안랩",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.10985,
+          "y": 37.3995833
+        },
+        {
+          "sequence": 56,
+          "stationId": "206000677",
+          "name": "H스퀘어.삼환하이펙스",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.10985,
+          "y": 37.4017833
+        },
+        {
+          "sequence": 57,
+          "stationId": "206000564",
+          "name": "봇들육교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1076667,
+          "y": 37.4033667
+        },
+        {
+          "sequence": 58,
+          "stationId": "206000566",
+          "name": "이노밸리.포스코DX",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1030667,
+          "y": 37.4033667
+        },
+        {
+          "sequence": 59,
+          "stationId": "206000549",
+          "name": "성내미육교.판교박물관",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.0959167,
+          "y": 37.4006667
+        },
+        {
+          "sequence": 60,
+          "stationId": "206000550",
+          "name": "판교원마을11단지.낙원중",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.0957833,
+          "y": 37.3985333
+        },
+        {
+          "sequence": 61,
+          "stationId": "206000604",
+          "name": "불꽃교회",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.09755,
+          "y": 37.397
+        },
+        {
+          "sequence": 62,
+          "stationId": "206000606",
+          "name": "낙생초등학교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.0981167,
+          "y": 37.3936
+        },
+        {
+          "sequence": 63,
+          "stationId": "206000608",
+          "name": "판교동행정복지센터",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.0975,
+          "y": 37.3891
+        },
+        {
+          "sequence": 64,
+          "stationId": "206000554",
+          "name": "판교유스센터.판교종합사회복지관",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.0916833,
+          "y": 37.38935
+        },
+        {
+          "sequence": 65,
+          "stationId": "206000016",
+          "name": "판교원마을1.2단지.판교도서관",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.0890667,
+          "y": 37.3899
+        },
+        {
+          "sequence": 66,
+          "stationId": "206000556",
+          "name": "뫼루니육교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.0830333,
+          "y": 37.3913
+        },
+        {
+          "sequence": 67,
+          "stationId": "206000015",
+          "name": "운중동행정복지센터",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.07675,
+          "y": 37.39185
+        },
+        {
+          "sequence": 68,
+          "stationId": "206000014",
+          "name": "운중고등학교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.0730167,
+          "y": 37.3918167
+        },
+        {
+          "sequence": 69,
+          "stationId": "206000557",
+          "name": "운중초등학교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.0667833,
+          "y": 37.3916
+        },
+        {
+          "sequence": 70,
+          "stationId": "206000657",
+          "name": "라이트온교회.월든힐스아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.0641,
+          "y": 37.3921333
+        },
+        {
+          "sequence": 71,
+          "stationId": "206000012",
+          "name": "운중동푸르지오하임",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.0609833,
+          "y": 37.392
+        },
+        {
+          "sequence": 72,
+          "stationId": "206000470",
+          "name": "운중동먹거리촌",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.05835,
+          "y": 37.3915167
+        },
+        {
+          "sequence": 73,
+          "stationId": "206000011",
+          "name": "한국학중앙연구원",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.0563,
+          "y": 37.3916
+        }
+      ]
+    },
+    {
+      "routeId": "234000886",
+      "displayName": "9300",
+      "startStopName": "도촌동9단지앞",
+      "endStopName": "서울역버스환승센터(5번승강장)(중)",
+      "turnSequence": 40,
+      "contentDigest": "1ac326886786974a11058d2a1ced484c8c227bf4a0f4aa45a8afdcd56a030bd7",
+      "timetable": {
+        "upFirstDepartureTime": "05:00",
+        "upLastDepartureTime": "23:00",
+        "downFirstDepartureTime": "05:50",
+        "downLastDepartureTime": "23:50"
+      },
+      "stops": [
+        {
+          "sequence": 1,
+          "stationId": "205000227",
+          "name": "도촌동9단지앞",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1627833,
+          "y": 37.4118167
+        },
+        {
+          "sequence": 2,
+          "stationId": "205000220",
+          "name": "도촌7단지.8단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1616,
+          "y": 37.4120167
+        },
+        {
+          "sequence": 3,
+          "stationId": "205000221",
+          "name": "도촌초등학교.도촌종합사회복지관",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1575667,
+          "y": 37.4139333
+        },
+        {
+          "sequence": 4,
+          "stationId": "205000222",
+          "name": "동분당포레스트.스위첸파티오1단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1530667,
+          "y": 37.4146
+        },
+        {
+          "sequence": 5,
+          "stationId": "205000231",
+          "name": "동강프라자앞",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1506833,
+          "y": 37.41435
+        },
+        {
+          "sequence": 6,
+          "stationId": "205000217",
+          "name": "도촌1.2단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1487833,
+          "y": 37.4146333
+        },
+        {
+          "sequence": 7,
+          "stationId": "205000098",
+          "name": "분재단지.도촌동1단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1449833,
+          "y": 37.4145833
+        },
+        {
+          "sequence": 8,
+          "stationId": "205000175",
+          "name": "매화마을주공3단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.14155,
+          "y": 37.4145
+        },
+        {
+          "sequence": 9,
+          "stationId": "205000210",
+          "name": "매화마을3단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1384167,
+          "y": 37.4150667
+        },
+        {
+          "sequence": 10,
+          "stationId": "206000726",
+          "name": "야탑119안전센터",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1362,
+          "y": 37.4163
+        },
+        {
+          "sequence": 11,
+          "stationId": "206000729",
+          "name": "연꽃마을4단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1344833,
+          "y": 37.4167833
+        },
+        {
+          "sequence": 12,
+          "stationId": "205000173",
+          "name": "야탑중학교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1317167,
+          "y": 37.41705
+        },
+        {
+          "sequence": 13,
+          "stationId": "206000361",
+          "name": "동부.코오롱아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1285167,
+          "y": 37.4158833
+        },
+        {
+          "sequence": 14,
+          "stationId": "206000157",
+          "name": "야탑역.종합버스터미널(전면)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1285,
+          "y": 37.4114167
+        },
+        {
+          "sequence": 15,
+          "stationId": "206000392",
+          "name": "쌍용아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1284333,
+          "y": 37.4068667
+        },
+        {
+          "sequence": 16,
+          "stationId": "206000298",
+          "name": "삼환진덕아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.12735,
+          "y": 37.4055333
+        },
+        {
+          "sequence": 17,
+          "stationId": "206000310",
+          "name": "탑마을대우아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1223667,
+          "y": 37.4055833
+        },
+        {
+          "sequence": 18,
+          "stationId": "204000203",
+          "name": "송현초등학교.판교이지더원2단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1177833,
+          "y": 37.4051833
+        },
+        {
+          "sequence": 19,
+          "stationId": "204000207",
+          "name": "벌말육교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1166667,
+          "y": 37.40205
+        },
+        {
+          "sequence": 20,
+          "stationId": "206000614",
+          "name": "봇들마을7단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1166667,
+          "y": 37.3980833
+        },
+        {
+          "sequence": 21,
+          "stationId": "206000616",
+          "name": "성남역.보평중고등학교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.11665,
+          "y": 37.39495
+        },
+        {
+          "sequence": 22,
+          "stationId": "206000531",
+          "name": "백현마을1단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1145,
+          "y": 37.3919667
+        },
+        {
+          "sequence": 23,
+          "stationId": "206000532",
+          "name": "판교역.낙생육교.현대백화점",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1118833,
+          "y": 37.3918667
+        },
+        {
+          "sequence": 24,
+          "stationId": "277103149",
+          "name": "판교TG(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1031667,
+          "y": 37.39595
+        },
+        {
+          "sequence": 25,
+          "stationId": "277103679",
+          "name": "금토JC(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0853167,
+          "y": 37.4152833
+        },
+        {
+          "sequence": 26,
+          "stationId": "277103441",
+          "name": "서울진입(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0665833,
+          "y": 37.43385
+        },
+        {
+          "sequence": 27,
+          "stationId": "277104177",
+          "name": "청계산입구역(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0542,
+          "y": 37.4483667
+        },
+        {
+          "sequence": 28,
+          "stationId": "277103388",
+          "name": "양재IC(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0403167,
+          "y": 37.4634
+        },
+        {
+          "sequence": 29,
+          "stationId": "277103390",
+          "name": "서초IC(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0263333,
+          "y": 37.4831333
+        },
+        {
+          "sequence": 30,
+          "stationId": "277103391",
+          "name": "반포IC(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0188667,
+          "y": 37.50285
+        },
+        {
+          "sequence": 31,
+          "stationId": "277103400",
+          "name": "한남IC(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0175833,
+          "y": 37.5224833
+        },
+        {
+          "sequence": 32,
+          "stationId": "102000069",
+          "name": "순천향대학병원",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.00625,
+          "y": 37.5356667
+        },
+        {
+          "sequence": 33,
+          "stationId": "277104180",
+          "name": "한남1고가차도(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0037,
+          "y": 37.5407167
+        },
+        {
+          "sequence": 34,
+          "stationId": "277104186",
+          "name": "남산1호터널TG(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 126.99315,
+          "y": 37.55585
+        },
+        {
+          "sequence": 35,
+          "stationId": "101000292",
+          "name": "남대문세무서.국가인권위원회",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9878,
+          "y": 37.5652333
+        },
+        {
+          "sequence": 36,
+          "stationId": "100000001",
+          "name": "종로2가사거리(중)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9877333,
+          "y": 37.5697833
+        },
+        {
+          "sequence": 37,
+          "stationId": "101000141",
+          "name": "을지로입구역.광교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9824667,
+          "y": 37.5675333
+        },
+        {
+          "sequence": 38,
+          "stationId": "101000041",
+          "name": "롯데백화점",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.98215,
+          "y": 37.5644667
+        },
+        {
+          "sequence": 39,
+          "stationId": "101000264",
+          "name": "북창동.남대문시장",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9771667,
+          "y": 37.5609667
+        },
+        {
+          "sequence": 40,
+          "stationId": "101000005",
+          "name": "서울역버스환승센터(5번승강장)(중)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9726833,
+          "y": 37.55515
+        },
+        {
+          "sequence": 41,
+          "stationId": "277101742",
+          "name": "서울역교차로(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 126.9726333,
+          "y": 37.5571
+        },
+        {
+          "sequence": 42,
+          "stationId": "101000026",
+          "name": "숭례문",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9744,
+          "y": 37.5587833
+        },
+        {
+          "sequence": 43,
+          "stationId": "277102115",
+          "name": "숭례문교차로(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 126.9754333,
+          "y": 37.5603667
+        },
+        {
+          "sequence": 44,
+          "stationId": "102000070",
+          "name": "순천향대학병원",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.0054333,
+          "y": 37.5359
+        },
+        {
+          "sequence": 45,
+          "stationId": "277103399",
+          "name": "한남IC(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.0172833,
+          "y": 37.5220333
+        },
+        {
+          "sequence": 46,
+          "stationId": "277103392",
+          "name": "반포IC(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.0184333,
+          "y": 37.5028167
+        },
+        {
+          "sequence": 47,
+          "stationId": "277103389",
+          "name": "서초IC(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.0256667,
+          "y": 37.48365
+        },
+        {
+          "sequence": 48,
+          "stationId": "277103387",
+          "name": "양재IC(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.0394333,
+          "y": 37.46365
+        },
+        {
+          "sequence": 49,
+          "stationId": "277104178",
+          "name": "청계산입구역(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.0538333,
+          "y": 37.4481833
+        },
+        {
+          "sequence": 50,
+          "stationId": "277103440",
+          "name": "성남진입(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.0661833,
+          "y": 37.43355
+        },
+        {
+          "sequence": 51,
+          "stationId": "277103678",
+          "name": "금토JC(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.08445,
+          "y": 37.4155
+        },
+        {
+          "sequence": 52,
+          "stationId": "277103148",
+          "name": "판교TG(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1021333,
+          "y": 37.3956667
+        },
+        {
+          "sequence": 53,
+          "stationId": "206000535",
+          "name": "판교역.낙생육교.현대백화점",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1117,
+          "y": 37.3914833
+        },
+        {
+          "sequence": 54,
+          "stationId": "206000617",
+          "name": "성남역.보평중고등학교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1169667,
+          "y": 37.3946833
+        },
+        {
+          "sequence": 55,
+          "stationId": "206000615",
+          "name": "봇들마을9단지",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.11695,
+          "y": 37.398
+        },
+        {
+          "sequence": 56,
+          "stationId": "204000208",
+          "name": "벌말육교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.117,
+          "y": 37.40215
+        },
+        {
+          "sequence": 57,
+          "stationId": "204000204",
+          "name": "송현초등학교.판교봇들마을4단지",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1177667,
+          "y": 37.4048833
+        },
+        {
+          "sequence": 58,
+          "stationId": "206000309",
+          "name": "아름마을건영아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1212667,
+          "y": 37.4053333
+        },
+        {
+          "sequence": 59,
+          "stationId": "206000277",
+          "name": "삼환아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1268167,
+          "y": 37.4052833
+        },
+        {
+          "sequence": 60,
+          "stationId": "206000441",
+          "name": "경남아너스빌",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.12895,
+          "y": 37.4073333
+        },
+        {
+          "sequence": 61,
+          "stationId": "206000784",
+          "name": "야탑역.종합버스터미널(광역버스)",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1289667,
+          "y": 37.4127167
+        },
+        {
+          "sequence": 62,
+          "stationId": "206000057",
+          "name": "야탑중학교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1305667,
+          "y": 37.4168
+        },
+        {
+          "sequence": 63,
+          "stationId": "206000728",
+          "name": "매화마을1단지",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1348167,
+          "y": 37.4165
+        },
+        {
+          "sequence": 64,
+          "stationId": "206000478",
+          "name": "매화마을3단지",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1378833,
+          "y": 37.4150833
+        },
+        {
+          "sequence": 65,
+          "stationId": "206000264",
+          "name": "매화마을주공3단지",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1408333,
+          "y": 37.4144333
+        },
+        {
+          "sequence": 66,
+          "stationId": "205000097",
+          "name": "도촌동1단지앞",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1449333,
+          "y": 37.41425
+        },
+        {
+          "sequence": 67,
+          "stationId": "205000211",
+          "name": "도촌1.2단지",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.14865,
+          "y": 37.4145333
+        },
+        {
+          "sequence": 68,
+          "stationId": "205000230",
+          "name": "도촌2단지.근로복지공단",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1507,
+          "y": 37.4142
+        },
+        {
+          "sequence": 69,
+          "stationId": "205000212",
+          "name": "동분당포레스트.스위첸파티오1단지",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1534833,
+          "y": 37.4144667
+        },
+        {
+          "sequence": 70,
+          "stationId": "205000213",
+          "name": "도촌초등학교.도촌종합사회복지관",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1577667,
+          "y": 37.4137667
+        },
+        {
+          "sequence": 71,
+          "stationId": "205000214",
+          "name": "도촌7단지.8단지",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1618,
+          "y": 37.4117833
+        },
+        {
+          "sequence": 72,
+          "stationId": "205000226",
+          "name": "도촌동9단지앞",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.16305,
+          "y": 37.41195
+        }
+      ]
+    },
+    {
+      "routeId": "233000392",
+      "displayName": "6011",
+      "startStopName": "호수자이파밀리에.아이원",
+      "endStopName": "판교역.낙생육교.현대백화점",
+      "turnSequence": 26,
+      "contentDigest": "056933eac19755727e4d6441d5e092893568ebdd55f86d15d291558b82e93a3f",
+      "timetable": {
+        "upFirstDepartureTime": "05:10",
+        "upLastDepartureTime": "23:00",
+        "downFirstDepartureTime": "06:10",
+        "downLastDepartureTime": "00:00"
+      },
+      "stops": [
+        {
+          "sequence": 1,
+          "stationId": "233003132",
+          "name": "호수자이파밀리에.아이원",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1052,
+          "y": 37.1607333
+        },
+        {
+          "sequence": 2,
+          "stationId": "233001754",
+          "name": "아이파크.센트럴시티",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1093167,
+          "y": 37.1655167
+        },
+        {
+          "sequence": 3,
+          "stationId": "233001696",
+          "name": "레이크파크뷰",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.119,
+          "y": 37.1699167
+        },
+        {
+          "sequence": 4,
+          "stationId": "233000374",
+          "name": "창의고",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1225333,
+          "y": 37.18185
+        },
+        {
+          "sequence": 5,
+          "stationId": "233001614",
+          "name": "한신더휴",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.12385,
+          "y": 37.18645
+        },
+        {
+          "sequence": 6,
+          "stationId": "233002421",
+          "name": "예솔초.호반2차.대원2차",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1187667,
+          "y": 37.1962333
+        },
+        {
+          "sequence": 7,
+          "stationId": "233000129",
+          "name": "신안2차.반도4차",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.11605,
+          "y": 37.1999833
+        },
+        {
+          "sequence": 8,
+          "stationId": "277104808",
+          "name": "치동천5교교차로(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.11355,
+          "y": 37.2034167
+        },
+        {
+          "sequence": 9,
+          "stationId": "233002429",
+          "name": "이주택지.상록.경남아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1108667,
+          "y": 37.2071
+        },
+        {
+          "sequence": 10,
+          "stationId": "233000063",
+          "name": "동원.다원중",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1035833,
+          "y": 37.2121333
+        },
+        {
+          "sequence": 11,
+          "stationId": "233000698",
+          "name": "현대트랜시스(중)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1036667,
+          "y": 37.2163
+        },
+        {
+          "sequence": 12,
+          "stationId": "277102516",
+          "name": "기흥IC진입(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.10135,
+          "y": 37.2217333
+        },
+        {
+          "sequence": 13,
+          "stationId": "277102660",
+          "name": "기흥휴게소(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1066167,
+          "y": 37.23525
+        },
+        {
+          "sequence": 14,
+          "stationId": "277103363",
+          "name": "수원신갈IC(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.104,
+          "y": 37.2657
+        },
+        {
+          "sequence": 15,
+          "stationId": "277103361",
+          "name": "신갈JC(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1038667,
+          "y": 37.2896667
+        },
+        {
+          "sequence": 16,
+          "stationId": "277103443",
+          "name": "죽전(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1038167,
+          "y": 37.3266333
+        },
+        {
+          "sequence": 17,
+          "stationId": "277102630",
+          "name": "금곡(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.10355,
+          "y": 37.3497667
+        },
+        {
+          "sequence": 18,
+          "stationId": "277103386",
+          "name": "서울TG(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1043333,
+          "y": 37.3649667
+        },
+        {
+          "sequence": 19,
+          "stationId": "277104184",
+          "name": "판교진입(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1017333,
+          "y": 37.3938167
+        },
+        {
+          "sequence": 20,
+          "stationId": "206000577",
+          "name": "화랑공원동편",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1072,
+          "y": 37.3969333
+        },
+        {
+          "sequence": 21,
+          "stationId": "206000539",
+          "name": "금토천교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1060333,
+          "y": 37.4013
+        },
+        {
+          "sequence": 22,
+          "stationId": "206000565",
+          "name": "유라코퍼레이션.SK케미칼",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1076833,
+          "y": 37.4030667
+        },
+        {
+          "sequence": 23,
+          "stationId": "206000563",
+          "name": "한국무역정보통신",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1109833,
+          "y": 37.4030833
+        },
+        {
+          "sequence": 24,
+          "stationId": "206000578",
+          "name": "봇들마을5단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.11275,
+          "y": 37.4014
+        },
+        {
+          "sequence": 25,
+          "stationId": "206000637",
+          "name": "판교역동편",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1127,
+          "y": 37.3953833
+        },
+        {
+          "sequence": 26,
+          "stationId": "206000532",
+          "name": "판교역.낙생육교.현대백화점",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1118833,
+          "y": 37.3918667
+        },
+        {
+          "sequence": 27,
+          "stationId": "277104185",
+          "name": "판교출입(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1019833,
+          "y": 37.3920667
+        },
+        {
+          "sequence": 28,
+          "stationId": "277103385",
+          "name": "서울TG(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1026,
+          "y": 37.36535
+        },
+        {
+          "sequence": 29,
+          "stationId": "277102104",
+          "name": "금곡(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1031167,
+          "y": 37.3503667
+        },
+        {
+          "sequence": 30,
+          "stationId": "277103442",
+          "name": "죽전(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.10315,
+          "y": 37.3266
+        },
+        {
+          "sequence": 31,
+          "stationId": "277103360",
+          "name": "신갈JC(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.10345,
+          "y": 37.2904333
+        },
+        {
+          "sequence": 32,
+          "stationId": "277103362",
+          "name": "수원신갈IC(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1035333,
+          "y": 37.2668167
+        },
+        {
+          "sequence": 33,
+          "stationId": "277102621",
+          "name": "기흥휴게소(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1061833,
+          "y": 37.2351167
+        },
+        {
+          "sequence": 34,
+          "stationId": "233000709",
+          "name": "현대트랜시스(중)",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1038167,
+          "y": 37.2172833
+        },
+        {
+          "sequence": 35,
+          "stationId": "233001902",
+          "name": "동원.다원중",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1032667,
+          "y": 37.2117833
+        },
+        {
+          "sequence": 36,
+          "stationId": "233001492",
+          "name": "상록.경남아파트.이주택지",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1105333,
+          "y": 37.2068667
+        },
+        {
+          "sequence": 37,
+          "stationId": "233001168",
+          "name": "센트럴푸르지오.호반베르디움2차",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1168167,
+          "y": 37.1981333
+        },
+        {
+          "sequence": 38,
+          "stationId": "233000965",
+          "name": "청목초.신안1차",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1194,
+          "y": 37.1945833
+        },
+        {
+          "sequence": 39,
+          "stationId": "233001620",
+          "name": "힐스테이트.호반5차",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1229333,
+          "y": 37.1848667
+        },
+        {
+          "sequence": 40,
+          "stationId": "233000209",
+          "name": "창의고",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1220167,
+          "y": 37.18175
+        },
+        {
+          "sequence": 41,
+          "stationId": "233001695",
+          "name": "레이크파크뷰",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1185333,
+          "y": 37.1700333
+        },
+        {
+          "sequence": 42,
+          "stationId": "233001753",
+          "name": "센트럴시티.아이파크",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1091167,
+          "y": 37.1658833
+        },
+        {
+          "sequence": 43,
+          "stationId": "233003126",
+          "name": "아이원.호수자이파밀리에",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1047833,
+          "y": 37.1610167
+        }
+      ]
+    },
+    {
+      "routeId": "227000038",
+      "displayName": "3000",
+      "startStopName": "미사역호반써밋",
+      "endStopName": "금토천교",
+      "turnSequence": 35,
+      "contentDigest": "8686d5a908f77affc660566189b3b8a4aaaec9fca402ab91dc2abd5e0c77a35d",
+      "timetable": {
+        "upFirstDepartureTime": "05:00",
+        "upLastDepartureTime": "23:00",
+        "downFirstDepartureTime": "06:00",
+        "downLastDepartureTime": "00:00"
+      },
+      "stops": [
+        {
+          "sequence": 1,
+          "stationId": "227000293",
+          "name": "미사역호반써밋",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1969167,
+          "y": 37.5660167
+        },
+        {
+          "sequence": 2,
+          "stationId": "227000294",
+          "name": "하남종합운동장.국민체육센터",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1959667,
+          "y": 37.5676833
+        },
+        {
+          "sequence": 3,
+          "stationId": "227000219",
+          "name": "한강유역환경청.미사고등학교.미사가람마을",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1945167,
+          "y": 37.5703833
+        },
+        {
+          "sequence": 4,
+          "stationId": "227000270",
+          "name": "미사강변한신더휴.트래지안",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1934,
+          "y": 37.5738333
+        },
+        {
+          "sequence": 5,
+          "stationId": "227000194",
+          "name": "구산문화마을.구산성당",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1903333,
+          "y": 37.5766667
+        },
+        {
+          "sequence": 6,
+          "stationId": "227000223",
+          "name": "미사강변중학교.미사강변리버나인",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.18675,
+          "y": 37.5771333
+        },
+        {
+          "sequence": 7,
+          "stationId": "227000204",
+          "name": "미사강변2차푸르지오.미사강변고등학교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1832333,
+          "y": 37.5769833
+        },
+        {
+          "sequence": 8,
+          "stationId": "227000284",
+          "name": "미사강변리버스위트칸타빌.리슈빌",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1813167,
+          "y": 37.5739333
+        },
+        {
+          "sequence": 9,
+          "stationId": "227000656",
+          "name": "미사강변스타힐스.금빛마을",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1831667,
+          "y": 37.5701167
+        },
+        {
+          "sequence": 10,
+          "stationId": "227000484",
+          "name": "미사2동행정복지센터.하남시미사보건센터",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1848833,
+          "y": 37.5673667
+        },
+        {
+          "sequence": 11,
+          "stationId": "227000232",
+          "name": "미사강변푸르지오.하우스디더레이크",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1862167,
+          "y": 37.5627833
+        },
+        {
+          "sequence": 12,
+          "stationId": "227000032",
+          "name": "하남노인·장애인복지관.미사1동행정복지센터",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.18845,
+          "y": 37.5598667
+        },
+        {
+          "sequence": 13,
+          "stationId": "227000514",
+          "name": "미사강변브라운스톤",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1919167,
+          "y": 37.5601333
+        },
+        {
+          "sequence": 14,
+          "stationId": "227000273",
+          "name": "청아초등학교.신안인스빌.브라운스톤",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.19535,
+          "y": 37.5583667
+        },
+        {
+          "sequence": 15,
+          "stationId": "227000191",
+          "name": "제일풍경채.미사강변신안인스빌",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1961333,
+          "y": 37.5551667
+        },
+        {
+          "sequence": 16,
+          "stationId": "227000257",
+          "name": "아이테코.이편한세상미사",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.19395,
+          "y": 37.5542167
+        },
+        {
+          "sequence": 17,
+          "stationId": "227000072",
+          "name": "하남시청소년수련관.한홀중",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1911,
+          "y": 37.5529
+        },
+        {
+          "sequence": 18,
+          "stationId": "227000250",
+          "name": "황산사거리.미사센텀비즈",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1841667,
+          "y": 37.5500167
+        },
+        {
+          "sequence": 19,
+          "stationId": "277103274",
+          "name": "하남JC(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.19505,
+          "y": 37.5310667
+        },
+        {
+          "sequence": 20,
+          "stationId": "277103154",
+          "name": "서하남IC(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1521333,
+          "y": 37.5127167
+        },
+        {
+          "sequence": 21,
+          "stationId": "277103268",
+          "name": "송파IC(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1275333,
+          "y": 37.4742333
+        },
+        {
+          "sequence": 22,
+          "stationId": "204000092",
+          "name": "가천대",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.12575,
+          "y": 37.4509667
+        },
+        {
+          "sequence": 23,
+          "stationId": "277103272",
+          "name": "성남TG(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1221833,
+          "y": 37.4365333
+        },
+        {
+          "sequence": 24,
+          "stationId": "277103271",
+          "name": "성남IC출입(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.12585,
+          "y": 37.4272
+        },
+        {
+          "sequence": 25,
+          "stationId": "205000245",
+          "name": "성남시청전면",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1285,
+          "y": 37.4181667
+        },
+        {
+          "sequence": 26,
+          "stationId": "206000361",
+          "name": "동부.코오롱아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1285167,
+          "y": 37.4158833
+        },
+        {
+          "sequence": 27,
+          "stationId": "206000157",
+          "name": "야탑역.종합버스터미널(전면)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1285,
+          "y": 37.4114167
+        },
+        {
+          "sequence": 28,
+          "stationId": "206000392",
+          "name": "쌍용아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1284333,
+          "y": 37.4068667
+        },
+        {
+          "sequence": 29,
+          "stationId": "206000298",
+          "name": "삼환진덕아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.12735,
+          "y": 37.4055333
+        },
+        {
+          "sequence": 30,
+          "stationId": "206000310",
+          "name": "탑마을대우아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1223667,
+          "y": 37.4055833
+        },
+        {
+          "sequence": 31,
+          "stationId": "204000203",
+          "name": "송현초등학교.판교이지더원2단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1177833,
+          "y": 37.4051833
+        },
+        {
+          "sequence": 32,
+          "stationId": "204000205",
+          "name": "판교신미주아파트.봇들3단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1154833,
+          "y": 37.4041333
+        },
+        {
+          "sequence": 33,
+          "stationId": "206000562",
+          "name": "차그룹컨소시엄",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.11095,
+          "y": 37.40335
+        },
+        {
+          "sequence": 34,
+          "stationId": "206000564",
+          "name": "봇들육교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1076667,
+          "y": 37.4033667
+        },
+        {
+          "sequence": 35,
+          "stationId": "206000543",
+          "name": "금토천교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.10555,
+          "y": 37.4012
+        },
+        {
+          "sequence": 36,
+          "stationId": "206000640",
+          "name": "동안교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1098667,
+          "y": 37.39725
+        },
+        {
+          "sequence": 37,
+          "stationId": "206000730",
+          "name": "엔씨.안랩",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.10985,
+          "y": 37.3995833
+        },
+        {
+          "sequence": 38,
+          "stationId": "206000579",
+          "name": "봇들마을5단지.테크노육교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.11315,
+          "y": 37.4014333
+        },
+        {
+          "sequence": 39,
+          "stationId": "204000206",
+          "name": "봇들3단지.판교신미주아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1156167,
+          "y": 37.4038833
+        },
+        {
+          "sequence": 40,
+          "stationId": "204000204",
+          "name": "송현초등학교.판교봇들마을4단지",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1177667,
+          "y": 37.4048833
+        },
+        {
+          "sequence": 41,
+          "stationId": "206000309",
+          "name": "아름마을건영아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1212667,
+          "y": 37.4053333
+        },
+        {
+          "sequence": 42,
+          "stationId": "206000277",
+          "name": "삼환아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1268167,
+          "y": 37.4052833
+        },
+        {
+          "sequence": 43,
+          "stationId": "206000441",
+          "name": "경남아너스빌",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.12895,
+          "y": 37.4073333
+        },
+        {
+          "sequence": 44,
+          "stationId": "206000784",
+          "name": "야탑역.종합버스터미널(광역버스)",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1289667,
+          "y": 37.4127167
+        },
+        {
+          "sequence": 45,
+          "stationId": "205000029",
+          "name": "성남시청전면",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.12905,
+          "y": 37.4193833
+        },
+        {
+          "sequence": 46,
+          "stationId": "277102644",
+          "name": "성남대로(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1289667,
+          "y": 37.4242667
+        },
+        {
+          "sequence": 47,
+          "stationId": "277103270",
+          "name": "성남IC진입(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.12585,
+          "y": 37.4275
+        },
+        {
+          "sequence": 48,
+          "stationId": "277103273",
+          "name": "성남TG(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.12385,
+          "y": 37.4350833
+        },
+        {
+          "sequence": 49,
+          "stationId": "204000091",
+          "name": "가천대",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1262,
+          "y": 37.45065
+        },
+        {
+          "sequence": 50,
+          "stationId": "277103269",
+          "name": "송파IC(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1273,
+          "y": 37.47345
+        },
+        {
+          "sequence": 51,
+          "stationId": "277103155",
+          "name": "서하남IC(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1513667,
+          "y": 37.5121167
+        },
+        {
+          "sequence": 52,
+          "stationId": "277103275",
+          "name": "하남JC(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1957667,
+          "y": 37.5322
+        },
+        {
+          "sequence": 53,
+          "stationId": "227000027",
+          "name": "황산사거리.하남수산물시장",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1838,
+          "y": 37.54935
+        },
+        {
+          "sequence": 54,
+          "stationId": "227000356",
+          "name": "황산사거리.미사3동공공복합청사",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1877667,
+          "y": 37.55065
+        },
+        {
+          "sequence": 55,
+          "stationId": "227000071",
+          "name": "하남시청소년수련관.한홀중건너편",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.19095,
+          "y": 37.55245
+        },
+        {
+          "sequence": 56,
+          "stationId": "227000256",
+          "name": "아이테코.이편한세상미사",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1943833,
+          "y": 37.554
+        },
+        {
+          "sequence": 57,
+          "stationId": "227000192",
+          "name": "제일풍경채.미사강변신안인스빌",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1970667,
+          "y": 37.5550667
+        },
+        {
+          "sequence": 58,
+          "stationId": "227000274",
+          "name": "미사강변골든센트로.미사레스티아",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1961167,
+          "y": 37.5578167
+        },
+        {
+          "sequence": 59,
+          "stationId": "227000506",
+          "name": "미사강변브라운스톤",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1926667,
+          "y": 37.56065
+        },
+        {
+          "sequence": 60,
+          "stationId": "227000201",
+          "name": "하남노인·장애인복지관.미사1동행정복지센터",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.18895,
+          "y": 37.5600833
+        },
+        {
+          "sequence": 61,
+          "stationId": "227000280",
+          "name": "미사1동행정복지센터.하남고등학교.노인장애인복지관",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1876,
+          "y": 37.5606333
+        },
+        {
+          "sequence": 62,
+          "stationId": "227000230",
+          "name": "미사강변푸르지오.하우스디더레이크",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1860167,
+          "y": 37.5638
+        },
+        {
+          "sequence": 63,
+          "stationId": "227000485",
+          "name": "미사2동행정복지센터.하남시미사보건센터",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1851833,
+          "y": 37.5676167
+        },
+        {
+          "sequence": 64,
+          "stationId": "227000291",
+          "name": "미사강변스타힐스.금빛마을",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1829333,
+          "y": 37.5713167
+        },
+        {
+          "sequence": 65,
+          "stationId": "227000282",
+          "name": "미사강변2차푸르지오.센트리버",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1813333,
+          "y": 37.5747833
+        },
+        {
+          "sequence": 66,
+          "stationId": "227000283",
+          "name": "미사강변2차푸르지오.미사강변고등학교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1813333,
+          "y": 37.5762333
+        },
+        {
+          "sequence": 67,
+          "stationId": "227000222",
+          "name": "미사강변중학교.미사강변리버나인",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1879833,
+          "y": 37.57675
+        },
+        {
+          "sequence": 68,
+          "stationId": "227000172",
+          "name": "구산문화마을.구산성당",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1905333,
+          "y": 37.57645
+        },
+        {
+          "sequence": 69,
+          "stationId": "227000684",
+          "name": "미사강변한신더휴",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1928,
+          "y": 37.57475
+        },
+        {
+          "sequence": 70,
+          "stationId": "227000271",
+          "name": "미사강변트래지안.미사초등학교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1936333,
+          "y": 37.5725167
+        },
+        {
+          "sequence": 71,
+          "stationId": "227000190",
+          "name": "한강유역환경청.미사고등학교.미사가람마을",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1943,
+          "y": 37.5702
+        }
+      ]
+    },
+    {
+      "routeId": "228000184",
+      "displayName": "5600",
+      "startStopName": "명지대",
+      "endStopName": "테크노마트앞.강변역(C)",
+      "turnSequence": 64,
+      "contentDigest": "82b634314bdab64c3ba84ba251437cf946e60e5f0e0322f19947147a92d3e770",
+      "timetable": {
+        "upFirstDepartureTime": "05:30",
+        "upLastDepartureTime": "23:00",
+        "downFirstDepartureTime": "07:05",
+        "downLastDepartureTime": "00:20"
+      },
+      "stops": [
+        {
+          "sequence": 1,
+          "stationId": "228000191",
+          "name": "명지대",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1884667,
+          "y": 37.22425
+        },
+        {
+          "sequence": 2,
+          "stationId": "228002958",
+          "name": "명지대앞",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1883,
+          "y": 37.2257333
+        },
+        {
+          "sequence": 3,
+          "stationId": "228000190",
+          "name": "동진마을",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1929167,
+          "y": 37.2263833
+        },
+        {
+          "sequence": 4,
+          "stationId": "228000189",
+          "name": "교수마을",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1978667,
+          "y": 37.2258167
+        },
+        {
+          "sequence": 5,
+          "stationId": "228000188",
+          "name": "보보스타운",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.2039333,
+          "y": 37.2269667
+        },
+        {
+          "sequence": 6,
+          "stationId": "228000187",
+          "name": "남동구미마을",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.2090667,
+          "y": 37.2271333
+        },
+        {
+          "sequence": 7,
+          "stationId": "228000199",
+          "name": "태성중고등학교.현대아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.21075,
+          "y": 37.22945
+        },
+        {
+          "sequence": 8,
+          "stationId": "228000198",
+          "name": "현대아파트.다보스병원앞",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.2098667,
+          "y": 37.23125
+        },
+        {
+          "sequence": 9,
+          "stationId": "228001320",
+          "name": "용인공영버스터미널.용인드마크데시앙앞",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.20925,
+          "y": 37.2336667
+        },
+        {
+          "sequence": 10,
+          "stationId": "228000449",
+          "name": "용인시장.시장약국.용인드마크데시앙앞",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.2066833,
+          "y": 37.2356
+        },
+        {
+          "sequence": 11,
+          "stationId": "228000448",
+          "name": "처인구청.용인헌혈의집",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.2028833,
+          "y": 37.235
+        },
+        {
+          "sequence": 12,
+          "stationId": "228000447",
+          "name": "중앙지구대.로하스용인병원",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.19855,
+          "y": 37.2349167
+        },
+        {
+          "sequence": 13,
+          "stationId": "228000749",
+          "name": "역북초.벽산블루밍.삼환나우빌",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.19335,
+          "y": 37.2354
+        },
+        {
+          "sequence": 14,
+          "stationId": "228000748",
+          "name": "명지대입구",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1899,
+          "y": 37.2361333
+        },
+        {
+          "sequence": 15,
+          "stationId": "228000747",
+          "name": "동원로얄듀크.용인등기소",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1858167,
+          "y": 37.2369833
+        },
+        {
+          "sequence": 16,
+          "stationId": "228000746",
+          "name": "역말마을",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1821,
+          "y": 37.2377167
+        },
+        {
+          "sequence": 17,
+          "stationId": "228000745",
+          "name": "시청.용인대역",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1799167,
+          "y": 37.2382
+        },
+        {
+          "sequence": 18,
+          "stationId": "228000744",
+          "name": "진우.늘푸른오스카빌.우남퍼스트빌아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1732833,
+          "y": 37.2398833
+        },
+        {
+          "sequence": 19,
+          "stationId": "228000743",
+          "name": "삼가동.궁촌",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1713833,
+          "y": 37.2407167
+        },
+        {
+          "sequence": 20,
+          "stationId": "228000742",
+          "name": "삼가역.두산위브",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.16805,
+          "y": 37.2423667
+        },
+        {
+          "sequence": 21,
+          "stationId": "228000741",
+          "name": "효자고개",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1543167,
+          "y": 37.2514
+        },
+        {
+          "sequence": 22,
+          "stationId": "228000689",
+          "name": "인정프린스.흥국생명연수원",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1437333,
+          "y": 37.2560333
+        },
+        {
+          "sequence": 23,
+          "stationId": "228000688",
+          "name": "수원동.쌍용아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1425667,
+          "y": 37.2588167
+        },
+        {
+          "sequence": 24,
+          "stationId": "228000687",
+          "name": "상지석.대우.진흥아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1408833,
+          "y": 37.26145
+        },
+        {
+          "sequence": 25,
+          "stationId": "228000686",
+          "name": "고인돌.하나로마트.현대출고장",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1365667,
+          "y": 37.2668
+        },
+        {
+          "sequence": 26,
+          "stationId": "228000685",
+          "name": "어정삼거리.강남마을",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1298,
+          "y": 37.2687167
+        },
+        {
+          "sequence": 27,
+          "stationId": "228000684",
+          "name": "강남대역.강남대입구",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1255,
+          "y": 37.2712667
+        },
+        {
+          "sequence": 28,
+          "stationId": "228000683",
+          "name": "수원컨트리클럽",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1194333,
+          "y": 37.2759833
+        },
+        {
+          "sequence": 29,
+          "stationId": "228000682",
+          "name": "기흥역6번출구",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1145833,
+          "y": 37.2759833
+        },
+        {
+          "sequence": 30,
+          "stationId": "228000681",
+          "name": "롯데캐슬스카이.이안두드림.백남준아트센터",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1087667,
+          "y": 37.2719
+        },
+        {
+          "sequence": 31,
+          "stationId": "228000680",
+          "name": "상미마을.신갈오거리.롯데캐슬레이시티",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1037167,
+          "y": 37.2711667
+        },
+        {
+          "sequence": 32,
+          "stationId": "277103364",
+          "name": "수원신갈TG(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1017167,
+          "y": 37.26785
+        },
+        {
+          "sequence": 33,
+          "stationId": "277103361",
+          "name": "신갈JC(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1038667,
+          "y": 37.2896667
+        },
+        {
+          "sequence": 34,
+          "stationId": "277103443",
+          "name": "죽전(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1038167,
+          "y": 37.3266333
+        },
+        {
+          "sequence": 35,
+          "stationId": "277102630",
+          "name": "금곡(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.10355,
+          "y": 37.3497667
+        },
+        {
+          "sequence": 36,
+          "stationId": "277103386",
+          "name": "서울TG(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1043333,
+          "y": 37.3649667
+        },
+        {
+          "sequence": 37,
+          "stationId": "277104184",
+          "name": "판교진입(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1017333,
+          "y": 37.3938167
+        },
+        {
+          "sequence": 38,
+          "stationId": "206000577",
+          "name": "화랑공원동편",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1072,
+          "y": 37.3969333
+        },
+        {
+          "sequence": 39,
+          "stationId": "206000539",
+          "name": "금토천교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1060333,
+          "y": 37.4013
+        },
+        {
+          "sequence": 40,
+          "stationId": "206000540",
+          "name": "삼평교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1047833,
+          "y": 37.4041333
+        },
+        {
+          "sequence": 41,
+          "stationId": "204000064",
+          "name": "판교제2테크노밸리",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.0997333,
+          "y": 37.4113333
+        },
+        {
+          "sequence": 42,
+          "stationId": "204000200",
+          "name": "국가기록원성남분원.코이카",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1014167,
+          "y": 37.41535
+        },
+        {
+          "sequence": 43,
+          "stationId": "204000063",
+          "name": "시흥사거리",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1023167,
+          "y": 37.4211167
+        },
+        {
+          "sequence": 44,
+          "stationId": "204000002",
+          "name": "고등119안전센터",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1024667,
+          "y": 37.4246833
+        },
+        {
+          "sequence": 45,
+          "stationId": "204000001",
+          "name": "고등동행정복지센터.판교밸리자이아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.10205,
+          "y": 37.4283333
+        },
+        {
+          "sequence": 46,
+          "stationId": "204000046",
+          "name": "등자리",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1037833,
+          "y": 37.4352667
+        },
+        {
+          "sequence": 47,
+          "stationId": "204000223",
+          "name": "공군부대제2정문.면회실",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1040167,
+          "y": 37.43805
+        },
+        {
+          "sequence": 48,
+          "stationId": "204000045",
+          "name": "공군아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1043333,
+          "y": 37.4465833
+        },
+        {
+          "sequence": 49,
+          "stationId": "204000044",
+          "name": "효성고등학교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.10575,
+          "y": 37.4498
+        },
+        {
+          "sequence": 50,
+          "stationId": "204000043",
+          "name": "오야동.신촌동행정복지센터",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1071167,
+          "y": 37.4552833
+        },
+        {
+          "sequence": 51,
+          "stationId": "204000042",
+          "name": "신촌동앞",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1077667,
+          "y": 37.4598167
+        },
+        {
+          "sequence": 52,
+          "stationId": "122000315",
+          "name": "세곡동사거리",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1086167,
+          "y": 37.4656667
+        },
+        {
+          "sequence": 53,
+          "stationId": "122000316",
+          "name": "방죽마을",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1072333,
+          "y": 37.47245
+        },
+        {
+          "sequence": 54,
+          "stationId": "122000317",
+          "name": "래미안포레아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1065167,
+          "y": 37.4752333
+        },
+        {
+          "sequence": 55,
+          "stationId": "122000318",
+          "name": "쟁골마을",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1049333,
+          "y": 37.4821167
+        },
+        {
+          "sequence": 56,
+          "stationId": "122000718",
+          "name": "고속철도수서역",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1042,
+          "y": 37.4847167
+        },
+        {
+          "sequence": 57,
+          "stationId": "122000302",
+          "name": "수서역5번출구",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1024333,
+          "y": 37.4869167
+        },
+        {
+          "sequence": 58,
+          "stationId": "123000009",
+          "name": "가락시장.가락시장역(중)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1171333,
+          "y": 37.4944167
+        },
+        {
+          "sequence": 59,
+          "stationId": "123000007",
+          "name": "송파역(중)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1118,
+          "y": 37.50025
+        },
+        {
+          "sequence": 60,
+          "stationId": "123000005",
+          "name": "석촌역(중)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1091167,
+          "y": 37.5032
+        },
+        {
+          "sequence": 61,
+          "stationId": "123000003",
+          "name": "석촌호수.한솔병원(중)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1057833,
+          "y": 37.50685
+        },
+        {
+          "sequence": 62,
+          "stationId": "123000001",
+          "name": "잠실역.잠실대교남단(중)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.0984833,
+          "y": 37.51555
+        },
+        {
+          "sequence": 63,
+          "stationId": "277102301",
+          "name": "잠실대교북단(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.09045,
+          "y": 37.5293333
+        },
+        {
+          "sequence": 64,
+          "stationId": "104000279",
+          "name": "테크노마트앞.강변역(C)",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.09385,
+          "y": 37.5366333
+        },
+        {
+          "sequence": 65,
+          "stationId": "277103308",
+          "name": "잠실대교북단(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.0878167,
+          "y": 37.5297333
+        },
+        {
+          "sequence": 66,
+          "stationId": "277102302",
+          "name": "잠실대교남단(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.0935667,
+          "y": 37.5215
+        },
+        {
+          "sequence": 67,
+          "stationId": "123000002",
+          "name": "잠실역.잠실대교남단(중)",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.0995667,
+          "y": 37.5137333
+        },
+        {
+          "sequence": 68,
+          "stationId": "277101950",
+          "name": "석촌호수앞(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1014,
+          "y": 37.5111833
+        },
+        {
+          "sequence": 69,
+          "stationId": "123000004",
+          "name": "석촌호수.한솔병원(중)",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1052833,
+          "y": 37.5071833
+        },
+        {
+          "sequence": 70,
+          "stationId": "123000006",
+          "name": "석촌역(중)",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1083667,
+          "y": 37.5038333
+        },
+        {
+          "sequence": 71,
+          "stationId": "123000008",
+          "name": "송파역(중)",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1112,
+          "y": 37.5006667
+        },
+        {
+          "sequence": 72,
+          "stationId": "123000294",
+          "name": "가락시장.가락시장역",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1171833,
+          "y": 37.4938333
+        },
+        {
+          "sequence": 73,
+          "stationId": "122000747",
+          "name": "수서역6번출구",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1025167,
+          "y": 37.4864167
+        },
+        {
+          "sequence": 74,
+          "stationId": "122000717",
+          "name": "고속철도수서역",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1036167,
+          "y": 37.4849667
+        },
+        {
+          "sequence": 75,
+          "stationId": "122000319",
+          "name": "쟁골마을",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1043667,
+          "y": 37.4827833
+        },
+        {
+          "sequence": 76,
+          "stationId": "122000320",
+          "name": "래미안포레아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1062333,
+          "y": 37.4750667
+        },
+        {
+          "sequence": 77,
+          "stationId": "122000321",
+          "name": "방죽마을",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1069333,
+          "y": 37.4722667
+        },
+        {
+          "sequence": 78,
+          "stationId": "122000308",
+          "name": "세곡동사거리",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1079,
+          "y": 37.4637167
+        },
+        {
+          "sequence": 79,
+          "stationId": "204000041",
+          "name": "신촌동앞",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1072667,
+          "y": 37.4592167
+        },
+        {
+          "sequence": 80,
+          "stationId": "204000040",
+          "name": "오야동.신촌동행정복지센터",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1065333,
+          "y": 37.4544
+        },
+        {
+          "sequence": 81,
+          "stationId": "204000039",
+          "name": "효성고등학교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1050167,
+          "y": 37.4490167
+        },
+        {
+          "sequence": 82,
+          "stationId": "204000057",
+          "name": "공군아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1036,
+          "y": 37.4457667
+        },
+        {
+          "sequence": 83,
+          "stationId": "204000222",
+          "name": "공군부대제2정문.면회실",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.10345,
+          "y": 37.4386333
+        },
+        {
+          "sequence": 84,
+          "stationId": "204000038",
+          "name": "등자리",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1031833,
+          "y": 37.4341833
+        },
+        {
+          "sequence": 85,
+          "stationId": "204000062",
+          "name": "고등동행정복지센터.판교밸리자이아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.10165,
+          "y": 37.4282167
+        },
+        {
+          "sequence": 86,
+          "stationId": "204000037",
+          "name": "고등119안전센터",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1020333,
+          "y": 37.4246
+        },
+        {
+          "sequence": 87,
+          "stationId": "204000061",
+          "name": "시흥사거리",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1019167,
+          "y": 37.4207667
+        },
+        {
+          "sequence": 88,
+          "stationId": "204000199",
+          "name": "국가기록원성남분원.코이카",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.101,
+          "y": 37.4153833
+        },
+        {
+          "sequence": 89,
+          "stationId": "204000060",
+          "name": "판교제2테크노밸리",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.09935,
+          "y": 37.4116833
+        },
+        {
+          "sequence": 90,
+          "stationId": "206000542",
+          "name": "삼평교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1041667,
+          "y": 37.4039167
+        },
+        {
+          "sequence": 91,
+          "stationId": "206000543",
+          "name": "금토천교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.10555,
+          "y": 37.4012
+        },
+        {
+          "sequence": 92,
+          "stationId": "206000561",
+          "name": "화랑공원동편",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1068333,
+          "y": 37.3974167
+        },
+        {
+          "sequence": 93,
+          "stationId": "277104185",
+          "name": "판교출입(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1019833,
+          "y": 37.3920667
+        },
+        {
+          "sequence": 94,
+          "stationId": "277103385",
+          "name": "서울TG(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1026,
+          "y": 37.36535
+        },
+        {
+          "sequence": 95,
+          "stationId": "277102104",
+          "name": "금곡(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1031167,
+          "y": 37.3503667
+        },
+        {
+          "sequence": 96,
+          "stationId": "277103442",
+          "name": "죽전(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.10315,
+          "y": 37.3266
+        },
+        {
+          "sequence": 97,
+          "stationId": "277103360",
+          "name": "신갈JC(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.10345,
+          "y": 37.2904333
+        },
+        {
+          "sequence": 98,
+          "stationId": "277103365",
+          "name": "수원신갈TG(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1028667,
+          "y": 37.26555
+        },
+        {
+          "sequence": 99,
+          "stationId": "228000698",
+          "name": "상미마을.신갈오거리.롯데캐슬레이시티",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1030333,
+          "y": 37.27065
+        },
+        {
+          "sequence": 100,
+          "stationId": "228000697",
+          "name": "롯데캐슬스카이.이안두드림.백남준아트센터",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1088833,
+          "y": 37.2716333
+        },
+        {
+          "sequence": 101,
+          "stationId": "228000696",
+          "name": "기흥역8번출구",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1168167,
+          "y": 37.276
+        },
+        {
+          "sequence": 102,
+          "stationId": "228000695",
+          "name": "수원컨트리클럽",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1201,
+          "y": 37.2753
+        },
+        {
+          "sequence": 103,
+          "stationId": "228000694",
+          "name": "강남대역.강남대입구",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1256167,
+          "y": 37.2706833
+        },
+        {
+          "sequence": 104,
+          "stationId": "228000693",
+          "name": "어정삼거리.강남마을",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1314333,
+          "y": 37.2681333
+        },
+        {
+          "sequence": 105,
+          "stationId": "228001147",
+          "name": "고인돌.하나로마트.현대출고장",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1356667,
+          "y": 37.26705
+        },
+        {
+          "sequence": 106,
+          "stationId": "228000692",
+          "name": "상지석.대우.진흥아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1401833,
+          "y": 37.2619167
+        },
+        {
+          "sequence": 107,
+          "stationId": "228000691",
+          "name": "수원동.쌍용아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1423667,
+          "y": 37.2587833
+        },
+        {
+          "sequence": 108,
+          "stationId": "228000690",
+          "name": "인정프린스.흥국생명연수원",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1435833,
+          "y": 37.2558667
+        },
+        {
+          "sequence": 109,
+          "stationId": "228000782",
+          "name": "효자고개",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.15435,
+          "y": 37.2510833
+        },
+        {
+          "sequence": 110,
+          "stationId": "228000781",
+          "name": "삼가역.두산위브",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.16955,
+          "y": 37.2411333
+        },
+        {
+          "sequence": 111,
+          "stationId": "228000780",
+          "name": "진우.늘푸른오스카빌.우남퍼스트빌아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1732667,
+          "y": 37.2395
+        },
+        {
+          "sequence": 112,
+          "stationId": "228000779",
+          "name": "시청.용인대역",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1784667,
+          "y": 37.2380333
+        },
+        {
+          "sequence": 113,
+          "stationId": "228000778",
+          "name": "역말마을",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1822667,
+          "y": 37.23745
+        },
+        {
+          "sequence": 114,
+          "stationId": "228000777",
+          "name": "동원로얄듀크.용인등기소",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1861333,
+          "y": 37.2366167
+        },
+        {
+          "sequence": 115,
+          "stationId": "228000776",
+          "name": "명지대입구",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.19,
+          "y": 37.2358
+        },
+        {
+          "sequence": 116,
+          "stationId": "228000775",
+          "name": "역북초.벽산블루밍.삼환나우빌",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1932833,
+          "y": 37.2351
+        },
+        {
+          "sequence": 117,
+          "stationId": "228000446",
+          "name": "중앙지구대",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1988167,
+          "y": 37.23475
+        },
+        {
+          "sequence": 118,
+          "stationId": "228000445",
+          "name": "처인구청.용인헌혈의집",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.2035833,
+          "y": 37.23485
+        },
+        {
+          "sequence": 119,
+          "stationId": "228000444",
+          "name": "용인시장.시장약국.용인드마크데시앙앞",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.2066833,
+          "y": 37.2354333
+        },
+        {
+          "sequence": 120,
+          "stationId": "228001414",
+          "name": "용인공영버스터미널.용인드마크데시앙앞",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.2088,
+          "y": 37.2340667
+        },
+        {
+          "sequence": 121,
+          "stationId": "228000236",
+          "name": "태성고교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.2104667,
+          "y": 37.2291667
+        },
+        {
+          "sequence": 122,
+          "stationId": "228000196",
+          "name": "남동구미마을",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.2090833,
+          "y": 37.2272333
+        },
+        {
+          "sequence": 123,
+          "stationId": "228000195",
+          "name": "보보스타운",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.2039667,
+          "y": 37.2270667
+        },
+        {
+          "sequence": 124,
+          "stationId": "228000194",
+          "name": "교수마을",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1981167,
+          "y": 37.2260167
+        },
+        {
+          "sequence": 125,
+          "stationId": "228000193",
+          "name": "동진마을",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1934333,
+          "y": 37.2265333
+        },
+        {
+          "sequence": 126,
+          "stationId": "228002959",
+          "name": "명지대앞",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1885833,
+          "y": 37.22585
+        },
+        {
+          "sequence": 127,
+          "stationId": "228000192",
+          "name": "명지대",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1883667,
+          "y": 37.2241833
+        }
+      ]
+    },
+    {
+      "routeId": "234000051",
+      "displayName": "3500",
+      "startStopName": "구미동차고지(경유)",
+      "endStopName": "케피코경기외국어고등학교",
+      "turnSequence": 42,
+      "contentDigest": "d96c35c32a62e6298286e32dcdbcc762596d6d795f521faf6cd00155a470358a",
+      "timetable": {
+        "upFirstDepartureTime": "04:50",
+        "upLastDepartureTime": "23:20",
+        "downFirstDepartureTime": "05:20",
+        "downLastDepartureTime": "23:20"
+      },
+      "stops": [
+        {
+          "sequence": 1,
+          "stationId": "277103068",
+          "name": "구미동차고지(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.10525,
+          "y": 37.3398833
+        },
+        {
+          "sequence": 2,
+          "stationId": "206000040",
+          "name": "오리역",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1091833,
+          "y": 37.3401167
+        },
+        {
+          "sequence": 3,
+          "stationId": "206000219",
+          "name": "하얀마을.구미도서관",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1091667,
+          "y": 37.3447167
+        },
+        {
+          "sequence": 4,
+          "stationId": "206000088",
+          "name": "까치마을.건영빌라.2001아울렛",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1091333,
+          "y": 37.3475167
+        },
+        {
+          "sequence": 5,
+          "stationId": "206000087",
+          "name": "미금역.청솔마을.2001아울렛",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1091833,
+          "y": 37.3510667
+        },
+        {
+          "sequence": 6,
+          "stationId": "206000086",
+          "name": "청솔주공6단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1091,
+          "y": 37.3543
+        },
+        {
+          "sequence": 7,
+          "stationId": "206000085",
+          "name": "상록마을",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.10855,
+          "y": 37.3578667
+        },
+        {
+          "sequence": 8,
+          "stationId": "206000084",
+          "name": "KT.주택전시관",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.11255,
+          "y": 37.3597833
+        },
+        {
+          "sequence": 9,
+          "stationId": "206000325",
+          "name": "한진아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.115,
+          "y": 37.3629667
+        },
+        {
+          "sequence": 10,
+          "stationId": "206000324",
+          "name": "정자2동행정복지센터",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1149667,
+          "y": 37.3653667
+        },
+        {
+          "sequence": 11,
+          "stationId": "206000323",
+          "name": "주공7단지앞.한솔종합사회복지관.치매안심센터",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1149667,
+          "y": 37.3682333
+        },
+        {
+          "sequence": 12,
+          "stationId": "206000322",
+          "name": "파크타운.롯데아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.11975,
+          "y": 37.3737333
+        },
+        {
+          "sequence": 13,
+          "stationId": "206000301",
+          "name": "중앙공원.양지마을청구아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1212333,
+          "y": 37.37615
+        },
+        {
+          "sequence": 14,
+          "stationId": "206000083",
+          "name": "중앙공원.양지마을금호아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1196333,
+          "y": 37.3791833
+        },
+        {
+          "sequence": 15,
+          "stationId": "206000082",
+          "name": "분당구청입구.수내교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.11735,
+          "y": 37.3813167
+        },
+        {
+          "sequence": 16,
+          "stationId": "206000081",
+          "name": "분당구청후문",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1189667,
+          "y": 37.3833167
+        },
+        {
+          "sequence": 17,
+          "stationId": "206000080",
+          "name": "서현역.분당우체국",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1228,
+          "y": 37.3860167
+        },
+        {
+          "sequence": 18,
+          "stationId": "206000316",
+          "name": "이매촌한신.서현역.AK프라자",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1246333,
+          "y": 37.3884833
+        },
+        {
+          "sequence": 19,
+          "stationId": "206000530",
+          "name": "성남역.백현마을2단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1182333,
+          "y": 37.3921167
+        },
+        {
+          "sequence": 20,
+          "stationId": "206000531",
+          "name": "백현마을1단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1145,
+          "y": 37.3919667
+        },
+        {
+          "sequence": 21,
+          "stationId": "206000532",
+          "name": "판교역.낙생육교.현대백화점",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.1118833,
+          "y": 37.3918667
+        },
+        {
+          "sequence": 22,
+          "stationId": "277103149",
+          "name": "판교TG(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.1031667,
+          "y": 37.39595
+        },
+        {
+          "sequence": 23,
+          "stationId": "277102599",
+          "name": "청계터널진입(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0542667,
+          "y": 37.39655
+        },
+        {
+          "sequence": 24,
+          "stationId": "226000190",
+          "name": "의왕청계영업소",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 127.02325,
+          "y": 37.3931333
+        },
+        {
+          "sequence": 25,
+          "stationId": "277103157",
+          "name": "학의JC(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 127.0018,
+          "y": 37.3875833
+        },
+        {
+          "sequence": 26,
+          "stationId": "277103147",
+          "name": "평촌IC(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 126.9654833,
+          "y": 37.3820833
+        },
+        {
+          "sequence": 27,
+          "stationId": "277104430",
+          "name": "산본IC출입(경유)",
+          "direction": "UP",
+          "boardingAllowed": false,
+          "x": 126.9286667,
+          "y": 37.3768833
+        },
+        {
+          "sequence": 28,
+          "stationId": "225000073",
+          "name": "군포문화예술회관.광정동주택단지",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9265833,
+          "y": 37.36825
+        },
+        {
+          "sequence": 29,
+          "stationId": "225000076",
+          "name": "중앙공원",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9303667,
+          "y": 37.3635833
+        },
+        {
+          "sequence": 30,
+          "stationId": "225000089",
+          "name": "군포시청.군포시의회",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9329667,
+          "y": 37.3605167
+        },
+        {
+          "sequence": 31,
+          "stationId": "225000052",
+          "name": "산본역",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9324,
+          "y": 37.3582
+        },
+        {
+          "sequence": 32,
+          "stationId": "225000051",
+          "name": "주공2.3단지아파트입구",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9332333,
+          "y": 37.3551667
+        },
+        {
+          "sequence": 33,
+          "stationId": "225000147",
+          "name": "3단지.율곡아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9327,
+          "y": 37.3532333
+        },
+        {
+          "sequence": 34,
+          "stationId": "225000146",
+          "name": "흥진고등학교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9299667,
+          "y": 37.3517333
+        },
+        {
+          "sequence": 35,
+          "stationId": "225000208",
+          "name": "금당터널입구.쌍용아파트",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9377333,
+          "y": 37.3484
+        },
+        {
+          "sequence": 36,
+          "stationId": "225000088",
+          "name": "당동초등학교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9410667,
+          "y": 37.3474667
+        },
+        {
+          "sequence": 37,
+          "stationId": "225000041",
+          "name": "군포시평생학습원",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9431667,
+          "y": 37.3465
+        },
+        {
+          "sequence": 38,
+          "stationId": "225000039",
+          "name": "한세대학교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9525167,
+          "y": 37.34765
+        },
+        {
+          "sequence": 39,
+          "stationId": "225000038",
+          "name": "당정초등학교.군포문화원",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9544667,
+          "y": 37.3484167
+        },
+        {
+          "sequence": 40,
+          "stationId": "225000037",
+          "name": "군포제일공단입구",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.95675,
+          "y": 37.3492667
+        },
+        {
+          "sequence": 41,
+          "stationId": "225000266",
+          "name": "케피코경기외국어고등학교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9599167,
+          "y": 37.3505167
+        },
+        {
+          "sequence": 42,
+          "stationId": "225000267",
+          "name": "케피코경기외국어고등학교",
+          "direction": "UP",
+          "boardingAllowed": true,
+          "x": 126.9599167,
+          "y": 37.3508667
+        },
+        {
+          "sequence": 43,
+          "stationId": "225000036",
+          "name": "제일공단입구",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9575333,
+          "y": 37.3499167
+        },
+        {
+          "sequence": 44,
+          "stationId": "225000035",
+          "name": "당정초등학교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9543667,
+          "y": 37.3487667
+        },
+        {
+          "sequence": 45,
+          "stationId": "225000034",
+          "name": "한세대학교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9510167,
+          "y": 37.3473167
+        },
+        {
+          "sequence": 46,
+          "stationId": "225000033",
+          "name": "군포시평생학습원",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9434667,
+          "y": 37.3467167
+        },
+        {
+          "sequence": 47,
+          "stationId": "225000087",
+          "name": "군포초등학교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9415833,
+          "y": 37.3476
+        },
+        {
+          "sequence": 48,
+          "stationId": "225000209",
+          "name": "금당터널입구.대림아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9382,
+          "y": 37.3486667
+        },
+        {
+          "sequence": 49,
+          "stationId": "225000137",
+          "name": "오금동행정복지센터.다산아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.93035,
+          "y": 37.3517333
+        },
+        {
+          "sequence": 50,
+          "stationId": "225000136",
+          "name": "군포화산초등학교.소월아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9328,
+          "y": 37.3530667
+        },
+        {
+          "sequence": 51,
+          "stationId": "225000048",
+          "name": "주공2단지충무아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9333833,
+          "y": 37.35545
+        },
+        {
+          "sequence": 52,
+          "stationId": "225000047",
+          "name": "산본역",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9336333,
+          "y": 37.3578667
+        },
+        {
+          "sequence": 53,
+          "stationId": "225000116",
+          "name": "군포시청.군포시의회",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9336167,
+          "y": 37.3603
+        },
+        {
+          "sequence": 54,
+          "stationId": "225000078",
+          "name": "중앙공원.산본제일병원",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9304667,
+          "y": 37.3640667
+        },
+        {
+          "sequence": 55,
+          "stationId": "225000072",
+          "name": "군포문화예술회관",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.92785,
+          "y": 37.3672
+        },
+        {
+          "sequence": 56,
+          "stationId": "225000238",
+          "name": "태을초등학교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 126.9271,
+          "y": 37.3714
+        },
+        {
+          "sequence": 57,
+          "stationId": "277104429",
+          "name": "산본IC진입(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 126.9288,
+          "y": 37.3766833
+        },
+        {
+          "sequence": 58,
+          "stationId": "277103146",
+          "name": "평촌IC(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 126.96505,
+          "y": 37.38175
+        },
+        {
+          "sequence": 59,
+          "stationId": "277103156",
+          "name": "학의JC(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.0011667,
+          "y": 37.3869833
+        },
+        {
+          "sequence": 60,
+          "stationId": "226000191",
+          "name": "의왕청계영업소",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.0261667,
+          "y": 37.39245
+        },
+        {
+          "sequence": 61,
+          "stationId": "277102796",
+          "name": "청계터널출입(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.0549833,
+          "y": 37.3961167
+        },
+        {
+          "sequence": 62,
+          "stationId": "277103148",
+          "name": "판교TG(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.1021333,
+          "y": 37.3956667
+        },
+        {
+          "sequence": 63,
+          "stationId": "206000535",
+          "name": "판교역.낙생육교.현대백화점",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1117,
+          "y": 37.3914833
+        },
+        {
+          "sequence": 64,
+          "stationId": "206000536",
+          "name": "백현마을4단지",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1156833,
+          "y": 37.3916667
+        },
+        {
+          "sequence": 65,
+          "stationId": "206000537",
+          "name": "성남역.백현마을3단지",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.11815,
+          "y": 37.3917833
+        },
+        {
+          "sequence": 66,
+          "stationId": "206000695",
+          "name": "이매촌한신.서현역.AK프라자",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1243667,
+          "y": 37.3882
+        },
+        {
+          "sequence": 67,
+          "stationId": "206000102",
+          "name": "서현역.분당우체국",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1224167,
+          "y": 37.3860833
+        },
+        {
+          "sequence": 68,
+          "stationId": "206000101",
+          "name": "분당구청후문",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1181667,
+          "y": 37.3830833
+        },
+        {
+          "sequence": 69,
+          "stationId": "206000100",
+          "name": "분당구청입구.수내교",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1169833,
+          "y": 37.3811667
+        },
+        {
+          "sequence": 70,
+          "stationId": "206000099",
+          "name": "중앙공원.양지마을금호아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1196333,
+          "y": 37.3785333
+        },
+        {
+          "sequence": 71,
+          "stationId": "206000025",
+          "name": "중앙공원.양지마을청구아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1211167,
+          "y": 37.3755833
+        },
+        {
+          "sequence": 72,
+          "stationId": "206000183",
+          "name": "파크타운.양지마을",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1193667,
+          "y": 37.37385
+        },
+        {
+          "sequence": 73,
+          "stationId": "206000182",
+          "name": "주공7단지앞.치매안심센터",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1145667,
+          "y": 37.3692667
+        },
+        {
+          "sequence": 74,
+          "stationId": "206000181",
+          "name": "정자2동행정복지센터",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1146167,
+          "y": 37.3654333
+        },
+        {
+          "sequence": 75,
+          "stationId": "206000180",
+          "name": "한솔프라자",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1146667,
+          "y": 37.3626667
+        },
+        {
+          "sequence": 76,
+          "stationId": "206000098",
+          "name": "KT.주택전시관",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1124167,
+          "y": 37.36005
+        },
+        {
+          "sequence": 77,
+          "stationId": "206000097",
+          "name": "상록마을(임광.보성).미켈란쉐르빌",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1079333,
+          "y": 37.3589167
+        },
+        {
+          "sequence": 78,
+          "stationId": "206000096",
+          "name": "분당경영고.한라아파트",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1084167,
+          "y": 37.35575
+        },
+        {
+          "sequence": 79,
+          "stationId": "206000095",
+          "name": "미금역.청솔마을.2001아울렛",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1086,
+          "y": 37.3507167
+        },
+        {
+          "sequence": 80,
+          "stationId": "206000094",
+          "name": "까치마을건영빌라.구미도서관",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1086667,
+          "y": 37.3475
+        },
+        {
+          "sequence": 81,
+          "stationId": "206000216",
+          "name": "하얀마을",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1086833,
+          "y": 37.3441167
+        },
+        {
+          "sequence": 82,
+          "stationId": "206000215",
+          "name": "오리역",
+          "direction": "DOWN",
+          "boardingAllowed": true,
+          "x": 127.1087333,
+          "y": 37.3402667
+        },
+        {
+          "sequence": 83,
+          "stationId": "277103068",
+          "name": "구미동차고지(경유)",
+          "direction": "DOWN",
+          "boardingAllowed": false,
+          "x": 127.10525,
+          "y": 37.3398833
+        }
+      ]
+    }
+  ]
+}

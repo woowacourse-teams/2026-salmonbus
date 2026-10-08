@@ -1,0 +1,15 @@
+server:
+  address: 0.0.0.0
+
+chat:
+  enabled: true
+  allowed-origins: http://localhost:3000,http://127.0.0.1:3000
+
+spring:
+  flyway:
+    enabled: true
+
+logging:
+  level:
+    org.springframework.web.servlet.DispatcherServlet: WARN
+    org.apache.catalina.core.ContainerBase: WARN

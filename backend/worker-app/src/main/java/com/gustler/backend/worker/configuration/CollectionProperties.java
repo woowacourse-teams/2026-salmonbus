@@ -1,6 +1,8 @@
 package com.gustler.backend.worker.configuration;
 
 import java.util.List;
+import java.time.Duration;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -13,10 +15,19 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties("collection")
 public record CollectionProperties(
     boolean enabled,
-    List<String> routeIds
+    List<String> routeIds,
+    Duration fixedInterval
 ) {
 
+    @ConstructorBinding
     public CollectionProperties {
         routeIds = routeIds == null ? List.of() : List.copyOf(routeIds);
+        if (fixedInterval != null && fixedInterval.compareTo(Duration.ofSeconds(1)) < 0) {
+            throw new IllegalArgumentException("collection.fixed-interval은 1초 이상이어야 합니다.");
+        }
+    }
+
+    public CollectionProperties(boolean enabled, List<String> routeIds) {
+        this(enabled, routeIds, null);
     }
 }

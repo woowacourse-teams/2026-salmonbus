@@ -1,0 +1,3911 @@
+{
+  "version": "gbis-frozen-20261002-v1",
+  "routes": [
+    {
+      "modelRoute": "1650",
+      "sourceRouteId": "234000050",
+      "stops": [
+        {
+          "order": 1,
+          "id": "221000046",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 2,
+          "id": "221000050",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 3,
+          "id": "221000055",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 4,
+          "id": "221000085",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 5,
+          "id": "221000084",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 6,
+          "id": "221000041",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 7,
+          "id": "221000030",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 8,
+          "id": "221000026",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 9,
+          "id": "277100104",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 10,
+          "id": "277103306",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 11,
+          "id": "277102674",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 12,
+          "id": "277103309",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 13,
+          "id": "104000279",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 14,
+          "id": "277103308",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 15,
+          "id": "277102302",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 16,
+          "id": "123000002",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 17,
+          "id": "277101950",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 18,
+          "id": "123000004",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 19,
+          "id": "123000006",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 20,
+          "id": "123000008",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 21,
+          "id": "123000010",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 22,
+          "id": "123000012",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 23,
+          "id": "123000014",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 24,
+          "id": "123000016",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 25,
+          "id": "277103266",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 26,
+          "id": "204000092",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 27,
+          "id": "277103272",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 28,
+          "id": "277102924",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 29,
+          "id": "277102599",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 30,
+          "id": "226000190",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 31,
+          "id": "277103157",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 32,
+          "id": "209000133",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 33,
+          "id": "209000021",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 34,
+          "id": "209000020",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 35,
+          "id": "209000221",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 36,
+          "id": "209000018",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 37,
+          "id": "209000134",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 38,
+          "id": "209000179",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 39,
+          "id": "209000178",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 40,
+          "id": "208000115",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 41,
+          "id": "208000114",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 42,
+          "id": "208000066",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 43,
+          "id": "208000065",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 44,
+          "id": "208000069",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 45,
+          "id": "277101770",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 46,
+          "id": "208000158",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 47,
+          "id": "208000254",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 48,
+          "id": "208000156",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 49,
+          "id": "208000095",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 50,
+          "id": "208000252",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 51,
+          "id": "209000044",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 52,
+          "id": "209000177",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 53,
+          "id": "209000176",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 54,
+          "id": "209000147",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 55,
+          "id": "209000016",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 56,
+          "id": "209000015",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 57,
+          "id": "209000126",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 58,
+          "id": "209000243",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 59,
+          "id": "209000129",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 60,
+          "id": "277103156",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 61,
+          "id": "226000191",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 62,
+          "id": "277102796",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 63,
+          "id": "277102925",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 64,
+          "id": "277103273",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 65,
+          "id": "204000091",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 66,
+          "id": "277103267",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 67,
+          "id": "123000215",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 68,
+          "id": "123000015",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 69,
+          "id": "123000013",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 70,
+          "id": "123000011",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 71,
+          "id": "123000009",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 72,
+          "id": "123000007",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 73,
+          "id": "123000005",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 74,
+          "id": "123000003",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 75,
+          "id": "277102839",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 76,
+          "id": "123000001",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 77,
+          "id": "277102301",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 78,
+          "id": "104000069",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 79,
+          "id": "277101910",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 80,
+          "id": "277102675",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 81,
+          "id": "277103307",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 82,
+          "id": "277103313",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 83,
+          "id": "221000025",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 84,
+          "id": "221000029",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 85,
+          "id": "221000075",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 86,
+          "id": "221000074",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 87,
+          "id": "221000073",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 88,
+          "id": "221000049",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 89,
+          "id": "221000047",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        }
+      ]
+    },
+    {
+      "modelRoute": "3330",
+      "sourceRouteId": "204000057",
+      "stops": [
+        {
+          "order": 1,
+          "id": "205000227",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 2,
+          "id": "205000220",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 3,
+          "id": "205000221",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 4,
+          "id": "205000222",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 5,
+          "id": "205000231",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 6,
+          "id": "205000217",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 7,
+          "id": "205000098",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 8,
+          "id": "205000175",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 9,
+          "id": "205000210",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 10,
+          "id": "206000726",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 11,
+          "id": "206000729",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 12,
+          "id": "205000173",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 13,
+          "id": "206000361",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 14,
+          "id": "206000157",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 15,
+          "id": "206000392",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 16,
+          "id": "206000055",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 17,
+          "id": "206000054",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 18,
+          "id": "206000053",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 19,
+          "id": "206000316",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 20,
+          "id": "206000530",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 21,
+          "id": "206000531",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 22,
+          "id": "206000532",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 23,
+          "id": "277103149",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 24,
+          "id": "277102599",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 25,
+          "id": "226000190",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 26,
+          "id": "277103157",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 27,
+          "id": "209000133",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 28,
+          "id": "209000160",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 29,
+          "id": "209000057",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 30,
+          "id": "209000132",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 31,
+          "id": "209000097",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 32,
+          "id": "209000131",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 33,
+          "id": "209000094",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 34,
+          "id": "209000093",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 35,
+          "id": "209000119",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 36,
+          "id": "208000005",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 37,
+          "id": "208000004",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 38,
+          "id": "208000003",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 39,
+          "id": "208000002",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 40,
+          "id": "208000001",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 41,
+          "id": "208000066",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 42,
+          "id": "208000065",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 43,
+          "id": "208000069",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 44,
+          "id": "277101770",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 45,
+          "id": "208000158",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 46,
+          "id": "208000254",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 47,
+          "id": "208000156",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 48,
+          "id": "208000155",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 49,
+          "id": "208000087",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 50,
+          "id": "208000086",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 51,
+          "id": "208000281",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 52,
+          "id": "208000084",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 53,
+          "id": "209000118",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 54,
+          "id": "209000110",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 55,
+          "id": "209000135",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 56,
+          "id": "209000109",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 57,
+          "id": "209000108",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 58,
+          "id": "209000130",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 59,
+          "id": "209000072",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 60,
+          "id": "209000159",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 61,
+          "id": "209000129",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 62,
+          "id": "277103156",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 63,
+          "id": "226000191",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 64,
+          "id": "277102796",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 65,
+          "id": "277103148",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 66,
+          "id": "206000535",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 67,
+          "id": "206000536",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 68,
+          "id": "206000537",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 69,
+          "id": "206000239",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 70,
+          "id": "206000028",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 71,
+          "id": "206000227",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 72,
+          "id": "206000226",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 73,
+          "id": "206000441",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 74,
+          "id": "206000784",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 75,
+          "id": "206000057",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 76,
+          "id": "206000728",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 77,
+          "id": "206000478",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 78,
+          "id": "206000264",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 79,
+          "id": "205000097",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 80,
+          "id": "205000211",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 81,
+          "id": "205000230",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 82,
+          "id": "205000212",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 83,
+          "id": "205000213",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 84,
+          "id": "205000214",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 85,
+          "id": "205000226",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        }
+      ]
+    },
+    {
+      "modelRoute": "9007",
+      "sourceRouteId": "204000070",
+      "stops": [
+        {
+          "order": 1,
+          "id": "206000010",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 2,
+          "id": "206000009",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 3,
+          "id": "206000658",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 4,
+          "id": "206000558",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 5,
+          "id": "206000007",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 6,
+          "id": "206000006",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 7,
+          "id": "206000005",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 8,
+          "id": "206000004",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 9,
+          "id": "206000555",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 10,
+          "id": "206000609",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 11,
+          "id": "206000607",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 12,
+          "id": "206000605",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 13,
+          "id": "206000603",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 14,
+          "id": "206000551",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 15,
+          "id": "206000567",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 16,
+          "id": "206000565",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 17,
+          "id": "206000678",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 18,
+          "id": "206000731",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 19,
+          "id": "206000679",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 20,
+          "id": "206000637",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 21,
+          "id": "206000532",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 22,
+          "id": "277103149",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 23,
+          "id": "277103679",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 24,
+          "id": "277103441",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 25,
+          "id": "277104177",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 26,
+          "id": "277103388",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 27,
+          "id": "277103390",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 28,
+          "id": "277103391",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 29,
+          "id": "277100065",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 30,
+          "id": "121900201",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 31,
+          "id": "102000058",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 32,
+          "id": "101000049",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 33,
+          "id": "101000043",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 34,
+          "id": "101000303",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 35,
+          "id": "277104283",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 36,
+          "id": "101000128",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 37,
+          "id": "101000005",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 38,
+          "id": "277101742",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 39,
+          "id": "101000026",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 40,
+          "id": "277102115",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 41,
+          "id": "101000031",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 42,
+          "id": "101000048",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 43,
+          "id": "102000057",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 44,
+          "id": "121000020",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 45,
+          "id": "277103392",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 46,
+          "id": "277103389",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 47,
+          "id": "277103387",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 48,
+          "id": "277104178",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 49,
+          "id": "277103440",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 50,
+          "id": "277103678",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 51,
+          "id": "277103148",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 52,
+          "id": "206000635",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 53,
+          "id": "206000680",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 54,
+          "id": "206000640",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 55,
+          "id": "206000730",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 56,
+          "id": "206000677",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 57,
+          "id": "206000564",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 58,
+          "id": "206000566",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 59,
+          "id": "206000549",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 60,
+          "id": "206000550",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 61,
+          "id": "206000604",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 62,
+          "id": "206000606",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 63,
+          "id": "206000608",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 64,
+          "id": "206000554",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 65,
+          "id": "206000016",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 66,
+          "id": "206000556",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 67,
+          "id": "206000015",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 68,
+          "id": "206000014",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 69,
+          "id": "206000557",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 70,
+          "id": "206000657",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 71,
+          "id": "206000012",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 72,
+          "id": "206000470",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 73,
+          "id": "206000011",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        }
+      ]
+    },
+    {
+      "modelRoute": "9300",
+      "sourceRouteId": "234000886",
+      "stops": [
+        {
+          "order": 1,
+          "id": "205000227",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 2,
+          "id": "205000220",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 3,
+          "id": "205000221",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 4,
+          "id": "205000222",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 5,
+          "id": "205000231",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 6,
+          "id": "205000217",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 7,
+          "id": "205000098",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 8,
+          "id": "205000175",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 9,
+          "id": "205000210",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 10,
+          "id": "206000726",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 11,
+          "id": "206000729",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 12,
+          "id": "205000173",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 13,
+          "id": "206000361",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 14,
+          "id": "206000157",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 15,
+          "id": "206000392",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 16,
+          "id": "206000298",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 17,
+          "id": "206000310",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 18,
+          "id": "204000203",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 19,
+          "id": "204000207",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 20,
+          "id": "206000614",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 21,
+          "id": "206000616",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 22,
+          "id": "206000531",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 23,
+          "id": "206000532",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 24,
+          "id": "277103149",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 25,
+          "id": "277103679",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 26,
+          "id": "277103441",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 27,
+          "id": "277104177",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 28,
+          "id": "277103388",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 29,
+          "id": "277103390",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 30,
+          "id": "277103391",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 31,
+          "id": "277103400",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 32,
+          "id": "102000069",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 33,
+          "id": "277104180",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 34,
+          "id": "277104186",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 35,
+          "id": "101000292",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 36,
+          "id": "100000001",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 37,
+          "id": "101000141",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 38,
+          "id": "101000041",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 39,
+          "id": "101000264",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 40,
+          "id": "101000005",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 41,
+          "id": "277101742",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 42,
+          "id": "101000026",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 43,
+          "id": "277102115",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 44,
+          "id": "102000070",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 45,
+          "id": "277103399",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 46,
+          "id": "277103392",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 47,
+          "id": "277103389",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 48,
+          "id": "277103387",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 49,
+          "id": "277104178",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 50,
+          "id": "277103440",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 51,
+          "id": "277103678",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 52,
+          "id": "277103148",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 53,
+          "id": "206000535",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 54,
+          "id": "206000617",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 55,
+          "id": "206000615",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 56,
+          "id": "204000208",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 57,
+          "id": "204000204",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 58,
+          "id": "206000309",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 59,
+          "id": "206000277",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 60,
+          "id": "206000441",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 61,
+          "id": "206000784",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 62,
+          "id": "206000057",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 63,
+          "id": "206000728",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 64,
+          "id": "206000478",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 65,
+          "id": "206000264",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 66,
+          "id": "205000097",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 67,
+          "id": "205000211",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 68,
+          "id": "205000230",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 69,
+          "id": "205000212",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 70,
+          "id": "205000213",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 71,
+          "id": "205000214",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 72,
+          "id": "205000226",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        }
+      ]
+    },
+    {
+      "modelRoute": "6011",
+      "sourceRouteId": "233000392",
+      "stops": [
+        {
+          "order": 1,
+          "id": "233003132",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 2,
+          "id": "233001754",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 3,
+          "id": "233001696",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 4,
+          "id": "233000374",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 5,
+          "id": "233001614",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 6,
+          "id": "233002421",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 7,
+          "id": "233000129",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 8,
+          "id": "277104808",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 9,
+          "id": "233002429",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 10,
+          "id": "233000063",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 11,
+          "id": "233000698",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 12,
+          "id": "277102516",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 13,
+          "id": "277102660",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 14,
+          "id": "277103363",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 15,
+          "id": "277103361",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 16,
+          "id": "277103443",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 17,
+          "id": "277102630",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 18,
+          "id": "277103386",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 19,
+          "id": "277104184",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 20,
+          "id": "206000577",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 21,
+          "id": "206000539",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 22,
+          "id": "206000565",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 23,
+          "id": "206000563",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 24,
+          "id": "206000578",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 25,
+          "id": "206000637",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 26,
+          "id": "206000532",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 27,
+          "id": "277104185",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 28,
+          "id": "277103385",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 29,
+          "id": "277102104",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 30,
+          "id": "277103442",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 31,
+          "id": "277103360",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 32,
+          "id": "277103362",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 33,
+          "id": "277102621",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 34,
+          "id": "233000709",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 35,
+          "id": "233001902",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 36,
+          "id": "233001492",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 37,
+          "id": "233001168",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 38,
+          "id": "233000965",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 39,
+          "id": "233001620",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 40,
+          "id": "233000209",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 41,
+          "id": "233001695",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 42,
+          "id": "233001753",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 43,
+          "id": "233003126",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        }
+      ]
+    },
+    {
+      "modelRoute": "3000",
+      "sourceRouteId": "227000038",
+      "stops": [
+        {
+          "order": 1,
+          "id": "227000293",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 2,
+          "id": "227000294",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 3,
+          "id": "227000219",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 4,
+          "id": "227000270",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 5,
+          "id": "227000194",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 6,
+          "id": "227000223",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 7,
+          "id": "227000204",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 8,
+          "id": "227000284",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 9,
+          "id": "227000656",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 10,
+          "id": "227000484",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 11,
+          "id": "227000232",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 12,
+          "id": "227000032",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 13,
+          "id": "227000514",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 14,
+          "id": "227000273",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 15,
+          "id": "227000191",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 16,
+          "id": "227000257",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 17,
+          "id": "227000072",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 18,
+          "id": "227000250",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 19,
+          "id": "277103274",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 20,
+          "id": "277103154",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 21,
+          "id": "277103268",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 22,
+          "id": "204000092",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 23,
+          "id": "277103272",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 24,
+          "id": "277103271",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 25,
+          "id": "205000245",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 26,
+          "id": "206000361",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 27,
+          "id": "206000157",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 28,
+          "id": "206000392",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 29,
+          "id": "206000298",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 30,
+          "id": "206000310",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 31,
+          "id": "204000203",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 32,
+          "id": "204000205",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 33,
+          "id": "206000562",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 34,
+          "id": "206000564",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 35,
+          "id": "206000543",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 36,
+          "id": "206000640",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 37,
+          "id": "206000730",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 38,
+          "id": "206000579",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 39,
+          "id": "204000206",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 40,
+          "id": "204000204",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 41,
+          "id": "206000309",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 42,
+          "id": "206000277",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 43,
+          "id": "206000441",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 44,
+          "id": "206000784",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 45,
+          "id": "205000029",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 46,
+          "id": "277102644",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 47,
+          "id": "277103270",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 48,
+          "id": "277103273",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 49,
+          "id": "204000091",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 50,
+          "id": "277103269",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 51,
+          "id": "277103155",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 52,
+          "id": "277103275",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 53,
+          "id": "227000027",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 54,
+          "id": "227000356",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 55,
+          "id": "227000071",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 56,
+          "id": "227000256",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 57,
+          "id": "227000192",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 58,
+          "id": "227000274",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 59,
+          "id": "227000506",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 60,
+          "id": "227000201",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 61,
+          "id": "227000280",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 62,
+          "id": "227000230",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 63,
+          "id": "227000485",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 64,
+          "id": "227000291",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 65,
+          "id": "227000282",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 66,
+          "id": "227000283",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 67,
+          "id": "227000222",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 68,
+          "id": "227000172",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 69,
+          "id": "227000684",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 70,
+          "id": "227000271",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 71,
+          "id": "227000190",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        }
+      ]
+    },
+    {
+      "modelRoute": "5600",
+      "sourceRouteId": "228000184",
+      "stops": [
+        {
+          "order": 1,
+          "id": "228000191",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 2,
+          "id": "228002958",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 3,
+          "id": "228000190",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 4,
+          "id": "228000189",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 5,
+          "id": "228000188",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 6,
+          "id": "228000187",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 7,
+          "id": "228000199",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 8,
+          "id": "228000198",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 9,
+          "id": "228001320",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 10,
+          "id": "228000449",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 11,
+          "id": "228000448",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 12,
+          "id": "228000447",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 13,
+          "id": "228000749",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 14,
+          "id": "228000748",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 15,
+          "id": "228000747",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 16,
+          "id": "228000746",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 17,
+          "id": "228000745",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 18,
+          "id": "228000744",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 19,
+          "id": "228000743",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 20,
+          "id": "228000742",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 21,
+          "id": "228000741",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 22,
+          "id": "228000689",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 23,
+          "id": "228000688",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 24,
+          "id": "228000687",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 25,
+          "id": "228000686",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 26,
+          "id": "228000685",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 27,
+          "id": "228000684",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 28,
+          "id": "228000683",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 29,
+          "id": "228000682",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 30,
+          "id": "228000681",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 31,
+          "id": "228000680",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 32,
+          "id": "277103364",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 33,
+          "id": "277103361",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 34,
+          "id": "277103443",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 35,
+          "id": "277102630",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 36,
+          "id": "277103386",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 37,
+          "id": "277104184",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 38,
+          "id": "206000577",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 39,
+          "id": "206000539",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 40,
+          "id": "206000540",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 41,
+          "id": "204000064",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 42,
+          "id": "204000200",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 43,
+          "id": "204000063",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 44,
+          "id": "204000002",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 45,
+          "id": "204000001",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 46,
+          "id": "204000046",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 47,
+          "id": "204000223",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 48,
+          "id": "204000045",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 49,
+          "id": "204000044",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 50,
+          "id": "204000043",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 51,
+          "id": "204000042",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 52,
+          "id": "122000315",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 53,
+          "id": "122000316",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 54,
+          "id": "122000317",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 55,
+          "id": "122000318",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 56,
+          "id": "122000718",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 57,
+          "id": "122000302",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 58,
+          "id": "123000009",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 59,
+          "id": "123000007",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 60,
+          "id": "123000005",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 61,
+          "id": "123000003",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 62,
+          "id": "123000001",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 63,
+          "id": "277102301",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 64,
+          "id": "104000279",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 65,
+          "id": "277103308",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 66,
+          "id": "277102302",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 67,
+          "id": "123000002",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 68,
+          "id": "277101950",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 69,
+          "id": "123000004",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 70,
+          "id": "123000006",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 71,
+          "id": "123000008",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 72,
+          "id": "123000294",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 73,
+          "id": "122000747",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 74,
+          "id": "122000717",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 75,
+          "id": "122000319",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 76,
+          "id": "122000320",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 77,
+          "id": "122000321",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 78,
+          "id": "122000308",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 79,
+          "id": "204000041",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 80,
+          "id": "204000040",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 81,
+          "id": "204000039",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 82,
+          "id": "204000057",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 83,
+          "id": "204000222",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 84,
+          "id": "204000038",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 85,
+          "id": "204000062",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 86,
+          "id": "204000037",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 87,
+          "id": "204000061",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 88,
+          "id": "204000199",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 89,
+          "id": "204000060",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 90,
+          "id": "206000542",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 91,
+          "id": "206000543",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 92,
+          "id": "206000561",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 93,
+          "id": "277104185",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 94,
+          "id": "277103385",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 95,
+          "id": "277102104",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 96,
+          "id": "277103442",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 97,
+          "id": "277103360",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 98,
+          "id": "277103365",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 99,
+          "id": "228000698",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 100,
+          "id": "228000697",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 101,
+          "id": "228000696",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 102,
+          "id": "228000695",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 103,
+          "id": "228000694",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 104,
+          "id": "228000693",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 105,
+          "id": "228001147",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 106,
+          "id": "228000692",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 107,
+          "id": "228000691",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 108,
+          "id": "228000690",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 109,
+          "id": "228000782",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 110,
+          "id": "228000781",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 111,
+          "id": "228000780",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 112,
+          "id": "228000779",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 113,
+          "id": "228000778",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 114,
+          "id": "228000777",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 115,
+          "id": "228000776",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 116,
+          "id": "228000775",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 117,
+          "id": "228000446",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 118,
+          "id": "228000445",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 119,
+          "id": "228000444",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 120,
+          "id": "228001414",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 121,
+          "id": "228000236",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 122,
+          "id": "228000196",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 123,
+          "id": "228000195",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 124,
+          "id": "228000194",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 125,
+          "id": "228000193",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 126,
+          "id": "228002959",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 127,
+          "id": "228000192",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        }
+      ]
+    },
+    {
+      "modelRoute": "3500",
+      "sourceRouteId": "234000051",
+      "stops": [
+        {
+          "order": 1,
+          "id": "277103068",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 2,
+          "id": "206000040",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 3,
+          "id": "206000219",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 4,
+          "id": "206000088",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 5,
+          "id": "206000087",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 6,
+          "id": "206000086",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 7,
+          "id": "206000085",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 8,
+          "id": "206000084",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 9,
+          "id": "206000325",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 10,
+          "id": "206000324",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 11,
+          "id": "206000323",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 12,
+          "id": "206000322",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 13,
+          "id": "206000301",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 14,
+          "id": "206000083",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 15,
+          "id": "206000082",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 16,
+          "id": "206000081",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 17,
+          "id": "206000080",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 18,
+          "id": "206000316",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 19,
+          "id": "206000530",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 20,
+          "id": "206000531",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 21,
+          "id": "206000532",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 22,
+          "id": "277103149",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 23,
+          "id": "277102599",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 24,
+          "id": "226000190",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 25,
+          "id": "277103157",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 26,
+          "id": "277103147",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 27,
+          "id": "277104430",
+          "boardingAllowed": false,
+          "direction": "UP"
+        },
+        {
+          "order": 28,
+          "id": "225000073",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 29,
+          "id": "225000076",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 30,
+          "id": "225000089",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 31,
+          "id": "225000052",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 32,
+          "id": "225000051",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 33,
+          "id": "225000147",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 34,
+          "id": "225000146",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 35,
+          "id": "225000208",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 36,
+          "id": "225000088",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 37,
+          "id": "225000041",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 38,
+          "id": "225000039",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 39,
+          "id": "225000038",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 40,
+          "id": "225000037",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 41,
+          "id": "225000266",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 42,
+          "id": "225000267",
+          "boardingAllowed": true,
+          "direction": "UP"
+        },
+        {
+          "order": 43,
+          "id": "225000036",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 44,
+          "id": "225000035",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 45,
+          "id": "225000034",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 46,
+          "id": "225000033",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 47,
+          "id": "225000087",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 48,
+          "id": "225000209",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 49,
+          "id": "225000137",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 50,
+          "id": "225000136",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 51,
+          "id": "225000048",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 52,
+          "id": "225000047",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 53,
+          "id": "225000116",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 54,
+          "id": "225000078",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 55,
+          "id": "225000072",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 56,
+          "id": "225000238",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 57,
+          "id": "277104429",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 58,
+          "id": "277103146",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 59,
+          "id": "277103156",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 60,
+          "id": "226000191",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 61,
+          "id": "277102796",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 62,
+          "id": "277103148",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        },
+        {
+          "order": 63,
+          "id": "206000535",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 64,
+          "id": "206000536",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 65,
+          "id": "206000537",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 66,
+          "id": "206000695",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 67,
+          "id": "206000102",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 68,
+          "id": "206000101",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 69,
+          "id": "206000100",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 70,
+          "id": "206000099",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 71,
+          "id": "206000025",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 72,
+          "id": "206000183",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 73,
+          "id": "206000182",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 74,
+          "id": "206000181",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 75,
+          "id": "206000180",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 76,
+          "id": "206000098",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 77,
+          "id": "206000097",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 78,
+          "id": "206000096",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 79,
+          "id": "206000095",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 80,
+          "id": "206000094",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 81,
+          "id": "206000216",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 82,
+          "id": "206000215",
+          "boardingAllowed": true,
+          "direction": "DOWN"
+        },
+        {
+          "order": 83,
+          "id": "277103068",
+          "boardingAllowed": false,
+          "direction": "DOWN"
+        }
+      ]
+    }
+  ]
+}

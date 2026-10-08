@@ -3,6 +3,7 @@ package com.gustler.backend.worker.scheduling;
 import com.gustler.backend.observations.api.CollectionTiming;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import org.springframework.scheduling.Trigger;
 import org.springframework.scheduling.TriggerContext;
@@ -19,11 +20,17 @@ import org.springframework.scheduling.TriggerContext;
 public class AdaptiveCollectionTrigger implements Trigger {
 
     private final Clock clock;
+    private final Duration fixedInterval;
 
     public AdaptiveCollectionTrigger(
         Clock clock
     ) {
+        this(clock, null);
+    }
+
+    public AdaptiveCollectionTrigger(Clock clock, Duration fixedInterval) {
         this.clock = clock;
+        this.fixedInterval = fixedInterval;
     }
 
     @Override
@@ -34,6 +41,8 @@ public class AdaptiveCollectionTrigger implements Trigger {
         if (lastCompletion == null) {
             return clock.instant();
         }
-        return lastCompletion.plusSeconds(CollectionTiming.intervalSeconds(lastCompletion));
+        return fixedInterval == null
+            ? lastCompletion.plusSeconds(CollectionTiming.intervalSeconds(lastCompletion))
+            : lastCompletion.plus(fixedInterval);
     }
 }
