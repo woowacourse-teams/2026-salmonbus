@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "연어버스",
+    "slug": "salmonbus",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "bundleIdentifier": "com.salmonbus.app",
+      "supportsTablet": false
+    }
+  }
+}
