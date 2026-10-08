@@ -1,15 +1,13 @@
 import { useEffect, useState } from "react";
 import { createLatestRequestGate } from "@/shared/api/latestRequestGate";
 import { fetchRoutes } from "@/shared/api/routeForecast.api";
-import type { RouteSummary } from "@/shared/api/routeForecast.types";
 import { RouteList } from "./components/RouteList";
+import type { RoutesState } from "./displayPolicy";
 import salmongProud from "@/shared/assets/images/salmong-logo/salmong-proud.png";
 import salmonbusWordmark from "@/shared/assets/images/salmonbus-wordmark.webp";
 import { PageInfo } from "@/shared/components/PageInfo";
 import { titleMock, captionMock } from "./api/routeSelect.mock";
 import * as styles from "./RouteSelectPage.css";
-
-type RoutesState = { status: "loading" } | { status: "error" } | { status: "ready"; routes: RouteSummary[] };
 
 export function RouteSelectPage() {
   const [gate] = useState(createLatestRequestGate);
