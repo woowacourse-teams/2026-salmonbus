@@ -31,7 +31,8 @@ public final class LocalData {
         String step = "INPUT";
         try {
             final boolean recover = args.length == 3 && args[2].equals("--recover-collector-only");
-            require((args.length == 2 || recover) && args[0].equals("/local/data/routes.json")
+            final boolean reset = args.length == 3 && args[2].equals("--reset-generated");
+            require((args.length == 2 || recover || reset) && args[0].equals("/local/data/routes.json")
                 && args[1].equals(ReferenceBundle.DIRECTORY), "LOCAL_PATHS");
             require(URL.equals(System.getenv("DB_URL")) && USER.equals(System.getenv("DB_USERNAME")), "LOCAL_DATABASE_ONLY");
             String password = System.getenv("DB_PASSWORD");
@@ -73,7 +74,17 @@ public final class LocalData {
                             SELECT count(*) FROM local_development_fixture
                             WHERE singleton AND version=? AND route_digest=? AND bundle_digest=?
                             """, ReferenceBundle.VERSION, routeDigest, inspection.bundleDigest()).equals("1"), "FIXTURE_VERSION_CHANGED");
+                        if (reset) {
+                            step = "RESET";
+                            require(scalar(connection, """
+                                SELECT count(*) FROM model_deployment WHERE state='ACTIVE' AND bundle_digest<>?
+                                """, inspection.bundleDigest()).equals("0"), "UNOWNED_ACTIVE_MODEL");
+                            verify(connection, data, args[1], false);
+                            verify(connection, catalog, args[1], false, false);
+                            resetGenerated(connection, data);
+                        }
                     } else {
+                        require(!reset, "FIXTURE_REQUIRED_FOR_RESET");
                         step = "SEED";
                         if (recover) {
                             recoverCollectorOnly(connection, data);
@@ -101,7 +112,7 @@ public final class LocalData {
                 }
             }
             System.out.println(new String(ReferenceBundle.bytes(Map.of("status", "ok",
-                "result", existing ? "preserved" : recover ? "recovered" : "prepared", "routeCount", data.routes().size() + catalog.routes().size(),
+                "result", reset ? "reset" : existing ? "preserved" : recover ? "recovered" : "prepared", "routeCount", data.routes().size() + catalog.routes().size(),
                 "catalogRouteCount", catalog.routes().size(), "modelRouteCount", data.routes().size(),
                 "stopCount", data.routes().stream().mapToInt(route -> route.stops().size()).sum()
                     + catalog.routes().stream().mapToInt(route -> route.stops().size()).sum(),
@@ -115,6 +126,27 @@ public final class LocalData {
             System.err.println("{\"status\":\"failed\",\"code\":\"" + code + "\",\"type\":\""
                 + error.getClass().getSimpleName() + "\",\"sqlState\":\"" + sqlState + "\"}");
             System.exit(1);
+        }
+    }
+
+    private static void resetGenerated(Connection connection, RouteDataset data) throws Exception {
+        execute(connection, """
+            TRUNCATE daily_call_quota, observation_batch, vehicle_observation, seat_forecast,
+                forecast_publication, forecast_evaluation, observation_trip_assignment,
+                vehicle_one_way_trip, trip_quality_rebuild, same_day_full_outcomes,
+                same_day_model_full_outcomes, stop_demand_pending_sample, stop_demand_rebuild_request,
+                stop_demand_current_total, stop_demand_baseline, stop_demand_rebuild_progress,
+                stop_demand_rebuild_total, stop_demand_rebuild_scan, stop_demand_vehicle,
+                stop_demand_run, stop_demand_capacity_stage, stop_demand_day_stage,
+                stop_demand_cell_stage, stop_demand_statistics, demand_statistics_version
+            """);
+        execute(connection, "UPDATE route_data_quality SET quality_revision=1");
+        for (RouteDataset.Route route : data.routes()) {
+            final long versionId = Long.parseLong(scalar(connection, """
+                SELECT v.id FROM route r JOIN route_version v ON v.route_id=r.id
+                WHERE r.source_route_id=? AND v.valid_to IS NULL
+                """, route.routeId()));
+            seedStatistics(connection, route, versionId, 1);
         }
     }
 

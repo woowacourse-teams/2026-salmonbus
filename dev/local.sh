@@ -26,7 +26,7 @@ compose() {
 
 command=${1:-help}
 case $command in
-  init|check|build|prepare|up|status|stop|logs|scenario)
+  init|check|build|prepare|up|status|stop|logs|scenario|reset-data)
     check_docker
     shift
     case $command in
@@ -50,14 +50,26 @@ case $command in
         ;;
       status) compose ps ;;
       stop) compose stop ;;
+      reset-data)
+        [[ $# == 1 && $1 == --yes ]] || fail '실행 이력과 채팅을 지우려면 reset-data --yes로 실행해 주세요.'
+        for service in postgres mongodb gbis-mock; do
+          compose exec -T "$service" true >/dev/null 2>&1 || fail '먼저 로컬 환경을 실행해 주세요.'
+        done
+        compose stop frontend api worker
+        compose run --rm --no-deps local-init reset
+        compose exec -T mongodb bash /local-tools/reset-chat.sh
+        compose exec -T gbis-mock java -cp '/var/wiremock/lib/*:/var/wiremock/extensions/*' com.gustler.localgbis.ScenarioControl normal all
+        compose up --detach --no-build --wait --wait-timeout 240 frontend
+        printf '%s\n' '로컬 실행 이력과 채팅을 정리했습니다. 브라우저를 새로고침해 주세요.'
+        ;;
       logs)
         case ${1:-} in
-          api|worker|frontend|postgres|mongodb|local-init|settings-init|gbis-mock) compose logs --tail 100 "$1" ;;
+          api|worker|frontend|postgres|mongodb|local-init|local-ready|settings-init|gbis-mock) compose logs --tail 100 "$1" ;;
           *) fail 'logs 뒤에 서비스 이름을 적어 주세요.' ;;
         esac
         ;;
     esac
     ;;
-  help) printf '%s\n' './dev/local.sh up [--watch] | status | logs <서비스> | stop | scenario <모드> [노선|all]' ;;
+  help) printf '%s\n' './dev/local.sh up [--watch] | status | logs <서비스> | stop | scenario <모드> [노선|all] | reset-data --yes' ;;
   *) fail '지원하지 않는 명령입니다. help를 확인해 주세요.' ;;
 esac

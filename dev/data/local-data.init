@@ -20,6 +20,12 @@ gradle.projectsEvaluated {
         mainClass = 'com.gustler.localdata.GbisContractCheck'
         args worker.findProperty('localScenario') ?: 'normal'
     }
+    worker.tasks.register('resetLocalData', JavaExec) {
+        dependsOn worker.tasks.named('localDataClasses')
+        classpath = worker.sourceSets.localData.runtimeClasspath
+        mainClass = 'com.gustler.localdata.LocalData'
+        args '/local/data/routes.json', '/local/models/reference-20261002', '--reset-generated'
+    }
     worker.tasks.register('verifyReferenceModel', JavaExec) {
         dependsOn worker.tasks.named('localDataClasses')
         classpath = worker.sourceSets.localData.runtimeClasspath
