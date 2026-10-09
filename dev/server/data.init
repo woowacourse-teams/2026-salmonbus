@@ -1,0 +1,28 @@
+gradle.projectsEvaluated {
+    def worker = gradle.rootProject.project(':worker-app')
+    def dev = new File(gradle.rootProject.projectDir, '../dev')
+    worker.sourceSets.create('sharedDevData') {
+        java.srcDirs = [new File(dev, 'data/java')]
+        compileClasspath += worker.sourceSets.main.runtimeClasspath
+        runtimeClasspath += worker.sourceSets.main.runtimeClasspath
+    }
+    worker.sourceSets.create('sharedDevDataTest') {
+        java.srcDirs = [new File(dev, 'server/tests/java')]
+        compileClasspath += worker.sourceSets.sharedDevData.output + worker.sourceSets.test.compileClasspath
+        runtimeClasspath += worker.sourceSets.sharedDevData.output + worker.sourceSets.test.runtimeClasspath
+    }
+    worker.tasks.register('sharedDevDataTest', Test) {
+        dependsOn worker.tasks.named('sharedDevDataClasses')
+        testClassesDirs = worker.sourceSets.sharedDevDataTest.output.classesDirs
+        classpath = worker.sourceSets.sharedDevDataTest.runtimeClasspath
+        useJUnitPlatform()
+    }
+    def bootJarType = worker.tasks.named('bootJar').get().class.superclass
+    worker.tasks.register('sharedDevDataJar', bootJarType) {
+        dependsOn worker.tasks.named('sharedDevDataClasses')
+        archiveFileName = 'shared-dev-data.jar'
+        targetJavaVersion = JavaVersion.VERSION_21
+        mainClass = 'com.gustler.localdata.LocalData'
+        classpath = worker.sourceSets.sharedDevData.output + worker.sourceSets.main.runtimeClasspath
+    }
+}
