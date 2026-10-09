@@ -11,6 +11,7 @@ function readWebUrl() {
 }
 
 const WEB_URL = readWebUrl();
+const IN_APP_ORIGINS = [new URL(WEB_URL).origin];
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
       <WebView
         source={{ uri: WEB_URL }}
         style={styles.webView}
+        originWhitelist={IN_APP_ORIGINS}
         allowsBackForwardNavigationGestures
       />
       <StatusBar style="auto" />
