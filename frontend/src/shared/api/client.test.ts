@@ -41,11 +41,11 @@ describe("requestJson", () => {
   it("노선 정보는 URL에서 추측하지 않고 API 호출자가 전달한다", async () => {
     respondWith(503, { code: "SERVICE_UNAVAILABLE", message: "장애", requestId: "request-1" });
     await fetchBoard("123456789");
-    expect(reportApiFailure).toHaveBeenCalledWith(
-      "/api/v1/routes/123456789/board",
-      expect.anything(),
-      expect.objectContaining({ endpoint: "/api/v1/routes/:routeId/board", tags: { route_id: "123456789" } }),
-    );
+    expect(reportApiFailure).toHaveBeenCalledWith("/api/v1/routes/123456789/board", expect.anything(), {
+      context: { endpoint: "/api/v1/routes/:routeId/board", tags: { route_id: "123456789" } },
+      abortReason: null,
+      rawResponse: null,
+    });
   });
 
   it("수집 함수가 실패해도 서버의 원래 오류 응답을 유지한다", async () => {
@@ -87,7 +87,9 @@ describe("requestJson", () => {
     });
     expect(reportApiFailure).toHaveBeenCalledTimes(1);
     expect(reportApiFailure).toHaveBeenCalledWith("/api/v1/routes/123456789/board", failure, {
-      abortReason: undefined,
+      context: null,
+      abortReason: null,
+      rawResponse: null,
     });
   });
 
@@ -100,7 +102,11 @@ describe("requestJson", () => {
     expect(reportApiFailure).toHaveBeenCalledWith(
       "/api/v1/routes",
       expect.objectContaining({ kind: "malformed", status: 502 }),
-      expect.objectContaining({ responseBody: "<html>Bad Gateway</html>" }),
+      {
+        context: null,
+        abortReason: null,
+        rawResponse: { body: "<html>Bad Gateway</html>", contentType: "text/plain;charset=UTF-8" },
+      },
     );
   });
 
@@ -111,7 +117,7 @@ describe("requestJson", () => {
     expect(reportApiFailure).toHaveBeenCalledWith(
       "/api/v1/routes",
       { kind: "aborted" },
-      { abortReason: REQUEST_DISPOSED },
+      { context: null, abortReason: REQUEST_DISPOSED, rawResponse: null },
     );
   });
 
@@ -135,7 +141,11 @@ describe("requestJson", () => {
     const pending = requestJson("/api/v1/routes");
     await jest.advanceTimersByTimeAsync(10_000);
     expect(failureOf(await pending).kind).toBe("timeout");
-    expect(reportApiFailure).toHaveBeenCalledWith("/api/v1/routes", { kind: "timeout" }, { abortReason: undefined });
+    expect(reportApiFailure).toHaveBeenCalledWith(
+      "/api/v1/routes",
+      { kind: "timeout" },
+      { context: null, abortReason: null, rawResponse: null },
+    );
   });
 
   describe("오류 응답을 받으면", () => {

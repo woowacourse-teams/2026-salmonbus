@@ -44,12 +44,15 @@ export interface ApiError {
 
 export type ApiResult<T> = ApiSuccess<T> | ApiError;
 
+export interface RequestErrorContext {
+  endpoint: string;
+  tags: Record<string, string>;
+}
+
 export interface ApiFailureDetails {
-  endpoint?: string;
-  tags?: Record<string, string>;
-  abortReason?: unknown;
-  responseBody?: string;
-  contentType?: string | null;
+  context: RequestErrorContext | null;
+  abortReason: unknown;
+  rawResponse: { body: string; contentType: string | null } | null;
 }
 
 export type ApiFailureReporter = (url: string, failure: ApiFailure, details: ApiFailureDetails) => void;
@@ -63,7 +66,7 @@ export function initApiFailureReporter(reporter: ApiFailureReporter | null): voi
 export interface RequestOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
-  errorContext?: Pick<ApiFailureDetails, "endpoint" | "tags">;
+  errorContext?: RequestErrorContext;
 }
 
 export async function requestJson<T>(url: string, options: RequestOptions = {}): Promise<ApiResult<T>> {
@@ -73,9 +76,12 @@ export async function requestJson<T>(url: string, options: RequestOptions = {}):
     if (!result.ok && failureReporter) {
       try {
         failureReporter(url, result.failure, {
-          ...options.errorContext,
-          abortReason: options.signal?.reason,
-          ...(result.failure.kind === "malformed" && responseBody !== undefined ? { responseBody, contentType } : {}),
+          context: options.errorContext ?? null,
+          abortReason: options.signal?.reason ?? null,
+          rawResponse:
+            result.failure.kind === "malformed" && responseBody !== undefined
+              ? { body: responseBody, contentType }
+              : null,
         });
       } catch {
         // 수집 실패가 원래 요청 결과나 재시도 동작을 바꾸면 안 된다.

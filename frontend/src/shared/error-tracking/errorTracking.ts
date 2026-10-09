@@ -140,11 +140,11 @@ export function createApiFailureReporter(
     const requestId =
       failure.kind === "contract" ? failure.error.requestId : "requestId" in failure ? failure.requestId : null;
     // 요청을 소유한 쪽에서 노선 정보와 그룹 경로를 전달한다. 수집기는 URL의 업무 의미를 해석하지 않는다.
-    const endpoint = details.endpoint ?? path;
+    const endpoint = details.context?.endpoint ?? path;
     const event: Sentry.Event = {
       level: "error",
       fingerprint: ["api", endpoint, failure.kind, String(status), code],
-      tags: { ...details.tags, source: "api", failure_kind: failure.kind, error_code: code },
+      tags: { ...details.context?.tags, source: "api", failure_kind: failure.kind, error_code: code },
       extra: {
         api_path: path,
         http_method: "GET",
@@ -154,14 +154,14 @@ export function createApiFailureReporter(
         ...(failure.kind === "aborted" ? { cancellation_reason: reason } : {}),
       },
     };
-    if (failure.kind === "malformed" && details.responseBody !== undefined) {
-      const body = redactedBodyFrom(details.responseBody);
+    if (failure.kind === "malformed" && details.rawResponse !== null) {
+      const body = redactedBodyFrom(details.rawResponse.body);
       event.extra = {
         ...event.extra,
         response_body: body,
-        response_body_original_bytes: utf8ByteLengthFrom(details.responseBody),
+        response_body_original_bytes: utf8ByteLengthFrom(details.rawResponse.body),
         response_body_redacted_bytes: utf8ByteLengthFrom(body),
-        response_content_type: details.contentType ?? null,
+        response_content_type: details.rawResponse.contentType,
       };
     }
     const error = new Error("API " + failure.kind + ": " + endpoint + (status === null ? "" : " (" + status + ")"));

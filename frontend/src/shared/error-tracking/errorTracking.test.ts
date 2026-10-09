@@ -20,7 +20,7 @@ function createRecording() {
 describe("공통 오류 수집", () => {
   it.each([REQUEST_DISPOSED, REQUEST_SUPERSEDED])("확인된 취소는 참고 기록만 남긴다", (abortReason) => {
     const recording = createRecording();
-    recording.report("/api/resource", { kind: "aborted" }, { abortReason });
+    recording.report("/api/resource", { kind: "aborted" }, { context: null, abortReason, rawResponse: null });
     expect(recording.events).toEqual([]);
     expect(recording.breadcrumbs).toEqual([
       expect.objectContaining({
@@ -32,7 +32,11 @@ describe("공통 오류 수집", () => {
 
   it("이유 없는 취소는 오류로 남기고 취소 원인 객체는 첨부하지 않는다", () => {
     const recording = createRecording();
-    recording.report("/api/resource", { kind: "aborted" }, { abortReason: { token: "secret" } });
+    recording.report(
+      "/api/resource",
+      { kind: "aborted" },
+      { context: null, abortReason: { token: "secret" }, rawResponse: null },
+    );
     expect(recording.events[0]?.extra?.cancellation_reason).toBe("unknown");
     expect(JSON.stringify(recording.events)).not.toContain("secret");
   });
@@ -48,9 +52,9 @@ describe("공통 오류 수집", () => {
         error: { code: "SERVICE_UNAVAILABLE", message: "일시적 장애", requestId: "request-1" },
       },
       {
-        endpoint: "/api/resource/:id",
-        tags: { resource_id: "42" },
-        responseBody: '{"token":"secret"}',
+        context: { endpoint: "/api/resource/:id", tags: { resource_id: "42" } },
+        abortReason: null,
+        rawResponse: { body: '{"token":"secret"}', contentType: null },
       },
     );
     expect(recording.events[0]).toMatchObject({
@@ -71,8 +75,9 @@ describe("공통 오류 수집", () => {
         : kind === "network"
           ? { kind, cause: new TypeError("Failed to fetch") }
           : { kind };
-    recording.report("/api/resource", failure, {});
+    recording.report("/api/resource", failure, { context: null, abortReason: null, rawResponse: null });
     expect(recording.events[0]?.tags?.failure_kind).toBe(kind);
+    expect(recording.events[0]?.fingerprint?.[1]).toBe("/api/resource");
   });
 
   it("형식 오류 본문은 인증 정보를 가린 후 길이 제한 없이 수집 단계로 전달한다", () => {
@@ -82,13 +87,18 @@ describe("공통 오류 수집", () => {
       "/api/resource",
       { kind: "malformed", status: 502, requestId: null },
       {
-        responseBody: JSON.stringify({ access_token: "secret", explanation }),
-        contentType: "application/json",
+        context: null,
+        abortReason: null,
+        rawResponse: {
+          body: JSON.stringify({ access_token: "secret", explanation }),
+          contentType: "application/json",
+        },
       },
     );
     expect(String(recording.events[0]?.extra?.response_body)).toContain(explanation);
     expect(JSON.stringify(recording.events)).not.toContain("secret");
     expect(recording.events[0]?.extra?.response_body_original_bytes).toBeGreaterThan(16_384);
+    expect(recording.events[0]?.extra?.response_content_type).toBe("application/json");
   });
 
   it("React 콜백별 실제 처리 상태와 컴포넌트 스택을 전달한다", () => {
