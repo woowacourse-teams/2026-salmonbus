@@ -91,7 +91,7 @@ final class Environment {
                         && uri.getRawQuery() == null
                         && uri.getRawFragment() == null
                         && uri.getRawPath().isEmpty()
-                        && (uri.getPort() == -1 || uri.getPort() == 443),
+                        && uri.getPort() == -1,
                 "DEV_FRONTEND_ORIGIN");
     }
 

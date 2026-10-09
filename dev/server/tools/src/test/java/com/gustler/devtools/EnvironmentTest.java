@@ -102,6 +102,16 @@ class EnvironmentTest {
     }
 
     @Test
+    void rejectsExplicitDefaultHttpsPort() {
+        var error =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> Environment.origin("https://dev.example.test:443"));
+        assertEquals("DEV_FRONTEND_ORIGIN", error.getMessage());
+        assertDoesNotThrow(() -> Environment.origin("https://dev.example.test"));
+    }
+
+    @Test
     void rejectsMutableImageTagsAndShellExpressions() {
         for (var value : java.util.List.of("latest", "$(command)", "a".repeat(7))) {
             settings.get("infra").put("DEV_REVISION", value);
