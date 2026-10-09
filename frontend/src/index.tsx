@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "@/shared/styles/reset.css";
 import { App } from "@/app/App";
+import { AppErrorBoundary } from "@/app/AppErrorBoundary";
 import { initAnalytics } from "@/shared/analytics/analytics";
 
 const container = document.getElementById("root");
@@ -14,6 +15,8 @@ initAnalytics();
 
 createRoot(container, errorTrackingRootOptions).render(
   <StrictMode>
-    <App />
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
   </StrictMode>,
 );
