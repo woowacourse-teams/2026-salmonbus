@@ -20,6 +20,10 @@ export function eventWithContextFor<T extends Event>(original: T, page: PageErro
   }
   event.extra = { ...event.extra, page_path: requestPathFrom(safePage.path), browser_user_agent: safeUserAgent };
   event.tags = { ...safePage.tags, ...event.tags };
+  const routeId = event.tags.route_id;
+  if (routeId !== undefined) {
+    event.tags.route_id = typeof routeId === "string" && /^[0-9]{9}$/.test(routeId) ? routeId : "invalid";
+  }
   return event;
 }
 

@@ -38,6 +38,48 @@ describe("오류 전송 정책", () => {
     expect(original.user?.id).toBe("secret-user");
   });
 
+  it.each([
+    ["123456789", "123456789"],
+    ["000000000", "000000000"],
+    ["12345678", "invalid"],
+    ["1234567890", "invalid"],
+    ["abc", "invalid"],
+    ["１２３４５６７８９", "invalid"],
+    ["x".repeat(1000), "invalid"],
+  ])("페이지의 노선 태그가 9자리 숫자 형식을 따르도록 정규화한다 (%#)", (routeId, expected) => {
+    const result = eventWithContextFor<Event>(
+      {},
+      { path: "/routes/" + routeId, tags: { route_id: routeId } },
+      "test-browser",
+    );
+    expect(result.tags?.route_id).toBe(expected);
+    expect(result.extra?.page_path).toBe("/routes/" + encodeURIComponent(routeId));
+  });
+
+  it.each([
+    ["987654321", "987654321"],
+    ["abc", "invalid"],
+    [123456789, "invalid"],
+  ] as const)("API 요청의 노선 ID %s를 페이지보다 우선하고 최종 태그를 %s로 정규화한다", (routeId, expected) => {
+    const original: Event = {
+      tags: { source: "api", route_id: routeId },
+      extra: { api_path: "/api/routes/" + routeId },
+    };
+    const result = eventWithContextFor(
+      original,
+      { path: "/routes/123456789", tags: { route_id: "123456789" } },
+      "test-browser",
+    );
+    expect(result.tags).toEqual({ source: "api", route_id: expected });
+    expect(result.extra).toMatchObject({ api_path: "/api/routes/" + routeId, page_path: "/routes/123456789" });
+    expect(original.tags?.route_id).toBe(routeId);
+  });
+
+  it("노선 정보가 없는 오류에는 노선 태그를 추가하지 않는다", () => {
+    const result = eventWithContextFor<Event>({ tags: { react_error_kind: "caught" } }, { path: "/" }, "test-browser");
+    expect(result.tags).toEqual({ react_error_kind: "caught" });
+  });
+
   it("같은 탭을 새로고침해도 1분 제한을 이어가고 만료하면 다시 허용한다", () => {
     const values = new Map<string, string>();
     const storage = {
