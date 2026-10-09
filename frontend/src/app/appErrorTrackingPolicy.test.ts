@@ -14,12 +14,24 @@ describe("앱 오류 추적 설정", () => {
     expect(isErrorTrackingEnabled(mode, environment, dsn, hostname)).toBe(expected);
   });
 
-  it("앱의 라우트 정의로 현재 화면의 노선을 결정한다", () => {
-    expect(pageErrorContextFor("/routes/123456789")).toEqual({
-      path: "/routes/123456789",
-      tags: { route_id: "123456789" },
+  it.each([
+    ["/routes/123456789", "123456789"],
+    ["/routes/123456789/", "123456789"],
+    ["/routes/123456789//", "123456789"],
+    ["/ROUTES/123456789", "123456789"],
+    ["/routes/%31%32%33", "123"],
+    ["/routes/a%2Fb", "a/b"],
+  ])("%s에서 라우터가 해석한 노선 ID %s를 수집한다", (pathname, routeId) => {
+    expect(pageErrorContextFor(pathname)).toEqual({
+      path: pathname,
+      tags: { route_id: routeId },
     });
-    expect(pageErrorContextFor("/")).toEqual({ path: "/" });
-    expect(pageErrorContextFor("/other")).toEqual({ path: "/other" });
   });
+
+  it.each(["/", "/other", "/routes/", "/routes/123456789/other"])(
+    "%s가 판정보드 경로와 일치하지 않으면 노선 태그를 넣지 않는다",
+    (pathname) => {
+      expect(pageErrorContextFor(pathname)).toEqual({ path: pathname });
+    },
+  );
 });

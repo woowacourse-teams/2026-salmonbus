@@ -1,7 +1,6 @@
+import { matchRoutes } from "react-router";
 import type { PageErrorContext } from "@/shared/error-tracking/eventPolicy";
 import { paths } from "@/shared/routing/paths";
-
-const boardPathPattern = new RegExp("^" + paths.board.replace(":routeId", "([^/]+)") + "/?$");
 
 export function isErrorTrackingEnabled(
   buildMode: string | undefined,
@@ -18,6 +17,6 @@ export function isErrorTrackingEnabled(
 }
 
 export function pageErrorContextFor(pathname: string): PageErrorContext {
-  const routeId = boardPathPattern.exec(pathname)?.[1];
+  const routeId = matchRoutes([{ path: paths.board }], { pathname })?.[0]?.params.routeId;
   return { path: pathname, ...(routeId ? { tags: { route_id: routeId } } : {}) };
 }
