@@ -28,7 +28,7 @@ class WorkerOperationLogTest {
     private final ListAppender<ILoggingEvent> logs = new ListAppender<>();
 
     @BeforeEach void attach() { logs.start(); logger.addAppender(logs); }
-    @AfterEach void detach() { logger.detachAppender(logs); logs.stop(); }
+    @AfterEach void detach() { WorkerOperationLog.setListener(null); logger.detachAppender(logs); logs.stop(); }
 
     @Test
     void 빠른_정상_조회는_로그를_남기지_않고_결과를_그대로_반환한다() {
@@ -156,6 +156,53 @@ class WorkerOperationLogTest {
 
         assertThat(messages()).hasSize(2).allSatisfy(message ->
             assertThat(message).contains("operation=quota", "route=1"));
+    }
+
+    @Test
+    void 정상과_실패_실행을_각각_계측하고_계측_실패는_업무_결과를_바꾸지_않는다() {
+        java.util.ArrayList<Boolean> outcomes = new java.util.ArrayList<>();
+        WorkerOperationLog.setListener((operation, route, elapsed, failed) -> {
+            outcomes.add(failed);
+            throw new IllegalStateException("telemetry failure");
+        });
+        assertThat(recorder.measure("test", 1L, () -> 42)).isEqualTo(42);
+        var failure = new IllegalArgumentException("business failure");
+        assertThatThrownBy(() -> recorder.measure("test", 1L, () -> { throw failure; })).isSameAs(failure);
+        assertThat(outcomes).containsExactly(false, true);
+    }
+
+    @Test
+    void 노선_표시명은_기존_필드_뒤에만_추가한다() {
+        WorkerOperationLog.setListener(new WorkerOperationLog.Listener() {
+            @Override public void completed(String operation, Object route, long elapsed, boolean failed) { }
+            @Override public String context(String operation, Object route) { return " routeName=\"3330\""; }
+        });
+        slowQuery();
+        assertThat(messages()).singleElement().asString()
+            .contains("operation=query route=1 durationMs=1000")
+            .endsWith("transactionOutcome=NOT_OBSERVED routeName=\"3330\"");
+    }
+
+    @Test
+    void 수집_최신성은_외부_트랜잭션_커밋_뒤에만_갱신한다() {
+        AtomicLong calls = new AtomicLong();
+        WorkerOperationLog.setListener(new WorkerOperationLog.Listener() {
+            @Override public void completed(String operation, Object route, long elapsed, boolean failed) { }
+            @Override public void collectionCommitted(String route, long observedAt, int rows) { calls.incrementAndGet(); }
+        });
+        new TransactionTemplate(new TestTransactionManager(false)).executeWithoutResult(status -> {
+            WorkerOperationLog.collectionCommitted("234000886", 123, 0);
+            assertThat(calls.get()).isZero();
+        });
+        assertThat(calls.get()).isEqualTo(1);
+        new TransactionTemplate(new TestTransactionManager(false)).executeWithoutResult(status -> {
+            WorkerOperationLog.collectionCommitted("234000886", 124, 1);
+            status.setRollbackOnly();
+        });
+        assertThat(calls.get()).isEqualTo(1);
+        assertThatThrownBy(() -> new TransactionTemplate(new TestTransactionManager(true)).executeWithoutResult(status ->
+            WorkerOperationLog.collectionCommitted("234000886", 125, 1))).isInstanceOf(TransactionSystemException.class);
+        assertThat(calls.get()).isEqualTo(1);
     }
 
     private void slowQuery() {

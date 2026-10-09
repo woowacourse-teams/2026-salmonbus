@@ -47,7 +47,7 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
 
     /** 성공한 수집 배치 중 발행이 없고 신선도 기준을 만족하는 현재 시도를 읽는다. */
     private static final String SELECT_BATCHES_AWAITING_FORECAST = """
-        SELECT batch.id, batch.route_version_id, version.route_id, batch.response_received_at
+        SELECT /* salmonbus:vehicle_trajectory_query.select_batches_awaiting_forecast */ batch.id, batch.route_version_id, version.route_id, batch.response_received_at
         FROM observation_batch batch
         JOIN route_version version
           ON version.id = batch.route_version_id
@@ -62,7 +62,7 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
 
     /** 최근 처리 범위에서 신선도 기준을 지난 미발행 배치의 가장 오래된 관측 시각. */
     private static final String SELECT_OLDEST_BATCH_LEFT_BEHIND = """
-        SELECT batch.response_received_at
+        SELECT /* salmonbus:vehicle_trajectory_query.select_oldest_batch_left_behind */ batch.response_received_at
         FROM observation_batch batch
         WHERE batch.route_version_id = :routeVersionId
           AND NOT EXISTS (SELECT 1 FROM forecast_publication p WHERE p.source_batch_id = batch.id)
@@ -75,7 +75,7 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
         """;
 
     private static final String SELECT_TARGET_BATCH = """
-        SELECT route_version_id, response_received_at
+        SELECT /* salmonbus:vehicle_trajectory_query.select_target_batch */ route_version_id, response_received_at
         FROM observation_batch
         WHERE id = :observationBatchId
           AND response_received_at IS NOT NULL
@@ -88,7 +88,7 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
      * 시각만으로는 물어본 판이 맨 뒤에 온다는 보장이 없고, 그러면 엉뚱한 판의 궤적이 나간다.
      */
     private static final String SELECT_BATCHES_IN_WINDOW = """
-        SELECT id, response_received_at
+        SELECT /* salmonbus:vehicle_trajectory_query.select_batches_in_window */ id, response_received_at
         FROM observation_batch
         WHERE route_version_id = :routeVersionId
           AND response_received_at IS NOT NULL
@@ -102,7 +102,7 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
      * 스키마가 그 열을 NULL 허용으로 두고 있어서 실제로 생길 수 있다.
      */
     private static final String SELECT_OBSERVATIONS_IN_BATCHES = """
-        SELECT o.id, o.observation_batch_id, o.route_version_id, o.vehicle_id,
+        SELECT /* salmonbus:vehicle_trajectory_query.select_observations_in_batches */ o.id, o.observation_batch_id, o.route_version_id, o.vehicle_id,
                o.vehicle_trip_key, o.passed_stop_order,
                CASE WHEN o.forecast_eligible THEN o.remaining_seats END AS remaining_seats,
                CASE WHEN NOT o.forecast_eligible THEN 'QUALITY_WITHHELD' ELSE o.seat_unknown_reason END AS seat_unknown_reason,
@@ -135,7 +135,7 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
      * 품질은 후보 ID로 확인하여 편도 view 조인이 잔여석 순서의 인덱스 탐색을 깨지 않게 한다.
      */
     private static final String SELECT_MAXIMUM_SEATS_EVER_OBSERVED = """
-        WITH vehicles AS (
+        WITH /* salmonbus:vehicle_trajectory_query.select_maximum_seats_ever_observed */ vehicles AS (
             SELECT unnest(ARRAY[:vehicleIds]::text[]) AS vehicle_id
         )
         SELECT capacity.vehicle_id, capacity.maximum_seats

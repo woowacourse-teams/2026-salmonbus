@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useParams } from "react-router";
 import type { ApiFailure, ApiResult } from "@/shared/api/client";
+import { latestSuccessOf, type PolledResource } from "@/shared/api/polledResource";
 import { fetchBoard } from "@/shared/api/routeForecast.api";
 import { boardMock, liveVehiclesMock } from "@/shared/api/routeForecast.mock";
 import type { Board, Direction, DirectionInfo, LiveVehicles } from "@/shared/api/routeForecast.types";
@@ -27,25 +28,20 @@ function loadBoard(routeId: string, signal: AbortSignal): Promise<ApiResult<Boar
 
 export function VerdictBoardPage() {
   const { routeId = "" } = useParams<{ routeId: string }>();
-  const {
-    result: boardResult,
-    body: boardBody,
-    clock: boardClock,
-    receivedAt: boardReceivedAt,
-  } = usePolledRequest(loadBoard, routeId);
+  const boardResource = usePolledRequest(loadBoard, routeId);
   const liveVehicleState = useLiveVehicles(routeId);
   const [preferredDirection, setPreferredDirection] = useState<Direction | null>(null);
   const [switched, setSwitched] = useState(false);
 
   const state: BoardState = USE_ROUTE_MOCKS
-    ? boardStateOf(boardMock, null, preferredDirection)
-    : boardStateOf(boardBody, boardResult, preferredDirection);
+    ? readyStateOf(boardMock, preferredDirection)
+    : boardStateOf(boardResource, preferredDirection);
   const liveVehicles = USE_ROUTE_MOCKS ? liveVehiclesMock : liveVehicleState.liveVehicles;
   const liveMotionDurationMs = USE_ROUTE_MOCKS ? DEFAULT_LIVE_MOTION_DURATION_MS : liveVehicleState.motionDurationMs;
 
   const screen = boardScreenOf(state);
 
-  useBoardVisitEvents({ routeId, screen, receivedAt: boardReceivedAt, clock: boardClock });
+  useBoardVisitEvents({ routeId, screen, latestSuccess: latestSuccessOf(boardResource) });
 
   function selectDirection(next: Direction) {
     if (state.status === "ready" && next !== state.direction.id) {
@@ -74,18 +70,20 @@ export function VerdictBoardPage() {
   );
 }
 
-function boardStateOf(
-  board: Board | null,
-  result: ApiResult<Board> | null,
-  preferredDirection: Direction | null,
-): BoardState {
-  if (board !== null) {
-    return { status: "ready", board, direction: directionInfoFor(board, preferredDirection) };
+function boardStateOf(resource: PolledResource<Board>, preferredDirection: Direction | null): BoardState {
+  switch (resource.status) {
+    case "pending":
+      return { status: "loading" };
+    case "loadingError":
+      return { status: "error", failure: resource.failure };
+    case "success":
+    case "refetchError":
+      return readyStateOf(resource.latestSuccess.body, preferredDirection);
   }
-  if (result !== null && !result.ok) {
-    return { status: "error", failure: result.failure };
-  }
-  return { status: "loading" };
+}
+
+function readyStateOf(board: Board, preferredDirection: Direction | null): BoardState {
+  return { status: "ready", board, direction: directionInfoFor(board, preferredDirection) };
 }
 
 function boardScreenOf(state: BoardState): BoardScreen {

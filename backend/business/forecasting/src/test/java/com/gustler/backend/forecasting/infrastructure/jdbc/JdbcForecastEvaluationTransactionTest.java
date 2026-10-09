@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gustler.backend.forecasting.application.evaluation.ForecastEvaluationWriter;
+import com.gustler.backend.forecasting.api.ForecastTelemetry;
+import com.gustler.backend.forecasting.domain.evaluation.SettledEvaluation;
 import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesService;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
@@ -137,6 +139,35 @@ class JdbcForecastEvaluationTransactionTest {
             jdbc.sql("DELETE FROM model_deployment WHERE id = ?").param(modelId).update();
             return null;
         });
+    }
+
+    @Test
+    void 관측은_실제_커밋_이후에만_전달하고_재정산은_중복_집계하지_않는다() {
+        initializeSameDayOutcomes();
+        AtomicInteger count = new AtomicInteger();
+        evaluationWriter.setTelemetry(new ForecastTelemetry() {
+            @Override public void settled(List<SettledEvaluation> results) {
+                count.addAndGet(results.size());
+                results.forEach(result -> {
+                    assertThat(result.diagnostics()).isNotNull();
+                    assertThat(result.diagnostics().routeName()).isNotBlank();
+                    assertThat(result.diagnostics().stopName()).isNotBlank();
+                    assertThat(result.diagnostics().modelDeploymentId()).isEqualTo(modelId);
+                });
+            }
+        });
+        try {
+            new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                evaluationWriter.complete(List.of(completedEvaluation()));
+                assertThat(count).hasValue(0);
+                status.setRollbackOnly();
+            });
+            assertThat(count).hasValue(0);
+            evaluationWriter.complete(List.of(completedEvaluation()));
+            assertThat(count).hasValue(1);
+            evaluationWriter.complete(List.of(completedEvaluation()));
+            assertThat(count).hasValue(1);
+        } finally { evaluationWriter.setTelemetry(ForecastTelemetry.NONE); }
     }
 
     @Test

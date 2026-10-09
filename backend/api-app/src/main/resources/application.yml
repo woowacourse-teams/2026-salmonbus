@@ -21,6 +21,8 @@ spring:
     username: ${DB_USERNAME:salmonbus}
     password: ${DB_PASSWORD:salmonbus}
     hikari:
+      data-source-properties:
+        ApplicationName: salmonbus-api
       maximum-pool-size: 5
 
   jpa:

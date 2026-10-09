@@ -1,5 +1,9 @@
 package com.gustler.backend.forecasting.application.publication;
 
+import com.gustler.backend.forecasting.api.ForecastTelemetry;
+import com.gustler.backend.forecasting.application.AfterCommitTelemetry;
+import org.springframework.beans.factory.annotation.Autowired;
+
 import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesService;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluationRepository;
@@ -36,6 +40,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class ForecastBatchWriter {
+    private ForecastTelemetry telemetry = ForecastTelemetry.NONE;
+
+    @Autowired(required = false)
+    public void setTelemetry(ForecastTelemetry telemetry) { this.telemetry = telemetry; }
+
 
     private static final Logger log = LoggerFactory.getLogger(ForecastBatchWriter.class);
 
@@ -89,6 +98,8 @@ public class ForecastBatchWriter {
             .map(prediction -> ForecastEvaluation.pending(prediction.vehicleObservationId(), prediction.targetStopOrder()))
             .toList());
         collectionInputs.confirmInput(batch.observationBatchId(), generatedAt);
+        AfterCommitTelemetry.record(() -> telemetry.published(batch.routeId(), batch.routeVersionId(),
+            batch.responseReceivedAt(), predictions.size()));
         return predictions.size();
     }
 

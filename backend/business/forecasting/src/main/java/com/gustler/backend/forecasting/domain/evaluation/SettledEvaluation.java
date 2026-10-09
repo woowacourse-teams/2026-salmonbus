@@ -20,8 +20,20 @@ public record SettledEvaluation(
     boolean usableForCalibration,
     String predictionVehicleId,
     Integer predictionRemainingSeats,
-    boolean targetBoardingAllowed
+    boolean targetBoardingAllowed,
+    EvaluationDiagnostics diagnostics
 ) {
+
+    /** 기존 도메인 호출자는 관측용 부가 정보를 요구하지 않는다. */
+    public SettledEvaluation(long routeId, long modelDeploymentId, long routeVersionId, long vehicleObservationId,
+        int targetStopOrder, int stopsToTarget, double rawFullChance, ScoringState state,
+        Long arrivalObservationId, Integer seatsOnArrival, Instant arrivedAt, Instant scoredAt,
+        boolean usableForCalibration, String predictionVehicleId, Integer predictionRemainingSeats,
+        boolean targetBoardingAllowed) {
+        this(routeId, modelDeploymentId, routeVersionId, vehicleObservationId, targetStopOrder, stopsToTarget, rawFullChance,
+            state, arrivalObservationId, seatsOnArrival, arrivedAt, scoredAt, usableForCalibration,
+            predictionVehicleId, predictionRemainingSeats, targetBoardingAllowed, null);
+    }
 
     public SettledEvaluation {
         Objects.requireNonNull(state, "평가 상태가 필요하다");

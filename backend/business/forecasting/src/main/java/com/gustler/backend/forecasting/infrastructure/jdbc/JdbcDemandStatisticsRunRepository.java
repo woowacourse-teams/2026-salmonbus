@@ -25,7 +25,7 @@ public class JdbcDemandStatisticsRunRepository implements DemandStatisticsRunRep
     private static final String NO_SLOT = "";
 
     private static final String SELECT = """
-        SELECT run_id, quality_revision, phase, data_until, input_until_id, vehicle_cursor, cursor_id,
+        SELECT /* salmonbus:demand_statistics_run.select */ run_id, quality_revision, phase, data_until, input_until_id, vehicle_cursor, cursor_id,
                CASE WHEN hour_cursor = '-infinity' THEN NULL ELSE hour_cursor END AS hour_cursor,
                stop_cursor, slot_cursor,
                CASE WHEN day_cursor = '-infinity' THEN NULL ELSE day_cursor END AS day_cursor,
@@ -34,7 +34,7 @@ public class JdbcDemandStatisticsRunRepository implements DemandStatisticsRunRep
         """;
 
     private static final String UPSERT = """
-        INSERT INTO stop_demand_run(route_version_id, run_id, quality_revision, phase, data_until, input_until_id,
+        INSERT /* salmonbus:demand_statistics_run.upsert */ INTO stop_demand_run(route_version_id, run_id, quality_revision, phase, data_until, input_until_id,
             vehicle_cursor, cursor_id, hour_cursor, stop_cursor, slot_cursor, day_cursor, completed_at)
         VALUES (:version, :runId, :qualityRevision, :phase, :dataUntil, :inputUntilId,
             :vehicleCursor, :cursorId, COALESCE(CAST(:hourCursor AS timestamptz), '-infinity'::timestamptz),

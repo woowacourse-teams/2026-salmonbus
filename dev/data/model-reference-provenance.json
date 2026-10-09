@@ -1,0 +1,23 @@
+{
+  "status": "ok",
+  "checkedAt": "2026-10-07T04:37:47.325889+00:00",
+  "identityDigest": "f9d1b6d76d5ba4ef4b909a8903337cb9e7ba74883c7fe270432650f3f2fd80bb",
+  "files": {
+    "manifest.json": {
+      "sha256": "392fd8ac62e0352eef02a4fe276d68745abe11510f0b7fa4aa933b5ca9820b4d",
+      "size": 3076
+    },
+    "weights.safetensors": {
+      "sha256": "9211e027914c5b41589dc5c8bf404edf2567b464ce1eafebf6e1b5c9f0b6849d",
+      "size": 810096
+    },
+    "route-reference.json": {
+      "sha256": "58b02e37dfe7b2b515effeed73104a49d816b73d8a9ab2dcb3ae6af1edffb23e",
+      "size": 89021
+    }
+  },
+  "artifactIdentityProven": false,
+  "source": "Configured production bundle snapshot read via SSH; identity also matched ACTIVE deployment in read-only DB inspection",
+  "purpose": "Pinned local development reference; no runtime production connection",
+  "capturedArtifactNotLoadedBytesProof": true
+}

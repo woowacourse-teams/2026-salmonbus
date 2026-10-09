@@ -6,6 +6,7 @@ import com.gustler.backend.worker.scheduling.AdaptiveCollectionTrigger;
 import com.gustler.backend.worker.scheduling.CollectionScheduler;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,15 +66,18 @@ public class CollectionConfig {
             warnIfOverDailyLimit();
             ScheduledTaskRegistrar registrar = new ScheduledTaskRegistrar();
             registrar.setTaskScheduler(collectionTaskScheduler);
-            registrar.addTriggerTask(scheduler::collectAllRoutes, new AdaptiveCollectionTrigger(clock));
+            registrar.addTriggerTask(scheduler::collectAllRoutes, new AdaptiveCollectionTrigger(clock, properties.fixedInterval()));
             return registrar;
         }
 
         private void warnIfOverDailyLimit() {
             final int routeCount = properties.routeIds().size();
-            if (!CollectionTiming.fitsDailyLimit(routeCount, dailyLimit)) {
+            final long estimatedCalls = properties.fixedInterval() == null
+                ? CollectionTiming.dailyCallsFor(routeCount)
+                : (long) routeCount * (Duration.ofDays(1).dividedBy(properties.fixedInterval()) + 1);
+            if (estimatedCalls > dailyLimit) {
                 log.error("이 주기로 {}개 노선을 돌면 하루 {}회라 한도 {}회를 넘는다. 주기표나 노선 수를 고쳐라.",
-                    routeCount, CollectionTiming.dailyCallsFor(routeCount), dailyLimit);
+                    routeCount, estimatedCalls, dailyLimit);
             }
         }
     }

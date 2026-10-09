@@ -85,6 +85,21 @@ class GbisLocationSourceTest {
     }
 
     @Test
+    void HTTP_상태를_수집_진단에_남기고_오류_본문_분류는_유지한다() {
+        org.slf4j.MDC.put("collectionAttemptId", "test-attempt");
+        try {
+            openApi.expect(requestTo(containsString(BUS_LOCATION_PATH)))
+                .andRespond(withServerError().body("not-json"));
+            assertThat(source.read(ROUTE_3330)).isInstanceOf(UnreadableResponse.class);
+            assertThat(org.slf4j.MDC.get("collectionHttpStatus")).isEqualTo("500");
+            assertThat(org.slf4j.MDC.get("collectionTransport")).isEqualTo("RECEIVED");
+            openApi.verify();
+        } finally {
+            org.slf4j.MDC.clear();
+        }
+    }
+
+    @Test
     void Open_API를_부를_때_서비스키와_노선ID와_JSON_형식을_보낸다() {
         // given
         openApi.expect(requestTo(containsString(BUS_LOCATION_PATH)))

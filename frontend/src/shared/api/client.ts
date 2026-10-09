@@ -69,7 +69,6 @@ export function resetApiFailureReporter(): void {
 
 export interface RequestOptions {
   signal?: AbortSignal;
-  timeoutMs?: number;
   errorContext?: RequestErrorContext;
 }
 
@@ -109,7 +108,7 @@ async function executeRequest<T>(url: string, options: RequestOptions): Promise<
   const controller = new AbortController();
   const forwardAbort = () => controller.abort(options.signal?.reason);
   options.signal?.addEventListener("abort", forwardAbort, { once: true });
-  const timeout = setTimeout(() => controller.abort(TIMEOUT_REASON), options.timeoutMs ?? REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(TIMEOUT_REASON), REQUEST_TIMEOUT_MS);
 
   let response: Response | null = null;
   try {

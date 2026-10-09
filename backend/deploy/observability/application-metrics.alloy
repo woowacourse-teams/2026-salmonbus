@@ -1,0 +1,31 @@
+// 기존 /etc/alloy/config.alloy에 병합한다. 기존 로그/node 수집과 remote_write는 유지한다.
+// 2026-10-02 운영 확인: user_stack이 higgs95 Grafana로 전송한다.
+// 별도의 인증 정보나 writer를 만들지 않는다. 다른 환경에서는 목적지를 먼저 확인한다.
+prometheus.scrape "salmonbus_application" {
+  targets = [
+    {
+      "__address__" = "127.0.0.1:8082",
+      "job"         = "salmonbus/api",
+      "instance"    = constants.hostname,
+    },
+    {
+      "__address__" = "127.0.0.1:8081",
+      "job"         = "salmonbus/worker",
+      "instance"    = constants.hostname,
+    },
+  ]
+  metrics_path    = "/actuator/prometheus"
+  scrape_interval = "30s"
+  scrape_timeout  = "5s"
+  forward_to     = [prometheus.relabel.salmonbus_application.receiver]
+}
+
+prometheus.relabel "salmonbus_application" {
+  // HTTP/JVM/DB 풀/프로세스와 수집 상태만 보낸다. 변경 시 사용 중인 패널을 함께 점검한다.
+  rule {
+    source_labels = ["__name__"]
+    regex         = "salmonbus_.*|up|scrape_.*|http_server_requests_seconds_.*|hikaricp_.*|jdbc_connections_.*|jvm_.*|process_.*|system_cpu_.*|system_load_average_1m"
+    action        = "keep"
+  }
+  forward_to = [prometheus.remote_write.user_stack.receiver]
+}

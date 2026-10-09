@@ -1,0 +1,27 @@
+plugins {
+    id 'java'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly 'org.wiremock:wiremock-standalone:3.13.2'
+    testImplementation 'org.wiremock:wiremock-standalone:3.13.2'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.12.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.12.2'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    systemProperty 'routes.file', file('../data/routes.json').absolutePath
+}
+
+tasks.named('jar') {
+    archiveFileName = 'local-gbis-replay.jar'
+}

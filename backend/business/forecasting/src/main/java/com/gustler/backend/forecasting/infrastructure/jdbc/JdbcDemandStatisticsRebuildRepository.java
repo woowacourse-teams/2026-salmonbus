@@ -19,7 +19,7 @@ import org.springframework.stereotype.Repository;
 public class JdbcDemandStatisticsRebuildRepository implements DemandStatisticsRebuildRepository {
 
     private static final String SELECT = """
-        SELECT progress.request_id, progress.quality_revision, progress.data_until, progress.input_until_id,
+        SELECT /* salmonbus:demand_statistics_rebuild.select */ progress.request_id, progress.quality_revision, progress.data_until, progress.input_until_id,
                progress.observation_until_id, progress.cursor_id, progress.phase,
                scan.route_version_id IS NOT NULL AS has_scan, scan.batch_until_id, scan.after_at,
                scan.after_batch_id, scan.group_end_at, scan.group_end_id
@@ -30,7 +30,7 @@ public class JdbcDemandStatisticsRebuildRepository implements DemandStatisticsRe
         """;
 
     private static final String UPSERT_PROGRESS = """
-        INSERT INTO stop_demand_rebuild_progress(route_version_id, vehicle_id, request_id, quality_revision,
+        INSERT /* salmonbus:demand_statistics_rebuild.upsert_progress */ INTO stop_demand_rebuild_progress(route_version_id, vehicle_id, request_id, quality_revision,
             data_until, input_until_id, observation_until_id, cursor_id, phase)
         VALUES (:version, :vehicle, :requestId, :qualityRevision, :dataUntil, :inputUntilId, :observationUntilId,
             :cursorId, :phase)
@@ -41,7 +41,7 @@ public class JdbcDemandStatisticsRebuildRepository implements DemandStatisticsRe
         """;
 
     private static final String UPSERT_SCAN = """
-        INSERT INTO stop_demand_rebuild_scan(route_version_id, vehicle_id, batch_until_id, after_at, after_batch_id,
+        INSERT /* salmonbus:demand_statistics_rebuild.upsert_scan */ INTO stop_demand_rebuild_scan(route_version_id, vehicle_id, batch_until_id, after_at, after_batch_id,
             group_end_at, group_end_id)
         VALUES (:version, :vehicle, :batchUntilId, :afterAt, :afterBatchId, :groupEndAt, :groupEndId)
         ON CONFLICT (route_version_id, vehicle_id) DO UPDATE SET batch_until_id = EXCLUDED.batch_until_id,

@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.slf4j.MDC;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -68,7 +69,7 @@ public class GbisApiCaller {
         String keyAlias
     ) {
         try {
-            byte[] raw = gbisRestClient.get()
+            var response = gbisRestClient.get()
                 .uri(builder -> builder
                     .path(path)
                     .queryParam("serviceKey", "{serviceKey}")
@@ -77,11 +78,22 @@ public class GbisApiCaller {
                     .build(properties.serviceKeyOf(keyAlias), routeId))
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, KEEP_ERROR_BODY)
-                .body(byte[].class);
-            return interpret(decode(raw));
+                .toEntity(byte[].class);
+            diagnostic("collectionHttpStatus", Integer.toString(response.getStatusCode().value()));
+            diagnostic("collectionTransport", "RECEIVED");
+            return interpret(decode(response.getBody()));
         } catch (RestClientException e) {
+            diagnostic("collectionTransport", e.getClass().getSimpleName());
+            Throwable cause = e;
+            var seen = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable, Boolean>());
+            while (cause.getCause() != null && seen.add(cause.getCause())) { cause = cause.getCause(); }
+            diagnostic("collectionTransportCause", cause.getClass().getSimpleName());
             return new NotReceived(e.getMessage());
         }
+    }
+
+    private static void diagnostic(String key, String value) {
+        if (MDC.get("collectionAttemptId") != null) { MDC.put(key, value); }
     }
 
     private String decode(

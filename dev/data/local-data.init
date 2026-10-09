@@ -1,0 +1,34 @@
+gradle.projectsEvaluated {
+    def worker = gradle.rootProject.project(':worker-app')
+    worker.sourceSets.create('localData') {
+        java.srcDirs = ['/local/data/java']
+        compileClasspath += worker.sourceSets.main.runtimeClasspath
+        runtimeClasspath += worker.sourceSets.main.runtimeClasspath
+    }
+    worker.tasks.register('prepareLocalData', JavaExec) {
+        dependsOn worker.tasks.named('localDataClasses')
+        classpath = worker.sourceSets.localData.runtimeClasspath
+        mainClass = 'com.gustler.localdata.LocalData'
+        args '/local/data/routes.json', '/local/models/reference-20261002'
+        if (worker.findProperty('recoverCollectorOnly') == 'true') {
+            args '--recover-collector-only'
+        }
+    }
+    worker.tasks.register('verifyLocalGbis', JavaExec) {
+        dependsOn worker.tasks.named('localDataClasses')
+        classpath = worker.sourceSets.localData.runtimeClasspath
+        mainClass = 'com.gustler.localdata.GbisContractCheck'
+        args worker.findProperty('localScenario') ?: 'normal'
+    }
+    worker.tasks.register('resetLocalData', JavaExec) {
+        dependsOn worker.tasks.named('localDataClasses')
+        classpath = worker.sourceSets.localData.runtimeClasspath
+        mainClass = 'com.gustler.localdata.LocalData'
+        args '/local/data/routes.json', '/local/models/reference-20261002', '--reset-generated'
+    }
+    worker.tasks.register('verifyReferenceModel', JavaExec) {
+        dependsOn worker.tasks.named('localDataClasses')
+        classpath = worker.sourceSets.localData.runtimeClasspath
+        mainClass = 'com.gustler.localdata.ModelParityCheck'
+    }
+}

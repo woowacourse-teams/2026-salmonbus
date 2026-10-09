@@ -20,7 +20,40 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public final class WorkerOperationLog {
     private static final Recorder RECORDER = new Recorder(System::nanoTime);
 
+    public interface Listener {
+        void completed(String operation, Object route, long nanos, boolean failed);
+        default void collectionAttempted(String sourceRoute, long epochSecond) { }
+        default void collectionCommitted(String sourceRoute, long observedEpochSecond, int usableRows) { }
+        default String context(String operation, Object route) { return ""; }
+    }
+    private static final Listener NONE = (operation, route, nanos, failed) -> { };
+    private static volatile Listener listener = NONE;
+    public static void setListener(Listener value) { listener = value == null ? NONE : value; }
+    public static void clearListener(Listener value) { if (listener == value) { listener = NONE; } }
+
+    private static String context(String operation, Object route) {
+        try { return listener.context(operation, route); }
+        catch (RuntimeException ignored) { return ""; }
+    }
     private WorkerOperationLog() { }
+    public static String routeContext(String operation, Object route) { return context(operation, route); }
+    public static void collectionAttempted(String sourceRoute, long epochSecond) {
+        try { listener.collectionAttempted(sourceRoute, epochSecond); } catch (RuntimeException ignored) { }
+    }
+
+    /** 저장 메서드 반환 후 호출한다. 외부 트랜잭션이 있으면 커밋까지 기다린다. */
+    public static void collectionCommitted(String sourceRoute, long observedEpochSecond, int usableRows) {
+        Runnable record = () -> {
+            try { listener.collectionCommitted(sourceRoute, observedEpochSecond, usableRows); }
+            catch (RuntimeException ignored) { /* 진단 실패가 수집 결과를 바꾸지 않는다. */ }
+        };
+        if (TransactionSynchronizationManager.isActualTransactionActive()
+            && TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override public void afterCommit() { record.run(); }
+            });
+        } else { record.run(); }
+    }
 
     public static <T> T measure(String operation, Object route, Supplier<T> action) {
         return RECORDER.measure(operation, route, action);
@@ -52,6 +85,7 @@ public final class WorkerOperationLog {
             boolean outermost = reported.get() == null;
             if (outermost) { reported.set(Collections.newSetFromMap(new IdentityHashMap<>())); }
             long start = nanoTime.getAsLong();
+            boolean failed = false;
             try {
                 T result = action.get();
                 long elapsed = nanoTime.getAsLong() - start;
@@ -61,23 +95,29 @@ public final class WorkerOperationLog {
                 }
                 return result;
             } catch (RuntimeException failure) {
+                failed = true;
                 Set<Throwable> chain = Collections.newSetFromMap(new IdentityHashMap<>());
-                Throwable root = failure;
+                Throwable primary = failure instanceof org.springframework.transaction.TransactionSystemException tx
+                    && tx.getApplicationException() != null ? tx.getApplicationException() : failure;
+                Throwable root = primary;
                 String sqlState = "-";
-                for (Throwable cause = failure; cause != null && chain.add(cause); cause = cause.getCause()) {
+                for (Throwable cause = primary; cause != null && chain.add(cause); cause = cause.getCause()) {
                     root = cause;
                     if (cause instanceof SQLException sql && sql.getSQLState() != null) {
                         sqlState = sql.getSQLState();
                     }
                 }
                 if (Collections.disjoint(reported.get(), chain)) {
-                    log.error("event=worker_operation status=FAILED operation={} route={} durationMs={} sqlState={} exceptionType={} rootCause={}",
+                    log.error("event=worker_operation status=FAILED operation={} route={} durationMs={} sqlState={} exceptionType={} rootCause={}{}",
                         operation, route, millis(nanoTime.getAsLong() - start), sqlState,
-                        failure.getClass().getSimpleName(), root.getClass().getSimpleName());
+                        failure.getClass().getSimpleName(), root.getClass().getSimpleName(), context(operation, route));
                 }
                 reported.get().addAll(chain);
+                reported.get().add(failure);
                 throw failure;
             } finally {
+                try { listener.completed(operation, route, nanoTime.getAsLong() - start, failed); }
+                catch (RuntimeException ignored) { /* 계측 실패는 업무 결과를 바꾸지 않는다. */ }
                 if (outermost) { reported.remove(); }
             }
         }
@@ -104,8 +144,8 @@ public final class WorkerOperationLog {
         }
 
         private void writeSlow(String operation, Object route, long elapsed, int rows, String outcome) {
-            log.warn("event=worker_operation status=SLOW operation={} route={} durationMs={} returnedRows={} transactionOutcome={}",
-                operation, route, millis(elapsed), rows, outcome);
+            log.warn("event=worker_operation status=SLOW operation={} route={} durationMs={} returnedRows={} transactionOutcome={}{}",
+                operation, route, millis(elapsed), rows, outcome, context(operation, route));
         }
 
         synchronized void warn(String operation, Object route, String reason) {
@@ -117,7 +157,7 @@ public final class WorkerOperationLog {
                 warnings.remove(warnings.keySet().iterator().next());
             }
             warnings.put(key, now);
-            log.warn("event=worker_operation status=DEFERRED operation={} route={} reason={}", operation, route, reason);
+            log.warn("event=worker_operation status=DEFERRED operation={} route={} reason={}{}", operation, route, reason, context(operation, route));
         }
 
         synchronized void recovered(String operation, Object route) {

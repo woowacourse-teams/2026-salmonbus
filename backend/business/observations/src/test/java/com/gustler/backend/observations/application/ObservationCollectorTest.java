@@ -120,6 +120,30 @@ class ObservationCollectorTest {
     }
 
     @Test
+    void 실제_FK_실패에_원본_정류장_증거를_남기고_관측은_롤백한다() {
+        given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME,
+            List.of(busAt(VEHICLE_204000206, 1, "206000564"))));
+        var diagnostics = new ListAppender<ILoggingEvent>();
+        diagnostics.start();
+        Logger logger = (Logger) LoggerFactory.getLogger(CollectionAttemptLog.class);
+        logger.addAppender(diagnostics);
+        try {
+            assertThatThrownBy(() -> collector.collectOnce(ROUTE_3330)).isInstanceOf(RuntimeException.class);
+            assertThat(observationCount()).isZero();
+            assertThat(onlyBatchColumn("outcome", String.class)).isEqualTo("DISPATCHING");
+            assertThat(diagnostics.list).hasSize(1);
+            assertThat(diagnostics.list.getFirst().getFormattedMessage()).contains(
+                "reason=DB_REFERENCE_MISMATCH", "sqlState=23503", "resultCommitConfirmed=false",
+                "sourceReference=MATCHED", "responseRouteId=" + ROUTE_3330,
+                "responseStopOrder=1", "responseStopId=206000564");
+            then(locationSource).should().read(ROUTE_3330, GbisKey.PRIMARY);
+        } finally {
+            logger.detachAppender(diagnostics);
+            diagnostics.stop();
+        }
+    }
+
+    @Test
     void 판본이_없던_노선은_상류에서_받아_판본을_연다() {
         // when
         collector.collectOnce(ROUTE_3330);

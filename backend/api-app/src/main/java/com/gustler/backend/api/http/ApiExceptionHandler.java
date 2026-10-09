@@ -3,8 +3,6 @@ package com.gustler.backend.api.http;
 import com.gustler.backend.api.error.ApiException;
 import com.gustler.backend.api.error.ErrorCode;
 import com.gustler.backend.api.error.ErrorResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -27,7 +25,6 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 @RestControllerAdvice
 public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ErrorResponse> handleApiException(
@@ -38,7 +35,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         exception.retryAfter().ifPresent(retryAfter ->
             headers.set(HttpHeaders.RETRY_AFTER, String.valueOf(retryAfter.toSeconds())));
 
-        return new ResponseEntity<>(bodyOf(code, exception.getMessage()), headers, code.status());
+        return new ResponseEntity<>(bodyOf(code, exception.getMessage(), code.status().value(), exception), headers, code.status());
     }
 
     @ExceptionHandler({
@@ -48,14 +45,14 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ErrorResponse> handleDatabaseUnavailable(
         RuntimeException exception
     ) {
-        return respond(ErrorCode.SERVICE_UNAVAILABLE);
+        return respond(ErrorCode.SERVICE_UNAVAILABLE, exception);
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(
         Exception exception
     ) {
-        return respond(ErrorCode.INTERNAL_ERROR);
+        return respond(ErrorCode.INTERNAL_ERROR, exception);
     }
 
     /**
@@ -74,15 +71,15 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         ErrorCode code = ErrorCode.of(status);
 
         return new ResponseEntity<>(
-            bodyOf(code, code.message()),
+            bodyOf(code, code.message(), status.value(), exception),
             ErrorHeaders.of(headers, MediaType.APPLICATION_JSON),
             status);
     }
 
     private ResponseEntity<ErrorResponse> respond(
-        ErrorCode code
+        ErrorCode code, Throwable exception
     ) {
-        return new ResponseEntity<>(bodyOf(code, code.message()), errorHeaders(), code.status());
+        return new ResponseEntity<>(bodyOf(code, code.message(), code.status().value(), exception), errorHeaders(), code.status());
     }
 
     /**
@@ -96,14 +93,10 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
      */
     private ErrorResponse bodyOf(
         ErrorCode code,
-        String message
+        String message, int status, Throwable failure
     ) {
         String requestId = RequestId.ofCurrentRequest();
-        if (code.status().is5xxServerError()) {
-            log.warn("오류로 응답한다. 오류코드={} requestId={}", code.name(), requestId);
-        } else {
-            log.info("오류로 응답한다. 오류코드={} requestId={}", code.name(), requestId);
-        }
+        ApiFailureLog.write(status, code, requestId, failure);
 
         return new ErrorResponse(code, message, requestId);
     }

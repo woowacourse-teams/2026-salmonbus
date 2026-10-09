@@ -108,7 +108,7 @@ class ObservationCollectorKeyTest {
 
     @ParameterizedTest
     @MethodSource("rejectionsAndReasonCodes")
-    void 키를_빼면_슬롯과_사유와_채우기_전_사용량만_오류_로그로_남긴다(
+    void 키를_빼면_슬롯과_사유와_채우기_전_사용량만_경고_로그로_남긴다(
         ObservationResponse response,
         String reasonCode
     ) {
@@ -122,8 +122,9 @@ class ObservationCollectorKeyTest {
         collector.collectOnce(ROUTE_3330);
 
         // then
-        assertThat(errorMessages()).containsExactly(
+        assertThat(messagesAt(Level.WARN)).containsExactly(
             "포털이 GBIS 키를 거절해 그 키를 한국 자정까지 쓰지 않는다. 슬롯=b 사유=" + reasonCode + " 채우기 전 사용량=764");
+        assertThat(messagesAt(Level.ERROR)).isEmpty();
     }
 
     private static Stream<Arguments> rejectionsAndReasonCodes() {
@@ -164,9 +165,9 @@ class ObservationCollectorKeyTest {
         return (Logger) LoggerFactory.getLogger(ObservationCollector.class);
     }
 
-    private List<String> errorMessages() {
+    private List<String> messagesAt(Level level) {
         return collectorLog.list.stream()
-            .filter(event -> event.getLevel() == Level.ERROR)
+            .filter(event -> event.getLevel() == level)
             .map(ILoggingEvent::getFormattedMessage)
             .toList();
     }

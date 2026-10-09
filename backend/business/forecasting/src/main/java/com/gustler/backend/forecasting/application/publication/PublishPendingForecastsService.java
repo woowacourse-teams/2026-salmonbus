@@ -25,10 +25,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
+import com.gustler.backend.forecasting.api.ForecastTelemetry;
 
 @Component
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class PublishPendingForecastsService implements PublishPendingForecasts {
+    private ForecastTelemetry telemetry = ForecastTelemetry.NONE;
+    @Autowired(required = false)
+    public void setTelemetry(ForecastTelemetry telemetry) { this.telemetry = telemetry; }
 
     private static final Logger log = LoggerFactory.getLogger(PublishPendingForecastsService.class);
 
@@ -153,6 +158,11 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
         List<PendingForecastBatch> batches = WorkerOperationLog.measure("forecast_pending_batches", routeVersionId,
             () -> vehicleTrajectoryQuery.findBatchesAwaitingForecast(routeVersionId, notBefore,
                 properties.batchLimit()));
+        // 기존 처리 대상 조회를 재사용한다. 저장 실패 때도 대상이 있었다는 사실을 남긴다.
+        Instant oldest = batches.stream().map(PendingForecastBatch::responseReceivedAt)
+            .min(Instant::compareTo).orElse(null);
+        try { telemetry.pending(routeVersionId, oldest); }
+        catch (RuntimeException ignored) { /* 계측 실패는 발행을 막지 않는다. */ }
         for (PendingForecastBatch batch : batches) {
             int saved = WorkerOperationLog.measure("forecast_write_and_commit", routeVersionId,
                 () -> forecastBatchWriter.writeForecastsOf(batch, stops, runtime));

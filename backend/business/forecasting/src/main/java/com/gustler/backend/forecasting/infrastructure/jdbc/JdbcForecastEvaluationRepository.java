@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
+import com.gustler.backend.forecasting.domain.evaluation.EvaluationDiagnostics;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluationRepository;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import com.gustler.backend.forecasting.domain.evaluation.ScoringState;
@@ -28,13 +29,13 @@ import org.springframework.transaction.annotation.Propagation;
 public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepository {
 
     private static final String INSERT_PENDING = """
-        INSERT INTO forecast_evaluation (vehicle_observation_id, target_stop_order, route_version_id)
+        INSERT /* salmonbus:forecast_evaluation.insert_pending */ INTO forecast_evaluation (vehicle_observation_id, target_stop_order, route_version_id)
         VALUES (?, ?, ?)
         ON CONFLICT (vehicle_observation_id, target_stop_order) DO NOTHING
         """;
 
     private static final String SELECT_PENDING_KEYS = """
-        SELECT vehicle_observation_id, target_stop_order
+        SELECT /* salmonbus:forecast_evaluation.select_pending_keys */ vehicle_observation_id, target_stop_order
         FROM forecast_evaluation
         WHERE scoring_state = 'PENDING' AND route_version_id = :routeVersionId
           AND (vehicle_observation_id, target_stop_order) > (:afterObservationId, :afterStopOrder)
@@ -43,7 +44,7 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
         """;
 
     private static final String SELECT_PENDING = """
-        SELECT forecast.vehicle_observation_id, forecast.target_stop_order, forecast.route_version_id,
+        SELECT /* salmonbus:forecast_evaluation.select_pending */ forecast.vehicle_observation_id, forecast.target_stop_order, forecast.route_version_id,
                source.vehicle_id, forecast.stops_to_target, batch.response_received_at,
                forecast.generated_at, source.quality_direction
         FROM forecast_evaluation evaluation
@@ -61,7 +62,7 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
 
     /** 근거의 정류장 순번은 원 관측의 stop_order다. 평가 판정에 사용하는 passed_stop_order와 구분한다. */
     private static final String COMPLETE = """
-        UPDATE forecast_evaluation evaluation
+        UPDATE /* salmonbus:forecast_evaluation.complete */ forecast_evaluation evaluation
         SET scoring_state = :scoringState,
             arrival_observation_id = :arrivalObservationId,
             seats_on_arrival = :seatsOnArrival,
@@ -77,6 +78,9 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
             arrival_quality_direction = arrival.quality_direction
         FROM seat_forecast forecast
         JOIN route_version version ON version.id = forecast.route_version_id
+        JOIN route route_info ON route_info.id = version.route_id
+        LEFT JOIN route_stop target_stop ON target_stop.route_version_id = forecast.route_version_id
+          AND target_stop.stop_order = forecast.target_stop_order
         JOIN route_data_quality quality ON quality.route_id = version.route_id
         JOIN forecast_eligible_observation source ON source.id = forecast.vehicle_observation_id
         LEFT JOIN forecast_eligible_observation arrival ON arrival.id = :arrivalObservationId
@@ -94,16 +98,17 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
                   evaluation.scoring_state, evaluation.scored_at,
                   forecast.quality_revision = quality.quality_revision AS usable_for_calibration,
                   source.vehicle_id AS prediction_vehicle_id, source.remaining_seats AS prediction_remaining_seats,
-                  COALESCE((SELECT target_stop.boarding_allowed FROM route_stop target_stop
-                      WHERE target_stop.route_version_id = forecast.route_version_id
-                        AND target_stop.stop_order = forecast.target_stop_order), false) AS target_boarding_allowed
+                  COALESCE(target_stop.boarding_allowed, false) AS target_boarding_allowed,
+                  route_info.display_name AS route_name, target_stop.name AS stop_name,
+                  target_stop.stop_id, target_stop.direction, forecast.model_deployment_id,
+                  forecast.expected_seats, forecast.seat_full_chance
         """.formatted(EligibleObservationSql.ARRIVAL_MATCHES_SOURCE);
 
     private static final int SETTLEMENT_BATCH_SIZE = 100;
 
     /** 같은 관측을 쓰는 여러 예보의 품질 조회를 묶음 안에서 한 번만 수행한다. */
     private static final String COMPLETE_BATCH = """
-        WITH input(vehicleObservationId, targetStopOrder, arrivalObservationId, scoringState, seatsOnArrival, scoredAt)
+        WITH /* salmonbus:forecast_evaluation.complete_batch */ input(vehicleObservationId, targetStopOrder, arrivalObservationId, scoringState, seatsOnArrival, scoredAt)
             AS MATERIALIZED (VALUES %s),
         eligible AS MATERIALIZED (
             SELECT observation.* FROM forecast_eligible_observation observation
@@ -131,6 +136,9 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
         JOIN seat_forecast forecast ON forecast.vehicle_observation_id = input.vehicleObservationId
          AND forecast.target_stop_order = input.targetStopOrder
         JOIN route_version version ON version.id = forecast.route_version_id
+        JOIN route route_info ON route_info.id = version.route_id
+        LEFT JOIN route_stop target_stop ON target_stop.route_version_id = forecast.route_version_id
+          AND target_stop.stop_order = forecast.target_stop_order
         JOIN route_data_quality quality ON quality.route_id = version.route_id
         JOIN eligible source ON source.id = forecast.vehicle_observation_id
         LEFT JOIN eligible arrival ON arrival.id = input.arrivalObservationId
@@ -148,9 +156,10 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
                   evaluation.scoring_state, evaluation.scored_at,
                   forecast.quality_revision = quality.quality_revision AS usable_for_calibration,
                   source.vehicle_id AS prediction_vehicle_id, source.remaining_seats AS prediction_remaining_seats,
-                  COALESCE((SELECT target_stop.boarding_allowed FROM route_stop target_stop
-                      WHERE target_stop.route_version_id = forecast.route_version_id
-                        AND target_stop.stop_order = forecast.target_stop_order), false) AS target_boarding_allowed
+                  COALESCE(target_stop.boarding_allowed, false) AS target_boarding_allowed,
+                  route_info.display_name AS route_name, target_stop.name AS stop_name,
+                  target_stop.stop_id, target_stop.direction, forecast.model_deployment_id,
+                  forecast.expected_seats, forecast.seat_full_chance
         """;
 
     private static final int EXCLUSION_LIMIT = 500;
@@ -387,7 +396,10 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
                     row.getObject("scored_at", OffsetDateTime.class).toInstant(),
                     row.getBoolean("usable_for_calibration"), row.getString("prediction_vehicle_id"),
                     row.getObject("prediction_remaining_seats", Integer.class),
-                    row.getBoolean("target_boarding_allowed"));
+                    row.getBoolean("target_boarding_allowed"),
+                    new EvaluationDiagnostics(row.getString("route_name"), row.getString("stop_name"),
+                        row.getString("stop_id"), row.getString("direction"), row.getLong("model_deployment_id"),
+                        row.getObject("expected_seats", Double.class), row.getDouble("seat_full_chance")));
     }
 
     private JdbcClient.StatementSpec parameters(String sql, ForecastEvaluation evaluation) {

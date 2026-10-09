@@ -1,5 +1,9 @@
 package com.gustler.backend.forecasting.application.evaluation;
 
+import com.gustler.backend.forecasting.api.ForecastTelemetry;
+import com.gustler.backend.forecasting.application.AfterCommitTelemetry;
+import org.springframework.beans.factory.annotation.Autowired;
+
 import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
@@ -18,6 +22,11 @@ import org.springframework.transaction.annotation.Transactional;
 /** 평가 결과, 통계 입력, 당일 보정을 같은 트랜잭션에 반영한다. */
 @Component
 public class ForecastEvaluationWriter {
+    private ForecastTelemetry telemetry = ForecastTelemetry.NONE;
+
+    @Autowired(required = false)
+    public void setTelemetry(ForecastTelemetry telemetry) { this.telemetry = telemetry; }
+
 
     private final ForecastEvaluationRepository evaluations;
     private final RouteDataQualityAccess quality;
@@ -58,7 +67,9 @@ public class ForecastEvaluationWriter {
 
         List<SettledForecast> settled = new ArrayList<>();
         List<DemandSample> demandSamples = new ArrayList<>();
-        for (SettledEvaluation result : evaluations.settle(completed)) {
+        List<SettledEvaluation> results = evaluations.settle(completed);
+        AfterCommitTelemetry.record(() -> telemetry.settled(results));
+        for (SettledEvaluation result : results) {
             result.calibrationOutcome().ifPresent(settled::add);
             demandSampleOf(result).ifPresent(demandSamples::add);
         }
