@@ -30,6 +30,10 @@ artifacts:
   files:
     - '**/*'
   secondary-artifacts:
+    DevBasis:
+      base-directory: backend/build/shared-dev/revision/basis
+      files:
+        - '**/*'
     ApiRevision:
       base-directory: backend/build/shared-dev/revision/api
       files:
