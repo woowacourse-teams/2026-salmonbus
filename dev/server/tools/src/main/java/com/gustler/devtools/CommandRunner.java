@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -50,6 +51,11 @@ final class CommandRunner {
                     process.exitValue(), result(stdout, deadline), result(stderr, deadline));
         } catch (TimeoutException error) {
             throw new IllegalArgumentException("DEV_COMMAND_TIMEOUT");
+        } catch (ExecutionException error) {
+            if (error.getCause() instanceof RuntimeException cause) {
+                throw cause;
+            }
+            throw error;
         } finally {
             terminate(process, children, grouped);
             executor.shutdownNow();
