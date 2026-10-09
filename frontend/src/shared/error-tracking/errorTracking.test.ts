@@ -1,7 +1,13 @@
-import { describe, expect, it } from "@jest/globals";
+import { describe, expect, it, jest } from "@jest/globals";
+import * as Sentry from "@sentry/react";
 import type { Event, Breadcrumb } from "@sentry/react";
-import { createApiFailureReporter, createReactErrorHandlers } from "./errorTracking";
+import { initErrorTracking, createApiFailureReporter, createReactErrorHandlers } from "./errorTracking";
 import { REQUEST_DISPOSED, REQUEST_SUPERSEDED } from "@/shared/api/cancellation";
+
+jest.mock("@sentry/react", () => ({
+  ...jest.requireActual<typeof import("@sentry/react")>("@sentry/react"),
+  init: jest.fn<typeof Sentry.init>(),
+}));
 
 function createRecording() {
   const events: Event[] = [];
@@ -18,6 +24,31 @@ function createRecording() {
 }
 
 describe("공통 오류 수집", () => {
+  it("SDK 기본 통합을 끄고 허용한 통합만 초기화한다", () => {
+    const init = jest.mocked(Sentry.init);
+    initErrorTracking({
+      dsn: "",
+      environment: "production",
+      release: "test",
+      contextForPage: () => ({ path: "/" }),
+    });
+
+    const options = init.mock.calls[0]?.[0];
+    expect(options?.defaultIntegrations).toBe(false);
+    expect(Array.isArray(options?.integrations)).toBe(true);
+    if (!Array.isArray(options?.integrations)) throw new Error("명시적인 통합 목록이 필요합니다");
+    expect(options.integrations.map(({ name }) => name)).toEqual([
+      "EventFilters",
+      "FunctionToString",
+      "BrowserApiErrors",
+      "GlobalHandlers",
+      "LinkedErrors",
+      "HttpContext",
+      "CultureContext",
+      "Breadcrumbs",
+    ]);
+  });
+
   it.each([REQUEST_DISPOSED, REQUEST_SUPERSEDED])("확인된 취소는 참고 기록만 남긴다", (abortReason) => {
     const recording = createRecording();
     recording.report("/api/resource", { kind: "aborted" }, { context: null, abortReason, rawResponse: null });

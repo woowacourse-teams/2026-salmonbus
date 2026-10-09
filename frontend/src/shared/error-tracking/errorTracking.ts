@@ -73,10 +73,15 @@ export function initErrorTracking(configuration: ErrorTrackingConfiguration) {
       urlQueryParams: false,
       stackFrameVariables: false,
     },
-    integrations: (defaults) => [
-      ...defaults.filter(
-        ({ name }) => !["BrowserSession", "Dedupe", "Breadcrumbs", "Console", "ConversationId"].includes(name),
-      ),
+    defaultIntegrations: false,
+    integrations: [
+      Sentry.eventFiltersIntegration(),
+      Sentry.functionToStringIntegration(),
+      Sentry.browserApiErrorsIntegration(),
+      Sentry.globalHandlersIntegration({ onerror: true, onunhandledrejection: true }),
+      Sentry.linkedErrorsIntegration(),
+      Sentry.httpContextIntegration(),
+      Sentry.cultureContextIntegration(),
       Sentry.breadcrumbsIntegration({ dom: false, history: true, fetch: true, xhr: true, sentry: false }),
     ],
     beforeBreadcrumb(breadcrumb) {
