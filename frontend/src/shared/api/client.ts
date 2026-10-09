@@ -56,7 +56,6 @@ export type ApiFailureReporter = (url: string, failure: ApiFailure, details: Api
 
 let failureReporter: ApiFailureReporter | null = null;
 
-// 앱 초기화에서 연결한다. 로컬 개발·테스트에서는 기본적으로 보고하지 않는다.
 export function initApiFailureReporter(reporter: ApiFailureReporter | null): void {
   failureReporter = reporter;
 }
