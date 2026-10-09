@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { isErrorTrackingEnabled, pageErrorContextFor } from "./initErrorTracking";
+import { isErrorTrackingEnabled, pageErrorContextFor } from "./appErrorTrackingPolicy";
 
 describe("앱 오류 추적 설정", () => {
   it.each([

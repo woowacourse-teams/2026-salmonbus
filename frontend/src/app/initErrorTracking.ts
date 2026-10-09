@@ -1,29 +1,7 @@
 import type { RootOptions } from "react-dom/client";
 import { initErrorTracking } from "@/shared/error-tracking/errorTracking";
-import type { PageErrorContext } from "@/shared/error-tracking/eventPolicy";
 import { initApiFailureReporter } from "@/shared/api/client";
-import { paths } from "@/shared/routing/paths";
-
-const boardPathPattern = new RegExp("^" + paths.board.replace(":routeId", "([^/]+)") + "/?$");
-
-export function isErrorTrackingEnabled(
-  buildMode: string | undefined,
-  environment: string,
-  dsn: string,
-  hostname: string,
-): boolean {
-  return (
-    buildMode === "production" &&
-    environment === "production" &&
-    dsn !== "" &&
-    !["localhost", "127.0.0.1", "::1", "[::1]", ""].includes(hostname)
-  );
-}
-
-export function pageErrorContextFor(pathname: string): PageErrorContext {
-  const routeId = boardPathPattern.exec(pathname)?.[1];
-  return { path: pathname, ...(routeId ? { tags: { route_id: routeId } } : {}) };
-}
+import { isErrorTrackingEnabled, pageErrorContextFor } from "./appErrorTrackingPolicy";
 
 function initAppErrorTracking(): RootOptions {
   if (
@@ -36,7 +14,7 @@ function initAppErrorTracking(): RootOptions {
   try {
     storage = window.sessionStorage;
   } catch {
-    /* 브라우저가 저장소를 막으면 메모리 제한으로 동작한다. */
+    /* sessionStorage를 사용할 수 없으면 메모리에 전송 기록을 보관해 중복 전송을 제한합니다. */
   }
   const tracking = initErrorTracking({
     dsn: __SENTRY_DSN__,
@@ -49,5 +27,5 @@ function initAppErrorTracking(): RootOptions {
   return tracking.reactErrorHandlers;
 }
 
-// App 모듈보다 먼저 import해서 앱 초기 로딩 중 발생하는 오류도 수집한다.
+// App 모듈보다 먼저 import해서 앱 초기 로딩 중 발생하는 오류도 수집
 export const errorTrackingRootOptions = initAppErrorTracking();
