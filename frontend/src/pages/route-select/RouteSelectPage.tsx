@@ -29,7 +29,7 @@ export function RouteSelectPage() {
       }
       setState(result.ok ? { status: "ready", routes: result.body.routes } : { status: "error" });
     });
-    return () => ticket.abort();
+    return () => gate.close();
   }, [gate, attempt]);
 
   return (

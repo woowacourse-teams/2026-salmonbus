@@ -1,10 +1,28 @@
-import { afterEach, describe, expect, it, jest } from "@jest/globals";
-import { requestJson, type ApiFailure, type ApiResult } from "./client";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import {
+  initApiFailureReporter,
+  resetApiFailureReporter,
+  requestJson,
+  type ApiFailure,
+  type ApiResult,
+  type ApiFailureReporter,
+} from "./client";
+import { fetchBoard, fetchLiveVehicles } from "./routeForecast.api";
+import { REQUEST_DISPOSED } from "./cancellation";
+
+const reportApiFailure = jest.fn<ApiFailureReporter>();
+
+beforeEach(() => {
+  reportApiFailure.mockReset();
+  initApiFailureReporter(reportApiFailure);
+});
 
 const originalFetch = global.fetch;
 
 afterEach(() => {
+  resetApiFailureReporter();
   global.fetch = originalFetch;
+  jest.useRealTimers();
 });
 
 function respondWith(status: number, body: unknown, headers: Record<string, string> = {}) {
@@ -21,11 +39,163 @@ function failureOf(result: ApiResult<unknown>): ApiFailure {
 }
 
 describe("requestJson", () => {
+  it.each([
+    {
+      name: "판정보드",
+      fetch: fetchBoard,
+      url: "/api/v1/routes/123456789/board",
+      endpoint: "/api/v1/routes/:routeId/board",
+    },
+    {
+      name: "실시간 차량",
+      fetch: fetchLiveVehicles,
+      url: "/api/v1/routes/123456789/vehicles",
+      endpoint: "/api/v1/routes/:routeId/vehicles",
+    },
+  ])("$name 노선 정보는 URL에서 추측하지 않고 API 호출자가 전달한다", async ({ fetch, url, endpoint }) => {
+    respondWith(503, { code: "SERVICE_UNAVAILABLE", message: "장애", requestId: "request-1" });
+    await fetch("123456789");
+    expect(global.fetch).toHaveBeenCalledWith(url, expect.anything());
+    expect(reportApiFailure).toHaveBeenCalledWith(url, expect.anything(), {
+      context: { endpoint, tags: { route_id: "123456789" } },
+      abortReason: null,
+      rawResponse: null,
+    });
+  });
+
+  it.each([
+    {
+      name: "판정보드",
+      fetch: fetchBoard,
+      url: "/api/v1/routes/R%2F1%20%3F%23%ED%95%9C%EA%B8%80%25/board",
+      endpoint: "/api/v1/routes/:routeId/board",
+    },
+    {
+      name: "실시간 차량",
+      fetch: fetchLiveVehicles,
+      url: "/api/v1/routes/R%2F1%20%3F%23%ED%95%9C%EA%B8%80%25/vehicles",
+      endpoint: "/api/v1/routes/:routeId/vehicles",
+    },
+  ])("$name 요청 URL의 노선 ID만 인코딩하고 오류 문맥에는 원래 값을 남긴다", async ({ fetch, url, endpoint }) => {
+    respondWith(503, { code: "SERVICE_UNAVAILABLE", message: "장애", requestId: "request-1" });
+    await fetch("R/1 ?#한글%");
+    expect(global.fetch).toHaveBeenCalledWith(url, expect.anything());
+    expect(reportApiFailure).toHaveBeenCalledWith(url, expect.anything(), {
+      context: { endpoint, tags: { route_id: "R/1 ?#한글%" } },
+      abortReason: null,
+      rawResponse: null,
+    });
+  });
+
+  it("수집 함수가 실패해도 서버의 원래 오류 응답을 유지한다", async () => {
+    reportApiFailure.mockImplementation(() => {
+      throw new Error("수집 실패");
+    });
+    respondWith(503, { code: "SERVICE_UNAVAILABLE", message: "서버 장애", requestId: "request-1" });
+    expect(failureOf(await requestJson("/api/v1/routes"))).toMatchObject({
+      kind: "contract",
+      status: 503,
+      error: { message: "서버 장애", requestId: "request-1" },
+    });
+    expect(reportApiFailure).toHaveBeenCalledTimes(1);
+  });
+
+  it("앱에서 수집 함수를 연결하지 않아도 요청은 그대로 동작한다", async () => {
+    resetApiFailureReporter();
+    respondWith(500, { code: "INTERNAL_ERROR", message: "오류", requestId: "request-1" });
+    expect(failureOf(await requestJson("/api/v1/routes")).kind).toBe("contract");
+    expect(reportApiFailure).not.toHaveBeenCalled();
+  });
+  it.each([
+    [400, "INVALID_ROUTE_ID"],
+    [400, "INVALID_REQUEST"],
+    [404, "ROUTE_NOT_FOUND"],
+    [404, "ENDPOINT_NOT_FOUND"],
+    [405, "METHOD_NOT_ALLOWED"],
+    [500, "INTERNAL_ERROR"],
+    [503, "SERVICE_UNAVAILABLE"],
+    [503, "MODEL_OUT_OF_SCOPE"],
+    [503, "NO_RECENT_OBSERVATION"],
+  ])("%s / %s 응답을 바꾸지 않고 한 번 보고한다", async (status, code) => {
+    respondWith(Number(status), { code, message: "원래 메시지", requestId: "request-1" });
+    const result = await requestJson("/api/v1/routes/123456789/board");
+    const failure = failureOf(result);
+    expect(failure).toMatchObject({
+      kind: "contract",
+      error: { code, message: "원래 메시지", requestId: "request-1" },
+    });
+    expect(reportApiFailure).toHaveBeenCalledTimes(1);
+    expect(reportApiFailure).toHaveBeenCalledWith("/api/v1/routes/123456789/board", failure, {
+      context: null,
+      abortReason: null,
+      rawResponse: null,
+    });
+  });
+
+  it("정상 응답은 기록하지 않고, 형식 오류일 때만 원문을 보고한다", async () => {
+    respondWith(200, { routes: [] });
+    await requestJson("/api/v1/routes");
+    expect(reportApiFailure).not.toHaveBeenCalled();
+    respondText(502, "<html>Bad Gateway</html>");
+    await requestJson("/api/v1/routes");
+    expect(reportApiFailure).toHaveBeenCalledTimes(1);
+    expect(reportApiFailure).toHaveBeenCalledWith(
+      "/api/v1/routes",
+      expect.objectContaining({ kind: "malformed", status: 502 }),
+      {
+        context: null,
+        abortReason: null,
+        rawResponse: { body: "<html>Bad Gateway</html>", contentType: "text/plain;charset=UTF-8" },
+      },
+    );
+  });
+
+  it("외부 취소의 실제 이유를 전달한다", async () => {
+    const controller = new AbortController();
+    controller.abort(REQUEST_DISPOSED);
+    await requestJson("/api/v1/routes", { signal: controller.signal });
+    expect(reportApiFailure).toHaveBeenCalledTimes(1);
+    expect(reportApiFailure).toHaveBeenCalledWith(
+      "/api/v1/routes",
+      { kind: "aborted" },
+      { context: null, abortReason: REQUEST_DISPOSED, rawResponse: null },
+    );
+  });
+
+  it("연결 실패도 보고한다", async () => {
+    global.fetch = jest.fn(async () => {
+      throw new TypeError("Failed to fetch");
+    }) as typeof fetch;
+    const result = await requestJson("/api/v1/routes");
+    expect(failureOf(result).kind).toBe("network");
+    expect(reportApiFailure).toHaveBeenCalledTimes(1);
+  });
+
+  it("타임아웃은 정상 취소와 구분하고 요청 제한 시간을 유지한다", async () => {
+    jest.useFakeTimers();
+    global.fetch = jest.fn(
+      (_url: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+        }),
+    ) as typeof fetch;
+    const pending = requestJson("/api/v1/routes");
+    await jest.advanceTimersByTimeAsync(10_000);
+    expect(failureOf(await pending).kind).toBe("timeout");
+    expect(reportApiFailure).toHaveBeenCalledTimes(1);
+    expect(reportApiFailure).toHaveBeenCalledWith(
+      "/api/v1/routes",
+      { kind: "timeout" },
+      { context: null, abortReason: null, rawResponse: null },
+    );
+  });
+
   describe("오류 응답을 받으면", () => {
     it("429 응답이면 rateLimited로 분류하고 상태 코드를 함께 담는다", async () => {
       respondWith(429, {});
       const failure = failureOf(await requestJson("/api/v1/routes/R1/board"));
       expect(failure).toMatchObject({ kind: "rateLimited", status: 429 });
+      expect(reportApiFailure).toHaveBeenCalledTimes(1);
     });
 
     it("계약에 있는 code면 retryable 필드 없이도 contract로 분류한다", async () => {
@@ -38,6 +208,7 @@ describe("requestJson", () => {
       respondWith(500, { code: "SOMETHING_NEW", message: "x", requestId: "req-unknown-code" });
       const failure = failureOf(await requestJson("/api/v1/routes/R1/board"));
       expect(failure).toMatchObject({ kind: "malformed", status: 500 });
+      expect(reportApiFailure).toHaveBeenCalledTimes(1);
     });
 
     it("서버가 503과 함께 Retry-After 헤더를 보내면 초를 ms로 바꾼다음 retryAfterMs에 넣는다", async () => {

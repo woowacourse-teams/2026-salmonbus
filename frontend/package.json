@@ -20,14 +20,15 @@
     "format:check": "prettier --check .",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
-    "test": "jest",
-    "test:watch": "jest --watch",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:watch": "pnpm test --watch",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:watch": "E2E_SLOW_MO=500 playwright test --project=chromium --headed --workers=1 --timeout=120000"
   },
   "dependencies": {
     "@amplitude/unified": "^1.1.29",
+    "@sentry/react": "^11.4.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.3.0"
@@ -41,6 +42,7 @@
     "@jest/globals": "^30.5.1",
     "@playwright/test": "^1.63.0",
     "@pmmmwh/react-refresh-webpack-plugin": "^0.6.2",
+    "@sentry/webpack-plugin": "^5.4.0",
     "@storybook/addon-a11y": "^10.6.0",
     "@storybook/addon-docs": "^10.6.0",
     "@storybook/addon-webpack5-compiler-swc": "latest",

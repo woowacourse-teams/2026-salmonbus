@@ -44,12 +44,66 @@ export interface ApiError {
 
 export type ApiResult<T> = ApiSuccess<T> | ApiError;
 
+export interface RequestErrorContext {
+  endpoint: string;
+  tags: Record<string, string>;
+}
+
+export interface ApiFailureDetails {
+  context: RequestErrorContext | null;
+  abortReason: unknown;
+  rawResponse: { body: string; contentType: string | null } | null;
+}
+
+export type ApiFailureReporter = (url: string, failure: ApiFailure, details: ApiFailureDetails) => void;
+
+let failureReporter: ApiFailureReporter | null = null;
+
+export function initApiFailureReporter(reporter: ApiFailureReporter): void {
+  failureReporter = reporter;
+}
+
+export function resetApiFailureReporter(): void {
+  failureReporter = null;
+}
+
 export interface RequestOptions {
   signal?: AbortSignal;
+  errorContext?: RequestErrorContext;
+}
+
+interface RequestOutcome<T> {
+  result: ApiResult<T>;
+  details: ApiFailureDetails;
 }
 
 export async function requestJson<T>(url: string, options: RequestOptions = {}): Promise<ApiResult<T>> {
-  if (options.signal?.aborted) return failed({ kind: "aborted" });
+  const { result, details } = await executeRequest<T>(url, options);
+  if (!result.ok && failureReporter) {
+    try {
+      failureReporter(url, result.failure, details);
+    } catch {
+      // 수집 실패가 원래 요청 결과나 재시도 동작을 바꾸면 안 된다.
+    }
+  }
+  return result;
+}
+
+async function executeRequest<T>(url: string, options: RequestOptions): Promise<RequestOutcome<T>> {
+  let responseBody: string | undefined;
+  let contentType: string | null = null;
+  const outcomeOf = (result: ApiResult<T>): RequestOutcome<T> => ({
+    result,
+    details: {
+      context: options.errorContext ?? null,
+      abortReason: options.signal?.reason ?? null,
+      rawResponse:
+        !result.ok && result.failure.kind === "malformed" && responseBody !== undefined
+          ? { body: responseBody, contentType }
+          : null,
+    },
+  });
+  if (options.signal?.aborted) return outcomeOf(failed({ kind: "aborted" }));
 
   const controller = new AbortController();
   const forwardAbort = () => controller.abort(options.signal?.reason);
@@ -59,22 +113,24 @@ export async function requestJson<T>(url: string, options: RequestOptions = {}):
   let response: Response | null = null;
   try {
     response = await fetch(url, { headers: { Accept: "application/json" }, signal: controller.signal });
+    contentType = response.headers.get("content-type");
     const clock = referenceClockFrom(response.headers);
     const infrastructureFailure = infrastructureFailureOf(response, clock);
     if (infrastructureFailure !== null) {
-      return failed(infrastructureFailure);
+      return outcomeOf(failed(infrastructureFailure));
     }
 
-    const body: unknown = await response.json();
-    return interpret<T>(response, body, clock);
+    responseBody = await response.text();
+    const body: unknown = JSON.parse(responseBody);
+    return outcomeOf(interpret<T>(response, body, clock));
   } catch (cause) {
     if (controller.signal.aborted) {
-      return failed(controller.signal.reason === TIMEOUT_REASON ? { kind: "timeout" } : { kind: "aborted" });
+      return outcomeOf(failed(controller.signal.reason === TIMEOUT_REASON ? { kind: "timeout" } : { kind: "aborted" }));
     }
     if (response !== null) {
-      return failed({ kind: "malformed", status: response.status, requestId: requestIdOf(response) });
+      return outcomeOf(failed({ kind: "malformed", status: response.status, requestId: requestIdOf(response) }));
     }
-    return failed({ kind: "network", cause });
+    return outcomeOf(failed({ kind: "network", cause }));
   } finally {
     clearTimeout(timeout);
     options.signal?.removeEventListener("abort", forwardAbort);
