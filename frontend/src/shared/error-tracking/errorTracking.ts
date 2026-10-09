@@ -113,12 +113,12 @@ export function initErrorTracking(configuration: ErrorTrackingConfiguration) {
   };
 }
 
-export function createReactErrorHandlers(requestCapture: typeof Sentry.captureReactException): RootOptions {
+export function createReactErrorHandlers(captureReactException: typeof Sentry.captureReactException): RootOptions {
   const createHandler =
     (kind: "caught" | "uncaught" | "recoverable") =>
     (error: unknown, info: { componentStack?: string | undefined }) => {
       // SDK 일반 헬퍼의 callback 유무가 아니라 실제 React 처리 상태를 기록한다.
-      requestCapture(
+      captureReactException(
         error,
         { componentStack: info.componentStack ?? null },
         {
@@ -135,14 +135,14 @@ export function createReactErrorHandlers(requestCapture: typeof Sentry.captureRe
 }
 
 export function createApiFailureReporter(
-  requestCapture: (error: Error, event: ApiFailureEvent) => unknown,
-  requestBreadcrumb: (breadcrumb: Sentry.Breadcrumb) => unknown,
+  captureException: (error: Error, event: ApiFailureEvent) => unknown,
+  addBreadcrumb: (breadcrumb: Sentry.Breadcrumb) => unknown,
 ): ApiFailureReporter {
   return (url, failure, details) => {
     const path = requestPathFrom(url);
     const reason = cancellationReasonFrom(details.abortReason);
     if (failure.kind === "aborted" && reason !== "unknown") {
-      requestBreadcrumb({ category: "request.cancelled", level: "info", data: { api_path: path, reason } });
+      addBreadcrumb({ category: "request.cancelled", level: "info", data: { api_path: path, reason } });
       return;
     }
     const status = "status" in failure ? failure.status : null;
@@ -179,6 +179,6 @@ export function createApiFailureReporter(
     }
     const error = new Error("API " + failure.kind + ": " + endpoint + (status === null ? "" : " (" + status + ")"));
     error.name = "ApiRequestFailure";
-    requestCapture(error, event);
+    captureException(error, event);
   };
 }

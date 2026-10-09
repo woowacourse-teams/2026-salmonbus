@@ -59,8 +59,12 @@ export type ApiFailureReporter = (url: string, failure: ApiFailure, details: Api
 
 let failureReporter: ApiFailureReporter | null = null;
 
-export function initApiFailureReporter(reporter: ApiFailureReporter | null): void {
+export function initApiFailureReporter(reporter: ApiFailureReporter): void {
   failureReporter = reporter;
+}
+
+export function resetApiFailureReporter(): void {
+  failureReporter = null;
 }
 
 export interface RequestOptions {

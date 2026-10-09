@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import {
   initApiFailureReporter,
+  resetApiFailureReporter,
   requestJson,
   type ApiFailure,
   type ApiResult,
@@ -19,7 +20,7 @@ beforeEach(() => {
 const originalFetch = global.fetch;
 
 afterEach(() => {
-  initApiFailureReporter(null);
+  resetApiFailureReporter();
   global.fetch = originalFetch;
   jest.useRealTimers();
 });
@@ -62,7 +63,7 @@ describe("requestJson", () => {
   });
 
   it("앱에서 수집 함수를 연결하지 않아도 요청은 그대로 동작한다", async () => {
-    initApiFailureReporter(null);
+    resetApiFailureReporter();
     respondWith(500, { code: "INTERNAL_ERROR", message: "오류", requestId: "request-1" });
     expect(failureOf(await requestJson("/api/v1/routes")).kind).toBe("contract");
     expect(reportApiFailure).not.toHaveBeenCalled();
