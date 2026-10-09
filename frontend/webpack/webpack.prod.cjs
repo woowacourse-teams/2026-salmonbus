@@ -60,6 +60,13 @@ module.exports = merge(common, {
             project: process.env.SENTRY_PROJECT ?? "salmonbus-fe",
             authToken: process.env.SENTRY_AUTH_TOKEN,
             telemetry: false,
+            errorHandler: (error) => {
+              console.warn(
+                "[Sentry] 릴리스 생성 또는 소스맵 업로드에 실패했습니다. " +
+                  "빌드는 계속 진행하지만, 해당 배포의 오류 스택을 원본 코드로 복원하지 못할 수 있습니다.",
+                error.message,
+              );
+            },
             release: { name: "salmonbus-fe@" + process.env.APP_VERSION, inject: false },
             sourcemaps: {
               assets: "./dist/assets/**",
