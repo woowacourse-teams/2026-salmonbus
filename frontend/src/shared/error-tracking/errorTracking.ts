@@ -20,6 +20,10 @@ interface ErrorTrackingConfiguration {
   contextForPage: () => PageErrorContext;
 }
 
+interface ApiFailureEvent extends Sentry.Event {
+  level: "warning" | "error";
+}
+
 const createErrorTransport: NonNullable<Sentry.BrowserOptions["transport"]> = (options) => {
   const nativeFetch = globalThis.fetch.bind(globalThis);
   let pendingBytes = 0;
@@ -97,7 +101,7 @@ export function initErrorTracking(configuration: ErrorTrackingConfiguration) {
     apiFailureReporter: createApiFailureReporter(
       (error, event) =>
         Sentry.captureException(error, {
-          level: "error",
+          level: event.level,
           tags: event.tags ?? {},
           extra: event.extra ?? {},
           fingerprint: event.fingerprint ?? [],
@@ -130,7 +134,7 @@ export function createReactErrorHandlers(requestCapture: typeof Sentry.captureRe
 }
 
 export function createApiFailureReporter(
-  requestCapture: (error: Error, event: Sentry.Event) => unknown,
+  requestCapture: (error: Error, event: ApiFailureEvent) => unknown,
   requestBreadcrumb: (breadcrumb: Sentry.Breadcrumb) => unknown,
 ): ApiFailureReporter {
   return (url, failure, details) => {
@@ -146,8 +150,8 @@ export function createApiFailureReporter(
       failure.kind === "contract" ? failure.error.requestId : "requestId" in failure ? failure.requestId : null;
     // 요청을 소유한 쪽에서 노선 정보와 그룹 경로를 전달한다. 수집기는 URL의 업무 의미를 해석하지 않는다.
     const endpoint = details.context?.endpoint ?? path;
-    const event: Sentry.Event = {
-      level: "error",
+    const event: ApiFailureEvent = {
+      level: code === "INVALID_ROUTE_ID" || code === "ROUTE_NOT_FOUND" ? "warning" : "error",
       fingerprint: ["api", endpoint, failure.kind, String(status), code],
       tags: { ...details.context?.tags, source: "api", failure_kind: failure.kind, error_code: code },
       extra: {

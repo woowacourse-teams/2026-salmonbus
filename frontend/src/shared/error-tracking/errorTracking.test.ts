@@ -7,6 +7,7 @@ import { REQUEST_DISPOSED, REQUEST_SUPERSEDED } from "@/shared/api/cancellation"
 jest.mock("@sentry/react", () => ({
   ...jest.requireActual<typeof import("@sentry/react")>("@sentry/react"),
   init: jest.fn<typeof Sentry.init>(),
+  captureException: jest.fn<typeof Sentry.captureException>(),
 }));
 
 function createRecording() {
@@ -49,6 +50,32 @@ describe("공통 오류 수집", () => {
     ]);
   });
 
+  it.each([
+    [400, "INVALID_ROUTE_ID", "warning"],
+    [404, "ROUTE_NOT_FOUND", "warning"],
+    [400, "INVALID_REQUEST", "error"],
+    [404, "ENDPOINT_NOT_FOUND", "error"],
+    [405, "METHOD_NOT_ALLOWED", "error"],
+    [500, "INTERNAL_ERROR", "error"],
+    [503, "SERVICE_UNAVAILABLE", "error"],
+    [503, "MODEL_OUT_OF_SCOPE", "error"],
+    [503, "NO_RECENT_OBSERVATION", "error"],
+  ] as const)("%s %s 응답의 수집 레벨을 Sentry에 전달한다", (status, code, level) => {
+    const { apiFailureReporter } = initErrorTracking({
+      dsn: "",
+      environment: "production",
+      release: "test",
+      contextForPage: () => ({ path: "/" }),
+    });
+    apiFailureReporter(
+      "/api/resource",
+      { kind: "contract", status, retryAfterMs: null, error: { code, message: "실패", requestId: "request-1" } },
+      { context: null, abortReason: null, rawResponse: null },
+    );
+
+    expect(Sentry.captureException).toHaveBeenLastCalledWith(expect.any(Error), expect.objectContaining({ level }));
+  });
+
   it.each([REQUEST_DISPOSED, REQUEST_SUPERSEDED])("확인된 취소는 참고 기록만 남긴다", (abortReason) => {
     const recording = createRecording();
     recording.report("/api/resource", { kind: "aborted" }, { context: null, abortReason, rawResponse: null });
@@ -68,6 +95,7 @@ describe("공통 오류 수집", () => {
       { kind: "aborted" },
       { context: null, abortReason: { token: "secret" }, rawResponse: null },
     );
+    expect(recording.events[0]?.level).toBe("error");
     expect(recording.events[0]?.extra?.cancellation_reason).toBe("unknown");
     expect(JSON.stringify(recording.events)).not.toContain("secret");
   });
@@ -107,8 +135,19 @@ describe("공통 오류 수집", () => {
           ? { kind, cause: new TypeError("Failed to fetch") }
           : { kind };
     recording.report("/api/resource", failure, { context: null, abortReason: null, rawResponse: null });
+    expect(recording.events[0]?.level).toBe("error");
     expect(recording.events[0]?.tags?.failure_kind).toBe(kind);
     expect(recording.events[0]?.fingerprint?.[1]).toBe("/api/resource");
+  });
+
+  it.each([400, 404])("%s 응답도 오류 형식이 맞지 않으면 error로 수집한다", (status) => {
+    const recording = createRecording();
+    recording.report(
+      "/api/resource",
+      { kind: "malformed", status, requestId: null },
+      { context: null, abortReason: null, rawResponse: null },
+    );
+    expect(recording.events[0]?.level).toBe("error");
   });
 
   it("형식 오류 본문은 인증 정보를 가린 후 길이 제한 없이 수집 단계로 전달한다", () => {
