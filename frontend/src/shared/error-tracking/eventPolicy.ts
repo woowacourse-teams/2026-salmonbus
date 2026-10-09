@@ -28,7 +28,7 @@ export function eventWithContextFor<T extends Event>(original: T, page: PageErro
 }
 
 export const EVENT_LIMIT_BYTES = 1024 * 1024;
-/** Initial diagnostic cap, matching ASP.NET Core's response-body logging default. */
+/** 응답 본문 기록의 임시 상한. 추후 Sentry에서 수집한 본문 크기와 잘림 여부를 바탕으로 조정한다. */
 export const RESPONSE_BODY_LIMIT_BYTES = 32 * 1024;
 const encoder = new TextEncoder();
 
@@ -37,12 +37,10 @@ export function utf8ByteLengthFrom(value: string): number {
 }
 
 export function responseBodyWithinLimitFor(body: string) {
-  // encodeInto stops before a character that would exceed the buffer.
   const { read, written } = encoder.encodeInto(body, new Uint8Array(RESPONSE_BODY_LIMIT_BYTES));
   return { body: body.slice(0, read), bytes: written, truncated: read < body.length };
 }
 
-/** Fixed window from the last recorded event; suppressed repeats do not extend it. */
 export function createRateLimiter(intervalMs = 60_000, storage?: Pick<Storage, "getItem" | "setItem">) {
   const sentAt = new Map<string, number>();
   const storageKey = "salmonbus.sentry.sentAt";
@@ -61,7 +59,7 @@ export function createRateLimiter(intervalMs = 60_000, storage?: Pick<Storage, "
       }
     }
   } catch {
-    /* Storage can be unavailable; the in-memory limit still applies. */
+    // 저장소 기록을 복원하지 못해도 메모리로 중복 기록을 제한합니다.
   }
   return (key: string, now: number): boolean => {
     for (const [existing, timestamp] of sentAt) {
@@ -72,7 +70,7 @@ export function createRateLimiter(intervalMs = 60_000, storage?: Pick<Storage, "
     try {
       storage?.setItem(storageKey, JSON.stringify([...sentAt]));
     } catch {
-      /* Full/blocked storage must not break error reporting. */
+      // 저장소 쓰기에 실패해도 메모리 기록을 유지하고 오류 보고를 계속합니다.
     }
     return true;
   };
@@ -89,11 +87,6 @@ export function eventKeyFor(event: Event): string {
   ]);
 }
 
-/**
- * Applied by the transport AFTER SDK enrichment/normalization, immediately before
- * serialization. Budget is the UTF-8 JSON size of the whole event, not body length.
- * 1 byte of headroom keeps the event strictly below Sentry's 1 MiB item limit.
- */
 export function eventWithinLimitFor<T extends Event>(original: T, limitBytes = EVENT_LIMIT_BYTES) {
   const event = { ...original, extra: { ...original.extra } };
   const body = event.extra.response_body;

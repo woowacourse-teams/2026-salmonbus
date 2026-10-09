@@ -8,27 +8,23 @@ const SECRET_ASSIGNMENT = new RegExp(
 );
 
 export function redactedTextFrom(text: string): string {
-  return (
-    text
-      .replace(/&(?:quot|#34|#x22);/gi, '"')
-      .replace(/&(?:apos|#39|#x27);/gi, "'")
-      // Header text has spaces/semicolons in its value; redact the whole line.
-      .replace(/(^|\n)(\s*(?:set-cookie|cookie|(?:proxy-)?authorization)\s*:\s*)[^\r\n]*/gi, "$1$2[Filtered]")
-      .replace(SECRET_ASSIGNMENT, (_match, prefix: string, value: string) => {
-        const quote = value.startsWith('"') ? '"' : value.startsWith("'") ? "'" : "";
-        return prefix + quote + FILTERED + quote;
-      })
-      .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9+/_.=~-]+/gi, "$1 [Filtered]")
-      .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, FILTERED)
-      .replace(/<(?:input|meta)\b[^>]*>/gi, (tag) => (SECRET_KEY.test(tag) ? FILTERED : tag))
-      .replace(/https?:\/\/[^\s"'<>]+/gi, (url) => safeUrlFrom(url))
-  );
+  return text
+    .replace(/&(?:quot|#34|#x22);/gi, '"')
+    .replace(/&(?:apos|#39|#x27);/gi, "'")
+    .replace(/(^|\n)(\s*(?:set-cookie|cookie|(?:proxy-)?authorization)\s*:\s*)[^\r\n]*/gi, "$1$2[Filtered]")
+    .replace(SECRET_ASSIGNMENT, (_match, prefix: string, value: string) => {
+      const quote = value.startsWith('"') ? '"' : value.startsWith("'") ? "'" : "";
+      return prefix + quote + FILTERED + quote;
+    })
+    .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9+/_.=~-]+/gi, "$1 [Filtered]")
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, FILTERED)
+    .replace(/<(?:input|meta)\b[^>]*>/gi, (tag) => (SECRET_KEY.test(tag) ? FILTERED : tag))
+    .replace(/https?:\/\/[^\s"'<>]+/gi, (url) => safeUrlFrom(url));
 }
 
 export function safeUrlFrom(value: string): string {
   try {
     const url = new URL(value, "https://relative.invalid");
-    // Query strings/fragments and URL credentials can contain authentication values.
     const origin = /^https?:\/\//i.test(value) ? url.origin : "";
     return origin + url.pathname;
   } catch {
@@ -44,7 +40,6 @@ export function requestPathFrom(value: string): string {
   }
 }
 
-/** Also used on SDK-generated fields so automatic capture cannot bypass our policy. */
 export function redactedValueFrom<T>(value: T): T {
   const seen = new WeakSet<object>();
   function toRedactedNode(item: unknown): unknown {
@@ -70,7 +65,6 @@ export function redactedBodyFrom(body: string): string {
   try {
     return JSON.stringify(redactedValueFrom(JSON.parse(body)));
   } catch {
-    // Malformed JSON / HTML cannot be field-filtered, so scrub credential patterns.
     return redactedTextFrom(body);
   }
 }
