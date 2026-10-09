@@ -24,10 +24,18 @@ export function eventWithContextFor<T extends Event>(original: T, page: PageErro
 }
 
 export const EVENT_LIMIT_BYTES = 1024 * 1024;
+/** Initial diagnostic cap, matching ASP.NET Core's response-body logging default. */
+export const RESPONSE_BODY_LIMIT_BYTES = 32 * 1024;
 const encoder = new TextEncoder();
 
 export function utf8ByteLengthFrom(value: string): number {
   return encoder.encode(value).byteLength;
+}
+
+export function responseBodyWithinLimitFor(body: string) {
+  // encodeInto stops before a character that would exceed the buffer.
+  const { read, written } = encoder.encodeInto(body, new Uint8Array(RESPONSE_BODY_LIMIT_BYTES));
+  return { body: body.slice(0, read), bytes: written, truncated: read < body.length };
 }
 
 /** Fixed window from the last recorded event; suppressed repeats do not extend it. */
@@ -85,34 +93,6 @@ export function eventKeyFor(event: Event): string {
 export function eventWithinLimitFor<T extends Event>(original: T, limitBytes = EVENT_LIMIT_BYTES) {
   const event = { ...original, extra: { ...original.extra } };
   const body = event.extra.response_body;
-  const fits = (candidate: Event) => utf8ByteLengthFrom(JSON.stringify(candidate)) < limitBytes;
-  if (typeof body !== "string") return fits(event) ? event : null;
-
-  event.extra.response_body_truncated = false;
-  event.extra.response_body_sent_bytes = utf8ByteLengthFrom(body);
-  if (fits(event)) return event;
-
-  event.extra.response_body_truncated = true;
-  const eventWithPrefixFor = (length: number) => {
-    // Do not split UTF-16 surrogate pairs.
-    if (length > 0 && /[\uD800-\uDBFF]/.test(body.charAt(length - 1))) length -= 1;
-    const prefix = body.slice(0, length);
-    return {
-      ...event,
-      extra: { ...event.extra, response_body: prefix, response_body_sent_bytes: utf8ByteLengthFrom(prefix) },
-    };
-  };
-  let candidate = eventWithPrefixFor(0);
-  if (!fits(candidate)) return null; // Even without the body, this event exceeds the ingestion limit.
-  let low = 0;
-  let high = body.length;
-  while (low < high) {
-    const middle = Math.ceil((low + high) / 2);
-    const next = eventWithPrefixFor(middle);
-    if (fits(next)) {
-      low = middle;
-      candidate = next;
-    } else high = middle - 1;
-  }
-  return candidate;
+  if (typeof body === "string") event.extra.response_body_sent_bytes = utf8ByteLengthFrom(body);
+  return utf8ByteLengthFrom(JSON.stringify(event)) < limitBytes ? event : null;
 }

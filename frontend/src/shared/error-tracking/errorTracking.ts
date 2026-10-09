@@ -8,6 +8,7 @@ import {
   eventKeyFor,
   eventWithinLimitFor,
   eventWithContextFor,
+  responseBodyWithinLimitFor,
   type PageErrorContext,
 } from "./eventPolicy";
 import { redactedBodyFrom, redactedValueFrom, requestPathFrom } from "./privacy";
@@ -165,11 +166,14 @@ export function createApiFailureReporter(
     };
     if (failure.kind === "malformed" && details.rawResponse !== null) {
       const body = redactedBodyFrom(details.rawResponse.body);
+      const limitedBody = responseBodyWithinLimitFor(body);
       event.extra = {
         ...event.extra,
-        response_body: body,
+        response_body: limitedBody.body,
         response_body_original_bytes: utf8ByteLengthFrom(details.rawResponse.body),
         response_body_redacted_bytes: utf8ByteLengthFrom(body),
+        response_body_sent_bytes: limitedBody.bytes,
+        response_body_truncated: limitedBody.truncated,
         response_content_type: details.rawResponse.contentType,
       };
     }

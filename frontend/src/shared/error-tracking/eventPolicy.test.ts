@@ -5,8 +5,10 @@ import {
   createRateLimiter,
   eventKeyFor,
   EVENT_LIMIT_BYTES,
+  RESPONSE_BODY_LIMIT_BYTES,
   eventWithinLimitFor,
   eventWithContextFor,
+  responseBodyWithinLimitFor,
 } from "./eventPolicy";
 
 describe("오류 전송 정책", () => {
@@ -65,43 +67,28 @@ describe("오류 전송 정책", () => {
     expect(eventKeyFor(first)).not.toBe(eventKeyFor({ ...first, extra: { api_path: "/routes/2" } }));
   });
 
-  it("16KB를 넘어도 전체 이벤트가 한도 이하면 본문을 전부 보존한다", () => {
-    const body = "정상적인 오류 진단 내용".repeat(10_000);
-    const result = eventWithinLimitFor({ extra: { response_body: body } });
-    expect(result?.extra.response_body).toBe(body);
-    expect(result?.extra.response_body_truncated).toBe(false);
+  it.each([
+    ["한글 한 글자를 온전히 남긴다", "한글", "한"],
+    ["공간이 부족한 이모지를 통째로 제외한다", "🚍", ""],
+  ])("32KiB 경계에서 %s", (_description, suffix, retained) => {
+    const prefix = "x".repeat(RESPONSE_BODY_LIMIT_BYTES - 3);
+    const result = responseBodyWithinLimitFor(prefix + suffix);
+    expect(result).toEqual({ body: prefix + retained, bytes: utf8ByteLengthFrom(prefix + retained), truncated: true });
+    expect(result.bytes).toBeLessThanOrEqual(RESPONSE_BODY_LIMIT_BYTES);
   });
 
-  it("한글/이모지/따옴표의 UTF-8·JSON 크기와 부가정보를 함께 계산한다", () => {
-    const body = '한글🚍"\n'.repeat(100_000);
-    const original = {
-      message: "gateway error",
-      extra: {
-        response_body: body,
-        response_body_original_bytes: utf8ByteLengthFrom(body),
-        other: "diagnostics".repeat(2000),
-      },
-      breadcrumbs: [{ message: "previous step".repeat(1000) }],
-    };
+  it("본문의 잘림 여부를 유지하고 최종 전송 본문의 바이트 수를 기록한다", () => {
+    const original = { message: "cause", extra: { response_body: '한글🚍"\n', response_body_truncated: true } };
     const result = eventWithinLimitFor(original);
-    expect(result).not.toBeNull();
-    expect(utf8ByteLengthFrom(JSON.stringify(result))).toBeLessThan(EVENT_LIMIT_BYTES);
-    expect(result?.extra.response_body_truncated).toBe(true);
-    expect(result?.extra.response_body_original_bytes).toBe(utf8ByteLengthFrom(body));
-    expect(body.startsWith(result?.extra.response_body ?? "missing")).toBe(true);
-    expect(result?.extra.response_body).not.toMatch(/[\uD800-\uDBFF]$/);
-    expect(original.extra.response_body).toBe(body);
+    expect(result).toMatchObject(original);
+    expect(result?.extra.response_body_sent_bytes).toBe(utf8ByteLengthFrom(original.extra.response_body));
+    expect(original.extra).not.toHaveProperty("response_body_sent_bytes");
   });
 
-  it("본문만 줄이고 나머지 원인 정보는 보존하며 크기를 최대한 활용한다", () => {
-    const event = { message: "cause", extra: { response_body: "x".repeat(2000) } };
-    const fitted = eventWithinLimitFor(event, 512);
-    expect(fitted?.message).toBe("cause");
-    expect(utf8ByteLengthFrom(JSON.stringify(fitted))).toBe(511);
-  });
-
-  it("본문을 전부 빼도 한도를 넘는 이벤트는 전송하지 않는다", () => {
-    expect(eventWithinLimitFor({ message: "x".repeat(600), extra: { response_body: "body" } }, 512)).toBeNull();
-    expect(eventWithinLimitFor({ message: "x".repeat(600) }, 512)).toBeNull();
+  it("SDK 부가정보와 JSON 이스케이프를 포함한 전체 이벤트가 한도 이상이면 전송하지 않는다", () => {
+    expect(eventWithinLimitFor({ message: "x".repeat(EVENT_LIMIT_BYTES) })).toBeNull();
+    expect(
+      eventWithinLimitFor({ extra: { response_body: "\n".repeat(200), diagnostics: "x".repeat(200) } }, 512),
+    ).toBeNull();
   });
 });

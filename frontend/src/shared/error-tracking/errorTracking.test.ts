@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/react";
 import type { Event, Breadcrumb } from "@sentry/react";
 import { initErrorTracking, createApiFailureReporter, createReactErrorHandlers } from "./errorTracking";
 import { REQUEST_DISPOSED, REQUEST_SUPERSEDED } from "@/shared/api/cancellation";
+import { RESPONSE_BODY_LIMIT_BYTES, utf8ByteLengthFrom } from "./eventPolicy";
 
 jest.mock("@sentry/react", () => ({
   ...jest.requireActual<typeof import("@sentry/react")>("@sentry/react"),
@@ -150,9 +151,31 @@ describe("공통 오류 수집", () => {
     expect(recording.events[0]?.level).toBe("error");
   });
 
-  it("형식 오류 본문은 인증 정보를 가린 후 길이 제한 없이 수집 단계로 전달한다", () => {
+  it.each(["<html>Bad Gateway</html>", "x".repeat(RESPONSE_BODY_LIMIT_BYTES)])(
+    "32KiB 이하의 형식 오류 본문은 전부 보존한다",
+    (body) => {
+      const recording = createRecording();
+      recording.report(
+        "/api/resource",
+        { kind: "malformed", status: 502, requestId: null },
+        { context: null, abortReason: null, rawResponse: { body, contentType: "text/html" } },
+      );
+      expect(recording.events[0]?.extra).toMatchObject({
+        response_body: body,
+        response_body_original_bytes: utf8ByteLengthFrom(body),
+        response_body_redacted_bytes: utf8ByteLengthFrom(body),
+        response_body_sent_bytes: utf8ByteLengthFrom(body),
+        response_body_truncated: false,
+        response_content_type: "text/html",
+      });
+    },
+  );
+
+  it("큰 형식 오류 본문은 인증 정보를 가린 뒤 32KiB까지 남기고 크기와 잘림 여부를 기록한다", () => {
     const recording = createRecording();
     const explanation = "진단 내용".repeat(5000);
+    const originalBody = JSON.stringify({ access_token: "secret", explanation });
+    const redactedBody = JSON.stringify({ access_token: "[Filtered]", explanation });
     recording.report(
       "/api/resource",
       { kind: "malformed", status: 502, requestId: null },
@@ -160,15 +183,24 @@ describe("공통 오류 수집", () => {
         context: null,
         abortReason: null,
         rawResponse: {
-          body: JSON.stringify({ access_token: "secret", explanation }),
+          body: originalBody,
           contentType: "application/json",
         },
       },
     );
-    expect(String(recording.events[0]?.extra?.response_body)).toContain(explanation);
+    const extra = recording.events[0]?.extra;
+    const sentBody = String(extra?.response_body);
+    expect(sentBody).toContain("[Filtered]");
+    expect(redactedBody.startsWith(sentBody)).toBe(true);
+    expect(utf8ByteLengthFrom(sentBody)).toBeLessThanOrEqual(RESPONSE_BODY_LIMIT_BYTES);
     expect(JSON.stringify(recording.events)).not.toContain("secret");
-    expect(recording.events[0]?.extra?.response_body_original_bytes).toBeGreaterThan(16_384);
-    expect(recording.events[0]?.extra?.response_content_type).toBe("application/json");
+    expect(extra).toMatchObject({
+      response_body_original_bytes: utf8ByteLengthFrom(originalBody),
+      response_body_redacted_bytes: utf8ByteLengthFrom(redactedBody),
+      response_body_sent_bytes: utf8ByteLengthFrom(sentBody),
+      response_body_truncated: true,
+      response_content_type: "application/json",
+    });
   });
 
   it("React 콜백별 실제 처리 상태와 컴포넌트 스택을 전달한다", () => {
