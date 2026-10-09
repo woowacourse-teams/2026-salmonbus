@@ -7,7 +7,7 @@ import {
   type ApiResult,
   type ApiFailureReporter,
 } from "./client";
-import { fetchBoard } from "./routeForecast.api";
+import { fetchBoard, fetchLiveVehicles } from "./routeForecast.api";
 import { REQUEST_DISPOSED } from "./cancellation";
 
 const reportApiFailure = jest.fn<ApiFailureReporter>();
@@ -39,11 +39,49 @@ function failureOf(result: ApiResult<unknown>): ApiFailure {
 }
 
 describe("requestJson", () => {
-  it("노선 정보는 URL에서 추측하지 않고 API 호출자가 전달한다", async () => {
+  it.each([
+    {
+      name: "판정보드",
+      fetch: fetchBoard,
+      url: "/api/v1/routes/123456789/board",
+      endpoint: "/api/v1/routes/:routeId/board",
+    },
+    {
+      name: "실시간 차량",
+      fetch: fetchLiveVehicles,
+      url: "/api/v1/routes/123456789/vehicles",
+      endpoint: "/api/v1/routes/:routeId/vehicles",
+    },
+  ])("$name 노선 정보는 URL에서 추측하지 않고 API 호출자가 전달한다", async ({ fetch, url, endpoint }) => {
     respondWith(503, { code: "SERVICE_UNAVAILABLE", message: "장애", requestId: "request-1" });
-    await fetchBoard("123456789");
-    expect(reportApiFailure).toHaveBeenCalledWith("/api/v1/routes/123456789/board", expect.anything(), {
-      context: { endpoint: "/api/v1/routes/:routeId/board", tags: { route_id: "123456789" } },
+    await fetch("123456789");
+    expect(global.fetch).toHaveBeenCalledWith(url, expect.anything());
+    expect(reportApiFailure).toHaveBeenCalledWith(url, expect.anything(), {
+      context: { endpoint, tags: { route_id: "123456789" } },
+      abortReason: null,
+      rawResponse: null,
+    });
+  });
+
+  it.each([
+    {
+      name: "판정보드",
+      fetch: fetchBoard,
+      url: "/api/v1/routes/R%2F1%20%3F%23%ED%95%9C%EA%B8%80%25/board",
+      endpoint: "/api/v1/routes/:routeId/board",
+    },
+    {
+      name: "실시간 차량",
+      fetch: fetchLiveVehicles,
+      url: "/api/v1/routes/R%2F1%20%3F%23%ED%95%9C%EA%B8%80%25/vehicles",
+      endpoint: "/api/v1/routes/:routeId/vehicles",
+    },
+  ])("$name 요청 URL의 노선 ID만 인코딩하고 오류 문맥에는 원래 값을 남긴다", async ({ fetch, url, endpoint }) => {
+    respondWith(503, { code: "SERVICE_UNAVAILABLE", message: "장애", requestId: "request-1" });
+    await fetch("R/1 ?#한글%");
+    expect(global.fetch).toHaveBeenCalledWith(url, expect.anything());
+    expect(reportApiFailure).toHaveBeenCalledWith(url, expect.anything(), {
+      context: { endpoint, tags: { route_id: "R/1 ?#한글%" } },
       abortReason: null,
       rawResponse: null,
     });
