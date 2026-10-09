@@ -99,6 +99,7 @@ describe("requestJson", () => {
     expect(reportApiFailure).not.toHaveBeenCalled();
     respondText(502, "<html>Bad Gateway</html>");
     await requestJson("/api/v1/routes");
+    expect(reportApiFailure).toHaveBeenCalledTimes(1);
     expect(reportApiFailure).toHaveBeenCalledWith(
       "/api/v1/routes",
       expect.objectContaining({ kind: "malformed", status: 502 }),
@@ -114,6 +115,7 @@ describe("requestJson", () => {
     const controller = new AbortController();
     controller.abort(REQUEST_DISPOSED);
     await requestJson("/api/v1/routes", { signal: controller.signal });
+    expect(reportApiFailure).toHaveBeenCalledTimes(1);
     expect(reportApiFailure).toHaveBeenCalledWith(
       "/api/v1/routes",
       { kind: "aborted" },
@@ -141,6 +143,7 @@ describe("requestJson", () => {
     const pending = requestJson("/api/v1/routes");
     await jest.advanceTimersByTimeAsync(10_000);
     expect(failureOf(await pending).kind).toBe("timeout");
+    expect(reportApiFailure).toHaveBeenCalledTimes(1);
     expect(reportApiFailure).toHaveBeenCalledWith(
       "/api/v1/routes",
       { kind: "timeout" },
@@ -153,6 +156,7 @@ describe("requestJson", () => {
       respondWith(429, {});
       const failure = failureOf(await requestJson("/api/v1/routes/R1/board"));
       expect(failure).toMatchObject({ kind: "rateLimited", status: 429 });
+      expect(reportApiFailure).toHaveBeenCalledTimes(1);
     });
 
     it("계약에 있는 code면 retryable 필드 없이도 contract로 분류한다", async () => {
@@ -165,6 +169,7 @@ describe("requestJson", () => {
       respondWith(500, { code: "SOMETHING_NEW", message: "x", requestId: "req-unknown-code" });
       const failure = failureOf(await requestJson("/api/v1/routes/R1/board"));
       expect(failure).toMatchObject({ kind: "malformed", status: 500 });
+      expect(reportApiFailure).toHaveBeenCalledTimes(1);
     });
 
     it("서버가 503과 함께 Retry-After 헤더를 보내면 초를 ms로 바꾼다음 retryAfterMs에 넣는다", async () => {
