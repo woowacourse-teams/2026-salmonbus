@@ -211,7 +211,7 @@ final class BasisLifecycle {
                                 host.account().gid());
                 FileOps.atomicFile(journal(), Json.bytes(operation), 0600);
                 loadImage(target(next.releaseId()));
-                host.run("systemctl", "stop", unit.getFileName().toString());
+                stopInfrastructure();
                 FileOps.moveNew(layout.config(), operation.backup(layout));
                 FileOps.moveNew(operation.stage(layout), layout.config());
                 Deployment.setLink(
@@ -288,8 +288,17 @@ final class BasisLifecycle {
         }
     }
 
+    private void stopInfrastructure() throws Exception {
+        host.run(
+                        Path.of("/"),
+                        null,
+                        Duration.ofSeconds(210),
+                        List.of("systemctl", "stop", "salmonbus-dev-infra.service"))
+                .checked();
+    }
+
     private void restore(Operation operation) throws Exception {
-        host.run("systemctl", "stop", "salmonbus-dev-infra.service");
+        stopInfrastructure();
         if (FileOps.exists(operation.backup(layout))) {
             if (FileOps.exists(layout.config())) {
                 var failed =

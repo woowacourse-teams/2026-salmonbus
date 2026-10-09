@@ -190,6 +190,39 @@ class BasisLifecycleServerTest {
     }
 
     @Test
+    void infrastructureStopCanUseTheFullServiceStopTimeout() throws Exception {
+        var slowHost = new SlowStopHost();
+        slowHost.data = fixture.layout.data();
+        new BasisLifecycle(fixture.layout, slowHost).change(incoming, true);
+        assertEquals(1, slowHost.stopCalls);
+        assertEquals(
+                RevisionStore.verify(incoming, true).releaseId(),
+                fixture.layout
+                        .root()
+                        .resolve("basis/current")
+                        .toRealPath()
+                        .getFileName()
+                        .toString());
+    }
+
+    @Test
+    void recoveryAlsoWaitsForInfrastructureToStop() throws Exception {
+        var before = secrets();
+        var slowHost = new SlowStopHost();
+        slowHost.data = fixture.layout.data();
+        slowHost.startFailures = 1;
+        var error =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> new BasisLifecycle(fixture.layout, slowHost).change(incoming, true));
+        assertEquals("DEV_BASIS_CHANGE_FAILED", error.getMessage());
+        assertEquals(2, slowHost.stopCalls);
+        assertEquals(original, fixture.layout.root().resolve("basis/current").toRealPath());
+        assertFalse(Files.exists(fixture.layout.root().resolve("basis/operation.json")));
+        preserved(before);
+    }
+
+    @Test
     void failedRecoveryBlocksDeploymentUntilExplicitRecovery() throws Exception {
         var before = secrets();
         host.startFailures = 2;
@@ -336,6 +369,22 @@ class BasisLifecycleServerTest {
                 () -> new BasisLifecycle(fixture.layout, host).change(incoming, true));
         assertEquals("api other-deployment 1\n", Files.readString(marker.resolve("owner")));
         assertTrue(host.calls.isEmpty());
+    }
+
+    private static class SlowStopHost extends UpdateHost {
+        int stopCalls;
+
+        @Override
+        Result run(
+                Path cwd, Map<String, String> environment, Duration timeout, List<String> command) {
+            if (command.equals(List.of("systemctl", "stop", "salmonbus-dev-infra.service"))) {
+                stopCalls++;
+                if (timeout.compareTo(Duration.ofSeconds(90)) <= 0) {
+                    throw new IllegalArgumentException("DEV_COMMAND_TIMEOUT");
+                }
+            }
+            return super.run(cwd, environment, timeout, command);
+        }
     }
 
     private static class UpdateHost extends Fixtures.FakeHost {
