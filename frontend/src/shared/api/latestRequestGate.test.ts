@@ -11,14 +11,20 @@ describe("요청 취소 사유", () => {
     expect(cancellationReasonFrom(old.signal.reason)).toBe("superseded");
     expect(old.isLatest()).toBe(false);
     gate.close();
+    expect(current.signal.aborted).toBe(true);
     expect(cancellationReasonFrom(current.signal.reason)).toBe("disposed");
+    expect(current.isLatest()).toBe(false);
+
+    const next = gate.issue();
+    expect(next.signal.aborted).toBe(false);
+    expect(next.isLatest()).toBe(true);
     expect(current.isLatest()).toBe(false);
   });
 
   it("호출자가 이유 없이 취소하면 정상 흐름으로 추측하지 않는다", () => {
-    const ticket = createLatestRequestGate().issue();
-    ticket.abort();
-    expect(cancellationReasonFrom(ticket.signal.reason)).toBe("unknown");
+    const controller = new AbortController();
+    controller.abort();
+    expect(cancellationReasonFrom(controller.signal.reason)).toBe("unknown");
     expect(cancellationReasonFrom("disposed")).toBe("unknown");
   });
 });

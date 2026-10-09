@@ -3,7 +3,6 @@ import { REQUEST_DISPOSED, REQUEST_SUPERSEDED } from "./cancellation";
 export interface RequestTicket {
   readonly signal: AbortSignal;
   isLatest(): boolean;
-  abort(reason?: unknown): void;
 }
 
 export interface LatestRequestGate {
@@ -23,7 +22,6 @@ export function createLatestRequestGate(): LatestRequestGate {
       return {
         signal: controller.signal,
         isLatest: () => latest === controller,
-        abort: (reason) => controller.abort(reason),
       };
     },
     close() {

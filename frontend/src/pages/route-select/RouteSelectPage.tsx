@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { createLatestRequestGate } from "@/shared/api/latestRequestGate";
-import { REQUEST_DISPOSED } from "@/shared/api/cancellation";
 import { fetchRoutes } from "@/shared/api/routeForecast.api";
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
 import { RouteList } from "./components/RouteList";
@@ -30,7 +29,7 @@ export function RouteSelectPage() {
       }
       setState(result.ok ? { status: "ready", routes: result.body.routes } : { status: "error" });
     });
-    return () => ticket.abort(REQUEST_DISPOSED);
+    return () => gate.close();
   }, [gate, attempt]);
 
   return (
