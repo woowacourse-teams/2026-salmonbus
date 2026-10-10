@@ -4,6 +4,8 @@ import type { RouteSummary } from "@/shared/api/routeForecast.types";
 import salmongProud from "@/shared/assets/images/salmong-logo/salmong-proud.png";
 import salmonbusWordmark from "@/shared/assets/images/salmonbus-wordmark.webp";
 import { boardPathFor } from "@/shared/routing/paths";
+import { routeSelectedPropertiesOf, unmatchedQueryOf } from "./analytics/searchEventPolicy";
+import { useUnmatchedSearchEvent } from "./analytics/useUnmatchedSearchEvent";
 import { SearchForm } from "./components/SearchForm";
 import { SearchResults } from "./components/SearchResults";
 import { submitTargetFor } from "./displayPolicy";
@@ -14,15 +16,11 @@ import * as styles from "./RouteSelectPage.css";
 export function RouteSelectPage() {
   const navigate = useNavigate();
   const { input, view, changeInput, retry } = useRouteSearch();
+  useUnmatchedSearchEvent(unmatchedQueryOf(view, input));
 
   const handleSelect = (route: RouteSummary, position: number) => {
     if (view.kind !== "matched") return;
-    track("route_selected", {
-      route_id: route.id,
-      route_status: route.status,
-      list_position: position,
-      route_count: view.routes.length,
-    });
+    track("route_selected", routeSelectedPropertiesOf(route, position, view.routes.length));
     void navigate(boardPathFor(route.id));
   };
 
