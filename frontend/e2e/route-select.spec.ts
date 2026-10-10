@@ -13,9 +13,9 @@ test("노선 조회 실패 후 재시도에 성공하면 노선을 선택할 수
   api.mode.routes = "network-error";
   await page.goto("/");
 
-  const error = page.getByText("노선을 불러오지 못했어요", { exact: true });
+  const status = page.getByRole("main").getByRole("status");
   const retry = page.getByRole("button", { name: "다시 시도하기", exact: true });
-  await expect(error).toBeVisible();
+  await expect(status).toHaveText("노선을 불러오지 못했어요");
   await expect(retry).toBeVisible();
   await expect(routeButton(page)).toHaveCount(0);
 
@@ -27,9 +27,7 @@ test("노선 조회 실패 후 재시도에 성공하면 노선을 선택할 수
   await retry.click();
   await response;
 
-  await expect(error).not.toBeVisible();
-  await expect(routeButton(page)).toBeVisible();
-  await expect(routeButton(page)).toBeEnabled();
+  await expect(status).toHaveText("");
   await selectRoute(page);
 });
 
@@ -37,9 +35,9 @@ test("노선 재시도도 실패하면 실패 안내와 재시도 버튼이 표�
   api.mode.routes = "network-error";
   await page.goto("/");
 
-  const error = page.getByText("노선을 불러오지 못했어요", { exact: true });
+  const status = page.getByRole("main").getByRole("status");
   const retry = page.getByRole("button", { name: "다시 시도하기", exact: true });
-  await expect(error).toBeVisible();
+  await expect(status).toHaveText("노선을 불러오지 못했어요");
   await expect(retry).toBeVisible();
 
   const requestsBeforeRetry = api.requests.routes;
@@ -51,7 +49,7 @@ test("노선 재시도도 실패하면 실패 안내와 재시도 버튼이 표�
   await failedRequest;
   expect(api.requests.routes).toBeGreaterThan(requestsBeforeRetry);
 
-  await expect(error).toBeVisible();
+  await expect(status).toHaveText("노선을 불러오지 못했어요");
   await expect(retry).toBeVisible();
   await expect(retry).toBeEnabled();
   await expect(page.getByText("노선을 불러오는 중이에요", { exact: true })).not.toBeVisible();

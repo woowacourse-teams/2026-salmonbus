@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
-import { searchViewFor, type RoutesState } from "./displayPolicy";
+import { searchViewFor, submitTargetFor, type RoutesState } from "./displayPolicy";
 
 function createRoute(displayName: string): RouteSummary {
   return {
@@ -60,5 +60,19 @@ describe("searchViewFor", () => {
     it("숫자가 없는 입력은 결과 없음을 보여준다", () => {
       expect(searchViewFor(ready, "번")).toEqual({ kind: "unmatched" });
     });
+  });
+});
+
+describe("submitTargetFor", () => {
+  it("결과가 정확히 1개면 그 노선이 엔터 대상이다", () => {
+    expect(submitTargetFor({ kind: "matched", routes: [route5600] })).toBe(route5600);
+  });
+
+  it("결과가 2개 이상이면 엔터 대상이 없다", () => {
+    expect(submitTargetFor({ kind: "matched", routes: [route5600, route3330] })).toBeNull();
+  });
+
+  it("일치하는 노선이 없으면 엔터 대상이 없다", () => {
+    expect(submitTargetFor({ kind: "unmatched" })).toBeNull();
   });
 });
