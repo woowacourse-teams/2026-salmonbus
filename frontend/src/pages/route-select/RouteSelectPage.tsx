@@ -39,10 +39,12 @@ export function RouteSelectPage() {
           <img className={styles.wordmark} src={salmonbusWordmark} width={175} height={45} alt="연어 버스 글자 로고" />
         </div>
       </header>
-      <main className={styles.main}>
-        <h1 className={styles.question}>{SEARCH_QUESTION}</h1>
-        <SearchForm value={input} onChange={changeInput} onClear={() => changeInput("")} onSubmit={handleSubmit} />
-        <SearchResults view={view} onSelect={handleSelect} onRetry={retry} />
+      <main>
+        <div className={styles.searchArea} data-filled={input === "" ? undefined : ""}>
+          <h1 className={styles.question}>{SEARCH_QUESTION}</h1>
+          <SearchForm value={input} onChange={changeInput} onClear={() => changeInput("")} onSubmit={handleSubmit} />
+          <SearchResults view={view} onSelect={handleSelect} onRetry={retry} />
+        </div>
       </main>
     </div>
   );

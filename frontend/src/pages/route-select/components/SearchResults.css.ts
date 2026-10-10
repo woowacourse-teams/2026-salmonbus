@@ -16,7 +16,7 @@ export const status = style({
 
 export const notice = style({
   margin: "12px 4px 0",
-  color: vars.color.onInk,
+  color: vars.color.onBrand,
   fontSize: "14px",
   fontWeight: 600,
 });
@@ -27,18 +27,26 @@ export const retryButton = style({
   minHeight: "44px",
   marginTop: "8px",
   padding: "0 18px",
-  border: `1px solid ${vars.color.onInk}`,
+  border: `1px solid ${vars.color.onBrand}`,
   borderRadius: "22px",
   background: "transparent",
-  color: vars.color.onInk,
+  color: vars.color.onBrand,
   fontWeight: 700,
 });
 
 export const sheet = style({
+  maxHeight: "634px",
+  overflowY: "auto",
   marginTop: "8px",
   padding: "10px 0",
   borderRadius: "16px",
   backgroundColor: vars.color.surface,
+
+  "@media": {
+    "screen and (max-width: 424px)": {
+      maxHeight: ["calc(100vh - 210px)", "calc(100dvh - 210px)"],
+    },
+  },
 });
 
 export const count = style({

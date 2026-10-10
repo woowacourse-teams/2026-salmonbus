@@ -1,8 +1,6 @@
 import { style } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 
-const accent = "#E8523F";
-
 export const form = style({
   display: "flex",
   alignItems: "center",
@@ -29,7 +27,7 @@ export const searchIcon = style({
   height: "22px",
   marginRight: "19px",
   fill: "none",
-  stroke: accent,
+  stroke: vars.color.brand,
   strokeWidth: 2,
   strokeLinecap: "round",
 });
