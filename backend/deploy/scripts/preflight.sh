@@ -24,6 +24,10 @@ if [ "$COMPONENT" = "worker" ]; then
   grep -qc '^GBIS_SERVICE_KEY=' "$ENV_FILE" || { log "$ENV_FILE 에 GBIS_SERVICE_KEY 가 없다"; exit 1; }
   # 모델 계수 디렉터리는 배포가 안 건드리는 곳이라 여기서 만들기만 한다
   mkdir -p "$MODEL_DIRECTORY"
+  # 이관 임시 파일만 두는 전용 경로. 기존 파일은 삭제하지 않는다.
+  [ ! -L /var/lib/salmonbus/evaluation-archive ] || { log "이관 작업 경로가 심볼릭 링크다"; exit 1; }
+  mkdir -p /var/lib/salmonbus/evaluation-archive
+  chmod 700 /var/lib/salmonbus/evaluation-archive
   chown -R "$SERVICE_USER:$SERVICE_USER" /var/lib/salmonbus
 fi
 

@@ -653,6 +653,124 @@ class DemandStatisticsPipelineTest {
         }
     }
 
+    @Test
+    void 같은_차량의_정상_편도들을_모두_통계에_반영한다() {
+        // given
+        givenTwoDistinctTrips();
+
+        // when
+        finishPipeline();
+
+        // then
+        assertPublishedComparisonCell(2, 0.8125, 0.5625);
+        assertThat(jdbcClient.sql("""
+            SELECT capacity FROM stop_demand_capacity_stage
+            WHERE route_version_id=? AND vehicle_id=?
+            """).params(routeVersionId, "synthetic-bus")
+            .query(Integer.class).single()).isEqualTo(40);
+    }
+
+    @Test
+    void 문제_편도를_제외해도_같은_차량의_다른_편도는_통계에_남는다() {
+        // given
+        givenTwoDistinctTrips();
+        finishPipeline();
+        assertPublishedComparisonCell(2, 0.8125, 0.5625);
+
+        // when
+        excludeComparisonTrip("sal175-trip-a");
+        finishPipeline();
+
+        // then
+        assertPublishedComparisonCell(1, 0.75, 0.75);
+        assertThat(jdbcClient.sql("""
+            SELECT sample_count, arrival_seats_sum, net_boarding_sum
+            FROM stop_demand_current_total
+            WHERE route_version_id=? AND vehicle_id=? AND target_stop_order=?
+            """).params(routeVersionId, "synthetic-bus", TARGET_STOP_ORDER)
+            .query((rs, row) -> new long[]{rs.getLong(1), rs.getLong(2), rs.getLong(3)})
+            .single()).containsExactly(1L, 5L, 15L);
+        assertThat(jdbcClient.sql("SELECT status FROM vehicle_one_way_trip WHERE id=?")
+            .param("sal175-trip-b").query(String.class).single()).isEqualTo("ELIGIBLE");
+    }
+
+    @Test
+    void 최대_잔여석을_기록한_편도를_제외하면_남은_관측으로_정원을_다시_추정한다() {
+        // given
+        givenTwoDistinctTrips();
+        finishPipeline();
+        assertThat(jdbcClient.sql("""
+            SELECT capacity FROM stop_demand_capacity_stage
+            WHERE route_version_id=? AND vehicle_id=?
+            """).params(routeVersionId, "synthetic-bus")
+            .query(Integer.class).single()).isEqualTo(40);
+
+        // when
+        excludeComparisonTrip("sal175-trip-a");
+        finishPipeline();
+
+        // then
+        assertThat(jdbcClient.sql("""
+            SELECT capacity FROM stop_demand_capacity_stage
+            WHERE route_version_id=? AND vehicle_id=?
+            """).params(routeVersionId, "synthetic-bus")
+            .query(Integer.class).single()).isEqualTo(20);
+        assertPublishedComparisonCell(1, 0.75, 0.75);
+    }
+
+    private void givenTwoDistinctTrips() {
+        addComparisonTrip("sal175-trip-a",
+            OffsetDateTime.parse("2026-08-20T07:05:00+09:00"), 40, 10);
+        addComparisonTrip("sal175-trip-b",
+            OffsetDateTime.parse("2026-08-20T07:35:00+09:00"), 20, 5);
+    }
+
+    private void addComparisonTrip(String tripId, OffsetDateTime at, int before, int after) {
+        long sourceBatch = insertObservationBatch(tripId + "-source", at.minusSeconds(15));
+        long source = insertObservation(sourceBatch, "synthetic-bus", 0, PASSED_STOP_ORDER);
+        long arrivalBatch = insertObservationBatch(tripId + "-arrival", at);
+        long arrival = insertObservation(arrivalBatch, "synthetic-bus", 0, TARGET_STOP_ORDER);
+        jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats=? WHERE id=?")
+            .params(before, source).update();
+        jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats=? WHERE id=?")
+            .params(after, arrival).update();
+        jdbcClient.sql("""
+            INSERT INTO vehicle_one_way_trip(
+                id, start_observation_id, route_version_id, vehicle_id,
+                status, boundary, rule_version)
+            VALUES (?, ?, ?, ?, 'ELIGIBLE', 'DEPARTURE', 'test-sal175-confirmed-trip')
+            """).params(tripId, source, routeVersionId, "synthetic-bus").update();
+        // insertObservation이 만든 기본 배정을 이 테스트의 명시적인 편도로 교체한다.
+        assertThat(jdbcClient.sql("""
+            UPDATE observation_trip_assignment SET trip_id=?
+            WHERE observation_id IN (?, ?)
+            """).params(tripId, source, arrival).update()).isEqualTo(2);
+        saveForecasts(List.of(new SeatForecast(source, routeVersionId, TARGET_STOP_ORDER, 1,
+            modelDeploymentId, DEMAND_STATISTICS_REVISION, 0.41, 0.38, 12.5,
+            at.minusSeconds(14).toInstant())));
+        evaluationWriter.complete(List.of(ForecastEvaluation.completed(source, TARGET_STOP_ORDER,
+            new ArrivalLabel.Settled(arrival, after), at.plusSeconds(60).toInstant())));
+    }
+
+    private void excludeComparisonTrip(String tripId) {
+        assertThat(jdbcClient.sql("UPDATE vehicle_one_way_trip SET status='EXCLUDED' WHERE id=?")
+            .param(tripId).update()).isEqualTo(1);
+        changeEligibility();
+        rebuildRequests.request(routeVersionId, RebuildScope.vehicle("synthetic-bus"));
+    }
+
+    private void assertPublishedComparisonCell(int samples, double fillRate, double netBoardingRate) {
+        var actual = statistics.readAsOf(routeVersionId, TimeSlot.MORNING,
+            DemandStatisticsVersion.CURRENT_CALCULATION_VERSION, PIPELINE_NOW);
+        assertThat(actual.cells()).hasSize(1);
+        var cell = actual.cells().getFirst();
+        assertThat(cell.stopOrder()).isEqualTo(TARGET_STOP_ORDER);
+        assertThat(cell.sampleCount()).isEqualTo(samples);
+        assertThat(cell.dayCount()).isEqualTo(1);
+        assertThat(cell.averageFillRate()).isCloseTo(fillRate, Offset.offset(1e-12));
+        assertThat(cell.averageNetBoardingRate()).isCloseTo(netBoardingRate, Offset.offset(1e-12));
+    }
+
     private void finishPipelineLeavingLegacyCursors() {
         for (int i = 0; i < 200; i++) {
             if (pipeline.step(routeVersionId).status() == DemandStatisticsPipeline.Step.Status.COMPLETED) {

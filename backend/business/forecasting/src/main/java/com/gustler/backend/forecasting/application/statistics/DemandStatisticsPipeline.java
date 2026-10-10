@@ -24,7 +24,9 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** 한 호출은 한 페이지/단계만 커밋한다. 진행 중인 원합은 예보 조회에 노출하지 않는다. */
 @Component
@@ -44,12 +46,15 @@ public class DemandStatisticsPipeline {
     private final RouteDataQualityAccess quality;
     private final DemandStatisticsPolicy policy;
     private final Clock clock;
+    private final ArchivedDemandStatisticsRebuilder archived;
+    private final TransactionTemplate transaction;
 
     public DemandStatisticsPipeline(final DemandStatisticsRunRepository runs,
         final DemandStatisticsRebuildRequestStore requests, final DemandStatisticsRebuilder rebuilder,
         final DemandAccumulator accumulator, final DemandStatisticsStore store, final DemandSampleStore samples,
         final StopDemandStatisticsRepository statistics, final RouteDataQualityAccess quality,
-        final DemandStatisticsPolicy policy, final Clock clock) {
+        final DemandStatisticsPolicy policy, final Clock clock, final ArchivedDemandStatisticsRebuilder archived,
+        final PlatformTransactionManager transactions) {
         this.runs = runs;
         this.requests = requests;
         this.rebuilder = rebuilder;
@@ -60,10 +65,23 @@ public class DemandStatisticsPipeline {
         this.quality = quality;
         this.policy = policy;
         this.clock = clock;
+        this.archived = archived;
+        this.transaction = new TransactionTemplate(transactions);
+        this.transaction.setTimeout(2);
     }
 
-    @Transactional(timeout = 2)
     public Step step(final long routeVersionId) {
+        // 기존 호출자의 DB 트랜잭션에서는 외부 전송을 하지 않는다. 누락된 이력은 JDBC 경로가 거부한다.
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            Optional<Boolean> advanced = archived.advance(routeVersionId);
+            if (advanced.isPresent()) {
+                return new Step(advanced.get() ? Status.PROGRESSED : Status.WAITING, REBUILD, null);
+            }
+        }
+        return transaction.execute(status -> stepInTransaction(routeVersionId));
+    }
+
+    private Step stepInTransaction(final long routeVersionId) {
         store.limitStatementTime();
         final long currentRevision = WorkerOperationLog.measure("statistics_route_lock", routeVersionId,
             () -> quality.lock(routeVersionId));

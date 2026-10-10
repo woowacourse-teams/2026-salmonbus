@@ -51,7 +51,7 @@ final class StatisticsForecastFixture {
             .params(observationId, targetStopOrder, stopsToTarget, rawChance, chance, expectedSeats, publicationId)
             .update();
         jdbc.sql("""
-                INSERT INTO forecast_evaluation (vehicle_observation_id, target_stop_order, route_version_id)
+                INSERT INTO forecast_evaluation_pending (vehicle_observation_id, target_stop_order, route_version_id)
                 SELECT vehicle_observation_id, target_stop_order, route_version_id
                 FROM seat_forecast WHERE vehicle_observation_id = ? AND target_stop_order = ?
                 """)
@@ -66,21 +66,25 @@ final class StatisticsForecastFixture {
         OffsetDateTime scoredAt
     ) {
         jdbc.sql("""
-                UPDATE forecast_evaluation evaluation
-                SET scoring_state = 'SETTLED', arrival_observation_id = arrival.id,
-                    seats_on_arrival = arrival.remaining_seats, scored_at = ?,
-                    arrived_at = batch.response_received_at,
-                    arrival_route_version_id = arrival.route_version_id,
-                    arrival_vehicle_id = arrival.vehicle_id, arrival_stop_order = arrival.stop_order,
-                    arrival_running_state = arrival.running_state,
-                    arrival_remaining_seats = arrival.remaining_seats,
-                    arrival_seat_unknown_reason = arrival.seat_unknown_reason,
-                    arrival_vehicle_trip_key = arrival.vehicle_trip_key,
-                    arrival_quality_direction = arrival.quality_direction
-                FROM forecast_observation_quality arrival
-                JOIN observation_batch batch ON batch.id = arrival.observation_batch_id
-                WHERE arrival.id = ? AND evaluation.vehicle_observation_id = ?
-                  AND evaluation.target_stop_order = ?
+                WITH arrival AS MATERIALIZED (
+                    SELECT observation.*, batch.response_received_at, CAST(? AS timestamptz) AS scored_at
+                    FROM forecast_observation_quality observation
+                    JOIN observation_batch batch ON batch.id=observation.observation_batch_id
+                    WHERE observation.id=?
+                ), removed AS (
+                    DELETE FROM forecast_evaluation_pending WHERE vehicle_observation_id=? AND target_stop_order=?
+                    RETURNING *
+                )
+                INSERT INTO forecast_evaluation_result (
+                    vehicle_observation_id,target_stop_order,route_version_id,scoring_state,
+                    arrival_observation_id,seats_on_arrival,scored_at,arrived_at,arrival_route_version_id,
+                    arrival_vehicle_id,arrival_stop_order,arrival_running_state,arrival_remaining_seats,
+                    arrival_seat_unknown_reason,arrival_vehicle_trip_key,arrival_quality_direction)
+                SELECT removed.vehicle_observation_id,removed.target_stop_order,removed.route_version_id,'SETTLED',
+                       arrival.id,arrival.remaining_seats,arrival.scored_at,arrival.response_received_at,
+                       arrival.route_version_id,arrival.vehicle_id,arrival.stop_order,arrival.running_state,
+                       arrival.remaining_seats,arrival.seat_unknown_reason,arrival.vehicle_trip_key,arrival.quality_direction
+                FROM removed CROSS JOIN arrival
                 """)
             .params(scoredAt, arrivalObservationId, observationId, targetStopOrder).update();
     }

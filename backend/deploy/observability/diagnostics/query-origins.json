@@ -3,21 +3,9 @@
     "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcForecastEvaluationRepository.java",
     "line": 32
   },
-  "forecast_evaluation.select_pending_keys": {
-    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcForecastEvaluationRepository.java",
-    "line": 39
-  },
-  "forecast_evaluation.select_pending": {
-    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcForecastEvaluationRepository.java",
-    "line": 49
-  },
-  "forecast_evaluation.complete": {
-    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcForecastEvaluationRepository.java",
-    "line": 68
-  },
   "forecast_evaluation.complete_batch": {
     "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcForecastEvaluationRepository.java",
-    "line": 115
+    "line": 80
   },
   "demand_statistics_run.select": {
     "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcDemandStatisticsRunRepository.java",
@@ -25,7 +13,7 @@
   },
   "demand_statistics_run.upsert": {
     "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcDemandStatisticsRunRepository.java",
-    "line": 38
+    "line": 37
   },
   "vehicle_trajectory_query.select_batches_awaiting_forecast": {
     "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcVehicleTrajectoryQuery.java",
@@ -33,23 +21,23 @@
   },
   "vehicle_trajectory_query.select_oldest_batch_left_behind": {
     "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcVehicleTrajectoryQuery.java",
-    "line": 66
+    "line": 65
   },
   "vehicle_trajectory_query.select_target_batch": {
     "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcVehicleTrajectoryQuery.java",
-    "line": 80
+    "line": 78
   },
   "vehicle_trajectory_query.select_batches_in_window": {
     "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcVehicleTrajectoryQuery.java",
-    "line": 94
+    "line": 91
   },
   "vehicle_trajectory_query.select_observations_in_batches": {
     "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcVehicleTrajectoryQuery.java",
-    "line": 109
+    "line": 105
   },
   "vehicle_trajectory_query.select_maximum_seats_ever_observed": {
     "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcVehicleTrajectoryQuery.java",
-    "line": 143
+    "line": 138
   },
   "demand_statistics_rebuild.select": {
     "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcDemandStatisticsRebuildRepository.java",
@@ -57,11 +45,11 @@
   },
   "demand_statistics_rebuild.upsert_progress": {
     "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcDemandStatisticsRebuildRepository.java",
-    "line": 34
+    "line": 33
   },
   "demand_statistics_rebuild.upsert_scan": {
     "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcDemandStatisticsRebuildRepository.java",
-    "line": 46
+    "line": 44
   },
   "forecast_publication.insert_publication": {
     "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcForecastPublicationRepository.java",
@@ -69,15 +57,15 @@
   },
   "forecast_publication.update_publication": {
     "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcForecastPublicationRepository.java",
-    "line": 29
+    "line": 28
   },
   "forecast_publication.upsert_prediction": {
     "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcForecastPublicationRepository.java",
-    "line": 42
+    "line": 40
   },
   "forecast_publication.count_predictions": {
     "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcForecastPublicationRepository.java",
-    "line": 62
+    "line": 59
   },
   "api.board": {
     "source": "backend/api-app/src/main/java/com/gustler/backend/api/http/ApiSqlOrigin.java"
@@ -90,5 +78,9 @@
   },
   "api.other": {
     "source": "backend/api-app/src/main/java/com/gustler/backend/api/http/ApiSqlOrigin.java"
+  },
+  "forecast_evaluation.select_pending_page": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/jdbc/JdbcForecastEvaluationRepository.java",
+    "line": 43
   }
 }

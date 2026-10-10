@@ -309,7 +309,8 @@ class RuntimeProcessSeparationTest {
         assertThat(queryStrings("""
             SELECT DISTINCT event_object_table FROM information_schema.triggers
             WHERE trigger_schema = 'public' AND trigger_name = 'runtime_test_write_audit'
-            """)).contains("observation_batch", "forecast_publication", "forecast_evaluation", "route",
+            """)).contains("observation_batch", "forecast_publication", "forecast_evaluation_pending",
+                "forecast_evaluation_result", "route",
                 "route_data_quality", "trip_quality_rebuild", "daily_call_quota", "model_deployment");
         assertNoWrites();
     }

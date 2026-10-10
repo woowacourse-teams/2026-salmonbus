@@ -198,6 +198,14 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
     ) {
         // read→aggregate→append 동안 판정 변경을 막는다. 호출 writer가 노선별 transaction을 연다.
         qualityAccess.lock(routeVersionId);
+        boolean archived = jdbcClient.sql("""
+            SELECT EXISTS(SELECT 1 FROM evaluation_archive_batch b JOIN evaluation_archive_member m ON m.batch_id=b.id
+                JOIN seat_forecast f ON f.vehicle_observation_id=m.vehicle_observation_id
+                  AND f.target_stop_order=m.target_stop_order AND f.stops_to_target=1
+                WHERE b.route_version_id=:route AND NOT EXISTS(SELECT 1 FROM forecast_evaluation_result e
+                    WHERE e.vehicle_observation_id=m.vehicle_observation_id AND e.target_stop_order=m.target_stop_order))
+            """).param("route", routeVersionId).query(Boolean.class).single();
+        if (archived) throw new IllegalStateException("DB 원본만 읽는 일괄 집계는 이관된 정산을 처리할 수 없다");
         JdbcClient.StatementSpec statement = jdbcClient.sql(SELECT_HOURLY_TOTALS)
             .param("routeVersionId", routeVersionId)
             .param("dataUntil", offsetOf(dataUntil));

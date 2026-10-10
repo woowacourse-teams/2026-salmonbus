@@ -119,7 +119,8 @@ class JdbcForecastEvaluationTransactionTest {
     @AfterEach
     void 이_테스트가_저장한_자료만_정리한다() {
         inTransaction(() -> {
-            jdbc.sql("DELETE FROM forecast_evaluation WHERE route_version_id = ?").param(routeVersionId).update();
+            jdbc.sql("DELETE FROM forecast_evaluation_pending WHERE route_version_id = ?").param(routeVersionId).update();
+            jdbc.sql("DELETE FROM forecast_evaluation_result WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM seat_forecast WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM forecast_publication WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM same_day_model_full_outcomes WHERE route_id = ?").param(routeId).update();
@@ -205,6 +206,52 @@ class JdbcForecastEvaluationTransactionTest {
         assertThat(evaluationState()).isEqualTo("SKIPPED");
         assertThat(jdbc.sql("SELECT count(*) FROM same_day_model_full_outcomes WHERE route_id = ?")
             .param(routeId).query(Long.class).single()).isZero();
+    }
+
+    @Test
+    void 정산과_재등록이_겹쳐도_완료된_평가를_대기로_다시_넣지_않는다() throws Exception {
+        initializeSameDayOutcomes();
+        CountDownLatch settled = new CountDownLatch(1);
+        CountDownLatch retryStarted = new CountDownLatch(1);
+        CountDownLatch commit = new CountDownLatch(1);
+        AtomicInteger holding = new AtomicInteger();
+        AtomicInteger waiting = new AtomicInteger();
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            var first = executor.submit(() -> inTransaction(() -> {
+                holding.set(connectionId());
+                evaluationWriter.complete(List.of(completedEvaluation()));
+                settled.countDown();
+                await(commit);
+                return null;
+            }));
+            var retry = executor.submit(() -> {
+                await(settled);
+                return inTransaction(() -> {
+                    waiting.set(connectionId());
+                    retryStarted.countDown();
+                    // ForecastBatchWriter가 대기 등록 전에 확보하는 같은 노선 잠금이다.
+                    qualityAccess.lock(routeVersionId);
+                    evaluations.addPending(routeVersionId,
+                        List.of(ForecastEvaluation.pending(sourceObservationId, TARGET_STOP_ORDER)));
+                    return null;
+                });
+            });
+            await(retryStarted);
+            awaitDatabaseLock(waiting.get(), holding.get());
+            commit.countDown();
+            first.get(10, TimeUnit.SECONDS);
+            retry.get(10, TimeUnit.SECONDS);
+            assertThat(jdbc.sql("SELECT count(*) FROM forecast_evaluation_pending WHERE vehicle_observation_id=?")
+                .param(sourceObservationId).query(Long.class).single()).isZero();
+            assertThat(jdbc.sql("SELECT count(*) FROM forecast_evaluation_result WHERE vehicle_observation_id=?")
+                .param(sourceObservationId).query(Long.class).single()).isOne();
+            assertCountedOnce();
+        } finally {
+            settled.countDown();
+            commit.countDown();
+            stop(executor);
+        }
     }
 
     @Test

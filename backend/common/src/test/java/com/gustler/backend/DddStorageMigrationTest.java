@@ -179,6 +179,43 @@ class DddStorageMigrationTest {
             """)).isInstanceOf(SQLException.class);
     }
 
+    @Test
+    void 평가_분리는_완료_이력_파일을_유지하고_대기만_옮긴다() throws SQLException {
+        migrate("24");
+        insertLegacyData();
+        migrate("25");
+        copyLegacyData();
+        execute("INSERT INTO sal134_transition(backup_id, verified_at) VALUES ('stopped-writer-backup', now())");
+        migrate("30");
+        execute("""
+            INSERT INTO route_stop(route_version_id,stop_order,stop_id,name,direction,boarding_allowed)
+            VALUES(1,3,'stop3','다음 정류장','UP',true);
+            INSERT INTO seat_forecast(vehicle_observation_id,target_stop_order,route_version_id,stops_to_target,
+                model_deployment_id,demand_statistics_revision,seat_full_chance_raw,seat_full_chance,
+                generated_at,quality_revision,publication_id)
+            SELECT vehicle_observation_id,3,route_version_id,2,model_deployment_id,demand_statistics_revision,
+                seat_full_chance_raw,seat_full_chance,generated_at,quality_revision,publication_id FROM seat_forecast;
+            INSERT INTO forecast_evaluation(vehicle_observation_id,target_stop_order,route_version_id) VALUES(1,3,1)
+            """);
+        long originalFile = number("SELECT pg_relation_filenode('forecast_evaluation')");
+        long trainingRows = number("SELECT count(*) FROM training_eligible_seat_forecast");
+
+        migrate("31");
+
+        assertThat(number("SELECT pg_relation_filenode('forecast_evaluation_result')")).isEqualTo(originalFile);
+        assertThat(number("SELECT count(*) FROM forecast_evaluation_result")).isOne();
+        assertThat(number("SELECT count(*) FROM forecast_evaluation_pending")).isOne();
+        assertThat(number("SELECT count(*) FROM forecast_evaluation")).isEqualTo(2);
+        assertThat(number("SELECT count(*) FROM quality_eligible_seat_forecast")).isEqualTo(2);
+        assertThat(number("SELECT count(*) FROM training_eligible_seat_forecast")).isEqualTo(trainingRows);
+        assertThat(scalar("SELECT scoring_state FROM forecast_evaluation WHERE target_stop_order=3")).isEqualTo("PENDING");
+        assertThat(number("SELECT seats_on_arrival FROM forecast_evaluation_result")).isEqualTo(9);
+        assertThatThrownBy(() -> execute("""
+            INSERT INTO forecast_evaluation_result(vehicle_observation_id,target_stop_order,route_version_id,scoring_state)
+            VALUES(1,3,1,'PENDING')
+            """)).isInstanceOf(SQLException.class);
+    }
+
     private void insertRoute() throws SQLException {
         execute("""
             INSERT INTO route(public_route_id, source_id, source_route_id, display_name, start_stop_name, end_stop_name, quality_revision)

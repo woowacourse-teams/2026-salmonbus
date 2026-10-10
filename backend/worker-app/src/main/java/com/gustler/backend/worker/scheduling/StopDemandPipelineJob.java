@@ -14,7 +14,7 @@ public class StopDemandPipelineJob {
         this.service = service;
     }
 
-    @Scheduled(fixedDelayString = "${forecast.statistics-step-interval:100ms}")
+    @Scheduled(fixedDelayString = "${forecast.statistics-step-interval:100ms}", scheduler = "calibrationTaskScheduler")
     public void advance() {
         service.advance();
     }

@@ -67,6 +67,15 @@ model:
 # 예보 배치와 라벨 회수 배치. 계수 번들이 없어 도는 배포가 하나도 없으므로 꺼둔 채로 낸다.
 # 켜는 것은 배포 행이 선 뒤다. 수집(collection.enabled)과 같은 방식으로 끈다.
 forecast:
+  archive:
+    # 배포 유닛에서만 기본 활성화한다. 로컬과 테스트는 외부 저장소를 사용하지 않는다.
+    enabled: ${FORECAST_ARCHIVE_ENABLED:false}
+    delete-enabled: ${FORECAST_ARCHIVE_DELETE_ENABLED:false}
+    work-directory: ${FORECAST_ARCHIVE_WORK_DIRECTORY:/var/lib/salmonbus/evaluation-archive}
+    page-size: ${FORECAST_ARCHIVE_PAGE_SIZE:100}
+    max-file-bytes: 1048576
+    interval: 5s
+    initial-delay: 60s
   same-day-initialization:
     interval: 10s
     retry-interval: 60s

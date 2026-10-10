@@ -41,30 +41,41 @@ public class JdbcDemandStatisticsRebuildStore implements DemandStatisticsRebuild
         ) observation ON true ORDER BY observation.id LIMIT :limit
         """;
 
+    // 이번 페이지가 참조하는 원본·도착 관측만 품질 검사한다. 도착 관측 전체를 예보마다 재조회하지 않는다.
     private static final String AGGREGATE = """
         WITH page AS MATERIALIZED (
             SELECT id FROM vehicle_observation WHERE id IN (:ids)
+        ), forecasts AS MATERIALIZED (
+            SELECT forecast.vehicle_observation_id,forecast.target_stop_order,
+                evaluation.arrival_observation_id,evaluation.arrived_at,evaluation.seats_on_arrival
+            FROM page JOIN seat_forecast forecast ON forecast.vehicle_observation_id=page.id
+            JOIN forecast_evaluation evaluation ON evaluation.vehicle_observation_id=forecast.vehicle_observation_id
+              AND evaluation.target_stop_order=forecast.target_stop_order
+            JOIN route_stop stop ON stop.route_version_id=forecast.route_version_id AND stop.stop_order=forecast.target_stop_order
+            WHERE evaluation.scoring_state='SETTLED' AND forecast.stops_to_target=1 AND stop.boarding_allowed
+              AND evaluation.scored_at<=:until
+              AND NOT EXISTS (SELECT 1 FROM stop_demand_pending_sample pending
+                  WHERE pending.prediction_observation_id=page.id AND pending.target_stop_order=forecast.target_stop_order
+                    AND pending.id>:inputUntil)
+        ), observation_keys AS MATERIALIZED (
+            SELECT vehicle_observation_id AS id FROM forecasts
+            UNION SELECT arrival_observation_id FROM forecasts WHERE arrival_observation_id IS NOT NULL
+        ), eligible AS MATERIALIZED (
+            SELECT observation.id,observation.route_version_id,observation.vehicle_id,
+                observation.quality_direction,observation.remaining_seats
+            FROM observation_keys keys JOIN forecast_eligible_observation observation ON observation.id=keys.id
         ), added AS (
             INSERT INTO stop_demand_rebuild_total AS total(route_version_id, scope_vehicle_id, request_id,
                 vehicle_id, arrived_hour_start, target_stop_order, sample_count, arrival_seats_sum, net_boarding_sum)
             SELECT :version, :vehicle, :request, source.vehicle_id,
-                date_trunc('hour', evaluation.arrived_at, 'UTC'), forecast.target_stop_order,
-                count(*), sum(evaluation.seats_on_arrival), sum(source.remaining_seats-evaluation.seats_on_arrival)
-            FROM page JOIN forecast_eligible_observation source ON source.id=page.id
-            JOIN seat_forecast forecast ON forecast.vehicle_observation_id=source.id
-            JOIN forecast_evaluation evaluation ON evaluation.vehicle_observation_id=forecast.vehicle_observation_id
-              AND evaluation.target_stop_order=forecast.target_stop_order
-            JOIN forecast_eligible_observation arrival ON arrival.id=evaluation.arrival_observation_id
+                date_trunc('hour', forecast.arrived_at, 'UTC'), forecast.target_stop_order,
+                count(*), sum(forecast.seats_on_arrival), sum(source.remaining_seats-forecast.seats_on_arrival)
+            FROM forecasts forecast JOIN eligible source ON source.id=forecast.vehicle_observation_id
+            JOIN eligible arrival ON arrival.id=forecast.arrival_observation_id
               AND %s
-            JOIN route_stop stop ON stop.route_version_id=forecast.route_version_id AND stop.stop_order=forecast.target_stop_order
             WHERE source.route_version_id=:version AND (:vehicle='' OR source.vehicle_id=:vehicle)
               AND source.vehicle_id IS NOT NULL AND source.remaining_seats IS NOT NULL
-              AND evaluation.scoring_state='SETTLED' AND forecast.stops_to_target=1 AND stop.boarding_allowed
-              AND evaluation.scored_at<=:until
-              AND NOT EXISTS (SELECT 1 FROM stop_demand_pending_sample pending
-                  WHERE pending.prediction_observation_id=source.id AND pending.target_stop_order=forecast.target_stop_order
-                    AND pending.id>:inputUntil)
-            GROUP BY source.vehicle_id, date_trunc('hour', evaluation.arrived_at, 'UTC'), forecast.target_stop_order
+            GROUP BY source.vehicle_id, date_trunc('hour', forecast.arrived_at, 'UTC'), forecast.target_stop_order
             ON CONFLICT(request_id,vehicle_id,arrived_hour_start,target_stop_order) DO UPDATE SET
                 sample_count=total.sample_count+EXCLUDED.sample_count,
                 arrival_seats_sum=total.arrival_seats_sum+EXCLUDED.arrival_seats_sum,
@@ -159,6 +170,15 @@ public class JdbcDemandStatisticsRebuildStore implements DemandStatisticsRebuild
         if (observationIds.isEmpty()) {
             return;
         }
+        boolean missing = jdbc.sql("""
+            SELECT EXISTS(SELECT 1 FROM evaluation_archive_member m JOIN seat_forecast f
+                ON f.vehicle_observation_id=m.vehicle_observation_id AND f.target_stop_order=m.target_stop_order
+                  AND f.stops_to_target=1
+                WHERE m.vehicle_observation_id IN (:ids) AND m.route_version_id=:route
+                  AND NOT EXISTS(SELECT 1 FROM forecast_evaluation_result e
+                      WHERE e.vehicle_observation_id=m.vehicle_observation_id AND e.target_stop_order=m.target_stop_order))
+            """).param("ids", observationIds).param("route", rebuild.routeVersionId()).query(Boolean.class).single();
+        if (missing) throw new IllegalStateException("이관된 정산을 제외한 DB 전용 재집계는 실행하지 않는다");
         jdbc.sql(AGGREGATE).param("version", rebuild.routeVersionId()).param("vehicle", rebuild.scope().vehicleId())
             .param("request", rebuild.requestId()).param("ids", observationIds)
             .param("until", offsetOf(rebuild.dataUntil())).param("inputUntil", rebuild.inputUntilId())
