@@ -18,26 +18,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import org.flywaydb.core.Flyway;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
 public final class LocalData {
-    private static final String URL = "jdbc:postgresql://postgres:5432/salmonbus_local";
-    private static final String USER = "salmonbus_local";
     private static final String STATISTICS = ForecastFeatureContract.STATISTICS_CALCULATION_VERSION;
     private static final OffsetDateTime BASELINE = OffsetDateTime.parse("2026-10-06T00:00:00Z");
 
     public static void main(String[] args) {
         String step = "INPUT";
         try {
+            var target = DataTarget.resolve(args, System.getenv());
             final boolean recover = args.length == 3 && args[2].equals("--recover-collector-only");
             final boolean reset = args.length == 3 && args[2].equals("--reset-generated");
-            require((args.length == 2 || recover || reset) && args[0].equals("/local/data/routes.json")
-                && args[1].equals(ReferenceBundle.DIRECTORY), "LOCAL_PATHS");
-            require(URL.equals(System.getenv("DB_URL")) && USER.equals(System.getenv("DB_USERNAME")), "LOCAL_DATABASE_ONLY");
             String password = System.getenv("DB_PASSWORD");
-            require(password != null && password.matches("[0-9a-f]{48}"), "LOCAL_CREDENTIALS");
-            require("local-only-placeholder".equals(System.getenv("GBIS_SERVICE_KEY")), "LOCAL_KEY_ONLY");
             Path routeFile = Path.of(args[0]);
             RouteDataset data = RouteDataset.read(routeFile);
             Path catalogFile = routeFile.resolveSibling("catalog-routes.json");
@@ -46,21 +42,32 @@ public final class LocalData {
             String routeDigest = ReferenceBundle.sha(Files.readAllBytes(routeFile));
             step = "MODEL";
             var inspection = ReferenceBundle.prepare(routeFile.resolveSibling("model-reference"), Path.of(args[1]));
+            if (target.shared()) {
+                step = "MIGRATION";
+                // 준비 도구에서는 DB 접속 정보 대신 결과 코드만 남긴다.
+                var logger = (ch.qos.logback.classic.Logger) LoggerFactory.getLogger("org.flywaydb");
+                logger.setLevel(ch.qos.logback.classic.Level.OFF);
+                Flyway.configure().dataSource(target.url(), target.username(), password)
+                    .locations("classpath:db/migration").loggers("slf4j").cleanDisabled(true)
+                    .jdbcProperties(Map.of("connectTimeout", "5", "socketTimeout", "30",
+                        "options", "-c statement_timeout=25000 -c lock_timeout=1000"))
+                    .baselineOnMigrate(false).load().migrate();
+            }
             step = "DATABASE";
             Properties properties = new Properties();
-            properties.setProperty("user", USER);
+            properties.setProperty("user", target.username());
             properties.setProperty("password", password);
             properties.setProperty("connectTimeout", "5");
             properties.setProperty("socketTimeout", "30");
-            properties.setProperty("ApplicationName", "salmonbus-local-data");
+            properties.setProperty("ApplicationName", target.shared() ? "salmonbus-shared-dev-data" : "salmonbus-local-data");
             boolean existing;
-            try (Connection connection = DriverManager.getConnection(URL, properties)) {
+            try (Connection connection = DriverManager.getConnection(target.url(), properties)) {
                 connection.setAutoCommit(false);
                 try {
                     execute(connection, "SET LOCAL statement_timeout = '10s'");
                     execute(connection, "SET LOCAL lock_timeout = '1s'");
                     scalar(connection, "SELECT pg_advisory_xact_lock(16320261006)");
-                    require(USER.equals(scalar(connection, "SELECT current_database()")), "LOCAL_DATABASE_NAME");
+                    require(target.username().equals(scalar(connection, "SELECT current_database()")), "LOCAL_DATABASE_NAME");
                     require(!scalar(connection, "SELECT count(*) FROM flyway_schema_history WHERE success").equals("0"), "MIGRATION_REQUIRED");
                     execute(connection, """
                         CREATE TABLE IF NOT EXISTS local_development_fixture (

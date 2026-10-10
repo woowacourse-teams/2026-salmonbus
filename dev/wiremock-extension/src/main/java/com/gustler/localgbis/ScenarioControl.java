@@ -55,7 +55,7 @@ public final class ScenarioControl {
                     String mapping = Json.write(Map.of("id", id, "priority", 1, "request", Map.of(
                         "method", "GET", "urlPath", "/buslocationservice/v2/getBusLocationListv2",
                         "queryParameters", Map.of("routeId", Map.of("equalTo", route.routeId()),
-                            "serviceKey", Map.of("equalTo", "local-only-placeholder"), "format", Map.of("equalTo", "json"))),
+                            "serviceKey", Map.of("matches", "(local-only-placeholder|shared-dev-placeholder)"), "format", Map.of("equalTo", "json"))),
                         "response", response));
                     int status = request(client, uri, "PUT", mapping);
                     if (status == 404) {

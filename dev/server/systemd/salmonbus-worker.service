@@ -1,0 +1,27 @@
+[Unit]
+Description=salmonbus dev Worker
+After=network-online.target salmonbus-dev-infra.service
+Wants=network-online.target
+Requires=salmonbus-dev-infra.service
+RequiresMountsFor=/srv/salmonbus-dev
+
+[Service]
+Type=simple
+User=salmonbus
+Group=salmonbus
+EnvironmentFile=/etc/salmonbus-dev/worker.env
+EnvironmentFile=/opt/salmonbus-dev/worker/current/release.env
+UnsetEnvironment=JAVA_TOOL_OPTIONS JDK_JAVA_OPTIONS _JAVA_OPTIONS CLASSPATH
+ExecStartPre=+/usr/bin/java -Xms16m -Xmx64m -jar /opt/salmonbus-dev/tools/shared-dev-tools.jar preflight worker
+ExecStart=/usr/bin/java -Xms128m -Xmx384m -jar /opt/salmonbus-dev/worker/current/jars/worker-app.jar --spring.config.additional-location=file:/etc/salmonbus-dev/worker.yml --spring.datasource.url=jdbc:postgresql://127.0.0.1:15432/salmonbus_dev --spring.datasource.username=salmonbus_dev --gbis.base-url=http://127.0.0.1:18080
+Restart=on-failure
+RestartSec=5
+SuccessExitStatus=143
+TimeoutStopSec=45
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

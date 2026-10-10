@@ -1,0 +1,44 @@
+version: 0.2
+
+env:
+  shell: bash
+  variables:
+    GRADLE_USER_HOME: /root/.gradle-shared-dev
+
+phases:
+  install:
+    runtime-versions:
+      java: corretto21
+  pre_build:
+    commands:
+      - bash "${CODEBUILD_SRC_DIR}/dev/server/build.sh" prepare-tools
+  build:
+    commands:
+      - bash "${CODEBUILD_SRC_DIR}/dev/server/build.sh" build
+  post_build:
+    commands:
+      - test "$CODEBUILD_BUILD_SUCCEEDING" = "1"
+      - bash "${CODEBUILD_SRC_DIR}/dev/server/build.sh" package
+
+cache:
+  paths:
+    - '/root/.gradle-shared-dev/wrapper/dists/**/*'
+    - '/root/.gradle-shared-dev/caches/modules-2/**/*'
+
+artifacts:
+  base-directory: backend/build/shared-dev/revision/basis
+  files:
+    - '**/*'
+  secondary-artifacts:
+    DevBasis:
+      base-directory: backend/build/shared-dev/revision/basis
+      files:
+        - '**/*'
+    ApiRevision:
+      base-directory: backend/build/shared-dev/revision/api
+      files:
+        - '**/*'
+    WorkerRevision:
+      base-directory: backend/build/shared-dev/revision/worker
+      files:
+        - '**/*'

@@ -1,0 +1,11 @@
+import org.gradle.api.tasks.JavaExec
+
+gradle.projectsEvaluated {
+    gradle.rootProject.subprojects.each { project ->
+        project.tasks.withType(JavaExec).configureEach {
+            minHeapSize = '64m'
+            maxHeapSize = '384m'
+            jvmArgs '-XX:MaxMetaspaceSize=192m', '-XX:ActiveProcessorCount=2'
+        }
+    }
+}
