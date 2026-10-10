@@ -1,0 +1,38 @@
+name: LOCAL-DEV-CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+    paths:
+      - 'dev/**'
+      - 'compose*.yaml'
+      - '.dockerignore'
+      - 'backend/**/build.gradle'
+      - 'backend/settings.gradle'
+      - 'backend/gradle/**'
+      - 'backend/common/src/main/resources/db/**'
+      - 'frontend/package.json'
+      - 'frontend/pnpm-lock.yaml'
+      - 'frontend/pnpm-workspace.yaml'
+      - '.github/workflows/local-dev-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: local-dev-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-development:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify local Docker development environment
+        run: |
+          bash dev/tests/cli-contract.sh
+          bash dev/tests/smoke-local.sh
