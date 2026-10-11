@@ -8,7 +8,10 @@
     "userInterfaceStyle": "light",
     "ios": {
       "bundleIdentifier": "com.salmonbus.app",
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "plugins": [
       [
@@ -18,6 +21,12 @@
           "image": "./assets/splash-blank.png"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "80433e07-5af8-4b3e-b10c-f59cddb88e99"
+      }
+    },
+    "owner": "salmonbus"
   }
 }
