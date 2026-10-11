@@ -58,9 +58,9 @@ describe("공통 오류 수집", () => {
     [404, "ENDPOINT_NOT_FOUND", "error"],
     [405, "METHOD_NOT_ALLOWED", "error"],
     [500, "INTERNAL_ERROR", "error"],
-    [503, "SERVICE_UNAVAILABLE", "error"],
-    [503, "MODEL_OUT_OF_SCOPE", "error"],
-    [503, "NO_RECENT_OBSERVATION", "error"],
+    [503, "SERVICE_UNAVAILABLE", "warning"],
+    [503, "MODEL_OUT_OF_SCOPE", "warning"],
+    [503, "NO_RECENT_OBSERVATION", "warning"],
   ] as const)("%s %s 응답의 수집 레벨을 Sentry에 전달한다", (status, code, level) => {
     const { apiFailureReporter } = initErrorTracking({
       dsn: "",
@@ -141,7 +141,7 @@ describe("공통 오류 수집", () => {
     expect(recording.events[0]?.fingerprint?.[1]).toBe("/api/resource");
   });
 
-  it.each([400, 404])("%s 응답도 오류 형식이 맞지 않으면 error로 수집한다", (status) => {
+  it.each([400, 404, 503])("%s 응답도 오류 형식이 맞지 않으면 error로 수집한다", (status) => {
     const recording = createRecording();
     recording.report(
       "/api/resource",

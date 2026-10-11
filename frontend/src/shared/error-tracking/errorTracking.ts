@@ -152,7 +152,15 @@ export function createApiFailureReporter(
     // 요청을 소유한 쪽에서 노선 정보와 그룹 경로를 전달한다. 수집기는 URL의 업무 의미를 해석하지 않는다.
     const endpoint = details.context?.endpoint ?? path;
     const event: ApiFailureEvent = {
-      level: code === "INVALID_ROUTE_ID" || code === "ROUTE_NOT_FOUND" ? "warning" : "error",
+      level: [
+        "INVALID_ROUTE_ID",
+        "ROUTE_NOT_FOUND",
+        "SERVICE_UNAVAILABLE",
+        "MODEL_OUT_OF_SCOPE",
+        "NO_RECENT_OBSERVATION",
+      ].includes(code)
+        ? "warning"
+        : "error",
       fingerprint: ["api", endpoint, failure.kind, String(status), code],
       tags: { ...details.context?.tags, source: "api", failure_kind: failure.kind, error_code: code },
       extra: {
