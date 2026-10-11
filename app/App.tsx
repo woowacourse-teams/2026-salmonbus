@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet } from 'react-native';
@@ -20,10 +20,15 @@ const IN_APP_ORIGINS = [new URL(WEB_URL).origin];
 const SPLASH_BACKGROUND_COLOR = '#E8533F';
 
 export default function App() {
+  const webViewRef = useRef<WebView>(null);
   const [loadFailed, setLoadFailed] = useState(false);
 
-  const showLoadFailed = () => setLoadFailed(true);
+  const showLoadFailed = () => {
+    setLoadFailed(true);
+    SplashScreen.hide();
+  };
   const retryLoad = () => setLoadFailed(false);
+  const reloadWebView = () => webViewRef.current?.reload();
 
   return (
     <>
@@ -31,6 +36,7 @@ export default function App() {
         <LoadFailedView onRetry={retryLoad} />
       ) : (
         <WebView
+          ref={webViewRef}
           source={{ uri: WEB_URL }}
           style={styles.webView}
           originWhitelist={IN_APP_ORIGINS}
@@ -38,6 +44,7 @@ export default function App() {
           onLoadEnd={SplashScreen.hide}
           onError={showLoadFailed}
           onHttpError={showLoadFailed}
+          onContentProcessDidTerminate={reloadWebView}
         />
       )}
       <StatusBar style="auto" />
