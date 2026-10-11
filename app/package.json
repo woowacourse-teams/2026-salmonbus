@@ -4,6 +4,7 @@
   "main": "index.ts",
   "dependencies": {
     "expo": "~57.0.27",
+    "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
     "react-native": "0.86.3",
@@ -15,7 +16,7 @@
   },
   "scripts": {
     "start": "expo start",
-    "ios": "expo start --ios"
+    "ios": "expo run:ios"
   },
   "private": true
 }

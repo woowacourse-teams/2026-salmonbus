@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { LoadFailedView } from './LoadFailedView';
+
+SplashScreen.preventAutoHideAsync();
 
 function readWebUrl() {
   const webUrl = process.env.EXPO_PUBLIC_WEB_URL;
@@ -14,6 +17,7 @@ function readWebUrl() {
 
 const WEB_URL = readWebUrl();
 const IN_APP_ORIGINS = [new URL(WEB_URL).origin];
+const SPLASH_BACKGROUND_COLOR = '#E8533F';
 
 export default function App() {
   const [loadFailed, setLoadFailed] = useState(false);
@@ -31,6 +35,7 @@ export default function App() {
           style={styles.webView}
           originWhitelist={IN_APP_ORIGINS}
           allowsBackForwardNavigationGestures
+          onLoadEnd={SplashScreen.hide}
           onError={showLoadFailed}
           onHttpError={showLoadFailed}
         />
@@ -43,5 +48,6 @@ export default function App() {
 const styles = StyleSheet.create({
   webView: {
     flex: 1,
+    backgroundColor: SPLASH_BACKGROUND_COLOR,
   },
 });

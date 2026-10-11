@@ -9,6 +9,15 @@
     "ios": {
       "bundleIdentifier": "com.salmonbus.app",
       "supportsTablet": false
-    }
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#E8533F",
+          "image": "./assets/splash-blank.png"
+        }
+      ]
+    ]
   }
 }
