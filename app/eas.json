@@ -1,0 +1,19 @@
+{
+  "cli": {
+    "version": ">= 24.12.1",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_WEB_URL": "https://www.salmonbus.com"
+      }
+    },
+    "production-simulator": {
+      "extends": "production",
+      "ios": {
+        "simulator": true
+      }
+    }
+  }
+}
