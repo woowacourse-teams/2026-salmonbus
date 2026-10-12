@@ -53,8 +53,9 @@ describe("requestJson", () => {
       endpoint: "/api/v1/routes/:routeId/vehicles",
     },
   ])("$name 노선 정보는 URL에서 추측하지 않고 API 호출자가 전달한다", async ({ fetch, url, endpoint }) => {
+    const controller = new AbortController();
     respondWith(503, { code: "SERVICE_UNAVAILABLE", message: "장애", requestId: "request-1" });
-    await fetch("123456789");
+    await fetch("123456789", { signal: controller.signal });
     expect(global.fetch).toHaveBeenCalledWith(url, expect.anything());
     expect(reportApiFailure).toHaveBeenCalledWith(url, expect.anything(), {
       context: { endpoint, tags: { route_id: "123456789" } },
@@ -77,8 +78,9 @@ describe("requestJson", () => {
       endpoint: "/api/v1/routes/:routeId/vehicles",
     },
   ])("$name 요청 URL의 노선 ID만 인코딩하고 오류 문맥에는 원래 값을 남긴다", async ({ fetch, url, endpoint }) => {
+    const controller = new AbortController();
     respondWith(503, { code: "SERVICE_UNAVAILABLE", message: "장애", requestId: "request-1" });
-    await fetch("R/1 ?#한글%");
+    await fetch("R/1 ?#한글%", { signal: controller.signal });
     expect(global.fetch).toHaveBeenCalledWith(url, expect.anything());
     expect(reportApiFailure).toHaveBeenCalledWith(url, expect.anything(), {
       context: { endpoint, tags: { route_id: "R/1 ?#한글%" } },
