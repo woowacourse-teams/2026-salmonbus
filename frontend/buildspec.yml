@@ -3,10 +3,7 @@ version: 0.2
 env:
   shell: bash
   variables:
-    S3_BASE: "s3://techcourse-project-2026/salmonbus"
-    CLOUDFRONT_DISTRIBUTION_ID: "E1SSFHW3MNNQB8"
     WEBPACK_SENTRY_DSN: "https://82d47f0abddcf3d5a67454615589b0c6@o4512242355535872.ingest.us.sentry.io/4512242363596800"
-    WEBPACK_SENTRY_ENVIRONMENT: "production"
     SENTRY_ORG: "salmonbus-org"
     SENTRY_PROJECT: "salmonbus-fe"
     SENTRY_UPLOAD_SOURCEMAPS: "true"
@@ -23,6 +20,10 @@ phases:
       - test -n "$WEBPACK_AMPLITUDE_API_KEY"
       # 인증 토큰은 CodeBuild의 비밀 환경변수로 설정한다. 값은 로그에 출력하지 않는다.
       - test -n "$SENTRY_AUTH_TOKEN"
+      # 배포 경로, 무효화 대상, Sentry 환경은 운영과 dev가 달라서 CodeBuild 프로젝트 환경변수로 받는다. 비어 있으면 배포 전에 멈춘다
+      - test -n "$S3_BASE"
+      - test -n "$CLOUDFRONT_DISTRIBUTION_ID"
+      - test -n "$WEBPACK_SENTRY_ENVIRONMENT"
       - cd "${CODEBUILD_SRC_DIR}/frontend"
       - pnpm install --frozen-lockfile
       - pnpm typecheck
