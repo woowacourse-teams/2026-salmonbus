@@ -7,7 +7,7 @@ env:
     CLOUDFRONT_DISTRIBUTION_ID: "E1SSFHW3MNNQB8"
     WEBPACK_SENTRY_DSN: "https://82d47f0abddcf3d5a67454615589b0c6@o4512242355535872.ingest.us.sentry.io/4512242363596800"
     WEBPACK_SENTRY_ENVIRONMENT: "production"
-    SENTRY_ORG: "salmonbus"
+    SENTRY_ORG: "salmonbus-org"
     SENTRY_PROJECT: "salmonbus-fe"
     SENTRY_UPLOAD_SOURCEMAPS: "true"
 
