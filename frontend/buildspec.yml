@@ -5,7 +5,7 @@ env:
   variables:
     S3_BASE: "s3://techcourse-project-2026/salmonbus"
     CLOUDFRONT_DISTRIBUTION_ID: "E1SSFHW3MNNQB8"
-    WEBPACK_SENTRY_DSN: "https://4eb32e04e084d18d6d72c204ddc65c5e@o4512197658083328.ingest.us.sentry.io/4512197664833536"
+    WEBPACK_SENTRY_DSN: "https://82d47f0abddcf3d5a67454615589b0c6@o4512242355535872.ingest.us.sentry.io/4512242363596800"
     WEBPACK_SENTRY_ENVIRONMENT: "production"
     SENTRY_ORG: "salmonbus"
     SENTRY_PROJECT: "salmonbus-fe"
