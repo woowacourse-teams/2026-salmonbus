@@ -1,10 +1,12 @@
 import { describe, expect, it } from "@jest/globals";
-import type { LatestSuccess } from "@/shared/api/polledResource";
-import type { LiveVehicles, ObservationState } from "@/shared/api/routeForecast.types";
+import { PENDING_RESOURCE, type LatestSuccess, type PolledResource } from "@/shared/api/polledResource";
+import type { Board, LiveVehicles, ObservationState } from "@/shared/api/routeForecast.types";
 import { boardWith, liveVehiclesWith, vehicleAt } from "@/testing/fixtures";
 import {
+  boardHistoriesWith,
   boardObservedAtOf,
   boardSnapshotFor,
+  emptyBoardHistoriesFor,
   historyWith,
   isPairedWithAny,
   liveVehiclesObservedAtOf,
@@ -198,11 +200,11 @@ describe("receivedBoardOf", () => {
 });
 
 describe("historyWith", () => {
-  it("마지막 응답과 같은 observation batch면 처음 받은 것을 그대로 둔다", () => {
+  it("마지막 응답과 같은 observation batch면 새 응답으로 바꾼다", () => {
     const first = liveVehiclesAt(BATCH_100, at("08:00:03"));
-    const history = historyWith([first], liveVehiclesAt(BATCH_100, at("08:00:18")), 3, liveVehiclesObservedAtOf);
+    const again = liveVehiclesAt(BATCH_100, at("08:00:18"));
 
-    expect(history).toEqual([first]);
+    expect(historyWith([first], again, 3, liveVehiclesObservedAtOf)).toEqual([again]);
   });
 
   it("개수를 넘으면 가장 오래된 응답부터 버린다", () => {
@@ -247,6 +249,196 @@ describe("예보가 멈춘 채 차량만 계속 올 때", () => {
     expect(boardSnapshotFor(boards, history, at("08:00:49")).snapshot).toEqual({
       board: boards[0]?.success,
       liveVehicles: paired,
+    });
+  });
+});
+
+type Arrival =
+  | { kind: "board"; at: number; observedAt: string; maxAgeSeconds?: number; board?: Board }
+  | { kind: "boardFailed"; at: number }
+  | { kind: "vehicles"; at: number; observedAt: string; state: ObservationState };
+
+const LIFETIME_15S = { noStore: false, ageSeconds: 0 };
+
+function board(time: string, observedAt: string, options: { maxAgeSeconds?: number; board?: Board } = {}): Arrival {
+  return { kind: "board", at: at(time), observedAt, ...options };
+}
+
+function boardFailed(time: string): Arrival {
+  return { kind: "boardFailed", at: at(time) };
+}
+
+function vehicles(time: string, observedAt: string, state: ObservationState = "VEHICLES_PRESENT"): Arrival {
+  return { kind: "vehicles", at: at(time), observedAt, state };
+}
+
+function boardResourceAfter(previous: PolledResource<Board>, arrival: Arrival): PolledResource<Board> {
+  if (arrival.kind === "board") {
+    const body = arrival.board ?? boardWith({ observedAt: arrival.observedAt });
+    return {
+      status: "success",
+      latestSuccess: successOf({ ...body, observedAt: arrival.observedAt }, arrival.at),
+      lifetime: { ...LIFETIME_15S, maxAgeSeconds: arrival.maxAgeSeconds ?? 15 },
+    };
+  }
+  if (arrival.kind === "boardFailed" && (previous.status === "success" || previous.status === "refetchError")) {
+    return { status: "refetchError", failure: { kind: "network", cause: null }, latestSuccess: previous.latestSuccess };
+  }
+  return previous;
+}
+
+function replay(arrivals: readonly Arrival[], routeId = "R1", from = emptyBoardHistoriesFor(routeId)) {
+  let boardResource: PolledResource<Board> = PENDING_RESOURCE;
+  let liveVehicleResource: PolledResource<LiveVehicles> = PENDING_RESOURCE;
+
+  return arrivals.reduce((histories, arrival) => {
+    boardResource = boardResourceAfter(boardResource, arrival);
+    if (arrival.kind === "vehicles") {
+      liveVehicleResource = {
+        status: "success",
+        latestSuccess: liveVehiclesAt(arrival.observedAt, arrival.at, arrival.state),
+        lifetime: { ...LIFETIME_15S, maxAgeSeconds: 15 },
+      };
+    }
+    return boardHistoriesWith(histories, routeId, boardResource, liveVehicleResource);
+  }, from);
+}
+
+function screenOf(arrivals: readonly Arrival[], time: string) {
+  const histories = replay(arrivals);
+  const step = boardSnapshotFor(histories.boards, histories.liveVehicles, at(time));
+  return {
+    boardBatch: step.snapshot?.board.body.observedAt ?? null,
+    vehiclesBatch: step.snapshot?.liveVehicles?.body.observation.observedAt ?? null,
+    recheckAt: step.recheckAt,
+  };
+}
+
+describe("응답이 도착하는 순서대로 재생한 화면", () => {
+  describe("평소 출근길 (수집 15초)", () => {
+    it("차량이 먼저 오면 이전 쌍에 머물고, 예보가 따라오는 순간 셋이 함께 바뀐다", () => {
+      const morning = [vehicles("08:00:03", BATCH_100), board("08:00:05", BATCH_100), vehicles("08:00:18", BATCH_101)];
+
+      expect(screenOf(morning, "08:00:19")).toEqual({
+        boardBatch: BATCH_100,
+        vehiclesBatch: BATCH_100,
+        recheckAt: null,
+      });
+      expect(screenOf([...morning, board("08:00:21", BATCH_101)], "08:00:21")).toEqual({
+        boardBatch: BATCH_101,
+        vehiclesBatch: BATCH_101,
+        recheckAt: null,
+      });
+    });
+  });
+
+  describe("예보가 먼저 온 주기", () => {
+    const boardFirst = [board("07:59:52", BATCH_100), vehicles("07:59:55", BATCH_100), board("08:00:07", BATCH_101)];
+
+    it("예보의 max-age(15초)가 지나기 전에는 이전 쌍을 보여 주고, 다시 볼 시각을 알려 준다", () => {
+      expect(screenOf(boardFirst, "08:00:12")).toEqual({
+        boardBatch: BATCH_100,
+        vehiclesBatch: BATCH_100,
+        recheckAt: at("08:00:22"),
+      });
+    });
+
+    it("max-age가 지나도 짝이 없으면 새 예보를 마커 없이 보여 준다", () => {
+      expect(screenOf(boardFirst, "08:00:22")).toEqual({ boardBatch: BATCH_101, vehiclesBatch: null, recheckAt: null });
+    });
+
+    it("늦게라도 차량이 오면 다시 셋이 함께 맞는다", () => {
+      expect(screenOf([...boardFirst, vehicles("08:00:25", BATCH_101)], "08:00:25")).toEqual({
+        boardBatch: BATCH_101,
+        vehiclesBatch: BATCH_101,
+        recheckAt: null,
+      });
+    });
+
+    it("같은 예보를 한 번 더 받아도 기다리는 기한은 처음 받은 때를 기준으로 한다", () => {
+      expect(screenOf([...boardFirst, board("08:00:20", BATCH_101)], "08:00:21").recheckAt).toBe(at("08:00:22"));
+    });
+  });
+
+  describe("예보 발행이 밀린 날", () => {
+    const delayed = [
+      board("08:00:05", BATCH_100),
+      vehicles("08:00:03", BATCH_100),
+      boardFailed("08:00:20"),
+      vehicles("08:00:18", BATCH_101),
+      vehicles("08:00:33", BATCH_102),
+      vehicles("08:00:48", "2026-10-13T08:00:45+09:00"),
+    ];
+
+    it("차량이 세 번 넘게 새로 와도 마지막 쌍에 머문다", () => {
+      expect(screenOf(delayed, "08:00:49")).toEqual({
+        boardBatch: BATCH_100,
+        vehiclesBatch: BATCH_100,
+        recheckAt: null,
+      });
+    });
+
+    it("예보가 observation batch 두 개를 건너뛰고 따라와도, 들고 있던 차량과 바로 짝이 맞는다", () => {
+      const caughtUp = [...delayed, board("08:00:52", "2026-10-13T08:00:45+09:00")];
+
+      expect(screenOf(caughtUp, "08:00:52")).toEqual({
+        boardBatch: "2026-10-13T08:00:45+09:00",
+        vehiclesBatch: "2026-10-13T08:00:45+09:00",
+        recheckAt: null,
+      });
+    });
+  });
+
+  describe("수집 중 빈 응답", () => {
+    it("UNKNOWN 빈 응답이 와도 직전 차량으로 마커를 그대로 그린다", () => {
+      const collecting = [
+        vehicles("08:00:03", BATCH_100),
+        board("08:00:05", BATCH_100),
+        vehicles("08:00:18", BATCH_100, "UNKNOWN"),
+      ];
+      const histories = replay(collecting);
+      const step = boardSnapshotFor(histories.boards, histories.liveVehicles, at("08:00:19"));
+
+      expect(step.snapshot?.liveVehicles?.body.observation.state).toBe("VEHICLES_PRESENT");
+      expect(step.snapshot?.liveVehicles?.body.vehicles).toHaveLength(1);
+    });
+  });
+
+  describe("새벽 (수집 600초)", () => {
+    it("예보가 먼저 오면 max-age 600초 동안 이전 쌍에 머문다", () => {
+      const dawn = [
+        board("02:00:00", "2026-10-13T01:59:55+09:00", { maxAgeSeconds: 600 }),
+        vehicles("02:00:01", "2026-10-13T01:59:55+09:00"),
+        board("02:10:05", "2026-10-13T02:09:55+09:00", { maxAgeSeconds: 600 }),
+      ];
+
+      expect(screenOf(dawn, "02:19:00")).toEqual({
+        boardBatch: "2026-10-13T01:59:55+09:00",
+        vehiclesBatch: "2026-10-13T01:59:55+09:00",
+        recheckAt: at("02:20:05"),
+      });
+    });
+  });
+
+  describe("처음 들어왔을 때", () => {
+    it("차량이 예보보다 새 observation batch면 예보부터 보여 주고, 짝이 생기면 마커가 붙는다", () => {
+      const entering = [vehicles("08:00:18", BATCH_101), board("08:00:18", BATCH_100)];
+
+      expect(screenOf(entering, "08:00:18")).toEqual({ boardBatch: BATCH_100, vehiclesBatch: null, recheckAt: null });
+      expect(screenOf([...entering, board("08:00:21", BATCH_101)], "08:00:21")).toEqual({
+        boardBatch: BATCH_101,
+        vehiclesBatch: BATCH_101,
+        recheckAt: null,
+      });
+    });
+  });
+
+  describe("노선을 바꿨을 때", () => {
+    it("이전 노선의 기록은 버리고 새 노선의 응답만 쓴다", () => {
+      const previousRoute = replay([vehicles("08:00:03", BATCH_100), board("08:00:05", BATCH_100)], "R1");
+      const nextRoute = boardHistoriesWith(previousRoute, "R2", PENDING_RESOURCE, PENDING_RESOURCE);
+
+      expect(nextRoute).toEqual(emptyBoardHistoriesFor("R2"));
     });
   });
 });

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ApiResult } from "@/shared/api/client";
-import { latestSuccessOf, type LatestSuccess, type PolledResource } from "@/shared/api/polledResource";
+import type { LatestSuccess, PolledResource } from "@/shared/api/polledResource";
 import { fetchLiveVehicles } from "@/shared/api/routeForecast.api";
 import type { LiveVehicles } from "@/shared/api/routeForecast.types";
 import { usePolledRequest } from "@/shared/api/usePolledRequest";
@@ -14,13 +14,12 @@ function loadLiveVehicles(routeId: string, signal: AbortSignal): Promise<ApiResu
 
 export function useLiveVehicles(routeId: string) {
   const liveVehicleResource = usePolledRequest(loadLiveVehicles, routeId);
-  const liveVehicles = useFreshLiveVehicles(latestSuccessOf(liveVehicleResource));
   const motionDurationMs = liveMotionDurationOf(liveVehicleResource);
 
-  return { liveVehicles, motionDurationMs };
+  return { liveVehicleResource, motionDurationMs };
 }
 
-function useFreshLiveVehicles(latestSuccess: LatestSuccess<LiveVehicles> | null): LiveVehicles | null {
+export function useFreshLiveVehicles(latestSuccess: LatestSuccess<LiveVehicles> | null): LiveVehicles | null {
   const staleAt = latestSuccess?.body.observation.staleAt ?? null;
   const staleAtMillis = staleAt === null ? null : Date.parse(staleAt);
   const serverClock = latestSuccess?.clock ?? null;

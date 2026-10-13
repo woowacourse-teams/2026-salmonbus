@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { apiPaths, pollIntervalMs, targetStopNames } from "./fixtures/mock-data";
 import { test, expect } from "./fixtures/api";
 import { selectRoute } from "./utils/route-select";
@@ -110,6 +111,79 @@ test("자동 갱신 실패 후 다음 요청이 성공하면 새 예측으로 �
   await expect(stop).toHaveAttribute("aria-expanded", "true");
   await expect(arrivals).toHaveText([/2정류장 전\s*도착 시 9석 예상해요/]);
   await expect(arrivals.nth(0)).toBeVisible();
+});
+
+function busMarkerAt(page: Page, stopName: string) {
+  return page.getByRole("img", { name: new RegExp(`^${stopName} 정류장,`) });
+}
+
+async function pollBoardAndVehicles(page: Page) {
+  const responded = (path: string) =>
+    page.waitForResponse((response) => new URL(response.url()).pathname === path && response.status() === 200);
+  const polled = Promise.all([responded(apiPaths.board), responded(apiPaths.vehicles)]);
+  await page.clock.fastForward(pollIntervalMs);
+  await polled;
+  await settleMarkers(page);
+}
+
+// 픽스처가 시계를 멈춰 두어서, 마커 위치를 재는 타이머가 돌도록 시계를 조금 진행한다.
+async function settleMarkers(page: Page) {
+  await page.clock.runFor(100);
+}
+
+test("차량이 먼저 다음 정류장으로 가도, 예보가 따라올 때 마커와 도착 예상이 한 번에 바뀐다", async ({ page, api }) => {
+  // 정류장 8을 막 출발한 버스라서 목표 정류장(순번 11)까지 3정류장 전이다. 백엔드 horizonStops 계산과 같다.
+  const bus = api.data.vehicles.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1");
+  if (bus === undefined) throw new Error("bus-1 차량 fixture가 필요합니다");
+  bus.phase = "DEPARTED";
+  await openBoard(page);
+  const stop = targetStop(page, "UP");
+  await stop.scrollIntoViewIfNeeded();
+  await stop.click();
+  await settleMarkers(page);
+  const nearestArrival = targetRow(page, "UP").getByRole("listitem").nth(0);
+  await expect(nearestArrival).toHaveText(/3정류장 전\s*도착 시 5석 예상해요/);
+  await expect(busMarkerAt(page, "상행 정류장 8")).toBeVisible();
+
+  // 수집기가 다음 observation batch를 저장했지만 예보 발행은 아직이다. 차량 응답만 새 batch로 온다.
+  const nextObservedAt = "2026-09-16T08:00:15+09:00";
+  Object.assign(bus, { currentStopSequence: 9, stopId: "1009", stopName: "상행 정류장 9" });
+  api.data.vehicles.observation.observedAt = nextObservedAt;
+  await pollBoardAndVehicles(page);
+
+  await expect(busMarkerAt(page, "상행 정류장 8")).toBeVisible();
+  await expect(busMarkerAt(page, "상행 정류장 9")).toHaveCount(0);
+  await expect(nearestArrival).toHaveText(/3정류장 전\s*도착 시 5석 예상해요/);
+
+  // 같은 batch의 예보가 발행되면 마커, 정류장 수, 좌석이 같이 바뀐다.
+  const target = api.data.board.stops.find((candidate) => candidate.name === targetStopNames.UP);
+  const forecastedBus = target?.approachingVehicles.find((vehicle) => vehicle.vehicleId === "bus-1");
+  if (forecastedBus === undefined) throw new Error("상행 목표 정류장의 bus-1 예보 fixture가 필요합니다");
+  Object.assign(forecastedBus, {
+    horizonStops: 2,
+    forecast: { status: "AVAILABLE", seatAvailableProbability: 0.8, expectedSeats: 4 },
+  });
+  api.data.board.observedAt = nextObservedAt;
+  await pollBoardAndVehicles(page);
+
+  await expect(busMarkerAt(page, "상행 정류장 9")).toBeVisible();
+  await expect(busMarkerAt(page, "상행 정류장 8")).toHaveCount(0);
+  await expect(nearestArrival).toHaveText(/2정류장 전\s*도착 시 4석 예상해요/);
+});
+
+test("수집 중이라 차량 응답이 비어 와도 마커가 사라지지 않는다", async ({ page, api }) => {
+  await openBoard(page);
+  await settleMarkers(page);
+  await expect(busMarkerAt(page, "상행 정류장 8")).toBeVisible();
+  const requestsBeforeCollecting = api.requests.vehicles;
+
+  // 다음 GBIS 응답을 저장하기 전에는 직전 정상 batch의 observedAt과 빈 목록이 UNKNOWN으로 온다.
+  api.data.vehicles.observation.state = "UNKNOWN";
+  api.data.vehicles.vehicles = [];
+  await pollBoardAndVehicles(page);
+
+  expect(api.requests.vehicles).toBeGreaterThan(requestsBeforeCollecting);
+  await expect(busMarkerAt(page, "상행 정류장 8")).toBeVisible();
 });
 
 test("운행 중인 차량이 없으면 운행 없음 안내를 표시한다", async ({ page, api }) => {

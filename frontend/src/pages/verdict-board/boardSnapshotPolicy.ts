@@ -1,5 +1,5 @@
 import type { CacheLifetime } from "@/shared/api/cacheControl";
-import type { LatestSuccess } from "@/shared/api/polledResource";
+import { latestSuccessOf, type LatestSuccess, type PolledResource } from "@/shared/api/polledResource";
 import type { Board, LiveVehicles } from "@/shared/api/routeForecast.types";
 
 export const BOARD_HISTORY_LIMIT = 2;
@@ -18,6 +18,14 @@ export interface BoardSnapshot {
 export interface BoardSnapshotStep {
   snapshot: BoardSnapshot | null;
   recheckAt: number | null;
+}
+
+export interface BoardHistories {
+  routeId: string;
+  boards: readonly ReceivedBoard[];
+  liveVehicles: readonly LatestSuccess<LiveVehicles>[];
+  seenBoard: LatestSuccess<Board> | null;
+  seenLiveVehicles: LatestSuccess<LiveVehicles> | null;
 }
 
 interface BoardPair {
@@ -48,9 +56,8 @@ export function historyWith<T>(
   shouldKeep: (item: T) => boolean = () => false,
 ): readonly T[] {
   const last = history.at(-1);
-  if (last !== undefined && observedAtOf(last) === observedAtOf(entry)) return history;
-
-  const next = [...history, entry];
+  const sameBatchAsLast = last !== undefined && observedAtOf(last) === observedAtOf(entry);
+  const next = sameBatchAsLast ? [...history.slice(0, -1), entry] : [...history, entry];
   while (next.length > limit) {
     const oldestDroppable = next.findIndex((item) => !shouldKeep(item));
     if (oldestDroppable === -1) break;
@@ -62,6 +69,52 @@ export function historyWith<T>(
 export function isPairedWithAny(boards: readonly ReceivedBoard[], liveVehicles: LatestSuccess<LiveVehicles>): boolean {
   const time = liveVehiclesObservedAtOf(liveVehicles);
   return time !== null && boards.some((board) => boardObservedAtOf(board) === time);
+}
+
+export function emptyBoardHistoriesFor(routeId: string): BoardHistories {
+  return { routeId, boards: [], liveVehicles: [], seenBoard: null, seenLiveVehicles: null };
+}
+
+export function boardHistoriesWith(
+  current: BoardHistories,
+  routeId: string,
+  boardResource: PolledResource<Board>,
+  liveVehicleResource: PolledResource<LiveVehicles>,
+): BoardHistories {
+  const forRoute = current.routeId === routeId ? current : emptyBoardHistoriesFor(routeId);
+  return withLiveVehicles(withBoard(forRoute, boardResource), liveVehicleResource);
+}
+
+function withBoard(histories: BoardHistories, resource: PolledResource<Board>): BoardHistories {
+  if (resource.status !== "success" || resource.latestSuccess === histories.seenBoard) return histories;
+
+  const received = receivedBoardOf(resource.latestSuccess, resource.lifetime);
+  const last = histories.boards.at(-1);
+  const entry =
+    last !== undefined && boardObservedAtOf(last) === boardObservedAtOf(received)
+      ? { ...received, pairingDeadline: last.pairingDeadline }
+      : received;
+
+  return {
+    ...histories,
+    boards: historyWith(histories.boards, entry, BOARD_HISTORY_LIMIT, boardObservedAtOf),
+    seenBoard: resource.latestSuccess,
+  };
+}
+
+function withLiveVehicles(histories: BoardHistories, resource: PolledResource<LiveVehicles>): BoardHistories {
+  const latest = latestSuccessOf(resource);
+  if (latest === null || latest === histories.seenLiveVehicles) return histories;
+  if (!canPair(latest)) return { ...histories, seenLiveVehicles: latest };
+
+  const liveVehicles = historyWith(
+    histories.liveVehicles,
+    latest,
+    LIVE_VEHICLES_HISTORY_LIMIT,
+    liveVehiclesObservedAtOf,
+    (item) => isPairedWithAny(histories.boards, item),
+  );
+  return { ...histories, liveVehicles, seenLiveVehicles: latest };
 }
 
 export function boardSnapshotFor(
