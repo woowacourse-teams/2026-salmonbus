@@ -1,11 +1,18 @@
 import type { EventMap } from "@/shared/analytics/events";
 import type { Board, Direction } from "@/shared/api/routeForecast.types";
 import type { ArrivalTone } from "../arrivalPolicy";
-import { stopViewsFor } from "../displayPolicy";
+import { stopViewsFor, type ExpandableStopView } from "../displayPolicy";
 
 interface BoardViewTiming {
   now: number;
   loadMs: number;
+}
+
+interface StopExpandContext {
+  routeId: string;
+  direction: Direction;
+  rowPosition: number;
+  expandIndex: number;
 }
 
 export function boardViewedPropertiesOf(
@@ -34,5 +41,41 @@ export function boardViewedPropertiesOf(
     very_low_count: toneCounts.veryLow,
     unavailable_count: toneCounts.unavailable,
     load_ms: Math.round(loadMs),
+  };
+}
+
+export function stopExpandedPropertiesOf(
+  stop: ExpandableStopView,
+  { routeId, direction, rowPosition, expandIndex }: StopExpandContext,
+): EventMap["stop_expanded"] {
+  const common = {
+    route_id: routeId,
+    direction,
+    stop_id: stop.stopId,
+    stop_sequence: stop.sequence,
+    row_position: rowPosition,
+    expand_index: expandIndex,
+  };
+  if (stop.kind === "noVehicle") {
+    return { ...common, stop_kind: "noVehicle", arrival_count: 0 };
+  }
+
+  const [nearest] = stop.arrivals;
+  if (nearest.kind === "unavailable") {
+    return {
+      ...common,
+      stop_kind: "boarding",
+      forecast_status: "UNAVAILABLE",
+      stops_away: nearest.stopsAway,
+      arrival_count: stop.arrivals.length,
+    };
+  }
+  return {
+    ...common,
+    stop_kind: "boarding",
+    forecast_status: "AVAILABLE",
+    level: nearest.level,
+    stops_away: nearest.stopsAway,
+    arrival_count: stop.arrivals.length,
   };
 }

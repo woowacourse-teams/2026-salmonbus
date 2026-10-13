@@ -14,6 +14,15 @@ export type FailureProperties =
       error_kind: "timeout" | "network";
     };
 
+type StopExpandedBase = {
+  route_id: string;
+  direction: Direction;
+  stop_id: string;
+  stop_sequence: number;
+  row_position: number;
+  expand_index: number;
+};
+
 export interface EventMap {
   route_selected: {
     route_id: string;
@@ -45,4 +54,20 @@ export interface EventMap {
     route_id: string;
     to_direction: Direction;
   };
+
+  stop_expanded:
+    | (StopExpandedBase & {
+        stop_kind: "boarding";
+        forecast_status: "AVAILABLE";
+        level: "high" | "low" | "veryLow";
+        stops_away: number;
+        arrival_count: number;
+      })
+    | (StopExpandedBase & {
+        stop_kind: "boarding";
+        forecast_status: "UNAVAILABLE";
+        stops_away: number;
+        arrival_count: number;
+      })
+    | (StopExpandedBase & { stop_kind: "noVehicle"; arrival_count: 0 });
 }

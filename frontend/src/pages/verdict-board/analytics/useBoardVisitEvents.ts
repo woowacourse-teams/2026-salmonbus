@@ -1,8 +1,8 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { track } from "@/shared/analytics/track";
 import type { LatestSuccess } from "@/shared/api/polledResource";
-import type { BoardScreen } from "../displayPolicy";
-import { nextBoardVisitStep, type BoardVisit } from "./boardVisitPolicy";
+import type { BoardScreen, ExpandableStopView } from "../displayPolicy";
+import { nextBoardVisitStep, nextStopExpandStep, type BoardVisit } from "./boardVisitPolicy";
 
 interface Params {
   routeId: string;
@@ -39,4 +39,13 @@ export function useBoardVisitEvents({ routeId, screen, latestSuccess }: Params) 
       track(step.event.name, step.event.properties);
     }
   }, [routeId, screen, latestSuccess, visible]);
+
+  function trackStopExpanded(stop: ExpandableStopView, rowPosition: number) {
+    if (visitRef.current === null || screen.kind !== "forecast") return;
+    const step = nextStopExpandStep(visitRef.current, { stop, direction: screen.direction, rowPosition });
+    visitRef.current = step.visit;
+    track("stop_expanded", step.properties);
+  }
+
+  return { trackStopExpanded };
 }

@@ -1,4 +1,4 @@
-import type { StopView } from "../displayPolicy";
+import type { ExpandableStopView, StopView } from "../displayPolicy";
 import type { LiveVehicleView } from "../liveVehiclePolicy";
 import { LOADING_NOTICE, LOAD_FAILED_NOTICE, OUT_OF_SERVICE_NOTICE } from "../verdictCopy";
 import { StopList } from "./StopList";
@@ -14,6 +14,7 @@ type StopBoardProps =
       liveVehicleViews: LiveVehicleView[];
       liveMotionDurationMs: number;
       entering: boolean;
+      onStopExpand: (stop: ExpandableStopView, rowPosition: number) => void;
     };
 
 const NOTICES: Record<NoticeStatus, string> = {
@@ -31,6 +32,7 @@ export function StopBoard(props: StopBoardProps) {
           liveVehicleViews={props.liveVehicleViews}
           liveMotionDurationMs={props.liveMotionDurationMs}
           entering={props.entering}
+          onStopExpand={props.onStopExpand}
         />
       </section>
     );

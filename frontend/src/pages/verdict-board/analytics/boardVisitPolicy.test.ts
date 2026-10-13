@@ -1,7 +1,13 @@
 import { describe, expect, it } from "@jest/globals";
 import { boardWith } from "@/testing/fixtures";
-import type { BoardScreen } from "../displayPolicy";
-import { nextBoardVisitStep, type BoardObservation, type BoardVisit, type BoardVisitEvent } from "./boardVisitPolicy";
+import type { BoardScreen, ExpandableStopView } from "../displayPolicy";
+import {
+  nextBoardVisitStep,
+  nextStopExpandStep,
+  type BoardObservation,
+  type BoardVisit,
+  type BoardVisitEvent,
+} from "./boardVisitPolicy";
 
 const MINUTE_MS = 60 * 1000;
 
@@ -172,5 +178,74 @@ describe("nextBoardVisitStep", () => {
     ]);
 
     expect(namesOf(events)).toEqual(["board_unavailable:error", "board_viewed"]);
+  });
+});
+
+describe("nextStopExpandStep", () => {
+  const stop: ExpandableStopView = {
+    kind: "noVehicle",
+    sequence: 2,
+    stopId: "S2",
+    name: "정류장2",
+    isTurnaround: false,
+  };
+  const expand = { stop, direction: "UP", rowPosition: 1 } as const;
+
+  function visitAfter(observations: BoardObservation[], from: BoardVisit | null = null): BoardVisit {
+    let visit = from;
+    for (const observation of observations) {
+      visit = nextBoardVisitStep(visit, observation).visit;
+    }
+    if (visit === null) throw new Error("관측이 없어 방문을 만들 수 없습니다");
+    return visit;
+  }
+
+  it("같은 방문에서 정류장을 펼칠 때마다 expand_index가 1씩 늘어난다", () => {
+    const first = nextStopExpandStep(visitAfter([observed({ screen: forecast, receivedAt: 1_000 })]), expand);
+    const second = nextStopExpandStep(first.visit, expand);
+
+    expect([first.properties.expand_index, second.properties.expand_index]).toEqual([1, 2]);
+  });
+
+  it("다른 노선으로 바뀌어 새 방문이 시작되면 expand_index를 1부터 다시 센다", () => {
+    const expanded = nextStopExpandStep(
+      visitAfter([observed({ routeId: "R1", screen: forecast, receivedAt: 1_000 })]),
+      expand,
+    );
+    const nextVisit = visitAfter([observed({ routeId: "R2", screen: loading })], expanded.visit);
+
+    expect(nextStopExpandStep(nextVisit, expand).properties).toMatchObject({ route_id: "R2", expand_index: 1 });
+  });
+
+  it("탭을 30분 넘게 숨겼다 다시 열면 expand_index를 1부터 다시 센다", () => {
+    const expanded = nextStopExpandStep(
+      visitAfter([observed({ screen: forecast, receivedAt: 1_000, wallNow: 0 })]),
+      expand,
+    );
+    const returned = visitAfter(
+      [
+        observed({ screen: forecast, receivedAt: 1_000, visible: false, wallNow: 0 }),
+        observed({ screen: forecast, receivedAt: 1_000, visible: true, wallNow: 31 * MINUTE_MS }),
+      ],
+      expanded.visit,
+    );
+
+    expect(nextStopExpandStep(returned, expand).properties.expand_index).toBe(1);
+  });
+
+  it("탭을 30분 안에 다시 열면 같은 방문이라 이어서 센다", () => {
+    const expanded = nextStopExpandStep(
+      visitAfter([observed({ screen: forecast, receivedAt: 1_000, wallNow: 0 })]),
+      expand,
+    );
+    const returned = visitAfter(
+      [
+        observed({ screen: forecast, receivedAt: 1_000, visible: false, wallNow: 0 }),
+        observed({ screen: forecast, receivedAt: 1_000, visible: true, wallNow: 10 * MINUTE_MS }),
+      ],
+      expanded.visit,
+    );
+
+    expect(nextStopExpandStep(returned, expand).properties.expand_index).toBe(2);
   });
 });

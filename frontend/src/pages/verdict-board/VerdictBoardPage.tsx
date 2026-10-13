@@ -7,7 +7,14 @@ import { fetchBoard } from "@/shared/api/routeForecast.api";
 import { boardMock, liveVehiclesMock } from "@/shared/api/routeForecast.mock";
 import type { Board, Direction, DirectionInfo, LiveVehicles } from "@/shared/api/routeForecast.types";
 import { usePolledRequest } from "@/shared/api/usePolledRequest";
-import { directionInfoFor, directionViewsFor, serviceStateFor, stopViewsFor, type BoardScreen } from "./displayPolicy";
+import {
+  directionInfoFor,
+  directionViewsFor,
+  serviceStateFor,
+  stopViewsFor,
+  type BoardScreen,
+  type ExpandableStopView,
+} from "./displayPolicy";
 import { liveVehicleViewsFor } from "./liveVehiclePolicy";
 import { DEFAULT_LIVE_MOTION_DURATION_MS, useLiveVehicles } from "./useLiveVehicles";
 import { BoardHeader } from "./components/BoardHeader";
@@ -42,7 +49,11 @@ export function VerdictBoardPage() {
 
   const screen = boardScreenOf(state);
 
-  useBoardVisitEvents({ routeId, screen, latestSuccess: latestSuccessOf(boardResource) });
+  const { trackStopExpanded } = useBoardVisitEvents({
+    routeId,
+    screen,
+    latestSuccess: latestSuccessOf(boardResource),
+  });
 
   function selectDirection(next: Direction) {
     if (state.status === "ready" && next !== state.direction.id) {
@@ -66,7 +77,7 @@ export function VerdictBoardPage() {
             />
           )}
         </div>
-        {renderBoard(screen, switched, liveVehicles, liveMotionDurationMs)}
+        {renderBoard(screen, switched, liveVehicles, liveMotionDurationMs, trackStopExpanded)}
       </main>
     </div>
   );
@@ -106,6 +117,7 @@ function renderBoard(
   switched: boolean,
   liveVehicles: LiveVehicles | null,
   liveMotionDurationMs: number,
+  onStopExpand: (stop: ExpandableStopView, rowPosition: number) => void,
 ) {
   switch (screen.kind) {
     case "loading":
@@ -123,6 +135,7 @@ function renderBoard(
           liveVehicleViews={liveVehicleViewsFor(screen.board, liveVehicles, screen.direction)}
           liveMotionDurationMs={liveMotionDurationMs}
           entering={switched}
+          onStopExpand={onStopExpand}
         />
       );
   }
