@@ -40,4 +40,9 @@ export interface EventMap {
   board_unavailable:
     | ({ route_id: string; reason: "error" } & FailureProperties)
     | { route_id: string; reason: "outOfService"; vehicles_in_service: number };
+
+  direction_switched: {
+    route_id: string;
+    to_direction: Direction;
+  };
 }

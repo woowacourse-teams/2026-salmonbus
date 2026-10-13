@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useParams } from "react-router";
+import { track } from "@/shared/analytics/track";
 import type { ApiFailure, ApiResult } from "@/shared/api/client";
 import { latestSuccessOf, type PolledResource } from "@/shared/api/polledResource";
 import { fetchBoard } from "@/shared/api/routeForecast.api";
@@ -46,6 +47,7 @@ export function VerdictBoardPage() {
   function selectDirection(next: Direction) {
     if (state.status === "ready" && next !== state.direction.id) {
       setSwitched(true);
+      track("direction_switched", { route_id: routeId, to_direction: next });
     }
     setPreferredDirection(next);
   }
