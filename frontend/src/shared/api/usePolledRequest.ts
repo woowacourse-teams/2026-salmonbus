@@ -57,7 +57,14 @@ export function usePolledRequest<T>(
       }
     };
 
+    const onOnline = () => {
+      if (document.visibilityState === "visible") {
+        load();
+      }
+    };
+
     document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("online", onOnline);
     if (document.visibilityState === "visible") {
       load();
     }
@@ -66,6 +73,7 @@ export function usePolledRequest<T>(
       disposed = true;
       clearTimer();
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("online", onOnline);
       gate.close();
     };
   }, [key]);
