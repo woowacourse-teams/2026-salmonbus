@@ -1,6 +1,7 @@
 import { apiPaths, routeId } from "./fixtures/mock-data";
 import { test, expect } from "./fixtures/api";
 import { routeButton, routeSearchInput, selectRoute } from "./utils/route-select";
+import { boardBackLink } from "./utils/verdict-board";
 
 test.use({
   viewport: { width: 390, height: 844 },
@@ -118,6 +119,28 @@ test("판정 보드에서 뒤로 오면 입력한 번호와 결과가 남아 있
   await expect(page).toHaveURL("/?q=3330");
   await expect(routeSearchInput(page)).toHaveValue("3330");
   await expect(routeButton(page)).toBeVisible();
+});
+
+test("판정 보드 헤더의 뒤로 가기를 눌러도 입력한 번호와 결과가 남아 있다", async ({ page }) => {
+  await page.goto("/");
+  await selectRoute(page);
+  const historyLength = await page.evaluate(() => history.length);
+
+  await boardBackLink(page).click();
+
+  await expect(page).toHaveURL("/?q=3330");
+  await expect(routeSearchInput(page)).toHaveValue("3330");
+  await expect(routeButton(page)).toBeVisible();
+  expect(await page.evaluate(() => history.length)).toBe(historyLength);
+});
+
+test("판정 보드로 바로 들어오면 헤더의 뒤로 가기가 노선 선택 화면으로 간다", async ({ page }) => {
+  await page.goto(`/routes/${routeId}`);
+
+  await boardBackLink(page).click();
+
+  await expect(page).toHaveURL("/");
+  await expect(routeSearchInput(page)).toHaveValue("");
 });
 
 test("번호를 한 글자씩 쳐도 방문 기록이 늘지 않는다", async ({ page }) => {
