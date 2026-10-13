@@ -30,7 +30,16 @@ test("노선 조회 실패 후 재시도에 성공하면 노선을 선택할 수
   await expect(error).not.toBeVisible();
   await expect(routeButton(page)).toBeVisible();
   await expect(routeButton(page)).toBeEnabled();
+  const boardResponse = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.board && response.status() === 200,
+  );
+  const vehiclesResponse = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.vehicles && response.status() === 200,
+  );
   await selectRoute(page);
+  for (const response of await Promise.all([boardResponse, vehiclesResponse])) {
+    expect(await response.finished()).toBeNull();
+  }
 });
 
 test("노선 재시도도 실패하면 실패 안내와 재시도 버튼이 표시된다", async ({ page, api }) => {
