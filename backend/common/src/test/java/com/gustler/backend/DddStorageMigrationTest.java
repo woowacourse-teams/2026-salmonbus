@@ -3,6 +3,8 @@ package com.gustler.backend;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -177,6 +179,70 @@ class DddStorageMigrationTest {
                 observed_at, published_at, prediction_count, provenance)
             VALUES (2, 1, '2026-09-01T00:01:00Z', '2026-09-01T00:01:01Z', 0, 'RECORDED')
             """)).isInstanceOf(SQLException.class);
+    }
+
+    @Test
+    void 평가_분리는_완료_이력_파일을_유지하고_대기만_옮긴다() throws SQLException {
+        migrate("24");
+        insertLegacyData();
+        migrate("25");
+        copyLegacyData();
+        execute("INSERT INTO sal134_transition(backup_id, verified_at) VALUES ('stopped-writer-backup', now())");
+        migrate("30");
+        execute("""
+            INSERT INTO route_stop(route_version_id,stop_order,stop_id,name,direction,boarding_allowed)
+            VALUES(1,3,'stop3','다음 정류장','UP',true);
+            INSERT INTO seat_forecast(vehicle_observation_id,target_stop_order,route_version_id,stops_to_target,
+                model_deployment_id,demand_statistics_revision,seat_full_chance_raw,seat_full_chance,
+                generated_at,quality_revision,publication_id)
+            SELECT vehicle_observation_id,3,route_version_id,2,model_deployment_id,demand_statistics_revision,
+                seat_full_chance_raw,seat_full_chance,generated_at,quality_revision,publication_id FROM seat_forecast;
+            INSERT INTO forecast_evaluation(vehicle_observation_id,target_stop_order,route_version_id) VALUES(1,3,1)
+            """);
+        long originalFile = number("SELECT pg_relation_filenode('forecast_evaluation')");
+        long trainingRows = number("SELECT count(*) FROM training_eligible_seat_forecast");
+
+        migrate("31");
+
+        assertThat(number("SELECT pg_relation_filenode('forecast_evaluation_result')")).isEqualTo(originalFile);
+        assertThat(number("SELECT count(*) FROM forecast_evaluation_result")).isOne();
+        assertThat(number("SELECT count(*) FROM forecast_evaluation_pending")).isOne();
+        assertThat(number("SELECT count(*) FROM forecast_evaluation")).isEqualTo(2);
+        assertThat(number("SELECT count(*) FROM quality_eligible_seat_forecast")).isEqualTo(2);
+        assertThat(number("SELECT count(*) FROM training_eligible_seat_forecast")).isEqualTo(trainingRows);
+        assertThat(scalar("SELECT scoring_state FROM forecast_evaluation WHERE target_stop_order=3")).isEqualTo("PENDING");
+        assertThat(number("SELECT seats_on_arrival FROM forecast_evaluation_result")).isEqualTo(9);
+        assertThatThrownBy(() -> execute("""
+            INSERT INTO forecast_evaluation_result(vehicle_observation_id,target_stop_order,route_version_id,scoring_state)
+            VALUES(1,3,1,'PENDING')
+            """)).isInstanceOf(SQLException.class);
+    }
+
+    @Test
+    void 로컬_초기화_SQL은_평가_분리_후에도_실행되고_노선은_보존한다() throws Exception {
+        migrate("24");
+        insertLegacyData();
+        migrate("25");
+        copyLegacyData();
+        execute("INSERT INTO sal134_transition(backup_id, verified_at) VALUES ('test-backup', now())");
+        migrate("31");
+        assertThat(number("SELECT count(*) FROM forecast_evaluation_result")).isOne();
+
+        Path root = Path.of("").toAbsolutePath();
+        while (root != null && !Files.isRegularFile(root.resolve("dev/data/java/com/gustler/localdata/LocalData.java"))) {
+            root = root.getParent();
+        }
+        assertThat(root).as("로컬 초기화 소스가 있는 저장소 루트").isNotNull();
+        String source = Files.readString(root.resolve("dev/data/java/com/gustler/localdata/LocalData.java"));
+        int start = source.indexOf("TRUNCATE ", source.indexOf("private static void resetGenerated"));
+        assertThat(start).isGreaterThanOrEqualTo(0);
+        int end = source.indexOf("\"\"\"", start);
+        execute(source.substring(start, end));
+
+        assertThat(number("SELECT count(*) FROM forecast_evaluation_pending")).isZero();
+        assertThat(number("SELECT count(*) FROM forecast_evaluation_result")).isZero();
+        assertThat(number("SELECT count(*) FROM forecast_evaluation")).isZero();
+        assertThat(number("SELECT count(*) FROM route")).isOne();
     }
 
     private void insertRoute() throws SQLException {

@@ -1,0 +1,29 @@
+version: 0.0
+os: linux
+files:
+  - source: /
+    destination: /opt/salmonbus-dev/worker/staging
+file_exists_behavior: OVERWRITE
+permissions:
+  - object: /opt/salmonbus-dev/worker/staging
+    owner: root
+    group: root
+    mode: "755"
+    type: [directory, file]
+hooks:
+  BeforeInstall:
+    - location: scripts/preflight.sh
+      timeout: 180
+      runas: root
+  AfterInstall:
+    - location: scripts/install.sh
+      timeout: 300
+      runas: root
+  ApplicationStart:
+    - location: scripts/start.sh
+      timeout: 300
+      runas: root
+  ValidateService:
+    - location: scripts/validate.sh
+      timeout: 300
+      runas: root

@@ -1,9 +1,14 @@
+# syntax=docker/dockerfile:1
 FROM eclipse-temurin:21-jdk@sha256:3e3c176ffed168beb42c607be9bc1639b466cf00261a0fb04425562c9d0c5c2b AS build
+ARG TARGETARCH
 WORKDIR /build/extension
 COPY dev/wiremock-extension/ ./
 COPY dev/data/routes.json /build/data/routes.json
 COPY dev/data/catalog-routes.json /build/data/catalog-routes.json
-RUN ./gradlew test jar --no-daemon --console=plain
+COPY dev/wiremock/mappings/ /build/wiremock/mappings/
+RUN --mount=type=cache,id=salmonbus-gbis-gradle-${TARGETARCH},target=/root/.gradle,sharing=locked \
+    ./gradlew test jar --no-daemon --max-workers=2 \
+        '-Dorg.gradle.jvmargs=-Xms64m -Xmx256m -XX:MaxMetaspaceSize=192m -XX:ActiveProcessorCount=2' --console=plain
 
 FROM wiremock/wiremock:3.13.2@sha256:0d4ecb3e4dc8213fd7a4d37d6a78f6e6b553a6d2e15bd51b0999781282ac61b3
 COPY --from=build /build/extension/build/libs/local-gbis-replay.jar /var/wiremock/extensions/

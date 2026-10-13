@@ -1,0 +1,18 @@
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+
+gradle.projectsEvaluated {
+    gradle.rootProject.tasks.register('prepareLocalDependencies') {
+        doLast {
+            gradle.rootProject.subprojects.each { project ->
+                ['compileClasspath', 'runtimeClasspath', 'annotationProcessor'].each { name ->
+                    def configuration = project.configurations.findByName(name)
+                    if (configuration != null && configuration.canBeResolved) {
+                        configuration.incoming.artifactView {
+                            componentFilter { it instanceof ModuleComponentIdentifier }
+                        }.files.files
+                    }
+                }
+            }
+        }
+    }
+}

@@ -579,6 +579,40 @@ class JdbcForecastEvaluationRepositoryTest {
     }
 
     @Test
+    void 원본_관측을_공유하는_예보는_정류장별_상세와_두_시각을_유지한다() {
+        saveForecasts(List.of(
+            forecastOf(NEXT_TARGET_STOP_ORDER, STOPS_TO_NEXT_TARGET, NEXT_GENERATED_AT),
+            forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
+
+        assertThat(evaluationRepository.findPending(routeVersionId, READ_LIMIT)).containsExactly(
+            new PendingForecast(vehicleObservationId, TARGET_STOP_ORDER, routeVersionId,
+                VEHICLE_204000206, STOPS_TO_TARGET, RESPONSE_RECEIVED_AT.toInstant(), GENERATED_AT, 0L),
+            new PendingForecast(vehicleObservationId, NEXT_TARGET_STOP_ORDER, routeVersionId,
+                VEHICLE_204000206, STOPS_TO_NEXT_TARGET, RESPONSE_RECEIVED_AT.toInstant(), NEXT_GENERATED_AT, 0L));
+    }
+
+    @Test
+    void 품질_보류_묶음_뒤의_공유_관측이_페이지에_걸쳐도_누락하거나_중복하지_않는다() {
+        saveForecasts(List.of(
+            forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT),
+            forecastOf(NEXT_TARGET_STOP_ORDER, STOPS_TO_NEXT_TARGET, NEXT_GENERATED_AT)));
+        jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats=82 WHERE id=?")
+            .param(vehicleObservationId).update();
+        long next = insertObservation(observationBatchId, "shared-page-test", 1, PASSED_STOP_ORDER);
+        saveForecasts(List.of(
+            new SeatForecast(next, routeVersionId, TARGET_STOP_ORDER, STOPS_TO_TARGET,
+                modelDeploymentId, DEMAND_STATISTICS_REVISION, 0.41, 0.38, 12.5, GENERATED_AT),
+            new SeatForecast(next, routeVersionId, NEXT_TARGET_STOP_ORDER, STOPS_TO_NEXT_TARGET,
+                modelDeploymentId, DEMAND_STATISTICS_REVISION, 0.41, 0.38, 12.5, NEXT_GENERATED_AT)));
+
+        assertThat(evaluationRepository.findPending(routeVersionId, 1))
+            .extracting(PendingForecast::targetStopOrder).containsExactly(TARGET_STOP_ORDER);
+        assertThat(evaluationRepository.findPending(routeVersionId, 2))
+            .extracting(PendingForecast::targetStopOrder).containsExactly(TARGET_STOP_ORDER, NEXT_TARGET_STOP_ORDER);
+        assertThat(storedState(vehicleObservationId)).isEqualTo("PENDING");
+    }
+
+    @Test
     void 미정산_평가가_남은_노선_버전을_정산할_노선으로_한_번만_읽는다() {
         // given
         saveForecasts(List.of(

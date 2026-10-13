@@ -41,10 +41,10 @@ class MigrationOrderTest {
      * 번호가 거꾸로 배정돼도 그 가정에 맞춰 다른 파일을 빼게 되고, 결국 늘 순서가 맞아서 통과한다.
      * 이름으로 고르고, 그 파일들이 정말 마지막 번호인지는 아래에서 따로 단언한다.
      *
-     * <p>이 브랜치는 정류장 좌표 이력과 모델별 당일 보정 집계를 더한다.
+     * <p>이 브랜치는 예보 평가 대기와 완료 이력을 분리한다.
      */
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
-        List.of("route_stop_location_history", "model_same_day_full_outcomes");
+        List.of("separate_forecast_evaluation_pending");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";

@@ -19,7 +19,7 @@ export function useRouteSearch() {
       }
       setRoutesState(result.ok ? { status: "ready", routes: result.body.routes } : { status: "error" });
     });
-    return () => ticket.abort();
+    return () => gate.close();
   }, [gate, attempt]);
 
   const changeInput = (value: string) => {

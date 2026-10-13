@@ -1,0 +1,11 @@
+server:
+  address: 0.0.0.0
+
+spring:
+  flyway:
+    enabled: true
+
+management:
+  server:
+    port: 8082
+    address: 127.0.0.1

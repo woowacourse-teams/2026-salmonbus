@@ -32,4 +32,5 @@ case ${LOCAL_COMPONENT:-} in
   *) fail ;;
 esac
 
-exec ./gradlew ":${LOCAL_COMPONENT}:bootRun" --offline --no-daemon --console=plain
+exec ./gradlew --init-script /local-tools/runtime.init ":${LOCAL_COMPONENT}:bootRun" \
+    --offline --no-daemon --console=plain

@@ -1,7 +1,8 @@
+import { REQUEST_DISPOSED, REQUEST_SUPERSEDED } from "./cancellation";
+
 export interface RequestTicket {
   readonly signal: AbortSignal;
   isLatest(): boolean;
-  abort(): void;
 }
 
 export interface LatestRequestGate {
@@ -14,18 +15,17 @@ export function createLatestRequestGate(): LatestRequestGate {
 
   return {
     issue() {
-      latest?.abort();
+      latest?.abort(REQUEST_SUPERSEDED);
       const controller = new AbortController();
       latest = controller;
 
       return {
         signal: controller.signal,
         isLatest: () => latest === controller,
-        abort: () => controller.abort(),
       };
     },
     close() {
-      latest?.abort();
+      latest?.abort(REQUEST_DISPOSED);
       latest = null;
     },
   };

@@ -14,8 +14,9 @@ public interface ForecastEvaluationRepository {
     /** 정산 트랜잭션에서 호출한다. 읽은 범위의 확정 제외 평가를 제한 개수만 종료한다. */
     List<PendingForecast> findPending(long routeVersionId, int limit);
 
+    /** 같은 노선의 정산과 직렬화하도록 노선 잠금을 확보한 트랜잭션에서 호출한다. */
     void addPending(long routeVersionId, List<ForecastEvaluation> evaluations);
 
-    /** PENDING에서 새로 확정한 결과를 반환한다. */
+    /** 노선 잠금을 확보한 트랜잭션에서 대기를 제거하고 새로 확정한 결과를 반환한다. */
     List<SettledEvaluation> settle(List<ForecastEvaluation> evaluations);
 }

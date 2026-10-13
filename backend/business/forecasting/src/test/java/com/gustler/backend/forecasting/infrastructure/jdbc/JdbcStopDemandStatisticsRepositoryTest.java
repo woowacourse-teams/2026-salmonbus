@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.quality.RouteDataQuality;
@@ -146,6 +147,23 @@ class JdbcStopDemandStatisticsRepositoryTest {
             insertRouteStop(stopOrder, stopOrder != PASSING_ONLY_STOP_ORDER);
         }
         modelDeploymentId = insertModelDeployment();
+    }
+
+    @Test
+    void 도착_관측이_없는_정산_fixture는_실패하고_대기를_보존한다() {
+        final long sourceId = insertObservation(
+            VEHICLE_204000206, TARGET_STOP_ORDER - NEXT_STOP_AHEAD, SEATS_ON_PREDICTION, FIRST_ARRIVED_AT);
+        StatisticsForecastFixture.insertPending(jdbcClient, sourceId, TARGET_STOP_ORDER,
+            NEXT_STOP_AHEAD, modelDeploymentId, DEMAND_STATISTICS_REVISION, SEAT_FULL_CHANCE_RAW,
+            SEAT_FULL_CHANCE, EXPECTED_SEATS, GENERATED_AT);
+
+        assertThatThrownBy(() -> StatisticsForecastFixture.settle(
+            jdbcClient, sourceId, TARGET_STOP_ORDER, -1L, FIRST_ARRIVED_AT))
+            .isInstanceOf(AssertionError.class);
+        assertThat(jdbcClient.sql("SELECT count(*) FROM forecast_evaluation_pending WHERE vehicle_observation_id=?")
+            .param(sourceId).query(Long.class).single()).isEqualTo(1L);
+        assertThat(jdbcClient.sql("SELECT count(*) FROM forecast_evaluation_result WHERE vehicle_observation_id=?")
+            .param(sourceId).query(Long.class).single()).isZero();
     }
 
     @Test

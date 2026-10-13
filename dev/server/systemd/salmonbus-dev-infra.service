@@ -1,0 +1,21 @@
+[Unit]
+Description=salmonbus dev PostgreSQL, MongoDB and GBIS replay
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+RequiresMountsFor=/srv/salmonbus-dev
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+WorkingDirectory=/opt/salmonbus-dev/infra/current
+EnvironmentFile=/etc/salmonbus-dev/infra.env
+UnsetEnvironment=JAVA_TOOL_OPTIONS JDK_JAVA_OPTIONS _JAVA_OPTIONS CLASSPATH
+ExecStartPre=/usr/bin/java -Xms16m -Xmx64m -jar /opt/salmonbus-dev/tools/shared-dev-tools.jar preflight infra
+ExecStart=/usr/bin/docker compose --env-file /dev/null --file compose.yaml up --detach --no-build --wait --wait-timeout 180
+ExecStop=/usr/bin/docker compose --env-file /dev/null --file compose.yaml stop
+TimeoutStartSec=210
+TimeoutStopSec=90
+
+[Install]
+WantedBy=multi-user.target
