@@ -3,6 +3,7 @@ const { merge } = require("webpack-merge");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const CssMinimizerPlugin = require("css-minimizer-webpack-plugin");
 const common = require("./webpack.common.cjs");
+const { DefinePlugin } = require("webpack");
 const { sentryWebpackPlugin } = require("@sentry/webpack-plugin");
 
 const uploadSourceMaps = process.env.SENTRY_UPLOAD_SOURCEMAPS === "true";
@@ -50,6 +51,7 @@ module.exports = merge(common, {
     runtimeChunk: "single",
   },
   plugins: [
+    new DefinePlugin({ __BOARD_MAP_PREVIEW__: JSON.stringify(false) }),
     new MiniCssExtractPlugin({
       filename: "assets/css/[name].[contenthash:8].css",
     }),

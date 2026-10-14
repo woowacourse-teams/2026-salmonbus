@@ -2,6 +2,7 @@ const path = require("path");
 const { merge } = require("webpack-merge");
 const ReactRefreshWebpackPlugin = require("@pmmmwh/react-refresh-webpack-plugin");
 const common = require("./webpack.common.cjs");
+const { DefinePlugin } = require("webpack");
 
 // 아래 devServer.proxy가 설정 시점에 process.env를 읽는다. webpack의 dotenv 옵션은 번들에만 값을 넣는다.
 try {
@@ -53,5 +54,5 @@ module.exports = merge(common, {
       },
     ],
   },
-  plugins: [new ReactRefreshWebpackPlugin()],
+  plugins: [new ReactRefreshWebpackPlugin(), new DefinePlugin({ __BOARD_MAP_PREVIEW__: JSON.stringify(true) })],
 });
