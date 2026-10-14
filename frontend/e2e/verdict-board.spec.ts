@@ -122,6 +122,7 @@ test("운행 중인 차량이 없으면 운행 없음 안내를 표시한다", a
   await expect(page.getByText("정보를 불러오지 못했어요", { exact: true })).not.toBeVisible();
   await expect(page.locator("button[aria-expanded]")).toHaveCount(0);
   await expect(page.getByText(/도착 시 .*석 예상해요/)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /방면 보기$/ })).toHaveCount(0);
 });
 
 test("운행 중인 노선의 특정 정류장에 접근 차량이 없으면 차량 없음 안내를 표시한다", async ({ page, api }) => {

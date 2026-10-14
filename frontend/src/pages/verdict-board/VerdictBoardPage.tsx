@@ -21,6 +21,7 @@ import { RouteMap } from "./map/RouteMap";
 import { useRouteMapData } from "./map/useRouteMapData";
 import { useBoardViewport } from "./hooks/useBoardViewport";
 import { useBoardOverlayAnchors } from "./hooks/useBoardOverlayAnchors";
+import { OUT_OF_SERVICE_NOTICE } from "./verdictCopy";
 import * as styles from "./VerdictBoardPage.css";
 
 type BoardState =
@@ -75,10 +76,30 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
   }
 
   const status = screen.kind === "outOfService" ? "outOfService" : screen.kind === "error" ? "error" : "loading";
+  const runningDirection =
+    status === "outOfService" && state.status === "ready"
+      ? (state.board.route.directions.find((candidate) => serviceStateFor(state.board, candidate) === "running") ??
+        null)
+      : null;
   return (
     <main className={styles.noticePage}>
       <BoardBackLink />
-      <StopBoard status={status} />
+      {status === "outOfService" ? (
+        <div className={styles.outOfService}>
+          <p role="status">{OUT_OF_SERVICE_NOTICE}</p>
+          {runningDirection !== null && (
+            <button
+              type="button"
+              className={styles.alternateDirection}
+              onClick={() => selectDirection(runningDirection.id)}
+            >
+              {runningDirection.terminalStopName} 방면 보기
+            </button>
+          )}
+        </div>
+      ) : (
+        <StopBoard status={status} />
+      )}
     </main>
   );
 }
