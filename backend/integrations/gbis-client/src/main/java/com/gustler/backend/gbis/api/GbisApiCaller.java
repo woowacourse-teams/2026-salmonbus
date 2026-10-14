@@ -78,6 +78,10 @@ public class GbisApiCaller {
         return requestBy(path, "stationId", stationId, keyAlias);
     }
 
+    public GbisHttpResult getWithMetadata(String path, String routeId, String keyAlias) {
+        return requestBy(path, "routeId", routeId, keyAlias);
+    }
+
     private GbisRawResponse getBy(String path, String parameter, String value, String keyAlias) {
         return requestBy(path, parameter, value, keyAlias).response();
     }

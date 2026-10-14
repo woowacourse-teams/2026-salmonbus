@@ -30,6 +30,7 @@ dependencies {
 
 tasks.named('test') {
     environment 'ARRIVALS_ENABLED', 'false'
+    environment 'ROUTE_GEOMETRY_ENABLED', 'false'
     environment 'GBIS_SERVICE_KEY', 'fake-service-key-for-test'
     environment 'GBIS_SERVICE_KEY_B', ''
     environment 'GBIS_SERVICE_KEY_C', ''
