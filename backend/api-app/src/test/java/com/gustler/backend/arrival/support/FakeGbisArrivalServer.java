@@ -49,8 +49,8 @@ public final class FakeGbisArrivalServer implements AutoCloseable {
     private final List<String> unexpected = new CopyOnWriteArrayList<>();
     private final AtomicInteger active = new AtomicInteger();
     private final AtomicInteger maximumActive = new AtomicInteger();
-    private volatile boolean geometryEnabled;
-    private final AtomicInteger geometryCalls = new AtomicInteger();
+    private volatile Map<String, RouteGeometryFixture> geometryRoutes = Map.of();
+    private final Map<String, AtomicInteger> geometryCalls = new ConcurrentHashMap<>();
     private final AtomicInteger locationCalls = new AtomicInteger();
 
     public FakeGbisArrivalServer() throws IOException {
@@ -76,8 +76,16 @@ public final class FakeGbisArrivalServer implements AutoCloseable {
         return maximumActive.get();
     }
 
-    public void enableGeometry() { geometryEnabled = true; }
-    public int geometryCalls() { return geometryCalls.get(); }
+    public void enableGeometry() { enableGeometry(List.of(RouteGeometryFixture.synthetic3330())); }
+    public void enableGeometry(List<RouteGeometryFixture> routes) {
+        geometryRoutes = routes.stream().collect(java.util.stream.Collectors.toUnmodifiableMap(
+            RouteGeometryFixture::routeId, route -> route));
+    }
+    public int geometryCalls() { return geometryCalls.values().stream().mapToInt(AtomicInteger::get).sum(); }
+    public Map<String, Integer> geometryCallsByRoute() {
+        return geometryCalls.entrySet().stream().collect(java.util.stream.Collectors.toUnmodifiableMap(
+            Map.Entry::getKey, entry -> entry.getValue().get()));
+    }
     public int locationCalls() { return locationCalls.get(); }
 
     public List<String> unexpected() {
@@ -91,8 +99,8 @@ public final class FakeGbisArrivalServer implements AutoCloseable {
         calls.clear();
         unexpected.clear();
         maximumActive.set(0);
-        geometryEnabled = false;
-        geometryCalls.set(0);
+        geometryRoutes = Map.of();
+        geometryCalls.clear();
         locationCalls.set(0);
     }
 
@@ -101,8 +109,9 @@ public final class FakeGbisArrivalServer implements AutoCloseable {
             .map(pair -> pair.split("=", 2)).collect(java.util.stream.Collectors.toMap(
                 pair -> pair[0], pair -> URLDecoder.decode(pair[1], StandardCharsets.UTF_8)));
         String station = query.get("stationId");
-        if (geometryEnabled && query.getOrDefault("serviceKey", "").startsWith("fake-arrival-")
-            && "204000057".equals(query.get("routeId")) && geometry(exchange)) return;
+        var route = geometryRoutes.get(query.getOrDefault("routeId", ""));
+        if (route != null && query.getOrDefault("serviceKey", "").startsWith("fake-arrival-")
+            && geometry(exchange, route)) return;
         if (!PATH.equals(exchange.getRequestURI().getPath()) || !STATIONS.contains(station)
             || !query.getOrDefault("serviceKey", "").startsWith("fake-arrival-")) {
             unexpected.add(exchange.getRequestURI().getPath());
@@ -132,23 +141,27 @@ public final class FakeGbisArrivalServer implements AutoCloseable {
         }
     }
 
-    private boolean geometry(HttpExchange exchange) throws IOException {
+    private boolean geometry(HttpExchange exchange, RouteGeometryFixture route) throws IOException {
         String path = exchange.getRequestURI().getPath();
+        var json = new tools.jackson.databind.ObjectMapper();
         String body;
         if (path.endsWith("getBusRouteInfoItemv2")) {
-            body = "\"busRouteInfoItem\":{\"routeName\":\"3330\",\"startStationName\":\"A\",\"endStationName\":\"B\"}";
+            body = "\"busRouteInfoItem\":" + json.writeValueAsString(route.capturedResponseFields() == null
+                ? Map.of("routeName", route.name(), "startStationName", route.startPoint(), "endStationName", route.endPoint())
+                : route.capturedResponseFields().path("info").get(0));
         } else if (path.endsWith("getBusRouteStationListv2")) {
-            var rows = new java.util.ArrayList<Map<String, Object>>();
-            for (int index = 0; index < STATIONS.size(); index++) rows.add(Map.of(
-                "stationId", STATIONS.get(index), "stationSeq", index + 1, "stationName", "synthetic stop",
-                "turnSeq", 12, "turnYn", index == 11 ? "Y" : "N", "x", shapeX(index * 70), "y", shapeY(index * 70)));
-            body = "\"busRouteStationList\":" + new tools.jackson.databind.ObjectMapper().writeValueAsString(rows);
+            var rows = route.stops().stream().map(stop -> Map.of("stationId", stop.stationId(),
+                "stationSeq", stop.sequence(), "stationName", stop.name(), "turnSeq", route.turnSequence(),
+                "turnYn", stop.sequence() == route.turnSequence() ? "Y" : "N", "x", stop.x(), "y", stop.y())).toList();
+            body = "\"busRouteStationList\":" + json.writeValueAsString(route.capturedResponseFields() == null
+                ? rows : route.capturedResponseFields().path("stops"));
         } else if (path.endsWith("getBusRouteLineListv2")) {
-            geometryCalls.incrementAndGet();
+            geometryCalls.computeIfAbsent(route.routeId(), ignored -> new AtomicInteger()).incrementAndGet();
             var points = new java.util.ArrayList<Map<String, Object>>();
-            for (int index = 0; index < 836; index++) points.add(Map.of("lineSeq", index + 1,
-                "x", shapeX(index), "y", shapeY(index)));
-            body = "\"busRouteLineList\":" + new tools.jackson.databind.ObjectMapper().writeValueAsString(points);
+            for (int index = 0; index < route.points().size(); index++) points.add(Map.of("lineSeq", index + 1,
+                "routeId", route.routeId(), "x", route.points().get(index).x(), "y", route.points().get(index).y()));
+            body = "\"busRouteLineList\":" + json.writeValueAsString(route.capturedResponseFields() == null
+                ? points : route.capturedResponseFields().path("shape"));
         } else if (path.endsWith("getBusLocationListv2")) {
             locationCalls.incrementAndGet();
             body = "\"busLocationList\":[]";
@@ -162,9 +175,6 @@ public final class FakeGbisArrivalServer implements AutoCloseable {
         }
         return true;
     }
-
-    private static double shapeX(int index) { return 127 + index * .00001; }
-    private static double shapeY(int index) { return 37 + Math.sin(index * .01) * .001; }
 
     public void release() {
         plans.values().forEach(Plan::release);

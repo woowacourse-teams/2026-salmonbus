@@ -48,17 +48,22 @@ tasks.named('test') {
         .withPathSensitivity(PathSensitivity.NONE)
     def chatContractExamples = rootProject.file('../contract/examples/chat-v1.json')
     def chatInitScript = rootProject.file('deploy/chat/init-chat-db.js')
+    def geometryRoutesFixture = rootProject.file('../dev/data/routes.json')
     inputs.file(chatContractExamples)
         .withPropertyName('chatContractExamples')
         .withPathSensitivity(PathSensitivity.NONE)
     inputs.file(chatInitScript)
         .withPropertyName('chatInitScript')
         .withPathSensitivity(PathSensitivity.NONE)
+    inputs.file(geometryRoutesFixture)
+        .withPropertyName('geometryRoutesFixture')
+        .withPathSensitivity(PathSensitivity.NONE)
     doFirst {
         systemProperty 'api.boot.jar', apiJar.get().asFile.absolutePath
         systemProperty 'worker.boot.jar', workerJar.get().asFile.absolutePath
         systemProperty 'chat.contract.examples', chatContractExamples.absolutePath
         systemProperty 'chat.init.script', chatInitScript.absolutePath
+        systemProperty 'geometry.routes.fixture', geometryRoutesFixture.absolutePath
     }
 }
 
