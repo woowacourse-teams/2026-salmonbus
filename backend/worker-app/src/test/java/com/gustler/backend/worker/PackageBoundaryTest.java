@@ -128,7 +128,7 @@ class PackageBoundaryTest {
                 .as("%s 모듈의 실제 클래스가 검사 대상에 있어야 한다", module)
                 .isTrue();
         }
-        for (String module : List.of("routecatalog", "observations", "forecasting", "quota")) {
+        for (String module : List.of("routecatalog", "observations", "forecasting", "arrivals", "quota")) {
             assertThat(classes.stream().anyMatch(type -> type.getPackageName().startsWith(PREFIX + module + ".domain")))
                 .as("%s의 도메인 클래스가 검사 대상에 있어야 한다", module)
                 .isTrue();

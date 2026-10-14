@@ -4,7 +4,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import com.gustler.backend.arrival.ArrivalRefresh;
+import com.gustler.backend.arrival.contract.ArrivalRefresh;
 import com.gustler.backend.arrivals.api.RefreshStationArrivals;
 import java.time.*;
 import org.junit.jupiter.api.Test;

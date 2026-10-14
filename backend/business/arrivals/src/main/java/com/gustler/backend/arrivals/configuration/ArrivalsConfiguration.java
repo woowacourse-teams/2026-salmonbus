@@ -1,8 +1,13 @@
 package com.gustler.backend.arrivals.configuration;
 
-import com.gustler.backend.arrivals.api.*;
-import com.gustler.backend.arrivals.application.*;
-import com.gustler.backend.arrivals.infrastructure.*;
+import com.gustler.backend.arrivals.api.ArrivalCollectionPolicy;
+import com.gustler.backend.arrivals.api.RefreshStationArrivals;
+import com.gustler.backend.arrivals.api.RetainArrivalSnapshots;
+import com.gustler.backend.arrivals.application.ArrivalRefreshCoordinator;
+import com.gustler.backend.arrivals.domain.ArrivalSource;
+import com.gustler.backend.arrivals.domain.ArrivalStore;
+import com.gustler.backend.arrivals.infrastructure.gbis.GbisArrivalSource;
+import com.gustler.backend.arrivals.infrastructure.jdbc.JdbcArrivalStore;
 import com.gustler.backend.gbis.api.GbisApiCaller;
 import com.gustler.backend.gbis.api.GbisClientOptions;
 import com.gustler.backend.quota.api.ArrivalCallQuota;

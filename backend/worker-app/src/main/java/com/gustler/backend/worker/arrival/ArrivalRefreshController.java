@@ -1,6 +1,6 @@
 package com.gustler.backend.worker.arrival;
 
-import com.gustler.backend.arrival.ArrivalRefresh;
+import com.gustler.backend.arrival.contract.ArrivalRefresh;
 import com.gustler.backend.arrivals.api.RefreshStationArrivals;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
