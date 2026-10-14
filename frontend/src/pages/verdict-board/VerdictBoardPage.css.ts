@@ -2,28 +2,56 @@ import { style } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 
 export const page = style({
-  display: "flex",
-  flexDirection: "column",
-  height: ["100vh", "100dvh"],
+  position: "fixed",
+  right: 0,
+  left: 0,
+  maxWidth: "430px",
+  margin: "0 auto",
   overflow: "hidden",
   backgroundColor: vars.color.background,
 });
-
-export const content = style({
-  display: "flex",
-  flex: 1,
-  minHeight: 0,
-  flexDirection: "column",
-  gap: "13px",
-  width: "100%",
-  maxWidth: "430px",
-  margin: "0 auto",
-  padding: "22px 18px 32px",
+export const content = style({ position: "relative", width: "100%", height: "100%" });
+export const mapSlot = style({ position: "absolute", top: 0, left: 0, right: 0, overflow: "hidden" });
+export const back = style({
+  position: "absolute",
+  top: "calc(env(safe-area-inset-top, 0px) + 20px)",
+  left: "20px",
+  zIndex: 1,
+  display: "grid",
+  placeItems: "center",
+  width: "32px",
+  height: "32px",
+  borderRadius: "50%",
+  backgroundColor: vars.color.liveBus,
+  color: "#FFFFFF",
+  selectors: { "&:focus-visible": { outline: `2px solid ${vars.color.focusRing}`, outlineOffset: "3px" } },
 });
-
-// 헤더와 방향 탭은 스크롤 밖에 둔다. 목록만 카드 안에서 움직여야 탭과 카드 사이 여백이 남는다.
-export const controls = style({
+export const fullControls = style({
+  position: "relative",
+  height: "36px",
+});
+export const fullBack = style([back, { top: 0, left: 0 }]);
+export const outOfService = style({
+  alignSelf: "center",
+  width: "100%",
+  textAlign: "center",
+  color: vars.color.textSubtle,
+  fontSize: vars.font.boardNotice,
+});
+export const alternateDirection = style({
+  border: `1px solid ${vars.color.cardBorder}`,
+  borderRadius: vars.radius.control,
+  padding: "10px 14px",
+  background: vars.color.surface,
+  color: vars.color.textBody,
+  cursor: "pointer",
+});
+export const noticePage = style({
+  position: "relative",
   display: "flex",
-  flexDirection: "column",
-  gap: "17px",
+  width: "min(100%, 430px)",
+  height: ["100vh", "100dvh"],
+  margin: "0 auto",
+  padding: "64px 18px 32px",
+  backgroundColor: vars.color.background,
 });
