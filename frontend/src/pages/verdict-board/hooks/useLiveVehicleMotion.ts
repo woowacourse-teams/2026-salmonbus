@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { LiveVehicleView } from "../liveVehiclePolicy";
+import type { LiveVehicleView } from "../components/liveVehiclePolicy";
 
 export interface LiveVehicleMotionFrame {
   key: string;

@@ -1,6 +1,6 @@
 import { useId } from "react";
-import type { StopView } from "../displayPolicy";
-import { stopNameLabel, WAYPOINT_CAPTION } from "../verdictCopy";
+import type { StopView } from "./displayPolicy";
+import { stopNameLabel, WAYPOINT_CAPTION } from "./verdictCopy";
 import { ArrivalForecastCard } from "./ArrivalForecastCard";
 import { StopName } from "./StopName";
 import { TimelineMarker, type RoutePosition } from "./TimelineMarker";

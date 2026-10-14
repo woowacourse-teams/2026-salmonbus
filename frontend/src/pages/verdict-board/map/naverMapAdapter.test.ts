@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { boardMock } from "@/shared/api/routeForecast.mock";
-import { liveVehicleViewsFor } from "../liveVehiclePolicy";
+import { liveVehicleViewsFor } from "../components/liveVehiclePolicy";
 import { liveVehiclesMock } from "@/shared/api/routeForecast.mock";
 import { loadPreviewRouteMapData } from "./routeMapPreview";
 import type { NaverCoordinate, NaverMap, NaverMaps, NaverMarker } from "./naverSdk";

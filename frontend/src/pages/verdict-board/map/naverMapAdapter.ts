@@ -1,6 +1,6 @@
 import type { Board, Direction } from "@/shared/api/routeForecast.types";
 import type { StopSelection } from "../components/stopSelection";
-import type { LiveVehicleView } from "../liveVehiclePolicy";
+import type { LiveVehicleView } from "../components/liveVehiclePolicy";
 import type { GeoCoordinate, RouteMapData } from "./routeMapModel";
 import { routeArrowsFor, routeMapCoordinateForSequence } from "./routeMapGeometry";
 import type { NaverMap, NaverMaps, NaverMarker } from "./naverSdk";

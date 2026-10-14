@@ -47,11 +47,11 @@ export function liveVehicleViewsFor(
 
   const visibleVehicles = liveVehicles.vehicles
     .filter((vehicle) => vehicle.direction === direction && stopSequenceSet.has(vehicle.currentStopSequence))
-    .sort(compareVehicles);
+    .sort(vehicleOrderFor);
   const occurrenceByIdentity = new Map<string, number>();
 
   return visibleVehicles.map((vehicle) => ({
-    key: stableVehicleKey(vehicle, occurrenceByIdentity),
+    key: assignVehicleKey(vehicle, occurrenceByIdentity),
     vehicle,
     motionSegment: motionSegmentFor(vehicle, stopSequences),
   }));
@@ -65,17 +65,17 @@ function canDisplayLiveVehicles(board: Board, liveVehicles: LiveVehicles): boole
   );
 }
 
-function compareVehicles(left: Vehicle, right: Vehicle): number {
+function vehicleOrderFor(left: Vehicle, right: Vehicle): number {
   const sequenceDifference = left.currentStopSequence - right.currentStopSequence;
   if (sequenceDifference !== 0) return sequenceDifference;
 
   const phaseDifference = PHASE_RANK[left.phase] - PHASE_RANK[right.phase];
   if (phaseDifference !== 0) return phaseDifference;
 
-  return compareVehicleIds(left.vehicleId, right.vehicleId);
+  return vehicleIdOrderFor(left.vehicleId, right.vehicleId);
 }
 
-function compareVehicleIds(left: string | null, right: string | null): number {
+function vehicleIdOrderFor(left: string | null, right: string | null): number {
   const sortableLeft = left ?? "";
   const sortableRight = right ?? "";
   if (sortableLeft < sortableRight) return -1;
@@ -107,7 +107,7 @@ function motionSegmentFor(vehicle: Vehicle, stopSequences: number[]): LiveVehicl
   };
 }
 
-function stableVehicleKey(vehicle: Vehicle, occurrenceByIdentity: Map<string, number>): string {
+function assignVehicleKey(vehicle: Vehicle, occurrenceByIdentity: Map<string, number>): string {
   const identity =
     vehicle.vehicleId === null
       ? JSON.stringify([

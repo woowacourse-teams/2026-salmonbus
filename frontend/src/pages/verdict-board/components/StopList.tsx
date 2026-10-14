@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type RefObject } from "react";
-import type { StopView } from "../displayPolicy";
-import type { LiveVehicleView } from "../liveVehiclePolicy";
+import type { StopView } from "./displayPolicy";
+import type { LiveVehicleView } from "./liveVehiclePolicy";
 import type { LiveVehicleMotionStore } from "../hooks/useLiveVehicleMotion";
 import { LiveBusTraker } from "./LiveBusTraker";
 import { StopRow } from "./StopRow";

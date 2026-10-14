@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { Board, Direction } from "@/shared/api/routeForecast.types";
 import type { StopSelection } from "../components/stopSelection";
 import type { LiveVehicleMotionStore } from "../hooks/useLiveVehicleMotion";
-import type { LiveVehicleView } from "../liveVehiclePolicy";
+import type { LiveVehicleView } from "../components/liveVehiclePolicy";
 import type { RouteMapData } from "./routeMapModel";
 import { loadNaverMaps, subscribeNaverMapAuthFailure } from "./naverSdk";
 import { createNaverRouteMap, type RouteMapAdapter } from "./naverMapAdapter";

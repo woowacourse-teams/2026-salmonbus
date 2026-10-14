@@ -1,7 +1,7 @@
 import type { EventMap } from "@/shared/analytics/events";
 import type { Board, Direction } from "@/shared/api/routeForecast.types";
-import type { ArrivalTone } from "../arrivalPolicy";
-import { stopViewsFor } from "../displayPolicy";
+import type { ArrivalTone } from "../components/arrivalPolicy";
+import { stopViewsFor } from "../components/displayPolicy";
 
 interface BoardViewTiming {
   now: number;

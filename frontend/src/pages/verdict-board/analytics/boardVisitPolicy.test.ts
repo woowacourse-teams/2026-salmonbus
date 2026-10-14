@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import { boardWith } from "@/testing/fixtures";
-import type { BoardScreen } from "../displayPolicy";
+import type { BoardScreen } from "../components/displayPolicy";
 import { nextBoardVisitStep, type BoardObservation, type BoardVisit, type BoardVisitEvent } from "./boardVisitPolicy";
 
 const MINUTE_MS = 60 * 1000;

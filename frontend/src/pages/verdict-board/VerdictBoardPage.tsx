@@ -6,9 +6,15 @@ import { fetchBoard } from "@/shared/api/routeForecast.api";
 import type { Board, Direction, DirectionInfo, LiveVehicles } from "@/shared/api/routeForecast.types";
 import { usePolledRequest } from "@/shared/api/usePolledRequest";
 import { paths } from "@/shared/routing/paths";
-import { directionInfoFor, directionViewsFor, serviceStateFor, stopViewsFor, type BoardScreen } from "./displayPolicy";
-import { liveVehicleViewsFor } from "./liveVehiclePolicy";
-import { useLiveVehicles } from "./useLiveVehicles";
+import {
+  directionInfoFor,
+  directionViewsFor,
+  serviceStateFor,
+  stopViewsFor,
+  type BoardScreen,
+} from "./components/displayPolicy";
+import { liveVehicleViewsFor } from "./components/liveVehiclePolicy";
+import { useLiveVehicles } from "./hooks/useLiveVehicles";
 import { useLiveVehicleMotion } from "./hooks/useLiveVehicleMotion";
 import type { StopSelection } from "./components/stopSelection";
 import type { BoardSheetSnap } from "./components/boardSheetPolicy";
@@ -21,7 +27,7 @@ import { RouteMap } from "./map/RouteMap";
 import { useRouteMapData } from "./map/useRouteMapData";
 import { useBoardViewport } from "./hooks/useBoardViewport";
 import { useBoardOverlayAnchors } from "./hooks/useBoardOverlayAnchors";
-import { OUT_OF_SERVICE_NOTICE } from "./verdictCopy";
+import { OUT_OF_SERVICE_NOTICE } from "./components/verdictCopy";
 import * as styles from "./VerdictBoardPage.css";
 
 type BoardState =

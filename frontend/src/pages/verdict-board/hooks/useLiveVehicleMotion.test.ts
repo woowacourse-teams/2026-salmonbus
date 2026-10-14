@@ -1,7 +1,7 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import { boardWith, liveVehiclesWith, vehicleAt } from "@/testing/fixtures";
 import type { Phase } from "@/shared/api/routeForecast.types";
-import { liveVehicleViewsFor, type LiveVehicleView } from "../liveVehiclePolicy";
+import { liveVehicleViewsFor, type LiveVehicleView } from "../components/liveVehiclePolicy";
 import { createLiveVehicleMotionStore, type LiveVehicleMotionStore } from "./useLiveVehicleMotion";
 
 const DURATION = 20_000;

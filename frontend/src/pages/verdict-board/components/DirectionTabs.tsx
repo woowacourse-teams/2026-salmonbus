@@ -1,5 +1,5 @@
 import type { Direction } from "@/shared/api/routeForecast.types";
-import type { DirectionView } from "../displayPolicy";
+import type { DirectionView } from "./displayPolicy";
 import * as styles from "./DirectionTabs.css";
 
 interface DirectionTabsProps {

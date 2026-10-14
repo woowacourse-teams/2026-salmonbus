@@ -1,8 +1,8 @@
 import { useRef } from "react";
-import type { StopView } from "../displayPolicy";
-import type { LiveVehicleView } from "../liveVehiclePolicy";
+import type { StopView } from "./displayPolicy";
+import type { LiveVehicleView } from "./liveVehiclePolicy";
 import type { LiveVehicleMotionStore } from "../hooks/useLiveVehicleMotion";
-import { LOADING_NOTICE, LOAD_FAILED_NOTICE, OUT_OF_SERVICE_NOTICE } from "../verdictCopy";
+import { LOADING_NOTICE, LOAD_FAILED_NOTICE, OUT_OF_SERVICE_NOTICE } from "./verdictCopy";
 import { StopList } from "./StopList";
 import * as styles from "./StopBoard.css";
 

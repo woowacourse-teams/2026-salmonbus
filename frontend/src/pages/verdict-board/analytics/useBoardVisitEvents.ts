@@ -1,7 +1,7 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { track } from "@/shared/analytics/track";
 import type { LatestSuccess } from "@/shared/api/polledResource";
-import type { BoardScreen } from "../displayPolicy";
+import type { BoardScreen } from "../components/displayPolicy";
 import { nextBoardVisitStep, type BoardVisit } from "./boardVisitPolicy";
 
 interface Params {

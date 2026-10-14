@@ -12,12 +12,12 @@ const phaseDescription: Record<Phase, string> = {
   IN_TRANSIT: "다음 정류장으로 이동 중",
 };
 
-function describeRemainingSeats(seat: SeatInfo) {
+function remainingSeatsLabel(seat: SeatInfo) {
   return seat.kind === "EXACT" ? `현재 잔여 좌석 ${seat.remaining}석` : "현재 잔여 좌석 정보 없음";
 }
 
 export function LiveBusTraker({ vehicle }: LiveBusTrakerProps) {
-  const accessibilityLabel = `${vehicle.stopName} 정류장, ${phaseDescription[vehicle.phase]}, ${describeRemainingSeats(vehicle.seat)}`;
+  const accessibilityLabel = `${vehicle.stopName} 정류장, ${phaseDescription[vehicle.phase]}, ${remainingSeatsLabel(vehicle.seat)}`;
 
   return (
     <div className={styles.tracker} role="img" aria-label={accessibilityLabel}>
