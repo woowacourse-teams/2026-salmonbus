@@ -7,9 +7,10 @@ export function fetchRouteGeometry(
   options: { signal: AbortSignal; referenceVersionId?: string },
 ): Promise<ApiResult<RouteGeometry>> {
   const endpoint = "/api/v2/routes/:routeId/geometry";
-  const query = options.referenceVersionId === undefined
-    ? ""
-    : `?referenceVersionId=${encodeURIComponent(options.referenceVersionId)}`;
+  const query =
+    options.referenceVersionId === undefined
+      ? ""
+      : `?referenceVersionId=${encodeURIComponent(options.referenceVersionId)}`;
   return requestJson<RouteGeometry>(endpoint.replace(":routeId", encodeURIComponent(routeId)) + query, {
     signal: options.signal,
     errorContext: { endpoint, tags: { route_id: routeId } },
