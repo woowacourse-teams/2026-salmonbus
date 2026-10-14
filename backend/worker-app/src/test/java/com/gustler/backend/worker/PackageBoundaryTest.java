@@ -29,7 +29,7 @@ import org.springframework.stereotype.Repository;
 class PackageBoundaryTest {
 
     private static final String PREFIX = "com.gustler.backend.";
-    private static final List<String> MODULES = List.of("routecatalog", "observations", "forecasting", "quota", "gbis");
+    private static final List<String> MODULES = List.of("routecatalog", "observations", "forecasting", "arrivals", "quota", "gbis");
 
     @ArchTest
     static final ArchRule domainUsesOnlyBusinessTypes = noClasses()
@@ -138,13 +138,13 @@ class PackageBoundaryTest {
     @ArchTest
     static void sharedLibrariesHaveNoBusinessOrExecutionDependencies(JavaClasses classes) {
         verifyLibrary(ClockConfig.class, "common", List.of(
-            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "quota..",
+            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "arrivals..", PREFIX + "quota..",
             PREFIX + "gbis..", PREFIX + "worker..", PREFIX + "maintenance..", PREFIX + "api.."));
         verifyLibrary(GbisApiCaller.class, "gbis-client", List.of(
-            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "quota..",
+            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "arrivals..", PREFIX + "quota..",
             PREFIX + "worker..", PREFIX + "maintenance..", PREFIX + "api.."));
         verifyLibrary(WorkerOperationLog.class, "operation-log", List.of(
-            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "quota..",
+            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "arrivals..", PREFIX + "quota..",
             PREFIX + "gbis..", PREFIX + "worker..", PREFIX + "maintenance..", PREFIX + "api.."));
     }
 

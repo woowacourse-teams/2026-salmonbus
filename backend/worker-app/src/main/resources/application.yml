@@ -91,6 +91,21 @@ forecast:
   # 한 차량의 뒤 관측을 얼마나 읽나. 첨두 15초 수집이면 400개가 100분치라 지평 12의 중앙 소요 26.5분을 덮는다.
   arrival-limit: 400
 
+arrivals:
+  enabled: ${ARRIVALS_ENABLED:false}
+  internal-token: ${ARRIVAL_INTERNAL_TOKEN:}
+  daily-limit: 40000
+  key-daily-limit: 10000
+  queue-capacity: 8
+  refresh-interval: 40s
+  validity: 60s
+  retry-base: 40s
+  retry-maximum: 300s
+  startup-delay: 40s
+  queue-wait: 2s
+  retention: 10m
+  cleanup-interval: 60s
+
 management:
   endpoints:
     web:
