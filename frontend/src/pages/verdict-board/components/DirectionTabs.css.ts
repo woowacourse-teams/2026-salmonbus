@@ -30,7 +30,7 @@ const indicatorBase = style({
   left: TRACK_PADDING,
   width: `calc((100% - ${TRACK_PADDING} * 2 - ${TAB_GAP}) / 2)`,
   borderRadius: vars.radius.control,
-  backgroundColor: vars.color.ink,
+  backgroundColor: vars.color.liveBus,
   willChange: "translate",
   animationDuration: vars.duration.spring,
   animationTimingFunction: vars.easing.slide,

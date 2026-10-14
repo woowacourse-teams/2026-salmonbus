@@ -11,8 +11,8 @@ export const apiPaths = {
 };
 
 export const directionLabels = {
-  UP: "테스트 기점 → 테스트 종점",
-  DOWN: "테스트 종점 → 테스트 기점",
+  UP: "테스트 종점 방면",
+  DOWN: "테스트 기점 방면",
 };
 
 export const targetStopNames = { UP: "상행 중앙역", DOWN: "하행 중앙역" };
