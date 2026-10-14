@@ -71,7 +71,7 @@ function composer(page: Page) {
 }
 
 function boardCard(page: Page) {
-  return page.locator("main > section");
+  return page.getByRole("region", { name: "판정보드 정류장 목록", exact: true });
 }
 
 async function edges(locator: Locator) {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "react-router";
 import type { ApiFailure, ApiResult } from "@/shared/api/client";
 import { latestSuccessOf, type PolledResource } from "@/shared/api/polledResource";
@@ -9,6 +9,7 @@ import { usePolledRequest } from "@/shared/api/usePolledRequest";
 import { directionInfoFor, directionViewsFor, serviceStateFor, stopViewsFor, type BoardScreen } from "./displayPolicy";
 import { liveVehicleViewsFor } from "./liveVehiclePolicy";
 import { DEFAULT_LIVE_MOTION_DURATION_MS, useLiveVehicles } from "./useLiveVehicles";
+import { useLiveVehicleMotion } from "./hooks/useLiveVehicleMotion";
 import { BoardHeader } from "./components/BoardHeader";
 import { DirectionTabs } from "./components/DirectionTabs";
 import { StopBoard } from "./components/StopBoard";
@@ -114,14 +115,49 @@ function renderBoard(
       return <StopBoard status="outOfService" />;
     case "forecast":
       return (
-        <StopBoard
+        <InteractiveStopBoard
           key={screen.direction}
-          status="ready"
-          stops={stopViewsFor(screen.board, screen.direction)}
-          liveVehicleViews={liveVehicleViewsFor(screen.board, liveVehicles, screen.direction)}
+          screen={screen}
+          switched={switched}
+          liveVehicles={liveVehicles}
           liveMotionDurationMs={liveMotionDurationMs}
-          entering={switched}
         />
       );
   }
+}
+
+function InteractiveStopBoard({
+  screen,
+  switched,
+  liveVehicles,
+  liveMotionDurationMs,
+}: {
+  screen: Extract<BoardScreen, { kind: "forecast" }>;
+  switched: boolean;
+  liveVehicles: LiveVehicles | null;
+  liveMotionDurationMs: number;
+}) {
+  const [selectedSequence, setSelectedSequence] = useState<number | null>(null);
+  const [selectionRevision, setSelectionRevision] = useState(0);
+  const vehicles = useMemo(
+    () => liveVehicleViewsFor(screen.board, liveVehicles, screen.direction),
+    [screen.board, liveVehicles, screen.direction],
+  );
+  const motion = useLiveVehicleMotion(vehicles, liveMotionDurationMs);
+  function toggleStop(sequence: number) {
+    setSelectedSequence((current) => (current === sequence ? null : sequence));
+    setSelectionRevision((current) => current + 1);
+  }
+  return (
+    <StopBoard
+      status="ready"
+      stops={stopViewsFor(screen.board, screen.direction)}
+      liveVehicleViews={vehicles}
+      motion={motion}
+      entering={switched}
+      selectedSequence={selectedSequence}
+      selectionRevision={selectionRevision}
+      onToggle={toggleStop}
+    />
+  );
 }

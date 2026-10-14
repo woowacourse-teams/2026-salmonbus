@@ -8,6 +8,7 @@ interface MockApi {
   data: ReturnType<typeof createApiData>;
   mode: Record<Endpoint, ResponseMode>;
   requests: Record<Endpoint, number>;
+  cacheMaxAgeSeconds: number;
 }
 
 export const test = base.extend<{ api: MockApi }>({
@@ -18,11 +19,14 @@ export const test = base.extend<{ api: MockApi }>({
       const start = new Date(observedAt).getTime();
       await page.clock.install({ time: start });
       await page.clock.pauseAt(start + 1_000);
+      // 실제 SDK는 별도 검증한다. 로컬 키가 있어도 자동 테스트가 외부 지도에 의존하지 않는다.
+      await page.route("https://oapi.map.naver.com/**", (route) => route.abort());
 
       const api: MockApi = {
         data: createApiData(),
         mode: { routes: "success", board: "success", vehicles: "success" },
         requests: { routes: 0, board: 0, vehicles: 0 },
+        cacheMaxAgeSeconds: pollIntervalMs / 1_000,
       };
       const unexpectedRequests: string[] = [];
 
@@ -53,7 +57,7 @@ export const test = base.extend<{ api: MockApi }>({
           headers: {
             Date: new Date(now).toUTCString(),
             Age: "0",
-            "Cache-Control": `public, max-age=${pollIntervalMs / 1_000}`,
+            "Cache-Control": `public, max-age=${api.cacheMaxAgeSeconds}`,
           },
           json: api.data[endpoint],
         });
