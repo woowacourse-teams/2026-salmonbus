@@ -49,6 +49,9 @@ public final class FakeGbisArrivalServer implements AutoCloseable {
     private final List<String> unexpected = new CopyOnWriteArrayList<>();
     private final AtomicInteger active = new AtomicInteger();
     private final AtomicInteger maximumActive = new AtomicInteger();
+    private volatile boolean geometryEnabled;
+    private final AtomicInteger geometryCalls = new AtomicInteger();
+    private final AtomicInteger locationCalls = new AtomicInteger();
 
     public FakeGbisArrivalServer() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -73,6 +76,10 @@ public final class FakeGbisArrivalServer implements AutoCloseable {
         return maximumActive.get();
     }
 
+    public void enableGeometry() { geometryEnabled = true; }
+    public int geometryCalls() { return geometryCalls.get(); }
+    public int locationCalls() { return locationCalls.get(); }
+
     public List<String> unexpected() {
         return List.copyOf(unexpected);
     }
@@ -84,6 +91,9 @@ public final class FakeGbisArrivalServer implements AutoCloseable {
         calls.clear();
         unexpected.clear();
         maximumActive.set(0);
+        geometryEnabled = false;
+        geometryCalls.set(0);
+        locationCalls.set(0);
     }
 
     private void respond(HttpExchange exchange) throws IOException {
@@ -91,6 +101,8 @@ public final class FakeGbisArrivalServer implements AutoCloseable {
             .map(pair -> pair.split("=", 2)).collect(java.util.stream.Collectors.toMap(
                 pair -> pair[0], pair -> URLDecoder.decode(pair[1], StandardCharsets.UTF_8)));
         String station = query.get("stationId");
+        if (geometryEnabled && query.getOrDefault("serviceKey", "").startsWith("fake-arrival-")
+            && "204000057".equals(query.get("routeId")) && geometry(exchange)) return;
         if (!PATH.equals(exchange.getRequestURI().getPath()) || !STATIONS.contains(station)
             || !query.getOrDefault("serviceKey", "").startsWith("fake-arrival-")) {
             unexpected.add(exchange.getRequestURI().getPath());
@@ -119,6 +131,40 @@ public final class FakeGbisArrivalServer implements AutoCloseable {
             active.decrementAndGet();
         }
     }
+
+    private boolean geometry(HttpExchange exchange) throws IOException {
+        String path = exchange.getRequestURI().getPath();
+        String body;
+        if (path.endsWith("getBusRouteInfoItemv2")) {
+            body = "\"busRouteInfoItem\":{\"routeName\":\"3330\",\"startStationName\":\"A\",\"endStationName\":\"B\"}";
+        } else if (path.endsWith("getBusRouteStationListv2")) {
+            var rows = new java.util.ArrayList<Map<String, Object>>();
+            for (int index = 0; index < STATIONS.size(); index++) rows.add(Map.of(
+                "stationId", STATIONS.get(index), "stationSeq", index + 1, "stationName", "synthetic stop",
+                "turnSeq", 12, "turnYn", index == 11 ? "Y" : "N", "x", shapeX(index * 70), "y", shapeY(index * 70)));
+            body = "\"busRouteStationList\":" + new tools.jackson.databind.ObjectMapper().writeValueAsString(rows);
+        } else if (path.endsWith("getBusRouteLineListv2")) {
+            geometryCalls.incrementAndGet();
+            var points = new java.util.ArrayList<Map<String, Object>>();
+            for (int index = 0; index < 836; index++) points.add(Map.of("lineSeq", index + 1,
+                "x", shapeX(index), "y", shapeY(index)));
+            body = "\"busRouteLineList\":" + new tools.jackson.databind.ObjectMapper().writeValueAsString(points);
+        } else if (path.endsWith("getBusLocationListv2")) {
+            locationCalls.incrementAndGet();
+            body = "\"busLocationList\":[]";
+        } else return false;
+        byte[] bytes = ("{\"response\":{\"msgHeader\":{\"resultCode\":0},\"msgBody\":{" + body + "}}}")
+            .getBytes(StandardCharsets.UTF_8);
+        try (exchange) {
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+        }
+        return true;
+    }
+
+    private static double shapeX(int index) { return 127 + index * .00001; }
+    private static double shapeY(int index) { return 37 + Math.sin(index * .01) * .001; }
 
     public void release() {
         plans.values().forEach(Plan::release);

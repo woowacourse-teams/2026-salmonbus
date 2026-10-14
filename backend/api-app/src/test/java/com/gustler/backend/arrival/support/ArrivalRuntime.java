@@ -174,6 +174,10 @@ public final class ArrivalRuntime implements AutoCloseable {
             + "AND key_alias <> '__total__' AND reserved_calls > 0");
     }
 
+    public int routeReservations() throws SQLException {
+        return scalar("SELECT COALESCE(sum(reserved_calls),0) FROM daily_call_quota WHERE api_service='BUS_ROUTE'");
+    }
+
     private int scalar(String sql) throws SQLException {
         try (Connection connection = connection(); var statement = connection.createStatement(); ResultSet rows = statement.executeQuery(sql)) {
             rows.next();
