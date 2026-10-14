@@ -10,7 +10,7 @@ runtime_source_inputs() {
       modules+=(api-app)
       ;;
     worker)
-      modules+=(worker-app business/route-catalog business/observations
+      modules+=(worker-app business/route-catalog business/observations business/arrivals
         business/forecasting business/api-call-quota integrations/gbis-client libraries/operation-log)
       ;;
     *)
