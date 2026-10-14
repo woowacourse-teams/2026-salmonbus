@@ -22,13 +22,13 @@ export const vars = createGlobalTheme(":root", {
     forecastCardSurface: "#F7F7F5",
     forecastCardBorder: "#E3E2DE",
     noVehicleRing: "#000000",
-    liveBus: "#C93C32",
+    liveBus: "#E8533F",
 
     remainingSeat: {
-      surface: "#FFFFFF",
-      border: "#000000",
-      label: "#6B6A6A",
-      value: "#000000",
+      surface: "#E8533F",
+      border: "#E8533F",
+      label: "#FFFFFF",
+      value: "#FFFFFF",
     },
 
     seat: {
