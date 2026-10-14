@@ -1,0 +1,2 @@
+org.springframework.boot.EnvironmentPostProcessor=\
+com.gustler.backend.api.http.docs.ApiDocsEnvironmentPostProcessor

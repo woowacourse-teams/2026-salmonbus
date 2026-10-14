@@ -1,10 +1,13 @@
 package com.gustler.backend.api.route.dto;
 
 import com.gustler.backend.api.route.application.RouteOverview;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.Objects;
 
+@Schema(requiredProperties = {"routes"})
 public record RouteListResponse(
+    @Schema(description = "현재 판본이 있는 노선 목록. 빈 배열도 정상 응답")
     List<RouteSummary> routes
 ) {
 

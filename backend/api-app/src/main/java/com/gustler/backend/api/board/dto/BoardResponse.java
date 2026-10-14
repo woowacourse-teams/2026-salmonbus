@@ -1,15 +1,23 @@
 package com.gustler.backend.api.board.dto;
 
 import com.gustler.backend.api.board.domain.Board;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.OffsetDateTime;
 import java.util.List;
 
+@Schema(requiredProperties = {"route", "observedAt", "staleAt", "model", "vehiclesInService", "stops"})
 public record BoardResponse(
+    @Schema(description = "노선과 현재 판본의 방향 정보")
     BoardRouteResponse route,
+    @Schema(description = "보드가 기준으로 사용한 관측 시각. ISO-8601 오프셋 포함")
     OffsetDateTime observedAt,
+    @Schema(description = "보드 기준 관측의 만료 시각. observedAt에서 5분 뒤")
     OffsetDateTime staleAt,
+    @Schema(description = "보드 예보에 연결된 모델 정보")
     ModelInfoResponse model,
+    @Schema(description = "현재 기준 관측에 포함된 운행 차량 수", minimum = "0")
     int vehiclesInService,
+    @Schema(description = "노선의 정류장 목록. 접근 차량이 없는 정류장도 포함")
     List<StopStateResponse> stops
 ) {
 
