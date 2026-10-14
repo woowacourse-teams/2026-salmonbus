@@ -16,9 +16,10 @@ export const layer = style({
   pointerEvents: "none",
   "@media": {
     [DESKTOP_MEDIA]: {
-      top: DESKTOP_TOP,
+      top: `var(--board-list-top, ${DESKTOP_TOP})`,
       right: "auto",
-      bottom: DESKTOP_BOTTOM,
+      bottom: `var(--board-chat-layer-bottom, ${DESKTOP_BOTTOM})`,
+      height: "var(--board-list-height, auto)",
       left: DESKTOP_LEFT,
       width: DESKTOP_WIDTH,
       margin: 0,

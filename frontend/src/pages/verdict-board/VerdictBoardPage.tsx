@@ -20,6 +20,7 @@ import { useBoardVisitEvents } from "./analytics/useBoardVisitEvents";
 import { RouteMap } from "./map/RouteMap";
 import { useRouteMapData } from "./map/useRouteMapData";
 import { useBoardViewport } from "./hooks/useBoardViewport";
+import { useBoardOverlayAnchors } from "./hooks/useBoardOverlayAnchors";
 import * as styles from "./VerdictBoardPage.css";
 
 type BoardState =
@@ -104,6 +105,7 @@ function OperatingBoard({
   const motion = useLiveVehicleMotion(vehicles, liveMotionDurationMs);
   const mapData = useRouteMapData(board);
   const mapHeight = Math.max(0, viewport.height - sheetHeight);
+  useBoardOverlayAnchors(pageRef, snap, sheetHeight, viewport.height);
 
   function selectFromMap(selection: StopSelection) {
     setSelected(selection);
