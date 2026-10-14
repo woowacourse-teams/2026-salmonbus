@@ -32,6 +32,7 @@ springBoot {
 }
 
 tasks.named('test') {
+    environment 'ARRIVALS_ENABLED', 'false'
     def apiJar = tasks.named('bootJar').flatMap { it.archiveFile }
     // Worker 프로젝트가 구성된 뒤 실제 Boot JAR 출력 파일을 조회한다.
     def workerJar = providers.provider {

@@ -35,6 +35,11 @@ logging:
   pattern:
     correlation: "[${spring.application.name:},%X{requestId:-}] "
 
+arrivals:
+  enabled: ${ARRIVALS_ENABLED:false}
+  worker-base-url: ${ARRIVAL_WORKER_BASE_URL:http://127.0.0.1:8081}
+  internal-token: ${ARRIVAL_INTERNAL_TOKEN:}
+
 management:
   endpoints:
     web:
