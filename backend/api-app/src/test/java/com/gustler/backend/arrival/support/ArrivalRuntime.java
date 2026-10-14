@@ -16,11 +16,16 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import org.testcontainers.containers.PostgreSQLContainer;
+import com.gustler.backend.arrival.contract.ArrivalSnapshot;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -38,13 +43,21 @@ public final class ArrivalRuntime implements AutoCloseable {
     private Process api;
     private Process worker;
     private int workerNumber;
+    private final List<String> apiJvmOptions;
 
     public ArrivalRuntime() throws Exception {
+        this(List.of(), Map.of());
+    }
+
+    public ArrivalRuntime(List<String> apiJvmOptions, Map<String, String> apiSettings) throws Exception {
+        this.apiJvmOptions = List.copyOf(apiJvmOptions);
         Files.createDirectories(logs);
         source = new FakeGbisArrivalServer();
         try {
             postgres.start();
-            api = start("api.boot.jar", apiPort, Map.of("ARRIVAL_WORKER_BASE_URL", workerUrl()), logs.resolve("api.log"));
+            Map<String, String> settings = new HashMap<>(apiSettings);
+            settings.put("ARRIVAL_WORKER_BASE_URL", workerUrl());
+            api = start("api.boot.jar", apiPort, settings, logs.resolve("api.log"));
             seedCatalog();
         } catch (Exception failure) {
             close();
@@ -56,6 +69,37 @@ public final class ArrivalRuntime implements AutoCloseable {
         public String value(String pointer) {
             return body.at(pointer).asString(null);
         }
+    }
+
+    /** 프로파일링 중에는 외부 수집 없이 신선한 DB 조회 경로만 유지한다. */
+    public void seedFreshReceipt(int routeCount) throws SQLException {
+        Instant received = Instant.now();
+        var routes = new ArrayList<ArrivalSnapshot.RouteArrival>();
+        for (int index = 0; index < routeCount; index++) {
+            String route = index == 0 ? "204000057" : index == 1 ? "204000155" : Integer.toString(209000000 + index);
+            routes.add(new ArrivalSnapshot.RouteArrival(route, "synthetic " + index, 1, 12, null, null, "RUN",
+                List.of(new ArrivalSnapshot.Prediction("vehicle-" + index, 1, 3600, 60, 3, 0, null, null, 0, false))));
+        }
+        var snapshot = new ArrivalSnapshot(UUID.randomUUID(), FakeGbisArrivalServer.STATIONS.getFirst(), received,
+            received.plusSeconds(3600), received.plusSeconds(3660), "synthetic profile", routes);
+        try (Connection connection = connection(); var statement = connection.prepareStatement("""
+            INSERT INTO arrival_snapshot(id,provider,operation,station_id,received_at,refresh_after_at,stale_at,
+                normalization_version,payload_digest,payload)
+            VALUES (?,'GBIS','ARRIVAL_LIST_V2',?,?,?,?,'gbis-arrival-v1',?,CAST(? AS jsonb))
+            """)) {
+            statement.setObject(1, snapshot.id());
+            statement.setString(2, snapshot.stationId());
+            statement.setTimestamp(3, java.sql.Timestamp.from(snapshot.receivedAt()));
+            statement.setTimestamp(4, java.sql.Timestamp.from(snapshot.refreshAfterAt()));
+            statement.setTimestamp(5, java.sql.Timestamp.from(snapshot.staleAt()));
+            statement.setString(6, "b".repeat(64));
+            statement.setString(7, JSON.writeValueAsString(snapshot));
+            statement.executeUpdate();
+        }
+    }
+
+    public URI arrivalsUri() {
+        return URI.create("http://127.0.0.1:" + apiPort + "/api/v2/stations/" + FakeGbisArrivalServer.STATIONS.getFirst() + "/arrivals");
     }
 
     public void startWorker(boolean productionTimings, Map<String, String> extra) throws Exception {
@@ -176,8 +220,11 @@ public final class ArrivalRuntime implements AutoCloseable {
     }
 
     private Process start(String jarProperty, int port, Map<String, String> extra, Path log) throws Exception {
-        var builder = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin/java").toString(),
-            "-Xmx256m", "-XX:ActiveProcessorCount=2", "-jar", System.getProperty(jarProperty));
+        List<String> command = new ArrayList<>(List.of(Path.of(System.getProperty("java.home"), "bin/java").toString(),
+            "-Xmx256m", "-XX:ActiveProcessorCount=2"));
+        if (jarProperty.equals("api.boot.jar")) command.addAll(apiJvmOptions);
+        command.addAll(List.of("-jar", System.getProperty(jarProperty)));
+        var builder = new ProcessBuilder(command);
         Map<String, String> environment = builder.environment();
         environment.clear();
         environment.putAll(Map.of("SERVER_PORT", Integer.toString(port), "SERVER_ADDRESS", "127.0.0.1",
