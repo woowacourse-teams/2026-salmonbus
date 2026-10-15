@@ -5,6 +5,7 @@ import type { LiveVehicleMotionStore } from "../hooks/useLiveVehicleMotion";
 import { LiveBusTraker } from "./LiveBusTraker";
 import { StopRow } from "./StopRow";
 import type { RoutePosition } from "./TimelineMarker";
+import type { StopSelection } from "./stopSelection";
 import * as styles from "./StopList.css";
 
 interface StopListProps {
@@ -13,14 +14,14 @@ interface StopListProps {
   motion: LiveVehicleMotionStore;
   entering: boolean;
   selectedSequence: number | null;
-  scrollRequestRevision: number | null;
+  scrollRequest: StopSelection | null;
   onToggle: (sequence: number) => void;
   scrollContainerRef: RefObject<HTMLElement | null>;
 }
 
 const LIVE_MARKER_HEIGHT = 32;
 const COLLIDING_VEHICLE_GAP = 8;
-const SELECTED_ROW_TOP_PADDING = 12;
+const SCROLL_TARGET_TOP_PADDING = 12;
 const EMPTY_ANCHOR_POSITIONS: ReadonlyMap<number, number> = new Map();
 
 // 회차 지점은 노선의 끝이 아니라 반대 방향으로 이어지는 지점이라 축을 끊지 않는다.
@@ -38,14 +39,14 @@ export function StopList({
   motion,
   entering,
   selectedSequence,
-  scrollRequestRevision,
+  scrollRequest,
   onToggle,
   scrollContainerRef,
 }: StopListProps) {
   const routeCanvasRef = useRef<HTMLDivElement>(null);
   const markerRefs = useRef(new Map<string, HTMLDivElement>());
   const anchorPositions = useTimelineAnchorPositions(routeCanvasRef, stops, selectedSequence);
-  useSelectedStopScroll(routeCanvasRef, scrollContainerRef, selectedSequence, scrollRequestRevision);
+  useStopScroll(routeCanvasRef, scrollContainerRef, scrollRequest);
 
   useLayoutEffect(() => {
     const offsets = collisionOffsetsFor(liveVehicleViews);
@@ -97,23 +98,22 @@ export function StopList({
   );
 }
 
-function useSelectedStopScroll(
+function useStopScroll(
   routeCanvasRef: RefObject<HTMLDivElement | null>,
   scrollContainerRef: RefObject<HTMLElement | null>,
-  selectedSequence: number | null,
-  scrollRequestRevision: number | null,
+  scrollRequest: StopSelection | null,
 ) {
   useLayoutEffect(() => {
     const canvas = routeCanvasRef.current;
-    if (canvas === null || selectedSequence === null || scrollRequestRevision === null) return;
-    const row = canvas.querySelector<HTMLElement>(`[data-stop-sequence="${selectedSequence}"]`);
+    if (canvas === null || scrollRequest === null) return;
+    const row = canvas.querySelector<HTMLElement>(`[data-stop-sequence="${scrollRequest.sequence}"]`);
     if (row === null) return;
 
     const scrollToRow = () => {
       const container = scrollContainerRef.current;
       if (container === null) return;
       const top = row.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
-      container.scrollTo({ top: Math.max(0, top - SELECTED_ROW_TOP_PADDING), behavior: "instant" });
+      container.scrollTo({ top: Math.max(0, top - SCROLL_TARGET_TOP_PADDING), behavior: "instant" });
     };
     const selectedControl = row.querySelector<HTMLButtonElement>("button[aria-expanded]") ?? row;
     const frame = window.requestAnimationFrame(() => {
@@ -130,7 +130,7 @@ function useSelectedStopScroll(
       window.cancelAnimationFrame(frame);
       canvas.removeEventListener("transitionend", scrollAfterExpansion);
     };
-  }, [routeCanvasRef, scrollContainerRef, selectedSequence, scrollRequestRevision]);
+  }, [routeCanvasRef, scrollContainerRef, scrollRequest]);
 }
 
 function useTimelineAnchorPositions(

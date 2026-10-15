@@ -123,7 +123,7 @@ function OperatingBoard({
   const [snap, setSnap] = useState<BoardSheetSnap>("half");
   const [sheetHeight, setSheetHeight] = useState(() => viewport.height / 2);
   const [selected, setSelected] = useState<StopSelection | null>(null);
-  const [scrollRequestRevision, setScrollRequestRevision] = useState<number | null>(null);
+  const [scrollRequest, setScrollRequest] = useState<StopSelection | null>(null);
   const stops = useMemo(() => stopViewsFor(board, direction.id), [board, direction.id]);
   const vehicles = useMemo(
     () => liveVehicleViewsFor(board, liveVehicles, direction.id),
@@ -136,7 +136,7 @@ function OperatingBoard({
 
   function selectFromMap(selection: StopSelection) {
     setSelected(selection);
-    setScrollRequestRevision((current) => (current ?? 0) + 1);
+    setScrollRequest({ ...selection });
     if (snap === "minimum") setSnap("half");
     onDirectionChange(selection.direction);
   }
@@ -147,13 +147,13 @@ function OperatingBoard({
         ? null
         : { direction: direction.id, sequence },
     );
-    setScrollRequestRevision(null);
+    setScrollRequest(null);
   }
 
   function switchDirection(next: Direction) {
     if (next === direction.id) return;
     setSelected(null);
-    setScrollRequestRevision(null);
+    setScrollRequest(null);
     onDirectionChange(next);
   }
 
@@ -212,7 +212,7 @@ function OperatingBoard({
             motion={motion}
             entering={switched}
             selectedSequence={selected?.direction === direction.id ? selected.sequence : null}
-            scrollRequestRevision={scrollRequestRevision}
+            scrollRequest={scrollRequest?.direction === direction.id ? scrollRequest : null}
             onToggle={toggleFromList}
           />
         </BoardBottomSheet>

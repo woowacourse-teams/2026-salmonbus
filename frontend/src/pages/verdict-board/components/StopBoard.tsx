@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import type { StopSelection } from "./stopSelection";
 import type { StopView } from "./displayPolicy";
 import type { LiveVehicleView } from "./liveVehiclePolicy";
 import type { LiveVehicleMotionStore } from "../hooks/useLiveVehicleMotion";
@@ -17,7 +18,7 @@ type StopBoardProps =
       motion: LiveVehicleMotionStore;
       entering: boolean;
       selectedSequence: number | null;
-      scrollRequestRevision: number | null;
+      scrollRequest: StopSelection | null;
       onToggle: (sequence: number) => void;
     };
 
@@ -38,7 +39,7 @@ export function StopBoard(props: StopBoardProps) {
           motion={props.motion}
           entering={props.entering}
           selectedSequence={props.selectedSequence}
-          scrollRequestRevision={props.scrollRequestRevision}
+          scrollRequest={props.scrollRequest}
           onToggle={props.onToggle}
           scrollContainerRef={scrollContainerRef}
         />
