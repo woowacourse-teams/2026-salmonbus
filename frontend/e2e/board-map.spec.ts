@@ -117,6 +117,49 @@ test("첫 화면은 절반 높이에 전체 노선을 맞추고 줌에 따라 �
   await expect(map(page).getByRole("img", { name: /부근 버스/ })).toHaveCount(2);
 });
 
+test("축소에서는 선택한 방향의 화살표만 표시하고 확대하면 두 방향을 표시한다", async ({ page, naverMap }) => {
+  await openMap(page);
+  const visibleDirections = () =>
+    map(page)
+      .locator("[data-map-arrow-direction]:visible")
+      .evaluateAll((elements) =>
+        [...new Set(elements.map((element) => element.getAttribute("data-map-arrow-direction")))].sort(),
+      );
+  expect(await visibleDirections()).toEqual(["UP"]);
+  const initialView = await naverMap.snapshot();
+  const original = await map(page).evaluateHandle((region) => ({
+    layer: region.querySelector('[data-testid="naver-map-test-double"]'),
+    lines: [...region.querySelectorAll('[data-testid="naver-polyline"]')],
+    arrows: [...region.querySelectorAll("[data-map-arrow-direction]")],
+  }));
+
+  await tab(page, "DOWN").click();
+  await page.clock.runFor(32);
+  expect(await visibleDirections()).toEqual(["DOWN"]);
+  expect(await naverMap.snapshot()).toEqual(initialView);
+
+  await naverMap.setZoom(14);
+  expect(await visibleDirections()).toEqual(["DOWN", "UP"]);
+  expect(await naverMap.snapshot()).toEqual({ ...initialView, zoom: 14 });
+
+  await naverMap.setZoom(13.9);
+  expect(await visibleDirections()).toEqual(["DOWN"]);
+  const contractedView = await naverMap.snapshot();
+  expect(contractedView).toEqual({ ...initialView, zoom: 13.9 });
+  await tab(page, "UP").click();
+  await page.clock.runFor(32);
+  expect(await visibleDirections()).toEqual(["UP"]);
+  expect(await naverMap.snapshot()).toEqual(contractedView);
+  expect(
+    await original.evaluate(
+      ({ layer, lines, arrows }) =>
+        layer?.isConnected && lines.every((line) => line.isConnected) && arrows.every((arrow) => arrow.isConnected),
+    ),
+  ).toBe(true);
+  await expect(map(page).getByTestId("naver-map-test-double")).toHaveCount(1);
+  await original.dispose();
+});
+
 test("GL 지도의 휠과 더블클릭은 부드럽게 확대하며 노선·마커 DOM을 유지한다", async ({ page, naverMap }) => {
   await openMap(page);
   await naverMap.setZoom(14);

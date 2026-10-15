@@ -23,6 +23,7 @@ interface VehicleMarker {
   direction: Direction;
 }
 interface ArrowMarker extends RouteArrow {
+  direction: Direction;
   marker: NaverMarker;
   element: HTMLElement;
   visible: boolean;
@@ -90,6 +91,7 @@ export function createNaverRouteMap(
     }),
   }));
   const arrows: ArrowMarker[] = [];
+  let arrowsShowBothDirections: boolean | null = null;
   let userMarker: NaverMarker | null = null;
   let accuracyCircle: { setMap(map: NaverMap | null): void } | null = null;
   const vehicles = new Map<string, VehicleMarker>();
@@ -173,20 +175,25 @@ export function createNaverRouteMap(
   }
 
   function refreshArrows() {
+    const showBothDirections = map.getZoom() >= DETAIL_ZOOM;
     const viewport = map.getSize();
     const projection = map.getProjection();
-    const nextArrows = data.paths.flatMap((path) =>
-      routeArrowsFor(
-        path.coordinates,
-        (coordinate) => projection.fromCoordToOffset(toNaverCoordinate(coordinate)),
-        viewport,
-      ),
-    );
+    // 축소 화면에서는 겹치는 두 방향 화살표 대신 현재 선택한 방향만 표시한다.
+    const nextArrows = data.paths
+      .filter((path) => showBothDirections || path.direction === activeDirection)
+      .flatMap((path) =>
+        routeArrowsFor(
+          path.coordinates,
+          (coordinate) => projection.fromCoordToOffset(toNaverCoordinate(coordinate)),
+          viewport,
+        ).map((arrow) => ({ ...arrow, direction: path.direction })),
+      );
     nextArrows.forEach((arrow, index) => {
       const item = arrows[index];
       if (item === undefined) {
         const content = document.createElement("span");
         content.className = styles.arrow;
+        content.dataset.mapArrowDirection = arrow.direction;
         content.setAttribute("aria-hidden", "true");
         content.innerHTML =
           '<svg width="14" height="14" viewBox="0 0 14 14"><path d="m4 3 5 4-5 4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -200,6 +207,10 @@ export function createNaverRouteMap(
         });
         arrows.push({ ...arrow, marker, element: content, visible: true });
         return;
+      }
+      if (item.direction !== arrow.direction) {
+        item.direction = arrow.direction;
+        item.element.dataset.mapArrowDirection = arrow.direction;
       }
       if (
         item.coordinate.latitude !== arrow.coordinate.latitude ||
@@ -223,6 +234,7 @@ export function createNaverRouteMap(
       item.marker.setVisible(false);
       item.visible = false;
     });
+    arrowsShowBothDirections = showBothDirections;
   }
 
   function focus(selection: StopSelection) {
@@ -301,7 +313,15 @@ export function createNaverRouteMap(
         fitInitialRoute();
       }),
     ),
-    sdk.Event.addListener(map, "zoom_changed", createNativeEventHandler(refreshStops)),
+    sdk.Event.addListener(
+      map,
+      "zoom_changed",
+      createNativeEventHandler(() => {
+        refreshStops();
+        const showBothDirections = map.getZoom() >= DETAIL_ZOOM;
+        if (arrowsShowBothDirections !== showBothDirections) refreshArrows();
+      }),
+    ),
     sdk.Event.addListener(
       map,
       "idle",
@@ -324,6 +344,7 @@ export function createNaverRouteMap(
       activeDirection = nextDirection;
       if (directionChanged) {
         paths.forEach(({ direction, line }) => line.setOptions(routePathStyleFor(direction)));
+        refreshArrows();
       }
       refreshStops();
       const visibleKeys = new Set(nextVehicles.map((view) => view.key));

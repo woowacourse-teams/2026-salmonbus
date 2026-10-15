@@ -314,6 +314,22 @@ function setup(glSupported = true, { initialized = true } = {}) {
   };
 }
 
+function visibleArrowDirections(native: ReturnType<typeof createRecordingSdk>) {
+  return [
+    ...new Set(
+      native.markers
+        .filter((marker) => {
+          const content = marker.options.icon.content as unknown as ElementStub;
+          return content.className === "arrow" && marker.visible;
+        })
+        .map((marker) => {
+          const content = marker.options.icon.content as unknown as ElementStub;
+          return content.dataset.mapArrowDirection ?? content.getAttribute("data-map-arrow-direction");
+        }),
+    ),
+  ].sort();
+}
+
 describe("네이버 지도 adapter", () => {
   it("GL 지도에서 SDK의 부드러운 확대와 기본 마커 배치를 유지한다", () => {
     const { native, element } = setup();
@@ -443,6 +459,43 @@ describe("네이버 지도 adapter", () => {
     expect(zoomBy).not.toHaveBeenCalled();
     doubleClick({ ...input, timeStamp: 700 } as unknown as Event);
     expect(zoomBy).toHaveBeenCalledTimes(1);
+  });
+  it("축소 상태에서 선택한 방향의 화살표만 표시하고 방향을 바꿔도 지도 시점을 유지한다", () => {
+    const { native, adapter } = setup();
+    expect(visibleArrowDirections(native)).toEqual(["UP"]);
+    const map = native.map;
+    const center = map.center;
+    const zoom = map.zoom;
+    const setCenter = jest.spyOn(map, "setCenter");
+    const setZoom = jest.spyOn(map, "setZoom");
+
+    adapter.update(null, "DOWN", []);
+    expect(visibleArrowDirections(native)).toEqual(["DOWN"]);
+    adapter.update(null, "UP", []);
+    expect(visibleArrowDirections(native)).toEqual(["UP"]);
+    expect(native.map).toBe(map);
+    expect(map.center).toBe(center);
+    expect(map.zoom).toBe(zoom);
+    expect(map.fits).toBe(1);
+    expect(setCenter).not.toHaveBeenCalled();
+    expect(setZoom).not.toHaveBeenCalled();
+  });
+  it("줌 14 경계를 넘으면 idle을 기다리지 않고 한 방향과 두 방향 화살표 표시를 전환한다", () => {
+    const { native, adapter } = setup();
+    const zoomChanged = native.events.find((event) => event.name === "zoom_changed")!.listener;
+    native.map.zoom = 13.9;
+    zoomChanged();
+    expect(visibleArrowDirections(native)).toEqual(["UP"]);
+
+    native.map.zoom = 14;
+    zoomChanged();
+    expect(visibleArrowDirections(native)).toEqual(["DOWN", "UP"]);
+    adapter.update(null, "DOWN", []);
+    expect(visibleArrowDirections(native)).toEqual(["DOWN", "UP"]);
+
+    native.map.zoom = 13.9;
+    zoomChanged();
+    expect(visibleArrowDirections(native)).toEqual(["DOWN"]);
   });
   it("확대와 이동에서 정류장 아이콘과 방향 화살표를 제거하거나 다시 만들지 않는다", () => {
     const { native, adapter } = setup();
