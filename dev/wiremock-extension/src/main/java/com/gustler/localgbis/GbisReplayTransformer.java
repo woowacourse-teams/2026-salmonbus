@@ -6,6 +6,7 @@ import com.github.tomakehurst.wiremock.extension.ResponseDefinitionTransformerV2
 import com.github.tomakehurst.wiremock.http.ResponseDefinition;
 import com.github.tomakehurst.wiremock.stubbing.ServeEvent;
 import java.nio.file.Path;
+import java.util.Map;
 
 public final class GbisReplayTransformer implements ResponseDefinitionTransformerV2 {
     private final ReplayEngine engine;
@@ -27,12 +28,19 @@ public final class GbisReplayTransformer implements ResponseDefinitionTransforme
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public ResponseDefinition transform(ServeEvent event) {
         var parameters = event.getTransformerParameters();
-        var reply = engine.response(parameters.getString("operation"),
-            (String) parameters.getOrDefault("mode", "normal"), event.getRequest().queryParameter("routeId").firstValue());
-        return ResponseDefinitionBuilder.like(event.getResponseDefinition()).withStatus(reply.status()).withBody(Json.write(reply.body()))
-            .withHeader("Content-Type", "application/json; charset=utf-8").withHeader("Cache-Control", "no-store").build();
+        String operation = parameters.getString("operation");
+        var reply = engine.response(operation,
+            (String) parameters.getOrDefault("mode", "normal"), event.getRequest()
+                .queryParameter(operation.equals("arrival") ? "stationId" : "routeId").firstValue(),
+            (Map<String, String>) parameters.getOrDefault("routeModes", Map.of()));
+        var response = ResponseDefinitionBuilder.like(event.getResponseDefinition()).withStatus(reply.status())
+            .withBody(Json.write(reply.body())).withHeader("Content-Type", "application/json; charset=utf-8")
+            .withHeader("Cache-Control", "no-store");
+        if (reply.delayMillis() > 0) response.withFixedDelay(reply.delayMillis());
+        return response.build();
     }
 
     @Override
