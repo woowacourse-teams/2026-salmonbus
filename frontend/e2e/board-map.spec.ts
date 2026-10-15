@@ -944,6 +944,62 @@ test("헤더 드래그는 양 끝에 붙고 방향 버튼에서 시작한 드래
 });
 
 for (const reducedMotion of ["reduce", "no-preference"] as const) {
+  test(`뒤쪽 차량 응답에는 지도와 목록이 멈추고 앞선 응답이 오면 함께 이동한다 (${reducedMotion})`, async ({
+    page,
+    api,
+  }) => {
+    const durationMs = 20_000;
+    api.cacheMaxAgeSeconds = durationMs / 1_000;
+    const vehicle = api.data.vehicles.vehicles.find((item) => item.vehicleId === "bus-1");
+    const nextStop = api.data.board.stops.find((item) => item.direction === "UP" && item.sequence === 9);
+    if (vehicle === undefined || nextStop === undefined) throw new Error("이동할 버스와 정류장이 없습니다");
+    vehicle.phase = "IN_TRANSIT";
+    await page.emulateMedia({ reducedMotion });
+    await openMap(page);
+    const pin = map(page).getByRole("button", { name: /부근 버스, 현재 잔여 좌석 5석/ });
+    const tracker = list(page)
+      .getByRole("button", { name: /현재 잔여 좌석 5석/ })
+      .locator("..");
+
+    async function refreshVehicles() {
+      const response = page.waitForResponse(
+        (response) => new URL(response.url()).pathname === apiPaths.vehicles && response.status() === 200,
+      );
+      await page.clock.fastForward(durationMs);
+      await (await response).finished();
+      await page.clock.runFor(32);
+    }
+
+    async function positions() {
+      return {
+        map: await pin.evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+          return { x: bounds.x, y: bounds.y };
+        }),
+        list: await tracker.evaluate((element) => element.getBoundingClientRect().y),
+      };
+    }
+
+    await refreshVehicles();
+    const stopped = await positions();
+    for (const phase of ["DEPARTED", "DEPARTED", "ARRIVING"] as const) {
+      vehicle.phase = phase;
+      await refreshVehicles();
+      await page.clock.runFor(1_000);
+      expect(await positions()).toEqual(stopped);
+    }
+
+    vehicle.phase = "DEPARTED";
+    vehicle.currentStopSequence = nextStop.sequence;
+    vehicle.stopId = nextStop.stopId;
+    vehicle.stopName = nextStop.name;
+    await refreshVehicles();
+    await page.clock.runFor(durationMs / 2);
+    const moved = await positions();
+    expect(Math.hypot(moved.map.x - stopped.map.x, moved.map.y - stopped.map.y)).toBeGreaterThan(1);
+    expect(moved.list).toBeGreaterThan(stopped.list + 1);
+  });
+
   test(`드래그 중 지도와 채팅 위치가 시트 경계를 따라가고 지도 시점은 유지된다 (${reducedMotion})`, async ({
     page,
     naverMap,

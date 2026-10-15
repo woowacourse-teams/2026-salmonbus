@@ -17,15 +17,12 @@ interface MotionTarget {
   durationMs: number;
 }
 
-interface MotionBase extends MotionTarget {
+interface VehicleMotion extends MotionTarget {
   signature: string;
   startedAt: number;
 }
 
-type VehicleMotion = (MotionBase & { kind: "moving" }) | (MotionBase & { kind: "correcting"; next: MotionTarget });
-
 interface MotionSample {
-  motion: VehicleMotion;
   position: number;
   active: boolean;
 }
@@ -37,8 +34,6 @@ interface LiveVehicleMotionController extends LiveVehicleMotionStore {
   clear: () => void;
 }
 
-const SERVER_CORRECTION_DURATION_MS = 300;
-const POSITION_EPSILON = 0.000_001;
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 // 지도와 목록은 같은 순번 좌표를 구독하고, 각자의 화면 좌표로만 변환한다.
@@ -67,7 +62,6 @@ export function createLiveVehicleMotionStore(): LiveVehicleMotionController {
     const nextFrames: LiveVehicleMotionFrame[] = [];
     motions.forEach((motion, key) => {
       const sample = motionSampleFor(motion, now);
-      motions.set(key, sample.motion);
       nextFrames.push({ key, sequencePosition: sample.position });
       active ||= sample.active;
     });
@@ -91,38 +85,19 @@ export function createLiveVehicleMotionStore(): LiveVehicleMotionController {
         const previous = motions.get(view.key);
         const sample = previous === undefined ? null : motionSampleFor(previous, now);
 
-        if (reducedMotion) {
-          nextMotions.set(view.key, movingMotionFor(signature, target.end, target.end, 0, now));
-        } else if (sample === null) {
-          nextMotions.set(view.key, movingMotionFor(signature, target.start, target.end, target.durationMs, now));
-        } else if (sample.motion.signature === signature) {
+        if (previous !== undefined && previous.signature === signature) {
           // 좌석 갱신이나 같은 구간 응답은 이미 흐른 시간과 끝점을 유지한다.
-          nextMotions.set(view.key, sample.motion);
-        } else if (sample.motion.kind === "correcting") {
-          const remainingMs = Math.max(0, sample.motion.startedAt + sample.motion.durationMs - now);
-          nextMotions.set(view.key, {
-            kind: "correcting",
-            signature,
-            start: sample.position,
-            end: target.start,
-            durationMs: remainingMs,
-            startedAt: now,
-            next: target,
-          });
-        } else if (target.end < sample.position - POSITION_EPSILON) {
-          nextMotions.set(view.key, {
-            kind: "correcting",
-            signature,
-            start: sample.position,
-            end: target.start,
-            durationMs: SERVER_CORRECTION_DURATION_MS,
-            startedAt: now,
-            next: target,
-          });
-        } else {
-          // 새 phase도 지금 실제로 표시하는 위치에서 이어 움직인다.
-          nextMotions.set(view.key, movingMotionFor(signature, sample.position, target.end, target.durationMs, now));
+          nextMotions.set(view.key, previous);
+          return;
         }
+
+        const start = sample?.position ?? target.start;
+        // 뒤쪽 목표는 현재 위치에서 멈추고, 앞선 목표가 올 때 같은 위치에서 이어간다.
+        const end = Math.max(start, target.end);
+        nextMotions.set(
+          view.key,
+          movingMotionFor(signature, reducedMotion ? end : start, end, reducedMotion ? 0 : target.durationMs, now),
+        );
       });
       motions = nextMotions;
       advance(now);
@@ -132,7 +107,7 @@ export function createLiveVehicleMotionStore(): LiveVehicleMotionController {
       reducedMotion = next;
       if (next) {
         motions.forEach((motion, key) => {
-          const target = motion.kind === "correcting" ? motion.next.end : motion.end;
+          const target = motion.end;
           motions.set(key, movingMotionFor(motion.signature, target, target, 0, now));
         });
       }
@@ -204,28 +179,15 @@ function movingMotionFor(
   durationMs: number,
   startedAt: number,
 ): VehicleMotion {
-  return { kind: "moving", signature, start, end, durationMs, startedAt };
+  return { signature, start, end, durationMs, startedAt };
 }
 
 function motionSampleFor(motion: VehicleMotion, now: number): MotionSample {
   const elapsed = Math.max(0, now - motion.startedAt);
-  if (motion.kind === "correcting" && elapsed >= motion.durationMs) {
-    const next = movingMotionFor(
-      motion.signature,
-      motion.next.start,
-      motion.next.end,
-      motion.next.durationMs,
-      motion.startedAt + motion.durationMs,
-    );
-    return motionSampleFor(next, now);
-  }
-
   const progress = motion.durationMs === 0 ? 1 : Math.min(1, elapsed / motion.durationMs);
-  const easedProgress = motion.kind === "correcting" ? 1 - (1 - progress) ** 3 : progress;
   return {
-    motion,
-    position: interpolatedPositionFor(motion.start, motion.end, easedProgress),
-    active: progress < 1 && (motion.kind === "correcting" || motion.start !== motion.end),
+    position: interpolatedPositionFor(motion.start, motion.end, progress),
+    active: progress < 1 && motion.start !== motion.end,
   };
 }
 

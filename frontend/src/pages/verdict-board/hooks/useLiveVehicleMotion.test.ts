@@ -6,10 +6,10 @@ import { createLiveVehicleMotionStore, type LiveVehicleMotionStore } from "./use
 
 const DURATION = 20_000;
 
-function viewFor(phase: Phase): LiveVehicleView {
+function viewFor(phase: Phase, sequence = 1): LiveVehicleView {
   return liveVehicleViewsFor(
     boardWith(),
-    liveVehiclesWith([vehicleAt(1, { vehicleId: "moving-bus", phase })]),
+    liveVehiclesWith([vehicleAt(sequence, { vehicleId: "moving-bus", phase })]),
     "UP",
   )[0]!;
 }
@@ -71,57 +71,99 @@ describe("shared live vehicle motion", () => {
     expect(positionOf(store)).toBeCloseTo(1.8);
   });
 
-  it("목표가 현재 표시 위치보다 뒤이면 300ms 보정 뒤 새 구간을 이동한다", () => {
+  it("이동 중 뒤쪽 목표가 오면 현재 위치에서 멈추고 지도와 목록에 후진을 통지하지 않는다", () => {
     const store = createLiveVehicleMotionStore();
+    const mapListener = jest.fn();
+    const listListener = jest.fn();
     store.update([viewFor("IN_TRANSIT")], 1_000, 0);
-    store.advance(1_000);
-    expect(positionOf(store)).toBeCloseTo(1.8);
-
-    store.update([viewFor("DEPARTED")], DURATION, 1_000);
-    expect(positionOf(store)).toBeCloseTo(1.8);
-    store.advance(1_150);
-    expect(positionOf(store)).toBeGreaterThan(1.08);
-    expect(positionOf(store)).toBeLessThan(1.8);
-    store.advance(1_300);
-    expect(positionOf(store)).toBeCloseTo(1.08);
-    store.advance(11_300);
-    expect(positionOf(store)).toBeCloseTo(1.19);
-    store.advance(21_300);
-    expect(positionOf(store)).toBeCloseTo(1.3);
-  });
-
-  it("보정 중 새 응답이 와도 현재 위치와 최초 보정 종료 시각을 유지한다", () => {
-    const store = createLiveVehicleMotionStore();
-    store.update([viewFor("IN_TRANSIT")], 1_000, 0);
-    store.advance(1_000);
-    store.update([viewFor("DEPARTED")], DURATION, 1_000);
-    store.advance(1_150);
+    store.advance(500);
     const previous = positionOf(store);
-    const arriving = {
-      ...viewFor("ARRIVING"),
-      motionSegment: { fromStopSequence: 0, toStopSequence: 1, startProgress: 0.8, endProgress: 0.9 },
-    };
-    store.update([arriving], DURATION, 1_150);
+    expect(previous).toBeCloseTo(1.575);
+    store.subscribe(mapListener);
+    store.subscribe(listListener);
+
+    store.update([viewFor("DEPARTED")], DURATION, 500);
+    expect(store.advance(650)).toBe(false);
+    expect(store.advance(800)).toBe(false);
+    expect(store.advance(20_500)).toBe(false);
     expect(positionOf(store)).toBe(previous);
-    store.advance(1_300);
-    expect(positionOf(store)).toBeCloseTo(0.8);
-    store.advance(21_300);
-    expect(positionOf(store)).toBeCloseTo(0.9);
+    expect(mapListener).not.toHaveBeenCalled();
+    expect(listListener).not.toHaveBeenCalled();
   });
 
-  it("reduced motion은 보정 중에도 최종 목표를 즉시 표시하고 다시 켜져도 재시작하지 않는다", () => {
+  it("멈춘 동안 같은 응답과 더 뒤쪽 응답이 반복돼도 현재 위치를 유지한다", () => {
+    const store = createLiveVehicleMotionStore();
+    store.update([viewFor("IN_TRANSIT")], 1_000, 0);
+    store.advance(1_000);
+    store.update([viewFor("DEPARTED")], DURATION, 1_000);
+    const previous = positionOf(store);
+
+    store.update([viewFor("DEPARTED")], DURATION * 4, 5_000);
+    store.update([viewFor("ARRIVING")], DURATION, 10_000);
+    expect(store.advance(30_000)).toBe(false);
+    expect(positionOf(store)).toBe(previous);
+  });
+
+  it("멈춘 위치보다 앞선 목표가 오면 그 위치에서 선형 이동을 다시 시작한다", () => {
+    const store = createLiveVehicleMotionStore();
+    store.update([viewFor("IN_TRANSIT")], 1_000, 0);
+    store.advance(500);
+    const previous = positionOf(store);
+    store.update([viewFor("DEPARTED")], DURATION, 500);
+
+    // 처음 이동하던 phase로 돌아와도 멈춤 이후의 새 이동으로 받아들인다.
+    store.update([viewFor("IN_TRANSIT")], DURATION, 5_000);
+    expect(positionOf(store)).toBe(previous);
+    expect(store.advance(15_000)).toBe(true);
+    expect(positionOf(store)).toBeCloseTo((previous + 1.8) / 2);
+    expect(store.advance(25_000)).toBe(false);
+    expect(positionOf(store)).toBeCloseTo(1.8);
+  });
+
+  it("현재 위치와 같은 목표는 멈춘 채 유지하고 다음 구간은 현재 위치에서 이어간다", () => {
+    const store = createLiveVehicleMotionStore();
+    store.update([viewFor("IN_TRANSIT")], 1_000, 0);
+    store.advance(1_000);
+    store.update([viewFor("DEPARTED")], DURATION, 1_000);
+
+    store.update([viewFor("IN_TRANSIT")], DURATION, 2_000);
+    expect(store.advance(22_000)).toBe(false);
+    expect(positionOf(store)).toBeCloseTo(1.8);
+
+    store.update([viewFor("DEPARTED", 2)], DURATION, 22_000);
+    expect(positionOf(store)).toBeCloseTo(1.8);
+    expect(store.advance(32_000)).toBe(true);
+    expect(positionOf(store)).toBeCloseTo(2.05);
+    expect(store.advance(42_000)).toBe(false);
+    expect(positionOf(store)).toBeCloseTo(2.3);
+  });
+
+  it("멈춘 상태에서 reduced motion을 켜거나 뒤쪽 응답을 받아도 후진하지 않는다", () => {
     const store = createLiveVehicleMotionStore();
     store.update([viewFor("IN_TRANSIT")], 1_000, 0);
     store.advance(1_000);
     store.update([viewFor("DEPARTED")], DURATION, 1_000);
     store.setReducedMotion(true, 1_100);
-    expect(positionOf(store)).toBeCloseTo(1.3);
+    expect(positionOf(store)).toBeCloseTo(1.8);
     expect(store.advance(1_200)).toBe(false);
 
-    store.setReducedMotion(false, 1_200);
-    store.update([viewFor("DEPARTED")], DURATION, 1_200);
-    expect(store.advance(1_300)).toBe(false);
-    expect(positionOf(store)).toBeCloseTo(1.3);
+    store.update([viewFor("ARRIVING")], DURATION, 1_200);
+    expect(positionOf(store)).toBeCloseTo(1.8);
+    store.update([viewFor("DEPARTED", 2)], DURATION, 1_300);
+    expect(positionOf(store)).toBeCloseTo(2.3);
+
+    store.setReducedMotion(false, 1_400);
+    store.update([viewFor("DEPARTED", 2)], DURATION, 1_400);
+    expect(store.advance(1_500)).toBe(false);
+    expect(positionOf(store)).toBeCloseTo(2.3);
+  });
+
+  it("이동 중 reduced motion을 켜면 앞선 최종 목표를 즉시 표시한다", () => {
+    const store = createLiveVehicleMotionStore();
+    store.update([viewFor("IN_TRANSIT")], DURATION, 0);
+    store.setReducedMotion(true, 5_000);
+    expect(positionOf(store)).toBeCloseTo(1.8);
+    expect(store.advance(10_000)).toBe(false);
   });
 
   it("순번이 연속되지 않은 정류장 구간도 공통 좌표로 보간한다", () => {
