@@ -3,7 +3,7 @@ import busFrontIcon from "./bus-front.svg";
 import type { StopSelection } from "../components/stopSelection";
 import type { LiveVehicleView } from "../components/liveVehiclePolicy";
 import type { GeoCoordinate, RouteMapData } from "./routeMapModel";
-import { routeArrowsFor, routeMapCoordinateForSequence } from "./routeMapGeometry";
+import { routeArrowsFor, routeMapCoordinateForSequence, type RouteArrow } from "./routeMapGeometry";
 import type { NaverMap, NaverMaps, NaverMarker } from "./naverSdk";
 import * as styles from "./RouteMap.css";
 
@@ -19,6 +19,12 @@ interface VehicleMarker {
   element: HTMLElement;
   count: HTMLElement;
   direction: Direction;
+}
+
+interface ArrowMarker extends RouteArrow {
+  marker: NaverMarker;
+  element: HTMLElement;
+  visible: boolean;
 }
 
 export interface RouteMapAdapter {
@@ -75,7 +81,7 @@ export function createNaverRouteMap(
       ...routePathStyleFor(path.direction),
     }),
   }));
-  let arrows: NaverMarker[] = [];
+  const arrows: ArrowMarker[] = [];
   let userMarker: NaverMarker | null = null;
   let accuracyCircle: { setMap(map: NaverMap | null): void } | null = null;
   const vehicles = new Map<string, VehicleMarker>();
@@ -119,7 +125,7 @@ export function createNaverRouteMap(
   });
 
   function refreshStops() {
-    const zoom = map.getZoom();
+    const hidden = map.getZoom() < 15;
     const projection = map.getProjection();
     const display = stops.map((stop) => ({
       ...stop,
@@ -141,43 +147,74 @@ export function createNaverRouteMap(
     display.forEach(({ selection, marker, button, label, size, offsetX }) => {
       const isSelected = selected?.sequence === selection.sequence && selected.direction === selection.direction;
       const isActive = selection.direction === activeDirection;
-      button.setAttribute("aria-pressed", String(isSelected));
-      button.dataset.active = String(isActive);
-      button.dataset.labelAbove = String(offsetX !== 0 && !isActive);
-      label.hidden = zoom < 15;
-      marker.setVisible(zoom >= 15);
-      marker.setZIndex(isSelected ? 15 : selection.direction === activeDirection ? 6 : 5);
-      marker.setIcon({
-        content: button,
-        anchor: new sdk.Point(size / 2 - offsetX, size / 2),
-      });
+      const selectionChanged = button.getAttribute("aria-pressed") !== String(isSelected);
+      const directionChanged = button.dataset.active !== String(isActive);
+      if (selectionChanged) button.setAttribute("aria-pressed", String(isSelected));
+      if (directionChanged) button.dataset.active = String(isActive);
+      const labelAbove = String(offsetX !== 0 && !isActive);
+      if (button.dataset.labelAbove !== labelAbove) button.dataset.labelAbove = labelAbove;
+      if (label.hidden !== hidden) {
+        label.hidden = hidden;
+        marker.setVisible(!hidden);
+      }
+      if (selectionChanged || directionChanged) marker.setZIndex(isSelected ? 15 : isActive ? 6 : 5);
+      // 아이콘을 다시 설정하면 SDK가 DOM을 재구성하므로 표시 위치만 조정한다.
+      const transform = `translate(${offsetX - (size - 24) / 2}px, ${-(size - 24) / 2}px)`;
+      if (button.style.transform !== transform) button.style.transform = transform;
     });
   }
 
   function refreshArrows() {
-    arrows.forEach((marker) => marker.setMap(null));
     const viewport = map.getSize();
-    arrows = data.paths.flatMap((path) =>
+    const projection = map.getProjection();
+    const nextArrows = data.paths.flatMap((path) =>
       routeArrowsFor(
         path.coordinates,
-        (coordinate) => map.getProjection().fromCoordToOffset(toNaverCoordinate(coordinate)),
+        (coordinate) => projection.fromCoordToOffset(toNaverCoordinate(coordinate)),
         viewport,
-      ).map((arrow) => {
+      ),
+    );
+    nextArrows.forEach((arrow, index) => {
+      const item = arrows[index];
+      if (item === undefined) {
         const content = document.createElement("span");
         content.className = styles.arrow;
         content.setAttribute("aria-hidden", "true");
         content.innerHTML =
           '<svg width="14" height="14" viewBox="0 0 14 14"><path d="m4 3 5 4-5 4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
         content.style.transform = `rotate(${arrow.rotation}deg)`;
-        return new sdk.Marker({
+        const marker = new sdk.Marker({
           map,
           position: toNaverCoordinate(arrow.coordinate),
           icon: { content, anchor: new sdk.Point(8, 8) },
           zIndex: 3,
           clickable: false,
         });
-      }),
-    );
+        arrows.push({ ...arrow, marker, element: content, visible: true });
+        return;
+      }
+      if (
+        item.coordinate.latitude !== arrow.coordinate.latitude ||
+        item.coordinate.longitude !== arrow.coordinate.longitude
+      ) {
+        item.marker.setPosition(toNaverCoordinate(arrow.coordinate));
+        item.coordinate = arrow.coordinate;
+      }
+      if (item.rotation !== arrow.rotation) {
+        item.element.style.transform = `rotate(${arrow.rotation}deg)`;
+        item.rotation = arrow.rotation;
+      }
+      if (!item.visible) {
+        item.marker.setVisible(true);
+        item.visible = true;
+      }
+    });
+    // 필요한 수가 줄어도 제거하지 않고 다음 확대·이동에서 재사용한다.
+    arrows.slice(nextArrows.length).forEach((item) => {
+      if (!item.visible) return;
+      item.marker.setVisible(false);
+      item.visible = false;
+    });
   }
 
   function focus(selection: StopSelection) {
@@ -344,7 +381,7 @@ export function createNaverRouteMap(
       listeners.forEach((listener) => cleanup(() => sdk.Event.removeListener(listener)));
       stops.forEach(({ marker }) => cleanup(() => marker.setMap(null)));
       vehicles.forEach(({ marker }) => cleanup(() => marker.setMap(null)));
-      arrows.forEach((marker) => cleanup(() => marker.setMap(null)));
+      arrows.forEach(({ marker }) => cleanup(() => marker.setMap(null)));
       paths.forEach(({ line }) => cleanup(() => line.setMap(null)));
       cleanup(() => userMarker?.setMap(null));
       cleanup(() => accuracyCircle?.setMap(null));

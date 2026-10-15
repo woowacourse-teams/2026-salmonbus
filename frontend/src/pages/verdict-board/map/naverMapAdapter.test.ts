@@ -83,6 +83,7 @@ function createRecordingSdk() {
     center: NaverCoordinate = new CoordinateStub(0, 0);
     size = new SizeStub(400, 350);
     fits = 0;
+    projectionOffsetX = 0;
     destroyed = false;
     constructor(_element: HTMLElement, options: ConstructorParameters<NaverMaps["Map"]>[1]) {
       this.center = options.center;
@@ -112,7 +113,7 @@ function createRecordingSdk() {
     getProjection() {
       return {
         fromCoordToOffset: (coordinate: NaverCoordinate) =>
-          new PointStub((coordinate.lng() - 126.9) * 1000, (37.6 - coordinate.lat()) * 1000),
+          new PointStub((coordinate.lng() - 126.9) * 1000 + this.projectionOffsetX, (37.6 - coordinate.lat()) * 1000),
       };
     }
     destroy() {
@@ -224,6 +225,50 @@ function setup() {
 }
 
 describe("네이버 지도 adapter", () => {
+  it("확대와 이동에서 정류장 아이콘과 방향 화살표를 제거하거나 다시 만들지 않는다", () => {
+    const { native, adapter } = setup();
+    const idle = native.events.find((event) => event.name === "idle")!.listener;
+    const zoomChanged = native.events.find((event) => event.name === "zoom_changed")!.listener;
+    const markers = [...native.markers];
+    const iconUpdates = markers.map((marker) => jest.spyOn(marker, "setIcon"));
+    const mapUpdates = markers.map((marker) => jest.spyOn(marker, "setMap"));
+    native.map.zoom = 15;
+    zoomChanged();
+    adapter.update(null, "DOWN", []);
+    native.map.zoom = 16;
+    zoomChanged();
+    idle();
+    expect(iconUpdates.every((update) => update.mock.calls.length === 0)).toBe(true);
+    expect(native.markers).toEqual(markers);
+    expect(markers.every((marker) => marker.map === native.map)).toBe(true);
+    expect(mapUpdates.every((update) => update.mock.calls.length === 0)).toBe(true);
+
+    // 화면 밖으로 나갔다 돌아온 화살표도 같은 마커를 다시 사용한다.
+    const arrows = markers.filter(
+      (marker) => (marker.options.icon.content as unknown as ElementStub).className === "arrow",
+    );
+    expect(arrows.length).toBeGreaterThan(0);
+    native.map.projectionOffsetX = -10_000;
+    idle();
+    expect(arrows.every((marker) => !marker.visible && marker.map === native.map)).toBe(true);
+    native.map.projectionOffsetX = 0;
+    idle();
+    expect(arrows.every((marker) => marker.visible)).toBe(true);
+    expect(native.markers).toEqual(markers);
+  });
+  it("화면이 그대로인 idle 이벤트는 마커를 다시 갱신하지 않는다", () => {
+    const { native } = setup();
+    const updates = native.markers.flatMap((marker) => [
+      jest.spyOn(marker, "setIcon"),
+      jest.spyOn(marker, "setPosition"),
+      jest.spyOn(marker, "setVisible"),
+      jest.spyOn(marker, "setZIndex"),
+    ]);
+    const idle = native.events.find((event) => event.name === "idle")!.listener;
+    idle();
+    idle();
+    expect(updates.every((update) => update.mock.calls.length === 0)).toBe(true);
+  });
   it("크기가 같으면 지도 크기와 중심·줌을 다시 설정하지 않는다", () => {
     const { native, adapter } = setup();
     const setSize = jest.spyOn(native.map, "setSize");

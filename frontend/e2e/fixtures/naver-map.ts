@@ -109,7 +109,7 @@ export const test = apiTest.extend<{ naverMap: MapFixture }>({
                 if (operation === "all" || operation === "resize") this.setSize = fail;
                 this.destroy = fail;
                 this.markers.forEach((marker) => {
-                  if (operation === "all" || operation === "update") marker.setIcon = fail;
+                  if (operation === "all" || operation === "update") marker.setZIndex = fail;
                   if (operation === "all" || operation === "frame") marker.setPosition = fail;
                   marker.setMap = fail;
                 });

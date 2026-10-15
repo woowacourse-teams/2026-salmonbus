@@ -97,6 +97,40 @@ test("첫 화면은 정확히 절반 높이이고 줌에 따라 정류장만 숨
   await expect(map(page).getByRole("img", { name: /부근 버스/ })).toHaveCount(2);
 });
 
+test("반복 확대와 이동에도 지도와 마커 DOM을 유지하고 정류장 포커스가 남는다", async ({ page, naverMap }) => {
+  await openMap(page);
+  await naverMap.setZoom(15);
+  await naverMap.panToStop(11);
+  const pin = map(page).locator("button[data-map-stop-sequence='11']");
+  await pin.focus();
+  const observation = await map(page).evaluateHandle((region) => {
+    const layer = region.querySelector('[data-testid="naver-map-test-double"]');
+    const removed: string[] = [];
+    const observer = new MutationObserver((records) => {
+      records.forEach((record) => {
+        record.removedNodes.forEach((node) => {
+          if (node instanceof HTMLElement && node.matches("[data-marker-kind], button[data-map-stop-sequence]"))
+            removed.push(node.outerHTML);
+        });
+      });
+    });
+    observer.observe(region, { childList: true, subtree: true });
+    return { layer, removed, observer };
+  });
+
+  for (const zoom of [16, 17, 15]) await naverMap.setZoom(zoom);
+  await naverMap.panToStop(23);
+  await page.clock.runFor(32);
+
+  await expect(pin).toBeFocused();
+  const changes = await observation.evaluate(({ layer, removed, observer }) => {
+    observer.disconnect();
+    return { mapConnected: layer?.isConnected, removed };
+  });
+  expect(changes).toEqual({ mapConnected: true, removed: [] });
+  await observation.dispose();
+  expect(await map(page).locator("[data-marker-kind='arrow']:visible").count()).toBeGreaterThan(0);
+});
 test("잔여석 응답이 바뀌어도 차량 핀과 이미지 DOM을 유지한다", async ({ page, api }) => {
   await openMap(page);
   const bus = map(page).getByRole("img", {
