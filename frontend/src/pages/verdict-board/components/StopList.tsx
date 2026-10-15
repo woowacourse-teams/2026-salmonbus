@@ -56,13 +56,13 @@ export function StopList({ stops, liveVehicleViews, liveMotionDurationMs, enteri
   const anchorPositions = useTimelineAnchorPositions(routeCanvasRef, stops, expandedSequence);
   const positionedLiveVehicles = positionsFor(liveVehicleViews, anchorPositions);
   const reducedMotion = usePrefersReducedMotion();
-  const toggle = (stop: StopView, rowPosition: number) => {
+  const toggle = (stop: ExpandableStopView, rowPosition: number) => {
     if (expandedSequence === stop.sequence) {
       setExpandedSequence(null);
       return;
     }
     setExpandedSequence(stop.sequence);
-    if (stop.kind !== "passThrough") onStopExpand(stop, rowPosition);
+    onStopExpand(stop, rowPosition);
   };
 
   return (
@@ -74,7 +74,7 @@ export function StopList({ stops, liveVehicleViews, liveMotionDurationMs, enteri
             stop={stop}
             routePosition={routePositionFor(stop, index, stops.length - 1)}
             expanded={expandedSequence === stop.sequence}
-            onToggle={() => toggle(stop, index)}
+            onToggle={(expandableStop) => toggle(expandableStop, index)}
           />
         ))}
       </ul>
