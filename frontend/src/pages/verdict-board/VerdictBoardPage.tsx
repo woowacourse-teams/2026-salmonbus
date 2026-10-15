@@ -136,6 +136,9 @@ function OperatingBoard({
 
   function selectFromMap(selection: StopSelection) {
     setSelected(selection);
+    scrollToStop(selection);
+  }
+  function scrollToStop(selection: StopSelection) {
     setScrollRequest({ ...selection });
     if (snap === "minimum") setSnap("half");
     onDirectionChange(selection.direction);
@@ -171,6 +174,7 @@ function OperatingBoard({
             data={mapData}
             selected={selected}
             onSelect={selectFromMap}
+            onVehicleSelect={scrollToStop}
             liveVehicleViews={vehicles}
             motion={motion}
             viewportHeight={mapHeight}

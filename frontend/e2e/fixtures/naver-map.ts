@@ -311,11 +311,11 @@ export const test = apiTest.extend<{
               this.content.style.pointerEvents = options.clickable ? "auto" : "none";
               this.wrapper.dataset.markerKind = this.content.dataset.mapStopSequence
                 ? "stop"
-                : this.content.getAttribute("role") === "img"
-                  ? this.content.getAttribute("aria-label") === "내 현재 위치"
+                : this.content.dataset.mapVehicleKey !== undefined
+                  ? "vehicle"
+                  : this.content.getAttribute("aria-label") === "내 현재 위치"
                     ? "location"
-                    : "vehicle"
-                  : "arrow";
+                    : "arrow";
               this.wrapper.append(this.content);
               this.setZIndex(options.zIndex);
               this.setMap(options.map);

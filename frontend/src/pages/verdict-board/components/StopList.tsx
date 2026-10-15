@@ -22,6 +22,7 @@ interface StopListProps {
 const LIVE_MARKER_HEIGHT = 32;
 const COLLIDING_VEHICLE_GAP = 8;
 const SCROLL_TARGET_TOP_PADDING = 12;
+const STOP_SCROLL_DURATION_MS = 320;
 const EMPTY_ANCHOR_POSITIONS: ReadonlyMap<number, number> = new Map();
 
 // 회차 지점은 노선의 끝이 아니라 반대 방향으로 이어지는 지점이라 축을 끊지 않는다.
@@ -108,27 +109,67 @@ function useStopScroll(
     if (canvas === null || scrollRequest === null) return;
     const row = canvas.querySelector<HTMLElement>(`[data-stop-sequence="${scrollRequest.sequence}"]`);
     if (row === null) return;
+    const control = row.querySelector<HTMLButtonElement>("button[aria-expanded]") ?? row;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let frame: number | null = null;
+    let interrupted = false;
+
+    const cancelFrame = () => {
+      if (frame === null) return;
+      window.cancelAnimationFrame(frame);
+      frame = null;
+    };
+    const interruptScroll = () => {
+      interrupted = true;
+      cancelFrame();
+    };
 
     const scrollToRow = () => {
+      if (interrupted) return;
+      cancelFrame();
       const container = scrollContainerRef.current;
       if (container === null) return;
-      const top = row.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
-      container.scrollTo({ top: Math.max(0, top - SCROLL_TARGET_TOP_PADDING), behavior: "instant" });
+      const startTop = container.scrollTop;
+      const startedAt = performance.now();
+      const animate = (now: number) => {
+        frame = null;
+        if (interrupted) return;
+        // 정류장이나 시트가 펼쳐지는 동안 달라지는 위치도 따라간다.
+        const top = row.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
+        const target = Math.min(
+          Math.max(0, container.scrollHeight - container.clientHeight),
+          Math.max(0, top - SCROLL_TARGET_TOP_PADDING),
+        );
+        const progress =
+          reducedMotion || Math.abs(target - startTop) < 1
+            ? 1
+            : Math.max(0, Math.min(1, (now - startedAt) / STOP_SCROLL_DURATION_MS));
+        const eased = 1 - (1 - progress) ** 3;
+        container.scrollTo({ top: startTop + (target - startTop) * eased, behavior: "instant" });
+        if (progress < 1) frame = window.requestAnimationFrame(animate);
+        else control.focus({ preventScroll: true });
+      };
+      animate(startedAt);
     };
-    const selectedControl = row.querySelector<HTMLButtonElement>("button[aria-expanded]") ?? row;
-    const frame = window.requestAnimationFrame(() => {
-      selectedControl.focus({ preventScroll: true });
-      scrollToRow();
-    });
+    // 방향을 바꾸어 목록을 새로 만들 때는 부모의 스크롤 영역도 연결된 뒤 시작한다.
+    frame = window.requestAnimationFrame(scrollToRow);
 
     // 앞서 펼친 행이 접히는 동안 순번의 실제 위치가 바뀔 수 있어 마지막 레이아웃도 맞춘다.
     const scrollAfterExpansion = (event: TransitionEvent) => {
-      if (event.propertyName === "grid-template-rows" || event.propertyName === "min-height") scrollToRow();
+      if (frame === null && (event.propertyName === "grid-template-rows" || event.propertyName === "min-height"))
+        scrollToRow();
     };
     canvas.addEventListener("transitionend", scrollAfterExpansion);
+    // 이동 중 다른 조작을 시작하면 멈추고 포커스도 가져오지 않는다.
+    const interruptEvents = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+    interruptEvents.forEach((event) =>
+      window.addEventListener(event, interruptScroll, { passive: true, capture: true }),
+    );
     return () => {
-      window.cancelAnimationFrame(frame);
+      interrupted = true;
+      cancelFrame();
       canvas.removeEventListener("transitionend", scrollAfterExpansion);
+      interruptEvents.forEach((event) => window.removeEventListener(event, interruptScroll, true));
     };
   }, [routeCanvasRef, scrollContainerRef, scrollRequest]);
 }

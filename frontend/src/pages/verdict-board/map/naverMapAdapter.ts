@@ -21,7 +21,7 @@ interface VehicleMarker {
   marker: NaverMarker;
   element: HTMLElement;
   count: HTMLElement;
-  direction: Direction;
+  selection: StopSelection;
 }
 interface ArrowMarker extends RouteArrow {
   direction: Direction;
@@ -47,6 +47,7 @@ export function createNaverRouteMap(
   onSelect: (selection: StopSelection) => void,
   onError: () => void,
   onReady: () => void,
+  onVehicleSelect: (selection: StopSelection, key: string) => void,
 ): RouteMapAdapter {
   const createNativeEventHandler = (action: () => void) => () => {
     try {
@@ -420,9 +421,11 @@ export function createNaverRouteMap(
         if (coordinate === null) return;
         let item = vehicles.get(view.key);
         if (item === undefined) {
-          const content = document.createElement("span");
+          const content = document.createElement("button");
+          content.type = "button";
           content.className = styles.bus;
-          content.setAttribute("role", "img");
+          content.dataset.mapVehicleKey = view.key;
+          content.setAttribute("aria-pressed", "false");
           const count = document.createElement("span");
           count.className = styles.busCount;
           count.setAttribute("aria-hidden", "true");
@@ -442,12 +445,22 @@ export function createNaverRouteMap(
             position: toNaverCoordinate(coordinate),
             icon: { content, anchor: new sdk.Point(20, 52) },
             zIndex: 20,
-            clickable: false,
+            clickable: true,
           });
-          item = { marker, element: content, count, direction: view.vehicle.direction };
+          const vehicleMarker: VehicleMarker = {
+            marker,
+            element: content,
+            count,
+            selection: { direction: view.vehicle.direction, sequence: view.vehicle.currentStopSequence },
+          };
+          content.addEventListener("click", (event) => {
+            event.stopPropagation();
+            onVehicleSelect(vehicleMarker.selection, view.key);
+          });
+          item = vehicleMarker;
           vehicles.set(view.key, item);
         }
-        item.direction = view.vehicle.direction;
+        item.selection = { direction: view.vehicle.direction, sequence: view.vehicle.currentStopSequence };
         const seat = view.vehicle.seat;
         const count = seat.kind === "EXACT" ? `${seat.remaining}석` : "–";
         if (item.count.textContent !== count) item.count.textContent = count;
@@ -460,7 +473,7 @@ export function createNaverRouteMap(
       frames.forEach((frame) => {
         const item = vehicles.get(frame.key);
         if (item === undefined) return;
-        const coordinate = routeMapCoordinateForSequence(data, frame.sequencePosition, item.direction);
+        const coordinate = routeMapCoordinateForSequence(data, frame.sequencePosition, item.selection.direction);
         if (coordinate === null) return;
         const key = `${coordinate.latitude}:${coordinate.longitude}`;
         const group = groups.get(key) ?? [];

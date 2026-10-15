@@ -18,6 +18,8 @@ jest.mock("./RouteMap.css", () => ({
 }));
 
 class ElementStub {
+  readonly tagName: string;
+  type = "";
   clientWidth = 400;
   clientHeight = 350;
   className = "";
@@ -29,6 +31,9 @@ class ElementStub {
   children: ElementStub[] = [];
   attributes = new Map<string, string>();
   listeners = new Map<string, (event: Event) => void>();
+  constructor(tagName = "div") {
+    this.tagName = tagName.toUpperCase();
+  }
   setAttribute(name: string, value: string) {
     this.attributes.set(name, value);
   }
@@ -280,13 +285,14 @@ function setup(glSupported = true, { initialized = true } = {}) {
   };
   Object.defineProperty(globalThis, "document", {
     configurable: true,
-    value: { createElement: () => new ElementStub() },
+    value: { createElement: (tagName: string) => new ElementStub(tagName) },
   });
   const native = createRecordingSdk(glSupported);
   const data = loadPreviewRouteMapData(boardMock)!;
   const onSelect = jest.fn<(selection: { direction: "UP" | "DOWN"; sequence: number }) => void>();
   const onError = jest.fn();
   const onReady = jest.fn();
+  const onVehicleSelect = jest.fn<(selection: { direction: "UP" | "DOWN"; sequence: number }, key: string) => void>();
   const element = new ElementStub();
   const adapter = createNaverRouteMap(
     native.sdk,
@@ -296,6 +302,7 @@ function setup(glSupported = true, { initialized = true } = {}) {
     onSelect,
     onError,
     onReady,
+    onVehicleSelect,
   );
   const initialize = () => native.events.find((event) => event.name === "init")?.listener();
   if (initialized) initialize();
@@ -305,6 +312,7 @@ function setup(glSupported = true, { initialized = true } = {}) {
     onSelect,
     onError,
     onReady,
+    onVehicleSelect,
     adapter,
     element,
     initialize,
@@ -768,6 +776,64 @@ describe("네이버 지도 adapter", () => {
     expect(content.attributes.get("aria-label")).toContain("정보 없음");
     adapter.update(null, "DOWN", []);
     expect(bus.map).toBeNull();
+  });
+  it("차량 버튼은 재사용하며 폴링으로 갱신된 방향과 정류장을 카메라 이동 없이 전달한다", () => {
+    const { native, data, adapter, onSelect, onVehicleSelect } = setup();
+    const view = liveVehicleViewsFor(boardMock, liveVehiclesMock, "UP")[0]!;
+    adapter.update(null, "UP", [view]);
+    const bus = native.markers.find(
+      (item) => (item.options.icon.content as unknown as ElementStub).dataset.mapVehicleKey === view.key,
+    )!;
+    const button = bus.options.icon.content as unknown as ElementStub;
+    const [count, pin] = button.children;
+    const image = pin!.children[0];
+    const click = button.listeners.get("click")!;
+    const event = new Event("click");
+    const stopPropagation = jest.spyOn(event, "stopPropagation");
+    const center = native.map.center;
+    const zoom = native.map.zoom;
+    const setCenter = jest.spyOn(native.map, "setCenter");
+    const setZoom = jest.spyOn(native.map, "setZoom");
+    const fitBounds = jest.spyOn(native.map, "fitBounds");
+
+    expect(button.tagName).toBe("BUTTON");
+    expect(button.type).toBe("button");
+    expect(button.attributes.has("role")).toBe(false);
+    expect(button.attributes.get("aria-label")).toContain("부근 버스");
+    expect(bus.options.clickable).toBe(true);
+    click(event);
+    expect(stopPropagation).toHaveBeenCalledTimes(1);
+    expect(onVehicleSelect).toHaveBeenLastCalledWith(
+      { direction: "UP", sequence: view.vehicle.currentStopSequence },
+      view.key,
+    );
+
+    const nextStop = data.stops.find(
+      (stop) => stop.direction === "UP" && stop.sequence !== view.vehicle.currentStopSequence,
+    )!;
+    adapter.update(null, "UP", [{ ...view, vehicle: { ...view.vehicle, currentStopSequence: nextStop.sequence } }]);
+    adapter.moveVehicles([{ key: view.key, sequencePosition: nextStop.sequence + 0.5 }]);
+    click(new Event("click"));
+    expect(onVehicleSelect).toHaveBeenLastCalledWith({ direction: "UP", sequence: nextStop.sequence }, view.key);
+
+    const oppositeStop = data.stops.find((stop) => stop.direction === "DOWN")!;
+    adapter.update(null, "DOWN", [
+      { ...view, vehicle: { ...view.vehicle, direction: "DOWN", currentStopSequence: oppositeStop.sequence } },
+    ]);
+    click(new Event("click"));
+    expect(onVehicleSelect).toHaveBeenCalledTimes(3);
+    expect(onVehicleSelect).toHaveBeenLastCalledWith({ direction: "DOWN", sequence: oppositeStop.sequence }, view.key);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(native.map.center).toBe(center);
+    expect(native.map.zoom).toBe(zoom);
+    expect(setCenter).not.toHaveBeenCalled();
+    expect(setZoom).not.toHaveBeenCalled();
+    expect(fitBounds).not.toHaveBeenCalled();
+    expect(bus.options.icon.content).toBe(button);
+    expect(button.children[0]).toBe(count);
+    expect(button.children[1]).toBe(pin);
+    expect(pin!.children[0]).toBe(image);
+    expect(button.listeners.get("click")).toBe(click);
   });
   it("잔여석만 갱신해도 차량 마커와 핀·이미지 DOM을 그대로 사용한다", () => {
     const { native, adapter } = setup();

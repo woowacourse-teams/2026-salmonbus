@@ -13,6 +13,7 @@ interface RouteMapProps {
   data: RouteMapData | null;
   selected: StopSelection | null;
   onSelect: (selection: StopSelection) => void;
+  onVehicleSelect: (selection: StopSelection, key: string) => void;
   liveVehicleViews: LiveVehicleView[];
   motion: LiveVehicleMotionStore;
   viewportHeight: number;
@@ -107,6 +108,7 @@ export function RouteMap(props: RouteMapProps) {
             setMapState({ status: "ready", data });
             setLocationState({ status: "idle" });
           },
+          (selection, key) => propsRef.current.onVehicleSelect(selection, key),
         );
         adapterRef.current = adapter;
         adapter.update(current.selected, current.activeDirection, current.liveVehicleViews);

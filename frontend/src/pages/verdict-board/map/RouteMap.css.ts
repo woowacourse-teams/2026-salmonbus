@@ -115,14 +115,25 @@ export const bus = style({
   display: "block",
   width: 40,
   height: 52,
+  padding: 0,
+  border: 0,
+  outline: "none",
+  background: "transparent",
   color: vars.color.onInk,
   fontFamily: "'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif",
   fontSize: 11,
   fontWeight: 700,
   whiteSpace: "nowrap",
-  pointerEvents: "none",
+  pointerEvents: "auto",
+  cursor: "pointer",
+  transformOrigin: "50% 100%",
+  transition: `transform ${vars.duration.fast} ${vars.easing.slide}`,
+  "@media": {
+    "(prefers-reduced-motion: reduce)": { transition: "none" },
+  },
   selectors: {
     [`${canvas}[data-overlays-ready="false"] &`]: { visibility: "hidden" },
+    "&:focus": { transform: "scale(1.12)" },
   },
 });
 export const busCount = style({
