@@ -17,6 +17,7 @@ import {
 const BATCH_100 = "2026-10-13T08:00:00+09:00";
 const BATCH_101 = "2026-10-13T08:00:15+09:00";
 const BATCH_102 = "2026-10-13T08:00:30+09:00";
+const BATCH_103 = "2026-10-13T08:00:45+09:00";
 
 function at(time: string): number {
   return Date.parse(`2026-10-13T${time}+09:00`);
@@ -384,6 +385,40 @@ describe("응답이 도착하는 순서대로 재생한 화면", () => {
       expect(screenOf(caughtUp, "08:00:52")).toEqual({
         boardBatch: "2026-10-13T08:00:45+09:00",
         vehiclesBatch: "2026-10-13T08:00:45+09:00",
+        recheckAt: null,
+      });
+    });
+  });
+
+  describe("차량 응답이 끊긴 채 예보만 계속 올 때", () => {
+    const outage = [
+      vehicles("08:00:03", BATCH_100),
+      board("08:00:05", BATCH_100),
+      board("08:00:20", BATCH_101),
+      board("08:00:37", BATCH_102),
+      board("08:00:52", BATCH_103),
+    ];
+
+    it("첫 기한이 지나 마커 없이 새 예보를 보인 뒤에는, 다음 예보가 와도 이전 쌍으로 되돌아가지 않는다", () => {
+      expect(screenOf(outage.slice(0, 3), "08:00:36")).toEqual({
+        boardBatch: BATCH_101,
+        vehiclesBatch: null,
+        recheckAt: null,
+      });
+      expect(screenOf(outage.slice(0, 4), "08:00:38")).toEqual({
+        boardBatch: BATCH_102,
+        vehiclesBatch: null,
+        recheckAt: null,
+      });
+      expect(screenOf(outage, "08:00:53")).toEqual({ boardBatch: BATCH_103, vehiclesBatch: null, recheckAt: null });
+    });
+
+    it("차량이 다시 오면 같은 observation batch의 예보와 짝이 맞는 순간 마커가 돌아온다", () => {
+      const recovered = [...outage, vehicles("08:01:00", BATCH_103)];
+
+      expect(screenOf(recovered, "08:01:00")).toEqual({
+        boardBatch: BATCH_103,
+        vehiclesBatch: BATCH_103,
         recheckAt: null,
       });
     });
