@@ -13,7 +13,7 @@ interface StopListProps {
   motion: LiveVehicleMotionStore;
   entering: boolean;
   selectedSequence: number | null;
-  selectionRevision: number;
+  scrollRequestRevision: number | null;
   onToggle: (sequence: number) => void;
   scrollContainerRef: RefObject<HTMLElement | null>;
 }
@@ -38,14 +38,14 @@ export function StopList({
   motion,
   entering,
   selectedSequence,
-  selectionRevision,
+  scrollRequestRevision,
   onToggle,
   scrollContainerRef,
 }: StopListProps) {
   const routeCanvasRef = useRef<HTMLDivElement>(null);
   const markerRefs = useRef(new Map<string, HTMLDivElement>());
   const anchorPositions = useTimelineAnchorPositions(routeCanvasRef, stops, selectedSequence);
-  useSelectedStopScroll(routeCanvasRef, scrollContainerRef, selectedSequence, selectionRevision);
+  useSelectedStopScroll(routeCanvasRef, scrollContainerRef, selectedSequence, scrollRequestRevision);
 
   useLayoutEffect(() => {
     const offsets = collisionOffsetsFor(liveVehicleViews);
@@ -101,11 +101,11 @@ function useSelectedStopScroll(
   routeCanvasRef: RefObject<HTMLDivElement | null>,
   scrollContainerRef: RefObject<HTMLElement | null>,
   selectedSequence: number | null,
-  selectionRevision: number,
+  scrollRequestRevision: number | null,
 ) {
   useLayoutEffect(() => {
     const canvas = routeCanvasRef.current;
-    if (canvas === null || selectedSequence === null) return;
+    if (canvas === null || selectedSequence === null || scrollRequestRevision === null) return;
     const row = canvas.querySelector<HTMLElement>(`[data-stop-sequence="${selectedSequence}"]`);
     if (row === null) return;
 
@@ -130,7 +130,7 @@ function useSelectedStopScroll(
       window.cancelAnimationFrame(frame);
       canvas.removeEventListener("transitionend", scrollAfterExpansion);
     };
-  }, [routeCanvasRef, scrollContainerRef, selectedSequence, selectionRevision]);
+  }, [routeCanvasRef, scrollContainerRef, selectedSequence, scrollRequestRevision]);
 }
 
 function useTimelineAnchorPositions(

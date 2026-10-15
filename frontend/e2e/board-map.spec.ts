@@ -182,6 +182,94 @@ test("목록 선택은 지도에 반영하고 직접 방향 전환은 선택·�
   await expect(sheet(page)).toHaveAttribute("data-snap", "half");
 });
 
+for (const reducedMotion of ["reduce", "no-preference"] as const) {
+  for (const sequence of [6, 12]) {
+    test(`목록에서 ${sequence}번 정류장을 펼치고 접어도 클릭한 위치를 유지한다 (${reducedMotion})`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion });
+      await openMap(page);
+      const stop = list(page).locator(`li[data-stop-sequence='${sequence}'] button[aria-expanded]`);
+      await stop.evaluate((element) => {
+        const container = element.closest("section");
+        if (container === null) throw new Error("정류장 목록이 없습니다");
+        container.scrollTop +=
+          element.getBoundingClientRect().top - container.getBoundingClientRect().top - container.clientHeight / 2;
+      });
+      await page.clock.runFor(32);
+      const originalTop = await stop.evaluate((element) => element.getBoundingClientRect().top);
+      const originalScroll = await list(page).evaluate((element) => element.scrollTop);
+
+      await stop.click({ position: { x: 30, y: 20 } });
+      await page.clock.runFor(400);
+      await expect(stop).toHaveAttribute("aria-expanded", "true");
+      expect(await stop.evaluate((element) => element.getBoundingClientRect().top)).toBeCloseTo(originalTop, 0);
+      expect(await list(page).evaluate((element) => element.scrollTop)).toBeCloseTo(originalScroll, 0);
+
+      // 키보드로 접고 다시 펼쳐도 같은 버튼에 포커스가 남는다.
+      await stop.press("Enter");
+      await page.clock.runFor(400);
+      await expect(stop).toHaveAttribute("aria-expanded", "false");
+      await expect(stop).toBeFocused();
+      await stop.press("Enter");
+      await page.clock.runFor(400);
+      await expect(stop).toHaveAttribute("aria-expanded", "true");
+      await expect(stop).toBeFocused();
+      expect(await stop.evaluate((element) => element.getBoundingClientRect().top)).toBeCloseTo(originalTop, 0);
+    });
+  }
+}
+
+test("지도 선택 직후 목록에서 펼치면 대기 중인 지도 선택의 목록 이동을 취소한다", async ({ page, naverMap }) => {
+  await openMap(page);
+  await naverMap.setZoom(15);
+  await naverMap.panToStop(11);
+  await map(page).locator("button[data-map-stop-sequence='11']").click();
+  const stop = list(page).locator("li[data-stop-sequence='6'] button[aria-expanded]");
+  await stop.evaluate((element) => {
+    const container = element.closest("section");
+    if (container === null) throw new Error("정류장 목록이 없습니다");
+    container.scrollTop +=
+      element.getBoundingClientRect().top - container.getBoundingClientRect().top - container.clientHeight / 2;
+  });
+  const originalTop = await stop.evaluate((element) => element.getBoundingClientRect().top);
+
+  await stop.click({ position: { x: 30, y: 20 } });
+  await page.clock.runFor(400);
+  await expect(stop).toHaveAttribute("aria-expanded", "true");
+  await expect(list(page).locator("li[data-stop-sequence='11'] button[aria-expanded]")).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  expect(await stop.evaluate((element) => element.getBoundingClientRect().top)).toBeCloseTo(originalTop, 0);
+});
+
+test("위쪽 정류장이 접힐 때 새로 펼친 정류장을 목록 상단으로 이동시키지 않는다", async ({ page }) => {
+  await openMap(page);
+  const previous = list(page).locator("li[data-stop-sequence='6'] button[aria-expanded]");
+  await previous.scrollIntoViewIfNeeded();
+  await previous.click();
+  await page.clock.runFor(32);
+  const next = list(page).locator("li[data-stop-sequence='7'] button[aria-expanded]");
+  await next.scrollIntoViewIfNeeded();
+  await page.clock.runFor(32);
+  const previousRowHeight = await list(page)
+    .locator("li[data-stop-sequence='6']")
+    .evaluate((element) => element.getBoundingClientRect().height);
+  const originalTop = await next.evaluate((element) => element.getBoundingClientRect().top);
+  await next.click({ position: { x: 30, y: 20 } });
+  await page.clock.runFor(32);
+  await expect(previous).toHaveAttribute("aria-expanded", "false");
+  await expect(next).toHaveAttribute("aria-expanded", "true");
+  const collapsedRowHeight = await list(page)
+    .locator("li[data-stop-sequence='6']")
+    .evaluate((element) => element.getBoundingClientRect().height);
+  // 위쪽 행이 접힌 높이만큼의 자연스러운 이동만 허용한다.
+  const nextTop = await next.evaluate((element) => element.getBoundingClientRect().top);
+  expect(nextTop).toBeGreaterThanOrEqual(originalTop - (previousRowHeight - collapsedRowHeight) - 1);
+  expect(nextTop).toBeLessThanOrEqual(originalTop + 1);
+});
+
 test("현재 위치 성공은 파란 위치·정확도 범위를 표시하고 권한 거부는 지도를 유지하며 안내한다", async ({
   page,
   naverMap,

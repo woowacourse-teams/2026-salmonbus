@@ -17,7 +17,7 @@ type StopBoardProps =
       motion: LiveVehicleMotionStore;
       entering: boolean;
       selectedSequence: number | null;
-      selectionRevision: number;
+      scrollRequestRevision: number | null;
       onToggle: (sequence: number) => void;
     };
 
@@ -38,7 +38,7 @@ export function StopBoard(props: StopBoardProps) {
           motion={props.motion}
           entering={props.entering}
           selectedSequence={props.selectedSequence}
-          selectionRevision={props.selectionRevision}
+          scrollRequestRevision={props.scrollRequestRevision}
           onToggle={props.onToggle}
           scrollContainerRef={scrollContainerRef}
         />
