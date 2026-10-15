@@ -2,7 +2,7 @@ import type { EventMap } from "@/shared/analytics/events";
 import { failurePropertiesOf } from "@/shared/analytics/failureProperties";
 import type { ApiFailure } from "@/shared/api/client";
 import type { Direction } from "@/shared/api/routeForecast.types";
-import type { BoardScreen, ExpandableStopView } from "../displayPolicy";
+import type { BoardScreen, ExpandableStopView } from "../components/displayPolicy";
 import { boardViewedPropertiesOf, stopExpandedPropertiesOf } from "./boardEventPolicy";
 
 const NEW_VISIT_AFTER_HIDDEN_MS = 30 * 60 * 1000;

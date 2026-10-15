@@ -19,14 +19,16 @@ const HOVER_MEDIA = "(hover: hover) and (pointer: fine)";
 
 export const slot = style({
   position: "absolute",
-  right: SLOT_RIGHT,
-  bottom: `calc(env(safe-area-inset-bottom, 0px) + ${SLOT_BOTTOM})`,
+  top: "var(--board-chat-top, auto)",
+  right: `var(--board-chat-right, ${SLOT_RIGHT})`,
+  left: "var(--board-chat-left, auto)",
+  bottom: `var(--board-chat-bottom, calc(env(safe-area-inset-bottom, 0px) + ${SLOT_BOTTOM}))`,
   display: "flex",
   height: SLOT_HEIGHT,
   alignItems: "flex-start",
   pointerEvents: "auto",
   "@media": {
-    [DESKTOP_MEDIA]: { right: "auto", bottom: 0, left: 0, alignItems: "flex-end" },
+    [DESKTOP_MEDIA]: { top: "auto", right: "auto", bottom: 0, left: 0, alignItems: "flex-end" },
   },
 });
 

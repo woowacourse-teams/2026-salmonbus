@@ -7,6 +7,21 @@ export const tracker = style({
   flex: "none",
   width: "30px",
   height: "32px",
+  padding: 0,
+  border: 0,
+  outline: "none",
+  background: "transparent",
+  pointerEvents: "auto",
+  cursor: "pointer",
+  transformOrigin: "50% 50%",
+  transition: `transform ${vars.duration.fast} ${vars.easing.slide}`,
+  "@media": {
+    "(prefers-reduced-motion: reduce)": { transition: "none" },
+  },
+  selectors: {
+    '&[aria-pressed="true"]': { transform: "scale(1.12)" },
+    "&:focus-visible": { transform: "scale(1.12)" },
+  },
 });
 
 export const remainingSeats = style({

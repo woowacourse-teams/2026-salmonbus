@@ -44,11 +44,13 @@ class PublicApiDocsContractTest {
             .andExpect(jsonPath("$.paths['/api/v1/routes'].get").exists())
             .andExpect(jsonPath("$.paths['/api/v1/routes/{routeId}/board'].get").exists())
             .andExpect(jsonPath("$.paths['/api/v1/routes/{routeId}/vehicles'].get").exists())
+            .andExpect(jsonPath("$.paths['/api/v2/stations/{stationId}/arrivals'].get").exists())
+            .andExpect(jsonPath("$.paths['/api/v2/routes/{routeId}/geometry'].get").exists())
             .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
 
         JsonNode document = objectMapper.readTree(body);
         JsonNode paths = document.path("paths");
-        assertThat(paths.size()).isEqualTo(3);
+        assertThat(paths.size()).isEqualTo(5);
         assertThat(document.path("servers").get(0).path("url").asText()).isEqualTo("/");
         assertThat(document.path("components").path("schemas")
             .path("ForecastResponse").path("properties")
@@ -74,7 +76,8 @@ class PublicApiDocsContractTest {
             .path("responses").path("200").path("content");
         assertThat(successContent.toString()).contains("application/json").doesNotContain("*/*");
         for (String route : List.of("/api/v1/routes", "/api/v1/routes/{routeId}/board",
-            "/api/v1/routes/{routeId}/vehicles")) {
+            "/api/v1/routes/{routeId}/vehicles", "/api/v2/stations/{stationId}/arrivals",
+            "/api/v2/routes/{routeId}/geometry")) {
             JsonNode responses = paths.path(route).path("get").path("responses");
             for (String statusCode : List.of("200", "503", "405", "500")) {
                 JsonNode content = responses.path(statusCode).path("content").path("application/json");
@@ -84,7 +87,7 @@ class PublicApiDocsContractTest {
                     .isPositive();
             }
         }
-        assertThat(body).doesNotContain("/api/chat/rooms/{routeId}/stream", "/actuator", "/readyz");
+        assertThat(body).doesNotContain("/api/chat/rooms/{routeId}/stream", "/actuator", "/readyz", "/internal/arrivals/refresh");
         assertThat(body).doesNotContain("DB_URL", "CHAT_MONGODB_URI", "jdbc:", "clientSecret");
     }
 
@@ -118,7 +121,7 @@ class PublicApiDocsContractTest {
         String yaml = mockMvc.perform(get("/api/docs/openapi.yaml"))
             .andExpect(status().isOk())
             .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
-        assertThat(yaml).contains("openapi:", "/api/v1/routes");
+        assertThat(yaml).contains("openapi:", "/api/v1/routes", "/api/v2/stations/", "/api/v2/routes/");
     }
 
     @Test

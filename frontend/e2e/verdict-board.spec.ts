@@ -114,7 +114,9 @@ test("자동 갱신 실패 후 다음 요청이 성공하면 새 예측으로 �
 });
 
 function busMarkerAt(page: Page, stopName: string) {
-  return page.getByRole("img", { name: new RegExp(`^${stopName} 정류장,`) });
+  return page
+    .getByRole("region", { name: "판정보드 정류장 목록", exact: true })
+    .getByRole("button", { name: new RegExp(`^${stopName} 정류장,`) });
 }
 
 async function pollBoardAndVehicles(page: Page) {
@@ -196,6 +198,7 @@ test("운행 중인 차량이 없으면 운행 없음 안내를 표시한다", a
   await expect(page.getByText("정보를 불러오지 못했어요", { exact: true })).not.toBeVisible();
   await expect(page.locator("button[aria-expanded]")).toHaveCount(0);
   await expect(page.getByText(/도착 시 .*석 예상해요/)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /방면 보기$/ })).toHaveCount(0);
 });
 
 test("운행 중인 노선의 특정 정류장에 접근 차량이 없으면 차량 없음 안내를 표시한다", async ({ page, api }) => {

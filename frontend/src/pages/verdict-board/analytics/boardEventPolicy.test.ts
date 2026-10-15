@@ -2,7 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 import type { ApproachingVehicle, Direction } from "@/shared/api/routeForecast.types";
 import { boardWith, stopAt } from "@/testing/fixtures";
 import { forecastFixtures } from "@/testing/forecastFixtures";
-import { stopViewsFor, type ExpandableStopView } from "../displayPolicy";
+import { stopViewsFor, type ExpandableStopView } from "../components/displayPolicy";
 import { boardViewedPropertiesOf, stopExpandedPropertiesOf } from "./boardEventPolicy";
 
 function approaching(seatAvailableProbability: number): ApproachingVehicle[] {

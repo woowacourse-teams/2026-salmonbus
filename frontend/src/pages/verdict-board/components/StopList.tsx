@@ -1,44 +1,31 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
-import type { ExpandableStopView, StopView } from "../displayPolicy";
-import type { LiveVehicleView } from "../liveVehiclePolicy";
+import { useLayoutEffect, useRef, useState, type RefObject } from "react";
+import type { ExpandableStopView, StopView } from "./displayPolicy";
+import type { LiveVehicleView } from "./liveVehiclePolicy";
+import type { LiveVehicleMotionStore } from "../hooks/useLiveVehicleMotion";
 import { LiveBusTraker } from "./LiveBusTraker";
 import { StopRow } from "./StopRow";
 import type { RoutePosition } from "./TimelineMarker";
+import type { StopSelection } from "./stopSelection";
 import * as styles from "./StopList.css";
 
 interface StopListProps {
   stops: StopView[];
   liveVehicleViews: LiveVehicleView[];
-  liveMotionDurationMs: number;
+  motion: LiveVehicleMotionStore;
   entering: boolean;
+  selectedSequence: number | null;
+  scrollRequest: StopSelection | null;
+  selectedVehicleKey: string | null;
+  onToggle: (sequence: number) => void;
+  onVehicleSelect: (key: string) => void;
+  scrollContainerRef: RefObject<HTMLElement | null>;
   onStopExpand: (stop: ExpandableStopView, rowPosition: number) => void;
-}
-
-interface PositionedLiveVehicle {
-  view: LiveVehicleView;
-  startY: number;
-  endY: number;
-}
-
-interface AnimatedLiveVehicleProps extends PositionedLiveVehicle {
-  durationMs: number;
-  reducedMotion: boolean;
-}
-
-interface PendingCorrection {
-  segmentKey: string;
-  startY: number;
-  endY: number;
-  durationMs: number;
 }
 
 const LIVE_MARKER_HEIGHT = 32;
 const COLLIDING_VEHICLE_GAP = 8;
-const POSITION_EPSILON = 0.5;
-const LAYOUT_REBASE_DELAY_MS = 16;
-const SERVER_CORRECTION_DURATION_MS = 300;
-const SERVER_CORRECTION_EASING = "ease-out";
-const LINEAR_EASING = "linear";
+const SCROLL_TARGET_TOP_PADDING = 12;
+const STOP_SCROLL_DURATION_MS = 320;
 const EMPTY_ANCHOR_POSITIONS: ReadonlyMap<number, number> = new Map();
 
 // 회차 지점은 노선의 끝이 아니라 반대 방향으로 이어지는 지점이라 축을 끊지 않는다.
@@ -50,19 +37,44 @@ function routePositionFor(stop: StopView, index: number, lastIndex: number): Rou
   return "middle";
 }
 
-export function StopList({ stops, liveVehicleViews, liveMotionDurationMs, entering, onStopExpand }: StopListProps) {
-  const [expandedSequence, setExpandedSequence] = useState<number | null>(null);
+export function StopList({
+  stops,
+  liveVehicleViews,
+  motion,
+  entering,
+  selectedSequence,
+  scrollRequest,
+  selectedVehicleKey,
+  onToggle,
+  onVehicleSelect,
+  scrollContainerRef,
+  onStopExpand,
+}: StopListProps) {
   const routeCanvasRef = useRef<HTMLDivElement>(null);
-  const anchorPositions = useTimelineAnchorPositions(routeCanvasRef, stops, expandedSequence);
-  const positionedLiveVehicles = positionsFor(liveVehicleViews, anchorPositions);
-  const reducedMotion = usePrefersReducedMotion();
+  const markerRefs = useRef(new Map<string, HTMLDivElement>());
+  const anchorPositions = useTimelineAnchorPositions(routeCanvasRef, stops, selectedSequence);
+  useStopScroll(routeCanvasRef, scrollContainerRef, scrollRequest);
+
+  useLayoutEffect(() => {
+    const offsets = collisionOffsetsFor(liveVehicleViews);
+    const updatePositions = () => {
+      motion.frames.forEach((frame) => {
+        const marker = markerRefs.current.get(frame.key);
+        if (marker === undefined) return;
+        const centerY = timelinePositionFor(frame.sequencePosition, anchorPositions);
+        marker.style.visibility = centerY === null ? "hidden" : "visible";
+        if (centerY !== null) {
+          marker.style.transform = `translate(-50%, ${centerY + (offsets.get(frame.key) ?? 0) - LIVE_MARKER_HEIGHT / 2}px)`;
+        }
+      });
+    };
+    updatePositions();
+    return motion.subscribe(updatePositions);
+  }, [anchorPositions, liveVehicleViews, motion]);
+
   const toggle = (stop: ExpandableStopView, rowPosition: number) => {
-    if (expandedSequence === stop.sequence) {
-      setExpandedSequence(null);
-      return;
-    }
-    setExpandedSequence(stop.sequence);
-    onStopExpand(stop, rowPosition);
+    if (selectedSequence !== stop.sequence) onStopExpand(stop, rowPosition);
+    onToggle(stop.sequence);
   };
 
   return (
@@ -73,335 +85,190 @@ export function StopList({ stops, liveVehicleViews, liveMotionDurationMs, enteri
             key={stop.sequence}
             stop={stop}
             routePosition={routePositionFor(stop, index, stops.length - 1)}
-            expanded={expandedSequence === stop.sequence}
+            selected={selectedSequence === stop.sequence}
+            expanded={stop.kind !== "passThrough" && selectedSequence === stop.sequence}
             onToggle={(expandableStop) => toggle(expandableStop, index)}
           />
         ))}
       </ul>
       <div className={styles.liveVehicleOverlay}>
-        {positionedLiveVehicles.map((positionedVehicle) => (
-          <AnimatedLiveVehicle
-            key={positionedVehicle.view.key}
-            {...positionedVehicle}
-            durationMs={liveMotionDurationMs}
-            reducedMotion={reducedMotion}
-          />
+        {liveVehicleViews.map((view) => (
+          <div
+            key={view.key}
+            ref={(marker) => {
+              if (marker === null) markerRefs.current.delete(view.key);
+              else markerRefs.current.set(view.key, marker);
+            }}
+            className={styles.liveVehicle}
+            data-live-vehicle-key={view.key}
+          >
+            <LiveBusTraker
+              vehicle={view.vehicle}
+              selected={view.key === selectedVehicleKey}
+              onSelect={() => onVehicleSelect(view.key)}
+            />
+          </div>
         ))}
       </div>
     </div>
   );
 }
 
-function usePrefersReducedMotion(): boolean {
-  const [reducedMotion, setReducedMotion] = useState(
-    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-  );
+function useStopScroll(
+  routeCanvasRef: RefObject<HTMLDivElement | null>,
+  scrollContainerRef: RefObject<HTMLElement | null>,
+  scrollRequest: StopSelection | null,
+) {
+  useLayoutEffect(() => {
+    const canvas = routeCanvasRef.current;
+    if (canvas === null || scrollRequest === null) return;
+    const row = canvas.querySelector<HTMLElement>(`[data-stop-sequence="${scrollRequest.sequence}"]`);
+    if (row === null) return;
+    const control = row.querySelector<HTMLButtonElement>("button[aria-expanded]") ?? row;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let frame: number | null = null;
+    let interrupted = false;
 
-  useEffect(() => {
-    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const updatePreference = (event: MediaQueryListEvent) => setReducedMotion(event.matches);
+    const cancelFrame = () => {
+      if (frame === null) return;
+      window.cancelAnimationFrame(frame);
+      frame = null;
+    };
+    const interruptScroll = () => {
+      interrupted = true;
+      cancelFrame();
+    };
 
-    preference.addEventListener("change", updatePreference);
-    return () => preference.removeEventListener("change", updatePreference);
-  }, []);
+    const scrollToRow = () => {
+      if (interrupted) return;
+      cancelFrame();
+      const container = scrollContainerRef.current;
+      if (container === null) return;
+      const startTop = container.scrollTop;
+      const startedAt = performance.now();
+      const animate = (now: number) => {
+        frame = null;
+        if (interrupted) return;
+        // 정류장이나 시트가 펼쳐지는 동안 달라지는 위치도 따라간다.
+        const top = row.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
+        const target = Math.min(
+          Math.max(0, container.scrollHeight - container.clientHeight),
+          Math.max(0, top - SCROLL_TARGET_TOP_PADDING),
+        );
+        const progress =
+          reducedMotion || Math.abs(target - startTop) < 1
+            ? 1
+            : Math.max(0, Math.min(1, (now - startedAt) / STOP_SCROLL_DURATION_MS));
+        const eased = 1 - (1 - progress) ** 3;
+        container.scrollTo({ top: startTop + (target - startTop) * eased, behavior: "instant" });
+        if (progress < 1) frame = window.requestAnimationFrame(animate);
+        else control.focus({ preventScroll: true });
+      };
+      animate(startedAt);
+    };
+    // 방향을 바꾸어 목록을 새로 만들 때는 부모의 스크롤 영역도 연결된 뒤 시작한다.
+    frame = window.requestAnimationFrame(scrollToRow);
 
-  return reducedMotion;
+    // 앞서 펼친 행이 접히는 동안 순번의 실제 위치가 바뀔 수 있어 마지막 레이아웃도 맞춘다.
+    const scrollAfterExpansion = (event: TransitionEvent) => {
+      if (frame === null && (event.propertyName === "grid-template-rows" || event.propertyName === "min-height"))
+        scrollToRow();
+    };
+    canvas.addEventListener("transitionend", scrollAfterExpansion);
+    // 이동 중 다른 조작을 시작하면 멈추고 포커스도 가져오지 않는다.
+    const interruptEvents = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+    interruptEvents.forEach((event) =>
+      window.addEventListener(event, interruptScroll, { passive: true, capture: true }),
+    );
+    return () => {
+      interrupted = true;
+      cancelFrame();
+      canvas.removeEventListener("transitionend", scrollAfterExpansion);
+      interruptEvents.forEach((event) => window.removeEventListener(event, interruptScroll, true));
+    };
+  }, [routeCanvasRef, scrollContainerRef, scrollRequest]);
 }
 
 function useTimelineAnchorPositions(
   routeCanvasRef: RefObject<HTMLDivElement | null>,
   stops: StopView[],
-  expandedSequence: number | null,
+  selectedSequence: number | null,
 ): ReadonlyMap<number, number> {
   const [anchorPositions, setAnchorPositions] = useState(EMPTY_ANCHOR_POSITIONS);
 
   useLayoutEffect(() => {
     const routeCanvas = routeCanvasRef.current;
     if (routeCanvas === null) return;
-
-    let measurementFrame: number | undefined;
+    let measurementFrame: number | null = null;
 
     const measureAnchorPositions = () => {
-      measurementFrame = undefined;
+      measurementFrame = null;
       const canvasBounds = routeCanvas.getBoundingClientRect();
       const nextAnchorPositions = new Map<number, number>();
-
       routeCanvas.querySelectorAll<HTMLElement>("[data-timeline-sequence]").forEach((anchor) => {
         const sequence = Number(anchor.dataset.timelineSequence);
         if (!Number.isInteger(sequence)) return;
-
-        const anchorBounds = anchor.getBoundingClientRect();
-        const anchorCenterY = anchorBounds.top - canvasBounds.top + anchorBounds.height / 2;
-        nextAnchorPositions.set(sequence, anchorCenterY);
+        const bounds = anchor.getBoundingClientRect();
+        nextAnchorPositions.set(sequence, bounds.top - canvasBounds.top + bounds.height / 2);
       });
-
-      setAnchorPositions((currentPositions) =>
-        equalAnchorPositions(currentPositions, nextAnchorPositions) ? currentPositions : nextAnchorPositions,
+      setAnchorPositions((current) =>
+        hasEqualAnchorPositions(current, nextAnchorPositions) ? current : nextAnchorPositions,
       );
     };
 
     const scheduleMeasurement = () => {
-      if (measurementFrame !== undefined) return;
-      measurementFrame = window.requestAnimationFrame(measureAnchorPositions);
+      if (measurementFrame === null) measurementFrame = window.requestAnimationFrame(measureAnchorPositions);
     };
-
-    const resizeObserver =
-      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => scheduleMeasurement());
-
-    resizeObserver?.observe(routeCanvas);
-    routeCanvas.querySelectorAll("li").forEach((row) => resizeObserver?.observe(row));
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(scheduleMeasurement);
+    observer?.observe(routeCanvas);
+    routeCanvas.querySelectorAll("[data-stop-sequence]").forEach((row) => observer?.observe(row));
     window.addEventListener("resize", scheduleMeasurement);
     scheduleMeasurement();
 
     return () => {
-      if (measurementFrame !== undefined) window.cancelAnimationFrame(measurementFrame);
-      resizeObserver?.disconnect();
+      if (measurementFrame !== null) window.cancelAnimationFrame(measurementFrame);
+      observer?.disconnect();
       window.removeEventListener("resize", scheduleMeasurement);
     };
-  }, [expandedSequence, routeCanvasRef, stops]);
+  }, [routeCanvasRef, selectedSequence, stops]);
 
   return anchorPositions;
 }
 
-function equalAnchorPositions(
-  currentPositions: ReadonlyMap<number, number>,
-  nextPositions: ReadonlyMap<number, number>,
-): boolean {
-  if (currentPositions.size !== nextPositions.size) return false;
-
-  for (const [sequence, nextPosition] of nextPositions) {
-    if (currentPositions.get(sequence) !== nextPosition) return false;
+function hasEqualAnchorPositions(current: ReadonlyMap<number, number>, next: ReadonlyMap<number, number>): boolean {
+  if (current.size !== next.size) return false;
+  for (const [sequence, position] of next) {
+    if (current.get(sequence) !== position) return false;
   }
   return true;
 }
 
-function positionsFor(
-  liveVehicleViews: LiveVehicleView[],
-  anchorPositions: ReadonlyMap<number, number>,
-): PositionedLiveVehicle[] {
-  const basePositions = liveVehicleViews.flatMap((view) => {
-    const fromAnchorY = anchorPositions.get(view.motionSegment.fromStopSequence);
-    const toAnchorY = anchorPositions.get(view.motionSegment.toStopSequence);
-    if (fromAnchorY === undefined || toAnchorY === undefined) return [];
-
-    return [
-      {
-        view,
-        startY: interpolate(fromAnchorY, toAnchorY, view.motionSegment.startProgress),
-        endY: interpolate(fromAnchorY, toAnchorY, view.motionSegment.endProgress),
-      },
-    ];
-  });
-
-  const vehicleCountByPosition = countVehiclesByPosition(basePositions);
-  const vehicleIndexByPosition = new Map<string, number>();
-
-  return basePositions.map((position) => {
-    const positionKey = collisionPositionKey(position);
-    const vehicleCount = vehicleCountByPosition.get(positionKey) ?? 1;
-    const vehicleIndex = vehicleIndexByPosition.get(positionKey) ?? 0;
-    const verticalOffset = centeredVerticalOffset(vehicleIndex, vehicleCount);
-
-    vehicleIndexByPosition.set(positionKey, vehicleIndex + 1);
-    return {
-      ...position,
-      startY: position.startY + verticalOffset,
-      endY: position.endY + verticalOffset,
-    };
-  });
-}
-
-function countVehiclesByPosition(positions: PositionedLiveVehicle[]): ReadonlyMap<string, number> {
-  const counts = new Map<string, number>();
-  positions.forEach((position) => {
-    const positionKey = collisionPositionKey(position);
-    counts.set(positionKey, (counts.get(positionKey) ?? 0) + 1);
-  });
-  return counts;
-}
-
-function collisionPositionKey(position: PositionedLiveVehicle): string {
-  return `${position.startY}:${position.endY}`;
-}
-
-function centeredVerticalOffset(vehicleIndex: number, vehicleCount: number): number {
-  return (vehicleIndex - (vehicleCount - 1) / 2) * COLLIDING_VEHICLE_GAP;
-}
-
-function interpolate(start: number, end: number, progress: number): number {
-  return start + (end - start) * progress;
-}
-
-function AnimatedLiveVehicle({ view, startY, endY, durationMs, reducedMotion }: AnimatedLiveVehicleProps) {
-  const markerRef = useRef<HTMLDivElement>(null);
-  const previousSegmentKeyRef = useRef<string | null>(null);
-  const previousStartYRef = useRef(startY);
-  const previousEndYRef = useRef(endY);
-  const previousTargetYRef = useRef(endY);
-  const correctionInProgressRef = useRef(false);
-  const pendingCorrectionRef = useRef<PendingCorrection | null>(null);
-  const correctionStartTimerRef = useRef<number | undefined>(undefined);
-  const correctionFinishTimerRef = useRef<number | undefined>(undefined);
-  const correctionContinuationTimerRef = useRef<number | undefined>(undefined);
-  const [motion, setMotion] = useState({
-    centerY: reducedMotion ? endY : startY,
-    durationMs: 0,
-    easing: LINEAR_EASING,
-  });
-  const segmentKey = motionSegmentKey(view);
-
-  useEffect(() => {
-    const marker = markerRef.current;
-    if (marker === null) return;
-
-    const previousSegmentKey = previousSegmentKeyRef.current;
-    const previousTargetY = previousTargetYRef.current;
-    const scheduledTransitions: number[] = [];
-    const targetTransform = transformFor(endY);
-    const nextCorrection = { segmentKey, startY, endY, durationMs } satisfies PendingCorrection;
-
-    if (correctionContinuationTimerRef.current !== undefined) {
-      window.clearTimeout(correctionContinuationTimerRef.current);
-      correctionContinuationTimerRef.current = undefined;
+function timelinePositionFor(position: number, anchors: ReadonlyMap<number, number>): number | null {
+  let previous: [number, number] | null = null;
+  for (const [sequence, centerY] of anchors) {
+    if (sequence === position) return centerY;
+    if (sequence > position) {
+      if (previous === null) return centerY;
+      const [fromSequence, fromY] = previous;
+      return fromY + ((position - fromSequence) / (sequence - fromSequence)) * (centerY - fromY);
     }
-
-    if (correctionInProgressRef.current) {
-      pendingCorrectionRef.current = nextCorrection;
-      if (!reducedMotion) return;
-
-      if (correctionStartTimerRef.current !== undefined) {
-        window.clearTimeout(correctionStartTimerRef.current);
-        correctionStartTimerRef.current = undefined;
-      }
-      if (correctionFinishTimerRef.current !== undefined) {
-        window.clearTimeout(correctionFinishTimerRef.current);
-        correctionFinishTimerRef.current = undefined;
-      }
-      correctionInProgressRef.current = false;
-      pendingCorrectionRef.current = null;
-    }
-
-    if (
-      !reducedMotion &&
-      previousSegmentKey === segmentKey &&
-      previousTargetY === endY &&
-      marker.style.transform === targetTransform
-    ) {
-      return;
-    }
-
-    const scheduleTransition = (centerY: number, nextDurationMs: number, easing: string, delayMs = 0) => {
-      const timer = window.setTimeout(() => {
-        setMotion({ centerY, durationMs: nextDurationMs, easing });
-      }, delayMs);
-      scheduledTransitions.push(timer);
-    };
-
-    if (reducedMotion || startY === endY) {
-      scheduleTransition(endY, 0, LINEAR_EASING);
-    } else if (previousSegmentKey === segmentKey) {
-      // 행 높이가 바뀌어도 차량의 구간 진행률은 유지하고 새 축 좌표에만 다시 맞춘다.
-      const currentCenterY = currentCenterWithinOverlay(marker);
-      const segmentProgress = progressBetween(previousStartYRef.current, previousEndYRef.current, currentCenterY);
-      const rebasedCenterY = interpolate(startY, endY, segmentProgress);
-      const remainingDurationMs = durationMs * (1 - segmentProgress);
-
-      scheduleTransition(rebasedCenterY, 0, LINEAR_EASING);
-      scheduleTransition(endY, remainingDurationMs, LINEAR_EASING, LAYOUT_REBASE_DELAY_MS);
-    } else {
-      const currentCenterY = currentCenterWithinOverlay(marker);
-
-      // 새 phase의 끝점도 현재 표시 위치보다 뒤일 때만 서버 보정으로 간주한다.
-      if (endY < currentCenterY - POSITION_EPSILON) {
-        correctionInProgressRef.current = true;
-        pendingCorrectionRef.current = nextCorrection;
-        correctionStartTimerRef.current = window.setTimeout(() => {
-          setMotion({ centerY: startY, durationMs: SERVER_CORRECTION_DURATION_MS, easing: SERVER_CORRECTION_EASING });
-          correctionStartTimerRef.current = undefined;
-        });
-        correctionFinishTimerRef.current = window.setTimeout(() => {
-          const latestCorrection = pendingCorrectionRef.current;
-          correctionInProgressRef.current = false;
-          pendingCorrectionRef.current = null;
-          correctionFinishTimerRef.current = undefined;
-          if (latestCorrection === null) return;
-
-          // 보정 중 바뀐 행 높이는 보정이 끝난 뒤 최신 축 좌표에 한 번만 반영한다.
-          setMotion({ centerY: latestCorrection.startY, durationMs: 0, easing: LINEAR_EASING });
-          previousSegmentKeyRef.current = latestCorrection.segmentKey;
-          previousStartYRef.current = latestCorrection.startY;
-          previousEndYRef.current = latestCorrection.endY;
-          previousTargetYRef.current = latestCorrection.endY;
-
-          correctionContinuationTimerRef.current = window.setTimeout(() => {
-            setMotion({
-              centerY: latestCorrection.endY,
-              durationMs: latestCorrection.durationMs,
-              easing: LINEAR_EASING,
-            });
-            correctionContinuationTimerRef.current = undefined;
-          }, LAYOUT_REBASE_DELAY_MS);
-        }, SERVER_CORRECTION_DURATION_MS);
-        return;
-      } else {
-        scheduleTransition(endY, durationMs, LINEAR_EASING);
-      }
-    }
-
-    previousSegmentKeyRef.current = segmentKey;
-    previousStartYRef.current = startY;
-    previousEndYRef.current = endY;
-    previousTargetYRef.current = endY;
-
-    return () => scheduledTransitions.forEach((timer) => window.clearTimeout(timer));
-  }, [durationMs, endY, reducedMotion, segmentKey, startY]);
-
-  useEffect(
-    () => () => {
-      if (correctionStartTimerRef.current !== undefined) window.clearTimeout(correctionStartTimerRef.current);
-      if (correctionFinishTimerRef.current !== undefined) window.clearTimeout(correctionFinishTimerRef.current);
-      if (correctionContinuationTimerRef.current !== undefined) {
-        window.clearTimeout(correctionContinuationTimerRef.current);
-      }
-    },
-    [],
-  );
-
-  return (
-    <div
-      ref={markerRef}
-      className={styles.liveVehicle}
-      style={{
-        transform: transformFor(motion.centerY),
-        transitionProperty: reducedMotion ? "none" : "transform",
-        transitionDuration: `${motion.durationMs}ms`,
-        transitionTimingFunction: motion.easing,
-      }}
-    >
-      <LiveBusTraker vehicle={view.vehicle} />
-    </div>
-  );
+    previous = [sequence, centerY];
+  }
+  return previous?.[1] ?? null;
 }
 
-function motionSegmentKey(view: LiveVehicleView): string {
-  const { fromStopSequence, toStopSequence, startProgress, endProgress } = view.motionSegment;
-  return `${view.vehicle.phase}:${fromStopSequence}:${toStopSequence}:${startProgress}:${endProgress}`;
-}
-
-function transformFor(centerY: number): string {
-  return `translate(-50%, ${centerY - LIVE_MARKER_HEIGHT / 2}px)`;
-}
-
-function currentCenterWithinOverlay(marker: HTMLElement): number {
-  const overlay = marker.parentElement;
-  if (overlay === null) return 0;
-
-  const markerBounds = marker.getBoundingClientRect();
-  const overlayBounds = overlay.getBoundingClientRect();
-  return markerBounds.top - overlayBounds.top + markerBounds.height / 2;
-}
-
-function progressBetween(start: number, end: number, position: number): number {
-  if (start === end) return 1;
-  return Math.min(1, Math.max(0, (position - start) / (end - start)));
+function collisionOffsetsFor(views: LiveVehicleView[]): ReadonlyMap<string, number> {
+  const groups = new Map<string, string[]>();
+  views.forEach((view) => {
+    const segment = view.motionSegment;
+    const group = `${segment.fromStopSequence}:${segment.toStopSequence}:${segment.startProgress}:${segment.endProgress}`;
+    const keys = groups.get(group) ?? [];
+    keys.push(view.key);
+    groups.set(group, keys);
+  });
+  const offsets = new Map<string, number>();
+  groups.forEach((keys) => {
+    keys.forEach((key, index) => offsets.set(key, (index - (keys.length - 1) / 2) * COLLIDING_VEHICLE_GAP));
+  });
+  return offsets;
 }

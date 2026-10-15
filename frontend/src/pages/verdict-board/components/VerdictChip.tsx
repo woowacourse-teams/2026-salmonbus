@@ -1,4 +1,4 @@
-import { chipLabel, type ChipTone } from "../verdictCopy";
+import { chipLabel, type ChipTone } from "./verdictCopy";
 import * as styles from "./VerdictChip.css";
 
 interface VerdictChipProps {

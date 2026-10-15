@@ -7,6 +7,7 @@ dependencies {
     implementation project(':common')
     implementation project(':route-catalog')
     implementation project(':observations')
+    implementation project(':arrivals')
     implementation project(':forecasting')
     implementation project(':api-call-quota')
     implementation project(':gbis-client')
@@ -28,6 +29,8 @@ dependencies {
 }
 
 tasks.named('test') {
+    environment 'ARRIVALS_ENABLED', 'false'
+    environment 'ROUTE_GEOMETRY_ENABLED', 'false'
     environment 'GBIS_SERVICE_KEY', 'fake-service-key-for-test'
     environment 'GBIS_SERVICE_KEY_B', ''
     environment 'GBIS_SERVICE_KEY_C', ''

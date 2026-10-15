@@ -1,4 +1,4 @@
-import type { ArrivalTone } from "../arrivalPolicy";
+import type { ArrivalTone } from "./arrivalPolicy";
 import * as styles from "./SeatCountBadge.css";
 
 interface SeatCountBadgeProps {

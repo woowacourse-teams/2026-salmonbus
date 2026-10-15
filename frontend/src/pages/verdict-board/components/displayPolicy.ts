@@ -82,7 +82,7 @@ export function stopViewsFor(board: Board, direction: Direction): StopView[] {
 export function directionViewsFor(board: Board): DirectionView[] {
   return board.route.directions.map((directionInfo) => ({
     id: directionInfo.id,
-    label: `${directionInfo.originStopName} → ${directionInfo.terminalStopName}`,
+    label: `${directionInfo.terminalStopName} 방면`,
   }));
 }
 

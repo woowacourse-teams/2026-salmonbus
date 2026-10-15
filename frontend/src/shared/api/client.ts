@@ -10,6 +10,8 @@ const ERROR_CODE_KEYS: Record<ErrorCode, true> = {
   INVALID_ROUTE_ID: true,
   INVALID_REQUEST: true,
   ROUTE_NOT_FOUND: true,
+  STATION_NOT_FOUND: true,
+  REFERENCE_VERSION_CONFLICT: true,
   ENDPOINT_NOT_FOUND: true,
   METHOD_NOT_ALLOWED: true,
   INTERNAL_ERROR: true,

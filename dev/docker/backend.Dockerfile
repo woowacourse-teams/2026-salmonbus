@@ -17,6 +17,7 @@ COPY --chown=developer:developer backend/maintenance-app/build.gradle ./maintena
 COPY --chown=developer:developer backend/common/build.gradle ./common/build.gradle
 COPY --chown=developer:developer backend/business/route-catalog/build.gradle ./business/route-catalog/build.gradle
 COPY --chown=developer:developer backend/business/observations/build.gradle ./business/observations/build.gradle
+COPY --chown=developer:developer backend/business/arrivals/build.gradle ./business/arrivals/build.gradle
 COPY --chown=developer:developer backend/business/forecasting/build.gradle ./business/forecasting/build.gradle
 COPY --chown=developer:developer backend/business/api-call-quota/build.gradle ./business/api-call-quota/build.gradle
 COPY --chown=developer:developer backend/integrations/gbis-client/build.gradle ./integrations/gbis-client/build.gradle
@@ -36,6 +37,7 @@ RUN --mount=type=cache,id=salmonbus-backend-gradle-${TARGETARCH},target=/depende
 FROM dependencies AS development
 COPY --chown=developer:developer backend/ ./
 COPY --chown=developer:developer contract/examples/chat-v1.json /workspace/contract/examples/
+COPY --chown=developer:developer contract/station-arrivals-v2.openapi.json contract/route-geometry-v2.openapi.json /workspace/contract/
 COPY --chown=developer:developer docs/api/chat-websocket-public.md /workspace/docs/api/
 COPY --chown=developer:developer dev/data/ /local/data/
 COPY --chmod=755 dev/docker/run-backend.sh /usr/local/bin/run-backend

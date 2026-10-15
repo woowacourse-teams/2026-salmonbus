@@ -24,13 +24,24 @@ export const vars = createGlobalTheme(":root", {
     forecastCardSurface: "#F7F7F5",
     forecastCardBorder: "#E3E2DE",
     noVehicleRing: "#000000",
-    liveBus: "#C93C32",
+    liveBus: "#E8533F",
+    mapBus: "#E53D4D",
+    mapStopName: "#24352B",
+    routeSummary: {
+      endpoints: "#354239",
+      text: "#737373",
+      separator: "#B3BBB2",
+    },
+    currentLocation: "#3486F5",
+    currentLocationHalo: "#3686F526",
+    currentLocationBorder: "#3686F540",
+    currentLocationShadow: "#163D7626",
 
     remainingSeat: {
-      surface: "#FFFFFF",
-      border: "#000000",
-      label: "#6B6A6A",
-      value: "#000000",
+      surface: "#E8533F",
+      border: "#E8533F",
+      label: "#FFFFFF",
+      value: "#FFFFFF",
     },
 
     seat: {

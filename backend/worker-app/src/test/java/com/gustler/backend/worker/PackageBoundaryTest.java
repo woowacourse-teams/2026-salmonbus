@@ -29,7 +29,7 @@ import org.springframework.stereotype.Repository;
 class PackageBoundaryTest {
 
     private static final String PREFIX = "com.gustler.backend.";
-    private static final List<String> MODULES = List.of("routecatalog", "observations", "forecasting", "quota", "gbis");
+    private static final List<String> MODULES = List.of("routecatalog", "observations", "forecasting", "arrivals", "quota", "gbis");
 
     @ArchTest
     static final ArchRule domainUsesOnlyBusinessTypes = noClasses()
@@ -128,7 +128,7 @@ class PackageBoundaryTest {
                 .as("%s 모듈의 실제 클래스가 검사 대상에 있어야 한다", module)
                 .isTrue();
         }
-        for (String module : List.of("routecatalog", "observations", "forecasting", "quota")) {
+        for (String module : List.of("routecatalog", "observations", "forecasting", "arrivals", "quota")) {
             assertThat(classes.stream().anyMatch(type -> type.getPackageName().startsWith(PREFIX + module + ".domain")))
                 .as("%s의 도메인 클래스가 검사 대상에 있어야 한다", module)
                 .isTrue();
@@ -138,13 +138,13 @@ class PackageBoundaryTest {
     @ArchTest
     static void sharedLibrariesHaveNoBusinessOrExecutionDependencies(JavaClasses classes) {
         verifyLibrary(ClockConfig.class, "common", List.of(
-            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "quota..",
+            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "arrivals..", PREFIX + "quota..",
             PREFIX + "gbis..", PREFIX + "worker..", PREFIX + "maintenance..", PREFIX + "api.."));
         verifyLibrary(GbisApiCaller.class, "gbis-client", List.of(
-            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "quota..",
+            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "arrivals..", PREFIX + "quota..",
             PREFIX + "worker..", PREFIX + "maintenance..", PREFIX + "api.."));
         verifyLibrary(WorkerOperationLog.class, "operation-log", List.of(
-            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "quota..",
+            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "arrivals..", PREFIX + "quota..",
             PREFIX + "gbis..", PREFIX + "worker..", PREFIX + "maintenance..", PREFIX + "api.."));
     }
 

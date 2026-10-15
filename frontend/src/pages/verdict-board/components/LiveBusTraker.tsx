@@ -4,6 +4,8 @@ import * as styles from "./LiveBusTraker.css";
 
 interface LiveBusTrakerProps {
   vehicle: Vehicle;
+  selected: boolean;
+  onSelect: () => void;
 }
 
 const phaseDescription: Record<Phase, string> = {
@@ -12,15 +14,21 @@ const phaseDescription: Record<Phase, string> = {
   IN_TRANSIT: "다음 정류장으로 이동 중",
 };
 
-function describeRemainingSeats(seat: SeatInfo) {
+function remainingSeatsLabel(seat: SeatInfo) {
   return seat.kind === "EXACT" ? `현재 잔여 좌석 ${seat.remaining}석` : "현재 잔여 좌석 정보 없음";
 }
 
-export function LiveBusTraker({ vehicle }: LiveBusTrakerProps) {
-  const accessibilityLabel = `${vehicle.stopName} 정류장, ${phaseDescription[vehicle.phase]}, ${describeRemainingSeats(vehicle.seat)}`;
+export function LiveBusTraker({ vehicle, selected, onSelect }: LiveBusTrakerProps) {
+  const accessibilityLabel = `${vehicle.stopName} 정류장, ${phaseDescription[vehicle.phase]}, ${remainingSeatsLabel(vehicle.seat)}`;
 
   return (
-    <div className={styles.tracker} role="img" aria-label={accessibilityLabel}>
+    <button
+      type="button"
+      className={styles.tracker}
+      aria-label={accessibilityLabel}
+      aria-pressed={selected}
+      onClick={onSelect}
+    >
       <span className={styles.remainingSeats} aria-hidden="true">
         <RemainingSeats seat={vehicle.seat} />
       </span>
@@ -44,6 +52,6 @@ export function LiveBusTraker({ vehicle }: LiveBusTrakerProps) {
         <circle className={styles.busDetail} cx="9.572" cy="17.368" r="1.382" />
         <circle className={styles.busDetail} cx="20.23" cy="17.368" r="1.382" />
       </svg>
-    </div>
+    </button>
   );
 }

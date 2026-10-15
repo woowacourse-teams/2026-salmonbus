@@ -34,10 +34,12 @@ class ApiPackageBoundaryTest {
     private static final String PREFIX = "com.gustler.backend.api.";
     private static final String TRANSPORT = "com.gustler.backend.api.http..";
     private static final String CONTRACT = "com.gustler.backend.api.error..";
-    private static final List<String> FEATURES = List.of("board", "chat", "route", "vehicle");
+    private static final String ARRIVAL_HTTP_CLIENT = PREFIX + "arrival.infrastructure.http..";
+    private static final List<String> FEATURES = List.of("arrival", "board", "chat", "route", "vehicle");
     private static final List<String> BUSINESS_MODULES = List.of(
         "com.gustler.backend.routecatalog..", "com.gustler.backend.observations..",
-        "com.gustler.backend.forecasting..", "com.gustler.backend.quota..", "com.gustler.backend.gbis..");
+        "com.gustler.backend.forecasting..", "com.gustler.backend.arrivals..",
+        "com.gustler.backend.quota..", "com.gustler.backend.gbis..");
     private static final List<String> READ_LAYERS = List.of("..domain..", "..application..", "..infrastructure..");
     private static final List<String> REQUEST_HANDLING = List.of(
         "org.springframework.web..", "jakarta.servlet..", "org.apache.catalina..");
@@ -53,6 +55,14 @@ class ApiPackageBoundaryTest {
         .should().dependOnClassesThat().resideInAnyPackage(
             "org.springframework..", "jakarta.persistence..", "java.sql..", "javax.sql..",
             "tools.jackson..", "com.fasterxml.jackson..");
+
+    @ArchTest
+    static final ArchRule arrivalContractUsesOnlyPlainTypes = noClasses()
+        .that().resideInAPackage("com.gustler.backend.arrival.contract..")
+        .should().dependOnClassesThat().resideInAnyPackage(
+            "org.springframework..", "jakarta..", "java.sql..", "javax.sql..",
+            "tools.jackson..", "com.fasterxml.jackson..", "..application..", "..infrastructure..",
+            "..controller..", "..dto..", "..configuration..");
 
     @ArchTest
     static final ArchRule domainDoesNotDependOnOuterLayers = noClasses()
@@ -90,12 +100,26 @@ class ApiPackageBoundaryTest {
      * <p>{@code org.springframework.http}까지 함께 막는다. 컨트롤러는 {@code CacheControl}과
      * {@code ResponseEntity}를 쓰지만 그 아래 세 계층은 쓰지 않는다. 상태코드를 아는 코드가
      * 경계 밖으로 내려오지 않게 한다.
+     *
+     * <p>Worker로 갱신을 요청하는 HTTP 클라이언트는 별도 경계다. 클라이언트 기술 의존만
+     * 허용하고, 아래 규칙으로 서버 요청 처리 기술은 계속 금지한다.
      */
     @ArchTest
     static final ArchRule readLayersDoNotTouchWebTechnology = noClasses()
         .that().resideInAnyPackage(READ_LAYERS.toArray(String[]::new))
+        .and().resideOutsideOfPackage(ARRIVAL_HTTP_CLIENT)
         .should().dependOnClassesThat().resideInAnyPackage(
             concat(REQUEST_HANDLING, "org.springframework.http.."));
+
+    @ArchTest
+    static final ArchRule arrivalHttpClientDoesNotHandleServerRequests = noClasses()
+        .that().resideInAPackage(ARRIVAL_HTTP_CLIENT)
+        .should().dependOnClassesThat().resideInAnyPackage(
+            "org.springframework.web.bind..", "org.springframework.web.servlet..",
+            "org.springframework.web.context..", "org.springframework.web.filter..",
+            "org.springframework.web.server..", "org.springframework.web.socket..",
+            "org.springframework.web.method..", "org.springframework.http.server..",
+            "jakarta.servlet..", "org.apache.catalina..");
 
     /** 계약 패키지는 계약만 담는다. 요청을 다루는 장치가 여기로 섞여 들어오면 분리가 무너진다. */
     @ArchTest

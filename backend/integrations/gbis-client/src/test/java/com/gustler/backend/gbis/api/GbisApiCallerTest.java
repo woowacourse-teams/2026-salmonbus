@@ -4,9 +4,12 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.ObjectMapper;
@@ -75,6 +78,38 @@ class GbisApiCallerTest {
         caller.get(BUS_LOCATION_PATH, ROUTE_3330 + "&format=xml");
 
         // then
+        openApi.verify();
+    }
+
+    @Test
+    void 정류장_조회는_routeId가_아닌_stationId로_한번만_전달한다() {
+        bind(KEY_WITH_SYMBOLS);
+        openApi.expect(requestTo(containsString("stationId=206000637%26format%3Dxml")))
+            .andExpect(requestTo(not(containsString("routeId="))))
+            .andRespond(withSuccess(EMPTY_JSON, MediaType.APPLICATION_JSON));
+        caller.getByStation("/busarrivalservice/v2/getBusArrivalListv2", "206000637&format=xml", "a");
+        openApi.verify();
+    }
+
+    @Test
+    void 오류_본문이_비어도_HTTP상태와_재시도_힌트는_보존한다() {
+        bind(KEY_WITH_SYMBOLS);
+        openApi.expect(requestTo(containsString("stationId=206000637")))
+            .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS).header("Retry-After", "120"));
+        var result = caller.getByStationWithMetadata("/busarrivalservice/v2/getBusArrivalListv2", "206000637", "a");
+        assertThat(result.httpStatus()).isEqualTo(429);
+        assertThat(result.retryAfter()).isEqualTo("120");
+        openApi.verify();
+    }
+
+    @Test
+    void 통신_예외의_URL에_포함된_인증키를_결과로_전달하지_않는다() {
+        bind(KEY_WITH_SYMBOLS);
+        openApi.expect(requestTo(containsString("stationId=206000637")))
+            .andRespond(request -> { throw new java.io.IOException("serviceKey=" + KEY_WITH_SYMBOLS); });
+        var result = caller.getByStationWithMetadata("/busarrivalservice/v2/getBusArrivalListv2", "206000637", "a");
+        assertThat(result.response()).isInstanceOfSatisfying(GbisRawResponse.NotReceived.class,
+            failure -> assertThat(failure.message()).doesNotContain(KEY_WITH_SYMBOLS).doesNotContain("serviceKey"));
         openApi.verify();
     }
 }

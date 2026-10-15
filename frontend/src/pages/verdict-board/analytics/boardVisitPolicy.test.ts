@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import { boardWith } from "@/testing/fixtures";
-import type { BoardScreen, ExpandableStopView } from "../displayPolicy";
+import type { BoardScreen, ExpandableStopView } from "../components/displayPolicy";
 import {
   nextBoardVisitStep,
   nextStopExpandStep,

@@ -8,6 +8,7 @@ import com.gustler.backend.api.error.ApiException;
 import com.gustler.backend.api.error.ErrorCode;
 import com.gustler.backend.api.error.ErrorResponse;
 import com.gustler.backend.api.error.ServiceUnavailableException;
+import com.gustler.backend.api.arrival.ArrivalQuery;
 import com.gustler.backend.api.route.InvalidRouteIdException;
 import com.gustler.backend.api.route.RouteNotFoundException;
 import java.time.Duration;
@@ -37,7 +38,9 @@ class ApiExceptionHandlerTest {
             new RouteNotFoundException(),
             new ModelOutOfScopeException(),
             new NoRecentObservationException(),
-            new ServiceUnavailableException()
+            new ServiceUnavailableException(),
+            new ArrivalQuery.Failure(ErrorCode.STATION_NOT_FOUND),
+            new ArrivalQuery.Failure(ErrorCode.REFERENCE_VERSION_CONFLICT)
         );
     }
 

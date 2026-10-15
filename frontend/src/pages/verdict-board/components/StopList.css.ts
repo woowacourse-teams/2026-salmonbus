@@ -26,7 +26,7 @@ export const liveVehicle = style({
   left: vars.layout.axisX,
   width: "30px",
   height: "32px",
-  transitionProperty: "transform",
+  visibility: "hidden",
   willChange: "transform",
 });
 

@@ -91,4 +91,22 @@ done
 for version in 2.40.0 v2.40.0 2.40.3-desktop.1 5.0.1; do
   LOCAL_TEST_COMPOSE_VERSION="$version" run check >/dev/null
 done
+
+# 새 Gradle 모듈의 Docker 의존성 입력 누락을 실제 이미지 빌드 전에 확인한다.
+python3 - "$ROOT" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+root = Path(sys.argv[1])
+settings = (root / 'backend/settings.gradle').read_text()
+modules = re.findall(r"^include '([^']+)'", settings, re.M)
+directories = dict(re.findall(r"project\(':([^']+)'\)\.projectDir = file\('([^']+)'\)", settings))
+dependency_stage = (root / 'dev/docker/backend.Dockerfile').read_text().split('FROM dependencies AS development')[0]
+copied = set(re.findall(r'^COPY .*backend/([^ ]+)/build\.gradle ', dependency_stage, re.M))
+missing = sorted({directories.get(module, module) for module in modules} - copied)
+if missing:
+    raise SystemExit('Docker dependency stage is missing Gradle modules: ' + ', '.join(missing))
+print('Docker dependency inputs cover all configured Gradle modules.')
+PY
 printf '%s\n' 'Local CLI builder, scoped image cleanup, Watch pruning, read-only diagnostics, data-preserving stop and Compose compatibility checks passed.'

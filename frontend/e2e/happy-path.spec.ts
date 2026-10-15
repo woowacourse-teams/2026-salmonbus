@@ -20,6 +20,7 @@ for (const { direction, label, sequence, expectedArrivals } of [
   { direction: "DOWN", label: "하행", sequence: 15, expectedArrivals: [/2정류장 전\s*도착 시 8석 예상해요/] },
 ] as const) {
   test(`${label} 노선을 선택해 실시간 차량 이동과 정류장별 좌석 예측을 확인한다`, async ({ page, api }) => {
+    api.cacheMaxAgeSeconds = 20;
     const stop = api.data.board.stops.find((stop) => stop.sequence === sequence)!;
     const nextStop = api.data.board.stops.find((stop) => stop.sequence === sequence + 1)!;
     const vehicle = {
@@ -43,7 +44,9 @@ for (const { direction, label, sequence, expectedArrivals } of [
     });
 
     await test.step("실시간 차량이 출발·이동·다음 정류장 도착 위치로 이어 움직인다", async () => {
-      const tracker = page.getByRole("img", { name: /현재 잔여 좌석 5석/ });
+      const tracker = page
+        .getByRole("region", { name: "판정보드 정류장 목록", exact: true })
+        .getByRole("button", { name: /현재 잔여 좌석 5석/ });
       const marker = tracker.locator("..");
       await expect
         .poll(async () => {

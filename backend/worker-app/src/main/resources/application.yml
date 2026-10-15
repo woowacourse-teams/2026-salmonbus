@@ -46,7 +46,7 @@ collection:
   enabled: ${COLLECTION_ENABLED:false}
   # 노선을 늘리면 하루 호출이 노선당 4,278회씩 는다. 넘치면 기동 때 오류 로그가 뜬다.
   route-ids:
-    - "204000057" # 3330 범계역 - 강남역
+    - "204000057" # 3330
     - "234000050" # 1650
     - "204000070" # 9007
     - "234000886" # 9300
@@ -90,6 +90,25 @@ forecast:
   pending-limit: 3000
   # 한 차량의 뒤 관측을 얼마나 읽나. 첨두 15초 수집이면 400개가 100분치라 지평 12의 중앙 소요 26.5분을 덮는다.
   arrival-limit: 400
+
+route-geometry:
+  enabled: ${ROUTE_GEOMETRY_ENABLED:false} # 카탈로그 갱신 후 노선당 1회, 기존 BUS_ROUTE 예산 사용
+  route-ids: [] # 비어 있으면 collection.route-ids. 별도 지정해도 차량 관측 대상은 늘어나지 않는다.
+
+arrivals:
+  enabled: ${ARRIVALS_ENABLED:false}
+  internal-token: ${ARRIVAL_INTERNAL_TOKEN:}
+  daily-limit: 40000
+  key-daily-limit: 10000
+  queue-capacity: 8
+  refresh-interval: 40s
+  validity: 60s
+  retry-base: 40s
+  retry-maximum: 300s
+  startup-delay: 40s
+  queue-wait: 2s
+  retention: 10m
+  cleanup-interval: 60s
 
 management:
   endpoints:

@@ -1,6 +1,6 @@
 import { useId } from "react";
-import type { ExpandableStopView, StopView } from "../displayPolicy";
-import { stopNameLabel, WAYPOINT_CAPTION } from "../verdictCopy";
+import type { ExpandableStopView, StopView } from "./displayPolicy";
+import { stopNameLabel, WAYPOINT_CAPTION } from "./verdictCopy";
 import { ArrivalForecastCard } from "./ArrivalForecastCard";
 import { StopName } from "./StopName";
 import { TimelineMarker, type RoutePosition } from "./TimelineMarker";
@@ -12,6 +12,7 @@ type ChevronDirection = "right" | "up";
 interface StopRowProps {
   stop: StopView;
   routePosition: RoutePosition;
+  selected: boolean;
   expanded: boolean;
   onToggle: (stop: ExpandableStopView) => void;
 }
@@ -20,12 +21,12 @@ interface ChevronProps {
   direction: ChevronDirection;
 }
 
-export function StopRow({ stop, routePosition, expanded, onToggle }: StopRowProps) {
+export function StopRow({ stop, routePosition, selected, expanded, onToggle }: StopRowProps) {
   const panelId = useId();
 
   if (stop.kind === "passThrough") {
     return (
-      <li className={styles.waypointRow}>
+      <li className={styles.waypointRow} data-stop-sequence={stop.sequence} data-selected={selected} tabIndex={-1}>
         <TimelineMarker sequence={stop.sequence} routePosition={routePosition} tone="passThrough" band="waypoint" />
         <div className={styles.waypointHead}>
           <StopName name={stopNameLabel(stop)} muted />
@@ -39,7 +40,7 @@ export function StopRow({ stop, routePosition, expanded, onToggle }: StopRowProp
   const tone = boardingStop === null ? "noVehicle" : boardingStop.tone;
 
   return (
-    <li className={styles.stopRow}>
+    <li className={styles.stopRow} data-stop-sequence={stop.sequence} data-selected={selected}>
       <TimelineMarker sequence={stop.sequence} routePosition={routePosition} tone={tone} band="stop" />
       <button
         type="button"

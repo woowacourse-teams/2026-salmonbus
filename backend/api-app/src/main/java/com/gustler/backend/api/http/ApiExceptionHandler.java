@@ -8,6 +8,8 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.jpa.JpaSystemException;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -40,7 +42,9 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler({
         CannotCreateTransactionException.class,
-        JpaSystemException.class
+        JpaSystemException.class,
+        DataAccessResourceFailureException.class,
+        QueryTimeoutException.class
     })
     public ResponseEntity<ErrorResponse> handleDatabaseUnavailable(
         RuntimeException exception

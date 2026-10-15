@@ -123,6 +123,36 @@ class DeploymentPreparationServerTest {
     }
 
     @Test
+    void workerShutdownLongerThanThirtySecondsCanPrepareChangedBasis() throws Exception {
+        host.workerStopCommand = List.of("/bin/sleep", "31");
+
+        assertEquals(true, preparation().prepare(incoming, apiEnvironment).get("preparationRequired"));
+
+        assertNotEquals(original, RevisionStore.selectedBasis(fixture.layout));
+        assertFalse(host.apiActive);
+        assertFalse(host.workerActive);
+        assertEquals("PREPARED", Json.read(fixture.layout.data().resolve("deployment-preparation/current.json")).path("phase").asText());
+    }
+
+    @Test
+    void failedWorkerShutdownRestoresPreviousServicesAndConfiguration() throws Exception {
+        var before = Files.readString(fixture.layout.config().resolve("api.env"));
+        host.workerStopCommand = List.of("/bin/sh", "-c", "exit 7");
+
+        var error = assertThrows(IllegalArgumentException.class,
+                () -> preparation().prepare(incoming, apiEnvironment));
+
+        assertEquals("DEV_PREPARATION_FAILED", error.getMessage());
+        assertEquals(original, RevisionStore.selectedBasis(fixture.layout));
+        assertTrue(host.apiActive);
+        assertTrue(host.workerActive);
+        assertEquals(before, Files.readString(fixture.layout.config().resolve("api.env")));
+        assertEquals("old worker unit\n", Files.readString(fixture.layout.units().resolve("salmonbus-worker.service")));
+        assertEquals("existing database contents\n", Files.readString(fixture.layout.data().resolve("database-sentinel")));
+        assertEquals("ROLLED_BACK", Json.read(fixture.layout.data().resolve("deployment-preparation/current.json")).path("phase").asText());
+    }
+
+    @Test
     void unchangedContractDoesNotStopApplicationsOrReloadInfrastructure() throws Exception {
         var same = application(base.resolve("same-api"), "api", "1".repeat(64), "c".repeat(40),
                 basis(base.resolve("same-basis"), "1".repeat(64), "c".repeat(40)));
@@ -162,6 +192,7 @@ class DeploymentPreparationServerTest {
         preparation().prepare(incoming, apiEnvironment);
         Files.delete(drop);
         Files.writeString(fixture.layout.units().resolve("salmonbus-api.service"), "new unit\n");
+        host.workerStopCommand = List.of("/bin/sleep", "31");
         assertEquals(true, preparation().recover(incoming, apiEnvironment).get("recoveryRequired"));
         assertEquals(original, RevisionStore.selectedBasis(fixture.layout));
         assertEquals(before, fixture.layout.root().resolve("api/current").toRealPath());
@@ -226,6 +257,7 @@ class DeploymentPreparationServerTest {
         boolean workerActive = true;
         boolean infraActive = true;
         boolean failLoad;
+        List<String> workerStopCommand;
 
         @Override
         tools.jackson.databind.JsonNode identity() {
@@ -254,6 +286,16 @@ class DeploymentPreparationServerTest {
                         : unit.equals("salmonbus-worker") ? workerActive : infraActive;
                 if (command.contains("show")) return new Result(0, active ? "active\n" : "inactive\n", "");
                 if (command.contains("is-active")) return new Result(active ? 0 : 3, active ? "active\n" : "inactive\n", "");
+                if (command.contains("stop") && unit.equals("salmonbus-worker") && workerStopCommand != null) {
+                    var stopCommand = workerStopCommand;
+                    workerStopCommand = null;
+                    try {
+                        var result = new CommandRunner().run(cwd, environment, timeout, stopCommand);
+                        if (result.exit() != 0) return result;
+                    } catch (Exception error) {
+                        throw new IllegalStateException(error);
+                    }
+                }
                 if (command.contains("stop") || command.contains("start")) {
                     final boolean next = command.contains("start");
                     switch (unit) {

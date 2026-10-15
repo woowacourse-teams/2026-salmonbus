@@ -2,7 +2,7 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 import { track } from "@/shared/analytics/track";
 import type { LatestSuccess } from "@/shared/api/polledResource";
 import type { Direction } from "@/shared/api/routeForecast.types";
-import type { BoardScreen, ExpandableStopView } from "../displayPolicy";
+import type { BoardScreen, ExpandableStopView } from "../components/displayPolicy";
 import { nextBoardVisitStep, nextStopExpandStep, type BoardVisit } from "./boardVisitPolicy";
 
 interface Params {

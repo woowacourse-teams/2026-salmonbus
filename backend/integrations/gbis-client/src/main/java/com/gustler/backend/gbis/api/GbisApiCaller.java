@@ -62,33 +62,54 @@ public class GbisApiCaller {
         return get(path, routeId, GbisKey.PRIMARY);
     }
 
-    // TODO 로깅 혹은 저장 시 serviceKey 를 마스킹해야 한다.
     public GbisRawResponse get(
         String path,
         String routeId,
         String keyAlias
     ) {
+        return getBy(path, "routeId", routeId, keyAlias);
+    }
+
+    public GbisRawResponse getByStation(String path, String stationId, String keyAlias) {
+        return getBy(path, "stationId", stationId, keyAlias);
+    }
+
+    public GbisHttpResult getByStationWithMetadata(String path, String stationId, String keyAlias) {
+        return requestBy(path, "stationId", stationId, keyAlias);
+    }
+
+    public GbisHttpResult getWithMetadata(String path, String routeId, String keyAlias) {
+        return requestBy(path, "routeId", routeId, keyAlias);
+    }
+
+    private GbisRawResponse getBy(String path, String parameter, String value, String keyAlias) {
+        return requestBy(path, parameter, value, keyAlias).response();
+    }
+
+    private GbisHttpResult requestBy(String path, String parameter, String value, String keyAlias) {
         try {
             var response = gbisRestClient.get()
                 .uri(builder -> builder
                     .path(path)
                     .queryParam("serviceKey", "{serviceKey}")
-                    .queryParam("routeId", "{routeId}")
+                    .queryParam(parameter, "{identifier}")
                     .queryParam("format", "json")
-                    .build(properties.serviceKeyOf(keyAlias), routeId))
+                    .build(properties.serviceKeyOf(keyAlias), value))
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, KEEP_ERROR_BODY)
                 .toEntity(byte[].class);
             diagnostic("collectionHttpStatus", Integer.toString(response.getStatusCode().value()));
             diagnostic("collectionTransport", "RECEIVED");
-            return interpret(decode(response.getBody()));
+            return new GbisHttpResult(interpret(decode(response.getBody())), response.getStatusCode().value(),
+                response.getHeaders().getFirst("Retry-After"));
         } catch (RestClientException e) {
             diagnostic("collectionTransport", e.getClass().getSimpleName());
             Throwable cause = e;
             var seen = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable, Boolean>());
             while (cause.getCause() != null && seen.add(cause.getCause())) { cause = cause.getCause(); }
             diagnostic("collectionTransportCause", cause.getClass().getSimpleName());
-            return new NotReceived(e.getMessage());
+            // 예외 메시지에는 인증키를 포함한 요청 URL이 들어갈 수 있다.
+            return new GbisHttpResult(new NotReceived(e.getClass().getSimpleName()), 0, null);
         }
     }
 

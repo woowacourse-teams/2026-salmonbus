@@ -1,5 +1,9 @@
 server:
   port: 8080
+  compression:
+    enabled: true
+    mime-types: application/json
+    min-response-size: 2KB
 
 chat:
   enabled: ${CHAT_ENABLED:false}
@@ -44,6 +48,8 @@ springdoc:
     validator-url: none
   paths-to-match:
     - /api/v1/**
+    - /api/v2/stations/{stationId}/arrivals
+    - /api/v2/routes/{routeId}/geometry
     - /api/chat/rooms/{routeId}
 
 # 오류 응답에 실어 보낸 requestId 로 서버 로그를 찾을 수 있게 한다.
@@ -51,6 +57,11 @@ springdoc:
 logging:
   pattern:
     correlation: "[${spring.application.name:},%X{requestId:-}] "
+
+arrivals:
+  enabled: ${ARRIVALS_ENABLED:false}
+  worker-base-url: ${ARRIVAL_WORKER_BASE_URL:http://127.0.0.1:8081}
+  internal-token: ${ARRIVAL_INTERNAL_TOKEN:}
 
 management:
   endpoints:

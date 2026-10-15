@@ -6,6 +6,8 @@ export const board = style({
   minHeight: 0,
   overflow: "hidden auto",
   scrollbarWidth: "none",
+  overscrollBehavior: "contain",
+  touchAction: "pan-y",
   border: `1px solid ${vars.color.cardBorder}`,
   borderRadius: vars.radius.card,
   backgroundColor: vars.color.surface,
