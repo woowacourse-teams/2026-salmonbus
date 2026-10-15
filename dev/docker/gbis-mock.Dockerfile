@@ -5,6 +5,7 @@ WORKDIR /build/extension
 COPY dev/wiremock-extension/ ./
 COPY dev/data/routes.json /build/data/routes.json
 COPY dev/data/catalog-routes.json /build/data/catalog-routes.json
+COPY dev/data/route-shapes.json /build/data/route-shapes.json
 COPY dev/server/replay.json /build/server/replay.json
 COPY dev/scenarios/replay.json /build/scenarios/replay.json
 COPY dev/wiremock/mappings/ /build/wiremock/mappings/
@@ -17,5 +18,6 @@ COPY --from=build /build/extension/build/libs/local-gbis-replay.jar /var/wiremoc
 COPY dev/wiremock/mappings/ /home/wiremock/mappings/
 COPY dev/data/routes.json /local/data/routes.json
 COPY dev/data/catalog-routes.json /local/data/catalog-routes.json
+COPY dev/data/route-shapes.json /local/data/route-shapes.json
 COPY dev/scenarios/replay.json /local/scenarios/replay.json
 ENTRYPOINT ["/docker-entrypoint.sh", "--extensions", "com.gustler.localgbis.GbisReplayTransformer", "--max-request-journal-entries", "500", "--disable-banner", "--disable-request-logging"]

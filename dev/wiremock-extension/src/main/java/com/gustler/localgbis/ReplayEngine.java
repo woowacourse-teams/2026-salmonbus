@@ -23,6 +23,7 @@ final class ReplayEngine {
     private static final DateTimeFormatter QUERY_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
         .withZone(ZoneId.of("Asia/Seoul"));
     private final Map<String, Route> routes;
+    private final Map<String, List<RouteShapes.Point>> routeLines;
     private final Configuration configuration;
     private final Clock clock;
     private final LongSupplier nanoTime;
@@ -31,11 +32,21 @@ final class ReplayEngine {
     private final Map<String, Layout> layouts = new java.util.concurrent.ConcurrentHashMap<>();
 
     ReplayEngine(Path routeFile, Path scenarioFile) throws Exception {
-        this(readAllRoutes(routeFile), Json.read(Files.readString(scenarioFile), Configuration.class),
-            Clock.systemUTC(), System::nanoTime, UUID.randomUUID().toString().substring(0, 8));
+        this(readAllRoutes(routeFile), scenarioFile, routeFile.resolveSibling("route-shapes.json"));
+    }
+
+    private ReplayEngine(Dataset dataset, Path scenarioFile, Path shapeFile) throws Exception {
+        this(dataset, Json.read(Files.readString(scenarioFile), Configuration.class),
+            Clock.systemUTC(), System::nanoTime, UUID.randomUUID().toString().substring(0, 8),
+            RouteShapes.read(shapeFile, dataset));
     }
 
     ReplayEngine(Dataset dataset, Configuration configuration, Clock clock, LongSupplier nanoTime, String runId) {
+        this(dataset, configuration, clock, nanoTime, runId, Map.of());
+    }
+
+    private ReplayEngine(Dataset dataset, Configuration configuration, Clock clock, LongSupplier nanoTime,
+                         String runId, Map<String, List<RouteShapes.Point>> routeLines) {
         require("local-routes-v1".equals(dataset.version()), "노선 자료 버전이 다릅니다.");
         require(dataset.routes().stream().limit(ROUTES.size()).map(Route::displayName).toList().equals(ROUTES),
             "재생할 8개 노선의 순서를 확인해 주세요.");
@@ -63,6 +74,7 @@ final class ReplayEngine {
             }
         }
         routes = Map.copyOf(indexed);
+        this.routeLines = Map.copyOf(routeLines);
     }
 
     static Dataset readRoutes(Path file) throws Exception {
@@ -88,6 +100,7 @@ final class ReplayEngine {
         return switch (operation) {
             case "route-info" -> new Reply(200, envelope(0, Map.of("busRouteInfoItem", info(route))));
             case "route-stations" -> new Reply(200, envelope(0, Map.of("busRouteStationList", stations(route))));
+            case "route-line" -> line(route);
             case "location" -> ROUTES.contains(route.displayName())
                 ? locations(route, mode)
                 : new Reply(404, Map.of("error", "local-route-observation-disabled"));
@@ -111,6 +124,19 @@ final class ReplayEngine {
         return route.stops().stream().map(stop -> Map.<String, Object>of("stationId", stop.stationId(),
             "stationName", stop.name(), "stationSeq", stop.sequence(), "turnSeq", route.turnSequence(),
             "turnYn", stop.sequence() == route.turnSequence() ? "Y" : "N", "x", stop.x(), "y", stop.y())).toList();
+    }
+
+    private Reply line(Route route) {
+        List<RouteShapes.Point> points = routeLines.get(route.routeId());
+        if (points == null) {
+            return new Reply(200, envelope(4, null));
+        }
+        List<Map<String, Object>> items = new ArrayList<>(points.size());
+        for (int index = 0; index < points.size(); index++) {
+            RouteShapes.Point point = points.get(index);
+            items.add(Map.of("routeId", route.routeId(), "lineSeq", index + 1, "x", point.x(), "y", point.y()));
+        }
+        return new Reply(200, envelope(0, Map.of("busRouteLineList", items)));
     }
 
     private Reply locations(Route route, String mode) {

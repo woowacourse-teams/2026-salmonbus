@@ -15,6 +15,11 @@ on:
       - 'backend/gradlew'
       - 'backend/gradle/**'
       - 'backend/common/src/main/resources/db/**'
+      - 'backend/api-app/src/main/java/com/gustler/backend/api/route/**'
+      - 'backend/business/route-catalog/src/main/**'
+      - 'backend/integrations/gbis-client/src/main/**'
+      - 'backend/worker-app/src/main/java/com/gustler/backend/worker/configuration/RouteGeometryProperties.java'
+      - 'backend/worker-app/src/main/java/com/gustler/backend/worker/scheduling/RouteCatalogRefreshScheduler.java'
       - 'frontend/package.json'
       - 'frontend/pnpm-lock.yaml'
       - 'frontend/pnpm-workspace.yaml'
@@ -46,3 +51,5 @@ jobs:
           bash dev/tests/cli-contract.sh
           bash dev/tests/image-lifecycle.sh
           bash dev/tests/smoke-local.sh
+      - name: Verify every catalog route geometry and persistence
+        run: bash dev/tests/geometry-local.sh

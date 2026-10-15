@@ -1,0 +1,26 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/busrouteservice/v2/getBusRouteLineListv2",
+    "queryParameters": {
+      "serviceKey": {
+        "matches": "(local-only-placeholder|shared-dev-placeholder)"
+      },
+      "format": {
+        "equalTo": "json"
+      },
+      "routeId": {
+        "matches": "[0-9]{9}"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "transformers": [
+      "gbis-replay"
+    ],
+    "transformerParameters": {
+      "operation": "route-line"
+    }
+  }
+}

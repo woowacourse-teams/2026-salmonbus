@@ -70,8 +70,15 @@ final class Packager {
         return HexFormat.of().formatHex(hash.digest());
     }
 
-    private List<Path> basisInputs() {
-        return List.of(
+    private List<Path> replayDataInputs() throws Exception {
+        try (var files = Files.list(repo.resolve("dev/data"))) {
+            return files.filter(path -> path.getFileName().toString().endsWith(".json"))
+                    .sorted().toList();
+        }
+    }
+
+    private List<Path> basisInputs() throws Exception {
+        var inputs = new java.util.ArrayList<>(List.of(
                 repo.resolve("dev/server/tools/src/main"),
                 repo.resolve("dev/server/tools/build.gradle"),
                 repo.resolve("dev/server/tools/settings.gradle"),
@@ -84,11 +91,11 @@ final class Packager {
                 repo.resolve("dev/server/systemd/salmonbus-dev-infra.service"),
                 repo.resolve("dev/config/mongodb.yml"),
                 repo.resolve("dev/data/java"),
-                repo.resolve("dev/data/routes.json"),
-                repo.resolve("dev/data/catalog-routes.json"),
                 repo.resolve("dev/data/model-reference"),
                 repo.resolve("dev/wiremock/mappings"),
-                repo.resolve("dev/wiremock-extension/src/main"));
+                repo.resolve("dev/wiremock-extension/src/main")));
+        inputs.addAll(replayDataInputs());
+        return inputs;
     }
 
     String basisContract() throws Exception {
@@ -224,8 +231,8 @@ final class Packager {
                 copy(file, output.resolve("mappings/" + file.getFileName()));
             }
         }
-        for (var name : List.of("routes.json", "catalog-routes.json")) {
-            copy(repo.resolve("dev/data/" + name), output.resolve("data/" + name));
+        for (var file : replayDataInputs()) {
+            copy(file, output.resolve("data").resolve(file.getFileName()));
         }
         copy(repo.resolve("dev/server/replay.json"), output.resolve("replay.json"));
     }

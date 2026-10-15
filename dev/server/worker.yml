@@ -6,6 +6,10 @@ collection:
   enabled: true
   # 운영 worker와 같은 시간대별 수집 주기를 사용한다.
 
+route-geometry:
+  enabled: true
+  include-catalog: true
+
 forecast:
   enabled: true
   interval: 10s

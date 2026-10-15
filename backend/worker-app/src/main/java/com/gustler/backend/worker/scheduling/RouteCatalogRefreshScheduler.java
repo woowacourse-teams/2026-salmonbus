@@ -8,6 +8,7 @@ import com.gustler.backend.worker.configuration.RouteGeometryProperties;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import org.slf4j.Logger;
@@ -28,6 +29,8 @@ public class RouteCatalogRefreshScheduler {
     private final RefreshRouteGeometry geometry;
     private final Executor geometryExecutor;
     private final Set<String> geometryRoutes;
+    private final boolean includeCatalog;
+    private final AtomicBoolean catalogGeometryPending = new AtomicBoolean();
 
     public RouteCatalogRefreshScheduler(CollectionProperties properties, RefreshRouteCatalog catalog, Clock clock,
         RefreshRouteGeometry geometry, @Qualifier("routeGeometryExecutor") Executor geometryExecutor,
@@ -37,6 +40,7 @@ public class RouteCatalogRefreshScheduler {
         this.clock = clock;
         this.geometry = geometry;
         this.geometryExecutor = geometryExecutor;
+        this.includeCatalog = geometryProperties.enabled() && geometryProperties.includeCatalog();
         this.geometryRoutes = geometryProperties.enabled()
             ? java.util.Collections.unmodifiableSet(new LinkedHashSet<>(geometryProperties.routeIds().isEmpty()
                 ? properties.routeIds() : geometryProperties.routeIds()))
@@ -46,13 +50,15 @@ public class RouteCatalogRefreshScheduler {
     @Scheduled(initialDelayString = "PT0S", fixedDelayString = "PT24H", scheduler = "collectionTaskScheduler")
     public void refreshAllRoutes() {
         Set<String> observed = new LinkedHashSet<>(properties.enabled() ? properties.routeIds() : java.util.List.of());
+        Set<String> refreshed = new LinkedHashSet<>();
         for (String routeId : observed) {
             try {
                 if (catalog.refresh(routeId, OffsetDateTime.now(clock)).isEmpty()) {
                     log.warn("event=route_catalog_refresh_failed routeId={} routeName={} reason=UPSTREAM_OR_QUOTA",
                         quote(routeId), quote(catalog.knownRouteName(routeId)));
-                } else if (geometryRoutes.contains(routeId)) {
-                    enqueueGeometry(routeId, false);
+                } else {
+                    refreshed.add(routeId);
+                    if (!includeCatalog && geometryRoutes.contains(routeId)) enqueueGeometry(routeId, false);
                 }
             } catch (RuntimeException failure) {
                 // 인증키가 포함될 수 있는 HTTP 예외 본문은 기록하지 않는다.
@@ -60,8 +66,40 @@ public class RouteCatalogRefreshScheduler {
                     quote(routeId), quote(catalog.knownRouteName(routeId)), quote(failure.getClass().getSimpleName()));
             }
         }
+        if (includeCatalog) {
+            enqueueCatalogGeometry(observed, refreshed);
+            return;
+        }
         // 지도 전용 노선의 기본정보·정류장 HTTP도 기존 차량 관측 스케줄 밖에서 처리한다.
         geometryRoutes.stream().filter(routeId -> !observed.contains(routeId)).forEach(routeId -> enqueueGeometry(routeId, true));
+    }
+
+    private void enqueueCatalogGeometry(Set<String> observed, Set<String> refreshed) {
+        // 노선 수만큼 큐를 점유하지 않는다. 진행 중인 전체 갱신도 중복해서 쌓지 않는다.
+        if (!catalogGeometryPending.compareAndSet(false, true)) return;
+        try {
+            geometryExecutor.execute(() -> {
+                try {
+                    Set<String> routes = new LinkedHashSet<>(geometryRoutes);
+                    routes.addAll(properties.routeIds());
+                    try {
+                        routes.addAll(catalog.currentGbisRouteIds());
+                    } catch (RuntimeException failure) {
+                        log.warn("event=route_geometry_catalog_lookup_failed exceptionType={}",
+                            quote(failure.getClass().getSimpleName()));
+                    }
+                    for (String routeId : routes) {
+                        if (!observed.contains(routeId)) refreshGeometryCatalog(routeId);
+                        else if (refreshed.contains(routeId)) refreshGeometry(routeId);
+                    }
+                } finally {
+                    catalogGeometryPending.set(false);
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException full) {
+            catalogGeometryPending.set(false);
+            log.warn("event=route_geometry_refresh_deferred reason=QUEUE_FULL scope=CATALOG");
+        }
     }
 
     private void enqueueGeometry(String routeId, boolean refreshCatalog) {

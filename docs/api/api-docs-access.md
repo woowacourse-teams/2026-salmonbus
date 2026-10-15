@@ -24,11 +24,28 @@ API 문서는 `api-app`이 현재 Controller/DTO에서 생성한다. 같은 빌�
 | 경로 | 주요 계약 |
 | --- | --- |
 | `GET /api/v2/stations/{stationId}/arrivals` | 선택 정류장의 ETA. `routeId`로 노선을 선택하고 `referenceVersionId`·`stopSequence`는 함께 전달해 방문을 구분한다. |
-| `GET /api/v2/routes/{routeId}/geometry` | 전체 노선·정류장 좌표와 방향별 `paths.UP.points`·`paths.DOWN.points`. 회차 근거가 없으면 `paths`는 `null`이고 제공 가능한 전체 `points`는 유지한다. |
+| `GET /api/v2/routes/{routeId}/geometry` | 원본 운행 순서의 전체 도로 형상 `points`와 정류장 마커 `busStops[].point`. 분리 근거가 확인되면 `paths.UP.points`·`paths.DOWN.points`도 함께 제공한다. READY여도 `paths=null`일 수 있으며 전체 `points`는 유지한다. |
 
 도착정보의 데이터 상태와 갱신 상태는 별개다. 최초 수집·만료·호출 제한도 HTTP 200 본문으로 구분하므로 `status`, `refresh`, `eta.status`를 확인한다. 재조회는 `refresh.suggestedRefreshAt`, 카운트다운은 서버 시계와 `expectedArrivalAt`을 사용한다. HTTP 캐시 최대 5초를 폴링 주기로 사용하지 않으며 예상 시각이 지났다고 실제 도착으로 확정하지 않는다.
 
-geometry는 노선 선택 시 받아 재사용한다. 두 방향의 색상·선택·겹침 순서는 프론트에서 처리하며 방향 전환마다 재조회하지 않는다. 최대 5분의 HTTP 캐시와 ETag 재검증을 지원하고, 변경이 없으면 본문 없는 304를 반환한다.
+geometry는 `/api/v1/routes`에서 선택한 `routeId`로 한 번 받아 재사용한다. `points`로 도로 형상을, `busStops[].point`로 정류장 마커를 그린다. 정류장 좌표를 직선으로 이어 도로 형상을 대체하지 않는다. 같은 `stationId`가 여러 번 나와도 방문별로 유지하고 `stopSequence`로 구분한다. `turningPoint.stopSequence`는 정류장 방문 순번이며 `points` 배열 인덱스가 아니다.
+
+`paths`가 있으면 두 방향을 한 응답에서 사용한다. UP과 DOWN은 회차 경계점을 공유하며 DOWN을 UP의 역순으로 만들지 않는다. 회차·방문 순서를 형상에 대응할 근거가 부족하거나 모호하면 `paths=null`이므로 전체 `points`를 표시한다. 두 방향의 색상·선택·겹침 순서는 프론트에서 처리하며 방향 전환이나 지도 확대·이동마다 재조회하지 않는다.
+
+| HTTP / 본문 상태 | 화면 처리 |
+| --- | --- |
+| 200 / `READY` | 전체 도로 형상과 모든 정류장 좌표를 표시한다. `paths`의 존재 여부는 별도로 확인한다. |
+| 200 / `PARTIAL`, `MISSING_STOP_COORDINATES` | 전체 도로 형상은 표시하고 `point=null`인 정류장의 마커만 생략한다. |
+| 200 / `UNAVAILABLE`, `NOT_COLLECTED` | 현재 판본의 형상이 아직 없어 `points=[]`, `paths=null`이다. 정류장 좌표가 있으면 마커만 표시한다. |
+| 304 | 이전과 같은 표시 자료이므로 기존 본문을 재사용한다. 응답 본문은 없다. |
+| 409 / `REFERENCE_VERSION_CONFLICT` | `referenceVersionId` 없이 geometry를 다시 받고 새 판본·방문 순번으로 선택을 갱신한다. 과거 판본 조회는 제공하지 않는다. |
+| 503 / `SERVICE_UNAVAILABLE` | 저장소 또는 저장된 형상을 읽지 못한 오류다. 200의 미수집 상태와 구분한다. |
+
+정류장 ETA를 선택할 때 geometry의 `referenceVersionId`와 해당 방문의 `stopSequence`를 함께 전달한다. 새 카탈로그 판본에는 이전 판본의 정류장 좌표·형상을 붙이지 않는다. `referenceVersionId`가 같아도 정류장 좌표나 형상이 바뀌면 `geometryRevision`과 ETag가 바뀐다. READY/PARTIAL은 최대 5분의 HTTP 캐시와 `If-None-Match` 재검증을 지원하며, UNAVAILABLE과 오류는 `no-store`다. GET은 외부 형상 수집을 유발하지 않는다.
+
+현재 dev 공급 자료는 **41노선, 정류장 방문 3,215건, 형상점 35,542개**의 GBIS 정적 재생 자료다. 기존 8노선의 정적 API 저장본과 추가 33노선의 공식 공개 지도 형상을 사용한다. 방문 건수는 고유 물리 정류장 수가 아니며, 형상점은 정류장 좌표와 별도 자료다. 좌표·출처·공식 지도 자료의 좌표계 변환과 검증 범위는 [형상 자료 안내](../../dev/data/route-shapes.md)에 있다. 이 수치는 저장소 공급 자료 기준이며 공개 dev 배포 완료나 실시간 원천 갱신을 뜻하지 않는다.
+
+dev Worker는 형상 수집과 카탈로그 전체 포함을 켜서 현재 GBIS 카탈로그 노선을 순차 갱신한다. 초기 수집 완료 전이나 노선 판본이 바뀐 직후에는 일시적으로 NOT_COLLECTED일 수 있다. 같은 판본에서 수집이 실패하면 이미 저장한 정상 형상은 유지한다. 새로운 카탈로그 노선도 수집 대상에 포함하지만, dev 재생을 위해서는 그 판본에 맞는 정류장·원본 형상 공급 자료가 필요하다. 운영 기본 설정의 형상 수집은 계속 꺼져 있으며 dev 재생 자료가 운영의 인증 API 수집을 대신하지 않는다.
 
 별도 공유 명세는 `contract/station-arrivals-v2.openapi.json`, `contract/route-geometry-v2.openapi.json`에 있다. 문서 테스트는 이 파일의 200 응답 예시와 Controller에서 생성한 예시를 대조한다. 두 파일은 검증 입력이며 앱의 Swagger는 Controller/DTO에서 생성한다.
 
