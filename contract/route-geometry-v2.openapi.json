@@ -134,6 +134,36 @@
                           "y": 37
                         }
                       ],
+                      "paths": {
+                        "UP": {
+                          "points": [
+                            {
+                              "x": 127,
+                              "y": 37
+                            },
+                            {
+                              "x": 127.1,
+                              "y": 37.05
+                            },
+                            {
+                              "x": 127.2,
+                              "y": 37.1
+                            }
+                          ]
+                        },
+                        "DOWN": {
+                          "points": [
+                            {
+                              "x": 127.2,
+                              "y": 37.1
+                            },
+                            {
+                              "x": 127,
+                              "y": 37
+                            }
+                          ]
+                        }
+                      },
                       "boundary": {
                         "left": 127,
                         "top": 37.1,
@@ -206,6 +236,7 @@
                           "y": 37
                         }
                       ],
+                      "paths": null,
                       "boundary": {
                         "left": 127,
                         "top": 37.1,
@@ -264,6 +295,82 @@
                         }
                       ],
                       "points": [],
+                      "paths": null,
+                      "boundary": {
+                        "left": 127,
+                        "top": 37.1,
+                        "right": 127.2,
+                        "bottom": 37
+                      }
+                    }
+                  },
+                  "withoutDirectionSplit": {
+                    "summary": "전체 형상은 있지만 회차 근거가 없어 방향별 경로는 제공하지 않는 예시",
+                    "value": {
+                      "routeId": "204000057",
+                      "referenceVersionId": "7",
+                      "geometryRevision": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                      "name": "3330",
+                      "startPoint": "합성 기점 A",
+                      "endPoint": "합성 회차 B",
+                      "status": "READY",
+                      "reason": null,
+                      "coordinateSystem": "WGS84_ASSUMED",
+                      "turningPoint": null,
+                      "busStops": [
+                        {
+                          "stationId": "206000637",
+                          "stopSequence": 1,
+                          "name": "합성 A",
+                          "direction": "UP",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127,
+                            "y": 37
+                          }
+                        },
+                        {
+                          "stationId": "206000638",
+                          "stopSequence": 2,
+                          "name": "합성 B",
+                          "direction": "UP",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127.2,
+                            "y": 37.1
+                          }
+                        },
+                        {
+                          "stationId": "206000637",
+                          "stopSequence": 3,
+                          "name": "합성 A",
+                          "direction": "UP",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127,
+                            "y": 37
+                          }
+                        }
+                      ],
+                      "points": [
+                        {
+                          "x": 127,
+                          "y": 37
+                        },
+                        {
+                          "x": 127.1,
+                          "y": 37.05
+                        },
+                        {
+                          "x": 127.2,
+                          "y": 37.1
+                        },
+                        {
+                          "x": 127,
+                          "y": 37
+                        }
+                      ],
+                      "paths": null,
                       "boundary": {
                         "left": 127,
                         "top": 37.1,
@@ -472,6 +579,7 @@
           "turningPoint",
           "busStops",
           "points",
+          "paths",
           "boundary"
         ],
         "properties": {
@@ -542,6 +650,17 @@
             },
             "description": "lineSeq 순서의 실제 형상점 목록. 정류장 좌표를 이어 만든 선이 아니다."
           },
+          "paths": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoutePaths"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "방향별 경로를 함께 제공한다. 미수집·회차 근거 부족·모호한 대응 등으로 분리할 수 없으면 null이며, 기존 points와 상위 status의 의미는 유지한다."
+          },
           "boundary": {
             "anyOf": [
               {
@@ -570,6 +689,9 @@
                 },
                 "reason": {
                   "const": "NOT_COLLECTED"
+                },
+                "paths": {
+                  "type": "null"
                 }
               }
             },
@@ -633,6 +755,40 @@
           "message",
           "requestId"
         ]
+      },
+      "RoutePath": {
+        "type": "object",
+        "required": [
+          "points"
+        ],
+        "properties": {
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Point"
+            },
+            "minItems": 2,
+            "description": "실제 운행 순서의 형상점. 서로 다른 좌표를 두 개 이상 포함하며, 원본의 반복 좌표는 유지한다."
+          }
+        },
+        "additionalProperties": false
+      },
+      "RoutePaths": {
+        "type": "object",
+        "required": [
+          "UP",
+          "DOWN"
+        ],
+        "properties": {
+          "UP": {
+            "$ref": "#/components/schemas/RoutePath"
+          },
+          "DOWN": {
+            "$ref": "#/components/schemas/RoutePath"
+          }
+        },
+        "additionalProperties": false,
+        "description": "기점→회차 지점과 회차 지점→복귀 경로. 두 경로는 같은 회차 경계점을 공유한다. DOWN은 UP을 뒤집어 만들지 않는다. 별도 status/reason 필드는 없다."
       }
     }
   },
@@ -640,9 +796,10 @@
     "naverSimilarity": "기존에 확인한 네이버 버스 노선 응답의 points/busStops[].point/boundary/turningPoint 구성만 참조한다. 네이버 데이터를 조회하거나 복제하는 서비스가 아니다. ID와 1-based stopSequence는 Salmonbus 계약이다.",
     "source": "GBIS getBusRouteStationListv2의 방문·정류장 좌표와 getBusRouteLineListv2의 별도 도로 형상 목록. SDK 길찾기 경로를 사용하지 않는다.",
     "coordinatePolicy": "원문 x/y에 유한성·경도/위도 범위·미제공 0 검증을 한다. 범위가 맞는 것이 WGS84 증명은 아니어서 WGS84_ASSUMED를 명시한다. 검증된 GeoJSON/실측 GPS/거리·ratio라고 취급하지 않는다.",
-    "cacheRevision": "노선명·기종점·회차·모든 방문 좌표·형상 자료를 반영한다. 좌표만 바뀌어 referenceVersionId가 같아도 geometryRevision과 ETag는 변경된다.",
+    "cacheRevision": "노선명·기종점·회차·모든 방문 좌표·형상 자료를 반영한다. 좌표만 바뀌어 referenceVersionId가 같아도 geometryRevision과 ETag는 변경된다. 방향 분리 규칙 버전도 포함하므로 규칙이 바뀌면 같은 원본 자료라도 ETag가 바뀐다.",
     "frontendFlow": "노선 선택 시 조회. 받은 referenceVersionId와 stopSequence를 차량 관측·정류장 ETA의 선택 기준으로 사용. 확대·이동마다 geometry를 재조회하지 않는다.",
-    "noGeometry": "정류장 직선으로 형상을 대체하지 않는다. points=[]이고 정류장 좌표가 있으면 마커만 그릴 수 있다. 새 로컬 판본에는 옛 판본 형상을 붙이지 않는다."
+    "noGeometry": "정류장 직선으로 형상을 대체하지 않는다. points=[]이고 정류장 좌표가 있으면 마커만 그릴 수 있다. 새 로컬 판본에는 옛 판본 형상을 붙이지 않는다.",
+    "directionalPaths": "기존 points를 유지하고 paths.UP.points와 paths.DOWN.points를 추가한다. 노선 방문 순서를 지키는 선상 대응으로 회차 경계를 찾고, 그 경계를 두 경로에 함께 포함한다. 정류장 좌표까지 선을 꺾거나 하행을 상행의 역순으로 만들지 않는다. paths가 null이면 전체 points만 표시한다. 방향 선택·색상·겹침 순서는 프론트가 처리하며 방향 전환 시 재조회하지 않는다."
   },
   "x-collection": {
     "defaultEnabled": false,

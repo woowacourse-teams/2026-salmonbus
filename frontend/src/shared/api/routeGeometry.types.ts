@@ -1,5 +1,10 @@
 export type RouteMapPoint = { x: number; y: number };
 
+export type RouteGeometryPaths = {
+  UP: { points: RouteMapPoint[] };
+  DOWN: { points: RouteMapPoint[] };
+};
+
 export type RouteGeometry = {
   routeId: string;
   referenceVersionId: string;
@@ -21,5 +26,7 @@ export type RouteGeometry = {
     point: RouteMapPoint | null;
   }[];
   points: RouteMapPoint[];
+  /** 운행 순서의 상·하행 경로. 분리할 수 없으면 null이며 전체 points는 유지한다. */
+  paths: RouteGeometryPaths | null;
   boundary: { left: number; top: number; right: number; bottom: number } | null;
 };

@@ -47,6 +47,7 @@ class RouteGeometryRuntimeTest {
                 """));
             var versions = new HashSet<String>();
             var revisions = new HashSet<String>();
+            var responses = new ArrayList<JsonNode>();
             int visits = 0;
             for (int routeIndex = 0; routeIndex < fixtures.size(); routeIndex++) {
                 var route = fixtures.get(routeIndex);
@@ -61,6 +62,19 @@ class RouteGeometryRuntimeTest {
                 assertThat(body.at("/turningPoint/stopSequence").intValue()).isEqualTo(route.turnSequence());
                 assertThat(body.path("busStops")).hasSize(route.stops().size());
                 assertThat(body.path("points")).isEqualTo(JSON.valueToTree(route.points()));
+                var paths = body.path("paths");
+                assertThat(paths.size()).as(route.name()).isEqualTo(2);
+                assertThat(paths.has("status")).isFalse();
+                assertThat(paths.has("reason")).isFalse();
+                var up = paths.at("/UP/points");
+                var down = paths.at("/DOWN/points");
+                assertThat(up.size()).as(route.name()).isGreaterThanOrEqualTo(2);
+                assertThat(down.size()).as(route.name()).isGreaterThanOrEqualTo(2);
+                assertThat(up.get(0)).isEqualTo(body.path("points").get(0));
+                assertThat(up.get(up.size() - 1)).isEqualTo(down.get(0));
+                assertThat(down.get(down.size() - 1)).isEqualTo(body.path("points").get(route.points().size() - 1));
+                // 이 저장본의 회차 경계는 모두 원본 선분 내부에 있으며, 두 경로에 한 번씩 추가된다.
+                assertThat(up.size() + down.size()).isEqualTo(route.points().size() + 2);
                 for (int stopIndex = 0; stopIndex < route.stops().size(); stopIndex++) {
                     var stop = expected.path("stops").get(stopIndex);
                     var actual = body.path("busStops").get(stopIndex);
@@ -78,6 +92,7 @@ class RouteGeometryRuntimeTest {
                 }
                 versions.add(body.path("referenceVersionId").asString());
                 revisions.add(body.path("geometryRevision").asString());
+                responses.add(body);
                 visits += body.path("busStops").size();
                 var pinned = get(URI.create(uri + "?referenceVersionId=" + body.path("referenceVersionId").asString()));
                 assertThat(pinned.statusCode()).isEqualTo(200);
@@ -93,6 +108,8 @@ class RouteGeometryRuntimeTest {
             assertThat(runtime.routeReservations()).isEqualTo(24);
             assertThat(runtime.reservations()).isZero();
             assertThat(runtime.source.locationCalls()).isZero();
+            Files.writeString(Path.of("build/reports/geometry-eight-runtime-responses.json"),
+                JSON.writerWithDefaultPrettyPrinter().writeValueAsString(responses));
             assertThat(runtime.source.unexpected()).isEmpty();
             assertThat(fixtures.stream().mapToInt(route -> route.points().size()).sum()).isEqualTo(7063);
             System.out.println("geometry_runtime routes=8 visits=643 points=7063 routeQuota=24 arrivalQuota=0 liveGbisCalls=0 shapes=captured_20261014");
@@ -125,6 +142,8 @@ class RouteGeometryRuntimeTest {
             assertThat(body.at("/busStops/0/point/x").doubleValue()).isEqualTo(127);
             assertThat(body.at("/turningPoint/stopSequence").intValue()).isEqualTo(12);
             assertThat(body.path("coordinateSystem").asString()).isEqualTo("WGS84_ASSUMED");
+            // 합성 자료는 회차가 마지막 방문이라 복귀 경로의 근거가 없다. 전체 형상은 유지한다.
+            assertThat(body.path("paths").isNull()).isTrue();
             assertThat(runtime.source.geometryCalls()).isEqualTo(1);
             assertThat(runtime.source.locationCalls()).isZero();
             assertThat(runtime.routeReservations()).isEqualTo(3);

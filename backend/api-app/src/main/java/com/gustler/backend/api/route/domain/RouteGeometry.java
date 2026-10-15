@@ -44,6 +44,7 @@ public record RouteGeometry(String routeId, long referenceVersionId, String name
     public record Boundary(double left, double top, double right, double bottom) { }
 
     public List<Point> points() { return shape == null ? List.of() : shape.points(); }
+    public RoutePaths paths() { return RoutePathSplitter.split(this); }
     public Availability status() {
         if (shape == null) return Availability.UNAVAILABLE;
         return busStops.stream().anyMatch(stop -> stop.point() == null) ? Availability.PARTIAL : Availability.READY;
@@ -67,7 +68,7 @@ public record RouteGeometry(String routeId, long referenceVersionId, String name
         try {
             var bytes = new ByteArrayOutputStream();
             var data = new DataOutputStream(bytes);
-            data.writeUTF("route-geometry-v1/" + COORDINATE_SYSTEM);
+            data.writeUTF("route-geometry-v2/" + COORDINATE_SYSTEM + "/" + RoutePathSplitter.REVISION);
             data.writeUTF(routeId); data.writeLong(referenceVersionId);
             data.writeUTF(name); data.writeUTF(startPoint); data.writeUTF(endPoint);
             data.writeInt(turnSequence == null ? -1 : turnSequence);
