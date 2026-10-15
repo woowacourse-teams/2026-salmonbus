@@ -13,8 +13,15 @@ interface NaverSize {
   height: number;
 }
 export interface NaverMap {
+  getOptions(key: "gl"): boolean;
+  setOptions(options: {
+    overlayZoomEffect: string | null;
+    scrollWheel: boolean;
+    disableDoubleClickZoom: boolean;
+  }): void;
   getZoom(): number;
   setZoom(zoom: number, animate: boolean): void;
+  zoomBy(delta: number, origin: NaverCoordinate, animate: boolean): void;
   getCenter(): NaverCoordinate;
   setCenter(center: NaverCoordinate): void;
   fitBounds(
@@ -23,7 +30,10 @@ export interface NaverMap {
   ): void;
   getSize(): NaverSize;
   setSize(size: NaverSize): void;
-  getProjection(): { fromCoordToOffset(coordinate: NaverCoordinate): NaverPoint };
+  getProjection(): {
+    fromCoordToOffset(coordinate: NaverCoordinate): NaverPoint;
+    fromOffsetToCoord(point: NaverPoint): NaverCoordinate;
+  };
   destroy(): void;
 }
 
@@ -44,6 +54,7 @@ interface NaverPolyline extends NaverOverlay {
 }
 
 export interface NaverMaps {
+  glEnabled: boolean;
   LatLng: new (latitude: number, longitude: number) => NaverCoordinate;
   Point: new (x: number, y: number) => NaverPoint;
   Size: new (width: number, height: number) => NaverSize;
@@ -56,6 +67,10 @@ export interface NaverMaps {
       zoomControl: boolean;
       scaleControl: boolean;
       mapDataControl: boolean;
+      overlayZoomEffect: string | null;
+      gl: boolean;
+      scrollWheel: boolean;
+      disableDoubleClickZoom: boolean;
     },
   ) => NaverMap;
   Marker: new (options: {
@@ -157,8 +172,8 @@ function readyNaverMapsOf(host: Window): NaverMaps | null {
 
 export function loadNaverMaps(keyId: string): Promise<NaverMaps> {
   const existingMaps = readyNaverMapsOf(window);
-  if (existingMaps !== null) return Promise.resolve(existingMaps);
-  if (keyId.trim() === "") return Promise.reject(new Error("지도 설정을 준비 중이에요"));
+  if (existingMaps?.glEnabled === true) return Promise.resolve(existingMaps);
+  if (existingMaps === null && keyId.trim() === "") return Promise.reject(new Error("지도 설정을 준비 중이에요"));
   if (sdkPromise !== null) return sdkPromise;
   sdkPromise = new Promise<NaverMaps>((resolve, reject) => {
     const script = document.createElement("script");
@@ -179,13 +194,20 @@ export function loadNaverMaps(keyId: string): Promise<NaverMaps> {
     };
     const finishLoadingWhenReady = () => {
       const maps = readyNaverMapsOf(window);
-      if (maps !== null) finish(maps);
+      // 기본 스크립트의 onload가 GL 모듈 완료보다 먼저 올 수 있다.
+      if (maps?.glEnabled === true) finish(maps);
     };
-    const timer = window.setTimeout(() => finish(readyNaverMapsOf(window)), 10_000);
+    const timer = window.setTimeout(() => {
+      const maps = readyNaverMapsOf(window);
+      finish(maps?.glEnabled === true ? maps : null);
+    }, 10_000);
     const unsubscribeAuthFailure = subscribeNaverMapAuthFailure(() => finish(null));
     window.__salmonbusNaverMapsReady = finishLoadingWhenReady;
     script.async = true;
-    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(keyId)}&callback=__salmonbusNaverMapsReady`;
+    script.src =
+      existingMaps === null
+        ? `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(keyId)}&submodules=gl&callback=__salmonbusNaverMapsReady`
+        : "https://oapi.map.naver.com/openapi/v3/maps-gl.js";
     script.onerror = () => finish(null);
     script.onload = finishLoadingWhenReady;
     document.head.appendChild(script);

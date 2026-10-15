@@ -7,6 +7,8 @@ import { routeArrowsFor, routeMapCoordinateForSequence, type RouteArrow } from "
 import type { NaverMap, NaverMaps, NaverMarker } from "./naverSdk";
 import * as styles from "./RouteMap.css";
 
+const DETAIL_ZOOM = 14;
+
 interface StopMarker {
   selection: StopSelection;
   coordinate: GeoCoordinate;
@@ -20,7 +22,6 @@ interface VehicleMarker {
   count: HTMLElement;
   direction: Direction;
 }
-
 interface ArrowMarker extends RouteArrow {
   marker: NaverMarker;
   element: HTMLElement;
@@ -56,14 +57,21 @@ export function createNaverRouteMap(
   const toNaverCoordinate = (coordinate: GeoCoordinate) => new sdk.LatLng(coordinate.latitude, coordinate.longitude);
   const map = new sdk.Map(element, {
     center: toNaverCoordinate(first),
-    zoom: 11,
+    zoom: 10,
     size: new sdk.Size(element.clientWidth, element.clientHeight),
     zoomControl: false,
     scaleControl: false,
     mapDataControl: false,
+    // 벡터 지도의 연속 줌에서 노선·마커도 같은 카메라를 따라 움직인다.
+    gl: true,
+    // GL은 마커 좌표를 직접 갱신하므로 이미지 타일용 확대 효과를 중복 적용하지 않는다.
+    overlayZoomEffect: null,
+    scrollWheel: true,
+    disableDoubleClickZoom: false,
   });
   let selected: StopSelection | null = null;
   let activeDirection: Direction = board.route.directions[0].id;
+  let initialFitPending = true;
   function routePathStyleFor(direction: Direction) {
     const active = direction === activeDirection;
     return {
@@ -125,7 +133,7 @@ export function createNaverRouteMap(
   });
 
   function refreshStops() {
-    const hidden = map.getZoom() < 15;
+    const hidden = map.getZoom() < DETAIL_ZOOM;
     const projection = map.getProjection();
     const display = stops.map((stop) => ({
       ...stop,
@@ -222,11 +230,77 @@ export function createNaverRouteMap(
       (item) => item.sequence === selection.sequence && item.direction === selection.direction,
     );
     if (stop === undefined) return;
+    initialFitPending = false;
     map.setCenter(toNaverCoordinate(stop.coordinate));
-    map.setZoom(Math.max(16, map.getZoom()), false);
+    map.setZoom(Math.max(15, map.getZoom()), false);
+  }
+
+  function zoomAt(delta: number, clientX: number, clientY: number) {
+    const bounds = element.getBoundingClientRect();
+    const origin = map.getProjection().fromOffsetToCoord(new sdk.Point(clientX - bounds.left, clientY - bounds.top));
+    map.zoomBy(delta, origin, false);
+  }
+
+  let wheelDelta = 0;
+  let lastWheelAt = 0;
+  let lastTouchAt = -Infinity;
+  const onTouchEnd = (event: TouchEvent) => {
+    lastTouchAt = event.timeStamp;
+  };
+  const onWheel = (event: WheelEvent) => {
+    event.preventDefault();
+    if (!Number.isFinite(event.deltaY) || event.deltaY === 0) return;
+    if (event.timeStamp - lastWheelAt > 200 || Math.sign(wheelDelta) !== Math.sign(event.deltaY)) wheelDelta = 0;
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? element.clientHeight : 1;
+    wheelDelta += event.deltaY * unit;
+    lastWheelAt = event.timeStamp;
+    // 작은 트랙패드 입력을 모아 한 번의 입력으로 여러 줌 단계를 건너뛰지 않게 한다.
+    if (Math.abs(wheelDelta) < (event.ctrlKey ? 12 : 60)) return;
+    const delta = -Math.sign(wheelDelta);
+    wheelDelta = 0;
+    createNativeEventHandler(() => zoomAt(delta, event.clientX, event.clientY))();
+  };
+  const onDoubleClick = (event: MouseEvent) => {
+    // 터치 더블탭은 SDK가 처리하므로 뒤따르는 합성 dblclick은 중복 처리하지 않는다.
+    if (event.timeStamp - lastTouchAt < 500) return;
+    if ((event.target as Element | null)?.closest?.("button")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    createNativeEventHandler(() => zoomAt(1, event.clientX, event.clientY))();
+  };
+  // 하드웨어 가속을 사용할 수 없는 환경은 SDK가 이미지 타일 지도로 전환한다.
+  // 이 경우에만 오버레이를 숨기는 기존 확대 효과를 건너뛴다.
+  const useInstantZoom = !map.getOptions("gl");
+  if (useInstantZoom) {
+    map.setOptions({ overlayZoomEffect: "all", scrollWheel: false, disableDoubleClickZoom: true });
+    element.addEventListener("wheel", onWheel, { passive: false });
+    element.addEventListener("dblclick", onDoubleClick);
+    element.addEventListener("touchend", onTouchEnd, { passive: true, capture: true });
+  }
+
+  const routeCoordinates = data.paths.flatMap((path) => path.coordinates);
+  function fitInitialRoute() {
+    if (!initialFitPending) return;
+    initialFitPending = false;
+    map.fitBounds(
+      (routeCoordinates.length > 0 ? routeCoordinates : data.stops.map((stop) => stop.coordinate)).map(
+        toNaverCoordinate,
+      ),
+      { top: 28, right: 12, bottom: 28, left: 12, maxZoom: 13 },
+    );
+    refreshStops();
+    refreshArrows();
   }
 
   const listeners = [
+    // GL 초기화 전의 이미지 타일 배율로 맞추면 전환 후 노선 양 끝이 잘린다.
+    sdk.Event.addListener(
+      map,
+      "init",
+      createNativeEventHandler(() => {
+        fitInitialRoute();
+      }),
+    ),
     sdk.Event.addListener(map, "zoom_changed", createNativeEventHandler(refreshStops)),
     sdk.Event.addListener(
       map,
@@ -237,16 +311,11 @@ export function createNaverRouteMap(
       }),
     ),
   ];
-  const bounds = data.paths.flatMap((path) => path.coordinates);
-  map.fitBounds((bounds.length > 0 ? bounds : data.stops.map((stop) => stop.coordinate)).map(toNaverCoordinate), {
-    top: 28,
-    right: 12,
-    bottom: 28,
-    left: 12,
-    maxZoom: 14,
-  });
-  refreshStops();
-  refreshArrows();
+  if (useInstantZoom) fitInitialRoute();
+  else {
+    refreshStops();
+    refreshArrows();
+  }
 
   return {
     update(nextSelected, nextDirection, nextVehicles) {
@@ -296,12 +365,7 @@ export function createNaverRouteMap(
             zIndex: 20,
             clickable: false,
           });
-          item = {
-            marker,
-            element: content,
-            count,
-            direction: view.vehicle.direction,
-          };
+          item = { marker, element: content, count, direction: view.vehicle.direction };
           vehicles.set(view.key, item);
         }
         item.direction = view.vehicle.direction;
@@ -342,6 +406,7 @@ export function createNaverRouteMap(
     },
     focus,
     showLocation(coordinate, accuracy) {
+      initialFitPending = false;
       userMarker?.setMap(null);
       accuracyCircle?.setMap(null);
       const position = toNaverCoordinate(coordinate);
@@ -368,9 +433,10 @@ export function createNaverRouteMap(
         zIndex: 4,
       });
       map.setCenter(position);
-      map.setZoom(Math.max(16, map.getZoom()), false);
+      map.setZoom(Math.max(15, map.getZoom()), false);
     },
     destroy() {
+      initialFitPending = false;
       const cleanup = (action: () => void) => {
         try {
           action();
@@ -379,6 +445,11 @@ export function createNaverRouteMap(
         }
       };
       listeners.forEach((listener) => cleanup(() => sdk.Event.removeListener(listener)));
+      if (useInstantZoom) {
+        cleanup(() => element.removeEventListener("wheel", onWheel));
+        cleanup(() => element.removeEventListener("dblclick", onDoubleClick));
+        cleanup(() => element.removeEventListener("touchend", onTouchEnd, true));
+      }
       stops.forEach(({ marker }) => cleanup(() => marker.setMap(null)));
       vehicles.forEach(({ marker }) => cleanup(() => marker.setMap(null)));
       arrows.forEach(({ marker }) => cleanup(() => marker.setMap(null)));

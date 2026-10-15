@@ -18,6 +18,8 @@ jest.mock("./RouteMap.css", () => ({
 }));
 
 class ElementStub {
+  clientWidth = 400;
+  clientHeight = 350;
   className = "";
   textContent = "";
   innerHTML = "";
@@ -41,6 +43,12 @@ class ElementStub {
   }
   addEventListener(name: string, listener: (event: Event) => void) {
     this.listeners.set(name, listener);
+  }
+  removeEventListener(name: string) {
+    this.listeners.delete(name);
+  }
+  getBoundingClientRect() {
+    return { left: 10, top: 20 };
   }
 }
 
@@ -69,7 +77,7 @@ class SizeStub {
   ) {}
 }
 
-function createRecordingSdk() {
+function createRecordingSdk(glSupported = true) {
   let damaged = false;
   const checkSdk = () => {
     if (damaged) throw new TypeError("SDK 내부 구현이 제거됨");
@@ -79,14 +87,20 @@ function createRecordingSdk() {
   const circles: ConstructorParameters<NaverMaps["Circle"]>[0][] = [];
   const events: { name: string; listener: () => void }[] = [];
   class MapStub implements NaverMap {
-    zoom = 11;
+    zoom = 10;
     center: NaverCoordinate = new CoordinateStub(0, 0);
     size = new SizeStub(400, 350);
     fits = 0;
+    fitMaxZoom = 0;
+    fittedCoordinates: NaverCoordinate[] = [];
     projectionOffsetX = 0;
     destroyed = false;
-    constructor(_element: HTMLElement, options: ConstructorParameters<NaverMaps["Map"]>[1]) {
+    constructor(
+      _element: HTMLElement,
+      public options: ConstructorParameters<NaverMaps["Map"]>[1],
+    ) {
       this.center = options.center;
+      this.zoom = options.zoom;
     }
     getZoom() {
       checkSdk();
@@ -95,14 +109,30 @@ function createRecordingSdk() {
     setZoom(zoom: number) {
       this.zoom = zoom;
     }
+    zoomBy(delta: number) {
+      checkSdk();
+      this.zoom += delta;
+    }
+    getOptions() {
+      return glSupported;
+    }
+    setOptions(options: Parameters<NaverMap["setOptions"]>[0]) {
+      Object.assign(this.options, options);
+    }
     getCenter() {
       return this.center;
     }
     setCenter(center: NaverCoordinate) {
       this.center = center;
     }
-    fitBounds() {
+    fitBounds(
+      coordinates: NaverCoordinate[],
+      margins: { top: number; right: number; bottom: number; left: number; maxZoom: number },
+    ) {
       this.fits += 1;
+      this.fittedCoordinates = coordinates;
+      this.fitMaxZoom = margins.maxZoom;
+      this.zoom = margins.maxZoom;
     }
     getSize() {
       return this.size;
@@ -114,6 +144,8 @@ function createRecordingSdk() {
       return {
         fromCoordToOffset: (coordinate: NaverCoordinate) =>
           new PointStub((coordinate.lng() - 126.9) * 1000 + this.projectionOffsetX, (37.6 - coordinate.lat()) * 1000),
+        fromOffsetToCoord: (point: PointStub) =>
+          new CoordinateStub(37.6 - point.y / 1000, 126.9 + (point.x - this.projectionOffsetX) / 1000),
       };
     }
     destroy() {
@@ -154,6 +186,7 @@ function createRecordingSdk() {
     }
   }
   const sdk: NaverMaps = {
+    glEnabled: true,
     LatLng: CoordinateStub,
     Point: PointStub,
     Size: SizeStub,
@@ -199,43 +232,233 @@ function createRecordingSdk() {
 }
 
 const previousDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 afterEach(() => {
   if (previousDocument !== undefined) Object.defineProperty(globalThis, "document", previousDocument);
   else Reflect.deleteProperty(globalThis, "document");
+  if (previousWindow !== undefined) Object.defineProperty(globalThis, "window", previousWindow);
+  else Reflect.deleteProperty(globalThis, "window");
 });
 
-function setup() {
+function setup(glSupported = true, { initialized = true } = {}) {
+  const pendingFrames = new Map<number, FrameRequestCallback>();
+  const pendingTimers = new Map<number, { remaining: number; callback: () => void }>();
+  let frameId = 0;
+  let timerId = 0;
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      requestAnimationFrame: (callback: FrameRequestCallback) => {
+        const id = ++frameId;
+        pendingFrames.set(id, callback);
+        return id;
+      },
+      cancelAnimationFrame: (id: number) => pendingFrames.delete(id),
+      setTimeout: (callback: () => void, delay: number) => {
+        const id = ++timerId;
+        pendingTimers.set(id, { remaining: delay, callback });
+        return id;
+      },
+      clearTimeout: (id: number) => pendingTimers.delete(id),
+    },
+  });
+  const flushFrames = () => {
+    const callbacks = [...pendingFrames.values()];
+    pendingFrames.clear();
+    callbacks.forEach((callback) => callback(16));
+  };
+  const advanceTimers = (milliseconds: number) => {
+    const expired: (() => void)[] = [];
+    pendingTimers.forEach((timer, id) => {
+      timer.remaining -= milliseconds;
+      if (timer.remaining <= 0) {
+        pendingTimers.delete(id);
+        expired.push(timer.callback);
+      }
+    });
+    expired.forEach((callback) => callback());
+  };
   Object.defineProperty(globalThis, "document", {
     configurable: true,
     value: { createElement: () => new ElementStub() },
   });
-  const native = createRecordingSdk();
+  const native = createRecordingSdk(glSupported);
   const data = loadPreviewRouteMapData(boardMock)!;
   const onSelect = jest.fn<(selection: { direction: "UP" | "DOWN"; sequence: number }) => void>();
   const onError = jest.fn();
+  const onReady = jest.fn();
+  const element = new ElementStub();
   const adapter = createNaverRouteMap(
     native.sdk,
-    { clientWidth: 400, clientHeight: 350 } as HTMLElement,
+    element as unknown as HTMLElement,
     boardMock,
     data,
     onSelect,
     onError,
   );
-  return { native, data, onSelect, onError, adapter };
+  const initialize = () => native.events.find((event) => event.name === "init")?.listener();
+  if (initialized) initialize();
+  return {
+    native,
+    data,
+    onSelect,
+    onError,
+    onReady,
+    adapter,
+    element,
+    initialize,
+    pendingFrames,
+    flushFrames,
+    pendingTimers,
+    advanceTimers,
+  };
 }
 
 describe("네이버 지도 adapter", () => {
+  it("GL 지도에서 SDK의 부드러운 확대와 기본 마커 배치를 유지한다", () => {
+    const { native, element } = setup();
+    expect(native.map.options).toMatchObject({
+      gl: true,
+      zoom: 10,
+      overlayZoomEffect: null,
+      scrollWheel: true,
+      disableDoubleClickZoom: false,
+    });
+    expect(element.listeners.size).toBe(0);
+  });
+  it("GL 초기화 뒤 두 방향의 모든 경로 좌표를 한 번만 화면에 맞춘다", () => {
+    const { native, data, adapter, initialize } = setup(true, { initialized: false });
+    expect(native.lines).toHaveLength(2);
+    expect(native.map.fits).toBe(0);
+
+    initialize();
+    expect(native.map.fits).toBe(1);
+    expect(native.map.fitMaxZoom).toBe(13);
+    expect(
+      native.map.fittedCoordinates.map((coordinate) => ({ latitude: coordinate.lat(), longitude: coordinate.lng() })),
+    ).toEqual(data.paths.flatMap((path) => path.coordinates));
+
+    initialize();
+    adapter.resize(400, 600);
+    adapter.update(null, "UP", []);
+    initialize();
+    expect(native.map.fits).toBe(1);
+  });
+  it("GL을 사용할 수 없는 지도는 초기화 이벤트를 기다리지 않고 전체 경로를 맞춘다", () => {
+    const { native, initialize } = setup(false, { initialized: false });
+    expect(native.map.fits).toBe(1);
+    expect(native.map.fittedCoordinates.length).toBeGreaterThan(0);
+    initialize();
+    expect(native.map.fits).toBe(1);
+  });
+  for (const interaction of ["focus", "location"] as const) {
+    it(`GL 초기화 전에 ${interaction === "focus" ? "정류장을 선택하면" : "현재 위치를 찾으면"} 뒤늦은 전체 경로 맞춤으로 덮어쓰지 않는다`, () => {
+      const { native, adapter, initialize } = setup(true, { initialized: false });
+      if (interaction === "focus") adapter.focus({ direction: "UP", sequence: 15 });
+      else adapter.showLocation({ latitude: 37.4, longitude: 127.1 }, 45);
+      const center = native.map.center;
+      const zoom = native.map.zoom;
+
+      initialize();
+      expect(native.map.fits).toBe(0);
+      expect(native.map.center).toBe(center);
+      expect(native.map.zoom).toBe(zoom);
+    });
+  }
+  it("GL 초기화를 기다리던 지도를 제거하면 늦게 도착한 초기화 이벤트로 경로를 맞추지 않는다", () => {
+    const { native, adapter, initialize } = setup(true, { initialized: false });
+    adapter.destroy();
+    expect(initialize).not.toThrow();
+    expect(native.map.fits).toBe(0);
+    expect(native.map.destroyed).toBe(true);
+  });
+  it("GL을 사용할 수 없으면 작은 휠 입력을 모아 포인터 위치를 기준으로 즉시 확대한다", () => {
+    const { native, element } = setup(false);
+    expect(native.map.options).toMatchObject({
+      overlayZoomEffect: "all",
+      scrollWheel: false,
+      disableDoubleClickZoom: true,
+    });
+    const zoomBy = jest.spyOn(native.map as NaverMap, "zoomBy");
+    const wheel = element.listeners.get("wheel")!;
+    const preventDefault = jest.fn();
+    const input = (deltaY: number, timeStamp: number) =>
+      wheel({ deltaY, deltaMode: 0, clientX: 110, clientY: 120, timeStamp, preventDefault } as unknown as Event);
+    input(-20, 100);
+    input(-20, 110);
+    expect(zoomBy).not.toHaveBeenCalled();
+    input(-20, 120);
+    expect(zoomBy).toHaveBeenCalledTimes(1);
+    const [delta, origin, animate] = zoomBy.mock.calls[0]!;
+    expect(delta).toBe(1);
+    expect(origin.lat()).toBeCloseTo(37.5);
+    expect(origin.lng()).toBeCloseTo(127);
+    expect(animate).toBe(false);
+    expect(preventDefault).toHaveBeenCalledTimes(3);
+
+    input(-40, 130);
+    input(30, 140);
+    input(30, 400);
+    expect(zoomBy).toHaveBeenCalledTimes(1);
+    input(30, 410);
+    expect(zoomBy.mock.calls[1]?.[0]).toBe(-1);
+  });
+  it("GL을 사용할 수 없는 지도의 더블클릭은 즉시 확대하고 제거 시 입력 리스너를 정리한다", () => {
+    const { native, element, adapter } = setup(false);
+    const zoomBy = jest.spyOn(native.map as NaverMap, "zoomBy");
+    element.listeners.get("dblclick")!({
+      clientX: 110,
+      clientY: 120,
+      target: null,
+      preventDefault: jest.fn(),
+      stopPropagation: jest.fn(),
+    } as unknown as Event);
+    expect(zoomBy.mock.calls[0]?.[0]).toBe(1);
+    expect(zoomBy.mock.calls[0]?.[2]).toBe(false);
+    adapter.destroy();
+    expect(element.listeners.size).toBe(0);
+  });
+  it("GL fallback의 휠 확대 중 SDK 오류도 지도 오류 처리로 전달한다", () => {
+    const { native, element, onError } = setup(false);
+    native.damage();
+    expect(() =>
+      element.listeners.get("wheel")!({
+        deltaY: -120,
+        deltaMode: 0,
+        clientX: 110,
+        clientY: 120,
+        timeStamp: 100,
+        preventDefault: jest.fn(),
+      } as unknown as Event),
+    ).not.toThrow();
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+  it("GL fallback에서도 터치 더블탭 뒤의 합성 더블클릭은 확대를 중복 실행하지 않는다", () => {
+    const { native, element } = setup(false);
+    const zoomBy = jest.spyOn(native.map as NaverMap, "zoomBy");
+    element.listeners.get("touchend")!({ timeStamp: 100 } as Event);
+    const doubleClick = element.listeners.get("dblclick")!;
+    const input = { clientX: 110, clientY: 120, target: null, preventDefault: jest.fn(), stopPropagation: jest.fn() };
+    doubleClick({ ...input, timeStamp: 200 } as unknown as Event);
+    expect(zoomBy).not.toHaveBeenCalled();
+    doubleClick({ ...input, timeStamp: 700 } as unknown as Event);
+    expect(zoomBy).toHaveBeenCalledTimes(1);
+  });
   it("확대와 이동에서 정류장 아이콘과 방향 화살표를 제거하거나 다시 만들지 않는다", () => {
     const { native, adapter } = setup();
     const idle = native.events.find((event) => event.name === "idle")!.listener;
     const zoomChanged = native.events.find((event) => event.name === "zoom_changed")!.listener;
+    // 처음 두 방향을 표시할 때 필요한 마커까지 만든 뒤 같은 풀을 재사용하는지 확인한다.
+    native.map.zoom = 14;
+    zoomChanged();
+    idle();
     const markers = [...native.markers];
     const iconUpdates = markers.map((marker) => jest.spyOn(marker, "setIcon"));
     const mapUpdates = markers.map((marker) => jest.spyOn(marker, "setMap"));
-    native.map.zoom = 15;
+    native.map.zoom = 13.9;
     zoomChanged();
     adapter.update(null, "DOWN", []);
-    native.map.zoom = 16;
+    native.map.zoom = 14;
     zoomChanged();
     idle();
     expect(iconUpdates.every((update) => update.mock.calls.length === 0)).toBe(true);
@@ -283,6 +506,7 @@ describe("네이버 지도 adapter", () => {
     const { native, adapter } = setup();
     expect(native.lines).toHaveLength(2);
     expect(native.map.fits).toBe(1);
+    expect(native.map.fitMaxZoom).toBe(13);
     adapter.focus({ direction: "UP", sequence: 15 });
     const center = native.map.center;
     const setCenter = jest.spyOn(native.map, "setCenter");
@@ -293,7 +517,7 @@ describe("네이버 지도 adapter", () => {
     expect(setZoom).not.toHaveBeenCalled();
     expect(native.map.fits).toBe(1);
     expect(native.map.center).toBe(center);
-    expect(native.map.zoom).toBe(16);
+    expect(native.map.zoom).toBe(15);
   });
   it("축소에서는 정류장을 숨기고 선택 버튼은 확대와 단일 선택값을 전달한다", () => {
     const { native, adapter, onSelect } = setup();
@@ -303,7 +527,7 @@ describe("네이버 지도 adapter", () => {
     expect(marker.visible).toBe(false);
     const button = marker.options.icon.content as unknown as ElementStub;
     button.listeners.get("click")?.(new Event("click"));
-    expect(native.map.zoom).toBe(16);
+    expect(native.map.zoom).toBe(15);
     expect(onSelect).toHaveBeenCalledWith({ direction: "UP", sequence: 15 });
     adapter.update({ direction: "UP", sequence: 15 }, "UP", []);
     expect(marker.visible).toBe(true);
@@ -339,12 +563,7 @@ describe("네이버 지도 adapter", () => {
     const setMap = jest.spyOn(bus, "setMap");
     const setIcon = jest.spyOn(bus, "setIcon");
 
-    adapter.update(null, "UP", [
-      {
-        ...view,
-        vehicle: { ...view.vehicle, seat: { kind: "EXACT", remaining: 0 } },
-      },
-    ]);
+    adapter.update(null, "UP", [{ ...view, vehicle: { ...view.vehicle, seat: { kind: "EXACT", remaining: 0 } } }]);
     expect(count!.textContent).toBe("0석");
     adapter.update(null, "UP", [{ ...view, vehicle: { ...view.vehicle, seat: { kind: "UNKNOWN" } } }]);
     expect(count!.textContent).toBe("–");
@@ -359,9 +578,9 @@ describe("네이버 지도 adapter", () => {
     const { native, adapter } = setup();
     adapter.showLocation({ latitude: 37.4, longitude: 127.1 }, 45);
     expect(native.circles[0]?.radius).toBe(45);
-    expect(native.map.zoom).toBe(16);
+    expect(native.map.zoom).toBe(15);
     adapter.destroy();
-    expect(native.sdk.Event.removeListener).toHaveBeenCalledTimes(2);
+    expect(native.sdk.Event.removeListener).toHaveBeenCalledTimes(3);
     expect(native.markers.every((marker) => marker.map === null)).toBe(true);
     expect(native.map.destroyed).toBe(true);
   });
@@ -371,7 +590,7 @@ describe("네이버 지도 adapter", () => {
     expect(() => native.events.find((event) => event.name === "zoom_changed")?.listener()).not.toThrow();
     expect(onError).toHaveBeenCalledTimes(1);
     expect(() => adapter.destroy()).not.toThrow();
-    // 첫 SDK 정리에 실패해도 두 번째 리스너까지 정리를 시도한다.
-    expect(native.sdk.Event.removeListener).toHaveBeenCalledTimes(2);
+    // 첫 SDK 정리에 실패해도 초기화 리스너까지 모두 정리를 시도한다.
+    expect(native.sdk.Event.removeListener).toHaveBeenCalledTimes(3);
   });
 });

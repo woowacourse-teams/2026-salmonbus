@@ -26,8 +26,9 @@ function tab(page: Page, direction: "UP" | "DOWN") {
 async function openMap(page: Page) {
   await page.goto(`/routes/${routeId}`);
   await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
+  await expect(page.getByTestId("naver-map-test-double")).toHaveCount(1);
+  await page.clock.runFor(48);
   await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
-  await page.clock.runFor(32);
 }
 
 async function height(locator: Locator) {
@@ -60,7 +61,7 @@ async function dragHeader(page: Page, destinationY: number) {
   await page.clock.runFor(32);
 }
 
-test("첫 화면은 정확히 절반 높이이고 줌에 따라 정류장만 숨기며 차량·방향 화살표는 유지한다", async ({
+test("첫 화면은 절반 높이에 전체 노선을 맞추고 줌에 따라 정류장만 숨기며 차량·방향 화살표는 유지한다", async ({
   page,
   naverMap,
 }, testInfo) => {
@@ -72,12 +73,31 @@ test("첫 화면은 정확히 절반 높이이고 줌에 따라 정류장만 숨
   await expect(map(page).locator("button[data-map-stop-sequence]:visible")).toHaveCount(0);
   await expect(map(page).getByRole("img", { name: /부근 버스/ })).toHaveCount(2);
   await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
+  const routeCoverage = await map(page)
+    .getByTestId("naver-map-test-double")
+    .evaluate((layer) => {
+      const bounds = layer.getBoundingClientRect();
+      return [...layer.querySelectorAll("polyline")].map((line) => {
+        const points = [...line.points];
+        return {
+          pointCount: points.length,
+          inside: points.every(
+            (point) => point.x >= 11 && point.x <= bounds.width - 11 && point.y >= 27 && point.y <= bounds.height - 27,
+          ),
+        };
+      });
+    });
+  expect(routeCoverage).toHaveLength(2);
+  routeCoverage.forEach((path) => {
+    expect(path.pointCount).toBeGreaterThan(1);
+    expect(path.inside).toBe(true);
+  });
   expect(await map(page).locator("[data-marker-kind='arrow']").count()).toBeGreaterThan(0);
   await expect(sheet(page).getByText("15–25분", { exact: true })).toBeVisible();
   await expect(sheet(page).getByText("3대", { exact: true })).toBeVisible();
   if (testInfo.project.name === "chromium") await page.screenshot({ path: "/tmp/sal192-board-half.png" });
 
-  await naverMap.setZoom(15);
+  await naverMap.setZoom(14);
   await expect(map(page).locator("button[data-map-stop-sequence]:visible")).toHaveCount(24);
   await expect(
     map(page).getByRole("button", {
@@ -92,14 +112,64 @@ test("첫 화면은 정확히 절반 높이이고 줌에 따라 정류장만 숨
     }),
   ).toHaveAttribute("data-map-stop-sequence", "13");
   expect(await map(page).locator("[data-marker-kind='arrow']").count()).toBeGreaterThan(0);
-  await naverMap.setZoom(14);
+  await naverMap.setZoom(13);
   await expect(map(page).locator("button[data-map-stop-sequence]:visible")).toHaveCount(0);
   await expect(map(page).getByRole("img", { name: /부근 버스/ })).toHaveCount(2);
 });
 
+test("GL 지도의 휠과 더블클릭은 부드럽게 확대하며 노선·마커 DOM을 유지한다", async ({ page, naverMap }) => {
+  await openMap(page);
+  await naverMap.setZoom(14);
+  await naverMap.panToStop(11);
+  const before = await naverMap.snapshot();
+  const bounds = await map(page).boundingBox();
+  if (bounds === null) throw new Error("지도 영역이 없습니다");
+  const nativeLayer = map(page).getByTestId("naver-map-test-double");
+  const pin = map(page).locator("button[data-map-stop-sequence='11']");
+  const pinWidth = await pin.evaluate((element) => element.getBoundingClientRect().width);
+  const persistent = await map(page).evaluateHandle((region) => [
+    ...region.querySelectorAll(
+      '[data-testid="naver-map-test-double"], [data-testid="naver-polyline"], [data-marker-kind], [data-marker-kind="vehicle"] img',
+    ),
+  ]);
+
+  await page.mouse.move(bounds.x + bounds.width / 2 + 60, bounds.y + bounds.height / 2);
+  await page.mouse.wheel(0, -120);
+  await expect(nativeLayer).toHaveAttribute("data-zoom-animating", "true");
+  await page.clock.runFor(80);
+  const duringWheel = await naverMap.snapshot();
+  expect(duringWheel.zoom).toBeGreaterThan(14);
+  expect(duringWheel.zoom).toBeLessThan(15);
+  expect(await pin.evaluate((element) => element.getBoundingClientRect().width)).toBe(pinWidth);
+  expect(await persistent.evaluate((nodes) => nodes.every((node) => node.isConnected))).toBe(true);
+  await page.clock.runFor(300);
+  expect((await naverMap.snapshot()).zoom).toBe(15);
+  expect((await naverMap.snapshot()).longitude).not.toBe(before.longitude);
+
+  await page.mouse.wheel(0, 120);
+  await expect(nativeLayer).toHaveAttribute("data-zoom-animating", "true");
+  await page.clock.runFor(300);
+  const restored = await naverMap.snapshot();
+  expect(restored.zoom).toBe(14);
+  expect(restored.latitude).toBeCloseTo(before.latitude, 8);
+  expect(restored.longitude).toBeCloseTo(before.longitude, 8);
+
+  await page.mouse.dblclick(bounds.x + bounds.width - 40, bounds.y + 30);
+  await expect(nativeLayer).toHaveAttribute("data-zoom-animating", "true");
+  await page.clock.runFor(80);
+  const duringDoubleClick = await naverMap.snapshot();
+  expect(duringDoubleClick.zoom).toBeGreaterThan(14);
+  expect(duringDoubleClick.zoom).toBeLessThan(15);
+  expect(await persistent.evaluate((nodes) => nodes.every((node) => node.isConnected))).toBe(true);
+  await page.clock.runFor(300);
+  expect((await naverMap.snapshot()).zoom).toBe(15);
+  await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
+  await persistent.dispose();
+});
+
 test("반복 확대와 이동에도 지도와 마커 DOM을 유지하고 정류장 포커스가 남는다", async ({ page, naverMap }) => {
   await openMap(page);
-  await naverMap.setZoom(15);
+  await naverMap.setZoom(14);
   await naverMap.panToStop(11);
   const pin = map(page).locator("button[data-map-stop-sequence='11']");
   await pin.focus();
@@ -118,7 +188,7 @@ test("반복 확대와 이동에도 지도와 마커 DOM을 유지하고 정류�
     return { layer, removed, observer };
   });
 
-  for (const zoom of [16, 17, 15]) await naverMap.setZoom(zoom);
+  for (const zoom of [15, 16, 14]) await naverMap.setZoom(zoom);
   await naverMap.panToStop(23);
   await page.clock.runFor(32);
 
@@ -131,12 +201,10 @@ test("반복 확대와 이동에도 지도와 마커 DOM을 유지하고 정류�
   await observation.dispose();
   expect(await map(page).locator("[data-marker-kind='arrow']:visible").count()).toBeGreaterThan(0);
 });
+
 test("잔여석 응답이 바뀌어도 차량 핀과 이미지 DOM을 유지한다", async ({ page, api }) => {
   await openMap(page);
-  const bus = map(page).getByRole("img", {
-    name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 5석",
-    exact: true,
-  });
+  const bus = map(page).getByRole("img", { name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 5석", exact: true });
   const observation = await bus.evaluateHandle((element) => {
     const image = element.querySelector("img");
     const pin = image?.parentElement;
@@ -164,10 +232,7 @@ test("잔여석 응답이 바뀌어도 차량 핀과 이미지 DOM을 유지한�
   await (await refreshedVehicles).finished();
   await page.clock.runFor(32);
   await expect(
-    map(page).getByRole("img", {
-      name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 0석",
-      exact: true,
-    }),
+    map(page).getByRole("img", { name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 0석", exact: true }),
   ).toContainText("0석");
   expect(
     await observation.evaluate(({ element, pin, image, removed, observer }) => {
@@ -182,6 +247,7 @@ test("잔여석 응답이 바뀌어도 차량 핀과 이미지 DOM을 유지한�
   ).toEqual({ connected: true, sameImage: true, samePin: true, removed: [] });
   await observation.dispose();
 });
+
 test("키보드로 최소·절반·전체를 선택하고 목록 스크롤은 시트 높이를 바꾸지 않는다", async ({ page }, testInfo) => {
   await openMap(page);
   await handle(page).focus();
@@ -240,7 +306,7 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
   }) => {
     await page.emulateMedia({ reducedMotion });
     await openMap(page);
-    await naverMap.setZoom(15);
+    await naverMap.setZoom(14);
     await naverMap.panToStop(11);
     const originalView = await naverMap.snapshot();
     await expectMapToFillRegion(page);
@@ -274,7 +340,7 @@ test("반대 방향 지도 정류장은 탭·시트·펼침·목록 스크롤을
 }, testInfo) => {
   await openMap(page);
   await handle(page).press("Home");
-  await naverMap.setZoom(15);
+  await naverMap.setZoom(14);
   await naverMap.panToStop(23);
   const pin = map(page).locator("button[data-map-stop-sequence='23']");
   await expect(pin).toHaveAccessibleName(`${targetStopNames.DOWN} ${directionLabels.DOWN} 정류장 지도에서 선택`);
@@ -287,7 +353,7 @@ test("반대 방향 지도 정류장은 탭·시트·펼침·목록 스크롤을
   await expect(row).toHaveAttribute("data-selected", "true");
   await expect(pin).toHaveAttribute("aria-pressed", "true");
   expect(await pin.evaluate((element) => element.getBoundingClientRect().width)).toBe(32);
-  expect((await naverMap.snapshot()).zoom).toBe(16);
+  expect((await naverMap.snapshot()).zoom).toBe(15);
   await expect.poll(() => list(page).evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
   await pin.click();
   await page.clock.runFor(32);
@@ -306,7 +372,7 @@ test("목록 선택은 지도에 반영하고 직접 방향 전환은 선택·�
   const pin = map(page).locator("button[data-map-stop-sequence='11']");
   await expect(pin).toHaveAccessibleName(`${targetStopNames.UP} ${directionLabels.UP} 정류장 지도에서 선택`);
   await expect(pin).toHaveAttribute("aria-pressed", "true");
-  expect((await naverMap.snapshot()).zoom).toBe(16);
+  expect((await naverMap.snapshot()).zoom).toBe(15);
   const focused = await naverMap.snapshot();
   await tab(page, "DOWN").click();
   await page.clock.runFor(32);
@@ -357,7 +423,7 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
 
 test("지도 선택 직후 목록에서 펼치면 대기 중인 지도 선택의 목록 이동을 취소한다", async ({ page, naverMap }) => {
   await openMap(page);
-  await naverMap.setZoom(15);
+  await naverMap.setZoom(14);
   await naverMap.panToStop(11);
   await map(page).locator("button[data-map-stop-sequence='11']").click();
   const stop = list(page).locator("li[data-stop-sequence='6'] button[aria-expanded]");
@@ -436,7 +502,7 @@ test("현재 위치 성공은 파란 위치·정확도 범위를 표시하고 �
   await page.getByRole("button", { name: "현재 위치 보기", exact: true }).click();
   await expect(map(page).getByRole("img", { name: "내 현재 위치", exact: true })).toBeVisible();
   await expect(map(page).getByTestId("location-accuracy")).toBeVisible();
-  expect(await naverMap.snapshot()).toEqual({ zoom: 16, latitude: 37.43, longitude: 127.16 });
+  expect(await naverMap.snapshot()).toEqual({ zoom: 15, latitude: 37.43, longitude: 127.16 });
   const located = await naverMap.snapshot();
 
   await page.evaluate(() =>

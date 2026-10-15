@@ -32,8 +32,9 @@ afterEach(() => {
 });
 
 // 이 테스트에서는 생성하지 않는다. 로드 완료에 필요한 native 기능의 존재만 확인한다.
-function createReadyMapsStub(): NaverMaps {
+function createReadyMapsStub(glEnabled = true): NaverMaps {
   return {
+    glEnabled,
     LatLng: class {},
     Point: class {},
     Size: class {},
@@ -46,11 +47,34 @@ function createReadyMapsStub(): NaverMaps {
 }
 
 describe("NAVER SDK 비동기 로드", () => {
-  it("호스트가 이미 불러온 SDK는 추가 스크립트나 키 없이 사용한다", async () => {
+  it("호스트가 이미 불러온 GL SDK는 추가 스크립트나 키 없이 사용한다", async () => {
     const maps = createReadyMapsStub();
     window.naver = { maps };
     expect(await loadNaverMaps("")).toBe(maps);
     expect(scripts).toHaveLength(0);
+  });
+  it("기본 SDK만 있으면 키 없이 GL 서브모듈만 불러온다", async () => {
+    const maps = createReadyMapsStub(false);
+    window.naver = { maps };
+    const promise = loadNaverMaps("");
+    expect(scripts).toHaveLength(1);
+    expect(scripts[0]?.src).toBe("https://oapi.map.naver.com/openapi/v3/maps-gl.js");
+    maps.glEnabled = true;
+    scripts[0]?.onload?.();
+    expect(await promise).toBe(maps);
+    expect(scripts[0]?.remove).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
+  });
+  it("기존 SDK의 GL 서브모듈을 불러오는 동안 추가 요청은 같은 작업을 기다린다", async () => {
+    const maps = createReadyMapsStub(false);
+    window.naver = { maps };
+    const first = loadNaverMaps("");
+    const second = loadNaverMaps("another-key");
+    expect(first).toBe(second);
+    expect(scripts).toHaveLength(1);
+    maps.glEnabled = true;
+    scripts[0]?.onload?.();
+    expect(await first).toBe(maps);
   });
   it("키가 없으면 외부 요청을 보내지 않는다", async () => {
     await expect(loadNaverMaps("")).rejects.toThrow("지도 설정");
@@ -69,6 +93,8 @@ describe("NAVER SDK 비동기 로드", () => {
     expect(first).toBe(second);
     expect(scripts).toHaveLength(1);
     expect(scripts[0]?.src).toContain("ncpKeyId=test-key");
+    expect(scripts[0]?.src).toContain("submodules=gl");
+    expect(scripts[0]?.src).toContain("callback=__salmonbusNaverMapsReady");
     const maps = createReadyMapsStub();
     window.naver = { maps };
     window.__salmonbusNaverMapsReady?.();
@@ -83,6 +109,26 @@ describe("NAVER SDK 비동기 로드", () => {
     expect(await promise).toBe(maps);
     expect(window.__salmonbusNaverMapsReady).toBeUndefined();
     expect(scripts[0]?.remove).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
+  });
+  it("기본 SDK의 onload와 콜백이 먼저 와도 GL이 준비될 때까지 기다린다", async () => {
+    const promise = loadNaverMaps("test-key");
+    const maps = createReadyMapsStub(false);
+    window.naver = { maps };
+    const resolved = jest.fn();
+    void promise.then(resolved);
+    scripts[0]?.onload?.();
+    window.__salmonbusNaverMapsReady?.();
+    await Promise.resolve();
+    expect(resolved).not.toHaveBeenCalled();
+    expect(window.__salmonbusNaverMapsReady).toBeDefined();
+    expect(jest.getTimerCount()).toBe(1);
+    expect(loadNaverMaps("test-key")).toBe(promise);
+    expect(scripts).toHaveLength(1);
+    maps.glEnabled = true;
+    window.__salmonbusNaverMapsReady?.();
+    expect(await promise).toBe(maps);
+    expect(window.__salmonbusNaverMapsReady).toBeUndefined();
     expect(jest.getTimerCount()).toBe(0);
   });
   it("불완전한 Maps 객체는 기존 SDK나 onload 완료로 취급하지 않는다", async () => {
@@ -100,12 +146,12 @@ describe("NAVER SDK 비동기 로드", () => {
     window.__salmonbusNaverMapsReady?.();
     expect(await promise).toBe(maps);
   });
-  it("onload 당시 미완성이어도 제한 시간의 마지막 확인에서 준비된 SDK를 사용한다", async () => {
+  it("onload 당시 기본 SDK만 있어도 마지막 확인에서 GL이 준비되면 사용한다", async () => {
     const promise = loadNaverMaps("test-key");
-    window.naver = { maps: {} as NaverMaps };
-    scripts[0]?.onload?.();
-    const maps = createReadyMapsStub();
+    const maps = createReadyMapsStub(false);
     window.naver = { maps };
+    scripts[0]?.onload?.();
+    maps.glEnabled = true;
     jest.advanceTimersByTime(10_000);
     expect(await promise).toBe(maps);
   });
@@ -122,6 +168,33 @@ describe("NAVER SDK 비동기 로드", () => {
     const retryAssertion = expect(retry).rejects.toThrow("불러오지 못");
     scripts[1]?.onerror?.();
     await retryAssertion;
+  });
+  it("기본 SDK만 준비되고 GL이 끝내 준비되지 않으면 실패하고 서브모듈만 재시도한다", async () => {
+    const promise = loadNaverMaps("test-key");
+    const maps = createReadyMapsStub(false);
+    window.naver = { maps };
+    scripts[0]?.onload?.();
+    window.__salmonbusNaverMapsReady?.();
+    const assertion = expect(promise).rejects.toThrow("불러오지 못");
+    jest.advanceTimersByTime(10_000);
+    await assertion;
+    expect(scripts[0]?.remove).toHaveBeenCalled();
+    expect(window.__salmonbusNaverMapsReady).toBeUndefined();
+    const retry = loadNaverMaps("");
+    expect(scripts).toHaveLength(2);
+    expect(scripts[1]?.src).toBe("https://oapi.map.naver.com/openapi/v3/maps-gl.js");
+    maps.glEnabled = true;
+    scripts[1]?.onload?.();
+    expect(await retry).toBe(maps);
+  });
+  it("GL 서브모듈 요청도 로드 오류가 나면 정리하고 실패한다", async () => {
+    window.naver = { maps: createReadyMapsStub(false) };
+    const promise = loadNaverMaps("");
+    const assertion = expect(promise).rejects.toThrow("불러오지 못");
+    scripts[0]?.onerror?.();
+    await assertion;
+    expect(scripts[0]?.remove).toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
   });
   it("Maps 객체가 만들어졌어도 인증 실패 콜백이 오면 즉시 실패한다", async () => {
     const promise = loadNaverMaps("test-key");
