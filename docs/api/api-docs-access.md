@@ -17,13 +17,26 @@ API 문서는 `api-app`이 현재 Controller/DTO에서 생성한다. 같은 빌�
 | `/api/docs/chat` | WebSocket 메시지·연결·재접속 계약 |
 | `/api/docs/chat/examples` | WebSocket 프레임 합성 예시 |
 
-문서에는 구현된 HTTP 조회만 표시한다. 채팅이 꺼져 있으면 채팅방 가용성 GET도 명세에서 빠진다. WebSocket `/stream`은 HTTP operation으로 표시하지 않고 별도 계약에서 설명한다. 미구현 ETA·진행률 설계는 명세에 포함하지 않는다.
+문서에는 구현된 HTTP 조회만 표시한다. v1의 노선 목록·보드·차량 관측과 v2의 정류장 도착정보·노선 geometry를 포함한다. 채팅이 꺼져 있으면 채팅방 가용성 GET도 명세에서 빠진다. WebSocket `/stream`은 HTTP operation으로 표시하지 않고 별도 계약에서 설명한다. 차량의 구간 진행률은 제공하지 않으며 미구현 설계를 명세에 포함하지 않는다.
+
+## 정류장 도착정보와 지도 geometry
+
+| 경로 | 주요 계약 |
+| --- | --- |
+| `GET /api/v2/stations/{stationId}/arrivals` | 선택 정류장의 ETA. `routeId`로 노선을 선택하고 `referenceVersionId`·`stopSequence`는 함께 전달해 방문을 구분한다. |
+| `GET /api/v2/routes/{routeId}/geometry` | 전체 노선·정류장 좌표와 방향별 `paths.UP.points`·`paths.DOWN.points`. 회차 근거가 없으면 `paths`는 `null`이고 제공 가능한 전체 `points`는 유지한다. |
+
+도착정보의 데이터 상태와 갱신 상태는 별개다. 최초 수집·만료·호출 제한도 HTTP 200 본문으로 구분하므로 `status`, `refresh`, `eta.status`를 확인한다. 재조회는 `refresh.suggestedRefreshAt`, 카운트다운은 서버 시계와 `expectedArrivalAt`을 사용한다. HTTP 캐시 최대 5초를 폴링 주기로 사용하지 않으며 예상 시각이 지났다고 실제 도착으로 확정하지 않는다.
+
+geometry는 노선 선택 시 받아 재사용한다. 두 방향의 색상·선택·겹침 순서는 프론트에서 처리하며 방향 전환마다 재조회하지 않는다. 최대 5분의 HTTP 캐시와 ETag 재검증을 지원하고, 변경이 없으면 본문 없는 304를 반환한다.
+
+별도 공유 명세는 `contract/station-arrivals-v2.openapi.json`, `contract/route-geometry-v2.openapi.json`에 있다. 문서 테스트는 이 파일의 200 응답 예시와 Controller에서 생성한 예시를 대조한다. 두 파일은 검증 입력이며 앱의 Swagger는 Controller/DTO에서 생성한다.
 
 ## 새 API가 생길 때
 
-springdoc은 앱이 뜰 때 Spring Controller와 DTO에서 명세를 만든다. 현재 `springdoc.paths-to-match`가 `/api/v1/**`와 채팅방 가용성 경로만 포함하므로, **새 `@RestController` 경로가 `/api/v1/**` 아래라면 경로와 DTO의 기본 구조는 다음 빌드·배포 때 자동 반영**된다. 다른 경로는 포함 범위를 먼저 검토해야 한다. 채팅처럼 `RouterFunction`으로 등록한 HTTP 경로에는 명시적인 `@RouterOperation`이 필요하다. WebSocket 프레임은 OpenAPI HTTP 경로로 자동 생성되지 않는다.
+springdoc은 앱이 뜰 때 Spring Controller와 DTO에서 명세를 만든다. 현재 `springdoc.paths-to-match`는 `/api/v1/**`, 위의 v2 두 경로, 채팅방 가용성 경로를 포함한다. 이 범위의 `@RestController` 경로와 DTO 기본 구조는 다음 빌드·배포 때 자동 반영된다. 다른 경로는 포함 범위를 먼저 검토해야 한다. 채팅처럼 `RouterFunction`으로 등록한 HTTP 경로에는 명시적인 `@RouterOperation`이 필요하다. WebSocket 프레임은 OpenAPI HTTP 경로로 자동 생성되지 않는다.
 
-자동 생성만으로 필드 의미·단위, null과 생략의 차이, 상태별 정상/오류 예시가 채워지지는 않는다. 새 API를 추가할 때 Controller의 응답 설명과 합성 예시, DTO의 `@Schema`, WebSocket 공개 안내를 실제 계약에 맞게 갱신한다. 현재 문서 테스트는 경로 3개(채팅 on이면 4개)를 확인하므로 새 경로가 생기면 테스트가 실패한다. 이는 공개 문서에 새 API가 실리기 전에 범위와 예시를 검토하도록 하는 신호다. 문서 파일을 별도로 업로드할 필요는 없으며 검토를 마친 코드를 배포하면 같은 앱의 Swagger 화면이 새 명세를 보여준다.
+자동 생성만으로 필드 의미·단위, null과 생략의 차이, 상태별 정상/오류 예시가 채워지지는 않는다. 새 API를 추가할 때 Controller의 응답 설명과 합성 예시, DTO의 `@Schema`, WebSocket 공개 안내를 실제 계약에 맞게 갱신한다. 현재 문서 테스트는 경로 5개(채팅 on이면 6개)를 확인하므로 새 경로가 생기면 테스트가 실패한다. 이는 공개 문서에 새 API가 실리기 전에 범위와 예시를 검토하도록 하는 신호다. 문서 파일을 별도로 업로드할 필요는 없으며 검토를 마친 코드를 배포하면 같은 앱의 Swagger 화면이 새 명세를 보여준다.
 
 ## Try it out과 dev 연결
 

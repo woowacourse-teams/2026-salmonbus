@@ -281,6 +281,18 @@ public final class ApiDocsExamples {
         }
         """;
 
+    public static final String INVALID_REQUEST = """
+        {"code":"INVALID_REQUEST","message":"요청 형식이 올바르지 않습니다.","requestId":"example-request"}
+        """;
+
+    public static final String STATION_NOT_FOUND = """
+        {"code":"STATION_NOT_FOUND","message":"지원하지 않는 정류장입니다.","requestId":"example-request"}
+        """;
+
+    public static final String REFERENCE_VERSION_CONFLICT = """
+        {"code":"REFERENCE_VERSION_CONFLICT","message":"노선 판본과 정류장 방문이 일치하지 않습니다.","requestId":"example-request"}
+        """;
+
     private ApiDocsExamples() {
     }
 }

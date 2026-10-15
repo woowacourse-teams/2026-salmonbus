@@ -136,6 +136,67 @@
                       },
                       "routes": []
                     }
+                  },
+                  "noPrediction": {
+                    "summary": "수신 결과는 유효하지만 해당 방문의 도착 예측이 없음",
+                    "value": {
+                      "stationId": "206000637",
+                      "generatedAt": "2026-10-14T12:00:10+09:00",
+                      "status": "NO_PREDICTION",
+                      "reason": null,
+                      "snapshot": {
+                        "snapshotId": "00000000-0000-0000-0000-000000000001",
+                        "receivedAt": "2026-10-14T12:00:00+09:00",
+                        "sourceObservedAt": null,
+                        "sourceQueryTime": "2026-10-14 12:00:00",
+                        "refreshAfterAt": "2026-10-14T12:00:40+09:00",
+                        "staleAt": "2026-10-14T12:01:00+09:00"
+                      },
+                      "refresh": {
+                        "status": "IDLE",
+                        "reason": null,
+                        "suggestedRefreshAt": "2026-10-14T12:00:40+09:00"
+                      },
+                      "routes": [
+                        {
+                          "routeId": "204000057",
+                          "name": "3330",
+                          "targetVisit": {
+                            "referenceVersionId": "7",
+                            "stopSequence": 22,
+                            "sourceStopOrder": 22,
+                            "matchStatus": "MATCHED",
+                            "direction": "UP"
+                          },
+                          "status": "NO_PREDICTION",
+                          "reason": null,
+                          "arrivals": []
+                        }
+                      ]
+                    }
+                  },
+                  "stale": {
+                    "summary": "기존 수신 결과가 만료되어 표시할 수 없고 갱신 중",
+                    "value": {
+                      "stationId": "206000637",
+                      "generatedAt": "2026-10-14T12:01:01+09:00",
+                      "status": "UNAVAILABLE",
+                      "reason": "STALE",
+                      "snapshot": {
+                        "snapshotId": "00000000-0000-0000-0000-000000000001",
+                        "receivedAt": "2026-10-14T12:00:00+09:00",
+                        "sourceObservedAt": null,
+                        "sourceQueryTime": "2026-10-14 12:00:00",
+                        "refreshAfterAt": "2026-10-14T12:00:40+09:00",
+                        "staleAt": "2026-10-14T12:01:00+09:00"
+                      },
+                      "refresh": {
+                        "status": "RUNNING",
+                        "reason": "COLLECTING",
+                        "suggestedRefreshAt": "2026-10-14T12:01:03+09:00"
+                      },
+                      "routes": []
+                    }
                   }
                 }
               }
@@ -177,6 +238,36 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "지원하지 않는 HTTP 메서드",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "code": "METHOD_NOT_ALLOWED",
+                  "message": "이 경로에서 지원하지 않는 요청 방식입니다.",
+                  "requestId": "example-request"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "요청 처리 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "code": "INTERNAL_ERROR",
+                  "message": "요청을 처리하지 못했습니다.",
+                  "requestId": "example-request"
                 }
               }
             }

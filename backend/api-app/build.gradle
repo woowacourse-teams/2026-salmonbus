@@ -50,6 +50,8 @@ tasks.named('test') {
     def chatContractExamples = rootProject.file('../contract/examples/chat-v1.json')
     def chatInitScript = rootProject.file('deploy/chat/init-chat-db.js')
     def geometryRoutesFixture = rootProject.file('../dev/data/routes.json')
+    def arrivalsContract = rootProject.file('../contract/station-arrivals-v2.openapi.json')
+    def geometryContract = rootProject.file('../contract/route-geometry-v2.openapi.json')
     inputs.file(chatContractExamples)
         .withPropertyName('chatContractExamples')
         .withPathSensitivity(PathSensitivity.NONE)
@@ -59,12 +61,17 @@ tasks.named('test') {
     inputs.file(geometryRoutesFixture)
         .withPropertyName('geometryRoutesFixture')
         .withPathSensitivity(PathSensitivity.NONE)
+    inputs.files(arrivalsContract, geometryContract)
+        .withPropertyName('v2OpenApiContracts')
+        .withPathSensitivity(PathSensitivity.NONE)
     doFirst {
         systemProperty 'api.boot.jar', apiJar.get().asFile.absolutePath
         systemProperty 'worker.boot.jar', workerJar.get().asFile.absolutePath
         systemProperty 'chat.contract.examples', chatContractExamples.absolutePath
         systemProperty 'chat.init.script', chatInitScript.absolutePath
         systemProperty 'geometry.routes.fixture', geometryRoutesFixture.absolutePath
+        systemProperty 'arrival.openapi.contract', arrivalsContract.absolutePath
+        systemProperty 'geometry.openapi.contract', geometryContract.absolutePath
     }
 }
 

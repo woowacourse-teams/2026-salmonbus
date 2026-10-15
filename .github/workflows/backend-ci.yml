@@ -6,6 +6,7 @@ on:
     paths:
       - 'backend/**'
       - 'contract/examples/chat-v1.json'
+      - 'contract/*.openapi.json'
       - 'docs/api/chat-websocket-public.md'
       - 'dev/server/api.yml'
       - '.github/workflows/backend-ci.yml'
@@ -14,6 +15,7 @@ on:
     paths:
       - 'backend/**'
       - 'contract/examples/chat-v1.json'
+      - 'contract/*.openapi.json'
       - 'docs/api/chat-websocket-public.md'
       - 'dev/server/api.yml'
       - '.github/workflows/backend-ci.yml'

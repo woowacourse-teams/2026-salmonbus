@@ -48,6 +48,8 @@ springdoc:
     validator-url: none
   paths-to-match:
     - /api/v1/**
+    - /api/v2/stations/{stationId}/arrivals
+    - /api/v2/routes/{routeId}/geometry
     - /api/chat/rooms/{routeId}
 
 # 오류 응답에 실어 보낸 requestId 로 서버 로그를 찾을 수 있게 한다.
