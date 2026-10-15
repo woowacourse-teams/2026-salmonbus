@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import type { ApproachingVehicle } from "@/shared/api/routeForecast.types";
 import { forecastFixtures } from "@/testing/forecastFixtures";
-import { arrivalViewsFor, representativeArrival } from "./arrivalPolicy";
+import { arrivalViewsFor, representativeArrival, type ArrivalView } from "./arrivalPolicy";
 
 describe("arrivalViewsFor", () => {
   it("forecast 안의 확률과 예상 좌석으로 도착 예측을 만든다", () => {
@@ -45,7 +45,9 @@ describe("arrivalViewsFor", () => {
       { ...forecastFixtures.unavailable, horizonStops: 1 },
       { ...forecastFixtures.available, horizonStops: 3 },
     ];
-    const arrivals = arrivalViewsFor(vehicles);
+    const [first, ...rest] = arrivalViewsFor(vehicles);
+    if (first === undefined) throw new Error("도착 예측이 비어 있습니다");
+    const arrivals: [ArrivalView, ...ArrivalView[]] = [first, ...rest];
 
     expect(arrivals.map((arrival) => arrival.stopsAway)).toEqual([1, 3, 7]);
     expect(representativeArrival(arrivals)).toEqual({

@@ -1,6 +1,6 @@
 import type { EventMap } from "@/shared/analytics/events";
 import type { Board, Direction } from "@/shared/api/routeForecast.types";
-import type { ArrivalTone } from "../arrivalPolicy";
+import { representativeArrival, type ArrivalTone } from "../arrivalPolicy";
 import { stopViewsFor, type ExpandableStopView } from "../displayPolicy";
 
 interface BoardViewTiming {
@@ -60,13 +60,13 @@ export function stopExpandedPropertiesOf(
     return { ...common, stop_kind: "noVehicle", arrival_count: 0 };
   }
 
-  const [nearest] = stop.arrivals;
-  if (nearest.kind === "unavailable") {
+  const representative = representativeArrival(stop.arrivals);
+  if (representative.kind === "unavailable") {
     return {
       ...common,
       stop_kind: "boarding",
       forecast_status: "UNAVAILABLE",
-      stops_away: nearest.stopsAway,
+      stops_away: representative.stopsAway,
       arrival_count: stop.arrivals.length,
     };
   }
@@ -74,8 +74,8 @@ export function stopExpandedPropertiesOf(
     ...common,
     stop_kind: "boarding",
     forecast_status: "AVAILABLE",
-    level: nearest.level,
-    stops_away: nearest.stopsAway,
+    level: representative.level,
+    stops_away: representative.stopsAway,
     arrival_count: stop.arrivals.length,
   };
 }

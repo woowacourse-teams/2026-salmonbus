@@ -94,20 +94,20 @@ function toStopView(stop: StopState, turnSequence: number | null): StopView {
     return { kind: "passThrough", sequence, stopId, name, isTurnaround };
   }
 
-  const arrivals = arrivalViewsFor(stop.approachingVehicles);
-  const representative = representativeArrival(arrivals);
-  if (representative === undefined) {
+  const [first, ...rest] = arrivalViewsFor(stop.approachingVehicles);
+  if (first === undefined) {
     return { kind: "noVehicle", sequence, stopId, name, isTurnaround };
   }
 
+  const arrivals: BoardingStopView["arrivals"] = [first, ...rest];
   return {
     kind: "boarding",
     sequence,
     stopId,
     name,
     isTurnaround,
-    tone: arrivalToneFor(representative),
-    arrivals: [representative, ...arrivals.slice(1)],
+    tone: arrivalToneFor(representativeArrival(arrivals)),
+    arrivals,
   };
 }
 
