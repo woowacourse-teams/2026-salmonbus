@@ -26,7 +26,7 @@ export function useBoardSnapshot(
   useEffect(() => {
     if (recheckAt === null) return;
 
-    const timer = window.setTimeout(() => setNow(Date.now()), Math.max(0, recheckAt - Date.now()));
+    const timer = window.setTimeout(() => setNow(Math.max(Date.now(), recheckAt)), Math.max(0, recheckAt - Date.now()));
     return () => window.clearTimeout(timer);
   }, [recheckAt]);
 
