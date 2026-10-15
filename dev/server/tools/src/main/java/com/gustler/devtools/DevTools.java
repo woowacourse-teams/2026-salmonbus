@@ -52,6 +52,16 @@ public final class DevTools {
             throws Exception {
         Checks.require(args.length > 0, "COMMAND_REQUIRED");
         switch (args[0]) {
+            case "prepare-deployment", "recover-deployment", "complete-deployment" -> {
+                var options = options(args, Set.of("--bundle"), Set.of());
+                var incoming = Path.of(required(options, "--bundle")).toAbsolutePath();
+                var preparation = new DeploymentPreparation(layout, host);
+                Json.output(switch (args[0]) {
+                    case "prepare-deployment" -> preparation.prepare(incoming, environment);
+                    case "recover-deployment" -> preparation.recover(incoming, environment);
+                    default -> preparation.complete(incoming, environment);
+                });
+            }
             case "preflight" -> {
                 Checks.require(args.length == 2, "COMPONENT");
                 new Preflight(layout, host).check(args[1], environment);

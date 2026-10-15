@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { paths } from "@/shared/routing/paths";
 import * as styles from "./BoardHeader.css";
 
@@ -7,9 +7,22 @@ interface BoardHeaderProps {
 }
 
 export function BoardHeader({ routeName }: BoardHeaderProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isFirstPage = location.key === "default";
+
   return (
     <header className={styles.header}>
-      <Link to={paths.routeSelect} className={styles.back} aria-label="노선 선택으로 돌아가기">
+      <Link
+        to={paths.routeSelect}
+        onClick={(event) => {
+          if (isFirstPage || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          void navigate(-1);
+        }}
+        className={styles.back}
+        aria-label="노선 선택으로 돌아가기"
+      >
         <BackArrow />
       </Link>
       <h1 className={styles.routeName}>{routeName}</h1>

@@ -34,3 +34,7 @@ export async function openBoard(page: Page) {
   await selectRoute(page);
   await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
 }
+
+export function boardBackLink(page: Page) {
+  return page.getByRole("link", { name: "노선 선택으로 돌아가기", exact: true });
+}
