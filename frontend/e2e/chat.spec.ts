@@ -840,7 +840,7 @@ for (const [routeId, displayName] of [
   ["234000051", "3500"],
 ]) {
   test(`${displayName} 노선도 서버 응답으로 채팅을 열고 메시지를 보낸다`, async ({ page, api, chat }) => {
-    await page.route("**/api/**", async (route) => {
+    await api.route(async (route) => {
       const path = new URL(route.request().url()).pathname;
       const prefix = `/api/v1/routes/${routeId}`;
       if (path === `/api/chat/rooms/${routeId}`) {

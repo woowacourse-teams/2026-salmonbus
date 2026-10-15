@@ -12,6 +12,9 @@
 !dev/data/**
 !dev/scenarios/
 !dev/scenarios/**
+!dev/server/
+dev/server/**
+!dev/server/replay.json
 !dev/wiremock/
 !dev/wiremock/**
 !dev/wiremock-extension/

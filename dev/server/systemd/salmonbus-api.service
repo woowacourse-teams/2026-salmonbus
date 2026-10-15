@@ -13,7 +13,7 @@ EnvironmentFile=/etc/salmonbus-dev/api.env
 EnvironmentFile=/opt/salmonbus-dev/api/current/release.env
 UnsetEnvironment=JAVA_TOOL_OPTIONS JDK_JAVA_OPTIONS _JAVA_OPTIONS CLASSPATH
 ExecStartPre=+/usr/bin/java -Xms16m -Xmx64m -jar /opt/salmonbus-dev/tools/shared-dev-tools.jar preflight api
-ExecStart=/usr/bin/java -Xms128m -Xmx256m -jar /opt/salmonbus-dev/api/current/jars/api-app.jar --spring.config.additional-location=file:/etc/salmonbus-dev/api.yml --spring.datasource.url=jdbc:postgresql://127.0.0.1:15432/salmonbus_dev --spring.datasource.username=salmonbus_dev
+ExecStart=/usr/bin/java -Xms128m -Xmx256m -jar /opt/salmonbus-dev/api/current/jars/api-app.jar --spring.config.additional-location=file:/etc/salmonbus-dev/api.yml
 Restart=on-failure
 RestartSec=5
 SuccessExitStatus=143
