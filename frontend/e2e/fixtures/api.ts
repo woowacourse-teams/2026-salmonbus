@@ -1,12 +1,12 @@
 import { test as base, expect } from "@playwright/test";
-import { createApiMockRouter } from "./api-mock-router";
+import { createApiMockRouter, type ApiMockRouter } from "./api-mock-router";
 import { apiPaths, createApiData, observedAt, pollIntervalMs } from "./mock-data";
 
 type Endpoint = keyof typeof apiPaths;
 type ResponseMode = "success" | "network-error";
 
 interface MockApi {
-  route: ReturnType<typeof createApiMockRouter>["route"];
+  route: ApiMockRouter["route"];
   data: ReturnType<typeof createApiData>;
   mode: Record<Endpoint, ResponseMode>;
   requests: Record<Endpoint, number>;

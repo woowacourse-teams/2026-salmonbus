@@ -2,7 +2,12 @@ import type { Page, Request, Route } from "@playwright/test";
 
 type ApiRouteHandler = (route: Route) => Promise<void>;
 
-export function createApiMockRouter(page: Page) {
+export interface ApiMockRouter {
+  route(handler: ApiRouteHandler): Promise<void>;
+  dispose(): Promise<void>;
+}
+
+export function createApiMockRouter(page: Page): ApiMockRouter {
   const callbacks = new Set<Promise<void>>();
   const requests = new Map<Request, { finished: Promise<void>; finish: () => void }>();
   const errors: unknown[] = [];
