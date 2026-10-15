@@ -11,7 +11,7 @@ const arrival: ArrivalView = {
   level: "high",
   seatEstimate: { kind: "count", seats: 15 },
 };
-const unavailable = { stopsAway: 3, label: "시간 정보 없음" };
+const unavailable = { available: false, stopsAway: 3, label: "시간 정보 없음" };
 
 function detailsWith(seconds = 120) {
   const vehicle: ArrivalVehicle = {
@@ -87,7 +87,7 @@ describe("arrivalTimingFor", () => {
     const details = detailsWith();
     const route = details.resource.latestSuccess.body.routes[0]!;
     route.arrivals.unshift({ ...route.arrivals[0]!, vehicleId: "another-bus", ordinal: 2, remainingStops: 9 });
-    expect(arrivalTimingFor(arrival, details)).toEqual({ stopsAway: 1, label: "2분 남음" });
+    expect(arrivalTimingFor(arrival, details)).toEqual({ available: true, stopsAway: 1, label: "2분 남음" });
     expect(arrival.seatEstimate).toEqual({ kind: "count", seats: 15 });
   });
 
@@ -95,7 +95,7 @@ describe("arrivalTimingFor", () => {
     const expected =
       seconds <= 0
         ? unavailable
-        : { stopsAway: 1, label: seconds <= 60 ? "1분 이내" : `${Math.ceil(seconds / 60)}분 남음` };
+        : { available: true, stopsAway: 1, label: seconds <= 60 ? "1분 이내" : `${Math.ceil(seconds / 60)}분 남음` };
     expect(arrivalTimingFor(arrival, detailsWith(seconds))).toEqual(expected);
   });
 
@@ -173,7 +173,7 @@ describe("arrivalTimingFor", () => {
           latestSuccess: details.resource.latestSuccess,
         },
       }),
-    ).toEqual({ stopsAway: 1, label: "2분 남음" });
+    ).toEqual({ available: true, stopsAway: 1, label: "2분 남음" });
     expect(
       arrivalTimingFor(arrival, { ...details, resource: { status: "loadingError", failure: { kind: "timeout" } } }),
     ).toEqual(unavailable);

@@ -46,7 +46,7 @@ export const timing = style({
   flexDirection: "column",
   justifyContent: "center",
   flex: "0 1 76px",
-  minWidth: "66px",
+  minWidth: "72px",
   paddingLeft: "6px",
   lineHeight: 1.4,
   whiteSpace: "nowrap",
@@ -63,6 +63,11 @@ export const remainingTime = style({
   fontSize: vars.font.arrivalTime,
   fontWeight: 600,
 });
+
+export const unavailableTime = style([
+  remainingTime,
+  { fontSize: vars.font.distance, color: vars.color.textSubtle, fontWeight: 500 },
+]);
 
 export const notice = style({
   display: "flex",
