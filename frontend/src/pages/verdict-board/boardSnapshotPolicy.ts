@@ -15,10 +15,8 @@ export interface BoardSnapshot {
   liveVehicles: LatestSuccess<LiveVehicles> | null;
 }
 
-export interface BoardSnapshotStep {
-  snapshot: BoardSnapshot | null;
-  recheckAt: number | null;
-}
+export type BoardSnapshotStep =
+  { snapshot: null; recheckAt: null } | { snapshot: BoardSnapshot; recheckAt: number | null };
 
 export interface BoardHistories {
   routeId: string;
