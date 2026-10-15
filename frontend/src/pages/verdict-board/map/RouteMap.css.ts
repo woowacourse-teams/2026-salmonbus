@@ -4,6 +4,7 @@ import { vars } from "@/shared/styles/tokens.css";
 export const region = style({
   position: "relative",
   width: "100%",
+  height: "100%",
   overflow: "hidden",
   isolation: "isolate",
   background: vars.color.surface,

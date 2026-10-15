@@ -10,8 +10,14 @@ export const page = style({
   overflow: "hidden",
   backgroundColor: vars.color.background,
 });
-export const content = style({ position: "relative", width: "100%", height: "100%" });
-export const mapSlot = style({ position: "absolute", top: 0, left: 0, right: 0, overflow: "hidden" });
+export const content = style({
+  position: "relative",
+  display: "flex",
+  flexDirection: "column",
+  width: "100%",
+  height: "100%",
+});
+export const mapSlot = style({ position: "relative", flex: 1, minHeight: 0, overflow: "hidden" });
 export const back = style({
   position: "absolute",
   top: "calc(env(safe-area-inset-top, 0px) + 20px)",

@@ -7,7 +7,6 @@ interface BoardBottomSheetProps {
   snap: BoardSheetSnap;
   onSnapChange: (snap: BoardSheetSnap) => void;
   viewportHeight: number;
-  onHeightChange: (height: number) => void;
   header: ReactNode;
   children: ReactNode;
 }
@@ -20,14 +19,7 @@ const SNAP_LABEL: Record<BoardSheetSnap, string> = {
 };
 const SNAP_VALUE: Record<BoardSheetSnap, number> = { minimum: 0, half: 1, expanded: 2, full: 3 };
 
-export function BoardBottomSheet({
-  snap,
-  onSnapChange,
-  viewportHeight,
-  onHeightChange,
-  header,
-  children,
-}: BoardBottomSheetProps) {
+export function BoardBottomSheet({ snap, onSnapChange, viewportHeight, header, children }: BoardBottomSheetProps) {
   const listId = useId();
   const {
     sheetRef,
@@ -39,7 +31,7 @@ export function BoardBottomSheet({
     dragHandlers,
     onHandleKeyDown,
     onHandleClick,
-  } = useBoardSheet({ snap, onSnapChange, viewportHeight, onHeightChange });
+  } = useBoardSheet({ snap, onSnapChange, viewportHeight });
 
   return (
     <section

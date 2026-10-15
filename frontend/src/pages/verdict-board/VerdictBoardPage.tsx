@@ -121,7 +121,6 @@ function OperatingBoard({
   const viewport = useBoardViewport();
   const pageRef = useRef<HTMLDivElement>(null);
   const [snap, setSnap] = useState<BoardSheetSnap>("half");
-  const [sheetHeight, setSheetHeight] = useState(() => viewport.height / 2);
   const [selected, setSelected] = useState<StopSelection | null>(null);
   const [scrollRequest, setScrollRequest] = useState<StopSelection | null>(null);
   const [vehicleFocusRequest, setVehicleFocusRequest] = useState<{ key: string; focusMarker: boolean } | null>(null);
@@ -133,7 +132,7 @@ function OperatingBoard({
   );
   const motion = useLiveVehicleMotion(vehicles, liveMotionDurationMs);
   const mapData = useRouteMapData(board);
-  const mapHeight = Math.max(0, viewport.height - sheetHeight);
+  const mapVisible = snap !== "full";
   useBoardOverlayAnchors(pageRef, snap, viewport.height);
 
   function selectFromMap(selection: StopSelection) {
@@ -181,12 +180,7 @@ function OperatingBoard({
   return (
     <div ref={pageRef} className={styles.page} style={{ height: viewport.height, top: viewport.top }}>
       <main className={styles.content}>
-        <div
-          className={styles.mapSlot}
-          style={{ height: mapHeight }}
-          inert={mapHeight <= 0}
-          aria-hidden={mapHeight <= 0}
-        >
+        <div className={styles.mapSlot} inert={!mapVisible} aria-hidden={!mapVisible}>
           <RouteMap
             board={board}
             data={mapData}
@@ -197,7 +191,7 @@ function OperatingBoard({
             selectedVehicleKey={selectedVehicleKey}
             liveVehicleViews={vehicles}
             motion={motion}
-            viewportHeight={mapHeight}
+            visible={mapVisible}
             activeDirection={direction.id}
           />
           <BoardBackLink />
@@ -206,7 +200,6 @@ function OperatingBoard({
           snap={snap}
           onSnapChange={setSnap}
           viewportHeight={viewport.height}
-          onHeightChange={setSheetHeight}
           header={
             <>
               {snap === "full" && (

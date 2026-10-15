@@ -944,6 +944,45 @@ test("헤더 드래그는 양 끝에 붙고 방향 버튼에서 시작한 드래
 });
 
 for (const reducedMotion of ["reduce", "no-preference"] as const) {
+  test(`드래그 중 지도와 채팅 위치가 시트 경계를 따라가고 지도 시점은 유지된다 (${reducedMotion})`, async ({
+    page,
+    naverMap,
+  }) => {
+    await page.emulateMedia({ reducedMotion });
+    await openMap(page);
+    await naverMap.setZoom(14);
+    await naverMap.panToStop(11);
+    const originalView = await naverMap.snapshot();
+    const bounds = await sheet(page).boundingBox();
+    if (bounds === null) throw new Error("드래그할 시트가 없습니다");
+    const originY = bounds.y + 12;
+    await page.mouse.move(bounds.x + 25, originY);
+    await page.mouse.down();
+
+    for (const offset of [-80, -150, -90, 80]) {
+      await page.mouse.move(bounds.x + 25, originY + offset, { steps: 4 });
+      await page.clock.runFor(48);
+      await expect(sheet(page)).toHaveAttribute("data-dragging", "true");
+      await expectSheetAndMapHeights(page, bounds.height - offset, 844 - bounds.height + offset);
+      await expectMapToFillRegion(page);
+      await expect
+        .poll(async () => {
+          await page.clock.runFor(32);
+          return sheet(page).evaluate((element) => {
+            const chatTop = Number.parseFloat(document.documentElement.style.getPropertyValue("--board-chat-top"));
+            return Math.abs(chatTop - (element.getBoundingClientRect().top - 52));
+          });
+        })
+        .toBeLessThanOrEqual(1);
+      expect(await naverMap.snapshot()).toEqual(originalView);
+    }
+
+    await page.mouse.up();
+    await page.clock.runFor(400);
+    await expect(sheet(page)).toHaveAttribute("data-dragging", "false");
+    await expectMapToFillRegion(page);
+  });
+
   test(`최소·70%·전체 시트와 화면 크기 변경에도 지도가 영역을 채우고 시점을 유지한다 (${reducedMotion})`, async ({
     page,
     naverMap,

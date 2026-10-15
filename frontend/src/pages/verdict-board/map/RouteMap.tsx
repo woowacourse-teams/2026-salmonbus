@@ -18,7 +18,7 @@ interface RouteMapProps {
   selectedVehicleKey: string | null;
   liveVehicleViews: LiveVehicleView[];
   motion: LiveVehicleMotionStore;
-  viewportHeight: number;
+  visible: boolean;
   activeDirection: Direction;
 }
 
@@ -31,7 +31,7 @@ type LocationState = { status: "idle" } | { status: "loading" } | { status: "mes
 export function RouteMap(props: RouteMapProps) {
   const {
     data,
-    viewportHeight,
+    visible,
     selected,
     activeDirection,
     liveVehicleViews,
@@ -39,7 +39,6 @@ export function RouteMap(props: RouteMapProps) {
     vehicleFocusRequest,
     selectedVehicleKey,
   } = props;
-  const visible = viewportHeight > 0;
   const regionRef = useRef<HTMLElement | null>(null);
   const elementRef = useRef<HTMLDivElement>(null);
   const adapterRef = useRef<RouteMapAdapter | null>(null);
@@ -48,12 +47,10 @@ export function RouteMap(props: RouteMapProps) {
   const locationRequest = useRef(0);
   const [mapState, setMapState] = useState<MapState>({ status: "loading" });
   const [locationState, setLocationState] = useState<LocationState>({ status: "idle" });
-  const [height, setHeight] = useState(Math.max(1, viewportHeight));
-  if (viewportHeight > 0 && height !== viewportHeight) setHeight(viewportHeight);
 
   useLayoutEffect(() => {
     propsRef.current = props;
-  }, [props, viewportHeight]);
+  }, [props]);
 
   const disposeMap = useCallback(() => {
     const adapter = adapterRef.current;
@@ -172,23 +169,17 @@ export function RouteMap(props: RouteMapProps) {
     [motion, runMapAction],
   );
 
-  useLayoutEffect(() => {
-    // SDK가 지도 요소의 크기를 픽셀 값으로 고정하므로 바깥 영역을 측정한다.
-    const region = regionRef.current;
-    if (region === null || viewportHeight <= 0) return;
-    runMapAction((adapter) => adapter.resize(region.clientWidth, region.clientHeight));
-  }, [height, viewportHeight, mapState, runMapAction]);
-
   useEffect(() => {
     const region = regionRef.current;
     if (region === null) return;
+    // SDK가 canvas 크기를 픽셀 값으로 고정하므로 CSS 레이아웃이 정한 바깥 영역만 관찰한다.
+    // 지도 준비 때도 observe의 최초 알림으로 같은 경로에서 크기를 맞춘다.
     const observer = new ResizeObserver(() => {
-      if (propsRef.current.viewportHeight > 0)
-        runMapAction((adapter) => adapter.resize(region.clientWidth, region.clientHeight));
+      runMapAction((adapter) => adapter.resize(region.clientWidth, region.clientHeight));
     });
     observer.observe(region);
     return () => observer.disconnect();
-  }, [runMapAction]);
+  }, [mapState, runMapAction]);
 
   function locate() {
     if (adapterRef.current === null) return;
@@ -234,11 +225,11 @@ export function RouteMap(props: RouteMapProps) {
     <section
       ref={regionRef}
       className={styles.region}
-      style={{ height, pointerEvents: viewportHeight <= 0 ? "none" : "auto" }}
+      style={{ pointerEvents: visible ? "auto" : "none" }}
       aria-label="노선 지도"
       aria-busy={currentMapState.status === "loading"}
-      aria-hidden={viewportHeight <= 0}
-      inert={viewportHeight <= 0}
+      aria-hidden={!visible}
+      inert={!visible}
     >
       <div
         ref={elementRef}

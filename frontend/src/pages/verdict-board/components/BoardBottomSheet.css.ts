@@ -2,12 +2,10 @@ import { style } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 
 export const sheet = style({
-  position: "absolute",
-  right: 0,
-  bottom: 0,
-  left: 0,
+  position: "relative",
   zIndex: 2,
   display: "flex",
+  flexShrink: 0,
   flexDirection: "column",
   boxSizing: "border-box",
   overflow: "hidden",

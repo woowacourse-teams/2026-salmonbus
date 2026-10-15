@@ -22,7 +22,6 @@ interface BoardSheetOptions {
   snap: BoardSheetSnap;
   viewportHeight: number;
   onSnapChange: (snap: BoardSheetSnap) => void;
-  onHeightChange: (height: number) => void;
 }
 
 interface SheetGeometry {
@@ -47,7 +46,7 @@ const INTERACTIVE_HEADER_CONTENT =
 const CLICK_AFTER_DRAG_MS = 400;
 const FLICK_IDLE_MS = 80;
 
-export function useBoardSheet({ snap, viewportHeight, onSnapChange, onHeightChange }: BoardSheetOptions) {
+export function useBoardSheet({ snap, viewportHeight, onSnapChange }: BoardSheetOptions) {
   const sheetRef = useRef<HTMLElement | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
   const safeTopRef = useRef<HTMLSpanElement | null>(null);
@@ -105,16 +104,6 @@ export function useBoardSheet({ snap, viewportHeight, onSnapChange, onHeightChan
     observer.observe(safeBottom);
     return () => observer.disconnect();
   }, []);
-
-  useLayoutEffect(() => {
-    const sheet = sheetRef.current;
-    if (sheet === null) return;
-    const reportHeight = () => onHeightChange(sheet.getBoundingClientRect().height);
-    reportHeight();
-    const observer = new ResizeObserver(reportHeight);
-    observer.observe(sheet);
-    return () => observer.disconnect();
-  }, [onHeightChange]);
 
   useEffect(() => {
     window.addEventListener("blur", cancelDrag);
