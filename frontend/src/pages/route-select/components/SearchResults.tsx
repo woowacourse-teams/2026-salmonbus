@@ -44,7 +44,13 @@ function renderView(view: SearchView, onSelect: SearchResultsProps["onSelect"], 
       return (
         <div className={styles.notice}>
           <p aria-hidden="true">{LOAD_FAILED_NOTICE}</p>
-          <button className={styles.retryButton} type="button" onClick={onRetry}>
+          {/* 누르는 순간 검색창 포커스가 빠지면 검색 영역이 내려가서 버튼이 움직이고 클릭이 취소된다 */}
+          <button
+            className={styles.retryButton}
+            type="button"
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={onRetry}
+          >
             {RETRY_LABEL}
           </button>
         </div>
