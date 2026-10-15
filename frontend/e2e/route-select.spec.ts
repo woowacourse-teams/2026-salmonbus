@@ -88,6 +88,7 @@ test("지우기 버튼을 누르면 입력과 결과가 사라지고 입력창�
 test("결과가 하나일 때 엔터를 누르면 그 노선의 판정 보드로 이동한다", async ({ page }) => {
   await page.goto("/");
   await routeSearchInput(page).fill("3330");
+  await expect(page.getByRole("main").getByRole("status")).toHaveText("일치하는 노선 1개");
   await routeSearchInput(page).press("Enter");
 
   await expect(page).toHaveURL(`/routes/${routeId}`);
