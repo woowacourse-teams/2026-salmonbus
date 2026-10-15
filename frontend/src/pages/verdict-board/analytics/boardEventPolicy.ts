@@ -3,7 +3,8 @@ import type { Board, Direction } from "@/shared/api/routeForecast.types";
 import { representativeArrival, type ArrivalTone } from "../arrivalPolicy";
 import { stopViewsFor, type ExpandableStopView } from "../displayPolicy";
 
-interface BoardViewTiming {
+interface BoardViewContext {
+  routeId: string;
   now: number;
   loadMs: number;
 }
@@ -18,7 +19,7 @@ interface StopExpandContext {
 export function boardViewedPropertiesOf(
   board: Board,
   direction: Direction,
-  { now, loadMs }: BoardViewTiming,
+  { routeId, now, loadMs }: BoardViewContext,
 ): EventMap["board_viewed"] {
   const stops = stopViewsFor(board, direction);
   const toneCounts: Record<ArrivalTone, number> = { high: 0, low: 0, veryLow: 0, unavailable: 0 };
@@ -29,7 +30,7 @@ export function boardViewedPropertiesOf(
   }
 
   return {
-    route_id: board.route.id,
+    route_id: routeId,
     direction,
     model_release_id: board.model.releaseId,
     forecast_age_sec: Math.round((now - Date.parse(board.observedAt)) / 1000),

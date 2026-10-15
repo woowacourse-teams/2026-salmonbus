@@ -23,7 +23,7 @@ const board = boardWith({
   ],
 });
 
-const timing = { now: Date.parse("2026-09-01T08:13:10+09:00"), loadMs: 1234.6 };
+const timing = { routeId: "R1", now: Date.parse("2026-09-01T08:13:10+09:00"), loadMs: 1234.6 };
 
 describe("boardViewedPropertiesOf", () => {
   it("보고 있는 방향의 정류장만 센다", () => {
@@ -74,6 +74,10 @@ describe("boardViewedPropertiesOf", () => {
       vehicles_in_service: 3,
       load_ms: 1235,
     });
+  });
+
+  it("route_id는 서버 응답이 아니라 방문의 노선 ID(URL 값)를 쓴다", () => {
+    expect(boardViewedPropertiesOf(board, "UP", { ...timing, routeId: "R9" }).route_id).toBe("R9");
   });
 });
 

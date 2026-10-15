@@ -115,6 +115,7 @@ function eventStepOf(visit: BoardVisit, observation: BoardObservation): BoardVis
     case "forecast": {
       if (visit.viewed || !freshForVisit) return { visit, event: null };
       const properties = boardViewedPropertiesOf(screen.board, screen.direction, {
+        routeId: visit.routeId,
         now: observation.serverNow,
         loadMs: observation.elapsedNow - visit.startedAt,
       });
