@@ -88,6 +88,7 @@ export const test = apiTest.extend<{
             private glInitialized = false;
             private holdIdle = holdMapIdle;
             private zoomFrame = 0;
+            private setSizeCount = 0;
             private removeInputListeners: () => void;
             constructor(
               private element: HTMLElement,
@@ -233,6 +234,7 @@ export const test = apiTest.extend<{
               return this.size;
             }
             setSize(size: Size) {
+              this.layer.dataset.setSizeCount = String(++this.setSizeCount);
               this.size = size;
               // 실제 SDK도 지도 요소의 크기를 픽셀 값으로 고정한다.
               this.element.style.width = `${size.width}px`;

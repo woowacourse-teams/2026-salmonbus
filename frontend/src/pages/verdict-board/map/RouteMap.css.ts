@@ -1,4 +1,4 @@
-import { style } from "@vanilla-extract/css";
+import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 
 export const region = style({
@@ -9,7 +9,18 @@ export const region = style({
   isolation: "isolate",
   background: vars.color.surface,
 });
+export const canvasViewport = style({
+  position: "absolute",
+  top: "50%",
+  left: 0,
+  width: "100%",
+  transform: "translateY(-50%)",
+});
 export const canvas = style({ position: "relative", zIndex: 0, width: "100%", height: "100%" });
+// SDK가 캔버스 하단에 배치한 출처 표시는 실제로 보이는 지도 하단으로 올린다.
+globalStyle(`${canvas} > div:has(img[alt="NAVER"])`, {
+  translate: "0 calc(-1 * var(--map-crop-inset, 0px))",
+});
 export const notice = style({
   position: "absolute",
   inset: 0,
@@ -96,7 +107,9 @@ export const stopName = style({
   top: "calc(100% + 4px)",
   transform: "translateX(-50%)",
   padding: "3px 5px",
-  color: vars.color.mapStopName,
+  color: vars.color.onInk,
+  WebkitTextStroke: "2px #000000",
+  paintOrder: "stroke fill",
   whiteSpace: "nowrap",
   fontFamily: "'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif",
   fontSize: 13,
@@ -134,21 +147,27 @@ export const bus = style({
   },
   selectors: {
     [`${canvas}[data-overlays-ready="false"] &`]: { visibility: "hidden" },
-    '&[aria-pressed="true"]': { transform: "scale(1.12)" },
-    "&:focus-visible": { transform: "scale(1.12)" },
+    '&[aria-pressed="true"]': { transform: "scale(1.5)" },
+    "&:focus-visible": { transform: "scale(1.5)" },
   },
 });
 export const busCount = style({
   position: "absolute",
   top: 0,
-  left: 4,
+  left: "50%",
+  translate: "-50% 0",
   display: "grid",
   placeItems: "center",
-  width: 32,
+  width: "max-content",
+  minWidth: 32,
   height: 18,
+  padding: "2px 6px 0",
   lineHeight: 1,
   borderRadius: 5,
   background: vars.color.mapBus,
+  selectors: {
+    "&[hidden]": { display: "none" },
+  },
 });
 export const busPin = style({
   position: "absolute",

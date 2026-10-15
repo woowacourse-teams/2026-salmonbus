@@ -192,6 +192,7 @@ function OperatingBoard({
             liveVehicleViews={vehicles}
             motion={motion}
             visible={mapVisible}
+            viewportHeight={viewport.height}
             activeDirection={direction.id}
           />
           <BoardBackLink />

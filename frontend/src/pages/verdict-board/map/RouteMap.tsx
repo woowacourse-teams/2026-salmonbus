@@ -19,6 +19,7 @@ interface RouteMapProps {
   liveVehicleViews: LiveVehicleView[];
   motion: LiveVehicleMotionStore;
   visible: boolean;
+  viewportHeight: number;
   activeDirection: Direction;
 }
 
@@ -32,6 +33,7 @@ export function RouteMap(props: RouteMapProps) {
   const {
     data,
     visible,
+    viewportHeight,
     selected,
     activeDirection,
     liveVehicleViews,
@@ -105,13 +107,15 @@ export function RouteMap(props: RouteMapProps) {
     void loadNaverMaps(__NAVER_MAP_KEY_ID__)
       .then((sdk) => {
         const element = elementRef.current;
-        if (!active || failed || element === null) return;
+        const region = regionRef.current;
+        if (!active || failed || element === null || region === null) return;
         const current = propsRef.current;
         const adapter = createNaverRouteMap(
           sdk,
           element,
           current.board,
           data,
+          region.clientHeight,
           (selection) => propsRef.current.onSelect(selection),
           () => failActiveMap(null),
           () => {
@@ -172,14 +176,14 @@ export function RouteMap(props: RouteMapProps) {
   useEffect(() => {
     const region = regionRef.current;
     if (region === null) return;
-    // SDK가 canvas 크기를 픽셀 값으로 고정하므로 CSS 레이아웃이 정한 바깥 영역만 관찰한다.
-    // 지도 준비 때도 observe의 최초 알림으로 같은 경로에서 크기를 맞춘다.
+    // 시트는 지도를 잘라 보이는 높이만 바꾼다. GL 버퍼 크기는 화면 크기가 바뀔 때만 갱신한다.
     const observer = new ResizeObserver(() => {
-      runMapAction((adapter) => adapter.resize(region.clientWidth, region.clientHeight));
+      region.style.setProperty("--map-crop-inset", `${Math.max(0, (viewportHeight - region.clientHeight) / 2)}px`);
+      runMapAction((adapter) => adapter.resize(region.clientWidth, viewportHeight));
     });
     observer.observe(region);
     return () => observer.disconnect();
-  }, [mapState, runMapAction]);
+  }, [mapState, viewportHeight, runMapAction]);
 
   function locate() {
     if (adapterRef.current === null) return;
@@ -193,10 +197,7 @@ export function RouteMap(props: RouteMapProps) {
       (position) => {
         if (request !== locationRequest.current || adapterRef.current === null) return;
         runMapAction((adapter) =>
-          adapter.showLocation(
-            { latitude: position.coords.latitude, longitude: position.coords.longitude },
-            position.coords.accuracy,
-          ),
+          adapter.showLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
         );
         setLocationState({ status: "idle" });
       },
@@ -231,14 +232,16 @@ export function RouteMap(props: RouteMapProps) {
       aria-hidden={!visible}
       inert={!visible}
     >
-      <div
-        ref={elementRef}
-        className={styles.canvas}
-        data-testid="route-map"
-        data-overlays-ready={ready}
-        inert={!ready}
-        aria-hidden={!ready}
-      />
+      <div className={styles.canvasViewport} style={{ height: viewportHeight }}>
+        <div
+          ref={elementRef}
+          className={styles.canvas}
+          data-testid="route-map"
+          data-overlays-ready={ready}
+          inert={!ready}
+          aria-hidden={!ready}
+        />
+      </div>
       {unavailableMessage !== null ? (
         <div className={styles.notice} role="status">
           <span>{unavailableMessage}</span>

@@ -98,6 +98,7 @@ function createRecordingSdk(glSupported = true) {
     size = new SizeStub(400, 350);
     fits = 0;
     fitMaxZoom = 0;
+    fitMargins: { top: number; right: number; bottom: number; left: number; maxZoom: number } | null = null;
     fittedCoordinates: NaverCoordinate[] = [];
     projectionOffsetX = 0;
     destroyed = false;
@@ -138,6 +139,7 @@ function createRecordingSdk(glSupported = true) {
       this.fits += 1;
       this.fittedCoordinates = coordinates;
       this.fitMaxZoom = margins.maxZoom;
+      this.fitMargins = margins;
       this.zoom = margins.maxZoom;
     }
     getSize() {
@@ -246,7 +248,7 @@ afterEach(() => {
   else Reflect.deleteProperty(globalThis, "window");
 });
 
-function setup(glSupported = true, { initialized = true, reducedMotion = false } = {}) {
+function setup(glSupported = true, { initialized = true, reducedMotion = false, visibleHeight = 350 } = {}) {
   const pendingFrames = new Map<number, FrameRequestCallback>();
   const pendingTimers = new Map<number, { remaining: number; callback: () => void }>();
   const windowListeners = new Map<string, () => void>();
@@ -306,6 +308,7 @@ function setup(glSupported = true, { initialized = true, reducedMotion = false }
     element as unknown as HTMLElement,
     boardMock,
     data,
+    visibleHeight,
     onSelect,
     onError,
     onReady,
@@ -550,11 +553,17 @@ describe("네이버 지도 adapter", () => {
     initialize();
     expect(native.map.fits).toBe(1);
   });
+  for (const glSupported of [true, false]) {
+    it(`${glSupported ? "GL" : "타일"} 지도의 첫 경로를 캔버스에서 잘린 위아래 영역을 제외하고 맞춘다`, () => {
+      const { native } = setup(glSupported, { visibleHeight: 150 });
+      expect(native.map.fitMargins).toEqual({ top: 128, right: 12, bottom: 128, left: 12, maxZoom: 13 });
+    });
+  }
   for (const interaction of ["focus", "location"] as const) {
     it(`GL 초기화 전에 ${interaction === "focus" ? "정류장을 선택하면" : "현재 위치를 찾으면"} 뒤늦은 전체 경로 맞춤으로 덮어쓰지 않는다`, () => {
       const { native, adapter, initialize } = setup(true, { initialized: false });
       if (interaction === "focus") adapter.focus({ direction: "UP", sequence: 15 });
-      else adapter.showLocation({ latitude: 37.4, longitude: 127.1 }, 45);
+      else adapter.showLocation({ latitude: 37.4, longitude: 127.1 });
       const center = native.map.center;
       const zoom = native.map.zoom;
 
@@ -939,7 +948,7 @@ describe("네이버 지도 adapter", () => {
     expect(native.map.zoom).toBe(16);
     expect(button.focus).not.toHaveBeenCalled();
     expect(button.attributes.get("aria-pressed")).toBe("true");
-    expect(count!.textContent).toBe("0석");
+    expect(count!.textContent).toBe("현재 0석");
     adapter.focusVehicle(null);
     expect(button.attributes.get("aria-pressed")).toBe("true");
 
@@ -1046,7 +1055,7 @@ describe("네이버 지도 adapter", () => {
       flushFrames(160);
       if (interruption === "null") adapter.focusVehicle(null);
       else if (interruption === "focus") adapter.focus({ direction: "UP", sequence: 15 });
-      else if (interruption === "location") adapter.showLocation({ latitude: 37.4, longitude: 127.1 }, 20);
+      else if (interruption === "location") adapter.showLocation({ latitude: 37.4, longitude: 127.1 });
       else if (interruption === "remove") adapter.update(null, "UP", []);
       else if (interruption === "destroy") adapter.destroy();
       else windowListeners.get(interruption)!();
@@ -1079,7 +1088,7 @@ describe("네이버 지도 adapter", () => {
     const setIcon = jest.spyOn(bus, "setIcon");
 
     adapter.update(null, "UP", [{ ...view, vehicle: { ...view.vehicle, seat: { kind: "EXACT", remaining: 0 } } }]);
-    expect(count!.textContent).toBe("0석");
+    expect(count!.textContent).toBe("현재 0석");
     adapter.update(null, "UP", [{ ...view, vehicle: { ...view.vehicle, seat: { kind: "UNKNOWN" } } }]);
     expect(count!.textContent).toBe("–");
     expect(content.children[0]).toBe(count);
@@ -1089,10 +1098,10 @@ describe("네이버 지도 adapter", () => {
     expect(setIcon).not.toHaveBeenCalled();
     expect(native.markers.filter((marker) => marker.options.icon.content === bus.options.icon.content)).toEqual([bus]);
   });
-  it("현재 위치는 정확도 원과 함께 표시하며 정리 시 SDK 리스너와 지도를 제거한다", () => {
+  it("현재 위치는 마커 하나만 표시하며 정리 시 SDK 리스너와 지도를 제거한다", () => {
     const { native, adapter } = setup();
-    adapter.showLocation({ latitude: 37.4, longitude: 127.1 }, 45);
-    expect(native.circles[0]?.radius).toBe(45);
+    adapter.showLocation({ latitude: 37.4, longitude: 127.1 });
+    expect(native.circles).toHaveLength(0);
     expect(native.map.zoom).toBe(15);
     adapter.destroy();
     expect(native.sdk.Event.removeListener).toHaveBeenCalledTimes(3);

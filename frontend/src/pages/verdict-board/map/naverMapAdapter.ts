@@ -4,7 +4,7 @@ import type { StopSelection } from "../components/stopSelection";
 import type { LiveVehicleView } from "../components/liveVehiclePolicy";
 import type { GeoCoordinate, RouteMapData } from "./routeMapModel";
 import { routeArrowsFor, routeMapCoordinateForSequence, type RouteArrow } from "./routeMapGeometry";
-import type { NaverMap, NaverMaps, NaverMarker } from "./naverSdk";
+import type { NaverMaps, NaverMarker } from "./naverSdk";
 import * as styles from "./RouteMap.css";
 
 const DETAIL_ZOOM = 14;
@@ -43,7 +43,7 @@ export interface RouteMapAdapter {
   resize: (width: number, height: number) => void;
   focus: (selection: StopSelection) => void;
   focusVehicle: (key: string | null, options?: { focusMarker?: boolean }) => void;
-  showLocation: (coordinate: GeoCoordinate, accuracy: number) => void;
+  showLocation: (coordinate: GeoCoordinate) => void;
   destroy: () => void;
 }
 
@@ -52,6 +52,7 @@ export function createNaverRouteMap(
   element: HTMLElement,
   board: Board,
   data: RouteMapData,
+  visibleHeight: number,
   onSelect: (selection: StopSelection) => void,
   onError: () => void,
   onReady: () => void,
@@ -153,7 +154,6 @@ export function createNaverRouteMap(
   const arrows: ArrowMarker[] = [];
   let arrowsShowBothDirections: boolean | null = null;
   let userMarker: NaverMarker | null = null;
-  let accuracyCircle: { setMap(map: NaverMap | null): void } | null = null;
   const vehicles = new Map<string, VehicleMarker>();
   let vehicleFocusFrame: number | null = null;
   let vehicleFocusKey: string | null = null;
@@ -293,6 +293,13 @@ export function createNaverRouteMap(
     });
   }
 
+  function refreshVehicleCounts() {
+    const hidden = map.getZoom() < DETAIL_ZOOM;
+    vehicles.forEach(({ count }) => {
+      if (count.hidden !== hidden) count.hidden = hidden;
+    });
+  }
+
   function refreshArrows() {
     const showBothDirections = map.getZoom() >= DETAIL_ZOOM;
     const viewport = map.getSize();
@@ -417,11 +424,13 @@ export function createNaverRouteMap(
     if (!initialFitPending) return;
     initialFitPending = false;
     initialViewIdle = false;
+    // 고정 캔버스의 위아래에서 잘리는 만큼 여백을 더해 보이는 영역 안에 경로를 맞춘다.
+    const verticalPadding = 28 + Math.max(0, (map.getSize().height - visibleHeight) / 2);
     map.fitBounds(
       (routeCoordinates.length > 0 ? routeCoordinates : data.stops.map((stop) => stop.coordinate)).map(
         toNaverCoordinate,
       ),
-      { top: 28, right: 12, bottom: 28, left: 12, maxZoom: 13 },
+      { top: verticalPadding, right: 12, bottom: verticalPadding, left: 12, maxZoom: 13 },
     );
     refreshStops();
     refreshArrows();
@@ -443,6 +452,7 @@ export function createNaverRouteMap(
       "zoom_changed",
       createNativeEventHandler(() => {
         refreshStops();
+        refreshVehicleCounts();
         const showBothDirections = map.getZoom() >= DETAIL_ZOOM;
         if (arrowsShowBothDirections !== showBothDirections) refreshArrows();
       }),
@@ -452,6 +462,7 @@ export function createNaverRouteMap(
       "idle",
       createNativeEventHandler(() => {
         refreshStops();
+        refreshVehicleCounts();
         refreshArrows();
         initialViewIdle = true;
         notifyReadyAfterFrame();
@@ -537,11 +548,12 @@ export function createNaverRouteMap(
           item.marker.setZIndex(pressed === "true" ? 30 : 20);
         }
         const seat = view.vehicle.seat;
-        const count = seat.kind === "EXACT" ? `${seat.remaining}석` : "–";
+        const count = seat.kind === "EXACT" ? `현재 ${seat.remaining}석` : "–";
         if (item.count.textContent !== count) item.count.textContent = count;
         const label = `${view.vehicle.stopName} 부근 버스, ${seat.kind === "EXACT" ? `현재 잔여 좌석 ${seat.remaining}석` : "현재 잔여 좌석 정보 없음"}`;
         if (item.element.getAttribute("aria-label") !== label) item.element.setAttribute("aria-label", label);
       });
+      refreshVehicleCounts();
     },
     moveVehicles(frames) {
       const groups = new Map<string, { item: VehicleMarker; coordinate: GeoCoordinate }[]>();
@@ -574,13 +586,12 @@ export function createNaverRouteMap(
     },
     focus,
     focusVehicle,
-    showLocation(coordinate, accuracy) {
+    showLocation(coordinate) {
       cancelVehicleFocus();
       initialFitPending = false;
       initialViewIdle = false;
       cancelReadyFrame();
       userMarker?.setMap(null);
-      accuracyCircle?.setMap(null);
       const position = toNaverCoordinate(coordinate);
       const content = document.createElement("span");
       content.className = styles.userPosition;
@@ -592,17 +603,6 @@ export function createNaverRouteMap(
         icon: { content, anchor: new sdk.Point(25, 25) },
         zIndex: 25,
         clickable: false,
-      });
-      accuracyCircle = new sdk.Circle({
-        map,
-        center: position,
-        radius: Math.max(0, accuracy),
-        fillColor: "#3686F5",
-        fillOpacity: 0.15,
-        strokeColor: "#3686F5",
-        strokeOpacity: 0.25,
-        strokeWeight: 1,
-        zIndex: 4,
       });
       map.setCenter(position);
       map.setZoom(Math.max(15, map.getZoom()), false);
@@ -631,7 +631,6 @@ export function createNaverRouteMap(
       arrows.forEach(({ marker }) => cleanup(() => marker.setMap(null)));
       paths.forEach(({ line }) => cleanup(() => line.setMap(null)));
       cleanup(() => userMarker?.setMap(null));
-      cleanup(() => accuracyCircle?.setMap(null));
       cleanup(() => map.destroy());
     },
   };

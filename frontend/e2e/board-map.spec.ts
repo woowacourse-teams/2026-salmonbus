@@ -67,9 +67,9 @@ async function expectStopFocusedInList(page: Page, sequence: number) {
 
 async function vehicleOffsetFromMapCenter(marker: Locator) {
   return marker.evaluate((element) => {
-    const canvas = element.closest('[data-testid="route-map"]');
-    if (canvas === null) throw new Error("지도 영역이 없습니다");
-    const bounds = canvas.getBoundingClientRect();
+    const region = element.closest('[aria-label="노선 지도"]');
+    if (region === null) throw new Error("지도 영역이 없습니다");
+    const bounds = region.getBoundingClientRect();
     const pin = element.getBoundingClientRect();
     return Math.hypot(
       pin.left + pin.width / 2 - bounds.left - bounds.width / 2,
@@ -107,18 +107,43 @@ async function expectVehicleFocusedOnMap(
 }
 
 async function expectMapToFillRegion(page: Page) {
+  // SDK 크기 변경을 예약하는 ResizeObserver까지 전달된 뒤 canvas를 확인한다.
+  await map(page).evaluate(
+    (region) =>
+      new Promise<void>((resolve) => {
+        const observer = new ResizeObserver(() => {
+          observer.disconnect();
+          resolve();
+        });
+        observer.observe(region);
+      }),
+  );
   await expect
     .poll(() =>
       page.getByTestId("route-map").evaluate((element) => {
-        const region = element.parentElement;
+        const region = element.closest('[aria-label="노선 지도"]');
         if (region === null) throw new Error("지도 영역이 없습니다");
+        const canvas = element.getBoundingClientRect();
+        const visible = region.getBoundingClientRect();
         return Math.max(
           Math.abs(element.clientWidth - region.clientWidth),
-          Math.abs(element.clientHeight - region.clientHeight),
+          Math.abs(element.clientHeight - (window.visualViewport?.height ?? window.innerHeight)),
+          Math.max(0, canvas.left - visible.left),
+          Math.max(0, canvas.top - visible.top),
+          Math.max(0, visible.right - canvas.right),
+          Math.max(0, visible.bottom - canvas.bottom),
+          Math.abs(canvas.left + canvas.width / 2 - visible.left - visible.width / 2),
+          Math.abs(canvas.top + canvas.height / 2 - visible.top - visible.height / 2),
         );
       }),
     )
     .toBeLessThanOrEqual(1);
+}
+
+async function mapSetSizeCount(page: Page) {
+  const count = await map(page).getByTestId("naver-map-test-double").getAttribute("data-set-size-count");
+  if (count === null) throw new Error("지도 크기 변경 횟수가 없습니다");
+  return Number(count);
 }
 
 async function dragHeader(page: Page, destinationY: number, { releaseDelayMs = 32 } = {}) {
@@ -265,14 +290,19 @@ test("첫 화면은 절반 높이에 전체 노선을 맞추고 줌에 따라 �
   const routeCoverage = await map(page)
     .getByTestId("naver-map-test-double")
     .evaluate((layer) => {
-      const bounds = layer.getBoundingClientRect();
+      const region = layer.closest('[aria-label="노선 지도"]');
+      if (region === null) throw new Error("지도 영역이 없습니다");
+      const bounds = region.getBoundingClientRect();
+      const canvas = layer.getBoundingClientRect();
       return [...layer.querySelectorAll("polyline")].map((line) => {
         const points = [...line.points];
         return {
           pointCount: points.length,
-          inside: points.every(
-            (point) => point.x >= 11 && point.x <= bounds.width - 11 && point.y >= 27 && point.y <= bounds.height - 27,
-          ),
+          inside: points.every((point) => {
+            const x = canvas.left + point.x - bounds.left;
+            const y = canvas.top + point.y - bounds.top;
+            return x >= 11 && x <= bounds.width - 11 && y >= 27 && y <= bounds.height - 27;
+          }),
         };
       });
     });
@@ -816,9 +846,21 @@ test("전체 시트의 목록 버스를 누르면 절반 높이로 열고 지도
   expect(await naverMap.snapshot()).toEqual(pannedView);
 });
 
-test("잔여석 응답이 바뀌어도 차량 핀과 이미지 DOM을 유지한다", async ({ page, api }) => {
+test("정류장명과 현재 좌석을 함께 표시하고 줌과 잔여석 응답이 바뀌어도 차량 핀과 이미지 DOM을 유지한다", async ({
+  page,
+  api,
+  naverMap,
+}) => {
+  const vehicle = api.data.vehicles.vehicles.find((item) => item.vehicleId === "bus-1");
+  if (vehicle === undefined) throw new Error("갱신할 버스가 없습니다");
+  vehicle.seat = { kind: "EXACT", remaining: 39 };
   await openMap(page);
-  const bus = map(page).getByRole("button", { name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 5석", exact: true });
+  const bus = map(page).getByRole("button", { name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 39석", exact: true });
+  const count = bus.getByText("현재 39석", { exact: true });
+  const stopName = map(page).getByText("상행 정류장 8", { exact: true });
+  await expect(bus).toBeVisible();
+  await expect(count).toBeHidden();
+  await expect(stopName).toBeHidden();
   const observation = await bus.evaluateHandle((element) => {
     const image = element.querySelector("img");
     const pin = image?.parentElement;
@@ -834,8 +876,16 @@ test("잔여석 응답이 바뀌어도 차량 핀과 이미지 DOM을 유지한�
     observer.observe(element, { childList: true, subtree: true });
     return { element, pin, image, removed, observer };
   });
-  const vehicle = api.data.vehicles.vehicles.find((item) => item.vehicleId === "bus-1");
-  if (vehicle === undefined) throw new Error("갱신할 버스가 없습니다");
+  await naverMap.setZoom(13.9);
+  await expect(count).toBeHidden();
+  await expect(stopName).toBeHidden();
+  await naverMap.setZoom(14);
+  await expect(count).toBeVisible();
+  await expect(stopName).toBeVisible();
+  await naverMap.setZoom(13.9);
+  await expect(count).toBeHidden();
+  await expect(stopName).toBeHidden();
+  await expect(bus).toBeVisible();
   vehicle.seat = { kind: "EXACT", remaining: 0 };
   api.data.vehicles.observation.observedAt = "2026-09-16T08:01:00+09:00";
   api.data.vehicles.observation.staleAt = "2026-09-16T08:06:00+09:00";
@@ -845,9 +895,15 @@ test("잔여석 응답이 바뀌어도 차량 핀과 이미지 DOM을 유지한�
   await page.clock.fastForward(pollIntervalMs);
   await (await refreshedVehicles).finished();
   await page.clock.runFor(32);
-  await expect(
-    map(page).getByRole("button", { name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 0석", exact: true }),
-  ).toContainText("0석");
+  const updatedBus = map(page).getByRole("button", {
+    name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 0석",
+    exact: true,
+  });
+  const updatedCount = updatedBus.getByText("현재 0석", { exact: true });
+  await expect(updatedCount).toBeHidden();
+  await naverMap.setZoom(14);
+  await expect(updatedCount).toBeVisible();
+  await expect(stopName).toBeVisible();
   expect(
     await observation.evaluate(({ element, pin, image, removed, observer }) => {
       observer.disconnect();
@@ -1009,15 +1065,25 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
     await naverMap.setZoom(14);
     await naverMap.panToStop(11);
     const originalView = await naverMap.snapshot();
+    const originalSetSizeCount = await mapSetSizeCount(page);
     const bounds = await sheet(page).boundingBox();
     if (bounds === null) throw new Error("드래그할 시트가 없습니다");
     const originY = bounds.y + 12;
     await page.mouse.move(bounds.x + 25, originY);
     await page.mouse.down();
 
+    let previousOffset = 0;
     for (const offset of [-80, -150, -90, 80]) {
-      await page.mouse.move(bounds.x + 25, originY + offset, { steps: 4 });
-      await page.clock.runFor(48);
+      for (let step = 1; step <= 4; step += 1) {
+        const currentOffset = previousOffset + ((offset - previousOffset) * step) / 4;
+        await page.mouse.move(bounds.x + 25, originY + currentOffset);
+        await page.clock.runFor(32);
+        const actualTop = await sheet(page).evaluate((element) => element.getBoundingClientRect().top);
+        expect(Math.abs(actualTop - bounds.y - currentOffset)).toBeLessThanOrEqual(1);
+        await expectMapToFillRegion(page);
+        expect(await mapSetSizeCount(page)).toBe(originalSetSizeCount);
+      }
+      previousOffset = offset;
       await expect(sheet(page)).toHaveAttribute("data-dragging", "true");
       await expectSheetAndMapHeights(page, bounds.height - offset, 844 - bounds.height + offset);
       await expectMapToFillRegion(page);
@@ -1037,6 +1103,7 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
     await page.clock.runFor(400);
     await expect(sheet(page)).toHaveAttribute("data-dragging", "false");
     await expectMapToFillRegion(page);
+    expect(await mapSetSizeCount(page)).toBe(originalSetSizeCount);
   });
 
   test(`최소·70%·전체 시트와 화면 크기 변경에도 지도가 영역을 채우고 시점을 유지한다 (${reducedMotion})`, async ({
@@ -1049,12 +1116,14 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
     await naverMap.panToStop(11);
     const originalView = await naverMap.snapshot();
     await expectMapToFillRegion(page);
+    const originalSetSizeCount = await mapSetSizeCount(page);
 
     await handle(page).press("Home");
     await page.clock.runFor(400);
     await expect(sheet(page)).toHaveAttribute("data-snap", "minimum");
     await expect.poll(() => height(map(page))).toBeGreaterThan(422);
     await expectMapToFillRegion(page);
+    expect(await mapSetSizeCount(page)).toBe(originalSetSizeCount);
     expect(await naverMap.snapshot()).toEqual(originalView);
 
     await handle(page).press("End");
@@ -1064,6 +1133,7 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
     await page.clock.runFor(400);
     await expect.poll(() => height(map(page))).toBeGreaterThan(422);
     await expectMapToFillRegion(page);
+    expect(await mapSetSizeCount(page)).toBe(originalSetSizeCount);
     expect(await naverMap.snapshot()).toEqual(originalView);
 
     await handle(page).press("ArrowUp");
@@ -1071,12 +1141,14 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
     await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
     await expectSheetAndMapHeights(page, 844 * 0.7, 844 * 0.3);
     await expectMapToFillRegion(page);
+    expect(await mapSetSizeCount(page)).toBe(originalSetSizeCount);
     expect(await naverMap.snapshot()).toEqual(originalView);
 
     await page.setViewportSize({ width: 360, height: 900 });
     await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
     await expectSheetAndMapHeights(page, 630, 270);
     await expectMapToFillRegion(page);
+    await expect.poll(() => mapSetSizeCount(page)).toBeGreaterThan(originalSetSizeCount);
     expect(await naverMap.snapshot()).toEqual(originalView);
   });
 }
@@ -1218,10 +1290,7 @@ test("위쪽 정류장이 접힐 때 새로 펼친 정류장을 목록 상단으
   expect(nextTop).toBeLessThanOrEqual(originalTop + 1);
 });
 
-test("현재 위치 성공은 파란 위치·정확도 범위를 표시하고 권한 거부는 지도를 유지하며 안내한다", async ({
-  page,
-  naverMap,
-}) => {
+test("현재 위치 성공은 작은 반투명 원과 파란 점을 표시하고 권한 거부 시 안내한다", async ({ page, naverMap }) => {
   await openMap(page);
   await page.evaluate(() =>
     Object.defineProperty(navigator, "geolocation", {
@@ -1248,7 +1317,7 @@ test("현재 위치 성공은 파란 위치·정확도 범위를 표시하고 �
   );
   await page.getByRole("button", { name: "현재 위치 보기", exact: true }).click();
   await expect(map(page).getByRole("img", { name: "내 현재 위치", exact: true })).toBeVisible();
-  await expect(map(page).getByTestId("location-accuracy")).toBeVisible();
+  await expect(map(page).getByTestId("location-accuracy")).toHaveCount(0);
   expect(await naverMap.snapshot()).toEqual({ zoom: 15, latitude: 37.43, longitude: 127.16 });
   const located = await naverMap.snapshot();
 
