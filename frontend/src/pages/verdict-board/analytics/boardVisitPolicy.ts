@@ -1,8 +1,9 @@
 import type { EventMap } from "@/shared/analytics/events";
 import { failurePropertiesOf } from "@/shared/analytics/failureProperties";
 import type { ApiFailure } from "@/shared/api/client";
-import type { BoardScreen } from "../displayPolicy";
-import { boardViewedPropertiesOf } from "./boardEventPolicy";
+import type { Direction } from "@/shared/api/routeForecast.types";
+import type { BoardScreen, ExpandableStopView } from "../displayPolicy";
+import { boardViewedPropertiesOf, stopExpandedPropertiesOf } from "./boardEventPolicy";
 
 const NEW_VISIT_AFTER_HIDDEN_MS = 30 * 60 * 1000;
 
@@ -26,6 +27,7 @@ export interface BoardVisit {
   hiddenSince: number | null;
   viewed: boolean;
   unavailableReasons: readonly UnavailableReason[];
+  expandCount: number;
 }
 
 export type BoardVisitEvent =
@@ -37,6 +39,17 @@ export interface BoardVisitStep {
   event: BoardVisitEvent | null;
 }
 
+export interface StopExpandStep {
+  visit: BoardVisit;
+  properties: EventMap["stop_expanded"];
+}
+
+interface StopExpandInput {
+  stop: ExpandableStopView;
+  direction: Direction;
+  rowPosition: number;
+}
+
 export function nextBoardVisitStep(visit: BoardVisit | null, observation: BoardObservation): BoardVisitStep {
   const current = currentVisitOf(visit, observation);
 
@@ -44,6 +57,23 @@ export function nextBoardVisitStep(visit: BoardVisit | null, observation: BoardO
     return { visit: { ...current, hiddenSince: current.hiddenSince ?? observation.wallNow }, event: null };
   }
   return eventStepOf(current, observation);
+}
+
+export function nextStopExpandStep(
+  visit: BoardVisit | null,
+  { stop, direction, rowPosition }: StopExpandInput,
+): StopExpandStep | null {
+  if (visit === null || !visit.viewed) return null;
+  const expandCount = visit.expandCount + 1;
+  return {
+    visit: { ...visit, expandCount },
+    properties: stopExpandedPropertiesOf(stop, {
+      routeId: visit.routeId,
+      direction,
+      rowPosition,
+      expandIndex: expandCount,
+    }),
+  };
 }
 
 function currentVisitOf(visit: BoardVisit | null, observation: BoardObservation): BoardVisit {
@@ -72,6 +102,7 @@ function newVisitOf(
     hiddenSince: null,
     viewed: false,
     unavailableReasons: [],
+    expandCount: 0,
   };
 }
 
@@ -85,6 +116,7 @@ function eventStepOf(visit: BoardVisit, observation: BoardObservation): BoardVis
     case "forecast": {
       if (visit.viewed || !freshForVisit) return { visit, event: null };
       const properties = boardViewedPropertiesOf(screen.board, screen.direction, {
+        routeId: visit.routeId,
         now: observation.serverNow,
         loadMs: observation.elapsedNow - visit.startedAt,
       });

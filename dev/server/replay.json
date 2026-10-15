@@ -1,0 +1,40 @@
+{
+  "version": "local-replay-v1",
+  "stepSeconds": 30,
+  "idleSeconds": 1,
+  "vehiclesPerDirection": 6,
+  "routeVehicles": {
+    "3330": {
+      "up": 14,
+      "down": 7
+    },
+    "1650": {
+      "up": 13,
+      "down": 9
+    },
+    "9007": {
+      "up": 11,
+      "down": 5
+    },
+    "9300": {
+      "up": 6,
+      "down": 7
+    },
+    "6011": {
+      "up": 5,
+      "down": 5
+    },
+    "3000": {
+      "up": 5,
+      "down": 8
+    },
+    "5600": {
+      "up": 12,
+      "down": 7
+    },
+    "3500": {
+      "up": 10,
+      "down": 8
+    }
+  }
+}

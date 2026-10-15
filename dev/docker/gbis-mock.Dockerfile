@@ -5,6 +5,8 @@ WORKDIR /build/extension
 COPY dev/wiremock-extension/ ./
 COPY dev/data/routes.json /build/data/routes.json
 COPY dev/data/catalog-routes.json /build/data/catalog-routes.json
+COPY dev/server/replay.json /build/server/replay.json
+COPY dev/scenarios/replay.json /build/scenarios/replay.json
 COPY dev/wiremock/mappings/ /build/wiremock/mappings/
 RUN --mount=type=cache,id=salmonbus-gbis-gradle-${TARGETARCH},target=/root/.gradle,sharing=locked \
     ./gradlew test jar --no-daemon --max-workers=2 \

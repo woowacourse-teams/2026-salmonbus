@@ -1,9 +1,18 @@
 package com.gustler.backend.api.vehicle.controller;
 
 import com.gustler.backend.api.route.RouteId;
+import com.gustler.backend.api.docs.ApiDocsExamples;
+import com.gustler.backend.api.error.ErrorResponse;
 import com.gustler.backend.api.vehicle.application.LiveVehicleOverview;
 import com.gustler.backend.api.vehicle.application.LiveVehicleQueryService;
 import com.gustler.backend.api.vehicle.dto.LiveVehicleResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -20,7 +29,31 @@ public class LiveVehicleController {
     private final LiveVehicleQueryService liveVehicleQueryService;
 
     @GetMapping("/{routeId}/vehicles")
+    @Operation(summary = "실시간 차량 관측", description = "관측이 불확실하면 200 UNKNOWN과 빈 차량 목록을 반환합니다. 정상 빈 관측을 운행 종료로 단정하지 않습니다.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "현재 차량 관측 또는 관측 상태 UNKNOWN",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = LiveVehicleResponse.class), examples = {
+                @ExampleObject(name = "VEHICLES_PRESENT", value = ApiDocsExamples.VEHICLES_PRESENT),
+                @ExampleObject(name = "UNKNOWN", value = ApiDocsExamples.VEHICLES_UNKNOWN)
+            })),
+        @ApiResponse(responseCode = "400", description = "노선 ID 형식이 올바르지 않음",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
+                examples = @ExampleObject(value = ApiDocsExamples.INVALID_ROUTE))),
+        @ApiResponse(responseCode = "404", description = "등록되지 않은 노선",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
+                examples = @ExampleObject(value = ApiDocsExamples.ROUTE_NOT_FOUND))),
+        @ApiResponse(responseCode = "503", description = "DB 등 조회 자원을 사용할 수 없음",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
+                examples = @ExampleObject(value = ApiDocsExamples.SERVICE_UNAVAILABLE))),
+        @ApiResponse(responseCode = "405", description = "지원하지 않는 요청 방식",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
+                examples = @ExampleObject(value = ApiDocsExamples.METHOD_NOT_ALLOWED))),
+        @ApiResponse(responseCode = "500", description = "요청 처리 실패",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
+                examples = @ExampleObject(value = ApiDocsExamples.INTERNAL_ERROR)))
+    })
     public ResponseEntity<LiveVehicleResponse> getLiveVehicles(
+        @Parameter(description = "9자리 GBIS 노선 ID", example = "123456789")
         @PathVariable("routeId") String routeId
     ) {
         LiveVehicleOverview overview = liveVehicleQueryService.getLiveVehicles(

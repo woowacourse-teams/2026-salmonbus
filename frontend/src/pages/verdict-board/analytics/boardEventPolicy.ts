@@ -1,17 +1,25 @@
 import type { EventMap } from "@/shared/analytics/events";
 import type { Board, Direction } from "@/shared/api/routeForecast.types";
-import type { ArrivalTone } from "../arrivalPolicy";
-import { stopViewsFor } from "../displayPolicy";
+import { representativeArrival, type ArrivalTone } from "../arrivalPolicy";
+import { stopViewsFor, type ExpandableStopView } from "../displayPolicy";
 
-interface BoardViewTiming {
+interface BoardViewContext {
+  routeId: string;
   now: number;
   loadMs: number;
+}
+
+interface StopExpandContext {
+  routeId: string;
+  direction: Direction;
+  rowPosition: number;
+  expandIndex: number;
 }
 
 export function boardViewedPropertiesOf(
   board: Board,
   direction: Direction,
-  { now, loadMs }: BoardViewTiming,
+  { routeId, now, loadMs }: BoardViewContext,
 ): EventMap["board_viewed"] {
   const stops = stopViewsFor(board, direction);
   const toneCounts: Record<ArrivalTone, number> = { high: 0, low: 0, veryLow: 0, unavailable: 0 };
@@ -22,7 +30,7 @@ export function boardViewedPropertiesOf(
   }
 
   return {
-    route_id: board.route.id,
+    route_id: routeId,
     direction,
     model_release_id: board.model.releaseId,
     forecast_age_sec: Math.round((now - Date.parse(board.observedAt)) / 1000),
@@ -34,5 +42,41 @@ export function boardViewedPropertiesOf(
     very_low_count: toneCounts.veryLow,
     unavailable_count: toneCounts.unavailable,
     load_ms: Math.round(loadMs),
+  };
+}
+
+export function stopExpandedPropertiesOf(
+  stop: ExpandableStopView,
+  { routeId, direction, rowPosition, expandIndex }: StopExpandContext,
+): EventMap["stop_expanded"] {
+  const common = {
+    route_id: routeId,
+    direction,
+    stop_id: stop.stopId,
+    stop_sequence: stop.sequence,
+    row_position: rowPosition,
+    expand_index: expandIndex,
+  };
+  if (stop.kind === "noVehicle") {
+    return { ...common, stop_kind: "noVehicle", arrival_count: 0 };
+  }
+
+  const representative = representativeArrival(stop.arrivals);
+  if (representative.kind === "unavailable") {
+    return {
+      ...common,
+      stop_kind: "boarding",
+      forecast_status: "UNAVAILABLE",
+      stops_away: representative.stopsAway,
+      arrival_count: stop.arrivals.length,
+    };
+  }
+  return {
+    ...common,
+    stop_kind: "boarding",
+    forecast_status: "AVAILABLE",
+    level: representative.level,
+    stops_away: representative.stopsAway,
+    arrival_count: stop.arrivals.length,
   };
 }

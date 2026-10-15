@@ -10,14 +10,23 @@ import com.gustler.backend.api.chat.controller.ChatClientAddressInterceptor;
 import com.gustler.backend.api.chat.controller.ChatConnectionLimiter;
 import com.gustler.backend.api.chat.controller.ChatFrameCodec;
 import com.gustler.backend.api.chat.controller.ChatWebSocketHandler;
+import com.gustler.backend.api.chat.dto.ChatRoomResponse;
 import com.gustler.backend.api.chat.infrastructure.jdbc.JdbcChatRouteSource;
 import com.gustler.backend.api.chat.infrastructure.mongo.ChatMongoClientSettings;
 import com.gustler.backend.api.chat.infrastructure.mongo.MongoChatMessageRepository;
+import com.gustler.backend.api.docs.ApiDocsExamples;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import java.time.Clock;
 import org.bson.Document;
+import org.springdoc.core.annotations.RouterOperation;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
@@ -25,6 +34,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
@@ -109,6 +119,16 @@ public class ChatConfiguration {
     }
 
     @Bean
+    @RouterOperation(path = "/api/chat/rooms/{routeId}", method = RequestMethod.GET,
+        operation = @Operation(operationId = "getChatRoomAvailability", summary = "노선 채팅 사용 가능 여부",
+            description = "채팅이 켜져 있고 지원 노선이면 200, 그 밖에는 본문 없는 404를 반환합니다. WebSocket 메시지 계약은 별도 문서입니다.",
+            parameters = @Parameter(name = "routeId", description = "채팅방의 노선 ID", example = "123456789"),
+            responses = {
+                @ApiResponse(responseCode = "200", description = "채팅방을 사용할 수 있음",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ChatRoomResponse.class),
+                        examples = @ExampleObject(value = ApiDocsExamples.CHAT_ROOM))),
+                @ApiResponse(responseCode = "404", description = "채팅이 꺼져 있거나 지원하지 않는 노선")
+            }))
     RouterFunction<ServerResponse> chatAvailabilityRoute(ChatAvailabilityHandler handler) {
         return RouterFunctions.route()
             .GET("/api/chat/rooms/{routeId}", handler::availability)

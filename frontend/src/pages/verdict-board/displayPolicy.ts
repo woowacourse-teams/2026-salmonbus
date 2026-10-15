@@ -28,7 +28,7 @@ interface StopViewBase {
 export interface BoardingStopView extends StopViewBase {
   kind: "boarding";
   tone: ArrivalTone;
-  arrivals: ArrivalView[];
+  arrivals: [ArrivalView, ...ArrivalView[]];
 }
 
 export interface PassThroughStopView extends StopViewBase {
@@ -40,6 +40,7 @@ export interface NoVehicleStopView extends StopViewBase {
 }
 
 export type StopView = BoardingStopView | PassThroughStopView | NoVehicleStopView;
+export type ExpandableStopView = BoardingStopView | NoVehicleStopView;
 
 export interface DirectionView {
   id: Direction;
@@ -93,13 +94,21 @@ function toStopView(stop: StopState, turnSequence: number | null): StopView {
     return { kind: "passThrough", sequence, stopId, name, isTurnaround };
   }
 
-  const arrivals = arrivalViewsFor(stop.approachingVehicles);
-  const representative = representativeArrival(arrivals);
-  if (representative === undefined) {
+  const [first, ...rest] = arrivalViewsFor(stop.approachingVehicles);
+  if (first === undefined) {
     return { kind: "noVehicle", sequence, stopId, name, isTurnaround };
   }
 
-  return { kind: "boarding", sequence, stopId, name, isTurnaround, tone: arrivalToneFor(representative), arrivals };
+  const arrivals: BoardingStopView["arrivals"] = [first, ...rest];
+  return {
+    kind: "boarding",
+    sequence,
+    stopId,
+    name,
+    isTurnaround,
+    tone: arrivalToneFor(representativeArrival(arrivals)),
+    arrivals,
+  };
 }
 
 // 회차 정류장은 상행의 마지막 순번이고, 하행은 그 다음 순번에서 시작한다. 양쪽에 표시한다.

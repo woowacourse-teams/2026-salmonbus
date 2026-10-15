@@ -1,5 +1,5 @@
 import { useId } from "react";
-import type { StopView } from "../displayPolicy";
+import type { ExpandableStopView, StopView } from "../displayPolicy";
 import { stopNameLabel, WAYPOINT_CAPTION } from "../verdictCopy";
 import { ArrivalForecastCard } from "./ArrivalForecastCard";
 import { StopName } from "./StopName";
@@ -13,7 +13,7 @@ interface StopRowProps {
   stop: StopView;
   routePosition: RoutePosition;
   expanded: boolean;
-  onToggle: () => void;
+  onToggle: (stop: ExpandableStopView) => void;
 }
 
 interface ChevronProps {
@@ -46,7 +46,7 @@ export function StopRow({ stop, routePosition, expanded, onToggle }: StopRowProp
         className={expanded ? styles.head.expanded : styles.head.collapsed}
         aria-expanded={expanded}
         aria-controls={panelId}
-        onClick={onToggle}
+        onClick={() => onToggle(stop)}
       >
         <span className={styles.headStack}>
           <StopName name={stopNameLabel(stop)} />
@@ -59,7 +59,7 @@ export function StopRow({ stop, routePosition, expanded, onToggle }: StopRowProp
       <div
         className={expanded ? styles.detail.open : styles.detail.closed}
         inert={!expanded}
-        onClick={expanded ? onToggle : undefined}
+        onClick={expanded ? () => onToggle(stop) : undefined}
       >
         <div id={panelId} className={styles.detailInner}>
           <ArrivalForecastCard arrivals={boardingStop?.arrivals ?? []} />

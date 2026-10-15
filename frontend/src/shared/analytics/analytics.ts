@@ -10,14 +10,16 @@ export function initAnalytics() {
   }
 
   if (!AMPLITUDE_API_KEY) {
-    console.warn("Amplitude API key missing — analytics disabled");
+    console.warn("WEBPACK_AMPLITUDE_API_KEY가 비어 있어 Amplitude 이벤트를 보내지 않습니다");
     return;
   }
 
   initialized = true;
 
+  const appVersion = document.querySelector<HTMLMetaElement>('meta[name="app-version"]')?.content;
+
   amplitude.initAll(AMPLITUDE_API_KEY, {
-    analytics: { autocapture: true },
+    analytics: { autocapture: true, ...(appVersion ? { appVersion } : {}) },
     sessionReplay: { sampleRate: 1 },
   });
 }
