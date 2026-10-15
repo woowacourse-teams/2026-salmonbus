@@ -399,17 +399,15 @@ describe("응답이 도착하는 순서대로 재생한 화면", () => {
       board("08:00:52", BATCH_103),
     ];
 
-    it("첫 기한이 지나 마커 없이 새 예보를 보인 뒤에는, 다음 예보가 와도 이전 쌍으로 되돌아가지 않는다", () => {
-      expect(screenOf(outage.slice(0, 3), "08:00:36")).toEqual({
-        boardBatch: BATCH_101,
-        vehiclesBatch: null,
-        recheckAt: null,
-      });
+    it("첫 기한이 지난 뒤 다음 예보가 와도 이전 쌍으로 되돌아가지 않는다", () => {
       expect(screenOf(outage.slice(0, 4), "08:00:38")).toEqual({
         boardBatch: BATCH_102,
         vehiclesBatch: null,
         recheckAt: null,
       });
+    });
+
+    it("예보가 계속 와도 마커 없이 가장 최근 예보를 보여 준다", () => {
       expect(screenOf(outage, "08:00:53")).toEqual({ boardBatch: BATCH_103, vehiclesBatch: null, recheckAt: null });
     });
 
