@@ -30,6 +30,12 @@ final class Packager {
         FileOps.mode(destination, destination.toString().endsWith(".sh") ? 0755 : 0644);
     }
 
+    static void embedBasis(Path basis, Path application) throws Exception {
+        for (var name : RevisionStore.inventory(basis).keySet()) {
+            copy(basis.resolve(name), application.resolve("basis").resolve(name));
+        }
+    }
+
     String digest(List<Path> inputs) throws Exception {
         var files = new TreeMap<String, Path>();
         for (var input : inputs) {
@@ -294,7 +300,11 @@ final class Packager {
                 copy(
                         repo.resolve("dev/server/deploy/appspec-" + component + ".yml"),
                         directory.resolve("appspec.yml"));
-                for (var name : List.of("common.sh", "preflight.sh", "install.sh")) {
+                if (component.equals("api")) {
+                    embedBasis(basis, directory);
+                }
+                for (var name : List.of("common.sh", "guard.sh", "preflight.sh", "preflight-body.sh",
+                        "install.sh", "install-body.sh", "start.sh", "validate.sh")) {
                     copy(
                             repo.resolve("dev/server/deploy/" + name),
                             directory.resolve("scripts/" + name));
@@ -306,7 +316,7 @@ final class Packager {
                                     "scripts/"
                                             + (name.equals("common.sh")
                                                     ? "production-common.sh"
-                                                    : name)));
+                                                    : name.replace(".sh", "-body.sh"))));
                 }
                 var unit = "systemd/salmonbus-" + component + ".service";
                 copy(repo.resolve("dev/server/" + unit), directory.resolve(unit));
