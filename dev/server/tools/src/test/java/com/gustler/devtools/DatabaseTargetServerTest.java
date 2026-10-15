@@ -80,6 +80,18 @@ class DatabaseTargetServerTest {
     }
 
     @Test
+    void rejectsCertificateUnreadableByTheApplicationAccount() throws Exception {
+        enableRds();
+        var certificate = fixture.layout.config().resolve(DatabaseTarget.CERTIFICATE);
+        FileOps.mode(certificate, 0600);
+        assertEquals("DEV_RDS_CERTIFICATE",
+                assertThrows(IllegalArgumentException.class,
+                        () -> Environment.load(fixture.layout.config())).getMessage());
+        FileOps.mode(certificate, 0644);
+        assertDoesNotThrow(() -> Environment.load(fixture.layout.config()));
+    }
+
+    @Test
     void rejectsReadablePinSymlinksAndTamperedCertificates() throws Exception {
         enableRds();
         var directory = fixture.layout.config();

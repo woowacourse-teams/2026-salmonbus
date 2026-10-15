@@ -36,6 +36,9 @@ final class DatabaseTarget {
                 Json.read(FileOps.privateText(directory.resolve("environment.json")).getBytes());
         var certificate = directory.resolve(CERTIFICATE);
         FileOps.protectedFile(certificate, "DEV_RDS_CERTIFICATE");
+        Checks.require(
+                (FileOps.attribute(certificate, "mode") & 0777) == 0644,
+                "DEV_RDS_CERTIFICATE");
         Checks.require(Files.size(certificate) <= 524288, "DEV_RDS_CERTIFICATE");
         return validatedUrl(value, marker, FileOps.sha(certificate));
     }
