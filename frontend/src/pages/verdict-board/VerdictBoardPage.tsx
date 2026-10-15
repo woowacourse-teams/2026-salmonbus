@@ -79,15 +79,13 @@ function boardStateOf(
   snapshot: BoardSnapshot | null,
   preferredDirection: Direction | null,
 ): BoardState {
-  switch (resource.status) {
-    case "pending":
-      return { status: "loading" };
-    case "loadingError":
-      return { status: "error", failure: resource.failure };
-    case "success":
-    case "refetchError":
-      return readyStateOf(snapshot?.board.body ?? resource.latestSuccess.body, preferredDirection);
+  if (snapshot !== null) {
+    return readyStateOf(snapshot.board.body, preferredDirection);
   }
+  if (resource.status === "loadingError") {
+    return { status: "error", failure: resource.failure };
+  }
+  return { status: "loading" };
 }
 
 function readyStateOf(board: Board, preferredDirection: Direction | null): BoardState {
