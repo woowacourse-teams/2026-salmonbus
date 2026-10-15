@@ -1,6 +1,9 @@
 import { style } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 
+const SAFE_AREA_TOP = "env(safe-area-inset-top, 0px)";
+const SAFE_AREA_BOTTOM = "env(safe-area-inset-bottom, 0px)";
+
 export const page = style({
   position: "fixed",
   right: 0,
@@ -58,6 +61,6 @@ export const noticePage = style({
   width: "min(100%, 430px)",
   height: ["100vh", "100dvh"],
   margin: "0 auto",
-  padding: "64px 18px 32px",
+  padding: `calc(64px + ${SAFE_AREA_TOP}) 18px calc(32px + ${SAFE_AREA_BOTTOM})`,
   backgroundColor: vars.color.background,
 });

@@ -249,6 +249,16 @@ final class RevisionStore {
     }
 
     static void routing(Revision app, Map<String, String> environment, Revision basis) {
+        deploymentGroup(app, environment);
+        Checks.require(
+                basis.kind().equals("basis")
+                        && basis.environment().equals("dev")
+                        && !basis.reviewOnly()
+                        && basis.basisDigest().equals(app.basisDigest()),
+                "DEV_BASIS_UPDATE_REQUIRED");
+    }
+
+    static void deploymentGroup(Revision app, Map<String, String> environment) {
         Checks.require(
                 Set.of("api", "worker").contains(app.kind())
                         && app.environment().equals("dev")
@@ -259,12 +269,6 @@ final class RevisionStore {
                         && (APPLICATION + "-" + app.kind())
                                 .equals(environment.get("DEPLOYMENT_GROUP_NAME")),
                 "DEV_DEPLOYMENT_GROUP");
-        Checks.require(
-                basis.kind().equals("basis")
-                        && basis.environment().equals("dev")
-                        && !basis.reviewOnly()
-                        && basis.basisDigest().equals(app.basisDigest()),
-                "DEV_BASIS_UPDATE_REQUIRED");
     }
 
     static Revision component(

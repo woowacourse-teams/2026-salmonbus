@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import type { ApiFailure, ApiResult } from "@/shared/api/client";
 import { latestSuccessOf, type PolledResource } from "@/shared/api/polledResource";
 import { fetchBoard } from "@/shared/api/routeForecast.api";
@@ -241,9 +241,18 @@ function OperatingBoard({
 }
 
 function BoardBackLink({ inHeader = false }: { inHeader?: boolean }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isFirstPage = location.key === "default";
+
   return (
     <Link
       to={paths.routeSelect}
+      onClick={(event) => {
+        if (isFirstPage || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        void navigate(-1);
+      }}
       className={inHeader ? styles.fullBack : styles.back}
       aria-label="노선 선택으로 돌아가기"
     >

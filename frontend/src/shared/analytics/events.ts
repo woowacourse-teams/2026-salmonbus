@@ -18,8 +18,12 @@ export interface EventMap {
   route_selected: {
     route_id: string;
     route_status: RouteStatus;
-    list_position: number;
-    route_count: number;
+    result_position: number;
+    result_count: number;
+  };
+
+  route_search_unmatched: {
+    query: string;
   };
 
   board_viewed: {

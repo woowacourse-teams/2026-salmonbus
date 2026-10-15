@@ -141,6 +141,7 @@ final class SettingsPreparation {
                                 "configSha256",
                                 hashes)),
                 0600);
+        DatabaseTarget.preserve(layout.config(), destination, writer);
         var updated = Environment.load(destination);
         for (var name : java.util.List.of("api", "worker", "postgres", "mongodb")) {
             Checks.require(updated.get(name).equals(settings.get(name)), "DEV_SECRETS_CHANGED");

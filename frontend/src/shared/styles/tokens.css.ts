@@ -7,6 +7,8 @@ export const vars = createGlobalTheme(":root", {
     cardBorder: "#D8D5CF",
     ink: "#111111",
     onInk: "#FFFFFF",
+    brand: "#E8523F",
+    onBrand: "#FFFFFF",
     textStrong: "#151515",
     textBody: "#454545",
     textSubtle: "#6B6A6A",

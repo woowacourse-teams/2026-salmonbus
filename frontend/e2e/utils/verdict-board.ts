@@ -43,3 +43,7 @@ export async function openBoard(page: Page) {
       .or(page.getByText("현재는 운행시간이 아닙니다", { exact: true })),
   ).toBeVisible();
 }
+
+export function boardBackLink(page: Page) {
+  return page.getByRole("link", { name: "노선 선택으로 돌아가기", exact: true });
+}

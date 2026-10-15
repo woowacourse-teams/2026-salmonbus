@@ -45,6 +45,8 @@ final class ReplayEngine {
             && configuration.stepSeconds() <= 300 && configuration.idleSeconds() >= 1
             && configuration.idleSeconds() <= 600 && configuration.vehiclesPerDirection() >= 1
             && configuration.vehiclesPerDirection() <= 6, "재생 간격과 차량 수를 확인해 주세요.");
+        require(ROUTES.containsAll(configuration.routeVehicles().keySet()),
+            "차량 규모를 지정할 재생 노선을 확인해 주세요.");
         this.configuration = configuration;
         this.clock = clock;
         this.nanoTime = nanoTime;
@@ -133,25 +135,32 @@ final class ReplayEngine {
         String vehicleRun = layout.generation() == 0 ? runId : UUID.nameUUIDFromBytes(
             (runId + route.routeId() + layout.generation()).getBytes(java.nio.charset.StandardCharsets.UTF_8))
             .toString().substring(0, 8);
-        final int downFirst = route.turnSequence() + (configuration.vehiclesPerDirection() == 1 ? 0 : 1);
+        Fleet fleet = configuration.routeVehicles().getOrDefault(route.displayName(),
+            new Fleet(configuration.vehiclesPerDirection(), configuration.vehiclesPerDirection()));
+        final boolean legacyLayout = configuration.vehiclesPerDirection() == 1
+            && !configuration.routeVehicles().containsKey(route.displayName());
+        final int downFirst = route.turnSequence() + (legacyLayout ? 0 : 1);
         final int downCount = route.stops().size() - downFirst + 1;
         List<Map<String, Object>> vehicles = new ArrayList<>();
         if (!mode.equals("down-only")) {
-            addDirection(vehicles, route, route.turnSequence(), 1, "U", mode, elapsed, vehicleRun);
+            addDirection(vehicles, route, route.turnSequence(), 1, fleet.up(), legacyLayout,
+                "U", mode, elapsed, vehicleRun);
         }
         if (!mode.equals("up-only")) {
-            addDirection(vehicles, route, downCount, downFirst, "D", mode, elapsed, vehicleRun);
+            addDirection(vehicles, route, downCount, downFirst, fleet.down(), legacyLayout,
+                "D", mode, elapsed, vehicleRun);
         }
         return vehicles.isEmpty() ? new Reply(200, envelope(4, null))
             : new Reply(200, envelope(0, Map.of("busLocationList", vehicles)));
     }
 
     private void addDirection(List<Map<String, Object>> vehicles, Route route, final int count,
-                              final int firstSequence, String direction, String mode, final long elapsed, String vehicleRun) {
-        final int length = configuration.vehiclesPerDirection() == 1
+                              final int firstSequence, final int requestedFleet, final boolean legacyLayout,
+                              String direction, String mode, final long elapsed, String vehicleRun) {
+        final int length = legacyLayout
             ? Math.max(route.turnSequence(), route.stops().size() - route.turnSequence() + 1) : count;
         final long period = (long) length * configuration.stepSeconds() + configuration.idleSeconds();
-        final int fleet = mode.equals("single") ? 1 : configuration.vehiclesPerDirection();
+        final int fleet = mode.equals("single") ? Math.min(1, requestedFleet) : requestedFleet;
         final int groups = (fleet + 2) / 3;
         for (int slot = 0; slot < fleet; slot++) {
             final long offset = (mode.equals("sparse") ? period * slot / fleet
@@ -159,23 +168,23 @@ final class ReplayEngine {
                 : period * (slot / 3) / groups + (long) (slot % 3) * 3 * configuration.stepSeconds()
                     + (long) (slot % 3) * configuration.stepSeconds() / 3) % period;
             final long shifted = elapsed + offset;
-            final long trip = shifted / period * configuration.vehiclesPerDirection() + slot;
+            final long trip = shifted / period * requestedFleet + slot;
             final int step = (int) ((shifted % period) / configuration.stepSeconds());
             final long withinStep = shifted % configuration.stepSeconds();
-            final int phase = phaseOf(mode, withinStep, step == count - 1);
+            final int phase = phaseOf(mode, withinStep, step == count - 1, legacyLayout);
             if (step < count) {
-                vehicles.add(vehicle(route, firstSequence + step, step, trip, slot, phase, direction, mode, vehicleRun));
+                vehicles.add(vehicle(route, firstSequence + step, step, trip, slot, phase, legacyLayout, direction, mode, vehicleRun));
             }
         }
     }
 
-    private int phaseOf(String mode, final long withinStep, final boolean terminal) {
+    private int phaseOf(String mode, final long withinStep, final boolean terminal, final boolean legacyLayout) {
         return switch (mode) {
             case "arriving" -> 1;
             case "departed" -> 2;
             case "in-transit" -> 0;
             case "unreadable" -> 99;
-            default -> configuration.vehiclesPerDirection() == 1 ? terminal ? 0 : 2
+            default -> legacyLayout ? terminal ? 0 : 2
                 : withinStep * 3 < configuration.stepSeconds() ? 1
                 : withinStep * 3 < configuration.stepSeconds() * 2L ? 2 : 0;
         };
@@ -183,7 +192,7 @@ final class ReplayEngine {
 
     private Map<String, Object> vehicle(Route route, final int sequence,
                                       final int step, final long cycle, final int slot, final int phase,
-                                      String direction, String mode, String vehicleRun) {
+                                      final boolean legacyLayout, String direction, String mode, String vehicleRun) {
         Stop stop = route.stops().get(sequence - 1);
         Integer remaining = switch (mode) {
             case "unknown-seat" -> -1;
@@ -198,14 +207,14 @@ final class ReplayEngine {
                 case 4 -> null;
                 default -> 16;
             };
-            default -> configuration.vehiclesPerDirection() == 1
+            default -> legacyLayout
                 ? step == 0 ? 40 : Math.floorMod(40 - step * 7, 41)
                 : Math.floorMod(44 - step * 2 - (slot % 3) * 11, 45);
         };
         Map<String, Object> value = new LinkedHashMap<>();
         if (!mode.equals("anonymous")) {
             value.put("plateNo", "LOCAL-" + route.displayName()
-                + (configuration.vehiclesPerDirection() == 1 ? "" : "-" + slot) + "-" + direction);
+                + (legacyLayout ? "" : "-" + slot) + "-" + direction);
             value.put("vehId", "L" + vehicleRun + "-" + route.routeId() + "-" + cycle + direction);
         }
         value.put("lowPlate", 2);
@@ -240,7 +249,21 @@ final class ReplayEngine {
     record Reply(int status, Map<String, Object> body) { }
     private record Layout(String kind, int generation) { }
     public record Dataset(String version, List<Route> routes) { }
-    public record Configuration(String version, int stepSeconds, int idleSeconds, int vehiclesPerDirection) {
+    public record Fleet(int up, int down) {
+        public Fleet {
+            require(up >= 0 && up <= 64 && down >= 0 && down <= 64,
+                "방향별 재생 차량 수는 0대 이상 64대 이하여야 합니다.");
+        }
+    }
+    public record Configuration(String version, int stepSeconds, int idleSeconds,
+                                int vehiclesPerDirection, Map<String, Fleet> routeVehicles) {
+        public Configuration {
+            routeVehicles = routeVehicles == null ? Map.of() : Map.copyOf(routeVehicles);
+        }
+        public Configuration(String version, final int stepSeconds, final int idleSeconds,
+                             final int vehiclesPerDirection) {
+            this(version, stepSeconds, idleSeconds, vehiclesPerDirection, Map.of());
+        }
         public Configuration(String version, final int stepSeconds, final int idleSeconds) {
             this(version, stepSeconds, idleSeconds, 1);
         }
