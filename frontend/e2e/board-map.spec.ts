@@ -34,6 +34,21 @@ async function height(locator: Locator) {
   return locator.evaluate((element) => element.getBoundingClientRect().height);
 }
 
+async function expectMapToFillRegion(page: Page) {
+  await expect
+    .poll(() =>
+      page.getByTestId("route-map").evaluate((element) => {
+        const region = element.parentElement;
+        if (region === null) throw new Error("지도 영역이 없습니다");
+        return Math.max(
+          Math.abs(element.clientWidth - region.clientWidth),
+          Math.abs(element.clientHeight - region.clientHeight),
+        );
+      }),
+    )
+    .toBeLessThanOrEqual(1);
+}
+
 async function dragHeader(page: Page, destinationY: number) {
   const bounds = await sheet(page).boundingBox();
   if (bounds === null) throw new Error("드래그할 시트가 없습니다");
@@ -132,6 +147,41 @@ test("헤더 드래그는 양 끝에 붙고 방향 버튼에서 시작한 드래
   await expect(sheet(page)).toHaveAttribute("data-snap", "half");
   expect(await height(sheet(page))).toBeCloseTo(422, 0);
 });
+
+for (const reducedMotion of ["reduce", "no-preference"] as const) {
+  test(`최소 시트와 전체 화면에서 돌아와도 지도가 영역을 채우고 중심과 줌을 유지한다 (${reducedMotion})`, async ({
+    page,
+    naverMap,
+  }) => {
+    await page.emulateMedia({ reducedMotion });
+    await openMap(page);
+    await naverMap.setZoom(15);
+    await naverMap.panToStop(11);
+    const originalView = await naverMap.snapshot();
+    await expectMapToFillRegion(page);
+
+    await handle(page).press("Home");
+    await page.clock.runFor(400);
+    await expect(sheet(page)).toHaveAttribute("data-snap", "minimum");
+    await expect.poll(() => height(map(page))).toBeGreaterThan(422);
+    await expectMapToFillRegion(page);
+    expect(await naverMap.snapshot()).toEqual(originalView);
+
+    await handle(page).press("End");
+    await page.clock.runFor(400);
+    await expect(map(page)).toHaveCount(0);
+    await handle(page).press("Home");
+    await page.clock.runFor(400);
+    await expect.poll(() => height(map(page))).toBeGreaterThan(422);
+    await expectMapToFillRegion(page);
+    expect(await naverMap.snapshot()).toEqual(originalView);
+
+    await page.setViewportSize({ width: 360, height: 900 });
+    await page.clock.runFor(400);
+    await expectMapToFillRegion(page);
+    expect(await naverMap.snapshot()).toEqual(originalView);
+  });
+}
 
 test("반대 방향 지도 정류장은 탭·시트·펼침·목록 스크롤을 함께 바꾸고 재선택해도 접히지 않는다", async ({
   page,

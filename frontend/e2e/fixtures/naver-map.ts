@@ -74,7 +74,10 @@ export const test = apiTest.extend<{ naverMap: MapFixture }>({
           private center: NaverCoordinate;
           private size: Size;
           private scale = 1;
-          constructor(element: HTMLElement, options: ConstructorParameters<NaverMaps["Map"]>[1]) {
+          constructor(
+            private element: HTMLElement,
+            options: ConstructorParameters<NaverMaps["Map"]>[1],
+          ) {
             this.zoom = options.zoom;
             this.center = options.center;
             this.size = options.size;
@@ -87,6 +90,7 @@ export const test = apiTest.extend<{ naverMap: MapFixture }>({
             caption.style.cssText = "position:absolute;left:8px;bottom:8px;color:#68736D;font-size:10px";
             this.layer.append(caption);
             element.append(this.layer);
+            this.setSize(this.size);
             (window as unknown as TestMapWindow).__naverMapTest = {
               setZoom: (zoom) => this.setZoom(zoom),
               panToStop: (sequence) => {
@@ -137,6 +141,9 @@ export const test = apiTest.extend<{ naverMap: MapFixture }>({
           }
           setSize(size: Size) {
             this.size = size;
+            // 실제 SDK도 지도 요소의 크기를 픽셀 값으로 고정한다.
+            this.element.style.width = `${size.width}px`;
+            this.element.style.height = `${size.height}px`;
             this.draw();
           }
           fitBounds(

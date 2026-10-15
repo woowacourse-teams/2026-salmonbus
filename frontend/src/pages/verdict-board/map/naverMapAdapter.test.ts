@@ -216,13 +216,28 @@ function setup() {
 }
 
 describe("네이버 지도 adapter", () => {
+  it("크기가 같으면 지도 크기와 중심·줌을 다시 설정하지 않는다", () => {
+    const { native, adapter } = setup();
+    const setSize = jest.spyOn(native.map, "setSize");
+    const setCenter = jest.spyOn(native.map, "setCenter");
+    const setZoom = jest.spyOn(native.map, "setZoom");
+    adapter.resize(400, 350);
+    expect(setSize).not.toHaveBeenCalled();
+    expect(setCenter).not.toHaveBeenCalled();
+    expect(setZoom).not.toHaveBeenCalled();
+  });
   it("두 방향 경로를 그리고 최초에만 전체를 맞춘 뒤 크기 변경에도 중심과 줌을 보존한다", () => {
     const { native, adapter } = setup();
     expect(native.lines).toHaveLength(2);
     expect(native.map.fits).toBe(1);
     adapter.focus({ direction: "UP", sequence: 15 });
     const center = native.map.center;
+    const setCenter = jest.spyOn(native.map, "setCenter");
+    const setZoom = jest.spyOn(native.map, "setZoom");
     adapter.resize(400, 600);
+    expect(native.map.size).toEqual(new SizeStub(400, 600));
+    expect(setCenter).not.toHaveBeenCalled();
+    expect(setZoom).not.toHaveBeenCalled();
     expect(native.map.fits).toBe(1);
     expect(native.map.center).toBe(center);
     expect(native.map.zoom).toBe(16);

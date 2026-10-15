@@ -270,11 +270,9 @@ export function createNaverRouteMap(
     },
     resize(width, height) {
       if (width <= 0 || height <= 0) return;
-      const center = map.getCenter();
-      const zoom = map.getZoom();
+      const size = map.getSize();
+      if (size.width === width && size.height === height) return;
       map.setSize(new sdk.Size(width, height));
-      map.setCenter(center);
-      map.setZoom(zoom, false);
       refreshStops();
       refreshArrows();
     },

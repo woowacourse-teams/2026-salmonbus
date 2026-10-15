@@ -27,6 +27,7 @@ type LocationState = { status: "idle" } | { status: "loading" } | { status: "mes
 
 export function RouteMap(props: RouteMapProps) {
   const { data, viewportHeight, selected, activeDirection, liveVehicleViews, motion } = props;
+  const regionRef = useRef<HTMLElement | null>(null);
   const elementRef = useRef<HTMLDivElement>(null);
   const adapterRef = useRef<RouteMapAdapter | null>(null);
   const propsRef = useRef(props);
@@ -140,19 +141,20 @@ export function RouteMap(props: RouteMapProps) {
   );
 
   useLayoutEffect(() => {
-    const element = elementRef.current;
-    if (element === null || viewportHeight <= 0) return;
-    runMapAction((adapter) => adapter.resize(element.clientWidth, element.clientHeight));
+    // SDK가 지도 요소의 크기를 픽셀 값으로 고정하므로 바깥 영역을 측정한다.
+    const region = regionRef.current;
+    if (region === null || viewportHeight <= 0) return;
+    runMapAction((adapter) => adapter.resize(region.clientWidth, region.clientHeight));
   }, [height, viewportHeight, mapState, runMapAction]);
 
   useEffect(() => {
-    const element = elementRef.current;
-    if (element === null) return;
+    const region = regionRef.current;
+    if (region === null) return;
     const observer = new ResizeObserver(() => {
       if (propsRef.current.viewportHeight > 0)
-        runMapAction((adapter) => adapter.resize(element.clientWidth, element.clientHeight));
+        runMapAction((adapter) => adapter.resize(region.clientWidth, region.clientHeight));
     });
-    observer.observe(element);
+    observer.observe(region);
     return () => observer.disconnect();
   }, [runMapAction]);
 
@@ -197,6 +199,7 @@ export function RouteMap(props: RouteMapProps) {
     data === null ? "지도 정보를 준비 중이에요" : currentMapState.status === "error" ? currentMapState.message : null;
   return (
     <section
+      ref={regionRef}
       className={styles.region}
       style={{ height, pointerEvents: viewportHeight <= 0 ? "none" : "auto" }}
       aria-label="노선 지도"
