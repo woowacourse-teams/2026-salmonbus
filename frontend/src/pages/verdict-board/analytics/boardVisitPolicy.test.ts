@@ -7,6 +7,7 @@ import {
   type BoardObservation,
   type BoardVisit,
   type BoardVisitEvent,
+  type StopExpandStep,
 } from "./boardVisitPolicy";
 
 const MINUTE_MS = 60 * 1000;
@@ -200,31 +201,35 @@ describe("nextStopExpandStep", () => {
     return visit;
   }
 
-  it("같은 방문에서 정류장을 펼칠 때마다 expand_index가 1씩 늘어난다", () => {
-    const first = nextStopExpandStep(visitAfter([observed({ screen: forecast, receivedAt: 1_000 })]), expand);
-    const second = nextStopExpandStep(first.visit, expand);
+  function expandOnce(visit: BoardVisit | null): StopExpandStep {
+    const step = nextStopExpandStep(visit, expand);
+    if (step === null) throw new Error("stop_expanded를 보내지 않았습니다");
+    return step;
+  }
 
-    expect([first.properties?.expand_index, second.properties?.expand_index]).toEqual([1, 2]);
+  it("같은 방문에서 정류장을 펼칠 때마다 expand_index가 1씩 늘어난다", () => {
+    const first = expandOnce(visitAfter([observed({ screen: forecast, receivedAt: 1_000 })]));
+    const second = expandOnce(first.visit);
+
+    expect([first.properties.expand_index, second.properties.expand_index]).toEqual([1, 2]);
+  });
+
+  it("방문 기록이 없으면 stop_expanded를 보내지 않는다", () => {
+    expect(nextStopExpandStep(null, expand)).toBeNull();
   });
 
   it("다른 노선으로 바뀌어 새 방문이 시작되면 expand_index를 1부터 다시 센다", () => {
-    const expanded = nextStopExpandStep(
-      visitAfter([observed({ routeId: "R1", screen: forecast, receivedAt: 1_000 })]),
-      expand,
-    );
+    const expanded = expandOnce(visitAfter([observed({ routeId: "R1", screen: forecast, receivedAt: 1_000 })]));
     const nextVisit = visitAfter(
       [observed({ routeId: "R2", screen: loading }), observed({ routeId: "R2", screen: forecast, receivedAt: 2_000 })],
       expanded.visit,
     );
 
-    expect(nextStopExpandStep(nextVisit, expand).properties).toMatchObject({ route_id: "R2", expand_index: 1 });
+    expect(expandOnce(nextVisit).properties).toMatchObject({ route_id: "R2", expand_index: 1 });
   });
 
   it("탭을 30분 넘게 숨겼다 돌아와 새 예보를 받기 전에 펼치면 stop_expanded를 보내지 않는다", () => {
-    const expanded = nextStopExpandStep(
-      visitAfter([observed({ screen: forecast, receivedAt: 1_000, wallNow: 0 })]),
-      expand,
-    );
+    const expanded = expandOnce(visitAfter([observed({ screen: forecast, receivedAt: 1_000, wallNow: 0 })]));
     const returned = visitAfter(
       [
         observed({ screen: forecast, receivedAt: 1_000, visible: false, wallNow: 0 }),
@@ -232,17 +237,12 @@ describe("nextStopExpandStep", () => {
       ],
       expanded.visit,
     );
-    const step = nextStopExpandStep(returned, expand);
 
-    expect(step.properties).toBeNull();
-    expect(step.visit.expandCount).toBe(0);
+    expect(nextStopExpandStep(returned, expand)).toBeNull();
   });
 
   it("탭을 30분 넘게 숨겼다 돌아와 새 예보로 board_viewed를 보낸 뒤 펼치면 expand_index를 1부터 센다", () => {
-    const expanded = nextStopExpandStep(
-      visitAfter([observed({ screen: forecast, receivedAt: 1_000, wallNow: 0 })]),
-      expand,
-    );
+    const expanded = expandOnce(visitAfter([observed({ screen: forecast, receivedAt: 1_000, wallNow: 0 })]));
     const refreshed = visitAfter(
       [
         observed({ screen: forecast, receivedAt: 1_000, visible: false, wallNow: 0 }),
@@ -252,14 +252,11 @@ describe("nextStopExpandStep", () => {
       expanded.visit,
     );
 
-    expect(nextStopExpandStep(refreshed, expand).properties?.expand_index).toBe(1);
+    expect(expandOnce(refreshed).properties.expand_index).toBe(1);
   });
 
   it("탭을 30분 안에 다시 열면 같은 방문이라 이어서 센다", () => {
-    const expanded = nextStopExpandStep(
-      visitAfter([observed({ screen: forecast, receivedAt: 1_000, wallNow: 0 })]),
-      expand,
-    );
+    const expanded = expandOnce(visitAfter([observed({ screen: forecast, receivedAt: 1_000, wallNow: 0 })]));
     const returned = visitAfter(
       [
         observed({ screen: forecast, receivedAt: 1_000, visible: false, wallNow: 0 }),
@@ -268,6 +265,6 @@ describe("nextStopExpandStep", () => {
       expanded.visit,
     );
 
-    expect(nextStopExpandStep(returned, expand).properties?.expand_index).toBe(2);
+    expect(expandOnce(returned).properties.expand_index).toBe(2);
   });
 });

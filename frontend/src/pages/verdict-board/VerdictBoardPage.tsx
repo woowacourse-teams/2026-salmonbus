@@ -117,7 +117,7 @@ function renderBoard(
   switched: boolean,
   liveVehicles: LiveVehicles | null,
   liveMotionDurationMs: number,
-  onStopExpand: (stop: ExpandableStopView, rowPosition: number) => void,
+  trackStopExpanded: (stop: ExpandableStopView, direction: Direction, rowPosition: number) => void,
 ) {
   switch (screen.kind) {
     case "loading":
@@ -135,7 +135,7 @@ function renderBoard(
           liveVehicleViews={liveVehicleViewsFor(screen.board, liveVehicles, screen.direction)}
           liveMotionDurationMs={liveMotionDurationMs}
           entering={switched}
-          onStopExpand={onStopExpand}
+          onStopExpand={(stop, rowPosition) => trackStopExpanded(stop, screen.direction, rowPosition)}
         />
       );
   }
