@@ -1,0 +1,17 @@
+gbis:
+  base-url: http://127.0.0.1:18080
+  daily-limit: 100000
+
+collection:
+  enabled: true
+  fixed-interval: 20s
+
+forecast:
+  enabled: true
+  interval: 5s
+  settlement-interval: 10s
+
+model:
+  bundle:
+    directory: /srv/salmonbus-dev/models/reference-20261002
+    promote-on-start: false

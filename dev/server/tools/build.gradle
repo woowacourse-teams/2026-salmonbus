@@ -1,0 +1,64 @@
+plugins {
+    id 'java'
+}
+
+repositories {
+    mavenCentral()
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+dependencies {
+    implementation 'tools.jackson.core:jackson-databind:3.1.4'
+    implementation 'org.apache.commons:commons-compress:1.28.0'
+    testImplementation 'org.junit.jupiter:junit-jupiter:6.0.3'
+    testImplementation 'org.junit.platform:junit-platform-launcher:6.0.3'
+}
+
+tasks.named('test') {
+    useJUnitPlatform {
+        excludeTags 'linux-root'
+    }
+}
+
+tasks.named('processTestResources') {
+    from '../../../backend/deploy/runtime-source-inputs.sh'
+}
+
+tasks.register('serverTest', Test) {
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'linux-root'
+    }
+}
+
+tasks.named('jar') {
+    archiveFileName = 'shared-dev-tools.jar'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes 'Main-Class': 'com.gustler.devtools.DevTools'
+    }
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA', 'module-info.class'
+}
+
+tasks.register('testHarnessJar', Jar) {
+    dependsOn testClasses
+    archiveFileName = 'shared-dev-tools-tests.jar'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes 'Main-Class': 'com.gustler.devtools.TestRunner'
+    }
+    from sourceSets.test.output, sourceSets.main.output
+    from {
+        configurations.testRuntimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA', 'module-info.class'
+}

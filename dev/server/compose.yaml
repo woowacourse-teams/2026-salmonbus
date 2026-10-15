@@ -1,0 +1,80 @@
+name: salmonbus-shared-dev
+
+services:
+  postgres:
+    platform: linux/arm64
+    image: postgres:18.4@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636
+    env_file: /etc/salmonbus-dev/postgres.env
+    ports:
+      - "127.0.0.1:15432:5432"
+    volumes:
+      - type: bind
+        source: /srv/salmonbus-dev/postgres
+        target: /var/lib/postgresql
+        bind:
+          create_host_path: false
+    command: [postgres, -c, shared_buffers=32MB, -c, max_connections=30]
+    healthcheck:
+      test: [CMD, pg_isready, -h, 127.0.0.1, -U, salmonbus_dev, -d, salmonbus_dev]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: "no"
+    mem_limit: 192m
+    networks: [dev]
+
+  mongodb:
+    platform: linux/arm64
+    image: mongo:8.0@sha256:4968f22d0c6c10ef29952f3e807f62872ba22b3312f25803564fbfc08255efc2
+    env_file: /etc/salmonbus-dev/mongodb.env
+    command: [mongod, --config, /etc/mongod-dev.yml, --wiredTigerCacheSizeGB, "0.25"]
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - type: bind
+        source: /srv/salmonbus-dev/mongodb
+        target: /data/db
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /etc/salmonbus-dev/mongodb.yml
+        target: /etc/mongod-dev.yml
+        read_only: true
+        bind:
+          create_host_path: false
+      - ./init-chat.js:/docker-entrypoint-initdb.d/10-chat.js:ro
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - "const chat = db.getSiblingDB('salmonbus_chat_dev'); if (!chat.auth('salmonbus_dev_chat', process.env.MONGO_CHAT_PASSWORD)) quit(1); quit(chat.runCommand({ping: 1}).ok === 1 ? 0 : 1)"
+      interval: 30s
+      timeout: 10s
+      retries: 6
+    restart: "no"
+    mem_limit: 512m
+    networks: [dev]
+
+  gbis-mock:
+    platform: linux/arm64
+    image: salmonbus-gbis-replay:${DEV_REVISION:?DEV_REVISION is required}
+    pull_policy: never
+    environment:
+      JAVA_OPTS: -XX:ActiveProcessorCount=2 -Xms32m -Xmx96m
+    ports:
+      - "127.0.0.1:18080:8080"
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, --output, /dev/null, http://127.0.0.1:8080/__admin/mappings]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 12
+    restart: "no"
+    mem_limit: 256m
+    networks: [dev]
+
+networks:
+  dev:
+    internal: true

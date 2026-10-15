@@ -4,7 +4,7 @@
     "urlPath": "/buslocationservice/v2/getBusLocationListv2",
     "queryParameters": {
       "serviceKey": {
-        "equalTo": "local-only-placeholder"
+        "matches": "(local-only-placeholder|shared-dev-placeholder)"
       },
       "format": {
         "equalTo": "json"

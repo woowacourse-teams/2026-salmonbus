@@ -3,14 +3,35 @@ import type { Board, LiveVehicles, RouteListResponse } from "./routeForecast.typ
 
 const API_BASE = "/api/v1";
 
-export function fetchRoutes(options?: RequestOptions): Promise<ApiResult<RouteListResponse>> {
+type FetchRequestOption = Required<Pick<RequestOptions, "signal">>;
+
+const ENDPOINTS = {
+  board: `${API_BASE}/routes/:routeId/board`,
+  vehicles: `${API_BASE}/routes/:routeId/vehicles`,
+};
+
+function routeUrlFrom(endpoint: string, routeId: string): string {
+  return endpoint.replace(":routeId", encodeURIComponent(routeId));
+}
+
+export function fetchRoutes(options: FetchRequestOption): Promise<ApiResult<RouteListResponse>> {
   return requestJson<RouteListResponse>(`${API_BASE}/routes`, options);
 }
 
-export function fetchBoard(routeId: string, options?: RequestOptions): Promise<ApiResult<Board>> {
-  return requestJson<Board>(`${API_BASE}/routes/${encodeURIComponent(routeId)}/board`, options);
+export function fetchBoard(routeId: string, options: FetchRequestOption): Promise<ApiResult<Board>> {
+  const endpoint = ENDPOINTS.board;
+
+  return requestJson<Board>(routeUrlFrom(endpoint, routeId), {
+    ...options,
+    errorContext: { endpoint, tags: { route_id: routeId } },
+  });
 }
 
-export function fetchLiveVehicles(routeId: string, options?: RequestOptions): Promise<ApiResult<LiveVehicles>> {
-  return requestJson<LiveVehicles>(`${API_BASE}/routes/${encodeURIComponent(routeId)}/vehicles`, options);
+export function fetchLiveVehicles(routeId: string, options: FetchRequestOption): Promise<ApiResult<LiveVehicles>> {
+  const endpoint = ENDPOINTS.vehicles;
+
+  return requestJson<LiveVehicles>(routeUrlFrom(endpoint, routeId), {
+    ...options,
+    errorContext: { endpoint, tags: { route_id: routeId } },
+  });
 }

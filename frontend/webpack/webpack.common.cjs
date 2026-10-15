@@ -2,6 +2,7 @@ const path = require("path");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const { VanillaExtractPlugin } = require("@vanilla-extract/webpack-plugin");
 const { execSync } = require("child_process");
+const { DefinePlugin } = require("webpack");
 
 // CodePipeline sources arrive without .git, so buildspec injects APP_VERSION
 function resolveAppVersion() {
@@ -14,6 +15,8 @@ function resolveAppVersion() {
     return "unknown";
   }
 }
+
+const appVersion = resolveAppVersion();
 
 module.exports = {
   entry: path.resolve(__dirname, "../src/index.tsx"),
@@ -36,11 +39,16 @@ module.exports = {
     ],
   },
   plugins: [
+    new DefinePlugin({
+      __SENTRY_DSN__: JSON.stringify(process.env.WEBPACK_SENTRY_DSN ?? ""),
+      __SENTRY_ENVIRONMENT__: JSON.stringify(process.env.WEBPACK_SENTRY_ENVIRONMENT ?? ""),
+      __APP_RELEASE__: JSON.stringify("salmonbus-fe@" + appVersion),
+    }),
     new HtmlWebpackPlugin({
       template: path.resolve(__dirname, "../public/index.html"),
       favicon: path.resolve(__dirname, "../public/favicon.ico"),
       meta: {
-        "app-version": resolveAppVersion(),
+        "app-version": appVersion,
       },
     }),
     new VanillaExtractPlugin(),

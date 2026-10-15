@@ -14,6 +14,8 @@ secrets/
 /.local/
 /dev/wiremock-extension/.gradle/
 /dev/wiremock-extension/build/
+/dev/server/tools/.gradle/
+/dev/server/tools/build/
 
 ### Backend ###
 ### IntelliJ IDEA ###

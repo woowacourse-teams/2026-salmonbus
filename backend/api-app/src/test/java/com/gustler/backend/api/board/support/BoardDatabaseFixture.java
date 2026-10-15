@@ -328,9 +328,9 @@ public class BoardDatabaseFixture {
             .param("generatedAt", generatedAt)
             .update();
         jdbcClient.sql("""
-                INSERT INTO forecast_evaluation (
-                    vehicle_observation_id, target_stop_order, route_version_id, scoring_state
-                ) VALUES (:observationId, :targetStopOrder, :routeVersionId, 'PENDING')
+                INSERT INTO forecast_evaluation_pending (
+                    vehicle_observation_id, target_stop_order, route_version_id
+                ) VALUES (:observationId, :targetStopOrder, :routeVersionId)
                 """)
             .param("observationId", observationId)
             .param("targetStopOrder", targetStopOrder)
