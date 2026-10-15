@@ -204,7 +204,7 @@ describe("nextStopExpandStep", () => {
     const first = nextStopExpandStep(visitAfter([observed({ screen: forecast, receivedAt: 1_000 })]), expand);
     const second = nextStopExpandStep(first.visit, expand);
 
-    expect([first.properties.expand_index, second.properties.expand_index]).toEqual([1, 2]);
+    expect([first.properties?.expand_index, second.properties?.expand_index]).toEqual([1, 2]);
   });
 
   it("다른 노선으로 바뀌어 새 방문이 시작되면 expand_index를 1부터 다시 센다", () => {
@@ -212,12 +212,15 @@ describe("nextStopExpandStep", () => {
       visitAfter([observed({ routeId: "R1", screen: forecast, receivedAt: 1_000 })]),
       expand,
     );
-    const nextVisit = visitAfter([observed({ routeId: "R2", screen: loading })], expanded.visit);
+    const nextVisit = visitAfter(
+      [observed({ routeId: "R2", screen: loading }), observed({ routeId: "R2", screen: forecast, receivedAt: 2_000 })],
+      expanded.visit,
+    );
 
     expect(nextStopExpandStep(nextVisit, expand).properties).toMatchObject({ route_id: "R2", expand_index: 1 });
   });
 
-  it("탭을 30분 넘게 숨겼다 다시 열면 expand_index를 1부터 다시 센다", () => {
+  it("탭을 30분 넘게 숨겼다 돌아와 새 예보를 받기 전에 펼치면 stop_expanded를 보내지 않는다", () => {
     const expanded = nextStopExpandStep(
       visitAfter([observed({ screen: forecast, receivedAt: 1_000, wallNow: 0 })]),
       expand,
@@ -229,8 +232,27 @@ describe("nextStopExpandStep", () => {
       ],
       expanded.visit,
     );
+    const step = nextStopExpandStep(returned, expand);
 
-    expect(nextStopExpandStep(returned, expand).properties.expand_index).toBe(1);
+    expect(step.properties).toBeNull();
+    expect(step.visit.expandCount).toBe(0);
+  });
+
+  it("탭을 30분 넘게 숨겼다 돌아와 새 예보로 board_viewed를 보낸 뒤 펼치면 expand_index를 1부터 센다", () => {
+    const expanded = nextStopExpandStep(
+      visitAfter([observed({ screen: forecast, receivedAt: 1_000, wallNow: 0 })]),
+      expand,
+    );
+    const refreshed = visitAfter(
+      [
+        observed({ screen: forecast, receivedAt: 1_000, visible: false, wallNow: 0 }),
+        observed({ screen: forecast, receivedAt: 1_000, visible: true, wallNow: 31 * MINUTE_MS }),
+        observed({ screen: forecast, receivedAt: 2_000, visible: true, wallNow: 31 * MINUTE_MS }),
+      ],
+      expanded.visit,
+    );
+
+    expect(nextStopExpandStep(refreshed, expand).properties?.expand_index).toBe(1);
   });
 
   it("탭을 30분 안에 다시 열면 같은 방문이라 이어서 센다", () => {
@@ -246,6 +268,6 @@ describe("nextStopExpandStep", () => {
       expanded.visit,
     );
 
-    expect(nextStopExpandStep(returned, expand).properties.expand_index).toBe(2);
+    expect(nextStopExpandStep(returned, expand).properties?.expand_index).toBe(2);
   });
 });

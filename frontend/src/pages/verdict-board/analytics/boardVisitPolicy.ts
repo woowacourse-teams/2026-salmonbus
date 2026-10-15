@@ -41,7 +41,7 @@ export interface BoardVisitStep {
 
 export interface StopExpandStep {
   visit: BoardVisit;
-  properties: EventMap["stop_expanded"];
+  properties: EventMap["stop_expanded"] | null;
 }
 
 interface StopExpandInput {
@@ -63,6 +63,7 @@ export function nextStopExpandStep(
   visit: BoardVisit,
   { stop, direction, rowPosition }: StopExpandInput,
 ): StopExpandStep {
+  if (!visit.viewed) return { visit, properties: null };
   const expandCount = visit.expandCount + 1;
   return {
     visit: { ...visit, expandCount },

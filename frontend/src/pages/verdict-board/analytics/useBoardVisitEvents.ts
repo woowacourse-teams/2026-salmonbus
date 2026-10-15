@@ -44,7 +44,9 @@ export function useBoardVisitEvents({ routeId, screen, latestSuccess }: Params) 
     if (visitRef.current === null || screen.kind !== "forecast") return;
     const step = nextStopExpandStep(visitRef.current, { stop, direction: screen.direction, rowPosition });
     visitRef.current = step.visit;
-    track("stop_expanded", step.properties);
+    if (step.properties !== null) {
+      track("stop_expanded", step.properties);
+    }
   }
 
   return { trackStopExpanded };
