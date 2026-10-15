@@ -1,4 +1,4 @@
-export type BoardSheetSnap = "minimum" | "half" | "full";
+export type BoardSheetSnap = "minimum" | "half" | "expanded" | "full";
 
 export type BoardSheetHeights = Record<BoardSheetSnap, number>;
 
@@ -9,7 +9,7 @@ export interface BoardSheetMeasurements {
   safeBottom: number;
 }
 
-const SNAPS: readonly BoardSheetSnap[] = ["minimum", "half", "full"];
+const SNAPS: readonly BoardSheetSnap[] = ["minimum", "half", "expanded", "full"];
 const FLICK_SPEED_PX_PER_MS = 0.45;
 const FLICK_PROJECTION_MS = 150;
 
@@ -23,7 +23,12 @@ export function boardSheetHeightsFor({
 }: BoardSheetMeasurements): BoardSheetHeights {
   const full = Math.max(0, viewportHeight - safeTop);
   const minimum = Math.min(full, Math.max(0, headerHeight + safeBottom));
-  return { minimum, half: Math.min(full, Math.max(minimum, viewportHeight / 2)), full };
+  return {
+    minimum,
+    half: Math.min(full, Math.max(minimum, viewportHeight / 2)),
+    expanded: Math.min(full, Math.max(minimum, viewportHeight * 0.7)),
+    full,
+  };
 }
 
 export function boundedBoardSheetHeightFor(height: number, heights: BoardSheetHeights): number {

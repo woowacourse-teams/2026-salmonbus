@@ -35,6 +35,17 @@ async function height(locator: Locator) {
   return locator.evaluate((element) => element.getBoundingClientRect().height);
 }
 
+async function expectSheetAndMapHeights(page: Page, sheetHeight: number, mapHeight: number) {
+  await expect
+    .poll(async () => {
+      // resize 이벤트와 애니메이션 뒤의 ResizeObserver 갱신이 반영될 프레임을 진행한다.
+      await page.clock.runFor(32);
+      const [actualSheetHeight, actualMapHeight] = await Promise.all([height(sheet(page)), height(map(page))]);
+      return Math.max(Math.abs(actualSheetHeight - sheetHeight), Math.abs(actualMapHeight - mapHeight));
+    })
+    .toBeLessThanOrEqual(1);
+}
+
 async function expectMapToFillRegion(page: Page) {
   await expect
     .poll(() =>
@@ -50,13 +61,13 @@ async function expectMapToFillRegion(page: Page) {
     .toBeLessThanOrEqual(1);
 }
 
-async function dragHeader(page: Page, destinationY: number) {
+async function dragHeader(page: Page, destinationY: number, { releaseDelayMs = 32 } = {}) {
   const bounds = await sheet(page).boundingBox();
   if (bounds === null) throw new Error("드래그할 시트가 없습니다");
   await page.mouse.move(bounds.x + 25, bounds.y + 12);
   await page.mouse.down();
   await page.mouse.move(bounds.x + 25, destinationY, { steps: 12 });
-  await page.clock.runFor(32);
+  await page.clock.runFor(releaseDelayMs);
   await page.mouse.up();
   await page.clock.runFor(32);
 }
@@ -409,11 +420,14 @@ test("잔여석 응답이 바뀌어도 차량 핀과 이미지 DOM을 유지한�
   await observation.dispose();
 });
 
-test("키보드로 최소·절반·전체를 선택하고 목록 스크롤은 시트 높이를 바꾸지 않는다", async ({ page }, testInfo) => {
+test("키보드로 최소·절반·70%·전체를 선택하고 목록 스크롤은 시트 높이를 바꾸지 않는다", async ({ page }, testInfo) => {
   await openMap(page);
+  await expect(handle(page)).toHaveAttribute("aria-valuemax", "3");
+  await expect(handle(page)).toHaveAttribute("aria-valuenow", "1");
   await handle(page).focus();
   await handle(page).press("Home");
   await expect(sheet(page)).toHaveAttribute("data-snap", "minimum");
+  await expect(handle(page)).toHaveAttribute("aria-valuenow", "0");
   await expect(list(page)).toHaveCount(0);
   await expect(tab(page, "UP")).toBeVisible();
   await expect(sheet(page).getByText("운행 시간", { exact: true })).toBeVisible();
@@ -430,14 +444,41 @@ test("키보드로 최소·절반·전체를 선택하고 목록 스크롤은 �
   await expect.poll(() => list(page).evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
   expect(await height(sheet(page))).toBe(originalHeight);
 
+  await handle(page).press("ArrowUp");
+  await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
+  await expect(handle(page)).toHaveAttribute("aria-valuenow", "2");
+  await expect(handle(page)).toHaveAttribute("aria-valuetext", "화면 70% 표시");
+  await expectSheetAndMapHeights(page, 844 * 0.7, 844 * 0.3);
+  if (testInfo.project.name === "chromium") await page.screenshot({ path: "/tmp/sal192-board-expanded.png" });
+
   await handle(page).press("End");
   await expect(sheet(page)).toHaveAttribute("data-snap", "full");
+  await expect(handle(page)).toHaveAttribute("aria-valuenow", "3");
   expect(await height(sheet(page))).toBeCloseTo(844, 0);
   await expect(map(page)).toHaveCount(0);
   await expect(sheet(page).getByRole("link", { name: "노선 선택으로 돌아가기" })).toBeVisible();
   if (testInfo.project.name === "chromium") await page.screenshot({ path: "/tmp/sal192-board-full.png" });
   await handle(page).press("ArrowDown");
+  await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
+  await handle(page).press("ArrowDown");
   await expect(sheet(page)).toHaveAttribute("data-snap", "half");
+});
+
+test("핸들 클릭은 네 단계를 순환하고 느린 드래그는 70% 높이에 멈춘다", async ({ page }) => {
+  await openMap(page);
+  for (const snap of ["expanded", "full", "minimum", "half"]) {
+    await handle(page).click();
+    await page.clock.runFor(32);
+    await expect(sheet(page)).toHaveAttribute("data-snap", snap);
+  }
+
+  const bounds = await sheet(page).boundingBox();
+  if (bounds === null) throw new Error("드래그할 시트가 없습니다");
+  const targetHeight = 844 * 0.7;
+  await dragHeader(page, bounds.y + 12 - (targetHeight - bounds.height), { releaseDelayMs: 100 });
+  await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
+  await expect(sheet(page)).toHaveAttribute("data-dragging", "false");
+  await expectSheetAndMapHeights(page, targetHeight, 844 - targetHeight);
 });
 
 test("헤더 드래그는 양 끝에 붙고 방향 버튼에서 시작한 드래그는 높이를 바꾸지 않는다", async ({ page }) => {
@@ -461,7 +502,7 @@ test("헤더 드래그는 양 끝에 붙고 방향 버튼에서 시작한 드래
 });
 
 for (const reducedMotion of ["reduce", "no-preference"] as const) {
-  test(`최소 시트와 전체 화면에서 돌아와도 지도가 영역을 채우고 중심과 줌을 유지한다 (${reducedMotion})`, async ({
+  test(`최소·70%·전체 시트와 화면 크기 변경에도 지도가 영역을 채우고 시점을 유지한다 (${reducedMotion})`, async ({
     page,
     naverMap,
   }) => {
@@ -488,8 +529,16 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
     await expectMapToFillRegion(page);
     expect(await naverMap.snapshot()).toEqual(originalView);
 
+    await handle(page).press("ArrowUp");
+    await handle(page).press("ArrowUp");
+    await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
+    await expectSheetAndMapHeights(page, 844 * 0.7, 844 * 0.3);
+    await expectMapToFillRegion(page);
+    expect(await naverMap.snapshot()).toEqual(originalView);
+
     await page.setViewportSize({ width: 360, height: 900 });
-    await page.clock.runFor(400);
+    await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
+    await expectSheetAndMapHeights(page, 630, 270);
     await expectMapToFillRegion(page);
     expect(await naverMap.snapshot()).toEqual(originalView);
   });

@@ -15,9 +15,10 @@ interface BoardBottomSheetProps {
 const SNAP_LABEL: Record<BoardSheetSnap, string> = {
   minimum: "노선 정보만 표시",
   half: "화면 절반 표시",
+  expanded: "화면 70% 표시",
   full: "전체 화면 표시",
 };
-const SNAP_VALUE: Record<BoardSheetSnap, number> = { minimum: 0, half: 1, full: 2 };
+const SNAP_VALUE: Record<BoardSheetSnap, number> = { minimum: 0, half: 1, expanded: 2, full: 3 };
 
 export function BoardBottomSheet({
   snap,
@@ -59,7 +60,7 @@ export function BoardBottomSheet({
           aria-label="판정보드 높이"
           aria-orientation="vertical"
           aria-valuemin={0}
-          aria-valuemax={2}
+          aria-valuemax={3}
           aria-valuenow={SNAP_VALUE[snap]}
           aria-valuetext={SNAP_LABEL[snap]}
           aria-controls={listId}

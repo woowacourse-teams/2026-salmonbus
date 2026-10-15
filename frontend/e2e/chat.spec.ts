@@ -761,15 +761,37 @@ test.describe("판정보드 시트 애니메이션", () => {
 
     const boardSheet = page.getByRole("region", { name: "판정보드", exact: true });
     const handle = page.getByRole("slider", { name: "판정보드 높이" });
-    for (const key of ["Home", "ArrowUp", "End", "ArrowDown", "Home", "End"]) {
+    const steps = [
+      { key: "Home", snap: "minimum" },
+      { key: "ArrowUp", snap: "half" },
+      { key: "ArrowUp", snap: "expanded" },
+      { key: "End", snap: "full" },
+      { key: "ArrowDown", snap: "expanded" },
+      { key: "ArrowDown", snap: "half" },
+      { key: "Home", snap: "minimum" },
+      { key: "End", snap: "full" },
+    ];
+    let resizedAtExpanded = false;
+    for (const { key, snap } of steps) {
       await handle.press(key);
+      await expect(boardSheet).toHaveAttribute("data-snap", snap);
       await boardSheet.evaluate(async (element) => {
         await Promise.all(element.getAnimations().map((animation) => animation.finished));
       });
+      if (snap === "expanded") {
+        const viewport = page.viewportSize();
+        if (viewport === null) throw new Error("화면 크기를 확인할 수 없습니다");
+        expect((await edges(boardSheet)).height).toBeCloseTo(viewport.height * 0.7, 0);
+        if (!resizedAtExpanded) {
+          resizedAtExpanded = true;
+          await page.setViewportSize({ width: 1440, height: 1000 });
+          await expect.poll(async () => Math.abs((await edges(boardSheet)).height - 700)).toBeLessThanOrEqual(1);
+        }
+      }
       expect(
         await page.evaluate(() => (window as unknown as { __resizeObserverErrors: string[] }).__resizeObserverErrors),
       ).toEqual([]);
-      if (key !== "Home") await expect.poll(() => panelOffsetFromCard(page)).toBeLessThanOrEqual(1);
+      if (snap !== "minimum") await expect.poll(() => panelOffsetFromCard(page)).toBeLessThanOrEqual(1);
     }
   });
 });
