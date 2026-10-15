@@ -45,6 +45,10 @@ jobs:
         with:
           version: v2.40.0
           cache-binary: false
+      - name: Install geometry check prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ripgrep
       - name: Verify local Docker development environment
         run: |
           ./dev/local.sh check
