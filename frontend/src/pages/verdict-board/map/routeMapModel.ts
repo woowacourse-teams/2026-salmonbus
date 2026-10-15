@@ -17,7 +17,7 @@ export interface DirectionPath {
   coordinates: GeoCoordinate[];
 }
 
-// FE 표시 모델이다. 백엔드 지도 데이터 응답 계약은 아직 합의 전이다.
+// geometry API의 좌표와 방향별 경로를 지도 표시에 맞게 변환한 FE 모델이다.
 export interface RouteMapData {
   routeId: BoardRoute["id"];
   referenceVersionId: BoardRoute["referenceVersionId"];

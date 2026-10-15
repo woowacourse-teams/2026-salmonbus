@@ -1,5 +1,12 @@
-import type { Locator, Page } from "@playwright/test";
-import { apiPaths, directionLabels, pollIntervalMs, routeId, targetStopNames } from "./fixtures/mock-data";
+import type { Locator, Page, Route } from "@playwright/test";
+import {
+  apiPaths,
+  createRouteGeometry,
+  directionLabels,
+  pollIntervalMs,
+  routeId,
+  targetStopNames,
+} from "./fixtures/mock-data";
 import { test, expect } from "./fixtures/naver-map";
 
 test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce", screenshot: "only-on-failure" });
@@ -156,6 +163,184 @@ async function dragHeader(page: Page, destinationY: number, { releaseDelayMs = 3
   await page.mouse.up();
   await page.clock.runFor(32);
 }
+
+test("보드와 같은 노선 판본의 geometry API를 조회하고 같은 판본의 폴링에는 지도를 다시 받지 않는다", async ({
+  page,
+  api,
+}) => {
+  const geometryRequests: URL[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === apiPaths.geometry) geometryRequests.push(url);
+  });
+  await openMap(page);
+  const initialGeometryRequests = geometryRequests.length;
+  expect(initialGeometryRequests).toBeGreaterThan(0);
+  expect(
+    geometryRequests.every(
+      (url) => url.searchParams.get("referenceVersionId") === api.data.board.route.referenceVersionId,
+    ),
+  ).toBe(true);
+  await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
+
+  const refreshedBoard = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.board && response.status() === 200,
+  );
+  await page.clock.fastForward(pollIntervalMs);
+  await (await refreshedBoard).finished();
+  await page.clock.runFor(32);
+  expect(api.requests.board).toBeGreaterThan(1);
+  expect(geometryRequests).toHaveLength(initialGeometryRequests);
+  await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
+});
+
+test("도로 경로가 미수집이어도 지도와 정류장을 표시하고 목록 버스를 사용할 수 있다", async ({ page, api }) => {
+  api.data.geometry.status = "UNAVAILABLE";
+  api.data.geometry.reason = "NOT_COLLECTED";
+  api.data.geometry.paths = null;
+  api.data.geometry.points = [];
+  api.data.geometry.boundary = null;
+  await openMap(page);
+
+  await expect(map(page).getByTestId("naver-map-test-double")).toBeVisible();
+  await expect(map(page).locator("button[data-map-stop-sequence]:visible")).toHaveCount(24);
+  await expect(map(page).getByTestId("naver-polyline")).toHaveCount(0);
+  await expect(map(page).locator("[data-marker-kind='arrow']")).toHaveCount(0);
+  await expect(map(page).getByRole("button", { name: /부근 버스/ })).toHaveCount(0);
+  await expect(
+    map(page).getByRole("status").filter({ hasText: "노선 경로를 준비 중이에요. 정류장 위치는 확인할 수 있어요" }),
+  ).toBeVisible();
+  await expect(map(page)).toHaveAttribute("aria-busy", "false");
+  await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
+
+  const bus = list(page).getByRole("button", {
+    name: "상행 정류장 8 정류장, 도착 중, 현재 잔여 좌석 5석",
+    exact: true,
+  });
+  await bus.scrollIntoViewIfNeeded();
+  await bus.click();
+  await page.clock.runFor(32);
+  await expect(bus).toHaveAttribute("aria-pressed", "true");
+  await expect(map(page).getByRole("button", { name: /부근 버스/ })).toHaveCount(0);
+
+  await map(page).locator("button[data-map-stop-sequence='11']").click();
+  await page.clock.runFor(32);
+  const stop = list(page).locator("li[data-stop-sequence='11'] button[aria-expanded]");
+  await expect(stop).toHaveAttribute("aria-expanded", "true");
+  await expectStopFocusedInList(page, 11);
+  await expect(map(page).getByTestId("naver-polyline")).toHaveCount(0);
+});
+
+test("한 방향의 도로 경로가 없어도 해당 정류장을 표시하고 다른 방향의 경로와 차량을 사용할 수 있다", async ({
+  page,
+  api,
+  naverMap,
+}) => {
+  if (api.data.geometry.paths === null) throw new Error("수정할 노선 경로가 없습니다");
+  api.data.geometry.paths.UP.points = [];
+  await openMap(page);
+  expect((await naverMap.snapshot()).zoom).toBeLessThan(14);
+  await expect(map(page).locator("button[data-map-stop-sequence]:visible")).toHaveCount(12);
+  await expect(map(page).locator("button[data-map-stop-sequence='11']")).toBeVisible();
+  await expect(map(page).getByRole("button", { name: /부근 버스/ })).toHaveCount(0);
+  await expect(map(page).getByTestId("naver-polyline")).toHaveCount(1);
+  const notice = map(page).getByRole("status").filter({
+    hasText: "노선 경로를 준비 중이에요. 정류장 위치는 확인할 수 있어요",
+  });
+  await expect(notice).toBeVisible();
+
+  await tab(page, "DOWN").click();
+  await page.clock.runFor(32);
+  await expect(notice).toHaveCount(0);
+  await expect(map(page).getByRole("button", { name: /부근 버스, 현재 잔여 좌석 8석/ })).toBeVisible();
+  await expect(map(page).getByTestId("naver-polyline").locator("polyline")).toHaveAttribute("stroke-opacity", "0.95");
+});
+
+for (const failure of ["network", "referenceVersion"] as const) {
+  test(`geometry ${failure === "network" ? "조회가 실패해도" : "판본이 보드와 달라도"} 정류장 목록과 방향 선택을 사용할 수 있다`, async ({
+    page,
+    api,
+  }) => {
+    if (failure === "network") api.mode.geometry = "network-error";
+    else api.data.geometry.referenceVersionId = "different-reference";
+    await page.goto(`/routes/${routeId}`);
+    await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
+    await expect(map(page).getByText("지도 정보를 준비 중이에요", { exact: true })).toBeVisible();
+    await expect(map(page).getByText("정류장 목록은 계속 확인할 수 있어요", { exact: true })).toBeVisible();
+    await expect(map(page).getByTestId("naver-map-test-double")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toHaveCount(0);
+    expect(api.requests.geometry).toBeGreaterThan(0);
+
+    await tab(page, "DOWN").click();
+    await expect(tab(page, "DOWN")).toHaveAttribute("aria-pressed", "true");
+    const downStop = list(page).locator("li[data-stop-sequence='23'] button[aria-expanded]");
+    await downStop.scrollIntoViewIfNeeded();
+    await downStop.click();
+    await page.clock.runFor(32);
+    await expect(downStop).toHaveAttribute("aria-expanded", "true");
+    await expect(list(page).locator("li[data-stop-sequence='23']")).toContainText("도착 시 8석 예상해요");
+  });
+}
+
+test("보드 판본이 바뀌면 이전 geometry 요청을 취소하고 새 좌표만 지도에 표시한다", async ({ page, api, naverMap }) => {
+  api.cacheMaxAgeSeconds = 5;
+  const oldGeometry = structuredClone(api.data.geometry);
+  const oldRoutes: Route[] = [];
+  await api.route(async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === apiPaths.geometry && url.searchParams.get("referenceVersionId") === "1") {
+      oldRoutes.push(route);
+      return;
+    }
+    await route.fallback();
+  });
+
+  try {
+    await page.goto(`/routes/${routeId}`);
+    await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
+    await expect.poll(() => oldRoutes.length).toBeGreaterThan(0);
+    await page.clock.runFor(32);
+    expect(oldRoutes.some((route) => route.request().failure() === null)).toBe(true);
+    await expect(map(page).getByTestId("naver-map-test-double")).toHaveCount(0);
+
+    const replacedStop = api.data.board.stops.find((stop) => stop.sequence === 11);
+    if (replacedStop === undefined) throw new Error("새 판본의 정류장이 없습니다");
+    replacedStop.stopId = "replacement-stop";
+    replacedStop.name = "새 판본 중앙역";
+    api.data.board.route.referenceVersionId = "2";
+    api.data.vehicles.referenceVersionId = "2";
+    api.data.geometry = createRouteGeometry(api.data.board);
+    for (const point of api.data.geometry.points) {
+      point.x += 1;
+      point.y += 1;
+    }
+    const latestPoint = api.data.geometry.busStops.find((stop) => stop.stopSequence === 11)?.point;
+    if (latestPoint === null || latestPoint === undefined) throw new Error("새 판본의 좌표가 없습니다");
+    const nextGeometry = page.waitForRequest(
+      (request) =>
+        new URL(request.url()).pathname === apiPaths.geometry &&
+        new URL(request.url()).searchParams.get("referenceVersionId") === "2",
+    );
+    await page.clock.fastForward(5_000);
+    await nextGeometry;
+    await expect.poll(() => oldRoutes.every((route) => route.request().failure() !== null)).toBe(true);
+    await expect(map(page).getByTestId("naver-map-test-double")).toHaveCount(1);
+    await page.clock.runFor(48);
+    await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
+    await naverMap.panToStop(11);
+    const latestView = await naverMap.snapshot();
+    expect(latestView.latitude).toBeCloseTo(latestPoint.y);
+    expect(latestView.longitude).toBeCloseTo(latestPoint.x);
+    await expect(list(page).locator("li[data-stop-sequence='11']")).toContainText("새 판본 중앙역");
+
+    for (const route of oldRoutes) await route.fulfill({ status: 200, json: oldGeometry });
+    await page.clock.runFor(32);
+    expect(await naverMap.snapshot()).toEqual(latestView);
+    await expect(map(page).getByTestId("naver-map-test-double")).toHaveCount(1);
+  } finally {
+    for (const route of oldRoutes) await route.abort().catch(() => {});
+  }
+});
 
 test.describe("지도 첫 화면 준비", () => {
   test.use({ holdMapInitialization: true, holdMapIdle: true });
@@ -1405,6 +1590,7 @@ test("노선 버전 갱신 시 이전 순번의 선택을 새 정류장에 이�
   replacedStop.stopId = "replacement-stop";
   replacedStop.name = "새 버전 중앙역";
   api.data.board.route.referenceVersionId = "2";
+  api.data.geometry = createRouteGeometry(api.data.board);
   api.data.board.observedAt = "2026-09-16T08:01:00+09:00";
   api.data.board.staleAt = "2026-09-16T08:06:00+09:00";
   api.data.vehicles.referenceVersionId = "2";

@@ -65,6 +65,7 @@ export function createNaverRouteMap(
       onError();
     }
   };
+  const mappedDirections = new Set(data.paths.map((path) => path.direction));
   const first = data.stops[0]?.coordinate;
   if (first === undefined) throw new Error("지도 좌표가 없어요");
   const toNaverCoordinate = (coordinate: GeoCoordinate) => new sdk.LatLng(coordinate.latitude, coordinate.longitude);
@@ -284,7 +285,7 @@ export function createNaverRouteMap(
       if (button.dataset.labelAbove !== labelAbove) button.dataset.labelAbove = labelAbove;
       if (label.hidden !== hidden) {
         label.hidden = hidden;
-        marker.setVisible(!hidden);
+        marker.setVisible(!hidden || !mappedDirections.has(selection.direction));
       }
       if (selectionChanged || directionChanged) marker.setZIndex(isSelected ? 15 : isActive ? 6 : 5);
       // 아이콘을 다시 설정하면 SDK가 DOM을 재구성하므로 표시 위치만 조정한다.
@@ -485,14 +486,16 @@ export function createNaverRouteMap(
         refreshArrows();
       }
       refreshStops();
-      const visibleKeys = new Set(nextVehicles.map((view) => view.key));
+      // 실제 도로 경로가 없는 방향은 정류장 사이를 임의로 이동시키지 않는다.
+      const visibleVehicles = nextVehicles.filter((view) => mappedDirections.has(view.vehicle.direction));
+      const visibleKeys = new Set(visibleVehicles.map((view) => view.key));
       for (const [key, item] of vehicles) {
         if (visibleKeys.has(key)) continue;
         if (vehicleFocusKey === key) cancelVehicleFocus();
         item.marker.setMap(null);
         vehicles.delete(key);
       }
-      nextVehicles.forEach((view) => {
+      visibleVehicles.forEach((view) => {
         const coordinate = routeMapCoordinateForSequence(
           data,
           view.vehicle.currentStopSequence,

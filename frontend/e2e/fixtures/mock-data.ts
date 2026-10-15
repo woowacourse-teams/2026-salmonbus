@@ -1,4 +1,5 @@
 import type { Board, Direction, LiveVehicles, RouteListResponse } from "../../src/shared/api/routeForecast.types";
+import type { RouteGeometry } from "../../src/shared/api/routeGeometry.types";
 
 export const observedAt = "2026-09-16T08:00:00+09:00";
 export const staleAt = "2026-09-16T08:05:00+09:00";
@@ -8,6 +9,7 @@ export const apiPaths = {
   routes: "/api/v1/routes",
   board: `/api/v1/routes/${routeId}/board`,
   vehicles: `/api/v1/routes/${routeId}/vehicles`,
+  geometry: `/api/v2/routes/${routeId}/geometry`,
 };
 
 export const directionLabels = {
@@ -48,8 +50,59 @@ export const stopNames: Record<Direction, string[]> = {
   ],
 };
 
+// 실제 geometry 응답 계약을 따르는 가상 노선이다. SDK 대역과 기존 지도 동작의 좌표를 유지한다.
+export function createRouteGeometry(board: Board): RouteGeometry {
+  const busStops = board.stops.map((stop) => {
+    const directionStops = board.stops.filter((candidate) => candidate.direction === stop.direction);
+    const index = directionStops.findIndex((candidate) => candidate.sequence === stop.sequence);
+    const progress = index / Math.max(1, directionStops.length - 1);
+    const offset = stop.direction === "UP" ? progress : 1 - progress;
+    return {
+      stationId: stop.stopId,
+      stopSequence: stop.sequence,
+      name: stop.name,
+      direction: stop.direction,
+      boardingAllowed: stop.boardingAllowed,
+      point: {
+        x: 127.105 + offset * 0.12 + (stop.direction === "DOWN" ? 0.002 : 0),
+        y: 37.395 + offset * 0.07,
+      },
+    };
+  });
+  const points = busStops.map((stop) => stop.point);
+  return {
+    routeId: board.route.id,
+    referenceVersionId: board.route.referenceVersionId,
+    geometryRevision: `geometry-${board.route.referenceVersionId}`,
+    name: board.route.displayName,
+    startPoint: board.route.startStopName,
+    endPoint: board.route.endStopName,
+    status: "READY",
+    reason: null,
+    coordinateSystem: "WGS84_ASSUMED",
+    turningPoint: board.route.turnSequence === null ? null : { stopSequence: board.route.turnSequence },
+    busStops,
+    points,
+    paths: {
+      UP: { points: busStops.filter((stop) => stop.direction === "UP").map((stop) => stop.point) },
+      DOWN: { points: busStops.filter((stop) => stop.direction === "DOWN").map((stop) => stop.point) },
+    },
+    boundary: {
+      left: Math.min(...points.map((point) => point.x)),
+      top: Math.max(...points.map((point) => point.y)),
+      right: Math.max(...points.map((point) => point.x)),
+      bottom: Math.min(...points.map((point) => point.y)),
+    },
+  };
+}
+
 // 각 테스트가 별도의 응답 객체를 받아 병렬 실행 중에도 서로 영향을 주지 않는다.
-export function createApiData(): { routes: RouteListResponse; board: Board; vehicles: LiveVehicles } {
+export function createApiData(): {
+  routes: RouteListResponse;
+  board: Board;
+  vehicles: LiveVehicles;
+  geometry: RouteGeometry;
+} {
   const route = {
     id: routeId,
     displayName: "3330",
@@ -125,6 +178,7 @@ export function createApiData(): { routes: RouteListResponse; board: Board; vehi
   return {
     routes: { routes: [route] },
     board,
+    geometry: createRouteGeometry(board),
     vehicles: {
       routeId,
       referenceVersionId: board.route.referenceVersionId,
