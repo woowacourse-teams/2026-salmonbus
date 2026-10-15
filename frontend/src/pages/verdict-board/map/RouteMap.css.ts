@@ -37,6 +37,21 @@ export const notice = style({
   textAlign: "center",
   pointerEvents: "auto",
 });
+export const pathNotice = style({
+  position: "absolute",
+  top: "calc(env(safe-area-inset-top, 0px) + 16px)",
+  left: 64,
+  right: 16,
+  zIndex: 30,
+  padding: "8px 12px",
+  borderRadius: 8,
+  background: vars.color.surface,
+  color: vars.color.textMuted,
+  fontSize: 12,
+  lineHeight: 1.5,
+  boxShadow: "0 2px 8px #00000015",
+  pointerEvents: "none",
+});
 export const location = style({
   position: "absolute",
   bottom: 16,

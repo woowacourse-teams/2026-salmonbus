@@ -1,6 +1,6 @@
 import { test as base, expect } from "@playwright/test";
 import { createApiMockRouter, type ApiMockRouter } from "./api-mock-router";
-import { apiPaths, createApiData, observedAt, pollIntervalMs } from "./mock-data";
+import { apiPaths, createApiData, observedAt, pollIntervalMs, routeId } from "./mock-data";
 
 type Endpoint = keyof typeof apiPaths;
 type ResponseMode = "success" | "network-error";
@@ -28,8 +28,8 @@ export const test = base.extend<{ api: MockApi }>({
       const api: MockApi = {
         route: router.route,
         data: createApiData(),
-        mode: { routes: "success", board: "success", vehicles: "success" },
-        requests: { routes: 0, board: 0, vehicles: 0 },
+        mode: { routes: "success", board: "success", vehicles: "success", geometry: "success" },
+        requests: { routes: 0, board: 0, vehicles: 0, geometry: 0 },
         cacheMaxAgeSeconds: pollIntervalMs / 1_000,
       };
       const unexpectedRequests: string[] = [];
@@ -41,7 +41,12 @@ export const test = base.extend<{ api: MockApi }>({
           await route.fulfill({ status: 404, headers: { "Cache-Control": "no-store" } });
           return;
         }
-        const endpoint = (Object.keys(apiPaths) as Endpoint[]).find((key) => apiPaths[key] === path);
+        // 채팅 테스트가 가상 노선을 재사용하므로 geometry도 요청한 노선 ID로 응답한다.
+        const geometryRoute = /^\/api\/v2\/routes\/([^/]+)\/geometry$/.exec(path)?.[1];
+        const endpoint =
+          geometryRoute === undefined
+            ? (Object.keys(apiPaths) as Endpoint[]).find((key) => apiPaths[key] === path)
+            : "geometry";
         if (endpoint === undefined || request.method() !== "GET") {
           unexpectedRequests.push(`${request.method()} ${path}`);
           await route.abort();
@@ -63,7 +68,10 @@ export const test = base.extend<{ api: MockApi }>({
             Age: "0",
             "Cache-Control": `public, max-age=${api.cacheMaxAgeSeconds}`,
           },
-          json: api.data[endpoint],
+          json:
+            endpoint === "geometry" && geometryRoute !== undefined && geometryRoute !== routeId
+              ? { ...api.data.geometry, routeId: decodeURIComponent(geometryRoute) }
+              : api.data[endpoint],
         });
       });
 

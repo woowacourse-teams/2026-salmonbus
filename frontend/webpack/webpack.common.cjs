@@ -44,7 +44,7 @@ module.exports = {
       __SENTRY_ENVIRONMENT__: JSON.stringify(process.env.WEBPACK_SENTRY_ENVIRONMENT ?? ""),
       __APP_RELEASE__: JSON.stringify("salmonbus-fe@" + appVersion),
       __NAVER_MAP_KEY_ID__: DefinePlugin.runtimeValue(
-        () => JSON.stringify(process.env.WEBPACK_NAVER_MAP_KEY_ID ?? ""),
+        () => JSON.stringify(process.env.WEBPACK_NAVER_MAP_KEY_ID?.trim() ?? ""),
         true,
       ),
     }),
