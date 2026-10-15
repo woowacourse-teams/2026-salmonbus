@@ -47,6 +47,27 @@ class PackagerTest {
     }
 
     @Test
+    void sharedImageUsesTheServerReplayProfile() throws Exception {
+        var repo = root.resolve("repo");
+        for (var entry : Map.of(
+                "dev/server/wiremock.Dockerfile", "FROM scratch\n",
+                "dev/server/replay.json", "shared replay profile",
+                "dev/scenarios/replay.json", "personal local profile",
+                "dev/wiremock-extension/build/libs/local-gbis-replay.jar", "extension artifact",
+                "dev/wiremock/mappings/location.json", "{}",
+                "dev/data/routes.json", "{}",
+                "dev/data/catalog-routes.json", "{}").entrySet()) {
+            var file = repo.resolve(entry.getKey());
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, entry.getValue());
+        }
+        var output = root.resolve("image");
+        new Packager(repo, new Host()).imageContext(output);
+        assertEquals("shared replay profile", Files.readString(output.resolve("replay.json")));
+        assertTrue(Files.exists(output.resolve("mappings/location.json")));
+    }
+
+    @Test
     void acceptsArmImageAndRejectsWrongTagArchitectureAndTraversal() throws Exception {
         var archive = archive("arm64", "layer.tar");
         assertEquals("arm64", Packager.imageMetadata(archive, "a".repeat(40)).get("architecture"));

@@ -77,6 +77,7 @@ final class Packager {
                 repo.resolve("dev/server/tools/settings.gradle"),
                 repo.resolve("dev/server/api.yml"),
                 repo.resolve("dev/server/worker.yml"),
+                repo.resolve("dev/server/replay.json"),
                 repo.resolve("dev/server/compose.yaml"),
                 repo.resolve("dev/server/init-chat.js"),
                 repo.resolve("dev/server/wiremock.Dockerfile"),
@@ -87,8 +88,7 @@ final class Packager {
                 repo.resolve("dev/data/catalog-routes.json"),
                 repo.resolve("dev/data/model-reference"),
                 repo.resolve("dev/wiremock/mappings"),
-                repo.resolve("dev/wiremock-extension/src/main"),
-                repo.resolve("dev/scenarios/replay.json"));
+                repo.resolve("dev/wiremock-extension/src/main"));
     }
 
     String basisContract() throws Exception {
@@ -227,7 +227,7 @@ final class Packager {
         for (var name : List.of("routes.json", "catalog-routes.json")) {
             copy(repo.resolve("dev/data/" + name), output.resolve("data/" + name));
         }
-        copy(repo.resolve("dev/scenarios/replay.json"), output.resolve("replay.json"));
+        copy(repo.resolve("dev/server/replay.json"), output.resolve("replay.json"));
     }
 
     void assemble(Path output, Path archive, String commit, final boolean review) throws Exception {

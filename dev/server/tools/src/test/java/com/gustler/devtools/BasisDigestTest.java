@@ -23,6 +23,7 @@ class BasisDigestTest {
                         "dev/server/tools/settings.gradle",
                         "dev/server/api.yml",
                         "dev/server/worker.yml",
+                        "dev/server/replay.json",
                         "dev/server/compose.yaml",
                         "dev/server/init-chat.js",
                         "dev/server/wiremock.Dockerfile",
@@ -75,6 +76,18 @@ class BasisDigestTest {
                 "SELECT 1;\n");
         assertNotEquals(source, packager.basisDigest());
         assertEquals(contract, packager.basisContract());
+    }
+
+    @Test
+    void sharedReplayChangesInvalidateTheBasisWithoutChangingTheDataContract() throws Exception {
+        var contract = packager.basisContract();
+        var preparation = packager.preparationContract();
+        Files.writeString(repo.resolve("dev/server/replay.json"), "changed shared fleet\n");
+        assertNotEquals(contract, packager.basisContract());
+        assertEquals(preparation, packager.preparationContract());
+        var shared = packager.basisContract();
+        Files.writeString(repo.resolve("dev/scenarios/replay.json"), "changed personal profile\n");
+        assertEquals(shared, packager.basisContract());
     }
 
     @Test
