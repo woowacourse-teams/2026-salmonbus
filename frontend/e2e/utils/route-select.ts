@@ -6,7 +6,12 @@ export function routeButton(page: Page) {
   return page.getByRole("button", { name: "3330번 노선, 테스트 기점부터 테스트 종점 구간", exact: true });
 }
 
+export function routeSearchInput(page: Page) {
+  return page.getByRole("textbox", { name: "노선 번호", exact: true });
+}
+
 export async function selectRoute(page: Page) {
+  await routeSearchInput(page).fill("3330");
   await routeButton(page).click();
   await expect(page).toHaveURL(`/routes/${routeId}`);
 }
