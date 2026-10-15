@@ -25,6 +25,11 @@ export const vars = createGlobalTheme(":root", {
     liveBus: "#E8533F",
     mapBus: "#E53D4D",
     mapStopName: "#24352B",
+    routeSummary: {
+      endpoints: "#354239",
+      text: "#737373",
+      separator: "#B3BBB2",
+    },
     currentLocation: "#3486F5",
     currentLocationHalo: "#3686F526",
     currentLocationBorder: "#3686F540",

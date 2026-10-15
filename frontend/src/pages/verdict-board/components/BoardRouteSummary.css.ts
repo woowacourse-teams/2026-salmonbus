@@ -1,76 +1,108 @@
 import { style } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 
-export const summary = style({ display: "flex", flexDirection: "column", gap: "10px" });
-export const route = style({ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 });
+export const summary = style({
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+  minHeight: "56px",
+  // 헤더의 공통 간격 10px에 더해 방향 버튼과는 14px을 띄운다.
+  marginBottom: "4px",
+});
 
 export const routeNumber = style({
-  margin: 0,
-  padding: "6px 10px",
-  borderRadius: "9px",
-  backgroundColor: vars.color.focusRing,
-  color: vars.color.onInk,
-  fontSize: "25px",
-  lineHeight: 1.2,
-  fontWeight: 900,
-  letterSpacing: "-0.5px",
-  whiteSpace: "nowrap",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   flexShrink: 0,
+  minWidth: "85px",
+  height: "50px",
+  margin: 0,
+  padding: "0 10px",
+  borderRadius: vars.radius.control,
+  backgroundColor: vars.color.liveBus,
+  color: vars.color.onInk,
+  fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  fontSize: "25px",
+  fontWeight: 800,
+  lineHeight: "30px",
+  letterSpacing: "-0.8px",
+  whiteSpace: "nowrap",
+});
+
+export const content = style({
+  display: "flex",
+  flex: 1,
+  flexDirection: "column",
+  minWidth: 0,
+  gap: "7px",
+  fontFamily: "'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif",
+  containerName: "route-summary",
+  containerType: "inline-size",
 });
 
 export const endpoints = style({
-  minWidth: 0,
   margin: 0,
-  color: vars.color.textBody,
+  color: vars.color.routeSummary.endpoints,
   fontSize: "13px",
-  fontWeight: 500,
-  lineHeight: 1.5,
+  fontWeight: 600,
+  lineHeight: "19px",
   overflowWrap: "anywhere",
 });
 
 export const details = style({
-  display: "grid",
-  gridTemplateColumns: "1.25fr 1fr 1fr",
-  gap: "14px",
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  gap: "4px 8px",
   margin: 0,
-  padding: "6px 14px",
 });
 
 export const detail = style({
-  position: "relative",
   display: "flex",
-  flexDirection: "column",
-  gap: "8px",
-  minWidth: 0,
+  alignItems: "center",
+  minHeight: "16px",
   selectors: {
     "& + &::before": {
       content: '""',
-      position: "absolute",
-      top: 0,
-      left: "-7px",
-      bottom: 0,
-      width: "1px",
-      backgroundColor: "#DBE3D8",
+      flexShrink: 0,
+      width: "2px",
+      height: "2px",
+      marginRight: "8px",
+      borderRadius: "1px",
+      backgroundColor: vars.color.routeSummary.separator,
+    },
+  },
+  "@container": {
+    "route-summary (max-width: 245px)": {
+      selectors: { "& + &::before": { display: "none" } },
     },
   },
 });
 
 export const label = style({
+  position: "absolute",
+  width: "1px",
+  height: "1px",
+  padding: 0,
+  margin: "-1px",
+  overflow: "hidden",
+  clipPath: "inset(50%)",
+  whiteSpace: "nowrap",
+  border: 0,
+});
+
+export const summaryIcon = style({ width: "12px", height: "12px", flexShrink: 0 });
+
+export const value = style({
   display: "flex",
   alignItems: "center",
-  gap: "4px",
+  gap: "3px",
   margin: 0,
-  color: vars.color.textSubtle,
-  fontSize: "10px",
-  lineHeight: 1.4,
-});
-export const summaryIcon = style({ flexShrink: 0, color: "#71816F" });
-export const value = style({
-  margin: 0,
-  color: vars.color.textStrong,
-  fontSize: "13px",
-  fontWeight: 600,
-  lineHeight: 1.4,
-  overflowWrap: "anywhere",
+  color: vars.color.routeSummary.text,
+  fontSize: "11px",
+  fontWeight: 500,
+  lineHeight: 1,
+  whiteSpace: "nowrap",
   fontVariantNumeric: "tabular-nums",
 });

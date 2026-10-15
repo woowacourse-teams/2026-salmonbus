@@ -283,7 +283,7 @@ test("첫 화면은 절반 높이에 전체 노선을 맞추고 줌에 따라 �
   });
   expect(await map(page).locator("[data-marker-kind='arrow']").count()).toBeGreaterThan(0);
   await expect(sheet(page).getByText("15–25분", { exact: true })).toBeVisible();
-  await expect(sheet(page).getByText("3대", { exact: true })).toBeVisible();
+  await expect(sheet(page).getByText("3대 운행 중", { exact: true })).toBeVisible();
   if (testInfo.project.name === "chromium") await page.screenshot({ path: "/tmp/sal192-board-half.png" });
 
   await naverMap.setZoom(14);
@@ -872,7 +872,7 @@ test("키보드로 최소·절반·70%·전체를 선택하고 목록 스크롤�
   await expect(handle(page)).toHaveAttribute("aria-valuenow", "0");
   await expect(list(page)).toHaveCount(0);
   await expect(tab(page, "UP")).toBeVisible();
-  await expect(sheet(page).getByText("운행 시간", { exact: true })).toBeVisible();
+  await expect(sheet(page).getByText("05:00–23:00", { exact: true })).toBeVisible();
   expect(await height(sheet(page))).toBeLessThan(422);
   if (testInfo.project.name === "chromium") await page.screenshot({ path: "/tmp/sal192-board-minimum.png" });
 
