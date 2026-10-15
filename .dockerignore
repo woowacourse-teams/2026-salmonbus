@@ -19,6 +19,16 @@ dev/server/**
 !dev/wiremock/**
 !dev/wiremock-extension/
 !dev/wiremock-extension/**
+!contract/
+contract/**
+!contract/examples/
+contract/examples/**
+!contract/examples/chat-v1.json
+!docs/
+docs/**
+!docs/api/
+docs/api/**
+!docs/api/chat-websocket-public.md
 **/.env*
 **/build/
 **/.gradle/

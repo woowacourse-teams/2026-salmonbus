@@ -8,6 +8,8 @@ on:
       - 'compose*.yaml'
       - '.dockerignore'
       - 'backend/**/build.gradle'
+      - 'contract/examples/chat-v1.json'
+      - 'docs/api/chat-websocket-public.md'
       - 'backend/settings.gradle'
       - 'backend/gradle.properties'
       - 'backend/gradlew'

@@ -36,6 +36,8 @@ cat > "$override" <<EOF
 services:
   api:
     image: $project-api:check
+    environment:
+      SPRING_PROFILES_ACTIVE: api-docs-local
     ports: !override
       - "127.0.0.1::8080"
   worker:
@@ -103,6 +105,15 @@ frontend="http://$(compose port frontend 3000)"
 for path in /actuator/health /api/v1/routes /api/v1/routes/234000050/board /api/v1/routes/234000050/vehicles; do
   curl --fail --silent --show-error "$api$path" >/dev/null
 done
+for path in /api/docs /api/docs/openapi /api/docs/openapi.yaml /api/docs/chat /api/docs/chat/examples; do
+  curl --fail --silent --show-error --location "$api$path" >/dev/null
+done
+chat_contract=$(curl --fail --silent --show-error "$api/api/docs/chat")
+[[ $chat_contract == *session.start* ]]
+curl --fail --silent --show-error "$api/api/docs/chat/examples" \
+  | python3 -c 'import json, sys; assert json.load(sys.stdin)["clientFrames"]["session.start"]["v"] == 1'
+curl --fail --silent --show-error "$api/api/docs/openapi/swagger-config" \
+  | python3 -c 'import json, sys; assert json.load(sys.stdin)["supportedSubmitMethods"] == []'
 curl --fail --silent --show-error "$frontend/" >/dev/null
 
 containers=$(compose ps --quiet)

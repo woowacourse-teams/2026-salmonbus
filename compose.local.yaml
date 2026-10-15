@@ -114,6 +114,14 @@ services:
             - dependencies.init
             - gradle.properties
             - runtime.init
+        - action: rebuild
+          path: ./contract/examples
+          include:
+            - chat-v1.json
+        - action: rebuild
+          path: ./docs/api
+          include:
+            - chat-websocket-public.md
     networks: [access, local]
 
   local-init:
