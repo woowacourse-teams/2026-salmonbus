@@ -295,6 +295,7 @@ function setup(glSupported = true, { initialized = true } = {}) {
     data,
     onSelect,
     onError,
+    onReady,
   );
   const initialize = () => native.events.find((event) => event.name === "init")?.listener();
   if (initialized) initialize();
@@ -342,6 +343,172 @@ describe("네이버 지도 adapter", () => {
     });
     expect(element.listeners.size).toBe(0);
   });
+  it("GL 초기화와 최초 idle 뒤 노선을 먼저 그리고 다음 프레임에 마커 표시 준비를 알린다", () => {
+    const { native, initialize, onReady, flushFrames, pendingFrames } = setup(true, { initialized: false });
+    const idle = native.events.find((event) => event.name === "idle")!.listener;
+    expect(native.lines.every((line) => line.strokeOpacity === 0)).toBe(true);
+    idle();
+    flushFrames();
+    expect(onReady).not.toHaveBeenCalled();
+    expect(native.map.fits).toBe(0);
+    expect(native.lines.every((line) => line.strokeOpacity === 0)).toBe(true);
+
+    initialize();
+    expect(native.map.fits).toBe(1);
+    flushFrames();
+    expect(onReady).not.toHaveBeenCalled();
+    expect(native.lines.every((line) => line.strokeOpacity === 0)).toBe(true);
+
+    idle();
+    idle();
+    expect(pendingFrames.size).toBe(1);
+    expect(onReady).not.toHaveBeenCalled();
+    expect(native.lines.every((line) => line.strokeOpacity === 0)).toBe(true);
+    flushFrames();
+    expect(native.lines.every((line) => line.strokeOpacity === 0.95)).toBe(true);
+    expect(onReady).not.toHaveBeenCalled();
+    expect(pendingFrames.size).toBe(1);
+    flushFrames();
+    expect(onReady).toHaveBeenCalledTimes(1);
+  });
+  it("준비 중 방향을 바꿔도 노선을 먼저 표시하지 않는다", () => {
+    const { native, adapter } = setup();
+    adapter.update(null, "DOWN", []);
+    expect(native.lines.every((line) => line.strokeOpacity === 0)).toBe(true);
+  });
+  it("한 번 표시한 지도는 확대·방향 전환·추가 idle에서 노선을 숨기거나 준비 콜백을 다시 호출하지 않는다", () => {
+    const { native, adapter, initialize, onReady, flushFrames, pendingFrames } = setup();
+    const idle = native.events.find((event) => event.name === "idle")!.listener;
+    idle();
+    flushFrames();
+    flushFrames();
+    expect(onReady).toHaveBeenCalledTimes(1);
+
+    native.map.zoom = 14;
+    native.events.find((event) => event.name === "zoom_changed")!.listener();
+    adapter.update(null, "DOWN", []);
+    initialize();
+    idle();
+    idle();
+    expect(native.lines.every((line) => line.strokeOpacity === 0.95)).toBe(true);
+    expect(pendingFrames.size).toBe(0);
+    flushFrames();
+    expect(onReady).toHaveBeenCalledTimes(1);
+  });
+  for (const routeRevealed of [false, true]) {
+    it(`${routeRevealed ? "노선을 그린 뒤" : "노선을 그리기 전"} 대기 중인 지도를 제거하면 준비 콜백을 취소한다`, () => {
+      const { native, adapter, onReady, flushFrames, pendingFrames } = setup();
+      native.events.find((event) => event.name === "idle")!.listener();
+      if (routeRevealed) flushFrames();
+      expect(pendingFrames.size).toBe(1);
+      adapter.destroy();
+      expect(pendingFrames.size).toBe(0);
+      flushFrames();
+      expect(onReady).not.toHaveBeenCalled();
+    });
+  }
+  it("초기화 전에 정류장을 선택해도 GL 초기화·idle·두 프레임까지 마커 표시를 기다린다", () => {
+    const { native, adapter, initialize, onReady, flushFrames } = setup(true, { initialized: false });
+    const idle = native.events.find((event) => event.name === "idle")!.listener;
+    adapter.focus({ direction: "UP", sequence: 15 });
+    idle();
+    flushFrames();
+    expect(onReady).not.toHaveBeenCalled();
+    initialize();
+    expect(native.map.fits).toBe(0);
+    idle();
+    flushFrames();
+    expect(onReady).not.toHaveBeenCalled();
+    flushFrames();
+    expect(onReady).toHaveBeenCalledTimes(1);
+  });
+  it("GL fallback도 native 초기화와 전체 경로 idle 뒤 두 프레임에 걸쳐 표시한다", () => {
+    const { native, initialize, onReady, flushFrames } = setup(false, { initialized: false });
+    expect(native.map.fits).toBe(1);
+    native.events.find((event) => event.name === "idle")!.listener();
+    flushFrames();
+    expect(onReady).not.toHaveBeenCalled();
+    initialize();
+    flushFrames();
+    expect(onReady).not.toHaveBeenCalled();
+    flushFrames();
+    expect(onReady).toHaveBeenCalledTimes(1);
+  });
+  it("노선을 그리기 전에 정류장을 선택하면 이동을 마친 idle과 두 프레임을 다시 기다린다", () => {
+    const { native, adapter, onReady, flushFrames, pendingFrames } = setup();
+    const idle = native.events.find((event) => event.name === "idle")!.listener;
+    idle();
+    expect(pendingFrames.size).toBe(1);
+    adapter.focus({ direction: "UP", sequence: 15 });
+    expect(pendingFrames.size).toBe(0);
+    flushFrames();
+    expect(onReady).not.toHaveBeenCalled();
+    idle();
+    flushFrames();
+    expect(onReady).not.toHaveBeenCalled();
+    flushFrames();
+    expect(onReady).toHaveBeenCalledTimes(1);
+  });
+  it("노선을 그린 뒤 정류장을 선택하면 다음 idle까지 마커 표시를 기다리며 노선은 유지한다", () => {
+    const { native, adapter, onReady, flushFrames, pendingFrames } = setup();
+    const idle = native.events.find((event) => event.name === "idle")!.listener;
+    idle();
+    flushFrames();
+    expect(native.lines.every((line) => line.strokeOpacity === 0.95)).toBe(true);
+    adapter.focus({ direction: "UP", sequence: 15 });
+    expect(pendingFrames.size).toBe(0);
+    flushFrames();
+    expect(onReady).not.toHaveBeenCalled();
+    expect(native.lines.every((line) => line.strokeOpacity === 0.95)).toBe(true);
+    idle();
+    flushFrames();
+    expect(onReady).toHaveBeenCalledTimes(1);
+  });
+  for (const initialized of [false, true]) {
+    it(`${initialized ? "GL 초기화 뒤 idle이 오지 않으면" : "GL 초기화가 끝나지 않으면"} 10초 후 한 번 실패하고 늦은 이벤트로 표시하지 않는다`, () => {
+      const { native, initialize, onError, onReady, advanceTimers, flushFrames, pendingFrames } = setup(true, {
+        initialized,
+      });
+      advanceTimers(9_999);
+      expect(onError).not.toHaveBeenCalled();
+      advanceTimers(1);
+      expect(onError).toHaveBeenCalledTimes(1);
+
+      initialize();
+      native.events.find((event) => event.name === "idle")!.listener();
+      flushFrames();
+      flushFrames();
+      advanceTimers(10_000);
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onReady).not.toHaveBeenCalled();
+      expect(pendingFrames.size).toBe(0);
+    });
+  }
+  it("노선을 그린 뒤에도 표시 제한 시간이 지나면 남은 준비 프레임을 취소한다", () => {
+    const { native, onError, onReady, advanceTimers, flushFrames, pendingFrames } = setup();
+    native.events.find((event) => event.name === "idle")!.listener();
+    flushFrames();
+    expect(pendingFrames.size).toBe(1);
+    advanceTimers(10_000);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(pendingFrames.size).toBe(0);
+    flushFrames();
+    expect(onReady).not.toHaveBeenCalled();
+  });
+  for (const outcome of ["ready", "destroy"] as const) {
+    it(`지도를 ${outcome === "ready" ? "표시하면" : "제거하면"} 초기 표시 제한 시간을 해제한다`, () => {
+      const { native, adapter, onError, onReady, advanceTimers, flushFrames, pendingTimers } = setup();
+      if (outcome === "ready") {
+        native.events.find((event) => event.name === "idle")!.listener();
+        flushFrames();
+        flushFrames();
+        expect(onReady).toHaveBeenCalledTimes(1);
+      } else adapter.destroy();
+      expect(pendingTimers.size).toBe(0);
+      advanceTimers(10_000);
+      expect(onError).not.toHaveBeenCalled();
+    });
+  }
   it("GL 초기화 뒤 두 방향의 모든 경로 좌표를 한 번만 화면에 맞춘다", () => {
     const { native, data, adapter, initialize } = setup(true, { initialized: false });
     expect(native.lines).toHaveLength(2);

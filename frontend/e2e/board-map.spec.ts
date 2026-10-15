@@ -61,6 +61,124 @@ async function dragHeader(page: Page, destinationY: number) {
   await page.clock.runFor(32);
 }
 
+test.describe("지도 첫 화면 준비", () => {
+  test.use({ holdMapInitialization: true, holdMapIdle: true });
+
+  test("기본 지도를 먼저 표시하고 준비되면 노선·마커·위치 버튼을 차례로 표시한다", async ({ page, naverMap }) => {
+    await page.goto(`/routes/${routeId}`);
+    const region = map(page);
+    const canvas = region.getByTestId("route-map");
+    const basemap = region.getByTestId("naver-map-test-double");
+    const paths = region.getByTestId("naver-polyline").locator("polyline");
+    const buses = canvas.locator("[data-marker-kind='vehicle'] [role='img']");
+    const loading = region.getByRole("status").filter({ hasText: "지도를 불러오는 중이에요" });
+    await expect(basemap).toBeVisible();
+    await expect(loading).toHaveCount(0);
+    await expect(region.getByRole("status")).toHaveCount(0);
+    await expect(region).toHaveAttribute("aria-busy", "true");
+    await expect(canvas).toHaveAttribute("data-overlays-ready", "false");
+    await expect(canvas).toHaveAttribute("aria-hidden", "true");
+    await expect(canvas).toHaveAttribute("inert", "");
+    await expect(basemap).toHaveCSS("visibility", "visible");
+    await expect(paths).toHaveCount(2);
+    await expect(paths.nth(0)).toHaveAttribute("stroke-opacity", "0");
+    await expect(paths.nth(1)).toHaveAttribute("stroke-opacity", "0");
+    await expect(buses).toHaveCount(2);
+    await expect(buses.nth(0)).toHaveCSS("visibility", "hidden");
+    await expect(buses.nth(1)).toHaveCSS("visibility", "hidden");
+    await expect(canvas.locator("[data-map-arrow-direction]").first()).toHaveCSS("visibility", "hidden");
+    await expect(region.getByRole("img", { name: /부근 버스/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toHaveCount(0);
+    await expectMapToFillRegion(page);
+    const originalCanvas = await canvas.elementHandle();
+
+    await naverMap.initialize();
+    await page.clock.runFor(32);
+    await expect(basemap).toBeVisible();
+    await expect(loading).toHaveCount(0);
+    await expect(region).toHaveAttribute("aria-busy", "true");
+    await expect(paths.nth(0)).toHaveAttribute("stroke-opacity", "0");
+    await expect(paths.nth(1)).toHaveAttribute("stroke-opacity", "0");
+    await naverMap.finishIdle();
+    await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toHaveCount(0);
+
+    await page.clock.runFor(16);
+    await expect(paths.nth(0)).toHaveAttribute("stroke-opacity", "0.95");
+    await expect(paths.nth(1)).toHaveAttribute("stroke-opacity", "0.95");
+    await expect(canvas).toHaveAttribute("data-overlays-ready", "false");
+    await expect(buses.nth(0)).toHaveCSS("visibility", "hidden");
+    await expect(buses.nth(1)).toHaveCSS("visibility", "hidden");
+    await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toHaveCount(0);
+
+    await page.clock.runFor(16);
+    await expect(region).toHaveAttribute("aria-busy", "false");
+    await expect(canvas).toHaveAttribute("data-overlays-ready", "true");
+    await expect(canvas).toHaveAttribute("aria-hidden", "false");
+    await expect(canvas).not.toHaveAttribute("inert", "");
+    await expect(buses.nth(0)).toHaveCSS("visibility", "visible");
+    await expect(buses.nth(1)).toHaveCSS("visibility", "visible");
+    await expect(region.getByRole("img", { name: /부근 버스/ })).toHaveCount(2);
+    await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
+    expect(await originalCanvas?.evaluate((element) => element.isConnected)).toBe(true);
+
+    await naverMap.setZoom(14);
+    await tab(page, "DOWN").click();
+    await page.clock.runFor(32);
+    await expect(loading).toHaveCount(0);
+    await expect(region).toHaveAttribute("aria-busy", "false");
+    await expect(canvas).toHaveAttribute("data-overlays-ready", "true");
+    await expect(paths.nth(0)).toHaveAttribute("stroke-opacity", "0.95");
+    await expect(paths.nth(1)).toHaveAttribute("stroke-opacity", "0.95");
+    await expect(region.getByRole("img", { name: /부근 버스/ })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
+    await originalCanvas?.dispose();
+  });
+
+  test("native 초기화가 멈춰도 10초 뒤 오류를 안내하고 목록과 방향 선택을 유지한다", async ({ page }) => {
+    await page.goto(`/routes/${routeId}`);
+    await expect(map(page).getByTestId("naver-map-test-double")).toBeVisible();
+    await expect(map(page)).toHaveAttribute("aria-busy", "true");
+    await page.clock.runFor(9_999);
+    await expect(map(page).getByText("지도를 불러오지 못했어요", { exact: true })).toHaveCount(0);
+    await expect(map(page)).toHaveAttribute("aria-busy", "true");
+
+    await page.clock.runFor(1);
+    await expect(map(page).getByText("지도를 불러오지 못했어요", { exact: true })).toBeVisible();
+    await expect(map(page).getByText("정류장 목록은 계속 확인할 수 있어요", { exact: true })).toBeVisible();
+    await expect(map(page)).toHaveAttribute("aria-busy", "false");
+    await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toHaveCount(0);
+    await expect(map(page).getByTestId("naver-map-test-double")).toHaveCount(0);
+    await tab(page, "DOWN").click();
+    await page.clock.runFor(32);
+    await expect(tab(page, "DOWN")).toHaveAttribute("aria-pressed", "true");
+    const stop = list(page).locator("li[data-stop-sequence='23'] button[aria-expanded]");
+    await stop.scrollIntoViewIfNeeded();
+    await stop.click();
+    await page.clock.runFor(32);
+    await expect(stop).toHaveAttribute("aria-expanded", "true");
+  });
+
+  test("처음 표시하기 전 SDK 오류가 나도 목록과 방향 선택은 계속 사용할 수 있다", async ({ page, naverMap }) => {
+    await page.goto(`/routes/${routeId}`);
+    await expect(map(page).getByTestId("naver-map-test-double")).toHaveCount(1);
+    await expect(map(page)).toHaveAttribute("aria-busy", "true");
+    await naverMap.failNative("all");
+    await page.evaluate(() => window.navermap_authFailure?.());
+    await expect(map(page).getByText("지도를 불러오지 못했어요", { exact: true })).toBeVisible();
+    await expect(map(page).getByText("정류장 목록은 계속 확인할 수 있어요", { exact: true })).toBeVisible();
+    await expect(map(page)).toHaveAttribute("aria-busy", "false");
+    await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toHaveCount(0);
+    await tab(page, "DOWN").click();
+    await page.clock.runFor(32);
+    await expect(tab(page, "DOWN")).toHaveAttribute("aria-pressed", "true");
+    const stop = list(page).locator("li[data-stop-sequence='23'] button[aria-expanded]");
+    await stop.scrollIntoViewIfNeeded();
+    await stop.click();
+    await page.clock.runFor(32);
+    await expect(stop).toHaveAttribute("aria-expanded", "true");
+  });
+});
+
 test("첫 화면은 절반 높이에 전체 노선을 맞추고 줌에 따라 정류장만 숨기며 차량·방향 화살표는 유지한다", async ({
   page,
   naverMap,

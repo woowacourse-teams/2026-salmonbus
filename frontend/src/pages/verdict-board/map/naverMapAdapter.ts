@@ -8,6 +8,7 @@ import type { NaverMap, NaverMaps, NaverMarker } from "./naverSdk";
 import * as styles from "./RouteMap.css";
 
 const DETAIL_ZOOM = 14;
+const INITIALIZATION_TIMEOUT_MS = 10_000;
 
 interface StopMarker {
   selection: StopSelection;
@@ -45,6 +46,7 @@ export function createNaverRouteMap(
   data: RouteMapData,
   onSelect: (selection: StopSelection) => void,
   onError: () => void,
+  onReady: () => void,
 ): RouteMapAdapter {
   const createNativeEventHandler = (action: () => void) => () => {
     try {
@@ -73,11 +75,60 @@ export function createNaverRouteMap(
   let selected: StopSelection | null = null;
   let activeDirection: Direction = board.route.directions[0].id;
   let initialFitPending = true;
+  let initialized = false;
+  let initialViewIdle = false;
+  let initializationFailed = false;
+  let routeRevealed = false;
+  let readyNotified = false;
+  let readyFrame: number | null = null;
+  let destroyed = false;
+  // GL 스타일 요청 실패는 SDK 인증 실패 콜백 없이 초기화를 중단할 수 있다.
+  const initializationTimeout = window.setTimeout(() => {
+    if (destroyed || readyNotified || initializationFailed) return;
+    initializationFailed = true;
+    cancelReadyFrame();
+    onError();
+  }, INITIALIZATION_TIMEOUT_MS);
+
+  function cancelReadyFrame() {
+    if (readyFrame === null) return;
+    window.cancelAnimationFrame(readyFrame);
+    readyFrame = null;
+  }
+
+  function notifyReadyAfterFrame() {
+    if (
+      destroyed ||
+      initializationFailed ||
+      readyNotified ||
+      !initialized ||
+      !initialViewIdle ||
+      initialFitPending ||
+      readyFrame !== null
+    )
+      return;
+    readyFrame = window.requestAnimationFrame(
+      createNativeEventHandler(() => {
+        readyFrame = null;
+        if (destroyed || initializationFailed || readyNotified) return;
+        if (!routeRevealed) {
+          routeRevealed = true;
+          paths.forEach(({ direction, line }) => line.setOptions(routePathStyleFor(direction)));
+          // 노선의 GPU 그리기를 먼저 예약한 뒤 HTML 마커와 버튼을 함께 공개한다.
+          notifyReadyAfterFrame();
+          return;
+        }
+        readyNotified = true;
+        window.clearTimeout(initializationTimeout);
+        onReady();
+      }),
+    );
+  }
   function routePathStyleFor(direction: Direction) {
     const active = direction === activeDirection;
     return {
       strokeColor: active ? "#ED7768" : "#5B6472",
-      strokeOpacity: 0.95,
+      strokeOpacity: routeRevealed ? 0.95 : 0,
       zIndex: active ? 2 : 1,
     };
   }
@@ -243,6 +294,8 @@ export function createNaverRouteMap(
     );
     if (stop === undefined) return;
     initialFitPending = false;
+    initialViewIdle = false;
+    cancelReadyFrame();
     map.setCenter(toNaverCoordinate(stop.coordinate));
     map.setZoom(Math.max(15, map.getZoom()), false);
   }
@@ -294,6 +347,7 @@ export function createNaverRouteMap(
   function fitInitialRoute() {
     if (!initialFitPending) return;
     initialFitPending = false;
+    initialViewIdle = false;
     map.fitBounds(
       (routeCoordinates.length > 0 ? routeCoordinates : data.stops.map((stop) => stop.coordinate)).map(
         toNaverCoordinate,
@@ -310,7 +364,9 @@ export function createNaverRouteMap(
       map,
       "init",
       createNativeEventHandler(() => {
+        initialized = true;
         fitInitialRoute();
+        notifyReadyAfterFrame();
       }),
     ),
     sdk.Event.addListener(
@@ -328,6 +384,8 @@ export function createNaverRouteMap(
       createNativeEventHandler(() => {
         refreshStops();
         refreshArrows();
+        initialViewIdle = true;
+        notifyReadyAfterFrame();
       }),
     ),
   ];
@@ -428,6 +486,8 @@ export function createNaverRouteMap(
     focus,
     showLocation(coordinate, accuracy) {
       initialFitPending = false;
+      initialViewIdle = false;
+      cancelReadyFrame();
       userMarker?.setMap(null);
       accuracyCircle?.setMap(null);
       const position = toNaverCoordinate(coordinate);
@@ -457,7 +517,10 @@ export function createNaverRouteMap(
       map.setZoom(Math.max(15, map.getZoom()), false);
     },
     destroy() {
+      destroyed = true;
+      window.clearTimeout(initializationTimeout);
       initialFitPending = false;
+      cancelReadyFrame();
       const cleanup = (action: () => void) => {
         try {
           action();

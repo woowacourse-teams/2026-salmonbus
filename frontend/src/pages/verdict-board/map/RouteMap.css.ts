@@ -1,21 +1,29 @@
 import { style } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 
-export const region = style({ position: "relative", width: "100%", overflow: "hidden", background: "#e7eceb" });
-export const canvas = style({ width: "100%", height: "100%" });
+export const region = style({
+  position: "relative",
+  width: "100%",
+  overflow: "hidden",
+  isolation: "isolate",
+  background: "#e7eceb",
+});
+export const canvas = style({ position: "relative", zIndex: 0, width: "100%", height: "100%" });
 export const notice = style({
   position: "absolute",
   inset: 0,
+  zIndex: 1,
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
   gap: 8,
   padding: "52px 24px",
+  background: "#e7eceb",
   color: vars.color.textMuted,
   fontSize: 13,
   textAlign: "center",
-  pointerEvents: "none",
+  pointerEvents: "auto",
 });
 export const location = style({
   position: "absolute",
@@ -65,6 +73,7 @@ export const stop = style({
   boxShadow: "0 1px 4px #0002",
   cursor: "pointer",
   selectors: {
+    [`${canvas}[data-overlays-ready="false"] &`]: { visibility: "hidden" },
     '&[data-active="false"]': {
       borderColor: vars.color.textMuted,
       background: vars.color.mutedChipSurface,
@@ -112,6 +121,9 @@ export const bus = style({
   fontWeight: 700,
   whiteSpace: "nowrap",
   pointerEvents: "none",
+  selectors: {
+    [`${canvas}[data-overlays-ready="false"] &`]: { visibility: "hidden" },
+  },
 });
 export const busCount = style({
   position: "absolute",
@@ -148,6 +160,9 @@ export const arrow = style({
   placeItems: "center",
   pointerEvents: "none",
   color: "#FFFFFF",
+  selectors: {
+    [`${canvas}[data-overlays-ready="false"] &`]: { visibility: "hidden" },
+  },
 });
 export const userPosition = style({
   display: "grid",
@@ -160,6 +175,7 @@ export const userPosition = style({
   background: vars.color.currentLocationHalo,
   pointerEvents: "none",
   selectors: {
+    [`${canvas}[data-overlays-ready="false"] &`]: { visibility: "hidden" },
     "&::after": {
       content: '""',
       display: "block",

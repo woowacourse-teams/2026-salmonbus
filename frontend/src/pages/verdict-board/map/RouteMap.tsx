@@ -102,6 +102,11 @@ export function RouteMap(props: RouteMapProps) {
           data,
           (selection) => propsRef.current.onSelect(selection),
           () => failActiveMap(null),
+          () => {
+            if (!active || failed || propsRef.current.data !== data) return;
+            setMapState({ status: "ready", data });
+            setLocationState({ status: "idle" });
+          },
         );
         adapterRef.current = adapter;
         adapter.update(current.selected, current.activeDirection, current.liveVehicleViews);
@@ -111,8 +116,6 @@ export function RouteMap(props: RouteMapProps) {
           disposeMap();
           return;
         }
-        setMapState({ status: "ready", data });
-        setLocationState({ status: "idle" });
       })
       .catch((error: unknown) => {
         failActiveMap(error);
@@ -197,27 +200,32 @@ export function RouteMap(props: RouteMapProps) {
     mapState.status !== "loading" && mapState.data === data ? mapState : { status: "loading" as const };
   const unavailableMessage =
     data === null ? "지도 정보를 준비 중이에요" : currentMapState.status === "error" ? currentMapState.message : null;
+  const ready = currentMapState.status === "ready";
   return (
     <section
       ref={regionRef}
       className={styles.region}
       style={{ height, pointerEvents: viewportHeight <= 0 ? "none" : "auto" }}
       aria-label="노선 지도"
+      aria-busy={currentMapState.status === "loading"}
       aria-hidden={viewportHeight <= 0}
       inert={viewportHeight <= 0}
     >
-      <div ref={elementRef} className={styles.canvas} data-testid="route-map" />
+      <div
+        ref={elementRef}
+        className={styles.canvas}
+        data-testid="route-map"
+        data-overlays-ready={ready}
+        inert={!ready}
+        aria-hidden={!ready}
+      />
       {unavailableMessage !== null ? (
         <div className={styles.notice} role="status">
           <span>{unavailableMessage}</span>
           <span>정류장 목록은 계속 확인할 수 있어요</span>
         </div>
-      ) : currentMapState.status === "loading" ? (
-        <div className={styles.notice} role="status">
-          지도를 불러오는 중이에요
-        </div>
       ) : null}
-      {data !== null && currentMapState.status === "ready" ? (
+      {data !== null && ready ? (
         <button
           type="button"
           className={styles.location}
@@ -240,7 +248,7 @@ export function RouteMap(props: RouteMapProps) {
           </svg>
         </button>
       ) : null}
-      {locationState.status === "message" ? (
+      {ready && locationState.status === "message" ? (
         <div className={styles.locationNotice} role="status">
           {locationState.message}
         </div>
