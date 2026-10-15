@@ -27,6 +27,12 @@ export function routeMapCoordinateForSequence(
   direction: Direction,
 ): GeoCoordinate | null {
   if (!Number.isFinite(sequencePosition)) return null;
+  // 방향별 도로 경로가 없으면 보고된 정류장 좌표만 표시하고 정류장 사이를 직선으로 보간하지 않는다.
+  if (!data.paths.some((path) => path.direction === direction)) {
+    return (
+      data.stops.find((stop) => stop.direction === direction && stop.sequence === sequencePosition)?.coordinate ?? null
+    );
+  }
   let byDirection = pathCache.get(data);
   if (byDirection === undefined) {
     byDirection = new Map();
@@ -61,8 +67,7 @@ export function routeMapCoordinateForSequence(
 
 function preparedRoutePathFor(data: RouteMapData, direction: Direction): PreparedRoutePath {
   const stops = data.stops.filter((stop) => stop.direction === direction).sort((a, b) => a.sequence - b.sequence);
-  const coordinates =
-    data.paths.find((path) => path.direction === direction)?.coordinates ?? stops.map((stop) => stop.coordinate);
+  const coordinates = data.paths.find((path) => path.direction === direction)?.coordinates ?? [];
   const longitudeScale = Math.cos(((coordinates[0]?.latitude ?? 0) * Math.PI) / 180);
   const distances = coordinates.length === 0 ? [] : [0];
   for (let index = 1; index < coordinates.length; index += 1) {

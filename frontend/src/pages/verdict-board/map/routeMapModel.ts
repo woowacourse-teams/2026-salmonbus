@@ -23,4 +23,6 @@ export interface RouteMapData {
   referenceVersionId: BoardRoute["referenceVersionId"];
   stops: RouteMapStop[];
   paths: DirectionPath[];
+  // API가 제공한 전체 도로 형상. 방향을 나눌 수 없어도 원본 운행 순서를 유지한다.
+  fullPath?: GeoCoordinate[];
 }

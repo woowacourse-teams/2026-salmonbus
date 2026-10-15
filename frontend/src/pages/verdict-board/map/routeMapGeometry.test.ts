@@ -5,7 +5,15 @@ import type { RouteMapData } from "./routeMapModel";
 const data: RouteMapData = {
   routeId: "1",
   referenceVersionId: "1",
-  paths: [],
+  paths: [
+    {
+      direction: "UP",
+      coordinates: [
+        { latitude: 37, longitude: 127 },
+        { latitude: 38, longitude: 129 },
+      ],
+    },
+  ],
   stops: [
     { sequence: 1, stopId: "1", direction: "UP", coordinate: { latitude: 37, longitude: 127 } },
     { sequence: 2, stopId: "2", direction: "UP", coordinate: { latitude: 38, longitude: 129 } },
@@ -13,11 +21,29 @@ const data: RouteMapData = {
 };
 
 describe("지도 차량 좌표", () => {
-  it("목록과 공유한 순번 진행률을 정류장 좌표로 보간한다", () => {
+  it("목록과 공유한 순번 진행률을 제공된 방향별 경로 위에서 보간한다", () => {
     expect(routeMapCoordinateForSequence(data, 1.25, "UP")).toEqual({ latitude: 37.25, longitude: 127.5 });
     expect(routeMapCoordinateForSequence(data, 0, "UP")).toEqual(data.stops[0]?.coordinate);
     expect(routeMapCoordinateForSequence(data, 3, "UP")).toEqual(data.stops[1]?.coordinate);
   });
+  it("방향별 경로가 없으면 전체 도로가 있어도 정확히 보고된 정류장 좌표만 반환한다", () => {
+    const unsplit: RouteMapData = {
+      ...data,
+      paths: [],
+      fullPath: [
+        { latitude: 37, longitude: 127 },
+        { latitude: 39, longitude: 127 },
+        { latitude: 38, longitude: 129 },
+      ],
+    };
+    expect(routeMapCoordinateForSequence(unsplit, 1, "UP")).toEqual(data.stops[0]?.coordinate);
+    expect(routeMapCoordinateForSequence(unsplit, 2, "UP")).toEqual(data.stops[1]?.coordinate);
+    expect(routeMapCoordinateForSequence(unsplit, 1.25, "UP")).toBeNull();
+    expect(routeMapCoordinateForSequence(unsplit, 0, "UP")).toBeNull();
+    expect(routeMapCoordinateForSequence(unsplit, 3, "UP")).toBeNull();
+    expect(routeMapCoordinateForSequence(unsplit, 1, "DOWN")).toBeNull();
+  });
+
   it("좌표가 없거나 유효하지 않은 순번이면 위치를 만들지 않는다", () => {
     expect(routeMapCoordinateForSequence({ ...data, stops: [] }, 1, "UP")).toBeNull();
     expect(routeMapCoordinateForSequence(data, Number.NaN, "UP")).toBeNull();

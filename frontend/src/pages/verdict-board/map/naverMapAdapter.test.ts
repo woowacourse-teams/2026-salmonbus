@@ -5,6 +5,7 @@ import { liveVehiclesMock } from "@/shared/api/routeForecast.mock";
 import { loadPreviewRouteMapData } from "./routeMapPreview";
 import type { NaverCoordinate, NaverMap, NaverMaps, NaverMarker } from "./naverSdk";
 import { createNaverRouteMap } from "./naverMapAdapter";
+import type { RouteMapData } from "./routeMapModel";
 
 jest.mock("./RouteMap.css", () => ({
   stop: "stop",
@@ -90,6 +91,7 @@ function createRecordingSdk(glSupported = true) {
   };
   const markers: MarkerStub[] = [];
   const lines: ConstructorParameters<NaverMaps["Polyline"]>[0][] = [];
+  const lineMaps = new Map<ConstructorParameters<NaverMaps["Polyline"]>[0], NaverMap | null>();
   const circles: ConstructorParameters<NaverMaps["Circle"]>[0][] = [];
   const events: { name: string; listener: () => void }[] = [];
   class MapStub implements NaverMap {
@@ -203,12 +205,16 @@ function createRecordingSdk(glSupported = true) {
     Polyline: class {
       constructor(private options: ConstructorParameters<NaverMaps["Polyline"]>[0]) {
         lines.push(options);
+        lineMaps.set(options, options.map);
       }
       setOptions(options: Parameters<InstanceType<NaverMaps["Polyline"]>["setOptions"]>[0]) {
         checkSdk();
         Object.assign(this.options, options);
       }
-      setMap() {}
+      setMap(map: NaverMap | null) {
+        checkSdk();
+        lineMaps.set(this.options, map);
+      }
     },
     Circle: class {
       constructor(options: ConstructorParameters<NaverMaps["Circle"]>[0]) {
@@ -228,6 +234,7 @@ function createRecordingSdk(glSupported = true) {
     sdk,
     markers,
     lines,
+    lineMaps,
     circles,
     events,
     damage: () => {
@@ -248,7 +255,11 @@ afterEach(() => {
   else Reflect.deleteProperty(globalThis, "window");
 });
 
-function setup(glSupported = true, { initialized = true, reducedMotion = false, visibleHeight = 350 } = {}) {
+function setup(
+  glSupported = true,
+  { initialized = true, reducedMotion = false, visibleHeight = 350 } = {},
+  dataOverrides: Partial<RouteMapData> = {},
+) {
   const pendingFrames = new Map<number, FrameRequestCallback>();
   const pendingTimers = new Map<number, { remaining: number; callback: () => void }>();
   const windowListeners = new Map<string, () => void>();
@@ -297,7 +308,7 @@ function setup(glSupported = true, { initialized = true, reducedMotion = false, 
     value: { createElement: (tagName: string) => new ElementStub(tagName) },
   });
   const native = createRecordingSdk(glSupported);
-  const data = loadPreviewRouteMapData(boardMock)!;
+  const data: RouteMapData = { ...loadPreviewRouteMapData(boardMock)!, ...dataOverrides };
   const onSelect = jest.fn<(selection: { direction: "UP" | "DOWN"; sequence: number }) => void>();
   const onError = jest.fn();
   const onReady = jest.fn();
@@ -764,6 +775,164 @@ describe("네이버 지도 adapter", () => {
     expect(native.map.center).toBe(center);
     expect(native.map.zoom).toBe(15);
   });
+  it("정류장이나 분리 경로가 없어도 전체 도로를 중립색으로 그리고 원본 형상에 맞춘 뒤 자원을 정리한다", () => {
+    const fullPath = [
+      { latitude: 37.1, longitude: 127.1 },
+      { latitude: 37.4, longitude: 127.3 },
+      { latitude: 37.2, longitude: 127.4 },
+      { latitude: 37.1, longitude: 127.1 },
+    ];
+    const { native, adapter, initialize, onReady, flushFrames } = setup(
+      true,
+      { initialized: false },
+      {
+        stops: [],
+        paths: [],
+        fullPath,
+      },
+    );
+    expect([native.map.center.lat(), native.map.center.lng()]).toEqual([37.1, 127.1]);
+    expect(native.lines).toHaveLength(1);
+    const fullLine = native.lines[0]!;
+    expect(fullLine).toMatchObject({ strokeColor: "#5B6472", strokeOpacity: 0, zIndex: 1 });
+    expect(fullLine.path.map((point) => ({ latitude: point.lat(), longitude: point.lng() }))).toEqual(fullPath);
+    initialize();
+    expect(native.map.fittedCoordinates.map((point) => ({ latitude: point.lat(), longitude: point.lng() }))).toEqual(
+      fullPath,
+    );
+    native.events.find((event) => event.name === "idle")!.listener();
+    flushFrames();
+    expect(fullLine.strokeOpacity).toBe(0.95);
+    expect(onReady).not.toHaveBeenCalled();
+    flushFrames();
+    expect(onReady).toHaveBeenCalledTimes(1);
+    adapter.update(null, "DOWN", []);
+    native.map.zoom = 15;
+    native.events.find((event) => event.name === "zoom_changed")!.listener();
+    expect(fullLine.strokeColor).toBe("#5B6472");
+    expect(visibleArrowDirections(native)).toEqual([]);
+    adapter.destroy();
+    expect(native.lineMaps.get(fullLine)).toBeNull();
+    expect(native.map.destroyed).toBe(true);
+  });
+
+  it("한 방향만 분리됐으면 전체 도로를 중립색으로 보완하되 분리된 방향에만 화살표를 붙인다", () => {
+    const original = loadPreviewRouteMapData(boardMock)!;
+    const up = original.paths.find((path) => path.direction === "UP")!;
+    const fullPath = original.paths.flatMap((path) => path.coordinates);
+    const { native, adapter, flushFrames } = setup(true, {}, { paths: [up], fullPath });
+    expect(native.lines).toHaveLength(2);
+    native.events.find((event) => event.name === "idle")!.listener();
+    flushFrames();
+    flushFrames();
+    native.map.zoom = 15;
+    native.events.find((event) => event.name === "zoom_changed")!.listener();
+    expect(visibleArrowDirections(native)).toEqual(["UP"]);
+    const fullLine = native.lines[1]!;
+    expect(fullLine.strokeColor).toBe("#5B6472");
+    adapter.update(null, "DOWN", []);
+    expect(fullLine).toMatchObject({ strokeColor: "#5B6472", strokeOpacity: 0.95 });
+    adapter.destroy();
+    expect(native.lines.every((line) => native.lineMaps.get(line) === null)).toBe(true);
+  });
+
+  it("두 방향 경로가 모두 있으면 전체 형상을 중복해서 그리지 않는다", () => {
+    const original = loadPreviewRouteMapData(boardMock)!;
+    const { native } = setup(true, {}, { fullPath: original.paths.flatMap((path) => path.coordinates) });
+    expect(native.lines).toHaveLength(2);
+  });
+
+  it("방향별 도로가 없으면 차량을 최신 보고 정류장에 두고 진행률과 방향 응답이 바뀌어도 임의로 보간하지 않는다", () => {
+    const { native, data, adapter, onVehicleSelect } = setup(true, { reducedMotion: true }, { paths: [] });
+    const view = liveVehicleViewsFor(boardMock, liveVehiclesMock, "UP")[0]!;
+    const firstStop = data.stops.find(
+      (stop) => stop.direction === "UP" && stop.sequence === view.vehicle.currentStopSequence,
+    )!;
+    adapter.update(null, "UP", [view]);
+    const bus = native.markers.find((marker) => marker.options.icon.content.dataset.mapVehicleKey === view.key)!;
+    const button = bus.options.icon.content as unknown as ElementStub;
+    const center = native.map.center;
+    const zoom = native.map.zoom;
+    adapter.moveVehicles([{ key: view.key, sequencePosition: view.vehicle.currentStopSequence + 0.5 }]);
+    expect([bus.options.position.lat(), bus.options.position.lng()]).toEqual([
+      firstStop.coordinate.latitude,
+      firstStop.coordinate.longitude,
+    ]);
+
+    const nextStop = data.stops.find((stop) => stop.direction === "UP" && stop.sequence !== firstStop.sequence)!;
+    adapter.update(null, "UP", [
+      {
+        ...view,
+        vehicle: {
+          ...view.vehicle,
+          currentStopSequence: nextStop.sequence,
+          stopName: "최신 정류장",
+          seat: { kind: "EXACT", remaining: 7 },
+        },
+      },
+    ]);
+    // 공유 motion에 이전 응답의 프레임이 남아 있어도 최근 관측 위치를 사용한다.
+    adapter.moveVehicles([{ key: view.key, sequencePosition: view.vehicle.currentStopSequence + 0.75 }]);
+    expect([bus.options.position.lat(), bus.options.position.lng()]).toEqual([
+      nextStop.coordinate.latitude,
+      nextStop.coordinate.longitude,
+    ]);
+    expect(button.getAttribute("aria-label")).toBe("최신 정류장 부근 버스, 현재 잔여 좌석 7석");
+    button.listeners.get("click")!(new Event("click"));
+    expect(onVehicleSelect).toHaveBeenLastCalledWith({ direction: "UP", sequence: nextStop.sequence }, view.key);
+
+    const opposite = data.stops.find((stop) => stop.direction === "DOWN")!;
+    adapter.update(null, "DOWN", [
+      { ...view, vehicle: { ...view.vehicle, direction: "DOWN", currentStopSequence: opposite.sequence } },
+    ]);
+    adapter.moveVehicles([{ key: view.key, sequencePosition: opposite.sequence + 0.5 }]);
+    expect([bus.options.position.lat(), bus.options.position.lng()]).toEqual([
+      opposite.coordinate.latitude,
+      opposite.coordinate.longitude,
+    ]);
+    expect(native.map.center).toBe(center);
+    expect(native.map.zoom).toBe(zoom);
+    expect(bus.options.icon.content).toBe(button);
+    adapter.focusVehicle(view.key);
+    expect([native.map.center.lat(), native.map.center.lng()]).toEqual([
+      opposite.coordinate.latitude,
+      opposite.coordinate.longitude,
+    ]);
+  });
+
+  it("방향 도로가 없는 차량의 새 정류장 좌표를 모르면 이전 핀과 대기 포커스를 제거하고 좌표가 돌아오면 다시 표시한다", () => {
+    const original = loadPreviewRouteMapData(boardMock)!;
+    const view = liveVehicleViewsFor(boardMock, liveVehiclesMock, "UP")[0]!;
+    const missingStop = original.stops.find(
+      (stop) => stop.direction === "UP" && stop.sequence !== view.vehicle.currentStopSequence,
+    )!;
+    const { native, adapter, pendingFrames, windowListeners } = setup(
+      true,
+      {},
+      {
+        paths: [],
+        stops: original.stops.filter((stop) => stop !== missingStop),
+      },
+    );
+    adapter.update(null, "UP", [view]);
+    const bus = native.markers.find((marker) => marker.options.icon.content.dataset.mapVehicleKey === view.key)!;
+    adapter.focusVehicle(view.key);
+    expect(pendingFrames.size).toBe(1);
+    adapter.update(null, "UP", [{ ...view, vehicle: { ...view.vehicle, currentStopSequence: missingStop.sequence } }]);
+    expect(bus.map).toBeNull();
+    expect(pendingFrames.size).toBe(0);
+    expect(windowListeners.size).toBe(0);
+    adapter.moveVehicles([{ key: view.key, sequencePosition: view.vehicle.currentStopSequence }]);
+    expect(bus.map).toBeNull();
+    adapter.update(null, "UP", [view]);
+    const replacement = native.markers.filter(
+      (marker) => marker.options.icon.content.dataset.mapVehicleKey === view.key,
+    );
+    expect(replacement).toHaveLength(2);
+    expect(replacement[0]?.map).toBeNull();
+    expect(replacement[1]?.map).toBe(native.map);
+  });
+
   it("축소에서는 정류장을 숨기고 선택 버튼은 확대와 단일 선택값을 전달한다", () => {
     const { native, adapter, onSelect } = setup();
     const marker = native.markers.find(

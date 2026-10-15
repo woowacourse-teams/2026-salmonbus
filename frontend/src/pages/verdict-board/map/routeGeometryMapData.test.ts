@@ -96,6 +96,11 @@ describe("routeGeometryMapDataFor", () => {
       { sequence: 2, stopId: "turn", direction: "UP" },
       { sequence: 3, stopId: "first", direction: "DOWN" },
     ]);
+    expect(data?.fullPath).toEqual([
+      { latitude: 37, longitude: 127 },
+      { latitude: 37.1, longitude: 127.1 },
+      { latitude: 37, longitude: 127 },
+    ]);
     expect(data?.stops[0]?.coordinate).toEqual({ latitude: 37, longitude: 127 });
     expect(geometry.paths?.UP.points[1]).toEqual({ x: 127.05, y: 37.08 });
   });
@@ -117,10 +122,15 @@ describe("routeGeometryMapDataFor", () => {
   });
 
   it.each(["READY", "PARTIAL", "UNAVAILABLE"] as const)(
-    "%s 상태여도 방향 경로가 null이면 전체 points나 정류장을 임의로 이어 그리지 않는다",
+    "%s 상태여도 방향 경로가 null이면 제공된 전체 points를 보존하고 임의 방향 경로는 만들지 않는다",
     (status) => {
       const data = routeGeometryMapDataFor(geometryWith({ status, paths: null }), route);
       expect(data?.paths).toEqual([]);
+      expect(data?.fullPath).toEqual([
+        { latitude: 37, longitude: 127 },
+        { latitude: 37.1, longitude: 127.1 },
+        { latitude: 37, longitude: 127 },
+      ]);
       expect(data?.stops.map((stop) => stop.sequence)).toEqual([1, 2, 3]);
     },
   );
@@ -144,6 +154,7 @@ describe("routeGeometryMapDataFor", () => {
     });
     expect(data?.stops).toHaveLength(3);
     expect(data?.paths).toEqual([]);
+    expect(data?.fullPath).toEqual([]);
   });
 
   it.each([
@@ -153,12 +164,19 @@ describe("routeGeometryMapDataFor", () => {
     expect(routeGeometryMapDataFor(geometryWith(overrides), route)).toBeNull();
   });
 
-  it("유효하지 않은 정류장 좌표를 제외하고 표시할 정류장이 하나도 없으면 지도를 만들지 않는다", () => {
+  it("유효하지 않은 정류장 좌표를 제외하되 정류장 좌표가 하나도 없어도 실제 도로 경로는 유지한다", () => {
     const geometry = geometryWith();
     geometry.busStops[0]!.point = { x: Number.NaN, y: 37 };
     geometry.busStops[1]!.point = { x: 181, y: 37 };
     expect(routeGeometryMapDataFor(geometry, route)?.stops.map((stop) => stop.sequence)).toEqual([3]);
     geometry.busStops[2]!.point = { x: 127, y: -91 };
+    const roadsOnly = routeGeometryMapDataFor(geometry, route);
+    expect(roadsOnly?.stops).toEqual([]);
+    expect(roadsOnly?.paths).toHaveLength(2);
+    expect(roadsOnly?.fullPath).toHaveLength(3);
+    geometry.paths = null;
+    expect(routeGeometryMapDataFor(geometry, route)?.fullPath).toHaveLength(3);
+    geometry.points = [];
     expect(routeGeometryMapDataFor(geometry, route)).toBeNull();
   });
 
@@ -187,6 +205,37 @@ describe("routeGeometryMapDataFor", () => {
     const stopsOnly = routeGeometryMapDataFor(geometry, route);
     expect(stopsOnly?.paths).toEqual([]);
     expect(stopsOnly?.stops).toHaveLength(3);
+  });
+
+  it("분리 경로가 없어도 전체 도로의 굴곡과 반복 좌표를 원순서로 보존하고 정류장 직선으로 대체하지 않는다", () => {
+    const geometry = geometryWith({
+      paths: null,
+      points: [
+        { x: 127, y: 37 },
+        { x: 127.03, y: 37.08 },
+        { x: 127.03, y: 37.08 },
+        { x: 127.09, y: 37.06 },
+        { x: 127, y: 37 },
+      ],
+    });
+    const data = routeGeometryMapDataFor(geometry, route);
+    expect(data?.paths).toEqual([]);
+    expect(data?.fullPath).toEqual([
+      { latitude: 37, longitude: 127 },
+      { latitude: 37.08, longitude: 127.03 },
+      { latitude: 37.08, longitude: 127.03 },
+      { latitude: 37.06, longitude: 127.09 },
+      { latitude: 37, longitude: 127 },
+    ]);
+  });
+
+  it("전체 경로 중간에 잘못된 좌표가 있으면 건너뛴 도로를 연결하지 않고 정류장만 유지한다", () => {
+    const geometry = geometryWith({ paths: null });
+    geometry.points[1] = { x: Number.NaN, y: 37 };
+    const data = routeGeometryMapDataFor(geometry, route);
+    expect(data?.fullPath).toEqual([]);
+    expect(data?.paths).toEqual([]);
+    expect(data?.stops).toHaveLength(3);
   });
 
   it("한 방향 정류장 좌표가 전부 없어도 두 방향의 실제 형상은 유지한다", () => {

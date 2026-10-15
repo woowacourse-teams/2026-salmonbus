@@ -15,11 +15,12 @@ export function routeGeometryMapDataFor(
     return null;
   }
 
+  const fullPath = validPath(geometry.points) ? geometry.points.map(coordinateFor) : [];
   const paths: RouteMapData["paths"] = [];
   for (const direction of ["UP", "DOWN"] as const) {
     const points = geometry.paths?.[direction].points;
     // 중간의 잘못된 점만 빼면 서로 떨어진 도로를 직선으로 이을 수 있으므로 경로 전체를 제외한다.
-    if (points === undefined || points.length < 2 || !points.every(validPoint) || !hasDistinctPoints(points)) continue;
+    if (points === undefined || !validPath(points)) continue;
     paths.push({ direction, coordinates: points.map(coordinateFor) });
   }
   const stops: RouteMapStop[] = geometry.busStops.flatMap((stop) => {
@@ -33,9 +34,9 @@ export function routeGeometryMapDataFor(
       },
     ];
   });
-  if (stops.length === 0) return null;
+  if (stops.length === 0 && paths.length === 0 && fullPath.length === 0) return null;
 
-  return { routeId: geometry.routeId, referenceVersionId: geometry.referenceVersionId, stops, paths };
+  return { routeId: geometry.routeId, referenceVersionId: geometry.referenceVersionId, stops, paths, fullPath };
 }
 
 function validPoint(point: RouteMapPoint): boolean {
@@ -47,6 +48,10 @@ function validPoint(point: RouteMapPoint): boolean {
     point.y >= -90 &&
     point.y <= 90
   );
+}
+
+function validPath(points: RouteMapPoint[]): boolean {
+  return points.length >= 2 && points.every(validPoint) && hasDistinctPoints(points);
 }
 
 function hasDistinctPoints(points: RouteMapPoint[]): boolean {

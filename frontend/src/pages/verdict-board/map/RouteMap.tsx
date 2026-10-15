@@ -250,7 +250,7 @@ export function RouteMap(props: RouteMapProps) {
       ) : null}
       {data !== null && ready && !data.paths.some((path) => path.direction === activeDirection) ? (
         <div className={styles.pathNotice} role="status">
-          노선 경로를 준비 중이에요. 정류장 위치는 확인할 수 있어요
+          방향별 경로 정보가 없어 버스는 최근 확인된 정류장에 표시해요
         </div>
       ) : null}
       {data !== null && ready ? (
