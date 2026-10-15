@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
-import type { StopView } from "../displayPolicy";
+import type { ExpandableStopView, StopView } from "../displayPolicy";
 import type { LiveVehicleView } from "../liveVehiclePolicy";
 import { LiveBusTraker } from "./LiveBusTraker";
 import { StopRow } from "./StopRow";
@@ -11,6 +11,7 @@ interface StopListProps {
   liveVehicleViews: LiveVehicleView[];
   liveMotionDurationMs: number;
   entering: boolean;
+  onStopExpand: (stop: ExpandableStopView, rowPosition: number) => void;
 }
 
 interface PositionedLiveVehicle {
@@ -49,13 +50,20 @@ function routePositionFor(stop: StopView, index: number, lastIndex: number): Rou
   return "middle";
 }
 
-export function StopList({ stops, liveVehicleViews, liveMotionDurationMs, entering }: StopListProps) {
+export function StopList({ stops, liveVehicleViews, liveMotionDurationMs, entering, onStopExpand }: StopListProps) {
   const [expandedSequence, setExpandedSequence] = useState<number | null>(null);
   const routeCanvasRef = useRef<HTMLDivElement>(null);
   const anchorPositions = useTimelineAnchorPositions(routeCanvasRef, stops, expandedSequence);
   const positionedLiveVehicles = positionsFor(liveVehicleViews, anchorPositions);
   const reducedMotion = usePrefersReducedMotion();
-  const toggle = (sequence: number) => setExpandedSequence((current) => (current === sequence ? null : sequence));
+  const toggle = (stop: ExpandableStopView, rowPosition: number) => {
+    if (expandedSequence === stop.sequence) {
+      setExpandedSequence(null);
+      return;
+    }
+    setExpandedSequence(stop.sequence);
+    onStopExpand(stop, rowPosition);
+  };
 
   return (
     <div ref={routeCanvasRef} className={styles.routeCanvas}>
@@ -66,7 +74,7 @@ export function StopList({ stops, liveVehicleViews, liveMotionDurationMs, enteri
             stop={stop}
             routePosition={routePositionFor(stop, index, stops.length - 1)}
             expanded={expandedSequence === stop.sequence}
-            onToggle={() => toggle(stop.sequence)}
+            onToggle={(expandableStop) => toggle(expandableStop, index)}
           />
         ))}
       </ul>

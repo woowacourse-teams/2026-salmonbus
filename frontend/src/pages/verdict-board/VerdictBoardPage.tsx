@@ -1,12 +1,20 @@
 import { useState } from "react";
 import { useParams } from "react-router";
+import { track } from "@/shared/analytics/track";
 import type { ApiFailure, ApiResult } from "@/shared/api/client";
 import { latestSuccessOf, type PolledResource } from "@/shared/api/polledResource";
 import { fetchBoard } from "@/shared/api/routeForecast.api";
 import { boardMock, liveVehiclesMock } from "@/shared/api/routeForecast.mock";
 import type { Board, Direction, DirectionInfo, LiveVehicles } from "@/shared/api/routeForecast.types";
 import { usePolledRequest } from "@/shared/api/usePolledRequest";
-import { directionInfoFor, directionViewsFor, serviceStateFor, stopViewsFor, type BoardScreen } from "./displayPolicy";
+import {
+  directionInfoFor,
+  directionViewsFor,
+  serviceStateFor,
+  stopViewsFor,
+  type BoardScreen,
+  type ExpandableStopView,
+} from "./displayPolicy";
 import { liveVehicleViewsFor } from "./liveVehiclePolicy";
 import { DEFAULT_LIVE_MOTION_DURATION_MS, useLiveVehicles } from "./useLiveVehicles";
 import { BoardHeader } from "./components/BoardHeader";
@@ -41,11 +49,16 @@ export function VerdictBoardPage() {
 
   const screen = boardScreenOf(state);
 
-  useBoardVisitEvents({ routeId, screen, latestSuccess: latestSuccessOf(boardResource) });
+  const { trackStopExpanded } = useBoardVisitEvents({
+    routeId,
+    screen,
+    latestSuccess: latestSuccessOf(boardResource),
+  });
 
   function selectDirection(next: Direction) {
     if (state.status === "ready" && next !== state.direction.id) {
       setSwitched(true);
+      track("direction_switched", { route_id: routeId, to_direction: next });
     }
     setPreferredDirection(next);
   }
@@ -64,7 +77,7 @@ export function VerdictBoardPage() {
             />
           )}
         </div>
-        {renderBoard(screen, switched, liveVehicles, liveMotionDurationMs)}
+        {renderBoard(screen, switched, liveVehicles, liveMotionDurationMs, trackStopExpanded)}
       </main>
     </div>
   );
@@ -104,6 +117,7 @@ function renderBoard(
   switched: boolean,
   liveVehicles: LiveVehicles | null,
   liveMotionDurationMs: number,
+  trackStopExpanded: (stop: ExpandableStopView, direction: Direction, rowPosition: number) => void,
 ) {
   switch (screen.kind) {
     case "loading":
@@ -121,6 +135,7 @@ function renderBoard(
           liveVehicleViews={liveVehicleViewsFor(screen.board, liveVehicles, screen.direction)}
           liveMotionDurationMs={liveMotionDurationMs}
           entering={switched}
+          onStopExpand={(stop, rowPosition) => trackStopExpanded(stop, screen.direction, rowPosition)}
         />
       );
   }

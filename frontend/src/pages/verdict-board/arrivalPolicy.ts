@@ -27,7 +27,7 @@ export function arrivalViewsFor(vehicles: readonly ApproachingVehicle[]): Arriva
     .map(toArrivalView);
 }
 
-export function representativeArrival(arrivals: readonly ArrivalView[]): ArrivalView | undefined {
+export function representativeArrival(arrivals: readonly [ArrivalView, ...ArrivalView[]]): ArrivalView {
   return arrivals[0];
 }
 
