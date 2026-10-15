@@ -96,6 +96,24 @@ class PackagerTest {
     }
 
     @Test
+    void embeddedBasisRetainsItsManifestAndDetectsChangedFiles() throws Exception {
+        var basis = Files.createDirectory(root.resolve("basis"));
+        Files.createDirectory(basis.resolve("tools"));
+        Files.writeString(basis.resolve("tools/shared-dev-tools.jar"), "tool artifact");
+        Files.writeString(basis.resolve("wiremock-image.tar"), "image artifact");
+        var metadata = RevisionStore.seal(basis, "basis", "a".repeat(40),
+                "b".repeat(64), "c".repeat(64), false);
+        var api = Files.createDirectory(root.resolve("api"));
+        Packager.embedBasis(basis, api);
+        assertEquals(metadata, RevisionStore.verify(api.resolve("basis"), true));
+        assertEquals(FileOps.sha(basis.resolve("tools/shared-dev-tools.jar")),
+                FileOps.sha(api.resolve("basis/tools/shared-dev-tools.jar")));
+        Files.writeString(api.resolve("basis/tools/shared-dev-tools.jar"), "changed artifact");
+        assertThrows(IllegalArgumentException.class,
+                () -> RevisionStore.verify(api.resolve("basis"), true));
+    }
+
+    @Test
     void malformedCliArgumentsDoNotStartCommands() {
         var host =
                 new Host() {
