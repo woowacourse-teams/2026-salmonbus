@@ -1,5 +1,6 @@
 import { keyframes, style } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
+import { PHONE_MEDIA } from "../routeSelectLayout";
 
 const SAFE_AREA_TOP = "env(safe-area-inset-top, 0px)";
 const SAFE_AREA_BOTTOM = "env(safe-area-inset-bottom, 0px)";
@@ -46,7 +47,7 @@ export const sheet = style({
   backgroundColor: vars.color.surface,
 
   "@media": {
-    "screen and (max-width: 424px)": {
+    [PHONE_MEDIA]: {
       maxHeight: [
         `calc(100vh - 210px - ${SAFE_AREA_TOP} - ${SAFE_AREA_BOTTOM})`,
         `calc(100dvh - 210px - ${SAFE_AREA_TOP} - ${SAFE_AREA_BOTTOM})`,
