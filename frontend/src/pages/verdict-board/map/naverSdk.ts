@@ -39,13 +39,24 @@ interface NaverOverlay {
   setMap(map: NaverMap | null): void;
 }
 
+interface NaverPolyline extends NaverOverlay {
+  setOptions(options: { strokeColor: string; strokeOpacity: number; zIndex: number }): void;
+}
+
 export interface NaverMaps {
   LatLng: new (latitude: number, longitude: number) => NaverCoordinate;
   Point: new (x: number, y: number) => NaverPoint;
   Size: new (width: number, height: number) => NaverSize;
   Map: new (
     element: HTMLElement,
-    options: { center: NaverCoordinate; zoom: number; size: NaverSize; zoomControl: boolean; scaleControl: boolean },
+    options: {
+      center: NaverCoordinate;
+      zoom: number;
+      size: NaverSize;
+      zoomControl: boolean;
+      scaleControl: boolean;
+      mapDataControl: boolean;
+    },
   ) => NaverMap;
   Marker: new (options: {
     map: NaverMap;
@@ -61,7 +72,7 @@ export interface NaverMaps {
     strokeWeight: number;
     strokeOpacity: number;
     zIndex: number;
-  }) => NaverOverlay;
+  }) => NaverPolyline;
   Circle: new (options: {
     map: NaverMap;
     center: NaverCoordinate;

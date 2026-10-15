@@ -1,4 +1,5 @@
 import type { Board, Direction } from "@/shared/api/routeForecast.types";
+import busFrontIcon from "./bus-front.svg";
 import type { StopSelection } from "../components/stopSelection";
 import type { LiveVehicleView } from "../components/liveVehiclePolicy";
 import type { GeoCoordinate, RouteMapData } from "./routeMapModel";
@@ -16,6 +17,7 @@ interface StopMarker {
 interface VehicleMarker {
   marker: NaverMarker;
   element: HTMLElement;
+  count: HTMLElement;
   direction: Direction;
 }
 
@@ -51,21 +53,28 @@ export function createNaverRouteMap(
     zoom: 11,
     size: new sdk.Size(element.clientWidth, element.clientHeight),
     zoomControl: false,
-    scaleControl: true,
+    scaleControl: false,
+    mapDataControl: false,
   });
-  const paths = data.paths.map(
-    (path) =>
-      new sdk.Polyline({
-        map,
-        path: path.coordinates.map(toNaverCoordinate),
-        strokeColor: path.direction === "UP" ? "#ED7768" : "#DC8E81",
-        strokeWeight: 6,
-        strokeOpacity: 0.95,
-        zIndex: path.direction === "UP" ? 2 : 1,
-      }),
-  );
   let selected: StopSelection | null = null;
   let activeDirection: Direction = board.route.directions[0].id;
+  function routePathStyleFor(direction: Direction) {
+    const active = direction === activeDirection;
+    return {
+      strokeColor: active ? "#ED7768" : "#5B6472",
+      strokeOpacity: 0.95,
+      zIndex: active ? 2 : 1,
+    };
+  }
+  const paths = data.paths.map((path) => ({
+    direction: path.direction,
+    line: new sdk.Polyline({
+      map,
+      path: path.coordinates.map(toNaverCoordinate),
+      strokeWeight: 6,
+      ...routePathStyleFor(path.direction),
+    }),
+  }));
   let arrows: NaverMarker[] = [];
   let userMarker: NaverMarker | null = null;
   let accuracyCircle: { setMap(map: NaverMap | null): void } | null = null;
@@ -131,7 +140,10 @@ export function createNaverRouteMap(
     }
     display.forEach(({ selection, marker, button, label, size, offsetX }) => {
       const isSelected = selected?.sequence === selection.sequence && selected.direction === selection.direction;
+      const isActive = selection.direction === activeDirection;
       button.setAttribute("aria-pressed", String(isSelected));
+      button.dataset.active = String(isActive);
+      button.dataset.labelAbove = String(offsetX !== 0 && !isActive);
       label.hidden = zoom < 15;
       marker.setVisible(zoom >= 15);
       marker.setZIndex(isSelected ? 15 : selection.direction === activeDirection ? 6 : 5);
@@ -202,7 +214,11 @@ export function createNaverRouteMap(
   return {
     update(nextSelected, nextDirection, nextVehicles) {
       selected = nextSelected;
+      const directionChanged = activeDirection !== nextDirection;
       activeDirection = nextDirection;
+      if (directionChanged) {
+        paths.forEach(({ direction, line }) => line.setOptions(routePathStyleFor(direction)));
+      }
       refreshStops();
       const visibleKeys = new Set(nextVehicles.map((view) => view.key));
       for (const [key, item] of vehicles) {
@@ -222,6 +238,20 @@ export function createNaverRouteMap(
           const content = document.createElement("span");
           content.className = styles.bus;
           content.setAttribute("role", "img");
+          const count = document.createElement("span");
+          count.className = styles.busCount;
+          count.setAttribute("aria-hidden", "true");
+          const pin = document.createElement("span");
+          pin.className = styles.busPin;
+          pin.setAttribute("aria-hidden", "true");
+          pin.innerHTML =
+            '<svg width="26" height="32" viewBox="0 0 40 44" preserveAspectRatio="none" overflow="visible" aria-hidden="true"><path d="M20 0c-10 0-17 8-17 18 0 11 17 26 17 26 0 0 17-15 17-26 0-10-7-18-17-18z" fill="currentColor" stroke="white" stroke-width="1" vector-effect="non-scaling-stroke"/></svg>';
+          const icon = document.createElement("img");
+          icon.className = styles.busIcon;
+          icon.src = busFrontIcon;
+          icon.alt = "";
+          pin.append(icon);
+          content.append(count, pin);
           const marker = new sdk.Marker({
             map,
             position: toNaverCoordinate(coordinate),
@@ -229,23 +259,20 @@ export function createNaverRouteMap(
             zIndex: 20,
             clickable: false,
           });
-          item = { marker, element: content, direction: view.vehicle.direction };
+          item = {
+            marker,
+            element: content,
+            count,
+            direction: view.vehicle.direction,
+          };
           vehicles.set(view.key, item);
         }
         item.direction = view.vehicle.direction;
         const seat = view.vehicle.seat;
-        const pin = document.createElement("span");
-        pin.className = styles.busPin;
-        pin.innerHTML =
-          '<svg width="16" height="19" viewBox="0 0 16 19" aria-hidden="true"><rect x="3" y="1" width="10" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 7h10M5 16v2m6-2v2" stroke="currentColor" stroke-width="1.5"/><circle cx="5.5" cy="12" r="1" fill="currentColor"/><circle cx="10.5" cy="12" r="1" fill="currentColor"/></svg>';
-        const count = document.createElement("span");
-        count.className = styles.busCount;
-        count.textContent = seat.kind === "EXACT" ? `${seat.remaining}석` : "–";
-        item.element.replaceChildren(count, pin);
-        item.element.setAttribute(
-          "aria-label",
-          `${view.vehicle.stopName} 부근 버스, ${seat.kind === "EXACT" ? `현재 잔여 좌석 ${seat.remaining}석` : "현재 잔여 좌석 정보 없음"}`,
-        );
+        const count = seat.kind === "EXACT" ? `${seat.remaining}석` : "–";
+        if (item.count.textContent !== count) item.count.textContent = count;
+        const label = `${view.vehicle.stopName} 부근 버스, ${seat.kind === "EXACT" ? `현재 잔여 좌석 ${seat.remaining}석` : "현재 잔여 좌석 정보 없음"}`;
+        if (item.element.getAttribute("aria-label") !== label) item.element.setAttribute("aria-label", label);
       });
     },
     moveVehicles(frames) {
@@ -263,8 +290,8 @@ export function createNaverRouteMap(
       groups.forEach((group) =>
         group.forEach(({ item, coordinate }, index) => {
           item.marker.setPosition(toNaverCoordinate(coordinate));
-          // 같은 위치의 차량도 좌석을 읽을 수 있게 표시만 분리한다. 실제 좌표는 그대로 둔다.
-          item.element.style.transform = `translateY(${(index - (group.length - 1) / 2) * 56}px)`;
+          // 핀 끝은 경로 위에 두고, 같은 위치의 차량은 잔여석만 위로 쌓아 구분한다.
+          item.count.style.transform = `translateY(${-index * 20}px)`;
         }),
       );
     },
@@ -318,7 +345,7 @@ export function createNaverRouteMap(
       stops.forEach(({ marker }) => cleanup(() => marker.setMap(null)));
       vehicles.forEach(({ marker }) => cleanup(() => marker.setMap(null)));
       arrows.forEach((marker) => cleanup(() => marker.setMap(null)));
-      paths.forEach((path) => cleanup(() => path.setMap(null)));
+      paths.forEach(({ line }) => cleanup(() => line.setMap(null)));
       cleanup(() => userMarker?.setMap(null));
       cleanup(() => accuracyCircle?.setMap(null));
       cleanup(() => map.destroy());

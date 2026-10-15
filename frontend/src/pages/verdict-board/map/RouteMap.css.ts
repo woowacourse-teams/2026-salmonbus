@@ -65,6 +65,11 @@ export const stop = style({
   boxShadow: "0 1px 4px #0002",
   cursor: "pointer",
   selectors: {
+    '&[data-active="false"]': {
+      borderColor: vars.color.textMuted,
+      background: vars.color.mutedChipSurface,
+      color: vars.color.textMuted,
+    },
     '&[aria-pressed="true"]': {
       width: 32,
       height: 32,
@@ -80,63 +85,61 @@ export const stopName = style({
   left: "50%",
   top: "calc(100% + 4px)",
   transform: "translateX(-50%)",
-  padding: "2px 5px",
-  borderRadius: 3,
-  background: "#ffffffe8",
-  color: vars.color.textStrong,
+  padding: "3px 5px",
+  color: vars.color.mapStopName,
   whiteSpace: "nowrap",
-  fontSize: 11,
-  fontWeight: 600,
+  fontFamily: "'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif",
+  fontSize: 13,
+  fontWeight: 800,
   pointerEvents: "none",
+  selectors: {
+    [`${stop}[data-label-above="true"] &`]: {
+      top: "auto",
+      bottom: "calc(100% + 4px)",
+    },
+  },
 });
 
 export const stopIcon = style({ width: "65%", height: "65%", display: "block" });
 export const bus = style({
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
+  position: "relative",
+  display: "block",
   width: 40,
   height: 52,
-  gap: 2,
   color: vars.color.onInk,
+  fontFamily: "'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif",
   fontSize: 11,
   fontWeight: 700,
   whiteSpace: "nowrap",
   pointerEvents: "none",
 });
 export const busCount = style({
-  minWidth: 32,
-  height: 18,
-  padding: "1px 4px",
-  lineHeight: "16px",
-  borderRadius: 4,
-  textAlign: "center",
-  background: vars.color.liveBus,
-  boxShadow: "0 1px 4px #0002",
-});
-export const busPin = style({
-  position: "relative",
+  position: "absolute",
+  top: 0,
+  left: 4,
   display: "grid",
   placeItems: "center",
-  flexShrink: 0,
-  width: 30,
-  height: 30,
-  borderRadius: "50%",
-  background: vars.color.liveBus,
-  boxShadow: "0 1px 4px #0002",
-  selectors: {
-    "&::after": {
-      content: '""',
-      position: "absolute",
-      bottom: -3,
-      left: 11,
-      width: 8,
-      height: 8,
-      background: vars.color.liveBus,
-      transform: "rotate(45deg)",
-      zIndex: -1,
-    },
-  },
+  width: 32,
+  height: 18,
+  lineHeight: 1,
+  borderRadius: 5,
+  background: vars.color.mapBus,
+});
+export const busPin = style({
+  position: "absolute",
+  top: 20,
+  left: 7,
+  width: 26,
+  height: 32,
+  color: vars.color.mapBus,
+});
+export const busIcon = style({
+  position: "absolute",
+  top: 5,
+  left: 5,
+  display: "block",
+  width: 16,
+  height: 16,
 });
 export const arrow = style({
   width: 16,

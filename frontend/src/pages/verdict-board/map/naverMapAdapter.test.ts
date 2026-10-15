@@ -13,6 +13,7 @@ jest.mock("./RouteMap.css", () => ({
   bus: "bus",
   busCount: "busCount",
   busPin: "busPin",
+  busIcon: "busIcon",
   userPosition: "user",
 }));
 
@@ -28,6 +29,9 @@ class ElementStub {
   listeners = new Map<string, (event: Event) => void>();
   setAttribute(name: string, value: string) {
     this.attributes.set(name, value);
+  }
+  getAttribute(name: string) {
+    return this.attributes.get(name) ?? null;
   }
   append(...children: ElementStub[]) {
     this.children.push(...children);
@@ -155,8 +159,12 @@ function createRecordingSdk() {
     Map: RecordingMap,
     Marker: MarkerStub,
     Polyline: class {
-      constructor(options: ConstructorParameters<NaverMaps["Polyline"]>[0]) {
+      constructor(private options: ConstructorParameters<NaverMaps["Polyline"]>[0]) {
         lines.push(options);
+      }
+      setOptions(options: Parameters<InstanceType<NaverMaps["Polyline"]>["setOptions"]>[0]) {
+        checkSdk();
+        Object.assign(this.options, options);
       }
       setMap() {}
     },
@@ -271,6 +279,36 @@ describe("네이버 지도 adapter", () => {
     expect(content.attributes.get("aria-label")).toContain("정보 없음");
     adapter.update(null, "DOWN", []);
     expect(bus.map).toBeNull();
+  });
+  it("잔여석만 갱신해도 차량 마커와 핀·이미지 DOM을 그대로 사용한다", () => {
+    const { native, adapter } = setup();
+    const view = liveVehicleViewsFor(boardMock, liveVehiclesMock, "UP")[0]!;
+    adapter.update(null, "UP", [view]);
+    const bus = native.markers.find(
+      (item) => (item.options.icon.content as unknown as ElementStub).className === "bus",
+    )!;
+    const content = bus.options.icon.content as unknown as ElementStub;
+    const [count, pin] = content.children;
+    const image = pin!.children[0];
+    expect(image).toBeDefined();
+    const setMap = jest.spyOn(bus, "setMap");
+    const setIcon = jest.spyOn(bus, "setIcon");
+
+    adapter.update(null, "UP", [
+      {
+        ...view,
+        vehicle: { ...view.vehicle, seat: { kind: "EXACT", remaining: 0 } },
+      },
+    ]);
+    expect(count!.textContent).toBe("0석");
+    adapter.update(null, "UP", [{ ...view, vehicle: { ...view.vehicle, seat: { kind: "UNKNOWN" } } }]);
+    expect(count!.textContent).toBe("–");
+    expect(content.children[0]).toBe(count);
+    expect(content.children[1]).toBe(pin);
+    expect(pin!.children[0]).toBe(image);
+    expect(setMap).not.toHaveBeenCalled();
+    expect(setIcon).not.toHaveBeenCalled();
+    expect(native.markers.filter((marker) => marker.options.icon.content === bus.options.icon.content)).toEqual([bus]);
   });
   it("현재 위치는 정확도 원과 함께 표시하며 정리 시 SDK 리스너와 지도를 제거한다", () => {
     const { native, adapter } = setup();

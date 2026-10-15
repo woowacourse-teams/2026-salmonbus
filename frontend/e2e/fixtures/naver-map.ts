@@ -263,6 +263,11 @@ export const test = apiTest.extend<{ naverMap: MapFixture }>({
             this.svg.append(this.line);
             this.setMap(options.map);
           }
+          setOptions(options: Parameters<InstanceType<NaverMaps["Polyline"]>["setOptions"]>[0]) {
+            this.line.setAttribute("stroke", options.strokeColor);
+            this.line.setAttribute("stroke-opacity", String(options.strokeOpacity));
+            this.svg.style.zIndex = String(options.zIndex);
+          }
           setMap(map: NaverMap | null) {
             this.map?.drawings.delete(this);
             this.map = map as FakeMap | null;

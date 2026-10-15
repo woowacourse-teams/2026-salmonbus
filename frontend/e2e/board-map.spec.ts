@@ -97,6 +97,57 @@ test("첫 화면은 정확히 절반 높이이고 줌에 따라 정류장만 숨
   await expect(map(page).getByRole("img", { name: /부근 버스/ })).toHaveCount(2);
 });
 
+test("잔여석 응답이 바뀌어도 차량 핀과 이미지 DOM을 유지한다", async ({ page, api }) => {
+  await openMap(page);
+  const bus = map(page).getByRole("img", {
+    name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 5석",
+    exact: true,
+  });
+  const observation = await bus.evaluateHandle((element) => {
+    const image = element.querySelector("img");
+    const pin = image?.parentElement;
+    if (image === null || pin === null || pin === undefined) throw new Error("차량 핀 이미지가 없습니다");
+    const removed: string[] = [];
+    const observer = new MutationObserver((records) => {
+      records.forEach((record) => {
+        record.removedNodes.forEach((node) => {
+          if (node instanceof Element) removed.push(node.outerHTML);
+        });
+      });
+    });
+    observer.observe(element, { childList: true, subtree: true });
+    return { element, pin, image, removed, observer };
+  });
+  const vehicle = api.data.vehicles.vehicles.find((item) => item.vehicleId === "bus-1");
+  if (vehicle === undefined) throw new Error("갱신할 버스가 없습니다");
+  vehicle.seat = { kind: "EXACT", remaining: 0 };
+  api.data.vehicles.observation.observedAt = "2026-09-16T08:01:00+09:00";
+  api.data.vehicles.observation.staleAt = "2026-09-16T08:06:00+09:00";
+  const refreshedVehicles = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.vehicles && response.status() === 200,
+  );
+  await page.clock.fastForward(pollIntervalMs);
+  await (await refreshedVehicles).finished();
+  await page.clock.runFor(32);
+  await expect(
+    map(page).getByRole("img", {
+      name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 0석",
+      exact: true,
+    }),
+  ).toContainText("0석");
+  expect(
+    await observation.evaluate(({ element, pin, image, removed, observer }) => {
+      observer.disconnect();
+      return {
+        connected: element.isConnected && pin.isConnected && image.isConnected,
+        sameImage: element.querySelector("img") === image,
+        samePin: image.parentElement === pin,
+        removed,
+      };
+    }),
+  ).toEqual({ connected: true, sameImage: true, samePin: true, removed: [] });
+  await observation.dispose();
+});
 test("키보드로 최소·절반·전체를 선택하고 목록 스크롤은 시트 높이를 바꾸지 않는다", async ({ page }, testInfo) => {
   await openMap(page);
   await handle(page).focus();
