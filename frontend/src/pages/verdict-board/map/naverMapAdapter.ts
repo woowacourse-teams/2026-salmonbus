@@ -290,7 +290,7 @@ export function createNaverRouteMap(
       userMarker = new sdk.Marker({
         map,
         position,
-        icon: { content, anchor: new sdk.Point(8, 8) },
+        icon: { content, anchor: new sdk.Point(25, 25) },
         zIndex: 25,
         clickable: false,
       });
@@ -298,10 +298,10 @@ export function createNaverRouteMap(
         map,
         center: position,
         radius: Math.max(0, accuracy),
-        fillColor: "#307DF6",
-        fillOpacity: 0.12,
-        strokeColor: "#307DF6",
-        strokeOpacity: 0.4,
+        fillColor: "#3686F5",
+        fillOpacity: 0.15,
+        strokeColor: "#3686F5",
+        strokeOpacity: 0.25,
         strokeWeight: 1,
         zIndex: 4,
       });

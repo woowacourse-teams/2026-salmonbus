@@ -23,6 +23,10 @@ export const vars = createGlobalTheme(":root", {
     forecastCardBorder: "#E3E2DE",
     noVehicleRing: "#000000",
     liveBus: "#E8533F",
+    currentLocation: "#3486F5",
+    currentLocationHalo: "#3686F526",
+    currentLocationBorder: "#3686F540",
+    currentLocationShadow: "#163D7626",
 
     remainingSeat: {
       surface: "#E8533F",

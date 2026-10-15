@@ -147,10 +147,26 @@ export const arrow = style({
   color: "#FFFFFF",
 });
 export const userPosition = style({
-  width: 16,
-  height: 16,
-  border: "3px solid white",
+  display: "grid",
+  placeItems: "center",
+  width: 50,
+  height: 50,
+  outline: `1px solid ${vars.color.currentLocationBorder}`,
+  outlineOffset: -0.5,
   borderRadius: "50%",
-  background: "#307DF6",
-  boxShadow: "0 1px 5px #0004",
+  background: vars.color.currentLocationHalo,
+  pointerEvents: "none",
+  selectors: {
+    "&::after": {
+      content: '""',
+      display: "block",
+      width: 18,
+      height: 18,
+      outline: `3px solid ${vars.color.surface}`,
+      outlineOffset: -1.5,
+      borderRadius: "50%",
+      background: vars.color.currentLocation,
+      boxShadow: `0 1px 5px ${vars.color.currentLocationShadow}`,
+    },
+  },
 });
