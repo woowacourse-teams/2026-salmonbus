@@ -7,19 +7,22 @@ test.use({
   trace: "retain-on-failure",
 });
 
-for (const width of [390, 425]) {
+for (const { width, height } of [
+  { width: 390, height: 844 },
+  { width: 440, height: 956 },
+  { width: 1280, height: 844 },
+]) {
   for (const insets of [
     { top: 0, bottom: 0 },
     { top: 59, bottom: 34 },
   ]) {
-    test(`화면 너비 ${width}px, safe area ${insets.top}/${insets.bottom}px에서 검색창과 마지막 결과가 가려지지 않는다`, async ({
+    test(`화면 ${width}x${height}px, safe area ${insets.top}/${insets.bottom}px에서 검색창과 마지막 결과가 가려지지 않는다`, async ({
       page,
       context,
       browserName,
       api,
     }) => {
       test.skip(browserName !== "chromium", "safe area 값 지정은 Chromium CDP에서 지원한다");
-      const height = 844;
       await page.setViewportSize({ width, height });
       const session = await context.newCDPSession(page);
       await session.send("Emulation.setSafeAreaInsetsOverride", { insets });

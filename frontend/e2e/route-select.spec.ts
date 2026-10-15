@@ -153,6 +153,17 @@ test("판정 보드로 바로 들어오면 헤더의 뒤로 가기가 노선 선
   await expect(routeSearchInput(page)).toHaveValue("");
 });
 
+test("노선 선택 화면에서만 html 배경을 주황으로 칠한다", async ({ page }) => {
+  const htmlBackground = () => page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);
+  await page.goto("/");
+
+  await expect.poll(htmlBackground).toBe("rgb(232, 82, 63)");
+
+  await selectRoute(page);
+
+  await expect.poll(htmlBackground).toBe("rgba(0, 0, 0, 0)");
+});
+
 test("번호를 한 글자씩 쳐도 방문 기록이 늘지 않는다", async ({ page }) => {
   await page.goto("/");
   const historyLength = await page.evaluate(() => history.length);
