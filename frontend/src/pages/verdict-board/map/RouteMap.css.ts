@@ -6,7 +6,7 @@ export const region = style({
   width: "100%",
   overflow: "hidden",
   isolation: "isolate",
-  background: "#e7eceb",
+  background: vars.color.surface,
 });
 export const canvas = style({ position: "relative", zIndex: 0, width: "100%", height: "100%" });
 export const notice = style({
@@ -19,7 +19,7 @@ export const notice = style({
   justifyContent: "center",
   gap: 8,
   padding: "52px 24px",
-  background: "#e7eceb",
+  background: vars.color.surface,
   color: vars.color.textMuted,
   fontSize: 13,
   textAlign: "center",
