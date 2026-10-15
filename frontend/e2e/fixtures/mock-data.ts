@@ -1,4 +1,5 @@
 import type { Board, Direction, LiveVehicles, RouteListResponse } from "../../src/shared/api/routeForecast.types";
+import type { StationArrivalsResponse } from "../../src/shared/api/stationArrivals.types";
 
 export const observedAt = "2026-09-16T08:00:00+09:00";
 export const staleAt = "2026-09-16T08:05:00+09:00";
@@ -49,7 +50,12 @@ export const stopNames: Record<Direction, string[]> = {
 };
 
 // 각 테스트가 별도의 응답 객체를 받아 병렬 실행 중에도 서로 영향을 주지 않는다.
-export function createApiData(): { routes: RouteListResponse; board: Board; vehicles: LiveVehicles } {
+export function createApiData(): {
+  routes: RouteListResponse;
+  board: Board;
+  vehicles: LiveVehicles;
+  arrivals: StationArrivalsResponse | null;
+} {
   const route = {
     id: routeId,
     displayName: "3330",
@@ -123,6 +129,7 @@ export function createApiData(): { routes: RouteListResponse; board: Board; vehi
   };
 
   return {
+    arrivals: null,
     routes: { routes: [route] },
     board,
     vehicles: {

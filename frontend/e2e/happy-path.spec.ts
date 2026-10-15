@@ -15,9 +15,17 @@ for (const { direction, label, sequence, expectedArrivals } of [
     direction: "UP",
     label: "상행",
     sequence: 3,
-    expectedArrivals: [/3정류장 전\s*도착 시 5석 예상해요/, /7정류장 전\s*도착 시 2석 예상해요/],
+    expectedArrivals: [
+      /3정류장 전\s*시간 정보 없음\s*도착 시 5석 예상해요/,
+      /7정류장 전\s*시간 정보 없음\s*도착 시 2석 예상해요/,
+    ],
   },
-  { direction: "DOWN", label: "하행", sequence: 15, expectedArrivals: [/2정류장 전\s*도착 시 8석 예상해요/] },
+  {
+    direction: "DOWN",
+    label: "하행",
+    sequence: 15,
+    expectedArrivals: [/2정류장 전\s*시간 정보 없음\s*도착 시 8석 예상해요/],
+  },
 ] as const) {
   test(`${label} 노선을 선택해 실시간 차량 이동과 정류장별 좌석 예측을 확인한다`, async ({ page, api }) => {
     api.cacheMaxAgeSeconds = 20;
