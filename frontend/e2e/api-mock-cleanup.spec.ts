@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Route } from "@playwright/test";
+import { test, expect, type Page, type Request, type Route } from "@playwright/test";
 import { createApiMockRouter } from "./fixtures/api-mock-router";
 
 function deferred() {
@@ -72,6 +72,57 @@ test("빠른 채팅 mock이 끝나도 느린 보드와 차량 mock이 완료된 
     await (cleanup ?? router.dispose());
   }
 });
+
+for (const responseMode of ["fulfill", "abort"] as const) {
+  test(`${responseMode}로 요청이 끝나도 handler가 완료된 뒤 해제한다`, async ({ page }) => {
+    const router = createApiMockRouter(page);
+    const handlerResponded = deferred();
+    const releaseHandler = deferred();
+    const isBoardRequest = (request: Request) => new URL(request.url()).pathname === "/api/cleanup/board";
+    const requestFinished =
+      responseMode === "fulfill"
+        ? page.waitForEvent("requestfinished", isBoardRequest)
+        : page.waitForEvent("requestfailed", isBoardRequest);
+    let cleanup: Promise<void> | undefined;
+    let disposed = false;
+    let handlerFinished = false;
+
+    try {
+      await router.route(async (route) => {
+        if (responseMode === "fulfill") {
+          await route.fulfill({ json: { endpoint: "board" } });
+        } else {
+          await route.abort();
+        }
+        handlerResponded.resolve();
+        await releaseHandler.promise;
+        handlerFinished = true;
+      });
+      const response = page.evaluate(async () => {
+        try {
+          return await (await fetch("/api/cleanup/board")).json();
+        } catch {
+          return null;
+        }
+      });
+      await Promise.all([requestFinished, handlerResponded.promise]);
+
+      cleanup = router.dispose().then(() => {
+        disposed = true;
+      });
+      await page.evaluate(() => Date.now());
+      expect(disposed).toBe(false);
+
+      releaseHandler.resolve();
+      await cleanup;
+      expect(handlerFinished).toBe(true);
+      expect(await response).toEqual(responseMode === "fulfill" ? { endpoint: "board" } : null);
+    } finally {
+      releaseHandler.resolve();
+      await (cleanup ?? router.dispose());
+    }
+  });
+}
 
 test("추가 mock의 fallback 뒤에 시작하는 기본 mock도 완료된 뒤 해제한다", async ({ page }) => {
   const forwarded = await captureForwardedRequests(page);

@@ -8,7 +8,6 @@ export interface ApiMockRouter {
 }
 
 export function createApiMockRouter(page: Page): ApiMockRouter {
-  const callbacks = new Set<Promise<void>>();
   const requests = new Map<Request, { finished: Promise<void>; finish: () => void }>();
   const errors: unknown[] = [];
 
@@ -33,26 +32,23 @@ export function createApiMockRouter(page: Page): ApiMockRouter {
   return {
     async route(handler: ApiRouteHandler) {
       await page.route("**/api/**", async (route) => {
-        const callback = Promise.resolve().then(() => handler(route));
-        callbacks.add(callback);
         try {
-          await callback;
+          await handler(route);
         } catch (error) {
           errors.push(error);
           // 응답하지 못한 요청도 종료하되, 원래 콜백 오류는 그대로 드러낸다.
           await route.abort().catch(() => {});
           throw error;
-        } finally {
-          callbacks.delete(callback);
         }
       });
     },
     async dispose() {
       try {
         // fallback으로 다음 콜백에 넘어가는 동안에도 요청 완료까지 mock 등록을 유지한다.
-        while (callbacks.size > 0 || requests.size > 0) {
-          await Promise.allSettled([...callbacks, ...Array.from(requests.values(), (request) => request.finished)]);
+        while (requests.size > 0) {
+          await Promise.all(Array.from(requests.values(), (request) => request.finished));
         }
+        // 요청 종료 후에도 handler에 남은 작업이 있으면 Playwright가 완료를 기다린다.
         await page.unrouteAll({ behavior: "wait" });
         if (errors.length > 0) throw new AggregateError(errors, "API mock 응답에 실패했습니다");
       } finally {
