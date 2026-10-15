@@ -9,6 +9,7 @@ import * as styles from "./RouteMap.css";
 
 const DETAIL_ZOOM = 14;
 const INITIALIZATION_TIMEOUT_MS = 10_000;
+const VEHICLE_FOCUS_DURATION_MS = 560;
 
 interface StopMarker {
   selection: StopSelection;
@@ -22,6 +23,7 @@ interface VehicleMarker {
   element: HTMLElement;
   count: HTMLElement;
   selection: StopSelection;
+  coordinate: GeoCoordinate;
 }
 interface ArrowMarker extends RouteArrow {
   direction: Direction;
@@ -31,10 +33,16 @@ interface ArrowMarker extends RouteArrow {
 }
 
 export interface RouteMapAdapter {
-  update: (selected: StopSelection | null, activeDirection: Direction, vehicles: readonly LiveVehicleView[]) => void;
+  update: (
+    selected: StopSelection | null,
+    activeDirection: Direction,
+    vehicles: readonly LiveVehicleView[],
+    selectedVehicleKey?: string | null,
+  ) => void;
   moveVehicles: (frames: readonly { key: string; sequencePosition: number }[]) => void;
   resize: (width: number, height: number) => void;
   focus: (selection: StopSelection) => void;
+  focusVehicle: (key: string | null, options?: { focusMarker?: boolean }) => void;
   showLocation: (coordinate: GeoCoordinate, accuracy: number) => void;
   destroy: () => void;
 }
@@ -147,6 +155,65 @@ export function createNaverRouteMap(
   let userMarker: NaverMarker | null = null;
   let accuracyCircle: { setMap(map: NaverMap | null): void } | null = null;
   const vehicles = new Map<string, VehicleMarker>();
+  let vehicleFocusFrame: number | null = null;
+  let vehicleFocusKey: string | null = null;
+  const vehicleFocusInterruptEvents = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+
+  function cancelVehicleFocus() {
+    if (vehicleFocusFrame !== null) window.cancelAnimationFrame(vehicleFocusFrame);
+    vehicleFocusFrame = null;
+    vehicleFocusKey = null;
+    vehicleFocusInterruptEvents.forEach((event) => window.removeEventListener(event, cancelVehicleFocus, true));
+  }
+
+  function focusVehicle(key: string | null, { focusMarker = true } = {}) {
+    cancelVehicleFocus();
+    if (destroyed || initializationFailed || key === null) return;
+    const item = vehicles.get(key);
+    if (item === undefined) return;
+    const center = map.getCenter();
+    const from = { latitude: center.lat(), longitude: center.lng() };
+    const startZoom = map.getZoom();
+    const targetZoom = Math.max(startZoom, 16);
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let startedAt: number | null = null;
+    vehicleFocusKey = key;
+    vehicleFocusInterruptEvents.forEach((event) =>
+      window.addEventListener(event, cancelVehicleFocus, { passive: true, capture: true }),
+    );
+    const animate = (now: number) => {
+      vehicleFocusFrame = null;
+      if (vehicleFocusKey !== key) return;
+      createNativeEventHandler(() => {
+        const current = vehicles.get(key);
+        if (current === undefined) {
+          cancelVehicleFocus();
+          return;
+        }
+        startedAt ??= now;
+        const progress = reducedMotion ? 1 : Math.min(1, Math.max(0, (now - startedAt) / VEHICLE_FOCUS_DURATION_MS));
+        const eased = 1 - (1 - progress) ** 3;
+        const nextZoom = startZoom + (targetZoom - startZoom) * eased;
+        const zoom = useInstantZoom ? Math.round(nextZoom) : nextZoom;
+        if (map.getZoom() !== zoom) map.setZoom(zoom, false);
+        // 확대에 따른 화면 배율도 보정해 버스가 화면 밖으로 밀리지 않고 중앙으로 다가오게 한다.
+        const remaining = (1 - eased) * 2 ** (startZoom - map.getZoom());
+        map.setCenter(
+          toNaverCoordinate({
+            latitude: current.coordinate.latitude + (from.latitude - current.coordinate.latitude) * remaining,
+            longitude: current.coordinate.longitude + (from.longitude - current.coordinate.longitude) * remaining,
+          }),
+        );
+        if (progress < 1) vehicleFocusFrame = window.requestAnimationFrame(animate);
+        else {
+          cancelVehicleFocus();
+          if (focusMarker) current.element.focus({ preventScroll: true });
+        }
+      })();
+    };
+    if (reducedMotion) animate(0);
+    else vehicleFocusFrame = window.requestAnimationFrame(animate);
+  }
   const stops: StopMarker[] = data.stops.flatMap((stop) => {
     const stopState = board.stops.find((item) => item.sequence === stop.sequence && item.direction === stop.direction);
     if (stopState === undefined) return [];
@@ -290,6 +357,7 @@ export function createNaverRouteMap(
   }
 
   function focus(selection: StopSelection) {
+    cancelVehicleFocus();
     const stop = data.stops.find(
       (item) => item.sequence === selection.sequence && item.direction === selection.direction,
     );
@@ -397,7 +465,7 @@ export function createNaverRouteMap(
   }
 
   return {
-    update(nextSelected, nextDirection, nextVehicles) {
+    update(nextSelected, nextDirection, nextVehicles, selectedVehicleKey: string | null = null) {
       selected = nextSelected;
       const directionChanged = activeDirection !== nextDirection;
       activeDirection = nextDirection;
@@ -409,6 +477,7 @@ export function createNaverRouteMap(
       const visibleKeys = new Set(nextVehicles.map((view) => view.key));
       for (const [key, item] of vehicles) {
         if (visibleKeys.has(key)) continue;
+        if (vehicleFocusKey === key) cancelVehicleFocus();
         item.marker.setMap(null);
         vehicles.delete(key);
       }
@@ -452,6 +521,7 @@ export function createNaverRouteMap(
             element: content,
             count,
             selection: { direction: view.vehicle.direction, sequence: view.vehicle.currentStopSequence },
+            coordinate,
           };
           content.addEventListener("click", (event) => {
             event.stopPropagation();
@@ -461,6 +531,11 @@ export function createNaverRouteMap(
           vehicles.set(view.key, item);
         }
         item.selection = { direction: view.vehicle.direction, sequence: view.vehicle.currentStopSequence };
+        const pressed = String(view.key === selectedVehicleKey);
+        if (item.element.getAttribute("aria-pressed") !== pressed) {
+          item.element.setAttribute("aria-pressed", pressed);
+          item.marker.setZIndex(pressed === "true" ? 30 : 20);
+        }
         const seat = view.vehicle.seat;
         const count = seat.kind === "EXACT" ? `${seat.remaining}석` : "–";
         if (item.count.textContent !== count) item.count.textContent = count;
@@ -483,6 +558,7 @@ export function createNaverRouteMap(
       groups.forEach((group) =>
         group.forEach(({ item, coordinate }, index) => {
           item.marker.setPosition(toNaverCoordinate(coordinate));
+          item.coordinate = coordinate;
           // 핀 끝은 경로 위에 두고, 같은 위치의 차량은 잔여석만 위로 쌓아 구분한다.
           item.count.style.transform = `translateY(${-index * 20}px)`;
         }),
@@ -497,7 +573,9 @@ export function createNaverRouteMap(
       refreshArrows();
     },
     focus,
+    focusVehicle,
     showLocation(coordinate, accuracy) {
+      cancelVehicleFocus();
       initialFitPending = false;
       initialViewIdle = false;
       cancelReadyFrame();
@@ -531,6 +609,7 @@ export function createNaverRouteMap(
     },
     destroy() {
       destroyed = true;
+      cancelVehicleFocus();
       window.clearTimeout(initializationTimeout);
       initialFitPending = false;
       cancelReadyFrame();

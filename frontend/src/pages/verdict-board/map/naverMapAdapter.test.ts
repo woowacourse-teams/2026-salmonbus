@@ -31,6 +31,7 @@ class ElementStub {
   children: ElementStub[] = [];
   attributes = new Map<string, string>();
   listeners = new Map<string, (event: Event) => void>();
+  focus = jest.fn<(options?: FocusOptions) => void>();
   constructor(tagName = "div") {
     this.tagName = tagName.toUpperCase();
   }
@@ -245,10 +246,12 @@ afterEach(() => {
   else Reflect.deleteProperty(globalThis, "window");
 });
 
-function setup(glSupported = true, { initialized = true } = {}) {
+function setup(glSupported = true, { initialized = true, reducedMotion = false } = {}) {
   const pendingFrames = new Map<number, FrameRequestCallback>();
   const pendingTimers = new Map<number, { remaining: number; callback: () => void }>();
+  const windowListeners = new Map<string, () => void>();
   let frameId = 0;
+  let frameTime = 0;
   let timerId = 0;
   Object.defineProperty(globalThis, "window", {
     configurable: true,
@@ -265,12 +268,16 @@ function setup(glSupported = true, { initialized = true } = {}) {
         return id;
       },
       clearTimeout: (id: number) => pendingTimers.delete(id),
+      matchMedia: () => ({ matches: reducedMotion }),
+      addEventListener: (name: string, listener: () => void) => windowListeners.set(name, listener),
+      removeEventListener: (name: string) => windowListeners.delete(name),
     },
   });
-  const flushFrames = () => {
+  const flushFrames = (elapsed = 16) => {
+    frameTime += elapsed;
     const callbacks = [...pendingFrames.values()];
     pendingFrames.clear();
-    callbacks.forEach((callback) => callback(16));
+    callbacks.forEach((callback) => callback(frameTime));
   };
   const advanceTimers = (milliseconds: number) => {
     const expired: (() => void)[] = [];
@@ -320,6 +327,7 @@ function setup(glSupported = true, { initialized = true } = {}) {
     flushFrames,
     pendingTimers,
     advanceTimers,
+    windowListeners,
   };
 }
 
@@ -834,6 +842,227 @@ describe("네이버 지도 adapter", () => {
     expect(button.children[1]).toBe(pin);
     expect(pin!.children[0]).toBe(image);
     expect(button.listeners.get("click")).toBe(click);
+  });
+  it("이미 확대한 줌과 마커 DOM을 유지하며 이동 중인 핀의 최신 표시 좌표까지 부드럽게 이동한다", () => {
+    const { native, adapter, onSelect, onVehicleSelect, flushFrames, windowListeners } = setup();
+    const view = liveVehicleViewsFor(boardMock, liveVehiclesMock, "UP")[0]!;
+    adapter.update(null, "UP", [view]);
+    const bus = native.markers.find(
+      (item) => (item.options.icon.content as unknown as ElementStub).dataset.mapVehicleKey === view.key,
+    )!;
+    const button = bus.options.icon.content as unknown as ElementStub;
+    const [count, pin] = button.children;
+    const image = pin!.children[0];
+    const setIcon = jest.spyOn(bus, "setIcon");
+    const setMap = jest.spyOn(bus, "setMap");
+    native.map.center = new CoordinateStub(37.9, 126.7);
+    native.map.zoom = 17.25;
+    const from = native.map.center;
+    const setZoom = jest.spyOn(native.map, "setZoom");
+    adapter.moveVehicles([{ key: view.key, sequencePosition: view.vehicle.currentStopSequence + 0.25 }]);
+    const initialTarget = bus.options.position;
+
+    adapter.focusVehicle(view.key);
+    expect(native.map.center).toBe(from);
+    flushFrames();
+    flushFrames(280);
+    expect(native.map.center.lat()).toBeLessThan(from.lat());
+    expect(native.map.center.lat()).toBeGreaterThan(initialTarget.lat());
+    expect(button.focus).not.toHaveBeenCalled();
+
+    adapter.moveVehicles([{ key: view.key, sequencePosition: view.vehicle.currentStopSequence + 0.75 }]);
+    const latestTarget = bus.options.position;
+    expect([latestTarget.lat(), latestTarget.lng()]).not.toEqual([initialTarget.lat(), initialTarget.lng()]);
+    adapter.resize(400, 500);
+    flushFrames(280);
+    expect(native.map.center.lat()).toBeCloseTo(latestTarget.lat(), 12);
+    expect(native.map.center.lng()).toBeCloseTo(latestTarget.lng(), 12);
+    expect(native.map.zoom).toBe(17.25);
+    expect(setZoom).not.toHaveBeenCalled();
+    expect(button.focus).toHaveBeenCalledTimes(1);
+    expect(button.focus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onVehicleSelect).not.toHaveBeenCalled();
+    expect(bus.options.icon.content).toBe(button);
+    expect(button.children).toEqual([count, pin]);
+    expect(pin!.children[0]).toBe(image);
+    expect(setIcon).not.toHaveBeenCalled();
+    expect(setMap).not.toHaveBeenCalled();
+    expect(windowListeners.size).toBe(0);
+  });
+  it("동작 줄이기를 사용하면 현재 표시된 차량 위치로 즉시 이동하고 포커스한다", () => {
+    const { native, adapter, pendingFrames, windowListeners } = setup(true, { reducedMotion: true });
+    const view = liveVehicleViewsFor(boardMock, liveVehiclesMock, "UP")[0]!;
+    adapter.update(null, "UP", [view]);
+    const bus = native.markers.find(
+      (item) => (item.options.icon.content as unknown as ElementStub).dataset.mapVehicleKey === view.key,
+    )!;
+    const button = bus.options.icon.content as unknown as ElementStub;
+    adapter.moveVehicles([{ key: view.key, sequencePosition: view.vehicle.currentStopSequence + 0.5 }]);
+    adapter.focusVehicle(view.key);
+    expect(native.map.center.lat()).toBeCloseTo(bus.options.position.lat(), 12);
+    expect(native.map.center.lng()).toBeCloseTo(bus.options.position.lng(), 12);
+    expect(native.map.zoom).toBe(16);
+    expect(button.focus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(pendingFrames.size).toBe(0);
+    expect(windowListeners.size).toBe(0);
+  });
+  it("차량 선택은 포커스와 별개로 유지하고 폴링·선택 변경·해제에도 같은 마커를 사용한다", () => {
+    const { native, adapter, onVehicleSelect } = setup(true, { reducedMotion: true });
+    const views = liveVehicleViewsFor(boardMock, liveVehiclesMock, "UP").slice(0, 2);
+    const [first, second] = views;
+    expect(first).toBeDefined();
+    expect(second).toBeDefined();
+    adapter.update(null, "UP", views, first!.key);
+    const buses = views.map((view) =>
+      native.markers.find(
+        (marker) => (marker.options.icon.content as unknown as ElementStub).dataset.mapVehicleKey === view.key,
+      )!,
+    );
+    const [firstBus, secondBus] = buses;
+    const button = firstBus!.options.icon.content as unknown as ElementStub;
+    const [count, pin] = button.children;
+    const image = pin!.children[0];
+    const iconUpdates = buses.map((bus) => jest.spyOn(bus, "setIcon"));
+    const mapUpdates = buses.map((bus) => jest.spyOn(bus, "setMap"));
+    expect(button.attributes.get("aria-pressed")).toBe("true");
+    expect(firstBus!.options.zIndex).toBe(30);
+    expect(secondBus!.options.zIndex).toBe(20);
+
+    adapter.update(
+      null,
+      "UP",
+      views.map((view) => ({ ...view, vehicle: { ...view.vehicle, seat: { kind: "EXACT", remaining: 0 } } })),
+      first!.key,
+    );
+    adapter.focusVehicle(first!.key, { focusMarker: false });
+    expect(native.map.zoom).toBe(16);
+    expect(button.focus).not.toHaveBeenCalled();
+    expect(button.attributes.get("aria-pressed")).toBe("true");
+    expect(count!.textContent).toBe("0석");
+    adapter.focusVehicle(null);
+    expect(button.attributes.get("aria-pressed")).toBe("true");
+
+    adapter.update(null, "UP", views, second!.key);
+    expect(button.attributes.get("aria-pressed")).toBe("false");
+    expect(firstBus!.options.zIndex).toBe(20);
+    expect(secondBus!.options.icon.content.getAttribute("aria-pressed")).toBe("true");
+    expect(secondBus!.options.zIndex).toBe(30);
+    adapter.update(null, "UP", views);
+    expect(secondBus!.options.icon.content.getAttribute("aria-pressed")).toBe("false");
+    expect(secondBus!.options.zIndex).toBe(20);
+    expect(onVehicleSelect).not.toHaveBeenCalled();
+    expect(button.children).toEqual([count, pin]);
+    expect(pin!.children[0]).toBe(image);
+    expect(iconUpdates.every((update) => update.mock.calls.length === 0)).toBe(true);
+    expect(mapUpdates.every((update) => update.mock.calls.length === 0)).toBe(true);
+  });
+  it("차량을 확대하면서 화면상 거리는 계속 줄이고 같은 버스도 다시 확대할 수 있다", () => {
+    const { native, adapter, flushFrames } = setup();
+    const view = liveVehicleViewsFor(boardMock, liveVehiclesMock, "UP")[0]!;
+    adapter.update(null, "UP", [view], view.key);
+    const bus = native.markers.find(
+      (marker) => (marker.options.icon.content as unknown as ElementStub).dataset.mapVehicleKey === view.key,
+    )!;
+    const button = bus.options.icon.content as unknown as ElementStub;
+    const target = bus.options.position;
+    native.map.center = new CoordinateStub(37.5, 127);
+    native.map.zoom = 10;
+    const setZoom = jest.spyOn(native.map, "setZoom");
+    // 같은 지리적 거리라도 줌 한 단계마다 화면상 거리는 두 배가 된다.
+    const screenDistance = () =>
+      Math.hypot(native.map.center.lat() - target.lat(), native.map.center.lng() - target.lng()) * 2 ** native.map.zoom;
+    const initialDistance = screenDistance();
+    adapter.focusVehicle(view.key);
+    flushFrames();
+    expect(setZoom).not.toHaveBeenCalled();
+    flushFrames(140);
+    const firstDistance = screenDistance();
+    expect(native.map.zoom).toBeGreaterThan(10);
+    expect(native.map.zoom).toBeLessThan(16);
+    expect(firstDistance).toBeGreaterThan(0);
+    expect(firstDistance).toBeLessThan(initialDistance);
+    flushFrames(140);
+    expect(screenDistance()).toBeLessThan(firstDistance);
+    flushFrames(280);
+    expect(native.map.zoom).toBe(16);
+    expect(native.map.center.lat()).toBeCloseTo(target.lat(), 12);
+    expect(native.map.center.lng()).toBeCloseTo(target.lng(), 12);
+    expect(button.focus).toHaveBeenCalledTimes(1);
+    const zooms = setZoom.mock.calls.map(([zoom]) => zoom);
+    expect(zooms.some((zoom) => !Number.isInteger(zoom))).toBe(true);
+    expect(new Set(zooms).size).toBe(zooms.length);
+    expect(setZoom.mock.calls.at(-1)).toEqual([16, false]);
+
+    native.map.zoom = 14;
+    adapter.focusVehicle(view.key);
+    flushFrames();
+    flushFrames(560);
+    expect(native.map.zoom).toBe(16);
+    expect(button.focus).toHaveBeenCalledTimes(2);
+  });
+  it("이미지 타일 fallback에서는 같은 정수 줌을 반복 설정하지 않는다", () => {
+    const { native, adapter, flushFrames } = setup(false);
+    const view = liveVehicleViewsFor(boardMock, liveVehiclesMock, "UP")[0]!;
+    adapter.update(null, "UP", [view]);
+    native.map.zoom = 10;
+    const setZoom = jest.spyOn(native.map, "setZoom");
+    adapter.focusVehicle(view.key);
+    flushFrames();
+    flushFrames(1);
+    expect(setZoom).not.toHaveBeenCalled();
+    flushFrames(139);
+    flushFrames(140);
+    flushFrames(280);
+    const zooms = setZoom.mock.calls.map(([zoom]) => zoom);
+    expect(zooms.every(Number.isInteger)).toBe(true);
+    expect(new Set(zooms).size).toBe(zooms.length);
+    expect(native.map.zoom).toBe(16);
+  });
+  it("사용자 조작이나 다른 지도 동작·차량 제거는 대기 중인 차량 이동과 포커스를 취소한다", () => {
+    const interruptions = [
+      "wheel",
+      "touchstart",
+      "pointerdown",
+      "keydown",
+      "null",
+      "focus",
+      "location",
+      "remove",
+      "destroy",
+    ];
+    for (const interruption of interruptions) {
+      const { native, adapter, flushFrames, windowListeners } = setup();
+      const view = liveVehicleViewsFor(boardMock, liveVehiclesMock, "UP")[0]!;
+      adapter.update(null, "UP", [view]);
+      const bus = native.markers.find(
+        (item) => (item.options.icon.content as unknown as ElementStub).dataset.mapVehicleKey === view.key,
+      )!;
+      const button = bus.options.icon.content as unknown as ElementStub;
+      const setCenter = jest.spyOn(native.map, "setCenter");
+      const setZoom = jest.spyOn(native.map, "setZoom");
+      adapter.focusVehicle(view.key);
+      flushFrames();
+      flushFrames(160);
+      if (interruption === "null") adapter.focusVehicle(null);
+      else if (interruption === "focus") adapter.focus({ direction: "UP", sequence: 15 });
+      else if (interruption === "location") adapter.showLocation({ latitude: 37.4, longitude: 127.1 }, 20);
+      else if (interruption === "remove") adapter.update(null, "UP", []);
+      else if (interruption === "destroy") adapter.destroy();
+      else windowListeners.get(interruption)!();
+      const center = native.map.center;
+      const zoom = native.map.zoom;
+      const centerUpdates = setCenter.mock.calls.length;
+      const zoomUpdates = setZoom.mock.calls.length;
+      flushFrames(400);
+      expect(native.map.center).toBe(center);
+      expect(setCenter).toHaveBeenCalledTimes(centerUpdates);
+      expect(native.map.zoom).toBe(zoom);
+      expect(setZoom).toHaveBeenCalledTimes(zoomUpdates);
+      expect(button.focus).not.toHaveBeenCalled();
+      expect(windowListeners.size).toBe(0);
+      if (interruption !== "destroy") adapter.destroy();
+    }
   });
   it("잔여석만 갱신해도 차량 마커와 핀·이미지 DOM을 그대로 사용한다", () => {
     const { native, adapter } = setup();

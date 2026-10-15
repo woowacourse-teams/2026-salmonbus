@@ -133,7 +133,8 @@ export const bus = style({
   },
   selectors: {
     [`${canvas}[data-overlays-ready="false"] &`]: { visibility: "hidden" },
-    "&:focus": { transform: "scale(1.12)" },
+    '&[aria-pressed="true"]': { transform: "scale(1.12)" },
+    "&:focus-visible": { transform: "scale(1.12)" },
   },
 });
 export const busCount = style({

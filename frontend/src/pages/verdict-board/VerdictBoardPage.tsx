@@ -124,6 +124,8 @@ function OperatingBoard({
   const [sheetHeight, setSheetHeight] = useState(() => viewport.height / 2);
   const [selected, setSelected] = useState<StopSelection | null>(null);
   const [scrollRequest, setScrollRequest] = useState<StopSelection | null>(null);
+  const [vehicleFocusRequest, setVehicleFocusRequest] = useState<{ key: string; focusMarker: boolean } | null>(null);
+  const selectedVehicleKey = vehicleFocusRequest?.key ?? null;
   const stops = useMemo(() => stopViewsFor(board, direction.id), [board, direction.id]);
   const vehicles = useMemo(
     () => liveVehicleViewsFor(board, liveVehicles, direction.id),
@@ -136,15 +138,30 @@ function OperatingBoard({
 
   function selectFromMap(selection: StopSelection) {
     setSelected(selection);
+    setVehicleFocusRequest(null);
     scrollToStop(selection);
   }
+
   function scrollToStop(selection: StopSelection) {
+    // 같은 위치를 다시 눌러도 목록 이동을 새로 요청한다.
     setScrollRequest({ ...selection });
     if (snap === "minimum") setSnap("half");
     onDirectionChange(selection.direction);
   }
 
+  function selectVehicleFromMap(selection: StopSelection, key: string) {
+    setVehicleFocusRequest({ key, focusMarker: false });
+    scrollToStop(selection);
+  }
+
+  function focusVehicleFromList(key: string) {
+    setScrollRequest(null);
+    setVehicleFocusRequest({ key, focusMarker: true });
+    if (snap === "full") setSnap("half");
+  }
+
   function toggleFromList(sequence: number) {
+    setVehicleFocusRequest(null);
     setSelected((current) =>
       current?.direction === direction.id && current.sequence === sequence
         ? null
@@ -157,6 +174,7 @@ function OperatingBoard({
     if (next === direction.id) return;
     setSelected(null);
     setScrollRequest(null);
+    setVehicleFocusRequest(null);
     onDirectionChange(next);
   }
 
@@ -174,7 +192,9 @@ function OperatingBoard({
             data={mapData}
             selected={selected}
             onSelect={selectFromMap}
-            onVehicleSelect={scrollToStop}
+            onVehicleSelect={selectVehicleFromMap}
+            vehicleFocusRequest={vehicleFocusRequest}
+            selectedVehicleKey={selectedVehicleKey}
             liveVehicleViews={vehicles}
             motion={motion}
             viewportHeight={mapHeight}
@@ -217,7 +237,9 @@ function OperatingBoard({
             entering={switched}
             selectedSequence={selected?.direction === direction.id ? selected.sequence : null}
             scrollRequest={scrollRequest?.direction === direction.id ? scrollRequest : null}
+            selectedVehicleKey={selectedVehicleKey}
             onToggle={toggleFromList}
+            onVehicleSelect={focusVehicleFromList}
           />
         </BoardBottomSheet>
       </main>

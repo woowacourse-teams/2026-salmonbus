@@ -14,6 +14,8 @@ interface RouteMapProps {
   selected: StopSelection | null;
   onSelect: (selection: StopSelection) => void;
   onVehicleSelect: (selection: StopSelection, key: string) => void;
+  vehicleFocusRequest: { key: string; focusMarker: boolean } | null;
+  selectedVehicleKey: string | null;
   liveVehicleViews: LiveVehicleView[];
   motion: LiveVehicleMotionStore;
   viewportHeight: number;
@@ -27,10 +29,21 @@ type MapState =
 type LocationState = { status: "idle" } | { status: "loading" } | { status: "message"; message: string };
 
 export function RouteMap(props: RouteMapProps) {
-  const { data, viewportHeight, selected, activeDirection, liveVehicleViews, motion } = props;
+  const {
+    data,
+    viewportHeight,
+    selected,
+    activeDirection,
+    liveVehicleViews,
+    motion,
+    vehicleFocusRequest,
+    selectedVehicleKey,
+  } = props;
+  const visible = viewportHeight > 0;
   const regionRef = useRef<HTMLElement | null>(null);
   const elementRef = useRef<HTMLDivElement>(null);
   const adapterRef = useRef<RouteMapAdapter | null>(null);
+  const lastVehicleFocusRequest = useRef<RouteMapProps["vehicleFocusRequest"]>(null);
   const propsRef = useRef(props);
   const locationRequest = useRef(0);
   const [mapState, setMapState] = useState<MapState>({ status: "loading" });
@@ -45,6 +58,7 @@ export function RouteMap(props: RouteMapProps) {
   const disposeMap = useCallback(() => {
     const adapter = adapterRef.current;
     adapterRef.current = null;
+    lastVehicleFocusRequest.current = null;
     locationRequest.current += 1;
     adapter?.destroy();
     elementRef.current?.replaceChildren();
@@ -111,7 +125,7 @@ export function RouteMap(props: RouteMapProps) {
           (selection, key) => propsRef.current.onVehicleSelect(selection, key),
         );
         adapterRef.current = adapter;
-        adapter.update(current.selected, current.activeDirection, current.liveVehicleViews);
+        adapter.update(current.selected, current.activeDirection, current.liveVehicleViews, current.selectedVehicleKey);
         adapter.moveVehicles(current.motion.frames);
         if (current.selected !== null) adapter.focus(current.selected);
         if (failed) {
@@ -131,14 +145,27 @@ export function RouteMap(props: RouteMapProps) {
 
   useEffect(() => {
     runMapAction((adapter) => {
-      adapter.update(selected, activeDirection, liveVehicleViews);
+      adapter.update(selected, activeDirection, liveVehicleViews, selectedVehicleKey);
       adapter.moveVehicles(motion.frames);
     });
-  }, [selected, activeDirection, liveVehicleViews, motion, mapState, runMapAction]);
+  }, [selected, activeDirection, liveVehicleViews, motion, selectedVehicleKey, mapState, runMapAction]);
 
   useEffect(() => {
     if (selected !== null) runMapAction((adapter) => adapter.focus(selected));
   }, [selected, runMapAction]);
+
+  useEffect(() => {
+    if (mapState.status !== "ready" || !visible) {
+      runMapAction((adapter) => adapter.focusVehicle(null));
+      return;
+    }
+    // 시트 높이가 바뀌어 지도가 다시 보여도 처리한 이동 요청을 반복하지 않는다.
+    if (lastVehicleFocusRequest.current === vehicleFocusRequest) return;
+    lastVehicleFocusRequest.current = vehicleFocusRequest;
+    runMapAction((adapter) =>
+      adapter.focusVehicle(vehicleFocusRequest?.key ?? null, { focusMarker: vehicleFocusRequest?.focusMarker ?? true }),
+    );
+  }, [vehicleFocusRequest, mapState, visible, runMapAction]);
 
   useEffect(
     () => motion.subscribe(() => runMapAction((adapter) => adapter.moveVehicles(motion.frames))),

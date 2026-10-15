@@ -1,8 +1,8 @@
 import { useRef } from "react";
-import type { StopSelection } from "./stopSelection";
 import type { StopView } from "./displayPolicy";
 import type { LiveVehicleView } from "./liveVehiclePolicy";
 import type { LiveVehicleMotionStore } from "../hooks/useLiveVehicleMotion";
+import type { StopSelection } from "./stopSelection";
 import { LOADING_NOTICE, LOAD_FAILED_NOTICE, OUT_OF_SERVICE_NOTICE } from "./verdictCopy";
 import { StopList } from "./StopList";
 import * as styles from "./StopBoard.css";
@@ -19,7 +19,9 @@ type StopBoardProps =
       entering: boolean;
       selectedSequence: number | null;
       scrollRequest: StopSelection | null;
+      selectedVehicleKey: string | null;
       onToggle: (sequence: number) => void;
+      onVehicleSelect: (key: string) => void;
     };
 
 const NOTICES: Record<NoticeStatus, string> = {
@@ -40,7 +42,9 @@ export function StopBoard(props: StopBoardProps) {
           entering={props.entering}
           selectedSequence={props.selectedSequence}
           scrollRequest={props.scrollRequest}
+          selectedVehicleKey={props.selectedVehicleKey}
           onToggle={props.onToggle}
+          onVehicleSelect={props.onVehicleSelect}
           scrollContainerRef={scrollContainerRef}
         />
       </section>

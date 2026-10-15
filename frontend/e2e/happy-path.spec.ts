@@ -46,7 +46,7 @@ for (const { direction, label, sequence, expectedArrivals } of [
     await test.step("실시간 차량이 출발·이동·다음 정류장 도착 위치로 이어 움직인다", async () => {
       const tracker = page
         .getByRole("region", { name: "판정보드 정류장 목록", exact: true })
-        .getByRole("img", { name: /현재 잔여 좌석 5석/ });
+        .getByRole("button", { name: /현재 잔여 좌석 5석/ });
       const marker = tracker.locator("..");
       await expect
         .poll(async () => {

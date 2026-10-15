@@ -15,7 +15,9 @@ interface StopListProps {
   entering: boolean;
   selectedSequence: number | null;
   scrollRequest: StopSelection | null;
+  selectedVehicleKey: string | null;
   onToggle: (sequence: number) => void;
+  onVehicleSelect: (key: string) => void;
   scrollContainerRef: RefObject<HTMLElement | null>;
 }
 
@@ -41,7 +43,9 @@ export function StopList({
   entering,
   selectedSequence,
   scrollRequest,
+  selectedVehicleKey,
   onToggle,
+  onVehicleSelect,
   scrollContainerRef,
 }: StopListProps) {
   const routeCanvasRef = useRef<HTMLDivElement>(null);
@@ -91,7 +95,11 @@ export function StopList({
             className={styles.liveVehicle}
             data-live-vehicle-key={view.key}
           >
-            <LiveBusTraker vehicle={view.vehicle} />
+            <LiveBusTraker
+              vehicle={view.vehicle}
+              selected={view.key === selectedVehicleKey}
+              onSelect={() => onVehicleSelect(view.key)}
+            />
           </div>
         ))}
       </div>
