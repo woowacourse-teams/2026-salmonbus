@@ -535,6 +535,16 @@ export const errorResponseMocks = {
     message: "등록되지 않은 노선입니다.",
     requestId: "req-01J9X2ABCE",
   },
+  STATION_NOT_FOUND: {
+    code: "STATION_NOT_FOUND",
+    message: "지원하지 않는 정류장입니다.",
+    requestId: "req-SAL176-STATION",
+  },
+  REFERENCE_VERSION_CONFLICT: {
+    code: "REFERENCE_VERSION_CONFLICT",
+    message: "노선 판본과 정류장 방문이 일치하지 않습니다.",
+    requestId: "req-SAL176-REFERENCE",
+  },
   MODEL_OUT_OF_SCOPE: {
     code: "MODEL_OUT_OF_SCOPE",
     message: "활성 모델 번들이 지원하지 않는 노선 판본입니다.",

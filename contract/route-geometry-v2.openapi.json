@@ -1,0 +1,858 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Salmonbus route geometry",
+    "version": "2.0.0"
+  },
+  "paths": {
+    "/api/v2/routes/{routeId}/geometry": {
+      "get": {
+        "operationId": "getRouteGeometry",
+        "summary": "선택 노선의 형상과 정류장 방문 좌표",
+        "parameters": [
+          {
+            "name": "routeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{9}$"
+            }
+          },
+          {
+            "name": "referenceVersionId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            },
+            "description": "생략하면 현재 판본. 지정 시 현재 판본과 다르면 409. 64비트 양의 정수 문자열."
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "정적 지도 자료. 모델·차량 관측 존재 여부와 독립적이다. 예시는 모두 합성 자료다.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "W/\"g-{geometryRevision}\". If-None-Match로 재검증한다. UNAVAILABLE에는 제공하지 않는다."
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "READY/PARTIAL은 max-age=300, must-revalidate, public. UNAVAILABLE은 no-store."
+              },
+              "Content-Encoding": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Accept-Encoding:gzip을 수락하고 본문이 2KB 이상이면 gzip 압축 가능."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteGeometry"
+                },
+                "examples": {
+                  "ready": {
+                    "value": {
+                      "routeId": "204000057",
+                      "referenceVersionId": "7",
+                      "geometryRevision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                      "name": "3330",
+                      "startPoint": "합성 기점 A",
+                      "endPoint": "합성 회차 B",
+                      "status": "READY",
+                      "reason": null,
+                      "coordinateSystem": "WGS84_ASSUMED",
+                      "turningPoint": {
+                        "stopSequence": 2
+                      },
+                      "busStops": [
+                        {
+                          "stationId": "206000637",
+                          "stopSequence": 1,
+                          "name": "합성 A",
+                          "direction": "UP",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127,
+                            "y": 37
+                          }
+                        },
+                        {
+                          "stationId": "206000638",
+                          "stopSequence": 2,
+                          "name": "합성 B",
+                          "direction": "UP",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127.2,
+                            "y": 37.1
+                          }
+                        },
+                        {
+                          "stationId": "206000637",
+                          "stopSequence": 3,
+                          "name": "합성 A",
+                          "direction": "DOWN",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127,
+                            "y": 37
+                          }
+                        }
+                      ],
+                      "points": [
+                        {
+                          "x": 127,
+                          "y": 37
+                        },
+                        {
+                          "x": 127.1,
+                          "y": 37.05
+                        },
+                        {
+                          "x": 127.2,
+                          "y": 37.1
+                        },
+                        {
+                          "x": 127,
+                          "y": 37
+                        }
+                      ],
+                      "paths": {
+                        "UP": {
+                          "points": [
+                            {
+                              "x": 127,
+                              "y": 37
+                            },
+                            {
+                              "x": 127.1,
+                              "y": 37.05
+                            },
+                            {
+                              "x": 127.2,
+                              "y": 37.1
+                            }
+                          ]
+                        },
+                        "DOWN": {
+                          "points": [
+                            {
+                              "x": 127.2,
+                              "y": 37.1
+                            },
+                            {
+                              "x": 127,
+                              "y": 37
+                            }
+                          ]
+                        }
+                      },
+                      "boundary": {
+                        "left": 127,
+                        "top": 37.1,
+                        "right": 127.2,
+                        "bottom": 37
+                      }
+                    }
+                  },
+                  "partial": {
+                    "value": {
+                      "routeId": "204000057",
+                      "referenceVersionId": "7",
+                      "geometryRevision": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                      "name": "3330",
+                      "startPoint": "합성 기점 A",
+                      "endPoint": "합성 회차 B",
+                      "status": "PARTIAL",
+                      "reason": "MISSING_STOP_COORDINATES",
+                      "coordinateSystem": "WGS84_ASSUMED",
+                      "turningPoint": {
+                        "stopSequence": 2
+                      },
+                      "busStops": [
+                        {
+                          "stationId": "206000637",
+                          "stopSequence": 1,
+                          "name": "합성 A",
+                          "direction": "UP",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127,
+                            "y": 37
+                          }
+                        },
+                        {
+                          "stationId": "206000638",
+                          "stopSequence": 2,
+                          "name": "합성 B",
+                          "direction": "UP",
+                          "boardingAllowed": true,
+                          "point": null
+                        },
+                        {
+                          "stationId": "206000637",
+                          "stopSequence": 3,
+                          "name": "합성 A",
+                          "direction": "DOWN",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127,
+                            "y": 37
+                          }
+                        }
+                      ],
+                      "points": [
+                        {
+                          "x": 127,
+                          "y": 37
+                        },
+                        {
+                          "x": 127.1,
+                          "y": 37.05
+                        },
+                        {
+                          "x": 127.2,
+                          "y": 37.1
+                        },
+                        {
+                          "x": 127,
+                          "y": 37
+                        }
+                      ],
+                      "paths": null,
+                      "boundary": {
+                        "left": 127,
+                        "top": 37.1,
+                        "right": 127.2,
+                        "bottom": 37
+                      }
+                    }
+                  },
+                  "notCollected": {
+                    "value": {
+                      "routeId": "204000057",
+                      "referenceVersionId": "7",
+                      "geometryRevision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                      "name": "3330",
+                      "startPoint": "합성 기점 A",
+                      "endPoint": "합성 회차 B",
+                      "status": "UNAVAILABLE",
+                      "reason": "NOT_COLLECTED",
+                      "coordinateSystem": "WGS84_ASSUMED",
+                      "turningPoint": {
+                        "stopSequence": 2
+                      },
+                      "busStops": [
+                        {
+                          "stationId": "206000637",
+                          "stopSequence": 1,
+                          "name": "합성 A",
+                          "direction": "UP",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127,
+                            "y": 37
+                          }
+                        },
+                        {
+                          "stationId": "206000638",
+                          "stopSequence": 2,
+                          "name": "합성 B",
+                          "direction": "UP",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127.2,
+                            "y": 37.1
+                          }
+                        },
+                        {
+                          "stationId": "206000637",
+                          "stopSequence": 3,
+                          "name": "합성 A",
+                          "direction": "DOWN",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127,
+                            "y": 37
+                          }
+                        }
+                      ],
+                      "points": [],
+                      "paths": null,
+                      "boundary": {
+                        "left": 127,
+                        "top": 37.1,
+                        "right": 127.2,
+                        "bottom": 37
+                      }
+                    }
+                  },
+                  "withoutDirectionSplit": {
+                    "summary": "전체 형상은 있지만 회차 근거가 없어 방향별 경로는 제공하지 않는 예시",
+                    "value": {
+                      "routeId": "204000057",
+                      "referenceVersionId": "7",
+                      "geometryRevision": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                      "name": "3330",
+                      "startPoint": "합성 기점 A",
+                      "endPoint": "합성 회차 B",
+                      "status": "READY",
+                      "reason": null,
+                      "coordinateSystem": "WGS84_ASSUMED",
+                      "turningPoint": null,
+                      "busStops": [
+                        {
+                          "stationId": "206000637",
+                          "stopSequence": 1,
+                          "name": "합성 A",
+                          "direction": "UP",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127,
+                            "y": 37
+                          }
+                        },
+                        {
+                          "stationId": "206000638",
+                          "stopSequence": 2,
+                          "name": "합성 B",
+                          "direction": "UP",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127.2,
+                            "y": 37.1
+                          }
+                        },
+                        {
+                          "stationId": "206000637",
+                          "stopSequence": 3,
+                          "name": "합성 A",
+                          "direction": "UP",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127,
+                            "y": 37
+                          }
+                        }
+                      ],
+                      "points": [
+                        {
+                          "x": 127,
+                          "y": 37
+                        },
+                        {
+                          "x": 127.1,
+                          "y": 37.05
+                        },
+                        {
+                          "x": 127.2,
+                          "y": 37.1
+                        },
+                        {
+                          "x": 127,
+                          "y": 37
+                        }
+                      ],
+                      "paths": null,
+                      "boundary": {
+                        "left": 127,
+                        "top": 37.1,
+                        "right": 127.2,
+                        "bottom": 37
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "기존 ETag와 동일한 표시 자료. 본문 없음.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "W/\"g-{geometryRevision}\". If-None-Match로 재검증한다. UNAVAILABLE에는 제공하지 않는다."
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "READY/PARTIAL은 max-age=300, must-revalidate, public. UNAVAILABLE은 no-store."
+              },
+              "Content-Encoding": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Accept-Encoding:gzip을 수락하고 본문이 2KB 이상이면 gzip 압축 가능."
+              }
+            }
+          },
+          "400": {
+            "description": "잘못된 routeId 또는 판본 형식: INVALID_ROUTE_ID/INVALID_REQUEST",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "현재 카탈로그에 없는 노선: ROUTE_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "요청한 판본이 현재 판본과 다름: REFERENCE_VERSION_CONFLICT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "저장소 또는 저장된 형상을 읽을 수 없음: SERVICE_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "지원하지 않는 HTTP 메서드",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "code": "METHOD_NOT_ALLOWED",
+                  "message": "이 경로에서 지원하지 않는 요청 방식입니다.",
+                  "requestId": "example-request"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "요청 처리 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "code": "INTERNAL_ERROR",
+                  "message": "요청을 처리하지 못했습니다.",
+                  "requestId": "example-request"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Point": {
+        "type": "object",
+        "required": [
+          "x",
+          "y"
+        ],
+        "properties": {
+          "x": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180,
+            "not": {
+              "const": 0
+            }
+          },
+          "y": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90,
+            "not": {
+              "const": 0
+            }
+          }
+        },
+        "additionalProperties": false,
+        "description": "GBIS X/Y를 x=경도·y=위도로 표시하는 가정. 공급자 형상 명세의 좌표계 보증은 미확인."
+      },
+      "BusStop": {
+        "type": "object",
+        "required": [
+          "stationId",
+          "stopSequence",
+          "name",
+          "direction",
+          "boardingAllowed",
+          "point"
+        ],
+        "properties": {
+          "stationId": {
+            "type": "string",
+            "pattern": "^[0-9]{9}$"
+          },
+          "stopSequence": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "노선 판본 안의 1부터 시작하는 방문 순번. stationId가 같아도 합치지 않는다."
+          },
+          "name": {
+            "type": "string"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "UP",
+              "DOWN"
+            ]
+          },
+          "boardingAllowed": {
+            "type": "boolean"
+          },
+          "point": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Point"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "Boundary": {
+        "type": "object",
+        "required": [
+          "left",
+          "top",
+          "right",
+          "bottom"
+        ],
+        "properties": {
+          "left": {
+            "type": "number"
+          },
+          "top": {
+            "type": "number"
+          },
+          "right": {
+            "type": "number"
+          },
+          "bottom": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false,
+        "description": "경로점과 제공 가능한 정류장 좌표를 모두 포함하는 영역. left=min x, right=max x, top=max y, bottom=min y."
+      },
+      "TurningPoint": {
+        "type": "object",
+        "required": [
+          "stopSequence"
+        ],
+        "properties": {
+          "stopSequence": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "additionalProperties": false,
+        "description": "회차 정류장의 방문 순번. 형상에 대응하는 pointIdx는 이번 계약에 제공하지 않는다."
+      },
+      "RouteGeometry": {
+        "type": "object",
+        "required": [
+          "routeId",
+          "referenceVersionId",
+          "geometryRevision",
+          "name",
+          "startPoint",
+          "endPoint",
+          "status",
+          "reason",
+          "coordinateSystem",
+          "turningPoint",
+          "busStops",
+          "points",
+          "paths",
+          "boundary"
+        ],
+        "properties": {
+          "routeId": {
+            "type": "string",
+            "pattern": "^[0-9]{9}$"
+          },
+          "referenceVersionId": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "geometryRevision": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "startPoint": {
+            "type": "string"
+          },
+          "endPoint": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "READY",
+              "PARTIAL",
+              "UNAVAILABLE"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              null,
+              "NOT_COLLECTED",
+              "MISSING_STOP_COORDINATES"
+            ]
+          },
+          "coordinateSystem": {
+            "type": "string",
+            "const": "WGS84_ASSUMED"
+          },
+          "turningPoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TurningPoint"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "busStops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BusStop"
+            }
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Point"
+            },
+            "description": "lineSeq 순서의 실제 형상점 목록. 정류장 좌표를 이어 만든 선이 아니다."
+          },
+          "paths": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoutePaths"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "방향별 경로를 함께 제공한다. 미수집·회차 근거 부족·모호한 대응 등으로 분리할 수 없으면 null이며, 기존 points와 상위 status의 의미는 유지한다."
+          },
+          "boundary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Boundary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "UNAVAILABLE"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "points": {
+                  "maxItems": 0
+                },
+                "reason": {
+                  "const": "NOT_COLLECTED"
+                },
+                "paths": {
+                  "type": "null"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "points": {
+                  "minItems": 2
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "READY"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "reason": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "PARTIAL"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "reason": {
+                  "const": "MISSING_STOP_COORDINATES"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "requestId"
+        ]
+      },
+      "RoutePath": {
+        "type": "object",
+        "required": [
+          "points"
+        ],
+        "properties": {
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Point"
+            },
+            "minItems": 2,
+            "description": "실제 운행 순서의 형상점. 서로 다른 좌표를 두 개 이상 포함하며, 원본의 반복 좌표는 유지한다."
+          }
+        },
+        "additionalProperties": false
+      },
+      "RoutePaths": {
+        "type": "object",
+        "required": [
+          "UP",
+          "DOWN"
+        ],
+        "properties": {
+          "UP": {
+            "$ref": "#/components/schemas/RoutePath"
+          },
+          "DOWN": {
+            "$ref": "#/components/schemas/RoutePath"
+          }
+        },
+        "additionalProperties": false,
+        "description": "기점→회차 지점과 회차 지점→복귀 경로. 두 경로는 같은 회차 경계점을 공유한다. DOWN은 UP을 뒤집어 만들지 않는다. 별도 status/reason 필드는 없다."
+      }
+    }
+  },
+  "x-design": {
+    "naverSimilarity": "기존에 확인한 네이버 버스 노선 응답의 points/busStops[].point/boundary/turningPoint 구성만 참조한다. 네이버 데이터를 조회하거나 복제하는 서비스가 아니다. ID와 1-based stopSequence는 Salmonbus 계약이다.",
+    "source": "GBIS getBusRouteStationListv2의 방문·정류장 좌표와 getBusRouteLineListv2의 별도 도로 형상 목록. SDK 길찾기 경로를 사용하지 않는다.",
+    "coordinatePolicy": "원문 x/y에 유한성·경도/위도 범위·미제공 0 검증을 한다. 범위가 맞는 것이 WGS84 증명은 아니어서 WGS84_ASSUMED를 명시한다. 검증된 GeoJSON/실측 GPS/거리·ratio라고 취급하지 않는다.",
+    "cacheRevision": "노선명·기종점·회차·모든 방문 좌표·형상 자료를 반영한다. 좌표만 바뀌어 referenceVersionId가 같아도 geometryRevision과 ETag는 변경된다. 방향 분리 규칙 버전도 포함하므로 규칙이 바뀌면 같은 원본 자료라도 ETag가 바뀐다.",
+    "frontendFlow": "노선 선택 시 조회. 받은 referenceVersionId와 stopSequence를 차량 관측·정류장 ETA의 선택 기준으로 사용. 확대·이동마다 geometry를 재조회하지 않는다.",
+    "noGeometry": "정류장 직선으로 형상을 대체하지 않는다. points=[]이고 정류장 좌표가 있으면 마커만 그릴 수 있다. 새 로컬 판본에는 옛 판본 형상을 붙이지 않는다.",
+    "directionalPaths": "기존 points를 유지하고 paths.UP.points와 paths.DOWN.points를 추가한다. 노선 방문 순서를 지키는 선상 대응으로 회차 경계를 찾고, 그 경계를 두 경로에 함께 포함한다. 정류장 좌표까지 선을 꺾거나 하행을 상행의 역순으로 만들지 않는다. paths가 null이면 전체 points만 표시한다. 방향 선택·색상·겹침 순서는 프론트가 처리하며 방향 전환 시 재조회하지 않는다."
+  },
+  "x-collection": {
+    "defaultEnabled": false,
+    "defaultRouteScope": "별도 형상 대상 목록을 지정하지 않으면 기존 8노선(3330·1650·9007·9300·6011·3000·5600·3500)을 모두 대상으로 한다. API 구현에 특정 노선 제한은 없으며, 실제 응답의 READY 여부는 해당 로컬 판본의 형상 수집 성공 여부로 판단한다.",
+    "enable": "Worker ROUTE_GEOMETRY_ENABLED=true, 기존 GBIS 키와 연결 설정 필요. route-geometry.route-ids를 지정할 수 있다. 생략 시 collection.route-ids 사용. COLLECTION_ENABLED=false여도 정적 자료만 수집 가능.",
+    "schedule": "카탈로그는 최초 및 완료 후 24시간마다 대상 노선별 1회 갱신. 기존 관측 노선의 카탈로그 갱신 순서는 유지하고, 지도 전용 노선의 카탈로그·형상 HTTP는 모두 별도 실행기(동시 1, 대기 64)에서 수행한다. 공통 노선을 중복 조회하지 않는다.",
+    "quota": "기존 BUS_ROUTE 예약을 사용. 노선 기본정보+정류장 2회, 형상 1회. ETA의 별도 40000회 예산을 사용하지 않는다.",
+    "persistence": "route_geometry에 정상 변경만 INSERT. 동일 최신 형상은 추가 저장하지 않는다. A→B→A 복귀는 새 기록. 게시 직전 현재 노선 판본을 잠금 아래 확인하고, 늦게 끝난 이전 응답은 게시하지 않는다.",
+    "failure": "수집 실패·빈 자료·좌표 해석 실패는 같은 로컬 판본의 기존 형상을 지우지 않는다. GET은 외부 수집을 유발하지 않는다.",
+    "migration": "현재 dev V31 이후 SAL-176의 V32(ETA), V33(geometry). 미병합 PR97의 V32~V37과 번호·MigrationOrderTest 조정이 병합 순서에 따라 필요하다."
+  },
+  "x-sources": [
+    {
+      "title": "GBIS 경유정류소 명세",
+      "url": "https://www.gbis.go.kr/gbis2014/publicService.action?cmd=mBusRouteStation"
+    },
+    {
+      "title": "GBIS 형상 명세",
+      "url": "https://www.gbis.go.kr/gbis2014/publicService.action?cmd=mBusRouteLine"
+    }
+  ],
+  "x-deployment": {
+    "cloudFront": "캐시를 사용하는 경우 routeId 경로와 referenceVersionId 쿼리를 전달하고 캐시 키에 포함해야 한다. 압축 표현을 구분하고 origin의 no-store를 무시하는 최소 TTL을 두지 않는다. 인프라 설정은 이번 변경에서 적용하지 않았다.",
+    "coordinateVerification": "WGS84_ASSUMED는 검증 완료 표기가 아니다. 실제 좌표계 확인 후 변환/품질 정책과 geometry 판본을 함께 갱신한다."
+  }
+}

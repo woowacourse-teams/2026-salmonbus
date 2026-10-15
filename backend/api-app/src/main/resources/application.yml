@@ -1,5 +1,9 @@
 server:
   port: 8080
+  compression:
+    enabled: true
+    mime-types: application/json
+    min-response-size: 2KB
 
 chat:
   enabled: ${CHAT_ENABLED:false}
@@ -29,11 +33,35 @@ spring:
     hibernate:
       ddl-auto: validate # 스키마의 주인은 Flyway 다. Hibernate 는 대조만 한다.
 
+# API 문서는 명시적으로 local/dev 프로필을 켠 경우에만 제공한다.
+springdoc:
+  api-docs:
+    enabled: false
+    path: /api/docs/openapi
+  swagger-ui:
+    enabled: false
+    path: /api/docs/ui
+    url: /api/docs/openapi
+    supported-submit-methods: []
+    disable-swagger-default-url: true
+    query-config-enabled: false
+    validator-url: none
+  paths-to-match:
+    - /api/v1/**
+    - /api/v2/stations/{stationId}/arrivals
+    - /api/v2/routes/{routeId}/geometry
+    - /api/chat/rooms/{routeId}
+
 # 오류 응답에 실어 보낸 requestId 로 서버 로그를 찾을 수 있게 한다.
 # 이 줄이 없으면 MDC 에 넣어도 로그 줄에 안 찍혀서, 클라이언트가 받은 ID 로 검색할 것이 없다.
 logging:
   pattern:
     correlation: "[${spring.application.name:},%X{requestId:-}] "
+
+arrivals:
+  enabled: ${ARRIVALS_ENABLED:false}
+  worker-base-url: ${ARRIVAL_WORKER_BASE_URL:http://127.0.0.1:8081}
+  internal-token: ${ARRIVAL_INTERNAL_TOKEN:}
 
 management:
   endpoints:

@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import type { StopView } from "./displayPolicy";
+import type { ExpandableStopView, StopView } from "./displayPolicy";
 import type { LiveVehicleView } from "./liveVehiclePolicy";
 import type { LiveVehicleMotionStore } from "../hooks/useLiveVehicleMotion";
 import type { StopSelection } from "./stopSelection";
@@ -22,6 +22,7 @@ type StopBoardProps =
       selectedVehicleKey: string | null;
       onToggle: (sequence: number) => void;
       onVehicleSelect: (key: string) => void;
+      onStopExpand: (stop: ExpandableStopView, rowPosition: number) => void;
     };
 
 const NOTICES: Record<NoticeStatus, string> = {
@@ -46,6 +47,7 @@ export function StopBoard(props: StopBoardProps) {
           onToggle={props.onToggle}
           onVehicleSelect={props.onVehicleSelect}
           scrollContainerRef={scrollContainerRef}
+          onStopExpand={props.onStopExpand}
         />
       </section>
     );

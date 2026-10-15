@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type RefObject } from "react";
-import type { StopView } from "./displayPolicy";
+import type { ExpandableStopView, StopView } from "./displayPolicy";
 import type { LiveVehicleView } from "./liveVehiclePolicy";
 import type { LiveVehicleMotionStore } from "../hooks/useLiveVehicleMotion";
 import { LiveBusTraker } from "./LiveBusTraker";
@@ -19,6 +19,7 @@ interface StopListProps {
   onToggle: (sequence: number) => void;
   onVehicleSelect: (key: string) => void;
   scrollContainerRef: RefObject<HTMLElement | null>;
+  onStopExpand: (stop: ExpandableStopView, rowPosition: number) => void;
 }
 
 const LIVE_MARKER_HEIGHT = 32;
@@ -47,6 +48,7 @@ export function StopList({
   onToggle,
   onVehicleSelect,
   scrollContainerRef,
+  onStopExpand,
 }: StopListProps) {
   const routeCanvasRef = useRef<HTMLDivElement>(null);
   const markerRefs = useRef(new Map<string, HTMLDivElement>());
@@ -70,6 +72,11 @@ export function StopList({
     return motion.subscribe(updatePositions);
   }, [anchorPositions, liveVehicleViews, motion]);
 
+  const toggle = (stop: ExpandableStopView, rowPosition: number) => {
+    if (selectedSequence !== stop.sequence) onStopExpand(stop, rowPosition);
+    onToggle(stop.sequence);
+  };
+
   return (
     <div ref={routeCanvasRef} className={styles.routeCanvas}>
       <ul className={entering ? styles.list.entering : styles.list.still}>
@@ -80,7 +87,7 @@ export function StopList({
             routePosition={routePositionFor(stop, index, stops.length - 1)}
             selected={selectedSequence === stop.sequence}
             expanded={stop.kind !== "passThrough" && selectedSequence === stop.sequence}
-            onToggle={() => onToggle(stop.sequence)}
+            onToggle={(expandableStop) => toggle(expandableStop, index)}
           />
         ))}
       </ul>

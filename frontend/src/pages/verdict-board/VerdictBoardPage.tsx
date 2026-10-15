@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
+import { track } from "@/shared/analytics/track";
 import type { ApiFailure, ApiResult } from "@/shared/api/client";
 import { latestSuccessOf, type PolledResource } from "@/shared/api/polledResource";
 import { fetchBoard } from "@/shared/api/routeForecast.api";
@@ -12,6 +13,7 @@ import {
   serviceStateFor,
   stopViewsFor,
   type BoardScreen,
+  type ExpandableStopView,
 } from "./components/displayPolicy";
 import { liveVehicleViewsFor } from "./components/liveVehiclePolicy";
 import { useLiveVehicles } from "./hooks/useLiveVehicles";
@@ -42,6 +44,7 @@ interface OperatingBoardProps {
   liveMotionDurationMs: number;
   switched: boolean;
   onDirectionChange: (direction: Direction) => void;
+  onStopExpand: (stop: ExpandableStopView, rowPosition: number) => void;
 }
 
 function loadBoard(routeId: string, signal: AbortSignal): Promise<ApiResult<Board>> {
@@ -60,10 +63,13 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
   const [switched, setSwitched] = useState(false);
   const state = boardStateOf(resource, preferredDirection);
   const screen = boardScreenOf(state);
-  useBoardVisitEvents({ routeId, screen, latestSuccess: latestSuccessOf(resource) });
+  const { trackStopExpanded } = useBoardVisitEvents({ routeId, screen, latestSuccess: latestSuccessOf(resource) });
 
   function selectDirection(next: Direction) {
-    if (state.status === "ready" && next !== state.direction.id) setSwitched(true);
+    if (state.status === "ready" && next !== state.direction.id) {
+      setSwitched(true);
+      track("direction_switched", { route_id: routeId, to_direction: next });
+    }
     setPreferredDirection(next);
   }
 
@@ -77,6 +83,7 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
         liveVehicles={liveVehicleState.liveVehicles}
         liveMotionDurationMs={liveVehicleState.motionDurationMs}
         onDirectionChange={selectDirection}
+        onStopExpand={(stop, rowPosition) => trackStopExpanded(stop, state.direction.id, rowPosition)}
       />
     );
   }
@@ -117,6 +124,7 @@ function OperatingBoard({
   liveMotionDurationMs,
   switched,
   onDirectionChange,
+  onStopExpand,
 }: OperatingBoardProps) {
   const viewport = useBoardViewport();
   const pageRef = useRef<HTMLDivElement>(null);
@@ -233,6 +241,7 @@ function OperatingBoard({
             scrollRequest={scrollRequest?.direction === direction.id ? scrollRequest : null}
             selectedVehicleKey={selectedVehicleKey}
             onToggle={toggleFromList}
+            onStopExpand={onStopExpand}
             onVehicleSelect={focusVehicleFromList}
           />
         </BoardBottomSheet>

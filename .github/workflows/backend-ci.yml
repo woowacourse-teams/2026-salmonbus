@@ -5,11 +5,19 @@ on:
     branches: [ "dev", "main" ]
     paths:
       - 'backend/**'
+      - 'contract/examples/chat-v1.json'
+      - 'contract/*.openapi.json'
+      - 'docs/api/chat-websocket-public.md'
+      - 'dev/server/api.yml'
       - '.github/workflows/backend-ci.yml'
   pull_request:
     branches: [ "dev", "main" ]
     paths:
       - 'backend/**'
+      - 'contract/examples/chat-v1.json'
+      - 'contract/*.openapi.json'
+      - 'docs/api/chat-websocket-public.md'
+      - 'dev/server/api.yml'
       - '.github/workflows/backend-ci.yml'
 
 concurrency:

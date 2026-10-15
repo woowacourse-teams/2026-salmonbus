@@ -91,6 +91,19 @@ class BasisDigestTest {
     }
 
     @Test
+    void devApiConfigChangesBasisContractAndDigest() throws Exception {
+        var beforeContract = packager.basisContract();
+        var beforeDigest = packager.basisDigest();
+        var beforePreparation = packager.preparationContract();
+
+        Files.writeString(repo.resolve("dev/server/api.yml"), "spring:\n  profiles:\n    include: api-docs-dev\n");
+
+        assertNotEquals(beforeContract, packager.basisContract());
+        assertNotEquals(beforeDigest, packager.basisDigest());
+        assertEquals(beforePreparation, packager.preparationContract());
+    }
+
+    @Test
     void wiremockAndDataContractsRemainVisibleToRuntimeValidation() throws Exception {
         var contract = packager.basisContract();
         Files.writeString(

@@ -1,5 +1,6 @@
-import { style } from "@vanilla-extract/css";
+import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
+import { PHONE_MEDIA } from "./routeSelectLayout";
 
 const moveUp = "transform 400ms cubic-bezier(0.27, 1.05, 0.47, 0.97)";
 const SAFE_AREA_TOP = "env(safe-area-inset-top, 0px)";
@@ -17,9 +18,19 @@ export const page = style({
   backgroundColor: vars.color.brand,
 
   "@media": {
-    "screen and (max-width: 424px)": {
+    [PHONE_MEDIA]: {
+      maxWidth: "none",
       minHeight: ["100vh", "100dvh"],
       borderRadius: 0,
+    },
+  },
+});
+
+// iOS Safari는 상태 표시줄 아래 띠와 주소창 뒤를 html 배경색으로 칠한다. theme-color는 보지 않는다.
+globalStyle(`html:has(${page})`, {
+  "@media": {
+    [PHONE_MEDIA]: {
+      backgroundColor: vars.color.brand,
     },
   },
 });
@@ -57,7 +68,7 @@ export const searchArea = style({
   transition: moveUp,
 
   "@media": {
-    "screen and (max-width: 424px)": {
+    [PHONE_MEDIA]: {
       transform: [
         `translateY(calc(50vh - 138px - (${SAFE_AREA_TOP} + ${SAFE_AREA_BOTTOM}) / 2))`,
         `translateY(calc(50dvh - 138px - (${SAFE_AREA_TOP} + ${SAFE_AREA_BOTTOM}) / 2))`,

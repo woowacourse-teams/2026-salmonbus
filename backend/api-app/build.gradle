@@ -10,6 +10,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-flyway'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
     implementation 'org.mongodb:mongodb-driver-sync'
     runtimeOnly 'org.flywaydb:flyway-database-postgresql'
     runtimeOnly 'org.postgresql:postgresql'
@@ -17,6 +18,7 @@ dependencies {
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
     annotationProcessor 'org.projectlombok:lombok'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'net.bytebuddy:byte-buddy' // 별도 JVM에서 실행하는 선택적 성능 계측 에이전트
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:postgresql'
@@ -32,6 +34,10 @@ springBoot {
 }
 
 tasks.named('test') {
+    environment 'ARRIVALS_ENABLED', 'false'
+    environment 'ROUTE_GEOMETRY_ENABLED', 'false'
+    // 상세 성능 계측은 명시적으로 요청할 때만 실행한다.
+    systemProperty 'arrival.profile', providers.gradleProperty('arrivalProfile').getOrElse('false')
     def apiJar = tasks.named('bootJar').flatMap { it.archiveFile }
     // Worker 프로젝트가 구성된 뒤 실제 Boot JAR 출력 파일을 조회한다.
     def workerJar = providers.provider {
@@ -43,17 +49,40 @@ tasks.named('test') {
         .withPathSensitivity(PathSensitivity.NONE)
     def chatContractExamples = rootProject.file('../contract/examples/chat-v1.json')
     def chatInitScript = rootProject.file('deploy/chat/init-chat-db.js')
+    def geometryRoutesFixture = rootProject.file('../dev/data/routes.json')
+    def arrivalsContract = rootProject.file('../contract/station-arrivals-v2.openapi.json')
+    def geometryContract = rootProject.file('../contract/route-geometry-v2.openapi.json')
     inputs.file(chatContractExamples)
         .withPropertyName('chatContractExamples')
         .withPathSensitivity(PathSensitivity.NONE)
     inputs.file(chatInitScript)
         .withPropertyName('chatInitScript')
         .withPathSensitivity(PathSensitivity.NONE)
+    inputs.file(geometryRoutesFixture)
+        .withPropertyName('geometryRoutesFixture')
+        .withPathSensitivity(PathSensitivity.NONE)
+    inputs.files(arrivalsContract, geometryContract)
+        .withPropertyName('v2OpenApiContracts')
+        .withPathSensitivity(PathSensitivity.NONE)
     doFirst {
         systemProperty 'api.boot.jar', apiJar.get().asFile.absolutePath
         systemProperty 'worker.boot.jar', workerJar.get().asFile.absolutePath
         systemProperty 'chat.contract.examples', chatContractExamples.absolutePath
         systemProperty 'chat.init.script', chatInitScript.absolutePath
+        systemProperty 'geometry.routes.fixture', geometryRoutesFixture.absolutePath
+        systemProperty 'arrival.openapi.contract', arrivalsContract.absolutePath
+        systemProperty 'geometry.openapi.contract', geometryContract.absolutePath
+    }
+}
+
+tasks.named('processResources') {
+    from(rootProject.file('../contract')) {
+        include 'examples/chat-v1.json'
+        into 'api-docs'
+    }
+    from(rootProject.file('../docs/api')) {
+        include 'chat-websocket-public.md'
+        into 'api-docs'
     }
 }
 

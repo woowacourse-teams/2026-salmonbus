@@ -191,6 +191,9 @@ for runtime_module in common api-app worker-app; do
   printf 'initial source\n' > "$RUNTIME_FIXTURE/$runtime_module/src/main/java/Marker.java"
   printf 'module build\n' > "$RUNTIME_FIXTURE/$runtime_module/build.gradle"
 done
+mkdir -p "$RUNTIME_FIXTURE/../contract/examples" "$RUNTIME_FIXTURE/../docs/api"
+printf 'chat example\n' > "$RUNTIME_FIXTURE/../contract/examples/chat-v1.json"
+printf 'chat guide\n' > "$RUNTIME_FIXTURE/../docs/api/chat-websocket-public.md"
 if runtime_source_digest api "$RUNTIME_FIXTURE" >/dev/null \
   && runtime_source_digest worker "$RUNTIME_FIXTURE" >/dev/null; then
   ok "아직 옮기지 않은 모듈 디렉터리가 없어도 기존 소스 지문을 계산한다"
@@ -217,13 +220,16 @@ check_runtime_change() {
 }
 
 # 중앙 목록에서 경로를 얻어 테스트하면 빠뜨린 모듈도 함께 빠진다. 목표 경로를 독립적으로 확인한다.
-for runtime_module in worker-app business/route-catalog business/observations \
+for runtime_module in worker-app business/route-catalog business/observations business/arrivals \
   business/forecasting business/api-call-quota integrations/gbis-client libraries/operation-log; do
   check_runtime_change "$runtime_module/src/main/java/Marker.java" unchanged changed
   check_runtime_change "$runtime_module/src/main/resources/module.properties" unchanged changed
   check_runtime_change "$runtime_module/build.gradle" unchanged changed
 done
 for runtime_path in api-app/src/main/java/Marker.java api-app/src/main/resources/application.yml api-app/build.gradle; do
+  check_runtime_change "$runtime_path" changed unchanged
+done
+for runtime_path in ../contract/examples/chat-v1.json ../docs/api/chat-websocket-public.md; do
   check_runtime_change "$runtime_path" changed unchanged
 done
 for runtime_path in common/src/main/java/Marker.java common/src/main/resources/db/migration/V17__fixture.sql \
@@ -241,8 +247,12 @@ check_runtime_change "business/forecasting/src/main/resources/file with spaces.p
 
 mkdir -p "$WORK/another-checkout"
 cp -a "$RUNTIME_FIXTURE" "$WORK/another-checkout/backend"
+cp -a "$RUNTIME_FIXTURE/../contract" "$WORK/another-checkout/contract"
+cp -a "$RUNTIME_FIXTURE/../docs" "$WORK/another-checkout/docs"
 [ "$(runtime_source_digest worker "$RUNTIME_FIXTURE")" = "$(runtime_source_digest worker "$WORK/another-checkout/backend")" ] \
   && ok "checkout 위치가 달라도 같은 입력의 지문은 같다" || bad "checkout 위치가 소스 지문에 영향을 준다"
+[ "$(runtime_source_digest api "$RUNTIME_FIXTURE")" = "$(runtime_source_digest api "$WORK/another-checkout/backend")" ] \
+  && ok "외부 문서를 포함해도 API 지문은 checkout 위치와 무관하다" || bad "외부 문서가 API 지문의 checkout 위치를 바꾼다"
 if runtime_source_digest maintenance "$RUNTIME_FIXTURE" > "$WORK/unknown-component.out" 2>&1; then
   bad "배포하지 않는 컴포넌트의 서버 지문을 허용했다"
 else

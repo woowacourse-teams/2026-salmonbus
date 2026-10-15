@@ -1,0 +1,717 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Salmonbus station arrivals",
+    "version": "2.0.0",
+    "description": "SAL-176. 정류장 공유 수신 결과를 선택 노선·방문으로 필터링한다. ratio는 후속 범위."
+  },
+  "paths": {
+    "/api/v2/stations/{stationId}/arrivals": {
+      "get": {
+        "operationId": "getStationArrivals",
+        "description": "referenceVersionId와 stopSequence는 함께 사용하고 routeId가 필요하다.",
+        "parameters": [
+          {
+            "name": "stationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{9}$"
+            }
+          },
+          {
+            "name": "routeId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{9}$"
+            }
+          },
+          {
+            "name": "referenceVersionId",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "format": "int64"
+            }
+          },
+          {
+            "name": "stopSequence",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "정상 조회. 수집 중/만료/제한은 본문 상태로 구별한다. 예시는 합성 값이다.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StationArrivals"
+                },
+                "examples": {
+                  "ready": {
+                    "value": {
+                      "stationId": "206000637",
+                      "generatedAt": "2026-10-14T12:00:10+09:00",
+                      "status": "READY",
+                      "reason": null,
+                      "snapshot": {
+                        "snapshotId": "00000000-0000-0000-0000-000000000001",
+                        "receivedAt": "2026-10-14T12:00:00+09:00",
+                        "sourceObservedAt": null,
+                        "sourceQueryTime": "2026-10-14 12:00:00",
+                        "refreshAfterAt": "2026-10-14T12:00:40+09:00",
+                        "staleAt": "2026-10-14T12:01:00+09:00"
+                      },
+                      "refresh": {
+                        "status": "IDLE",
+                        "reason": null,
+                        "suggestedRefreshAt": "2026-10-14T12:00:40+09:00"
+                      },
+                      "routes": [
+                        {
+                          "routeId": "204000057",
+                          "name": "3330",
+                          "targetVisit": {
+                            "referenceVersionId": "7",
+                            "stopSequence": 22,
+                            "sourceStopOrder": 22,
+                            "matchStatus": "MATCHED",
+                            "direction": "UP"
+                          },
+                          "status": "READY",
+                          "reason": null,
+                          "arrivals": [
+                            {
+                              "vehicleId": "example-vehicle-1",
+                              "ordinal": 1,
+                              "remainingStops": 3,
+                              "eta": {
+                                "status": "AVAILABLE",
+                                "reason": null,
+                                "resolution": "SECONDS",
+                                "estimateBaseAt": "2026-10-14T12:00:00+09:00",
+                                "baseKind": "RECEIVED_AT_APPROXIMATION",
+                                "expectedArrivalAt": "2026-10-14T12:03:00+09:00",
+                                "remainingSeconds": 170
+                              },
+                              "currentSeat": {
+                                "kind": "EXACT",
+                                "remaining": 0,
+                                "reason": null
+                              },
+                              "congestionCode": null,
+                              "vehicleTypeCode": 0,
+                              "taglessSupported": false
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "collecting": {
+                    "value": {
+                      "stationId": "206000637",
+                      "generatedAt": "2026-10-14T12:00:10+09:00",
+                      "status": "UNAVAILABLE",
+                      "reason": "NOT_COLLECTED",
+                      "snapshot": null,
+                      "refresh": {
+                        "status": "RUNNING",
+                        "reason": "COLLECTING",
+                        "suggestedRefreshAt": "2026-10-14T12:00:12+09:00"
+                      },
+                      "routes": []
+                    }
+                  },
+                  "noPrediction": {
+                    "summary": "수신 결과는 유효하지만 해당 방문의 도착 예측이 없음",
+                    "value": {
+                      "stationId": "206000637",
+                      "generatedAt": "2026-10-14T12:00:10+09:00",
+                      "status": "NO_PREDICTION",
+                      "reason": null,
+                      "snapshot": {
+                        "snapshotId": "00000000-0000-0000-0000-000000000001",
+                        "receivedAt": "2026-10-14T12:00:00+09:00",
+                        "sourceObservedAt": null,
+                        "sourceQueryTime": "2026-10-14 12:00:00",
+                        "refreshAfterAt": "2026-10-14T12:00:40+09:00",
+                        "staleAt": "2026-10-14T12:01:00+09:00"
+                      },
+                      "refresh": {
+                        "status": "IDLE",
+                        "reason": null,
+                        "suggestedRefreshAt": "2026-10-14T12:00:40+09:00"
+                      },
+                      "routes": [
+                        {
+                          "routeId": "204000057",
+                          "name": "3330",
+                          "targetVisit": {
+                            "referenceVersionId": "7",
+                            "stopSequence": 22,
+                            "sourceStopOrder": 22,
+                            "matchStatus": "MATCHED",
+                            "direction": "UP"
+                          },
+                          "status": "NO_PREDICTION",
+                          "reason": null,
+                          "arrivals": []
+                        }
+                      ]
+                    }
+                  },
+                  "stale": {
+                    "summary": "기존 수신 결과가 만료되어 표시할 수 없고 갱신 중",
+                    "value": {
+                      "stationId": "206000637",
+                      "generatedAt": "2026-10-14T12:01:01+09:00",
+                      "status": "UNAVAILABLE",
+                      "reason": "STALE",
+                      "snapshot": {
+                        "snapshotId": "00000000-0000-0000-0000-000000000001",
+                        "receivedAt": "2026-10-14T12:00:00+09:00",
+                        "sourceObservedAt": null,
+                        "sourceQueryTime": "2026-10-14 12:00:00",
+                        "refreshAfterAt": "2026-10-14T12:00:40+09:00",
+                        "staleAt": "2026-10-14T12:01:00+09:00"
+                      },
+                      "refresh": {
+                        "status": "RUNNING",
+                        "reason": "COLLECTING",
+                        "suggestedRefreshAt": "2026-10-14T12:01:03+09:00"
+                      },
+                      "routes": []
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "입력 형식·필터 조합 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "지원하지 않는 정류장 또는 노선",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "노선 판본·정류장 방문 충돌",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "RDS 연결 또는 조회 불가",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "지원하지 않는 HTTP 메서드",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "code": "METHOD_NOT_ALLOWED",
+                  "message": "이 경로에서 지원하지 않는 요청 방식입니다.",
+                  "requestId": "example-request"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "요청 처리 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "code": "INTERNAL_ERROR",
+                  "message": "요청을 처리하지 못했습니다.",
+                  "requestId": "example-request"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "StationArrivals": {
+        "type": "object",
+        "required": [
+          "stationId",
+          "generatedAt",
+          "status",
+          "reason",
+          "snapshot",
+          "refresh",
+          "routes"
+        ],
+        "properties": {
+          "stationId": {
+            "type": "string",
+            "pattern": "^[0-9]{9}$"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "READY",
+              "NO_PREDICTION",
+              "UNAVAILABLE"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "snapshot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Snapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refresh": {
+            "$ref": "#/components/schemas/Refresh"
+          },
+          "routes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Route"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "Snapshot": {
+        "type": "object",
+        "required": [
+          "snapshotId",
+          "receivedAt",
+          "sourceObservedAt",
+          "sourceQueryTime",
+          "refreshAfterAt",
+          "staleAt"
+        ],
+        "properties": {
+          "snapshotId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "receivedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sourceObservedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "sourceQueryTime": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "refreshAfterAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "staleAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Refresh": {
+        "type": "object",
+        "required": [
+          "status",
+          "reason",
+          "suggestedRefreshAt"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "IDLE",
+              "RUNNING",
+              "BLOCKED",
+              "FAILED"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "suggestedRefreshAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TargetVisit": {
+        "type": "object",
+        "required": [
+          "referenceVersionId",
+          "stopSequence",
+          "sourceStopOrder",
+          "matchStatus",
+          "direction"
+        ],
+        "properties": {
+          "referenceVersionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stopSequence": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          },
+          "sourceStopOrder": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "matchStatus": {
+            "type": "string",
+            "enum": [
+              "MATCHED",
+              "UNVERIFIED"
+            ]
+          },
+          "direction": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "UP",
+              "DOWN",
+              null
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "Route": {
+        "type": "object",
+        "required": [
+          "routeId",
+          "name",
+          "targetVisit",
+          "status",
+          "reason",
+          "arrivals"
+        ],
+        "properties": {
+          "routeId": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "targetVisit": {
+            "$ref": "#/components/schemas/TargetVisit"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "READY",
+              "NO_PREDICTION",
+              "UNAVAILABLE"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "arrivals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Vehicle"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "Vehicle": {
+        "type": "object",
+        "required": [
+          "vehicleId",
+          "ordinal",
+          "remainingStops",
+          "eta",
+          "currentSeat",
+          "congestionCode",
+          "vehicleTypeCode",
+          "taglessSupported"
+        ],
+        "properties": {
+          "vehicleId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ordinal": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2
+          },
+          "remainingStops": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "eta": {
+            "$ref": "#/components/schemas/Eta"
+          },
+          "currentSeat": {
+            "$ref": "#/components/schemas/Seat"
+          },
+          "congestionCode": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 4
+          },
+          "vehicleTypeCode": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "taglessSupported": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "Eta": {
+        "type": "object",
+        "required": [
+          "status",
+          "reason",
+          "resolution",
+          "estimateBaseAt",
+          "baseKind",
+          "expectedArrivalAt",
+          "remainingSeconds"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "AVAILABLE",
+              "UNAVAILABLE"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "SECONDS",
+              "MINUTES"
+            ]
+          },
+          "estimateBaseAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "baseKind": {
+            "type": "string",
+            "const": "RECEIVED_AT_APPROXIMATION"
+          },
+          "expectedArrivalAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "remainingSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "Seat": {
+        "type": "object",
+        "required": [
+          "kind",
+          "remaining",
+          "reason"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "EXACT",
+              "UNKNOWN"
+            ]
+          },
+          "remaining": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "requestId"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "x-behavior": {
+    "sourceKey": [
+      "GBIS",
+      "ARRIVAL_LIST_V2",
+      "stationId"
+    ],
+    "filterDoesNotCreateAnotherSourceCall": true,
+    "normalRefreshSeconds": 40,
+    "validitySeconds": 60,
+    "httpMaximumCacheSeconds": 5,
+    "initialCollectionPollHintSeconds": 2,
+    "retryBackoffSeconds": [
+      40,
+      80,
+      160,
+      300
+    ],
+    "dataStateAndRefreshStateAreIndependent": true,
+    "sourceObservedAtIsUnknown": true,
+    "etaBase": "수신시각 근사. GPS 관측/ETA 산출시각으로 해석하지 않는다.",
+    "clientPolling": "HTTP max-age를 재조회 간격으로 사용하지 않는다. refresh.suggestedRefreshAt과 staleAt을 Date/Age로 보정한다. 카운트다운은 expectedArrivalAt으로 계산.",
+    "pastExpectedArrival": "실제 도착으로 확정하지 않고 해당 eta를 UNAVAILABLE로 반환한다.",
+    "noAutomaticSubscription": true
+  },
+  "x-runtime": {
+    "activeArrivalWorkers": 1,
+    "executionState": "Worker 메모리. Caffeine/Redis/Kafka/DB 작업 상태 테이블 없음.",
+    "queueCapacity": 8,
+    "sourceConcurrency": 1,
+    "queueWaitSeconds": 2,
+    "startupGraceSeconds": 40,
+    "pacing": "전체 예산/86400 회를 초당 보충하는 토큰 버킷. 초기 버스트는 대기열 크기.",
+    "dailyLimit": 40000,
+    "keyDailyMaximum": 10000,
+    "persistence": "arrival_snapshot에 정상 결과만 INSERT. 작업 UUID로 저장 재시도 중복 방지. 별도 시도 기록 없음.",
+    "retention": "만료 후 10분이 지난 수신 결과를 60초마다 최대 500건 삭제. DELETE/vacuum 비용 관찰 필요.",
+    "workerHandoff": "비중첩 재기동과 단일 활성 수집 Worker가 전제. 다중 Worker 공유 소유권은 후속 범위."
+  },
+  "x-deployment": {
+    "defaultEnabled": false,
+    "enable": "API와 Worker에 ARRIVALS_ENABLED=true 및 동일 ARRIVAL_INTERNAL_TOKEN. 기존 GBIS 키의 도착 서비스 승인 한도 확인.",
+    "internalEndpoint": "POST /internal/arrivals/refresh. Worker loopback 및 X-Arrival-Token 인증.",
+    "apiWorkerBaseUrl": "ARRIVAL_WORKER_BASE_URL (기본 http://127.0.0.1:8081)",
+    "cloudFront": "stationId 경로와 routeId/referenceVersionId/stopSequence 쿼리 전달·캐시 키를 배포 전에 검증해야 한다.",
+    "migration": "최신 dev 기준 V32. 미병합 PR97의 V32 이후 마이그레이션과 병합 순서·번호 조정 필요."
+  }
+}

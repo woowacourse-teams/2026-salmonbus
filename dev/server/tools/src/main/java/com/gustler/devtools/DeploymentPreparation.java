@@ -137,7 +137,9 @@ final class DeploymentPreparation {
 
     private void stopApplications() throws Exception {
         for (var component : List.of("worker", "api")) {
-            host.run("systemctl", "stop", "salmonbus-" + component);
+            // Allow systemd's 45-second worker shutdown to complete before timing out.
+            host.run(Path.of("/"), null, Duration.ofSeconds(75),
+                    List.of("systemctl", "stop", "salmonbus-" + component)).checked();
         }
         DataPreparation.requireStopped(host, "STOP_DEV_APPS_BEFORE_PREPARATION");
     }
