@@ -33,4 +33,18 @@ class VehicleFreshnessPolicyTest {
         assertThat(policy.isStale(boundary)).isFalse();
         assertThat(policy.isStale(exceeded)).isTrue();
     }
+
+    @Test
+    void 심야_관측의_staleAt은_UTC_입력과_4시_이후_조회에서도_10분이다() {
+        var observedAt = OffsetDateTime.parse("2026-10-15T18:59:00Z");
+        var atExpiry = new VehicleFreshnessPolicy(Clock.fixed(
+            Instant.parse("2026-10-15T19:09:00Z"), ZoneId.of("UTC")));
+        var staleAt = atExpiry.staleAt(observedAt);
+
+        assertThat(staleAt).isEqualTo(OffsetDateTime.parse("2026-10-15T19:09:00Z"));
+        assertThat(atExpiry.isStale(staleAt)).isFalse();
+        assertThat(new VehicleFreshnessPolicy(Clock.fixed(
+            Instant.parse("2026-10-15T19:09:00.000000001Z"), ZoneId.of("UTC")))
+            .isStale(staleAt)).isTrue();
+    }
 }

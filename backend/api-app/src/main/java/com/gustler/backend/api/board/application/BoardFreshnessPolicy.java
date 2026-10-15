@@ -1,5 +1,6 @@
 package com.gustler.backend.api.board.application;
 
+import com.gustler.backend.api.observation.ObservationFreshness;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -11,7 +12,8 @@ import org.springframework.stereotype.Component;
 public class BoardFreshnessPolicy {
 
     /**
-     * 조회가 최신으로 인정하는 관측의 나이다. worker 의 {@code forecast.staleness} 와 짝이다.
+     * 조회가 최신으로 인정하는 관측의 최대 나이다. 심야 관측은 10분, 그 외는 5분이다.
+     * worker 의 {@code forecast.staleness} 와 짝이다.
      *
      * <p>관계는 등호가 아니라 <b>예보 창 ≥ 조회 창</b>이다. 예보 창이 이보다 짧으면 그 사이 관측은
      * 영영 발행되지 않아 보드가 집을 최신 발행이 없어진다. 넓히는 쪽은 계약이 허용하지만 공짜가
@@ -20,14 +22,14 @@ public class BoardFreshnessPolicy {
      * 모듈이 갈려 상수를 안 나눠 쓰고, 두 값의 관계는 BoardFreshnessContractTest 가 worker 의
      * 실행 JAR 을 읽어 고정한다.
      */
-    static final Duration FRESHNESS_WINDOW = Duration.ofMinutes(5);
+    static final Duration FRESHNESS_WINDOW = ObservationFreshness.MAX_WINDOW;
 
     private final Clock clock;
 
     public OffsetDateTime staleAt(
         OffsetDateTime observedAt
     ) {
-        return observedAt.plus(FRESHNESS_WINDOW);
+        return ObservationFreshness.staleAt(observedAt);
     }
 
     public boolean isStale(
