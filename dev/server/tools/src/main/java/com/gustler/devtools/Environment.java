@@ -104,11 +104,15 @@ final class Environment {
                             FileOps.privateText(directory.resolve(entry.getKey() + ".env")),
                             entry.getValue()));
         }
-        validate(values);
+        validate(values, DatabaseTarget.url(directory));
         return values;
     }
 
     static void validate(Map<String, Map<String, String>> settings) {
+        validate(settings, DATABASE);
+    }
+
+    static void validate(Map<String, Map<String, String>> settings, String database) {
         var postgres = settings.get("postgres");
         var api = settings.get("api");
         var worker = settings.get("worker");
@@ -121,7 +125,7 @@ final class Environment {
         Checks.require(password != null && password.matches("[0-9a-f]{48}"), "DEV_PASSWORD");
         for (var app : java.util.List.of(api, worker)) {
             Checks.require(
-                    DATABASE.equals(app.get("DB_URL"))
+                    database.equals(app.get("DB_URL"))
                             && "salmonbus_dev".equals(app.get("DB_USERNAME"))
                             && password.equals(app.get("DB_PASSWORD")),
                     "DEV_DATABASE");

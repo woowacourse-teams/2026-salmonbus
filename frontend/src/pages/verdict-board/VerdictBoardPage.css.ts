@@ -1,6 +1,9 @@
 import { style } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 
+const SAFE_AREA_TOP = "env(safe-area-inset-top, 0px)";
+const SAFE_AREA_BOTTOM = "env(safe-area-inset-bottom, 0px)";
+
 export const page = style({
   display: "flex",
   flexDirection: "column",
@@ -18,7 +21,7 @@ export const content = style({
   width: "100%",
   maxWidth: "430px",
   margin: "0 auto",
-  padding: "22px 18px 32px",
+  padding: `calc(22px + ${SAFE_AREA_TOP}) 18px calc(32px + ${SAFE_AREA_BOTTOM})`,
 });
 
 // 헤더와 방향 탭은 스크롤 밖에 둔다. 목록만 카드 안에서 움직여야 탭과 카드 사이 여백이 남는다.

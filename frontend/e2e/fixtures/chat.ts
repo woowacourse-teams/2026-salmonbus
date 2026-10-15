@@ -48,7 +48,7 @@ export const test = apiTest.extend<{ chat: ChatMock }>({
         if (request.resourceType() === "script") chat.scripts.push(request.url());
       });
 
-      await page.route("**/api/**", async (route) => {
+      await api.route(async (route) => {
         const request = route.request();
         const path = new URL(request.url()).pathname;
         if (path.startsWith("/api/chat/")) chat.requests.push(`${request.method()} ${path}`);

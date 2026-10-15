@@ -30,6 +30,12 @@ final class Packager {
         FileOps.mode(destination, destination.toString().endsWith(".sh") ? 0755 : 0644);
     }
 
+    static void embedBasis(Path basis, Path application) throws Exception {
+        for (var name : RevisionStore.inventory(basis).keySet()) {
+            copy(basis.resolve(name), application.resolve("basis").resolve(name));
+        }
+    }
+
     String digest(List<Path> inputs) throws Exception {
         var files = new TreeMap<String, Path>();
         for (var input : inputs) {
@@ -71,6 +77,7 @@ final class Packager {
                 repo.resolve("dev/server/tools/settings.gradle"),
                 repo.resolve("dev/server/api.yml"),
                 repo.resolve("dev/server/worker.yml"),
+                repo.resolve("dev/server/replay.json"),
                 repo.resolve("dev/server/compose.yaml"),
                 repo.resolve("dev/server/init-chat.js"),
                 repo.resolve("dev/server/wiremock.Dockerfile"),
@@ -81,8 +88,7 @@ final class Packager {
                 repo.resolve("dev/data/catalog-routes.json"),
                 repo.resolve("dev/data/model-reference"),
                 repo.resolve("dev/wiremock/mappings"),
-                repo.resolve("dev/wiremock-extension/src/main"),
-                repo.resolve("dev/scenarios/replay.json"));
+                repo.resolve("dev/wiremock-extension/src/main"));
     }
 
     String basisContract() throws Exception {
@@ -221,7 +227,7 @@ final class Packager {
         for (var name : List.of("routes.json", "catalog-routes.json")) {
             copy(repo.resolve("dev/data/" + name), output.resolve("data/" + name));
         }
-        copy(repo.resolve("dev/scenarios/replay.json"), output.resolve("replay.json"));
+        copy(repo.resolve("dev/server/replay.json"), output.resolve("replay.json"));
     }
 
     void assemble(Path output, Path archive, String commit, final boolean review) throws Exception {
@@ -294,7 +300,11 @@ final class Packager {
                 copy(
                         repo.resolve("dev/server/deploy/appspec-" + component + ".yml"),
                         directory.resolve("appspec.yml"));
-                for (var name : List.of("common.sh", "preflight.sh", "install.sh")) {
+                if (component.equals("api")) {
+                    embedBasis(basis, directory);
+                }
+                for (var name : List.of("common.sh", "guard.sh", "preflight.sh", "preflight-body.sh",
+                        "install.sh", "install-body.sh", "start.sh", "validate.sh")) {
                     copy(
                             repo.resolve("dev/server/deploy/" + name),
                             directory.resolve("scripts/" + name));
@@ -306,7 +316,7 @@ final class Packager {
                                     "scripts/"
                                             + (name.equals("common.sh")
                                                     ? "production-common.sh"
-                                                    : name)));
+                                                    : name.replace(".sh", "-body.sh"))));
                 }
                 var unit = "systemd/salmonbus-" + component + ".service";
                 copy(repo.resolve("dev/server/" + unit), directory.resolve(unit));
