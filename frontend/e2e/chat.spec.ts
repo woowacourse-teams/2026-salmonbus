@@ -744,6 +744,36 @@ test.describe("1024px 화면", () => {
   });
 });
 
+test.describe("판정보드 시트 애니메이션", () => {
+  test.use({ viewport: { width: 1440, height: 900 }, reducedMotion: "no-preference" });
+
+  test("판정보드 시트를 조절해도 채팅 패널이 목록을 따라가고 ResizeObserver 에러가 없다", async ({ page, chat }) => {
+    chat.enabled = true;
+    await page.addInitScript(() => {
+      const errors: string[] = [];
+      Object.assign(window, { __resizeObserverErrors: errors });
+      window.addEventListener("error", (event) => {
+        if (event.message.startsWith("ResizeObserver loop")) errors.push(event.message);
+      });
+    });
+    await openReadyChat(page, chat.sockets, 0);
+    await page.clock.resume();
+
+    const boardSheet = page.getByRole("region", { name: "판정보드", exact: true });
+    const handle = page.getByRole("slider", { name: "판정보드 높이" });
+    for (const key of ["Home", "ArrowUp", "End", "ArrowDown", "Home", "End"]) {
+      await handle.press(key);
+      await boardSheet.evaluate(async (element) => {
+        await Promise.all(element.getAnimations().map((animation) => animation.finished));
+      });
+      expect(
+        await page.evaluate(() => (window as unknown as { __resizeObserverErrors: string[] }).__resizeObserverErrors),
+      ).toEqual([]);
+      if (key !== "Home") await expect.poll(() => panelOffsetFromCard(page)).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
 test("이름을 받기 전에 연결에 실패하면 불러오는 중 표시와 이름 준비 문구를 거둔다", async ({ page, chat }) => {
   // given
   chat.enabled = true;

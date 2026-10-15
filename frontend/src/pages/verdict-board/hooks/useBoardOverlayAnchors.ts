@@ -5,13 +5,15 @@ import type { BoardSheetSnap } from "../components/boardSheetPolicy";
 export function useBoardOverlayAnchors(
   pageRef: RefObject<HTMLDivElement | null>,
   snap: BoardSheetSnap,
-  sheetHeight: number,
   viewportHeight: number,
 ) {
   useLayoutEffect(() => {
     const page = pageRef.current;
     if (page === null) return;
+    const sheet = page.querySelector<HTMLElement>('[aria-label="판정보드"]');
+    if (sheet === null) return;
     const style = document.documentElement.style;
+    let frame: number | null = null;
     const properties = [
       "--board-chat-top",
       "--board-chat-left",
@@ -23,10 +25,10 @@ export function useBoardOverlayAnchors(
     ];
     const previous = properties.map((name) => ({ name, value: style.getPropertyValue(name) }));
     const update = () => {
+      frame = null;
       const pageBounds = page.getBoundingClientRect();
-      const sheet = page.querySelector<HTMLElement>('[aria-label="판정보드"]');
       const list = page.querySelector<HTMLElement>('[aria-label="판정보드 정류장 목록"]');
-      const sheetTop = sheet?.getBoundingClientRect().top ?? pageBounds.top + viewportHeight - sheetHeight;
+      const sheetTop = sheet.getBoundingClientRect().top;
       style.setProperty("--board-chat-top", `${snap === "full" ? sheetTop + 29 : sheetTop - 52}px`);
       style.setProperty("--board-chat-left", snap === "full" ? "auto" : "18px");
       style.setProperty("--board-chat-right", snap === "full" ? "18px" : "auto");
@@ -41,16 +43,19 @@ export function useBoardOverlayAnchors(
       }
     };
     update();
-    const observer = new ResizeObserver(update);
+    // 채팅 영역의 크기 변경은 ResizeObserver 알림이 끝난 다음 프레임에 반영한다.
+    const observer = new ResizeObserver(() => {
+      if (frame === null) frame = window.requestAnimationFrame(update);
+    });
     observer.observe(page);
-    const sheet = page.querySelector('[aria-label="판정보드"]');
-    if (sheet !== null) observer.observe(sheet);
+    observer.observe(sheet);
     return () => {
       observer.disconnect();
+      if (frame !== null) window.cancelAnimationFrame(frame);
       previous.forEach(({ name, value }) => {
         if (value === "") style.removeProperty(name);
         else style.setProperty(name, value);
       });
     };
-  }, [pageRef, snap, sheetHeight, viewportHeight]);
+  }, [pageRef, snap, viewportHeight]);
 }
