@@ -121,11 +121,27 @@ export const test = apiTest.extend<{
                 const bounds = this.element.getBoundingClientRect();
                 this.animateZoom(1, new MapPoint(event.clientX - bounds.left, event.clientY - bounds.top));
               };
+              let lastTouchAt = -Infinity;
+              const onClick = (event: MouseEvent) => {
+                // 터치 입력은 tap으로 전달하고 뒤따르는 합성 click은 중복 전달하지 않는다.
+                if (event.timeStamp - lastTouchAt < 500) return;
+                this.emit("click");
+              };
+              const onTap = (event: TouchEvent) => {
+                lastTouchAt = event.timeStamp;
+                // 실제 SDK의 지도 이벤트는 클릭 가능한 마커에서 발생하지 않는다.
+                if ((event.target as Element | null)?.closest("button")) return;
+                this.emit("tap");
+              };
               element.addEventListener("wheel", onWheel, { passive: false });
               element.addEventListener("dblclick", onDoubleClick);
+              element.addEventListener("click", onClick);
+              element.addEventListener("touchend", onTap);
               this.removeInputListeners = () => {
                 element.removeEventListener("wheel", onWheel);
                 element.removeEventListener("dblclick", onDoubleClick);
+                element.removeEventListener("click", onClick);
+                element.removeEventListener("touchend", onTap);
               };
               this.setSize(this.size);
               (window as unknown as TestMapWindow).__naverMapTest = {
