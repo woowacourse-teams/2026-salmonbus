@@ -12,11 +12,17 @@ import com.gustler.backend.api.board.support.BoardDatabaseFixture;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture.RouteContext;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
@@ -26,6 +32,7 @@ import org.springframework.web.context.WebApplicationContext;
 
 @IntegrationTest
 @Transactional
+@Import(BoardApiContractTest.FixedClockConfig.class)
 class BoardApiContractTest {
 
     private static final String ROUTE_ID = "204000057";
@@ -640,5 +647,14 @@ class BoardApiContractTest {
             expectedSeats,
             observedAt.plusSeconds(1)
         );
+    }
+    @TestConfiguration(proxyBeanMethods = false)
+    static class FixedClockConfig {
+
+        @Bean
+        @Primary
+        Clock fixedDaytimeBoardClock() {
+            return Clock.fixed(Instant.parse("2026-08-27T03:00:00Z"), ZoneId.of("Asia/Seoul"));
+        }
     }
 }

@@ -5,6 +5,7 @@ import type { LiveVehicleMotionStore } from "../hooks/useLiveVehicleMotion";
 import type { StopSelection } from "./stopSelection";
 import { LOADING_NOTICE, LOAD_FAILED_NOTICE, OUT_OF_SERVICE_NOTICE } from "./verdictCopy";
 import { StopList } from "./StopList";
+import type { StationArrivalDetails } from "./stationArrivalPolicy";
 import * as styles from "./StopBoard.css";
 
 type NoticeStatus = "loading" | "error" | "outOfService";
@@ -20,6 +21,7 @@ type StopBoardProps =
       selectedSequence: number | null;
       scrollRequest: StopSelection | null;
       selectedVehicleKey: string | null;
+      stationArrivals: StationArrivalDetails | null;
       onToggle: (sequence: number) => void;
       onVehicleSelect: (key: string) => void;
       onStopExpand: (stop: ExpandableStopView, rowPosition: number) => void;
@@ -44,6 +46,7 @@ export function StopBoard(props: StopBoardProps) {
           selectedSequence={props.selectedSequence}
           scrollRequest={props.scrollRequest}
           selectedVehicleKey={props.selectedVehicleKey}
+          stationArrivals={props.stationArrivals}
           onToggle={props.onToggle}
           onVehicleSelect={props.onVehicleSelect}
           scrollContainerRef={scrollContainerRef}

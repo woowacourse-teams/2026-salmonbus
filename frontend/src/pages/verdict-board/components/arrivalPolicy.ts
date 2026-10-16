@@ -1,16 +1,19 @@
 import type { ApproachingVehicle } from "@/shared/api/routeForecast.types";
 import { toSeatEstimate, toSeatLevel, type SeatEstimate, type SeatLevel } from "./seatGrade";
 
-export interface AvailableArrival {
-  kind: "available";
+interface ArrivalBase {
+  vehicleId: string | null;
   stopsAway: number;
+}
+
+export interface AvailableArrival extends ArrivalBase {
+  kind: "available";
   level: SeatLevel;
   seatEstimate: SeatEstimate;
 }
 
-export interface UnavailableArrival {
+export interface UnavailableArrival extends ArrivalBase {
   kind: "unavailable";
-  stopsAway: number;
   level?: never;
   seatEstimate?: never;
 }
@@ -36,16 +39,18 @@ export function arrivalToneFor(arrival: ArrivalView): ArrivalTone {
 }
 
 function toArrivalView(vehicle: ApproachingVehicle): ArrivalView {
-  const { horizonStops, forecast } = vehicle;
+  const { vehicleId, horizonStops, forecast } = vehicle;
   if (forecast.status !== "AVAILABLE") {
     return {
       kind: "unavailable",
+      vehicleId,
       stopsAway: horizonStops,
     };
   }
 
   return {
     kind: "available",
+    vehicleId,
     stopsAway: horizonStops,
     level: toSeatLevel(forecast.seatAvailableProbability),
     seatEstimate: toSeatEstimate(forecast.expectedSeats),

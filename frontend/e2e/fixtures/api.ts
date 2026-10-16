@@ -1,8 +1,9 @@
 import { test as base, expect } from "@playwright/test";
 import { createApiMockRouter, type ApiMockRouter } from "./api-mock-router";
 import { apiPaths, createApiData, observedAt, pollIntervalMs, routeId } from "./mock-data";
+import { createStationArrivalsData } from "./station-arrivals";
 
-type Endpoint = keyof typeof apiPaths;
+type Endpoint = keyof typeof apiPaths | "arrivals";
 type ResponseMode = "success" | "network-error";
 
 interface MockApi {
@@ -10,6 +11,7 @@ interface MockApi {
   data: ReturnType<typeof createApiData>;
   mode: Record<Endpoint, ResponseMode>;
   requests: Record<Endpoint, number>;
+  arrivalRequests: URL[];
   cacheMaxAgeSeconds: number;
 }
 
@@ -28,25 +30,28 @@ export const test = base.extend<{ api: MockApi }>({
       const api: MockApi = {
         route: router.route,
         data: createApiData(),
-        mode: { routes: "success", board: "success", vehicles: "success", geometry: "success" },
-        requests: { routes: 0, board: 0, vehicles: 0, geometry: 0 },
+        mode: { routes: "success", board: "success", vehicles: "success", geometry: "success", arrivals: "success" },
+        requests: { routes: 0, board: 0, vehicles: 0, geometry: 0, arrivals: 0 },
+        arrivalRequests: [],
         cacheMaxAgeSeconds: pollIntervalMs / 1_000,
       };
       const unexpectedRequests: string[] = [];
 
       await api.route(async (route) => {
         const request = route.request();
-        const path = new URL(request.url()).pathname;
+        const url = new URL(request.url());
+        const path = url.pathname;
         if (request.method() === "GET" && /^\/api\/chat\/rooms\/[^/]+$/.test(path)) {
           await route.fulfill({ status: 404, headers: { "Cache-Control": "no-store" } });
           return;
         }
         // 채팅 테스트가 가상 노선을 재사용하므로 geometry도 요청한 노선 ID로 응답한다.
         const geometryRoute = /^\/api\/v2\/routes\/([^/]+)\/geometry$/.exec(path)?.[1];
-        const endpoint =
-          geometryRoute === undefined
-            ? (Object.keys(apiPaths) as Endpoint[]).find((key) => apiPaths[key] === path)
-            : "geometry";
+        const endpoint: Endpoint | undefined = /^\/api\/v2\/stations\/[^/]+\/arrivals$/.test(path)
+          ? "arrivals"
+          : geometryRoute !== undefined
+            ? "geometry"
+            : (Object.keys(apiPaths) as (keyof typeof apiPaths)[]).find((key) => apiPaths[key] === path);
         if (endpoint === undefined || request.method() !== "GET") {
           unexpectedRequests.push(`${request.method()} ${path}`);
           await route.abort();
@@ -54,6 +59,7 @@ export const test = base.extend<{ api: MockApi }>({
         }
 
         api.requests[endpoint] += 1;
+        if (endpoint === "arrivals") api.arrivalRequests.push(url);
         if (api.mode[endpoint] === "network-error") {
           await route.abort("failed");
           return;
@@ -66,12 +72,14 @@ export const test = base.extend<{ api: MockApi }>({
           headers: {
             Date: new Date(now).toUTCString(),
             Age: "0",
-            "Cache-Control": `public, max-age=${api.cacheMaxAgeSeconds}`,
+            "Cache-Control": `public, max-age=${endpoint === "arrivals" ? 5 : api.cacheMaxAgeSeconds}`,
           },
           json:
-            endpoint === "geometry" && geometryRoute !== undefined && geometryRoute !== routeId
-              ? { ...api.data.geometry, routeId: decodeURIComponent(geometryRoute) }
-              : api.data[endpoint],
+            endpoint === "arrivals"
+              ? (api.data.arrivals ?? createStationArrivalsData(url, now))
+              : endpoint === "geometry" && geometryRoute !== undefined && geometryRoute !== routeId
+                ? { ...api.data.geometry, routeId: decodeURIComponent(geometryRoute) }
+                : api.data[endpoint],
         });
       });
 

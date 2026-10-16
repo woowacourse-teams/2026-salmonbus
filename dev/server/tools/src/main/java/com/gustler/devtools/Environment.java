@@ -105,6 +105,7 @@ final class Environment {
                             entry.getValue()));
         }
         validate(values, DatabaseTarget.url(directory));
+        ArrivalSettings.validateIfPresent(directory);
         return values;
     }
 
@@ -184,6 +185,8 @@ final class Environment {
                         "MODEL_",
                         "COLLECTION_",
                         "FORECAST_",
+                        "ARRIVAL_",
+                        "ARRIVALS_",
                         "JAVA_",
                         "JDK_",
                         "_JAVA_",

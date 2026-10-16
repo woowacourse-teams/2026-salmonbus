@@ -30,6 +30,27 @@ class BoardFreshnessPolicyTest {
         assertThat(policy.isStale(OBSERVED_AT)).isTrue();
     }
 
+    @Test
+    void 심야_관측은_정확히_10분까지_유효하고_초과하면_낡았다() {
+        var observedAt = OffsetDateTime.parse("2026-10-16T01:00:00+09:00");
+
+        assertThat(policyAt("2026-10-15T16:10:00Z").staleAt(observedAt))
+            .isEqualTo(observedAt.plusMinutes(10));
+        assertThat(policyAt("2026-10-15T16:10:00Z").isStale(observedAt)).isFalse();
+        assertThat(policyAt("2026-10-15T16:10:00.000000001Z").isStale(observedAt)).isTrue();
+    }
+
+    @Test
+    void 조회가_4시를_지나도_관측_시각의_심야_유효기간을_유지한다() {
+        var observedAt = OffsetDateTime.parse("2026-10-16T03:59:00+09:00");
+        var afterNight = policyAt("2026-10-15T19:05:00Z");
+
+        assertThat(afterNight.staleAt(observedAt))
+            .isEqualTo(OffsetDateTime.parse("2026-10-16T04:09:00+09:00"));
+        assertThat(afterNight.isStale(observedAt)).isFalse();
+        assertThat(policyAt("2026-10-15T19:09:00.000000001Z").isStale(observedAt)).isTrue();
+    }
+
     private BoardFreshnessPolicy policyAt(String instant) {
         return new BoardFreshnessPolicy(
             Clock.fixed(Instant.parse(instant), ZoneOffset.UTC)

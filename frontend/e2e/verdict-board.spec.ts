@@ -40,7 +40,10 @@ test("유효기간 안의 자동 갱신 실패 시 마지막 예측을 유지한
   await stop.click();
 
   const arrivals = targetRow(page, "UP").getByRole("listitem");
-  await expect(arrivals).toHaveText([/3정류장 전\s*도착 시 5석 예상해요/, /7정류장 전\s*도착 시 2석 예상해요/]);
+  await expect(arrivals).toHaveText([
+    /3정류장 전\s*시간 정보 없음\s*도착 시 5석 예상해요/,
+    /7정류장 전\s*시간 정보 없음\s*도착 시 2석 예상해요/,
+  ]);
   const previousForecast = await arrivals.allTextContents();
   const requestsBeforePoll = api.requests.board;
   api.mode.board = "network-error";
@@ -71,7 +74,10 @@ test("자동 갱신 실패 후 다음 요청이 성공하면 새 예측으로 �
   await stop.click();
 
   const arrivals = targetRow(page, "UP").getByRole("listitem");
-  await expect(arrivals).toHaveText([/3정류장 전\s*도착 시 5석 예상해요/, /7정류장 전\s*도착 시 2석 예상해요/]);
+  await expect(arrivals).toHaveText([
+    /3정류장 전\s*시간 정보 없음\s*도착 시 5석 예상해요/,
+    /7정류장 전\s*시간 정보 없음\s*도착 시 2석 예상해요/,
+  ]);
   const requestsBeforeFailure = api.requests.board;
   api.mode.board = "network-error";
 
@@ -108,7 +114,7 @@ test("자동 갱신 실패 후 다음 요청이 성공하면 새 예측으로 �
   expect(await page.evaluate(() => Date.now())).toBeLessThan(Date.parse(api.data.board.staleAt));
 
   await expect(stop).toHaveAttribute("aria-expanded", "true");
-  await expect(arrivals).toHaveText([/2정류장 전\s*도착 시 9석 예상해요/]);
+  await expect(arrivals).toHaveText([/2정류장 전\s*시간 정보 없음\s*도착 시 9석 예상해요/]);
   await expect(arrivals.nth(0)).toBeVisible();
 });
 
@@ -186,7 +192,7 @@ for (const { name, vehicle, chip, seatLabel } of [
     await expect(row.getByText(chip, { exact: true })).toBeVisible();
     await stop.click();
 
-    await expect(row.getByRole("listitem")).toHaveText([`3정류장 전${seatLabel}`]);
+    await expect(row.getByRole("listitem")).toHaveText([`3정류장 전시간 정보 없음${seatLabel}`]);
     await expect(row.getByText("지금 오는 차량이 없어요", { exact: true })).toHaveCount(0);
     await expect(row.getByText("도착 시 28석 예상해요", { exact: true })).toHaveCount(0);
   });

@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/busarrivalservice/v2/getBusArrivalListv2",
+    "queryParameters": {
+      "serviceKey": {"matches": "(local-only-placeholder|shared-dev-placeholder)"},
+      "format": {"equalTo": "json"},
+      "stationId": {"matches": "[0-9]{9}"}
+    }
+  },
+  "response": {
+    "status": 200,
+    "transformers": ["gbis-replay"],
+    "transformerParameters": {"operation": "arrival"}
+  }
+}

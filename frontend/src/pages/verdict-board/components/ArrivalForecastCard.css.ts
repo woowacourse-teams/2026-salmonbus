@@ -24,7 +24,7 @@ export const row = style({
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  gap: "8px",
+  gap: 0,
   height: ROW_HEIGHT,
   padding: `0 ${CARD_PADDING_X}`,
   selectors: {
@@ -41,13 +41,33 @@ export const row = style({
   },
 });
 
-export const distance = style({
-  flexShrink: 0,
-  color: vars.color.textBody,
-  fontSize: vars.font.distance,
-  fontWeight: 500,
+export const timing = style({
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "center",
+  flex: "0 1 76px",
+  minWidth: "72px",
+  paddingLeft: "6px",
+  lineHeight: 1.4,
   whiteSpace: "nowrap",
 });
+
+export const distance = style({
+  color: vars.color.textSubtle,
+  fontSize: vars.font.distance,
+  fontWeight: 500,
+});
+
+export const remainingTime = style({
+  color: vars.color.textStrong,
+  fontSize: vars.font.arrivalTime,
+  fontWeight: 600,
+});
+
+export const unavailableTime = style([
+  remainingTime,
+  { fontSize: vars.font.distance, color: vars.color.textSubtle, fontWeight: 500 },
+]);
 
 export const notice = style({
   display: "flex",

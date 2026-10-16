@@ -23,6 +23,7 @@ final class ReplayEngine {
     private static final DateTimeFormatter QUERY_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
         .withZone(ZoneId.of("Asia/Seoul"));
     private final Map<String, Route> routes;
+    private final Map<String, List<RouteShapes.Point>> routeLines;
     private final Configuration configuration;
     private final Clock clock;
     private final LongSupplier nanoTime;
@@ -31,11 +32,21 @@ final class ReplayEngine {
     private final Map<String, Layout> layouts = new java.util.concurrent.ConcurrentHashMap<>();
 
     ReplayEngine(Path routeFile, Path scenarioFile) throws Exception {
-        this(readAllRoutes(routeFile), Json.read(Files.readString(scenarioFile), Configuration.class),
-            Clock.systemUTC(), System::nanoTime, UUID.randomUUID().toString().substring(0, 8));
+        this(readAllRoutes(routeFile), scenarioFile, routeFile.resolveSibling("route-shapes.json"));
+    }
+
+    private ReplayEngine(Dataset dataset, Path scenarioFile, Path shapeFile) throws Exception {
+        this(dataset, Json.read(Files.readString(scenarioFile), Configuration.class),
+            Clock.systemUTC(), System::nanoTime, UUID.randomUUID().toString().substring(0, 8),
+            RouteShapes.read(shapeFile, dataset));
     }
 
     ReplayEngine(Dataset dataset, Configuration configuration, Clock clock, LongSupplier nanoTime, String runId) {
+        this(dataset, configuration, clock, nanoTime, runId, Map.of());
+    }
+
+    private ReplayEngine(Dataset dataset, Configuration configuration, Clock clock, LongSupplier nanoTime,
+                         String runId, Map<String, List<RouteShapes.Point>> routeLines) {
         require("local-routes-v1".equals(dataset.version()), "노선 자료 버전이 다릅니다.");
         require(dataset.routes().stream().limit(ROUTES.size()).map(Route::displayName).toList().equals(ROUTES),
             "재생할 8개 노선의 순서를 확인해 주세요.");
@@ -63,6 +74,7 @@ final class ReplayEngine {
             }
         }
         routes = Map.copyOf(indexed);
+        this.routeLines = Map.copyOf(routeLines);
     }
 
     static Dataset readRoutes(Path file) throws Exception {
@@ -81,6 +93,13 @@ final class ReplayEngine {
     }
 
     Reply response(String operation, String mode, String routeId) {
+        return response(operation, mode, routeId, Map.of());
+    }
+
+    Reply response(String operation, String mode, String routeId, Map<String, String> routeModes) {
+        if (operation.equals("arrival")) {
+            return arrivals(routeId, mode, routeModes);
+        }
         Route route = routes.get(routeId);
         if (route == null) {
             return new Reply(404, Map.of("error", "unsupported-local-route"));
@@ -88,6 +107,7 @@ final class ReplayEngine {
         return switch (operation) {
             case "route-info" -> new Reply(200, envelope(0, Map.of("busRouteInfoItem", info(route))));
             case "route-stations" -> new Reply(200, envelope(0, Map.of("busRouteStationList", stations(route))));
+            case "route-line" -> line(route);
             case "location" -> ROUTES.contains(route.displayName())
                 ? locations(route, mode)
                 : new Reply(404, Map.of("error", "local-route-observation-disabled"));
@@ -113,6 +133,19 @@ final class ReplayEngine {
             "turnYn", stop.sequence() == route.turnSequence() ? "Y" : "N", "x", stop.x(), "y", stop.y())).toList();
     }
 
+    private Reply line(Route route) {
+        List<RouteShapes.Point> points = routeLines.get(route.routeId());
+        if (points == null) {
+            return new Reply(200, envelope(4, null));
+        }
+        List<Map<String, Object>> items = new ArrayList<>(points.size());
+        for (int index = 0; index < points.size(); index++) {
+            RouteShapes.Point point = points.get(index);
+            items.add(Map.of("routeId", route.routeId(), "lineSeq", index + 1, "x", point.x(), "y", point.y()));
+        }
+        return new Reply(200, envelope(0, Map.of("busRouteLineList", items)));
+    }
+
     private Reply locations(Route route, String mode) {
         if (mode.equals("empty")) {
             return new Reply(200, envelope(4, null));
@@ -126,6 +159,12 @@ final class ReplayEngine {
         if (!MODES.contains(mode)) {
             return new Reply(400, Map.of("error", "unsupported-local-scenario"));
         }
+        List<Map<String, Object>> vehicles = observations(route, mode).stream().map(Observation::value).toList();
+        return vehicles.isEmpty() ? new Reply(200, envelope(4, null))
+            : new Reply(200, envelope(0, Map.of("busLocationList", vehicles)));
+    }
+
+    private List<Observation> observations(Route route, String mode) {
         final long now = nanoTime.getAsLong();
         startedAt.compareAndSet(Long.MIN_VALUE, now);
         final long elapsed = Math.max(0, (now - startedAt.get()) / 1_000_000_000L);
@@ -141,7 +180,7 @@ final class ReplayEngine {
             && !configuration.routeVehicles().containsKey(route.displayName());
         final int downFirst = route.turnSequence() + (legacyLayout ? 0 : 1);
         final int downCount = route.stops().size() - downFirst + 1;
-        List<Map<String, Object>> vehicles = new ArrayList<>();
+        List<Observation> vehicles = new ArrayList<>();
         if (!mode.equals("down-only")) {
             addDirection(vehicles, route, route.turnSequence(), 1, fleet.up(), legacyLayout,
                 "U", mode, elapsed, vehicleRun);
@@ -150,11 +189,10 @@ final class ReplayEngine {
             addDirection(vehicles, route, downCount, downFirst, fleet.down(), legacyLayout,
                 "D", mode, elapsed, vehicleRun);
         }
-        return vehicles.isEmpty() ? new Reply(200, envelope(4, null))
-            : new Reply(200, envelope(0, Map.of("busLocationList", vehicles)));
+        return vehicles;
     }
 
-    private void addDirection(List<Map<String, Object>> vehicles, Route route, final int count,
+    private void addDirection(List<Observation> vehicles, Route route, final int count,
                               final int firstSequence, final int requestedFleet, final boolean legacyLayout,
                               String direction, String mode, final long elapsed, String vehicleRun) {
         final int length = legacyLayout
@@ -173,9 +211,71 @@ final class ReplayEngine {
             final long withinStep = shifted % configuration.stepSeconds();
             final int phase = phaseOf(mode, withinStep, step == count - 1, legacyLayout);
             if (step < count) {
-                vehicles.add(vehicle(route, firstSequence + step, step, trip, slot, phase, legacyLayout, direction, mode, vehicleRun));
+                vehicles.add(new Observation(vehicle(route, firstSequence + step, step, trip, slot, phase,
+                    legacyLayout, direction, mode, vehicleRun), direction, withinStep));
             }
         }
+    }
+
+    /** ETA는 위치 재생과 같은 차량·시계에서 계산한다. 이미 지나간 방문과 반대 방향 차량은 제외한다. */
+    private Reply arrivals(String stationId, String mode, Map<String, String> routeModes) {
+        if (stationId == null || !stationId.matches("[0-9]{9}") || !MODES.contains(mode)) {
+            return new Reply(400, Map.of("error", "unsupported-local-arrival-request"));
+        }
+        if (mode.equals("upstream-error")) return new Reply(503, envelope(1, null));
+        if (mode.equals("invalid-response")) return new Reply(200, envelope(0, null));
+        List<Map<String, Object>> rows = new ArrayList<>();
+        int delay = 0;
+        for (Route route : routes.values()) {
+            List<Stop> visits = route.stops().stream().filter(stop -> stop.stationId().equals(stationId)).toList();
+            if (visits.isEmpty()) continue;
+            String routeMode = routeModes.getOrDefault(route.routeId(), mode);
+            if (!MODES.contains(routeMode)) return new Reply(400, Map.of("error", "unsupported-local-scenario"));
+            if (routeMode.equals("upstream-error")) return new Reply(503, envelope(1, null));
+            if (routeMode.equals("invalid-response")) return new Reply(200, envelope(0, null));
+            if (routeMode.equals("timeout")) delay = 7_000;
+            List<Observation> fleet = ROUTES.contains(route.displayName()) && !routeMode.equals("empty")
+                ? observations(route, routeMode) : List.of();
+            for (Stop stop : visits) {
+                String direction = stop.sequence() <= route.turnSequence() ? "U" : "D";
+                var candidates = fleet.stream().filter(vehicle -> vehicle.direction().equals(direction))
+                    .filter(vehicle -> (int) vehicle.value().get("stateCd") != 99)
+                    .filter(vehicle -> (int) vehicle.value().get("stationSeq") < stop.sequence()
+                        || (int) vehicle.value().get("stationSeq") == stop.sequence()
+                            && (int) vehicle.value().get("stateCd") == 1)
+                    .sorted(java.util.Comparator.comparingLong(vehicle -> arrivalSeconds(vehicle, stop)))
+                    .limit(2).toList();
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("stationId", stationId);
+                row.put("staOrder", stop.sequence());
+                row.put("routeId", route.routeId());
+                row.put("routeName", route.displayName());
+                row.put("routeTypeCd", 11);
+                Stop destination = route.stops().get(direction.equals("U") ? route.turnSequence() - 1 : route.stops().size() - 1);
+                row.put("routeDestId", destination.stationId());
+                row.put("routeDestName", destination.name());
+                row.put("flag", "RUN");
+                for (int index = 0; index < candidates.size(); index++) {
+                    Observation candidate = candidates.get(index);
+                    Map<String, Object> vehicle = candidate.value();
+                    final int ordinal = index + 1;
+                    final long seconds = arrivalSeconds(candidate, stop);
+                    row.put("predictTimeSec" + ordinal, seconds);
+                    row.put("predictTime" + ordinal, (seconds + 59) / 60);
+                    row.put("locationNo" + ordinal, stop.sequence() - (int) vehicle.get("stationSeq"));
+                    for (String field : List.of("vehId", "remainSeatCnt", "crowded", "lowPlate", "taglessCd")) {
+                        if (vehicle.containsKey(field)) row.put(field + ordinal, vehicle.get(field));
+                    }
+                }
+                rows.add(row);
+            }
+        }
+        return new Reply(200, envelope(0, Map.of("busArrivalList", rows)), delay);
+    }
+
+    private long arrivalSeconds(Observation observation, Stop target) {
+        return Math.max(0, (long) (target.sequence() - (int) observation.value().get("stationSeq"))
+            * configuration.stepSeconds() - observation.withinStep());
     }
 
     private int phaseOf(String mode, final long withinStep, final boolean terminal, final boolean legacyLayout) {
@@ -246,8 +346,13 @@ final class ReplayEngine {
         }
     }
 
-    record Reply(int status, Map<String, Object> body) { }
+    record Reply(int status, Map<String, Object> body, int delayMillis) {
+        Reply(final int status, Map<String, Object> body) {
+            this(status, body, 0);
+        }
+    }
     private record Layout(String kind, int generation) { }
+    private record Observation(Map<String, Object> value, String direction, long withinStep) { }
     public record Dataset(String version, List<Route> routes) { }
     public record Fleet(int up, int down) {
         public Fleet {

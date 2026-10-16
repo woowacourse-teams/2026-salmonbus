@@ -12,6 +12,7 @@ import com.gustler.backend.routecatalog.domain.RouteSource;
 import com.gustler.backend.routecatalog.domain.RouteSourceResult.Failed;
 import com.gustler.backend.routecatalog.domain.RouteSourceResult.Success;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
 import org.slf4j.Logger;
@@ -69,6 +70,11 @@ public class RouteCatalogLoader implements CurrentRouteVersion, RefreshRouteCata
         }
         OptionalLong created = openFromUpstream(sourceRouteId, readAt);
         return created.isPresent() ? Optional.of(new RouteReference(created.getAsLong())) : Optional.empty();
+    }
+
+    @Override
+    public List<String> currentGbisRouteIds() {
+        return currentRouteVersionQuery.findCurrentGbisRouteIds();
     }
 
     @Override

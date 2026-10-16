@@ -18,6 +18,7 @@ import {
 import { liveVehicleViewsFor } from "./components/liveVehiclePolicy";
 import { useLiveVehicles } from "./hooks/useLiveVehicles";
 import { useLiveVehicleMotion } from "./hooks/useLiveVehicleMotion";
+import { useStationArrivals } from "./hooks/useStationArrivals";
 import type { StopSelection } from "./components/stopSelection";
 import type { BoardSheetSnap } from "./components/boardSheetPolicy";
 import { BoardBottomSheet } from "./components/BoardBottomSheet";
@@ -134,6 +135,21 @@ function OperatingBoard({
   const [vehicleFocusRequest, setVehicleFocusRequest] = useState<{ key: string; focusMarker: boolean } | null>(null);
   const selectedVehicleKey = vehicleFocusRequest?.key ?? null;
   const stops = useMemo(() => stopViewsFor(board, direction.id), [board, direction.id]);
+  const selectedStop =
+    selected?.direction === direction.id
+      ? stops.find((stop) => stop.sequence === selected.sequence && stop.kind !== "passThrough")
+      : undefined;
+  const arrivalSelection =
+    selectedStop === undefined
+      ? null
+      : {
+          stationId: selectedStop.stopId,
+          routeId: board.route.id,
+          referenceVersionId: board.route.referenceVersionId,
+          stopSequence: selectedStop.sequence,
+          direction: direction.id,
+        };
+  const stationArrivals = useStationArrivals(arrivalSelection);
   const vehicles = useMemo(
     () => liveVehicleViewsFor(board, liveVehicles, direction.id),
     [board, liveVehicles, direction.id],
@@ -233,6 +249,9 @@ function OperatingBoard({
           <StopBoard
             key={direction.id}
             status="ready"
+            stationArrivals={
+              arrivalSelection === null ? null : { selection: arrivalSelection, resource: stationArrivals }
+            }
             stops={stops}
             liveVehicleViews={vehicles}
             motion={motion}

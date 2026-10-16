@@ -69,7 +69,8 @@ final class Preflight {
                                 && release.get("INFO_SOURCEDIGEST").matches("[0-9a-f]{64}"),
                         "DEV_RELEASE_ENV");
                 Environment.effective(
-                        Environment.combined(settings.get(component), release), effective);
+                        Environment.combined(Environment.combined(settings.get(component), release),
+                                ArrivalSettings.load(directory)), effective);
             }
             default -> throw new IllegalArgumentException("COMPONENT");
         }

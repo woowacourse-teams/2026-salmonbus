@@ -13,24 +13,24 @@ import java.util.List;
     additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
 public record RouteGeometryResponse(
     @Schema(description = "9자리 GBIS 노선 ID", pattern = "^[0-9]{9}$") String routeId,
-    @Schema(description = "현재 노선 판본. 문자열로 유지하고 정류장 ETA 요청에 전달", pattern = "^[1-9][0-9]*$")
+    @Schema(description = "현재 노선 판본. 문자열로 유지하고 stopSequence와 함께 정류장 ETA 요청에 전달. 409이면 판본 없이 geometry 재조회", pattern = "^[1-9][0-9]*$")
     String referenceVersionId,
-    @Schema(description = "형상·정류장 자료와 방향 분리 규칙을 반영한 캐시 판본", pattern = "^[0-9a-f]{64}$")
+    @Schema(description = "형상·정류장 자료와 방향 분리 규칙을 반영한 캐시 판본. referenceVersionId가 같아도 좌표가 바뀌면 변경", pattern = "^[0-9a-f]{64}$")
     String geometryRevision,
     @Schema(description = "노선 번호 또는 표시명") String name,
     @Schema(description = "기점 이름") String startPoint,
     @Schema(description = "회차 방면 종점 이름") String endPoint,
-    @Schema(description = "전체 형상과 정류장 좌표의 제공 상태. paths의 존재 여부는 별도로 확인",
+    @Schema(description = "READY=형상과 모든 정류장 좌표, PARTIAL=형상은 있고 일부 정류장 point=null, UNAVAILABLE=현재 판본 형상 미수집. READY여도 paths=null 가능",
         allowableValues = {"READY", "PARTIAL", "UNAVAILABLE"}) String status,
-    @Schema(description = "정상이면 null. NOT_COLLECTED 또는 MISSING_STOP_COORDINATES", nullable = true,
+    @Schema(description = "READY이면 null. NOT_COLLECTED=현재 판본 형상 미수집, MISSING_STOP_COORDINATES=일부 정류장 좌표 누락", nullable = true,
         allowableValues = {"NOT_COLLECTED", "MISSING_STOP_COORDINATES"}) String reason,
     @Schema(description = "x를 경도, y를 위도로 표시하는 가정이며 원천 좌표계 확인 완료를 뜻하지 않음",
         allowableValues = "WGS84_ASSUMED") String coordinateSystem,
-    @Schema(description = "회차 정류장의 방문 순번. 없으면 null", nullable = true) TurningPoint turningPoint,
-    @Schema(description = "방문 순서의 정류장 목록. 같은 stationId의 반복 방문을 합치지 않음") List<BusStop> busStops,
-    @Schema(description = "원본 운행 순서의 전체 도로 형상. 미수집이면 빈 배열이며 정류장 직선으로 대체하지 않음")
+    @Schema(description = "회차 정류장의 방문 순번. 형상 배열 인덱스가 아니며, 값이 있어도 paths 분리 근거가 충분하다는 뜻은 아님. 없으면 null", nullable = true) TurningPoint turningPoint,
+    @Schema(description = "방문 순서의 정류장 마커 목록. 같은 stationId의 반복 방문을 stopSequence로 구분하며 합치지 않음. 전체 형상과 점 개수가 다름") List<BusStop> busStops,
+    @Schema(description = "원본 운행 순서의 전체 도로 형상. 정류장 마커와 별도 자료이며 정류장 직선으로 대체하지 않음. 미수집이면 빈 배열, paths=null이어도 형상은 유지")
     List<Point> points,
-    @Schema(description = "상·하행 경로를 함께 제공. 분리 근거가 없으면 null이며 전체 points는 유지. 방향 선택에 재조회 불필요",
+    @Schema(description = "분리 근거가 확인되면 UP/DOWN을 함께 제공. 회차·방문 순서 대응이 부족하거나 모호하면 READY여도 null이며 전체 points는 유지. 방향 선택에 재조회 불필요",
         nullable = true) Paths paths,
     @Schema(description = "전체 경로와 제공 가능한 정류장 좌표를 포함하는 영역. 좌표가 전혀 없으면 null", nullable = true)
     Boundary boundary
@@ -60,7 +60,7 @@ public record RouteGeometryResponse(
         @Schema(description = "정류장 이름") String name,
         @Schema(description = "해당 방문의 방향. 회차 방문까지 UP이며 다음 방문부터 DOWN", allowableValues = {"UP", "DOWN"}) String direction,
         @Schema(description = "이 방문에서 승차 가능한지 여부") boolean boardingAllowed,
-        @Schema(description = "정류장 마커 좌표. 미제공 또는 읽을 수 없는 좌표이면 null", nullable = true) Point point
+        @Schema(description = "정류장 마커 좌표(x=경도,y=위도). 미제공·유효하지 않은 좌표이면 null로 유지하고 마커를 생략. 도로 형상 points와 별개", nullable = true) Point point
     ) { }
 
     @Schema(name = "RouteGeometryPoint", requiredProperties = {"x", "y"},

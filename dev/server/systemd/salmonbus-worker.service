@@ -10,6 +10,7 @@ Type=simple
 User=salmonbus
 Group=salmonbus
 EnvironmentFile=/etc/salmonbus-dev/worker.env
+EnvironmentFile=/etc/salmonbus-dev/arrivals.env
 EnvironmentFile=/opt/salmonbus-dev/worker/current/release.env
 UnsetEnvironment=JAVA_TOOL_OPTIONS JDK_JAVA_OPTIONS _JAVA_OPTIONS CLASSPATH
 ExecStartPre=+/usr/bin/java -Xms16m -Xmx64m -jar /opt/salmonbus-dev/tools/shared-dev-tools.jar preflight worker

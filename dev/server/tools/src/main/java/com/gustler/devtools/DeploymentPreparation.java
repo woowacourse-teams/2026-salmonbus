@@ -30,7 +30,8 @@ final class DeploymentPreparation {
 
     private Map<String, Path> files() {
         var values = new TreeMap<String, Path>();
-        for (var name : List.of("api.env", "worker.env", DatabaseTarget.FILE, DatabaseTarget.CERTIFICATE)) {
+        for (var name : List.of("api.env", "worker.env", ArrivalSettings.FILE,
+                DatabaseTarget.FILE, DatabaseTarget.CERTIFICATE)) {
             values.put("config-" + name, layout.config().resolve(name));
         }
         for (var component : List.of("api", "worker")) {

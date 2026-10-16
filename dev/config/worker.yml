@@ -15,6 +15,10 @@ collection:
     - '228000184'
     - '234000051'
 
+route-geometry:
+  enabled: true
+  include-catalog: true
+
 forecast:
   enabled: true
   interval: 5s

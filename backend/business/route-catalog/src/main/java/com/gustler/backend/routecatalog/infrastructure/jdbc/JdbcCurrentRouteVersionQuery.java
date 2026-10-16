@@ -1,6 +1,7 @@
 package com.gustler.backend.routecatalog.infrastructure.jdbc;
 
 import com.gustler.backend.routecatalog.domain.CurrentRouteVersionQuery;
+import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -28,6 +29,17 @@ public class JdbcCurrentRouteVersionQuery implements CurrentRouteVersionQuery {
         JdbcClient jdbcClient
     ) {
         this.jdbcClient = jdbcClient;
+    }
+
+    @Override
+    public List<String> findCurrentGbisRouteIds() {
+        return jdbcClient.sql("""
+            SELECT route.public_route_id
+            FROM route
+            JOIN route_version ON route_version.route_id = route.id AND route_version.valid_to IS NULL
+            WHERE route.source_id = 'GBIS'
+            ORDER BY route.public_route_id
+            """).query(String.class).list();
     }
 
     @Override

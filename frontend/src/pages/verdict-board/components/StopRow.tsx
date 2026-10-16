@@ -2,6 +2,7 @@ import { useId } from "react";
 import type { ExpandableStopView, StopView } from "./displayPolicy";
 import { stopNameLabel, WAYPOINT_CAPTION } from "./verdictCopy";
 import { ArrivalForecastCard } from "./ArrivalForecastCard";
+import type { StationArrivalDetails } from "./stationArrivalPolicy";
 import { StopName } from "./StopName";
 import { TimelineMarker, type RoutePosition } from "./TimelineMarker";
 import { VerdictChip } from "./VerdictChip";
@@ -14,6 +15,7 @@ interface StopRowProps {
   routePosition: RoutePosition;
   selected: boolean;
   expanded: boolean;
+  stationArrivals: StationArrivalDetails | null;
   onToggle: (stop: ExpandableStopView) => void;
 }
 
@@ -21,7 +23,7 @@ interface ChevronProps {
   direction: ChevronDirection;
 }
 
-export function StopRow({ stop, routePosition, selected, expanded, onToggle }: StopRowProps) {
+export function StopRow({ stop, routePosition, selected, expanded, stationArrivals, onToggle }: StopRowProps) {
   const panelId = useId();
 
   if (stop.kind === "passThrough") {
@@ -63,7 +65,7 @@ export function StopRow({ stop, routePosition, selected, expanded, onToggle }: S
         onClick={expanded ? () => onToggle(stop) : undefined}
       >
         <div id={panelId} className={styles.detailInner}>
-          <ArrivalForecastCard arrivals={boardingStop?.arrivals ?? []} />
+          <ArrivalForecastCard arrivals={boardingStop?.arrivals ?? []} stationArrivals={stationArrivals} />
         </div>
       </div>
     </li>

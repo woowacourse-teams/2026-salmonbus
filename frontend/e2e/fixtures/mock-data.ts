@@ -1,5 +1,6 @@
 import type { Board, Direction, LiveVehicles, RouteListResponse } from "../../src/shared/api/routeForecast.types";
 import type { RouteGeometry } from "../../src/shared/api/routeGeometry.types";
+import type { StationArrivalsResponse } from "../../src/shared/api/stationArrivals.types";
 
 export const observedAt = "2026-09-16T08:00:00+09:00";
 export const staleAt = "2026-09-16T08:05:00+09:00";
@@ -102,6 +103,7 @@ export function createApiData(): {
   board: Board;
   vehicles: LiveVehicles;
   geometry: RouteGeometry;
+  arrivals: StationArrivalsResponse | null;
 } {
   const route = {
     id: routeId,
@@ -176,6 +178,7 @@ export function createApiData(): {
   };
 
   return {
+    arrivals: null,
     routes: { routes: [route] },
     board,
     geometry: createRouteGeometry(board),

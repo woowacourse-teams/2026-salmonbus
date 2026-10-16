@@ -65,6 +65,7 @@ final class Deployment {
         }
         var account = host.account();
         Checks.require(account.uid() > 0, "DEV_SERVICE_ACCOUNT");
+        final boolean changedArrivals = ArrivalSettings.ensure(layout.config());
         try (var paths = Files.walk(release)) {
             for (var path : paths.toList()) {
                 FileOps.owner(path, 0, account.gid());
@@ -95,7 +96,8 @@ final class Deployment {
             setLink(base.resolve("current"), release);
         }
         final boolean changed =
-                old == null || !old.sourceDigest().equals(metadata.sourceDigest()) || changedUnit;
+                old == null || !old.sourceDigest().equals(metadata.sourceDigest()) || changedUnit
+                        || changedArrivals;
         FileOps.atomicFile(
                 base.resolve(".changed"),
                 ("changed=" + (changed ? "yes" : "no") + "\nreason=dev 배포 버전 비교\n").getBytes(),
