@@ -183,6 +183,10 @@ function OperatingBoard({
 
   function clearMapSelection() {
     setSelected(null);
+    clearVehicleSelection();
+  }
+
+  function clearVehicleSelection() {
     setScrollRequest(null);
     setVehicleFocusRequest(null);
   }
@@ -273,6 +277,7 @@ function OperatingBoard({
             onToggle={toggleFromList}
             onStopExpand={onStopExpand}
             onVehicleSelect={focusVehicleFromList}
+            onVehicleDeselect={clearVehicleSelection}
           />
         </BoardBottomSheet>
       </main>

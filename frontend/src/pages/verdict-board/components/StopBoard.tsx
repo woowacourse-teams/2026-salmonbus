@@ -24,6 +24,7 @@ type StopBoardProps =
       stationArrivals: StationArrivalDetails | null;
       onToggle: (sequence: number) => void;
       onVehicleSelect: (key: string) => void;
+      onVehicleDeselect: () => void;
       onStopExpand: (stop: ExpandableStopView, rowPosition: number) => void;
     };
 
@@ -37,7 +38,15 @@ export function StopBoard(props: StopBoardProps) {
   const scrollContainerRef = useRef<HTMLElement | null>(null);
   if (props.status === "ready") {
     return (
-      <section ref={scrollContainerRef} className={styles.board} role="region" aria-label="판정보드 정류장 목록">
+      <section
+        ref={scrollContainerRef}
+        className={styles.board}
+        role="region"
+        aria-label="판정보드 정류장 목록"
+        onClick={(event) => {
+          if (event.target instanceof Element && event.target.closest("button, a") === null) props.onVehicleDeselect();
+        }}
+      >
         <StopList
           stops={props.stops}
           liveVehicleViews={props.liveVehicleViews}

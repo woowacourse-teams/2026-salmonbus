@@ -44,6 +44,13 @@ async function mapBackgroundPosition(page: Page) {
   return { x: bounds.width - 24, y: 24 };
 }
 
+async function listBackgroundPosition(page: Page) {
+  const bounds = await list(page).boundingBox();
+  if (bounds === null) throw new Error("정류장 목록 영역이 없습니다");
+  // 정류장 버튼 오른쪽 여백은 행과 버스 버튼의 동작에 겹치지 않는 빈 영역이다.
+  return { x: bounds.width - 8, y: 24 };
+}
+
 async function height(locator: Locator) {
   return locator.evaluate((element) => element.getBoundingClientRect().height);
 }
@@ -811,6 +818,95 @@ test("키보드로 선택한 버스도 지도 빈 곳을 누르면 포커스에 
   expect(await naverMap.snapshot()).toEqual(focused);
 });
 
+test("목록 빈 곳을 누르면 목록에서 선택한 버스만 초기화하고 펼침·시트·스크롤·지도 시점을 유지한다", async ({
+  page,
+  naverMap,
+}) => {
+  await openMap(page);
+  const expandedStop = list(page).locator("li[data-stop-sequence='6'] button[aria-expanded]");
+  await expandedStop.scrollIntoViewIfNeeded();
+  await expandedStop.click();
+  await page.clock.runFor(32);
+  await handle(page).press("ArrowUp");
+  await expectSheetAndMapHeights(page, 844 * 0.7, 844 * 0.3);
+  const tracker = list(page).getByRole("button", {
+    name: "상행 정류장 8 정류장, 도착 중, 현재 잔여 좌석 5석",
+    exact: true,
+  });
+  const bus = map(page).getByRole("button", { name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 5석", exact: true });
+  await tracker.scrollIntoViewIfNeeded();
+  await tracker.focus();
+  await tracker.press("Enter");
+  await expectVehicleFocusedOnMap(page, bus, naverMap);
+  await expect(tracker).toHaveAttribute("aria-pressed", "true");
+  await expect(tracker).toHaveCSS("transform", "matrix(1.12, 0, 0, 1.12, 0, 0)");
+  await expect(bus).toHaveCSS("transform", "matrix(1.5, 0, 0, 1.5, 0, 0)");
+  const focused = await naverMap.snapshot();
+  const scrollTop = await list(page).evaluate((element) => element.scrollTop);
+
+  await list(page).click({ position: await listBackgroundPosition(page) });
+  await page.clock.runFor(32);
+  await expect(tracker).toHaveAttribute("aria-pressed", "false");
+  await expect(tracker).toHaveCSS("transform", "none");
+  await expect(bus).toHaveAttribute("aria-pressed", "false");
+  await expect(bus).not.toBeFocused();
+  await expect(bus).toHaveCSS("transform", "none");
+  await expect(expandedStop).toHaveAttribute("aria-expanded", "true");
+  await expect(list(page).locator("li[data-stop-sequence='6']")).toHaveAttribute("data-selected", "true");
+  await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
+  expect(await naverMap.snapshot()).toEqual(focused);
+  expect(await list(page).evaluate((element) => element.scrollTop)).toBeCloseTo(scrollTop, 0);
+
+  // 버스 버튼의 자식 아이콘을 눌러도 빈 영역 클릭으로 처리하지 않는다.
+  await tracker.locator("svg").click();
+  await expectVehicleFocusedOnMap(page, bus, naverMap);
+  await expect(tracker).toHaveAttribute("aria-pressed", "true");
+  await expect(bus).toHaveAttribute("aria-pressed", "true");
+  await expect(expandedStop).toHaveAttribute("aria-expanded", "true");
+
+  const nextStop = list(page).locator("li[data-stop-sequence='8'] button[aria-expanded]");
+  await nextStop.click();
+  await page.clock.runFor(32);
+  await expect(nextStop).toHaveAttribute("aria-expanded", "true");
+  await expect(expandedStop).toHaveAttribute("aria-expanded", "false");
+  await expect(tracker).toHaveAttribute("aria-pressed", "false");
+  await expect(bus).toHaveAttribute("aria-pressed", "false");
+});
+
+test("지도에서 선택한 버스도 목록 빈 곳을 누르면 확대와 목록 선택을 해제하고 다시 선택할 수 있다", async ({
+  page,
+  naverMap,
+}) => {
+  await openMap(page);
+  const bus = map(page).getByRole("button", { name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 5석", exact: true });
+  const tracker = list(page).getByRole("button", {
+    name: "상행 정류장 8 정류장, 도착 중, 현재 잔여 좌석 5석",
+    exact: true,
+  });
+  await bus.click();
+  await expectStopFocusedInList(page, 8);
+  await expectVehicleCenteredOnMap(page, bus, naverMap);
+  await expect(bus).toHaveAttribute("aria-pressed", "true");
+  const focused = await naverMap.snapshot();
+  const scrollTop = await list(page).evaluate((element) => element.scrollTop);
+
+  await list(page).click({ position: await listBackgroundPosition(page) });
+  await page.clock.runFor(32);
+  await expect(bus).toHaveAttribute("aria-pressed", "false");
+  await expect(bus).toHaveCSS("transform", "none");
+  await expect(tracker).toHaveAttribute("aria-pressed", "false");
+  await expect(tracker).toHaveCSS("transform", "none");
+  await expect(list(page).locator("button[aria-expanded='true']")).toHaveCount(0);
+  await expect(sheet(page)).toHaveAttribute("data-snap", "half");
+  expect(await naverMap.snapshot()).toEqual(focused);
+  expect(await list(page).evaluate((element) => element.scrollTop)).toBeCloseTo(scrollTop, 0);
+
+  await bus.click();
+  await expectStopFocusedInList(page, 8);
+  await expect(bus).toHaveAttribute("aria-pressed", "true");
+  await expect(tracker).toHaveAttribute("aria-pressed", "true");
+});
+
 test.describe("지도 터치 선택 해제", () => {
   test.use({ hasTouch: true });
 
@@ -833,6 +929,31 @@ test.describe("지도 터치 선택 해제", () => {
     await bus.tap();
     await expectStopFocusedInList(page, 8);
     await expect(bus).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("목록 빈 곳을 탭하면 버스 아이콘의 확대와 선택을 해제한다", async ({ page, naverMap }) => {
+    await openMap(page);
+    const tracker = list(page).getByRole("button", {
+      name: "상행 정류장 8 정류장, 도착 중, 현재 잔여 좌석 5석",
+      exact: true,
+    });
+    const bus = map(page).getByRole("button", { name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 5석", exact: true });
+    await tracker.scrollIntoViewIfNeeded();
+    await tracker.tap();
+    await expectVehicleFocusedOnMap(page, bus, naverMap);
+    await expect(tracker).toHaveAttribute("aria-pressed", "true");
+    const focused = await naverMap.snapshot();
+
+    // WebKit의 터치 대상 보정이 가까운 정류장 버튼을 고르지 않도록 왼쪽의 넓은 여백을 누른다.
+    await list(page).tap({ position: { x: 8, y: 24 } });
+    await page.clock.runFor(32);
+    await expect(tracker).toHaveAttribute("aria-pressed", "false");
+    await expect(tracker).toHaveCSS("transform", "none");
+    await expect(bus).toHaveAttribute("aria-pressed", "false");
+    await expect(bus).not.toBeFocused();
+    await expect(bus).toHaveCSS("transform", "none");
+    await expect(list(page).locator("button[aria-expanded='true']")).toHaveCount(0);
+    expect(await naverMap.snapshot()).toEqual(focused);
   });
 });
 
