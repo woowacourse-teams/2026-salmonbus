@@ -313,6 +313,7 @@ function setup(
   const onError = jest.fn();
   const onReady = jest.fn();
   const onVehicleSelect = jest.fn<(selection: { direction: "UP" | "DOWN"; sequence: number }, key: string) => void>();
+  const onDeselect = jest.fn();
   const element = new ElementStub();
   const adapter = createNaverRouteMap(
     native.sdk,
@@ -324,6 +325,7 @@ function setup(
     onError,
     onReady,
     onVehicleSelect,
+    onDeselect,
   );
   const initialize = () => native.events.find((event) => event.name === "init")?.listener();
   if (initialized) initialize();
@@ -334,6 +336,7 @@ function setup(
     onError,
     onReady,
     onVehicleSelect,
+    onDeselect,
     adapter,
     element,
     initialize,
@@ -362,6 +365,26 @@ function visibleArrowDirections(native: ReturnType<typeof createRecordingSdk>) {
 }
 
 describe("네이버 지도 adapter", () => {
+  it.each(["click", "tap"])("지도 배경의 %s는 카메라 이동 없이 선택 해제를 요청한다", (eventName) => {
+    const { native, adapter, onDeselect, onSelect, onVehicleSelect } = setup();
+    const selection = { direction: "UP" as const, sequence: 15 };
+    adapter.update(selection, "UP", []);
+    adapter.focus(selection);
+    const center = native.map.center;
+    const zoom = native.map.zoom;
+    const listener = native.events.find((event) => event.name === eventName)!.listener;
+
+    listener();
+
+    expect(onDeselect).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onVehicleSelect).not.toHaveBeenCalled();
+    expect(native.map.center).toBe(center);
+    expect(native.map.zoom).toBe(zoom);
+    adapter.destroy();
+    expect(native.sdk.Event.removeListener).toHaveBeenCalledWith(listener);
+  });
+
   it("GL 지도에서 SDK의 부드러운 확대와 기본 마커 배치를 유지한다", () => {
     const { native, element } = setup();
     expect(native.map.options).toMatchObject({
@@ -1273,7 +1296,7 @@ describe("네이버 지도 adapter", () => {
     expect(native.circles).toHaveLength(0);
     expect(native.map.zoom).toBe(15);
     adapter.destroy();
-    expect(native.sdk.Event.removeListener).toHaveBeenCalledTimes(3);
+    expect(native.sdk.Event.removeListener).toHaveBeenCalledTimes(native.events.length);
     expect(native.markers.every((marker) => marker.map === null)).toBe(true);
     expect(native.map.destroyed).toBe(true);
   });
@@ -1284,6 +1307,6 @@ describe("네이버 지도 adapter", () => {
     expect(onError).toHaveBeenCalledTimes(1);
     expect(() => adapter.destroy()).not.toThrow();
     // 첫 SDK 정리에 실패해도 초기화 리스너까지 모두 정리를 시도한다.
-    expect(native.sdk.Event.removeListener).toHaveBeenCalledTimes(3);
+    expect(native.sdk.Event.removeListener).toHaveBeenCalledTimes(native.events.length);
   });
 });

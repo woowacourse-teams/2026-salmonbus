@@ -181,6 +181,12 @@ function OperatingBoard({
     scrollToStop(selection);
   }
 
+  function clearMapSelection() {
+    setSelected(null);
+    setScrollRequest(null);
+    setVehicleFocusRequest(null);
+  }
+
   function focusVehicleFromList(key: string) {
     setScrollRequest(null);
     setVehicleFocusRequest({ key, focusMarker: true });
@@ -215,6 +221,7 @@ function OperatingBoard({
             selected={selected}
             onSelect={selectFromMap}
             onVehicleSelect={selectVehicleFromMap}
+            onDeselect={clearMapSelection}
             vehicleFocusRequest={vehicleFocusRequest}
             selectedVehicleKey={selectedVehicleKey}
             liveVehicleViews={vehicles}

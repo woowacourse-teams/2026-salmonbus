@@ -14,6 +14,7 @@ interface RouteMapProps {
   selected: StopSelection | null;
   onSelect: (selection: StopSelection) => void;
   onVehicleSelect: (selection: StopSelection, key: string) => void;
+  onDeselect: () => void;
   vehicleFocusRequest: { key: string; focusMarker: boolean } | null;
   selectedVehicleKey: string | null;
   liveVehicleViews: LiveVehicleView[];
@@ -124,6 +125,7 @@ export function RouteMap(props: RouteMapProps) {
             setLocationState({ status: "idle" });
           },
           (selection, key) => propsRef.current.onVehicleSelect(selection, key),
+          () => propsRef.current.onDeselect(),
         );
         adapterRef.current = adapter;
         adapter.update(current.selected, current.activeDirection, current.liveVehicleViews, current.selectedVehicleKey);

@@ -57,6 +57,7 @@ export function createNaverRouteMap(
   onError: () => void,
   onReady: () => void,
   onVehicleSelect: (selection: StopSelection, key: string) => void,
+  onDeselect: () => void,
 ): RouteMapAdapter {
   const createNativeEventHandler = (action: () => void) => () => {
     try {
@@ -453,6 +454,8 @@ export function createNaverRouteMap(
   }
 
   const listeners = [
+    sdk.Event.addListener(map, "click", createNativeEventHandler(onDeselect)),
+    sdk.Event.addListener(map, "tap", createNativeEventHandler(onDeselect)),
     // GL 초기화 전의 이미지 타일 배율로 맞추면 전환 후 노선 양 끝이 잘린다.
     sdk.Event.addListener(
       map,
