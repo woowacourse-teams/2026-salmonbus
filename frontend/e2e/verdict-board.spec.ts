@@ -150,7 +150,7 @@ test("차량이 먼저 다음 정류장으로 가도, 예보가 따라올 때 �
   await stop.click();
   await settleMarkers(page);
   const nearestArrival = targetRow(page, "UP").getByRole("listitem").nth(0);
-  await expect(nearestArrival).toHaveText(/3정류장 전\s*도착 시 5석 예상해요/);
+  await expect(nearestArrival).toHaveText(/3정류장 전\s*시간 정보 없음\s*도착 시 5석 예상해요/);
   await expect(busMarkerAt(page, "상행 정류장 8")).toBeVisible();
 
   // 수집기가 다음 observation batch를 저장했지만 예보 발행은 아직이다. 차량 응답만 새 batch로 온다.
@@ -161,7 +161,7 @@ test("차량이 먼저 다음 정류장으로 가도, 예보가 따라올 때 �
 
   await expect(busMarkerAt(page, "상행 정류장 8")).toBeVisible();
   await expect(busMarkerAt(page, "상행 정류장 9")).toHaveCount(0);
-  await expect(nearestArrival).toHaveText(/3정류장 전\s*도착 시 5석 예상해요/);
+  await expect(nearestArrival).toHaveText(/3정류장 전\s*시간 정보 없음\s*도착 시 5석 예상해요/);
 
   // 같은 batch의 예보가 발행되면 마커, 정류장 수, 좌석이 같이 바뀐다.
   const target = api.data.board.stops.find((candidate) => candidate.name === targetStopNames.UP);
@@ -176,7 +176,7 @@ test("차량이 먼저 다음 정류장으로 가도, 예보가 따라올 때 �
 
   await expect(busMarkerAt(page, "상행 정류장 9")).toBeVisible();
   await expect(busMarkerAt(page, "상행 정류장 8")).toHaveCount(0);
-  await expect(nearestArrival).toHaveText(/2정류장 전\s*도착 시 4석 예상해요/);
+  await expect(nearestArrival).toHaveText(/2정류장 전\s*시간 정보 없음\s*도착 시 4석 예상해요/);
 });
 
 test("수집 중이라 차량 응답이 비어 와도 마커가 사라지지 않는다", async ({ page, api }) => {
