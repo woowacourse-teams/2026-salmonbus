@@ -37,6 +37,8 @@ jobs:
   local-development:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 20
+    env:
+      LOCAL_TEST_BUILDER: salmonbus-local-ci
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,6 +47,10 @@ jobs:
         with:
           version: v2.40.0
           cache-binary: false
+      - name: Create shared image builder
+        run: |
+          docker buildx create --name "$LOCAL_TEST_BUILDER" --driver docker-container --driver-opt memory=2g \
+            --buildkitd-config dev/docker/buildkitd.toml
       - name: Install geometry check prerequisites
         run: |
           sudo apt-get update

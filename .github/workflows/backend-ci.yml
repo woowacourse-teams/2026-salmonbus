@@ -22,7 +22,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   backend-deploy-contract:
@@ -75,3 +75,42 @@ jobs:
           report_paths: 'backend/**/build/test-results/*/TEST-*.xml'
           check_name: 'BE 테스트 결과'
           detailed_summary: true
+
+      - name: Summarize slow test classes
+        if: ${{ !cancelled() && hashFiles('backend/**/build/test-results/*/TEST-*.xml') != '' }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import glob
+          import xml.etree.ElementTree as ET
+          from collections import defaultdict
+
+          suites = []
+          modules = defaultdict(float)
+          for path in glob.glob('**/build/test-results/*/TEST-*.xml', recursive=True):
+              suite = ET.parse(path).getroot()
+              module = path.split('/build/test-results/')[0]
+              seconds = float(suite.get('time', 0))
+              suites.append((seconds, module, suite.get('name'), int(suite.get('tests', 0))))
+              modules[module] += seconds
+
+          print('### 테스트 시간')
+          print('Spring 컨텍스트와 컨테이너 시작 시간은 그것을 처음 쓴 클래스에 더해진다.')
+          print()
+          print('| 모듈 | 클래스 시간 합계(초) |')
+          print('|---|---:|')
+          for module, seconds in sorted(modules.items(), key=lambda item: -item[1]):
+              print(f'| {module} | {seconds:.1f} |')
+          print()
+          print('| 느린 클래스 | 모듈 | 테스트 수 | 시간(초) |')
+          print('|---|---|---:|---:|')
+          for seconds, module, name, tests in sorted(suites, reverse=True)[:20]:
+              print(f'| {name} | {module} | {tests} | {seconds:.1f} |')
+          PY
+
+      - name: Upload test results
+        if: ${{ !cancelled() && hashFiles('backend/**/build/test-results/*/TEST-*.xml') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: backend/**/build/test-results/*/TEST-*.xml
+          retention-days: 7
