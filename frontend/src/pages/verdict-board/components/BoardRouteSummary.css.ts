@@ -92,7 +92,13 @@ export const label = style({
   border: 0,
 });
 
-export const summaryIcon = style({ width: "12px", height: "12px", flexShrink: 0 });
+export const summaryIcon = style({
+  width: "12px",
+  height: "12px",
+  flexShrink: 0,
+  // 글자의 시각적 중심이 line box보다 위에 있어 아이콘도 같은 높이로 맞춘다.
+  transform: "translateY(-1px)",
+});
 
 export const value = style({
   display: "flex",
