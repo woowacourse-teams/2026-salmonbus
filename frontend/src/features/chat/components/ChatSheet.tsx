@@ -49,6 +49,8 @@ export function ChatSheet({
       inert={position === "collapsed"}
       data-position={position}
       data-connection={connection}
+      data-native-map-hit
+      data-native-map-drag
     >
       <div className={styles.content}>
         <SheetHeader

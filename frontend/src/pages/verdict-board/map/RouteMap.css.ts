@@ -8,6 +8,7 @@ export const region = style({
   overflow: "hidden",
   isolation: "isolate",
   background: vars.color.surface,
+  selectors: { 'html[data-native-map="true"] &': { background: "transparent" } },
 });
 export const canvasViewport = style({
   position: "absolute",

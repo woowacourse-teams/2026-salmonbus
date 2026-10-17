@@ -12,6 +12,7 @@ export const page = style({
   margin: "0 auto",
   overflow: "hidden",
   backgroundColor: vars.color.background,
+  selectors: { 'html[data-native-map="true"] &': { backgroundColor: "transparent" } },
 });
 export const content = style({
   position: "relative",
