@@ -26,9 +26,10 @@ transition_version() {
 }
 
 transition_planner_options() {
-  local decoded tokens index name_value
+  local decoded tokens index name_value allowed='^[a-z0-9_= -]+$'
   decoded="${1//+/ }"
   decoded="$(printf '%b' "${decoded//%/\\x}")"
+  [[ "$decoded" =~ $allowed ]] || return 1
   read -ra tokens <<< "$decoded"
   [ "${#tokens[@]}" -gt 0 ] || return 1
   index=0

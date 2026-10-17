@@ -291,7 +291,7 @@ sudo sed -i 's/^MODEL_BUNDLE_PROMOTE_ON_START=.*/MODEL_BUNDLE_PROMOTE_ON_START=f
 
 prepare는 다음을 확인한 뒤 worker를 멈추고 30분짜리 승인을 DB에 남긴다. 어느 하나라도 안 되면 멈춘다.
 
-- `api.env`와 `worker.env`가 같은 DB를 가리킨다. 호스트·포트·DB 이름·계정이 같아야 한다. URL 쿼리는 `connectTimeout`·`socketTimeout`·`tcpKeepAlive`와 `options`의 `join_collapse_limit`·`from_collapse_limit`·`geqo_threshold`만 달라도 된다
+- `api.env`와 `worker.env`가 같은 DB를 가리킨다. 호스트·포트·DB 이름·계정이 같아야 한다. URL 쿼리에는 `connectTimeout`·`socketTimeout`·`tcpKeepAlive`와 `options`의 `join_collapse_limit`·`from_collapse_limit`·`geqo_threshold`만 쓸 수 있고, 이 값들은 두 파일에서 달라도 된다. 그 밖의 키는 두 파일에 같은 값으로 들어 있어도 멈추므로, 전환 전에 두 파일에서 빼거나 허용 목록을 먼저 고친다
 - 기존 대기 테이블 구조다. **Flyway 버전은 보지 않는다.** 앞선 시도가 일부 마이그레이션을 남겼는지는 사람이 확인한다
 - worker와 정비 연결이 남아 있지 않다
 

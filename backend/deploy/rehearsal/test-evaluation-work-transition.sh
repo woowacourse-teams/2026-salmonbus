@@ -197,7 +197,10 @@ run_case '스키마·보안 옵션이나 허용하지 않은 세션 설정이 �
   write_database_env api jdbc:postgresql://rds:5432/salmonbus
   for query in currentSchema=other sslmode=disable "options=-c%20search_path%3Dother" \
       "options=-c%20join_collapse_limit%3D20%20-c%20search_path%3Dother" "options=-c" "options=join_collapse_limit%3D20" \
-      "socketTimeout=abc" "tcpKeepAlive=yes" "connectTimeout"; do
+      "socketTimeout=abc" "tcpKeepAlive=yes" "connectTimeout" \
+      "options=-c%20join_collapse_limit%3D20%0A-c%20search_path%3Dother" \
+      "options=-c%20join_collapse_limit%3D20%0D%0A-c%20search_path%3Dother" \
+      "options=-c%20join_collapse_limit%3D20\\n-c%20search_path%3Dother"; do
     write_database_env worker "jdbc:postgresql://rds:5432/salmonbus?$query"
     expect_blocked transition_same_database "$TEST_DIRECTORY/api.env" "$TEST_DIRECTORY/worker.env"
   done
