@@ -307,6 +307,56 @@ sudo bash /etc/salmonbus/evaluation-work-transition.sh resume-legacy
 DB의 Flyway 최대 버전과 두 앱 `current`의 `flywayMaxVersion`이 같아야 차단이 풀린다. 서비스는 시작하지 않는다.
 V39 전용 롤백 SQL은 V38까지만 되돌리므로 V38 배포 파일이 없으면 쓸 수 없다.
 
+## 도착 정보·노선 형상 켜기
+
+기본은 꺼져 있다. 켜려면 두 앱에 같은 내부 토큰을 넣는다. **켠 앱에 토큰이 비어 있으면 그 앱이 시작하지 않는다.**
+
+| 파일 | 넣는 줄 |
+| --- | --- |
+| `api.env` | `ARRIVALS_ENABLED=true` · `ARRIVAL_INTERNAL_TOKEN` |
+| `worker.env` | `ARRIVALS_ENABLED=true` · `ARRIVAL_INTERNAL_TOKEN`(api와 같은 값) · `ROUTE_GEOMETRY_ENABLED=true` |
+
+```bash
+token="$(openssl rand -hex 32)"
+for c in api worker; do
+  printf 'ARRIVALS_ENABLED=true\nARRIVAL_INTERNAL_TOKEN=%s\n' "$token" | sudo tee -a "/etc/salmonbus/$c.env" >/dev/null
+done
+unset token
+echo 'ROUTE_GEOMETRY_ENABLED=true' | sudo tee -a /etc/salmonbus/worker.env >/dev/null
+for c in api worker; do
+  sudo grep '^ARRIVAL_INTERNAL_TOKEN=' "/etc/salmonbus/$c.env" | cut -d= -f2- | tr -d '\n' | sha256sum | cut -c1-8
+done
+```
+
+마지막 두 줄의 출력이 같아야 한다. 새 배포 버전이 이미 돌고 있으면 worker를 먼저 재시작하고 API를 재시작한다. API는 `127.0.0.1:8081`의 worker에 도착 정보 갱신을 요청한다.
+배포 전에 넣으면 배포가 재시작할 때 적용된다. 이전 배포 버전은 이 값을 읽지 않는다.
+
+켜기 전에 확인할 것:
+
+- 도착 정보는 위치정보와 다른 API다. 각 키에 버스도착정보 API(`busarrivalservice`) 활용신청이 있어야 한다. 코드는 키당 10,000회, 합 40,000회까지만 쓴다
+- 도착 정보와 형상 조회는 쿼리스트링을 쓴다. CloudFront의 `/api/*` 동작이 쿼리스트링을 원본으로 넘겨야 한다
+- 지도는 FE 운영 CodeBuild의 `WEBPACK_NAVER_MAP_KEY_ID`와 NAVER Cloud Web 서비스 URL에 운영 주소가 있어야 표시된다
+- 형상은 카탈로그를 갱신한 뒤 노선마다 한 번 수집한다. 그 전에는 형상 조회가 미수집 상태로 응답한다
+
+## 평가 이관과 원본 삭제
+
+worker 유닛이 `FORECAST_ARCHIVE_ENABLED=true`·`FORECAST_ARCHIVE_DELETE_ENABLED=true`로 켠다.
+검증을 마친 완료 정산을 S3 `techcourse-project-2026` 버킷의 `salmonbus-be/evaluation-archive/v1/` 아래에 올리고, 다시 내려받아 대조한 뒤 DB 원본을 지운다.
+**이 경로에는 환경 구분이 없다.** dev와 운영이 같은 접두어를 쓴다.
+
+켜 두기 전에 확인할 것:
+
+- 인스턴스 역할에 이 접두어의 `s3:PutObject`·`s3:GetObject` 권한이 있다
+- 버킷 수명 주기 규칙이 이 접두어의 객체를 지우지 않는다. 지우면 DB 원본을 삭제한 뒤 복구할 곳이 없다
+
+끄려면 `worker.env`에 줄을 넣고 재시작한다. `worker.env`는 유닛의 `Environment=`보다 뒤에 읽혀 값을 덮는다.
+삭제만 끄면 이관은 계속하고 DB 원본은 남긴다.
+
+```bash
+echo 'FORECAST_ARCHIVE_DELETE_ENABLED=false' | sudo tee -a /etc/salmonbus/worker.env >/dev/null   # 이관도 끄려면 FORECAST_ARCHIVE_ENABLED=false
+sudo systemctl restart salmonbus-worker
+```
+
 ## 인증 정보를 출력하지 않고 확인하기
 
 ```bash
@@ -332,7 +382,7 @@ Worker는 버스 위치정보 API를 키 최대 4개로 나눠 호출한다. 호
 | c | `GBIS_SERVICE_KEY_C` |
 | d | `GBIS_SERVICE_KEY_D` |
 
-**모든 키의 하루 한도를 같은 10,000회(`gbis.daily-limit`)로 센다.** 포털에서 한도 10,000회를 받은 키만 넣는다.
+**모든 키의 하루 한도를 같은 값(`gbis.daily-limit`, 기본 10,000회)으로 센다.** 포털에서 그 한도 이상을 받은 키만 넣는다.
 값이 빈 슬롯은 쓰지 않는다. **같은 키를 두 슬롯에 넣지 않는다.** Worker가 막지 않으므로 그 키의 한도를 두 배로 센다.
 
 ### 키 추가
@@ -356,6 +406,22 @@ sudo systemctl restart salmonbus-worker
 
 **`GBIS_SERVICE_KEY` 줄은 지우지 않는다.** 슬롯 a가 없으면 Worker가 시작하지 않는다.
 재시작한 뒤에는 슬롯 a만 쓴다. 장부의 b~d 행은 그날 남아 있지만 더 늘지 않는다.
+
+### 하루 한도 늘리기
+
+노선 하나는 하루 4,278회를 호출한다. 20노선이면 85,560회라 키 4개 × 10,000회로는 오후에 한도가 바닥난다.
+한도는 노선이 함께 쓰므로 바닥나면 기존 노선 수집도 자정까지 멈춘다.
+
+포털에서 **모든 키의 위치정보 API 한도를 같은 값 이상으로 늘린 뒤에** 그 값을 넣는다. 키 4개로 20노선이면 키당 21,390회 이상이어야 한다.
+
+```bash
+echo 'GBIS_DAILY_LIMIT=25000' | sudo tee -a /etc/salmonbus/worker.env >/dev/null
+sudo systemctl restart salmonbus-worker
+journalctl -u salmonbus-worker --no-pager | grep 'GBIS 키 슬롯' | tail -1
+```
+
+**한 키라도 포털 한도가 이 값보다 작으면 넣지 않는다.** 포털이 22로 거절할 때까지 그 키를 쓴다.
+이 값은 노선정보 API 예산에도 같이 적용된다. 노선정보 API 한도를 늘리지 않았다면 아래 "키별 사용량"으로 `BUS_ROUTE` 사용량을 확인한다.
 
 ### 키별 사용량
 
