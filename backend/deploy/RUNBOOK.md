@@ -276,6 +276,37 @@ sudo sed -i 's/^MODEL_BUNDLE_PROMOTE_ON_START=.*/MODEL_BUNDLE_PROMOTE_ON_START=f
 **활성화한 채로 두면 배포로 재시작할 때마다 디스크의 모델 계수가 적용된다.**
 운영 기본값은 `false`이며 systemd 유닛에도 같은 값이 설정돼 있다.
 
+## 운영 첫 V39 전환
+
+운영 데이터가 있는 DB에서는 prepare 승인 없이 V39가 실행되지 않는다. 승인 없이 새 배포 버전을 내보내면 API의 BeforeInstall에서 멈춘다.
+
+```text
+1. 자동 배포와 정비 작업을 멈춘다. 같은 DB에 붙은 psql 같은 수동 세션은 자동 검사가 막지 않으므로 직접 정리한다
+2. 배포 전 DB 백업을 확인한다. prepare는 백업을 만들거나 검증하지 않는다
+3. 새 배포 버전의 scripts/와 sql/이 나란히 있는 디렉터리에서 실행한다
+   sudo bash scripts/evaluation-work-transition.sh prepare <백업 식별자>
+4. API를 배포한다. API의 Flyway가 V39까지 적용한다
+5. worker를 배포한다. worker는 V39가 적용된 DB에서만 시작한다
+```
+
+prepare는 다음을 확인한 뒤 worker를 멈추고 30분짜리 승인을 DB에 남긴다. 어느 하나라도 안 되면 멈춘다.
+
+- `api.env`와 `worker.env`가 같은 DB를 가리킨다. 호스트·포트·DB 이름·계정이 같아야 한다. URL 쿼리는 `connectTimeout`·`socketTimeout`·`tcpKeepAlive`와 `options`의 `join_collapse_limit`·`from_collapse_limit`·`geqo_threshold`만 달라도 된다
+- 기존 대기 테이블 구조다. **Flyway 버전은 보지 않는다.** 앞선 시도가 일부 마이그레이션을 남겼는지는 사람이 확인한다
+- worker와 정비 연결이 남아 있지 않다
+
+30분 승인은 API의 BeforeInstall·ApplicationStart·기동 전 검사와 V39 안에서 확인한다. V39가 끝나면 승인 기록은 지워지고 worker에는 시한이 없다.
+
+**V39가 적용된 뒤에는 옛 JAR가 기동 검사에 막힌다.** CodeDeploy 자동 롤백이 옛 배포 버전으로 바꾸면 서비스가 멈춘 채 남는다.
+이전 버전으로 돌아가려면 배포 전 DB와 그 DB에 맞는 이전 배포 파일을 함께 복구한 뒤 실행한다.
+
+```bash
+sudo bash /etc/salmonbus/evaluation-work-transition.sh resume-legacy
+```
+
+DB의 Flyway 최대 버전과 두 앱 `current`의 `flywayMaxVersion`이 같아야 차단이 풀린다. 서비스는 시작하지 않는다.
+V39 전용 롤백 SQL은 V38까지만 되돌리므로 V38 배포 파일이 없으면 쓸 수 없다.
+
 ## 인증 정보를 출력하지 않고 확인하기
 
 ```bash

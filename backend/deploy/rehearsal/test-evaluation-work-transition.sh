@@ -166,4 +166,53 @@ run_case '이전 DB와 두 JAR가 일치해야 구 worker 차단을 해제한다
   test ! -e /etc/salmonbus/evaluation-work-hold
   test "$RUNNING" = inactive
 '
+write_database_env() {
+  printf 'DB_URL=%s\nDB_USERNAME=%s\nDB_PASSWORD=p\n' "$2" "${3:-x}" > "$TEST_DIRECTORY/$1.env"
+}
+
+run_case '두 앱의 DB 주소가 같으면 같은 DB로 본다' '
+  write_database_env api jdbc:postgresql://rds:5432/salmonbus
+  write_database_env worker jdbc:postgresql://rds/salmonbus
+  transition_same_database "$TEST_DIRECTORY/api.env" "$TEST_DIRECTORY/worker.env"
+'
+run_case 'worker에만 연결 시간과 플래너 설정이 있어도 같은 DB로 본다' '
+  write_database_env api jdbc:postgresql://rds:5432/salmonbus
+  write_database_env worker "jdbc:postgresql://rds:5432/salmonbus?connectTimeout=5&socketTimeout=300&tcpKeepAlive=true&options=-c%20join_collapse_limit%3D20%20-c%20from_collapse_limit%3D20%20-c%20geqo_threshold%3D20"
+  transition_same_database "$TEST_DIRECTORY/api.env" "$TEST_DIRECTORY/worker.env"
+  write_database_env worker "jdbc:postgresql://rds:5432/salmonbus?options=-cjoin_collapse_limit=20+-c+geqo_threshold=20"
+  transition_same_database "$TEST_DIRECTORY/api.env" "$TEST_DIRECTORY/worker.env"
+'
+run_case '호스트·포트·DB·계정이 하나라도 다르면 거절한다' '
+  write_database_env api jdbc:postgresql://rds:5432/salmonbus
+  write_database_env worker jdbc:postgresql://other:5432/salmonbus
+  expect_blocked transition_same_database "$TEST_DIRECTORY/api.env" "$TEST_DIRECTORY/worker.env"
+  write_database_env worker jdbc:postgresql://rds:5433/salmonbus
+  expect_blocked transition_same_database "$TEST_DIRECTORY/api.env" "$TEST_DIRECTORY/worker.env"
+  write_database_env worker jdbc:postgresql://rds:5432/other
+  expect_blocked transition_same_database "$TEST_DIRECTORY/api.env" "$TEST_DIRECTORY/worker.env"
+  write_database_env worker jdbc:postgresql://rds:5432/salmonbus y
+  expect_blocked transition_same_database "$TEST_DIRECTORY/api.env" "$TEST_DIRECTORY/worker.env"
+'
+run_case '스키마·보안 옵션이나 허용하지 않은 세션 설정이 있으면 거절한다' '
+  write_database_env api jdbc:postgresql://rds:5432/salmonbus
+  for query in currentSchema=other sslmode=disable "options=-c%20search_path%3Dother" \
+      "options=-c%20join_collapse_limit%3D20%20-c%20search_path%3Dother" "options=-c" "options=join_collapse_limit%3D20" \
+      "socketTimeout=abc" "tcpKeepAlive=yes" "connectTimeout"; do
+    write_database_env worker "jdbc:postgresql://rds:5432/salmonbus?$query"
+    expect_blocked transition_same_database "$TEST_DIRECTORY/api.env" "$TEST_DIRECTORY/worker.env"
+  done
+  write_database_env worker jdbc:postgresql://rds:5432/salmonbus
+  write_database_env api "jdbc:postgresql://rds:5432/salmonbus?currentSchema=other"
+  expect_blocked transition_same_database "$TEST_DIRECTORY/api.env" "$TEST_DIRECTORY/worker.env"
+'
+run_case 'DB 대상이 다르면 worker를 중지하기 전에 prepare를 거절한다' '
+  RUNNING=active
+  cp /etc/salmonbus/worker.env "$TEST_DIRECTORY/worker.env.saved"
+  sed -i "s#^DB_URL=.*#DB_URL=jdbc:postgresql://other:5432/salmonbus#" /etc/salmonbus/worker.env
+  rm -f /etc/salmonbus/evaluation-work-hold
+  expect_blocked transition_prepare test-backup
+  cp "$TEST_DIRECTORY/worker.env.saved" /etc/salmonbus/worker.env
+  test "$RUNNING" = active
+  test ! -e /etc/salmonbus/evaluation-work-hold
+'
 echo "======== 전환 차단 검사: 통과 $PASS · 실패 0 ========"

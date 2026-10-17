@@ -25,6 +25,51 @@ transition_version() {
   printf '%s' "$version"
 }
 
+transition_planner_options() {
+  local decoded tokens index name_value
+  decoded="${1//+/ }"
+  decoded="$(printf '%b' "${decoded//%/\\x}")"
+  read -ra tokens <<< "$decoded"
+  [ "${#tokens[@]}" -gt 0 ] || return 1
+  index=0
+  while [ "$index" -lt "${#tokens[@]}" ]; do
+    case "${tokens[$index]}" in
+      -c) index=$((index + 1)); name_value="${tokens[$index]:-}" ;;
+      -c*) name_value="${tokens[$index]#-c}" ;;
+      *) return 1 ;;
+    esac
+    [[ "$name_value" =~ ^(join_collapse_limit|from_collapse_limit|geqo_threshold)=[0-9]{1,4}$ ]] || return 1
+    index=$((index + 1))
+  done
+}
+
+transition_database_target() {
+  local url="$1" host port database query parameter name value
+  local -a parameters=()
+  [[ "$url" =~ ^jdbc:postgresql://([a-zA-Z0-9.-]+)(:([0-9]+))?/([a-zA-Z0-9_-]+)(\?(.*))?$ ]] || return 1
+  host="${BASH_REMATCH[1]}"; port="${BASH_REMATCH[3]:-5432}"; database="${BASH_REMATCH[4]}"; query="${BASH_REMATCH[6]}"
+  [ -z "$query" ] || IFS='&' read -ra parameters <<< "$query"
+  for parameter in "${parameters[@]}"; do
+    name="${parameter%%=*}"; value="${parameter#*=}"
+    [ "$name" != "$parameter" ] || return 1
+    case "$name" in
+      connectTimeout|socketTimeout) [[ "$value" =~ ^[0-9]{1,6}$ ]] || return 1 ;;
+      tcpKeepAlive) [[ "$value" =~ ^(true|false)$ ]] || return 1 ;;
+      options) transition_planner_options "$value" || return 1 ;;
+      *) return 1 ;;
+    esac
+  done
+  printf '%s:%s/%s' "$host" "$port" "$database"
+}
+
+transition_same_database() {
+  local api_target worker_target
+  [ "$(sed -n 's/^DB_USERNAME=//p' "$1")" = "$(sed -n 's/^DB_USERNAME=//p' "$2")" ] || return 1
+  api_target="$(transition_database_target "$(sed -n 's/^DB_URL=//p' "$1")")" || return 1
+  worker_target="$(transition_database_target "$(sed -n 's/^DB_URL=//p' "$2")")" || return 1
+  [ "$api_target" = "$worker_target" ]
+}
+
 # 접속 실패·조회 권한 부족·응답 지연은 모두 차단한다. 비밀번호와 DB 오류 원문은 출력하지 않는다.
 transition_sql() {
   local component="$1" sql="$2" env_file url user password host port database
@@ -126,8 +171,8 @@ transition_prepare() {
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   # api와 worker의 DB가 다르면 단일 DB 전환 절차를 실행하지 않는다.
   for component in api worker; do transition_secure_file "/etc/salmonbus/$component.env" || return 1; done
-  [ "$(sed -n 's/^DB_URL=//p' /etc/salmonbus/api.env)" = "$(sed -n 's/^DB_URL=//p' /etc/salmonbus/worker.env)" ] \
-    || { transition_error 'api와 worker의 DB 주소가 다릅니다'; return 1; }
+  transition_same_database /etc/salmonbus/api.env /etc/salmonbus/worker.env \
+    || { transition_error 'api와 worker의 DB 대상이 다르거나 허용하지 않은 연결 옵션이 있습니다'; return 1; }
   schema="$(transition_schema api)" || return 1
   case "$schema" in pending) ;; *) transition_error '기존 대기 테이블이 있는 DB에서만 prepare를 실행할 수 있습니다'; return 1 ;; esac
   [ -f "$script_dir/../sql/prepare-evaluation-work-transition.sql" ] || return 1
