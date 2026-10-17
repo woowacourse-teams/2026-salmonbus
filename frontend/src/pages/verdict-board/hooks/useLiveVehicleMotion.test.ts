@@ -19,6 +19,25 @@ function positionOf(store: LiveVehicleMotionStore): number {
 }
 
 describe("shared live vehicle motion", () => {
+  it("native 계획 구독은 매 프레임이나 동일 관측의 좌석 갱신을 전송하지 않는다", () => {
+    const store = createLiveVehicleMotionStore();
+    const listener = jest.fn();
+    store.subscribePlans(listener);
+    const view = viewFor("DEPARTED");
+    store.update([view], DURATION, 0);
+    const plans = store.plans;
+    for (let now = 16; now < 1_000; now += 16) store.advance(now);
+    store.update([{ ...view, vehicle: { ...view.vehicle, seat: { kind: "EXACT", remaining: 0 } } }], DURATION, 1_000);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(store.plans).toBe(plans);
+    store.update([viewFor("IN_TRANSIT")], DURATION, 1_000);
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(store.plans[0]?.start).toBeCloseTo(1.091);
+    store.clear();
+    expect(listener).toHaveBeenCalledTimes(3);
+    expect(store.plans).toEqual([]);
+  });
+
   it("같은 clock의 정규화 좌표를 지도와 목록 구독자에게 선형으로 전달한다", () => {
     const store = createLiveVehicleMotionStore();
     const mapPositions: number[] = [];
