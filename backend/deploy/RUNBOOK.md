@@ -362,6 +362,7 @@ sudo systemctl restart salmonbus-worker
 ```bash
 stat -c '%a' /etc/salmonbus/worker.env                          # 600 이어야 한다
 grep -c '^GBIS_SERVICE_KEY=' /etc/salmonbus/worker.env          # 1 이어야 한다
+grep -cE '^(GBIS_SERVICE_KEY|GBIS_KEYS_A)=' /etc/salmonbus/worker.env   # 별칭 a를 GBIS_KEYS_A로 옮겼다면 이 줄로 센다. 1 이어야 한다
 grep '^GBIS_SERVICE_KEY=' /etc/salmonbus/worker.env | cut -d= -f2- | tr -d '\n' | sha256sum | cut -c1-8
 ```
 
@@ -372,40 +373,62 @@ grep '^GBIS_SERVICE_KEY=' /etc/salmonbus/worker.env | cut -d= -f2- | tr -d '\n' 
 
 ## GBIS 키 여러 개 쓰기
 
-Worker는 버스 위치정보 API를 키 최대 4개로 나눠 호출한다. 호출마다 다음 키로 넘어가고, 그날 한도가 찬 키는 건너뛴다.
-노선정보 API는 슬롯 a만 쓴다.
+Worker는 버스 위치정보 API와 도착정보 API를 설정한 키 전부에 나눠 호출한다. 호출마다 다음 키로 넘어가고, 그날 한도가 찬 키는 건너뛴다.
+노선정보 API는 별칭 a의 키만 쓴다. 키 개수에는 상한이 없고, 바꾼 설정은 Worker를 다시 시작하면 반영된다.
 
-| 슬롯 | `worker.env` 변수 |
+키마다 **별칭**을 하나 붙인다. 하루 호출 장부(`daily_call_quota.key_alias`)는 별칭으로 센다.
+같은 별칭이면 키 값을 바꿔도 그날 쓴 횟수와 제외 상태를 이어 받는다. 순서를 바꿔도 장부는 그대로다.
+
+| 별칭 | `worker.env` 변수 |
 | --- | --- |
-| a | `GBIS_SERVICE_KEY`. 반드시 있어야 한다 |
-| b | `GBIS_SERVICE_KEY_B` |
-| c | `GBIS_SERVICE_KEY_C` |
-| d | `GBIS_SERVICE_KEY_D` |
+| a | `GBIS_SERVICE_KEY` 또는 `GBIS_KEYS_A`. 둘 중 하나는 반드시 있어야 한다 |
+| b, c, d | `GBIS_SERVICE_KEY_B`·`_C`·`_D` 또는 `GBIS_KEYS_B`·`_C`·`_D` |
+| 그 밖 | `GBIS_KEYS_<별칭>`. 예: `GBIS_KEYS_E`, `GBIS_KEYS_TEAM5` |
 
-**모든 키의 하루 한도를 같은 값(`gbis.daily-limit`, 기본 10,000회)으로 센다.** 포털에서 그 한도 이상을 받은 키만 넣는다.
-값이 빈 슬롯은 쓰지 않는다. **같은 키를 두 슬롯에 넣지 않는다.** Worker가 막지 않으므로 그 키의 한도를 두 배로 센다.
+- 별칭은 영문 소문자와 숫자 1~16자다. 환경변수 이름의 별칭 부분은 대문자로 써도 소문자로 읽는다(`GBIS_KEYS_TEAM5` → `team5`). 밑줄과 하이픈은 쓸 수 없다.
+- 같은 별칭을 두 방식으로 함께 적으면(`GBIS_SERVICE_KEY`와 `GBIS_KEYS_A`) Worker가 시작하지 않는다. 한쪽만 남긴다.
+- 같은 키를 두 별칭에 넣으면 Worker가 시작하지 않는다. 한도를 두 번 세기 때문이다. 퍼센트 인코딩한 값과 원래 값도 같은 키로 본다.
+- `GBIS_KEYS_<별칭>=`처럼 값이 빈 줄은 오류다. 쓰지 않을 키는 줄을 지운다. `GBIS_SERVICE_KEY_B=`처럼 빈 기존 변수는 예전처럼 없는 것으로 본다.
+- `GBIS_KEYS=` 한 줄에 여러 키를 적는 형식은 쓰지 않는다.
+
+**하루 한도는 키마다 포털에서 받은 값으로 센다.** 따로 적지 않은 키는 공통 값을 쓴다.
+
+| API | 공통 값 | 키 하나만 다르게 |
+| --- | --- | --- |
+| 위치정보·노선정보 | `gbis.daily-limit`(기본 10,000회, `GBIS_DAILY_LIMIT`) | `GBIS_LIMITS_<별칭>=1000` |
+| 도착정보 | `arrivals.key-daily-limit`(기본 10,000회, `ARRIVALS_KEY_DAILY_LIMIT`) | `ARRIVALS_LIMITS_<별칭>=1000` |
+
+- 새로 받은 키처럼 한도가 다른 키는 그 키의 한도 줄을 함께 넣는다. 포털 한도보다 크게 넣지 않는다.
+- 설정에 없는 별칭에 한도를 주거나 1보다 작게 주면 Worker가 시작하지 않는다.
+- 도착정보 전체 예산은 `arrivals.daily-limit`(기본 40,000회, `ARRIVALS_DAILY_LIMIT`)이다. 키를 늘려도 저절로 늘지 않는다.
+- 한도를 바꿔도 그날 이미 만든 장부 행은 처음 정한 한도로 끝까지 센다. 바꾼 한도는 다음 날(한국 시각) 행부터 적용된다.
 
 ### 키 추가
 
 ```bash
-sudo vi /etc/salmonbus/worker.env    # GBIS_SERVICE_KEY_B= 줄을 추가한다. C·D도 같다
+sudo vi /etc/salmonbus/worker.env    # GBIS_KEYS_E= 줄을 추가한다. 한도가 다른 키면 GBIS_LIMITS_E=, ARRIVALS_LIMITS_E= 줄도 넣는다
 sudo systemctl restart salmonbus-worker
 journalctl -u salmonbus-worker --no-pager | grep 'GBIS 키 슬롯' | tail -1
 ```
 
-마지막 명령의 출력에서 슬롯 목록과 한도 합을 확인한다. 키가 4개면 `GBIS 키 슬롯 4개로 수집한다. 슬롯=a,b,c,d 하루 한도 합=40000`이다.
+마지막 명령의 출력에서 슬롯 목록과 한도 합을 확인한다. 키가 5개면 `GBIS 키 슬롯 5개로 수집한다. 슬롯=a,b,c,d,e 하루 한도 합=50000`이다.
 이 로그는 수집을 활성화한 Worker에서만 남는다. 넣은 키는 "인증 정보를 출력하지 않고 확인하기"의 명령에서
-`^GBIS_SERVICE_KEY=`를 `^GBIS_SERVICE_KEY_B=`처럼 바꿔 포털 값과 대조한다.
+`^GBIS_SERVICE_KEY=`를 `^GBIS_KEYS_E=`처럼 바꿔 포털 값과 대조한다.
+
+### 키 교체와 제거
+
+- 같은 별칭의 값만 바꾸면 새 키도 그날 그 별칭이 쓴 횟수와 제외 상태를 이어 받는다. 그날 바로 새 한도로 쓰려면 새 별칭으로 넣는다.
+- 줄을 지우고 다시 시작하면 그 별칭을 더 쓰지 않는다. 장부의 그날 행은 남아 있고, 같은 날 다시 넣으면 남은 횟수부터 이어서 센다.
 
 ### 키 1개로 되돌리기
 
 ```bash
-sudo sed -i '/^GBIS_SERVICE_KEY_[BCD]=/d' /etc/salmonbus/worker.env
+sudo sed -i -E '/^GBIS_SERVICE_KEY_[BCD]=|^GBIS_KEYS_[A-Za-z0-9]+=|^GBIS_LIMITS_[A-Za-z0-9]+=|^ARRIVALS_LIMITS_[A-Za-z0-9]+=/d' /etc/salmonbus/worker.env
 sudo systemctl restart salmonbus-worker
 ```
 
-**`GBIS_SERVICE_KEY` 줄은 지우지 않는다.** 슬롯 a가 없으면 Worker가 시작하지 않는다.
-재시작한 뒤에는 슬롯 a만 쓴다. 장부의 b~d 행은 그날 남아 있지만 더 늘지 않는다.
+**`GBIS_SERVICE_KEY` 줄은 지우지 않는다.** 별칭 a가 없으면 Worker가 시작하지 않는다. a를 `GBIS_KEYS_A`로 옮겼다면 위 명령 대신 그 줄만 남긴다.
+재시작한 뒤에는 별칭 a만 쓴다. 장부의 다른 별칭 행은 그날 남아 있지만 더 늘지 않는다.
 
 ### 하루 한도 늘리기
 
