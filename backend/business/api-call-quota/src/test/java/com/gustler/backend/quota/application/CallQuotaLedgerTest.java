@@ -456,4 +456,95 @@ class CallQuotaLedgerTest {
             .query((rs, n) -> Map.entry(rs.getString(1), rs.getInt(2)))
             .list();
     }
+    @Test
+    void 위치정보는_키_다섯_개를_차례로_돌려_쓰고_한도가_찬_키는_건너뛴다() {
+        // given
+        ApiCallQuota fiveKeys = ledgerOf(List.of("a", "b", "c", "d", "e"), TWO_CALLS);
+
+        // when
+        List<String> aliases = new java.util.ArrayList<>();
+        for (int call = 0; call < 10; call++) {
+            aliases.add(fiveKeys.reserveLocation(KOREA_8_28_LATE_NIGHT).orElseThrow());
+        }
+
+        // then
+        assertThat(aliases).containsExactly("a", "b", "c", "d", "e", "a", "b", "c", "d", "e");
+        assertThat(fiveKeys.reserveLocation(KOREA_8_28_LATE_NIGHT)).isEmpty();
+    }
+
+    @Test
+    void 키를_뺐다가_다시_넣어도_그날_그_별칭의_쓴_횟수를_이어서_센다() {
+        // given
+        ApiCallQuota withE = ledgerOf(List.of("a", "e"), TWO_CALLS);
+        withE.reserveLocation(KOREA_8_28_LATE_NIGHT);
+        withE.reserveLocation(KOREA_8_28_LATE_NIGHT);
+        ApiCallQuota withoutE = ledgerOf(List.of("a"), TWO_CALLS);
+        withoutE.reserveLocation(KOREA_8_28_LATE_NIGHT);
+
+        // when
+        ApiCallQuota restored = ledgerOf(List.of("a", "e"), TWO_CALLS);
+        List<String> aliases = new java.util.ArrayList<>();
+        restored.reserveLocation(KOREA_8_28_LATE_NIGHT).ifPresent(aliases::add);
+        restored.reserveLocation(KOREA_8_28_LATE_NIGHT).ifPresent(aliases::add);
+
+        // then
+        assertThat(aliases).containsExactly("e");
+        assertThat(reservedCallsOf(KOREA_8_28, "e")).isEqualTo(TWO_CALLS);
+        assertThat(reservedCallsOf(KOREA_8_28, "a")).isEqualTo(TWO_CALLS);
+    }
+
+    @Test
+    void 제외한_키는_다시_기동해도_그날_다시_쓰지_않는다() {
+        // given
+        ApiCallQuota beforeRestart = ledgerOf(List.of("a", "e"), DAILY_LIMIT_10000);
+        beforeRestart.reserveLocation(KOREA_8_28_LATE_NIGHT);
+        beforeRestart.reserveLocation(KOREA_8_28_LATE_NIGHT);
+        beforeRestart.excludeLocationKey("e", KOREA_8_28_LATE_NIGHT);
+
+        // when
+        ApiCallQuota restarted = ledgerOf(List.of("a", "e"), DAILY_LIMIT_10000);
+        List<String> aliases = new java.util.ArrayList<>();
+        for (int call = 0; call < 3; call++) {
+            restarted.reserveLocation(KOREA_8_28_LATE_NIGHT).ifPresent(aliases::add);
+        }
+
+        // then
+        assertThat(aliases).containsOnly("a");
+    }
+
+    @Test
+    void 키별_한도를_준_키는_그_한도에서_멈추고_다른_키는_계속_쓴다() {
+        // given
+        ApiCallQuota ledger = new CallQuotaLedger(callQuotaStore,
+            CallQuotaPolicy.sameForEveryApi(TWO_CALLS, List.of("a", "e"), Map.of("e", 1)));
+
+        // when
+        List<String> aliases = new java.util.ArrayList<>();
+        for (int call = 0; call < 4; call++) {
+            ledger.reserveLocation(KOREA_8_28_LATE_NIGHT).ifPresent(aliases::add);
+        }
+
+        // then
+        assertThat(aliases).containsExactly("a", "e", "a");
+    }
+
+    private ApiCallQuota ledgerOf(
+        List<String> aliases,
+        final int dailyLimit
+    ) {
+        return new CallQuotaLedger(callQuotaStore, CallQuotaPolicy.sameForEveryApi(dailyLimit, aliases));
+    }
+
+    private int reservedCallsOf(
+        LocalDate koreanDate,
+        String keyAlias
+    ) {
+        return jdbcClient.sql("""
+                SELECT reserved_calls FROM daily_call_quota
+                WHERE api_service = 'BUS_LOCATION' AND kst_date = ? AND key_alias = ?
+                """)
+            .params(koreanDate, keyAlias)
+            .query(Integer.class)
+            .single();
+    }
 }

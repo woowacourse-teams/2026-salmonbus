@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -71,5 +72,22 @@ class CallQuotaPolicyTest {
         limits.put(CallQuota.BUS_LOCATION, location);
         limits.put(CallQuota.BUS_ROUTE, route);
         return limits;
+    }
+
+    @Test
+    void 키별_한도가_있는_키는_그_한도를_없는_키는_API_한도를_쓴다() {
+        // given
+        CallQuotaPolicy policy = CallQuotaPolicy.sameForEveryApi(SAME_LIMIT, List.of("a", "e"), Map.of("e", 1));
+
+        // then
+        assertThat(policy.limitOf(CallQuota.BUS_LOCATION, "e")).isEqualTo(1);
+        assertThat(policy.limitOf(CallQuota.BUS_LOCATION, "a")).isEqualTo(SAME_LIMIT);
+    }
+
+    @Test
+    void 설정에_없는_키에_키별_한도를_주면_거절한다() {
+        // when & then
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> CallQuotaPolicy.sameForEveryApi(SAME_LIMIT, List.of("a"), Map.of("e", 1)));
     }
 }

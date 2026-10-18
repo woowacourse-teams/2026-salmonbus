@@ -33,12 +33,12 @@ public class CollectionRuntimeConfiguration {
     @Bean
     @Primary
     GbisClientOptions gbisClientOptions(GbisProperties properties) {
-        return new GbisClientOptions(properties.baseUrl(), properties.keys());
+        return new GbisClientOptions(properties.baseUrl(), properties.serviceKeys());
     }
 
     @Bean
     CallQuotaPolicy callQuotaPolicy(GbisProperties properties) {
         return CallQuotaPolicy.sameForEveryApi(properties.dailyLimit(),
-            properties.keys().stream().map(GbisKey::alias).toList());
+            properties.serviceKeys().stream().map(GbisKey::alias).toList(), properties.limits());
     }
 }

@@ -11,7 +11,11 @@ import java.util.Objects;
  *
  * <p>한도는 서비스키 전체가 아니라 API 단위로 적용되므로 위치정보와 노선정보의 한도가 다를 수 있다.
  */
-public record CallQuotaPolicy(Map<CallQuota, Integer> dailyLimits, List<String> locationKeyAliases) {
+public record CallQuotaPolicy(
+    Map<CallQuota, Integer> dailyLimits,
+    List<String> locationKeyAliases,
+    Map<String, Integer> keyDailyLimits
+) {
 
     public static final String PRIMARY_KEY_ALIAS = "a";
 
@@ -32,6 +36,16 @@ public record CallQuotaPolicy(Map<CallQuota, Integer> dailyLimits, List<String> 
             throw new IllegalArgumentException("위치정보 키 별칭에는 기본 키가 있어야 한다: " + locationKeyAliases);
         }
         locationKeyAliases = List.copyOf(locationKeyAliases);
+        keyDailyLimits = keyDailyLimits == null ? Map.of() : Map.copyOf(keyDailyLimits);
+        for (Map.Entry<String, Integer> limit : keyDailyLimits.entrySet()) {
+            if (!locationKeyAliases.contains(limit.getKey()) || limit.getValue() == null || limit.getValue() <= 0) {
+                throw new IllegalArgumentException("키별 하루 한도는 설정한 키에만 1 이상으로 줄 수 있다: " + limit.getKey());
+            }
+        }
+    }
+
+    public CallQuotaPolicy(Map<CallQuota, Integer> dailyLimits, List<String> locationKeyAliases) {
+        this(dailyLimits, locationKeyAliases, Map.of());
     }
 
     public CallQuotaPolicy(Map<CallQuota, Integer> dailyLimits) {
@@ -44,14 +58,26 @@ public record CallQuotaPolicy(Map<CallQuota, Integer> dailyLimits, List<String> 
     }
 
     public static CallQuotaPolicy sameForEveryApi(final int dailyLimit, List<String> locationKeyAliases) {
+        return sameForEveryApi(dailyLimit, locationKeyAliases, Map.of());
+    }
+
+    public static CallQuotaPolicy sameForEveryApi(
+        final int dailyLimit,
+        List<String> locationKeyAliases,
+        Map<String, Integer> keyDailyLimits
+    ) {
         Map<CallQuota, Integer> limits = new EnumMap<>(CallQuota.class);
         for (CallQuota service : CallQuota.values()) {
             limits.put(service, dailyLimit);
         }
-        return new CallQuotaPolicy(limits, locationKeyAliases);
+        return new CallQuotaPolicy(limits, locationKeyAliases, keyDailyLimits);
     }
 
     public int limitOf(CallQuota service) {
         return dailyLimits.get(Objects.requireNonNull(service, "호출 서비스가 필요하다"));
+    }
+
+    public int limitOf(CallQuota service, String keyAlias) {
+        return keyDailyLimits.getOrDefault(keyAlias, limitOf(service));
     }
 }

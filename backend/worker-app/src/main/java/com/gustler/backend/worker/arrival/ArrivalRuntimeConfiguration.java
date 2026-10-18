@@ -26,13 +26,18 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class ArrivalRuntimeConfiguration {
     @Bean
     ArrivalQuotaPolicy arrivalQuotaPolicy(GbisProperties keys, ArrivalProperties properties) {
-        return new ArrivalQuotaPolicy(properties.dailyLimit(), keys.keys().stream()
-            .collect(Collectors.toMap(key -> key.alias(), key -> properties.keyDailyLimit())));
+        var aliases = keys.serviceKeys().stream().map(key -> key.alias()).toList();
+        properties.limits().keySet().stream().filter(alias -> !aliases.contains(alias)).sorted().findFirst()
+            .ifPresent(alias -> {
+                throw new IllegalStateException("arrivals.limits." + alias + " 에 맞는 GBIS 키가 없다. 별칭을 확인하라");
+            });
+        return new ArrivalQuotaPolicy(properties.dailyLimit(), aliases.stream()
+            .collect(Collectors.toMap(alias -> alias, properties::keyDailyLimitOf)));
     }
 
     @Bean
     GbisClientOptions arrivalGbisOptions(GbisProperties keys) {
-        return new GbisClientOptions(keys.baseUrl(), keys.keys());
+        return new GbisClientOptions(keys.baseUrl(), keys.serviceKeys());
     }
 
     @Bean(destroyMethod = "close")
