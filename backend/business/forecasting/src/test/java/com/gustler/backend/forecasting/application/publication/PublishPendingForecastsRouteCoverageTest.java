@@ -208,10 +208,10 @@ class PublishPendingForecastsRouteCoverageTest {
     @Test
     void 회차에서_한_노선의_발행이_실패해도_다음_노선을_발행한다() {
         // given
-        final RuntimeSnapshot runtime = new RuntimeSnapshot(RUNTIME.deployment(),
+        RuntimeSnapshot runtime = new RuntimeSnapshot(RUNTIME.deployment(),
             new SupportedForecastScope(List.of("3330", "9007")), RUNTIME.model(), NOW);
-        final PendingForecastBatch failing = new PendingForecastBatch(20L, ROUTE_VERSION_9007, 3L, NOW.minusSeconds(20));
-        final PendingForecastBatch next = new PendingForecastBatch(10L, ROUTE_VERSION_3330, 1L, NOW.minusSeconds(20));
+        PendingForecastBatch failing = new PendingForecastBatch(20L, ROUTE_VERSION_9007, 3L, NOW.minusSeconds(20));
+        PendingForecastBatch next = new PendingForecastBatch(10L, ROUTE_VERSION_3330, 1L, NOW.minusSeconds(20));
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
         when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_9007, ROUTE_VERSION_3330));
         when(routeStops.readStops(ROUTE_VERSION_9007)).thenReturn(STOPS_9007);
