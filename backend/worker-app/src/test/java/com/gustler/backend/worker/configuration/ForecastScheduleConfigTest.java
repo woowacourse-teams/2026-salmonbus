@@ -1,6 +1,8 @@
 package com.gustler.backend.worker.configuration;
 
+import com.gustler.backend.observations.api.ObservationDeliveryHook;
 import com.gustler.backend.worker.scheduling.ArrivalLabelJob;
+import com.gustler.backend.worker.scheduling.ForecastTrigger;
 import com.gustler.backend.worker.scheduling.TripQualityInvestigationJob;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -68,5 +70,20 @@ class ForecastScheduleConfigTest {
 
         // then
         assertThat(registeredTasks).contains(TripQualityInvestigationJob.class.getName() + ".investigate");
+    }
+
+    @Test
+    void 예보_스위치를_켜면_30초_회차를_등록하고_관측_저장_이벤트를_받는다() {
+        // when
+        List<String> registeredTasks = applicationContext.getBeansOfType(ScheduledTaskHolder.class).values().stream()
+            .flatMap(holder -> holder.getScheduledTasks().stream())
+            .map(scheduled -> scheduled.getTask().toString())
+            .toList();
+
+        // then
+        assertThat(registeredTasks).contains(ForecastTrigger.class.getName() + ".writeForecasts");
+        assertThat(applicationContext.getBeansOfType(ObservationDeliveryHook.class).values())
+            .anySatisfy(hook -> assertThat(org.springframework.aop.support.AopUtils.getTargetClass(hook))
+                .isEqualTo(ForecastTrigger.class));
     }
 }

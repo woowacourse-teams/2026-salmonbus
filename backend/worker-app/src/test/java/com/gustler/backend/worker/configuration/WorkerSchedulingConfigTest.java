@@ -84,4 +84,35 @@ class WorkerSchedulingConfigTest {
             processing.shutdown();
         }
     }
+
+    @Test
+    void 처리가_스레드를_사용하는_중에도_예보를_전용_스레드에서_실행한다() throws Exception {
+        // given
+        var config = new WorkerSchedulingConfig();
+        var processing = config.processingScheduler();
+        var forecast = config.forecastScheduler();
+        var started = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        processing.initialize();
+        forecast.initialize();
+        try {
+            processing.execute(() -> {
+                started.countDown();
+                try { release.await(3, TimeUnit.SECONDS); }
+                catch (InterruptedException failure) { Thread.currentThread().interrupt(); }
+            });
+            assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
+
+            // when
+            var forecastThread = forecast.submit(() -> Thread.currentThread().getName()).get(1, TimeUnit.SECONDS);
+
+            // then
+            assertThat(forecastThread).startsWith("forecast-");
+            assertThat(forecast.getPoolSize()).isOne();
+        } finally {
+            release.countDown();
+            forecast.shutdown();
+            processing.shutdown();
+        }
+    }
 }
