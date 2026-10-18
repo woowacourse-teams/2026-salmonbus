@@ -20,6 +20,15 @@ public class JdbcRouteDataQualityAccess implements RouteDataQualityAccess {
     }
 
     @Override
+    public void ensureExists(final long version) {
+        jdbc.sql("""
+            INSERT INTO route_data_quality(route_id)
+            SELECT route_id FROM route_version WHERE id = ?
+            ON CONFLICT(route_id) DO NOTHING
+            """).param(version).update();
+    }
+
+    @Override
     public long lock(final long version) {
         final long routeId = jdbc.sql("SELECT route_id FROM route_version WHERE id = ?")
             .param(version).query(Long.class).single();
