@@ -218,6 +218,22 @@ readiness 그룹을 `management.endpoint.health.probes.add-additional-paths`로 
 다른 서비스의 잠금이면 마지막 훅이 시작한 뒤 15분이 지났을 때만 죽은 배포로 보고 회수한다. 15분이 안 됐으면
 진행 중인 배포로 보고 대기하지 않고 배포를 중단한다. 진행 중인 배포는 훅마다 잠금을 갱신하므로 15분을 넘겨도 뺏기지 않는다.
 
+**Worker를 GBIS 키 별칭 형식 이전 버전으로 되돌릴 때는 롤백하기 전에 `worker.env`를 옛 형식으로 바꾼다.**
+이전 버전은 `GBIS_SERVICE_KEY`가 없으면 시작하지 않고, 도착정보 한도가 `ARRIVALS_DAILY_LIMIT` 40,000,
+`ARRIVALS_KEY_DAILY_LIMIT` 10,000을 넘어도 시작하지 않는다. 직전에 성공한 배포가 이전 버전이면 자동 롤백도
+그 버전의 preflight나 기동에서 멈춘다. 이때는 아래 명령을 돌린 뒤 수동으로 롤백한다.
+
+```bash
+sudo sed -i -E '/^GBIS_SERVICE_KEY(_[BCD])?=[[:space:]]*$/d; s/^GBIS_KEYS_A=/GBIS_SERVICE_KEY=/; s/^GBIS_KEYS_([BCD])=/GBIS_SERVICE_KEY_\1=/' /etc/salmonbus/worker.env
+grep -cE '^GBIS_SERVICE_KEY=' /etc/salmonbus/worker.env                             # 1 이어야 한다
+grep -E '^ARRIVALS_(DAILY|KEY_DAILY)_LIMIT=' /etc/salmonbus/worker.env              # 40000·10000 이하여야 한다
+```
+
+값이 빈 `GBIS_SERVICE_KEY` 계열 줄은 먼저 지운다. 남겨 두면 이름을 바꾼 줄과 겹쳐 뒤에 있는 빈 값이 쓰인다.
+a~d가 아닌 별칭의 키(`GBIS_KEYS_E`, `GBIS_KEYS_TEAM5` 등)와 `GBIS_LIMITS_*`·`ARRIVALS_LIMITS_*` 줄은 이전 버전이
+읽지 않는다. 그 키는 쓰지 않고, 남은 키는 위치정보·노선정보는 `GBIS_DAILY_LIMIT`, 도착정보는 `ARRIVALS_KEY_DAILY_LIMIT`로 센다.
+바꾼 파일은 지금 버전에서도 그대로 쓸 수 있다.
+
 수동으로 롤백할 때는 대상 서비스를 하나만 선택한다.
 
 ```bash
@@ -381,15 +397,17 @@ Worker는 버스 위치정보 API와 도착정보 API를 설정한 키 전부에
 
 | 별칭 | `worker.env` 변수 |
 | --- | --- |
-| a | `GBIS_SERVICE_KEY` 또는 `GBIS_KEYS_A`. 둘 중 하나는 반드시 있어야 한다 |
-| b, c, d | `GBIS_SERVICE_KEY_B`·`_C`·`_D` 또는 `GBIS_KEYS_B`·`_C`·`_D` |
+| a | `GBIS_SERVICE_KEY` 또는 `GBIS_KEYS_A`. 둘 중 하나는 반드시 있어야 한다. 롤백에 대비해 `GBIS_SERVICE_KEY`를 쓴다 |
+| b, c, d | `GBIS_SERVICE_KEY_B`·`_C`·`_D` 또는 `GBIS_KEYS_B`·`_C`·`_D`. 롤백에 대비해 `GBIS_SERVICE_KEY_B`~`_D`를 쓴다 |
 | 그 밖 | `GBIS_KEYS_<별칭>`. 예: `GBIS_KEYS_E`, `GBIS_KEYS_TEAM5` |
 
-- 별칭은 영문 소문자와 숫자 1~16자다. 환경변수 이름의 별칭 부분은 대문자로 써도 소문자로 읽는다(`GBIS_KEYS_TEAM5` → `team5`). 밑줄과 하이픈은 쓸 수 없다.
+- 별칭은 영문 소문자와 숫자 1~16자다. 환경변수 이름은 대문자로 쓰고, 별칭 부분은 소문자로 읽는다(`GBIS_KEYS_TEAM5` → `team5`). 밑줄과 하이픈은 쓸 수 없다.
 - 같은 별칭을 두 방식으로 함께 적으면(`GBIS_SERVICE_KEY`와 `GBIS_KEYS_A`) Worker가 시작하지 않는다. 한쪽만 남긴다.
 - 같은 키를 두 별칭에 넣으면 Worker가 시작하지 않는다. 한도를 두 번 세기 때문이다. 퍼센트 인코딩한 값과 원래 값도 같은 키로 본다.
 - `GBIS_KEYS_<별칭>=`처럼 값이 빈 줄은 오류다. 쓰지 않을 키는 줄을 지운다. `GBIS_SERVICE_KEY_B=`처럼 빈 기존 변수는 예전처럼 없는 것으로 본다.
 - `GBIS_KEYS=` 한 줄에 여러 키를 적는 형식은 쓰지 않는다.
+- e부터는 `GBIS_SERVICE_KEY_E`처럼 적으면 읽지 않는다. `GBIS_KEYS_E`로 적는다.
+- 별칭 형식 이전 버전은 a~d의 옛 변수만 읽는다. 이전 버전으로 되돌릴 때는 "롤백"을 본다.
 
 **하루 한도는 키마다 포털에서 받은 값으로 센다.** 따로 적지 않은 키는 공통 값을 쓴다.
 
@@ -400,7 +418,7 @@ Worker는 버스 위치정보 API와 도착정보 API를 설정한 키 전부에
 
 - 새로 받은 키처럼 한도가 다른 키는 그 키의 한도 줄을 함께 넣는다. 포털 한도보다 크게 넣지 않는다.
 - 설정에 없는 별칭에 한도를 주거나 1보다 작게 주면 Worker가 시작하지 않는다.
-- 도착정보 전체 예산은 `arrivals.daily-limit`(기본 40,000회, `ARRIVALS_DAILY_LIMIT`)이다. 키를 늘려도 저절로 늘지 않는다.
+- 도착정보 전체 예산은 `arrivals.daily-limit`(기본 40,000회, `ARRIVALS_DAILY_LIMIT`)이다. 키를 늘려도 저절로 늘지 않는다. 40,000이나 키별 10,000을 넘기면 이전 버전으로 롤백하기 전에 다시 낮춰야 한다.
 - 한도를 바꿔도 그날 이미 만든 장부 행은 처음 정한 한도로 끝까지 센다. 바꾼 한도는 다음 날(한국 시각) 행부터 적용된다.
 
 ### 키 추가
@@ -423,11 +441,13 @@ journalctl -u salmonbus-worker --no-pager | grep 'GBIS 키 슬롯' | tail -1
 ### 키 1개로 되돌리기
 
 ```bash
-sudo sed -i -E '/^GBIS_SERVICE_KEY_[BCD]=|^GBIS_KEYS_[A-Za-z0-9]+=|^GBIS_LIMITS_[A-Za-z0-9]+=|^ARRIVALS_LIMITS_[A-Za-z0-9]+=/d' /etc/salmonbus/worker.env
+sudo sed -i -E '/^GBIS_SERVICE_KEY=[[:space:]]*$/d; s/^GBIS_KEYS_A=/GBIS_SERVICE_KEY=/; /^(GBIS|ARRIVALS)_LIMITS_A=/b; /^GBIS_SERVICE_KEY_[BCD]=|^GBIS_KEYS_[A-Za-z0-9]+=|^(GBIS|ARRIVALS)_LIMITS_[A-Za-z0-9]+=/d' /etc/salmonbus/worker.env
+grep -cE '^GBIS_SERVICE_KEY=' /etc/salmonbus/worker.env    # 1 이어야 한다
 sudo systemctl restart salmonbus-worker
 ```
 
-**`GBIS_SERVICE_KEY` 줄은 지우지 않는다.** 별칭 a가 없으면 Worker가 시작하지 않는다. a를 `GBIS_KEYS_A`로 옮겼다면 위 명령 대신 그 줄만 남긴다.
+별칭 a의 키와 a의 한도 줄(`GBIS_LIMITS_A`·`ARRIVALS_LIMITS_A`)만 남기고 다른 별칭의 키와 한도 줄을 지운다. 공통 한도 줄은 그대로 둔다.
+a를 `GBIS_KEYS_A`에 적었다면 `GBIS_SERVICE_KEY`로 이름을 바꿔 남긴다. `GBIS_SERVICE_KEY` 줄을 손으로 지우지 않는다. 별칭 a가 없으면 Worker가 시작하지 않는다.
 재시작한 뒤에는 별칭 a만 쓴다. 장부의 다른 별칭 행은 그날 남아 있지만 더 늘지 않는다.
 
 ### 하루 한도 늘리기
