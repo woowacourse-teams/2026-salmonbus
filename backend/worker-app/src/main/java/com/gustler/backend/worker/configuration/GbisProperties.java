@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
@@ -22,7 +23,8 @@ public record GbisProperties(
     String serviceKeyD,
     Map<String, String> keys,
     int dailyLimit,
-    Map<String, Integer> limits
+    Map<String, Integer> limits,
+    Map<String, String> namedKeys
 ) {
 
     private static final String BROKEN_PERCENT =
@@ -39,12 +41,26 @@ public record GbisProperties(
         serviceKeyB = decodedIfPresent("gbis.service-key-b", serviceKeyB);
         serviceKeyC = decodedIfPresent("gbis.service-key-c", serviceKeyC);
         serviceKeyD = decodedIfPresent("gbis.service-key-d", serviceKeyD);
-        keys = keysOf(serviceKey, serviceKeyB, serviceKeyC, serviceKeyD, keys);
+        namedKeys = namedKeys == null ? Map.of() : Map.copyOf(namedKeys);
+        keys = keysOf(serviceKey, serviceKeyB, serviceKeyC, serviceKeyD, namedKeys, keys);
         serviceKey = keys.get(GbisKey.PRIMARY);
         if (dailyLimit <= 0) {
             throw new IllegalStateException("gbis.daily-limit must be positive");
         }
         limits = limitsOf(keys, limits);
+    }
+
+    public GbisProperties(
+        String baseUrl,
+        String serviceKey,
+        String serviceKeyB,
+        String serviceKeyC,
+        String serviceKeyD,
+        Map<String, String> keys,
+        int dailyLimit,
+        Map<String, Integer> limits
+    ) {
+        this(baseUrl, serviceKey, serviceKeyB, serviceKeyC, serviceKeyD, keys, dailyLimit, limits, Map.of());
     }
 
     public GbisProperties(
@@ -95,6 +111,7 @@ public record GbisProperties(
         String serviceKeyB,
         String serviceKeyC,
         String serviceKeyD,
+        Map<String, String> named,
         Map<String, String> declared
     ) {
         Map<String, String> merged = new TreeMap<>();
@@ -102,6 +119,20 @@ public record GbisProperties(
         putIfPresent(merged, "b", serviceKeyB);
         putIfPresent(merged, "c", serviceKeyC);
         putIfPresent(merged, "d", serviceKeyD);
+        new TreeMap<>(named).forEach((alias, value) -> {
+            String variable = "GBIS_SERVICE_KEY_" + alias.toUpperCase(Locale.ROOT);
+            if (!ALIAS.matcher(alias).matches()) {
+                throw new IllegalStateException(variable + " 의 별칭은 영문과 숫자 1~16자여야 한다");
+            }
+            if (value == null || value.isBlank()) {
+                throw new IllegalStateException(variable + " 의 값이 비었다");
+            }
+            if (merged.containsKey(alias)) {
+                throw new IllegalStateException(variable + " 와 다른 GBIS_SERVICE_KEY 설정이 같은 별칭 "
+                    + alias + " 를 함께 정한다. 한쪽만 남겨라");
+            }
+            merged.put(alias, decodedOnce(variable, value));
+        });
         Map<String, String> aliased = declared == null ? Map.of() : new TreeMap<>(declared);
         aliased.forEach((alias, value) -> {
             String property = "gbis.keys." + alias;

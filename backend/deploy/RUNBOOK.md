@@ -230,7 +230,7 @@ grep -E '^ARRIVALS_(DAILY|KEY_DAILY)_LIMIT=' /etc/salmonbus/worker.env          
 ```
 
 값이 빈 `GBIS_SERVICE_KEY` 계열 줄은 먼저 지운다. 남겨 두면 이름을 바꾼 줄과 겹쳐 뒤에 있는 빈 값이 쓰인다.
-a~d가 아닌 별칭의 키(`GBIS_KEYS_E`, `GBIS_KEYS_TEAM5` 등)와 `GBIS_LIMITS_*`·`ARRIVALS_LIMITS_*` 줄은 이전 버전이
+a~d가 아닌 별칭의 키(`GBIS_SERVICE_KEY_E`, `GBIS_KEYS_E` 등)와 `GBIS_LIMITS_*`·`ARRIVALS_LIMITS_*` 줄은 이전 버전이
 읽지 않는다. 그 키는 쓰지 않고, 남은 키는 위치정보·노선정보는 `GBIS_DAILY_LIMIT`, 도착정보는 `ARRIVALS_KEY_DAILY_LIMIT`로 센다.
 바꾼 파일은 지금 버전에서도 그대로 쓸 수 있다.
 
@@ -397,17 +397,17 @@ Worker는 버스 위치정보 API와 도착정보 API를 설정한 키 전부에
 
 | 별칭 | `worker.env` 변수 |
 | --- | --- |
-| a | `GBIS_SERVICE_KEY` 또는 `GBIS_KEYS_A`. 둘 중 하나는 반드시 있어야 한다. 롤백에 대비해 `GBIS_SERVICE_KEY`를 쓴다 |
-| b, c, d | `GBIS_SERVICE_KEY_B`·`_C`·`_D` 또는 `GBIS_KEYS_B`·`_C`·`_D`. 롤백에 대비해 `GBIS_SERVICE_KEY_B`~`_D`를 쓴다 |
-| 그 밖 | `GBIS_KEYS_<별칭>`. 예: `GBIS_KEYS_E`, `GBIS_KEYS_TEAM5` |
+| a | `GBIS_SERVICE_KEY`. 반드시 있어야 한다 |
+| 그 밖 | `GBIS_SERVICE_KEY_<별칭>`. 예: `GBIS_SERVICE_KEY_B`, `GBIS_SERVICE_KEY_E`, `GBIS_SERVICE_KEY_TEAM5` |
 
-- 별칭은 영문 소문자와 숫자 1~16자다. 환경변수 이름은 대문자로 쓰고, 별칭 부분은 소문자로 읽는다(`GBIS_KEYS_TEAM5` → `team5`). 밑줄과 하이픈은 쓸 수 없다.
-- 같은 별칭을 두 방식으로 함께 적으면(`GBIS_SERVICE_KEY`와 `GBIS_KEYS_A`) Worker가 시작하지 않는다. 한쪽만 남긴다.
+`GBIS_KEYS_<별칭>`(a는 `GBIS_KEYS_A`)도 읽지만, 이전 버전으로 롤백할 때 다시 바꿔야 하니 위 형식을 쓴다.
+
+- 별칭은 영문 소문자와 숫자 1~16자다. 환경변수 이름은 대문자로 쓰고, 별칭 부분은 소문자로 읽는다(`GBIS_SERVICE_KEY_TEAM5` → `team5`). 밑줄과 하이픈은 쓸 수 없다.
+- 같은 별칭을 두 방식으로 함께 적으면(`GBIS_SERVICE_KEY_E`와 `GBIS_KEYS_E`) Worker가 시작하지 않는다. 한쪽만 남긴다.
 - 같은 키를 두 별칭에 넣으면 Worker가 시작하지 않는다. 한도를 두 번 세기 때문이다. 퍼센트 인코딩한 값과 원래 값도 같은 키로 본다.
-- `GBIS_KEYS_<별칭>=`처럼 값이 빈 줄은 오류다. 쓰지 않을 키는 줄을 지운다. `GBIS_SERVICE_KEY_B=`처럼 빈 기존 변수는 예전처럼 없는 것으로 본다.
+- `GBIS_SERVICE_KEY_E=`처럼 값이 빈 줄은 없는 것으로 본다. `GBIS_KEYS_<별칭>=`처럼 값이 빈 줄은 오류다. 쓰지 않을 키는 줄을 지운다.
 - `GBIS_KEYS=` 한 줄에 여러 키를 적는 형식은 쓰지 않는다.
-- e부터는 `GBIS_SERVICE_KEY_E`처럼 적으면 읽지 않는다. `GBIS_KEYS_E`로 적는다.
-- 별칭 형식 이전 버전은 a~d의 옛 변수만 읽는다. 이전 버전으로 되돌릴 때는 "롤백"을 본다.
+- 별칭 형식 이전 버전은 a~d만 읽는다. 이전 버전으로 되돌릴 때는 "롤백"을 본다.
 
 **하루 한도는 키마다 포털에서 받은 값으로 센다.** 따로 적지 않은 키는 공통 값을 쓴다.
 
@@ -424,14 +424,14 @@ Worker는 버스 위치정보 API와 도착정보 API를 설정한 키 전부에
 ### 키 추가
 
 ```bash
-sudo vi /etc/salmonbus/worker.env    # GBIS_KEYS_E= 줄을 추가한다. 한도가 다른 키면 GBIS_LIMITS_E=, ARRIVALS_LIMITS_E= 줄도 넣는다
+sudo vi /etc/salmonbus/worker.env    # GBIS_SERVICE_KEY_H= 줄을 추가한다. 한도가 다른 키면 GBIS_LIMITS_H=, ARRIVALS_LIMITS_H= 줄도 넣는다
 sudo systemctl restart salmonbus-worker
 journalctl -u salmonbus-worker --no-pager | grep 'GBIS 키 슬롯' | tail -1
 ```
 
-마지막 명령의 출력에서 슬롯 목록과 한도 합을 확인한다. 키가 5개면 `GBIS 키 슬롯 5개로 수집한다. 슬롯=a,b,c,d,e 하루 한도 합=50000`이다.
+마지막 명령의 출력에서 슬롯 목록과 한도 합을 확인한다. a~h 8개면 `GBIS 키 슬롯 8개로 수집한다. 슬롯=a,b,c,d,e,f,g,h 하루 한도 합=80000`이다.
 이 로그는 수집을 활성화한 Worker에서만 남는다. 넣은 키는 "인증 정보를 출력하지 않고 확인하기"의 명령에서
-`^GBIS_SERVICE_KEY=`를 `^GBIS_KEYS_E=`처럼 바꿔 포털 값과 대조한다.
+`^GBIS_SERVICE_KEY=`를 `^GBIS_SERVICE_KEY_H=`처럼 바꿔 포털 값과 대조한다.
 
 ### 키 교체와 제거
 
@@ -441,7 +441,7 @@ journalctl -u salmonbus-worker --no-pager | grep 'GBIS 키 슬롯' | tail -1
 ### 키 1개로 되돌리기
 
 ```bash
-sudo sed -i -E '/^GBIS_SERVICE_KEY=[[:space:]]*$/d; s/^GBIS_KEYS_A=/GBIS_SERVICE_KEY=/; /^(GBIS|ARRIVALS)_LIMITS_A=/b; /^GBIS_SERVICE_KEY_[BCD]=|^GBIS_KEYS_[A-Za-z0-9]+=|^(GBIS|ARRIVALS)_LIMITS_[A-Za-z0-9]+=/d' /etc/salmonbus/worker.env
+sudo sed -i -E '/^GBIS_SERVICE_KEY=[[:space:]]*$/d; s/^GBIS_KEYS_A=/GBIS_SERVICE_KEY=/; /^(GBIS|ARRIVALS)_LIMITS_A=/b; /^GBIS_SERVICE_KEY_[A-Za-z0-9]+=|^GBIS_KEYS_[A-Za-z0-9]+=|^(GBIS|ARRIVALS)_LIMITS_[A-Za-z0-9]+=/d' /etc/salmonbus/worker.env
 grep -cE '^GBIS_SERVICE_KEY=' /etc/salmonbus/worker.env    # 1 이어야 한다
 sudo systemctl restart salmonbus-worker
 ```

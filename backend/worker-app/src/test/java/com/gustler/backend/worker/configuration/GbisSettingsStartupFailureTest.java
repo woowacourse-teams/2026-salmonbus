@@ -28,7 +28,11 @@ class GbisSettingsStartupFailureTest {
             Arguments.of("한 줄 목록", Map.of("GBIS_SERVICE_KEY", "fake-key-a", "GBIS_KEYS", "e=" + SECRET)),
             Arguments.of("별칭 중복", Map.of("GBIS_SERVICE_KEY", SECRET, "GBIS_KEYS_A", "fake-key-other")),
             Arguments.of("깨진 인코딩", Map.of("GBIS_KEYS_A", "fake-key-a", "GBIS_KEYS_E", "ab%G0" + SECRET)),
-            Arguments.of("같은 키", Map.of("GBIS_KEYS_A", SECRET, "GBIS_KEYS_E", SECRET)));
+            Arguments.of("같은 키", Map.of("GBIS_KEYS_A", SECRET, "GBIS_KEYS_E", SECRET)),
+            Arguments.of("두 형식의 같은 별칭", Map.of("GBIS_SERVICE_KEY", "fake-key-a", "GBIS_SERVICE_KEY_E", SECRET,
+                "GBIS_KEYS_E", "fake-key-other")),
+            Arguments.of("별칭 형식", Map.of("GBIS_SERVICE_KEY", "fake-key-a", "GBIS_SERVICE_KEY_TEAM_5", SECRET)),
+            Arguments.of("같은 키를 별칭 둘에", Map.of("GBIS_SERVICE_KEY", SECRET, "GBIS_SERVICE_KEY_E", SECRET)));
     }
 
     @ParameterizedTest(name = "{0}")

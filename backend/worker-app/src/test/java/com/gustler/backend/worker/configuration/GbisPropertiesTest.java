@@ -475,6 +475,71 @@ class GbisPropertiesTest {
             });
     }
 
+    @Test
+    void GBIS_SERVICE_KEY_별칭으로_받은_키를_기존_슬롯_뒤에_별칭_순서대로_쓴다() {
+        // given
+        GbisProperties properties = namedOnly(Map.of("g", "fake-key-g", "e", "fake%2Bkey-e", "f", "fake-key-f"));
+
+        // when
+        List<String> aliases = aliasesOf(properties);
+
+        // then
+        assertThat(aliases).containsExactly(GbisKey.PRIMARY, "b", "d", "e", "f", "g");
+        assertThat(serviceKeyOf(properties, "e")).isEqualTo("fake+key-e");
+    }
+
+    @Test
+    void 같은_별칭을_GBIS_SERVICE_KEY_별칭과_새_형식에서_함께_정하면_기동을_막는다() {
+        // when & then
+        assertThatThrownBy(() -> new GbisProperties(BASE_URL, "fake-key-a", null, null, null,
+            Map.of("e", "fake-key-other"), DAILY_LIMIT, Map.of(), Map.of("e", "fake-key-e")))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("gbis.keys.e")
+            .hasMessageNotContaining("fake-key-e")
+            .hasMessageNotContaining("fake-key-other");
+    }
+
+    @Test
+    void GBIS_SERVICE_KEY_A로_기본_키를_한_번_더_정하면_기동을_막는다() {
+        // when & then
+        assertThatThrownBy(() -> namedOnly(Map.of("a", "fake-key-other")))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("GBIS_SERVICE_KEY_A")
+            .hasMessageNotContaining("fake-key-other");
+    }
+
+    @Test
+    void GBIS_SERVICE_KEY_별칭이_영문과_숫자_16자_규칙에_맞지_않으면_기동을_막는다() {
+        // when & then
+        assertThatThrownBy(() -> namedOnly(Map.of("team_5", "fake-key-team5")))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("GBIS_SERVICE_KEY_TEAM_5")
+            .hasMessageNotContaining("fake-key-team5");
+    }
+
+    @Test
+    void GBIS_SERVICE_KEY_별칭의_퍼센트_형식이_깨지면_값_없이_변수_이름만_알린다() {
+        // when & then
+        assertThatThrownBy(() -> namedOnly(Map.of("e", "ab%G0" + KEY_TAIL)))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("GBIS_SERVICE_KEY_E")
+            .hasMessageNotContaining(KEY_TAIL);
+    }
+
+    @Test
+    void GBIS_SERVICE_KEY_별칭의_값이_비었으면_기동을_막는다() {
+        // when & then
+        assertThatThrownBy(() -> namedOnly(Map.of("e", " ")))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("GBIS_SERVICE_KEY_E");
+    }
+
+    private static GbisProperties namedOnly(
+        Map<String, String> named
+    ) {
+        return new GbisProperties(BASE_URL, ORIGINAL_KEY, KEY_B, null, KEY_D, Map.of(), DAILY_LIMIT, Map.of(), named);
+    }
+
     private static GbisProperties keysOnly(
         Map<String, String> keys
     ) {

@@ -23,7 +23,7 @@ case ${LOCAL_COMPONENT:-} in
     ;;
   worker-app)
     [[ ${GBIS_SERVICE_KEY:-} == local-only-placeholder ]] || fail
-    for key in GBIS_SERVICE_KEY_B GBIS_SERVICE_KEY_C GBIS_SERVICE_KEY_D; do
+    for key in $(compgen -e | grep '^GBIS_SERVICE_KEY_' || true); do
       [[ -z ${!key:-} ]] || fail
     done
     [[ -z $(compgen -e | grep '^GBIS_KEYS' || true) ]] || fail

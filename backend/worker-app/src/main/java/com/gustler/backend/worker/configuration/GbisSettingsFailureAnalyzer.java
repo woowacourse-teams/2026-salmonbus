@@ -10,7 +10,7 @@ public class GbisSettingsFailureAnalyzer extends AbstractFailureAnalyzer<BindExc
 
     private static final ConfigurationPropertyName GBIS = ConfigurationPropertyName.of("gbis");
 
-    private static final String ACTION = "인증키는 GBIS_SERVICE_KEY(_B/_C/_D) 또는 GBIS_KEYS_<별칭>=<키> 형식으로 "
+    private static final String ACTION = "인증키는 GBIS_SERVICE_KEY, GBIS_SERVICE_KEY_<별칭> 또는 GBIS_KEYS_<별칭>=<키> 형식으로 "
         + "한 줄에 하나씩 넣는다. 형식은 RUNBOOK 의 'GBIS 키 여러 개 쓰기'를 본다";
 
     @Override

@@ -40,7 +40,7 @@ for jar in "${jars[@]}"; do
             value = line
             sub(/^[^:]*:[[:space:]]*/, "", value); sub(/[[:space:]]*$/, "", value)
             if (path == "springdoc.swagger-ui.url" && value == "/api/docs/openapi") next
-            if (path ~ /^gbis\.keys(\.|$)/ && value != "") { print "gbis-keys: " value; next }
+            if (path ~ /^gbis\.(keys|named-keys)(\.|$)/ && value != "") { print "gbis-keys: " value; next }
             depth++; levels[depth] = indent; keys[depth] = key
           }
           { print }

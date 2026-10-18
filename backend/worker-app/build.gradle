@@ -29,12 +29,12 @@ dependencies {
 }
 
 tasks.named('test') {
+    environment = environment.findAll { name, value ->
+        !name.startsWith('GBIS_SERVICE_KEY_') && !name.startsWith('GBIS_KEYS')
+    }
     environment 'ARRIVALS_ENABLED', 'false'
     environment 'ROUTE_GEOMETRY_ENABLED', 'false'
     environment 'GBIS_SERVICE_KEY', 'fake-service-key-for-test'
-    environment 'GBIS_SERVICE_KEY_B', ''
-    environment 'GBIS_SERVICE_KEY_C', ''
-    environment 'GBIS_SERVICE_KEY_D', ''
 }
 
 springBoot {
