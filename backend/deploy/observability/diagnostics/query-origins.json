@@ -65,6 +65,9 @@
   "api.vehicles": {
     "source": "backend/api-app/src/main/java/com/gustler/backend/api/http/ApiSqlOrigin.java"
   },
+  "api.live": {
+    "source": "backend/api-app/src/main/java/com/gustler/backend/api/http/ApiSqlOrigin.java"
+  },
   "api.routes": {
     "source": "backend/api-app/src/main/java/com/gustler/backend/api/http/ApiSqlOrigin.java"
   },
