@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import type { ApiFailure, ApiResult, ApiSuccess } from "./client";
 import { PENDING_RESOURCE } from "./polledResource";
+import { referenceClockFrom } from "./referenceClock";
 import {
   nextStationArrivalPollFrom,
   nextStationArrivalsResource,
@@ -59,6 +60,58 @@ describe("stationArrivalSelectionKey", () => {
 });
 
 describe("withStationArrivalClock", () => {
+  it("수집 중 no-store 응답은 Date의 소수점 손실 없이 2초 뒤 재조회하고 경과 시간을 반영한다", () => {
+    let elapsed = 500;
+    const response = success({
+      clock: referenceClockFrom(new Headers({ Date: "Wed, 14 Oct 2026 03:00:10 GMT" }), () => elapsed),
+      lifetime: { maxAgeSeconds: null, ageSeconds: 0, noStore: true },
+    });
+    response.body.generatedAt = "2026-10-14T12:00:10.880+09:00";
+    response.body.refresh.suggestedRefreshAt = "2026-10-14T12:00:12.880+09:00";
+    expect(nextStationArrivalPollFrom(response)).toEqual({ kind: "again", delayMs: 2_880 });
+
+    const result = withStationArrivalClock(response, () => elapsed);
+    expect(nextStationArrivalPollFrom(result)).toEqual({ kind: "again", delayMs: 2_000 });
+    elapsed += 250;
+    expect(nextStationArrivalPollFrom(result)).toEqual({ kind: "again", delayMs: 1_750 });
+    elapsed += 1_000;
+    expect(nextStationArrivalPollFrom(result)).toEqual({ kind: "again", delayMs: 1_000 });
+  });
+
+  it("캐시된 READY 응답은 생성 시각 대신 Date와 Age 시계를 유지한다", () => {
+    let elapsed = 500;
+    const clock = referenceClockFrom(new Headers({ Date: "Wed, 14 Oct 2026 03:00:10 GMT", Age: "3" }), () => elapsed);
+    const result = success({ clock, lifetime: { maxAgeSeconds: 5, ageSeconds: 3, noStore: false } });
+    result.body.status = "READY";
+    result.body.generatedAt = "2026-10-14T12:00:10.880+09:00";
+    result.body.refresh = { status: "IDLE", reason: null, suggestedRefreshAt: "2026-10-14T12:00:40+09:00" };
+
+    expect(withStationArrivalClock(result)).toBe(result);
+    expect(result.clock?.servedAt).toBe(Date.parse(generatedAt) + 3_000);
+    elapsed += 250;
+    expect(nextStationArrivalPollFrom(result)).toEqual({ kind: "again", delayMs: 26_750 });
+  });
+
+  it("수집 중이 아닌 no-store 응답은 기존 서버 시계를 유지한다", () => {
+    const result = success({
+      clock: { servedAt: 1_000, now: () => 2_000 },
+      lifetime: { maxAgeSeconds: null, ageSeconds: 0, noStore: true },
+    });
+    result.body.refresh = { ...result.body.refresh, status: "BLOCKED", reason: "RATE_LIMITED" };
+
+    expect(withStationArrivalClock(result)).toBe(result);
+  });
+
+  it("수집 중이어도 생성 시각이 잘못되면 기존 서버 시계를 유지한다", () => {
+    const result = success({
+      clock: { servedAt: 1_000, now: () => 2_000 },
+      lifetime: { maxAgeSeconds: null, ageSeconds: 0, noStore: true },
+    });
+    result.body.generatedAt = "invalid";
+
+    expect(withStationArrivalClock(result)).toBe(result);
+  });
+
   it("Date/Age로 만들어진 서버 시계가 있으면 응답 생성 시각으로 덮어쓰지 않는다", () => {
     const clock = { servedAt: 1_000, now: () => 2_000 };
     const result = success({ clock });

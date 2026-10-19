@@ -72,7 +72,10 @@ export const test = base.extend<{ api: MockApi }>({
           headers: {
             Date: new Date(now).toUTCString(),
             Age: "0",
-            "Cache-Control": `public, max-age=${endpoint === "arrivals" ? 5 : api.cacheMaxAgeSeconds}`,
+            "Cache-Control":
+              endpoint === "arrivals" && api.data.arrivals?.status === "UNAVAILABLE"
+                ? "no-store"
+                : `public, max-age=${endpoint === "arrivals" ? 5 : api.cacheMaxAgeSeconds}`,
           },
           json:
             endpoint === "arrivals"
