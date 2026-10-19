@@ -2,6 +2,8 @@ package com.gustler.backend.routecatalog.infrastructure.gbis;
 
 import com.gustler.backend.gbis.api.GbisRouteInfoSource;
 import com.gustler.backend.gbis.api.GbisRouteResult;
+import com.gustler.backend.routecatalog.domain.HeadwayRange;
+import com.gustler.backend.routecatalog.domain.RouteHeadways;
 import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteSource;
 import com.gustler.backend.routecatalog.domain.RouteSourceResult;
@@ -15,7 +17,9 @@ import com.gustler.backend.gbis.api.dto.BusRouteInfoResponse.RouteInfoItem;
 import com.gustler.backend.gbis.api.dto.BusRouteStationResponse.RouteStationItem;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -30,6 +34,7 @@ import org.springframework.stereotype.Component;
 public class GbisRouteSource implements RouteSource {
 
     private static final Logger log = LoggerFactory.getLogger(GbisRouteSource.class);
+    private static final Pattern MINUTES = Pattern.compile("[0-9]{1,4}");
 
     private final GbisRouteInfoSource routes;
 
@@ -71,7 +76,7 @@ public class GbisRouteSource implements RouteSource {
                 routeInfo.startStopName(),
                 routeInfo.endStopName(),
                 RouteStops.from(turnSequenceOf(stations), toUpstreamStops(stations)),
-                timetableOf(routeInfo)));
+                timetableOf(routeId, routeInfo)));
         } catch (final IllegalArgumentException e) {
             // 순번이 겹치거나 회차 순번이 정류소 목록에 없는 응답. 판본으로 열면 뜻이 없는 노선이 된다.
             return new Failed("노선 %s 의 정류소 목록이 성립하지 않는다: %s".formatted(routeId, e.getMessage()));
@@ -140,12 +145,60 @@ public class GbisRouteSource implements RouteSource {
     }
 
     private RouteTimetable timetableOf(
+        String routeId,
         RouteInfoItem routeInfo
     ) {
         return new RouteTimetable(
             routeInfo.upFirstDepartureTime(),
             routeInfo.upLastDepartureTime(),
             routeInfo.downFirstDepartureTime(),
-            routeInfo.downLastDepartureTime());
+            routeInfo.downLastDepartureTime(),
+            headwaysOf(routeId, routeInfo));
+    }
+
+    private RouteHeadways headwaysOf(
+        String routeId,
+        RouteInfoItem routeInfo
+    ) {
+        return new RouteHeadways(
+            headwayOf(routeId, "WEEKDAY", routeInfo.weekdayMinHeadway(), routeInfo.weekdayMaxHeadway()),
+            headwayOf(routeId, "SATURDAY", routeInfo.saturdayMinHeadway(), routeInfo.saturdayMaxHeadway()),
+            headwayOf(routeId, "SUNDAY", routeInfo.sundayMinHeadway(), routeInfo.sundayMaxHeadway()),
+            headwayOf(routeId, "HOLIDAY", routeInfo.holidayMinHeadway(), routeInfo.holidayMaxHeadway()));
+    }
+
+    private HeadwayRange headwayOf(
+        String routeId,
+        String day,
+        String minText,
+        String maxText
+    ) {
+        if (isBlank(minText) && isBlank(maxText)) {
+            return null;
+        }
+        Optional<HeadwayRange> headway = HeadwayRange.of(minutesOf(minText), minutesOf(maxText));
+        if (headway.isEmpty()) {
+            log.warn("event=route_headway_ignored routeId={} day={} min={} max={}", routeId, day, minText, maxText);
+        }
+        return headway.orElse(null);
+    }
+
+    private boolean isBlank(
+        String text
+    ) {
+        return text == null || text.isBlank();
+    }
+
+    private Integer minutesOf(
+        String text
+    ) {
+        if (text == null) {
+            return null;
+        }
+        String minutes = text.strip();
+        if (!MINUTES.matcher(minutes).matches()) {
+            return null;
+        }
+        return Integer.valueOf(minutes);
     }
 }

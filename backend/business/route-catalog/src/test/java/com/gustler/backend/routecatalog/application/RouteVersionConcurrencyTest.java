@@ -3,6 +3,7 @@ package com.gustler.backend.routecatalog.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.gustler.backend.routecatalog.domain.RouteHeadways;
 import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
@@ -25,7 +26,8 @@ class RouteVersionConcurrencyTest {
 
     private static final OffsetDateTime FIRST = OffsetDateTime.parse("2026-09-01T09:00:00+09:00");
     private static final OffsetDateTime SECOND = FIRST.plusDays(1);
-    private static final RouteTimetable TIMETABLE = new RouteTimetable("05:00", "22:00", "05:30", "22:30");
+    private static final RouteTimetable TIMETABLE =
+        new RouteTimetable("05:00", "22:00", "05:30", "22:30", RouteHeadways.none());
 
     @Autowired
     private RouteVersionLoader loader;

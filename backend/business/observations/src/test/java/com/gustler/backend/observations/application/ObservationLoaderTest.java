@@ -8,6 +8,7 @@ import com.gustler.backend.observations.domain.CollectionBatchRepository;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.domain.ObservationBatchConclusion;
 import com.gustler.backend.routecatalog.application.RouteVersionLoader;
+import com.gustler.backend.routecatalog.domain.RouteHeadways;
 import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
@@ -62,7 +63,7 @@ class ObservationLoaderTest {
     private static final String QUERY_TIME = "2026-08-19 11:14:04.9";
 
     private static final RouteTimetable TIMETABLE_3330 =
-        new RouteTimetable("05:00", "22:35", "05:00", "23:55");
+        new RouteTimetable("05:00", "22:35", "05:00", "23:55", RouteHeadways.none());
 
     @Autowired
     private ObservationLoader loader;

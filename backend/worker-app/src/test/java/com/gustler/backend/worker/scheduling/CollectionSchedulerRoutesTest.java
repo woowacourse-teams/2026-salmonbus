@@ -2,6 +2,7 @@ package com.gustler.backend.worker.scheduling;
 
 import com.gustler.backend.gbis.api.GbisKey;
 import com.gustler.backend.gbis.api.GbisLocationSource;
+import com.gustler.backend.routecatalog.domain.RouteHeadways;
 import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.UpstreamRoute;
@@ -98,7 +99,7 @@ class CollectionSchedulerRoutesTest {
                 new UpstreamRouteStop(1, STOP_205000217, "범계역"),
                 new UpstreamRouteStop(2, STOP_277103149, "안양대교(경유)"),
                 new UpstreamRouteStop(3, STOP_208000069, "안양역"))),
-            new RouteTimetable("05:00", "22:35", "05:00", "23:55"));
+            new RouteTimetable("05:00", "22:35", "05:00", "23:55", RouteHeadways.none()));
     }
 
     private int countOf(

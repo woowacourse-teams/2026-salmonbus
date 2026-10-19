@@ -11,8 +11,12 @@ class RouteTest {
 
     private static final OffsetDateTime OPENED = OffsetDateTime.parse("2026-09-01T09:00:00+09:00");
     private static final OffsetDateTime CHANGED = OPENED.plusDays(1);
-    private static final RouteTimetable TIMETABLE = new RouteTimetable("05:00", "22:00", "05:30", "22:30");
-    private static final RouteTimetable LATER_LAST_BUS = new RouteTimetable("05:00", "23:00", "05:30", "22:30");
+    private static final RouteTimetable TIMETABLE =
+        new RouteTimetable("05:00", "22:00", "05:30", "22:30", RouteHeadways.none());
+    private static final RouteTimetable LATER_LAST_BUS =
+        new RouteTimetable("05:00", "23:00", "05:30", "22:30", RouteHeadways.none());
+    private static final RouteTimetable WITH_HEADWAYS = new RouteTimetable("05:00", "22:00", "05:30", "22:30",
+        new RouteHeadways(new HeadwayRange(10, 20), null, null, new HeadwayRange(20, 40)));
 
     @Test
     void 종료된_최신_버전과_정류장과_시간표가_같으면_그_버전을_그대로_쓴다() {
@@ -40,6 +44,22 @@ class RouteTest {
         assertThat(route.currentVersion().id()).isEqualTo(10L);
         assertThat(route.currentVersion().validTo()).isEqualTo(CHANGED);
         assertThat(route.currentVersion().content().timetable()).isEqualTo(LATER_LAST_BUS);
+        assertThat(route.closedVersion()).isEmpty();
+    }
+
+    @Test
+    void 열린_버전의_배차간격만_바뀌면_같은_버전에_고쳐_쓰고_버전을_닫지_않는다() {
+        // given
+        Route route = new Route(1L, new RouteVersion(10L, OPENED, null, content(stops())));
+
+        // when
+        route.accept(stops(), WITH_HEADWAYS, CHANGED);
+
+        // then
+        assertThat(route.currentVersion().id()).isEqualTo(10L);
+        assertThat(route.currentVersion().validFrom()).isEqualTo(OPENED);
+        assertThat(route.currentVersion().validTo()).isNull();
+        assertThat(route.currentVersion().content().timetable()).isEqualTo(WITH_HEADWAYS);
         assertThat(route.closedVersion()).isEmpty();
     }
 
