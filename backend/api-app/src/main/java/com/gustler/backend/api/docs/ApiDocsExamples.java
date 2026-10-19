@@ -213,7 +213,22 @@ public final class ApiDocsExamples {
                 "lastDepartureTime": "23:00"
               }
             ],
-            "referenceVersionId": "example-version"
+            "referenceVersionId": "example-version",
+            "headways": {
+              "weekday": {
+                "minMinutes": 10,
+                "maxMinutes": 20
+              },
+              "saturday": {
+                "minMinutes": 12,
+                "maxMinutes": 25
+              },
+              "sunday": {
+                "minMinutes": 15,
+                "maxMinutes": 30
+              },
+              "holiday": null
+            }
           },
           "observedAt": "2026-10-01T12:00:00+09:00",
           "staleAt": "2026-10-01T12:05:00+09:00",
@@ -302,7 +317,13 @@ public final class ApiDocsExamples {
                 "lastDepartureTime": "23:00"
               }
             ],
-            "referenceVersionId": "example-version"
+            "referenceVersionId": "example-version",
+            "headways": {
+              "weekday": null,
+              "saturday": null,
+              "sunday": null,
+              "holiday": null
+            }
           },
           "observedAt": "2026-10-01T12:00:00+09:00",
           "staleAt": "2026-10-01T12:05:00+09:00",

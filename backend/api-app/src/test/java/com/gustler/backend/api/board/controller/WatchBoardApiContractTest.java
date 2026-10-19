@@ -126,6 +126,29 @@ class WatchBoardApiContractTest {
     }
 
     @Test
+    void 노선_버전에_저장된_요일별_배차간격을_노선_정보에_준다() throws Exception {
+        // given
+        RouteContext route = insertRoundTripRoute();
+        final long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        OffsetDateTime publishedAt = now.minusMinutes(1);
+        final long published = fixture.insertBatch(route, publishedAt, "SUCCESS_ROWS", 1);
+        fixture.insertObservation(route, published, 1, "V1", 1, "STOP-1", 1, DEPARTED, 7, null);
+        fixture.insertPublication(published, model, publishedAt.plusSeconds(1), publishedAt.plusSeconds(2));
+        fixture.updateHeadway(route, "weekday", 10, 20);
+        fixture.updateHeadway(route, "holiday", 16, 35);
+
+        // when & then
+        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.route.headways.weekday.minMinutes").value(10))
+            .andExpect(jsonPath("$.route.headways.weekday.maxMinutes").value(20))
+            .andExpect(jsonPath("$.route.headways.saturday").isEmpty())
+            .andExpect(jsonPath("$.route.headways.sunday").isEmpty())
+            .andExpect(jsonPath("$.route.headways.holiday.minMinutes").value(16))
+            .andExpect(jsonPath("$.route.headways.holiday.maxMinutes").value(35));
+    }
+
+    @Test
     void 최신_관측이_발행되어_있으면_차량_목록은_차량_API와_같다() throws Exception {
         // given
         RouteContext route = insertRoundTripRoute();

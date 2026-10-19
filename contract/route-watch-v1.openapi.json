@@ -69,7 +69,22 @@
                             "lastDepartureTime": "23:00"
                           }
                         ],
-                        "referenceVersionId": "example-version"
+                        "referenceVersionId": "example-version",
+                        "headways": {
+                          "weekday": {
+                            "minMinutes": 10,
+                            "maxMinutes": 20
+                          },
+                          "saturday": {
+                            "minMinutes": 12,
+                            "maxMinutes": 25
+                          },
+                          "sunday": {
+                            "minMinutes": 15,
+                            "maxMinutes": 30
+                          },
+                          "holiday": null
+                        }
                       },
                       "observedAt": "2026-10-01T12:00:00+09:00",
                       "staleAt": "2026-10-01T12:05:00+09:00",
@@ -158,7 +173,13 @@
                             "lastDepartureTime": "23:00"
                           }
                         ],
-                        "referenceVersionId": "example-version"
+                        "referenceVersionId": "example-version",
+                        "headways": {
+                          "weekday": null,
+                          "saturday": null,
+                          "sunday": null,
+                          "holiday": null
+                        }
                       },
                       "observedAt": "2026-10-01T12:00:00+09:00",
                       "staleAt": "2026-10-01T12:05:00+09:00",
@@ -395,6 +416,10 @@
           "referenceVersionId": {
             "type": "string",
             "description": "이 응답이 기준으로 삼은 노선 판본 ID"
+          },
+          "headways": {
+            "$ref": "#/components/schemas/RouteHeadwaysResponse",
+            "description": "GBIS 노선 기본정보에 등록된 요일별 최소·최대 배차간격(분). 방향 구분이 없고 실제 도착 간격이나 평균이 아니다. GBIS가 맞지 않는 값을 보내면 그 요일은 마지막으로 받은 정상 값을 유지한다. 오늘이 공휴일인지는 판정하지 않는다. 이 필드가 없는 응답은 정보 없음으로 본다"
           }
         },
         "required": [
@@ -406,6 +431,84 @@
           "startStopName",
           "status",
           "turnSequence"
+        ]
+      },
+      "RouteHeadwaysResponse": {
+        "type": "object",
+        "properties": {
+          "weekday": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HeadwayRangeResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "평일 배차간격. 정보가 없으면 null"
+          },
+          "saturday": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HeadwayRangeResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "토요일 배차간격. 정보가 없으면 null"
+          },
+          "sunday": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HeadwayRangeResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "일요일 배차간격. 정보가 없으면 null"
+          },
+          "holiday": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HeadwayRangeResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "공휴일 배차간격. 정보가 없으면 null이며 일요일 값으로 대신하지 않는다"
+          }
+        },
+        "required": [
+          "holiday",
+          "saturday",
+          "sunday",
+          "weekday"
+        ]
+      },
+      "HeadwayRangeResponse": {
+        "type": "object",
+        "properties": {
+          "minMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "최소 배차간격(분)",
+            "maximum": 1440,
+            "minimum": 1
+          },
+          "maxMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "최대 배차간격(분). minMinutes와 같거나 크다",
+            "maximum": 1440,
+            "minimum": 1
+          }
+        },
+        "required": [
+          "maxMinutes",
+          "minMinutes"
         ]
       },
       "DirectionInfoResponse": {
