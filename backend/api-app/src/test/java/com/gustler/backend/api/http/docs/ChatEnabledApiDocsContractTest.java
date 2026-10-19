@@ -55,7 +55,7 @@ class ChatEnabledApiDocsContractTest {
             .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
 
         JsonNode paths = objectMapper.readTree(body).path("paths");
-        assertThat(paths.size()).isEqualTo(6);
+        assertThat(paths.size()).isEqualTo(7);
         assertThat(body).doesNotContain("/api/chat/rooms/{routeId}/stream");
     }
 }

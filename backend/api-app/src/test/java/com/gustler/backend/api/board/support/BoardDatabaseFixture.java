@@ -256,15 +256,31 @@ public class BoardDatabaseFixture {
         String stopId,
         OffsetDateTime observedAt
     ) {
+        return insertObservation(route, batchId, sourceRowNumber, vehicleId, stopOrder, stopId,
+            stopOrder, RUNNING_STATE_DEPARTED, null, NOT_REPORTED);
+    }
+
+    public long insertObservation(
+        RouteContext route,
+        final long batchId,
+        final int sourceRowNumber,
+        String vehicleId,
+        final int stopOrder,
+        String stopId,
+        final int passedStopOrder,
+        final int runningState,
+        Integer remainingSeats,
+        String seatUnknownReason
+    ) {
         return ConfirmedTripFixture.include(jdbcClient, jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
                     observation_batch_id, route_version_id, source_row_number,
                     vehicle_id, stop_order, stop_id,
-                    passed_stop_order, running_state, seat_unknown_reason
+                    passed_stop_order, running_state, remaining_seats, seat_unknown_reason
                 ) VALUES (
                     :batchId, :routeVersionId, :sourceRowNumber,
                     :vehicleId, :stopOrder, :stopId,
-                    :stopOrder, :runningState, :seatUnknownReason
+                    :passedStopOrder, :runningState, :remainingSeats, :seatUnknownReason
                 )
                 RETURNING id
                 """)
@@ -274,8 +290,10 @@ public class BoardDatabaseFixture {
             .param("vehicleId", vehicleId)
             .param("stopOrder", stopOrder)
             .param("stopId", stopId)
-            .param("runningState", RUNNING_STATE_DEPARTED)
-            .param("seatUnknownReason", NOT_REPORTED)
+            .param("passedStopOrder", passedStopOrder)
+            .param("runningState", runningState)
+            .param("remainingSeats", remainingSeats)
+            .param("seatUnknownReason", seatUnknownReason)
             .query(Long.class)
             .single());
     }

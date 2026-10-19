@@ -87,6 +87,20 @@ class BoardQueryServiceTest {
     }
 
     @Test
+    void 보드를_읽으면_기준_관측_묶음의_ID와_같은_보드를_돌려준다() {
+        // given
+        givenRoundTripBoard(List.of(prediction(3, "A", 1, 1, 0.2, 10.0)));
+
+        // when
+        BoardReading reading = service.readBoard(ROUTE_ID);
+
+        // then
+        assertThat(reading.observationBatchId()).isEqualTo(100L);
+        assertThat(reading.board()).isEqualTo(service.getBoard(ROUTE_ID).board());
+        assertThat(reading.cacheMaxAge()).isEqualTo(Duration.ofSeconds(15));
+    }
+
+    @Test
     void 예보_행이_있으면_그_행의_모델을_사용한다() {
         givenRoundTripBoard(List.of(prediction(3, "A", 1, 1, 0.2, 10.0)));
 
