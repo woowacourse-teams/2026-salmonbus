@@ -100,6 +100,20 @@ test("native host는 JS SDK 없이 scene과 관측별 motion을 보내고 브라
   ).toBe("rgba(0, 0, 0, 0)");
 });
 
+test("randomUUID가 없는 환경에서도 native 지도 연결과 선택 이벤트가 동작한다", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(crypto, "randomUUID", { configurable: true, value: undefined });
+  });
+  await open(page);
+  const mount = (await messages(page)).find((message) => message.type === "mount")!;
+  expect(mount.sessionId).toMatch(/^[0-9a-f]{32}$/);
+  await emit(page, { type: "stopPress", payload: { selection: { direction: "UP", sequence: 1 } } });
+  await page.clock.runFor(64);
+  expect(
+    (await messages(page)).filter((message) => message.type === "updateScene").at(-1)?.payload.selectedStop,
+  ).toEqual({ direction: "UP", sequence: 1 });
+});
+
 test("실제 transition 경계와 웹 버튼 영역을 전달하고 native 위치·선택 이벤트를 연결한다", async ({ page }) => {
   await open(page);
   await page.getByRole("slider", { name: "판정보드 높이" }).click();

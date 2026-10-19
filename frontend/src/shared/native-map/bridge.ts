@@ -27,7 +27,10 @@ export interface NativeMapChannel {
 }
 
 export function createNativeMapChannel(capability: NativeMapCapability): NativeMapChannel {
-  const sessionId = crypto.randomUUID();
+  const sessionId =
+    typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
   const listeners = new Set<(event: NativeMapEvent) => void>();
   let revision = 0;
   let destroyed = false;
