@@ -443,13 +443,13 @@ footer { margin-top:28px; padding-top:18px; border-top:1px solid var(--border); 
     },
     error: {
       steps: [
-        ['native', '인증·네트워크·지도 준비 오류', '현재 sessionId와 함께 error 전달'],
-        ['gate', 'Native 지도 조작 차단', '오류 영역은 웹이 터치 수신'],
-        ['web', '지도 자리에 오류·재시도 표시', '지도 부분은 불투명 웹 안내'],
-        ['web', '정류장 목록 계속 사용', '기존 API·선택 state 유지'],
-        ['native', '사용자 재시도로 native 지도 복구', '준비·최신 데이터·영역 적용 확인']
+        ['native', '준비 시간 초과·인증 실패', 'native 오류 또는 웹의 15초 제한으로 감지'],
+        ['gate', 'Native 세션 정리', '지도를 숨기고 모든 터치를 웹으로 전달'],
+        ['web', '기존 JS 지도로 전환', '선택 state·차량 이동 유지, Sentry에 원인 기록'],
+        ['web', '같은 화면에서는 JS 지도 유지', '늦게 도착한 native 이벤트 무시'],
+        ['web', 'JS 지도도 실패하면 오류 안내', '정류장 목록은 계속 사용 가능']
       ],
-      outcome: 'Native 지도 모드의 오류 시 JS 지도로 자동 전환하지 않음. 웹 목록은 계속 표시.'
+      outcome: '준비 시간 초과·인증 실패 시 JS 지도 사용. 그 외 native 오류나 JS 지도 실패 시 오류 안내와 목록 유지.'
     },
     reload: {
       steps: [

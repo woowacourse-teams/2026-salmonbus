@@ -8,6 +8,7 @@ import { loadNaverMaps, subscribeNaverMapAuthFailure } from "./naverSdk";
 import { createNaverRouteMap, type RouteMapAdapter } from "./naverMapAdapter";
 import { nativeMapCapability } from "@/shared/native-map/bridge";
 import { createNativeRouteMap, type NativeRouteMapAdapter } from "./nativeMapAdapter";
+import { reportNativeMapFailure } from "@/shared/error-tracking/errorTracking";
 import * as styles from "./RouteMap.css";
 
 interface RouteMapProps {
@@ -52,6 +53,7 @@ export function RouteMap(props: RouteMapProps) {
   const locationRequest = useRef(0);
   const [mapState, setMapState] = useState<MapState>({ status: "loading" });
   const [locationState, setLocationState] = useState<LocationState>({ status: "idle" });
+  const [nativeFailed, setNativeFailed] = useState(false);
 
   useLayoutEffect(() => {
     propsRef.current = props;
@@ -107,7 +109,7 @@ export function RouteMap(props: RouteMapProps) {
       failMap(data, error);
     };
     const capability = nativeMapCapability();
-    if (capability !== null) {
+    if (capability !== null && !nativeFailed) {
       const region = regionRef.current;
       if (region !== null) {
         try {
@@ -121,7 +123,19 @@ export function RouteMap(props: RouteMapProps) {
             onSelect: (selection) => propsRef.current.onSelect(selection),
             onVehicleSelect: (selection, key) => propsRef.current.onVehicleSelect(selection, key),
             onDeselect: () => propsRef.current.onDeselect(),
-            onError: failActiveMap,
+            onError: (error, reason) => {
+              if (!active || failed || propsRef.current.data !== data) return;
+              if (reason === undefined) {
+                failActiveMap(error);
+                return;
+              }
+              failed = true;
+              disposeMap();
+              setMapState({ status: "loading" });
+              setLocationState({ status: "idle" });
+              setNativeFailed(true);
+              reportNativeMapFailure(reason, data.routeId);
+            },
             onReady: () => {
               if (!active || failed || propsRef.current.data !== data) return;
               setMapState({ status: "ready", data });
@@ -185,7 +199,7 @@ export function RouteMap(props: RouteMapProps) {
       unsubscribeAuthFailure();
       disposeMap();
     };
-  }, [data, disposeMap, failMap]);
+  }, [data, disposeMap, failMap, nativeFailed]);
 
   useEffect(() => {
     runMapAction((adapter) => {
@@ -212,9 +226,9 @@ export function RouteMap(props: RouteMapProps) {
   }, [vehicleFocusRequest, mapState, visible, runMapAction]);
 
   useEffect(() => {
-    if (nativeMapCapability() !== null) return;
+    if (nativeMapCapability() !== null && !nativeFailed) return;
     return motion.subscribe(() => runMapAction((adapter) => adapter.moveVehicles(motion.frames)));
-  }, [motion, runMapAction]);
+  }, [motion, runMapAction, nativeFailed]);
 
   useEffect(() => {
     const region = regionRef.current;

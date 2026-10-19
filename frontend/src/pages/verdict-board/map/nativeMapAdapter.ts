@@ -24,7 +24,7 @@ export function createNativeRouteMap(options: {
   onVehicleSelect: (selection: StopSelection, key: string) => void;
   onDeselect: () => void;
   onReady: () => void;
-  onError: (error: Error) => void;
+  onError: (error: Error, reason?: "timeout" | "auth") => void;
 }): NativeRouteMapAdapter {
   const { capability, region, board, data, motion, onSelect, onVehicleSelect, onDeselect, onReady, onError } = options;
   const channel = createNativeMapChannel(capability);
@@ -42,7 +42,7 @@ export function createNativeRouteMap(options: {
   };
   let sceneSignature = "";
   let destroyed = false;
-  const timer = window.setTimeout(() => onError(new Error("지도를 불러오지 못했어요")), 15_000);
+  const timer = window.setTimeout(() => onError(new Error("지도를 불러오지 못했어요"), "timeout"), 15_000);
   const unsubscribe = channel.subscribe((event) => {
     switch (event.type) {
       case "ready":
@@ -67,7 +67,15 @@ export function createNativeRouteMap(options: {
         onDeselect();
         break;
       case "error":
-        onError(new Error(event.payload.message));
+        // shortcut: 기존 앱과 호환하려고 오류 문구로 분류하며, 앱에 오류 코드가 추가되면 교체한다.
+        onError(
+          new Error(event.payload.message),
+          event.payload.message === "지도 설정을 확인하지 못했어요"
+            ? "auth"
+            : event.payload.message === "지도를 불러오지 못했어요"
+              ? "timeout"
+              : undefined,
+        );
         break;
       case "locationResult": {
         const request = locationRequests.get(event.payload.requestId);

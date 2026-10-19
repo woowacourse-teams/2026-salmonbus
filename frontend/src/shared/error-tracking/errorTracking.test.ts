@@ -1,7 +1,12 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import * as Sentry from "@sentry/react";
 import type { Event, Breadcrumb } from "@sentry/react";
-import { initErrorTracking, createApiFailureReporter, createReactErrorHandlers } from "./errorTracking";
+import {
+  initErrorTracking,
+  createApiFailureReporter,
+  createReactErrorHandlers,
+  reportNativeMapFailure,
+} from "./errorTracking";
 import { REQUEST_DISPOSED, REQUEST_SUPERSEDED } from "@/shared/api/cancellation";
 import { RESPONSE_BODY_LIMIT_BYTES, utf8ByteLengthFrom } from "./eventPolicy";
 
@@ -26,6 +31,15 @@ function createRecording() {
 }
 
 describe("공통 오류 수집", () => {
+  it.each(["timeout", "auth"] as const)("native 지도 %s 실패를 원인별로 기록한다", (reason) => {
+    reportNativeMapFailure(reason, "200000001");
+    expect(Sentry.captureException).toHaveBeenLastCalledWith(new Error(`Native map initialization failed: ${reason}`), {
+      level: "warning",
+      tags: { source: "native-map", failure_kind: reason, route_id: "200000001" },
+      fingerprint: ["native-map", reason],
+    });
+  });
+
   it("SDK 기본 통합을 끄고 허용한 통합만 초기화한다", () => {
     const init = jest.mocked(Sentry.init);
     initErrorTracking({

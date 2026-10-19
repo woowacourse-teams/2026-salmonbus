@@ -199,7 +199,9 @@ window.SalmonNativeMap = {
 };
 ```
 
-기능 정보가 없는 브라우저는 기존 JS SDK를 사용합니다. Native 모드를 선택한 앱에서는 지도 오류가 났다고 JS SDK로 조용히 바꾸지 않습니다. 오류를 표시하고 native 지도를 다시 준비하는 경로를 사용합니다.
+기능 정보가 없는 브라우저는 기존 JS SDK를 사용합니다. 앱에서 native 지도 준비가 15초 안에 끝나지 않거나 인증이 실패하면 native 지도를 정리하고 기존 JS 지도로 전환합니다. 같은 화면에서는 JS 지도를 유지하며, 늦게 도착한 native 이벤트로 다시 전환하지 않습니다. 선택 state와 차량 이동도 JS 지도에 연결하고, JS 지도까지 실패하면 오류 안내와 정류장 목록을 유지합니다. 그 외 native 오류는 기존 오류 안내를 표시합니다.
+
+전환 원인은 기존 Sentry에 `source:native-map`, `failure_kind:timeout` 또는 `failure_kind:auth`로 기록합니다. 노선 ID를 함께 기록하며 좌표나 원본 native 오류 메시지는 보내지 않습니다. 수집은 기존 production 설정을 따르고, 같은 오류의 반복 전송은 기존 1분 제한을 적용하므로 이벤트 수가 전체 실패 횟수와 같지는 않습니다. Native 준비 대기 뒤 JS SDK 로딩 시간이 추가될 수 있습니다.
 
 이번 구현은 iOS용입니다. Android나 native module이 없는 실행 환경에서는 이 기능 정보를 주입하지 않으므로 기존 WebView의 JS 지도 경로를 사용합니다.
 
@@ -232,7 +234,11 @@ stateDiagram-v2
     Active --> Active: 관측값·선택·layout 갱신
     Active --> Covered: 전체 웹 modal 또는 시트 이동
     Covered --> Active: 최신 layout 적용
-    Connecting --> Failed: 준비 오류
+    Connecting --> JSMap: 준비 시간 초과·인증 실패
+    Connecting --> Failed: 그 외 준비 오류
+    JSMap --> Failed: JS 지도 오류
+    JSMap --> Disposed: 화면 종료
+    Active --> JSMap: 인증 실패
     Active --> Failed: 지도 오류
     Failed --> Connecting: 새 세션으로 재시도
     Active --> Disposed: 화면 종료·웹 재로드

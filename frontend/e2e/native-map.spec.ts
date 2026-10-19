@@ -1,7 +1,12 @@
-import type { Page } from "@playwright/test";
-import { test, expect, chatRouteId, chatAvailability } from "./fixtures/chat";
+import { mergeTests, type Page } from "@playwright/test";
+import { test as chatTest, expect, chatRouteId, chatAvailability } from "./fixtures/chat";
+import { test as mapTest } from "./fixtures/naver-map";
 import { routeId } from "./fixtures/mock-data";
 import type { NativeMapMessage, NativeMapEvent } from "../src/shared/native-map/protocol";
+
+const test = mergeTests(chatTest, mapTest).extend<{ nativeReady: boolean }>({
+  nativeReady: [true, { option: true }],
+});
 
 declare global {
   interface Window {
@@ -11,8 +16,8 @@ declare global {
 
 test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "no-preference" });
 
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
+test.beforeEach(async ({ page, nativeReady }) => {
+  await page.addInitScript((nativeReady) => {
     window.nativeMapMessages = [];
     window.SalmonNativeMap = {
       version: 1,
@@ -20,7 +25,7 @@ test.beforeEach(async ({ page }) => {
       postMessage(raw) {
         const message = JSON.parse(raw) as NativeMapMessage;
         window.nativeMapMessages.push(message);
-        if (message.type === "mount" || message.type === "layout") {
+        if ((message.type === "mount" && nativeReady) || message.type === "layout") {
           queueMicrotask(() =>
             window.dispatchEvent(
               new CustomEvent("salmon:native-map", {
@@ -37,7 +42,7 @@ test.beforeEach(async ({ page }) => {
         }
       },
     };
-  });
+  }, nativeReady);
 });
 
 async function messages(page: Page) {
@@ -200,6 +205,66 @@ test("native 지도 오류 후에도 웹 목록을 유지하고 앱 전용 투�
   await expect(page.getByRole("region", { name: "판정보드 정류장 목록", exact: true })).toBeVisible();
   expect(await page.locator("html").getAttribute("data-native-map")).toBeNull();
   expect((await messages(page)).at(-1)?.type).toBe("unmount");
+});
+
+test.describe("native 지도 준비 실패 시 JS 지도 전환", () => {
+  test.use({ nativeReady: false });
+
+  for (const failure of ["timeout", "native-timeout", "auth"] as const) {
+    test(`${failure} 후 JS 지도를 유지하고 선택과 차량 이동을 연결한다`, async ({ page, naverMap, api }) => {
+      api.cacheMaxAgeSeconds = 60;
+      api.data.vehicles.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1")!.phase = "IN_TRANSIT";
+      await page.goto(`/routes/${routeId}`);
+      await expect.poll(async () => (await messages(page)).some((message) => message.type === "mount")).toBe(true);
+      await emit(page, { type: "stopPress", payload: { selection: { direction: "UP", sequence: 1 } } });
+      if (failure === "timeout") await page.clock.runFor(15_000);
+      else
+        await emit(page, {
+          type: "error",
+          payload: { message: failure === "auth" ? "지도 설정을 확인하지 못했어요" : "지도를 불러오지 못했어요" },
+        });
+
+      const map = page.getByRole("region", { name: "노선 지도", exact: true });
+      await expect(map.getByTestId("naver-map-test-double")).toHaveCount(1);
+      await page.clock.runFor(64);
+      await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
+      expect(await page.locator("html").getAttribute("data-native-map")).toBeNull();
+      expect((await messages(page)).filter((message) => message.type === "unmount")).toHaveLength(1);
+      await expect(map.locator('button[data-map-stop-sequence="1"][aria-pressed="true"]')).toHaveCount(1);
+
+      const camera = await naverMap.snapshot();
+      const mountCount = (await messages(page)).filter((message) => message.type === "mount").length;
+      await emit(page, { type: "ready", payload: {} });
+      await emit(page, { type: "error", payload: { message: "지도 설정을 확인하지 못했어요" } });
+      await page.clock.runFor(64);
+      expect(await naverMap.snapshot()).toEqual(camera);
+      expect((await messages(page)).filter((message) => message.type === "mount")).toHaveLength(mountCount);
+      await expect(map.getByTestId("naver-map-test-double")).toHaveCount(1);
+
+      const bus = map.getByRole("button", { name: /부근 버스, 현재 잔여 좌석 5석/ });
+      const before = await bus.evaluate((element) => element.parentElement!.style.cssText);
+      await page.clock.runFor(1_000);
+      expect(await bus.evaluate((element) => element.parentElement!.style.cssText)).not.toBe(before);
+      await bus.evaluate((element: HTMLButtonElement) => element.click());
+      await page.clock.runFor(600);
+      expect((await naverMap.snapshot()).zoom).toBeGreaterThanOrEqual(16);
+    });
+  }
+
+  test("JS 지도도 초기화에 실패하면 오류를 안내하고 목록을 유지한다", async ({ page }) => {
+    await page.addInitScript(() => {
+      delete window.naver;
+    });
+    await page.goto(`/routes/${routeId}`);
+    await expect.poll(async () => (await messages(page)).some((message) => message.type === "mount")).toBe(true);
+    await emit(page, { type: "error", payload: { message: "지도 설정을 확인하지 못했어요" } });
+    await expect(page.getByText(/지도를 불러오지 못했어요|지도 설정을 준비 중이에요/)).toBeVisible();
+    await expect(page.getByRole("region", { name: "판정보드 정류장 목록", exact: true })).toBeVisible();
+    expect(await page.locator("html").getAttribute("data-native-map")).toBeNull();
+    const count = (await messages(page)).filter((message) => message.type === "mount").length;
+    await page.clock.runFor(16_000);
+    expect((await messages(page)).filter((message) => message.type === "mount")).toHaveLength(count);
+  });
 });
 
 test("겹친 transition과 두 손가락 중 하나가 끝나도 native gesture 잠금을 유지한다", async ({ page }) => {
