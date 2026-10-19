@@ -14,7 +14,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class ArrivalRefreshControllerTest {
     private final RefreshStationArrivals coordinator = mock(RefreshStationArrivals.class);
-    private final ArrivalProperties properties = new ArrivalProperties("test-internal-token", 40000, 10000, 8,
+    private final ArrivalProperties properties = new ArrivalProperties("test-internal-token", 10000, 8,
         Duration.ofSeconds(40), Duration.ofSeconds(60), Duration.ofSeconds(40), Duration.ofSeconds(300),
         Duration.ofSeconds(40), Duration.ofSeconds(2), Duration.ofMinutes(10));
     private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new ArrivalRefreshController(coordinator, properties)).build();

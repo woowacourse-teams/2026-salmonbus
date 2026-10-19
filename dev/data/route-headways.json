@@ -1,0 +1,626 @@
+{
+  "version": "local-route-headways-v1",
+  "source": "GBIS_OPENAPI_CAPTURE",
+  "operation": "busrouteservice/v2/getBusRouteInfoItemv2",
+  "capturedAt": "2026-10-19T07:51:49.268096+00:00",
+  "description": "GBIS 노선 기본정보 API를 노선마다 한 번 호출해 받은 요일별 최소·최대 배차간격(분)이다. 응답에서 배차 8필드만 원래 값과 타입 그대로 남겼다. responses에는 노선별 응답 시각과 원문 SHA-256·크기를 기록했다. 원문은 저장하지 않았다.",
+  "responses": {
+    "234000050": {
+      "queryTime": "2026-10-19 16:51:55.677",
+      "bodySha256": "6b9ea296ba8b2cdc2209a8d8dc41c32469df4f8f68a1af0d6134f81fe388e01d",
+      "bodyBytes": 1293
+    },
+    "204000057": {
+      "queryTime": "2026-10-19 16:51:58.109",
+      "bodySha256": "f7350cb69e5d22880712735b04ce1ed5e6d1f02a0e2193ee0ed5a6b5ea7119ab",
+      "bodyBytes": 1279
+    },
+    "204000070": {
+      "queryTime": "2026-10-19 16:51:58.484",
+      "bodySha256": "afbc7b7a4e76d6733da7633871ff9a049cb30c13c26548b31182555432ecb2e6",
+      "bodyBytes": 1331
+    },
+    "234000886": {
+      "queryTime": "2026-10-19 16:51:56.787",
+      "bodySha256": "5d24fd015a9714d2051b1082f1f631c5e3c94ec6903ea3f01449a18ffca73ab9",
+      "bodyBytes": 1329
+    },
+    "233000392": {
+      "queryTime": "2026-10-19 16:51:57.193",
+      "bodySha256": "eff0d8a441bba18e318f150fea27bc9b42d7120c04ad15d4b112998318f2c086",
+      "bodyBytes": 1347
+    },
+    "227000038": {
+      "queryTime": "2026-10-19 16:51:59.655",
+      "bodySha256": "2f7cc8f919af97b06ddf5affc93378163a4620a649121efee1c76e471503623f",
+      "bodyBytes": 1274
+    },
+    "228000184": {
+      "queryTime": "2026-10-19 16:52:00.015",
+      "bodySha256": "1a0629078d22714d566f3dd19b0b2381ca79d2a1c15e0978f3a5d369ee54d6c5",
+      "bodyBytes": 1296
+    },
+    "234000051": {
+      "queryTime": "2026-10-19 16:52:00.390",
+      "bodySha256": "963b8da5ee3e6f157c0457d0a283c6cfe10d16403ec2605ad240ce61ef58035a",
+      "bodyBytes": 1303
+    },
+    "234000065": {
+      "queryTime": "2026-10-19 16:51:58.724",
+      "bodySha256": "bbeb40affa3f68127e6643add3814a7bca87ec43a29d245ef4aa3d0f510cf350",
+      "bodyBytes": 1299
+    },
+    "234000015": {
+      "queryTime": "2026-10-19 16:51:59.115",
+      "bodySha256": "75f6910d274b4aa289f75fe17fd65ff33cec7e8a2f40c1c3616d82f6bcf2ba83",
+      "bodyBytes": 1295
+    },
+    "234000013": {
+      "queryTime": "2026-10-19 16:52:01.577",
+      "bodySha256": "bc0e0ae9512441b1069ecda676a81d74624dec77ffcee49bd88ae92886d4ae67",
+      "bodyBytes": 1311
+    },
+    "234000310": {
+      "queryTime": "2026-10-19 16:52:01.921",
+      "bodySha256": "fffbedc041eefab47ec0a34bfa9ba9d17a5dce516e1479a02e1a3c72ed4c4f64",
+      "bodyBytes": 1301
+    },
+    "233000476": {
+      "queryTime": "2026-10-19 16:52:00.256",
+      "bodySha256": "71980ae1ab2ed2e6e183ff4fef074f053ffe576286c9a655a4298e781dd42705",
+      "bodyBytes": 1339
+    },
+    "234000879": {
+      "queryTime": "2026-10-19 16:52:00.662",
+      "bodySha256": "74dfb7f332f6c75bd48d6fed88535c35fa98832a47ad59294c1206791a5c2605",
+      "bodyBytes": 1300
+    },
+    "234000882": {
+      "queryTime": "2026-10-19 16:52:01.037",
+      "bodySha256": "db4450a258463b92beb9e0a3326bb11b585ce16609e8c2ddb294e4b23ba7275c",
+      "bodyBytes": 1340
+    },
+    "204000081": {
+      "queryTime": "2026-10-19 16:52:01.412",
+      "bodySha256": "affe6ef2f49239eb0aaf27baee939c94f092e99d27a15f0554580399bd0e0c9a",
+      "bodyBytes": 1292
+    },
+    "234000313": {
+      "queryTime": "2026-10-19 16:52:03.858",
+      "bodySha256": "6a11fc4fd35ffd76a7547297204d0c17114da3903e211ad9b6d1cd1bc759050a",
+      "bodyBytes": 1299
+    },
+    "204000170": {
+      "queryTime": "2026-10-19 16:52:04.233",
+      "bodySha256": "550430586857bdf3ae267d0aec5502813db18fc61b8cf5f850d99ed83b9756c4",
+      "bodyBytes": 1293
+    },
+    "216000107": {
+      "queryTime": "2026-10-19 16:52:04.593",
+      "bodySha256": "0fbceca5e3a517fba05fcd4a62c505d895cebef9b7a4558b2ae2cacf646409fe",
+      "bodyBytes": 1337
+    },
+    "224000067": {
+      "queryTime": "2026-10-19 16:52:04.968",
+      "bodySha256": "3ae6f53c9980d7a8c8c178a9b74cebf82c13904afd92c403e742e9a9082e1db6",
+      "bodyBytes": 1332
+    },
+    "224000068": {
+      "queryTime": "2026-10-19 16:52:03.318",
+      "bodySha256": "924b0b0048eaca5496e4eb54a8e39a91fbae75ede61b33844d4db8918b3caab3",
+      "bodyBytes": 1344
+    },
+    "224000069": {
+      "queryTime": "2026-10-19 16:52:03.771",
+      "bodySha256": "8999cbd51b33c330f5110423b55190cc528159737a070efe08fffa9620e3e767",
+      "bodyBytes": 1331
+    },
+    "200000314": {
+      "queryTime": "2026-10-19 16:52:04.177",
+      "bodySha256": "661e16056fae7b69c0ec38e362687dc79a5e1b1e729316f0f69b415d0811ad2d",
+      "bodyBytes": 1284
+    },
+    "204000056": {
+      "queryTime": "2026-10-19 16:52:04.568",
+      "bodySha256": "e3e60f6be23f712cc6bbcf717c4099466914dd13540c03a5b399e0813ee44162",
+      "bodyBytes": 1300
+    },
+    "228000271": {
+      "queryTime": "2026-10-19 16:52:06.999",
+      "bodySha256": "0950832ca3dd430e6625562120277e5d1d9d046efba860eb4d687887c463f5f6",
+      "bodyBytes": 1300
+    },
+    "233000266": {
+      "queryTime": "2026-10-19 16:52:05.318",
+      "bodySha256": "806ceef11f9789832ff1aed988216f1006cf23cf18db38b731d40e6bfd75cef5",
+      "bodyBytes": 1336
+    },
+    "233000426": {
+      "queryTime": "2026-10-19 16:52:05.709",
+      "bodySha256": "68cfa1cc4c6c7eb1159cb1fd6b2a7d99c13faed29dedb2c50bf538d3550d1cb0",
+      "bodyBytes": 1289
+    },
+    "234001739": {
+      "queryTime": "2026-10-19 16:52:06.099",
+      "bodySha256": "2e169bdb0d20abd3eb4650210a102c6de6391f6586037fb8a5f34800aa1b1214",
+      "bodyBytes": 1350
+    },
+    "214000273": {
+      "queryTime": "2026-10-19 16:52:06.505",
+      "bodySha256": "6c18b48e284b25e54ff0c0f475092c65e18bd24cf8f8709e66b8c3d99b5e6016",
+      "bodyBytes": 1333
+    },
+    "234000027": {
+      "queryTime": "2026-10-19 16:52:08.937",
+      "bodySha256": "63102c6d985337960dab18156a1583ce9b3c6a3cb043c9ad11738920bfe9c443",
+      "bodyBytes": 1285
+    },
+    "228000393": {
+      "queryTime": "2026-10-19 16:52:07.271",
+      "bodySha256": "b3002def90bf56845702bd09691bcf9dcf018d5e6eb308dabf6189135258f6a9",
+      "bodyBytes": 1296
+    },
+    "234000878": {
+      "queryTime": "2026-10-19 16:52:09.702",
+      "bodySha256": "b19527ccd85b1c2025c891b5e6392b8608031d57b1405bbb561783bd9978ff87",
+      "bodyBytes": 1316
+    },
+    "234001730": {
+      "queryTime": "2026-10-19 16:52:10.077",
+      "bodySha256": "f8b7c6db301f60bf5bc758738575b0ef4ee15a51e520a64499763b2c6a9f537b",
+      "bodyBytes": 1351
+    },
+    "234001741": {
+      "queryTime": "2026-10-19 16:52:08.427",
+      "bodySha256": "7b6f09427725aef5252098a10d29f233e68a18bad2ec4c2fad7ca63ffdbacad9",
+      "bodyBytes": 1326
+    },
+    "223000152": {
+      "queryTime": "2026-10-19 16:52:10.921",
+      "bodySha256": "ddccf9a5ca3d7d09475164f81c4ecc182490f698885fc23349e39a2d5838fe2e",
+      "bodyBytes": 1345
+    },
+    "234000002": {
+      "queryTime": "2026-10-19 16:52:11.312",
+      "bodySha256": "996929de1ea2741ebc11f0d02df4d08e77a5982c7ab39297f7970cc318bb88ba",
+      "bodyBytes": 1312
+    },
+    "200000337": {
+      "queryTime": "2026-10-19 16:52:11.718",
+      "bodySha256": "cbb99f04d3ad303395a73319b4689fb4c503cb09fbf7199e570a2b4236b649f9",
+      "bodyBytes": 1358
+    },
+    "200000342": {
+      "queryTime": "2026-10-19 16:52:12.093",
+      "bodySha256": "8cee57a8b05cb184bb14b9a808aca2a5f5248c36cce05ed29bf7417e336338f4",
+      "bodyBytes": 1344
+    },
+    "228000442": {
+      "queryTime": "2026-10-19 16:52:12.499",
+      "bodySha256": "fd6fec4c84136f67655ff3a3307d1c7d67a91dd077bf3d02f4d179bb62d044a0",
+      "bodyBytes": 1325
+    },
+    "204000059": {
+      "queryTime": "2026-10-19 16:52:10.849",
+      "bodySha256": "4f1a2d242a97323d3b24f721e7ce183e043628811e8c17319c7888bff031ce6a",
+      "bodyBytes": 1307
+    },
+    "204000082": {
+      "queryTime": "2026-10-19 16:52:13.280",
+      "bodySha256": "979cbdb12cd30a43a78f229eae4ca98a11c83788e422193ef504944ce7eb4e40",
+      "bodyBytes": 1303
+    }
+  },
+  "routes": {
+    "234000050": {
+      "peekAlloc": 8,
+      "nPeekAlloc": 14,
+      "satPeekAlloc": 15,
+      "satNPeekAlloc": 18,
+      "sunPeekAlloc": 15,
+      "sunNPeekAlloc": 18,
+      "wePeekAlloc": 15,
+      "weNPeekAlloc": 18
+    },
+    "204000057": {
+      "peekAlloc": 5,
+      "nPeekAlloc": 15,
+      "satPeekAlloc": 10,
+      "satNPeekAlloc": 20,
+      "sunPeekAlloc": 10,
+      "sunNPeekAlloc": 20,
+      "wePeekAlloc": 10,
+      "weNPeekAlloc": 20
+    },
+    "204000070": {
+      "peekAlloc": 5,
+      "nPeekAlloc": 20,
+      "satPeekAlloc": 20,
+      "satNPeekAlloc": 30,
+      "sunPeekAlloc": 20,
+      "sunNPeekAlloc": 30,
+      "wePeekAlloc": 20,
+      "weNPeekAlloc": 30
+    },
+    "234000886": {
+      "peekAlloc": 5,
+      "nPeekAlloc": 30,
+      "satPeekAlloc": 15,
+      "satNPeekAlloc": 30,
+      "sunPeekAlloc": 15,
+      "sunNPeekAlloc": 30,
+      "wePeekAlloc": 15,
+      "weNPeekAlloc": 30
+    },
+    "233000392": {
+      "peekAlloc": 5,
+      "nPeekAlloc": 25,
+      "satPeekAlloc": 35,
+      "satNPeekAlloc": 40,
+      "sunPeekAlloc": 35,
+      "sunNPeekAlloc": 40,
+      "wePeekAlloc": 35,
+      "weNPeekAlloc": 40
+    },
+    "227000038": {
+      "peekAlloc": 15,
+      "nPeekAlloc": 30,
+      "satPeekAlloc": 20,
+      "satNPeekAlloc": 35,
+      "sunPeekAlloc": 20,
+      "sunNPeekAlloc": 35,
+      "wePeekAlloc": 20,
+      "weNPeekAlloc": 35
+    },
+    "228000184": {
+      "peekAlloc": 8,
+      "nPeekAlloc": 18,
+      "satPeekAlloc": 21,
+      "satNPeekAlloc": 26,
+      "sunPeekAlloc": 21,
+      "sunNPeekAlloc": 26,
+      "wePeekAlloc": 21,
+      "weNPeekAlloc": 26
+    },
+    "234000051": {
+      "peekAlloc": 10,
+      "nPeekAlloc": 25,
+      "satPeekAlloc": 20,
+      "satNPeekAlloc": 30,
+      "sunPeekAlloc": 20,
+      "sunNPeekAlloc": 30,
+      "wePeekAlloc": 20,
+      "weNPeekAlloc": 30
+    },
+    "234000065": {
+      "peekAlloc": 35,
+      "nPeekAlloc": 60,
+      "satPeekAlloc": 35,
+      "satNPeekAlloc": 60,
+      "sunPeekAlloc": 60,
+      "sunNPeekAlloc": 75,
+      "wePeekAlloc": 60,
+      "weNPeekAlloc": 75
+    },
+    "234000015": {
+      "peekAlloc": 10,
+      "nPeekAlloc": 30,
+      "satPeekAlloc": 20,
+      "satNPeekAlloc": 40,
+      "sunPeekAlloc": 30,
+      "sunNPeekAlloc": 40,
+      "wePeekAlloc": 30,
+      "weNPeekAlloc": 40
+    },
+    "234000013": {
+      "peekAlloc": 40,
+      "nPeekAlloc": 60,
+      "satPeekAlloc": 70,
+      "satNPeekAlloc": 90,
+      "sunPeekAlloc": 70,
+      "sunNPeekAlloc": 90,
+      "wePeekAlloc": 70,
+      "weNPeekAlloc": 90
+    },
+    "234000310": {
+      "peekAlloc": 3,
+      "nPeekAlloc": 40,
+      "satPeekAlloc": 30,
+      "satNPeekAlloc": 40,
+      "sunPeekAlloc": 35,
+      "sunNPeekAlloc": 50,
+      "wePeekAlloc": 35,
+      "weNPeekAlloc": 50
+    },
+    "233000476": {
+      "peekAlloc": 30,
+      "nPeekAlloc": 50,
+      "satPeekAlloc": 40,
+      "satNPeekAlloc": 60,
+      "sunPeekAlloc": 40,
+      "sunNPeekAlloc": 60,
+      "wePeekAlloc": 40,
+      "weNPeekAlloc": 60
+    },
+    "234000879": {
+      "peekAlloc": 15,
+      "nPeekAlloc": 25,
+      "satPeekAlloc": 25,
+      "satNPeekAlloc": 35,
+      "sunPeekAlloc": 30,
+      "sunNPeekAlloc": 50,
+      "wePeekAlloc": 30,
+      "weNPeekAlloc": 50
+    },
+    "234000882": {
+      "peekAlloc": 6,
+      "nPeekAlloc": 30,
+      "satPeekAlloc": 15,
+      "satNPeekAlloc": 30,
+      "sunPeekAlloc": 15,
+      "sunNPeekAlloc": 30,
+      "wePeekAlloc": 15,
+      "weNPeekAlloc": 30
+    },
+    "204000081": {
+      "peekAlloc": 1,
+      "nPeekAlloc": 10,
+      "satPeekAlloc": 8,
+      "satNPeekAlloc": 10,
+      "sunPeekAlloc": 8,
+      "sunNPeekAlloc": 12,
+      "wePeekAlloc": 8,
+      "weNPeekAlloc": 12
+    },
+    "234000313": {
+      "peekAlloc": 4,
+      "nPeekAlloc": 15,
+      "satPeekAlloc": 11,
+      "satNPeekAlloc": 17,
+      "sunPeekAlloc": 10,
+      "sunNPeekAlloc": 20,
+      "wePeekAlloc": 10,
+      "weNPeekAlloc": 20
+    },
+    "204000170": {
+      "peekAlloc": 30,
+      "nPeekAlloc": 40,
+      "satPeekAlloc": 40,
+      "satNPeekAlloc": 60,
+      "sunPeekAlloc": 40,
+      "sunNPeekAlloc": 60,
+      "wePeekAlloc": 40,
+      "weNPeekAlloc": 60
+    },
+    "216000107": {
+      "peekAlloc": 60,
+      "nPeekAlloc": 80,
+      "satPeekAlloc": 90,
+      "satNPeekAlloc": 150,
+      "sunPeekAlloc": 90,
+      "sunNPeekAlloc": 150,
+      "wePeekAlloc": 90,
+      "weNPeekAlloc": 150
+    },
+    "224000067": {
+      "peekAlloc": 30,
+      "nPeekAlloc": 75,
+      "satPeekAlloc": 80,
+      "satNPeekAlloc": 100,
+      "sunPeekAlloc": 80,
+      "sunNPeekAlloc": 100,
+      "wePeekAlloc": 80,
+      "weNPeekAlloc": 100
+    },
+    "224000068": {
+      "peekAlloc": 30,
+      "nPeekAlloc": 70,
+      "satPeekAlloc": 80,
+      "satNPeekAlloc": 100,
+      "sunPeekAlloc": 80,
+      "sunNPeekAlloc": 100,
+      "wePeekAlloc": 80,
+      "weNPeekAlloc": 100
+    },
+    "224000069": {
+      "peekAlloc": 30,
+      "nPeekAlloc": 60,
+      "satPeekAlloc": 80,
+      "satNPeekAlloc": 100,
+      "sunPeekAlloc": 80,
+      "sunNPeekAlloc": 100,
+      "wePeekAlloc": 80,
+      "weNPeekAlloc": 100
+    },
+    "200000314": {
+      "peekAlloc": 30,
+      "nPeekAlloc": 65,
+      "satPeekAlloc": 70,
+      "satNPeekAlloc": 75,
+      "sunPeekAlloc": 70,
+      "sunNPeekAlloc": 75,
+      "wePeekAlloc": 70,
+      "weNPeekAlloc": 75
+    },
+    "204000056": {
+      "peekAlloc": 30,
+      "nPeekAlloc": 40,
+      "satPeekAlloc": 40,
+      "satNPeekAlloc": 50,
+      "sunPeekAlloc": 40,
+      "sunNPeekAlloc": 50,
+      "wePeekAlloc": 40,
+      "weNPeekAlloc": 50
+    },
+    "228000271": {
+      "peekAlloc": 35,
+      "nPeekAlloc": 45,
+      "satPeekAlloc": 35,
+      "satNPeekAlloc": 45,
+      "sunPeekAlloc": 35,
+      "sunNPeekAlloc": 45,
+      "wePeekAlloc": 35,
+      "weNPeekAlloc": 45
+    },
+    "233000266": {
+      "peekAlloc": 10,
+      "nPeekAlloc": 20,
+      "satPeekAlloc": 10,
+      "satNPeekAlloc": 30,
+      "sunPeekAlloc": 10,
+      "sunNPeekAlloc": 30,
+      "wePeekAlloc": 10,
+      "weNPeekAlloc": 30
+    },
+    "233000426": {
+      "peekAlloc": 15,
+      "nPeekAlloc": 50,
+      "satPeekAlloc": 20,
+      "satNPeekAlloc": 50,
+      "sunPeekAlloc": 20,
+      "sunNPeekAlloc": 50,
+      "wePeekAlloc": 20,
+      "weNPeekAlloc": 50
+    },
+    "234001739": {
+      "peekAlloc": 10,
+      "nPeekAlloc": 60,
+      "satPeekAlloc": 30,
+      "satNPeekAlloc": 70,
+      "sunPeekAlloc": 30,
+      "sunNPeekAlloc": 70,
+      "wePeekAlloc": 30,
+      "weNPeekAlloc": 70
+    },
+    "214000273": {
+      "peekAlloc": 30,
+      "nPeekAlloc": 120,
+      "satPeekAlloc": 60,
+      "satNPeekAlloc": 90,
+      "sunPeekAlloc": 60,
+      "sunNPeekAlloc": 170,
+      "wePeekAlloc": 60,
+      "weNPeekAlloc": 170
+    },
+    "234000027": {
+      "peekAlloc": 20,
+      "nPeekAlloc": 30,
+      "satPeekAlloc": 40,
+      "satNPeekAlloc": 50,
+      "sunPeekAlloc": 40,
+      "sunNPeekAlloc": 50,
+      "wePeekAlloc": 40,
+      "weNPeekAlloc": 50
+    },
+    "228000393": {
+      "peekAlloc": 30,
+      "nPeekAlloc": 60,
+      "satPeekAlloc": 60,
+      "satNPeekAlloc": 90,
+      "sunPeekAlloc": 60,
+      "sunNPeekAlloc": 90,
+      "wePeekAlloc": 60,
+      "weNPeekAlloc": 90
+    },
+    "234000878": {
+      "peekAlloc": 6,
+      "nPeekAlloc": 10,
+      "satPeekAlloc": 8,
+      "satNPeekAlloc": 12,
+      "sunPeekAlloc": 12,
+      "sunNPeekAlloc": 20,
+      "wePeekAlloc": 12,
+      "weNPeekAlloc": 20
+    },
+    "234001730": {
+      "peekAlloc": 40,
+      "nPeekAlloc": 60,
+      "satPeekAlloc": 60,
+      "satNPeekAlloc": 70,
+      "sunPeekAlloc": 60,
+      "sunNPeekAlloc": 70,
+      "wePeekAlloc": 60,
+      "weNPeekAlloc": 70
+    },
+    "234001741": {
+      "peekAlloc": 30,
+      "nPeekAlloc": 270,
+      "satPeekAlloc": 90,
+      "satNPeekAlloc": 280,
+      "sunPeekAlloc": 90,
+      "sunNPeekAlloc": 280,
+      "wePeekAlloc": 90,
+      "weNPeekAlloc": 280
+    },
+    "223000152": {
+      "peekAlloc": 30,
+      "nPeekAlloc": 240,
+      "satPeekAlloc": 290,
+      "satNPeekAlloc": 300,
+      "sunPeekAlloc": 290,
+      "sunNPeekAlloc": 300,
+      "wePeekAlloc": 290,
+      "weNPeekAlloc": 300
+    },
+    "234000002": {
+      "peekAlloc": 3,
+      "nPeekAlloc": 35,
+      "satPeekAlloc": 15,
+      "satNPeekAlloc": 35,
+      "sunPeekAlloc": 20,
+      "sunNPeekAlloc": 55,
+      "wePeekAlloc": 20,
+      "weNPeekAlloc": 55
+    },
+    "200000337": {
+      "peekAlloc": 10,
+      "nPeekAlloc": 30,
+      "satPeekAlloc": 25,
+      "satNPeekAlloc": 30,
+      "sunPeekAlloc": 25,
+      "sunNPeekAlloc": 30,
+      "wePeekAlloc": 25,
+      "weNPeekAlloc": 30
+    },
+    "200000342": {
+      "peekAlloc": 20,
+      "nPeekAlloc": 45,
+      "satPeekAlloc": 30,
+      "satNPeekAlloc": 43,
+      "sunPeekAlloc": 30,
+      "sunNPeekAlloc": 43,
+      "wePeekAlloc": 30,
+      "weNPeekAlloc": 43
+    },
+    "228000442": {
+      "peekAlloc": 17,
+      "nPeekAlloc": 35,
+      "satPeekAlloc": 50,
+      "satNPeekAlloc": 55,
+      "sunPeekAlloc": 50,
+      "sunNPeekAlloc": 55,
+      "wePeekAlloc": 50,
+      "weNPeekAlloc": 55
+    },
+    "204000059": {
+      "peekAlloc": 19,
+      "nPeekAlloc": 33,
+      "satPeekAlloc": 30,
+      "satNPeekAlloc": 45,
+      "sunPeekAlloc": 33,
+      "sunNPeekAlloc": 52,
+      "wePeekAlloc": 33,
+      "weNPeekAlloc": 52
+    },
+    "204000082": {
+      "peekAlloc": 8,
+      "nPeekAlloc": 15,
+      "satPeekAlloc": 15,
+      "satNPeekAlloc": 20,
+      "sunPeekAlloc": 15,
+      "sunNPeekAlloc": 20,
+      "wePeekAlloc": 15,
+      "weNPeekAlloc": 20
+    }
+  }
+}

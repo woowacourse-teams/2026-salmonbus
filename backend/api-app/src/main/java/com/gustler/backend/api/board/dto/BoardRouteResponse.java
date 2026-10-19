@@ -23,7 +23,11 @@ public record BoardRouteResponse(
     @Schema(description = "상행/하행 방향 이름과 운행 시간")
     List<DirectionInfoResponse> directions,
     @Schema(description = "이 응답이 기준으로 삼은 노선 판본 ID")
-    String referenceVersionId
+    String referenceVersionId,
+    @Schema(description = "GBIS 노선 기본정보에 등록된 요일별 최소·최대 배차간격(분). 방향 구분이 없고 실제 도착 간격이나 "
+        + "평균이 아니다. GBIS가 맞지 않는 값을 보내면 그 요일은 마지막으로 받은 정상 값을 유지한다. "
+        + "오늘이 공휴일인지는 판정하지 않는다. 이 필드가 없는 응답은 정보 없음으로 본다")
+    RouteHeadwaysResponse headways
 ) {
 
     static BoardRouteResponse from(
@@ -39,7 +43,8 @@ public record BoardRouteResponse(
             route.directions().stream()
                 .map(DirectionInfoResponse::from)
                 .toList(),
-            route.referenceVersionId()
+            route.referenceVersionId(),
+            RouteHeadwaysResponse.from(route.headways())
         );
     }
 }

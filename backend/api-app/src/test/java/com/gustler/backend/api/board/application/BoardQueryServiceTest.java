@@ -14,6 +14,8 @@ import com.gustler.backend.api.board.domain.Board;
 import com.gustler.backend.api.board.domain.BoardDirection;
 import com.gustler.backend.api.board.domain.BoardStop;
 import com.gustler.backend.api.board.domain.ForecastModel;
+import com.gustler.backend.api.board.domain.HeadwayRange;
+import com.gustler.backend.api.board.domain.RouteHeadways;
 import com.gustler.backend.api.board.domain.StopState;
 import com.gustler.backend.api.board.domain.VehicleForecast;
 import com.gustler.backend.api.error.ServiceUnavailableException;
@@ -84,6 +86,47 @@ class BoardQueryServiceTest {
         assertThat(board.route().directions())
             .extracting(direction -> direction.name())
             .containsExactly("회차점 방면", "종점 방면");
+    }
+
+    @Test
+    void 노선_버전의_요일별_배차간격을_노선_정보에_그대로_싣는다() {
+        // given
+        RouteHeadways headways = new RouteHeadways(
+            new HeadwayRange(10, 20), null, new HeadwayRange(15, 30), new HeadwayRange(16, 35));
+        given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(new BoardSnapshot(
+            1L,
+            route(),
+            2,
+            new DepartureSchedule("04:50", "23:30", "05:00", "23:30", headways),
+            Optional.of(observation()),
+            Optional.of(ACTIVE_MODEL)
+        )));
+        given(repository.findStops(1L)).willReturn(roundTripStops());
+        given(repository.findPredictions(100L)).willReturn(List.of());
+        given(repository.findObservedVehicles(100L, 1L)).willReturn(List.of());
+
+        // when
+        Board actual = service.getBoard(ROUTE_ID).board();
+
+        // then
+        assertThat(actual.route().headways()).isEqualTo(headways);
+        assertThat(actual.route().directions())
+            .extracting(direction -> direction.firstDepartureTime())
+            .containsExactly("04:50", "05:00");
+    }
+
+    @Test
+    void 보드를_읽으면_기준_관측_묶음의_ID와_같은_보드를_돌려준다() {
+        // given
+        givenRoundTripBoard(List.of(prediction(3, "A", 1, 1, 0.2, 10.0)));
+
+        // when
+        BoardReading reading = service.readBoard(ROUTE_ID);
+
+        // then
+        assertThat(reading.observationBatchId()).isEqualTo(100L);
+        assertThat(reading.board()).isEqualTo(service.getBoard(ROUTE_ID).board());
+        assertThat(reading.cacheMaxAge()).isEqualTo(Duration.ofSeconds(15));
     }
 
     @Test
@@ -265,7 +308,7 @@ class BoardQueryServiceTest {
             2L,
             route(),
             null,
-            new DepartureSchedule("05:00", "23:00", null, null),
+            new DepartureSchedule("05:00", "23:00", null, null, RouteHeadways.none()),
             Optional.of(observation()),
             Optional.of(ACTIVE_MODEL)
         );
@@ -447,7 +490,7 @@ class BoardQueryServiceTest {
     }
 
     private DepartureSchedule schedule() {
-        return new DepartureSchedule("04:50", "23:30", "05:00", "23:30");
+        return new DepartureSchedule("04:50", "23:30", "05:00", "23:30", RouteHeadways.none());
     }
 
     private SnapshotObservation observation() {

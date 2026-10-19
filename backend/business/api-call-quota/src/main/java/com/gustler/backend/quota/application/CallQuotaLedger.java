@@ -77,7 +77,7 @@ public class CallQuotaLedger implements ApiCallQuota {
         OffsetDateTime requestedAt,
         final int calls
     ) {
-        return DailyCallQuota.at(quota, keyAlias, requestedAt, policy.limitOf(quota))
+        return DailyCallQuota.at(quota, keyAlias, requestedAt, policy.limitOf(quota, keyAlias))
             .reservationFor(calls)
             .map(callQuotaStore::reserve)
             .orElse(false);
@@ -97,7 +97,7 @@ public class CallQuotaLedger implements ApiCallQuota {
         OffsetDateTime reservedAt,
         OffsetDateTime dispatchAt
     ) {
-        if (DailyCallQuota.at(CallQuota.BUS_LOCATION, keyAlias, reservedAt, policy.limitOf(CallQuota.BUS_LOCATION))
+        if (DailyCallQuota.at(CallQuota.BUS_LOCATION, keyAlias, reservedAt, policy.limitOf(CallQuota.BUS_LOCATION, keyAlias))
             .covers(dispatchAt)) {
             return true;
         }
@@ -111,7 +111,7 @@ public class CallQuotaLedger implements ApiCallQuota {
         OffsetDateTime requestedAt
     ) {
         DailyCallQuota quota = DailyCallQuota.at(
-            CallQuota.BUS_LOCATION, keyAlias, requestedAt, policy.limitOf(CallQuota.BUS_LOCATION));
+            CallQuota.BUS_LOCATION, keyAlias, requestedAt, policy.limitOf(CallQuota.BUS_LOCATION, keyAlias));
         return callQuotaStore.exclude(quota.service(), quota.koreanDate(), quota.keyAlias());
     }
 }

@@ -43,7 +43,8 @@ public class ForecastBatchCommitter {
 
     @Transactional
     public int commit(PendingForecastBatch batch, ForecastPublication publication) {
-        long currentRevision = quality.lock(batch.routeVersionId());
+        quality.ensureExists(batch.routeVersionId());
+        long currentRevision = quality.current(batch.routeVersionId());
         if (currentRevision != publication.qualityRevision()) {
             log.info("event=forecast_publication_skipped reason=QUALITY_CHANGED batchId={} routeVersionId={} expectedRevision={} actualRevision={}",
                 batch.observationBatchId(), batch.routeVersionId(), publication.qualityRevision(), currentRevision);

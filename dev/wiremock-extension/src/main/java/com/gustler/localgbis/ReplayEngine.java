@@ -22,10 +22,13 @@ final class ReplayEngine {
     private static final List<String> REFERENCE_ROUTES = List.of("1650", "3330", "9007", "9300", "6011", "3000", "5600", "3500");
     static final List<String> REPLAY_ROUTES = java.util.stream.Stream.concat(REFERENCE_ROUTES.stream(),
         List.of("1151", "9000", "1500-2", "8100", "1150", "G8110", "6801", "6003", "3100", "1101", "7007-1", "4000").stream()).toList();
+    static final List<String> HEADWAY_FIELDS = List.of("peekAlloc", "nPeekAlloc", "satPeekAlloc", "satNPeekAlloc",
+        "sunPeekAlloc", "sunNPeekAlloc", "wePeekAlloc", "weNPeekAlloc");
     private static final DateTimeFormatter QUERY_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
         .withZone(ZoneId.of("Asia/Seoul"));
     private final Map<String, Route> routes;
     private final Map<String, List<RouteShapes.Point>> routeLines;
+    private final Map<String, Map<String, Object>> headways;
     private final Configuration configuration;
     private final Clock clock;
     private final LongSupplier nanoTime;
@@ -34,21 +37,23 @@ final class ReplayEngine {
     private final Map<String, Layout> layouts = new java.util.concurrent.ConcurrentHashMap<>();
 
     ReplayEngine(Path routeFile, Path scenarioFile) throws Exception {
-        this(readAllRoutes(routeFile), scenarioFile, routeFile.resolveSibling("route-shapes.json"));
+        this(readAllRoutes(routeFile), scenarioFile, routeFile.resolveSibling("route-shapes.json"),
+            routeFile.resolveSibling("route-headways.json"));
     }
 
-    private ReplayEngine(Dataset dataset, Path scenarioFile, Path shapeFile) throws Exception {
+    private ReplayEngine(Dataset dataset, Path scenarioFile, Path shapeFile, Path headwayFile) throws Exception {
         this(dataset, Json.read(Files.readString(scenarioFile), Configuration.class),
             Clock.systemUTC(), System::nanoTime, UUID.randomUUID().toString().substring(0, 8),
-            RouteShapes.read(shapeFile, dataset));
+            RouteShapes.read(shapeFile, dataset), readHeadways(headwayFile, dataset));
     }
 
     ReplayEngine(Dataset dataset, Configuration configuration, Clock clock, LongSupplier nanoTime, String runId) {
-        this(dataset, configuration, clock, nanoTime, runId, Map.of());
+        this(dataset, configuration, clock, nanoTime, runId, Map.of(), Map.of());
     }
 
     private ReplayEngine(Dataset dataset, Configuration configuration, Clock clock, LongSupplier nanoTime,
-                         String runId, Map<String, List<RouteShapes.Point>> routeLines) {
+                         String runId, Map<String, List<RouteShapes.Point>> routeLines,
+                         Map<String, Map<String, Object>> headways) {
         require("local-routes-v1".equals(dataset.version()), "노선 자료 버전이 다릅니다.");
         require(dataset.routes().stream().limit(REFERENCE_ROUTES.size()).map(Route::displayName).toList().equals(REFERENCE_ROUTES),
             "재생할 8개 노선의 순서를 확인해 주세요.");
@@ -77,11 +82,28 @@ final class ReplayEngine {
         }
         routes = Map.copyOf(indexed);
         this.routeLines = Map.copyOf(routeLines);
+        this.headways = Map.copyOf(headways);
     }
 
     static Dataset readRoutes(Path file) throws Exception {
         require(!Files.isSymbolicLink(file) && Files.size(file) <= 1_048_576, "노선 파일을 확인해 주세요.");
         return Json.read(Files.readString(file), Dataset.class);
+    }
+
+    static Map<String, Map<String, Object>> readHeadways(Path file, Dataset dataset) throws Exception {
+        require(!Files.isSymbolicLink(file) && Files.size(file) <= 262_144, "배차간격 파일을 확인해 주세요.");
+        HeadwayDataset headways = Json.read(Files.readString(file), HeadwayDataset.class);
+        require("local-route-headways-v1".equals(headways.version())
+            && "GBIS_OPENAPI_CAPTURE".equals(headways.source()), "배차간격 자료 버전과 출처를 확인해 주세요.");
+        var routeIds = dataset.routes().stream().map(Route::routeId).collect(java.util.stream.Collectors.toSet());
+        for (var route : headways.routes().entrySet()) {
+            require(routeIds.contains(route.getKey()) && HEADWAY_FIELDS.containsAll(route.getValue().keySet())
+                && route.getValue().values().stream().allMatch(value -> value == null || value instanceof Integer || value instanceof String)
+                && headways.responses().containsKey(route.getKey())
+                && headways.responses().get(route.getKey()).bodySha256().matches("[0-9a-f]{64}"),
+                "배차간격 자료의 노선과 필드, 응답 기록을 확인해 주세요.");
+        }
+        return headways.routes();
     }
 
     static Dataset readAllRoutes(Path file) throws Exception {
@@ -126,6 +148,7 @@ final class ReplayEngine {
         item.put("upLastTime", route.timetable().upLastDepartureTime());
         item.put("downFirstTime", route.timetable().downFirstDepartureTime());
         item.put("downLastTime", route.timetable().downLastDepartureTime());
+        item.putAll(headways.getOrDefault(route.routeId(), Map.of()));
         return item;
     }
 
@@ -356,6 +379,10 @@ final class ReplayEngine {
     private record Layout(String kind, int generation) { }
     private record Observation(Map<String, Object> value, String direction, long withinStep) { }
     public record Dataset(String version, List<Route> routes) { }
+    public record HeadwayDataset(String version, String source, String operation, String capturedAt,
+                                 String description, Map<String, CapturedResponse> responses,
+                                 Map<String, Map<String, Object>> routes) { }
+    public record CapturedResponse(String queryTime, String bodySha256, long bodyBytes) { }
     public record Fleet(int up, int down) {
         public Fleet {
             require(up >= 0 && up <= 64 && down >= 0 && down <= 64,

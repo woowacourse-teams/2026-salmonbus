@@ -46,7 +46,9 @@ public final class ArrivalRuntime implements AutoCloseable {
     private final List<String> apiJvmOptions;
 
     public ArrivalRuntime() throws Exception {
-        this(List.of(), Map.of());
+        // 비동기 접수·대기열 회귀 시나리오는 대기 없이 검증한다.
+        // 기본 500ms 동작은 API 설정을 생략한 생성자로 별도 검증한다.
+        this(List.of(), Map.of("ARRIVALS_FIRST_RESULT_WAIT", "0ms"));
     }
 
     public ArrivalRuntime(List<String> apiJvmOptions, Map<String, String> apiSettings) throws Exception {

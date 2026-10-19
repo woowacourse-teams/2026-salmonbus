@@ -7,6 +7,7 @@ import com.gustler.backend.gbis.api.GbisKey;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
@@ -15,6 +16,7 @@ import org.springframework.boot.autoconfigure.context.ConfigurationPropertiesAut
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.env.StandardEnvironment;
+import org.springframework.core.env.SystemEnvironmentPropertySource;
 import org.springframework.core.io.ClassPathResource;
 
 class GbisPropertiesTest {
@@ -227,6 +229,336 @@ class GbisPropertiesTest {
             .run(context -> assertThat(context.getBean(GbisProperties.class).serviceKey()).isEqualTo(ORIGINAL_KEY));
     }
 
+    @Test
+    void 새_형식으로_키를_다섯_개_넣으면_a를_먼저_두고_별칭_순서대로_모두_쓴다() {
+        // given
+        GbisProperties properties = keysOnly(Map.of(
+            "e", "fake-key-e", "a", "fake-key-a", "c", "fake-key-c", "b", "fake-key-b", "d", "fake-key-d"));
+
+        // when
+        List<String> aliases = aliasesOf(properties);
+
+        // then
+        assertThat(aliases).containsExactly(GbisKey.PRIMARY, "b", "c", "d", "e");
+        assertThat(serviceKeyOf(properties, "e")).isEqualTo("fake-key-e");
+    }
+
+    @Test
+    void 기존_슬롯_네_개와_새_형식의_키를_함께_쓰면_합쳐서_쓴다() {
+        // given
+        GbisProperties properties = new GbisProperties(BASE_URL, ORIGINAL_KEY, KEY_B, "fake-key-c", KEY_D,
+            Map.of("e", "fake-key-e", "f10", "fake-key-f10"), DAILY_LIMIT);
+
+        // when
+        List<String> aliases = aliasesOf(properties);
+
+        // then
+        assertThat(aliases).containsExactly(GbisKey.PRIMARY, "b", "c", "d", "e", "f10");
+        assertThat(serviceKeyOf(properties, GbisKey.PRIMARY)).isEqualTo(ORIGINAL_KEY);
+    }
+
+    @Test
+    void 새_형식만으로_기본_키_a를_주면_기존_변수_없이도_뜬다() {
+        // given
+        GbisProperties properties = keysOnly(Map.of("a", PERCENT_KEY, "e", "fake-key-e"));
+
+        // when
+        String primary = properties.serviceKey();
+
+        // then
+        assertThat(primary).isEqualTo(ORIGINAL_KEY);
+        assertThat(aliasesOf(properties)).containsExactly(GbisKey.PRIMARY, "e");
+    }
+
+    @Test
+    void 설정에_적은_순서가_달라도_별칭과_키의_짝은_같다() {
+        // given
+        Map<String, String> forward = new java.util.LinkedHashMap<>();
+        forward.put("a", "fake-key-a");
+        forward.put("e", "fake-key-e");
+        forward.put("b", "fake-key-b");
+        Map<String, String> backward = new java.util.LinkedHashMap<>();
+        backward.put("b", "fake-key-b");
+        backward.put("e", "fake-key-e");
+        backward.put("a", "fake-key-a");
+
+        // when
+        List<GbisKey> first = keysOnly(forward).serviceKeys();
+        List<GbisKey> second = keysOnly(backward).serviceKeys();
+
+        // then
+        assertThat(first).isEqualTo(second);
+    }
+
+    @Test
+    void 기본_키_a가_없으면_새_형식의_다른_키가_있어도_기동을_막는다() {
+        // when & then
+        assertThatThrownBy(() -> keysOnly(Map.of("e", "fake-key-e")))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("GBIS_KEYS_A")
+            .hasMessageNotContaining("fake-key-e");
+    }
+
+    @Test
+    void 같은_별칭을_기존_변수와_새_형식에서_함께_정하면_기동을_막는다() {
+        // when & then
+        assertThatThrownBy(() -> new GbisProperties(BASE_URL, ORIGINAL_KEY, KEY_B, null, null,
+            Map.of("b", "fake-key-other"), DAILY_LIMIT))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("gbis.keys.b")
+            .hasMessageNotContaining(KEY_B)
+            .hasMessageNotContaining("fake-key-other");
+    }
+
+    @Test
+    void 같은_인증키를_두_별칭에_넣으면_어느_형식이든_기동을_막는다() {
+        // when & then
+        assertThatThrownBy(() -> keysOnly(Map.of("a", "fake-key-a", "e", "fake-key-a")))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("a,e")
+            .hasMessageNotContaining("fake-key-a");
+        assertThatThrownBy(() -> new GbisProperties(BASE_URL, ORIGINAL_KEY, KEY_B, null, null,
+            Map.of("e", KEY_B), DAILY_LIMIT))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("b,e")
+            .hasMessageNotContaining(KEY_B);
+    }
+
+    @Test
+    void 퍼센트로_바꾼_값과_원래_값이_같은_키면_중복으로_막는다() {
+        // when & then
+        assertThatThrownBy(() -> keysOnly(Map.of("a", ORIGINAL_KEY, "e", PERCENT_KEY)))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageNotContaining(ORIGINAL_KEY)
+            .hasMessageNotContaining(PERCENT_KEY);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   "})
+    void 새_형식의_값이_비었으면_기동을_막는다(
+        String serviceKey
+    ) {
+        // when & then
+        assertThatThrownBy(() -> keysOnly(Map.of("a", "fake-key-a", "e", serviceKey)))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("gbis.keys.e");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"E", "e-1", "e_1", "e.1", "abcdefghijklmnopq"})
+    void 별칭이_소문자와_숫자_16자_규칙에_맞지_않으면_기동을_막는다(
+        String alias
+    ) {
+        // when & then
+        assertThatThrownBy(() -> keysOnly(Map.of("a", "fake-key-a", alias, "fake-key-x")))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageNotContaining("fake-key-x");
+    }
+
+    @Test
+    void 새_형식의_퍼센트_형식이_깨지면_값_없이_별칭만_알린다() {
+        // when & then
+        assertThatThrownBy(() -> keysOnly(Map.of("a", "fake-key-a", "e", "ab%G0" + KEY_TAIL)))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("gbis.keys.e")
+            .hasMessageNotContaining(KEY_TAIL);
+    }
+
+    @Test
+    void 문자열로_바꾸면_새_형식의_키도_가리고_별칭만_보인다() {
+        // given
+        GbisProperties properties = keysOnly(Map.of("a", "fake-key-a", "e", "fake-key-e"));
+
+        // when
+        String actual = properties.toString();
+
+        // then
+        assertThat(actual).contains("a,e").doesNotContain("fake-key-a").doesNotContain("fake-key-e");
+    }
+
+    @Test
+    void 환경변수_GBIS_KEYS_별칭으로_새_키를_읽는다() {
+        // when & then
+        environmentRunner(Map.of(
+            "GBIS_BASE_URL", BASE_URL,
+            "GBIS_SERVICE_KEY", "fake-key-a",
+            "GBIS_SERVICE_KEY_B", "fake-key-b",
+            "GBIS_KEYS_E", "fake-key-e",
+            "GBIS_KEYS_F10", "fake-key-f10"))
+            .run(context -> {
+                GbisProperties properties = context.getBean(GbisProperties.class);
+                assertThat(aliasesOf(properties)).containsExactly(GbisKey.PRIMARY, "b", "e", "f10");
+                assertThat(serviceKeyOf(properties, "f10")).isEqualTo("fake-key-f10");
+            });
+    }
+
+    @Test
+    void 환경변수를_새_형식으로만_주어도_기동한다() {
+        // when & then
+        environmentRunner(Map.of(
+            "GBIS_BASE_URL", BASE_URL,
+            "GBIS_KEYS_A", "fake-key-a",
+            "GBIS_KEYS_E", "fake-key-e"))
+            .run(context -> assertThat(aliasesOf(context.getBean(GbisProperties.class)))
+                .containsExactly(GbisKey.PRIMARY, "e"));
+    }
+
+    @Test
+    void 환경변수의_별칭이_기존_변수와_겹치면_키_값을_남기지_않고_기동을_막는다() {
+        // when & then
+        environmentRunner(Map.of(
+            "GBIS_BASE_URL", BASE_URL,
+            "GBIS_SERVICE_KEY", "fake-key-a",
+            "GBIS_KEYS_A", "fake-key-other"))
+            .run(context -> assertThat(context).getFailure()
+                .satisfies(failure -> assertThat(messagesOf(failure))
+                    .contains("gbis.keys.a")
+                    .doesNotContain("fake-key-a")
+                    .doesNotContain("fake-key-other")));
+    }
+
+    @Test
+    void 키_목록을_한_줄로_넣으면_값을_남기지_않고_기동을_막는다() {
+        // when & then
+        environmentRunner(Map.of(
+            "GBIS_BASE_URL", BASE_URL,
+            "GBIS_SERVICE_KEY", "fake-key-a",
+            "GBIS_KEYS", "e=fake-key-inline"))
+            .run(context -> assertThat(context).getFailure()
+                .satisfies(failure -> assertThat(messagesOf(failure)).doesNotContain("fake-key-inline")));
+    }
+
+    @Test
+    void 키별_한도를_주면_그_키만_그_한도를_쓰고_나머지는_공통_한도를_쓴다() {
+        // given
+        GbisProperties properties = new GbisProperties(BASE_URL, ORIGINAL_KEY, null, null, null,
+            Map.of("e", "fake-key-e"), DAILY_LIMIT, Map.of("e", 1_000));
+
+        // when & then
+        assertThat(properties.dailyLimitOf("e")).isEqualTo(1_000);
+        assertThat(properties.dailyLimitOf(GbisKey.PRIMARY)).isEqualTo(DAILY_LIMIT);
+    }
+
+    @Test
+    void 설정에_없는_별칭에_한도를_주면_기동을_막는다() {
+        // when & then
+        assertThatThrownBy(() -> new GbisProperties(BASE_URL, ORIGINAL_KEY, null, null, null,
+            Map.of("e", "fake-key-e"), DAILY_LIMIT, Map.of("f", 1_000)))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("gbis.limits.f");
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, -1})
+    void 키별_한도가_1보다_작으면_기동을_막는다(
+        final int limit
+    ) {
+        // when & then
+        assertThatThrownBy(() -> new GbisProperties(BASE_URL, ORIGINAL_KEY, null, null, null,
+            Map.of("e", "fake-key-e"), DAILY_LIMIT, Map.of("e", limit)))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("gbis.limits.e");
+    }
+
+    @Test
+    void 환경변수_GBIS_LIMITS_별칭으로_키별_한도를_읽는다() {
+        // when & then
+        environmentRunner(Map.of(
+            "GBIS_BASE_URL", BASE_URL,
+            "GBIS_SERVICE_KEY", "fake-key-a",
+            "GBIS_KEYS_E", "fake-key-e",
+            "GBIS_LIMITS_E", "1000"))
+            .run(context -> {
+                GbisProperties properties = context.getBean(GbisProperties.class);
+                assertThat(properties.dailyLimitOf("e")).isEqualTo(1_000);
+                assertThat(properties.dailyLimitOf(GbisKey.PRIMARY)).isEqualTo(DAILY_LIMIT);
+            });
+    }
+
+    @Test
+    void GBIS_SERVICE_KEY_별칭으로_받은_키를_기존_슬롯_뒤에_별칭_순서대로_쓴다() {
+        // given
+        GbisProperties properties = namedOnly(Map.of("g", "fake-key-g", "e", "fake%2Bkey-e", "f", "fake-key-f"));
+
+        // when
+        List<String> aliases = aliasesOf(properties);
+
+        // then
+        assertThat(aliases).containsExactly(GbisKey.PRIMARY, "b", "d", "e", "f", "g");
+        assertThat(serviceKeyOf(properties, "e")).isEqualTo("fake+key-e");
+    }
+
+    @Test
+    void 같은_별칭을_GBIS_SERVICE_KEY_별칭과_새_형식에서_함께_정하면_기동을_막는다() {
+        // when & then
+        assertThatThrownBy(() -> new GbisProperties(BASE_URL, "fake-key-a", null, null, null,
+            Map.of("e", "fake-key-other"), DAILY_LIMIT, Map.of(), Map.of("e", "fake-key-e")))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("gbis.keys.e")
+            .hasMessageNotContaining("fake-key-e")
+            .hasMessageNotContaining("fake-key-other");
+    }
+
+    @Test
+    void GBIS_SERVICE_KEY_A로_기본_키를_한_번_더_정하면_기동을_막는다() {
+        // when & then
+        assertThatThrownBy(() -> namedOnly(Map.of("a", "fake-key-other")))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("GBIS_SERVICE_KEY_A")
+            .hasMessageNotContaining("fake-key-other");
+    }
+
+    @Test
+    void GBIS_SERVICE_KEY_별칭이_영문과_숫자_16자_규칙에_맞지_않으면_기동을_막는다() {
+        // when & then
+        assertThatThrownBy(() -> namedOnly(Map.of("team_5", "fake-key-team5")))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("GBIS_SERVICE_KEY_TEAM_5")
+            .hasMessageNotContaining("fake-key-team5");
+    }
+
+    @Test
+    void GBIS_SERVICE_KEY_별칭의_퍼센트_형식이_깨지면_값_없이_변수_이름만_알린다() {
+        // when & then
+        assertThatThrownBy(() -> namedOnly(Map.of("e", "ab%G0" + KEY_TAIL)))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("GBIS_SERVICE_KEY_E")
+            .hasMessageNotContaining(KEY_TAIL);
+    }
+
+    @Test
+    void GBIS_SERVICE_KEY_별칭의_값이_비었으면_기동을_막는다() {
+        // when & then
+        assertThatThrownBy(() -> namedOnly(Map.of("e", " ")))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("GBIS_SERVICE_KEY_E");
+    }
+
+    private static GbisProperties namedOnly(
+        Map<String, String> named
+    ) {
+        return new GbisProperties(BASE_URL, ORIGINAL_KEY, KEY_B, null, KEY_D, Map.of(), DAILY_LIMIT, Map.of(), named);
+    }
+
+    private static GbisProperties keysOnly(
+        Map<String, String> keys
+    ) {
+        return new GbisProperties(BASE_URL, null, null, null, null, keys, DAILY_LIMIT);
+    }
+
+    private ApplicationContextRunner environmentRunner(
+        Map<String, String> variables
+    ) {
+        Map<String, Object> environment = new java.util.HashMap<>(variables);
+        environment.putIfAbsent("GBIS_DAILY_LIMIT", Integer.toString(DAILY_LIMIT));
+        return contextRunner().withInitializer(context -> {
+            var sources = context.getEnvironment().getPropertySources();
+            sources.remove(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME);
+            sources.addLast(new SystemEnvironmentPropertySource(
+                StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME, environment));
+        });
+    }
+
     private ApplicationContextRunner contextRunner() {
         return new ApplicationContextRunner()
             .withConfiguration(
@@ -246,14 +578,14 @@ class GbisPropertiesTest {
     private static List<String> aliasesOf(
         GbisProperties properties
     ) {
-        return properties.keys().stream().map(GbisKey::alias).toList();
+        return properties.serviceKeys().stream().map(GbisKey::alias).toList();
     }
 
     private static String serviceKeyOf(
         GbisProperties properties,
         String alias
     ) {
-        return properties.keys().stream()
+        return properties.serviceKeys().stream()
             .filter(key -> key.alias().equals(alias))
             .map(GbisKey::serviceKey)
             .findFirst()

@@ -44,6 +44,30 @@ public class RouteVersionJpaEntity {
     @Column(name = "down_last_departure_time")
     private String downLastDepartureTime;
 
+    @Column(name = "weekday_min_headway_minutes")
+    private Integer weekdayMinHeadwayMinutes;
+
+    @Column(name = "weekday_max_headway_minutes")
+    private Integer weekdayMaxHeadwayMinutes;
+
+    @Column(name = "saturday_min_headway_minutes")
+    private Integer saturdayMinHeadwayMinutes;
+
+    @Column(name = "saturday_max_headway_minutes")
+    private Integer saturdayMaxHeadwayMinutes;
+
+    @Column(name = "sunday_min_headway_minutes")
+    private Integer sundayMinHeadwayMinutes;
+
+    @Column(name = "sunday_max_headway_minutes")
+    private Integer sundayMaxHeadwayMinutes;
+
+    @Column(name = "holiday_min_headway_minutes")
+    private Integer holidayMinHeadwayMinutes;
+
+    @Column(name = "holiday_max_headway_minutes")
+    private Integer holidayMaxHeadwayMinutes;
+
     @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "content_digest", nullable = false)
     private String contentDigest;
@@ -80,5 +104,37 @@ public class RouteVersionJpaEntity {
 
     public String downLastDepartureTime() {
         return downLastDepartureTime;
+    }
+
+    public Integer weekdayMinHeadwayMinutes() {
+        return weekdayMinHeadwayMinutes;
+    }
+
+    public Integer weekdayMaxHeadwayMinutes() {
+        return weekdayMaxHeadwayMinutes;
+    }
+
+    public Integer saturdayMinHeadwayMinutes() {
+        return saturdayMinHeadwayMinutes;
+    }
+
+    public Integer saturdayMaxHeadwayMinutes() {
+        return saturdayMaxHeadwayMinutes;
+    }
+
+    public Integer sundayMinHeadwayMinutes() {
+        return sundayMinHeadwayMinutes;
+    }
+
+    public Integer sundayMaxHeadwayMinutes() {
+        return sundayMaxHeadwayMinutes;
+    }
+
+    public Integer holidayMinHeadwayMinutes() {
+        return holidayMinHeadwayMinutes;
+    }
+
+    public Integer holidayMaxHeadwayMinutes() {
+        return holidayMaxHeadwayMinutes;
     }
 }

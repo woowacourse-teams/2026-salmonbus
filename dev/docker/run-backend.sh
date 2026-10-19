@@ -23,9 +23,10 @@ case ${LOCAL_COMPONENT:-} in
     ;;
   worker-app)
     [[ ${GBIS_SERVICE_KEY:-} == local-only-placeholder ]] || fail
-    for key in GBIS_SERVICE_KEY_B GBIS_SERVICE_KEY_C GBIS_SERVICE_KEY_D; do
+    for key in $(compgen -e | grep '^GBIS_SERVICE_KEY_' || true); do
       [[ -z ${!key:-} ]] || fail
     done
+    [[ -z $(compgen -e | grep '^GBIS_KEYS' || true) ]] || fail
     [[ ${GBIS_BASE_URL:-http://gbis-mock:8080} == http://gbis-mock:8080 ]] || fail
     [[ ${MODEL_BUNDLE_DIRECTORY:-/local/models/coldstart-20261016} == /local/models/coldstart-20261016 ]] || fail
     ;;

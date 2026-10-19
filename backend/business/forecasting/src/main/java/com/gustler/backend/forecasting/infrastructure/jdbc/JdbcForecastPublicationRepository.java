@@ -6,7 +6,9 @@ import com.gustler.backend.forecasting.domain.publication.SeatForecast;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
+import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
@@ -64,9 +66,11 @@ public class JdbcForecastPublicationRepository implements ForecastPublicationRep
         """;
 
     private final JdbcClient jdbc;
+    private final JdbcOperations batches;
 
-    public JdbcForecastPublicationRepository(JdbcClient jdbc) {
+    public JdbcForecastPublicationRepository(JdbcClient jdbc, JdbcOperations batches) {
         this.jdbc = jdbc;
+        this.batches = batches;
     }
 
     @Override
@@ -85,14 +89,15 @@ public class JdbcForecastPublicationRepository implements ForecastPublicationRep
                 publication.qualityRevision(), offset(publication.observedAt()), offset(publication.generatedAt()),
                 offset(publication.publishedAt()), id)
             .update());
-        for (SeatForecast prediction : publication.predictions()) {
-            jdbc.sql(UPSERT_PREDICTION)
-                .params(publicationId, prediction.vehicleObservationId(), prediction.targetStopOrder(),
-                    prediction.routeVersionId(), prediction.stopsToTarget(), prediction.modelDeploymentId(),
-                    prediction.demandStatisticsRevision(), prediction.seatFullChanceRaw(),
-                    prediction.seatFullChance(), prediction.expectedSeats(), offset(prediction.generatedAt()),
-                    publication.qualityRevision())
-                .update();
+        List<Object[]> rows = publication.predictions().stream()
+            .map(prediction -> new Object[] {publicationId, prediction.vehicleObservationId(),
+                prediction.targetStopOrder(), prediction.routeVersionId(), prediction.stopsToTarget(),
+                prediction.modelDeploymentId(), prediction.demandStatisticsRevision(), prediction.seatFullChanceRaw(),
+                prediction.seatFullChance(), prediction.expectedSeats(), offset(prediction.generatedAt()),
+                publication.qualityRevision()})
+            .toList();
+        if (!rows.isEmpty()) {
+            batches.batchUpdate(UPSERT_PREDICTION, rows);
         }
         existing.ifPresent(id -> jdbc.sql(COUNT_PREDICTIONS).params(publication.sourceBatchId(), id).update());
     }

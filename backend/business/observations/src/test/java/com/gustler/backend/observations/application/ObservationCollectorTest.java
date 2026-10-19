@@ -5,6 +5,7 @@ import com.gustler.backend.gbis.api.GbisLocationSource;
 import com.gustler.backend.observations.domain.CollectionSchedule;
 import com.gustler.backend.quota.api.CallQuota;
 import com.gustler.backend.quota.domain.CallQuotaStore;
+import com.gustler.backend.routecatalog.domain.RouteHeadways;
 import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.UpstreamRoute;
@@ -439,7 +440,7 @@ class ObservationCollectorTest {
             ROUTE_3330, "3330", "범계역", "강남역",
             RouteStops.from(null, List.of(
                 new UpstreamRouteStop(1, STOP_205000217, "범".repeat(61)))),
-            new RouteTimetable("05:00", "22:35", "05:00", "23:55"));
+            new RouteTimetable("05:00", "22:35", "05:00", "23:55", RouteHeadways.none()));
     }
 
     private int routeRowCount() {
@@ -456,7 +457,7 @@ class ObservationCollectorTest {
                 new UpstreamRouteStop(1, STOP_205000217, "범계역"),
                 new UpstreamRouteStop(2, STOP_277103149, "안양대교(경유)"),
                 new UpstreamRouteStop(3, STOP_208000069, "안양역"))),
-            new RouteTimetable("05:00", "22:35", "05:00", "23:55"));
+            new RouteTimetable("05:00", "22:35", "05:00", "23:55", RouteHeadways.none()));
     }
 
     private static BusLocation busAt(

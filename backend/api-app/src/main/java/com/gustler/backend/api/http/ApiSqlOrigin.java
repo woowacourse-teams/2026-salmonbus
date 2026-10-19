@@ -29,6 +29,7 @@ public class ApiSqlOrigin implements HibernatePropertiesCustomizer, StatementIns
         String origin = switch (pattern == null ? "" : pattern.toString()) {
             case "/api/v1/routes/{routeId}/board" -> "api.board";
             case "/api/v1/routes/{routeId}/vehicles" -> "api.vehicles";
+            case "/api/v1/routes/{routeId}/watch" -> "api.watch";
             case "/api/v1/routes" -> "api.routes";
             default -> "api.other";
         };

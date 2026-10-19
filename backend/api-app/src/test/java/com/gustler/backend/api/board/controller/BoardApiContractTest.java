@@ -92,7 +92,7 @@ class BoardApiContractTest {
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, cacheControl))
             .andExpect(jsonPath("$", aMapWithSize(6)))
-            .andExpect(jsonPath("$.route", aMapWithSize(8)))
+            .andExpect(jsonPath("$.route", aMapWithSize(9)))
             .andExpect(jsonPath("$.route.id").value(ROUTE_ID))
             .andExpect(jsonPath("$.route.status").value("FORECAST_READY"))
             .andExpect(jsonPath("$.route.turnSequence").value(2))
@@ -129,6 +129,51 @@ class BoardApiContractTest {
             .andExpect(jsonPath("$.stops[2].approachingVehicles[2].vehicleId").isEmpty())
             .andExpect(jsonPath("$.stops[2].approachingVehicles[2].forecast.expectedSeats")
                 .doesNotExist());
+    }
+
+    @Test
+    void 배차간격이_저장되지_않은_기존_노선_버전도_정상_응답하고_네_요일을_null로_낸다() throws Exception {
+        // given
+        OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
+        RouteContext route = insertPublishedRoundTripRoute(now);
+
+        // when & then
+        mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.route", aMapWithSize(9)))
+            .andExpect(jsonPath("$.route.headways", aMapWithSize(4)))
+            .andExpect(jsonPath("$.route.headways.weekday").isEmpty())
+            .andExpect(jsonPath("$.route.headways.saturday").isEmpty())
+            .andExpect(jsonPath("$.route.headways.sunday").isEmpty())
+            .andExpect(jsonPath("$.route.headways.holiday").isEmpty())
+            .andExpect(jsonPath("$.route.referenceVersionId").value(String.valueOf(route.routeVersionId())))
+            .andExpect(jsonPath("$.route.directions[0].firstDepartureTime").value("04:50"))
+            .andExpect(jsonPath("$.route.directions[1].lastDepartureTime").value("23:30"));
+    }
+
+    @Test
+    void 노선_버전에_저장된_요일별_배차간격을_분_단위_최소_최대로_낸다() throws Exception {
+        // given
+        OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
+        RouteContext route = insertPublishedRoundTripRoute(now);
+        fixture.updateHeadway(route, "weekday", 10, 20);
+        fixture.updateHeadway(route, "saturday", 15, 15);
+        fixture.updateHeadway(route, "holiday", 16, 35);
+
+        // when & then
+        mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.route.headways.weekday", aMapWithSize(2)))
+            .andExpect(jsonPath("$.route.headways.weekday.minMinutes").value(10))
+            .andExpect(jsonPath("$.route.headways.weekday.maxMinutes").value(20))
+            .andExpect(jsonPath("$.route.headways.saturday.minMinutes").value(15))
+            .andExpect(jsonPath("$.route.headways.saturday.maxMinutes").value(15))
+            .andExpect(jsonPath("$.route.headways.sunday").isEmpty())
+            .andExpect(jsonPath("$.route.headways.holiday.minMinutes").value(16))
+            .andExpect(jsonPath("$.route.headways.holiday.maxMinutes").value(35))
+            .andExpect(jsonPath("$.route.referenceVersionId").value(String.valueOf(route.routeVersionId())))
+            .andExpect(jsonPath("$.model.releaseId").value("model-headway"))
+            .andExpect(jsonPath("$.stops.length()").value(3));
     }
 
     @Test
@@ -365,7 +410,8 @@ class BoardApiContractTest {
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, cacheControl))
             .andExpect(jsonPath("$", aMapWithSize(6)))
-            .andExpect(jsonPath("$.route", aMapWithSize(8)))
+            .andExpect(jsonPath("$.route", aMapWithSize(9)))
+            .andExpect(jsonPath("$.route.headways", aMapWithSize(4)))
             .andExpect(jsonPath("$.route.status").value("PREPARING"))
             .andExpect(jsonPath("$.route.referenceVersionId")
                 .value(String.valueOf(route.routeVersionId())))
@@ -550,6 +596,17 @@ class BoardApiContractTest {
             .param("publishedAt", publishedAt)
             .query(Long.class)
             .single();
+    }
+
+    private RouteContext insertPublishedRoundTripRoute(
+        OffsetDateTime now
+    ) {
+        OffsetDateTime observedAt = now.minusMinutes(1);
+        RouteContext route = insertRoundTripRoute(now.minusDays(1));
+        final long modelId = fixture.insertModel("model-headway", "ACTIVE", now.minusDays(1));
+        final long batchId = fixture.insertBatch(route, observedAt, "SUCCESS_ROWS", 1);
+        fixture.insertPublication(batchId, modelId, observedAt.plusSeconds(1), observedAt.plusSeconds(2));
+        return route;
     }
 
     private RouteContext insertRoundTripRoute(OffsetDateTime validFrom) {

@@ -342,12 +342,12 @@ class DddStorageMigrationTest {
     }
 
     @Test
-    void 최신_스키마를_이전_구조로_되돌린_뒤_다시_전환해도_미완료_예보가_보존된다() throws Exception {
+    void V39_스키마를_이전_구조로_되돌린_뒤_최신으로_다시_전환해도_미완료_예보가_보존된다() throws Exception {
         // given
         preparePendingTransition();
         migrate("38");
         approveEvaluationTransition();
-        migrate("latest");
+        migrate("39");
         java.nio.file.Path directory = java.nio.file.Path.of("").toAbsolutePath();
         while (directory != null && !java.nio.file.Files.isRegularFile(
             directory.resolve("deploy/sql/rollback-observation-evaluation-work.sql"))) directory = directory.getParent();

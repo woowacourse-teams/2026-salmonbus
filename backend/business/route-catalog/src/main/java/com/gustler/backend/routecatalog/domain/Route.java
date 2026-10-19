@@ -20,7 +20,9 @@ public final class Route {
     }
 
     public void accept(RouteStops stops, RouteTimetable timetable, OffsetDateTime at) {
-        RouteVersionContent incoming = RouteVersionContent.of(stops, timetable);
+        RouteTimetable readable = timetable.keepingUnreadableHeadwaysOf(
+            currentVersion == null ? null : currentVersion.content().timetable());
+        RouteVersionContent incoming = RouteVersionContent.of(stops, readable);
         if (currentVersion == null) {
             openVersion(stops, incoming, at);
             return;
@@ -30,7 +32,7 @@ public final class Route {
                 closedVersion = currentVersion.closeAt(at);
                 openVersion(stops, incoming, at);
             }
-            case REVISE_TIMETABLE -> currentVersion = currentVersion.reviseTimetable(timetable);
+            case REVISE_TIMETABLE -> currentVersion = currentVersion.reviseTimetable(readable);
             case KEEP_CURRENT_VERSION -> { }
         }
     }

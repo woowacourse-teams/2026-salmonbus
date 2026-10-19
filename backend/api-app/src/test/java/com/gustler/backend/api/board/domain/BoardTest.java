@@ -68,7 +68,8 @@ class BoardTest {
                 status,
                 null,
                 List.of(new DirectionInfo(BoardDirection.UP, "종점 방면", "기점", "종점", "05:00", "23:00")),
-                "31"
+                "31",
+                RouteHeadways.none()
             ),
             OBSERVED_AT,
             OBSERVED_AT.plusMinutes(5),

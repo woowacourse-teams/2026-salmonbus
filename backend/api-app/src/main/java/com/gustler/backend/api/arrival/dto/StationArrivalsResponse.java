@@ -94,7 +94,7 @@ public record StationArrivalsResponse(
         String status,
         @Schema(description = "COLLECTING, STARTING, RATE_LIMITED, DAILY_QUOTA_EXHAUSTED, REFRESH_DISABLED 등. 없으면 null", nullable = true)
         String reason,
-        @Schema(description = "다음 재조회 권장 시각. 최초 수집 중에는 보통 2초 뒤이며 고정 주기 대신 이 값을 사용")
+        @Schema(description = "다음 재조회 권장 시각. 수집 중에는 보통 1초 뒤이며 고정 주기 대신 이 값을 사용")
         Instant suggestedRefreshAt
     ) { }
     @Schema(name = "ArrivalTargetVisit", requiredProperties = {"referenceVersionId", "stopSequence", "sourceStopOrder", "matchStatus", "direction"},

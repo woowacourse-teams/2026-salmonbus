@@ -95,20 +95,60 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
         Instant oldestLeftBehind = null;
         for (Long routeVersionId : WorkerOperationLog.measure("forecast_routes", "all",
             routeVersions::findActiveVersionIds)) {
-            RouteStops stops = WorkerOperationLog.measure("forecast_stops", routeVersionId,
-                () -> routeStops.readStops(routeVersionId));
-            if (!runtime.get().covers(stops.sourceRouteId())) {
+            if (!writeForecastsOfRouteInTick(routeVersionId, notBefore, runtime.get())) {
                 continue;
             }
-            if (!runtime.get().model().supportsRoute(stops)) {
-                modelUsage.referenceMismatch(stops.sourceRouteId(), stops.routeName(), routeVersionId, runtime.get());
-                continue;
-            }
-            writeForecastsOf(routeVersionId, stops, notBefore, runtime.get());
             oldestLeftBehind = olderOf(
                 oldestLeftBehind, leftBehindAt(routeVersionId, leftBehindFrom, notBefore));
         }
         warnIfLeftBehind(oldestLeftBehind, now);
+    }
+
+    @Override
+    public void writeForecastsOfRoute(final long routeVersionId) {
+        WorkerOperationLog.run("forecast_route", routeVersionId, () -> {
+            Optional<RuntimeSnapshot> runtime = WorkerOperationLog.measure("forecast_active_model", "all",
+                forecastRuntime::resolveActive);
+            if (runtime.isEmpty()) {
+                return;
+            }
+            if (!WorkerOperationLog.measure("forecast_routes", "all", routeVersions::findActiveVersionIds)
+                .contains(routeVersionId)) {
+                return;
+            }
+            writeForecastsOfCoveredRoute(routeVersionId, clock.instant().minus(properties.staleness()), runtime.get());
+        });
+    }
+
+    private boolean writeForecastsOfRouteInTick(
+        final long routeVersionId,
+        Instant notBefore,
+        RuntimeSnapshot runtime
+    ) {
+        try {
+            return WorkerOperationLog.measure("forecast_route", routeVersionId,
+                () -> writeForecastsOfCoveredRoute(routeVersionId, notBefore, runtime));
+        } catch (RuntimeException alreadyLogged) {
+            return false;
+        }
+    }
+
+    private boolean writeForecastsOfCoveredRoute(
+        final long routeVersionId,
+        Instant notBefore,
+        RuntimeSnapshot runtime
+    ) {
+        RouteStops stops = WorkerOperationLog.measure("forecast_stops", routeVersionId,
+            () -> routeStops.readStops(routeVersionId));
+        if (!runtime.covers(stops.sourceRouteId())) {
+            return false;
+        }
+        if (!runtime.model().supportsRoute(stops)) {
+            modelUsage.referenceMismatch(stops.sourceRouteId(), stops.routeName(), routeVersionId, runtime);
+            return false;
+        }
+        writeForecastsOf(routeVersionId, stops, notBefore, runtime);
+        return true;
     }
 
     private Optional<Instant> leftBehindAt(

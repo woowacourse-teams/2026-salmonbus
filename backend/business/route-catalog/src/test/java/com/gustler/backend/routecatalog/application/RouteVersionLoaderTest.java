@@ -1,7 +1,10 @@
 package com.gustler.backend.routecatalog.application;
 
+import com.gustler.backend.routecatalog.domain.HeadwayRange;
+import com.gustler.backend.routecatalog.domain.RouteHeadways;
 import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
+import com.gustler.backend.routecatalog.domain.ServiceDay;
 import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -10,7 +13,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import com.gustler.backend.routecatalog.support.RouteCatalogIntegrationTest;
 import jakarta.persistence.EntityManager;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -36,9 +41,15 @@ class RouteVersionLoaderTest {
     private static final String LAST_BUS_MOVED_TO = "22:50";
 
     private static final RouteTimetable TIMETABLE_1650 =
-        new RouteTimetable("05:00", "22:35", "05:00", "23:55");
+        new RouteTimetable("05:00", "22:35", "05:00", "23:55", RouteHeadways.none());
     private static final RouteTimetable TIMETABLE_1650_LAST_BUS_MOVED =
-        new RouteTimetable("05:00", LAST_BUS_MOVED_TO, "05:00", "23:55");
+        new RouteTimetable("05:00", LAST_BUS_MOVED_TO, "05:00", "23:55", RouteHeadways.none());
+    private static final RouteTimetable TIMETABLE_1650_WITH_HEADWAYS =
+        new RouteTimetable("05:00", "22:35", "05:00", "23:55", new RouteHeadways(
+            new HeadwayRange(10, 20), new HeadwayRange(12, 25), new HeadwayRange(15, 30), new HeadwayRange(16, 35)));
+    private static final RouteTimetable TIMETABLE_1650_WEEKDAY_HEADWAY_MOVED =
+        new RouteTimetable("05:00", "22:35", "05:00", "23:55", new RouteHeadways(
+            new HeadwayRange(8, 18), new HeadwayRange(12, 25), new HeadwayRange(15, 30), new HeadwayRange(16, 35)));
 
     @Autowired
     private RouteVersionLoader loader;
@@ -139,6 +150,120 @@ class RouteVersionLoaderTest {
 
         // then
         assertThat(actual).isEqualTo(LAST_BUS_MOVED_TO);
+    }
+
+    @Test
+    void 배차간격이_없던_노선_버전에_배차간격을_받으면_새로_열지_않고_같은_노선_버전에_채운다() {
+        // given
+        final long versionId = loader.load(routeId, threeStops(), TIMETABLE_1650, FIRST_READ_AT);
+        assertThat(headwayMinutesOf(versionId)).containsOnlyNulls();
+
+        // when
+        final long actual = loader.load(routeId, threeStops(), TIMETABLE_1650_WITH_HEADWAYS, SECOND_READ_AT);
+
+        // then
+        assertThat(actual).isEqualTo(versionId);
+        assertThat(versionCount()).isEqualTo(1);
+        assertThat(isOpen(versionId)).isTrue();
+        assertThat(headwayMinutesOf(versionId)).containsExactly(10, 20, 12, 25, 15, 30, 16, 35);
+    }
+
+    @Test
+    void 배차간격만_바뀌면_같은_노선_버전의_배차간격만_고치고_정류소와_첫차_막차는_그대로_둔다() {
+        // given
+        final long versionId = loader.load(routeId, threeStops(), TIMETABLE_1650_WITH_HEADWAYS, FIRST_READ_AT);
+
+        // when
+        final long actual =
+            loader.load(routeId, threeStops(), TIMETABLE_1650_WEEKDAY_HEADWAY_MOVED, SECOND_READ_AT);
+
+        // then
+        assertThat(actual).isEqualTo(versionId);
+        assertThat(versionCount()).isEqualTo(1);
+        assertThat(stopOrdersOf(versionId)).containsExactly(1, 2, 3);
+        assertThat(upLastDepartureTimeOf(versionId)).isEqualTo("22:35");
+        assertThat(headwayMinutesOf(versionId)).containsExactly(8, 18, 12, 25, 15, 30, 16, 35);
+    }
+
+    @Test
+    void 맞지_않는_배차간격을_받으면_저장된_배차간격을_유지하고_노선_버전도_그대로_둔다() {
+        // given
+        final long versionId = loader.load(routeId, threeStops(), TIMETABLE_1650_WITH_HEADWAYS, FIRST_READ_AT);
+        RouteTimetable unreadableWeekdayAndHoliday = new RouteTimetable("05:00", "22:35", "05:00", "23:55",
+            new RouteHeadways(null, new HeadwayRange(12, 25), new HeadwayRange(15, 30), null,
+                Set.of(ServiceDay.WEEKDAY, ServiceDay.HOLIDAY)));
+
+        // when
+        final long actual = loader.load(routeId, threeStops(), unreadableWeekdayAndHoliday, SECOND_READ_AT);
+
+        // then
+        assertThat(actual).isEqualTo(versionId);
+        assertThat(versionCount()).isEqualTo(1);
+        assertThat(headwayMinutesOf(versionId)).containsExactly(10, 20, 12, 25, 15, 30, 16, 35);
+    }
+
+    @Test
+    void 저장된_배차간격이_없으면_맞지_않는_요일은_비워_둔다() {
+        // given
+        RouteTimetable unreadableWeekday = new RouteTimetable("05:00", "22:35", "05:00", "23:55",
+            new RouteHeadways(null, new HeadwayRange(12, 25), null, null, Set.of(ServiceDay.WEEKDAY)));
+
+        // when
+        final long actual = loader.load(routeId, threeStops(), unreadableWeekday, FIRST_READ_AT);
+
+        // then
+        assertThat(headwayMinutesOf(actual)).containsExactly(null, null, 12, 25, null, null, null, null);
+    }
+
+    @Test
+    void GBIS가_배차간격을_비워_보내면_같은_노선_버전에서_배차간격을_비운다() {
+        // given
+        final long versionId = loader.load(routeId, threeStops(), TIMETABLE_1650_WITH_HEADWAYS, FIRST_READ_AT);
+
+        // when
+        final long actual = loader.load(routeId, threeStops(), TIMETABLE_1650, SECOND_READ_AT);
+
+        // then
+        assertThat(actual).isEqualTo(versionId);
+        assertThat(headwayMinutesOf(versionId)).containsOnlyNulls();
+    }
+
+    @Test
+    void 정류소가_바뀌어_새_노선_버전을_열면_배차간격도_새_버전에_담기고_직전_버전은_그대로_남는다() {
+        // given
+        final long firstVersionId = loader.load(routeId, threeStops(), TIMETABLE_1650_WITH_HEADWAYS, FIRST_READ_AT);
+
+        // when
+        final long actual = loader.load(routeId, fourStops(), TIMETABLE_1650_WEEKDAY_HEADWAY_MOVED, SECOND_READ_AT);
+
+        // then
+        assertThat(actual).isNotEqualTo(firstVersionId);
+        assertThat(headwayMinutesOf(actual)).containsExactly(8, 18, 12, 25, 15, 30, 16, 35);
+        assertThat(headwayMinutesOf(firstVersionId)).containsExactly(10, 20, 12, 25, 15, 30, 16, 35);
+        assertThat(validToOf(firstVersionId)).isEqualTo(SECOND_READ_AT);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "weekday_min_headway_minutes = 20, weekday_max_headway_minutes = 10",
+        "saturday_min_headway_minutes = 0, saturday_max_headway_minutes = 10",
+        "sunday_min_headway_minutes = 10, sunday_max_headway_minutes = 1441",
+        "holiday_min_headway_minutes = 10"})
+    void 저장소는_영분_역전_하루_초과_한쪽만_있는_배차간격을_거부한다(
+        String assignment
+    ) {
+        // given
+        final long versionId = loader.load(routeId, threeStops(), TIMETABLE_1650, FIRST_READ_AT);
+        entityManager.flush();
+
+        // when
+        Throwable actual = catchThrowable(() -> jdbcClient
+            .sql("UPDATE route_version SET " + assignment + " WHERE id = ?")
+            .param(versionId)
+            .update());
+
+        // then
+        assertThat(actual).hasMessageContaining("ck_route_version_");
     }
 
     @Test
@@ -346,6 +471,38 @@ class RouteVersionLoaderTest {
         return jdbcClient.sql("SELECT valid_to FROM route_version WHERE id = ?")
             .param(versionId)
             .query(OffsetDateTime.class)
+            .single();
+    }
+
+    private boolean isOpen(
+        final long versionId
+    ) {
+        entityManager.flush();
+        return jdbcClient.sql("SELECT valid_to IS NULL FROM route_version WHERE id = ?")
+            .param(versionId)
+            .query(Boolean.class)
+            .single();
+    }
+
+    private List<Integer> headwayMinutesOf(
+        final long versionId
+    ) {
+        entityManager.flush();
+        return jdbcClient.sql("""
+                SELECT weekday_min_headway_minutes, weekday_max_headway_minutes,
+                       saturday_min_headway_minutes, saturday_max_headway_minutes,
+                       sunday_min_headway_minutes, sunday_max_headway_minutes,
+                       holiday_min_headway_minutes, holiday_max_headway_minutes
+                FROM route_version WHERE id = ?
+                """)
+            .param(versionId)
+            .query((row, rowNumber) -> {
+                List<Integer> minutes = new ArrayList<>();
+                for (int column = 1; column <= 8; column++) {
+                    minutes.add(row.getObject(column, Integer.class));
+                }
+                return minutes;
+            })
             .single();
     }
 

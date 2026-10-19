@@ -33,7 +33,8 @@ public class RouteVersionLoader {
         long versionId = routeRepository.save(route);
         var changes = locations.record(versionId, stops, readAt);
         boolean versionChanged = previous.isEmpty() || previous.get().id() != versionId;
-        boolean timetableChanged = previous.isPresent() && !previous.get().content().timetable().equals(timetable);
+        boolean timetableChanged = previous.isPresent()
+            && !previous.get().content().timetable().equals(route.currentVersion().content().timetable());
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {

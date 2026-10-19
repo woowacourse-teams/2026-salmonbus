@@ -53,6 +53,13 @@ public class BoardQueryService {
     public BoardOverview getBoard(
         RouteId routeId
     ) {
+        BoardReading reading = readBoard(routeId);
+        return new BoardOverview(reading.board(), reading.cacheMaxAge());
+    }
+
+    public BoardReading readBoard(
+        RouteId routeId
+    ) {
         BoardSnapshot snapshot = boardQueryRepository.findSnapshot(routeId)
             .orElseThrow(RouteNotFoundException::new);
         ForecastModel activeModel = snapshot.activeModel()
@@ -100,8 +107,9 @@ public class BoardQueryService {
             observation.vehiclesInService(),
             stopStates
         );
-        return new BoardOverview(
+        return new BoardReading(
             board,
+            observation.batchId(),
             cachePolicy.maxAgeAt(observation.observedAt())
         );
     }
@@ -208,7 +216,8 @@ public class BoardQueryService {
             status,
             snapshot.turnSequence(),
             directionsOf(snapshot, stops),
-            String.valueOf(snapshot.routeVersionId())
+            String.valueOf(snapshot.routeVersionId()),
+            snapshot.schedule().headways()
         );
     }
 

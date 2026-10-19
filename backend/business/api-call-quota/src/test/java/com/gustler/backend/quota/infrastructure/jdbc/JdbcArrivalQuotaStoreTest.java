@@ -70,6 +70,15 @@ class JdbcArrivalQuotaStoreTest {
     }
 
     @Test
+    void 키가_다섯_개면_다섯_별칭에_고르게_나누고_키별_한도에서_멈춘다() {
+        ArrivalCallQuota quota = quota(100, Map.of("a", 2, "b", 2, "c", 2, "d", 2, "e", 2));
+        for (int i = 0; i < 10; i++) assertThat(quota.reserve(BASE)).isPresent();
+        assertThat(quota.reserve(BASE)).isEmpty();
+        for (String alias : List.of("a", "b", "c", "d", "e")) assertThat(reserved(alias)).isEqualTo(2);
+        assertThat(reserved(ArrivalQuotaPolicy.TOTAL)).isEqualTo(10);
+    }
+
+    @Test
     void 키가_모두_소진되면_전체_예약도_롤백한다() {
         ArrivalCallQuota quota = quota(10, Map.of("a", 1, "b", 1));
         assertThat(quota.reserve(BASE)).isPresent();

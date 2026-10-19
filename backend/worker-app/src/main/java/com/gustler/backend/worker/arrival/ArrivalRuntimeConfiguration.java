@@ -6,11 +6,14 @@ import com.gustler.backend.gbis.api.GbisClientOptions;
 import com.gustler.backend.quota.api.ArrivalQuotaPolicy;
 import com.gustler.backend.quota.configuration.ArrivalQuotaConfiguration;
 import com.gustler.backend.worker.configuration.GbisProperties;
+import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -24,15 +27,26 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableConfigurationProperties({ArrivalProperties.class, GbisProperties.class})
 @Import({ArrivalsConfiguration.class, ArrivalQuotaConfiguration.class})
 public class ArrivalRuntimeConfiguration {
+    private static final Logger log = LoggerFactory.getLogger(ArrivalRuntimeConfiguration.class);
+
     @Bean
     ArrivalQuotaPolicy arrivalQuotaPolicy(GbisProperties keys, ArrivalProperties properties) {
-        return new ArrivalQuotaPolicy(properties.dailyLimit(), keys.keys().stream()
-            .collect(Collectors.toMap(key -> key.alias(), key -> properties.keyDailyLimit())));
+        var aliases = keys.serviceKeys().stream().map(key -> key.alias()).toList();
+        properties.limits().keySet().stream().filter(alias -> !aliases.contains(alias)).sorted().findFirst()
+            .ifPresent(alias -> {
+                throw new IllegalStateException("arrivals.limits." + alias + " 에 맞는 GBIS 키가 없다. 별칭을 확인하라");
+            });
+        Map<String, Integer> keyLimits = aliases.stream()
+            .collect(Collectors.toMap(alias -> alias, properties::keyDailyLimitOf));
+        final int dailyLimit = Math.toIntExact(keyLimits.values().stream().mapToLong(Integer::longValue).sum());
+        log.info("도착정보 키 {}개로 수집한다. 별칭={} 하루 한도 합={} 초당 호출={}",
+            aliases.size(), String.join(",", aliases), dailyLimit, String.format("%.3f", dailyLimit / 86_400.0));
+        return new ArrivalQuotaPolicy(dailyLimit, keyLimits);
     }
 
     @Bean
     GbisClientOptions arrivalGbisOptions(GbisProperties keys) {
-        return new GbisClientOptions(keys.baseUrl(), keys.keys());
+        return new GbisClientOptions(keys.baseUrl(), keys.serviceKeys());
     }
 
     @Bean(destroyMethod = "close")
@@ -43,9 +57,9 @@ public class ArrivalRuntimeConfiguration {
     }
 
     @Bean
-    ArrivalCollectionPolicy arrivalCollectionPolicy(ArrivalProperties properties) {
+    ArrivalCollectionPolicy arrivalCollectionPolicy(ArrivalProperties properties, ArrivalQuotaPolicy quota) {
         return new ArrivalCollectionPolicy(properties.refreshInterval(), properties.validity(),
             properties.retryBase(), properties.retryMaximum(), properties.startupDelay(), properties.queueWait(),
-            10_000, properties.dailyLimit() / 86_400.0, properties.queueCapacity(), 2);
+            10_000, quota.dailyLimit() / 86_400.0, properties.queueCapacity(), 2);
     }
 }

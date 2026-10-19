@@ -22,6 +22,7 @@ dev/server/**
 !contract/
 contract/**
 !contract/station-arrivals-v2.openapi.json
+!contract/route-watch-v1.openapi.json
 !contract/route-geometry-v2.openapi.json
 !contract/examples/
 contract/examples/**

@@ -4,8 +4,10 @@ import static com.gustler.backend.routecatalog.domain.RouteVersionDecision.KEEP_
 import static com.gustler.backend.routecatalog.domain.RouteVersionDecision.OPEN_NEW_VERSION;
 import static com.gustler.backend.routecatalog.domain.RouteVersionDecision.REVISE_TIMETABLE;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class RouteVersionContentTest {
@@ -13,9 +15,12 @@ class RouteVersionContentTest {
     private static final String STOP_205000217 = "205000217";
     private static final String STOP_208000069 = "208000069";
     private static final RouteTimetable TIMETABLE_1650 =
-        new RouteTimetable("05:00", "22:35", "05:00", "23:55");
+        new RouteTimetable("05:00", "22:35", "05:00", "23:55", RouteHeadways.none());
     private static final RouteTimetable TIMETABLE_1650_LAST_BUS_MOVED =
-        new RouteTimetable("05:00", "22:50", "05:00", "23:55");
+        new RouteTimetable("05:00", "22:50", "05:00", "23:55", RouteHeadways.none());
+    private static final RouteTimetable TIMETABLE_1650_WITH_HEADWAYS =
+        new RouteTimetable("05:00", "22:35", "05:00", "23:55", new RouteHeadways(
+            new HeadwayRange(10, 20), new HeadwayRange(12, 25), new HeadwayRange(15, 30), null));
 
     @Test
     void 직전_판본과_정류소가_다르면_새로_끊는다() {
@@ -43,6 +48,32 @@ class RouteVersionContentTest {
     }
 
     @Test
+    void 배차간격만_바뀌어도_노선_버전을_새로_끊지_않고_같은_버전의_시간표를_고친다() {
+        // given
+        RouteVersionContent stored = RouteVersionContent.of(twoStops(), TIMETABLE_1650);
+
+        // when
+        RouteVersionDecision actual =
+            stored.decideFor(RouteVersionContent.of(twoStops(), TIMETABLE_1650_WITH_HEADWAYS));
+
+        // then
+        assertThat(actual).isEqualTo(REVISE_TIMETABLE);
+    }
+
+    @Test
+    void 직전_노선_버전과_정류소도_배차간격도_같으면_그_버전을_그대로_쓴다() {
+        // given
+        RouteVersionContent stored = RouteVersionContent.of(twoStops(), TIMETABLE_1650_WITH_HEADWAYS);
+
+        // when
+        RouteVersionDecision actual =
+            stored.decideFor(RouteVersionContent.of(twoStops(), TIMETABLE_1650_WITH_HEADWAYS));
+
+        // then
+        assertThat(actual).isEqualTo(KEEP_CURRENT_VERSION);
+    }
+
+    @Test
     void 직전_판본과_정류소도_시간표도_같으면_그_판본을_그대로_쓴다() {
         // given
         RouteVersionContent stored = RouteVersionContent.of(twoStops(), TIMETABLE_1650);
@@ -52,6 +83,17 @@ class RouteVersionContentTest {
 
         // then
         assertThat(actual).isEqualTo(KEEP_CURRENT_VERSION);
+    }
+
+    @Test
+    void 읽지_못한_배차간격이_남은_시간표로는_판정하지_않는다() {
+        // given
+        RouteTimetable unresolved = new RouteTimetable("05:00", "22:35", "05:00", "23:55",
+            new RouteHeadways(null, null, null, null, Set.of(ServiceDay.WEEKDAY)));
+
+        // when & then
+        assertThatThrownBy(() -> RouteVersionContent.of(twoStops(), unresolved))
+            .isInstanceOf(IllegalArgumentException.class);
     }
 
     private RouteStops twoStops() {

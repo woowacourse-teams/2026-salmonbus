@@ -1,6 +1,8 @@
 package com.gustler.backend.routecatalog.infrastructure.jpa;
 
+import com.gustler.backend.routecatalog.domain.HeadwayRange;
 import com.gustler.backend.routecatalog.domain.RouteContentDigest;
+import com.gustler.backend.routecatalog.domain.RouteHeadways;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.RouteVersionContent;
 import com.gustler.backend.routecatalog.domain.RouteVersion;
@@ -45,6 +47,30 @@ public class RouteVersionJpaEntity {
     @Column(name = "down_last_departure_time")
     private String downLastDepartureTime;
 
+    @Column(name = "weekday_min_headway_minutes")
+    private Integer weekdayMinHeadwayMinutes;
+
+    @Column(name = "weekday_max_headway_minutes")
+    private Integer weekdayMaxHeadwayMinutes;
+
+    @Column(name = "saturday_min_headway_minutes")
+    private Integer saturdayMinHeadwayMinutes;
+
+    @Column(name = "saturday_max_headway_minutes")
+    private Integer saturdayMaxHeadwayMinutes;
+
+    @Column(name = "sunday_min_headway_minutes")
+    private Integer sundayMinHeadwayMinutes;
+
+    @Column(name = "sunday_max_headway_minutes")
+    private Integer sundayMaxHeadwayMinutes;
+
+    @Column(name = "holiday_min_headway_minutes")
+    private Integer holidayMinHeadwayMinutes;
+
+    @Column(name = "holiday_max_headway_minutes")
+    private Integer holidayMaxHeadwayMinutes;
+
     @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "content_digest")
     private String contentDigest;
@@ -86,8 +112,20 @@ public class RouteVersionJpaEntity {
             upFirstDepartureTime,
             upLastDepartureTime,
             downFirstDepartureTime,
-            downLastDepartureTime
+            downLastDepartureTime,
+            new RouteHeadways(
+                headwayOf(weekdayMinHeadwayMinutes, weekdayMaxHeadwayMinutes),
+                headwayOf(saturdayMinHeadwayMinutes, saturdayMaxHeadwayMinutes),
+                headwayOf(sundayMinHeadwayMinutes, sundayMaxHeadwayMinutes),
+                headwayOf(holidayMinHeadwayMinutes, holidayMaxHeadwayMinutes))
         );
+    }
+
+    private HeadwayRange headwayOf(
+        Integer minMinutes,
+        Integer maxMinutes
+    ) {
+        return HeadwayRange.of(minMinutes, maxMinutes).orElse(null);
     }
 
     private void applyTimetable(
@@ -97,5 +135,31 @@ public class RouteVersionJpaEntity {
         this.upLastDepartureTime = timetable.upLastDepartureTime();
         this.downFirstDepartureTime = timetable.downFirstDepartureTime();
         this.downLastDepartureTime = timetable.downLastDepartureTime();
+        applyHeadways(timetable.headways());
+    }
+
+    private void applyHeadways(
+        RouteHeadways headways
+    ) {
+        this.weekdayMinHeadwayMinutes = minMinutesOf(headways.weekday());
+        this.weekdayMaxHeadwayMinutes = maxMinutesOf(headways.weekday());
+        this.saturdayMinHeadwayMinutes = minMinutesOf(headways.saturday());
+        this.saturdayMaxHeadwayMinutes = maxMinutesOf(headways.saturday());
+        this.sundayMinHeadwayMinutes = minMinutesOf(headways.sunday());
+        this.sundayMaxHeadwayMinutes = maxMinutesOf(headways.sunday());
+        this.holidayMinHeadwayMinutes = minMinutesOf(headways.holiday());
+        this.holidayMaxHeadwayMinutes = maxMinutesOf(headways.holiday());
+    }
+
+    private Integer minMinutesOf(
+        HeadwayRange headway
+    ) {
+        return headway == null ? null : headway.minMinutes();
+    }
+
+    private Integer maxMinutesOf(
+        HeadwayRange headway
+    ) {
+        return headway == null ? null : headway.maxMinutes();
     }
 }

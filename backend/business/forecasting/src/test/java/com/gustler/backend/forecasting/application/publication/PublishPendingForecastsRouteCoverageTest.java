@@ -199,10 +199,69 @@ class PublishPendingForecastsRouteCoverageTest {
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(RUNTIME));
         when(forecastBatchWriter.writeForecastsOf(any(), any(), any()))
             .thenThrow(new IllegalStateException("commit failed")).thenReturn(1);
-        assertThatThrownBy(job::writeForecasts).isInstanceOf(IllegalStateException.class);
+        job.writeForecasts();
         assertThat(modelLogs.list).isEmpty();
         job.writeForecasts();
         assertThat(modelLogs.list).hasSize(1);
+    }
+
+    @Test
+    void 회차에서_한_노선의_발행이_실패해도_다음_노선을_발행한다() {
+        // given
+        RuntimeSnapshot runtime = new RuntimeSnapshot(RUNTIME.deployment(),
+            new SupportedForecastScope(List.of("3330", "9007")), RUNTIME.model(), NOW);
+        PendingForecastBatch failing = new PendingForecastBatch(20L, ROUTE_VERSION_9007, 3L, NOW.minusSeconds(20));
+        PendingForecastBatch next = new PendingForecastBatch(10L, ROUTE_VERSION_3330, 1L, NOW.minusSeconds(20));
+        when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
+        when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_9007, ROUTE_VERSION_3330));
+        when(routeStops.readStops(ROUTE_VERSION_9007)).thenReturn(STOPS_9007);
+        when(routeStops.readStops(ROUTE_VERSION_3330)).thenReturn(STOPS_3330);
+        when(vehicleTrajectoryQuery.findBatchesAwaitingForecast(eq(ROUTE_VERSION_9007), any(), anyInt()))
+            .thenReturn(List.of(failing));
+        when(vehicleTrajectoryQuery.findBatchesAwaitingForecast(eq(ROUTE_VERSION_3330), any(), anyInt()))
+            .thenReturn(List.of(next));
+        when(forecastBatchWriter.writeForecastsOf(failing, STOPS_9007, runtime))
+            .thenThrow(new IllegalStateException("commit failed"));
+        when(forecastBatchWriter.writeForecastsOf(next, STOPS_3330, runtime)).thenReturn(1);
+
+        // when
+        job.writeForecasts();
+
+        // then
+        verify(forecastBatchWriter).writeForecastsOf(next, STOPS_3330, runtime);
+        verify(vehicleTrajectoryQuery, never()).findOldestLeftBehindAt(eq(ROUTE_VERSION_9007), any(), any());
+    }
+
+    @Test
+    void 이벤트로_요청한_노선은_그_노선의_미발행_batch만_발행한다() {
+        // given
+        prepareOneRoute();
+        when(forecastRuntime.resolveActive()).thenReturn(Optional.of(RUNTIME));
+
+        // when
+        job.writeForecastsOfRoute(ROUTE_VERSION_3330);
+
+        // then
+        verify(forecastBatchWriter).writeForecastsOf(
+            new PendingForecastBatch(10L, ROUTE_VERSION_3330, 1L, NOW.minusSeconds(20)), STOPS_3330, RUNTIME);
+        verify(vehicleTrajectoryQuery).findBatchesAwaitingForecast(eq(ROUTE_VERSION_3330), eq(NOW.minus(Duration.ofMinutes(5))), eq(20));
+        verify(routeStops, never()).readStops(ROUTE_VERSION_9007);
+        verify(vehicleTrajectoryQuery, never()).findOldestLeftBehindAt(any(Long.class), any(), any());
+    }
+
+    @Test
+    void 이벤트로_요청한_노선이_활성_버전이_아니거나_도는_모델이_없으면_발행하지_않는다() {
+        // given
+        when(forecastRuntime.resolveActive()).thenReturn(Optional.of(RUNTIME), Optional.empty());
+        when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_9007));
+
+        // when
+        job.writeForecastsOfRoute(ROUTE_VERSION_3330);
+        job.writeForecastsOfRoute(ROUTE_VERSION_9007);
+
+        // then
+        verify(routeStops, never()).readStops(any(Long.class));
+        verify(forecastBatchWriter, never()).writeForecastsOf(any(), any(), any());
     }
 
     @Test

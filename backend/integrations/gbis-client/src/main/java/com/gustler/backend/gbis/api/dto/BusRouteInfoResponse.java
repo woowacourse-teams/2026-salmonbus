@@ -1,6 +1,7 @@
 package com.gustler.backend.gbis.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import tools.jackson.databind.annotation.JsonDeserialize;
 
 /**
  * 노선 한 건의 기본 정보. 표시명과 기점 · 종점 이름과 첫차 · 막차 시각과 회차 순번이 여기서 온다.
@@ -55,7 +56,39 @@ public record BusRouteInfoResponse(
         String downFirstDepartureTime,
 
         @JsonProperty("downLastTime")
-        String downLastDepartureTime
+        String downLastDepartureTime,
+
+        @JsonProperty("peekAlloc")
+        @JsonDeserialize(using = ScalarTextDeserializer.class)
+        String weekdayMinHeadway,
+
+        @JsonProperty("nPeekAlloc")
+        @JsonDeserialize(using = ScalarTextDeserializer.class)
+        String weekdayMaxHeadway,
+
+        @JsonProperty("satPeekAlloc")
+        @JsonDeserialize(using = ScalarTextDeserializer.class)
+        String saturdayMinHeadway,
+
+        @JsonProperty("satNPeekAlloc")
+        @JsonDeserialize(using = ScalarTextDeserializer.class)
+        String saturdayMaxHeadway,
+
+        @JsonProperty("sunPeekAlloc")
+        @JsonDeserialize(using = ScalarTextDeserializer.class)
+        String sundayMinHeadway,
+
+        @JsonProperty("sunNPeekAlloc")
+        @JsonDeserialize(using = ScalarTextDeserializer.class)
+        String sundayMaxHeadway,
+
+        @JsonProperty("wePeekAlloc")
+        @JsonDeserialize(using = ScalarTextDeserializer.class)
+        String holidayMinHeadway,
+
+        @JsonProperty("weNPeekAlloc")
+        @JsonDeserialize(using = ScalarTextDeserializer.class)
+        String holidayMaxHeadway
     ) {
     }
 }
