@@ -1895,6 +1895,7 @@ test("선택 방향이 운행 전이어도 반대 방향은 운행 종료 안내
   const up = api.data.board.route.directions.find((direction) => direction.id === "UP");
   if (up === undefined) throw new Error("상행 운행 정보가 없습니다");
   up.firstDepartureTime = "09:00";
+  api.data.vehicles.vehicles = api.data.vehicles.vehicles.filter((vehicle) => vehicle.direction !== "UP");
   await page.goto(`/routes/${routeId}`);
   await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).toBeVisible();
   await expect(sheet(page)).toHaveCount(0);
@@ -1909,8 +1910,29 @@ test("선택 방향이 운행 전이어도 반대 방향은 운행 종료 안내
   await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).toHaveCount(0);
 });
 
+test("막차 시각이 지나도 그 방향 차량이 달리고 있으면 판정 보드를 보여준다", async ({ page, api }) => {
+  const up = api.data.board.route.directions.find((direction) => direction.id === "UP");
+  if (up === undefined) throw new Error("상행 운행 정보가 없습니다");
+  up.lastDepartureTime = "07:00";
+  await page.goto(`/routes/${routeId}`);
+  await page.clock.runFor(32);
+
+  await expect(sheet(page)).toHaveAttribute("data-snap", "half");
+  await expect(map(page)).toBeVisible();
+  await expect(tab(page, "UP")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).toHaveCount(0);
+});
+
 test("운행 종료 화면에는 지도와 바텀시트가 없다", async ({ page, api }) => {
-  api.data.board.observedAt = "2026-09-16T23:30:00+09:00";
+  const lateObservedAt = "2026-09-16T23:30:00+09:00";
+  api.data.board.observedAt = lateObservedAt;
+  api.data.board.vehiclesInService = 0;
+  api.data.vehicles.observation = {
+    state: "NO_VEHICLES_OBSERVED",
+    observedAt: lateObservedAt,
+    staleAt: "2026-09-16T23:35:00+09:00",
+  };
+  api.data.vehicles.vehicles = [];
   await page.goto(`/routes/${routeId}`);
   await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).toBeVisible();
   await expect(sheet(page)).toHaveCount(0);
