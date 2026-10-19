@@ -98,7 +98,7 @@ final class ReplayEngine {
         var routeIds = dataset.routes().stream().map(Route::routeId).collect(java.util.stream.Collectors.toSet());
         for (var route : headways.routes().entrySet()) {
             require(routeIds.contains(route.getKey()) && HEADWAY_FIELDS.containsAll(route.getValue().keySet())
-                && route.getValue().values().stream().allMatch(value -> value instanceof Integer || value instanceof String)
+                && route.getValue().values().stream().allMatch(value -> value == null || value instanceof Integer || value instanceof String)
                 && headways.responses().containsKey(route.getKey())
                 && headways.responses().get(route.getKey()).bodySha256().matches("[0-9a-f]{64}"),
                 "배차간격 자료의 노선과 필드, 응답 기록을 확인해 주세요.");
