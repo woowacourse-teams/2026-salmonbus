@@ -36,6 +36,9 @@ export function startOverlayLayoutBridge(channel: NativeMapChannel, mapRegion: H
       observer.unobserve(element);
       observed.delete(element);
     }
+    for (const target of transitions.keys()) {
+      if (!(target instanceof Node) || !target.isConnected) transitions.delete(target);
+    }
     const viewport = window.visualViewport;
     const layout: NativeMapLayout = {
       viewport: {

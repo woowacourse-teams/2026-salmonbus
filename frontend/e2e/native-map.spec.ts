@@ -281,6 +281,47 @@ test.describe("native 지도 준비 실패 시 JS 지도 전환", () => {
   });
 });
 
+test("transition 중 제거된 채팅 버튼은 정리하고 다른 UI가 움직이는 동안에는 잠금을 유지한다", async ({
+  page,
+  chat,
+}) => {
+  chat.enabled = true;
+  await open(page, chatRouteId);
+  const launcher = page.getByRole("button", { name: `${chatAvailability.displayName} 채팅 열기`, exact: true });
+  await expect
+    .poll(async () => {
+      await page.clock.runFor(100);
+      return launcher.count();
+    })
+    .toBe(1);
+  const sheet = page.getByRole("region", { name: "판정보드", exact: true });
+  await sheet.evaluate((element) =>
+    element.dispatchEvent(new TransitionEvent("transitionrun", { bubbles: true, propertyName: "transform" })),
+  );
+  await launcher.evaluate((element) =>
+    element.dispatchEvent(new TransitionEvent("transitionrun", { bubbles: true, propertyName: "scale" })),
+  );
+  await page.clock.runFor(32);
+  expect((await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.transitioning).toBe(
+    true,
+  );
+
+  await launcher.click();
+  await expect(launcher).toHaveCount(0);
+  await page.clock.runFor(1_000);
+  expect((await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.transitioning).toBe(
+    true,
+  );
+
+  await sheet.evaluate((element) =>
+    element.dispatchEvent(new TransitionEvent("transitioncancel", { bubbles: true, propertyName: "transform" })),
+  );
+  await page.clock.runFor(32);
+  expect((await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.transitioning).toBe(
+    false,
+  );
+});
+
 test("겹친 transition과 두 손가락 중 하나가 끝나도 native gesture 잠금을 유지한다", async ({ page }) => {
   await open(page);
   const sheet = page.getByRole("region", { name: "판정보드", exact: true });
