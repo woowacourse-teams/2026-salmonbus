@@ -161,7 +161,7 @@ export function createNativeRouteMap(options: {
       }
       syncMotion();
     },
-    // Native CADisplayLink owns interpolation; the web list continues using the shared JS clock.
+    // 차량 위치 보간은 iOS의 CADisplayLink가 맡고, 웹 목록은 기존 공통 JS 시계를 사용한다.
     moveVehicles() {},
     resize() {},
     focus(selection) {

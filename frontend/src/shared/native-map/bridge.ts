@@ -11,7 +11,7 @@ declare global {
   }
 }
 
-// Only an injected, compatible host opts in; ordinary mobile browsers keep the JS SDK.
+// 주입된 호환 host가 있을 때만 native 지도를 사용하고, 일반 모바일 브라우저는 JS SDK를 사용한다.
 export function nativeMapCapability(host: Pick<Window, "SalmonNativeMap"> = window): NativeMapCapability | null {
   const capability = host.SalmonNativeMap;
   return capability?.version === 1 && capability.platform === "ios" && typeof capability.postMessage === "function"
