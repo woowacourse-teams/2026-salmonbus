@@ -220,7 +220,7 @@ class GbisRouteSourceTest {
     }
 
     @Test
-    void 배차간격을_함께_읽어도_상류_호출은_노선정보와_정류소_두_번이다() {
+    void 배차간격을_함께_읽어도_GBIS_호출은_노선정보와_정류소_두_번이다() {
         // given
         respondWith(ROUTE_INFO_WITH_HEADWAYS_JSON.formatted("""
             "peekAlloc":10,"nPeekAlloc":20"""), THREE_STATIONS_JSON);

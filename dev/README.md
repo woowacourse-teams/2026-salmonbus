@@ -41,7 +41,7 @@ docker compose logs worker
 
 개인 로컬과 공유 dev 설정에서만 `route-geometry.enabled`와 `include-catalog`를 활성화합니다. 형상 자료는 모의 GBIS 이미지와 basis digest에 포함하며, DB 초기 데이터·기존 모델 판본은 바꾸지 않습니다. 공유 dev 반영에는 새 모의 GBIS basis와 worker의 별도 배포가 필요합니다.
 
-노선 기본정보 응답의 요일별 배차간격은 [route-headways.json](data/route-headways.json)을 재생합니다. 2026-10-19에 GBIS 노선 기본정보 API(`getBusRouteInfoItemv2`)를 41개 노선마다 한 번 호출해 받은 배차 8필드를 원래 값과 타입 그대로 담았고, 노선별 응답 시각과 원문 SHA-256을 함께 기록했습니다. worker가 노선 정보를 다시 읽으면 같은 노선 판본에 채워지고 `GET /api/v1/routes/{routeId}/board`의 `route.headways`에서 확인합니다. 이 파일은 모의 GBIS 이미지와 basis digest에 포함되며 DB 초기 데이터 계약은 바꾸지 않습니다. 값을 다시 받으면 이 파일과 기록을 함께 갱신해야 합니다.
+노선 기본정보 응답의 요일별 배차간격은 [route-headways.json](data/route-headways.json)을 재생합니다. 2026-10-19에 GBIS 노선 기본정보 API(`getBusRouteInfoItemv2`)를 41개 노선마다 한 번 호출해 받은 배차 8필드를 원래 값과 타입 그대로 담았고, 노선별 응답 시각과 원문 SHA-256을 함께 기록했습니다. worker가 노선 정보를 다시 읽으면 같은 노선 버전에 채워지고 `GET /api/v1/routes/{routeId}/board`의 `route.headways`에서 확인합니다. 이 파일은 모의 GBIS 이미지와 basis digest에 포함되며 DB 초기 데이터 계약은 바꾸지 않습니다. 값을 다시 받으면 이 파일과 기록을 함께 갱신해야 합니다.
 
 `stop`은 이 프로젝트의 컨테이너와 네트워크를 정리합니다. DB·계정·모델은 이름 있는 볼륨에 유지되며 다음 실행에서 재사용합니다. `settings-data` 볼륨만 따로 삭제하지 마세요. 초기 데이터 버전이나 모델이 맞지 않으면 자동으로 덮어쓰지 않고 중단합니다.
 

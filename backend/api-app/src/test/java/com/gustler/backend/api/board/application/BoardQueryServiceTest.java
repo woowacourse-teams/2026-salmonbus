@@ -89,7 +89,7 @@ class BoardQueryServiceTest {
     }
 
     @Test
-    void 노선_판본의_요일별_배차간격을_노선_정보에_그대로_싣는다() {
+    void 노선_버전의_요일별_배차간격을_노선_정보에_그대로_싣는다() {
         // given
         RouteHeadways headways = new RouteHeadways(
             new HeadwayRange(10, 20), null, new HeadwayRange(15, 30), new HeadwayRange(16, 35));

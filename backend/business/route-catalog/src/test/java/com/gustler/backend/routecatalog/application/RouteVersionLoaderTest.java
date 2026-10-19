@@ -153,7 +153,7 @@ class RouteVersionLoaderTest {
     }
 
     @Test
-    void 배차간격이_없던_판본에_배차간격을_받으면_판본을_새로_열지_않고_같은_판본에_채운다() {
+    void 배차간격이_없던_노선_버전에_배차간격을_받으면_새로_열지_않고_같은_노선_버전에_채운다() {
         // given
         final long versionId = loader.load(routeId, threeStops(), TIMETABLE_1650, FIRST_READ_AT);
         assertThat(headwayMinutesOf(versionId)).containsOnlyNulls();
@@ -169,7 +169,7 @@ class RouteVersionLoaderTest {
     }
 
     @Test
-    void 배차간격만_바뀌면_같은_판본의_배차간격만_고치고_정류소와_첫차_막차는_그대로_둔다() {
+    void 배차간격만_바뀌면_같은_노선_버전의_배차간격만_고치고_정류소와_첫차_막차는_그대로_둔다() {
         // given
         final long versionId = loader.load(routeId, threeStops(), TIMETABLE_1650_WITH_HEADWAYS, FIRST_READ_AT);
 
@@ -229,7 +229,7 @@ class RouteVersionLoaderTest {
     }
 
     @Test
-    void 정류소가_바뀌어_새_판본을_열면_배차간격도_새_판본에_담기고_직전_판본은_그대로_남는다() {
+    void 정류소가_바뀌어_새_노선_버전을_열면_배차간격도_새_버전에_담기고_직전_버전은_그대로_남는다() {
         // given
         final long firstVersionId = loader.load(routeId, threeStops(), TIMETABLE_1650_WITH_HEADWAYS, FIRST_READ_AT);
 

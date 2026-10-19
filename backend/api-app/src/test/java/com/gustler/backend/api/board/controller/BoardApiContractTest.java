@@ -132,7 +132,7 @@ class BoardApiContractTest {
     }
 
     @Test
-    void 배차간격이_저장되지_않은_기존_판본도_정상_응답하고_네_요일을_null로_낸다() throws Exception {
+    void 배차간격이_저장되지_않은_기존_노선_버전도_정상_응답하고_네_요일을_null로_낸다() throws Exception {
         // given
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         RouteContext route = insertPublishedRoundTripRoute(now);
@@ -152,7 +152,7 @@ class BoardApiContractTest {
     }
 
     @Test
-    void 판본에_저장된_요일별_배차간격을_분_단위_최소_최대로_낸다() throws Exception {
+    void 노선_버전에_저장된_요일별_배차간격을_분_단위_최소_최대로_낸다() throws Exception {
         // given
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         RouteContext route = insertPublishedRoundTripRoute(now);

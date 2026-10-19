@@ -48,7 +48,7 @@ class RouteVersionContentTest {
     }
 
     @Test
-    void 배차간격만_바뀌어도_판본을_새로_끊지_않고_같은_판본의_시간표를_고친다() {
+    void 배차간격만_바뀌어도_노선_버전을_새로_끊지_않고_같은_버전의_시간표를_고친다() {
         // given
         RouteVersionContent stored = RouteVersionContent.of(twoStops(), TIMETABLE_1650);
 
@@ -61,7 +61,7 @@ class RouteVersionContentTest {
     }
 
     @Test
-    void 직전_판본과_정류소도_배차간격도_같으면_그_판본을_그대로_쓴다() {
+    void 직전_노선_버전과_정류소도_배차간격도_같으면_그_버전을_그대로_쓴다() {
         // given
         RouteVersionContent stored = RouteVersionContent.of(twoStops(), TIMETABLE_1650_WITH_HEADWAYS);
 
