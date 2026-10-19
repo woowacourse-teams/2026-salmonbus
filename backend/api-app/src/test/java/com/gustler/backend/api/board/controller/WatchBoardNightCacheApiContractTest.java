@@ -51,10 +51,10 @@ class WatchBoardNightCacheApiContractTest {
 
     @ParameterizedTest
     @CsvSource({
-        "2026-10-15T18:55:00Z, 5",
+        "2026-10-15T18:55:00Z, 0",
         "2026-10-15T18:59:00Z, 240",
         "2026-10-15T18:59:59.999999Z, 299",
-        "2026-10-15T19:00:00Z, 5"
+        "2026-10-15T19:00:00Z, 0"
     })
     void 심야_관측은_정책_캐시_시간과_만료까지_남은_시간_중_짧은_쪽만큼_캐시한다(String time, final int maxAge)
         throws Exception {

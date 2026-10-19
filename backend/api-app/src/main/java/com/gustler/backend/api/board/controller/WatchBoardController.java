@@ -37,7 +37,7 @@ public class WatchBoardController {
         @ApiResponse(responseCode = "200", description = "보드 상태별 정상 응답",
             headers = @Header(name = "Cache-Control",
                 description = "public, max-age는 관측 시각대별 정책값(첨두 15초, 평시 20초, 01~03시대 600초)과 "
-                    + "staleAt까지 남은 시간(최소 5초) 중 작은 값", schema = @Schema(type = "string")),
+                    + "staleAt까지 남은 시간 중 작은 값. staleAt을 넘겨 캐시하지 않는다", schema = @Schema(type = "string")),
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = WatchBoardResponse.class), examples = {
                 @ExampleObject(name = "FORECAST_READY", value = ApiDocsExamples.WATCH_BOARD_READY),
                 @ExampleObject(name = "PREPARING", value = ApiDocsExamples.WATCH_BOARD_PREPARING)

@@ -22,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class WatchBoardQueryService {
 
     private static final Logger log = LoggerFactory.getLogger(WatchBoardQueryService.class);
-    private static final Duration MIN_CACHE_MAX_AGE = Duration.ofSeconds(5);
 
     private final BoardQueryService boardQueryService;
     private final VehicleQueryRepository vehicleQueryRepository;
@@ -44,7 +43,7 @@ public class WatchBoardQueryService {
         BoardReading reading
     ) {
         Duration untilStale = Duration.between(OffsetDateTime.now(clock), reading.board().staleAt());
-        Duration bounded = untilStale.compareTo(MIN_CACHE_MAX_AGE) < 0 ? MIN_CACHE_MAX_AGE : untilStale;
+        Duration bounded = untilStale.isNegative() ? Duration.ZERO : untilStale;
         return bounded.compareTo(reading.cacheMaxAge()) < 0 ? bounded : reading.cacheMaxAge();
     }
 

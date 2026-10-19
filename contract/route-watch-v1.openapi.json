@@ -28,7 +28,7 @@
             "description": "보드 상태별 정상 응답",
             "headers": {
               "Cache-Control": {
-                "description": "public, max-age는 관측 시각대별 정책값(첨두 15초, 평시 20초, 01~03시대 600초)과 staleAt까지 남은 시간(최소 5초) 중 작은 값",
+                "description": "public, max-age는 관측 시각대별 정책값(첨두 15초, 평시 20초, 01~03시대 600초)과 staleAt까지 남은 시간 중 작은 값. staleAt을 넘겨 캐시하지 않는다",
                 "style": "simple",
                 "schema": {
                   "type": "string"
@@ -756,7 +756,7 @@
     "batchRule": "예보가 발행된 최신 관측 묶음을 고르고, 발행 이력이 없으면 최신 정상 관측 묶음을 고른다. 예보와 차량 위치를 모두 그 묶음에서 읽는다.",
     "consistency": "REPEATABLE_READ 읽기 전용 트랜잭션 하나에서 읽는다.",
     "freshness": "관측 후 5분, 관측 시각이 01~03시대면 10분. 지나면 503 NO_RECENT_OBSERVATION.",
-    "cache": "max-age = min(관측 시각대별 정책값, max(5초, staleAt까지 남은 시간)). 오류 응답은 no-store.",
+    "cache": "max-age = min(관측 시각대별 정책값, staleAt까지 남은 시간). staleAt을 넘겨 캐시하지 않는다. 오류 응답은 no-store.",
     "seat": "vehicles[].seat는 관측 시점의 실측 잔여석이다. 정류장 도착 시점 예보는 stops[].approachingVehicles[].forecast.",
     "direction": "vehicles[].direction은 현재 정류장이 속한 방향이다. 회차점을 출발한 차량의 예보는 DOWN 정류장에 붙는다."
   }

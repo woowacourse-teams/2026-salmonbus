@@ -90,7 +90,7 @@ class WatchBoardQueryServiceTest {
     }
 
     @Test
-    void 만료가_임박해도_캐시는_5초보다_짧아지지_않는다() {
+    void 만료_시각이면_캐시하지_않는다() {
         // given
         Board board = board(NOW.minusMinutes(10), 0);
         given(boardQueryService.readBoard(ROUTE_ID)).willReturn(new BoardReading(board, BATCH_ID, Duration.ofSeconds(600)));
@@ -100,7 +100,21 @@ class WatchBoardQueryServiceTest {
         WatchBoardOverview overview = service.getWatchBoard(ROUTE_ID);
 
         // then
-        assertThat(overview.cacheMaxAge()).isEqualTo(Duration.ofSeconds(5));
+        assertThat(overview.cacheMaxAge()).isEqualTo(Duration.ZERO);
+    }
+
+    @Test
+    void 판정_직후_만료_시각을_넘겨도_캐시_시간은_음수가_되지_않는다() {
+        // given
+        Board board = board(NOW.minusMinutes(10).minusSeconds(1), 0);
+        given(boardQueryService.readBoard(ROUTE_ID)).willReturn(new BoardReading(board, BATCH_ID, Duration.ofSeconds(600)));
+        given(vehicleQueryRepository.findVehicles(BATCH_ID)).willReturn(List.of());
+
+        // when
+        WatchBoardOverview overview = service.getWatchBoard(ROUTE_ID);
+
+        // then
+        assertThat(overview.cacheMaxAge()).isEqualTo(Duration.ZERO);
     }
 
     @Test
