@@ -4,8 +4,10 @@ import static com.gustler.backend.routecatalog.domain.RouteVersionDecision.KEEP_
 import static com.gustler.backend.routecatalog.domain.RouteVersionDecision.OPEN_NEW_VERSION;
 import static com.gustler.backend.routecatalog.domain.RouteVersionDecision.REVISE_TIMETABLE;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class RouteVersionContentTest {
@@ -81,6 +83,17 @@ class RouteVersionContentTest {
 
         // then
         assertThat(actual).isEqualTo(KEEP_CURRENT_VERSION);
+    }
+
+    @Test
+    void 읽지_못한_배차간격이_남은_시간표로는_판정하지_않는다() {
+        // given
+        RouteTimetable unresolved = new RouteTimetable("05:00", "22:35", "05:00", "23:55",
+            new RouteHeadways(null, null, null, null, Set.of(ServiceDay.WEEKDAY)));
+
+        // when & then
+        assertThatThrownBy(() -> RouteVersionContent.of(twoStops(), unresolved))
+            .isInstanceOf(IllegalArgumentException.class);
     }
 
     private RouteStops twoStops() {

@@ -8,6 +8,7 @@ import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteSource;
 import com.gustler.backend.routecatalog.domain.RouteSourceResult;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
+import com.gustler.backend.routecatalog.domain.ServiceDay;
 import com.gustler.backend.routecatalog.domain.UpstreamRoute;
 import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
 
@@ -15,6 +16,7 @@ import com.gustler.backend.routecatalog.domain.RouteSourceResult.Failed;
 import com.gustler.backend.routecatalog.domain.RouteSourceResult.Success;
 import com.gustler.backend.gbis.api.dto.BusRouteInfoResponse.RouteInfoItem;
 import com.gustler.backend.gbis.api.dto.BusRouteStationResponse.RouteStationItem;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -160,25 +162,32 @@ public class GbisRouteSource implements RouteSource {
         String routeId,
         RouteInfoItem routeInfo
     ) {
-        return new RouteHeadways(
-            headwayOf(routeId, "WEEKDAY", routeInfo.weekdayMinHeadway(), routeInfo.weekdayMaxHeadway()),
-            headwayOf(routeId, "SATURDAY", routeInfo.saturdayMinHeadway(), routeInfo.saturdayMaxHeadway()),
-            headwayOf(routeId, "SUNDAY", routeInfo.sundayMinHeadway(), routeInfo.sundayMaxHeadway()),
-            headwayOf(routeId, "HOLIDAY", routeInfo.holidayMinHeadway(), routeInfo.holidayMaxHeadway()));
+        Set<ServiceDay> unreadableDays = EnumSet.noneOf(ServiceDay.class);
+        HeadwayRange weekday = headwayOf(routeId, ServiceDay.WEEKDAY,
+            routeInfo.weekdayMinHeadway(), routeInfo.weekdayMaxHeadway(), unreadableDays);
+        HeadwayRange saturday = headwayOf(routeId, ServiceDay.SATURDAY,
+            routeInfo.saturdayMinHeadway(), routeInfo.saturdayMaxHeadway(), unreadableDays);
+        HeadwayRange sunday = headwayOf(routeId, ServiceDay.SUNDAY,
+            routeInfo.sundayMinHeadway(), routeInfo.sundayMaxHeadway(), unreadableDays);
+        HeadwayRange holiday = headwayOf(routeId, ServiceDay.HOLIDAY,
+            routeInfo.holidayMinHeadway(), routeInfo.holidayMaxHeadway(), unreadableDays);
+        return new RouteHeadways(weekday, saturday, sunday, holiday, unreadableDays);
     }
 
     private HeadwayRange headwayOf(
         String routeId,
-        String day,
+        ServiceDay day,
         String minText,
-        String maxText
+        String maxText,
+        Set<ServiceDay> unreadableDays
     ) {
         if (isBlank(minText) && isBlank(maxText)) {
             return null;
         }
         Optional<HeadwayRange> headway = HeadwayRange.of(minutesOf(minText), minutesOf(maxText));
         if (headway.isEmpty()) {
-            log.warn("event=route_headway_ignored routeId={} day={} min={} max={}", routeId, day, minText, maxText);
+            unreadableDays.add(day);
+            log.warn("event=route_headway_unreadable routeId={} day={} min={} max={}", routeId, day, minText, maxText);
         }
         return headway.orElse(null);
     }

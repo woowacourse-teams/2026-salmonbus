@@ -12,8 +12,7 @@ final class ScalarTextDeserializer extends ValueDeserializer<String> {
         DeserializationContext context
     ) {
         if (parser.currentToken().isStructStart()) {
-            parser.skipChildren();
-            return null;
+            return context.readTree(parser).toString();
         }
         return parser.getString();
     }

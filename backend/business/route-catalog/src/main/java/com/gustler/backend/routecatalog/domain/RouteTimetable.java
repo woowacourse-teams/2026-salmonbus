@@ -13,4 +13,15 @@ public record RouteTimetable(
     public RouteTimetable {
         Objects.requireNonNull(headways, "headways는 null일 수 없습니다.");
     }
+
+    public RouteTimetable keepingUnreadableHeadwaysOf(
+        RouteTimetable stored
+    ) {
+        return new RouteTimetable(
+            upFirstDepartureTime,
+            upLastDepartureTime,
+            downFirstDepartureTime,
+            downLastDepartureTime,
+            headways.keepingUnreadableDaysFrom(stored == null ? null : stored.headways()));
+    }
 }

@@ -4,6 +4,7 @@ import com.gustler.backend.routecatalog.domain.HeadwayRange;
 import com.gustler.backend.routecatalog.domain.RouteHeadways;
 import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
+import com.gustler.backend.routecatalog.domain.ServiceDay;
 import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -14,6 +15,7 @@ import jakarta.persistence.EntityManager;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -184,7 +186,37 @@ class RouteVersionLoaderTest {
     }
 
     @Test
-    void 배차간격을_더_받지_못하면_같은_판본에서_배차간격을_비운다() {
+    void 맞지_않는_배차간격을_받으면_저장된_배차간격을_유지하고_노선_버전도_그대로_둔다() {
+        // given
+        final long versionId = loader.load(routeId, threeStops(), TIMETABLE_1650_WITH_HEADWAYS, FIRST_READ_AT);
+        RouteTimetable unreadableWeekdayAndHoliday = new RouteTimetable("05:00", "22:35", "05:00", "23:55",
+            new RouteHeadways(null, new HeadwayRange(12, 25), new HeadwayRange(15, 30), null,
+                Set.of(ServiceDay.WEEKDAY, ServiceDay.HOLIDAY)));
+
+        // when
+        final long actual = loader.load(routeId, threeStops(), unreadableWeekdayAndHoliday, SECOND_READ_AT);
+
+        // then
+        assertThat(actual).isEqualTo(versionId);
+        assertThat(versionCount()).isEqualTo(1);
+        assertThat(headwayMinutesOf(versionId)).containsExactly(10, 20, 12, 25, 15, 30, 16, 35);
+    }
+
+    @Test
+    void 저장된_배차간격이_없으면_맞지_않는_요일은_비워_둔다() {
+        // given
+        RouteTimetable unreadableWeekday = new RouteTimetable("05:00", "22:35", "05:00", "23:55",
+            new RouteHeadways(null, new HeadwayRange(12, 25), null, null, Set.of(ServiceDay.WEEKDAY)));
+
+        // when
+        final long actual = loader.load(routeId, threeStops(), unreadableWeekday, FIRST_READ_AT);
+
+        // then
+        assertThat(headwayMinutesOf(actual)).containsExactly(null, null, 12, 25, null, null, null, null);
+    }
+
+    @Test
+    void GBIS가_배차간격을_비워_보내면_같은_노선_버전에서_배차간격을_비운다() {
         // given
         final long versionId = loader.load(routeId, threeStops(), TIMETABLE_1650_WITH_HEADWAYS, FIRST_READ_AT);
 

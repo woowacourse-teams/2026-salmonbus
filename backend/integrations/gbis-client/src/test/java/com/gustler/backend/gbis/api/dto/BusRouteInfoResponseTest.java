@@ -68,14 +68,14 @@ class BusRouteInfoResponseTest {
         RouteInfoItem actual = objectMapper.readValue(json, BusRouteInfoResponse.class)
             .response().body().routeInfo();
 
-        // then 해석은 노선 어댑터가 한다
+        // then
         assertThat(actual).isEqualTo(new RouteInfoItem(
             "3330", "범계역", "강남역", "05:00", "22:35", "05:00", "23:55",
             "10", " 20 ", "", null, "10.5", "-3", "abc", null));
     }
 
     @Test
-    void 배차간격이_객체나_배열이어도_노선_기본_정보를_읽는다() {
+    void 배차간격이_객체나_배열이어도_노선_기본_정보를_읽고_원문_JSON으로_넘긴다() {
         // given
         String json = routeInfoWith("""
             "peekAlloc":{},"nPeekAlloc":[10],"satPeekAlloc":true,"satNPeekAlloc":{"value":20}""");
@@ -87,7 +87,7 @@ class BusRouteInfoResponseTest {
         // then
         assertThat(actual).isEqualTo(new RouteInfoItem(
             "3330", "범계역", "강남역", "05:00", "22:35", "05:00", "23:55",
-            null, null, "true", null, null, null, null, null));
+            "{}", "[10]", "true", "{\"value\":20}", null, null, null, null));
     }
 
     private static String routeInfoWith(

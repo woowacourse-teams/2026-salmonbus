@@ -8,6 +8,7 @@ import com.gustler.backend.routecatalog.domain.HeadwayRange;
 import com.gustler.backend.routecatalog.domain.RouteHeadways;
 import com.gustler.backend.routecatalog.domain.RouteStop;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
+import com.gustler.backend.routecatalog.domain.ServiceDay;
 import com.gustler.backend.routecatalog.domain.StopDirection;
 import com.gustler.backend.routecatalog.domain.UpstreamRoute;
 import com.gustler.backend.gbis.api.GbisClientOptions;
@@ -18,6 +19,8 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.gustler.backend.routecatalog.domain.RouteSourceResult.Failed;
 import com.gustler.backend.routecatalog.domain.RouteSourceResult.Success;
+import java.util.EnumSet;
+import java.util.Set;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -168,7 +171,7 @@ class GbisRouteSourceTest {
     }
 
     @Test
-    void 성립하지_않는_요일의_배차간격만_비우고_노선과_시간표와_정류소는_그대로_읽는다() {
+    void 성립하지_않는_요일은_읽지_못한_요일로_표시하고_노선과_시간표와_정류소는_그대로_읽는다() {
         // given
         respondWith(ROUTE_INFO_WITH_HEADWAYS_JSON.formatted("""
             "peekAlloc":0,"nPeekAlloc":0,"satPeekAlloc":20,"satNPeekAlloc":10,
@@ -180,14 +183,14 @@ class GbisRouteSourceTest {
 
         // then
         UpstreamRoute route = ((Success) actual).route();
-        assertThat(route.timetable()).isEqualTo(
-            new RouteTimetable("05:00", "22:35", "05:00", "23:55", RouteHeadways.none()));
+        assertThat(route.timetable()).isEqualTo(new RouteTimetable("05:00", "22:35", "05:00", "23:55",
+            new RouteHeadways(null, null, null, null, EnumSet.allOf(ServiceDay.class))));
         assertThat(route.stops().stops()).hasSize(3);
         assertThat(route.displayName()).isEqualTo("3330");
     }
 
     @Test
-    void 배차간격이_음수거나_하루를_넘어도_그_요일만_비운다() {
+    void 배차간격이_음수거나_하루를_넘으면_그_요일만_읽지_못한_요일이고_둘_다_비면_없는_요일이다() {
         // given
         respondWith(ROUTE_INFO_WITH_HEADWAYS_JSON.formatted("""
             "peekAlloc":-5,"nPeekAlloc":20,"satPeekAlloc":10,"satNPeekAlloc":1441,
@@ -198,11 +201,12 @@ class GbisRouteSourceTest {
 
         // then
         assertThat(((Success) actual).route().timetable().headways())
-            .isEqualTo(new RouteHeadways(null, null, null, new HeadwayRange(8, 16)));
+            .isEqualTo(new RouteHeadways(null, null, null, new HeadwayRange(8, 16),
+                Set.of(ServiceDay.WEEKDAY, ServiceDay.SATURDAY)));
     }
 
     @Test
-    void 배차간격이_객체나_배열로_와도_노선을_읽지_못한_것으로_보지_않는다() {
+    void 배차간격이_객체나_배열이면_그_요일을_읽지_못한_요일로_표시하고_노선은_읽는다() {
         // given
         respondWith(ROUTE_INFO_WITH_HEADWAYS_JSON.formatted("""
             "peekAlloc":{},"nPeekAlloc":[10],"satPeekAlloc":true,"satNPeekAlloc":true"""), THREE_STATIONS_JSON);
@@ -211,7 +215,8 @@ class GbisRouteSourceTest {
         RouteSourceResult actual = source.read(ROUTE_3330);
 
         // then
-        assertThat(((Success) actual).route().timetable().headways()).isEqualTo(RouteHeadways.none());
+        assertThat(((Success) actual).route().timetable().headways()).isEqualTo(new RouteHeadways(
+            null, null, null, null, Set.of(ServiceDay.WEEKDAY, ServiceDay.SATURDAY)));
     }
 
     @Test

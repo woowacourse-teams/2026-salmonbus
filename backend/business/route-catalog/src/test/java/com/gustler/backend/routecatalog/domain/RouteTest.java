@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class RouteTest {
@@ -61,6 +62,43 @@ class RouteTest {
         assertThat(route.currentVersion().validTo()).isNull();
         assertThat(route.currentVersion().content().timetable()).isEqualTo(WITH_HEADWAYS);
         assertThat(route.closedVersion()).isEmpty();
+    }
+
+    @Test
+    void 읽지_못한_요일은_현재_버전의_배차간격을_유지하고_버전을_닫지_않는다() {
+        // given
+        Route route = new Route(1L, new RouteVersion(10L, OPENED, null,
+            RouteVersionContent.of(stops(), WITH_HEADWAYS)));
+        RouteTimetable unreadableWeekday = new RouteTimetable("05:00", "22:00", "05:30", "22:30",
+            new RouteHeadways(null, null, null, new HeadwayRange(20, 40), Set.of(ServiceDay.WEEKDAY)));
+
+        // when
+        route.accept(stops(), unreadableWeekday, CHANGED);
+
+        // then
+        assertThat(route.currentVersion().id()).isEqualTo(10L);
+        assertThat(route.currentVersion().content().timetable()).isEqualTo(WITH_HEADWAYS);
+        assertThat(route.closedVersion()).isEmpty();
+    }
+
+    @Test
+    void 정류장이_바뀌어_새_버전을_열어도_읽지_못한_요일은_직전_버전의_배차간격을_이어받는다() {
+        // given
+        Route route = new Route(1L, new RouteVersion(10L, OPENED, null,
+            RouteVersionContent.of(stops(), WITH_HEADWAYS)));
+        RouteStops incoming = new RouteStops(null, List.of(
+            new RouteStop(1, "100", "기점", StopDirection.UP, true),
+            new RouteStop(2, "300", "새 종점", StopDirection.UP, true)));
+        RouteTimetable unreadableWeekday = new RouteTimetable("05:00", "22:00", "05:30", "22:30",
+            new RouteHeadways(null, null, null, new HeadwayRange(20, 40), Set.of(ServiceDay.WEEKDAY)));
+
+        // when
+        route.accept(incoming, unreadableWeekday, CHANGED);
+
+        // then
+        assertThat(route.closedVersion()).isPresent();
+        assertThat(route.currentVersion().content().timetable().headways().weekday())
+            .isEqualTo(new HeadwayRange(10, 20));
     }
 
     @Test

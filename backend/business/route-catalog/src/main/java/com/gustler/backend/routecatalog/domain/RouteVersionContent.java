@@ -5,6 +5,12 @@ public record RouteVersionContent(
     RouteTimetable timetable
 ) {
 
+    public RouteVersionContent {
+        if (timetable.headways().hasUnreadableDays()) {
+            throw new IllegalArgumentException("판정할 시간표에 읽지 못한 배차간격이 남아 있다");
+        }
+    }
+
     public static RouteVersionContent of(
         RouteStops routeStops,
         RouteTimetable timetable
