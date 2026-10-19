@@ -5,7 +5,8 @@ export const region = style({
   position: "relative",
   width: "100%",
   height: "100%",
-  overflow: "hidden",
+  // 시트의 28px 둥근 모서리 뒤까지 지도를 표시하되 지도 높이와 컨트롤 위치는 유지한다.
+  clipPath: "inset(0 0 -28px)",
   isolation: "isolate",
   background: vars.color.surface,
 });
@@ -15,6 +16,7 @@ export const canvasViewport = style({
   left: 0,
   width: "100%",
   transform: "translateY(-50%)",
+  background: vars.color.surface,
 });
 export const canvas = style({ position: "relative", zIndex: 0, width: "100%", height: "100%" });
 // SDK가 캔버스 하단에 배치한 출처 표시는 실제로 보이는 지도 하단으로 올린다.

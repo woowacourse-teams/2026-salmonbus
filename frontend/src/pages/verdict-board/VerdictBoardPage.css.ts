@@ -20,7 +20,7 @@ export const content = style({
   width: "100%",
   height: "100%",
 });
-export const mapSlot = style({ position: "relative", flex: 1, minHeight: 0, overflow: "hidden" });
+export const mapSlot = style({ position: "relative", flex: 1, minHeight: 0 });
 export const back = style({
   position: "absolute",
   top: "calc(env(safe-area-inset-top, 0px) + 20px)",

@@ -177,6 +177,27 @@ async function dragHeader(page: Page, destinationY: number, { releaseDelayMs = 3
   await page.clock.runFor(32);
 }
 
+test("시트의 둥근 모서리 바깥에는 배경색 대신 지도가 이어진다", async ({ page }) => {
+  await openMap(page);
+
+  for (const key of ["Home", "ArrowUp", "ArrowUp"]) {
+    await handle(page).press(key);
+    await page.clock.runFor(48);
+    const layers = await sheet(page).evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      // WebKit은 둥근 모서리 밖에서도 시트 자식을 반환하므로 뒤에 있는 레이어를 직접 확인한다.
+      element.style.visibility = "hidden";
+      const behindCorners = [bounds.left + 1, bounds.right - 1].map((x) => {
+        const hit = document.elementFromPoint(x, bounds.top + 1);
+        return hit !== null && hit.closest('[data-testid="route-map"]') !== null;
+      });
+      element.style.removeProperty("visibility");
+      return behindCorners;
+    });
+    expect(layers).toEqual([true, true]);
+  }
+});
+
 test("보드와 같은 노선 판본의 geometry API를 조회하고 같은 판본의 폴링에는 지도를 다시 받지 않는다", async ({
   page,
   api,
