@@ -305,7 +305,7 @@ sudo bash /etc/salmonbus/evaluation-work-transition.sh resume-legacy
 ```
 
 DB의 Flyway 최대 버전과 두 앱 `current`의 `flywayMaxVersion`이 같아야 차단이 풀린다. 서비스는 시작하지 않는다.
-V39 전용 롤백 SQL은 V38까지만 되돌리므로 V38 배포 파일이 없으면 쓸 수 없다.
+V39 전용 롤백 SQL은 V38까지만 되돌리므로 V38 배포 파일이 없으면 쓸 수 없다. V40 이후가 적용된 DB에서는 롤백 SQL이 실행을 거부한다.
 
 ## 도착 정보·노선 형상 켜기
 
