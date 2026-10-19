@@ -1,16 +1,16 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Salmonbus route live board",
+    "title": "Salmonbus route watch board",
     "version": "1.0.0",
-    "description": "노선의 판정 보드(정류장별 도착 예보)와 같은 관측의 차량 위치를 한 번에 조회하는 계약. 200 응답 전체는 관측 하나에서 나온다. 예시는 합성 자료다."
+    "description": "노선의 판정 보드(정류장별 도착 예보)와 같은 관측의 차량 위치를 한 번에 폴링으로 조회하는 계약. 200 응답 전체는 관측 하나에서 나온다. 예시는 합성 자료다."
   },
   "paths": {
-    "/api/v1/routes/{routeId}/live": {
+    "/api/v1/routes/{routeId}/watch": {
       "get": {
         "summary": "노선별 판정 보드와 차량 위치",
-        "description": "발행된 예보가 있으면 해당 관측을, 없으면 최신 정상 관측을 기준으로 보드를 구성하고, 같은 관측의 차량 위치를 함께 반환합니다. 200 응답은 전체가 관측 하나에서 나온 것입니다. 신선도는 관측 후 5분, 관측 시각이 01~03시대면 10분입니다.",
-        "operationId": "getRouteLive",
+        "description": "발행된 예보가 있으면 해당 관측을, 없으면 최신 정상 관측을 기준으로 보드를 구성하고, 같은 관측의 차량 위치를 함께 반환합니다. 화면이 주기적으로 다시 부르는 폴링용 조회입니다. 200 응답은 전체가 관측 하나에서 나온 것입니다. 신선도는 관측 후 5분, 관측 시각이 01~03시대면 10분입니다.",
+        "operationId": "getRouteWatch",
         "parameters": [
           {
             "name": "routeId",
@@ -38,7 +38,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LiveBoardResponse"
+                  "$ref": "#/components/schemas/WatchBoardResponse"
                 },
                 "examples": {
                   "FORECAST_READY": {
@@ -536,7 +536,7 @@
           "status"
         ]
       },
-      "LiveBoardResponse": {
+      "WatchBoardResponse": {
         "type": "object",
         "properties": {
           "route": {

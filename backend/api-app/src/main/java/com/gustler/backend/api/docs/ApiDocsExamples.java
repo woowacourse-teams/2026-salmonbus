@@ -165,7 +165,7 @@ public final class ApiDocsExamples {
         }
         """;
 
-    public static final String LIVE_BOARD_READY = """
+    public static final String WATCH_BOARD_READY = """
         {
           "route": {
             "id": "123456789",
@@ -254,7 +254,7 @@ public final class ApiDocsExamples {
         }
         """;
 
-    public static final String LIVE_BOARD_PREPARING = """
+    public static final String WATCH_BOARD_PREPARING = """
         {
           "route": {
             "id": "123456789",

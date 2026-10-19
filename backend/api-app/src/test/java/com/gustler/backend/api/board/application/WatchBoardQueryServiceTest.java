@@ -38,7 +38,7 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
-class LiveBoardQueryServiceTest {
+class WatchBoardQueryServiceTest {
 
     private static final RouteId ROUTE_ID = new RouteId("204000057");
     private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-08-27T12:00:00+09:00");
@@ -50,12 +50,12 @@ class LiveBoardQueryServiceTest {
     @Mock
     private VehicleQueryRepository vehicleQueryRepository;
 
-    private LiveBoardQueryService service;
+    private WatchBoardQueryService service;
 
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(NOW.toInstant(), ZoneId.of("Asia/Seoul"));
-        service = new LiveBoardQueryService(boardQueryService, vehicleQueryRepository, clock);
+        service = new WatchBoardQueryService(boardQueryService, vehicleQueryRepository, clock);
     }
 
     @Test
@@ -67,7 +67,7 @@ class LiveBoardQueryServiceTest {
         given(vehicleQueryRepository.findVehicles(BATCH_ID)).willReturn(vehicles);
 
         // when
-        LiveBoardOverview overview = service.getLiveBoard(ROUTE_ID);
+        WatchBoardOverview overview = service.getWatchBoard(ROUTE_ID);
 
         // then
         assertThat(overview.board()).isEqualTo(board);
@@ -83,7 +83,7 @@ class LiveBoardQueryServiceTest {
         given(vehicleQueryRepository.findVehicles(BATCH_ID)).willReturn(List.of());
 
         // when
-        LiveBoardOverview overview = service.getLiveBoard(ROUTE_ID);
+        WatchBoardOverview overview = service.getWatchBoard(ROUTE_ID);
 
         // then
         assertThat(overview.cacheMaxAge()).isEqualTo(Duration.between(NOW, board.staleAt()));
@@ -97,7 +97,7 @@ class LiveBoardQueryServiceTest {
         given(vehicleQueryRepository.findVehicles(BATCH_ID)).willReturn(List.of());
 
         // when
-        LiveBoardOverview overview = service.getLiveBoard(ROUTE_ID);
+        WatchBoardOverview overview = service.getWatchBoard(ROUTE_ID);
 
         // then
         assertThat(overview.cacheMaxAge()).isEqualTo(Duration.ofSeconds(5));
@@ -109,7 +109,7 @@ class LiveBoardQueryServiceTest {
         given(boardQueryService.readBoard(ROUTE_ID)).willThrow(new NoRecentObservationException());
 
         // when & then
-        assertThatThrownBy(() -> service.getLiveBoard(ROUTE_ID)).isInstanceOf(NoRecentObservationException.class);
+        assertThatThrownBy(() -> service.getWatchBoard(ROUTE_ID)).isInstanceOf(NoRecentObservationException.class);
         verify(vehicleQueryRepository, never()).findVehicles(anyLong());
     }
 
@@ -121,7 +121,7 @@ class LiveBoardQueryServiceTest {
         given(vehicleQueryRepository.findVehicles(BATCH_ID)).willThrow(new ServiceUnavailableException());
 
         // when & then
-        assertThatThrownBy(() -> service.getLiveBoard(ROUTE_ID)).isInstanceOf(ServiceUnavailableException.class);
+        assertThatThrownBy(() -> service.getWatchBoard(ROUTE_ID)).isInstanceOf(ServiceUnavailableException.class);
     }
 
     @Test
@@ -132,8 +132,8 @@ class LiveBoardQueryServiceTest {
         given(vehicleQueryRepository.findVehicles(BATCH_ID)).willReturn(List.of(vehicle("V1")));
 
         // when
-        service.getLiveBoard(ROUTE_ID);
-        service.getLiveBoard(ROUTE_ID);
+        service.getWatchBoard(ROUTE_ID);
+        service.getWatchBoard(ROUTE_ID);
 
         // then
         assertThat(output.getOut().split("기준 관측의 차량 수와 읽어낸 차량 수가 다르다", -1)).hasSize(2);
@@ -152,11 +152,11 @@ class LiveBoardQueryServiceTest {
         given(vehicleQueryRepository.findVehicles(anyLong())).willReturn(List.of(vehicle("V1")));
 
         // when
-        service.getLiveBoard(ROUTE_ID);
-        service.getLiveBoard(otherRoute);
-        service.getLiveBoard(ROUTE_ID);
-        service.getLiveBoard(otherRoute);
-        service.getLiveBoard(ROUTE_ID);
+        service.getWatchBoard(ROUTE_ID);
+        service.getWatchBoard(otherRoute);
+        service.getWatchBoard(ROUTE_ID);
+        service.getWatchBoard(otherRoute);
+        service.getWatchBoard(ROUTE_ID);
 
         // then
         assertThat(output.getOut().split("기준 관측의 차량 수와 읽어낸 차량 수가 다르다", -1)).hasSize(4);
@@ -165,7 +165,7 @@ class LiveBoardQueryServiceTest {
     @Test
     void 보드와_차량을_한_스냅샷에서_읽도록_반복_읽기_트랜잭션을_선언한다() {
         // when
-        Transactional transactional = LiveBoardQueryService.class.getAnnotation(Transactional.class);
+        Transactional transactional = WatchBoardQueryService.class.getAnnotation(Transactional.class);
 
         // then
         assertThat(transactional).isNotNull();

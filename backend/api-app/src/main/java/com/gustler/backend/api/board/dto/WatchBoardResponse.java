@@ -1,6 +1,6 @@
 package com.gustler.backend.api.board.dto;
 
-import com.gustler.backend.api.board.application.LiveBoardOverview;
+import com.gustler.backend.api.board.application.WatchBoardOverview;
 import com.gustler.backend.api.board.domain.Board;
 import com.gustler.backend.api.vehicle.dto.VehicleResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -8,7 +8,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 @Schema(requiredProperties = {"route", "observedAt", "staleAt", "model", "vehiclesInService", "stops", "vehicles"})
-public record LiveBoardResponse(
+public record WatchBoardResponse(
     @Schema(description = "노선과 현재 판본의 방향 정보")
     BoardRouteResponse route,
     @Schema(description = "응답 전체가 기준으로 사용한 관측 시각. 정류장 예보와 차량 위치가 모두 이 관측에서 나온다")
@@ -27,11 +27,11 @@ public record LiveBoardResponse(
     List<VehicleResponse> vehicles
 ) {
 
-    public static LiveBoardResponse from(
-        LiveBoardOverview overview
+    public static WatchBoardResponse from(
+        WatchBoardOverview overview
     ) {
         Board board = overview.board();
-        return new LiveBoardResponse(
+        return new WatchBoardResponse(
             BoardRouteResponse.from(board.route()),
             board.observedAt(),
             board.staleAt(),

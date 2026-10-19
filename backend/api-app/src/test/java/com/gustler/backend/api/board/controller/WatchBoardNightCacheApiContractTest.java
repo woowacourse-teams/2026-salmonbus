@@ -28,8 +28,8 @@ import org.springframework.web.context.WebApplicationContext;
 
 @IntegrationTest
 @Transactional
-@Import(LiveBoardNightCacheApiContractTest.FixedClockConfig.class)
-class LiveBoardNightCacheApiContractTest {
+@Import(WatchBoardNightCacheApiContractTest.FixedClockConfig.class)
+class WatchBoardNightCacheApiContractTest {
 
     private static final String ROUTE_ID = "204000057";
     private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-10-15T19:05:00Z");
@@ -70,7 +70,7 @@ class LiveBoardNightCacheApiContractTest {
         fixture.insertPublication(batch, model, observedAt, observedAt);
 
         // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/live", ROUTE_ID))
+        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID))
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "max-age=" + maxAge + ", public"));
     }

@@ -20,9 +20,9 @@ import tools.jackson.databind.ObjectMapper;
 
 @IntegrationTest
 @ActiveProfiles("api-docs-local")
-class LiveApiDocsContractTest {
+class WatchApiDocsContractTest {
 
-    private static final String LIVE = "/api/v1/routes/{routeId}/live";
+    private static final String WATCH = "/api/v1/routes/{routeId}/watch";
 
     @Autowired
     private WebApplicationContext context;
@@ -38,14 +38,14 @@ class LiveApiDocsContractTest {
         String body = MockMvcBuilders.webAppContextSetup(context).build().perform(get("/api/docs/openapi"))
             .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         generated = json.readTree(body);
-        contract = json.readTree(Files.readString(Path.of(System.getProperty("live.openapi.contract"))));
+        contract = json.readTree(Files.readString(Path.of(System.getProperty("watch.openapi.contract"))));
     }
 
     @Test
-    void 생성한_문서의_live_경로가_프론트_공유명세와_같다() {
+    void 생성한_문서의_watch_경로가_프론트_공유명세와_같다() {
         // given
-        JsonNode source = contract.path("paths").path(LIVE).path("get");
-        JsonNode operation = generated.path("paths").path(LIVE).path("get");
+        JsonNode source = contract.path("paths").path(WATCH).path("get");
+        JsonNode operation = generated.path("paths").path(WATCH).path("get");
 
         // when
         JsonNode sourceExamples = source.at("/responses/200/content/application~1json/examples");
@@ -71,7 +71,7 @@ class LiveApiDocsContractTest {
         JsonNode generatedSchemas = generated.at("/components/schemas");
 
         // when & then
-        for (String name : List.of("LiveBoardResponse", "VehicleResponse", "SeatResponse", "ExactSeat", "UnknownSeat",
+        for (String name : List.of("WatchBoardResponse", "VehicleResponse", "SeatResponse", "ExactSeat", "UnknownSeat",
             "StopStateResponse", "ApproachingVehicleResponse", "ForecastResponse", "BoardRouteResponse")) {
             assertThat(generatedSchemas.path(name)).as(name).isEqualTo(sourceSchemas.path(name));
         }

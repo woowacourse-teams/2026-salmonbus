@@ -38,8 +38,8 @@ import tools.jackson.databind.node.ObjectNode;
 
 @IntegrationTest
 @Transactional
-@Import(LiveBoardApiContractTest.FixedClockConfig.class)
-class LiveBoardApiContractTest {
+@Import(WatchBoardApiContractTest.FixedClockConfig.class)
+class WatchBoardApiContractTest {
 
     private static final String ROUTE_ID = "204000057";
     private static final int IN_TRANSIT = 0;
@@ -84,7 +84,7 @@ class LiveBoardApiContractTest {
         fixture.insertObservation(route, newer, 1, "V1", 2, "STOP-2", 1, ARRIVING, 3, null);
 
         // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/live", ROUTE_ID))
+        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$", aMapWithSize(7)))
             .andExpect(jsonPath("$.observedAt").value(DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(publishedAt)))
@@ -113,15 +113,15 @@ class LiveBoardApiContractTest {
         fixture.insertForecast(route, first, 3, 2, model, 0.3, 4.0, publishedAt.plusSeconds(1));
 
         // when
-        MvcResult live = mockMvc.perform(get("/api/v1/routes/{routeId}/live", ROUTE_ID)).andReturn();
+        MvcResult watch = mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID)).andReturn();
         MvcResult board = mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID)).andReturn();
 
         // then
-        ObjectNode liveBody = (ObjectNode) bodyOf(live);
-        liveBody.remove("vehicles");
-        assertThat(live.getResponse().getStatus()).isEqualTo(200);
-        assertThat(liveBody).isEqualTo(bodyOf(board));
-        assertThat(live.getResponse().getHeader(HttpHeaders.CACHE_CONTROL))
+        ObjectNode watchBody = (ObjectNode) bodyOf(watch);
+        watchBody.remove("vehicles");
+        assertThat(watch.getResponse().getStatus()).isEqualTo(200);
+        assertThat(watchBody).isEqualTo(bodyOf(board));
+        assertThat(watch.getResponse().getHeader(HttpHeaders.CACHE_CONTROL))
             .isEqualTo(board.getResponse().getHeader(HttpHeaders.CACHE_CONTROL));
     }
 
@@ -138,14 +138,14 @@ class LiveBoardApiContractTest {
         fixture.insertPublication(published, model, publishedAt.plusSeconds(1), publishedAt.plusSeconds(2));
 
         // when
-        JsonNode live = bodyOf(mockMvc.perform(get("/api/v1/routes/{routeId}/live", ROUTE_ID)).andReturn());
+        JsonNode watch = bodyOf(mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID)).andReturn());
         JsonNode vehicles = bodyOf(mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID)).andReturn());
 
         // then
-        assertThat(live.path("vehicles")).isEqualTo(vehicles.path("vehicles"));
-        assertThat(live.path("vehicles").size()).isEqualTo(live.path("vehiclesInService").asInt());
-        assertThat(live.path("vehicles").get(0).path("seat").path("remaining").asInt()).isZero();
-        assertThat(live.path("vehicles").get(1).path("seat").path("reason").asText()).isEqualTo("NOT_REPORTED");
+        assertThat(watch.path("vehicles")).isEqualTo(vehicles.path("vehicles"));
+        assertThat(watch.path("vehicles").size()).isEqualTo(watch.path("vehiclesInService").asInt());
+        assertThat(watch.path("vehicles").get(0).path("seat").path("remaining").asInt()).isZero();
+        assertThat(watch.path("vehicles").get(1).path("seat").path("reason").asText()).isEqualTo("NOT_REPORTED");
     }
 
     @Test
@@ -157,7 +157,7 @@ class LiveBoardApiContractTest {
         fixture.insertObservation(route, batch, 1, "V1", 1, "STOP-1", 1, DEPARTED, 5, null);
 
         // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/live", ROUTE_ID))
+        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.route.status").value("PREPARING"))
             .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast.status").value("UNAVAILABLE"))
@@ -179,7 +179,7 @@ class LiveBoardApiContractTest {
         fixture.insertPublication(old, model, now.minusSeconds(19), now.minusSeconds(18));
 
         // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/live", ROUTE_ID))
+        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.route.status").value("PREPARING"))
             .andExpect(jsonPath("$.route.referenceVersionId").value(String.valueOf(currentRoute.routeVersionId())))
@@ -196,7 +196,7 @@ class LiveBoardApiContractTest {
         fixture.insertPublication(empty, model, now.minusSeconds(59), now.minusSeconds(58));
 
         // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/live", ROUTE_ID))
+        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.vehiclesInService").value(0))
             .andExpect(jsonPath("$.vehicles").isEmpty())
@@ -213,7 +213,7 @@ class LiveBoardApiContractTest {
         fixture.insertBatch(route, now.minusSeconds(30), "SUCCESS_ROWS", 1);
 
         // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/live", ROUTE_ID))
+        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID))
             .andExpect(status().isServiceUnavailable())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
             .andExpect(jsonPath("$.code").value("NO_RECENT_OBSERVATION"));
@@ -226,7 +226,7 @@ class LiveBoardApiContractTest {
         fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
 
         // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/live", ROUTE_ID))
+        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID))
             .andExpect(status().isServiceUnavailable())
             .andExpect(jsonPath("$.code").value("MODEL_OUT_OF_SCOPE"));
     }
@@ -234,13 +234,13 @@ class LiveBoardApiContractTest {
     @Test
     void 노선_ID가_잘못되면_400_없는_노선이면_404_POST면_405다() throws Exception {
         // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/live", "abc"))
+        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", "abc"))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_ROUTE_ID"));
-        mockMvc.perform(get("/api/v1/routes/{routeId}/live", "999999999"))
+        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", "999999999"))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.code").value("ROUTE_NOT_FOUND"));
-        mockMvc.perform(post("/api/v1/routes/{routeId}/live", ROUTE_ID))
+        mockMvc.perform(post("/api/v1/routes/{routeId}/watch", ROUTE_ID))
             .andExpect(status().isMethodNotAllowed());
     }
 
@@ -253,7 +253,7 @@ class LiveBoardApiContractTest {
         fixture.insertPublication(empty, model, now.minusSeconds(59), now.minusSeconds(58));
 
         // when & then
-        mockMvc.perform(head("/api/v1/routes/{routeId}/live", ROUTE_ID))
+        mockMvc.perform(head("/api/v1/routes/{routeId}/watch", ROUTE_ID))
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "max-age=20, public"));
     }
@@ -268,7 +268,7 @@ class LiveBoardApiContractTest {
         fixture.insertPublication(batch, model, observedAt.plusSeconds(1), observedAt.plusSeconds(2));
 
         // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/live", ROUTE_ID))
+        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID))
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "max-age=10, public"));
     }
@@ -295,7 +295,7 @@ class LiveBoardApiContractTest {
 
         @Bean
         @Primary
-        Clock fixedDaytimeLiveClock() {
+        Clock fixedDaytimeWatchClock() {
             return Clock.fixed(Instant.parse("2026-08-27T03:00:00Z"), ZoneId.of("Asia/Seoul"));
         }
     }

@@ -19,9 +19,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 @RequiredArgsConstructor
-public class LiveBoardQueryService {
+public class WatchBoardQueryService {
 
-    private static final Logger log = LoggerFactory.getLogger(LiveBoardQueryService.class);
+    private static final Logger log = LoggerFactory.getLogger(WatchBoardQueryService.class);
     private static final Duration MIN_CACHE_MAX_AGE = Duration.ofSeconds(5);
 
     private final BoardQueryService boardQueryService;
@@ -29,7 +29,7 @@ public class LiveBoardQueryService {
     private final Clock clock;
     private final Map<String, Long> lastMismatchedBatchByRoute = new ConcurrentHashMap<>();
 
-    public LiveBoardOverview getLiveBoard(
+    public WatchBoardOverview getWatchBoard(
         RouteId routeId
     ) {
         BoardReading reading = boardQueryService.readBoard(routeId);
@@ -37,7 +37,7 @@ public class LiveBoardQueryService {
         if (vehicles.size() != reading.board().vehiclesInService()) {
             warnMismatchOnce(routeId, reading, vehicles.size());
         }
-        return new LiveBoardOverview(reading.board(), vehicles, cacheMaxAgeOf(reading));
+        return new WatchBoardOverview(reading.board(), vehicles, cacheMaxAgeOf(reading));
     }
 
     private Duration cacheMaxAgeOf(

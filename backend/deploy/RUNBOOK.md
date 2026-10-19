@@ -44,7 +44,7 @@ sudo vi /etc/salmonbus/api.env       # DB_URL · DB_USERNAME · DB_PASSWORD
 sudo vi /etc/salmonbus/worker.env    # 위 셋 + GBIS_SERVICE_KEY · COLLECTION_ENABLED · FORECAST_ENABLED
 ```
 
-`FORECAST_STALENESS`는 넣지 않는다. 예보 신선도 창은 api-app이 `/board`·`/live`에서 약속한 창과 짝이라
+`FORECAST_STALENESS`는 넣지 않는다. 예보 신선도 창은 api-app이 `/board`·`/watch`에서 약속한 창과 짝이라
 worker 쪽만 바꾸면 조용히 어긋난다. 예보를 켠 Worker(`FORECAST_ENABLED=true`)는 이 변수가 있으면 기동에서 멈춘다.
 
 첫 배포에서는 수집과 예보를 비활성화한다.
@@ -244,7 +244,7 @@ curl -s http://127.0.0.1:8082/actuator/info     # api. 현재 실행 중인 배�
 curl -s http://127.0.0.1:8081/actuator/info     # worker
 ```
 
-프론트엔드가 `/api/v1/routes/{routeId}/live`로 전환된 뒤에는 `/live`가 없는 api 버전으로 되돌리지 않는다. 판정 보드 화면 전체가 오류가 된다.
+프론트엔드가 `/api/v1/routes/{routeId}/watch`로 전환된 뒤에는 `/watch`가 없는 api 버전으로 되돌리지 않는다. 판정 보드 화면 전체가 오류가 된다.
 
 **스키마는 롤백되지 않는다.** Flyway 마이그레이션은 새 버전을 적용하는 방향으로만 실행한다.
 새 배포 버전에서 `V13`을 실행한 뒤 롤백하면 코드는 이전 버전이지만 스키마는 `V13`이다.

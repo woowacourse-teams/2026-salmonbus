@@ -6,13 +6,13 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 
-public record LiveBoardOverview(
+public record WatchBoardOverview(
     Board board,
     List<ObservedVehicle> vehicles,
     Duration cacheMaxAge
 ) {
 
-    public LiveBoardOverview {
+    public WatchBoardOverview {
         Objects.requireNonNull(board, "board는 null일 수 없습니다.");
         Objects.requireNonNull(vehicles, "vehicles는 null일 수 없습니다.");
         Objects.requireNonNull(cacheMaxAge, "cacheMaxAge는 null일 수 없습니다.");

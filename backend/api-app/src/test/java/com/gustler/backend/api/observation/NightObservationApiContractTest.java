@@ -78,12 +78,12 @@ class NightObservationApiContractTest {
                 .andExpect(jsonPath("$.code").value("NO_RECENT_OBSERVATION"));
         }
         if (fresh) {
-            api.perform(get("/api/v1/routes/{routeId}/live", ROUTE))
+            api.perform(get("/api/v1/routes/{routeId}/watch", ROUTE))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.staleAt").value(expectedExpiry))
                 .andExpect(jsonPath("$.vehicles.length()").value(1));
         } else {
-            api.perform(get("/api/v1/routes/{routeId}/live", ROUTE))
+            api.perform(get("/api/v1/routes/{routeId}/watch", ROUTE))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.code").value("NO_RECENT_OBSERVATION"));
         }

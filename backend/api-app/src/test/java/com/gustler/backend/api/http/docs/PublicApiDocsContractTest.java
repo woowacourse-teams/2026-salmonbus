@@ -44,7 +44,7 @@ class PublicApiDocsContractTest {
             .andExpect(jsonPath("$.paths['/api/v1/routes'].get").exists())
             .andExpect(jsonPath("$.paths['/api/v1/routes/{routeId}/board'].get").exists())
             .andExpect(jsonPath("$.paths['/api/v1/routes/{routeId}/vehicles'].get").exists())
-            .andExpect(jsonPath("$.paths['/api/v1/routes/{routeId}/live'].get").exists())
+            .andExpect(jsonPath("$.paths['/api/v1/routes/{routeId}/watch'].get").exists())
             .andExpect(jsonPath("$.paths['/api/v2/stations/{stationId}/arrivals'].get").exists())
             .andExpect(jsonPath("$.paths['/api/v2/routes/{routeId}/geometry'].get").exists())
             .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
@@ -64,12 +64,12 @@ class PublicApiDocsContractTest {
         assertThat(schemas.path("RouteListResponse").path("required").toString()).contains("routes");
         assertThat(schemas.path("BoardResponse").path("required").toString())
             .contains("route", "observedAt", "staleAt", "model", "stops");
-        assertThat(schemas.path("LiveBoardResponse").path("required").toString())
+        assertThat(schemas.path("WatchBoardResponse").path("required").toString())
             .contains("route", "observedAt", "staleAt", "model", "stops", "vehicles");
-        assertThat(schemas.path("LiveBoardResponse").path("properties").path("vehicles").path("items")
+        assertThat(schemas.path("WatchBoardResponse").path("properties").path("vehicles").path("items")
             .path("$ref").asText()).isEqualTo("#/components/schemas/VehicleResponse");
-        assertThat(paths.path("/api/v1/routes/{routeId}/live").path("get").path("operationId").asText())
-            .isEqualTo("getRouteLive");
+        assertThat(paths.path("/api/v1/routes/{routeId}/watch").path("get").path("operationId").asText())
+            .isEqualTo("getRouteWatch");
         assertThat(schemas.path("ObservationResponse").path("required").toString())
             .contains("state", "observedAt", "staleAt");
         assertThat(schemas.path("SeatResponse").path("oneOf").size()).isEqualTo(2);
@@ -83,7 +83,7 @@ class PublicApiDocsContractTest {
             .path("responses").path("200").path("content");
         assertThat(successContent.toString()).contains("application/json").doesNotContain("*/*");
         for (String route : List.of("/api/v1/routes", "/api/v1/routes/{routeId}/board",
-            "/api/v1/routes/{routeId}/vehicles", "/api/v1/routes/{routeId}/live", "/api/v2/stations/{stationId}/arrivals",
+            "/api/v1/routes/{routeId}/vehicles", "/api/v1/routes/{routeId}/watch", "/api/v2/stations/{stationId}/arrivals",
             "/api/v2/routes/{routeId}/geometry")) {
             JsonNode responses = paths.path(route).path("get").path("responses");
             for (String statusCode : List.of("200", "503", "405", "500")) {

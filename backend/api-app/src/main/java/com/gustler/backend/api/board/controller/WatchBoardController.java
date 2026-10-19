@@ -1,8 +1,8 @@
 package com.gustler.backend.api.board.controller;
 
-import com.gustler.backend.api.board.application.LiveBoardOverview;
-import com.gustler.backend.api.board.application.LiveBoardQueryService;
-import com.gustler.backend.api.board.dto.LiveBoardResponse;
+import com.gustler.backend.api.board.application.WatchBoardOverview;
+import com.gustler.backend.api.board.application.WatchBoardQueryService;
+import com.gustler.backend.api.board.dto.WatchBoardResponse;
 import com.gustler.backend.api.docs.ApiDocsExamples;
 import com.gustler.backend.api.error.ErrorResponse;
 import com.gustler.backend.api.route.RouteId;
@@ -23,24 +23,24 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/routes/{routeId}/live")
+@RequestMapping("/api/v1/routes/{routeId}/watch")
 @RequiredArgsConstructor
-public class LiveBoardController {
+public class WatchBoardController {
 
-    private final LiveBoardQueryService liveBoardQueryService;
+    private final WatchBoardQueryService watchBoardQueryService;
 
     @GetMapping
-    @Operation(operationId = "getRouteLive", summary = "노선별 판정 보드와 차량 위치",
+    @Operation(operationId = "getRouteWatch", summary = "노선별 판정 보드와 차량 위치",
         description = "발행된 예보가 있으면 해당 관측을, 없으면 최신 정상 관측을 기준으로 보드를 구성하고, 같은 관측의 차량 위치를 "
-            + "함께 반환합니다. 200 응답은 전체가 관측 하나에서 나온 것입니다. 신선도는 관측 후 5분, 관측 시각이 01~03시대면 10분입니다.")
+            + "함께 반환합니다. 화면이 주기적으로 다시 부르는 폴링용 조회입니다. 200 응답은 전체가 관측 하나에서 나온 것입니다. 신선도는 관측 후 5분, 관측 시각이 01~03시대면 10분입니다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "보드 상태별 정상 응답",
             headers = @Header(name = "Cache-Control",
                 description = "public, max-age는 관측 시각대별 정책값(첨두 15초, 평시 20초, 01~03시대 600초)과 "
                     + "staleAt까지 남은 시간(최소 5초) 중 작은 값", schema = @Schema(type = "string")),
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = LiveBoardResponse.class), examples = {
-                @ExampleObject(name = "FORECAST_READY", value = ApiDocsExamples.LIVE_BOARD_READY),
-                @ExampleObject(name = "PREPARING", value = ApiDocsExamples.LIVE_BOARD_PREPARING)
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = WatchBoardResponse.class), examples = {
+                @ExampleObject(name = "FORECAST_READY", value = ApiDocsExamples.WATCH_BOARD_READY),
+                @ExampleObject(name = "PREPARING", value = ApiDocsExamples.WATCH_BOARD_PREPARING)
             })),
         @ApiResponse(responseCode = "400", description = "노선 ID 형식이 올바르지 않음",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
@@ -61,14 +61,14 @@ public class LiveBoardController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
                 examples = @ExampleObject(value = ApiDocsExamples.INTERNAL_ERROR)))
     })
-    public ResponseEntity<LiveBoardResponse> getLiveBoard(
+    public ResponseEntity<WatchBoardResponse> getWatchBoard(
         @Parameter(description = "9자리 GBIS 노선 ID", example = "123456789")
         @PathVariable String routeId
     ) {
-        LiveBoardOverview overview = liveBoardQueryService.getLiveBoard(new RouteId(routeId));
+        WatchBoardOverview overview = watchBoardQueryService.getWatchBoard(new RouteId(routeId));
 
         return ResponseEntity.ok()
             .cacheControl(CacheControl.maxAge(overview.cacheMaxAge()).cachePublic())
-            .body(LiveBoardResponse.from(overview));
+            .body(WatchBoardResponse.from(overview));
     }
 }

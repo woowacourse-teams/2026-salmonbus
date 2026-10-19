@@ -8,7 +8,7 @@
 
 변경 필드: `vehicles[].seat.reason`. `observation.state=UNKNOWN`과는 별개인 차량별 좌석 상태다.
 
-`GET /api/v1/routes/{routeId}/live`의 `vehicles[].seat`도 같은 형식과 사유를 쓴다.
+`GET /api/v1/routes/{routeId}/watch`의 `vehicles[].seat`도 같은 형식과 사유를 쓴다.
 
 ## 응답
 
