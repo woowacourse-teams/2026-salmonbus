@@ -1,3 +1,4 @@
+SET LOCAL lock_timeout = '1s';
 ALTER TABLE route_version
     ADD COLUMN weekday_min_headway_minutes integer,
     ADD COLUMN weekday_max_headway_minutes integer,
