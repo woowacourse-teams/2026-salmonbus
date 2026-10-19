@@ -22,8 +22,8 @@ export function withStationArrivalClock(
   elapsedNow: () => number = () => performance.now(),
 ): ApiResult<StationArrivalsResponse> {
   if (!result.ok) return result;
-  const collecting = result.lifetime.noStore && result.body.refresh.reason === "COLLECTING";
-  if (result.clock !== null && !collecting) return result;
+  const shouldUseGeneratedAt = result.lifetime.noStore && result.body.refresh.reason === "COLLECTING";
+  if (result.clock !== null && !shouldUseGeneratedAt) return result;
 
   const generatedAt = Date.parse(result.body.generatedAt);
   if (!Number.isFinite(generatedAt)) return result;
