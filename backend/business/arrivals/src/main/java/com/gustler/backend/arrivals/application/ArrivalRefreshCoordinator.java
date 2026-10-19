@@ -18,6 +18,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executor;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.function.LongSupplier;
 import org.slf4j.Logger;
@@ -27,6 +32,7 @@ import org.slf4j.LoggerFactory;
 public final class ArrivalRefreshCoordinator implements RefreshStationArrivals {
     private static final Logger log = LoggerFactory.getLogger(ArrivalRefreshCoordinator.class);
     private static final Duration POLL = Duration.ofSeconds(2);
+    private static final Duration COLLECTING_POLL = Duration.ofSeconds(1);
     private final ArrivalStore store;
     private final ArrivalSource source;
     private final ArrivalCallQuota quota;
@@ -40,6 +46,7 @@ public final class ArrivalRefreshCoordinator implements RefreshStationArrivals {
     private long serviceBlockedUntil;
     private final ArrivalRateLimit rateLimit;
     private final ArrivalRetryPolicy retryPolicy;
+    private final Semaphore waitingRequests = new Semaphore(32);
 
     public ArrivalRefreshCoordinator(ArrivalStore store, ArrivalSource source, ArrivalCallQuota quota,
         Executor executor, ArrivalCollectionPolicy policy, Clock clock, LongSupplier ticker) {
@@ -64,7 +71,7 @@ public final class ArrivalRefreshCoordinator implements RefreshStationArrivals {
         synchronized (this) {
             long now = ticker.getAsLong();
             State previous = states.get(stationId);
-            if (previous != null && previous.job != null) return reply(Status.IN_PROGRESS, "COLLECTING", POLL);
+            if (previous != null && previous.job != null) return reply(Status.IN_PROGRESS, "COLLECTING", COLLECTING_POLL);
             if (now < startupUntil) return waitFor("STARTING", startupUntil - now);
             if (clock.instant().isBefore(quotaBlockedUntil)) {
                 return new ArrivalRefresh(Status.DEFERRED, "DAILY_QUOTA_EXHAUSTED", quotaBlockedUntil);
@@ -88,7 +95,50 @@ public final class ArrivalRefreshCoordinator implements RefreshStationArrivals {
             defer(stationId, job, "BUSY", POLL);
             return reply(Status.DEFERRED, "BUSY", POLL);
         }
-        return reply(Status.ACCEPTED, "COLLECTING", POLL);
+        return reply(Status.ACCEPTED, "COLLECTING", COLLECTING_POLL);
+    }
+
+    @Override
+    public ArrivalRefresh requestAndAwait(String value, Duration maximumWait) {
+        if (maximumWait == null || maximumWait.isNegative()
+            || maximumWait.compareTo(Duration.ofMillis(ArrivalRefresh.MAX_WAIT_MILLIS)) > 0) {
+            throw new IllegalArgumentException("ETA 수집 완료 대기 한도 초과");
+        }
+        final long deadline = System.nanoTime() + maximumWait.toNanos();
+        ArrivalRefresh initial = request(value);
+        if (maximumWait.isZero() || (initial.status() != Status.ACCEPTED && initial.status() != Status.IN_PROGRESS)
+            || !waitingRequests.tryAcquire()) return initial;
+        try {
+            StationId stationId = new StationId(value);
+            Job job;
+            synchronized (this) {
+                State state = states.get(stationId);
+                job = state == null ? null : state.job;
+            }
+            if (job != null) {
+                final long remaining = deadline - System.nanoTime();
+                if (remaining > 0) job.completed.get(remaining, TimeUnit.NANOSECONDS);
+            }
+            return afterWait(stationId, initial);
+        } catch (TimeoutException timeout) {
+            return new ArrivalRefresh(Status.IN_PROGRESS, "COLLECTING", initial.suggestedRefreshAt());
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return initial;
+        } catch (ExecutionException failure) {
+            return initial;
+        } finally {
+            waitingRequests.release();
+        }
+    }
+
+    private synchronized ArrivalRefresh afterWait(StationId stationId, ArrivalRefresh initial) {
+        State state = states.get(stationId);
+        if (state == null) return initial;
+        if (state.job != null) return new ArrivalRefresh(Status.IN_PROGRESS, "COLLECTING", initial.suggestedRefreshAt());
+        Duration untilNext = Duration.ofNanos(Math.max(0, state.nextAllowed - ticker.getAsLong()));
+        return "NOT_DUE".equals(state.reason)
+            ? reply(Status.IDLE, null, untilNext) : reply(Status.DEFERRED, state.reason, untilNext);
     }
 
     private void collect(StationId stationId, Job job) {
@@ -161,6 +211,9 @@ public final class ArrivalRefreshCoordinator implements RefreshStationArrivals {
             // 예외의 본문이나 URL에 인증 정보가 있을 수 있어 출력하지 않는다.
             log.warn("event=arrival_collection_failed stationId={} exceptionType={}", stationId.value(),
                 failure.getClass().getSimpleName());
+        } finally {
+            // 수신 저장·상태 정리가 끝난 뒤 알린다. 대기하는 HTTP 요청은 DB 연결을 점유하지 않는다.
+            job.completed.complete(null);
         }
     }
 
@@ -218,6 +271,7 @@ public final class ArrivalRefreshCoordinator implements RefreshStationArrivals {
     private static final class Job {
         final UUID id;
         final long startBy;
+        final CompletableFuture<Void> completed = new CompletableFuture<>();
         Job(UUID id, long startBy) { this.id = id; this.startBy = startBy; }
     }
     private static final class State {

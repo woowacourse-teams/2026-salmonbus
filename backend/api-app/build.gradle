@@ -38,6 +38,7 @@ tasks.named('test') {
     environment 'ROUTE_GEOMETRY_ENABLED', 'false'
     // 상세 성능 계측은 명시적으로 요청할 때만 실행한다.
     systemProperty 'arrival.profile', providers.gradleProperty('arrivalProfile').getOrElse('false')
+    systemProperty 'arrival.firstResultProfile', providers.gradleProperty('arrivalFirstResultProfile').getOrElse('false')
     def apiJar = tasks.named('bootJar').flatMap { it.archiveFile }
     // Worker 프로젝트가 구성된 뒤 실제 Boot JAR 출력 파일을 조회한다.
     def workerJar = providers.provider {

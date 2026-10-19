@@ -33,6 +33,7 @@ public class StationArrivalsController {
             + "routeId와 함께 전달해 같은 정류장의 반복 방문을 구분합니다. 판본·순번 중 하나만 전달하면 400입니다. "
             + "미수집·만료·호출 제한도 200 본문의 데이터 상태와 refresh 상태로 구별합니다. 같은 정류장은 수집 결과를 공유하며 "
             + "40초 후 갱신 대상, 60초 후 만료입니다. 자동 구독은 없고 refresh.suggestedRefreshAt에 맞춰 재조회합니다. "
+            + "사용 가능한 수신이 없으면 기본 최대 500ms 동안 수집 완료를 기다리고, 계속 수집 중이면 1초 뒤 재조회를 안내합니다. "
             + "HTTP 캐시 최대 5초는 폴링 주기가 아닙니다. 카운트다운은 Date/Age를 반영한 서버 기준시각과 expectedArrivalAt을 "
             + "사용하고, 예상 시각 경과나 staleAt 도달을 실제 도착으로 확정하지 않습니다.")
     @ApiResponses({

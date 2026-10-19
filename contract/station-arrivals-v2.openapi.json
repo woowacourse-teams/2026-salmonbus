@@ -9,7 +9,7 @@
     "/api/v2/stations/{stationId}/arrivals": {
       "get": {
         "operationId": "getStationArrivals",
-        "description": "referenceVersionId와 stopSequence는 함께 사용하고 routeId가 필요하다.",
+        "description": "referenceVersionId와 stopSequence는 함께 사용하고 routeId가 필요하다. 사용 가능한 수신이 없으면 기본 최대 500ms 동안 수집 완료를 기다리고, 계속 수집 중이면 1초 뒤 재조회를 안내한다.",
         "parameters": [
           {
             "name": "stationId",
@@ -132,7 +132,7 @@
                       "refresh": {
                         "status": "RUNNING",
                         "reason": "COLLECTING",
-                        "suggestedRefreshAt": "2026-10-14T12:00:12+09:00"
+                        "suggestedRefreshAt": "2026-10-14T12:00:11+09:00"
                       },
                       "routes": []
                     }
@@ -193,7 +193,7 @@
                       "refresh": {
                         "status": "RUNNING",
                         "reason": "COLLECTING",
-                        "suggestedRefreshAt": "2026-10-14T12:01:03+09:00"
+                        "suggestedRefreshAt": "2026-10-14T12:01:02+09:00"
                       },
                       "routes": []
                     }

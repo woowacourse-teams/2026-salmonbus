@@ -3,6 +3,7 @@ package com.gustler.backend.worker.arrival;
 import com.gustler.backend.arrival.contract.ArrivalRefresh;
 import com.gustler.backend.arrivals.api.RefreshStationArrivals;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.security.MessageDigest;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
@@ -26,12 +27,17 @@ public class ArrivalRefreshController {
     @PostMapping("/internal/arrivals/refresh")
     public ResponseEntity<ArrivalRefresh> refresh(
         @RequestHeader(name = "X-Arrival-Token", defaultValue = "") String supplied,
-        @RequestBody ArrivalRefresh.Request request) {
+        @RequestBody ArrivalRefresh.Request request,
+        @RequestHeader(name = ArrivalRefresh.WAIT_HEADER, defaultValue = "0") final int maximumWaitMillis) {
         if (!MessageDigest.isEqual(token, supplied.getBytes(StandardCharsets.UTF_8))) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
+        if (maximumWaitMillis < 0 || maximumWaitMillis > ArrivalRefresh.MAX_WAIT_MILLIS) {
+            return ResponseEntity.badRequest().build();
+        }
         try { return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore())
-            .body(coordinator.request(request.stationId())); }
+            .body(maximumWaitMillis == 0 ? coordinator.request(request.stationId())
+                : coordinator.requestAndAwait(request.stationId(), Duration.ofMillis(maximumWaitMillis))); }
         catch (IllegalArgumentException invalid) { return ResponseEntity.badRequest().build(); }
     }
 }

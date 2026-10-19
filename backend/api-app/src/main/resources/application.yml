@@ -62,6 +62,8 @@ arrivals:
   enabled: ${ARRIVALS_ENABLED:false}
   worker-base-url: ${ARRIVAL_WORKER_BASE_URL:http://127.0.0.1:8081}
   internal-token: ${ARRIVAL_INTERNAL_TOKEN:}
+  first-result-wait: 500ms # 사용 가능한 수신이 없을 때만 수집 완료를 기다린다. 0ms로 비활성화 가능.
+  first-result-max-waiters: 32
 
 management:
   endpoints:

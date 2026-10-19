@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -22,9 +23,17 @@ public class ArrivalQueryService {
     private final ArrivalRefreshGateway gateway;
     private final ArrivalFreshnessPolicy freshness;
     private final Clock clock;
+    private final ArrivalFirstResultPolicy firstResult;
 
     public ArrivalQueryService(ArrivalReadRepository repository, ArrivalRefreshGateway gateway,
                                ArrivalFreshnessPolicy freshness, Clock clock) {
+        this(repository, gateway, freshness, clock, new ArrivalFirstResultPolicy(Duration.ZERO, 32));
+    }
+
+    @Autowired
+    public ArrivalQueryService(ArrivalReadRepository repository, ArrivalRefreshGateway gateway,
+        ArrivalFreshnessPolicy freshness, Clock clock, ArrivalFirstResultPolicy firstResult) {
+        this.firstResult = firstResult;
         this.repository = repository;
         this.gateway = gateway;
         this.freshness = freshness;
@@ -36,9 +45,28 @@ public class ArrivalQueryService {
         List<ArrivalVisit> visits = repository.visits(query.stationId());
         validateTarget(query, visits);
         ArrivalSnapshot snapshot = repository.latest(query.stationId()).orElse(null);
-        ArrivalRefresh refresh = freshness.refreshDue(snapshot, clock.instant())
-            ? gateway.request(query.stationId())
-            : new ArrivalRefresh(ArrivalRefresh.Status.IDLE, null, snapshot.refreshAfterAt());
+        final boolean waiting = !freshness.usable(snapshot, clock.instant()) && firstResult.tryAcquire();
+        ArrivalRefresh refresh;
+        try {
+            refresh = freshness.refreshDue(snapshot, clock.instant())
+                ? (waiting ? gateway.request(query.stationId(), firstResult.maximumWait()) : gateway.request(query.stationId()))
+                : new ArrivalRefresh(ArrivalRefresh.Status.IDLE, null, snapshot.refreshAfterAt());
+            if (waiting && (refresh.status() == ArrivalRefresh.Status.ACCEPTED
+                || refresh.status() == ArrivalRefresh.Status.IN_PROGRESS
+                || refresh.status() == ArrivalRefresh.Status.IDLE || "NOT_DUE".equals(refresh.reason()))) {
+                snapshot = repository.latest(query.stationId()).orElse(snapshot);
+                if (freshness.usable(snapshot, clock.instant())) {
+                    // 대기 중 바뀐 판본을 다시 확인해 새 수신을 이전 판본에 연결하지 않는다.
+                    visits = repository.visits(query.stationId());
+                    validateTarget(query, visits);
+                    if (!freshness.refreshDue(snapshot, clock.instant())) {
+                        refresh = new ArrivalRefresh(ArrivalRefresh.Status.IDLE, null, snapshot.refreshAfterAt());
+                    }
+                }
+            }
+        } finally {
+            if (waiting) firstResult.release();
+        }
         Instant now = clock.instant();
         if (!freshness.usable(snapshot, now)) {
             return new StationArrivalsOverview(query.stationId(), now, ArrivalAvailability.UNAVAILABLE,

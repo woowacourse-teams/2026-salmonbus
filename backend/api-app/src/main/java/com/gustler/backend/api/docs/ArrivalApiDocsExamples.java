@@ -74,7 +74,7 @@ public final class ArrivalApiDocsExamples {
           "refresh": {
             "status": "RUNNING",
             "reason": "COLLECTING",
-            "suggestedRefreshAt": "2026-10-14T12:00:12+09:00"
+            "suggestedRefreshAt": "2026-10-14T12:00:11+09:00"
           },
           "routes": []
         }
@@ -135,7 +135,7 @@ public final class ArrivalApiDocsExamples {
           "refresh": {
             "status": "RUNNING",
             "reason": "COLLECTING",
-            "suggestedRefreshAt": "2026-10-14T12:01:03+09:00"
+            "suggestedRefreshAt": "2026-10-14T12:01:02+09:00"
           },
           "routes": []
         }
