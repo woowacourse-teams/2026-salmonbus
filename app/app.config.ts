@@ -1,7 +1,7 @@
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 
 export default ({ config }: ConfigContext): ExpoConfig => {
-  const mapKeyId = process.env.NAVER_MAP_KEY_ID ?? process.env.EXPO_PUBLIC_NAVER_MAP_KEY_ID;
+  const mapKeyId = process.env.NAVER_MAP_KEY_ID || process.env.EXPO_PUBLIC_NAVER_MAP_KEY_ID;
   return {
     ...config,
     name: config.name ?? '연어버스',
