@@ -179,6 +179,7 @@ test("화면이 숨은 동안에는 연결이 돌아와도 요청하지 않고 �
   await onlineListener.evaluate((listener) => listener.delivered);
 
   // online에서 요청했다면 화면 복귀 요청보다 먼저 mock에 도착해 1이 아니라 2가 늘어난다.
+  // 복귀 요청이 online 요청을 mock에 닿기 전에 취소하면 1만 늘어 버그가 있어도 통과한다. online 전달을 기다린 뒤 복귀해서 이 틈을 좁힌다.
   const responded = (path: string) =>
     page.waitForResponse((response) => new URL(response.url()).pathname === path && response.status() === 200);
   const reloaded = Promise.all([responded(apiPaths.board), responded(apiPaths.vehicles)]);
