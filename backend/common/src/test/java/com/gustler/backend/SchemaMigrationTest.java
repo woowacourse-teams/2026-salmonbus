@@ -14,12 +14,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.jdbc.core.simple.JdbcClient;
 
 @IntegrationTest
 class SchemaMigrationTest {
 
     @Autowired
     private Flyway flyway;
+
+    @Autowired
+    private JdbcClient jdbcClient;
 
     @Test
     void 앱_부팅_시_Flyway가_마이그레이션을_V1부터_순차적으로_모두_실행한다() throws IOException {
@@ -53,6 +57,20 @@ class SchemaMigrationTest {
         // then
         List<Date> actual = installedOn();
         assertThat(actual).isEqualTo(firstRun);
+    }
+
+    @Test
+    void 최신_성공_관측_인덱스는_유지하고_미사용_배치_시도_인덱스는_제거한다() {
+        // when
+        boolean actual = jdbcClient.sql("""
+                SELECT to_regclass('ix_batch_forecast_candidates') IS NOT NULL
+                   AND to_regclass('ix_batch_latest_attempt') IS NULL
+                """)
+            .query(Boolean.class)
+            .single();
+
+        // then
+        assertThat(actual).isTrue();
     }
 
     private List<Date> installedOn() {
