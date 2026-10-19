@@ -153,11 +153,11 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
             let payload = object["payload"] else { return }
       let payloadBytes = try JSONSerialization.data(withJSONObject: payload)
       if envelope.type == "mount" {
-        let nextScene = try JSONDecoder().decode(MapScene.self, from: payloadBytes)
         if sessionId == envelope.sessionId && envelope.revision <= lastRevision { return }
         reset()
         sessionId = envelope.sessionId
         lastRevision = envelope.revision
+        let nextScene = try JSONDecoder().decode(MapScene.self, from: payloadBytes)
         mount(nextScene)
         return
       }
