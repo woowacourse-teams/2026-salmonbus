@@ -38,7 +38,7 @@ import * as styles from "./VerdictBoardPage.css";
 type BoardState =
   | { status: "loading" }
   | { status: "error"; failure: ApiFailure }
-  | { status: "ready"; board: Board; liveVehicles: LiveVehicles | null; direction: DirectionInfo };
+  | { status: "ready"; board: Board; pairedLiveVehicles: LiveVehicles | null; direction: DirectionInfo };
 
 interface OperatingBoardProps {
   board: Board;
@@ -97,7 +97,7 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
   const runningDirection =
     status === "outOfService" && state.status === "ready"
       ? (state.board.route.directions.find(
-          (candidate) => serviceStateFor(state.board, candidate, state.liveVehicles) === "running",
+          (candidate) => serviceStateFor(state.board, candidate, state.pairedLiveVehicles) === "running",
         ) ?? null)
       : null;
   return (
@@ -329,7 +329,7 @@ function boardStateOf(
     return {
       status: "ready",
       board,
-      liveVehicles: snapshot.liveVehicles?.body ?? null,
+      pairedLiveVehicles: snapshot.liveVehicles?.body ?? null,
       direction: directionInfoFor(board, preferredDirection),
     };
   }
@@ -346,7 +346,7 @@ function boardScreenOf(state: BoardState): BoardScreen {
     case "error":
       return { kind: "error", failure: state.failure };
     case "ready":
-      return serviceStateFor(state.board, state.direction, state.liveVehicles) === "outOfService"
+      return serviceStateFor(state.board, state.direction, state.pairedLiveVehicles) === "outOfService"
         ? { kind: "outOfService", board: state.board }
         : { kind: "forecast", board: state.board, direction: state.direction.id };
   }

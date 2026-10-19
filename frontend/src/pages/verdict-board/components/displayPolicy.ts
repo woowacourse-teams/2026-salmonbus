@@ -51,16 +51,16 @@ export interface DirectionView {
 const KST_LOCAL_TIME = /T(\d{2}):(\d{2})[^Z]*\+09:00$/;
 const CLOCK_TIME = /^(\d{1,2}):(\d{2})$/;
 
-// liveVehicles는 board와 같은 관측 판이어야 한다. 짝이 없으면 null을 넘긴다.
 export function serviceStateFor(
   board: Board,
   directionInfo: DirectionInfo,
-  liveVehicles: LiveVehicles | null,
+  pairedLiveVehicles: LiveVehicles | null,
 ): ServiceState {
   // 시간표의 막차 시각은 기점 출발 시각이라 그 뒤에도 막차는 종점까지 달린다.
-  // 시간표 밖에서는 같은 관측 판에 이 방향 차량이 있을 때만 보드를 보여준다.
-  if (servicePhaseOf(directionInfo, board.observedAt) === "outsideTimetable" && liveVehicles !== null) {
-    return liveVehicles.vehicles.some((vehicle) => vehicle.direction === directionInfo.id) ? "running" : "outOfService";
+  if (servicePhaseOf(directionInfo, board.observedAt) === "outsideTimetable" && pairedLiveVehicles !== null) {
+    return pairedLiveVehicles.vehicles.some((vehicle) => vehicle.direction === directionInfo.id)
+      ? "running"
+      : "outOfService";
   }
   // 실제 운영 시간이라고 하더라도 운행 중인 차량이 하나도 없으면 예측 화면을 보여주지 않는다.
   // 관측한 값일 뿐 계산된 판정이 아니라서, 실제 운영 중 시간대에서만 이 값을 보여준다.
