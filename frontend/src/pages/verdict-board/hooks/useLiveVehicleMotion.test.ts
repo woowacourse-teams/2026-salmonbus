@@ -1,15 +1,15 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import { boardWith, liveVehiclesWith, vehicleAt } from "@/testing/fixtures";
+import { boardWith, liveVehiclesWith, stopAt, vehicleAt } from "@/testing/fixtures";
 import type { Phase } from "@/shared/api/routeForecast.types";
 import { liveVehicleViewsFor, type LiveVehicleView } from "../components/liveVehiclePolicy";
 import { createLiveVehicleMotionStore, type LiveVehicleMotionStore } from "./useLiveVehicleMotion";
 
 const DURATION = 20_000;
 
-function viewFor(phase: Phase, sequence = 1): LiveVehicleView {
+function viewFor(phase: Phase, sequence = 1, board = boardWith()): LiveVehicleView {
   return liveVehicleViewsFor(
-    boardWith(),
-    liveVehiclesWith([vehicleAt(sequence, { vehicleId: "moving-bus", phase })]),
+    board,
+    liveVehiclesWith([vehicleAt(sequence, { vehicleId: "moving-bus", phase, direction: "UP" })]),
     "UP",
   )[0]!;
 }
@@ -19,6 +19,79 @@ function positionOf(store: LiveVehicleMotionStore): number {
 }
 
 describe("shared live vehicle motion", () => {
+  const sparseBoard = boardWith({
+    stops: [10, 30, 60, 100, 150].map((sequence) => stopAt(sequence, { direction: "UP" })),
+  });
+
+  it("B ARRIVING에서 D ARRIVING으로 두 구간 앞서면 최신 구간 시작으로 보정한다", () => {
+    const store = createLiveVehicleMotionStore();
+    store.update([viewFor("ARRIVING", 30, sparseBoard)], DURATION, 0);
+    store.advance(5_000);
+
+    store.update([viewFor("ARRIVING", 100, sparseBoard)], DURATION, 5_000);
+    expect(positionOf(store)).toBeCloseTo(92);
+    store.advance(15_000);
+    expect(positionOf(store)).toBeCloseTo(94);
+    store.advance(25_000);
+    expect(positionOf(store)).toBeCloseTo(96);
+  });
+
+  it("B ARRIVING에서 C ARRIVING으로 다음 구간이면 현재 위치에서 이어간다", () => {
+    const store = createLiveVehicleMotionStore();
+    store.update([viewFor("ARRIVING", 30, sparseBoard)], DURATION, 0);
+    store.advance(5_000);
+    const previous = positionOf(store);
+
+    store.update([viewFor("ARRIVING", 60, sparseBoard)], DURATION, 5_000);
+    expect(positionOf(store)).toBe(previous);
+    store.advance(15_000);
+    expect(positionOf(store)).toBeCloseTo((previous + 57) / 2);
+  });
+
+  it("A IN_TRANSIT과 B ARRIVING은 같은 구간으로 보고 이동을 이어간다", () => {
+    const store = createLiveVehicleMotionStore();
+    store.update([viewFor("IN_TRANSIT", 10, sparseBoard)], DURATION, 0);
+    store.advance(5_000);
+    const previous = positionOf(store);
+
+    store.update([viewFor("ARRIVING", 30, sparseBoard)], DURATION, 5_000);
+    expect(positionOf(store)).toBe(previous);
+    store.advance(15_000);
+    expect(positionOf(store)).toBeCloseTo((previous + 28) / 2);
+  });
+
+  it("정류장 기준으로 두 칸 앞서도 phase를 반영해 다음 구간이면 이동을 이어간다", () => {
+    const store = createLiveVehicleMotionStore();
+    store.update([viewFor("IN_TRANSIT", 10, sparseBoard)], DURATION, 0);
+    store.advance(5_000);
+    const previous = positionOf(store);
+
+    store.update([viewFor("ARRIVING", 60, sparseBoard)], DURATION, 5_000);
+    expect(positionOf(store)).toBe(previous);
+  });
+
+  it("두 구간보다 더 앞선 응답도 보정하고 뒤쪽 응답에서는 후진하지 않는다", () => {
+    const store = createLiveVehicleMotionStore();
+    store.update([viewFor("DEPARTED", 10, sparseBoard)], DURATION, 0);
+    store.update([viewFor("ARRIVING", 150, sparseBoard)], DURATION, 5_000);
+    expect(positionOf(store)).toBeCloseTo(140);
+
+    store.update([viewFor("ARRIVING", 30, sparseBoard)], DURATION, 6_000);
+    const previous = positionOf(store);
+    store.update([viewFor("ARRIVING", 100, sparseBoard)], DURATION, 7_000);
+    expect(positionOf(store)).toBe(previous);
+    expect(store.advance(30_000)).toBe(false);
+  });
+
+  it("reduced motion에서는 두 구간 앞선 응답의 최종 위치를 바로 표시한다", () => {
+    const store = createLiveVehicleMotionStore();
+    store.setReducedMotion(true, 0);
+    store.update([viewFor("ARRIVING", 30, sparseBoard)], DURATION, 0);
+    store.update([viewFor("ARRIVING", 100, sparseBoard)], DURATION, 5_000);
+    expect(positionOf(store)).toBeCloseTo(96);
+    expect(store.advance(6_000)).toBe(false);
+  });
+
   it("같은 clock의 정규화 좌표를 지도와 목록 구독자에게 선형으로 전달한다", () => {
     const store = createLiveVehicleMotionStore();
     const mapPositions: number[] = [];
@@ -170,7 +243,7 @@ describe("shared live vehicle motion", () => {
     const store = createLiveVehicleMotionStore();
     const view = {
       ...viewFor("IN_TRANSIT"),
-      motionSegment: { fromStopSequence: 1, toStopSequence: 3, startProgress: 0.2, endProgress: 0.8 },
+      motionSegment: { segmentIndex: 0, fromStopSequence: 1, toStopSequence: 3, startProgress: 0.2, endProgress: 0.8 },
     };
     store.update([view], DURATION, 0);
     expect(positionOf(store)).toBeCloseTo(1.4);

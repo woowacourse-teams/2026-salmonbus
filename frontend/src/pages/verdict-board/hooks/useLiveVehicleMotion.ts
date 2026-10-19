@@ -18,6 +18,7 @@ interface MotionTarget {
 }
 
 interface VehicleMotion extends MotionTarget {
+  segmentIndex: number;
   signature: string;
   startedAt: number;
 }
@@ -91,12 +92,23 @@ export function createLiveVehicleMotionStore(): LiveVehicleMotionController {
           return;
         }
 
-        const start = sample?.position ?? target.start;
+        const { segmentIndex } = view.motionSegment;
+        const skipsSegments = previous !== undefined && segmentIndex - previous.segmentIndex >= 2;
+        const currentPosition = sample?.position ?? target.start;
+        // 관측이 두 구간 이상 앞서면 밀린 거리를 재생하지 않고 최신 구간부터 이어간다.
+        const start = skipsSegments ? Math.max(currentPosition, target.start) : currentPosition;
         // 뒤쪽 목표는 현재 위치에서 멈추고, 앞선 목표가 올 때 같은 위치에서 이어간다.
         const end = Math.max(start, target.end);
         nextMotions.set(
           view.key,
-          movingMotionFor(signature, reducedMotion ? end : start, end, reducedMotion ? 0 : target.durationMs, now),
+          movingMotionFor(
+            signature,
+            reducedMotion ? end : start,
+            end,
+            reducedMotion ? 0 : target.durationMs,
+            now,
+            segmentIndex,
+          ),
         );
       });
       motions = nextMotions;
@@ -108,7 +120,7 @@ export function createLiveVehicleMotionStore(): LiveVehicleMotionController {
       if (next) {
         motions.forEach((motion, key) => {
           const target = motion.end;
-          motions.set(key, movingMotionFor(motion.signature, target, target, 0, now));
+          motions.set(key, movingMotionFor(motion.signature, target, target, 0, now, motion.segmentIndex));
         });
       }
       advance(now);
@@ -178,8 +190,9 @@ function movingMotionFor(
   end: number,
   durationMs: number,
   startedAt: number,
+  segmentIndex: number,
 ): VehicleMotion {
-  return { signature, start, end, durationMs, startedAt };
+  return { signature, start, end, durationMs, startedAt, segmentIndex };
 }
 
 function motionSampleFor(motion: VehicleMotion, now: number): MotionSample {
