@@ -237,7 +237,7 @@ class ArrivalRuntimeFlowTest {
 
     @Test
     void 키별_한도와_전체_한도는_Worker_재기동_후에도_유지된다() throws Exception {
-        Map<String, String> budget = Map.of("ARRIVALS_DAILY_LIMIT", "2", "ARRIVALS_KEY_DAILY_LIMIT", "1",
+        Map<String, String> budget = Map.of("ARRIVALS_KEY_DAILY_LIMIT", "1",
             "GBIS_SERVICE_KEY_B", "fake-arrival-key-b");
         runtime.startWorker(false, budget);
         runtime.awaitValue(STATION, "/status", "READY", QUICK_TIMEOUT);

@@ -55,7 +55,7 @@ class ArrivalRuntimeConfigurationTest {
     }
 
     @Test
-    void 키를_늘려도_도착정보는_모든_별칭에_키별_한도를_두고_전체_예산은_설정값을_그대로_쓴다() {
+    void 키를_늘리면_도착정보_전체_예산과_호출_속도도_키별_한도의_합으로_늘어난다() {
         context.withPropertyValues("arrivals.enabled=true", "arrivals.internal-token=local-test-token",
                 "gbis.keys.e=fake-key-e", "gbis.keys.f10=fake-key-f10")
             .run(application -> {
@@ -64,7 +64,9 @@ class ArrivalRuntimeConfigurationTest {
                 var properties = application.getBean(ArrivalProperties.class);
                 assertThat(policy.keyLimits().keySet()).contains("a", "e", "f10");
                 assertThat(policy.keyLimits().values()).containsOnly(properties.keyDailyLimit());
-                assertThat(policy.dailyLimit()).isEqualTo(properties.dailyLimit());
+                assertThat(policy.dailyLimit()).isEqualTo(properties.keyDailyLimit() * 3);
+                var collection = application.getBean(com.gustler.backend.arrivals.api.ArrivalCollectionPolicy.class);
+                assertThat(collection.callsPerSecond()).isEqualTo(policy.dailyLimit() / 86_400.0);
                 var options = application.getBean("arrivalGbisOptions", com.gustler.backend.gbis.api.GbisClientOptions.class);
                 assertThat(options.keys().stream().map(com.gustler.backend.gbis.api.GbisKey::alias).toList())
                     .containsAll(policy.keyLimits().keySet());
@@ -77,8 +79,9 @@ class ArrivalRuntimeConfigurationTest {
                 "gbis.keys.e=fake-key-e", "arrivals.limits.e=1000")
             .run(application -> {
                 var policy = application.getBean(com.gustler.backend.quota.api.ArrivalQuotaPolicy.class);
-                assertThat(policy.keyLimits()).containsEntry("e", 1_000)
-                    .containsEntry("a", application.getBean(ArrivalProperties.class).keyDailyLimit());
+                final int keyDailyLimit = application.getBean(ArrivalProperties.class).keyDailyLimit();
+                assertThat(policy.keyLimits()).containsEntry("e", 1_000).containsEntry("a", keyDailyLimit);
+                assertThat(policy.dailyLimit()).isEqualTo(keyDailyLimit + 1_000);
             });
     }
 

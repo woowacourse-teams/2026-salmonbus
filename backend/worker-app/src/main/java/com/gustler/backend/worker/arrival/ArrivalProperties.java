@@ -6,13 +6,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.ConstructorBinding;
 
 @ConfigurationProperties("arrivals")
-public record ArrivalProperties(String internalToken, int dailyLimit, int keyDailyLimit, int queueCapacity,
+public record ArrivalProperties(String internalToken, int keyDailyLimit, int queueCapacity,
     Duration refreshInterval, Duration validity, Duration retryBase, Duration retryMaximum,
     Duration startupDelay, Duration queueWait, Duration retention, Map<String, Integer> limits) {
     @ConstructorBinding
     public ArrivalProperties {
         if (internalToken == null || internalToken.isBlank() || queueCapacity < 1 || queueCapacity > 100
-            || dailyLimit < 1 || keyDailyLimit < 1
+            || keyDailyLimit < 1
             || retention == null || retention.compareTo(Duration.ofMinutes(1)) < 0) {
             throw new IllegalArgumentException("도착 수집 설정과 내부 인증 토큰을 확인해야 한다");
         }
@@ -31,10 +31,10 @@ public record ArrivalProperties(String internalToken, int dailyLimit, int keyDai
         return Map.copyOf(limits);
     }
 
-    public ArrivalProperties(String internalToken, int dailyLimit, int keyDailyLimit, int queueCapacity,
+    public ArrivalProperties(String internalToken, int keyDailyLimit, int queueCapacity,
         Duration refreshInterval, Duration validity, Duration retryBase, Duration retryMaximum,
         Duration startupDelay, Duration queueWait, Duration retention) {
-        this(internalToken, dailyLimit, keyDailyLimit, queueCapacity, refreshInterval, validity, retryBase,
+        this(internalToken, keyDailyLimit, queueCapacity, refreshInterval, validity, retryBase,
             retryMaximum, startupDelay, queueWait, retention, Map.of());
     }
 
@@ -43,5 +43,5 @@ public record ArrivalProperties(String internalToken, int dailyLimit, int keyDai
     }
 
     @Override
-    public String toString() { return "ArrivalProperties[internalToken=***, dailyLimit=" + dailyLimit + "]"; }
+    public String toString() { return "ArrivalProperties[internalToken=***, keyDailyLimit=" + keyDailyLimit + "]"; }
 }

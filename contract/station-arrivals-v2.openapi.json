@@ -700,8 +700,8 @@
     "queueWaitSeconds": 2,
     "startupGraceSeconds": 40,
     "pacing": "전체 예산/86400 회를 초당 보충하는 토큰 버킷. 초기 버스트는 대기열 크기.",
-    "dailyLimit": 40000,
-    "keyDailyMaximum": 10000,
+    "dailyLimit": "키별 한도의 합",
+    "keyDailyLimit": "기본 10000(arrivals.key-daily-limit), 별칭별로 ARRIVALS_LIMITS_<별칭>",
     "persistence": "arrival_snapshot에 정상 결과만 INSERT. 작업 UUID로 저장 재시도 중복 방지. 별도 시도 기록 없음.",
     "retention": "만료 후 10분이 지난 수신 결과를 60초마다 최대 500건 삭제. DELETE/vacuum 비용 관찰 필요.",
     "workerHandoff": "비중첩 재기동과 단일 활성 수집 Worker가 전제. 다중 Worker 공유 소유권은 후속 범위."

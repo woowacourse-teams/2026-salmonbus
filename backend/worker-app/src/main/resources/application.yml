@@ -133,7 +133,6 @@ route-geometry:
 arrivals:
   enabled: ${ARRIVALS_ENABLED:false}
   internal-token: ${ARRIVAL_INTERNAL_TOKEN:}
-  daily-limit: 40000
   key-daily-limit: 10000
   queue-capacity: 8
   refresh-interval: 40s
