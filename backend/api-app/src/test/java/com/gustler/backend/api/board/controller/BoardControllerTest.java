@@ -18,6 +18,8 @@ import com.gustler.backend.api.board.domain.BoardDirection;
 import com.gustler.backend.api.board.domain.BoardRoute;
 import com.gustler.backend.api.board.domain.DirectionInfo;
 import com.gustler.backend.api.board.domain.ForecastModel;
+import com.gustler.backend.api.board.domain.HeadwayRange;
+import com.gustler.backend.api.board.domain.RouteHeadways;
 import com.gustler.backend.api.board.domain.StopState;
 import com.gustler.backend.api.board.domain.VehicleForecast;
 import com.gustler.backend.api.http.ApiExceptionHandler;
@@ -68,6 +70,48 @@ class BoardControllerTest {
     }
 
     @Test
+    void 노선_정보에_요일별_최소_최대_배차간격을_분_단위로_내보낸다() throws Exception {
+        // given
+        given(boardQueryService.getBoard(any())).willReturn(overview(
+            new VehicleForecast.Unavailable(),
+            new RouteHeadways(new HeadwayRange(10, 20), new HeadwayRange(12, 12), null, new HeadwayRange(16, 35))));
+
+        // when & then
+        mockMvc.perform(get("/api/v1/routes/204000057/board"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.route", aMapWithSize(9)))
+            .andExpect(jsonPath("$.route.headways", aMapWithSize(4)))
+            .andExpect(jsonPath("$.route.headways.weekday", aMapWithSize(2)))
+            .andExpect(jsonPath("$.route.headways.weekday.minMinutes").value(10))
+            .andExpect(jsonPath("$.route.headways.weekday.maxMinutes").value(20))
+            .andExpect(jsonPath("$.route.headways.saturday.minMinutes").value(12))
+            .andExpect(jsonPath("$.route.headways.saturday.maxMinutes").value(12))
+            .andExpect(jsonPath("$.route.headways.sunday").isEmpty())
+            .andExpect(jsonPath("$.route.headways.holiday.minMinutes").value(16))
+            .andExpect(jsonPath("$.route.headways.holiday.maxMinutes").value(35));
+    }
+
+    @Test
+    void 배차간격_정보가_없어도_네_요일_키를_null로_내보내고_기존_노선_필드는_그대로다() throws Exception {
+        // given
+        given(boardQueryService.getBoard(any())).willReturn(overview(new VehicleForecast.Unavailable()));
+
+        // when & then
+        mockMvc.perform(get("/api/v1/routes/204000057/board"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.route", aMapWithSize(9)))
+            .andExpect(jsonPath("$.route.headways", aMapWithSize(4)))
+            .andExpect(jsonPath("$.route.headways.weekday").isEmpty())
+            .andExpect(jsonPath("$.route.headways.saturday").isEmpty())
+            .andExpect(jsonPath("$.route.headways.sunday").isEmpty())
+            .andExpect(jsonPath("$.route.headways.holiday").isEmpty())
+            .andExpect(jsonPath("$.route.referenceVersionId").value("1"))
+            .andExpect(jsonPath("$.route.directions[0]", aMapWithSize(6)))
+            .andExpect(jsonPath("$.route.directions[0].firstDepartureTime").value("04:50"))
+            .andExpect(jsonPath("$.route.directions[0].lastDepartureTime").value("23:30"));
+    }
+
+    @Test
     void 접근_차량_응답에_forecast_필드를_포함한다() throws Exception {
         given(boardQueryService.getBoard(any())).willReturn(overview(new VehicleForecast.Available(0.8, null)));
 
@@ -104,6 +148,13 @@ class BoardControllerTest {
     }
 
     private BoardOverview overview(VehicleForecast forecast) {
+        return overview(forecast, RouteHeadways.none());
+    }
+
+    private BoardOverview overview(
+        VehicleForecast forecast,
+        RouteHeadways headways
+    ) {
         BoardRoute route = new BoardRoute(
             "204000057",
             "3330",
@@ -119,7 +170,8 @@ class BoardControllerTest {
                 "04:50",
                 "23:30"
             )),
-            "1"
+            "1",
+            headways
         );
         StopState stop = new StopState(
             1,

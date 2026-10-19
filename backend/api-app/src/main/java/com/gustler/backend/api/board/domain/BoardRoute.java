@@ -12,7 +12,8 @@ public record BoardRoute(
     RouteStatus status,
     Integer turnSequence,
     List<DirectionInfo> directions,
-    String referenceVersionId
+    String referenceVersionId,
+    RouteHeadways headways
 ) {
 
     public BoardRoute {
@@ -23,6 +24,7 @@ public record BoardRoute(
         Objects.requireNonNull(status, "status는 null일 수 없습니다.");
         Objects.requireNonNull(directions, "directions는 null일 수 없습니다.");
         Objects.requireNonNull(referenceVersionId, "referenceVersionId는 null일 수 없습니다.");
+        Objects.requireNonNull(headways, "headways는 null일 수 없습니다.");
         directions = List.copyOf(directions);
     }
 }

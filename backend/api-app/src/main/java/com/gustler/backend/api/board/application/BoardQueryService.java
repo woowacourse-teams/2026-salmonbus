@@ -208,7 +208,8 @@ public class BoardQueryService {
             status,
             snapshot.turnSequence(),
             directionsOf(snapshot, stops),
-            String.valueOf(snapshot.routeVersionId())
+            String.valueOf(snapshot.routeVersionId()),
+            snapshot.schedule().headways()
         );
     }
 

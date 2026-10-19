@@ -117,6 +117,23 @@ public class BoardDatabaseFixture {
         return new RouteContext(route.routeId(), routeVersionId, route.sourceRouteId());
     }
 
+    public void updateHeadway(
+        RouteContext route,
+        String day,
+        Integer minMinutes,
+        Integer maxMinutes
+    ) {
+        jdbcClient.sql("""
+                UPDATE route_version
+                SET %1$s_min_headway_minutes = :minMinutes, %1$s_max_headway_minutes = :maxMinutes
+                WHERE id = :routeVersionId
+                """.formatted(day))
+            .param("minMinutes", minMinutes)
+            .param("maxMinutes", maxMinutes)
+            .param("routeVersionId", route.routeVersionId())
+            .update();
+    }
+
     public void insertStop(
         RouteContext route,
         final int sequence,
