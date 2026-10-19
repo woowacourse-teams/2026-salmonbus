@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.gustler.backend.api.board.application.BoardVehicleObservation;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture.RouteContext;
+import com.gustler.backend.api.observation.ObservationFreshness;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.OffsetDateTime;
@@ -117,6 +118,40 @@ class JpaBoardQueryRepositoryIntegrationTest {
         // then
         assertThat(selected.batchId()).isEqualTo(publishedBatch);
         assertThat(selected.forecastPublished()).isTrue();
+    }
+
+    @Test
+    void 발행된_묶음이_신선도_최대_창보다_오래되면_더_최신의_미발행_묶음이_있어도_관측을_고르지_않는다() {
+        // given
+        BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbcClient);
+        OffsetDateTime now = OffsetDateTime.now().withNano(0);
+        RouteContext route = route(fixture, "204000057", now);
+        final long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        OffsetDateTime outsideWindow = now.minus(ObservationFreshness.MAX_WINDOW).minusSeconds(1);
+        final long oldPublishedBatch = fixture.insertBatch(route, outsideWindow, "SUCCESS_EMPTY", 0);
+        fixture.insertPublication(oldPublishedBatch, model, outsideWindow, outsideWindow);
+        fixture.insertBatch(route, now.minusSeconds(30), "SUCCESS_EMPTY", 0);
+
+        // when
+        var snapshot = repository.findSnapshot(new RouteId(route.sourceRouteId())).orElseThrow();
+
+        // then
+        assertThat(snapshot.observation()).isEmpty();
+    }
+
+    @Test
+    void 발행된_예보가_없는_판본은_정상_묶음이_신선도_최대_창보다_오래되면_관측을_고르지_않는다() {
+        // given
+        BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbcClient);
+        OffsetDateTime now = OffsetDateTime.now().withNano(0);
+        RouteContext route = route(fixture, "204000057", now);
+        fixture.insertBatch(route, now.minus(ObservationFreshness.MAX_WINDOW).minusSeconds(1), "SUCCESS_EMPTY", 0);
+
+        // when
+        var snapshot = repository.findSnapshot(new RouteId(route.sourceRouteId())).orElseThrow();
+
+        // then
+        assertThat(snapshot.observation()).isEmpty();
     }
 
     private RouteContext route(BoardDatabaseFixture fixture, String id, OffsetDateTime now) {

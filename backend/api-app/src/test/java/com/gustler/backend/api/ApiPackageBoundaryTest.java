@@ -76,6 +76,11 @@ class ApiPackageBoundaryTest {
         .should().dependOnClassesThat().resideInAPackage("..infrastructure..");
 
     @ArchTest
+    static final ArchRule vehicleDoesNotDependOnBoard = noClasses()
+        .that().resideInAPackage(PREFIX + "vehicle..")
+        .should().dependOnClassesThat().resideInAPackage(PREFIX + "board..");
+
+    @ArchTest
     static final ArchRule readLayersDoNotDependOnWebAdapters = noClasses()
         .that().resideInAnyPackage(READ_LAYERS.toArray(String[]::new))
         .should().dependOnClassesThat().resideInAnyPackage("..controller..", "..dto..");

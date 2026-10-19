@@ -186,6 +186,182 @@ public final class ApiDocsExamples {
         }
         """;
 
+    public static final String WATCH_BOARD_READY = """
+        {
+          "route": {
+            "id": "123456789",
+            "displayName": "예시 노선",
+            "startStopName": "기점",
+            "endStopName": "종점",
+            "status": "FORECAST_READY",
+            "turnSequence": 2,
+            "directions": [
+              {
+                "id": "UP",
+                "name": "회차점 방면",
+                "originStopName": "기점",
+                "terminalStopName": "회차점",
+                "firstDepartureTime": "05:00",
+                "lastDepartureTime": "23:00"
+              },
+              {
+                "id": "DOWN",
+                "name": "종점 방면",
+                "originStopName": "회차점",
+                "terminalStopName": "종점",
+                "firstDepartureTime": "05:00",
+                "lastDepartureTime": "23:00"
+              }
+            ],
+            "referenceVersionId": "example-version"
+          },
+          "observedAt": "2026-10-01T12:00:00+09:00",
+          "staleAt": "2026-10-01T12:05:00+09:00",
+          "model": {
+            "releaseId": "example-model",
+            "trainedThrough": "2026-09-30T00:00:00+09:00"
+          },
+          "vehiclesInService": 1,
+          "stops": [
+            {
+              "sequence": 1,
+              "stopId": "example-stop-1",
+              "name": "기점",
+              "direction": "UP",
+              "boardingAllowed": true,
+              "approachingVehicles": []
+            },
+            {
+              "sequence": 2,
+              "stopId": "example-stop-2",
+              "name": "회차점",
+              "direction": "UP",
+              "boardingAllowed": false,
+              "approachingVehicles": []
+            },
+            {
+              "sequence": 3,
+              "stopId": "example-stop-3",
+              "name": "종점",
+              "direction": "DOWN",
+              "boardingAllowed": true,
+              "approachingVehicles": [
+                {
+                  "vehicleId": "example-vehicle",
+                  "horizonStops": 2,
+                  "forecast": {
+                    "status": "AVAILABLE",
+                    "seatAvailableProbability": 0.7,
+                    "expectedSeats": 4.0
+                  }
+                }
+              ]
+            }
+          ],
+          "vehicles": [
+            {
+              "vehicleId": "example-vehicle",
+              "direction": "UP",
+              "currentStopSequence": 2,
+              "stopId": "example-stop-2",
+              "stopName": "회차점",
+              "phase": "ARRIVING",
+              "seat": {
+                "kind": "EXACT",
+                "remaining": 12
+              }
+            }
+          ]
+        }
+        """;
+
+    public static final String WATCH_BOARD_PREPARING = """
+        {
+          "route": {
+            "id": "123456789",
+            "displayName": "예시 노선",
+            "startStopName": "기점",
+            "endStopName": "종점",
+            "status": "PREPARING",
+            "turnSequence": 2,
+            "directions": [
+              {
+                "id": "UP",
+                "name": "회차점 방면",
+                "originStopName": "기점",
+                "terminalStopName": "회차점",
+                "firstDepartureTime": "05:00",
+                "lastDepartureTime": "23:00"
+              },
+              {
+                "id": "DOWN",
+                "name": "종점 방면",
+                "originStopName": "회차점",
+                "terminalStopName": "종점",
+                "firstDepartureTime": "05:00",
+                "lastDepartureTime": "23:00"
+              }
+            ],
+            "referenceVersionId": "example-version"
+          },
+          "observedAt": "2026-10-01T12:00:00+09:00",
+          "staleAt": "2026-10-01T12:05:00+09:00",
+          "model": {
+            "releaseId": "example-model",
+            "trainedThrough": "2026-09-30T00:00:00+09:00"
+          },
+          "vehiclesInService": 1,
+          "stops": [
+            {
+              "sequence": 1,
+              "stopId": "example-stop-1",
+              "name": "기점",
+              "direction": "UP",
+              "boardingAllowed": true,
+              "approachingVehicles": []
+            },
+            {
+              "sequence": 2,
+              "stopId": "example-stop-2",
+              "name": "회차점",
+              "direction": "UP",
+              "boardingAllowed": false,
+              "approachingVehicles": []
+            },
+            {
+              "sequence": 3,
+              "stopId": "example-stop-3",
+              "name": "종점",
+              "direction": "DOWN",
+              "boardingAllowed": true,
+              "approachingVehicles": [
+                {
+                  "vehicleId": "example-vehicle",
+                  "horizonStops": 2,
+                  "forecast": {
+                    "status": "UNAVAILABLE"
+                  }
+                }
+              ]
+            }
+          ],
+          "vehicles": [
+            {
+              "vehicleId": "example-vehicle",
+              "direction": "UP",
+              "currentStopSequence": 2,
+              "stopId": "example-stop-2",
+              "stopName": "회차점",
+              "phase": "ARRIVING",
+              "seat": {
+                "kind": "UNKNOWN",
+                "reason": "QUALITY_WITHHELD"
+              }
+            }
+          ]
+        }
+        """;
+
     public static final String VEHICLES_PRESENT = """
         {
           "routeId": "123456789",

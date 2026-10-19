@@ -15,6 +15,9 @@ class ApiSqlOriginTest {
         try {
             assertThat(new ApiSqlOrigin().inspect("select id from route where id = ?"))
                 .isEqualTo("select /* salmonbus:api.board */ id from route where id = ?");
+            request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/api/v1/routes/{routeId}/watch");
+            assertThat(new ApiSqlOrigin().inspect("select id from route where id = ?"))
+                .isEqualTo("select /* salmonbus:api.watch */ id from route where id = ?");
             request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "private-route?secret=key");
             assertThat(new ApiSqlOrigin().inspect("select 1")).isEqualTo("select /* salmonbus:api.other */ 1");
         } finally { RequestContextHolder.resetRequestAttributes(); }

@@ -109,7 +109,7 @@ class PublishPendingForecastsStalenessTest {
             10L, ROUTE_VERSION_3330, 1L, NOW.minusSeconds(30));
         when(vehicleTrajectoryQuery.findBatchesAwaitingForecast(anyLong(), any(), anyInt())).thenReturn(List.of(batch));
         when(forecastBatchWriter.writeForecastsOf(any(), any(), any())).thenThrow(new IllegalStateException("commit failed"));
-        org.assertj.core.api.Assertions.assertThatThrownBy(job::writeForecasts).isInstanceOf(IllegalStateException.class);
+        job.writeForecasts();
         var order = inOrder(telemetry, forecastBatchWriter);
         order.verify(telemetry).pending(ROUTE_VERSION_3330, NOW.minusSeconds(30));
         order.verify(forecastBatchWriter).writeForecastsOf(any(), any(), any());

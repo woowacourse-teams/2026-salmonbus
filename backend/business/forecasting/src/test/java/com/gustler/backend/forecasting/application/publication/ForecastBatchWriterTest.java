@@ -98,7 +98,6 @@ class ForecastBatchWriterTest {
     @BeforeEach
     void setUp() {
         when(quality.current(anyLong())).thenReturn(1L);
-        when(quality.lock(anyLong())).thenReturn(1L);
         when(statistics.readAsOf(1, STATISTICS.timeSlot(), "feature-v1", NOW)).thenReturn(STATISTICS);
         when(outcomes.outcomesFor(1, 7L, NOW)).thenReturn(Map.of());
         logs.start();
@@ -112,7 +111,7 @@ class ForecastBatchWriterTest {
     }
 
     @Test
-    void 예보_계산에_쓸_품질_버전과_통계를_읽은_뒤_저장_직전에_품질_행을_잠근다() {
+    void 예보_계산에_쓸_품질_버전과_통계를_읽은_뒤_저장_직전에_잠그지_않고_품질_버전을_다시_읽는다() {
         // given
         var snapshot = runtime(input -> RESULT);
 
@@ -123,8 +122,10 @@ class ForecastBatchWriterTest {
         var order = inOrder(quality, statistics, forecasts);
         order.verify(quality).current(BATCH.routeVersionId());
         order.verify(statistics).readAsOf(1, STATISTICS.timeSlot(), "feature-v1", NOW);
-        order.verify(quality).lock(BATCH.routeVersionId());
+        order.verify(quality).ensureExists(BATCH.routeVersionId());
+        order.verify(quality).current(BATCH.routeVersionId());
         order.verify(forecasts).save(any());
+        verify(quality, never()).lock(anyLong());
     }
 
     @Test

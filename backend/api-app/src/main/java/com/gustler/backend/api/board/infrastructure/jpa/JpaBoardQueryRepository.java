@@ -11,12 +11,14 @@ import com.gustler.backend.api.board.domain.ForecastModel;
 import com.gustler.backend.api.board.domain.HeadwayRange;
 import com.gustler.backend.api.board.domain.RouteHeadways;
 import com.gustler.backend.api.error.ServiceUnavailableException;
+import com.gustler.backend.api.observation.ObservationFreshness;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.infrastructure.jpa.ModelDeploymentEntityRepository;
 import com.gustler.backend.api.route.infrastructure.jpa.ModelDeploymentJpaEntity;
 import com.gustler.backend.api.route.infrastructure.jpa.ModelDeploymentState;
 import com.gustler.backend.api.route.infrastructure.jpa.RouteVersionJpaEntity;
 import java.time.Clock;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -142,10 +144,11 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
         RouteVersionJpaEntity routeVersion,
         final boolean forecastPublished
     ) {
+        OffsetDateTime observedSince = OffsetDateTime.now(clock).minus(ObservationFreshness.MAX_WINDOW);
         if (forecastPublished) {
-            return observationBatchRepository.findLatestPublished(routeVersion, FIRST_RESULT);
+            return observationBatchRepository.findLatestPublished(routeVersion, observedSince, FIRST_RESULT);
         }
-        return observationBatchRepository.findLatestObserved(routeVersion, FIRST_RESULT);
+        return observationBatchRepository.findLatestObserved(routeVersion, observedSince, FIRST_RESULT);
     }
 
     private ForecastModel toModel(

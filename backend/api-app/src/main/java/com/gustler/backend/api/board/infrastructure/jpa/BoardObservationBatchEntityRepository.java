@@ -1,6 +1,7 @@
 package com.gustler.backend.api.board.infrastructure.jpa;
 
 import com.gustler.backend.api.route.infrastructure.jpa.RouteVersionJpaEntity;
+import java.time.OffsetDateTime;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
@@ -16,6 +17,7 @@ public interface BoardObservationBatchEntityRepository
         WHERE batch.routeVersion = :routeVersion
           AND batch.outcome IN ('SUCCESS_ROWS', 'SUCCESS_EMPTY')
           AND batch.responseReceivedAt IS NOT NULL
+          AND batch.responseReceivedAt >= :observedSince
           AND EXISTS (
               SELECT publication.id
               FROM BoardForecastPublicationJpaEntity publication
@@ -27,6 +29,7 @@ public interface BoardObservationBatchEntityRepository
         """)
     List<ObservationBatchJpaEntity> findLatestPublished(
         @Param("routeVersion") RouteVersionJpaEntity routeVersion,
+        @Param("observedSince") OffsetDateTime observedSince,
         Pageable pageable
     );
 
@@ -36,11 +39,13 @@ public interface BoardObservationBatchEntityRepository
         WHERE batch.routeVersion = :routeVersion
           AND batch.outcome IN ('SUCCESS_ROWS', 'SUCCESS_EMPTY')
           AND batch.responseReceivedAt IS NOT NULL
+          AND batch.responseReceivedAt >= :observedSince
         ORDER BY batch.responseReceivedAt DESC,
                  batch.id DESC
         """)
     List<ObservationBatchJpaEntity> findLatestObserved(
         @Param("routeVersion") RouteVersionJpaEntity routeVersion,
+        @Param("observedSince") OffsetDateTime observedSince,
         Pageable pageable
     );
 }

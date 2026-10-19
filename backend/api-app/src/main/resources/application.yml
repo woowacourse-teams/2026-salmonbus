@@ -27,6 +27,9 @@ spring:
     hikari:
       data-source-properties:
         ApplicationName: salmonbus-api
+        connectTimeout: 10
+        socketTimeout: 60
+        tcpKeepAlive: true
       maximum-pool-size: 5
 
   jpa:

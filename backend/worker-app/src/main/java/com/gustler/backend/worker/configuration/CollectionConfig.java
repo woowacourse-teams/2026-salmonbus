@@ -54,8 +54,8 @@ public class CollectionConfig {
             this.properties = properties;
             this.scheduler = scheduler;
             this.clock = clock;
-            this.keyAliases = gbisProperties.keys().stream().map(GbisKey::alias).toList();
-            this.dailyLimit = gbisProperties.dailyLimit() * keyAliases.size();
+            this.keyAliases = gbisProperties.serviceKeys().stream().map(GbisKey::alias).toList();
+            this.dailyLimit = keyAliases.stream().mapToInt(gbisProperties::dailyLimitOf).sum();
             this.collectionTaskScheduler = collectionTaskScheduler;
         }
 

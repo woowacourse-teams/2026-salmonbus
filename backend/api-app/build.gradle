@@ -52,6 +52,7 @@ tasks.named('test') {
     def geometryRoutesFixture = rootProject.file('../dev/data/routes.json')
     def arrivalsContract = rootProject.file('../contract/station-arrivals-v2.openapi.json')
     def geometryContract = rootProject.file('../contract/route-geometry-v2.openapi.json')
+    def watchContract = rootProject.file('../contract/route-watch-v1.openapi.json')
     inputs.file(chatContractExamples)
         .withPropertyName('chatContractExamples')
         .withPathSensitivity(PathSensitivity.NONE)
@@ -61,7 +62,7 @@ tasks.named('test') {
     inputs.file(geometryRoutesFixture)
         .withPropertyName('geometryRoutesFixture')
         .withPathSensitivity(PathSensitivity.NONE)
-    inputs.files(arrivalsContract, geometryContract)
+    inputs.files(arrivalsContract, geometryContract, watchContract)
         .withPropertyName('v2OpenApiContracts')
         .withPathSensitivity(PathSensitivity.NONE)
     doFirst {
@@ -72,6 +73,7 @@ tasks.named('test') {
         systemProperty 'geometry.routes.fixture', geometryRoutesFixture.absolutePath
         systemProperty 'arrival.openapi.contract', arrivalsContract.absolutePath
         systemProperty 'geometry.openapi.contract', geometryContract.absolutePath
+        systemProperty 'watch.openapi.contract', watchContract.absolutePath
     }
 }
 

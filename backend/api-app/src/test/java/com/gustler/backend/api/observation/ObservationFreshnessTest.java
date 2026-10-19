@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class ObservationFreshnessTest {
 
@@ -28,5 +29,18 @@ class ObservationFreshnessTest {
             .isEqualTo(observedAt.plusMinutes(minutes));
         assertThat(Duration.between(observedAt, ObservationFreshness.staleAt(observedAt)))
             .isEqualTo(Duration.ofMinutes(minutes));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23})
+    void 어느_시각의_신선도_창도_최대_창을_넘지_않는다(final int hour) {
+        // given
+        var observedAt = OffsetDateTime.parse("2026-10-16T00:00:00+09:00").plusHours(hour).plusMinutes(59);
+
+        // when
+        var window = Duration.between(observedAt, ObservationFreshness.staleAt(observedAt));
+
+        // then
+        assertThat(window).isLessThanOrEqualTo(ObservationFreshness.MAX_WINDOW);
     }
 }

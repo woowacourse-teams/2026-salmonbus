@@ -2,6 +2,7 @@ package com.gustler.backend.forecasting.application.publication;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -32,6 +33,7 @@ import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -41,6 +43,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -242,6 +248,59 @@ class ForecastPublicationTransactionTest {
         // then
         assertThat(saved).isEqualTo(2);
         assertThat(readCounts()).isEqualTo(new StoredCounts(1, 2, 2, true));
+    }
+
+    @Test
+    void 다른_트랜잭션이_품질_행을_잠그고_있어도_기다리지_않고_예보를_저장한다() throws Exception {
+        // given
+        new TransactionTemplate(transactions).executeWithoutResult(status -> quality.lock(routeVersionId));
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Thread holder = Thread.ofPlatform().start(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            quality.lock(routeVersionId);
+            locked.countDown();
+            try { release.await(5, TimeUnit.SECONDS); }
+            catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
+        }));
+        assertThat(locked.await(2, TimeUnit.SECONDS)).isTrue();
+        try {
+            // when
+            int saved = assertTimeoutPreemptively(Duration.ofSeconds(5), () -> writer.writeForecastsOf(batch, stops, runtime));
+
+            // then
+            assertThat(saved).isEqualTo(2);
+            assertThat(readCounts()).isEqualTo(new StoredCounts(1, 2, 2, true));
+        } finally {
+            release.countDown();
+            holder.join();
+        }
+    }
+
+    @Test
+    void 품질_버전을_올리고_커밋하지_않은_트랜잭션이_있으면_끝날_때까지_기다린_뒤_저장하지_않는다() throws Exception {
+        // given
+        new TransactionTemplate(transactions).executeWithoutResult(status -> quality.lock(routeVersionId));
+        CountDownLatch changed = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Thread changer = Thread.ofPlatform().start(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            quality.lock(routeVersionId);
+            jdbc.sql("UPDATE route_data_quality SET quality_revision=quality_revision+1 WHERE route_id=?")
+                .param(routeId).update();
+            changed.countDown();
+            try { release.await(5, TimeUnit.SECONDS); }
+            catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
+        }));
+        assertThat(changed.await(2, TimeUnit.SECONDS)).isTrue();
+
+        // when
+        CompletableFuture<Integer> saving = CompletableFuture.supplyAsync(() -> writer.writeForecastsOf(batch, stops, runtime));
+
+        // then
+        assertThatThrownBy(() -> saving.get(300, TimeUnit.MILLISECONDS)).isInstanceOf(TimeoutException.class);
+        release.countDown();
+        changer.join();
+        assertThat(saving.get(5, TimeUnit.SECONDS)).isZero();
+        assertThat(readCounts()).isEqualTo(new StoredCounts(0, 0, 0, false));
     }
 
     @Test
