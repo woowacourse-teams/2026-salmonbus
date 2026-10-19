@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.gustler.backend.api.error.ServiceUnavailableException;
 import com.gustler.backend.api.route.RouteId;
@@ -14,6 +16,7 @@ import com.gustler.backend.api.vehicle.domain.VehicleDirection;
 import com.gustler.backend.api.vehicle.domain.VehiclePhase;
 import com.gustler.backend.api.vehicle.domain.VehiclePollOutcome;
 import com.gustler.backend.api.vehicle.domain.VehicleSeat;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -100,21 +103,46 @@ class JpaVehicleQueryRepositoryTest {
             routeId.value()
         )).willReturn(Optional.of(routeVersion));
         given(routeVersion.id()).willReturn(42L);
-        given(observationBatchRepository.findLatestByRouteVersion(
+        given(observationBatchRepository.findLatestSuccessfulByRouteVersion(
             routeVersion,
-            firstResultPage
-        )).willReturn(List.of());
-        given(observationBatchRepository.findLatestNormalByRouteVersion(
-            routeVersion,
-            List.of(
-                VehiclePollOutcome.SUCCESS_ROWS.name(),
-                VehiclePollOutcome.SUCCESS_EMPTY.name()
-            ),
             firstResultPage
         )).willReturn(List.of());
 
         VehicleSnapshot actual = repository.findLatestSnapshot(routeId).orElseThrow();
 
         assertThat(actual.routeId()).isEqualTo(routeId.value());
+        verify(observationBatchRepository).findLatestSuccessfulByRouteVersion(
+            routeVersion,
+            firstResultPage
+        );
+        verifyNoMoreInteractions(observationBatchRepository);
+    }
+
+    @Test
+    void 최신_성공_배치_하나에서_ID와_상태와_관측_시각을_만든다() {
+        RouteId routeId = new RouteId("204000057");
+        RouteVersionJpaEntity routeVersion = mock(RouteVersionJpaEntity.class);
+        ObservationBatchJpaEntity batch = mock(ObservationBatchJpaEntity.class);
+        OffsetDateTime observedAt = OffsetDateTime.parse("2026-08-27T03:58:00Z");
+        PageRequest firstResultPage = PageRequest.of(0, 1);
+        given(routeVersionRepository.findByRoute_SourceRouteIdAndValidToIsNull(
+            routeId.value()
+        )).willReturn(Optional.of(routeVersion));
+        given(routeVersion.id()).willReturn(42L);
+        given(observationBatchRepository.findLatestSuccessfulByRouteVersion(
+            routeVersion,
+            firstResultPage
+        )).willReturn(List.of(batch));
+        given(batch.id()).willReturn(7L);
+        given(batch.outcome()).willReturn(VehiclePollOutcome.SUCCESS_ROWS.name());
+        given(batch.responseReceivedAt()).willReturn(observedAt);
+
+        VehicleSnapshot actual = repository.findLatestSnapshot(routeId).orElseThrow();
+
+        assertThat(actual.latestBatchId()).isEqualTo(7L);
+        assertThat(actual.latestOutcome()).isEqualTo(VehiclePollOutcome.SUCCESS_ROWS);
+        assertThat(actual.observedAt()).isEqualTo(
+            OffsetDateTime.parse("2026-08-27T12:58:00+09:00")
+        );
     }
 }

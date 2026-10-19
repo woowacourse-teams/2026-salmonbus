@@ -227,35 +227,191 @@ class LiveVehicleApiContractTest {
     }
 
     @Test
-    void 최신_poll이_실패하면_마지막_정상_시각과_UNKNOWN을_반환한다() throws Exception {
+    void 최근_NOT_RESERVED_뒤에도_신선한_마지막_성공_차량을_반환한다() throws Exception {
         RouteContext route = insertCurrentRoute();
+        insertStop(route, 5, "205000005", "상행 다섯 번째", "UP");
         OffsetDateTime lastObservedAt = NOW.minusMinutes(2);
-        insertSuccessfulBatch(route, lastObservedAt, "SUCCESS_ROWS", 1);
-        insertFailedBatch(route, NOW.minusSeconds(30));
+        long successfulBatch = insertSuccessfulBatch(
+            route,
+            lastObservedAt,
+            "SUCCESS_ROWS",
+            1
+        );
+        insertObservation(
+            successfulBatch,
+            route,
+            0,
+            "last-success-bus",
+            5,
+            "205000005",
+            1,
+            12
+        );
+        insertNotReservedBatch(route, NOW.minusSeconds(30));
 
         mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.observation.state").value("UNKNOWN"))
+            .andExpect(jsonPath("$.observation.state").value("VEHICLES_PRESENT"))
             .andExpect(jsonPath("$.observation.observedAt").value(jsonTime(lastObservedAt)))
             .andExpect(jsonPath("$.observation.staleAt").value(
                 jsonTime(lastObservedAt.plusMinutes(5))
             ))
-            .andExpect(jsonPath("$.vehicles").isEmpty());
+            .andExpect(jsonPath("$.vehicles.length()").value(1))
+            .andExpect(jsonPath("$.vehicles[0].vehicleId").value("last-success-bus"));
     }
 
     @Test
-    void 최신_성공_poll에_응답_수신_시각이_없으면_불완전한_관측으로_처리한다() throws Exception {
+    void 수신_시각_없는_성공은_제외하고_마지막_완료된_성공을_반환한다() throws Exception {
         RouteContext route = insertCurrentRoute();
+        insertStop(route, 5, "205000005", "상행 다섯 번째", "UP");
         OffsetDateTime lastObservedAt = NOW.minusMinutes(2);
-        insertSuccessfulBatch(route, lastObservedAt, "SUCCESS_ROWS", 1);
+        long completedBatch = insertSuccessfulBatch(
+            route,
+            lastObservedAt,
+            "SUCCESS_ROWS",
+            1
+        );
+        insertObservation(
+            completedBatch,
+            route,
+            0,
+            "completed-bus",
+            5,
+            "205000005",
+            1,
+            12
+        );
         insertIncompleteSuccessfulBatch(route, NOW.minusSeconds(20));
 
         mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.observation.state").value("UNKNOWN"))
+            .andExpect(jsonPath("$.observation.state").value("VEHICLES_PRESENT"))
             .andExpect(jsonPath("$.observation.observedAt").value(jsonTime(lastObservedAt)))
             .andExpect(jsonPath("$.observation.staleAt").value(
                 jsonTime(lastObservedAt.plusMinutes(5))
+            ))
+            .andExpect(jsonPath("$.vehicles.length()").value(1))
+            .andExpect(jsonPath("$.vehicles[0].vehicleId").value("completed-bus"));
+    }
+
+    @Test
+    void 예약_순서와_수신_순서가_다르면_나중에_수신한_성공을_선택한다() throws Exception {
+        RouteContext route = insertCurrentRoute();
+        insertStop(route, 5, "205000005", "상행 다섯 번째", "UP");
+        OffsetDateTime laterReceivedAt = NOW.minusSeconds(20);
+        long laterReceivedBatch = insertSuccessfulBatch(
+            route,
+            NOW.minusMinutes(2),
+            laterReceivedAt,
+            "SUCCESS_ROWS",
+            1
+        );
+        insertObservation(
+            laterReceivedBatch,
+            route,
+            0,
+            "later-received-bus",
+            5,
+            "205000005",
+            1,
+            12
+        );
+        OffsetDateTime laterScheduledAt = NOW.minusMinutes(1);
+        long laterScheduledBatch = insertSuccessfulBatch(
+            route,
+            laterScheduledAt,
+            NOW.minusSeconds(30),
+            "SUCCESS_ROWS",
+            1
+        );
+        insertObservation(
+            laterScheduledBatch,
+            route,
+            0,
+            "later-scheduled-bus",
+            5,
+            "205000005",
+            1,
+            12
+        );
+
+        mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.observation.observedAt").value(jsonTime(laterReceivedAt)))
+            .andExpect(jsonPath("$.vehicles.length()").value(1))
+            .andExpect(jsonPath("$.vehicles[0].vehicleId").value("later-received-bus"));
+    }
+
+    @Test
+    void 수신_시각이_같으면_ID가_큰_성공을_선택한다() throws Exception {
+        RouteContext route = insertCurrentRoute();
+        OffsetDateTime observedAt = NOW.minusMinutes(1);
+        insertSuccessfulBatch(route, observedAt, "SUCCESS_ROWS", 1);
+        insertSuccessfulBatch(route, observedAt, "SUCCESS_EMPTY", 0);
+
+        mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.observation.state").value("NO_VEHICLES_OBSERVED"))
+            .andExpect(jsonPath("$.observation.observedAt").value(jsonTime(observedAt)))
+            .andExpect(jsonPath("$.vehicles").isEmpty());
+    }
+
+    @Test
+    void 가장_최근_성공이_SUCCESS_EMPTY면_이전_차량을_반환하지_않는다() throws Exception {
+        RouteContext route = insertCurrentRoute();
+        insertStop(route, 5, "205000005", "상행 다섯 번째", "UP");
+        long rowsBatch = insertSuccessfulBatch(
+            route,
+            NOW.minusMinutes(2),
+            "SUCCESS_ROWS",
+            1
+        );
+        insertObservation(
+            rowsBatch,
+            route,
+            0,
+            "old-bus",
+            5,
+            "205000005",
+            1,
+            12
+        );
+        OffsetDateTime emptyObservedAt = NOW.minusMinutes(1);
+        insertSuccessfulBatch(route, emptyObservedAt, "SUCCESS_EMPTY", 0);
+
+        mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.observation.state").value("NO_VEHICLES_OBSERVED"))
+            .andExpect(jsonPath("$.observation.observedAt").value(jsonTime(emptyObservedAt)))
+            .andExpect(jsonPath("$.vehicles").isEmpty());
+    }
+
+    @Test
+    void 현재_노선_판본의_성공만_선택한다() throws Exception {
+        RouteContext currentRoute = insertCurrentRoute();
+        RouteContext previousRoute = insertPreviousRouteVersion(currentRoute);
+        insertSuccessfulBatch(
+            previousRoute,
+            NOW.minusSeconds(10),
+            "SUCCESS_ROWS",
+            1
+        );
+        OffsetDateTime currentObservedAt = NOW.minusMinutes(1);
+        insertSuccessfulBatch(
+            currentRoute,
+            currentObservedAt,
+            "SUCCESS_EMPTY",
+            0
+        );
+
+        mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.referenceVersionId").value(
+                String.valueOf(currentRoute.routeVersionId())
+            ))
+            .andExpect(jsonPath("$.observation.state").value("NO_VEHICLES_OBSERVED"))
+            .andExpect(jsonPath("$.observation.observedAt").value(
+                jsonTime(currentObservedAt)
             ))
             .andExpect(jsonPath("$.vehicles").isEmpty());
     }
@@ -333,7 +489,25 @@ class LiveVehicleApiContractTest {
             .query(Long.class)
             .single();
 
-        return new RouteContext(routeVersionId);
+        return new RouteContext(routeId, routeVersionId);
+    }
+
+    private RouteContext insertPreviousRouteVersion(RouteContext currentRoute) {
+        long routeVersionId = jdbcClient.sql("""
+                INSERT INTO route_version (
+                    route_id, content_digest, valid_from, valid_to
+                ) VALUES (?, ?, ?, ?)
+                RETURNING id
+                """)
+            .params(
+                currentRoute.routeId(),
+                "6".repeat(64),
+                NOW.minusDays(2),
+                NOW.minusDays(1)
+            )
+            .query(Long.class)
+            .single();
+        return new RouteContext(currentRoute.routeId(), routeVersionId);
     }
 
     private String jsonTime(OffsetDateTime value) {
@@ -363,6 +537,22 @@ class LiveVehicleApiContractTest {
         String outcome,
         final int storedRows
     ) {
+        return insertSuccessfulBatch(
+            route,
+            observedAt.minusSeconds(2),
+            observedAt,
+            outcome,
+            storedRows
+        );
+    }
+
+    private long insertSuccessfulBatch(
+        RouteContext route,
+        OffsetDateTime scheduledAt,
+        OffsetDateTime observedAt,
+        String outcome,
+        final int storedRows
+    ) {
         return jdbcClient.sql("""
                 INSERT INTO observation_batch (
                     route_version_id, scheduled_at, attempt_number, attempt_key,
@@ -374,7 +564,7 @@ class LiveVehicleApiContractTest {
                 """)
             .params(
                 route.routeVersionId(),
-                observedAt.minusSeconds(2),
+                scheduledAt,
                 1,
                 UUID.randomUUID().toString(),
                 observedAt.minusSeconds(1),
@@ -391,26 +581,25 @@ class LiveVehicleApiContractTest {
             .single();
     }
 
-    private void insertFailedBatch(
+    private void insertNotReservedBatch(
         RouteContext route,
         OffsetDateTime scheduledAt
     ) {
         jdbcClient.sql("""
                 INSERT INTO observation_batch (
                     route_version_id, scheduled_at, attempt_number, attempt_key,
-                    requested_at, completed_at, outcome, failure_code, normalization_version,
+                    completed_at, outcome, failure_code, normalization_version,
                     collection_strategy_version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """)
             .params(
                 route.routeVersionId(),
                 scheduledAt,
                 1,
                 UUID.randomUUID().toString(),
-                scheduledAt.plusSeconds(1),
                 scheduledAt.plusSeconds(2),
-                "FAILED_UPSTREAM",
-                "UPSTREAM_ERROR",
+                "NOT_RESERVED",
+                "LOCAL_QUOTA_EXHAUSTED",
                 NORMALIZATION_VERSION,
                 STRATEGY_VERSION
             )
@@ -518,7 +707,7 @@ class LiveVehicleApiContractTest {
         return runningState == RUNNING_STATE_ARRIVING ? stopOrder - 1 : stopOrder;
     }
 
-    private record RouteContext(long routeVersionId) {
+    private record RouteContext(long routeId, long routeVersionId) {
     }
 
     @TestConfiguration(proxyBeanMethods = false)

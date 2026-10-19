@@ -22,10 +22,6 @@ import org.springframework.stereotype.Repository;
 public class JpaVehicleQueryRepository implements VehicleQueryRepository {
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
-    private static final List<String> NORMAL_OUTCOMES = List.of(
-        VehiclePollOutcome.SUCCESS_ROWS.name(),
-        VehiclePollOutcome.SUCCESS_EMPTY.name()
-    );
     private static final Pageable FIRST_RESULT_PAGE = PageRequest.of(0, 1);
 
     private final VehicleRouteVersionEntityRepository routeVersionRepository;
@@ -60,29 +56,21 @@ public class JpaVehicleQueryRepository implements VehicleQueryRepository {
         RouteId routeId,
         RouteVersionJpaEntity routeVersion
     ) {
-        Optional<ObservationBatchJpaEntity> latestBatch = firstBatchOf(
-            observationBatchRepository.findLatestByRouteVersion(
+        Optional<ObservationBatchJpaEntity> latestSuccessfulBatch =
+            observationBatchRepository.findLatestSuccessfulByRouteVersion(
                 routeVersion,
                 FIRST_RESULT_PAGE
-            )
-        );
-        Optional<ObservationBatchJpaEntity> latestNormalBatch = firstBatchOf(
-            observationBatchRepository.findLatestNormalByRouteVersion(
-                routeVersion,
-                NORMAL_OUTCOMES,
-                FIRST_RESULT_PAGE
-            )
-        );
+            ).stream().findFirst();
 
         return new VehicleSnapshot(
             routeId.value(),
             String.valueOf(routeVersion.id()),
-            latestBatch.map(ObservationBatchJpaEntity::id).orElse(null),
-            latestBatch.filter(ObservationBatchJpaEntity::hasResponseReceivedAt)
+            latestSuccessfulBatch.map(ObservationBatchJpaEntity::id).orElse(null),
+            latestSuccessfulBatch
                 .map(ObservationBatchJpaEntity::outcome)
                 .map(VehiclePollOutcome::fromDatabaseValue)
                 .orElse(VehiclePollOutcome.UNKNOWN),
-            latestNormalBatch.map(ObservationBatchJpaEntity::responseReceivedAt)
+            latestSuccessfulBatch.map(ObservationBatchJpaEntity::responseReceivedAt)
                 .map(this::inSeoul)
                 .orElse(null)
         );
@@ -90,11 +78,5 @@ public class JpaVehicleQueryRepository implements VehicleQueryRepository {
 
     private OffsetDateTime inSeoul(OffsetDateTime dateTime) {
         return dateTime.atZoneSameInstant(SEOUL).toOffsetDateTime();
-    }
-
-    private Optional<ObservationBatchJpaEntity> firstBatchOf(
-        List<ObservationBatchJpaEntity> batches
-    ) {
-        return batches.stream().findFirst();
     }
 }
