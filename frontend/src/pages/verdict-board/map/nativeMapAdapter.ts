@@ -32,7 +32,7 @@ export function createNativeRouteMap(options: {
   const sentPlans = new Map<string, string>();
   const locationRequests = new Map<
     number,
-    { resolve: (coordinate: GeoCoordinate) => void; reject: (error: Error) => void; timer: number }
+    { resolve: (coordinate: GeoCoordinate) => void; reject: (error: Error) => void }
   >();
   let sceneState: NativeMapSceneState = {
     activeDirection: board.route.directions[0].id,
@@ -73,7 +73,6 @@ export function createNativeRouteMap(options: {
         const request = locationRequests.get(event.payload.requestId);
         if (request === undefined) break;
         locationRequests.delete(event.payload.requestId);
-        window.clearTimeout(request.timer);
         if (event.payload.coordinate !== undefined) request.resolve(event.payload.coordinate);
         else request.reject(new Error(event.payload.error ?? "unavailable"));
         break;
@@ -176,11 +175,8 @@ export function createNativeRouteMap(options: {
     },
     locate(requestId) {
       return new Promise((resolve, reject) => {
-        const requestTimer = window.setTimeout(() => {
-          locationRequests.delete(requestId);
-          reject(new Error("timeout"));
-        }, 12_000);
-        locationRequests.set(requestId, { resolve, reject, timer: requestTimer });
+        // 권한 대기는 제한하지 않고, 실제 조회의 시간 제한은 iOS가 담당한다.
+        locationRequests.set(requestId, { resolve, reject });
         channel.send("location", { requestId });
       });
     },
@@ -191,7 +187,6 @@ export function createNativeRouteMap(options: {
       unsubscribeMotion();
       unsubscribe();
       for (const request of locationRequests.values()) {
-        window.clearTimeout(request.timer);
         request.reject(new Error("unavailable"));
       }
       locationRequests.clear();

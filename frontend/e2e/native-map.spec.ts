@@ -126,6 +126,55 @@ test("실제 transition 경계와 웹 버튼 영역을 전달하고 native 위�
   ).toBeNull();
 });
 
+test("native 위치 권한 대기가 12초를 넘어도 결과를 받아 위치를 표시한다", async ({ page }) => {
+  await open(page);
+  const button = page.getByRole("button", { name: "현재 위치 보기", exact: true });
+  await button.click();
+  const location = (await messages(page)).find((message) => message.type === "location")!;
+  await page.clock.runFor(15_000);
+  await expect(button).toBeDisabled();
+  await expect(page.getByText("위치를 확인하는 데 시간이 걸려요. 다시 눌러주세요")).toHaveCount(0);
+  await emit(page, {
+    type: "locationResult",
+    payload: { requestId: location.payload.requestId, coordinate: { latitude: 37.4, longitude: 127.1 } },
+  });
+  await expect(button).toBeEnabled();
+  expect((await messages(page)).filter((message) => message.type === "camera").at(-1)?.payload.command).toBe(
+    "location",
+  );
+});
+
+test("native 위치 조회 시간 초과와 권한 거부를 안내하고 재시도하며 지도 종료 시 요청을 정리한다", async ({ page }) => {
+  await open(page);
+  const button = page.getByRole("button", { name: "현재 위치 보기", exact: true });
+  for (const error of ["timeout", "denied"] as const) {
+    await button.click();
+    const location = (await messages(page)).filter((message) => message.type === "location").at(-1)!;
+    await emit(page, { type: "locationResult", payload: { requestId: location.payload.requestId, error } });
+    await expect(button).toBeEnabled();
+    await expect(
+      page.getByText(
+        error === "timeout"
+          ? "위치를 확인하는 데 시간이 걸려요. 다시 눌러주세요"
+          : "위치 권한을 허용하면 내 위치를 볼 수 있어요",
+        { exact: true },
+      ),
+    ).toBeVisible();
+  }
+  const errors: Error[] = [];
+  page.on("pageerror", (error) => errors.push(error));
+  await button.click();
+  const location = (await messages(page)).filter((message) => message.type === "location").at(-1)!;
+  await emit(page, { type: "error", payload: { message: "SDK 인증 실패" } });
+  await emit(page, {
+    type: "locationResult",
+    payload: { requestId: location.payload.requestId, coordinate: { latitude: 37.4, longitude: 127.1 } },
+  });
+  await expect(button).toHaveCount(0);
+  expect((await messages(page)).at(-1)?.type).toBe("unmount");
+  expect(errors).toEqual([]);
+});
+
 test("body portal 채팅을 hit region에 포함하고 전체 modal은 native 지도 입력도 차단한다", async ({ page, chat }) => {
   chat.enabled = true;
   await open(page, chatRouteId);

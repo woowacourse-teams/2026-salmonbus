@@ -693,9 +693,14 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     locationSessionId = sessionId
     switch locationManager.authorizationStatus {
     case .notDetermined: locationManager.requestWhenInUseAuthorization()
-    case .authorizedAlways, .authorizedWhenInUse: locationManager.requestLocation()
+    case .authorizedAlways, .authorizedWhenInUse: startLocationRequest(locationManager)
     default: finishLocation(error: "denied"); return
     }
+  }
+
+  private func startLocationRequest(_ manager: CLLocationManager) {
+    manager.requestLocation()
+    locationTimer?.invalidate()
     locationTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: false) { [weak self] _ in
       self?.finishLocation(error: "timeout")
     }
@@ -704,7 +709,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
     guard locationRequestId != nil else { return }
     switch manager.authorizationStatus {
-    case .authorizedAlways, .authorizedWhenInUse: manager.requestLocation()
+    case .authorizedAlways, .authorizedWhenInUse: startLocationRequest(manager)
     case .denied, .restricted: finishLocation(error: "denied")
     default: break
     }
