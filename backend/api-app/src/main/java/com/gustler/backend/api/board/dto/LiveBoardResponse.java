@@ -17,7 +17,7 @@ public record LiveBoardResponse(
     OffsetDateTime staleAt,
     @Schema(description = "정류장 예보에 연결된 모델 정보")
     ModelInfoResponse model,
-    @Schema(description = "기준 관측에 포함된 운행 차량 수. vehicles의 길이와 같다", minimum = "0")
+    @Schema(description = "기준 관측에 기록된 운행 차량 수. 위치를 읽지 못한 차량이 있으면 vehicles의 길이보다 클 수 있다", minimum = "0")
     int vehiclesInService,
     @Schema(description = "노선의 정류장 목록과 정류장별 도착 예보. 접근 차량이 없는 정류장도 포함")
     List<StopStateResponse> stops,

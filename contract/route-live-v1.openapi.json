@@ -560,7 +560,7 @@
           "vehiclesInService": {
             "type": "integer",
             "format": "int32",
-            "description": "기준 관측에 포함된 운행 차량 수. vehicles의 길이와 같다",
+            "description": "기준 관측에 기록된 운행 차량 수. 위치를 읽지 못한 차량이 있으면 vehicles의 길이보다 클 수 있다",
             "minimum": 0
           },
           "stops": {
