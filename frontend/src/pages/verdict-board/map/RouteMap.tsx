@@ -248,7 +248,7 @@ export function RouteMap(props: RouteMapProps) {
             status: "message",
             message:
               reason === "denied"
-                ? "위치 권한을 허용하면 내 위치를 볼 수 있어요"
+                ? "iPhone 설정에서 연어버스의 위치 권한을 허용해주세요"
                 : reason === "timeout"
                   ? "위치를 확인하는 데 시간이 걸려요. 다시 눌러주세요"
                   : "현재 위치를 확인하지 못했어요. 다시 눌러주세요",
