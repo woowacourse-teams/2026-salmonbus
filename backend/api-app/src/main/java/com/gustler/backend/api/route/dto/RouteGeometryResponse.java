@@ -3,14 +3,22 @@ package com.gustler.backend.api.route.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.gustler.backend.api.route.domain.RouteGeometry;
 import com.gustler.backend.api.route.domain.RoutePaths;
+import com.gustler.backend.api.route.dto.RouteGeometryResponse.Boundary;
+import com.gustler.backend.api.route.dto.RouteGeometryResponse.BusStop;
+import com.gustler.backend.api.route.dto.RouteGeometryResponse.Paths;
+import com.gustler.backend.api.route.dto.RouteGeometryResponse.Point;
+import com.gustler.backend.api.route.dto.RouteGeometryResponse.TurningPoint;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Schema.AdditionalPropertiesValue;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /** 네이버 버스 노선 응답의 points/busStops/point/boundary 구성을 필요한 필드로 한정한다. */
 @Schema(requiredProperties = {"routeId", "referenceVersionId", "geometryRevision", "name", "startPoint", "endPoint",
     "status", "reason", "coordinateSystem", "turningPoint", "busStops", "points", "paths", "boundary"},
-    additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
+    additionalProperties = AdditionalPropertiesValue.FALSE)
 public record RouteGeometryResponse(
     @Schema(description = "9자리 GBIS 노선 ID", pattern = "^[0-9]{9}$")
     String routeId,
@@ -50,16 +58,25 @@ public record RouteGeometryResponse(
     @Schema(description = "전체 경로와 제공 가능한 정류장 좌표를 포함하는 영역. 좌표가 전혀 없으면 null", nullable = true)
     Boundary boundary
 ) {
+    /** 원본 참조와 분리하고 기존 null·원소·순서를 보존한다. */
+    public RouteGeometryResponse {
+        if (busStops != null) {
+            busStops = Collections.unmodifiableList(new ArrayList<>(busStops));
+        }
+        if (points != null) {
+            points = Collections.unmodifiableList(new ArrayList<>(points));
+        }
+    }
 
     @Schema(name = "RouteTurningPoint", requiredProperties = "stopSequence",
-        additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
+        additionalProperties = AdditionalPropertiesValue.FALSE)
     public record TurningPoint(@Schema(description = "회차 정류장 방문 순번. 형상 배열 인덱스가 아님", minimum = "1")
         int stopSequence) {
     }
 
     @Schema(name = "RouteGeometryPaths", requiredProperties = {"UP", "DOWN"},
         description = "실제 운행 순서의 양방향 경로. 회차 경계점을 공유하며 하행은 상행의 역순으로 만들지 않음",
-        additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
+        additionalProperties = AdditionalPropertiesValue.FALSE)
     public record Paths(@JsonProperty("UP")
         @Schema(description = "기점에서 회차 지점까지")
         Path up,
@@ -69,14 +86,21 @@ public record RouteGeometryResponse(
     }
 
     @Schema(name = "RouteGeometryPath", requiredProperties = "points",
-        additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
+        additionalProperties = AdditionalPropertiesValue.FALSE)
     public record Path(@ArraySchema(minItems = 2, schema = @Schema(implementation = Point.class),
         arraySchema = @Schema(description = "운행 순서의 형상점. 서로 다른 좌표가 두 개 이상이고 원본의 반복 좌표는 유지"))
-        List<Point> points) { }
+        List<Point> points) {
+        /** 원본 참조와 분리하고 기존 null·원소·순서를 보존한다. */
+        public Path {
+            if (points != null) {
+                points = Collections.unmodifiableList(new ArrayList<>(points));
+            }
+        }
+    }
 
     @Schema(name = "RouteGeometryStop",
         requiredProperties = {"stationId", "stopSequence", "name", "direction", "boardingAllowed", "point"},
-        additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
+        additionalProperties = AdditionalPropertiesValue.FALSE)
     public record BusStop(
         @Schema(description = "정류장 ID. 노선 안에서 여러 번 등장할 수 있음")
         String stationId,
@@ -95,7 +119,7 @@ public record RouteGeometryResponse(
     }
 
     @Schema(name = "RouteGeometryPoint", requiredProperties = {"x", "y"},
-        additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
+        additionalProperties = AdditionalPropertiesValue.FALSE)
     public record Point(@Schema(description = "경도로 해석하는 X좌표", minimum = "-180", maximum = "180")
         double x,
         @Schema(description = "위도로 해석하는 Y좌표", minimum = "-90", maximum = "90")
@@ -103,7 +127,7 @@ public record RouteGeometryResponse(
     }
 
     @Schema(name = "RouteGeometryBoundary", requiredProperties = {"left", "top", "right", "bottom"},
-        additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
+        additionalProperties = AdditionalPropertiesValue.FALSE)
     public record Boundary(@Schema(description = "최소 X좌표")
         double left, @Schema(description = "최대 Y좌표")
         double top,
@@ -118,17 +142,41 @@ public record RouteGeometryResponse(
         return new RouteGeometryResponse(geometry.routeId(), Long.toString(geometry.referenceVersionId()),
             geometry.revision(),
             geometry.name(), geometry.startPoint(), geometry.endPoint(), geometry.status().name(), geometry.reason(),
-            RouteGeometry.COORDINATE_SYSTEM, geometry.turnSequence() == null ? null : new TurningPoint(geometry.turnSequence()),
+            RouteGeometry.COORDINATE_SYSTEM, turningPointOf(geometry.turnSequence()),
             geometry.busStops()
                 .stream()
                 .map(stop -> new BusStop(stop.stationId(), stop.stopSequence(), stop.name(),
                     stop.direction(), stop.boardingAllowed(), pointOf(stop.point())))
                 .toList(), pointsOf(geometry.points()),
-            paths == null ? null : new Paths(new Path(pointsOf(paths.up().points())), new Path(pointsOf(paths.down().points()))),
-            boundary == null ? null : new Boundary(boundary.left(), boundary.top(), boundary.right(), boundary.bottom()));
+            pathsOf(paths), boundaryOf(boundary));
     }
 
-    private static Point pointOf(RouteGeometry.Point point) { return point == null ? null : new Point(point.x(), point.y());
+    private static TurningPoint turningPointOf(Integer sequence) {
+        if (sequence == null) {
+            return null;
+        }
+        return new TurningPoint(sequence);
+    }
+
+    private static Paths pathsOf(RoutePaths paths) {
+        if (paths == null) {
+            return null;
+        }
+        return new Paths(new Path(pointsOf(paths.up().points())), new Path(pointsOf(paths.down().points())));
+    }
+
+    private static Boundary boundaryOf(RouteGeometry.Boundary boundary) {
+        if (boundary == null) {
+            return null;
+        }
+        return new Boundary(boundary.left(), boundary.top(), boundary.right(), boundary.bottom());
+    }
+
+    private static Point pointOf(RouteGeometry.Point point) {
+        if (point == null) {
+            return null;
+        }
+        return new Point(point.x(), point.y());
     }
 
     private static List<Point> pointsOf(List<RouteGeometry.Point> points) {
