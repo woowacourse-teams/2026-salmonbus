@@ -9,7 +9,7 @@ import org.springframework.boot.test.autoconfigure.json.JsonTest;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * 이 JSON 은 실제 응답을 받아 적은 것이 아니라 공공데이터포털 문서를 보고 지어낸 것이다.
+ * 이 JSON 은 실제 응답을 받아 적은 것이 아니라 공공데이터포털 문서를 보고 만든 것이다.
  * 서비스키가 아직 없어 대조하지 못했다. 위치정보 픽스처와 달리 실측이 아니다.
  */
 @JsonTest
@@ -34,8 +34,10 @@ class BusRouteStationResponseTest {
 
     @Test
     void 정류소가_여럿이면_배열로_응답받고_리스트로_읽는다() {
+        // given
+
         // when
-        final BusRouteStationResponse actual =
+        BusRouteStationResponse actual =
             objectMapper.readValue(THREE_STATIONS_JSON, BusRouteStationResponse.class);
 
         // then
@@ -44,8 +46,10 @@ class BusRouteStationResponseTest {
 
     @Test
     void 정류소가_하나면_객체로_응답받고_리스트로_읽는다() {
+        // given
+
         // when
-        final BusRouteStationResponse actual =
+        BusRouteStationResponse actual =
             objectMapper.readValue(SINGLE_STATION_AS_OBJECT_JSON, BusRouteStationResponse.class);
 
         // then
@@ -54,20 +58,24 @@ class BusRouteStationResponseTest {
 
     @Test
     void GBIS_필드명을_서버에서_이해하기_쉬운_변수명으로_매핑한다() {
+        // given
+
         // when
-        final BusRouteStationResponse actual =
+        BusRouteStationResponse actual =
             objectMapper.readValue(THREE_STATIONS_JSON, BusRouteStationResponse.class);
 
         // then
-        final RouteStationItem actualStation = actual.response().body().stations().getFirst();
+        RouteStationItem actualStation = actual.response().body().stations().getFirst();
         assertThat(actualStation)
             .isEqualTo(new RouteStationItem("205000217", "범계역", 1, 2, "N"));
     }
 
     @Test
     void 회차_지점인_정류소만_회차_표시가_붙는다() {
+        // given
+
         // when
-        final BusRouteStationResponse actual =
+        BusRouteStationResponse actual =
             objectMapper.readValue(THREE_STATIONS_JSON, BusRouteStationResponse.class);
 
         // then
@@ -78,11 +86,14 @@ class BusRouteStationResponseTest {
 
     @Test
     void 회차_순번은_모든_정류소_행에_같은_값으로_실려_온다() {
+        // given
+
         // when
-        final BusRouteStationResponse actual =
+        BusRouteStationResponse actual =
             objectMapper.readValue(THREE_STATIONS_JSON, BusRouteStationResponse.class);
 
-        // then 노선정보 응답에는 이 값이 없어서 여기서만 읽을 수 있다
+        // then
+        // 노선정보 응답에는 이 값이 없어서 여기서만 읽을 수 있다
         assertThat(actual.response().body().stations())
             .extracting(RouteStationItem::turnSequence)
             .containsOnly(2);

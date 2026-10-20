@@ -1,10 +1,10 @@
 package com.gustler.backend.gbis.api;
 
-import com.gustler.backend.gbis.configuration.GbisClientConfig;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.gbis.api.GbisLocationResult.NoResponse;
+import com.gustler.backend.gbis.api.GbisLocationSourceTimeoutTest.ClientOptions;
+import com.gustler.backend.gbis.configuration.GbisClientConfig;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -19,11 +19,14 @@ import org.springframework.boot.http.client.autoconfigure.imperative.ImperativeH
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 @SpringBootTest(classes =
-    {GbisClientConfig.class, GbisApiCaller.class, GbisLocationSource.class, GbisLocationSourceTimeoutTest.ClientOptions.class})
+    {GbisClientConfig.class, GbisApiCaller.class, GbisLocationSource.class,
+        ClientOptions.class})
 @ImportAutoConfiguration({
     HttpClientAutoConfiguration.class,
     ImperativeHttpClientAutoConfiguration.class,
@@ -53,6 +56,8 @@ class GbisLocationSourceTimeoutTest {
 
     @Test
     void Open_API가_응답을_안_줘도_읽기_제한시간에_포기한다() {
+        // given
+
         // when
         final long startedAt = System.nanoTime();
         GbisLocationResult actual = source.read(ROUTE_3330);
@@ -65,6 +70,8 @@ class GbisLocationSourceTimeoutTest {
 
     @Test
     void 포기한_응답_사유에_서비스키가_남지_않는다() {
+        // given
+
         // when
         GbisLocationResult actual = source.read(ROUTE_3330);
 
@@ -73,9 +80,9 @@ class GbisLocationSourceTimeoutTest {
             noResponse -> assertThat(noResponse.message()).doesNotContain(FAKE_SERVICE_KEY));
     }
 
-    @org.springframework.boot.test.context.TestConfiguration
+    @TestConfiguration
     static class ClientOptions {
-        @org.springframework.context.annotation.Bean
+        @Bean
         GbisClientOptions gbisClientOptions() {
             return new GbisClientOptions("http://localhost:" + SLOW_OPEN_API.getAddress().getPort(), FAKE_SERVICE_KEY);
         }

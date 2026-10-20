@@ -25,7 +25,7 @@ public enum CallQuota {
         return provider;
     }
 
-    /** 상수 이름을 그대로 쓴다. daily_call_quota.api_service 에 이 글자가 들어간다. */
+    /** 상수 이름을 그대로 쓴다. daily_call_quota.api_service 에 이 값이 들어간다. */
     public String apiService() {
         return name();
     }
