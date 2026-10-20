@@ -8,7 +8,10 @@ public final class SeatRangeException extends IllegalArgumentException {
     private final int maximum;
 
     public SeatRangeException(
-        String inputField, int inputValue, int minimum, int maximum
+        String inputField,
+        final int inputValue,
+        final int minimum,
+        final int maximum
     ) {
         super("모델 좌석 입력 범위 초과: %s=%d, 허용 범위=%d..%d"
             .formatted(inputField, inputValue, minimum, maximum));

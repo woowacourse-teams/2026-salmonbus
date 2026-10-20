@@ -2,6 +2,7 @@ package com.gustler.backend.forecasting.domain.model;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -22,7 +23,7 @@ public final class ForecastRouteReference {
         this.routes = routes.entrySet()
             .stream()
             .collect(Collectors.toUnmodifiableMap(
-            Map.Entry::getKey, entry -> List.copyOf(entry.getValue())));
+                Entry::getKey, entry -> List.copyOf(entry.getValue())));
         for (List<Stop> stops : this.routes.values()) {
             int previous = 0;
             for (Stop stop : stops) {

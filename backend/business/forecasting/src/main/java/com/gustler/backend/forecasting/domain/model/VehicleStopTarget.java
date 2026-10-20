@@ -1,6 +1,8 @@
 package com.gustler.backend.forecasting.domain.model;
 
-
+/**
+ * 현재 관측과 예보 대상 방문을 연결해 정류장 거리와 입력 좌석을 제공한다.
+ */
 public record VehicleStopTarget(
     ObservedVehicle observation,
     RouteStop targetStop

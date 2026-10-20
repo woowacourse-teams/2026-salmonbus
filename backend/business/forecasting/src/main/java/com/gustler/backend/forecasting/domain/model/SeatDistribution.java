@@ -3,6 +3,10 @@ package com.gustler.backend.forecasting.domain.model;
 import java.util.List;
 import java.util.stream.IntStream;
 
+/**
+ * 좌석 수별 확률을 보관하고 만석 확률과 기대 잔여석을 계산한다.
+ * 분포의 수치 범위와 합계를 검증한다.
+ */
 public record SeatDistribution(
     List<Double> chanceBySeats
 ) {

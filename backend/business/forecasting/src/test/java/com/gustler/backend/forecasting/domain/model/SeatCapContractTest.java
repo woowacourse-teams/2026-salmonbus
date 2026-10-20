@@ -29,6 +29,8 @@ class SeatCapContractTest {
     @Test
     void 품질_view_의_좌석_상한은_도메인_격자와_같다() {
         // given
+
+        // when
         List<Integer> caps = seatCapsIn(cutoverMigration());
 
         // then
@@ -41,7 +43,7 @@ class SeatCapContractTest {
     }
 
     private static List<Integer> seatCapsIn(
-        final String sql
+        String sql
     ) {
         Matcher matcher = SEAT_CAP.matcher(sql);
         return matcher.results().map(result -> Integer.parseInt(result.group(1))).toList();

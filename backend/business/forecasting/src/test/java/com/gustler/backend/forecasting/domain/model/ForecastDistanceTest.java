@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.domain.model;
 
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -10,15 +10,27 @@ import org.junit.jupiter.params.provider.ValueSource;
 class ForecastDistanceTest {
     @Test
     void 예보는_관측한_정류장의_다음_정류장부터_시작한다() {
-        // when & then
-        assertThatThrownBy(() -> new ForecastDistance(0))
+        // given
+
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new ForecastDistance(0));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void 도착_예정인_12개_정류장까지만_예보한다() {
-        // when & then
-        assertThatThrownBy(() -> new ForecastDistance(13))
+        // given
+
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new ForecastDistance(13));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -27,8 +39,13 @@ class ForecastDistanceTest {
     void 다음_정류장부터_12정류장_앞까지_예보한다(
         final int stopCount
     ) {
-        // when & then
-        assertThatCode(() -> new ForecastDistance(stopCount))
+        // given
+
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new ForecastDistance(stopCount));
+
+        // then
+        assertThat(caughtFailure)
             .doesNotThrowAnyException();
     }
 }

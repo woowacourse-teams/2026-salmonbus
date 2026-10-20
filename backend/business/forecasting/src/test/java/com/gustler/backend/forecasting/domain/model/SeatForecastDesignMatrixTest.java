@@ -1,22 +1,25 @@
 package com.gustler.backend.forecasting.domain.model;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
+
 import com.gustler.backend.forecasting.domain.model.FullSeatStreak;
+import com.gustler.backend.forecasting.domain.model.FullSeatStreak.SeenToEnd;
 import com.gustler.backend.forecasting.domain.model.ObservedSeats;
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
 import com.gustler.backend.forecasting.domain.model.PrecedingVehicle;
 import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
+import com.gustler.backend.forecasting.domain.model.SameDayFullOutcomes;
 import com.gustler.backend.forecasting.domain.model.SeatSlope;
+import com.gustler.backend.forecasting.domain.model.SeatSlope.Known;
+import com.gustler.backend.forecasting.domain.model.SeatSlope.Unknown;
 import com.gustler.backend.forecasting.domain.model.TrajectoryGap;
 import com.gustler.backend.forecasting.domain.model.VehicleStopTarget;
 import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandCell;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
 import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
-import com.gustler.backend.forecasting.domain.model.SameDayFullOutcomes;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.within;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -28,14 +31,13 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /**
- * 설계행렬 31열 중 무엇을 지금 채우고 무엇이 계수 번들을 기다리는지 고정한다.
+ * 설계행렬 31열 중 현재 입력으로 계산하는 열과 계수 번들이 필요한 열을 고정한다.
  *
- * <p>이 테스트가 깨지면 둘 중 하나다. 모델이 받는 재료가 달라졌거나, 설계행렬이 바뀌었거나.
- * 어느 쪽이든 몇 열을 채우는지 다시 세야 한다.
+ * <p>이 테스트가 실패하면 모델 입력이나 설계행렬이 바뀌었는지 확인하고
+ * 현재 계산하는 열의 개수를 다시 세어야 한다.
  */
 class SeatForecastDesignMatrixTest {
-
-    /** 오늘 확정된 결과가 없는 자리. 그때는 만석 확률을 안 옮긴다. */
+    /** 오늘 확정된 결과가 없어 만석 확률을 보정하지 않는 경우. */
     private static final SameDayFullOutcomes NO_SAME_DAY_OUTCOMES = null;
 
     private static final Clock KOREAN_CLOCK =
@@ -65,9 +67,9 @@ class SeatForecastDesignMatrixTest {
     private static final Integer CROWD_LEVEL_UNKNOWN = null;
 
     /**
-     * 문서와 같은 1부터의 열 번호. 프로덕션과 따로 적는다.
+     * 문서와 같은 1부터의 열 번호를 프로덕션과 별도로 명시한다.
      *
-     * <p>프로덕션 상수를 그대로 쓰면 열 번호가 바뀔 때 테스트도 같이 따라가서 아무것도 안 잡는다.
+     * <p>프로덕션 상수를 그대로 쓰면 열 번호가 바뀔 때 테스트도 같은 값으로 바뀌어 오류를 발견할 수 없다.
      */
     private static final int CONSTANT = 1;
     private static final int IS_MORNING = 2;
@@ -89,11 +91,13 @@ class SeatForecastDesignMatrixTest {
     private static final int NET_BOARDING_SEGMENT_SCORE = 30;
     private static final int FILLED_BY_NEIGHBOURS = 31;
 
-    /** 실수 계산에서 자리끝이 어긋나는 만큼. 값이 다른 것과 구별하려고 좁게 잡는다. */
+    /** 실수 계산의 반올림 오차 허용 범위. 값 자체의 차이와 구분하도록 좁게 잡는다. */
     private static final double FLOATING_POINT_ROUNDING = 1e-12;
 
     @Test
     void 설계행렬은_31열이다() {
+        // given
+
         // when
         double[] actual = matrixOf(input()).toArray();
 
@@ -103,13 +107,16 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 지금_채우는_열과_계수를_기다리는_열과_늘_0인_열이_31열을_빠짐없이_나눈다() {
+        // given
+
         // when
         List<Integer> actual = new ArrayList<>();
         actual.addAll(SeatForecastDesignMatrix.COLUMNS_FILLED_NOW);
         actual.addAll(SeatForecastDesignMatrix.COLUMNS_WAITING_FOR_COEFFICIENTS);
         actual.addAll(SeatForecastDesignMatrix.COLUMNS_ALWAYS_ZERO);
 
-        // then 겹치는 열도 빠진 열도 없다
+        // then
+        // 겹치는 열도 빠진 열도 없다
         assertThat(actual).containsExactlyInAnyOrderElementsOf(
             IntStream.rangeClosed(1, SeatForecastDesignMatrix.COLUMN_COUNT)
                 .boxed()
@@ -118,13 +125,19 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 지금_채우는_열은_스물한_개다() {
-        // then 계약을 넓히기 전에는 여섯 개였다
+        // given
+
+        // when
+
+        // then
+        // 계약을 넓히기 전에는 여섯 개였다
         assertThat(SeatForecastDesignMatrix.COLUMNS_FILLED_NOW).hasSize(21);
     }
 
     @Test
     void 계수를_기다리는_아홉_열은_재료가_달라져도_0이다() {
-        // given 시간대도 잔여석도 혼잡도도 다른 두 재료
+        // given
+        // 시간대 · 잔여석 · 혼잡도가 서로 다른 두 입력
         SeatForecastDesignMatrix morning = matrixOf(input());
         SeatForecastDesignMatrix evening = matrixOf(
             inputOf(observed(NO_SEAT_LEFT, CROWD_LEVEL_UNKNOWN, EVENING_AT), statisticsOf(TimeSlot.EVENING)));
@@ -141,15 +154,20 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 노선은_노선마다_따로_배워서_0이다() {
+        // given
+
         // when
         SeatForecastDesignMatrix actual = matrixOf(input());
 
-        // then 한 적합 안에서 상수라 절편에 흡수된다
+        // then
+        // 한 적합 안에서 상수라 절편에 흡수된다
         assertThat(actual.columnAt(ROUTE)).isEqualTo(0);
     }
 
     @Test
     void 상수는_재료와_무관하게_1이다() {
+        // given
+
         // when
         SeatForecastDesignMatrix actual = matrixOf(input());
 
@@ -159,6 +177,8 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 아침으로_정해진_예보는_아침_열이_1이다() {
+        // given
+
         // when
         SeatForecastDesignMatrix actual = matrixOf(input());
 
@@ -168,6 +188,8 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 저녁으로_정해진_예보는_저녁_열이_1이다() {
+        // given
+
         // when
         SeatForecastDesignMatrix actual = matrixOf(
             inputOf(observed(SEATS_LEFT_12, CROWD_LEVEL_3, EVENING_AT), statisticsOf(TimeSlot.EVENING)));
@@ -178,6 +200,8 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 아침도_저녁도_아닌_예보는_두_열이_모두_0이다() {
+        // given
+
         // when
         SeatForecastDesignMatrix actual = matrixOf(
             inputOf(observed(SEATS_LEFT_12, CROWD_LEVEL_3, MIDDAY_AT), statisticsOf(TimeSlot.OTHER)));
@@ -188,6 +212,8 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 최대_44석을_보인_차량에_12석_남았으면_잔여석_비율은_12를_44로_나눈_값이다() {
+        // given
+
         // when
         SeatForecastDesignMatrix actual = matrixOf(input());
 
@@ -197,6 +223,8 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 잔여석이_0석이면_만석이_1이다() {
+        // given
+
         // when
         SeatForecastDesignMatrix actual = matrixOf(
             inputOf(observed(NO_SEAT_LEFT, CROWD_LEVEL_3, MORNING_AT), fullStatistics()));
@@ -207,6 +235,8 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 잔여석이_20석보다_많이_남으면_낮은_좌석_구간은_1이다() {
+        // given
+
         // when
         SeatForecastDesignMatrix actual = matrixOf(
             inputOf(observed(30, CROWD_LEVEL_3, MORNING_AT), fullStatistics()));
@@ -220,6 +250,8 @@ class SeatForecastDesignMatrixTest {
     void 혼잡도_1등급부터_4등급까지_그_등급의_열만_1이다(
         final int crowdLevel
     ) {
+        // given
+
         // when
         SeatForecastDesignMatrix actual = matrixOf(
             inputOf(observed(SEATS_LEFT_12, crowdLevel, MORNING_AT), fullStatistics()));
@@ -231,6 +263,8 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 혼잡도를_모르면_혼잡도_네_열이_모두_0이다() {
+        // given
+
         // when
         SeatForecastDesignMatrix actual = matrixOf(
             inputOf(observed(SEATS_LEFT_12, CROWD_LEVEL_UNKNOWN, MORNING_AT), fullStatistics()));
@@ -241,6 +275,8 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 최대_44석을_보인_차량은_최대_잔여석_비율이_44를_68로_나눈_값이다() {
+        // given
+
         // when
         SeatForecastDesignMatrix actual = matrixOf(input());
 
@@ -250,6 +286,8 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 상류에서_3석_줄었으면_좌석_기울기는_마이너스_3이다() {
+        // given
+
         // when
         SeatForecastDesignMatrix actual = matrixOf(input());
 
@@ -262,9 +300,9 @@ class SeatForecastDesignMatrixTest {
         // given
         VehicleTrajectory unknownSlope = trajectoryOf(
             observed(SEATS_LEFT_12, CROWD_LEVEL_3, MORNING_AT),
-            new SeatSlope.Unknown(TrajectoryGap.NO_EARLIER_OBSERVATION),
+            new Unknown(TrajectoryGap.NO_EARLIER_OBSERVATION),
             precedingVehicle(),
-            new FullSeatStreak.SeenToEnd(3));
+            new SeenToEnd(3));
 
         // when
         SeatForecastDesignMatrix actual = matrixOf(inputOf(unknownSlope, fullStatistics()));
@@ -275,6 +313,8 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 만석이_3정류장째_이어지면_연속_만석은_3이다() {
+        // given
+
         // when
         SeatForecastDesignMatrix actual = matrixOf(input());
 
@@ -287,9 +327,9 @@ class SeatForecastDesignMatrixTest {
         // given
         VehicleTrajectory fullPreceding = trajectoryOf(
             observed(SEATS_LEFT_12, CROWD_LEVEL_3, MORNING_AT),
-            new SeatSlope.Known(-3),
+            new Known(-3),
             new PrecedingVehicle.Known(VEHICLE_204003542, NO_SEAT_LEFT, MORNING_AT),
-            new FullSeatStreak.SeenToEnd(3));
+            new SeenToEnd(3));
 
         // when
         SeatForecastDesignMatrix actual = matrixOf(inputOf(fullPreceding, fullStatistics()));
@@ -300,6 +340,8 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 직전_차량에_11석_남았으면_직전_잔여석_비율은_11을_44로_나눈_값이다() {
+        // given
+
         // when
         SeatForecastDesignMatrix actual = matrixOf(input());
 
@@ -313,9 +355,9 @@ class SeatForecastDesignMatrixTest {
         // given
         VehicleTrajectory noPreceding = trajectoryOf(
             observed(SEATS_LEFT_12, CROWD_LEVEL_3, MORNING_AT),
-            new SeatSlope.Known(-3),
+            new Known(-3),
             new PrecedingVehicle.Unknown(TrajectoryGap.NO_VEHICLE_AHEAD),
-            new FullSeatStreak.SeenToEnd(3));
+            new SeenToEnd(3));
 
         // when
         SeatForecastDesignMatrix actual = matrixOf(inputOf(noPreceding, fullStatistics()));
@@ -326,6 +368,8 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 정류장_60개짜리_판본의_49번_정류장은_49를_60으로_나눈_자리다() {
+        // given
+
         // when
         SeatForecastDesignMatrix actual = matrixOf(input());
 
@@ -335,7 +379,8 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 대상_정류장의_셀이_없으면_이웃으로_메웠다고_남는다() {
-        // given 49번 셀이 없는 세대
+        // given
+        // 49번 셀이 없는 세대
         StopDemandStatistics withoutTargetCell = new StopDemandStatistics(
             ROUTE_VERSION_3330, TimeSlot.MORNING, 1, List.of(new StopDemandCell(47, 0.5, 0.1, 30, 10)));
 
@@ -349,7 +394,8 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 셀_통계_두_열은_대상_정류장과_지나갈_구간에서_나온다() {
-        // given 대상 49번만 크게 차 있고 지나갈 구간의 순승차도 크다
+        // given
+        // 대상 49번만 크게 차 있고 지나갈 구간의 순승차도 크다
         StopDemandStatistics statistics = new StopDemandStatistics(
             ROUTE_VERSION_3330,
             TimeSlot.MORNING,
@@ -368,6 +414,8 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 같은_재료로_두_번_만들면_31열이_모두_같다() {
+        // given
+
         // when
         double[] actual = matrixOf(input()).toArray();
 
@@ -387,7 +435,7 @@ class SeatForecastDesignMatrixTest {
         final int crowdLevel
     ) {
         return IntStream.rangeClosed(1, 4)
-            .mapToObj(level -> level == crowdLevel ? 1.0 : 0.0)
+            .mapToObj(level -> crowdFeature(level, crowdLevel))
             .toList();
     }
 
@@ -414,7 +462,7 @@ class SeatForecastDesignMatrixTest {
         TimeSlot timeSlot
     ) {
         return inputOf(
-            trajectoryOf(observation, new SeatSlope.Known(-3), precedingVehicle(), new FullSeatStreak.SeenToEnd(3)),
+            trajectoryOf(observation, new Known(-3), precedingVehicle(), new SeenToEnd(3)),
             statistics,
             timeSlot);
     }
@@ -486,5 +534,12 @@ class SeatForecastDesignMatrixTest {
             stops.add(new RouteStop(ROUTE_VERSION_3330, stopOrder, "204000%02d".formatted(stopOrder), true));
         }
         return new RouteStops(ROUTE_VERSION_3330, UPSTREAM_ROUTE_3330, stops);
+    }
+
+    private static double crowdFeature(final int level, final int crowdLevel) {
+        if (level == crowdLevel) {
+            return 1.0;
+        }
+        return 0.0;
     }
 }

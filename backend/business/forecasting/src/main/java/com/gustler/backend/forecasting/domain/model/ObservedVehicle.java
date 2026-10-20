@@ -3,10 +3,10 @@ package com.gustler.backend.forecasting.domain.model;
 import java.time.Instant;
 
 /**
- * 관측 한 건에서 예보에 그대로 넘기는 값.
+ * 관측 한 건에서 예보에 그대로 전달하는 값.
  *
- * <p>혼잡도는 상류가 1등급에서 4등급으로 주고 안 줄 때도 있다. 적재가 0을 미제공으로 접어
- * 두어서 여기 오는 값은 1에서 4 사이거나 비어 있다.
+ * <p>상류는 혼잡도를 1등급에서 4등급으로 제공하거나 생략한다. 적재 단계에서 0을 미제공으로
+ * 처리하므로 이 값은 1에서 4 사이거나 비어 있다.
  */
 public record ObservedVehicle(
     String vehicleId,

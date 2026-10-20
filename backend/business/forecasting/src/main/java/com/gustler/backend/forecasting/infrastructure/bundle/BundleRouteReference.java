@@ -1,12 +1,14 @@
 package com.gustler.backend.forecasting.infrastructure.bundle;
 
 import com.gustler.backend.forecasting.domain.model.ForecastRouteReference;
+import com.gustler.backend.forecasting.domain.model.ForecastRouteReference.Stop;
 import com.gustler.backend.forecasting.domain.model.ModelRoute;
-import com.gustler.backend.forecasting.domain.model.Sha256;
 import com.gustler.backend.forecasting.domain.model.RouteDirection;
+import com.gustler.backend.forecasting.domain.model.Sha256;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import tools.jackson.core.StreamReadFeature;
@@ -31,7 +33,7 @@ final class BundleRouteReference {
             JsonNode routes = root.get("routes");
             BundleCheck.ROUTE_REFERENCE.require(routes.isArray() && routes.size() == manifest.routes()
                 .size(), "노선 수 불일치");
-            Map<String, java.util.List<ForecastRouteReference.Stop>> result = new LinkedHashMap<>();
+            Map<String, List<Stop>> result = new LinkedHashMap<>();
             for (int index = 0; index < routes.size(); index++) {
                 JsonNode route = routes.get(index);
                 fields(route, Set.of("modelRoute", "sourceRouteId", "stops"));
@@ -41,13 +43,13 @@ final class BundleRouteReference {
                 JsonNode stops = route.get("stops");
                 BundleCheck.ROUTE_REFERENCE.require(stops.isArray() && !stops.isEmpty() && stops.size() <= 2000,
                 "정류장 목록 오류");
-                java.util.List<ForecastRouteReference.Stop> parsed = new ArrayList<>();
+                List<Stop> parsed = new ArrayList<>();
                 for (JsonNode stop : stops) {
                     fields(stop, Set.of("order", "id", "boardingAllowed", "direction"));
                     JsonNode order = stop.get("order");
                     BundleCheck.ROUTE_REFERENCE.require(order.isIntegralNumber() && order.canConvertToInt()
                         && stop.get("boardingAllowed").isBoolean(), "순번 또는 승차 가능 여부 자료형 오류");
-                    parsed.add(new ForecastRouteReference.Stop(order.intValue(), text(stop, "id"),
+                    parsed.add(new Stop(order.intValue(), text(stop, "id"),
                         stop.get("boardingAllowed").booleanValue(), RouteDirection.valueOf(text(stop, "direction"))));
                 }
                 result.put(modelRoute, parsed);

@@ -4,10 +4,10 @@ import java.time.Instant;
 import java.util.Objects;
 
 /**
- * 같은 정류소를 나보다 앞서 지난 차.
+ * 같은 정류소를 현재 차량보다 앞서 지난 차.
  *
- * <p>앞차가 만석이면 뒷차도 만석일 확률이 크게 오른다. 언제 지났는지를 같이 들어서,
- * 얼마나 오래된 앞차까지 쳐줄지는 읽는 쪽이 정한다.
+ * <p>앞차가 만석이면 뒷차도 만석일 확률이 크게 오른다. 통과 시각을 함께 보관하며,
+ * 얼마나 오래된 앞차 관측까지 사용할지는 읽는 쪽이 정한다.
  */
 public sealed interface PrecedingVehicle {
     record Known(

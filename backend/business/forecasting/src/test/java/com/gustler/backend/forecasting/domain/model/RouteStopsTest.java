@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.domain.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -145,21 +145,27 @@ class RouteStopsTest {
             boardingStop(1),
             new RouteStop(otherRouteVersion, 2, "20402", true));
 
-        // when & then
-        assertThatThrownBy(() -> new RouteStops(ROUTE_VERSION_3330, UPSTREAM_ROUTE_3330, mixed))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new RouteStops(ROUTE_VERSION_3330, UPSTREAM_ROUTE_3330, mixed));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void 판본의_마지막_순번은_정류장_중_가장_큰_순번이다() {
-        // given 경유 지점이 마지막 순번을 차지해도 그것까지 센다
+        // given
+        // 경유 지점이 마지막 순번을 차지해도 그것까지 센다
         RouteStops stops =
             new RouteStops(ROUTE_VERSION_3330, UPSTREAM_ROUTE_3330, List.of(boardingStop(1), passingStop(60)));
 
         // when
         final int actual = stops.largestStopOrder();
 
-        // then 정류장 위치를 0에서 1 사이로 옮길 때 나누는 수다
+        // then
+        // 정류장 위치를 0에서 1 사이로 옮길 때 나누는 수다
         assertThat(actual).isEqualTo(60);
     }
 

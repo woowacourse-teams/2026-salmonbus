@@ -1,9 +1,9 @@
 package com.gustler.backend.forecasting.domain.model;
 
-import com.gustler.backend.forecasting.domain.model.ForecastDistance;
-
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
+
+import com.gustler.backend.forecasting.domain.model.ForecastDistance;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -34,8 +34,12 @@ class VehicleStopTargetTest {
         // given
         RouteStop passedStop = routeStop(40);
 
-        // when & then
-        assertThatThrownBy(() -> new VehicleStopTarget(observed(44, 12), passedStop))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new VehicleStopTarget(observed(44, 12), passedStop));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -44,8 +48,12 @@ class VehicleStopTargetTest {
         // given
         RouteStop farStop = routeStop(57);
 
-        // when & then
-        assertThatThrownBy(() -> new VehicleStopTarget(observed(44, 12), farStop))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new VehicleStopTarget(observed(44, 12), farStop));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -55,8 +63,12 @@ class VehicleStopTargetTest {
         final long otherRouteVersion = 2L;
         RouteStop stopOfOtherVersion = new RouteStop(otherRouteVersion, 49, "20449", true);
 
-        // when & then
-        assertThatThrownBy(() -> new VehicleStopTarget(observed(44, 12), stopOfOtherVersion))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new VehicleStopTarget(observed(44, 12), stopOfOtherVersion));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -69,8 +81,12 @@ class VehicleStopTargetTest {
         // given
         ObservedVehicle seatsUnknown = observed(44, unknownSeats);
 
-        // when & then
-        assertThatThrownBy(() -> new VehicleStopTarget(seatsUnknown, routeStop(49)))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new VehicleStopTarget(seatsUnknown, routeStop(49)));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -79,8 +95,12 @@ class VehicleStopTargetTest {
         // given
         RouteStop passingStop = new RouteStop(ROUTE_VERSION_3330, 49, "27700049", false);
 
-        // when & then
-        assertThatThrownBy(() -> new VehicleStopTarget(observed(44, 12), passingStop))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new VehicleStopTarget(observed(44, 12), passingStop));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 

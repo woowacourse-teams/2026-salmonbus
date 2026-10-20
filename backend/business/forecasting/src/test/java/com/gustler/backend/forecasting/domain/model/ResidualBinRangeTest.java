@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
  * 중심이 40석인 차량과 3석인 차량은 "크게 어긋났다" 의 뜻이 다르다.
  *
  * <p>폭이 좁으면 앞 구간들의 경계가 같은 정수로 내려앉아 <b>담을 것이 없는 구간</b>이 생긴다.
- * 그 구간은 확률을 안 받고, 남은 구간끼리 나눠 갖는다.
+ * 그 구간에 배정된 확률은 다른 구간에 재분배하지 않고 중심 좌석의 확률로 돌린다.
  */
 class ResidualBinRangeTest {
     private static final double[] RELATIVE_EDGES =
@@ -25,6 +25,8 @@ class ResidualBinRangeTest {
 
     @Test
     void 어긋난_정도를_아홉_구간으로_나눈다() {
+        // given
+
         // when
         ResidualBinRange[] actual = ResidualBinRange.allOf(WIDE, RELATIVE_EDGES);
 
@@ -34,16 +36,22 @@ class ResidualBinRangeTest {
 
     @Test
     void 첫_구간은_1석_어긋난_것부터_담는다() {
+        // given
+
         // when
         ResidualBinRange[] actual = ResidualBinRange.allOf(WIDE, RELATIVE_EDGES);
 
-        // then 0석 어긋난 것은 따로 세므로 구간에 안 들어간다
+        // then
+        // 0석 어긋난 것은 따로 세므로 구간에 안 들어간다
         assertThat(actual[0].lowest()).isEqualTo(1);
     }
 
     @Test
     void 어긋날_수_있는_폭이_67석이면_둘째_구간은_4석까지_담는다() {
-        // when 0.07 곱하기 67 은 4.69 라 4석에서 끊는다
+        // given
+
+        // when
+        // 0.07 곱하기 67 은 4.69 라 4석에서 끊는다
         ResidualBinRange[] actual = ResidualBinRange.allOf(WIDE, RELATIVE_EDGES);
 
         // then
@@ -52,6 +60,8 @@ class ResidualBinRangeTest {
 
     @Test
     void 마지막_구간은_50석_어긋난_것까지_담는다() {
+        // given
+
         // when
         ResidualBinRange[] actual = ResidualBinRange.allOf(NARROW, RELATIVE_EDGES);
 
@@ -61,7 +71,10 @@ class ResidualBinRangeTest {
 
     @Test
     void 어긋날_수_있는_폭이_67석이면_마지막_구간은_담을_것이_없다() {
-        // when 마지막 구간이 68석부터 시작하는데 50석까지만 셀 수 있다
+        // given
+
+        // when
+        // 마지막 구간이 68석부터 시작하는데 50석까지만 셀 수 있다
         ResidualBinRange[] actual = ResidualBinRange.allOf(WIDE, RELATIVE_EDGES);
 
         // then
@@ -70,7 +83,10 @@ class ResidualBinRangeTest {
 
     @Test
     void 어긋날_수_있는_폭이_1석이면_앞_구간들은_담을_것이_없다() {
-        // when 앞 여덟 구간이 전부 1석에서 시작해 0석에서 끝난다
+        // given
+
+        // when
+        // 앞 여덟 구간이 전부 1석에서 시작해 0석에서 끝난다
         ResidualBinRange[] actual = ResidualBinRange.allOf(NARROW, RELATIVE_EDGES);
 
         // then
@@ -79,6 +95,8 @@ class ResidualBinRangeTest {
 
     @Test
     void 어긋날_수_있는_폭이_1석이면_마지막_구간_하나가_전부를_담는다() {
+        // given
+
         // when
         ResidualBinRange[] actual = ResidualBinRange.allOf(NARROW, RELATIVE_EDGES);
 
@@ -88,6 +106,8 @@ class ResidualBinRangeTest {
 
     @Test
     void 구간이_5석부터_8석까지면_어긋난_경우_네_가지를_담는다() {
+        // given
+
         // when
         ResidualBinRange actual = new ResidualBinRange(5, 8);
 

@@ -17,7 +17,7 @@ public final class SeatGrid {
     private SeatGrid() {
     }
 
-    /** 잔차 값이 놓이는 배열 자리. 잔차 -40 이 0번, 잔차 0 이 40번이다. */
+    /** 잔차 값에 대응하는 배열 인덱스. 잔차 -40 이 0번, 잔차 0 이 40번이다. */
     static int residualIndexOf(
         final int residual
     ) {

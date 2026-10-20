@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.domain.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -35,8 +35,14 @@ class SeatForecastResultTest {
 
     @Test
     void 예보는_좌석_분포를_반드시_들고_있다() {
-        // when & then
-        assertThatThrownBy(() -> new SeatForecastResult(null, 0.35))
+        // given
+
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new SeatForecastResult(null, 0.35));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(NullPointerException.class);
     }
 
@@ -45,8 +51,14 @@ class SeatForecastResultTest {
     void 보정_전_만석_확률은_0과_1_사이의_수다(
         final double notChance
     ) {
-        // when & then
-        assertThatThrownBy(() -> new SeatForecastResult(seatDistribution(), notChance))
+        // given
+
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new SeatForecastResult(seatDistribution(), notChance));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 

@@ -1,5 +1,9 @@
 package com.gustler.backend.forecasting.domain.model;
 
+/**
+ * 예보 대상까지의 정류장 방문 거리를 나타낸다.
+ * 거리의 단위는 미터가 아니라 정류장 수다.
+ */
 public record ForecastDistance(
     int stopCount
 ) {
@@ -15,7 +19,7 @@ public record ForecastDistance(
         }
     }
 
-    /** 예보를 내는 범위 안인가. 대상을 고르는 쪽이 예외를 안 쓰고 물어볼 수 있어야 한다. */
+    /** 예보 대상 거리가 지원 범위에 속하는지 예외 없이 확인한다. */
     public static boolean covers(
         final int stopCount
     ) {

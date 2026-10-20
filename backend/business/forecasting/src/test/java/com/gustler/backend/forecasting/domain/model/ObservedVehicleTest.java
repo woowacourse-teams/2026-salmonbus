@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.domain.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
@@ -19,6 +19,8 @@ class ObservedVehicleTest {
     void 혼잡도는_1등급부터_4등급까지다(
         final int crowdLevel
     ) {
+        // given
+
         // when
         ObservedVehicle actual = observedWith(crowdLevel);
 
@@ -28,6 +30,8 @@ class ObservedVehicleTest {
 
     @Test
     void 혼잡도를_안_준_관측도_만들_수_있다() {
+        // given
+
         // when
         ObservedVehicle actual = observedWith(null);
 
@@ -37,8 +41,15 @@ class ObservedVehicleTest {
 
     @Test
     void 등급_밖의_혼잡도로는_관측을_만들_수_없다() {
-        // when, then 적재가 0을 미제공으로 접어 두는데 그 규칙이 깨진 값이 오면 여기서 멈춘다
-        assertThatThrownBy(() -> observedWith(0))
+        // given
+        // 적재 시 0을 미제공으로 처리하므로 이 규칙에 어긋난 값은 거절한다.
+
+        // when
+        Throwable caughtFailure = catchThrowable(() -> observedWith(0));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 
