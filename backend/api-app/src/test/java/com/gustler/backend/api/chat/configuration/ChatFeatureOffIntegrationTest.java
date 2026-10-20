@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.gustler.backend.api.chat.configuration.ChatConfiguration.ChatHeartbeat;
 import com.gustler.backend.api.chat.controller.ChatAvailabilityHandler;
 import com.gustler.backend.api.chat.controller.ChatWebSocketHandler;
 import com.gustler.backend.support.IntegrationTest;
@@ -40,10 +42,14 @@ class ChatFeatureOffIntegrationTest {
 
     @Test
     void 기본_설정에서는_채팅_경로가_404이고_채팅_Mongo_WebSocket_빈이_없다() throws Exception {
+        // given
+
+        // when
         mockMvc.perform(get("/api/chat/rooms/204000057"))
             .andExpect(status().isNotFound())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"));
 
+        // then
         assertThat(context.getBeansOfType(ChatAvailabilityHandler.class)).isEmpty();
         assertThat(context.getBeansOfType(ChatWebSocketHandler.class)).isEmpty();
         assertThat(context.getBeansOfType(MongoClient.class)).isEmpty();
@@ -51,6 +57,8 @@ class ChatFeatureOffIntegrationTest {
 
     @Test
     void 기본_설정에서는_WebSocket_매핑과_하트비트와_Mongo_스레드가_없다() throws Exception {
+        // given
+
         // when
         mockMvc.perform(get("/api/chat/rooms/204000057/stream"))
             .andExpect(status().isNotFound());
@@ -59,7 +67,7 @@ class ChatFeatureOffIntegrationTest {
         assertThat(context.containsBean("webSocketHandlerMapping")).isFalse();
         assertThat(context.getBeansOfType(WebSocketConfigurer.class)).isEmpty();
         assertThat(context.getBeansOfType(ServletServerContainerFactoryBean.class)).isEmpty();
-        assertThat(context.getBeansOfType(ChatConfiguration.ChatHeartbeat.class)).isEmpty();
+        assertThat(context.getBeansOfType(ChatHeartbeat.class)).isEmpty();
         assertThat(mongoMonitorThreadsAfterSettling()).isEmpty();
     }
 

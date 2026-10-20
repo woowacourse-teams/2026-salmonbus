@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Test;
 class ChatMongoClientSettingsTest {
     @Test
     void 접속_문자열에_값이_없으면_코드의_기본값을_쓴다() {
+        // given
+
         // when
         MongoClientSettings settings = ChatMongoClientSettings.from(
             "mongodb://127.0.0.1:27017/salmonbus_chat"
@@ -26,6 +28,8 @@ class ChatMongoClientSettingsTest {
 
     @Test
     void 접속_문자열에_값이_있으면_접속_문자열이_이긴다() {
+        // given
+
         // when
         MongoClientSettings settings = ChatMongoClientSettings.from(
             "mongodb://127.0.0.1:27017/salmonbus_chat"
@@ -43,6 +47,8 @@ class ChatMongoClientSettingsTest {
 
     @Test
     void 접속_문자열에_일부만_있으면_나머지는_기본값이다() {
+        // given
+
         // when
         MongoClientSettings settings = ChatMongoClientSettings.from(
             "mongodb://127.0.0.1:27017/salmonbus_chat?maxPoolSize=3"

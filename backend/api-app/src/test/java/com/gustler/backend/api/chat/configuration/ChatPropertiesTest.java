@@ -10,8 +10,16 @@ class ChatPropertiesTest {
         // given
         ChatProperties properties = new ChatProperties();
 
-        // when & then
-        assertThat(properties.getMaxConnections()).isEqualTo(1_000);
-        assertThat(properties.getMaxConnectionsPerAddress()).isEqualTo(30);
+        // when
+        final int maxConnections1 = properties.getMaxConnections();
+
+        // then
+        assertThat(maxConnections1).isEqualTo(1_000);
+
+        // when
+        final int maxConnections2 = properties.getMaxConnectionsPerAddress();
+
+        // then
+        assertThat(maxConnections2).isEqualTo(30);
     }
 }

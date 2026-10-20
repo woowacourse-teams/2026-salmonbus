@@ -2,9 +2,12 @@ package com.gustler.backend.api.arrival.infrastructure.http;
 
 import com.gustler.backend.api.arrival.application.ArrivalRefreshGateway;
 import com.gustler.backend.arrival.contract.ArrivalRefresh;
+import com.gustler.backend.arrival.contract.ArrivalRefresh.Request;
+import com.gustler.backend.arrival.contract.ArrivalRefresh.Status;
 import java.time.Clock;
 import java.time.Duration;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClient.RequestBodySpec;
 
 /** 기본은 빠른 접수 응답이며, 요청한 경우에만 수집 완료를 제한 시간 동안 기다린다. */
 public final class WorkerArrivalRefreshClient implements ArrivalRefreshGateway {
@@ -37,20 +40,29 @@ public final class WorkerArrivalRefreshClient implements ArrivalRefreshGateway {
     @Override
     public ArrivalRefresh request(String stationId, Duration maximumWait) {
         try {
-            RestClient selected = maximumWait.isZero() ? rest : waitingRest;
-            var request = selected.post()
+            RestClient selected = clientFor(maximumWait);
+            RequestBodySpec request = selected.post()
                 .uri("/internal/arrivals/refresh")
                 .header("X-Arrival-Token", token);
-            if (!maximumWait.isZero()) request.header(ArrivalRefresh.WAIT_HEADER, Long.toString(maximumWait.toMillis()));
-            ArrivalRefresh reply = request.body(new ArrivalRefresh.Request(stationId))
+            if (!maximumWait.isZero()) {
+                request.header(ArrivalRefresh.WAIT_HEADER, Long.toString(maximumWait.toMillis()));
+            }
+            ArrivalRefresh reply = request.body(new Request(stationId))
                 .retrieve().body(ArrivalRefresh.class);
             if (reply == null || reply.status() == null || reply.suggestedRefreshAt() == null) {
                 throw new IllegalStateException("수집 Worker 응답 미해석");
             }
             return reply;
         } catch (RuntimeException unavailable) {
-            return new ArrivalRefresh(ArrivalRefresh.Status.UNAVAILABLE, "WORKER_UNAVAILABLE",
+            return new ArrivalRefresh(Status.UNAVAILABLE, "WORKER_UNAVAILABLE",
                 clock.instant().plusSeconds(2));
         }
+    }
+
+    private RestClient clientFor(Duration maximumWait) {
+        if (maximumWait.isZero()) {
+            return rest;
+        }
+        return waitingRest;
     }
 }

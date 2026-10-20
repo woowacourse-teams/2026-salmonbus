@@ -9,6 +9,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 공개 API 계약과 채팅 예시 자료를 문서 진입 경로로 제공한다.
+ */
 @RestController
 @ConditionalOnProperty(name = "springdoc.api-docs.enabled", havingValue = "true")
 public class ApiDocsContractController {

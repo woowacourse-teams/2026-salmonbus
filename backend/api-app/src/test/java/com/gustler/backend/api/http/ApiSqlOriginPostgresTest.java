@@ -2,7 +2,10 @@ package com.gustler.backend.api.http;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -30,7 +33,12 @@ class ApiSqlOriginPostgresTest {
 
     @Test
     void PostgreSQL18은_SQL_맨_앞_주석을_통계에서_제외한다() throws Exception {
+        // given
+
+        // when
         execute("/* salmonbus:api.other */ SELECT id FROM origin_check");
+
+        // then
         assertThat(storedQuery()).doesNotContain("salmonbus:");
     }
 
@@ -43,23 +51,28 @@ class ApiSqlOriginPostgresTest {
         "WITH rows AS (SELECT id FROM origin_check) SELECT * FROM rows"
     })
     void SQL_내부_표식은_실행_후_통계에도_남는다(String sql) throws Exception {
+        // given
+
+        // when
         execute(new ApiSqlOrigin().inspect(sql));
+
+        // then
         assertThat(storedQuery()).contains("/* salmonbus:api.other */");
     }
 
     private static void execute(String sql) throws Exception {
-        try (var connection = DriverManager.getConnection(POSTGRES.getJdbcUrl(),
+        try (Connection connection = DriverManager.getConnection(POSTGRES.getJdbcUrl(),
             POSTGRES.getUsername(), POSTGRES.getPassword());
-             var statement = connection.createStatement()) {
+            Statement statement = connection.createStatement()) {
             statement.execute(sql);
         }
     }
 
     private static String storedQuery() throws Exception {
-        try (var connection = DriverManager.getConnection(POSTGRES.getJdbcUrl(),
+        try (Connection connection = DriverManager.getConnection(POSTGRES.getJdbcUrl(),
             POSTGRES.getUsername(), POSTGRES.getPassword());
-             var statement = connection.createStatement();
-             var rows = statement.executeQuery(
+            Statement statement = connection.createStatement();
+            ResultSet rows = statement.executeQuery(
                 "SELECT query FROM pg_stat_statements WHERE query LIKE '%origin_check%' AND toplevel")) {
             assertThat(rows.next()).isTrue();
             String sql = rows.getString(1);

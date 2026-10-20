@@ -3,6 +3,7 @@ package com.gustler.backend.api.chat.infrastructure.mongo;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.api.chat.application.ChatMessageRepository.SaveResult;
+import com.gustler.backend.api.chat.application.ChatMessageRepository.SaveResult.Status;
 import com.gustler.backend.api.chat.domain.ChatMessage;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
@@ -13,6 +14,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.bson.Document;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -62,7 +64,7 @@ class MongoChatMessageRepositoryIntegrationTest {
         SaveResult result = repository.save(message);
 
         // then
-        assertThat(result).isEqualTo(new SaveResult(SaveResult.Status.CREATED, message));
+        assertThat(result).isEqualTo(new SaveResult(Status.CREATED, message));
         assertThat(repository.findRecent(ROOM, 50)).containsExactly(message);
     }
 
@@ -78,8 +80,10 @@ class MongoChatMessageRepositoryIntegrationTest {
         SaveResult result = repository.save(retried);
 
         // then
-        assertThat(result).isEqualTo(new SaveResult(SaveResult.Status.DUPLICATE, stored));
-        assertThat(collection.countDocuments()).isEqualTo(1);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(result).isEqualTo(new SaveResult(Status.DUPLICATE, stored));
+            softly.assertThat(collection.countDocuments()).isEqualTo(1);
+        }
     }
 
     @Test
@@ -95,13 +99,17 @@ class MongoChatMessageRepositoryIntegrationTest {
             message(3, ROOM, "7c9e6679-7425-40de-944b-e07fc1f90ae7", "author-b", "처음 내용", BASE.plusSeconds(2)));
 
         // then
-        assertThat(otherBody).isEqualTo(new SaveResult(SaveResult.Status.CONFLICT, stored));
-        assertThat(otherAuthor).isEqualTo(new SaveResult(SaveResult.Status.CONFLICT, stored));
-        assertThat(collection.countDocuments()).isEqualTo(1);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(otherBody).isEqualTo(new SaveResult(Status.CONFLICT, stored));
+            softly.assertThat(otherAuthor).isEqualTo(new SaveResult(Status.CONFLICT, stored));
+            softly.assertThat(collection.countDocuments()).isEqualTo(1);
+        }
     }
 
     @Test
     void 방이_다르면_같은_ID도_따로_저장한다() {
+        // given
+
         // when
         SaveResult first = repository.save(
             message(1, ROOM, "7c9e6679-7425-40de-944b-e07fc1f90ae7", "author-a", "안녕", BASE));
@@ -109,8 +117,10 @@ class MongoChatMessageRepositoryIntegrationTest {
             message(2, OTHER_ROOM, "7c9e6679-7425-40de-944b-e07fc1f90ae7", "author-a", "안녕", BASE));
 
         // then
-        assertThat(first.status()).isEqualTo(SaveResult.Status.CREATED);
-        assertThat(second.status()).isEqualTo(SaveResult.Status.CREATED);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(first.status()).isEqualTo(Status.CREATED);
+            softly.assertThat(second.status()).isEqualTo(Status.CREATED);
+        }
     }
 
     @Test
@@ -148,6 +158,8 @@ class MongoChatMessageRepositoryIntegrationTest {
 
     @Test
     void 초기화_스크립트가_두_인덱스를_만들고_TTL_인덱스는_없다() {
+        // given
+
         // when
         Map<String, Document> indexes = collection.listIndexes()
             .into(new ArrayList<>())
@@ -167,15 +179,19 @@ class MongoChatMessageRepositoryIntegrationTest {
 
     @Test
     void 새_ID는_저장할_수_있는_ObjectId_문자열이고_매번_다르다() {
+        // given
+
         // when
         String first = repository.nextId();
         String second = repository.nextId();
         SaveResult saved = repository.save(message(first, "7c9e6679-7425-40de-944b-e07fc1f90ae7"));
 
         // then
-        assertThat(first).matches("[0-9a-f]{24}");
-        assertThat(second).matches("[0-9a-f]{24}").isNotEqualTo(first);
-        assertThat(saved.status()).isEqualTo(SaveResult.Status.CREATED);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(first).matches("[0-9a-f]{24}");
+            softly.assertThat(second).matches("[0-9a-f]{24}").isNotEqualTo(first);
+            softly.assertThat(saved.status()).isEqualTo(Status.CREATED);
+        }
         assertThat(repository.findRecent(ROOM, 50)).extracting(ChatMessage::id).containsExactly(first);
     }
 

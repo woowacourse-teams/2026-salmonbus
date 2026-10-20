@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.server.ServletServerHttpRequest;
 import org.springframework.http.server.ServletServerHttpResponse;
@@ -20,6 +21,8 @@ class ChatClientAddressInterceptorTest {
 
     @Test
     void X_Forwarded_For의_마지막_값을_쓴다() {
+        // given
+
         // when
         String address = clientAddress(List.of("203.0.113.1, 203.0.113.2, 192.0.2.44"));
 
@@ -29,6 +32,8 @@ class ChatClientAddressInterceptorTest {
 
     @Test
     void 헤더가_여러_줄이면_마지막_줄의_마지막_값을_쓴다() {
+        // given
+
         // when
         String address = clientAddress(List.of("203.0.113.1, 203.0.113.2", "192.0.2.10, 192.0.2.44"));
 
@@ -38,6 +43,8 @@ class ChatClientAddressInterceptorTest {
 
     @Test
     void 값의_앞뒤_공백을_뗀다() {
+        // given
+
         // when
         String address = clientAddress(List.of("203.0.113.1 ,   192.0.2.44   "));
 
@@ -47,17 +54,23 @@ class ChatClientAddressInterceptorTest {
 
     @Test
     void 마지막_값이_비어_있으면_원격_주소를_쓴다() {
+        // given
+
         // when
         String trailingComma = clientAddress(List.of("192.0.2.44, "));
         String blankLine = clientAddress(List.of("192.0.2.44", "   "));
 
         // then
-        assertThat(trailingComma).isEqualTo(REMOTE_ADDRESS);
-        assertThat(blankLine).isEqualTo(REMOTE_ADDRESS);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(trailingComma).isEqualTo(REMOTE_ADDRESS);
+            softly.assertThat(blankLine).isEqualTo(REMOTE_ADDRESS);
+        }
     }
 
     @Test
     void 헤더가_없으면_원격_주소를_쓴다() {
+        // given
+
         // when
         String address = clientAddress(List.of());
 
@@ -80,8 +93,10 @@ class ChatClientAddressInterceptorTest {
         );
 
         // then
-        assertThat(proceed).isTrue();
-        assertThat(attributes).containsOnlyKeys(ChatClientAddressInterceptor.CLIENT_ADDRESS_ATTRIBUTE);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(proceed).isTrue();
+            softly.assertThat(attributes).containsOnlyKeys(ChatClientAddressInterceptor.CLIENT_ADDRESS_ATTRIBUTE);
+        }
     }
 
     private String clientAddress(List<String> forwardedForLines) {

@@ -5,6 +5,9 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
 
+/**
+ * MongoDB 기본 제한을 구성하되 연결 문자열에 명시한 옵션을 우선한다.
+ */
 public final class ChatMongoClientSettings {
     static final int SERVER_SELECTION_TIMEOUT_SECONDS = 2;
     static final int CONNECT_TIMEOUT_SECONDS = 2;

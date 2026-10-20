@@ -11,10 +11,15 @@ import org.springframework.web.servlet.HandlerMapping;
 class ApiSqlOriginTest {
     @Test
     void SQL과_파라미터를_유지하며_고정된_업무_표식만_추가한다() {
-        var request = new MockHttpServletRequest();
+        // given
+
+        // when
+        MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/api/v1/routes/{routeId}/board");
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
         try {
+
+            // then
             assertThat(new ApiSqlOrigin().inspect("select id from route where id = ?"))
                 .isEqualTo("select /* salmonbus:api.board */ id from route where id = ?");
             request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/api/v1/routes/{routeId}/watch");
@@ -29,10 +34,26 @@ class ApiSqlOriginTest {
 
     @Test
     void 앞쪽_주석과_문자열_리터럴을_보존한다() {
-        assertThat(new ApiSqlOrigin().inspect("/* hibernate */\n-- read\nSELECT 'select secret'"))
+        // given
+
+        // when
+        String inspectedSql1 = new ApiSqlOrigin().inspect("/* hibernate */\n-- read\nSELECT 'select secret'");
+
+        // then
+        assertThat(inspectedSql1)
             .isEqualTo("/* hibernate */\n-- read\nSELECT /* salmonbus:api.other */ 'select secret'");
-        assertThat(new ApiSqlOrigin().inspect("with x as (select 1) select * from x"))
+
+        // when
+        String inspectedSql2 = new ApiSqlOrigin().inspect("with x as (select 1) select * from x");
+
+        // then
+        assertThat(inspectedSql2)
             .isEqualTo("with /* salmonbus:api.other */ x as (select 1) select * from x");
-        assertThat(new ApiSqlOrigin().inspect("show application_name")).isEqualTo("show application_name");
+
+        // when
+        String inspectedSql3 = new ApiSqlOrigin().inspect("show application_name");
+
+        // then
+        assertThat(inspectedSql3).isEqualTo("show application_name");
     }
 }

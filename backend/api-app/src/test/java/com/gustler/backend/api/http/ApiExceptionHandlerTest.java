@@ -1,13 +1,14 @@
 package com.gustler.backend.api.http;
 
 import static org.assertj.core.api.Assertions.assertThat;
+
+import com.gustler.backend.api.arrival.ArrivalQuery.Failure;
 import com.gustler.backend.api.board.ModelOutOfScopeException;
 import com.gustler.backend.api.board.NoRecentObservationException;
 import com.gustler.backend.api.error.ApiException;
 import com.gustler.backend.api.error.ErrorCode;
 import com.gustler.backend.api.error.ErrorResponse;
 import com.gustler.backend.api.error.ServiceUnavailableException;
-import com.gustler.backend.api.arrival.ArrivalQuery;
 import com.gustler.backend.api.route.InvalidRouteIdException;
 import com.gustler.backend.api.route.RouteNotFoundException;
 import java.time.Duration;
@@ -37,8 +38,8 @@ class ApiExceptionHandlerTest {
             new ModelOutOfScopeException(),
             new NoRecentObservationException(),
             new ServiceUnavailableException(),
-            new ArrivalQuery.Failure(ErrorCode.STATION_NOT_FOUND),
-            new ArrivalQuery.Failure(ErrorCode.REFERENCE_VERSION_CONFLICT)
+            new Failure(ErrorCode.STATION_NOT_FOUND),
+            new Failure(ErrorCode.REFERENCE_VERSION_CONFLICT)
         );
     }
 
@@ -69,6 +70,8 @@ class ApiExceptionHandlerTest {
     @ParameterizedTest
     @MethodSource("thrownExceptions")
     void 오류_응답은_저장하지_않게_하고_재시도_시각은_알리지_않는다(ApiException exception) {
+        // given
+
         // when
         ResponseEntity<ErrorResponse> actual = handler.handleApiException(exception);
 
@@ -113,6 +116,8 @@ class ApiExceptionHandlerTest {
     void DB_트랜잭션을_시작하거나_종료하지_못하면_서비스_불가로_응답한다(
         RuntimeException exception
     ) {
+        // given
+
         // when
         ResponseEntity<ErrorResponse> actual =
             handler.handleDatabaseUnavailable(exception);
@@ -141,6 +146,8 @@ class ApiExceptionHandlerTest {
         final int status,
         ErrorCode expected
     ) {
+        // given
+
         // when
         ResponseEntity<Object> actual = handler.handleExceptionInternal(
             new IllegalStateException("스프링이 잡은 예외"),
@@ -161,6 +168,8 @@ class ApiExceptionHandlerTest {
 
     @Test
     void 스프링이_잡은_오류도_JSON_으로_적는다고_못박는다() {
+        // given
+
         // when
         ResponseEntity<Object> actual = handler.handleExceptionInternal(
             new IllegalStateException("스프링이 잡은 예외"),
@@ -177,16 +186,21 @@ class ApiExceptionHandlerTest {
     @ParameterizedTest
     @MethodSource("thrownExceptions")
     void 우리가_던진_오류도_JSON_으로_적는다고_못박는다(ApiException exception) {
+        // given
+
         // when
         ResponseEntity<ErrorResponse> actual = handler.handleApiException(exception);
 
-        // then 협상에 맡기면 Accept 가 JSON 이 아닌 요청에서 본문이 통째로 사라진다
+        // then
+        // 콘텐츠 협상에 맡기면 Accept 가 JSON 이 아닌 요청에서 본문이 사라진다
         assertThat(actual.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_JSON);
     }
 
     @ParameterizedTest
     @MethodSource("databaseUnavailableExceptions")
     void DB_오류도_JSON_으로_적는다고_못박는다(RuntimeException exception) {
+        // given
+
         // when
         ResponseEntity<ErrorResponse> actual = handler.handleDatabaseUnavailable(exception);
 
@@ -196,6 +210,8 @@ class ApiExceptionHandlerTest {
 
     @Test
     void 예상하지_못한_오류도_JSON_으로_적는다고_못박는다() {
+        // given
+
         // when
         ResponseEntity<ErrorResponse> actual =
             handler.handleUnexpected(new IllegalStateException("아무도 모르는 오류"));
@@ -227,6 +243,8 @@ class ApiExceptionHandlerTest {
 
     @Test
     void 예상하지_못한_예외는_500으로_옮긴다() {
+        // given
+
         // when
         ResponseEntity<ErrorResponse> actual =
             handler.handleUnexpected(new IllegalStateException("아무도 모르는 오류"));

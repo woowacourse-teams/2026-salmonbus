@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTimeout;
 import static org.mockito.Mockito.mock;
 
 import com.gustler.backend.api.chat.application.ChatService;
+import com.gustler.backend.api.chat.configuration.ChatConfiguration.ChatHeartbeat;
 import com.gustler.backend.api.chat.controller.ChatAvailabilityHandler;
 import com.gustler.backend.api.chat.controller.ChatClientAddressInterceptor;
 import com.gustler.backend.api.chat.controller.ChatConnectionLimiter;
@@ -17,6 +18,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.Map;
 import java.util.regex.Pattern;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.context.assertj.AssertableWebApplicationContext;
@@ -45,7 +47,12 @@ class ChatConfigurationConditionTest {
 
     @Test
     void 기본값에서는_채팅_객체와_Mongo_연결을_하나도_만들지_않는다() {
+        // given
+
+        // when
         contextRunner.run(context -> {
+
+            // then
             assertThat(context).hasNotFailed();
             assertChatIsOff(context);
         });
@@ -53,8 +60,13 @@ class ChatConfigurationConditionTest {
 
     @Test
     void 명시적으로_false여도_채팅은_꺼져_있다() {
+        // given
+
+        // when
         contextRunner.withPropertyValues("chat.enabled=false", "chat.mongodb-uri=mongodb://127.0.0.1:27017")
             .run(context -> {
+
+                // then
                 assertThat(context).hasNotFailed();
                 assertChatIsOff(context);
             });
@@ -62,6 +74,8 @@ class ChatConfigurationConditionTest {
 
     @Test
     void 켜져_있어도_URI가_비어_있으면_채팅만_끈_채로_뜨고_WARN을_한_번_남긴다(CapturedOutput output) {
+        // given
+
         // when
         contextRunner.withPropertyValues("chat.enabled=true", "chat.mongodb-uri=")
             .run(context -> {
@@ -77,6 +91,8 @@ class ChatConfigurationConditionTest {
 
     @Test
     void 켜져_있어도_URI_형식이_틀리면_채팅만_끈_채로_뜨고_값은_로그에_남기지_않는다(CapturedOutput output) {
+        // given
+
         // when
         contextRunner.withPropertyValues(
             "chat.enabled=true", "chat.mongodb-uri=mongdb://chat:typo-secret@127.0.0.1:27017/salmonbus_chat"
@@ -95,6 +111,8 @@ class ChatConfigurationConditionTest {
 
     @Test
     void 켜져_있어도_URI가_공백뿐이면_채팅만_끈_채로_뜬다(CapturedOutput output) {
+        // given
+
         // when
         contextRunner.withPropertyValues("chat.enabled=true")
             .withInitializer(context -> context.getEnvironment().getPropertySources().addFirst(
@@ -124,18 +142,20 @@ class ChatConfigurationConditionTest {
 
                     // then
                     assertThat(context).hasNotFailed();
-                    assertThat(context).hasSingleBean(ChatConfiguration.class);
-                    assertThat(context).hasSingleBean(ChatProperties.class);
-                    assertThat(context).hasSingleBean(MongoClient.class);
-                    assertThat(context).hasSingleBean(ChatService.class);
-                    assertThat(context).hasSingleBean(ChatAvailabilityHandler.class);
-                    assertThat(context).hasSingleBean(ChatWebSocketHandler.class);
-                    assertThat(context).hasSingleBean(ChatConnectionLimiter.class);
-                    assertThat(context).hasSingleBean(ChatClientAddressInterceptor.class);
-                    assertThat(context).hasSingleBean(WebSocketConfigurer.class);
-                    assertThat(context).hasSingleBean(ServletServerContainerFactoryBean.class);
-                    assertThat(context).hasSingleBean(ChatConfiguration.ChatHeartbeat.class);
-                    assertThat(context).hasBean("webSocketHandlerMapping");
+                    try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+                        softly.check(() -> assertThat(context).hasSingleBean(ChatConfiguration.class));
+                        softly.check(() -> assertThat(context).hasSingleBean(ChatProperties.class));
+                        softly.check(() -> assertThat(context).hasSingleBean(MongoClient.class));
+                        softly.check(() -> assertThat(context).hasSingleBean(ChatService.class));
+                        softly.check(() -> assertThat(context).hasSingleBean(ChatAvailabilityHandler.class));
+                        softly.check(() -> assertThat(context).hasSingleBean(ChatWebSocketHandler.class));
+                        softly.check(() -> assertThat(context).hasSingleBean(ChatConnectionLimiter.class));
+                        softly.check(() -> assertThat(context).hasSingleBean(ChatClientAddressInterceptor.class));
+                        softly.check(() -> assertThat(context).hasSingleBean(WebSocketConfigurer.class));
+                        softly.check(() -> assertThat(context).hasSingleBean(ServletServerContainerFactoryBean.class));
+                        softly.check(() -> assertThat(context).hasSingleBean(ChatHeartbeat.class));
+                        softly.check(() -> assertThat(context).hasBean("webSocketHandlerMapping"));
+                    }
                 })
         );
 
@@ -148,7 +168,7 @@ class ChatConfigurationConditionTest {
         // given
         String uri = "mongodb://127.0.0.1:" + closedPort() + "/?serverSelectionTimeoutMS=60000";
 
-        // when & then
+        // when
         contextRunner.withPropertyValues(
             "chat.enabled=true",
                 "chat.mongodb-uri=" + uri,
@@ -157,24 +177,51 @@ class ChatConfigurationConditionTest {
         )
             .run(context -> {
                 ChatConnectionLimiter limiter = context.getBean(ChatConnectionLimiter.class);
-                assertThat(limiter.tryAcquire("a", "198.51.100.1")).isTrue();
-                assertThat(limiter.tryAcquire("b", "198.51.100.1")).isTrue();
-                assertThat(limiter.tryAcquire("c", "198.51.100.1")).isFalse();
-                assertThat(limiter.tryAcquire("d", "198.51.100.2")).isTrue();
-                assertThat(limiter.tryAcquire("e", "198.51.100.3")).isFalse();
+
+                // when
+                final boolean acquired1 = limiter.tryAcquire("a", "198.51.100.1");
+
+                // then
+                assertThat(acquired1).isTrue();
+
+                // when
+                final boolean acquired2 = limiter.tryAcquire("b", "198.51.100.1");
+
+                // then
+                assertThat(acquired2).isTrue();
+
+                // when
+                final boolean acquired3 = limiter.tryAcquire("c", "198.51.100.1");
+
+                // then
+                assertThat(acquired3).isFalse();
+
+                // when
+                final boolean acquired4 = limiter.tryAcquire("d", "198.51.100.2");
+
+                // then
+                assertThat(acquired4).isTrue();
+
+                // when
+                final boolean acquired5 = limiter.tryAcquire("e", "198.51.100.3");
+
+                // then
+                assertThat(acquired5).isFalse();
             });
     }
 
     private void assertChatIsOff(AssertableWebApplicationContext context) {
-        assertThat(context).doesNotHaveBean(ChatConfiguration.class);
-        assertThat(context).doesNotHaveBean(ChatProperties.class);
-        assertThat(context).doesNotHaveBean(ChatAvailabilityHandler.class);
-        assertThat(context).doesNotHaveBean(ChatWebSocketHandler.class);
-        assertThat(context).doesNotHaveBean(MongoClient.class);
-        assertThat(context).doesNotHaveBean(WebSocketConfigurer.class);
-        assertThat(context).doesNotHaveBean(ServletServerContainerFactoryBean.class);
-        assertThat(context).doesNotHaveBean(ChatConfiguration.ChatHeartbeat.class);
-        assertThat(context).doesNotHaveBean("webSocketHandlerMapping");
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.check(() -> assertThat(context).doesNotHaveBean(ChatConfiguration.class));
+            softly.check(() -> assertThat(context).doesNotHaveBean(ChatProperties.class));
+            softly.check(() -> assertThat(context).doesNotHaveBean(ChatAvailabilityHandler.class));
+            softly.check(() -> assertThat(context).doesNotHaveBean(ChatWebSocketHandler.class));
+            softly.check(() -> assertThat(context).doesNotHaveBean(MongoClient.class));
+            softly.check(() -> assertThat(context).doesNotHaveBean(WebSocketConfigurer.class));
+            softly.check(() -> assertThat(context).doesNotHaveBean(ServletServerContainerFactoryBean.class));
+            softly.check(() -> assertThat(context).doesNotHaveBean(ChatHeartbeat.class));
+            softly.check(() -> assertThat(context).doesNotHaveBean("webSocketHandlerMapping"));
+        }
     }
 
     private int occurrences(String text, String fragment) {

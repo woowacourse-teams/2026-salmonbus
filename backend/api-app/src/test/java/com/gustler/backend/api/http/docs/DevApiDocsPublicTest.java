@@ -28,6 +28,9 @@ class DevApiDocsPublicTest {
 
     @Test
     void dev_프로필에서는_익명_문서_조회만_켜고_시험_요청은_끄고_둔다() throws Exception {
+        // given
+
+        // when
         mockMvc.perform(get("/api/docs/openapi"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.paths['/api/v2/stations/{stationId}/arrivals'].get").exists())
@@ -35,5 +38,7 @@ class DevApiDocsPublicTest {
         mockMvc.perform(get("/api/docs/openapi/swagger-config"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.supportedSubmitMethods").isEmpty());
+
+        // then
     }
 }

@@ -9,6 +9,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map.Entry;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,7 +57,7 @@ class WatchApiDocsContractTest {
         assertThat(operation.path("responses").propertyNames()).containsExactlyInAnyOrderElementsOf(
             source.path("responses").propertyNames());
         assertThat(generatedExamples.size()).isEqualTo(sourceExamples.size());
-        for (var example : sourceExamples.properties()) {
+        for (Entry<String, JsonNode> example : sourceExamples.properties()) {
             assertThat(generatedExamples.path(example.getKey()).path("value")).as(example.getKey())
                 .isEqualTo(example.getValue().path("value"));
         }
@@ -69,10 +71,16 @@ class WatchApiDocsContractTest {
         JsonNode sourceSchemas = contract.at("/components/schemas");
         JsonNode generatedSchemas = generated.at("/components/schemas");
 
-        // when & then
-        for (String name : List.of("WatchBoardResponse", "VehicleResponse", "SeatResponse", "ExactSeat", "UnknownSeat",
-            "StopStateResponse", "ApproachingVehicleResponse", "ForecastResponse", "BoardRouteResponse")) {
-            assertThat(generatedSchemas.path(name)).as(name).isEqualTo(sourceSchemas.path(name));
+        // when
+
+        // then
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            for (String name : List.of(
+                "WatchBoardResponse", "VehicleResponse", "SeatResponse", "ExactSeat", "UnknownSeat", "StopStateResponse",
+                "ApproachingVehicleResponse", "ForecastResponse", "BoardRouteResponse"
+            )) {
+                softly.assertThat(generatedSchemas.path(name)).as(name).isEqualTo(sourceSchemas.path(name));
+            }
         }
     }
 }

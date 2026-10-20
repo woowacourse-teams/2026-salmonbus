@@ -7,7 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.gustler.backend.support.IntegrationTest;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Map;
+import java.util.Map.Entry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +41,8 @@ class BoardHeadwaysApiDocsTest {
 
     @Test
     void 노선_배차간격은_기존_필수_필드를_바꾸지_않는_선택_필드다() {
+        // given
+
         // when
         JsonNode actual = document.at("/components/schemas/BoardRouteResponse");
 
@@ -57,6 +59,8 @@ class BoardHeadwaysApiDocsTest {
 
     @Test
     void 네_요일은_항상_있고_값이_없으면_null이다() {
+        // given
+
         // when
         JsonNode actual = document.at("/components/schemas/RouteHeadwaysResponse");
 
@@ -72,6 +76,8 @@ class BoardHeadwaysApiDocsTest {
 
     @Test
     void 배차간격은_1분부터_1440분까지의_최소와_최대다() {
+        // given
+
         // when
         JsonNode actual = document.at("/components/schemas/HeadwayRangeResponse");
 
@@ -86,6 +92,8 @@ class BoardHeadwaysApiDocsTest {
 
     @Test
     void 보드_응답_예시가_네_요일_배차간격을_보여준다() {
+        // given
+
         // when
         JsonNode examples = document.at(
             "/paths/~1api~1v1~1routes~1{routeId}~1board/get/responses/200/content/application~1json/examples");
@@ -93,7 +101,7 @@ class BoardHeadwaysApiDocsTest {
         // then
         for (String name : List.of("FORECAST_READY", "PREPARING")) {
             JsonNode headways = examples.at("/" + name + "/value/route/headways");
-            assertThat(headways.properties()).as(name).extracting(Map.Entry::getKey)
+            assertThat(headways.properties()).as(name).extracting(Entry::getKey)
                 .containsExactlyElementsOf(DAYS);
         }
         assertThat(examples.at("/FORECAST_READY/value/route/headways/weekday/minMinutes").asInt()).isEqualTo(10);

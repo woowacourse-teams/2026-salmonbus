@@ -5,6 +5,7 @@ import static com.gustler.backend.api.chat.application.ChatMessageRepository.Sav
 import static com.gustler.backend.api.chat.application.ChatMessageRepository.SaveResult.Status.DUPLICATE;
 
 import com.gustler.backend.api.chat.application.ChatMessageRepository;
+import com.gustler.backend.api.chat.application.ChatMessageRepository.SaveResult;
 import com.gustler.backend.api.chat.domain.ChatMessage;
 import com.mongodb.ErrorCategory;
 import com.mongodb.MongoWriteException;
@@ -17,6 +18,10 @@ import java.util.List;
 import org.bson.Document;
 import org.bson.types.ObjectId;
 
+/**
+ * MongoDB에 채팅 메시지를 저장하고 재전송·충돌을 구분한다.
+ * 최근 메시지는 화면에 표시할 시간 순서로 반환한다.
+ */
 public final class MongoChatMessageRepository implements ChatMessageRepository {
     private final MongoCollection<Document> collection;
 
@@ -48,7 +53,10 @@ public final class MongoChatMessageRepository implements ChatMessageRepository {
             ChatMessage existing = fromDocument(stored);
             final boolean sameRequest = existing.authorId().equals(message.authorId())
                 && existing.body().equals(message.body());
-            return new SaveResult(sameRequest ? DUPLICATE : CONFLICT, existing);
+            if (sameRequest) {
+                return new SaveResult(DUPLICATE, existing);
+            }
+            return new SaveResult(CONFLICT, existing);
         }
     }
 

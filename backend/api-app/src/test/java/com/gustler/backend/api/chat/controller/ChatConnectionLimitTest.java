@@ -8,8 +8,10 @@ import static org.mockito.Mockito.mock;
 
 import com.gustler.backend.api.chat.application.ChatIdentityService;
 import com.gustler.backend.api.chat.application.ChatMessageRepository;
-import com.gustler.backend.api.chat.application.ChatTestRoutes;
+import com.gustler.backend.api.chat.application.ChatMessageRepository.SaveResult;
+import com.gustler.backend.api.chat.application.ChatMessageRepository.SaveResult.Status;
 import com.gustler.backend.api.chat.application.ChatService;
+import com.gustler.backend.api.chat.application.ChatTestRoutes;
 import com.gustler.backend.api.chat.domain.ChatMessage;
 import java.net.URI;
 import java.time.Clock;
@@ -25,6 +27,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -204,8 +207,10 @@ class ChatConnectionLimitTest {
         handler.afterConnectionEstablished(session("a0", ROUTE_3330, "198.51.100.7"));
 
         // then
-        assertThat(closed).containsOnlyKeys("x0", "x1", "x2", "x3", "x4");
-        assertThat(closed.values()).allSatisfy(status -> assertThat(status.getCode()).isEqualTo(1003));
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(closed).containsOnlyKeys("x0", "x1", "x2", "x3", "x4");
+            softly.assertThat(closed.values()).allSatisfy(status -> assertThat(status.getCode()).isEqualTo(1003));
+        }
     }
 
     @Test
@@ -256,8 +261,10 @@ class ChatConnectionLimitTest {
                 );
             }
         }
-        assertThat(perAddress.values()).allSatisfy(count -> assertThat(count).isLessThanOrEqualTo(5));
-        assertThat(closed.values()).allSatisfy(status -> assertThat(status.getCode()).isEqualTo(1013));
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(perAddress.values()).allSatisfy(count -> assertThat(count).isLessThanOrEqualTo(5));
+            softly.assertThat(closed.values()).allSatisfy(status -> assertThat(status.getCode()).isEqualTo(1013));
+        }
     }
 
     private WebSocketSession session(String id, String routeId, String clientAddress) throws Exception {
@@ -284,7 +291,7 @@ class ChatConnectionLimitTest {
 
         @Override
         public SaveResult save(ChatMessage message) {
-            return new SaveResult(SaveResult.Status.CREATED, message);
+            return new SaveResult(Status.CREATED, message);
         }
 
         @Override

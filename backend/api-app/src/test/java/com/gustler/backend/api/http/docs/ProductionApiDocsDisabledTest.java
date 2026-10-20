@@ -27,6 +27,9 @@ class ProductionApiDocsDisabledTest {
 
     @Test
     void 운영_프로필이_겹쳐도_화면과_명세를_제공하지_않는다() throws Exception {
+        // given
+
+        // when
         mockMvc.perform(get("/api/docs")).andExpect(status().isNotFound());
         mockMvc.perform(get("/api/docs/ui")).andExpect(status().isNotFound());
         mockMvc.perform(get("/api/docs/openapi")).andExpect(status().isNotFound());
@@ -35,5 +38,7 @@ class ProductionApiDocsDisabledTest {
         mockMvc.perform(get("/api/docs/chat")).andExpect(status().isNotFound());
         mockMvc.perform(get("/v3/api-docs")).andExpect(status().isNotFound());
         mockMvc.perform(get("/swagger-ui.html")).andExpect(status().isNotFound());
+
+        // then
     }
 }

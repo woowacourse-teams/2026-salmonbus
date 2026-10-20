@@ -40,6 +40,8 @@ class ChatMissingUriIntegrationTest {
 
     @Test
     void 켜져_있어도_URI가_없으면_채팅만_꺼진_채로_뜨고_WARN을_한_번만_남긴다(CapturedOutput output) throws Exception {
+        // given
+
         // when
         mockMvc.perform(get("/api/chat/rooms/204000057"))
             .andExpect(status().isNotFound())
