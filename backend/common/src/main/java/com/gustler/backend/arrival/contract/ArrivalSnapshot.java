@@ -1,4 +1,6 @@
 package com.gustler.backend.arrival.contract;
+
+import com.gustler.backend.arrival.contract.ArrivalSnapshot.RouteArrival;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;

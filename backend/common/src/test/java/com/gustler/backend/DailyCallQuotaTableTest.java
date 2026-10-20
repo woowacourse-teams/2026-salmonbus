@@ -1,7 +1,7 @@
 package com.gustler.backend;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.gustler.backend.support.IntegrationTest;
 import java.time.LocalDate;
@@ -26,6 +26,8 @@ class DailyCallQuotaTableTest {
 
     @Test
     void 쓴_횟수가_한도와_같은_장부는_저장된다() {
+        // given
+
         // when
         insertQuota(DAILY_LIMIT_10000, DAILY_LIMIT_10000);
 
@@ -35,27 +37,47 @@ class DailyCallQuotaTableTest {
 
     @Test
     void 쓴_횟수가_한도를_넘는_장부는_저장되지_않는다() {
-        // when & then
-        assertThatThrownBy(() -> insertQuota(DAILY_LIMIT_10000 + 1, DAILY_LIMIT_10000))
+        // given
+
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertQuota(DAILY_LIMIT_10000 + 1, DAILY_LIMIT_10000));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void 쓴_횟수가_음수인_장부는_저장되지_않는다() {
-        // when & then
-        assertThatThrownBy(() -> insertQuota(-1, DAILY_LIMIT_10000))
+        // given
+
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertQuota(-1, DAILY_LIMIT_10000));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void 한도가_0인_장부는_저장되지_않는다() {
-        // when & then
-        assertThatThrownBy(() -> insertQuota(0, 0))
+        // given
+
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertQuota(0, 0));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void 키_별칭을_모르는_이전_예약_문장도_슬롯_a_장부에_센다() {
+        // given
+
         // when
         reserveWithoutKeyAlias();
         reserveWithoutKeyAlias();

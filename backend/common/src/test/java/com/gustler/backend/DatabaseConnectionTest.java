@@ -19,6 +19,7 @@ class DatabaseConnectionTest {
 
     @Test
     void 테스트는_운영과_같은_PostgreSQL_18에서_돈다() throws SQLException {
+        // given
         try (Connection connection = dataSource.getConnection()) {
 
             // when

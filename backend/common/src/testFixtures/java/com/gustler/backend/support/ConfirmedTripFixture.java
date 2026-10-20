@@ -7,8 +7,8 @@ public final class ConfirmedTripFixture {
     private ConfirmedTripFixture() {
     }
 
-    public static long include(JdbcClient jdbc, long observationId) {
-        long trip = jdbc.sql("""
+    public static long include(JdbcClient jdbc, final long observationId) {
+        final long trip = jdbc.sql("""
             SELECT min(o.id) FROM vehicle_observation o JOIN vehicle_observation target
               ON o.route_version_id = target.route_version_id
              AND o.vehicle_id IS NOT DISTINCT FROM target.vehicle_id

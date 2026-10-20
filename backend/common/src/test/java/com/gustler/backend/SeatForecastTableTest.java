@@ -1,6 +1,7 @@
 package com.gustler.backend;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.gustler.backend.support.IntegrationTest;
 import java.time.OffsetDateTime;
@@ -13,10 +14,10 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 예보 행이 닫히는 규칙을 DB 가 지키는지 본다.
+ * 예보 행의 확정 규칙을 DB가 지키는지 검사한다.
  *
- * <p>발행과 분리한 forecast_evaluation의 검사들이라 SQL 을 직접 넣어서 막히는지 확인한다.
- * 저장소를 거치면 저장소가 못 만드는 조합은 시험할 수가 없다.
+ * <p>발행과 분리된 forecast_evaluation의 제약을 확인하므로 SQL을 직접 실행한다.
+ * 저장소를 거치면 저장소에서 만들 수 없는 조합을 시험할 수 없다.
  */
 @IntegrationTest
 @Transactional
@@ -82,39 +83,69 @@ class SeatForecastTableTest {
 
     @Test
     void 회수_상태는_다섯_값만_저장된다() {
-        // when & then
-        assertThatThrownBy(() -> insertForecast(UNKNOWN_SCORING_STATE, null, null, SCORED_AT))
+        // given
+
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertForecast(UNKNOWN_SCORING_STATE, null, null, SCORED_AT));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void 회수가_끝난_행에만_회수_시각이_남는다() {
-        // when & then
-        assertThatThrownBy(() -> insertForecast("PENDING", null, null, SCORED_AT))
+        // given
+
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertForecast("PENDING", null, null, SCORED_AT));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void 만석으로_회수한_행에만_도착_잔여석이_남는다() {
-        // when & then
-        assertThatThrownBy(() ->
-            insertForecast("SEAT_MISSING", arrivalObservationId, SEATS_ON_ARRIVAL, SCORED_AT))
+        // given
+
+        // when
+        Throwable caughtFailure = catchThrowable(() ->
+            insertForecast("SEAT_MISSING", arrivalObservationId, SEATS_ON_ARRIVAL, SCORED_AT));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void 도착_관측을_찾은_행에만_도착_관측_id가_남는다() {
-        // when & then
-        assertThatThrownBy(
-            () -> insertForecast("SKIPPED", arrivalObservationId, null, SCORED_AT))
+        // given
+
+        // when
+        Throwable caughtFailure = catchThrowable(
+            () -> insertForecast("SKIPPED", arrivalObservationId, null, SCORED_AT));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void 도착_잔여석은_0석_이상만_저장된다() {
-        // when & then
-        assertThatThrownBy(() ->
-            insertForecast("SETTLED", arrivalObservationId, NEGATIVE_SEATS_ON_ARRIVAL, SCORED_AT))
+        // given
+
+        // when
+        Throwable caughtFailure = catchThrowable(() ->
+            insertForecast("SETTLED", arrivalObservationId, NEGATIVE_SEATS_ON_ARRIVAL, SCORED_AT));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -148,14 +179,21 @@ class SeatForecastTableTest {
                 """)
             .params(vehicleObservationId, TARGET_STOP_ORDER, routeVersionId,
                 scoringState, arrivalId, seatsOnArrival, scoredAt,
-                arrivalId == null ? null : ARRIVAL_RESPONSE_RECEIVED_AT,
-                arrivalId == null ? null : routeVersionId,
-                arrivalId == null ? null : VEHICLE_204000206,
-                arrivalId == null ? null : TARGET_STOP_ORDER,
-                arrivalId == null ? null : RUNNING_STATE_DEPARTED,
-                arrivalId == null ? null : SEATS_ON_ARRIVAL,
-                arrivalId == null ? null : 0L)
+                arrivalValue(arrivalId, ARRIVAL_RESPONSE_RECEIVED_AT),
+                arrivalValue(arrivalId, routeVersionId),
+                arrivalValue(arrivalId, VEHICLE_204000206),
+                arrivalValue(arrivalId, TARGET_STOP_ORDER),
+                arrivalValue(arrivalId, RUNNING_STATE_DEPARTED),
+                arrivalValue(arrivalId, SEATS_ON_ARRIVAL),
+                arrivalValue(arrivalId, 0L))
             .update();
+    }
+
+    private static <T> T arrivalValue(Long arrivalId, T value) {
+        if (arrivalId == null) {
+            return null;
+        }
+        return value;
     }
 
     private long insertRoute() {

@@ -12,7 +12,7 @@ import java.util.Date;
 
 public final class TimeSourceRules {
     @ArchTest
-    public static final ArchRule timeMustComeFromInjectedClock = noClasses()
+    public static final ArchRule TIME_MUST_COME_FROM_INJECTED_CLOCK = noClasses()
         .should().callMethod(Instant.class, "now")
         .orShould().callMethod(LocalDate.class, "now")
         .orShould().callMethod(LocalDateTime.class, "now")
