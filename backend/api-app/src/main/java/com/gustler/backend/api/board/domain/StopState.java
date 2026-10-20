@@ -3,6 +3,10 @@ package com.gustler.backend.api.board.domain;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 한 정류장 방문의 승차 가능 여부와 접근 차량 목록이다.
+ * 접근 차량이 없어도 방문 자체는 유지한다.
+ */
 public record StopState(
     int sequence,
     String stopId,

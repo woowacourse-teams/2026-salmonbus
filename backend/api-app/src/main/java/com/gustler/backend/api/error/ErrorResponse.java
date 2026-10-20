@@ -3,6 +3,10 @@ package com.gustler.backend.api.error;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;
 
+/**
+ * API 오류의 code·message·requestId 전송 계약이다.
+ * 내부 예외 원문이나 요청 인증정보를 담지 않는다.
+ */
 @Schema(requiredProperties = {"code", "message", "requestId"})
 public record ErrorResponse(
     @Schema(description = "안정적인 오류 코드")

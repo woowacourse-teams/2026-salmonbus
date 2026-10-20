@@ -2,6 +2,9 @@ package com.gustler.backend.api.board.domain;
 
 import java.util.Objects;
 
+/**
+ * 한 방향의 기점·종점 표시와 첫차·막차 시각을 전달한다.
+ */
 public record DirectionInfo(
     BoardDirection id,
     String name,

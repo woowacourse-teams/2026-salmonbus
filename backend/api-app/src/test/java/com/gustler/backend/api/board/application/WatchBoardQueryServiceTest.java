@@ -1,7 +1,7 @@
 package com.gustler.backend.api.board.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -22,12 +22,13 @@ import com.gustler.backend.api.vehicle.application.VehicleQueryRepository;
 import com.gustler.backend.api.vehicle.domain.ObservedVehicle;
 import com.gustler.backend.api.vehicle.domain.VehicleDirection;
 import com.gustler.backend.api.vehicle.domain.VehiclePhase;
-import com.gustler.backend.api.vehicle.domain.VehicleSeat;
+import com.gustler.backend.api.vehicle.domain.VehicleSeat.Exact;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -71,9 +72,11 @@ class WatchBoardQueryServiceTest {
         WatchBoardOverview overview = service.getWatchBoard(ROUTE_ID);
 
         // then
-        assertThat(overview.board()).isEqualTo(board);
-        assertThat(overview.vehicles()).isEqualTo(vehicles);
-        assertThat(overview.cacheMaxAge()).isEqualTo(Duration.ofSeconds(20));
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(overview.board()).isEqualTo(board);
+            softly.assertThat(overview.vehicles()).isEqualTo(vehicles);
+            softly.assertThat(overview.cacheMaxAge()).isEqualTo(Duration.ofSeconds(20));
+        }
     }
 
     @Test
@@ -126,8 +129,12 @@ class WatchBoardQueryServiceTest {
         // given
         given(boardQueryService.readBoard(ROUTE_ID)).willThrow(new NoRecentObservationException());
 
-        // when & then
-        assertThatThrownBy(() -> service.getWatchBoard(ROUTE_ID)).isInstanceOf(NoRecentObservationException.class);
+        // when
+        Throwable caughtFailure = catchThrowable(() -> service.getWatchBoard(ROUTE_ID));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull().isInstanceOf(NoRecentObservationException.class);
         verify(vehicleQueryRepository, never()).findVehicles(anyLong());
     }
 
@@ -138,8 +145,12 @@ class WatchBoardQueryServiceTest {
             .willReturn(new BoardReading(board(NOW.minusMinutes(1), 1), BATCH_ID, Duration.ofSeconds(20)));
         given(vehicleQueryRepository.findVehicles(BATCH_ID)).willThrow(new ServiceUnavailableException());
 
-        // when & then
-        assertThatThrownBy(() -> service.getWatchBoard(ROUTE_ID)).isInstanceOf(ServiceUnavailableException.class);
+        // when
+        Throwable caughtFailure = catchThrowable(() -> service.getWatchBoard(ROUTE_ID));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull().isInstanceOf(ServiceUnavailableException.class);
     }
 
     @Test
@@ -182,6 +193,8 @@ class WatchBoardQueryServiceTest {
 
     @Test
     void 보드와_차량을_한_스냅샷에서_읽도록_반복_읽기_트랜잭션을_선언한다() {
+        // given
+
         // when
         Transactional transactional = WatchBoardQueryService.class.getAnnotation(Transactional.class);
 
@@ -203,6 +216,6 @@ class WatchBoardQueryServiceTest {
 
     private static ObservedVehicle vehicle(String vehicleId) {
         return new ObservedVehicle(vehicleId, VehicleDirection.UP, 1, "STOP-1", "기점", VehiclePhase.DEPARTED,
-            new VehicleSeat.Exact(7));
+            new Exact(7));
     }
 }

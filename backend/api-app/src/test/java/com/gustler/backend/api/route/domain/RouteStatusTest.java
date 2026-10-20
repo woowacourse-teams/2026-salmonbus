@@ -18,8 +18,10 @@ class RouteStatusTest {
         final boolean forecastPublished,
         RouteStatus expected
     ) {
+        // given
+
         // when
-        final RouteStatus actual = RouteStatus.from(activeModelExists, forecastPublished);
+        RouteStatus actual = RouteStatus.from(activeModelExists, forecastPublished);
 
         // then
         assertThat(actual).isEqualTo(expected);

@@ -5,6 +5,9 @@ import com.gustler.backend.api.route.domain.Route;
 import java.util.Objects;
 import java.util.Optional;
 
+/**
+ * 현재 노선 판본과 모델·관측 준비 상태를 함께 읽은 조회 스냅샷이다.
+ */
 public record BoardSnapshot(
     long routeVersionId,
     Route route,

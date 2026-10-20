@@ -2,6 +2,7 @@ package com.gustler.backend.api.arrival.controller;
 
 import com.gustler.backend.api.arrival.ArrivalQuery;
 import com.gustler.backend.api.arrival.application.ArrivalQueryService;
+import com.gustler.backend.api.arrival.application.StationArrivalsOverview;
 import com.gustler.backend.api.arrival.domain.ArrivalAvailability;
 import com.gustler.backend.api.arrival.dto.StationArrivalsResponse;
 import com.gustler.backend.api.docs.ApiDocsExamples;
@@ -22,6 +23,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 정류장 도착정보 요청을 조회 조건으로 바꾸고, 결과의 유효 시간에 맞춰 HTTP 캐시 헤더를 제공한다.
+ */
 @RestController
 public class StationArrivalsController {
     private final ArrivalQueryService service;
@@ -30,6 +34,9 @@ public class StationArrivalsController {
         this.service = service;
     }
 
+    /**
+     * 정류장·노선·방문 순번·판본 조건으로 도착정보를 조회하고 수신 신선도에 맞는 캐시 헤더를 설정한다.
+     */
     @GetMapping("/api/v2/stations/{stationId}/arrivals")
     @Operation(operationId = "getStationArrivals", summary = "정류장 도착정보",
         description = "선택 정류장까지의 ETA를 반환합니다. routeId는 노선을 필터링하고, referenceVersionId와 stopSequence는 "
@@ -85,7 +92,7 @@ public class StationArrivalsController {
         @Parameter(description = "geometry에서 선택한 정류장 방문 순번. referenceVersionId와 함께 사용", example = "22",
             schema = @Schema(minimum = "1")) @RequestParam(required = false) Integer stopSequence
     ) {
-        var overview =
+        StationArrivalsOverview overview =
             service.get(new ArrivalQuery(stationId, routeId, referenceVersionId, stopSequence));
         CacheControl cache = CacheControl.noStore();
         if (overview.status() != ArrivalAvailability.UNAVAILABLE) {

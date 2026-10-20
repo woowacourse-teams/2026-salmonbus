@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.gustler.backend.api.board.controller.WatchBoardApiContractTest.FixedClockConfig;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture.RouteContext;
 import com.gustler.backend.support.IntegrationTest;
@@ -28,6 +30,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
@@ -37,7 +40,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 @IntegrationTest
 @Transactional
-@Import(WatchBoardApiContractTest.FixedClockConfig.class)
+@Import(FixedClockConfig.class)
 class WatchBoardApiContractTest {
     private static final String ROUTE_ID = "204000057";
     private static final int IN_TRANSIT = 0;
@@ -81,8 +84,11 @@ class WatchBoardApiContractTest {
         final long newer = fixture.insertBatch(route, now.minusSeconds(30), "SUCCESS_ROWS", 1);
         fixture.insertObservation(route, newer, 1, "V1", 2, "STOP-2", 1, ARRIVING, 3, null);
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID))
+        // when
+        ResultActions httpResponse = mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID));
+
+        // then
+        httpResponse
             .andExpect(status().isOk())
             .andExpect(jsonPath("$", aMapWithSize(7)))
             .andExpect(jsonPath("$.observedAt").value(DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(publishedAt)))
@@ -135,8 +141,11 @@ class WatchBoardApiContractTest {
         fixture.updateHeadway(route, "weekday", 10, 20);
         fixture.updateHeadway(route, "holiday", 16, 35);
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID))
+        // when
+        ResultActions httpResponse2 = mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID));
+
+        // then
+        httpResponse2
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.route.headways.weekday.minMinutes").value(10))
             .andExpect(jsonPath("$.route.headways.weekday.maxMinutes").value(20))
@@ -177,8 +186,11 @@ class WatchBoardApiContractTest {
         final long batch = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_ROWS", 1);
         fixture.insertObservation(route, batch, 1, "V1", 1, "STOP-1", 1, DEPARTED, 5, null);
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID))
+        // when
+        ResultActions httpResponse3 = mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID));
+
+        // then
+        httpResponse3
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.route.status").value("PREPARING"))
             .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast.status").value("UNAVAILABLE"))
@@ -199,8 +211,11 @@ class WatchBoardApiContractTest {
         fixture.insertObservation(oldRoute, old, 1, "OLD", 1, "STOP-1", 1, DEPARTED, 5, null);
         fixture.insertPublication(old, model, now.minusSeconds(19), now.minusSeconds(18));
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID))
+        // when
+        ResultActions httpResponse4 = mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID));
+
+        // then
+        httpResponse4
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.route.status").value("PREPARING"))
             .andExpect(jsonPath("$.route.referenceVersionId").value(String.valueOf(currentRoute.routeVersionId())))
@@ -216,8 +231,11 @@ class WatchBoardApiContractTest {
         final long empty = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
         fixture.insertPublication(empty, model, now.minusSeconds(59), now.minusSeconds(58));
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID))
+        // when
+        ResultActions httpResponse5 = mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID));
+
+        // then
+        httpResponse5
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.vehiclesInService").value(0))
             .andExpect(jsonPath("$.vehicles").isEmpty())
@@ -233,8 +251,11 @@ class WatchBoardApiContractTest {
         fixture.insertPublication(stale, model, now.minusMinutes(5), now.minusMinutes(5));
         fixture.insertBatch(route, now.minusSeconds(30), "SUCCESS_ROWS", 1);
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID))
+        // when
+        ResultActions httpResponse6 = mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID));
+
+        // then
+        httpResponse6
             .andExpect(status().isServiceUnavailable())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
             .andExpect(jsonPath("$.code").value("NO_RECENT_OBSERVATION"));
@@ -246,22 +267,40 @@ class WatchBoardApiContractTest {
         RouteContext route = insertRoundTripRoute();
         fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID))
+        // when
+        ResultActions httpResponse7 = mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID));
+
+        // then
+        httpResponse7
             .andExpect(status().isServiceUnavailable())
             .andExpect(jsonPath("$.code").value("MODEL_OUT_OF_SCOPE"));
     }
 
     @Test
     void 노선_ID가_잘못되면_400_없는_노선이면_404_POST면_405다() throws Exception {
-        // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", "abc"))
+        // given
+
+        // when
+        ResultActions httpResponse8 = mockMvc.perform(get("/api/v1/routes/{routeId}/watch", "abc"));
+
+        // then
+        httpResponse8
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("INVALID_ROUTE_ID"));
-        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", "999999999"))
+
+        // when
+        ResultActions httpResponse9 = mockMvc.perform(get("/api/v1/routes/{routeId}/watch", "999999999"));
+
+        // then
+        httpResponse9
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.code").value("ROUTE_NOT_FOUND"));
-        mockMvc.perform(post("/api/v1/routes/{routeId}/watch", ROUTE_ID))
+
+        // when
+        ResultActions httpResponse10 = mockMvc.perform(post("/api/v1/routes/{routeId}/watch", ROUTE_ID));
+
+        // then
+        httpResponse10
             .andExpect(status().isMethodNotAllowed());
     }
 
@@ -273,8 +312,11 @@ class WatchBoardApiContractTest {
         final long empty = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
         fixture.insertPublication(empty, model, now.minusSeconds(59), now.minusSeconds(58));
 
-        // when & then
-        mockMvc.perform(head("/api/v1/routes/{routeId}/watch", ROUTE_ID))
+        // when
+        ResultActions httpResponse11 = mockMvc.perform(head("/api/v1/routes/{routeId}/watch", ROUTE_ID));
+
+        // then
+        httpResponse11
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "max-age=20, public"));
     }
@@ -288,8 +330,11 @@ class WatchBoardApiContractTest {
         final long batch = fixture.insertBatch(route, observedAt, "SUCCESS_EMPTY", 0);
         fixture.insertPublication(batch, model, observedAt.plusSeconds(1), observedAt.plusSeconds(2));
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID))
+        // when
+        ResultActions httpResponse12 = mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID));
+
+        // then
+        httpResponse12
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "max-age=10, public"));
     }

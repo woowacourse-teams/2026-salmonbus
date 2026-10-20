@@ -1,4 +1,7 @@
 package com.gustler.backend.arrival.support;
+
+import com.gustler.backend.arrival.support.RouteGeometryFixture.Point;
+import com.gustler.backend.arrival.support.RouteGeometryFixture.Stop;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.IntStream;
@@ -13,12 +16,12 @@ public record RouteGeometryFixture(String routeId, String name, String startPoin
     }
 
     public static RouteGeometryFixture synthetic3330() {
-        var points = IntStream.range(0, 836)
+        List<Point> points = IntStream.range(0, 836)
             .mapToObj(index -> new Point(127 + index * .00001, 37 + Math.sin(index * .01) * .001))
             .toList();
-        var stops = IntStream.range(0, FakeGbisArrivalServer.STATIONS.size())
+        List<Stop> stops = IntStream.range(0, FakeGbisArrivalServer.STATIONS.size())
             .mapToObj(index -> {
-            var point = points.get(index * 70);
+                Point point = points.get(index * 70);
                 return new Stop(index + 1, FakeGbisArrivalServer.STATIONS.get(index), "synthetic stop", point.x(),
                     point.y());
             })
@@ -28,13 +31,17 @@ public record RouteGeometryFixture(String routeId, String name, String startPoin
 
     /** 실제 수신한 공개 정적 필드로 HTTP 수집·저장·응답 흐름을 재생한다. */
     public static RouteGeometryFixture fromCaptured(JsonNode route) {
-        var stops = new ArrayList<Stop>();
-        for (var stop : route.path("stops")) stops.add(new Stop(stop.path("stationSeq").intValue(),
-            stop.path("stationId").asString(), stop.path("stationName").asString(),
-            stop.path("x").doubleValue(), stop.path("y").doubleValue()));
-        var points = new ArrayList<Point>();
-        for (var point : route.path("shape")) points.add(new Point(point.path("x").doubleValue(), point.path("y").doubleValue()));
-        var info = route.path("info").get(0);
+        ArrayList<Stop> stops = new ArrayList<Stop>();
+        for (JsonNode stop : route.path("stops")) {
+            stops.add(new Stop(stop.path("stationSeq").intValue(),
+                stop.path("stationId").asString(), stop.path("stationName").asString(),
+                stop.path("x").doubleValue(), stop.path("y").doubleValue()));
+        }
+        ArrayList<Point> points = new ArrayList<Point>();
+        for (JsonNode point : route.path("shape")) {
+            points.add(new Point(point.path("x").doubleValue(), point.path("y").doubleValue()));
+        }
+        JsonNode info = route.path("info").get(0);
         return new RouteGeometryFixture(route.path("routeId").asString(), info.path("routeName").asString(),
             info.path("startStationName").asString(), info.path("endStationName").asString(),
             route.path("stops").get(0).path("turnSeq").intValue(), List.copyOf(stops), List.copyOf(points), route);

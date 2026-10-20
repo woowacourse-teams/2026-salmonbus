@@ -8,6 +8,9 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Immutable;
 
+/**
+ * API 조회가 발행 여부와 기준 판본을 확인할 때 사용하는 예보 발행 매핑이다.
+ */
 @Entity(name = "RouteForecastPublicationJpaEntity")
 @Table(name = "forecast_publication")
 @Immutable

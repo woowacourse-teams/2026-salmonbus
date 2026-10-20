@@ -2,8 +2,10 @@ package com.gustler.backend.api.arrival.configuration;
 
 import com.gustler.backend.api.arrival.application.ArrivalFirstResultPolicy;
 import com.gustler.backend.api.arrival.application.ArrivalRefreshGateway;
+import com.gustler.backend.api.arrival.configuration.ArrivalApiConfiguration.Properties;
 import com.gustler.backend.api.arrival.infrastructure.http.WorkerArrivalRefreshClient;
 import com.gustler.backend.arrival.contract.ArrivalRefresh;
+import com.gustler.backend.arrival.contract.ArrivalRefresh.Status;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Clock;
@@ -16,8 +18,11 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
+/**
+ * 도착정보 조회의 첫 결과 대기 정책과 내부 Worker HTTP 클라이언트를 연결한다.
+ */
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(ArrivalApiConfiguration.Properties.class)
+@EnableConfigurationProperties(Properties.class)
 public class ArrivalApiConfiguration {
     @ConfigurationProperties("arrivals")
     public record Properties(boolean enabled, URI workerBaseUrl, String internalToken) {
@@ -49,16 +54,18 @@ public class ArrivalApiConfiguration {
         Clock clock,
         ArrivalFirstResultPolicy firstResult
     ) {
-        if (!properties.enabled()) return station -> new ArrivalRefresh(ArrivalRefresh.Status.UNAVAILABLE,
-            "REFRESH_DISABLED", clock.instant().plusSeconds(40));
-        var client = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(100)).build();
+        if (!properties.enabled()) {
+            return station -> new ArrivalRefresh(Status.UNAVAILABLE,
+                "REFRESH_DISABLED", clock.instant().plusSeconds(40));
+        }
+        HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(100)).build();
         RestClient immediate = refreshClient(client, properties, Duration.ofMillis(500));
         RestClient waiting = refreshClient(client, properties, Duration.ofMillis(500).plus(firstResult.maximumWait()));
         return new WorkerArrivalRefreshClient(immediate, waiting, properties.internalToken(), clock);
     }
 
     private RestClient refreshClient(HttpClient client, Properties properties, Duration timeout) {
-        var factory = new JdkClientHttpRequestFactory(client);
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(client);
         factory.setReadTimeout(timeout);
         return RestClient.builder().baseUrl(properties.workerBaseUrl().toString()).requestFactory(factory).build();
     }

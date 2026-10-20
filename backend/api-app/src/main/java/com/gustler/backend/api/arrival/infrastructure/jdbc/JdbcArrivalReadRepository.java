@@ -9,6 +9,9 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.ObjectMapper;
 
+/**
+ * 현재 노선 판본의 정류장 방문과 저장된 도착정보 수신 결과를 API 조회 모델로 읽는다.
+ */
 @Repository
 public class JdbcArrivalReadRepository implements ArrivalReadRepository {
     private final JdbcClient jdbc;

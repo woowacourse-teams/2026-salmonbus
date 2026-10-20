@@ -4,6 +4,9 @@ import com.gustler.backend.api.board.domain.BoardDirection;
 import com.gustler.backend.api.board.domain.DirectionInfo;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+/**
+ * 방향별 기점·종점과 첫차·막차 표시를 공개 응답으로 전달한다.
+ */
 @Schema(requiredProperties = {"id", "name", "originStopName", "terminalStopName",
     "firstDepartureTime", "lastDepartureTime"})
 public record DirectionInfoResponse(

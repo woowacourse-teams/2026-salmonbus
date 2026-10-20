@@ -3,6 +3,8 @@ package com.gustler.backend.api.board.controller;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.gustler.backend.api.board.controller.WatchBoardNightCacheApiContractTest.FixedClockConfig;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture.RouteContext;
 import com.gustler.backend.support.IntegrationTest;
@@ -21,13 +23,14 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
 
 @IntegrationTest
 @Transactional
-@Import(WatchBoardNightCacheApiContractTest.FixedClockConfig.class)
+@Import(FixedClockConfig.class)
 class WatchBoardNightCacheApiContractTest {
     private static final String ROUTE_ID = "204000057";
     private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-10-15T19:05:00Z");
@@ -67,8 +70,11 @@ class WatchBoardNightCacheApiContractTest {
         final long batch = fixture.insertBatch(route, observedAt, "SUCCESS_EMPTY", 0);
         fixture.insertPublication(batch, model, observedAt, observedAt);
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID))
+        // when
+        ResultActions httpResponse = mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID));
+
+        // then
+        httpResponse
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "max-age=" + maxAge + ", public"));
     }

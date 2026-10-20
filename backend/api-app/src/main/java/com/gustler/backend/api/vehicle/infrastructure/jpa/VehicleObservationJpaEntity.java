@@ -16,6 +16,9 @@ import jakarta.persistence.Table;
 import java.util.Optional;
 import org.hibernate.annotations.Immutable;
 
+/**
+ * 수집 배치의 원천 행 식별을 유지하며 저장된 차량 관측을 조회 모델로 옮기는 JPA 매핑이다.
+ */
 @Entity
 @Table(name = "forecast_observation_quality")
 @Immutable

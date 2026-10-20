@@ -1,10 +1,11 @@
 package com.gustler.backend.api.route.controller;
-import com.gustler.backend.api.route.RouteId;
-import com.gustler.backend.api.route.application.RouteGeometryQueryService;
-import com.gustler.backend.api.route.dto.RouteGeometryResponse;
+
 import com.gustler.backend.api.docs.ApiDocsExamples;
 import com.gustler.backend.api.docs.RouteGeometryApiDocsExamples;
 import com.gustler.backend.api.error.ErrorResponse;
+import com.gustler.backend.api.route.RouteId;
+import com.gustler.backend.api.route.application.RouteGeometryQueryService;
+import com.gustler.backend.api.route.dto.RouteGeometryResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -24,6 +25,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.WebRequest;
 
+/**
+ * 지도 형상과 방문 판본을 제공하고 ETag를 이용한 재검증 요청을 처리한다.
+ */
 @RestController
 public class RouteGeometryController {
     private static final CacheControl CACHE = CacheControl.maxAge(Duration.ofMinutes(5)).cachePublic().mustRevalidate();
@@ -33,6 +37,9 @@ public class RouteGeometryController {
         this.service = service;
     }
 
+    /**
+     * 요청 판본과 ETag 조건을 적용해 형상을 반환한다. 현재 판본 충돌과 변경 없음 응답을 일반 형상 응답과 구별한다.
+     */
     @GetMapping("/api/v2/routes/{routeId}/geometry")
     @Operation(operationId = "getRouteGeometry", summary = "노선 도로 형상과 정류장 좌표",
         description = """
@@ -126,11 +133,15 @@ public class RouteGeometryController {
         @RequestParam(required = false) Long referenceVersionId,
         WebRequest request
     ) {
-        var response =
+        RouteGeometryResponse response =
             RouteGeometryResponse.from(service.get(new RouteId(routeId), referenceVersionId));
-        if (response.status().equals("UNAVAILABLE")) return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
+        if (response.status().equals("UNAVAILABLE")) {
+            return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
+        }
         String etag = "W/\"g-" + response.geometryRevision() + "\"";
-        if (request.checkNotModified(etag)) return ResponseEntity.status(HttpStatus.NOT_MODIFIED).cacheControl(CACHE).eTag(etag).build();
+        if (request.checkNotModified(etag)) {
+            return ResponseEntity.status(HttpStatus.NOT_MODIFIED).cacheControl(CACHE).eTag(etag).build();
+        }
         return ResponseEntity.ok().cacheControl(CACHE).eTag(etag).body(response);
     }
 }

@@ -2,17 +2,24 @@ package com.gustler.backend.api.vehicle.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.gustler.backend.api.vehicle.domain.VehicleSeat;
+import com.gustler.backend.api.vehicle.dto.SeatResponse.Exact;
+import com.gustler.backend.api.vehicle.dto.SeatResponse.Unknown;
 import io.swagger.v3.oas.annotations.media.DiscriminatorMapping;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import java.util.Objects;
 
+/**
+ * 현재 좌석의 EXACT·UNKNOWN 형태를 공개 JSON 계약으로 전송한다.
+ * 0석과 null은 다른 의미다.
+ */
 @Schema(description = "EXACT는 remaining, UNKNOWN은 reason을 포함. 두 변형의 다른 필드는 생략",
-    oneOf = {SeatResponse.Exact.class, SeatResponse.Unknown.class}, discriminatorProperty = "kind",
+    oneOf = {Exact.class, Unknown.class}, discriminatorProperty = "kind",
     discriminatorMapping = {
-        @DiscriminatorMapping(value = "EXACT", schema = SeatResponse.Exact.class),
-        @DiscriminatorMapping(value = "UNKNOWN", schema = SeatResponse.Unknown.class)
+        @DiscriminatorMapping(value = "EXACT", schema = Exact.class),
+        @DiscriminatorMapping(value = "UNKNOWN", schema = Unknown.class)
     })
-public sealed interface SeatResponse permits SeatResponse.Exact, SeatResponse.Unknown {
+public sealed interface SeatResponse permits Exact, Unknown {
     static SeatResponse from(VehicleSeat seat) {
         if (seat instanceof VehicleSeat.Exact exact) {
             return new Exact(exact.remaining());
@@ -33,7 +40,7 @@ public sealed interface SeatResponse permits SeatResponse.Exact, SeatResponse.Un
     ) implements SeatResponse {
         @JsonProperty("kind")
         @Schema(description = "EXACT", allowableValues = "EXACT",
-            requiredMode = Schema.RequiredMode.REQUIRED)
+            requiredMode = RequiredMode.REQUIRED)
         public Kind kind() {
             return Kind.EXACT;
         }
@@ -50,7 +57,7 @@ public sealed interface SeatResponse permits SeatResponse.Exact, SeatResponse.Un
 
         @JsonProperty("kind")
         @Schema(description = "UNKNOWN", allowableValues = "UNKNOWN",
-            requiredMode = Schema.RequiredMode.REQUIRED)
+            requiredMode = RequiredMode.REQUIRED)
         public Kind kind() {
             return Kind.UNKNOWN;
         }

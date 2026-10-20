@@ -6,6 +6,9 @@ import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+/**
+ * 관측 시각의 시간대별 수집 간격에 맞춰 탑승판의 클라이언트 캐시 수명을 정한다.
+ */
 @Component
 @RequiredArgsConstructor
 public class BoardCachePolicy {
@@ -15,6 +18,9 @@ public class BoardCachePolicy {
 
     private final Clock clock;
 
+    /**
+     * 관측 시각을 주입된 시계의 시간대로 해석해 혼잡·심야·일반 시간대별 유효기간을 고른다.
+     */
     public Duration maxAgeAt(
         OffsetDateTime observedAt
     ) {

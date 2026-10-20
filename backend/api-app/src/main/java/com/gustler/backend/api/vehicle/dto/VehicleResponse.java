@@ -6,6 +6,9 @@ import com.gustler.backend.api.vehicle.domain.VehiclePhase;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;
 
+/**
+ * 한 차량의 현재 관측과 좌석 제공 상태를 공개 필드로 전달한다.
+ */
 @Schema(requiredProperties = {"vehicleId", "direction", "currentStopSequence", "stopId",
     "stopName", "phase", "seat"})
 public record VehicleResponse(

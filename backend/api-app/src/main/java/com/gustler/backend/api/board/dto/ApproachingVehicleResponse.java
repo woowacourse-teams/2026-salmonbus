@@ -3,6 +3,9 @@ package com.gustler.backend.api.board.dto;
 import com.gustler.backend.api.board.domain.ApproachingVehicle;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+/**
+ * 접근 차량의 식별·정류장 거리·좌석 예보를 공개 탑승판 필드로 변환한 값이다.
+ */
 @Schema(requiredProperties = {"vehicleId", "horizonStops", "forecast"})
 public record ApproachingVehicleResponse(
     @Schema(description = "관측된 차량 ID. 제공되지 않으면 null", nullable = true)

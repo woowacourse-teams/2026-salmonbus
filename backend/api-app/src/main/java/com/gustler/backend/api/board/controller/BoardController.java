@@ -21,12 +21,18 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 탑승판 조회 결과를 공개 응답으로 변환하고 결과의 캐시 수명을 HTTP 헤더에 반영한다.
+ */
 @RestController
 @RequestMapping("/api/v1/routes/{routeId}/board")
 @RequiredArgsConstructor
 public class BoardController {
     private final BoardQueryService boardQueryService;
 
+    /**
+     * 노선 승차판을 조회해 응답 DTO와 신선도 헤더를 조립한다. 조회 중 계산한 새 예측을 저장하지 않는다.
+     */
     @GetMapping
     @Operation(summary = "노선별 판정 보드",
         description = "발행된 예보가 있으면 해당 관측을, 없으면 최신 정상 관측을 기준으로 보드를 구성합니다. 신선도는 관측 후 5분입니다.")

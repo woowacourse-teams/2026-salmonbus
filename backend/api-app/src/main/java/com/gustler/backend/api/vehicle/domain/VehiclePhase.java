@@ -2,6 +2,10 @@ package com.gustler.backend.api.vehicle.domain;
 
 import java.util.Optional;
 
+/**
+ * 원천 운행 상태를 API의 차량 진행 상태로 해석한다.
+ * 알 수 없는 상태를 임의의 정상 상태로 채우지 않는다.
+ */
 public enum VehiclePhase {
     ARRIVING,
     DEPARTED,

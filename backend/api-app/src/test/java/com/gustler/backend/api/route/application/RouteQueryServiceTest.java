@@ -46,7 +46,7 @@ class RouteQueryServiceTest {
         given(routeQueryRepository.existsActiveModel()).willReturn(true);
 
         // when
-        final RouteOverview actual = routeQueryService.getRouteOverview();
+        RouteOverview actual = routeQueryService.getRouteOverview();
 
         // then
         assertThat(actual.routes()).containsExactly(new CurrentRoute(ROUTE, RouteStatus.PREPARING));
@@ -58,7 +58,7 @@ class RouteQueryServiceTest {
         given(routeQueryRepository.existsActiveModel()).willReturn(false);
 
         // when
-        final RouteOverview actual = routeQueryService.getRouteOverview();
+        RouteOverview actual = routeQueryService.getRouteOverview();
 
         // then
         assertThat(actual.routes()).containsExactly(new CurrentRoute(ROUTE, RouteStatus.PREPARING));
@@ -71,7 +71,7 @@ class RouteQueryServiceTest {
         given(routeQueryRepository.findForecastPublishedRouteIds()).willReturn(Set.of("204000057"));
 
         // when
-        final RouteOverview actual = routeQueryService.getRouteOverview();
+        RouteOverview actual = routeQueryService.getRouteOverview();
 
         // then
         assertThat(actual.routes()).containsExactly(new CurrentRoute(ROUTE, RouteStatus.FORECAST_READY));
@@ -84,7 +84,7 @@ class RouteQueryServiceTest {
         given(routeQueryRepository.findForecastPublishedRouteIds()).willReturn(Set.of("204000057"));
 
         // when
-        final RouteOverview actual = routeQueryService.getRouteOverview();
+        RouteOverview actual = routeQueryService.getRouteOverview();
 
         // then
         assertThat(actual.routes()).containsExactly(new CurrentRoute(ROUTE, RouteStatus.PREPARING));
@@ -98,7 +98,7 @@ class RouteQueryServiceTest {
         given(routeQueryRepository.findForecastPublishedRouteIds()).willReturn(Set.of("204000057"));
 
         // when
-        final RouteOverview actual = routeQueryService.getRouteOverview();
+        RouteOverview actual = routeQueryService.getRouteOverview();
 
         // then
         assertThat(actual.routes()).containsExactly(

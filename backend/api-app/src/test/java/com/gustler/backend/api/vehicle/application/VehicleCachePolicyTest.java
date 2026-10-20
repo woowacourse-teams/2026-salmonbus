@@ -29,6 +29,12 @@ class VehicleCachePolicyTest {
         OffsetDateTime pollAt,
         final long expectedSeconds
     ) {
-        assertThat(policy.maxAgeAt(pollAt)).isEqualTo(Duration.ofSeconds(expectedSeconds));
+        // given
+
+        // when
+        Duration maxAge = policy.maxAgeAt(pollAt);
+
+        // then
+        assertThat(maxAge).isEqualTo(Duration.ofSeconds(expectedSeconds));
     }
 }

@@ -6,8 +6,8 @@ import com.gustler.backend.api.arrival.application.ArrivalFirstResultPolicy;
 import java.time.Clock;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.convert.ApplicationConversionService;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 class ArrivalFirstResultConfigurationTest {
     private final ApplicationContextRunner context = new ApplicationContextRunner()
@@ -18,12 +18,21 @@ class ArrivalFirstResultConfigurationTest {
 
     @Test
     void 기본은_500ms와_동시_32건이며_0ms로_비활성화할_수_있다() {
+        // given
+
+        // when
         context.run(app -> {
-            var policy = app.getBean(ArrivalFirstResultPolicy.class);
+            ArrivalFirstResultPolicy policy = app.getBean(ArrivalFirstResultPolicy.class);
+
+            // then
             assertThat(policy.maximumWait()).isEqualTo(Duration.ofMillis(500));
-            for (int index = 0; index < 32; index++) assertThat(policy.tryAcquire()).isTrue();
+            for (int index = 0; index < 32; index++) {
+                assertThat(policy.tryAcquire()).isTrue();
+            }
             assertThat(policy.tryAcquire()).isFalse();
-            for (int index = 0; index < 32; index++) policy.release();
+            for (int index = 0; index < 32; index++) {
+                policy.release();
+            }
         });
         context.withPropertyValues("arrivals.first-result-wait=0ms").run(app ->
             assertThat(app.getBean(ArrivalFirstResultPolicy.class).tryAcquire()).isFalse());
@@ -31,8 +40,13 @@ class ArrivalFirstResultConfigurationTest {
 
     @Test
     void 잘못된_대기_설정은_기동_시_거절한다() {
+        // given
+
+        // when
         for (String value : new String[]{"-1ms", "1001ms"}) {
             context.withPropertyValues("arrivals.first-result-wait=" + value).run(app ->
+
+                // then
                 assertThat(app).hasFailed());
         }
     }

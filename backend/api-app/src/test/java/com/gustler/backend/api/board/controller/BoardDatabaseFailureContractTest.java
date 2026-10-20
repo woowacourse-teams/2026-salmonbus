@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.annotation.DirtiesContext.ClassMode;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -24,7 +25,7 @@ import org.springframework.web.context.WebApplicationContext;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 @IntegrationTest
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@DirtiesContext(classMode = ClassMode.AFTER_CLASS)
 @TestPropertySource(properties = {
     "spring.datasource.hikari.connection-timeout=250",
     "spring.datasource.hikari.maximum-pool-size=1",
@@ -56,6 +57,7 @@ class BoardDatabaseFailureContractTest {
 
     @Test
     void 실행_중_DB_연결을_잃으면_공통_503_오류로_응답한다() throws Exception {
+        // given
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         RouteContext route = fixture.insertRoute(
             "204000057",
@@ -72,8 +74,8 @@ class BoardDatabaseFailureContractTest {
         fixture.insertStop(route, 1, "STOP-1", "기점", "UP", true);
         fixture.insertStop(route, 2, "STOP-2", "회차점", "UP", true);
         fixture.insertStop(route, 3, "STOP-3", "종점", "DOWN", true);
-        long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
-        long batch = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
+        final long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        final long batch = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
         fixture.insertPublication(batch, model, now, now);
 
         mockMvc.perform(get("/api/v1/routes/204000057/board"))
@@ -81,6 +83,7 @@ class BoardDatabaseFailureContractTest {
 
         postgres.stop();
 
+        // when
         mockMvc.perform(get("/api/v1/routes/204000057/board"))
             .andExpect(status().isServiceUnavailable())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
@@ -89,5 +92,7 @@ class BoardDatabaseFailureContractTest {
             .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"))
             .andExpect(jsonPath("$.message").value("일시적인 서버 장애가 발생했습니다."))
             .andExpect(jsonPath("$.requestId").isNotEmpty());
+
+        // then
     }
 }

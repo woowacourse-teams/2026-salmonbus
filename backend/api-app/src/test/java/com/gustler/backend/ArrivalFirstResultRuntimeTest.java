@@ -5,13 +5,30 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.gustler.backend.arrival.profiling.TimingAgentJar;
 import com.gustler.backend.arrival.support.ArrivalRuntime;
 import com.gustler.backend.arrival.support.FakeGbisArrivalServer;
+import com.gustler.backend.arrival.support.FakeGbisArrivalServer.Plan;
+import java.io.BufferedWriter;
 import java.net.URI;
-import java.net.http.*;
-import java.nio.file.*;
-import java.time.*;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpRequest.Builder;
+import java.net.http.HttpResponse;
+import java.net.http.HttpResponse.BodyHandlers;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -36,10 +53,15 @@ class ArrivalFirstResultRuntimeTest {
     @Test
     @Timeout(300)
     void 최초_결과_대기의_효과와_느린상류_동시요청_비용을_실행_JAR로_비교한다() throws Exception {
+        // given
+
+        // when
         Files.createDirectories(DIRECTORY);
         Path agent = TimingAgentJar.create(DIRECTORY.resolve("timing-agent.jar"));
         try {
-            for (int waitMillis : List.of(0, 500)) profile(waitMillis, agent);
+            for (final int waitMillis : List.of(0, 500)) {
+                profile(waitMillis, agent);
+            }
         } finally {
             Files.writeString(DIRECTORY.resolve("comparison.json"), JSON.writerWithDefaultPrettyPrinter()
                 .writeValueAsString(Map.of(
@@ -50,25 +72,31 @@ class ArrivalFirstResultRuntimeTest {
                     "notes",
                     "No SLA assertions; >=1s failure boundaries and response semantics are tested separately. API SQL counts include revalidating the route version after a completed wait.",
                     "cases", results)));
-            try (var file = Files.newBufferedWriter(DIRECTORY.resolve("requests.jsonl"))) {
-                for (var row : requests) {
+            try (BufferedWriter file = Files.newBufferedWriter(DIRECTORY.resolve("requests.jsonl"))) {
+                for (Map<String, Object> row : requests) {
                     String id = (String) row.get("id");
                     JsonNode trace = traces.get(id);
-                    if (trace != null) row.put("apiSqlExecutions", trace.at("/calls/jdbc.execute").intValue());
+                    if (trace != null) {
+                        row.put("apiSqlExecutions", trace.at("/calls/jdbc.execute").intValue());
+                    }
                     file.write(JSON.writeValueAsString(row));
                     file.newLine();
                 }
             }
         }
+
+        // then
     }
 
     private void profile(final int waitMillis, Path agent) throws Exception {
         Path trace = DIRECTORY.resolve("api-" + waitMillis + ".jsonl");
-        try (var runtime = new ArrivalRuntime(List.of("-javaagent:" + agent + "=" + trace),
+        try (ArrivalRuntime runtime = new ArrivalRuntime(List.of("-javaagent:" + agent + "=" + trace),
             Map.of("ARRIVALS_FIRST_RESULT_WAIT", waitMillis + "ms"))) {
             runtime.startWorker(true, Map.of());
             Reply starting = get(URI.create(runtime.arrivalsUri().toString()), null);
-            if ("STARTING".equals(starting.body().at("/refresh/reason").asString())) pauseToSuggested(starting);
+            if ("STARTING".equals(starting.body().at("/refresh/reason").asString())) {
+                pauseToSuggested(starting);
+            }
             Reply warm = get(runtime.arrivalsUri(), null);
             if (!"READY".equals(warm.body().path("status").asString())) {
                 pauseToSuggested(warm);
@@ -78,25 +106,29 @@ class ArrivalFirstResultRuntimeTest {
             String version = warm.body().at("/routes/0/targetVisit/referenceVersionId").asString();
             int stationIndex = 1;
             int fastFirstReady = 0;
-            for (int delay : List.of(100, 300, 800)) {
+            for (final int delay : List.of(100, 300, 800)) {
                 for (int repeat = 0; repeat < 2; repeat++) {
                     String station = FakeGbisArrivalServer.STATIONS.get(stationIndex);
-                    runtime.source.plan(station, FakeGbisArrivalServer.Plan.slow(Duration.ofMillis(delay)));
+                    runtime.source.plan(station, Plan.slow(Duration.ofMillis(delay)));
                     final int sourceBefore = runtime.source.calls();
                     final int reservationsBefore = runtime.reservations();
                     String prefix = "wait" + waitMillis + "-delay" + delay + "-r" + repeat;
                     Outcome outcome = untilReady(uri(runtime, station, version, stationIndex + 1), prefix);
                     assertThat(runtime.source.calls() - sourceBefore).isEqualTo(1);
                     assertThat(runtime.reservations() - reservationsBefore).isEqualTo(1);
-                    if (delay <= 300 && outcome.firstReady()) fastFirstReady++;
+                    if (delay <= 300 && outcome.firstReady()) {
+                        fastFirstReady++;
+                    }
                     results.add(result(waitMillis, delay, 1, List.of(outcome), prefix, 1));
                     stationIndex++;
                 }
             }
-            if (waitMillis > 0) assertThat(fastFirstReady).isGreaterThan(0);
-            for (int concurrency : List.of(20, 100)) {
+            if (waitMillis > 0) {
+                assertThat(fastFirstReady).isGreaterThan(0);
+            }
+            for (final int concurrency : List.of(20, 100)) {
                 String station = FakeGbisArrivalServer.STATIONS.get(stationIndex);
-                runtime.source.plan(station, FakeGbisArrivalServer.Plan.slow(Duration.ofMillis(300)));
+                runtime.source.plan(station, Plan.slow(Duration.ofMillis(300)));
                 String prefix = "wait" + waitMillis + "-c" + concurrency;
                 final int sourceBefore = runtime.source.calls();
                 URI target = uri(runtime, station, version, stationIndex + 1);
@@ -107,15 +139,17 @@ class ArrivalFirstResultRuntimeTest {
             }
             // 정상 빈 수신도 완료로 처리하고 예측을 만들어 내지 않는다.
             String emptyStation = FakeGbisArrivalServer.STATIONS.get(stationIndex);
-            runtime.source.plan(emptyStation, new FakeGbisArrivalServer.Plan(200,
+            runtime.source.plan(emptyStation, new Plan(200,
                 "{\"response\":{\"msgHeader\":{\"resultCode\":0},\"msgBody\":{\"busArrivalList\":[]}}}", null,
                 Duration.ofMillis(100), null));
             String emptyPrefix = "wait" + waitMillis + "-empty";
             Reply empty = get(uri(runtime, emptyStation, version, ++stationIndex), emptyPrefix + "-first");
-            if (waitMillis > 0) assertThat(empty.body().path("status").asString()).isEqualTo("NO_PREDICTION");
+            if (waitMillis > 0) {
+                assertThat(empty.body().path("status").asString()).isEqualTo("NO_PREDICTION");
+            }
             assertThat(empty.body().path("routes").size()).isZero();
             String failedStation = FakeGbisArrivalServer.STATIONS.get(stationIndex);
-            runtime.source.plan(failedStation, FakeGbisArrivalServer.Plan.error(500, null));
+            runtime.source.plan(failedStation, Plan.error(500, null));
             Reply failed =
                 get(uri(runtime, failedStation, version, stationIndex + 1),
                     "wait" + waitMillis + "-upstream-error-first");
@@ -138,7 +172,7 @@ class ArrivalFirstResultRuntimeTest {
 
     private List<Outcome> burst(URI uri, String prefix, final int concurrency) throws Exception {
         CountDownLatch start = new CountDownLatch(1);
-        try (var executor = Executors.newFixedThreadPool(concurrency)) {
+        try (ExecutorService executor = Executors.newFixedThreadPool(concurrency)) {
             List<Future<Outcome>> calls = new ArrayList<>();
             for (int i = 0; i < concurrency; i++) {
                 final int index = i;
@@ -149,7 +183,9 @@ class ArrivalFirstResultRuntimeTest {
             }
             start.countDown();
             List<Outcome> outcomes = new ArrayList<>();
-            for (var call : calls) outcomes.add(call.get(12, TimeUnit.SECONDS));
+            for (Future<Outcome> call : calls) {
+                outcomes.add(call.get(12, TimeUnit.SECONDS));
+            }
             return outcomes;
         }
     }
@@ -181,9 +217,11 @@ class ArrivalFirstResultRuntimeTest {
                 traces.put(row.path("id").asString(), row);
             }
         }
-        for (var result : results) {
+        for (Map<String, Object> result : results) {
             String prefix = (String) result.get("requestPrefix");
-            if (!prefix.startsWith("wait" + result.get("waitMillis"))) continue;
+            if (!prefix.startsWith("wait" + result.get("waitMillis"))) {
+                continue;
+            }
             final int sql = requests.stream()
                 .filter(r -> ((String) r.get("id")).startsWith(prefix))
                 .mapToInt(r -> traces.get((String) r.get("id")).at("/calls/jdbc.execute").intValue())
@@ -193,10 +231,12 @@ class ArrivalFirstResultRuntimeTest {
     }
 
     private Reply get(URI uri, String id) throws Exception {
-        var builder = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(5));
-        if (id != null) builder.header("X-ETA-Measure", id);
+        Builder builder = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(5));
+        if (id != null) {
+            builder.header("X-ETA-Measure", id);
+        }
         final long began = System.nanoTime();
-        var response = HTTP.send(builder.GET().build(), HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response = HTTP.send(builder.GET().build(), BodyHandlers.ofString());
         final long received = System.nanoTime();
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode body = JSON.readTree(response.body());
@@ -204,10 +244,15 @@ class ArrivalFirstResultRuntimeTest {
             .map(value -> ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli())
             .orElseGet(() -> Instant.parse(body.path("generatedAt").asString()).toEpochMilli())
             + 1000L * response.headers().firstValue("age").map(Long::parseLong).orElse(0L);
-        if (id != null) synchronized (this) {
-            Map<String, Object> row = new LinkedHashMap<>(); row.put("id", id); row.put("httpMs", (received-began)/1e6);
-            row.put("status", body.path("status").asString()); row.put("refreshStatus", body.at("/refresh/status").asString());
-            requests.add(row);
+        if (id != null) {
+            synchronized (this) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("id", id);
+                row.put("httpMs", (received - began) / 1e6);
+                row.put("status", body.path("status").asString());
+                row.put("refreshStatus", body.at("/refresh/status").asString());
+                requests.add(row);
+            }
         }
         return new Reply(body, (received - began) / 1e6, received, served);
     }

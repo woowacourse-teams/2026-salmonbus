@@ -18,28 +18,40 @@ class VehicleFreshnessPolicyTest {
 
     @Test
     void 관측_시각에서_5분_뒤를_staleAt으로_계산한다() {
+        // given
+
+        // when
         OffsetDateTime observedAt = OffsetDateTime.parse("2026-08-27T11:55:00+09:00");
 
+        // then
         assertThat(policy.staleAt(observedAt))
             .isEqualTo(OffsetDateTime.parse("2026-08-27T12:00:00+09:00"));
     }
 
     @Test
     void 현재_시각이_staleAt을_초과해야만_오래된_관측이다() {
+        // given
+
+        // when
         OffsetDateTime boundary = OffsetDateTime.parse("2026-08-27T12:00:00+09:00");
         OffsetDateTime exceeded = boundary.minusNanos(1);
 
+        // then
         assertThat(policy.isStale(boundary)).isFalse();
         assertThat(policy.isStale(exceeded)).isTrue();
     }
 
     @Test
     void 심야_관측의_staleAt은_UTC_입력과_4시_이후_조회에서도_10분이다() {
-        var observedAt = OffsetDateTime.parse("2026-10-15T18:59:00Z");
-        var atExpiry = new VehicleFreshnessPolicy(Clock.fixed(
-            Instant.parse("2026-10-15T19:09:00Z"), ZoneId.of("UTC")));
-        var staleAt = atExpiry.staleAt(observedAt);
+        // given
 
+        // when
+        OffsetDateTime observedAt = OffsetDateTime.parse("2026-10-15T18:59:00Z");
+        VehicleFreshnessPolicy atExpiry = new VehicleFreshnessPolicy(Clock.fixed(
+            Instant.parse("2026-10-15T19:09:00Z"), ZoneId.of("UTC")));
+        OffsetDateTime staleAt = atExpiry.staleAt(observedAt);
+
+        // then
         assertThat(staleAt).isEqualTo(OffsetDateTime.parse("2026-10-15T19:09:00Z"));
         assertThat(atExpiry.isStale(staleAt)).isFalse();
         assertThat(new VehicleFreshnessPolicy(Clock.fixed(

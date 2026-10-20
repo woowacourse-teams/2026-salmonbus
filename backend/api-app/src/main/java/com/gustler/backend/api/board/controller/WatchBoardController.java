@@ -22,12 +22,18 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 같은 관측 기준의 탑승판·차량 통합 조회를 제공하고 캐시 헤더를 설정한다.
+ */
 @RestController
 @RequestMapping("/api/v1/routes/{routeId}/watch")
 @RequiredArgsConstructor
 public class WatchBoardController {
     private final WatchBoardQueryService watchBoardQueryService;
 
+    /**
+     * 노선의 승차판과 차량 목록을 같은 관측 묶음으로 반환하고 통합 응답의 캐시 헤더를 설정한다.
+     */
     @GetMapping
     @Operation(operationId = "getRouteWatch", summary = "노선별 판정 보드와 차량 위치",
         description = "발행된 예보가 있으면 해당 관측을, 없으면 최신 정상 관측을 기준으로 보드를 구성하고, 같은 관측의 차량 위치를 "

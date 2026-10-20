@@ -7,6 +7,9 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 최신 차량 관측과 결과의 유효 시간·캐시 정책을 함께 전달한다.
+ */
 public record LiveVehicleOverview(
     String routeId,
     String referenceVersionId,
