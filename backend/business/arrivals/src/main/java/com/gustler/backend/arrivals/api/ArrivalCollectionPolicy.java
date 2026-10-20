@@ -2,6 +2,9 @@ package com.gustler.backend.arrivals.api;
 
 import java.time.Duration;
 
+/**
+ * 정류장 수집의 간격·대기·재시도·보존·실행 한도를 함께 전달하는 정책 값이다.
+ */
 public record ArrivalCollectionPolicy(Duration refreshInterval, Duration validity, Duration retryBase,
     Duration retryMaximum, Duration startupDelay, Duration queueWait, int maximumStates,
     double callsPerSecond, int burst, int saveAttempts) {

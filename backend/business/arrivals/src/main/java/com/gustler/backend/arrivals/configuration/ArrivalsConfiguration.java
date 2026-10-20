@@ -34,10 +34,10 @@ public class ArrivalsConfiguration {
     @Bean
     ArrivalSource arrivalSource(@Qualifier("arrivalGbisOptions") GbisClientOptions options,
         ObjectMapper json, Clock clock) {
-        var client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
-        var factory = new JdkClientHttpRequestFactory(client);
+        HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(client);
         factory.setReadTimeout(Duration.ofSeconds(5));
-        var rest = RestClient.builder().baseUrl(options.baseUrl()).requestFactory(factory).build();
+        RestClient rest = RestClient.builder().baseUrl(options.baseUrl()).requestFactory(factory).build();
         return new GbisArrivalSource(new GbisApiCaller(rest, options, json), json, clock);
     }
 
