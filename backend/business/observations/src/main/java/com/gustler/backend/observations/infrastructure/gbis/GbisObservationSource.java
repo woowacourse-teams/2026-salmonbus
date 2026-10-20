@@ -47,23 +47,28 @@ public class GbisObservationSource implements ObservationSource {
         if (MDC.get("collectionAttemptId") != null) {
             MDC.put("collectionUpstreamResult", result.getClass().getSimpleName());
             if (result instanceof GbisLocationResult.Success success && success.buses() != null) {
-                long mismatches = success.buses().stream()
-                    .filter(bus -> !Objects.equals(sourceRouteId, bus.routeId())).count();
+                long mismatches = success.buses()
+                    .stream()
+                    .filter(bus -> !Objects.equals(sourceRouteId, bus.routeId()))
+                    .count();
                 MDC.put("collectionRouteMismatchRows", Long.toString(mismatches));
             }
         }
         GbisLocationResult received = result;
         return new ObservationReply() {
-            @Override public ObservationResponse interpret(OffsetDateTime receivedAt) {
+            @Override
+            public ObservationResponse interpret(OffsetDateTime receivedAt) {
                 return GbisObservationMapper.response(received, receivedAt);
             }
 
-            @Override public Optional<StopReference> sourceReference(int stopOrder, String stopId) {
+            @Override
+            public Optional<StopReference> sourceReference(int stopOrder, String stopId) {
                 if (received instanceof GbisLocationResult.Success success && success.buses() != null) {
                     for (int index = 0; index < success.buses().size(); index++) {
                         var bus = success.buses().get(index);
                         if (Objects.equals(bus.stopSequence(), stopOrder) && Objects.equals(bus.stopId(), stopId)) {
-                            return Optional.of(new StopReference(index, bus.routeId(), bus.stopSequence(), bus.stopId()));
+                            return Optional.of(
+                                new StopReference(index, bus.routeId(), bus.stopSequence(), bus.stopId()));
                         }
                     }
                 }

@@ -20,7 +20,6 @@ import java.util.Optional;
  * 예보를 안 내는 것은 이미 정상 상태다. 계수 번들이 없는 동안 예보 배치가 도는 방식과 같다.
  */
 public final class ActiveForecastRuntimeResolver implements ForecastRuntime {
-
     private final ModelDeploymentRepository deployments;
     private final LoadedModelRegistry bundles;
 

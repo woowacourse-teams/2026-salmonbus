@@ -10,7 +10,6 @@ public record HeadwayRangeResponse(
     @Schema(description = "최대 배차간격(분). minMinutes와 같거나 크다", minimum = "1", maximum = "1440")
     int maxMinutes
 ) {
-
     static HeadwayRangeResponse from(
         HeadwayRange headway
     ) {

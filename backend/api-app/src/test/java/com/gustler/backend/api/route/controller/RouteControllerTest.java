@@ -24,7 +24,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class RouteControllerTest {
-
     private RouteQueryService routeQueryService;
     private MockMvc mockMvc;
 

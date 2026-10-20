@@ -26,7 +26,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class ForecastEvaluationWriterTest {
-
     private static final Instant ARRIVED_AT = Instant.parse("2026-08-19T02:20:00Z");
     private static final Instant SCORED_AT = ARRIVED_AT.plusSeconds(60);
     private static final int TARGET_STOP_ORDER = 9;
@@ -129,7 +128,8 @@ class ForecastEvaluationWriterTest {
     private static SettledEvaluation settledFrom(
         SettledForecast forecast
     ) {
-        return new SettledEvaluation(forecast.routeId(), forecast.modelDeploymentId(), 11L, 200L, TARGET_STOP_ORDER, forecast.stopsToTarget(),
+        return new SettledEvaluation(forecast.routeId(), forecast.modelDeploymentId(), 11L, 200L, TARGET_STOP_ORDER,
+            forecast.stopsToTarget(),
             forecast.rawFullChance(), ScoringState.SETTLED, 300L, forecast.seatsOnArrival(), forecast.arrivedAt(),
             SCORED_AT, true, null, null, false);
     }

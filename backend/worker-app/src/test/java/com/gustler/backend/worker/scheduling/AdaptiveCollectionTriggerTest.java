@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.scheduling.support.SimpleTriggerContext;
 
 class AdaptiveCollectionTriggerTest {
-
     private static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
 
     /** 한국 시각 2026-08-28 08:00. 아침 첨두라 20초다. */

@@ -35,7 +35,6 @@ import org.springframework.context.annotation.Import;
     properties = "management.server.port=0")
 @Import(PostgresTestContainer.class)
 class ManagementPortSeparationTest {
-
     @LocalServerPort
     private int publicPort;
 

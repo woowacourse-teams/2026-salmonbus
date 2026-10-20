@@ -18,7 +18,6 @@ public record ForecastPublication(
     Instant publishedAt,
     List<SeatForecast> predictions
 ) {
-
     public ForecastPublication {
         if (sourceBatchId <= 0 || routeVersionId <= 0 || modelDeploymentId <= 0) {
             throw new IllegalArgumentException("발행에는 수집 배치·노선 버전·모델 식별 정보가 필요하다");
@@ -48,5 +47,6 @@ public record ForecastPublication(
         return predictions.size();
     }
 
-    private record PredictionKey(long observationId, int stopOrder) { }
+    private record PredictionKey(long observationId, int stopOrder) {
+    }
 }

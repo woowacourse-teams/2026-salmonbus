@@ -18,21 +18,29 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class ArrivalQueryService {
-
     private final ArrivalReadRepository repository;
     private final ArrivalRefreshGateway gateway;
     private final ArrivalFreshnessPolicy freshness;
     private final Clock clock;
     private final ArrivalFirstResultPolicy firstResult;
 
-    public ArrivalQueryService(ArrivalReadRepository repository, ArrivalRefreshGateway gateway,
-                               ArrivalFreshnessPolicy freshness, Clock clock) {
+    public ArrivalQueryService(
+        ArrivalReadRepository repository,
+        ArrivalRefreshGateway gateway,
+        ArrivalFreshnessPolicy freshness,
+        Clock clock
+    ) {
         this(repository, gateway, freshness, clock, new ArrivalFirstResultPolicy(Duration.ZERO, 32));
     }
 
     @Autowired
-    public ArrivalQueryService(ArrivalReadRepository repository, ArrivalRefreshGateway gateway,
-        ArrivalFreshnessPolicy freshness, Clock clock, ArrivalFirstResultPolicy firstResult) {
+    public ArrivalQueryService(
+        ArrivalReadRepository repository,
+        ArrivalRefreshGateway gateway,
+        ArrivalFreshnessPolicy freshness,
+        Clock clock,
+        ArrivalFirstResultPolicy firstResult
+    ) {
         this.firstResult = firstResult;
         this.repository = repository;
         this.gateway = gateway;
@@ -92,8 +100,12 @@ public class ArrivalQueryService {
         }
     }
 
-    private static List<RouteArrivals> selectRoutes(ArrivalQuery query, List<ArrivalVisit> visits,
-                                                   ArrivalSnapshot snapshot, Instant now) {
+    private static List<RouteArrivals> selectRoutes(
+        ArrivalQuery query,
+        List<ArrivalVisit> visits,
+        ArrivalSnapshot snapshot,
+        Instant now
+    ) {
         List<RouteArrivals> routes = new ArrayList<>();
         for (RouteArrival route : snapshot.routes()) {
             ArrivalVisit visit = visits.stream()
@@ -110,7 +122,7 @@ public class ArrivalQueryService {
     private static ArrivalAvailability availability(List<RouteArrivals> routes, ArrivalSnapshot snapshot) {
         if (routes.stream().anyMatch(route -> route.status() == ArrivalAvailability.READY)) return ArrivalAvailability.READY;
         if (routes.stream().anyMatch(route -> route.status() == ArrivalAvailability.UNAVAILABLE)
-            || routes.isEmpty() && !snapshot.routes().isEmpty()) return ArrivalAvailability.UNAVAILABLE;
+                || routes.isEmpty() && !snapshot.routes().isEmpty()) return ArrivalAvailability.UNAVAILABLE;
         return ArrivalAvailability.NO_PREDICTION;
     }
 }

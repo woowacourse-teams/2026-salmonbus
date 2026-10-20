@@ -48,16 +48,26 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class EvaluationArchiveRetentionTest {
     private static final Instant UNTIL = Instant.parse("2026-10-09T00:00:00Z");
-    @MockitoSpyBean JdbcClient jdbc;
-    @MockitoBean Clock clock;
-    @MockitoBean StatisticsArchiveReader statisticsReader;
-    @Autowired PlatformTransactionManager transactions;
-    @Autowired RouteDataQualityAccess quality;
-    @Autowired DemandStatisticsPipeline pipeline;
-    @Autowired JdbcStopDemandStatisticsRepository statistics;
-    @Autowired JdbcSameDayFullOutcomesStore outcomes;
-    @Autowired ForecastEvaluationRepository evaluations;
-    @Autowired JdbcEvaluationArchiveQueue queue;
+    @MockitoSpyBean
+    JdbcClient jdbc;
+    @MockitoBean
+    Clock clock;
+    @MockitoBean
+    StatisticsArchiveReader statisticsReader;
+    @Autowired
+    PlatformTransactionManager transactions;
+    @Autowired
+    RouteDataQualityAccess quality;
+    @Autowired
+    DemandStatisticsPipeline pipeline;
+    @Autowired
+    JdbcStopDemandStatisticsRepository statistics;
+    @Autowired
+    JdbcSameDayFullOutcomesStore outcomes;
+    @Autowired
+    ForecastEvaluationRepository evaluations;
+    @Autowired
+    JdbcEvaluationArchiveQueue queue;
     private JdbcEvaluationArchiveStore store;
     private long route;
     private long source;
@@ -76,9 +86,12 @@ class EvaluationArchiveRetentionTest {
         when(statisticsReader.read(any())).thenAnswer(call -> {
             assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
             StatisticsArchiveReader.Reference reference = call.getArgument(0);
-            return archived.get(reference.batchId()).stream().map(row -> new StatisticsArchiveReader.Row(
-                new StatisticsArchiveReader.Key(row.key().observationId(), row.key().stopOrder()),
-                row.originalJson(), row.sha256())).toList();
+            return archived.get(reference.batchId())
+                .stream()
+                .map(row -> new StatisticsArchiveReader.Row(
+                    new StatisticsArchiveReader.Key(row.key().observationId(), row.key().stopOrder()),
+                    row.originalJson(), row.sha256()))
+                .toList();
         });
         store = new JdbcEvaluationArchiveStore(jdbc, quality, clock, transactions);
         jdbc.sql("UPDATE evaluation_archive_scan SET next_attempt_at='-infinity' WHERE id=1").update();
@@ -288,7 +301,8 @@ class EvaluationArchiveRetentionTest {
         int repeated = purge(batch);
         new TransactionTemplate(transactions).executeWithoutResult(status -> {
             quality.lock(route);
-            evaluations.addPending(route, List.of(ForecastEvaluation.pending(source, 9), ForecastEvaluation.pending(source, 10)));
+            evaluations.addPending(route,
+                List.of(ForecastEvaluation.pending(source, 9), ForecastEvaluation.pending(source, 10)));
         });
 
         // then
@@ -370,7 +384,8 @@ class EvaluationArchiveRetentionTest {
         var batch = ready();
 
         // when & then
-        assertThatThrownBy(() -> new TransactionTemplate(transactions).execute(status -> purge(batch)))
+        assertThatThrownBy(
+            () -> new TransactionTemplate(transactions).execute(status -> purge(batch)))
             .isInstanceOf(IllegalStateException.class);
         assertThat(downloads.get()).isZero();
         assertThat(liveCount()).isEqualTo(2);
@@ -430,7 +445,8 @@ class EvaluationArchiveRetentionTest {
         restore(batch);
 
         // when & then
-        assertThatThrownBy(() -> store.purge(stale, archived.get(batch.id()))).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() ->
+            store.purge(stale, archived.get(batch.id()))).isInstanceOf(IllegalStateException.class);
         assertThat(liveCount()).isEqualTo(2);
         assertThat(location(batch)).isEqualTo("LIVE");
     }
@@ -449,7 +465,7 @@ class EvaluationArchiveRetentionTest {
         assertThat(restored).isEqualTo(2);
         assertThat(store.prepareRestore(batch).currentQuality()).isEqualTo(2);
         assertThat(jdbc.sql("SELECT count(*) FROM stop_demand_pending_sample WHERE route_version_id=?")
-            .param(route).query(Long.class).single()).isZero();
+                .param(route).query(Long.class).single()).isZero();
     }
 
     @Test
@@ -461,7 +477,8 @@ class EvaluationArchiveRetentionTest {
         restore(batch);
 
         // when & then
-        assertThatThrownBy(() -> store.restore(stale, archived.get(batch.id()))).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() ->
+            store.restore(stale, archived.get(batch.id()))).isInstanceOf(IllegalStateException.class);
         assertThat(liveCount()).isEqualTo(2);
     }
 
@@ -471,7 +488,8 @@ class EvaluationArchiveRetentionTest {
         var batch = ready();
         var rows = archived.get(batch.id());
         var changed = new Row(rows.getFirst().key(), rows.getFirst().originalJson(), "b".repeat(64));
-        var service = new PurgeArchivedEvaluationsService(store, ignored -> List.of(changed, rows.getLast()));
+        var service =
+            new PurgeArchivedEvaluationsService(store, ignored -> List.of(changed, rows.getLast()));
 
         // when & then
         assertThatThrownBy(() -> service.purge(batch)).isInstanceOf(IllegalArgumentException.class);
@@ -490,10 +508,20 @@ class EvaluationArchiveRetentionTest {
                 || '{"target_stop_order":11,"arrival_stop_order":11,"arrived_at":"2026-10-08T23:00:00Z","scored_at":"2026-10-08T23:30:00Z"}'::jsonb
                 || jsonb_build_object('arrival_observation_id',CAST(:arrival AS bigint)))).*
             FROM forecast_evaluation_result e WHERE vehicle_observation_id=:source AND target_stop_order=9
-            """).param("source", source).param("arrival", todayArrival).update();
-        long routeId = jdbc.sql("SELECT route_id FROM route_version WHERE id=?").param(route).query(Long.class).single();
-        long model = jdbc.sql("SELECT model_deployment_id FROM seat_forecast WHERE vehicle_observation_id=? AND target_stop_order=11")
-            .param(source).query(Long.class).single();
+            """)
+            .param("source", source)
+            .param("arrival", todayArrival)
+            .update();
+        long routeId = jdbc.sql("SELECT route_id FROM route_version WHERE id=?")
+            .param(route)
+            .query(Long.class)
+            .single();
+        long model =
+            jdbc.sql(
+                "SELECT model_deployment_id FROM seat_forecast WHERE vehicle_observation_id=? AND target_stop_order=11")
+                .param(source)
+                .query(Long.class)
+                .single();
         var day = SeoulDay.containing(UNTIL);
         var before = outcomes.countFromSource(routeId, model, day, UNTIL);
         assertThat(before).hasSize(1);
@@ -521,7 +549,7 @@ class EvaluationArchiveRetentionTest {
         assertThat(liveCount()).isZero();
         assertThat(archived).hasSize(1);
         assertThat(jdbc.sql("SELECT storage_state FROM evaluation_archive_batch WHERE route_version_id=?")
-            .param(route).query(String.class).single()).isEqualTo("PURGED");
+                .param(route).query(String.class).single()).isEqualTo("PURGED");
     }
 
     @Test
@@ -537,7 +565,7 @@ class EvaluationArchiveRetentionTest {
         assertThat(liveCount()).isEqualTo(2);
         assertThat(archived).hasSize(1);
         assertThat(jdbc.sql("SELECT state FROM evaluation_archive_batch WHERE route_version_id=?")
-            .param(route).query(String.class).single()).isEqualTo("VERIFIED");
+                .param(route).query(String.class).single()).isEqualTo("VERIFIED");
     }
 
     @Test
@@ -564,7 +592,9 @@ class EvaluationArchiveRetentionTest {
         var service = new com.gustler.backend.forecasting.application.evaluation.AdvanceEvaluationArchiveService(
             queue, store,
             new com.gustler.backend.forecasting.application.evaluation.ArchiveCompletedEvaluationsService(store,
-                (batch, rows) -> { throw new IllegalStateException("시험용 저장 실패"); }),
+                (batch, rows) -> {
+                    throw new IllegalStateException("시험용 저장 실패");
+                }),
             new PurgeArchivedEvaluationsService(store, external),
             new com.gustler.backend.forecasting.api.evaluation.EvaluationArchivePolicy(true, 100), clock);
 
@@ -576,7 +606,7 @@ class EvaluationArchiveRetentionTest {
         assertThat(liveCount()).isEqualTo(2);
         assertThat(queue.available()).isFalse();
         assertThat(jdbc.sql("SELECT count(*) FROM evaluation_archive_batch WHERE route_version_id=?")
-            .param(route).query(Long.class).single()).isOne();
+                .param(route).query(Long.class).single()).isOne();
     }
 
     @Test
@@ -584,16 +614,20 @@ class EvaluationArchiveRetentionTest {
         // given
         finish();
         seekCurrent();
-        jdbc.sql("UPDATE forecast_evaluation_result SET scored_at='2026-10-09T00:00:00Z' WHERE vehicle_observation_id=?")
-            .param(source).update();
+        jdbc.sql(
+        "UPDATE forecast_evaluation_result SET scored_at='2026-10-09T00:00:00Z' WHERE vehicle_observation_id=?")
+            .param(source)
+            .update();
         assertThat(queue.next(100)).isEmpty();
         assertThat(queue.next(100)).isEmpty();
-        jdbc.sql("UPDATE forecast_evaluation_result SET scored_at='2026-10-08T11:00:00Z' WHERE vehicle_observation_id=?")
-            .param(source).update();
+        jdbc.sql(
+        "UPDATE forecast_evaluation_result SET scored_at='2026-10-08T11:00:00Z' WHERE vehicle_observation_id=?")
+            .param(source)
+            .update();
 
         // when
         boolean found = false;
-        for (int i=0; i<100 && !found; i++) {
+        for (int i = 0; i < 100 && !found; i++) {
             found = queue.next(100).map(candidate -> candidate.routeVersionId() == route
                 && candidate.keys().contains(new Key(source, 9))).orElse(false);
         }
@@ -634,7 +668,7 @@ class EvaluationArchiveRetentionTest {
         assertThat(renewed.id()).isNotEqualTo(batch.id());
         assertThat(renewed.qualityRevision()).isEqualTo(2);
         assertThat(jdbc.sql("SELECT abandoned_at IS NOT NULL FROM evaluation_archive_batch WHERE id=?")
-            .param(batch.id()).query(Boolean.class).single()).isTrue();
+                .param(batch.id()).query(Boolean.class).single()).isTrue();
         assertThatThrownBy(() -> store.readOwned(batch)).isInstanceOf(IllegalStateException.class);
     }
 
@@ -651,7 +685,7 @@ class EvaluationArchiveRetentionTest {
         // then
         assertThat(retired).isFalse();
         assertThat(jdbc.sql("SELECT count(*) FROM evaluation_archive_member WHERE batch_id=?")
-            .param(batch.id()).query(Long.class).single()).isEqualTo(2);
+                .param(batch.id()).query(Long.class).single()).isEqualTo(2);
     }
 
     private void seekCurrent() {
@@ -683,8 +717,14 @@ class EvaluationArchiveRetentionTest {
         return batch;
     }
 
-    private List<Key> keys() { return List.of(new Key(source, 9), new Key(source, 10)); }
-    private int purge(EvaluationArchiveBatch batch) { return new PurgeArchivedEvaluationsService(store, external).purge(batch); }
+    private List<Key> keys() {
+        return List.of(new Key(source, 9), new Key(source, 10));
+    }
+
+    private int purge(EvaluationArchiveBatch batch) {
+        return new PurgeArchivedEvaluationsService(store, external).purge(batch);
+    }
+
     @Test
     void 복원한_정산은_이관_작업이_다시_삭제하지_않는다() {
         // given
@@ -709,8 +749,10 @@ class EvaluationArchiveRetentionTest {
         var batch = ready();
         purge(batch);
         restore(batch);
-        jdbc.sql("UPDATE route_data_quality SET quality_revision=quality_revision+1 WHERE route_id=(SELECT route_id FROM route_version WHERE id=?)")
-            .param(route).update();
+        jdbc.sql(
+        "UPDATE route_data_quality SET quality_revision=quality_revision+1 WHERE route_id=(SELECT route_id FROM route_version WHERE id=?)")
+            .param(route)
+            .update();
 
         // when
         boolean retired = queue.retireChanged(batch);
@@ -721,7 +763,9 @@ class EvaluationArchiveRetentionTest {
         assertThat(liveCount()).isEqualTo(2);
     }
 
-    private int restore(EvaluationArchiveBatch batch) { return new RestoreArchivedEvaluationsService(store, external).restore(batch); }
+    private int restore(EvaluationArchiveBatch batch) {
+        return new RestoreArchivedEvaluationsService(store, external).restore(batch);
+    }
 
     private void failReceipt() {
         doThrow(new IllegalStateException("시험용 위치 기록 장애")).when(jdbc)
@@ -729,15 +773,19 @@ class EvaluationArchiveRetentionTest {
     }
 
     private void insert(Row row) {
-        jdbc.sql("INSERT INTO forecast_evaluation_result SELECT * FROM jsonb_populate_record(NULL::forecast_evaluation_result,CAST(? AS jsonb))")
-            .param(row.originalJson()).update();
+        jdbc.sql(
+        "INSERT INTO forecast_evaluation_result SELECT * FROM jsonb_populate_record(NULL::forecast_evaluation_result,CAST(? AS jsonb))")
+            .param(row.originalJson())
+            .update();
     }
 
     private void changeQuality() {
         new TransactionTemplate(transactions).executeWithoutResult(status -> {
             quality.lock(route);
-            jdbc.sql("UPDATE route_data_quality SET quality_revision=quality_revision+1 WHERE route_id=(SELECT route_id FROM route_version WHERE id=?)")
-                .param(route).update();
+            jdbc.sql(
+            "UPDATE route_data_quality SET quality_revision=quality_revision+1 WHERE route_id=(SELECT route_id FROM route_version WHERE id=?)")
+                .param(route)
+                .update();
         });
     }
 
@@ -768,7 +816,7 @@ class EvaluationArchiveRetentionTest {
                 requested_at,response_received_at,outcome,normalization_version,collection_strategy_version)
             VALUES(:route,CAST(:at AS timestamptz),1,:key,CAST(:at AS timestamptz),CAST(:at AS timestamptz),
                 'SUCCESS_ROWS','normalization-v1.0.0','adaptive-kst-v1.0.1') RETURNING id
-            """).param("route", route).param("at", at).param("key", UUID.randomUUID().toString().substring(0,20))
+            """).param("route", route).param("at", at).param("key", UUID.randomUUID().toString().substring(0, 20))
             .query(Long.class).single();
         return jdbc.sql("""
             INSERT INTO vehicle_observation(observation_batch_id,route_version_id,source_row_number,
@@ -805,8 +853,10 @@ class EvaluationArchiveRetentionTest {
             WHERE e.vehicle_observation_id=:source AND e.target_stop_order=9 AND o.id IN (:ids)
             """).param("source", source).param("ids", ids).update();
         finish();
-        jdbc.sql("UPDATE evaluation_archive_scan SET observation_id=?,stop_order=2147483647,next_attempt_at=clock_timestamp() WHERE id=1")
-            .param(ids.getFirst() - 1).update();
+        jdbc.sql(
+        "UPDATE evaluation_archive_scan SET observation_id=?,stop_order=2147483647,next_attempt_at=clock_timestamp() WHERE id=1")
+            .param(ids.getFirst() - 1)
+            .update();
         var candidates = queue.next(size).orElseThrow();
         assertThat(candidates.routeVersionId()).isEqualTo(route);
         assertThat(candidates.keys()).hasSize(size);
@@ -844,7 +894,8 @@ class EvaluationArchiveRetentionTest {
     }
 
     private List<com.gustler.backend.forecasting.domain.statistics.StopDemandCell> cells() {
-        return statistics.readAsOf(route, TimeSlot.EVENING, DemandStatisticsVersion.CURRENT_CALCULATION_VERSION, UNTIL).cells();
+        return statistics.readAsOf(route, TimeSlot.EVENING, DemandStatisticsVersion.CURRENT_CALCULATION_VERSION, UNTIL)
+            .cells();
     }
 
     private long liveCount() {
@@ -853,6 +904,9 @@ class EvaluationArchiveRetentionTest {
     }
 
     private String location(EvaluationArchiveBatch batch) {
-        return jdbc.sql("SELECT storage_state FROM evaluation_archive_batch WHERE id=?").param(batch.id()).query(String.class).single();
+        return jdbc.sql("SELECT storage_state FROM evaluation_archive_batch WHERE id=?")
+            .param(batch.id())
+            .query(String.class)
+            .single();
     }
 }

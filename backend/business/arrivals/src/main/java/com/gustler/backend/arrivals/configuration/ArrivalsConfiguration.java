@@ -27,7 +27,9 @@ import tools.jackson.databind.ObjectMapper;
 @Configuration(proxyBeanMethods = false)
 public class ArrivalsConfiguration {
     @Bean
-    ArrivalStore arrivalStore(JdbcClient jdbc, ObjectMapper json) { return new JdbcArrivalStore(jdbc, json); }
+    ArrivalStore arrivalStore(JdbcClient jdbc, ObjectMapper json) {
+        return new JdbcArrivalStore(jdbc, json);
+    }
 
     @Bean
     ArrivalSource arrivalSource(@Qualifier("arrivalGbisOptions") GbisClientOptions options,
@@ -40,11 +42,19 @@ public class ArrivalsConfiguration {
     }
 
     @Bean
-    RefreshStationArrivals refreshStationArrivals(ArrivalStore store, ArrivalSource source, ArrivalCallQuota quota,
-        @Qualifier("arrivalExecutor") Executor executor, ArrivalCollectionPolicy policy, Clock clock) {
+    RefreshStationArrivals refreshStationArrivals(
+        ArrivalStore store,
+        ArrivalSource source,
+        ArrivalCallQuota quota,
+        @Qualifier("arrivalExecutor") Executor executor,
+        ArrivalCollectionPolicy policy,
+        Clock clock
+    ) {
         return new ArrivalRefreshCoordinator(store, source, quota, executor, policy, clock, System::nanoTime);
     }
 
     @Bean
-    RetainArrivalSnapshots retainArrivalSnapshots(ArrivalStore store) { return store::purgeExpiredBefore; }
+    RetainArrivalSnapshots retainArrivalSnapshots(ArrivalStore store) {
+        return store::purgeExpiredBefore;
+    }
 }

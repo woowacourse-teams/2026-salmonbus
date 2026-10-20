@@ -11,7 +11,8 @@ import java.util.zip.ZipFile;
 import net.bytebuddy.agent.builder.AgentBuilder;
 
 public final class TimingAgentJar {
-    private TimingAgentJar() { }
+    private TimingAgentJar() {
+    }
 
     public static Path create(Path destination) throws Exception {
         Manifest manifest = new Manifest();
@@ -27,7 +28,9 @@ public final class TimingAgentJar {
                 String name = entry.getName();
                 if (entry.isDirectory() || name.startsWith("META-INF/") && !name.startsWith("META-INF/versions/")) continue;
                 jar.putNextEntry(new JarEntry(name));
-                try (var input = zip.getInputStream(entry)) { input.transferTo(jar); }
+                try (var input = zip.getInputStream(entry)) {
+                    input.transferTo(jar);
+                }
                 jar.closeEntry();
             }
             appendClass(jar, ArrivalTimingAgent.class);

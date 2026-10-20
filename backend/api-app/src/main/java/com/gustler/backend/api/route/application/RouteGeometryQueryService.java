@@ -14,7 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class RouteGeometryQueryService {
     private final RouteGeometryQueryRepository repository;
 
-    public RouteGeometryQueryService(RouteGeometryQueryRepository repository) { this.repository = repository; }
+    public RouteGeometryQueryService(RouteGeometryQueryRepository repository) {
+        this.repository = repository;
+    }
 
     public RouteGeometry get(RouteId routeId, Long requestedVersion) {
         if (requestedVersion != null && requestedVersion < 1) throw new InvalidReferenceVersionException();

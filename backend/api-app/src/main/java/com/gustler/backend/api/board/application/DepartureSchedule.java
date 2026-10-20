@@ -10,7 +10,6 @@ public record DepartureSchedule(
     String downLastDepartureTime,
     RouteHeadways headways
 ) {
-
     public DepartureSchedule {
         Objects.requireNonNull(headways, "headways는 null일 수 없습니다.");
     }

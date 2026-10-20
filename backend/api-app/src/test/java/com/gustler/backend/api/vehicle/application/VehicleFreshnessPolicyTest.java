@@ -9,7 +9,6 @@ import java.time.ZoneId;
 import org.junit.jupiter.api.Test;
 
 class VehicleFreshnessPolicyTest {
-
     private static final Clock CLOCK = Clock.fixed(
         Instant.parse("2026-08-27T03:00:00Z"),
         ZoneId.of("Asia/Seoul")

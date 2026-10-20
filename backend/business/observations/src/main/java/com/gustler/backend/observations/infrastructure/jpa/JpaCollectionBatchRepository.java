@@ -18,7 +18,7 @@ public class JpaCollectionBatchRepository implements CollectionBatchRepository {
     private final VehicleObservationEntityRepository observations;
 
     public JpaCollectionBatchRepository(ObservationBatchEntityRepository batches,
-                                        VehicleObservationEntityRepository observations) {
+        VehicleObservationEntityRepository observations) {
         this.batches = batches;
         this.observations = observations;
     }
@@ -52,7 +52,10 @@ public class JpaCollectionBatchRepository implements CollectionBatchRepository {
     @Override
     public List<StoredObservations.Row> saveObservations(CollectionBatch batch, List<UpstreamObservationRow> rows) {
         return observations.saveAll(rows.stream()
-                .map(row -> new VehicleObservationJpaEntity(batch.id(), batch.routeVersionId(), row)).toList())
-            .stream().map(VehicleObservationJpaEntity::storedRow).toList();
+            .map(row -> new VehicleObservationJpaEntity(batch.id(), batch.routeVersionId(), row))
+            .toList())
+            .stream()
+            .map(VehicleObservationJpaEntity::storedRow)
+            .toList();
     }
 }

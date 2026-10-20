@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
 
 class JpaBoardQueryRepositoryTest {
-
     private BoardRouteVersionEntityRepository routeVersionRepository;
     private JpaBoardQueryRepository repository;
     private BoardVehicleObservationEntityRepository vehicleObservationRepository;

@@ -9,7 +9,6 @@ import org.springframework.data.repository.query.Param;
 
 public interface ObservationBatchEntityRepository
     extends Repository<ObservationBatchJpaEntity, Long> {
-
     @Query("""
         SELECT batch
         FROM ObservationBatchJpaEntity batch

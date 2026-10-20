@@ -15,7 +15,6 @@ import java.time.OffsetDateTime;
 @Entity
 @Table(name = "observation_batch")
 public class ObservationBatchJpaEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

@@ -36,7 +36,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 @SpringBootTest(properties = "collection.route-ids[0]=204000057")
 @Import({PostgresTestContainer.class, CollectionRuntimeConfiguration.class})
 class CollectionSchedulerRoutesTest {
-
     private static final String ROUTE_3330 = "204000057";
     private static final String STOP_205000217 = "205000217";
     private static final String STOP_277103149 = "277103149";

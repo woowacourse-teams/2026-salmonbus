@@ -9,8 +9,10 @@ import java.util.List;
 import java.util.Optional;
 
 public interface TripQualityMaintenanceStore {
-    record Batch(long id, Instant observedAt) { }
-    record Signal(long batchId, QualityObservationBatch.Row row) { }
+    record Batch(long id, Instant observedAt) {
+    }
+    record Signal(long batchId, QualityObservationBatch.Row row) {
+    }
     TripQualityPreview preview(long version, Instant until);
     Optional<TripQualityDiscovery> discovery(long version);
     void startDiscovery(long version, TripQualityDiscovery discovery);
@@ -18,6 +20,7 @@ public interface TripQualityMaintenanceStore {
     List<Signal> anomalies(List<Long> batchIds);
     void saveDiscovery(long version, TripQualityDiscovery discovery);
     Optional<String> nextPendingVehicle(long version);
+
     boolean hasPendingVehicles(long version);
     List<TripQualityStatus> status(long version);
 }

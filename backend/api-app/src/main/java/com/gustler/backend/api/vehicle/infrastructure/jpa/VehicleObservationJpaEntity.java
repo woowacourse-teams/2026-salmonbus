@@ -20,7 +20,6 @@ import org.hibernate.annotations.Immutable;
 @Table(name = "forecast_observation_quality")
 @Immutable
 public class VehicleObservationJpaEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

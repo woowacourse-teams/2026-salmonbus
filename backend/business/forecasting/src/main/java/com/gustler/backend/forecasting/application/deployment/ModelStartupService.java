@@ -11,7 +11,6 @@ import java.util.Optional;
 import org.springframework.transaction.annotation.Transactional;
 
 public class ModelStartupService implements LoadConfiguredModel {
-
     private final ModelBundleLoader loader;
     private final ModelDeploymentRepository deployments;
     private final LoadedModelRegistry bundles;

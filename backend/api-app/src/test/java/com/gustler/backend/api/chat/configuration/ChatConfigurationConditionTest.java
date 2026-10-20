@@ -32,7 +32,6 @@ import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(OutputCaptureExtension.class)
 class ChatConfigurationConditionTest {
-
     private static final String MISSING_URI_WARNING = "chat.enabled=true 인데 chat.mongodb-uri 가 비어 있다";
     private static final String MALFORMED_URI_WARNING = "chat.enabled=true 인데 chat.mongodb-uri 형식이 올바르지 않다";
 
@@ -66,6 +65,7 @@ class ChatConfigurationConditionTest {
         // when
         contextRunner.withPropertyValues("chat.enabled=true", "chat.mongodb-uri=")
             .run(context -> {
+
                 // then
                 assertThat(context).hasNotFailed();
                 assertChatIsOff(context);
@@ -79,9 +79,10 @@ class ChatConfigurationConditionTest {
     void 켜져_있어도_URI_형식이_틀리면_채팅만_끈_채로_뜨고_값은_로그에_남기지_않는다(CapturedOutput output) {
         // when
         contextRunner.withPropertyValues(
-                "chat.enabled=true", "chat.mongodb-uri=mongdb://chat:typo-secret@127.0.0.1:27017/salmonbus_chat"
-            )
+            "chat.enabled=true", "chat.mongodb-uri=mongdb://chat:typo-secret@127.0.0.1:27017/salmonbus_chat"
+        )
             .run(context -> {
+
                 // then
                 assertThat(context).hasNotFailed();
                 assertChatIsOff(context);
@@ -100,6 +101,7 @@ class ChatConfigurationConditionTest {
                 new MapPropertySource("blankUri", Map.of("chat.mongodb-uri", "   "))
             ))
             .run(context -> {
+
                 // then
                 assertThat(context).hasNotFailed();
                 assertChatIsOff(context);
@@ -119,6 +121,7 @@ class ChatConfigurationConditionTest {
         assertTimeout(Duration.ofSeconds(20), () ->
             contextRunner.withPropertyValues("chat.enabled=true", "chat.mongodb-uri=" + uri)
                 .run(context -> {
+
                     // then
                     assertThat(context).hasNotFailed();
                     assertThat(context).hasSingleBean(ChatConfiguration.class);
@@ -147,11 +150,11 @@ class ChatConfigurationConditionTest {
 
         // when & then
         contextRunner.withPropertyValues(
-                "chat.enabled=true",
+            "chat.enabled=true",
                 "chat.mongodb-uri=" + uri,
-                "chat.max-connections=3",
-                "chat.max-connections-per-address=2"
-            )
+            "chat.max-connections=3",
+            "chat.max-connections-per-address=2"
+        )
             .run(context -> {
                 ChatConnectionLimiter limiter = context.getBean(ChatConnectionLimiter.class);
                 assertThat(limiter.tryAcquire("a", "198.51.100.1")).isTrue();

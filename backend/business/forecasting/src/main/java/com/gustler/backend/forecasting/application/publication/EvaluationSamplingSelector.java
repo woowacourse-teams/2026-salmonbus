@@ -31,8 +31,10 @@ public class EvaluationSamplingSelector {
         @Value("${forecast.evaluation-sampling.interval:60s}") Duration interval
     ) {
         this.enabled = enabled;
-        this.routes = Arrays.stream(routeIds.split(",")).map(String::strip)
-            .filter(value -> !value.isEmpty()).collect(Collectors.toUnmodifiableSet());
+        this.routes = Arrays.stream(routeIds.split(","))
+            .map(String::strip)
+            .filter(value -> !value.isEmpty())
+            .collect(Collectors.toUnmodifiableSet());
         this.policy = new EvaluationSamplingPolicy(interval);
     }
 
@@ -42,7 +44,9 @@ public class EvaluationSamplingSelector {
         }
         Map<Long, Boolean> decisions = new HashMap<>();
         List<EvaluationSamplingPoint> advances = new ArrayList<>();
-        Set<Long> predicted = publication.predictions().stream().map(SeatForecast::vehicleObservationId)
+        Set<Long> predicted = publication.predictions()
+            .stream()
+            .map(SeatForecast::vehicleObservationId)
             .collect(Collectors.toSet());
         for (EvaluationSamplingSource source : sources) {
             EvaluationSamplingPoint current = source.point();
@@ -59,9 +63,11 @@ public class EvaluationSamplingSelector {
             decisions.put(source.observationId(), all);
             if (all) advances.add(current);
         }
-        List<SeatForecast> selected = publication.predictions().stream().map(prediction ->
-            prediction.withEvaluationDetailRequired(policy.includesDistance(
-                decisions.getOrDefault(prediction.vehicleObservationId(), true), prediction.stopsToTarget())))
+        List<SeatForecast> selected = publication.predictions()
+            .stream()
+            .map(prediction ->
+                prediction.withEvaluationDetailRequired(policy.includesDistance(
+                    decisions.getOrDefault(prediction.vehicleObservationId(), true), prediction.stopsToTarget())))
             .toList();
         return new Selection(new ForecastPublication(publication.sourceBatchId(), publication.routeVersionId(),
             publication.modelDeploymentId(), publication.demandStatisticsRevision(), publication.qualityRevision(),
@@ -84,10 +90,14 @@ public class EvaluationSamplingSelector {
     }
 
     public record Selection(ForecastPublication publication, List<EvaluationSamplingPoint> advances) {
-        public Selection { advances = List.copyOf(advances); }
+        public Selection {
+            advances = List.copyOf(advances);
+        }
     }
 
     private record Key(long routeVersion, String vehicle) {
-        static Key of(EvaluationSamplingPoint point) { return new Key(point.routeVersionId(), point.vehicleId()); }
+        static Key of(EvaluationSamplingPoint point) {
+            return new Key(point.routeVersionId(), point.vehicleId());
+        }
     }
 }

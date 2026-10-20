@@ -30,7 +30,6 @@ import org.springframework.web.client.RestClient;
 import tools.jackson.databind.ObjectMapper;
 
 class GbisRouteSourceTest {
-
     private static final String BASE_URL = "https://gbis.test";
     private static final String SERVICE_KEY = "fake-service-key-for-test";
     private static final int DAILY_LIMIT = 10_000;
@@ -279,7 +278,7 @@ class GbisRouteSourceTest {
         // given
         respondWith(ROUTE_INFO_JSON.formatted(0),
             THREE_STATIONS_JSON.replace("\"stationSeq\":3,\"turnSeq\":2,\"turnYn\":\"N\"",
-                "\"stationSeq\":3,\"turnSeq\":2,\"turnYn\":\"Y\""));
+            "\"stationSeq\":3,\"turnSeq\":2,\"turnYn\":\"Y\""));
 
         // when
         final RouteSourceResult actual = source.read(ROUTE_3330);
@@ -306,7 +305,7 @@ class GbisRouteSourceTest {
         // given
         respondWith(ROUTE_INFO_JSON.formatted(0),
             THREE_STATIONS_JSON.replace("\"stationSeq\":1,\"turnSeq\":2,",
-                "\"stationSeq\":1,\"turnSeq\":3,"));
+            "\"stationSeq\":1,\"turnSeq\":3,"));
 
         // when
         final RouteSourceResult actual = source.read(ROUTE_3330);
@@ -320,9 +319,9 @@ class GbisRouteSourceTest {
         // given 순번은 2 인데 표시는 3번 정류소에 붙어 있다
         respondWith(ROUTE_INFO_JSON.formatted(0),
             THREE_STATIONS_JSON.replace("\"stationSeq\":2,\"turnSeq\":2,\"turnYn\":\"Y\"",
-                    "\"stationSeq\":2,\"turnSeq\":2,\"turnYn\":\"N\"")
+            "\"stationSeq\":2,\"turnSeq\":2,\"turnYn\":\"N\"")
                 .replace("\"stationSeq\":3,\"turnSeq\":2,\"turnYn\":\"N\"",
-                    "\"stationSeq\":3,\"turnSeq\":2,\"turnYn\":\"Y\""));
+                "\"stationSeq\":3,\"turnSeq\":2,\"turnYn\":\"Y\""));
 
         // when
         final RouteSourceResult actual = source.read(ROUTE_3330);

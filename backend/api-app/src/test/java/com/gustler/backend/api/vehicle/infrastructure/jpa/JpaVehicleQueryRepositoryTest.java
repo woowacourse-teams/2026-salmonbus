@@ -25,7 +25,6 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.data.domain.PageRequest;
 
 class JpaVehicleQueryRepositoryTest {
-
     private VehicleRouteVersionEntityRepository routeVersionRepository;
     private ObservationBatchEntityRepository observationBatchRepository;
     private VehicleObservationEntityRepository vehicleObservationRepository;

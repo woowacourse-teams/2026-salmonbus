@@ -16,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class JdbcModelDeploymentRepositoryTest {
-
     private static final String STAGED = "STAGED";
     private static final String ACTIVE = "ACTIVE";
     private static final String RETIRED = "RETIRED";

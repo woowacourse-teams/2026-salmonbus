@@ -11,7 +11,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class CollectionPhaseTest {
-
     private static final int PEAK_INTERVAL_SECONDS = 20;
     private static final int OFF_PEAK_INTERVAL_SECONDS = 30;
     private static final int DEEP_NIGHT_INTERVAL_SECONDS = 600;

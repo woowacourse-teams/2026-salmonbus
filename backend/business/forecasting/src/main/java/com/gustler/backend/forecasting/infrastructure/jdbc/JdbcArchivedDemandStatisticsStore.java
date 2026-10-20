@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Reference;
+
 import com.gustler.backend.forecasting.application.statistics.ArchivedDemandStatisticsStore;
 import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Key;
 import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Row;
@@ -18,7 +19,9 @@ import org.springframework.stereotype.Repository;
 public class JdbcArchivedDemandStatisticsStore implements ArchivedDemandStatisticsStore {
     private final JdbcClient jdbc;
 
-    public JdbcArchivedDemandStatisticsStore(JdbcClient jdbc) { this.jdbc = jdbc; }
+    public JdbcArchivedDemandStatisticsStore(JdbcClient jdbc) {
+        this.jdbc = jdbc;
+    }
 
     @Override
     public boolean hasArchive(long routeVersionId) {
@@ -38,14 +41,19 @@ public class JdbcArchivedDemandStatisticsStore implements ArchivedDemandStatisti
               AND NOT EXISTS(SELECT 1 FROM forecast_evaluation_result e
                   WHERE e.vehicle_observation_id=m.vehicle_observation_id AND e.target_stop_order=m.target_stop_order)
             ORDER BY m.vehicle_observation_id,m.target_stop_order LIMIT 129
-            """).param("route", routeVersionId).param("ids", observations).query((rs, n) -> {
+            """)
+            .param("route", routeVersionId)
+            .param("ids", observations)
+            .query((rs, n) -> {
                 if (!"VERIFIED".equals(rs.getString("state"))) {
                     throw new IllegalStateException("원본이 없는 정산의 S3 검증 기록이 없다");
                 }
                 return new Missing(new Reference(rs.getObject("id", UUID.class), rs.getLong("route_version_id"),
                     rs.getLong("quality_revision"), rs.getInt("row_count"), rs.getString("manifest_sha256")),
-                    new Key(rs.getLong("vehicle_observation_id"), rs.getInt("target_stop_order")), rs.getString("original_sha256"));
-            }).list();
+                    new Key(rs.getLong("vehicle_observation_id"), rs.getInt("target_stop_order")),
+                    rs.getString("original_sha256"));
+            })
+            .list();
         if (rows.size() > DemandStatisticsRebuild.PAGE_SIZE) {
             throw new IllegalStateException("한 단계의 이관 입력 한도를 넘었다");
         }
@@ -55,7 +63,9 @@ public class JdbcArchivedDemandStatisticsStore implements ArchivedDemandStatisti
     @Override
     public List<Sample> samples(DemandStatisticsRebuild rebuild, List<Long> observations, List<Row> archived) {
         if (observations.isEmpty()) return List.of();
-        String json = archived.stream().map(Row::originalJson).collect(Collectors.joining(",", "[", "]"));
+        String json = archived.stream()
+            .map(Row::originalJson)
+            .collect(Collectors.joining(",", "[", "]"));
         List<Sample> samples = jdbc.sql("""
             WITH archived AS MATERIALIZED (
                 SELECT * FROM jsonb_populate_recordset(NULL::forecast_evaluation_result,CAST(:archive AS jsonb))
@@ -83,11 +93,18 @@ public class JdbcArchivedDemandStatisticsStore implements ArchivedDemandStatisti
                     AND pending.id>:inputUntil)
             ORDER BY source.id,f.target_stop_order LIMIT 129
             """.formatted(EligibleObservationSql.ARRIVAL_MATCHES_SOURCE))
-            .param("archive", json).param("ids", observations).param("route", rebuild.routeVersionId())
-            .param("vehicle", rebuild.scope().vehicleId()).param("until", rebuild.dataUntil().atOffset(ZoneOffset.UTC))
-            .param("inputUntil", rebuild.inputUntilId()).query((rs, n) -> new Sample(
-                new Cell(rs.getString("vehicle_id"), rs.getObject("arrived_at", OffsetDateTime.class).toInstant().truncatedTo(ChronoUnit.HOURS),
-                    rs.getInt("target_stop_order")), rs.getLong("seats_on_arrival"), rs.getLong("net_boarding"))).list();
+            .param("archive", json)
+            .param("ids", observations)
+            .param("route", rebuild.routeVersionId())
+            .param("vehicle", rebuild.scope().vehicleId())
+            .param("until", rebuild.dataUntil().atOffset(ZoneOffset.UTC))
+            .param("inputUntil", rebuild.inputUntilId())
+            .query((rs, n) -> new Sample(
+                new Cell(rs.getString("vehicle_id"), rs.getObject("arrived_at", OffsetDateTime.class)
+                    .toInstant()
+                    .truncatedTo(ChronoUnit.HOURS),
+                    rs.getInt("target_stop_order")), rs.getLong("seats_on_arrival"), rs.getLong("net_boarding")))
+            .list();
         if (samples.size() > DemandStatisticsRebuild.PAGE_SIZE) {
             throw new IllegalStateException("한 단계의 집계 표본 한도를 넘었다");
         }
@@ -105,10 +122,17 @@ public class JdbcArchivedDemandStatisticsStore implements ArchivedDemandStatisti
                     sample_count=target.sample_count+EXCLUDED.sample_count,
                     arrival_seats_sum=target.arrival_seats_sum+EXCLUDED.arrival_seats_sum,
                     net_boarding_sum=target.net_boarding_sum+EXCLUDED.net_boarding_sum
-                """).param("route", rebuild.routeVersionId()).param("scope", rebuild.scope().vehicleId())
-                .param("request", rebuild.requestId()).param("vehicle", total.cell().vehicleId())
-                .param("hour", total.cell().hour().atOffset(ZoneOffset.UTC)).param("stop", total.cell().stopOrder())
-                .param("count", total.count()).param("arrival", total.arrivalSeats()).param("net", total.netBoarding()).update();
+                """)
+                .param("route", rebuild.routeVersionId())
+                .param("scope", rebuild.scope().vehicleId())
+                .param("request", rebuild.requestId())
+                .param("vehicle", total.cell().vehicleId())
+                .param("hour", total.cell().hour().atOffset(ZoneOffset.UTC))
+                .param("stop", total.cell().stopOrder())
+                .param("count", total.count())
+                .param("arrival", total.arrivalSeats())
+                .param("net", total.netBoarding())
+                .update();
         }
     }
 }

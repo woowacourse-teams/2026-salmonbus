@@ -17,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 @IntegrationTest
 @Transactional
 class JpaBoardQueryRepositoryIntegrationTest {
-
     @Autowired
     private JpaBoardQueryRepository repository;
 

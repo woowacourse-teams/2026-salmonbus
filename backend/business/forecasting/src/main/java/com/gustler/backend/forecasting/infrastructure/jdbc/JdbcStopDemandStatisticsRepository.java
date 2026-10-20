@@ -23,7 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 /** 통계 버전과 해당 정류장·시간대의 집계값을 함께 저장하고 조회한다. */
 @Repository
 public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsRepository {
-
     /** 아직 사용할 통계 버전이 없는 상태. */
     private static final int NO_STATISTICS_YET = 0;
 
@@ -118,7 +117,6 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
         ORDER BY forecast.target_stop_order, arrived_hour_start
         """;
 
-
     private static final String INSERT_VERSION = """
         INSERT INTO demand_statistics_version (
             route_version_id, calculation_version, revision, data_until, computed_at,
@@ -204,7 +202,10 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
                   AND f.target_stop_order=m.target_stop_order AND f.stops_to_target=1
                 WHERE b.route_version_id=:route AND NOT EXISTS(SELECT 1 FROM forecast_evaluation_result e
                     WHERE e.vehicle_observation_id=m.vehicle_observation_id AND e.target_stop_order=m.target_stop_order))
-            """).param("route", routeVersionId).query(Boolean.class).single();
+            """)
+            .param("route", routeVersionId)
+            .query(Boolean.class)
+            .single();
         if (archived) throw new IllegalStateException("DB 원본만 읽는 일괄 집계는 이관된 정산을 처리할 수 없다");
         JdbcClient.StatementSpec statement = jdbcClient.sql(SELECT_HOURLY_TOTALS)
             .param("routeVersionId", routeVersionId)

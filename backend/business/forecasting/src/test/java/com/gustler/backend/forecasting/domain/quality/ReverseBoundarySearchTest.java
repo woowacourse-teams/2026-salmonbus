@@ -26,7 +26,9 @@ class ReverseBoundarySearchTest {
             row(1, 4, firstState, 20), row(0, 3, 2, 0));
 
         // when
-        rows.stream().takeWhile(ignored -> !search.boundaryConfirmed()).forEachOrdered(search::inspect);
+        rows.stream()
+            .takeWhile(ignored -> !search.boundaryConfirmed())
+            .forEachOrdered(search::inspect);
 
         // then
         assertThat(search.boundaryConfirmed()).isTrue();
@@ -41,7 +43,9 @@ class ReverseBoundarySearchTest {
         var rows = List.of(row(2, 4, 2, gap), row(1, 4, 2, 0));
 
         // when
-        rows.stream().takeWhile(ignored -> !search.boundaryConfirmed()).forEachOrdered(search::inspect);
+        rows.stream()
+            .takeWhile(ignored -> !search.boundaryConfirmed())
+            .forEachOrdered(search::inspect);
 
         // then
         assertThat(search.replayStart().id()).isEqualTo(expectedStart);
@@ -54,7 +58,8 @@ class ReverseBoundarySearchTest {
         var rows = List.of(row(2, 3, 2, 40), row(1, 1, 2, 20));
 
         // when
-        rows.stream().forEachOrdered(search::inspect);
+        rows.stream()
+            .forEachOrdered(search::inspect);
 
         // then
         assertThat(search.replayStart().id()).isEqualTo(1);
@@ -67,7 +72,9 @@ class ReverseBoundarySearchTest {
 
         // when
         List.of(row(2, 4, 0, 40), row(1, 4, 2, 20), row(0, 3, 2, 0))
-            .stream().takeWhile(ignored -> !search.boundaryConfirmed()).forEachOrdered(search::inspect);
+            .stream()
+            .takeWhile(ignored -> !search.boundaryConfirmed())
+            .forEachOrdered(search::inspect);
 
         // then
         assertThat(search.boundaryConfirmed()).isTrue();
@@ -82,17 +89,20 @@ class ReverseBoundarySearchTest {
 
         // when
         List<Long> inspected = new ArrayList<>();
-        rows.stream().takeWhile(ignored -> !search.boundaryConfirmed()).forEachOrdered(row -> {
-            inspected.add(row.id());
-            search.inspect(row);
-        });
+        rows.stream()
+            .takeWhile(ignored -> !search.boundaryConfirmed())
+            .forEachOrdered(row -> {
+                inspected.add(row.id());
+                search.inspect(row);
+            });
 
         // then
         assertThat(inspected).containsExactly(2L, 1L);
         assertThat(search.replayStart().id()).isEqualTo(2);
     }
 
-    private static Observation row(long id, int stop, int state, int seconds) {
+    private static Observation row(long id, int stop, int state, int seconds
+    ) {
         return new Observation(id, "bus", AT.plusSeconds(seconds), stop, state, 44);
     }
 }

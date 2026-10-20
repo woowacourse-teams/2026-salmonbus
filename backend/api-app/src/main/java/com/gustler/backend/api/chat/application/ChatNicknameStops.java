@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 public final class ChatNicknameStops {
-
     private static final Pattern BRACKETS = Pattern.compile("\\([^)]*\\)|\\[[^\\]]*]");
     private static final String FRONT_SUFFIX = "앞";
     private static final int SHORT_NAME_MAX_LENGTH = 7;

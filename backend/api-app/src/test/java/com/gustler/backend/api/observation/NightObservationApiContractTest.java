@@ -33,8 +33,10 @@ class NightObservationApiContractTest {
     private static final String ROUTE = "204000057";
     private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-10-15T19:05:00Z");
 
-    @Autowired private WebApplicationContext application;
-    @Autowired private JdbcClient jdbc;
+    @Autowired
+    private WebApplicationContext application;
+    @Autowired
+    private JdbcClient jdbc;
     private MockMvc api;
     private BoardDatabaseFixture fixture;
 
@@ -53,7 +55,7 @@ class NightObservationApiContractTest {
         "2026-10-15T19:00:00Z, 5, true"
     })
     void boardAndVehiclesUseTheSameObservationBasedExpiry(String time, final int minutes,
-                                                           final boolean fresh) throws Exception {
+        final boolean fresh) throws Exception {
         var observedAt = OffsetDateTime.parse(time);
         var route = fixture.insertRoute(ROUTE, "3330", "기점", "종점", 2,
             "04:50", "23:30", "05:00", "23:30", NOW.minusDays(1));

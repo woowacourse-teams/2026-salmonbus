@@ -19,10 +19,13 @@ class JdbcCurrentGbisRoutesTest {
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration
     @Import({PostgresTestContainer.class, JdbcCurrentRouteVersionQuery.class})
-    static class Config { }
+    static class Config {
+    }
 
-    @Autowired CurrentRouteVersionQuery routes;
-    @Autowired JdbcClient jdbc;
+    @Autowired
+    CurrentRouteVersionQuery routes;
+    @Autowired
+    JdbcClient jdbc;
 
     @BeforeEach
     void reset() {

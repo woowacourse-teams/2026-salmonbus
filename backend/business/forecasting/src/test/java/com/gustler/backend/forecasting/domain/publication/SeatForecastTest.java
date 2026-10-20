@@ -5,16 +5,13 @@ import com.gustler.backend.forecasting.domain.model.VehicleStopTarget;
 import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.SeatDistribution;
 import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class SeatForecastTest {
-
     private static final long DEPLOYMENT_ID = 1L;
 
     private static final Instant OBSERVED_AT = Instant.parse("2026-08-25T08:30:00Z");
@@ -111,6 +108,4 @@ class SeatForecastTest {
     private SeatForecastResult result() {
         return new SeatForecastResult(new SeatDistribution(List.of(0.4, 0.6)), 0.38);
     }
-
-
 }

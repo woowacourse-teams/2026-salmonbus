@@ -14,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 @IntegrationTest
 @Transactional
 class JdbcChatRouteSourceTest {
-
     private static final OffsetDateTime FIRST_VERSION_AT = OffsetDateTime.parse("2026-08-01T00:00:00+09:00");
     private static final OffsetDateTime SECOND_VERSION_AT = OffsetDateTime.parse("2026-08-20T00:00:00+09:00");
 

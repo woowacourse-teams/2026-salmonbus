@@ -12,7 +12,6 @@ import java.util.Optional;
  * 신규 장부의 한도는 설정값을 사용하고, 기존 장부의 잔여 한도는 저장소가 원자적으로 판정한다.
  */
 public record DailyCallQuota(CallQuota service, LocalDate koreanDate, String keyAlias, int dailyLimit) {
-
     private static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
 
     public DailyCallQuota {
@@ -26,7 +25,11 @@ public record DailyCallQuota(CallQuota service, LocalDate koreanDate, String key
         }
     }
 
-    public static DailyCallQuota at(CallQuota service, String keyAlias, OffsetDateTime requestedAt, int dailyLimit) {
+    public static DailyCallQuota at(
+        CallQuota service,
+        String keyAlias,
+        OffsetDateTime requestedAt, int dailyLimit
+    ) {
         return new DailyCallQuota(service, koreanDateOf(requestedAt), keyAlias, dailyLimit);
     }
 
@@ -56,7 +59,6 @@ public record DailyCallQuota(CallQuota service, LocalDate koreanDate, String key
 
     /** 아직 확정되지 않은 예약 요청. 저장소의 원자 갱신이 성공한 뒤에만 호출할 수 있다. */
     public record Reservation(DailyCallQuota quota, int calls) {
-
         public Reservation {
             Objects.requireNonNull(quota, "일일 호출 한도가 필요하다");
             requirePositiveCalls(calls);

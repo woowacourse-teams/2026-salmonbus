@@ -22,7 +22,6 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
     GbisConfiguration.class, CollectionScheduler.class})
 @EnableConfigurationProperties(RouteGeometryProperties.class)
 public class CollectionRuntimeConfiguration {
-
     /** 정적 형상 HTTP 대기가 위치 관측 스케줄을 막지 않게 분리한다. */
     @Bean(destroyMethod = "close")
     ExecutorService routeGeometryExecutor() {
@@ -39,6 +38,9 @@ public class CollectionRuntimeConfiguration {
     @Bean
     CallQuotaPolicy callQuotaPolicy(GbisProperties properties) {
         return CallQuotaPolicy.sameForEveryApi(properties.dailyLimit(),
-            properties.serviceKeys().stream().map(GbisKey::alias).toList(), properties.limits());
+            properties.serviceKeys()
+                .stream()
+                .map(GbisKey::alias)
+                .toList(), properties.limits());
     }
 }

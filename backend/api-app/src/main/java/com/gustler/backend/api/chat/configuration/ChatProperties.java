@@ -6,7 +6,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties("chat")
 public final class ChatProperties {
-
     private String mongodbUri;
     private List<String> allowedOrigins = new ArrayList<>();
     private int maxConnections = 1_000;

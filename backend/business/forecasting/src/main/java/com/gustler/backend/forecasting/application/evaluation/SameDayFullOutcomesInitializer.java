@@ -22,9 +22,14 @@ public class SameDayFullOutcomesInitializer {
     private final ModelDeploymentRepository deployments;
     private final SameDayInitializationPolicy policy;
 
-    public SameDayFullOutcomesInitializer(SameDayFullOutcomesService service, SameDayFullOutcomesStore repository,
-        RouteDataQualityAccess quality, QueryTimeLimits limits, SameDayInitializationPolicy policy,
-        ModelDeploymentRepository deployments) {
+    public SameDayFullOutcomesInitializer(
+        SameDayFullOutcomesService service,
+        SameDayFullOutcomesStore repository,
+        RouteDataQualityAccess quality,
+        QueryTimeLimits limits,
+        SameDayInitializationPolicy policy,
+        ModelDeploymentRepository deployments
+    ) {
         this.service = service;
         this.repository = repository;
         this.quality = quality;

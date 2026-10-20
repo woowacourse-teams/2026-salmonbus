@@ -7,7 +7,6 @@ import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
 class ResidualDistributionTest {
-
     private static final double TOLERANCE = 1e-12;
     private static final int NO_RESIDUAL = SeatGrid.residualIndexOf(0);
 
@@ -35,7 +34,8 @@ class ResidualDistributionTest {
         double[] actual = allFitted().chancesByResidual(CoefficientsFixture.ONE_FEATURE, 20, 44);
 
         // then
-        assertThat(Arrays.stream(actual).sum()).isEqualTo(1.0, within(TOLERANCE));
+        assertThat(Arrays.stream(actual)
+            .sum()).isEqualTo(1.0, within(TOLERANCE));
     }
 
     @Test
@@ -74,7 +74,8 @@ class ResidualDistributionTest {
         // when
         double[] chances = distribution.chancesByResidual(
             CoefficientsFixture.ONE_FEATURE, ALL_BINS_USABLE_ANCHOR, ALL_BINS_USABLE_CAPACITY);
-        final double actual = Arrays.stream(chances, 0, NO_RESIDUAL).sum();
+        final double actual = Arrays.stream(chances, 0, NO_RESIDUAL)
+            .sum();
 
         // then
         assertThat(actual).isEqualTo(0.3, within(TOLERANCE));
@@ -105,7 +106,8 @@ class ResidualDistributionTest {
 
         // when
         double[] chances = distribution.chancesByResidual(CoefficientsFixture.ONE_FEATURE, 20, 44);
-        final double actual = Arrays.stream(chances, 0, NO_RESIDUAL).sum();
+        final double actual = Arrays.stream(chances, 0, NO_RESIDUAL)
+            .sum();
 
         // then
         assertThat(actual).isGreaterThan(0.0);

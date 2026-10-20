@@ -2,7 +2,6 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
 import com.gustler.backend.forecasting.application.quality.WorkerQualityState;
 import com.gustler.backend.forecasting.application.quality.WorkerQualityTransactions;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityChanges;
@@ -23,11 +22,16 @@ import org.springframework.transaction.support.TransactionTemplate;
 @ForecastingIntegrationTest
 @TestPropertySource(properties = "forecast.quality-memory.enabled=true")
 class WorkerQualityTransactionTest {
-    @Autowired JdbcClient jdbc;
-    @Autowired PlatformTransactionManager transactions;
-    @Autowired WorkerQualityState state;
-    @Autowired WorkerQualityTransactions changes;
-    @Autowired RouteDataQualityChanges qualityChanges;
+    @Autowired
+    JdbcClient jdbc;
+    @Autowired
+    PlatformTransactionManager transactions;
+    @Autowired
+    WorkerQualityState state;
+    @Autowired
+    WorkerQualityTransactions changes;
+    @Autowired
+    RouteDataQualityChanges qualityChanges;
     private long route;
     private long version;
 
@@ -81,7 +85,8 @@ class WorkerQualityTransactionTest {
             jdbc.sql("UPDATE route_data_quality SET quality_revision=2 WHERE route_id=?").param(route).update();
             assertThat(state.read(version)).isEmpty();
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override public void afterCommit() {
+                @Override
+                public void afterCommit() {
                     assertThat(state.read(version)).isEmpty();
                 }
             });
@@ -149,7 +154,10 @@ class WorkerQualityTransactionTest {
             changes.changing();
             jdbc.sql("UPDATE route_data_quality SET quality_revision=2 WHERE route_id=?").param(route).update();
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override public void afterCommit() { throw new IllegalStateException("콜백 실패"); }
+                @Override
+                public void afterCommit() {
+                    throw new IllegalStateException("콜백 실패");
+                }
             });
         })).isInstanceOf(IllegalStateException.class);
 

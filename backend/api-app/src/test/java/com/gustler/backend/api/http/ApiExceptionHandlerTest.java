@@ -1,7 +1,6 @@
 package com.gustler.backend.api.http;
 
 import static org.assertj.core.api.Assertions.assertThat;
-
 import com.gustler.backend.api.board.ModelOutOfScopeException;
 import com.gustler.backend.api.board.NoRecentObservationException;
 import com.gustler.backend.api.error.ApiException;
@@ -29,7 +28,6 @@ import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.transaction.CannotCreateTransactionException;
 
 class ApiExceptionHandlerTest {
-
     private final ApiExceptionHandler handler = new ApiExceptionHandler();
 
     private static List<ApiException> thrownExceptions() {

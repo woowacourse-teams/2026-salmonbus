@@ -15,7 +15,8 @@ class EvaluationArchiveBatchTest {
         var id = UUID.randomUUID();
 
         // when
-        var batch = new EvaluationArchiveBatch(id, 1, 1, UUID.randomUUID(), Instant.now(), State.RESERVED, 1, null);
+        var batch =
+            new EvaluationArchiveBatch(id, 1, 1, UUID.randomUUID(), Instant.now(), State.RESERVED, 1, null);
 
         // then
         assertThat(batch.manifestSha256()).isNull();
@@ -27,9 +28,11 @@ class EvaluationArchiveBatchTest {
         var id = UUID.randomUUID();
 
         // when & then
-        assertThatThrownBy(() -> new EvaluationArchiveBatch(id, 1, 1, UUID.randomUUID(), Instant.now(),
+        assertThatThrownBy(
+            () -> new EvaluationArchiveBatch(id, 1, 1, UUID.randomUUID(), Instant.now(),
             State.VERIFIED, 1, null)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new EvaluationArchiveBatch(id, 1, 1, UUID.randomUUID(), Instant.now(),
+        assertThatThrownBy(
+            () -> new EvaluationArchiveBatch(id, 1, 1, UUID.randomUUID(), Instant.now(),
             State.RESERVED, 1, "a".repeat(64))).isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -39,9 +42,11 @@ class EvaluationArchiveBatchTest {
         var id = UUID.randomUUID();
 
         // when & then
-        assertThatThrownBy(() -> new EvaluationArchiveBatch(id, 1, 1, UUID.randomUUID(), Instant.now(),
+        assertThatThrownBy(
+            () -> new EvaluationArchiveBatch(id, 1, 1, UUID.randomUUID(), Instant.now(),
             State.RESERVED, 0, null)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new EvaluationArchiveBatch(id, 1, 1, UUID.randomUUID(), Instant.now(),
+        assertThatThrownBy(
+            () -> new EvaluationArchiveBatch(id, 1, 1, UUID.randomUUID(), Instant.now(),
             State.RESERVED, 1001, null)).isInstanceOf(IllegalArgumentException.class);
     }
 }

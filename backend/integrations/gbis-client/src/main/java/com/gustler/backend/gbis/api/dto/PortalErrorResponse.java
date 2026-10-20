@@ -6,7 +6,6 @@ public record PortalErrorResponse(
     @JsonProperty("OpenAPI_ServiceResponse")
     ServiceResponse response
 ) {
-
     public record ServiceResponse(
         @JsonProperty("cmmMsgHeader")
         CommonHeader header

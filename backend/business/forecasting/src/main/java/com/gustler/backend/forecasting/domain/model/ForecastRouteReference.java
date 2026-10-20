@@ -19,7 +19,9 @@ public final class ForecastRouteReference {
     private final Map<Long, RouteStops> checked = new ConcurrentHashMap<>();
 
     public ForecastRouteReference(Map<String, List<Stop>> routes) {
-        this.routes = routes.entrySet().stream().collect(Collectors.toUnmodifiableMap(
+        this.routes = routes.entrySet()
+            .stream()
+            .collect(Collectors.toUnmodifiableMap(
             Map.Entry::getKey, entry -> List.copyOf(entry.getValue())));
         for (List<Stop> stops : this.routes.values()) {
             int previous = 0;
@@ -50,7 +52,8 @@ public final class ForecastRouteReference {
             Stop trained = expected.get(index);
             RouteStop current = actual.stops().get(index);
             if (trained.order() != current.stopOrder() || !trained.id().equals(current.stopId())
-                || trained.boardingAllowed() != current.boardingAllowed() || trained.direction() != current.direction()) {
+                || trained.boardingAllowed() != current.boardingAllowed()
+                || trained.direction() != current.direction()) {
                 return false;
             }
         }

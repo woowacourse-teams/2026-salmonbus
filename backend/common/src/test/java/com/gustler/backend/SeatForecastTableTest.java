@@ -21,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 @IntegrationTest
 @Transactional
 class SeatForecastTableTest {
-
     /** 판마다 남는 두 판본. 기본값이 없어서 픽스처가 직접 넣는다. */
     private static final String NORMALIZATION_VERSION = "normalization-v1.0.0";
     private static final String COLLECTION_STRATEGY_VERSION = "adaptive-kst-v1.0.1";
@@ -106,7 +105,8 @@ class SeatForecastTableTest {
     @Test
     void 도착_관측을_찾은_행에만_도착_관측_id가_남는다() {
         // when & then
-        assertThatThrownBy(() -> insertForecast("SKIPPED", arrivalObservationId, null, SCORED_AT))
+        assertThatThrownBy(
+            () -> insertForecast("SKIPPED", arrivalObservationId, null, SCORED_AT))
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 

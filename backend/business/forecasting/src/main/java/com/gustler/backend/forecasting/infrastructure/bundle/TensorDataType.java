@@ -8,7 +8,6 @@ package com.gustler.backend.forecasting.infrastructure.bundle;
  * 자료형이 다르면 읽지 않고 거절한다.
  */
 enum TensorDataType {
-
     FLOAT64("F64", 8),
     UINT8("U8", 1),
     ;

@@ -16,8 +16,13 @@ final class StatisticsExtractUploader {
     private static final String ROOT = "salmonbus-be/statistics-input/v1/";
     private final Command command;
 
-    StatisticsExtractUploader() { this(StatisticsExtractUploader::execute); }
-    StatisticsExtractUploader(Command command) { this.command = command; }
+    StatisticsExtractUploader() {
+        this(StatisticsExtractUploader::execute);
+    }
+
+    StatisticsExtractUploader(Command command) {
+        this.command = command;
+    }
 
     String upload(StatisticsExtractWriter.Bundle bundle, UUID exportId) {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
@@ -33,7 +38,10 @@ final class StatisticsExtractUploader {
         }
         try {
             if (Files.size(manifestPath) > 1024 * 1024
-                || !Files.readString(manifestPath).equals(JsonMapper.builder().build().writeValueAsString(bundle.manifest()))) {
+                || !Files.readString(manifestPath)
+                .equals(JsonMapper.builder()
+                    .build()
+                    .writeValueAsString(bundle.manifest()))) {
                 throw new IllegalArgumentException("파일 설명서가 검증된 내용과 다르다");
             }
         } catch (IOException exception) {
@@ -85,5 +93,7 @@ final class StatisticsExtractUploader {
     }
 
     @FunctionalInterface
-    interface Command { void run(List<String> arguments); }
+    interface Command {
+        void run(List<String> arguments);
+    }
 }

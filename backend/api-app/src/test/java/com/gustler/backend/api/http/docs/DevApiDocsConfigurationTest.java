@@ -13,7 +13,6 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Configuration;
 
 class DevApiDocsConfigurationTest {
-
     @Test
     void 실제_dev_설정은_문서_프로필을_포함한다() {
         try (var context = start()) {
@@ -39,7 +38,8 @@ class DevApiDocsConfigurationTest {
         var arguments = Stream.concat(
             Stream.of("--spring.config.additional-location=" + devApiConfig().toUri()),
             Arrays.stream(additionalArguments)
-        ).toArray(String[]::new);
+        )
+            .toArray(String[]::new);
         return application.run(arguments);
     }
 

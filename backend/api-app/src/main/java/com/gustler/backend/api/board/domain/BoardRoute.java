@@ -15,7 +15,6 @@ public record BoardRoute(
     String referenceVersionId,
     RouteHeadways headways
 ) {
-
     public BoardRoute {
         Objects.requireNonNull(id, "id는 null일 수 없습니다.");
         Objects.requireNonNull(displayName, "displayName은 null일 수 없습니다.");

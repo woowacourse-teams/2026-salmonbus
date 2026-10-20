@@ -6,7 +6,6 @@ import javax.sql.DataSource;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 public final class DatabaseConnections {
-
     private DatabaseConnections() {
     }
 

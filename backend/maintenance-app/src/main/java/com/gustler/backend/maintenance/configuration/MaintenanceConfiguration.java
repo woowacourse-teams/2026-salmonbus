@@ -18,7 +18,6 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @Import(QualityMaintenanceConfiguration.class)
 @EnableTransactionManagement(proxyTargetClass = true)
 public class MaintenanceConfiguration {
-
     @Bean
     Clock clock() {
         return Clock.systemUTC();

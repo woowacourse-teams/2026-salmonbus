@@ -17,8 +17,11 @@ public final class ExportStatisticsInputAdapter implements ExportStatisticsInput
     private final ZoneId zone;
 
     public ExportStatisticsInputAdapter(org.springframework.jdbc.core.simple.JdbcClient jdbc,
-        org.springframework.transaction.PlatformTransactionManager transactions, Path workDirectory,
-        long maxBytes, ZoneId zone) {
+        org.springframework.transaction.PlatformTransactionManager transactions,
+        Path workDirectory,
+        long maxBytes,
+        ZoneId zone
+    ) {
         if (workDirectory == null || !Files.isDirectory(workDirectory) || Files.isSymbolicLink(workDirectory)
             || maxBytes < 1 || maxBytes > 16 * 1024 * 1024 || zone == null) {
             throw new IllegalArgumentException("작업 디렉터리와 시간대, 16MiB 이하의 파일 한도가 필요하다");
@@ -32,7 +35,9 @@ public final class ExportStatisticsInputAdapter implements ExportStatisticsInput
 
     @Override
     public synchronized String export(long routeVersionId, long afterObservationId, long throughObservationId,
-        Instant dataUntil, int maxRows, UUID exportId) {
+        Instant dataUntil, int maxRows,
+        UUID exportId
+    ) {
         if (exportId == null) {
             throw new IllegalArgumentException("추출 번호가 필요하다");
         }

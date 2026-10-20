@@ -1,5 +1,4 @@
 package com.gustler.backend.observations.domain;
-
 import java.util.List;
 import java.util.Optional;
 

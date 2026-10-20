@@ -1,5 +1,4 @@
 package com.gustler.backend.forecasting.domain.publication;
-
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
 import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
 import com.gustler.backend.forecasting.domain.model.SeatUnknownReason;
@@ -9,7 +8,6 @@ import com.gustler.backend.forecasting.domain.model.PrecedingVehicle;
 import com.gustler.backend.forecasting.domain.model.SeatSlope;
 import com.gustler.backend.forecasting.domain.model.FullSeatStreak;
 import static org.assertj.core.api.Assertions.assertThat;
-
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
@@ -17,7 +15,6 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class VehicleTrajectoryAssemblerTest {
-
     private static final long ROUTE_VERSION_ID = 1L;
 
     /** 혼잡도를 안 준 관측. 궤적을 잇는 판정은 혼잡도를 안 본다. */
@@ -344,7 +341,8 @@ class VehicleTrajectoryAssemblerTest {
         ObservationHistory history,
         String vehicleId
     ) {
-        return VehicleTrajectoryAssembler.assemble(history, MAXIMUM_SEATS_READ).stream()
+        return VehicleTrajectoryAssembler.assemble(history, MAXIMUM_SEATS_READ)
+            .stream()
             .filter(trajectory -> vehicleId.equals(trajectory.observation().vehicleId()))
             .findFirst()
             .orElseThrow();

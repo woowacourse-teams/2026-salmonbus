@@ -15,7 +15,6 @@ import java.time.ZoneId;
 @Entity(name = "BoardSeatForecastJpaEntity")
 @Table(name = "seat_forecast")
 public class SeatForecastJpaEntity {
-
     @EmbeddedId
     private SeatForecastJpaId id;
 

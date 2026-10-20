@@ -17,9 +17,14 @@ import org.springframework.web.servlet.HandlerMapping;
 final class ApiFailureLog {
     private static final Logger log = LoggerFactory.getLogger(ApiFailureLog.class);
 
-    private ApiFailureLog() { }
+    private ApiFailureLog() {
+    }
 
-    static void write(int status, ErrorCode code, String requestId, Throwable failure) {
+    static void write(int status,
+        ErrorCode code,
+        String requestId,
+        Throwable failure
+    ) {
         HttpServletRequest request = RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes a
             ? a.getRequest() : null;
         Object pattern = request == null ? null : request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
@@ -33,9 +38,11 @@ final class ApiFailureLog {
             && tx.getApplicationException() != null ? tx.getApplicationException() : failure;
         Throwable root = primary;
         String sqlState = "UNKNOWN";
-        for (Throwable cause = primary; cause != null && seen.size() < 32 && seen.add(cause); cause = cause.getCause()) {
+        for (Throwable cause = primary; cause != null && seen.size() < 32 && seen.add(cause); cause =
+            cause.getCause()) {
             root = cause;
-            if (cause instanceof SQLException sql && sql.getSQLState() != null && sql.getSQLState().matches("[A-Z0-9]{5}")) {
+            if (cause instanceof SQLException sql && sql.getSQLState() != null && sql.getSQLState()
+                .matches("[A-Z0-9]{5}")) {
                 sqlState = sql.getSQLState();
             }
         }
@@ -50,7 +57,8 @@ final class ApiFailureLog {
                 }
             }
         }
-        String format = "event=api_failure status={} errorCode={} endpoint={} routeId={} requestId={} exceptionType={} rootCause={} sqlState={} source={}";
+        String format =
+            "event=api_failure status={} errorCode={} endpoint={} routeId={} requestId={} exceptionType={} rootCause={} sqlState={} source={}";
         if (status >= 500) { log.warn(format, status, code.name(), endpoint, routeId, requestId, type, rootType, sqlState, source); }
         else { log.info(format, status, code.name(), endpoint, routeId, requestId, type, rootType, sqlState, source); }
     }

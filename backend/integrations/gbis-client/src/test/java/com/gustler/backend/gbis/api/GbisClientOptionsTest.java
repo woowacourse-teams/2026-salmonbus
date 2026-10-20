@@ -7,7 +7,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class GbisClientOptionsTest {
-
     private static final String BASE_URL = "https://gbis.test";
     private static final String SERVICE_KEY = "fake-key-a";
     private static final String SERVICE_KEY_B = "fake-key-b";

@@ -28,8 +28,13 @@ final class StatisticsFilePublisher {
     private final Clock clock;
     private final TransactionTemplate transaction;
 
-    StatisticsFilePublisher(JdbcClient jdbc, PlatformTransactionManager transactions,
-        RouteDataQualityAccess quality, StopDemandStatisticsRepository statistics, Clock clock) {
+    StatisticsFilePublisher(
+        JdbcClient jdbc,
+        PlatformTransactionManager transactions,
+        RouteDataQualityAccess quality,
+        StopDemandStatisticsRepository statistics,
+        Clock clock
+    ) {
         this.jdbc = jdbc;
         this.quality = quality;
         this.statistics = statistics;
@@ -54,8 +59,10 @@ final class StatisticsFilePublisher {
         String digest = digest(new Input(bundle.manifest(), fixedCapacities));
         // DB 연결을 보유하지 않은 상태에서 무결성 검사와 계산을 끝낸다.
         var inputKeys = readKeys(bundle);
-        var measurements = StatisticsFileCalculator.calculate(bundle.directory(), bundle.manifest().files(),
-            scope, fixedCapacities, maxDailyCells, 64 * 1024);
+        var measurements =
+            StatisticsFileCalculator.calculate(bundle.directory(), bundle.manifest()
+                .files(),
+                scope, fixedCapacities, maxDailyCells, 64 * 1024);
         return transaction.execute(status -> {
             jdbc.sql("SET LOCAL statement_timeout='500ms'").update();
             jdbc.sql("SET LOCAL lock_timeout='100ms'").update();
@@ -81,7 +88,8 @@ final class StatisticsFilePublisher {
                 throw new IllegalStateException("더 최근 자료의 통계가 이미 게시되어 있다");
             }
             assertComplete(scope, inputKeys);
-            int published = Math.incrementExact(statistics.currentRevision(scope.routeVersionId(), scope.calculationVersion()));
+            int published =
+                Math.incrementExact(statistics.currentRevision(scope.routeVersionId(), scope.calculationVersion()));
             statistics.append(new DemandStatisticsVersion(scope.routeVersionId(), scope.calculationVersion(),
                 published, scope.dataUntil(), clock.instant(), measurements));
             jdbc.sql("""
@@ -98,7 +106,8 @@ final class StatisticsFilePublisher {
             throw new IllegalArgumentException("소량 파일 게시 범위를 넘는 자료는 전체 재집계 경로를 사용해야 한다");
         }
         Set<EvaluationKey> keys = new HashSet<>();
-        try (var reader = new StatisticsInputReader(bundle.directory(), bundle.manifest().files(), 64 * 1024)) {
+        try (var reader = new StatisticsInputReader(bundle.directory(), bundle.manifest()
+            .files(), 64 * 1024)) {
             while (reader.hasNext()) {
                 var row = reader.next();
                 if (!keys.add(new EvaluationKey(row.predictionObservationId(), row.targetStopOrder()))
@@ -131,7 +140,8 @@ final class StatisticsFilePublisher {
         }
     }
 
-    private record EvaluationKey(long observationId, int targetStopOrder) { }
+    private record EvaluationKey(long observationId, int targetStopOrder) {
+    }
 
     private static String digest(Input input) {
         try {

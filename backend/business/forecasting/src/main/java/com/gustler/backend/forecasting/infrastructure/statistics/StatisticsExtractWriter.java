@@ -14,7 +14,9 @@ import tools.jackson.databind.json.JsonMapper;
 /** DB 읽기 트랜잭션이 끝난 뒤 호출한다. 실패한 디렉터리는 재사용하지 않는다. */
 final class StatisticsExtractWriter {
     private static final JsonMapper JSON = JsonMapper.builder().build();
-    private StatisticsExtractWriter() { }
+
+    private StatisticsExtractWriter() {
+    }
 
     static Bundle write(Path parent, JdbcStatisticsInputExtractor.Extracted extracted, long maxBytes) {
         if (maxBytes < 1 || extracted == null || parent == null || !Files.isDirectory(parent)
@@ -38,7 +40,8 @@ final class StatisticsExtractWriter {
                     written += bytes.length;
                 }
             }
-            var file = new StatisticsInputFile("rows.jsonl", written, HexFormat.of().formatHex(hash.digest()));
+            var file = new StatisticsInputFile("rows.jsonl", written, HexFormat.of()
+                .formatHex(hash.digest()));
             StatisticsInputFiles.verify(directory, List.of(file));
             var manifest = new Manifest("statistics-extract-v1", extracted.scope(),
                 extracted.afterObservationId(), extracted.throughObservationId(), List.of(file));
@@ -52,5 +55,6 @@ final class StatisticsExtractWriter {
 
     record Manifest(String format, StatisticsInputScope scope, long afterObservationId,
         long throughObservationId, List<StatisticsInputFile> files) { }
-    record Bundle(Path directory, Manifest manifest) { }
+    record Bundle(Path directory, Manifest manifest) {
+    }
 }

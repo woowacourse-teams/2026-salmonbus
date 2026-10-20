@@ -4,7 +4,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 
 public enum ErrorCode {
-
     INVALID_ROUTE_ID(HttpStatus.BAD_REQUEST, "routeId는 9자리 숫자여야 합니다."),
     ROUTE_NOT_FOUND(HttpStatus.NOT_FOUND, "등록되지 않은 노선입니다."),
     STATION_NOT_FOUND(HttpStatus.NOT_FOUND, "지원하지 않는 정류장입니다."),

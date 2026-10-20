@@ -10,7 +10,6 @@ import java.util.List;
  * 따라서 정류장 하나씩 조회하지 않고 노선 버전과 시간대별 통계를 함께 조회한다.
  */
 public interface StopDemandStatisticsRepository {
-
     /**
      * 자료 기준 시각과 계산 완료 시각이 모두 관측 시각 이하인 통계 중 가장 최근 버전을 조회한다.
      *

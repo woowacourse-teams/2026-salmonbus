@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 
 class CollectionScheduleTest {
-
     private static final int DAILY_LIMIT_10000 = 10_000;
     private static final int DAILY_CALLS_PER_ROUTE = 3_018;
 

@@ -6,10 +6,14 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 
 @ConfigurationProperties("forecast.same-day-initialization")
 public record SameDayInitializationProperties(
-    @DefaultValue("10s") Duration interval,
-    @DefaultValue("60s") Duration retryInterval,
-    @DefaultValue("25s") Duration statementTimeout,
-    @DefaultValue("100ms") Duration lockTimeout
+    @DefaultValue("10s")
+    Duration interval,
+    @DefaultValue("60s")
+    Duration retryInterval,
+    @DefaultValue("25s")
+    Duration statementTimeout,
+    @DefaultValue("100ms")
+    Duration lockTimeout
 ) {
     public SameDayInitializationProperties {
         requirePositive("interval", interval);

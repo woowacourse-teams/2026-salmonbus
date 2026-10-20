@@ -10,7 +10,6 @@ import java.util.Arrays;
  * 호출 횟수를 코드로 계산해 기동 시 한도 초과 여부를 경고한다.
  */
 public final class CollectionSchedule {
-
     /** 수집 주기의 버전. 간격을 하나라도 바꾸면 올린다. 나중에 확인할 수 있도록 수집 배치마다 기록한다. */
     public static final String CURRENT_STRATEGY_VERSION = "adaptive-kst-v1.0.2";
 

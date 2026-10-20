@@ -36,7 +36,6 @@ public sealed interface ObservedSeats {
     record Known(
         int seats
     ) implements ObservedSeats {
-
         public Known {
             if (seats < 0) {
                 throw new IllegalArgumentException("아는 잔여석은 음수일 수 없다: " + seats);
@@ -47,7 +46,6 @@ public sealed interface ObservedSeats {
     record Unknown(
         SeatUnknownReason reason
     ) implements ObservedSeats {
-
         public Unknown {
             Objects.requireNonNull(reason, "잔여석을 모르면 사유가 있어야 한다");
         }

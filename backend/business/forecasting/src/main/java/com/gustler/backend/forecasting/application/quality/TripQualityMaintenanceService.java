@@ -16,12 +16,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class TripQualityMaintenanceService implements PreviewTripQuality, ProcessTripQualityChunk, GetTripQualityStatus {
+public class TripQualityMaintenanceService implements PreviewTripQuality, ProcessTripQualityChunk,
+    GetTripQualityStatus {
     private WorkerQualityTransactions memory;
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     public void useQualityMemory(WorkerQualityTransactions memory) { this.memory = memory; }
     private final TripQualityMaintenanceStore maintenance;
+
     private final TripQualityInvestigationService investigations;
     private final RouteDataQualityAccess quality;
     private final TripQualityStore store;
@@ -29,7 +31,8 @@ public class TripQualityMaintenanceService implements PreviewTripQuality, Proces
 
     public TripQualityMaintenanceService(final TripQualityMaintenanceStore maintenance,
         final TripQualityInvestigationService investigations, final RouteDataQualityAccess quality, final TripQualityStore store,
-        final RouteDataQualityChanges changes) {
+        final RouteDataQualityChanges changes
+    ) {
         this.maintenance = maintenance;
         this.investigations = investigations;
         this.quality = quality;
@@ -47,13 +50,16 @@ public class TripQualityMaintenanceService implements PreviewTripQuality, Proces
     @Override
     @Transactional
     public TripQualityChunkResult applyChunk(final long version, final Instant until, final int limit) {
-        if (limit < 1 || limit > 100) { throw new IllegalArgumentException("한 번에 1~100개 관측 묶음만 처리할 수 있다"); }
+        if (limit < 1 || limit > 100) {
+            throw new IllegalArgumentException("한 번에 1~100개 관측 묶음만 처리할 수 있다");
+        }
         if (memory != null) memory.changing();
         store.applyTimeBudget();
         quality.lock(version);
         final long seconds = store.readRoute(version).maximumGap().toSeconds();
         final var existing = maintenance.discovery(version);
-        final var discovery = existing.orElseGet(() -> new TripQualityDiscovery(Instant.EPOCH, 0, until, seconds, false));
+        final var discovery =
+            existing.orElseGet(() -> new TripQualityDiscovery(Instant.EPOCH, 0, until, seconds, false));
         discovery.verifyResume(until, seconds);
         if (existing.isEmpty()) {
             maintenance.startDiscovery(version, discovery);
@@ -63,11 +69,16 @@ public class TripQualityMaintenanceService implements PreviewTripQuality, Proces
         if (!discovery.completed()) {
             final var batches = maintenance.discoveryPage(version, discovery, limit);
             if (!batches.isEmpty()) {
-                final var batchTimes = batches.stream().collect(Collectors.toMap(
+                final var batchTimes = batches.stream()
+                    .collect(Collectors.toMap(
                     TripQualityMaintenanceStore.Batch::id, TripQualityMaintenanceStore.Batch::observedAt));
-                final var signals = maintenance.anomalies(batches.stream().map(TripQualityMaintenanceStore.Batch::id).toList());
+                final var signals = maintenance.anomalies(batches.stream()
+                    .map(TripQualityMaintenanceStore.Batch::id)
+                    .toList());
                 final var first = new LinkedHashMap<String, TripQualityMaintenanceStore.Signal>();
-                for (final var signal : signals) { first.putIfAbsent(signal.row().vehicleId(), signal); }
+                for (final var signal : signals) {
+                    first.putIfAbsent(signal.row().vehicleId(), signal);
+                }
                 for (final var signal : first.values()) {
                     investigations.observationsStored(new QualityObservationBatch(signal.batchId(), version,
                         batchTimes.get(signal.batchId()), List.of(signal.row())));

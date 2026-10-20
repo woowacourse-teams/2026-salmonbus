@@ -9,7 +9,6 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class VehicleFreshnessPolicy {
-
     private final Clock clock;
 
     public OffsetDateTime staleAt(OffsetDateTime observedAt) {

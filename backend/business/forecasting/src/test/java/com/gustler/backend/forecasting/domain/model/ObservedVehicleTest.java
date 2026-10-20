@@ -9,7 +9,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class ObservedVehicleTest {
-
     private static final long ROUTE_VERSION_3330 = 1L;
     private static final Instant OBSERVED_AT = Instant.parse("2026-08-19T08:30:00+09:00");
     private static final int PASSED_STOP_44 = 44;

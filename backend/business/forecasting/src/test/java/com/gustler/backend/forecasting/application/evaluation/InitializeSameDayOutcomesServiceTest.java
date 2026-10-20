@@ -95,11 +95,13 @@ class InitializeSameDayOutcomesServiceTest {
             when(initializer.initialize(eq(2L), any(), any())).thenReturn(true);
             assertThatThrownBy(service::initializeNext).isInstanceOf(TransactionSystemException.class);
             assertThat(events.list).singleElement().satisfies(event ->
-                assertThat(event.getFormattedMessage()).contains("status=FAILED", "failedStage=COMMIT").doesNotContain("status=COMPLETED"));
+                assertThat(event.getFormattedMessage()).contains("status=FAILED", "failedStage=COMMIT")
+                    .doesNotContain("status=COMPLETED"));
             events.list.clear();
             service.initializeNext();
             assertThat(events.list).singleElement().satisfies(event -> {
-                assertThat(event.getFormattedMessage()).contains("status=COMPLETED", "routeId=2", "outcomeDate=2026-09-28");
+                assertThat(event.getFormattedMessage()).contains("status=COMPLETED", "routeId=2",
+                "outcomeDate=2026-09-28");
             });
         } finally {
             logger.detachAppender(events);

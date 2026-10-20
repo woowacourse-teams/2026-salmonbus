@@ -10,7 +10,6 @@ public record RouteListResponse(
     @Schema(description = "현재 판본이 있는 노선 목록. 빈 배열도 정상 응답")
     List<RouteSummary> routes
 ) {
-
     public RouteListResponse {
         Objects.requireNonNull(routes, "routes는 null일 수 없습니다.");
         routes = List.copyOf(routes);

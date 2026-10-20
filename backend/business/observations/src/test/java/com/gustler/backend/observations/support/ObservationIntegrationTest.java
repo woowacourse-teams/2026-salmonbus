@@ -13,6 +13,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest(classes = ObservationTestConfiguration.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE,
     properties = {"spring.jpa.hibernate.ddl-auto=validate", "spring.jpa.open-in-view=false",
-        "spring.datasource.hikari.maximum-pool-size=3"})
+    "spring.datasource.hikari.maximum-pool-size=3"})
 public @interface ObservationIntegrationTest {
 }

@@ -1,7 +1,6 @@
 package com.gustler.backend.api.vehicle.domain;
 
 public sealed interface VehicleSeat permits VehicleSeat.Exact, VehicleSeat.Unknown {
-
     static VehicleSeat from(Integer remainingSeats) {
         return from(remainingSeats, null, true);
     }
@@ -23,7 +22,6 @@ public sealed interface VehicleSeat permits VehicleSeat.Exact, VehicleSeat.Unkno
     }
 
     record Exact(int remaining) implements VehicleSeat {
-
         public Exact {
             if (remaining < 0) {
                 throw new IllegalArgumentException("remaining은 0 이상이어야 합니다.");
@@ -32,7 +30,6 @@ public sealed interface VehicleSeat permits VehicleSeat.Exact, VehicleSeat.Unkno
     }
 
     enum Unknown implements VehicleSeat {
-
         NOT_REPORTED,
         REPORTED_UNKNOWN,
         QUALITY_WITHHELD,

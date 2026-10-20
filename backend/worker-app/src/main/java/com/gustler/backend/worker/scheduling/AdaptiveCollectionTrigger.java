@@ -1,7 +1,6 @@
 package com.gustler.backend.worker.scheduling;
 
 import com.gustler.backend.observations.api.CollectionTiming;
-
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -18,7 +17,6 @@ import org.springframework.scheduling.TriggerContext;
  * 시작 시각 기준으로 재면 응답이 간격보다 오래 걸릴 때 판이 겹쳐 쌓인다.
  */
 public class AdaptiveCollectionTrigger implements Trigger {
-
     private final Clock clock;
     private final Duration fixedInterval;
 

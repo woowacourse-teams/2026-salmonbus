@@ -16,7 +16,6 @@ public record DemandSample(
     int predictionRemainingSeats,
     int arrivalRemainingSeats
 ) {
-
     private static final int ONE_STOP_AHEAD = 1;
 
     public DemandSample {

@@ -7,7 +7,6 @@ package com.gustler.backend.observations.domain;
  * 전송 전 중단은 결과 상태로 구분되므로 별도의 실패 사유가 필요하지 않다.
  */
 public enum ObservationBatchFailureCode {
-
     /** 오늘 예약할 호출 한도가 남지 않아 호출을 보내지 않았다. */
     LOCAL_QUOTA_EXHAUSTED,
     /** 상류가 하루 한도 초과를 응답했다. 내부 호출 집계와 상류의 집계가 다르다. */

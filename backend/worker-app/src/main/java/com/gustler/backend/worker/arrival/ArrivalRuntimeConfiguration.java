@@ -31,14 +31,25 @@ public class ArrivalRuntimeConfiguration {
 
     @Bean
     ArrivalQuotaPolicy arrivalQuotaPolicy(GbisProperties keys, ArrivalProperties properties) {
-        var aliases = keys.serviceKeys().stream().map(key -> key.alias()).toList();
-        properties.limits().keySet().stream().filter(alias -> !aliases.contains(alias)).sorted().findFirst()
+        var aliases = keys.serviceKeys()
+            .stream()
+            .map(key -> key.alias())
+            .toList();
+        properties.limits()
+            .keySet()
+            .stream()
+            .filter(alias -> !aliases.contains(alias))
+            .sorted()
+            .findFirst()
             .ifPresent(alias -> {
                 throw new IllegalStateException("arrivals.limits." + alias + " 에 맞는 GBIS 키가 없다. 별칭을 확인하라");
             });
         Map<String, Integer> keyLimits = aliases.stream()
             .collect(Collectors.toMap(alias -> alias, properties::keyDailyLimitOf));
-        final int dailyLimit = Math.toIntExact(keyLimits.values().stream().mapToLong(Integer::longValue).sum());
+        final int dailyLimit = Math.toIntExact(keyLimits.values()
+            .stream()
+            .mapToLong(Integer::longValue)
+            .sum());
         log.info("도착정보 키 {}개로 수집한다. 별칭={} 하루 한도 합={} 초당 호출={}",
             aliases.size(), String.join(",", aliases), dailyLimit, String.format("%.3f", dailyLimit / 86_400.0));
         return new ArrivalQuotaPolicy(dailyLimit, keyLimits);

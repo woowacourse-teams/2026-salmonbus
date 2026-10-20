@@ -17,7 +17,6 @@ public record SameDayFullOutcomeCount(
     double rawFullChanceSum,
     Instant settledThrough
 ) {
-
     public SameDayFullOutcomeCount {
         if (rowCount < 0 || (rowCount == 0 && (stopsToTarget != 0 || actualFullCount != 0 || rawFullChanceSum != 0))) {
             throw new IllegalArgumentException("빈 집계 표시는 거리·건수·합계가 모두 0이어야 한다: " + rowCount);

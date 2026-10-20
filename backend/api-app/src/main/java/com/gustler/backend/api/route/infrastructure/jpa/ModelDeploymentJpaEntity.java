@@ -16,7 +16,6 @@ import lombok.NoArgsConstructor;
 @Table(name = "model_deployment")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ModelDeploymentJpaEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

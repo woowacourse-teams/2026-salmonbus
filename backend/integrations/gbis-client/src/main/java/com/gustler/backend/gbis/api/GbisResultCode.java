@@ -4,7 +4,6 @@ import java.util.Arrays;
 import java.util.Objects;
 
 public enum GbisResultCode {
-
     SUCCESS(0),
     SYSTEM_FAILURE(1),
     PARAMETER_MISSING(2),

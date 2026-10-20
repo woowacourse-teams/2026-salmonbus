@@ -11,7 +11,6 @@ package com.gustler.backend.observations.domain;
  * V1__collector.sql 93행의 부분 인덱스가 이 두 글자를 그대로 담고 있다.
  */
 public enum ObservationBatchOutcome {
-
     /** 호출 횟수를 예약했다. 아직 전송하지 않았다. */
     RESERVED,
     /** 보냈다. 응답을 기다린다. */

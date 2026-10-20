@@ -1,5 +1,4 @@
 package com.gustler.backend.forecasting.application.evaluation;
-
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -18,7 +17,9 @@ class EvaluationWorkPageReader {
     }
 
     Page read(long version, long after, long through, int limit, long qualityRevision,
-              boolean investigating, Map<Long, PendingEvaluationBuffer.Entry> cached) {
+              boolean investigating,
+        Map<Long, PendingEvaluationBuffer.Entry> cached
+    ) {
         if (limit < 1 || limit > 100) {
             throw new IllegalArgumentException("한 번에 확인할 관측은 1개 이상 100개 이하이다");
         }
@@ -63,7 +64,9 @@ class EvaluationWorkPageReader {
             if (rows.isEmpty() || rows.stream().anyMatch(row -> row.forecast().isEmpty())) continue;
             if (!revisions.containsKey(id)) continue;
             ready.add(new Ready(id, qualityRevision, revisions.get(id),
-                rows.stream().map(row -> row.forecast().orElseThrow()).toList()));
+                rows.stream()
+                    .map(row -> row.forecast().orElseThrow())
+                    .toList()));
         }
         return new Page(ids.getLast(), ids, List.copyOf(ready), revisions);
     }
@@ -72,6 +75,7 @@ class EvaluationWorkPageReader {
         Ready(long observationId, long qualityRevision, List<PendingForecast> forecasts) {
             this(observationId, qualityRevision, 1, forecasts);
         }
+
         Ready {
             forecasts = List.copyOf(forecasts);
         }
@@ -81,6 +85,7 @@ class EvaluationWorkPageReader {
         Page(long nextAfter, List<Long> checkedIds, List<Ready> ready) {
             this(nextAfter, checkedIds, ready, Map.of());
         }
+
         Page {
             workRevisions = Map.copyOf(workRevisions);
             checkedIds = List.copyOf(checkedIds);

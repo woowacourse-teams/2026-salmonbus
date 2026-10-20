@@ -65,8 +65,12 @@ class GbisObservationSourceTest {
 
     @ParameterizedTest
     @MethodSource("failedResponses")
-    void 외부_실패_유형과_원본_결과_코드를_보존한다(GbisLocationResult response,
-        ObservationBatchOutcome outcome, ObservationBatchFailureCode failureCode, Integer resultCode) {
+    void 외부_실패_유형과_원본_결과_코드를_보존한다(
+        GbisLocationResult response,
+        ObservationBatchOutcome outcome,
+        ObservationBatchFailureCode failureCode,
+        Integer resultCode
+    ) {
         given(source.read(ROUTE_ID, "a")).willReturn(response);
 
         ObservationResponse result = observations.read(ROUTE_ID, "a").interpret(RECEIVED_AT);

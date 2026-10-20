@@ -32,7 +32,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Component
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class DemandStatisticsPipeline {
-
     private static final int PAGE_SIZE = DemandStatisticsRun.PAGE_SIZE;
     private static final String REBUILD = "REBUILD";
 
@@ -54,7 +53,8 @@ public class DemandStatisticsPipeline {
         final DemandAccumulator accumulator, final DemandStatisticsStore store, final DemandSampleStore samples,
         final StopDemandStatisticsRepository statistics, final RouteDataQualityAccess quality,
         final DemandStatisticsPolicy policy, final Clock clock, final ArchivedDemandStatisticsRebuilder archived,
-        final PlatformTransactionManager transactions) {
+        final PlatformTransactionManager transactions
+    ) {
         this.runs = runs;
         this.requests = requests;
         this.rebuilder = rebuilder;
@@ -176,8 +176,10 @@ public class DemandStatisticsPipeline {
 
     private void fold(final DemandStatisticsRun run) {
         final List<FoldRow> rows = store.foldPage(run.routeVersionId(), run.foldCursor(), PAGE_SIZE);
-        final List<DailyStopDemand> days = rows.stream().filter(row -> row.capacity() != null)
-            .map(row -> row.total().onDay(row.capacity(), clock)).toList();
+        final List<DailyStopDemand> days = rows.stream()
+            .filter(row -> row.capacity() != null)
+            .map(row -> row.total().onDay(row.capacity(), clock))
+            .toList();
         store.addToDayStage(run.routeVersionId(), days);
         if (rows.size() < PAGE_SIZE) {
             run.foldFinished();
@@ -191,7 +193,9 @@ public class DemandStatisticsPipeline {
 
     private void reduce(final DemandStatisticsRun run) {
         final List<DailyStopDemand> days = store.reducePage(run.routeVersionId(), run.reduceCursor(), PAGE_SIZE);
-        store.addToCellStage(run.routeVersionId(), days.stream().map(StopDemandCellTotals::ofDay).toList());
+        store.addToCellStage(run.routeVersionId(), days.stream()
+                .map(StopDemandCellTotals::ofDay)
+                .toList());
         if (days.size() < PAGE_SIZE) {
             run.reduceFinished();
         } else {
@@ -207,13 +211,17 @@ public class DemandStatisticsPipeline {
         final Instant computedAt = clock.instant();
         statistics.append(new DemandStatisticsVersion(run.routeVersionId(), calculationVersion, revision,
             run.dataUntil(), computedAt,
-            store.stagedCells(run.routeVersionId()).stream().map(StopDemandCellTotals::toMeasurement).toList()));
+            store.stagedCells(run.routeVersionId())
+                .stream()
+                .map(StopDemandCellTotals::toMeasurement)
+                .toList()));
         run.published(computedAt);
         runs.save(run);
     }
 
     public record Step(Status status, String phase, Instant dataUntil) {
-
-        public enum Status { IDLE, WAITING, PROGRESSED, STARTED, COMPLETED }
+        public enum Status {
+            IDLE, WAITING, PROGRESSED, STARTED, COMPLETED
+        }
     }
 }

@@ -55,7 +55,10 @@ final class JdbcStatisticsInputExtractor {
         transaction.setTimeout(5);
     }
 
-    Extracted extract(long route, long after, long through, Instant until, ZoneId zone, int maxRows) {
+    Extracted extract(long route, long after, long through,
+        Instant until,
+        ZoneId zone, int maxRows
+    ) {
         if (route <= 0 || after < 0 || through <= after || through - after > MAX_ID_SPAN
             || until == null || zone == null || maxRows < 1 || maxRows > MAX_ROWS) {
             throw new IllegalArgumentException("추출 노선·관측 범위·시각·건수 한도가 올바르지 않다");
@@ -114,6 +117,8 @@ final class JdbcStatisticsInputExtractor {
 
     record Extracted(StatisticsInputScope scope, long afterObservationId, long throughObservationId,
         List<StatisticsInputRow> rows) {
-        Extracted { rows = List.copyOf(rows); }
+        Extracted {
+            rows = List.copyOf(rows);
+        }
     }
 }

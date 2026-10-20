@@ -2,7 +2,6 @@ package com.gustler.backend.gbis.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
-
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 
@@ -12,7 +11,8 @@ class GbisRouteLineSourceTest {
     private static final String ROUTE = "204000057";
 
     private void response(String rows, int status) {
-        String body = "{\"response\":{\"msgHeader\":{\"resultCode\":0},\"msgBody\":{\"busRouteLineList\":" + rows + "}}}";
+        String body = "{\"response\":{\"msgHeader\":{\"resultCode\":0},\"msgBody\":{\"busRouteLineList\":" + rows
+            + "}}}";
         when(caller.getWithMetadata(GbisRouteLineSource.PATH, ROUTE, "a"))
             .thenReturn(new GbisHttpResult(new GbisRawResponse.Received(body), status, null));
     }
@@ -42,7 +42,8 @@ class GbisRouteLineSourceTest {
 
     @Test
     void 다른_노선이나_HTTP오류는_기존_형상을_대체하지_않는다() {
-        String rows = "[{\"routeId\":\"204000155\",\"lineSeq\":1,\"x\":127,\"y\":37},{\"lineSeq\":2,\"x\":128,\"y\":38}]";
+        String rows =
+            "[{\"routeId\":\"204000155\",\"lineSeq\":1,\"x\":127,\"y\":37},{\"lineSeq\":2,\"x\":128,\"y\":38}]";
         response(rows, 200);
         assertThat(source.read(ROUTE)).isEmpty();
         response(rows.replace("204000155", ROUTE), 429);

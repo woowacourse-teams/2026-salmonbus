@@ -6,7 +6,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class RouteContentDigestTest {
-
     private static final int TURN_SEQUENCE = 2;
     private static final String STOP_205000217 = "205000217";
     private static final String STOP_208000069 = "208000069";

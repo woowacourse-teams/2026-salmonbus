@@ -15,7 +15,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
-
     private static final String SELECT_COUNTS = """
         SELECT stops_to_target, row_count, actual_full_count, raw_full_chance_sum, settled_through
         FROM same_day_model_full_outcomes
@@ -139,7 +138,7 @@ public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
         for (SameDayFullOutcomeCount count : counts) {
             jdbcClient.sql(UPSERT_COUNT)
                 .param("routeId", routeId)
-            .param("modelDeploymentId", modelDeploymentId)
+                .param("modelDeploymentId", modelDeploymentId)
                 .param("outcomeDate", day.date())
                 .param("stopsToTarget", count.stopsToTarget())
                 .param("rowCount", count.rowCount())
@@ -160,7 +159,10 @@ public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
     }
 
     @Override
-    public void addCounts(long routeId, long modelDeploymentId, SeoulDay day, List<SameDayFullOutcomeCount> increments) {
+    public void addCounts(long routeId, long modelDeploymentId,
+        SeoulDay day,
+        List<SameDayFullOutcomeCount> increments
+    ) {
         for (SameDayFullOutcomeCount count : increments) {
             if (count.rowCount() <= 0 || count.stopsToTarget() <= 0) {
                 throw new IllegalArgumentException("증가분에는 실제 정산 결과가 필요합니다");
@@ -169,7 +171,7 @@ public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
         for (SameDayFullOutcomeCount count : increments) {
             jdbcClient.sql(ADD_TO_COUNT)
                 .param("routeId", routeId)
-            .param("modelDeploymentId", modelDeploymentId)
+                .param("modelDeploymentId", modelDeploymentId)
                 .param("outcomeDate", day.date())
                 .param("stopsToTarget", count.stopsToTarget())
                 .param("rowCount", count.rowCount())

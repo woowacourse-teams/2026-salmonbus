@@ -26,7 +26,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/routes/{routeId}/watch")
 @RequiredArgsConstructor
 public class WatchBoardController {
-
     private final WatchBoardQueryService watchBoardQueryService;
 
     @GetMapping
@@ -38,10 +37,12 @@ public class WatchBoardController {
             headers = @Header(name = "Cache-Control",
                 description = "public, max-age는 관측 시각대별 정책값(첨두 15초, 평시 20초, 01~03시대 600초)과 "
                     + "staleAt까지 남은 시간 중 작은 값. staleAt을 넘겨 캐시하지 않는다", schema = @Schema(type = "string")),
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = WatchBoardResponse.class), examples = {
-                @ExampleObject(name = "FORECAST_READY", value = ApiDocsExamples.WATCH_BOARD_READY),
-                @ExampleObject(name = "PREPARING", value = ApiDocsExamples.WATCH_BOARD_PREPARING)
-            })),
+            content =
+            @Content(mediaType = "application/json", schema = @Schema(implementation = WatchBoardResponse.class),
+                examples = {
+                    @ExampleObject(name = "FORECAST_READY", value = ApiDocsExamples.WATCH_BOARD_READY),
+                    @ExampleObject(name = "PREPARING", value = ApiDocsExamples.WATCH_BOARD_PREPARING)
+                })),
         @ApiResponse(responseCode = "400", description = "노선 ID 형식이 올바르지 않음",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
                 examples = @ExampleObject(value = ApiDocsExamples.INVALID_ROUTE))),
@@ -49,11 +50,13 @@ public class WatchBoardController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
                 examples = @ExampleObject(value = ApiDocsExamples.ROUTE_NOT_FOUND))),
         @ApiResponse(responseCode = "503", description = "모델 범위 밖, 최근 정상 관측 없음 또는 DB 사용 불가. Cache-Control은 no-store",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class), examples = {
-                @ExampleObject(name = "MODEL_OUT_OF_SCOPE", value = ApiDocsExamples.MODEL_OUT_OF_SCOPE),
-                @ExampleObject(name = "NO_RECENT_OBSERVATION", value = ApiDocsExamples.NO_RECENT_OBSERVATION),
-                @ExampleObject(name = "SERVICE_UNAVAILABLE", value = ApiDocsExamples.SERVICE_UNAVAILABLE)
-            })),
+            content =
+            @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
+                examples = {
+                    @ExampleObject(name = "MODEL_OUT_OF_SCOPE", value = ApiDocsExamples.MODEL_OUT_OF_SCOPE),
+                    @ExampleObject(name = "NO_RECENT_OBSERVATION", value = ApiDocsExamples.NO_RECENT_OBSERVATION),
+                    @ExampleObject(name = "SERVICE_UNAVAILABLE", value = ApiDocsExamples.SERVICE_UNAVAILABLE)
+                })),
         @ApiResponse(responseCode = "405", description = "지원하지 않는 요청 방식",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
                 examples = @ExampleObject(value = ApiDocsExamples.METHOD_NOT_ALLOWED))),

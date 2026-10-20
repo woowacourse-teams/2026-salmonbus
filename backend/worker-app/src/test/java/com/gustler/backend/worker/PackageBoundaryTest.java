@@ -4,7 +4,6 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 import static org.assertj.core.api.Assertions.assertThat;
-
 import com.tngtech.archunit.core.domain.Dependency;
 import com.tngtech.archunit.core.domain.JavaAccess;
 import com.tngtech.archunit.core.domain.JavaClass;
@@ -27,9 +26,9 @@ import org.springframework.stereotype.Repository;
 
 @AnalyzeClasses(packages = "com.gustler.backend", importOptions = ImportOption.DoNotIncludeTests.class)
 class PackageBoundaryTest {
-
     private static final String PREFIX = "com.gustler.backend.";
-    private static final List<String> MODULES = List.of("routecatalog", "observations", "forecasting", "arrivals", "quota", "gbis");
+    private static final List<String> MODULES =
+        List.of("routecatalog", "observations", "forecasting", "arrivals", "quota", "gbis");
 
     @ArchTest
     static final ArchRule domainUsesOnlyBusinessTypes = noClasses()
@@ -73,7 +72,9 @@ class PackageBoundaryTest {
 
     @ArchTest
     static final ArchRule librariesDoNotDependOnExecutableApps = noClasses()
-        .that().resideInAnyPackage(MODULES.stream().map(name -> PREFIX + name + "..").toArray(String[]::new))
+        .that().resideInAnyPackage(MODULES.stream()
+                .map(name -> PREFIX + name + "..")
+                .toArray(String[]::new))
         .should().dependOnClassesThat().resideInAnyPackage(
             PREFIX + "worker..", PREFIX + "maintenance..", PREFIX + "api..");
 
@@ -89,7 +90,9 @@ class PackageBoundaryTest {
 
     @ArchTest
     static final ArchRule otherModulesUsePublicContracts = classes()
-        .that().resideInAnyPackage(MODULES.stream().map(name -> PREFIX + name + "..").toArray(String[]::new))
+        .that().resideInAnyPackage(MODULES.stream()
+                .map(name -> PREFIX + name + "..")
+                .toArray(String[]::new))
         .should(new ArchCondition<>("다른 업무 모듈의 공개 계약만 사용한다") {
             @Override
             public void check(JavaClass source, ConditionEvents events) {
@@ -138,13 +141,16 @@ class PackageBoundaryTest {
     @ArchTest
     static void sharedLibrariesHaveNoBusinessOrExecutionDependencies(JavaClasses classes) {
         verifyLibrary(ClockConfig.class, "common", List.of(
-            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "arrivals..", PREFIX + "quota..",
+            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "arrivals..",
+            PREFIX + "quota..",
             PREFIX + "gbis..", PREFIX + "worker..", PREFIX + "maintenance..", PREFIX + "api.."));
         verifyLibrary(GbisApiCaller.class, "gbis-client", List.of(
-            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "arrivals..", PREFIX + "quota..",
+            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "arrivals..",
+            PREFIX + "quota..",
             PREFIX + "worker..", PREFIX + "maintenance..", PREFIX + "api.."));
         verifyLibrary(WorkerOperationLog.class, "operation-log", List.of(
-            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "arrivals..", PREFIX + "quota..",
+            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "arrivals..",
+            PREFIX + "quota..",
             PREFIX + "gbis..", PREFIX + "worker..", PREFIX + "maintenance..", PREFIX + "api.."));
     }
 

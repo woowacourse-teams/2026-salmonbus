@@ -149,12 +149,17 @@ public class JdbcEvaluationWorkStore implements EvaluationWorkStore {
         return jdbc.sql("""
             SELECT /* salmonbus:evaluation_work.last_observation */ vehicle_observation_id FROM forecast_evaluation_work WHERE route_version_id=:version
             ORDER BY vehicle_observation_id DESC LIMIT 1
-            """).param("version", version).query(Long.class).optional().orElse(0L);
+            """)
+            .param("version", version)
+            .query(Long.class)
+            .optional()
+            .orElse(0L);
     }
 
     @Override
     @Transactional(readOnly = true, propagation = Propagation.SUPPORTS)
-    public List<Long> page(long version, long afterObservationId, long throughObservationId, int limit) {
+    public List<Long> page(long version, long afterObservationId, long throughObservationId, int limit
+    ) {
         if (afterObservationId < 0 || limit < 1 || limit > MAX_OBSERVATIONS) {
             throw new IllegalArgumentException("작업 탐색은 음수가 아닌 시작 위치와 제한된 개수가 필요하다");
         }
@@ -242,6 +247,8 @@ public class JdbcEvaluationWorkStore implements EvaluationWorkStore {
         if (ids.size() > MAX_OBSERVATIONS || ids.stream().anyMatch(id -> id <= 0)) {
             throw new IllegalArgumentException("작업은 양수 관측 ID로 한 번에 제한된 개수만 처리한다");
         }
-        return ids.stream().distinct().toList();
+        return ids.stream()
+            .distinct()
+            .toList();
     }
 }

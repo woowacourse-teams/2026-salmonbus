@@ -9,10 +9,15 @@ public final class OneWayTripClassifier {
     public static final String RULE_VERSION = "one-way-seat-range-v3";
     public static final Duration DEFAULT_MAXIMUM_GAP = Duration.ofMinutes(10);
 
-    public enum Status { ELIGIBLE, BOUNDARY_UNCONFIRMED, EXCLUDED }
-    public enum Boundary { DEPARTURE, DIRECTION_CHANGE, CONTINUATION, UNCONFIRMED }
+    public enum Status {
+        ELIGIBLE, BOUNDARY_UNCONFIRMED, EXCLUDED
+    }
+    public enum Boundary {
+        DEPARTURE, DIRECTION_CHANGE, CONTINUATION, UNCONFIRMED
+    }
     public record Observation(long id, String vehicleId, Instant at, int stopOrder,
-                              Integer runningState, Integer seats) { }
+        Integer runningState, Integer seats) {
+    }
     public record Route(int firstStop, int lastStop, Integer turnStop, Duration maximumGap) {
         public Route {
             maximumGap = maximumGap == null ? DEFAULT_MAXIMUM_GAP : maximumGap;
@@ -21,15 +26,18 @@ public final class OneWayTripClassifier {
             }
         }
     }
-    public record Start(int stopOrder, Integer runningState) { }
+    public record Start(int stopOrder, Integer runningState) {
+    }
     public record Previous(Observation observation, long tripId, Status status, Start start) {
         public Previous(Observation observation, long tripId, Status status) {
             this(observation, tripId, status, new Start(observation.stopOrder(), observation.runningState()));
         }
     }
-    public record Decision(long tripId, Status status, Boundary boundary) { }
+    public record Decision(long tripId, Status status, Boundary boundary) {
+    }
 
-    private OneWayTripClassifier() { }
+    private OneWayTripClassifier() {
+    }
 
     public static Decision classify(Route route, Previous previous, Observation current) {
         boolean comparable = previous != null && current.vehicleId() != null
@@ -40,7 +48,9 @@ public final class OneWayTripClassifier {
         boolean departure = current.vehicleId() != null && isDeparture(route, current);
         boolean repeatedDeparture = connected && departure
             && previous.observation().stopOrder() == current.stopOrder()
-            && direction(route, previous.start().stopOrder(), previous.start().runningState()) == direction(route, current);
+            && direction(route, previous.start()
+                .stopOrder(), previous.start()
+                .runningState()) == direction(route, current);
         long tripId = current.id();
         Status status = Status.BOUNDARY_UNCONFIRMED;
         Boundary boundary = Boundary.UNCONFIRMED;

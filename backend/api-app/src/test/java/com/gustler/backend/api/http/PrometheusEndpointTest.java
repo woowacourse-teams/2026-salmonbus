@@ -24,7 +24,6 @@ import org.springframework.test.context.ActiveProfiles;
     properties = "management.server.port=0")
 @Import(PostgresTestContainer.class)
 class PrometheusEndpointTest {
-
     private final HttpClient http = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(3)).build();
 
@@ -85,9 +84,9 @@ class PrometheusEndpointTest {
 
     private HttpResponse<String> get(int port, String path) throws Exception {
         return http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
-            .timeout(Duration.ofSeconds(5))
-            .header("Accept", path.equals("/actuator/prometheus") ? "text/plain" : "application/json")
-            .header("X-Request-Id", "monitoring-test-request-id")
-            .GET().build(), HttpResponse.BodyHandlers.ofString());
+                .timeout(Duration.ofSeconds(5))
+                .header("Accept", path.equals("/actuator/prometheus") ? "text/plain" : "application/json")
+                .header("X-Request-Id", "monitoring-test-request-id")
+                .GET().build(), HttpResponse.BodyHandlers.ofString());
     }
 }

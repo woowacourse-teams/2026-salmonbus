@@ -1,5 +1,4 @@
 package com.gustler.backend.arrival.contract;
-
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -40,8 +39,8 @@ public record ArrivalSnapshot(
     }
 
     public record RouteArrival(String routeId, String name, int sourceStopOrder, Integer routeType,
-                               String destinationId, String destinationName, String operatingFlag,
-                               List<Prediction> arrivals) {
+        String destinationId, String destinationName, String operatingFlag,
+        List<Prediction> arrivals) {
         public RouteArrival {
             if (routeId == null || !routeId.matches("[0-9]{9}") || sourceStopOrder < 1) {
                 throw new IllegalArgumentException("노선과 대상 방문의 식별자가 필요하다");
@@ -51,9 +50,9 @@ public record ArrivalSnapshot(
     }
 
     public record Prediction(String vehicleId, int ordinal, Integer sourceRemainingSeconds,
-                             Integer sourceRemainingMinutes, Integer remainingStops,
-                             Integer remainingSeats, String seatUnknownReason, Integer congestion,
-                             Integer vehicleType, Boolean taglessSupported) {
+        Integer sourceRemainingMinutes, Integer remainingStops,
+        Integer remainingSeats, String seatUnknownReason, Integer congestion,
+        Integer vehicleType, Boolean taglessSupported) {
         public Prediction {
             if (ordinal < 1 || ordinal > 2 || (sourceRemainingSeconds == null && sourceRemainingMinutes == null)
                 || (sourceRemainingSeconds != null && sourceRemainingSeconds < 0)

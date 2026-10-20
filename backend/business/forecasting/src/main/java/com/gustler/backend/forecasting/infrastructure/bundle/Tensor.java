@@ -12,7 +12,6 @@ record Tensor(
     int[] shape,
     double[] values
 ) {
-
     Tensor {
         final int expected = valueCountOf(shape);
         if (values.length != expected) {
@@ -47,7 +46,7 @@ record Tensor(
         if (axes.length != shape.length - 1) {
             throw new IllegalArgumentException(
                 "%s 는 축이 %d 개라 %d 개를 짚어야 한 줄이 남는다: %d 개를 짚었다"
-                    .formatted(name, shape.length, shape.length - 1, axes.length)
+                .formatted(name, shape.length, shape.length - 1, axes.length)
             );
         }
         final int length = shape[shape.length - 1];
@@ -74,7 +73,7 @@ record Tensor(
             if (axes[index] < 0 || axes[index] >= shape[index]) {
                 throw new IllegalArgumentException(
                     "%s 의 %d 번째 축은 %d 칸인데 %d 을 짚었다"
-                        .formatted(name, index, shape[index], axes[index])
+                    .formatted(name, index, shape[index], axes[index])
                 );
             }
             offset = offset * shape[index] + axes[index];

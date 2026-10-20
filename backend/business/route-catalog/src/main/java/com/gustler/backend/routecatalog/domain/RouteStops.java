@@ -6,7 +6,6 @@ public record RouteStops(
     Integer turnSequence,
     List<RouteStop> stops
 ) {
-
     public RouteStops {
         stops = List.copyOf(stops);
         validateStopOrdersDoNotRepeat(stops);

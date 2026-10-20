@@ -5,7 +5,6 @@ import com.gustler.backend.api.error.ErrorCode;
 import java.time.Duration;
 
 public class NoRecentObservationException extends ApiException {
-
     public NoRecentObservationException() {
         super(ErrorCode.NO_RECENT_OBSERVATION);
     }

@@ -21,7 +21,8 @@ class FixedCollectionIntervalTest {
     void bindsOptionalIntervalAlongsideExistingProperties() {
         var source = new MapConfigurationPropertySource(Map.of("collection.enabled", "true",
             "collection.route-ids[0]", "234000050", "collection.fixed-interval", "20s"));
-        var properties = new Binder(source).bind("collection", Bindable.of(CollectionProperties.class)).get();
+        var properties = new Binder(source).bind("collection", Bindable.of(CollectionProperties.class))
+            .get();
         assertThat(properties.enabled()).isTrue();
         assertThat(properties.routeIds()).containsExactly("234000050");
         assertThat(properties.fixedInterval()).isEqualTo(Duration.ofSeconds(20));
@@ -31,7 +32,8 @@ class FixedCollectionIntervalTest {
     void fixedIntervalUsesCompletionRegardlessOfTimeOfDay() {
         Instant started = Instant.parse("2026-10-06T16:00:00Z");
         Instant completed = started.plusSeconds(3);
-        var trigger = new AdaptiveCollectionTrigger(Clock.fixed(started, ZoneOffset.UTC), Duration.ofSeconds(20));
+        var trigger =
+            new AdaptiveCollectionTrigger(Clock.fixed(started, ZoneOffset.UTC), Duration.ofSeconds(20));
         assertThat(trigger.nextExecution(new SimpleTriggerContext(started, started, completed)))
             .isEqualTo(completed.plusSeconds(20));
         assertThat(trigger.nextExecution(new SimpleTriggerContext())).isEqualTo(started);

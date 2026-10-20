@@ -34,7 +34,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class GbisRouteSource implements RouteSource {
-
     private static final Logger log = LoggerFactory.getLogger(GbisRouteSource.class);
     private static final Pattern MINUTES = Pattern.compile("[0-9]{1,4}");
 
@@ -57,11 +56,11 @@ public class GbisRouteSource implements RouteSource {
     ) {
         return switch (routes.read(routeId)) {
             case GbisRouteResult.RouteInfoUnavailable ignored ->
-                new Failed("노선 %s 의 기본 정보를 읽지 못했다".formatted(routeId));
+            new Failed("노선 %s 의 기본 정보를 읽지 못했다".formatted(routeId));
             case GbisRouteResult.StationsUnavailable ignored ->
-                new Failed("노선 %s 의 경유 정류소를 읽지 못했다".formatted(routeId));
+            new Failed("노선 %s 의 경유 정류소를 읽지 못했다".formatted(routeId));
             case GbisRouteResult.Success read when read.stations().isEmpty() ->
-                new Failed("노선 %s 의 경유 정류소를 읽지 못했다".formatted(routeId));
+            new Failed("노선 %s 의 경유 정류소를 읽지 못했다".formatted(routeId));
             case GbisRouteResult.Success read -> toSuccess(routeId, read.routeInfo(), read.stations());
         };
     }
@@ -187,7 +186,8 @@ public class GbisRouteSource implements RouteSource {
         Optional<HeadwayRange> headway = HeadwayRange.of(minutesOf(minText), minutesOf(maxText));
         if (headway.isEmpty()) {
             unreadableDays.add(day);
-            log.warn("event=route_headway_unreadable routeId={} day={} min={} max={}", routeId, day, minText, maxText);
+            log.warn("event=route_headway_unreadable routeId={} day={} min={} max={}", routeId, day, minText,
+                maxText);
         }
         return headway.orElse(null);
     }

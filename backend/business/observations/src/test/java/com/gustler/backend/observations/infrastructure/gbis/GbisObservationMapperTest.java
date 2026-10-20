@@ -4,7 +4,6 @@ import com.gustler.backend.observations.domain.ObservationBatchConclusion;
 import com.gustler.backend.observations.domain.ObservationBatchFailureCode;
 import com.gustler.backend.observations.domain.ObservationBatchOutcome;
 
-
 import static com.gustler.backend.observations.domain.ObservationBatchFailureCode.DAILY_QUOTA_EXCEEDED;
 import static com.gustler.backend.observations.domain.ObservationBatchFailureCode.PER_SECOND_QUOTA_EXCEEDED;
 import static com.gustler.backend.observations.domain.ObservationBatchFailureCode.UPSTREAM_ERROR;
@@ -37,7 +36,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 class GbisObservationMapperTest {
-
     private static final String QUERY_TIME = "2026-08-19 11:14:04.9";
     private static final int RESULT_CODE_SUCCESS = 0;
     private static final int RESULT_CODE_SYSTEM_FAILURE = 1;

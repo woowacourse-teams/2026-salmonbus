@@ -8,7 +8,6 @@ package com.gustler.backend.forecasting.domain.model;
  * 여기서 넓히면 같은 계수로 다른 확률이 나온다.
  */
 final class ProbabilityScale {
-
     /** 로짓으로 옮기기 전에 확률을 이 폭 안으로 자른다. */
     static final double SMALLEST_CHANCE = 1e-6;
 

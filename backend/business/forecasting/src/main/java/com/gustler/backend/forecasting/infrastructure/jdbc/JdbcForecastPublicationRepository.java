@@ -16,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public class JdbcForecastPublicationRepository implements ForecastPublicationRepository {
-
     private static final String INSERT_PUBLICATION = """
         INSERT /* salmonbus:forecast_publication.insert_publication */ INTO forecast_publication (
             source_batch_id, route_version_id, model_deployment_id,
@@ -90,7 +89,8 @@ public class JdbcForecastPublicationRepository implements ForecastPublicationRep
                 publication.qualityRevision(), offset(publication.observedAt()), offset(publication.generatedAt()),
                 offset(publication.publishedAt()), id)
             .update());
-        List<Object[]> rows = publication.predictions().stream()
+        List<Object[]> rows = publication.predictions()
+            .stream()
             .map(prediction -> new Object[] {publicationId, prediction.vehicleObservationId(),
                 prediction.targetStopOrder(), prediction.routeVersionId(), prediction.stopsToTarget(),
                 prediction.modelDeploymentId(), prediction.demandStatisticsRevision(), prediction.seatFullChanceRaw(),

@@ -29,13 +29,15 @@ class ArrivalQueryServiceTest {
         when(repository.visits(STATION)).thenReturn(List.of(
             new ArrivalVisit(ROUTE, ROUTE, 7L, 22, "UP", RECEIVED.minusSeconds(100)),
             new ArrivalVisit(ROUTE, ROUTE, 7L, 65, "DOWN", RECEIVED.minusSeconds(100))));
-        when(repository.latest(STATION)).thenReturn(Optional.of(snapshot(List.of(route(ROUTE, 22), route("204000155", 1)))));
+        when(repository.latest(STATION)).thenReturn(
+            Optional.of(snapshot(List.of(route(ROUTE, 22), route("204000155", 1)))));
         when(gateway.request(STATION)).thenReturn(new ArrivalRefresh(ArrivalRefresh.Status.ACCEPTED,
             "COLLECTING", RECEIVED.plusSeconds(50)));
     }
 
     private ArrivalQueryService serviceAt(int seconds) {
-        return new ArrivalQueryService(repository, gateway, new ArrivalFreshnessPolicy(), Clock.fixed(RECEIVED.plusSeconds(seconds), ZoneOffset.UTC));
+        return new ArrivalQueryService(repository, gateway, new ArrivalFreshnessPolicy(),
+            Clock.fixed(RECEIVED.plusSeconds(seconds), ZoneOffset.UTC));
     }
 
     private ArrivalSnapshot snapshot(List<RouteArrival> routes) {
@@ -109,7 +111,8 @@ class ArrivalQueryServiceTest {
     @Test
     void 정상_빈_수신과_최초_수집중을_구별한다() {
         when(repository.latest(STATION)).thenReturn(Optional.of(snapshot(List.of())));
-        assertThat(service.get(new ArrivalQuery(STATION, null, null, null)).status()).isEqualTo(ArrivalAvailability.NO_PREDICTION);
+        assertThat(service.get(new ArrivalQuery(STATION, null, null, null))
+                    .status()).isEqualTo(ArrivalAvailability.NO_PREDICTION);
         when(repository.latest(STATION)).thenReturn(Optional.empty());
         var pending = service.get(new ArrivalQuery(STATION, null, null, null));
         assertThat(pending.status()).isEqualTo(ArrivalAvailability.UNAVAILABLE);
@@ -120,7 +123,8 @@ class ArrivalQueryServiceTest {
     void 수신_이후에_생긴_판본으로_기존_ETA를_연결하지_않는다() {
         when(repository.visits(STATION)).thenReturn(List.of(new ArrivalVisit(
             ROUTE, ROUTE, 8, 22, "UP", RECEIVED.plusSeconds(1))));
-        assertThat(service.get(new ArrivalQuery(STATION, ROUTE, 8L, 22)).status()).isEqualTo(ArrivalAvailability.UNAVAILABLE);
+        assertThat(service.get(new ArrivalQuery(STATION, ROUTE, 8L, 22))
+                    .status()).isEqualTo(ArrivalAvailability.UNAVAILABLE);
     }
 
     @Test

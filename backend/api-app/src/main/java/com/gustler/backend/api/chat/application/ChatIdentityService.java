@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.UUID;
 
 public final class ChatIdentityService {
-
     private static final String[] ADJECTIVES = {
         "졸린", "수다스러운", "용감한", "느긋한", "반짝이는", "신나는", "엉뚱한", "다정한",
         "배고픈", "명랑한", "부지런한", "설레는", "재빠른", "포근한", "궁금한", "씩씩한"

@@ -15,7 +15,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class JdbcDemandStatisticsRebuildStore implements DemandStatisticsRebuildStore {
-
     private static final String GROUP_END = """
         SELECT id,response_received_at FROM (
             SELECT id,response_received_at FROM observation_batch
@@ -144,18 +143,27 @@ public class JdbcDemandStatisticsRebuildStore implements DemandStatisticsRebuild
     @Override
     public Optional<BatchPosition> nextGroupEnd(final long routeVersionId, final ScanWindow window,
         final int groupSize) {
-        return jdbc.sql(GROUP_END).param("version", routeVersionId).param("upper", window.batchUntilId())
+        return jdbc.sql(GROUP_END)
+            .param("version", routeVersionId)
+            .param("upper", window.batchUntilId())
             .param("afterAt", window.after().map(JdbcDemandStatisticsRebuildStore::offsetOf).orElse(null))
-            .param("afterId", window.afterBatchId()).param("groupSize", groupSize)
-            .query((rs, row) -> new BatchPosition(rs.getObject("response_received_at", OffsetDateTime.class).toInstant(),
+            .param("afterId", window.afterBatchId())
+            .param("groupSize", groupSize)
+            .query((rs, row) -> new BatchPosition(rs.getObject("response_received_at", OffsetDateTime.class)
+                .toInstant(),
                 rs.getLong("id")))
             .optional();
     }
 
     @Override
-    public List<Long> groupObservationPage(final long routeVersionId, final ScanWindow window,
-        final RebuildScope scope, final long afterObservationId, final long observationUntilId, final int groupSize,
-        final int limit) {
+    public List<Long> groupObservationPage(
+        final long routeVersionId, final ScanWindow window,
+        final RebuildScope scope,
+        final long afterObservationId,
+        final long observationUntilId,
+        final int groupSize,
+        final int limit
+    ) {
         return jdbc.sql(GROUP_OBSERVATIONS).param("version", routeVersionId).param("batchUpper", window.batchUntilId())
             .param("afterAt", window.after().map(JdbcDemandStatisticsRebuildStore::offsetOf).orElse(null))
             .param("afterId", window.afterBatchId())
@@ -177,7 +185,11 @@ public class JdbcDemandStatisticsRebuildStore implements DemandStatisticsRebuild
                 WHERE m.vehicle_observation_id IN (:ids) AND m.route_version_id=:route
                   AND NOT EXISTS(SELECT 1 FROM forecast_evaluation_result e
                       WHERE e.vehicle_observation_id=m.vehicle_observation_id AND e.target_stop_order=m.target_stop_order))
-            """).param("ids", observationIds).param("route", rebuild.routeVersionId()).query(Boolean.class).single();
+            """)
+            .param("ids", observationIds)
+            .param("route", rebuild.routeVersionId())
+            .query(Boolean.class)
+            .single();
         if (missing) throw new IllegalStateException("이관된 정산을 제외한 DB 전용 재집계는 실행하지 않는다");
         jdbc.sql(AGGREGATE).param("version", rebuild.routeVersionId()).param("vehicle", rebuild.scope().vehicleId())
             .param("request", rebuild.requestId()).param("ids", observationIds)
@@ -191,7 +203,9 @@ public class JdbcDemandStatisticsRebuildStore implements DemandStatisticsRebuild
             DELETE FROM stop_demand_current_total WHERE (route_version_id,vehicle_id,arrived_hour_start,target_stop_order) IN (
                 SELECT route_version_id,vehicle_id,arrived_hour_start,target_stop_order FROM stop_demand_current_total
                 WHERE route_version_id=? AND (?='' OR vehicle_id=?) LIMIT ?)
-            """).params(routeVersionId, scope.vehicleId(), scope.vehicleId(), limit).update();
+            """)
+            .params(routeVersionId, scope.vehicleId(), scope.vehicleId(), limit)
+            .update();
     }
 
     @Override
@@ -201,8 +215,12 @@ public class JdbcDemandStatisticsRebuildStore implements DemandStatisticsRebuild
     }
 
     @Override
-    public Page acknowledgeSamples(final long routeVersionId, final RebuildScope scope, final long afterSampleId,
-        final long inputUntilId, final Instant dataUntil, final int limit) {
+    public Page acknowledgeSamples(
+        final long routeVersionId, final RebuildScope scope,
+        final long afterSampleId,
+        final long inputUntilId, final Instant dataUntil,
+        final int limit
+    ) {
         return jdbc.sql(ACKNOWLEDGE).param("version", routeVersionId).param("vehicle", scope.vehicleId())
             .param("cursor", afterSampleId).param("upper", inputUntilId).param("until", offsetOf(dataUntil))
             .param("limit", limit)
@@ -213,7 +231,9 @@ public class JdbcDemandStatisticsRebuildStore implements DemandStatisticsRebuild
     public int cleanRebuildTotals(final UUID requestId, final int limit) {
         return jdbc.sql("""
             DELETE FROM stop_demand_rebuild_total WHERE id IN (SELECT id FROM stop_demand_rebuild_total WHERE request_id=? LIMIT ?)
-            """).params(requestId, limit).update();
+            """)
+            .params(requestId, limit)
+            .update();
     }
 
     private static OffsetDateTime offsetOf(final Instant instant) {

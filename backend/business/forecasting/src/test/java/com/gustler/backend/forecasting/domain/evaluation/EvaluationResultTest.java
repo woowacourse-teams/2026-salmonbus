@@ -2,8 +2,8 @@ package com.gustler.backend.forecasting.domain.evaluation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
-import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -11,7 +11,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 class EvaluationResultTest {
-
     @ParameterizedTest
     @MethodSource("completedLabels")
     void 도착_판정의_상태와_근거를_평가_결과로_옮긴다(ArrivalLabel label, EvaluationResult expected) {

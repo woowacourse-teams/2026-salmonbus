@@ -78,7 +78,7 @@ class RefreshDemandStatisticsServiceLoggingTest {
         assertThat(messages()).hasSize(2);
         assertThat(messages().get(1)).contains("status=FAILED", "routeVersionId=1",
             "computedAt=2026-09-25T09:00:00+09:00", "durationMs=",
-            "exceptionType=TransactionSystemException").doesNotContain("COMPLETED");
+        "exceptionType=TransactionSystemException").doesNotContain("COMPLETED");
         assertThat(logs.list.get(1).getThrowableProxy()).isNull();
     }
 
@@ -93,6 +93,8 @@ class RefreshDemandStatisticsServiceLoggingTest {
     }
 
     private List<String> messages() {
-        return logs.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
+        return logs.list.stream()
+            .map(ILoggingEvent::getFormattedMessage)
+            .toList();
     }
 }

@@ -21,7 +21,6 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.transaction.CannotCreateTransactionException;
 
 public final class MaintenanceApplication {
-
     private MaintenanceApplication() {
     }
 
@@ -74,8 +73,10 @@ public final class MaintenanceApplication {
     }
 
     private static Object quality(CliArguments arguments) {
-        Configuration configuration = Configuration.load(arguments.requiredPath("config"));
-        DatabaseEnvironment environment = DatabaseEnvironment.load(configuration);
+        Configuration
+        configuration = Configuration.load(arguments.requiredPath("config"));
+        DatabaseEnvironment
+        environment = DatabaseEnvironment.load(configuration);
         long version = Long.parseLong(arguments.required("route-version"));
         boolean write = arguments.command().equals("quality-rebuild");
         if (write && environment.targetKind() != DatabaseEnvironment.TargetKind.LOCAL) {
@@ -87,8 +88,11 @@ public final class MaintenanceApplication {
             context.register(MaintenanceConfiguration.class);
             context.refresh();
             if (arguments.command().equals("quality-status")) {
-                return context.getBean(GetTripQualityStatus.class).status(version).stream()
-                    .map(MaintenanceApplication::statusOutput).toList();
+                return context.getBean(GetTripQualityStatus.class)
+                    .status(version)
+                    .stream()
+                    .map(MaintenanceApplication::statusOutput)
+                    .toList();
             }
             Instant until = Instant.parse(arguments.required("until"));
             if (write) {
@@ -99,7 +103,8 @@ public final class MaintenanceApplication {
             }
             TripQualityPreview result = context.getBean(PreviewTripQuality.class).preview(version, until);
             return Map.of("scope", result.scope(), "sampled_batches", result.sampledBatches(),
-                "sampled_observations", result.sampledObservations(), "sampled_above_range", result.sampledAboveRange());
+                "sampled_observations", result.sampledObservations(), "sampled_above_range",
+                result.sampledAboveRange());
         } catch (MaintenanceException e) {
             throw e;
         } catch (CannotCreateTransactionException e) {

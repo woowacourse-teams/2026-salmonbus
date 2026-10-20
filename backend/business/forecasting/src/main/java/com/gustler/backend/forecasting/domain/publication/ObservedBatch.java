@@ -15,7 +15,6 @@ public record ObservedBatch(
     Instant responseReceivedAt,
     List<TrajectoryObservation> observations
 ) {
-
     public ObservedBatch {
         observations = List.copyOf(observations);
     }

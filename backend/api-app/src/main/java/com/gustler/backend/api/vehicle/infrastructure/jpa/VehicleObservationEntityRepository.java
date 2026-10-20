@@ -7,7 +7,6 @@ import org.springframework.data.repository.query.Param;
 
 public interface VehicleObservationEntityRepository
     extends Repository<VehicleObservationJpaEntity, Long> {
-
     @Query("""
         SELECT observation
         FROM VehicleObservationJpaEntity observation

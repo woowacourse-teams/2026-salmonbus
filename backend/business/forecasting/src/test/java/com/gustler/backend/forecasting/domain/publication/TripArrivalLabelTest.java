@@ -1,13 +1,12 @@
 package com.gustler.backend.forecasting.domain.publication;
 
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
+
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabelResolver;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
-
 import static org.assertj.core.api.Assertions.assertThat;
-
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;

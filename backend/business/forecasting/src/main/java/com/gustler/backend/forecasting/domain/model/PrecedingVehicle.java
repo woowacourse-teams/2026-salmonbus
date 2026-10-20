@@ -10,13 +10,11 @@ import java.util.Objects;
  * 얼마나 오래된 앞차까지 쳐줄지는 읽는 쪽이 정한다.
  */
 public sealed interface PrecedingVehicle {
-
     record Known(
         String vehicleId,
         int remainingSeats,
         Instant observedAt
     ) implements PrecedingVehicle {
-
         public Known {
             Objects.requireNonNull(vehicleId, "앞차를 알면 차량 아이디가 있어야 한다");
             Objects.requireNonNull(observedAt, "앞차를 알면 관측 시각이 있어야 한다");
@@ -29,7 +27,6 @@ public sealed interface PrecedingVehicle {
     record Unknown(
         TrajectoryGap gap
     ) implements PrecedingVehicle {
-
         public Unknown {
             Objects.requireNonNull(gap, "앞차를 모르면 끊긴 사유가 있어야 한다");
         }

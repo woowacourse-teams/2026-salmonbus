@@ -10,7 +10,6 @@ package com.gustler.backend.forecasting.domain.model;
  * 그 수는 특징 계약이 정하는 것이지 이 코드가 정하는 것이 아니다.
  */
 public final class HorizonCoefficients {
-
     /** 크기 묶음 수. 상대 경계 개수와 같다. */
     public static final int BIN_COUNT = 9;
 

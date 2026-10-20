@@ -20,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 @IntegrationTest
 @Transactional
 class VehicleObservationTableTest {
-
     private static final String SOURCE_ID = "GBIS";
     private static final String ROUTE_204000057 = "204000057";
     private static final String STOP_205000217 = "205000217";

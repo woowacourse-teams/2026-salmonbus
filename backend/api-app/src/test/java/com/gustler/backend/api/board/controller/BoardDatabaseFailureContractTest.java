@@ -31,7 +31,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
     "spring.datasource.hikari.minimum-idle=0"
 })
 class BoardDatabaseFailureContractTest {
-
     @Autowired
     private WebApplicationContext applicationContext;
 

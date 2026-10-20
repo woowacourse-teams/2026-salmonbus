@@ -13,7 +13,6 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 
 class MaintenanceConfigurationTest {
-
     @Test
     void 정비_구성은_DB에_접속하지_않고_공개_품질_기능만_준비한다() {
         // 연결할 수 없는 주소에서도 기동 구성이 DB 변경이나 모델 적재를 시작하지 않아야 한다.

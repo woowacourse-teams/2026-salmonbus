@@ -7,7 +7,6 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 /** 통계 조회 테스트에 필요한 발행·예측·평가를 새 저장 구조로 준비한다. */
 final class StatisticsForecastFixture {
-
     private StatisticsForecastFixture() {
     }
 
@@ -88,7 +87,8 @@ final class StatisticsForecastFixture {
                        arrival.remaining_seats,arrival.seat_unknown_reason,arrival.vehicle_trip_key,arrival.quality_direction
                 FROM removed CROSS JOIN arrival
                 """)
-            .params(scoredAt, arrivalObservationId, observationId, targetStopOrder).update();
+            .params(scoredAt, arrivalObservationId, observationId, targetStopOrder)
+            .update();
         assertThat(inserted).as("정산 fixture는 도착 관측과 대기가 있는 결과 1건을 저장해야 한다").isEqualTo(1);
     }
 }

@@ -88,13 +88,19 @@ class SameDayFullOutcomesInitializerTest extends SameDayTransactionBoundaryTest 
         assertThatThrownBy(() -> initializer.initialize(routeId, day)).isInstanceOf(QueryTimeoutException.class);
         assertThat(count("same_day_model_full_outcomes")).isZero();
         new TransactionTemplate(new DataSourceTransactionManager(dataSource)).executeWithoutResult(status ->
-            jdbc.sql("SELECT route_id FROM route_data_quality WHERE route_id = ? FOR UPDATE NOWAIT").param(routeId).query(Long.class).single());
+            jdbc.sql("SELECT route_id FROM route_data_quality WHERE route_id = ? FOR UPDATE NOWAIT")
+                .param(routeId)
+                .query(Long.class)
+                .single());
     }
 
     @Test
     void 초기집계_재시도는_이미_커밋한_정산을_누락하거나_중복하지_않는다() {
         committedSettlementWithoutCounts();
-        doAnswer(call -> { timeout(); return call.callRealMethod(); })
+        doAnswer(call -> {
+            timeout();
+            return call.callRealMethod();
+        })
             .when(countsSpy).countFromSource(anyLong(), anyLong(), any(), any());
         assertThatThrownBy(() -> initializer.initialize(routeId, day)).isInstanceOf(QueryTimeoutException.class);
         assertThat(count("stop_demand_pending_sample")).isEqualTo(1);
@@ -110,7 +116,8 @@ class SameDayFullOutcomesInitializerTest extends SameDayTransactionBoundaryTest 
         assertThat(initializer.activeRouteIds()).containsExactly(routeId);
         assertThat(initializer.initialize(routeId, day)).isTrue();
         assertThat(initializer.initialize(routeId, day)).isFalse();
-        assertThat(countsSpy.findCounts(routeId, modelId, day)).containsExactly(new SameDayFullOutcomeCount(0, 0, 0, 0, day.start()));
+        assertThat(countsSpy.findCounts(routeId, modelId, day)).containsExactly(
+            new SameDayFullOutcomeCount(0, 0, 0, 0, day.start()));
         verify(countsSpy, times(1)).countFromSource(routeId, modelId, day, day.end());
     }
 
@@ -183,14 +190,21 @@ class SameDayFullOutcomesInitializerTest extends SameDayTransactionBoundaryTest 
 
     private void awaitLockWait() throws InterruptedException {
         for (int attempt = 0; attempt < 100; attempt++) {
-            if (jdbc.sql("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND cardinality(pg_blocking_pids(pid))>0)")
-                .query(Boolean.class).single()) { return; }
+            if (
+                jdbc.sql(
+                "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND cardinality(pg_blocking_pids(pid))>0)")
+                    .query(Boolean.class)
+                    .single()) {
+                return;
+            }
             TimeUnit.MILLISECONDS.sleep(5);
         }
         throw new AssertionError("실제 PostgreSQL 잠금 대기에 도달하지 않았다");
     }
 
     private long total() {
-        return jdbc.sql("SELECT coalesce(sum(row_count),0) FROM same_day_model_full_outcomes").query(Long.class).single();
+        return jdbc.sql("SELECT coalesce(sum(row_count),0) FROM same_day_model_full_outcomes")
+            .query(Long.class)
+            .single();
     }
 }

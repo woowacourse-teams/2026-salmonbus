@@ -32,7 +32,6 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class JdbcSameDayFullOutcomesStoreTest {
-
     private static final String NORMALIZATION_VERSION = "normalization-v1.0.0";
     private static final String COLLECTION_STRATEGY_VERSION = "adaptive-kst-v1.0.1";
     private static final int RUNNING_STATE_DEPARTED = 2;
@@ -91,7 +90,8 @@ class JdbcSameDayFullOutcomesStoreTest {
         insertRouteStops(routeVersionId);
         modelDeploymentId = insertModelDeployment();
         observationBatchId = insertObservationBatch(routeVersionId, "2026-08-19T11:14", RESPONSE_RECEIVED_AT);
-        vehicleObservationId = insertObservation(observationBatchId, routeVersionId, VEHICLE_204000206, 0, PASSED_STOP_ORDER);
+        vehicleObservationId =
+            insertObservation(observationBatchId, routeVersionId, VEHICLE_204000206, 0, PASSED_STOP_ORDER);
     }
 
     @Test
@@ -118,7 +118,8 @@ class JdbcSameDayFullOutcomesStoreTest {
 
     @Test
     void 빈_초기화_표시는_정산_증가분으로_저장하지_않는다() {
-        assertThatThrownBy(() -> repository.addCounts(routeId, modelDeploymentId, ARRIVAL_DAY, List.of(
+        assertThatThrownBy(
+            () -> repository.addCounts(routeId, modelDeploymentId, ARRIVAL_DAY, List.of(
             new SameDayFullOutcomeCount(0, 0, 0, 0, ARRIVAL_DAY.start()))))
             .hasRootCauseInstanceOf(IllegalArgumentException.class);
         assertThat(repository.findCounts(routeId, modelDeploymentId, ARRIVAL_DAY)).isEmpty();
@@ -211,7 +212,8 @@ class JdbcSameDayFullOutcomesStoreTest {
         settleAsFull(vehicleObservationId, RAW_FULL_CHANCE);
 
         // when
-        List<SameDayFullOutcomeCount> actual = repository.countFromSource(routeId, modelDeploymentId, ARRIVAL_DAY, ARRIVED_AT);
+        List<SameDayFullOutcomeCount> actual =
+            repository.countFromSource(routeId, modelDeploymentId, ARRIVAL_DAY, ARRIVED_AT);
 
         // then
         assertThat(actual).hasSize(1);
@@ -275,7 +277,8 @@ class JdbcSameDayFullOutcomesStoreTest {
 
         // when
         List<SameDayFullOutcomeCount> actual =
-            repository.countFromSource(routeId, modelDeploymentId, ARRIVAL_DAY, ARRIVED_AT.plus(Duration.ofMinutes(20)));
+            repository.countFromSource(routeId, modelDeploymentId, ARRIVAL_DAY,
+                ARRIVED_AT.plus(Duration.ofMinutes(20)));
 
         // then
         assertThat(actual).containsExactly(new SameDayFullOutcomeCount(
@@ -303,8 +306,10 @@ class JdbcSameDayFullOutcomesStoreTest {
     void 새_판정_버전의_결과를_더할_때_이전_버전의_건수는_합산하지_않는다() {
         // given
         repository.add(settleAsFull(vehicleObservationId, RAW_FULL_CHANCE));
-        assertThat(jdbcClient.sql("UPDATE route_data_quality SET quality_revision = quality_revision + 1 WHERE route_id = ?")
-            .param(routeId).update()).isEqualTo(1);
+        assertThat(
+            jdbcClient.sql("UPDATE route_data_quality SET quality_revision = quality_revision + 1 WHERE route_id = ?")
+                .param(routeId)
+                .update()).isEqualTo(1);
         // 품질 변경 후의 예측은 새 수집 배치로 발행한다. 기존 발행의 품질 버전은 변경하지 않는다.
         final long currentBatch = insertObservationBatch(routeVersionId, "quality-revised", RESPONSE_RECEIVED_AT);
         final long other = insertObservation(currentBatch, routeVersionId, VEHICLE_204000207, 0, PASSED_STOP_ORDER);
@@ -326,7 +331,8 @@ class JdbcSameDayFullOutcomesStoreTest {
             .param(vehicleObservationId).update();
 
         // when
-        List<SameDayFullOutcomeCount> counts = repository.countFromSource(routeId, modelDeploymentId, ARRIVAL_DAY, ARRIVED_AT);
+        List<SameDayFullOutcomeCount> counts =
+            repository.countFromSource(routeId, modelDeploymentId, ARRIVAL_DAY, ARRIVED_AT);
 
         // then
         assertThat(counts).isEmpty();
@@ -345,7 +351,8 @@ class JdbcSameDayFullOutcomesStoreTest {
         // then
         assertThat(first).isTrue();
         assertThat(second).isFalse();
-        verify(observedRepository, times(1)).countFromSource(routeId, modelDeploymentId, ARRIVAL_DAY, ARRIVAL_DAY.end());
+        verify(observedRepository, times(1)).countFromSource(routeId, modelDeploymentId, ARRIVAL_DAY,
+            ARRIVAL_DAY.end());
         assertThat(repository.findCounts(routeId, modelDeploymentId, ARRIVAL_DAY)).singleElement()
             .extracting(SameDayFullOutcomeCount::rowCount).isEqualTo(0);
     }
@@ -360,12 +367,14 @@ class JdbcSameDayFullOutcomesStoreTest {
 
         // when
         observedService.record(List.of(settled));
-        var outcomes = observedService.outcomesFor(routeId, modelDeploymentId, ARRIVED_AT);
+        var outcomes = observedService.outcomesFor(
+            routeId, modelDeploymentId, ARRIVED_AT);
 
         // then
         assertThat(outcomes).hasSize(1);
         assertThat(outcomes.get(STOPS_TO_TARGET).rowCount()).isEqualTo(1);
-        verify(observedRepository, times(1)).countFromSource(routeId, modelDeploymentId, ARRIVAL_DAY, ARRIVAL_DAY.end());
+        verify(observedRepository, times(1)).countFromSource(routeId, modelDeploymentId, ARRIVAL_DAY,
+            ARRIVAL_DAY.end());
     }
 
     @Test
@@ -381,15 +390,18 @@ class JdbcSameDayFullOutcomesStoreTest {
             .singleElement().extracting(SameDayFullOutcomeCount::rowCount).isEqualTo(1);
         // 이 fixture의 지평은 3이므로 통계 입력(지평 1) 대상은 아니다. 원본 정산은 보존한다.
         assertThat(jdbcClient.sql("SELECT scoring_state FROM forecast_evaluation WHERE vehicle_observation_id = ?")
-            .param(vehicleObservationId).query(String.class).single()).isEqualTo("SETTLED");
+                .param(vehicleObservationId).query(String.class).single()).isEqualTo("SETTLED");
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"정상", "예측 제외", "도착 제외", "다른 차량", "다른 판본", "다른 방향", "이전 품질 버전"})
     void 품질을_통과한_같은_차량과_방향의_정산만_당일_성적에_포함한다(String condition) {
         settleAsFull(vehicleObservationId, RAW_FULL_CHANCE);
-        long arrivalId = jdbcClient.sql("SELECT arrival_observation_id FROM forecast_evaluation WHERE vehicle_observation_id = ?")
-            .param(vehicleObservationId).query(Long.class).single();
+        long arrivalId =
+            jdbcClient.sql("SELECT arrival_observation_id FROM forecast_evaluation WHERE vehicle_observation_id = ?")
+                .param(vehicleObservationId)
+                .query(Long.class)
+                .single();
         switch (condition) {
             case "예측 제외" -> jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats = 82 WHERE id = ?")
                 .param(vehicleObservationId).update();
@@ -399,20 +411,26 @@ class JdbcSameDayFullOutcomesStoreTest {
                 .params(VEHICLE_204000207, arrivalId).update();
             case "다른 판본" -> {
                 long laterVersion = insertLaterRouteVersion();
-                long laterBatch = insertObservationBatch(laterVersion, "different-version", ARRIVAL_RESPONSE_RECEIVED_AT);
-                long laterArrival = insertObservation(laterBatch, laterVersion, VEHICLE_204000206, 0, TARGET_STOP_ORDER);
-                jdbcClient.sql("UPDATE forecast_evaluation_result SET arrival_observation_id = ? WHERE vehicle_observation_id = ?")
-                    .params(laterArrival, vehicleObservationId).update();
+                long laterBatch =
+                    insertObservationBatch(laterVersion, "different-version", ARRIVAL_RESPONSE_RECEIVED_AT);
+                long laterArrival =
+                    insertObservation(laterBatch, laterVersion, VEHICLE_204000206, 0, TARGET_STOP_ORDER);
+                jdbcClient.sql(
+                "UPDATE forecast_evaluation_result SET arrival_observation_id = ? WHERE vehicle_observation_id = ?")
+                    .params(laterArrival, vehicleObservationId)
+                    .update();
             }
             case "다른 방향" -> jdbcClient.sql("UPDATE route_version SET turn_sequence = ? WHERE id = ?")
                 .params(TARGET_STOP_ORDER, routeVersionId).update();
             case "이전 품질 버전" -> jdbcClient.sql(
-                    "UPDATE route_data_quality SET quality_revision = quality_revision + 1 WHERE route_id = ?")
+            "UPDATE route_data_quality SET quality_revision = quality_revision + 1 WHERE route_id = ?")
                 .param(routeId).update();
-            default -> { }
+            default -> {
+            }
         }
 
-        List<SameDayFullOutcomeCount> actual = repository.countFromSource(routeId, modelDeploymentId, ARRIVAL_DAY, ARRIVED_AT);
+        List<SameDayFullOutcomeCount> actual =
+            repository.countFromSource(routeId, modelDeploymentId, ARRIVAL_DAY, ARRIVED_AT);
 
         if (condition.equals("정상")) {
             assertThat(actual).containsExactly(
@@ -445,7 +463,9 @@ class JdbcSameDayFullOutcomesStoreTest {
             ) VALUES ('other-route', 'fixture', 'other-route', 'other', 'start', 'end')
             RETURNING id
             """).query(Long.class).single();
-        jdbcClient.sql("INSERT INTO route_data_quality(route_id, quality_revision) VALUES (?, 2)").param(otherRoute).update();
+        jdbcClient.sql("INSERT INTO route_data_quality(route_id, quality_revision) VALUES (?, 2)")
+            .param(otherRoute)
+            .update();
 
         assertThat(repository.countFromSource(routeId, modelDeploymentId, ARRIVAL_DAY, ARRIVED_AT)).containsExactly(
             new SameDayFullOutcomeCount(STOPS_TO_TARGET, 1, 1, RAW_FULL_CHANCE, ARRIVED_AT));
@@ -457,7 +477,8 @@ class JdbcSameDayFullOutcomesStoreTest {
     @Test
     void 여러_예보가_같은_도착_관측을_사용해도_각_예보를_모두_집계한다() {
         settleAsFull(vehicleObservationId, RAW_FULL_CHANCE);
-        long laterBatch = insertObservationBatch(routeVersionId, "later-prediction", RESPONSE_RECEIVED_AT.plusSeconds(10));
+        long laterBatch =
+            insertObservationBatch(routeVersionId, "later-prediction", RESPONSE_RECEIVED_AT.plusSeconds(10));
         long laterSource = insertObservation(laterBatch, routeVersionId, VEHICLE_204000206, 0, PASSED_STOP_ORDER);
         settleAsFull(laterSource, OTHER_RAW_FULL_CHANCE);
         jdbcClient.sql("""
@@ -481,7 +502,10 @@ class JdbcSameDayFullOutcomesStoreTest {
             SELECT ?, ?, model_key, model_version, bundle_digest, prediction_target_version,
                 calculation_version, supported_scope_digest, data_until, 'STAGED'
             FROM model_deployment WHERE id = ? RETURNING id
-            """).params(UUID.randomUUID(), "different-model", previousModel).query(Long.class).single();
+            """)
+            .params(UUID.randomUUID(), "different-model", previousModel)
+            .query(Long.class)
+            .single();
         service.initializeIfAbsent(routeId, modelDeploymentId, ARRIVAL_DAY);
         service.initializeIfAbsent(routeId, previousModel, ARRIVAL_DAY);
         assertThat(repository.findCounts(routeId, modelDeploymentId, ARRIVAL_DAY)).singleElement()
@@ -511,8 +535,11 @@ class JdbcSameDayFullOutcomesStoreTest {
         final long arrivalBatchId = insertObservationBatch(
             routeVersionId, "2026-08-19T11:20-" + observationId, ARRIVAL_RESPONSE_RECEIVED_AT);
         final long arrivalObservationId =
-            insertObservation(arrivalBatchId, routeVersionId, jdbcClient.sql("SELECT vehicle_id FROM vehicle_observation WHERE id = ?")
-                .param(observationId).query(String.class).single(), 0, TARGET_STOP_ORDER);
+            insertObservation(arrivalBatchId, routeVersionId,
+                jdbcClient.sql("SELECT vehicle_id FROM vehicle_observation WHERE id = ?")
+                    .param(observationId)
+                    .query(String.class)
+                    .single(), 0, TARGET_STOP_ORDER);
         return evaluationRepository.settle(List.of(ForecastEvaluation.completed(
             observationId, TARGET_STOP_ORDER,
             new ArrivalLabel.Settled(arrivalObservationId, seatsOnArrival), SCORED_AT))).getFirst()
@@ -641,13 +668,13 @@ class JdbcSameDayFullOutcomesStoreTest {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
-            .params(
-                batchId, versionId, sourceRowNumber,
-                vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
-                RUNNING_STATE_DEPARTED, SEATS_LEFT
-            )
-            .query(Long.class)
-            .single());
+                    .params(
+                        batchId, versionId, sourceRowNumber,
+                        vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
+                        RUNNING_STATE_DEPARTED, SEATS_LEFT
+                    )
+                    .query(Long.class)
+                    .single());
     }
 
     private static String stopIdOf(

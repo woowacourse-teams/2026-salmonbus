@@ -42,14 +42,22 @@ import org.springframework.transaction.support.TransactionTemplate;
 class DemandStatisticsIdleTest {
     private static final Instant NOW = Instant.parse("2026-10-01T12:00:00Z");
     private static final Instant DATA_UNTIL = NOW.minusSeconds(60);
-    @Autowired JdbcClient jdbc;
-    @Autowired DemandStatisticsPipeline pipeline;
-    @Autowired DemandStatisticsRunRepository runs;
-    @Autowired PlatformTransactionManager transactions;
-    @MockitoSpyBean JdbcDemandStatisticsStore store;
-    @MockitoSpyBean RouteDataQualityAccess quality;
-    @MockitoBean ArchivedDemandStatisticsRebuilder archived;
-    @MockitoBean Clock clock;
+    @Autowired
+    JdbcClient jdbc;
+    @Autowired
+    DemandStatisticsPipeline pipeline;
+    @Autowired
+    DemandStatisticsRunRepository runs;
+    @Autowired
+    PlatformTransactionManager transactions;
+    @MockitoSpyBean
+    JdbcDemandStatisticsStore store;
+    @MockitoSpyBean
+    RouteDataQualityAccess quality;
+    @MockitoBean
+    ArchivedDemandStatisticsRebuilder archived;
+    @MockitoBean
+    Clock clock;
     private long route;
     private long version;
 
@@ -134,13 +142,21 @@ class DemandStatisticsIdleTest {
     void 작업이_남아_있으면_최근에_발행했어도_유휴로_판단하지_않는다(String condition) {
         // given
         switch (condition) {
-            case "진행중" -> jdbc.sql("UPDATE stop_demand_run SET phase='FOLD' WHERE route_version_id=?").param(version).update();
-            case "품질변경" -> jdbc.sql("UPDATE route_data_quality SET quality_revision=2 WHERE route_id=?").param(route).update();
+            case "진행중" -> jdbc.sql("UPDATE stop_demand_run SET phase='FOLD' WHERE route_version_id=?")
+                .param(version)
+                .update();
+            case "품질변경" -> jdbc.sql("UPDATE route_data_quality SET quality_revision=2 WHERE route_id=?")
+                .param(route)
+                .update();
             case "차량재집계", "전체재집계" -> jdbc.sql("""
                 INSERT INTO stop_demand_rebuild_request(route_version_id,vehicle_id,request_id) VALUES (?,?,?)
                 """).params(version, condition.equals("전체재집계") ? "" : "bus", UUID.randomUUID()).update();
-            case "초기집계미완료" -> jdbc.sql("UPDATE stop_demand_baseline SET initialized=false WHERE route_version_id=?").param(version).update();
-            case "초기집계기록없음" -> jdbc.sql("DELETE FROM stop_demand_baseline WHERE route_version_id=?").param(version).update();
+            case "초기집계미완료" -> jdbc.sql("UPDATE stop_demand_baseline SET initialized=false WHERE route_version_id=?")
+                .param(version)
+                .update();
+            case "초기집계기록없음" -> jdbc.sql("DELETE FROM stop_demand_baseline WHERE route_version_id=?")
+                .param(version)
+                .update();
             default -> throw new AssertionError(condition);
         }
 

@@ -55,7 +55,7 @@ final class SafetensorsFile {
             || HEADER_LENGTH_BYTES + headerLength > content.length) {
             throw new BundleRejectedException(
                 "계수 파일의 머리말 길이가 파일 크기를 넘는다: %d, %d"
-                    .formatted(headerLength, content.length)
+                .formatted(headerLength, content.length)
             );
         }
         return new SafetensorsFile(
@@ -101,12 +101,12 @@ final class SafetensorsFile {
         int[] shape = shapeOf(arrayAt(declaration, "shape", name), name);
         JsonNode offsets = arrayAt(declaration, "data_offsets", name);
         require(offsets.size() == 2,
-            "%s 의 값 구간은 시작과 끝 둘이다: %d개".formatted(name, offsets.size()));
+                "%s 의 값 구간은 시작과 끝 둘이다: %d개".formatted(name, offsets.size()));
         final long from = wholeNumberOf(offsets.get(0), name + " 의 값 구간 시작");
         final long until = wholeNumberOf(offsets.get(1), name + " 의 값 구간 끝");
         if (from < 0 || until < from || until > (long) content.length - valuesFrom) {
             throw new BundleRejectedException(
-                "%s 의 값 구간이 파일 밖을 가리킨다: %d, %d".formatted(name, from, until));
+                    "%s 의 값 구간이 파일 밖을 가리킨다: %d, %d".formatted(name, from, until));
         }
         final long declared = (long) Tensor.valueCountOf(shape) * dataType.byteCount();
         if (until - from != declared) {

@@ -48,8 +48,15 @@ public final class ArrivalRefreshCoordinator implements RefreshStationArrivals {
     private final ArrivalRetryPolicy retryPolicy;
     private final Semaphore waitingRequests = new Semaphore(32);
 
-    public ArrivalRefreshCoordinator(ArrivalStore store, ArrivalSource source, ArrivalCallQuota quota,
-        Executor executor, ArrivalCollectionPolicy policy, Clock clock, LongSupplier ticker) {
+    public ArrivalRefreshCoordinator(
+        ArrivalStore store,
+        ArrivalSource source,
+        ArrivalCallQuota quota,
+        Executor executor,
+        ArrivalCollectionPolicy policy,
+        Clock clock,
+        LongSupplier ticker
+    ) {
         this.store = store;
         this.source = source;
         this.quota = quota;
@@ -90,7 +97,9 @@ public final class ArrivalRefreshCoordinator implements RefreshStationArrivals {
             state.job = job;
             states.put(stationId, state);
         }
-        try { executor.execute(() -> collect(stationId, job)); }
+        try {
+            executor.execute(() -> collect(stationId, job));
+        }
         catch (RejectedExecutionException full) {
             defer(stationId, job, "BUSY", POLL);
             return reply(Status.DEFERRED, "BUSY", POLL);
@@ -143,7 +152,10 @@ public final class ArrivalRefreshCoordinator implements RefreshStationArrivals {
 
     private void collect(StationId stationId, Job job) {
         try {
-            if (expired(job)) { defer(stationId, job, "QUEUE_EXPIRED", POLL); return; }
+            if (expired(job)) {
+                defer(stationId, job, "QUEUE_EXPIRED", POLL);
+                return;
+            }
             if (!store.supported(stationId.value())) {
                 synchronized (this) {
                     State state = states.get(stationId);
@@ -156,25 +168,37 @@ public final class ArrivalRefreshCoordinator implements RefreshStationArrivals {
                 defer(stationId, job, "NOT_DUE", Duration.between(clock.instant(), latest.get().refreshAfterAt()));
                 return;
             }
-            if (expired(job)) { defer(stationId, job, "QUEUE_EXPIRED", POLL); return; }
+            if (expired(job)) {
+                defer(stationId, job, "QUEUE_EXPIRED", POLL);
+                return;
+            }
             synchronized (this) {
                 if (clock.instant().isBefore(quotaBlockedUntil)) {
-                    defer(stationId, job, "DAILY_QUOTA_EXHAUSTED", Duration.between(clock.instant(), quotaBlockedUntil));
+                    defer(stationId, job, "DAILY_QUOTA_EXHAUSTED",
+                        Duration.between(clock.instant(), quotaBlockedUntil));
                     return;
                 }
                 if (ticker.getAsLong() < serviceBlockedUntil) {
-                    defer(stationId, job, "RATE_LIMITED", Duration.ofNanos(serviceBlockedUntil - ticker.getAsLong()));
+                    defer(stationId, job, "RATE_LIMITED",
+                        Duration.ofNanos(serviceBlockedUntil - ticker.getAsLong()));
                     return;
                 }
             }
             Duration rateWait = acquireRate();
-            if (!rateWait.isZero()) { defer(stationId, job, "RATE_LIMITED", rateWait); return; }
+            if (!rateWait.isZero()) {
+                defer(stationId, job, "RATE_LIMITED", rateWait);
+                return;
+            }
             var reservation = quota.reserve(clock.instant());
-            if (reservation.isEmpty()) { exhausted(stationId, job); return; }
+            if (reservation.isEmpty()) {
+                exhausted(stationId, job);
+                return;
+            }
             if (!reservation.get().covers(clock.instant())) {
                 reservation = quota.reserve(clock.instant());
                 if (reservation.isEmpty() || !reservation.get().covers(clock.instant())) {
-                    exhausted(stationId, job); return;
+                    exhausted(stationId, job);
+                    return;
                 }
             }
             ArrivalSource.Result result = source.fetch(stationId.value(), reservation.get().keyAlias());
@@ -190,7 +214,8 @@ public final class ArrivalRefreshCoordinator implements RefreshStationArrivals {
                         finish(state, "NOT_DUE", Duration.between(clock.instant(), snapshot.refreshAfterAt()));
                     }
                 }
-                log.info("event=arrival_collected stationId={} routes={}", stationId.value(), snapshot.routes().size());
+                log.info("event=arrival_collected stationId={} routes={}", stationId.value(), snapshot.routes()
+                        .size());
             } else {
                 var failed = (ArrivalSource.Failed) result;
                 ArrivalSource.Reason reason = failed.reason();
@@ -220,13 +245,20 @@ public final class ArrivalRefreshCoordinator implements RefreshStationArrivals {
     private void save(ArrivalSnapshot snapshot) {
         RuntimeException last = null;
         for (int attempt = 0; attempt < policy.saveAttempts(); attempt++) {
-            try { store.save(snapshot); return; }
-            catch (RuntimeException failure) { last = failure; }
+            try {
+                store.save(snapshot);
+                return;
+            }
+            catch (RuntimeException failure) {
+                last = failure;
+            }
         }
         throw last;
     }
 
-    private synchronized boolean expired(Job job) { return ticker.getAsLong() >= job.startBy; }
+    private synchronized boolean expired(Job job) {
+        return ticker.getAsLong() >= job.startBy;
+    }
 
     private synchronized Duration acquireRate() {
         return rateLimit.acquire(ticker.getAsLong());
@@ -242,14 +274,24 @@ public final class ArrivalRefreshCoordinator implements RefreshStationArrivals {
         fail(stationId, job, reason, null);
     }
 
-    private synchronized void fail(StationId stationId, Job job, String reason, Duration minimum) {
+    private synchronized void fail(
+        StationId stationId,
+        Job job,
+        String reason,
+        Duration minimum
+    ) {
         State state = states.get(stationId);
         if (state == null || state.job != job) return;
         state.failures = Math.min(state.failures + 1, 30);
         finish(state, reason, retryPolicy.delay(state.failures, minimum));
     }
 
-    private synchronized void defer(StationId stationId, Job job, String reason, Duration delay) {
+    private synchronized void defer(
+        StationId stationId,
+        Job job,
+        String reason,
+        Duration delay
+    ) {
         State state = states.get(stationId);
         if (state != null && state.job == job) finish(state, reason, delay);
     }
@@ -272,7 +314,11 @@ public final class ArrivalRefreshCoordinator implements RefreshStationArrivals {
         final UUID id;
         final long startBy;
         final CompletableFuture<Void> completed = new CompletableFuture<>();
-        Job(UUID id, long startBy) { this.id = id; this.startBy = startBy; }
+
+        Job(UUID id, long startBy) {
+            this.id = id;
+            this.startBy = startBy;
+        }
     }
     private static final class State {
         Job job;

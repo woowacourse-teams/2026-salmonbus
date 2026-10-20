@@ -23,7 +23,6 @@ import org.junit.jupiter.api.io.TempDir;
  * 계산은 A 계수로 하고 DB 에는 B 예보라고 적는 상태가 된다.
  */
 class ActiveForecastRuntimeResolverTest {
-
     @TempDir
     Path directory;
 
@@ -133,7 +132,6 @@ class ActiveForecastRuntimeResolverTest {
         ActiveModelDeployment deployment
     ) {
         return new ModelDeploymentRepository() {
-
             @Override
             public Optional<ActiveModelDeployment> findActive() {
                 return Optional.ofNullable(deployment);

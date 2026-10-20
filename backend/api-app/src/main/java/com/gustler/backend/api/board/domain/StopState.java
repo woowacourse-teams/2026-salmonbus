@@ -11,7 +11,6 @@ public record StopState(
     boolean boardingAllowed,
     List<ApproachingVehicle> approachingVehicles
 ) {
-
     public StopState {
         Objects.requireNonNull(stopId, "stopId는 null일 수 없습니다.");
         Objects.requireNonNull(name, "name은 null일 수 없습니다.");

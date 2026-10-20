@@ -6,7 +6,6 @@ import com.gustler.backend.quota.api.CallQuota;
 import com.gustler.backend.quota.domain.CallQuotaStore;
 
 import static org.assertj.core.api.Assertions.assertThat;
-
 import com.gustler.backend.quota.support.QuotaIntegrationTest;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -29,7 +28,6 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @QuotaIntegrationTest
 class CallQuotaLedgerTest {
-
     private static final OffsetDateTime KOREA_8_28_LATE_NIGHT = OffsetDateTime.parse("2026-08-28T14:59:59Z");
     private static final OffsetDateTime KOREA_8_29_MIDNIGHT = OffsetDateTime.parse("2026-08-28T15:00:00Z");
     private static final LocalDate KOREA_8_28 = LocalDate.of(2026, 8, 28);
@@ -425,7 +423,8 @@ class CallQuotaLedgerTest {
     private CallQuotaLedger ledgerOverTwoKeys() {
         return new CallQuotaLedger(
             callQuotaStore,
-            CallQuotaPolicy.sameForEveryApi(DAILY_LIMIT_10000, List.of(CallQuotaPolicy.PRIMARY_KEY_ALIAS, KEY_ALIAS_B)));
+            CallQuotaPolicy.sameForEveryApi(DAILY_LIMIT_10000,
+                List.of(CallQuotaPolicy.PRIMARY_KEY_ALIAS, KEY_ALIAS_B)));
     }
 
     private void insertQuotaOf(
@@ -456,6 +455,7 @@ class CallQuotaLedgerTest {
             .query((rs, n) -> Map.entry(rs.getString(1), rs.getInt(2)))
             .list();
     }
+
     @Test
     void 위치정보는_키_다섯_개를_차례로_돌려_쓰고_한도가_찬_키는_건너뛴다() {
         // given

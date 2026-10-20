@@ -7,7 +7,6 @@ import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 class ForecastPropertiesTest {
-
     private static final Duration INTERVAL = Duration.ofSeconds(10);
     private static final Duration SETTLEMENT_INTERVAL = Duration.ofSeconds(60);
     private static final Duration STATISTICS_INTERVAL = Duration.ofHours(6);

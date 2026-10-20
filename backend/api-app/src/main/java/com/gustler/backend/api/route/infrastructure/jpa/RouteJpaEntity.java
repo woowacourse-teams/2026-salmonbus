@@ -14,7 +14,6 @@ import lombok.NoArgsConstructor;
 @Table(name = "route")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RouteJpaEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

@@ -18,7 +18,6 @@ import org.bson.Document;
 import org.bson.types.ObjectId;
 
 public final class MongoChatMessageRepository implements ChatMessageRepository {
-
     private final MongoCollection<Document> collection;
 
     public MongoChatMessageRepository(MongoCollection<Document> collection) {

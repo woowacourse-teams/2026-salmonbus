@@ -14,7 +14,6 @@ import tools.jackson.databind.cfg.JsonNodeFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 public final class CanonicalJson {
-
     private static final ObjectMapper READER = new ObjectMapper();
     private static final ObjectMapper WRITER = JsonMapper.builder()
         .enable(JsonNodeFeature.WRITE_PROPERTIES_SORTED)

@@ -20,7 +20,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 @RequiredArgsConstructor
 public class JpaVehicleQueryRepository implements VehicleQueryRepository {
-
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final Pageable FIRST_RESULT_PAGE = PageRequest.of(0, 1);
 
@@ -60,7 +59,9 @@ public class JpaVehicleQueryRepository implements VehicleQueryRepository {
             observationBatchRepository.findLatestSuccessfulByRouteVersion(
                 routeVersion,
                 FIRST_RESULT_PAGE
-            ).stream().findFirst();
+            )
+                .stream()
+                .findFirst();
 
         return new VehicleSnapshot(
             routeId.value(),

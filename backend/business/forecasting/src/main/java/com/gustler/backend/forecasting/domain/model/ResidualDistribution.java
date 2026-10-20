@@ -19,7 +19,6 @@ package com.gustler.backend.forecasting.domain.model;
  * 밀려 올라간다. 중심 좌석이 작을수록 자주 생기는 자리다.
  */
 final class ResidualDistribution {
-
     /** 미적합 묶음이 받는 확률. 0 이 아니라서 방향의 질량이 사라지지 않는다. */
     private static final double UNFITTED_BIN_CHANCE = 1e-6;
 

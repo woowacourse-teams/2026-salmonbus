@@ -9,7 +9,6 @@ public record BoardStop(
     BoardDirection direction,
     boolean boardingAllowed
 ) {
-
     public BoardStop {
         Objects.requireNonNull(stopId, "stopId는 null일 수 없습니다.");
         Objects.requireNonNull(name, "name은 null일 수 없습니다.");

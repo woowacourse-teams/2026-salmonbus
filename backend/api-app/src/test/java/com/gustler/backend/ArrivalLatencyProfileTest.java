@@ -41,7 +41,8 @@ class ArrivalLatencyProfileTest {
     private static final String[] REQUIRED = {"pool.acquire", "jdbc.execute", "repository.visits", "repository.latest",
         "snapshot.decode", "query.service", "response.dto", "response.write", "server.filter"};
 
-    private record ClientSample(String id, double httpMillis, double parseMillis, double totalMillis, int bytes) { }
+    private record ClientSample(String id, double httpMillis, double parseMillis, double totalMillis, int bytes) {
+    }
 
     @Test
     @Timeout(240)
@@ -70,18 +71,23 @@ class ArrivalLatencyProfileTest {
             profile(agent, 5);
             profile(agent, 20);
         } finally {
-            var report = Map.of("generatedAt", Instant.now().toString(), "scope", "local Boot JAR / PostgreSQL 18",
+            var report = Map.of("generatedAt", Instant.now()
+                .toString(), "scope", "local Boot JAR / PostgreSQL 18",
                 "realPublicApiCalls", 0, "fixture", "synthetic fresh receipt, refresh in 1h to isolate the read path",
                 "jvm", "Java 21; 256MB heap; ActiveProcessorCount=2 (processor-count hint)",
                 "notes", List.of("Instrumented stages are inclusive; do not add their percentiles.",
                     "pool.acquire includes getConnection overhead, not only blocking.",
                     "jdbc.execute includes driver/network/DB work; it is not DB engine time alone.",
                     "client residual includes connector queue, HTTP transport and client scheduling.",
-                    "Pool 20 is a diagnostic comparison, not a production configuration change."),
+                "Pool 20 is a diagnostic comparison, not a production configuration change."),
                 "cases", CASES);
-            Files.writeString(DIRECTORY.resolve("summary.json"), JSON.writerWithDefaultPrettyPrinter().writeValueAsString(report));
+            Files.writeString(DIRECTORY.resolve("summary.json"), JSON.writerWithDefaultPrettyPrinter()
+                    .writeValueAsString(report));
             try (var output = Files.newBufferedWriter(DIRECTORY.resolve("requests.jsonl"))) {
-                for (var sample : RAW) { output.write(JSON.writeValueAsString(sample)); output.newLine(); }
+                for (var sample : RAW) {
+                    output.write(JSON.writeValueAsString(sample));
+                    output.newLine();
+                }
             }
         }
     }
@@ -115,12 +121,19 @@ class ArrivalLatencyProfileTest {
         }
     }
 
-    private static void measure(URI uri, String name, int pool, int count, int concurrency, Path trace) throws Exception {
+    private static void measure(
+        URI uri,
+        String name, int pool, int count, int concurrency,
+        Path trace
+    ) throws Exception {
         List<ClientSample> samples = requests(uri, name, count, concurrency, true);
         summarize(name, pool, concurrency, samples, traces(trace, samples), true);
     }
 
-    private static List<ClientSample> requests(URI uri, String prefix, int count, int concurrency, boolean trace) throws Exception {
+    private static List<ClientSample> requests(
+        URI uri,
+        String prefix, int count, int concurrency, boolean trace
+    ) throws Exception {
         CountDownLatch start = new CountDownLatch(1);
         List<Future<ClientSample>> futures = new ArrayList<>();
         try (var clients = Executors.newFixedThreadPool(concurrency)) {
@@ -164,8 +177,11 @@ class ArrivalLatencyProfileTest {
         throw new AssertionError("HTTP 응답과 대응되는 서버 계측 기록이 부족하다");
     }
 
-    private static void summarize(String name, int pool, int concurrency, List<ClientSample> clients,
-                                   Map<String, JsonNode> traces, boolean instrumented) {
+    private static void summarize(
+        String name, int pool, int concurrency,
+        List<ClientSample> clients,
+        Map<String, JsonNode> traces, boolean instrumented
+    ) {
         Map<String, List<Double>> measures = new LinkedHashMap<>();
         for (ClientSample client : clients) {
             Map<String, Object> raw = new LinkedHashMap<>();
@@ -177,7 +193,8 @@ class ArrivalLatencyProfileTest {
             if (instrumented) {
                 JsonNode server = traces.get(client.id());
                 for (String section : REQUIRED) raw.put(section, server.path("nanos").path(section).longValue() / 1e6);
-                raw.put("unattributed", client.totalMillis() - client.parseMillis() - (double) raw.get("server.filter"));
+                raw.put("unattributed",
+                    client.totalMillis() - client.parseMillis() - (double) raw.get("server.filter"));
                 assertThat(server.at("/calls/pool.acquire").intValue()).isEqualTo(2);
                 assertThat(server.at("/calls/jdbc.execute").intValue()).isEqualTo(2);
                 assertThat(server.at("/calls/snapshot.decode").intValue()).isEqualTo(1);
@@ -199,12 +216,18 @@ class ArrivalLatencyProfileTest {
         summary.put("milliseconds", stats);
         CASES.add(summary);
         System.out.printf("arrival_profile case=%s client=%s server=%s pool=%s jdbc=%s%n", name,
-            stats.get("client.total"), stats.get("server.filter"), stats.get("pool.acquire"), stats.get("jdbc.execute"));
+            stats.get("client.total"), stats.get("server.filter"), stats.get("pool.acquire"),
+            stats.get("jdbc.execute"));
     }
 
     private static Map<String, Double> stats(List<Double> values) {
-        List<Double> sorted = values.stream().sorted().toList();
-        return Map.of("mean", values.stream().mapToDouble(Double::doubleValue).average().orElseThrow(),
+        List<Double> sorted = values.stream()
+            .sorted()
+            .toList();
+        return Map.of("mean", values.stream()
+                .mapToDouble(Double::doubleValue)
+                .average()
+                .orElseThrow(),
             "p50", sorted.get((int) Math.ceil(sorted.size() * .50) - 1),
             "p95", sorted.get((int) Math.ceil(sorted.size() * .95) - 1), "max", sorted.getLast());
     }

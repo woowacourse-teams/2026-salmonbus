@@ -82,7 +82,8 @@ class ArrivalRuntimeFlowTest {
     @AfterAll
     static void stopAndReport() throws Exception {
         try {
-            var report = Map.of("generatedAt", Instant.now().toString(), "scope", "local HTTP / separate Boot JARs / PostgreSQL 18 / synthetic GBIS",
+            var report = Map.of("generatedAt", Instant.now()
+                .toString(), "scope", "local HTTP / separate Boot JARs / PostgreSQL 18 / synthetic GBIS",
                 "jvm", "Java 21, -Xmx256m, ActiveProcessorCount=2 per child JVM", "realPublicApiCalls", 0,
                 "outcomes", OUTCOMES, "evidence", EVIDENCE);
             Files.writeString(REPORT, new ObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(report));
@@ -118,8 +119,10 @@ class ArrivalRuntimeFlowTest {
         assertThat(ready.body().path("routes")).hasSize(2);
         assertThat(ready.body().at("/routes/0/arrivals/0/currentSeat/remaining").intValue()).isZero();
         assertThat(ready.body().at("/snapshot/sourceObservedAt").isNull()).isTrue();
-        assertThat(Duration.between(instant(ready, "receivedAt"), instant(ready, "refreshAfterAt"))).isEqualTo(Duration.ofSeconds(40));
-        assertThat(Duration.between(instant(ready, "receivedAt"), instant(ready, "staleAt"))).isEqualTo(Duration.ofSeconds(60));
+        assertThat(Duration.between(instant(ready, "receivedAt"), instant(ready, "refreshAfterAt"))).isEqualTo(
+            Duration.ofSeconds(40));
+        assertThat(Duration.between(instant(ready, "receivedAt"), instant(ready, "staleAt"))).isEqualTo(
+            Duration.ofSeconds(60));
 
         String id = ready.value("/snapshot/snapshotId");
         String version = ready.value("/routes/0/targetVisit/referenceVersionId");
@@ -127,7 +130,8 @@ class ArrivalRuntimeFlowTest {
         assertThat(selected.body().path("routes")).hasSize(1);
         assertThat(selected.value("/snapshot/snapshotId")).isEqualTo(id);
         assertThat(runtime.get(STATION, "?routeId=204000155").value("/snapshot/snapshotId")).isEqualTo(id);
-        assertThat(runtime.get(STATION, "?routeId=204000057&referenceVersionId=999999&stopSequence=1").httpStatus()).isEqualTo(409);
+        assertThat(runtime.get(STATION, "?routeId=204000057&referenceVersionId=999999&stopSequence=1")
+                .httpStatus()).isEqualTo(409);
 
         List<Reply> warm = burst(STATION, 100);
         assertThat(warm).allSatisfy(reply -> {
@@ -195,7 +199,9 @@ class ArrivalRuntimeFlowTest {
         ArrivalRuntime.await(() -> runtime.source.calls() == 1, QUICK_TIMEOUT, "느린 가짜 응답 시작");
         List<Reply> queued = new ArrayList<>();
         for (String station : FakeGbisArrivalServer.STATIONS.subList(1, 10)) queued.add(runtime.get(station));
-        assertThat(queued.stream().filter(reply -> "BUSY".equals(reply.value("/refresh/reason"))).count()).isEqualTo(1);
+        assertThat(queued.stream()
+                .filter(reply -> "BUSY".equals(reply.value("/refresh/reason")))
+                .count()).isEqualTo(1);
         ArrivalRuntime.await(() -> snapshots() == 1, QUICK_TIMEOUT, "느린 응답 저장");
         Reply expired = runtime.get(OTHER);
         assertThat(expired.value("/refresh/reason")).isEqualTo("QUEUE_EXPIRED");
@@ -271,11 +277,16 @@ class ArrivalRuntimeFlowTest {
     }
 
     private static Map<String, Object> timings(List<Reply> replies) {
-        List<Double> sorted = replies.stream().map(Reply::elapsedMillis).sorted().toList();
+        List<Double> sorted = replies.stream()
+            .map(Reply::elapsedMillis)
+            .sorted()
+            .toList();
         return Map.of("requests", replies.size(), "concurrentClients", 20,
             "p50Millis", sorted.get((int) Math.ceil(sorted.size() * .50) - 1),
             "p95Millis", sorted.get((int) Math.ceil(sorted.size() * .95) - 1),
-            "maxMillis", sorted.getLast(), "http200", replies.stream().filter(reply -> reply.httpStatus() == 200).count());
+            "maxMillis", sorted.getLast(), "http200", replies.stream()
+                .filter(reply -> reply.httpStatus() == 200)
+                .count());
     }
 
     private static Instant instant(Reply reply, String field) {
@@ -288,7 +299,11 @@ class ArrivalRuntimeFlowTest {
     }
 
     private static int snapshots() {
-        try { return runtime.snapshots(); }
-        catch (Exception failure) { throw new IllegalStateException(failure); }
+        try {
+            return runtime.snapshots();
+        }
+        catch (Exception failure) {
+            throw new IllegalStateException(failure);
+        }
     }
 }

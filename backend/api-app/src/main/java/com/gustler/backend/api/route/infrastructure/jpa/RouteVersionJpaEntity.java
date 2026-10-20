@@ -20,7 +20,6 @@ import org.hibernate.type.SqlTypes;
 @Table(name = "route_version")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RouteVersionJpaEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

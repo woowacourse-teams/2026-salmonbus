@@ -8,7 +8,6 @@ public record BoardOverview(
     Board board,
     Duration cacheMaxAge
 ) {
-
     public BoardOverview {
         Objects.requireNonNull(board, "board는 null일 수 없습니다.");
         Objects.requireNonNull(cacheMaxAge, "cacheMaxAge는 null일 수 없습니다.");

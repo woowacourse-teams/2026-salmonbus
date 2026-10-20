@@ -14,7 +14,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class ChatRoomCatalogTest {
-
     private final MovableClock clock = new MovableClock(Instant.parse("2026-09-30T02:00:00Z"));
 
     @Test
@@ -36,7 +35,8 @@ class ChatRoomCatalogTest {
     @Test
     void 정류장이_없는_노선은_노선_이름으로_닉네임을_만든다() {
         // given
-        ChatRoomCatalog catalog = new ChatRoomCatalog(() -> List.of(new ChatRoute("204000070", "9007", List.of())), clock);
+        ChatRoomCatalog catalog =
+            new ChatRoomCatalog(() -> List.of(new ChatRoute("204000070", "9007", List.of())), clock);
 
         // when & then
         assertThat(catalog.find("204000070")).hasValueSatisfying(
@@ -96,7 +96,6 @@ class ChatRoomCatalogTest {
     }
 
     private static final class MovableClock extends Clock {
-
         private Instant instant;
 
         private MovableClock(Instant instant) {

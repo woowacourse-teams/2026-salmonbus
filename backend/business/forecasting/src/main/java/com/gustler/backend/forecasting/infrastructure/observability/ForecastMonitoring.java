@@ -49,14 +49,25 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
         this.clock = clock;
         catalog = new JdbcTemplate(dataSource);
         catalog.setQueryTimeout(1);
-        Gauge.builder("salmonbus.collection.expected.interval.seconds", () -> com.gustler.backend.observations.api.CollectionTiming.intervalSeconds(clock.instant())).register(registry);
+        Gauge.builder("salmonbus.collection.expected.interval.seconds",
+            () -> com.gustler.backend.observations.api.CollectionTiming.intervalSeconds(clock.instant()))
+            .register(registry);
         Gauge.builder("salmonbus.monitoring.heartbeat.timestamp", heartbeat, AtomicLong::get).register(registry);
         Gauge.builder("salmonbus.accuracy.dropped.samples", dropped, AtomicLong::get).register(registry);
     }
-    @PostConstruct void listen() { WorkerOperationLog.setListener(this); }
-    @PreDestroy void stop() { WorkerOperationLog.clearListener(this); }
 
-    @Override public String context(String operation, Object route) {
+    @PostConstruct
+    void listen() {
+        WorkerOperationLog.setListener(this);
+    }
+
+    @PreDestroy
+    void stop() {
+        WorkerOperationLog.clearListener(this);
+    }
+
+    @Override
+    public String context(String operation, Object route) {
         if (operation.startsWith("collection_") && route instanceof String source) {
             Long id = sourceRoutes.get(source);
             RouteState state = id == null ? null : routes.get(id);
@@ -116,20 +127,29 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
         }
     }
 
-    @Override public synchronized void settled(List<SettledEvaluation> results) {
+    @Override
+    public synchronized void settled(List<SettledEvaluation> results) {
         for (SettledEvaluation result : results) {
             EvaluationDiagnostics d = result.diagnostics();
-            if (d == null) { dropped.incrementAndGet(); continue; }
+            if (d == null) {
+                dropped.incrementAndGet();
+                continue;
+            }
             Key key = new Key(result.routeId(), result.routeVersionId(), result.targetStopOrder(),
                 text(d.routeName(), "노선 정보 없음"), text(d.stopName(), "정류장 정보 없음"),
                 text(d.stopId(), "unknown"), text(d.direction(), "unknown"), d.modelDeploymentId(),
                 distance(result.stopsToTarget()));
-            if (!accuracy.containsKey(key) && accuracy.size() >= 5000) { dropped.incrementAndGet(); continue; }
+            if (!accuracy.containsKey(key) && accuracy.size() >= 5000) {
+                dropped.incrementAndGet();
+                continue;
+            }
             Totals totals = accuracy.computeIfAbsent(key, ignored -> new Totals());
             totals.completed++;
             boolean eligible = result.state() == ScoringState.SETTLED && result.usableForCalibration()
                 && result.targetBoardingAllowed() && result.seatsOnArrival() != null && result.seatsOnArrival() >= 0;
-            if (!eligible) { continue; }
+            if (!eligible) {
+                continue;
+            }
             if (d.expectedSeats() != null && Double.isFinite(d.expectedSeats()) && d.expectedSeats() >= 0) {
                 totals.maeCount++;
                 totals.absoluteError += Math.abs(d.expectedSeats() - result.seatsOnArrival());
@@ -158,13 +178,19 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
                 SELECT r.id, r.source_route_id, r.display_name, v.id AS version_id FROM route r
                 JOIN route_version v ON v.route_id = r.id AND v.valid_to IS NULL
                 ORDER BY r.id LIMIT 201
-                """, row -> { names.put(row.getLong("id"), row.getString("display_name"));
+                """, row -> {
+                    names.put(row.getLong("id"), row.getString("display_name"));
                     versions.put(row.getLong("version_id"), row.getString("display_name"));
                     sources.put(row.getString("source_route_id"), row.getLong("id"));
-                    versionIds.put(row.getLong("version_id"), row.getLong("id")); });
-            if (names.size() > 200) { throw new IllegalStateException("route limit"); }
+                    versionIds.put(row.getLong("version_id"), row.getLong("id"));
+                });
+            if (names.size() > 200) {
+                throw new IllegalStateException("route limit");
+            }
             routes.entrySet().removeIf(entry -> {
-                if (entry.getValue().name.equals(names.get(entry.getKey()))) { return false; }
+                if (entry.getValue().name.equals(names.get(entry.getKey()))) {
+                    return false;
+                }
                 entry.getValue().gauges.forEach(registry::remove);
                 return true;
             });
@@ -203,24 +229,33 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
     @Scheduled(fixedDelay = 300000, initialDelay = 300000)
     public void flushAccuracy() {
         Map<Key, Totals> snapshot;
-        synchronized (this) { snapshot = new HashMap<>(accuracy); accuracy.clear(); }
+        synchronized (this) {
+            snapshot = new HashMap<>(accuracy);
+            accuracy.clear();
+        }
         snapshot.forEach((key, t) -> log.info(
             "event=forecast_accuracy telemetrySchema=1 routeId={} routeVersionId={} stopOrder={} "
-                + "routeName={} stopName={} stopId={} direction={} modelDeploymentId={} distance={} "
-                + "completed={} maeCount={} absoluteErrorSum={} probabilityCount={} brierSum={} "
-                + "predictedFullSum={} actualFullCount={}",
+                        + "routeName={} stopName={} stopId={} direction={} modelDeploymentId={} distance={} "
+                        + "completed={} maeCount={} absoluteErrorSum={} probabilityCount={} brierSum={} "
+                        + "predictedFullSum={} actualFullCount={}",
             key.routeId, key.version, key.stop, quote(key.routeName), quote(key.stopName), quote(key.stopId),
             quote(key.direction), key.model, key.distance, t.completed, t.maeCount, t.absoluteError,
             t.probabilityCount, t.brierSum, t.predictedFullSum, t.actualFullCount));
     }
+
     static String quote(String value) {
         return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"")
             .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t") + "\"";
     }
-    private static String text(String value, String fallback) { return value == null ? fallback : value; }
-    private static String distance(int stops) { return stops <= 3 ? "1-3" : stops <= 6 ? "4-6" : "7-12"; }
+
+    private static String text(String value, String fallback) { return value == null ? fallback : value;
+    }
+
+    private static String distance(int stops) { return stops <= 3 ? "1-3" : stops <= 6 ? "4-6" : "7-12";
+    }
     private record Key(long routeId, long version, int stop, String routeName, String stopName,
-        String stopId, String direction, long model, String distance) { }
+        String stopId, String direction, long model, String distance) {
+    }
     private static final class Totals {
         long completed, maeCount, probabilityCount, actualFullCount;
         double absoluteError, brierSum, predictedFullSum;
@@ -228,8 +263,12 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
     private static final class RouteState {
         final String name;
         volatile double committedAt = Double.NaN, nonemptyAt = Double.NaN, observedAt = Double.NaN;
-        volatile double firstAttemptAt = Double.NaN, collectionAt = Double.NaN, usableRows = Double.NaN, pendingAge = Double.NaN, pendingCheckedAt = Double.NaN;
+        volatile double firstAttemptAt = Double.NaN, collectionAt = Double.NaN, usableRows = Double.NaN,
+        pendingAge = Double.NaN, pendingCheckedAt = Double.NaN;
         List<Gauge> gauges = List.of();
-        RouteState(String name) { this.name = name; }
+
+        RouteState(String name) {
+            this.name = name;
+        }
     }
 }

@@ -15,7 +15,6 @@ import org.springframework.web.context.WebApplicationContext;
 @IntegrationTest
 @ActiveProfiles({"api-docs-dev", "prod"})
 class ProductionApiDocsDisabledTest {
-
     @Autowired
     private WebApplicationContext applicationContext;
 

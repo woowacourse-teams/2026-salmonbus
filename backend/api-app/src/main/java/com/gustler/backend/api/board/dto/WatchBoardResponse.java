@@ -37,10 +37,12 @@ public record WatchBoardResponse(
             board.staleAt(),
             ModelInfoResponse.from(board.model()),
             board.vehiclesInService(),
-            board.stops().stream()
+            board.stops()
+                .stream()
                 .map(StopStateResponse::from)
                 .toList(),
-            overview.vehicles().stream()
+            overview.vehicles()
+                .stream()
                 .map(VehicleResponse::from)
                 .toList()
         );

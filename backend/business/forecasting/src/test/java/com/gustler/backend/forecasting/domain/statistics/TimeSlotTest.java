@@ -13,7 +13,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class TimeSlotTest {
-
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final Clock CLOCK = Clock.fixed(Instant.EPOCH, SEOUL);
     private static final LocalDate ANY_DAY = LocalDate.of(2026, 8, 25);

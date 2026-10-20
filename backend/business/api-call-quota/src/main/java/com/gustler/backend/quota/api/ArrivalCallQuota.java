@@ -14,6 +14,8 @@ public interface ArrivalCallQuota {
     void exclude(Reservation reservation);
 
     record Reservation(String keyAlias, LocalDate koreanDate) {
-        public boolean covers(Instant now) { return koreanDate.equals(now.atZone(KOREA).toLocalDate()); }
+        public boolean covers(Instant now) {
+            return koreanDate.equals(now.atZone(KOREA).toLocalDate());
+        }
     }
 }

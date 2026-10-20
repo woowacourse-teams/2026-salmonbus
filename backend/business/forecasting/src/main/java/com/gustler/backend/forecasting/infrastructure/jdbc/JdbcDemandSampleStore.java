@@ -13,7 +13,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class JdbcDemandSampleStore implements DemandSampleStore {
-
     private static final String INSERT = """
         INSERT INTO stop_demand_pending_sample (
             route_version_id, prediction_observation_id, arrival_observation_id,
@@ -66,8 +65,12 @@ public class JdbcDemandSampleStore implements DemandSampleStore {
     }
 
     @Override
-    public DemandSamplePage lockPage(final long routeVersionId, final String vehicleId, final long afterInputId,
-        final long inputUntilId, final int limit) {
+    public DemandSamplePage lockPage(
+        final long routeVersionId, final String vehicleId,
+        final long afterInputId,
+        final long inputUntilId,
+        final int limit
+    ) {
         return new DemandSamplePage(jdbc.sql(LOCK_PAGE)
             .param("version", routeVersionId).param("vehicle", vehicleId)
             .param("afterInputId", afterInputId).param("inputUntilId", inputUntilId).param("limit", limit)

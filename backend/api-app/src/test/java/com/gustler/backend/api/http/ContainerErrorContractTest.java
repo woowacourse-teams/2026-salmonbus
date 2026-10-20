@@ -37,7 +37,6 @@ import org.springframework.context.annotation.Import;
 @Import(PostgresTestContainer.class)
 @ExtendWith(OutputCaptureExtension.class)
 class ContainerErrorContractTest {
-
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
 
     @LocalServerPort
@@ -149,7 +148,6 @@ class ContainerErrorContractTest {
         List<String> headers,
         String body
     ) {
-
         static Response read(
             Socket socket
         ) throws IOException {

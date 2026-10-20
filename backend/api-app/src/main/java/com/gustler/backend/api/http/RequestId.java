@@ -17,7 +17,6 @@ import org.springframework.web.context.request.RequestContextHolder;
  * ContainerErrorResponseValve} 가 만든다. 그래서 읽는 쪽은 <b>없을 수도 있다고 보고</b> 읽는다.
  */
 public final class RequestId {
-
     /** 응답에 실어 보내는 헤더 이름. 본문의 requestId 와 같은 값이다. */
     public static final String HEADER = "X-Request-ID";
 

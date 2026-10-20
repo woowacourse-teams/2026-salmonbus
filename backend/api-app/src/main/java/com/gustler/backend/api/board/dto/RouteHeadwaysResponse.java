@@ -15,7 +15,6 @@ public record RouteHeadwaysResponse(
         nullable = true)
     HeadwayRangeResponse holiday
 ) {
-
     static RouteHeadwaysResponse from(
         RouteHeadways headways
     ) {

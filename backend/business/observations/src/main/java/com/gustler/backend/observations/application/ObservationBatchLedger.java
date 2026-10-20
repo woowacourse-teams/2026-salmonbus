@@ -24,8 +24,12 @@ public class ObservationBatchLedger {
     private final ObservationLoader loader;
     private final List<ObservationDeliveryHook> deliveryHooks;
 
-    public ObservationBatchLedger(ApiCallQuota callQuota, CollectionBatchRepository batches,
-                                  ObservationLoader loader, List<ObservationDeliveryHook> deliveryHooks) {
+    public ObservationBatchLedger(
+        ApiCallQuota callQuota,
+        CollectionBatchRepository batches,
+        ObservationLoader loader,
+        List<ObservationDeliveryHook> deliveryHooks
+    ) {
         this.callQuota = callQuota;
         this.batches = batches;
         this.loader = loader;
@@ -44,8 +48,12 @@ public class ObservationBatchLedger {
 
     /** 한국 자정을 지났으면 새 날짜의 한도도 확보한 뒤 전송 사실을 별도로 커밋한다. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean markDispatching(final long batchId, OffsetDateTime reservedAt,
-                                   OffsetDateTime requestedAt, String keyAlias) {
+    public boolean markDispatching(
+        final long batchId,
+        OffsetDateTime reservedAt,
+        OffsetDateTime requestedAt,
+        String keyAlias
+    ) {
         if (!callQuota.ensureLocationReservation(keyAlias, reservedAt, requestedAt)) {
             abandon(batchId);
             return false;

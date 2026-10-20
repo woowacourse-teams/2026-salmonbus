@@ -90,8 +90,9 @@ class JdbcTripQualityStoreTest {
         final var fixture = existingInvestigation(phase, false);
 
         // when
-        final var pending = new JdbcTripQualityInvestigationRepository(jdbc).findPending(fixture.version(), VEHICLE)
-            .orElseThrow();
+        final var pending =
+            new JdbcTripQualityInvestigationRepository(jdbc).findPending(fixture.version(), VEHICLE)
+                .orElseThrow();
 
         // then
         assertThat(pending.phase()).isEqualTo(Phase.REPLAY);
@@ -100,7 +101,8 @@ class JdbcTripQualityStoreTest {
     private TripQualityInvestigationService service() {
         return new TripQualityInvestigationService(new JdbcTripQualityInvestigationRepository(jdbc),
             new JdbcTripQualityStore(jdbc), new JdbcRouteDataQualityAccess(jdbc),
-            new RouteDataQualityChanges(new JdbcRouteDataQualityRepository(jdbc), new JdbcDemandStatisticsRebuildRequestStore(jdbc)));
+            new RouteDataQualityChanges(new JdbcRouteDataQualityRepository(jdbc),
+                new JdbcDemandStatisticsRebuildRequestStore(jdbc)));
     }
 
     private Fixture existingInvestigation(String phase, final boolean completed) {
@@ -122,7 +124,9 @@ class JdbcTripQualityStoreTest {
         jdbc.sql("""
             INSERT INTO route_version_quality_policy(route_version_id,maximum_observation_gap_seconds,observation_gap_evidence)
             VALUES (?,60,'synthetic test')
-            """).param(version).update();
+            """)
+            .param(version)
+            .update();
         final var start = observation(version, 1, VEHICLE, 44);
         final var evidence = observation(version, 2, VEHICLE, 71);
         final var cursor = observation(version, 3, VEHICLE, 44);
@@ -140,7 +144,12 @@ class JdbcTripQualityStoreTest {
         return new Fixture(route, version);
     }
 
-    private StoredObservation observation(final long version, final int step, String vehicle, final int seats) {
+    private StoredObservation observation(
+        final long version,
+        final int step,
+        String vehicle,
+        final int seats
+    ) {
         final Instant at = START.plusSeconds(step * 10L);
         final long batch = jdbc.sql("""
             INSERT INTO observation_batch(route_version_id,scheduled_at,attempt_number,attempt_key,
@@ -161,7 +170,10 @@ class JdbcTripQualityStoreTest {
         jdbc.sql("""
             UPDATE route_version_quality_policy SET maximum_observation_gap_seconds=?,observation_gap_evidence='changed test policy'
             WHERE route_version_id=?
-            """).param(seconds).param(version).update();
+            """)
+            .param(seconds)
+            .param(version)
+            .update();
     }
 
     private InvestigationRow investigation(final long version) {
@@ -171,13 +183,13 @@ class JdbcTripQualityStoreTest {
                 include_cursor,can_release,started_at,investigated_at
             FROM trip_quality_rebuild WHERE route_version_id=? AND vehicle_id=?
             """).param(version).param(VEHICLE).query((row, index) -> new InvestigationRow(
-                row.getLong("last_batch_id"), row.getObject("last_batch_at", OffsetDateTime.class).toInstant(),
-                row.getObject("until_at", OffsetDateTime.class).toInstant(), row.getInt("maximum_gap_seconds"),
-                row.getBoolean("completed"), row.getString("phase"), row.getLong("evidence_observation_id"),
-                row.getLong("anchor_observation_id"), row.getObject("previous_observation_id", Long.class),
-                row.getObject("boundary_candidate_observation_id", Long.class), row.getBoolean("include_cursor"),
-                row.getBoolean("can_release"), row.getObject("started_at", OffsetDateTime.class).toInstant(),
-                row.getObject("investigated_at", OffsetDateTime.class).toInstant())).single();
+            row.getLong("last_batch_id"), row.getObject("last_batch_at", OffsetDateTime.class).toInstant(),
+            row.getObject("until_at", OffsetDateTime.class).toInstant(), row.getInt("maximum_gap_seconds"),
+            row.getBoolean("completed"), row.getString("phase"), row.getLong("evidence_observation_id"),
+            row.getLong("anchor_observation_id"), row.getObject("previous_observation_id", Long.class),
+            row.getObject("boundary_candidate_observation_id", Long.class), row.getBoolean("include_cursor"),
+            row.getBoolean("can_release"), row.getObject("started_at", OffsetDateTime.class).toInstant(),
+            row.getObject("investigated_at", OffsetDateTime.class).toInstant())).single();
     }
 
     private long qualityRevision(final long route) {
@@ -195,14 +207,20 @@ class JdbcTripQualityStoreTest {
             List.of(new QualityObservationBatch.Row(observation.observationId(), observation.vehicleId(), observation.seats())));
     }
 
-    private static OffsetDateTime offset(Instant at) { return at.atOffset(ZoneOffset.UTC); }
+    private static OffsetDateTime offset(Instant at) {
+        return at.atOffset(ZoneOffset.UTC);
+    }
 
-    private record Fixture(long route, long version) { }
+    private record Fixture(long route, long version) {
+    }
 
-    private record StoredObservation(long batchId, long observationId, Instant observedAt, String vehicleId, int seats) { }
+    private record StoredObservation(long batchId, long observationId, Instant observedAt, String vehicleId,
+        int seats) {
+    }
 
     private record InvestigationRow(long cursorBatchId, Instant cursorAt, Instant evidenceAt, int maximumGapSeconds,
         boolean completed, String phase, long evidenceObservationId, long anchorObservationId,
         Long previousObservationId, Long boundaryCandidateObservationId, boolean includeCursor, boolean canRelease,
-        Instant startedAt, Instant investigatedAt) { }
+        Instant startedAt, Instant investigatedAt) {
+    }
 }

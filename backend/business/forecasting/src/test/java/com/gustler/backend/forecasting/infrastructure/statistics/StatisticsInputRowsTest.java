@@ -15,7 +15,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 class StatisticsInputRowsTest {
-
     private static final Instant CUTOFF = Instant.parse("2026-10-09T00:00:00Z");
 
     @Test
@@ -226,7 +225,9 @@ class StatisticsInputRowsTest {
     }
 
     private StatisticsInputRow row(long sourceId, int target, int distance,
-        boolean boarding, boolean usable, Instant scoredAt) {
+        boolean boarding, boolean usable,
+        Instant scoredAt
+    ) {
         return new StatisticsInputRow(sourceId, target, distance, boarding, ScoringState.SETTLED,
             100L, 5, CUTOFF.minusSeconds(60), scoredAt, 1,
             observation(sourceId, usable), observation(100, true));

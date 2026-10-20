@@ -10,7 +10,6 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.type.AnnotatedTypeMetadata;
 
 public final class ChatEnabledCondition extends SpringBootCondition {
-
     static final String ENABLED = "chat.enabled";
     static final String MONGODB_URI = "chat.mongodb-uri";
 

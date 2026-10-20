@@ -1,7 +1,6 @@
 package com.gustler.backend.gbis.api;
 
 import com.gustler.backend.gbis.api.GbisClientOptions;
-
 import com.gustler.backend.gbis.api.GbisRawResponse.NotReceived;
 import com.gustler.backend.gbis.api.GbisRawResponse.PortalRejected;
 import com.gustler.backend.gbis.api.GbisRawResponse.Received;
@@ -28,7 +27,6 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Component
 public class GbisApiCaller {
-
     private static final String PORTAL_ERROR_ROOT = "OpenAPI_ServiceResponse";
     private static final Pattern REASON_CODE_IN_XML = Pattern.compile("<returnReasonCode>(.*?)</returnReasonCode>");
     private static final Pattern ERROR_CODE_IN_XML = Pattern.compile("<errMsg>(.*?)</errMsg>");
@@ -82,11 +80,21 @@ public class GbisApiCaller {
         return requestBy(path, "routeId", routeId, keyAlias);
     }
 
-    private GbisRawResponse getBy(String path, String parameter, String value, String keyAlias) {
+    private GbisRawResponse getBy(
+        String path,
+        String parameter,
+        String value,
+        String keyAlias
+    ) {
         return requestBy(path, parameter, value, keyAlias).response();
     }
 
-    private GbisHttpResult requestBy(String path, String parameter, String value, String keyAlias) {
+    private GbisHttpResult requestBy(
+        String path,
+        String parameter,
+        String value,
+        String keyAlias
+    ) {
         try {
             var response = gbisRestClient.get()
                 .uri(builder -> builder
@@ -106,7 +114,9 @@ public class GbisApiCaller {
             diagnostic("collectionTransport", e.getClass().getSimpleName());
             Throwable cause = e;
             var seen = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable, Boolean>());
-            while (cause.getCause() != null && seen.add(cause.getCause())) { cause = cause.getCause(); }
+            while (cause.getCause() != null && seen.add(cause.getCause())) {
+                cause = cause.getCause();
+            }
             diagnostic("collectionTransportCause", cause.getClass().getSimpleName());
             // 예외 메시지에는 인증키를 포함한 요청 URL이 들어갈 수 있다.
             return new GbisHttpResult(new NotReceived(e.getClass().getSimpleName()), 0, null);
@@ -114,7 +124,9 @@ public class GbisApiCaller {
     }
 
     private static void diagnostic(String key, String value) {
-        if (MDC.get("collectionAttemptId") != null) { MDC.put(key, value); }
+        if (MDC.get("collectionAttemptId") != null) {
+            MDC.put(key, value);
+        }
     }
 
     private String decode(

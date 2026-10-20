@@ -20,7 +20,6 @@ import org.springframework.core.env.SystemEnvironmentPropertySource;
 import org.springframework.core.io.ClassPathResource;
 
 class GbisPropertiesTest {
-
     private static final String BASE_URL = "https://gbis.test";
     private static final int DAILY_LIMIT = 10_000;
 
@@ -211,9 +210,9 @@ class GbisPropertiesTest {
         collectionConfigRunner()
             .withPropertyValues(
                 "collection.enabled=false",
-                "gbis.base-url=" + BASE_URL,
+                    "gbis.base-url=" + BASE_URL,
                 "gbis.service-key=",
-                "gbis.daily-limit=" + DAILY_LIMIT)
+                    "gbis.daily-limit=" + DAILY_LIMIT)
             .run(context -> assertThat(context).hasFailed());
     }
 
@@ -223,9 +222,9 @@ class GbisPropertiesTest {
         collectionConfigRunner()
             .withPropertyValues(
                 "collection.enabled=false",
-                "gbis.base-url=" + BASE_URL,
-                "gbis.service-key=" + PERCENT_KEY,
-                "gbis.daily-limit=" + DAILY_LIMIT)
+                    "gbis.base-url=" + BASE_URL,
+                    "gbis.service-key=" + PERCENT_KEY,
+                    "gbis.daily-limit=" + DAILY_LIMIT)
             .run(context -> assertThat(context.getBean(GbisProperties.class).serviceKey()).isEqualTo(ORIGINAL_KEY));
     }
 
@@ -578,14 +577,18 @@ class GbisPropertiesTest {
     private static List<String> aliasesOf(
         GbisProperties properties
     ) {
-        return properties.serviceKeys().stream().map(GbisKey::alias).toList();
+        return properties.serviceKeys()
+            .stream()
+            .map(GbisKey::alias)
+            .toList();
     }
 
     private static String serviceKeyOf(
         GbisProperties properties,
         String alias
     ) {
-        return properties.serviceKeys().stream()
+        return properties.serviceKeys()
+            .stream()
             .filter(key -> key.alias().equals(alias))
             .map(GbisKey::serviceKey)
             .findFirst()

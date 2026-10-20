@@ -23,8 +23,10 @@ import tools.jackson.databind.ObjectMapper;
 class V2ApiDocsContractTest {
     private static final String ARRIVALS = "/api/v2/stations/{stationId}/arrivals";
     private static final String GEOMETRY = "/api/v2/routes/{routeId}/geometry";
-    @Autowired private WebApplicationContext context;
-    @Autowired private ObjectMapper json;
+    @Autowired
+    private WebApplicationContext context;
+    @Autowired
+    private ObjectMapper json;
     private JsonNode document;
 
     @BeforeEach
@@ -59,14 +61,17 @@ class V2ApiDocsContractTest {
             }
             for (String code : List.of("200", "400", "404", "409", "503", "405", "500")) {
                 var response = generated.path("responses").path(code);
-                assertThat(response.at("/content/application~1json/schema").isMissingNode()).as(entry[0] + " " + code).isFalse();
+                assertThat(response.at("/content/application~1json/schema")
+                    .isMissingNode()).as(entry[0] + " " + code)
+                    .isFalse();
             }
         }
         assertThat(operation(GEOMETRY).at("/responses/304/content").isMissingNode()).isTrue();
         assertThat(operation(GEOMETRY).at("/responses/200/headers/ETag").isMissingNode()).isFalse();
         assertThat(operation(ARRIVALS).at("/responses/200/headers/Cache-Control").isMissingNode()).isFalse();
         Files.createDirectories(Path.of("build/reports"));
-        Files.writeString(Path.of("build/reports/v2-generated-openapi.json"), json.writerWithDefaultPrettyPrinter().writeValueAsString(document));
+        Files.writeString(Path.of("build/reports/v2-generated-openapi.json"), json.writerWithDefaultPrettyPrinter()
+            .writeValueAsString(document));
     }
 
     @Test
@@ -81,14 +86,17 @@ class V2ApiDocsContractTest {
         assertThat(schemas.at("/ArrivalSeat/required").toString()).contains("kind", "remaining", "reason");
         assertThat(schemas.at("/ArrivalSeat/properties/remaining/minimum").intValue()).isZero();
         assertThat(schemas.at("/ArrivalVehicle/properties").has("ratio")).isFalse();
-        assertThat(schemas.at("/ArrivalSnapshot/properties/sourceObservedAt/description").asString()).contains("알 수 없어", "null");
-        assertThat(schemas.at("/ArrivalTargetVisit/properties/direction/enum").toString()).contains("UP", "DOWN", "null");
+        assertThat(schemas.at("/ArrivalSnapshot/properties/sourceObservedAt/description")
+            .asString()).contains("알 수 없어", "null");
+        assertThat(schemas.at("/ArrivalTargetVisit/properties/direction/enum")
+            .toString()).contains("UP", "DOWN", "null");
     }
 
     @Test
     void geometry의_양방향과_명시적_null_필드를_필수항목으로_문서화한다() {
         var schemas = document.at("/components/schemas");
-        assertThat(schemas.at("/RouteGeometryResponse/required").toString()).contains("paths", "turningPoint", "boundary");
+        assertThat(schemas.at("/RouteGeometryResponse/required")
+            .toString()).contains("paths", "turningPoint", "boundary");
         assertThat(schemas.at("/RouteGeometryPaths/required").toString()).contains("UP", "DOWN");
         assertThat(schemas.at("/RouteGeometryPaths/properties").size()).isEqualTo(2);
         assertThat(schemas.at("/RouteGeometryPaths/additionalProperties").booleanValue()).isFalse();
@@ -104,12 +112,17 @@ class V2ApiDocsContractTest {
             var property = schemas.path(field[0]).path("properties").path(field[1]);
             assertThat(property.has("$ref")).as(field[1]).isFalse();
             assertThat(property.has("type")).as(field[1]).isFalse();
-            assertThat(property.path("anyOf").get(0).path("$ref").asString()).isEqualTo("#/components/schemas/" + field[2]);
+            assertThat(property.path("anyOf")
+                .get(0)
+                .path("$ref")
+                .asString()).isEqualTo("#/components/schemas/" + field[2]);
             assertThat(property.path("anyOf").get(1).path("type").asString()).isEqualTo("null");
             assertThat(schemas.path(field[2]).path("type").asString()).isEqualTo("object");
         }
         assertThat(schemas.at("/ArrivalEta/properties/remainingSeconds/type").toString()).contains("integer", "null");
     }
 
-    private JsonNode operation(String path) { return document.path("paths").path(path).path("get"); }
+    private JsonNode operation(String path) {
+        return document.path("paths").path(path).path("get");
+    }
 }

@@ -22,7 +22,6 @@ import tools.jackson.databind.ObjectMapper;
 
 @Component
 public class GbisLocationSource {
-
     private static final String BUS_LOCATION_PATH = "/buslocationservice/v2/getBusLocationListv2";
 
     private static final String PARSE_FAILURE = "Open API 응답을 파싱하지 못했다: ";
@@ -63,7 +62,7 @@ public class GbisLocationSource {
             case DAILY_QUOTA_EXCEEDED -> new DailyQuotaExceeded();
             case PER_SECOND_QUOTA_EXCEEDED -> new PerSecondQuotaExceeded();
             case UNREGISTERED_KEY, EXPIRED_KEY, OTHER ->
-                new GatewayRejected(rejected.reasonCode(), rejected.errorCode(), rejected.message());
+            new GatewayRejected(rejected.reasonCode(), rejected.errorCode(), rejected.message());
         };
     }
 

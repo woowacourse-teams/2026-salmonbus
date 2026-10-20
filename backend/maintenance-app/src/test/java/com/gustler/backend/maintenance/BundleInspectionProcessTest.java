@@ -14,7 +14,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 /** DB 컨테이너 없이 실제 정비 JAR의 검수 진입점을 검증한다. */
 class BundleInspectionProcessTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
     private int sequence;
 
     @Test
@@ -72,5 +73,6 @@ class BundleInspectionProcessTest {
         }
     }
 
-    private record Result(int exitCode, String stdout, String stderr) { }
+    private record Result(int exitCode, String stdout, String stderr) {
+    }
 }

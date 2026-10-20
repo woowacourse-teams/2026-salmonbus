@@ -19,14 +19,18 @@ final class ReverseBoundarySearch {
     }
 
     void inspect(Observation older) {
-        if (boundaryConfirmed || older == null) { return; }
+        if (boundaryConfirmed || older == null) {
+            return;
+        }
         if (!Objects.equals(older.vehicleId(), anchor.vehicleId()) || older.at().isAfter(anchor.at())
             || Duration.between(older.at(), anchor.at()).compareTo(route.maximumGap()) > 0) {
             boundaryConfirmed = true;
             return;
         }
         if (isTerminal(older) && older.stopOrder() == anchor.stopOrder()) {
-            if (OneWayTripClassifier.isDeparture(route, older)) { candidate = older; }
+            if (OneWayTripClassifier.isDeparture(route, older)) {
+                candidate = older;
+            }
             anchor = older;
             return;
         }
@@ -51,13 +55,25 @@ final class ReverseBoundarySearch {
             return;
         }
         anchor = older;
-        if (OneWayTripClassifier.isDeparture(route, older)) { candidate = older; }
+        if (OneWayTripClassifier.isDeparture(route, older)) {
+            candidate = older;
+        }
     }
 
-    Observation anchor() { return anchor; }
-    Observation candidate() { return candidate; }
-    Observation replayStart() { return candidate == null ? anchor : candidate; }
-    boolean boundaryConfirmed() { return boundaryConfirmed; }
+    Observation anchor() {
+        return anchor;
+    }
+
+    Observation candidate() {
+        return candidate;
+    }
+
+    Observation replayStart() { return candidate == null ? anchor : candidate;
+    }
+
+    boolean boundaryConfirmed() {
+        return boundaryConfirmed;
+    }
 
     private boolean isTerminal(Observation observation) {
         return observation.stopOrder() == route.firstStop()

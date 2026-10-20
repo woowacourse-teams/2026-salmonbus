@@ -23,7 +23,6 @@ import tools.jackson.databind.ObjectMapper;
 @IntegrationTest
 @ActiveProfiles("api-docs-local")
 class PublicApiDocsContractTest {
-
     @Autowired
     private WebApplicationContext applicationContext;
 
@@ -83,8 +82,9 @@ class PublicApiDocsContractTest {
             .path("responses").path("200").path("content");
         assertThat(successContent.toString()).contains("application/json").doesNotContain("*/*");
         for (String route : List.of("/api/v1/routes", "/api/v1/routes/{routeId}/board",
-            "/api/v1/routes/{routeId}/vehicles", "/api/v1/routes/{routeId}/watch", "/api/v2/stations/{stationId}/arrivals",
-            "/api/v2/routes/{routeId}/geometry")) {
+            "/api/v1/routes/{routeId}/vehicles", "/api/v1/routes/{routeId}/watch",
+            "/api/v2/stations/{stationId}/arrivals",
+        "/api/v2/routes/{routeId}/geometry")) {
             JsonNode responses = paths.path(route).path("get").path("responses");
             for (String statusCode : List.of("200", "503", "405", "500")) {
                 JsonNode content = responses.path(statusCode).path("content").path("application/json");

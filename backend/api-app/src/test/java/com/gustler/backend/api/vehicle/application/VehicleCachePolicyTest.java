@@ -8,7 +8,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class VehicleCachePolicyTest {
-
     private final VehicleCachePolicy policy = new VehicleCachePolicy();
 
     @ParameterizedTest

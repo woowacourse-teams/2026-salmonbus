@@ -1,15 +1,12 @@
 package com.gustler.backend.forecasting.domain.evaluation;
-
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
 
 import static org.assertj.core.api.Assertions.assertThat;
-
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ArrivalLabelResolverTest {
-
     private static final Instant FORECAST_AT = Instant.parse("2026-08-25T08:30:00Z");
     /** 혼잡도를 안 준 관측. 라벨 회수는 혼잡도를 안 본다. */
     private static final Integer CROWD_LEVEL_UNKNOWN = null;

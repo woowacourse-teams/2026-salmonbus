@@ -2,7 +2,6 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,7 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class WorkerQualitySnapshotTest {
-    @Autowired JdbcClient jdbc;
+    @Autowired
+    JdbcClient jdbc;
     private JdbcWorkerQualitySnapshotQuery query;
     private long route;
     private long version;

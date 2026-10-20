@@ -11,7 +11,6 @@ public record ObservedVehicle(
     VehiclePhase phase,
     VehicleSeat seat
 ) {
-
     public ObservedVehicle {
         Objects.requireNonNull(direction, "direction은 null일 수 없습니다.");
         if (currentStopSequence < 1) {

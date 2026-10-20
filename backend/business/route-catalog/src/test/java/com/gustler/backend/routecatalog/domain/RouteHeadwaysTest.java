@@ -7,7 +7,6 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class RouteHeadwaysTest {
-
     private static final RouteHeadways STORED = new RouteHeadways(
         new HeadwayRange(10, 20), new HeadwayRange(12, 25), new HeadwayRange(15, 30), new HeadwayRange(16, 35));
 

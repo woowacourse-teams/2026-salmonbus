@@ -3,7 +3,6 @@ package com.gustler.backend.forecasting.domain.statistics;
 import java.util.Objects;
 
 public record RebuildScope(String vehicleId) {
-
     private static final String WHOLE_ROUTE = "";
 
     public RebuildScope {

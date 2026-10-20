@@ -4,7 +4,6 @@ import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
 import java.util.List;
 
 public sealed interface GbisLocationResult {
-
     record Success(
         String gbisQueryTime,
         List<BusLocation> buses

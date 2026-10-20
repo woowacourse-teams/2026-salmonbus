@@ -161,9 +161,9 @@ class JdbcStopDemandStatisticsRepositoryTest {
             jdbcClient, sourceId, TARGET_STOP_ORDER, -1L, FIRST_ARRIVED_AT))
             .isInstanceOf(AssertionError.class);
         assertThat(jdbcClient.sql("SELECT count(*) FROM forecast_evaluation_pending WHERE vehicle_observation_id=?")
-            .param(sourceId).query(Long.class).single()).isEqualTo(1L);
+                .param(sourceId).query(Long.class).single()).isEqualTo(1L);
         assertThat(jdbcClient.sql("SELECT count(*) FROM forecast_evaluation_result WHERE vehicle_observation_id=?")
-            .param(sourceId).query(Long.class).single()).isZero();
+                .param(sourceId).query(Long.class).single()).isZero();
     }
 
     @Test
@@ -176,7 +176,8 @@ class JdbcStopDemandStatisticsRepositoryTest {
 
         // when
         StopDemandStatistics actual =
-            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION, READ_AS_OF);
+            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION,
+                READ_AS_OF);
 
         // then
         assertThat(actual.cells())
@@ -188,7 +189,8 @@ class JdbcStopDemandStatisticsRepositoryTest {
     void 세대가_없는_노선_판본은_빈_셀_목록으로_답한다() {
         // when
         StopDemandStatistics actual =
-            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION, READ_AS_OF);
+            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION,
+                READ_AS_OF);
 
         // then
         assertThat(actual).isEqualTo(
@@ -213,7 +215,8 @@ class JdbcStopDemandStatisticsRepositoryTest {
 
         // when
         StopDemandStatistics actual =
-            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION, READ_AS_OF);
+            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION,
+                READ_AS_OF);
 
         // then
         assertThat(actual.cells()).isEmpty();
@@ -227,7 +230,8 @@ class JdbcStopDemandStatisticsRepositoryTest {
 
         // when
         StopDemandStatistics actual =
-            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.EVENING, CALCULATION_VERSION, READ_AS_OF);
+            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.EVENING, CALCULATION_VERSION,
+                READ_AS_OF);
 
         // then
         assertThat(actual.cells()).isEmpty();
@@ -241,7 +245,8 @@ class JdbcStopDemandStatisticsRepositoryTest {
 
         // when
         StopDemandStatistics actual =
-            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.EVENING, CALCULATION_VERSION, READ_AS_OF);
+            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.EVENING, CALCULATION_VERSION,
+                READ_AS_OF);
 
         // then 세대가 아예 없는 것(0)과 구별돼야 예보 행에 무엇을 보고 냈는지가 남는다
         assertThat(actual.revision()).isEqualTo(FIRST_REVISION);
@@ -267,7 +272,8 @@ class JdbcStopDemandStatisticsRepositoryTest {
         jdbcStopDemandStatisticsRepository.append(generationOf(FIRST_REVISION, CALCULATION_VERSION, List.of(
             measurementOf(TimeSlot.MORNING, TARGET_STOP_ORDER))));
         jdbcStopDemandStatisticsRepository.append(new DemandStatisticsVersion(
-            routeVersionId, CALCULATION_VERSION, FIRST_REVISION + 1, READ_AS_OF.plusSeconds(3600), READ_AS_OF.plusSeconds(3603),
+            routeVersionId, CALCULATION_VERSION, FIRST_REVISION + 1, READ_AS_OF.plusSeconds(3600),
+            READ_AS_OF.plusSeconds(3603),
             List.of(measurementOf(TimeSlot.MORNING, TARGET_STOP_ORDER))));
 
         // when
@@ -453,7 +459,8 @@ class JdbcStopDemandStatisticsRepositoryTest {
 
         // then
         StopDemandStatistics actual =
-            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION, READ_AS_OF);
+            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION,
+                READ_AS_OF);
         assertThat(actual.cells())
             .extracting(StopDemandCell::stopOrder)
             .containsExactly(LOWEST_CELL_STOP_ORDER);
@@ -479,7 +486,8 @@ class JdbcStopDemandStatisticsRepositoryTest {
         changeEligibility();
 
         // when
-        var totals = jdbcStopDemandStatisticsRepository.readHourlyTotals(routeVersionId, DATA_UNTIL);
+        var totals =
+            jdbcStopDemandStatisticsRepository.readHourlyTotals(routeVersionId, DATA_UNTIL);
         var actual = jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING,
             CALCULATION_VERSION, READ_AS_OF);
 
@@ -638,13 +646,13 @@ class JdbcStopDemandStatisticsRepositoryTest {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
-            .params(
-                observationBatchId, routeVersionId, SOURCE_ROW_NUMBER,
-                vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
-                RUNNING_STATE_DEPARTED, remainingSeats
-            )
-            .query(Long.class)
-            .single());
+                    .params(
+                        observationBatchId, routeVersionId, SOURCE_ROW_NUMBER,
+                        vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
+                        RUNNING_STATE_DEPARTED, remainingSeats
+                    )
+                    .query(Long.class)
+                    .single());
     }
 
     private long insertObservationBatch(

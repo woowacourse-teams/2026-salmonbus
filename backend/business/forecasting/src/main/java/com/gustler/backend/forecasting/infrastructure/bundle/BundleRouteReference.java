@@ -18,16 +18,19 @@ final class BundleRouteReference {
     private static final JsonMapper JSON = JsonMapper.builder()
         .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION).build();
 
-    private BundleRouteReference() { }
+    private BundleRouteReference() {
+    }
 
     static ForecastRouteReference read(byte[] bytes, BundleManifest manifest) {
         BundleCheck.ROUTE_REFERENCE.require(Sha256.of(bytes).equals(manifest.routeReferenceDigest()), "정류장 파일 지문 불일치");
         try {
             JsonNode root = JSON.readTree(BundleManifestReader.textOf(bytes));
             fields(root, Set.of("version", "routes"));
-            BundleCheck.ROUTE_REFERENCE.require(text(root, "version").equals(manifest.routeReferenceVersion()), "정류장 기준 버전 불일치");
+            BundleCheck.ROUTE_REFERENCE.require(text(root, "version").equals(manifest.routeReferenceVersion()),
+            "정류장 기준 버전 불일치");
             JsonNode routes = root.get("routes");
-            BundleCheck.ROUTE_REFERENCE.require(routes.isArray() && routes.size() == manifest.routes().size(), "노선 수 불일치");
+            BundleCheck.ROUTE_REFERENCE.require(routes.isArray() && routes.size() == manifest.routes()
+                .size(), "노선 수 불일치");
             Map<String, java.util.List<ForecastRouteReference.Stop>> result = new LinkedHashMap<>();
             for (int index = 0; index < routes.size(); index++) {
                 JsonNode route = routes.get(index);
@@ -36,7 +39,8 @@ final class BundleRouteReference {
                 BundleCheck.ROUTE_REFERENCE.require(modelRoute.equals(manifest.routes().get(index))
                     && ModelRoute.of(text(route, "sourceRouteId")).equals(modelRoute), "노선 순서 또는 ID 불일치");
                 JsonNode stops = route.get("stops");
-                BundleCheck.ROUTE_REFERENCE.require(stops.isArray() && !stops.isEmpty() && stops.size() <= 2000, "정류장 목록 오류");
+                BundleCheck.ROUTE_REFERENCE.require(stops.isArray() && !stops.isEmpty() && stops.size() <= 2000,
+                "정류장 목록 오류");
                 java.util.List<ForecastRouteReference.Stop> parsed = new ArrayList<>();
                 for (JsonNode stop : stops) {
                     fields(stop, Set.of("order", "id", "boardingAllowed", "direction"));

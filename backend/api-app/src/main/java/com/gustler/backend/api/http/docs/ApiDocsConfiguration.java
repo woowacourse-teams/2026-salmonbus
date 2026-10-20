@@ -16,7 +16,6 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "springdoc.api-docs.enabled", havingValue = "true")
 public class ApiDocsConfiguration {
-
     @Bean
     OpenApiCustomizer nullableSchemas() {
         return document -> {

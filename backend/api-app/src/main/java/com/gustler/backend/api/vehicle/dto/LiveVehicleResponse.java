@@ -16,7 +16,6 @@ public record LiveVehicleResponse(
     @Schema(description = "응답에 포함된 차량 목록. 관측이 없거나 불확실하면 빈 배열")
     List<VehicleResponse> vehicles
 ) {
-
     public LiveVehicleResponse {
         Objects.requireNonNull(routeId, "routeId는 null일 수 없습니다.");
         Objects.requireNonNull(referenceVersionId, "referenceVersionId는 null일 수 없습니다.");
@@ -30,7 +29,8 @@ public record LiveVehicleResponse(
             overview.routeId(),
             overview.referenceVersionId(),
             ObservationResponse.from(overview),
-            overview.vehicles().stream()
+            overview.vehicles()
+                .stream()
                 .map(VehicleResponse::from)
                 .toList()
         );

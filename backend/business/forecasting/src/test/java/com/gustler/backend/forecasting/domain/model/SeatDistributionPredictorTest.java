@@ -11,7 +11,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class SeatDistributionPredictorTest {
-
     private static final double TOLERANCE = 1e-12;
     private static final String ROUTE = "3330";
     private static final int FOUR_STOPS_AHEAD = 4;
@@ -40,7 +39,11 @@ class SeatDistributionPredictorTest {
         SeatForecastResult actual = predictor().predict(input(20, 44, null));
 
         // then
-        assertThat(actual.distribution().chanceBySeats().stream().mapToDouble(Double::doubleValue).sum())
+        assertThat(actual.distribution()
+            .chanceBySeats()
+            .stream()
+            .mapToDouble(Double::doubleValue)
+            .sum())
             .isEqualTo(1.0, within(TOLERANCE));
     }
 
@@ -101,7 +104,11 @@ class SeatDistributionPredictorTest {
         SeatForecastResult actual = predictor().predict(input(Math.min(20, capacity), capacity, null));
 
         // then
-        assertThat(actual.distribution().chanceBySeats().stream().mapToDouble(Double::doubleValue).sum())
+        assertThat(actual.distribution()
+                .chanceBySeats()
+                .stream()
+                .mapToDouble(Double::doubleValue)
+                .sum())
             .isEqualTo(1.0, within(TOLERANCE));
     }
 
@@ -132,7 +139,11 @@ class SeatDistributionPredictorTest {
         SeatForecastResult actual = predictor().predict(input(30, 20, null));
 
         // then
-        assertThat(actual.distribution().chanceBySeats().stream().mapToDouble(Double::doubleValue).sum())
+        assertThat(actual.distribution()
+                .chanceBySeats()
+                .stream()
+                .mapToDouble(Double::doubleValue)
+                .sum())
             .isEqualTo(1.0, within(TOLERANCE));
     }
 

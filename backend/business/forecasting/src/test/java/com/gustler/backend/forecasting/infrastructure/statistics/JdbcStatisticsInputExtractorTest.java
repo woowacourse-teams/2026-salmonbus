@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
-import static org.mockito.ArgumentMatchers.contains;
 
+import static org.mockito.ArgumentMatchers.contains;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -29,12 +29,15 @@ import org.springframework.transaction.support.TransactionTemplate;
 @TestPropertySource(properties = "sal175.extractor-test=true")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class JdbcStatisticsInputExtractorTest {
-    @Autowired JdbcClient jdbc;
-    @Autowired PlatformTransactionManager transactions;
+    @Autowired
+    JdbcClient jdbc;
+    @Autowired
+    PlatformTransactionManager transactions;
     private JdbcStatisticsInputExtractor extractor;
     private long route;
     private long source;
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
     private static final Instant UNTIL = Instant.parse("2026-10-09T00:00:00Z");
     private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
 
@@ -85,7 +88,12 @@ class JdbcStatisticsInputExtractorTest {
               expected_seats,generated_at,quality_revision,publication_id)
             SELECT :source,target,:route,target-8,:model,1,0.5,0.5,10,'2026-10-08T23:00:00Z',1,:publication
             FROM generate_series(9,10) target
-            """).param("source", source).param("route", route).param("model", model).param("publication", publication).update();
+            """)
+            .param("source", source)
+            .param("route", route)
+            .param("model", model)
+            .param("publication", publication)
+            .update();
         jdbc.sql("""
             INSERT INTO forecast_evaluation_result(vehicle_observation_id,target_stop_order,route_version_id,
               scoring_state,scored_at)
@@ -106,14 +114,18 @@ class JdbcStatisticsInputExtractorTest {
         assertThat(result.scope().rowCount()).isEqualTo(2);
         assertThat(result.scope().qualityRevision()).isEqualTo(1);
         assertThat(result.rows()).extracting(StatisticsInputRow::targetStopOrder).containsExactly(9, 10);
-        assertThat(jdbc.sql("SELECT count(*) FROM forecast_evaluation_result").query(Long.class).single()).isEqualTo(before);
+        assertThat(jdbc.sql("SELECT count(*) FROM forecast_evaluation_result")
+            .query(Long.class)
+            .single()).isEqualTo(before);
     }
 
     @Test
     void 기준_시각_이후에_완료된_자료는_이번_묶음에서_제외한다() {
         // given
-        jdbc.sql("UPDATE forecast_evaluation_result SET scored_at='2026-10-10T00:00:00Z' WHERE vehicle_observation_id=? AND target_stop_order=10")
-            .param(source).update();
+        jdbc.sql(
+        "UPDATE forecast_evaluation_result SET scored_at='2026-10-10T00:00:00Z' WHERE vehicle_observation_id=? AND target_stop_order=10")
+            .param(source)
+            .update();
 
         // when
         var result = extractor.extract(route, source - 1, source, UNTIL, ZONE, 10);
@@ -128,7 +140,8 @@ class JdbcStatisticsInputExtractorTest {
         int rowLimit = 1;
 
         // when & then
-        assertThatThrownBy(() -> extractor.extract(route, source - 1, source, UNTIL, ZONE, rowLimit))
+        assertThatThrownBy(
+            () -> extractor.extract(route, source - 1, source, UNTIL, ZONE, rowLimit))
             .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("한도");
     }
 
@@ -138,7 +151,8 @@ class JdbcStatisticsInputExtractorTest {
         long outsideAllowedRange = 10001;
 
         // when & then
-        assertThatThrownBy(() -> extractor.extract(route, 0, outsideAllowedRange, UNTIL, ZONE, 10))
+        assertThatThrownBy(
+            () -> extractor.extract(route, 0, outsideAllowedRange, UNTIL, ZONE, 10))
             .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("범위");
     }
 
@@ -185,8 +199,10 @@ class JdbcStatisticsInputExtractorTest {
         UUID exportId = UUID.randomUUID();
         new StatisticsExtractUploader(storage).upload(bundle, exportId);
         var received = new StatisticsExtractDownloader(storage).download(directory, exportId, bundle.manifest());
-        var result = StatisticsFileCalculator.calculate(received.directory(), received.manifest().files(),
-            extracted.scope(), Map.of("bus", 20), 100, 4096);
+        var result =
+            StatisticsFileCalculator.calculate(received.directory(), received.manifest()
+                .files(),
+                extracted.scope(), Map.of("bus", 20), 100, 4096);
 
         // then
         assertThat(result).hasSize(1);

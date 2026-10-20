@@ -25,7 +25,6 @@ import java.util.Map;
  * 차량마다 나눠서 평균 내면 안 된다.
  */
 public final class StopDemandAggregator {
-
     private StopDemandAggregator() {
     }
 

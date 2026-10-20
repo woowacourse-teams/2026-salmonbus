@@ -13,7 +13,6 @@ import org.springframework.stereotype.Component;
 /** Worker 기동 후 설정된 모델의 적재를 요청한다. */
 @Component
 public class BundleStartupLoader {
-
     private static final Logger log = LoggerFactory.getLogger(BundleStartupLoader.class);
 
     private final ModelBundleProperties properties;
@@ -39,10 +38,10 @@ public class BundleStartupLoader {
                 log.info("도는 배포의 계수를 다시 올렸다: {}", reloaded.releaseId());
             case ModelLoadResult.IdentityMismatch mismatch ->
                 log.warn("도는 배포와 계수 파일의 신원이 다르다. model.bundle.promote-on-start 가 꺼져 있어 "
-                    + "안 올린다. 도는 배포 {}, 파일 {}", mismatch.activeReleaseId(), mismatch.fileReleaseId());
+                + "안 올린다. 도는 배포 {}, 파일 {}", mismatch.activeReleaseId(), mismatch.fileReleaseId());
             case ModelLoadResult.Promoted promoted ->
                 log.warn("사람이 켜 둔 스위치로 계수를 갈아 끼운다. {} 에서 {} 로, 배포 {}",
-                    promoted.activeReleaseId(), promoted.fileReleaseId(), promoted.deploymentId());
+                promoted.activeReleaseId(), promoted.fileReleaseId(), promoted.deploymentId());
         }
     }
 }

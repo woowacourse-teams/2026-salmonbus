@@ -50,7 +50,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
  */
 @ObservationIntegrationTest
 class ObservationCollectorTest {
-
     private static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
     /** 한국 시각 2026-08-28 11:14:04. 낮이라 20초 간격이다. */
     private static final Instant TICK = Instant.parse("2026-08-28T02:14:04Z");
@@ -404,7 +403,8 @@ class ObservationCollectorTest {
         collector.collectOnce(ROUTE_3330);
 
         // then
-        assertThat(warningMessages()).anyMatch(message -> message.contains("operation=collection_quota") && message.contains("reason=DAILY_LIMIT"));
+        assertThat(warningMessages()).anyMatch(message -> message.contains("operation=collection_quota")
+            && message.contains("reason=DAILY_LIMIT"));
     }
 
     @Test

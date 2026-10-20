@@ -10,7 +10,6 @@ import org.springframework.core.env.MapPropertySource;
 
 /** 문서 제공 범위를 명시적인 local/dev 프로필로 제한한다. */
 public final class ApiDocsEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
-
     @Override
     public int getOrder() {
         return Ordered.LOWEST_PRECEDENCE;

@@ -15,7 +15,6 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration
 public class ContainerErrorResponseConfig {
-
     @Bean
     public WebServerFactoryCustomizer<TomcatServletWebServerFactory> containerErrorResponse() {
         return factory -> factory.addContextCustomizers(context -> {

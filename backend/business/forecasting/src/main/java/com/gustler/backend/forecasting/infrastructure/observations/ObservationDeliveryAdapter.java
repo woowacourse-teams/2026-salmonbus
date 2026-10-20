@@ -59,7 +59,8 @@ public class ObservationDeliveryAdapter implements ObservationDeliveryHook {
             remembered = qualityMemory.read(batch.routeVersionId());
         } catch (RuntimeException failure) {
             // 캐시 조회 예외는 다시 던지지 않는다. DB 자체 오류의 롤백 여부는 수집 트랜잭션이 결정한다.
-            log.warn("event=observation_cache_publish_skipped reason=QUALITY_READ_FAILED batchId={} exceptionType={}",
+            log.warn(
+                "event=observation_cache_publish_skipped reason=QUALITY_READ_FAILED batchId={} exceptionType={}",
                 batch.batchId(), failure.getClass().getSimpleName());
             return;
         }

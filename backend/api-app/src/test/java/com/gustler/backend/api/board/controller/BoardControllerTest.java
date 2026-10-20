@@ -1,6 +1,7 @@
 package com.gustler.backend.api.board.controller;
 
 import static org.mockito.BDDMockito.given;
+
 import static org.hamcrest.Matchers.aMapWithSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -35,7 +36,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class BoardControllerTest {
-
     private BoardQueryService boardQueryService;
     private MockMvc mockMvc;
 

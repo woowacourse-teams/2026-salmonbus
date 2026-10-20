@@ -2,7 +2,6 @@ package com.gustler.backend.forecasting.application.evaluation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import java.time.Instant;
 import java.util.List;
@@ -63,7 +62,9 @@ class PendingEvaluationBufferTest {
     void 보관_한도를_넘는_대기는_메모리에_넣지_않고_기존_대기는_유지한다() {
         // given
         var buffer = new PendingEvaluationBuffer(12);
-        var full = IntStream.rangeClosed(1, 12).mapToObj(target -> forecast(1, target)).toList();
+        var full = IntStream.rangeClosed(1, 12)
+            .mapToObj(target -> forecast(1, target))
+            .toList();
         buffer.restore(1, full);
 
         // when

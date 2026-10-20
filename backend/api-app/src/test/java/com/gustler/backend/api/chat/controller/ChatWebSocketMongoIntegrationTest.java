@@ -35,7 +35,6 @@ import tools.jackson.databind.JsonNode;
 @Import({PostgresTestContainer.class, ChatTestRoutesConfiguration.class})
 @DirtiesContext
 class ChatWebSocketMongoIntegrationTest {
-
     private static final String ROOM = "204000057";
     private static final Duration WAIT = Duration.ofSeconds(5);
 
@@ -97,7 +96,9 @@ class ChatWebSocketMongoIntegrationTest {
             .containsExactly("session.ready", "history.batch", "history.batch", "history.end");
         assertSameShape(senderStart.getFirst(), "session.ready");
         assertThat(historyBodies(senderStart)).containsExactlyElementsOf(
-            IntStream.range(0, 12).mapToObj(index -> "이력 " + index).toList()
+            IntStream.range(0, 12)
+                .mapToObj(index -> "이력 " + index)
+                .toList()
         );
         assertThat(ChatContractExamples.parse(senderStart.get(1)).get("messages")).hasSize(10);
         assertThat(ChatContractExamples.parse(senderStart.get(1)).get("messages").get(0).get("createdAt").stringValue())

@@ -21,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class JdbcStopDemandStatisticsRepositorySeedTest {
-
     private static final String NORMALIZATION_VERSION = "normalization-v1.0.0";
     private static final String COLLECTION_STRATEGY_VERSION = "adaptive-kst-v1.0.1";
     private static final String OUTCOME_SUCCESS_ROWS = "SUCCESS_ROWS";
@@ -287,12 +286,12 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
-            .params(
-                observationBatchId, routeVersionId, SOURCE_ROW_NUMBER,
-                vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
-                RUNNING_STATE_DEPARTED, remainingSeats)
-            .query(Long.class)
-            .single());
+                .params(
+                    observationBatchId, routeVersionId, SOURCE_ROW_NUMBER,
+                    vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
+                    RUNNING_STATE_DEPARTED, remainingSeats)
+                .query(Long.class)
+                .single());
     }
 
     private long insertObservationBatch(

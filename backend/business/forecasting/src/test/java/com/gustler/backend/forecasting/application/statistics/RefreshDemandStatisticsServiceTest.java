@@ -12,7 +12,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -28,7 +27,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class RefreshDemandStatisticsServiceTest {
-
     private static final long ROUTE_VERSION_3330 = 1L;
     private static final Instant COMPUTED_AT = Instant.parse("2026-08-25T00:00:00Z");
     private static final int STOP_ORDER = 44;
@@ -48,7 +46,8 @@ class RefreshDemandStatisticsServiceTest {
     void 집계_배치를_멈춘_시계로_세운다() {
         job = new RefreshDemandStatisticsService(
             routeVersions,
-            new StopDemandStatisticsWriter(stopDemandStatisticsRepository, Clock.fixed(COMPUTED_AT, ZoneId.of("Asia/Seoul"))),
+            new StopDemandStatisticsWriter(stopDemandStatisticsRepository,
+                Clock.fixed(COMPUTED_AT, ZoneId.of("Asia/Seoul"))),
             Clock.fixed(COMPUTED_AT, ZoneId.of("Asia/Seoul")));
         when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
     }

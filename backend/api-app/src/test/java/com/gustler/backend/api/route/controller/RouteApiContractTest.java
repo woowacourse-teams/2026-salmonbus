@@ -22,7 +22,6 @@ import org.springframework.web.context.WebApplicationContext;
 @IntegrationTest
 @Transactional
 class RouteApiContractTest {
-
     private static final OffsetDateTime FIRST_VERSION_AT = OffsetDateTime.parse(
         "2026-08-01T00:00:00+09:00"
     );
@@ -304,10 +303,10 @@ class RouteApiContractTest {
                 "route-contract-test",
                 "seat-forecast",
                 "test-v1",
-                "3".repeat(64),
+                    "3".repeat(64),
                 "target-v1",
                 "calculation-v1",
-                "4".repeat(64),
+                    "4".repeat(64),
                 SECOND_VERSION_AT,
                 state,
                 SECOND_VERSION_AT
@@ -346,7 +345,7 @@ class RouteApiContractTest {
             .params(
                 routeVersionId,
                 SECOND_VERSION_AT,
-                "route-contract-test-" + routeVersionId,
+                    "route-contract-test-" + routeVersionId,
                 SECOND_VERSION_AT,
                 SECOND_VERSION_AT,
                 SECOND_VERSION_AT,

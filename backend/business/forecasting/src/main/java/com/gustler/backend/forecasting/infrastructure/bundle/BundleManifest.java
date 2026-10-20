@@ -1,5 +1,4 @@
 package com.gustler.backend.forecasting.infrastructure.bundle;
-
 import java.util.List;
 import java.util.Map;
 

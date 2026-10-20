@@ -3,7 +3,6 @@ package com.gustler.backend.forecasting.api.evaluation;
 import java.time.Duration;
 
 public record SameDayInitializationPolicy(Duration retryInterval, Duration statementTimeout, Duration lockTimeout) {
-
     private static final Duration SHORTEST = Duration.ofMillis(1);
 
     public SameDayInitializationPolicy {

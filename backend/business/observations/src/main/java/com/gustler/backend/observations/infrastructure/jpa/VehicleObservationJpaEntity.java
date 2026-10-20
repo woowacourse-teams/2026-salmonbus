@@ -1,5 +1,4 @@
 package com.gustler.backend.observations.infrastructure.jpa;
-
 import com.gustler.backend.observations.domain.RemainingSeats.Known;
 import com.gustler.backend.observations.domain.RemainingSeats.Unknown;
 import com.gustler.backend.observations.domain.RemainingSeats;
@@ -29,7 +28,6 @@ import lombok.NoArgsConstructor;
 @Table(name = "vehicle_observation")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class VehicleObservationJpaEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

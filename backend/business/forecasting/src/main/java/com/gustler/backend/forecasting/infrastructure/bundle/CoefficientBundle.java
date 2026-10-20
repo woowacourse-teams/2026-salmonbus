@@ -4,7 +4,6 @@ import com.gustler.backend.forecasting.domain.model.CoefficientLookup;
 import com.gustler.backend.forecasting.domain.model.HorizonCoefficients;
 import com.gustler.backend.forecasting.domain.model.ResidualDirection;
 import com.gustler.backend.forecasting.domain.model.ResidualSignHead;
-
 import java.util.List;
 import java.util.Map;
 
@@ -17,7 +16,6 @@ import java.util.Map;
  * <p>바뀌지 않는다. 승격으로 계수가 바뀌면 새 묶음이 생기지 이 묶음의 값이 갈리지 않는다.
  */
 final class CoefficientBundle implements CoefficientLookup {
-
     private final BundleManifest manifest;
     private final Map<BundleTensor, Tensor> tensors;
 
@@ -58,7 +56,7 @@ final class CoefficientBundle implements CoefficientLookup {
         if (axis < 0) {
             throw new IllegalArgumentException(
                 "이 계수 묶음이 안 담는 노선이다: %s, 담는 노선은 %s"
-                    .formatted(modelRoute, manifest.routes())
+                .formatted(modelRoute, manifest.routes())
             );
         }
         return axis;
@@ -71,7 +69,7 @@ final class CoefficientBundle implements CoefficientLookup {
         if (axis < 0) {
             throw new IllegalArgumentException(
                 "이 계수 묶음이 안 담는 예보 거리다: %d정류장 앞, 담는 거리는 %s"
-                    .formatted(stopsAhead, manifest.horizonStops())
+                .formatted(stopsAhead, manifest.horizonStops())
             );
         }
         return axis;

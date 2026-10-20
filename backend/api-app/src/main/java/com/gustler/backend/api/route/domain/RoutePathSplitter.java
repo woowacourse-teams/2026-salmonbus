@@ -20,12 +20,16 @@ final class RoutePathSplitter {
     // 원본은 최대 10만 점까지 허용하므로 GET에서의 정적 가공량을 별도로 제한한다.
     private static final long MAX_PROJECTION_CELLS = 2_000_000;
 
-    private RoutePathSplitter() { }
+    private RoutePathSplitter() {
+    }
 
     static RoutePaths split(RouteGeometry geometry) {
         if (geometry.shape() == null || geometry.turnSequence() == null) return null;
-        var stops = geometry.busStops().stream().filter(stop -> stop.point() != null)
-            .sorted(Comparator.comparingInt(Stop::stopSequence)).toList();
+        var stops = geometry.busStops()
+            .stream()
+            .filter(stop -> stop.point() != null)
+            .sorted(Comparator.comparingInt(Stop::stopSequence))
+            .toList();
         int turn = -1;
         for (int i = 0; i < stops.size(); i++) {
             if (i > 0 && stops.get(i - 1).stopSequence() == stops.get(i).stopSequence()) return null;
@@ -56,7 +60,10 @@ final class RoutePathSplitter {
         return cut(geometry.points(), best, forward.row().fractions()[best]);
     }
 
-    private static Alignment align(Line line, List<Stop> stops, int first, int last, int step) {
+    private static Alignment align(
+        Line line,
+        List<Stop> stops, int first, int last, int step
+    ) {
         Row previous = line.project(stops.get(first).point());
         double[] costs = previous.offsets().clone();
         for (int i = first + step; step > 0 ? i <= last : i >= last; i += step) {
@@ -89,12 +96,20 @@ final class RoutePathSplitter {
         var down = new ArrayList<Point>();
         if (!boundary.equals(b)) down.add(boundary);
         down.addAll(points.subList(edge + 1, points.size()));
-        if (up.stream().distinct().limit(2).count() < 2 || down.stream().distinct().limit(2).count() < 2) return null;
+        if (up.stream()
+            .distinct()
+            .limit(2)
+            .count() < 2 || down.stream()
+            .distinct()
+            .limit(2)
+            .count() < 2) return null;
         return new RoutePaths(new RoutePaths.Path(up), new RoutePaths.Path(down));
     }
 
-    private record Row(double[] positions, double[] offsets, double[] fractions) { }
-    private record Alignment(Row row, double[] costs) { }
+    private record Row(double[] positions, double[] offsets, double[] fractions) {
+    }
+    private record Alignment(Row row, double[] costs) {
+    }
 
     private static final class Line {
         private final double originX;
@@ -113,9 +128,13 @@ final class RoutePathSplitter {
             originY = points.getFirst().y();
             scaleX = METERS_PER_DEGREE * Math.cos(Math.toRadians(latitude));
             int count = points.size() - 1;
-            x = new double[count]; y = new double[count];
-            dx = new double[count]; dy = new double[count];
-            squared = new double[count]; lengths = new double[count]; chain = new double[count + 1];
+            x = new double[count];
+            y = new double[count];
+            dx = new double[count];
+            dy = new double[count];
+            squared = new double[count];
+            lengths = new double[count];
+            chain = new double[count + 1];
             for (int edge = 0; edge < count; edge++) {
                 Point a = points.get(edge);
                 Point b = points.get(edge + 1);
@@ -129,8 +148,13 @@ final class RoutePathSplitter {
             }
         }
 
-        private int edges() { return x.length; }
-        private double length() { return chain[chain.length - 1]; }
+        private int edges() {
+            return x.length;
+        }
+
+        private double length() {
+            return chain[chain.length - 1];
+        }
 
         private Row project(Point point) {
             double px = (point.x() - originX) * scaleX;

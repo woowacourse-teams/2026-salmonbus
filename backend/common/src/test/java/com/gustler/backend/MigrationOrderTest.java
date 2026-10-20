@@ -83,12 +83,16 @@ class MigrationOrderTest {
     @Test
     void 이_브랜치가_더하는_마이그레이션이_마지막_번호를_차지한다() {
         // when
-        final List<Integer> actual = thisBranchMigrations().stream().map(this::versionOf).toList();
+        final List<Integer> actual = thisBranchMigrations().stream()
+            .map(this::versionOf)
+            .toList();
 
         // then 앞 브랜치가 먼저 머지되므로 이 브랜치 것이 마지막 번호들이어야 한다
         final int firstOfThisBranch = migrationCount() - MIGRATIONS_THIS_BRANCH_ADDS.size() + 1;
         assertThat(actual).containsExactlyElementsOf(
-            IntStream.rangeClosed(firstOfThisBranch, migrationCount()).boxed().toList());
+            IntStream.rangeClosed(firstOfThisBranch, migrationCount())
+                .boxed()
+                .toList());
     }
 
     @Test
@@ -98,7 +102,9 @@ class MigrationOrderTest {
 
         // then 1 부터 하나씩 오른다. 번호를 나눠 가지다 빠뜨리거나 겹치면 여기서 걸린다
         assertThat(actual).containsExactly(
-            IntStream.rangeClosed(1, actual.size()).boxed().toArray(Integer[]::new));
+            IntStream.rangeClosed(1, actual.size())
+                .boxed()
+                .toArray(Integer[]::new));
     }
 
     /** 스키마를 만든 기록은 버전이 없다. 마이그레이션만 센다. */

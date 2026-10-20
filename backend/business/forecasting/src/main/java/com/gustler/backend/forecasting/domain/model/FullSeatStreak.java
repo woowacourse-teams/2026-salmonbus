@@ -9,13 +9,11 @@ import java.util.Objects;
  * 실제로는 그보다 길 수 있다.
  */
 public sealed interface FullSeatStreak {
-
     int stopCount();
 
     record SeenToEnd(
         int stopCount
     ) implements FullSeatStreak {
-
         public SeenToEnd {
             if (stopCount < 0) {
                 throw new IllegalArgumentException("연속 만석 정류장 수는 0 이상이다: " + stopCount);
@@ -27,7 +25,6 @@ public sealed interface FullSeatStreak {
         int stopCount,
         TrajectoryGap gap
     ) implements FullSeatStreak {
-
         public CutByGap {
             if (stopCount < 0) {
                 throw new IllegalArgumentException("연속 만석 정류장 수는 0 이상이다: " + stopCount);

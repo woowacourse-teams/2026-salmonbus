@@ -2,7 +2,6 @@ package com.gustler.backend.forecasting.infrastructure.bundle;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -27,7 +26,6 @@ import tools.jackson.databind.ObjectMapper;
  * 뜻만 없다. 화면에서도 로그에서도 구분되지 않아서, 막히는지를 여기서 고정해 둬야 한다.
  */
 class BundleLoaderTest {
-
     private static final List<String> EIGHT_ROUTES =
         List.of("1650", "3330", "9007", "9300", "6011", "3000", "5600", "3500");
 
@@ -157,7 +155,7 @@ class BundleLoaderTest {
         BundleFiles files = DummyBundle.valid().writeTo(directory);
         Files.write(files.manifest(), movedToEnd(
             read(files.manifest()),
-            "\"bundleSchemaVersion\":\"%s\"".formatted(DummyBundle.BUNDLE_SCHEMA_VERSION)));
+                "\"bundleSchemaVersion\":\"%s\"".formatted(DummyBundle.BUNDLE_SCHEMA_VERSION)));
 
         // when & then 순서만 달라도 요약값이 달라져 같은 계수가 두 신원이 된다
         assertRejectedBy(BundleCheck.MANIFEST_IS_CANONICAL_JSON, () -> BundleLoader.load(files));
@@ -169,7 +167,7 @@ class BundleLoaderTest {
         BundleFiles files = DummyBundle.valid().writeTo(directory);
         Files.write(files.manifest(), read(files.manifest()).replaceFirst(
             "\\{\"dtype\":(\"[A-Z0-9]+\"),\"shape\":(\\[[0-9,]+])}",
-            "{\"shape\":$2,\"dtype\":$1}").getBytes(StandardCharsets.UTF_8));
+        "{\"shape\":$2,\"dtype\":$1}").getBytes(StandardCharsets.UTF_8));
 
         // when & then 안쪽도 이름순이어야 같은 뜻이 한 요약값으로만 적힌다
         assertRejectedBy(BundleCheck.MANIFEST_IS_CANONICAL_JSON, () -> BundleLoader.load(files));
@@ -183,8 +181,8 @@ class BundleLoaderTest {
 
         // when & then 안 보고 꺼내면 여기서 NullPointerException 이 나 거절을 안 거친다
         assertRejectedBy(BundleCheck.MANIFEST_FIELD_TYPE, loading(DummyBundle.valid()
-            .put("goldenVector", golden)
-            .put("goldenVectorDigest", "0".repeat(64))));
+                .put("goldenVector", golden)
+                .put("goldenVectorDigest", "0".repeat(64))));
     }
 
     @Test
@@ -472,7 +470,7 @@ class BundleLoaderTest {
         final int byteCount
     ) {
         byte[] header = ("{\"hurdle_coefficients\":{\"dtype\":\"%s\",\"shape\":[1],\"data_offsets\":[0,%d]}}"
-            .formatted(dataType, byteCount)).getBytes(StandardCharsets.UTF_8);
+                .formatted(dataType, byteCount)).getBytes(StandardCharsets.UTF_8);
         ByteBuffer file = ByteBuffer.allocate(8 + header.length + byteCount).order(ByteOrder.LITTLE_ENDIAN);
         file.putLong(header.length);
         file.put(header);

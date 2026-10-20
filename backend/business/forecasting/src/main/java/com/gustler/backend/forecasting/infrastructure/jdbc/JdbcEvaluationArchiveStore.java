@@ -37,8 +37,12 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
     private final Clock clock;
     private final TransactionTemplate transaction;
 
-    public JdbcEvaluationArchiveStore(JdbcClient jdbc, RouteDataQualityAccess quality, Clock clock,
-        PlatformTransactionManager transactions) {
+    public JdbcEvaluationArchiveStore(
+        JdbcClient jdbc,
+        RouteDataQualityAccess quality,
+        Clock clock,
+        PlatformTransactionManager transactions
+    ) {
         this.jdbc = jdbc;
         this.quality = quality;
         this.clock = clock;
@@ -52,8 +56,10 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
             || candidates.stream().anyMatch(key -> key == null)) {
             throw new IllegalArgumentException("노선과 한정된 정산 후보가 필요하다");
         }
-        List<Key> keys = candidates.stream().distinct()
-            .sorted(Comparator.comparingLong(Key::observationId).thenComparingInt(Key::stopOrder)).toList();
+        List<Key> keys = candidates.stream()
+            .distinct()
+            .sorted(Comparator.comparingLong(Key::observationId).thenComparingInt(Key::stopOrder))
+            .toList();
         return inTransaction(() -> {
             long revision = quality.lock(routeVersionId);
             if (quality.anyInvestigationPending(routeVersionId)) {
@@ -95,9 +101,14 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
                 INSERT INTO evaluation_archive_batch(id,route_version_id,quality_revision,lease_token,lease_until,row_count)
                 VALUES(:id,:route,:revision,:token,clock_timestamp()+interval '5 minutes',:count)
                 RETURNING *
-                """).param("id", id).param("route", routeVersionId).param("revision", revision)
-                .param("token", UUID.randomUUID()).param("count", rows.size())
-                .query(JdbcEvaluationArchiveStore::batchOf).single();
+                """)
+                .param("id", id)
+                .param("route", routeVersionId)
+                .param("revision", revision)
+                .param("token", UUID.randomUUID())
+                .param("count", rows.size())
+                .query(JdbcEvaluationArchiveStore::batchOf)
+                .single();
             var memberValues = new java.util.StringJoiner(",");
             for (int index = 0; index < rows.size(); index++) {
                 memberValues.add("(:observation%d,:stop%d,:route,:batch,:digest%d)".formatted(index, index, index));
@@ -308,8 +319,8 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
             SELECT vehicle_observation_id,target_stop_order,original_sha256
             FROM evaluation_archive_member WHERE batch_id=?
             """).param(batch.id()).query((rs, n) -> java.util.Map.entry(
-                new Key(rs.getLong("vehicle_observation_id"), rs.getInt("target_stop_order")),
-                rs.getString("original_sha256"))).list();
+            new Key(rs.getLong("vehicle_observation_id"), rs.getInt("target_stop_order")),
+            rs.getString("original_sha256"))).list();
         var actual = new java.util.HashMap<Key, String>();
         long bytes = 0;
         for (Row row : rows) {
@@ -375,9 +386,10 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
             WHERE m.batch_id=:id ORDER BY m.vehicle_observation_id,m.target_stop_order
             FOR UPDATE OF e
             """).param("id", batch.id()).query((rs, n) -> new Row(
-                new Key(rs.getLong("vehicle_observation_id"), rs.getInt("target_stop_order")),
-                rs.getString("original"), rs.getString("original_sha256"))).list();
-        if (rows.size() != batch.rowCount() || rows.stream().anyMatch(row -> !digest(row.originalJson()).equals(row.sha256()))) {
+            new Key(rs.getLong("vehicle_observation_id"), rs.getInt("target_stop_order")),
+            rs.getString("original"), rs.getString("original_sha256"))).list();
+        if (rows.size() != batch.rowCount() || rows.stream()
+            .anyMatch(row -> !digest(row.originalJson()).equals(row.sha256()))) {
             throw new IllegalStateException("예약한 완료 정산의 원본이 바뀌었거나 없어졌다");
         }
         return rows;

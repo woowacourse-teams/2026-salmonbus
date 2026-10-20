@@ -35,7 +35,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 @RequiredArgsConstructor
 public class BoardQueryService {
-
     private static final int MAX_APPROACHING_VEHICLES = 3;
     private static final Pattern DEPARTURE_TIME_FORMAT = Pattern.compile(
         "([01][0-9]|2[0-3]):[0-5][0-9]"

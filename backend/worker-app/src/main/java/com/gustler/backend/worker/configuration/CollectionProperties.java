@@ -18,7 +18,6 @@ public record CollectionProperties(
     List<String> routeIds,
     Duration fixedInterval
 ) {
-
     @ConstructorBinding
     public CollectionProperties {
         routeIds = routeIds == null ? List.of() : List.copyOf(routeIds);

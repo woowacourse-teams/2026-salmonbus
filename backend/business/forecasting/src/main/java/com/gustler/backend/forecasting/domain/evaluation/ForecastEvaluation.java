@@ -5,7 +5,6 @@ import java.util.Objects;
 
 /** 한 예측의 평가를 관리한다. 확정한 결과와 평가 시각은 다시 변경할 수 없다. */
 public final class ForecastEvaluation {
-
     private final long vehicleObservationId;
     private final int targetStopOrder;
     private EvaluationResult result;

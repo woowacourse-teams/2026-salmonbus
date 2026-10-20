@@ -1,7 +1,6 @@
 package com.gustler.backend.forecasting.domain.publication;
 
 import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
-
 import java.time.Clock;
 
 /**
@@ -22,7 +21,6 @@ import java.time.Clock;
  * 학습과 서빙이 같은 규칙으로 함께 바꿔야 한다.
  */
 public final class ForecastTimeSlot {
-
     private ForecastTimeSlot() {
     }
 

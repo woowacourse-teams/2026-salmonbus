@@ -21,7 +21,6 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class AdvanceDemandStatisticsService implements AdvanceDemandStatistics {
-
     private static final Logger log = LoggerFactory.getLogger(AdvanceDemandStatisticsService.class);
 
     private final DemandStatisticsPipeline pipeline;
@@ -46,8 +45,10 @@ public class AdvanceDemandStatisticsService implements AdvanceDemandStatistics {
         final Instant now = clock.instant();
         if (!now.isBefore(refreshAt)) {
             refreshAt = now.plusSeconds(10);
-            versions = WorkerOperationLog.measure("statistics_routes", "all", routes::findActiveVersionIds).stream()
-                .sorted().toList();
+            versions = WorkerOperationLog.measure("statistics_routes", "all", routes::findActiveVersionIds)
+                .stream()
+                .sorted()
+                .toList();
             retryAt.keySet().retainAll(versions);
             failures.keySet().retainAll(versions);
             progressAt.keySet().retainAll(versions);
@@ -67,7 +68,8 @@ public class AdvanceDemandStatisticsService implements AdvanceDemandStatistics {
                 final boolean progress = result.status() == Status.PROGRESSED
                     && !now.isBefore(progressAt.getOrDefault(version, Instant.MIN));
                 if (result.status() == Status.STARTED || result.status() == Status.COMPLETED || progress) {
-                    log.info("event=stop_demand_statistics status={} phase={} routeVersionId={} dataUntil={} stepDurationMs={}",
+                    log.info(
+                        "event=stop_demand_statistics status={} phase={} routeVersionId={} dataUntil={} stepDurationMs={}",
                         result.status(), result.phase(), version, result.dataUntil() == null ? "-"
                             : result.dataUntil().atZone(clock.getZone()).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
                         elapsed(started));

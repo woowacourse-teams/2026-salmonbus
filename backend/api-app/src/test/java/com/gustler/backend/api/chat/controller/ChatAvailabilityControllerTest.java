@@ -15,7 +15,6 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.function.RouterFunctions;
 
 class ChatAvailabilityControllerTest {
-
     private MockMvc mockMvc;
 
     @BeforeEach

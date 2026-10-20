@@ -11,7 +11,6 @@ public record SettledForecast(
     Instant arrivedAt,
     int seatsOnArrival
 ) {
-
     public boolean wasFull() {
         return seatsOnArrival == 0;
     }

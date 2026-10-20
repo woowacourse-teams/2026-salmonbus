@@ -7,7 +7,6 @@ package com.gustler.backend.forecasting.domain.model;
  * 0 이나 1 로 포화되고, 그다음 당일 보정이 로짓으로 옮길 때 무한대를 만난다.
  */
 final class FullChanceHurdle {
-
     private final double[] coefficients;
 
     FullChanceHurdle(

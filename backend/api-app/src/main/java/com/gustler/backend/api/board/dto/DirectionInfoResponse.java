@@ -20,7 +20,6 @@ public record DirectionInfoResponse(
     @Schema(description = "막차 시각. HH:mm 형식")
     String lastDepartureTime
 ) {
-
     static DirectionInfoResponse from(
         DirectionInfo direction
     ) {

@@ -6,7 +6,6 @@ import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import java.util.UUID;
 
 public final class BundleActivation {
-
     private final ModelDeploymentRepository deployments;
     private final LoadedModelRegistry bundles;
 

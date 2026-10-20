@@ -11,7 +11,6 @@ import com.tngtech.archunit.junit.ArchTests;
     importOptions = ImportOption.DoNotIncludeTests.class
 )
 public class TimeSourceTest {
-
     @ArchTest
     static final ArchTests 시각은_주입받은_Clock_에서만 = ArchTests.in(TimeSourceRules.class);
 }

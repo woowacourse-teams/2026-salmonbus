@@ -1,5 +1,4 @@
 package com.gustler.backend.forecasting.application.quality;
-
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -16,7 +15,8 @@ public final class WorkerQualityTransactions {
             || !TransactionSynchronizationManager.isSynchronizationActive()) {
             throw new IllegalStateException("품질 변경에는 실제 트랜잭션이 필요하다");
         }
-        if (TransactionSynchronizationManager.getSynchronizations().stream()
+        if (TransactionSynchronizationManager.getSynchronizations()
+            .stream()
             .anyMatch(sync -> sync instanceof Completion completion && completion.owner() == this)) return;
         var change = state.beginChange();
         try {
@@ -30,9 +30,13 @@ public final class WorkerQualityTransactions {
     private final class Completion implements TransactionSynchronization {
         private final WorkerQualityState.Change change;
 
-        private Completion(WorkerQualityState.Change change) { this.change = change; }
+        private Completion(WorkerQualityState.Change change) {
+            this.change = change;
+        }
 
-        private WorkerQualityTransactions owner() { return WorkerQualityTransactions.this; }
+        private WorkerQualityTransactions owner() {
+            return WorkerQualityTransactions.this;
+        }
 
         @Override
         public void afterCompletion(int status) {

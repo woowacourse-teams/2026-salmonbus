@@ -6,7 +6,6 @@ public record SeatForecastResult(
     SeatDistribution distribution,
     double fullChanceRaw
 ) {
-
     public SeatForecastResult {
         Objects.requireNonNull(distribution, "예보에는 좌석 분포가 있어야 한다");
         if (!SeatDistribution.isBetweenZeroAndOne(fullChanceRaw)) {

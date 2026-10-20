@@ -6,7 +6,6 @@ import com.gustler.backend.observations.domain.SeatUnknownReason;
 
 
 import static org.assertj.core.api.Assertions.assertThat;
-
 import com.gustler.backend.observations.domain.RemainingSeats.Known;
 import com.gustler.backend.observations.domain.RemainingSeats.Unknown;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
@@ -16,7 +15,6 @@ import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class GbisVehicleObservationMapperTest {
-
     private static final String VEHICLE_204000206 = "204000206";
     private static final String PLATE_NUMBER = "경기70아0001";
     private static final String ROUTE_3330 = "204000057";

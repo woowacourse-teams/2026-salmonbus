@@ -1,7 +1,6 @@
 package com.gustler.backend.api.vehicle.domain;
 
 public enum VehiclePollOutcome {
-
     SUCCESS_ROWS,
     SUCCESS_EMPTY,
     UNKNOWN,

@@ -4,7 +4,8 @@ import java.util.List;
 import java.util.Optional;
 
 public interface TripQualityInvestigationRepository {
-    record Key(long routeVersionId, String vehicleId) { }
+    record Key(long routeVersionId, String vehicleId) {
+    }
     Optional<Key> nextPending();
     Optional<TripQualityInvestigation> findPending(long routeVersionId, String vehicleId);
     List<String> activeVehicleIds(long routeVersionId);

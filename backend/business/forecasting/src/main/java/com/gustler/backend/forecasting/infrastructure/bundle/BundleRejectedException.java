@@ -7,7 +7,6 @@ package com.gustler.backend.forecasting.infrastructure.bundle;
  * 낫다. 값이 정상처럼 보이면서 뜻만 없는 상태는 화면에서 구분되지 않는다.
  */
 public class BundleRejectedException extends com.gustler.backend.forecasting.api.model.ModelLoadException {
-
     public BundleRejectedException(
         String message
     ) {

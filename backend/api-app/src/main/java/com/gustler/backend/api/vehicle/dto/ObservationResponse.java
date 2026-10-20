@@ -15,7 +15,6 @@ public record ObservationResponse(
     @Schema(description = "마지막 정상 관측의 만료 시각. 이력이 없으면 null", nullable = true)
     OffsetDateTime staleAt
 ) {
-
     public ObservationResponse {
         Objects.requireNonNull(state, "state는 null일 수 없습니다.");
     }

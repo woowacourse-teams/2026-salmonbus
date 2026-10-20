@@ -21,36 +21,70 @@ public final class WorkerOperationLog {
     private static final Recorder RECORDER = new Recorder(System::nanoTime);
 
     public interface Listener {
-        void completed(String operation, Object route, long nanos, boolean failed);
-        default void collectionAttempted(String sourceRoute, long epochSecond) { }
-        default void collectionCommitted(String sourceRoute, long observedEpochSecond, int usableRows) { }
-        default String context(String operation, Object route) { return ""; }
+        void completed(
+            String operation,
+            Object route,
+            long nanos,
+            boolean failed
+        );
+
+        default void collectionAttempted(String sourceRoute, long epochSecond) {
+        }
+
+        default void collectionCommitted(String sourceRoute, long observedEpochSecond, int usableRows) {
+        }
+
+        default String context(String operation, Object route) {
+            return "";
+        }
     }
-    private static final Listener NONE = (operation, route, nanos, failed) -> { };
+    private static final Listener NONE = (operation, route, nanos, failed) -> {
+    };
     private static volatile Listener listener = NONE;
-    public static void setListener(Listener value) { listener = value == null ? NONE : value; }
-    public static void clearListener(Listener value) { if (listener == value) { listener = NONE; } }
+    public static void setListener(Listener value) { listener = value == null ? NONE : value;
+    }
+
+    public static void clearListener(Listener value) {
+        if (listener == value) {
+            listener = NONE;
+        }
+    }
 
     private static String context(String operation, Object route) {
-        try { return listener.context(operation, route); }
-        catch (RuntimeException ignored) { return ""; }
+        try {
+            return listener.context(operation, route);
+        }
+        catch (RuntimeException ignored) {
+            return "";
+        }
     }
     private WorkerOperationLog() { }
-    public static String routeContext(String operation, Object route) { return context(operation, route); }
+    public static String routeContext(String operation, Object route) {
+        return context(operation, route);
+    }
+
     public static void collectionAttempted(String sourceRoute, long epochSecond) {
-        try { listener.collectionAttempted(sourceRoute, epochSecond); } catch (RuntimeException ignored) { }
+        try {
+            listener.collectionAttempted(sourceRoute, epochSecond);
+        }
+        catch (RuntimeException ignored) { }
     }
 
     /** 저장 메서드 반환 후 호출한다. 외부 트랜잭션이 있으면 커밋까지 기다린다. */
     public static void collectionCommitted(String sourceRoute, long observedEpochSecond, int usableRows) {
         Runnable record = () -> {
-            try { listener.collectionCommitted(sourceRoute, observedEpochSecond, usableRows); }
+            try {
+                listener.collectionCommitted(sourceRoute, observedEpochSecond, usableRows);
+            }
             catch (RuntimeException ignored) { /* 진단 실패가 수집 결과를 바꾸지 않는다. */ }
         };
         if (TransactionSynchronizationManager.isActualTransactionActive()
-            && TransactionSynchronizationManager.isSynchronizationActive()) {
+                && TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override public void afterCommit() { record.run(); }
+                @Override
+                public void afterCommit() {
+                    record.run();
+                }
             });
         } else { record.run(); }
     }
@@ -60,7 +94,10 @@ public final class WorkerOperationLog {
     }
 
     public static void run(String operation, Object route, Runnable action) {
-        measure(operation, route, () -> { action.run(); return null; });
+        measure(operation, route, () -> {
+            action.run();
+            return null;
+        });
     }
 
     public static void warn(String operation, Object route, String reason) {
@@ -79,11 +116,15 @@ public final class WorkerOperationLog {
         private final ThreadLocal<Set<Throwable>> reported = new ThreadLocal<>();
         private final Map<WarningKey, Long> warnings = new LinkedHashMap<>();
 
-        Recorder(LongSupplier nanoTime) { this.nanoTime = nanoTime; }
+        Recorder(LongSupplier nanoTime) {
+            this.nanoTime = nanoTime;
+        }
 
         <T> T measure(String operation, Object route, Supplier<T> action) {
             boolean outermost = reported.get() == null;
-            if (outermost) { reported.set(Collections.newSetFromMap(new IdentityHashMap<>())); }
+            if (outermost) {
+                reported.set(Collections.newSetFromMap(new IdentityHashMap<>()));
+            }
             long start = nanoTime.getAsLong();
             boolean failed = false;
             try {
@@ -108,7 +149,8 @@ public final class WorkerOperationLog {
                     }
                 }
                 if (Collections.disjoint(reported.get(), chain)) {
-                    log.error("event=worker_operation status=FAILED operation={} route={} durationMs={} sqlState={} exceptionType={} rootCause={}{}",
+                    log.error(
+                        "event=worker_operation status=FAILED operation={} route={} durationMs={} sqlState={} exceptionType={} rootCause={}{}",
                         operation, route, millis(nanoTime.getAsLong() - start), sqlState,
                         failure.getClass().getSimpleName(), root.getClass().getSimpleName(), context(operation, route));
                 }
@@ -122,7 +164,9 @@ public final class WorkerOperationLog {
             }
         }
 
-        private void slow(String operation, Object route, long elapsed, int rows) {
+        private void slow(
+            String operation,
+            Object route, long elapsed, int rows) {
             if (TransactionSynchronizationManager.isActualTransactionActive()
                 && TransactionSynchronizationManager.isSynchronizationActive()) {
                 // 메서드 반환을 commit 성공으로 기록하지 않는다. 실패한 transaction의 느린 조회도 구분한다.
@@ -143,8 +187,13 @@ public final class WorkerOperationLog {
             }
         }
 
-        private void writeSlow(String operation, Object route, long elapsed, int rows, String outcome) {
-            log.warn("event=worker_operation status=SLOW operation={} route={} durationMs={} returnedRows={} transactionOutcome={}{}",
+        private void writeSlow(
+            String operation,
+            Object route, long elapsed, int rows,
+            String outcome
+        ) {
+            log.warn(
+                "event=worker_operation status=SLOW operation={} route={} durationMs={} returnedRows={} transactionOutcome={}{}",
                 operation, route, millis(elapsed), rows, outcome, context(operation, route));
         }
 
@@ -152,21 +201,27 @@ public final class WorkerOperationLog {
             WarningKey key = new WarningKey(operation, String.valueOf(route), reason);
             long now = nanoTime.getAsLong();
             Long last = warnings.get(key);
-            if (last != null && now - last < WARNING_NANOS) { return; }
+            if (last != null && now - last < WARNING_NANOS) {
+                return;
+            }
             if (!warnings.containsKey(key) && warnings.size() >= 256) {
                 warnings.remove(warnings.keySet().iterator().next());
             }
             warnings.put(key, now);
-            log.warn("event=worker_operation status=DEFERRED operation={} route={} reason={}{}", operation, route, reason, context(operation, route));
+            log.warn("event=worker_operation status=DEFERRED operation={} route={} reason={}{}", operation, route,
+                reason, context(operation, route));
         }
 
         synchronized void recovered(String operation, Object route) {
             warnings.keySet().removeIf(key -> Objects.equals(key.operation(), operation)
-                && key.route().equals(String.valueOf(route)));
+                    && key.route().equals(String.valueOf(route)));
         }
 
-        private record WarningKey(String operation, String route, String reason) { }
+        private record WarningKey(String operation, String route, String reason) {
+        }
 
-        private static long millis(long nanos) { return TimeUnit.NANOSECONDS.toMillis(nanos); }
+        private static long millis(long nanos) {
+            return TimeUnit.NANOSECONDS.toMillis(nanos);
+        }
     }
 }

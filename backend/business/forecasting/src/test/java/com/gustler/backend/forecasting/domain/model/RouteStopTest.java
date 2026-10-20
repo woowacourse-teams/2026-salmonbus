@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.Test;
 
 class RouteStopTest {
-
     @Test
     void 정류장_순번은_1번부터다() {
         // when & then

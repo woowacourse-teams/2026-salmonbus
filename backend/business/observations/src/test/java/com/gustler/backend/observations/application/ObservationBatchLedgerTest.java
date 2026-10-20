@@ -44,7 +44,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 @ObservationIntegrationTest
 @Import(ObservationBatchLedgerTest.QualityFailureConfiguration.class)
 class ObservationBatchLedgerTest {
-
     private static final String SOURCE_ID = "GBIS";
     private static final String ROUTE_204000057 = "204000057";
     private static final String CONTENT_DIGEST = "0".repeat(64);
@@ -381,7 +380,7 @@ class ObservationBatchLedgerTest {
 
         // then
         assertThat(jdbcClient.sql("SELECT count(*) FROM vehicle_observation WHERE observation_batch_id = ?")
-            .param(batchId).query(Integer.class).single()).isZero();
+                .param(batchId).query(Integer.class).single()).isZero();
     }
 
     @Test
@@ -407,7 +406,8 @@ class ObservationBatchLedgerTest {
             STOP_ID, 1, 2, 71, 3, 1);
 
         // when & then
-        assertThatThrownBy(() -> ledger.conclude(batchId, reply(new Success(QUERY_TIME, List.of(bus))), RESPONSE_RECEIVED_AT))
+        assertThatThrownBy(() ->
+            ledger.conclude(batchId, reply(new Success(QUERY_TIME, List.of(bus))), RESPONSE_RECEIVED_AT))
             .isInstanceOf(IllegalStateException.class)
             .hasMessage("품질 처리 실패");
         assertThat(outcomeOf(batchId)).isEqualTo("DISPATCHING");
@@ -415,9 +415,9 @@ class ObservationBatchLedgerTest {
         assertThat(responseReceivedAtOf(batchId)).isNull();
         assertThat(reservedCallsOn(KOREA_8_19)).isEqualTo(1);
         assertThat(jdbcClient.sql("SELECT count(*) FROM vehicle_observation WHERE observation_batch_id = ?")
-            .param(batchId).query(Integer.class).single()).isZero();
+                .param(batchId).query(Integer.class).single()).isZero();
         assertThat(jdbcClient.sql("SELECT count(*) FROM trip_quality_rebuild WHERE route_version_id = ?")
-            .param(routeVersionId).query(Integer.class).single()).isZero();
+                .param(routeVersionId).query(Integer.class).single()).isZero();
     }
 
     private CollectionPlan plan() {
@@ -445,7 +445,6 @@ class ObservationBatchLedgerTest {
 
     @TestConfiguration(proxyBeanMethods = false)
     static class QualityFailureConfiguration {
-
         @Bean
         FailingQualityHook failingQualityHook() {
             return new FailingQualityHook();
@@ -454,7 +453,6 @@ class ObservationBatchLedgerTest {
 
     @Order(Ordered.LOWEST_PRECEDENCE)
     static class FailingQualityHook implements CollectionQualityHook {
-
         private boolean fail;
         private int afterCalls;
 

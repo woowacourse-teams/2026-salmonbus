@@ -36,9 +36,13 @@ final class BundleInspectionFixture {
         int offset = 0;
         for (var entry : shapes.entrySet()) {
             String dtype = entry.getKey().equals("bin_fitted") ? "U8" : "F64";
-            int bytes = Arrays.stream(entry.getValue()).reduce(1, (a, b) -> a * b) * (dtype.equals("U8") ? 1 : 8);
-            List<Integer> shape = Arrays.stream(entry.getValue()).boxed().toList();
-            header.put(entry.getKey(), Map.of("dtype", dtype, "shape", shape, "data_offsets", List.of(offset, offset + bytes)));
+            int bytes = Arrays.stream(entry.getValue())
+                .reduce(1, (a, b) -> a * b) * (dtype.equals("U8") ? 1 : 8);
+            List<Integer> shape = Arrays.stream(entry.getValue())
+                .boxed()
+                .toList();
+            header.put(entry.getKey(),
+                Map.of("dtype", dtype, "shape", shape, "data_offsets", List.of(offset, offset + bytes)));
             declarations.put(entry.getKey(), Map.of("dtype", dtype, "shape", shape));
             offset += bytes;
         }
@@ -59,7 +63,9 @@ final class BundleInspectionFixture {
         var predicted = predictor.predict(new SeatDistributionInput(vector, "1650", 1, 10, 40, null));
         double fullChance = predicted.distribution().fullChance();
         double expectedSeats = predicted.distribution().expectedSeats();
-        String vectorText = Arrays.stream(vector).mapToObj(Double::toString).collect(Collectors.joining(","));
+        String vectorText = Arrays.stream(vector)
+            .mapToObj(Double::toString)
+            .collect(Collectors.joining(","));
         String goldenDigest = sha(String.join("\n", vectorText, "1650", "1", "10", "40",
             Double.toString(fullChance), Double.toString(expectedSeats)).getBytes(StandardCharsets.UTF_8));
         String weightsDigest = sha(weights);
@@ -82,7 +88,9 @@ final class BundleInspectionFixture {
         manifest.put("sourceCommit", sourceCommit);
         manifest.put("routeReference", Map.of("version", "synthetic-reference-v1", "digest", referenceDigest));
         manifest.put("routes", ROUTES);
-        manifest.put("horizonStops", IntStream.rangeClosed(1, 12).boxed().toList());
+        manifest.put("horizonStops", IntStream.rangeClosed(1, 12)
+                .boxed()
+                .toList());
         manifest.put("featureNames", SeatForecastDesignMatrix.COLUMN_NAMES);
         manifest.put("normalizationConstants", Map.of("largestSeatCount", 68.0, "lowSeatBand", 20.0));
         manifest.put("timeSlotSource", timeSource);
@@ -94,7 +102,9 @@ final class BundleInspectionFixture {
         manifest.put("identityDigest", identity);
         manifest.put("dataThrough", "2026-09-29T12:00:00Z");
         manifest.put("goldenVector", Map.of("modelRoute", "1650", "stopsAhead", 1,
-            "currentSeats", 10, "capacity", 40, "featureVector", Arrays.stream(vector).boxed().toList(),
+            "currentSeats", 10, "capacity", 40, "featureVector", Arrays.stream(vector)
+                .boxed()
+                .toList(),
             "expectedFullChance", fullChance, "expectedSeats", expectedSeats));
         Files.write(directory.resolve("weights.safetensors"), weights);
         Files.writeString(directory.resolve("manifest.json"), CanonicalJson.stringOf(manifest));

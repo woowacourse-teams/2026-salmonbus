@@ -14,7 +14,6 @@ import jakarta.persistence.Table;
 @Entity(name = "BoardVehicleObservationJpaEntity")
 @Table(name = "vehicle_observation")
 public class VehicleObservationJpaEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

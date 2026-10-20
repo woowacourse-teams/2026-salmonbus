@@ -20,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 @RequiredArgsConstructor
 public class WatchBoardQueryService {
-
     private static final Logger log = LoggerFactory.getLogger(WatchBoardQueryService.class);
 
     private final BoardQueryService boardQueryService;

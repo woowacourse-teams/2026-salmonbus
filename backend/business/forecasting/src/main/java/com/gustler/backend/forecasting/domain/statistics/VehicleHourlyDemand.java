@@ -18,7 +18,6 @@ public record VehicleHourlyDemand(
     long arrivalSeatsSum,
     long netBoardingSum
 ) {
-
     private static final Comparator<Key> KEY_ORDER = Comparator.comparing(Key::vehicleId)
         .thenComparing(Key::arrivedHourStart).thenComparingInt(Key::targetStopOrder);
 

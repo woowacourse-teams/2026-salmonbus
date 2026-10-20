@@ -20,17 +20,24 @@ public final class ArrivalTimingAgent {
     private static final Map<String, String> SECTIONS = Map.ofEntries(
         Map.entry("com.zaxxer.hikari.HikariDataSource.getConnection", "pool.acquire"),
         Map.entry("org.postgresql.jdbc.PgPreparedStatement.executeQuery", "jdbc.execute"),
-        Map.entry("com.gustler.backend.api.arrival.infrastructure.jdbc.JdbcArrivalReadRepository.visits", "repository.visits"),
-        Map.entry("com.gustler.backend.api.arrival.infrastructure.jdbc.JdbcArrivalReadRepository.latest", "repository.latest"),
+        Map.entry("com.gustler.backend.api.arrival.infrastructure.jdbc.JdbcArrivalReadRepository.visits",
+        "repository.visits"),
+        Map.entry("com.gustler.backend.api.arrival.infrastructure.jdbc.JdbcArrivalReadRepository.latest",
+        "repository.latest"),
         Map.entry("com.gustler.backend.api.arrival.application.ArrivalQueryService.get", "query.service"),
         Map.entry("com.gustler.backend.api.arrival.dto.StationArrivalsResponse.from", "response.dto"),
-        Map.entry("org.springframework.http.converter.AbstractJacksonHttpMessageConverter.writeInternal", "response.write")
+        Map.entry("org.springframework.http.converter.AbstractJacksonHttpMessageConverter.writeInternal",
+        "response.write")
     );
 
     public static void premain(String destination, Instrumentation instrumentation) throws Exception {
-        output = Files.newBufferedWriter(Path.of(destination), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        output =
+            Files.newBufferedWriter(Path.of(destination), StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING);
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            try { output.close(); } catch (Exception ignored) { }
+            try {
+                output.close();
+            } catch (Exception ignored) { }
         }));
         var builder = new AgentBuilder.Default().disableClassFormatChanges()
             .with(AgentBuilder.Listener.StreamWriting.toSystemError().withErrorsOnly())
@@ -47,9 +54,11 @@ public final class ArrivalTimingAgent {
             .transform((target, type, loader, module, domain) -> target.visit(Advice.to(TimedAdvice.class)
                 .on(named("visits").or(named("latest")))))
             .type(named("com.gustler.backend.api.arrival.application.ArrivalQueryService"))
-            .transform((target, type, loader, module, domain) -> target.visit(Advice.to(TimedAdvice.class).on(named("get"))))
+            .transform((target, type, loader, module, domain) -> target.visit(Advice.to(TimedAdvice.class)
+                .on(named("get"))))
             .type(named("com.gustler.backend.api.arrival.dto.StationArrivalsResponse"))
-            .transform((target, type, loader, module, domain) -> target.visit(Advice.to(TimedAdvice.class).on(named("from"))))
+            .transform((target, type, loader, module, domain) -> target.visit(Advice.to(TimedAdvice.class)
+                .on(named("from"))))
             .type(named("tools.jackson.databind.ObjectMapper"))
             .transform((target, type, loader, module, domain) -> target.visit(Advice.to(DecodeAdvice.class)
                 .on(named("readValue").and(takesArguments(String.class, Class.class)))))
@@ -65,7 +74,9 @@ public final class ArrivalTimingAgent {
         public final Map<String, Long> nanos = new LinkedHashMap<>();
         public final Map<String, Integer> calls = new LinkedHashMap<>();
 
-        public Scope(String id) { this.id = id; }
+        public Scope(String id) {
+            this.id = id;
+        }
     }
 
     public static boolean begin(Object request) throws Exception {
@@ -110,20 +121,29 @@ public final class ArrivalTimingAgent {
             row.append('"').append(value.getKey()).append("\":").append(value.getValue());
         }
         row.append("}}\n");
-        synchronized (ArrivalTimingAgent.class) { output.write(row.toString()); output.flush(); }
+        synchronized (ArrivalTimingAgent.class) {
+            output.write(row.toString());
+            output.flush();
+        }
     }
 
     public static final class RequestAdvice {
         @Advice.OnMethodEnter(suppress = Throwable.class)
-        public static boolean enter(@Advice.Argument(0) Object request) throws Exception { return begin(request); }
+        public static boolean enter(@Advice.Argument(0) Object request) throws Exception {
+            return begin(request);
+        }
 
         @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
-        public static void exit(@Advice.Enter boolean root) throws Exception { end(root); }
+        public static void exit(@Advice.Enter boolean root) throws Exception {
+            end(root);
+        }
     }
 
     public static final class TimedAdvice {
         @Advice.OnMethodEnter
-        public static long enter() { return started(); }
+        public static long enter() {
+            return started();
+        }
 
         @Advice.OnMethodExit(onThrowable = Throwable.class)
         public static void exit(@Advice.Enter long started, @Advice.Origin("#t.#m") String method) {
@@ -138,6 +158,8 @@ public final class ArrivalTimingAgent {
         }
 
         @Advice.OnMethodExit(onThrowable = Throwable.class)
-        public static void exit(@Advice.Enter long started) { finish("snapshot.decode", started); }
+        public static void exit(@Advice.Enter long started) {
+            finish("snapshot.decode", started);
+        }
     }
 }

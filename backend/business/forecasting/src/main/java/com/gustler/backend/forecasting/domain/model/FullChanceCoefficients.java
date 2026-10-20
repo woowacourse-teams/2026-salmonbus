@@ -15,7 +15,6 @@ import java.util.List;
 public record FullChanceCoefficients(
     List<Double> byColumn
 ) {
-
     public FullChanceCoefficients {
         byColumn = List.copyOf(byColumn);
         if (byColumn.size() != SeatForecastDesignMatrix.COLUMN_COUNT) {

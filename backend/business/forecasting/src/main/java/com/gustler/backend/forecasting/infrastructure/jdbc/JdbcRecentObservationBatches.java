@@ -12,7 +12,9 @@ import org.springframework.stereotype.Repository;
 public class JdbcRecentObservationBatches implements RecentObservationBatches {
     private final JdbcClient jdbc;
 
-    public JdbcRecentObservationBatches(JdbcClient jdbc) { this.jdbc = jdbc; }
+    public JdbcRecentObservationBatches(JdbcClient jdbc) {
+        this.jdbc = jdbc;
+    }
 
     @Override
     public List<Header> headers(long version, Instant after, int limit) {
@@ -45,5 +47,4 @@ public class JdbcRecentObservationBatches implements RecentObservationBatches {
             .query((rs, n) -> new Row(rs.getLong("observation_batch_id"),
                 JdbcArrivalObservationQuery.candidate(rs))).list();
     }
-
 }

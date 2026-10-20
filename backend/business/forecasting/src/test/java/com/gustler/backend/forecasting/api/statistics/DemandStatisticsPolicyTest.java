@@ -7,7 +7,6 @@ import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 class DemandStatisticsPolicyTest {
-
     @Test
     void 통계_주기가_양수면_만든다() {
         // when

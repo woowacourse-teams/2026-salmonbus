@@ -1,7 +1,6 @@
 package com.gustler.backend.forecasting.application.publication;
 
 import static org.assertj.core.api.Assertions.assertThat;
-
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationSamplingPoint;
 import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
@@ -35,7 +34,11 @@ class EvaluationSamplingSelectorTest {
 
         assertThat(next.publication().predictions()).extracting(SeatForecast::evaluationDetailRequired)
             .containsExactly(true, false);
-        assertThat(next.publication().predictions().stream().map(p -> p.withEvaluationDetailRequired(true)).toList())
+        assertThat(next.publication()
+            .predictions()
+            .stream()
+            .map(p -> p.withEvaluationDetailRequired(true))
+            .toList())
             .isEqualTo(original.predictions());
         assertThat(afterMinute.publication().predictions()).allMatch(SeatForecast::evaluationDetailRequired);
     }

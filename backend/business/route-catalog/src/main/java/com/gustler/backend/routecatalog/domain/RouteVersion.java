@@ -10,7 +10,6 @@ public record RouteVersion(
     OffsetDateTime validTo,
     RouteVersionContent content
 ) {
-
     public RouteVersion {
         Objects.requireNonNull(validFrom);
         Objects.requireNonNull(content);

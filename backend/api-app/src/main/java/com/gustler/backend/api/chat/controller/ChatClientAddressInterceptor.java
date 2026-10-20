@@ -10,8 +10,8 @@ import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.HandshakeInterceptor;
 
 public final class ChatClientAddressInterceptor implements HandshakeInterceptor {
-
-    public static final String CLIENT_ADDRESS_ATTRIBUTE = ChatClientAddressInterceptor.class.getName() + ".clientAddress";
+    public static final String CLIENT_ADDRESS_ATTRIBUTE = ChatClientAddressInterceptor.class.getName()
+        + ".clientAddress";
     private static final String FORWARDED_FOR = "X-Forwarded-For";
     private static final String UNKNOWN_ADDRESS = "unknown";
 

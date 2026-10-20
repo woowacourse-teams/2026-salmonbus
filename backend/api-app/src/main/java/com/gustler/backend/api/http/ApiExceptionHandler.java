@@ -37,7 +37,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         exception.retryAfter().ifPresent(retryAfter ->
             headers.set(HttpHeaders.RETRY_AFTER, String.valueOf(retryAfter.toSeconds())));
 
-        return new ResponseEntity<>(bodyOf(code, exception.getMessage(), code.status().value(), exception), headers, code.status());
+        return new ResponseEntity<>(bodyOf(code, exception.getMessage(), code.status()
+            .value(), exception), headers, code.status());
     }
 
     @ExceptionHandler({
@@ -83,7 +84,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     private ResponseEntity<ErrorResponse> respond(
         ErrorCode code, Throwable exception
     ) {
-        return new ResponseEntity<>(bodyOf(code, code.message(), code.status().value(), exception), errorHeaders(), code.status());
+        return new ResponseEntity<>(bodyOf(code, code.message(), code.status()
+            .value(), exception), errorHeaders(), code.status());
     }
 
     /**
@@ -97,7 +99,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
      */
     private ErrorResponse bodyOf(
         ErrorCode code,
-        String message, int status, Throwable failure
+        String message, int status,
+        Throwable failure
     ) {
         String requestId = RequestId.ofCurrentRequest();
         ApiFailureLog.write(status, code, requestId, failure);

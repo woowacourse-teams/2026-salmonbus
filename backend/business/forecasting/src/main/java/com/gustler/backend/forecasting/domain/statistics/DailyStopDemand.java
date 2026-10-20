@@ -14,7 +14,6 @@ public record DailyStopDemand(
     long capacityTotal,
     long sampleCount
 ) {
-
     public DailyStopDemand {
         Objects.requireNonNull(timeSlot, "시간대가 필요하다");
         Objects.requireNonNull(arrivalDate, "도착 날짜가 필요하다");

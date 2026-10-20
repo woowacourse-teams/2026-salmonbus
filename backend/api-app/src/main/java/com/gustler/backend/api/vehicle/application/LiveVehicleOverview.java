@@ -16,7 +16,6 @@ public record LiveVehicleOverview(
     List<ObservedVehicle> vehicles,
     Duration cacheMaxAge
 ) {
-
     public LiveVehicleOverview {
         Objects.requireNonNull(routeId, "routeId는 null일 수 없습니다.");
         Objects.requireNonNull(referenceVersionId, "referenceVersionId는 null일 수 없습니다.");

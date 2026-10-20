@@ -15,7 +15,6 @@ import java.util.Map;
  * <p>읽는 쪽을 재려면 쓰는 쪽이 있어야 한다. 여기서 일부러 망가뜨린 파일도 만든다.
  */
 final class SafetensorsWriter {
-
     private final Map<String, Written> tensors = new LinkedHashMap<>();
 
     private record Written(

@@ -7,7 +7,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class CollectionRuntimeConfigurationTest {
-
     private static final String BASE_URL = "https://gbis.test";
     private static final int DAILY_LIMIT = 10_000;
 
@@ -20,7 +19,9 @@ class CollectionRuntimeConfigurationTest {
 
         // when
         List<String> quotaAliases = configuration.callQuotaPolicy(properties).locationKeyAliases();
-        List<String> clientAliases = configuration.gbisClientOptions(properties).keys().stream()
+        List<String> clientAliases = configuration.gbisClientOptions(properties)
+            .keys()
+            .stream()
             .map(GbisKey::alias)
             .toList();
 
@@ -55,7 +56,10 @@ class CollectionRuntimeConfigurationTest {
 
         // then
         assertThat(quotaAliases).containsExactly(GbisKey.PRIMARY, "b", "c", "d", "e", "f10")
-            .isEqualTo(client.keys().stream().map(GbisKey::alias).toList());
+            .isEqualTo(client.keys()
+                .stream()
+                .map(GbisKey::alias)
+                .toList());
         assertThat(client.serviceKeyOf("f10")).isEqualTo("fake-key-f10");
     }
 

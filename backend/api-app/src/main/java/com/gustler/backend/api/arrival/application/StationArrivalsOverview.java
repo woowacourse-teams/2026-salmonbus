@@ -10,8 +10,8 @@ import java.util.List;
 
 /** 조회 결과. HTTP 응답 형식과 캐시 헤더로의 변환은 컨트롤러가 담당한다. */
 public record StationArrivalsOverview(String stationId, Instant generatedAt, ArrivalAvailability status,
-                                      String reason, ArrivalSnapshot snapshot, ArrivalRefresh refresh,
-                                      List<RouteArrivals> routes, Duration cacheMaxAge) {
+    String reason, ArrivalSnapshot snapshot, ArrivalRefresh refresh,
+    List<RouteArrivals> routes, Duration cacheMaxAge) {
     public StationArrivalsOverview {
         routes = List.copyOf(routes);
     }

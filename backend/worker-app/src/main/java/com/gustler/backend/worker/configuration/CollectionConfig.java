@@ -4,7 +4,6 @@ import com.gustler.backend.gbis.api.GbisKey;
 import com.gustler.backend.observations.api.CollectionTiming;
 import com.gustler.backend.worker.scheduling.AdaptiveCollectionTrigger;
 import com.gustler.backend.worker.scheduling.CollectionScheduler;
-
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
@@ -22,7 +21,6 @@ import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 @Configuration
 @EnableConfigurationProperties({CollectionProperties.class, GbisProperties.class})
 public class CollectionConfig {
-
     private static final Logger log = LoggerFactory.getLogger(CollectionConfig.class);
 
     /**
@@ -36,7 +34,6 @@ public class CollectionConfig {
     @EnableScheduling
     @ConditionalOnProperty(prefix = "collection", name = "enabled", havingValue = "true")
     static class ScheduledCollection {
-
         private final CollectionProperties properties;
         private final CollectionScheduler scheduler;
         private final Clock clock;
@@ -54,8 +51,13 @@ public class CollectionConfig {
             this.properties = properties;
             this.scheduler = scheduler;
             this.clock = clock;
-            this.keyAliases = gbisProperties.serviceKeys().stream().map(GbisKey::alias).toList();
-            this.dailyLimit = keyAliases.stream().mapToInt(gbisProperties::dailyLimitOf).sum();
+            this.keyAliases = gbisProperties.serviceKeys()
+                .stream()
+                .map(GbisKey::alias)
+                .toList();
+            this.dailyLimit = keyAliases.stream()
+                .mapToInt(gbisProperties::dailyLimitOf)
+                .sum();
             this.collectionTaskScheduler = collectionTaskScheduler;
         }
 
@@ -66,7 +68,8 @@ public class CollectionConfig {
             warnIfOverDailyLimit();
             ScheduledTaskRegistrar registrar = new ScheduledTaskRegistrar();
             registrar.setTaskScheduler(collectionTaskScheduler);
-            registrar.addTriggerTask(scheduler::collectAllRoutes, new AdaptiveCollectionTrigger(clock, properties.fixedInterval()));
+            registrar.addTriggerTask(scheduler::collectAllRoutes,
+                new AdaptiveCollectionTrigger(clock, properties.fixedInterval()));
             return registrar;
         }
 

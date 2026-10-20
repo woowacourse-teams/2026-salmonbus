@@ -25,24 +25,34 @@ import tools.jackson.databind.json.JsonMapper;
 class StatisticsFileCalculatorTest {
     private static final Instant UNTIL = Instant.parse("2026-10-09T00:00:00Z");
     private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
 
     @Test
     void 파일_계산은_기존_시간별_집계와_같은_통계를_만든다() throws Exception {
         // given
         var rows = List.of(row(10, 40, 10, true, 3600), row(20, 20, 5, true, 3600));
         var files = write(rows);
-        var samples = rows.stream().map(row -> row.sample(scope(2)).orElseThrow()).toList();
+        var samples = rows.stream()
+            .map(row -> row.sample(scope(2)).orElseThrow())
+            .toList();
         DailyStopDemand day = VehicleHourlyDemand.sumOf(samples).getFirst().onDay(40, Clock.fixed(UNTIL, ZONE));
         var expected = StopDemandCellTotals.ofDay(day).toMeasurement();
 
         // when
-        var actual = StatisticsFileCalculator.calculate(directory, files, scope(2), Map.of("bus", 40), 100, 4096);
+        var actual =
+            StatisticsFileCalculator.calculate(directory, files, scope(2), Map.of("bus", 40), 100, 4096);
 
         // then
         assertThat(actual).hasSize(1);
-        assertThat(actual.getFirst().cell().averageFillRate()).isCloseTo(expected.cell().averageFillRate(), within(1e-12));
-        assertThat(actual.getFirst().cell().averageNetBoardingRate()).isCloseTo(expected.cell().averageNetBoardingRate(), within(1e-12));
+        assertThat(actual.getFirst()
+            .cell()
+            .averageFillRate()).isCloseTo(expected.cell()
+                .averageFillRate(), within(1e-12));
+        assertThat(actual.getFirst()
+            .cell()
+            .averageNetBoardingRate()).isCloseTo(expected.cell()
+                .averageNetBoardingRate(), within(1e-12));
         assertThat(actual.getFirst().cell().sampleCount()).isEqualTo(expected.cell().sampleCount());
         assertThat(actual.getFirst().timeSlot()).isEqualTo(expected.timeSlot());
     }
@@ -54,7 +64,8 @@ class StatisticsFileCalculatorTest {
             row(30, 40, 40, true, 90000)));
 
         // when
-        var actual = StatisticsFileCalculator.calculate(directory, files, scope(3), Map.of("bus", 40), 100, 4096);
+        var actual =
+            StatisticsFileCalculator.calculate(directory, files, scope(3), Map.of("bus", 40), 100, 4096);
 
         // then
         assertThat(actual).hasSize(1);
@@ -70,7 +81,8 @@ class StatisticsFileCalculatorTest {
         var files = write(List.of(row(10, 40, 10, false, 3600), row(20, 20, 5, true, 3600)));
 
         // when
-        var actual = StatisticsFileCalculator.calculate(directory, files, scope(2), Map.of("bus", 20), 100, 4096);
+        var actual =
+            StatisticsFileCalculator.calculate(directory, files, scope(2), Map.of("bus", 20), 100, 4096);
 
         // then
         assertThat(actual.getFirst().cell().sampleCount()).isEqualTo(1);
@@ -83,10 +95,13 @@ class StatisticsFileCalculatorTest {
         var files = write(List.of(row(10, 40, 10, true, 3600)));
 
         // when & then
-        assertThatThrownBy(() -> StatisticsFileCalculator.calculate(directory, files, scope(1), Map.of(), 100, 4096))
+        assertThatThrownBy(
+            () -> StatisticsFileCalculator.calculate(directory, files, scope(1), Map.of(), 100, 4096))
             .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("정원");
-        assertThatThrownBy(() -> StatisticsFileCalculator.calculate(directory, files, scope(1), Map.of("bus", 20), 100, 4096))
-            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("정원");
+        assertThatThrownBy(() ->
+            StatisticsFileCalculator.calculate(directory, files, scope(1), Map.of("bus", 20), 100, 4096))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("정원");
     }
 
     @Test
@@ -95,8 +110,10 @@ class StatisticsFileCalculatorTest {
         var files = write(List.of(row(10, 40, 10, true, 3600), row(20, 40, 10, true, 90000)));
 
         // when & then
-        assertThatThrownBy(() -> StatisticsFileCalculator.calculate(directory, files, scope(2), Map.of("bus", 40), 1, 4096))
-            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("한도");
+        assertThatThrownBy(() ->
+            StatisticsFileCalculator.calculate(directory, files, scope(2), Map.of("bus", 40), 1, 4096))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("한도");
     }
 
     @Test
@@ -106,18 +123,25 @@ class StatisticsFileCalculatorTest {
         var files = write(List.of(input, input));
 
         // when & then
-        assertThatThrownBy(() -> StatisticsFileCalculator.calculate(directory, files, scope(2), Map.of("bus", 40), 100, 4096))
-            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("중복");
+        assertThatThrownBy(() ->
+            StatisticsFileCalculator.calculate(directory, files, scope(2), Map.of("bus", 40), 100, 4096))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("중복");
         var single = write(List.of(input));
-        assertThatThrownBy(() -> StatisticsFileCalculator.calculate(directory, single, scope(2), Map.of("bus", 40), 100, 4096))
-            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("건수");
+        assertThatThrownBy(() ->
+            StatisticsFileCalculator.calculate(directory, single, scope(2), Map.of("bus", 40), 100, 4096))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("건수");
     }
 
     private List<StatisticsInputFile> write(List<StatisticsInputRow> rows) throws Exception {
         var mapper = JsonMapper.builder().build();
         var path = directory.resolve("rows.jsonl");
         try (var output = Files.newBufferedWriter(path)) {
-            for (var row : rows) { output.write(mapper.writeValueAsString(row)); output.newLine(); }
+            for (var row : rows) {
+                output.write(mapper.writeValueAsString(row));
+                output.newLine();
+            }
         }
         return List.of(new StatisticsInputFile("rows.jsonl", Files.size(path),
             HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path)))));
@@ -128,7 +152,8 @@ class StatisticsFileCalculatorTest {
             DemandStatisticsVersion.CURRENT_CALCULATION_VERSION, 1, 1, UNTIL, ZONE, count);
     }
 
-    private StatisticsInputRow row(long id, int before, int after, boolean usable, long secondsAgo) {
+    private StatisticsInputRow row(long id, int before, int after, boolean usable, long secondsAgo
+    ) {
         return new StatisticsInputRow(id, 9, 1, true, ScoringState.SETTLED, id + 1000, after,
             UNTIL.minusSeconds(secondsAgo), UNTIL, 1,
             new StatisticsInputRow.Observation(id, 1, "bus", 0, before, usable),

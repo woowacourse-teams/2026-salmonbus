@@ -108,16 +108,23 @@ class EvaluationMemoryRecoveryTest {
             long after = call.getArgument(1);
             long through = call.getArgument(2);
             int limit = call.getArgument(3);
-            return inputs.keySet().stream().filter(id -> id > after && id <= through).limit(limit).toList();
+            return inputs.keySet()
+                .stream()
+                .filter(id -> id > after && id <= through)
+                .limit(limit)
+                .toList();
         });
         when(work.revisions(anyLong(), any())).thenAnswer(call -> {
             List<Long> ids = call.getArgument(1);
-            return ids.stream().collect(Collectors.toMap(id -> id, id -> 1L));
+            return ids.stream()
+                .collect(Collectors.toMap(id -> id, id -> 1L));
         });
         when(work.restore(anyLong(), any())).thenAnswer(call -> {
             List<Long> ids = call.getArgument(1);
-            return ids.stream().map(id -> new EvaluationWorkStore.Restored(
-                new EvaluationWorkStore.Key(id, 2), Optional.of(inputs.get(id)))).toList();
+            return ids.stream()
+                .map(id -> new EvaluationWorkStore.Restored(
+                    new EvaluationWorkStore.Key(id, 2), Optional.of(inputs.get(id))))
+                .toList();
         });
         when(arrivals.findAfter(anyLong(), anyString(), any(), anyInt())).thenAnswer(call -> {
             evaluatedVehicles.add(call.getArgument(1));
@@ -150,8 +157,10 @@ class EvaluationMemoryRecoveryTest {
         for (int round = 0; round < 17; round++) commitRound();
 
         // then
-        assertThat(evaluatedVehicles).containsExactlyElementsOf(inputs.keySet().stream()
-            .map(id -> "bus-" + id).toList());
+        assertThat(evaluatedVehicles).containsExactlyElementsOf(inputs.keySet()
+            .stream()
+            .map(id -> "bus-" + id)
+            .toList());
         verify(work, times(17)).releaseCompleted(anyLong(), any());
     }
 
@@ -255,8 +264,9 @@ class EvaluationMemoryRecoveryTest {
     }
 
     private EvaluateForecastsService newService() {
-        return new EvaluateForecastsService(work, new EvaluationWorkPageReader(work), new EvaluationRouteCommitter(work, quality, writer,
-            new EvaluationQualityRecheck(work, arrivals, 400)), arrivals,
+        return new EvaluateForecastsService(work, new EvaluationWorkPageReader(work),
+            new EvaluationRouteCommitter(work, quality, writer,
+                new EvaluationQualityRecheck(work, arrivals, 400)), arrivals,
             quality, new ForecastPolicy(Duration.ofMinutes(5), 20, 1, 400),
             Clock.fixed(NOW, ZoneOffset.UTC), 12, 1,
             new RecentArrivalObservationCache(false, 30000, Duration.ofMinutes(30)));
@@ -267,7 +277,9 @@ class EvaluationMemoryRecoveryTest {
             NOW.minusSeconds(30), NOW.minusSeconds(30)));
     }
 
-    private void commitRound() { finish(prepareRound(), TransactionSynchronization.STATUS_COMMITTED); }
+    private void commitRound() {
+        finish(prepareRound(), TransactionSynchronization.STATUS_COMMITTED);
+    }
 
     private List<TransactionSynchronization> prepareRound() {
         TransactionSynchronizationManager.setActualTransactionActive(true);

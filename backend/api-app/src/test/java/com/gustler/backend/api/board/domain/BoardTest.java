@@ -2,14 +2,12 @@ package com.gustler.backend.api.board.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
 import com.gustler.backend.api.route.domain.RouteStatus;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class BoardTest {
-
     private static final OffsetDateTime OBSERVED_AT = OffsetDateTime.parse("2026-09-30T08:00:00+09:00");
     private static final ForecastModel ACTIVE_MODEL = new ForecastModel(
         9L,

@@ -1,5 +1,4 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
-
 import com.gustler.backend.forecasting.domain.publication.ObservationHistory;
 import com.gustler.backend.forecasting.domain.publication.ObservedBatch;
 import com.gustler.backend.forecasting.domain.model.ObservedSeats;
@@ -36,7 +35,6 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
-
     /**
      * 궤적을 잇는 데 거슬러 볼 시간.
      *
@@ -207,11 +205,16 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
             return List.of();
         }
         ObservationHistory history = historyEndingAt(target.get());
-        Set<Long> eligibleIds = history.targetBatch().observations().stream()
+        Set<Long> eligibleIds = history.targetBatch()
+            .observations()
+            .stream()
             .filter(TrajectoryObservation::isForecastEligible)
-            .map(TrajectoryObservation::vehicleObservationId).collect(Collectors.toSet());
+            .map(TrajectoryObservation::vehicleObservationId)
+            .collect(Collectors.toSet());
         return VehicleTrajectoryAssembler.assemble(history, maximumSeatsEverObservedOf(target.get(), history))
-            .stream().filter(trajectory -> eligibleIds.contains(trajectory.vehicleObservationId())).toList();
+            .stream()
+            .filter(trajectory -> eligibleIds.contains(trajectory.vehicleObservationId()))
+            .toList();
     }
 
     /**
@@ -224,7 +227,9 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
         TargetBatch target,
         ObservationHistory history
     ) {
-        List<String> vehicleIds = history.targetBatch().observations().stream()
+        List<String> vehicleIds = history.targetBatch()
+            .observations()
+            .stream()
             .filter(TrajectoryObservation::isForecastEligible)
             .map(TrajectoryObservation::vehicleId)
             .distinct()
@@ -371,7 +376,6 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
         String seatUnknownReason,
         Integer crowdLevel
     ) {
-
         TrajectoryObservation toObservation(
             Instant observedAt
         ) {

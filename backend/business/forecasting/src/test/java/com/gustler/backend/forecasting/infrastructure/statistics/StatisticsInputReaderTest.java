@@ -21,7 +21,8 @@ import tools.jackson.databind.json.JsonMapper;
 class StatisticsInputReaderTest {
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final Instant UNTIL = Instant.parse("2026-10-09T00:00:00Z");
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
 
     @Test
     void 여러_파일을_선언한_순서대로_읽고_마지막_줄바꿈이_없어도_검증한다() throws Exception {
@@ -141,7 +142,9 @@ class StatisticsInputReaderTest {
             HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path))));
     }
 
-    private String json(long id) { return JSON.writeValueAsString(row(id)); }
+    private String json(long id) {
+        return JSON.writeValueAsString(row(id));
+    }
 
     private StatisticsInputRow row(long id) {
         return new StatisticsInputRow(id, 9, 1, true, ScoringState.SETTLED, 100L, 5,

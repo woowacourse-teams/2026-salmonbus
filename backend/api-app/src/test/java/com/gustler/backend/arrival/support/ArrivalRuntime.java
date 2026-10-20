@@ -82,8 +82,9 @@ public final class ArrivalRuntime implements AutoCloseable {
             routes.add(new ArrivalSnapshot.RouteArrival(route, "synthetic " + index, 1, 12, null, null, "RUN",
                 List.of(new ArrivalSnapshot.Prediction("vehicle-" + index, 1, 3600, 60, 3, 0, null, null, 0, false))));
         }
-        var snapshot = new ArrivalSnapshot(UUID.randomUUID(), FakeGbisArrivalServer.STATIONS.getFirst(), received,
-            received.plusSeconds(3600), received.plusSeconds(3660), "synthetic profile", routes);
+        var snapshot =
+            new ArrivalSnapshot(UUID.randomUUID(), FakeGbisArrivalServer.STATIONS.getFirst(), received,
+                received.plusSeconds(3600), received.plusSeconds(3660), "synthetic profile", routes);
         try (Connection connection = connection(); var statement = connection.prepareStatement("""
             INSERT INTO arrival_snapshot(id,provider,operation,station_id,received_at,refresh_after_at,stale_at,
                 normalization_version,payload_digest,payload)
@@ -101,7 +102,8 @@ public final class ArrivalRuntime implements AutoCloseable {
     }
 
     public URI arrivalsUri() {
-        return URI.create("http://127.0.0.1:" + apiPort + "/api/v2/stations/" + FakeGbisArrivalServer.STATIONS.getFirst() + "/arrivals");
+        return URI.create("http://127.0.0.1:" + apiPort + "/api/v2/stations/"
+                    + FakeGbisArrivalServer.STATIONS.getFirst() + "/arrivals");
     }
 
     public void startWorker(boolean productionTimings, Map<String, String> extra) throws Exception {
@@ -144,13 +146,21 @@ public final class ArrivalRuntime implements AutoCloseable {
     public Reply get(String station, String query) throws Exception {
         String path = "/api/v2/stations/" + station + "/arrivals" + query;
         long started = System.nanoTime();
-        var response = HTTP.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + apiPort + path))
-            .timeout(Duration.ofSeconds(10)).GET().build(), HttpResponse.BodyHandlers.ofString());
+        var response =
+            HTTP.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + apiPort + path))
+                    .timeout(Duration.ofSeconds(10))
+                    .GET()
+                    .build(), HttpResponse.BodyHandlers.ofString());
         return new Reply(response.statusCode(), JSON.readTree(response.body()),
             response.headers().firstValue("Cache-Control").orElse(""), (System.nanoTime() - started) / 1e6);
     }
 
-    public Reply awaitValue(String station, String pointer, String expected, Duration timeout) throws Exception {
+    public Reply awaitValue(
+        String station,
+        String pointer,
+        String expected,
+        Duration timeout
+    ) throws Exception {
         long deadline = System.nanoTime() + timeout.toNanos();
         Reply latest;
         do {
@@ -168,12 +178,12 @@ public final class ArrivalRuntime implements AutoCloseable {
 
     public int reservations() throws SQLException {
         return scalar("SELECT COALESCE(sum(reserved_calls),0) FROM daily_call_quota "
-            + "WHERE api_service='BUS_ARRIVAL' AND key_alias='__total__'");
+                + "WHERE api_service='BUS_ARRIVAL' AND key_alias='__total__'");
     }
 
     public int usedKeys() throws SQLException {
         return scalar("SELECT count(*) FROM daily_call_quota WHERE api_service='BUS_ARRIVAL' "
-            + "AND key_alias <> '__total__' AND reserved_calls > 0");
+                + "AND key_alias <> '__total__' AND reserved_calls > 0");
     }
 
     public int routeReservations() throws SQLException {
@@ -181,7 +191,8 @@ public final class ArrivalRuntime implements AutoCloseable {
     }
 
     private int scalar(String sql) throws SQLException {
-        try (Connection connection = connection(); var statement = connection.createStatement(); ResultSet rows = statement.executeQuery(sql)) {
+        try (Connection connection = connection(); var statement = connection.createStatement(); ResultSet rows =
+            statement.executeQuery(sql)) {
             rows.next();
             return rows.getInt(1);
         }
@@ -200,24 +211,35 @@ public final class ArrivalRuntime implements AutoCloseable {
                     INSERT INTO route(public_route_id,source_id,source_route_id,display_name,start_stop_name,end_stop_name)
                     VALUES (?,'GBIS',?,?, 'A','B') RETURNING id
                     """)) {
-                    insert.setString(1, route[0]); insert.setString(2, route[0]); insert.setString(3, route[1]);
-                    try (var rows = insert.executeQuery()) { rows.next(); routeId = rows.getLong(1); }
+                    insert.setString(1, route[0]);
+                    insert.setString(2, route[0]);
+                    insert.setString(3, route[1]);
+                    try (var rows = insert.executeQuery()) {
+                        rows.next();
+                        routeId = rows.getLong(1);
+                    }
                 }
                 long version;
                 try (var insert = connection.prepareStatement("""
                     INSERT INTO route_version(route_id,turn_sequence,content_digest,valid_from)
                     VALUES (?,12,?,clock_timestamp() - interval '1 day') RETURNING id
                     """)) {
-                    insert.setLong(1, routeId); insert.setString(2, "a".repeat(64));
-                    try (var rows = insert.executeQuery()) { rows.next(); version = rows.getLong(1); }
+                    insert.setLong(1, routeId);
+                    insert.setString(2, "a".repeat(64));
+                    try (var rows = insert.executeQuery()) {
+                        rows.next();
+                        version = rows.getLong(1);
+                    }
                 }
                 try (var insert = connection.prepareStatement("""
                     INSERT INTO route_stop(route_version_id,stop_order,stop_id,name,direction,boarding_allowed)
                     VALUES (?,?,?,'synthetic stop','UP',true)
                     """)) {
                     for (int index = 0; index < FakeGbisArrivalServer.STATIONS.size(); index++) {
-                        insert.setLong(1, version); insert.setInt(2, index + 1);
-                        insert.setString(3, FakeGbisArrivalServer.STATIONS.get(index)); insert.addBatch();
+                        insert.setLong(1, version);
+                        insert.setInt(2, index + 1);
+                        insert.setString(3, FakeGbisArrivalServer.STATIONS.get(index));
+                        insert.addBatch();
                     }
                     insert.executeBatch();
                 }
@@ -225,7 +247,11 @@ public final class ArrivalRuntime implements AutoCloseable {
         }
     }
 
-    private Process start(String jarProperty, int port, Map<String, String> extra, Path log) throws Exception {
+    private Process start(
+        String jarProperty, int port,
+        Map<String, String> extra,
+        Path log
+    ) throws Exception {
         List<String> command = new ArrayList<>(List.of(Path.of(System.getProperty("java.home"), "bin/java").toString(),
             "-Xmx256m", "-XX:ActiveProcessorCount=2"));
         if (jarProperty.equals("api.boot.jar")) command.addAll(apiJvmOptions);
@@ -246,10 +272,15 @@ public final class ArrivalRuntime implements AutoCloseable {
             await(() -> {
                 if (!process.isAlive()) throw new AssertionError("실행 JAR 기동 실패: " + tail(log));
                 try {
-                    var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/actuator/health"))
-                        .timeout(Duration.ofSeconds(1)).GET().build();
+                    var request =
+                        HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/actuator/health"))
+                        .timeout(Duration.ofSeconds(1))
+                        .GET()
+                        .build();
                     return HTTP.send(request, HttpResponse.BodyHandlers.discarding()).statusCode() == 200;
-                } catch (Exception notReady) { return false; }
+                } catch (Exception notReady) {
+                    return false;
+                }
             }, BOOT_TIMEOUT, "Boot JAR 기동: " + log);
             return process;
         } catch (Throwable failure) {
@@ -258,7 +289,8 @@ public final class ArrivalRuntime implements AutoCloseable {
         }
     }
 
-    public static void await(BooleanSupplier condition, Duration timeout, String description) throws InterruptedException {
+    public static void await(BooleanSupplier condition, Duration timeout,
+        String description) throws InterruptedException {
         long deadline = System.nanoTime() + timeout.toNanos();
         do {
             if (condition.getAsBoolean()) return;
@@ -268,13 +300,19 @@ public final class ArrivalRuntime implements AutoCloseable {
     }
 
     private static int freePort() {
-        try (ServerSocket socket = new ServerSocket(0)) { return socket.getLocalPort(); }
-        catch (IOException failure) { throw new java.io.UncheckedIOException(failure); }
+        try (ServerSocket socket = new ServerSocket(0)) {
+            return socket.getLocalPort();
+        }
+        catch (IOException failure) {
+            throw new java.io.UncheckedIOException(failure);
+        }
     }
 
     private static int anotherPort(int excluded) {
         int port;
-        do { port = freePort(); } while (port == excluded);
+        do {
+            port = freePort();
+        } while (port == excluded);
         return port;
     }
 
@@ -286,7 +324,9 @@ public final class ArrivalRuntime implements AutoCloseable {
         try {
             String content = Files.readString(path);
             return content.substring(Math.max(0, content.length() - 6000));
-        } catch (IOException failure) { return "로그 읽기 실패"; }
+        } catch (IOException failure) {
+            return "로그 읽기 실패";
+        }
     }
 
     private static void destroy(Process process) throws InterruptedException {
@@ -301,9 +341,13 @@ public final class ArrivalRuntime implements AutoCloseable {
     @Override
     public void close() throws Exception {
         source.release();
-        try { destroy(worker); }
+        try {
+            destroy(worker);
+        }
         finally {
-            try { destroy(api); }
+            try {
+                destroy(api);
+            }
             finally {
                 source.close();
                 if (postgres.isRunning()) postgres.stop();

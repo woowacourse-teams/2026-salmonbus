@@ -8,7 +8,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 class SeatResponseTest {
-
     @Test
     void 정확한_좌석_응답은_EXACT_종류를_스스로_결정한다() {
         SeatResponse.Exact actual = (SeatResponse.Exact) SeatResponse.from(

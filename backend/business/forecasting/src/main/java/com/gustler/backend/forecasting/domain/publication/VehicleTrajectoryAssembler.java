@@ -22,7 +22,6 @@ import java.util.Optional;
  * 판 결손·순번 건너뜀·순번 역행으로 특징 계산을 끊는다.
  */
 public final class VehicleTrajectoryAssembler {
-
     private static final int SAME_STOP = 0;
     private static final int NEXT_STOP = 1;
 
@@ -44,7 +43,8 @@ public final class VehicleTrajectoryAssembler {
         Map<String, Integer> maximumSeatsByVehicle
     ) {
         List<VehicleTrajectory> trajectories = new ArrayList<>();
-        for (TrajectoryObservation observation : history.targetBatch().observations()) {
+        for (TrajectoryObservation observation : history.targetBatch()
+            .observations()) {
             if (!maximumSeatsByVehicle.containsKey(observation.vehicleId())) {
                 continue;
             }
@@ -132,7 +132,7 @@ public final class VehicleTrajectoryAssembler {
             return new SeatSlope.Unknown(chain.gap());
         }
         if (!(chain.latest().seats() instanceof ObservedSeats.Known later)
-            || !(chain.justBeforeLatest().seats() instanceof ObservedSeats.Known earlier)) {
+                || !(chain.justBeforeLatest().seats() instanceof ObservedSeats.Known earlier)) {
             return new SeatSlope.Unknown(TrajectoryGap.SEATS_UNKNOWN);
         }
         return new SeatSlope.Known(later.seats() - earlier.seats());
@@ -248,8 +248,8 @@ public final class VehicleTrajectoryAssembler {
         List<TrajectoryObservation> observations,
         TrajectoryGap gap
     ) {
-
         private static final int LATEST = 0;
+
         private static final int JUST_BEFORE_LATEST = 1;
 
         boolean hasEarlierObservation() {

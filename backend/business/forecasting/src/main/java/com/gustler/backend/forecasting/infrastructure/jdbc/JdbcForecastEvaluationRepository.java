@@ -28,7 +28,6 @@ import org.springframework.transaction.annotation.Propagation;
 /** 평가 상태와 당시 도착 관측의 근거 값을 예측과 별도로 저장한다. */
 @Repository
 public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepository {
-
     // 대상 키는 한 번만 읽고, 같은 관측을 쓰는 여러 정류장 예보의 품질 조회를 공유한다.
     // 품질을 통과하지 못한 키도 반환해야 다음 페이지 이동과 확정 제외 처리를 유지할 수 있다.
     private static final String SELECT_PENDING_PAGE = """
@@ -223,12 +222,21 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
         return pending;
     }
 
-    private int closeConfirmedExclusions(long version, List<PendingKey> keys,
-        List<PendingForecast> eligible, int budget) {
-        Set<Long> eligibleIds = eligible.stream().map(PendingForecast::vehicleObservationId).collect(Collectors.toSet());
-        List<Long> absentIds = keys.stream().map(PendingKey::vehicleObservationId)
-            .filter(id -> !eligibleIds.contains(id)).distinct().toList();
-        if (absentIds.isEmpty()) { return 0; }
+    private int closeConfirmedExclusions(long version,
+        List<PendingKey> keys,
+        List<PendingForecast> eligible, int budget
+    ) {
+        Set<Long> eligibleIds = eligible.stream()
+            .map(PendingForecast::vehicleObservationId)
+            .collect(Collectors.toSet());
+        List<Long> absentIds = keys.stream()
+            .map(PendingKey::vehicleObservationId)
+            .filter(id -> !eligibleIds.contains(id))
+            .distinct()
+            .toList();
+        if (absentIds.isEmpty()) {
+            return 0;
+        }
         List<Long> confirmed = jdbcClient.sql("""
             SELECT source.id FROM vehicle_observation source
             LEFT JOIN observation_trip_assignment assignment ON assignment.observation_id = source.id
@@ -236,13 +244,17 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
             WHERE source.id IN (:ids) AND source.route_version_id = :version AND
             """ + CONFIRMED_EXCLUSION)
             .param("ids", absentIds).param("version", version).query(Long.class).list();
-        if (confirmed.isEmpty()) { return 0; }
+        if (confirmed.isEmpty()) {
+            return 0;
+        }
 
         // 제외 확정도 같은 노선의 품질 변경과 순서를 맞춘다.
         quality.lock(version);
         Set<Long> excludedIds = Set.copyOf(confirmed);
-        List<PendingKey> closing = keys.stream().filter(key -> excludedIds.contains(key.vehicleObservationId()))
-            .limit(budget).toList();
+        List<PendingKey> closing = keys.stream()
+            .filter(key -> excludedIds.contains(key.vehicleObservationId()))
+            .limit(budget)
+            .toList();
         StringJoiner values = new StringJoiner(", ");
         for (int index = 0; index < closing.size(); index++) {
             values.add("(CAST(:observation%d AS bigint), CAST(:stop%d AS integer))".formatted(index, index));
@@ -301,7 +313,10 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void addPending(final long routeVersionId, List<ForecastEvaluation> evaluations) {
-        List<Long> ids = evaluations.stream().map(ForecastEvaluation::vehicleObservationId).distinct().toList();
+        List<Long> ids = evaluations.stream()
+            .map(ForecastEvaluation::vehicleObservationId)
+            .distinct()
+            .toList();
         for (int from = 0; from < ids.size(); from += 100) {
             work.register(routeVersionId, ids.subList(from, Math.min(from + 100, ids.size())));
         }
@@ -369,19 +384,20 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
     }
 
     private static SettledEvaluation settledEvaluationOf(ResultSet row, int index) throws SQLException {
-        return new SettledEvaluation(row.getLong("route_id"), row.getLong("model_deployment_id"), row.getLong("route_version_id"),
-                    row.getLong("vehicle_observation_id"), row.getInt("target_stop_order"),
-                    row.getInt("stops_to_target"), row.getDouble("seat_full_chance_raw"),
-                    ScoringState.valueOf(row.getString("scoring_state")),
-                    row.getObject("arrival_observation_id", Long.class), row.getObject("seats_on_arrival", Integer.class),
-                    instantOrNull(row.getObject("arrived_at", OffsetDateTime.class)),
-                    row.getObject("scored_at", OffsetDateTime.class).toInstant(),
-                    row.getBoolean("usable_for_calibration"), row.getString("prediction_vehicle_id"),
-                    row.getObject("prediction_remaining_seats", Integer.class),
-                    row.getBoolean("target_boarding_allowed"),
-                    new EvaluationDiagnostics(row.getString("route_name"), row.getString("stop_name"),
-                        row.getString("stop_id"), row.getString("direction"), row.getLong("model_deployment_id"),
-                        row.getObject("expected_seats", Double.class), row.getDouble("seat_full_chance")));
+        return new SettledEvaluation(row.getLong("route_id"), row.getLong("model_deployment_id"),
+            row.getLong("route_version_id"),
+            row.getLong("vehicle_observation_id"), row.getInt("target_stop_order"),
+            row.getInt("stops_to_target"), row.getDouble("seat_full_chance_raw"),
+            ScoringState.valueOf(row.getString("scoring_state")),
+            row.getObject("arrival_observation_id", Long.class), row.getObject("seats_on_arrival", Integer.class),
+            instantOrNull(row.getObject("arrived_at", OffsetDateTime.class)),
+            row.getObject("scored_at", OffsetDateTime.class).toInstant(),
+            row.getBoolean("usable_for_calibration"), row.getString("prediction_vehicle_id"),
+            row.getObject("prediction_remaining_seats", Integer.class),
+            row.getBoolean("target_boarding_allowed"),
+            new EvaluationDiagnostics(row.getString("route_name"), row.getString("stop_name"),
+                row.getString("stop_id"), row.getString("direction"), row.getLong("model_deployment_id"),
+                row.getObject("expected_seats", Double.class), row.getDouble("seat_full_chance")));
     }
 
     private static Instant instantOrNull(OffsetDateTime timestamp) {
@@ -396,8 +412,6 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
     }
 
     private record PendingKey(long vehicleObservationId, int targetStopOrder) {
-
         private static final PendingKey BEFORE_FIRST = new PendingKey(0L, 0);
     }
-
 }

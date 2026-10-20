@@ -13,7 +13,6 @@ import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.StandardEnvironment;
 
 public final class GbisServiceKeyEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
-
     static final String PROPERTY_SOURCE = "gbisServiceKeys";
 
     private static final String PREFIX = "GBIS_SERVICE_KEY_";

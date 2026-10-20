@@ -1,8 +1,6 @@
 package com.gustler.backend.forecasting.domain.model;
-
 import com.gustler.backend.forecasting.domain.statistics.TargetStopDemand;
 import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
-
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -42,7 +40,6 @@ import java.util.stream.Stream;
  * </ul>
  */
 public final class SeatForecastDesignMatrix {
-
     public static final int COLUMN_COUNT = 31;
 
     /** 늘 1. 절편이 붙는 자리다. */
@@ -166,7 +163,8 @@ public final class SeatForecastDesignMatrix {
 
     /** 학습된 계수가 와야 값이 정해지는 열. */
     public static final List<Integer> COLUMNS_WAITING_FOR_COEFFICIENTS =
-        Stream.concat(Stream.of(NEW_TIME_SLOT), STOP_POSITION_BASIS_COLUMNS.stream()).toList();
+        Stream.concat(Stream.of(NEW_TIME_SLOT), STOP_POSITION_BASIS_COLUMNS.stream())
+            .toList();
 
     /** 어느 재료에도 없어 0으로 두는 열. */
     public static final List<Integer> COLUMNS_ALWAYS_ZERO = List.of(ROUTE);

@@ -2,7 +2,6 @@ package com.gustler.backend.forecasting.application.publication;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.api.publication.PublishPendingForecasts;
-
 import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
@@ -12,7 +11,6 @@ import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryQuery
 import com.gustler.backend.forecasting.api.ForecastPolicy;
 
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
-
 import jakarta.annotation.PostConstruct;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -36,13 +34,14 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
     public void setTelemetry(ForecastTelemetry telemetry) { this.telemetry = telemetry; }
 
     private static final Logger log = LoggerFactory.getLogger(PublishPendingForecastsService.class);
-
     private static final Duration WARNING_INTERVAL = Duration.ofMinutes(1);
 
     private static final Duration LEFT_BEHIND_LOOKBACK = ForecastPolicy.MAX_STALENESS;
 
     private final VehicleTrajectoryQuery vehicleTrajectoryQuery;
+
     private final RouteVersionQuery routeVersions;
+
     private final RouteStopsQuery routeStops;
     private final ForecastRuntime forecastRuntime;
     private final ForecastBatchWriter forecastBatchWriter;
@@ -113,7 +112,7 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
                 return;
             }
             if (!WorkerOperationLog.measure("forecast_routes", "all", routeVersions::findActiveVersionIds)
-                .contains(routeVersionId)) {
+                    .contains(routeVersionId)) {
                 return;
             }
             writeForecastsOfCoveredRoute(routeVersionId, clock.instant().minus(properties.staleness()), runtime.get());
@@ -173,7 +172,7 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
         }
         lastStaleWarningAt = now;
         log.warn("신선도 창보다 오래돼서 예보 없이 두고 가는 판이 남아 있다. 그중 가장 오래된 판의 "
-            + "관측 시각={}", oldestLeftBehind.atZone(clock.getZone()));
+                + "관측 시각={}", oldestLeftBehind.atZone(clock.getZone()));
     }
 
     private static Instant olderOf(
@@ -199,8 +198,10 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
             () -> vehicleTrajectoryQuery.findBatchesAwaitingForecast(routeVersionId, notBefore,
                 properties.batchLimit()));
         // 기존 처리 대상 조회를 재사용한다. 저장 실패 때도 대상이 있었다는 사실을 남긴다.
-        Instant oldest = batches.stream().map(PendingForecastBatch::responseReceivedAt)
-            .min(Instant::compareTo).orElse(null);
+        Instant oldest = batches.stream()
+            .map(PendingForecastBatch::responseReceivedAt)
+            .min(Instant::compareTo)
+            .orElse(null);
         try { telemetry.pending(routeVersionId, oldest); }
         catch (RuntimeException ignored) { /* 계측 실패는 발행을 막지 않는다. */ }
         for (PendingForecastBatch batch : batches) {

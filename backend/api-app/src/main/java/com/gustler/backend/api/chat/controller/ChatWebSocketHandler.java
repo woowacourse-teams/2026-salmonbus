@@ -39,7 +39,6 @@ import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorato
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 public final class ChatWebSocketHandler extends TextWebSocketHandler {
-
     public static final int MAX_FRAME_BYTES = 1_024;
     private static final int HISTORY_BATCH_SIZE = 10;
     private static final Duration START_TIMEOUT = Duration.ofSeconds(5);
@@ -122,7 +121,7 @@ public final class ChatWebSocketHandler extends TextWebSocketHandler {
         }
         switch (frame) {
             case UnsupportedProtocol unsupported ->
-                fail(state, unsupported.requestId(), "UNSUPPORTED_PROTOCOL", "지원하지 않는 프로토콜입니다.", null, true);
+            fail(state, unsupported.requestId(), "UNSUPPORTED_PROTOCOL", "지원하지 않는 프로토콜입니다.", null, true);
             case SessionStart start -> start(state, start);
             case MessageSend send -> {
                 if (state.started()) {
@@ -186,7 +185,10 @@ public final class ChatWebSocketHandler extends TextWebSocketHandler {
         if (active.isEmpty() && created == 0 && rejected == 0 && storeErrors == 0 && overloaded == 0) {
             return;
         }
-        final long rooms = active.stream().map(SessionState::routeId).distinct().count();
+        final long rooms = active.stream()
+            .map(SessionState::routeId)
+            .distinct()
+            .count();
         log.info("채팅 1분 요약. 방={} 세션={} 보냄={} 거절={} 저장오류={} 연결초과={} 마지막저장오류={}",
             rooms, active.size(), created, rejected, storeErrors, overloaded, storeError);
     }
@@ -206,7 +208,9 @@ public final class ChatWebSocketHandler extends TextWebSocketHandler {
             for (int index = 0; index < history.size(); index += HISTORY_BATCH_SIZE) {
                 List<ChatMessageResponse> batch = history
                     .subList(index, Math.min(index + HISTORY_BATCH_SIZE, history.size()))
-                    .stream().map(ChatMessageResponse::from).toList();
+                    .stream()
+                    .map(ChatMessageResponse::from)
+                    .toList();
                 sendFrame(state, new ChatServerFrame.HistoryBatch(1, "history.batch", batch));
             }
             sendFrame(state, new ChatServerFrame.HistoryEnd(1, "history.end"));
@@ -303,7 +307,7 @@ public final class ChatWebSocketHandler extends TextWebSocketHandler {
 
     private void limitBlockingSend(WebSocketSession session) {
         if (session instanceof NativeWebSocketSession nativeSession
-            && nativeSession.getNativeSession() instanceof Session container) {
+                && nativeSession.getNativeSession() instanceof Session container) {
             container.getUserProperties().put(TOMCAT_BLOCKING_SEND_TIMEOUT, SEND_TIME_LIMIT.toMillis());
         }
     }
@@ -314,7 +318,8 @@ public final class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     private String clientAddress(WebSocketSession session) {
-        if (session.getAttributes().get(ChatClientAddressInterceptor.CLIENT_ADDRESS_ATTRIBUTE) instanceof String address) {
+        if (session.getAttributes()
+                .get(ChatClientAddressInterceptor.CLIENT_ADDRESS_ATTRIBUTE) instanceof String address) {
             return address;
         }
         return ChatClientAddressInterceptor.hostAddress(session.getRemoteAddress());
@@ -340,7 +345,12 @@ public final class ChatWebSocketHandler extends TextWebSocketHandler {
         private volatile Instant lastSentAt;
         private volatile ChatIdentity identity;
 
-        private SessionState(WebSocketSession session, WebSocketSession rawSession, ChatRoom room, Instant connectedAt) {
+        private SessionState(
+            WebSocketSession session,
+            WebSocketSession rawSession,
+            ChatRoom room,
+            Instant connectedAt
+        ) {
             this.session = session;
             this.rawSession = rawSession;
             this.room = room;

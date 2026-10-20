@@ -5,7 +5,6 @@ import java.util.Optional;
 
 /** 한 노선의 버전 교체를 결정한다. 과거 버전 전체를 로딩할 필요는 없다. */
 public final class Route {
-
     private final long id;
     private RouteVersion currentVersion;
     private RouteVersion closedVersion;
@@ -33,7 +32,8 @@ public final class Route {
                 openVersion(stops, incoming, at);
             }
             case REVISE_TIMETABLE -> currentVersion = currentVersion.reviseTimetable(readable);
-            case KEEP_CURRENT_VERSION -> { }
+            case KEEP_CURRENT_VERSION -> {
+            }
         }
     }
 

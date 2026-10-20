@@ -19,7 +19,8 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 class StatisticsExtractDownloaderTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
 
     @Test
     void 다시_받은_자료는_원본과_같고_독립된_디렉터리에서_읽는다() throws IOException {
@@ -40,7 +41,10 @@ class StatisticsExtractDownloaderTest {
             .isEqualTo(Files.readAllBytes(source.directory().resolve("rows.jsonl")));
         assertThat(commands).hasSize(2);
         assertThat(commands.getFirst()).contains("--range", "bytes=0-1048576");
-        assertThat(commands.getLast()).contains("--range", "bytes=0-" + source.manifest().files().getFirst().byteCount());
+        assertThat(commands.getLast()).contains("--range", "bytes=0-" + source.manifest()
+            .files()
+            .getFirst()
+            .byteCount());
     }
 
     @Test
@@ -54,7 +58,8 @@ class StatisticsExtractDownloaderTest {
         });
 
         // when & then
-        assertThatThrownBy(() -> downloader.download(directory, UUID.randomUUID(), source.manifest()))
+        assertThatThrownBy(
+            () -> downloader.download(directory, UUID.randomUUID(), source.manifest()))
             .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("파일 목록");
         assertThat(commands).hasSize(1);
     }
@@ -72,7 +77,8 @@ class StatisticsExtractDownloaderTest {
         });
 
         // when & then
-        assertThatThrownBy(() -> downloader.download(directory, UUID.randomUUID(), source.manifest()))
+        assertThatThrownBy(
+            () -> downloader.download(directory, UUID.randomUUID(), source.manifest()))
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -80,10 +86,13 @@ class StatisticsExtractDownloaderTest {
     void 전송이_실패하면_완료된_묶음으로_취급하지_않는다() {
         // given
         var source = bundle();
-        var downloader = new StatisticsExtractDownloader(command -> { throw new IllegalStateException("읽기 실패"); });
+        var downloader = new StatisticsExtractDownloader(command -> {
+            throw new IllegalStateException("읽기 실패");
+        });
 
         // when & then
-        assertThatThrownBy(() -> downloader.download(directory, UUID.randomUUID(), source.manifest()))
+        assertThatThrownBy(
+            () -> downloader.download(directory, UUID.randomUUID(), source.manifest()))
             .isInstanceOf(IllegalStateException.class).hasMessage("읽기 실패");
     }
 

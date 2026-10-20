@@ -25,14 +25,13 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 @SpringBootTest(properties = {"collection.enabled=true", "forecast.enabled=false", "collection.route-ids="})
 @Import(PostgresTestContainer.class)
 class ScheduledCollectionTest {
-
     @Autowired
     private List<ScheduledTaskHolder> scheduledTaskHolders;
 
-    @MockitoSpyBean(name="collectionTaskScheduler", reset=MockReset.NONE)
+    @MockitoSpyBean(name = "collectionTaskScheduler", reset = MockReset.NONE)
     private ThreadPoolTaskScheduler collectionScheduler;
 
-    @MockitoSpyBean(name="taskScheduler", reset=MockReset.NONE)
+    @MockitoSpyBean(name = "taskScheduler", reset = MockReset.NONE)
     private ThreadPoolTaskScheduler processingScheduler;
 
     @Test
@@ -41,7 +40,8 @@ class ScheduledCollectionTest {
 
         // when
         var triggers = scheduledTaskHolders.stream()
-            .flatMap(holder -> holder.getScheduledTasks().stream())
+            .flatMap(holder -> holder.getScheduledTasks()
+                .stream())
             .map(scheduled -> scheduled.getTask())
             .filter(TriggerTask.class::isInstance)
             .map(TriggerTask.class::cast)
@@ -50,8 +50,8 @@ class ScheduledCollectionTest {
 
         // then
         assertThat(triggers).singleElement().isInstanceOf(AdaptiveCollectionTrigger.class);
-        verify(collectionScheduler).schedule(any(Runnable.class),any(AdaptiveCollectionTrigger.class));
-        verify(processingScheduler, never()).schedule(any(Runnable.class),any(AdaptiveCollectionTrigger.class));
+        verify(collectionScheduler).schedule(any(Runnable.class), any(AdaptiveCollectionTrigger.class));
+        verify(processingScheduler, never()).schedule(any(Runnable.class), any(AdaptiveCollectionTrigger.class));
     }
 
     @Test
@@ -60,7 +60,8 @@ class ScheduledCollectionTest {
 
         // when
         var registeredTasks = scheduledTaskHolders.stream()
-            .flatMap(holder -> holder.getScheduledTasks().stream())
+            .flatMap(holder -> holder.getScheduledTasks()
+                .stream())
             .map(scheduled -> scheduled.getTask().toString())
             .toList();
 

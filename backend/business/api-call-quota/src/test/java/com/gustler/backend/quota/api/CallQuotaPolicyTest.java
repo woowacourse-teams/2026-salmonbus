@@ -10,7 +10,6 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class CallQuotaPolicyTest {
-
     private static final int LOCATION_LIMIT = 10_000;
     private static final int ROUTE_LIMIT = 500;
     private static final int SAME_LIMIT = 3;
@@ -88,6 +87,7 @@ class CallQuotaPolicyTest {
     void 설정에_없는_키에_키별_한도를_주면_거절한다() {
         // when & then
         assertThatIllegalArgumentException()
-            .isThrownBy(() -> CallQuotaPolicy.sameForEveryApi(SAME_LIMIT, List.of("a"), Map.of("e", 1)));
+            .isThrownBy(
+            () -> CallQuotaPolicy.sameForEveryApi(SAME_LIMIT, List.of("a"), Map.of("e", 1)));
     }
 }

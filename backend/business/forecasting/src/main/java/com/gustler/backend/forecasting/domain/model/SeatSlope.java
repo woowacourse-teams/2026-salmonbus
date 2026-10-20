@@ -8,7 +8,6 @@ import java.util.Objects;
  * <p>여정 밖으로 넘어가면 뜻이 없어서, 이을 수 없을 때는 사유를 들고 모른다고 답한다.
  */
 public sealed interface SeatSlope {
-
     record Known(
         int seatChange
     ) implements SeatSlope {
@@ -17,7 +16,6 @@ public sealed interface SeatSlope {
     record Unknown(
         TrajectoryGap gap
     ) implements SeatSlope {
-
         public Unknown {
             Objects.requireNonNull(gap, "좌석 변화를 모르면 끊긴 사유가 있어야 한다");
         }

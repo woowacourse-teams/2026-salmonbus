@@ -17,7 +17,6 @@ public record TargetStopDemand(
     double netBoardingSegmentScore,
     boolean filledByNeighbours
 ) {
-
     public static TargetStopDemand of(
         StopDemandStatistics statistics,
         final int targetStopOrder,

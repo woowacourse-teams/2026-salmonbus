@@ -23,7 +23,6 @@ public record StopDemandStatistics(
     int revision,
     List<StopDemandCell> cells
 ) {
-
     /** 이웃을 찾는 순번 거리. 자기 자신은 뺀다. */
     private static final int NEIGHBOUR_RADIUS = 4;
 
@@ -179,7 +178,6 @@ public record StopDemandStatistics(
 
     @FunctionalInterface
     private interface RateOfCell {
-
         double of(
             StopDemandCell cell
         );

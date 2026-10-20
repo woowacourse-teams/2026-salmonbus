@@ -6,7 +6,13 @@ public interface DemandSampleStore {
 
     void record(List<DemandSample> samples);
 
-    DemandSamplePage lockPage(long routeVersionId, String vehicleId, long afterInputId, long inputUntilId, int limit);
+    DemandSamplePage lockPage(
+        long routeVersionId,
+        String vehicleId,
+        long afterInputId,
+        long inputUntilId,
+        int limit
+    );
 
     void remove(List<Long> sampleIds);
 

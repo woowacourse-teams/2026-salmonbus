@@ -9,6 +9,8 @@ public interface RecentObservationBatches {
     List<Header> headers(long version, Instant after, int limit);
     List<Row> restore(long version, List<Long> batches, int limit);
 
-    record Header(long batchId, int attempt, Instant observedAt, int rows, Integer turnSequence) { }
-    record Row(long batchId, ArrivalCandidate candidate) { }
+    record Header(long batchId, int attempt, Instant observedAt, int rows, Integer turnSequence) {
+    }
+    record Row(long batchId, ArrivalCandidate candidate) {
+    }
 }

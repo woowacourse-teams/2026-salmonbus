@@ -9,7 +9,6 @@ import org.springframework.web.servlet.function.ServerRequest;
 import org.springframework.web.servlet.function.ServerResponse;
 
 public final class ChatAvailabilityHandler {
-
     private final ChatRoomCatalog rooms;
 
     public ChatAvailabilityHandler(ChatRoomCatalog rooms) {

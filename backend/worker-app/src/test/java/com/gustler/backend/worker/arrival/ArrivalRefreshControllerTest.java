@@ -17,7 +17,8 @@ class ArrivalRefreshControllerTest {
     private final ArrivalProperties properties = new ArrivalProperties("test-internal-token", 10000, 8,
         Duration.ofSeconds(40), Duration.ofSeconds(60), Duration.ofSeconds(40), Duration.ofSeconds(300),
         Duration.ofSeconds(40), Duration.ofSeconds(2), Duration.ofMinutes(10));
-    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new ArrivalRefreshController(coordinator, properties)).build();
+    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new ArrivalRefreshController(coordinator, properties))
+        .build();
 
     @Test
     void 내부_인증_없이는_작업을_등록하지_않는다() throws Exception {

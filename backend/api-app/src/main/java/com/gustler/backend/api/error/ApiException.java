@@ -5,7 +5,6 @@ import java.util.Objects;
 import java.util.Optional;
 
 public abstract class ApiException extends RuntimeException {
-
     private final ErrorCode code;
     private final Duration retryAfter;
 

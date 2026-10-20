@@ -1,7 +1,6 @@
 package com.gustler.backend.observations.application;
 
 import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
-
 import com.gustler.backend.observations.domain.CollectedObservations;
 import com.gustler.backend.observations.domain.CollectionBatch;
 import com.gustler.backend.observations.domain.CollectionBatchRepository;
@@ -31,7 +30,6 @@ import org.springframework.transaction.annotation.Transactional;
 @ObservationIntegrationTest
 @Transactional
 class ObservationLoaderTest {
-
     private static final String SOURCE_ID = "GBIS";
     private static final String ROUTE_204000057 = "204000057";
 

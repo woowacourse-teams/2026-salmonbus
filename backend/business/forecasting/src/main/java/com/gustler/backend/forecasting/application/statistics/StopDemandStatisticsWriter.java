@@ -4,7 +4,6 @@ import com.gustler.backend.forecasting.domain.statistics.StopDemandAggregator;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandHourlyTotals;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;

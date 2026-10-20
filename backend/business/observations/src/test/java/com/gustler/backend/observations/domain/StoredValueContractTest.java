@@ -7,14 +7,14 @@ import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
 class StoredValueContractTest {
-
     @Test
     void 잔여석_미제공_사유는_관측_표의_CHECK와_같다() {
         // when
         var allowed = SchemaCheck.allowedValues("V4__observation.sql", "seat_unknown_reason");
 
         // then
-        assertThat(Arrays.stream(SeatUnknownReason.values()).map(Enum::name))
+        assertThat(Arrays.stream(SeatUnknownReason.values())
+            .map(Enum::name))
             .containsExactlyInAnyOrderElementsOf(allowed);
     }
 
@@ -24,7 +24,8 @@ class StoredValueContractTest {
         var allowed = SchemaCheck.allowedValues("V6__call_reservation.sql", "outcome");
 
         // then
-        assertThat(Arrays.stream(ObservationBatchOutcome.values()).map(Enum::name))
+        assertThat(Arrays.stream(ObservationBatchOutcome.values())
+            .map(Enum::name))
             .containsExactlyInAnyOrderElementsOf(allowed);
     }
 
@@ -34,7 +35,8 @@ class StoredValueContractTest {
         var allowed = SchemaCheck.allowedValues("V6__call_reservation.sql", "failure_code");
 
         // then
-        assertThat(Arrays.stream(ObservationBatchFailureCode.values()).map(Enum::name))
+        assertThat(Arrays.stream(ObservationBatchFailureCode.values())
+            .map(Enum::name))
             .containsExactlyInAnyOrderElementsOf(allowed);
     }
 }

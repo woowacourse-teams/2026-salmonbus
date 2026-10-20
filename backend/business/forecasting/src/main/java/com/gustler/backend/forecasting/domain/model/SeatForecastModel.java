@@ -11,7 +11,6 @@ package com.gustler.backend.forecasting.domain.model;
  * 그 밖의 계산·설정 오류는 좌석 범위 오류로 바꾸지 않는다.
  */
 public interface SeatForecastModel {
-
     default boolean supportsRoute(RouteStops stops) {
         return true;
     }

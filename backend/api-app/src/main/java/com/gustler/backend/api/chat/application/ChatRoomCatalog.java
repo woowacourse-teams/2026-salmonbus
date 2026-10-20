@@ -10,7 +10,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public final class ChatRoomCatalog {
-
     private static final Duration REFRESH_INTERVAL = Duration.ofMinutes(5);
     private static final Duration RETRY_INTERVAL = Duration.ofSeconds(30);
 

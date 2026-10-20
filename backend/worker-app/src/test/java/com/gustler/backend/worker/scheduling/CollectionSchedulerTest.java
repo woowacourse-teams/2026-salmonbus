@@ -2,7 +2,6 @@ package com.gustler.backend.worker.scheduling;
 
 import com.gustler.backend.observations.application.ObservationCollector;
 import com.gustler.backend.worker.configuration.CollectionProperties;
-
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
@@ -16,7 +15,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class CollectionSchedulerTest {
-
     private static final String ROUTE_3330 = "204000057";
     private static final String ROUTE_9100 = "234000016";
 

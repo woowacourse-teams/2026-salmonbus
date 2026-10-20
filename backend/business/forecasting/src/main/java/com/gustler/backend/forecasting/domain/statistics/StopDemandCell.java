@@ -17,7 +17,6 @@ public record StopDemandCell(
     int sampleCount,
     int dayCount
 ) {
-
     private static final int FIRST_STOP_ORDER = 1;
 
     public StopDemandCell {

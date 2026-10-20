@@ -13,7 +13,6 @@ import tools.jackson.databind.annotation.JsonDeserialize;
 public record BusRouteInfoResponse(
     Response response
 ) {
-
     public record Response(
         @JsonProperty("msgHeader")
         Header header,

@@ -29,8 +29,11 @@ public class ArrivalApiConfiguration {
                 throw new IllegalArgumentException("도착 갱신 Worker 주소와 내부 인증 토큰을 확인해야 한다");
             }
         }
+
         @Override
-        public String toString() { return "ArrivalApiProperties[enabled=" + enabled + ", internalToken=***]"; }
+        public String toString() {
+            return "ArrivalApiProperties[enabled=" + enabled + ", internalToken=***]";
+        }
     }
 
     @Bean
@@ -41,7 +44,11 @@ public class ArrivalApiConfiguration {
     }
 
     @Bean
-    ArrivalRefreshGateway arrivalRefreshGateway(Properties properties, Clock clock, ArrivalFirstResultPolicy firstResult) {
+    ArrivalRefreshGateway arrivalRefreshGateway(
+        Properties properties,
+        Clock clock,
+        ArrivalFirstResultPolicy firstResult
+    ) {
         if (!properties.enabled()) return station -> new ArrivalRefresh(ArrivalRefresh.Status.UNAVAILABLE,
             "REFRESH_DISABLED", clock.instant().plusSeconds(40));
         var client = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(100)).build();

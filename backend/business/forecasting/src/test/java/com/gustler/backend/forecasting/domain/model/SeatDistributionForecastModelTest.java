@@ -16,7 +16,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 /** 예보 재료가 실제 계수 계산과 모델 입력 검증까지 연결되는지 확인한다. */
 class SeatDistributionForecastModelTest {
-
     @TempDir
     Path directory;
 
@@ -43,8 +42,11 @@ class SeatDistributionForecastModelTest {
         SeatForecastResult actual = model.predict(input);
 
         // then
-        assertThat(actual.distribution().chanceBySeats().stream()
-            .mapToDouble(Double::doubleValue).sum()).isEqualTo(1.0, within(1e-12));
+        assertThat(actual.distribution()
+            .chanceBySeats()
+            .stream()
+            .mapToDouble(Double::doubleValue)
+            .sum()).isEqualTo(1.0, within(1e-12));
     }
 
     @Test

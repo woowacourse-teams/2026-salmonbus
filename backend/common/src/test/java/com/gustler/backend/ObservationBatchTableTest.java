@@ -15,7 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 @IntegrationTest
 @Transactional
 class ObservationBatchTableTest {
-
     private static final String SOURCE_ID = "GBIS";
     private static final String ROUTE_204000057 = "204000057";
     private static final String CONTENT_DIGEST = "0".repeat(64);
@@ -63,7 +62,8 @@ class ObservationBatchTableTest {
     @Test
     void 뜻을_모르는_실패_사유의_판은_저장되지_않는다() {
         // when & then
-        assertThatThrownBy(() -> insertBatch("FAILED_UPSTREAM", SCHEDULED_AT, "CONNECTION_RESET"))
+        assertThatThrownBy(
+            () -> insertBatch("FAILED_UPSTREAM", SCHEDULED_AT, "CONNECTION_RESET"))
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 

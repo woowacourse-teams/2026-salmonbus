@@ -15,7 +15,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class StatisticsInputFilesTest {
-
     private static final String ABC_SHA256 =
         "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
 
@@ -92,7 +91,8 @@ class StatisticsInputFilesTest {
         String invalidHash = "invalid";
 
         // when & then
-        assertThatThrownBy(() -> new StatisticsInputFile("samples.bin", negativeSize, ABC_SHA256))
+        assertThatThrownBy(
+            () -> new StatisticsInputFile("samples.bin", negativeSize, ABC_SHA256))
             .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new StatisticsInputFile("samples.bin", 3, invalidHash))
             .isInstanceOf(IllegalArgumentException.class);
@@ -154,7 +154,7 @@ class StatisticsInputFilesTest {
         // given
         Files.createFile(directory.resolve("empty.bin"));
         var files = List.of(new StatisticsInputFile("empty.bin", 0,
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
 
         // when & then
         assertThatCode(() -> StatisticsInputFiles.verify(directory, files)).doesNotThrowAnyException();

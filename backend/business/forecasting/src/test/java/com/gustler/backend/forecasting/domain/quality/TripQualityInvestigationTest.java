@@ -73,7 +73,8 @@ class TripQualityInvestigationTest {
             1, "bus", anchor.at(), anchor.batch(), AT.plusSeconds(420), anchor.observation().id(), Phase.SEARCH_START,
             anchor.observation().id(), null, false, false, Duration.ofMinutes(10), departure.observation().id(), false);
         final List<BatchObservations> page = LongStream.range(0, TripQualityInvestigation.BATCH_LIMIT)
-            .mapToObj(offset -> emptyBatch(399 - offset)).toList();
+            .mapToObj(offset -> emptyBatch(399 - offset))
+            .toList();
 
         // when
         investigation.searchStart(ROUTE, page, Map.of(400L, anchor, 410L, departure));
@@ -96,7 +97,8 @@ class TripQualityInvestigationTest {
         final List<BatchObservations> firstPage = new ArrayList<>();
         firstPage.add(departure);
         LongStream.range(0, TripQualityInvestigation.BATCH_LIMIT - 1)
-            .mapToObj(offset -> emptyBatch(398 - offset)).forEach(firstPage::add);
+            .mapToObj(offset -> emptyBatch(398 - offset))
+            .forEach(firstPage::add);
         investigation.searchStart(ROUTE, firstPage, Map.of(400L, anomaly));
         assertThat(investigation.phase()).isEqualTo(Phase.SEARCH_START);
         assertThat(investigation.boundaryCandidateObservationId()).isEqualTo(399L);
@@ -119,7 +121,8 @@ class TripQualityInvestigationTest {
         // given
         final TripQualityInvestigation investigation = investigation(Phase.REPLAY, row(1, 1, 2, 44), false);
         final List<BatchObservations> fullPage = LongStream.rangeClosed(2, 33)
-            .mapToObj(id -> row(id, 1, 2, 44)).toList();
+            .mapToObj(id -> row(id, 1, 2, 44))
+            .toList();
 
         // when
         final List<OneWayTripAssessment> assessments = investigation.replay(ROUTE, fullPage, null);
@@ -189,11 +192,17 @@ class TripQualityInvestigationTest {
 
     private static TripQualityInvestigation investigation(final Phase phase, final BatchObservations anchor,
         final boolean canRelease) {
-        return new TripQualityInvestigation(1, "bus", anchor.at(), anchor.batch(), anchor.at(), anchor.observation().id(), phase,
+        return new TripQualityInvestigation(1, "bus", anchor.at(), anchor.batch(), anchor.at(), anchor.observation()
+                .id(), phase,
             anchor.observation().id(), null, true, canRelease, Duration.ofMinutes(10), null, phase == Phase.DONE);
     }
 
-    private static BatchObservations row(final long id, final int stop, final int state, final int seats) {
+    private static BatchObservations row(
+        final long id,
+        final int stop,
+        final int state,
+        final int seats
+    ) {
         final Instant at = AT.plusSeconds(id);
         return new BatchObservations(id, at, new Observation(id, "bus", at, stop, state, seats));
     }

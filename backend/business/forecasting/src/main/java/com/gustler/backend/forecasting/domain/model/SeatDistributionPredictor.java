@@ -13,7 +13,6 @@ import java.util.List;
  * 새 예측기를 만든다. 처리 중인 배치는 기존 예측기를 유지해 처음부터 끝까지 같은 계수를 사용한다.
  */
 public final class SeatDistributionPredictor {
-
     private final CoefficientLookup coefficients;
     private final double[] relativeEdges;
 
@@ -32,7 +31,7 @@ public final class SeatDistributionPredictor {
         if (cell.featureCount() != input.featureVector().length) {
             throw new IllegalArgumentException(
                 "번들이 요구하는 특징 개수와 들어온 벡터의 길이가 다르다: %d, %d"
-                    .formatted(cell.featureCount(), input.featureVector().length)
+                .formatted(cell.featureCount(), input.featureVector().length)
             );
         }
 

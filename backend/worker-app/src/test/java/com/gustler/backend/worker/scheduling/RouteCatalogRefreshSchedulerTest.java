@@ -25,8 +25,9 @@ class RouteCatalogRefreshSchedulerTest {
         var geometry = mock(RefreshRouteGeometry.class);
         when(catalog.refresh(anyString(), any())).thenReturn(Optional.of(new RouteReference(7)));
         var routes = List.of("204000057", "204000081", "234000002");
-        var scheduler = new RouteCatalogRefreshScheduler(new CollectionProperties(false, routes),
-            catalog, Clock.systemUTC(), geometry, Runnable::run, new RouteGeometryProperties(true, List.of()));
+        var scheduler =
+            new RouteCatalogRefreshScheduler(new CollectionProperties(false, routes),
+                catalog, Clock.systemUTC(), geometry, Runnable::run, new RouteGeometryProperties(true, List.of()));
 
         scheduler.refreshAllRoutes();
 
@@ -43,9 +44,10 @@ class RouteCatalogRefreshSchedulerTest {
         var geometry = mock(RefreshRouteGeometry.class);
         when(catalog.refresh(anyString(), any())).thenReturn(Optional.of(new RouteReference(7)));
         var tasks = new java.util.ArrayDeque<Runnable>();
-        var scheduler = new RouteCatalogRefreshScheduler(new CollectionProperties(true, List.of("204000057")),
-            catalog, Clock.systemUTC(), geometry, tasks::add,
-            new RouteGeometryProperties(true, List.of("204000057", "204000155")));
+        var scheduler =
+            new RouteCatalogRefreshScheduler(new CollectionProperties(true, List.of("204000057")),
+                catalog, Clock.systemUTC(), geometry, tasks::add,
+                new RouteGeometryProperties(true, List.of("204000057", "204000155")));
         scheduler.refreshAllRoutes();
         verify(catalog).refresh(eq("204000057"), any());
         verify(catalog, never()).refresh(eq("204000155"), any());
@@ -63,9 +65,10 @@ class RouteCatalogRefreshSchedulerTest {
         var catalog = mock(RefreshRouteCatalog.class);
         var geometry = mock(RefreshRouteGeometry.class);
         var tasks = new java.util.ArrayDeque<Runnable>();
-        var scheduler = new RouteCatalogRefreshScheduler(new CollectionProperties(false, List.of("204000155")),
-            catalog, Clock.systemUTC(), geometry, tasks::add,
-            new RouteGeometryProperties(true, List.of("204000057")));
+        var scheduler =
+            new RouteCatalogRefreshScheduler(new CollectionProperties(false, List.of("204000155")),
+                catalog, Clock.systemUTC(), geometry, tasks::add,
+                new RouteGeometryProperties(true, List.of("204000057")));
         scheduler.refreshAllRoutes();
         verifyNoInteractions(catalog, geometry);
         assertThat(tasks).hasSize(1);
@@ -92,7 +95,8 @@ class RouteCatalogRefreshSchedulerTest {
             assertThat(logs.list.getFirst().getFormattedMessage()).contains(
                 "routeId=\"id-1\"", "routeName=\"3330\"", "reason=UPSTREAM_OR_QUOTA");
             assertThat(logs.list.getLast().getFormattedMessage()).contains(
-                "routeId=\"id-2\"", "routeName=\"\"", "reason=REFRESH_EXCEPTION", "exceptionType=\"IllegalStateException\"")
+                "routeId=\"id-2\"", "routeName=\"\"", "reason=REFRESH_EXCEPTION",
+            "exceptionType=\"IllegalStateException\"")
                 .doesNotContain("SECRET", "HTTP body");
             assertThat(logs.list).allSatisfy(event -> assertThat(event.getThrowableProxy()).isNull());
             verify(catalog).refresh(eq("id-3"), any());

@@ -2,7 +2,6 @@ package com.gustler.backend.api.chat.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
 import com.gustler.backend.api.chat.dto.ChatMessageResponse;
 import com.gustler.backend.api.chat.dto.ChatServerFrame;
 import java.time.Instant;
@@ -15,7 +14,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import tools.jackson.databind.json.JsonMapper;
 
 class ChatFrameCodecTest {
-
     private static final ChatMessageResponse HISTORY_FIRST = new ChatMessageResponse(
         "68db00000000000000000001",
         "q2Xl9Rk3TbS1c0vYmN8wJA",

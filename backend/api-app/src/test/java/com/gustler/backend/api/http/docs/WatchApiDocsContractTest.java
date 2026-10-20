@@ -21,7 +21,6 @@ import tools.jackson.databind.ObjectMapper;
 @IntegrationTest
 @ActiveProfiles("api-docs-local")
 class WatchApiDocsContractTest {
-
     private static final String WATCH = "/api/v1/routes/{routeId}/watch";
 
     @Autowired

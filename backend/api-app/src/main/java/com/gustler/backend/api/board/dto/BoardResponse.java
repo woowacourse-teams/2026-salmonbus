@@ -30,7 +30,8 @@ public record BoardResponse(
             board.staleAt(),
             ModelInfoResponse.from(board.model()),
             board.vehiclesInService(),
-            board.stops().stream()
+            board.stops()
+                .stream()
                 .map(StopStateResponse::from)
                 .toList()
         );

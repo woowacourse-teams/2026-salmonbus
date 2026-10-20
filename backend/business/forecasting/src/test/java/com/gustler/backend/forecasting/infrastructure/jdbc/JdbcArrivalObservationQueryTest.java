@@ -16,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class JdbcArrivalObservationQueryTest {
-
     private static final String SOURCE_ID = "GBIS";
     private static final String ROUTE_204000057 = "204000057";
     private static final String ROUTE_204000121 = "204000121";
@@ -243,7 +242,9 @@ class JdbcArrivalObservationQueryTest {
         assertThat(limited).containsExactly(earlier);
         assertThat(ids).containsExactlyElementsOf(jdbcArrivalObservationQuery.findAfter(
             routeVersionId, VEHICLE_204000206, FORECAST_OBSERVED_AT.toInstant(), READ_LIMIT_TWO)
-            .stream().map(ArrivalCandidate::observationId).toList());
+                .stream()
+                .map(ArrivalCandidate::observationId)
+                .toList());
     }
 
     @Test
@@ -373,7 +374,7 @@ class JdbcArrivalObservationQueryTest {
                 """)
             .params(
                 versionId, responseReceivedAt, 1,
-                "%s-%d".formatted(ROUTE_204000057, insertedBatchCount++),
+                    "%s-%d".formatted(ROUTE_204000057, insertedBatchCount++),
                 responseReceivedAt, responseReceivedAt, SUCCESS_ROWS,
                 NORMALIZATION_VERSION, COLLECTION_STRATEGY_VERSION
             )
@@ -441,13 +442,13 @@ class JdbcArrivalObservationQueryTest {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
-            .params(
-                batchId, versionId, insertedObservationCount++,
-                vehicleId, stopOrder, stopIdOf(stopOrder), passedStopOrder,
-                runningState, remainingSeats, seatUnknownReason
-            )
-            .query(Long.class)
-            .single());
+                .params(
+                    batchId, versionId, insertedObservationCount++,
+                    vehicleId, stopOrder, stopIdOf(stopOrder), passedStopOrder,
+                    runningState, remainingSeats, seatUnknownReason
+                )
+                .query(Long.class)
+                .single());
     }
 
     private static String stopIdOf(

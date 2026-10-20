@@ -31,7 +31,8 @@ public record StopStateResponse(
             stop.name(),
             stop.direction(),
             stop.boardingAllowed(),
-            stop.approachingVehicles().stream()
+            stop.approachingVehicles()
+                .stream()
                 .map(ApproachingVehicleResponse::from)
                 .toList()
         );

@@ -11,7 +11,6 @@ import tools.jackson.databind.ObjectMapper;
 
 @JsonTest
 class BusLocationResponseTest {
-
     @Autowired
     private ObjectMapper objectMapper;
 

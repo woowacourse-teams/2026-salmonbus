@@ -7,7 +7,6 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class VehicleCachePolicy {
-
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final Duration PEAK_MAX_AGE = Duration.ofSeconds(15);
     private static final Duration REGULAR_MAX_AGE = Duration.ofSeconds(20);

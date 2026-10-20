@@ -11,7 +11,6 @@ import java.time.ZonedDateTime;
 import java.util.Date;
 
 public final class TimeSourceRules {
-
     @ArchTest
     public static final ArchRule timeMustComeFromInjectedClock = noClasses()
         .should().callMethod(Instant.class, "now")

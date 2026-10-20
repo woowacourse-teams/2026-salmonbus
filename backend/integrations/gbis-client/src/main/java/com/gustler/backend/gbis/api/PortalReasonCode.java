@@ -4,7 +4,6 @@ import java.util.Arrays;
 import java.util.Objects;
 
 public enum PortalReasonCode {
-
     DAILY_QUOTA_EXCEEDED("22"),
     PER_SECOND_QUOTA_EXCEEDED("23"),
     UNREGISTERED_KEY("30"),

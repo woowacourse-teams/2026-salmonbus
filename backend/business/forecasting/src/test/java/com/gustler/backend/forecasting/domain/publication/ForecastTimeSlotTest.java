@@ -4,7 +4,6 @@ import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
 
 import static org.assertj.core.api.Assertions.assertThat;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -16,7 +15,6 @@ import org.junit.jupiter.api.Test;
  * <p>몇 시가 아침인지는 {@link TimeSlotTest} 가 본다. 여기서 보는 것은 <b>어느 시각을 보느냐</b>다.
  */
 class ForecastTimeSlotTest {
-
     private static final Clock KOREAN_CLOCK =
         Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneId.of("Asia/Seoul"));
 

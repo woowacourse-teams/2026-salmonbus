@@ -23,7 +23,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * 아직 없어서 지금은 모른다. 잇는 PR 에서 정한다.
  */
 public final class LoadedModelRegistry {
-
     private final Map<String, ModelRelease> byBundleDigest = new ConcurrentHashMap<>();
 
     /** 도는 배포가 가리키는 요약값으로 찾는다. 없으면 비어 있다. */

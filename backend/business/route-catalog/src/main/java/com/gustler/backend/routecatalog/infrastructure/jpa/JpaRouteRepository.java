@@ -11,13 +11,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 @Transactional(propagation = Propagation.MANDATORY)
 public class JpaRouteRepository implements RouteRepository {
-
     private final JdbcClient jdbc;
     private final RouteVersionEntityRepository versions;
     private final RouteStopEntityRepository stops;
 
     public JpaRouteRepository(JdbcClient jdbc, RouteVersionEntityRepository versions,
-                              RouteStopEntityRepository stops) {
+        RouteStopEntityRepository stops) {
         this.jdbc = jdbc;
         this.versions = versions;
         this.stops = stops;
@@ -48,8 +47,11 @@ public class JpaRouteRepository implements RouteRepository {
         }
         RouteVersionJpaEntity opened = versions.save(new RouteVersionJpaEntity(
             route.id(), route.newVersionStops().turnSequence(), current.content(), current.validFrom()));
-        stops.saveAll(route.newVersionStops().stops().stream()
-            .map(stop -> new RouteStopJpaEntity(opened.getId(), stop)).toList());
+        stops.saveAll(route.newVersionStops()
+            .stops()
+            .stream()
+            .map(stop -> new RouteStopJpaEntity(opened.getId(), stop))
+            .toList());
         versions.flush();
         return opened.getId();
     }

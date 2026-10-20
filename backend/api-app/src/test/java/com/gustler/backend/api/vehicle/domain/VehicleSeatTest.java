@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 
 class VehicleSeatTest {
-
     @Test
     void 잔여_좌석이_0이면_정확히_0석으로_해석한다() {
         assertThat(VehicleSeat.from(0)).isEqualTo(new VehicleSeat.Exact(0));

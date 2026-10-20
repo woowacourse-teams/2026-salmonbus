@@ -30,7 +30,6 @@ import java.util.List;
  */
 @AnalyzeClasses(packages = "com.gustler.backend", importOptions = ImportOption.DoNotIncludeTests.class)
 class ApiPackageBoundaryTest {
-
     private static final String PREFIX = "com.gustler.backend.api.";
     private static final String TRANSPORT = "com.gustler.backend.api.http..";
     private static final String CONTRACT = "com.gustler.backend.api.error..";
@@ -146,7 +145,9 @@ class ApiPackageBoundaryTest {
     /** 기능 루트는 그 기능의 경계 어휘만 둔다. 계층 클래스나 프레임워크 타입이 오면 잘못 놓인 것이다. */
     @ArchTest
     static final ArchRule featureRootsHoldOnlyBoundaryVocabulary = noClasses()
-        .that().resideInAnyPackage(FEATURES.stream().map(PREFIX::concat).toArray(String[]::new))
+        .that().resideInAnyPackage(FEATURES.stream()
+                .map(PREFIX::concat)
+                .toArray(String[]::new))
         .should().dependOnClassesThat().resideInAnyPackage(
             "..application..", "..infrastructure..", "..controller..", "..dto..",
             "org.springframework..", "jakarta..", "tools.jackson..", "com.fasterxml.jackson..");
@@ -167,10 +168,14 @@ class ApiPackageBoundaryTest {
     /** 오류 계약과 요청 처리 장치가 실제로 갈려 있는지 본다. 한쪽이 비면 위 규칙들이 헛돈다. */
     @ArchTest
     static void 오류_계약과_요청_처리_장치가_갈려_있다(JavaClasses classes) {
-        assertThat(classes.stream().filter(type -> type.getPackageName().equals(PREFIX + "error")).count())
+        assertThat(classes.stream()
+            .filter(type -> type.getPackageName().equals(PREFIX + "error"))
+            .count())
             .as("api.error에 오류 계약 클래스가 있어야 한다")
             .isGreaterThanOrEqualTo(4);
-        assertThat(classes.stream().filter(type -> type.getPackageName().equals(PREFIX + "http")).count())
+        assertThat(classes.stream()
+            .filter(type -> type.getPackageName().equals(PREFIX + "http"))
+            .count())
             .as("api.http에 요청 처리 장치가 있어야 한다")
             .isGreaterThanOrEqualTo(4);
     }

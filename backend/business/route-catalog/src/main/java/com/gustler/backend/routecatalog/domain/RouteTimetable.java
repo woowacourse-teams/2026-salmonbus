@@ -9,7 +9,6 @@ public record RouteTimetable(
     String downLastDepartureTime,
     RouteHeadways headways
 ) {
-
     public RouteTimetable {
         Objects.requireNonNull(headways, "headways는 null일 수 없습니다.");
     }

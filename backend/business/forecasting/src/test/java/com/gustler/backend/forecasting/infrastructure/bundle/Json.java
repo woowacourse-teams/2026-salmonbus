@@ -6,7 +6,6 @@ import tools.jackson.databind.SerializationFeature;
 
 /** 테스트가 설명 파일을 JSON 으로 쓴다. */
 final class Json {
-
     private Json() {
     }
 

@@ -20,7 +20,6 @@ import org.springframework.context.annotation.Import;
 @Import({PostgresTestContainer.class, ClockConfig.class, ForecastingConfiguration.class,
     ObservationPersistenceConfiguration.class})
 class ForecastingTestConfiguration {
-
     @Bean
     ForecastPolicy forecastPolicy(
         @Value("${forecast.staleness}") Duration staleness,

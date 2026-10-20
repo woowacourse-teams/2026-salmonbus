@@ -13,7 +13,14 @@ import java.util.Optional;
 public interface TripQualityStore {
     Optional<Duration> maximumObservationGap(long routeVersionId);
     Route readRoute(long routeVersionId);
-    List<BatchObservations> readPage(long version, String vehicle, Instant at, long batch, boolean backwards, boolean include);
+    List<BatchObservations> readPage(
+        long version,
+        String vehicle,
+        Instant at,
+        long batch,
+        boolean backwards,
+        boolean include
+    );
     Map<Long, BatchObservations> observations(long anchor, Long candidate);
     Previous previous(long observationId);
     void saveAssessments(long version, List<OneWayTripAssessment> assessments);

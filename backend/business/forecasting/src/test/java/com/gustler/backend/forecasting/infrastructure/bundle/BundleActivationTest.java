@@ -45,7 +45,6 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class BundleActivationTest {
-
     private static final int FOUR_STOPS_AHEAD = 4;
 
     @TempDir
@@ -201,8 +200,11 @@ class BundleActivationTest {
             featureVector(), ModelRoute.of("234000050"), 1, 44, 44, null));
 
         // then
-        assertThat(actual.distribution().chanceBySeats().stream()
-            .mapToDouble(Double::doubleValue).sum()).isEqualTo(1.0, within(1e-12));
+        assertThat(actual.distribution()
+            .chanceBySeats()
+            .stream()
+            .mapToDouble(Double::doubleValue)
+            .sum()).isEqualTo(1.0, within(1e-12));
     }
 
     @Test
@@ -416,7 +418,6 @@ class BundleActivationTest {
     /** 승격만 실패하는 적재. 적재와 STAGED 는 그대로 되고 마지막 한 걸음에서 못 올린다. */
     private BundleActivation failingActivation() {
         return new BundleActivation(new ModelDeploymentRepository() {
-
             @Override
             public Optional<ActiveModelDeployment> findActive() {
                 return deployments.findActive();

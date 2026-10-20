@@ -1,5 +1,4 @@
 package com.gustler.backend.forecasting.application.publication;
-
 import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
 import com.gustler.backend.forecasting.domain.model.SeatDistribution;
@@ -628,13 +627,13 @@ class PublishPendingForecastsIntegrationTest {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
-            .params(
-                observationBatchId, routeVersionId, sourceRowNumber,
-                vehicleId, passedStopOrder, stopIdOf(passedStopOrder), passedStopOrder,
-                RUNNING_STATE_DEPARTED, remainingSeats, seatUnknownReason
-            )
-            .query(Long.class)
-            .single());
+                    .params(
+                        observationBatchId, routeVersionId, sourceRowNumber,
+                        vehicleId, passedStopOrder, stopIdOf(passedStopOrder), passedStopOrder,
+                        RUNNING_STATE_DEPARTED, remainingSeats, seatUnknownReason
+                    )
+                    .query(Long.class)
+                    .single());
     }
 
     private static String stopIdOf(
@@ -679,7 +678,6 @@ class PublishPendingForecastsIntegrationTest {
      */
     @TestConfiguration(proxyBeanMethods = false)
     static class FixedSeatForecastModel {
-
         private static final Instant DATA_UNTIL = Instant.parse("2026-08-30T14:59:56Z");
 
         /**
@@ -723,7 +721,6 @@ class PublishPendingForecastsIntegrationTest {
     }
 
     static class RecordingSeatForecastModel implements SeatForecastModel {
-
         private static final double FULL_CHANCE_RAW = 0.4;
 
         /** 0석 남을 확률 0.4, 1석 남을 확률 0.6. 합이 1이라 분포 규칙을 지킨다. */

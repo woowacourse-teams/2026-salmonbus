@@ -9,7 +9,6 @@ import java.util.EnumSet;
 import java.util.Set;
 
 public final class SecureFiles {
-
     private static final Set<PosixFilePermission> OWNER_FILE = EnumSet.of(
         PosixFilePermission.OWNER_READ,
         PosixFilePermission.OWNER_WRITE);
@@ -36,5 +35,4 @@ public final class SecureFiles {
             throw new MaintenanceException("PRIVATE_FILE_INSPECTION_FAILED", e);
         }
     }
-
 }

@@ -23,9 +23,16 @@ class RouteGeometryQueryRepositoryTest {
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration
     @Import({PostgresTestContainer.class, JdbcRouteGeometryQueryRepository.class, RouteGeometryQueryService.class})
-    static class Config { @Bean ObjectMapper objectMapper() { return new ObjectMapper(); } }
-    @Autowired JdbcClient jdbc;
-    @Autowired RouteGeometryQueryService service;
+    static class Config {
+        @Bean
+        ObjectMapper objectMapper() {
+            return new ObjectMapper();
+        }
+    }
+    @Autowired
+    JdbcClient jdbc;
+    @Autowired
+    RouteGeometryQueryService service;
 
     @Test
     void 모델과_차량관측_없이_정적자료를_제공하고_좌표변경을_판본에_반영한다() {
@@ -33,8 +40,12 @@ class RouteGeometryQueryRepositoryTest {
             INSERT INTO route(public_route_id,source_id,source_route_id,display_name,start_stop_name,end_stop_name)
             VALUES ('204000057','GBIS','204000057','3330','A','B') RETURNING id
             """).query(Long.class).single();
-        long version = jdbc.sql("INSERT INTO route_version(route_id,turn_sequence,content_digest,valid_from) VALUES (?,1,?,'2026-10-13T00:00:00Z') RETURNING id")
-            .params(route, "a".repeat(64)).query(Long.class).single();
+        long version =
+            jdbc.sql(
+                "INSERT INTO route_version(route_id,turn_sequence,content_digest,valid_from) VALUES (?,1,?,'2026-10-13T00:00:00Z') RETURNING id")
+                .params(route, "a".repeat(64))
+                .query(Long.class)
+                .single();
         jdbc.sql("""
             INSERT INTO route_stop(route_version_id,stop_order,stop_id,name,direction,boarding_allowed)
             VALUES (?,1,'206000637','A','UP',true),(?,2,'206000637','A','DOWN',true)

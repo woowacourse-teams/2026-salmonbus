@@ -19,9 +19,14 @@ public final class AdvanceEvaluationArchiveService implements AdvanceEvaluationA
     private final EvaluationArchivePolicy policy;
     private final Clock clock;
 
-    public AdvanceEvaluationArchiveService(EvaluationArchiveQueue queue, EvaluationArchiveStore store,
-        ArchiveCompletedEvaluationsService archive, PurgeArchivedEvaluationsService purge,
-        EvaluationArchivePolicy policy, Clock clock) {
+    public AdvanceEvaluationArchiveService(
+        EvaluationArchiveQueue queue,
+        EvaluationArchiveStore store,
+        ArchiveCompletedEvaluationsService archive,
+        PurgeArchivedEvaluationsService purge,
+        EvaluationArchivePolicy policy,
+        Clock clock
+    ) {
         this.queue = queue;
         this.store = store;
         this.archive = archive;
@@ -46,7 +51,8 @@ public final class AdvanceEvaluationArchiveService implements AdvanceEvaluationA
             batch = selected.get();
             stage = "REVALIDATE";
             if (queue.retireChanged(batch)) {
-                log.info("event=evaluation_archive status=RETIRED batchId={} routeVersionId={}", batch.id(), batch.routeVersionId());
+                log.info("event=evaluation_archive status=RETIRED batchId={} routeVersionId={}", batch.id(),
+                    batch.routeVersionId());
                 return;
             }
             if (batch.state() == State.RESERVED) {
@@ -58,9 +64,10 @@ public final class AdvanceEvaluationArchiveService implements AdvanceEvaluationA
                 stage = "PURGE";
                 removed = purge.purge(batch);
             }
-            log.info("event=evaluation_archive status={} batchId={} routeVersionId={} rows={} deletedRows={} lastSuccessAt={} durationMs={}",
+            log.info(
+                "event=evaluation_archive status={} batchId={} routeVersionId={} rows={} deletedRows={} lastSuccessAt={} durationMs={}",
                 policy.deleteEnabled() ? "PURGED" : "ARCHIVED", batch.id(), batch.routeVersionId(),
-                batch.rowCount(), removed, clock.instant(), (System.nanoTime()-started)/1_000_000);
+                batch.rowCount(), removed, clock.instant(), (System.nanoTime() - started) / 1_000_000);
         } catch (RuntimeException failure) {
             // 원본/품질 변경은 다음 순회에서 새 묶음으로 예약한다. 파일은 삭제하지 않는다.
             try {
@@ -71,7 +78,7 @@ public final class AdvanceEvaluationArchiveService implements AdvanceEvaluationA
             // SQL 원문과 바인딩 값을 운영 로그로 보내지 않는다.
             log.warn("event=evaluation_archive status=FAILED stage={} batchId={} failureType={} durationMs={}",
                 stage, batch == null ? "-" : batch.id(), failure.getClass().getSimpleName(),
-                (System.nanoTime()-started)/1_000_000);
+                (System.nanoTime() - started) / 1_000_000);
         }
     }
 }

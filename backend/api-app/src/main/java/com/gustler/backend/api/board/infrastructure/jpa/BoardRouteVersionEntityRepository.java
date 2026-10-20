@@ -8,7 +8,6 @@ import org.springframework.data.repository.query.Param;
 
 public interface BoardRouteVersionEntityRepository
     extends Repository<RouteVersionJpaEntity, Long> {
-
     @Query("""
         SELECT version
         FROM RouteVersionJpaEntity version

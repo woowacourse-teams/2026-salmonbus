@@ -1,5 +1,4 @@
 package com.gustler.backend.forecasting.domain.evaluation;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;

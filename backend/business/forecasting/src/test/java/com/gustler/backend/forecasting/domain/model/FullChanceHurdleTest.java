@@ -14,7 +14,6 @@ import org.junit.jupiter.api.Test;
  * 굳어 버리면 뒤에서 오늘 성적으로 확률을 옮길 때 계산이 무너진다.
  */
 class FullChanceHurdleTest {
-
     private static final double TOLERANCE = 1e-15;
 
     @Test

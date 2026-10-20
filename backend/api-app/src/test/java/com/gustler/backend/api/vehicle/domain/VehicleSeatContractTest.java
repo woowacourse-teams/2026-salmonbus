@@ -6,7 +6,6 @@ import com.gustler.backend.support.SchemaCheck;
 import org.junit.jupiter.api.Test;
 
 class VehicleSeatContractTest {
-
     @Test
     void 관측_표에_저장된_잔여석_미제공_사유는_같은_이름으로_응답한다() {
         // given

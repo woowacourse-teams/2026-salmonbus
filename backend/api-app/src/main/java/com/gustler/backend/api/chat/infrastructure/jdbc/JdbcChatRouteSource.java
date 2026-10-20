@@ -11,7 +11,6 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 public class JdbcChatRouteSource implements ChatRouteSource {
-
     private static final String CURRENT_ROUTE_STOPS = """
         SELECT route.source_route_id, route.display_name, stop.name
         FROM route_version version
@@ -40,7 +39,8 @@ public class JdbcChatRouteSource implements ChatRouteSource {
                     route.stopNames().add(stopName);
                 }
             });
-            return routes.values().stream()
+            return routes.values()
+                .stream()
                 .map(route -> new ChatRoute(route.routeId(), route.displayName(), route.stopNames()))
                 .toList();
         } catch (DataAccessResourceFailureException exception) {

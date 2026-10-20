@@ -24,7 +24,6 @@ public record VehicleTrajectory(
     FullSeatStreak fullSeatStreak,
     int maximumSeatsEverObserved
 ) {
-
     /**
      * 최대 관측 잔여석의 허용 최솟값.
      *
@@ -38,7 +37,7 @@ public record VehicleTrajectory(
         if (maximumSeatsEverObserved < SMALLEST_MAXIMUM_SEATS) {
             throw new IllegalArgumentException(
                 "그 차량이 보여 준 최대 잔여석은 %d석 이상이다: %d"
-                    .formatted(SMALLEST_MAXIMUM_SEATS, maximumSeatsEverObserved)
+                .formatted(SMALLEST_MAXIMUM_SEATS, maximumSeatsEverObserved)
             );
         }
     }

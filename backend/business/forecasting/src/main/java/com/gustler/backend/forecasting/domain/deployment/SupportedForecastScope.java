@@ -17,7 +17,6 @@ import java.util.List;
 public record SupportedForecastScope(
     List<String> modelRoutes
 ) {
-
     public SupportedForecastScope {
         if (modelRoutes == null || modelRoutes.isEmpty()) {
             throw new IllegalArgumentException("예보할 노선이 하나는 있어야 한다");

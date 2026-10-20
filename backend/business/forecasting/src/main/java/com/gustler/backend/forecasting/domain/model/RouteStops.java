@@ -1,6 +1,5 @@
 package com.gustler.backend.forecasting.domain.model;
 
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -26,7 +25,6 @@ public record RouteStops(
     List<RouteStop> stops,
     String routeName
 ) {
-
     public RouteStops(long routeVersionId, String sourceRouteId, List<RouteStop> stops) {
         this(routeVersionId, sourceRouteId, stops, "");
     }

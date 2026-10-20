@@ -3,7 +3,6 @@ package com.gustler.backend.forecasting.domain.statistics;
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
 import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.VehicleStopTarget;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
@@ -17,7 +16,6 @@ import org.junit.jupiter.api.Test;
  * 지나갈 구간이 물음으로 옮겨지는가</b> 하나다.
  */
 class TargetStopDemandTest {
-
     private static final long ROUTE_VERSION_3330 = 1L;
     private static final Instant MORNING_AT = Instant.parse("2026-08-19T08:30:00+09:00");
 
@@ -34,7 +32,8 @@ class TargetStopDemandTest {
             new StopDemandCell(TARGET_STOP_49, 0.8, 0.1, 30, 10));
 
         // when
-        TargetStopDemand actual = TargetStopDemand.of(statistics, target().stopOrder(), target().distance().stopCount());
+        TargetStopDemand actual = TargetStopDemand.of(statistics, target().stopOrder(), target().distance()
+                .stopCount());
 
         // then
         assertThat(actual.fillRateScore()).isPositive();
@@ -46,7 +45,8 @@ class TargetStopDemandTest {
         StopDemandStatistics statistics = statisticsOf(new StopDemandCell(47, 0.2, 0.1, 30, 10));
 
         // when
-        TargetStopDemand actual = TargetStopDemand.of(statistics, target().stopOrder(), target().distance().stopCount());
+        TargetStopDemand actual = TargetStopDemand.of(statistics, target().stopOrder(), target().distance()
+                .stopCount());
 
         // then
         assertThat(actual.filledByNeighbours()).isTrue();
@@ -61,7 +61,8 @@ class TargetStopDemandTest {
             new StopDemandCell(TARGET_STOP_49, 0.5, 0.3, 30, 10));
 
         // when
-        TargetStopDemand actual = TargetStopDemand.of(statistics, target().stopOrder(), target().distance().stopCount());
+        TargetStopDemand actual = TargetStopDemand.of(statistics, target().stopOrder(), target().distance()
+                .stopCount());
 
         // then
         assertThat(actual.netBoardingSegmentScore()).isPositive();

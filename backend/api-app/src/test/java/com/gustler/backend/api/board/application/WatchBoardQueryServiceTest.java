@@ -40,7 +40,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 @ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 class WatchBoardQueryServiceTest {
-
     private static final RouteId ROUTE_ID = new RouteId("204000057");
     private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-08-27T12:00:00+09:00");
     private static final long BATCH_ID = 100L;
@@ -64,7 +63,8 @@ class WatchBoardQueryServiceTest {
         // given
         Board board = board(NOW.minusMinutes(1), 1);
         List<ObservedVehicle> vehicles = List.of(vehicle("V1"));
-        given(boardQueryService.readBoard(ROUTE_ID)).willReturn(new BoardReading(board, BATCH_ID, Duration.ofSeconds(20)));
+        given(boardQueryService.readBoard(ROUTE_ID)).willReturn(
+            new BoardReading(board, BATCH_ID, Duration.ofSeconds(20)));
         given(vehicleQueryRepository.findVehicles(BATCH_ID)).willReturn(vehicles);
 
         // when
@@ -80,7 +80,8 @@ class WatchBoardQueryServiceTest {
     void 만료까지_남은_시간이_캐시_정책보다_짧으면_남은_시간만큼만_캐시한다() {
         // given
         Board board = board(NOW.minusMinutes(9), 0);
-        given(boardQueryService.readBoard(ROUTE_ID)).willReturn(new BoardReading(board, BATCH_ID, Duration.ofSeconds(600)));
+        given(boardQueryService.readBoard(ROUTE_ID)).willReturn(
+            new BoardReading(board, BATCH_ID, Duration.ofSeconds(600)));
         given(vehicleQueryRepository.findVehicles(BATCH_ID)).willReturn(List.of());
 
         // when
@@ -94,7 +95,8 @@ class WatchBoardQueryServiceTest {
     void 만료_시각이면_캐시하지_않는다() {
         // given
         Board board = board(NOW.minusMinutes(10), 0);
-        given(boardQueryService.readBoard(ROUTE_ID)).willReturn(new BoardReading(board, BATCH_ID, Duration.ofSeconds(600)));
+        given(boardQueryService.readBoard(ROUTE_ID)).willReturn(
+            new BoardReading(board, BATCH_ID, Duration.ofSeconds(600)));
         given(vehicleQueryRepository.findVehicles(BATCH_ID)).willReturn(List.of());
 
         // when
@@ -108,7 +110,8 @@ class WatchBoardQueryServiceTest {
     void 판정_직후_만료_시각을_넘겨도_캐시_시간은_음수가_되지_않는다() {
         // given
         Board board = board(NOW.minusMinutes(10).minusSeconds(1), 0);
-        given(boardQueryService.readBoard(ROUTE_ID)).willReturn(new BoardReading(board, BATCH_ID, Duration.ofSeconds(600)));
+        given(boardQueryService.readBoard(ROUTE_ID)).willReturn(
+            new BoardReading(board, BATCH_ID, Duration.ofSeconds(600)));
         given(vehicleQueryRepository.findVehicles(BATCH_ID)).willReturn(List.of());
 
         // when
@@ -193,7 +196,8 @@ class WatchBoardQueryServiceTest {
             List.of(new DirectionInfo(BoardDirection.UP, "종점 방면", "기점", "종점", "04:50", "23:30")), "1",
             RouteHeadways.none());
         StopState stop = new StopState(1, "STOP-1", "기점", BoardDirection.UP, true, List.of());
-        return new Board(route, observedAt, observedAt.plusMinutes(10), new ForecastModel(7L, "model-7", NOW.minusDays(1)),
+        return new Board(route, observedAt, observedAt.plusMinutes(10),
+            new ForecastModel(7L, "model-7", NOW.minusDays(1)),
             vehiclesInService, List.of(stop));
     }
 

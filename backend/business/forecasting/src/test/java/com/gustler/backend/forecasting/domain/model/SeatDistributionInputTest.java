@@ -12,7 +12,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class SeatDistributionInputTest {
-
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void 모델이_지원하는_최소값과_최대값을_입력하면_허용한다(boolean useMaximum) {
@@ -30,7 +29,8 @@ class SeatDistributionInputTest {
     @ParameterizedTest
     @MethodSource("outOfRangeInputs")
     void 좌석_범위를_벗어나면_거부한_입력값과_허용_범위를_예외에_남긴다(
-        int currentSeats, int capacity, String field, int value, int minimum
+        int currentSeats, int capacity,
+        String field, int value, int minimum
     ) {
         // given
         int maximum = SeatGrid.LARGEST_SEATS;

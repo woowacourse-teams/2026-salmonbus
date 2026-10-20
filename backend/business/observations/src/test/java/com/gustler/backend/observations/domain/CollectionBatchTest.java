@@ -2,7 +2,6 @@ package com.gustler.backend.observations.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
 import java.time.OffsetDateTime;
 import org.junit.jupiter.api.Test;
 

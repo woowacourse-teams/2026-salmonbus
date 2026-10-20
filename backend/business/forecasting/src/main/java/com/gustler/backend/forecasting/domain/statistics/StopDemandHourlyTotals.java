@@ -19,7 +19,6 @@ public record StopDemandHourlyTotals(
     double capacityTotal,
     int sampleCount
 ) {
-
     public StopDemandHourlyTotals {
         if (sampleCount <= 0) {
             throw new IllegalArgumentException("합친 라벨이 없으면 셀 재료가 아니다: " + sampleCount);

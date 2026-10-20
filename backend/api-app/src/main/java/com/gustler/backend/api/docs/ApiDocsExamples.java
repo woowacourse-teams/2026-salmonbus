@@ -2,7 +2,6 @@ package com.gustler.backend.api.docs;
 
 /** 공개 문서에만 쓰는 합성 요청·응답 예시다. */
 public final class ApiDocsExamples {
-
     public static final String ROUTES = """
         {
           "routes": [

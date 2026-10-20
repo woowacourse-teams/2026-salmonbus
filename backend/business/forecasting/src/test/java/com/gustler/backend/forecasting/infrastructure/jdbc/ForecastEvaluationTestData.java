@@ -8,7 +8,6 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 /** 평가 테스트가 발행 유스케이스와 독립적으로 사용할 예측과 PENDING 평가를 준비한다. */
 final class ForecastEvaluationTestData {
-
     private ForecastEvaluationTestData() {
     }
 
@@ -43,12 +42,19 @@ final class ForecastEvaluationTestData {
                 SELECT :observation, :target, :version, :distance, :model, :revision,
                     :rawChance, :chance, :seats, :generatedAt, publication.quality_revision, publication.id
                 FROM forecast_publication publication WHERE publication.id = :publication
-                """).param("observation", forecast.vehicleObservationId()).param("target", forecast.targetStopOrder())
-                .param("version", forecast.routeVersionId()).param("distance", forecast.stopsToTarget())
-                .param("model", forecast.modelDeploymentId()).param("revision", forecast.demandStatisticsRevision())
-                .param("rawChance", forecast.seatFullChanceRaw()).param("chance", forecast.seatFullChance())
-                .param("seats", forecast.expectedSeats()).param("generatedAt", OffsetDateTime.ofInstant(forecast.generatedAt(), ZoneOffset.UTC))
-                .param("publication", publicationId).update();
+                """)
+                .param("observation", forecast.vehicleObservationId())
+                .param("target", forecast.targetStopOrder())
+                .param("version", forecast.routeVersionId())
+                .param("distance", forecast.stopsToTarget())
+                .param("model", forecast.modelDeploymentId())
+                .param("revision", forecast.demandStatisticsRevision())
+                .param("rawChance", forecast.seatFullChanceRaw())
+                .param("chance", forecast.seatFullChance())
+                .param("seats", forecast.expectedSeats())
+                .param("generatedAt", OffsetDateTime.ofInstant(forecast.generatedAt(), ZoneOffset.UTC))
+                .param("publication", publicationId)
+                .update();
             jdbc.sql("""
                 INSERT INTO forecast_evaluation_work(vehicle_observation_id, route_version_id)
                 VALUES(:observation, :version) ON CONFLICT DO NOTHING

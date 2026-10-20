@@ -34,7 +34,6 @@ import org.springframework.web.context.WebApplicationContext;
 @Transactional
 @Import(BoardApiContractTest.FixedClockConfig.class)
 class BoardApiContractTest {
-
     private static final String ROUTE_ID = "204000057";
 
     @Autowired
@@ -370,8 +369,11 @@ class BoardApiContractTest {
         fixture.insertForecast(route, observation, 3, 1, model, 0.2, 40.0, now);
         jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats = 82, seat_unknown_reason = NULL WHERE id = ?")
             .param(observation).update();
-        jdbcClient.sql("UPDATE vehicle_one_way_trip SET status = 'EXCLUDED', evidence_observation_id = ? WHERE id = CAST(? AS text)")
-            .param(observation).param(observation).update();
+        jdbcClient.sql(
+        "UPDATE vehicle_one_way_trip SET status = 'EXCLUDED', evidence_observation_id = ? WHERE id = CAST(? AS text)")
+            .param(observation)
+            .param(observation)
+            .update();
 
         // when
         var boardResponse = mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID));
@@ -386,9 +388,9 @@ class BoardApiContractTest {
             .andExpect(jsonPath("$.vehicles[0].seat.kind").value("UNKNOWN"))
             .andExpect(jsonPath("$.vehicles[0].seat.remaining").doesNotExist());
         assertThat(jdbcClient.sql("SELECT remaining_seats FROM vehicle_observation WHERE id = ?")
-            .param(observation).query(Integer.class).single()).isEqualTo(82);
+                .param(observation).query(Integer.class).single()).isEqualTo(82);
         assertThat(jdbcClient.sql("SELECT count(*) FROM seat_forecast WHERE vehicle_observation_id = ?")
-            .param(observation).query(Integer.class).single()).isEqualTo(1);
+                .param(observation).query(Integer.class).single()).isEqualTo(1);
     }
 
     @Test
@@ -707,7 +709,6 @@ class BoardApiContractTest {
     }
     @TestConfiguration(proxyBeanMethods = false)
     static class FixedClockConfig {
-
         @Bean
         @Primary
         Clock fixedDaytimeBoardClock() {

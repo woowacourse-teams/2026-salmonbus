@@ -14,7 +14,6 @@ import java.util.Set;
 
 /** 입력 파일의 바이트만 검사한다. 표본 건수와 참조의 완전성은 별도로 검사해야 한다. */
 final class StatisticsInputFiles {
-
     private static final int BUFFER_SIZE = 64 * 1024;
 
     private StatisticsInputFiles() {

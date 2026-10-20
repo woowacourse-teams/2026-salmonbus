@@ -7,7 +7,6 @@ package com.gustler.backend.forecasting.domain.model;
  * -40 부터 50 까지 91칸이다. 두 격자 폭은 학습 쪽 상수와 같아야 한다.
  */
 public final class SeatGrid {
-
     static final int SEAT_COUNT = 71;
     public static final int LARGEST_SEATS = SEAT_COUNT - 1;
 

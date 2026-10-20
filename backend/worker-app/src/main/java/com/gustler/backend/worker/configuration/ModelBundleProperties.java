@@ -23,5 +23,4 @@ public record ModelBundleProperties(
     String directory,
     boolean promoteOnStart
 ) {
-
 }

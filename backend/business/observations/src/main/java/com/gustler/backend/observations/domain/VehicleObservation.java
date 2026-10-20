@@ -14,7 +14,6 @@ public record VehicleObservation(
     Integer routeType,
     Integer tagless
 ) {
-
     private static final int LOWEST_CROWD_LEVEL = 1;
     private static final int HIGHEST_CROWD_LEVEL = 4;
     private static final int MOVING_BETWEEN_STOPS = 0;

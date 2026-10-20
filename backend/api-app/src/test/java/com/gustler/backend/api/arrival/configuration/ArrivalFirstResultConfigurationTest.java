@@ -11,8 +11,10 @@ import org.springframework.boot.convert.ApplicationConversionService;
 
 class ArrivalFirstResultConfigurationTest {
     private final ApplicationContextRunner context = new ApplicationContextRunner()
-        .withUserConfiguration(ArrivalApiConfiguration.class).withBean(Clock.class, Clock::systemUTC)
-        .withInitializer(app -> app.getBeanFactory().setConversionService(ApplicationConversionService.getSharedInstance()));
+        .withUserConfiguration(ArrivalApiConfiguration.class)
+        .withBean(Clock.class, Clock::systemUTC)
+        .withInitializer(app -> app.getBeanFactory()
+            .setConversionService(ApplicationConversionService.getSharedInstance()));
 
     @Test
     void 기본은_500ms와_동시_32건이며_0ms로_비활성화할_수_있다() {

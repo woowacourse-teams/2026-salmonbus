@@ -16,7 +16,6 @@ import com.tngtech.archunit.lang.SimpleConditionEvent;
 
 @AnalyzeClasses(packages = "com.gustler.backend.maintenance", importOptions = ImportOption.DoNotIncludeTests.class)
 class PackageBoundaryTest {
-
     private static final String PREFIX = "com.gustler.backend.";
     private static final String APP = PREFIX + "maintenance";
 

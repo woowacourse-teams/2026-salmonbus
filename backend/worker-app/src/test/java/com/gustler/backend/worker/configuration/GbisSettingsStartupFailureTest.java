@@ -20,7 +20,6 @@ import org.springframework.core.env.SystemEnvironmentPropertySource;
 
 @ExtendWith(OutputCaptureExtension.class)
 class GbisSettingsStartupFailureTest {
-
     private static final String SECRET = "fake-key-must-not-be-printed";
 
     static java.util.stream.Stream<Arguments> 잘못된_키_설정() {
@@ -50,7 +49,8 @@ class GbisSettingsStartupFailureTest {
         application.setWebApplicationType(WebApplicationType.NONE);
         StandardEnvironment standard = new StandardEnvironment();
         standard.getPropertySources().replace(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
-            new SystemEnvironmentPropertySource(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME, environment));
+            new SystemEnvironmentPropertySource(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
+                environment));
         application.setEnvironment(standard);
 
         // when & then

@@ -7,7 +7,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
-
 import com.gustler.backend.forecasting.api.evaluation.EvaluateForecasts;
 import com.gustler.backend.forecasting.application.evaluation.ForecastEvaluationWriter;
 import com.gustler.backend.forecasting.application.evaluation.RecentArrivalObservationCache;
@@ -57,7 +56,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Import(JdbcForecastEvaluationTransactionTest.FixedClock.class)
 @TestPropertySource(properties = "forecast.evaluation.observation-cache.enabled=true")
 class JdbcForecastEvaluationTransactionTest {
-
     private static final Instant OBSERVED_AT = Instant.parse("2026-08-19T02:14:00Z");
     private static final Instant ARRIVED_AT = OBSERVED_AT.plusSeconds(360);
     private static final Instant SCORED_AT = ARRIVED_AT.plusSeconds(60);
@@ -148,7 +146,9 @@ class JdbcForecastEvaluationTransactionTest {
     void 이_테스트가_저장한_자료만_정리한다() {
         inTransaction(() -> {
             jdbc.sql("DELETE FROM forecast_evaluation_work WHERE route_version_id = ?").param(routeVersionId).update();
-            jdbc.sql("DELETE FROM forecast_evaluation_result WHERE route_version_id = ?").param(routeVersionId).update();
+            jdbc.sql("DELETE FROM forecast_evaluation_result WHERE route_version_id = ?")
+                .param(routeVersionId)
+                .update();
             jdbc.sql("DELETE FROM seat_forecast WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM forecast_publication WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM same_day_model_full_outcomes WHERE route_id = ?").param(routeId).update();
@@ -160,7 +160,9 @@ class JdbcForecastEvaluationTransactionTest {
             jdbc.sql("DELETE FROM vehicle_one_way_trip WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM vehicle_observation WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM observation_batch WHERE route_version_id = ?").param(routeVersionId).update();
-            jdbc.sql("DELETE FROM route_version_quality_policy WHERE route_version_id = ?").param(routeVersionId).update();
+            jdbc.sql("DELETE FROM route_version_quality_policy WHERE route_version_id = ?")
+                .param(routeVersionId)
+                .update();
             jdbc.sql("DELETE FROM route_data_quality WHERE route_id = ?").param(routeId).update();
             jdbc.sql("DELETE FROM route_stop WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM route_version WHERE id = ?").param(routeVersionId).update();
@@ -228,7 +230,8 @@ class JdbcForecastEvaluationTransactionTest {
         initializeSameDayOutcomes();
         AtomicInteger count = new AtomicInteger();
         evaluationWriter.setTelemetry(new ForecastTelemetry() {
-            @Override public void settled(List<SettledEvaluation> results) {
+            @Override
+            public void settled(List<SettledEvaluation> results) {
                 count.addAndGet(results.size());
                 results.forEach(result -> {
                     assertThat(result.diagnostics()).isNotNull();
@@ -249,7 +252,9 @@ class JdbcForecastEvaluationTransactionTest {
             assertThat(count).hasValue(1);
             evaluationWriter.complete(List.of(completedEvaluation()));
             assertThat(count).hasValue(1);
-        } finally { evaluationWriter.setTelemetry(ForecastTelemetry.NONE); }
+        } finally {
+            evaluationWriter.setTelemetry(ForecastTelemetry.NONE);
+        }
     }
 
     @Test
@@ -268,7 +273,7 @@ class JdbcForecastEvaluationTransactionTest {
         // then
         assertThat(evaluationState()).isEqualTo("PENDING");
         assertThat(jdbc.sql("SELECT sum(row_count) FROM same_day_model_full_outcomes WHERE route_id = ?")
-            .param(routeId).query(Long.class).single()).isZero();
+                .param(routeId).query(Long.class).single()).isZero();
     }
 
     @Test
@@ -286,7 +291,7 @@ class JdbcForecastEvaluationTransactionTest {
         assertThat(repeated).isEmpty();
         assertThat(evaluationState()).isEqualTo("SKIPPED");
         assertThat(jdbc.sql("SELECT count(*) FROM same_day_model_full_outcomes WHERE route_id = ?")
-            .param(routeId).query(Long.class).single()).isZero();
+                .param(routeId).query(Long.class).single()).isZero();
     }
 
     @Test
@@ -447,7 +452,10 @@ class JdbcForecastEvaluationTransactionTest {
             assertThat(closing.get(10, TimeUnit.SECONDS)).isEmpty();
             assertThat(evaluationState()).isEqualTo("PENDING");
         } finally {
-            locked.countDown(); closeStarted.countDown(); release.countDown(); stop(executor);
+            locked.countDown();
+            closeStarted.countDown();
+            release.countDown();
+            stop(executor);
         }
     }
 
@@ -475,7 +483,7 @@ class JdbcForecastEvaluationTransactionTest {
         assertThat(outcomes.outcomesFor(routeId, modelId, SCORED_AT)).containsExactlyEntriesOf(
             Map.of(STOPS_TO_TARGET, new SameDayFullOutcomes(1, 1, RAW_FULL_CHANCE)));
         assertThat(jdbc.sql("SELECT sum(row_count) FROM same_day_model_full_outcomes WHERE route_id = ?")
-            .param(routeId).query(Long.class).single()).isEqualTo(1);
+                .param(routeId).query(Long.class).single()).isEqualTo(1);
     }
 
     private String evaluationState() {
@@ -522,7 +530,7 @@ class JdbcForecastEvaluationTransactionTest {
                 VALUES (?, ?, 1, ?, ?, ?, ?, 'SUCCESS_ROWS', 'normalization-v1', 'collection-v1', 1)
                 RETURNING id
                 """).params(routeVersionId, offset(observedAt), UUID.randomUUID().toString(),
-                offset(observedAt), offset(observedAt), offset(observedAt))
+            offset(observedAt), offset(observedAt), offset(observedAt))
             .query(Long.class).single();
     }
 
@@ -568,7 +576,6 @@ class JdbcForecastEvaluationTransactionTest {
 
     /** DB에 실제 집계가 저장된 직후 발생하는 후속 처리 실패를 재현한다. */
     private static final class FailingOutcomeRepository implements SameDayFullOutcomesStore {
-
         private final SameDayFullOutcomesStore delegate;
 
         private FailingOutcomeRepository(SameDayFullOutcomesStore delegate) {
@@ -581,12 +588,17 @@ class JdbcForecastEvaluationTransactionTest {
         }
 
         @Override
-        public List<SameDayFullOutcomeCount> findCounts(final long routeId, long modelDeploymentId, SeoulDay day) {
+        public List<SameDayFullOutcomeCount> findCounts(final long routeId, long modelDeploymentId,
+            SeoulDay day) {
             return delegate.findCounts(routeId, modelDeploymentId, day);
         }
 
         @Override
-        public void upsertCounts(final long routeId, long modelDeploymentId, SeoulDay day, List<SameDayFullOutcomeCount> counts) {
+        public void upsertCounts(
+            final long routeId, long modelDeploymentId,
+            SeoulDay day,
+            List<SameDayFullOutcomeCount> counts
+        ) {
             delegate.upsertCounts(routeId, modelDeploymentId, day, counts);
             throw new CalibrationWriteFailure();
         }
@@ -598,13 +610,20 @@ class JdbcForecastEvaluationTransactionTest {
         }
 
         @Override
-        public void addCounts(long routeId, long modelDeploymentId, SeoulDay day, List<SameDayFullOutcomeCount> increments) {
+        public void addCounts(long routeId, long modelDeploymentId,
+            SeoulDay day,
+            List<SameDayFullOutcomeCount> increments
+        ) {
             delegate.addCounts(routeId, modelDeploymentId, day, increments);
             throw new CalibrationWriteFailure();
         }
 
         @Override
-        public List<SameDayFullOutcomeCount> countFromSource(final long routeId, long modelDeploymentId, SeoulDay day, Instant until) {
+        public List<SameDayFullOutcomeCount> countFromSource(
+            final long routeId, long modelDeploymentId,
+            SeoulDay day,
+            Instant until
+        ) {
             return delegate.countFromSource(routeId, modelDeploymentId, day, until);
         }
     }

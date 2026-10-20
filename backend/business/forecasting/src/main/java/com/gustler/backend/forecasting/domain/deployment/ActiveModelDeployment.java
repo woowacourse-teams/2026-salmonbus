@@ -16,7 +16,6 @@ public record ActiveModelDeployment(
     String releaseId,
     String bundleDigest
 ) {
-
     public ActiveModelDeployment {
         if (calculationVersion == null || calculationVersion.isBlank()) {
             throw new IllegalArgumentException("배포에는 계산 규칙 판이 있어야 한다: " + calculationVersion);

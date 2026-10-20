@@ -5,12 +5,12 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
 public final class ObservationFreshness {
-
     public static final Duration MAX_WINDOW = Duration.ofMinutes(10);
     private static final Duration DEFAULT_WINDOW = Duration.ofMinutes(5);
     private static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
 
-    private ObservationFreshness() {}
+    private ObservationFreshness() {
+    }
 
     public static OffsetDateTime staleAt(OffsetDateTime observedAt) {
         final int hour = observedAt.atZoneSameInstant(KOREA).getHour();

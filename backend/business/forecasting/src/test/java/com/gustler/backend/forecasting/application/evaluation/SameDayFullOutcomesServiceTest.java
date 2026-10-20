@@ -12,7 +12,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-
 import com.gustler.backend.forecasting.domain.model.SameDayFullOutcomes;
 import java.time.Duration;
 import java.time.Instant;
@@ -26,7 +25,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class SameDayFullOutcomesServiceTest {
-
     private static final long ROUTE_3330 = 1L;
     private static final long ROUTE_1650 = 2L;
     private static final int STOPS_TO_TARGET = 3;

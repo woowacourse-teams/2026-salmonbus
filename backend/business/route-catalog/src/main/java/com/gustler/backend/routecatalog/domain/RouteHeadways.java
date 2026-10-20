@@ -9,7 +9,6 @@ public record RouteHeadways(
     HeadwayRange holiday,
     Set<ServiceDay> unreadableDays
 ) {
-
     public RouteHeadways {
         unreadableDays = Set.copyOf(unreadableDays);
         for (ServiceDay day : unreadableDays) {

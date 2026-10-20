@@ -14,7 +14,6 @@ import org.springframework.scheduling.config.ScheduledTaskHolder;
  */
 @IntegrationTest
 class ScheduledCollectionDisabledTest {
-
     @Autowired
     private ApplicationContext context;
 

@@ -30,7 +30,10 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class JdbcTripQualityStore implements TripQualityStore {
     private final JdbcClient jdbc;
-    public JdbcTripQualityStore(final JdbcClient jdbc) { this.jdbc = jdbc; }
+
+    public JdbcTripQualityStore(final JdbcClient jdbc) {
+        this.jdbc = jdbc;
+    }
 
     @Override
     public Optional<Duration> maximumObservationGap(final long version) {
@@ -39,13 +42,17 @@ public class JdbcTripQualityStore implements TripQualityStore {
             FROM route_version v LEFT JOIN route_version_quality_policy p ON p.route_version_id = v.id
             WHERE v.id = ?
             """).param(version).query((rs, n) -> Optional.ofNullable(rs.getObject(1, Integer.class))
-                .map(seconds -> Duration.ofSeconds(seconds))).single();
+            .map(seconds -> Duration.ofSeconds(seconds))).single();
     }
 
     /** 차량이 없는 기간도 제한된 배치 수에서 멈추도록 배치부터 조회한다. */
     @Override
-    public List<BatchObservations> readPage(final long version, final String vehicle, final Instant at,
-        final long batch, final boolean backwards, final boolean include) {
+    public List<BatchObservations> readPage(
+        final long version, final String vehicle, final Instant at,
+        final long batch,
+        final boolean backwards,
+        final boolean include
+    ) {
         final String comparison = backwards ? "<" : include ? ">=" : ">";
         final String order = backwards ? "DESC" : "ASC";
         return jdbc.sql("""
@@ -67,11 +74,18 @@ public class JdbcTripQualityStore implements TripQualityStore {
 
     @Override
     public Map<Long, BatchObservations> observations(final long anchor, final Long candidate) {
-        final var ids = Stream.of(anchor, candidate).filter(Objects::nonNull).distinct().toList();
+        final var ids = Stream.of(anchor, candidate)
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
         return jdbc.sql("""
             SELECT b.id AS batch_id, b.response_received_at, o.id, o.vehicle_id, o.stop_order, o.running_state, o.remaining_seats
             FROM vehicle_observation o JOIN observation_batch b ON b.id = o.observation_batch_id WHERE o.id IN (:ids)
-            """).param("ids", ids).query((rs, n) -> scanRow(rs)).list().stream()
+            """)
+            .param("ids", ids)
+            .query((rs, n) -> scanRow(rs))
+            .list()
+            .stream()
             .collect(Collectors.toMap(row -> row.observation().id(), row -> row));
     }
 
@@ -83,12 +97,14 @@ public class JdbcTripQualityStore implements TripQualityStore {
             FROM observation_trip_assignment a JOIN vehicle_one_way_trip t ON t.id = a.trip_id
             JOIN vehicle_observation origin ON origin.id = t.start_observation_id WHERE a.observation_id = ?
             """).param(id).query((rs, n) -> new Previous(observation, rs.getLong(1), Status.valueOf(rs.getString(2)),
-                new Start(rs.getInt(3), rs.getObject(4, Integer.class)))).single();
+            new Start(rs.getInt(3), rs.getObject(4, Integer.class)))).single();
     }
 
     @Override
     public void saveAssessments(final long version, final List<OneWayTripAssessment> assessments) {
-        if (assessments.isEmpty()) { return; }
+        if (assessments.isEmpty()) {
+            return;
+        }
         final List<Object> starts = new ArrayList<>();
         final List<Object> exclusions = new ArrayList<>();
         final List<Object> links = new ArrayList<>();
@@ -157,10 +173,10 @@ public class JdbcTripQualityStore implements TripQualityStore {
     private static BatchObservations scanRow(final ResultSet rs) throws SQLException {
         final Instant at = rs.getObject("response_received_at", OffsetDateTime.class).toInstant();
         final Long id = rs.getObject("id", Long.class);
-        return new BatchObservations(rs.getLong("batch_id"), at, id == null ? null : new Observation(id,
-            rs.getString("vehicle_id"), at, rs.getInt("stop_order"), rs.getObject("running_state", Integer.class),
-            rs.getObject("remaining_seats", Integer.class)));
+        return new BatchObservations(rs.getLong("batch_id"), at, id == null ? null : new Observation(id, rs.getString("vehicle_id"), at, rs.getInt("stop_order"),
+            rs.getObject("running_state", Integer.class), rs.getObject("remaining_seats", Integer.class)));
     }
     private static OffsetDateTime offset(final Instant at) { return at.atOffset(ZoneOffset.UTC); }
-    private static String values(final int rows, final String tuple) { return String.join(", ", Collections.nCopies(rows, tuple)); }
+    private static String values(final int rows, final String tuple) { return String.join(", ", Collections.nCopies(rows, tuple));
+    }
 }

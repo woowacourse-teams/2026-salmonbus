@@ -4,7 +4,6 @@ import com.gustler.backend.forecasting.domain.model.CoefficientsFixture;
 import com.gustler.backend.forecasting.domain.model.SeatDistributionInput;
 import com.gustler.backend.forecasting.domain.model.SeatDistributionPredictor;
 import com.gustler.backend.forecasting.domain.model.Sha256;
-
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -27,7 +26,6 @@ import java.util.Random;
  * <p>진짜 파일이 오면 이 픽스처를 안 고치고 파일만 갈아 끼운다.
  */
 public final class DummyBundle {
-
     static final String BUNDLE_SCHEMA_VERSION = "a18-live-bundle-v1";
     static final String MODEL_VERSION = "seat-distribution-a18-v1";
     static final String FEATURE_CONTRACT_VERSION = "seat-feature-contract-v4-1-draft";
@@ -47,9 +45,9 @@ public final class DummyBundle {
     private byte[] routeReference;
 
     private final Map<String, Object> manifest = new LinkedHashMap<>();
+
     private final SafetensorsWriter weights = new SafetensorsWriter();
     private final List<String> routes;
-
     private DummyBundle(
         List<String> routes
     ) {
@@ -184,7 +182,8 @@ public final class DummyBundle {
     ) {
         return String.join("\n",
             ((List<Double>) golden.get("featureVector")).stream()
-                .map(String::valueOf).collect(java.util.stream.Collectors.joining(",")),
+                .map(String::valueOf)
+                .collect(java.util.stream.Collectors.joining(",")),
             String.valueOf(golden.get("modelRoute")),
             String.valueOf(golden.get("stopsAhead")),
             String.valueOf(golden.get("currentSeats")),
@@ -404,7 +403,8 @@ public final class DummyBundle {
             String.valueOf(written.get("routeReferenceDigest")),
             String.valueOf(written.get("weightsDigest")),
             String.join(",", featureNamesOf(written)),
-            normalizationOf(written).entrySet().stream()
+            normalizationOf(written).entrySet()
+                .stream()
                 .sorted(Map.Entry.comparingByKey())
                 .map(constant -> constant.getKey() + "=" + constant.getValue())
                 .collect(java.util.stream.Collectors.joining(",")),

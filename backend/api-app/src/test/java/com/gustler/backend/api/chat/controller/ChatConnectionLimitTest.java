@@ -33,7 +33,6 @@ import org.springframework.web.socket.WebSocketSession;
 import tools.jackson.databind.json.JsonMapper;
 
 class ChatConnectionLimitTest {
-
     private static final String ROUTE_3330 = "204000057";
 
     private final Map<String, CloseStatus> closed = new ConcurrentHashMap<>();
@@ -246,12 +245,14 @@ class ChatConnectionLimitTest {
             .filter(id -> !closed.containsKey(id))
             .toList();
         assertThat(admitted).hasSize(100);
-        assertThat(admitted.stream().filter(id -> id.startsWith("same"))).hasSizeLessThanOrEqualTo(5);
+        assertThat(admitted.stream()
+            .filter(id -> id.startsWith("same"))).hasSizeLessThanOrEqualTo(5);
         Map<String, Integer> perAddress = new HashMap<>();
         for (WebSocketSession session : sessions) {
             if (!closed.containsKey(session.getId())) {
                 perAddress.merge(
-                    (String) session.getAttributes().get(ChatClientAddressInterceptor.CLIENT_ADDRESS_ATTRIBUTE), 1, Integer::sum
+                    (String) session.getAttributes()
+                        .get(ChatClientAddressInterceptor.CLIENT_ADDRESS_ATTRIBUTE), 1, Integer::sum
                 );
             }
         }
@@ -276,7 +277,6 @@ class ChatConnectionLimitTest {
     }
 
     private static final class EmptyRepository implements ChatMessageRepository {
-
         @Override
         public String nextId() {
             return "68db00000000000000000003";

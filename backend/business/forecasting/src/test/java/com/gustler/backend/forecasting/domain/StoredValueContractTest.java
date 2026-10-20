@@ -10,14 +10,14 @@ import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
 class StoredValueContractTest {
-
     @Test
     void 관측_표에_저장된_잔여석_미제공_사유를_모두_읽을_수_있다() {
         // when
         var stored = SchemaCheck.allowedValues("V4__observation.sql", "seat_unknown_reason");
 
         // then
-        assertThat(Arrays.stream(SeatUnknownReason.values()).map(Enum::name)).containsAll(stored);
+        assertThat(Arrays.stream(SeatUnknownReason.values())
+            .map(Enum::name)).containsAll(stored);
     }
 
     @Test
@@ -26,7 +26,8 @@ class StoredValueContractTest {
         var allowed = SchemaCheck.allowedValues("V28__quality_excluded_evaluation.sql", "scoring_state");
 
         // then
-        assertThat(Arrays.stream(ScoringState.values()).map(Enum::name)).containsExactlyInAnyOrderElementsOf(allowed);
+        assertThat(Arrays.stream(ScoringState.values())
+            .map(Enum::name)).containsExactlyInAnyOrderElementsOf(allowed);
     }
 
     @Test
@@ -35,7 +36,8 @@ class StoredValueContractTest {
         var allowed = SchemaCheck.allowedValues("V15__one_way_trip_quality.sql", "status");
 
         // then
-        assertThat(Arrays.stream(OneWayTripClassifier.Status.values()).map(Enum::name))
+        assertThat(Arrays.stream(OneWayTripClassifier.Status.values())
+            .map(Enum::name))
             .containsExactlyInAnyOrderElementsOf(allowed);
     }
 }

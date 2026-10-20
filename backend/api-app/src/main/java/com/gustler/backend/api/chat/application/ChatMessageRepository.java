@@ -12,7 +12,6 @@ public interface ChatMessageRepository {
     List<ChatMessage> findRecent(String roomId, int limit);
 
     record SaveResult(Status status, ChatMessage message) {
-
         public enum Status {
             CREATED,
             DUPLICATE,

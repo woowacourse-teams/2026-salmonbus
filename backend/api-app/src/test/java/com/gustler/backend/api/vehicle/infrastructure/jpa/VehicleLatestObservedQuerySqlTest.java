@@ -23,7 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 @Import(VehicleLatestObservedQuerySqlTest.SqlCaptureConfig.class)
 class VehicleLatestObservedQuerySqlTest {
-
     private static final String ROUTE_ID = "204000057";
 
     @Autowired
@@ -42,7 +41,8 @@ class VehicleLatestObservedQuerySqlTest {
 
         repository.findLatestSnapshot(new RouteId(ROUTE_ID));
 
-        String sql = sqlCapture.statements().stream()
+        String sql = sqlCapture.statements()
+            .stream()
             .filter(statement -> statement.contains("from observation_batch"))
             .findFirst()
             .orElseThrow();
@@ -99,7 +99,6 @@ class VehicleLatestObservedQuerySqlTest {
     }
 
     static final class SqlCapture implements StatementInspector {
-
         private final List<String> statements = new CopyOnWriteArrayList<>();
 
         @Override
@@ -119,7 +118,6 @@ class VehicleLatestObservedQuerySqlTest {
 
     @TestConfiguration(proxyBeanMethods = false)
     static class SqlCaptureConfig {
-
         @Bean
         SqlCapture vehicleSqlCapture() {
             return new SqlCapture();

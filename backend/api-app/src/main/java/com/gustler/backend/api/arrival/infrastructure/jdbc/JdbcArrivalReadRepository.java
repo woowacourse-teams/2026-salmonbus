@@ -14,7 +14,10 @@ public class JdbcArrivalReadRepository implements ArrivalReadRepository {
     private final JdbcClient jdbc;
     private final ObjectMapper json;
 
-    public JdbcArrivalReadRepository(JdbcClient jdbc, ObjectMapper json) { this.jdbc = jdbc; this.json = json; }
+    public JdbcArrivalReadRepository(JdbcClient jdbc, ObjectMapper json) {
+        this.jdbc = jdbc;
+        this.json = json;
+    }
 
     @Override
     public List<ArrivalVisit> visits(String stationId) {
@@ -26,7 +29,7 @@ public class JdbcArrivalReadRepository implements ArrivalReadRepository {
             WHERE stop.stop_id = ? AND version.valid_to IS NULL AND route.source_id = 'GBIS'
             ORDER BY route.public_route_id, stop.stop_order
             """).param(stationId).query((row, index) -> new ArrivalVisit(row.getString(1), row.getString(2),
-                row.getLong(3), row.getInt(4), row.getString(5), row.getTimestamp(6).toInstant())).list();
+            row.getLong(3), row.getInt(4), row.getString(5), row.getTimestamp(6).toInstant())).list();
     }
 
     @Override

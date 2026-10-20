@@ -9,9 +9,11 @@ import com.tngtech.archunit.lang.ArchRule;
 
 @AnalyzeClasses(packages = "com.gustler.backend.api.chat", importOptions = ImportOption.DoNotIncludeTests.class)
 class ChatStorageBoundaryTest {
-
     @ArchTest
     static final ArchRule applicationAndDomainDoNotUseMongoTypes = noClasses()
-        .that().resideInAnyPackage("com.gustler.backend.api.chat.application..", "com.gustler.backend.api.chat.domain..")
-        .should().dependOnClassesThat().resideInAnyPackage("com.mongodb..", "org.bson..");
+        .that()
+        .resideInAnyPackage("com.gustler.backend.api.chat.application..", "com.gustler.backend.api.chat.domain..")
+        .should()
+        .dependOnClassesThat()
+        .resideInAnyPackage("com.mongodb..", "org.bson..");
 }

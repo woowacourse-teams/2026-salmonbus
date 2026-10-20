@@ -1,7 +1,6 @@
 package com.gustler.backend.forecasting.domain.evaluation;
 
 import com.gustler.backend.forecasting.domain.model.ForecastDistance;
-
 import java.time.Instant;
 
 /**
@@ -24,9 +23,12 @@ public record PendingForecast(
     Instant generatedAt,
     Long qualityDirection
 ) {
-
-    public PendingForecast(long observationId, int target, long version, String vehicle,
-                           int distance, Instant observedAt, Instant generatedAt) {
+    public PendingForecast(long observationId, int target, long version,
+        String vehicle,
+                           int distance,
+        Instant observedAt,
+        Instant generatedAt
+    ) {
         this(observationId, target, version, vehicle, distance, observedAt, generatedAt, null);
     }
 

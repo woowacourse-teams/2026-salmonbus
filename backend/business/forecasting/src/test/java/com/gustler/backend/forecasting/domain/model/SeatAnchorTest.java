@@ -16,7 +16,6 @@ import org.junit.jupiter.params.provider.CsvSource;
  * 어긋나고, 같은 계수로 다른 예보가 나간다.
  */
 class SeatAnchorTest {
-
     @Test
     void 정원_40석에_20석_남은_차량의_중심_좌석은_14석이다() {
         // given 절편 0.1 에 기울기 0.5 인 계수다

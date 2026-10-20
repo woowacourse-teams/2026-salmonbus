@@ -11,7 +11,6 @@ public record ModelInfoResponse(
     @Schema(description = "모델이 학습에 사용한 데이터의 마지막 시각. ISO-8601 오프셋 포함")
     OffsetDateTime trainedThrough
 ) {
-
     static ModelInfoResponse from(
         ForecastModel model
     ) {

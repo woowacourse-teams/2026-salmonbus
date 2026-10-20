@@ -17,7 +17,10 @@ public class JdbcArrivalStore implements ArrivalStore {
     private final JdbcClient jdbc;
     private final ObjectMapper json;
 
-    public JdbcArrivalStore(JdbcClient jdbc, ObjectMapper json) { this.jdbc = jdbc; this.json = json; }
+    public JdbcArrivalStore(JdbcClient jdbc, ObjectMapper json) {
+        this.jdbc = jdbc;
+        this.json = json;
+    }
 
     @Override
     public boolean supported(String stationId) {
@@ -50,8 +53,8 @@ public class JdbcArrivalStore implements ArrivalStore {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS jsonb))
             ON CONFLICT (id) DO NOTHING
             """).params(snapshot.id(), ArrivalSnapshot.PROVIDER, ArrivalSnapshot.OPERATION,
-                snapshot.stationId(), Timestamp.from(snapshot.receivedAt()), Timestamp.from(snapshot.refreshAfterAt()),
-                Timestamp.from(snapshot.staleAt()), ArrivalSnapshot.NORMALIZATION_VERSION, digest, payload).update();
+            snapshot.stationId(), Timestamp.from(snapshot.receivedAt()), Timestamp.from(snapshot.refreshAfterAt()),
+            Timestamp.from(snapshot.staleAt()), ArrivalSnapshot.NORMALIZATION_VERSION, digest, payload).update();
         if (changed == 0) {
             String previous = jdbc.sql("SELECT payload_digest FROM arrival_snapshot WHERE id = ?")
                 .param(snapshot.id()).query(String.class).single();
@@ -73,6 +76,8 @@ public class JdbcArrivalStore implements ArrivalStore {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                 .digest(payload.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException(impossible);
+        }
     }
 }

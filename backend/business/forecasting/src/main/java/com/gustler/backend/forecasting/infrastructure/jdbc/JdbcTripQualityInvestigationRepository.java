@@ -17,7 +17,10 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class JdbcTripQualityInvestigationRepository implements TripQualityInvestigationRepository {
     private final JdbcClient jdbc;
-    public JdbcTripQualityInvestigationRepository(final JdbcClient jdbc) { this.jdbc = jdbc; }
+
+    public JdbcTripQualityInvestigationRepository(final JdbcClient jdbc) {
+        this.jdbc = jdbc;
+    }
 
     @Override
     public Optional<Key> nextPending() {
@@ -75,7 +78,8 @@ public class JdbcTripQualityInvestigationRepository implements TripQualityInvest
             rs.getObject("last_batch_at", OffsetDateTime.class).toInstant(), rs.getLong("last_batch_id"),
             rs.getObject("until_at", OffsetDateTime.class).toInstant(), rs.getLong("evidence_observation_id"),
             "SEARCH_START".equals(rs.getString("phase")) ? Phase.SEARCH_START : Phase.REPLAY, rs.getLong("anchor_observation_id"),
-            rs.getObject("previous_observation_id", Long.class), rs.getBoolean("include_cursor"), rs.getBoolean("can_release"),
+            rs.getObject("previous_observation_id", Long.class), rs.getBoolean("include_cursor"),
+            rs.getBoolean("can_release"),
             seconds == null ? null : Duration.ofSeconds(seconds), rs.getObject("boundary_candidate_observation_id", Long.class),
             rs.getBoolean("completed"));
     }
@@ -87,11 +91,23 @@ public class JdbcTripQualityInvestigationRepository implements TripQualityInvest
                 anchor_observation_id = ?, boundary_candidate_observation_id = ?, previous_observation_id = ?,
                 include_cursor = ?, can_release = ?, completed = ?, investigated_at = CURRENT_TIMESTAMP
             WHERE route_version_id = ? AND vehicle_id = ?
-            """).param(investigation.phase().name()).param(offset(investigation.cursorAt())).param(investigation.cursorBatchId())
-            .param(investigation.anchorObservationId()).param(investigation.boundaryCandidateObservationId())
-            .param(investigation.previousObservationId()).param(investigation.includeCursor()).param(investigation.canRelease())
-            .param(investigation.completed()).param(investigation.routeVersionId()).param(investigation.vehicleId()).update();
+            """)
+            .param(investigation.phase()
+                .name())
+            .param(offset(investigation.cursorAt()))
+            .param(investigation.cursorBatchId())
+            .param(investigation.anchorObservationId())
+            .param(investigation.boundaryCandidateObservationId())
+            .param(investigation.previousObservationId())
+            .param(investigation.includeCursor())
+            .param(investigation.canRelease())
+            .param(investigation.completed())
+            .param(investigation.routeVersionId())
+            .param(investigation.vehicleId())
+            .update();
     }
 
-    private static OffsetDateTime offset(final Instant at) { return at.atOffset(ZoneOffset.UTC); }
+    private static OffsetDateTime offset(final Instant at) {
+        return at.atOffset(ZoneOffset.UTC);
+    }
 }

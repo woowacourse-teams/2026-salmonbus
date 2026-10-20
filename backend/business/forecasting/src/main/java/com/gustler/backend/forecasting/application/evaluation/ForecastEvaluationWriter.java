@@ -1,5 +1,4 @@
 package com.gustler.backend.forecasting.application.evaluation;
-
 import com.gustler.backend.forecasting.api.ForecastTelemetry;
 import com.gustler.backend.forecasting.application.AfterCommitTelemetry;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,7 +28,9 @@ public class ForecastEvaluationWriter {
 
 
     private final ForecastEvaluationRepository evaluations;
+
     private final RouteDataQualityAccess quality;
+
     private final SameDayFullOutcomesService outcomes;
     private final DemandSampleStore samples;
 
@@ -53,7 +54,8 @@ public class ForecastEvaluationWriter {
         if (completed.stream().anyMatch(evaluation -> evaluation.state() == ScoringState.PENDING)) {
             throw new IllegalArgumentException("완료된 평가만 저장할 수 있다");
         }
-        List<SettledForecast> newlySettled = WorkerOperationLog.measure("settlement_save", "all", () -> settle(completed));
+        List<SettledForecast> newlySettled =
+            WorkerOperationLog.measure("settlement_save", "all", () -> settle(completed));
         if (!newlySettled.isEmpty()) {
             WorkerOperationLog.run("same_day_record", "all", () -> outcomes.record(newlySettled));
         }
@@ -61,8 +63,14 @@ public class ForecastEvaluationWriter {
     }
 
     private List<SettledForecast> settle(List<ForecastEvaluation> completed) {
-        List<Long> observationIds = completed.stream().map(ForecastEvaluation::vehicleObservationId).distinct().toList();
-        evaluations.findRouteIdsForObservations(observationIds).stream().distinct().sorted()
+        List<Long> observationIds = completed.stream()
+            .map(ForecastEvaluation::vehicleObservationId)
+            .distinct()
+            .toList();
+        evaluations.findRouteIdsForObservations(observationIds)
+            .stream()
+            .distinct()
+            .sorted()
             .forEach(quality::lockByRoute);
 
         List<SettledForecast> settled = new ArrayList<>();

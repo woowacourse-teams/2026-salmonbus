@@ -10,5 +10,6 @@ public interface ArrivalQuotaStore {
 
     void exclude(LocalDate date, String keyAlias);
 
-    record KeyLimit(String alias, int limit) { }
+    record KeyLimit(String alias, int limit) {
+    }
 }

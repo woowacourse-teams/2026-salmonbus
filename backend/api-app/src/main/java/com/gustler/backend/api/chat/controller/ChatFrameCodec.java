@@ -6,7 +6,6 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 public final class ChatFrameCodec {
-
     public static final int PROTOCOL_VERSION = 1;
     private static final String MESSAGE_SEND = "message.send";
 

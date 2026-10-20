@@ -1,5 +1,4 @@
 package com.gustler.backend.maintenance;
-
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -19,7 +18,6 @@ public record DatabaseEnvironment(
     String password,
     String identitySha256
 ) {
-
     private static final Path ACADEMY_ENV = Path.of("/etc/salmonbus/worker.env");
 
     public enum TargetKind {

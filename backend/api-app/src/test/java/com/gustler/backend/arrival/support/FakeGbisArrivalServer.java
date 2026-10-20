@@ -21,7 +21,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 /** 실제 HTTP 요청을 받되 공공 API로는 연결하지 않는 테스트 서버. */
 public final class FakeGbisArrivalServer implements AutoCloseable {
     public static final List<String> STATIONS = java.util.stream.IntStream.range(0, 12)
-        .mapToObj(index -> Integer.toString(206000637 + index)).toList();
+        .mapToObj(index -> Integer.toString(206000637 + index))
+        .toList();
     private static final String PATH = "/busarrivalservice/v2/getBusArrivalListv2";
 
     public record Plan(int status, String body, String retryAfter, Duration delay, CountDownLatch gate) {
@@ -69,24 +70,43 @@ public final class FakeGbisArrivalServer implements AutoCloseable {
     }
 
     public int calls() {
-        return calls.values().stream().mapToInt(AtomicInteger::get).sum();
+        return calls.values()
+            .stream()
+            .mapToInt(AtomicInteger::get)
+            .sum();
     }
 
     public int maximumActive() {
         return maximumActive.get();
     }
 
-    public void enableGeometry() { enableGeometry(List.of(RouteGeometryFixture.synthetic3330())); }
-    public void enableGeometry(List<RouteGeometryFixture> routes) {
-        geometryRoutes = routes.stream().collect(java.util.stream.Collectors.toUnmodifiableMap(
-            RouteGeometryFixture::routeId, route -> route));
+    public void enableGeometry() {
+        enableGeometry(List.of(RouteGeometryFixture.synthetic3330()));
     }
-    public int geometryCalls() { return geometryCalls.values().stream().mapToInt(AtomicInteger::get).sum(); }
+
+    public void enableGeometry(List<RouteGeometryFixture> routes) {
+        geometryRoutes = routes.stream()
+            .collect(java.util.stream.Collectors.toUnmodifiableMap(
+                RouteGeometryFixture::routeId, route -> route));
+    }
+
+    public int geometryCalls() {
+        return geometryCalls.values()
+            .stream()
+            .mapToInt(AtomicInteger::get)
+            .sum();
+    }
+
     public Map<String, Integer> geometryCallsByRoute() {
-        return geometryCalls.entrySet().stream().collect(java.util.stream.Collectors.toUnmodifiableMap(
+        return geometryCalls.entrySet()
+            .stream()
+            .collect(java.util.stream.Collectors.toUnmodifiableMap(
             Map.Entry::getKey, entry -> entry.getValue().get()));
     }
-    public int locationCalls() { return locationCalls.get(); }
+
+    public int locationCalls() {
+        return locationCalls.get();
+    }
 
     public List<String> unexpected() {
         return List.copyOf(unexpected);
@@ -106,7 +126,8 @@ public final class FakeGbisArrivalServer implements AutoCloseable {
 
     private void respond(HttpExchange exchange) throws IOException {
         Map<String, String> query = Arrays.stream(exchange.getRequestURI().getRawQuery().split("&"))
-            .map(pair -> pair.split("=", 2)).collect(java.util.stream.Collectors.toMap(
+            .map(pair -> pair.split("=", 2))
+            .collect(java.util.stream.Collectors.toMap(
                 pair -> pair[0], pair -> URLDecoder.decode(pair[1], StandardCharsets.UTF_8)));
         String station = query.get("stationId");
         var route = geometryRoutes.get(query.getOrDefault("routeId", ""));

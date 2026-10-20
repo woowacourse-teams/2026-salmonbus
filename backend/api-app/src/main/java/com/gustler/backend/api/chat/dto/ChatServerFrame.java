@@ -3,7 +3,6 @@ package com.gustler.backend.api.chat.dto;
 import java.util.List;
 
 public sealed interface ChatServerFrame {
-
     int v();
 
     String type();

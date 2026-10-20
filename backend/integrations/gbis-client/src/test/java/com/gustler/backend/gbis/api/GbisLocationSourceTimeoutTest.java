@@ -22,7 +22,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-@SpringBootTest(classes = {GbisClientConfig.class, GbisApiCaller.class, GbisLocationSource.class, GbisLocationSourceTimeoutTest.ClientOptions.class})
+@SpringBootTest(classes =
+    {GbisClientConfig.class, GbisApiCaller.class, GbisLocationSource.class, GbisLocationSourceTimeoutTest.ClientOptions.class})
 @ImportAutoConfiguration({
     HttpClientAutoConfiguration.class,
     ImperativeHttpClientAutoConfiguration.class,
@@ -30,7 +31,6 @@ import org.springframework.test.context.DynamicPropertySource;
     JacksonAutoConfiguration.class,
 })
 class GbisLocationSourceTimeoutTest {
-
     private static final Duration READ_TIMEOUT = Duration.ofMillis(300);
     private static final Duration RESPONSE_DELAY = Duration.ofSeconds(5);
     private static final Duration MAX_ACCEPTABLE_WAIT = Duration.ofSeconds(3);

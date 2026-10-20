@@ -12,7 +12,6 @@ public record ApproachingVehicleResponse(
     @Schema(description = "좌석 예보. 상태가 UNAVAILABLE이면 확률과 기대 좌석은 생략")
     ForecastResponse forecast
 ) {
-
     static ApproachingVehicleResponse from(
         ApproachingVehicle vehicle
     ) {

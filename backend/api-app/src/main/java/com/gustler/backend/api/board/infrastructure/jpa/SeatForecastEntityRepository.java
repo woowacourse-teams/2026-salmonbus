@@ -7,7 +7,6 @@ import org.springframework.data.repository.query.Param;
 
 public interface SeatForecastEntityRepository
     extends Repository<SeatForecastJpaEntity, SeatForecastJpaId> {
-
     @Query("""
         SELECT forecast
         FROM BoardSeatForecastJpaEntity forecast

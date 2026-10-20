@@ -1,7 +1,6 @@
 package com.gustler.backend.api.route.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
-
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -22,7 +21,7 @@ class RouteGeometryTest {
             new RouteGeometry.Point(127.0, 37.0), new RouteGeometry.Point(127.1, 37.3),
             new RouteGeometry.Point(127.2, 37.0)));
         var map = new RouteGeometry("204000057", 7, "3330", "A", "B", null,
-            List.of(new RouteGeometry.Stop("206000637", 1, "A", "UP", true, new RouteGeometry.Point(126.9,37))), shape);
+            List.of(new RouteGeometry.Stop("206000637", 1, "A", "UP", true, new RouteGeometry.Point(126.9, 37))), shape);
         assertThat(map.boundary()).isEqualTo(new RouteGeometry.Boundary(126.9, 37.3, 127.2, 37.0));
         assertThat(map.points()).hasSize(3);
     }

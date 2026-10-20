@@ -18,7 +18,6 @@ public record RouteSummary(
     @Schema(description = "FORECAST_READY는 현재 노선 판본의 예보가 준비됨, PREPARING은 아직 준비되지 않음")
     RouteStatus status
 ) {
-
     public RouteSummary {
         Objects.requireNonNull(id, "id는 null일 수 없습니다.");
         Objects.requireNonNull(displayName, "displayName은 null일 수 없습니다.");

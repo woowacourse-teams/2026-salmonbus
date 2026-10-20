@@ -8,7 +8,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class ForecastDistanceTest {
-
     @Test
     void 예보는_관측한_정류장의_다음_정류장부터_시작한다() {
         // when & then

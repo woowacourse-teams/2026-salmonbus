@@ -8,7 +8,6 @@ import com.gustler.backend.routecatalog.domain.CurrentRouteVersionQuery;
 import com.gustler.backend.routecatalog.domain.RouteRegistry;
 import com.gustler.backend.routecatalog.domain.UpstreamRoute;
 import com.gustler.backend.routecatalog.domain.RouteSource;
-
 import com.gustler.backend.routecatalog.domain.RouteSourceResult.Failed;
 import com.gustler.backend.routecatalog.domain.RouteSourceResult.Success;
 import java.time.OffsetDateTime;
@@ -30,7 +29,6 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Component
 public class RouteCatalogLoader implements CurrentRouteVersion, RefreshRouteCatalog {
-
     private static final Logger log = LoggerFactory.getLogger(RouteCatalogLoader.class);
 
     private final java.util.Map<String, String> knownNames = new java.util.LinkedHashMap<>();

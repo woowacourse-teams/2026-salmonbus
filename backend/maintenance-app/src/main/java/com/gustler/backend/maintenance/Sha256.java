@@ -6,7 +6,6 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
 public final class Sha256 {
-
     private static final String ALGORITHM = "SHA-256";
 
     private Sha256() {

@@ -6,7 +6,6 @@ import org.springframework.data.repository.Repository;
 
 public interface VehicleRouteVersionEntityRepository
     extends Repository<RouteVersionJpaEntity, Long> {
-
     Optional<RouteVersionJpaEntity> findByRoute_SourceRouteIdAndValidToIsNull(
         String sourceRouteId
     );

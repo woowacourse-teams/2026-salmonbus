@@ -8,7 +8,6 @@ package com.gustler.backend.forecasting.domain.model;
  * 값을 눈으로 따라갈 수 있다.
  */
 public final class CoefficientsFixture {
-
     static final double[] ONE_FEATURE = {1.0};
 
     public static final double[] RELATIVE_EDGES =

@@ -8,7 +8,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class RuntimeSnapshotTest {
-
     private static final ActiveModelDeployment DEPLOYMENT =
         new ActiveModelDeployment(1L, "feature-v1", "release-1", "0".repeat(64));
     private static final Instant DATA_UNTIL = Instant.parse("2026-09-02T00:00:00Z");
@@ -16,7 +15,8 @@ class RuntimeSnapshotTest {
     @Test
     void 예보_범위가_없는_배포로는_만들_수_없다() {
         // when & then
-        assertThatThrownBy(() -> new RuntimeSnapshot(DEPLOYMENT, null, input -> null, DATA_UNTIL))
+        assertThatThrownBy(
+            () -> new RuntimeSnapshot(DEPLOYMENT, null, input -> null, DATA_UNTIL))
             .isInstanceOf(IllegalArgumentException.class);
     }
 

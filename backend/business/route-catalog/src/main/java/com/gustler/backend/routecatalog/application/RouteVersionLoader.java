@@ -15,7 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Component
 public class RouteVersionLoader {
-
     private static final Logger log = LoggerFactory.getLogger(RouteVersionLoader.class);
     private final RouteRepository routeRepository;
     private final RouteStopLocationStore locations;
@@ -26,7 +25,11 @@ public class RouteVersionLoader {
     }
 
     @Transactional
-    public long load(long routeId, RouteStops stops, RouteTimetable timetable, OffsetDateTime readAt) {
+    public long load(long routeId,
+        RouteStops stops,
+        RouteTimetable timetable,
+        OffsetDateTime readAt
+    ) {
         Route route = routeRepository.findByIdForUpdate(routeId);
         var previous = route.latestVersion();
         route.accept(stops, timetable, readAt);
@@ -40,7 +43,7 @@ public class RouteVersionLoader {
             public void afterCommit() {
                 if (versionChanged || timetableChanged) {
                     log.info("event=route_catalog_changed routeId={} previousRouteVersionId={} routeVersionId={} "
-                            + "change={} stopCount={} observedAt={}",
+                        + "change={} stopCount={} observedAt={}",
                         routeId, previous.map(version -> version.id()).orElse(null), versionId,
                         versionChanged ? (previous.isEmpty() ? "INITIAL" : "STOPS") : "TIMETABLE",
                         stops.stops().size(), readAt);

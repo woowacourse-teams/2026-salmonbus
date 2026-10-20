@@ -22,9 +22,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 class EvaluationQualityScopeTest {
     private static final Instant START = Instant.parse("2026-10-01T00:00:00Z");
-    @Autowired JdbcClient jdbc;
-    @Autowired EvaluationWorkStore work;
-    @Autowired EvaluationRouteCommitter committer;
+    @Autowired
+    JdbcClient jdbc;
+    @Autowired
+    EvaluationWorkStore work;
+    @Autowired
+    EvaluationRouteCommitter committer;
     private long route;
     private long version;
     private long model;
@@ -52,17 +55,25 @@ class EvaluationQualityScopeTest {
             INSERT INTO model_deployment(deployment_key,release_id,model_key,model_version,bundle_digest,
                 prediction_target_version,calculation_version,supported_scope_digest,data_until,state)
             VALUES(?,?,'seat-full-chance','1.0.0',?,'SEAT_FULL_CHANCE_V1','CALCULATION_V1',?,?,'STAGED') RETURNING id
-            """).params(UUID.randomUUID(), key, "0".repeat(64), "0".repeat(64), offset(START)).query(Long.class).single();
+            """)
+            .params(UUID.randomUUID(), key, "0".repeat(64), "0".repeat(64), offset(START))
+            .query(Long.class)
+            .single();
         firstA = pair("A", START);
         secondA = pair("A", START.plusSeconds(600));
         busB = pair("B", START);
         List<Long> ids = List.of(firstA.source(), secondA.source(), busB.source());
-        List<PendingForecast> forecasts = work.restore(version, ids).stream()
-            .map(row -> row.forecast().orElseThrow()).toList();
+        List<PendingForecast> forecasts = work.restore(version, ids)
+            .stream()
+            .map(row -> row.forecast().orElseThrow())
+            .toList();
         input = new EvaluateForecastsService.RouteInput(version, 1, false, EvaluationSelection.Cursor.START,
             ids, work.revisions(version, ids), List.of(), forecasts);
-        calculated = List.of(firstA, secondA, busB).stream().map(pair -> ForecastEvaluation.completed(
-            pair.source(), 2, new ArrivalLabel.Settled(pair.arrival(), 12), START.plusSeconds(660))).toList();
+        calculated = List.of(firstA, secondA, busB)
+            .stream()
+            .map(pair -> ForecastEvaluation.completed(
+                pair.source(), 2, new ArrivalLabel.Settled(pair.arrival(), 12), START.plusSeconds(660)))
+            .toList();
     }
 
     @Test
@@ -71,7 +82,8 @@ class EvaluationQualityScopeTest {
         investigate(false);
 
         // when
-        committer.commit(input, calculated, (status, change) -> { });
+        committer.commit(input, calculated, (status, change) -> {
+        });
 
         // then
         assertThat(result(busB)).isEqualTo("SETTLED");
@@ -89,7 +101,8 @@ class EvaluationQualityScopeTest {
             .param(Long.toString(firstA.source())).update();
 
         // when
-        committer.commit(input, calculated, (status, change) -> { });
+        committer.commit(input, calculated, (status, change) -> {
+        });
 
         // then
         assertThat(result(firstA)).isEqualTo("QUALITY_EXCLUDED");
@@ -105,7 +118,8 @@ class EvaluationQualityScopeTest {
         jdbc.sql("UPDATE vehicle_observation SET remaining_seats=0 WHERE id=?").param(firstA.arrival()).update();
 
         // when
-        committer.commit(input, calculated, (status, change) -> { });
+        committer.commit(input, calculated, (status, change) -> {
+        });
 
         // then
         assertThat(result(firstA)).isNull();
@@ -128,7 +142,9 @@ class EvaluationQualityScopeTest {
         jdbc.sql("""
             INSERT INTO vehicle_one_way_trip(id,start_observation_id,route_version_id,vehicle_id,status,boundary,rule_version)
             VALUES(?,?,?,?,'ELIGIBLE','DEPARTURE','test')
-            """).params(Long.toString(source), source, version, vehicle).update();
+            """)
+            .params(Long.toString(source), source, version, vehicle)
+            .update();
         for (long id : List.of(source, arrival)) {
             jdbc.sql("INSERT INTO observation_trip_assignment(observation_id,trip_id) VALUES(?,?)")
                 .params(id, Long.toString(source)).update();
@@ -153,7 +169,11 @@ class EvaluationQualityScopeTest {
             INSERT INTO observation_batch(route_version_id,scheduled_at,attempt_number,attempt_key,requested_at,
                 response_received_at,outcome,normalization_version,collection_strategy_version)
             VALUES(?,?,1,?,?,?,'SUCCESS_ROWS','test','test') RETURNING id
-            """).params(version, offset(at), UUID.randomUUID().toString(), offset(at), offset(at)).query(Long.class).single();
+            """)
+            .params(version, offset(at), UUID.randomUUID()
+                .toString(), offset(at), offset(at))
+            .query(Long.class)
+            .single();
         return jdbc.sql("""
             INSERT INTO vehicle_observation(observation_batch_id,route_version_id,source_row_number,vehicle_id,
                 stop_order,stop_id,running_state,passed_stop_order,remaining_seats)
@@ -166,6 +186,9 @@ class EvaluationQualityScopeTest {
             .param(pair.source()).query(String.class).optional().orElse(null);
     }
 
-    private static OffsetDateTime offset(Instant at) { return at.atOffset(ZoneOffset.UTC); }
-    private record Pair(long source, long arrival) { }
+    private static OffsetDateTime offset(Instant at) {
+        return at.atOffset(ZoneOffset.UTC);
+    }
+    private record Pair(long source, long arrival) {
+    }
 }

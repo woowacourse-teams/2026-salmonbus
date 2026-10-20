@@ -17,7 +17,6 @@ import java.time.ZoneId;
 @Entity(name = "BoardObservationBatchJpaEntity")
 @Table(name = "observation_batch")
 public class ObservationBatchJpaEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

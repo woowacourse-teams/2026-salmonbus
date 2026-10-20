@@ -15,7 +15,6 @@ import org.junit.jupiter.api.Test;
  * 뒤엣것이 더 나쁘다. 예외가 안 나고 아무 수나 계수가 된다.
  */
 class SafetensorsFileTest {
-
     @Test
     void 실수_배열을_적힌_크기대로_읽는다() {
         // given
@@ -111,7 +110,7 @@ class SafetensorsFileTest {
         // given
         byte[] given = fileOf(
             "{\"hurdle_coefficients\":{\"dtype\":\"F64\",\"shape\":[0],\"data_offsets\":[0,0]}}"
-                .getBytes(StandardCharsets.UTF_8), 0);
+                    .getBytes(StandardCharsets.UTF_8), 0);
 
         // when & then
         assertThatThrownBy(() -> SafetensorsFile.of(given))
@@ -123,7 +122,7 @@ class SafetensorsFileTest {
         // given
         byte[] given = fileOf(
             "{\"hurdle_coefficients\":{\"shape\":[1],\"data_offsets\":[0,8]}}"
-                .getBytes(StandardCharsets.UTF_8), 8);
+                    .getBytes(StandardCharsets.UTF_8), 8);
 
         // when & then 안 보고 꺼내면 거절이 아니라 NullPointerException 으로 끝난다
         assertThatThrownBy(() -> SafetensorsFile.of(given))
@@ -135,7 +134,7 @@ class SafetensorsFileTest {
         // given
         byte[] given = fileOf(
             "{\"hurdle_coefficients\":{\"dtype\":\"F64\",\"shape\":[1],\"data_offsets\":[0]}}"
-                .getBytes(StandardCharsets.UTF_8), 8);
+                    .getBytes(StandardCharsets.UTF_8), 8);
 
         // when & then
         assertThatThrownBy(() -> SafetensorsFile.of(given))
@@ -189,7 +188,7 @@ class SafetensorsFileTest {
         final int valueBytes
     ) {
         return ("{\"hurdle_coefficients\":{\"dtype\":\"%s\",\"shape\":[%d],\"data_offsets\":[0,%d]}}"
-            .formatted(dataType, length, valueBytes)).getBytes(StandardCharsets.UTF_8);
+                .formatted(dataType, length, valueBytes)).getBytes(StandardCharsets.UTF_8);
     }
 
     private static byte[] fileOf(

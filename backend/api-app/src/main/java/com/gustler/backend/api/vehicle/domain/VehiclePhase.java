@@ -3,7 +3,6 @@ package com.gustler.backend.api.vehicle.domain;
 import java.util.Optional;
 
 public enum VehiclePhase {
-
     ARRIVING,
     DEPARTED,
     IN_TRANSIT,

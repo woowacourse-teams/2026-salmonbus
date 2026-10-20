@@ -22,7 +22,6 @@ import org.springframework.core.env.SystemEnvironmentPropertySource;
  * 두 앱이 다른 프로세스여서 한쪽만 바뀌어도 기동은 따로 성공하므로, 여기서 멈춰야 한다.
  */
 class BusinessConfigurationTest {
-
     private static final String ENVIRONMENT_NAME = "FORECAST_STALENESS";
     private static final String[] VALID_FORECAST_SETTINGS = {
         "forecast.interval=10s",
@@ -41,7 +40,8 @@ class BusinessConfigurationTest {
 
         // when & then
         assertThatIllegalStateException()
-            .isThrownBy(() -> BusinessConfiguration.requireStalenessFromConfigurationFile(environment))
+            .isThrownBy(
+            () -> BusinessConfiguration.requireStalenessFromConfigurationFile(environment))
             .withMessageContaining(ENVIRONMENT_NAME);
     }
 
@@ -51,7 +51,8 @@ class BusinessConfigurationTest {
         StandardEnvironment environment = environmentWith(Map.of("FORECAST_ENABLED", "false"));
 
         // when & then
-        assertThatCode(() -> BusinessConfiguration.requireStalenessFromConfigurationFile(environment))
+        assertThatCode(
+            () -> BusinessConfiguration.requireStalenessFromConfigurationFile(environment))
             .doesNotThrowAnyException();
     }
 
@@ -84,7 +85,7 @@ class BusinessConfigurationTest {
                 "forecast.enabled=false",
                 "forecast.staleness=0s",
                 "forecast.batch-limit=0",
-                "forecast.same-day-initialization.retry-interval=0ms")
+            "forecast.same-day-initialization.retry-interval=0ms")
             .run(context -> assertThat(context)
                 .hasNotFailed()
                 .doesNotHaveBean(ForecastProperties.class)

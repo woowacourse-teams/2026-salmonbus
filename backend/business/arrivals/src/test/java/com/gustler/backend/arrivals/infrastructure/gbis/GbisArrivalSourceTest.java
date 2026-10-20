@@ -3,7 +3,6 @@ package com.gustler.backend.arrivals.infrastructure.gbis;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
-
 import com.gustler.backend.arrivals.domain.ArrivalSource;
 import com.gustler.backend.gbis.api.*;
 import java.time.*;
@@ -16,8 +15,10 @@ class GbisArrivalSourceTest {
         Clock.fixed(Instant.parse("2026-10-14T03:00:00Z"), ZoneOffset.UTC));
 
     private ArrivalSource.Result read(String rows) {
-        when(caller.getByStationWithMetadata(anyString(), anyString(), anyString())).thenReturn(new GbisHttpResult(new GbisRawResponse.Received(
-            "{\"response\":{\"msgHeader\":{\"resultCode\":0},\"msgBody\":{\"busArrivalList\":" + rows + "}}}"), 200, null));
+        when(caller.getByStationWithMetadata(anyString(), anyString(), anyString())).thenReturn(
+            new GbisHttpResult(new GbisRawResponse.Received(
+                "{\"response\":{\"msgHeader\":{\"resultCode\":0},\"msgBody\":{\"busArrivalList\":" + rows + "}}}"), 200,
+                null));
         return source.fetch("206000637", "a");
     }
 
@@ -49,7 +50,7 @@ class GbisArrivalSourceTest {
     @Test
     void 분_단위_대체와_미제공_좌석을_구분한다() {
         var success = (ArrivalSource.Success) read(row("").replace("\"predictTimeSec1\":180,", "")
-            .replace("\"remainSeatCnt1\":0", "\"remainSeatCnt1\":-1"));
+                .replace("\"remainSeatCnt1\":0", "\"remainSeatCnt1\":-1"));
         var vehicle = success.routes().getFirst().arrivals().getFirst();
         assertThat(vehicle.sourceRemainingSeconds()).isNull();
         assertThat(vehicle.sourceRemainingMinutes()).isEqualTo(3);
@@ -70,7 +71,8 @@ class GbisArrivalSourceTest {
     void 정상_빈_응답과_상류_거절은_다른_결과다() {
         assertThat(((ArrivalSource.Success) read("[]")).routes()).isEmpty();
         when(caller.getByStationWithMetadata(anyString(), anyString(), anyString())).thenReturn(
-            new GbisHttpResult(new GbisRawResponse.PortalRejected(PortalReasonCode.PER_SECOND_QUOTA_EXCEEDED, "23", "", ""), 429, null));
+            new GbisHttpResult(new GbisRawResponse.PortalRejected(PortalReasonCode.PER_SECOND_QUOTA_EXCEEDED, "23", "", ""), 429,
+                null));
         assertThat(source.fetch("206000637", "a"))
             .isEqualTo(new ArrivalSource.Failed(ArrivalSource.Reason.RATE_LIMITED));
     }

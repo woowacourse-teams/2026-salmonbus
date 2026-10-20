@@ -23,11 +23,14 @@ public final class JdbcWorkerQualitySnapshotQuery {
               ON r.route_version_id = v.id AND NOT r.completed
             WHERE v.id = ?
             """).param(version).query((rs, row) ->
-                new Row(rs.getLong("revision"), rs.getString("vehicle_id"))).list();
+            new Row(rs.getLong("revision"), rs.getString("vehicle_id"))).list();
         if (rows.isEmpty()) throw new EmptyResultDataAccessException(1);
         return new Snapshot(rows.getFirst().revision(), rows.stream()
-            .map(Row::vehicle).filter(Objects::nonNull).collect(Collectors.toSet()));
+                .map(Row::vehicle)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet()));
     }
 
-    private record Row(long revision, String vehicle) { }
+    private record Row(long revision, String vehicle) {
+    }
 }

@@ -40,7 +40,8 @@ public record BoardRouteResponse(
             route.endStopName(),
             route.status(),
             route.turnSequence(),
-            route.directions().stream()
+            route.directions()
+                .stream()
                 .map(DirectionInfoResponse::from)
                 .toList(),
             route.referenceVersionId(),

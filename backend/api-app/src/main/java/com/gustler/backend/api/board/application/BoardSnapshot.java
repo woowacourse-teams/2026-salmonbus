@@ -13,7 +13,6 @@ public record BoardSnapshot(
     Optional<SnapshotObservation> observation,
     Optional<ForecastModel> activeModel
 ) {
-
     public BoardSnapshot {
         Objects.requireNonNull(route, "route는 null일 수 없습니다.");
         Objects.requireNonNull(schedule, "schedule은 null일 수 없습니다.");

@@ -51,12 +51,18 @@ public class EvaluateForecastsService implements EvaluateForecasts {
     @Autowired(required = false)
     public void useQualityMemory(WorkerQualityState qualityMemory) { this.qualityMemory = qualityMemory; }
 
-    public EvaluateForecastsService(EvaluationWorkStore work, EvaluationWorkPageReader pages,
-        EvaluationRouteCommitter committer, ArrivalObservationQuery arrivals,
-        RouteDataQualityAccess quality, ForecastPolicy policy, Clock clock,
+    public EvaluateForecastsService(
+        EvaluationWorkStore work,
+        EvaluationWorkPageReader pages,
+        EvaluationRouteCommitter committer,
+        ArrivalObservationQuery arrivals,
+        RouteDataQualityAccess quality,
+        ForecastPolicy policy,
+        Clock clock,
         @Value("${forecast.evaluation.memory-limit:60000}") int memoryLimit,
         @Value("${forecast.evaluation.recovery-page-limit:3}") int pageLimit,
-        RecentArrivalObservationCache observationCache) {
+        RecentArrivalObservationCache observationCache
+    ) {
         if (pageLimit < 1) throw new IllegalArgumentException("복원 페이지 한도는 양수여야 한다");
         this.work = work;
         this.pages = pages;
@@ -118,7 +124,9 @@ public class EvaluateForecastsService implements EvaluateForecasts {
         }
     }
 
-    private RouteInput read(long version, long revision, Snapshot snapshot, boolean investigating) {
+    private RouteInput read(long version, long revision,
+        Snapshot snapshot, boolean investigating
+    ) {
         EvaluationSelection.Cursor cursor = snapshot.cursors().getOrDefault(
             version, EvaluationSelection.Cursor.START);
         if (cursor.through() == 0) {
@@ -133,7 +141,7 @@ public class EvaluateForecastsService implements EvaluateForecasts {
         Map<Long, EvaluationWorkPageReader.Ready> ready = new LinkedHashMap<>();
         List<PendingForecast> selected = new ArrayList<>();
         for (int pageNumber = 0; pageNumber < pageLimit && cursor.through() != 0
-             && selected.size() < policy.pendingLimit(); pageNumber++) {
+                    && selected.size() < policy.pendingLimit(); pageNumber++) {
             long after = cursor.after();
             long through = cursor.through();
             var page = WorkerOperationLog.measure("settlement_pending_forecasts", version,
@@ -159,12 +167,14 @@ public class EvaluateForecastsService implements EvaluateForecasts {
         }
         List<ForecastEvaluation> results = new ArrayList<>();
         for (var vehicle : byVehicle.entrySet()) {
-            Instant earliest = vehicle.getValue().stream().map(PendingForecast::generatedAt)
-                .min(Instant::compareTo).orElseThrow();
+            Instant earliest = vehicle.getValue()
+                .stream()
+                .map(PendingForecast::generatedAt)
+                .min(Instant::compareTo)
+                .orElseThrow();
             List<ArrivalCandidate> candidates = vehicle.getKey() == null ? List.of()
                 : WorkerOperationLog.measure("settlement_arrival_candidates", version,
-                    () -> observations.read(arrivals, version, input.revision(), input.investigating(),
-                        vehicle.getKey(), earliest, policy.arrivalLimit()));
+                    () -> observations.read(arrivals, version, input.revision(), input.investigating(), vehicle.getKey(), earliest, policy.arrivalLimit()));
             for (PendingForecast forecast : vehicle.getValue()) {
                 ArrivalLabel label = ArrivalLabelResolver.resolve(forecast, candidates, now);
                 if (label.settles()) results.add(ForecastEvaluation.completed(
@@ -193,7 +203,7 @@ public class EvaluateForecastsService implements EvaluateForecasts {
 
     private synchronized void apply(Snapshot snapshot, int status, EvaluationRouteCommitter.Change change) {
         if (status == TransactionSynchronization.STATUS_ROLLED_BACK
-            || snapshot.revision() != memoryRevision) return;
+                    || snapshot.revision() != memoryRevision) return;
         memoryRevision++;
         if (status != TransactionSynchronization.STATUS_COMMITTED) {
             resetMemory();
@@ -226,7 +236,8 @@ public class EvaluateForecastsService implements EvaluateForecasts {
     }
 
     private record Snapshot(long revision, Map<Long, EvaluationSelection.Cursor> cursors,
-                            List<PendingEvaluationBuffer.Entry> entries) { }
+        List<PendingEvaluationBuffer.Entry> entries) {
+    }
 
     record RouteInput(long version, long revision, boolean investigating,
         EvaluationSelection.Cursor cursor, List<Long> checked, Map<Long, Long> workRevisions,

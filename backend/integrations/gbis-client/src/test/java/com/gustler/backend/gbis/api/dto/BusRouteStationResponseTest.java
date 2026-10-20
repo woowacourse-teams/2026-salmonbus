@@ -14,7 +14,6 @@ import tools.jackson.databind.ObjectMapper;
  */
 @JsonTest
 class BusRouteStationResponseTest {
-
     private static final String THREE_STATIONS_JSON = """
         {"response":{"msgHeader":{
             "queryTime":"2026-08-28 11:14:04.911","resultCode":0,"resultMessage":"정상"},

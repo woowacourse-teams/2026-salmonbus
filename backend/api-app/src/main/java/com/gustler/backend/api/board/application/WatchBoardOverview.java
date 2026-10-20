@@ -11,7 +11,6 @@ public record WatchBoardOverview(
     List<ObservedVehicle> vehicles,
     Duration cacheMaxAge
 ) {
-
     public WatchBoardOverview {
         Objects.requireNonNull(board, "board는 null일 수 없습니다.");
         Objects.requireNonNull(vehicles, "vehicles는 null일 수 없습니다.");

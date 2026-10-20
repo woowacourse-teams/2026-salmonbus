@@ -9,7 +9,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 abstract class PostgresMigrationTestSupport {
-
     static PostgreSQLContainer<?> postgres;
 
     @BeforeAll

@@ -5,7 +5,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 
 public interface RouteEntityRepository extends Repository<RouteJpaEntity, Long> {
-
     @Query("""
         SELECT version.route
         FROM RouteVersionJpaEntity version

@@ -8,10 +8,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 public final class DemandStatisticsRun {
-
     public static final int PAGE_SIZE = 128;
     private static final String NO_VEHICLE = "";
-    public enum Phase { STALE, CLEAN, CAPTURE, ACCUMULATE, FOLD, REDUCE, PUBLISH, DONE }
+    public enum Phase {
+        STALE, CLEAN, CAPTURE, ACCUMULATE, FOLD, REDUCE, PUBLISH, DONE
+    }
 
     public record FoldCursor(String vehicleId, Instant arrivedHourStart, int targetStopOrder) {
         public FoldCursor {
@@ -39,9 +40,13 @@ public final class DemandStatisticsRun {
     private ReduceCursor reduceCursor;
     private Instant completedAt;
 
-    public DemandStatisticsRun(final long routeVersionId, final UUID runId, final long qualityRevision,
-        final Phase phase, final Instant dataUntil, final long inputUntilId, final String vehicleCursor,
-        final long inputCursor, final FoldCursor foldCursor, final ReduceCursor reduceCursor, final Instant completedAt) {
+    public DemandStatisticsRun(
+        final long routeVersionId, final UUID runId,
+        final long qualityRevision,
+        final Phase phase, final Instant dataUntil,
+        final long inputUntilId, final String vehicleCursor,
+        final long inputCursor, final FoldCursor foldCursor, final ReduceCursor reduceCursor, final Instant completedAt
+    ) {
         this.routeVersionId = routeVersionId;
         this.runId = Objects.requireNonNull(runId, "계산 식별자가 필요하다");
         this.qualityRevision = qualityRevision;
@@ -55,8 +60,11 @@ public final class DemandStatisticsRun {
         this.completedAt = completedAt;
     }
 
-    public static DemandStatisticsRun start(final long routeVersionId, final UUID runId, final long qualityRevision,
-        final Instant now) {
+    public static DemandStatisticsRun start(
+        final long routeVersionId, final UUID runId,
+        final long qualityRevision,
+        final Instant now
+    ) {
         return new DemandStatisticsRun(routeVersionId, runId, qualityRevision, Phase.CLEAN, now, 0, NO_VEHICLE, 0,
             null, null, null);
     }
@@ -151,15 +159,47 @@ public final class DemandStatisticsRun {
         }
     }
 
-    public long routeVersionId() { return routeVersionId; }
-    public UUID runId() { return runId; }
-    public long qualityRevision() { return qualityRevision; }
-    public Phase phase() { return phase; }
-    public Instant dataUntil() { return dataUntil; }
-    public long inputUntilId() { return inputUntilId; }
-    public String vehicleCursor() { return vehicleCursor; }
-    public long inputCursor() { return inputCursor; }
-    public Optional<FoldCursor> foldCursor() { return Optional.ofNullable(foldCursor); }
-    public Optional<ReduceCursor> reduceCursor() { return Optional.ofNullable(reduceCursor); }
-    public Optional<Instant> completedAt() { return Optional.ofNullable(completedAt); }
+    public long routeVersionId() {
+        return routeVersionId;
+    }
+
+    public UUID runId() {
+        return runId;
+    }
+
+    public long qualityRevision() {
+        return qualityRevision;
+    }
+
+    public Phase phase() {
+        return phase;
+    }
+
+    public Instant dataUntil() {
+        return dataUntil;
+    }
+
+    public long inputUntilId() {
+        return inputUntilId;
+    }
+
+    public String vehicleCursor() {
+        return vehicleCursor;
+    }
+
+    public long inputCursor() {
+        return inputCursor;
+    }
+
+    public Optional<FoldCursor> foldCursor() {
+        return Optional.ofNullable(foldCursor);
+    }
+
+    public Optional<ReduceCursor> reduceCursor() {
+        return Optional.ofNullable(reduceCursor);
+    }
+
+    public Optional<Instant> completedAt() {
+        return Optional.ofNullable(completedAt);
+    }
 }

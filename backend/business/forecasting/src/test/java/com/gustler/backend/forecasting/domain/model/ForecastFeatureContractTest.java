@@ -3,7 +3,6 @@ package com.gustler.backend.forecasting.domain.model;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
-
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
 import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
 import java.util.List;
@@ -40,7 +39,8 @@ class ForecastFeatureContractTest {
     @Test
     void 같은_정류장_ID라도_방향을_구분한다() {
         double[] up = ForecastFeatureContract.STOP_DIRECTION_TIME.vectorOf(input(TimeSlot.MORNING, RouteDirection.UP));
-        double[] down = ForecastFeatureContract.STOP_DIRECTION_TIME.vectorOf(input(TimeSlot.MORNING, RouteDirection.DOWN));
+        double[] down =
+            ForecastFeatureContract.STOP_DIRECTION_TIME.vectorOf(input(TimeSlot.MORNING, RouteDirection.DOWN));
         assertThat(up[31]).isZero();
         assertThat(down[31]).isEqualTo(1);
         assertThat(up[40]).isZero();
@@ -56,15 +56,18 @@ class ForecastFeatureContractTest {
     @Test
     void 검증한_판본도_정류장_내용이_바뀌면_다시_거절한다() {
         SeatForecastInput input = input(TimeSlot.MORNING, RouteDirection.DOWN);
-        ForecastRouteReference reference = new ForecastRouteReference(Map.of("3330", input.stops().stops().stream()
-            .map(stop -> new ForecastRouteReference.Stop(stop.stopOrder(), stop.stopId(), stop.boardingAllowed(), stop.direction()))
-            .toList()));
+        ForecastRouteReference reference = new ForecastRouteReference(Map.of("3330", input.stops()
+                .stops()
+                .stream()
+                .map(stop -> new ForecastRouteReference.Stop(stop.stopOrder(), stop.stopId(), stop.boardingAllowed(), stop.direction()))
+                .toList()));
         reference.requireMatches(input.stops());
         reference.requireMatches(input.stops());
         RouteStop changed = new RouteStop(1L, 49, "different-stop", true, RouteDirection.DOWN);
         assertThatThrownBy(() -> reference.requireMatches(new RouteStops(1L, "204000057",
             List.of(changed, input.stops().stops().get(1))))).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> reference.requireMatches(input(TimeSlot.MORNING, RouteDirection.UP).stops()))
+        assertThatThrownBy(
+            () -> reference.requireMatches(input(TimeSlot.MORNING, RouteDirection.UP).stops()))
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -84,7 +87,9 @@ class ForecastFeatureContractTest {
         double[] previous = ForecastFeatureContract.STOP_DIRECTION_TIME.vectorOf(input);
         assertThat(new double[] {previous[28], previous[29], previous[30]}).containsOnly(0);
         for (int index = 0; index < 50; index++) {
-            if (index < 28 || index > 30) { assertThat(actual[index]).isEqualTo(previous[index]); }
+            if (index < 28 || index > 30) {
+                assertThat(actual[index]).isEqualTo(previous[index]);
+            }
         }
     }
 

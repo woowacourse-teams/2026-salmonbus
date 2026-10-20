@@ -13,7 +13,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-
 import com.gustler.backend.forecasting.api.ForecastPolicy;
 import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
 import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
@@ -39,7 +38,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class PublishPendingForecastsRouteCoverageTest {
-
     private static final Instant NOW = Instant.parse("2026-09-30T02:30:00Z");
     private static final long ROUTE_VERSION_3330 = 1L;
     private static final long ROUTE_VERSION_9007 = 3L;
@@ -142,6 +140,7 @@ class PublishPendingForecastsRouteCoverageTest {
             public boolean supportsRoute(RouteStops stops) {
                 return stops.routeVersionId() == ROUTE_VERSION_3330;
             }
+
             @Override
             public com.gustler.backend.forecasting.domain.model.SeatForecastResult predict(
                 com.gustler.backend.forecasting.domain.model.SeatForecastInput input) {
@@ -157,7 +156,8 @@ class PublishPendingForecastsRouteCoverageTest {
         when(routeStops.readStops(ROUTE_VERSION_9007)).thenReturn(STOPS_9007);
         when(vehicleTrajectoryQuery.findBatchesAwaitingForecast(eq(ROUTE_VERSION_3330), any(), anyInt()))
             .thenReturn(List.of(batch));
-        when(vehicleTrajectoryQuery.findOldestLeftBehindAt(eq(ROUTE_VERSION_3330), any(), any())).thenReturn(Optional.empty());
+        when(vehicleTrajectoryQuery.findOldestLeftBehindAt(eq(ROUTE_VERSION_3330), any(), any())).thenReturn(
+            Optional.empty());
         job.writeForecasts();
         verify(forecastBatchWriter).writeForecastsOf(batch, STOPS_3330, runtime);
         verify(vehicleTrajectoryQuery, never()).findBatchesAwaitingForecast(eq(ROUTE_VERSION_9007), any(), anyInt());
@@ -173,7 +173,8 @@ class PublishPendingForecastsRouteCoverageTest {
         assertThat(modelLogs.list).hasSize(1);
         assertThat(modelLogs.list.getFirst().getFormattedMessage())
             .contains("event=forecast_model_used", "routeId=\"204000057\"", "routeName=\"3330\"", "routeVersionId=1",
-                "batchId=10", "modelDeploymentId=1", "releaseId=\"release-1\"", "featureContractVersion=\"feature-v1\"");
+                "batchId=10", "modelDeploymentId=1", "releaseId=\"release-1\"",
+            "featureContractVersion=\"feature-v1\"");
     }
 
     @Test
@@ -244,7 +245,8 @@ class PublishPendingForecastsRouteCoverageTest {
         // then
         verify(forecastBatchWriter).writeForecastsOf(
             new PendingForecastBatch(10L, ROUTE_VERSION_3330, 1L, NOW.minusSeconds(20)), STOPS_3330, RUNTIME);
-        verify(vehicleTrajectoryQuery).findBatchesAwaitingForecast(eq(ROUTE_VERSION_3330), eq(NOW.minus(Duration.ofMinutes(5))), eq(20));
+        verify(vehicleTrajectoryQuery).findBatchesAwaitingForecast(eq(ROUTE_VERSION_3330),
+            eq(NOW.minus(Duration.ofMinutes(5))), eq(20));
         verify(routeStops, never()).readStops(ROUTE_VERSION_9007);
         verify(vehicleTrajectoryQuery, never()).findOldestLeftBehindAt(any(Long.class), any(), any());
     }
@@ -302,16 +304,29 @@ class PublishPendingForecastsRouteCoverageTest {
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(RUNTIME));
         var manager = new org.springframework.transaction.support.AbstractPlatformTransactionManager() {
             boolean failCommit = true;
-            @Override protected Object doGetTransaction() { return new Object(); }
-            @Override protected void doBegin(Object tx, org.springframework.transaction.TransactionDefinition definition) { }
-            @Override protected void doCommit(org.springframework.transaction.support.DefaultTransactionStatus status) {
+
+            @Override
+            protected Object doGetTransaction() {
+                return new Object();
+            }
+
+            @Override
+            protected void doBegin(Object tx, org.springframework.transaction.TransactionDefinition definition) {
+            }
+
+            @Override
+            protected void doCommit(org.springframework.transaction.support.DefaultTransactionStatus status) {
                 assertThat(modelLogs.list).isEmpty();
                 if (failCommit) throw new org.springframework.transaction.TransactionSystemException("commit failed");
             }
-            @Override protected void doRollback(org.springframework.transaction.support.DefaultTransactionStatus status) { }
+
+            @Override
+            protected void doRollback(org.springframework.transaction.support.DefaultTransactionStatus status) {
+            }
         };
         var transaction = new org.springframework.transaction.support.TransactionTemplate(manager);
-        assertThatThrownBy(() -> transaction.executeWithoutResult(status -> job.writeForecasts()))
+        assertThatThrownBy(
+            () -> transaction.executeWithoutResult(status -> job.writeForecasts()))
             .isInstanceOf(org.springframework.transaction.TransactionSystemException.class);
         assertThat(modelLogs.list).isEmpty();
         manager.failCommit = false;

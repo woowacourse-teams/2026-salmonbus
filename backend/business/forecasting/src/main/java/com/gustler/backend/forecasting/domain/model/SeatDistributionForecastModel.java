@@ -14,7 +14,6 @@ package com.gustler.backend.forecasting.domain.model;
  * 만석 확률을 안 옮긴다. 자르는 것은 그 값을 읽는 쪽이 하고 여기서는 옮기기만 한다.
  */
 public final class SeatDistributionForecastModel implements SeatForecastModel {
-
     private final SeatDistributionPredictor predictor;
     private final ForecastFeatureContract features;
     private final ForecastRouteReference reference;

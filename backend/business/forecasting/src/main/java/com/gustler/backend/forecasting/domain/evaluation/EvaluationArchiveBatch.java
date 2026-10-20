@@ -1,5 +1,4 @@
 package com.gustler.backend.forecasting.domain.evaluation;
-
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -7,7 +6,6 @@ import java.util.UUID;
 /** 소유권 토큰은 재시작한 작업자가 이전 실행자의 결과 확정을 막는 데 사용한다. */
 public record EvaluationArchiveBatch(UUID id, long routeVersionId, long qualityRevision,
     UUID leaseToken, Instant leaseUntil, State state, int rowCount, String manifestSha256) {
-
     public EvaluationArchiveBatch {
         Objects.requireNonNull(id);
         Objects.requireNonNull(leaseToken);
@@ -22,7 +20,9 @@ public record EvaluationArchiveBatch(UUID id, long routeVersionId, long qualityR
         }
     }
 
-    public enum State { RESERVED, VERIFIED }
+    public enum State {
+        RESERVED, VERIFIED
+    }
 
     public record Key(long observationId, int stopOrder) {
         public Key {

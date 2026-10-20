@@ -16,14 +16,14 @@ import org.junit.jupiter.params.provider.MethodSource;
  * 확인하는 것이라 오해가 있으면 오해째로 통과한다. 이것만 밖에서 온 값과 견준다.
  */
 class SeatDistributionParityTest {
-
     private static final double TOLERANCE = 1e-12;
 
     /** 잔차 격자의 아래 끝. 중심 좌석에서 이만큼 빼면 격자 밖 질량이 쌓이는 좌석 칸이다. */
     private static final int SMALLEST_RESIDUAL_SEATS = -40;
 
     static Stream<ReferenceParityCase> 대조_사례() {
-        return ReferenceParityCase.all().stream();
+        return ReferenceParityCase.all()
+            .stream();
     }
 
     @ParameterizedTest(name = "{0}")
@@ -59,8 +59,4 @@ class SeatDistributionParityTest {
         // then
         assertThat(actual).hasSize(8);
     }
-
-
-
-
 }

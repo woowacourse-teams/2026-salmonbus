@@ -108,10 +108,10 @@ public final class CollectionBatch {
     }
 
     public record State(Long id, long routeVersionId, OffsetDateTime scheduledAt, String attemptKey,
-                        int attemptNumber, OffsetDateTime requestedAt, OffsetDateTime responseReceivedAt,
-                        OffsetDateTime inputConfirmedAt, ObservationBatchOutcome outcome,
-                        ObservationBatchFailureCode failureCode, Integer resultCode, Integer providerRows,
-                        Integer storedRows, Integer excludedRows, String normalizationVersion,
-                        String collectionStrategyVersion) {
+        int attemptNumber, OffsetDateTime requestedAt, OffsetDateTime responseReceivedAt,
+        OffsetDateTime inputConfirmedAt, ObservationBatchOutcome outcome,
+        ObservationBatchFailureCode failureCode, Integer resultCode, Integer providerRows,
+        Integer storedRows, Integer excludedRows, String normalizationVersion,
+        String collectionStrategyVersion) {
     }
 }

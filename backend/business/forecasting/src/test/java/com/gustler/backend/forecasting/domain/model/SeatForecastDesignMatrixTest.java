@@ -13,7 +13,6 @@ import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandCell;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
 import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
-
 import com.gustler.backend.forecasting.domain.model.SameDayFullOutcomes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
@@ -38,7 +37,6 @@ class SeatForecastDesignMatrixTest {
 
     /** 오늘 확정된 결과가 없는 자리. 그때는 만석 확률을 안 옮긴다. */
     private static final SameDayFullOutcomes NO_SAME_DAY_OUTCOMES = null;
-
 
     private static final Clock KOREAN_CLOCK =
         Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneId.of("Asia/Seoul"));
@@ -113,7 +111,9 @@ class SeatForecastDesignMatrixTest {
 
         // then 겹치는 열도 빠진 열도 없다
         assertThat(actual).containsExactlyInAnyOrderElementsOf(
-            IntStream.rangeClosed(1, SeatForecastDesignMatrix.COLUMN_COUNT).boxed().toList());
+            IntStream.rangeClosed(1, SeatForecastDesignMatrix.COLUMN_COUNT)
+                .boxed()
+                .toList());
     }
 
     @Test
@@ -131,7 +131,8 @@ class SeatForecastDesignMatrixTest {
 
         // when
         List<Double> actual = SeatForecastDesignMatrix.COLUMNS_WAITING_FOR_COEFFICIENTS.stream()
-            .flatMap(column -> List.of(morning.columnAt(column), evening.columnAt(column)).stream())
+            .flatMap(column -> List.of(morning.columnAt(column), evening.columnAt(column))
+                .stream())
             .toList();
 
         // then
@@ -303,7 +304,8 @@ class SeatForecastDesignMatrixTest {
         SeatForecastDesignMatrix actual = matrixOf(input());
 
         // then
-        assertThat(actual.columnAt(PRECEDING_VEHICLE_SEATS_RATIO)).isCloseTo(11.0 / 44, within(FLOATING_POINT_ROUNDING));
+        assertThat(actual.columnAt(PRECEDING_VEHICLE_SEATS_RATIO)).isCloseTo(11.0 / 44,
+            within(FLOATING_POINT_ROUNDING));
     }
 
     @Test

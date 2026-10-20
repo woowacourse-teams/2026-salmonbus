@@ -14,14 +14,14 @@ import org.springframework.transaction.annotation.Transactional;
 /** 한 차량의 고정된 처리 범위에서 한 페이지만 반영한다. 호출자가 다음 실행 기회를 정한다. */
 @Component
 public class DemandAccumulator {
-
     private final DemandStatisticsStore store;
     private final DemandSampleStore samples;
     private final DemandStatisticsRebuildRequestStore requests;
     private final RouteDataQualityAccess quality;
 
     public DemandAccumulator(final DemandStatisticsStore store, final DemandSampleStore samples,
-        final DemandStatisticsRebuildRequestStore requests, final RouteDataQualityAccess quality) {
+        final DemandStatisticsRebuildRequestStore requests, final RouteDataQualityAccess quality
+    ) {
         this.store = store;
         this.samples = samples;
         this.requests = requests;
@@ -29,8 +29,11 @@ public class DemandAccumulator {
     }
 
     @Transactional(timeout = 2)
-    public Result apply(final long routeVersionId, final String vehicleId, final long afterInputId,
-        final long inputUntilId, final Instant dataUntil) {
+    public Result apply(
+        final long routeVersionId, final String vehicleId,
+        final long afterInputId,
+        final long inputUntilId, final Instant dataUntil
+    ) {
         store.limitStatementTime();
         quality.lock(routeVersionId);
         if (quality.investigationPending(routeVersionId, vehicleId)
@@ -47,13 +50,14 @@ public class DemandAccumulator {
         if (!applicable.isEmpty()) {
             store.addToCurrentTotals(routeVersionId, page.totalsUntil(dataUntil));
             store.registerVehicle(routeVersionId, vehicleId);
-            samples.remove(applicable.stream().map(PendingSample::id).toList());
+            samples.remove(applicable.stream()
+                .map(PendingSample::id)
+                .toList());
         }
         return new Result(page.size(), applicable.size(), false, page.nextInputId(afterInputId));
     }
 
     public record Result(int selected, int applied, boolean waitingForRebuild, long nextInputId) {
-
         static Result waiting(final long afterInputId) {
             return new Result(0, 0, true, afterInputId);
         }

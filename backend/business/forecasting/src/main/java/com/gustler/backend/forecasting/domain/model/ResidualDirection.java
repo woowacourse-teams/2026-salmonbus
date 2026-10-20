@@ -10,7 +10,6 @@ package com.gustler.backend.forecasting.domain.model;
  * 뒤집으면 분포가 좌우로 뒤집힌 채로 합이 1 이라 어떤 검증에도 안 걸린다.
  */
 public enum ResidualDirection {
-
     SEATS_BELOW_ANCHOR,
     SEATS_ABOVE_ANCHOR,
     ;

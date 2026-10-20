@@ -43,7 +43,6 @@ import org.slf4j.LoggerFactory;
 
 @ExtendWith(MockitoExtension.class)
 class PublishPendingForecastsStalenessTest {
-
     private static final Instant NOW = Instant.parse("2026-09-03T02:30:00Z");
     private static final Duration STALENESS = Duration.ofMinutes(5);
     private static final long ROUTE_VERSION_3330 = 1L;
@@ -58,7 +57,6 @@ class PublishPendingForecastsStalenessTest {
     @Mock
 
     private RouteVersionQuery routeVersions;
-
 
     private final RouteStopsQuery routeStops = PublishPendingForecastsStalenessTest::stopsOf;
 
@@ -108,7 +106,8 @@ class PublishPendingForecastsStalenessTest {
         var batch = new com.gustler.backend.forecasting.domain.publication.PendingForecastBatch(
             10L, ROUTE_VERSION_3330, 1L, NOW.minusSeconds(30));
         when(vehicleTrajectoryQuery.findBatchesAwaitingForecast(anyLong(), any(), anyInt())).thenReturn(List.of(batch));
-        when(forecastBatchWriter.writeForecastsOf(any(), any(), any())).thenThrow(new IllegalStateException("commit failed"));
+        when(forecastBatchWriter.writeForecastsOf(any(), any(), any())).thenThrow(
+            new IllegalStateException("commit failed"));
         job.writeForecasts();
         var order = inOrder(telemetry, forecastBatchWriter);
         order.verify(telemetry).pending(ROUTE_VERSION_3330, NOW.minusSeconds(30));

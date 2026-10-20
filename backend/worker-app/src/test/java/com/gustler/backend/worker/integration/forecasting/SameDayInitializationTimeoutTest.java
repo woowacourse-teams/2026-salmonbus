@@ -60,7 +60,7 @@ class SameDayInitializationTimeoutTest {
                 prediction_target_version,calculation_version,supported_scope_digest,data_until,state)
             VALUES (?, 'fixture', 'seat-full-chance', '1', ?, 'SEAT_FULL_CHANCE_V1', 'fixture', ?, ?, 'ACTIVE')
             """).params(java.util.UUID.randomUUID(), "0".repeat(64), "0".repeat(64),
-                OffsetDateTime.ofInstant(OBSERVED_AT, ZoneOffset.UTC)).update();
+            OffsetDateTime.ofInstant(OBSERVED_AT, ZoneOffset.UTC)).update();
         jdbc.sql("INSERT INTO route_version(route_id,content_digest,valid_from,turn_sequence) VALUES (?,?,?,20)")
             .params(routeId, "0".repeat(64), OffsetDateTime.ofInstant(OBSERVED_AT, ZoneOffset.UTC)).update();
     }
@@ -82,15 +82,18 @@ class SameDayInitializationTimeoutTest {
         }).when(countsSpy).countFromSource(anyLong(), anyLong(), any(), any());
 
         assertThat(context.getBean(SameDayFullOutcomesInitializer.class)
-            .initialize(routeId, SeoulDay.containing(NOW))).isTrue();
+                .initialize(routeId, SeoulDay.containing(NOW))).isTrue();
         assertThat(sourceQueryMs.get()).isGreaterThanOrEqualTo(2_000L);
         assertThat(count("same_day_model_full_outcomes")).isEqualTo(1);
     }
 
-    long count(String table) { return jdbc.sql("SELECT count(*) FROM " + table).query(Long.class).single(); }
+    long count(String table) {
+        return jdbc.sql("SELECT count(*) FROM " + table).query(Long.class).single();
+    }
 
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration
     @Import({PostgresTestContainer.class, BusinessConfiguration.class})
-    static class WorkerBusiness { }
+    static class WorkerBusiness {
+    }
 }

@@ -118,11 +118,11 @@ class DemandSampleRecordingTest {
                    prediction_remaining_seats, arrival_remaining_seats
             FROM stop_demand_pending_sample WHERE prediction_observation_id = ?
             """).param(vehicleObservationId).query((rs, n) -> List.of(
-                rs.getLong("route_version_id"), rs.getLong("prediction_observation_id"),
-                rs.getLong("arrival_observation_id"), rs.getString("vehicle_id"),
-                rs.getInt("target_stop_order"), rs.getObject("arrived_at", OffsetDateTime.class).toInstant(),
-                rs.getObject("scored_at", OffsetDateTime.class).toInstant(),
-                rs.getInt("prediction_remaining_seats"), rs.getInt("arrival_remaining_seats"))).single())
+            rs.getLong("route_version_id"), rs.getLong("prediction_observation_id"),
+            rs.getLong("arrival_observation_id"), rs.getString("vehicle_id"),
+            rs.getInt("target_stop_order"), rs.getObject("arrived_at", OffsetDateTime.class).toInstant(),
+            rs.getObject("scored_at", OffsetDateTime.class).toInstant(),
+            rs.getInt("prediction_remaining_seats"), rs.getInt("arrival_remaining_seats"))).single())
             .containsExactly(routeVersionId, vehicleObservationId, arrival, VEHICLE_204000206,
                 TARGET_STOP_ORDER, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant(), SCORED_AT, SEATS_LEFT, 0);
     }
@@ -191,12 +191,16 @@ class DemandSampleRecordingTest {
         int horizon = excludedReason.equals("distant") ? STOPS_TO_NEXT_TARGET : 1;
         saveForecasts(List.of(forecastOf(target, horizon, GENERATED_AT)));
         if (excludedReason.equals("non_boarding")) {
-            jdbcClient.sql("UPDATE route_stop SET boarding_allowed = false WHERE route_version_id = ? AND stop_order = ?")
-                .params(routeVersionId, target).update();
+            jdbcClient.sql(
+            "UPDATE route_stop SET boarding_allowed = false WHERE route_version_id = ? AND stop_order = ?")
+                .params(routeVersionId, target)
+                .update();
         }
         if (excludedReason.equals("missing_seats")) {
-            jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats = NULL, seat_unknown_reason = 'NOT_REPORTED' WHERE id = ?")
-                .param(vehicleObservationId).update();
+            jdbcClient.sql(
+            "UPDATE vehicle_observation SET remaining_seats = NULL, seat_unknown_reason = 'NOT_REPORTED' WHERE id = ?")
+                .param(vehicleObservationId)
+                .update();
         }
 
         evaluationWriter.complete(List.of(ForecastEvaluation.completed(
@@ -222,9 +226,9 @@ class DemandSampleRecordingTest {
         // then
         assertThat(actual).isEmpty();
         assertThat(jdbcClient.sql("SELECT scoring_state FROM forecast_evaluation WHERE vehicle_observation_id = ?")
-            .param(vehicleObservationId).query(String.class).single()).isEqualTo("SETTLED");
+                .param(vehicleObservationId).query(String.class).single()).isEqualTo("SETTLED");
         assertThat(jdbcClient.sql("SELECT seats_on_arrival FROM forecast_evaluation WHERE vehicle_observation_id = ?")
-            .param(vehicleObservationId).query(Integer.class).single()).isZero();
+                .param(vehicleObservationId).query(Integer.class).single()).isZero();
         // 6시간 통계는 후보정과 달리 예보의 이전 quality_revision 자체를 제외하지 않는다.
         assertThat(pendingSampleCount()).isEqualTo(1);
     }
@@ -244,7 +248,7 @@ class DemandSampleRecordingTest {
         // then
         assertThat(actual).isEmpty();
         assertThat(jdbcClient.sql("SELECT scoring_state FROM forecast_evaluation WHERE vehicle_observation_id = ?")
-            .param(vehicleObservationId).query(String.class).single()).isEqualTo("PENDING");
+                .param(vehicleObservationId).query(String.class).single()).isEqualTo("PENDING");
         assertThat(pendingSampleCount()).isZero();
     }
 
@@ -263,7 +267,7 @@ class DemandSampleRecordingTest {
         // then
         assertThat(actual).isEmpty();
         assertThat(jdbcClient.sql("SELECT scoring_state FROM forecast_evaluation WHERE vehicle_observation_id = ?")
-            .param(vehicleObservationId).query(String.class).single()).isEqualTo("PENDING");
+                .param(vehicleObservationId).query(String.class).single()).isEqualTo("PENDING");
         assertThat(pendingSampleCount()).isZero();
     }
 
@@ -415,13 +419,13 @@ class DemandSampleRecordingTest {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
-            .params(
-                batchId, routeVersionId, sourceRowNumber,
-                vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
-                RUNNING_STATE_DEPARTED, SEATS_LEFT
-            )
-            .query(Long.class)
-            .single());
+                    .params(
+                        batchId, routeVersionId, sourceRowNumber,
+                        vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
+                        RUNNING_STATE_DEPARTED, SEATS_LEFT
+                    )
+                    .query(Long.class)
+                    .single());
     }
 
     private static String stopIdOf(

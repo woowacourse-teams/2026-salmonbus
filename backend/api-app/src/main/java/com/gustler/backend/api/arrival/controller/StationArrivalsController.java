@@ -25,7 +25,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class StationArrivalsController {
     private final ArrivalQueryService service;
-    public StationArrivalsController(ArrivalQueryService service) { this.service = service; }
+
+    public StationArrivalsController(ArrivalQueryService service) {
+        this.service = service;
+    }
 
     @GetMapping("/api/v2/stations/{stationId}/arrivals")
     @Operation(operationId = "getStationArrivals", summary = "정류장 도착정보",
@@ -38,22 +41,27 @@ public class StationArrivalsController {
             + "사용하고, 예상 시각 경과나 staleAt 도달을 실제 도착으로 확정하지 않습니다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "도착정보 또는 수집 중·예측 부재·제공 불가 상태",
-            headers = @Header(name = "Cache-Control", description = "유효한 결과는 public, max-age 최대 5초. UNAVAILABLE은 no-store",
+            headers =
+            @Header(name = "Cache-Control", description = "유효한 결과는 public, max-age 최대 5초. UNAVAILABLE은 no-store",
                 schema = @Schema(type = "string")),
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = StationArrivalsResponse.class), examples = {
-                @ExampleObject(name = "ready", value = ArrivalApiDocsExamples.READY),
-                @ExampleObject(name = "collecting", value = ArrivalApiDocsExamples.COLLECTING),
-                @ExampleObject(name = "noPrediction", value = ArrivalApiDocsExamples.NO_PREDICTION),
-                @ExampleObject(name = "stale", value = ArrivalApiDocsExamples.STALE)
-            })),
+            content =
+            @Content(mediaType = "application/json",
+                schema = @Schema(implementation = StationArrivalsResponse.class), examples = {
+                    @ExampleObject(name = "ready", value = ArrivalApiDocsExamples.READY),
+                    @ExampleObject(name = "collecting", value = ArrivalApiDocsExamples.COLLECTING),
+                    @ExampleObject(name = "noPrediction", value = ArrivalApiDocsExamples.NO_PREDICTION),
+                    @ExampleObject(name = "stale", value = ArrivalApiDocsExamples.STALE)
+                })),
         @ApiResponse(responseCode = "400", description = "정류장·노선 ID 형식 또는 필터 조합 오류",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
                 examples = @ExampleObject(value = ApiDocsExamples.INVALID_REQUEST))),
         @ApiResponse(responseCode = "404", description = "지원하지 않는 정류장 또는 노선",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class), examples = {
-                @ExampleObject(name = "stationNotFound", value = ApiDocsExamples.STATION_NOT_FOUND),
-                @ExampleObject(name = "routeNotFound", value = ApiDocsExamples.ROUTE_NOT_FOUND)
-            })),
+            content =
+            @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
+                examples = {
+                    @ExampleObject(name = "stationNotFound", value = ApiDocsExamples.STATION_NOT_FOUND),
+                    @ExampleObject(name = "routeNotFound", value = ApiDocsExamples.ROUTE_NOT_FOUND)
+                })),
         @ApiResponse(responseCode = "409", description = "현재 노선 판본·방문과 불일치. geometry를 다시 조회하고 방문을 재확인",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
                 examples = @ExampleObject(value = ApiDocsExamples.REFERENCE_VERSION_CONFLICT))),
@@ -75,8 +83,10 @@ public class StationArrivalsController {
         @Parameter(description = "현재 노선 판본의 양의 64비트 정수. routeId 및 stopSequence와 함께 사용", example = "7",
             schema = @Schema(minimum = "1")) @RequestParam(required = false) Long referenceVersionId,
         @Parameter(description = "geometry에서 선택한 정류장 방문 순번. referenceVersionId와 함께 사용", example = "22",
-            schema = @Schema(minimum = "1")) @RequestParam(required = false) Integer stopSequence) {
-        var overview = service.get(new ArrivalQuery(stationId, routeId, referenceVersionId, stopSequence));
+            schema = @Schema(minimum = "1")) @RequestParam(required = false) Integer stopSequence
+    ) {
+        var overview =
+            service.get(new ArrivalQuery(stationId, routeId, referenceVersionId, stopSequence));
         CacheControl cache = CacheControl.noStore();
         if (overview.status() != ArrivalAvailability.UNAVAILABLE) {
             cache = CacheControl.maxAge(overview.cacheMaxAge()).cachePublic();

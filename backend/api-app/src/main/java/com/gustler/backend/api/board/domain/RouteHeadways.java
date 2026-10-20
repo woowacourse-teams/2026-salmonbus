@@ -6,7 +6,6 @@ public record RouteHeadways(
     HeadwayRange sunday,
     HeadwayRange holiday
 ) {
-
     public static RouteHeadways none() {
         return new RouteHeadways(null, null, null, null);
     }

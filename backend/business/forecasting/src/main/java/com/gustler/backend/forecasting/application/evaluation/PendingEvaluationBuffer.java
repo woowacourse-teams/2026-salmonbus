@@ -24,7 +24,9 @@ public final class PendingEvaluationBuffer {
         return restore(qualityRevision, 1, forecasts);
     }
 
-    public synchronized boolean restore(long qualityRevision, long workRevision, List<PendingForecast> forecasts) {
+    public synchronized boolean restore(long qualityRevision, long workRevision,
+        List<PendingForecast> forecasts
+    ) {
         if (forecasts == null || forecasts.isEmpty() || forecasts.size() > 12) {
             throw new IllegalArgumentException("복원할 관측의 미완료 예보가 필요하다");
         }
@@ -61,12 +63,14 @@ public final class PendingEvaluationBuffer {
     public synchronized void committed(Entry evaluated, Set<Integer> completedTargets) {
         if (entries.get(evaluated.key) != evaluated) return;
         List<PendingForecast> remaining = evaluated.forecasts.stream()
-            .filter(forecast -> !completedTargets.contains(forecast.targetStopOrder())).toList();
+            .filter(forecast -> !completedTargets.contains(forecast.targetStopOrder()))
+            .toList();
         if (remaining.size() == evaluated.forecasts.size()) return;
         entries.remove(evaluated.key);
         size -= evaluated.forecasts.size() - remaining.size();
         if (!remaining.isEmpty()) {
-            entries.put(evaluated.key, new Entry(evaluated.key, evaluated.qualityRevision, evaluated.workRevision, remaining));
+            entries.put(evaluated.key,
+                new Entry(evaluated.key, evaluated.qualityRevision, evaluated.workRevision, remaining));
         }
     }
 
@@ -78,9 +82,13 @@ public final class PendingEvaluationBuffer {
         }
     }
 
-    public synchronized int size() { return size; }
+    public synchronized int size() {
+        return size;
+    }
 
-    public synchronized List<Entry> snapshot() { return List.copyOf(entries.values()); }
+    public synchronized List<Entry> snapshot() {
+        return List.copyOf(entries.values());
+    }
 
     public synchronized void evictOldest() {
         var oldest = entries.pollFirstEntry();
@@ -97,7 +105,8 @@ public final class PendingEvaluationBuffer {
         return new Key(forecast.routeVersionId(), forecast.vehicleObservationId());
     }
 
-    public record Key(long routeVersionId, long observationId) { }
+    public record Key(long routeVersionId, long observationId) {
+    }
 
     /** 인스턴스 동일성으로 재복원 전의 오래된 완료 처리를 구분한다. */
     public static final class Entry {
@@ -106,16 +115,30 @@ public final class PendingEvaluationBuffer {
         private final long workRevision;
         private final List<PendingForecast> forecasts;
 
-        private Entry(Key key, long qualityRevision, long workRevision, List<PendingForecast> forecasts) {
+        private Entry(
+            Key key, long qualityRevision, long workRevision,
+            List<PendingForecast> forecasts
+        ) {
             this.key = key;
             this.qualityRevision = qualityRevision;
             this.workRevision = workRevision;
             this.forecasts = forecasts;
         }
 
-        public Key key() { return key; }
-        public long qualityRevision() { return qualityRevision; }
-        public long workRevision() { return workRevision; }
-        public List<PendingForecast> forecasts() { return forecasts; }
+        public Key key() {
+            return key;
+        }
+
+        public long qualityRevision() {
+            return qualityRevision;
+        }
+
+        public long workRevision() {
+            return workRevision;
+        }
+
+        public List<PendingForecast> forecasts() {
+            return forecasts;
+        }
     }
 }

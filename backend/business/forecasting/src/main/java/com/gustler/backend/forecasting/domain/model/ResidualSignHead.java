@@ -9,7 +9,6 @@ package com.gustler.backend.forecasting.domain.model;
  * <p><b>선언 순서가 계수 배열의 자리다.</b>
  */
 public enum ResidualSignHead {
-
     SAME_SEATS,
     BELOW_ANCHOR,
     ;

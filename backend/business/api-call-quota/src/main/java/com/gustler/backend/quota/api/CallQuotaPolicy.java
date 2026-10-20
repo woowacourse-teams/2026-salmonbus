@@ -1,5 +1,4 @@
 package com.gustler.backend.quota.api;
-
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
@@ -16,7 +15,6 @@ public record CallQuotaPolicy(
     List<String> locationKeyAliases,
     Map<String, Integer> keyDailyLimits
 ) {
-
     public static final String PRIMARY_KEY_ALIAS = "a";
 
     public CallQuotaPolicy {

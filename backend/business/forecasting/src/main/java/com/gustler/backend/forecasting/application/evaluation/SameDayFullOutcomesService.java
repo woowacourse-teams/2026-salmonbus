@@ -5,7 +5,6 @@ import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomeCount
 import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomesStore;
 import com.gustler.backend.forecasting.domain.evaluation.SeoulDay;
 import com.gustler.backend.forecasting.domain.evaluation.SettledForecast;
-
 import com.gustler.backend.forecasting.domain.model.SameDayFullOutcomes;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -20,7 +19,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class SameDayFullOutcomesService {
-
     private final SameDayFullOutcomesStore repository;
 
     public SameDayFullOutcomesService(
@@ -88,7 +86,10 @@ public class SameDayFullOutcomesService {
         return initializeIfAbsent(routeId, modelDeploymentId, day, new SameDayInitializationAttempt());
     }
 
-    boolean initializeIfAbsent(long routeId, long modelDeploymentId, SeoulDay day, SameDayInitializationAttempt attempt) {
+    boolean initializeIfAbsent(long routeId, long modelDeploymentId,
+        SeoulDay day,
+        SameDayInitializationAttempt attempt
+    ) {
         if (!attempt.measure(SameDayInitializationAttempt.Stage.CHECK,
             () -> repository.findCounts(routeId, modelDeploymentId, day)).isEmpty()) {
             return false;
@@ -141,11 +142,11 @@ public class SameDayFullOutcomesService {
         long modelDeploymentId,
         SeoulDay day
     ) {
-
         static RouteDay of(
             SettledForecast forecast
         ) {
-            return new RouteDay(forecast.routeId(), forecast.modelDeploymentId(), SeoulDay.containing(forecast.arrivedAt()));
+            return new RouteDay(forecast.routeId(), forecast.modelDeploymentId(),
+                SeoulDay.containing(forecast.arrivedAt()));
         }
     }
 }

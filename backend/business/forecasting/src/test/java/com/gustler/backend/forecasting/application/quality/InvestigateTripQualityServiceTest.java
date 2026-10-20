@@ -1,5 +1,4 @@
 package com.gustler.backend.forecasting.application.quality;
-
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
@@ -29,7 +28,8 @@ class InvestigateTripQualityServiceTest {
     void 잠금_시간_초과가_아닌_DB_오류는_그대로_전파한다() {
         // given
         var investigation = mock(TripQualityInvestigationService.class);
-        var failure = new UncategorizedSQLException("investigation", "SELECT", new SQLException("connection lost", "08006"));
+        var failure =
+            new UncategorizedSQLException("investigation", "SELECT", new SQLException("connection lost", "08006"));
         when(investigation.investigateNext()).thenThrow(failure);
 
         // when & then

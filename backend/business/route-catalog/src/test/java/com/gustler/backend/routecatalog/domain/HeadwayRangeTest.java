@@ -8,7 +8,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class HeadwayRangeTest {
-
     @ParameterizedTest
     @CsvSource({"10, 20", "15, 15", "1, 1440"})
     void 최소가_최대보다_크지_않은_1분부터_1440분까지의_범위를_받는다(

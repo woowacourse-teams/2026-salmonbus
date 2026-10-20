@@ -18,7 +18,6 @@ import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.env.SystemEnvironmentPropertySource;
 
 class GbisServiceKeyEnvironmentPostProcessorTest {
-
     @Test
     void 운영처럼_GBIS_SERVICE_KEY_뒤에_별칭을_붙인_키를_모두_읽는다() {
         // given
@@ -99,7 +98,8 @@ class GbisServiceKeyEnvironmentPostProcessorTest {
         GbisServiceKeyEnvironmentPostProcessor processor = new GbisServiceKeyEnvironmentPostProcessor();
 
         // when & then
-        assertThatThrownBy(() -> processor.postProcessEnvironment(environment, new SpringApplication()))
+        assertThatThrownBy(
+            () -> processor.postProcessEnvironment(environment, new SpringApplication()))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("e")
             .hasMessageNotContaining("fake-key-upper")
@@ -123,14 +123,18 @@ class GbisServiceKeyEnvironmentPostProcessorTest {
     ) {
         StandardEnvironment environment = new StandardEnvironment();
         environment.getPropertySources().replace(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
-            new SystemEnvironmentPropertySource(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME, variables));
+            new SystemEnvironmentPropertySource(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
+                variables));
         return environment;
     }
 
     private static List<String> aliasesOf(
         GbisProperties properties
     ) {
-        return properties.serviceKeys().stream().map(GbisKey::alias).toList();
+        return properties.serviceKeys()
+            .stream()
+            .map(GbisKey::alias)
+            .toList();
     }
 
     @Configuration(proxyBeanMethods = false)

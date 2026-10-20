@@ -4,6 +4,5 @@ import org.springframework.data.repository.Repository;
 
 public interface BoardForecastPublicationEntityRepository
     extends Repository<ForecastPublicationJpaEntity, Long> {
-
     boolean existsByRouteVersionId(Long routeVersionId);
 }

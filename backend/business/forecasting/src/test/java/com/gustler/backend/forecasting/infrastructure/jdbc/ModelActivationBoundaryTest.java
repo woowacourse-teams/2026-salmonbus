@@ -31,7 +31,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @ForecastingIntegrationTest
 class ModelActivationBoundaryTest {
-
     private static final String MODEL_DIRECTORY = "test-model-directory";
 
     @Autowired
@@ -66,8 +65,10 @@ class ModelActivationBoundaryTest {
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             jdbcClient.sql("DELETE FROM model_deployment WHERE release_id = :release")
                 .param("release", releaseId).update();
-            originalActive.ifPresent(active -> jdbcClient.sql("UPDATE model_deployment SET state = 'ACTIVE' WHERE id = ?")
-                .param(active.id()).update());
+            originalActive.ifPresent(active ->
+                jdbcClient.sql("UPDATE model_deployment SET state = 'ACTIVE' WHERE id = ?")
+                    .param(active.id())
+                    .update());
         });
     }
 

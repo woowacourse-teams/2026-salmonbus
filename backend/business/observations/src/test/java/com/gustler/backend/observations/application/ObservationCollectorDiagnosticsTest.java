@@ -3,6 +3,7 @@ package com.gustler.backend.observations.application;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import ch.qos.logback.classic.Logger;
+
 import ch.qos.logback.classic.Level;
 import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.gbis.api.GbisLocationSource;
@@ -29,19 +30,32 @@ class ObservationCollectorDiagnosticsTest {
     private ListAppender<ILoggingEvent> logs;
     private final ObservationCollector collector = new ObservationCollector(routes, ledger, quota, source,
         Clock.fixed(Instant.parse("2026-10-02T09:00:00Z"), ZoneOffset.UTC));
-    @BeforeEach void setUp() {
-        logs = new ListAppender<>(); logs.start(); logger.addAppender(logs);
+
+    @BeforeEach
+    void setUp() {
+        logs = new ListAppender<>();
+        logs.start();
+        logger.addAppender(logs);
         when(routes.currentVersionOf(anyString(), any())).thenReturn(Optional.of(new RouteReference(4)));
         when(ledger.reserve(any(), any())).thenReturn(new ObservationBatchReservation(10, true, "a"));
         when(ledger.markDispatching(anyLong(), any(), any(), anyString())).thenReturn(true);
     }
-    @AfterEach void cleanUp() { logger.detachAppender(logs); logs.stop(); MDC.clear(); }
-    @Test void 커밋_단계_실패를_성공으로_기록하지_않고_기존_예외를_전파한다() {
+
+    @AfterEach
+    void cleanUp() {
+        logger.detachAppender(logs);
+        logs.stop();
+        MDC.clear();
+    }
+
+    @Test
+    void 커밋_단계_실패를_성공으로_기록하지_않고_기존_예외를_전파한다() {
         ObservationReply reply = at -> ObservationResponse.unconfirmed(at);
         when(source.read(anyString(), anyString())).thenReturn(reply);
         RuntimeException failure = new IllegalStateException("commit failed");
         when(ledger.conclude(anyLong(), any(), any())).thenAnswer(call -> {
-            call.<ObservationReply>getArgument(1).interpret(call.getArgument(2)); throw failure;
+            call.<ObservationReply>getArgument(1).interpret(call.getArgument(2));
+            throw failure;
         });
         assertThatThrownBy(() -> collector.collectOnce("234000886")).isSameAs(failure);
         assertThat(logs.list).hasSize(1);
@@ -51,13 +65,18 @@ class ObservationCollectorDiagnosticsTest {
         assertThat(MDC.get("collectionAttemptId")).isNull();
         verifyNoInteractions(quota);
     }
-    @Test void 정규화_실패와_DB_저장_실패를_구분한다() {
-        when(source.read(anyString(), anyString())).thenReturn(at -> { throw new IllegalArgumentException("bad input"); });
+
+    @Test
+    void 정규화_실패와_DB_저장_실패를_구분한다() {
+        when(source.read(anyString(), anyString())).thenReturn(at -> {
+            throw new IllegalArgumentException("bad input");
+        });
         when(ledger.conclude(anyLong(), any(), any())).thenAnswer(call ->
             call.<ObservationReply>getArgument(1).interpret(call.getArgument(2)));
         assertThatThrownBy(() -> collector.collectOnce("234000886")).isInstanceOf(IllegalArgumentException.class);
         assertThat(logs.list.getFirst().getLevel()).isEqualTo(Level.ERROR);
-        assertThat(logs.list.getFirst().getFormattedMessage()).contains("stage=NORMALIZE", "resultCommitConfirmed=false");
+        assertThat(logs.list.getFirst()
+                .getFormattedMessage()).contains("stage=NORMALIZE", "resultCommitConfirmed=false");
     }
 
     static Stream<GbisLocationResult> externalFailures() {
@@ -78,7 +97,8 @@ class ObservationCollectorDiagnosticsTest {
         when(quota.excludeLocationKey(anyString(), any())).thenReturn(Optional.of(10));
         var root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
         var all = new ListAppender<ILoggingEvent>();
-        all.start(); root.addAppender(all);
+        all.start();
+        root.addAppender(all);
         try {
             new ObservationCollector(routes, ledger, quota, new GbisObservationSource(location),
                 Clock.systemUTC()).collectOnce("234000886");
@@ -88,10 +108,14 @@ class ObservationCollectorDiagnosticsTest {
                 .contains("status=FAILED", "stage=UPSTREAM_RESULT", "resultCommitConfirmed=true")
                 .doesNotContain("private");
             assertThat(all.list).noneMatch(event -> event.getLevel() == Level.ERROR);
-        } finally { root.detachAppender(all); all.stop(); }
+        } finally {
+            root.detachAppender(all);
+            all.stop();
+        }
     }
 
-    @Test void 상류_호출_중_예상하지_못한_내부_예외는_ERROR를_유지한다() {
+    @Test
+    void 상류_호출_중_예상하지_못한_내부_예외는_ERROR를_유지한다() {
         var location = mock(GbisLocationSource.class);
         when(location.read(anyString(), anyString())).thenThrow(new IllegalStateException("private"));
         when(ledger.conclude(anyLong(), any(), any())).thenAnswer(call ->

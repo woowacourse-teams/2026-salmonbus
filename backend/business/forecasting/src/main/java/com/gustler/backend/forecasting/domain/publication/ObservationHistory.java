@@ -10,7 +10,6 @@ import java.util.List;
 public record ObservationHistory(
     List<ObservedBatch> batches
 ) {
-
     public ObservationHistory {
         batches = List.copyOf(batches);
         if (batches.isEmpty()) {

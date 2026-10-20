@@ -1,5 +1,4 @@
 package com.gustler.backend.forecasting.infrastructure.statistics;
-
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch.Key;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch.Row;
@@ -26,17 +25,21 @@ final class EvaluationArchiveFiles {
     private static final Set<String> COLUMNS = Set.of("vehicle_observation_id", "target_stop_order", "route_version_id",
         "scoring_state", "arrival_observation_id", "seats_on_arrival", "scored_at", "arrived_at",
         "arrival_route_version_id", "arrival_vehicle_id", "arrival_stop_order", "arrival_running_state",
-        "arrival_remaining_seats", "arrival_seat_unknown_reason", "arrival_vehicle_trip_key", "arrival_quality_direction");
+        "arrival_remaining_seats", "arrival_seat_unknown_reason", "arrival_vehicle_trip_key",
+        "arrival_quality_direction");
 
-    private EvaluationArchiveFiles() { }
+    private EvaluationArchiveFiles() {
+    }
 
     static Encoded encode(EvaluationArchiveBatch batch, List<Row> rows, long maxBytes) {
         if (batch == null || rows == null || rows.size() != batch.rowCount()
             || maxBytes < 1 || maxBytes > 16 * 1024 * 1024) {
             throw new IllegalArgumentException("묶음 건수와 파일 크기 한도가 올바르지 않다");
         }
-        var ordered = rows.stream().sorted(Comparator.comparingLong((Row row) -> row.key().observationId())
-            .thenComparingInt(row -> row.key().stopOrder())).toList();
+        var ordered = rows.stream()
+            .sorted(Comparator.comparingLong((Row row) -> row.key().observationId())
+                .thenComparingInt(row -> row.key().stopOrder()))
+            .toList();
         var data = new ByteArrayOutputStream();
         Set<Key> seen = new HashSet<>();
         for (Row row : ordered) {
@@ -63,7 +66,7 @@ final class EvaluationArchiveFiles {
                 || node.get("target_stop_order").asInt() != row.key().stopOrder()
                 || node.get("route_version_id").asLong() != batch.routeVersionId()
                 || !Set.of("SETTLED", "SKIPPED", "LOST", "SEAT_MISSING", "QUALITY_EXCLUDED")
-                    .contains(node.get("scoring_state").asString())
+                .contains(node.get("scoring_state").asString())
                 || !node.get("scored_at").isString()) {
                 throw new IllegalArgumentException("원본 열·키·노선·완료 상태가 예약과 다르다");
             }
@@ -90,16 +93,22 @@ final class EvaluationArchiveFiles {
         }
         Manifest manifest = JSON.readValue(bytes, Manifest.class);
         if (manifest == null || !"evaluation-archive-v1".equals(manifest.format())
-            || !reference.batchId().equals(manifest.batchId()) || reference.routeVersionId() != manifest.routeVersionId()
-            || reference.qualityRevision() != manifest.qualityRevision() || reference.rowCount() != manifest.rowCount()
-            || !"evaluations.jsonl".equals(manifest.file()) || manifest.bytes() < 1 || manifest.bytes() > maxBytes
-            || manifest.sha256() == null || !manifest.sha256().matches("[0-9a-f]{64}")) {
+                || !reference.batchId()
+                .equals(manifest.batchId()) || reference.routeVersionId() != manifest.routeVersionId()
+                || reference.qualityRevision() != manifest.qualityRevision()
+                || reference.rowCount() != manifest.rowCount()
+                || !"evaluations.jsonl".equals(manifest.file()) || manifest.bytes() < 1 || manifest.bytes() > maxBytes
+                || manifest.sha256() == null || !manifest.sha256().matches("[0-9a-f]{64}")) {
             throw new IllegalArgumentException("이관 설명 파일의 범위나 크기가 올바르지 않다");
         }
         return manifest;
     }
 
-    static List<Row> decode(Reference reference, byte[] manifestBytes, byte[] data, long maxBytes) {
+    static List<Row> decode(
+        Reference reference,
+        byte[] manifestBytes,
+        byte[] data, long maxBytes
+    ) {
         Manifest manifest = manifest(reference, manifestBytes, maxBytes);
         if (data.length != manifest.bytes() || !digest(data).equals(manifest.sha256())) {
             throw new IllegalArgumentException("보존한 원본의 크기나 검증값이 다르다");
@@ -119,23 +128,30 @@ final class EvaluationArchiveFiles {
             var node = JSON.readTree(lines[i]);
             if (node == null || !node.isObject() || !node.hasNonNull("vehicle_observation_id")
                 || !node.hasNonNull("target_stop_order") || !node.get("vehicle_observation_id").isIntegralNumber()
-                || !node.get("vehicle_observation_id").canConvertToLong() || !node.get("target_stop_order").isIntegralNumber()
+                || !node.get("vehicle_observation_id")
+                .canConvertToLong() || !node.get("target_stop_order")
+                .isIntegralNumber()
                 || !node.get("target_stop_order").canConvertToInt()) {
                 throw new IllegalArgumentException("원본 키가 올바르지 않다");
             }
-            rows.add(new Row(new Key(node.get("vehicle_observation_id").asLong(), node.get("target_stop_order").asInt()),
+            rows.add(new Row(new Key(node.get("vehicle_observation_id")
+                .asLong(), node.get("target_stop_order")
+                .asInt()),
                 lines[i], digest(lines[i].getBytes(StandardCharsets.UTF_8))));
         }
         // 같은 열·중복·정렬·노선 검사를 읽을 때도 적용한다. lease는 파일 내용에 포함되지 않는다.
-        var batch = new EvaluationArchiveBatch(reference.batchId(), reference.routeVersionId(), reference.qualityRevision(),
-            new UUID(0, 0), java.time.Instant.EPOCH, EvaluationArchiveBatch.State.RESERVED, reference.rowCount(), null);
+        var batch =
+            new EvaluationArchiveBatch(reference.batchId(), reference.routeVersionId(), reference.qualityRevision(),
+                new UUID(0, 0), java.time.Instant.EPOCH, EvaluationArchiveBatch.State.RESERVED, reference.rowCount(), null);
         if (!java.util.Arrays.equals(encode(batch, rows, maxBytes).rows(), data)) {
             throw new IllegalArgumentException("원본 파일의 정렬이나 표현이 올바르지 않다");
         }
         return List.copyOf(rows);
     }
 
-    record Encoded(byte[] rows, byte[] manifest) { }
+    record Encoded(byte[] rows, byte[] manifest) {
+    }
     record Manifest(String format, UUID batchId, long routeVersionId, long qualityRevision,
-        int rowCount, String file, long bytes, String sha256) { }
+        int rowCount, String file, long bytes, String sha256) {
+    }
 }

@@ -28,7 +28,9 @@ public final class GbisArrivalSource implements ArrivalSource {
     private final Clock clock;
 
     public GbisArrivalSource(GbisApiCaller caller, ObjectMapper json, Clock clock) {
-        this.caller = caller; this.json = json; this.clock = clock;
+        this.caller = caller;
+        this.json = json;
+        this.clock = clock;
     }
 
     @Override
@@ -123,8 +125,12 @@ public final class GbisArrivalSource implements ArrivalSource {
     private static Integer number(JsonNode node, String field) {
         String value = text(node, field);
         if (value == null) return null;
-        try { return Integer.valueOf(value); }
-        catch (NumberFormatException invalid) { throw new IllegalArgumentException("숫자 필드 미해석"); }
+        try {
+            return Integer.valueOf(value);
+        }
+        catch (NumberFormatException invalid) {
+            throw new IllegalArgumentException("숫자 필드 미해석");
+        }
     }
 
     private static String text(JsonNode node, String field) {

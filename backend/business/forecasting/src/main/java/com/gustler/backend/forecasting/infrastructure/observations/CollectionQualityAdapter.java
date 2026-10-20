@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class CollectionQualityAdapter implements CollectionQualityHook {
     private final TripQualityInvestigationService investigations;
+
     public CollectionQualityAdapter(final TripQualityInvestigationService investigations) {
         this.investigations = investigations;
     }
@@ -18,7 +19,11 @@ public class CollectionQualityAdapter implements CollectionQualityHook {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void observationsStored(final VehicleObservationsStored stored) {
-        investigations.observationsStored(new QualityObservationBatch(stored.batchId(), stored.routeVersionId(), stored.observedAt(),
-            stored.rows().stream().map(row -> new QualityObservationBatch.Row(row.observationId(), row.vehicleId(), row.remainingSeats())).toList()));
+        investigations.observationsStored(
+            new QualityObservationBatch(stored.batchId(), stored.routeVersionId(), stored.observedAt(),
+                stored.rows()
+                    .stream()
+                    .map(row -> new QualityObservationBatch.Row(row.observationId(), row.vehicleId(), row.remainingSeats()))
+                    .toList()));
     }
 }

@@ -9,7 +9,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface DemandStatisticsRebuildStore {
-
     record BatchPosition(Instant at, long id) {
     }
 
@@ -26,8 +25,15 @@ public interface DemandStatisticsRebuildStore {
 
     Optional<BatchPosition> nextGroupEnd(long routeVersionId, ScanWindow window, int groupSize);
 
-    List<Long> groupObservationPage(long routeVersionId, ScanWindow window, RebuildScope scope,
-        long afterObservationId, long observationUntilId, int groupSize, int limit);
+    List<Long> groupObservationPage(
+        long routeVersionId,
+        ScanWindow window,
+        RebuildScope scope,
+        long afterObservationId,
+        long observationUntilId,
+        int groupSize,
+        int limit
+    );
 
     void addRebuildTotals(DemandStatisticsRebuild rebuild, List<Long> observationIds);
 
@@ -35,8 +41,14 @@ public interface DemandStatisticsRebuildStore {
 
     Page copyToCurrentTotals(UUID requestId, long afterTotalId, int limit);
 
-    Page acknowledgeSamples(long routeVersionId, RebuildScope scope, long afterSampleId, long inputUntilId,
-        Instant dataUntil, int limit);
+    Page acknowledgeSamples(
+        long routeVersionId,
+        RebuildScope scope,
+        long afterSampleId,
+        long inputUntilId,
+        Instant dataUntil,
+        int limit
+    );
 
     int cleanRebuildTotals(UUID requestId, int limit);
 }

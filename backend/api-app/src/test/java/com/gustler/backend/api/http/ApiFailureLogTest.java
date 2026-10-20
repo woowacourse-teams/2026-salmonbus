@@ -16,9 +16,12 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.servlet.HandlerMapping;
 
 class ApiFailureLogTest {
-    @Test void 원인과_응답을_연결하되_요청값과_SQL_본문은_기록하지_않는다() {
+    @Test
+    void 원인과_응답을_연결하되_요청값과_SQL_본문은_기록하지_않는다() {
         Logger logger = (Logger) LoggerFactory.getLogger(ApiFailureLog.class);
-        ListAppender<ILoggingEvent> logs = new ListAppender<>(); logs.start(); logger.addAppender(logs);
+        ListAppender<ILoggingEvent> logs = new ListAppender<>();
+        logs.start();
+        logger.addAppender(logs);
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/routes/234000886/board");
         request.setQueryString("serviceKey=private-key");
         request.setAttribute(RequestId.ATTRIBUTE, "test-request-42");
@@ -32,8 +35,11 @@ class ApiFailureLogTest {
             assertThat(logs.list).hasSize(1);
             assertThat(logs.list.getFirst().getFormattedMessage()).contains("event=api_failure", "status=503",
                 "routeId=234000886", "requestId=test-request-42", "rootCause=SQLException", "sqlState=08006",
-                "endpoint=/api/v1/routes/{routeId}/board").doesNotContain("private-key", "private-value");
+            "endpoint=/api/v1/routes/{routeId}/board").doesNotContain("private-key", "private-value");
             assertThat(logs.list.getFirst().getThrowableProxy()).isNull();
-        } finally { RequestContextHolder.resetRequestAttributes(); logger.detachAppender(logs); }
+        } finally {
+            RequestContextHolder.resetRequestAttributes();
+            logger.detachAppender(logs);
+        }
     }
 }

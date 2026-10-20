@@ -32,7 +32,6 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class JdbcVehicleTrajectoryQueryTest {
-
     private static final String SOURCE_ID = "GBIS";
     private static final String ROUTE_204000057 = "204000057";
     private static final String ROUTE_204000121 = "204000121";
@@ -519,14 +518,24 @@ class JdbcVehicleTrajectoryQueryTest {
             .doesNotContain(badStart).hasSize(1);
         assertThat(repository.readTrajectories(later)).hasSize(1);
         assertThat(jdbcClient.sql("SELECT remaining_seats FROM vehicle_observation WHERE id = ?")
-            .param(badStart).query(Integer.class).single()).isEqualTo(44);
-        assertThat(jdbcClient.sql("SELECT quality_revision FROM route_data_quality WHERE route_id=(SELECT route_id FROM route_version WHERE id=?)").param(routeVersionId).query(Long.class).single()).isEqualTo(2);
+                    .param(badStart).query(Integer.class).single()).isEqualTo(44);
+        assertThat(
+            jdbcClient.sql(
+            "SELECT quality_revision FROM route_data_quality WHERE route_id=(SELECT route_id FROM route_version WHERE id=?)")
+                .param(routeVersionId)
+                .query(Long.class)
+                .single()).isEqualTo(2);
 
         // when: 같은 관측 묶음을 다시 판정한다.
         signal(quality, later);
 
         // then: 계산 자료 버전을 중복 증가시키지 않는다.
-        assertThat(jdbcClient.sql("SELECT quality_revision FROM route_data_quality WHERE route_id=(SELECT route_id FROM route_version WHERE id=?)").param(routeVersionId).query(Long.class).single()).isEqualTo(2);
+        assertThat(
+            jdbcClient.sql(
+            "SELECT quality_revision FROM route_data_quality WHERE route_id=(SELECT route_id FROM route_version WHERE id=?)")
+                .param(routeVersionId)
+                .query(Long.class)
+                .single()).isEqualTo(2);
     }
 
     @ParameterizedTest
@@ -579,14 +588,19 @@ class JdbcVehicleTrajectoryQueryTest {
         return new TripQualityInvestigationService(new JdbcTripQualityInvestigationRepository(jdbcClient),
             new JdbcTripQualityStore(jdbcClient),
             new JdbcRouteDataQualityAccess(jdbcClient), new RouteDataQualityChanges(
-                new JdbcRouteDataQualityRepository(jdbcClient), new JdbcDemandStatisticsRebuildRequestStore(jdbcClient)));
+                new JdbcRouteDataQualityRepository(jdbcClient),
+                new JdbcDemandStatisticsRebuildRequestStore(jdbcClient)));
     }
 
     private void signal(TripQualityInvestigationService quality, long batch) {
         var at = jdbcClient.sql("SELECT response_received_at FROM observation_batch WHERE id = ?")
             .param(batch).query(OffsetDateTime.class).single();
-        var rows = jdbcClient.sql("SELECT id, vehicle_id, remaining_seats FROM vehicle_observation WHERE observation_batch_id = ?")
-            .param(batch).query((rs, n) -> new QualityObservationBatch.Row(rs.getLong(1), rs.getString(2), rs.getObject(3, Integer.class))).list();
+        var rows =
+            jdbcClient.sql(
+                "SELECT id, vehicle_id, remaining_seats FROM vehicle_observation WHERE observation_batch_id = ?")
+                .param(batch)
+                .query((rs, n) -> new QualityObservationBatch.Row(rs.getLong(1), rs.getString(2), rs.getObject(3, Integer.class)))
+                .list();
         quality.observationsStored(new QualityObservationBatch(batch, routeVersionId, at.toInstant(), rows));
     }
 
@@ -596,7 +610,9 @@ class JdbcVehicleTrajectoryQueryTest {
                 INSERT INTO route_version_quality_policy(route_version_id,maximum_observation_gap_seconds,observation_gap_evidence)
                 VALUES (?,60,'synthetic test') ON CONFLICT(route_version_id) DO UPDATE
                 SET maximum_observation_gap_seconds=60,observation_gap_evidence='synthetic test'
-                """).param(routeVersionId).update();
+                """)
+            .param(routeVersionId)
+            .update();
     }
 
     private void clearSyntheticMemberships() {
@@ -718,13 +734,13 @@ class JdbcVehicleTrajectoryQueryTest {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
-            .params(
-                batchId, versionId, nextRowNumber(batchId),
-                vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
-                RUNNING_STATE_DEPARTED, remainingSeats, seatUnknownReason, CROWD_LEVEL_3
-            )
-            .query(Long.class)
-            .single());
+                    .params(
+                        batchId, versionId, nextRowNumber(batchId),
+                        vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
+                        RUNNING_STATE_DEPARTED, remainingSeats, seatUnknownReason, CROWD_LEVEL_3
+                    )
+                    .query(Long.class)
+                    .single());
     }
 
     private int nextRowNumber(

@@ -153,7 +153,8 @@ class DemandStatisticsPipelineTest {
         var first = accumulator.apply(routeVersionId, VEHICLE_204000206, 0, Long.MAX_VALUE, SCORED_AT);
         assertThat(first.applied()).isEqualTo(128);
         assertThat(pendingSampleCount()).isEqualTo(1);
-        var second = accumulator.apply(routeVersionId, VEHICLE_204000206, first.nextInputId(), Long.MAX_VALUE, SCORED_AT);
+        var second =
+            accumulator.apply(routeVersionId, VEHICLE_204000206, first.nextInputId(), Long.MAX_VALUE, SCORED_AT);
         assertThat(second.applied()).isEqualTo(1);
         accumulator.apply(routeVersionId, VEHICLE_204000206, 0, Long.MAX_VALUE, SCORED_AT);
 
@@ -174,8 +175,12 @@ class DemandStatisticsPipelineTest {
 
         accumulator.apply(routeVersionId, VEHICLE_204000206, 0, Long.MAX_VALUE, SCORED_AT);
 
-        var sums = jdbcClient.sql("SELECT sample_count, arrival_seats_sum, net_boarding_sum FROM stop_demand_current_total WHERE route_version_id=?")
-            .param(routeVersionId).query((rs, n) -> new long[]{rs.getLong(1), rs.getLong(2), rs.getLong(3)}).single();
+        var sums =
+            jdbcClient.sql(
+                "SELECT sample_count, arrival_seats_sum, net_boarding_sum FROM stop_demand_current_total WHERE route_version_id=?")
+                .param(routeVersionId)
+                .query((rs, n) -> new long[]{rs.getLong(1), rs.getLong(2), rs.getLong(3)})
+                .single();
         assertThat(sums).containsExactly(1, 20, -8);
         assertThat(sums[0] - sums[1] / 20.0).isEqualTo(original.fillRateTotal());
         assertThat((double) sums[2]).isEqualTo(original.netBoardingTotal());
@@ -209,7 +214,8 @@ class DemandStatisticsPipelineTest {
         assertThat(pendingSampleCount()).isEqualTo(1);
         assertThat(jdbcClient.sql("SELECT count(*) FROM stop_demand_rebuild_request WHERE route_version_id=?")
             .param(routeVersionId).query(Integer.class).single()).isEqualTo(1);
-        assertThat(accumulator.apply(routeVersionId, VEHICLE_204000206, 0, Long.MAX_VALUE, SCORED_AT).selected()).isZero();
+        assertThat(accumulator.apply(routeVersionId, VEHICLE_204000206, 0, Long.MAX_VALUE, SCORED_AT)
+            .selected()).isZero();
     }
 
     @Test
@@ -248,7 +254,8 @@ class DemandStatisticsPipelineTest {
             .param(vehicleObservationId).query(Long.class).single();
 
         assertThat(accumulator.apply(routeVersionId, VEHICLE_204000206, 0, id - 1, SCORED_AT).applied()).isZero();
-        assertThat(accumulator.apply(routeVersionId, VEHICLE_204000206, 0, id, SCORED_AT.minusSeconds(1)).applied()).isZero();
+        assertThat(accumulator.apply(routeVersionId, VEHICLE_204000206, 0, id, SCORED_AT.minusSeconds(1))
+            .applied()).isZero();
         assertThat(pendingSampleCount()).isEqualTo(1);
         assertThat(accumulator.apply(routeVersionId, VEHICLE_204000206, 0, id, SCORED_AT).applied()).isEqualTo(1);
     }
@@ -278,8 +285,12 @@ class DemandStatisticsPipelineTest {
             modelDeploymentId, DEMAND_STATISTICS_REVISION, 0.41, 0.38, 12.5, GENERATED_AT)));
         rebuildRequests.request(routeVersionId, RebuildScope.vehicle(VEHICLE_204000206));
         rebuilder.step(routeVersionId, VEHICLE_204000206); // 범위 고정
-        long arrival = jdbcClient.sql("SELECT arrival_observation_id FROM stop_demand_pending_sample WHERE prediction_observation_id=?")
-            .param(vehicleObservationId).query(Long.class).single();
+        long arrival =
+            jdbcClient.sql(
+                "SELECT arrival_observation_id FROM stop_demand_pending_sample WHERE prediction_observation_id=?")
+                .param(vehicleObservationId)
+                .query(Long.class)
+                .single();
         evaluationWriter.complete(List.of(ForecastEvaluation.completed(
             source, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
 
@@ -360,8 +371,12 @@ class DemandStatisticsPipelineTest {
     @Test
     void 큰_묶음을_나눠_처리하고_롤백_후에도_중복되지_않는다() {
         givenStatisticsSample();
-        long arrivalBatch = jdbcClient.sql("SELECT observation_batch_id FROM vehicle_observation WHERE id=(SELECT arrival_observation_id FROM forecast_evaluation WHERE vehicle_observation_id=?)")
-            .param(vehicleObservationId).query(Long.class).single();
+        long arrivalBatch =
+            jdbcClient.sql(
+                "SELECT observation_batch_id FROM vehicle_observation WHERE id=(SELECT arrival_observation_id FROM forecast_evaluation WHERE vehicle_observation_id=?)")
+                .param(vehicleObservationId)
+                .query(Long.class)
+                .single();
         for (int i = 1; i < 260; i++) {
             long source = insertObservation(observationBatchId, "large-" + i, i, PASSED_STOP_ORDER);
             long arrival = insertObservation(arrivalBatch, "large-" + i, i, ARRIVAL_STOP_ORDER);
@@ -386,7 +401,7 @@ class DemandStatisticsPipelineTest {
         finishRebuild("");
         assertRebuiltSamples(260);
         assertThat(jdbcClient.sql("SELECT count(*) FROM stop_demand_rebuild_scan WHERE route_version_id=?")
-            .param(routeVersionId).query(Integer.class).single()).isZero();
+                .param(routeVersionId).query(Integer.class).single()).isZero();
     }
 
     @Test
@@ -462,16 +477,24 @@ class DemandStatisticsPipelineTest {
         addLateSample("global-refresh", 1);
         rebuildRequests.request(routeVersionId, RebuildScope.wholeRoute());
         finishRebuild("");
-        var expected = jdbcClient.sql("SELECT * FROM stop_demand_current_total WHERE route_version_id=? ORDER BY vehicle_id,arrived_hour_start,target_stop_order")
-            .param(routeVersionId).query().listOfRows();
+        var expected =
+            jdbcClient.sql(
+                "SELECT * FROM stop_demand_current_total WHERE route_version_id=? ORDER BY vehicle_id,arrived_hour_start,target_stop_order")
+                .param(routeVersionId)
+                .query()
+                .listOfRows();
 
         assertRebuiltSamples(2);
         assertThat(rebuildRequest(VEHICLE_204000206)).isNotEqualTo(original);
         finishRebuild(VEHICLE_204000206);
 
         assertRebuiltSamples(2);
-        assertThat(jdbcClient.sql("SELECT * FROM stop_demand_current_total WHERE route_version_id=? ORDER BY vehicle_id,arrived_hour_start,target_stop_order")
-            .param(routeVersionId).query().listOfRows()).isEqualTo(expected);
+        assertThat(
+            jdbcClient.sql(
+            "SELECT * FROM stop_demand_current_total WHERE route_version_id=? ORDER BY vehicle_id,arrived_hour_start,target_stop_order")
+                .param(routeVersionId)
+                .query()
+                .listOfRows()).isEqualTo(expected);
     }
 
     @Test
@@ -487,15 +510,17 @@ class DemandStatisticsPipelineTest {
         finishRebuild("");
 
         assertThat(jdbcClient.sql("SELECT count(*) FROM stop_demand_current_total WHERE route_version_id=?")
-            .param(routeVersionId).query(Integer.class).single()).isZero();
+                .param(routeVersionId).query(Integer.class).single()).isZero();
     }
 
     @Test
     void 초기_이관_중에는_기존_정상_통계를_쓰고_완성된_동일_결과로_교체한다() {
         givenStatisticsSample();
-        var expected = StopDemandAggregator.aggregate(statistics.readHourlyTotals(routeVersionId, SCORED_AT), clock);
-        statistics.append(new DemandStatisticsVersion(routeVersionId, DemandStatisticsVersion.CURRENT_CALCULATION_VERSION,
-            1, SCORED_AT, SCORED_AT, expected));
+        var expected =
+            StopDemandAggregator.aggregate(statistics.readHourlyTotals(routeVersionId, SCORED_AT), clock);
+        statistics.append(
+            new DemandStatisticsVersion(routeVersionId, DemandStatisticsVersion.CURRENT_CALCULATION_VERSION,
+                1, SCORED_AT, SCORED_AT, expected));
 
         pipeline.step(routeVersionId);
         assertThat(statistics.readAsOf(routeVersionId, TimeSlot.OTHER,
@@ -528,13 +553,13 @@ class DemandStatisticsPipelineTest {
         finishPipeline();
 
         assertThat(jdbcClient.sql("SELECT sample_count FROM stop_demand_current_total WHERE route_version_id=?")
-            .param(routeVersionId).query(Long.class).single()).isEqualTo(2);
+                .param(routeVersionId).query(Long.class).single()).isEqualTo(2);
         assertThat(jdbcClient.sql("SELECT count(*) FROM stop_demand_pending_sample WHERE route_version_id=?")
-            .param(routeVersionId).query(Integer.class).single()).isEqualTo(1);
+                .param(routeVersionId).query(Integer.class).single()).isEqualTo(1);
         when(clock.instant()).thenReturn(PIPELINE_NOW.plusSeconds(43200));
         finishPipeline();
         assertThat(jdbcClient.sql("SELECT sample_count FROM stop_demand_current_total WHERE route_version_id=?")
-            .param(routeVersionId).query(Long.class).single()).isEqualTo(3);
+                .param(routeVersionId).query(Long.class).single()).isEqualTo(3);
     }
 
     @Test
@@ -551,16 +576,17 @@ class DemandStatisticsPipelineTest {
                 throw new AssertionError("발행 단계에 도달하지 못함");
             }
         }
-        jdbcClient.sql("ALTER TABLE stop_demand_run ADD CONSTRAINT test_reject_completion CHECK(phase<>'DONE')").update();
+        jdbcClient.sql("ALTER TABLE stop_demand_run ADD CONSTRAINT test_reject_completion CHECK(phase<>'DONE')")
+            .update();
         jdbcClient.sql("SAVEPOINT before_publication").update();
 
         assertThatThrownBy(() -> pipeline.step(routeVersionId)).isInstanceOf(DataIntegrityViolationException.class);
         jdbcClient.sql("ROLLBACK TO SAVEPOINT before_publication").update();
 
         assertThat(jdbcClient.sql("SELECT count(*) FROM stop_demand_statistics WHERE route_version_id=?")
-            .param(routeVersionId).query(Integer.class).single()).isZero();
+                .param(routeVersionId).query(Integer.class).single()).isZero();
         assertThat(jdbcClient.sql("SELECT count(*) FROM demand_statistics_version WHERE route_version_id=?")
-            .param(routeVersionId).query(Integer.class).single()).isZero();
+                .param(routeVersionId).query(Integer.class).single()).isZero();
         jdbcClient.sql("ALTER TABLE stop_demand_run DROP CONSTRAINT test_reject_completion").update();
         assertThat(pipeline.step(routeVersionId).status()).isEqualTo(DemandStatisticsPipeline.Step.Status.COMPLETED);
     }
@@ -591,7 +617,8 @@ class DemandStatisticsPipelineTest {
             }
         }
         addStatisticsAt("extra-day-two", 11, OffsetDateTime.parse("2026-08-21T07:10:00+09:00"), 40, 10);
-        var expected = StopDemandAggregator.aggregate(statistics.readHourlyTotals(routeVersionId, PIPELINE_NOW), clock);
+        var expected =
+            StopDemandAggregator.aggregate(statistics.readHourlyTotals(routeVersionId, PIPELINE_NOW), clock);
 
         finishPipeline();
 
@@ -599,12 +626,16 @@ class DemandStatisticsPipelineTest {
             DemandStatisticsVersion.CURRENT_CALCULATION_VERSION, PIPELINE_NOW);
         assertThat(actual.cells()).hasSize(70);
         for (var cell : actual.cells()) {
-            var reference = expected.stream().filter(x -> x.cell().stopOrder() == cell.stopOrder())
-                .findFirst().orElseThrow().cell();
+            var reference = expected.stream()
+                .filter(x -> x.cell().stopOrder() == cell.stopOrder())
+                .findFirst()
+                .orElseThrow()
+                .cell();
             assertThat(cell.sampleCount()).isEqualTo(reference.sampleCount());
             assertThat(cell.dayCount()).isEqualTo(reference.dayCount());
             assertThat(cell.averageFillRate()).isCloseTo(reference.averageFillRate(), Offset.offset(1e-12));
-            assertThat(cell.averageNetBoardingRate()).isCloseTo(reference.averageNetBoardingRate(), Offset.offset(1e-12));
+            assertThat(cell.averageNetBoardingRate()).isCloseTo(reference.averageNetBoardingRate(),
+                Offset.offset(1e-12));
         }
         assertThat(actual.cells().getFirst().averageFillRate()).isCloseTo(0.7375, Offset.offset(1e-12));
     }
@@ -636,7 +667,8 @@ class DemandStatisticsPipelineTest {
                     day == 0 ? 24 : 40, day == 0 ? 6 : 20);
             }
         }
-        var expected = StopDemandAggregator.aggregate(statistics.readHourlyTotals(routeVersionId, PIPELINE_NOW), clock);
+        var expected =
+            StopDemandAggregator.aggregate(statistics.readHourlyTotals(routeVersionId, PIPELINE_NOW), clock);
 
         finishPipelineLeavingLegacyCursors();
 
@@ -644,12 +676,16 @@ class DemandStatisticsPipelineTest {
             DemandStatisticsVersion.CURRENT_CALCULATION_VERSION, PIPELINE_NOW);
         assertThat(actual.cells()).hasSize(70);
         for (var cell : actual.cells()) {
-            var reference = expected.stream().filter(x -> x.cell().stopOrder() == cell.stopOrder())
-                .findFirst().orElseThrow().cell();
+            var reference = expected.stream()
+                .filter(x -> x.cell().stopOrder() == cell.stopOrder())
+                .findFirst()
+                .orElseThrow()
+                .cell();
             assertThat(cell.sampleCount()).isEqualTo(reference.sampleCount());
             assertThat(cell.dayCount()).isEqualTo(reference.dayCount());
             assertThat(cell.averageFillRate()).isCloseTo(reference.averageFillRate(), Offset.offset(1e-12));
-            assertThat(cell.averageNetBoardingRate()).isCloseTo(reference.averageNetBoardingRate(), Offset.offset(1e-12));
+            assertThat(cell.averageNetBoardingRate()).isCloseTo(reference.averageNetBoardingRate(),
+                Offset.offset(1e-12));
         }
     }
 
@@ -667,7 +703,7 @@ class DemandStatisticsPipelineTest {
             SELECT capacity FROM stop_demand_capacity_stage
             WHERE route_version_id=? AND vehicle_id=?
             """).params(routeVersionId, "synthetic-bus")
-            .query(Integer.class).single()).isEqualTo(40);
+                .query(Integer.class).single()).isEqualTo(40);
     }
 
     @Test
@@ -688,10 +724,10 @@ class DemandStatisticsPipelineTest {
             FROM stop_demand_current_total
             WHERE route_version_id=? AND vehicle_id=? AND target_stop_order=?
             """).params(routeVersionId, "synthetic-bus", TARGET_STOP_ORDER)
-            .query((rs, row) -> new long[]{rs.getLong(1), rs.getLong(2), rs.getLong(3)})
-            .single()).containsExactly(1L, 5L, 15L);
+                .query((rs, row) -> new long[]{rs.getLong(1), rs.getLong(2), rs.getLong(3)})
+                .single()).containsExactly(1L, 5L, 15L);
         assertThat(jdbcClient.sql("SELECT status FROM vehicle_one_way_trip WHERE id=?")
-            .param("sal175-trip-b").query(String.class).single()).isEqualTo("ELIGIBLE");
+                .param("sal175-trip-b").query(String.class).single()).isEqualTo("ELIGIBLE");
     }
 
     @Test
@@ -703,7 +739,7 @@ class DemandStatisticsPipelineTest {
             SELECT capacity FROM stop_demand_capacity_stage
             WHERE route_version_id=? AND vehicle_id=?
             """).params(routeVersionId, "synthetic-bus")
-            .query(Integer.class).single()).isEqualTo(40);
+                .query(Integer.class).single()).isEqualTo(40);
 
         // when
         excludeComparisonTrip("sal175-trip-a");
@@ -714,7 +750,7 @@ class DemandStatisticsPipelineTest {
             SELECT capacity FROM stop_demand_capacity_stage
             WHERE route_version_id=? AND vehicle_id=?
             """).params(routeVersionId, "synthetic-bus")
-            .query(Integer.class).single()).isEqualTo(20);
+                .query(Integer.class).single()).isEqualTo(20);
         assertPublishedComparisonCell(1, 0.75, 0.75);
     }
 
@@ -725,7 +761,10 @@ class DemandStatisticsPipelineTest {
             OffsetDateTime.parse("2026-08-20T07:35:00+09:00"), 20, 5);
     }
 
-    private void addComparisonTrip(String tripId, OffsetDateTime at, int before, int after) {
+    private void addComparisonTrip(
+        String tripId,
+        OffsetDateTime at, int before, int after
+    ) {
         long sourceBatch = insertObservationBatch(tripId + "-source", at.minusSeconds(15));
         long source = insertObservation(sourceBatch, "synthetic-bus", 0, PASSED_STOP_ORDER);
         long arrivalBatch = insertObservationBatch(tripId + "-arrival", at);
@@ -754,7 +793,7 @@ class DemandStatisticsPipelineTest {
 
     private void excludeComparisonTrip(String tripId) {
         assertThat(jdbcClient.sql("UPDATE vehicle_one_way_trip SET status='EXCLUDED' WHERE id=?")
-            .param(tripId).update()).isEqualTo(1);
+                .param(tripId).update()).isEqualTo(1);
         changeEligibility();
         rebuildRequests.request(routeVersionId, RebuildScope.vehicle("synthetic-bus"));
     }
@@ -802,8 +841,10 @@ class DemandStatisticsPipelineTest {
                 .params(routeVersionId, target).update();
         }
         if (excludedReason.equals("missing_seats")) {
-            jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats=NULL, seat_unknown_reason='NOT_REPORTED' WHERE id=?")
-                .param(source).update();
+            jdbcClient.sql(
+            "UPDATE vehicle_observation SET remaining_seats=NULL, seat_unknown_reason='NOT_REPORTED' WHERE id=?")
+                .param(source)
+                .update();
         }
         evaluationWriter.complete(List.of(ForecastEvaluation.completed(source, target,
             new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
@@ -815,23 +856,30 @@ class DemandStatisticsPipelineTest {
             FROM stop_demand_current_total WHERE route_version_id=?
             ORDER BY vehicle_id, arrived_hour_start, target_stop_order
             """).param(routeVersionId).query((rs, n) -> List.<Object>of(rs.getString(1),
-                rs.getObject(2, OffsetDateTime.class).toInstant(), rs.getInt(3), rs.getLong(4), rs.getLong(5),
-                rs.getLong(6))).list();
+            rs.getObject(2, OffsetDateTime.class).toInstant(), rs.getInt(3), rs.getLong(4), rs.getLong(5),
+            rs.getLong(6))).list();
     }
 
     private void assertRebuiltSamples(long expected) {
         assertThat(jdbcClient.sql("SELECT sum(sample_count) FROM stop_demand_current_total WHERE route_version_id=?")
-            .param(routeVersionId).query(Long.class).single()).isEqualTo(expected);
+                .param(routeVersionId).query(Long.class).single()).isEqualTo(expected);
     }
 
     private UUID rebuildRequest(String vehicle) {
-        return jdbcClient.sql("SELECT request_id FROM stop_demand_rebuild_request WHERE route_version_id=? AND vehicle_id=?")
-            .params(routeVersionId, vehicle).query(UUID.class).single();
+        return jdbcClient.sql(
+        "SELECT request_id FROM stop_demand_rebuild_request WHERE route_version_id=? AND vehicle_id=?")
+            .params(routeVersionId, vehicle)
+            .query(UUID.class)
+            .single();
     }
 
     private String rebuildPhase(String vehicle) {
-        return jdbcClient.sql("SELECT phase FROM stop_demand_rebuild_progress WHERE route_version_id=? AND vehicle_id=?")
-            .params(routeVersionId, vehicle).query(String.class).optional().orElse("");
+        return jdbcClient.sql(
+        "SELECT phase FROM stop_demand_rebuild_progress WHERE route_version_id=? AND vehicle_id=?")
+            .params(routeVersionId, vehicle)
+            .query(String.class)
+            .optional()
+            .orElse("");
     }
 
     private void advanceRebuildTo(String vehicle, String phase) {
@@ -862,7 +910,10 @@ class DemandStatisticsPipelineTest {
         throw new AssertionError("통계가 200번의 작은 처리 안에 완료되지 않음");
     }
 
-    private void addStatisticsAt(String key, int stop, OffsetDateTime at, int before, int after) {
+    private void addStatisticsAt(
+        String key, int stop,
+        OffsetDateTime at, int before, int after
+    ) {
         long sourceBatch = insertObservationBatch(key + "-source", at.minusSeconds(15));
         long source = insertObservation(sourceBatch, "synthetic-bus", 0, stop - 1);
         long arrivalBatch = insertObservationBatch(key + "-arrival", at);
@@ -880,8 +931,12 @@ class DemandStatisticsPipelineTest {
         long source = insertObservation(batch, VEHICLE_204000206, 0, PASSED_STOP_ORDER);
         saveForecasts(List.of(new SeatForecast(source, routeVersionId, TARGET_STOP_ORDER, 1,
             modelDeploymentId, DEMAND_STATISTICS_REVISION, 0.41, 0.38, 12.5, GENERATED_AT)));
-        long arrival = jdbcClient.sql("SELECT arrival_observation_id FROM forecast_evaluation WHERE vehicle_observation_id=? AND target_stop_order=?")
-            .params(vehicleObservationId, TARGET_STOP_ORDER).query(Long.class).single();
+        long arrival =
+            jdbcClient.sql(
+                "SELECT arrival_observation_id FROM forecast_evaluation WHERE vehicle_observation_id=? AND target_stop_order=?")
+                .params(vehicleObservationId, TARGET_STOP_ORDER)
+                .query(Long.class)
+                .single();
         evaluationWriter.complete(List.of(ForecastEvaluation.completed(source, TARGET_STOP_ORDER,
             new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
     }
@@ -1017,13 +1072,13 @@ class DemandStatisticsPipelineTest {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
-            .params(
-                batchId, routeVersionId, sourceRowNumber,
-                vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
-                RUNNING_STATE_DEPARTED, SEATS_LEFT
-            )
-            .query(Long.class)
-            .single());
+                    .params(
+                        batchId, routeVersionId, sourceRowNumber,
+                        vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
+                        RUNNING_STATE_DEPARTED, SEATS_LEFT
+                    )
+                    .query(Long.class)
+                    .single());
     }
 
     private static String stopIdOf(

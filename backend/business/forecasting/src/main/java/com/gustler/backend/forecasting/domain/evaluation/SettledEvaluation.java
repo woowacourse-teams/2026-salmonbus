@@ -23,14 +23,21 @@ public record SettledEvaluation(
     boolean targetBoardingAllowed,
     EvaluationDiagnostics diagnostics
 ) {
-
     /** 기존 도메인 호출자는 관측용 부가 정보를 요구하지 않는다. */
     public SettledEvaluation(long routeId, long modelDeploymentId, long routeVersionId, long vehicleObservationId,
-        int targetStopOrder, int stopsToTarget, double rawFullChance, ScoringState state,
-        Long arrivalObservationId, Integer seatsOnArrival, Instant arrivedAt, Instant scoredAt,
-        boolean usableForCalibration, String predictionVehicleId, Integer predictionRemainingSeats,
-        boolean targetBoardingAllowed) {
-        this(routeId, modelDeploymentId, routeVersionId, vehicleObservationId, targetStopOrder, stopsToTarget, rawFullChance,
+        int targetStopOrder, int stopsToTarget, double rawFullChance,
+        ScoringState state,
+        Long arrivalObservationId,
+        Integer seatsOnArrival,
+        Instant arrivedAt,
+        Instant scoredAt,
+        boolean usableForCalibration,
+        String predictionVehicleId,
+        Integer predictionRemainingSeats,
+        boolean targetBoardingAllowed
+    ) {
+        this(routeId, modelDeploymentId, routeVersionId, vehicleObservationId, targetStopOrder, stopsToTarget,
+            rawFullChance,
             state, arrivalObservationId, seatsOnArrival, arrivedAt, scoredAt, usableForCalibration,
             predictionVehicleId, predictionRemainingSeats, targetBoardingAllowed, null);
     }
@@ -47,6 +54,7 @@ public record SettledEvaluation(
         if (!state.scorable() || !usableForCalibration) {
             return Optional.empty();
         }
-        return Optional.of(new SettledForecast(routeId, modelDeploymentId, stopsToTarget, rawFullChance, arrivedAt, seatsOnArrival));
+        return Optional.of(
+            new SettledForecast(routeId, modelDeploymentId, stopsToTarget, rawFullChance, arrivedAt, seatsOnArrival));
     }
 }

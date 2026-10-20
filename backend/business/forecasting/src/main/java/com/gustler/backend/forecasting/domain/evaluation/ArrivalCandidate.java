@@ -1,7 +1,6 @@
 package com.gustler.backend.forecasting.domain.evaluation;
 
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
-
 import java.time.Instant;
 
 /**
@@ -15,7 +14,6 @@ public record ArrivalCandidate(
     Long qualityDirection,
     boolean qualityAssessed
 ) {
-
     public ArrivalCandidate(long observationId, ObservedVehicle vehicle) {
         this(observationId, vehicle, null, true);
     }

@@ -1,5 +1,4 @@
 package com.gustler.backend.api.vehicle.controller;
-
 import static org.hamcrest.Matchers.aMapWithSize;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -35,7 +34,6 @@ import org.springframework.web.context.WebApplicationContext;
 @Transactional
 @Import(LiveVehicleApiContractTest.FixedClockConfig.class)
 class LiveVehicleApiContractTest {
-
     private static final String ROUTE_ID = "204000057";
     private static final OffsetDateTime NOW = OffsetDateTime.parse(
         "2026-08-27T12:00:00+09:00"
@@ -74,8 +72,11 @@ class LiveVehicleApiContractTest {
         int seats = reason.equals("above_range") ? 82 : 40;
         insertObservation(batch, route, 0, "test-bus", 5, "205000005", 2, seats);
         insertObservation(batch, route, 1, "normal-bus", 5, "205000005", 2, 12);
-        long observation = jdbcClient.sql("SELECT id FROM vehicle_observation WHERE observation_batch_id=? AND source_row_number=0")
-            .param(batch).query(Long.class).single();
+        long observation =
+            jdbcClient.sql("SELECT id FROM vehicle_observation WHERE observation_batch_id=? AND source_row_number=0")
+                .param(batch)
+                .query(Long.class)
+                .single();
         if (reason.equals("excluded_trip") || reason.equals("unconfirmed_trip")) {
             ConfirmedTripFixture.include(jdbcClient, observation);
             jdbcClient.sql("UPDATE vehicle_one_way_trip SET status=? WHERE start_observation_id=?")
@@ -108,8 +109,11 @@ class LiveVehicleApiContractTest {
         insertObservationWithUnknownSeats(batch, route, 0, "test-bus", 5, "205000005", 2, reason);
         jdbcClient.sql("INSERT INTO trip_quality_rebuild(route_version_id, vehicle_id, until_at) VALUES (?, ?, ?)")
             .params(route.routeVersionId(), "test-bus", NOW).update();
-        assertThat(jdbcClient.sql("SELECT forecast_eligible FROM forecast_observation_quality WHERE observation_batch_id=?")
-            .param(batch).query(Boolean.class).single()).isFalse();
+        assertThat(
+            jdbcClient.sql("SELECT forecast_eligible FROM forecast_observation_quality WHERE observation_batch_id=?")
+                .param(batch)
+                .query(Boolean.class)
+                .single()).isFalse();
 
         mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID))
             .andExpect(status().isOk())
@@ -501,7 +505,7 @@ class LiveVehicleApiContractTest {
                 """)
             .params(
                 currentRoute.routeId(),
-                "6".repeat(64),
+                    "6".repeat(64),
                 NOW.minusDays(2),
                 NOW.minusDays(1)
             )
@@ -712,7 +716,6 @@ class LiveVehicleApiContractTest {
 
     @TestConfiguration(proxyBeanMethods = false)
     static class FixedClockConfig {
-
         @Bean
         @Primary
         Clock fixedVehicleClock() {

@@ -14,7 +14,9 @@ public record RouteStop(
     RouteDirection direction
 ) {
 
-    public RouteStop(long routeVersionId, int stopOrder, String stopId, boolean boardingAllowed) {
+    public RouteStop(long routeVersionId, int stopOrder,
+        String stopId, boolean boardingAllowed
+    ) {
         this(routeVersionId, stopOrder, stopId, boardingAllowed, RouteDirection.UNKNOWN);
     }
 

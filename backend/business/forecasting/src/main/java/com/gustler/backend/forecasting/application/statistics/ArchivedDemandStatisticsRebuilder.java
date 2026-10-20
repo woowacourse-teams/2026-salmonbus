@@ -38,10 +38,17 @@ public class ArchivedDemandStatisticsRebuilder {
     private final ObjectProvider<StatisticsArchiveReader> readers;
     private final TransactionTemplate transaction;
 
-    public ArchivedDemandStatisticsRebuilder(DemandStatisticsRebuildRepository rebuilds,
-        DemandStatisticsRebuildRequestStore requests, DemandStatisticsRebuildStore pages, DemandStatisticsStore limits,
-        DemandStatisticsRunRepository runs, RouteDataQualityAccess quality, ArchivedDemandStatisticsStore archives,
-        ObjectProvider<StatisticsArchiveReader> readers, PlatformTransactionManager transactions) {
+    public ArchivedDemandStatisticsRebuilder(
+        DemandStatisticsRebuildRepository rebuilds,
+        DemandStatisticsRebuildRequestStore requests,
+        DemandStatisticsRebuildStore pages,
+        DemandStatisticsStore limits,
+        DemandStatisticsRunRepository runs,
+        RouteDataQualityAccess quality,
+        ArchivedDemandStatisticsStore archives,
+        ObjectProvider<StatisticsArchiveReader> readers,
+        PlatformTransactionManager transactions
+    ) {
         this.rebuilds = rebuilds;
         this.requests = requests;
         this.pages = pages;
@@ -67,11 +74,17 @@ public class ArchivedDemandStatisticsRebuilder {
 
         Map<Key, Row> selected = new LinkedHashMap<>();
         long bytes = 0;
-        for (var reference : prepared.missing().stream().map(Missing::reference).distinct().toList()) {
+        for (var reference : prepared.missing()
+            .stream()
+            .map(Missing::reference)
+            .distinct()
+            .toList()) {
             List<Row> rows = reader.read(reference);
             for (Missing missing : prepared.missing()) {
                 if (!missing.reference().equals(reference)) continue;
-                List<Row> matches = rows.stream().filter(row -> row.key().equals(missing.key())).toList();
+                List<Row> matches = rows.stream()
+                    .filter(row -> row.key().equals(missing.key()))
+                    .toList();
                 if (matches.size() != 1 || !matches.getFirst().sha256().equals(missing.originalSha256())) {
                     throw new IllegalStateException("이관 파일에 예약한 정산 원본이 없거나 달라졌다");
                 }
@@ -82,7 +95,8 @@ public class ArchivedDemandStatisticsRebuilder {
                 }
             }
         }
-        return Optional.of(Boolean.TRUE.equals(transaction.execute(status -> apply(prepared, List.copyOf(selected.values())))));
+        return Optional.of(
+            Boolean.TRUE.equals(transaction.execute(status -> apply(prepared, List.copyOf(selected.values())))));
     }
 
     private Prepared prepare(long route) {
@@ -122,7 +136,7 @@ public class ArchivedDemandStatisticsRebuilder {
         long revision = quality.lock(route);
         if (revision != prepared.currentQuality() || investigationPending(route, rebuild.scope())) return false;
         if (!requests.next(route).equals(Optional.of(rebuild.scope()))
-            || !requests.current(route, rebuild.scope()).equals(Optional.of(rebuild.requestId()))) return false;
+                || !requests.current(route, rebuild.scope()).equals(Optional.of(rebuild.requestId()))) return false;
         var current = rebuilds.find(route, rebuild.scope());
         if (current.isEmpty() || !prepared.snapshot().equals(Snapshot.of(current.get()))) return false;
         if (!archives.missing(route, prepared.observations()).equals(prepared.missing())) return false;
@@ -136,7 +150,10 @@ public class ArchivedDemandStatisticsRebuilder {
         if (rebuild.scansByObservationId()) rebuild.scannedObservations(prepared.observations());
         else rebuild.scannedGroup(prepared.observations());
         rebuilds.save(rebuild);
-        runs.find(route).ifPresent(run -> { run.markStale(); runs.save(run); });
+        runs.find(route).ifPresent(run -> {
+            run.markStale();
+            runs.save(run);
+        });
         return true;
     }
 
@@ -146,13 +163,16 @@ public class ArchivedDemandStatisticsRebuilder {
     }
 
     private record Prepared(Snapshot snapshot, DemandStatisticsRebuild opened, long currentQuality,
-        List<Long> observations, List<Missing> missing) { }
+        List<Long> observations, List<Missing> missing) {
+    }
 
     private record Snapshot(long route, RebuildScope scope, UUID request, long quality, Instant until, long inputUntil,
         long observationUntil, long cursor, DemandStatisticsRebuild.Phase phase, DemandStatisticsRebuild.ScanWindow scan) {
         static Snapshot of(DemandStatisticsRebuild rebuild) {
-            return new Snapshot(rebuild.routeVersionId(), rebuild.scope(), rebuild.requestId(), rebuild.qualityRevision(),
-                rebuild.dataUntil(), rebuild.inputUntilId(), rebuild.observationUntilId(), rebuild.cursorId(), rebuild.phase(),
+            return new Snapshot(rebuild.routeVersionId(), rebuild.scope(), rebuild.requestId(),
+                rebuild.qualityRevision(),
+                rebuild.dataUntil(), rebuild.inputUntilId(), rebuild.observationUntilId(), rebuild.cursorId(),
+                rebuild.phase(),
                 rebuild.scan().orElse(null));
         }
     }

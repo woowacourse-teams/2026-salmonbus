@@ -8,7 +8,6 @@ public record ForecastModel(
     String releaseId,
     OffsetDateTime trainedThrough
 ) {
-
     public ForecastModel {
         Objects.requireNonNull(releaseId, "releaseId는 null일 수 없습니다.");
         Objects.requireNonNull(trainedThrough, "trainedThrough는 null일 수 없습니다.");

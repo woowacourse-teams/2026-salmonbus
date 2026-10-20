@@ -2,6 +2,7 @@ package com.gustler.backend.forecasting.domain.model;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -38,7 +39,6 @@ record ReferenceParityCase(
     int anchorSeats,
     double[] expectedProbabilities
 ) {
-
     private static final String FIXTURE = "/seat-distribution/serving-parity.json";
 
     static double[] relativeEdges() {

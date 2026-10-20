@@ -19,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 public class LiveVehicleQueryService {
-
     private static final Logger log = LoggerFactory.getLogger(LiveVehicleQueryService.class);
 
     private final VehicleQueryRepository vehicleQueryRepository;
@@ -102,8 +101,8 @@ public class LiveVehicleQueryService {
         OffsetDateTime staleAt
     ) {
         if (!snapshot.latestOutcome().isNormal()
-            || snapshot.latestBatchId() == null
-            || staleAt == null) {
+                || snapshot.latestBatchId() == null
+                || staleAt == null) {
             return false;
         }
         return !freshnessPolicy.isStale(staleAt);

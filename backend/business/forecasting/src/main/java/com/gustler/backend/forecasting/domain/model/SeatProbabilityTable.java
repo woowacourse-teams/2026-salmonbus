@@ -12,7 +12,6 @@ import java.util.Arrays;
  * <b>0석 확률은 정의상 만석 확률과 같다.</b>
  */
 final class SeatProbabilityTable {
-
     private SeatProbabilityTable() {
     }
 

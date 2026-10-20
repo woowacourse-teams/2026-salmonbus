@@ -30,7 +30,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 @RequiredArgsConstructor
 public class JpaBoardQueryRepository implements BoardQueryRepository {
-
     private static final Pageable FIRST_RESULT = PageRequest.of(0, 1);
 
     private final Clock clock;

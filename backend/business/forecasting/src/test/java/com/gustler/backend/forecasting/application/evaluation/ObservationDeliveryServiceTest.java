@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
-
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationQuery;
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
@@ -219,7 +218,8 @@ class ObservationDeliveryServiceTest {
     }
 
     private ObservationDeliveryService memory(int capacity) {
-        return new ObservationDeliveryService(source, Clock.fixed(NOW, ZoneOffset.UTC), capacity, Duration.ofMinutes(30));
+        return new ObservationDeliveryService(source, Clock.fixed(NOW, ZoneOffset.UTC), capacity,
+            Duration.ofMinutes(30));
     }
 
     private List<ArrivalCandidate> read(ObservationDeliveryService.Round round, long revision) {

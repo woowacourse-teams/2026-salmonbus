@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import org.junit.jupiter.api.Test;
 
 class SameDayFullOutcomesTest {
-
     @Test
     void 실제_만석_수가_도착이_확인된_예보_수보다_많으면_만들어지지_않는다() {
         // when & then

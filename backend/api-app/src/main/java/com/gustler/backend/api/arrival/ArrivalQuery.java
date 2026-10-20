@@ -14,6 +14,8 @@ public record ArrivalQuery(String stationId, String routeId, Long referenceVersi
     }
 
     public static final class Failure extends ApiException {
-        public Failure(ErrorCode code) { super(code); }
+        public Failure(ErrorCode code) {
+            super(code);
+        }
     }
 }

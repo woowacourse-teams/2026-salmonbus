@@ -8,7 +8,6 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
-
 import com.gustler.backend.gbis.api.GbisLocationResult.DailyQuotaExceeded;
 import com.gustler.backend.gbis.api.GbisLocationResult.GatewayRejected;
 import com.gustler.backend.gbis.api.GbisLocationResult.GbisSystemError;
@@ -31,7 +30,6 @@ import org.springframework.web.client.RestClient;
 import tools.jackson.databind.ObjectMapper;
 
 class GbisLocationSourceTest {
-
     private static final String BASE_URL = "https://gbis.test";
     private static final String SERVICE_KEY = "fake-service-key-for-test";
     private static final String SERVICE_KEY_B = "fake-service-key-b-for-test";

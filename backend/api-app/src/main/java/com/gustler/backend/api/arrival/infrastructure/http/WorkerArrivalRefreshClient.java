@@ -8,7 +8,6 @@ import org.springframework.web.client.RestClient;
 
 /** 기본은 빠른 접수 응답이며, 요청한 경우에만 수집 완료를 제한 시간 동안 기다린다. */
 public final class WorkerArrivalRefreshClient implements ArrivalRefreshGateway {
-
     private final RestClient rest;
     private final RestClient waitingRest;
     private final String token;
@@ -18,7 +17,12 @@ public final class WorkerArrivalRefreshClient implements ArrivalRefreshGateway {
         this(rest, rest, token, clock);
     }
 
-    public WorkerArrivalRefreshClient(RestClient rest, RestClient waitingRest, String token, Clock clock) {
+    public WorkerArrivalRefreshClient(
+        RestClient rest,
+        RestClient waitingRest,
+        String token,
+        Clock clock
+    ) {
         this.rest = rest;
         this.waitingRest = waitingRest;
         this.token = token;
@@ -34,7 +38,9 @@ public final class WorkerArrivalRefreshClient implements ArrivalRefreshGateway {
     public ArrivalRefresh request(String stationId, Duration maximumWait) {
         try {
             RestClient selected = maximumWait.isZero() ? rest : waitingRest;
-            var request = selected.post().uri("/internal/arrivals/refresh").header("X-Arrival-Token", token);
+            var request = selected.post()
+                .uri("/internal/arrivals/refresh")
+                .header("X-Arrival-Token", token);
             if (!maximumWait.isZero()) request.header(ArrivalRefresh.WAIT_HEADER, Long.toString(maximumWait.toMillis()));
             ArrivalRefresh reply = request.body(new ArrivalRefresh.Request(stationId))
                 .retrieve().body(ArrivalRefresh.class);

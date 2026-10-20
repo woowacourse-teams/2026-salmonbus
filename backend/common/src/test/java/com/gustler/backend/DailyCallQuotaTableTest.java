@@ -14,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 @IntegrationTest
 @Transactional
 class DailyCallQuotaTableTest {
-
     private static final String PROVIDER_GBIS = "GBIS";
     private static final String API_SERVICE_BUS_LOCATION = "BUS_LOCATION";
     private static final LocalDate KST_DATE = LocalDate.of(2026, 8, 28);

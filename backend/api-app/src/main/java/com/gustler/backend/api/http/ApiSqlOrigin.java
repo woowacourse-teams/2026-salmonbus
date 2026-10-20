@@ -19,11 +19,13 @@ public class ApiSqlOrigin implements HibernatePropertiesCustomizer, StatementIns
         "\\A(?:\\s|/\\*.*?\\*/|--[^\\r\\n]*(?:\\r?\\n|$))*(select|insert|update|delete|with)\\b",
         Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
-    @Override public void customize(Map<String, Object> properties) {
+    @Override
+    public void customize(Map<String, Object> properties) {
         properties.put("hibernate.session_factory.statement_inspector", this);
     }
 
-    @Override public String inspect(String sql) {
+    @Override
+    public String inspect(String sql) {
         Object pattern = RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes a
             ? a.getRequest().getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE) : null;
         String origin = switch (pattern == null ? "" : pattern.toString()) {
@@ -34,7 +36,9 @@ public class ApiSqlOrigin implements HibernatePropertiesCustomizer, StatementIns
             default -> "api.other";
         };
         var start = STATEMENT_START.matcher(sql);
-        if (!start.find()) { return sql; }
+        if (!start.find()) {
+            return sql;
+        }
         int keywordEnd = start.end(1);
         return sql.substring(0, keywordEnd) + " /* salmonbus:" + origin + " */" + sql.substring(keywordEnd);
     }

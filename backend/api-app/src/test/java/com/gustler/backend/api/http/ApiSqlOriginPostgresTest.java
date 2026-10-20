@@ -19,7 +19,8 @@ class ApiSqlOriginPostgresTest {
         .withCommand("postgres", "-c", "shared_preload_libraries=pg_stat_statements",
             "-c", "shared_buffers=16MB");
 
-    @BeforeEach void prepare() throws Exception {
+    @BeforeEach
+    void prepare() throws Exception {
         execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements");
         execute("CREATE TABLE IF NOT EXISTS origin_check(id int)");
         execute("TRUNCATE origin_check");
@@ -27,7 +28,8 @@ class ApiSqlOriginPostgresTest {
         execute("SELECT pg_stat_statements_reset()");
     }
 
-    @Test void PostgreSQL18은_SQL_맨_앞_주석을_통계에서_제외한다() throws Exception {
+    @Test
+    void PostgreSQL18은_SQL_맨_앞_주석을_통계에서_제외한다() throws Exception {
         execute("/* salmonbus:api.other */ SELECT id FROM origin_check");
         assertThat(storedQuery()).doesNotContain("salmonbus:");
     }
@@ -47,7 +49,7 @@ class ApiSqlOriginPostgresTest {
 
     private static void execute(String sql) throws Exception {
         try (var connection = DriverManager.getConnection(POSTGRES.getJdbcUrl(),
-                POSTGRES.getUsername(), POSTGRES.getPassword());
+            POSTGRES.getUsername(), POSTGRES.getPassword());
              var statement = connection.createStatement()) {
             statement.execute(sql);
         }
@@ -55,10 +57,10 @@ class ApiSqlOriginPostgresTest {
 
     private static String storedQuery() throws Exception {
         try (var connection = DriverManager.getConnection(POSTGRES.getJdbcUrl(),
-                POSTGRES.getUsername(), POSTGRES.getPassword());
+            POSTGRES.getUsername(), POSTGRES.getPassword());
              var statement = connection.createStatement();
              var rows = statement.executeQuery(
-                 "SELECT query FROM pg_stat_statements WHERE query LIKE '%origin_check%' AND toplevel")) {
+                "SELECT query FROM pg_stat_statements WHERE query LIKE '%origin_check%' AND toplevel")) {
             assertThat(rows.next()).isTrue();
             String sql = rows.getString(1);
             assertThat(rows.next()).isFalse();

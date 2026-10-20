@@ -4,7 +4,6 @@ import com.gustler.backend.observations.api.ObservationDeliveryHook;
 import com.gustler.backend.worker.scheduling.ArrivalLabelJob;
 import com.gustler.backend.worker.scheduling.ForecastTrigger;
 import com.gustler.backend.worker.scheduling.TripQualityInvestigationJob;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.support.IntegrationTest;
@@ -63,8 +62,11 @@ class ForecastScheduleConfigTest {
     @Test
     void 수집을_꺼도_예보를_켜면_이상_차량의_편도_조사를_등록한다() {
         // when
-        List<String> registeredTasks = applicationContext.getBeansOfType(ScheduledTaskHolder.class).values().stream()
-            .flatMap(holder -> holder.getScheduledTasks().stream())
+        List<String> registeredTasks = applicationContext.getBeansOfType(ScheduledTaskHolder.class)
+            .values()
+            .stream()
+            .flatMap(holder -> holder.getScheduledTasks()
+                .stream())
             .map(scheduled -> scheduled.getTask().toString())
             .toList();
 
@@ -75,8 +77,11 @@ class ForecastScheduleConfigTest {
     @Test
     void 예보_스위치를_켜면_30초_회차를_등록하고_관측_저장_이벤트를_받는다() {
         // when
-        List<String> registeredTasks = applicationContext.getBeansOfType(ScheduledTaskHolder.class).values().stream()
-            .flatMap(holder -> holder.getScheduledTasks().stream())
+        List<String> registeredTasks = applicationContext.getBeansOfType(ScheduledTaskHolder.class)
+            .values()
+            .stream()
+            .flatMap(holder -> holder.getScheduledTasks()
+                .stream())
             .map(scheduled -> scheduled.getTask().toString())
             .toList();
 

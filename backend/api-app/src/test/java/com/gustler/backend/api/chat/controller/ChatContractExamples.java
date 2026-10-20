@@ -8,7 +8,6 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 final class ChatContractExamples {
-
     private static final String PROPERTY = "chat.contract.examples";
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
     private static final JsonNode ROOT = load();

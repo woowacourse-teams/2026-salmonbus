@@ -6,7 +6,6 @@ public record HeadwayRange(
     int minMinutes,
     int maxMinutes
 ) {
-
     private static final int SHORTEST_MINUTES = 1;
     private static final int LONGEST_MINUTES = 1440;
 

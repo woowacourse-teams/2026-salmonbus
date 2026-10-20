@@ -6,7 +6,6 @@ import java.net.ServerSocket;
 import java.net.Socket;
 
 final class LoopbackRelay implements AutoCloseable {
-
     private final ServerSocket server;
     private final String targetHost;
     private final int targetPort;

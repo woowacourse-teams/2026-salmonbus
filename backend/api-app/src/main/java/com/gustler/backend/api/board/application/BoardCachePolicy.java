@@ -9,7 +9,6 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class BoardCachePolicy {
-
     private static final Duration DENSE_HOUR_MAX_AGE = Duration.ofSeconds(15);
     private static final Duration REGULAR_HOUR_MAX_AGE = Duration.ofSeconds(20);
     private static final Duration OVERNIGHT_MAX_AGE = Duration.ofSeconds(600);

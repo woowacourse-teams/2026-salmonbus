@@ -8,7 +8,8 @@ import java.util.UUID;
 public interface StatisticsArchiveReader {
     List<Row> read(Reference reference);
 
-    record Key(long observationId, int stopOrder) { }
+    record Key(long observationId, int stopOrder) {
+    }
     record Row(Key key, String originalJson, String sha256) {
         public Row {
             Objects.requireNonNull(key);

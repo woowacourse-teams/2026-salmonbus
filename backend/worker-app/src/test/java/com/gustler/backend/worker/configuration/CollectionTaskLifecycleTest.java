@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-
 import com.gustler.backend.worker.scheduling.AdaptiveCollectionTrigger;
 import com.gustler.backend.worker.scheduling.CollectionScheduler;
 import java.time.Clock;
@@ -31,7 +30,8 @@ class CollectionTaskLifecycleTest {
             context.registerBean(CollectionProperties.class, () -> new CollectionProperties(true, List.of()));
             context.registerBean(CollectionScheduler.class, () -> mock(CollectionScheduler.class));
             context.registerBean(Clock.class, Clock::systemUTC);
-            context.registerBean(GbisProperties.class, () -> new GbisProperties("https://example.invalid", "fixture", 10000));
+            context.registerBean(GbisProperties.class,
+                () -> new GbisProperties("https://example.invalid", "fixture", 10000));
             context.registerBean("collectionTaskScheduler", TaskScheduler.class, () -> scheduler);
             context.register(CollectionConfig.ScheduledCollection.class);
             context.refresh();

@@ -8,7 +8,6 @@ import org.testcontainers.containers.MongoDBContainer;
 import org.testcontainers.utility.MountableFile;
 
 public final class ChatMongoContainer extends MongoDBContainer {
-
     private static final String IMAGE = "mongo:8.0";
     private static final String INIT_SCRIPT_PROPERTY = "chat.init.script";
     private static final String INIT_SCRIPT_IN_CONTAINER = "/tmp/init-chat-db.js";

@@ -26,10 +26,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 class ObservationDeliveryRecoveryTest {
     private static final Instant NOW = Instant.parse("2026-10-12T00:00:00Z");
-    @Autowired JdbcClient jdbc;
-    @Autowired JdbcArrivalObservationQuery query;
-    @Autowired JdbcRecentObservationBatches batches;
-    @Autowired RouteDataQualityAccess quality;
+    @Autowired
+    JdbcClient jdbc;
+    @Autowired
+    JdbcArrivalObservationQuery query;
+    @Autowired
+    JdbcRecentObservationBatches batches;
+    @Autowired
+    RouteDataQualityAccess quality;
     private long version;
     private long batch;
     private final List<ObservationDeliveryBatch.Row> rows = new ArrayList<>();
@@ -39,7 +43,9 @@ class ObservationDeliveryRecoveryTest {
         long route = jdbc.sql("""
             INSERT INTO route (public_route_id, source_id, source_route_id, display_name, start_stop_name, end_stop_name)
             VALUES ('memory-test', 'GBIS', 'memory-test', '테스트', '출발', '도착') RETURNING id
-            """).query(Long.class).single();
+            """)
+            .query(Long.class)
+            .single();
         version = jdbc.sql("""
             INSERT INTO route_version (route_id, content_digest, valid_from, turn_sequence)
             VALUES (:route, :digest, :at, 5) RETURNING id
@@ -55,7 +61,11 @@ class ObservationDeliveryRecoveryTest {
             INSERT INTO observation_batch (route_version_id, scheduled_at, attempt_number, attempt_key,
                 requested_at, response_received_at, outcome, normalization_version, collection_strategy_version, stored_rows)
             VALUES (:version, :at, 1, 'memory-test', :at, :at, 'SUCCESS_ROWS', 'test-v1', 'test-v1', 0) RETURNING id
-            """).param("version", version).param("at", NOW.atOffset(ZoneOffset.UTC)).query(Long.class).single();
+            """)
+            .param("version", version)
+            .param("at", NOW.atOffset(ZoneOffset.UTC))
+            .query(Long.class)
+            .single();
         quality.lock(version);
     }
 
@@ -81,7 +91,9 @@ class ObservationDeliveryRecoveryTest {
 
         // then
         verify(reads, never()).restore(anyLong(), anyList(), anyInt());
-        assertThat(jdbc.sql("SELECT to_regclass('observation_delivery') IS NULL").query(Boolean.class).single()).isTrue();
+        assertThat(jdbc.sql("SELECT to_regclass('observation_delivery') IS NULL")
+            .query(Boolean.class)
+            .single()).isTrue();
     }
 
     @Test
@@ -142,8 +154,10 @@ class ObservationDeliveryRecoveryTest {
 
         // when
         jdbc.sql("DELETE FROM vehicle_observation WHERE observation_batch_id = ?").param(batch).update();
-        jdbc.sql("UPDATE observation_batch SET response_received_at = NULL, stored_rows = NULL, attempt_number = 2 WHERE id = ?")
-            .param(batch).update();
+        jdbc.sql(
+        "UPDATE observation_batch SET response_received_at = NULL, stored_rows = NULL, attempt_number = 2 WHERE id = ?")
+            .param(batch)
+            .update();
 
         // then
         assertThat(read(memory, 1)).isEqualTo(expected()).isEmpty();

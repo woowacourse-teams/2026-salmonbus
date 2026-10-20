@@ -4,7 +4,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 public final class ChatConnectionLimiter {
-
     private final int maxConnections;
     private final int maxConnectionsPerAddress;
     private final Map<String, String> addressBySession = new HashMap<>();

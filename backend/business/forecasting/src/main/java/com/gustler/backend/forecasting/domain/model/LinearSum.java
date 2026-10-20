@@ -7,7 +7,6 @@ package com.gustler.backend.forecasting.domain.model;
  * 마지막 자리가 어긋난다. 앞에서부터 차례로 더한다.
  */
 final class LinearSum {
-
     private LinearSum() {
     }
 
@@ -18,7 +17,7 @@ final class LinearSum {
         if (featureVector.length != coefficients.length) {
             throw new IllegalArgumentException(
                 "특징 개수와 계수 개수가 같아야 한다: %d, %d"
-                    .formatted(featureVector.length, coefficients.length)
+                .formatted(featureVector.length, coefficients.length)
             );
         }
         double sum = 0.0;

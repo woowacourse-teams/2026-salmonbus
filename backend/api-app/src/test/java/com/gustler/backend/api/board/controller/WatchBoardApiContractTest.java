@@ -8,7 +8,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
 import com.gustler.backend.api.board.support.BoardDatabaseFixture;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture.RouteContext;
 import com.gustler.backend.support.IntegrationTest;
@@ -40,7 +39,6 @@ import tools.jackson.databind.node.ObjectNode;
 @Transactional
 @Import(WatchBoardApiContractTest.FixedClockConfig.class)
 class WatchBoardApiContractTest {
-
     private static final String ROUTE_ID = "204000057";
     private static final int IN_TRANSIT = 0;
     private static final int ARRIVING = 1;
@@ -315,7 +313,6 @@ class WatchBoardApiContractTest {
 
     @TestConfiguration(proxyBeanMethods = false)
     static class FixedClockConfig {
-
         @Bean
         @Primary
         Clock fixedDaytimeWatchClock() {

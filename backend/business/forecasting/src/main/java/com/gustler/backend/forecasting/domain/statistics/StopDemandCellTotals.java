@@ -10,7 +10,6 @@ public record StopDemandCellTotals(
     long sampleCount,
     int dayCount
 ) {
-
     public StopDemandCellTotals {
         Objects.requireNonNull(timeSlot, "시간대가 필요하다");
         if (dayCount < 1 || sampleCount < dayCount) {

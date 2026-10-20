@@ -15,7 +15,6 @@ public record SameDayFullOutcomes(
     int actualFullCount,
     double averageRawFullChance
 ) {
-
     public SameDayFullOutcomes {
         if (rowCount < 0) {
             throw new IllegalArgumentException("확정된 예보 수는 0 이상이다: " + rowCount);
@@ -23,7 +22,7 @@ public record SameDayFullOutcomes(
         if (actualFullCount < 0 || actualFullCount > rowCount) {
             throw new IllegalArgumentException(
                 "실제 만석 수는 0 이상이고 확정된 예보 수를 넘지 않는다: %d, %d"
-                    .formatted(actualFullCount, rowCount)
+                .formatted(actualFullCount, rowCount)
             );
         }
         if (!(averageRawFullChance >= 0.0 && averageRawFullChance <= 1.0)) {

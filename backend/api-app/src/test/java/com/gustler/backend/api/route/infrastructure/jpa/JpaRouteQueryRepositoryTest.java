@@ -11,7 +11,6 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.IncorrectResultSizeDataAccessException;
 
 class JpaRouteQueryRepositoryTest {
-
     private RouteEntityRepository routeRepository;
     private ModelDeploymentEntityRepository modelDeploymentRepository;
     private JpaRouteQueryRepository repository;

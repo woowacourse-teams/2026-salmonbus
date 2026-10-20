@@ -28,7 +28,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class LiveVehicleQueryServiceTest {
-
     private static final RouteId ROUTE_ID = new RouteId("204000057");
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final Clock CLOCK = clockAt("2026-08-27T12:00:00+09:00");

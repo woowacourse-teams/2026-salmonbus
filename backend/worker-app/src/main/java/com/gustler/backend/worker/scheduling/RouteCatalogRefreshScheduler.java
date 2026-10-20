@@ -32,9 +32,14 @@ public class RouteCatalogRefreshScheduler {
     private final boolean includeCatalog;
     private final AtomicBoolean catalogGeometryPending = new AtomicBoolean();
 
-    public RouteCatalogRefreshScheduler(CollectionProperties properties, RefreshRouteCatalog catalog, Clock clock,
-        RefreshRouteGeometry geometry, @Qualifier("routeGeometryExecutor") Executor geometryExecutor,
-        RouteGeometryProperties geometryProperties) {
+    public RouteCatalogRefreshScheduler(
+        CollectionProperties properties,
+        RefreshRouteCatalog catalog,
+        Clock clock,
+        RefreshRouteGeometry geometry,
+        @Qualifier("routeGeometryExecutor") Executor geometryExecutor,
+        RouteGeometryProperties geometryProperties
+    ) {
         this.properties = properties;
         this.catalog = catalog;
         this.clock = clock;
@@ -62,7 +67,8 @@ public class RouteCatalogRefreshScheduler {
                 }
             } catch (RuntimeException failure) {
                 // 인증키가 포함될 수 있는 HTTP 예외 본문은 기록하지 않는다.
-                log.warn("event=route_catalog_refresh_failed routeId={} routeName={} reason=REFRESH_EXCEPTION exceptionType={}",
+                log.warn(
+                    "event=route_catalog_refresh_failed routeId={} routeName={} reason=REFRESH_EXCEPTION exceptionType={}",
                     quote(routeId), quote(catalog.knownRouteName(routeId)), quote(failure.getClass().getSimpleName()));
             }
         }
@@ -71,7 +77,9 @@ public class RouteCatalogRefreshScheduler {
             return;
         }
         // 지도 전용 노선의 기본정보·정류장 HTTP도 기존 차량 관측 스케줄 밖에서 처리한다.
-        geometryRoutes.stream().filter(routeId -> !observed.contains(routeId)).forEach(routeId -> enqueueGeometry(routeId, true));
+        geometryRoutes.stream()
+            .filter(routeId -> !observed.contains(routeId))
+            .forEach(routeId -> enqueueGeometry(routeId, true));
     }
 
     private void enqueueCatalogGeometry(Set<String> observed, Set<String> refreshed) {
@@ -103,10 +111,12 @@ public class RouteCatalogRefreshScheduler {
     }
 
     private void enqueueGeometry(String routeId, boolean refreshCatalog) {
-        try { geometryExecutor.execute(() -> {
-            if (refreshCatalog) refreshGeometryCatalog(routeId);
+        try {
+            geometryExecutor.execute(() -> {
+                if (refreshCatalog) refreshGeometryCatalog(routeId);
             else refreshGeometry(routeId);
-        }); }
+            });
+        }
         catch (java.util.concurrent.RejectedExecutionException full) {
             log.warn("event=route_geometry_refresh_deferred routeId={} reason=QUEUE_FULL", quote(routeId));
         }

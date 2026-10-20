@@ -16,7 +16,6 @@ public record ObservedVehicle(
     Integer remainingSeats,
     Integer crowdLevel
 ) {
-
     public static final int LOWEST_CROWD_LEVEL = 1;
     public static final int HIGHEST_CROWD_LEVEL = 4;
 

@@ -51,7 +51,8 @@ public class JdbcArrivalObservationQuery implements ArrivalObservationQuery {
     }
 
     @Override
-    public List<ArrivalCandidate> findAfter(long routeVersionId, String vehicleId,
+    public List<ArrivalCandidate> findAfter(long routeVersionId,
+        String vehicleId,
         Instant observedAfter, int limit) {
         return jdbcClient.sql(COLUMNS + SOURCE + AFTER)
             .param("routeVersionId", routeVersionId)
@@ -63,7 +64,8 @@ public class JdbcArrivalObservationQuery implements ArrivalObservationQuery {
 
     @Override
     public List<Long> findIdsAfter(long routeVersionId, String vehicleId,
-        Instant observedAfter, int limit) {
+        Instant observedAfter, int limit
+    ) {
         return jdbcClient.sql("SELECT o.id\n" + SOURCE + AFTER)
             .param("routeVersionId", routeVersionId)
             .param("vehicleId", vehicleId)

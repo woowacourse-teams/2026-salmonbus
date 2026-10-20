@@ -16,7 +16,10 @@ public class JdbcRouteGeometryQueryRepository implements RouteGeometryQueryRepos
     private final JdbcClient jdbc;
     private final ObjectMapper json;
 
-    public JdbcRouteGeometryQueryRepository(JdbcClient jdbc, ObjectMapper json) { this.jdbc = jdbc; this.json = json; }
+    public JdbcRouteGeometryQueryRepository(JdbcClient jdbc, ObjectMapper json) {
+        this.jdbc = jdbc;
+        this.json = json;
+    }
 
     @Override
     public Optional<Reference> reference(String routeId) {
@@ -24,8 +27,11 @@ public class JdbcRouteGeometryQueryRepository implements RouteGeometryQueryRepos
             SELECT route.public_route_id,version.id,route.display_name,route.start_stop_name,route.end_stop_name,version.turn_sequence
             FROM route JOIN route_version version ON version.route_id=route.id AND version.valid_to IS NULL
             WHERE route.public_route_id=? AND route.source_id='GBIS'
-            """).param(routeId).query((row, index) -> new Reference(row.getString(1), row.getLong(2), row.getString(3),
-                row.getString(4), row.getString(5), row.getObject(6, Integer.class))).optional();
+            """)
+            .param(routeId)
+            .query((row, index) -> new Reference(row.getString(1), row.getLong(2), row.getString(3),
+                row.getString(4), row.getString(5), row.getObject(6, Integer.class)))
+            .optional();
     }
 
     @Override
@@ -38,8 +44,8 @@ public class JdbcRouteGeometryQueryRepository implements RouteGeometryQueryRepos
                 ORDER BY history.observed_at DESC LIMIT 1
             ) location ON true WHERE stop.route_version_id=? ORDER BY stop.stop_order
             """).param(versionId).query((row, index) -> new RouteGeometry.Stop(row.getString(1), row.getInt(2), row.getString(3),
-                row.getString(4), row.getBoolean(5), RouteGeometry.Point.orNull(row.getObject(6, Double.class),
-                    row.getObject(7, Double.class)))).list();
+            row.getString(4), row.getBoolean(5), RouteGeometry.Point.orNull(row.getObject(6, Double.class),
+                row.getObject(7, Double.class)))).list();
     }
 
     @Override
@@ -48,10 +54,13 @@ public class JdbcRouteGeometryQueryRepository implements RouteGeometryQueryRepos
             SELECT id,received_at,points::text FROM route_geometry WHERE route_version_id=?
             ORDER BY received_at DESC,id DESC LIMIT 1
             """).param(versionId).query((row, index) -> {
-                try {
-                    return new RouteGeometry.Shape(row.getObject(1, UUID.class), row.getTimestamp(2).toInstant(),
-                        json.readValue(row.getString(3), new TypeReference<List<RouteGeometry.Point>>() { }));
-                } catch (RuntimeException unreadable) { throw new ServiceUnavailableException(); }
-            }).optional();
+            try {
+                return new RouteGeometry.Shape(row.getObject(1, UUID.class), row.getTimestamp(2).toInstant(),
+                    json.readValue(row.getString(3), new TypeReference<List<RouteGeometry.Point>>() {
+                    }));
+            } catch (RuntimeException unreadable) {
+                throw new ServiceUnavailableException();
+            }
+        }).optional();
     }
 }

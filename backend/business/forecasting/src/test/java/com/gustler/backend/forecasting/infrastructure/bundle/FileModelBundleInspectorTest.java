@@ -9,7 +9,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class FileModelBundleInspectorTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
 
     @Test
     void 검수와_기동_로더가_같은_거절_규칙을_사용한다() {

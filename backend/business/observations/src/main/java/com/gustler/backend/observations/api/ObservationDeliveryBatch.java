@@ -1,5 +1,4 @@
 package com.gustler.backend.observations.api;
-
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -17,8 +16,11 @@ public record ObservationDeliveryBatch(long batchId, long routeVersionId, int at
         }
     }
 
-    public enum Kind { CLEARED, STORED }
+    public enum Kind {
+        CLEARED, STORED
+    }
 
     public record Row(long observationId, String vehicleId, Integer remainingSeats,
-                      Integer passedStopOrder, Integer crowdLevel, Integer stopOrder, Integer runningState) { }
+        Integer passedStopOrder, Integer crowdLevel, Integer stopOrder, Integer runningState) {
+    }
 }

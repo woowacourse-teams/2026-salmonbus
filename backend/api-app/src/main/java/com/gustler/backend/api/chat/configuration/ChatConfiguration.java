@@ -50,7 +50,6 @@ import tools.jackson.databind.ObjectMapper;
 @EnableWebSocket
 @EnableScheduling
 public class ChatConfiguration {
-
     @Bean(destroyMethod = "close")
     MongoClient chatMongoClient(ChatProperties properties) {
         return MongoClients.create(ChatMongoClientSettings.from(properties.getMongodbUri()));
@@ -125,11 +124,15 @@ public class ChatConfiguration {
             parameters = @Parameter(name = "routeId", description = "채팅방의 노선 ID", example = "123456789"),
             responses = {
                 @ApiResponse(responseCode = "200", description = "채팅방을 사용할 수 있음",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ChatRoomResponse.class),
+                    content =
+                    @Content(mediaType = "application/json",
+                        schema = @Schema(implementation = ChatRoomResponse.class),
                         examples = @ExampleObject(value = ApiDocsExamples.CHAT_ROOM))),
                 @ApiResponse(responseCode = "404", description = "채팅이 꺼져 있거나 지원하지 않는 노선")
             }))
-    RouterFunction<ServerResponse> chatAvailabilityRoute(ChatAvailabilityHandler handler) {
+    RouterFunction<ServerResponse> chatAvailabilityRoute(
+        ChatAvailabilityHandler handler
+    ) {
         return RouterFunctions.route()
             .GET("/api/chat/rooms/{routeId}", handler::availability)
             .build();

@@ -27,7 +27,6 @@ import org.springframework.core.io.ByteArrayResource;
  * 실린 설정을 읽어 빌드 시점에 대조한다. 환경변수로 주는 경로는 worker 가 기동에서 막는다.
  */
 class BoardFreshnessContractTest {
-
     private static final String WORKER_JAR = "worker.boot.jar";
     private static final String WORKER_CONFIG = "BOOT-INF/classes/application.yml";
     private static final String STALENESS = "forecast.staleness";

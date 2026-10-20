@@ -1,6 +1,7 @@
 package com.gustler.backend.api.vehicle.controller;
 
 import com.gustler.backend.api.route.RouteId;
+
 import com.gustler.backend.api.docs.ApiDocsExamples;
 import com.gustler.backend.api.error.ErrorResponse;
 import com.gustler.backend.api.vehicle.application.LiveVehicleOverview;
@@ -25,17 +26,18 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/routes")
 public class LiveVehicleController {
-
     private final LiveVehicleQueryService liveVehicleQueryService;
 
     @GetMapping("/{routeId}/vehicles")
     @Operation(summary = "실시간 차량 관측", description = "관측이 불확실하면 200 UNKNOWN과 빈 차량 목록을 반환합니다. 정상 빈 관측을 운행 종료로 단정하지 않습니다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "현재 차량 관측 또는 관측 상태 UNKNOWN",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = LiveVehicleResponse.class), examples = {
-                @ExampleObject(name = "VEHICLES_PRESENT", value = ApiDocsExamples.VEHICLES_PRESENT),
-                @ExampleObject(name = "UNKNOWN", value = ApiDocsExamples.VEHICLES_UNKNOWN)
-            })),
+            content =
+            @Content(mediaType = "application/json", schema = @Schema(implementation = LiveVehicleResponse.class),
+                examples = {
+                    @ExampleObject(name = "VEHICLES_PRESENT", value = ApiDocsExamples.VEHICLES_PRESENT),
+                    @ExampleObject(name = "UNKNOWN", value = ApiDocsExamples.VEHICLES_UNKNOWN)
+                })),
         @ApiResponse(responseCode = "400", description = "노선 ID 형식이 올바르지 않음",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
                 examples = @ExampleObject(value = ApiDocsExamples.INVALID_ROUTE))),

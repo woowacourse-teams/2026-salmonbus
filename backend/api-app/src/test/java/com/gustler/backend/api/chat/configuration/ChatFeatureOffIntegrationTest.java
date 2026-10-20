@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
 import com.gustler.backend.api.chat.controller.ChatAvailabilityHandler;
 import com.gustler.backend.api.chat.controller.ChatWebSocketHandler;
 import com.gustler.backend.support.IntegrationTest;
@@ -24,7 +23,6 @@ import org.springframework.web.socket.server.standard.ServletServerContainerFact
 
 @IntegrationTest
 class ChatFeatureOffIntegrationTest {
-
     private final WebApplicationContext webContext;
     private final ApplicationContext context;
     private MockMvc mockMvc;
@@ -76,7 +74,9 @@ class ChatFeatureOffIntegrationTest {
     }
 
     private List<String> mongoMonitorThreads() {
-        return Thread.getAllStackTraces().keySet().stream()
+        return Thread.getAllStackTraces()
+            .keySet()
+            .stream()
             .filter(Thread::isAlive)
             .map(Thread::getName)
             .filter(name -> name.startsWith("cluster-"))

@@ -18,7 +18,6 @@ import org.springframework.http.MediaType;
  * <p>{@code Allow} 나 {@code Retry-After} 처럼 스프링이 이미 실어 둔 헤더는 그대로 둔다.
  */
 final class ErrorHeaders {
-
     private ErrorHeaders() {
     }
 

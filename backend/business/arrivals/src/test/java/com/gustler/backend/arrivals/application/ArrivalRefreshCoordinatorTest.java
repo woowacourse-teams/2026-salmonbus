@@ -25,9 +25,17 @@ class ArrivalRefreshCoordinatorTest {
     private static final Instant BASE = Instant.parse("2026-10-14T03:00:00Z");
     private final AtomicLong millis = new AtomicLong();
     private final Clock clock = new Clock() {
-        public ZoneId getZone() { return ZoneOffset.UTC; }
-        public Clock withZone(ZoneId zone) { return this; }
-        public Instant instant() { return BASE.plusMillis(millis.get()); }
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        public Instant instant() {
+            return BASE.plusMillis(millis.get());
+        }
     };
     private final Queue<Runnable> queue = new ConcurrentLinkedQueue<>();
     private final ArrivalStore store = mock(ArrivalStore.class);
@@ -48,9 +56,11 @@ class ArrivalRefreshCoordinatorTest {
 
     private ArrivalRefreshCoordinator coordinator(Executor executor, double rate, int burst) {
         var defaults = ArrivalCollectionPolicy.defaults();
-        var policy = new ArrivalCollectionPolicy(defaults.refreshInterval(), defaults.validity(), defaults.retryBase(),
-            defaults.retryMaximum(), defaults.startupDelay(), defaults.queueWait(), 10_000, rate, burst, 2);
-        return new ArrivalRefreshCoordinator(store, source, quota, executor, policy, clock, () -> millis.get() * 1_000_000);
+        var policy =
+            new ArrivalCollectionPolicy(defaults.refreshInterval(), defaults.validity(), defaults.retryBase(),
+                defaults.retryMaximum(), defaults.startupDelay(), defaults.queueWait(), 10_000, rate, burst, 2);
+        return new ArrivalRefreshCoordinator(store, source, quota, executor, policy, clock,
+            () -> millis.get() * 1_000_000);
     }
 
     @Test
@@ -61,7 +71,8 @@ class ArrivalRefreshCoordinatorTest {
             for (int i = 0; i < 1000; i++) requests.add(callers.submit(() -> coordinator.request(STATION)));
             for (var request : requests) replies.add(request.get(5, TimeUnit.SECONDS));
         }
-        assertThat(replies.stream().filter(reply -> reply.status() == ArrivalRefresh.Status.ACCEPTED)).hasSize(1);
+        assertThat(replies.stream()
+                .filter(reply -> reply.status() == ArrivalRefresh.Status.ACCEPTED)).hasSize(1);
         assertThat(queue).hasSize(1);
         verifyNoInteractions(source, quota);
         queue.remove().run();
@@ -74,7 +85,8 @@ class ArrivalRefreshCoordinatorTest {
     @Test
     void 실패_대기는_새_요청에_연장되지_않고_연속_실패에는_늘어난다() {
         when(source.fetch(anyString(), anyString())).thenReturn(new ArrivalSource.Failed(ArrivalSource.Reason.TRANSPORT_ERROR));
-        coordinator.request(STATION); queue.remove().run();
+        coordinator.request(STATION);
+        queue.remove().run();
         Instant first = coordinator.request(STATION).suggestedRefreshAt();
         assertThat(first).isEqualTo(BASE.plusSeconds(80));
         millis.addAndGet(10_000);
@@ -93,7 +105,8 @@ class ArrivalRefreshCoordinatorTest {
             if (saves.getAndIncrement() == 0) throw new IllegalStateException("temporary storage failure");
             return null;
         }).when(store).save(any());
-        coordinator.request(STATION); queue.remove().run();
+        coordinator.request(STATION);
+        queue.remove().run();
         assertThat(saves).hasValue(2);
         verify(source, times(1)).fetch(anyString(), anyString());
         verify(quota, times(1)).reserve(any());
@@ -119,7 +132,8 @@ class ArrivalRefreshCoordinatorTest {
         millis.addAndGet(40_000);
         assertThat(coordinator.request(STATION).reason()).isEqualTo("BUSY");
         verifyNoInteractions(source, quota);
-        full.set(false); millis.addAndGet(2_000);
+        full.set(false);
+        millis.addAndGet(2_000);
         assertThat(coordinator.request(STATION).status()).isEqualTo(ArrivalRefresh.Status.ACCEPTED);
         queue.remove().run();
         verify(source).fetch(STATION, "a");
@@ -130,7 +144,8 @@ class ArrivalRefreshCoordinatorTest {
         ArrivalSnapshot snapshot = new ArrivalSnapshot(UUID.randomUUID(), STATION, clock.instant(),
             clock.instant().plusSeconds(40), clock.instant().plusSeconds(60), null, List.of());
         when(store.latest(STATION)).thenReturn(Optional.of(snapshot));
-        coordinator.request(STATION); queue.remove().run();
+        coordinator.request(STATION);
+        queue.remove().run();
         verifyNoInteractions(source, quota);
         assertThat(coordinator.request(STATION).reason()).isEqualTo("NOT_DUE");
     }
@@ -138,8 +153,10 @@ class ArrivalRefreshCoordinatorTest {
     @Test
     void 전체_제한이_발생하면_이미_대기중이던_다른_정류장도_호출하지_않는다() {
         when(source.fetch(anyString(), anyString())).thenReturn(new ArrivalSource.Failed(ArrivalSource.Reason.RATE_LIMITED));
-        coordinator.request(STATION); coordinator.request("206000532");
-        queue.remove().run(); queue.remove().run();
+        coordinator.request(STATION);
+        coordinator.request("206000532");
+        queue.remove().run();
+        queue.remove().run();
         verify(source, times(1)).fetch(anyString(), anyString());
         verify(quota, times(1)).reserve(any());
         assertThat(coordinator.request("206000532").reason()).isEqualTo("RATE_LIMITED");
@@ -151,7 +168,8 @@ class ArrivalRefreshCoordinatorTest {
         assertThat(coordinator.request(STATION).reason()).isEqualTo("STARTING");
         millis.addAndGet(40_000);
         doReturn(Optional.empty()).when(quota).reserve(any());
-        coordinator.request(STATION); queue.remove().run();
+        coordinator.request(STATION);
+        queue.remove().run();
         assertThat(coordinator.request("206000532").reason()).isEqualTo("DAILY_QUOTA_EXHAUSTED");
         verify(quota, times(1)).reserve(any());
         verifyNoInteractions(source);
@@ -161,8 +179,10 @@ class ArrivalRefreshCoordinatorTest {
     void 토큰이_소진되면_다른_정류장은_예산예약_전에_대기한다() {
         coordinator = coordinator(queue::add, 0.5, 1);
         millis.addAndGet(40_000);
-        coordinator.request(STATION); queue.remove().run();
-        coordinator.request("206000532"); queue.remove().run();
+        coordinator.request(STATION);
+        queue.remove().run();
+        coordinator.request("206000532");
+        queue.remove().run();
         verify(quota, times(1)).reserve(any());
         verify(source, times(1)).fetch(anyString(), anyString());
         assertThat(coordinator.request("206000532").reason()).isEqualTo("RATE_LIMITED");
@@ -172,7 +192,8 @@ class ArrivalRefreshCoordinatorTest {
     void 상류의_RetryAfter가_더_길면_전체_호출을_그만큼_미룬다() {
         when(source.fetch(anyString(), anyString())).thenReturn(new ArrivalSource.Failed(
             ArrivalSource.Reason.RATE_LIMITED, Duration.ofSeconds(120)));
-        coordinator.request(STATION); queue.remove().run();
+        coordinator.request(STATION);
+        queue.remove().run();
         assertThat(coordinator.request("206000532").suggestedRefreshAt()).isEqualTo(BASE.plusSeconds(160));
         millis.addAndGet(50_000);
         assertThat(coordinator.request("206000532").suggestedRefreshAt()).isEqualTo(BASE.plusSeconds(160));

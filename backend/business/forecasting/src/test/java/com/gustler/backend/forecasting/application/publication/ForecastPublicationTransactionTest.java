@@ -74,7 +74,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 @ForecastingIntegrationTest
 @Import(ForecastPublicationTransactionTest.FixedClock.class)
 class ForecastPublicationTransactionTest {
-
     private static final Instant OBSERVED_AT = Instant.parse("2026-09-21T02:00:00Z");
     private static final Instant GENERATED_AT = OBSERVED_AT.plusSeconds(2);
     private static final Clock CLOCK = Clock.fixed(GENERATED_AT, ZoneId.of("Asia/Seoul"));
@@ -185,7 +184,9 @@ class ForecastPublicationTransactionTest {
         jdbc.sql("DROP FUNCTION IF EXISTS publication_work_failure()").update();
         if (routeVersionId != 0) {
             jdbc.sql("DELETE FROM forecast_evaluation_work WHERE route_version_id = ?").param(routeVersionId).update();
-            jdbc.sql("DELETE FROM forecast_evaluation_result WHERE route_version_id = ?").param(routeVersionId).update();
+            jdbc.sql("DELETE FROM forecast_evaluation_result WHERE route_version_id = ?")
+                .param(routeVersionId)
+                .update();
             jdbc.sql("DELETE FROM seat_forecast WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM forecast_publication WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM vehicle_observation WHERE route_version_id = ?").param(routeVersionId).update();
@@ -213,10 +214,17 @@ class ForecastPublicationTransactionTest {
             committer.commit(batch, samplingPublication(), samplingSources(OBSERVED_AT)));
 
         assertThat(readCounts()).isEqualTo(new StoredCounts(1, 2, 2, true));
-        assertThat(jdbc.sql("SELECT target_stop_order FROM forecast_evaluation_pending WHERE vehicle_observation_id = ?")
-            .param(observationId).query(Integer.class).list()).containsExactlyInAnyOrder(4, 5);
-        assertThat(jdbc.sql("SELECT evaluation_detail_required FROM seat_forecast WHERE vehicle_observation_id = ? ORDER BY target_stop_order")
-            .param(observationId).query(Boolean.class).list()).containsExactly(true, false);
+        assertThat(
+            jdbc.sql("SELECT target_stop_order FROM forecast_evaluation_pending WHERE vehicle_observation_id = ?")
+                .param(observationId)
+                .query(Integer.class)
+                .list()).containsExactlyInAnyOrder(4, 5);
+        assertThat(
+            jdbc.sql(
+            "SELECT evaluation_detail_required FROM seat_forecast WHERE vehicle_observation_id = ? ORDER BY target_stop_order")
+                .param(observationId)
+                .query(Boolean.class)
+                .list()).containsExactly(true, false);
     }
 
     @Test
@@ -231,8 +239,8 @@ class ForecastPublicationTransactionTest {
 
         assertThat(readCounts()).isEqualTo(new StoredCounts(0, 0, 0, false));
         assertThat(sampling.select(samplingPublication(), samplingSources(OBSERVED_AT.plusSeconds(15)))
-            .publication().predictions()).allMatch(
-                SeatForecast::evaluationDetailRequired);
+                .publication().predictions()).allMatch(
+                    SeatForecast::evaluationDetailRequired);
     }
 
     @Test
@@ -249,8 +257,12 @@ class ForecastPublicationTransactionTest {
             disabled.commit(batch, samplingPublication(), samplingSources(OBSERVED_AT)));
 
         assertThat(readCounts()).isEqualTo(new StoredCounts(1, 2, 2, true));
-        assertThat(jdbc.sql("SELECT evaluation_detail_required FROM seat_forecast WHERE vehicle_observation_id = ? ORDER BY target_stop_order")
-            .param(observationId).query(Boolean.class).list()).containsExactly(true, false);
+        assertThat(
+            jdbc.sql(
+            "SELECT evaluation_detail_required FROM seat_forecast WHERE vehicle_observation_id = ? ORDER BY target_stop_order")
+                .param(observationId)
+                .query(Boolean.class)
+                .list()).containsExactly(true, false);
     }
 
     @Test
@@ -270,10 +282,14 @@ class ForecastPublicationTransactionTest {
 
         // then
         assertThat(readCounts()).isEqualTo(new StoredCounts(1, 2, 2, true));
-        assertThat(jdbc.sql("SELECT evaluation_detail_required FROM seat_forecast WHERE vehicle_observation_id = ? ORDER BY target_stop_order")
-            .param(observationId).query(Boolean.class).list()).containsExactly(true, false);
+        assertThat(
+            jdbc.sql(
+            "SELECT evaluation_detail_required FROM seat_forecast WHERE vehicle_observation_id = ? ORDER BY target_stop_order")
+                .param(observationId)
+                .query(Boolean.class)
+                .list()).containsExactly(true, false);
         assertThat(restarted.select(samplingPublication(), samplingSources(OBSERVED_AT.plusSeconds(15)))
-            .publication().predictions()).allMatch(SeatForecast::evaluationDetailRequired);
+                .publication().predictions()).allMatch(SeatForecast::evaluationDetailRequired);
     }
 
     private ForecastPublication samplingPublication() {
@@ -321,8 +337,10 @@ class ForecastPublicationTransactionTest {
         assertThat(republished.modelDeploymentId()).isEqualTo(replacement.deploymentId());
         assertThat(republished.predictionCount()).isEqualTo(2);
         assertThat(readPredictions()).containsExactly(
-            new StoredPrediction(publication.id(), observationId, 4, replacement.deploymentId(), 0.7, 0.3, GENERATED_AT),
-            new StoredPrediction(publication.id(), observationId, 5, replacement.deploymentId(), 0.7, 0.3, GENERATED_AT));
+            new StoredPrediction(publication.id(), observationId, 4, replacement.deploymentId(), 0.7, 0.3,
+                GENERATED_AT),
+            new StoredPrediction(publication.id(), observationId, 5, replacement.deploymentId(), 0.7, 0.3,
+                GENERATED_AT));
         assertThat(readEvaluationStates()).containsExactly("PENDING", "PENDING");
         assertThat(readCounts()).isEqualTo(new StoredCounts(1, 2, 2, true));
     }
@@ -362,16 +380,23 @@ class ForecastPublicationTransactionTest {
         new TransactionTemplate(transactions).executeWithoutResult(status -> quality.lock(routeVersionId));
         CountDownLatch locked = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
-        Thread holder = Thread.ofPlatform().start(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
-            quality.lock(routeVersionId);
-            locked.countDown();
-            try { release.await(5, TimeUnit.SECONDS); }
-            catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
-        }));
+        Thread holder = Thread.ofPlatform()
+            .start(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                quality.lock(routeVersionId);
+                locked.countDown();
+                try {
+                    release.await(5, TimeUnit.SECONDS);
+                }
+                catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }));
         assertThat(locked.await(2, TimeUnit.SECONDS)).isTrue();
         try {
+
             // when
-            int saved = assertTimeoutPreemptively(Duration.ofSeconds(5), () -> writer.writeForecastsOf(batch, stops, runtime));
+            int saved =
+                assertTimeoutPreemptively(Duration.ofSeconds(5), () -> writer.writeForecastsOf(batch, stops, runtime));
 
             // then
             assertThat(saved).isEqualTo(2);
@@ -388,18 +413,24 @@ class ForecastPublicationTransactionTest {
         new TransactionTemplate(transactions).executeWithoutResult(status -> quality.lock(routeVersionId));
         CountDownLatch changed = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
-        Thread changer = Thread.ofPlatform().start(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
-            quality.lock(routeVersionId);
-            jdbc.sql("UPDATE route_data_quality SET quality_revision=quality_revision+1 WHERE route_id=?")
-                .param(routeId).update();
-            changed.countDown();
-            try { release.await(5, TimeUnit.SECONDS); }
-            catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
-        }));
+        Thread changer = Thread.ofPlatform()
+            .start(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                quality.lock(routeVersionId);
+                jdbc.sql("UPDATE route_data_quality SET quality_revision=quality_revision+1 WHERE route_id=?")
+                    .param(routeId).update();
+                changed.countDown();
+                try {
+                    release.await(5, TimeUnit.SECONDS);
+                }
+                catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }));
         assertThat(changed.await(2, TimeUnit.SECONDS)).isTrue();
 
         // when
-        CompletableFuture<Integer> saving = CompletableFuture.supplyAsync(() -> writer.writeForecastsOf(batch, stops, runtime));
+        CompletableFuture<Integer> saving =
+            CompletableFuture.supplyAsync(() -> writer.writeForecastsOf(batch, stops, runtime));
 
         // then
         assertThatThrownBy(() -> saving.get(300, TimeUnit.MILLISECONDS)).isInstanceOf(TimeoutException.class);
@@ -428,7 +459,7 @@ class ForecastPublicationTransactionTest {
         assertThat(saved).isZero();
         assertThat(readCounts()).isEqualTo(new StoredCounts(0, 0, 0, false));
         assertThat(jdbc.sql("SELECT count(*) FROM forecast_evaluation_work WHERE route_version_id=?")
-            .param(routeVersionId).query(Long.class).single()).isZero();
+                .param(routeVersionId).query(Long.class).single()).isZero();
     }
 
     @Test
@@ -476,7 +507,7 @@ class ForecastPublicationTransactionTest {
         assertThat(failure).isInstanceOf(org.springframework.dao.DataAccessException.class);
         assertThat(readCounts()).isEqualTo(new StoredCounts(0, 0, 0, false));
         assertThat(jdbc.sql("SELECT count(*) FROM forecast_evaluation_work WHERE route_version_id=?")
-            .param(routeVersionId).query(Long.class).single()).isZero();
+                .param(routeVersionId).query(Long.class).single()).isZero();
     }
 
     @Test
@@ -523,8 +554,11 @@ class ForecastPublicationTransactionTest {
                 FROM forecast_publication WHERE source_batch_id = ?
                 """)
             .param(batchId)
-            .query((row, index) -> new StoredPublication(row.getLong("id"), row.getLong("model_deployment_id"), row.getObject("generated_at", OffsetDateTime.class).toInstant(),
-                row.getObject("published_at", OffsetDateTime.class).toInstant(), row.getInt("prediction_count")))
+            .query((row, index) ->
+                new StoredPublication(row.getLong("id"), row.getLong("model_deployment_id"),
+                    row.getObject("generated_at", OffsetDateTime.class)
+                        .toInstant(),
+                    row.getObject("published_at", OffsetDateTime.class).toInstant(), row.getInt("prediction_count")))
             .single();
     }
 
@@ -570,13 +604,16 @@ class ForecastPublicationTransactionTest {
     }
 
     private record StoredPublication(long id, long modelDeploymentId,
-                                     Instant generatedAt, Instant publishedAt, int predictionCount) { }
+        Instant generatedAt, Instant publishedAt, int predictionCount) {
+    }
 
     private record StoredPrediction(long publicationId, long observationId, int targetStopOrder,
-                                    long modelDeploymentId, double fullChance, double expectedSeats,
-                                    Instant generatedAt) { }
+        long modelDeploymentId, double fullChance, double expectedSeats,
+        Instant generatedAt) {
+    }
 
-    private record StoredCounts(long publications, long predictions, long evaluations, boolean inputConfirmed) { }
+    private record StoredCounts(long publications, long predictions, long evaluations, boolean inputConfirmed) {
+    }
 
     @TestConfiguration(proxyBeanMethods = false)
     static class FixedClock {

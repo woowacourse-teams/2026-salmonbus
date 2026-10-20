@@ -26,7 +26,7 @@ class RouteGeometryControllerTest {
         var point = new RouteGeometry.Point(stopX, 37.1);
         return new RouteGeometry("204000057", 7, "3330", "A", "B", 2,
             List.of(new RouteGeometry.Stop("206000637", 1, "A", "UP", true, point),
-                new RouteGeometry.Stop("206000638", 2, "B", "UP", true, new RouteGeometry.Point(127.2,37.2)),
+                new RouteGeometry.Stop("206000638", 2, "B", "UP", true, new RouteGeometry.Point(127.2, 37.2)),
                 new RouteGeometry.Stop("206000637", 3, "A", "DOWN", true, point)),
             shape ? new RouteGeometry.Shape(UUID.fromString("00000000-0000-0000-0000-000000000001"), Instant.EPOCH,
                 List.of(new RouteGeometry.Point(127, 37), new RouteGeometry.Point(127.2, 37.2),
@@ -52,7 +52,9 @@ class RouteGeometryControllerTest {
             .andExpect(header().string("Cache-Control", "max-age=300, must-revalidate, public")).andReturn();
         String tag = first.getResponse().getHeader("ETag");
         assertThat(tag).startsWith("W/\"g-");
-        mvc.perform(get(PATH).header("If-None-Match", tag)).andExpect(status().isNotModified()).andExpect(content().string(""));
+        mvc.perform(get(PATH).header("If-None-Match", tag))
+            .andExpect(status().isNotModified())
+            .andExpect(content().string(""));
     }
 
     @Test

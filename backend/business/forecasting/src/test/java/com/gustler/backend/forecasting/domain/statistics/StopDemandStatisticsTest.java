@@ -8,7 +8,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class StopDemandStatisticsTest {
-
     private static final long ROUTE_VERSION_3330 = 1L;
     private static final int REVISION = 3;
 

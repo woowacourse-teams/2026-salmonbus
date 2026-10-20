@@ -18,7 +18,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 
 class ContainerErrorResponseValveTest {
-
     private final ContainerErrorResponseValve valve = new ContainerErrorResponseValve();
 
     private final StringWriter written = new StringWriter();

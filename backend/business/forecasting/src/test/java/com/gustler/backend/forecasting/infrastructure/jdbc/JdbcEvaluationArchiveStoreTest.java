@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
-
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch.Key;
@@ -31,10 +30,14 @@ import org.springframework.transaction.support.TransactionTemplate;
 @org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 class JdbcEvaluationArchiveStoreTest {
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-09T00:00:00Z"), ZoneId.of("Asia/Seoul"));
-    @Autowired JdbcClient jdbc;
-    @Autowired PlatformTransactionManager transactions;
-    @Autowired RouteDataQualityAccess quality;
-    @Autowired ForecastEvaluationRepository evaluations;
+    @Autowired
+    JdbcClient jdbc;
+    @Autowired
+    PlatformTransactionManager transactions;
+    @Autowired
+    RouteDataQualityAccess quality;
+    @Autowired
+    ForecastEvaluationRepository evaluations;
     private JdbcEvaluationArchiveStore store;
     private long route;
     private long source;
@@ -125,8 +128,10 @@ class JdbcEvaluationArchiveStoreTest {
     @Test
     void 먼저_지나간_키의_정산도_늦게_완료되면_별도로_예약할_수_있다() {
         // given
-        jdbc.sql("UPDATE forecast_evaluation_result SET scored_at='2026-10-09T00:00:00Z' WHERE vehicle_observation_id=? AND target_stop_order=9")
-            .param(source).update();
+        jdbc.sql(
+        "UPDATE forecast_evaluation_result SET scored_at='2026-10-09T00:00:00Z' WHERE vehicle_observation_id=? AND target_stop_order=9")
+            .param(source)
+            .update();
         assertThat(store.reserve(route, List.of(new Key(source, 9)))).isEmpty();
         reserve(10);
         var tomorrow = new JdbcEvaluationArchiveStore(jdbc, quality,
@@ -166,7 +171,8 @@ class JdbcEvaluationArchiveStoreTest {
 
         // then
         assertThat(resumed.leaseToken()).isNotEqualTo(original.leaseToken());
-        assertThatThrownBy(() -> store.recordVerified(original, "a".repeat(64))).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() ->
+            store.recordVerified(original, "a".repeat(64))).isInstanceOf(IllegalStateException.class);
         store.recordVerified(resumed, "a".repeat(64));
         assertThat(state(original)).isEqualTo("VERIFIED");
     }
@@ -187,8 +193,10 @@ class JdbcEvaluationArchiveStoreTest {
     @Test
     void 서울_자정에_완료된_정산은_오늘_자료로_남긴다() {
         // given
-        jdbc.sql("UPDATE forecast_evaluation_result SET scored_at='2026-10-08T15:00:00Z' WHERE vehicle_observation_id=?")
-            .param(source).update();
+        jdbc.sql(
+        "UPDATE forecast_evaluation_result SET scored_at='2026-10-08T15:00:00Z' WHERE vehicle_observation_id=?")
+            .param(source)
+            .update();
 
         // when
         var batch = store.reserve(route, List.of(new Key(source, 9), new Key(source, 10)));
@@ -242,18 +250,19 @@ class JdbcEvaluationArchiveStoreTest {
         var locked = new java.util.concurrent.CountDownLatch(1);
         var release = new java.util.concurrent.CountDownLatch(1);
         try (var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
-            var owner = executor.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
-                quality.lock(route);
-                locked.countDown();
-                try {
-                    if (!release.await(5, java.util.concurrent.TimeUnit.SECONDS)) {
-                        throw new IllegalStateException("테스트 잠금 해제 시간 초과");
+            var owner =
+                executor.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                    quality.lock(route);
+                    locked.countDown();
+                    try {
+                        if (!release.await(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                            throw new IllegalStateException("테스트 잠금 해제 시간 초과");
+                        }
+                    } catch (InterruptedException exception) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException(exception);
                     }
-                } catch (InterruptedException exception) {
-                    Thread.currentThread().interrupt();
-                    throw new IllegalStateException(exception);
-                }
-            }));
+                }));
             try {
                 assertThat(locked.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
 
@@ -272,8 +281,10 @@ class JdbcEvaluationArchiveStoreTest {
     void 추출_후_원본이_바뀌면_검증_완료로_기록하지_않는다() {
         // given
         var batch = reserve(9);
-        jdbc.sql("UPDATE forecast_evaluation_result SET scoring_state='SKIPPED' WHERE vehicle_observation_id=? AND target_stop_order=9")
-            .param(source).update();
+        jdbc.sql(
+        "UPDATE forecast_evaluation_result SET scoring_state='SKIPPED' WHERE vehicle_observation_id=? AND target_stop_order=9")
+            .param(source)
+            .update();
 
         // when & then
         assertThatThrownBy(() -> store.recordVerified(batch, "a".repeat(64))).isInstanceOf(IllegalStateException.class);
@@ -296,8 +307,10 @@ class JdbcEvaluationArchiveStoreTest {
     void 품질_판본이_바뀌면_이전_예약의_검증_결과를_확정하지_않는다() {
         // given
         var batch = reserve(9);
-        jdbc.sql("UPDATE route_data_quality SET quality_revision=quality_revision+1 WHERE route_id=(SELECT route_id FROM route_version WHERE id=?)")
-            .param(route).update();
+        jdbc.sql(
+        "UPDATE route_data_quality SET quality_revision=quality_revision+1 WHERE route_id=(SELECT route_id FROM route_version WHERE id=?)")
+            .param(route)
+            .update();
 
         // when & then
         assertThatThrownBy(() -> store.recordVerified(batch, "a".repeat(64))).isInstanceOf(IllegalStateException.class);
@@ -322,7 +335,8 @@ class JdbcEvaluationArchiveStoreTest {
     void 키_기록에_실패하면_빈_이관_묶음도_남기지_않는다() {
         // given
         JdbcClient failing = spy(jdbc);
-        doThrow(new DataIntegrityViolationException("실패 주입")).when(failing).sql(contains("INSERT INTO evaluation_archive_member"));
+        doThrow(new DataIntegrityViolationException("실패 주입")).when(failing)
+            .sql(contains("INSERT INTO evaluation_archive_member"));
         var broken = new JdbcEvaluationArchiveStore(failing, quality, CLOCK, transactions);
 
         // when & then
@@ -352,7 +366,9 @@ class JdbcEvaluationArchiveStoreTest {
         // given
         var batch = reserve(9);
         var service = new com.gustler.backend.forecasting.application.evaluation.ArchiveCompletedEvaluationsService(
-            store, (reserved, rows) -> { throw new IllegalStateException("전송 실패 주입"); });
+            store, (reserved, rows) -> {
+                throw new IllegalStateException("전송 실패 주입");
+            });
 
         // when & then
         assertThatThrownBy(() -> service.archive(batch)).isInstanceOf(IllegalStateException.class);
@@ -386,8 +402,10 @@ class JdbcEvaluationArchiveStoreTest {
         var batch = reserve(9);
         var service = new com.gustler.backend.forecasting.application.evaluation.ArchiveCompletedEvaluationsService(
             store, (reserved, rows) -> {
-                jdbc.sql("UPDATE forecast_evaluation_result SET scoring_state='SKIPPED' WHERE vehicle_observation_id=? AND target_stop_order=9")
-                    .param(source).update();
+                jdbc.sql(
+                "UPDATE forecast_evaluation_result SET scoring_state='SKIPPED' WHERE vehicle_observation_id=? AND target_stop_order=9")
+                    .param(source)
+                    .update();
                 return new com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveStorage.Verification(
                     "s3://test-only", "a".repeat(64));
             });
@@ -415,6 +433,9 @@ class JdbcEvaluationArchiveStoreTest {
     }
 
     private String state(EvaluationArchiveBatch batch) {
-        return jdbc.sql("SELECT state FROM evaluation_archive_batch WHERE id=?").param(batch.id()).query(String.class).single();
+        return jdbc.sql("SELECT state FROM evaluation_archive_batch WHERE id=?")
+            .param(batch.id())
+            .query(String.class)
+            .single();
     }
 }

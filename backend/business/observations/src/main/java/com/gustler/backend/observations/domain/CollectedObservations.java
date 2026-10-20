@@ -10,7 +10,6 @@ public record CollectedObservations(
     List<UpstreamObservationRow> storableRows,
     List<UpstreamObservationRow> excludedRows
 ) {
-
     /** 원문 대신 보존하는 관측에 적용한 정규화 규칙의 버전. */
     public static final String CURRENT_NORMALIZATION_VERSION = "normalization-v1.0.0";
 

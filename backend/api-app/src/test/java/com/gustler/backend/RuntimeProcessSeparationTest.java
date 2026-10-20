@@ -30,7 +30,6 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 class RuntimeProcessSeparationTest {
-
     private static final String POSTGRES_IMAGE = "postgres:18";
     private static final String API_JAR = "api.boot.jar";
     private static final String WORKER_JAR = "worker.boot.jar";
@@ -138,7 +137,8 @@ class RuntimeProcessSeparationTest {
     void 실행_JAR_에는_각_프로세스가_사용하는_프로젝트_라이브러리만_들어간다() throws IOException {
         assertThat(projectLibraries(API_JAR)).containsExactly("common");
         assertThat(projectLibraries(WORKER_JAR)).containsExactlyInAnyOrder(
-            "common", "route-catalog", "observations", "arrivals", "forecasting", "api-call-quota", "gbis-client", "operation-log"
+            "common", "route-catalog", "observations", "arrivals", "forecasting", "api-call-quota", "gbis-client",
+            "operation-log"
         );
     }
 
@@ -186,9 +186,9 @@ class RuntimeProcessSeparationTest {
             jarAt(jarProperty));
         Map<String, String> environment = builder.environment();
         environment.keySet().removeIf(name -> name.startsWith("GBIS_")
-            || name.startsWith("MODEL_") || name.startsWith("COLLECTION_")
-            || name.startsWith("FORECAST_") || name.startsWith("MANAGEMENT_")
-            || name.equals("SPRING_APPLICATION_JSON"));
+                || name.startsWith("MODEL_") || name.startsWith("COLLECTION_")
+                || name.startsWith("FORECAST_") || name.startsWith("MANAGEMENT_")
+                || name.equals("SPRING_APPLICATION_JSON"));
         environment.put("SERVER_PORT", String.valueOf(port));
         environment.put("DB_URL", postgres.getJdbcUrl());
         environment.put("DB_USERNAME", postgres.getUsername());
@@ -310,8 +310,8 @@ class RuntimeProcessSeparationTest {
             SELECT DISTINCT event_object_table FROM information_schema.triggers
             WHERE trigger_schema = 'public' AND trigger_name = 'runtime_test_write_audit'
             """)).contains("observation_batch", "forecast_publication", "forecast_evaluation_work",
-                "forecast_evaluation_result", "route",
-                "route_data_quality", "trip_quality_rebuild", "daily_call_quota", "model_deployment");
+            "forecast_evaluation_result", "route",
+            "route_data_quality", "trip_quality_rebuild", "daily_call_quota", "model_deployment");
         assertNoWrites();
     }
 

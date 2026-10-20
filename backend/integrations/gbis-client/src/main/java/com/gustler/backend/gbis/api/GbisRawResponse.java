@@ -7,7 +7,6 @@ package com.gustler.backend.gbis.api;
  * 여기서 갈라둔다. 그 뒤의 해석은 부른 쪽이 한다.
  */
 public sealed interface GbisRawResponse {
-
     /** 본문을 받았다. GBIS 가 정상으로 답했는지는 아직 모른다. */
     record Received(
         String body

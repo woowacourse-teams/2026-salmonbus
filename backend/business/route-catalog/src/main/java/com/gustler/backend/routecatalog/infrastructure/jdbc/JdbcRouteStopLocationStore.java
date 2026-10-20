@@ -1,5 +1,4 @@
 package com.gustler.backend.routecatalog.infrastructure.jdbc;
-
 import com.gustler.backend.routecatalog.domain.RouteStopLocationStore;
 import com.gustler.backend.routecatalog.domain.RouteStop;
 import com.gustler.backend.routecatalog.domain.RouteStops;
@@ -34,8 +33,8 @@ public class JdbcRouteStopLocationStore implements RouteStopLocationStore {
             FROM route_stop_location_history WHERE route_version_id = ?
             ORDER BY stop_order, observed_at DESC
             """).param(versionId).query((rs, index) -> new Saved(rs.getInt("stop_order"),
-                new StopCoordinates(rs.getDouble("x"), rs.getDouble("y")),
-                rs.getObject("observed_at", OffsetDateTime.class))).list();
+            new StopCoordinates(rs.getDouble("x"), rs.getDouble("y")),
+            rs.getObject("observed_at", OffsetDateTime.class))).list();
         Map<Integer, Saved> latest = new HashMap<>();
         rows.forEach(row -> latest.put(row.order(), row));
         List<Object[]> writes = new ArrayList<>();
@@ -55,8 +54,11 @@ public class JdbcRouteStopLocationStore implements RouteStopLocationStore {
             if (previous != null && !observedAt.isAfter(previous.observedAt())) {
                 throw new IllegalArgumentException("이미 저장한 좌표보다 오래된 변경이다");
             }
-            writes.add(new Object[] {versionId, stop.stopOrder(), stop.stopId(), observedAt, coordinates.x(), coordinates.y()});
-            if (previous == null) { initial++; } else { changed++; }
+            writes.add(
+                new Object[] {versionId, stop.stopOrder(), stop.stopId(), observedAt, coordinates.x(),
+                    coordinates.y()});
+            if (previous == null) {
+                initial++; } else { changed++; }
         }
         if (!writes.isEmpty()) {
             batchJdbc.batchUpdate("""
@@ -67,5 +69,6 @@ public class JdbcRouteStopLocationStore implements RouteStopLocationStore {
         return new Changes(initial, changed, missing);
     }
 
-    private record Saved(int order, StopCoordinates coordinates, OffsetDateTime observedAt) { }
+    private record Saved(int order, StopCoordinates coordinates, OffsetDateTime observedAt) {
+    }
 }

@@ -72,13 +72,15 @@ public final class WorkerQualityState {
         }
     }
 
-    public record Read(long generation, Snapshot snapshot) { }
+    public record Read(long generation, Snapshot snapshot) {
+    }
 
     // 트랜잭션 종료 시 이 변경만 해제한다. 커밋·롤백 모두 다음 사용 때 재조회한다.
     public final class Change implements AutoCloseable {
         private boolean closed;
 
-        private Change() { }
+        private Change() {
+        }
 
         @Override
         public void close() {

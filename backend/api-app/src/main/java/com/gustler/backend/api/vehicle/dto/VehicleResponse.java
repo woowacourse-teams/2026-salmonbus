@@ -24,7 +24,6 @@ public record VehicleResponse(
     @Schema(description = "좌석 수가 알려져 있으면 EXACT, 숨기거나 미제공이면 UNKNOWN")
     SeatResponse seat
 ) {
-
     public VehicleResponse {
         Objects.requireNonNull(direction, "direction은 null일 수 없습니다.");
         Objects.requireNonNull(stopId, "stopId는 null일 수 없습니다.");

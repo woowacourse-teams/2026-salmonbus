@@ -14,7 +14,6 @@ import java.util.List;
 public record BusRouteStationResponse(
     Response response
 ) {
-
     public record Response(
         @JsonProperty("msgHeader")
         Header header,
@@ -61,7 +60,13 @@ public record BusRouteStationResponse(
         Double y
     ) {
 
-        public RouteStationItem(String stopId, String name, Integer stopOrder, Integer turnSequence, String turnPoint) {
+        public RouteStationItem(
+            String stopId,
+            String name,
+            Integer stopOrder,
+            Integer turnSequence,
+            String turnPoint
+        ) {
             this(stopId, name, stopOrder, turnSequence, turnPoint, null, null);
         }
 

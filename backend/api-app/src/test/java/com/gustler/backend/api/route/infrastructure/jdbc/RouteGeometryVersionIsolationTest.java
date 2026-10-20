@@ -40,11 +40,16 @@ class RouteGeometryVersionIsolationTest {
     @EnableAutoConfiguration
     @Import({PostgresTestContainer.class, JdbcRouteGeometryQueryRepository.class, RouteGeometryQueryService.class})
     static class Config {
-        @Bean ObjectMapper objectMapper() { return new ObjectMapper(); }
+        @Bean
+        ObjectMapper objectMapper() {
+            return new ObjectMapper();
+        }
     }
 
-    @Autowired private JdbcClient jdbc;
-    @Autowired private RouteGeometryQueryService service;
+    @Autowired
+    private JdbcClient jdbc;
+    @Autowired
+    private RouteGeometryQueryService service;
 
     @Test
     void 판본이_바뀌면_같은_정류장_ID라도_옛_좌표와_형상을_재사용하지_않는다() {
@@ -156,7 +161,12 @@ class RouteGeometryVersionIsolationTest {
         return version;
     }
 
-    private void insertCoordinates(final long version, OffsetDateTime observedAt, final double x, final double y) {
+    private void insertCoordinates(
+        final long version,
+        OffsetDateTime observedAt,
+        final double x,
+        final double y
+    ) {
         var coordinates = points(x, y);
         for (int index = 0; index < coordinates.size(); index++) {
             var point = coordinates.get(index);
@@ -164,7 +174,7 @@ class RouteGeometryVersionIsolationTest {
                 INSERT INTO route_stop_location_history(route_version_id,stop_order,stop_id,observed_at,x,y)
                 VALUES (?,?,?,?,?,?)
                 """).params(version, index + 1, index == 1 ? "206000638" : "206000637", observedAt,
-                    point.x(), point.y()).update();
+                point.x(), point.y()).update();
         }
     }
 
@@ -173,7 +183,7 @@ class RouteGeometryVersionIsolationTest {
             INSERT INTO route_geometry(id,route_version_id,received_at,content_digest,points)
             VALUES (?,?,?,?,?::jsonb)
             """).params(UUID.randomUUID(), version, receivedAt, "c".repeat(64),
-                new ObjectMapper().writeValueAsString(points)).update();
+            new ObjectMapper().writeValueAsString(points)).update();
     }
 
     // 판본 격리 계약을 확인하는 작은 합성 자료이며 실제 도로 형상 fixture가 아니다.

@@ -10,7 +10,6 @@ public record DirectionInfo(
     String firstDepartureTime,
     String lastDepartureTime
 ) {
-
     public DirectionInfo {
         Objects.requireNonNull(id, "id는 null일 수 없습니다.");
         Objects.requireNonNull(name, "name은 null일 수 없습니다.");

@@ -11,7 +11,6 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class RouteVersionContentTest {
-
     private static final String STOP_205000217 = "205000217";
     private static final String STOP_208000069 = "208000069";
     private static final RouteTimetable TIMETABLE_1650 =

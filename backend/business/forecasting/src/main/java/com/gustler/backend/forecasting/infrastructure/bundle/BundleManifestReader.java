@@ -1,5 +1,4 @@
 package com.gustler.backend.forecasting.infrastructure.bundle;
-
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
@@ -121,7 +120,7 @@ final class BundleManifestReader {
         String canonical = CANONICAL_WRITER.writeValueAsString(root);
         BundleCheck.MANIFEST_IS_CANONICAL_JSON.require(
             canonical.equals(text.strip()),
-            "항목을 이름순으로 빈칸 없이 다시 적은 것과 다르다");
+        "항목을 이름순으로 빈칸 없이 다시 적은 것과 다르다");
     }
 
     private static void rejectUnknownFields(

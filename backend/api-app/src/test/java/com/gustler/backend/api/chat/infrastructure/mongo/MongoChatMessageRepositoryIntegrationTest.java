@@ -23,7 +23,6 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 @Testcontainers
 class MongoChatMessageRepositoryIntegrationTest {
-
     private static final String ROOM = "204000057";
     private static final String OTHER_ROOM = "234000050";
     private static final Instant BASE = Instant.parse("2026-09-29T13:00:00.000Z");
@@ -56,7 +55,8 @@ class MongoChatMessageRepositoryIntegrationTest {
     @Test
     void 새_메시지는_CREATED로_저장한다() {
         // given
-        ChatMessage message = message(1, ROOM, "7c9e6679-7425-40de-944b-e07fc1f90ae7", "author-a", "지금 자리 여유 있어요", BASE);
+        ChatMessage message =
+            message(1, ROOM, "7c9e6679-7425-40de-944b-e07fc1f90ae7", "author-a", "지금 자리 여유 있어요", BASE);
 
         // when
         SaveResult result = repository.save(message);
@@ -118,7 +118,8 @@ class MongoChatMessageRepositoryIntegrationTest {
         // given
         List<ChatMessage> room = new ArrayList<>();
         for (int index = 0; index < 52; index++) {
-            room.add(message(100 + index, ROOM, "room-" + index, "author-a", "메시지 " + index, BASE.plusMillis(index * 10L)));
+            room.add(
+                message(100 + index, ROOM, "room-" + index, "author-a", "메시지 " + index, BASE.plusMillis(index * 10L)));
         }
         Instant tied = BASE.plusSeconds(60);
         for (int index = 0; index < 3; index++) {
@@ -148,7 +149,9 @@ class MongoChatMessageRepositoryIntegrationTest {
     @Test
     void 초기화_스크립트가_두_인덱스를_만들고_TTL_인덱스는_없다() {
         // when
-        Map<String, Document> indexes = collection.listIndexes().into(new ArrayList<>()).stream()
+        Map<String, Document> indexes = collection.listIndexes()
+            .into(new ArrayList<>())
+            .stream()
             .collect(Collectors.toMap(index -> index.getString("name"), index -> index));
 
         // then
@@ -179,7 +182,8 @@ class MongoChatMessageRepositoryIntegrationTest {
     @Test
     void 앱은_인덱스를_만들지_않는다() {
         // given
-        MongoCollection<Document> untouched = client.getDatabase("salmonbus_chat").getCollection("messages_without_init");
+        MongoCollection<Document> untouched = client.getDatabase("salmonbus_chat")
+            .getCollection("messages_without_init");
         untouched.drop();
         MongoChatMessageRepository withoutInit = new MongoChatMessageRepository(untouched);
 
@@ -212,7 +216,7 @@ class MongoChatMessageRepositoryIntegrationTest {
         Instant createdAt
     ) {
         return new ChatMessage(
-            "68db0000000000000000%04x".formatted(sequence),
+                "68db0000000000000000%04x".formatted(sequence),
             roomId,
             clientMessageId,
             authorId,

@@ -22,7 +22,10 @@ public class GbisRouteGeometrySource implements RouteGeometrySource {
     public Optional<Read> read(String sourceRouteId) {
         try {
             return lines.read(sourceRouteId).map(points -> new Read(new RouteShape(points.stream()
-                .map(point -> new RouteShape.Point(point.x(), point.y())).toList()), OffsetDateTime.now(clock)));
-        } catch (IllegalArgumentException unreadable) { return Optional.empty(); }
+                .map(point -> new RouteShape.Point(point.x(), point.y()))
+                .toList()), OffsetDateTime.now(clock)));
+        } catch (IllegalArgumentException unreadable) {
+            return Optional.empty();
+        }
     }
 }

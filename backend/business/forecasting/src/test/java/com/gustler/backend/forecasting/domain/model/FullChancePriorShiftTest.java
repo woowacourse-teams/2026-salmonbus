@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test;
  * 막는 자리다. 성적이 50건에 못 미치면 아예 안 옮긴다.
  */
 class FullChancePriorShiftTest {
-
     private static final double TOLERANCE = 1e-15;
     private static final double SMALLEST_CHANCE = 1e-6;
 

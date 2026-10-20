@@ -18,7 +18,6 @@ import com.gustler.backend.forecasting.domain.model.ResidualDirection;
  * v4-1 정본 6절이 그 둘을 최신 구현보다 우선해서 가져오면 안 되는 값으로 못박았다.
  */
 enum BundleTensor {
-
     FULL_CHANCE("hurdle_coefficients", TensorDataType.FLOAT64, Layout.BY_FEATURE),
     ANCHOR("anchor_coefficients", TensorDataType.FLOAT64, Layout.BY_ANCHOR_TERM),
     RESIDUAL_SIGN("sign_coefficients", TensorDataType.FLOAT64, Layout.BY_DIRECTION_AND_FEATURE),
@@ -71,9 +70,9 @@ enum BundleTensor {
             case BY_FEATURE -> new int[] {routeCount, horizonCount, featureCount};
             case BY_ANCHOR_TERM -> new int[] {routeCount, horizonCount, ANCHOR_TERM_COUNT};
             case BY_DIRECTION_AND_FEATURE ->
-                new int[] {routeCount, horizonCount, directions, featureCount};
+            new int[] {routeCount, horizonCount, directions, featureCount};
             case BY_DIRECTION_AND_BIN ->
-                new int[] {routeCount, horizonCount, directions, HorizonCoefficients.BIN_COUNT};
+            new int[] {routeCount, horizonCount, directions, HorizonCoefficients.BIN_COUNT};
             case BY_DIRECTION_AND_BIN_AND_FEATURE -> new int[] {
                 routeCount, horizonCount, directions, HorizonCoefficients.BIN_COUNT, featureCount};
         };

@@ -29,12 +29,15 @@ class RouteGeometryRuntimeTest {
     @Test
     @Timeout(90)
     void 지정한_기존_8노선_643방문을_수집하고_노선별_형상과_방향과_회차를_보존한다() throws Exception {
-        var catalogRows = JSON.readTree(Files.readString(Path.of(System.getProperty("geometry.routes.fixture")))).path("routes");
+        var catalogRows = JSON.readTree(Files.readString(Path.of(System.getProperty("geometry.routes.fixture"))))
+            .path("routes");
         var catalog = new java.util.HashMap<String, JsonNode>();
         catalogRows.forEach(route -> catalog.put(route.path("routeId").asString(), route));
         var fixtures = new ArrayList<RouteGeometryFixture>();
         try (var capture = getClass().getResourceAsStream("/gbis/route-geometry-eight-20261014.json")) {
-            JSON.readTree(capture).path("routes").forEach(route -> fixtures.add(RouteGeometryFixture.fromCaptured(route)));
+            JSON.readTree(capture)
+                .path("routes")
+                .forEach(route -> fixtures.add(RouteGeometryFixture.fromCaptured(route)));
         }
         assertThat(fixtures).extracting(RouteGeometryFixture::name)
             .containsExactlyInAnyOrder("3330", "1650", "9007", "9300", "6011", "3000", "5600", "3500");
@@ -89,14 +92,20 @@ class RouteGeometryRuntimeTest {
                     assertThat(actual.at("/point/y")).isEqualTo(stop.path("y"));
                 }
                 if (route.name().equals("3500")) {
-                    assertThat(route.stops().stream().map(RouteGeometryFixture.Stop::stationId).distinct().count())
+                    assertThat(route.stops()
+                        .stream()
+                        .map(RouteGeometryFixture.Stop::stationId)
+                        .distinct()
+                        .count())
                         .as("3500의 중복 정류장 방문을 합치지 않는다").isEqualTo(route.stops().size() - 1);
                 }
                 versions.add(body.path("referenceVersionId").asString());
                 revisions.add(body.path("geometryRevision").asString());
                 responses.add(body);
                 visits += body.path("busStops").size();
-                var pinned = get(URI.create(uri + "?referenceVersionId=" + body.path("referenceVersionId").asString()));
+                var pinned =
+                    get(URI.create(uri + "?referenceVersionId=" + body.path("referenceVersionId")
+                        .asString()));
                 assertThat(pinned.statusCode()).isEqualTo(200);
                 assertThat(JSON.readTree(pinned.body())).isEqualTo(body);
                 assertThat(response.headers().firstValue("ETag")).isPresent();
@@ -113,8 +122,11 @@ class RouteGeometryRuntimeTest {
             Files.writeString(Path.of("build/reports/geometry-eight-runtime-responses.json"),
                 JSON.writerWithDefaultPrettyPrinter().writeValueAsString(responses));
             assertThat(runtime.source.unexpected()).isEmpty();
-            assertThat(fixtures.stream().mapToInt(route -> route.points().size()).sum()).isEqualTo(7063);
-            System.out.println("geometry_runtime routes=8 visits=643 points=7063 routeQuota=24 arrivalQuota=0 liveGbisCalls=0 shapes=captured_20261014");
+            assertThat(fixtures.stream()
+                    .mapToInt(route -> route.points().size())
+                    .sum()).isEqualTo(7063);
+            System.out.println(
+            "geometry_runtime routes=8 visits=643 points=7063 routeQuota=24 arrivalQuota=0 liveGbisCalls=0 shapes=captured_20261014");
         }
     }
 
@@ -150,14 +162,23 @@ class RouteGeometryRuntimeTest {
             assertThat(runtime.source.locationCalls()).isZero();
             assertThat(runtime.routeReservations()).isEqualTo(3);
             String etag = response.headers().firstValue("ETag").orElseThrow();
-            var unchanged = HTTP.send(HttpRequest.newBuilder(uri).header("If-None-Match", etag).GET().build(), HttpResponse.BodyHandlers.ofString());
+            var unchanged = HTTP.send(HttpRequest.newBuilder(uri)
+                    .header("If-None-Match", etag)
+                    .GET()
+                    .build(), HttpResponse.BodyHandlers.ofString());
             assertThat(unchanged.statusCode()).isEqualTo(304);
             assertThat(unchanged.body()).isEmpty();
-            var compressed = HTTP.send(HttpRequest.newBuilder(uri).header("Accept-Encoding", "gzip").GET().build(),
+            var compressed = HTTP.send(HttpRequest.newBuilder(uri)
+                    .header("Accept-Encoding", "gzip")
+                    .GET()
+                    .build(),
                 HttpResponse.BodyHandlers.ofByteArray());
             assertThat(compressed.headers().firstValue("Content-Encoding")).contains("gzip");
             try (var gzip = new GZIPInputStream(new ByteArrayInputStream(compressed.body()))) {
-                assertThat(JSON.readTree(gzip).path("geometryRevision").asString()).isEqualTo(body.path("geometryRevision").asString());
+                assertThat(JSON.readTree(gzip)
+                    .path("geometryRevision")
+                    .asString()).isEqualTo(body.path("geometryRevision")
+                        .asString());
             }
             assertThat(runtime.source.geometryCalls()).isEqualTo(1);
             var eta = runtime.awaitValue("206000637", "/status", "READY", Duration.ofSeconds(8));
@@ -172,7 +193,10 @@ class RouteGeometryRuntimeTest {
     }
 
     private static HttpResponse<String> get(URI uri) throws Exception {
-        return HTTP.send(HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(5)).GET().build(), HttpResponse.BodyHandlers.ofString());
+        return HTTP.send(HttpRequest.newBuilder(uri)
+            .timeout(Duration.ofSeconds(5))
+            .GET()
+            .build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private static HttpResponse<String> awaitReady(URI uri) throws Exception {
@@ -180,7 +204,10 @@ class RouteGeometryRuntimeTest {
         HttpResponse<String> response;
         do {
             response = get(uri);
-            if (response.statusCode() == 200 && JSON.readTree(response.body()).path("status").asString().equals("READY")) {
+            if (response.statusCode() == 200 && JSON.readTree(response.body())
+                    .path("status")
+                    .asString()
+                    .equals("READY")) {
                 return response;
             }
             Thread.sleep(100);

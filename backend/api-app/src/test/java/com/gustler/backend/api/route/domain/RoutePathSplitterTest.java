@@ -104,8 +104,12 @@ class RoutePathSplitterTest {
 
     @Test
     void 큰_자료의_가공량을_제한하고_전체형상은_그대로_제공한다() {
-        var stops = IntStream.range(0, 2001).mapToObj(i -> i % 2 == 0 ? A : B).toList();
-        var points = IntStream.range(0, 1002).mapToObj(i -> i % 2 == 0 ? A : B).toList();
+        var stops = IntStream.range(0, 2001)
+            .mapToObj(i -> i % 2 == 0 ? A : B)
+            .toList();
+        var points = IntStream.range(0, 1002)
+            .mapToObj(i -> i % 2 == 0 ? A : B)
+            .toList();
         var geometry = geometry(1000, stops, points);
         assertThat(geometry.paths()).isNull();
         assertThat(geometry.points()).hasSize(1002);
@@ -121,9 +125,15 @@ class RoutePathSplitterTest {
             assertThat(routes).hasSize(8);
             for (var route : routes) {
                 var points = new ArrayList<Point>();
-                route.path("shape").forEach(p -> points.add(new Point(p.path("x").doubleValue(), p.path("y").doubleValue())));
+                route.path("shape")
+                    .forEach(p -> points.add(new Point(p.path("x")
+                        .doubleValue(), p.path("y")
+                        .doubleValue())));
                 var stops = new ArrayList<Point>();
-                route.path("stops").forEach(s -> stops.add(new Point(s.path("x").doubleValue(), s.path("y").doubleValue())));
+                route.path("stops")
+                    .forEach(s -> stops.add(new Point(s.path("x")
+                        .doubleValue(), s.path("y")
+                        .doubleValue())));
                 String name = route.path("expectedName").asString();
                 int turn = route.path("stops").get(0).path("turnSeq").intValue();
                 var paths = geometry(turn, stops, points).paths();
@@ -141,8 +151,10 @@ class RoutePathSplitterTest {
     }
 
     private static RouteGeometry geometry(Integer turn, List<Point> coordinates, List<Point> points) {
-        var stops = IntStream.range(0, coordinates.size()).mapToObj(i -> new Stop("206000637", i + 1, "stop",
-            turn == null || i + 1 <= turn ? "UP" : "DOWN", true, coordinates.get(i))).toList();
+        var stops = IntStream.range(0, coordinates.size())
+            .mapToObj(i -> new Stop("206000637", i + 1, "stop",
+            turn == null || i + 1 <= turn ? "UP" : "DOWN", true, coordinates.get(i)))
+            .toList();
         return new RouteGeometry("204000057", 7, "3330", "A", "B", turn, stops,
             points == null ? null : new RouteGeometry.Shape(UUID.randomUUID(), Instant.EPOCH, points));
     }

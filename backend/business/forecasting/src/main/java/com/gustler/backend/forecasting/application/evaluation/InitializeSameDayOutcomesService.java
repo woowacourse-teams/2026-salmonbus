@@ -46,11 +46,18 @@ public class InitializeSameDayOutcomesService implements InitializeSameDayOutcom
             lastRouteId = Long.MIN_VALUE;
         }
         List<Long> routes = WorkerOperationLog.measure("same_day_initialization_routes", "all",
-            initializer::activeRouteIds).stream().distinct().sorted().toList();
+            initializer::activeRouteIds)
+            .stream()
+            .distinct()
+            .sorted()
+            .toList();
         retryAt.keySet().retainAll(routes);
         List<Long> due = routes.stream()
-            .filter(route -> !now.isBefore(retryAt.getOrDefault(route, Instant.MIN))).toList();
-        if (due.isEmpty()) { return; }
+            .filter(route -> !now.isBefore(retryAt.getOrDefault(route, Instant.MIN)))
+            .toList();
+        if (due.isEmpty()) {
+            return;
+        }
         long route = due.stream().filter(id -> id > lastRouteId).findFirst().orElse(due.getFirst());
         lastRouteId = route;
         var attempt = new SameDayInitializationAttempt();
@@ -64,10 +71,11 @@ public class InitializeSameDayOutcomesService implements InitializeSameDayOutcom
             throw failure;
         } finally {
             log.atLevel(attempt.status().equals("FAILED") ? Level.ERROR : Level.INFO)
-                .log("event=same_day_initialization startedAt={} routeId={} outcomeDate={} status={} sourceAttempted={} lockAcquireMs={} sourceQueryMs={} totalMs={} failedStage={} sqlState={}",
-                startedAt.atZone(ZoneId.of("Asia/Seoul")), route, day.date(), attempt.status(),
-                attempt.sourceAttempted(), attempt.lockAcquireMs(), attempt.sourceQueryMs(),
-                attempt.totalMs(), attempt.failedStage(), attempt.sqlState());
+                .log(
+                    "event=same_day_initialization startedAt={} routeId={} outcomeDate={} status={} sourceAttempted={} lockAcquireMs={} sourceQueryMs={} totalMs={} failedStage={} sqlState={}",
+                    startedAt.atZone(ZoneId.of("Asia/Seoul")), route, day.date(), attempt.status(),
+                    attempt.sourceAttempted(), attempt.lockAcquireMs(), attempt.sourceQueryMs(),
+                    attempt.totalMs(), attempt.failedStage(), attempt.sqlState());
             // 실행 종료부터 간격을 둔다. 실패한 노선도 다음 회차를 독점하지 못한다.
             retryAt.put(route, clock.instant().plus(policy.retryInterval()));
         }

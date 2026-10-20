@@ -16,7 +16,6 @@ import org.springframework.data.domain.Persistable;
 @Table(name = "route_stop")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RouteStopJpaEntity implements Persistable<RouteStopJpaId> {
-
     @EmbeddedId
     private RouteStopJpaId id;
 

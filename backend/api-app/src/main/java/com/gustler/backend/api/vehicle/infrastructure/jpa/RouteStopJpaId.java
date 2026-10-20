@@ -7,7 +7,6 @@ import java.util.Objects;
 
 @Embeddable
 public class RouteStopJpaId implements Serializable {
-
     @Column(name = "route_version_id", nullable = false)
     private Long routeVersionId;
 

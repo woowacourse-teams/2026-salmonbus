@@ -3,7 +3,6 @@ package com.gustler.backend.api.board.controller;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
 import com.gustler.backend.api.board.support.BoardDatabaseFixture;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture.RouteContext;
 import com.gustler.backend.support.IntegrationTest;
@@ -30,7 +29,6 @@ import org.springframework.web.context.WebApplicationContext;
 @Transactional
 @Import(WatchBoardNightCacheApiContractTest.FixedClockConfig.class)
 class WatchBoardNightCacheApiContractTest {
-
     private static final String ROUTE_ID = "204000057";
     private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-10-15T19:05:00Z");
 
@@ -77,7 +75,6 @@ class WatchBoardNightCacheApiContractTest {
 
     @TestConfiguration(proxyBeanMethods = false)
     static class FixedClockConfig {
-
         @Bean
         @Primary
         Clock fixedSeoulNightClock() {

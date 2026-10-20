@@ -17,7 +17,6 @@ import org.springframework.context.ApplicationContext;
  */
 @IntegrationTest
 class ForecastScheduleDefaultTest {
-
     @Autowired
     private ApplicationContext applicationContext;
 

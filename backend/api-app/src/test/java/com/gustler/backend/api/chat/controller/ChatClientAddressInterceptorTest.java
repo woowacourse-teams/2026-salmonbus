@@ -14,7 +14,6 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.socket.WebSocketHandler;
 
 class ChatClientAddressInterceptorTest {
-
     private static final String REMOTE_ADDRESS = "198.51.100.9";
 
     private final ChatClientAddressInterceptor interceptor = new ChatClientAddressInterceptor();

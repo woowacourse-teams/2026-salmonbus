@@ -9,7 +9,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class RouteStopsTest {
-
     private static final Instant OBSERVED_AT = Instant.parse("2026-08-25T08:30:00Z");
     /** 혼잡도를 안 준 관측. 이 테스트가 보는 것과 무관하다. */
     private static final Integer CROWD_LEVEL_UNKNOWN = null;
@@ -154,7 +153,8 @@ class RouteStopsTest {
     @Test
     void 판본의_마지막_순번은_정류장_중_가장_큰_순번이다() {
         // given 경유 지점이 마지막 순번을 차지해도 그것까지 센다
-        RouteStops stops = new RouteStops(ROUTE_VERSION_3330, UPSTREAM_ROUTE_3330, List.of(boardingStop(1), passingStop(60)));
+        RouteStops stops =
+            new RouteStops(ROUTE_VERSION_3330, UPSTREAM_ROUTE_3330, List.of(boardingStop(1), passingStop(60)));
 
         // when
         final int actual = stops.largestStopOrder();

@@ -1,7 +1,6 @@
 package com.gustler.backend.api.chat.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
-
 import com.gustler.backend.api.chat.domain.ChatMessage;
 import java.time.Clock;
 import java.time.Instant;
@@ -11,7 +10,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ChatServiceTest {
-
     @Test
     void 저장소가_확정한_뒤에만_메시지_결과를_돌려준다() {
         RecordingRepository repository = new RecordingRepository();

@@ -9,5 +9,7 @@ public interface RouteGeometryQueryRepository {
     List<RouteGeometry.Stop> stops(long versionId);
     Optional<RouteGeometry.Shape> shape(long versionId);
 
-    record Reference(String routeId, long versionId, String name, String startPoint, String endPoint, Integer turnSequence) { }
+    record Reference(String routeId, long versionId, String name, String startPoint, String endPoint,
+        Integer turnSequence) {
+    }
 }

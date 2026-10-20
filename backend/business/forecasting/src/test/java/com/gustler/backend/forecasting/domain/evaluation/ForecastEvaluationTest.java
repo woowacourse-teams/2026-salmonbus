@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
-
 import java.time.Instant;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -13,7 +12,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 class ForecastEvaluationTest {
-
     private static final long OBSERVATION_ID = 10L;
     private static final int TARGET_STOP_ORDER = 9;
     private static final Instant SCORED_AT = Instant.parse("2026-09-23T02:00:00Z");

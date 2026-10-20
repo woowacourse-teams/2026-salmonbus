@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Optional;
 
 public interface VehicleQueryRepository {
-
     Optional<VehicleSnapshot> findLatestSnapshot(RouteId routeId);
 
     List<ObservedVehicle> findVehicles(final long observationBatchId);

@@ -12,7 +12,6 @@ import jakarta.persistence.Table;
 @Entity(name = "BoardRouteStopJpaEntity")
 @Table(name = "route_stop")
 public class RouteStopJpaEntity {
-
     @EmbeddedId
     private RouteStopJpaId id;
 

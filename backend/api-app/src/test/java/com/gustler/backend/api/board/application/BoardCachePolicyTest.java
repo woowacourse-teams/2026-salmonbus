@@ -11,7 +11,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class BoardCachePolicyTest {
-
     private static final Clock SEOUL_CLOCK = Clock.fixed(
         Instant.EPOCH,
         ZoneId.of("Asia/Seoul")

@@ -8,7 +8,10 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class JdbcRouteDataQualityRepository implements RouteDataQualityRepository {
     private final JdbcClient jdbc;
-    public JdbcRouteDataQualityRepository(final JdbcClient jdbc) { this.jdbc = jdbc; }
+
+    public JdbcRouteDataQualityRepository(final JdbcClient jdbc) {
+        this.jdbc = jdbc;
+    }
 
     @Override
     public RouteDataQuality findForUpdate(final long version) {

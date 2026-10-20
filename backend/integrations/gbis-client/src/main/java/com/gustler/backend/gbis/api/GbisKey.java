@@ -4,7 +4,6 @@ public record GbisKey(
     String alias,
     String serviceKey
 ) {
-
     public static final String PRIMARY = "a";
 
     @Override

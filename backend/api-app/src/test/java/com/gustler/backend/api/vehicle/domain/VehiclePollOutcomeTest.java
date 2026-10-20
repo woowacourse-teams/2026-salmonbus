@@ -8,7 +8,6 @@ import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class VehiclePollOutcomeTest {
-
     @ParameterizedTest
     @CsvSource({
         "SUCCESS_ROWS, SUCCESS_ROWS",

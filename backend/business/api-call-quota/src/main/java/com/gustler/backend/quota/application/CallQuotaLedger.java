@@ -27,7 +27,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Component
 public class CallQuotaLedger implements ApiCallQuota {
-
     private static final int ONE_CALL = 1;
 
     private final CallQuotaStore callQuotaStore;
@@ -97,8 +96,10 @@ public class CallQuotaLedger implements ApiCallQuota {
         OffsetDateTime reservedAt,
         OffsetDateTime dispatchAt
     ) {
-        if (DailyCallQuota.at(CallQuota.BUS_LOCATION, keyAlias, reservedAt, policy.limitOf(CallQuota.BUS_LOCATION, keyAlias))
-            .covers(dispatchAt)) {
+        if (
+            DailyCallQuota.at(CallQuota.BUS_LOCATION, keyAlias, reservedAt,
+                policy.limitOf(CallQuota.BUS_LOCATION, keyAlias))
+                .covers(dispatchAt)) {
             return true;
         }
         return reserveCalls(CallQuota.BUS_LOCATION, keyAlias, dispatchAt, ONE_CALL);

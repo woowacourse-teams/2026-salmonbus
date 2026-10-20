@@ -6,7 +6,6 @@ import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 public class BoardDatabaseFixture {
-
     private static final String NORMALIZATION_VERSION = "normalization-v1.0.0";
     private static final String COLLECTION_STRATEGY_VERSION = "adaptive-kst-v1.0.1";
     /** 지나온 정류소 순번이 stop_order 와 같아지는 상태다. 이 픽스처는 차량 위치만 쓰고 상태는 안 본다. */
@@ -301,18 +300,18 @@ public class BoardDatabaseFixture {
                 )
                 RETURNING id
                 """)
-            .param("batchId", batchId)
-            .param("routeVersionId", route.routeVersionId())
-            .param("sourceRowNumber", sourceRowNumber)
-            .param("vehicleId", vehicleId)
-            .param("stopOrder", stopOrder)
-            .param("stopId", stopId)
-            .param("passedStopOrder", passedStopOrder)
-            .param("runningState", runningState)
-            .param("remainingSeats", remainingSeats)
-            .param("seatUnknownReason", seatUnknownReason)
-            .query(Long.class)
-            .single());
+                .param("batchId", batchId)
+                .param("routeVersionId", route.routeVersionId())
+                .param("sourceRowNumber", sourceRowNumber)
+                .param("vehicleId", vehicleId)
+                .param("stopOrder", stopOrder)
+                .param("stopId", stopId)
+                .param("passedStopOrder", passedStopOrder)
+                .param("runningState", runningState)
+                .param("remainingSeats", remainingSeats)
+                .param("seatUnknownReason", seatUnknownReason)
+                .query(Long.class)
+                .single());
     }
 
     public void insertForecast(
@@ -371,7 +370,8 @@ public class BoardDatabaseFixture {
             .param("targetStopOrder", targetStopOrder)
             .param("routeVersionId", route.routeVersionId())
             .update();
-        jdbcClient.sql("UPDATE forecast_publication SET prediction_count = prediction_count + 1 WHERE id = :publicationId")
+        jdbcClient.sql(
+        "UPDATE forecast_publication SET prediction_count = prediction_count + 1 WHERE id = :publicationId")
             .param("publicationId", publicationId)
             .update();
     }

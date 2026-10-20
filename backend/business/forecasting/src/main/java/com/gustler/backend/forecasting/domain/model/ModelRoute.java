@@ -12,7 +12,6 @@ import java.util.Map;
  * <p>목록에 없는 노선을 임의로 변환하면 다른 노선의 계수를 사용할 수 있으므로 거절한다.
  */
 public final class ModelRoute {
-
     private static final Map<String, String> BY_SOURCE_ROUTE_ID = Map.ofEntries(
         Map.entry("234000050", "1650"),
         Map.entry("204000057", "3330"),

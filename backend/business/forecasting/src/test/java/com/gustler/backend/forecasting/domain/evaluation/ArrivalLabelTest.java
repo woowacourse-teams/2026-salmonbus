@@ -6,7 +6,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ArrivalLabelTest {
-
     private static final long ARRIVAL_OBSERVATION_ID = 7L;
     private static final int SEATS_ON_ARRIVAL = 12;
 

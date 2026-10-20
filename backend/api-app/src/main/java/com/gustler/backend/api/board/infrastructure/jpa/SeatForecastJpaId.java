@@ -8,7 +8,6 @@ import lombok.EqualsAndHashCode;
 @Embeddable
 @EqualsAndHashCode
 public class SeatForecastJpaId implements Serializable {
-
     @Column(name = "vehicle_observation_id", nullable = false)
     private Long vehicleObservationId;
 

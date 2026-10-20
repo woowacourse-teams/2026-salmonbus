@@ -35,7 +35,6 @@ import org.springframework.http.MediaType;
  * 로그를 찾을 수가 없다.</b> 이 경로의 거절은 다른 데 아무 기록도 안 남는다.
  */
 public class ContainerErrorResponseValve extends ErrorReportValve {
-
     private static final Logger log = LoggerFactory.getLogger(ContainerErrorResponseValve.class);
 
     private static final int SMALLEST_ERROR_STATUS = 400;

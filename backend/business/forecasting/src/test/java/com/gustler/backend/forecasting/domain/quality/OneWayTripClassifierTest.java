@@ -21,9 +21,12 @@ class OneWayTripClassifierTest {
     // 합성 입력의 60초는 운영 권장 기준이 아니다.
     private static final Route ROUTE = new Route(1, 20, 10, Duration.ofSeconds(60));
     private static final Route DEFAULT_ROUTE = new Route(1, 20, 10, null);
-    private Observation row(long id, int stop, int state, int seats) {
+
+    private Observation row(long id, int stop, int state, int seats
+    ) {
         return new Observation(id, "bus", T.plusSeconds(id), stop, state, seats);
     }
+
     private Previous previous(Observation row, long trip, Status status) {
         return new Previous(row, trip, status);
     }
@@ -347,9 +350,11 @@ class OneWayTripClassifierTest {
         // when
         var start = classify(DEFAULT_ROUTE, null, departure);
         var increase = classify(DEFAULT_ROUTE, previous(departure, start.tripId(), start.status()), increased);
-        var excluded = classify(DEFAULT_ROUTE, previous(increased, increase.tripId(), increase.status()), aboveRange);
+        var excluded =
+            classify(DEFAULT_ROUTE, previous(increased, increase.tripId(), increase.status()), aboveRange);
         var arrived = classify(DEFAULT_ROUTE, previous(aboveRange, excluded.tripId(), excluded.status()), arrival);
-        var nextTrip = classify(DEFAULT_ROUTE, previous(arrival, arrived.tripId(), arrived.status()), nextDeparture);
+        var nextTrip =
+            classify(DEFAULT_ROUTE, previous(arrival, arrived.tripId(), arrived.status()), nextDeparture);
 
         // then
         assertThat(increase).isEqualTo(new Decision(1, Status.ELIGIBLE, Boundary.CONTINUATION));
@@ -425,6 +430,7 @@ class OneWayTripClassifierTest {
         // then
         assertThat(actual).isEqualTo(new Decision(100, Status.ELIGIBLE, Boundary.DEPARTURE));
     }
+
     @Test
     void 관측_간격이_설정값을_초과해도_종점_직전에서_기점_다음으로_이동하면_새_편도를_시작한다() {
         // given
@@ -437,5 +443,4 @@ class OneWayTripClassifierTest {
         // then
         assertThat(actual).isEqualTo(new Decision(100, Status.ELIGIBLE, Boundary.DIRECTION_CHANGE));
     }
-
 }

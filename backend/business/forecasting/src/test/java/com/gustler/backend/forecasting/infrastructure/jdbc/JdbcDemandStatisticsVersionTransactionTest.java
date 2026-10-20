@@ -25,7 +25,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @ForecastingIntegrationTest
 class JdbcDemandStatisticsVersionTransactionTest {
-
     private static final String CALCULATION_VERSION = "observed-max-capacity-v1";
     private static final Instant DATA_UNTIL = Instant.parse("2026-08-19T04:00:00Z");
 

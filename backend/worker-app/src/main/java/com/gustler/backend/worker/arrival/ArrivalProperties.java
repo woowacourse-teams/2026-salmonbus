@@ -31,9 +31,16 @@ public record ArrivalProperties(String internalToken, int keyDailyLimit, int que
         return Map.copyOf(limits);
     }
 
-    public ArrivalProperties(String internalToken, int keyDailyLimit, int queueCapacity,
-        Duration refreshInterval, Duration validity, Duration retryBase, Duration retryMaximum,
-        Duration startupDelay, Duration queueWait, Duration retention) {
+    public ArrivalProperties(
+        String internalToken, int keyDailyLimit, int queueCapacity,
+        Duration refreshInterval,
+        Duration validity,
+        Duration retryBase,
+        Duration retryMaximum,
+        Duration startupDelay,
+        Duration queueWait,
+        Duration retention
+    ) {
         this(internalToken, keyDailyLimit, queueCapacity, refreshInterval, validity, retryBase,
             retryMaximum, startupDelay, queueWait, retention, Map.of());
     }
@@ -43,5 +50,7 @@ public record ArrivalProperties(String internalToken, int keyDailyLimit, int que
     }
 
     @Override
-    public String toString() { return "ArrivalProperties[internalToken=***, keyDailyLimit=" + keyDailyLimit + "]"; }
+    public String toString() {
+        return "ArrivalProperties[internalToken=***, keyDailyLimit=" + keyDailyLimit + "]";
+    }
 }

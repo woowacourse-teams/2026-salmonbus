@@ -1,9 +1,9 @@
 package com.gustler.backend.forecasting.domain.publication;
 
 import com.gustler.backend.forecasting.domain.model.VehicleStopTarget;
+
 import com.gustler.backend.forecasting.domain.model.ForecastDistance;
 import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
-
 import java.time.Instant;
 
 /**
@@ -25,10 +25,11 @@ public record SeatForecast(
     Instant generatedAt,
     boolean evaluationDetailRequired
 ) {
-
     public SeatForecast(long vehicleObservationId, long routeVersionId, int targetStopOrder, int stopsToTarget,
         long modelDeploymentId, int demandStatisticsRevision, double seatFullChanceRaw, double seatFullChance,
-        Double expectedSeats, Instant generatedAt) {
+        Double expectedSeats,
+        Instant generatedAt
+    ) {
         this(vehicleObservationId, routeVersionId, targetStopOrder, stopsToTarget, modelDeploymentId,
             demandStatisticsRevision, seatFullChanceRaw, seatFullChance, expectedSeats, generatedAt, true);
     }

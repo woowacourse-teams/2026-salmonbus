@@ -27,8 +27,18 @@ class WorkerOperationLogTest {
     private final Logger logger = (Logger) LoggerFactory.getLogger(WorkerOperationLog.class);
     private final ListAppender<ILoggingEvent> logs = new ListAppender<>();
 
-    @BeforeEach void attach() { logs.start(); logger.addAppender(logs); }
-    @AfterEach void detach() { WorkerOperationLog.setListener(null); logger.detachAppender(logs); logs.stop(); }
+    @BeforeEach
+    void attach() {
+        logs.start();
+        logger.addAppender(logs);
+    }
+
+    @AfterEach
+    void detach() {
+        WorkerOperationLog.setListener(null);
+        logger.detachAppender(logs);
+        logs.stop();
+    }
 
     @Test
     void 빠른_정상_조회는_로그를_남기지_않고_결과를_그대로_반환한다() {
@@ -50,9 +60,12 @@ class WorkerOperationLogTest {
 
     @Test
     void 중첩_실패는_가장_안쪽_작업과_SQLState만_한번_기록한다() {
-        var failure = new DataAccessResourceFailureException("private query", new SQLException("private vehicle", "08006"));
+        var failure =
+            new DataAccessResourceFailureException("private query", new SQLException("private vehicle", "08006"));
         assertThatThrownBy(() -> recorder.measure("forecast", 1L,
-            () -> recorder.measure("same_day_seed_source", 1L, () -> { throw failure; }))).isSameAs(failure);
+            () -> recorder.measure("same_day_seed_source", 1L, () -> {
+                throw failure;
+            }))).isSameAs(failure);
         assertThat(messages()).singleElement().asString()
             .contains("operation=same_day_seed_source", "sqlState=08006", "rootCause=SQLException")
             .doesNotContain("private", "operation=forecast");
@@ -63,7 +76,9 @@ class WorkerOperationLogTest {
     void 같은_예외라도_다음_실행의_실패는_다시_기록한다() {
         var failure = new IllegalStateException("private");
         for (int i = 0; i < 2; i++) {
-            assertThatThrownBy(() -> recorder.measure("query", 1L, () -> { throw failure; })).isSameAs(failure);
+            assertThatThrownBy(() -> recorder.measure("query", 1L, () -> {
+                throw failure;
+            })).isSameAs(failure);
         }
         assertThat(messages()).hasSize(2);
     }
@@ -72,7 +87,11 @@ class WorkerOperationLogTest {
     void 다른_원인으로_실패하면_같은_실행에서도_숨기지_않는다() {
         recorder.measure("outer", 1L, () -> {
             for (int i = 0; i < 2; i++) {
-                try { recorder.measure("inner", 1L, () -> { throw new IllegalStateException(); }); }
+                try {
+                    recorder.measure("inner", 1L, () -> {
+                        throw new IllegalStateException();
+                    });
+                }
                 catch (IllegalStateException ignored) { }
             }
             return null;
@@ -82,7 +101,8 @@ class WorkerOperationLogTest {
 
     @Test
     void transaction이_완료되기_전에는_느린_조회_성공을_기록하지_않는다() {
-        var manager = new TestTransactionManager(false);
+        var manager =
+            new TestTransactionManager(false);
         new TransactionTemplate(manager).executeWithoutResult(status -> {
             slowQuery();
             assertThat(logs.list).isEmpty();
@@ -92,9 +112,13 @@ class WorkerOperationLogTest {
 
     @Test
     void commit_실패를_성공으로_기록하지_않고_호출경계에서_SQLState를_남긴다() {
-        var manager = new TestTransactionManager(true);
+        var manager =
+            new TestTransactionManager(true);
         assertThatThrownBy(() -> recorder.measure("forecast_write_and_commit", 1L, () ->
-            new TransactionTemplate(manager).execute(status -> { slowQuery(); return null; })))
+            new TransactionTemplate(manager).execute(status -> {
+                slowQuery();
+                return null;
+            })))
             .isInstanceOf(TransactionSystemException.class);
         assertThat(messages()).anyMatch(x -> x.contains("status=FAILED") && x.contains("sqlState=08006"));
         assertThat(messages()).noneMatch(x -> x.contains("transactionOutcome=COMMITTED"));
@@ -167,15 +191,26 @@ class WorkerOperationLogTest {
         });
         assertThat(recorder.measure("test", 1L, () -> 42)).isEqualTo(42);
         var failure = new IllegalArgumentException("business failure");
-        assertThatThrownBy(() -> recorder.measure("test", 1L, () -> { throw failure; })).isSameAs(failure);
+        assertThatThrownBy(() -> recorder.measure("test", 1L, () -> {
+            throw failure;
+        })).isSameAs(failure);
         assertThat(outcomes).containsExactly(false, true);
     }
 
     @Test
     void 노선_표시명은_기존_필드_뒤에만_추가한다() {
         WorkerOperationLog.setListener(new WorkerOperationLog.Listener() {
-            @Override public void completed(String operation, Object route, long elapsed, boolean failed) { }
-            @Override public String context(String operation, Object route) { return " routeName=\"3330\""; }
+            @Override
+            public void completed(
+                String operation,
+                Object route, long elapsed, boolean failed
+            ) {
+            }
+
+            @Override
+            public String context(String operation, Object route) {
+                return " routeName=\"3330\"";
+            }
         });
         slowQuery();
         assertThat(messages()).singleElement().asString()
@@ -187,8 +222,17 @@ class WorkerOperationLogTest {
     void 수집_최신성은_외부_트랜잭션_커밋_뒤에만_갱신한다() {
         AtomicLong calls = new AtomicLong();
         WorkerOperationLog.setListener(new WorkerOperationLog.Listener() {
-            @Override public void completed(String operation, Object route, long elapsed, boolean failed) { }
-            @Override public void collectionCommitted(String route, long observedAt, int rows) { calls.incrementAndGet(); }
+            @Override
+            public void completed(
+                String operation,
+                Object route, long elapsed, boolean failed
+            ) {
+            }
+
+            @Override
+            public void collectionCommitted(String route, long observedAt, int rows) {
+                calls.incrementAndGet();
+            }
         });
         new TransactionTemplate(new TestTransactionManager(false)).executeWithoutResult(status -> {
             WorkerOperationLog.collectionCommitted("234000886", 123, 0);
@@ -200,27 +244,51 @@ class WorkerOperationLogTest {
             status.setRollbackOnly();
         });
         assertThat(calls.get()).isEqualTo(1);
-        assertThatThrownBy(() -> new TransactionTemplate(new TestTransactionManager(true)).executeWithoutResult(status ->
-            WorkerOperationLog.collectionCommitted("234000886", 125, 1))).isInstanceOf(TransactionSystemException.class);
+        assertThatThrownBy(() ->
+            new TransactionTemplate(new TestTransactionManager(true)).executeWithoutResult(status ->
+                WorkerOperationLog.collectionCommitted("234000886", 125, 1))).isInstanceOf(
+                    TransactionSystemException.class);
         assertThat(calls.get()).isEqualTo(1);
     }
 
     private void slowQuery() {
-        recorder.measure("query", 1L, () -> { nanos.addAndGet(TimeUnit.SECONDS.toNanos(1)); return List.of(1); });
+        recorder.measure("query", 1L, () -> {
+            nanos.addAndGet(TimeUnit.SECONDS.toNanos(1));
+            return List.of(1);
+        });
     }
 
     private List<String> messages() {
-        return logs.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
+        return logs.list.stream()
+            .map(ILoggingEvent::getFormattedMessage)
+            .toList();
     }
 
     private static final class TestTransactionManager extends AbstractPlatformTransactionManager {
         private final boolean failCommit;
-        TestTransactionManager(boolean failCommit) { this.failCommit = failCommit; }
-        @Override protected Object doGetTransaction() { return new Object(); }
-        @Override protected void doBegin(Object transaction, TransactionDefinition definition) { }
-        @Override protected void doCommit(DefaultTransactionStatus status) {
-            if (failCommit) { throw new TransactionSystemException("commit", new SQLException("private", "08006")); }
+
+        TestTransactionManager(boolean failCommit) {
+            this.failCommit = failCommit;
         }
-        @Override protected void doRollback(DefaultTransactionStatus status) { }
+
+        @Override
+        protected Object doGetTransaction() {
+            return new Object();
+        }
+
+        @Override
+        protected void doBegin(Object transaction, TransactionDefinition definition) {
+        }
+
+        @Override
+        protected void doCommit(DefaultTransactionStatus status) {
+            if (failCommit) {
+                throw new TransactionSystemException("commit", new SQLException("private", "08006"));
+            }
+        }
+
+        @Override
+        protected void doRollback(DefaultTransactionStatus status) {
+        }
     }
 }

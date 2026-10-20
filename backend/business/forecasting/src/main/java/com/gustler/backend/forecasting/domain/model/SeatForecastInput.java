@@ -2,7 +2,6 @@ package com.gustler.backend.forecasting.domain.model;
 
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
 import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
-
 import java.util.Objects;
 
 /**
@@ -32,7 +31,6 @@ public record SeatForecastInput(
     TimeSlot timeSlot,
     SameDayFullOutcomes sameDayFullOutcomes
 ) {
-
     public SeatForecastInput {
         Objects.requireNonNull(target, "예보에는 어느 차량이 어느 정류장에 도착하는지가 있어야 한다");
         Objects.requireNonNull(trajectory, "예보에는 그 차량의 궤적 재료가 있어야 한다");
@@ -49,7 +47,7 @@ public record SeatForecastInput(
         if (!trajectory.observation().equals(target.observation())) {
             throw new IllegalArgumentException(
                 "궤적과 대상이 같은 관측에서 나와야 한다: %s, %s"
-                    .formatted(trajectory.observation(), target.observation())
+                .formatted(trajectory.observation(), target.observation())
             );
         }
         final long routeVersionId = target.observation().routeVersionId();

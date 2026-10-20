@@ -25,7 +25,12 @@ class JdbcRouteGeometryStoreTest {
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration
     @Import({PostgresTestContainer.class, JdbcRouteGeometryStore.class})
-    static class Config { @Bean ObjectMapper objectMapper() { return new ObjectMapper(); } }
+    static class Config {
+        @Bean
+        ObjectMapper objectMapper() {
+            return new ObjectMapper();
+        }
+    }
     @Autowired RouteGeometryStore store;
     @Autowired JdbcClient jdbc;
     private static final OffsetDateTime BASE = OffsetDateTime.parse("2026-10-14T12:00:00Z");
@@ -46,7 +51,9 @@ class JdbcRouteGeometryStoreTest {
             new RouteShape.Point(x, 37.1))), BASE.plusSeconds(second));
     }
 
-    private int count() { return jdbc.sql("SELECT count(*) FROM route_geometry").query(Integer.class).single(); }
+    private int count() {
+        return jdbc.sql("SELECT count(*) FROM route_geometry").query(Integer.class).single();
+    }
 
     @Test
     void 같은_형상은_추가하지_않고_A에서_B로_바뀐_뒤_A로_돌아오면_기록한다() {

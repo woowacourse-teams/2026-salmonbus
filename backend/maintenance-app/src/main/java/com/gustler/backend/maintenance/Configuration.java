@@ -7,7 +7,6 @@ import java.nio.file.Path;
 import java.util.Properties;
 
 public final class Configuration {
-
     private final Properties values;
 
     private Configuration(

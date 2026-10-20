@@ -11,7 +11,6 @@ import java.time.OffsetDateTime;
 import org.junit.jupiter.api.Test;
 
 class CallQuotaLedgerPolicyTest {
-
     private static final OffsetDateTime REQUESTED_AT = OffsetDateTime.parse("2026-08-28T14:59:59Z");
 
     private final CallQuotaStore repository = mock(CallQuotaStore.class);

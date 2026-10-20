@@ -10,7 +10,6 @@ public record SeoulDay(
     Instant start,
     Instant end
 ) {
-
     private static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
 
     public static SeoulDay containing(

@@ -7,7 +7,10 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class JdbcRouteDataQualityAccess implements RouteDataQualityAccess {
     private final JdbcClient jdbc;
-    public JdbcRouteDataQualityAccess(final JdbcClient jdbc) { this.jdbc = jdbc; }
+
+    public JdbcRouteDataQualityAccess(final JdbcClient jdbc) {
+        this.jdbc = jdbc;
+    }
 
     @Override
     public long current(final long version) {
@@ -45,8 +48,11 @@ public class JdbcRouteDataQualityAccess implements RouteDataQualityAccess {
 
     @Override
     public boolean anyInvestigationPending(final long version) {
-        return jdbc.sql("SELECT EXISTS(SELECT 1 FROM trip_quality_rebuild WHERE route_version_id = ? AND NOT completed)")
-            .param(version).query(Boolean.class).single();
+        return jdbc.sql(
+        "SELECT EXISTS(SELECT 1 FROM trip_quality_rebuild WHERE route_version_id = ? AND NOT completed)")
+            .param(version)
+            .query(Boolean.class)
+            .single();
     }
 
     @Override

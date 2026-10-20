@@ -38,7 +38,7 @@ final class FullChancePriorShift {
                 / (outcomes.rowCount() + PRIOR_ROW_COUNT));
         final double shift = ProbabilityScale.clip(
             ProbabilityScale.logitOf(target) - ProbabilityScale.logitOf(average),
-            -SHIFT_LIMIT,
+                -SHIFT_LIMIT,
             SHIFT_LIMIT);
         return ProbabilityScale.chanceOf(ProbabilityScale.logitOf(clipped) + shift);
     }

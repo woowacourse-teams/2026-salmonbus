@@ -17,7 +17,6 @@ record ResidualBinRange(
     int lowest,
     int highest
 ) {
-
     boolean usable() {
         return highest >= lowest;
     }

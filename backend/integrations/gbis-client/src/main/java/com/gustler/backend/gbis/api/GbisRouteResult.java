@@ -11,7 +11,6 @@ import java.util.List;
  * 읽은 값이 업무에 쓸 만한지는 부른 쪽이 판단한다.
  */
 public sealed interface GbisRouteResult {
-
     record Success(
         RouteInfoItem routeInfo,
         List<RouteStationItem> stations

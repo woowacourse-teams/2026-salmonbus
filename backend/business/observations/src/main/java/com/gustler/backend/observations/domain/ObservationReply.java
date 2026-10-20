@@ -11,5 +11,6 @@ public interface ObservationReply {
         return Optional.empty();
     }
 
-    record StopReference(int sourceRowNumber, String routeId, Integer stopOrder, String stopId) { }
+    record StopReference(int sourceRowNumber, String routeId, Integer stopOrder, String stopId) {
+    }
 }

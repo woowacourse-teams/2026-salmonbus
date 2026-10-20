@@ -23,10 +23,25 @@ class ArrivalRuntimeConfigurationTest {
 
     @Configuration(proxyBeanMethods = false)
     static class Dependencies {
-        @Bean JdbcClient jdbcClient() { return mock(JdbcClient.class); }
-        @Bean PlatformTransactionManager transactionManager() { return mock(PlatformTransactionManager.class); }
-        @Bean ObjectMapper objectMapper() { return new ObjectMapper(); }
-        @Bean Clock clock() { return Clock.systemUTC(); }
+        @Bean
+        JdbcClient jdbcClient() {
+            return mock(JdbcClient.class);
+        }
+
+        @Bean
+        PlatformTransactionManager transactionManager() {
+            return mock(PlatformTransactionManager.class);
+        }
+
+        @Bean
+        ObjectMapper objectMapper() {
+            return new ObjectMapper();
+        }
+
+        @Bean
+        Clock clock() {
+            return Clock.systemUTC();
+        }
     }
 
     @Test
@@ -57,7 +72,7 @@ class ArrivalRuntimeConfigurationTest {
     @Test
     void 키를_늘리면_도착정보_전체_예산과_호출_속도도_키별_한도의_합으로_늘어난다() {
         context.withPropertyValues("arrivals.enabled=true", "arrivals.internal-token=local-test-token",
-                "gbis.keys.e=fake-key-e", "gbis.keys.f10=fake-key-f10")
+            "gbis.keys.e=fake-key-e", "gbis.keys.f10=fake-key-f10")
             .run(application -> {
                 assertThat(application).hasNotFailed();
                 var policy = application.getBean(com.gustler.backend.quota.api.ArrivalQuotaPolicy.class);
@@ -68,7 +83,10 @@ class ArrivalRuntimeConfigurationTest {
                 var collection = application.getBean(com.gustler.backend.arrivals.api.ArrivalCollectionPolicy.class);
                 assertThat(collection.callsPerSecond()).isEqualTo(policy.dailyLimit() / 86_400.0);
                 var options = application.getBean("arrivalGbisOptions", com.gustler.backend.gbis.api.GbisClientOptions.class);
-                assertThat(options.keys().stream().map(com.gustler.backend.gbis.api.GbisKey::alias).toList())
+                assertThat(options.keys()
+                    .stream()
+                    .map(com.gustler.backend.gbis.api.GbisKey::alias)
+                    .toList())
                     .containsAll(policy.keyLimits().keySet());
             });
     }
@@ -76,7 +94,7 @@ class ArrivalRuntimeConfigurationTest {
     @Test
     void 도착정보_키별_한도를_주면_그_키만_그_한도로_센다() {
         context.withPropertyValues("arrivals.enabled=true", "arrivals.internal-token=local-test-token",
-                "gbis.keys.e=fake-key-e", "arrivals.limits.e=1000")
+            "gbis.keys.e=fake-key-e", "arrivals.limits.e=1000")
             .run(application -> {
                 var policy = application.getBean(com.gustler.backend.quota.api.ArrivalQuotaPolicy.class);
                 final int keyDailyLimit = application.getBean(ArrivalProperties.class).keyDailyLimit();
@@ -88,7 +106,7 @@ class ArrivalRuntimeConfigurationTest {
     @Test
     void 설정에_없는_별칭에_도착정보_한도를_주면_활성화하지_않는다() {
         context.withPropertyValues("arrivals.enabled=true", "arrivals.internal-token=local-test-token",
-                "arrivals.limits.zz=1000")
+        "arrivals.limits.zz=1000")
             .run(application -> assertThat(application).hasFailed());
     }
 }

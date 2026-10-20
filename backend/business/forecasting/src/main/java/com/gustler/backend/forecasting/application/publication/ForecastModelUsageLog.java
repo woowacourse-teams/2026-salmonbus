@@ -3,7 +3,6 @@ package com.gustler.backend.forecasting.application.publication;
 import static com.gustler.backend.diagnostics.Logfmt.quote;
 
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
-
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -18,16 +17,25 @@ final class ForecastModelUsageLog {
     private static final int MAX_ROUTES = 256;
     private final Map<String, State> latest = new LinkedHashMap<>();
 
-    synchronized void committed(String routeId, String routeName, long routeVersionId, long batchId, RuntimeSnapshot runtime) {
+    synchronized void committed(
+        String routeId,
+        String routeName, long routeVersionId, long batchId,
+        RuntimeSnapshot runtime
+    ) {
         if (changed(routeId, new State(routeVersionId, runtime.deploymentId(), true))) {
             log.info("event=forecast_model_used routeId={} routeName={} routeVersionId={} batchId={} "
-                    + "modelDeploymentId={} releaseId={} featureContractVersion={}",
-                quote(routeId), quote(routeName), routeVersionId, batchId, runtime.deploymentId(), quote(runtime.releaseId()),
+                + "modelDeploymentId={} releaseId={} featureContractVersion={}",
+                quote(routeId), quote(routeName), routeVersionId, batchId, runtime.deploymentId(),
+                quote(runtime.releaseId()),
                 quote(runtime.featureContractVersion()));
         }
     }
 
-    synchronized void referenceMismatch(String routeId, String routeName, long routeVersionId, RuntimeSnapshot runtime) {
+    synchronized void referenceMismatch(
+        String routeId,
+        String routeName, long routeVersionId,
+        RuntimeSnapshot runtime
+    ) {
         if (changed(routeId, new State(routeVersionId, runtime.deploymentId(), false))) {
             log.warn("event=forecast_route_skipped reason=ROUTE_REFERENCE_MISMATCH routeId={} routeName={} "
                     + "routeVersionId={} modelDeploymentId={} releaseId={}",
@@ -46,5 +54,6 @@ final class ForecastModelUsageLog {
         return true;
     }
 
-    private record State(long routeVersionId, long deploymentId, boolean committed) { }
+    private record State(long routeVersionId, long deploymentId, boolean committed) {
+    }
 }

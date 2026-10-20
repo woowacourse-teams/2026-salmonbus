@@ -7,14 +7,14 @@ import java.util.Optional;
 import java.util.UUID;
 
 public final class DemandStatisticsRebuild {
-
     public static final int PAGE_SIZE = 128;
     public static final int BATCH_GROUP_SIZE = 32;
-    public enum Phase { SCAN, CLEAR, COPY, ACK, CLEAN }
+    public enum Phase {
+        SCAN, CLEAR, COPY, ACK, CLEAN
+    }
 
     public record ScanWindow(long batchUntilId, Instant afterAt, long afterBatchId, Instant groupEndAt,
-                             long groupEndId) {
-
+        long groupEndId) {
         public static ScanWindow startingAt(final long batchUntilId) {
             return new ScanWindow(batchUntilId, null, 0, null, 0);
         }
@@ -36,7 +36,6 @@ public final class DemandStatisticsRebuild {
         }
     }
 
-
     private final long routeVersionId;
     private final RebuildScope scope;
     private final UUID requestId;
@@ -48,9 +47,13 @@ public final class DemandStatisticsRebuild {
     private Phase phase;
     private ScanWindow scan;
 
-    public DemandStatisticsRebuild(final long routeVersionId, final RebuildScope scope, final UUID requestId,
-        final long qualityRevision, final Instant dataUntil, final long inputUntilId, final long observationUntilId,
-        final long cursorId, final Phase phase, final ScanWindow scan) {
+    public DemandStatisticsRebuild(
+        final long routeVersionId, final RebuildScope scope, final UUID requestId,
+        final long qualityRevision, final Instant dataUntil,
+        final long inputUntilId,
+        final long observationUntilId,
+        final long cursorId, final Phase phase, final ScanWindow scan
+    ) {
         this.routeVersionId = routeVersionId;
         this.scope = Objects.requireNonNull(scope, "정정 범위가 필요하다");
         this.requestId = Objects.requireNonNull(requestId, "정정 요청 식별자가 필요하다");
@@ -63,9 +66,14 @@ public final class DemandStatisticsRebuild {
         this.scan = scan;
     }
 
-    public static DemandStatisticsRebuild start(final long routeVersionId, final RebuildScope scope,
-        final UUID requestId, final long qualityRevision, final Instant dataUntil, final long inputUntilId,
-        final long observationUntilId, final long batchUntilId) {
+    public static DemandStatisticsRebuild start(
+        final long routeVersionId, final RebuildScope scope,
+        final UUID requestId,
+        final long qualityRevision, final Instant dataUntil,
+        final long inputUntilId,
+        final long observationUntilId,
+        final long batchUntilId
+    ) {
         return new DemandStatisticsRebuild(routeVersionId, scope, requestId, qualityRevision, dataUntil, inputUntilId,
             observationUntilId, 0, Phase.SCAN, ScanWindow.startingAt(batchUntilId));
     }
@@ -156,14 +164,43 @@ public final class DemandStatisticsRebuild {
         }
     }
 
-    public long routeVersionId() { return routeVersionId; }
-    public RebuildScope scope() { return scope; }
-    public UUID requestId() { return requestId; }
-    public long qualityRevision() { return qualityRevision; }
-    public Instant dataUntil() { return dataUntil; }
-    public long inputUntilId() { return inputUntilId; }
-    public long observationUntilId() { return observationUntilId; }
-    public long cursorId() { return cursorId; }
-    public Phase phase() { return phase; }
-    public Optional<ScanWindow> scan() { return Optional.ofNullable(scan); }
+    public long routeVersionId() {
+        return routeVersionId;
+    }
+
+    public RebuildScope scope() {
+        return scope;
+    }
+
+    public UUID requestId() {
+        return requestId;
+    }
+
+    public long qualityRevision() {
+        return qualityRevision;
+    }
+
+    public Instant dataUntil() {
+        return dataUntil;
+    }
+
+    public long inputUntilId() {
+        return inputUntilId;
+    }
+
+    public long observationUntilId() {
+        return observationUntilId;
+    }
+
+    public long cursorId() {
+        return cursorId;
+    }
+
+    public Phase phase() {
+        return phase;
+    }
+
+    public Optional<ScanWindow> scan() {
+        return Optional.ofNullable(scan);
+    }
 }

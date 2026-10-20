@@ -23,8 +23,10 @@ import tools.jackson.databind.ObjectMapper;
 class RouteGeometrySupportDocsTest {
     private static final String GEOMETRY = "/api/v2/routes/{routeId}/geometry";
 
-    @Autowired private WebApplicationContext context;
-    @Autowired private ObjectMapper json;
+    @Autowired
+    private WebApplicationContext context;
+    @Autowired
+    private ObjectMapper json;
     private JsonNode document;
     private JsonNode contract;
 

@@ -1,5 +1,4 @@
 package com.gustler.backend.gbis.api;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -20,7 +19,8 @@ public class GbisRouteLineSource {
         this.json = json;
     }
 
-    public record Point(int lineSeq, double x, double y) { }
+    public record Point(int lineSeq, double x, double y) {
+    }
 
     public Optional<List<Point>> read(String routeId) {
         var http = caller.getWithMetadata(PATH, routeId, GbisKey.PRIMARY);

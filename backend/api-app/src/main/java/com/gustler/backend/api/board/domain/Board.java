@@ -1,5 +1,4 @@
 package com.gustler.backend.api.board.domain;
-
 import com.gustler.backend.api.route.domain.RouteStatus;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -13,7 +12,6 @@ public record Board(
     int vehiclesInService,
     List<StopState> stops
 ) {
-
     public Board {
         Objects.requireNonNull(route, "route는 null일 수 없습니다.");
         Objects.requireNonNull(observedAt, "observedAt은 null일 수 없습니다.");
@@ -30,7 +28,8 @@ public record Board(
         List<StopState> stops
     ) {
         return stops.stream()
-            .flatMap(stop -> stop.approachingVehicles().stream())
+            .flatMap(stop -> stop.approachingVehicles()
+                .stream())
             .anyMatch(vehicle -> vehicle.forecast() instanceof VehicleForecast.Available);
     }
 }

@@ -153,7 +153,8 @@ class RouteCatalogGeometryCoverageTest {
     void 기본설정은_전체목록을_조회하지_않고_명시한_노선만_형상을_수집한다() {
         var routes = routes(2);
         when(catalog.refresh(anyString(), any())).thenReturn(Optional.of(new RouteReference(7)));
-        var scheduler = scheduler(true, List.of(routes.getFirst()), false, List.of(routes.getLast()), Runnable::run);
+        var scheduler =
+            scheduler(true, List.of(routes.getFirst()), false, List.of(routes.getLast()), Runnable::run);
 
         scheduler.refreshAllRoutes();
 
@@ -165,9 +166,10 @@ class RouteCatalogGeometryCoverageTest {
     @Test
     void 형상을_끄면_전체목록옵션을_켜도_형상작업을_만들지_않는다() {
         var tasks = new ArrayBlockingQueue<Runnable>(1);
-        var scheduler = new RouteCatalogRefreshScheduler(new CollectionProperties(false, routes(1)),
-            catalog, Clock.systemUTC(), geometry, tasks::add,
-            new RouteGeometryProperties(false, List.of(), true));
+        var scheduler =
+            new RouteCatalogRefreshScheduler(new CollectionProperties(false, routes(1)),
+                catalog, Clock.systemUTC(), geometry, tasks::add,
+                new RouteGeometryProperties(false, List.of(), true));
 
         scheduler.refreshAllRoutes();
 
@@ -175,14 +177,20 @@ class RouteCatalogGeometryCoverageTest {
         verifyNoInteractions(catalog, geometry);
     }
 
-    private RouteCatalogRefreshScheduler scheduler(boolean collectionEnabled, List<String> collectionRoutes,
-        boolean includeCatalog, List<String> geometryRoutes, Executor executor) {
+    private RouteCatalogRefreshScheduler scheduler(boolean collectionEnabled,
+        List<String> collectionRoutes,
+        boolean includeCatalog,
+        List<String> geometryRoutes,
+        Executor executor
+    ) {
         return new RouteCatalogRefreshScheduler(new CollectionProperties(collectionEnabled, collectionRoutes),
             catalog, Clock.systemUTC(), geometry, executor,
             new RouteGeometryProperties(true, geometryRoutes, includeCatalog));
     }
 
     private List<String> routes(int count) {
-        return IntStream.range(0, count).mapToObj(index -> Integer.toString(204000000 + index)).toList();
+        return IntStream.range(0, count)
+            .mapToObj(index -> Integer.toString(204000000 + index))
+            .toList();
     }
 }

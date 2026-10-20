@@ -7,7 +7,6 @@ import org.springframework.boot.diagnostics.FailureAnalysis;
 import org.springframework.core.Ordered;
 
 public class GbisSettingsFailureAnalyzer extends AbstractFailureAnalyzer<BindException> implements Ordered {
-
     private static final ConfigurationPropertyName GBIS = ConfigurationPropertyName.of("gbis");
 
     private static final String ACTION = "인증키는 GBIS_SERVICE_KEY, GBIS_SERVICE_KEY_<별칭> 또는 GBIS_KEYS_<별칭>=<키> 형식으로 "

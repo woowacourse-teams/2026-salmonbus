@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test;
  * 노선에서 서 있는 자리가 다르다.
  */
 class StopPositionOnRouteTest {
-
     private static final long ROUTE_VERSION_3330 = 1L;
 
     private static final String UPSTREAM_ROUTE_3330 = "204000057";

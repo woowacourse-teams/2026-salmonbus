@@ -13,13 +13,19 @@ public record OneWayTripAssessment(Observation observation, Previous previous, D
     public static OneWayTripAssessment assess(final Route route, final Previous previous, final Observation current) {
         return new OneWayTripAssessment(current, previous, OneWayTripClassifier.classify(route, previous, current));
     }
+
     public static boolean requiresInvestigation(final String vehicleId, final Integer seats) {
         return vehicleId != null && !vehicleId.isBlank() && seats != null && seats > SeatGrid.LARGEST_SEATS;
     }
-    public boolean startsTrip() { return decision.tripId() == observation.id(); }
+
+    public boolean startsTrip() {
+        return decision.tripId() == observation.id();
+    }
+
     public boolean excludesExistingTrip() {
         return !startsTrip() && decision.status() == Status.EXCLUDED && previous.status() != Status.EXCLUDED;
     }
+
     public Previous asPrevious() {
         final Start start = previous != null && previous.tripId() == decision.tripId() ? previous.start()
             : new Start(observation.stopOrder(), observation.runningState());

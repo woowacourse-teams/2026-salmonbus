@@ -27,7 +27,6 @@ class RouteDataQualityLockTest {
     @Autowired RouteDataQualityAccess quality;
     @Autowired PlatformTransactionManager transactions;
     private final List<Long> routes = new ArrayList<>();
-
     @AfterEach
     void 이번_테스트에서_만든_노선과_품질_행을_삭제한다() {
         for (long route : routes) {
@@ -59,8 +58,10 @@ class RouteDataQualityLockTest {
                 var changing = workers.submit(() -> inTransaction(() -> {
                     writerPid.set(pid());
                     attempted.countDown();
-                    return jdbc.sql("UPDATE route_data_quality SET quality_revision=quality_revision+1 WHERE route_id=?")
-                        .param(route).update();
+                    return jdbc.sql(
+                    "UPDATE route_data_quality SET quality_revision=quality_revision+1 WHERE route_id=?")
+                        .param(route)
+                        .update();
                 }));
 
                 // when

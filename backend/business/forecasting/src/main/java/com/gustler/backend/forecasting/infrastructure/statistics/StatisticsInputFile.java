@@ -1,7 +1,6 @@
 package com.gustler.backend.forecasting.infrastructure.statistics;
 
 record StatisticsInputFile(String name, long byteCount, String sha256) {
-
     StatisticsInputFile {
         if (name == null || !name.matches("[a-zA-Z0-9][a-zA-Z0-9._-]*")) {
             throw new IllegalArgumentException("입력 파일 이름은 하위 경로 없이 지정해야 한다");

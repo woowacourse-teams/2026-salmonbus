@@ -9,7 +9,6 @@ import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 
 class BoardFreshnessPolicyTest {
-
     private static final OffsetDateTime OBSERVED_AT = OffsetDateTime.parse(
         "2026-08-27T08:00:00+09:00"
     );

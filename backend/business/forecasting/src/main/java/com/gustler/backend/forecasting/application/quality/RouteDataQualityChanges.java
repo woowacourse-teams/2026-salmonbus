@@ -10,7 +10,9 @@ public class RouteDataQualityChanges {
     private WorkerQualityTransactions memory;
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
-    public void useQualityMemory(WorkerQualityTransactions memory) { this.memory = memory; }
+    public void useQualityMemory(WorkerQualityTransactions memory) {
+        this.memory = memory;
+    }
     private final RouteDataQualityRepository qualities;
     private final DemandStatisticsRebuildTrigger statistics;
 
@@ -21,7 +23,9 @@ public class RouteDataQualityChanges {
     }
 
     public void vehiclesChanged(final long version, final List<String> vehicles) {
-        if (vehicles.isEmpty()) { return; }
+        if (vehicles.isEmpty()) {
+            return;
+        }
         changeEligibility(version);
         vehicles.forEach(vehicle -> statistics.requestVehicle(version, vehicle));
     }

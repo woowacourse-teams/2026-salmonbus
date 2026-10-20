@@ -71,7 +71,6 @@ import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
 
 class ForecastBatchWriterTest {
-
     private static final Instant NOW = Instant.parse("2026-09-21T02:00:00Z");
     private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
     private static final PendingForecastBatch BATCH = new PendingForecastBatch(100, 1, 1, NOW);
@@ -116,7 +115,8 @@ class ForecastBatchWriterTest {
     void 이미_조회한_관측과_정류장에서_평가_선택에_필요한_정보를_전달한다() {
         // given
         var committer = mock(ForecastBatchCommitter.class);
-        var writer = new ForecastBatchWriter(trajectories, committer, outcomes, statistics, CLOCK, quality);
+        var writer =
+            new ForecastBatchWriter(trajectories, committer, outcomes, statistics, CLOCK, quality);
         var stops = new RouteStops(1, "204000057", List.of(
             new RouteStop(1, 3, "stop-3", true, com.gustler.backend.forecasting.domain.model.RouteDirection.UP),
             new RouteStop(1, 4, "stop-4", true), new RouteStop(1, 5, "stop-5", true)));
@@ -197,10 +197,10 @@ class ForecastBatchWriterTest {
         assertThat(saved()).containsExactlyInAnyOrder(expected(10, 4), expected(10, 5));
         verify(inputs).confirmInput(100, NOW);
         assertThat(logs.list).singleElement().satisfies(event -> assertThat(event.getFormattedMessage())
-            .contains("event=forecast_vehicle_skipped", "batchId=100", "vehicleObservationId=11",
-                "modelDeploymentId=7", "currentSeats=43", "capacity=82", "field=capacity",
-                "value=82", "minimum=1", "maximum=70")
-            .doesNotContain("vehicle-11"));
+                .contains("event=forecast_vehicle_skipped", "batchId=100", "vehicleObservationId=11",
+                    "modelDeploymentId=7", "currentSeats=43", "capacity=82", "field=capacity",
+                    "value=82", "minimum=1", "maximum=70")
+                .doesNotContain("vehicle-11"));
     }
 
     @Test
@@ -308,6 +308,7 @@ class ForecastBatchWriterTest {
         brokenAppender.start();
         logger.addAppender(brokenAppender);
         try {
+
             // when
             writer.writeForecastsOf(BATCH, STOPS, runtime(this::predictWithSeatValidation));
 
@@ -340,8 +341,9 @@ class ForecastBatchWriterTest {
         when(statistics.readAsOf(2, STATISTICS.timeSlot(), "feature-v1", NOW))
             .thenReturn(new StopDemandStatistics(2, STATISTICS.timeSlot(), 3, List.of()));
         ForecastPolicy properties = new ForecastPolicy(Duration.ofMinutes(5), 20, 3000, 400);
-        PublishPendingForecastsService job = new PublishPendingForecastsService(trajectories, routes, stops, runtimeProvider, writer,
-            properties, CLOCK);
+        PublishPendingForecastsService job =
+            new PublishPendingForecastsService(trajectories, routes, stops, runtimeProvider, writer,
+                properties, CLOCK);
 
         // when
         job.writeForecasts();
@@ -371,7 +373,10 @@ class ForecastBatchWriterTest {
         var runtime = new RuntimeSnapshot(new ActiveModelDeployment(7,
             com.gustler.backend.forecasting.domain.model.ForecastFeatureContract.STATISTICS_VERSION,
             "statistics-release", "0".repeat(64)), new SupportedForecastScope(List.of("1650", "3330")),
-            input -> { assertThat(input.statistics()).isSameAs(STATISTICS); return RESULT; }, NOW.minusSeconds(60));
+            input -> {
+                assertThat(input.statistics()).isSameAs(STATISTICS);
+                return RESULT;
+            }, NOW.minusSeconds(60));
         writer.writeForecastsOf(BATCH, STOPS, runtime);
         verify(statistics).readAsOf(1, STATISTICS.timeSlot(), version, NOW);
         verify(outcomes).outcomesFor(1, 7L, NOW);

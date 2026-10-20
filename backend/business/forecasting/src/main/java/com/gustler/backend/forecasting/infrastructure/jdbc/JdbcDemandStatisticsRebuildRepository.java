@@ -17,7 +17,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class JdbcDemandStatisticsRebuildRepository implements DemandStatisticsRebuildRepository {
-
     private static final String SELECT = """
         SELECT /* salmonbus:demand_statistics_rebuild.select */ progress.request_id, progress.quality_revision, progress.data_until, progress.input_until_id,
                progress.observation_until_id, progress.cursor_id, progress.phase,

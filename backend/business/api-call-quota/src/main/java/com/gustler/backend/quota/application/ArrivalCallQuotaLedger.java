@@ -21,7 +21,11 @@ public final class ArrivalCallQuotaLedger implements ArrivalCallQuota {
     public ArrivalCallQuotaLedger(ArrivalQuotaStore store, ArrivalQuotaPolicy policy) {
         this.store = store;
         this.policy = policy;
-        this.aliases = policy.keyLimits().keySet().stream().sorted().toList();
+        this.aliases = policy.keyLimits()
+            .keySet()
+            .stream()
+            .sorted()
+            .toList();
     }
 
     @Override

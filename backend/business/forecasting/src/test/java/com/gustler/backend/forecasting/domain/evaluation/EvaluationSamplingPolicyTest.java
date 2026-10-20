@@ -95,8 +95,11 @@ class EvaluationSamplingPolicyTest {
             .isInstanceOf(IllegalArgumentException.class);
     }
 
-    private EvaluationSamplingPoint point(long route, long model, String vehicle, int stop, String direction,
-        Instant at) {
+    private EvaluationSamplingPoint point(long route, long model,
+        String vehicle, int stop,
+        String direction,
+        Instant at
+    ) {
         return new EvaluationSamplingPoint(route, model, vehicle, stop, direction, at);
     }
 }

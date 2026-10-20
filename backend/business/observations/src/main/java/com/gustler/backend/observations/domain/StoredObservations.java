@@ -1,5 +1,4 @@
 package com.gustler.backend.observations.domain;
-
 import java.time.Instant;
 import java.util.List;
 
@@ -10,6 +9,6 @@ public record StoredObservations(long batchId, long routeVersionId, Instant obse
     }
 
     public record Row(long observationId, String vehicleId, Integer remainingSeats,
-                      Integer passedStopOrder, Integer crowdLevel, Integer stopOrder, Integer runningState) {
+        Integer passedStopOrder, Integer crowdLevel, Integer stopOrder, Integer runningState) {
     }
 }

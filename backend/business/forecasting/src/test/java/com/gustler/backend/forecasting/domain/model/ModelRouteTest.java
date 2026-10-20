@@ -8,7 +8,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class ModelRouteTest {
-
     @ParameterizedTest
     @CsvSource({
         "234000050, 1650", "204000057, 3330",

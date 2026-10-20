@@ -13,7 +13,6 @@ package com.gustler.backend.forecasting.domain.model;
  * 층이라는 뜻이다.
  */
 public final class StopPositionOnRoute {
-
     private StopPositionOnRoute() {
     }
 

@@ -20,7 +20,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
-
     private static final List<String> STAGES =
         List.of("stop_demand_capacity_stage", "stop_demand_day_stage", "stop_demand_cell_stage");
 
@@ -81,8 +80,12 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
     }
 
     @Override
-    public Optional<String> nextAccumulationVehicle(final long routeVersionId, final long inputUntilId,
-        final String vehicleCursor, final long inputCursor) {
+    public Optional<String> nextAccumulationVehicle(
+        final long routeVersionId,
+        final long inputUntilId,
+        final String vehicleCursor,
+        final long inputCursor
+    ) {
         return jdbc.sql("""
             SELECT vehicle_id FROM stop_demand_pending_sample
             WHERE route_version_id=:version AND id<=:upper
@@ -122,7 +125,7 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
         // 표 이름은 코드에 고정돼 있다. 외부 입력으로 SQL 식별자를 만들지 않는다.
         for (final String table : STAGES) {
             final int removed = jdbc.sql("DELETE FROM " + table + " WHERE ctid IN (SELECT ctid FROM " + table
-                    + " WHERE route_version_id=? LIMIT ?)")
+                + " WHERE route_version_id=? LIMIT ?)")
                 .params(routeVersionId, limit).update();
             if (removed > 0) {
                 return removed;
@@ -189,8 +192,10 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
                     fill_rate_total=day.fill_rate_total+EXCLUDED.fill_rate_total,
                     net_boarding_total=day.net_boarding_total+EXCLUDED.net_boarding_total,
                     capacity_total=day.capacity_total+EXCLUDED.capacity_total,sample_count=day.sample_count+EXCLUDED.sample_count
-                """).params(routeVersionId, day.stopOrder(), storedTimeSlotOf(day.timeSlot()), day.arrivalDate(),
-                    day.fillRateTotal(), day.netBoardingTotal(), day.capacityTotal(), day.sampleCount()).update();
+                """)
+                .params(routeVersionId, day.stopOrder(), storedTimeSlotOf(day.timeSlot()), day.arrivalDate(),
+                    day.fillRateTotal(), day.netBoardingTotal(), day.capacityTotal(), day.sampleCount())
+                .update();
         }
     }
 
@@ -225,7 +230,7 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
                     net_boarding_rate_total=cell.net_boarding_rate_total+EXCLUDED.net_boarding_rate_total,
                     sample_count=cell.sample_count+EXCLUDED.sample_count,day_count=cell.day_count+EXCLUDED.day_count
                 """).params(routeVersionId, cell.stopOrder(), storedTimeSlotOf(cell.timeSlot()), cell.fillRateTotal(),
-                    cell.netBoardingRateTotal(), cell.sampleCount(), cell.dayCount()).update();
+                cell.netBoardingRateTotal(), cell.sampleCount(), cell.dayCount()).update();
         }
     }
 

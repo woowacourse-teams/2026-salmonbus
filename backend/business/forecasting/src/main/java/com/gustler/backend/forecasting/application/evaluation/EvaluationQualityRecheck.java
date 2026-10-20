@@ -40,10 +40,14 @@ public class EvaluationQualityRecheck {
             earliest.merge(forecast.vehicleId(), forecast.generatedAt(),
                 (left, right) -> left.isBefore(right) ? left : right);
         }
-        List<Long> ids = results.stream().map(ForecastEvaluation::vehicleObservationId).distinct().toList();
+        List<Long> ids = results.stream()
+            .map(ForecastEvaluation::vehicleObservationId)
+            .distinct()
+            .toList();
         Map<EvaluationWorkStore.Key, PendingForecast> current = new HashMap<>();
         for (int from = 0; from < ids.size(); from += 100) {
-            for (var restored : work.restore(input.version(), ids.subList(from, Math.min(from + 100, ids.size())))) {
+            for (var restored : work.restore(input.version(),
+                    ids.subList(from, Math.min(from + 100, ids.size())))) {
                 restored.forecast().ifPresent(forecast -> current.put(restored.key(), forecast));
             }
         }

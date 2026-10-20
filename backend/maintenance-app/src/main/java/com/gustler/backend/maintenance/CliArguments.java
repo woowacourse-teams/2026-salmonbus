@@ -5,7 +5,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 final class CliArguments {
-
     private final String command;
     private final Map<String, String> options;
 
@@ -55,5 +54,4 @@ final class CliArguments {
     ) {
         return Path.of(required(name)).toAbsolutePath().normalize();
     }
-
 }

@@ -9,7 +9,6 @@ import java.util.HexFormat;
 public record RouteContentDigest(
     String value
 ) {
-
     private static final String ALGORITHM = "SHA-256";
     private static final String NO_TURN_SEQUENCE = "단방향";
 

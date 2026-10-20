@@ -17,7 +17,10 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class JdbcTripQualityMaintenanceStore implements TripQualityMaintenanceStore {
     private final JdbcClient jdbc;
-    public JdbcTripQualityMaintenanceStore(final JdbcClient jdbc) { this.jdbc = jdbc; }
+
+    public JdbcTripQualityMaintenanceStore(final JdbcClient jdbc) {
+        this.jdbc = jdbc;
+    }
 
     @Override
     public TripQualityPreview preview(final long version, final Instant until) {
@@ -28,8 +31,13 @@ public class JdbcTripQualityMaintenanceStore implements TripQualityMaintenanceSt
             )
             SELECT (SELECT count(*) FROM sample), count(*), count(*) FILTER (WHERE remaining_seats > ?)
             FROM vehicle_observation WHERE observation_batch_id IN (SELECT id FROM sample)
-            """).param(version).param(offset(until)).param(SeatGrid.LARGEST_SEATS)
-            .query((rs, n) -> new TripQualityPreview("LAST_32_BATCHES_SAMPLE", rs.getLong(1), rs.getLong(2), rs.getLong(3))).single();
+            """)
+            .param(version)
+            .param(offset(until))
+            .param(SeatGrid.LARGEST_SEATS)
+            .query((rs, n) ->
+                new TripQualityPreview("LAST_32_BATCHES_SAMPLE", rs.getLong(1), rs.getLong(2), rs.getLong(3)))
+            .single();
     }
 
     @Override
@@ -39,9 +47,9 @@ public class JdbcTripQualityMaintenanceStore implements TripQualityMaintenanceSt
             FROM trip_quality_rebuild WHERE route_version_id = ? AND vehicle_id = ''
             """).param(version).query((rs, n) -> {
                 final var at = rs.getObject(1, OffsetDateTime.class);
-                return new TripQualityDiscovery(at == null ? Instant.EPOCH : at.toInstant(), rs.getLong(2),
-                    rs.getObject(3, OffsetDateTime.class).toInstant(), rs.getLong(5), rs.getBoolean(4));
-            }).optional();
+            return new TripQualityDiscovery(at == null ? Instant.EPOCH : at.toInstant(), rs.getLong(2),
+                rs.getObject(3, OffsetDateTime.class).toInstant(), rs.getLong(5), rs.getBoolean(4));
+        }).optional();
     }
 
     @Override
@@ -63,7 +71,9 @@ public class JdbcTripQualityMaintenanceStore implements TripQualityMaintenanceSt
 
     @Override
     public List<Signal> anomalies(final List<Long> batches) {
-        if (batches.isEmpty()) { return List.of(); }
+        if (batches.isEmpty()) {
+            return List.of();
+        }
         return jdbc.sql("""
             SELECT o.observation_batch_id, o.id, o.vehicle_id, o.remaining_seats
             FROM vehicle_observation o LEFT JOIN observation_trip_assignment a ON a.observation_id = o.id
@@ -90,13 +100,19 @@ public class JdbcTripQualityMaintenanceStore implements TripQualityMaintenanceSt
         return jdbc.sql("""
             SELECT vehicle_id FROM trip_quality_rebuild WHERE route_version_id = ? AND vehicle_id <> '' AND NOT completed
             ORDER BY investigated_at, vehicle_id LIMIT 1
-            """).param(version).query(String.class).optional();
+            """)
+            .param(version)
+            .query(String.class)
+            .optional();
     }
 
     @Override
     public boolean hasPendingVehicles(final long version) {
-        return jdbc.sql("SELECT EXISTS(SELECT 1 FROM trip_quality_rebuild WHERE route_version_id = ? AND vehicle_id <> '' AND NOT completed)")
-            .param(version).query(Boolean.class).single();
+        return jdbc.sql(
+        "SELECT EXISTS(SELECT 1 FROM trip_quality_rebuild WHERE route_version_id = ? AND vehicle_id <> '' AND NOT completed)")
+            .param(version)
+            .query(Boolean.class)
+            .single();
     }
 
     @Override
@@ -105,12 +121,20 @@ public class JdbcTripQualityMaintenanceStore implements TripQualityMaintenanceSt
             SELECT vehicle_id, phase, completed, evidence_observation_id, last_batch_at, last_batch_id,
                    can_release, started_at, investigated_at
             FROM trip_quality_rebuild WHERE route_version_id = ? ORDER BY vehicle_id
-            """).param(version).query((rs, n) -> {
+            """)
+            .param(version)
+            .query((rs, n) -> {
                 final var at = rs.getObject(5, OffsetDateTime.class);
-                return new TripQualityStatus(rs.getString(1), rs.getString(2), rs.getBoolean(3), rs.getObject(4, Long.class),
+                return new TripQualityStatus(rs.getString(1), rs.getString(2), rs.getBoolean(3),
+                    rs.getObject(4, Long.class),
                     at == null ? null : at.toInstant(), rs.getLong(6), rs.getBoolean(7),
-                    rs.getObject(8, OffsetDateTime.class).toInstant(), rs.getObject(9, OffsetDateTime.class).toInstant());
-            }).list();
+                    rs.getObject(8, OffsetDateTime.class).toInstant(),
+                    rs.getObject(9, OffsetDateTime.class).toInstant());
+            })
+            .list();
     }
-    private static OffsetDateTime offset(final Instant at) { return at.atOffset(ZoneOffset.UTC); }
+
+    private static OffsetDateTime offset(final Instant at) {
+        return at.atOffset(ZoneOffset.UTC);
+    }
 }

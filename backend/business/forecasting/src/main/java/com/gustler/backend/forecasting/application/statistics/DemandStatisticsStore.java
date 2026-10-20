@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Optional;
 
 public interface DemandStatisticsStore {
-
     record FoldRow(VehicleHourlyDemand total, Integer capacity) {
     }
 
@@ -24,8 +23,12 @@ public interface DemandStatisticsStore {
 
     void recordBaseline(long routeVersionId, boolean initialized, Instant dataUntil);
 
-    Optional<String> nextAccumulationVehicle(long routeVersionId, long inputUntilId, String vehicleCursor,
-        long inputCursor);
+    Optional<String> nextAccumulationVehicle(
+        long routeVersionId,
+        long inputUntilId,
+        String vehicleCursor,
+        long inputCursor
+    );
 
     void addToCurrentTotals(long routeVersionId, List<VehicleHourlyDemand> increments);
 

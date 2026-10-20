@@ -14,7 +14,6 @@ import org.junit.jupiter.api.Test;
  * 그 구간은 확률을 안 받고, 남은 구간끼리 나눠 갖는다.
  */
 class ResidualBinRangeTest {
-
     private static final double[] RELATIVE_EDGES =
         {0.0, 0.03, 0.07, 0.12, 0.2, 0.32, 0.48, 0.7, 1.0};
 

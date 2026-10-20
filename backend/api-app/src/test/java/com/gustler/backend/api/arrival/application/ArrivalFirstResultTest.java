@@ -23,8 +23,9 @@ class ArrivalFirstResultTest {
     private final ArrivalReadRepository repository = mock(ArrivalReadRepository.class);
     private final ArrivalRefreshGateway gateway = mock(ArrivalRefreshGateway.class);
     private final ArrivalFirstResultPolicy policy = new ArrivalFirstResultPolicy(WAIT, 1);
-    private final ArrivalQueryService service = new ArrivalQueryService(repository, gateway, new ArrivalFreshnessPolicy(),
-        Clock.fixed(NOW, ZoneOffset.UTC), policy);
+    private final ArrivalQueryService service =
+        new ArrivalQueryService(repository, gateway, new ArrivalFreshnessPolicy(),
+            Clock.fixed(NOW, ZoneOffset.UTC), policy);
     private final ArrivalQuery query = new ArrivalQuery(STATION, ROUTE, 1L, 1);
 
     @BeforeEach
@@ -58,7 +59,8 @@ class ArrivalFirstResultTest {
 
     @Test
     void 대기_한도에_수신이_없으면_기존_COLLECTING으로_돌아간다() {
-        when(gateway.request(STATION, WAIT)).thenReturn(new ArrivalRefresh(ArrivalRefresh.Status.IN_PROGRESS, "COLLECTING", NOW.plusSeconds(2)));
+        when(gateway.request(STATION, WAIT)).thenReturn(
+            new ArrivalRefresh(ArrivalRefresh.Status.IN_PROGRESS, "COLLECTING", NOW.plusSeconds(2)));
         var result = service.get(query);
         assertThat(result.status()).isEqualTo(ArrivalAvailability.UNAVAILABLE);
         assertThat(result.reason()).isEqualTo("NOT_COLLECTED");
@@ -70,7 +72,8 @@ class ArrivalFirstResultTest {
     @Test
     void 갱신_시각이_지나도_유효한_수신이_있으면_대기하지_않는다() {
         when(repository.latest(STATION)).thenReturn(Optional.of(snapshot(NOW.minusSeconds(45), true)));
-        when(gateway.request(STATION)).thenReturn(new ArrivalRefresh(ArrivalRefresh.Status.ACCEPTED, "COLLECTING", NOW.plusSeconds(2)));
+        when(gateway.request(STATION)).thenReturn(
+            new ArrivalRefresh(ArrivalRefresh.Status.ACCEPTED, "COLLECTING", NOW.plusSeconds(2)));
         assertThat(service.get(query).status()).isEqualTo(ArrivalAvailability.READY);
         verify(gateway).request(STATION);
         verify(gateway, never()).request(anyString(), any());
@@ -80,7 +83,8 @@ class ArrivalFirstResultTest {
     @Test
     void 만료된_수신을_대기_시간만큼_연장하지_않는다() {
         when(repository.latest(STATION)).thenReturn(Optional.of(snapshot(NOW.minusSeconds(60), true)));
-        when(gateway.request(STATION, WAIT)).thenReturn(new ArrivalRefresh(ArrivalRefresh.Status.IN_PROGRESS, "COLLECTING", NOW.plusSeconds(2)));
+        when(gateway.request(STATION, WAIT)).thenReturn(
+            new ArrivalRefresh(ArrivalRefresh.Status.IN_PROGRESS, "COLLECTING", NOW.plusSeconds(2)));
         var result = service.get(query);
         assertThat(result.status()).isEqualTo(ArrivalAvailability.UNAVAILABLE);
         assertThat(result.reason()).isEqualTo("STALE");
@@ -90,7 +94,8 @@ class ArrivalFirstResultTest {
 
     @Test
     void 한도_초과나_실패_응답에는_추가_DB_조회를_하지_않는다() {
-        when(gateway.request(STATION, WAIT)).thenReturn(new ArrivalRefresh(ArrivalRefresh.Status.DEFERRED, "DAILY_QUOTA_EXHAUSTED", NOW.plusSeconds(100)));
+        when(gateway.request(STATION, WAIT)).thenReturn(
+            new ArrivalRefresh(ArrivalRefresh.Status.DEFERRED, "DAILY_QUOTA_EXHAUSTED", NOW.plusSeconds(100)));
         assertThat(service.get(query).refresh().reason()).isEqualTo("DAILY_QUOTA_EXHAUSTED");
         verify(repository, times(1)).latest(STATION);
         assertThat(policy.tryAcquire()).isTrue();
@@ -100,7 +105,8 @@ class ArrivalFirstResultTest {
     @Test
     void 대기_슬롯이_차면_요청을_쌓지_않고_기존_빠른_접수를_사용한다() {
         assertThat(policy.tryAcquire()).isTrue();
-        when(gateway.request(STATION)).thenReturn(new ArrivalRefresh(ArrivalRefresh.Status.ACCEPTED, "COLLECTING", NOW.plusSeconds(2)));
+        when(gateway.request(STATION)).thenReturn(
+            new ArrivalRefresh(ArrivalRefresh.Status.ACCEPTED, "COLLECTING", NOW.plusSeconds(2)));
         assertThat(service.get(query).reason()).isEqualTo("NOT_COLLECTED");
         verify(gateway).request(STATION);
         verify(gateway, never()).request(anyString(), any());
@@ -120,7 +126,8 @@ class ArrivalFirstResultTest {
     @Test
     void 대기는_명시적으로_켜야_하고_최대_1초까지만_설정한다() {
         assertThat(new ArrivalFirstResultPolicy(Duration.ZERO, 32).tryAcquire()).isFalse();
-        assertThatThrownBy(() -> new ArrivalFirstResultPolicy(Duration.ofMillis(1001), 32)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() ->
+            new ArrivalFirstResultPolicy(Duration.ofMillis(1001), 32)).isInstanceOf(IllegalArgumentException.class);
     }
 
     private ArrivalVisit visit(final long version) {
@@ -128,8 +135,9 @@ class ArrivalFirstResultTest {
     }
 
     private ArrivalSnapshot snapshot(Instant received, final boolean withPrediction) {
-        return new ArrivalSnapshot(UUID.randomUUID(), STATION, received, received.plusSeconds(40), received.plusSeconds(60), null,
+        return new ArrivalSnapshot(UUID.randomUUID(), STATION, received, received.plusSeconds(40),
+            received.plusSeconds(60), null,
             withPrediction ? List.of(new RouteArrival(ROUTE, "3330", 1, 12, null, null, "RUN",
-                List.of(new Prediction("test-bus", 1, 180, 3, 3, 0, null, null, null, null)))) : List.of());
+            List.of(new Prediction("test-bus", 1, 180, 3, 3, 0, null, null, null, null)))) : List.of());
     }
 }

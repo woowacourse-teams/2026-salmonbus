@@ -39,7 +39,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class BoardQueryServiceTest {
-
     private static final RouteId ROUTE_ID = new RouteId("204000057");
     private static final OffsetDateTime OBSERVED_AT = OffsetDateTime.parse(
         "2026-08-27T08:00:00+09:00"
@@ -480,9 +479,10 @@ class BoardQueryServiceTest {
         given(repository.findStops(1L)).willReturn(roundTripStops());
         given(repository.findPredictions(100L)).willReturn(predictions);
         given(repository.findObservedVehicles(100L, 1L)).willReturn(predictions.stream()
-            .map(p -> new BoardVehicleObservation(p.vehicleId(), p.sourceRowNumber(),
-                p.targetStopOrder() - p.stopsToTarget()))
-            .distinct().toList());
+                .map(p -> new BoardVehicleObservation(p.vehicleId(), p.sourceRowNumber(),
+                    p.targetStopOrder() - p.stopsToTarget()))
+                .distinct()
+                .toList());
     }
 
     private Route route() {

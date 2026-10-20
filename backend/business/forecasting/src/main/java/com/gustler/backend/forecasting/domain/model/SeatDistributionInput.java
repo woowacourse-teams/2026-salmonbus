@@ -25,7 +25,6 @@ public record SeatDistributionInput(
     int capacity,
     SameDayFullOutcomes sameDayOutcomes
 ) {
-
     public SeatDistributionInput {
         if (featureVector == null || featureVector.length == 0) {
             throw new IllegalArgumentException("특징 벡터가 있어야 한다");

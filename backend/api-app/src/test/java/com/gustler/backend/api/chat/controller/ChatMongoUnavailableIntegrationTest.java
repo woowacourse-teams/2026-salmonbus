@@ -27,7 +27,6 @@ import org.springframework.web.socket.CloseStatus;
 @Import({PostgresTestContainer.class, ChatTestRoutesConfiguration.class})
 @DirtiesContext
 class ChatMongoUnavailableIntegrationTest {
-
     private static final int CLOSED_PORT = closedPort();
     private static final String SESSION_START = """
         {"v":1,"type":"session.start","clientSessionId":"0f8fad5b-d9cb-469f-a165-70867728950e"}
@@ -83,7 +82,8 @@ class ChatMongoUnavailableIntegrationTest {
 
     @Test
     void 허용하지_않은_Origin은_핸드셰이크를_거절한다() {
-        assertThatThrownBy(() -> ChatTestClient.connect(port, "204000057", "http://localhost:3000"))
+        assertThatThrownBy(
+            () -> ChatTestClient.connect(port, "204000057", "http://localhost:3000"))
             .isInstanceOf(ExecutionException.class)
             .rootCause()
             .hasMessageContaining("[403]");

@@ -1,7 +1,6 @@
 package com.gustler.backend.worker.scheduling;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
-
 import com.gustler.backend.observations.api.CollectObservations;
 import com.gustler.backend.worker.configuration.CollectionProperties;
 

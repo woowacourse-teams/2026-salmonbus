@@ -19,7 +19,6 @@ import java.util.List;
 
 /** 예보 재료 한 벌. 값 자체는 아무 수나 좋고, 재료가 계수 계산까지 흘러가는지만 본다. */
 final class ForecastInputFixture {
-
     private static final long ROUTE_VERSION_3330 = 1L;
     private static final long OBSERVATION_ID = 10L;
     private static final int PASSED_STOP_44 = 44;

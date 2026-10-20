@@ -16,7 +16,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class RouteQueryServiceTest {
-
     private static final Route ROUTE = new Route(
         "204000057",
         "3330",

@@ -36,7 +36,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 @SpringBootTest
 @Import({PostgresTestContainer.class, CollectionRuntimeConfiguration.class})
 class CollectionTwentyRoutesTest {
-
     private static final String STOP_205000217 = "205000217";
     private static final String STOP_277103149 = "277103149";
     private static final String STOP_208000069 = "208000069";

@@ -27,8 +27,12 @@ public class EvaluationRouteCommitter {
     private final ForecastEvaluationWriter writer;
     private final EvaluationQualityRecheck qualityRecheck;
 
-    public EvaluationRouteCommitter(EvaluationWorkStore work, RouteDataQualityAccess quality,
-        ForecastEvaluationWriter writer, EvaluationQualityRecheck qualityRecheck) {
+    public EvaluationRouteCommitter(
+        EvaluationWorkStore work,
+        RouteDataQualityAccess quality,
+        ForecastEvaluationWriter writer,
+        EvaluationQualityRecheck qualityRecheck
+    ) {
         this.work = work;
         this.quality = quality;
         this.writer = writer;
@@ -42,8 +46,10 @@ public class EvaluationRouteCommitter {
     }
 
     @Transactional
-    public void commit(EvaluateForecastsService.RouteInput input, List<ForecastEvaluation> results,
-        BiConsumer<Integer, Change> completion, boolean memoryChanged) {
+    public void commit(EvaluateForecastsService.RouteInput input,
+        List<ForecastEvaluation> results,
+        BiConsumer<Integer, Change> completion, boolean memoryChanged
+    ) {
         requireTransaction();
         long actualRevision = quality.lock(input.version());
         if (!workUnchanged(input)) {
@@ -70,10 +76,12 @@ public class EvaluationRouteCommitter {
         for (PendingForecast forecast : input.selected()) {
             selected.add(new EvaluationWorkStore.Key(forecast.vehicleObservationId(), forecast.targetStopOrder()));
         }
-        List<ForecastEvaluation> pending = verified.stream().filter(result -> {
+        List<ForecastEvaluation> pending = verified.stream()
+            .filter(result -> {
             var key = new EvaluationWorkStore.Key(result.vehicleObservationId(), result.targetStopOrder());
-            return selected.contains(key) && !completed.contains(key);
-        }).toList();
+                return selected.contains(key) && !completed.contains(key);
+            })
+            .toList();
         writer.complete(pending);
         for (List<Long> ids : chunks(input.checked())) {
             completed.addAll(work.completed(input.version(), ids));
@@ -84,9 +92,11 @@ public class EvaluationRouteCommitter {
         // 변경 전에 읽은 대기 상세는 다음 회차에서 DB로 다시 확인한다.
         if (!input.investigating() && !qualityChanged) {
             for (var item : input.ready()) {
-                List<PendingForecast> forecasts = item.forecasts().stream()
+                List<PendingForecast> forecasts = item.forecasts()
+                    .stream()
                     .filter(forecast -> !completed.contains(new EvaluationWorkStore.Key(
-                        forecast.vehicleObservationId(), forecast.targetStopOrder()))).toList();
+                        forecast.vehicleObservationId(), forecast.targetStopOrder())))
+                    .toList();
                 if (!forecasts.isEmpty()) remaining.add(new EvaluationWorkPageReader.Ready(
                     item.observationId(), input.revision(), item.workRevision(), forecasts));
             }
@@ -117,11 +127,11 @@ public class EvaluationRouteCommitter {
 
     private static void requireTransaction() {
         if (!TransactionSynchronizationManager.isActualTransactionActive()
-            || !TransactionSynchronizationManager.isSynchronizationActive()) {
+                || !TransactionSynchronizationManager.isSynchronizationActive()) {
             throw new IllegalStateException("노선별 정산 확정에는 실제 트랜잭션이 필요하다");
         }
     }
 
     public record Change(long version, EvaluationSelection.Cursor cursor, Set<Long> checked,
-                         List<EvaluationWorkPageReader.Ready> remaining) { }
+        List<EvaluationWorkPageReader.Ready> remaining) { }
 }

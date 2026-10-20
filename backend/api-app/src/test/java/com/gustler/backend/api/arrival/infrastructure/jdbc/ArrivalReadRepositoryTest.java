@@ -24,15 +24,23 @@ class ArrivalReadRepositoryTest {
     @EnableAutoConfiguration
     @Import(PostgresTestContainer.class)
     static class Config {
-        @Bean ObjectMapper objectMapper() { return new ObjectMapper(); }
-        @Bean ArrivalReadRepository repository(JdbcClient jdbc, ObjectMapper json) {
+        @Bean
+        ObjectMapper objectMapper() {
+            return new ObjectMapper();
+        }
+
+        @Bean
+        ArrivalReadRepository repository(JdbcClient jdbc, ObjectMapper json) {
             return new JdbcArrivalReadRepository(jdbc, json);
         }
     }
 
-    @Autowired JdbcClient jdbc;
-    @Autowired ObjectMapper json;
-    @Autowired ArrivalReadRepository repository;
+    @Autowired
+    JdbcClient jdbc;
+    @Autowired
+    ObjectMapper json;
+    @Autowired
+    ArrivalReadRepository repository;
 
     @Test
     void 같은_정류장의_왕복방문과_전체수신결과를_실제_DB에서_읽는다() {
@@ -54,14 +62,15 @@ class ArrivalReadRepositoryTest {
         assertThat(visits).allSatisfy(visit -> assertThat(visit.referenceVersionId()).isEqualTo(version));
 
         Instant received = Instant.parse("2026-10-14T03:00:00Z");
-        var snapshot = new ArrivalSnapshot(UUID.randomUUID(), "206000637", received, received.plusSeconds(40),
-            received.plusSeconds(60), null, List.of());
+        var snapshot =
+            new ArrivalSnapshot(UUID.randomUUID(), "206000637", received, received.plusSeconds(40),
+                received.plusSeconds(60), null, List.of());
         jdbc.sql("""
             INSERT INTO arrival_snapshot(id, provider, operation, station_id, received_at, refresh_after_at,
                 stale_at, normalization_version, payload_digest, payload)
             VALUES (?, 'GBIS', 'ARRIVAL_LIST_V2', '206000637', ?, ?, ?, 'fixture', ?, CAST(? AS jsonb))
             """).params(snapshot.id(), Timestamp.from(received), Timestamp.from(received.plusSeconds(40)),
-                Timestamp.from(received.plusSeconds(60)), "a".repeat(64), json.writeValueAsString(snapshot)).update();
+            Timestamp.from(received.plusSeconds(60)), "a".repeat(64), json.writeValueAsString(snapshot)).update();
         assertThat(repository.latest("206000637")).contains(snapshot);
         assertThat(repository.latest("206000532")).isEmpty();
     }

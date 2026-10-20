@@ -5,7 +5,6 @@ import java.util.regex.Pattern;
 public record RouteId(
     String value
 ) {
-
     private static final Pattern FORMAT = Pattern.compile("[0-9]{9}");
 
     public RouteId {

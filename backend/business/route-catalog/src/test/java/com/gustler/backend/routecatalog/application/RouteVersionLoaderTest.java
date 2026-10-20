@@ -6,10 +6,8 @@ import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.ServiceDay;
 import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
-
 import com.gustler.backend.routecatalog.support.RouteCatalogIntegrationTest;
 import jakarta.persistence.EntityManager;
 import java.time.OffsetDateTime;
@@ -27,7 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RouteCatalogIntegrationTest
 @Transactional
 class RouteVersionLoaderTest {
-
     private static final OffsetDateTime FIRST_READ_AT = OffsetDateTime.parse("2026-08-19T11:14:04.911+09:00");
     private static final OffsetDateTime SECOND_READ_AT = OffsetDateTime.parse("2026-08-26T11:14:04.911+09:00");
     private static final OffsetDateTime THIRD_READ_AT = OffsetDateTime.parse("2026-09-02T11:14:04.911+09:00");
@@ -248,7 +245,7 @@ class RouteVersionLoaderTest {
         "weekday_min_headway_minutes = 20, weekday_max_headway_minutes = 10",
         "saturday_min_headway_minutes = 0, saturday_max_headway_minutes = 10",
         "sunday_min_headway_minutes = 10, sunday_max_headway_minutes = 1441",
-        "holiday_min_headway_minutes = 10"})
+    "holiday_min_headway_minutes = 10"})
     void 저장소는_영분_역전_하루_초과_한쪽만_있는_배차간격을_거부한다(
         String assignment
     ) {
@@ -366,7 +363,7 @@ class RouteVersionLoaderTest {
         assertThat(again).isEqualTo(versionId);
         assertThat(coordinateHistoryCount(versionId)).isEqualTo(1);
         assertThat(jdbcClient.sql("SELECT observed_at FROM route_stop_location_history WHERE route_version_id = ?")
-            .param(versionId).query(OffsetDateTime.class).single()).isEqualTo(FIRST_READ_AT);
+                .param(versionId).query(OffsetDateTime.class).single()).isEqualTo(FIRST_READ_AT);
     }
 
     @Test
@@ -377,8 +374,11 @@ class RouteVersionLoaderTest {
         assertThat(again).isEqualTo(versionId);
         assertThat(versionCount()).isEqualTo(1);
         assertThat(coordinateHistoryCount(versionId)).isEqualTo(2);
-        assertThat(jdbcClient.sql("SELECT x FROM route_stop_location_history WHERE route_version_id = ? ORDER BY observed_at")
-            .param(versionId).query(Double.class).list()).containsExactly(127.0, 127.1);
+        assertThat(
+            jdbcClient.sql("SELECT x FROM route_stop_location_history WHERE route_version_id = ? ORDER BY observed_at")
+                .param(versionId)
+                .query(Double.class)
+                .list()).containsExactly(127.0, 127.1);
     }
 
     @Test
@@ -390,7 +390,7 @@ class RouteVersionLoaderTest {
 
         assertThat(coordinateHistoryCount(versionId)).isEqualTo(1);
         assertThat(jdbcClient.sql("SELECT observed_at FROM route_stop_location_history WHERE route_version_id = ?")
-            .param(versionId).query(OffsetDateTime.class).single()).isEqualTo(SECOND_READ_AT);
+                .param(versionId).query(OffsetDateTime.class).single()).isEqualTo(SECOND_READ_AT);
     }
 
     private RouteStops stopsWithCoordinates(double x) {

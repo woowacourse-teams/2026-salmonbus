@@ -75,8 +75,10 @@ public class RecentArrivalObservationCache {
         }
     }
 
-    private record Key(long routeVersionId, long observationId) { }
-    private record Entry(long revision, ArrivalCandidate candidate) { }
+    private record Key(long routeVersionId, long observationId) {
+    }
+    private record Entry(long revision, ArrivalCandidate candidate) {
+    }
 
     /** 정산 한 회차에서만 사용한다. 커밋 전 자료를 다른 회차에 공개하지 않는다. */
     public final class Round {
@@ -89,8 +91,12 @@ public class RecentArrivalObservationCache {
             this.delivered = enabled && deliveries != null ? deliveries.begin(now) : null;
         }
 
-        public List<ArrivalCandidate> read(ArrivalObservationQuery query, long version,
-            long revision, boolean investigating, String vehicle, Instant after, int limit) {
+        public List<ArrivalCandidate> read(
+            ArrivalObservationQuery query, long version,
+            long revision, boolean investigating,
+            String vehicle,
+            Instant after, int limit
+        ) {
             if (!enabled || investigating) return query.findAfter(version, vehicle, after, limit);
             if (delivered != null) return delivered.read(query, version, revision, investigating, vehicle, after, limit);
 
@@ -118,7 +124,9 @@ public class RecentArrivalObservationCache {
                 return query.findAfter(version, vehicle, after, limit);
             }
 
-            List<ArrivalCandidate> ordered = ids.stream().map(found::get).toList();
+            List<ArrivalCandidate> ordered = ids.stream()
+                .map(found::get)
+                .toList();
             for (ArrivalCandidate candidate : ordered) {
                 if (recent(candidate, now)) {
                     staged.put(new Key(version, candidate.observationId()), new Entry(revision, candidate));

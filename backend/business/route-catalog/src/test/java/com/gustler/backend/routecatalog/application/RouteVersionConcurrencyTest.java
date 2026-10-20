@@ -23,7 +23,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @RouteCatalogIntegrationTest
 class RouteVersionConcurrencyTest {
-
     private static final OffsetDateTime FIRST = OffsetDateTime.parse("2026-09-01T09:00:00+09:00");
     private static final OffsetDateTime SECOND = FIRST.plusDays(1);
     private static final RouteTimetable TIMETABLE =
@@ -51,8 +50,10 @@ class RouteVersionConcurrencyTest {
     @AfterEach
     void removeRoute() {
         transaction.executeWithoutResult(status -> {
-            jdbc.sql("DELETE FROM route_stop WHERE route_version_id IN (SELECT id FROM route_version WHERE route_id = ?)")
-                .param(routeId).update();
+            jdbc.sql(
+            "DELETE FROM route_stop WHERE route_version_id IN (SELECT id FROM route_version WHERE route_id = ?)")
+                .param(routeId)
+                .update();
             jdbc.sql("DELETE FROM route_version WHERE route_id = ?").param(routeId).update();
             jdbc.sql("DELETE FROM route WHERE id = ?").param(routeId).update();
         });

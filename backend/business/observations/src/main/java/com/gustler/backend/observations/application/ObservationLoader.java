@@ -26,32 +26,43 @@ public class ObservationLoader {
     private final List<ObservationDeliveryHook> deliveryHooks;
 
     public ObservationLoader(CollectionBatchRepository batches, List<CollectionQualityHook> qualityHooks,
-                             List<ObservationDeliveryHook> deliveryHooks) {
+        List<ObservationDeliveryHook> deliveryHooks) {
         this.batches = batches;
         this.qualityHooks = List.copyOf(qualityHooks);
         this.deliveryHooks = List.copyOf(deliveryHooks);
     }
 
     @Transactional
-    public void load(final long batchId, ObservationBatchConclusion conclusion,
-                     CollectedObservations collected, OffsetDateTime responseReceivedAt) {
+    public void load(
+        final long batchId,
+        ObservationBatchConclusion conclusion,
+        CollectedObservations collected,
+        OffsetDateTime responseReceivedAt
+    ) {
         logExcludedRows(batchId, collected);
         CollectionBatch batch = batches.getById(batchId);
         batch.conclude(conclusion, responseReceivedAt);
         batch.countRows(collected);
         StoredObservations stored = new StoredObservations(batchId, batch.routeVersionId(),
             responseReceivedAt.toInstant(), batches.saveObservations(batch, collected.storableRows()));
-        var event = new VehicleObservationsStored(stored.batchId(), stored.routeVersionId(), stored.observedAt(),
-            stored.rows().stream().map(row -> new VehicleObservationsStored.Row(
-                row.observationId(), row.vehicleId(), row.remainingSeats())).toList());
+        var event =
+            new VehicleObservationsStored(stored.batchId(), stored.routeVersionId(), stored.observedAt(),
+                stored.rows()
+                    .stream()
+                    .map(row -> new VehicleObservationsStored.Row(
+                        row.observationId(), row.vehicleId(), row.remainingSeats()))
+                    .toList());
         // 동기 이벤트는 관측 저장 transaction 안에서 처리된다. 정상 관측은 추가 SQL이 없다.
         qualityHooks.forEach(hook -> hook.observationsStored(event));
         batches.save(batch);
         var delivery = new ObservationDeliveryBatch(batchId, batch.routeVersionId(),
             batch.state().attemptNumber(), ObservationDeliveryBatch.Kind.STORED, stored.observedAt(),
-            stored.rows().stream().map(row -> new ObservationDeliveryBatch.Row(
-                row.observationId(), row.vehicleId(), row.remainingSeats(),
-                row.passedStopOrder(), row.crowdLevel(), row.stopOrder(), row.runningState())).toList());
+            stored.rows()
+                .stream()
+                .map(row -> new ObservationDeliveryBatch.Row(
+                    row.observationId(), row.vehicleId(), row.remainingSeats(),
+                    row.passedStopOrder(), row.crowdLevel(), row.stopOrder(), row.runningState()))
+                .toList());
         deliveryHooks.forEach(hook -> hook.record(delivery));
     }
 

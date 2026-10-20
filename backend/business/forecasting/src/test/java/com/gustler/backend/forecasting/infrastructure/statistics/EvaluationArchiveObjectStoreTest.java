@@ -2,7 +2,6 @@ package com.gustler.backend.forecasting.infrastructure.statistics;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch.Key;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch.Row;
@@ -49,8 +48,10 @@ class EvaluationArchiveObjectStoreTest {
         String copied = new String(objects.values.get(prefix() + "evaluations.jsonl"), StandardCharsets.UTF_8);
         assertThat(copied).isEqualTo(ORIGINAL + "\n");
         assertThat(JsonMapper.builder().build().readTree(copied).size()).isEqualTo(16);
-        assertThat(verified.manifestSha256()).isEqualTo(EvaluationArchiveFiles.digest(objects.values.get(prefix() + "manifest.json")));
-        assertThat(objects.actions).containsExactly("put:evaluations.jsonl", "get:evaluations.jsonl", "put:manifest.json", "get:manifest.json");
+        assertThat(verified.manifestSha256()).isEqualTo(
+            EvaluationArchiveFiles.digest(objects.values.get(prefix() + "manifest.json")));
+        assertThat(objects.actions).containsExactly("put:evaluations.jsonl", "get:evaluations.jsonl",
+            "put:manifest.json", "get:manifest.json");
         assertDirectoryEmpty();
     }
 
@@ -92,7 +93,8 @@ class EvaluationArchiveObjectStoreTest {
         objects.values.put(prefix() + "evaluations.jsonl", different);
 
         // when & then
-        assertThatThrownBy(() -> store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL))))
+        assertThatThrownBy(
+            () -> store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL))))
             .isInstanceOf(IllegalStateException.class);
         assertThat(objects.values.get(prefix() + "evaluations.jsonl")).isEqualTo(different);
         assertThat(objects.values).doesNotContainKey(prefix() + "manifest.json");
@@ -105,7 +107,8 @@ class EvaluationArchiveObjectStoreTest {
         objects.corruptDownloads = true;
 
         // when & then
-        assertThatThrownBy(() -> store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL))))
+        assertThatThrownBy(
+            () -> store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL))))
             .isInstanceOf(IllegalStateException.class);
         assertThat(objects.values).doesNotContainKey(prefix() + "manifest.json");
     }
@@ -128,7 +131,8 @@ class EvaluationArchiveObjectStoreTest {
         String incomplete = ORIGINAL.replace(",\"arrival_quality_direction\":null", "");
 
         // when & then
-        assertThatThrownBy(() -> store(1024 * 1024).storeAndVerify(batch, List.of(row(incomplete))))
+        assertThatThrownBy(
+            () -> store(1024 * 1024).storeAndVerify(batch, List.of(row(incomplete))))
             .isInstanceOf(IllegalArgumentException.class);
         assertThat(objects.actions).isEmpty();
     }
@@ -139,7 +143,8 @@ class EvaluationArchiveObjectStoreTest {
         String changedKey = ORIGINAL.replace("\"vehicle_observation_id\":7", "\"vehicle_observation_id\":8");
 
         // when & then
-        assertThatThrownBy(() -> store(1024 * 1024).storeAndVerify(batch, List.of(row(changedKey))))
+        assertThatThrownBy(
+            () -> store(1024 * 1024).storeAndVerify(batch, List.of(row(changedKey))))
             .isInstanceOf(IllegalArgumentException.class);
         assertThat(objects.actions).isEmpty();
     }
@@ -147,10 +152,13 @@ class EvaluationArchiveObjectStoreTest {
     @Test
     void 같은_원본_키가_반복되면_건수가_맞아도_전송하지_않는다() {
         // given
-        var duplicate = new EvaluationArchiveBatch(batch.id(), 3, 1, batch.leaseToken(), batch.leaseUntil(), State.RESERVED, 2, null);
+        var duplicate =
+            new EvaluationArchiveBatch(batch.id(), 3, 1, batch.leaseToken(), batch.leaseUntil(), State.RESERVED, 2,
+                null);
 
         // when & then
-        assertThatThrownBy(() -> store(1024 * 1024).storeAndVerify(duplicate, List.of(row(ORIGINAL), row(ORIGINAL))))
+        assertThatThrownBy(
+            () -> store(1024 * 1024).storeAndVerify(duplicate, List.of(row(ORIGINAL), row(ORIGINAL))))
             .isInstanceOf(IllegalArgumentException.class);
         assertThat(objects.actions).isEmpty();
     }
@@ -161,7 +169,8 @@ class EvaluationArchiveObjectStoreTest {
         objects.values.put(prefix() + "evaluations.jsonl", (ORIGINAL + "\n다른 행").getBytes(StandardCharsets.UTF_8));
 
         // when & then
-        assertThatThrownBy(() -> store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL))))
+        assertThatThrownBy(
+            () -> store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL))))
             .isInstanceOf(IllegalStateException.class);
         assertThat(objects.values).doesNotContainKey(prefix() + "manifest.json");
     }
@@ -170,8 +179,9 @@ class EvaluationArchiveObjectStoreTest {
     void 작업을_이어받아_소유권이_바뀌어도_같은_자료의_설명_파일은_달라지지_않는다() {
         // given
         var first = store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL)));
-        var resumed = new EvaluationArchiveBatch(batch.id(), batch.routeVersionId(), batch.qualityRevision(),
-            UUID.randomUUID(), Instant.now().plusSeconds(600), State.RESERVED, batch.rowCount(), null);
+        var resumed =
+            new EvaluationArchiveBatch(batch.id(), batch.routeVersionId(), batch.qualityRevision(),
+                UUID.randomUUID(), Instant.now().plusSeconds(600), State.RESERVED, batch.rowCount(), null);
 
         // when
         var second = store(1024 * 1024).storeAndVerify(resumed, List.of(row(ORIGINAL)));
@@ -211,8 +221,9 @@ class EvaluationArchiveObjectStoreTest {
 
         // when
         var saved = storage.storeAndVerify(batch, List.of(row(excluded)));
-        var verified = new EvaluationArchiveBatch(batch.id(), batch.routeVersionId(), batch.qualityRevision(),
-            batch.leaseToken(), batch.leaseUntil(), State.VERIFIED, batch.rowCount(), saved.manifestSha256());
+        var verified =
+            new EvaluationArchiveBatch(batch.id(), batch.routeVersionId(), batch.qualityRevision(),
+                batch.leaseToken(), batch.leaseUntil(), State.VERIFIED, batch.rowCount(), saved.manifestSha256());
         var restored = storage.readOriginal(verified);
 
         // then
@@ -256,8 +267,9 @@ class EvaluationArchiveObjectStoreTest {
     void 삭제와_복원을_위한_원본도_저장한_모든_열과_검증값을_그대로_반환한다() throws Exception {
         // given
         var saved = store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL)));
-        var verified = new EvaluationArchiveBatch(batch.id(), batch.routeVersionId(), batch.qualityRevision(),
-            batch.leaseToken(), batch.leaseUntil(), State.VERIFIED, batch.rowCount(), saved.manifestSha256());
+        var verified =
+            new EvaluationArchiveBatch(batch.id(), batch.routeVersionId(), batch.qualityRevision(),
+                batch.leaseToken(), batch.leaseUntil(), State.VERIFIED, batch.rowCount(), saved.manifestSha256());
 
         // when
         var rows = store(1024 * 1024).readOriginal(verified);
@@ -299,16 +311,20 @@ class EvaluationArchiveObjectStoreTest {
         // given
         var large = new EvaluationArchiveBatch(batch.id(), 3, 1, batch.leaseToken(),
             batch.leaseUntil(), State.RESERVED, size, null);
-        var rows = java.util.stream.IntStream.rangeClosed(1, size).mapToObj(index -> {
-            String json = ORIGINAL.replace("\"vehicle_observation_id\":7", "\"vehicle_observation_id\":" + index);
-            return new Row(new Key(index, 9), json, EvaluationArchiveFiles.digest(json.getBytes(StandardCharsets.UTF_8)));
-        }).toList();
+        var rows = java.util.stream.IntStream.rangeClosed(1, size)
+            .mapToObj(index -> {
+                String json = ORIGINAL.replace("\"vehicle_observation_id\":7", "\"vehicle_observation_id\":" + index);
+                return new Row(new Key(index, 9), json,
+                    EvaluationArchiveFiles.digest(json.getBytes(StandardCharsets.UTF_8)));
+            })
+            .toList();
         var storage = store(4 * 1024 * 1024);
 
         // when
         var saved = storage.storeAndVerify(large, rows);
-        var verified = new EvaluationArchiveBatch(large.id(), 3, 1, large.leaseToken(), large.leaseUntil(),
-            State.VERIFIED, size, saved.manifestSha256());
+        var verified =
+            new EvaluationArchiveBatch(large.id(), 3, 1, large.leaseToken(), large.leaseUntil(),
+                State.VERIFIED, size, saved.manifestSha256());
         var reference = new com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Reference(
             large.id(), 3, 1, size, saved.manifestSha256());
 

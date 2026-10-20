@@ -19,7 +19,6 @@ record BundleFiles(
     Path manifest,
     Path weights
 ) {
-
     static final String MANIFEST_NAME = "manifest.json";
     static final String WEIGHTS_NAME = "weights.safetensors";
 

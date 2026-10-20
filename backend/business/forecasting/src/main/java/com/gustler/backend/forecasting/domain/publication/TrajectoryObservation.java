@@ -1,5 +1,4 @@
 package com.gustler.backend.forecasting.domain.publication;
-
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
 import com.gustler.backend.forecasting.domain.model.ObservedSeats;
 import com.gustler.backend.forecasting.domain.model.SeatUnknownReason;
@@ -18,7 +17,6 @@ public record TrajectoryObservation(
     String vehicleTripKey,
     ObservedSeats seats
 ) {
-
     private static final int NO_SEAT_LEFT = 0;
 
     public String vehicleId() {

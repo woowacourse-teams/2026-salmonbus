@@ -5,7 +5,6 @@ import tools.jackson.databind.DeserializationContext;
 import tools.jackson.databind.ValueDeserializer;
 
 final class ScalarTextDeserializer extends ValueDeserializer<String> {
-
     @Override
     public String deserialize(
         JsonParser parser,

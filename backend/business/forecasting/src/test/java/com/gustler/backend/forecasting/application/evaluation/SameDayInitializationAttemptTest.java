@@ -2,7 +2,6 @@ package com.gustler.backend.forecasting.application.evaluation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
 import java.sql.SQLException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -11,7 +10,10 @@ import org.junit.jupiter.api.Test;
 class SameDayInitializationAttemptTest {
     private final AtomicLong nanos = new AtomicLong();
     private final SameDayInitializationAttempt attempt = new SameDayInitializationAttempt(nanos::get);
-    private void advance(long ms) { nanos.addAndGet(TimeUnit.MILLISECONDS.toNanos(ms)); }
+
+    private void advance(long ms) {
+        nanos.addAndGet(TimeUnit.MILLISECONDS.toNanos(ms));
+    }
 
     @Test
     void 잠금_획득_실패는_원본_조회_미실행으로_기록한다() {

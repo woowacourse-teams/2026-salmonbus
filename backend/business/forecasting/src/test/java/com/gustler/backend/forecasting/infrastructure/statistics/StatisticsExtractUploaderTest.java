@@ -17,7 +17,8 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 class StatisticsExtractUploaderTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
 
     @Test
     void 추출한_자료는_다시_읽을_수_있고_설명서는_자료_뒤에_올린다() throws Exception {
@@ -31,16 +32,19 @@ class StatisticsExtractUploaderTest {
         String location = uploader.upload(bundle, id);
 
         // then
-        try (var reader = new StatisticsInputReader(bundle.directory(), bundle.manifest().files(), 4096)) {
+        try (var reader = new StatisticsInputReader(bundle.directory(), bundle.manifest()
+            .files(), 4096)) {
             StatisticsInputRows.verify(bundle.manifest().scope(), reader);
         }
-        assertThat(location).isEqualTo("s3://techcourse-project-2026/salmonbus-be/statistics-input/v1/route-version=1/export-id=" + id + "/");
+        assertThat(location).isEqualTo(
+            "s3://techcourse-project-2026/salmonbus-be/statistics-input/v1/route-version=1/export-id=" + id + "/");
         assertThat(commands).hasSize(2);
         assertThat(value(commands.get(0), "--key")).endsWith("/rows.jsonl");
         assertThat(value(commands.get(1), "--key")).endsWith("/manifest.json");
         for (var command : commands) {
             assertThat(value(command, "--if-none-match")).isEqualTo("*");
-            assertThat(value(command, "--tagging")).contains("ProjectTeam=salmonbus", "Service=techcourse", "Role=techcourse-etc");
+            assertThat(value(command, "--tagging")).contains("ProjectTeam=salmonbus", "Service=techcourse",
+            "Role=techcourse-etc");
         }
     }
 
@@ -69,7 +73,8 @@ class StatisticsExtractUploaderTest {
         Files.writeString(bundle.directory().resolve("manifest.json"), "{}");
 
         // when & then
-        assertThatThrownBy(() -> uploader.upload(bundle, UUID.randomUUID())).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() ->
+            uploader.upload(bundle, UUID.randomUUID())).isInstanceOf(IllegalArgumentException.class);
         assertThat(commands).isEmpty();
     }
 
@@ -82,7 +87,8 @@ class StatisticsExtractUploaderTest {
 
         // when & then
         try {
-            assertThatThrownBy(() -> new StatisticsExtractUploader(commands::add).upload(bundle, UUID.randomUUID()))
+            assertThatThrownBy(
+                () -> new StatisticsExtractUploader(commands::add).upload(bundle, UUID.randomUUID()))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("트랜잭션");
             assertThat(commands).isEmpty();
         } finally {
@@ -99,11 +105,14 @@ class StatisticsExtractUploaderTest {
         assertThatThrownBy(() -> StatisticsExtractWriter.write(directory, input, 1))
             .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("한도");
         try (var paths = Files.walk(directory)) {
-            assertThat(paths.noneMatch(path -> path.getFileName().toString().equals("manifest.json"))).isTrue();
+            assertThat(paths.noneMatch(
+                path -> path.getFileName().toString().equals("manifest.json"))).isTrue();
         }
     }
 
-    private StatisticsExtractWriter.Bundle bundle() { return StatisticsExtractWriter.write(directory, extracted(), 8192); }
+    private StatisticsExtractWriter.Bundle bundle() {
+        return StatisticsExtractWriter.write(directory, extracted(), 8192);
+    }
 
     private JdbcStatisticsInputExtractor.Extracted extracted() {
         var until = Instant.parse("2026-10-09T00:00:00Z");
@@ -114,5 +123,7 @@ class StatisticsExtractUploaderTest {
         return new JdbcStatisticsInputExtractor.Extracted(scope, 0, 1, List.of(row));
     }
 
-    private String value(List<String> command, String option) { return command.get(command.indexOf(option) + 1); }
+    private String value(List<String> command, String option) {
+        return command.get(command.indexOf(option) + 1);
+    }
 }

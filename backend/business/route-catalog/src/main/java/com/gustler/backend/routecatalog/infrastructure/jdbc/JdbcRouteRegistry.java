@@ -11,7 +11,6 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class JdbcRouteRegistry implements RouteRegistry {
-
     private static final String SOURCE_ID = "GBIS";
 
     /** 표시명과 기점 · 종점 이름은 상류가 바꿀 수 있어 부를 때마다 맞춘다. 노선 자체는 그대로다. */
@@ -47,6 +46,6 @@ public class JdbcRouteRegistry implements RouteRegistry {
             .query(Long.class)
             .optional()
             .orElseGet(() -> jdbcClient.sql("SELECT id FROM route WHERE public_route_id = ?")
-                .param(route.sourceRouteId()).query(Long.class).single());
+                    .param(route.sourceRouteId()).query(Long.class).single());
     }
 }

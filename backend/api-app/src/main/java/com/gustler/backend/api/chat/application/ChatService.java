@@ -1,12 +1,10 @@
 package com.gustler.backend.api.chat.application;
-
 import com.gustler.backend.api.chat.domain.ChatMessage;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 
 public final class ChatService {
-
     public static final int HISTORY_SIZE = 50;
     public static final int MAX_BODY_CODE_POINTS = 200;
 

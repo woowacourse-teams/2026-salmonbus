@@ -20,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 /** 정정 요청을 유지한 채 128행씩 재계산/교체한다. 요청이 남아 있는 동안 해당 누적과 발행은 금지한다. */
 @Component
 public class DemandStatisticsRebuilder {
-
     private static final int PAGE_SIZE = DemandStatisticsRebuild.PAGE_SIZE;
 
     private final DemandStatisticsRebuildRepository rebuilds;
@@ -34,7 +33,8 @@ public class DemandStatisticsRebuilder {
     public DemandStatisticsRebuilder(final DemandStatisticsRebuildRepository rebuilds,
         final DemandStatisticsRebuildRequestStore requests, final DemandStatisticsRebuildStore rebuildStore,
         final DemandStatisticsStore store, final DemandSampleStore samples, final RouteDataQualityAccess quality,
-        final Clock clock) {
+        final Clock clock
+    ) {
         this.rebuilds = rebuilds;
         this.requests = requests;
         this.rebuildStore = rebuildStore;

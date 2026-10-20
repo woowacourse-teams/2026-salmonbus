@@ -9,7 +9,6 @@ public record SnapshotObservation(
     Integer vehiclesInService,
     boolean forecastPublished
 ) {
-
     public SnapshotObservation {
         Objects.requireNonNull(observedAt, "observedAt은 null일 수 없습니다.");
     }

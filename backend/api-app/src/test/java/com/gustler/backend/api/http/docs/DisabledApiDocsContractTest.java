@@ -13,7 +13,6 @@ import org.springframework.web.context.WebApplicationContext;
 
 @IntegrationTest
 class DisabledApiDocsContractTest {
-
     @Autowired
     private WebApplicationContext applicationContext;
 

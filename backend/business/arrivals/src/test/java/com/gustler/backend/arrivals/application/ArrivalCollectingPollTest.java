@@ -25,9 +25,17 @@ class ArrivalCollectingPollTest {
         Instant base = Instant.parse("2026-10-19T03:00:00Z");
         AtomicLong seconds = new AtomicLong();
         Clock clock = new Clock() {
-            public ZoneId getZone() { return ZoneOffset.UTC; }
-            public Clock withZone(ZoneId zone) { return this; }
-            public Instant instant() { return base.plusSeconds(seconds.get()); }
+            public ZoneId getZone() {
+                return ZoneOffset.UTC;
+            }
+
+            public Clock withZone(ZoneId zone) {
+                return this;
+            }
+
+            public Instant instant() {
+                return base.plusSeconds(seconds.get());
+            }
         };
         Queue<Runnable> jobs = new ArrayDeque<>();
         var store = mock(ArrivalStore.class);

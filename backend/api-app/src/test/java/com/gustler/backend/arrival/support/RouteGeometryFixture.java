@@ -1,5 +1,4 @@
 package com.gustler.backend.arrival.support;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.IntStream;
@@ -7,17 +6,23 @@ import tools.jackson.databind.JsonNode;
 
 /** 공개 GBIS 저장 응답 또는 명시적으로 생성한 테스트 형상. */
 public record RouteGeometryFixture(String routeId, String name, String startPoint, String endPoint,
-                                   int turnSequence, List<Stop> stops, List<Point> points, JsonNode capturedResponseFields) {
-    public record Stop(int sequence, String stationId, String name, double x, double y) { }
-    public record Point(double x, double y) { }
+    int turnSequence, List<Stop> stops, List<Point> points, JsonNode capturedResponseFields) {
+    public record Stop(int sequence, String stationId, String name, double x, double y) {
+    }
+    public record Point(double x, double y) {
+    }
 
     public static RouteGeometryFixture synthetic3330() {
         var points = IntStream.range(0, 836)
-            .mapToObj(index -> new Point(127 + index * .00001, 37 + Math.sin(index * .01) * .001)).toList();
-        var stops = IntStream.range(0, FakeGbisArrivalServer.STATIONS.size()).mapToObj(index -> {
+            .mapToObj(index -> new Point(127 + index * .00001, 37 + Math.sin(index * .01) * .001))
+            .toList();
+        var stops = IntStream.range(0, FakeGbisArrivalServer.STATIONS.size())
+            .mapToObj(index -> {
             var point = points.get(index * 70);
-            return new Stop(index + 1, FakeGbisArrivalServer.STATIONS.get(index), "synthetic stop", point.x(), point.y());
-        }).toList();
+                return new Stop(index + 1, FakeGbisArrivalServer.STATIONS.get(index), "synthetic stop", point.x(),
+                    point.y());
+            })
+            .toList();
         return new RouteGeometryFixture("204000057", "3330", "A", "B", 12, stops, points, null);
     }
 

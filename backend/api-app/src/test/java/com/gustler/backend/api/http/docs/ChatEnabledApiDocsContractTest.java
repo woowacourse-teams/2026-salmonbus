@@ -1,6 +1,7 @@
 package com.gustler.backend.api.http.docs;
 
 import static org.assertj.core.api.Assertions.assertThat;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -28,7 +29,6 @@ import tools.jackson.databind.ObjectMapper;
 @Import(PostgresTestContainer.class)
 @ActiveProfiles("api-docs-local")
 class ChatEnabledApiDocsContractTest {
-
     @Container
     private static final ChatMongoContainer MONGO = new ChatMongoContainer();
 
@@ -50,9 +50,13 @@ class ChatEnabledApiDocsContractTest {
         String body = mockMvc.perform(get("/api/docs/openapi"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.paths['/api/chat/rooms/{routeId}'].get.responses['200']").exists())
-            .andExpect(jsonPath("$.paths['/api/chat/rooms/{routeId}'].get.responses['200'].content['application/json']").exists())
+            .andExpect(
+                jsonPath(
+                "$.paths['/api/chat/rooms/{routeId}'].get.responses['200'].content['application/json']").exists())
             .andExpect(jsonPath("$.paths['/api/chat/rooms/{routeId}'].get.responses['404']").exists())
-            .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+            .andReturn()
+            .getResponse()
+            .getContentAsString(StandardCharsets.UTF_8);
 
         JsonNode paths = objectMapper.readTree(body).path("paths");
         assertThat(paths.size()).isEqualTo(7);

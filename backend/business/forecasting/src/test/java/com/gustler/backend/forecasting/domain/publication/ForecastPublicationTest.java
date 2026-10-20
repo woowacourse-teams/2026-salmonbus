@@ -9,7 +9,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ForecastPublicationTest {
-
     private static final long SOURCE_BATCH_ID = 100;
     private static final long ROUTE_VERSION_ID = 10;
     private static final long MODEL_DEPLOYMENT_ID = 20;

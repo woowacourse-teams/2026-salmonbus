@@ -6,7 +6,7 @@ import java.time.Instant;
 
 /** 원본 예측을 수신시각 기준으로 해석한 값. 실제 도착이나 차량 좌표를 뜻하지 않는다. */
 public record ArrivalPrediction(Prediction source, Instant estimateBaseAt,
-                                Instant expectedArrivalAt, Long remainingSeconds) {
+    Instant expectedArrivalAt, Long remainingSeconds) {
     public static ArrivalPrediction at(Prediction source, Instant receivedAt, Instant now) {
         long seconds = source.sourceRemainingSeconds() != null
             ? source.sourceRemainingSeconds()

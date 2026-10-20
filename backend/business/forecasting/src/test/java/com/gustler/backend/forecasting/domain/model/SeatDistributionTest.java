@@ -11,7 +11,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class SeatDistributionTest {
-
     @Test
     void 좌석_수마다의_확률을_모두_더하면_1이_된다() {
         // when & then

@@ -8,7 +8,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class SupportedForecastScopeTest {
-
     private static final SupportedForecastScope SCOPE =
         new SupportedForecastScope(List.of("1650", "3330"));
 

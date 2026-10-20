@@ -7,7 +7,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class JdbcQueryTimeLimits implements QueryTimeLimits {
-
     private final JdbcClient jdbc;
 
     public JdbcQueryTimeLimits(final JdbcClient jdbc) {

@@ -17,12 +17,16 @@ public class ArrivalRetentionJob {
     private final Clock clock;
 
     public ArrivalRetentionJob(RetainArrivalSnapshots store, ArrivalProperties properties, Clock clock) {
-        this.store = store; this.properties = properties; this.clock = clock;
+        this.store = store;
+        this.properties = properties;
+        this.clock = clock;
     }
 
     @Scheduled(fixedDelayString = "${arrivals.cleanup-interval:60s}", initialDelayString = "60s")
     public void purge() {
-        try { store.purgeExpiredBefore(clock.instant().minus(properties.retention()), 500); }
+        try {
+            store.purgeExpiredBefore(clock.instant().minus(properties.retention()), 500);
+        }
         catch (RuntimeException failure) {
             log.warn("event=arrival_retention_failed exceptionType={}", failure.getClass().getSimpleName());
         }

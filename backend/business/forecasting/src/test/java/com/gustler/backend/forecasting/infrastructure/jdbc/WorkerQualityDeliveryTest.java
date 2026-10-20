@@ -99,7 +99,8 @@ class WorkerQualityDeliveryTest {
     @Test
     void 재시작_후_DB에서_조사_중임을_확인하면_수집_원본을_캐시에_넣지_않는다() {
         // given
-        var adapter = adapter(new WorkerQualityState(version -> new WorkerQualityState.Snapshot(2, Set.of("bus-A")), 20));
+        var adapter =
+            adapter(new WorkerQualityState(version -> new WorkerQualityState.Snapshot(2, Set.of("bus-A")), 20));
 
         // when
         new TransactionTemplate(transactions).executeWithoutResult(status -> adapter.record(batch()));

@@ -1,5 +1,4 @@
 package com.gustler.backend.forecasting.application.evaluation;
-
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -14,13 +13,16 @@ final class EvaluationSelection {
     }
 
     record Selected(Cursor next, List<PendingForecast> forecasts) {
-        Selected { forecasts = List.copyOf(forecasts); }
+        Selected {
+            forecasts = List.copyOf(forecasts);
+        }
     }
 
     static Selected take(Cursor cursor, EvaluationWorkPageReader.Page page, int limit) {
         if (limit < 1) throw new IllegalArgumentException("평가 한도는 양수여야 한다");
         if (page.checkedIds().isEmpty()) return new Selected(Cursor.START, List.of());
-        Map<Long, EvaluationWorkPageReader.Ready> ready = page.ready().stream()
+        Map<Long, EvaluationWorkPageReader.Ready> ready = page.ready()
+            .stream()
             .collect(Collectors.toMap(EvaluationWorkPageReader.Ready::observationId, Function.identity()));
         List<PendingForecast> selected = new ArrayList<>();
         Cursor next = cursor;

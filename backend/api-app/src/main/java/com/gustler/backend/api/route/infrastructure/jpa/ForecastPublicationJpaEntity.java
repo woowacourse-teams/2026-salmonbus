@@ -13,7 +13,6 @@ import org.hibernate.annotations.Immutable;
 @Immutable
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ForecastPublicationJpaEntity {
-
     @Id
     private Long id;
 

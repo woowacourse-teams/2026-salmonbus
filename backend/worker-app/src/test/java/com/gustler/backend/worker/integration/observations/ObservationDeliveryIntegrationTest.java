@@ -48,12 +48,18 @@ import org.springframework.transaction.support.TransactionTemplate;
 class ObservationDeliveryIntegrationTest {
     private static final OffsetDateTime AT = OffsetDateTime.parse("2026-08-19T11:14:00.123456789+09:00");
     private static final String SOURCE_ROUTE = "delivery-test-route";
-    @Autowired ObservationBatchLedger ledger;
-    @Autowired JdbcClient jdbc;
-    @Autowired PlatformTransactionManager transactions;
-    @Autowired RecordingReceiver receiver;
-    @Autowired JdbcArrivalObservationQuery arrivals;
-    @Autowired RouteDataQualityAccess quality;
+    @Autowired
+    ObservationBatchLedger ledger;
+    @Autowired
+    JdbcClient jdbc;
+    @Autowired
+    PlatformTransactionManager transactions;
+    @Autowired
+    RecordingReceiver receiver;
+    @Autowired
+    JdbcArrivalObservationQuery arrivals;
+    @Autowired
+    RouteDataQualityAccess quality;
     private long version;
     private long batch;
     private CollectionPlan plan;
@@ -86,7 +92,8 @@ class ObservationDeliveryIntegrationTest {
         receiver.deliveries.clear();
         receiver.fail = false;
         receiver.accept = true;
-        receiver.onReceive = (id, batch) -> { };
+        receiver.onReceive = (id, batch) -> {
+        };
         jdbc.sql("""
             TRUNCATE vehicle_observation, observation_batch, route_stop, route_version, route,
                 daily_call_quota RESTART IDENTITY CASCADE
@@ -111,8 +118,12 @@ class ObservationDeliveryIntegrationTest {
         // then
         assertThat(result).singleElement().satisfies(row -> {
             assertThat(row.remainingSeats()).isEqualTo(20);
-            assertThat(row.observedAt()).isEqualTo(jdbc.sql("SELECT response_received_at FROM observation_batch WHERE id = ?")
-                .param(batch).query(OffsetDateTime.class).single().toInstant());
+            assertThat(row.observedAt()).isEqualTo(
+                jdbc.sql("SELECT response_received_at FROM observation_batch WHERE id = ?")
+                    .param(batch)
+                    .query(OffsetDateTime.class)
+                    .single()
+                    .toInstant());
         });
         verify(source, never()).restore(anyLong(), anyList(), anyInt());
         assertDeliveryTableAbsent();
@@ -143,7 +154,9 @@ class ObservationDeliveryIntegrationTest {
                 // when
                 var result = new TransactionTemplate(transactions).execute(status -> {
                     long revision = quality.lock(version);
-                    String vehicle = jdbc.sql("SELECT vehicle_id FROM vehicle_observation").query(String.class).single();
+                    String vehicle = jdbc.sql("SELECT vehicle_id FROM vehicle_observation")
+                        .query(String.class)
+                        .single();
                     return memory.begin(AT.plusSeconds(2).toInstant()).read(arrivals, version, revision, false,
                         vehicle, AT.toInstant(), 100);
                 });
@@ -219,7 +232,7 @@ class ObservationDeliveryIntegrationTest {
         assertDeliveryTableAbsent();
         assertThat(receiver.deliveries).isEmpty();
         assertThat(jdbc.sql("SELECT outcome FROM observation_batch WHERE id = ?")
-            .param(batch).query(String.class).single()).isEqualTo("SUCCESS_ROWS");
+                .param(batch).query(String.class).single()).isEqualTo("SUCCESS_ROWS");
     }
 
     @Test
@@ -235,9 +248,13 @@ class ObservationDeliveryIntegrationTest {
         // then
         assertThat(reused).isEqualTo(batch);
         assertThat(receiver.deliveries).hasSize(3);
-        assertThat(receiver.deliveries.stream().map(item -> item.batch().attempt()).toList())
+        assertThat(receiver.deliveries.stream()
+                .map(item -> item.batch().attempt())
+                .toList())
             .containsExactly(1, 2, 2);
-        assertThat(receiver.deliveries.stream().map(item -> item.batch().kind()).toList())
+        assertThat(receiver.deliveries.stream()
+                .map(item -> item.batch().kind())
+                .toList())
             .containsExactly(ObservationDeliveryBatch.Kind.STORED,
                 ObservationDeliveryBatch.Kind.CLEARED, ObservationDeliveryBatch.Kind.STORED);
         assertThat(receiver.deliveries.get(1).batch().rows()).isEmpty();
@@ -269,7 +286,7 @@ class ObservationDeliveryIntegrationTest {
 
     private void assertDeliveryTableAbsent() {
         assertThat(jdbc.sql("SELECT to_regclass('observation_delivery') IS NULL")
-            .query(Boolean.class).single()).isTrue();
+                    .query(Boolean.class).single()).isTrue();
     }
 
     private void save() {
@@ -284,13 +301,15 @@ class ObservationDeliveryIntegrationTest {
         return jdbc.sql("SELECT count(*) FROM " + table).query(Integer.class).single();
     }
 
-    record Delivery(long id, ObservationDeliveryBatch batch) { }
+    record Delivery(long id, ObservationDeliveryBatch batch) {
+    }
 
     static class RecordingReceiver implements ObservationDeliveryReceiver {
         final List<Delivery> deliveries = new ArrayList<>();
         boolean fail;
         boolean accept = true;
-        BiConsumer<Long, ObservationDeliveryBatch> onReceive = (id, batch) -> { };
+        BiConsumer<Long, ObservationDeliveryBatch> onReceive = (id, batch) -> {
+        };
 
         @Override
         public boolean receive(long id, ObservationDeliveryBatch batch) {

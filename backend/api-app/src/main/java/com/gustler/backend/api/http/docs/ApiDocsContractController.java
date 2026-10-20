@@ -12,7 +12,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @ConditionalOnProperty(name = "springdoc.api-docs.enabled", havingValue = "true")
 public class ApiDocsContractController {
-
     @GetMapping("/api/docs")
     public ResponseEntity<Void> entry() {
         return ResponseEntity.status(302)

@@ -44,7 +44,6 @@ import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(OutputCaptureExtension.class)
 class ChatWebSocketHandlerTest {
-
     private static final String SESSION_START = """
         {"v":1,"type":"session.start","clientSessionId":"0f8fad5b-d9cb-469f-a165-70867728950e"}
         """;
@@ -169,7 +168,8 @@ class ChatWebSocketHandlerTest {
         assertThat(frames).hasSize(2);
         assertThat(type(frames.get(0))).isEqualTo("session.ready");
         assertThat(ChatContractExamples.fieldNames(ChatContractExamples.parse(frames.get(0))))
-            .containsExactlyElementsOf(ChatContractExamples.fieldNames(ChatContractExamples.serverFrame("session.ready")));
+            .containsExactlyElementsOf(
+                ChatContractExamples.fieldNames(ChatContractExamples.serverFrame("session.ready")));
         assertThat(frames.get(1)).isEqualTo(example("error.unavailable"));
         assertThat(closed.get("sender")).isEqualTo(CloseStatus.SERVER_ERROR);
     }
@@ -230,7 +230,9 @@ class ChatWebSocketHandlerTest {
         }
         assertThat(sizes).containsExactly(10, 10, 3);
         assertThat(bodies).containsExactlyElementsOf(
-            IntStream.range(0, 23).mapToObj(index -> "메시지 " + index).toList()
+            IntStream.range(0, 23)
+                .mapToObj(index -> "메시지 " + index)
+                .toList()
         );
         assertThat(ChatContractExamples.fieldNames(ChatContractExamples.parse(frames.get(1)).get("messages").get(0)))
             .containsExactlyElementsOf(ChatContractExamples.fieldNames(
@@ -586,7 +588,12 @@ class ChatWebSocketHandlerTest {
         });
     }
 
-    private WebSocketSession session(String id, String routeId, List<String> frames, Outbound outbound)
+    private WebSocketSession session(
+        String id,
+        String routeId,
+        List<String> frames,
+        Outbound outbound
+    )
         throws Exception {
         WebSocketSession session = mock(WebSocketSession.class);
         given(session.getId()).willReturn(id);
@@ -641,7 +648,8 @@ class ChatWebSocketHandlerTest {
 
         @Override
         public List<ChatMessage> findRecent(String roomId, final int limit) {
-            return stored.values().stream()
+            return stored.values()
+                .stream()
                 .filter(message -> message.roomId().equals(roomId))
                 .limit(limit)
                 .toList();

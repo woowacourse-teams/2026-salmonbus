@@ -9,7 +9,6 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class RouteTest {
-
     private static final OffsetDateTime OPENED = OffsetDateTime.parse("2026-09-01T09:00:00+09:00");
     private static final OffsetDateTime CHANGED = OPENED.plusDays(1);
     private static final RouteTimetable TIMETABLE =

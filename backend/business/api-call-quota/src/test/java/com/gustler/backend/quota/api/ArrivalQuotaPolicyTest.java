@@ -9,7 +9,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class ArrivalQuotaPolicyTest {
-
     private static final int TOTAL = 40_000;
     private static final int KEY_LIMIT = 10_000;
 
@@ -51,7 +50,8 @@ class ArrivalQuotaPolicyTest {
         String alias
     ) {
         // when & then
-        assertThatThrownBy(() -> new ArrivalQuotaPolicy(TOTAL, Map.of("a", KEY_LIMIT, alias, KEY_LIMIT)))
+        assertThatThrownBy(
+            () -> new ArrivalQuotaPolicy(TOTAL, Map.of("a", KEY_LIMIT, alias, KEY_LIMIT)))
             .isInstanceOf(IllegalArgumentException.class);
     }
 

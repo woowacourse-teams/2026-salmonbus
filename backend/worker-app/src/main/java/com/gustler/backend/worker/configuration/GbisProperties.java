@@ -26,7 +26,6 @@ public record GbisProperties(
     Map<String, Integer> limits,
     Map<String, String> namedKeys
 ) {
-
     private static final String BROKEN_PERCENT =
         "%s 의 퍼센트 인코딩이 깨졌다. 공공데이터포털에서 받은 값을 그대로 넣어라";
 
@@ -101,7 +100,8 @@ public record GbisProperties(
     }
 
     public List<GbisKey> serviceKeys() {
-        return keys.entrySet().stream()
+        return keys.entrySet()
+            .stream()
             .map(key -> new GbisKey(key.getKey(), key.getValue()))
             .toList();
     }
@@ -150,7 +150,7 @@ public record GbisProperties(
         });
         if (!merged.containsKey(GbisKey.PRIMARY)) {
             throw new IllegalStateException(
-                "gbis.service-key must not be blank. Set the GBIS_SERVICE_KEY or GBIS_KEYS_A environment variable");
+            "gbis.service-key must not be blank. Set the GBIS_SERVICE_KEY or GBIS_KEYS_A environment variable");
         }
         rejectDuplicateKeys(merged);
         Map<String, String> ordered = new LinkedHashMap<>();
@@ -191,7 +191,8 @@ public record GbisProperties(
         Map<String, List<String>> aliasesByKey = new LinkedHashMap<>();
         keys.forEach((alias, serviceKey) ->
             aliasesByKey.computeIfAbsent(serviceKey, ignored -> new ArrayList<>()).add(alias));
-        aliasesByKey.values().stream()
+        aliasesByKey.values()
+            .stream()
             .filter(aliases -> aliases.size() > 1)
             .findFirst()
             .ifPresent(aliases -> {

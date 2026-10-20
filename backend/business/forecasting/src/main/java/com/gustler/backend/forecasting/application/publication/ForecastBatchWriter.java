@@ -75,7 +75,8 @@ public class ForecastBatchWriter {
         Map<Integer, SameDayFullOutcomes> sameDayOutcomes =
             sameDayFullOutcomesService.outcomesFor(batch.routeId(), runtime.deploymentId(), batch.responseReceivedAt());
         List<EvaluationSamplingSource> sources = new ArrayList<>();
-        List<SeatForecast> predictions = forecastsOf(batch, stops, statistics, sameDayOutcomes, runtime, generatedAt, sources);
+        List<SeatForecast> predictions =
+            forecastsOf(batch, stops, statistics, sameDayOutcomes, runtime, generatedAt, sources);
         ForecastPublication publication = new ForecastPublication(
             batch.observationBatchId(), batch.routeVersionId(), runtime.deploymentId(), statistics.revision(),
             qualityRevision, batch.responseReceivedAt(), generatedAt, generatedAt, predictions);
@@ -105,19 +106,24 @@ public class ForecastBatchWriter {
         Instant generatedAt,
         List<EvaluationSamplingSource> sources
     ) {
-        return vehicleTrajectoryQuery.readTrajectories(batch.observationBatchId()).stream()
+        return vehicleTrajectoryQuery.readTrajectories(batch.observationBatchId())
+            .stream()
             .flatMap(trajectory -> {
                 List<SeatForecast> forecasts = forecastsOfVehicleOrEmpty(
                     batch, trajectory, stops, statistics, sameDayOutcomes, runtime, generatedAt);
                 if (!forecasts.isEmpty() && trajectory.observation().vehicleId() != null
-                    && !trajectory.observation().vehicleId().isBlank()) {
+                        && !trajectory.observation().vehicleId().isBlank()) {
                     var observation = trajectory.observation();
-                    String direction = stops.stops().stream()
+                    String direction = stops.stops()
+                        .stream()
                         .filter(stop -> stop.stopOrder() == observation.passedStopOrder())
-                        .map(stop -> stop.direction().name()).findFirst().orElse(RouteDirection.UNKNOWN.name());
+                        .map(stop -> stop.direction().name())
+                        .findFirst()
+                        .orElse(RouteDirection.UNKNOWN.name());
                     sources.add(new EvaluationSamplingSource(trajectory.vehicleObservationId(), stops.sourceRouteId(),
                         new EvaluationSamplingPoint(batch.routeVersionId(), runtime.deploymentId(),
-                            observation.vehicleId(), observation.passedStopOrder(), direction, observation.observedAt())));
+                            observation.vehicleId(), observation.passedStopOrder(), direction,
+                            observation.observedAt())));
                 }
                 return forecasts.stream();
             })
@@ -155,7 +161,8 @@ public class ForecastBatchWriter {
         RuntimeSnapshot runtime,
         Instant generatedAt
     ) {
-        return stops.targetsAheadOf(trajectory.observation()).stream()
+        return stops.targetsAheadOf(trajectory.observation())
+            .stream()
             .map(target -> SeatForecast.of(
                 trajectory.vehicleObservationId(),
                 target,

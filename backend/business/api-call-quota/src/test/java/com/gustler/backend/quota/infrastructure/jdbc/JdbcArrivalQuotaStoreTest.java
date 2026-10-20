@@ -30,10 +30,13 @@ class JdbcArrivalQuotaStoreTest {
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration
     @Import(PostgresTestContainer.class)
-    static class Config { }
+    static class Config {
+    }
 
-    @Autowired JdbcClient jdbc;
-    @Autowired PlatformTransactionManager manager;
+    @Autowired
+    JdbcClient jdbc;
+    @Autowired
+    PlatformTransactionManager manager;
 
     @BeforeEach
     void reset() {
@@ -41,7 +44,8 @@ class JdbcArrivalQuotaStoreTest {
     }
 
     private ArrivalCallQuota quota(int total, Map<String, Integer> keys) {
-        return new ArrivalCallQuotaLedger(new JdbcArrivalQuotaStore(jdbc, manager), new ArrivalQuotaPolicy(total, keys));
+        return new ArrivalCallQuotaLedger(new JdbcArrivalQuotaStore(jdbc, manager),
+            new ArrivalQuotaPolicy(total, keys));
     }
 
     private int reserved(String alias) {

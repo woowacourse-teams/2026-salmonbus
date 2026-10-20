@@ -20,7 +20,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class JdbcDemandStatisticsRunRepository implements DemandStatisticsRunRepository {
-
     private static final String NO_VEHICLE = "";
     private static final String NO_SLOT = "";
 
@@ -93,8 +92,7 @@ public class JdbcDemandStatisticsRunRepository implements DemandStatisticsRunRep
             ? new ReduceCursor(rs.getInt("stop_cursor"), timeSlotOf(rs.getString("slot_cursor")), day) : null;
         return new DemandStatisticsRun(routeVersionId, rs.getObject("run_id", UUID.class),
             rs.getLong("quality_revision"), phase, rs.getObject("data_until", OffsetDateTime.class).toInstant(),
-            rs.getLong("input_until_id"), accumulating ? rs.getString("vehicle_cursor") : NO_VEHICLE,
-            accumulating ? rs.getLong("cursor_id") : 0, fold, reduce,
+            rs.getLong("input_until_id"), accumulating ? rs.getString("vehicle_cursor") : NO_VEHICLE, accumulating ? rs.getLong("cursor_id") : 0, fold, reduce,
             completedAt == null ? null : completedAt.toInstant());
     }
 

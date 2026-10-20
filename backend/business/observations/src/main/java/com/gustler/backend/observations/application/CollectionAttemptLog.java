@@ -42,16 +42,33 @@ final class CollectionAttemptLog implements AutoCloseable {
     }
 
     void resetUpstream() {
-        for (String key : new String[]{"collectionHttpStatus", "collectionTransport", "collectionUpstreamResult", "collectionRouteMismatchRows", "collectionTransportCause"}) {
+        for (
+            String key : new String[]{"collectionHttpStatus", "collectionTransport", "collectionUpstreamResult",
+                "collectionRouteMismatchRows", "collectionTransportCause"}) {
             MDC.remove(key);
         }
     }
 
-    void reply(ObservationReply reply) { this.reply = reply; }
-    void stage(String stage) { this.stage = stage; }
-    void routeVersion(long value) { routeVersionId = value; }
-    void batch(long value) { batchId = value; }
-    void committed() { committed = true; }
+    void reply(ObservationReply reply) {
+        this.reply = reply;
+    }
+
+    void stage(String stage) {
+        this.stage = stage;
+    }
+
+    void routeVersion(long value) {
+        routeVersionId = value;
+    }
+
+    void batch(long value) {
+        batchId = value;
+    }
+
+    void committed() {
+        committed = true;
+    }
+
     void response(ObservationResponse response) {
         outcome = response.conclusion().outcome().name();
         failureCode = String.valueOf(response.conclusion().failureCode());
@@ -71,13 +88,16 @@ final class CollectionAttemptLog implements AutoCloseable {
         for (Throwable cause = failure; cause != null && seen.add(cause); cause = cause.getCause()) {
             root = cause;
             if (cause instanceof SQLException sql) {
-                if (sql.getSQLState() != null) { sqlState = safe(sql.getSQLState()); }
+                if (sql.getSQLState() != null) {
+                    sqlState = safe(sql.getSQLState());
+                }
                 if ("23503".equals(sql.getSQLState()) && sql.getMessage() != null
                     && sql.getMessage().contains("fk_observation_route_stop")) {
                     var match = STOP_REFERENCE.matcher(sql.getMessage());
                     if (match.find()) {
                         stop = " referenceRouteVersionId=" + match.group(1) + " stopOrder=" + match.group(2)
-                            + " stopId=" + match.group(3) + sourceEvidence(Integer.parseInt(match.group(2)), match.group(3));
+                            + " stopId=" + match.group(3)
+                            + sourceEvidence(Integer.parseInt(match.group(2)), match.group(3));
                     }
                 }
             }
@@ -101,9 +121,11 @@ final class CollectionAttemptLog implements AutoCloseable {
     }
 
     private String sourceEvidence(int stopOrder, String stopId) {
-        if (reply == null) { return " sourceReference=UNAVAILABLE"; }
+        if (reply == null) {
+            return " sourceReference=UNAVAILABLE";
+        }
         return reply.sourceReference(stopOrder, stopId).map(source ->
-            " sourceReference=MATCHED sourceRowNumber=" + source.sourceRowNumber()
+                " sourceReference=MATCHED sourceRowNumber=" + source.sourceRowNumber()
                 + " responseRouteId=" + safe(source.routeId())
                 + " responseStopOrder=" + source.stopOrder() + " responseStopId=" + safe(source.stopId()))
             .orElse(" sourceReference=NOT_FOUND");
@@ -128,7 +150,9 @@ final class CollectionAttemptLog implements AutoCloseable {
         return value != null && value.matches("[a-zA-Z0-9_.-]{1,80}") ? value : "UNKNOWN";
     }
 
-    @Override public void close() {
-        if (previous == null) { MDC.clear(); } else { MDC.setContextMap(previous); }
+    @Override
+    public void close() {
+        if (previous == null) {
+            MDC.clear(); } else { MDC.setContextMap(previous); }
     }
 }

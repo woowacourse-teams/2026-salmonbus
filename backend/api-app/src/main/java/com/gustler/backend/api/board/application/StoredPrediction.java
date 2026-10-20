@@ -12,7 +12,6 @@ public record StoredPrediction(
     Double expectedSeats,
     ForecastModel model
 ) {
-
     public StoredPrediction {
         Objects.requireNonNull(model, "model은 null일 수 없습니다.");
     }

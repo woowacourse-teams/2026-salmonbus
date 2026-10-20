@@ -8,7 +8,6 @@ import java.util.Set;
 import tools.jackson.databind.JsonNode;
 
 public final class ApprovalGate {
-
     public static final String ACADEMY_TRIP_QUALITY_REBUILD = "ACADEMY_TRIP_QUALITY_REBUILD";
 
     private static final String SCHEMA = "salmonbus-migration-approval-v1";

@@ -16,11 +16,13 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 class BundleInspectionCommandTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
 
     @Test
     void 검수_구성에_DB와_활성화_빈이_없다() {
-        try (var context = new AnnotationConfigApplicationContext(BundleInspectionCommandConfiguration.class)) {
+        try (var context =
+            new AnnotationConfigApplicationContext(BundleInspectionCommandConfiguration.class)) {
             assertThat(context.getBeansOfType(InspectModelBundle.class)).hasSize(1);
             assertThat(context.getBeansOfType(DataSource.class)).isEmpty();
             assertThat(context.getBeansOfType(ModelDeploymentRepository.class)).isEmpty();

@@ -1,5 +1,4 @@
 package com.gustler.backend.forecasting.domain.quality;
-
 import com.gustler.backend.forecasting.domain.quality.OneWayTripClassifier.Previous;
 import com.gustler.backend.forecasting.domain.quality.OneWayTripClassifier.Route;
 import com.gustler.backend.forecasting.domain.quality.OneWayTripClassifier.Status;
@@ -13,8 +12,11 @@ import java.util.Map;
 /** 시작점 탐색과 순방향 재판정의 커서를 별도로 보존하는 차량별 조사. */
 public final class TripQualityInvestigation {
     public static final int BATCH_LIMIT = 32;
-    public enum Phase { SEARCH_START, REPLAY, DONE }
-    public record BatchObservations(long batch, Instant at, OneWayTripClassifier.Observation observation) { }
+    public enum Phase {
+        SEARCH_START, REPLAY, DONE
+    }
+    public record BatchObservations(long batch, Instant at, OneWayTripClassifier.Observation observation) {
+    }
     private final long routeVersionId;
     private final String vehicleId;
     private final Instant evidenceAt;
@@ -30,10 +32,17 @@ public final class TripQualityInvestigation {
     private boolean completed;
     private Long boundaryCandidateObservationId;
 
-    public TripQualityInvestigation(final long routeVersionId, final String vehicleId, final Instant cursorAt,
-        final long cursorBatchId, final Instant evidenceAt, final long evidenceObservationId, final Phase phase, final long anchorObservationId,
-        final Long previousObservationId, final boolean includeCursor, final boolean canRelease,
-        final Duration maximumGap, final Long boundaryCandidateObservationId, final boolean completed) {
+    public TripQualityInvestigation(
+        final long routeVersionId, final String vehicleId, final Instant cursorAt,
+        final long cursorBatchId, final Instant evidenceAt,
+        final long evidenceObservationId, final Phase phase,
+        final long anchorObservationId,
+        final Long previousObservationId,
+        final boolean includeCursor,
+        final boolean canRelease,
+        final Duration maximumGap, final Long boundaryCandidateObservationId,
+        final boolean completed
+    ) {
         this.routeVersionId = routeVersionId;
         this.vehicleId = vehicleId;
         this.cursorAt = cursorAt;
@@ -69,7 +78,9 @@ public final class TripQualityInvestigation {
         final ReverseBoundarySearch search = new ReverseBoundarySearch(route(configured), anchor.observation(),
             candidate == null ? null : candidate.observation());
         for (final BatchObservations row : page) {
-            if (search.boundaryConfirmed()) { break; }
+            if (search.boundaryConfirmed()) {
+                break;
+            }
             if (row.observation() != null) {
                 observations.put(row.observation().id(), row);
                 search.inspect(row.observation());
@@ -91,8 +102,11 @@ public final class TripQualityInvestigation {
         final List<OneWayTripAssessment> assessments = new ArrayList<>();
         Previous previous = retainedPrevious;
         for (final BatchObservations row : page) {
-            if (row.observation() == null) { continue; }
-            final OneWayTripAssessment assessment = OneWayTripAssessment.assess(route(configured), previous, row.observation());
+            if (row.observation() == null) {
+                continue;
+            }
+            final OneWayTripAssessment assessment =
+                OneWayTripAssessment.assess(route(configured), previous, row.observation());
             assessments.add(assessment);
             previous = assessment.asPrevious();
             canRelease = row.at().isAfter(evidenceAt) && assessment.decision().status() == Status.ELIGIBLE;
@@ -110,21 +124,66 @@ public final class TripQualityInvestigation {
     private Route route(final Route configured) {
         return new Route(configured.firstStop(), configured.lastStop(), configured.turnStop(), maximumGap);
     }
+
     private void requirePhase(final Phase expected) {
-        if (phase != expected) { throw new IllegalStateException("조사 단계가 맞지 않는다: " + phase); }
+        if (phase != expected) {
+            throw new IllegalStateException("조사 단계가 맞지 않는다: " + phase);
+        }
     }
-    public long routeVersionId() { return routeVersionId; }
-    public String vehicleId() { return vehicleId; }
-    public Instant evidenceAt() { return evidenceAt; }
-    public long evidenceObservationId() { return evidenceObservationId; }
-    public Duration maximumGap() { return maximumGap; }
-    public Instant cursorAt() { return cursorAt; }
-    public long cursorBatchId() { return cursorBatchId; }
-    public Phase phase() { return phase; }
-    public long anchorObservationId() { return anchorObservationId; }
-    public Long previousObservationId() { return previousObservationId; }
-    public boolean includeCursor() { return includeCursor; }
-    public boolean canRelease() { return canRelease; }
-    public Long boundaryCandidateObservationId() { return boundaryCandidateObservationId; }
-    public boolean completed() { return completed; }
+
+    public long routeVersionId() {
+        return routeVersionId;
+    }
+
+    public String vehicleId() {
+        return vehicleId;
+    }
+
+    public Instant evidenceAt() {
+        return evidenceAt;
+    }
+
+    public long evidenceObservationId() {
+        return evidenceObservationId;
+    }
+
+    public Duration maximumGap() {
+        return maximumGap;
+    }
+
+    public Instant cursorAt() {
+        return cursorAt;
+    }
+
+    public long cursorBatchId() {
+        return cursorBatchId;
+    }
+
+    public Phase phase() {
+        return phase;
+    }
+
+    public long anchorObservationId() {
+        return anchorObservationId;
+    }
+
+    public Long previousObservationId() {
+        return previousObservationId;
+    }
+
+    public boolean includeCursor() {
+        return includeCursor;
+    }
+
+    public boolean canRelease() {
+        return canRelease;
+    }
+
+    public Long boundaryCandidateObservationId() {
+        return boundaryCandidateObservationId;
+    }
+
+    public boolean completed() {
+        return completed;
+    }
 }

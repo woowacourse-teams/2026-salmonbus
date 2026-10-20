@@ -35,9 +35,13 @@ public class ArrivalRefreshController {
         if (maximumWaitMillis < 0 || maximumWaitMillis > ArrivalRefresh.MAX_WAIT_MILLIS) {
             return ResponseEntity.badRequest().build();
         }
-        try { return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore())
-            .body(maximumWaitMillis == 0 ? coordinator.request(request.stationId())
-                : coordinator.requestAndAwait(request.stationId(), Duration.ofMillis(maximumWaitMillis))); }
-        catch (IllegalArgumentException invalid) { return ResponseEntity.badRequest().build(); }
+        try {
+            return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(maximumWaitMillis == 0 ? coordinator.request(request.stationId())
+                : coordinator.requestAndAwait(request.stationId(), Duration.ofMillis(maximumWaitMillis)));
+        }
+        catch (IllegalArgumentException invalid) {
+            return ResponseEntity.badRequest().build();
+        }
     }
 }

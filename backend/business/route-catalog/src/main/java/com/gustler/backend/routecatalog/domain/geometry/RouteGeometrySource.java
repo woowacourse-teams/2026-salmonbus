@@ -5,5 +5,6 @@ import java.util.Optional;
 
 public interface RouteGeometrySource {
     Optional<Read> read(String sourceRouteId);
-    record Read(RouteShape shape, OffsetDateTime receivedAt) { }
+    record Read(RouteShape shape, OffsetDateTime receivedAt) {
+    }
 }

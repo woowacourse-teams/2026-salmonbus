@@ -14,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 public class RouteQueryService {
-
     private final RouteQueryRepository routeQueryRepository;
 
     public RouteOverview getRouteOverview() {

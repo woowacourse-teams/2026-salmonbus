@@ -5,7 +5,6 @@ import com.gustler.backend.forecasting.domain.model.ForecastFeatureContract;
 import com.gustler.backend.forecasting.domain.model.ForecastRouteReference;
 import com.gustler.backend.forecasting.domain.model.SeatDistributionPredictor;
 import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
-
 import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
 import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 
@@ -15,7 +14,6 @@ public record LoadedBundle(
     SeatDistributionPredictor predictor,
     ForecastRouteReference routeReference
 ) {
-
     /** 크기 묶음 아홉 개의 상대 경계. 학습 쪽 상수와 같아야 한다. */
     private static final double[] RELATIVE_BIN_EDGES =
         {0.0, 0.03, 0.07, 0.12, 0.2, 0.32, 0.48, 0.7, 1.0};
@@ -46,7 +44,10 @@ public record LoadedBundle(
     private void verifyGoldenVector() {
         BundleManifest.GoldenVector golden = coefficients.manifest().goldenVector();
         SeatForecastResult actual = predictor.predict(new SeatDistributionInput(
-            golden.featureVector().stream().mapToDouble(Double::doubleValue).toArray(),
+            golden.featureVector()
+                .stream()
+                .mapToDouble(Double::doubleValue)
+                .toArray(),
             golden.modelRoute(),
             golden.stopsAhead(),
             golden.currentSeats(),
@@ -64,7 +65,7 @@ public record LoadedBundle(
     ) {
         BundleCheck.GOLDEN_VECTOR.require(
             Math.abs(expected - actual) <= GOLDEN_TOLERANCE,
-            "%s 가 다르다. 계수 파일 %s, 우리 계산 %s".formatted(name, expected, actual));
+                "%s 가 다르다. 계수 파일 %s, 우리 계산 %s".formatted(name, expected, actual));
     }
 
     public ModelRelease release() {

@@ -37,9 +37,14 @@ public class EvaluationArchiveConfiguration {
 
     @Bean
     @ConditionalOnProperty(prefix = "forecast.archive", name = "enabled", havingValue = "true")
-    AdvanceEvaluationArchive advanceEvaluationArchive(EvaluationArchiveQueue queue, EvaluationArchiveStore store,
-        EvaluationArchiveRetentionStore retention, EvaluationArchiveObjectStore objects,
-        EvaluationArchivePolicy policy, Clock clock) {
+    AdvanceEvaluationArchive advanceEvaluationArchive(
+        EvaluationArchiveQueue queue,
+        EvaluationArchiveStore store,
+        EvaluationArchiveRetentionStore retention,
+        EvaluationArchiveObjectStore objects,
+        EvaluationArchivePolicy policy,
+        Clock clock
+    ) {
         return new AdvanceEvaluationArchiveService(queue, store,
             new ArchiveCompletedEvaluationsService(store, objects),
             new PurgeArchivedEvaluationsService(retention, objects), policy, clock);

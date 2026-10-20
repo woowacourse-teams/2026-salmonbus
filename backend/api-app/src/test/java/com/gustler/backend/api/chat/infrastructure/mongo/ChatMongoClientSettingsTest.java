@@ -8,7 +8,6 @@ import com.mongodb.ServerAddress;
 import org.junit.jupiter.api.Test;
 
 class ChatMongoClientSettingsTest {
-
     @Test
     void 접속_문자열에_값이_없으면_코드의_기본값을_쓴다() {
         // when
@@ -30,8 +29,8 @@ class ChatMongoClientSettingsTest {
         // when
         MongoClientSettings settings = ChatMongoClientSettings.from(
             "mongodb://127.0.0.1:27017/salmonbus_chat"
-                + "?serverSelectionTimeoutMS=7000&connectTimeoutMS=3500&maxPoolSize=9"
-                + "&socketTimeoutMS=8000&waitQueueTimeoutMS=3000"
+            + "?serverSelectionTimeoutMS=7000&connectTimeoutMS=3500&maxPoolSize=9"
+            + "&socketTimeoutMS=8000&waitQueueTimeoutMS=3000"
         );
 
         // then

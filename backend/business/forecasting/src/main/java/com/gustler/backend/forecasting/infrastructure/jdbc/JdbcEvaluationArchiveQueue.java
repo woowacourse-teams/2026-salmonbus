@@ -28,8 +28,12 @@ public class JdbcEvaluationArchiveQueue implements EvaluationArchiveQueue {
     private final Clock clock;
     private final TransactionTemplate transaction;
 
-    public JdbcEvaluationArchiveQueue(JdbcClient jdbc, RouteDataQualityAccess quality, Clock clock,
-        PlatformTransactionManager transactions) {
+    public JdbcEvaluationArchiveQueue(
+        JdbcClient jdbc,
+        RouteDataQualityAccess quality,
+        Clock clock,
+        PlatformTransactionManager transactions
+    ) {
         this.jdbc = jdbc;
         this.quality = quality;
         this.clock = clock;
@@ -86,21 +90,32 @@ public class JdbcEvaluationArchiveQueue implements EvaluationArchiveQueue {
                           WHERE s.prediction_observation_id=p.vehicle_observation_id AND s.target_stop_order=p.target_stop_order)
                     ) AS eligible
                 FROM page p ORDER BY vehicle_observation_id,target_stop_order
-                """).param("observation", cursor.get().observation()).param("stop", cursor.get().stop())
-                .param("limit", limit).param("before", before).query((rs, n) -> new Candidate(
-                    rs.getLong("route_version_id"), new Key(rs.getLong("vehicle_observation_id"), rs.getInt("target_stop_order")),
-                    rs.getBoolean("eligible"))).list();
+                """)
+                .param("observation", cursor.get().observation())
+                .param("stop", cursor.get().stop())
+                .param("limit", limit)
+                .param("before", before)
+                .query((rs, n) -> new Candidate(
+                    rs.getLong("route_version_id"),
+                    new Key(rs.getLong("vehicle_observation_id"), rs.getInt("target_stop_order")),
+                    rs.getBoolean("eligible")))
+                .list();
             if (page.isEmpty()) {
                 jdbc.sql("UPDATE evaluation_archive_scan SET observation_id=0,stop_order=0 WHERE id=1").update();
                 return Optional.empty();
             }
             // 다음 노선의 행은 건너뛰지 않는다. 다음 호출이 같은 키부터 이어 읽는다.
             long route = page.getFirst().route();
-            List<Candidate> prefix = page.stream().takeWhile(row -> row.route() == route).toList();
+            List<Candidate> prefix = page.stream()
+                .takeWhile(row -> row.route() == route)
+                .toList();
             Key last = prefix.getLast().key();
             jdbc.sql("UPDATE evaluation_archive_scan SET observation_id=?,stop_order=? WHERE id=1")
                 .params(last.observationId(), last.stopOrder()).update();
-            List<Key> keys = prefix.stream().filter(Candidate::eligible).map(Candidate::key).toList();
+            List<Key> keys = prefix.stream()
+                .filter(Candidate::eligible)
+                .map(Candidate::key)
+                .toList();
             return keys.isEmpty() ? Optional.empty() : Optional.of(new Candidates(route, keys));
         });
     }
@@ -147,7 +162,9 @@ public class JdbcEvaluationArchiveQueue implements EvaluationArchiveQueue {
                     WHERE id=? AND lease_token=? AND storage_state='LIVE' AND abandoned_at IS NULL
                     """).params(owned.id(), owned.leaseToken()).update();
             }
-            jdbc.sql("UPDATE evaluation_archive_scan SET next_attempt_at=clock_timestamp()+interval '60 seconds' WHERE id=1").update();
+            jdbc.sql(
+            "UPDATE evaluation_archive_scan SET next_attempt_at=clock_timestamp()+interval '60 seconds' WHERE id=1")
+                .update();
             return null;
         });
     }
@@ -166,12 +183,17 @@ public class JdbcEvaluationArchiveQueue implements EvaluationArchiveQueue {
 
     private static String digest(String value) {
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of()
+                .formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException(exception);
         }
     }
-    private record Cursor(long observation, int stop) { }
-    private record Candidate(long route, Key key, boolean eligible) { }
-    private record Original(String sha256, String json) { }
+    private record Cursor(long observation, int stop) {
+    }
+    private record Candidate(long route, Key key, boolean eligible) {
+    }
+    private record Original(String sha256, String json) {
+    }
 }

@@ -1,5 +1,4 @@
 package com.gustler.backend.forecasting.application.evaluation;
-
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationQuery;
 import com.gustler.backend.observations.api.ObservationDeliveryBatch;
@@ -27,9 +26,12 @@ public class ObservationDeliveryService implements ObservationDeliveryReceiver {
     private final Map<Key, Entry> batches = new LinkedHashMap<>();
     private int retained;
 
-    public ObservationDeliveryService(RecentObservationBatches source, Clock clock,
+    public ObservationDeliveryService(
+        RecentObservationBatches source,
+        Clock clock,
         @Value("${forecast.evaluation.observation-cache.max-observations:100000}") int capacity,
-        @Value("${forecast.evaluation.observation-cache.retention:50m}") Duration retention) {
+        @Value("${forecast.evaluation.observation-cache.retention:50m}") Duration retention
+    ) {
         if (capacity < 1 || retention.isNegative() || retention.isZero()) {
             throw new IllegalArgumentException("관측 보관 개수와 시간은 양수여야 한다");
         }
@@ -90,7 +92,9 @@ public class ObservationDeliveryService implements ObservationDeliveryReceiver {
     private synchronized List<ArrivalCandidate> prepare(long version, long revision, Round round) {
         List<RecentObservationBatches.Header> headers = source.headers(version, round.cutoff, capacity + 1);
         if (headers.size() > capacity || headers.stream().anyMatch(header -> header.rows() < 0)
-            || headers.stream().mapToLong(RecentObservationBatches.Header::rows).sum() > round.remaining) return null;
+            || headers.stream()
+            .mapToLong(RecentObservationBatches.Header::rows)
+            .sum() > round.remaining) return null;
 
         Map<Long, List<ArrivalCandidate>> ready = new HashMap<>();
         List<RecentObservationBatches.Header> missing = new ArrayList<>();
@@ -111,10 +115,14 @@ public class ObservationDeliveryService implements ObservationDeliveryReceiver {
         }
 
         // 재시작이나 전달 누락 시에도 회차당 복원 배치 수와 본문 수를 제한한다.
-        List<RecentObservationBatches.Header> recovering = missing.stream().limit(round.recoveryBatches).toList();
+        List<RecentObservationBatches.Header> recovering = missing.stream()
+            .limit(round.recoveryBatches)
+            .toList();
         round.recoveryBatches -= recovering.size();
         if (!recovering.isEmpty()) {
-            List<Long> ids = recovering.stream().map(RecentObservationBatches.Header::batchId).toList();
+            List<Long> ids = recovering.stream()
+                .map(RecentObservationBatches.Header::batchId)
+                .toList();
             List<RecentObservationBatches.Row> rows = source.restore(version, ids, round.remaining + 1);
             if (rows.size() > round.remaining) return null;
             Map<Long, List<ArrivalCandidate>> grouped = new HashMap<>();
@@ -136,18 +144,26 @@ public class ObservationDeliveryService implements ObservationDeliveryReceiver {
                 header.observedAt(), revision, null, candidates));
         }
         if (ready.size() != headers.size()) return null;
-        List<ArrivalCandidate> result = ready.values().stream().flatMap(List::stream)
-            .sorted(Comparator.comparing(ArrivalCandidate::observedAt).thenComparingLong(ArrivalCandidate::observationId))
+        List<ArrivalCandidate> result = ready.values()
+            .stream()
+            .flatMap(List::stream)
+            .sorted(Comparator.comparing(ArrivalCandidate::observedAt)
+                .thenComparingLong(ArrivalCandidate::observationId))
             .toList();
         round.remaining -= result.size();
         return result;
     }
 
-    private record Key(long version, long batch) { }
+    private record Key(long version, long batch) {
+    }
     private record Entry(int attempt, Instant observedAt, long revision,
-                         ObservationDeliveryBatch raw, List<ArrivalCandidate> candidates) {
-        int size() { return raw == null ? candidates.size() : raw.rows().size(); }
-        int weight() { return Math.max(1, size()); }
+        ObservationDeliveryBatch raw, List<ArrivalCandidate> candidates) {
+        int size() { return raw == null ? candidates.size() : raw.rows().size();
+        }
+
+        int weight() {
+            return Math.max(1, size());
+        }
     }
 
     /** 기존 정산의 노선 품질 잠금을 획득한 뒤 사용한다. 회차의 목록을 콜백이 바꾸지 않는다. */
@@ -157,16 +173,25 @@ public class ObservationDeliveryService implements ObservationDeliveryReceiver {
         private int remaining = capacity;
         private int recoveryBatches = 100;
 
-        private Round(Instant cutoff) { this.cutoff = cutoff; }
+        private Round(Instant cutoff) {
+            this.cutoff = cutoff;
+        }
 
-        public List<ArrivalCandidate> read(ArrivalObservationQuery query, long version, long revision,
-            boolean investigating, String vehicle, Instant after, int limit) {
+        public List<ArrivalCandidate> read(
+            ArrivalObservationQuery query, long version, long revision,
+            boolean investigating,
+            String vehicle,
+            Instant after, int limit
+        ) {
             if (investigating || after.isBefore(cutoff)) return query.findAfter(version, vehicle, after, limit);
             if (!routes.containsKey(version)) routes.put(version, prepare(version, revision, this));
             List<ArrivalCandidate> candidates = routes.get(version);
             if (candidates == null) return query.findAfter(version, vehicle, after, limit);
-            return candidates.stream().filter(row -> Objects.equals(row.vehicle().vehicleId(), vehicle)
-                && row.observedAt().isAfter(after)).limit(limit).toList();
+            return candidates.stream()
+                .filter(row -> Objects.equals(row.vehicle().vehicleId(), vehicle)
+                    && row.observedAt().isAfter(after))
+                .limit(limit)
+                .toList();
         }
     }
 }

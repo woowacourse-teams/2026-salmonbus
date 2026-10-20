@@ -68,10 +68,12 @@ class EvaluateForecastsServiceTest {
 
     @BeforeEach
     void 회수_배치를_멈춘_시계로_세운다() {
-        job = new EvaluateForecastsService(work, new EvaluationWorkPageReader(work), new EvaluationRouteCommitter(work, quality, writer,
-            new EvaluationQualityRecheck(work, arrivalObservationQuery, properties().arrivalLimit())),
-            arrivalObservationQuery, quality, properties(), Clock.fixed(SETTLED_AT, ZoneOffset.UTC), 30000, 3,
-            new RecentArrivalObservationCache(false, 30000, Duration.ofMinutes(30)));
+        job =
+            new EvaluateForecastsService(work, new EvaluationWorkPageReader(work),
+                new EvaluationRouteCommitter(work, quality, writer,
+                    new EvaluationQualityRecheck(work, arrivalObservationQuery, properties().arrivalLimit())),
+                arrivalObservationQuery, quality, properties(), Clock.fixed(SETTLED_AT, ZoneOffset.UTC), 30000, 3,
+                new RecentArrivalObservationCache(false, 30000, Duration.ofMinutes(30)));
     }
 
     @Test
@@ -273,20 +275,27 @@ class EvaluateForecastsServiceTest {
         final long routeVersionId,
         PendingForecast... forecasts
     ) {
-        List<Long> ids = java.util.Arrays.stream(forecasts).map(PendingForecast::vehicleObservationId).distinct().sorted().toList();
+        List<Long> ids = java.util.Arrays.stream(forecasts)
+            .map(PendingForecast::vehicleObservationId)
+            .distinct()
+            .sorted()
+            .toList();
         when(work.routes()).thenReturn(List.of(routeVersionId));
         when(work.lastObservationId(routeVersionId)).thenReturn(ids.isEmpty() ? 0L : ids.getLast());
         if (ids.isEmpty()) return;
         when(work.revisions(eq(routeVersionId), any())).thenReturn(ids.stream()
-            .collect(java.util.stream.Collectors.toMap(id -> id, id -> 1L)));
+                .collect(java.util.stream.Collectors.toMap(id -> id, id -> 1L)));
         when(work.page(eq(routeVersionId), anyLong(), anyLong(), anyInt())).thenAnswer(call -> {
             long after = call.getArgument(1);
-            return ids.stream().filter(id -> id > after).toList();
+            return ids.stream()
+                .filter(id -> id > after)
+                .toList();
         });
         when(work.restore(eq(routeVersionId), any())).thenReturn(java.util.Arrays.stream(forecasts)
-            .map(f -> new EvaluationWorkStore.Restored(new EvaluationWorkStore.Key(f.vehicleObservationId(), f.targetStopOrder()),
-                Optional.of(new PendingForecast(f.vehicleObservationId(), f.targetStopOrder(), routeVersionId,
-                    f.vehicleId(), f.stopsToTarget(), f.observedAt(), f.generatedAt(), f.qualityDirection())))).toList());
+                .map(f -> new EvaluationWorkStore.Restored(new EvaluationWorkStore.Key(f.vehicleObservationId(), f.targetStopOrder()),
+                    Optional.of(new PendingForecast(f.vehicleObservationId(), f.targetStopOrder(), routeVersionId,
+                        f.vehicleId(), f.stopsToTarget(), f.observedAt(), f.generatedAt(), f.qualityDirection()))))
+                .toList());
     }
 
     private void runRound() {
@@ -310,14 +319,18 @@ class EvaluateForecastsServiceTest {
     }
 
     private List<ArrivalLabel> settledLabels() {
-        return captured().stream().<ArrivalLabel>map(evaluation -> switch (evaluation.state()) {
-            case SETTLED -> new ArrivalLabel.Settled(evaluation.result().arrivalObservationId(), evaluation.result().seatsOnArrival());
-            case SEAT_MISSING -> new ArrivalLabel.SeatMissing(evaluation.result().arrivalObservationId());
-            case SKIPPED -> new ArrivalLabel.Skipped();
-            case LOST -> new ArrivalLabel.Lost();
-            case QUALITY_EXCLUDED -> throw new AssertionError("품질 제외는 도착 판정이 아니라 저장소에서 처리한다");
-            case PENDING -> throw new AssertionError("평가 대기 상태를 저장하면 안 된다");
-        }).toList();
+        return captured().stream()
+            .<ArrivalLabel>map(evaluation -> switch (evaluation.state()) {
+                case SETTLED -> new ArrivalLabel.Settled(evaluation.result()
+                    .arrivalObservationId(), evaluation.result()
+                    .seatsOnArrival());
+                case SEAT_MISSING -> new ArrivalLabel.SeatMissing(evaluation.result().arrivalObservationId());
+                case SKIPPED -> new ArrivalLabel.Skipped();
+                case LOST -> new ArrivalLabel.Lost();
+                case QUALITY_EXCLUDED -> throw new AssertionError("품질 제외는 도착 판정이 아니라 저장소에서 처리한다");
+                case PENDING -> throw new AssertionError("평가 대기 상태를 저장하면 안 된다");
+            })
+            .toList();
     }
 
     private List<ForecastEvaluation> captured() {

@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.domain.deployment;
 
 import com.gustler.backend.forecasting.domain.model.SeatDistributionPredictor;
+
 import com.gustler.backend.forecasting.domain.model.ForecastFeatureContract;
 import com.gustler.backend.forecasting.domain.model.ForecastRouteReference;
 import java.time.Instant;
@@ -19,9 +20,15 @@ public record ModelRelease(
     ForecastRouteReference routeReference
 ) {
 
-    public ModelRelease(String releaseId, String modelVersion, String bundleDigest,
-        String featureContractVersion, String dataThrough, SupportedForecastScope scope,
-        SeatDistributionPredictor predictor) {
+    public ModelRelease(
+        String releaseId,
+        String modelVersion,
+        String bundleDigest,
+        String featureContractVersion,
+        String dataThrough,
+        SupportedForecastScope scope,
+        SeatDistributionPredictor predictor
+    ) {
         this(releaseId, modelVersion, bundleDigest, featureContractVersion, dataThrough, scope,
             predictor, ForecastFeatureContract.LEGACY, null);
     }

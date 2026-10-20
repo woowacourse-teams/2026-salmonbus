@@ -19,7 +19,15 @@ public final class ArrivalFirstResultPolicy {
         this.slots = new Semaphore(maximumWaiters);
     }
 
-    public Duration maximumWait() { return maximumWait; }
-    public boolean tryAcquire() { return !maximumWait.isZero() && slots.tryAcquire(); }
-    public void release() { slots.release(); }
+    public Duration maximumWait() {
+        return maximumWait;
+    }
+
+    public boolean tryAcquire() {
+        return !maximumWait.isZero() && slots.tryAcquire();
+    }
+
+    public void release() {
+        slots.release();
+    }
 }

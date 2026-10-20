@@ -9,8 +9,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public class JdbcDemandStatisticsRebuildRequestStore implements DemandStatisticsRebuildRequestStore, DemandStatisticsRebuildTrigger {
-
+public class JdbcDemandStatisticsRebuildRequestStore implements DemandStatisticsRebuildRequestStore,
+    DemandStatisticsRebuildTrigger {
     private final JdbcClient jdbc;
 
     public JdbcDemandStatisticsRebuildRequestStore(final JdbcClient jdbc) {

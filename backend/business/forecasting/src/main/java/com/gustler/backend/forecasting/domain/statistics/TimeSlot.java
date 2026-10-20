@@ -4,7 +4,6 @@ import java.time.Clock;
 import java.time.Instant;
 
 public enum TimeSlot {
-
     MORNING,
     EVENING,
     OTHER,

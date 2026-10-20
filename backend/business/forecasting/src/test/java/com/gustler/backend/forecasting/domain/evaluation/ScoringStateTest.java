@@ -6,7 +6,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 class ScoringStateTest {
-
     @ParameterizedTest
     @EnumSource(ScoringState.class)
     void 실제_잔여석을_받아낸_예보만_채점한다(

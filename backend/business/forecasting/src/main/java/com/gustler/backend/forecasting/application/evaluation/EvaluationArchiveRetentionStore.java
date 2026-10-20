@@ -11,6 +11,9 @@ public interface EvaluationArchiveRetentionStore {
     int purge(Snapshot prepared, List<Row> verifiedRows);
     int restore(Snapshot prepared, List<Row> verifiedRows);
 
-    enum Location { LIVE, PURGED }
-    record Snapshot(EvaluationArchiveBatch batch, long storageRevision, long currentQuality, Location location) { }
+    enum Location {
+        LIVE, PURGED
+    }
+    record Snapshot(EvaluationArchiveBatch batch, long storageRevision, long currentQuality, Location location) {
+    }
 }

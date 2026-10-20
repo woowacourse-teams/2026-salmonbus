@@ -13,7 +13,6 @@ import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class DemandStatisticsVersionTest {
-
     private static final long ROUTE_VERSION_ID = 1L;
     private static final String CALCULATION_VERSION = "v1";
     private static final int REVISION = 1;

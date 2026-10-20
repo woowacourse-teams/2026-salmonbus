@@ -7,7 +7,6 @@ import java.util.List;
 public record BusLocationResponse(
     Response response
 ) {
-
     public record Response(
         @JsonProperty("msgHeader")
         Header header,

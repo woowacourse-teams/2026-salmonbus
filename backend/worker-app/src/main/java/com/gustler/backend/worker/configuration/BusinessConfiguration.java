@@ -20,7 +20,6 @@ import org.springframework.core.env.StandardEnvironment;
 @Configuration
 @Import({ClockConfig.class, ObservationPersistenceConfiguration.class, ForecastingConfiguration.class})
 public class BusinessConfiguration {
-
     private static final String STALENESS = "forecast.staleness";
 
     @Bean
@@ -51,7 +50,6 @@ public class BusinessConfiguration {
     @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
     @EnableConfigurationProperties({ForecastProperties.class, SameDayInitializationProperties.class})
     static class ForecastPolicies {
-
         @Bean
         ForecastPolicy forecastPolicy(
             ForecastProperties properties,

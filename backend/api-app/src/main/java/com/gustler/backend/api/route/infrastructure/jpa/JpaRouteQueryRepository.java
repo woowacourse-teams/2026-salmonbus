@@ -12,7 +12,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 @RequiredArgsConstructor
 public class JpaRouteQueryRepository implements RouteQueryRepository {
-
     private final RouteEntityRepository routeRepository;
     private final ModelDeploymentEntityRepository modelDeploymentRepository;
 

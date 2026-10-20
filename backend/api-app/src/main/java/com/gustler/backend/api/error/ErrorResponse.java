@@ -12,7 +12,6 @@ public record ErrorResponse(
     @Schema(description = "응답 헤더의 X-Request-Id 및 서버 로그와 대응하는 요청 식별자")
     String requestId
 ) {
-
     public ErrorResponse {
         Objects.requireNonNull(code, "code는 null일 수 없습니다.");
         Objects.requireNonNull(message, "message는 null일 수 없습니다.");

@@ -9,7 +9,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class ObservationFreshnessTest {
-
     @ParameterizedTest
     @CsvSource({
         "2026-10-16T00:59:59.999999999+09:00, 5",

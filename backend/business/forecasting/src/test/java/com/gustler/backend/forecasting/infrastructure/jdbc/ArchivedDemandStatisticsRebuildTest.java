@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader;
+
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuildRequestStore;
@@ -44,15 +45,24 @@ import org.springframework.transaction.support.TransactionTemplate;
 class ArchivedDemandStatisticsRebuildTest {
     private static final Instant UNTIL = Instant.parse("2026-10-09T00:00:00Z");
     private static final Clock CLOCK = Clock.fixed(UNTIL, ZoneId.of("Asia/Seoul"));
-    @Autowired JdbcClient jdbc;
-    @Autowired PlatformTransactionManager transactions;
-    @Autowired RouteDataQualityAccess quality;
-    @Autowired DemandStatisticsPipeline pipeline;
-    @Autowired DemandStatisticsRebuildRequestStore requests;
-    @Autowired JdbcStopDemandStatisticsRepository statistics;
-    @MockitoSpyBean DemandStatisticsRebuildRepository rebuilds;
-    @MockitoBean StatisticsArchiveReader reader;
-    @MockitoBean Clock clock;
+    @Autowired
+    JdbcClient jdbc;
+    @Autowired
+    PlatformTransactionManager transactions;
+    @Autowired
+    RouteDataQualityAccess quality;
+    @Autowired
+    DemandStatisticsPipeline pipeline;
+    @Autowired
+    DemandStatisticsRebuildRequestStore requests;
+    @Autowired
+    JdbcStopDemandStatisticsRepository statistics;
+    @MockitoSpyBean
+    DemandStatisticsRebuildRepository rebuilds;
+    @MockitoBean
+    StatisticsArchiveReader reader;
+    @MockitoBean
+    Clock clock;
     private JdbcEvaluationArchiveStore store;
     private long route;
     private long source;
@@ -349,7 +359,10 @@ class ArchivedDemandStatisticsRebuildTest {
         var rows = archiveAndDelete(source);
         pipeline.step(route);
         var before = progress();
-        when(reader.read(any())).thenAnswer(call -> { request(); return rows; });
+        when(reader.read(any())).thenAnswer(call -> {
+            request();
+            return rows;
+        });
 
         // when
         var step = pipeline.step(route);
@@ -389,7 +402,9 @@ class ArchivedDemandStatisticsRebuildTest {
         answer(archiveAndDelete(source));
         pipeline.step(route);
         var before = progress();
-        doAnswer(call -> { throw new IllegalStateException("시험용 진행 저장 장애"); }).when(rebuilds).save(any());
+        doAnswer(call -> {
+            throw new IllegalStateException("시험용 진행 저장 장애");
+        }).when(rebuilds).save(any());
 
         // when & then
         assertThatThrownBy(() -> pipeline.step(route))
@@ -444,9 +459,12 @@ class ArchivedDemandStatisticsRebuildTest {
 
     private List<Row> archive(long id) {
         var batch = store.reserve(route, List.of(new Key(id, 9))).orElseThrow();
-        var rows = store.readOwned(batch).stream().map(row -> new Row(
-            new StatisticsArchiveReader.Key(row.key().observationId(), row.key().stopOrder()),
-            row.originalJson(), row.sha256())).toList();
+        var rows = store.readOwned(batch)
+            .stream()
+            .map(row -> new Row(
+                new StatisticsArchiveReader.Key(row.key().observationId(), row.key().stopOrder()),
+                row.originalJson(), row.sha256()))
+            .toList();
         // 저장소 계약 대역: 파일 해시와 객체 왕복은 EvaluationArchiveObjectStoreTest에서 별도 검증한다.
         store.recordVerified(batch, "a".repeat(64));
         return rows;
@@ -514,7 +532,10 @@ class ArchivedDemandStatisticsRebuildTest {
         jdbc.sql("""
             INSERT INTO forecast_evaluation_result(vehicle_observation_id,target_stop_order,route_version_id,scoring_state,scored_at)
             VALUES(:id,9,:route,'LOST','2026-10-08T13:00:00Z')
-            """).param("id", id).param("route", route).update();
+            """)
+            .param("id", id)
+            .param("route", route)
+            .update();
         return id;
     }
 
@@ -529,7 +550,11 @@ class ArchivedDemandStatisticsRebuildTest {
         jdbc.sql("""
             INSERT INTO vehicle_one_way_trip(id,start_observation_id,route_version_id,vehicle_id,status,boundary,rule_version)
             VALUES(:trip,:id,:route,'archive-bus','ELIGIBLE','DEPARTURE','archive-rebuild-test')
-            """).param("trip", "journey-" + id).param("id", id).param("route", route).update();
+            """)
+            .param("trip", "journey-" + id)
+            .param("id", id)
+            .param("route", route)
+            .update();
         jdbc.sql("""
             INSERT INTO observation_trip_assignment(observation_id,trip_id) VALUES(:id,:trip),(:arrival,:trip)
             """).param("id", id).param("arrival", arrival).param("trip", "journey-" + id).update();
@@ -539,7 +564,13 @@ class ArchivedDemandStatisticsRebuildTest {
                 arrival_vehicle_id='archive-bus',arrival_stop_order=9,arrival_running_state=2,
                 arrival_remaining_seats=:seats,arrival_quality_direction=0
             WHERE vehicle_observation_id=:id AND target_stop_order=9
-            """).param("arrival", arrival).param("seats", seats).param("at", at).param("route", route).param("id", id).update();
+            """)
+            .param("arrival", arrival)
+            .param("seats", seats)
+            .param("at", at)
+            .param("route", route)
+            .param("id", id)
+            .update();
     }
 
     private long batch(String at) {
@@ -548,7 +579,7 @@ class ArchivedDemandStatisticsRebuildTest {
                 requested_at,response_received_at,outcome,normalization_version,collection_strategy_version)
             VALUES(:route,CAST(:at AS timestamptz),1,:key,CAST(:at AS timestamptz),CAST(:at AS timestamptz),
                 'SUCCESS_ROWS','normalization-v1.0.0','adaptive-kst-v1.0.1') RETURNING id
-            """).param("route", route).param("at", at).param("key", UUID.randomUUID().toString().substring(0,20))
+            """).param("route", route).param("at", at).param("key", UUID.randomUUID().toString().substring(0, 20))
             .query(Long.class).single();
     }
 
@@ -560,7 +591,8 @@ class ArchivedDemandStatisticsRebuildTest {
     }
 
     private List<StopDemandCell> cells() {
-        return statistics.readAsOf(route, TimeSlot.EVENING, DemandStatisticsVersion.CURRENT_CALCULATION_VERSION, UNTIL).cells();
+        return statistics.readAsOf(route, TimeSlot.EVENING, DemandStatisticsVersion.CURRENT_CALCULATION_VERSION, UNTIL)
+            .cells();
     }
 
     private java.util.Map<String, Object> progress() {
@@ -574,7 +606,10 @@ class ArchivedDemandStatisticsRebuildTest {
     }
 
     private long liveCount(long id) {
-        return jdbc.sql("SELECT count(*) FROM forecast_evaluation_result WHERE vehicle_observation_id=? AND target_stop_order=9")
-            .param(id).query(Long.class).single();
+        return jdbc.sql(
+        "SELECT count(*) FROM forecast_evaluation_result WHERE vehicle_observation_id=? AND target_stop_order=9")
+            .param(id)
+            .query(Long.class)
+            .single();
     }
 }

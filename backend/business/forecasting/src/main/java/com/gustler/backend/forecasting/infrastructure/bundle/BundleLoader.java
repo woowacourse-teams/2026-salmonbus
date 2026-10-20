@@ -1,10 +1,8 @@
 package com.gustler.backend.forecasting.infrastructure.bundle;
 
 import com.gustler.backend.forecasting.domain.model.Sha256;
-
 import com.gustler.backend.forecasting.domain.model.SeatForecastDesignMatrix;
 import com.gustler.backend.forecasting.domain.model.ForecastFeatureContract;
-
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -107,7 +105,7 @@ public final class BundleLoader {
         final int characters = value.codePointCount(0, value.length());
         BundleCheck.DEPLOYMENT_IDENTIFIER_LENGTH.require(
             characters <= maximum,
-            "%s: %d자, 최대 %d자".formatted(field, characters, maximum));
+                "%s: %d자, 최대 %d자".formatted(field, characters, maximum));
     }
 
     private static void checkScope(
@@ -137,16 +135,18 @@ public final class BundleLoader {
         boolean conditional = featuresOf(manifest) != ForecastFeatureContract.LEGACY;
         boolean statistics = ForecastFeatureContract.STATISTICS_VERSION.equals(manifest.featureContractVersion());
         BundleCheck.FEATURE_CONTRACT_VERSION.require(
-            conditional == (statistics || ForecastFeatureContract.CONDITIONAL_VERSION.equals(manifest.featureContractVersion())),
-            "새 입력 계약은 v2 번들에서만 지원한다: " + manifest.featureContractVersion());
+            conditional == (statistics
+                        || ForecastFeatureContract.CONDITIONAL_VERSION.equals(manifest.featureContractVersion())),
+                "새 입력 계약은 v2 번들에서만 지원한다: " + manifest.featureContractVersion());
         if (conditional) {
             BundleCheck.FEATURE_CONTRACT_VERSION.require(
                 manifest.normalizationConstants().equals(Map.of("largestSeatCount", 68.0, "lowSeatBandWidth", 20.0))
-                    && manifest.timeSlotSource().equals("observation_batch.response_received_at;Asia/Seoul;new_time_slot=0")
+                    && manifest.timeSlotSource()
+                    .equals("observation_batch.response_received_at;Asia/Seoul;new_time_slot=0")
                     && manifest.capacityPolicy().equals("maximum-seats-ever-observed")
                     && manifest.cellStatisticsPolicy().equals(statistics
                         ? ForecastFeatureContract.STATISTICS_POLICY : "statistics-inputs-zero"),
-                "위치·방향·시간 계약의 정규화·시간·정원·통계 규칙이 다르다");
+            "위치·방향·시간 계약의 정규화·시간·정원·통계 규칙이 다르다");
         }
     }
 
@@ -197,7 +197,9 @@ public final class BundleLoader {
     private static String normalizationText(
         BundleManifest manifest
     ) {
-        return manifest.normalizationConstants().entrySet().stream()
+        return manifest.normalizationConstants()
+            .entrySet()
+            .stream()
             .sorted(Map.Entry.comparingByKey())
             .map(constant -> constant.getKey() + "=" + constant.getValue())
             .collect(Collectors.joining(","));
@@ -237,7 +239,10 @@ public final class BundleLoader {
         BundleManifest.GoldenVector golden
     ) {
         return String.join("\n",
-            golden.featureVector().stream().map(String::valueOf).collect(Collectors.joining(",")),
+            golden.featureVector()
+                .stream()
+                .map(String::valueOf)
+                .collect(Collectors.joining(",")),
             golden.modelRoute(),
             String.valueOf(golden.stopsAhead()),
             String.valueOf(golden.currentSeats()),
@@ -282,15 +287,15 @@ public final class BundleLoader {
 
         BundleCheck.TENSOR_SHAPE_AND_DATA_TYPE.require(
             Arrays.equals(expected, declaration.shape()),
-            "%s 선언 %s, 계약 %s".formatted(
-                wanted.tensorName(), Arrays.toString(declaration.shape()), Arrays.toString(expected)));
+                "%s 선언 %s, 계약 %s".formatted(
+                    wanted.tensorName(), Arrays.toString(declaration.shape()), Arrays.toString(expected)));
         BundleCheck.TENSOR_SHAPE_AND_DATA_TYPE.require(
             Arrays.equals(expected, tensor.shape()),
-            "%s 파일 %s, 계약 %s".formatted(
-                wanted.tensorName(), Arrays.toString(tensor.shape()), Arrays.toString(expected)));
+                "%s 파일 %s, 계약 %s".formatted(
+                    wanted.tensorName(), Arrays.toString(tensor.shape()), Arrays.toString(expected)));
         BundleCheck.TENSOR_SHAPE_AND_DATA_TYPE.require(
             wanted.dataType() == declaration.dataType() && wanted.dataType() == tensor.dataType(),
-            "%s 자료형이 %s 가 아니다".formatted(wanted.tensorName(), wanted.dataType().tensorName()));
+                "%s 자료형이 %s 가 아니다".formatted(wanted.tensorName(), wanted.dataType().tensorName()));
 
         checkValues(wanted, tensor);
         return tensor;
