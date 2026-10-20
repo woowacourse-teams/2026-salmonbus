@@ -12,7 +12,7 @@ final class LoopbackRelay implements AutoCloseable {
 
     LoopbackRelay(
         String targetHost,
-        int targetPort
+        final int targetPort
     ) throws IOException {
         this.targetHost = targetHost;
         this.targetPort = targetPort;
@@ -34,6 +34,8 @@ final class LoopbackRelay implements AutoCloseable {
                 pipe(client, target);
                 pipe(target, client);
             } catch (IOException ignored) {
+                // 수락 실패 뒤 종료 여부를 다시 확인한다.
+                continue;
             }
         }
     }
@@ -46,6 +48,8 @@ final class LoopbackRelay implements AutoCloseable {
             try (from; to) {
                 from.getInputStream().transferTo(to.getOutputStream());
             } catch (IOException ignored) {
+                // 한쪽 연결이 닫히면 이 방향의 복사를 끝낸다.
+                return;
             }
         }, "loopback-relay-pipe");
         thread.setDaemon(true);

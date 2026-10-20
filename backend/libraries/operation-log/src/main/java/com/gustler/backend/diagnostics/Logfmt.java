@@ -11,7 +11,7 @@ public final class Logfmt {
         }
         StringBuilder result = new StringBuilder("\"");
         for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
+            final char c = value.charAt(i);
             switch (c) {
                 case '\\' -> result.append("\\\\");
                 case '"' -> result.append("\\\"");
@@ -21,9 +21,9 @@ public final class Logfmt {
                 default -> {
                     if (Character.isISOControl(c)) {
                         result.append(String.format("\\u%04x", (int) c));
-                    } else {
-                        result.append(c);
+                        continue;
                     }
+                    result.append(c);
                 }
             }
         }
