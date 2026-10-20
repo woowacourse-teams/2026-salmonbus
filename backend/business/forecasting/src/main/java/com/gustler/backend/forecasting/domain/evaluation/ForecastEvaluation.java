@@ -33,6 +33,9 @@ public final class ForecastEvaluation {
         return evaluation;
     }
 
+    /**
+     * 결과와 평가 시각을 함께 확정한다. null 입력이나 이미 확정한 평가의 재확정은 예외로 거부한다.
+     */
     public void complete(EvaluationResult result, Instant scoredAt) {
         if (this.result != null) {
             throw new IllegalStateException("이미 확정한 예보 평가를 변경할 수 없습니다");
@@ -52,7 +55,10 @@ public final class ForecastEvaluation {
     }
 
     public ScoringState state() {
-        return result == null ? ScoringState.PENDING : result.state();
+        if (result == null) {
+            return ScoringState.PENDING;
+        }
+        return result.state();
     }
 
     public EvaluationResult result() {

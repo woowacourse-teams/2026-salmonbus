@@ -1,9 +1,8 @@
 package com.gustler.backend.forecasting.application.evaluation;
-import com.gustler.backend.forecasting.api.ForecastTelemetry;
-import com.gustler.backend.forecasting.application.AfterCommitTelemetry;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
+import com.gustler.backend.forecasting.api.ForecastTelemetry;
+import com.gustler.backend.forecasting.application.AfterCommitTelemetry;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluationRepository;
@@ -12,27 +11,23 @@ import com.gustler.backend.forecasting.domain.evaluation.SettledEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.SettledForecast;
 import com.gustler.backend.forecasting.domain.statistics.DemandSample;
 import com.gustler.backend.forecasting.domain.statistics.DemandSampleStore;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /** 평가 결과, 통계 입력, 당일 보정을 같은 트랜잭션에 반영한다. */
 @Component
 public class ForecastEvaluationWriter {
-    private ForecastTelemetry telemetry = ForecastTelemetry.NONE;
-
-    @Autowired(required = false)
-    public void setTelemetry(ForecastTelemetry telemetry) { this.telemetry = telemetry; }
-
-
     private final ForecastEvaluationRepository evaluations;
 
     private final RouteDataQualityAccess quality;
 
     private final SameDayFullOutcomesService outcomes;
     private final DemandSampleStore samples;
+    private ForecastTelemetry telemetry = ForecastTelemetry.NONE;
 
     public ForecastEvaluationWriter(
         ForecastEvaluationRepository evaluations,
@@ -46,7 +41,15 @@ public class ForecastEvaluationWriter {
         this.samples = samples;
     }
 
-    @Transactional
+    @Autowired(required = false)
+    public void setTelemetry(ForecastTelemetry telemetry) {
+        this.telemetry = telemetry;
+    }
+
+    /**
+     * 확정 평가를 저장하고 후속 통계·품질 처리를 조율한다. 확정한 결과만 후속 처리 대상으로 반환한다.
+     */
+    @Transactional(readOnly = false)
     public List<SettledForecast> complete(List<ForecastEvaluation> completed) {
         if (completed.isEmpty()) {
             return List.of();

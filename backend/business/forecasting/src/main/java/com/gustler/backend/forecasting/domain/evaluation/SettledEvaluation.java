@@ -4,6 +4,10 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 
+/**
+ * 커밋된 정산 결과와 진단·보정 적격성 근거다.
+ * 좌석 미관측과 0석 도착을 구분한다.
+ */
 public record SettledEvaluation(
     long routeId,
     long modelDeploymentId,
@@ -24,17 +28,23 @@ public record SettledEvaluation(
     EvaluationDiagnostics diagnostics
 ) {
     /** 기존 도메인 호출자는 관측용 부가 정보를 요구하지 않는다. */
-    public SettledEvaluation(long routeId, long modelDeploymentId, long routeVersionId, long vehicleObservationId,
-        int targetStopOrder, int stopsToTarget, double rawFullChance,
+    public SettledEvaluation(
+        final long routeId,
+        final long modelDeploymentId,
+        final long routeVersionId,
+        final long vehicleObservationId,
+        final int targetStopOrder,
+        final int stopsToTarget,
+        final double rawFullChance,
         ScoringState state,
         Long arrivalObservationId,
         Integer seatsOnArrival,
         Instant arrivedAt,
         Instant scoredAt,
-        boolean usableForCalibration,
+        final boolean usableForCalibration,
         String predictionVehicleId,
         Integer predictionRemainingSeats,
-        boolean targetBoardingAllowed
+        final boolean targetBoardingAllowed
     ) {
         this(routeId, modelDeploymentId, routeVersionId, vehicleObservationId, targetStopOrder, stopsToTarget,
             rawFullChance,

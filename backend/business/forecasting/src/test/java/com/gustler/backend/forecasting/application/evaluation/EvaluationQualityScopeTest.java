@@ -2,7 +2,9 @@ package com.gustler.backend.forecasting.application.evaluation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
+import com.gustler.backend.forecasting.application.evaluation.EvaluateForecastsService.RouteInput;
+import com.gustler.backend.forecasting.application.evaluation.EvaluationSelection.Cursor;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Settled;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
@@ -34,7 +36,7 @@ class EvaluationQualityScopeTest {
     private Pair firstA;
     private Pair secondA;
     private Pair busB;
-    private EvaluateForecastsService.RouteInput input;
+    private RouteInput input;
     private List<ForecastEvaluation> calculated;
 
     @BeforeEach
@@ -67,12 +69,12 @@ class EvaluationQualityScopeTest {
             .stream()
             .map(row -> row.forecast().orElseThrow())
             .toList();
-        input = new EvaluateForecastsService.RouteInput(version, 1, false, EvaluationSelection.Cursor.START,
+        input = new RouteInput(version, 1, false, Cursor.START,
             ids, work.revisions(version, ids), List.of(), forecasts);
         calculated = List.of(firstA, secondA, busB)
             .stream()
             .map(pair -> ForecastEvaluation.completed(
-                pair.source(), 2, new ArrivalLabel.Settled(pair.arrival(), 12), START.plusSeconds(660)))
+                pair.source(), 2, new Settled(pair.arrival(), 12), START.plusSeconds(660)))
             .toList();
     }
 
@@ -128,28 +130,28 @@ class EvaluationQualityScopeTest {
         assertThat(work.page(version, 0, Long.MAX_VALUE, 100)).containsExactly(firstA.source());
     }
 
-    private void investigate(boolean completed) {
+    private void investigate(final boolean completed) {
         jdbc.sql("""
             INSERT INTO trip_quality_rebuild(route_version_id,vehicle_id,until_at,completed,phase)
             VALUES(?,'A',?,?,?)
-            """).params(version, offset(START.plusSeconds(30)), completed, completed ? "DONE" : "SEARCH_START").update();
+            """).params(version, offset(START.plusSeconds(30)), completed, phaseOf(completed)).update();
         jdbc.sql("UPDATE route_data_quality SET quality_revision=2 WHERE route_id=?").param(route).update();
     }
 
     private Pair pair(String vehicle, Instant at) {
-        long source = observation(vehicle, at, 1);
-        long arrival = observation(vehicle, at.plusSeconds(30), 2);
+        final long source = observation(vehicle, at, 1);
+        final long arrival = observation(vehicle, at.plusSeconds(30), 2);
         jdbc.sql("""
             INSERT INTO vehicle_one_way_trip(id,start_observation_id,route_version_id,vehicle_id,status,boundary,rule_version)
             VALUES(?,?,?,?,'ELIGIBLE','DEPARTURE','test')
             """)
             .params(Long.toString(source), source, version, vehicle)
             .update();
-        for (long id : List.of(source, arrival)) {
+        for (final long id : List.of(source, arrival)) {
             jdbc.sql("INSERT INTO observation_trip_assignment(observation_id,trip_id) VALUES(?,?)")
                 .params(id, Long.toString(source)).update();
         }
-        long publication = jdbc.sql("""
+        final long publication = jdbc.sql("""
             INSERT INTO forecast_publication(source_batch_id,route_version_id,model_deployment_id,
                 demand_statistics_revision,quality_revision,observed_at,generated_at,published_at,prediction_count)
             SELECT observation_batch_id,?, ?,1,1,?,?,?,1 FROM vehicle_observation WHERE id=? RETURNING id
@@ -164,8 +166,8 @@ class EvaluationQualityScopeTest {
         return new Pair(source, arrival);
     }
 
-    private long observation(String vehicle, Instant at, int stop) {
-        long batch = jdbc.sql("""
+    private long observation(String vehicle, Instant at, final int stop) {
+        final long batch = jdbc.sql("""
             INSERT INTO observation_batch(route_version_id,scheduled_at,attempt_number,attempt_key,requested_at,
                 response_received_at,outcome,normalization_version,collection_strategy_version)
             VALUES(?,?,1,?,?,?,'SUCCESS_ROWS','test','test') RETURNING id
@@ -190,5 +192,12 @@ class EvaluationQualityScopeTest {
         return at.atOffset(ZoneOffset.UTC);
     }
     private record Pair(long source, long arrival) {
+    }
+
+    private static String phaseOf(final boolean completed) {
+        if (completed) {
+            return "DONE";
+        }
+        return "SEARCH_START";
     }
 }

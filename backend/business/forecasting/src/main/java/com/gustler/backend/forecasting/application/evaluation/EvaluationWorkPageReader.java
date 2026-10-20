@@ -1,12 +1,21 @@
 package com.gustler.backend.forecasting.application.evaluation;
+
+import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore.Restored;
+import com.gustler.backend.forecasting.application.evaluation.PendingEvaluationBuffer.Entry;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 품질·작업 판본이 같은 메모리 상세만 재사용하고 나머지는 DB에서 복원한다.
+ * 읽지 못한 상세를 완료로 간주하지 않는다.
+ */
 @Component
 @Transactional(readOnly = true)
 class EvaluationWorkPageReader {
@@ -16,53 +25,62 @@ class EvaluationWorkPageReader {
         this.work = work;
     }
 
-    Page read(long version, long after, long through, int limit, long qualityRevision,
-              boolean investigating,
-        Map<Long, PendingEvaluationBuffer.Entry> cached
+    Page read(
+        final long version,
+        final long after,
+        final long through,
+        final int limit,
+        final long qualityRevision,
+        final boolean investigating,
+        Map<Long, Entry> cached
     ) {
         if (limit < 1 || limit > 100) {
             throw new IllegalArgumentException("한 번에 확인할 관측은 1개 이상 100개 이하이다");
         }
         List<Long> ids = List.copyOf(work.page(version, after, through, limit));
-        if (ids.isEmpty()) return new Page(0, List.of(), List.of());
+        if (ids.isEmpty()) {
+            return new Page(0, List.of(), List.of());
+        }
         Map<Long, Long> revisions = work.revisions(version, ids);
 
-        Map<Long, PendingEvaluationBuffer.Entry> reusable = new LinkedHashMap<>();
+        Map<Long, Entry> reusable = new LinkedHashMap<>();
         List<Long> restoreIds = new ArrayList<>();
-        for (long id : ids) {
-            var entry = cached.get(id);
+        for (final long id : ids) {
+            Entry entry = cached.get(id);
             if (!investigating && entry != null
                 && entry.key().routeVersionId() == version
                 && entry.key().observationId() == id
                 && entry.qualityRevision() == qualityRevision
-                && java.util.Objects.equals(revisions.get(id), entry.workRevision())) {
+                && Objects.equals(revisions.get(id), entry.workRevision())) {
                 reusable.put(id, entry);
-            } else {
-                restoreIds.add(id);
+                continue;
             }
+            restoreIds.add(id);
         }
 
-        List<EvaluationWorkStore.Restored> restored = List.of();
+        List<Restored> restored = List.of();
         if (!restoreIds.isEmpty()) {
             restored = work.restore(version, restoreIds);
         }
-        Map<Long, List<EvaluationWorkStore.Restored>> byObservation = new LinkedHashMap<>();
-        for (var row : restored) {
-            byObservation.computeIfAbsent(row.key().observationId(), ignored -> new ArrayList<>())
-                .add(row);
-        }
+        Map<Long, List<Restored>> byObservation = restored.stream()
+            .collect(Collectors.groupingBy(row -> row.key().observationId(), LinkedHashMap::new,
+                Collectors.toCollection(ArrayList::new)));
 
         List<Ready> ready = new ArrayList<>();
-        for (long id : ids) {
-            var entry = reusable.get(id);
+        for (final long id : ids) {
+            Entry entry = reusable.get(id);
             if (entry != null) {
                 ready.add(new Ready(id, qualityRevision, entry.workRevision(), entry.forecasts()));
                 continue;
             }
-            var rows = byObservation.getOrDefault(id, List.of());
+            List<Restored> rows = byObservation.getOrDefault(id, List.of());
             // 상세를 읽지 못한 관측은 완료가 아니라 보류로 남긴다.
-            if (rows.isEmpty() || rows.stream().anyMatch(row -> row.forecast().isEmpty())) continue;
-            if (!revisions.containsKey(id)) continue;
+            if (rows.isEmpty() || rows.stream().anyMatch(row -> row.forecast().isEmpty())) {
+                continue;
+            }
+            if (!revisions.containsKey(id)) {
+                continue;
+            }
             ready.add(new Ready(id, qualityRevision, revisions.get(id),
                 rows.stream()
                     .map(row -> row.forecast().orElseThrow())
@@ -72,7 +90,7 @@ class EvaluationWorkPageReader {
     }
 
     record Ready(long observationId, long qualityRevision, long workRevision, List<PendingForecast> forecasts) {
-        Ready(long observationId, long qualityRevision, List<PendingForecast> forecasts) {
+        Ready(final long observationId, final long qualityRevision, List<PendingForecast> forecasts) {
             this(observationId, qualityRevision, 1, forecasts);
         }
 
@@ -82,7 +100,7 @@ class EvaluationWorkPageReader {
     }
 
     record Page(long nextAfter, List<Long> checkedIds, List<Ready> ready, Map<Long, Long> workRevisions) {
-        Page(long nextAfter, List<Long> checkedIds, List<Ready> ready) {
+        Page(final long nextAfter, List<Long> checkedIds, List<Ready> ready) {
             this(nextAfter, checkedIds, ready, Map.of());
         }
 

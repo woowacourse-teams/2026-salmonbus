@@ -1,4 +1,10 @@
 package com.gustler.backend.forecasting.domain.evaluation;
+
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Lost;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.NotArrivedYet;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.SeatMissing;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Settled;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Skipped;
 import java.util.Objects;
 
 /** 확정한 평가 결과. 도착을 확인한 경우에만 해당 관측과 좌석 정보를 가진다. */
@@ -31,16 +37,19 @@ public record EvaluationResult(
         }
     }
 
+    /**
+     * 최종 도착 판정을 저장 결과로 변환한다. 아직 도착하지 않은 판정은 예외로 거부하고 좌석 부재와 관측 소실을 구별한다.
+     */
     public static EvaluationResult from(ArrivalLabel label) {
         Objects.requireNonNull(label, "도착 판정이 필요합니다");
         return switch (label) {
-            case ArrivalLabel.Settled settled ->
+            case Settled settled ->
             new EvaluationResult(ScoringState.SETTLED, settled.arrivalObservationId(), settled.seatsOnArrival());
-            case ArrivalLabel.SeatMissing missing ->
+            case SeatMissing missing ->
             new EvaluationResult(ScoringState.SEAT_MISSING, missing.arrivalObservationId(), null);
-            case ArrivalLabel.Skipped ignored -> new EvaluationResult(ScoringState.SKIPPED, null, null);
-            case ArrivalLabel.Lost ignored -> new EvaluationResult(ScoringState.LOST, null, null);
-            case ArrivalLabel.NotArrivedYet ignored ->
+            case Skipped ignored -> new EvaluationResult(ScoringState.SKIPPED, null, null);
+            case Lost ignored -> new EvaluationResult(ScoringState.LOST, null, null);
+            case NotArrivedYet ignored ->
             throw new IllegalArgumentException("아직 도착하지 않은 예보의 평가는 대기 상태로 유지합니다");
         };
     }

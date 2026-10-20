@@ -7,6 +7,10 @@ import org.springframework.dao.QueryTimeoutException;
 import org.springframework.jdbc.UncategorizedSQLException;
 import org.springframework.stereotype.Component;
 
+/**
+ * 대기 중인 차량 품질 조사를 한 회차씩 실행한다.
+ * 실패한 조사가 다음 호출을 독점하지 않도록 재시도 흐름을 조율한다.
+ */
 @Component
 public class InvestigateTripQualityService implements InvestigateTripQuality {
     private final TripQualityInvestigationService quality;

@@ -2,6 +2,9 @@ package com.gustler.backend.forecasting.api.evaluation;
 
 import java.time.Duration;
 
+/**
+ * 당일 합계 초기화의 처리와 재시도 간격을 제한하는 정책 값이다.
+ */
 public record SameDayInitializationPolicy(Duration retryInterval, Duration statementTimeout, Duration lockTimeout) {
     private static final Duration SHORTEST = Duration.ofMillis(1);
 
@@ -11,7 +14,7 @@ public record SameDayInitializationPolicy(Duration retryInterval, Duration state
         }
     }
 
-    private static boolean tooShort(final Duration value) {
+    private static boolean tooShort(Duration value) {
         return value == null || value.compareTo(SHORTEST) < 0;
     }
 }

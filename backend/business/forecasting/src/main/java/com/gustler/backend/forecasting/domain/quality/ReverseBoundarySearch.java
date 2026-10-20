@@ -5,6 +5,10 @@ import com.gustler.backend.forecasting.domain.quality.OneWayTripClassifier.Route
 import java.time.Duration;
 import java.util.Objects;
 
+/**
+ * 이상 관측에서 과거 방향으로 출발 근거를 탐색한다.
+ * 방문 순서나 관측 간격이 끊기면 확인한 경계에서 멈춘다.
+ */
 final class ReverseBoundarySearch {
     private final Route route;
     private Observation anchor;
@@ -14,8 +18,7 @@ final class ReverseBoundarySearch {
     ReverseBoundarySearch(Route route, Observation anchor, Observation candidate) {
         this.route = route;
         this.anchor = anchor;
-        this.candidate = candidate != null ? candidate
-            : OneWayTripClassifier.isDeparture(route, anchor) ? anchor : null;
+        this.candidate = initialCandidate(route, anchor, candidate);
     }
 
     void inspect(Observation older) {
@@ -38,17 +41,17 @@ final class ReverseBoundarySearch {
             boundaryConfirmed = true;
             return;
         }
-        int before = OneWayTripClassifier.direction(route, older);
-        int after = OneWayTripClassifier.direction(route, anchor);
-        boolean forward = anchor.stopOrder() >= older.stopOrder();
-        boolean directionChange = before != after && (forward || (before == 1 && after == 0));
+        final int before = OneWayTripClassifier.direction(route, older);
+        final int after = OneWayTripClassifier.direction(route, anchor);
+        final boolean forward = anchor.stopOrder() >= older.stopOrder();
+        final boolean directionChange = before != after && (forward || (before == 1 && after == 0));
         // 회차지의 비출발 상태만으로 방향을 확정하지 않고, 앞선 출발 표시까지 확인한다.
         if (directionChange && isTerminal(older) && !OneWayTripClassifier.isDeparture(route, older)) {
             candidate = anchor;
             anchor = older;
             return;
         }
-        boolean continuation = before == after && (forward || (before == 1
+        final boolean continuation = before == after && (forward || (before == 1
             && anchor.stopOrder() == route.firstStop() && !OneWayTripClassifier.isDeparture(route, anchor)));
         if (!continuation) {
             boundaryConfirmed = true;
@@ -68,7 +71,11 @@ final class ReverseBoundarySearch {
         return candidate;
     }
 
-    Observation replayStart() { return candidate == null ? anchor : candidate;
+    Observation replayStart() {
+        if (candidate == null) {
+            return anchor;
+        }
+        return candidate;
     }
 
     boolean boundaryConfirmed() {
@@ -78,5 +85,15 @@ final class ReverseBoundarySearch {
     private boolean isTerminal(Observation observation) {
         return observation.stopOrder() == route.firstStop()
             || Objects.equals(observation.stopOrder(), route.turnStop());
+    }
+
+    private static Observation initialCandidate(Route route, Observation anchor, Observation candidate) {
+        if (candidate != null) {
+            return candidate;
+        }
+        if (OneWayTripClassifier.isDeparture(route, anchor)) {
+            return anchor;
+        }
+        return null;
     }
 }

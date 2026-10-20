@@ -1,4 +1,6 @@
 package com.gustler.backend.forecasting.domain.evaluation;
+
+import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch.State;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -14,8 +16,7 @@ public record EvaluationArchiveBatch(UUID id, long routeVersionId, long qualityR
         if (routeVersionId <= 0 || qualityRevision <= 0 || rowCount < 1 || rowCount > 1000) {
             throw new IllegalArgumentException("이관 묶음의 노선·품질 판본·건수가 올바르지 않다");
         }
-        if (state == State.VERIFIED ? manifestSha256 == null || !manifestSha256.matches("[0-9a-f]{64}")
-            : manifestSha256 != null) {
+        if (!hasMatchingManifest(state, manifestSha256)) {
             throw new IllegalArgumentException("검증 상태와 파일 검증값이 일치하지 않는다");
         }
     }
@@ -40,5 +41,12 @@ public record EvaluationArchiveBatch(UUID id, long routeVersionId, long qualityR
                 throw new IllegalArgumentException("원본 검증값이 올바르지 않다");
             }
         }
+    }
+
+    private static boolean hasMatchingManifest(State state, String manifestSha256) {
+        if (state == State.VERIFIED) {
+            return manifestSha256 != null && manifestSha256.matches("[0-9a-f]{64}");
+        }
+        return manifestSha256 == null;
     }
 }

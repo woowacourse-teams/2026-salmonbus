@@ -10,11 +10,11 @@ import com.gustler.backend.forecasting.domain.quality.OneWayTripClassifier.Statu
 
 /** 관측 하나를 판정한 결과와 그 결과가 기존 편도에 미치는 변경이다. */
 public record OneWayTripAssessment(Observation observation, Previous previous, Decision decision) {
-    public static OneWayTripAssessment assess(final Route route, final Previous previous, final Observation current) {
+    public static OneWayTripAssessment assess(Route route, Previous previous, Observation current) {
         return new OneWayTripAssessment(current, previous, OneWayTripClassifier.classify(route, previous, current));
     }
 
-    public static boolean requiresInvestigation(final String vehicleId, final Integer seats) {
+    public static boolean requiresInvestigation(String vehicleId, Integer seats) {
         return vehicleId != null && !vehicleId.isBlank() && seats != null && seats > SeatGrid.LARGEST_SEATS;
     }
 
@@ -27,8 +27,14 @@ public record OneWayTripAssessment(Observation observation, Previous previous, D
     }
 
     public Previous asPrevious() {
-        final Start start = previous != null && previous.tripId() == decision.tripId() ? previous.start()
-            : new Start(observation.stopOrder(), observation.runningState());
+        Start start = startOfTrip();
         return new Previous(observation, decision.tripId(), decision.status(), start);
+    }
+
+    private Start startOfTrip() {
+        if (previous != null && previous.tripId() == decision.tripId()) {
+            return previous.start();
+        }
+        return new Start(observation.stopOrder(), observation.runningState());
     }
 }

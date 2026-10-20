@@ -7,7 +7,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Settled;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Skipped;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluationRepository;
 import com.gustler.backend.forecasting.domain.evaluation.ScoringState;
@@ -51,7 +52,8 @@ class ForecastEvaluationWriterTest {
 
     @Test
     void 노선_순서대로_잠근_뒤_평가를_저장하고_새_평가만_보정에_반영한다() {
-        // given 요청 순서와 노선 순서가 달라도 잠금 순서는 일정하다.
+        // given
+        // 요청 순서와 노선 순서가 달라도 잠금 순서는 일정하다.
         ForecastEvaluation first = settledEvaluation(200L, 300L, SCORED_AT);
         ForecastEvaluation second = settledEvaluation(100L, 400L, SCORED_AT.plusSeconds(1));
         List<ForecastEvaluation> completed = List.of(first, second);
@@ -78,7 +80,8 @@ class ForecastEvaluationWriterTest {
 
     @Test
     void 새로_확정한_평가가_없으면_당일_성적에_더하지_않는다() {
-        // given 이미 완료됐거나 현재 자료 품질 조건에 맞지 않는 평가다.
+        // given
+        // 이미 완료됐거나 현재 자료 품질 조건에 맞지 않는 평가다.
         ForecastEvaluation completed = settledEvaluation(200L, 300L, SCORED_AT);
         when(evaluations.findRouteIdsForObservations(List.of(200L))).thenReturn(List.of(8L));
         when(evaluations.settle(List.of(completed))).thenReturn(List.of());
@@ -96,7 +99,7 @@ class ForecastEvaluationWriterTest {
     void 도착_관측이_없는_종료_결과도_저장한다() {
         // given
         ForecastEvaluation skipped = ForecastEvaluation.completed(200L, TARGET_STOP_ORDER,
-            new ArrivalLabel.Skipped(), SCORED_AT);
+            new Skipped(), SCORED_AT);
         when(evaluations.findRouteIdsForObservations(List.of(200L))).thenReturn(List.of(8L));
 
         // when
@@ -140,6 +143,6 @@ class ForecastEvaluationWriterTest {
         Instant scoredAt
     ) {
         return ForecastEvaluation.completed(sourceId, TARGET_STOP_ORDER,
-            new ArrivalLabel.Settled(arrivalId, 0), scoredAt);
+            new Settled(arrivalId, 0), scoredAt);
     }
 }

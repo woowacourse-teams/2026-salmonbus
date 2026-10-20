@@ -7,9 +7,14 @@ import java.util.List;
  * 당일 평가 집계의 조회·초기화·증분 저장을 담당한다.
  */
 public interface SameDayFullOutcomesStore {
-
+    /**
+     * 당일 성적 계산 대상으로 사용할 활성 노선 식별자를 읽는다.
+     */
     List<Long> findActiveRouteIds();
 
+    /**
+     * 지정 노선·모델의 날짜 범위에 속하는 확정 성적을 읽는다. 다른 날짜의 관측을 섞지 않는다.
+     */
     List<SameDayFullOutcomeCount> findCounts(
         long routeId,
         long modelDeploymentId,
@@ -27,7 +32,7 @@ public interface SameDayFullOutcomesStore {
     /**
      * 평가가 확정된 예보 하나를 집계에 더한다.
      *
-     * <p>날짜와 반영 시각은 도착 관측이 실린 batch 가 응답을 받은 시각으로 정한다. 채점한 시각을 쓰면
+     * <p>날짜와 반영 시각은 도착 관측이 포함된 batch가 응답을 받은 시각으로 정한다. 채점한 시각을 쓰면
      * 평가가 늦게 실행될 때 아직 도착하지 않은 관측까지 집계한 것처럼 기록된다.
      */
     void add(

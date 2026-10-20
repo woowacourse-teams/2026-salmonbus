@@ -11,6 +11,8 @@ class ScoringStateTest {
     void 실제_잔여석을_받아낸_예보만_채점한다(
         ScoringState scoringState
     ) {
+        // given
+
         // when
         final boolean actual = scoringState.scorable();
 

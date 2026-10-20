@@ -1,14 +1,19 @@
 package com.gustler.backend.forecasting.domain.evaluation;
-import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
 
 import static org.assertj.core.api.Assertions.assertThat;
+
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Lost;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.NotArrivedYet;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.SeatMissing;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Settled;
+import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ArrivalLabelResolverTest {
     private static final Instant FORECAST_AT = Instant.parse("2026-08-25T08:30:00Z");
-    /** 혼잡도를 안 준 관측. 라벨 회수는 혼잡도를 안 본다. */
+    /** 혼잡도가 없는 관측으로, 라벨 회수에는 혼잡도를 사용하지 않는다. */
     private static final Integer CROWD_LEVEL_UNKNOWN = null;
 
     private static final long ROUTE_VERSION_3330 = 1L;
@@ -18,7 +23,7 @@ class ArrivalLabelResolverTest {
     private static final int PASSED_STOP_ORDER = TARGET_STOP_ORDER - STOPS_TO_TARGET;
     private static final long ARRIVAL_OBSERVATION_ID = 7700L;
 
-    /** 아직 기다릴 만한 시각. 예보를 낸 지 10분이다. */
+    /** 대기 한도 이내의 시각. 예보를 낸 지 10분이다. */
     private static final Instant STILL_WAITING_AT = FORECAST_AT.plusSeconds(600);
 
     /** 기다림 한도(2시간)를 넘긴 시각. */
@@ -33,7 +38,7 @@ class ArrivalLabelResolverTest {
         ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), passing, STILL_WAITING_AT);
 
         // then
-        assertThat(actual).isEqualTo(new ArrivalLabel.Settled(ARRIVAL_OBSERVATION_ID, 0));
+        assertThat(actual).isEqualTo(new Settled(ARRIVAL_OBSERVATION_ID, 0));
     }
 
     @Test
@@ -45,7 +50,7 @@ class ArrivalLabelResolverTest {
         ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), passing, STILL_WAITING_AT);
 
         // then
-        assertThat(actual).isEqualTo(new ArrivalLabel.Settled(ARRIVAL_OBSERVATION_ID, 9));
+        assertThat(actual).isEqualTo(new Settled(ARRIVAL_OBSERVATION_ID, 9));
     }
 
     @Test
@@ -71,7 +76,7 @@ class ArrivalLabelResolverTest {
         ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), passing, STILL_WAITING_AT);
 
         // then
-        assertThat(actual).isEqualTo(new ArrivalLabel.SeatMissing(ARRIVAL_OBSERVATION_ID));
+        assertThat(actual).isEqualTo(new SeatMissing(ARRIVAL_OBSERVATION_ID));
     }
 
     @Test
@@ -168,6 +173,8 @@ class ArrivalLabelResolverTest {
 
     @Test
     void 뒤_관측이_하나도_없어도_한도_전까지는_열어_둔다() {
+        // given
+
         // when
         ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), List.of(), STILL_WAITING_AT);
 
@@ -177,6 +184,8 @@ class ArrivalLabelResolverTest {
 
     @Test
     void 운행을_끝내_뒤_관측이_없는_차량은_한도가_지나면_닫힌다() {
+        // given
+
         // when
         ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), List.of(), WAITED_TOO_LONG_AT);
 
@@ -196,7 +205,7 @@ class ArrivalLabelResolverTest {
             forecast, List.of(passedAt(TARGET_STOP_ORDER, 29, 0)), STILL_WAITING_AT);
 
         // then
-        assertThat(actual).isEqualTo(new ArrivalLabel.NotArrivedYet());
+        assertThat(actual).isEqualTo(new NotArrivedYet());
     }
 
     @Test
@@ -211,7 +220,7 @@ class ArrivalLabelResolverTest {
             forecast, List.of(passedAt(TARGET_STOP_ORDER, 30, 0)), STILL_WAITING_AT);
 
         // then
-        assertThat(actual).isEqualTo(new ArrivalLabel.NotArrivedYet());
+        assertThat(actual).isEqualTo(new NotArrivedYet());
     }
 
     @Test
@@ -229,7 +238,7 @@ class ArrivalLabelResolverTest {
         ArrivalLabel actual = ArrivalLabelResolver.resolve(forecast, List.of(arrival), STILL_WAITING_AT);
 
         // then
-        assertThat(actual).isEqualTo(new ArrivalLabel.Settled(ARRIVAL_OBSERVATION_ID, 0));
+        assertThat(actual).isEqualTo(new Settled(ARRIVAL_OBSERVATION_ID, 0));
     }
 
     @Test
@@ -247,7 +256,7 @@ class ArrivalLabelResolverTest {
         ArrivalLabel actual = ArrivalLabelResolver.resolve(forecast, candidates, STILL_WAITING_AT);
 
         // then
-        assertThat(actual).isEqualTo(new ArrivalLabel.Settled(ARRIVAL_OBSERVATION_ID, 9));
+        assertThat(actual).isEqualTo(new Settled(ARRIVAL_OBSERVATION_ID, 9));
     }
 
     @Test
@@ -264,7 +273,7 @@ class ArrivalLabelResolverTest {
         ArrivalLabel actual = ArrivalLabelResolver.resolve(forecast, candidates, STILL_WAITING_AT);
 
         // then
-        assertThat(actual).isEqualTo(new ArrivalLabel.Lost());
+        assertThat(actual).isEqualTo(new Lost());
     }
 
     private PendingForecast pending() {

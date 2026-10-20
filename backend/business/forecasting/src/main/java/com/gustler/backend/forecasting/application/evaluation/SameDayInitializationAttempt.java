@@ -33,7 +33,7 @@ final class SameDayInitializationAttempt {
 
     <T> T measure(Stage next, Supplier<T> action) {
         stage = next;
-        long start = nanoTime.getAsLong();
+        final long start = nanoTime.getAsLong();
         try {
             return action.get();
         }
@@ -53,8 +53,8 @@ final class SameDayInitializationAttempt {
         stage = Stage.COMMIT;
     }
 
-    void completed(boolean initialized) {
-        status = initialized ? "COMPLETED" : "SKIPPED";
+    void completed(final boolean initialized) {
+        status = completedStatus(initialized);
         finish();
     }
 
@@ -73,7 +73,11 @@ final class SameDayInitializationAttempt {
         return status;
     }
 
-    String failedStage() { return status.equals("FAILED") ? stage.name() : "-";
+    String failedStage() {
+        if (status.equals("FAILED")) {
+            return stage.name();
+        }
+        return "-";
     }
 
     String sqlState() {
@@ -100,7 +104,14 @@ final class SameDayInitializationAttempt {
         totalMs = millis(nanoTime.getAsLong() - started);
     }
 
-    private static long millis(long nanos) {
+    private static long millis(final long nanos) {
         return TimeUnit.NANOSECONDS.toMillis(nanos);
+    }
+
+    private static String completedStatus(final boolean initialized) {
+        if (initialized) {
+            return "COMPLETED";
+        }
+        return "SKIPPED";
     }
 }

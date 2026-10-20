@@ -5,14 +5,16 @@ import java.util.Objects;
 
 /** 수동 조사에서 이상 관측을 찾은 위치. 차량별 재판정 커서와 독립적이다. */
 public final class TripQualityDiscovery {
-    private Instant cursorAt;
-    private long cursorBatchId;
     private final Instant until;
     private final long maximumGapSeconds;
+    private Instant cursorAt;
+    private long cursorBatchId;
     private boolean completed;
 
-    public TripQualityDiscovery(final Instant cursorAt,
-        final long cursorBatchId, final Instant until,
+    public TripQualityDiscovery(
+        Instant cursorAt,
+        final long cursorBatchId,
+        Instant until,
         final long maximumGapSeconds,
         final boolean completed
     ) {
@@ -23,12 +25,17 @@ public final class TripQualityDiscovery {
         this.completed = completed;
     }
 
-    public void verifyResume(final Instant requestedUntil, final long requestedGapSeconds) {
+    public void verifyResume(Instant requestedUntil, final long requestedGapSeconds) {
         if (!Objects.equals(until, requestedUntil) || maximumGapSeconds != requestedGapSeconds) {
             throw new IllegalArgumentException("정리 작업의 종료 시각과 시간 기준을 변경할 수 없다");
         }
     }
-    public void advance(final Instant lastAt,
+
+    /**
+     * 처리 건수만큼 발견 커서를 전진시킨다. 짧은 페이지이면 완료하며 완료한 작업의 재진행은 예외로 거부한다.
+     */
+    public void advance(
+        Instant lastAt,
         final long lastId,
         final int processed,
         final int limit

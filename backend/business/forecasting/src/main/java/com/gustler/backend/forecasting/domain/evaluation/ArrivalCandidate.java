@@ -14,7 +14,7 @@ public record ArrivalCandidate(
     Long qualityDirection,
     boolean qualityAssessed
 ) {
-    public ArrivalCandidate(long observationId, ObservedVehicle vehicle) {
+    public ArrivalCandidate(final long observationId, ObservedVehicle vehicle) {
         this(observationId, vehicle, null, true);
     }
 
