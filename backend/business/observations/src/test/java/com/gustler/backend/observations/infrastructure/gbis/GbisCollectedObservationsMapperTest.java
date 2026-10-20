@@ -1,11 +1,10 @@
 package com.gustler.backend.observations.infrastructure.gbis;
 
-import com.gustler.backend.observations.domain.CollectedObservations;
-import com.gustler.backend.observations.domain.UpstreamObservationRow;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
+import com.gustler.backend.observations.domain.CollectedObservations;
+import com.gustler.backend.observations.domain.UpstreamObservationRow;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -111,6 +110,8 @@ class GbisCollectedObservationsMapperTest {
 
     @Test
     void 차량이_한_대도_없으면_쌓을_관측도_없다() {
+        // given
+
         // when
         CollectedObservations actual = GbisObservationMapper.collect(List.of());
 

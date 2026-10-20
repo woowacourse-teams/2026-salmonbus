@@ -57,6 +57,8 @@ class ObservationCollectorKeyTest {
     private static final int NOT_EXCLUDED = 0;
     private static final int RESERVED_BEFORE_764 = 764;
 
+    private final ListAppender<ILoggingEvent> collectorLog = new ListAppender<>();
+
     @Mock
     private CurrentRouteVersion currentRouteVersion;
 
@@ -68,8 +70,6 @@ class ObservationCollectorKeyTest {
 
     @Mock
     private ObservationSource observationSource;
-
-    private final ListAppender<ILoggingEvent> collectorLog = new ListAppender<>();
 
     @AfterEach
     void 로그_수집을_멈춘다() {

@@ -1,6 +1,8 @@
 package com.gustler.backend.routecatalog.infrastructure.jdbc;
-import com.gustler.backend.routecatalog.domain.RouteStopLocationStore;
+
 import com.gustler.backend.routecatalog.domain.RouteStop;
+import com.gustler.backend.routecatalog.domain.RouteStopLocationStore;
+import com.gustler.backend.routecatalog.domain.RouteStopLocationStore.Changes;
 import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.StopCoordinates;
 import java.time.OffsetDateTime;
@@ -16,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** 호출자는 노선 행 잠금을 보유한다. 동일 좌표는 UPDATE도 하지 않는다. */
 @Repository
-@Transactional(propagation = Propagation.MANDATORY)
+@Transactional(readOnly = false, propagation = Propagation.MANDATORY)
 public class JdbcRouteStopLocationStore implements RouteStopLocationStore {
     private final JdbcClient jdbc;
     private final JdbcTemplate batchJdbc;
@@ -27,7 +29,7 @@ public class JdbcRouteStopLocationStore implements RouteStopLocationStore {
     }
 
     @Override
-    public Changes record(long versionId, RouteStops stops, OffsetDateTime observedAt) {
+    public Changes record(final long versionId, RouteStops stops, OffsetDateTime observedAt) {
         List<Saved> rows = jdbc.sql("""
             SELECT DISTINCT ON (stop_order) stop_order, x, y, observed_at
             FROM route_stop_location_history WHERE route_version_id = ?
@@ -58,7 +60,10 @@ public class JdbcRouteStopLocationStore implements RouteStopLocationStore {
                 new Object[] {versionId, stop.stopOrder(), stop.stopId(), observedAt, coordinates.x(),
                     coordinates.y()});
             if (previous == null) {
-                initial++; } else { changed++; }
+                initial++;
+                continue;
+            }
+            changed++;
         }
         if (!writes.isEmpty()) {
             batchJdbc.batchUpdate("""

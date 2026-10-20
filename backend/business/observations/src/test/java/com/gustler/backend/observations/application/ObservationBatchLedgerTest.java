@@ -1,17 +1,8 @@
 package com.gustler.backend.observations.application;
 
-import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
-
-import com.gustler.backend.observations.api.CollectionInputs;
-import com.gustler.backend.observations.api.CollectionQualityHook;
-import com.gustler.backend.observations.api.VehicleObservationsStored;
-import com.gustler.backend.observations.domain.InputAlreadyConfirmedException;
-import com.gustler.backend.observations.domain.CollectionPlan;
-import com.gustler.backend.observations.domain.ObservationReply;
-import com.gustler.backend.quota.api.CallQuota;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.gbis.api.GbisLocationResult.GbisSystemError;
@@ -19,7 +10,16 @@ import com.gustler.backend.gbis.api.GbisLocationResult.NoResponse;
 import com.gustler.backend.gbis.api.GbisLocationResult.NoVehicles;
 import com.gustler.backend.gbis.api.GbisLocationResult.Success;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
+import com.gustler.backend.observations.api.CollectionInputs;
+import com.gustler.backend.observations.api.CollectionQualityHook;
+import com.gustler.backend.observations.api.VehicleObservationsStored;
+import com.gustler.backend.observations.application.ObservationBatchLedgerTest.QualityFailureConfiguration;
+import com.gustler.backend.observations.domain.CollectionPlan;
+import com.gustler.backend.observations.domain.InputAlreadyConfirmedException;
+import com.gustler.backend.observations.domain.ObservationReply;
+import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
 import com.gustler.backend.observations.support.ObservationIntegrationTest;
+import com.gustler.backend.quota.api.CallQuota;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -38,11 +38,11 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 예약이 제 트랜잭션에서 커밋되므로 @Transactional 을 붙이면 장부가 정리되지 않는다.
+ * 예약이 자체 트랜잭션에서 커밋되므로 @Transactional 을 붙이면 장부가 정리되지 않는다.
  * 매번 비우고 시작한다.
  */
 @ObservationIntegrationTest
-@Import(ObservationBatchLedgerTest.QualityFailureConfiguration.class)
+@Import(QualityFailureConfiguration.class)
 class ObservationBatchLedgerTest {
     private static final String SOURCE_ID = "GBIS";
     private static final String ROUTE_204000057 = "204000057";
@@ -102,6 +102,8 @@ class ObservationBatchLedgerTest {
 
     @Test
     void 자리를_잡은_판은_RESERVED로_남는다() {
+        // given
+
         // when
         final long batchId = ledger.reserve(plan(), RESERVED_AT).batchId();
 
@@ -111,6 +113,8 @@ class ObservationBatchLedgerTest {
 
     @Test
     void 자리를_잡은_판은_한도를_한_번_쓴다() {
+        // given
+
         // when
         ledger.reserve(plan(), RESERVED_AT);
 
@@ -239,12 +243,13 @@ class ObservationBatchLedgerTest {
     }
 
     /**
-     * 자리와 판이 한 트랜잭션에서 커밋된다. 판이 안 열리면 자리도 같이 되돌아가야
-     * "쓴 횟수는 올랐는데 그 자리를 쓸 판이 없다" 가 안 생긴다.
+     * 호출 예약과 수집 배치는 한 트랜잭션에서 커밋된다. 배치 생성이 실패하면 예약도 함께
+     * 롤백되어야 수집 배치 없이 호출 횟수만 증가하는 상태를 막을 수 있다.
      */
     @Test
     void 판을_못_열면_쓴_횟수도_안_오른다() {
-        // given 없는 노선 판본이라 판을 열다가 외래 키에 걸린다
+        // given
+        // 없는 노선 판본이라 수집 배치를 생성하다 외래 키 제약에 걸린다
         CollectionPlan missingRoutePlan =
             new CollectionPlan(MISSING_ROUTE_VERSION_ID, SCHEDULED_AT, ATTEMPT_KEY);
 
@@ -311,8 +316,12 @@ class ObservationBatchLedgerTest {
         // given
         confirmSuccessfulInput();
 
-        // when & then
-        assertThatThrownBy(() -> ledger.reserve(plan(), RESERVED_AT))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> ledger.reserve(plan(), RESERVED_AT));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(InputAlreadyConfirmedException.class);
     }
 
@@ -325,7 +334,8 @@ class ObservationBatchLedgerTest {
         assertThatThrownBy(() -> ledger.reserve(plan(), RESERVED_AT))
             .isInstanceOf(InputAlreadyConfirmedException.class);
 
-        // then 첫 예약 하나에서 안 늘었다
+        // then
+        // 첫 예약 하나에서 안 늘었다
         assertThat(reservedCallsOn(KOREA_8_19)).isEqualTo(1);
     }
 
@@ -405,9 +415,13 @@ class ObservationBatchLedgerTest {
             "경기70아0001", VEHICLE_ID, 0, ROUTE_204000057, 11,
             STOP_ID, 1, 2, 71, 3, 1);
 
-        // when & then
-        assertThatThrownBy(() ->
-            ledger.conclude(batchId, reply(new Success(QUERY_TIME, List.of(bus))), RESPONSE_RECEIVED_AT))
+        // when
+        Throwable caughtFailure = catchThrowable(() ->
+            ledger.conclude(batchId, reply(new Success(QUERY_TIME, List.of(bus))), RESPONSE_RECEIVED_AT));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalStateException.class)
             .hasMessage("품질 처리 실패");
         assertThat(outcomeOf(batchId)).isEqualTo("DISPATCHING");
@@ -564,7 +578,7 @@ class ObservationBatchLedgerTest {
     }
 
     private <T> T columnOf(
-        final String column,
+        String column,
         final long batchId,
         Class<T> type
     ) {
@@ -576,7 +590,7 @@ class ObservationBatchLedgerTest {
     }
 
     private int batchCountOf(
-        final String attemptKey
+        String attemptKey
     ) {
         return jdbcClient.sql("SELECT count(*) FROM observation_batch WHERE attempt_key = ?")
             .param(attemptKey)

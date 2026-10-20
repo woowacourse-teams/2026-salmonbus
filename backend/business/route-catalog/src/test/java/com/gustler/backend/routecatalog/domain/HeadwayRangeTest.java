@@ -1,7 +1,7 @@
 package com.gustler.backend.routecatalog.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.util.Optional;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -14,6 +14,8 @@ class HeadwayRangeTest {
         final int minMinutes,
         final int maxMinutes
     ) {
+        // given
+
         // when
         Optional<HeadwayRange> actual = HeadwayRange.of(minMinutes, maxMinutes);
 
@@ -28,6 +30,8 @@ class HeadwayRangeTest {
         Integer minMinutes,
         Integer maxMinutes
     ) {
+        // given
+
         // when
         Optional<HeadwayRange> actual = HeadwayRange.of(minMinutes, maxMinutes);
 
@@ -41,8 +45,14 @@ class HeadwayRangeTest {
         final int minMinutes,
         final int maxMinutes
     ) {
-        // when & then
-        assertThatThrownBy(() -> new HeadwayRange(minMinutes, maxMinutes))
+        // given
+
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new HeadwayRange(minMinutes, maxMinutes));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 }

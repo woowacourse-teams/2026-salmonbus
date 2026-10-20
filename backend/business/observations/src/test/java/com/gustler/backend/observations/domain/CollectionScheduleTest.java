@@ -10,6 +10,8 @@ class CollectionScheduleTest {
 
     @Test
     void 한_노선을_하루_다_돌면_3018번_부른다() {
+        // given
+
         // when
         final int actual = CollectionSchedule.dailyCallsPerRoute();
 
@@ -19,6 +21,8 @@ class CollectionScheduleTest {
 
     @Test
     void 두_노선을_하루_다_돌면_6036번_부른다() {
+        // given
+
         // when
         final int actual = CollectionSchedule.dailyCallsFor(2);
 
@@ -28,6 +32,8 @@ class CollectionScheduleTest {
 
     @Test
     void 두_노선은_하루_한도_10000번_안에_들어온다() {
+        // given
+
         // when
         final boolean actual = CollectionSchedule.fitsDailyLimit(2, DAILY_LIMIT_10000);
 
@@ -37,6 +43,8 @@ class CollectionScheduleTest {
 
     @Test
     void 네_노선은_하루_한도_10000번을_넘는다() {
+        // given
+
         // when
         final boolean actual = CollectionSchedule.fitsDailyLimit(4, DAILY_LIMIT_10000);
 

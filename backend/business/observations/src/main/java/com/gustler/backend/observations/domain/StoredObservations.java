@@ -1,4 +1,6 @@
 package com.gustler.backend.observations.domain;
+
+import com.gustler.backend.observations.domain.StoredObservations.Row;
 import java.time.Instant;
 import java.util.List;
 

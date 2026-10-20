@@ -2,6 +2,10 @@ package com.gustler.backend.routecatalog.domain;
 
 import java.util.Optional;
 
+/**
+ * 원천의 최소·최대 배차간격 범위다.
+ * 단위는 분이며, 읽을 수 없는 원천 값은 제공 가능한 범위와 구분한다.
+ */
 public record HeadwayRange(
     int minMinutes,
     int maxMinutes

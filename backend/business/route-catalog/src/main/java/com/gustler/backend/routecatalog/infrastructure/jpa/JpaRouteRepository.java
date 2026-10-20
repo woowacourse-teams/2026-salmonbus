@@ -8,8 +8,11 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 필수 노선을 잠가 읽고 도메인이 결정한 판본·시간표 변경을 저장한다.
+ */
 @Repository
-@Transactional(propagation = Propagation.MANDATORY)
+@Transactional(readOnly = false, propagation = Propagation.MANDATORY)
 public class JpaRouteRepository implements RouteRepository {
     private final JdbcClient jdbc;
     private final RouteVersionEntityRepository versions;
@@ -23,7 +26,7 @@ public class JpaRouteRepository implements RouteRepository {
     }
 
     @Override
-    public Route findByIdForUpdate(long routeId) {
+    public Route findByIdForUpdate(final long routeId) {
         jdbc.sql("SELECT id FROM route WHERE id = ? FOR UPDATE")
             .param(routeId).query(Long.class).optional()
             .orElseThrow(() -> new IllegalStateException("노선 %d가 없다".formatted(routeId)));
@@ -56,7 +59,7 @@ public class JpaRouteRepository implements RouteRepository {
         return opened.getId();
     }
 
-    private RouteVersionJpaEntity versionOf(long id) {
+    private RouteVersionJpaEntity versionOf(final long id) {
         return versions.findById(id)
             .orElseThrow(() -> new IllegalStateException("노선 버전 %d가 없다".formatted(id)));
     }

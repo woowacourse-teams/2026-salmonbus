@@ -1,19 +1,6 @@
 package com.gustler.backend.observations.infrastructure.gbis;
 
-import com.gustler.backend.observations.domain.CollectedObservations;
-import com.gustler.backend.observations.domain.ObservationBatchConclusion;
-import com.gustler.backend.observations.domain.ObservationBatchFailureCode;
-import com.gustler.backend.observations.domain.ObservationBatchOutcome;
-import com.gustler.backend.observations.domain.RemainingSeats;
-import com.gustler.backend.observations.domain.VehicleObservation;
 import com.gustler.backend.gbis.api.GbisLocationResult;
-import com.gustler.backend.gbis.api.GbisResultCode;
-import com.gustler.backend.gbis.api.PortalReasonCode;
-import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
-import java.util.List;
-import java.util.Optional;
-import java.time.OffsetDateTime;
-import com.gustler.backend.observations.domain.ObservationResponse;
 import com.gustler.backend.gbis.api.GbisLocationResult.DailyQuotaExceeded;
 import com.gustler.backend.gbis.api.GbisLocationResult.GatewayRejected;
 import com.gustler.backend.gbis.api.GbisLocationResult.GbisSystemError;
@@ -24,6 +11,19 @@ import com.gustler.backend.gbis.api.GbisLocationResult.PerSecondQuotaExceeded;
 import com.gustler.backend.gbis.api.GbisLocationResult.Success;
 import com.gustler.backend.gbis.api.GbisLocationResult.UnknownGbisResultCode;
 import com.gustler.backend.gbis.api.GbisLocationResult.UnreadableResponse;
+import com.gustler.backend.gbis.api.GbisResultCode;
+import com.gustler.backend.gbis.api.PortalReasonCode;
+import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
+import com.gustler.backend.observations.domain.CollectedObservations;
+import com.gustler.backend.observations.domain.ObservationBatchConclusion;
+import com.gustler.backend.observations.domain.ObservationBatchFailureCode;
+import com.gustler.backend.observations.domain.ObservationBatchOutcome;
+import com.gustler.backend.observations.domain.ObservationResponse;
+import com.gustler.backend.observations.domain.RemainingSeats;
+import com.gustler.backend.observations.domain.VehicleObservation;
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Optional;
 
 /** GBIS 응답을 수집 업무의 결과와 관측 값으로 변환한다. */
 public final class GbisObservationMapper {
@@ -76,7 +76,7 @@ public final class GbisObservationMapper {
             rejectedBy(ObservationBatchFailureCode.UPSTREAM_ERROR, unknown.resultCode());
             case NoResponse ignored -> new ObservationBatchConclusion(
                 ObservationBatchOutcome.UNKNOWN_AFTER_DISPATCH, null, null);
-            // 결과 코드가 0 이었는데 본문이 없던 경우도 여기로 온다. 갈래가 코드를 안 들고 나와 0 이 남지 않는다.
+            // 결과 코드가 0 이었는데 본문이 없던 경우도 여기로 온다. 이 결과 유형은 코드를 보관하지 않아 0 이 남지 않는다.
             case UnreadableResponse ignored -> new ObservationBatchConclusion(
                 ObservationBatchOutcome.FAILED_UNREADABLE, null, null);
         };

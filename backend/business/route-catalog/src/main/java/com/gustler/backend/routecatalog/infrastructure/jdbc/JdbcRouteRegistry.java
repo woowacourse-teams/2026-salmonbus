@@ -13,7 +13,7 @@ import org.springframework.stereotype.Repository;
 public class JdbcRouteRegistry implements RouteRegistry {
     private static final String SOURCE_ID = "GBIS";
 
-    /** 표시명과 기점 · 종점 이름은 상류가 바꿀 수 있어 부를 때마다 맞춘다. 노선 자체는 그대로다. */
+    /** 표시명과 기점 · 종점 이름은 상류가 바꿀 수 있어 호출할 때마다 갱신한다. 노선 자체는 그대로다. */
     private static final String REGISTER = """
         INSERT INTO route (
             public_route_id, source_id, source_route_id, display_name, start_stop_name, end_stop_name

@@ -1,4 +1,6 @@
 package com.gustler.backend.routecatalog.domain.geometry;
+
+import com.gustler.backend.routecatalog.domain.geometry.RouteShape.Point;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -26,11 +28,16 @@ public record RouteShape(List<Point> points) {
         }
     }
 
+    /**
+     * 형상의 좌표 순서와 값으로 내용 지문을 계산한다. 표시명 등 형상 밖의 값은 지문 입력이 아니다.
+     */
     public String digest() {
         try {
-            var digest = MessageDigest.getInstance("SHA-256");
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
             digest.update("GBIS_ROUTE_LINE_V2/ASSUMED_WGS84/v1\n".getBytes(StandardCharsets.UTF_8));
-            for (Point point : points) digest.update((point.x() + "," + point.y() + "\n").getBytes(StandardCharsets.UTF_8));
+            for (Point point : points) {
+                digest.update((point.x() + "," + point.y() + "\n").getBytes(StandardCharsets.UTF_8));
+            }
             return HexFormat.of().formatHex(digest.digest());
         } catch (NoSuchAlgorithmException impossible) {
             throw new IllegalStateException(impossible);

@@ -1,14 +1,13 @@
 package com.gustler.backend.observations.infrastructure.gbis;
 
-import com.gustler.backend.observations.domain.VehicleObservation;
-import com.gustler.backend.observations.domain.RemainingSeats;
-import com.gustler.backend.observations.domain.SeatUnknownReason;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
+
+import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
 import com.gustler.backend.observations.domain.RemainingSeats.Known;
 import com.gustler.backend.observations.domain.RemainingSeats.Unknown;
-import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
+import com.gustler.backend.observations.domain.SeatUnknownReason;
+import com.gustler.backend.observations.domain.VehicleObservation;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
@@ -153,8 +152,10 @@ class GbisVehicleObservationMapperTest {
         VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
-        assertThat(actual.vehicleType()).isEqualTo(DOUBLE_DECKER_BUS);
-        assertThat(actual.remainingSeats()).isEqualTo(new Known(SEATS_43));
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(actual.vehicleType()).isEqualTo(DOUBLE_DECKER_BUS);
+            softly.assertThat(actual.remainingSeats()).isEqualTo(new Known(SEATS_43));
+        }
     }
 
     @Test

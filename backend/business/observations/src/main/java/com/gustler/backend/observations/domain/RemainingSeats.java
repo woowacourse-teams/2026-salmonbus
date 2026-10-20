@@ -2,6 +2,10 @@ package com.gustler.backend.observations.domain;
 
 import java.util.Objects;
 
+/**
+ * 알려진 잔여석과 미제공 사유를 구분한다.
+ * 알려진 0석을 결측으로 바꾸지 않는다.
+ */
 public sealed interface RemainingSeats {
     static RemainingSeats from(
         Integer remainingSeatCount
