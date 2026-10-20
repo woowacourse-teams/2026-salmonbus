@@ -1,29 +1,31 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
-import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationDiagnostics;
+import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluationRepository;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import com.gustler.backend.forecasting.domain.evaluation.ScoringState;
 import com.gustler.backend.forecasting.domain.evaluation.SettledEvaluation;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.StringJoiner;
-import java.util.List;
+import java.util.stream.IntStream;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.core.simple.JdbcClient.StatementSpec;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /** 평가 상태와 당시 도착 관측의 근거 값을 예측과 별도로 저장한다. */
 @Repository
@@ -200,7 +202,7 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
     }
 
     @Override
-    @Transactional(propagation = Propagation.MANDATORY)
+    @Transactional(readOnly = false, propagation = Propagation.MANDATORY)
     public List<PendingForecast> findPending(final long routeVersionId, final int limit) {
         List<PendingForecast> pending = new ArrayList<>();
         PendingKey after = PendingKey.BEFORE_FIRST;
@@ -222,9 +224,11 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
         return pending;
     }
 
-    private int closeConfirmedExclusions(long version,
+    private int closeConfirmedExclusions(
+        final long version,
         List<PendingKey> keys,
-        List<PendingForecast> eligible, int budget
+        List<PendingForecast> eligible,
+        final int budget
     ) {
         Set<Long> eligibleIds = eligible.stream()
             .map(PendingForecast::vehicleObservationId)
@@ -255,12 +259,11 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
             .filter(key -> excludedIds.contains(key.vehicleObservationId()))
             .limit(budget)
             .toList();
-        StringJoiner values = new StringJoiner(", ");
-        for (int index = 0; index < closing.size(); index++) {
-            values.add("(CAST(:observation%d AS bigint), CAST(:stop%d AS integer))".formatted(index, index));
-        }
+        String values = IntStream.range(0, closing.size())
+            .mapToObj(index -> "(CAST(:observation%d AS bigint), CAST(:stop%d AS integer))".formatted(index, index))
+            .collect(Collectors.joining(", "));
         // 잠금을 얻은 뒤 최신 조사/편도 상태를 다시 확인한다. PENDING 조건으로 재시도도 중복 갱신하지 않는다.
-        JdbcClient.StatementSpec query = jdbcClient.sql("""
+        StatementSpec query = jdbcClient.sql("""
             WITH keys(observation_id, target_stop_order) AS MATERIALIZED (VALUES %s)
             , closing AS (
                 SELECT evaluation.vehicle_observation_id, evaluation.target_stop_order, evaluation.route_version_id
@@ -294,8 +297,8 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
                 List<PendingKey> keys = new ArrayList<>();
                 List<PendingForecast> eligible = new ArrayList<>();
                 while (rows.next()) {
-                    long observationId = rows.getLong("vehicle_observation_id");
-                    int stopOrder = rows.getInt("target_stop_order");
+                    final long observationId = rows.getLong("vehicle_observation_id");
+                    final int stopOrder = rows.getInt("target_stop_order");
                     keys.add(new PendingKey(observationId, stopOrder));
                     if (rows.getBoolean("eligible")) {
                         eligible.add(new PendingForecast(
@@ -311,7 +314,7 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
     }
 
     @Override
-    @Transactional(propagation = Propagation.MANDATORY)
+    @Transactional(readOnly = false, propagation = Propagation.MANDATORY)
     public void addPending(final long routeVersionId, List<ForecastEvaluation> evaluations) {
         List<Long> ids = evaluations.stream()
             .map(ForecastEvaluation::vehicleObservationId)
@@ -323,7 +326,7 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
     }
 
     @Override
-    @Transactional(propagation = Propagation.MANDATORY)
+    @Transactional(readOnly = false, propagation = Propagation.MANDATORY)
     public List<SettledEvaluation> settle(List<ForecastEvaluation> evaluations) {
         if (evaluations.stream().anyMatch(evaluation -> evaluation.state() == ScoringState.PENDING)) {
             throw new IllegalArgumentException("완료된 평가만 저장할 수 있다");
@@ -349,13 +352,12 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
     }
 
     private List<SettledEvaluation> settleBatch(List<ForecastEvaluation> batch) {
-        StringJoiner values = new StringJoiner(", ");
-        for (int index = 0; index < batch.size(); index++) {
-            values.add(("(CAST(:source%d AS bigint), CAST(:target%d AS integer), CAST(:arrival%d AS bigint), "
+        String values = IntStream.range(0, batch.size())
+            .mapToObj(index -> ("(CAST(:source%d AS bigint), CAST(:target%d AS integer), CAST(:arrival%d AS bigint), "
                 + "CAST(:state%d AS varchar), CAST(:seats%d AS integer), CAST(:at%d AS timestamptz))")
-                .formatted(index, index, index, index, index, index));
-        }
-        JdbcClient.StatementSpec query = jdbcClient.sql(COMPLETE_BATCH.formatted(
+                .formatted(index, index, index, index, index, index))
+            .collect(Collectors.joining(", "));
+        StatementSpec query = jdbcClient.sql(COMPLETE_BATCH.formatted(
             values, EligibleObservationSql.ARRIVAL_MATCHES_SOURCE));
         for (int index = 0; index < batch.size(); index++) {
             ForecastEvaluation evaluation = batch.get(index);
@@ -383,7 +385,7 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
         return List.copyOf(newlySettled);
     }
 
-    private static SettledEvaluation settledEvaluationOf(ResultSet row, int index) throws SQLException {
+    private static SettledEvaluation settledEvaluationOf(ResultSet row, final int index) throws SQLException {
         return new SettledEvaluation(row.getLong("route_id"), row.getLong("model_deployment_id"),
             row.getLong("route_version_id"),
             row.getLong("vehicle_observation_id"), row.getInt("target_stop_order"),
@@ -401,7 +403,10 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
     }
 
     private static Instant instantOrNull(OffsetDateTime timestamp) {
-        return timestamp == null ? null : timestamp.toInstant();
+        if (timestamp == null) {
+            return null;
+        }
+        return timestamp.toInstant();
     }
 
     private static OffsetDateTime offsetOf(Instant timestamp) {
@@ -409,6 +414,15 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
     }
 
     private record PendingPage(List<PendingKey> keys, List<PendingForecast> eligible) {
+        /** 호출자가 가진 원본과 분리해 null·원소·순서를 보존한다. */
+        private PendingPage {
+            if (keys != null) {
+                keys = Collections.unmodifiableList(new ArrayList<>(keys));
+            }
+            if (eligible != null) {
+                eligible = Collections.unmodifiableList(new ArrayList<>(eligible));
+            }
+        }
     }
 
     private record PendingKey(long vehicleObservationId, int targetStopOrder) {

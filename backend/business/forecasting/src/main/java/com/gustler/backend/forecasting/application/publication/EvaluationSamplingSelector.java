@@ -26,7 +26,7 @@ public class EvaluationSamplingSelector {
     private final Map<Key, EvaluationSamplingPoint> committed = new LinkedHashMap<>();
 
     public EvaluationSamplingSelector(
-        @Value("${forecast.evaluation-sampling.enabled:false}") boolean enabled,
+        @Value("${forecast.evaluation-sampling.enabled:false}") final boolean enabled,
         @Value("${forecast.evaluation-sampling.route-ids:}") String routeIds,
         @Value("${forecast.evaluation-sampling.interval:60s}") Duration interval
     ) {
@@ -38,6 +38,9 @@ public class EvaluationSamplingSelector {
         this.policy = new EvaluationSamplingPolicy(interval);
     }
 
+    /**
+     * 현재 커밋된 표본 기준으로 발행 예측을 선택한다. 이 호출만으로 다음 표본 기준을 확정하지 않는다.
+     */
     public synchronized Selection select(ForecastPublication publication, List<EvaluationSamplingSource> sources) {
         if (!enabled || publication.predictions().isEmpty()) {
             return new Selection(publication, List.of());
@@ -59,9 +62,11 @@ public class EvaluationSamplingSelector {
                 || current.modelDeploymentId() != publication.modelDeploymentId()) {
                 throw new IllegalArgumentException("평가 선택의 노선과 모델이 발행 정보와 다르다");
             }
-            boolean all = policy.includeAll(committed.get(Key.of(current)), current);
+            final boolean all = policy.includeAll(committed.get(Key.of(current)), current);
             decisions.put(source.observationId(), all);
-            if (all) advances.add(current);
+            if (all) {
+                advances.add(current);
+            }
         }
         List<SeatForecast> selected = publication.predictions()
             .stream()
@@ -74,6 +79,9 @@ public class EvaluationSamplingSelector {
             publication.observedAt(), publication.generatedAt(), publication.publishedAt(), selected), advances);
     }
 
+    /**
+     * 성공한 발행의 표본 기준만 앞으로 이동한다. DB 커밋 후에 호출하며 역순 시각으로 기준을 되돌리지 않는다.
+     */
     public synchronized void committed(Selection selection) {
         for (EvaluationSamplingPoint point : selection.advances()) {
             Key key = Key.of(point);

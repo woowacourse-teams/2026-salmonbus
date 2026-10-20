@@ -1,12 +1,15 @@
 package com.gustler.backend.forecasting.application.statistics;
 
-import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Reference;
 import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Key;
+import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Reference;
 import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Row;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuild;
 import java.time.Instant;
 import java.util.List;
 
+/**
+ * 검증된 이관 원본을 통계 표본으로 복원하고 재집계 중간값에 반영한다.
+ */
 public interface ArchivedDemandStatisticsStore {
     boolean hasArchive(long routeVersionId);
 

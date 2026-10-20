@@ -18,7 +18,7 @@ final class ForecastEvaluationTestData {
                 SELECT route_id FROM route_version WHERE id = :version
                 ON CONFLICT DO NOTHING
                 """).param("version", forecast.routeVersionId()).update();
-            long publicationId = jdbc.sql("""
+            final long publicationId = jdbc.sql("""
                 INSERT INTO forecast_publication(source_batch_id, route_version_id,
                     model_deployment_id, demand_statistics_revision, quality_revision,
                     observed_at, generated_at, published_at, prediction_count)

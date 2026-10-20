@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.domain.statistics;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.Assertions.within;
 
 import java.util.List;
@@ -141,9 +141,13 @@ class StopDemandStatisticsTest {
         // given
         List<StopDemandCell> twiceAtSameStop = List.of(cell(1, LOW_RATE), cell(1, HIGH_RATE));
 
-        // when & then
-        assertThatThrownBy(() -> new StopDemandStatistics(
-            ROUTE_VERSION_3330, TimeSlot.MORNING, REVISION, twiceAtSameStop))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new StopDemandStatistics(
+            ROUTE_VERSION_3330, TimeSlot.MORNING, REVISION, twiceAtSameStop));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 

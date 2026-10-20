@@ -6,6 +6,9 @@ import java.util.UUID;
 
 /** 통계가 필요로 하는 이관 입력 계약. 정산 도메인의 내부 타입을 노출하지 않는다. */
 public interface StatisticsArchiveReader {
+    /**
+     * 아카이브 참조의 무결성을 검증하고 행을 읽는다. 외부 파일 읽기가 포함되므로 DB 잠금 범위 밖에서 사용한다.
+     */
     List<Row> read(Reference reference);
 
     record Key(long observationId, int stopOrder) {

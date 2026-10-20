@@ -10,6 +10,9 @@ import com.gustler.backend.forecasting.infrastructure.bundle.FileModelBundleLoad
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * 모델 파일 검증·활성 배포·런타임 해석을 각각의 협력 객체로 연결한다.
+ */
 @Configuration(proxyBeanMethods = false)
 public class ForecastingModelConfiguration {
     @Bean

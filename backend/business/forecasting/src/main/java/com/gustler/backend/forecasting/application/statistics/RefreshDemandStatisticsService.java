@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class RefreshDemandStatisticsService {
-    private static final Logger log = LoggerFactory.getLogger(RefreshDemandStatisticsService.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(RefreshDemandStatisticsService.class);
 
     private final RouteVersionQuery routeVersions;
     private final StopDemandStatisticsWriter writer;
@@ -39,25 +39,25 @@ public class RefreshDemandStatisticsService {
             .stream()
             .sorted()
             .toList()) {
-            long startedAt = System.nanoTime();
-            log.info("event=stop_demand_statistics status=STARTED routeVersionId={} computedAt={}",
+            final long startedAt = System.nanoTime();
+            LOGGER.info("event=stop_demand_statistics status=STARTED routeVersionId={} computedAt={}",
                 routeVersionId, computedAtLocal);
             try {
                 // 이 job은 transaction을 열지 않는다. writer 프록시가 commit을 마친 뒤 반환한다.
                 writer.recompute(routeVersionId, computedAt);
             } catch (RuntimeException exception) {
-                log.error(
+                LOGGER.error(
                     "event=stop_demand_statistics status=FAILED routeVersionId={} computedAt={} durationMs={} exceptionType={}",
                     routeVersionId, computedAtLocal, elapsedMillis(startedAt), exception.getClass().getSimpleName());
                 throw exception;
             }
             // 입력이 없어 세대를 저장하지 않은 정상 반환도 COMPLETED에 포함한다.
-            log.info("event=stop_demand_statistics status=COMPLETED routeVersionId={} computedAt={} durationMs={}",
+            LOGGER.info("event=stop_demand_statistics status=COMPLETED routeVersionId={} computedAt={} durationMs={}",
                 routeVersionId, computedAtLocal, elapsedMillis(startedAt));
         }
     }
 
-    private static long elapsedMillis(long startedAt) {
+    private static long elapsedMillis(final long startedAt) {
         return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
     }
 }

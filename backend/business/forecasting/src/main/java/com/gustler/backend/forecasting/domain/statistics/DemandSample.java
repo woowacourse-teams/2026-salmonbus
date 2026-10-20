@@ -5,6 +5,10 @@ import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 import java.util.Optional;
 
+/**
+ * 정산에서 얻은 통계 표본이다.
+ * 도착 시간대와 순승차량 계산을 같은 원본 값에서 제공한다.
+ */
 public record DemandSample(
     long routeVersionId,
     long predictionObservationId,
@@ -32,15 +36,15 @@ public record DemandSample(
     public static Optional<DemandSample> fromSettlement(
         final long routeVersionId,
         final long predictionObservationId,
-        final Long arrivalObservationId,
-        final String vehicleId,
+        Long arrivalObservationId,
+        String vehicleId,
         final int targetStopOrder,
         final int stopsToTarget,
         final boolean targetBoardingAllowed,
-        final Instant arrivedAt,
-        final Instant scoredAt,
-        final Integer predictionRemainingSeats,
-        final Integer seatsOnArrival
+        Instant arrivedAt,
+        Instant scoredAt,
+        Integer predictionRemainingSeats,
+        Integer seatsOnArrival
     ) {
         if (stopsToTarget != ONE_STOP_AHEAD || !targetBoardingAllowed || vehicleId == null
             || arrivalObservationId == null || predictionRemainingSeats == null || seatsOnArrival == null) {

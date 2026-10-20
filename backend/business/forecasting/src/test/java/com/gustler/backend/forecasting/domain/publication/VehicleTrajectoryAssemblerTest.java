@@ -1,13 +1,19 @@
 package com.gustler.backend.forecasting.domain.publication;
-import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
-import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
-import com.gustler.backend.forecasting.domain.model.SeatUnknownReason;
-import com.gustler.backend.forecasting.domain.model.TrajectoryGap;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.gustler.backend.forecasting.domain.model.FullSeatStreak;
+import com.gustler.backend.forecasting.domain.model.FullSeatStreak.CutByGap;
+import com.gustler.backend.forecasting.domain.model.FullSeatStreak.SeenToEnd;
 import com.gustler.backend.forecasting.domain.model.ObservedSeats;
+import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
 import com.gustler.backend.forecasting.domain.model.PrecedingVehicle;
 import com.gustler.backend.forecasting.domain.model.SeatSlope;
-import com.gustler.backend.forecasting.domain.model.FullSeatStreak;
-import static org.assertj.core.api.Assertions.assertThat;
+import com.gustler.backend.forecasting.domain.model.SeatSlope.Known;
+import com.gustler.backend.forecasting.domain.model.SeatSlope.Unknown;
+import com.gustler.backend.forecasting.domain.model.SeatUnknownReason;
+import com.gustler.backend.forecasting.domain.model.TrajectoryGap;
+import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
@@ -59,7 +65,7 @@ class VehicleTrajectoryAssemblerTest {
         SeatSlope actual = onlyTrajectoryOf(history).seatSlope();
 
         // then
-        assertThat(actual).isEqualTo(new SeatSlope.Known(-3));
+        assertThat(actual).isEqualTo(new Known(-3));
     }
 
     @Test
@@ -72,7 +78,7 @@ class VehicleTrajectoryAssemblerTest {
         SeatSlope actual = onlyTrajectoryOf(history).seatSlope();
 
         // then
-        assertThat(actual).isEqualTo(new SeatSlope.Unknown(TrajectoryGap.NO_EARLIER_OBSERVATION));
+        assertThat(actual).isEqualTo(new Unknown(TrajectoryGap.NO_EARLIER_OBSERVATION));
     }
 
     @Test
@@ -87,7 +93,7 @@ class VehicleTrajectoryAssemblerTest {
         SeatSlope actual = trajectoryOf(history, VEHICLE_204000206).seatSlope();
 
         // then
-        assertThat(actual).isEqualTo(new SeatSlope.Unknown(TrajectoryGap.OBSERVATION_BATCH_MISSING));
+        assertThat(actual).isEqualTo(new Unknown(TrajectoryGap.OBSERVATION_BATCH_MISSING));
     }
 
     @Test
@@ -102,7 +108,7 @@ class VehicleTrajectoryAssemblerTest {
         SeatSlope actual = trajectoryOf(history, VEHICLE_204000206).seatSlope();
 
         // then
-        assertThat(actual).isEqualTo(new SeatSlope.Unknown(TrajectoryGap.OBSERVATION_BATCH_MISSING));
+        assertThat(actual).isEqualTo(new Unknown(TrajectoryGap.OBSERVATION_BATCH_MISSING));
     }
 
     @Test
@@ -116,7 +122,7 @@ class VehicleTrajectoryAssemblerTest {
         SeatSlope actual = onlyTrajectoryOf(history).seatSlope();
 
         // then
-        assertThat(actual).isEqualTo(new SeatSlope.Unknown(TrajectoryGap.STOP_ORDER_JUMPED));
+        assertThat(actual).isEqualTo(new Unknown(TrajectoryGap.STOP_ORDER_JUMPED));
     }
 
     @Test
@@ -130,7 +136,7 @@ class VehicleTrajectoryAssemblerTest {
         SeatSlope actual = onlyTrajectoryOf(history).seatSlope();
 
         // then
-        assertThat(actual).isEqualTo(new SeatSlope.Unknown(TrajectoryGap.STOP_ORDER_WENT_BACK));
+        assertThat(actual).isEqualTo(new Unknown(TrajectoryGap.STOP_ORDER_WENT_BACK));
     }
 
     @Test
@@ -144,7 +150,7 @@ class VehicleTrajectoryAssemblerTest {
         SeatSlope actual = onlyTrajectoryOf(history).seatSlope();
 
         // then
-        assertThat(actual).isEqualTo(new SeatSlope.Unknown(TrajectoryGap.TRIP_KEY_CHANGED));
+        assertThat(actual).isEqualTo(new Unknown(TrajectoryGap.TRIP_KEY_CHANGED));
     }
 
     @Test
@@ -158,7 +164,7 @@ class VehicleTrajectoryAssemblerTest {
         SeatSlope actual = onlyTrajectoryOf(history).seatSlope();
 
         // then
-        assertThat(actual).isEqualTo(new SeatSlope.Known(-3));
+        assertThat(actual).isEqualTo(new Known(-3));
     }
 
     @Test
@@ -172,7 +178,7 @@ class VehicleTrajectoryAssemblerTest {
         SeatSlope actual = onlyTrajectoryOf(history).seatSlope();
 
         // then
-        assertThat(actual).isEqualTo(new SeatSlope.Unknown(TrajectoryGap.SEATS_UNKNOWN));
+        assertThat(actual).isEqualTo(new Unknown(TrajectoryGap.SEATS_UNKNOWN));
     }
 
     @Test
@@ -251,7 +257,7 @@ class VehicleTrajectoryAssemblerTest {
         FullSeatStreak actual = onlyTrajectoryOf(history).fullSeatStreak();
 
         // then
-        assertThat(actual).isEqualTo(new FullSeatStreak.SeenToEnd(3));
+        assertThat(actual).isEqualTo(new SeenToEnd(3));
     }
 
     @Test
@@ -265,7 +271,7 @@ class VehicleTrajectoryAssemblerTest {
         FullSeatStreak actual = onlyTrajectoryOf(history).fullSeatStreak();
 
         // then
-        assertThat(actual).isEqualTo(new FullSeatStreak.SeenToEnd(0));
+        assertThat(actual).isEqualTo(new SeenToEnd(0));
     }
 
     @Test
@@ -280,7 +286,7 @@ class VehicleTrajectoryAssemblerTest {
 
         // then
         assertThat(actual).isEqualTo(
-            new FullSeatStreak.CutByGap(2, TrajectoryGap.NO_EARLIER_OBSERVATION));
+            new CutByGap(2, TrajectoryGap.NO_EARLIER_OBSERVATION));
     }
 
     @Test
@@ -294,7 +300,7 @@ class VehicleTrajectoryAssemblerTest {
         FullSeatStreak actual = onlyTrajectoryOf(history).fullSeatStreak();
 
         // then
-        assertThat(actual).isEqualTo(new FullSeatStreak.CutByGap(1, TrajectoryGap.SEATS_UNKNOWN));
+        assertThat(actual).isEqualTo(new CutByGap(1, TrajectoryGap.SEATS_UNKNOWN));
     }
 
     @Test
@@ -310,7 +316,7 @@ class VehicleTrajectoryAssemblerTest {
         FullSeatStreak actual = onlyTrajectoryOf(history).fullSeatStreak();
 
         // then
-        assertThat(actual).isEqualTo(new FullSeatStreak.SeenToEnd(1));
+        assertThat(actual).isEqualTo(new SeenToEnd(1));
     }
 
     @Test
@@ -354,7 +360,7 @@ class VehicleTrajectoryAssemblerTest {
         return new ObservationHistory(Arrays.asList(batches));
     }
 
-    /** 관측 시각은 판이 준다. 실물에서도 observation_batch.response_received_at 이 그 자리다. */
+    /** 관측 시각은 수집 배치에서 가져온다. 실제 조회도 observation_batch.response_received_at 을 사용한다. */
     private static ObservedBatch batch(
         final long observationBatchId,
         TrajectoryObservation... observations

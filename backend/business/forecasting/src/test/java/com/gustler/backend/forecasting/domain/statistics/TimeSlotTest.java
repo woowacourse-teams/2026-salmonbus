@@ -22,6 +22,8 @@ class TimeSlotTest {
     void 오전_7시부터_8시까지는_아침이다(
         final int hour
     ) {
+        // given
+
         // when
         TimeSlot actual = TimeSlot.of(seoulTimeAt(hour), CLOCK);
 
@@ -34,6 +36,8 @@ class TimeSlotTest {
     void 오후_5시부터_7시까지는_저녁이다(
         final int hour
     ) {
+        // given
+
         // when
         TimeSlot actual = TimeSlot.of(seoulTimeAt(hour), CLOCK);
 
@@ -46,6 +50,8 @@ class TimeSlotTest {
     void 아침과_저녁_밖의_시각은_모두_기타다(
         final int hour
     ) {
+        // given
+
         // when
         TimeSlot actual = TimeSlot.of(seoulTimeAt(hour), CLOCK);
 

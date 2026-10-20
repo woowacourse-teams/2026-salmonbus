@@ -1,11 +1,12 @@
 package com.gustler.backend.forecasting.domain.publication;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 
 class ForecastPublicationTest {
@@ -24,8 +25,12 @@ class ForecastPublicationTest {
         SeatForecast prediction = prediction(
             ROUTE_VERSION_ID + 1, MODEL_DEPLOYMENT_ID, STATISTICS_REVISION, GENERATED_AT);
 
-        // when & then
-        assertThatThrownBy(() -> publish(List.of(prediction)))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> publish(List.of(prediction)));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -35,8 +40,12 @@ class ForecastPublicationTest {
         SeatForecast prediction = prediction(
             ROUTE_VERSION_ID, MODEL_DEPLOYMENT_ID + 1, STATISTICS_REVISION, GENERATED_AT);
 
-        // when & then
-        assertThatThrownBy(() -> publish(List.of(prediction)))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> publish(List.of(prediction)));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -46,8 +55,12 @@ class ForecastPublicationTest {
         SeatForecast prediction = prediction(
             ROUTE_VERSION_ID, MODEL_DEPLOYMENT_ID, STATISTICS_REVISION + 1, GENERATED_AT);
 
-        // when & then
-        assertThatThrownBy(() -> publish(List.of(prediction)))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> publish(List.of(prediction)));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -57,8 +70,12 @@ class ForecastPublicationTest {
         SeatForecast prediction = prediction(
             ROUTE_VERSION_ID, MODEL_DEPLOYMENT_ID, STATISTICS_REVISION, GENERATED_AT.plusSeconds(1));
 
-        // when & then
-        assertThatThrownBy(() -> publish(List.of(prediction)))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> publish(List.of(prediction)));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -71,8 +88,12 @@ class ForecastPublicationTest {
             first.vehicleObservationId(), ROUTE_VERSION_ID, first.targetStopOrder(), first.stopsToTarget(),
             MODEL_DEPLOYMENT_ID, STATISTICS_REVISION, 0.8, 0.8, 0.2, GENERATED_AT);
 
-        // when & then
-        assertThatThrownBy(() -> publish(List.of(first, duplicate)))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> publish(List.of(first, duplicate)));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -90,26 +111,36 @@ class ForecastPublicationTest {
         // then
         assertThat(publication.predictions()).containsExactly(prediction);
         assertThat(publication.predictionCount()).isEqualTo(1);
-        assertThatThrownBy(() -> publication.predictions().clear())
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> publication.predictions().clear());
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull()
             .isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test
     void 예측이_없어도_수집_배치와_계산에_사용한_버전을_발행_정보에_남긴다() {
+        // given
+
         // when
         ForecastPublication publication = publish(List.of());
 
         // then
         assertThat(publication.predictions()).isEmpty();
-        assertThat(publication.predictionCount()).isZero();
-        assertThat(publication.sourceBatchId()).isEqualTo(SOURCE_BATCH_ID);
-        assertThat(publication.routeVersionId()).isEqualTo(ROUTE_VERSION_ID);
-        assertThat(publication.modelDeploymentId()).isEqualTo(MODEL_DEPLOYMENT_ID);
-        assertThat(publication.demandStatisticsRevision()).isEqualTo(STATISTICS_REVISION);
-        assertThat(publication.qualityRevision()).isEqualTo(QUALITY_REVISION);
-        assertThat(publication.observedAt()).isEqualTo(OBSERVED_AT);
-        assertThat(publication.generatedAt()).isEqualTo(GENERATED_AT);
-        assertThat(publication.publishedAt()).isEqualTo(PUBLISHED_AT);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(publication.predictionCount()).isZero();
+            softly.assertThat(publication.sourceBatchId()).isEqualTo(SOURCE_BATCH_ID);
+            softly.assertThat(publication.routeVersionId()).isEqualTo(ROUTE_VERSION_ID);
+            softly.assertThat(publication.modelDeploymentId()).isEqualTo(MODEL_DEPLOYMENT_ID);
+            softly.assertThat(publication.demandStatisticsRevision()).isEqualTo(STATISTICS_REVISION);
+            softly.assertThat(publication.qualityRevision()).isEqualTo(QUALITY_REVISION);
+            softly.assertThat(publication.observedAt()).isEqualTo(OBSERVED_AT);
+            softly.assertThat(publication.generatedAt()).isEqualTo(GENERATED_AT);
+            softly.assertThat(publication.publishedAt()).isEqualTo(PUBLISHED_AT);
+        }
     }
 
     private ForecastPublication publish(List<SeatForecast> predictions) {

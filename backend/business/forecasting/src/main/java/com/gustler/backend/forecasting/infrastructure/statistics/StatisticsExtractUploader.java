@@ -1,6 +1,8 @@
 package com.gustler.backend.forecasting.infrastructure.statistics;
 
+import com.gustler.backend.forecasting.infrastructure.statistics.StatisticsExtractWriter.Bundle;
 import java.io.IOException;
+import java.lang.ProcessBuilder.Redirect;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -24,7 +26,7 @@ final class StatisticsExtractUploader {
         this.command = command;
     }
 
-    String upload(StatisticsExtractWriter.Bundle bundle, UUID exportId) {
+    String upload(Bundle bundle, UUID exportId) {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("DB 트랜잭션 안에서는 S3 전송을 시작하지 않는다");
         }
@@ -49,7 +51,7 @@ final class StatisticsExtractUploader {
         }
         String prefix = ROOT + "route-version=" + bundle.manifest().scope().routeVersionId()
             + "/export-id=" + exportId + "/";
-        for (var file : bundle.manifest().files()) {
+        for (StatisticsInputFile file : bundle.manifest().files()) {
             put(prefix + file.name(), bundle.directory().resolve(file.name()));
         }
         // 모든 자료 파일이 성공한 경우에만 묶음 설명서를 게시한다.
@@ -69,9 +71,9 @@ final class StatisticsExtractUploader {
     static void execute(List<String> arguments) {
         Process process = null;
         try {
-            var builder = new ProcessBuilder(new ArrayList<>(arguments));
-            builder.redirectOutput(ProcessBuilder.Redirect.DISCARD);
-            builder.redirectError(ProcessBuilder.Redirect.DISCARD);
+            ProcessBuilder builder = new ProcessBuilder(new ArrayList<>(arguments));
+            builder.redirectOutput(Redirect.DISCARD);
+            builder.redirectError(Redirect.DISCARD);
             builder.environment().put("AWS_MAX_ATTEMPTS", "2");
             process = builder.start();
             if (!process.waitFor(45, TimeUnit.SECONDS)) {

@@ -1,8 +1,16 @@
 package com.gustler.backend.forecasting.infrastructure.statistics;
-import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveStorage;
+
 import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveSource;
+import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveStorage;
+import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveStorage.Verification;
 import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader;
+import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Key;
+import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Reference;
+import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Row;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch;
+import com.gustler.backend.forecasting.infrastructure.statistics.EvaluationArchiveFiles.Encoded;
+import com.gustler.backend.forecasting.infrastructure.statistics.EvaluationArchiveFiles.Manifest;
+import com.gustler.backend.forecasting.infrastructure.statistics.StatisticsExtractUploader.Command;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -18,13 +26,13 @@ public final class EvaluationArchiveObjectStore implements EvaluationArchiveStor
     private static final String ROOT = "salmonbus-be/evaluation-archive/v1/";
     private final Path workDirectory;
     private final long maxBytes;
-    private final StatisticsExtractUploader.Command command;
+    private final Command command;
 
-    public EvaluationArchiveObjectStore(Path workDirectory, long maxBytes) {
+    public EvaluationArchiveObjectStore(Path workDirectory, final long maxBytes) {
         this(workDirectory, maxBytes, StatisticsExtractUploader::execute);
     }
 
-    EvaluationArchiveObjectStore(Path workDirectory, long maxBytes, StatisticsExtractUploader.Command command) {
+    EvaluationArchiveObjectStore(Path workDirectory, final long maxBytes, Command command) {
         if (workDirectory == null || !Files.isDirectory(workDirectory, LinkOption.NOFOLLOW_LINKS)
             || maxBytes < 1 || maxBytes > 16 * 1024 * 1024 || command == null) {
             throw new IllegalArgumentException("작업 디렉터리와 16MiB 이하의 파일 한도가 필요하다");
@@ -42,7 +50,7 @@ public final class EvaluationArchiveObjectStore implements EvaluationArchiveStor
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("S3 전송 중 DB 트랜잭션을 유지하지 않는다");
         }
-        var encoded = EvaluationArchiveFiles.encode(batch, rows, maxBytes);
+        Encoded encoded = EvaluationArchiveFiles.encode(batch, rows, maxBytes);
         Path directory = null;
         RuntimeException failure = null;
         try {
@@ -50,12 +58,12 @@ public final class EvaluationArchiveObjectStore implements EvaluationArchiveStor
                 throw new IOException("작업 파일을 만들 임시 디스크 여유가 부족하다");
             }
             directory = Files.createTempDirectory(workDirectory, "evaluation-archive-");
-            Path data = directory.resolve("evaluations.jsonl");
+            Path rowsFile = directory.resolve("evaluations.jsonl");
             Path manifest = directory.resolve("manifest.json");
-            Files.write(data, encoded.rows());
+            Files.write(rowsFile, encoded.rows());
             Files.write(manifest, encoded.manifest());
             String prefix = ROOT + "route-version=" + batch.routeVersionId() + "/batch=" + batch.id() + "/";
-            ensureStored(prefix + "evaluations.jsonl", data, directory.resolve("downloaded-rows"), encoded.rows());
+            ensureStored(prefix + "evaluations.jsonl", rowsFile, directory.resolve("downloaded-rows"), encoded.rows());
             // 자료가 다시 읽히는 것을 확인한 다음 설명 파일을 게시한다.
             ensureStored(prefix + "manifest.json", manifest, directory.resolve("downloaded-manifest"),
                 encoded.manifest());
@@ -77,11 +85,10 @@ public final class EvaluationArchiveObjectStore implements EvaluationArchiveStor
                     }
                     Files.delete(directory);
                 } catch (IOException exception) {
-                    if (failure != null) {
-                        failure.addSuppressed(exception);
-                    } else {
+                    if (failure == null) {
                         throw new IllegalStateException("이관 임시 파일을 정리하지 못했다", exception);
                     }
+                    failure.addSuppressed(exception);
                 }
             }
         }
@@ -125,7 +132,17 @@ public final class EvaluationArchiveObjectStore implements EvaluationArchiveStor
     }
 
     @Override
-    public synchronized List<StatisticsArchiveReader.Row> read(Reference reference) {
+    public List<EvaluationArchiveBatch.Row> readOriginal(EvaluationArchiveBatch verified) {
+        return read(new Reference(verified.id(), verified.routeVersionId(), verified.qualityRevision(),
+            verified.rowCount(), verified.manifestSha256())).stream()
+            .map(row -> new EvaluationArchiveBatch.Row(
+                new EvaluationArchiveBatch.Key(row.key().observationId(), row.key().stopOrder()),
+                row.originalJson(), row.sha256()))
+            .toList();
+    }
+
+    @Override
+    public synchronized List<Row> read(Reference reference) {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("이관 파일은 DB 트랜잭션 밖에서 읽어야 한다");
         }
@@ -139,13 +156,13 @@ public final class EvaluationArchiveObjectStore implements EvaluationArchiveStor
             String prefix = ROOT + "route-version=" + reference.routeVersionId() + "/batch=" + reference.batchId()
                 + "/";
             byte[] manifest = downloadBounded(prefix + "manifest.json", directory.resolve("manifest.json"), 16384);
-            var metadata = EvaluationArchiveFiles.manifest(reference, manifest, maxBytes);
-            byte[] data =
+            Manifest metadata = EvaluationArchiveFiles.manifest(reference, manifest, maxBytes);
+            byte[] rowsBytes =
                 downloadBounded(prefix + "evaluations.jsonl", directory.resolve("evaluations.jsonl"), metadata.bytes());
-            return EvaluationArchiveFiles.decode(reference, manifest, data, maxBytes)
+            return EvaluationArchiveFiles.decode(reference, manifest, rowsBytes, maxBytes)
                 .stream()
-                .map(row -> new StatisticsArchiveReader.Row(
-                    new StatisticsArchiveReader.Key(row.key().observationId(), row.key().stopOrder()),
+                .map(row -> new Row(
+                    new Key(row.key().observationId(), row.key().stopOrder()),
                     row.originalJson(), row.sha256()))
                 .toList();
         } catch (IOException exception) {
@@ -161,23 +178,19 @@ public final class EvaluationArchiveObjectStore implements EvaluationArchiveStor
                     Files.deleteIfExists(directory.resolve("evaluations.jsonl"));
                     Files.delete(directory);
                 } catch (IOException exception) {
-                    if (failure != null) failure.addSuppressed(exception);
-                    else throw new IllegalStateException("읽기 임시 파일을 정리하지 못했다", exception);
+                    if (failure == null) {
+                        throw new IllegalStateException("읽기 임시 파일을 정리하지 못했다", exception);
+                    }
+                    failure.addSuppressed(exception);
                 }
             }
         }
     }
 
-    @Override
-    public List<EvaluationArchiveBatch.Row> readOriginal(EvaluationArchiveBatch verified) {
-        return read(new Reference(verified.id(), verified.routeVersionId(), verified.qualityRevision(),
-            verified.rowCount(), verified.manifestSha256())).stream()
-            .map(row -> new EvaluationArchiveBatch.Row(
-                new EvaluationArchiveBatch.Key(row.key().observationId(), row.key().stopOrder()),
-                row.originalJson(), row.sha256())).toList();
-    }
-
-    private byte[] downloadBounded(String key, Path path, long limit) throws IOException {
+    /**
+     * 설정한 바이트 한도 안에서 아카이브를 내려받는다. 한도 초과는 불완전 파일을 정상 입력으로 반환하지 않고 실패로 전파한다.
+     */
+    private byte[] downloadBounded(String key, Path path, final long limit) throws IOException {
         command.run(List.of("aws", "s3api", "get-object", "--bucket", BUCKET, "--key", key,
             "--range", "bytes=0-" + limit, "--region", "ap-northeast-2", "--cli-connect-timeout", "5",
             "--cli-read-timeout", "15", "--no-cli-pager", "--no-cli-auto-prompt", path.toAbsolutePath().toString()));

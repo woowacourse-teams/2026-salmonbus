@@ -2,10 +2,14 @@ package com.gustler.backend.forecasting.infrastructure.statistics;
 
 import com.gustler.backend.forecasting.domain.evaluation.ScoringState;
 import com.gustler.backend.forecasting.domain.statistics.DemandSample;
+import com.gustler.backend.forecasting.infrastructure.statistics.StatisticsInputRow.Observation;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 
+/**
+ * 파일의 통계 원본 행을 범위와 적격성 규칙에 따라 표본으로 해석한다.
+ */
 record StatisticsInputRow(
     long predictionObservationId,
     int targetStopOrder,

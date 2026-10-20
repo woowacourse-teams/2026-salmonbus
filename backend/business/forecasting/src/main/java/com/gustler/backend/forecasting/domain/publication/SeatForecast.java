@@ -1,9 +1,8 @@
 package com.gustler.backend.forecasting.domain.publication;
 
-import com.gustler.backend.forecasting.domain.model.VehicleStopTarget;
-
 import com.gustler.backend.forecasting.domain.model.ForecastDistance;
 import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
+import com.gustler.backend.forecasting.domain.model.VehicleStopTarget;
 import java.time.Instant;
 
 /**
@@ -25,19 +24,20 @@ public record SeatForecast(
     Instant generatedAt,
     boolean evaluationDetailRequired
 ) {
-    public SeatForecast(long vehicleObservationId, long routeVersionId, int targetStopOrder, int stopsToTarget,
-        long modelDeploymentId, int demandStatisticsRevision, double seatFullChanceRaw, double seatFullChance,
+    public SeatForecast(
+        final long vehicleObservationId,
+        final long routeVersionId,
+        final int targetStopOrder,
+        final int stopsToTarget,
+        final long modelDeploymentId,
+        final int demandStatisticsRevision,
+        final double seatFullChanceRaw,
+        final double seatFullChance,
         Double expectedSeats,
         Instant generatedAt
     ) {
         this(vehicleObservationId, routeVersionId, targetStopOrder, stopsToTarget, modelDeploymentId,
             demandStatisticsRevision, seatFullChanceRaw, seatFullChance, expectedSeats, generatedAt, true);
-    }
-
-    public SeatForecast withEvaluationDetailRequired(boolean required) {
-        return new SeatForecast(vehicleObservationId, routeVersionId, targetStopOrder, stopsToTarget,
-            modelDeploymentId, demandStatisticsRevision, seatFullChanceRaw, seatFullChance, expectedSeats,
-            generatedAt, required);
     }
 
     public SeatForecast {
@@ -53,7 +53,7 @@ public record SeatForecast(
     }
 
     /**
-     * 낸 예보를 저장할 모양으로 옮긴다.
+     * 발행한 예보를 저장 형식으로 변환한다.
      *
      * <p>예보 거리는 대상 순번에서 관측 차량이 지나온 순번을 뺀 값이며 대상 객체가 이미 계산한다.
      * 여기서 다시 계산하면 두 구현의 결과가 달라질 수 있다.
@@ -77,5 +77,11 @@ public record SeatForecast(
             result.fullChance(),
             result.distribution().expectedSeats(),
             generatedAt);
+    }
+
+    public SeatForecast withEvaluationDetailRequired(final boolean required) {
+        return new SeatForecast(vehicleObservationId, routeVersionId, targetStopOrder, stopsToTarget,
+            modelDeploymentId, demandStatisticsRevision, seatFullChanceRaw, seatFullChance, expectedSeats,
+            generatedAt, required);
     }
 }

@@ -3,6 +3,7 @@ package com.gustler.backend.forecasting.application.publication;
 import com.gustler.backend.forecasting.api.ForecastTelemetry;
 import com.gustler.backend.forecasting.application.AfterCommitTelemetry;
 import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore;
+import com.gustler.backend.forecasting.application.publication.EvaluationSamplingSelector.Selection;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
 import com.gustler.backend.forecasting.domain.publication.ForecastPublicationRepository;
@@ -23,7 +24,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Component
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class ForecastBatchCommitter {
-    private static final Logger log = LoggerFactory.getLogger(ForecastBatchCommitter.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(ForecastBatchCommitter.class);
     private final ForecastPublicationRepository publications;
     private final EvaluationWorkStore work;
     private final RouteDataQualityAccess quality;
@@ -50,25 +51,31 @@ public class ForecastBatchCommitter {
         this.telemetry = telemetry;
     }
 
-    @Transactional
+    /**
+     * 품질 판본이 같은 경우에만 발행·평가 작업·입력 확정을 함께 저장한다. 표본 기준과 성공 지표는 실제 커밋 후 갱신한다.
+     */
+    @Transactional(readOnly = false)
     public int commit(PendingForecastBatch batch, ForecastPublication publication) {
         return commit(batch, publication, List.of());
     }
 
-    @Transactional
+    /**
+     * 품질 판본이 같은 경우에만 발행·평가 작업·입력 확정을 함께 저장한다. 표본 기준과 성공 지표는 실제 커밋 후 갱신한다.
+     */
+    @Transactional(readOnly = false)
     public int commit(PendingForecastBatch batch, ForecastPublication publication,
         List<EvaluationSamplingSource> sources) {
         quality.ensureExists(batch.routeVersionId());
-        long currentRevision = quality.current(batch.routeVersionId());
+        final long currentRevision = quality.current(batch.routeVersionId());
         if (currentRevision != publication.qualityRevision()) {
-            log.info(
+            LOGGER.info(
                 "event=forecast_publication_skipped reason=QUALITY_CHANGED batchId={} routeVersionId={} expectedRevision={} actualRevision={}",
                 batch.observationBatchId(), batch.routeVersionId(), publication.qualityRevision(), currentRevision);
             return 0;
         }
 
-        EvaluationSamplingSelector.Selection selection = sampling.select(publication, sources);
-        boolean firstPublication = publications.save(selection.publication());
+        Selection selection = sampling.select(publication, sources);
+        final boolean firstPublication = publications.save(selection.publication());
         List<Long> observations = selection.publication()
             .predictions()
             .stream()

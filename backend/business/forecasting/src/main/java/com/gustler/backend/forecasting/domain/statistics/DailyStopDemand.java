@@ -4,7 +4,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Objects;
 
-/** 하루치 합. 하루 안에서는 관측 수로 가중한다. 그날 실제로 그만큼 지나갔기 때문이다. */
+/** 하루 합계다. 하루 안에서는 실제 관측 수로 가중한다. */
 public record DailyStopDemand(
     int stopOrder,
     TimeSlot timeSlot,
@@ -25,13 +25,13 @@ public record DailyStopDemand(
         }
     }
 
-    public static DailyStopDemand of(final StopDemandHourlyTotals hour, final Clock clock) {
+    public static DailyStopDemand of(StopDemandHourlyTotals hour, Clock clock) {
         return new DailyStopDemand(hour.stopOrder(), TimeSlot.of(hour.arrivedHourStart(), clock),
             hour.arrivedHourStart().atZone(clock.getZone()).toLocalDate(), hour.fillRateTotal(),
             Math.round(hour.netBoardingTotal()), Math.round(hour.capacityTotal()), hour.sampleCount());
     }
 
-    public DailyStopDemand plus(final DailyStopDemand other) {
+    public DailyStopDemand plus(DailyStopDemand other) {
         if (stopOrder != other.stopOrder || timeSlot != other.timeSlot || !arrivalDate.equals(other.arrivalDate)) {
             throw new IllegalArgumentException("같은 정류장·시간대·날짜의 합계만 더할 수 있다");
         }

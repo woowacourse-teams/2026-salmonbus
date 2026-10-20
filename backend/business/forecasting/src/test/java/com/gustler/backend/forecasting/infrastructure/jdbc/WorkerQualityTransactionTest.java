@@ -2,10 +2,14 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import com.gustler.backend.forecasting.application.quality.WorkerQualityState;
-import com.gustler.backend.forecasting.application.quality.WorkerQualityTransactions;
+import static org.assertj.core.api.Assertions.catchThrowable;
+
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityChanges;
+import com.gustler.backend.forecasting.application.quality.WorkerQualityState;
+import com.gustler.backend.forecasting.application.quality.WorkerQualityState.Read;
+import com.gustler.backend.forecasting.application.quality.WorkerQualityTransactions;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,11 +64,11 @@ class WorkerQualityTransactionTest {
     @Test
     void 실제_품질_변경_서비스가_커밋되면_메모리의_이전_버전을_버린다() {
         // given
-        var previous = state.read(version).orElseThrow();
+        Read previous = state.read(version).orElseThrow();
 
         // when
         new TransactionTemplate(transactions).executeWithoutResult(status -> {
-            qualityChanges.vehiclesChanged(version, java.util.List.of("vehicle-A"));
+            qualityChanges.vehiclesChanged(version, List.of("vehicle-A"));
             assertThat(state.read(version)).isEmpty();
         });
 
@@ -76,7 +80,7 @@ class WorkerQualityTransactionTest {
     @Test
     void 품질_변경이_커밋되면_다음_요청에서_DB의_품질_정보를_다시_읽는다() {
         // given
-        var previous = state.read(version).orElseThrow();
+        Read previous = state.read(version).orElseThrow();
 
         // when
         new TransactionTemplate(transactions).executeWithoutResult(status -> {
@@ -116,7 +120,7 @@ class WorkerQualityTransactionTest {
     @Test
     void 한_트랜잭션이_롤백돼도_다른_품질_변경이_진행_중이면_메모리를_사용하지_않는다() {
         // given
-        var inner = new TransactionTemplate(transactions);
+        TransactionTemplate inner = new TransactionTemplate(transactions);
         inner.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
         // when
@@ -138,9 +142,11 @@ class WorkerQualityTransactionTest {
         // given
 
         // when
+        Throwable caughtFailure = catchThrowable(changes::changing);
 
         // then
-        assertThatThrownBy(changes::changing).isInstanceOf(IllegalStateException.class);
+        assertThat(caughtFailure)
+            .isNotNull().isInstanceOf(IllegalStateException.class);
         assertThat(state.read(version)).isPresent();
     }
 

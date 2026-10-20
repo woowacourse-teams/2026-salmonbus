@@ -2,9 +2,9 @@ package com.gustler.backend.forecasting.application.statistics;
 
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.statistics.DemandSamplePage;
+import com.gustler.backend.forecasting.domain.statistics.DemandSamplePage.PendingSample;
 import com.gustler.backend.forecasting.domain.statistics.DemandSampleStore;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun;
-import com.gustler.backend.forecasting.domain.statistics.DemandSamplePage.PendingSample;
 import com.gustler.backend.forecasting.domain.statistics.RebuildScope;
 import java.time.Instant;
 import java.util.List;
@@ -19,8 +19,11 @@ public class DemandAccumulator {
     private final DemandStatisticsRebuildRequestStore requests;
     private final RouteDataQualityAccess quality;
 
-    public DemandAccumulator(final DemandStatisticsStore store, final DemandSampleStore samples,
-        final DemandStatisticsRebuildRequestStore requests, final RouteDataQualityAccess quality
+    public DemandAccumulator(
+        DemandStatisticsStore store,
+        DemandSampleStore samples,
+        DemandStatisticsRebuildRequestStore requests,
+        RouteDataQualityAccess quality
     ) {
         this.store = store;
         this.samples = samples;
@@ -28,11 +31,13 @@ public class DemandAccumulator {
         this.quality = quality;
     }
 
-    @Transactional(timeout = 2)
+    @Transactional(readOnly = false, timeout = 2)
     public Result apply(
-        final long routeVersionId, final String vehicleId,
+        final long routeVersionId,
+        String vehicleId,
         final long afterInputId,
-        final long inputUntilId, final Instant dataUntil
+        final long inputUntilId,
+        Instant dataUntil
     ) {
         store.limitStatementTime();
         quality.lock(routeVersionId);
@@ -40,13 +45,13 @@ public class DemandAccumulator {
             || requests.blocksAccumulation(routeVersionId, vehicleId)) {
             return Result.waiting(afterInputId);
         }
-        final DemandSamplePage page = samples.lockPage(routeVersionId, vehicleId, afterInputId, inputUntilId,
+        DemandSamplePage page = samples.lockPage(routeVersionId, vehicleId, afterInputId, inputUntilId,
             DemandStatisticsRun.PAGE_SIZE);
         if (page.requiresRebuild()) {
             requests.request(routeVersionId, new RebuildScope(vehicleId));
             return new Result(page.size(), 0, true, page.nextInputId(afterInputId));
         }
-        final List<PendingSample> applicable = page.applicableUntil(dataUntil);
+        List<PendingSample> applicable = page.applicableUntil(dataUntil);
         if (!applicable.isEmpty()) {
             store.addToCurrentTotals(routeVersionId, page.totalsUntil(dataUntil));
             store.registerVehicle(routeVersionId, vehicleId);

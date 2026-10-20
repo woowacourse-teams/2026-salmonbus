@@ -9,14 +9,17 @@ public interface ForecastTelemetry {
     ForecastTelemetry NONE = new ForecastTelemetry() {
     };
 
-    default void pending(long routeVersionId, Instant oldestObservedAt) {
+    default void pending(final long routeVersionId, Instant oldestObservedAt) {
     }
 
     default void settled(List<SettledEvaluation> results) {
     }
 
-    default void published(long routeId, long routeVersionId,
-        Instant observedAt, int predictions
+    default void published(
+        final long routeId,
+        final long routeVersionId,
+        Instant observedAt,
+        final int predictions
     ) {
     }
 }

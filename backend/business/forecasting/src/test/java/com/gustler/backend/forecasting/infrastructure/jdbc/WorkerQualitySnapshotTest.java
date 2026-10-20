@@ -1,7 +1,9 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
+
+import com.gustler.backend.forecasting.application.quality.WorkerQualityState.Snapshot;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,7 +41,7 @@ class WorkerQualitySnapshotTest {
         // given
 
         // when
-        var result = query.read(version);
+        Snapshot result = query.read(version);
 
         // then
         assertThat(result.revision()).isEqualTo(1);
@@ -55,7 +57,7 @@ class WorkerQualitySnapshotTest {
         investigation("vehicle-B", true);
 
         // when
-        var result = query.read(version);
+        Snapshot result = query.read(version);
 
         // then
         assertThat(result.revision()).isEqualTo(7);
@@ -68,7 +70,7 @@ class WorkerQualitySnapshotTest {
         investigation("", false);
 
         // when
-        var result = query.read(version);
+        Snapshot result = query.read(version);
 
         // then
         assertThat(result.investigationPending("vehicle-A")).isTrue();
@@ -80,12 +82,14 @@ class WorkerQualitySnapshotTest {
         // given
 
         // when
+        Throwable caughtFailure = catchThrowable(() -> query.read(-1));
 
         // then
-        assertThatThrownBy(() -> query.read(-1)).isInstanceOf(EmptyResultDataAccessException.class);
+        assertThat(caughtFailure)
+            .isNotNull().isInstanceOf(EmptyResultDataAccessException.class);
     }
 
-    private void investigation(String vehicle, boolean completed) {
+    private void investigation(String vehicle, final boolean completed) {
         jdbc.sql("""
             INSERT INTO trip_quality_rebuild(route_version_id,vehicle_id,until_at,completed)
             VALUES(?,?,CURRENT_TIMESTAMP,?)

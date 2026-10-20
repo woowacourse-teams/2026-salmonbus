@@ -1,4 +1,8 @@
 package com.gustler.backend.forecasting.infrastructure.statistics;
+
+import com.gustler.backend.forecasting.infrastructure.statistics.StatisticsExtractUploader.Command;
+import com.gustler.backend.forecasting.infrastructure.statistics.StatisticsExtractWriter.Bundle;
+import com.gustler.backend.forecasting.infrastructure.statistics.StatisticsExtractWriter.Manifest;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -9,18 +13,18 @@ import tools.jackson.databind.json.JsonMapper;
 
 /** 지정한 비교 묶음만 다시 받는다. 목록 전체 조회나 DB 원본 삭제는 수행하지 않는다. */
 final class StatisticsExtractDownloader {
-    private final StatisticsExtractUploader.Command command;
+    private final Command command;
 
     StatisticsExtractDownloader() {
         this(StatisticsExtractUploader::execute);
     }
 
-    StatisticsExtractDownloader(StatisticsExtractUploader.Command command) {
+    StatisticsExtractDownloader(Command command) {
         this.command = command;
     }
 
-    StatisticsExtractWriter.Bundle download(Path parent, UUID exportId,
-        StatisticsExtractWriter.Manifest expected) {
+    Bundle download(Path parent, UUID exportId,
+        Manifest expected) {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("DB 트랜잭션 안에서는 S3 자료를 읽지 않는다");
         }
@@ -43,19 +47,19 @@ final class StatisticsExtractDownloader {
             if (!Files.readString(manifest).equals(JsonMapper.builder().build().writeValueAsString(expected))) {
                 throw new IllegalArgumentException("S3 파일 목록이 추출한 묶음과 다르다");
             }
-            var file = expected.files().getFirst();
+            StatisticsInputFile file = expected.files().getFirst();
             get(prefix + file.name(), directory.resolve(file.name()), file.byteCount());
             StatisticsInputFiles.verify(directory, expected.files());
-            try (var rows = new StatisticsInputReader(directory, expected.files(), 64 * 1024)) {
+            try (StatisticsInputReader rows = new StatisticsInputReader(directory, expected.files(), 64 * 1024)) {
                 StatisticsInputRows.verify(expected.scope(), rows);
             }
-            return new StatisticsExtractWriter.Bundle(directory, expected);
+            return new Bundle(directory, expected);
         } catch (IOException exception) {
             throw new IllegalStateException("S3 비교 묶음을 다시 읽지 못했다", exception);
         }
     }
 
-    private void get(String key, Path target, long maxBytes) throws IOException {
+    private void get(String key, Path target, final long maxBytes) throws IOException {
         // 끝 위치도 포함하므로 한 바이트 초과까지 받아 과대 객체를 거부한다.
         command.run(List.of("aws", "s3api", "get-object", "--bucket", "techcourse-project-2026",
             "--key", key, "--range", "bytes=0-" + maxBytes,

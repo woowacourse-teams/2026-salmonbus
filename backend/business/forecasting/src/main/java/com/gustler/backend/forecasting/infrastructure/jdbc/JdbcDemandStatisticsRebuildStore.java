@@ -1,6 +1,8 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuildStore;
+import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuildStore.BatchPosition;
+import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuildStore.Page;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuild;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuild.ScanWindow;
 import com.gustler.backend.forecasting.domain.statistics.RebuildScope;
@@ -13,6 +15,9 @@ import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
+/**
+ * 재집계 범위를 제한된 관측 페이지로 읽고 중간 합계의 복사·정리·표본 확인을 수행한다.
+ */
 @Repository
 public class JdbcDemandStatisticsRebuildStore implements DemandStatisticsRebuildStore {
     private static final String GROUP_END = """
@@ -112,12 +117,12 @@ public class JdbcDemandStatisticsRebuildStore implements DemandStatisticsRebuild
 
     private final JdbcClient jdbc;
 
-    public JdbcDemandStatisticsRebuildStore(final JdbcClient jdbc) {
+    public JdbcDemandStatisticsRebuildStore(JdbcClient jdbc) {
         this.jdbc = jdbc;
     }
 
     @Override
-    public int clearLeftoverTotals(final long routeVersionId, final RebuildScope scope, final int limit) {
+    public int clearLeftoverTotals(final long routeVersionId, RebuildScope scope, final int limit) {
         return jdbc.sql("""
             DELETE FROM stop_demand_rebuild_total WHERE id IN (
                 SELECT id FROM stop_demand_rebuild_total WHERE route_version_id=? AND scope_vehicle_id=? LIMIT ?)
@@ -141,7 +146,7 @@ public class JdbcDemandStatisticsRebuildStore implements DemandStatisticsRebuild
     }
 
     @Override
-    public Optional<BatchPosition> nextGroupEnd(final long routeVersionId, final ScanWindow window,
+    public Optional<BatchPosition> nextGroupEnd(final long routeVersionId, ScanWindow window,
         final int groupSize) {
         return jdbc.sql(GROUP_END)
             .param("version", routeVersionId)
@@ -157,8 +162,9 @@ public class JdbcDemandStatisticsRebuildStore implements DemandStatisticsRebuild
 
     @Override
     public List<Long> groupObservationPage(
-        final long routeVersionId, final ScanWindow window,
-        final RebuildScope scope,
+        final long routeVersionId,
+        ScanWindow window,
+        RebuildScope scope,
         final long afterObservationId,
         final long observationUntilId,
         final int groupSize,
@@ -174,11 +180,11 @@ public class JdbcDemandStatisticsRebuildStore implements DemandStatisticsRebuild
     }
 
     @Override
-    public void addRebuildTotals(final DemandStatisticsRebuild rebuild, final List<Long> observationIds) {
+    public void addRebuildTotals(DemandStatisticsRebuild rebuild, List<Long> observationIds) {
         if (observationIds.isEmpty()) {
             return;
         }
-        boolean missing = jdbc.sql("""
+        final boolean missing = jdbc.sql("""
             SELECT EXISTS(SELECT 1 FROM evaluation_archive_member m JOIN seat_forecast f
                 ON f.vehicle_observation_id=m.vehicle_observation_id AND f.target_stop_order=m.target_stop_order
                   AND f.stops_to_target=1
@@ -190,7 +196,9 @@ public class JdbcDemandStatisticsRebuildStore implements DemandStatisticsRebuild
             .param("route", rebuild.routeVersionId())
             .query(Boolean.class)
             .single();
-        if (missing) throw new IllegalStateException("이관된 정산을 제외한 DB 전용 재집계는 실행하지 않는다");
+        if (missing) {
+            throw new IllegalStateException("이관된 정산을 제외한 DB 전용 재집계는 실행하지 않는다");
+        }
         jdbc.sql(AGGREGATE).param("version", rebuild.routeVersionId()).param("vehicle", rebuild.scope().vehicleId())
             .param("request", rebuild.requestId()).param("ids", observationIds)
             .param("until", offsetOf(rebuild.dataUntil())).param("inputUntil", rebuild.inputUntilId())
@@ -198,7 +206,7 @@ public class JdbcDemandStatisticsRebuildStore implements DemandStatisticsRebuild
     }
 
     @Override
-    public int clearCurrentTotals(final long routeVersionId, final RebuildScope scope, final int limit) {
+    public int clearCurrentTotals(final long routeVersionId, RebuildScope scope, final int limit) {
         return jdbc.sql("""
             DELETE FROM stop_demand_current_total WHERE (route_version_id,vehicle_id,arrived_hour_start,target_stop_order) IN (
                 SELECT route_version_id,vehicle_id,arrived_hour_start,target_stop_order FROM stop_demand_current_total
@@ -209,16 +217,18 @@ public class JdbcDemandStatisticsRebuildStore implements DemandStatisticsRebuild
     }
 
     @Override
-    public Page copyToCurrentTotals(final UUID requestId, final long afterTotalId, final int limit) {
+    public Page copyToCurrentTotals(UUID requestId, final long afterTotalId, final int limit) {
         return jdbc.sql(COPY).param("request", requestId).param("cursor", afterTotalId).param("limit", limit)
             .query((rs, row) -> new Page(rs.getInt("size"), rs.getLong("cursor"))).single();
     }
 
     @Override
     public Page acknowledgeSamples(
-        final long routeVersionId, final RebuildScope scope,
+        final long routeVersionId,
+        RebuildScope scope,
         final long afterSampleId,
-        final long inputUntilId, final Instant dataUntil,
+        final long inputUntilId,
+        Instant dataUntil,
         final int limit
     ) {
         return jdbc.sql(ACKNOWLEDGE).param("version", routeVersionId).param("vehicle", scope.vehicleId())
@@ -228,7 +238,7 @@ public class JdbcDemandStatisticsRebuildStore implements DemandStatisticsRebuild
     }
 
     @Override
-    public int cleanRebuildTotals(final UUID requestId, final int limit) {
+    public int cleanRebuildTotals(UUID requestId, final int limit) {
         return jdbc.sql("""
             DELETE FROM stop_demand_rebuild_total WHERE id IN (SELECT id FROM stop_demand_rebuild_total WHERE request_id=? LIMIT ?)
             """)
@@ -236,7 +246,7 @@ public class JdbcDemandStatisticsRebuildStore implements DemandStatisticsRebuild
             .update();
     }
 
-    private static OffsetDateTime offsetOf(final Instant instant) {
+    private static OffsetDateTime offsetOf(Instant instant) {
         return instant.atOffset(ZoneOffset.UTC);
     }
 }

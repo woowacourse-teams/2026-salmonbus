@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsStore;
+import com.gustler.backend.forecasting.application.statistics.DemandStatisticsStore.FoldRow;
 import com.gustler.backend.forecasting.domain.statistics.DailyStopDemand;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsBaseline;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun.FoldCursor;
@@ -18,6 +19,10 @@ import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
+/**
+ * 통계 처리 페이지와 중간 합계를 읽고 저장한다.
+ * 한 단계의 조회·정리가 설정된 DB 시간 예산 안에서 실행되게 한다.
+ */
 @Repository
 public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
     private static final List<String> STAGES =
@@ -25,7 +30,7 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
 
     private final JdbcClient jdbc;
 
-    public JdbcDemandStatisticsStore(final JdbcClient jdbc) {
+    public JdbcDemandStatisticsStore(JdbcClient jdbc) {
         this.jdbc = jdbc;
     }
 
@@ -38,7 +43,7 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
     }
 
     @Override
-    public Optional<Instant> idleDataUntil(final long routeVersionId, final Instant completedAfter) {
+    public Optional<Instant> idleDataUntil(final long routeVersionId, Instant completedAfter) {
         return jdbc.sql("""
             SELECT /* salmonbus:demand_statistics.idle_check */ run.data_until
             FROM stop_demand_run run
@@ -70,7 +75,7 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
     }
 
     @Override
-    public void recordBaseline(final long routeVersionId, final boolean initialized, final Instant dataUntil) {
+    public void recordBaseline(final long routeVersionId, final boolean initialized, Instant dataUntil) {
         jdbc.sql("""
             INSERT INTO stop_demand_baseline(route_version_id,initialized,data_until) VALUES (?, ?, ?)
             ON CONFLICT(route_version_id) DO UPDATE SET
@@ -83,7 +88,7 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
     public Optional<String> nextAccumulationVehicle(
         final long routeVersionId,
         final long inputUntilId,
-        final String vehicleCursor,
+        String vehicleCursor,
         final long inputCursor
     ) {
         return jdbc.sql("""
@@ -96,8 +101,8 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
     }
 
     @Override
-    public void addToCurrentTotals(final long routeVersionId, final List<VehicleHourlyDemand> increments) {
-        for (final VehicleHourlyDemand increment : increments) {
+    public void addToCurrentTotals(final long routeVersionId, List<VehicleHourlyDemand> increments) {
+        for (VehicleHourlyDemand increment : increments) {
             jdbc.sql("""
                 INSERT INTO stop_demand_current_total AS total (
                     route_version_id, vehicle_id, arrived_hour_start, target_stop_order,
@@ -115,7 +120,7 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
     }
 
     @Override
-    public void registerVehicle(final long routeVersionId, final String vehicleId) {
+    public void registerVehicle(final long routeVersionId, String vehicleId) {
         jdbc.sql("INSERT INTO stop_demand_vehicle(route_version_id,vehicle_id) VALUES (?, ?) ON CONFLICT DO NOTHING")
             .params(routeVersionId, vehicleId).update();
     }
@@ -123,7 +128,7 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
     @Override
     public int clearStagePage(final long routeVersionId, final int limit) {
         // 표 이름은 코드에 고정돼 있다. 외부 입력으로 SQL 식별자를 만들지 않는다.
-        for (final String table : STAGES) {
+        for (String table : STAGES) {
             final int removed = jdbc.sql("DELETE FROM " + table + " WHERE ctid IN (SELECT ctid FROM " + table
                 + " WHERE route_version_id=? LIMIT ?)")
                 .params(routeVersionId, limit).update();
@@ -135,7 +140,7 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
     }
 
     @Override
-    public void stageCapacities(final long routeVersionId, final Instant dataUntil, final long inputUntilId) {
+    public void stageCapacities(final long routeVersionId, Instant dataUntil, final long inputUntilId) {
         // 이 SQL 한 번의 snapshot에서 모든 정원을 고정한다. 다음 단계에서는 관측을 다시 읽지 않는다.
         jdbc.sql("""
             INSERT INTO stop_demand_capacity_stage(route_version_id,vehicle_id,capacity)
@@ -160,7 +165,7 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
     }
 
     @Override
-    public List<FoldRow> foldPage(final long routeVersionId, final Optional<FoldCursor> after, final int limit) {
+    public List<FoldRow> foldPage(final long routeVersionId, Optional<FoldCursor> after, final int limit) {
         return jdbc.sql("""
             SELECT total.*,capacity.capacity FROM stop_demand_current_total total
             LEFT JOIN stop_demand_capacity_stage capacity ON capacity.route_version_id=total.route_version_id
@@ -182,8 +187,8 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
     }
 
     @Override
-    public void addToDayStage(final long routeVersionId, final List<DailyStopDemand> days) {
-        for (final DailyStopDemand day : days) {
+    public void addToDayStage(final long routeVersionId, List<DailyStopDemand> days) {
+        for (DailyStopDemand day : days) {
             jdbc.sql("""
                 INSERT INTO stop_demand_day_stage AS day(route_version_id,stop_order,time_slot,arrival_date,
                     fill_rate_total,net_boarding_total,capacity_total,sample_count)
@@ -200,7 +205,7 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
     }
 
     @Override
-    public List<DailyStopDemand> reducePage(final long routeVersionId, final Optional<ReduceCursor> after,
+    public List<DailyStopDemand> reducePage(final long routeVersionId, Optional<ReduceCursor> after,
         final int limit) {
         return jdbc.sql("""
             SELECT * FROM stop_demand_day_stage
@@ -220,8 +225,8 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
     }
 
     @Override
-    public void addToCellStage(final long routeVersionId, final List<StopDemandCellTotals> cells) {
-        for (final StopDemandCellTotals cell : cells) {
+    public void addToCellStage(final long routeVersionId, List<StopDemandCellTotals> cells) {
+        for (StopDemandCellTotals cell : cells) {
             jdbc.sql("""
                 INSERT INTO stop_demand_cell_stage AS cell(route_version_id,stop_order,time_slot,
                     fill_rate_total,net_boarding_rate_total,sample_count,day_count) VALUES(?,?,?,?,?,?,?)
@@ -246,19 +251,22 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
             .list();
     }
 
-    private static String storedTimeSlotOf(final TimeSlot timeSlot) {
+    private static String storedTimeSlotOf(TimeSlot timeSlot) {
         return timeSlot.name().toLowerCase(Locale.ROOT);
     }
 
-    private static TimeSlot timeSlotOf(final String stored) {
+    private static TimeSlot timeSlotOf(String stored) {
         return TimeSlot.valueOf(stored.toUpperCase(Locale.ROOT));
     }
 
-    private static Instant instantOrNull(final OffsetDateTime value) {
-        return value == null ? null : value.toInstant();
+    private static Instant instantOrNull(OffsetDateTime value) {
+        if (value == null) {
+            return null;
+        }
+        return value.toInstant();
     }
 
-    private static OffsetDateTime offsetOf(final Instant instant) {
+    private static OffsetDateTime offsetOf(Instant instant) {
         return instant.atOffset(ZoneOffset.UTC);
     }
 }

@@ -2,10 +2,10 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.gustler.backend.forecasting.domain.statistics.StopDemandHourlyTotals;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion;
-import com.gustler.backend.support.ConfirmedTripFixture;
+import com.gustler.backend.forecasting.domain.statistics.StopDemandHourlyTotals;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
+import com.gustler.backend.support.ConfirmedTripFixture;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -101,7 +101,7 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
     @Test
     void 원본_편도를_확인할_수_없는_seed_합계를_제외하고_ELIGIBLE_편도의_라벨만_집계한다() {
         // given
-        final UUID seedImportId = insertAppliedSeedImport();
+        UUID seedImportId = insertAppliedSeedImport();
         insertSeedHourlyTotal(seedImportId);
         insertSettledLabel(VEHICLE_AFTER_CUTOVER, ARRIVED_AFTER_CUTOVER);
 
@@ -122,7 +122,7 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
     @Test
     void seed_집계_기준_시각_이전이라도_ELIGIBLE_편도의_라벨은_집계한다() {
         // given
-        final UUID seedImportId = insertAppliedSeedImport();
+        UUID seedImportId = insertAppliedSeedImport();
         insertSeedHourlyTotal(seedImportId);
         insertSettledLabel(VEHICLE_BEFORE_CUTOVER, ARRIVED_BEFORE_CUTOVER);
 
@@ -142,7 +142,7 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
     @Test
     void seed_집계_기준과_같은_시각의_ELIGIBLE_라벨을_seed_합계_없이_집계한다() {
         // given
-        final UUID seedImportId = insertAppliedSeedImport();
+        UUID seedImportId = insertAppliedSeedImport();
         insertSeedHourlyTotal(seedImportId);
         insertSettledLabel(VEHICLE_ON_CUTOVER, ARRIVED_ON_CUTOVER);
 
@@ -223,7 +223,7 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
     }
 
     private UUID insertAppliedSeedImport() {
-        final UUID seedImportId = UUID.randomUUID();
+        UUID seedImportId = UUID.randomUUID();
         jdbcClient.sql("""
                 INSERT INTO stop_demand_seed_import (
                     id, calculation_version, final_cutover_at, status

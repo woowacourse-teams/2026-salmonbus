@@ -1,9 +1,12 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
-import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Reference;
-
 import com.gustler.backend.forecasting.application.statistics.ArchivedDemandStatisticsStore;
+import com.gustler.backend.forecasting.application.statistics.ArchivedDemandStatisticsStore.Cell;
+import com.gustler.backend.forecasting.application.statistics.ArchivedDemandStatisticsStore.Missing;
+import com.gustler.backend.forecasting.application.statistics.ArchivedDemandStatisticsStore.Sample;
+import com.gustler.backend.forecasting.application.statistics.ArchivedDemandStatisticsStore.Total;
 import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Key;
+import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Reference;
 import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Row;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuild;
 import java.time.OffsetDateTime;
@@ -15,6 +18,9 @@ import java.util.stream.Collectors;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
+/**
+ * 이관 키와 검증된 원문을 재집계 표본으로 복원하고 누락 여부 및 중간 합계를 저장 경계에 제공한다.
+ */
 @Repository
 public class JdbcArchivedDemandStatisticsStore implements ArchivedDemandStatisticsStore {
     private final JdbcClient jdbc;
@@ -24,14 +30,16 @@ public class JdbcArchivedDemandStatisticsStore implements ArchivedDemandStatisti
     }
 
     @Override
-    public boolean hasArchive(long routeVersionId) {
+    public boolean hasArchive(final long routeVersionId) {
         return jdbc.sql("SELECT EXISTS(SELECT 1 FROM evaluation_archive_batch WHERE route_version_id=?)")
             .param(routeVersionId).query(Boolean.class).single();
     }
 
     @Override
-    public List<Missing> missing(long routeVersionId, List<Long> observations) {
-        if (observations.isEmpty()) return List.of();
+    public List<Missing> missing(final long routeVersionId, List<Long> observations) {
+        if (observations.isEmpty()) {
+            return List.of();
+        }
         List<Missing> rows = jdbc.sql("""
             SELECT m.vehicle_observation_id,m.target_stop_order,m.original_sha256,b.*
             FROM evaluation_archive_member m JOIN evaluation_archive_batch b ON b.id=m.batch_id
@@ -62,7 +70,9 @@ public class JdbcArchivedDemandStatisticsStore implements ArchivedDemandStatisti
 
     @Override
     public List<Sample> samples(DemandStatisticsRebuild rebuild, List<Long> observations, List<Row> archived) {
-        if (observations.isEmpty()) return List.of();
+        if (observations.isEmpty()) {
+            return List.of();
+        }
         String json = archived.stream()
             .map(Row::originalJson)
             .collect(Collectors.joining(",", "[", "]"));

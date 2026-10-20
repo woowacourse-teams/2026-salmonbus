@@ -51,20 +51,11 @@ public class JdbcArrivalObservationQuery implements ArrivalObservationQuery {
     }
 
     @Override
-    public List<ArrivalCandidate> findAfter(long routeVersionId,
+    public List<Long> findIdsAfter(
+        final long routeVersionId,
         String vehicleId,
-        Instant observedAfter, int limit) {
-        return jdbcClient.sql(COLUMNS + SOURCE + AFTER)
-            .param("routeVersionId", routeVersionId)
-            .param("vehicleId", vehicleId)
-            .param("observedAfter", offsetOf(observedAfter))
-            .param("limit", limit)
-            .query((rs, rowNumber) -> candidate(rs)).list();
-    }
-
-    @Override
-    public List<Long> findIdsAfter(long routeVersionId, String vehicleId,
-        Instant observedAfter, int limit
+        Instant observedAfter,
+        final int limit
     ) {
         return jdbcClient.sql("SELECT o.id\n" + SOURCE + AFTER)
             .param("routeVersionId", routeVersionId)
@@ -75,12 +66,29 @@ public class JdbcArrivalObservationQuery implements ArrivalObservationQuery {
     }
 
     @Override
-    public List<ArrivalCandidate> findByIds(long routeVersionId, String vehicleId, List<Long> ids) {
-        if (ids.isEmpty()) return List.of();
+    public List<ArrivalCandidate> findByIds(final long routeVersionId, String vehicleId, List<Long> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
         return jdbcClient.sql(COLUMNS + SOURCE + " AND o.id IN (:ids)")
             .param("routeVersionId", routeVersionId)
             .param("vehicleId", vehicleId)
             .param("ids", ids)
+            .query((rs, rowNumber) -> candidate(rs)).list();
+    }
+
+    @Override
+    public List<ArrivalCandidate> findAfter(
+        final long routeVersionId,
+        String vehicleId,
+        Instant observedAfter,
+        final int limit
+    ) {
+        return jdbcClient.sql(COLUMNS + SOURCE + AFTER)
+            .param("routeVersionId", routeVersionId)
+            .param("vehicleId", vehicleId)
+            .param("observedAfter", offsetOf(observedAfter))
+            .param("limit", limit)
             .query((rs, rowNumber) -> candidate(rs)).list();
     }
 
@@ -98,6 +106,9 @@ public class JdbcArrivalObservationQuery implements ArrivalObservationQuery {
     }
 
     private static Instant instantOf(OffsetDateTime at) {
-        return at == null ? null : at.toInstant();
+        if (at == null) {
+            return null;
+        }
+        return at.toInstant();
     }
 }

@@ -67,7 +67,8 @@ class JdbcModelDeploymentRepositoryTest {
 
     @Test
     void 배포에서_계산_규칙_판과_신원을_같이_읽는다() {
-        // given 신원을 같이 안 읽으면 올라온 계수가 이 행의 계수인지 대조할 수 없다
+        // given
+        // 식별 정보을 같이 안 읽으면 올라온 계수가 이 행의 계수인지 대조할 수 없다
         final long activeDeploymentId = insertDeployment(ACTIVE, CALCULATION_VERSION_IN_USE);
 
         // when
@@ -101,6 +102,8 @@ class JdbcModelDeploymentRepositoryTest {
 
     @Test
     void 적재_영수증은_STAGED_로_남는다() {
+        // given
+
         // when
         final long actual = repository.stage(staged());
 
@@ -110,6 +113,8 @@ class JdbcModelDeploymentRepositoryTest {
 
     @Test
     void 적재만_해서는_도는_배포가_되지_않는다() {
+        // given
+
         // when
         repository.stage(staged());
 
@@ -188,10 +193,12 @@ class JdbcModelDeploymentRepositoryTest {
         final long later = repository.stage(staged());
         repository.promoteToActive(later);
 
-        // when 이미 올라간 것을 한 번 더 올린다
+        // when
+        // 이미 올라간 것을 한 번 더 올린다
         repository.promoteToActive(later);
 
-        // then 도는 배포는 여전히 하나다
+        // then
+        // 활성 배포는 여전히 하나다
         assertThat(activeCount()).isOne();
     }
 

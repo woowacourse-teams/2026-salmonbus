@@ -37,7 +37,7 @@ public record SupportedForecastScope(
         return ModelRoute.covers(sourceRouteId) && modelRoutes.contains(ModelRoute.of(sourceRouteId));
     }
 
-    /** 노선 순서까지 담는다. 순서가 곧 계수 배열의 자리라 뒤집히면 다른 범위다. */
+    /** 노선 순서도 포함한다. 순서가 계수 배열의 위치를 결정하므로 뒤집히면 다른 범위다. */
     public String digest() {
         return Sha256.of(String.join(",", modelRoutes));
     }

@@ -21,20 +21,20 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class AdvanceDemandStatisticsService implements AdvanceDemandStatistics {
-    private static final Logger log = LoggerFactory.getLogger(AdvanceDemandStatisticsService.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(AdvanceDemandStatisticsService.class);
 
     private final DemandStatisticsPipeline pipeline;
     private final RouteVersionQuery routes;
     private final Clock clock;
-    private List<Long> versions = List.of();
-    private Instant refreshAt = Instant.MIN;
-    private int next;
     private final Map<Long, Instant> retryAt = new HashMap<>();
     private final Map<Long, Integer> failures = new HashMap<>();
     private final Map<Long, Instant> progressAt = new HashMap<>();
+    private List<Long> versions = List.of();
+    private Instant refreshAt = Instant.MIN;
+    private int next;
 
-    public AdvanceDemandStatisticsService(final DemandStatisticsPipeline pipeline, final RouteVersionQuery routes,
-        final Clock clock) {
+    public AdvanceDemandStatisticsService(DemandStatisticsPipeline pipeline, RouteVersionQuery routes,
+        Clock clock) {
         this.pipeline = pipeline;
         this.routes = routes;
         this.clock = clock;
@@ -42,7 +42,7 @@ public class AdvanceDemandStatisticsService implements AdvanceDemandStatistics {
 
     @Override
     public void advance() {
-        final Instant now = clock.instant();
+        Instant now = clock.instant();
         if (!now.isBefore(refreshAt)) {
             refreshAt = now.plusSeconds(10);
             versions = WorkerOperationLog.measure("statistics_routes", "all", routes::findActiveVersionIds)
@@ -61,17 +61,16 @@ public class AdvanceDemandStatisticsService implements AdvanceDemandStatistics {
             final long started = System.nanoTime();
             try {
                 // 프록시가 commit한 뒤만 성공/진행을 기록한다.
-                final Step result = WorkerOperationLog.measure("statistics_step_and_commit", version,
+                Step result = WorkerOperationLog.measure("statistics_step_and_commit", version,
                     () -> pipeline.step(version));
                 failures.remove(version);
                 retryAt.put(version, now.plusSeconds(retryDelaySeconds(result.status())));
                 final boolean progress = result.status() == Status.PROGRESSED
                     && !now.isBefore(progressAt.getOrDefault(version, Instant.MIN));
                 if (result.status() == Status.STARTED || result.status() == Status.COMPLETED || progress) {
-                    log.info(
+                    LOGGER.info(
                         "event=stop_demand_statistics status={} phase={} routeVersionId={} dataUntil={} stepDurationMs={}",
-                        result.status(), result.phase(), version, result.dataUntil() == null ? "-"
-                            : result.dataUntil().atZone(clock.getZone()).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
+                        result.status(), result.phase(), version, formatDataUntil(result.dataUntil()),
                         elapsed(started));
                     progressAt.put(version, now.plusSeconds(60));
                 }
@@ -85,7 +84,7 @@ public class AdvanceDemandStatisticsService implements AdvanceDemandStatistics {
         }
     }
 
-    private static long retryDelaySeconds(final Status status) {
+    private static long retryDelaySeconds(Status status) {
         return switch (status) {
             case IDLE, COMPLETED -> 10;
             case WAITING -> 1;
@@ -95,5 +94,12 @@ public class AdvanceDemandStatisticsService implements AdvanceDemandStatistics {
 
     private static long elapsed(final long started) {
         return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+    }
+
+    private String formatDataUntil(Instant dataUntil) {
+        if (dataUntil == null) {
+            return "-";
+        }
+        return dataUntil.atZone(clock.getZone()).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
     }
 }

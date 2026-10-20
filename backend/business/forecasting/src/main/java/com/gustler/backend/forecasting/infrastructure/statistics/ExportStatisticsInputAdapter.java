@@ -1,11 +1,15 @@
 package com.gustler.backend.forecasting.infrastructure.statistics;
 
 import com.gustler.backend.forecasting.api.statistics.ExportStatisticsInput;
-import java.nio.file.Path;
+import com.gustler.backend.forecasting.infrastructure.statistics.JdbcStatisticsInputExtractor.Extracted;
+import com.gustler.backend.forecasting.infrastructure.statistics.StatisticsExtractWriter.Bundle;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.UUID;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /** 명시적으로 구성해서 호출하는 비교 입력 내보내기. 자동 스케줄이나 운영 기본 Bean이 아니다. */
@@ -16,10 +20,11 @@ public final class ExportStatisticsInputAdapter implements ExportStatisticsInput
     private final long maxBytes;
     private final ZoneId zone;
 
-    public ExportStatisticsInputAdapter(org.springframework.jdbc.core.simple.JdbcClient jdbc,
-        org.springframework.transaction.PlatformTransactionManager transactions,
+    public ExportStatisticsInputAdapter(
+        JdbcClient jdbc,
+        PlatformTransactionManager transactions,
         Path workDirectory,
-        long maxBytes,
+        final long maxBytes,
         ZoneId zone
     ) {
         if (workDirectory == null || !Files.isDirectory(workDirectory) || Files.isSymbolicLink(workDirectory)
@@ -34,8 +39,12 @@ public final class ExportStatisticsInputAdapter implements ExportStatisticsInput
     }
 
     @Override
-    public synchronized String export(long routeVersionId, long afterObservationId, long throughObservationId,
-        Instant dataUntil, int maxRows,
+    public synchronized String export(
+        final long routeVersionId,
+        final long afterObservationId,
+        final long throughObservationId,
+        Instant dataUntil,
+        final int maxRows,
         UUID exportId
     ) {
         if (exportId == null) {
@@ -44,12 +53,12 @@ public final class ExportStatisticsInputAdapter implements ExportStatisticsInput
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("내보내기는 기존 DB 트랜잭션 밖에서 실행해야 한다");
         }
-        var extracted = extractor.extract(routeVersionId, afterObservationId, throughObservationId,
+        Extracted extracted = extractor.extract(routeVersionId, afterObservationId, throughObservationId,
             dataUntil, zone, maxRows);
         if (extracted.rows().isEmpty()) {
             throw new IllegalArgumentException("복사할 완료 자료가 없다");
         }
-        var bundle = StatisticsExtractWriter.write(workDirectory, extracted, maxBytes);
+        Bundle bundle = StatisticsExtractWriter.write(workDirectory, extracted, maxBytes);
         String location = uploader.upload(bundle, exportId);
         new StatisticsExtractDownloader().download(workDirectory, exportId, bundle.manifest());
         return location;

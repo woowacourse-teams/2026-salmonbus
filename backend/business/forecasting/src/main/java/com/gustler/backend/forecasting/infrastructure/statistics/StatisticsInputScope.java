@@ -4,6 +4,9 @@ import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion
 import java.time.Instant;
 import java.time.ZoneId;
 
+/**
+ * 파일 통계 입력의 노선·판본·기준 시각·시간대 범위를 고정하는 값이다.
+ */
 record StatisticsInputScope(
     String schemaVersion,
     String calculationVersion,
