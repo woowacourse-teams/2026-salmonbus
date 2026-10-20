@@ -28,7 +28,7 @@ public class WorkerSchedulingConfig {
     }
 
     private static ThreadPoolTaskScheduler scheduler(String prefix) {
-        var scheduler = new ThreadPoolTaskScheduler();
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(1);
         scheduler.setThreadNamePrefix(prefix);
         scheduler.setRemoveOnCancelPolicy(true);

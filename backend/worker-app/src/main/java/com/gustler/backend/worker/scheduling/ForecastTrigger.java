@@ -2,6 +2,7 @@ package com.gustler.backend.worker.scheduling;
 
 import com.gustler.backend.forecasting.api.publication.PublishPendingForecasts;
 import com.gustler.backend.observations.api.ObservationDeliveryBatch;
+import com.gustler.backend.observations.api.ObservationDeliveryBatch.Kind;
 import com.gustler.backend.observations.api.ObservationDeliveryHook;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,6 +17,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+/**
+ * 관측 저장 알림과 정기 호출을 예보 발행에 연결한다.
+ * 실제 실행과 처리 결과는 기존 업무 서비스에 맡긴다.
+ */
 @Component
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class ForecastTrigger implements ObservationDeliveryHook {
@@ -37,9 +42,9 @@ public class ForecastTrigger implements ObservationDeliveryHook {
     }
 
     @Override
-    @Transactional(propagation = Propagation.MANDATORY)
+    @Transactional(readOnly = false, propagation = Propagation.MANDATORY)
     public void record(ObservationDeliveryBatch batch) {
-        if (batch.kind() != ObservationDeliveryBatch.Kind.STORED) {
+        if (batch.kind() != Kind.STORED) {
             return;
         }
         final long routeVersionId = batch.routeVersionId();

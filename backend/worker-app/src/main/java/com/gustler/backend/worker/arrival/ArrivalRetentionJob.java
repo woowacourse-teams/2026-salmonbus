@@ -8,10 +8,13 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+/**
+ * 보존 기간을 지난 도착정보 수신 자료를 정리하는 기존 Worker 작업을 실행한다.
+ */
 @Component
 @ConditionalOnProperty(prefix = "arrivals", name = "enabled", havingValue = "true")
 public class ArrivalRetentionJob {
-    private static final Logger log = LoggerFactory.getLogger(ArrivalRetentionJob.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(ArrivalRetentionJob.class);
     private final RetainArrivalSnapshots store;
     private final ArrivalProperties properties;
     private final Clock clock;
@@ -28,7 +31,7 @@ public class ArrivalRetentionJob {
             store.purgeExpiredBefore(clock.instant().minus(properties.retention()), 500);
         }
         catch (RuntimeException failure) {
-            log.warn("event=arrival_retention_failed exceptionType={}", failure.getClass().getSimpleName());
+            LOGGER.warn("event=arrival_retention_failed exceptionType={}", failure.getClass().getSimpleName());
         }
     }
 }

@@ -1,7 +1,7 @@
 package com.gustler.backend.worker.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
@@ -19,15 +19,23 @@ class ForecastPropertiesTest {
 
     @Test
     void 신선도_창이_한_시간을_넘으면_기동을_막는다() {
+        // given
+
         // when
-        // then 창이 넓어지면 큐가 오래된 판부터 채워서 방금 들어온 판이 회차에 못 들어간다
-        assertThatThrownBy(() -> propertiesWith(TOO_LONG_STALENESS))
+        Throwable caughtFailure = catchThrowable(() -> propertiesWith(TOO_LONG_STALENESS));
+
+        // then
+        // 창이 넓어지면 큐가 오래된 관측부터 채워져 방금 들어온 관측이 회차에 포함되지 않는다.
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalStateException.class)
             .hasMessage("forecast.staleness 는 PT1H 이하여야 한다: PT1H1S");
     }
 
     @Test
     void 신선도_창이_한_시간이면_받는다() {
+        // given
+
         // when
         ForecastProperties actual = propertiesWith(LONGEST_ALLOWED_STALENESS);
 
@@ -37,9 +45,14 @@ class ForecastPropertiesTest {
 
     @Test
     void 신선도_창이_0이면_기동을_막는다() {
+        // given
+
         // when
+        Throwable caughtFailure = catchThrowable(() -> propertiesWith(Duration.ZERO));
+
         // then
-        assertThatThrownBy(() -> propertiesWith(Duration.ZERO))
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalStateException.class)
             .hasMessage("forecast.staleness 는 0보다 길어야 한다: PT0S");
     }

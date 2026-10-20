@@ -4,6 +4,9 @@ import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
+/**
+ * 당일 정산 합계 초기화의 처리·재시도 시간 정책을 바인딩하고 양수 범위를 확인한다.
+ */
 @ConfigurationProperties("forecast.same-day-initialization")
 public record SameDayInitializationProperties(
     @DefaultValue("10s")

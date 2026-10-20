@@ -1,7 +1,7 @@
 package com.gustler.backend.worker.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.gustler.backend.gbis.api.GbisKey;
 import java.util.HashMap;
@@ -97,9 +97,13 @@ class GbisServiceKeyEnvironmentPostProcessorTest {
             "GBIS_SERVICE_KEY_e", "fake-key-lower"));
         GbisServiceKeyEnvironmentPostProcessor processor = new GbisServiceKeyEnvironmentPostProcessor();
 
-        // when & then
-        assertThatThrownBy(
-            () -> processor.postProcessEnvironment(environment, new SpringApplication()))
+        // when
+        Throwable caughtFailure = catchThrowable(
+            () -> processor.postProcessEnvironment(environment, new SpringApplication()));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("e")
             .hasMessageNotContaining("fake-key-upper")

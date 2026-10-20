@@ -12,6 +12,10 @@ import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.StandardEnvironment;
 
+/**
+ * 키 별칭 환경 설정을 GBIS 속성으로 연결한다.
+ * 인증값 원문을 기동 진단에 출력하지 않는다.
+ */
 public final class GbisServiceKeyEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
     static final String PROPERTY_SOURCE = "gbisServiceKeys";
 

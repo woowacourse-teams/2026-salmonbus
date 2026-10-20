@@ -7,6 +7,9 @@ import java.util.HashSet;
 import java.util.Set;
 import tools.jackson.databind.JsonNode;
 
+/**
+ * 실행 대상과 승인 자료의 범위를 대조해 유지보수 명령의 실행 조건을 확인한다.
+ */
 public final class ApprovalGate {
     public static final String ACADEMY_TRIP_QUALITY_REBUILD = "ACADEMY_TRIP_QUALITY_REBUILD";
 

@@ -5,6 +5,10 @@ import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.ConstructorBinding;
 
+/**
+ * 도착정보의 내부 인증·키별 예산·대기·보존 정책을 바인딩한다.
+ * 시간 값은 Duration으로 전달하고 인증값은 문자열 표현에서 숨긴다.
+ */
 @ConfigurationProperties("arrivals")
 public record ArrivalProperties(String internalToken, int keyDailyLimit, int queueCapacity,
     Duration refreshInterval, Duration validity, Duration retryBase, Duration retryMaximum,
@@ -32,7 +36,9 @@ public record ArrivalProperties(String internalToken, int keyDailyLimit, int que
     }
 
     public ArrivalProperties(
-        String internalToken, int keyDailyLimit, int queueCapacity,
+        String internalToken,
+        final int keyDailyLimit,
+        final int queueCapacity,
         Duration refreshInterval,
         Duration validity,
         Duration retryBase,

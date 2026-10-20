@@ -6,6 +6,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Properties;
 
+/**
+ * 유지보수 설정 파일에서 필수 값과 경로를 읽는다.
+ * 잘못된 설정은 공개할 수 있는 오류 코드로 변환한다.
+ */
 public final class Configuration {
     private final Properties values;
 
@@ -15,6 +19,9 @@ public final class Configuration {
         this.values = values;
     }
 
+    /**
+     * 일반 설정 파일을 읽는다. 심볼릭 링크이거나 파일이 없거나 읽기에 실패하면 유지보수 오류로 변환한다.
+     */
     public static Configuration load(
         Path path
     ) {

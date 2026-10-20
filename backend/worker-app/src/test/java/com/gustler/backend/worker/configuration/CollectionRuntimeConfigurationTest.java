@@ -2,8 +2,12 @@ package com.gustler.backend.worker.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gustler.backend.gbis.api.GbisClientOptions;
 import com.gustler.backend.gbis.api.GbisKey;
+import com.gustler.backend.quota.api.CallQuota;
+import com.gustler.backend.quota.api.CallQuotaPolicy;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class CollectionRuntimeConfigurationTest {
@@ -46,13 +50,13 @@ class CollectionRuntimeConfigurationTest {
     void 키를_다섯_개_이상_설정하면_호출_한도와_GBIS_클라이언트가_모두_같은_별칭으로_돌려_쓴다() {
         // given
         GbisProperties properties = new GbisProperties(BASE_URL, "fake-key-a", null, null, null,
-            java.util.Map.of("b", "fake-key-b", "c", "fake-key-c", "d", "fake-key-d", "e", "fake-key-e", "f10", "fake-key-f10"),
+            Map.of("b", "fake-key-b", "c", "fake-key-c", "d", "fake-key-d", "e", "fake-key-e", "f10", "fake-key-f10"),
             DAILY_LIMIT);
         CollectionRuntimeConfiguration configuration = new CollectionRuntimeConfiguration();
 
         // when
         List<String> quotaAliases = configuration.callQuotaPolicy(properties).locationKeyAliases();
-        var client = configuration.gbisClientOptions(properties);
+        GbisClientOptions client = configuration.gbisClientOptions(properties);
 
         // then
         assertThat(quotaAliases).containsExactly(GbisKey.PRIMARY, "b", "c", "d", "e", "f10")
@@ -67,15 +71,15 @@ class CollectionRuntimeConfigurationTest {
     void 키별_한도를_주면_호출_한도가_그_키만_그_한도로_센다() {
         // given
         GbisProperties properties = new GbisProperties(BASE_URL, "fake-key-a", null, null, null,
-            java.util.Map.of("e", "fake-key-e"), DAILY_LIMIT, java.util.Map.of("e", 1_000));
+            Map.of("e", "fake-key-e"), DAILY_LIMIT, Map.of("e", 1_000));
         CollectionRuntimeConfiguration configuration = new CollectionRuntimeConfiguration();
 
         // when
-        var policy = configuration.callQuotaPolicy(properties);
+        CallQuotaPolicy policy = configuration.callQuotaPolicy(properties);
 
         // then
-        assertThat(policy.limitOf(com.gustler.backend.quota.api.CallQuota.BUS_LOCATION, "e")).isEqualTo(1_000);
-        assertThat(policy.limitOf(com.gustler.backend.quota.api.CallQuota.BUS_LOCATION, GbisKey.PRIMARY))
+        assertThat(policy.limitOf(CallQuota.BUS_LOCATION, "e")).isEqualTo(1_000);
+        assertThat(policy.limitOf(CallQuota.BUS_LOCATION, GbisKey.PRIMARY))
             .isEqualTo(DAILY_LIMIT);
     }
 }

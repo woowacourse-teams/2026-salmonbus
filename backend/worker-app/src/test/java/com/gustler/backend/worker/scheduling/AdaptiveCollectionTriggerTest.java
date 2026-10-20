@@ -22,8 +22,10 @@ class AdaptiveCollectionTriggerTest {
 
     @Test
     void 처음_도는_판은_기다리지_않고_바로_부른다() {
+        // given
+
         // when
-        final Instant actual = trigger.nextExecution(new SimpleTriggerContext(clock));
+        Instant actual = trigger.nextExecution(new SimpleTriggerContext(clock));
 
         // then
         assertThat(actual).isEqualTo(NOW);
@@ -31,8 +33,10 @@ class AdaptiveCollectionTriggerTest {
 
     @Test
     void 아침_첨두에_끝난_판의_다음_차례는_20초_뒤다() {
+        // given
+
         // when
-        final Instant actual = trigger.nextExecution(contextCompletedAt(MORNING_PEAK_MOMENT));
+        Instant actual = trigger.nextExecution(contextCompletedAt(MORNING_PEAK_MOMENT));
 
         // then
         assertThat(actual).isEqualTo(MORNING_PEAK_MOMENT.plusSeconds(20));
@@ -40,8 +44,10 @@ class AdaptiveCollectionTriggerTest {
 
     @Test
     void 심야에_끝난_판의_다음_차례는_600초_뒤다() {
+        // given
+
         // when
-        final Instant actual = trigger.nextExecution(contextCompletedAt(DEEP_NIGHT_MOMENT));
+        Instant actual = trigger.nextExecution(contextCompletedAt(DEEP_NIGHT_MOMENT));
 
         // then
         assertThat(actual).isEqualTo(DEEP_NIGHT_MOMENT.plusSeconds(600));
@@ -49,13 +55,14 @@ class AdaptiveCollectionTriggerTest {
 
     @Test
     void 상류가_늦게_답하면_다음_차례도_그만큼_밀린다() {
-        // given 계획은 08:00 이었지만 실제로 끝난 것은 5초 뒤다
-        final Instant completedLate = MORNING_PEAK_MOMENT.plusSeconds(5);
+        // given
+        // 예정 시각은 08:00 이었지만 실제 완료는 5초 뒤다.
+        Instant completedLate = MORNING_PEAK_MOMENT.plusSeconds(5);
         SimpleTriggerContext context = new SimpleTriggerContext(clock);
         context.update(MORNING_PEAK_MOMENT, MORNING_PEAK_MOMENT, completedLate);
 
         // when
-        final Instant actual = trigger.nextExecution(context);
+        Instant actual = trigger.nextExecution(context);
 
         // then
         assertThat(actual).isEqualTo(completedLate.plusSeconds(20));

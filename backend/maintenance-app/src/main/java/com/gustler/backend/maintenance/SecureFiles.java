@@ -8,6 +8,9 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.util.EnumSet;
 import java.util.Set;
 
+/**
+ * 유지보수 입력 파일의 일반 파일 여부와 허용된 접근 권한 조건을 확인한다.
+ */
 public final class SecureFiles {
     private static final Set<PosixFilePermission> OWNER_FILE = EnumSet.of(
         PosixFilePermission.OWNER_READ,
@@ -16,6 +19,9 @@ public final class SecureFiles {
     private SecureFiles() {
     }
 
+    /**
+     * 심볼릭 링크를 거부하고 일반 파일 및 소유자 전용 권한을 검증한다. POSIX 미지원 환경에서도 일반 파일 여부는 확인한다.
+     */
     public static void requirePrivateRegularFile(
         Path path
     ) {

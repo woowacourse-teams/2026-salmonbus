@@ -108,9 +108,9 @@ class ObservationForecastTriggerIntegrationTest {
     void 관측_저장이_커밋되면_회차를_기다리지_않고_그_batch의_예보를_발행한다() throws Exception {
         // given
         OffsetDateTime at = OffsetDateTime.now(SEOUL).truncatedTo(ChronoUnit.MILLIS);
-        long batchId = ledger.reserve(new CollectionPlan(routeVersionId, at, "trigger-test"), at).batchId();
+        final long batchId = ledger.reserve(new CollectionPlan(routeVersionId, at, "trigger-test"), at).batchId();
         ledger.markDispatching(batchId, at, at, "a");
-        var bus = new BusLocation("경기70아0001", "trigger-test-vehicle", 0, SOURCE_ROUTE, 11,
+        BusLocation bus = new BusLocation("경기70아0001", "trigger-test-vehicle", 0, SOURCE_ROUTE, 11,
             "stop-one", 1, 2, 20, 3, 1);
 
         // when

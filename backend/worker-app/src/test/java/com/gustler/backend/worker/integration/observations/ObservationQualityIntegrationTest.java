@@ -1,7 +1,7 @@
 package com.gustler.backend.worker.integration.observations;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.gustler.backend.gbis.api.GbisLocationResult.Success;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
@@ -15,6 +15,8 @@ import com.gustler.backend.quota.api.CallQuota;
 import com.gustler.backend.support.PostgresTestContainer;
 import com.gustler.backend.worker.WorkerApplication;
 import com.gustler.backend.worker.configuration.CollectionRuntimeConfiguration;
+import com.gustler.backend.worker.integration.observations.ObservationQualityIntegrationTest
+    .QualityFailureConfiguration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -32,7 +34,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 @SpringBootTest(classes = WorkerApplication.class)
 @Import({PostgresTestContainer.class, CollectionRuntimeConfiguration.class,
-    ObservationQualityIntegrationTest.QualityFailureConfiguration.class})
+    QualityFailureConfiguration.class})
 class ObservationQualityIntegrationTest {
     private static final String ROUTE_3330 = "204000057";
     private static final String STOP_205000217 = "205000217";
@@ -131,10 +133,14 @@ class ObservationQualityIntegrationTest {
         failingQualityHook.fail = true;
         BusLocation bus = bus(VEHICLE_204000206, 1, STOP_205000217, 2, 71);
 
-        // when & then
-        assertThatThrownBy(() -> ledger.conclude(batchId,
+        // when
+        Throwable caughtFailure = catchThrowable(() -> ledger.conclude(batchId,
             receivedAt -> GbisObservationMapper.response(new Success(QUERY_TIME, List.of(bus)), receivedAt),
-            RESPONSE_RECEIVED_AT))
+            RESPONSE_RECEIVED_AT));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalStateException.class)
             .hasMessage("품질 처리 실패");
         assertThat(columnOf("outcome", String.class)).isEqualTo("DISPATCHING");

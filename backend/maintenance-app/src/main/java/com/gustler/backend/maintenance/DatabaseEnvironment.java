@@ -1,4 +1,6 @@
 package com.gustler.backend.maintenance;
+
+import com.gustler.backend.maintenance.DatabaseEnvironment.TargetKind;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -11,6 +13,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+/**
+ * 검증한 유지보수 DB 대상과 접속·동일성 정보를 전달한다.
+ * 문자열 표현에는 인증값을 숨긴다.
+ */
 public record DatabaseEnvironment(
     TargetKind targetKind,
     String jdbcUrl,
@@ -35,11 +41,7 @@ public record DatabaseEnvironment(
             throw new MaintenanceException("CONFIG_INVALID_TARGET_KIND", e);
         }
         Path path = configuration.requiredPath("database.env-file");
-        if (targetKind == TargetKind.ACADEMY) {
-            requireAcademyEnvironmentFile(path);
-        } else {
-            SecureFiles.requirePrivateRegularFile(path);
-        }
+        requireEnvironmentFile(targetKind, path);
         Map<String, String> values = readWithoutShell(path);
         String url = required(values, "DB_URL");
         String username = required(values, "DB_USERNAME");
@@ -53,6 +55,14 @@ public record DatabaseEnvironment(
             + identity.getPath()
             + "\n" + username;
         return new DatabaseEnvironment(targetKind, url, username, password, Sha256.of(material));
+    }
+
+    private static void requireEnvironmentFile(TargetKind targetKind, Path path) {
+        if (targetKind == TargetKind.ACADEMY) {
+            requireAcademyEnvironmentFile(path);
+            return;
+        }
+        SecureFiles.requirePrivateRegularFile(path);
     }
 
     private static void requireAcademyEnvironmentFile(
@@ -84,11 +94,14 @@ public record DatabaseEnvironment(
         }
         Map<String, String> values = new HashMap<>();
         for (String original : lines) {
-            String line = original.endsWith("\r") ? original.substring(0, original.length() - 1) : original;
+            String line = original;
+            if (original.endsWith("\r")) {
+                line = original.substring(0, original.length() - 1);
+            }
             if (line.isBlank() || line.stripLeading().startsWith("#")) {
                 continue;
             }
-            int separator = line.indexOf('=');
+            final int separator = line.indexOf('=');
             if (separator < 1) {
                 throw new MaintenanceException("DATABASE_ENV_FILE_SYNTAX_INVALID");
             }
@@ -105,8 +118,8 @@ public record DatabaseEnvironment(
         String value
     ) {
         if (value.length() >= 2) {
-            char first = value.charAt(0);
-            char last = value.charAt(value.length() - 1);
+            final char first = value.charAt(0);
+            final char last = value.charAt(value.length() - 1);
             if ((first == '\'' && last == '\'') || (first == '"' && last == '"')) {
                 return value.substring(1, value.length() - 1);
             }
@@ -145,7 +158,10 @@ public record DatabaseEnvironment(
     private static int effectivePort(
         URI uri
     ) {
-        return uri.getPort() < 0 ? 5432 : uri.getPort();
+        if (uri.getPort() < 0) {
+            return 5432;
+        }
+        return uri.getPort();
     }
 
     private static boolean isLoopback(

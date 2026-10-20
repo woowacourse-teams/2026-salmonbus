@@ -1,9 +1,10 @@
 package com.gustler.backend.maintenance;
 
 import com.gustler.backend.forecasting.domain.model.HorizonCoefficients;
-import com.gustler.backend.forecasting.domain.model.SeatForecastDesignMatrix;
 import com.gustler.backend.forecasting.domain.model.SeatDistributionInput;
 import com.gustler.backend.forecasting.domain.model.SeatDistributionPredictor;
+import com.gustler.backend.forecasting.domain.model.SeatForecastDesignMatrix;
+import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -15,6 +16,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -24,7 +26,7 @@ final class BundleInspectionFixture {
 
     static void write(Path directory) throws Exception {
         Files.createDirectories(directory);
-        int features = SeatForecastDesignMatrix.COLUMN_COUNT;
+        final int features = SeatForecastDesignMatrix.COLUMN_COUNT;
         Map<String, int[]> shapes = new LinkedHashMap<>();
         shapes.put("hurdle_coefficients", new int[] {8, 12, features});
         shapes.put("anchor_coefficients", new int[] {8, 12, 2});
@@ -34,10 +36,10 @@ final class BundleInspectionFixture {
         Map<String, Object> header = new LinkedHashMap<>();
         Map<String, Object> declarations = new LinkedHashMap<>();
         int offset = 0;
-        for (var entry : shapes.entrySet()) {
-            String dtype = entry.getKey().equals("bin_fitted") ? "U8" : "F64";
-            int bytes = Arrays.stream(entry.getValue())
-                .reduce(1, (a, b) -> a * b) * (dtype.equals("U8") ? 1 : 8);
+        for (Entry<String, int[]> entry : shapes.entrySet()) {
+            String dtype = tensorDataType(entry.getKey());
+            final int bytes = Arrays.stream(entry.getValue())
+                .reduce(1, (a, b) -> a * b) * elementBytes(dtype);
             List<Integer> shape = Arrays.stream(entry.getValue())
                 .boxed()
                 .toList();
@@ -47,22 +49,22 @@ final class BundleInspectionFixture {
             offset += bytes;
         }
         byte[] headerBytes = CanonicalJson.stringOf(header).getBytes(StandardCharsets.UTF_8);
-        int paddedSize = ((headerBytes.length + 7) / 8) * 8;
+        final int paddedSize = ((headerBytes.length + 7) / 8) * 8;
         ByteBuffer buffer = ByteBuffer.allocate(8 + paddedSize + offset).order(ByteOrder.LITTLE_ENDIAN);
         buffer.putLong(paddedSize).put(headerBytes);
         while (buffer.position() < 8 + paddedSize) {
             buffer.put((byte) ' ');
         }
         byte[] weights = buffer.array();
-        var coefficients = new HorizonCoefficients(new double[features], new double[2],
+        HorizonCoefficients coefficients = new HorizonCoefficients(new double[features], new double[2],
             new double[features], new double[features], new double[2][9][features], new boolean[2][9]);
-        var predictor = new SeatDistributionPredictor((route, horizon) -> coefficients,
+        SeatDistributionPredictor predictor = new SeatDistributionPredictor((route, horizon) -> coefficients,
             new double[] {0, .03, .07, .12, .2, .32, .48, .7, 1});
         double[] vector = new double[features];
         vector[0] = 1;
-        var predicted = predictor.predict(new SeatDistributionInput(vector, "1650", 1, 10, 40, null));
-        double fullChance = predicted.distribution().fullChance();
-        double expectedSeats = predicted.distribution().expectedSeats();
+        SeatForecastResult predicted = predictor.predict(new SeatDistributionInput(vector, "1650", 1, 10, 40, null));
+        final double fullChance = predicted.distribution().fullChance();
+        final double expectedSeats = predicted.distribution().expectedSeats();
         String vectorText = Arrays.stream(vector)
             .mapToObj(Double::toString)
             .collect(Collectors.joining(","));
@@ -112,5 +114,19 @@ final class BundleInspectionFixture {
 
     private static String sha(byte[] bytes) throws Exception {
         return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+    }
+
+    private static String tensorDataType(String name) {
+        if (name.equals("bin_fitted")) {
+            return "U8";
+        }
+        return "F64";
+    }
+
+    private static int elementBytes(String dtype) {
+        if (dtype.equals("U8")) {
+            return 1;
+        }
+        return 8;
     }
 }

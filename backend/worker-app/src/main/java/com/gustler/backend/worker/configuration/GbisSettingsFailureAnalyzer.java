@@ -6,6 +6,9 @@ import org.springframework.boot.diagnostics.AbstractFailureAnalyzer;
 import org.springframework.boot.diagnostics.FailureAnalysis;
 import org.springframework.core.Ordered;
 
+/**
+ * GBIS 설정 기동 실패를 인증값을 노출하지 않는 설명과 조치 안내로 바꾼다.
+ */
 public class GbisSettingsFailureAnalyzer extends AbstractFailureAnalyzer<BindException> implements Ordered {
     private static final ConfigurationPropertyName GBIS = ConfigurationPropertyName.of("gbis");
 

@@ -6,10 +6,12 @@ import com.gustler.backend.gbis.api.GbisClientOptions;
 import com.gustler.backend.quota.api.ArrivalQuotaPolicy;
 import com.gustler.backend.quota.configuration.ArrivalQuotaConfiguration;
 import com.gustler.backend.worker.configuration.GbisProperties;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.ThreadPoolExecutor.AbortPolicy;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -21,17 +23,21 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
+/**
+ * 도착정보 예산·GBIS 설정·실행기·수집 정책을 연결한다.
+ * 기능 활성 조건과 별도 실행 큐를 유지한다.
+ */
 @Configuration(proxyBeanMethods = false)
 @EnableScheduling
 @ConditionalOnProperty(prefix = "arrivals", name = "enabled", havingValue = "true")
 @EnableConfigurationProperties({ArrivalProperties.class, GbisProperties.class})
 @Import({ArrivalsConfiguration.class, ArrivalQuotaConfiguration.class})
 public class ArrivalRuntimeConfiguration {
-    private static final Logger log = LoggerFactory.getLogger(ArrivalRuntimeConfiguration.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(ArrivalRuntimeConfiguration.class);
 
     @Bean
     ArrivalQuotaPolicy arrivalQuotaPolicy(GbisProperties keys, ArrivalProperties properties) {
-        var aliases = keys.serviceKeys()
+        List<String> aliases = keys.serviceKeys()
             .stream()
             .map(key -> key.alias())
             .toList();
@@ -50,7 +56,7 @@ public class ArrivalRuntimeConfiguration {
             .stream()
             .mapToLong(Integer::longValue)
             .sum());
-        log.info("도착정보 키 {}개로 수집한다. 별칭={} 하루 한도 합={} 초당 호출={}",
+        LOGGER.info("도착정보 키 {}개로 수집한다. 별칭={} 하루 한도 합={} 초당 호출={}",
             aliases.size(), String.join(",", aliases), dailyLimit, String.format("%.3f", dailyLimit / 86_400.0));
         return new ArrivalQuotaPolicy(dailyLimit, keyLimits);
     }
@@ -64,7 +70,7 @@ public class ArrivalRuntimeConfiguration {
     ExecutorService arrivalExecutor(ArrivalProperties properties) {
         return new ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS,
             new ArrayBlockingQueue<>(properties.queueCapacity()),
-            Thread.ofPlatform().name("arrival-", 0).factory(), new ThreadPoolExecutor.AbortPolicy());
+            Thread.ofPlatform().name("arrival-", 0).factory(), new AbortPolicy());
     }
 
     @Bean
