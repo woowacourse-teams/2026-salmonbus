@@ -3,7 +3,6 @@ package com.gustler.backend.forecasting.application.statistics;
 import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.api.statistics.DemandStatisticsPolicy;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
-import com.gustler.backend.forecasting.application.statistics.DemandAccumulator.Result;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline.Step.Status;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsStore.FoldRow;
 import com.gustler.backend.forecasting.domain.statistics.DailyStopDemand;
@@ -178,7 +177,7 @@ public class DemandStatisticsPipeline {
             runs.save(run);
             return;
         }
-        Result result = accumulator.apply(run.routeVersionId(), vehicle.get(),
+        DemandAccumulator.Result result = accumulator.apply(run.routeVersionId(), vehicle.get(),
             run.accumulationStartAfter(vehicle.get()), run.inputUntilId(), run.dataUntil());
         if (result.waitingForRebuild()) {
             return;

@@ -7,7 +7,6 @@ import static org.mockito.Mockito.when;
 import com.gustler.backend.forecasting.application.evaluation.ForecastEvaluationWriter;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.application.statistics.DemandAccumulator;
-import com.gustler.backend.forecasting.application.statistics.DemandAccumulator.Result;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline.Step.Status;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuildRequestStore;
@@ -159,12 +158,12 @@ class DemandStatisticsPipelineTest {
             """).update();
 
         // when
-        Result first = accumulator.apply(routeVersionId, VEHICLE_204000206, 0, Long.MAX_VALUE, SCORED_AT);
+        DemandAccumulator.Result first = accumulator.apply(routeVersionId, VEHICLE_204000206, 0, Long.MAX_VALUE, SCORED_AT);
 
         // then
         assertThat(first.applied()).isEqualTo(128);
         assertThat(pendingSampleCount()).isEqualTo(1);
-        Result second =
+        DemandAccumulator.Result second =
             accumulator.apply(routeVersionId, VEHICLE_204000206, first.nextInputId(), Long.MAX_VALUE, SCORED_AT);
         assertThat(second.applied()).isEqualTo(1);
         accumulator.apply(routeVersionId, VEHICLE_204000206, 0, Long.MAX_VALUE, SCORED_AT);
@@ -227,7 +226,7 @@ class DemandStatisticsPipelineTest {
             .param(vehicleObservationId).update();
 
         // when
-        Result result = accumulator.apply(routeVersionId, VEHICLE_204000206, 0, Long.MAX_VALUE, SCORED_AT);
+        DemandAccumulator.Result result = accumulator.apply(routeVersionId, VEHICLE_204000206, 0, Long.MAX_VALUE, SCORED_AT);
 
         // then
         try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
@@ -269,7 +268,7 @@ class DemandStatisticsPipelineTest {
             .param(vehicleObservationId).update();
 
         // when
-        Result result = accumulator.apply(routeVersionId, "", 0, Long.MAX_VALUE, SCORED_AT);
+        DemandAccumulator.Result result = accumulator.apply(routeVersionId, "", 0, Long.MAX_VALUE, SCORED_AT);
 
         // then
         assertThat(result.waitingForRebuild()).isTrue();

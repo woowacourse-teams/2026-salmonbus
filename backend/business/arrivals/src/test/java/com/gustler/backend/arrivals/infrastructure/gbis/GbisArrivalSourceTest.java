@@ -9,7 +9,7 @@ import static org.mockito.Mockito.when;
 import com.gustler.backend.arrival.contract.ArrivalSnapshot.Prediction;
 import com.gustler.backend.arrivals.domain.ArrivalSource.Failed;
 import com.gustler.backend.arrivals.domain.ArrivalSource.Reason;
-import com.gustler.backend.arrivals.domain.ArrivalSource.Result;
+import com.gustler.backend.arrivals.domain.ArrivalSource;
 import com.gustler.backend.arrivals.domain.ArrivalSource.Success;
 import com.gustler.backend.gbis.api.GbisApiCaller;
 import com.gustler.backend.gbis.api.GbisHttpResult;
@@ -32,7 +32,7 @@ class GbisArrivalSourceTest {
     private final GbisArrivalSource source = new GbisArrivalSource(caller, new ObjectMapper(),
         Clock.fixed(Instant.parse("2026-10-14T03:00:00Z"), ZoneOffset.UTC));
 
-    private Result read(String rows) {
+    private ArrivalSource.Result read(String rows) {
         when(caller.getByStationWithMetadata(anyString(), anyString(), anyString())).thenReturn(
             new GbisHttpResult(new Received(
                 "{\"response\":{\"msgHeader\":{\"resultCode\":0},\"msgBody\":{\"busArrivalList\":" + rows + "}}}"), 200,
@@ -87,21 +87,21 @@ class GbisArrivalSourceTest {
     @Test
     void 다른_정류장이나_깨진_필드는_빈_목록으로_바꾸지_않는다() {
         // when
-        Result differentStation = read(row("").replace("206000637", "206000532"));
+        ArrivalSource.Result differentStation = read(row("").replace("206000637", "206000532"));
 
         // then
         assertThat(differentStation)
             .isEqualTo(new Failed(Reason.UNREADABLE_RESPONSE));
 
         // when
-        Result brokenNumber = read(row("").replace("\"predictTimeSec1\":180", "\"predictTimeSec1\":\"broken\""));
+        ArrivalSource.Result brokenNumber = read(row("").replace("\"predictTimeSec1\":180", "\"predictTimeSec1\":\"broken\""));
 
         // then
         assertThat(brokenNumber)
             .isEqualTo(new Failed(Reason.UNREADABLE_RESPONSE));
 
         // when
-        Result brokenRows = read("\"broken\"");
+        ArrivalSource.Result brokenRows = read("\"broken\"");
 
         // then
         assertThat(brokenRows)
@@ -122,7 +122,7 @@ class GbisArrivalSourceTest {
                 null));
 
         // when
-        Result rejectedResponse = source.fetch("206000637", "a");
+        ArrivalSource.Result rejectedResponse = source.fetch("206000637", "a");
 
         // then
         assertThat(rejectedResponse)
@@ -132,7 +132,7 @@ class GbisArrivalSourceTest {
     @Test
     void 같은_노선_같은_방문의_중복행을_허용하지_않는다() {
         // when
-        Result actual = read("[" + row("") + "," + row("") + "]");
+        ArrivalSource.Result actual = read("[" + row("") + "," + row("") + "]");
 
         // then
         assertThat(actual)
@@ -147,7 +147,7 @@ class GbisArrivalSourceTest {
                 StandardCharsets.UTF_8);
             when(caller.getByStationWithMetadata(anyString(), anyString(), anyString()))
                 .thenReturn(new GbisHttpResult(new Received(fixture), 200, null));
-            Result result = source.fetch("206000637", "a");
+            ArrivalSource.Result result = source.fetch("206000637", "a");
 
             // then
             assertThat(result).isInstanceOf(Success.class);
@@ -162,7 +162,7 @@ class GbisArrivalSourceTest {
             new GbisHttpResult(new NotReceived("empty"), 429, "120"));
 
         // when
-        Result actual = source.fetch("206000637", "a");
+        ArrivalSource.Result actual = source.fetch("206000637", "a");
 
         // then
         assertThat(actual)

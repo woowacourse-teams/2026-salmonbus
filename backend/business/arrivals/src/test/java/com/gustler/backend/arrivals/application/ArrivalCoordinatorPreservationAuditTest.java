@@ -19,7 +19,6 @@ import com.gustler.backend.arrivals.domain.ArrivalSource.Reason;
 import com.gustler.backend.arrivals.domain.ArrivalSource.Success;
 import com.gustler.backend.arrivals.domain.ArrivalStore;
 import com.gustler.backend.quota.api.ArrivalCallQuota;
-import com.gustler.backend.quota.api.ArrivalCallQuota.Reservation;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -58,8 +57,8 @@ class ArrivalCoordinatorPreservationAuditTest {
     void 한국_자정_직후에는_두번째_예약의_키로만_전송한다() {
         // given
         when(clock.instant()).thenReturn(BEFORE_MIDNIGHT);
-        Reservation previous = reservation("a", BEFORE_MIDNIGHT);
-        Reservation current = reservation("b", AFTER_MIDNIGHT);
+        ArrivalCallQuota.Reservation previous = reservation("a", BEFORE_MIDNIGHT);
+        ArrivalCallQuota.Reservation current = reservation("b", AFTER_MIDNIGHT);
         when(quota.reserve(BEFORE_MIDNIGHT)).thenAnswer(call -> {
             when(clock.instant()).thenReturn(AFTER_MIDNIGHT);
             return Optional.of(previous);
@@ -113,7 +112,7 @@ class ArrivalCoordinatorPreservationAuditTest {
     void 거절된_키는_실제_전송에_쓴_예약_날짜로_제외한다() {
         // given
         when(clock.instant()).thenReturn(AFTER_MIDNIGHT);
-        Reservation reserved = reservation("b", AFTER_MIDNIGHT);
+        ArrivalCallQuota.Reservation reserved = reservation("b", AFTER_MIDNIGHT);
         when(quota.reserve(AFTER_MIDNIGHT)).thenReturn(Optional.of(reserved));
         when(source.fetch(STATION, "b")).thenReturn(new Failed(Reason.KEY_REJECTED));
         ArrivalRefreshCoordinator coordinator = coordinator(Runnable::run);
@@ -196,7 +195,7 @@ class ArrivalCoordinatorPreservationAuditTest {
         return coordinator;
     }
 
-    private static Reservation reservation(String alias, Instant at) {
-        return new Reservation(alias, at.atZone(ArrivalCallQuota.KOREA).toLocalDate());
+    private static ArrivalCallQuota.Reservation reservation(String alias, Instant at) {
+        return new ArrivalCallQuota.Reservation(alias, at.atZone(ArrivalCallQuota.KOREA).toLocalDate());
     }
 }

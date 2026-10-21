@@ -7,7 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.gustler.backend.arrivals.domain.ArrivalSource.Failed;
 import com.gustler.backend.arrivals.domain.ArrivalSource.Reason;
-import com.gustler.backend.arrivals.domain.ArrivalSource.Result;
+import com.gustler.backend.arrivals.domain.ArrivalSource;
 import com.gustler.backend.arrivals.domain.ArrivalSource.Success;
 import com.gustler.backend.gbis.api.GbisApiCaller;
 import com.gustler.backend.gbis.api.GbisHttpResult;
@@ -39,7 +39,7 @@ class GbisArrivalBoundaryPreservationAuditTest {
             .thenReturn(new GbisHttpResult(new Received(response), 200, null));
 
         // when
-        Result actual = source.fetch("206000637", "a");
+        ArrivalSource.Result actual = source.fetch("206000637", "a");
 
         // then
         assertThat(actual).isInstanceOf(Success.class);
@@ -54,7 +54,7 @@ class GbisArrivalBoundaryPreservationAuditTest {
             .thenReturn(new GbisHttpResult(new NotReceived("empty"), 429, header));
 
         // when
-        Result actual = source.fetch("206000637", "a");
+        ArrivalSource.Result actual = source.fetch("206000637", "a");
 
         // then
         assertThat(actual).isEqualTo(new Failed(Reason.RATE_LIMITED, expected));

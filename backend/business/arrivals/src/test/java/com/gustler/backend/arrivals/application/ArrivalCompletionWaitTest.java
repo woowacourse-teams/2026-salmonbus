@@ -20,7 +20,6 @@ import com.gustler.backend.arrivals.domain.ArrivalSource.Reason;
 import com.gustler.backend.arrivals.domain.ArrivalSource.Success;
 import com.gustler.backend.arrivals.domain.ArrivalStore;
 import com.gustler.backend.quota.api.ArrivalCallQuota;
-import com.gustler.backend.quota.api.ArrivalCallQuota.Reservation;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -51,7 +50,7 @@ class ArrivalCompletionWaitTest {
     private ArrivalRefreshCoordinator coordinator(Executor executor) {
         when(store.supported(anyString())).thenReturn(true);
         when(store.latest(anyString())).thenReturn(Optional.empty());
-        when(quota.reserve(any())).thenReturn(Optional.of(new Reservation("a", NOW.atZone(ArrivalCallQuota.KOREA)
+        when(quota.reserve(any())).thenReturn(Optional.of(new ArrivalCallQuota.Reservation("a", NOW.atZone(ArrivalCallQuota.KOREA)
             .toLocalDate())));
         when(source.fetch(anyString(), anyString())).thenReturn(new Success(NOW, null, List.of()));
         ArrivalCollectionPolicy defaults = ArrivalCollectionPolicy.defaults();

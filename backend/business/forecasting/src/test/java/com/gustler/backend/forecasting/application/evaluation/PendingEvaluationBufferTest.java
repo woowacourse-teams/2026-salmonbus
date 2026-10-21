@@ -3,7 +3,6 @@ package com.gustler.backend.forecasting.application.evaluation;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
-import com.gustler.backend.forecasting.application.evaluation.PendingEvaluationBuffer.Entry;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import java.time.Instant;
 import java.util.List;
@@ -18,7 +17,7 @@ class PendingEvaluationBufferTest {
         // given
         PendingEvaluationBuffer buffer = new PendingEvaluationBuffer(12);
         buffer.restore(1, List.of(forecast(1, 1), forecast(1, 2)));
-        Entry evaluated = buffer.next(1).getFirst();
+        PendingEvaluationBuffer.Entry evaluated = buffer.next(1).getFirst();
 
         // when
         buffer.committed(evaluated, Set.of(1));
@@ -34,10 +33,10 @@ class PendingEvaluationBufferTest {
         // given
         PendingEvaluationBuffer buffer = new PendingEvaluationBuffer(12);
         buffer.restore(1, List.of(forecast(1, 1)));
-        Entry before = buffer.next(1).getFirst();
+        PendingEvaluationBuffer.Entry before = buffer.next(1).getFirst();
 
         // when
-        Entry retry = buffer.next(1).getFirst();
+        PendingEvaluationBuffer.Entry retry = buffer.next(1).getFirst();
 
         // then
         try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
@@ -51,7 +50,7 @@ class PendingEvaluationBufferTest {
         // given
         PendingEvaluationBuffer buffer = new PendingEvaluationBuffer(12);
         buffer.restore(1, List.of(forecast(1, 1)));
-        Entry old = buffer.next(1).getFirst();
+        PendingEvaluationBuffer.Entry old = buffer.next(1).getFirst();
         buffer.restore(2, List.of(forecast(1, 1)));
 
         // when
@@ -91,8 +90,8 @@ class PendingEvaluationBufferTest {
         buffer.restore(1, List.of(forecast(2, 1)));
 
         // when
-        Entry first = buffer.next(1).getFirst();
-        Entry second = buffer.next(1).getFirst();
+        PendingEvaluationBuffer.Entry first = buffer.next(1).getFirst();
+        PendingEvaluationBuffer.Entry second = buffer.next(1).getFirst();
 
         // then
         try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {

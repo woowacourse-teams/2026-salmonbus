@@ -10,12 +10,10 @@ import com.gustler.backend.arrivals.domain.ArrivalRetryPolicy;
 import com.gustler.backend.arrivals.domain.ArrivalSource;
 import com.gustler.backend.arrivals.domain.ArrivalSource.Failed;
 import com.gustler.backend.arrivals.domain.ArrivalSource.Reason;
-import com.gustler.backend.arrivals.domain.ArrivalSource.Result;
 import com.gustler.backend.arrivals.domain.ArrivalSource.Success;
 import com.gustler.backend.arrivals.domain.ArrivalStore;
 import com.gustler.backend.arrivals.domain.StationId;
 import com.gustler.backend.quota.api.ArrivalCallQuota;
-import com.gustler.backend.quota.api.ArrivalCallQuota.Reservation;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -222,7 +220,7 @@ public final class ArrivalRefreshCoordinator implements RefreshStationArrivals {
                 defer(stationId, job, "RATE_LIMITED", rateWait);
                 return;
             }
-            Optional<Reservation> reservation = quota.reserve(clock.instant());
+            Optional<ArrivalCallQuota.Reservation> reservation = quota.reserve(clock.instant());
             if (reservation.isEmpty()) {
                 exhausted(stationId, job);
                 return;
@@ -234,7 +232,7 @@ public final class ArrivalRefreshCoordinator implements RefreshStationArrivals {
                     return;
                 }
             }
-            Result result = source.fetch(stationId.value(), reservation.get().keyAlias());
+            ArrivalSource.Result result = source.fetch(stationId.value(), reservation.get().keyAlias());
             if (result instanceof Success success) {
                 ArrivalSnapshot snapshot = new ArrivalSnapshot(job.id, stationId.value(), success.receivedAt(),
                     success.receivedAt().plus(policy.refreshInterval()), success.receivedAt().plus(policy.validity()),

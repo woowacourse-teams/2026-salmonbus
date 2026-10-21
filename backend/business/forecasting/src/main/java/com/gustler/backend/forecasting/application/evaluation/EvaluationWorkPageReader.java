@@ -1,7 +1,6 @@
 package com.gustler.backend.forecasting.application.evaluation;
 
 import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore.Restored;
-import com.gustler.backend.forecasting.application.evaluation.PendingEvaluationBuffer.Entry;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -32,7 +31,7 @@ class EvaluationWorkPageReader {
         final int limit,
         final long qualityRevision,
         final boolean investigating,
-        Map<Long, Entry> cached
+        Map<Long, PendingEvaluationBuffer.Entry> cached
     ) {
         if (limit < 1 || limit > 100) {
             throw new IllegalArgumentException("한 번에 확인할 관측은 1개 이상 100개 이하이다");
@@ -43,10 +42,10 @@ class EvaluationWorkPageReader {
         }
         Map<Long, Long> revisions = work.revisions(version, ids);
 
-        Map<Long, Entry> reusable = new LinkedHashMap<>();
+        Map<Long, PendingEvaluationBuffer.Entry> reusable = new LinkedHashMap<>();
         List<Long> restoreIds = new ArrayList<>();
         for (final long id : ids) {
-            Entry entry = cached.get(id);
+            PendingEvaluationBuffer.Entry entry = cached.get(id);
             if (!investigating && entry != null
                 && entry.key().routeVersionId() == version
                 && entry.key().observationId() == id
@@ -68,7 +67,7 @@ class EvaluationWorkPageReader {
 
         List<Ready> ready = new ArrayList<>();
         for (final long id : ids) {
-            Entry entry = reusable.get(id);
+            PendingEvaluationBuffer.Entry entry = reusable.get(id);
             if (entry != null) {
                 ready.add(new Ready(id, qualityRevision, entry.workRevision(), entry.forecasts()));
                 continue;

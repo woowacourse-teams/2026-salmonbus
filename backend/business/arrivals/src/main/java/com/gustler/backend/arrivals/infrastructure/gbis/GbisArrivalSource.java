@@ -5,7 +5,6 @@ import com.gustler.backend.arrival.contract.ArrivalSnapshot.RouteArrival;
 import com.gustler.backend.arrivals.domain.ArrivalSource;
 import com.gustler.backend.arrivals.domain.ArrivalSource.Failed;
 import com.gustler.backend.arrivals.domain.ArrivalSource.Reason;
-import com.gustler.backend.arrivals.domain.ArrivalSource.Result;
 import com.gustler.backend.arrivals.domain.ArrivalSource.Success;
 import com.gustler.backend.arrivals.domain.StationId;
 import com.gustler.backend.gbis.api.GbisApiCaller;
@@ -43,7 +42,7 @@ public final class GbisArrivalSource implements ArrivalSource {
     }
 
     @Override
-    public Result fetch(String stationId, String keyAlias) {
+    public ArrivalSource.Result fetch(String stationId, String keyAlias) {
         StationId station = new StationId(stationId);
         GbisHttpResult http = caller.getByStationWithMetadata(PATH, station.value(), keyAlias);
         GbisRawResponse raw = http.response();

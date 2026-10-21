@@ -1,7 +1,6 @@
 package com.gustler.backend.quota.application;
 
 import com.gustler.backend.quota.api.ArrivalCallQuota;
-import com.gustler.backend.quota.api.ArrivalCallQuota.Reservation;
 import com.gustler.backend.quota.api.ArrivalQuotaPolicy;
 import com.gustler.backend.quota.domain.ArrivalQuotaStore;
 import com.gustler.backend.quota.domain.ArrivalQuotaStore.KeyLimit;
@@ -32,18 +31,18 @@ public final class ArrivalCallQuotaLedger implements ArrivalCallQuota {
     }
 
     @Override
-    public Optional<Reservation> reserve(Instant dispatchAt) {
+    public Optional<ArrivalCallQuota.Reservation> reserve(Instant dispatchAt) {
         LocalDate date = dispatchAt.atZone(KOREA).toLocalDate();
         final int start = Math.floorMod(cursor.getAndIncrement(), aliases.size());
         List<KeyLimit> keys = IntStream.range(0, aliases.size())
             .mapToObj(offset -> aliases.get((start + offset) % aliases.size()))
             .map(alias -> new KeyLimit(alias, policy.keyLimits().get(alias)))
             .collect(Collectors.toCollection(ArrayList::new));
-        return store.reserve(date, policy.dailyLimit(), keys).map(alias -> new Reservation(alias, date));
+        return store.reserve(date, policy.dailyLimit(), keys).map(alias -> new ArrivalCallQuota.Reservation(alias, date));
     }
 
     @Override
-    public void exclude(Reservation reservation) {
+    public void exclude(ArrivalCallQuota.Reservation reservation) {
         store.exclude(reservation.koreanDate(), reservation.keyAlias());
     }
 }

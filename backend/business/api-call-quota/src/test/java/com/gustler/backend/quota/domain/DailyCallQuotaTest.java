@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.gustler.backend.quota.api.CallQuota;
-import com.gustler.backend.quota.domain.DailyCallQuota.Reservation;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import org.assertj.core.api.AutoCloseableSoftAssertions;
@@ -45,7 +44,7 @@ class DailyCallQuotaTest {
         DailyCallQuota quota = DailyCallQuota.at(CallQuota.BUS_ROUTE, "a", BEFORE_MIDNIGHT, 2);
 
         // then
-        assertThat(quota.reservationFor(2)).contains(new Reservation(quota, 2));
+        assertThat(quota.reservationFor(2)).contains(new DailyCallQuota.Reservation(quota, 2));
     }
 
     @Test

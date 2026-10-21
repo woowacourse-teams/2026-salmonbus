@@ -21,7 +21,6 @@ import com.gustler.backend.arrivals.domain.ArrivalSource.Reason;
 import com.gustler.backend.arrivals.domain.ArrivalSource.Success;
 import com.gustler.backend.arrivals.domain.ArrivalStore;
 import com.gustler.backend.quota.api.ArrivalCallQuota;
-import com.gustler.backend.quota.api.ArrivalCallQuota.Reservation;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -72,7 +71,7 @@ class ArrivalRefreshCoordinatorTest {
     void setUp() {
         when(store.supported(anyString())).thenReturn(true);
         when(store.latest(anyString())).thenReturn(Optional.empty());
-        when(quota.reserve(any())).thenAnswer(call -> Optional.of(new Reservation("a",
+        when(quota.reserve(any())).thenAnswer(call -> Optional.of(new ArrivalCallQuota.Reservation("a",
             ((Instant) call.getArgument(0)).atZone(ArrivalCallQuota.KOREA).toLocalDate())));
         when(source.fetch(anyString(), anyString())).thenAnswer(call -> new Success(clock.instant(), null, List.of()));
         coordinator = coordinator(queue::add, 1000, 100);

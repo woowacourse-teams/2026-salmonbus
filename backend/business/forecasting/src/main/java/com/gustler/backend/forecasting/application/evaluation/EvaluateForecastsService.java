@@ -8,7 +8,6 @@ import com.gustler.backend.forecasting.application.evaluation.EvaluationSelectio
 import com.gustler.backend.forecasting.application.evaluation.EvaluationSelection.Selected;
 import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkPageReader.Page;
 import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkPageReader.Ready;
-import com.gustler.backend.forecasting.application.evaluation.PendingEvaluationBuffer.Entry;
 import com.gustler.backend.forecasting.application.evaluation.RecentArrivalObservationCache.Round;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.application.quality.WorkerQualityState;
@@ -154,7 +153,7 @@ public class EvaluateForecastsService implements EvaluateForecasts {
         if (cursor.through() == 0) {
             cursor = new Cursor(work.lastObservationId(version), 0, 0, 0);
         }
-        Map<Long, Entry> cached = snapshot.entries()
+        Map<Long, PendingEvaluationBuffer.Entry> cached = snapshot.entries()
             .stream()
             .filter(entry -> entry.key().routeVersionId() == version)
             .collect(LinkedHashMap::new,
@@ -221,7 +220,7 @@ public class EvaluateForecastsService implements EvaluateForecasts {
         }
         Set<Long> active = Set.copyOf(versions);
         boolean changed = cursors.keySet().removeIf(version -> !active.contains(version));
-        for (Entry entry : buffer.snapshot()) {
+        for (PendingEvaluationBuffer.Entry entry : buffer.snapshot()) {
             if (!active.contains(entry.key().routeVersionId())) {
                 buffer.invalidate(entry);
                 changed = true;
@@ -244,7 +243,7 @@ public class EvaluateForecastsService implements EvaluateForecasts {
             return;
         }
         try {
-            for (Entry entry : buffer.snapshot()) {
+            for (PendingEvaluationBuffer.Entry entry : buffer.snapshot()) {
                 if (entry.key().routeVersionId() == change.version()
                     && change.checked().contains(entry.key().observationId())) {
                     buffer.invalidate(entry);
@@ -269,7 +268,7 @@ public class EvaluateForecastsService implements EvaluateForecasts {
     }
 
     private record Snapshot(long revision, Map<Long, Cursor> cursors,
-        List<Entry> entries) {
+        List<PendingEvaluationBuffer.Entry> entries) {
     }
 
     record RouteInput(long version, long revision, boolean investigating,

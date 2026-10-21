@@ -3,7 +3,6 @@ package com.gustler.backend.quota.infrastructure.jdbc;
 import com.gustler.backend.quota.api.CallQuota;
 import com.gustler.backend.quota.domain.CallQuotaStore;
 import com.gustler.backend.quota.domain.DailyCallQuota;
-import com.gustler.backend.quota.domain.DailyCallQuota.Reservation;
 import java.time.LocalDate;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -52,7 +51,7 @@ public class JdbcCallQuotaStore implements CallQuotaStore {
 
     @Override
     public boolean reserve(
-        Reservation reservation
+        DailyCallQuota.Reservation reservation
     ) {
         DailyCallQuota quota = reservation.quota();
         final int calls = reservation.calls();

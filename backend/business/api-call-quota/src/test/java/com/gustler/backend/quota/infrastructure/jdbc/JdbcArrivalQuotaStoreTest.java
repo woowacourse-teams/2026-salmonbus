@@ -3,7 +3,6 @@ package com.gustler.backend.quota.infrastructure.jdbc;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.quota.api.ArrivalCallQuota;
-import com.gustler.backend.quota.api.ArrivalCallQuota.Reservation;
 import com.gustler.backend.quota.api.ArrivalQuotaPolicy;
 import com.gustler.backend.quota.application.ArrivalCallQuotaLedger;
 import com.gustler.backend.quota.infrastructure.jdbc.JdbcArrivalQuotaStoreTest.Config;
@@ -115,7 +114,7 @@ class JdbcArrivalQuotaStoreTest {
     void 거절된_키는_다른_키의_기회를_소진하지_않는다() {
         // when
         ArrivalCallQuota quota = quota(10, Map.of("a", 3, "b", 3));
-        Reservation first = quota.reserve(BASE).orElseThrow();
+        ArrivalCallQuota.Reservation first = quota.reserve(BASE).orElseThrow();
         quota.exclude(first);
         for (int i = 0; i < 3; i++) {
             assertThat(quota.reserve(BASE).orElseThrow().keyAlias()).isEqualTo("b");
@@ -132,7 +131,7 @@ class JdbcArrivalQuotaStoreTest {
         ArrivalCallQuota quota = quota(1, Map.of("a", 1));
         Instant before = Instant.parse("2026-10-14T14:59:59Z");
         Instant after = before.plusSeconds(1);
-        Reservation old = quota.reserve(before).orElseThrow();
+        ArrivalCallQuota.Reservation old = quota.reserve(before).orElseThrow();
 
         // then
         assertThat(old.covers(after)).isFalse();

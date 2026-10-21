@@ -5,7 +5,6 @@ import com.gustler.backend.quota.api.CallQuota;
 import com.gustler.backend.quota.api.CallQuotaPolicy;
 import com.gustler.backend.quota.domain.CallQuotaStore;
 import com.gustler.backend.quota.domain.DailyCallQuota;
-import com.gustler.backend.quota.domain.DailyCallQuota.Reservation;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -90,7 +89,7 @@ public class CallQuotaLedger implements ApiCallQuota {
         OffsetDateTime requestedAt,
         final int calls
     ) {
-        Optional<Reservation> reservation = DailyCallQuota.at(
+        Optional<DailyCallQuota.Reservation> reservation = DailyCallQuota.at(
             quota, keyAlias, requestedAt, policy.limitOf(quota, keyAlias))
             .reservationFor(calls);
         if (reservation.isEmpty()) {
