@@ -5,6 +5,7 @@ import type {
   ErrorResponse,
   LiveVehicles,
   RouteListResponse,
+  RouteWatch,
   StopState,
 } from "./routeForecast.types";
 
@@ -451,6 +452,11 @@ export const boardMock = {
     approachingVehicles: approachingVehiclesAt(stop),
   })),
 } satisfies Board;
+
+export const routeWatchMock = {
+  ...boardMock,
+  vehicles: liveVehicleFixtures,
+} satisfies RouteWatch;
 
 export const boardClosedMock = {
   route: boardMock.route,

@@ -157,7 +157,7 @@ function OperatingBoard({
         };
   const stationArrivals = useStationArrivals(arrivalSelection);
   const vehicles = useMemo(
-    () => liveVehicleViewsFor(board, liveVehicles, direction.id),
+    () => liveVehicleViewsFor(board, liveVehicles?.vehicles ?? null, direction.id),
     [board, liveVehicles, direction.id],
   );
   const motion = useLiveVehicleMotion(vehicles, liveMotionDurationMs);
