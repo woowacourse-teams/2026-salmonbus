@@ -117,6 +117,10 @@ export interface Vehicle {
   seat: SeatInfo;
 }
 
+export interface RouteWatch extends Board {
+  vehicles: Vehicle[];
+}
+
 export type ObservationState = "VEHICLES_PRESENT" | "NO_VEHICLES_OBSERVED" | "UNKNOWN";
 
 export interface Observation {
