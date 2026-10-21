@@ -4,7 +4,16 @@ import com.gustler.backend.api.account.dto.AuthSessionResponse;
 import com.gustler.backend.api.account.dto.MemberResponse;
 import com.gustler.backend.api.account.token.AccessTokens;
 import com.gustler.backend.api.account.token.BearerTokens;
+import com.gustler.backend.api.docs.AuthApiDocsExamples;
 import com.gustler.backend.member.api.ViewMember;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Optional;
 import java.util.UUID;
@@ -34,7 +43,41 @@ public class AuthSessionController {
     }
 
     @GetMapping("/api/auth/session")
-    public ResponseEntity<AuthSessionResponse> session(CsrfToken csrfToken, HttpServletRequest request) {
+    @Operation(operationId = "getAuthSession", summary = "로그인 상태와 CSRF 토큰 쿠키",
+        description = """
+            현재 로그인 상태를 반환합니다. CSRF 토큰 쿠키 `__Host-XSRF-TOKEN`이 없으면 이 응답에서 발급합니다.
+            상태를 바꾸는 요청(갱신·로그아웃·닉네임 변경·탈퇴)을 보내기 전에 호출하고, 쿠키 값을 `X-XSRF-TOKEN` 헤더에 그대로 싣습니다.
+
+            액세스 토큰은 `Authorization: Bearer` 헤더를 먼저 보고, 없으면 `__Host-sb_at` 쿠키를 봅니다.
+            토큰이 없거나 만료·위조됐거나 회원이 탈퇴했으면 401 대신 `authenticated=false`로 답합니다.
+            이때 `__Host-sb_rt` 쿠키가 있으면 `refreshable=true`이므로 `POST /api/auth/refresh`로 로그인을 이어 갑니다.
+            리프레시 토큰 쿠키는 스크립트가 읽을 수 없어 이 값으로 판단합니다. 리프레시 토큰이 유효한지는 확인하지 않습니다.
+
+            로그인이 꺼져 있으면(`AUTH_ENABLED=false`) 이 경로는 404이고 명세에도 나오지 않습니다.
+            """)
+    @ApiResponses(
+        @ApiResponse(responseCode = "200", description = "로그인 상태. 로그인하지 않았으면 member를 생략",
+            headers = {
+                @Header(name = "Cache-Control", description = "no-store", schema = @Schema(type = "string")),
+                @Header(name = "Set-Cookie",
+                    description = "CSRF 토큰 쿠키가 없을 때만 __Host-XSRF-TOKEN 발급. Secure; SameSite=Lax; Path=/. "
+                        + "스크립트가 읽을 수 있음(HttpOnly 아님)",
+                    schema = @Schema(type = "string"))
+            },
+            content =
+            @Content(mediaType = "application/json", schema = @Schema(implementation = AuthSessionResponse.class),
+                examples = {
+                    @ExampleObject(name = "authenticated", summary = "로그인함",
+                        value = AuthApiDocsExamples.SESSION_AUTHENTICATED),
+                    @ExampleObject(name = "refreshable", summary = "액세스 토큰 없음·리프레시 토큰 쿠키 있음",
+                        value = AuthApiDocsExamples.SESSION_REFRESHABLE),
+                    @ExampleObject(name = "anonymous", summary = "로그인하지 않음",
+                        value = AuthApiDocsExamples.SESSION_ANONYMOUS)
+                })))
+    public ResponseEntity<AuthSessionResponse> session(
+        @Parameter(hidden = true) CsrfToken csrfToken,
+        HttpServletRequest request
+    ) {
         csrfToken.getToken();
         return ResponseEntity.ok()
             .cacheControl(CacheControl.noStore())

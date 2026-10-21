@@ -72,6 +72,13 @@ springdoc:
     - /api/v2/stations/{stationId}/arrivals
     - /api/v2/routes/{routeId}/geometry
     - /api/chat/rooms/{routeId}
+    # 로그인 API 는 auth.enabled=true 일 때만 컨트롤러가 등록되므로 꺼져 있으면 명세에도 없다.
+    # 브라우저 이동 경로(/api/auth/{provider}/start, /callback)는 보안 필터가 처리해 명세 대신 contract/auth-v1.md 에 적는다.
+    - /api/auth/session
+    - /api/auth/refresh
+    - /api/auth/logout
+    - /api/me
+    - /api/me/withdrawal/apple
 
 # 오류 응답에 실어 보낸 requestId 로 서버 로그를 찾을 수 있게 한다.
 # 이 줄이 없으면 MDC 에 넣어도 로그 줄에 안 찍혀서, 클라이언트가 받은 ID 로 검색할 것이 없다.
