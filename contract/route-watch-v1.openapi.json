@@ -571,7 +571,11 @@
               "METHOD_NOT_ALLOWED",
               "INTERNAL_ERROR",
               "UNAUTHENTICATED",
-              "CSRF_REJECTED"
+              "CSRF_REJECTED",
+              "NICKNAME_LENGTH",
+              "NICKNAME_CHARACTERS",
+              "NICKNAME_RESERVED",
+              "NICKNAME_TAKEN"
             ]
           },
           "message": {

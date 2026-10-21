@@ -12,6 +12,7 @@ import com.gustler.backend.member.domain.Member;
 import com.gustler.backend.member.domain.MemberRepository;
 import com.gustler.backend.member.domain.NewMember;
 import com.gustler.backend.member.domain.Nickname;
+import com.gustler.backend.member.domain.NicknameUpdate;
 import com.gustler.backend.member.domain.RegistrationResult;
 import java.time.Clock;
 import java.time.Instant;
@@ -250,6 +251,11 @@ class SocialSignInTest {
                 return new RegistrationResult.NicknameTaken();
             }
             return new RegistrationResult.Registered(add(newMember));
+        }
+
+        @Override
+        public NicknameUpdate changeNickname(UUID publicId, Nickname nickname) {
+            return NicknameUpdate.MEMBER_NOT_FOUND;
         }
 
         @Override

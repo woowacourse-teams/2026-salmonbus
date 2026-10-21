@@ -1,5 +1,6 @@
 package com.gustler.backend.member.domain;
 
+import com.gustler.backend.member.api.NicknameViolation;
 import java.text.Normalizer;
 import java.util.List;
 import java.util.Locale;

@@ -3,6 +3,7 @@ package com.gustler.backend.member.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.gustler.backend.member.api.NicknameViolation;
 import java.text.Normalizer;
 import java.util.Optional;
 import java.util.Random;

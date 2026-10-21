@@ -6,10 +6,12 @@ import com.gustler.backend.member.domain.Member;
 import com.gustler.backend.member.domain.MemberRepository;
 import com.gustler.backend.member.domain.NewMember;
 import com.gustler.backend.member.domain.Nickname;
+import com.gustler.backend.member.domain.NicknameUpdate;
 import com.gustler.backend.member.domain.RegistrationResult;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -105,5 +107,24 @@ public class JdbcMemberRepository implements MemberRepository {
         jdbcClient.sql("UPDATE member SET last_login_at = ? WHERE id = ?")
             .params(at, memberId)
             .update();
+    }
+
+    /**
+     * 갱신 한 문장으로 처리한다. 겹치는 닉네임은 {@code ux_member_nickname} 이 거절하고, 이 문장 하나가 트랜잭션이라
+     * 예외를 잡아도 이어서 실행할 문장이 없다.
+     */
+    @Override
+    public NicknameUpdate changeNickname(UUID publicId, Nickname nickname) {
+        try {
+            final int changed = jdbcClient.sql("UPDATE member SET nickname = ? WHERE public_id = ?")
+                .params(nickname.value(), publicId)
+                .update();
+            if (changed == ONE_ROW_CHANGED) {
+                return NicknameUpdate.UPDATED;
+            }
+            return NicknameUpdate.MEMBER_NOT_FOUND;
+        } catch (DuplicateKeyException exception) {
+            return NicknameUpdate.TAKEN;
+        }
     }
 }

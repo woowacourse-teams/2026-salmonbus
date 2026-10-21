@@ -20,4 +20,7 @@ public interface MemberRepository {
     RegistrationResult register(NewMember newMember);
 
     void recordLogin(long memberId, OffsetDateTime at);
+
+    /** 닉네임 고유성 위반도 예외 없이 {@link NicknameUpdate#TAKEN} 으로 알린다. */
+    NicknameUpdate changeNickname(UUID publicId, Nickname nickname);
 }
