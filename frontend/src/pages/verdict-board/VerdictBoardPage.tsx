@@ -97,7 +97,8 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
   const runningDirection =
     status === "outOfService" && state.status === "ready"
       ? (state.board.route.directions.find(
-          (candidate) => serviceStateFor(state.board, candidate, state.pairedLiveVehicles) === "running",
+          (candidate) =>
+            serviceStateFor(state.board, candidate, state.pairedLiveVehicles?.vehicles ?? []) === "running",
         ) ?? null)
       : null;
   return (
@@ -346,7 +347,7 @@ function boardScreenOf(state: BoardState): BoardScreen {
     case "error":
       return { kind: "error", failure: state.failure };
     case "ready":
-      return serviceStateFor(state.board, state.direction, state.pairedLiveVehicles) === "outOfService"
+      return serviceStateFor(state.board, state.direction, state.pairedLiveVehicles?.vehicles ?? []) === "outOfService"
         ? { kind: "outOfService", board: state.board }
         : { kind: "forecast", board: state.board, direction: state.direction.id };
   }
