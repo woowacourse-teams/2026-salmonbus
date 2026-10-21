@@ -64,9 +64,14 @@ final class JdbcStatisticsInputExtractor {
         ZoneId zone,
         final int maxRows
     ) {
-        if (route <= 0 || after < 0 || through <= after || through - after > MAX_ID_SPAN
-            || until == null || zone == null || maxRows < 1 || maxRows > MAX_ROWS) {
-            throw new IllegalArgumentException("추출 노선·관측 범위·시각·건수 한도가 올바르지 않다");
+        if (!hasValidObservationRange(route, after, through)) {
+            throw invalidExtractionRequest();
+        }
+        if (until == null || zone == null) {
+            throw invalidExtractionRequest();
+        }
+        if (maxRows < 1 || maxRows > MAX_ROWS) {
+            throw invalidExtractionRequest();
         }
         return transaction.execute(status -> {
             jdbc.sql("SET LOCAL statement_timeout = '2s'").update();
@@ -93,6 +98,20 @@ final class JdbcStatisticsInputExtractor {
             StatisticsInputRows.verify(scope, rows.iterator());
             return new Extracted(scope, after, through, rows);
         });
+    }
+
+    private boolean hasValidObservationRange(long route, long after, long through) {
+        if (route <= 0 || after < 0) {
+            return false;
+        }
+        if (through <= after) {
+            return false;
+        }
+        return through - after <= MAX_ID_SPAN;
+    }
+
+    private IllegalArgumentException invalidExtractionRequest() {
+        return new IllegalArgumentException("추출 노선·관측 범위·시각·건수 한도가 올바르지 않다");
     }
 
     private StatisticsInputRow row(ResultSet rs, final long revision) throws SQLException {

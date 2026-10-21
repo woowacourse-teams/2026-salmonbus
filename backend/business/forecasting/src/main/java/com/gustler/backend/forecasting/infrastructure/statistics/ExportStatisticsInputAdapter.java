@@ -27,8 +27,7 @@ public final class ExportStatisticsInputAdapter implements ExportStatisticsInput
         final long maxBytes,
         ZoneId zone
     ) {
-        if (workDirectory == null || !Files.isDirectory(workDirectory) || Files.isSymbolicLink(workDirectory)
-            || maxBytes < 1 || maxBytes > 16 * 1024 * 1024 || zone == null) {
+        if (!hasValidConfiguration(workDirectory, maxBytes, zone)) {
             throw new IllegalArgumentException("작업 디렉터리와 시간대, 16MiB 이하의 파일 한도가 필요하다");
         }
         this.extractor = new JdbcStatisticsInputExtractor(jdbc, transactions);
@@ -36,6 +35,16 @@ public final class ExportStatisticsInputAdapter implements ExportStatisticsInput
         this.workDirectory = workDirectory;
         this.maxBytes = maxBytes;
         this.zone = zone;
+    }
+
+    private boolean hasValidConfiguration(Path workDirectory, long maxBytes, ZoneId zone) {
+        if (workDirectory == null || zone == null) {
+            return false;
+        }
+        if (!Files.isDirectory(workDirectory) || Files.isSymbolicLink(workDirectory)) {
+            return false;
+        }
+        return maxBytes >= 1 && maxBytes <= 16 * 1024 * 1024;
     }
 
     @Override

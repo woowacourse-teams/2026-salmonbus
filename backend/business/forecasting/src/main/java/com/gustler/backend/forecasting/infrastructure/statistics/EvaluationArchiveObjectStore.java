@@ -33,13 +33,22 @@ public final class EvaluationArchiveObjectStore implements EvaluationArchiveStor
     }
 
     EvaluationArchiveObjectStore(Path workDirectory, final long maxBytes, Command command) {
-        if (workDirectory == null || !Files.isDirectory(workDirectory, LinkOption.NOFOLLOW_LINKS)
-            || maxBytes < 1 || maxBytes > 16 * 1024 * 1024 || command == null) {
+        if (!hasValidConfiguration(workDirectory, maxBytes, command)) {
             throw new IllegalArgumentException("작업 디렉터리와 16MiB 이하의 파일 한도가 필요하다");
         }
         this.workDirectory = workDirectory;
         this.maxBytes = maxBytes;
         this.command = command;
+    }
+
+    private boolean hasValidConfiguration(Path workDirectory, long maxBytes, Command command) {
+        if (workDirectory == null || command == null) {
+            return false;
+        }
+        if (!Files.isDirectory(workDirectory, LinkOption.NOFOLLOW_LINKS)) {
+            return false;
+        }
+        return maxBytes >= 1 && maxBytes <= 16 * 1024 * 1024;
     }
 
     @Override
@@ -119,8 +128,7 @@ public final class EvaluationArchiveObjectStore implements EvaluationArchiveStor
                 "--range", "bytes=0-" + expected.length, "--region", "ap-northeast-2",
                 "--cli-connect-timeout", "5", "--cli-read-timeout", "15", "--no-cli-pager", "--no-cli-auto-prompt",
                 downloaded.toAbsolutePath().toString()));
-            if (Files.isSymbolicLink(downloaded) || Files.size(downloaded) != expected.length
-                    || !Arrays.equals(Files.readAllBytes(downloaded), expected)) {
+            if (!matchesExpectedContent(downloaded, expected)) {
                 throw new IllegalStateException("S3에서 다시 읽은 원본이 예약 자료와 다르다");
             }
         } catch (IOException | RuntimeException exception) {
@@ -129,6 +137,13 @@ public final class EvaluationArchiveObjectStore implements EvaluationArchiveStor
             }
             throw exception;
         }
+    }
+
+    private boolean matchesExpectedContent(Path downloaded, byte[] expected) throws IOException {
+        if (Files.isSymbolicLink(downloaded) || Files.size(downloaded) != expected.length) {
+            return false;
+        }
+        return Arrays.equals(Files.readAllBytes(downloaded), expected);
     }
 
     @Override

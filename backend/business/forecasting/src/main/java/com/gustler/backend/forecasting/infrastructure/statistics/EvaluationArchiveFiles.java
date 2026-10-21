@@ -62,10 +62,20 @@ final class EvaluationArchiveFiles {
     }
 
     private static void validateEncodingRequest(EvaluationArchiveBatch batch, List<Row> rows, final long maxBytes) {
-        if (batch == null || rows == null || rows.size() != batch.rowCount()
-            || maxBytes < 1 || maxBytes > 16 * 1024 * 1024) {
+        if (!hasMatchingBatchRows(batch, rows) || !hasValidFileLimit(maxBytes)) {
             throw new IllegalArgumentException("묶음 건수와 파일 크기 한도가 올바르지 않다");
         }
+    }
+
+    private static boolean hasMatchingBatchRows(EvaluationArchiveBatch batch, List<Row> rows) {
+        if (batch == null || rows == null) {
+            return false;
+        }
+        return rows.size() == batch.rowCount();
+    }
+
+    private static boolean hasValidFileLimit(long maxBytes) {
+        return maxBytes >= 1 && maxBytes <= 16 * 1024 * 1024;
     }
 
     private static void validateArchiveRowBytes(
@@ -75,11 +85,27 @@ final class EvaluationArchiveFiles {
         final long maxBytes,
         Set<Key> seen
     ) {
-        if (original.length > 64 * 1024 || encodedBytes + (long) original.length + 1 > maxBytes
-            || row.originalJson().contains("\n") || row.originalJson().contains("\r")
-            || !seen.add(row.key()) || !digest(original).equals(row.sha256())) {
-            throw new IllegalArgumentException("원본의 크기·중복·검증값이 올바르지 않다");
+        if (exceedsArchiveLimit(original, encodedBytes, maxBytes)) {
+            throw invalidArchiveRow();
         }
+        if (containsLineBreak(row.originalJson()) || !seen.add(row.key())) {
+            throw invalidArchiveRow();
+        }
+        if (!digest(original).equals(row.sha256())) {
+            throw invalidArchiveRow();
+        }
+    }
+
+    private static boolean exceedsArchiveLimit(byte[] original, int encodedBytes, long maxBytes) {
+        return original.length > 64 * 1024 || encodedBytes + (long) original.length + 1 > maxBytes;
+    }
+
+    private static boolean containsLineBreak(String originalJson) {
+        return originalJson.contains("\n") || originalJson.contains("\r");
+    }
+
+    private static IllegalArgumentException invalidArchiveRow() {
+        return new IllegalArgumentException("원본의 크기·중복·검증값이 올바르지 않다");
     }
 
     private static JsonNode readArchiveRowObject(byte[] original) {
@@ -201,13 +227,22 @@ final class EvaluationArchiveFiles {
     }
 
     private static void validateDecodedRowKey(JsonNode node) {
-        if (node == null || !node.isObject() || !node.hasNonNull("vehicle_observation_id")
-            || !node.hasNonNull("target_stop_order") || !node.get("vehicle_observation_id").isIntegralNumber()
-            || !node.get("vehicle_observation_id").canConvertToLong()
-            || !node.get("target_stop_order").isIntegralNumber()
-            || !node.get("target_stop_order").canConvertToInt()) {
+        if (node == null || !node.isObject()) {
             throw new IllegalArgumentException("원본 키가 올바르지 않다");
         }
+        JsonNode observationId = node.get("vehicle_observation_id");
+        JsonNode stopOrder = node.get("target_stop_order");
+        if (!isLongNumber(observationId) || !isIntegerNumber(stopOrder)) {
+            throw new IllegalArgumentException("원본 키가 올바르지 않다");
+        }
+    }
+
+    private static boolean isLongNumber(JsonNode value) {
+        return value != null && value.isIntegralNumber() && value.canConvertToLong();
+    }
+
+    private static boolean isIntegerNumber(JsonNode value) {
+        return value != null && value.isIntegralNumber() && value.canConvertToInt();
     }
 
     /** 인코더가 새로 만든 바이트 배열을 같은 패키지의 저장·검증 단계로 넘긴다. 전달 뒤 배열을 수정하지 않는다. */

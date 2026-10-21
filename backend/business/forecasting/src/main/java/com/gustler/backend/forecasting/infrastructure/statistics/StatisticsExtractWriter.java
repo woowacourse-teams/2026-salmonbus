@@ -23,8 +23,7 @@ final class StatisticsExtractWriter {
     }
 
     static Bundle write(Path parent, Extracted extracted, final long maxBytes) {
-        if (maxBytes < 1 || extracted == null || parent == null || !Files.isDirectory(parent)
-            || Files.isSymbolicLink(parent)) {
+        if (!hasValidRequest(parent, extracted, maxBytes)) {
             throw new IllegalArgumentException("추출 자료와 작업 디렉터리, 파일 크기 한도가 필요하다");
         }
         StatisticsInputRows.verify(extracted.scope(), extracted.rows().iterator());
@@ -55,6 +54,16 @@ final class StatisticsExtractWriter {
         } catch (IOException | NoSuchAlgorithmException exception) {
             throw new IllegalStateException("검증된 추출 파일을 만들지 못했다", exception);
         }
+    }
+
+    private static boolean hasValidRequest(Path parent, Extracted extracted, long maxBytes) {
+        if (maxBytes < 1 || extracted == null) {
+            return false;
+        }
+        if (parent == null || !Files.isDirectory(parent)) {
+            return false;
+        }
+        return !Files.isSymbolicLink(parent);
     }
 
     record Manifest(String format, StatisticsInputScope scope, long afterObservationId,

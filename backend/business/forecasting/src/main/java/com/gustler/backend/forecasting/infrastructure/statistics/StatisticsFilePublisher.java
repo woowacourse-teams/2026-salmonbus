@@ -54,21 +54,22 @@ final class StatisticsFilePublisher {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("파일 읽기와 계산은 DB 트랜잭션 밖에서 실행해야 한다");
         }
-        if (bundle == null || capacities == null || bundle.manifest() == null
-            || !"statistics-extract-v1".equals(bundle.manifest().format())) {
+        if (!hasValidInput(bundle, capacities)) {
             throw new IllegalArgumentException("검증 가능한 입력 묶음과 차량 정원이 필요하다");
         }
-        StatisticsInputScope scope = bundle.manifest().scope();
+
+        Manifest manifest = bundle.manifest();
+        StatisticsInputScope scope = manifest.scope();
         if (scope.dataUntil().isAfter(clock.instant())) {
             throw new IllegalArgumentException("현재 시각 이후의 통계는 게시하지 않는다");
         }
+
         TreeMap<String, Integer> fixedCapacities = new TreeMap<>(capacities);
-        String digest = digest(new Input(bundle.manifest(), fixedCapacities));
+        String digest = digest(new Input(manifest, fixedCapacities));
         // DB 연결을 보유하지 않은 상태에서 무결성 검사와 계산을 끝낸다.
         Set<EvaluationKey> inputKeys = readKeys(bundle);
         List<StopDemandMeasurement> measurements =
-            StatisticsFileCalculator.calculate(bundle.directory(), bundle.manifest()
-                .files(),
+            StatisticsFileCalculator.calculate(bundle.directory(), manifest.files(),
                 scope, fixedCapacities, maxDailyCells, 64 * 1024);
         return transaction.execute(status -> {
             jdbc.sql("SET LOCAL statement_timeout='500ms'").update();
@@ -106,6 +107,17 @@ final class StatisticsFilePublisher {
                 .param("calculation", scope.calculationVersion()).param("revision", published).update();
             return published;
         });
+    }
+
+    private boolean hasValidInput(Bundle bundle, Map<String, Integer> capacities) {
+        if (bundle == null || capacities == null) {
+            return false;
+        }
+        Manifest manifest = bundle.manifest();
+        if (manifest == null) {
+            return false;
+        }
+        return "statistics-extract-v1".equals(manifest.format());
     }
 
     private static Set<EvaluationKey> readKeys(Bundle bundle) {

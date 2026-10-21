@@ -104,12 +104,20 @@ final class StatisticsFileCalculator {
 
     private static int requireVehicleCapacity(DemandSample sample, Map<String, Integer> capacities) {
         Integer capacity = capacities.get(sample.vehicleId());
-        if (capacity == null || capacity < 1
-            || sample.predictionRemainingSeats() > capacity
-            || sample.arrivalRemainingSeats() > capacity) {
+        if (!matchesVehicleCapacity(sample, capacity)) {
             throw new IllegalArgumentException("표본과 일치하는 차량 정원이 필요하다");
         }
         return capacity;
+    }
+
+    private static boolean matchesVehicleCapacity(DemandSample sample, Integer capacity) {
+        if (capacity == null || capacity < 1) {
+            return false;
+        }
+        if (sample.predictionRemainingSeats() > capacity) {
+            return false;
+        }
+        return sample.arrivalRemainingSeats() <= capacity;
     }
 
     private static Map<CellKey, StopDemandCellTotals> aggregateCellTotals(
