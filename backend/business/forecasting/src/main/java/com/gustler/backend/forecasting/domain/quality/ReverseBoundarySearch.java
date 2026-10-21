@@ -25,35 +25,30 @@ final class ReverseBoundarySearch {
         if (boundaryConfirmed || older == null) {
             return;
         }
-        if (!Objects.equals(older.vehicleId(), anchor.vehicleId()) || older.at().isAfter(anchor.at())
-            || Duration.between(older.at(), anchor.at()).compareTo(route.maximumGap()) > 0) {
+        if (isDisconnectedFromAnchor(older)) {
             boundaryConfirmed = true;
             return;
         }
-        if (isTerminal(older) && older.stopOrder() == anchor.stopOrder()) {
+        if (isRepeatedTerminalObservation(older)) {
             if (OneWayTripClassifier.isDeparture(route, older)) {
                 candidate = older;
             }
             anchor = older;
             return;
         }
-        if (isTerminal(anchor) && candidate != null) {
+        if (reachedKnownTerminalBoundary()) {
             boundaryConfirmed = true;
             return;
         }
         final int before = OneWayTripClassifier.direction(route, older);
         final int after = OneWayTripClassifier.direction(route, anchor);
         final boolean forward = anchor.stopOrder() >= older.stopOrder();
-        final boolean directionChange = before != after && (forward || (before == 1 && after == 0));
-        // 회차지의 비출발 상태만으로 방향을 확정하지 않고, 앞선 출발 표시까지 확인한다.
-        if (directionChange && isTerminal(older) && !OneWayTripClassifier.isDeparture(route, older)) {
+        if (changesDirectionAtUnconfirmedTerminal(older, before, after, forward)) {
             candidate = anchor;
             anchor = older;
             return;
         }
-        final boolean continuation = before == after && (forward || (before == 1
-            && anchor.stopOrder() == route.firstStop() && !OneWayTripClassifier.isDeparture(route, anchor)));
-        if (!continuation) {
+        if (!continuesTowardAnchor(before, after, forward)) {
             boundaryConfirmed = true;
             return;
         }
@@ -61,6 +56,37 @@ final class ReverseBoundarySearch {
         if (OneWayTripClassifier.isDeparture(route, older)) {
             candidate = older;
         }
+    }
+
+    private boolean isDisconnectedFromAnchor(Observation older) {
+        return !Objects.equals(older.vehicleId(), anchor.vehicleId())
+            || older.at().isAfter(anchor.at())
+            || Duration.between(older.at(), anchor.at()).compareTo(route.maximumGap()) > 0;
+    }
+
+    private boolean isRepeatedTerminalObservation(Observation older) {
+        return isTerminal(older) && older.stopOrder() == anchor.stopOrder();
+    }
+
+    private boolean reachedKnownTerminalBoundary() {
+        return isTerminal(anchor) && candidate != null;
+    }
+
+    private boolean changesDirectionAtUnconfirmedTerminal(
+        Observation older,
+        final int before,
+        final int after,
+        final boolean forward
+    ) {
+        final boolean directionChanged = before != after && (forward || (before == 1 && after == 0));
+        return directionChanged && isTerminal(older) && !OneWayTripClassifier.isDeparture(route, older);
+    }
+
+    private boolean continuesTowardAnchor(final int before, final int after, final boolean forward) {
+        final boolean returnsToFirstStop = before == 1
+            && anchor.stopOrder() == route.firstStop()
+            && !OneWayTripClassifier.isDeparture(route, anchor);
+        return before == after && (forward || returnsToFirstStop);
     }
 
     Observation anchor() {

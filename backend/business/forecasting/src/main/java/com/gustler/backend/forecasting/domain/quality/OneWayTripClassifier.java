@@ -47,17 +47,10 @@ public final class OneWayTripClassifier {
      * 이전 관측과 현재 관측으로 편도 운행 적격성을 판정한다. 좌석 범위가 잘못된 관측은 경계 판정 뒤에도 제외한다.
      */
     public static Decision classify(Route route, Previous previous, Observation current) {
-        final boolean comparable = previous != null && current.vehicleId() != null
-            && Objects.equals(previous.observation().vehicleId(), current.vehicleId())
-            && !current.at().isBefore(previous.observation().at());
-        final boolean connected = comparable
-            && Duration.between(previous.observation().at(), current.at()).compareTo(route.maximumGap()) <= 0;
+        final boolean comparable = canCompareObservations(previous, current);
+        final boolean connected = isWithinMaximumGap(route, previous, current, comparable);
         final boolean departure = current.vehicleId() != null && isDeparture(route, current);
-        final boolean repeatedDeparture = connected && departure
-            && previous.observation().stopOrder() == current.stopOrder()
-            && direction(route, previous.start()
-                .stopOrder(), previous.start()
-                .runningState()) == direction(route, current);
+        final boolean repeatedDeparture = isRepeatedDeparture(route, previous, current, connected, departure);
         final long tripId = current.id();
         if (departure && !repeatedDeparture) {
             return withSeatQuality(current, tripId, Status.ELIGIBLE, Boundary.DEPARTURE);
@@ -66,21 +59,71 @@ public final class OneWayTripClassifier {
             return withSeatQuality(current, tripId, Status.BOUNDARY_UNCONFIRMED, Boundary.UNCONFIRMED);
         }
         final int before = direction(route, previous.start().stopOrder(), previous.start().runningState());
-        int after = direction(route, current);
-        // 같은 정류장에서 운행 상태만 반복되어도 편도 방향을 되돌리지 않는다.
-        if (current.stopOrder() == previous.observation().stopOrder()) {
-            after = before;
-        }
+        final int after = directionAfterObservation(route, previous, current, before);
         final boolean forward = current.stopOrder() >= previous.observation().stopOrder();
-        final boolean wrap = before == 1 && after == 0 && !forward;
-        if (before != after && (forward || wrap)) {
+        if (crossesDirectionBoundary(before, after, forward)) {
             return withSeatQuality(current, tripId, Status.ELIGIBLE, Boundary.DIRECTION_CHANGE);
         }
-        if (connected && before == after && (forward || (before == 1
-            && current.stopOrder() == route.firstStop() && !departure))) {
+        if (continuesPreviousTrip(route, current, connected, departure, before, after, forward)) {
             return withSeatQuality(current, previous.tripId(), previous.status(), Boundary.CONTINUATION);
         }
         return withSeatQuality(current, tripId, Status.BOUNDARY_UNCONFIRMED, Boundary.UNCONFIRMED);
+    }
+
+    private static boolean canCompareObservations(Previous previous, Observation current) {
+        return previous != null && current.vehicleId() != null
+            && Objects.equals(previous.observation().vehicleId(), current.vehicleId())
+            && !current.at().isBefore(previous.observation().at());
+    }
+
+    private static boolean isWithinMaximumGap(
+        Route route,
+        Previous previous,
+        Observation current,
+        final boolean comparable
+    ) {
+        return comparable
+            && Duration.between(previous.observation().at(), current.at()).compareTo(route.maximumGap()) <= 0;
+    }
+
+    private static boolean isRepeatedDeparture(
+        Route route,
+        Previous previous,
+        Observation current,
+        final boolean connected,
+        final boolean departure
+    ) {
+        return connected && departure
+            && previous.observation().stopOrder() == current.stopOrder()
+            && direction(route, previous.start().stopOrder(), previous.start().runningState())
+            == direction(route, current);
+    }
+
+    private static int directionAfterObservation(Route route, Previous previous, Observation current, final int before) {
+        if (current.stopOrder() == previous.observation().stopOrder()) {
+            return before;
+        }
+        return direction(route, current);
+    }
+
+    private static boolean crossesDirectionBoundary(final int before, final int after, final boolean forward) {
+        final boolean wrapsToOutboundDirection = before == 1 && after == 0 && !forward;
+        return before != after && (forward || wrapsToOutboundDirection);
+    }
+
+    private static boolean continuesPreviousTrip(
+        Route route,
+        Observation current,
+        final boolean connected,
+        final boolean departure,
+        final int before,
+        final int after,
+        final boolean forward
+    ) {
+        final boolean returnsToFirstStop = before == 1
+            && current.stopOrder() == route.firstStop()
+            && !departure;
+        return connected && before == after && (forward || returnsToFirstStop);
     }
 
     /** 경계 판정 경로와 관계없이 좌석 범위 위반은 마지막에 동일하게 제외한다. */
