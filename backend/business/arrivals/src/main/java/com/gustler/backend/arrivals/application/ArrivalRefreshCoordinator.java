@@ -181,88 +181,29 @@ public final class ArrivalRefreshCoordinator implements RefreshStationArrivals {
 
     private void collect(StationId stationId, Job job) {
         try {
-            if (expired(job)) {
-                defer(stationId, job, "QUEUE_EXPIRED", POLL);
+            if (deferIfQueueExpired(stationId, job)) {
                 return;
             }
             if (!store.supported(stationId.value())) {
-                synchronized (this) {
-                    State state = states.get(stationId);
-                    if (state != null && state.job == job) {
-                        states.remove(stationId);
-                    }
-                }
+                removeUnsupportedStationJob(stationId, job);
                 return;
             }
-            Optional<ArrivalSnapshot> latest = store.latest(stationId.value());
-            if (latest.isPresent() && clock.instant().isBefore(latest.get().refreshAfterAt())) {
-                defer(stationId, job, "NOT_DUE", Duration.between(clock.instant(), latest.get().refreshAfterAt()));
+            if (deferIfLatestSnapshotIsFresh(stationId, job)) {
                 return;
             }
-            if (expired(job)) {
-                defer(stationId, job, "QUEUE_EXPIRED", POLL);
+            if (deferIfQueueExpired(stationId, job)) {
                 return;
             }
-            synchronized (this) {
-                if (clock.instant().isBefore(quotaBlockedUntil)) {
-                    defer(stationId, job, "DAILY_QUOTA_EXHAUSTED",
-                        Duration.between(clock.instant(), quotaBlockedUntil));
-                    return;
-                }
-                if (ticker.getAsLong() < serviceBlockedUntilNanos) {
-                    defer(stationId, job, "RATE_LIMITED",
-                        Duration.ofNanos(serviceBlockedUntilNanos - ticker.getAsLong()));
-                    return;
-                }
-            }
-            Duration rateWait = acquireRate();
-            if (!rateWait.isZero()) {
-                defer(stationId, job, "RATE_LIMITED", rateWait);
+            if (deferIfCollectionIsBlocked(stationId, job) || deferIfRateLimitReached(stationId, job)) {
                 return;
             }
-            Optional<ArrivalCallQuota.Reservation> reservation = quota.reserve(clock.instant());
+            Optional<ArrivalCallQuota.Reservation> reservation = reserveCoveredQuota();
             if (reservation.isEmpty()) {
                 exhausted(stationId, job);
                 return;
             }
-            if (!reservation.get().covers(clock.instant())) {
-                reservation = quota.reserve(clock.instant());
-                if (reservation.isEmpty() || !reservation.get().covers(clock.instant())) {
-                    exhausted(stationId, job);
-                    return;
-                }
-            }
             ArrivalSource.Result result = source.fetch(stationId.value(), reservation.get().keyAlias());
-            if (result instanceof Success success) {
-                ArrivalSnapshot snapshot = new ArrivalSnapshot(job.id, stationId.value(), success.receivedAt(),
-                    success.receivedAt().plus(policy.refreshInterval()), success.receivedAt().plus(policy.validity()),
-                    success.sourceQueryTime(), success.routes());
-                save(snapshot);
-                synchronized (this) {
-                    State state = states.get(stationId);
-                    if (state != null && state.job == job) {
-                        state.failures = 0;
-                        finish(state, "NOT_DUE", Duration.between(clock.instant(), snapshot.refreshAfterAt()));
-                    }
-                }
-                LOGGER.info("event=arrival_collected stationId={} routes={}", stationId.value(), snapshot.routes()
-                        .size());
-                return;
-            }
-            Failed failed = (Failed) result;
-            Reason reason = failed.reason();
-            LOGGER.warn("event=arrival_source_failed stationId={} reason={}", stationId.value(), reason);
-            if (reason == Reason.DAILY_QUOTA_EXCEEDED
-                || reason == Reason.KEY_REJECTED) {
-                quota.exclude(reservation.get());
-            }
-            fail(stationId, job, reason.name(), failed.retryAfter());
-            if (reason == Reason.RATE_LIMITED) {
-                synchronized (this) {
-                    Duration delay = retryDelay(failed);
-                    serviceBlockedUntilNanos = Math.max(serviceBlockedUntilNanos, ticker.getAsLong() + delay.toNanos());
-                }
-            }
+            recordCollectionResult(stationId, job, reservation.get(), result);
         } catch (RuntimeException failure) {
             fail(stationId, job, "STORAGE_OR_COLLECTION_ERROR");
             // 예외의 본문이나 URL에 인증 정보가 있을 수 있어 출력하지 않는다.
@@ -272,6 +213,116 @@ public final class ArrivalRefreshCoordinator implements RefreshStationArrivals {
             // 수신 저장·상태 정리가 끝난 뒤 알린다. 대기하는 HTTP 요청은 DB 연결을 점유하지 않는다.
             job.completed.complete(null);
         }
+    }
+
+    private boolean deferIfQueueExpired(StationId stationId, Job job) {
+        if (!expired(job)) {
+            return false;
+        }
+        defer(stationId, job, "QUEUE_EXPIRED", POLL);
+        return true;
+    }
+
+    private synchronized void removeUnsupportedStationJob(StationId stationId, Job job) {
+        State state = states.get(stationId);
+        if (state != null && state.job == job) {
+            states.remove(stationId);
+        }
+    }
+
+    private boolean deferIfLatestSnapshotIsFresh(StationId stationId, Job job) {
+        Optional<ArrivalSnapshot> latest = store.latest(stationId.value());
+        if (latest.isEmpty() || !clock.instant().isBefore(latest.get().refreshAfterAt())) {
+            return false;
+        }
+        defer(stationId, job, "NOT_DUE", Duration.between(clock.instant(), latest.get().refreshAfterAt()));
+        return true;
+    }
+
+    private synchronized boolean deferIfCollectionIsBlocked(StationId stationId, Job job) {
+        if (clock.instant().isBefore(quotaBlockedUntil)) {
+            defer(stationId, job, "DAILY_QUOTA_EXHAUSTED", Duration.between(clock.instant(), quotaBlockedUntil));
+            return true;
+        }
+        if (ticker.getAsLong() < serviceBlockedUntilNanos) {
+            defer(stationId, job, "RATE_LIMITED",
+                Duration.ofNanos(serviceBlockedUntilNanos - ticker.getAsLong()));
+            return true;
+        }
+        return false;
+    }
+
+    private boolean deferIfRateLimitReached(StationId stationId, Job job) {
+        Duration rateWait = acquireRate();
+        if (rateWait.isZero()) {
+            return false;
+        }
+        defer(stationId, job, "RATE_LIMITED", rateWait);
+        return true;
+    }
+
+    private Optional<ArrivalCallQuota.Reservation> reserveCoveredQuota() {
+        Optional<ArrivalCallQuota.Reservation> reservation = quota.reserve(clock.instant());
+        if (reservation.isEmpty() || reservation.get().covers(clock.instant())) {
+            return reservation;
+        }
+        Optional<ArrivalCallQuota.Reservation> renewed = quota.reserve(clock.instant());
+        if (renewed.isPresent() && renewed.get().covers(clock.instant())) {
+            return renewed;
+        }
+        return Optional.empty();
+    }
+
+    private void recordCollectionResult(
+        StationId stationId,
+        Job job,
+        ArrivalCallQuota.Reservation reservation,
+        ArrivalSource.Result result
+    ) {
+        if (result instanceof Success success) {
+            saveSuccessfulCollection(stationId, job, success);
+            return;
+        }
+        recordFailedCollection(stationId, job, reservation, (Failed) result);
+    }
+
+    private void saveSuccessfulCollection(StationId stationId, Job job, Success success) {
+        ArrivalSnapshot snapshot = new ArrivalSnapshot(job.id, stationId.value(), success.receivedAt(),
+            success.receivedAt().plus(policy.refreshInterval()), success.receivedAt().plus(policy.validity()),
+            success.sourceQueryTime(), success.routes());
+        save(snapshot);
+        finishSuccessfulJob(stationId, job, snapshot);
+        LOGGER.info("event=arrival_collected stationId={} routes={}", stationId.value(), snapshot.routes().size());
+    }
+
+    private synchronized void finishSuccessfulJob(StationId stationId, Job job, ArrivalSnapshot snapshot) {
+        State state = states.get(stationId);
+        if (state != null && state.job == job) {
+            state.failures = 0;
+            finish(state, "NOT_DUE", Duration.between(clock.instant(), snapshot.refreshAfterAt()));
+        }
+    }
+
+    private void recordFailedCollection(
+        StationId stationId,
+        Job job,
+        ArrivalCallQuota.Reservation reservation,
+        Failed failed
+    ) {
+        Reason reason = failed.reason();
+        LOGGER.warn("event=arrival_source_failed stationId={} reason={}", stationId.value(), reason);
+        if (reason == Reason.DAILY_QUOTA_EXCEEDED || reason == Reason.KEY_REJECTED) {
+            quota.exclude(reservation);
+        }
+        fail(stationId, job, reason.name(), failed.retryAfter());
+        if (reason == Reason.RATE_LIMITED) {
+            blockServiceUntilRetryIsAllowed(failed);
+        }
+    }
+
+    private synchronized void blockServiceUntilRetryIsAllowed(Failed failed) {
+        Duration delay = retryDelay(failed);
+        serviceBlockedUntilNanos = Math.max(serviceBlockedUntilNanos, ticker.getAsLong() + delay.toNanos());
     }
 
     private Duration retryDelay(Failed failed) {
