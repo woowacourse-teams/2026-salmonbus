@@ -95,11 +95,25 @@ aws ssm get-parameter --name /salmonbus/probe --with-decryption --region ap-nort
 
 ## 배포하기
 
-CodePipeline `salmonbus-backend-cd`에서 `변경 사항 릴리스`를 누른다. **수동 승인 단계는 없다.**
-누르면 Source → Build → Deploy가 멈추지 않고 이어진다. (2026-09-15 콘솔에서 확인)
+브랜치마다 파이프라인과 배포 대상이 따로 있다. 2026-10-13 콘솔 읽기 검증과 2026-10-17 v1.0.0 배포에서 확인했다.
+
+| 브랜치 | 파이프라인 | 배포 대상 | 서버 설정 경로 |
+| --- | --- | --- | --- |
+| `dev` | `salmonbus-backend-dev-cd` | 공유 dev 서버(`dev.salmonbus.com`) | `/etc/salmonbus-dev/` |
+| `main` | `salmonbus-backend-cd` | 운영 EC2(`www.salmonbus.com`) | `/etc/salmonbus/` |
+
+**운영 배포는 `dev` → `main` 릴리즈 PR을 머지하는 것이다.** 기능 PR은 `dev`에 머지하고 dev 서버에서 확인한 뒤 릴리즈 PR로 모아 낸다.
+GitHub push 웹훅이 파이프라인을 시작한다. 파이프라인별 웹훅 필터는 권한이 없어 확인하지 못했다.
+머지 뒤 파이프라인이 시작되지 않으면 콘솔에서 `변경 사항 릴리스`를 누른다. 아래는 운영 파이프라인 기준이다. **수동 승인 단계는 없다**(2026-09-15 확인).
+
+릴리즈 PR을 머지하기 전에 후보 커밋으로 bootJar를 만들고 `backend/buildspec.yml`의 패키징과 `deploy/verify-revision.sh`를 실제 JAR에 돌려 통과를 확인한다.
+이 검사는 운영 빌드에서만 실제 JAR로 돈다. v1.0.0 운영 빌드가 dev에서 거치지 않은 이 검사에서만 실패했다.
+
+dev 파이프라인은 `dev/server/buildspec.yml`로 빌드하고 `dev/server/deploy`의 훅으로 배포한다. dev 배포는 `dev/data/java`·`dev/data/models`·
+`ForecastFeatureContract.java`가 바뀌면 데이터 전환 승인을 요구하며 멈춘다. 그 밖의 변경(마이그레이션 포함)은 이 검사에 걸리지 않는다.
 
 ```text
-Source   GitHub dev에서 코드를 가져온다
+Source   GitHub main에서 코드를 가져온다
 Build    salmonbus-backend-build가 backend/buildspec.yml을 읽는다
          ./gradlew clean build --no-daemon 으로 전체 테스트를 다시 실행하고
          ApiRevision · WorkerRevision 두 배포 패키지를 생성한다
@@ -358,10 +372,13 @@ done
 
 ## 로그인 켜기
 
+아래 명령은 운영 경로(`/etc/salmonbus`) 기준이다. **dev 서버는 `/etc/salmonbus-dev`다.** 서비스 이름(`salmonbus-api`)과 실행 사용자(`salmonbus`)는 같다.
+명령 앞에서 `ETC=/etc/salmonbus`(dev는 `ETC=/etc/salmonbus-dev`)를 정하고 시작한다.
+
 기본은 꺼져 있다(`AUTH_ENABLED=false`). 꺼져 있으면 `/api/auth/*`·`/api/me`가 404이고 공개 조회 API는 로그인과 무관하게 동작한다.
 **켠 API에 필수 값이 비어 있거나 짧으면 API가 시작하지 않는다.** 비밀은 dev와 운영에서 서로 다른 값을 쓴다.
 
-| `api.env`에 넣는 줄 | 값 |
+| `$ETC/api.env`에 넣는 줄 | 값 |
 | --- | --- |
 | `AUTH_ENABLED` | `true` |
 | `AUTH_PUBLIC_BASE_URL` | 사용자가 보는 주소. 운영 `https://www.salmonbus.com`, dev `https://dev.salmonbus.com`. 제공자 콘솔에 등록한 콜백 주소(`<주소>/api/auth/{kakao,apple}/callback`)와 글자 하나까지 같아야 한다 |
@@ -374,21 +391,21 @@ done
 
 ```bash
 for name in AUTH_TOKEN_SECRET AUTH_REFRESH_TOKEN_SECRET; do
-  printf '%s=%s\n' "$name" "$(openssl rand -hex 32)" | sudo tee -a /etc/salmonbus/api.env >/dev/null
+  printf '%s=%s\n' "$name" "$(openssl rand -hex 32)" | sudo tee -a "$ETC/api.env" >/dev/null
 done
-sudo grep -cE '^AUTH_(TOKEN|REFRESH_TOKEN)_SECRET=[0-9a-f]{64}$' /etc/salmonbus/api.env   # 2 이어야 한다
+sudo grep -cE '^AUTH_(TOKEN|REFRESH_TOKEN)_SECRET=[0-9a-f]{64}$' "$ETC/api.env"   # 2 이어야 한다
 ```
 
 애플 `.p8` 파일은 API 프로세스(`salmonbus` 사용자)만 읽게 둔다. 유닛이 `ProtectHome=true`라 홈 디렉터리에 두면 읽지 못한다.
 
 ```bash
-sudo install -d -m 750 -o root -g salmonbus /etc/salmonbus/apple
-sudo install -m 640 -o root -g salmonbus AuthKey_<키ID>.p8 /etc/salmonbus/apple/
-echo 'AUTH_APPLE_PRIVATE_KEY_PATH=/etc/salmonbus/apple/AuthKey_<키ID>.p8' | sudo tee -a /etc/salmonbus/api.env >/dev/null
-sudo -u salmonbus test -r /etc/salmonbus/apple/AuthKey_<키ID>.p8 && echo readable
+sudo install -d -m 750 -o root -g salmonbus "$ETC/apple"
+sudo install -m 640 -o root -g salmonbus AuthKey_<키ID>.p8 "$ETC/apple/"
+echo "AUTH_APPLE_PRIVATE_KEY_PATH=$ETC/apple/AuthKey_<키ID>.p8" | sudo tee -a "$ETC/api.env" >/dev/null
+sudo -u salmonbus test -r "$ETC/apple/AuthKey_<키ID>.p8" && echo readable
 ```
 
-CloudFront에는 로그인 경로 동작을 `/api/*`보다 **앞 순서로** 추가한다. 공개 조회 경로는 지금처럼 쿠키를 받지 않는다.
+CloudFront에는 로그인 경로 동작을 `/api/*`보다 **앞 순서로** 추가한다. dev와 운영은 CloudFront 배포가 따로라 각각 추가한다. 공개 조회 경로는 지금처럼 쿠키를 받지 않는다.
 
 | 경로 | 설정 |
 | --- | --- |
@@ -416,7 +433,7 @@ curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' http://127.0.0.1:8080/a
 
 ```bash
 id=<provider_unlink id>; sub=<그 행의 subject>
-sudo grep '^AUTH_KAKAO_ADMIN_KEY=' /etc/salmonbus/api.env | cut -d= -f2- | sed 's/^/Authorization: KakaoAK /' \
+sudo grep '^AUTH_KAKAO_ADMIN_KEY=' "$ETC/api.env" | cut -d= -f2- | sed 's/^/Authorization: KakaoAK /' \
   | curl -s -o /dev/null -w '%{http_code}\n' -X POST https://kapi.kakao.com/v1/user/unlink \
       -H @- -d target_id_type=user_id -d "target_id=$sub"   # 키는 표준 입력으로만 넘긴다
 # 200 이면 끊겼다. 400 이고 본문 code 가 -101 이면 이미 끊긴 것이다. 둘 다 DB 에서 DELETE FROM provider_unlink WHERE id = <id>; 로 지운다
