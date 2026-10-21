@@ -21,12 +21,28 @@ public class VehicleCachePolicy {
     public Duration maxAgeAt(OffsetDateTime respondedAt) {
         final int hour = respondedAt.atZoneSameInstant(SEOUL).getHour();
 
-        if (hour >= 1 && hour < 4) {
+        if (isOvernight(hour)) {
             return OVERNIGHT_MAX_AGE;
         }
-        if ((hour >= 7 && hour < 9) || (hour >= 17 && hour < 23)) {
+        if (isPeakHour(hour)) {
             return PEAK_MAX_AGE;
         }
         return REGULAR_MAX_AGE;
+    }
+
+    private boolean isOvernight(int hour) {
+        return hour >= 1 && hour < 4;
+    }
+
+    private boolean isPeakHour(int hour) {
+        return isMorningPeak(hour) || isEveningPeak(hour);
+    }
+
+    private boolean isMorningPeak(int hour) {
+        return hour >= 7 && hour < 9;
+    }
+
+    private boolean isEveningPeak(int hour) {
+        return hour >= 17 && hour < 23;
     }
 }

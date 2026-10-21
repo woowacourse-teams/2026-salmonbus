@@ -141,9 +141,7 @@ public class BoardQueryService {
         return models.getFirst();
     }
 
-    private boolean hasValidForecastValues(
-        StoredPrediction prediction
-    ) {
+    private boolean hasValidForecastValues(StoredPrediction prediction) {
         final double seatFullChance = prediction.seatFullChance();
         return Double.isFinite(seatFullChance)
             && seatFullChance >= 0.0d
@@ -168,13 +166,15 @@ public class BoardQueryService {
      *
      * <p>실제로 걸러지는 값은 무한대뿐이다. 음수와 NaN은 {@code ck_forecast_expected_seats}가 막는다.
      */
-    private Double reportableExpectedSeats(
-        Double expectedSeats
-    ) {
-        if (expectedSeats == null || !Double.isFinite(expectedSeats) || expectedSeats < 0.0d) {
+    private Double reportableExpectedSeats(Double expectedSeats) {
+        if (expectedSeats == null || isUnreportableExpectedSeats(expectedSeats)) {
             return null;
         }
         return expectedSeats;
+    }
+
+    private boolean isUnreportableExpectedSeats(double expectedSeats) {
+        return !Double.isFinite(expectedSeats) || expectedSeats < 0.0d;
     }
 
     private StopState toStopState(
@@ -264,9 +264,10 @@ public class BoardQueryService {
         BoardStop origin = stops.getFirst();
         BoardStop turn = stopsBySequence.get(turnSequence);
         BoardStop terminal = stops.getLast();
-        if (turn == null || turn == origin || turn == terminal) {
+        if (isInvalidTurningStop(turn, origin, terminal)) {
             throw new ServiceUnavailableException();
         }
+
         requireRoundTripDirections(stops, turnSequence);
 
         DepartureSchedule schedule = snapshot.schedule();
@@ -290,17 +291,29 @@ public class BoardQueryService {
         return List.copyOf(directions);
     }
 
+    private boolean isInvalidTurningStop(BoardStop turn, BoardStop origin, BoardStop terminal) {
+        if (turn == null || turn == origin) {
+            return true;
+        }
+        return turn == terminal;
+    }
+
     private void requireRoundTripDirections(
         List<BoardStop> stops,
         final int turnSequence
     ) {
-        final boolean inconsistent = stops.stream().anyMatch(stop ->
-            stop.sequence() <= turnSequence && stop.direction() != BoardDirection.UP
-                || stop.sequence() > turnSequence && stop.direction() != BoardDirection.DOWN
-        );
+        final boolean inconsistent = stops.stream()
+            .anyMatch(stop -> hasUnexpectedDirection(stop, turnSequence));
         if (inconsistent) {
             throw new ServiceUnavailableException();
         }
+    }
+
+    private boolean hasUnexpectedDirection(BoardStop stop, int turnSequence) {
+        if (stop.sequence() <= turnSequence) {
+            return stop.direction() != BoardDirection.UP;
+        }
+        return stop.direction() != BoardDirection.DOWN;
     }
 
     private String directionName(

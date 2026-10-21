@@ -27,12 +27,34 @@ public class ArrivalApiConfiguration {
     @ConfigurationProperties("arrivals")
     public record Properties(boolean enabled, URI workerBaseUrl, String internalToken) {
         public Properties {
-            if (enabled && (workerBaseUrl == null || workerBaseUrl.getHost() == null
-                || !("http".equals(workerBaseUrl.getScheme()) || "https".equals(workerBaseUrl.getScheme()))
-                || workerBaseUrl.getUserInfo() != null || workerBaseUrl.getQuery() != null
-                || workerBaseUrl.getFragment() != null || internalToken == null || internalToken.isBlank())) {
+            if (enabled && hasInvalidWorkerConfiguration(workerBaseUrl, internalToken)) {
                 throw new IllegalArgumentException("도착 갱신 Worker 주소와 내부 인증 토큰을 확인해야 한다");
             }
+        }
+
+        private static boolean hasInvalidWorkerConfiguration(URI workerBaseUrl, String internalToken) {
+            if (!hasSupportedAddress(workerBaseUrl)) {
+                return true;
+            }
+            if (hasForbiddenAddressComponent(workerBaseUrl)) {
+                return true;
+            }
+            return internalToken == null || internalToken.isBlank();
+        }
+
+        private static boolean hasSupportedAddress(URI workerBaseUrl) {
+            if (workerBaseUrl == null || workerBaseUrl.getHost() == null) {
+                return false;
+            }
+            String scheme = workerBaseUrl.getScheme();
+            return "http".equals(scheme) || "https".equals(scheme);
+        }
+
+        private static boolean hasForbiddenAddressComponent(URI workerBaseUrl) {
+            if (workerBaseUrl.getUserInfo() != null || workerBaseUrl.getQuery() != null) {
+                return true;
+            }
+            return workerBaseUrl.getFragment() != null;
         }
 
         @Override

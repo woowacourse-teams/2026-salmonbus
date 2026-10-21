@@ -28,11 +28,14 @@ final class RoutePathSplitter {
         if (geometry.shape() == null || geometry.turnSequence() == null) {
             return null;
         }
+
         List<Stop> stops = geometry.busStops()
             .stream()
             .filter(stop -> stop.point() != null)
             .sorted(Comparator.comparingInt(Stop::stopSequence))
             .toList();
+        List<Point> points = geometry.points();
+
         int turn = -1;
         for (int i = 0; i < stops.size(); i++) {
             if (i > 0 && stops.get(i - 1).stopSequence() == stops.get(i).stopSequence()) {
@@ -42,23 +45,28 @@ final class RoutePathSplitter {
                 turn = i;
             }
         }
+
         // 회차 좌표와 그 양쪽의 방문 근거가 있어야 두 방향을 제공한다.
-        if (turn <= 0 || turn >= stops.size() - 1
-            || (long) stops.size() * (geometry.points().size() - 1) > MAX_PROJECTION_CELLS) {
+        if (hasInvalidTurnBoundary(turn, stops.size()) || exceedsProjectionLimit(stops, points)) {
             return null;
         }
 
-        Line line = new Line(geometry.points(), stops.get(turn).point().y());
+        Point turnPoint = stops.get(turn).point();
+        Line line = new Line(points, turnPoint.y());
         Alignment forward = align(line, stops, 0, turn, 1);
         Alignment backward = align(line, stops, stops.size() - 1, turn, -1);
+        Row forwardRow = forward.row();
+        double[] forwardCosts = forward.costs();
+        double[] backwardCosts = backward.costs();
         double[] costs = new double[line.edges()];
         Arrays.fill(costs, Double.POSITIVE_INFINITY);
+
         int best = -1;
         for (int edge = 0; edge < costs.length; edge++) {
-            if (!Double.isFinite(forward.costs()[edge]) || !Double.isFinite(backward.costs()[edge])) {
+            if (!Double.isFinite(forwardCosts[edge]) || !Double.isFinite(backwardCosts[edge])) {
                 continue;
             }
-            costs[edge] = forward.costs()[edge] + backward.costs()[edge] - forward.row().offsets()[edge];
+            costs[edge] = forwardCosts[edge] + backwardCosts[edge] - forwardRow.offsets()[edge];
             if (best == -1 || costs[edge] < costs[best]) {
                 best = edge;
             }
@@ -66,17 +74,27 @@ final class RoutePathSplitter {
         if (best == -1) {
             return null;
         }
-        final double boundary = forward.row().positions()[best];
+
+        double[] forwardPositions = forwardRow.positions();
+        final double boundary = forwardPositions[best];
         if (boundary <= ORDER_EPSILON_METERS || boundary >= line.length() - ORDER_EPSILON_METERS) {
             return null;
         }
         for (int edge = 0; edge < costs.length; edge++) {
             if (costs[edge] <= costs[best] + EQUIVALENT_COST_SQUARED
-                && Math.abs(forward.row().positions()[edge] - boundary) > DISTINCT_BOUNDARY_METERS) {
+                && Math.abs(forwardPositions[edge] - boundary) > DISTINCT_BOUNDARY_METERS) {
                 return null;
             }
         }
-        return cut(geometry.points(), best, forward.row().fractions()[best]);
+        return cut(points, best, forwardRow.fractions()[best]);
+    }
+
+    private static boolean hasInvalidTurnBoundary(int turn, int stopCount) {
+        return turn <= 0 || turn >= stopCount - 1;
+    }
+
+    private static boolean exceedsProjectionLimit(List<Stop> stops, List<Point> points) {
+        return (long) stops.size() * (points.size() - 1) > MAX_PROJECTION_CELLS;
     }
 
     /**
@@ -91,24 +109,47 @@ final class RoutePathSplitter {
     ) {
         Row previous = line.project(stops.get(first).point());
         double[] costs = previous.offsets().clone();
+        final int edgeCount = line.edges();
         for (int i = first + step; hasRemainingStop(i, last, step); i += step) {
             Row current = line.project(stops.get(i).point());
-            double[] next = new double[line.edges()];
+            double[] currentPositions = current.positions();
+            double[] previousPositions = previous.positions();
+            double[] currentOffsets = current.offsets();
+            double[] next = new double[edgeCount];
             double best = Double.POSITIVE_INFINITY;
             final int from = firstEdge(line, step);
             int candidate = from;
-            for (int edge = from; edge >= 0 && edge < line.edges(); edge += step) {
-                while (candidate >= 0 && candidate < line.edges()
-                    && step * (current.positions()[edge] - previous.positions()[candidate]) > ORDER_EPSILON_METERS) {
+            for (int edge = from; edge >= 0 && edge < edgeCount; edge += step) {
+                while (isCandidateInRange(candidate, edgeCount)) {
+                    if (!isCandidateBeforeCurrentPosition(
+                        step,
+                        currentPositions[edge],
+                        previousPositions[candidate]
+                    )) {
+                        break;
+                    }
                     best = Math.min(best, costs[candidate]);
                     candidate += step;
                 }
-                next[edge] = current.offsets()[edge] + best;
+                next[edge] = currentOffsets[edge] + best;
             }
+
             previous = current;
             costs = next;
         }
         return new Alignment(previous, costs);
+    }
+
+    private static boolean isCandidateInRange(int candidate, int edgeCount) {
+        return candidate >= 0 && candidate < edgeCount;
+    }
+
+    private static boolean isCandidateBeforeCurrentPosition(
+        int step,
+        double currentPosition,
+        double previousPosition
+    ) {
+        return step * (currentPosition - previousPosition) > ORDER_EPSILON_METERS;
     }
 
     private static boolean hasRemainingStop(final int index, final int last, final int step) {

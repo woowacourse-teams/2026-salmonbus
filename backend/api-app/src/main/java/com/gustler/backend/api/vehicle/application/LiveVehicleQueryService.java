@@ -108,9 +108,10 @@ public class LiveVehicleQueryService {
         VehicleSnapshot snapshot,
         OffsetDateTime staleAt
     ) {
-        if (!snapshot.latestOutcome().isNormal()
-                || snapshot.latestBatchId() == null
-                || staleAt == null) {
+        if (snapshot.latestBatchId() == null || staleAt == null) {
+            return false;
+        }
+        if (!snapshot.latestOutcome().isNormal()) {
             return false;
         }
         return !freshnessPolicy.isStale(staleAt);

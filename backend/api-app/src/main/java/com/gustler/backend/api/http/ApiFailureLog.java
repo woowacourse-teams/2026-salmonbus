@@ -37,25 +37,31 @@ final class ApiFailureLog {
         Throwable primary = primaryFailure(failure);
         Throwable root = primary;
         String sqlState = "UNKNOWN";
-        for (Throwable cause = primary; cause != null && seen.size() < 32 && seen.add(cause); cause =
-            cause.getCause()) {
+        for (Throwable cause = primary; cause != null; cause = cause.getCause()) {
+            if (seen.size() >= 32 || !seen.add(cause)) {
+                break;
+            }
+
             root = cause;
-            if (cause instanceof SQLException sql && sql.getSQLState() != null && sql.getSQLState()
-                .matches("[A-Z0-9]{5}")) {
-                sqlState = sql.getSQLState();
+            String reportableSqlState = reportableSqlState(cause);
+            if (reportableSqlState != null) {
+                sqlState = reportableSqlState;
             }
         }
+
         String type = exceptionType(failure);
         String rootType = exceptionType(root);
         String source = "UNKNOWN";
         if (root != null) {
             for (StackTraceElement frame : root.getStackTrace()) {
-                if (frame.getClassName().startsWith("com.gustler.backend.")) {
-                    source = frame.getClassName() + "." + frame.getMethodName() + ":" + frame.getLineNumber();
+                String className = frame.getClassName();
+                if (className.startsWith("com.gustler.backend.")) {
+                    source = className + "." + frame.getMethodName() + ":" + frame.getLineNumber();
                     break;
                 }
             }
         }
+
         String format =
             "event=api_failure status={} errorCode={} endpoint={} routeId={} requestId={} exceptionType={} rootCause={} sqlState={} source={}";
         if (status >= 500) {
@@ -63,6 +69,17 @@ final class ApiFailureLog {
             return;
         }
         LOGGER.info(format, status, code.name(), endpoint, routeId, requestId, type, rootType, sqlState, source);
+    }
+
+    private static String reportableSqlState(Throwable cause) {
+        if (!(cause instanceof SQLException sql)) {
+            return null;
+        }
+        String sqlState = sql.getSQLState();
+        if (sqlState == null || !sqlState.matches("[A-Z0-9]{5}")) {
+            return null;
+        }
+        return sqlState;
     }
 
     private static HttpServletRequest currentRequest() {
@@ -98,8 +115,12 @@ final class ApiFailureLog {
     }
 
     private static String safeRouteId(Object route) {
-        if (route != null && route.toString().matches("[0-9]{9}")) {
-            return route.toString();
+        if (route == null) {
+            return "UNKNOWN";
+        }
+        String routeId = route.toString();
+        if (routeId.matches("[0-9]{9}")) {
+            return routeId;
         }
         return "UNKNOWN";
     }

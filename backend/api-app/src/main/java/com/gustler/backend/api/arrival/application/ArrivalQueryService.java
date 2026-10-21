@@ -63,14 +63,13 @@ public class ArrivalQueryService {
     public StationArrivalsOverview get(ArrivalQuery query) {
         List<ArrivalVisit> visits = repository.visits(query.stationId());
         validateTarget(query, visits);
+
         ArrivalSnapshot snapshot = repository.latest(query.stationId()).orElse(null);
         final boolean waiting = !freshness.usable(snapshot, clock.instant()) && firstResult.tryAcquire();
         ArrivalRefresh refresh;
         try {
             refresh = refreshIfDue(query, snapshot, waiting);
-            if (waiting && (refresh.status() == Status.ACCEPTED
-                || refresh.status() == Status.IN_PROGRESS
-                || refresh.status() == Status.IDLE || "NOT_DUE".equals(refresh.reason()))) {
+            if (shouldReloadAfterWaiting(waiting, refresh)) {
                 snapshot = repository.latest(query.stationId()).orElse(snapshot);
                 if (freshness.usable(snapshot, clock.instant())) {
                     // 대기 중 바뀐 판본을 다시 확인해 새 수신을 이전 판본에 연결하지 않는다.
@@ -86,16 +85,33 @@ public class ArrivalQueryService {
                 firstResult.release();
             }
         }
+
         Instant now = clock.instant();
         if (!freshness.usable(snapshot, now)) {
             return new StationArrivalsOverview(query.stationId(), now, ArrivalAvailability.UNAVAILABLE,
                 unavailableReason(snapshot), snapshot, refresh, List.of(), Duration.ZERO);
         }
+
         List<RouteArrivals> routes = selectRoutes(query, visits, snapshot, now);
         ArrivalAvailability status = availability(routes, snapshot);
         String reason = unavailableReason(status, routes);
         return new StationArrivalsOverview(query.stationId(), now, status, reason, snapshot, refresh, routes,
             freshness.cacheMaxAge(snapshot, now));
+    }
+
+    private static boolean shouldReloadAfterWaiting(boolean waiting, ArrivalRefresh refresh) {
+        if (!waiting) {
+            return false;
+        }
+        return isRefreshPending(refresh) || "NOT_DUE".equals(refresh.reason());
+    }
+
+    private static boolean isRefreshPending(ArrivalRefresh refresh) {
+        Status status = refresh.status();
+        if (status == Status.ACCEPTED || status == Status.IN_PROGRESS) {
+            return true;
+        }
+        return status == Status.IDLE;
     }
 
     private ArrivalRefresh refreshIfDue(ArrivalQuery query, ArrivalSnapshot snapshot, final boolean waiting) {
@@ -129,14 +145,26 @@ public class ArrivalQueryService {
         if (visits.isEmpty()) {
             throw new Failure(ErrorCode.STATION_NOT_FOUND);
         }
-        if (query.referenceVersionId() != null && visits.stream().noneMatch(visit ->
-            visit.routeId().equals(query.routeId()) && visit.referenceVersionId() == query.referenceVersionId()
-                && visit.stopSequence() == query.stopSequence())) {
+        if (query.referenceVersionId() != null && visits.stream().noneMatch(visit -> matchesReference(query, visit))) {
             throw new Failure(ErrorCode.REFERENCE_VERSION_CONFLICT);
         }
-        if (query.routeId() != null && visits.stream().noneMatch(visit -> visit.routeId().equals(query.routeId()))) {
+        if (query.routeId() != null && visits.stream().noneMatch(visit -> matchesRoute(query, visit))) {
             throw new Failure(ErrorCode.ROUTE_NOT_FOUND);
         }
+    }
+
+    private static boolean matchesReference(ArrivalQuery query, ArrivalVisit visit) {
+        if (!matchesRoute(query, visit)) {
+            return false;
+        }
+        if (visit.referenceVersionId() != query.referenceVersionId()) {
+            return false;
+        }
+        return visit.stopSequence() == query.stopSequence();
+    }
+
+    private static boolean matchesRoute(ArrivalQuery query, ArrivalVisit visit) {
+        return visit.routeId().equals(query.routeId());
     }
 
     private static List<RouteArrivals> selectRoutes(
@@ -169,20 +197,34 @@ public class ArrivalQueryService {
         if (query.routeId() != null && !query.routeId().equals(routeId)) {
             return Optional.empty();
         }
-        if (query.stopSequence() != null && (visit == null || visit.stopSequence() != query.stopSequence())) {
+        if (!matchesRequestedStop(query, visit)) {
             return Optional.empty();
         }
         return Optional.of(RouteArrivals.at(route, visit, snapshot.receivedAt(), now));
+    }
+
+    private static boolean matchesRequestedStop(ArrivalQuery query, ArrivalVisit visit) {
+        if (query.stopSequence() == null) {
+            return true;
+        }
+        return visit != null && visit.stopSequence() == query.stopSequence();
     }
 
     private static ArrivalAvailability availability(List<RouteArrivals> routes, ArrivalSnapshot snapshot) {
         if (routes.stream().anyMatch(route -> route.status() == ArrivalAvailability.READY)) {
             return ArrivalAvailability.READY;
         }
-        if (routes.stream().anyMatch(route -> route.status() == ArrivalAvailability.UNAVAILABLE)
-                || routes.isEmpty() && !snapshot.routes().isEmpty()) {
+        if (hasUnavailableRoute(routes) || hasNoVerifiedRouteMatch(routes, snapshot)) {
             return ArrivalAvailability.UNAVAILABLE;
         }
         return ArrivalAvailability.NO_PREDICTION;
+    }
+
+    private static boolean hasUnavailableRoute(List<RouteArrivals> routes) {
+        return routes.stream().anyMatch(route -> route.status() == ArrivalAvailability.UNAVAILABLE);
+    }
+
+    private static boolean hasNoVerifiedRouteMatch(List<RouteArrivals> routes, ArrivalSnapshot snapshot) {
+        return routes.isEmpty() && !snapshot.routes().isEmpty();
     }
 }

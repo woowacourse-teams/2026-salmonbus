@@ -24,10 +24,17 @@ public record HeadwayRange(
         Integer minMinutes,
         Integer maxMinutes
     ) {
-        if (minMinutes == null || maxMinutes == null || !isValid(minMinutes, maxMinutes)) {
+        if (isUnavailable(minMinutes, maxMinutes)) {
             return Optional.empty();
         }
         return Optional.of(new HeadwayRange(minMinutes, maxMinutes));
+    }
+
+    private static boolean isUnavailable(Integer minMinutes, Integer maxMinutes) {
+        if (minMinutes == null || maxMinutes == null) {
+            return true;
+        }
+        return !isValid(minMinutes, maxMinutes);
     }
 
     private static boolean isValid(

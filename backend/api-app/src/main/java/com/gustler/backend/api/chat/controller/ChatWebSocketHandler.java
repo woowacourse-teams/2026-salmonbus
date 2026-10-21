@@ -199,15 +199,32 @@ public final class ChatWebSocketHandler extends TextWebSocketHandler {
         final long overloaded = overloadedCount.getAndSet(0);
         String storeError = lastStoreError.getAndSet("-");
         List<SessionState> active = new ArrayList<>(sessions.values());
-        if (active.isEmpty() && created == 0 && rejected == 0 && storeErrors == 0 && overloaded == 0) {
+        if (hasNoActivity(active, created, rejected, storeErrors, overloaded)) {
             return;
         }
+
         final long rooms = active.stream()
             .map(SessionState::routeId)
             .distinct()
             .count();
         LOGGER.info("채팅 1분 요약. 방={} 세션={} 보냄={} 거절={} 저장오류={} 연결초과={} 마지막저장오류={}",
             rooms, active.size(), created, rejected, storeErrors, overloaded, storeError);
+    }
+
+    private boolean hasNoActivity(
+        List<SessionState> active,
+        long created,
+        long rejected,
+        long storeErrors,
+        long overloaded
+    ) {
+        if (!active.isEmpty() || created != 0) {
+            return false;
+        }
+        if (rejected != 0 || storeErrors != 0) {
+            return false;
+        }
+        return overloaded == 0;
     }
 
     private void start(SessionState state, SessionStart start) {

@@ -39,7 +39,10 @@ public record RouteGeometry(String routeId, long referenceVersionId, String name
         }
 
         public static Point orNull(Double x, Double y) {
-            if (x == null || y == null || !valid(x, y)) {
+            if (x == null || y == null) {
+                return null;
+            }
+            if (!valid(x, y)) {
                 return null;
             }
             return new Point(x, y);
@@ -134,15 +137,16 @@ public record RouteGeometry(String routeId, long referenceVersionId, String name
             revisionOutput.writeInt(encodedTurnSequence());
             revisionOutput.writeInt(busStops.size());
             for (Stop stop : busStops) {
+                Point stopPoint = stop.point();
                 revisionOutput.writeUTF(stop.stationId());
                 revisionOutput.writeInt(stop.stopSequence());
                 revisionOutput.writeUTF(stop.name());
                 revisionOutput.writeUTF(stop.direction());
                 revisionOutput.writeBoolean(stop.boardingAllowed());
-                revisionOutput.writeBoolean(stop.point() != null);
-                if (stop.point() != null) {
-                    revisionOutput.writeDouble(stop.point().x());
-                    revisionOutput.writeDouble(stop.point().y());
+                revisionOutput.writeBoolean(stopPoint != null);
+                if (stopPoint != null) {
+                    revisionOutput.writeDouble(stopPoint.x());
+                    revisionOutput.writeDouble(stopPoint.y());
                 }
             }
             revisionOutput.writeBoolean(shape != null);

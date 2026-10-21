@@ -73,13 +73,20 @@ public final class ChatFrameCodec {
     private String messageIdOfSend(JsonNode root) {
         JsonNode type = root.get("type");
         JsonNode messageId = root.get("clientMessageId");
-        if (type == null || !type.isString() || !MESSAGE_SEND.equals(type.stringValue())) {
+        if (!isMessageSend(type)) {
             return null;
         }
         if (messageId == null || !messageId.isString()) {
             return null;
         }
         return messageId.stringValue();
+    }
+
+    private boolean isMessageSend(JsonNode type) {
+        if (type == null || !type.isString()) {
+            return false;
+        }
+        return MESSAGE_SEND.equals(type.stringValue());
     }
 
     public sealed interface ClientFrame {

@@ -49,7 +49,7 @@ public final class WorkerArrivalRefreshClient implements ArrivalRefreshGateway {
             }
             ArrivalRefresh reply = request.body(new Request(stationId))
                 .retrieve().body(ArrivalRefresh.class);
-            if (reply == null || reply.status() == null || reply.suggestedRefreshAt() == null) {
+            if (isUnreadable(reply)) {
                 throw new IllegalStateException("수집 Worker 응답 미해석");
             }
             return reply;
@@ -57,6 +57,13 @@ public final class WorkerArrivalRefreshClient implements ArrivalRefreshGateway {
             return new ArrivalRefresh(Status.UNAVAILABLE, "WORKER_UNAVAILABLE",
                 clock.instant().plusSeconds(2));
         }
+    }
+
+    private static boolean isUnreadable(ArrivalRefresh reply) {
+        if (reply == null || reply.status() == null) {
+            return true;
+        }
+        return reply.suggestedRefreshAt() == null;
     }
 
     private RestClient clientFor(Duration maximumWait) {
