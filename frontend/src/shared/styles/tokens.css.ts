@@ -73,6 +73,7 @@ export const vars = createGlobalTheme(":root", {
     stopName: "-0.25px",
   },
   radius: {
+    boardSheet: "28px",
     badge: "4px",
     control: "10px",
     forecastCard: "10px",

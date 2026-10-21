@@ -9,7 +9,7 @@ import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.net.http.HttpResponse.BodyHandlers;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -24,13 +24,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.jar.JarFile;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 class RuntimeProcessSeparationTest {
-
     private static final String POSTGRES_IMAGE = "postgres:18";
     private static final String API_JAR = "api.boot.jar";
     private static final String WORKER_JAR = "worker.boot.jar";
@@ -78,7 +78,7 @@ class RuntimeProcessSeparationTest {
         workerPort = freePort();
         worker = start(WORKER_JAR, workerPort, Map.of(
             "GBIS_SERVICE_KEY", SERVICE_KEY,
-            "DB_URL", postgres.getJdbcUrl() + (postgres.getJdbcUrl().contains("?") ? "&" : "?")
+            "DB_URL", postgres.getJdbcUrl() + (querySeparator(postgres.getJdbcUrl()))
                 + "ApplicationName=" + DISABLED_WORKER_APPLICATION_NAME,
             "MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE", "health,info,scheduledtasks",
             "FORECAST_INTERVAL", "100ms",
@@ -100,60 +100,149 @@ class RuntimeProcessSeparationTest {
 
     @Test
     void 서로_다른_JAR_두_프로세스가_서로_다른_포트에_같이_떠_있다() {
-        assertThat(api.isAlive()).isTrue();
-        assertThat(worker.isAlive()).isTrue();
-        assertThat(apiPort).isNotEqualTo(workerPort);
-        assertThat(statusOf(apiPort, HEALTH_PATH)).isEqualTo(200);
-        assertThat(statusOf(workerPort, HEALTH_PATH)).isEqualTo(200);
+        // when
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            final boolean alive1 = api.isAlive();
+
+            // then
+            softly.assertThat(alive1).isTrue();
+
+            // when
+            final boolean alive2 = worker.isAlive();
+
+            // then
+            softly.assertThat(alive2).isTrue();
+            softly.assertThat(apiPort).isNotEqualTo(workerPort);
+        }
+
+        // when
+        final int statusCode3 = statusOf(apiPort, HEALTH_PATH);
+
+        // then
+        assertThat(statusCode3).isEqualTo(200);
+
+        // when
+        final int statusCode4 = statusOf(workerPort, HEALTH_PATH);
+
+        // then
+        assertThat(statusCode4).isEqualTo(200);
     }
 
     @Test
     void 두_프로세스_모두_health_가_UP_이다() {
-        assertThat(bodyOf(apiPort, HEALTH_PATH)).contains("\"status\":\"UP\"");
-        assertThat(bodyOf(workerPort, HEALTH_PATH)).contains("\"status\":\"UP\"");
+        // when
+        String responseBody1 = bodyOf(apiPort, HEALTH_PATH);
+
+        // then
+        assertThat(responseBody1).contains("\"status\":\"UP\"");
+
+        // when
+        String responseBody2 = bodyOf(workerPort, HEALTH_PATH);
+
+        // then
+        assertThat(responseBody2).contains("\"status\":\"UP\"");
     }
 
     @Test
     void api_는_클라이언트_API_를_내준다() {
-        assertThat(statusOf(apiPort, CLIENT_API_PATH)).isEqualTo(200);
+        // when
+        final int statusCode1 = statusOf(apiPort, CLIENT_API_PATH);
+
+        // then
+        assertThat(statusCode1).isEqualTo(200);
     }
 
     @Test
     void worker_는_클라이언트_API_를_안_내준다() {
-        assertThat(statusOf(workerPort, CLIENT_API_PATH)).isEqualTo(404);
+        // when
+        final int statusCode1 = statusOf(workerPort, CLIENT_API_PATH);
+
+        // then
+        assertThat(statusCode1).isEqualTo(404);
     }
 
     @Test
     void api_는_서버_포트에_readyz_를_내준다() {
-        assertThat(statusOf(apiPort, READYZ_PATH)).isEqualTo(200);
-        assertThat(bodyOf(apiPort, READYZ_PATH)).contains("\"status\":\"UP\"");
+        // when
+        final int statusCode1 = statusOf(apiPort, READYZ_PATH);
+
+        // then
+        assertThat(statusCode1).isEqualTo(200);
+
+        // when
+        String responseBody2 = bodyOf(apiPort, READYZ_PATH);
+
+        // then
+        assertThat(responseBody2).contains("\"status\":\"UP\"");
     }
 
     @Test
     void api_가_적용한_V18_스키마에_기존_완료_평가_품질_컬럼이_없다() throws SQLException {
-        assertFinalSchema();
+        // when
+        List<String> columns1 = queryStrings("""
+            SELECT version FROM flyway_schema_history WHERE version = '26' AND success
+            """);
+
+        // then
+        assertThat(columns1).containsExactly("26");
+
+        // when
+        List<String> columns2 = queryStrings("""
+            SELECT table_name || '.' || column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND (
+                (table_name = 'observation_batch' AND column_name = 'forecast_completed_at')
+                OR (table_name = 'seat_forecast'
+                    AND column_name IN ('scoring_state', 'arrival_observation_id', 'seats_on_arrival', 'scored_at'))
+                OR (table_name = 'route' AND column_name = 'quality_revision')
+                OR (table_name = 'route_version'
+                    AND column_name IN ('maximum_observation_gap_seconds', 'observation_gap_evidence'))
+            )
+            """);
+
+        // then
+        assertThat(columns2).as("V26에서 제거한 기존 저장 컬럼").isEmpty();
     }
 
     @Test
     void 실행_JAR_에는_각_프로세스가_사용하는_프로젝트_라이브러리만_들어간다() throws IOException {
-        assertThat(projectLibraries(API_JAR)).containsExactly("common");
-        assertThat(projectLibraries(WORKER_JAR)).containsExactlyInAnyOrder(
-            "common", "route-catalog", "observations", "arrivals", "forecasting", "api-call-quota", "gbis-client", "operation-log"
+        // when
+        List<String> libraries1 = projectLibraries(API_JAR);
+
+        // then
+        assertThat(libraries1).containsExactly("common");
+
+        // when
+        List<String> libraries2 = projectLibraries(WORKER_JAR);
+
+        // then
+        assertThat(libraries2).containsExactlyInAnyOrder(
+            "common", "route-catalog", "observations", "arrivals", "forecasting", "api-call-quota", "gbis-client",
+            "operation-log"
         );
     }
 
     @Test
     void 수집과_예보를_끄면_worker_는_스케줄을_등록하거나_DB에_쓰지_않는다()
         throws SQLException, InterruptedException {
+        // given
         assertDisabledWorkerConnection();
         assertNoScheduledTasks();
         assertNoWrites();
 
+        // when
         // 예보 관련 간격은 100ms다. 등록된 스케줄 확인과 여러 실행 간격의 쓰기 감사를 함께 한다.
         Thread.sleep(DISABLED_JOB_OBSERVATION.toMillis());
+        final boolean alive1 = worker.isAlive();
 
-        assertThat(worker.isAlive()).isTrue();
-        assertThat(statusOf(workerPort, HEALTH_PATH)).isEqualTo(200);
+        // then
+        assertThat(alive1).isTrue();
+
+        // when
+        final int statusCode2 = statusOf(workerPort, HEALTH_PATH);
+
+        // then
+        assertThat(statusCode2).isEqualTo(200);
         assertDisabledWorkerConnection();
         assertNoScheduledTasks();
         assertNoWrites();
@@ -161,11 +250,13 @@ class RuntimeProcessSeparationTest {
 
     @Test
     void worker_는_수집을_켠_채_키가_없으면_못_뜬다() throws Exception {
+        // when
         Path log = Files.createTempFile("salmonbus-worker-nokey", ".log");
         Process nokey = start(WORKER_JAR, freePort(), Map.of("COLLECTION_ENABLED", "true"), log);
         try {
             final boolean exited = nokey.waitFor(BOOT_TIMEOUT.toSeconds(), TimeUnit.SECONDS);
 
+            // then
             assertThat(exited).as("기동이 안 막히고 계속 떠 있다. 로그=%s", tailOf(log)).isTrue();
             assertThat(nokey.exitValue()).isNotZero();
             assertThat(tailOf(log)).contains("gbis.service-key");
@@ -176,7 +267,7 @@ class RuntimeProcessSeparationTest {
 
     private static Process start(
         String jarProperty,
-        int port,
+        final int port,
         Map<String, String> extra,
         Path log
     ) throws IOException {
@@ -186,9 +277,9 @@ class RuntimeProcessSeparationTest {
             jarAt(jarProperty));
         Map<String, String> environment = builder.environment();
         environment.keySet().removeIf(name -> name.startsWith("GBIS_")
-            || name.startsWith("MODEL_") || name.startsWith("COLLECTION_")
-            || name.startsWith("FORECAST_") || name.startsWith("MANAGEMENT_")
-            || name.equals("SPRING_APPLICATION_JSON"));
+                || name.startsWith("MODEL_") || name.startsWith("COLLECTION_")
+                || name.startsWith("FORECAST_") || name.startsWith("MANAGEMENT_")
+                || name.equals("SPRING_APPLICATION_JSON"));
         environment.put("SERVER_PORT", String.valueOf(port));
         environment.put("DB_URL", postgres.getJdbcUrl());
         environment.put("DB_USERNAME", postgres.getUsername());
@@ -204,7 +295,7 @@ class RuntimeProcessSeparationTest {
 
     private static void awaitHealthy(
         Process process,
-        int port,
+        final int port,
         Path log
     ) throws InterruptedException {
         final long deadline = System.nanoTime() + BOOT_TIMEOUT.toNanos();
@@ -221,11 +312,11 @@ class RuntimeProcessSeparationTest {
     }
 
     private static int statusOf(
-        int port,
+        final int port,
         String path
     ) {
         try {
-            return HTTP.send(request(port, path), HttpResponse.BodyHandlers.discarding()).statusCode();
+            return HTTP.send(request(port, path), BodyHandlers.discarding()).statusCode();
         } catch (IOException e) {
             return -1;
         } catch (InterruptedException e) {
@@ -235,11 +326,11 @@ class RuntimeProcessSeparationTest {
     }
 
     private static String bodyOf(
-        int port,
+        final int port,
         String path
     ) {
         try {
-            return HTTP.send(request(port, path), HttpResponse.BodyHandlers.ofString()).body();
+            return HTTP.send(request(port, path), BodyHandlers.ofString()).body();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         } catch (InterruptedException e) {
@@ -249,31 +340,13 @@ class RuntimeProcessSeparationTest {
     }
 
     private static HttpRequest request(
-        int port,
+        final int port,
         String path
     ) {
         return HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
             .timeout(Duration.ofSeconds(5))
             .GET()
             .build();
-    }
-
-    private static void assertFinalSchema() throws SQLException {
-        assertThat(queryStrings("""
-            SELECT version FROM flyway_schema_history WHERE version = '26' AND success
-            """)).containsExactly("26");
-        assertThat(queryStrings("""
-            SELECT table_name || '.' || column_name
-            FROM information_schema.columns
-            WHERE table_schema = 'public' AND (
-                (table_name = 'observation_batch' AND column_name = 'forecast_completed_at')
-                OR (table_name = 'seat_forecast'
-                    AND column_name IN ('scoring_state', 'arrival_observation_id', 'seats_on_arrival', 'scored_at'))
-                OR (table_name = 'route' AND column_name = 'quality_revision')
-                OR (table_name = 'route_version'
-                    AND column_name IN ('maximum_observation_gap_seconds', 'observation_gap_evidence'))
-            )
-            """)).as("V26에서 제거한 기존 저장 컬럼").isEmpty();
     }
 
     private static void installWriteAudit() throws SQLException {
@@ -310,8 +383,8 @@ class RuntimeProcessSeparationTest {
             SELECT DISTINCT event_object_table FROM information_schema.triggers
             WHERE trigger_schema = 'public' AND trigger_name = 'runtime_test_write_audit'
             """)).contains("observation_batch", "forecast_publication", "forecast_evaluation_work",
-                "forecast_evaluation_result", "route",
-                "route_data_quality", "trip_quality_rebuild", "daily_call_quota", "model_deployment");
+            "forecast_evaluation_result", "route",
+            "route_data_quality", "trip_quality_rebuild", "daily_call_quota", "model_deployment");
         assertNoWrites();
     }
 
@@ -335,6 +408,25 @@ class RuntimeProcessSeparationTest {
         assertThat(statusOf(workerPort, SCHEDULED_TASKS_PATH)).isEqualTo(200);
         assertThat(bodyOf(workerPort, SCHEDULED_TASKS_PATH).replaceAll("\\s", ""))
             .contains("\"cron\":[]", "\"fixedDelay\":[]", "\"fixedRate\":[]", "\"custom\":[]");
+    }
+
+    /** 프로세스 기동 직후 공유 DB의 마이그레이션 전제를 검증한다. */
+    private static void assertFinalSchema() throws SQLException {
+        assertThat(queryStrings("""
+            SELECT version FROM flyway_schema_history WHERE version = '26' AND success
+            """)).containsExactly("26");
+        assertThat(queryStrings("""
+            SELECT table_name || '.' || column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND (
+                (table_name = 'observation_batch' AND column_name = 'forecast_completed_at')
+                OR (table_name = 'seat_forecast'
+                    AND column_name IN ('scoring_state', 'arrival_observation_id', 'seats_on_arrival', 'scored_at'))
+                OR (table_name = 'route' AND column_name = 'quality_revision')
+                OR (table_name = 'route_version'
+                    AND column_name IN ('maximum_observation_gap_seconds', 'observation_gap_evidence'))
+            )
+            """)).as("V26에서 제거한 기존 저장 컬럼").isEmpty();
     }
 
     private static List<String> queryStrings(String sql) throws SQLException {
@@ -383,15 +475,16 @@ class RuntimeProcessSeparationTest {
         try {
             String whole = Files.readString(log);
 
-            return whole.length() <= LOG_TAIL ? whole : whole.substring(whole.length() - LOG_TAIL);
+            if (whole.length() <= LOG_TAIL) {
+                return whole;
+            }
+            return whole.substring(whole.length() - LOG_TAIL);
         } catch (IOException e) {
             return "로그를 못 읽었다: " + e.getMessage();
         }
     }
 
-    private static void destroy(
-        Process process
-    ) {
+    private static void destroy(Process process) {
         if (process != null && process.isAlive()) {
             process.destroyForcibly();
         }
@@ -401,5 +494,12 @@ class RuntimeProcessSeparationTest {
         try (ServerSocket socket = new ServerSocket(0)) {
             return socket.getLocalPort();
         }
+    }
+
+    private static String querySeparator(String url) {
+        if (url.contains("?")) {
+            return "&";
+        }
+        return "?";
     }
 }

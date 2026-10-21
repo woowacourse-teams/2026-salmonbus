@@ -2,30 +2,34 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
+import com.gustler.backend.forecasting.api.ForecastTelemetry;
 import com.gustler.backend.forecasting.api.evaluation.EvaluateForecasts;
 import com.gustler.backend.forecasting.application.evaluation.ForecastEvaluationWriter;
 import com.gustler.backend.forecasting.application.evaluation.RecentArrivalObservationCache;
-import com.gustler.backend.forecasting.api.ForecastTelemetry;
-import com.gustler.backend.forecasting.domain.evaluation.SettledEvaluation;
 import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesService;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Settled;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Skipped;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
+import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomeCount;
 import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomesStore;
 import com.gustler.backend.forecasting.domain.evaluation.SeoulDay;
+import com.gustler.backend.forecasting.domain.evaluation.SettledEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.SettledForecast;
 import com.gustler.backend.forecasting.domain.model.SameDayFullOutcomes;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
 import com.gustler.backend.forecasting.domain.statistics.DemandSampleStore;
-import com.gustler.backend.support.ConfirmedTripFixture;
+import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcForecastEvaluationTransactionTest.FixedClock;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
+import com.gustler.backend.support.ConfirmedTripFixture;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -36,9 +40,11 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,6 +53,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
@@ -54,10 +61,9 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @ForecastingIntegrationTest
-@Import(JdbcForecastEvaluationTransactionTest.FixedClock.class)
+@Import(FixedClock.class)
 @TestPropertySource(properties = "forecast.evaluation.observation-cache.enabled=true")
 class JdbcForecastEvaluationTransactionTest {
-
     private static final Instant OBSERVED_AT = Instant.parse("2026-08-19T02:14:00Z");
     private static final Instant ARRIVED_AT = OBSERVED_AT.plusSeconds(360);
     private static final Instant SCORED_AT = ARRIVED_AT.plusSeconds(60);
@@ -121,7 +127,7 @@ class JdbcForecastEvaluationTransactionTest {
                 INSERT INTO route_version(route_id, content_digest, valid_from)
                 VALUES (?, ?, ?) RETURNING id
                 """).params(routeId, "0".repeat(64), offset(OBSERVED_AT)).query(Long.class).single();
-        for (int stopOrder : List.of(SOURCE_STOP_ORDER, TARGET_STOP_ORDER)) {
+        for (final int stopOrder : List.of(SOURCE_STOP_ORDER, TARGET_STOP_ORDER)) {
             jdbc.sql("""
                     INSERT INTO route_stop(route_version_id, stop_order, stop_id, name, direction, boarding_allowed)
                     VALUES (?, ?, ?, ?, 'UP', true)
@@ -148,7 +154,9 @@ class JdbcForecastEvaluationTransactionTest {
     void 이_테스트가_저장한_자료만_정리한다() {
         inTransaction(() -> {
             jdbc.sql("DELETE FROM forecast_evaluation_work WHERE route_version_id = ?").param(routeVersionId).update();
-            jdbc.sql("DELETE FROM forecast_evaluation_result WHERE route_version_id = ?").param(routeVersionId).update();
+            jdbc.sql("DELETE FROM forecast_evaluation_result WHERE route_version_id = ?")
+                .param(routeVersionId)
+                .update();
             jdbc.sql("DELETE FROM seat_forecast WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM forecast_publication WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM same_day_model_full_outcomes WHERE route_id = ?").param(routeId).update();
@@ -160,7 +168,9 @@ class JdbcForecastEvaluationTransactionTest {
             jdbc.sql("DELETE FROM vehicle_one_way_trip WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM vehicle_observation WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM observation_batch WHERE route_version_id = ?").param(routeVersionId).update();
-            jdbc.sql("DELETE FROM route_version_quality_policy WHERE route_version_id = ?").param(routeVersionId).update();
+            jdbc.sql("DELETE FROM route_version_quality_policy WHERE route_version_id = ?")
+                .param(routeVersionId)
+                .update();
             jdbc.sql("DELETE FROM route_data_quality WHERE route_id = ?").param(routeId).update();
             jdbc.sql("DELETE FROM route_stop WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM route_version WHERE id = ?").param(routeVersionId).update();
@@ -185,8 +195,8 @@ class JdbcForecastEvaluationTransactionTest {
             FOR EACH ROW EXECUTE FUNCTION reject_settlement_preview_fixture()
             """).update();
         try {
-            org.assertj.core.api.Assertions.assertThatThrownBy(settlement::settleArrivalLabels)
-                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+            Assertions.assertThatThrownBy(settlement::settleArrivalLabels)
+                .isInstanceOf(DataAccessException.class);
         } finally {
             jdbc.sql("DROP TRIGGER reject_settlement_preview_fixture ON forecast_evaluation_result").update();
             jdbc.sql("DROP FUNCTION reject_settlement_preview_fixture()").update();
@@ -209,8 +219,8 @@ class JdbcForecastEvaluationTransactionTest {
         assertThat(evaluationState()).isEqualTo("LOST");
 
         // when
-        var reused = inTransaction(() -> {
-            long revision = qualityAccess.lock(routeVersionId);
+        List<ArrivalCandidate> reused = inTransaction(() -> {
+            final long revision = qualityAccess.lock(routeVersionId);
             return observationCache.begin(SCORED_AT).read(arrivals, routeVersionId, revision, false,
                 "evaluation-vehicle", OBSERVED_AT.plusSeconds(1), 400);
         });
@@ -225,12 +235,16 @@ class JdbcForecastEvaluationTransactionTest {
 
     @Test
     void 관측은_실제_커밋_이후에만_전달하고_재정산은_중복_집계하지_않는다() {
+        // when
         initializeSameDayOutcomes();
         AtomicInteger count = new AtomicInteger();
         evaluationWriter.setTelemetry(new ForecastTelemetry() {
-            @Override public void settled(List<SettledEvaluation> results) {
+            @Override
+            public void settled(List<SettledEvaluation> results) {
                 count.addAndGet(results.size());
                 results.forEach(result -> {
+
+                    // then
                     assertThat(result.diagnostics()).isNotNull();
                     assertThat(result.diagnostics().routeName()).isNotBlank();
                     assertThat(result.diagnostics().stopName()).isNotBlank();
@@ -249,12 +263,15 @@ class JdbcForecastEvaluationTransactionTest {
             assertThat(count).hasValue(1);
             evaluationWriter.complete(List.of(completedEvaluation()));
             assertThat(count).hasValue(1);
-        } finally { evaluationWriter.setTelemetry(ForecastTelemetry.NONE); }
+        } finally {
+            evaluationWriter.setTelemetry(ForecastTelemetry.NONE);
+        }
     }
 
     @Test
     void 보정_집계_저장에_실패하면_평가도_함께_취소한다() {
-        // given 실제 집계 저장까지 수행한 뒤 실패시킨다.
+        // given
+        // 실제 집계 저장까지 수행한 뒤 실패시킨다.
         initializeSameDayOutcomes();
         SameDayFullOutcomesService failingOutcomes =
             new SameDayFullOutcomesService(new FailingOutcomeRepository(outcomeRepository));
@@ -268,29 +285,31 @@ class JdbcForecastEvaluationTransactionTest {
         // then
         assertThat(evaluationState()).isEqualTo("PENDING");
         assertThat(jdbc.sql("SELECT sum(row_count) FROM same_day_model_full_outcomes WHERE route_id = ?")
-            .param(routeId).query(Long.class).single()).isZero();
+                .param(routeId).query(Long.class).single()).isZero();
     }
 
     @Test
     void 이미_완료한_평가를_다시_요청해도_결과를_바꾸지_않는다() {
-        // given 도착 관측 없이 완료된 평가는 다른 결과로 덮어쓸 수 없다.
+        // given
+        // 도착 관측 없이 완료된 평가는 다른 결과로 덮어쓸 수 없다.
         evaluationWriter.complete(List.of(ForecastEvaluation.completed(sourceObservationId, TARGET_STOP_ORDER,
-            new ArrivalLabel.Skipped(), SCORED_AT)));
+            new Skipped(), SCORED_AT)));
 
         // when
         List<SettledForecast> repeated = evaluationWriter.complete(List.of(ForecastEvaluation.completed(
-            sourceObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrivalObservationId, 0),
+            sourceObservationId, TARGET_STOP_ORDER, new Settled(arrivalObservationId, 0),
             SCORED_AT.plusSeconds(60))));
 
         // then
         assertThat(repeated).isEmpty();
         assertThat(evaluationState()).isEqualTo("SKIPPED");
         assertThat(jdbc.sql("SELECT count(*) FROM same_day_model_full_outcomes WHERE route_id = ?")
-            .param(routeId).query(Long.class).single()).isZero();
+                .param(routeId).query(Long.class).single()).isZero();
     }
 
     @Test
     void 정산과_재등록이_겹쳐도_완료된_평가를_대기로_다시_넣지_않는다() throws Exception {
+        // given
         initializeSameDayOutcomes();
         CountDownLatch settled = new CountDownLatch(1);
         CountDownLatch retryStarted = new CountDownLatch(1);
@@ -299,19 +318,21 @@ class JdbcForecastEvaluationTransactionTest {
         AtomicInteger waiting = new AtomicInteger();
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
-            var first = executor.submit(() -> inTransaction(() -> {
+            Future<Object> first = executor.submit(() -> inTransaction(() -> {
                 holding.set(connectionId());
                 evaluationWriter.complete(List.of(completedEvaluation()));
                 settled.countDown();
                 await(commit);
                 return null;
             }));
-            var retry = executor.submit(() -> {
+            Future<Object> retry = executor.submit(() -> {
                 await(settled);
                 return inTransaction(() -> {
                     waiting.set(connectionId());
                     retryStarted.countDown();
                     // ForecastBatchWriter가 대기 등록 전에 확보하는 같은 노선 잠금이다.
+
+                    // when
                     qualityAccess.lock(routeVersionId);
                     evaluations.addPending(routeVersionId,
                         List.of(ForecastEvaluation.pending(sourceObservationId, TARGET_STOP_ORDER)));
@@ -323,6 +344,8 @@ class JdbcForecastEvaluationTransactionTest {
             commit.countDown();
             first.get(10, TimeUnit.SECONDS);
             retry.get(10, TimeUnit.SECONDS);
+
+            // then
             assertThat(jdbc.sql("SELECT count(*) FROM forecast_evaluation_pending WHERE vehicle_observation_id=?")
                 .param(sourceObservationId).query(Long.class).single()).isZero();
             assertThat(jdbc.sql("SELECT count(*) FROM forecast_evaluation_result WHERE vehicle_observation_id=?")
@@ -337,15 +360,16 @@ class JdbcForecastEvaluationTransactionTest {
 
     @Test
     void 같은_평가를_동시에_확정해도_당일_집계에는_한_번만_반영한다() throws Exception {
-        // given 빈 집계가 먼저 만들어진 경우에는 새 결과만 더한다.
+        // given
+        // 빈 집계가 먼저 만들어진 경우에는 새 결과만 더한다.
         initializeSameDayOutcomes();
         assertThat(outcomes.outcomesFor(routeId, modelId, SCORED_AT)).isEmpty();
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
-            var first = executor.submit(() -> settleAfter(ready, start));
-            var second = executor.submit(() -> settleAfter(ready, start));
+            Future<Integer> first = executor.submit(() -> settleAfter(ready, start));
+            Future<Integer> second = executor.submit(() -> settleAfter(ready, start));
             await(ready);
 
             // when
@@ -364,7 +388,8 @@ class JdbcForecastEvaluationTransactionTest {
 
     @Test
     void 당일_집계_초기화와_평가_확정이_겹쳐도_결과를_중복해서_세지_않는다() throws Exception {
-        // given 초기화가 노선 잠금을 먼저 잡은 상태에서 평가를 시작한다.
+        // given
+        // 초기화가 노선 잠금을 먼저 잡은 상태에서 평가를 시작한다.
         CountDownLatch initializationLocked = new CountDownLatch(1);
         CountDownLatch evaluationStarted = new CountDownLatch(1);
         CountDownLatch finishInitialization = new CountDownLatch(1);
@@ -372,7 +397,7 @@ class JdbcForecastEvaluationTransactionTest {
         AtomicInteger evaluationConnection = new AtomicInteger();
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
-            var initialized = executor.submit(() -> inTransaction(() -> {
+            Future<Map<Integer, SameDayFullOutcomes>> initialized = executor.submit(() -> inTransaction(() -> {
                 initializationConnection.set(connectionId());
                 qualityAccess.lockByRoute(routeId);
                 initializationLocked.countDown();
@@ -380,7 +405,7 @@ class JdbcForecastEvaluationTransactionTest {
                 outcomes.initializeIfAbsent(routeId, modelId, SeoulDay.containing(SCORED_AT));
                 return outcomes.outcomesFor(routeId, modelId, SCORED_AT);
             }));
-            var settled = executor.submit(() -> {
+            Future<Integer> settled = executor.submit(() -> {
                 await(initializationLocked);
                 return inTransaction(() -> {
                     evaluationConnection.set(connectionId());
@@ -396,7 +421,8 @@ class JdbcForecastEvaluationTransactionTest {
             Map<Integer, SameDayFullOutcomes> initialCounts = initialized.get(10, TimeUnit.SECONDS);
             final int changed = settled.get(10, TimeUnit.SECONDS);
 
-            // then 초기화 이후의 평가가 한 번만 증분으로 반영된다.
+            // then
+            // 초기화 이후의 평가가 한 번만 증분으로 반영된다.
             assertThat(initialCounts).isEmpty();
             assertThat(changed).isEqualTo(1);
             assertCountedOnce();
@@ -410,6 +436,7 @@ class JdbcForecastEvaluationTransactionTest {
 
     @Test
     void 제외_처리가_잠금을_기다리는_동안_재조사가_시작되면_대기를_유지한다() throws Exception {
+        // when
         jdbc.sql("UPDATE vehicle_one_way_trip SET status='EXCLUDED' WHERE start_observation_id=?")
             .param(sourceObservationId).update();
         jdbc.sql("""
@@ -423,7 +450,7 @@ class JdbcForecastEvaluationTransactionTest {
         AtomicInteger waiting = new AtomicInteger();
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
-            var investigation = executor.submit(() -> inTransaction(() -> {
+            Future<Boolean> investigation = executor.submit(() -> inTransaction(() -> {
                 holding.set(connectionId());
                 qualityAccess.lockByRoute(routeId);
                 jdbc.sql("UPDATE trip_quality_rebuild SET completed=false,phase='REPLAY' WHERE route_version_id=?")
@@ -432,7 +459,7 @@ class JdbcForecastEvaluationTransactionTest {
                 await(release);
                 return true;
             }));
-            var closing = executor.submit(() -> {
+            Future<List<PendingForecast>> closing = executor.submit(() -> {
                 await(locked);
                 return inTransaction(() -> {
                     waiting.set(connectionId());
@@ -444,10 +471,15 @@ class JdbcForecastEvaluationTransactionTest {
             awaitDatabaseLock(waiting.get(), holding.get());
             release.countDown();
             investigation.get(10, TimeUnit.SECONDS);
+
+            // then
             assertThat(closing.get(10, TimeUnit.SECONDS)).isEmpty();
             assertThat(evaluationState()).isEqualTo("PENDING");
         } finally {
-            locked.countDown(); closeStarted.countDown(); release.countDown(); stop(executor);
+            locked.countDown();
+            closeStarted.countDown();
+            release.countDown();
+            stop(executor);
         }
     }
 
@@ -475,7 +507,7 @@ class JdbcForecastEvaluationTransactionTest {
         assertThat(outcomes.outcomesFor(routeId, modelId, SCORED_AT)).containsExactlyEntriesOf(
             Map.of(STOPS_TO_TARGET, new SameDayFullOutcomes(1, 1, RAW_FULL_CHANCE)));
         assertThat(jdbc.sql("SELECT sum(row_count) FROM same_day_model_full_outcomes WHERE route_id = ?")
-            .param(routeId).query(Long.class).single()).isEqualTo(1);
+                .param(routeId).query(Long.class).single()).isEqualTo(1);
     }
 
     private String evaluationState() {
@@ -511,7 +543,7 @@ class JdbcForecastEvaluationTransactionTest {
 
     private ForecastEvaluation completedEvaluation() {
         return ForecastEvaluation.completed(sourceObservationId, TARGET_STOP_ORDER,
-            new ArrivalLabel.Settled(arrivalObservationId, 0), SCORED_AT);
+            new Settled(arrivalObservationId, 0), SCORED_AT);
     }
 
     private long insertBatch(Instant observedAt) {
@@ -522,7 +554,7 @@ class JdbcForecastEvaluationTransactionTest {
                 VALUES (?, ?, 1, ?, ?, ?, ?, 'SUCCESS_ROWS', 'normalization-v1', 'collection-v1', 1)
                 RETURNING id
                 """).params(routeVersionId, offset(observedAt), UUID.randomUUID().toString(),
-                offset(observedAt), offset(observedAt), offset(observedAt))
+            offset(observedAt), offset(observedAt), offset(observedAt))
             .query(Long.class).single();
     }
 
@@ -568,7 +600,6 @@ class JdbcForecastEvaluationTransactionTest {
 
     /** DB에 실제 집계가 저장된 직후 발생하는 후속 처리 실패를 재현한다. */
     private static final class FailingOutcomeRepository implements SameDayFullOutcomesStore {
-
         private final SameDayFullOutcomesStore delegate;
 
         private FailingOutcomeRepository(SameDayFullOutcomesStore delegate) {
@@ -581,12 +612,18 @@ class JdbcForecastEvaluationTransactionTest {
         }
 
         @Override
-        public List<SameDayFullOutcomeCount> findCounts(final long routeId, long modelDeploymentId, SeoulDay day) {
+        public List<SameDayFullOutcomeCount> findCounts(final long routeId, final long modelDeploymentId,
+            SeoulDay day) {
             return delegate.findCounts(routeId, modelDeploymentId, day);
         }
 
         @Override
-        public void upsertCounts(final long routeId, long modelDeploymentId, SeoulDay day, List<SameDayFullOutcomeCount> counts) {
+        public void upsertCounts(
+            final long routeId,
+            final long modelDeploymentId,
+            SeoulDay day,
+            List<SameDayFullOutcomeCount> counts
+        ) {
             delegate.upsertCounts(routeId, modelDeploymentId, day, counts);
             throw new CalibrationWriteFailure();
         }
@@ -598,13 +635,23 @@ class JdbcForecastEvaluationTransactionTest {
         }
 
         @Override
-        public void addCounts(long routeId, long modelDeploymentId, SeoulDay day, List<SameDayFullOutcomeCount> increments) {
+        public void addCounts(
+            final long routeId,
+            final long modelDeploymentId,
+            SeoulDay day,
+            List<SameDayFullOutcomeCount> increments
+        ) {
             delegate.addCounts(routeId, modelDeploymentId, day, increments);
             throw new CalibrationWriteFailure();
         }
 
         @Override
-        public List<SameDayFullOutcomeCount> countFromSource(final long routeId, long modelDeploymentId, SeoulDay day, Instant until) {
+        public List<SameDayFullOutcomeCount> countFromSource(
+            final long routeId,
+            final long modelDeploymentId,
+            SeoulDay day,
+            Instant until
+        ) {
             return delegate.countFromSource(routeId, modelDeploymentId, day, until);
         }
     }

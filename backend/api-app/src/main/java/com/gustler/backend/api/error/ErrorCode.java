@@ -3,8 +3,11 @@ package com.gustler.backend.api.error;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 
+/**
+ * API 오류의 공개 코드·메시지·상태 대응이다.
+ * 기존 코드 이름과 값은 클라이언트 계약으로 유지한다.
+ */
 public enum ErrorCode {
-
     INVALID_ROUTE_ID(HttpStatus.BAD_REQUEST, "routeId는 9자리 숫자여야 합니다."),
     ROUTE_NOT_FOUND(HttpStatus.NOT_FOUND, "등록되지 않은 노선입니다."),
     STATION_NOT_FOUND(HttpStatus.NOT_FOUND, "지원하지 않는 정류장입니다."),

@@ -289,7 +289,7 @@ final class Packager {
                 var source = repo.resolve("dev/server/" + name);
                 Checks.require(
                         !java.util.regex.Pattern.compile(
-                                        "(?m)^\\s*(password|username|url|service-key(?:-[a-z])?|mongodb-uri)\\s*:")
+                                        "(?m)^\\s*(password|username|url|service-key(?:-[a-z])?|keys|named-keys|mongodb-uri)\\s*:")
                                 .matcher(Files.readString(source))
                                 .find(),
                         "PRIVATE_CONFIG_FIELD_IN_REVISION");

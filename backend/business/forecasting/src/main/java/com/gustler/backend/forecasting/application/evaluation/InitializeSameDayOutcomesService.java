@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class InitializeSameDayOutcomesService implements InitializeSameDayOutcomes {
-    private static final Logger log = LoggerFactory.getLogger(InitializeSameDayOutcomesService.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(InitializeSameDayOutcomesService.class);
     private final SameDayFullOutcomesInitializer initializer;
     private final SameDayInitializationPolicy policy;
     private final Clock clock;
@@ -46,30 +46,45 @@ public class InitializeSameDayOutcomesService implements InitializeSameDayOutcom
             lastRouteId = Long.MIN_VALUE;
         }
         List<Long> routes = WorkerOperationLog.measure("same_day_initialization_routes", "all",
-            initializer::activeRouteIds).stream().distinct().sorted().toList();
+            initializer::activeRouteIds)
+            .stream()
+            .distinct()
+            .sorted()
+            .toList();
         retryAt.keySet().retainAll(routes);
         List<Long> due = routes.stream()
-            .filter(route -> !now.isBefore(retryAt.getOrDefault(route, Instant.MIN))).toList();
-        if (due.isEmpty()) { return; }
-        long route = due.stream().filter(id -> id > lastRouteId).findFirst().orElse(due.getFirst());
+            .filter(route -> !now.isBefore(retryAt.getOrDefault(route, Instant.MIN)))
+            .toList();
+        if (due.isEmpty()) {
+            return;
+        }
+        final long route = due.stream().filter(id -> id > lastRouteId).findFirst().orElse(due.getFirst());
         lastRouteId = route;
-        var attempt = new SameDayInitializationAttempt();
+        SameDayInitializationAttempt attempt = new SameDayInitializationAttempt();
         Instant startedAt = clock.instant();
         try {
             // 별도 빈의 트랜잭션 프록시가 커밋을 완료하고 반환해야 성공이다.
-            boolean initialized = initializer.initialize(route, day, attempt);
+            final boolean initialized = initializer.initialize(route, day, attempt);
             attempt.completed(initialized);
         } catch (RuntimeException failure) {
             attempt.failed(failure);
             throw failure;
         } finally {
-            log.atLevel(attempt.status().equals("FAILED") ? Level.ERROR : Level.INFO)
-                .log("event=same_day_initialization startedAt={} routeId={} outcomeDate={} status={} sourceAttempted={} lockAcquireMs={} sourceQueryMs={} totalMs={} failedStage={} sqlState={}",
-                startedAt.atZone(ZoneId.of("Asia/Seoul")), route, day.date(), attempt.status(),
-                attempt.sourceAttempted(), attempt.lockAcquireMs(), attempt.sourceQueryMs(),
-                attempt.totalMs(), attempt.failedStage(), attempt.sqlState());
-            // 실행 종료부터 간격을 둔다. 실패한 노선도 다음 회차를 독점하지 못한다.
+            LOGGER.atLevel(levelFor(attempt.status()))
+                .log(
+                    "event=same_day_initialization startedAt={} routeId={} outcomeDate={} status={} sourceAttempted={} lockAcquireMs={} sourceQueryMs={} totalMs={} failedStage={} sqlState={}",
+                    startedAt.atZone(ZoneId.of("Asia/Seoul")), route, day.date(), attempt.status(),
+                    attempt.sourceAttempted(), attempt.lockAcquireMs(), attempt.sourceQueryMs(),
+                    attempt.totalMs(), attempt.failedStage(), attempt.sqlState());
+            // 실행 종료 시점부터 재시도 간격을 둔다. 실패한 노선도 다음 회차를 독점하지 못한다.
             retryAt.put(route, clock.instant().plus(policy.retryInterval()));
         }
+    }
+
+    private static Level levelFor(String status) {
+        if (status.equals("FAILED")) {
+            return Level.ERROR;
+        }
+        return Level.INFO;
     }
 }

@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
@@ -22,7 +23,6 @@ import org.springframework.web.context.WebApplicationContext;
 @IntegrationTest
 @Transactional
 class RouteApiContractTest {
-
     private static final OffsetDateTime FIRST_VERSION_AT = OffsetDateTime.parse(
         "2026-08-01T00:00:00+09:00"
     );
@@ -66,12 +66,15 @@ class RouteApiContractTest {
         insertCurrentVersionWithStop(secondRouteId, SECOND_DIGEST, "205000001");
         insertModelDeployment("STAGED");
 
-        final String expected = """
+        String expected = """
             {"routes":[{"id":"234000050","displayName":"1650","startStopName":"구리수택차고지","endStopName":"안양역","status":"PREPARING"},{"id":"204000057","displayName":"3330","startStopName":"도촌동9단지앞","endStopName":"안양역","status":"PREPARING"}]}
             """.strip();
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes"))
+        // when
+        ResultActions httpResponse = mockMvc.perform(get("/api/v1/routes"));
+
+        // then
+        httpResponse
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "max-age=300, public"))
             .andExpect(content().string(expected));
@@ -89,8 +92,11 @@ class RouteApiContractTest {
         insertCurrentVersionWithStop(routeId, FIRST_DIGEST, "205000001");
         insertModelDeployment("ACTIVE");
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes"))
+        // when
+        ResultActions httpResponse2 = mockMvc.perform(get("/api/v1/routes"));
+
+        // then
+        httpResponse2
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.routes[0].status").value("PREPARING"));
     }
@@ -108,8 +114,11 @@ class RouteApiContractTest {
         insertModelDeployment("ACTIVE");
         insertPublication(currentVersionIdOf(routeId));
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes"))
+        // when
+        ResultActions httpResponse3 = mockMvc.perform(get("/api/v1/routes"));
+
+        // then
+        httpResponse3
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.routes[0].status").value("FORECAST_READY"));
     }
@@ -127,8 +136,11 @@ class RouteApiContractTest {
         insertModelDeployment("STAGED");
         insertPublication(currentVersionIdOf(routeId));
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes"))
+        // when
+        ResultActions httpResponse4 = mockMvc.perform(get("/api/v1/routes"));
+
+        // then
+        httpResponse4
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.routes[0].status").value("PREPARING"));
     }
@@ -147,8 +159,11 @@ class RouteApiContractTest {
         insertModelDeployment("ACTIVE");
         insertPublication(expiredVersionIdOf(routeId));
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes"))
+        // when
+        ResultActions httpResponse5 = mockMvc.perform(get("/api/v1/routes"));
+
+        // then
+        httpResponse5
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.routes.length()").value(1))
             .andExpect(jsonPath("$.routes[0].status").value("PREPARING"));
@@ -174,8 +189,11 @@ class RouteApiContractTest {
         insertModelDeployment("ACTIVE");
         insertPublication(currentVersionIdOf(forecastRouteId));
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes"))
+        // when
+        ResultActions httpResponse6 = mockMvc.perform(get("/api/v1/routes"));
+
+        // then
+        httpResponse6
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.routes.length()").value(2))
             .andExpect(jsonPath("$.routes[0].id").value("204000057"))
@@ -195,8 +213,11 @@ class RouteApiContractTest {
         );
         insertExpiredVersionWithStop(routeId, FIRST_DIGEST, "205000001");
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes"))
+        // when
+        ResultActions httpResponse7 = mockMvc.perform(get("/api/v1/routes"));
+
+        // then
+        httpResponse7
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.routes").isEmpty());
     }
@@ -213,18 +234,21 @@ class RouteApiContractTest {
         insertExpiredVersionWithStop(routeId, FIRST_DIGEST, "205000001");
         insertCurrentVersionWithStop(routeId, SECOND_DIGEST, "205000002");
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes"))
+        // when
+        ResultActions httpResponse8 = mockMvc.perform(get("/api/v1/routes"));
+
+        // then
+        httpResponse8
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.routes.length()").value(1))
             .andExpect(jsonPath("$.routes[0].id").value("204000057"));
     }
 
     private long insertRoute(
-        final String sourceRouteId,
-        final String displayName,
-        final String startStopName,
-        final String endStopName
+        String sourceRouteId,
+        String displayName,
+        String startStopName,
+        String endStopName
     ) {
         return jdbcClient.sql("""
                 INSERT INTO route (
@@ -247,8 +271,8 @@ class RouteApiContractTest {
 
     private void insertCurrentVersionWithStop(
         final long routeId,
-        final String contentDigest,
-        final String stopId
+        String contentDigest,
+        String stopId
     ) {
         final long routeVersionId = jdbcClient.sql("""
                 INSERT INTO route_version (route_id, content_digest, valid_from)
@@ -263,8 +287,8 @@ class RouteApiContractTest {
 
     private void insertExpiredVersionWithStop(
         final long routeId,
-        final String contentDigest,
-        final String stopId
+        String contentDigest,
+        String stopId
     ) {
         final long routeVersionId = jdbcClient.sql("""
                 INSERT INTO route_version (route_id, content_digest, valid_from, valid_to)
@@ -279,7 +303,7 @@ class RouteApiContractTest {
 
     private void insertRouteStop(
         final long routeVersionId,
-        final String stopId
+        String stopId
     ) {
         jdbcClient.sql("""
                 INSERT INTO route_stop (
@@ -291,7 +315,7 @@ class RouteApiContractTest {
             .update();
     }
 
-    private void insertModelDeployment(final String state) {
+    private void insertModelDeployment(String state) {
         jdbcClient.sql("""
                 INSERT INTO model_deployment (
                     deployment_key, release_id, model_key, model_version,
@@ -304,10 +328,10 @@ class RouteApiContractTest {
                 "route-contract-test",
                 "seat-forecast",
                 "test-v1",
-                "3".repeat(64),
+                    "3".repeat(64),
                 "target-v1",
                 "calculation-v1",
-                "4".repeat(64),
+                    "4".repeat(64),
                 SECOND_VERSION_AT,
                 state,
                 SECOND_VERSION_AT
@@ -346,7 +370,7 @@ class RouteApiContractTest {
             .params(
                 routeVersionId,
                 SECOND_VERSION_AT,
-                "route-contract-test-" + routeVersionId,
+                    "route-contract-test-" + routeVersionId,
                 SECOND_VERSION_AT,
                 SECOND_VERSION_AT,
                 SECOND_VERSION_AT,

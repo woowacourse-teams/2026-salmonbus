@@ -7,7 +7,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
 
 @TestConfiguration(proxyBeanMethods = false)
 public class PostgresTestContainer {
-
     private static final String POSTGRES_IMAGE = "postgres:18";
 
     @Bean

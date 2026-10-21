@@ -10,30 +10,48 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import net.bytebuddy.agent.builder.AgentBuilder;
+import java.util.Map.Entry;
+import net.bytebuddy.agent.builder.AgentBuilder.Default;
+import net.bytebuddy.agent.builder.AgentBuilder.Identified.Extendable;
+import net.bytebuddy.agent.builder.AgentBuilder.Listener.StreamWriting;
 import net.bytebuddy.asm.Advice;
+import net.bytebuddy.asm.Advice.Argument;
+import net.bytebuddy.asm.Advice.Enter;
+import net.bytebuddy.asm.Advice.OnMethodEnter;
+import net.bytebuddy.asm.Advice.OnMethodExit;
+import net.bytebuddy.asm.Advice.Origin;
 
 /** 테스트에서 생성한 javaagent JAR에만 담는다. 제품 코드·응답 헤더는 변경하지 않는다. */
 public final class ArrivalTimingAgent {
     public static final ThreadLocal<Scope> CURRENT = new ThreadLocal<>();
-    private static BufferedWriter output;
     private static final Map<String, String> SECTIONS = Map.ofEntries(
         Map.entry("com.zaxxer.hikari.HikariDataSource.getConnection", "pool.acquire"),
         Map.entry("org.postgresql.jdbc.PgPreparedStatement.executeQuery", "jdbc.execute"),
-        Map.entry("com.gustler.backend.api.arrival.infrastructure.jdbc.JdbcArrivalReadRepository.visits", "repository.visits"),
-        Map.entry("com.gustler.backend.api.arrival.infrastructure.jdbc.JdbcArrivalReadRepository.latest", "repository.latest"),
+        Map.entry("com.gustler.backend.api.arrival.infrastructure.jdbc.JdbcArrivalReadRepository.visits",
+        "repository.visits"),
+        Map.entry("com.gustler.backend.api.arrival.infrastructure.jdbc.JdbcArrivalReadRepository.latest",
+        "repository.latest"),
         Map.entry("com.gustler.backend.api.arrival.application.ArrivalQueryService.get", "query.service"),
         Map.entry("com.gustler.backend.api.arrival.dto.StationArrivalsResponse.from", "response.dto"),
-        Map.entry("org.springframework.http.converter.AbstractJacksonHttpMessageConverter.writeInternal", "response.write")
+        Map.entry("org.springframework.http.converter.AbstractJacksonHttpMessageConverter.writeInternal",
+        "response.write")
     );
+    private static BufferedWriter output;
 
     public static void premain(String destination, Instrumentation instrumentation) throws Exception {
-        output = Files.newBufferedWriter(Path.of(destination), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        output =
+            Files.newBufferedWriter(Path.of(destination), StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING);
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            try { output.close(); } catch (Exception ignored) { }
+            try {
+                output.close();
+            } catch (Exception ignored) {
+                // 종료 시점의 진단 파일 닫기 실패는 종료를 방해하지 않는다.
+                return;
+            }
         }));
-        var builder = new AgentBuilder.Default().disableClassFormatChanges()
-            .with(AgentBuilder.Listener.StreamWriting.toSystemError().withErrorsOnly())
+        Extendable builder = new Default().disableClassFormatChanges()
+            .with(StreamWriting.toSystemError().withErrorsOnly())
             .type(named("org.apache.catalina.core.ApplicationFilterChain"))
             .transform((target, type, loader, module, domain) -> target.visit(Advice.to(RequestAdvice.class)
                 .on(named("doFilter").and(takesArguments(2)))))
@@ -47,9 +65,11 @@ public final class ArrivalTimingAgent {
             .transform((target, type, loader, module, domain) -> target.visit(Advice.to(TimedAdvice.class)
                 .on(named("visits").or(named("latest")))))
             .type(named("com.gustler.backend.api.arrival.application.ArrivalQueryService"))
-            .transform((target, type, loader, module, domain) -> target.visit(Advice.to(TimedAdvice.class).on(named("get"))))
+            .transform((target, type, loader, module, domain) -> target.visit(Advice.to(TimedAdvice.class)
+                .on(named("get"))))
             .type(named("com.gustler.backend.api.arrival.dto.StationArrivalsResponse"))
-            .transform((target, type, loader, module, domain) -> target.visit(Advice.to(TimedAdvice.class).on(named("from"))))
+            .transform((target, type, loader, module, domain) -> target.visit(Advice.to(TimedAdvice.class)
+                .on(named("from"))))
             .type(named("tools.jackson.databind.ObjectMapper"))
             .transform((target, type, loader, module, domain) -> target.visit(Advice.to(DecodeAdvice.class)
                 .on(named("readValue").and(takesArguments(String.class, Class.class)))))
@@ -65,79 +85,117 @@ public final class ArrivalTimingAgent {
         public final Map<String, Long> nanos = new LinkedHashMap<>();
         public final Map<String, Integer> calls = new LinkedHashMap<>();
 
-        public Scope(String id) { this.id = id; }
+        public Scope(String id) {
+            this.id = id;
+        }
     }
 
     public static boolean begin(Object request) throws Exception {
-        if (CURRENT.get() != null) return false;
+        if (CURRENT.get() != null) {
+            return false;
+        }
         Object id = request.getClass().getMethod("getHeader", String.class).invoke(request, "X-ETA-Measure");
-        if (!(id instanceof String value) || !value.matches("[a-zA-Z0-9_-]{1,80}")) return false;
+        if (!(id instanceof String value) || !value.matches("[a-zA-Z0-9_-]{1,80}")) {
+            return false;
+        }
         CURRENT.set(new Scope(value));
         return true;
     }
 
     public static long started() {
-        return CURRENT.get() == null ? 0 : System.nanoTime();
+        if (CURRENT.get() == null) {
+            return (long) (0);
+        }
+        return System.nanoTime();
     }
 
-    public static void finish(String method, long started) {
+    public static void finish(String method, final long started) {
         Scope scope = CURRENT.get();
-        if (scope == null || started == 0) return;
-        String section = method.equals("snapshot.decode") ? method : SECTIONS.get(method);
+        if (scope == null || started == 0) {
+            return;
+        }
+        String section = sectionOf(method);
         if (section != null) {
             scope.nanos.merge(section, System.nanoTime() - started, Long::sum);
             scope.calls.merge(section, 1, Integer::sum);
         }
     }
 
-    public static void end(boolean root) throws Exception {
-        if (!root) return;
+    public static void end(final boolean root) throws Exception {
+        if (!root) {
+            return;
+        }
         Scope scope = CURRENT.get();
         scope.nanos.put("server.filter", System.nanoTime() - scope.started);
         CURRENT.remove();
         StringBuilder row = new StringBuilder("{\"id\":\"").append(scope.id).append("\",\"nanos\":{");
         boolean first = true;
-        for (var value : scope.nanos.entrySet()) {
-            if (!first) row.append(',');
+        for (Entry<String, Long> value : scope.nanos.entrySet()) {
+            if (!first) {
+                row.append(',');
+            }
             first = false;
             row.append('"').append(value.getKey()).append("\":").append(value.getValue());
         }
         row.append("},\"calls\":{");
         first = true;
-        for (var value : scope.calls.entrySet()) {
-            if (!first) row.append(',');
+        for (Entry<String, Integer> value : scope.calls.entrySet()) {
+            if (!first) {
+                row.append(',');
+            }
             first = false;
             row.append('"').append(value.getKey()).append("\":").append(value.getValue());
         }
         row.append("}}\n");
-        synchronized (ArrivalTimingAgent.class) { output.write(row.toString()); output.flush(); }
+        synchronized (ArrivalTimingAgent.class) {
+            output.write(row.toString());
+            output.flush();
+        }
     }
 
     public static final class RequestAdvice {
-        @Advice.OnMethodEnter(suppress = Throwable.class)
-        public static boolean enter(@Advice.Argument(0) Object request) throws Exception { return begin(request); }
+        @OnMethodEnter(suppress = Throwable.class)
+        public static boolean enter(@Argument(0) Object request) throws Exception {
+            return begin(request);
+        }
 
-        @Advice.OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
-        public static void exit(@Advice.Enter boolean root) throws Exception { end(root); }
+        @OnMethodExit(onThrowable = Throwable.class, suppress = Throwable.class)
+        public static void exit(@Enter final boolean root) throws Exception {
+            end(root);
+        }
     }
 
     public static final class TimedAdvice {
-        @Advice.OnMethodEnter
-        public static long enter() { return started(); }
+        @OnMethodEnter
+        public static long enter() {
+            return started();
+        }
 
-        @Advice.OnMethodExit(onThrowable = Throwable.class)
-        public static void exit(@Advice.Enter long started, @Advice.Origin("#t.#m") String method) {
+        @OnMethodExit(onThrowable = Throwable.class)
+        public static void exit(@Enter final long started, @Origin("#t.#m") String method) {
             finish(method, started);
         }
     }
 
     public static final class DecodeAdvice {
-        @Advice.OnMethodEnter
-        public static long enter(@Advice.Argument(1) Class<?> target) {
-            return target.getName().equals("com.gustler.backend.arrival.contract.ArrivalSnapshot") ? started() : 0;
+        @OnMethodEnter
+        public static long enter(@Argument(1) Class<?> target) {
+            if (target.getName().equals("com.gustler.backend.arrival.contract.ArrivalSnapshot")) {
+                return started();
+            }
+            return (long) (0);
         }
 
-        @Advice.OnMethodExit(onThrowable = Throwable.class)
-        public static void exit(@Advice.Enter long started) { finish("snapshot.decode", started); }
+        @OnMethodExit(onThrowable = Throwable.class)
+        public static void exit(@Enter final long started) {
+            finish("snapshot.decode", started);
+        }
+    }
+
+    private static String sectionOf(String method) {
+        if (method.equals("snapshot.decode")) {
+            return method;
+        }
+        return SECTIONS.get(method);
     }
 }

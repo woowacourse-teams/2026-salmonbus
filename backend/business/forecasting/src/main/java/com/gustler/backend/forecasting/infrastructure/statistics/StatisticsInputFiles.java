@@ -14,15 +14,13 @@ import java.util.Set;
 
 /** 입력 파일의 바이트만 검사한다. 표본 건수와 참조의 완전성은 별도로 검사해야 한다. */
 final class StatisticsInputFiles {
-
     private static final int BUFFER_SIZE = 64 * 1024;
 
     private StatisticsInputFiles() {
     }
 
     static void verify(Path directory, List<StatisticsInputFile> declarations) {
-        if (directory == null || Files.isSymbolicLink(directory)
-            || !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
+        if (!isRegularDirectory(directory)) {
             throw new IllegalArgumentException("입력 파일 디렉터리가 없거나 일반 디렉터리가 아니다");
         }
         if (declarations == null || declarations.isEmpty()) {
@@ -37,6 +35,13 @@ final class StatisticsInputFiles {
         for (StatisticsInputFile file : declarations) {
             verifyFile(directory.resolve(file.name()), file);
         }
+    }
+
+    private static boolean isRegularDirectory(Path directory) {
+        if (directory == null || Files.isSymbolicLink(directory)) {
+            return false;
+        }
+        return Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS);
     }
 
     private static void verifyFile(Path path, StatisticsInputFile declaration) {

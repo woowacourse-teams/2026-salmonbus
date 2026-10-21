@@ -11,10 +11,12 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
+/**
+ * 수집 배치의 원천 행 식별을 유지하며 저장된 차량 관측을 조회 모델로 옮기는 JPA 매핑이다.
+ */
 @Entity(name = "BoardVehicleObservationJpaEntity")
 @Table(name = "vehicle_observation")
 public class VehicleObservationJpaEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

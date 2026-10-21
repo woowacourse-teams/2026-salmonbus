@@ -98,6 +98,9 @@ test("native host는 JS SDK 없이 scene과 관측별 motion을 보내고 브라
       .getByRole("region", { name: "노선 지도", exact: true })
       .evaluate((element) => getComputedStyle(element).backgroundColor),
   ).toBe("rgba(0, 0, 0, 0)");
+  expect(
+    await page.getByTestId("route-map").evaluate((element) => getComputedStyle(element.parentElement!).backgroundColor),
+  ).toBe("rgba(0, 0, 0, 0)");
 });
 
 test("randomUUID가 없는 환경에서도 native 지도 연결과 선택 이벤트가 동작한다", async ({ page }) => {

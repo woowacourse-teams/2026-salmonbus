@@ -1,38 +1,37 @@
 package com.gustler.backend.forecasting.infrastructure.bundle;
 
-import com.gustler.backend.forecasting.domain.model.Sha256;
-
-import com.gustler.backend.forecasting.domain.model.SeatForecastDesignMatrix;
 import com.gustler.backend.forecasting.domain.model.ForecastFeatureContract;
-
+import com.gustler.backend.forecasting.domain.model.Sha256;
+import com.gustler.backend.forecasting.infrastructure.bundle.BundleManifest.GoldenVector;
+import com.gustler.backend.forecasting.infrastructure.bundle.BundleManifest.TensorDeclaration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
- * 계수 묶음을 읽어 검사한다. 하나라도 어긋나면 안 올린다.
+ * 계수 묶음을 읽고 검사하며 하나라도 어긋나면 적재하지 않는다.
  *
- * <p>검사 목록은 {@link BundleCheck} 에, 읽어 쓰는 배열 목록은 {@link BundleTensor} 에 있다.
- * 특징 계약이 확정되면 그 둘만 고친다.
+ * <p>검사 목록은 {@link BundleCheck} 에, 읽어 사용하는 배열 목록은 {@link BundleTensor} 에 있다.
+ * 특징 계약이 확정되면 두 목록만 수정한다.
  *
- * <p>배열의 크기를 코드에 안 박는다. 설명 파일이 선언한 노선 수 · 예보 거리 수 · 특징 개수에서
- * 크기를 만들고, 선언과 계수 파일과 그 크기 셋이 모두 같은지 본다. 셋 중 둘만 맞아도 거절한다.
+ * <p>배열 크기를 코드에 고정하지 않는다. 설명 파일이 선언한 노선 수 · 예보 거리 수 · 특징 개수로
+ * 크기를 계산하고, 선언 · 계수 파일 · 계산한 크기가 모두 같은지 확인한다. 셋 중 둘만 맞아도 거절한다.
  */
 public final class BundleLoader {
-
     /**
-     * 계수 파일이 자기 이름으로 적어 둔 값이다. 글자가 하나라도 다르면 다른 계수 묶음이라
-     * 우리가 고쳐 부를 수 없다.
+     * 계수 파일에 명시된 이름으로, 글자가 하나라도 다르면 다른 계수 묶음이므로 임의로 바꾸지 않는다.
      *
-     * <p>가운데 {@code a18} 이 무엇의 줄임인지는 <b>확인되지 않았다.</b> 분석 쪽에서 온 이름이고
-     * 배포된 계수 파일과 규약 문서 안에서만 산다. 같이 채점하는 다른 모델 일곱은 전부
-     * 서술형 이름이라 일련번호로 보기도 어렵다. 그래서 이 두 줄 밖으로는 안 퍼뜨린다.
+     * <p>가운데 {@code a18} 이 무엇의 줄임인지는 확인되지 않았다. 분석 쪽에서 정한 이름이며
+     * 배포된 계수 파일과 규약 문서에서만 사용한다. 함께 채점하는 다른 모델 일곱은 전부
+     * 서술형 이름이므로 일련번호로 보기도 어렵다. 따라서 이 두 줄 밖에서는 사용하지 않는다.
      */
     private static final String BUNDLE_SCHEMA_VERSION = "a18-live-bundle-v1";
     static final String CONDITIONAL_SCHEMA_VERSION = "a18-live-bundle-v2";
@@ -107,7 +106,7 @@ public final class BundleLoader {
         final int characters = value.codePointCount(0, value.length());
         BundleCheck.DEPLOYMENT_IDENTIFIER_LENGTH.require(
             characters <= maximum,
-            "%s: %d자, 최대 %d자".formatted(field, characters, maximum));
+                "%s: %d자, 최대 %d자".formatted(field, characters, maximum));
     }
 
     private static void checkScope(
@@ -129,54 +128,56 @@ public final class BundleLoader {
         if (!CONDITIONAL_SCHEMA_VERSION.equals(manifest.bundleSchemaVersion())) {
             return ForecastFeatureContract.LEGACY;
         }
-        return ForecastFeatureContract.STATISTICS_VERSION.equals(manifest.featureContractVersion())
-            ? ForecastFeatureContract.STOP_DIRECTION_TIME_STATISTICS : ForecastFeatureContract.STOP_DIRECTION_TIME;
+        if (ForecastFeatureContract.STATISTICS_VERSION.equals(manifest.featureContractVersion())) {
+            return ForecastFeatureContract.STOP_DIRECTION_TIME_STATISTICS;
+        }
+        return ForecastFeatureContract.STOP_DIRECTION_TIME;
     }
 
     private static void checkConditionalContract(BundleManifest manifest) {
-        boolean conditional = featuresOf(manifest) != ForecastFeatureContract.LEGACY;
-        boolean statistics = ForecastFeatureContract.STATISTICS_VERSION.equals(manifest.featureContractVersion());
+        final boolean conditional = featuresOf(manifest) != ForecastFeatureContract.LEGACY;
+        final boolean statistics = ForecastFeatureContract.STATISTICS_VERSION.equals(manifest.featureContractVersion());
         BundleCheck.FEATURE_CONTRACT_VERSION.require(
-            conditional == (statistics || ForecastFeatureContract.CONDITIONAL_VERSION.equals(manifest.featureContractVersion())),
-            "새 입력 계약은 v2 번들에서만 지원한다: " + manifest.featureContractVersion());
+            conditional == (statistics
+                        || ForecastFeatureContract.CONDITIONAL_VERSION.equals(manifest.featureContractVersion())),
+                "새 입력 계약은 v2 번들에서만 지원한다: " + manifest.featureContractVersion());
         if (conditional) {
             BundleCheck.FEATURE_CONTRACT_VERSION.require(
                 manifest.normalizationConstants().equals(Map.of("largestSeatCount", 68.0, "lowSeatBandWidth", 20.0))
-                    && manifest.timeSlotSource().equals("observation_batch.response_received_at;Asia/Seoul;new_time_slot=0")
+                    && manifest.timeSlotSource()
+                    .equals("observation_batch.response_received_at;Asia/Seoul;new_time_slot=0")
                     && manifest.capacityPolicy().equals("maximum-seats-ever-observed")
-                    && manifest.cellStatisticsPolicy().equals(statistics
-                        ? ForecastFeatureContract.STATISTICS_POLICY : "statistics-inputs-zero"),
-                "위치·방향·시간 계약의 정규화·시간·정원·통계 규칙이 다르다");
+                    && manifest.cellStatisticsPolicy().equals(statisticsPolicy(statistics)),
+            "위치·방향·시간 계약의 정규화·시간·정원·통계 규칙이 다르다");
         }
     }
 
     private static List<Integer> expectedHorizonStops() {
-        List<Integer> stops = new ArrayList<>();
-        for (int ahead = SMALLEST_STOPS_AHEAD; ahead <= LARGEST_STOPS_AHEAD; ahead++) {
-            stops.add(ahead);
-        }
+        List<Integer> stops = IntStream.rangeClosed(SMALLEST_STOPS_AHEAD, LARGEST_STOPS_AHEAD)
+            .boxed()
+            .collect(Collectors.toCollection(ArrayList::new));
         return List.copyOf(stops);
     }
 
     /**
-     * 출시 식별자가 무엇으로 만들어졌는지를 요약값 하나로 묶는다.
+     * 출시 식별자를 구성하는 정보를 하나의 요약값으로 묶는다.
      *
-     * <p>계수 파일 요약값만 묶으면 모자란다. 계수가 한 글자도 안 바뀌어도 <b>입력을 만드는 규칙이
-     * 바뀌면 그 계수의 뜻이 바뀐다.</b> 그래서 열 이름과 순서 · 정규화 상수 · 시간대 기준 ·
-     * 정원 정책 · 셀 통계 정책 · 대조 사례 요약값까지 같이 묶는다.
+     * <p>계수 파일 요약값만으로는 충분하지 않다. 계수가 한 글자도 바뀌지 않아도 입력 생성 규칙이
+     * 바뀌면 계수의 의미가 달라진다. 따라서 열 이름과 순서 · 정규화 상수 · 시간대 기준 ·
+     * 정원 정책 · 셀 통계 정책 · 대조 사례 요약값을 함께 포함한다.
      *
-     * <p>이 중 하나만 바뀌어도 요약값이 달라져서, 뜻만 바뀐 묶음이 같은 출시 식별자로 올라오지
-     * 못한다.
+     * <p>어느 하나라도 바뀌면 요약값이 달라지므로 의미가 달라진 묶음이 같은 출시 식별자로 적재되지
+     * 않는다.
      */
     private static void checkWeightsDigest(
         BundleManifest manifest,
         byte[] weightsContent
     ) {
-        final String measured = Sha256.of(weightsContent);
+        String measured = Sha256.of(weightsContent);
         BundleCheck.WEIGHTS_DIGEST.require(measured.equals(manifest.weightsDigest()), measured);
         BundleCheck.RELEASE_IDENTITY_DIGEST.require(
             !manifest.releaseId().isBlank(), "출시 식별자가 비어 있다");
-        final String identity = Sha256.of(String.join("\n",
+        String identity = Sha256.of(String.join("\n",
             manifest.featureContractVersion(),
             manifest.sourceCommit(),
             manifest.modelVersion(),
@@ -193,12 +194,14 @@ public final class BundleLoader {
             identity.equals(manifest.identityDigest()), identity);
     }
 
-    /** 정규화 상수를 이름 순서로 편다. 순서가 달라도 같은 요약값이 나와야 한다. */
+    /** 정규화 상수를 이름순으로 나열한다. 원래 순서가 달라도 같은 요약값이 나와야 한다. */
     private static String normalizationText(
         BundleManifest manifest
     ) {
-        return manifest.normalizationConstants().entrySet().stream()
-            .sorted(Map.Entry.comparingByKey())
+        return manifest.normalizationConstants()
+            .entrySet()
+            .stream()
+            .sorted(Entry.comparingByKey())
             .map(constant -> constant.getKey() + "=" + constant.getValue())
             .collect(Collectors.joining(","));
     }
@@ -216,17 +219,17 @@ public final class BundleLoader {
     }
 
     /**
-     * 대조 사례의 요약값이 그 사례 내용에서 나온 값인지 본다.
+     * 대조 사례의 내용으로 계산한 요약값이 명시된 요약값과 같은지 확인한다.
      *
-     * <p>이걸 안 보면 요약값을 아무 수로나 적어 놓고 사례를 바꿔도 신원이 그대로다. 신원 요약값에
-     * 이 값을 묶어 둔 것만으로는 모자란다. 묶인 것은 <b>적힌 요약값</b>이지 <b>사례 내용</b>이 아니다.
+     * <p>이 검사가 없으면 요약값을 임의로 적고 사례 내용을 바꿔도 식별 정보는 그대로다.
+     * 식별 정보 요약값에는 명시된 사례 요약값만 포함되므로 사례 내용도 별도로 검증해야 한다.
      *
-     * <p>사례를 이어 붙이는 순서가 계약이다. 만드는 쪽과 재는 쪽이 다르면 정상 묶음이 거절된다.
+     * <p>사례를 이어 붙이는 순서가 계약이다. 생성하는 쪽과 검증하는 쪽의 순서가 다르면 정상 묶음이 거절된다.
      */
     private static void checkGoldenVectorDigest(
         BundleManifest manifest
     ) {
-        final String measured = Sha256.of(goldenVectorText(manifest.goldenVector()));
+        String measured = Sha256.of(goldenVectorText(manifest.goldenVector()));
         BundleCheck.GOLDEN_VECTOR.require(
             measured.equals(manifest.goldenVectorDigest()),
             "적힌 요약값 %s, 사례 내용에서 잰 값 %s"
@@ -234,10 +237,13 @@ public final class BundleLoader {
     }
 
     static String goldenVectorText(
-        BundleManifest.GoldenVector golden
+        GoldenVector golden
     ) {
         return String.join("\n",
-            golden.featureVector().stream().map(String::valueOf).collect(Collectors.joining(",")),
+            golden.featureVector()
+                .stream()
+                .map(String::valueOf)
+                .collect(Collectors.joining(",")),
             golden.modelRoute(),
             String.valueOf(golden.stopsAhead()),
             String.valueOf(golden.currentSeats()),
@@ -277,20 +283,20 @@ public final class BundleLoader {
     ) {
         int[] expected = wanted.shapeOf(
             manifest.routes().size(), manifest.horizonStops().size(), manifest.featureCount());
-        BundleManifest.TensorDeclaration declaration =
+        TensorDeclaration declaration =
             manifest.tensorDeclarations().get(wanted.tensorName());
 
         BundleCheck.TENSOR_SHAPE_AND_DATA_TYPE.require(
             Arrays.equals(expected, declaration.shape()),
-            "%s 선언 %s, 계약 %s".formatted(
-                wanted.tensorName(), Arrays.toString(declaration.shape()), Arrays.toString(expected)));
+                "%s 선언 %s, 계약 %s".formatted(
+                    wanted.tensorName(), Arrays.toString(declaration.shape()), Arrays.toString(expected)));
         BundleCheck.TENSOR_SHAPE_AND_DATA_TYPE.require(
             Arrays.equals(expected, tensor.shape()),
-            "%s 파일 %s, 계약 %s".formatted(
-                wanted.tensorName(), Arrays.toString(tensor.shape()), Arrays.toString(expected)));
+                "%s 파일 %s, 계약 %s".formatted(
+                    wanted.tensorName(), Arrays.toString(tensor.shape()), Arrays.toString(expected)));
         BundleCheck.TENSOR_SHAPE_AND_DATA_TYPE.require(
             wanted.dataType() == declaration.dataType() && wanted.dataType() == tensor.dataType(),
-            "%s 자료형이 %s 가 아니다".formatted(wanted.tensorName(), wanted.dataType().tensorName()));
+                "%s 자료형이 %s 가 아니다".formatted(wanted.tensorName(), wanted.dataType().tensorName()));
 
         checkValues(wanted, tensor);
         return tensor;
@@ -301,14 +307,25 @@ public final class BundleLoader {
         Tensor tensor
     ) {
         for (final double value : tensor.values()) {
-            if (wanted.dataType() == TensorDataType.FLOAT64) {
-                BundleCheck.COEFFICIENTS_ARE_FINITE.require(
-                    Double.isFinite(value), "%s 에 %s 가 있다".formatted(wanted.tensorName(), value));
-            } else {
-                BundleCheck.FITTED_FLAGS_ARE_ZERO_OR_ONE.require(
-                    value == 0.0 || value == 1.0,
-                    "%s 에 %s 가 있다".formatted(wanted.tensorName(), value));
-            }
+            checkValue(wanted, value);
         }
+    }
+
+    private static String statisticsPolicy(final boolean statistics) {
+        if (statistics) {
+            return ForecastFeatureContract.STATISTICS_POLICY;
+        }
+        return "statistics-inputs-zero";
+    }
+
+    private static void checkValue(BundleTensor wanted, final double value) {
+        if (wanted.dataType() == TensorDataType.FLOAT64) {
+            BundleCheck.COEFFICIENTS_ARE_FINITE.require(
+                Double.isFinite(value), "%s 에 %s 가 있다".formatted(wanted.tensorName(), value));
+            return;
+        }
+        BundleCheck.FITTED_FLAGS_ARE_ZERO_OR_ONE.require(
+            value == 0.0 || value == 1.0,
+                "%s 에 %s 가 있다".formatted(wanted.tensorName(), value));
     }
 }

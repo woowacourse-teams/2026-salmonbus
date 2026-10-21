@@ -16,11 +16,14 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+/**
+ * 노선 판본의 유효 기간과 정류장·시간표 기준을 저장 행에 대응시킨다.
+ * 판본을 바꾸는 규칙은 도메인이 결정한다.
+ */
 @Entity
 @Table(name = "route_version")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RouteVersionJpaEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -43,6 +46,30 @@ public class RouteVersionJpaEntity {
 
     @Column(name = "down_last_departure_time")
     private String downLastDepartureTime;
+
+    @Column(name = "weekday_min_headway_minutes")
+    private Integer weekdayMinHeadwayMinutes;
+
+    @Column(name = "weekday_max_headway_minutes")
+    private Integer weekdayMaxHeadwayMinutes;
+
+    @Column(name = "saturday_min_headway_minutes")
+    private Integer saturdayMinHeadwayMinutes;
+
+    @Column(name = "saturday_max_headway_minutes")
+    private Integer saturdayMaxHeadwayMinutes;
+
+    @Column(name = "sunday_min_headway_minutes")
+    private Integer sundayMinHeadwayMinutes;
+
+    @Column(name = "sunday_max_headway_minutes")
+    private Integer sundayMaxHeadwayMinutes;
+
+    @Column(name = "holiday_min_headway_minutes")
+    private Integer holidayMinHeadwayMinutes;
+
+    @Column(name = "holiday_max_headway_minutes")
+    private Integer holidayMaxHeadwayMinutes;
 
     @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "content_digest", nullable = false)
@@ -80,5 +107,37 @@ public class RouteVersionJpaEntity {
 
     public String downLastDepartureTime() {
         return downLastDepartureTime;
+    }
+
+    public Integer weekdayMinHeadwayMinutes() {
+        return weekdayMinHeadwayMinutes;
+    }
+
+    public Integer weekdayMaxHeadwayMinutes() {
+        return weekdayMaxHeadwayMinutes;
+    }
+
+    public Integer saturdayMinHeadwayMinutes() {
+        return saturdayMinHeadwayMinutes;
+    }
+
+    public Integer saturdayMaxHeadwayMinutes() {
+        return saturdayMaxHeadwayMinutes;
+    }
+
+    public Integer sundayMinHeadwayMinutes() {
+        return sundayMinHeadwayMinutes;
+    }
+
+    public Integer sundayMaxHeadwayMinutes() {
+        return sundayMaxHeadwayMinutes;
+    }
+
+    public Integer holidayMinHeadwayMinutes() {
+        return holidayMinHeadwayMinutes;
+    }
+
+    public Integer holidayMaxHeadwayMinutes() {
+        return holidayMaxHeadwayMinutes;
     }
 }

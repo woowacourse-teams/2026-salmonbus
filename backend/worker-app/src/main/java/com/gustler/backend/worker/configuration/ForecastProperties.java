@@ -7,8 +7,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * 예보 배치와 라벨 회수 배치의 설정.
  *
- * <p>기본값은 꺼짐이다. 계수 번들이 없어 도는 배포가 하나도 없고, 그 상태로 배치를 켜면
- * 아무 값도 안 내면서 몇 초마다 빈 질의만 돈다. 켜는 것은 배포 행이 선 뒤다.
+ * <p>기본값은 꺼짐이다. 계수 번들이 없어 활성 배포가 하나도 없는 상태에서 배치를 켜면
+ * 아무 값도 내지 않으면서 몇 초마다 빈 질의만 실행한다. 배포 행이 생성된 뒤에 켠다.
  */
 @ConfigurationProperties("forecast")
 public record ForecastProperties(
@@ -21,13 +21,12 @@ public record ForecastProperties(
     int pendingLimit,
     int arrivalLimit
 ) {
-
     /**
      * 신선도 창의 상한.
      *
-     * <p>큐가 관측 시각 오름차순이라 창을 넓히면 오래된 판부터 회차의 자리를 채운다. 창이 옮겨 넣은
-     * 관측의 나이를 넘는 순간 한 회차가 그것으로 다 차서 방금 들어온 판이 한 개도 안 들어가고,
-     * 옮겨 온 관측에 예보가 붙어 되돌리기까지 막힌다. 운영으로 쓸 값이 몇 분 단위라 한 시간이면 넉넉하다.
+     * <p>큐가 관측 시각 오름차순이라 창을 넓히면 오래된 관측부터 회차를 채운다. 창이 옮겨 넣은
+     * 관측의 나이를 넘는 순간 한 회차가 그 관측으로 가득 차서 방금 들어온 관측은 한 개도 포함하지 못하고,
+     * 옮겨 온 관측에 예보가 붙어 되돌리기까지 막힌다. 운영에 사용할 값은 몇 분 단위라 한 시간이면 넉넉하다.
      */
     public static final Duration MAX_STALENESS = ForecastPolicy.MAX_STALENESS;
 
@@ -52,9 +51,16 @@ public record ForecastProperties(
         String name,
         Duration value
     ) {
-        if (value == null || value.isNegative() || value.isZero()) {
+        if (!isPositive(value)) {
             throw new IllegalStateException("%s 는 0보다 길어야 한다: %s".formatted(name, value));
         }
+    }
+
+    private static boolean isPositive(Duration value) {
+        if (value == null || value.isNegative()) {
+            return false;
+        }
+        return !value.isZero();
     }
 
     private static void requireAtMost(

@@ -1,12 +1,12 @@
 package com.gustler.backend.observations.infrastructure.jpa;
 
+import com.gustler.backend.observations.domain.RemainingSeats;
 import com.gustler.backend.observations.domain.RemainingSeats.Known;
 import com.gustler.backend.observations.domain.RemainingSeats.Unknown;
-import com.gustler.backend.observations.domain.RemainingSeats;
 import com.gustler.backend.observations.domain.SeatUnknownReason;
+import com.gustler.backend.observations.domain.StoredObservations.Row;
 import com.gustler.backend.observations.domain.UpstreamObservationRow;
 import com.gustler.backend.observations.domain.VehicleObservation;
-import com.gustler.backend.observations.domain.StoredObservations;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -20,7 +20,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * 조회 쪽도 이 표를 매핑한다. 같은 물리 컬럼에 논리명이 둘이면 Hibernate 가
- * DuplicateMappingException 을 내고 앱이 안 뜬다. 그래서 전 필드에 @Column(name) 을 명시한다.
+ * DuplicateMappingException 을 발생시켜 앱이 기동하지 않는다. 따라서 모든 필드에 @Column(name) 을 명시한다.
  *
  * <p>vehicle_trip_key 는 수집 엔티티에 매핑하지 않는다. 이상 차량의 제한된 조사에서만
  * 이 nullable 파생 열에 편도 키를 기록한다.
@@ -29,7 +29,6 @@ import lombok.NoArgsConstructor;
 @Table(name = "vehicle_observation")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class VehicleObservationJpaEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -102,12 +101,12 @@ public class VehicleObservationJpaEntity {
         applySeats(observation.remainingSeats());
     }
 
-    public StoredObservations.Row storedRow() {
-        return new StoredObservations.Row(id, vehicleId, remainingSeats, passedStopOrder, crowdLevel,
+    public Row storedRow() {
+        return new Row(id, vehicleId, remainingSeats, passedStopOrder, crowdLevel,
             stopOrder, runningState);
     }
 
-    /** 잔여석은 아는 값이거나 모르는 사유다. 둘 중 하나만 채운다. DB 도 CHECK 로 같은 것을 막는다. */
+    /** 잔여석은 아는 값과 모르는 사유 중 하나만 채우며 DB 도 CHECK 로 같은 규칙을 적용한다. */
     private void applySeats(
         RemainingSeats seats
     ) {

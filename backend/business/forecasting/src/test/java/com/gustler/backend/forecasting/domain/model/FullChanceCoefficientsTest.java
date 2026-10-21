@@ -1,11 +1,16 @@
 package com.gustler.backend.forecasting.domain.model;
 
-import com.gustler.backend.forecasting.domain.model.FullSeatStreak;
-import com.gustler.backend.forecasting.domain.model.ObservedSeats;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.Assertions.within;
+
+import com.gustler.backend.forecasting.domain.model.FullSeatStreak.SeenToEnd;
+import com.gustler.backend.forecasting.domain.model.ObservedSeats.Known;
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
-import com.gustler.backend.forecasting.domain.model.PrecedingVehicle;
+import com.gustler.backend.forecasting.domain.model.PrecedingVehicle.Unknown;
 import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
+import com.gustler.backend.forecasting.domain.model.SameDayFullOutcomes;
 import com.gustler.backend.forecasting.domain.model.SeatSlope;
 import com.gustler.backend.forecasting.domain.model.TrajectoryGap;
 import com.gustler.backend.forecasting.domain.model.VehicleStopTarget;
@@ -13,12 +18,6 @@ import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandCell;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
 import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
-
-import com.gustler.backend.forecasting.domain.model.SameDayFullOutcomes;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.within;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -28,15 +27,14 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * 계수를 손으로 넣으면 만석 확률이 나오는지 본다.
+ * 계수를 직접 입력해 만석 확률이 계산되는지 확인한다.
  *
- * <p>계수 번들이 없어도 계수를 받는 자리는 서야 한다. 여기서 손으로 넣는 자리에 나중에
- * 밖에서 배운 계수가 들어온다. 값이 맞는지는 그때 golden vector 가 본다.
+ * <p>계수 번들이 없어도 계수를 전달받아 계산할 수 있어야 한다. 여기서 직접 입력한 계수는
+ * 이후 외부 학습 계수로 대체되며, 값의 정확성은 golden vector 로 검증한다.
  */
 class FullChanceCoefficientsTest {
-    /** 오늘 확정된 결과가 없는 자리. 그때는 만석 확률을 안 옮긴다. */
+    /** 오늘 확정된 결과가 없어 만석 확률을 보정하지 않는 경우. */
     private static final SameDayFullOutcomes NO_SAME_DAY_OUTCOMES = null;
-
 
     private static final Clock KOREAN_CLOCK =
         Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneId.of("Asia/Seoul"));
@@ -55,7 +53,7 @@ class FullChanceCoefficientsTest {
     private static final int CROWD_LEVEL_3 = 3;
 
     private static final int CONSTANT_COLUMN = 1;
-    /** 실수 계산에서 자리끝이 어긋나는 만큼. 값이 다른 것과 구별하려고 좁게 잡는다. */
+    /** 실수 계산의 반올림 오차 허용 범위. 값 자체의 차이와 구분하도록 좁게 잡는다. */
     private static final double FLOATING_POINT_ROUNDING = 1e-12;
 
     @Test
@@ -69,11 +67,18 @@ class FullChanceCoefficientsTest {
 
     @Test
     void 계수가_31개가_아니면_묶음을_만들_수_없다() {
-        // given
+        // when
         List<Double> tooFew = allZero().subList(0, 30);
 
-        // when, then
-        assertThatThrownBy(() -> new FullChanceCoefficients(tooFew))
+
+        // then
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> new FullChanceCoefficients(tooFew));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -88,7 +93,8 @@ class FullChanceCoefficientsTest {
 
     @Test
     void 상수_열에만_계수가_붙으면_만석_확률은_그_계수의_로지스틱_값이다() {
-        // given 상수 열은 늘 1이라 가중합이 그 계수와 같다
+        // given
+        // 상수 열은 늘 1이라 가중합이 그 계수와 같다
         FullChanceCoefficients coefficients = withCoefficientAt(CONSTANT_COLUMN, 2.0);
 
         // when
@@ -133,10 +139,10 @@ class FullChanceCoefficientsTest {
         VehicleTrajectory trajectory = new VehicleTrajectory(
             ANY_OBSERVATION_ID,
             observation,
-            new ObservedSeats.Known(SEATS_LEFT),
+            new Known(SEATS_LEFT),
             new SeatSlope.Known(-3),
-            new PrecedingVehicle.Unknown(TrajectoryGap.NO_VEHICLE_AHEAD),
-            new FullSeatStreak.SeenToEnd(0),
+            new Unknown(TrajectoryGap.NO_VEHICLE_AHEAD),
+            new SeenToEnd(0),
             MAXIMUM_SEATS_44);
         VehicleStopTarget target = new VehicleStopTarget(
             observation, new RouteStop(ROUTE_VERSION_3330, TARGET_STOP_49, "20400049", true));

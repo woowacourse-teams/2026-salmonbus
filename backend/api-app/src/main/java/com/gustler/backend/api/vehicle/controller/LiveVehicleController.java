@@ -1,8 +1,8 @@
 package com.gustler.backend.api.vehicle.controller;
 
-import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.docs.ApiDocsExamples;
 import com.gustler.backend.api.error.ErrorResponse;
+import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.vehicle.application.LiveVehicleOverview;
 import com.gustler.backend.api.vehicle.application.LiveVehicleQueryService;
 import com.gustler.backend.api.vehicle.dto.LiveVehicleResponse;
@@ -21,21 +21,28 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 최신 차량 조회를 공개 응답으로 변환하고 관측의 캐시 정책을 HTTP 헤더로 전달한다.
+ */
 @RestController
-@RequiredArgsConstructor
 @RequestMapping("/api/v1/routes")
+@RequiredArgsConstructor
 public class LiveVehicleController {
-
     private final LiveVehicleQueryService liveVehicleQueryService;
 
+    /**
+     * 현재 노선 판본의 실시간 차량 화면을 반환한다. 관측 부재와 오래된 관측 상태를 응답에서 구별한다.
+     */
     @GetMapping("/{routeId}/vehicles")
     @Operation(summary = "실시간 차량 관측", description = "관측이 불확실하면 200 UNKNOWN과 빈 차량 목록을 반환합니다. 정상 빈 관측을 운행 종료로 단정하지 않습니다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "현재 차량 관측 또는 관측 상태 UNKNOWN",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = LiveVehicleResponse.class), examples = {
-                @ExampleObject(name = "VEHICLES_PRESENT", value = ApiDocsExamples.VEHICLES_PRESENT),
-                @ExampleObject(name = "UNKNOWN", value = ApiDocsExamples.VEHICLES_UNKNOWN)
-            })),
+            content =
+            @Content(mediaType = "application/json", schema = @Schema(implementation = LiveVehicleResponse.class),
+                examples = {
+                    @ExampleObject(name = "VEHICLES_PRESENT", value = ApiDocsExamples.VEHICLES_PRESENT),
+                    @ExampleObject(name = "UNKNOWN", value = ApiDocsExamples.VEHICLES_UNKNOWN)
+                })),
         @ApiResponse(responseCode = "400", description = "노선 ID 형식이 올바르지 않음",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
                 examples = @ExampleObject(value = ApiDocsExamples.INVALID_ROUTE))),

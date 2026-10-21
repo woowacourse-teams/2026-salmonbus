@@ -2,6 +2,7 @@ package com.gustler.backend;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -9,6 +10,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterEach;
@@ -20,7 +22,6 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 @Testcontainers
 class DddStorageMigrationTest {
-
     @Container
     private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18");
 
@@ -43,8 +44,10 @@ class DddStorageMigrationTest {
 
     @Test
     void 빈_DB는_별도_데이터_이관_없이_최종_구조로_설치한다() throws SQLException {
+        // when
         migrate("26");
 
+        // then
         assertThat(number("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '" + schema
             + "' AND table_name IN ('forecast_publication','forecast_evaluation','demand_statistics_version',"
             + "'route_data_quality','route_version_quality_policy','observation_trip_assignment')")).isEqualTo(6);
@@ -54,45 +57,69 @@ class DddStorageMigrationTest {
 
     @Test
     void 최종_구조에서는_통계_발행_기록을_세대_표로_합치고_평가_표의_vacuum_기준을_낮춘다() throws SQLException {
+        // when
         migrate("26");
 
+        // then
         assertThat(number("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '" + schema
             + "' AND table_name = 'stop_demand_publication'")).isZero();
-        assertThat(scalar("SELECT array_to_string(reloptions, ',') FROM pg_class WHERE oid = 'forecast_evaluation'::regclass"))
+        assertThat(
+            scalar("SELECT array_to_string(reloptions, ',') FROM pg_class WHERE oid = 'forecast_evaluation'::regclass"))
             .isEqualTo("autovacuum_vacuum_scale_factor=0.01,autovacuum_vacuum_threshold=50,"
                 + "autovacuum_vacuum_max_threshold=10000");
     }
 
     @Test
     void 예보_표의_vacuum_시작_기준은_최종_구조에도_남는다() throws SQLException {
+        // when
         migrate("26");
 
-        assertThat(scalar("SELECT array_to_string(reloptions, ',') FROM pg_class WHERE oid = 'seat_forecast'::regclass"))
+        // then
+        assertThat(
+            scalar("SELECT array_to_string(reloptions, ',') FROM pg_class WHERE oid = 'seat_forecast'::regclass"))
             .isEqualTo("autovacuum_vacuum_scale_factor=0.01,autovacuum_vacuum_threshold=50,"
                 + "autovacuum_vacuum_max_threshold=10000");
     }
 
     @Test
     void 검증_이후_통계_누적_자료가_바뀌어도_검증_완료를_취소한다() throws SQLException {
+        // given
         migrate("24");
         insertRoute();
-        execute("INSERT INTO route_version(route_id,content_digest,valid_from) VALUES(1,repeat('0',64),'2026-01-01T00:00:00Z')");
+        execute(
+        "INSERT INTO route_version(route_id,content_digest,valid_from) VALUES(1,repeat('0',64),'2026-01-01T00:00:00Z')");
         migrate("25");
         execute("INSERT INTO sal134_transition(backup_id, verified_at) VALUES ('stopped-writer-backup', now())");
 
+        // when
         execute("INSERT INTO stop_demand_baseline(route_version_id) VALUES (1)");
 
+        // then
         assertThat(number("SELECT COUNT(*) FROM sal134_transition WHERE verified_at IS NOT NULL")).isZero();
-        assertThatThrownBy(() -> migrate("26")).hasMessageContaining("backfill 검증");
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> migrate("26"));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull().hasMessageContaining("backfill 검증");
     }
 
     @Test
     void 검증하지_않은_기존_DB에서는_컬럼을_삭제하기_전에_전환을_거절한다() throws SQLException {
+        // when
         migrate("24");
         insertRoute();
         migrate("25");
 
-        assertThatThrownBy(() -> migrate("26")).hasMessageContaining("backfill 검증");
+        // then
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> migrate("26"));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull().hasMessageContaining("backfill 검증");
         assertThat(number("SELECT quality_revision FROM route WHERE id = 1")).isEqualTo(7);
         assertThat(number("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = '" + schema
             + "' AND table_name = 'seat_forecast' AND column_name = 'scoring_state'")).isOne();
@@ -100,42 +127,65 @@ class DddStorageMigrationTest {
 
     @Test
     void 검증_이후_변경이_발생하면_검증_완료를_취소한다() throws SQLException {
+        // given
         migrate("24");
         insertRoute();
         migrate("25");
         execute("INSERT INTO sal134_transition(backup_id, verified_at) VALUES ('stopped-writer-backup', now())");
 
+        // when
         execute("UPDATE route SET display_name = '변경된 노선' WHERE id = 1");
 
+        // then
         assertThat(number("SELECT COUNT(*) FROM sal134_transition WHERE verified_at IS NOT NULL")).isZero();
-        assertThatThrownBy(() -> migrate("26")).hasMessageContaining("backfill 검증");
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> migrate("26"));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull().hasMessageContaining("backfill 검증");
     }
 
     @Test
     void 예측_평가와_품질을_분리해도_원관측과_학습_조회_값을_보존한다() throws SQLException {
+        // given
         migrate("24");
         insertLegacyData();
-        String observationBefore = scalar("SELECT string_agg(row_to_json(o)::text, ',' ORDER BY id) FROM vehicle_observation o");
+        String observationBefore =
+            scalar("SELECT string_agg(row_to_json(o)::text, ',' ORDER BY id) FROM vehicle_observation o");
         String viewColumnsBefore = viewColumns();
-        String forecastsBefore = scalar("SELECT string_agg(row_to_json(f)::text, ',' ORDER BY vehicle_observation_id,target_stop_order) FROM quality_training_seat_forecast f");
+        String forecastsBefore =
+            scalar(
+                "SELECT string_agg(row_to_json(f)::text, ',' ORDER BY vehicle_observation_id,target_stop_order) FROM quality_training_seat_forecast f");
         migrate("25");
         copyLegacyData();
         execute("INSERT INTO sal134_transition(backup_id, verified_at) VALUES ('stopped-writer-backup', now())");
 
+        // when
         migrate("26");
 
-        assertThat(scalar("SELECT string_agg(row_to_json(o)::text, ',' ORDER BY id) FROM vehicle_observation o")).isEqualTo(observationBefore);
-        assertThat(scalar("SELECT string_agg(row_to_json(f)::text, ',' ORDER BY vehicle_observation_id,target_stop_order) FROM quality_training_seat_forecast f")).isEqualTo(forecastsBefore);
+        // then
+        assertThat(
+            scalar("SELECT string_agg(row_to_json(o)::text, ',' ORDER BY id) FROM vehicle_observation o")).isEqualTo(
+                observationBefore);
+        assertThat(
+            scalar(
+            "SELECT string_agg(row_to_json(f)::text, ',' ORDER BY vehicle_observation_id,target_stop_order) FROM quality_training_seat_forecast f"))
+            .isEqualTo(forecastsBefore);
         assertThat(viewColumns()).isEqualTo(viewColumnsBefore);
         assertThat(number("SELECT COUNT(*) FROM training_eligible_seat_forecast")).isOne();
         assertThat(number("SELECT COUNT(*) FROM forecast_evaluation WHERE scoring_state = 'SETTLED'")).isOne();
         assertThat(number("SELECT quality_revision FROM route_data_quality WHERE route_id = 1")).isEqualTo(7);
-        assertThat(number("SELECT COUNT(*) FROM forecast_publication WHERE provenance = 'LEGACY_UNKNOWN' AND model_deployment_id IS NULL")).isOne();
+        assertThat(
+            number(
+            "SELECT COUNT(*) FROM forecast_publication WHERE provenance = 'LEGACY_UNKNOWN' AND model_deployment_id IS NULL")).isOne();
         assertThat(number("SELECT COUNT(*) FROM observation_batch WHERE input_confirmed_at IS NOT NULL")).isEqualTo(3);
     }
 
     @Test
     void 평가_근거를_보존하면서_도착_관측의_최신_편도_판정을_조회에_반영한다() throws SQLException {
+        // given
         migrate("24");
         insertLegacyData();
         migrate("25");
@@ -143,12 +193,14 @@ class DddStorageMigrationTest {
         execute("INSERT INTO sal134_transition(backup_id, verified_at) VALUES ('stopped-writer-backup', now())");
         migrate("26");
 
+        // when
         execute("""
             INSERT INTO vehicle_one_way_trip(id,start_observation_id,route_version_id,vehicle_id,status,boundary,rule_version)
             VALUES('arrival-trip',2,1,'bus1','EXCLUDED','START','quality1');
             INSERT INTO observation_trip_assignment(observation_id,trip_id) VALUES(2,'arrival-trip')
             """);
 
+        // then
         assertThat(number("SELECT COUNT(*) FROM training_eligible_seat_forecast")).isZero();
         assertThat(scalar("SELECT arrival_vehicle_trip_key FROM forecast_evaluation")).isEqualTo("legacy-unassigned");
         execute("UPDATE vehicle_one_way_trip SET status='ELIGIBLE' WHERE id='arrival-trip'");
@@ -164,43 +216,130 @@ class DddStorageMigrationTest {
 
     @Test
     void 과거_빈_발행은_모델을_추정하지_않고_출처를_모름으로_기록한다() throws SQLException {
+        // given
         migrate("24");
         insertLegacyData();
         migrate("25");
 
+        // when
         execute("""
             INSERT INTO forecast_publication(source_batch_id, route_version_id,
                 observed_at, published_at, prediction_count, provenance)
             VALUES (3, 1, '2026-09-01T00:02:00Z', '2026-09-01T00:02:01Z', 0, 'LEGACY_UNKNOWN')
             """);
+
+        // then
         assertThat(number("SELECT COUNT(*) FROM forecast_publication WHERE model_deployment_id IS NULL")).isOne();
-        assertThatThrownBy(() -> execute("""
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> execute("""
             INSERT INTO forecast_publication(source_batch_id, route_version_id,
                 observed_at, published_at, prediction_count, provenance)
             VALUES (2, 1, '2026-09-01T00:01:00Z', '2026-09-01T00:01:01Z', 0, 'RECORDED')
-            """)).isInstanceOf(SQLException.class);
+            """));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull().isInstanceOf(SQLException.class);
     }
 
     @Test
     void 평가_분리는_완료_이력_파일을_유지하고_대기만_옮긴다() throws SQLException {
+        // given
         preparePendingTransition();
-        long originalFile = number("SELECT pg_relation_filenode('forecast_evaluation')");
-        long trainingRows = number("SELECT count(*) FROM training_eligible_seat_forecast");
+        final long originalFile = number("SELECT pg_relation_filenode('forecast_evaluation')");
+        final long trainingRows = number("SELECT count(*) FROM training_eligible_seat_forecast");
 
+        // when
         migrate("31");
 
+        // then
         assertThat(number("SELECT pg_relation_filenode('forecast_evaluation_result')")).isEqualTo(originalFile);
         assertThat(number("SELECT count(*) FROM forecast_evaluation_result")).isOne();
         assertThat(number("SELECT count(*) FROM forecast_evaluation_pending")).isOne();
         assertThat(number("SELECT count(*) FROM forecast_evaluation")).isEqualTo(2);
         assertThat(number("SELECT count(*) FROM quality_eligible_seat_forecast")).isEqualTo(2);
         assertThat(number("SELECT count(*) FROM training_eligible_seat_forecast")).isEqualTo(trainingRows);
-        assertThat(scalar("SELECT scoring_state FROM forecast_evaluation WHERE target_stop_order=3")).isEqualTo("PENDING");
+        assertThat(scalar("SELECT scoring_state FROM forecast_evaluation WHERE target_stop_order=3")).isEqualTo(
+        "PENDING");
         assertThat(number("SELECT seats_on_arrival FROM forecast_evaluation_result")).isEqualTo(9);
-        assertThatThrownBy(() -> execute("""
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> execute("""
             INSERT INTO forecast_evaluation_result(vehicle_observation_id,target_stop_order,route_version_id,scoring_state)
             VALUES(1,3,1,'PENDING')
-            """)).isInstanceOf(SQLException.class);
+            """));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull().isInstanceOf(SQLException.class);
+    }
+
+    @Test
+    void 기존_이관_묶음을_보존하면서_천행까지_확대한다() throws Exception {
+        // given
+        preparePendingTransition();
+        migrate("38");
+        approveEvaluationTransition();
+        migrate("42");
+        String insert = """
+            INSERT INTO evaluation_archive_batch(id,route_version_id,quality_revision,lease_token,lease_until,row_count)
+            SELECT gen_random_uuid(),id,1,gen_random_uuid(),clock_timestamp()+interval '5 minutes',%d
+            FROM route_version LIMIT 1
+            """;
+        execute(insert.formatted(100));
+
+        // when
+        migrate("43");
+        execute(insert.formatted(500));
+        execute(insert.formatted(1000));
+
+        // then
+        assertThat(number("SELECT count(*) FROM evaluation_archive_batch")).isEqualTo(3);
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> execute(insert.formatted(1001)));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull().isInstanceOf(SQLException.class);
+
+        // when
+        Throwable phaseFailure2 = catchThrowable(() -> execute(insert.formatted(0)));
+
+        // then
+        assertThat(phaseFailure2)
+            .isNotNull().isInstanceOf(SQLException.class);
+    }
+
+    @Test
+    void 평가_선택_열을_추가해도_기존_대기와_완료를_보존하고_예보_파일을_다시_쓰지_않는다() throws Exception {
+        // given
+        preparePendingTransition();
+        migrate("38");
+        approveEvaluationTransition();
+        migrate("39");
+        final long forecastFile = number("SELECT pg_relation_filenode('seat_forecast')");
+        final long pending = number("SELECT count(*) FROM forecast_evaluation_pending");
+        final long results = number("SELECT count(*) FROM forecast_evaluation_result");
+
+        // when
+        migrate("42");
+
+        // then
+        assertThat(number("SELECT pg_relation_filenode('seat_forecast')")).isEqualTo(forecastFile);
+        assertThat(number("SELECT count(*) FROM forecast_evaluation_pending")).isEqualTo(pending);
+        assertThat(number("SELECT count(*) FROM forecast_evaluation_result")).isEqualTo(results);
+        assertThat(number("SELECT count(*) FROM seat_forecast WHERE NOT evaluation_detail_required")).isZero();
+        assertThat(
+            scalar(
+            "EXPLAIN (FORMAT JSON) SELECT * FROM one_stop_quality_eligible_seat_forecast WHERE vehicle_observation_id=1"))
+            .contains("forecast_evaluation_result")
+            .doesNotContain("forecast_evaluation_compact");
+        execute(
+        "UPDATE seat_forecast SET evaluation_detail_required=false WHERE (vehicle_observation_id,target_stop_order) IN (SELECT vehicle_observation_id,target_stop_order FROM forecast_evaluation_pending)");
+        assertThat(number("SELECT count(*) FROM forecast_evaluation_pending")).isEqualTo(pending);
+        assertThat(number("SELECT count(*) FROM forecast_evaluation_result")).isEqualTo(results);
     }
 
     @Test
@@ -208,18 +347,24 @@ class DddStorageMigrationTest {
         // given
         preparePendingTransition();
         migrate("38");
-        String before = scalar("SELECT string_agg(vehicle_observation_id || ':' || target_stop_order, ',' ORDER BY vehicle_observation_id,target_stop_order) FROM forecast_evaluation_pending");
-        long resultFile = number("SELECT pg_relation_filenode('forecast_evaluation_result')");
+        String before =
+            scalar(
+                "SELECT string_agg(vehicle_observation_id || ':' || target_stop_order, ',' ORDER BY vehicle_observation_id,target_stop_order) FROM forecast_evaluation_pending");
+        final long resultFile = number("SELECT pg_relation_filenode('forecast_evaluation_result')");
         approveEvaluationTransition();
 
         // when
         migrate("39");
 
         // then
-        assertThat(scalar("SELECT string_agg(vehicle_observation_id || ':' || target_stop_order, ',' ORDER BY vehicle_observation_id,target_stop_order) FROM forecast_evaluation_pending")).isEqualTo(before);
+        assertThat(
+            scalar(
+            "SELECT string_agg(vehicle_observation_id || ':' || target_stop_order, ',' ORDER BY vehicle_observation_id,target_stop_order) FROM forecast_evaluation_pending")).isEqualTo(before);
         assertThat(number("SELECT count(*) FROM forecast_evaluation_work")).isOne();
         assertThat(number("SELECT pg_relation_filenode('forecast_evaluation_result')")).isEqualTo(resultFile);
-        assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid='forecast_evaluation_pending'::regclass")).isEqualTo("v");
+        assertThat(
+            scalar("SELECT relkind::text FROM pg_class WHERE oid='forecast_evaluation_pending'::regclass")).isEqualTo(
+            "v");
         assertThat(scalar("SELECT to_regclass('sal175_evaluation_transition')::text")).isNull();
     }
 
@@ -235,7 +380,9 @@ class DddStorageMigrationTest {
         assertThatThrownBy(() -> migrate("39")).hasMessageContaining("기존 대기와 관측별 복원 결과가 다르다");
 
         // then
-        assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid='forecast_evaluation_pending'::regclass")).isEqualTo("r");
+        assertThat(
+            scalar("SELECT relkind::text FROM pg_class WHERE oid='forecast_evaluation_pending'::regclass")).isEqualTo(
+            "r");
         assertThat(number("SELECT count(*) FROM forecast_evaluation_pending")).isOne();
         assertThat(scalar("SELECT to_regclass('forecast_evaluation_work')::text")).isNull();
     }
@@ -268,8 +415,8 @@ class DddStorageMigrationTest {
         // given
         preparePendingTransition();
         migrate("33");
-        long pending = number("SELECT count(*) FROM forecast_evaluation_pending");
-        long completed = number("SELECT count(*) FROM forecast_evaluation_result");
+        final long pending = number("SELECT count(*) FROM forecast_evaluation_pending");
+        final long completed = number("SELECT count(*) FROM forecast_evaluation_result");
         approveEvaluationTransition();
 
         // when
@@ -287,7 +434,8 @@ class DddStorageMigrationTest {
 
     @Test
     void 전환_검증은_전체_예보를_읽지_않고_대기_관측의_기존_인덱스를_사용한다() throws Exception {
-        // given: 실제 데이터가 아닌 10만 건의 합성 예보 중 마지막 관측의 10건만 대기한다.
+        // given
+        // 실제 데이터가 아닌 10만 건의 합성 예보 중 마지막 관측의 10건만 대기한다.
         execute("""
             CREATE TABLE seat_forecast(vehicle_observation_id bigint, target_stop_order integer,
                 route_version_id bigint, PRIMARY KEY(vehicle_observation_id,target_stop_order));
@@ -304,15 +452,18 @@ class DddStorageMigrationTest {
             ANALYZE forecast_evaluation_result;
             ANALYZE evaluation_archive_member
             """);
-        String migration = Files.readString(Path.of("src/main/resources/db/migration/V39__observation_evaluation_work.sql"));
+        String migration =
+            Files.readString(Path.of("src/main/resources/db/migration/V39__observation_evaluation_work.sql"));
         String verification = migration.substring(migration.indexOf("WITH restored AS MATERIALIZED"),
             migration.indexOf(" INTO mismatch;"));
 
         // when
         StringBuilder plan = new StringBuilder();
-        try (var statement = connection.createStatement();
-             ResultSet rows = statement.executeQuery("EXPLAIN (ANALYZE, BUFFERS) " + verification)) {
-            while (rows.next()) plan.append(rows.getString(1)).append('\n');
+        try (Statement statement = connection.createStatement();
+            ResultSet rows = statement.executeQuery("EXPLAIN (ANALYZE, BUFFERS) " + verification)) {
+            while (rows.next()) {
+                plan.append(rows.getString(1)).append('\n');
+            }
         }
 
         // then
@@ -342,27 +493,33 @@ class DddStorageMigrationTest {
     }
 
     @Test
-    void 최신_스키마를_이전_구조로_되돌린_뒤_다시_전환해도_미완료_예보가_보존된다() throws Exception {
+    void V39_스키마를_이전_구조로_되돌린_뒤_최신으로_다시_전환해도_미완료_예보가_보존된다() throws Exception {
         // given
         preparePendingTransition();
         migrate("38");
         approveEvaluationTransition();
-        migrate("latest");
-        java.nio.file.Path directory = java.nio.file.Path.of("").toAbsolutePath();
-        while (directory != null && !java.nio.file.Files.isRegularFile(
-            directory.resolve("deploy/sql/rollback-observation-evaluation-work.sql"))) directory = directory.getParent();
-        if (directory == null) throw new IllegalStateException("롤백 SQL을 찾을 수 없다");
-        String rollback = java.nio.file.Files.readString(directory.resolve("deploy/sql/rollback-observation-evaluation-work.sql"));
+        migrate("39");
+        Path directory = Path.of("").toAbsolutePath();
+        while (directory != null && !Files.isRegularFile(
+            directory.resolve("deploy/sql/rollback-observation-evaluation-work.sql"))) {
+            directory = directory.getParent();
+        }
+        if (directory == null) {
+            throw new IllegalStateException("롤백 SQL을 찾을 수 없다");
+        }
+        String rollback = Files.readString(directory.resolve("deploy/sql/rollback-observation-evaluation-work.sql"));
 
         // when
         execute(rollback);
 
         // then
-        assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid='forecast_evaluation_pending'::regclass")).isEqualTo("r");
+        assertThat(
+            scalar("SELECT relkind::text FROM pg_class WHERE oid='forecast_evaluation_pending'::regclass")).isEqualTo(
+            "r");
         assertThat(number("SELECT count(*) FROM forecast_evaluation_pending")).isOne();
         assertThat(number("SELECT count(*) FROM forecast_evaluation_result")).isOne();
         approveEvaluationTransition();
-        migrate("latest");
+        migrate("39");
         assertThat(number("SELECT count(*) FROM forecast_evaluation_work")).isOne();
         assertThat(number("SELECT count(*) FROM forecast_evaluation_pending")).isOne();
     }
@@ -387,14 +544,15 @@ class DddStorageMigrationTest {
         assertThat(number("SELECT count(*) FROM forecast_evaluation_result")).isOne();
         assertThat(number("SELECT count(*) FROM forecast_evaluation_work")).isOne();
         Path root = Path.of("").toAbsolutePath();
-        while (root != null && !Files.isRegularFile(root.resolve("dev/data/java/com/gustler/localdata/LocalData.java"))) {
+        while (root != null
+                && !Files.isRegularFile(root.resolve("dev/data/java/com/gustler/localdata/LocalData.java"))) {
             root = root.getParent();
         }
         assertThat(root).as("로컬 초기화 소스가 있는 저장소 루트").isNotNull();
         String source = Files.readString(root.resolve("dev/data/java/com/gustler/localdata/LocalData.java"));
-        int start = source.indexOf("TRUNCATE ", source.indexOf("private static void resetGenerated"));
+        final int start = source.indexOf("TRUNCATE ", source.indexOf("private static void resetGenerated"));
         assertThat(start).isGreaterThanOrEqualTo(0);
-        int end = source.indexOf("\"\"\"", start);
+        final int end = source.indexOf("\"\"\"", start);
 
         // when
         execute(source.substring(start, end));
@@ -406,7 +564,9 @@ class DddStorageMigrationTest {
         assertThat(number("SELECT count(*) FROM evaluation_archive_member")).isZero();
         assertThat(number("SELECT count(*) FROM evaluation_archive_batch")).isZero();
         assertThat(number("SELECT count(*) FROM file_statistics_publication")).isZero();
-        assertThat(number("SELECT count(*) FROM evaluation_archive_scan WHERE id=1 AND observation_id=0 AND stop_order=0 AND next_attempt_at='-infinity'::timestamptz")).isOne();
+        assertThat(
+            number(
+            "SELECT count(*) FROM evaluation_archive_scan WHERE id=1 AND observation_id=0 AND stop_order=0 AND next_attempt_at='-infinity'::timestamptz")).isOne();
         assertThat(number("SELECT count(*) FROM route")).isOne();
     }
 
@@ -446,7 +606,7 @@ class DddStorageMigrationTest {
         approveEvaluationTransition();
         try (Connection maintenance = DriverManager.getConnection(
             POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-             var statement = maintenance.createStatement()) {
+            Statement statement = maintenance.createStatement()) {
             statement.execute("SET application_name='salmonbus-historical-migration'");
 
             // when
@@ -466,7 +626,7 @@ class DddStorageMigrationTest {
         migrate("38");
         try (Connection worker = DriverManager.getConnection(
             POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-             var statement = worker.createStatement()) {
+            Statement statement = worker.createStatement()) {
             statement.execute("SET application_name='salmonbus-worker'");
 
             // when
@@ -481,7 +641,9 @@ class DddStorageMigrationTest {
     }
 
     private void assertPendingTablePreserved() throws SQLException {
-        assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid='forecast_evaluation_pending'::regclass")).isEqualTo("r");
+        assertThat(
+            scalar("SELECT relkind::text FROM pg_class WHERE oid='forecast_evaluation_pending'::regclass")).isEqualTo(
+            "r");
         assertThat(number("SELECT count(*) FROM forecast_evaluation_pending")).isOne();
         assertThat(scalar("SELECT to_regclass('forecast_evaluation_work')::text")).isNull();
     }
@@ -494,14 +656,15 @@ class DddStorageMigrationTest {
         approveEvaluationTransition();
         migrate("39");
         Path directory = Path.of("").toAbsolutePath();
-        while (directory != null && !Files.isRegularFile(directory.resolve("deploy/sql/rollback-observation-evaluation-work.sql"))) {
+        while (directory != null
+                && !Files.isRegularFile(directory.resolve("deploy/sql/rollback-observation-evaluation-work.sql"))) {
             directory = directory.getParent();
         }
         assertThat(directory).isNotNull();
         String rollback = Files.readString(directory.resolve("deploy/sql/rollback-observation-evaluation-work.sql"));
         try (Connection worker = DriverManager.getConnection(
             POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-             var statement = worker.createStatement()) {
+            Statement statement = worker.createStatement()) {
             statement.execute("SET application_name='salmonbus-worker'");
 
             // when
@@ -510,14 +673,17 @@ class DddStorageMigrationTest {
 
             // then
             assertThat(number("SELECT count(*) FROM forecast_evaluation_work")).isOne();
-            assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid='forecast_evaluation_pending'::regclass")).isEqualTo("v");
+            assertThat(
+                scalar(
+                "SELECT relkind::text FROM pg_class WHERE oid='forecast_evaluation_pending'::regclass")).isEqualTo("v");
             assertThat(number("SELECT count(*) FROM flyway_schema_history WHERE version='39' AND success")).isOne();
         }
     }
 
     private void approveEvaluationTransition() throws Exception {
         Path directory = Path.of("").toAbsolutePath();
-        while (directory != null && !Files.isRegularFile(directory.resolve("deploy/sql/prepare-evaluation-work-transition.sql"))) {
+        while (directory != null
+                && !Files.isRegularFile(directory.resolve("deploy/sql/prepare-evaluation-work-transition.sql"))) {
             directory = directory.getParent();
         }
         assertThat(directory).isNotNull();
@@ -594,23 +760,23 @@ class DddStorageMigrationTest {
             """);
     }
 
-    private void migrate(final String target) {
+    private void migrate(String target) {
         Flyway.configure().dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
             .schemas(schema).defaultSchema(schema).target(target).load().migrate();
     }
 
-    private void execute(final String sql) throws SQLException {
-        try (var statement = connection.createStatement()) {
+    private void execute(String sql) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
             statement.execute(sql);
         }
     }
 
-    private long number(final String sql) throws SQLException {
+    private long number(String sql) throws SQLException {
         return Long.parseLong(scalar(sql));
     }
 
-    private String scalar(final String sql) throws SQLException {
-        try (var statement = connection.createStatement(); ResultSet result = statement.executeQuery(sql)) {
+    private String scalar(String sql) throws SQLException {
+        try (Statement statement = connection.createStatement(); ResultSet result = statement.executeQuery(sql)) {
             result.next();
             return result.getString(1);
         }

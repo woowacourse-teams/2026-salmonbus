@@ -1,0 +1,4 @@
+org.springframework.boot.EnvironmentPostProcessor=\
+com.gustler.backend.worker.configuration.GbisServiceKeyEnvironmentPostProcessor
+org.springframework.boot.diagnostics.FailureAnalyzer=\
+com.gustler.backend.worker.configuration.GbisSettingsFailureAnalyzer

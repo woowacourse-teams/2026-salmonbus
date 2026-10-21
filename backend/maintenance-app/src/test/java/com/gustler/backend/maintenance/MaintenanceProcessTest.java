@@ -4,14 +4,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
+import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.Statement;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +23,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 import org.flywaydb.core.Flyway;
@@ -35,7 +40,6 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Testcontainers
 class MaintenanceProcessTest {
-
     private static final Instant START = Instant.parse("2026-09-21T00:00:00Z");
     private static final Instant UNTIL = START.plusSeconds(60);
     private static final AtomicInteger DATABASE_SEQUENCE = new AtomicInteger();
@@ -58,8 +62,10 @@ class MaintenanceProcessTest {
 
     @Test
     void 폐기한_이관_명령은_실제_JAR에서도_종료코드_1로_거절한다() throws Exception {
+        // when
         Result result = execute("archive-import");
 
+        // then
         assertThat(result.exitCode()).isEqualTo(1);
         assertThat(result.stdout()).isEmpty();
         Failure output = read(result.stderr(), Failure.class);
@@ -68,13 +74,17 @@ class MaintenanceProcessTest {
 
     @Test
     void 실제_JAR은_인증키와_모델_없이_품질을_조회하고_DB를_변경하지_않는다() throws Exception {
+        // given
         Database database = database(true);
-        long version = route(database.jdbc());
+        final long version = route(database.jdbc());
         batch(database.jdbc(), version, 1, 1, 44);
         batch(database.jdbc(), version, 2, 2, 71);
         Map<String, String> before = state(database.jdbc());
 
+        // when
         Result previewProcess = command(database, "quality-preview", version);
+
+        // then
         assertThat(previewProcess.exitCode()).isZero();
         PreviewOutput preview = read(previewProcess.stdout(), PreviewOutput.class);
         assertThat(preview).isEqualTo(new PreviewOutput("succeeded",
@@ -89,14 +99,18 @@ class MaintenanceProcessTest {
 
     @Test
     void 실제_JAR의_정비는_한_페이지씩_커서를_이어가고_완료한_작업을_중복_반영하지_않는다() throws Exception {
+        // given
         Database database = database(true);
         JdbcClient jdbc = database.jdbc();
-        long version = route(jdbc);
-        long first = batch(jdbc, version, 1, 1, 44);
-        long bad = batch(jdbc, version, 2, 2, 71);
-        long next = batch(jdbc, version, 3, 4, 44);
+        final long version = route(jdbc);
+        final long first = batch(jdbc, version, 1, 1, 44);
+        final long bad = batch(jdbc, version, 2, 2, 71);
+        final long next = batch(jdbc, version, 3, 4, 44);
 
+        // when
         ChunkOutput firstPage = rebuild(database, version);
+
+        // then
         assertThat(firstPage.result()).isEqualTo(new Chunk(1, false, false));
         assertThat(discoveryCursor(jdbc, version)).isEqualTo(first);
         ChunkOutput secondPage = rebuild(database, version);
@@ -105,7 +119,7 @@ class MaintenanceProcessTest {
 
         ChunkOutput result = secondPage;
         for (int attempt = 0; attempt < 8 && !result.result().completed(); attempt++) {
-            long previous = discoveryCursor(jdbc, version);
+            final long previous = discoveryCursor(jdbc, version);
             result = rebuild(database, version);
             assertThat(result.result().processedBatches()).isBetween(0, 1);
             assertThat(discoveryCursor(jdbc, version)).isBetween(previous, next);
@@ -114,8 +128,10 @@ class MaintenanceProcessTest {
         assertThat(discoveryCursor(jdbc, version)).isEqualTo(next);
         assertThat(jdbc.sql("SELECT remaining_seats FROM vehicle_observation ORDER BY id")
             .query(Integer.class).list()).containsExactly(44, 71, 44);
-        assertThat(jdbc.sql("SELECT observation_batch_id FROM forecast_eligible_observation ORDER BY observation_batch_id")
-            .query(Long.class).list()).containsExactly(next);
+        assertThat(
+            jdbc.sql("SELECT observation_batch_id FROM forecast_eligible_observation ORDER BY observation_batch_id")
+                .query(Long.class)
+                .list()).containsExactly(next);
 
         StatusOutput status = read(command(database, "quality-status", version).stdout(), StatusOutput.class);
         assertThat(status.status()).isEqualTo("succeeded");
@@ -129,15 +145,18 @@ class MaintenanceProcessTest {
 
     @Test
     void 스키마가_없는_DB에서는_자동_마이그레이션을_수행하지_않고_실패한다() throws Exception {
+        // given
         Database database = database(false);
 
+        // when
         Result result = command(database, "quality-status", 1);
 
+        // then
         assertThat(result.exitCode()).isEqualTo(1);
         assertThat(read(result.stderr(), Failure.class))
             .isEqualTo(new Failure("failed", "DATABASE_TRANSACTION_FAILED"));
         assertThat(database.jdbc().sql("SELECT to_regclass('public.flyway_schema_history') IS NULL")
-            .query(Boolean.class).single()).isTrue();
+                .query(Boolean.class).single()).isTrue();
         assertThat(database.jdbc().sql("""
             SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'v', 'm')
@@ -146,18 +165,21 @@ class MaintenanceProcessTest {
 
     @Test
     void 정비_JAR에는_다른_실행_앱과_완료된_이관_자원이_없다() throws Exception {
+        // when
         List<String> forbidden = new ArrayList<>();
         try (ZipFile jar = new ZipFile(jar().toFile())) {
-            for (var entries = jar.entries(); entries.hasMoreElements();) {
-                var entry = entries.nextElement();
+            for (Enumeration<? extends ZipEntry> entries = jar.entries(); entries.hasMoreElements();) {
+                ZipEntry entry = entries.nextElement();
                 String name = entry.getName();
                 if (forbiddenResource(name)) {
                     forbidden.add(name);
                 }
                 if (name.startsWith("BOOT-INF/lib/")) {
+
+                    // then
                     assertThat(name).doesNotContain("/api-app-", "/worker-app-", "/common-", "/flyway-");
-                    try (var nested = new ZipInputStream(jar.getInputStream(entry))) {
-                        for (var member = nested.getNextEntry(); member != null; member = nested.getNextEntry()) {
+                    try (ZipInputStream nested = new ZipInputStream(jar.getInputStream(entry))) {
+                        for (ZipEntry member = nested.getNextEntry(); member != null; member = nested.getNextEntry()) {
                             if (forbiddenResource(member.getName())) {
                                 forbidden.add(name + "!/" + member.getName());
                             }
@@ -170,13 +192,17 @@ class MaintenanceProcessTest {
     }
 
     private static boolean forbiddenResource(String path) {
-        String name = path.startsWith("BOOT-INF/classes/") ? path.substring("BOOT-INF/classes/".length()) : path;
+        String name = path;
+        if (path.startsWith("BOOT-INF/classes/")) {
+            name = path.substring("BOOT-INF/classes/".length());
+        }
         return name.startsWith("com/gustler/backend/api/") || name.startsWith("com/gustler/backend/worker/")
-            || name.startsWith("com/gustler/backend/migration/") || name.startsWith("software/amazon/awssdk/") || name.startsWith("com/amazonaws/")
+            || name.startsWith("com/gustler/backend/migration/") || name.startsWith("software/amazon/awssdk/")
+            || name.startsWith("com/amazonaws/")
             || name.startsWith("db/migration/") || name.startsWith("db/historical-migration/");
     }
 
-    private ChunkOutput rebuild(Database database, long version) throws Exception {
+    private ChunkOutput rebuild(Database database, final long version) throws Exception {
         Result process = command(database, "quality-rebuild", version);
         assertThat(process.exitCode()).isZero();
         ChunkOutput result = read(process.stdout(), ChunkOutput.class);
@@ -184,7 +210,7 @@ class MaintenanceProcessTest {
         return result;
     }
 
-    private Result command(Database database, String command, long version) throws Exception {
+    private Result command(Database database, String command, final long version) throws Exception {
         List<String> arguments = new ArrayList<>(List.of(command, "--config", database.configuration().toString(),
             "--route-version", Long.toString(version)));
         if (!command.equals("quality-status")) {
@@ -197,15 +223,18 @@ class MaintenanceProcessTest {
     }
 
     private Result execute(String... arguments) throws Exception {
-        List<String> command = new ArrayList<>(List.of(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+        List<String> command = new ArrayList<>(List.of(Path.of(System.getProperty("java.home"), "bin", "java")
+                .toString(),
             "-jar", jar().toString()));
         command.addAll(List.of(arguments));
         Path stdout = directory.resolve("process-" + (++processSequence) + ".out");
         Path stderr = directory.resolve("process-" + processSequence + ".err");
-        ProcessBuilder builder = new ProcessBuilder(command).redirectOutput(stdout.toFile()).redirectError(stderr.toFile());
+        ProcessBuilder builder = new ProcessBuilder(command).redirectOutput(stdout.toFile())
+            .redirectError(stderr.toFile());
         builder.environment().keySet().removeIf(name -> name.startsWith("GBIS_") || name.startsWith("MODEL_")
-            || name.startsWith("COLLECTION_") || name.startsWith("FORECAST_") || name.startsWith("SPRING_")
-            || name.startsWith("DB_") || Set.of("JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS").contains(name));
+                || name.startsWith("COLLECTION_") || name.startsWith("FORECAST_") || name.startsWith("SPRING_")
+                || name.startsWith("DB_") || Set.of("JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS")
+                .contains(name));
         Process process = builder.start();
         try {
             if (!process.waitFor(30, TimeUnit.SECONDS)) {
@@ -213,8 +242,10 @@ class MaintenanceProcessTest {
                 process.waitFor(10, TimeUnit.SECONDS);
                 throw new AssertionError("정비 JAR 명령이 30초 안에 종료하지 않았다. 실행 로그 원문은 생략한다");
             }
-            Result result = new Result(process.exitValue(), Files.readString(stdout).strip(), Files.readString(stderr).strip());
-            boolean credentialsAbsent = !result.stdout().contains(POSTGRES.getPassword())
+            Result result = new Result(process.exitValue(), Files.readString(stdout)
+                .strip(), Files.readString(stderr)
+                .strip());
+            final boolean credentialsAbsent = !result.stdout().contains(POSTGRES.getPassword())
                 && !result.stderr().contains(POSTGRES.getPassword());
             assertThat(credentialsAbsent).as("실행 로그와 실패 메시지는 DB 비밀번호를 포함하지 않아야 한다").isTrue();
             return result;
@@ -239,10 +270,11 @@ class MaintenanceProcessTest {
         }
     }
 
-    private Database database(boolean migrate) throws Exception {
+    private Database database(final boolean migrate) throws Exception {
         String name = "maintenance_process_" + DATABASE_SEQUENCE.incrementAndGet();
-        try (var connection = DriverManager.getConnection(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-             var statement = connection.createStatement()) {
+        try (Connection connection =
+            DriverManager.getConnection(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+            Statement statement = connection.createStatement()) {
             statement.execute("CREATE DATABASE " + name);
         }
         String url = "jdbc:postgresql://" + POSTGRES.getHost() + ":" + POSTGRES.getMappedPort(5432) + "/" + name;
@@ -252,26 +284,27 @@ class MaintenanceProcessTest {
         Path env = directory.resolve(name + ".env");
         String processUrl = "jdbc:postgresql://127.0.0.1:" + loopbackPort() + "/" + name;
         Files.writeString(env, "DB_URL=" + processUrl + "\nDB_USERNAME=" + POSTGRES.getUsername()
-            + "\nDB_PASSWORD=" + POSTGRES.getPassword() + "\n");
+                + "\nDB_PASSWORD=" + POSTGRES.getPassword() + "\n");
         Files.setPosixFilePermissions(env, Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
         Path configuration = directory.resolve(name + ".properties");
         Properties properties = new Properties();
         properties.setProperty("target.kind", "LOCAL");
         properties.setProperty("database.env-file", env.toString());
-        try (var stream = Files.newOutputStream(configuration)) {
+        try (OutputStream stream = Files.newOutputStream(configuration)) {
             properties.store(stream, null);
         }
-        Files.setPosixFilePermissions(configuration, Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
+        Files.setPosixFilePermissions(configuration,
+            Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
         return new Database(configuration,
             JdbcClient.create(new DriverManagerDataSource(url, POSTGRES.getUsername(), POSTGRES.getPassword())));
     }
 
     private static long route(JdbcClient jdbc) {
-        long route = jdbc.sql("""
+        final long route = jdbc.sql("""
             INSERT INTO route(public_route_id,source_id,source_route_id,display_name,start_stop_name,end_stop_name)
             VALUES ('900000010','TEST','900000010','test','a','b') RETURNING id
             """).query(Long.class).single();
-        long version = jdbc.sql("""
+        final long version = jdbc.sql("""
             INSERT INTO route_version(route_id,content_digest,valid_from,turn_sequence)
             VALUES (?,?,'2026-09-20T00:00:00Z',4) RETURNING id
             """).param(route).param("0".repeat(64)).query(Long.class).single();
@@ -284,9 +317,15 @@ class MaintenanceProcessTest {
         return version;
     }
 
-    private static long batch(JdbcClient jdbc, long version, int step, int stop, int seats) {
+    private static long batch(
+        JdbcClient jdbc,
+        final long version,
+        final int step,
+        final int stop,
+        final int seats
+    ) {
         OffsetDateTime at = START.plusSeconds(step * 10L).atOffset(ZoneOffset.UTC);
-        long batch = jdbc.sql("""
+        final long batch = jdbc.sql("""
             INSERT INTO observation_batch(route_version_id,scheduled_at,attempt_number,attempt_key,requested_at,
                 response_received_at,outcome,normalization_version,collection_strategy_version)
             VALUES (?,?,1,?,?,?,'SUCCESS_ROWS','test','test') RETURNING id
@@ -299,18 +338,23 @@ class MaintenanceProcessTest {
         return batch;
     }
 
-    private static long discoveryCursor(JdbcClient jdbc, long version) {
+    private static long discoveryCursor(JdbcClient jdbc, final long version) {
         return jdbc.sql("SELECT last_batch_id FROM trip_quality_rebuild WHERE route_version_id=? AND vehicle_id=''")
             .param(version).query(Long.class).single();
     }
 
     private static Map<String, String> state(JdbcClient jdbc) {
         Map<String, String> snapshot = new LinkedHashMap<>();
-        for (String table : List.of("observation_batch", "vehicle_observation", "route_data_quality", "trip_quality_rebuild",
-            "vehicle_one_way_trip", "observation_trip_assignment", "model_deployment", "forecast_publication",
-            "seat_forecast", "forecast_evaluation", "demand_statistics_version", "stop_demand_statistics")) {
-            snapshot.put(table, jdbc.sql("SELECT md5(coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text)::text,'[]')) FROM "
-                + table + " r").query(String.class).single());
+        for (
+            String table : List.of("observation_batch", "vehicle_observation", "route_data_quality",
+                "trip_quality_rebuild",
+                "vehicle_one_way_trip", "observation_trip_assignment", "model_deployment", "forecast_publication",
+                "seat_forecast", "forecast_evaluation", "demand_statistics_version", "stop_demand_statistics")) {
+            snapshot.put(table,
+                jdbc.sql("SELECT md5(coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text)::text,'[]')) FROM "
+                    + table + " r")
+                    .query(String.class)
+                    .single());
         }
         return snapshot;
     }
@@ -331,19 +375,40 @@ class MaintenanceProcessTest {
         }
     }
 
-    private record Database(Path configuration, JdbcClient jdbc) { }
-    private record Result(int exitCode, String stdout, String stderr) {
-        @Override public String toString() { return "Result[exitCode=" + exitCode + ", output omitted]"; }
+    private record Database(Path configuration, JdbcClient jdbc) {
     }
-    private record Failure(String status, String code) { }
-    private record PreviewOutput(String status, Preview result) { }
-    private record Preview(String scope, @JsonProperty("sampled_batches") long sampledBatches,
-        @JsonProperty("sampled_observations") long sampledObservations, @JsonProperty("sampled_above_range") long sampledAboveRange) { }
-    private record ChunkOutput(String status, Chunk result) { }
-    private record Chunk(int processedBatches, boolean discoveryCompleted, boolean completed) { }
-    private record StatusOutput(String status, List<StatusRow> result) { }
-    private record StatusRow(@JsonProperty("vehicle_id") String vehicleId, String phase, boolean completed,
-        @JsonProperty("evidence_observation_id") Long evidenceObservationId, @JsonProperty("last_batch_at") Instant lastBatchAt,
-        @JsonProperty("last_batch_id") long lastBatchId, @JsonProperty("can_release") boolean canRelease,
-        @JsonProperty("started_at") Instant startedAt, @JsonProperty("investigated_at") Instant investigatedAt) { }
+    private record Result(int exitCode, String stdout, String stderr) {
+        @Override
+        public String toString() {
+            return "Result[exitCode=" + exitCode + ", output omitted]";
+        }
+    }
+    private record Failure(String status, String code) {
+    }
+    private record PreviewOutput(String status, Preview result) {
+    }
+    private record Preview(String scope, @JsonProperty("sampled_batches")
+        long sampledBatches,
+        @JsonProperty("sampled_observations")
+        long sampledObservations, @JsonProperty("sampled_above_range")
+        long sampledAboveRange) {
+    }
+    private record ChunkOutput(String status, Chunk result) {
+    }
+    private record Chunk(int processedBatches, boolean discoveryCompleted, boolean completed) {
+    }
+    private record StatusOutput(String status, List<StatusRow> result) {
+    }
+    private record StatusRow(@JsonProperty("vehicle_id")
+        String vehicleId, String phase, boolean completed,
+        @JsonProperty("evidence_observation_id")
+        Long evidenceObservationId, @JsonProperty("last_batch_at")
+        Instant lastBatchAt,
+        @JsonProperty("last_batch_id")
+        long lastBatchId, @JsonProperty("can_release")
+        boolean canRelease,
+        @JsonProperty("started_at")
+        Instant startedAt, @JsonProperty("investigated_at")
+        Instant investigatedAt) {
+    }
 }

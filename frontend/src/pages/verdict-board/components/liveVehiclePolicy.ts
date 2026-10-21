@@ -1,6 +1,7 @@
 import type { Board, Direction, LiveVehicles, Phase, Vehicle } from "@/shared/api/routeForecast.types";
 
 export interface LiveVehicleMotionSegment {
+  segmentIndex: number;
   fromStopSequence: number;
   toStopSequence: number;
   startProgress: number;
@@ -92,6 +93,7 @@ function motionSegmentFor(vehicle: Vehicle, stopSequences: number[]): LiveVehicl
 
   if (neighborStopSequence === undefined) {
     return {
+      segmentIndex: Math.max(0, Math.min(currentStopIndex, stopSequences.length - 2)),
       fromStopSequence: currentStopSequence,
       toStopSequence: currentStopSequence,
       startProgress: 0,
@@ -100,6 +102,7 @@ function motionSegmentFor(vehicle: Vehicle, stopSequences: number[]): LiveVehicl
   }
 
   return {
+    segmentIndex: Math.min(currentStopIndex, neighborIndex),
     fromStopSequence: rule.neighbor === "previous" ? neighborStopSequence : currentStopSequence,
     toStopSequence: rule.neighbor === "previous" ? currentStopSequence : neighborStopSequence,
     startProgress: rule.startProgress,

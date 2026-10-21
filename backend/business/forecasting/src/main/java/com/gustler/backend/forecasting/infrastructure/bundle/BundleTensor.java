@@ -4,21 +4,20 @@ import com.gustler.backend.forecasting.domain.model.HorizonCoefficients;
 import com.gustler.backend.forecasting.domain.model.ResidualDirection;
 
 /**
- * 좌석 분포 계산이 실제로 쓰는 배열.
+ * 좌석 분포 계산에 사용하는 배열.
  *
- * <p>계수 파일에 무엇이 몇 개 들어 있는지는 설명 파일이 선언한다. 이 목록은 <b>그중 우리가
- * 읽어 쓰는 것</b>이다. 다섯 중 하나라도 없으면 분포를 못 만들어서 거절한다.
+ * <p>계수 파일에 포함되는 값의 종류와 개수는 설명 파일이 선언한다. 이 목록은 그중 읽어 사용하는
+ * 배열을 정하며, 다섯 중 하나라도 없으면 분포를 계산할 수 없어 거절한다.
  *
- * <p>크기를 상수로 안 박는다. 노선 수 · 예보 거리 수 · 특징 개수는 설명 파일이 정하고
- * 여기서는 축이 어떤 순서로 놓이는지만 안다. 특징 개수가 31 로 고정되지 않는다는 것이
- * v4-1 정본 3.3절이 상수들을 미결로 둔 결과다.
+ * <p>크기를 상수로 고정하지 않는다. 노선 수 · 예보 거리 수 · 특징 개수는 설명 파일이 정하고
+ * 여기서는 배열별 축의 순서만 정한다. 특징 개수가 31 로 고정되지 않는 것은
+ * v4-1 정본 3.3절이 상수들을 미결로 두었기 때문이다.
  *
- * <p>여기 없는 배열이 계수 파일에 있으면 적재를 거절한다. 검사할 줄 모르는 값을 지나치는 것보다
- * 멈추는 편이 낫다. 데모 번들이 들고 있던 동결 셀 통계와 도착 lead 가 그래서 안 들어온다.
- * v4-1 정본 6절이 그 둘을 최신 구현보다 우선해서 가져오면 안 되는 값으로 못박았다.
+ * <p>목록에 없는 배열이 계수 파일에 있으면 검사할 수 없으므로 적재를 거절한다.
+ * 데모 번들에 있던 동결 셀 통계와 도착 lead 도 제외한다.
+ * v4-1 정본 6절이 두 값을 최신 구현보다 우선해서 가져오면 안 된다고 규정했다.
  */
 enum BundleTensor {
-
     FULL_CHANCE("hurdle_coefficients", TensorDataType.FLOAT64, Layout.BY_FEATURE),
     ANCHOR("anchor_coefficients", TensorDataType.FLOAT64, Layout.BY_ANCHOR_TERM),
     RESIDUAL_SIGN("sign_coefficients", TensorDataType.FLOAT64, Layout.BY_DIRECTION_AND_FEATURE),
@@ -71,9 +70,9 @@ enum BundleTensor {
             case BY_FEATURE -> new int[] {routeCount, horizonCount, featureCount};
             case BY_ANCHOR_TERM -> new int[] {routeCount, horizonCount, ANCHOR_TERM_COUNT};
             case BY_DIRECTION_AND_FEATURE ->
-                new int[] {routeCount, horizonCount, directions, featureCount};
+            new int[] {routeCount, horizonCount, directions, featureCount};
             case BY_DIRECTION_AND_BIN ->
-                new int[] {routeCount, horizonCount, directions, HorizonCoefficients.BIN_COUNT};
+            new int[] {routeCount, horizonCount, directions, HorizonCoefficients.BIN_COUNT};
             case BY_DIRECTION_AND_BIN_AND_FEATURE -> new int[] {
                 routeCount, horizonCount, directions, HorizonCoefficients.BIN_COUNT, featureCount};
         };

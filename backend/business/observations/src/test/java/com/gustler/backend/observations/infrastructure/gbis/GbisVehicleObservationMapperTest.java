@@ -1,22 +1,19 @@
 package com.gustler.backend.observations.infrastructure.gbis;
 
-import com.gustler.backend.observations.domain.VehicleObservation;
-import com.gustler.backend.observations.domain.RemainingSeats;
-import com.gustler.backend.observations.domain.SeatUnknownReason;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
 import com.gustler.backend.observations.domain.RemainingSeats.Known;
 import com.gustler.backend.observations.domain.RemainingSeats.Unknown;
-import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
+import com.gustler.backend.observations.domain.SeatUnknownReason;
+import com.gustler.backend.observations.domain.VehicleObservation;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class GbisVehicleObservationMapperTest {
-
     private static final String VEHICLE_204000206 = "204000206";
     private static final String PLATE_NUMBER = "경기70아0001";
     private static final String ROUTE_3330 = "204000057";
@@ -62,9 +59,7 @@ class GbisVehicleObservationMapperTest {
 
     @ParameterizedTest
     @ValueSource(ints = {-1, -2, -99})
-    void 잔여석이_음수인_차량은_모른다고_알려준_것으로_판단한다(
-        final int remainingSeatCount
-    ) {
+    void 잔여석이_음수인_차량은_모른다고_알려준_것으로_판단한다(final int remainingSeatCount) {
         // given
         BusLocation bus = busWithSeats(remainingSeatCount);
 
@@ -91,9 +86,7 @@ class GbisVehicleObservationMapperTest {
 
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 3, 4})
-    void 혼잡도가_1에서_4까지면_그대로_쓴다(
-        final int crowdLevel
-    ) {
+    void 혼잡도가_1에서_4까지면_그대로_쓴다(final int crowdLevel) {
         // given
         BusLocation bus = busWithCrowdLevel(crowdLevel);
 
@@ -107,9 +100,7 @@ class GbisVehicleObservationMapperTest {
     @ParameterizedTest
     @NullSource
     @ValueSource(ints = {0, 5, -1})
-    void 혼잡도가_1에서_4가_아니면_모르는_것으로_판단한다(
-        Integer crowdLevel
-    ) {
+    void 혼잡도가_1에서_4가_아니면_모르는_것으로_판단한다(Integer crowdLevel) {
         // given
         BusLocation bus = busWithCrowdLevel(crowdLevel);
 
@@ -155,8 +146,10 @@ class GbisVehicleObservationMapperTest {
         VehicleObservation actual = GbisObservationMapper.observation(bus);
 
         // then
-        assertThat(actual.vehicleType()).isEqualTo(DOUBLE_DECKER_BUS);
-        assertThat(actual.remainingSeats()).isEqualTo(new Known(SEATS_43));
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(actual.vehicleType()).isEqualTo(DOUBLE_DECKER_BUS);
+            softly.assertThat(actual.remainingSeats()).isEqualTo(new Known(SEATS_43));
+        }
     }
 
     @Test
@@ -269,9 +262,7 @@ class GbisVehicleObservationMapperTest {
 
     @ParameterizedTest
     @ValueSource(ints = {0, 1, 2})
-    void 운행_상태_0과_1과_2는_뜻을_아는_값이다(
-        final int runningState
-    ) {
+    void 운행_상태_0과_1과_2는_뜻을_아는_값이다(final int runningState) {
         // given
         BusLocation bus = busAt(STOP_SEQUENCE_6, runningState);
 

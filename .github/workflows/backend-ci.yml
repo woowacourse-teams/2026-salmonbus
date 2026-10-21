@@ -38,7 +38,9 @@ jobs:
         run: bash backend/deploy/rehearsal/run.sh
 
   backend-build:
-    runs-on: ubuntu-latest
+    # MongoDB 8.0의 커널 6.19+ 기동 오류(SERVER-121912)를 피해 6.8 커널 러너를 사용한다.
+    # 2027-04-17 러너 지원 종료 전 MongoDB 이미지를 갱신하고 최신 러너로 복귀한다.
+    runs-on: ubuntu-22.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -53,9 +55,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: 루트 src 잔재 검사
-        run: test ! -d src
-
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -65,8 +64,16 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Verify build environment
+        run: bash deploy/verify-build-environment.sh
+
       - name: Build with Gradle
         run: ./gradlew clean build --continue --no-daemon
+
+      - name: Package and verify actual API and worker revisions
+        env:
+          REVISION_COMMIT: ${{ github.sha }}
+        run: bash deploy/package-revision.sh "$REVISION_COMMIT"
 
       - name: Publish test report
         if: ${{ !cancelled() && hashFiles('backend/**/build/test-results/*/TEST-*.xml') != '' }}

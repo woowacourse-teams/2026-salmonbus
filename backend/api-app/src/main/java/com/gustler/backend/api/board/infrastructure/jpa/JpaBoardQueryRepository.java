@@ -8,13 +8,17 @@ import com.gustler.backend.api.board.application.SnapshotObservation;
 import com.gustler.backend.api.board.application.StoredPrediction;
 import com.gustler.backend.api.board.domain.BoardStop;
 import com.gustler.backend.api.board.domain.ForecastModel;
+import com.gustler.backend.api.board.domain.HeadwayRange;
+import com.gustler.backend.api.board.domain.RouteHeadways;
 import com.gustler.backend.api.error.ServiceUnavailableException;
+import com.gustler.backend.api.observation.ObservationFreshness;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.infrastructure.jpa.ModelDeploymentEntityRepository;
 import com.gustler.backend.api.route.infrastructure.jpa.ModelDeploymentJpaEntity;
 import com.gustler.backend.api.route.infrastructure.jpa.ModelDeploymentState;
 import com.gustler.backend.api.route.infrastructure.jpa.RouteVersionJpaEntity;
 import java.time.Clock;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -23,10 +27,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
+/**
+ * 쓰기 모듈의 엔티티를 참조하지 않고 탑승판에 필요한 노선·모델·관측·예보를 조회한다.
+ */
 @Repository
 @RequiredArgsConstructor
 public class JpaBoardQueryRepository implements BoardQueryRepository {
-
     private static final Pageable FIRST_RESULT = PageRequest.of(0, 1);
 
     private final Clock clock;
@@ -79,7 +85,8 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
     }
 
     @Override
-    public List<BoardVehicleObservation> findObservedVehicles(long observationBatchId, long routeVersionId) {
+    public List<BoardVehicleObservation> findObservedVehicles(final long observationBatchId,
+        final long routeVersionId) {
         try {
             return vehicleObservationRepository.findAllByBatchIdAndRouteVersionId(observationBatchId, routeVersionId)
                 .stream()
@@ -110,21 +117,41 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
                 routeVersion.upFirstDepartureTime(),
                 routeVersion.upLastDepartureTime(),
                 routeVersion.downFirstDepartureTime(),
-                routeVersion.downLastDepartureTime()
+                routeVersion.downLastDepartureTime(),
+                headwaysOf(routeVersion)
             ),
             observation,
             activeModel
         );
     }
 
+    private RouteHeadways headwaysOf(
+        RouteVersionJpaEntity routeVersion
+    ) {
+        return new RouteHeadways(
+            headwayOf(routeVersion.weekdayMinHeadwayMinutes(), routeVersion.weekdayMaxHeadwayMinutes()),
+            headwayOf(routeVersion.saturdayMinHeadwayMinutes(), routeVersion.saturdayMaxHeadwayMinutes()),
+            headwayOf(routeVersion.sundayMinHeadwayMinutes(), routeVersion.sundayMaxHeadwayMinutes()),
+            headwayOf(routeVersion.holidayMinHeadwayMinutes(), routeVersion.holidayMaxHeadwayMinutes())
+        );
+    }
+
+    private HeadwayRange headwayOf(
+        Integer minMinutes,
+        Integer maxMinutes
+    ) {
+        return HeadwayRange.of(minMinutes, maxMinutes).orElse(null);
+    }
+
     private List<ObservationBatchJpaEntity> latestObservationOf(
         RouteVersionJpaEntity routeVersion,
         final boolean forecastPublished
     ) {
+        OffsetDateTime observedSince = OffsetDateTime.now(clock).minus(ObservationFreshness.MAX_WINDOW);
         if (forecastPublished) {
-            return observationBatchRepository.findLatestPublished(routeVersion, FIRST_RESULT);
+            return observationBatchRepository.findLatestPublished(routeVersion, observedSince, FIRST_RESULT);
         }
-        return observationBatchRepository.findLatestObserved(routeVersion, FIRST_RESULT);
+        return observationBatchRepository.findLatestObserved(routeVersion, observedSince, FIRST_RESULT);
     }
 
     private ForecastModel toModel(

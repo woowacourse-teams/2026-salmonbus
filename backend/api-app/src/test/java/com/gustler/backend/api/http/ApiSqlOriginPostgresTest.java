@@ -2,7 +2,10 @@ package com.gustler.backend.api.http;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -19,7 +22,8 @@ class ApiSqlOriginPostgresTest {
         .withCommand("postgres", "-c", "shared_preload_libraries=pg_stat_statements",
             "-c", "shared_buffers=16MB");
 
-    @BeforeEach void prepare() throws Exception {
+    @BeforeEach
+    void prepare() throws Exception {
         execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements");
         execute("CREATE TABLE IF NOT EXISTS origin_check(id int)");
         execute("TRUNCATE origin_check");
@@ -27,8 +31,12 @@ class ApiSqlOriginPostgresTest {
         execute("SELECT pg_stat_statements_reset()");
     }
 
-    @Test void PostgreSQL18은_SQL_맨_앞_주석을_통계에서_제외한다() throws Exception {
+    @Test
+    void PostgreSQL18은_SQL_맨_앞_주석을_통계에서_제외한다() throws Exception {
+        // when
         execute("/* salmonbus:api.other */ SELECT id FROM origin_check");
+
+        // then
         assertThat(storedQuery()).doesNotContain("salmonbus:");
     }
 
@@ -41,24 +49,27 @@ class ApiSqlOriginPostgresTest {
         "WITH rows AS (SELECT id FROM origin_check) SELECT * FROM rows"
     })
     void SQL_내부_표식은_실행_후_통계에도_남는다(String sql) throws Exception {
+        // when
         execute(new ApiSqlOrigin().inspect(sql));
+
+        // then
         assertThat(storedQuery()).contains("/* salmonbus:api.other */");
     }
 
     private static void execute(String sql) throws Exception {
-        try (var connection = DriverManager.getConnection(POSTGRES.getJdbcUrl(),
-                POSTGRES.getUsername(), POSTGRES.getPassword());
-             var statement = connection.createStatement()) {
+        try (Connection connection = DriverManager.getConnection(POSTGRES.getJdbcUrl(),
+            POSTGRES.getUsername(), POSTGRES.getPassword());
+            Statement statement = connection.createStatement()) {
             statement.execute(sql);
         }
     }
 
     private static String storedQuery() throws Exception {
-        try (var connection = DriverManager.getConnection(POSTGRES.getJdbcUrl(),
-                POSTGRES.getUsername(), POSTGRES.getPassword());
-             var statement = connection.createStatement();
-             var rows = statement.executeQuery(
-                 "SELECT query FROM pg_stat_statements WHERE query LIKE '%origin_check%' AND toplevel")) {
+        try (Connection connection = DriverManager.getConnection(POSTGRES.getJdbcUrl(),
+            POSTGRES.getUsername(), POSTGRES.getPassword());
+            Statement statement = connection.createStatement();
+            ResultSet rows = statement.executeQuery(
+                "SELECT query FROM pg_stat_statements WHERE query LIKE '%origin_check%' AND toplevel")) {
             assertThat(rows.next()).isTrue();
             String sql = rows.getString(1);
             assertThat(rows.next()).isFalse();

@@ -1,19 +1,19 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.quality.RouteDataQuality;
 import com.gustler.backend.forecasting.domain.quality.RouteDataQualityRepository;
-import com.gustler.backend.forecasting.domain.statistics.StopDemandCell;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion;
+import com.gustler.backend.forecasting.domain.statistics.StopDemandCell;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandHourlyTotals;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandMeasurement;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
 import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
-import com.gustler.backend.support.ConfirmedTripFixture;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
+import com.gustler.backend.support.ConfirmedTripFixture;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -28,15 +28,14 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class JdbcStopDemandStatisticsRepositoryTest {
-
-    /** 판마다 남는 두 판본. 기본값이 없어서 픽스처가 직접 넣는다. */
+    /** 수집 배치마다 기록할 두 판본. 기본값이 없어 픽스처에서 직접 지정한다. */
     private static final String NORMALIZATION_VERSION = "normalization-v1.0.0";
     private static final String COLLECTION_STRATEGY_VERSION = "adaptive-kst-v1.0.1";
 
-    /** 관측 판의 결말. CHECK 이 아홉 값으로 막아서 그중 하나를 쓴다. */
+    /** 관측 수집 배치의 결과 상태. CHECK 이 아홉 값으로 제한하므로 그중 하나를 사용한다. */
     private static final String OUTCOME_SUCCESS_ROWS = "SUCCESS_ROWS";
 
-    /** 지나감(2)으로 넣어서 통과 순번이 상류 순번과 같다. */
+    /** 운행 상태를 지나감(2)으로 설정해 통과 순번이 상류 순번과 같다. */
     private static final int RUNNING_STATE_DEPARTED = 2;
 
     private static final String SOURCE_ID = "GBIS";
@@ -54,7 +53,7 @@ class JdbcStopDemandStatisticsRepositoryTest {
     private static final int NEXT_STOP_AHEAD = 1;
     private static final int TWO_STOPS_AHEAD = 2;
 
-    /** 셀을 만들어 둘 정류장 셋. 넣는 순서와 읽히는 순서를 가르려고 순번을 뒤섞어 고른다. */
+    /** 셀을 만들어 둘 정류장 셋. 입력 순서와 조회 순서를 구분하려고 순번을 뒤섞어 고른다. */
     private static final int LOWEST_CELL_STOP_ORDER = 3;
     private static final int MIDDLE_CELL_STOP_ORDER = 5;
     private static final int HIGHEST_CELL_STOP_ORDER = 9;
@@ -73,13 +72,13 @@ class JdbcStopDemandStatisticsRepositoryTest {
     private static final Instant SCORED_AT = Instant.parse("2026-08-19T03:00:00Z");
     private static final Instant DATA_UNTIL = Instant.parse("2026-08-19T04:00:00Z");
 
-    /** 세대의 기준 시각보다 뒤에 받은 관측. 그 세대를 쓸 수 있는 자리다. */
+    /** 세대의 기준 시각보다 뒤에 받은 관측. 해당 세대를 사용할 수 있는 관측이다. */
     private static final Instant READ_AS_OF = Instant.parse("2026-08-19T06:00:00Z");
     private static final Instant SCORED_AFTER_DATA_UNTIL = Instant.parse("2026-08-19T05:00:00Z");
     private static final Instant COMPUTED_AT = Instant.parse("2026-08-19T04:00:03Z");
     private static final OffsetDateTime GENERATED_AT = OffsetDateTime.parse("2026-08-19T10:57:31+09:00");
 
-    /** 예측 시점과 도착 시점의 잔여석. 정원이 40 이라 몫이 이진수로 딱 떨어진다. */
+    /** 예측 시점과 도착 시점의 잔여석. 정원이 40 이라 나눈 값이 이진수로 정확히 표현된다. */
     private static final int SEATS_ON_PREDICTION = 40;
     private static final int SEATS_ON_FIRST_ARRIVAL = 10;
     private static final int SEATS_ON_SECOND_ARRIVAL = 20;
@@ -151,19 +150,27 @@ class JdbcStopDemandStatisticsRepositoryTest {
 
     @Test
     void 도착_관측이_없는_정산_fixture는_실패하고_대기를_보존한다() {
+        // when
         final long sourceId = insertObservation(
             VEHICLE_204000206, TARGET_STOP_ORDER - NEXT_STOP_AHEAD, SEATS_ON_PREDICTION, FIRST_ARRIVED_AT);
         StatisticsForecastFixture.insertPending(jdbcClient, sourceId, TARGET_STOP_ORDER,
             NEXT_STOP_AHEAD, modelDeploymentId, DEMAND_STATISTICS_REVISION, SEAT_FULL_CHANCE_RAW,
             SEAT_FULL_CHANCE, EXPECTED_SEATS, GENERATED_AT);
 
-        assertThatThrownBy(() -> StatisticsForecastFixture.settle(
-            jdbcClient, sourceId, TARGET_STOP_ORDER, -1L, FIRST_ARRIVED_AT))
+        // then
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> StatisticsForecastFixture.settle(
+            jdbcClient, sourceId, TARGET_STOP_ORDER, -1L, FIRST_ARRIVED_AT));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull()
             .isInstanceOf(AssertionError.class);
         assertThat(jdbcClient.sql("SELECT count(*) FROM forecast_evaluation_pending WHERE vehicle_observation_id=?")
-            .param(sourceId).query(Long.class).single()).isEqualTo(1L);
+                .param(sourceId).query(Long.class).single()).isEqualTo(1L);
         assertThat(jdbcClient.sql("SELECT count(*) FROM forecast_evaluation_result WHERE vehicle_observation_id=?")
-            .param(sourceId).query(Long.class).single()).isZero();
+                .param(sourceId).query(Long.class).single()).isZero();
     }
 
     @Test
@@ -176,7 +183,8 @@ class JdbcStopDemandStatisticsRepositoryTest {
 
         // when
         StopDemandStatistics actual =
-            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION, READ_AS_OF);
+            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION,
+                READ_AS_OF);
 
         // then
         assertThat(actual.cells())
@@ -188,7 +196,8 @@ class JdbcStopDemandStatisticsRepositoryTest {
     void 세대가_없는_노선_판본은_빈_셀_목록으로_답한다() {
         // when
         StopDemandStatistics actual =
-            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION, READ_AS_OF);
+            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION,
+                READ_AS_OF);
 
         // then
         assertThat(actual).isEqualTo(
@@ -213,7 +222,8 @@ class JdbcStopDemandStatisticsRepositoryTest {
 
         // when
         StopDemandStatistics actual =
-            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION, READ_AS_OF);
+            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION,
+                READ_AS_OF);
 
         // then
         assertThat(actual.cells()).isEmpty();
@@ -227,7 +237,8 @@ class JdbcStopDemandStatisticsRepositoryTest {
 
         // when
         StopDemandStatistics actual =
-            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.EVENING, CALCULATION_VERSION, READ_AS_OF);
+            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.EVENING, CALCULATION_VERSION,
+                READ_AS_OF);
 
         // then
         assertThat(actual.cells()).isEmpty();
@@ -235,46 +246,55 @@ class JdbcStopDemandStatisticsRepositoryTest {
 
     @Test
     void 셀이_없는_시간대도_그_세대의_번호를_그대로_받는다() {
-        // given 아침 셀만 있는 세대. 저녁은 아직 라벨이 안 쌓였다
+        // given
+        // 아침 셀만 있는 세대. 저녁은 아직 라벨이 안 쌓였다
         jdbcStopDemandStatisticsRepository.append(generationOf(FIRST_REVISION, CALCULATION_VERSION, List.of(
             measurementOf(TimeSlot.MORNING, TARGET_STOP_ORDER))));
 
         // when
         StopDemandStatistics actual =
-            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.EVENING, CALCULATION_VERSION, READ_AS_OF);
+            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.EVENING, CALCULATION_VERSION,
+                READ_AS_OF);
 
-        // then 세대가 아예 없는 것(0)과 구별돼야 예보 행에 무엇을 보고 냈는지가 남는다
+        // then
+        // 세대가 아예 없는 것(0)과 구별돼야 예보 행에 무엇을 보고 냈는지가 남는다
         assertThat(actual.revision()).isEqualTo(FIRST_REVISION);
     }
 
     @Test
     void 관측_시각_뒤에_난_세대는_안_읽는다() {
-        // given 08시에 받은 관측인데 정오까지의 라벨로 낸 세대가 그 뒤에 생겼다
+        // given
+        // 08시에 받은 관측인데 정오까지의 라벨로 낸 세대가 그 뒤에 생겼다
         jdbcStopDemandStatisticsRepository.append(generationOf(FIRST_REVISION, CALCULATION_VERSION, List.of(
             measurementOf(TimeSlot.MORNING, TARGET_STOP_ORDER))));
 
-        // when 그 세대의 기준 시각보다 앞선 관측으로 읽는다
+        // when
+        // 그 세대의 기준 시각보다 앞선 관측으로 읽는다
         StopDemandStatistics actual = jdbcStopDemandStatisticsRepository.readAsOf(
             routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION, DATA_UNTIL.minusSeconds(1));
 
-        // then 그때는 쓸 수 있는 세대가 없었다
+        // then
+        // 그때는 쓸 수 있는 세대가 없었다
         assertThat(actual.revision()).isZero();
     }
 
     @Test
     void 세대가_쌓여도_관측_시각까지의_것_중_가장_최근을_읽는다() {
-        // given 둘째 통계는 관측보다 늦은 자료까지 포함하며, 계산 시각도 그 이후다.
+        // given
+        // 둘째 통계는 관측보다 늦은 자료까지 포함하며, 계산 시각도 그 이후다.
         jdbcStopDemandStatisticsRepository.append(generationOf(FIRST_REVISION, CALCULATION_VERSION, List.of(
             measurementOf(TimeSlot.MORNING, TARGET_STOP_ORDER))));
         jdbcStopDemandStatisticsRepository.append(new DemandStatisticsVersion(
-            routeVersionId, CALCULATION_VERSION, FIRST_REVISION + 1, READ_AS_OF.plusSeconds(3600), READ_AS_OF.plusSeconds(3603),
+            routeVersionId, CALCULATION_VERSION, FIRST_REVISION + 1, READ_AS_OF.plusSeconds(3600),
+            READ_AS_OF.plusSeconds(3603),
             List.of(measurementOf(TimeSlot.MORNING, TARGET_STOP_ORDER))));
 
         // when
         StopDemandStatistics actual = jdbcStopDemandStatisticsRepository.readAsOf(
             routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION, READ_AS_OF);
 
-        // then 덮어썼으면 둘째만 남아서 같은 batch 를 다시 처리할 때 값이 달라진다
+        // then
+        // 덮어썼으면 둘째만 남아서 같은 batch 를 다시 처리할 때 값이 달라진다
         assertThat(actual.revision()).isEqualTo(FIRST_REVISION);
     }
 
@@ -453,7 +473,8 @@ class JdbcStopDemandStatisticsRepositoryTest {
 
         // then
         StopDemandStatistics actual =
-            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION, READ_AS_OF);
+            jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION,
+                READ_AS_OF);
         assertThat(actual.cells())
             .extracting(StopDemandCell::stopOrder)
             .containsExactly(LOWEST_CELL_STOP_ORDER);
@@ -479,8 +500,9 @@ class JdbcStopDemandStatisticsRepositoryTest {
         changeEligibility();
 
         // when
-        var totals = jdbcStopDemandStatisticsRepository.readHourlyTotals(routeVersionId, DATA_UNTIL);
-        var actual = jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING,
+        List<StopDemandHourlyTotals> totals =
+            jdbcStopDemandStatisticsRepository.readHourlyTotals(routeVersionId, DATA_UNTIL);
+        StopDemandStatistics actual = jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING,
             CALCULATION_VERSION, READ_AS_OF);
 
         // then
@@ -638,13 +660,13 @@ class JdbcStopDemandStatisticsRepositoryTest {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
-            .params(
-                observationBatchId, routeVersionId, SOURCE_ROW_NUMBER,
-                vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
-                RUNNING_STATE_DEPARTED, remainingSeats
-            )
-            .query(Long.class)
-            .single());
+                    .params(
+                        observationBatchId, routeVersionId, SOURCE_ROW_NUMBER,
+                        vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
+                        RUNNING_STATE_DEPARTED, remainingSeats
+                    )
+                    .query(Long.class)
+                    .single());
     }
 
     private long insertObservationBatch(

@@ -2,6 +2,9 @@ package com.gustler.backend.api.chat.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+/**
+ * 공개 조회 응답에 현재 노선 채팅방의 이용 가능 정보와 표시값을 담는다.
+ */
 @Schema(requiredProperties = {"routeId", "displayName", "historySize", "maxBodyCodePoints"})
 public record ChatRoomResponse(
     @Schema(description = "노선 채팅방의 9자리 노선 ID")

@@ -3,8 +3,14 @@ package com.gustler.backend.api.board.dto;
 import com.gustler.backend.api.board.domain.Board;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
+/**
+ * 같은 관측과 모델을 기준으로 만든 탑승판의 공개 응답이다.
+ * 정류장과 접근 차량 목록을 응답 이후 바꿀 수 없게 보관한다.
+ */
 @Schema(requiredProperties = {"route", "observedAt", "staleAt", "model", "vehiclesInService", "stops"})
 public record BoardResponse(
     @Schema(description = "노선과 현재 판본의 방향 정보")
@@ -20,6 +26,12 @@ public record BoardResponse(
     @Schema(description = "노선의 정류장 목록. 접근 차량이 없는 정류장도 포함")
     List<StopStateResponse> stops
 ) {
+    /** 원본 참조와 분리하고 기존 null·원소·순서를 보존한다. */
+    public BoardResponse {
+        if (stops != null) {
+            stops = Collections.unmodifiableList(new ArrayList<>(stops));
+        }
+    }
 
     public static BoardResponse from(
         Board board
@@ -30,7 +42,8 @@ public record BoardResponse(
             board.staleAt(),
             ModelInfoResponse.from(board.model()),
             board.vehiclesInService(),
-            board.stops().stream()
+            board.stops()
+                .stream()
                 .map(StopStateResponse::from)
                 .toList()
         );

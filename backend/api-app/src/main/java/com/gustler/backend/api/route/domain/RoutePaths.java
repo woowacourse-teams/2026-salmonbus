@@ -1,5 +1,7 @@
 package com.gustler.backend.api.route.domain;
 
+import com.gustler.backend.api.route.domain.RouteGeometry.Point;
+import com.gustler.backend.api.route.domain.RoutePaths.Path;
 import java.util.List;
 import java.util.Objects;
 
@@ -10,10 +12,13 @@ public record RoutePaths(Path up, Path down) {
         Objects.requireNonNull(down);
     }
 
-    public record Path(List<RouteGeometry.Point> points) {
+    public record Path(List<Point> points) {
         public Path {
             points = List.copyOf(points);
-            if (points.stream().distinct().limit(2).count() < 2) {
+            if (points.stream()
+                .distinct()
+                .limit(2)
+                .count() < 2) {
                 throw new IllegalArgumentException("방향별 경로에는 서로 다른 좌표가 두 개 이상 필요하다");
             }
         }

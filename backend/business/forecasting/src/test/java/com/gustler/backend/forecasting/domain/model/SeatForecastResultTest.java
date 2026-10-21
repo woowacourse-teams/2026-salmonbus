@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.domain.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -9,7 +9,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class SeatForecastResultTest {
-
     @Test
     void 만석_확률은_분포의_0석_남을_확률이다() {
         // given
@@ -36,18 +35,24 @@ class SeatForecastResultTest {
 
     @Test
     void 예보는_좌석_분포를_반드시_들고_있다() {
-        // when & then
-        assertThatThrownBy(() -> new SeatForecastResult(null, 0.35))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new SeatForecastResult(null, 0.35));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(NullPointerException.class);
     }
 
     @ParameterizedTest
     @ValueSource(doubles = {-0.1, 1.5, Double.NaN, Double.POSITIVE_INFINITY})
-    void 보정_전_만석_확률은_0과_1_사이의_수다(
-        final double notChance
-    ) {
-        // when & then
-        assertThatThrownBy(() -> new SeatForecastResult(seatDistribution(), notChance))
+    void 보정_전_만석_확률은_0과_1_사이의_수다(final double notChance) {
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new SeatForecastResult(seatDistribution(), notChance));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 

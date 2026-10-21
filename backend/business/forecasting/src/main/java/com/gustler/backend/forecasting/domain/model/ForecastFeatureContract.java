@@ -20,7 +20,10 @@ public enum ForecastFeatureContract {
     private static final List<String> CONDITIONAL_NAMES = conditionalNames();
 
     public List<String> featureNames() {
-        return this == LEGACY ? SeatForecastDesignMatrix.COLUMN_NAMES : CONDITIONAL_NAMES;
+        if (this == LEGACY) {
+            return SeatForecastDesignMatrix.COLUMN_NAMES;
+        }
+        return CONDITIONAL_NAMES;
     }
 
     public double[] vectorOf(SeatForecastInput input) {
@@ -28,7 +31,7 @@ public enum ForecastFeatureContract {
         if (this == LEGACY) {
             return original;
         }
-        RouteStop target = input.target().targetStop();
+        RouteStop target = input.targetStop();
         if (target.direction() == RouteDirection.UNKNOWN || !input.stops().stops().contains(target)) {
             throw new IllegalArgumentException("조건 모델에는 노선 기준과 일치하는 대상 정류장 방향이 필요하다");
         }
@@ -37,14 +40,14 @@ public enum ForecastFeatureContract {
         if (this == STOP_DIRECTION_TIME) {
             Arrays.fill(columns, 28, 31, 0);
         }
-        double position = columns[19];
+        final double position = columns[19];
         for (int index = 0; index < BASIS_COUNT; index++) {
-            double knot = index / (double) (BASIS_COUNT - 1);
+            final double knot = index / (double) (BASIS_COUNT - 1);
             columns[BASIS_START + index] = Math.max(1 - Math.abs(position - knot) * (BASIS_COUNT - 1), 0);
         }
-        columns[DOWN_COLUMN] = target.direction() == RouteDirection.DOWN ? 1 : 0;
+        columns[DOWN_COLUMN] = directionFeature(target.direction());
         int destination = DOWN_COLUMN + 1;
-        for (int timeColumn : new int[] {1, 2}) {
+        for (final int timeColumn : new int[] {1, 2}) {
             for (int index = 0; index < BASIS_COUNT; index++) {
                 columns[destination++] = columns[BASIS_START + index] * columns[timeColumn];
             }
@@ -63,5 +66,12 @@ public enum ForecastFeatureContract {
             names.add(time + "_target_direction_down");
         }
         return List.copyOf(names);
+    }
+
+    private static double directionFeature(RouteDirection direction) {
+        if (direction == RouteDirection.DOWN) {
+            return 1;
+        }
+        return 0;
     }
 }

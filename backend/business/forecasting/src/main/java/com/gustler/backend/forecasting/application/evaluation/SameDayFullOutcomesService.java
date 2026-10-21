@@ -1,17 +1,19 @@
 package com.gustler.backend.forecasting.application.evaluation;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
+import com.gustler.backend.forecasting.application.evaluation.SameDayInitializationAttempt.Stage;
 import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomeCount;
 import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomesStore;
 import com.gustler.backend.forecasting.domain.evaluation.SeoulDay;
 import com.gustler.backend.forecasting.domain.evaluation.SettledForecast;
-
 import com.gustler.backend.forecasting.domain.model.SameDayFullOutcomes;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 /**
@@ -20,7 +22,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class SameDayFullOutcomesService {
-
     private final SameDayFullOutcomesStore repository;
 
     public SameDayFullOutcomesService(
@@ -29,9 +30,12 @@ public class SameDayFullOutcomesService {
         this.repository = repository;
     }
 
+    /**
+     * 예측 시각을 서울 날짜로 해석해 노선·모델별 당일 성적을 읽는다. 집계 부재나 확정 상한보다 이른 시각은 빈 Map이다.
+     */
     public Map<Integer, SameDayFullOutcomes> outcomesFor(
         final long routeId,
-        long modelDeploymentId,
+        final long modelDeploymentId,
         Instant predictionAt
     ) {
         SeoulDay day = SeoulDay.containing(predictionAt);
@@ -43,10 +47,13 @@ public class SameDayFullOutcomesService {
         return outcomesOf(counts);
     }
 
+    /**
+     * 확정 평가를 당일 성적에 반영한다. 평가 확정과 같은 트랜잭션에서 호출한다.
+     */
     public void record(
         List<SettledForecast> settled
     ) {
-        for (Map.Entry<RouteDay, List<SettledForecast>> group : groupByRouteDay(settled).entrySet()) {
+        for (Entry<RouteDay, List<SettledForecast>> group : groupByRouteDay(settled).entrySet()) {
             RouteDay key = group.getKey();
             if (repository.findCounts(key.routeId(), key.modelDeploymentId(), key.day()).isEmpty()) {
                 // 부분 합계를 만들면 초기화 완료로 오인한다. 원본은 이후 초기화에서 함께 센다.
@@ -60,15 +67,14 @@ public class SameDayFullOutcomesService {
         Map<Integer, SameDayFullOutcomeCount> increments = new LinkedHashMap<>();
         for (SettledForecast forecast : settled) {
             SameDayFullOutcomeCount next = new SameDayFullOutcomeCount(
-                forecast.stopsToTarget(), 1, forecast.wasFull() ? 1 : 0,
+                forecast.stopsToTarget(), 1, fullOutcomeCount(forecast),
                 forecast.rawFullChance(), forecast.arrivedAt());
             increments.merge(forecast.stopsToTarget(), next, (previous, current) ->
                 new SameDayFullOutcomeCount(previous.stopsToTarget(),
                     previous.rowCount() + current.rowCount(),
                     previous.actualFullCount() + current.actualFullCount(),
                     previous.rawFullChanceSum() + current.rawFullChanceSum(),
-                    previous.settledThrough().isAfter(current.settledThrough())
-                        ? previous.settledThrough() : current.settledThrough()));
+                    laterSettlement(previous, current)));
         }
         return List.copyOf(increments.values());
     }
@@ -76,20 +82,24 @@ public class SameDayFullOutcomesService {
     private static Map<RouteDay, List<SettledForecast>> groupByRouteDay(
         List<SettledForecast> settled
     ) {
-        Map<RouteDay, List<SettledForecast>> byRouteDay = new LinkedHashMap<>();
-        for (SettledForecast forecast : settled) {
-            byRouteDay.computeIfAbsent(RouteDay.of(forecast), key -> new ArrayList<>()).add(forecast);
-        }
+        Map<RouteDay, List<SettledForecast>> byRouteDay = settled.stream()
+            .collect(Collectors.groupingBy(RouteDay::of, LinkedHashMap::new,
+                Collectors.toCollection(ArrayList::new)));
         return byRouteDay;
     }
 
     /** 호출자가 같은 노선 잠금을 유지하는 트랜잭션 안에서 사용한다. */
-    public boolean initializeIfAbsent(long routeId, long modelDeploymentId, SeoulDay day) {
+    public boolean initializeIfAbsent(final long routeId, final long modelDeploymentId, SeoulDay day) {
         return initializeIfAbsent(routeId, modelDeploymentId, day, new SameDayInitializationAttempt());
     }
 
-    boolean initializeIfAbsent(long routeId, long modelDeploymentId, SeoulDay day, SameDayInitializationAttempt attempt) {
-        if (!attempt.measure(SameDayInitializationAttempt.Stage.CHECK,
+    boolean initializeIfAbsent(
+        final long routeId,
+        final long modelDeploymentId,
+        SeoulDay day,
+        SameDayInitializationAttempt attempt
+    ) {
+        if (!attempt.measure(Stage.CHECK,
             () -> repository.findCounts(routeId, modelDeploymentId, day)).isEmpty()) {
             return false;
         }
@@ -99,18 +109,18 @@ public class SameDayFullOutcomesService {
 
     private List<SameDayFullOutcomeCount> seed(
         final long routeId,
-        long modelDeploymentId,
+        final long modelDeploymentId,
         SeoulDay day,
         SameDayInitializationAttempt attempt
     ) {
-        List<SameDayFullOutcomeCount> counted = attempt.measure(SameDayInitializationAttempt.Stage.SOURCE,
+        List<SameDayFullOutcomeCount> counted = attempt.measure(Stage.SOURCE,
             () -> repository.countFromSource(routeId, modelDeploymentId, day, day.end()));
         if (counted.isEmpty()) {
             // 거리 0은 실제 예보가 아니다. 이 날짜/품질 버전에서 원본이 비었음을 한 번만 기록한다.
             counted = List.of(new SameDayFullOutcomeCount(0, 0, 0, 0, day.start()));
         }
         List<SameDayFullOutcomeCount> toSave = counted;
-        attempt.run(SameDayInitializationAttempt.Stage.SAVE, () -> repository.upsertCounts(routeId, modelDeploymentId, day, toSave));
+        attempt.run(Stage.SAVE, () -> repository.upsertCounts(routeId, modelDeploymentId, day, toSave));
         return counted;
     }
 
@@ -129,10 +139,11 @@ public class SameDayFullOutcomesService {
     private static Map<Integer, SameDayFullOutcomes> outcomesOf(
         List<SameDayFullOutcomeCount> counts
     ) {
-        Map<Integer, SameDayFullOutcomes> byStopsAhead = new LinkedHashMap<>();
-        for (SameDayFullOutcomeCount count : counts) {
-            if (count.rowCount() > 0) { byStopsAhead.put(count.stopsToTarget(), count.outcomes()); }
-        }
+        Map<Integer, SameDayFullOutcomes> byStopsAhead = counts.stream()
+            .filter(count -> count.rowCount() > 0)
+            .collect(LinkedHashMap::new,
+                (byDistance, count) -> byDistance.put(count.stopsToTarget(), count.outcomes()),
+                Map::putAll);
         return Map.copyOf(byStopsAhead);
     }
 
@@ -141,11 +152,25 @@ public class SameDayFullOutcomesService {
         long modelDeploymentId,
         SeoulDay day
     ) {
-
         static RouteDay of(
             SettledForecast forecast
         ) {
-            return new RouteDay(forecast.routeId(), forecast.modelDeploymentId(), SeoulDay.containing(forecast.arrivedAt()));
+            return new RouteDay(forecast.routeId(), forecast.modelDeploymentId(),
+                SeoulDay.containing(forecast.arrivedAt()));
         }
+    }
+
+    private static int fullOutcomeCount(SettledForecast forecast) {
+        if (forecast.wasFull()) {
+            return 1;
+        }
+        return 0;
+    }
+
+    private static Instant laterSettlement(SameDayFullOutcomeCount previous, SameDayFullOutcomeCount current) {
+        if (previous.settledThrough().isAfter(current.settledThrough())) {
+            return previous.settledThrough();
+        }
+        return current.settledThrough();
     }
 }

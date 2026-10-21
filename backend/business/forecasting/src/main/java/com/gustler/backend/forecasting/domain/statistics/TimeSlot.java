@@ -3,8 +3,11 @@ package com.gustler.backend.forecasting.domain.statistics;
 import java.time.Clock;
 import java.time.Instant;
 
+/**
+ * 관측 기준 시각을 통계·모델 입력의 시간대로 분류한다.
+ * 조회 시각으로 과거 관측의 시간대를 바꾸지 않는다.
+ */
 public enum TimeSlot {
-
     MORNING,
     EVENING,
     OTHER,

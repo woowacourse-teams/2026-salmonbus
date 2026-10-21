@@ -10,8 +10,10 @@ import static org.mockito.Mockito.verify;
 
 import com.gustler.backend.api.chat.application.ChatIdentityService;
 import com.gustler.backend.api.chat.application.ChatMessageRepository;
-import com.gustler.backend.api.chat.application.ChatTestRoutes;
+import com.gustler.backend.api.chat.application.ChatMessageRepository.SaveResult;
+import com.gustler.backend.api.chat.application.ChatMessageRepository.SaveResult.Status;
 import com.gustler.backend.api.chat.application.ChatService;
+import com.gustler.backend.api.chat.application.ChatTestRoutes;
 import com.gustler.backend.api.chat.domain.ChatMessage;
 import jakarta.websocket.Session;
 import java.io.IOException;
@@ -44,7 +46,6 @@ import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(OutputCaptureExtension.class)
 class ChatWebSocketHandlerTest {
-
     private static final String SESSION_START = """
         {"v":1,"type":"session.start","clientSessionId":"0f8fad5b-d9cb-469f-a165-70867728950e"}
         """;
@@ -57,6 +58,7 @@ class ChatWebSocketHandlerTest {
 
     @Test
     void 저장한_뒤_ACK하고_같은_방에_방송하며_재전송은_중복_ACK만_보낸다() throws Exception {
+        // given
         MutableClock clock = new MutableClock(Instant.parse("2026-09-29T13:21:34.127Z"));
         InMemoryRepository repository = new InMemoryRepository();
         ChatWebSocketHandler handler = handler(repository, clock);
@@ -73,11 +75,13 @@ class ChatWebSocketHandlerTest {
         senderFrames.clear();
         peerFrames.clear();
 
+        // when
         String send = """
             {"v":1,"type":"message.send","clientMessageId":"7c9e6679-7425-40de-944b-e07fc1f90ae7","body":"지금 자리 여유 있어요"}
             """;
         handler.handleTextMessage(sender, new TextMessage(send));
 
+        // then
         assertThat(repository.saveCalls).isEqualTo(1);
         assertThat(senderFrames).hasSize(2);
         assertThat(senderFrames.get(0)).contains("\"type\":\"message.ack\"", "\"duplicate\":false");
@@ -97,14 +101,17 @@ class ChatWebSocketHandlerTest {
 
     @Test
     void 세션_시작_전의_잘못된_첫_프레임은_치명적_오류다() throws Exception {
+        // given
         MutableClock clock = new MutableClock(Instant.parse("2026-09-29T13:21:34.127Z"));
         ChatWebSocketHandler handler = handler(new InMemoryRepository(), clock);
         List<String> frames = new ArrayList<>();
         WebSocketSession session = session("sender", "204000057", frames);
         handler.afterConnectionEstablished(session);
 
+        // when
         handler.handleTextMessage(session, new TextMessage("not-json"));
 
+        // then
         assertThat(frames).singleElement().asString()
             .contains("\"code\":\"INVALID_FRAME\"", "\"fatal\":true");
         assertThat(closed.get("sender").getCode()).isEqualTo(1008);
@@ -112,6 +119,7 @@ class ChatWebSocketHandlerTest {
 
     @Test
     void 연결별_1초_속도_제한을_적용한다() throws Exception {
+        // given
         MutableClock clock = new MutableClock(Instant.parse("2026-09-29T13:21:34.127Z"));
         ChatWebSocketHandler handler = handler(new InMemoryRepository(), clock);
         List<String> frames = new ArrayList<>();
@@ -124,8 +132,10 @@ class ChatWebSocketHandlerTest {
             """));
         frames.clear();
 
+        // when
         handler.handleTextMessage(session, new TextMessage(sendFrame(EXAMPLE_MESSAGE_ID, "두 번째 메시지")));
 
+        // then
         assertThat(frames).singleElement()
             .isEqualTo(example("error.rateLimited"));
         assertThat(closed).isEmpty();
@@ -169,7 +179,8 @@ class ChatWebSocketHandlerTest {
         assertThat(frames).hasSize(2);
         assertThat(type(frames.get(0))).isEqualTo("session.ready");
         assertThat(ChatContractExamples.fieldNames(ChatContractExamples.parse(frames.get(0))))
-            .containsExactlyElementsOf(ChatContractExamples.fieldNames(ChatContractExamples.serverFrame("session.ready")));
+            .containsExactlyElementsOf(
+                ChatContractExamples.fieldNames(ChatContractExamples.serverFrame("session.ready")));
         assertThat(frames.get(1)).isEqualTo(example("error.unavailable"));
         assertThat(closed.get("sender")).isEqualTo(CloseStatus.SERVER_ERROR);
     }
@@ -230,7 +241,9 @@ class ChatWebSocketHandlerTest {
         }
         assertThat(sizes).containsExactly(10, 10, 3);
         assertThat(bodies).containsExactlyElementsOf(
-            IntStream.range(0, 23).mapToObj(index -> "메시지 " + index).toList()
+            IntStream.range(0, 23)
+                .mapToObj(index -> "메시지 " + index)
+                .toList()
         );
         assertThat(ChatContractExamples.fieldNames(ChatContractExamples.parse(frames.get(1)).get("messages").get(0)))
             .containsExactlyElementsOf(ChatContractExamples.fieldNames(
@@ -586,7 +599,12 @@ class ChatWebSocketHandlerTest {
         });
     }
 
-    private WebSocketSession session(String id, String routeId, List<String> frames, Outbound outbound)
+    private WebSocketSession session(
+        String id,
+        String routeId,
+        List<String> frames,
+        Outbound outbound
+    )
         throws Exception {
         WebSocketSession session = mock(WebSocketSession.class);
         given(session.getId()).willReturn(id);
@@ -631,17 +649,18 @@ class ChatWebSocketHandlerTest {
             saveCalls++;
             ChatMessage existing = stored.putIfAbsent(message.roomId() + ":" + message.clientMessageId(), message);
             if (existing == null) {
-                return new SaveResult(SaveResult.Status.CREATED, message);
+                return new SaveResult(Status.CREATED, message);
             }
             if (existing.authorId().equals(message.authorId()) && existing.body().equals(message.body())) {
-                return new SaveResult(SaveResult.Status.DUPLICATE, existing);
+                return new SaveResult(Status.DUPLICATE, existing);
             }
-            return new SaveResult(SaveResult.Status.CONFLICT, existing);
+            return new SaveResult(Status.CONFLICT, existing);
         }
 
         @Override
         public List<ChatMessage> findRecent(String roomId, final int limit) {
-            return stored.values().stream()
+            return stored.values()
+                .stream()
                 .filter(message -> message.roomId().equals(roomId))
                 .limit(limit)
                 .toList();

@@ -24,7 +24,8 @@ env_owner="$(stat -c '%U:%G' "$ENV_FILE")"
 [ "$env_owner" = "root:root" ] || { log "$ENV_FILE 주인이 $env_owner 다. root:root 여야 한다"; exit 1; }
 grep -qc '^DB_URL=' "$ENV_FILE" || { log "$ENV_FILE 에 DB_URL 이 없다"; exit 1; }
 if [ "$COMPONENT" = "worker" ]; then
-  grep -qc '^GBIS_SERVICE_KEY=' "$ENV_FILE" || { log "$ENV_FILE 에 GBIS_SERVICE_KEY 가 없다"; exit 1; }
+  grep -qcE '^(GBIS_SERVICE_KEY|GBIS_KEYS_A)=' "$ENV_FILE" || { log "$ENV_FILE 에 GBIS_SERVICE_KEY 또는 GBIS_KEYS_A 가 없다"; exit 1; }
+  ! grep -qc '^GBIS_KEYS=' "$ENV_FILE" || { log "$ENV_FILE 의 GBIS_KEYS= 한 줄 형식은 쓰지 않는다. GBIS_SERVICE_KEY_<별칭>= 으로 나눈다"; exit 1; }
   # 모델 계수 디렉터리는 배포가 안 건드리는 곳이라 여기서 만들기만 한다
   mkdir -p "$MODEL_DIRECTORY"
   # 이관 임시 파일만 두는 전용 경로. 기존 파일은 삭제하지 않는다.

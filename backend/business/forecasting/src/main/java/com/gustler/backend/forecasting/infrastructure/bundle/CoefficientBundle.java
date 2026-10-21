@@ -4,20 +4,18 @@ import com.gustler.backend.forecasting.domain.model.CoefficientLookup;
 import com.gustler.backend.forecasting.domain.model.HorizonCoefficients;
 import com.gustler.backend.forecasting.domain.model.ResidualDirection;
 import com.gustler.backend.forecasting.domain.model.ResidualSignHead;
-
 import java.util.List;
 import java.util.Map;
 
 /**
- * 검사를 통과한 계수 묶음. 노선과 예보 거리로 계수를 꺼낸다.
+ * 검사를 통과한 계수 묶음. 노선과 예보 거리로 계수를 조회한다.
  *
- * <p>노선 목록의 <b>순서가 계수 배열의 첫 축</b>이다. 목록을 뒤집으면 1650 계수로 3330 을
- * 예보하게 되고, 값은 정상으로 보인다. 그래서 순서까지 검사한다.
+ * <p>노선 목록의 순서가 계수 배열의 첫 축에 대응한다. 목록을 뒤집으면 1650 계수로 3330 을
+ * 예보해도 값은 정상처럼 보이므로 순서까지 검사한다.
  *
- * <p>바뀌지 않는다. 승격으로 계수가 바뀌면 새 묶음이 생기지 이 묶음의 값이 갈리지 않는다.
+ * <p>이 묶음의 값은 변경하지 않는다. 승격으로 계수가 바뀌면 기존 묶음을 변경하지 않고 새 묶음을 만든다.
  */
 final class CoefficientBundle implements CoefficientLookup {
-
     private final BundleManifest manifest;
     private final Map<BundleTensor, Tensor> tensors;
 
@@ -58,7 +56,7 @@ final class CoefficientBundle implements CoefficientLookup {
         if (axis < 0) {
             throw new IllegalArgumentException(
                 "이 계수 묶음이 안 담는 노선이다: %s, 담는 노선은 %s"
-                    .formatted(modelRoute, manifest.routes())
+                .formatted(modelRoute, manifest.routes())
             );
         }
         return axis;
@@ -71,7 +69,7 @@ final class CoefficientBundle implements CoefficientLookup {
         if (axis < 0) {
             throw new IllegalArgumentException(
                 "이 계수 묶음이 안 담는 예보 거리다: %d정류장 앞, 담는 거리는 %s"
-                    .formatted(stopsAhead, manifest.horizonStops())
+                .formatted(stopsAhead, manifest.horizonStops())
             );
         }
         return axis;

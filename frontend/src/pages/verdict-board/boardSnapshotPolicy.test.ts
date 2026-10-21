@@ -1,7 +1,8 @@
 import { describe, expect, it } from "@jest/globals";
 import { PENDING_RESOURCE, type LatestSuccess, type PolledResource } from "@/shared/api/polledResource";
-import type { Board, LiveVehicles, ObservationState } from "@/shared/api/routeForecast.types";
-import { boardWith, liveVehiclesWith, vehicleAt } from "@/testing/fixtures";
+import type { Board, DirectionInfo, LiveVehicles, ObservationState } from "@/shared/api/routeForecast.types";
+import { boardWith, downInfo, liveVehiclesWith, upInfo, vehicleAt } from "@/testing/fixtures";
+import { serviceStateFor } from "./components/displayPolicy";
 import {
   boardHistoriesWith,
   boardObservedAtOf,
@@ -472,6 +473,43 @@ describe("응답이 도착하는 순서대로 재생한 화면", () => {
       const nextRoute = boardHistoriesWith(previousRoute, "R2", PENDING_RESOURCE, PENDING_RESOURCE);
 
       expect(nextRoute).toEqual(emptyBoardHistoriesFor("R2"));
+    });
+  });
+
+  describe("막차가 떠난 뒤 처음 들어왔을 때", () => {
+    const LATE_BATCH_100 = "2026-10-13T23:40:00+09:00";
+    const LATE_BATCH_101 = "2026-10-13T23:40:20+09:00";
+
+    const entering = [vehicles("23:40:21", LATE_BATCH_101), board("23:40:21", LATE_BATCH_100)];
+    const caughtUp = [...entering, board("23:40:26", LATE_BATCH_101)];
+
+    function screenWithServiceOf(arrivals: readonly Arrival[], time: string, direction: DirectionInfo) {
+      const histories = replay(arrivals);
+      const { snapshot } = boardSnapshotFor(histories.boards, histories.liveVehicles, at(time));
+      if (snapshot === null) return null;
+      return {
+        vehiclesBatch: snapshot.liveVehicles?.body.observation.observedAt ?? null,
+        service: serviceStateFor(snapshot.board.body, direction, snapshot.liveVehicles?.body ?? null),
+      };
+    }
+
+    it("차량이 예보보다 새 observation batch라 짝이 없어도 운행 종료로 바뀌지 않는다", () => {
+      expect(screenWithServiceOf(entering, "23:40:21", upInfo)).toEqual({ vehiclesBatch: null, service: "running" });
+    });
+
+    it("예보가 따라와 짝이 맞아도 이 방향 차량이 있으니 판정 보드를 유지한다", () => {
+      expect(screenWithServiceOf(caughtUp, "23:40:26", upInfo)).toEqual({
+        vehiclesBatch: LATE_BATCH_101,
+        service: "running",
+      });
+    });
+
+    it("이 방향 차량이 없으면 짝을 기다리는 동안만 판정 보드를 보여 주고, 짝이 맞는 순간 운행 종료로 바뀐다", () => {
+      expect(screenWithServiceOf(entering, "23:40:21", downInfo)).toEqual({ vehiclesBatch: null, service: "running" });
+      expect(screenWithServiceOf(caughtUp, "23:40:26", downInfo)).toEqual({
+        vehiclesBatch: LATE_BATCH_101,
+        service: "outOfService",
+      });
     });
   });
 });

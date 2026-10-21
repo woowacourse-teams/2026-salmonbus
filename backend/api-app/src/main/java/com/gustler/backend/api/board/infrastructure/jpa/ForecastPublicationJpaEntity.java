@@ -11,7 +11,6 @@ import org.hibernate.annotations.Immutable;
 @Table(name = "forecast_publication")
 @Immutable
 public class ForecastPublicationJpaEntity {
-
     @Id
     private Long id;
 

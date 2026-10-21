@@ -12,21 +12,22 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.annotation.DirtiesContext.ClassMode;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 @IntegrationTest
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@DirtiesContext(classMode = ClassMode.AFTER_CLASS)
 @TestPropertySource(properties = {
     "spring.datasource.hikari.connection-timeout=250",
     "spring.datasource.hikari.maximum-pool-size=1",
     "spring.datasource.hikari.minimum-idle=0"
 })
 class RouteDatabaseFailureContractTest {
-
     @Autowired
     private WebApplicationContext applicationContext;
 
@@ -49,8 +50,11 @@ class RouteDatabaseFailureContractTest {
             .andExpect(status().isOk());
         postgres.stop();
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes"))
+        // when
+        ResultActions httpResponse = mockMvc.perform(get("/api/v1/routes"));
+
+        // then
+        httpResponse
             .andExpect(status().isServiceUnavailable())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
             .andExpect(header().doesNotExist(HttpHeaders.RETRY_AFTER))

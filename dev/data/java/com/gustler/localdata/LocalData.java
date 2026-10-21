@@ -140,7 +140,7 @@ public final class LocalData {
     private static void resetGenerated(Connection connection, RouteDataset data) throws Exception {
         execute(connection, """
             TRUNCATE daily_call_quota, observation_batch, vehicle_observation, seat_forecast,
-                forecast_publication, forecast_evaluation_work, forecast_evaluation_result,
+                forecast_publication, forecast_evaluation_work, forecast_evaluation_result, forecast_evaluation_compact,
                 evaluation_archive_member, evaluation_archive_batch, evaluation_archive_scan,
                 file_statistics_publication,
                 observation_trip_assignment,

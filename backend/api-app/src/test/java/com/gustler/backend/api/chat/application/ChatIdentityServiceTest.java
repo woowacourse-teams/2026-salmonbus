@@ -8,7 +8,6 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 class ChatIdentityServiceTest {
-
     private static final List<String> ROUTE_3330_STOPS = List.of(
         "분재단지", "매화마을", "연꽃마을", "야탑역", "성남아트센터", "이매역", "서현역", "판교역",
         "도촌동", "농수산물시장", "안양시청", "범계역", "명학역", "문화의거리", "댕리단길", "안양역"
@@ -23,12 +22,15 @@ class ChatIdentityServiceTest {
 
     @Test
     void 같은_노선과_세션은_같은_익명_신원을_만든다() {
+        // given
         UUID sessionId = UUID.fromString("0f8fad5b-d9cb-469f-a165-70867728950e");
         ChatRoom room = room("204000057");
 
+        // when
         ChatIdentity first = service.derive(room, sessionId);
         ChatIdentity second = service.derive(room, sessionId);
 
+        // then
         assertThat(second).isEqualTo(first);
         assertThat(first.authorId()).hasSize(22).matches("[A-Za-z0-9_-]{22}");
         assertThat(first.nickname())
@@ -38,17 +40,27 @@ class ChatIdentityServiceTest {
 
     @Test
     void 노선이_달라지면_신원도_달라진다() {
+        // when
         UUID sessionId = UUID.fromString("0f8fad5b-d9cb-469f-a165-70867728950e");
 
+        // then
         assertThat(service.derive(room("204000057"), sessionId))
             .isNotEqualTo(service.derive(room("234000050"), sessionId));
     }
 
     @Test
     void 방마다_그_노선의_정류장_목록을_이_순서로_둔다() {
+        // when
+        List<String> nicknameStops1 = room("204000057").nicknameStops();
+
         // then
-        assertThat(room("204000057").nicknameStops()).containsExactlyElementsOf(ROUTE_3330_STOPS);
-        assertThat(room("234000050").nicknameStops()).containsExactlyElementsOf(ROUTE_1650_STOPS);
+        assertThat(nicknameStops1).containsExactlyElementsOf(ROUTE_3330_STOPS);
+
+        // when
+        List<String> nicknameStops2 = room("234000050").nicknameStops();
+
+        // then
+        assertThat(nicknameStops2).containsExactlyElementsOf(ROUTE_1650_STOPS);
     }
 
     @Test
@@ -82,6 +94,7 @@ class ChatIdentityServiceTest {
             .toList();
 
         for (UUID sessionId : sessionIds) {
+
             // when
             ChatIdentity inRoute3330 = service.derive(room("204000057"), sessionId);
             ChatIdentity inRoute1650 = service.derive(room("234000050"), sessionId);

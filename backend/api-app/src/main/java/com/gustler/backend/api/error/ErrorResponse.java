@@ -3,6 +3,10 @@ package com.gustler.backend.api.error;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;
 
+/**
+ * API 오류의 code·message·requestId 전송 계약이다.
+ * 내부 예외 원문이나 요청 인증정보를 담지 않는다.
+ */
 @Schema(requiredProperties = {"code", "message", "requestId"})
 public record ErrorResponse(
     @Schema(description = "안정적인 오류 코드")
@@ -12,7 +16,6 @@ public record ErrorResponse(
     @Schema(description = "응답 헤더의 X-Request-Id 및 서버 로그와 대응하는 요청 식별자")
     String requestId
 ) {
-
     public ErrorResponse {
         Objects.requireNonNull(code, "code는 null일 수 없습니다.");
         Objects.requireNonNull(message, "message는 null일 수 없습니다.");

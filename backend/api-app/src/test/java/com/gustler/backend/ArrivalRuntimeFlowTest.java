@@ -15,9 +15,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -82,22 +84,29 @@ class ArrivalRuntimeFlowTest {
     @AfterAll
     static void stopAndReport() throws Exception {
         try {
-            var report = Map.of("generatedAt", Instant.now().toString(), "scope", "local HTTP / separate Boot JARs / PostgreSQL 18 / synthetic GBIS",
+            Map<String, Object> report = Map.of("generatedAt", Instant.now()
+                .toString(), "scope", "local HTTP / separate Boot JARs / PostgreSQL 18 / synthetic GBIS",
                 "jvm", "Java 21, -Xmx256m, ActiveProcessorCount=2 per child JVM", "realPublicApiCalls", 0,
                 "outcomes", OUTCOMES, "evidence", EVIDENCE);
             Files.writeString(REPORT, new ObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(report));
         } finally {
-            if (runtime != null) runtime.close();
+            if (runtime != null) {
+                runtime.close();
+            }
         }
     }
 
     @Test
     void 기본_40초_갱신_60초_유효기간에서_동시요청과_캐시공유_갱신을_확인한다() throws Exception {
+        // given
         Plan held = Plan.held();
         runtime.source.plan(STATION, held);
         runtime.startWorker(true, Map.of());
 
+        // when
         Reply starting = runtime.get(STATION);
+
+        // then
         assertThat(starting.httpStatus()).isEqualTo(200);
         assertThat(starting.value("/status")).isEqualTo("UNAVAILABLE");
         assertThat(starting.value("/refresh/reason")).isEqualTo("STARTING");
@@ -118,8 +127,10 @@ class ArrivalRuntimeFlowTest {
         assertThat(ready.body().path("routes")).hasSize(2);
         assertThat(ready.body().at("/routes/0/arrivals/0/currentSeat/remaining").intValue()).isZero();
         assertThat(ready.body().at("/snapshot/sourceObservedAt").isNull()).isTrue();
-        assertThat(Duration.between(instant(ready, "receivedAt"), instant(ready, "refreshAfterAt"))).isEqualTo(Duration.ofSeconds(40));
-        assertThat(Duration.between(instant(ready, "receivedAt"), instant(ready, "staleAt"))).isEqualTo(Duration.ofSeconds(60));
+        assertThat(Duration.between(instant(ready, "receivedAt"), instant(ready, "refreshAfterAt"))).isEqualTo(
+            Duration.ofSeconds(40));
+        assertThat(Duration.between(instant(ready, "receivedAt"), instant(ready, "staleAt"))).isEqualTo(
+            Duration.ofSeconds(60));
 
         String id = ready.value("/snapshot/snapshotId");
         String version = ready.value("/routes/0/targetVisit/referenceVersionId");
@@ -127,7 +138,8 @@ class ArrivalRuntimeFlowTest {
         assertThat(selected.body().path("routes")).hasSize(1);
         assertThat(selected.value("/snapshot/snapshotId")).isEqualTo(id);
         assertThat(runtime.get(STATION, "?routeId=204000155").value("/snapshot/snapshotId")).isEqualTo(id);
-        assertThat(runtime.get(STATION, "?routeId=204000057&referenceVersionId=999999&stopSequence=1").httpStatus()).isEqualTo(409);
+        assertThat(runtime.get(STATION, "?routeId=204000057&referenceVersionId=999999&stopSequence=1")
+                .httpStatus()).isEqualTo(409);
 
         List<Reply> warm = burst(STATION, 100);
         assertThat(warm).allSatisfy(reply -> {
@@ -136,8 +148,10 @@ class ArrivalRuntimeFlowTest {
             assertThat(reply.value("/snapshot/snapshotId")).isEqualTo(id);
         });
         assertThat(runtime.source.calls()).isEqualTo(1);
-        assertThat(runtime.reservations()).isEqualTo(1);
-        assertThat(runtime.snapshots()).isEqualTo(1);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(runtime.reservations()).isEqualTo(1);
+            softly.assertThat(runtime.snapshots()).isEqualTo(1);
+        }
         EVIDENCE.put("cold100", timings(cold));
         EVIDENCE.put("warm100", timings(warm));
 
@@ -155,11 +169,14 @@ class ArrivalRuntimeFlowTest {
 
     @Test
     void 갱신실패는_기존_수신의_유효기간을_연장하지_않는다() throws Exception {
+        // when
         runtime.startWorker(false, Map.of());
         Reply ready = runtime.awaitValue(STATION, "/status", "READY", QUICK_TIMEOUT);
         runtime.source.plan(STATION, Plan.error(503, "20"));
         pauseUntil(instant(ready, "refreshAfterAt").plusMillis(20));
         Reply failed = runtime.awaitValue(STATION, "/refresh/reason", "UPSTREAM_ERROR", QUICK_TIMEOUT);
+
+        // then
         assertThat(failed.value("/status")).isEqualTo("READY");
         assertThat(failed.value("/snapshot/snapshotId")).isEqualTo(ready.value("/snapshot/snapshotId"));
         assertThat(failed.value("/snapshot/staleAt")).isEqualTo(ready.value("/snapshot/staleAt"));
@@ -169,33 +186,47 @@ class ArrivalRuntimeFlowTest {
         assertThat(stale.value("/reason")).isEqualTo("STALE");
         assertThat(stale.cacheControl()).isEqualTo("no-store");
         assertThat(stale.body().path("routes")).isEmpty();
-        assertThat(runtime.snapshots()).isEqualTo(1);
-        assertThat(runtime.reservations()).isEqualTo(2);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(runtime.snapshots()).isEqualTo(1);
+            softly.assertThat(runtime.reservations()).isEqualTo(2);
+        }
         assertThat(runtime.source.calls()).isEqualTo(2);
     }
 
     @Test
     void HTTP429의_RetryAfter는_다른_정류장의_재호출도_막는다() throws Exception {
+        // when
         runtime.source.plan(STATION, Plan.error(429, "20"));
         runtime.startWorker(false, Map.of());
         Reply limited = runtime.awaitValue(STATION, "/refresh/reason", "RATE_LIMITED", QUICK_TIMEOUT);
+
+        // then
         assertThat(Instant.parse(limited.value("/refresh/suggestedRefreshAt"))).isAfter(Instant.now().plusSeconds(15));
         Reply other = runtime.get(OTHER);
         assertThat(other.value("/refresh/reason")).isEqualTo("RATE_LIMITED");
         assertThat(runtime.source.calls()).isEqualTo(1);
-        assertThat(runtime.reservations()).isEqualTo(1);
-        assertThat(runtime.snapshots()).isZero();
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(runtime.reservations()).isEqualTo(1);
+            softly.assertThat(runtime.snapshots()).isZero();
+        }
     }
 
     @Test
     void 느린_상류에서_대기열은_8개까지만_받고_시간지난_작업은_예산을_쓰지_않는다() throws Exception {
+        // when
         runtime.source.plan(STATION, Plan.slow(Duration.ofSeconds(3)));
         runtime.startWorker(false, Map.of());
         runtime.awaitValue(STATION, "/refresh/reason", "COLLECTING", QUICK_TIMEOUT);
         ArrivalRuntime.await(() -> runtime.source.calls() == 1, QUICK_TIMEOUT, "느린 가짜 응답 시작");
         List<Reply> queued = new ArrayList<>();
-        for (String station : FakeGbisArrivalServer.STATIONS.subList(1, 10)) queued.add(runtime.get(station));
-        assertThat(queued.stream().filter(reply -> "BUSY".equals(reply.value("/refresh/reason"))).count()).isEqualTo(1);
+        for (String station : FakeGbisArrivalServer.STATIONS.subList(1, 10)) {
+            queued.add(runtime.get(station));
+        }
+
+        // then
+        assertThat(queued.stream()
+                .filter(reply -> "BUSY".equals(reply.value("/refresh/reason")))
+                .count()).isEqualTo(1);
         ArrivalRuntime.await(() -> snapshots() == 1, QUICK_TIMEOUT, "느린 응답 저장");
         Reply expired = runtime.get(OTHER);
         assertThat(expired.value("/refresh/reason")).isEqualTo("QUEUE_EXPIRED");
@@ -208,25 +239,33 @@ class ArrivalRuntimeFlowTest {
 
     @Test
     void 상류_5초_타임아웃은_수신기록을_만들지_않고_즉시_재호출하지_않는다() throws Exception {
+        // when
         Plan held = Plan.held();
         runtime.source.plan(STATION, held);
         runtime.startWorker(false, Map.of());
         Reply failed = runtime.awaitValue(STATION, "/refresh/reason", "TRANSPORT_ERROR", Duration.ofSeconds(10));
+
+        // then
         assertThat(failed.value("/status")).isEqualTo("UNAVAILABLE");
         assertThat(runtime.get(STATION).value("/refresh/reason")).isEqualTo("TRANSPORT_ERROR");
         assertThat(runtime.source.calls()).isEqualTo(1);
-        assertThat(runtime.reservations()).isEqualTo(1);
-        assertThat(runtime.snapshots()).isZero();
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(runtime.reservations()).isEqualTo(1);
+            softly.assertThat(runtime.snapshots()).isZero();
+        }
         held.release();
     }
 
     @Test
     void Worker가_중단돼도_유효값을_제공하고_만료후에는_숨긴다() throws Exception {
+        // when
         runtime.startWorker(false, Map.of());
         Reply ready = runtime.awaitValue(STATION, "/status", "READY", QUICK_TIMEOUT);
         runtime.stopWorker();
         pauseUntil(instant(ready, "refreshAfterAt").plusMillis(20));
         Reply disconnected = runtime.get(STATION);
+
+        // then
         assertThat(disconnected.value("/status")).isEqualTo("READY");
         assertThat(disconnected.value("/refresh/reason")).isEqualTo("WORKER_UNAVAILABLE");
         pauseUntil(instant(ready, "staleAt").plusMillis(20));
@@ -237,15 +276,20 @@ class ArrivalRuntimeFlowTest {
 
     @Test
     void 키별_한도와_전체_한도는_Worker_재기동_후에도_유지된다() throws Exception {
-        Map<String, String> budget = Map.of("ARRIVALS_DAILY_LIMIT", "2", "ARRIVALS_KEY_DAILY_LIMIT", "1",
+        // when
+        Map<String, String> budget = Map.of("ARRIVALS_KEY_DAILY_LIMIT", "1",
             "GBIS_SERVICE_KEY_B", "fake-arrival-key-b");
         runtime.startWorker(false, budget);
         runtime.awaitValue(STATION, "/status", "READY", QUICK_TIMEOUT);
         runtime.awaitValue(OTHER, "/status", "READY", QUICK_TIMEOUT);
         String third = FakeGbisArrivalServer.STATIONS.get(2);
         runtime.awaitValue(third, "/refresh/reason", "DAILY_QUOTA_EXHAUSTED", QUICK_TIMEOUT);
-        assertThat(runtime.reservations()).isEqualTo(2);
-        assertThat(runtime.usedKeys()).isEqualTo(2);
+
+        // then
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(runtime.reservations()).isEqualTo(2);
+            softly.assertThat(runtime.usedKeys()).isEqualTo(2);
+        }
         assertThat(runtime.source.calls()).isEqualTo(2);
         runtime.startWorker(false, budget);
         runtime.awaitValue(third, "/refresh/reason", "DAILY_QUOTA_EXHAUSTED", QUICK_TIMEOUT);
@@ -255,27 +299,36 @@ class ArrivalRuntimeFlowTest {
             "sourceCallsAfterRestart", 2, "reservationsAfterRestart", 2));
     }
 
-    private static List<Reply> burst(String station, int count) throws Exception {
+    private static List<Reply> burst(String station, final int count) throws Exception {
         CountDownLatch start = new CountDownLatch(1);
         List<Future<Reply>> futures = new ArrayList<>();
-        try (var clients = Executors.newFixedThreadPool(20)) {
-            for (int index = 0; index < count; index++) futures.add(clients.submit(() -> {
-                start.await();
-                return runtime.get(station);
-            }));
+        try (ExecutorService clients = Executors.newFixedThreadPool(20)) {
+            for (int index = 0; index < count; index++) {
+                futures.add(clients.submit(() -> {
+                    start.await();
+                    return runtime.get(station);
+                }));
+            }
             start.countDown();
             List<Reply> replies = new ArrayList<>();
-            for (var future : futures) replies.add(future.get(10, TimeUnit.SECONDS));
+            for (Future<Reply> future : futures) {
+                replies.add(future.get(10, TimeUnit.SECONDS));
+            }
             return replies;
         }
     }
 
     private static Map<String, Object> timings(List<Reply> replies) {
-        List<Double> sorted = replies.stream().map(Reply::elapsedMillis).sorted().toList();
+        List<Double> sorted = replies.stream()
+            .map(Reply::elapsedMillis)
+            .sorted()
+            .toList();
         return Map.of("requests", replies.size(), "concurrentClients", 20,
             "p50Millis", sorted.get((int) Math.ceil(sorted.size() * .50) - 1),
             "p95Millis", sorted.get((int) Math.ceil(sorted.size() * .95) - 1),
-            "maxMillis", sorted.getLast(), "http200", replies.stream().filter(reply -> reply.httpStatus() == 200).count());
+            "maxMillis", sorted.getLast(), "http200", replies.stream()
+                .filter(reply -> reply.httpStatus() == 200)
+                .count());
     }
 
     private static Instant instant(Reply reply, String field) {
@@ -284,11 +337,17 @@ class ArrivalRuntimeFlowTest {
 
     private static void pauseUntil(Instant instant) throws InterruptedException {
         long millis;
-        while ((millis = Duration.between(Instant.now(), instant).toMillis()) > 0) Thread.sleep(Math.min(1000, millis));
+        while ((millis = Duration.between(Instant.now(), instant).toMillis()) > 0) {
+            Thread.sleep(Math.min(1000, millis));
+        }
     }
 
     private static int snapshots() {
-        try { return runtime.snapshots(); }
-        catch (Exception failure) { throw new IllegalStateException(failure); }
+        try {
+            return runtime.snapshots();
+        }
+        catch (Exception failure) {
+            throw new IllegalStateException(failure);
+        }
     }
 }

@@ -2,7 +2,6 @@ package com.gustler.backend.api.docs;
 
 /** 공개 문서용 합성 예시. contract의 같은 이름 예시와 문서 테스트에서 대조한다. */
 public final class ArrivalApiDocsExamples {
-
     public static final String READY = """
         {
           "stationId": "206000637",
@@ -74,7 +73,7 @@ public final class ArrivalApiDocsExamples {
           "refresh": {
             "status": "RUNNING",
             "reason": "COLLECTING",
-            "suggestedRefreshAt": "2026-10-14T12:00:12+09:00"
+            "suggestedRefreshAt": "2026-10-14T12:00:11+09:00"
           },
           "routes": []
         }
@@ -135,11 +134,12 @@ public final class ArrivalApiDocsExamples {
           "refresh": {
             "status": "RUNNING",
             "reason": "COLLECTING",
-            "suggestedRefreshAt": "2026-10-14T12:01:03+09:00"
+            "suggestedRefreshAt": "2026-10-14T12:01:02+09:00"
           },
           "routes": []
         }
         """;
 
-    private ArrivalApiDocsExamples() { }
+    private ArrivalApiDocsExamples() {
+    }
 }

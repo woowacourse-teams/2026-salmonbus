@@ -5,7 +5,7 @@ export const region = style({
   position: "relative",
   width: "100%",
   height: "100%",
-  overflow: "hidden",
+  clipPath: `inset(0 0 calc(-1 * ${vars.radius.boardSheet}))`,
   isolation: "isolate",
   background: vars.color.surface,
   selectors: { 'html[data-native-map="true"] &': { background: "transparent" } },
@@ -16,6 +16,8 @@ export const canvasViewport = style({
   left: 0,
   width: "100%",
   transform: "translateY(-50%)",
+  background: vars.color.surface,
+  selectors: { 'html[data-native-map="true"] &': { background: "transparent" } },
 });
 export const canvas = style({ position: "relative", zIndex: 0, width: "100%", height: "100%" });
 // SDK가 캔버스 하단에 배치한 출처 표시는 실제로 보이는 지도 하단으로 올린다.

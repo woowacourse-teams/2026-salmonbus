@@ -22,14 +22,13 @@ import org.junit.jupiter.api.Test;
  * 같은 규칙이 있는지 먼저 확인한다"고 적었다. 확인을 사람에게 맡기지 않고 빌드에서 대조한다.
  */
 class SeatCapContractTest {
-
     private static final String CUTOVER = "db/migration/V26__ddd_storage_cutover.sql";
     private static final Pattern SEAT_CAP = Pattern.compile("remaining_seats\\s*<=\\s*(\\d+)");
     private static final int VIEW_OCCURRENCES = 2;
 
     @Test
     void 품질_view_의_좌석_상한은_도메인_격자와_같다() {
-        // given
+        // when
         List<Integer> caps = seatCapsIn(cutoverMigration());
 
         // then
@@ -42,7 +41,7 @@ class SeatCapContractTest {
     }
 
     private static List<Integer> seatCapsIn(
-        final String sql
+        String sql
     ) {
         Matcher matcher = SEAT_CAP.matcher(sql);
         return matcher.results().map(result -> Integer.parseInt(result.group(1))).toList();

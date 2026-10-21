@@ -1,15 +1,15 @@
 package com.gustler.backend.observations.application;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
-import com.gustler.backend.observations.domain.ObservationSource;
+import com.gustler.backend.observations.api.CollectObservations;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.domain.ObservationBatchReservation;
 import com.gustler.backend.observations.domain.ObservationReply;
 import com.gustler.backend.observations.domain.ObservationResponse;
+import com.gustler.backend.observations.domain.ObservationSource;
 import com.gustler.backend.quota.api.ApiCallQuota;
 import com.gustler.backend.routecatalog.api.CurrentRouteVersion;
 import com.gustler.backend.routecatalog.api.RouteReference;
-
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
@@ -20,9 +20,8 @@ import org.springframework.stereotype.Component;
 
 /** 한 노선의 예약, HTTP 호출, 수집 결과 저장을 순서대로 진행한다. */
 @Component
-public class ObservationCollector implements com.gustler.backend.observations.api.CollectObservations {
-
-    private static final Logger log = LoggerFactory.getLogger(ObservationCollector.class);
+public class ObservationCollector implements CollectObservations {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ObservationCollector.class);
 
     private final CurrentRouteVersion currentRouteVersion;
     private final ObservationBatchLedger batchLedger;
@@ -44,6 +43,9 @@ public class ObservationCollector implements com.gustler.backend.observations.ap
         this.clock = clock;
     }
 
+    /**
+     * 한 노선의 판본 확인·예약·수집·저장을 조율한다. 처리 중 발생한 RuntimeException은 실패 단계를 기록한 뒤 전파한다.
+     */
     public void collectOnce(
         String sourceRouteId
     ) {
@@ -52,8 +54,9 @@ public class ObservationCollector implements com.gustler.backend.observations.ap
             WorkerOperationLog.collectionAttempted(sourceRouteId, scheduledAt.toEpochSecond());
             try {
                 attempt.stage("ROUTE_VERSION");
-                Optional<RouteReference> reference = WorkerOperationLog.measure("collection_route_version", sourceRouteId,
-                    () -> currentRouteVersion.currentVersionOf(sourceRouteId, scheduledAt));
+                Optional<RouteReference> reference =
+                    WorkerOperationLog.measure("collection_route_version", sourceRouteId,
+                        () -> currentRouteVersion.currentVersionOf(sourceRouteId, scheduledAt));
                 if (reference.isEmpty()) {
                     WorkerOperationLog.warn("collection_route_version", sourceRouteId, "NO_ROUTE_VERSION");
                     attempt.finish("DEFERRED", "NO_ROUTE_VERSION");
@@ -69,12 +72,17 @@ public class ObservationCollector implements com.gustler.backend.observations.ap
         }
     }
 
-    private void collectOn(long routeVersionId, String sourceRouteId, OffsetDateTime scheduledAt,
-                           CollectionAttemptLog attempt) {
+    private void collectOn(
+        final long routeVersionId,
+        String sourceRouteId,
+        OffsetDateTime scheduledAt,
+        CollectionAttemptLog attempt
+    ) {
         attempt.stage("RESERVE");
         ObservationBatchReservation reservation = WorkerOperationLog.measure("collection_reserve", sourceRouteId,
             () -> batchLedger.reserve(
-                new CollectionPlan(routeVersionId, scheduledAt, attemptKeyOf(sourceRouteId, scheduledAt)), scheduledAt));
+                new CollectionPlan(routeVersionId, scheduledAt, attemptKeyOf(sourceRouteId, scheduledAt)),
+                scheduledAt));
         attempt.batch(reservation.batchId());
         if (!reservation.reserved()) {
             WorkerOperationLog.warn("collection_quota", sourceRouteId, "DAILY_LIMIT");
@@ -84,7 +92,8 @@ public class ObservationCollector implements com.gustler.backend.observations.ap
         OffsetDateTime requestedAt = now();
         attempt.stage("DISPATCH");
         if (!WorkerOperationLog.measure("collection_dispatch", sourceRouteId,
-            () -> batchLedger.markDispatching(reservation.batchId(), scheduledAt, requestedAt, reservation.keyAlias()))) {
+            () ->
+            batchLedger.markDispatching(reservation.batchId(), scheduledAt, requestedAt, reservation.keyAlias()))) {
             WorkerOperationLog.warn("collection_quota", sourceRouteId, "NEXT_DAY_LIMIT");
             attempt.finish("DEFERRED", "NEXT_DAY_LIMIT");
             return;
@@ -110,9 +119,13 @@ public class ObservationCollector implements com.gustler.backend.observations.ap
                 response.receivedAt().toEpochSecond(), rows.storableRows().size()));
         attempt.stage("KEY_EXCLUSION");
         excludeKeyIfRejected(reservation.keyAlias(), response, requestedAt);
-        attempt.stage(response.observations().isPresent() ? "COMPLETE" : "UPSTREAM_RESULT");
-        attempt.finish(response.observations().isPresent() ? "SUCCESS" : "FAILED",
-            response.conclusion().outcome().name());
+        if (response.observations().isPresent()) {
+            attempt.stage("COMPLETE");
+            attempt.finish("SUCCESS", response.conclusion().outcome().name());
+            return;
+        }
+        attempt.stage("UPSTREAM_RESULT");
+        attempt.finish("FAILED", response.conclusion().outcome().name());
     }
 
     private void excludeKeyIfRejected(
@@ -122,7 +135,7 @@ public class ObservationCollector implements com.gustler.backend.observations.ap
     ) {
         response.keyRejectionCode().ifPresent(reasonCode ->
             callQuota.excludeLocationKey(keyAlias, requestedAt).ifPresent(reservedCallsBefore ->
-                log.warn("포털이 GBIS 키를 거절해 그 키를 한국 자정까지 쓰지 않는다. 슬롯={} 사유={} 채우기 전 사용량={}",
+                LOGGER.warn("포털이 GBIS 키를 거절해 그 키를 한국 자정까지 쓰지 않는다. 슬롯={} 사유={} 채우기 전 사용량={}",
                     keyAlias, reasonCode, reservedCallsBefore)));
     }
 

@@ -1,11 +1,13 @@
 package com.gustler.backend.api.http.docs;
 
+import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.info.Info;
-import io.swagger.v3.oas.models.servers.Server;
 import io.swagger.v3.oas.models.SpecVersion;
+import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.media.Schema;
+import io.swagger.v3.oas.models.servers.Server;
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.Set;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -13,20 +15,32 @@ import org.springframework.boot.info.BuildProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * 공개 API 문서와 nullable 응답 스키마를 실제 전송 계약에 맞춰 구성한다.
+ */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "springdoc.api-docs.enabled", havingValue = "true")
 public class ApiDocsConfiguration {
-
     @Bean
     OpenApiCustomizer nullableSchemas() {
         return document -> {
-            if (document.getComponents() == null || document.getComponents().getSchemas() == null) return;
-            for (Schema<?> model : document.getComponents().getSchemas().values()) {
-                if (model.getProperties() == null) continue;
+            Components components = document.getComponents();
+            if (components == null || components.getSchemas() == null) {
+                return;
+            }
+            Map<String, Schema> schemas = components.getSchemas();
+            for (Schema<?> model : schemas.values()) {
+                if (model.getProperties() == null) {
+                    continue;
+                }
                 for (Schema<?> property : model.getProperties().values()) {
-                    if (property.getTypes() == null || !property.getTypes().contains("null")) continue;
+                    if (property.getTypes() == null || !property.getTypes().contains("null")) {
+                        continue;
+                    }
                     allowNullEnum(property);
-                    if (property.get$ref() == null) continue;
+                    if (property.get$ref() == null) {
+                        continue;
+                    }
                     // 3.1에서 $ref와 type:null을 함께 쓰면 객체도 null도 만족할 수 없다.
                     // DTO의 nullable 의미를 참조 객체 또는 null로 표현하고 원본 컴포넌트는 바꾸지 않는다.
                     String reference = property.get$ref();
@@ -34,9 +48,9 @@ public class ApiDocsConfiguration {
                     property.setType(null);
                     property.setTypes(null);
                     property.setNullable(null);
-                    var referenceSchema = new Schema<>();
+                    Schema<Object> referenceSchema = new Schema<>();
                     referenceSchema.set$ref(reference);
-                    var nullSchema = new Schema<>();
+                    Schema<Object> nullSchema = new Schema<>();
                     nullSchema.setSpecVersion(SpecVersion.V31);
                     nullSchema.setTypes(Set.of("null"));
                     property.addAnyOfItem(referenceSchema);
@@ -47,8 +61,10 @@ public class ApiDocsConfiguration {
     }
 
     private static <T> void allowNullEnum(Schema<T> property) {
-        if (property.getEnum() == null) return;
-        var values = new ArrayList<>(property.getEnum());
+        if (property.getEnum() == null) {
+            return;
+        }
+        ArrayList<T> values = new ArrayList<>(property.getEnum());
         if (!values.contains(null)) {
             values.add(null);
             property.setEnum(values);

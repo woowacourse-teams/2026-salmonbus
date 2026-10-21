@@ -13,16 +13,13 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class TimeSlotTest {
-
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final Clock CLOCK = Clock.fixed(Instant.EPOCH, SEOUL);
     private static final LocalDate ANY_DAY = LocalDate.of(2026, 8, 25);
 
     @ParameterizedTest
     @ValueSource(ints = {7, 8})
-    void 오전_7시부터_8시까지는_아침이다(
-        final int hour
-    ) {
+    void 오전_7시부터_8시까지는_아침이다(final int hour) {
         // when
         TimeSlot actual = TimeSlot.of(seoulTimeAt(hour), CLOCK);
 
@@ -32,9 +29,7 @@ class TimeSlotTest {
 
     @ParameterizedTest
     @ValueSource(ints = {17, 18, 19})
-    void 오후_5시부터_7시까지는_저녁이다(
-        final int hour
-    ) {
+    void 오후_5시부터_7시까지는_저녁이다(final int hour) {
         // when
         TimeSlot actual = TimeSlot.of(seoulTimeAt(hour), CLOCK);
 
@@ -44,9 +39,7 @@ class TimeSlotTest {
 
     @ParameterizedTest
     @MethodSource("hoursOutsideMorningAndEvening")
-    void 아침과_저녁_밖의_시각은_모두_기타다(
-        final int hour
-    ) {
+    void 아침과_저녁_밖의_시각은_모두_기타다(final int hour) {
         // when
         TimeSlot actual = TimeSlot.of(seoulTimeAt(hour), CLOCK);
 

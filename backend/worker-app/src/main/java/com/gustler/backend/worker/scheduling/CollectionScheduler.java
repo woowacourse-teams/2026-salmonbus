@@ -1,23 +1,16 @@
 package com.gustler.backend.worker.scheduling;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
-
 import com.gustler.backend.observations.api.CollectObservations;
 import com.gustler.backend.worker.configuration.CollectionProperties;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 /**
- * 설정에 적힌 노선을 한 바퀴 돈다.
+ * 설정에 적힌 노선을 한 차례 수집한다.
  *
- * <p>한 노선이 터져도 나머지를 계속 돈다. 한 노선 때문에 다른 노선까지 그 판을 통째로 건너뛰면
- * 구멍이 두 배가 된다.
+ * <p>한 노선이 실패해도 나머지 노선의 수집을 계속한다. 한 노선 때문에 다른 노선까지
+ * 해당 수집을 통째로 건너뛰면 누락 범위가 두 배가 된다.
  */
 public class CollectionScheduler {
-
-    private static final Logger log = LoggerFactory.getLogger(CollectionScheduler.class);
-
     private final CollectionProperties properties;
     private final CollectObservations collector;
 
@@ -35,13 +28,16 @@ public class CollectionScheduler {
         }
     }
 
+    /**
+     * 계측 경계가 정제된 실패를 기록한 뒤 다음 노선으로 넘어간다. 예외 원문을 다시 출력하지 않는다.
+     */
     private void collectSafely(
         String routeId
     ) {
         try {
             WorkerOperationLog.run("collection_route", routeId, () -> collector.collectOnce(routeId));
-        } catch (final RuntimeException e) {
-            log.error("수집 한 판이 실패했다. 다음 노선을 이어서 돈다. 노선={}", routeId, e);
+        } catch (RuntimeException recordedFailure) {
+            return;
         }
     }
 }

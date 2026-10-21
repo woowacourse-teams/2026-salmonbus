@@ -1,37 +1,45 @@
 package com.gustler.backend.forecasting.application.publication;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
+import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore;
 import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesService;
+import com.gustler.backend.forecasting.application.publication.ForecastPublicationTransactionTest.FixedClock;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
 import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
-import com.gustler.backend.forecasting.domain.publication.ForecastTimeSlot;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
+import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
+import com.gustler.backend.forecasting.domain.evaluation.EvaluationSamplingPoint;
+import com.gustler.backend.forecasting.domain.model.FullSeatStreak.SeenToEnd;
+import com.gustler.backend.forecasting.domain.model.ObservedSeats.Known;
+import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
+import com.gustler.backend.forecasting.domain.model.PrecedingVehicle.Unknown;
+import com.gustler.backend.forecasting.domain.model.RouteStop;
+import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.model.SeatDistribution;
 import com.gustler.backend.forecasting.domain.model.SeatForecastModel;
 import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
-import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
-import com.gustler.backend.forecasting.domain.model.FullSeatStreak;
-import com.gustler.backend.forecasting.domain.model.ObservedSeats;
-import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
-import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
-import com.gustler.backend.forecasting.domain.model.PrecedingVehicle;
-import com.gustler.backend.forecasting.domain.model.RouteStop;
-import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.model.SeatSlope;
 import com.gustler.backend.forecasting.domain.model.TrajectoryGap;
 import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
+import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
+import com.gustler.backend.forecasting.domain.publication.ForecastPublicationRepository;
+import com.gustler.backend.forecasting.domain.publication.ForecastTimeSlot;
+import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
+import com.gustler.backend.forecasting.domain.publication.SeatForecast;
 import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryQuery;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
+import com.gustler.backend.observations.api.CollectionInputs;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -41,6 +49,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import org.assertj.core.api.Assertions;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,19 +63,19 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.IllegalTransactionStateException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** 외부 테스트 트랜잭션 없이 실제 발행의 커밋·롤백과 수집 배치 잠금을 검증한다. */
 @ForecastingIntegrationTest
-@Import(ForecastPublicationTransactionTest.FixedClock.class)
+@Import(FixedClock.class)
 class ForecastPublicationTransactionTest {
-
     private static final Instant OBSERVED_AT = Instant.parse("2026-09-21T02:00:00Z");
     private static final Instant GENERATED_AT = OBSERVED_AT.plusSeconds(2);
     private static final Clock CLOCK = Clock.fixed(GENERATED_AT, ZoneId.of("Asia/Seoul"));
@@ -98,6 +112,15 @@ class ForecastPublicationTransactionTest {
     @MockitoBean
     private ForecastRuntime forecastRuntime;
 
+    @Autowired
+    private ForecastPublicationRepository publications;
+
+    @Autowired
+    private EvaluationWorkStore work;
+
+    @Autowired
+    private CollectionInputs inputs;
+
     private final List<Long> deploymentIds = new ArrayList<>();
     private long routeId;
     private long routeVersionId;
@@ -110,7 +133,7 @@ class ForecastPublicationTransactionTest {
     @BeforeEach
     void 발행_입력을_별도_트랜잭션에서_조회할_수_있게_저장한다() {
         when(forecastRuntime.resolveActive()).thenReturn(Optional.empty());
-        final String routeKey = "publication-" + UUID.randomUUID().toString().substring(0, 12);
+        String routeKey = "publication-" + UUID.randomUUID().toString().substring(0, 12);
         routeId = jdbc.sql("""
                 INSERT INTO route (
                     public_route_id, source_id, source_route_id, display_name, start_stop_name, end_stop_name
@@ -163,7 +186,9 @@ class ForecastPublicationTransactionTest {
         jdbc.sql("DROP FUNCTION IF EXISTS publication_work_failure()").update();
         if (routeVersionId != 0) {
             jdbc.sql("DELETE FROM forecast_evaluation_work WHERE route_version_id = ?").param(routeVersionId).update();
-            jdbc.sql("DELETE FROM forecast_evaluation_result WHERE route_version_id = ?").param(routeVersionId).update();
+            jdbc.sql("DELETE FROM forecast_evaluation_result WHERE route_version_id = ?")
+                .param(routeVersionId)
+                .update();
             jdbc.sql("DELETE FROM seat_forecast WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM forecast_publication WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM vehicle_observation WHERE route_version_id = ?").param(routeVersionId).update();
@@ -175,9 +200,123 @@ class ForecastPublicationTransactionTest {
             jdbc.sql("DELETE FROM route_data_quality WHERE route_id = ?").param(routeId).update();
             jdbc.sql("DELETE FROM route WHERE id = ?").param(routeId).update();
         }
-        for (long deploymentId : deploymentIds) {
+        for (final long deploymentId : deploymentIds) {
             jdbc.sql("DELETE FROM model_deployment WHERE id = ?").param(deploymentId).update();
         }
+    }
+
+    @Test
+    void 상세_저장을_줄여도_모든_예보를_정산_대상으로_남긴다() {
+        // given
+        EvaluationSamplingSelector sampling = new EvaluationSamplingSelector(true, "", Duration.ofSeconds(60));
+        List<EvaluationSamplingSource> source = samplingSources(OBSERVED_AT.minusSeconds(15));
+        sampling.committed(sampling.select(samplingPublication(), source));
+        ForecastBatchCommitter committer = new ForecastBatchCommitter(publications, work, quality, inputs, sampling);
+
+        // when
+        new TransactionTemplate(transactions).executeWithoutResult(status ->
+            committer.commit(batch, samplingPublication(), samplingSources(OBSERVED_AT)));
+
+        // then
+        assertThat(readCounts()).isEqualTo(new StoredCounts(1, 2, 2, true));
+        assertThat(
+            jdbc.sql("SELECT target_stop_order FROM forecast_evaluation_pending WHERE vehicle_observation_id = ?")
+                .param(observationId)
+                .query(Integer.class)
+                .list()).containsExactlyInAnyOrder(4, 5);
+        assertThat(
+            jdbc.sql(
+            "SELECT evaluation_detail_required FROM seat_forecast WHERE vehicle_observation_id = ? ORDER BY target_stop_order")
+                .param(observationId)
+                .query(Boolean.class)
+                .list()).containsExactly(true, false);
+    }
+
+    @Test
+    void 트랜잭션이_롤백되면_평가_선택_기준도_갱신하지_않는다() {
+        // given
+        EvaluationSamplingSelector sampling = new EvaluationSamplingSelector(true, "", Duration.ofSeconds(60));
+        ForecastBatchCommitter committer = new ForecastBatchCommitter(publications, work, quality, inputs, sampling);
+
+        // when
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            committer.commit(batch, samplingPublication(), samplingSources(OBSERVED_AT));
+            status.setRollbackOnly();
+        });
+
+        // then
+        assertThat(readCounts()).isEqualTo(new StoredCounts(0, 0, 0, false));
+        assertThat(sampling.select(samplingPublication(), samplingSources(OBSERVED_AT.plusSeconds(15)))
+                .publication().predictions()).allMatch(
+                    SeatForecast::evaluationDetailRequired);
+    }
+
+    @Test
+    void 기능을_꺼도_재발행한_기존_예보의_상세_저장_선택은_유지한다() {
+        // given
+        EvaluationSamplingSelector sampling = new EvaluationSamplingSelector(true, "", Duration.ofSeconds(60));
+        sampling.committed(sampling.select(samplingPublication(), samplingSources(OBSERVED_AT.minusSeconds(15))));
+        ForecastBatchCommitter enabled = new ForecastBatchCommitter(publications, work, quality, inputs, sampling);
+        ForecastBatchCommitter disabled = new ForecastBatchCommitter(publications, work, quality, inputs,
+            new EvaluationSamplingSelector(false, "", Duration.ofSeconds(60)));
+        new TransactionTemplate(transactions).executeWithoutResult(status ->
+            enabled.commit(batch, samplingPublication(), samplingSources(OBSERVED_AT)));
+
+        // when
+        new TransactionTemplate(transactions).executeWithoutResult(status ->
+            disabled.commit(batch, samplingPublication(), samplingSources(OBSERVED_AT)));
+
+        // then
+        assertThat(readCounts()).isEqualTo(new StoredCounts(1, 2, 2, true));
+        assertThat(
+            jdbc.sql(
+            "SELECT evaluation_detail_required FROM seat_forecast WHERE vehicle_observation_id = ? ORDER BY target_stop_order")
+                .param(observationId)
+                .query(Boolean.class)
+                .list()).containsExactly(true, false);
+    }
+
+    @Test
+    void 재시작_후_재발행은_새_전체_평가_표본으로_기억하지_않는다() {
+        // given
+        EvaluationSamplingSelector sampling = new EvaluationSamplingSelector(true, "", Duration.ofSeconds(60));
+        sampling.committed(sampling.select(samplingPublication(), samplingSources(OBSERVED_AT.minusSeconds(15))));
+        ForecastBatchCommitter original = new ForecastBatchCommitter(publications, work, quality, inputs, sampling);
+        new TransactionTemplate(transactions).executeWithoutResult(status ->
+            original.commit(batch, samplingPublication(), samplingSources(OBSERVED_AT)));
+        EvaluationSamplingSelector restarted = new EvaluationSamplingSelector(true, "", Duration.ofSeconds(60));
+        ForecastBatchCommitter committer = new ForecastBatchCommitter(publications, work, quality, inputs, restarted);
+
+        // when
+        new TransactionTemplate(transactions).executeWithoutResult(status ->
+            committer.commit(batch, samplingPublication(), samplingSources(OBSERVED_AT)));
+
+        // then
+        assertThat(readCounts()).isEqualTo(new StoredCounts(1, 2, 2, true));
+        assertThat(
+            jdbc.sql(
+            "SELECT evaluation_detail_required FROM seat_forecast WHERE vehicle_observation_id = ? ORDER BY target_stop_order")
+                .param(observationId)
+                .query(Boolean.class)
+                .list()).containsExactly(true, false);
+        assertThat(restarted.select(samplingPublication(), samplingSources(OBSERVED_AT.plusSeconds(15)))
+                .publication().predictions()).allMatch(SeatForecast::evaluationDetailRequired);
+    }
+
+    private ForecastPublication samplingPublication() {
+        return new ForecastPublication(
+            batchId, routeVersionId, runtime.deploymentId(), 0, 1, OBSERVED_AT, GENERATED_AT, GENERATED_AT,
+            List.of(
+                new SeatForecast(
+                    observationId, routeVersionId, 4, 1, runtime.deploymentId(), 0, .4, .4, 12.0, GENERATED_AT),
+                new SeatForecast(
+                    observationId, routeVersionId, 5, 2, runtime.deploymentId(), 0, .4, .4, 12.0, GENERATED_AT)));
+    }
+
+    private List<EvaluationSamplingSource> samplingSources(Instant observedAt) {
+        return List.of(new EvaluationSamplingSource(observationId, "3330",
+            new EvaluationSamplingPoint(
+                routeVersionId, runtime.deploymentId(), "vehicle-1", 3, "UP", observedAt)));
     }
 
     @Test
@@ -188,9 +327,11 @@ class ForecastPublicationTransactionTest {
         // then
         StoredPublication publication = readPublication();
         List<StoredPrediction> predictions = readPredictions();
-        assertThat(publication.modelDeploymentId()).isEqualTo(runtime.deploymentId());
-        assertThat(publication.publishedAt()).isEqualTo(GENERATED_AT);
-        assertThat(publication.predictionCount()).isEqualTo(2);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(publication.modelDeploymentId()).isEqualTo(runtime.deploymentId());
+            softly.assertThat(publication.publishedAt()).isEqualTo(GENERATED_AT);
+            softly.assertThat(publication.predictionCount()).isEqualTo(2);
+        }
         assertThat(predictions).containsExactly(
             new StoredPrediction(publication.id(), observationId, 4, runtime.deploymentId(), 0.4, 0.6, GENERATED_AT),
             new StoredPrediction(publication.id(), observationId, 5, runtime.deploymentId(), 0.4, 0.6, GENERATED_AT));
@@ -205,12 +346,16 @@ class ForecastPublicationTransactionTest {
 
         // then
         StoredPublication republished = readPublication();
-        assertThat(republished.id()).isEqualTo(publication.id());
-        assertThat(republished.modelDeploymentId()).isEqualTo(replacement.deploymentId());
-        assertThat(republished.predictionCount()).isEqualTo(2);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(republished.id()).isEqualTo(publication.id());
+            softly.assertThat(republished.modelDeploymentId()).isEqualTo(replacement.deploymentId());
+            softly.assertThat(republished.predictionCount()).isEqualTo(2);
+        }
         assertThat(readPredictions()).containsExactly(
-            new StoredPrediction(publication.id(), observationId, 4, replacement.deploymentId(), 0.7, 0.3, GENERATED_AT),
-            new StoredPrediction(publication.id(), observationId, 5, replacement.deploymentId(), 0.7, 0.3, GENERATED_AT));
+            new StoredPrediction(publication.id(), observationId, 4, replacement.deploymentId(), 0.7, 0.3,
+                GENERATED_AT),
+            new StoredPrediction(publication.id(), observationId, 5, replacement.deploymentId(), 0.7, 0.3,
+                GENERATED_AT));
         assertThat(readEvaluationStates()).containsExactly("PENDING", "PENDING");
         assertThat(readCounts()).isEqualTo(new StoredCounts(1, 2, 2, true));
     }
@@ -221,8 +366,12 @@ class ForecastPublicationTransactionTest {
         when(trajectories.readTrajectories(batchId))
             .thenReturn(List.of(trajectory(observationId), trajectory(MISSING_OBSERVATION_ID)));
 
-        // when & then
-        assertThatThrownBy(() -> writer.writeForecastsOf(batch, stops, runtime))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> writer.writeForecastsOf(batch, stops, runtime));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
         assertThat(readCounts()).isEqualTo(new StoredCounts(0, 0, 0, false));
     }
@@ -237,11 +386,83 @@ class ForecastPublicationTransactionTest {
         });
 
         // when
-        int saved = writer.writeForecastsOf(batch, stops, checking);
+        final int saved = writer.writeForecastsOf(batch, stops, checking);
 
         // then
         assertThat(saved).isEqualTo(2);
         assertThat(readCounts()).isEqualTo(new StoredCounts(1, 2, 2, true));
+    }
+
+    @Test
+    void 다른_트랜잭션이_품질_행을_잠그고_있어도_기다리지_않고_예보를_저장한다() throws Exception {
+        // given
+        new TransactionTemplate(transactions).executeWithoutResult(status -> quality.lock(routeVersionId));
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Thread holder = Thread.ofPlatform()
+            .start(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                quality.lock(routeVersionId);
+                locked.countDown();
+                try {
+                    release.await(5, TimeUnit.SECONDS);
+                }
+                catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }));
+        assertThat(locked.await(2, TimeUnit.SECONDS)).isTrue();
+        try {
+
+            // when
+            final int saved =
+                assertTimeoutPreemptively(Duration.ofSeconds(5), () -> writer.writeForecastsOf(batch, stops, runtime));
+
+            // then
+            assertThat(saved).isEqualTo(2);
+            assertThat(readCounts()).isEqualTo(new StoredCounts(1, 2, 2, true));
+        } finally {
+            release.countDown();
+            holder.join();
+        }
+    }
+
+    @Test
+    void 품질_버전을_올리고_커밋하지_않은_트랜잭션이_있으면_끝날_때까지_기다린_뒤_저장하지_않는다() throws Exception {
+        // given
+        new TransactionTemplate(transactions).executeWithoutResult(status -> quality.lock(routeVersionId));
+        CountDownLatch changed = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Thread changer = Thread.ofPlatform()
+            .start(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                quality.lock(routeVersionId);
+                jdbc.sql("UPDATE route_data_quality SET quality_revision=quality_revision+1 WHERE route_id=?")
+                    .param(routeId).update();
+                changed.countDown();
+                try {
+                    release.await(5, TimeUnit.SECONDS);
+                }
+                catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }));
+        assertThat(changed.await(2, TimeUnit.SECONDS)).isTrue();
+
+        // when
+        CompletableFuture<Integer> saving =
+            CompletableFuture.supplyAsync(() -> writer.writeForecastsOf(batch, stops, runtime));
+
+        // then
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> saving.get(300, TimeUnit.MILLISECONDS));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull().isInstanceOf(TimeoutException.class);
+        release.countDown();
+        changer.join();
+        assertThat(saving.get(5, TimeUnit.SECONDS)).isZero();
+        assertThat(readCounts()).isEqualTo(new StoredCounts(0, 0, 0, false));
     }
 
     @Test
@@ -257,13 +478,13 @@ class ForecastPublicationTransactionTest {
         });
 
         // when
-        int saved = writer.writeForecastsOf(batch, stops, changing);
+        final int saved = writer.writeForecastsOf(batch, stops, changing);
 
         // then
         assertThat(saved).isZero();
         assertThat(readCounts()).isEqualTo(new StoredCounts(0, 0, 0, false));
         assertThat(jdbc.sql("SELECT count(*) FROM forecast_evaluation_work WHERE route_version_id=?")
-            .param(routeVersionId).query(Long.class).single()).isZero();
+                .param(routeVersionId).query(Long.class).single()).isZero();
     }
 
     @Test
@@ -281,7 +502,7 @@ class ForecastPublicationTransactionTest {
         assertThat(readCounts()).isEqualTo(new StoredCounts(0, 0, 0, false));
 
         // when
-        int saved = writer.writeForecastsOf(batch, stops, runtime);
+        final int saved = writer.writeForecastsOf(batch, stops, runtime);
 
         // then
         assertThat(saved).isEqualTo(2);
@@ -304,23 +525,23 @@ class ForecastPublicationTransactionTest {
             """).update();
 
         // when
-        Throwable failure = org.assertj.core.api.Assertions.catchThrowable(
+        Throwable failure = Assertions.catchThrowable(
             () -> writer.writeForecastsOf(batch, stops, runtime));
 
         // then
-        assertThat(failure).isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThat(failure).isInstanceOf(DataAccessException.class);
         assertThat(readCounts()).isEqualTo(new StoredCounts(0, 0, 0, false));
         assertThat(jdbc.sql("SELECT count(*) FROM forecast_evaluation_work WHERE route_version_id=?")
-            .param(routeVersionId).query(Long.class).single()).isZero();
+                .param(routeVersionId).query(Long.class).single()).isZero();
     }
 
     @Test
     void 이미_열린_트랜잭션_안에서_예보_계산을_호출하면_실행하지_않는다() {
         // given
-        var transaction = new TransactionTemplate(transactions);
+        TransactionTemplate transaction = new TransactionTemplate(transactions);
 
         // when
-        Throwable failure = org.assertj.core.api.Assertions.catchThrowable(() ->
+        Throwable failure = Assertions.catchThrowable(() ->
             transaction.executeWithoutResult(status -> writer.writeForecastsOf(batch, stops, runtime)));
 
         // then
@@ -348,8 +569,8 @@ class ForecastPublicationTransactionTest {
     private VehicleTrajectory trajectory(final long sourceObservationId) {
         return new VehicleTrajectory(sourceObservationId,
             new ObservedVehicle("vehicle-" + sourceObservationId, routeVersionId, 3, OBSERVED_AT, 12, null),
-            new ObservedSeats.Known(12), new SeatSlope.Known(0),
-            new PrecedingVehicle.Unknown(TrajectoryGap.NO_VEHICLE_AHEAD), new FullSeatStreak.SeenToEnd(0), 44);
+            new Known(12), new SeatSlope.Known(0),
+            new Unknown(TrajectoryGap.NO_VEHICLE_AHEAD), new SeenToEnd(0), 44);
     }
 
     private StoredPublication readPublication() {
@@ -358,8 +579,11 @@ class ForecastPublicationTransactionTest {
                 FROM forecast_publication WHERE source_batch_id = ?
                 """)
             .param(batchId)
-            .query((row, index) -> new StoredPublication(row.getLong("id"), row.getLong("model_deployment_id"), row.getObject("generated_at", OffsetDateTime.class).toInstant(),
-                row.getObject("published_at", OffsetDateTime.class).toInstant(), row.getInt("prediction_count")))
+            .query((row, index) ->
+                new StoredPublication(row.getLong("id"), row.getLong("model_deployment_id"),
+                    row.getObject("generated_at", OffsetDateTime.class)
+                        .toInstant(),
+                    row.getObject("published_at", OffsetDateTime.class).toInstant(), row.getInt("prediction_count")))
             .single();
     }
 
@@ -405,13 +629,16 @@ class ForecastPublicationTransactionTest {
     }
 
     private record StoredPublication(long id, long modelDeploymentId,
-                                     Instant generatedAt, Instant publishedAt, int predictionCount) { }
+        Instant generatedAt, Instant publishedAt, int predictionCount) {
+    }
 
     private record StoredPrediction(long publicationId, long observationId, int targetStopOrder,
-                                    long modelDeploymentId, double fullChance, double expectedSeats,
-                                    Instant generatedAt) { }
+        long modelDeploymentId, double fullChance, double expectedSeats,
+        Instant generatedAt) {
+    }
 
-    private record StoredCounts(long publications, long predictions, long evaluations, boolean inputConfirmed) { }
+    private record StoredCounts(long publications, long predictions, long evaluations, boolean inputConfirmed) {
+    }
 
     @TestConfiguration(proxyBeanMethods = false)
     static class FixedClock {

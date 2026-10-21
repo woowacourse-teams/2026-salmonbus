@@ -109,8 +109,9 @@ test("HTTP 캐시 5초 대신 응답의 40초 권장 시각에 재조회하고 �
   expect(api.requests.arrivals).toBe(2);
 });
 
-test("최초 수집 중이면 확인 중을 표시하고 권장하는 2초 뒤 결과를 반영한다", async ({ page, api }) => {
+test("최초 수집 중이면 초 단위 Date와 무관하게 권장하는 2초 뒤 결과를 반영한다", async ({ page, api }) => {
   const collecting = readyArrivals();
+  collecting.generatedAt = new Date(now + 880).toISOString();
   collecting.status = "UNAVAILABLE";
   collecting.reason = "NOT_COLLECTED";
   collecting.snapshot = null;
@@ -118,10 +119,11 @@ test("최초 수집 중이면 확인 중을 표시하고 권장하는 2초 뒤 �
   collecting.refresh = {
     status: "RUNNING",
     reason: "COLLECTING",
-    suggestedRefreshAt: new Date(now + 2_000).toISOString(),
+    suggestedRefreshAt: new Date(now + 880 + 2_000).toISOString(),
   };
   api.data.arrivals = collecting;
   await openBoard(page);
+  await page.clock.fastForward(880);
   const arrivalResponse = page.waitForResponse((response) => new URL(response.url()).pathname === arrivalsPath);
   await targetStop(page, "UP").click();
   await (await arrivalResponse).finished();

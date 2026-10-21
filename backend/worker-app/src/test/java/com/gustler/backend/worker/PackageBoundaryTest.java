@@ -5,17 +5,18 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gustler.backend.config.ClockConfig;
+import com.gustler.backend.diagnostics.WorkerOperationLog;
+import com.gustler.backend.gbis.api.GbisApiCaller;
 import com.tngtech.archunit.core.domain.Dependency;
 import com.tngtech.archunit.core.domain.JavaAccess;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.core.domain.JavaMethodReference;
-import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
-import com.gustler.backend.config.ClockConfig;
-import com.gustler.backend.diagnostics.WorkerOperationLog;
-import com.gustler.backend.gbis.api.GbisApiCaller;
+import com.tngtech.archunit.core.importer.ImportOption.DoNotIncludeTests;
+import com.tngtech.archunit.core.importer.ImportOption.OnlyIncludeTests;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchCondition;
@@ -25,14 +26,14 @@ import com.tngtech.archunit.lang.SimpleConditionEvent;
 import java.util.List;
 import org.springframework.stereotype.Repository;
 
-@AnalyzeClasses(packages = "com.gustler.backend", importOptions = ImportOption.DoNotIncludeTests.class)
+@AnalyzeClasses(packages = "com.gustler.backend", importOptions = DoNotIncludeTests.class)
 class PackageBoundaryTest {
-
     private static final String PREFIX = "com.gustler.backend.";
-    private static final List<String> MODULES = List.of("routecatalog", "observations", "forecasting", "arrivals", "quota", "gbis");
+    private static final List<String> MODULES =
+        List.of("routecatalog", "observations", "forecasting", "arrivals", "quota", "gbis");
 
     @ArchTest
-    static final ArchRule domainUsesOnlyBusinessTypes = noClasses()
+    static final ArchRule DOMAIN_USES_ONLY_BUSINESS_TYPES = noClasses()
         .that().resideInAPackage("..domain..")
         .should().dependOnClassesThat().resideInAnyPackage(
             "org.springframework..", "jakarta.persistence..", "java.sql..", "javax.sql..",
@@ -41,17 +42,17 @@ class PackageBoundaryTest {
             PREFIX + "diagnostics..");
 
     @ArchTest
-    static final ArchRule applicationUsesPersistencePorts = noClasses()
+    static final ArchRule APPLICATION_USES_PERSISTENCE_PORTS = noClasses()
         .that().resideInAPackage("..application..")
         .should().dependOnClassesThat().resideInAPackage("..infrastructure..");
 
     @ArchTest
-    static final ArchRule businessLogicDoesNotUseProviderTypes = noClasses()
+    static final ArchRule BUSINESS_LOGIC_DOES_NOT_USE_PROVIDER_TYPES = noClasses()
         .that().resideInAnyPackage("..application..", "..domain..")
         .should().dependOnClassesThat().resideInAPackage(PREFIX + "gbis..");
 
     @ArchTest
-    static final ArchRule persistenceDoesNotRunPublicUseCases = classes()
+    static final ArchRule PERSISTENCE_DOES_NOT_RUN_PUBLIC_USE_CASES = classes()
         .that().areAnnotatedWith(Repository.class)
         .or().resideInAnyPackage("..infrastructure.jpa..", "..infrastructure.jdbc..")
         .should(new ArchCondition<>("저장 어댑터에서 업무 모듈의 공개 기능을 실행하지 않는다") {
@@ -72,24 +73,28 @@ class PackageBoundaryTest {
         });
 
     @ArchTest
-    static final ArchRule librariesDoNotDependOnExecutableApps = noClasses()
-        .that().resideInAnyPackage(MODULES.stream().map(name -> PREFIX + name + "..").toArray(String[]::new))
+    static final ArchRule LIBRARIES_DO_NOT_DEPEND_ON_EXECUTABLE_APPS = noClasses()
+        .that().resideInAnyPackage(MODULES.stream()
+                .map(name -> PREFIX + name + "..")
+                .toArray(String[]::new))
         .should().dependOnClassesThat().resideInAnyPackage(
             PREFIX + "worker..", PREFIX + "maintenance..", PREFIX + "api..");
 
     @ArchTest
-    static final ArchRule businessModulesHaveNoCycles = slices()
+    static final ArchRule BUSINESS_MODULES_HAVE_NO_CYCLES = slices()
         .matching("com.gustler.backend.(*)..")
         .should().beFreeOfCycles();
 
     @ArchTest
-    static final ArchRule domainConceptsHaveNoCycles = slices()
+    static final ArchRule DOMAIN_CONCEPTS_HAVE_NO_CYCLES = slices()
         .matching("com.gustler.backend.(*).[domain|application].(*)..")
         .should().beFreeOfCycles();
 
     @ArchTest
-    static final ArchRule otherModulesUsePublicContracts = classes()
-        .that().resideInAnyPackage(MODULES.stream().map(name -> PREFIX + name + "..").toArray(String[]::new))
+    static final ArchRule OTHER_MODULES_USE_PUBLIC_CONTRACTS = classes()
+        .that().resideInAnyPackage(MODULES.stream()
+                .map(name -> PREFIX + name + "..")
+                .toArray(String[]::new))
         .should(new ArchCondition<>("다른 업무 모듈의 공개 계약만 사용한다") {
             @Override
             public void check(JavaClass source, ConditionEvents events) {
@@ -100,21 +105,21 @@ class PackageBoundaryTest {
                     if (targetModule == null || targetModule.equals(sourceModule)) {
                         continue;
                     }
-                    boolean publicContract = inPackage(target, PREFIX + targetModule + ".api");
+                    final boolean publicContract = inPackage(target, PREFIX + targetModule + ".api");
                     events.add(new SimpleConditionEvent(dependency, publicContract, dependency.getDescription()));
                 }
             }
         });
 
     @ArchTest
-    static final ArchRule workerRunsOnlyPublicUseCases = noClasses()
+    static final ArchRule WORKER_RUNS_ONLY_PUBLIC_USE_CASES = noClasses()
         .that().resideInAPackage(PREFIX + "worker..")
         .should().dependOnClassesThat().resideInAnyPackage(
             "..domain..", "..application..", "..infrastructure..");
 
     @ArchTest
     static void workerTestsStayInWorkerPackages(JavaClasses ignored) {
-        JavaClasses tests = new ClassFileImporter().withImportOption(new ImportOption.OnlyIncludeTests())
+        JavaClasses tests = new ClassFileImporter().withImportOption(new OnlyIncludeTests())
             .importPackages("com.gustler.backend");
         assertThat(tests.stream().anyMatch(type -> type.getName().equals(PackageBoundaryTest.class.getName())))
             .as("worker 테스트 클래스가 검사 대상에 있어야 한다").isTrue();
@@ -138,18 +143,21 @@ class PackageBoundaryTest {
     @ArchTest
     static void sharedLibrariesHaveNoBusinessOrExecutionDependencies(JavaClasses classes) {
         verifyLibrary(ClockConfig.class, "common", List.of(
-            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "arrivals..", PREFIX + "quota..",
+            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "arrivals..",
+            PREFIX + "quota..",
             PREFIX + "gbis..", PREFIX + "worker..", PREFIX + "maintenance..", PREFIX + "api.."));
         verifyLibrary(GbisApiCaller.class, "gbis-client", List.of(
-            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "arrivals..", PREFIX + "quota..",
+            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "arrivals..",
+            PREFIX + "quota..",
             PREFIX + "worker..", PREFIX + "maintenance..", PREFIX + "api.."));
         verifyLibrary(WorkerOperationLog.class, "operation-log", List.of(
-            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "arrivals..", PREFIX + "quota..",
+            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "arrivals..",
+            PREFIX + "quota..",
             PREFIX + "gbis..", PREFIX + "worker..", PREFIX + "maintenance..", PREFIX + "api.."));
     }
 
     private static void verifyLibrary(Class<?> entry, String name, List<String> forbiddenPackages) {
-        JavaClasses library = new ClassFileImporter().withImportOption(new ImportOption.DoNotIncludeTests())
+        JavaClasses library = new ClassFileImporter().withImportOption(new DoNotIncludeTests())
             .importUrl(entry.getProtectionDomain().getCodeSource().getLocation());
         assertThat(library.stream().anyMatch(type -> type.getName().equals(entry.getName())))
             .as("%s의 실제 실행 클래스가 검사 대상에 있어야 한다", name).isTrue();

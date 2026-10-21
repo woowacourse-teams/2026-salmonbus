@@ -13,7 +13,6 @@ public record RuntimeSnapshot(
     SeatForecastModel model,
     Instant dataUntil
 ) {
-
     public RuntimeSnapshot {
         if (deployment == null) {
             throw new IllegalArgumentException("도는 배포가 있어야 한다");

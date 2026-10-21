@@ -21,10 +21,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class RouteControllerTest {
-
     private RouteQueryService routeQueryService;
     private MockMvc mockMvc;
 
@@ -40,13 +40,13 @@ class RouteControllerTest {
     @Test
     void 지원_노선을_받은_순서_그대로_반환한다() throws Exception {
         // given
-        final Route firstRoute = new Route(
+        Route firstRoute = new Route(
             "204000057",
             "3330",
             "도촌동9단지앞",
             "안양역"
         );
-        final Route secondRoute = new Route(
+        Route secondRoute = new Route(
             "234000050",
             "1650",
             "구리수택차고지",
@@ -57,8 +57,11 @@ class RouteControllerTest {
             new CurrentRoute(secondRoute, RouteStatus.FORECAST_READY)
         )));
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes"))
+        // when
+        ResultActions httpResponse = mockMvc.perform(get("/api/v1/routes"));
+
+        // then
+        httpResponse
             .andExpect(status().isOk())
             .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "max-age=300, public"))
@@ -76,8 +79,11 @@ class RouteControllerTest {
         // given
         given(routeQueryService.getRouteOverview()).willThrow(new ServiceUnavailableException());
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes"))
+        // when
+        ResultActions httpResponse2 = mockMvc.perform(get("/api/v1/routes"));
+
+        // then
+        httpResponse2
             .andExpect(status().isServiceUnavailable())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
             .andExpect(header().doesNotExist(HttpHeaders.RETRY_AFTER))

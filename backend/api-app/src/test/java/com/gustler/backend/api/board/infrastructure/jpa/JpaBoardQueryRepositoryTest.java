@@ -1,6 +1,7 @@
 package com.gustler.backend.api.board.infrastructure.jpa;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
@@ -13,7 +14,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
 
 class JpaBoardQueryRepositoryTest {
-
     private BoardRouteVersionEntityRepository routeVersionRepository;
     private JpaBoardQueryRepository repository;
     private BoardVehicleObservationEntityRepository vehicleObservationRepository;
@@ -36,20 +36,36 @@ class JpaBoardQueryRepositoryTest {
 
     @Test
     void 차량_관측_DB_조회_장애를_예보_없음으로_처리하지_않는다() {
+        // when
         given(vehicleObservationRepository.findAllByBatchIdAndRouteVersionId(100L, 1L))
             .willThrow(new DataAccessResourceFailureException("database unavailable"));
 
-        assertThatThrownBy(() -> repository.findObservedVehicles(100L, 1L))
+        // then
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> repository.findObservedVehicles(100L, 1L));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull()
             .isInstanceOf(ServiceUnavailableException.class);
     }
 
     @Test
     void DB_조회_장애를_서비스_불가_예외로_변환한다() {
+        // when
         RouteId routeId = new RouteId("204000057");
         given(routeVersionRepository.findCurrent(routeId.value()))
             .willThrow(new DataAccessResourceFailureException("database unavailable"));
 
-        assertThatThrownBy(() -> repository.findSnapshot(routeId))
+        // then
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> repository.findSnapshot(routeId));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull()
             .isInstanceOf(ServiceUnavailableException.class)
             .hasMessage("일시적인 서버 장애가 발생했습니다.");
     }

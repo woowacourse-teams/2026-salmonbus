@@ -6,24 +6,29 @@ import com.gustler.backend.forecasting.api.model.LoadConfiguredModel;
 import com.gustler.backend.forecasting.api.quality.GetTripQualityStatus;
 import com.gustler.backend.forecasting.api.quality.PreviewTripQuality;
 import com.gustler.backend.forecasting.api.quality.ProcessTripQualityChunk;
+import com.gustler.backend.maintenance.DatabaseEnvironment.TargetKind;
 import com.gustler.backend.maintenance.configuration.MaintenanceConfiguration;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 
 class MaintenanceConfigurationTest {
-
     @Test
     void 정비_구성은_DB에_접속하지_않고_공개_품질_기능만_준비한다() {
+        // given
         // 연결할 수 없는 주소에서도 기동 구성이 DB 변경이나 모델 적재를 시작하지 않아야 한다.
-        DatabaseEnvironment environment = new DatabaseEnvironment(DatabaseEnvironment.TargetKind.LOCAL,
+
+        // when
+        DatabaseEnvironment environment = new DatabaseEnvironment(TargetKind.LOCAL,
             "jdbc:postgresql://127.0.0.1:1/maintenance-test", "unused", "unused", "test");
-        try (var context = new AnnotationConfigApplicationContext()) {
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
             context.registerBean(DatabaseEnvironment.class, () -> environment);
             context.register(MaintenanceConfiguration.class);
             context.refresh();
 
+            // then
             assertThat(context.getBeansOfType(PreviewTripQuality.class)).hasSize(1);
             assertThat(context.getBeansOfType(ProcessTripQualityChunk.class)).hasSize(1);
             assertThat(context.getBeansOfType(GetTripQualityStatus.class)).hasSize(1);
@@ -37,7 +42,8 @@ class MaintenanceConfigurationTest {
 
     @Test
     void 폐기한_이관_명령은_정비_구성을_시작하기_전에_거절한다() {
-        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+        // when
+        Assertions.assertThatThrownBy(() ->
             MaintenanceApplication.run(CliArguments.parse(new String[] {"archive-import"})))
             .isInstanceOfSatisfying(MaintenanceException.class,
                 error -> assertThat(error.code()).isEqualTo("UNKNOWN_COMMAND"));

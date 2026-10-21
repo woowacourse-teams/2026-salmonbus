@@ -119,6 +119,88 @@ test("자동 갱신 실패 후 다음 요청이 성공하면 새 예측으로 �
   await expect(arrivals.nth(0)).toBeVisible();
 });
 
+test("화면을 켜 둔 채 연결이 돌아오면 다음 폴링을 기다리지 않고 예보와 차량을 다시 불러온다", async ({ page, api }) => {
+  await openBoard(page);
+  const stop = targetStop(page, "UP");
+  await stop.scrollIntoViewIfNeeded();
+  await stop.click();
+
+  const arrivals = targetRow(page, "UP").getByRole("listitem");
+  await expect(arrivals).toHaveText([
+    /3정류장 전\s*시간 정보 없음\s*도착 시 5석 예상해요/,
+    /7정류장 전\s*시간 정보 없음\s*도착 시 2석 예상해요/,
+  ]);
+
+  // 오프라인 요청이 mock까지 와도 실패하도록 응답도 실패로 맞춘다.
+  await page.context().setOffline(true);
+  api.mode.board = "network-error";
+  api.mode.vehicles = "network-error";
+  const failed = (path: string) =>
+    page.waitForEvent("requestfailed", (request) => new URL(request.url()).pathname === path);
+  const pollFailed = Promise.all([failed(apiPaths.board), failed(apiPaths.vehicles)]);
+  await page.clock.fastForward(pollIntervalMs);
+  await pollFailed;
+  await page.clock.runFor(1);
+
+  const stopData = api.data.board.stops.find((stop) => stop.name === targetStopNames.UP);
+  if (stopData === undefined) throw new Error("상행 목표 정류장 fixture가 필요합니다");
+  stopData.approachingVehicles = [
+    {
+      vehicleId: "bus-1",
+      horizonStops: 2,
+      forecast: { status: "AVAILABLE", seatAvailableProbability: 0.9, expectedSeats: 9 },
+    },
+  ];
+  api.mode.board = "success";
+  api.mode.vehicles = "success";
+
+  // 시계가 멈춰 있어서 60초 뒤 예약 요청은 실행될 수 없다. 여기서 오는 응답은 online이 시작한 요청이다.
+  const responded = (path: string) =>
+    page.waitForResponse((response) => new URL(response.url()).pathname === path && response.status() === 200);
+  const refilled = Promise.all([responded(apiPaths.board), responded(apiPaths.vehicles)]);
+  await page.context().setOffline(false);
+  await refilled;
+
+  await expect(arrivals).toHaveText([/2정류장 전\s*시간 정보 없음\s*도착 시 9석 예상해요/]);
+});
+
+test("화면이 숨은 동안에는 연결이 돌아와도 요청하지 않고 다시 보일 때 한 번만 불러온다", async ({ page }) => {
+  await openBoard(page);
+  await setVisibility(page, "hidden");
+  await page.context().setOffline(true);
+
+  // 페이지가 요청을 보내는 순간에 세므로, 화면 복귀 요청이 앞 요청을 취소해도 횟수에 남는다.
+  const issuedRequests = { board: 0, vehicles: 0 };
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path === apiPaths.board) issuedRequests.board += 1;
+    if (path === apiPaths.vehicles) issuedRequests.vehicles += 1;
+  });
+
+  // 리스너를 먼저 붙여 두어야 online 이벤트를 놓치지 않는다. 객체로 감싸 Promise를 기다리지 않고 핸들만 받는다.
+  const onlineListener = await page.evaluateHandle(() => ({
+    delivered: new Promise<void>((resolve) => window.addEventListener("online", () => resolve(), { once: true })),
+  }));
+  await page.context().setOffline(false);
+  await onlineListener.evaluate((listener) => listener.delivered);
+
+  const responded = (path: string) =>
+    page.waitForResponse((response) => new URL(response.url()).pathname === path && response.status() === 200);
+  const reloaded = Promise.all([responded(apiPaths.board), responded(apiPaths.vehicles)]);
+  await setVisibility(page, "visible");
+  await reloaded;
+
+  expect(issuedRequests).toEqual({ board: 1, vehicles: 1 });
+});
+
+// Playwright는 탭 숨김을 직접 지원하지 않아서, 훅이 읽는 값을 덮어쓰고 이벤트를 보낸다.
+async function setVisibility(page: Page, visibility: DocumentVisibilityState) {
+  await page.evaluate((state) => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => state });
+    document.dispatchEvent(new Event("visibilitychange"));
+  }, visibility);
+}
+
 function busMarkerAt(page: Page, stopName: string) {
   return page
     .getByRole("region", { name: "판정보드 정류장 목록", exact: true })

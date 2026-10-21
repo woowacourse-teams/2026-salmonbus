@@ -3,10 +3,13 @@ package com.gustler.backend.forecasting.domain.model;
 import java.util.List;
 import java.util.stream.IntStream;
 
+/**
+ * 좌석 수별 확률을 보관하고 만석 확률과 기대 잔여석을 계산한다.
+ * 분포의 수치 범위와 합계를 검증한다.
+ */
 public record SeatDistribution(
     List<Double> chanceBySeats
 ) {
-
     private static final double PROBABILITY_SUM_TOLERANCE = 1e-9;
     private static final int NO_SEAT_LEFT = 0;
 
@@ -54,7 +57,7 @@ public record SeatDistribution(
             .sum();
         if (Math.abs(sum - 1.0) > PROBABILITY_SUM_TOLERANCE) {
             throw new IllegalArgumentException(
-                "0석부터 차례로 담은 확률을 모두 더하면 1이어야 한다: " + sum
+                    "0석부터 차례로 담은 확률을 모두 더하면 1이어야 한다: " + sum
             );
         }
     }

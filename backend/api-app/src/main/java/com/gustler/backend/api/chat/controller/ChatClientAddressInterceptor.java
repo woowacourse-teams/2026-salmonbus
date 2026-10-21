@@ -9,9 +9,12 @@ import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.HandshakeInterceptor;
 
+/**
+ * WebSocket 연결 전에 사용할 클라이언트 주소를 정해 세션 속성에 전달한다.
+ */
 public final class ChatClientAddressInterceptor implements HandshakeInterceptor {
-
-    public static final String CLIENT_ADDRESS_ATTRIBUTE = ChatClientAddressInterceptor.class.getName() + ".clientAddress";
+    public static final String CLIENT_ADDRESS_ATTRIBUTE = ChatClientAddressInterceptor.class.getName()
+        + ".clientAddress";
     private static final String FORWARDED_FOR = "X-Forwarded-For";
     private static final String UNKNOWN_ADDRESS = "unknown";
 
@@ -40,7 +43,10 @@ public final class ChatClientAddressInterceptor implements HandshakeInterceptor 
             return UNKNOWN_ADDRESS;
         }
         InetAddress address = remoteAddress.getAddress();
-        return address == null ? remoteAddress.getHostString() : address.getHostAddress();
+        if (address == null) {
+            return remoteAddress.getHostString();
+        }
+        return address.getHostAddress();
     }
 
     private String clientAddress(ServerHttpRequest request) {

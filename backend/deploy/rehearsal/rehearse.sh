@@ -680,7 +680,7 @@ else
 fi
 
 sec "10. 훅 로그에 값이 새지 않았는가"
-if grep -rqE 'GBIS_SERVICE_KEY(_[A-Z])?=[^$]|DB_PASSWORD=[^$]' "$WORK"/*.out 2>/dev/null; then
+if grep -rqE 'GBIS_SERVICE_KEY(_[A-Z])?=[^$]|GBIS_KEYS(_[A-Za-z0-9]+)?=[^$]|DB_PASSWORD=[^$]' "$WORK"/*.out 2>/dev/null; then
   bad "훅 출력에 값이 찍혔다"
 else
   ok "훅 출력에 값이 안 찍혔다"

@@ -1,6 +1,7 @@
 package com.gustler.backend.observations.infrastructure.jpa;
 
 import com.gustler.backend.observations.domain.CollectionBatch;
+import com.gustler.backend.observations.domain.CollectionBatch.State;
 import com.gustler.backend.observations.domain.ObservationBatchFailureCode;
 import com.gustler.backend.observations.domain.ObservationBatchOutcome;
 import jakarta.persistence.Column;
@@ -22,7 +23,6 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ObservationBatchJpaEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -79,14 +79,14 @@ public class ObservationBatchJpaEntity {
     }
 
     public CollectionBatch toDomain() {
-        return CollectionBatch.restore(new CollectionBatch.State(id, routeVersionId, scheduledAt,
+        return CollectionBatch.restore(new State(id, routeVersionId, scheduledAt,
             attemptKey, attemptNumber, requestedAt, responseReceivedAt, inputConfirmedAt, outcome,
             failureCode, resultCode, providerRows, storedRows, excludedRows, normalizationVersion,
             collectionStrategyVersion));
     }
 
     public void apply(CollectionBatch batch) {
-        CollectionBatch.State state = batch.state();
+        State state = batch.state();
         routeVersionId = state.routeVersionId();
         scheduledAt = state.scheduledAt();
         attemptKey = state.attemptKey();

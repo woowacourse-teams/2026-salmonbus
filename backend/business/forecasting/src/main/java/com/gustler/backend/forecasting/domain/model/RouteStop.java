@@ -1,5 +1,7 @@
 package com.gustler.backend.forecasting.domain.model;
 
+import java.util.Objects;
+
 /**
  * 한 노선 버전이 지나는 정류장 하나.
  *
@@ -13,15 +15,19 @@ public record RouteStop(
     boolean boardingAllowed,
     RouteDirection direction
 ) {
+    private static final int FIRST_STOP_ORDER = 1;
 
-    public RouteStop(long routeVersionId, int stopOrder, String stopId, boolean boardingAllowed) {
+    public RouteStop(
+        final long routeVersionId,
+        final int stopOrder,
+        String stopId,
+        final boolean boardingAllowed
+    ) {
         this(routeVersionId, stopOrder, stopId, boardingAllowed, RouteDirection.UNKNOWN);
     }
 
-    private static final int FIRST_STOP_ORDER = 1;
-
     public RouteStop {
-        java.util.Objects.requireNonNull(direction, "정류장 방향은 UNKNOWN 또는 실제 방향이어야 한다");
+        Objects.requireNonNull(direction, "정류장 방향은 UNKNOWN 또는 실제 방향이어야 한다");
         if (stopOrder < FIRST_STOP_ORDER) {
             throw new IllegalArgumentException("정류장 순번은 %d번부터다: %d".formatted(FIRST_STOP_ORDER, stopOrder));
         }

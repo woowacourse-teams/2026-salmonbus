@@ -9,8 +9,11 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/**
+ * 현재 공개 노선으로 채팅방 목록을 구성해 짧은 기간 동안 스냅샷으로 보관한다.
+ * 갱신 실패 시 이미 읽은 목록을 사용할 수 있다.
+ */
 public final class ChatRoomCatalog {
-
     private static final Duration REFRESH_INTERVAL = Duration.ofMinutes(5);
     private static final Duration RETRY_INTERVAL = Duration.ofSeconds(30);
 
@@ -58,9 +61,16 @@ public final class ChatRoomCatalog {
 
     private static ChatRoom room(ChatRoute route) {
         List<String> stops = ChatNicknameStops.from(route.stopNames());
-        return new ChatRoom(route.routeId(), route.displayName(), stops.isEmpty() ? List.of(route.displayName()) : stops);
+        return new ChatRoom(route.routeId(), route.displayName(), nicknameStopsOrRouteName(route, stops));
     }
 
     private record Snapshot(Map<String, ChatRoom> rooms, Instant expiresAt) {
+    }
+
+    private static List<String> nicknameStopsOrRouteName(ChatRoute route, List<String> stops) {
+        if (stops.isEmpty()) {
+            return List.of(route.displayName());
+        }
+        return stops;
     }
 }

@@ -1,11 +1,11 @@
 package com.gustler.backend.api.route.controller;
 
-import com.gustler.backend.api.route.RouteId;
-import com.gustler.backend.api.route.application.RouteGeometryQueryService;
-import com.gustler.backend.api.route.dto.RouteGeometryResponse;
 import com.gustler.backend.api.docs.ApiDocsExamples;
 import com.gustler.backend.api.docs.RouteGeometryApiDocsExamples;
 import com.gustler.backend.api.error.ErrorResponse;
+import com.gustler.backend.api.route.RouteId;
+import com.gustler.backend.api.route.application.RouteGeometryQueryService;
+import com.gustler.backend.api.route.dto.RouteGeometryResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -25,13 +25,21 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.WebRequest;
 
+/**
+ * 지도 형상과 방문 판본을 제공하고 ETag를 이용한 재검증 요청을 처리한다.
+ */
 @RestController
 public class RouteGeometryController {
     private static final CacheControl CACHE = CacheControl.maxAge(Duration.ofMinutes(5)).cachePublic().mustRevalidate();
     private final RouteGeometryQueryService service;
 
-    public RouteGeometryController(RouteGeometryQueryService service) { this.service = service; }
+    public RouteGeometryController(RouteGeometryQueryService service) {
+        this.service = service;
+    }
 
+    /**
+     * 요청 판본과 ETag 조건을 적용해 형상을 반환한다. 현재 판본 충돌과 변경 없음 응답을 일반 형상 응답과 구별한다.
+     */
     @GetMapping("/api/v2/routes/{routeId}/geometry")
     @Operation(operationId = "getRouteGeometry", summary = "노선 도로 형상과 정류장 좌표",
         description = """
@@ -55,48 +63,59 @@ public class RouteGeometryController {
             같은 ETag에는 본문 없는 304를 반환합니다. UNAVAILABLE과 오류는 no-store이고, 저장소·저장 형상을 읽을 수 없으면 503입니다.
             조회는 외부 수집을 유발하지 않으며 모델·차량 관측의 준비 상태와 독립적입니다.
             """,
-        parameters = @Parameter(name = "If-None-Match", in = ParameterIn.HEADER, description = "이전 응답의 ETag. 일치하면 본문 없는 304",
+        parameters =
+        @Parameter(name = "If-None-Match", in = ParameterIn.HEADER, description = "이전 응답의 ETag. 일치하면 본문 없는 304",
             schema = @Schema(type = "string")))
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "READY: 형상과 모든 정류장 좌표. PARTIAL: 형상은 있고 일부 point=null. "
             + "UNAVAILABLE/NOT_COLLECTED: 현재 판본 형상 미수집. READY여도 paths=null 가능. 예시는 합성 자료.",
             headers = {
-                @Header(name = "ETag", description = "W/\"g-{geometryRevision}\". UNAVAILABLE에는 제공하지 않음", schema = @Schema(type = "string")),
-                @Header(name = "Cache-Control", description = "READY/PARTIAL은 public, max-age=300, must-revalidate. UNAVAILABLE은 no-store",
+                @Header(name = "ETag", description = "W/\"g-{geometryRevision}\". UNAVAILABLE에는 제공하지 않음",
                     schema = @Schema(type = "string")),
-                @Header(name = "Content-Encoding", description = "gzip 요청을 수락하고 본문이 2KB 이상이면 gzip 압축 가능", schema = @Schema(type = "string"))
+                @Header(name = "Cache-Control",
+                    description = "READY/PARTIAL은 public, max-age=300, must-revalidate. UNAVAILABLE은 no-store",
+                    schema = @Schema(type = "string")),
+                @Header(name = "Content-Encoding", description = "gzip 요청을 수락하고 본문이 2KB 이상이면 gzip 압축 가능",
+                    schema = @Schema(type = "string"))
             },
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = RouteGeometryResponse.class), examples = {
-                @ExampleObject(name = "ready", summary = "READY: 전체 형상·정류장·양방향 경로",
-                    description = "합성 예시. 도로 형상과 정류장 좌표가 모두 있고 회차 분리 근거도 있는 경우입니다.",
-                    value = RouteGeometryApiDocsExamples.READY),
-                @ExampleObject(name = "partial", summary = "PARTIAL: 형상 유지·정류장 좌표 일부 누락",
-                    description = "합성 예시. point=null인 정류장의 마커를 생략하고 전체 points를 표시합니다. 회차 좌표 누락으로 paths=null입니다.",
-                    value = RouteGeometryApiDocsExamples.PARTIAL),
-                @ExampleObject(name = "notCollected", summary = "UNAVAILABLE: 현재 판본 형상 미수집",
-                    description = "합성 예시. points는 빈 배열, paths는 null입니다. 제공된 정류장 좌표로 마커만 표시할 수 있습니다.",
-                    value = RouteGeometryApiDocsExamples.NOT_COLLECTED),
-                @ExampleObject(name = "withoutDirectionSplit", summary = "READY: 전체 형상 제공·방향 분리 근거 없음",
-                    description = "합성 예시. READY가 paths의 존재를 보장하지 않습니다. paths=null이면 전체 points를 표시합니다.",
-                    value = RouteGeometryApiDocsExamples.WITHOUT_DIRECTION_SPLIT)
-            })),
+            content =
+            @Content(mediaType = "application/json", schema = @Schema(implementation = RouteGeometryResponse.class),
+                examples = {
+                    @ExampleObject(name = "ready", summary = "READY: 전체 형상·정류장·양방향 경로",
+                        description = "합성 예시. 도로 형상과 정류장 좌표가 모두 있고 회차 분리 근거도 있는 경우입니다.",
+                        value = RouteGeometryApiDocsExamples.READY),
+                    @ExampleObject(name = "partial", summary = "PARTIAL: 형상 유지·정류장 좌표 일부 누락",
+                        description = "합성 예시. point=null인 정류장의 마커를 생략하고 전체 points를 표시합니다. 회차 좌표 누락으로 paths=null입니다.",
+                        value = RouteGeometryApiDocsExamples.PARTIAL),
+                    @ExampleObject(name = "notCollected", summary = "UNAVAILABLE: 현재 판본 형상 미수집",
+                        description = "합성 예시. points는 빈 배열, paths는 null입니다. 제공된 정류장 좌표로 마커만 표시할 수 있습니다.",
+                        value = RouteGeometryApiDocsExamples.NOT_COLLECTED),
+                    @ExampleObject(name = "withoutDirectionSplit", summary = "READY: 전체 형상 제공·방향 분리 근거 없음",
+                        description = "합성 예시. READY가 paths의 존재를 보장하지 않습니다. paths=null이면 전체 points를 표시합니다.",
+                        value = RouteGeometryApiDocsExamples.WITHOUT_DIRECTION_SPLIT)
+                })),
         @ApiResponse(responseCode = "304", description = "ETag와 같은 지도 자료. 본문 없음", content = @Content,
             headers = {
                 @Header(name = "ETag", description = "재검증한 ETag", schema = @Schema(type = "string")),
-                @Header(name = "Cache-Control", description = "public, max-age=300, must-revalidate", schema = @Schema(type = "string"))
+                @Header(name = "Cache-Control", description = "public, max-age=300, must-revalidate",
+                    schema = @Schema(type = "string"))
             }),
         @ApiResponse(responseCode = "400", description = "노선 ID 또는 판본 형식 오류",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class), examples = {
-                @ExampleObject(name = "invalidRouteId", value = ApiDocsExamples.INVALID_ROUTE),
-                @ExampleObject(name = "invalidRequest", value = ApiDocsExamples.INVALID_REQUEST)
-            })),
+            content =
+            @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
+                examples = {
+                    @ExampleObject(name = "invalidRouteId", value = ApiDocsExamples.INVALID_ROUTE),
+                    @ExampleObject(name = "invalidRequest", value = ApiDocsExamples.INVALID_REQUEST)
+                })),
         @ApiResponse(responseCode = "404", description = "현재 카탈로그에 없는 노선",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
                 examples = @ExampleObject(value = ApiDocsExamples.ROUTE_NOT_FOUND))),
-        @ApiResponse(responseCode = "409", description = "지정한 판본이 현재 판본과 다름. referenceVersionId 없이 geometry를 다시 조회하고 새 방문 순번으로 선택을 갱신",
+        @ApiResponse(responseCode = "409",
+            description = "지정한 판본이 현재 판본과 다름. referenceVersionId 없이 geometry를 다시 조회하고 새 방문 순번으로 선택을 갱신",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
                 examples = @ExampleObject(value = ApiDocsExamples.REFERENCE_VERSION_CONFLICT))),
-        @ApiResponse(responseCode = "503", description = "저장소 또는 저장된 형상 조회 불가. 형상 미수집을 뜻하는 200/UNAVAILABLE과 구분. no-store",
+        @ApiResponse(responseCode = "503",
+            description = "저장소 또는 저장된 형상 조회 불가. 형상 미수집을 뜻하는 200/UNAVAILABLE과 구분. no-store",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
                 examples = @ExampleObject(value = ApiDocsExamples.SERVICE_UNAVAILABLE))),
         @ApiResponse(responseCode = "405", description = "지원하지 않는 HTTP 메서드",
@@ -111,11 +130,18 @@ public class RouteGeometryController {
         @PathVariable String routeId,
         @Parameter(description = "현재 노선 판본. 양의 64비트 정수의 문자열 표현", example = "\"7\"",
             schema = @Schema(implementation = String.class, pattern = "^[1-9][0-9]*$"))
-        @RequestParam(required = false) Long referenceVersionId, WebRequest request) {
-        var response = RouteGeometryResponse.from(service.get(new RouteId(routeId), referenceVersionId));
-        if (response.status().equals("UNAVAILABLE")) return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
+        @RequestParam(required = false) Long referenceVersionId,
+        WebRequest request
+    ) {
+        RouteGeometryResponse response =
+            RouteGeometryResponse.from(service.get(new RouteId(routeId), referenceVersionId));
+        if (response.status().equals("UNAVAILABLE")) {
+            return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
+        }
         String etag = "W/\"g-" + response.geometryRevision() + "\"";
-        if (request.checkNotModified(etag)) return ResponseEntity.status(HttpStatus.NOT_MODIFIED).cacheControl(CACHE).eTag(etag).build();
+        if (request.checkNotModified(etag)) {
+            return ResponseEntity.status(HttpStatus.NOT_MODIFIED).cacheControl(CACHE).eTag(etag).build();
+        }
         return ResponseEntity.ok().cacheControl(CACHE).eTag(etag).body(response);
     }
 }

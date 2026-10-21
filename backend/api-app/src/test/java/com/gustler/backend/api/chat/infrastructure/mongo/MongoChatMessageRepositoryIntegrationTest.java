@@ -3,6 +3,7 @@ package com.gustler.backend.api.chat.infrastructure.mongo;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.api.chat.application.ChatMessageRepository.SaveResult;
+import com.gustler.backend.api.chat.application.ChatMessageRepository.SaveResult.Status;
 import com.gustler.backend.api.chat.domain.ChatMessage;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
@@ -13,6 +14,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.bson.Document;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -23,7 +25,6 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 @Testcontainers
 class MongoChatMessageRepositoryIntegrationTest {
-
     private static final String ROOM = "204000057";
     private static final String OTHER_ROOM = "234000050";
     private static final Instant BASE = Instant.parse("2026-09-29T13:00:00.000Z");
@@ -56,13 +57,14 @@ class MongoChatMessageRepositoryIntegrationTest {
     @Test
     void 새_메시지는_CREATED로_저장한다() {
         // given
-        ChatMessage message = message(1, ROOM, "7c9e6679-7425-40de-944b-e07fc1f90ae7", "author-a", "지금 자리 여유 있어요", BASE);
+        ChatMessage message =
+            message(1, ROOM, "7c9e6679-7425-40de-944b-e07fc1f90ae7", "author-a", "지금 자리 여유 있어요", BASE);
 
         // when
         SaveResult result = repository.save(message);
 
         // then
-        assertThat(result).isEqualTo(new SaveResult(SaveResult.Status.CREATED, message));
+        assertThat(result).isEqualTo(new SaveResult(Status.CREATED, message));
         assertThat(repository.findRecent(ROOM, 50)).containsExactly(message);
     }
 
@@ -78,8 +80,10 @@ class MongoChatMessageRepositoryIntegrationTest {
         SaveResult result = repository.save(retried);
 
         // then
-        assertThat(result).isEqualTo(new SaveResult(SaveResult.Status.DUPLICATE, stored));
-        assertThat(collection.countDocuments()).isEqualTo(1);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(result).isEqualTo(new SaveResult(Status.DUPLICATE, stored));
+            softly.assertThat(collection.countDocuments()).isEqualTo(1);
+        }
     }
 
     @Test
@@ -95,9 +99,11 @@ class MongoChatMessageRepositoryIntegrationTest {
             message(3, ROOM, "7c9e6679-7425-40de-944b-e07fc1f90ae7", "author-b", "처음 내용", BASE.plusSeconds(2)));
 
         // then
-        assertThat(otherBody).isEqualTo(new SaveResult(SaveResult.Status.CONFLICT, stored));
-        assertThat(otherAuthor).isEqualTo(new SaveResult(SaveResult.Status.CONFLICT, stored));
-        assertThat(collection.countDocuments()).isEqualTo(1);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(otherBody).isEqualTo(new SaveResult(Status.CONFLICT, stored));
+            softly.assertThat(otherAuthor).isEqualTo(new SaveResult(Status.CONFLICT, stored));
+            softly.assertThat(collection.countDocuments()).isEqualTo(1);
+        }
     }
 
     @Test
@@ -109,8 +115,10 @@ class MongoChatMessageRepositoryIntegrationTest {
             message(2, OTHER_ROOM, "7c9e6679-7425-40de-944b-e07fc1f90ae7", "author-a", "안녕", BASE));
 
         // then
-        assertThat(first.status()).isEqualTo(SaveResult.Status.CREATED);
-        assertThat(second.status()).isEqualTo(SaveResult.Status.CREATED);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(first.status()).isEqualTo(Status.CREATED);
+            softly.assertThat(second.status()).isEqualTo(Status.CREATED);
+        }
     }
 
     @Test
@@ -118,7 +126,8 @@ class MongoChatMessageRepositoryIntegrationTest {
         // given
         List<ChatMessage> room = new ArrayList<>();
         for (int index = 0; index < 52; index++) {
-            room.add(message(100 + index, ROOM, "room-" + index, "author-a", "메시지 " + index, BASE.plusMillis(index * 10L)));
+            room.add(
+                message(100 + index, ROOM, "room-" + index, "author-a", "메시지 " + index, BASE.plusMillis(index * 10L)));
         }
         Instant tied = BASE.plusSeconds(60);
         for (int index = 0; index < 3; index++) {
@@ -148,7 +157,9 @@ class MongoChatMessageRepositoryIntegrationTest {
     @Test
     void 초기화_스크립트가_두_인덱스를_만들고_TTL_인덱스는_없다() {
         // when
-        Map<String, Document> indexes = collection.listIndexes().into(new ArrayList<>()).stream()
+        Map<String, Document> indexes = collection.listIndexes()
+            .into(new ArrayList<>())
+            .stream()
             .collect(Collectors.toMap(index -> index.getString("name"), index -> index));
 
         // then
@@ -170,16 +181,19 @@ class MongoChatMessageRepositoryIntegrationTest {
         SaveResult saved = repository.save(message(first, "7c9e6679-7425-40de-944b-e07fc1f90ae7"));
 
         // then
-        assertThat(first).matches("[0-9a-f]{24}");
-        assertThat(second).matches("[0-9a-f]{24}").isNotEqualTo(first);
-        assertThat(saved.status()).isEqualTo(SaveResult.Status.CREATED);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(first).matches("[0-9a-f]{24}");
+            softly.assertThat(second).matches("[0-9a-f]{24}").isNotEqualTo(first);
+            softly.assertThat(saved.status()).isEqualTo(Status.CREATED);
+        }
         assertThat(repository.findRecent(ROOM, 50)).extracting(ChatMessage::id).containsExactly(first);
     }
 
     @Test
     void 앱은_인덱스를_만들지_않는다() {
         // given
-        MongoCollection<Document> untouched = client.getDatabase("salmonbus_chat").getCollection("messages_without_init");
+        MongoCollection<Document> untouched = client.getDatabase("salmonbus_chat")
+            .getCollection("messages_without_init");
         untouched.drop();
         MongoChatMessageRepository withoutInit = new MongoChatMessageRepository(untouched);
 
@@ -212,7 +226,7 @@ class MongoChatMessageRepositoryIntegrationTest {
         Instant createdAt
     ) {
         return new ChatMessage(
-            "68db0000000000000000%04x".formatted(sequence),
+                "68db0000000000000000%04x".formatted(sequence),
             roomId,
             clientMessageId,
             authorId,

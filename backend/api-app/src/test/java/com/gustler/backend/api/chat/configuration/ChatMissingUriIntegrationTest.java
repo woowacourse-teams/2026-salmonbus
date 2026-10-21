@@ -27,7 +27,6 @@ import org.springframework.web.context.WebApplicationContext;
 @IntegrationTest
 @TestPropertySource(properties = {"chat.enabled=true", "chat.mongodb-uri="})
 class ChatMissingUriIntegrationTest {
-
     private static final String MISSING_URI_WARNING = "chat.enabled=true 인데 chat.mongodb-uri 가 비어 있다";
 
     private final ApplicationContext context;

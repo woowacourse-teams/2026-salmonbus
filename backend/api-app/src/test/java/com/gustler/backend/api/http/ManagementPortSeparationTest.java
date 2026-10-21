@@ -9,33 +9,34 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalManagementPort;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
 
 /**
- * Actuator 를 다른 포트에 떼도 공개 포트의 오류 응답이 안 바뀌는지 붙잡는다.
+ * Actuator 를 별도 포트로 분리해도 공개 포트의 오류 응답이 바뀌지 않는지 검증한다.
  *
- * <p>배포에서 {@code MANAGEMENT_SERVER_PORT} 로 관리 포트를 뗀다. 그러면 그 포트가 자식
- * 컨텍스트에서 도는데, 우리 오류 처리는 부모 컨텍스트에만 붙는다. <b>공개 포트가 그 분리에
- * 휩쓸리지 않는지를 여기서 고정한다.</b>
+ * <p>배포에서는 {@code MANAGEMENT_SERVER_PORT} 로 관리 포트를 분리한다. 관리 포트는 자식
+ * 컨텍스트에서 실행되지만 서비스 오류 처리는 부모 컨텍스트에만 등록된다. 이 분리가 공개 포트의 오류 응답에
+ * 영향을 주지 않는지 검증한다.
  *
- * <p>관리 포트가 부트 기본 응답을 내는 것도 같이 고정한다. 그것이 <b>지금 정한 범위</b>이고,
- * 누가 자식 컨텍스트에 우리 것을 등록하면 이 테스트가 먼저 알려 준다. 범위를 바꾸기로 하면
- * 이 테스트를 뒤집으면 된다.
+ * <p>관리 포트가 부트 기본 응답을 반환하는 것도 검증한다. 현재 정한 범위이며,
+ * 자식 컨텍스트에 서비스 오류 처리를 등록하면 이 테스트가 실패한다. 범위를 바꾸기로 하면
+ * 이 테스트의 기대 결과도 바꾸면 된다.
  *
  * <p>공개 포트에 있는 Actuator 는 {@code add-additional-paths} 로 연 {@code /livez}·{@code /readyz}
- * 뿐이다. 배포 검증({@code validate.sh})이 8080 이 트래픽 받을 상태인지 {@code /readyz} 로 본다.
- * 나머지 Actuator 가 공개 포트로 새지 않는 것도 같이 고정한다.
+ * 뿐이다. 배포 검증({@code validate.sh})은 8080 이 트래픽을 받을 상태인지 {@code /readyz} 로 확인한다.
+ * 나머지 Actuator 가 공개 포트에 노출되지 않는 것도 검증한다.
  */
 @SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    webEnvironment = WebEnvironment.RANDOM_PORT,
     properties = "management.server.port=0")
 @Import(PostgresTestContainer.class)
 class ManagementPortSeparationTest {
-
     @LocalServerPort
     private int publicPort;
 
@@ -48,9 +49,11 @@ class ManagementPortSeparationTest {
         String actual = send(publicPort, "TRACE /api/v1/routes HTTP/1.1");
 
         // then
-        assertThat(actual).contains("\"code\":\"METHOD_NOT_ALLOWED\"");
-        assertThat(actual).contains("\"requestId\"");
-        assertThat(actual).contains(RequestId.HEADER);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(actual).contains("\"code\":\"METHOD_NOT_ALLOWED\"");
+            softly.assertThat(actual).contains("\"requestId\"");
+            softly.assertThat(actual).contains(RequestId.HEADER);
+        }
     }
 
     @Test
@@ -58,24 +61,31 @@ class ManagementPortSeparationTest {
         // when
         String actual = send(managementPort, "TRACE /actuator/health HTTP/1.1");
 
-        // then api 문서가 정한 것은 /api/v1 아래뿐이라 여기는 부트 기본 응답으로 둔다
-        assertThat(actual).doesNotContain("\"code\":");
-        assertThat(actual).doesNotContain(RequestId.HEADER);
+        // then
+        // api 문서의 범위는 /api/v1 아래뿐이므로 관리 포트는 부트 기본 응답으로 둔다
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(actual).doesNotContain("\"code\":");
+            softly.assertThat(actual).doesNotContain(RequestId.HEADER);
+        }
     }
 
     @Test
     void 두_포트가_서로_다른_포트다() {
+        // then
         assertThat(managementPort).isNotEqualTo(publicPort);
     }
 
     @Test
     void 공개_포트의_readyz_가_UP_이다() throws IOException {
-        // when validate.sh 가 8080 이 트래픽 받을 상태인지 이걸로 본다
+        // when
+        // validate.sh 가 8080 이 트래픽을 받을 상태인지 이 응답으로 확인한다
         String actual = send(publicPort, "GET /readyz HTTP/1.1");
 
         // then
-        assertThat(actual).startsWith("HTTP/1.1 200");
-        assertThat(actual).contains("\"status\":\"UP\"");
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(actual).startsWith("HTTP/1.1 200");
+            softly.assertThat(actual).contains("\"status\":\"UP\"");
+        }
     }
 
     @Test
@@ -83,7 +93,8 @@ class ManagementPortSeparationTest {
         // when
         String actual = send(publicPort, "GET /actuator/health HTTP/1.1");
 
-        // then /livez·/readyz 말고는 관리 포트에만 있다
+        // then
+        // /livez·/readyz 말고는 관리 포트에만 있다
         assertThat(actual).startsWith("HTTP/1.1 404");
     }
 

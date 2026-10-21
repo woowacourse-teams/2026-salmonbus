@@ -12,13 +12,12 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class SeatDistributionInputTest {
-
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void 모델이_지원하는_최소값과_최대값을_입력하면_허용한다(boolean useMaximum) {
+    void 모델이_지원하는_최소값과_최대값을_입력하면_허용한다(final boolean useMaximum) {
         // given
-        int currentSeats = useMaximum ? SeatGrid.LARGEST_SEATS : 0;
-        int capacity = useMaximum ? SeatGrid.LARGEST_SEATS : 1;
+        final int currentSeats = currentSeatsFor(useMaximum);
+        final int capacity = capacityFor(useMaximum);
 
         // when
         Throwable actual = catchThrowable(() -> input(currentSeats, capacity));
@@ -30,10 +29,14 @@ class SeatDistributionInputTest {
     @ParameterizedTest
     @MethodSource("outOfRangeInputs")
     void 좌석_범위를_벗어나면_거부한_입력값과_허용_범위를_예외에_남긴다(
-        int currentSeats, int capacity, String field, int value, int minimum
+        final int currentSeats,
+        final int capacity,
+        String field,
+        final int value,
+        final int minimum
     ) {
         // given
-        int maximum = SeatGrid.LARGEST_SEATS;
+        final int maximum = SeatGrid.LARGEST_SEATS;
 
         // when
         Throwable actual = catchThrowable(() -> input(currentSeats, capacity));
@@ -72,7 +75,7 @@ class SeatDistributionInputTest {
     }
 
     private static Stream<Arguments> outOfRangeInputs() {
-        int maximum = SeatGrid.LARGEST_SEATS;
+        final int maximum = SeatGrid.LARGEST_SEATS;
         return Stream.of(
             Arguments.of(-1, maximum, "currentSeats", -1, 0),
             Arguments.of(maximum + 1, maximum + 1, "currentSeats", maximum + 1, 0),
@@ -82,7 +85,21 @@ class SeatDistributionInputTest {
             Arguments.of(maximum / 2, maximum * 2, "capacity", maximum * 2, 1));
     }
 
-    private SeatDistributionInput input(int currentSeats, int capacity) {
+    private SeatDistributionInput input(final int currentSeats, final int capacity) {
         return new SeatDistributionInput(new double[] {1}, "3330", 1, currentSeats, capacity, null);
+    }
+
+    private static int currentSeatsFor(final boolean useMaximum) {
+        if (useMaximum) {
+            return SeatGrid.LARGEST_SEATS;
+        }
+        return 0;
+    }
+
+    private static int capacityFor(final boolean useMaximum) {
+        if (useMaximum) {
+            return SeatGrid.LARGEST_SEATS;
+        }
+        return 1;
     }
 }

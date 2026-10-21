@@ -10,8 +10,10 @@ import java.util.Map;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
+/**
+ * 현재 노선과 정류장 표시명을 채팅방 카탈로그의 입력으로 읽는다.
+ */
 public class JdbcChatRouteSource implements ChatRouteSource {
-
     private static final String CURRENT_ROUTE_STOPS = """
         SELECT route.source_route_id, route.display_name, stop.name
         FROM route_version version
@@ -36,22 +38,38 @@ public class JdbcChatRouteSource implements ChatRouteSource {
                 String displayName = resultSet.getString("display_name");
                 String stopName = resultSet.getString("name");
                 RouteRows route = routes.computeIfAbsent(routeId, id -> new RouteRows(id, displayName));
-                if (stopName != null) {
-                    route.stopNames().add(stopName);
-                }
+                route.addStopName(stopName);
             });
-            return routes.values().stream()
-                .map(route -> new ChatRoute(route.routeId(), route.displayName(), route.stopNames()))
+            return routes.values()
+                .stream()
+                .map(RouteRows::toRoute)
                 .toList();
         } catch (DataAccessResourceFailureException exception) {
             throw new ServiceUnavailableException();
         }
     }
 
-    private record RouteRows(String routeId, String displayName, List<String> stopNames) {
+    /**
+     * SQL 행의 노선별 누적 상태다. 조회 순서대로 모은 이름은 불변 ChatRoute를 만들 때 복사된다.
+     */
+    private static final class RouteRows {
+        private final String routeId;
+        private final String displayName;
+        private final List<String> stopNames = new ArrayList<>();
 
-        RouteRows(String routeId, String displayName) {
-            this(routeId, displayName, new ArrayList<>());
+        private RouteRows(String routeId, String displayName) {
+            this.routeId = routeId;
+            this.displayName = displayName;
+        }
+
+        private void addStopName(String stopName) {
+            if (stopName != null) {
+                stopNames.add(stopName);
+            }
+        }
+
+        private ChatRoute toRoute() {
+            return new ChatRoute(routeId, displayName, stopNames);
         }
     }
 }

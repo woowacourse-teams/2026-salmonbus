@@ -35,22 +35,25 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.servlet.function.RouterFunction;
+import org.springframework.web.servlet.function.RouterFunctions;
+import org.springframework.web.servlet.function.ServerResponse;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
 import org.springframework.web.socket.server.standard.ServletServerContainerFactoryBean;
-import org.springframework.web.servlet.function.RouterFunction;
-import org.springframework.web.servlet.function.RouterFunctions;
-import org.springframework.web.servlet.function.ServerResponse;
 import tools.jackson.databind.ObjectMapper;
 
+/**
+ * 채팅 저장소·프로토콜·연결 제한·WebSocket 경계를 구성한다.
+ * 채팅의 활성 조건과 공개 API 실행 구성을 함께 적용한다.
+ */
 @Configuration(proxyBeanMethods = false)
 @Conditional(ChatEnabledCondition.class)
 @EnableConfigurationProperties(ChatProperties.class)
 @EnableWebSocket
 @EnableScheduling
 public class ChatConfiguration {
-
     @Bean(destroyMethod = "close")
     MongoClient chatMongoClient(ChatProperties properties) {
         return MongoClients.create(ChatMongoClientSettings.from(properties.getMongodbUri()));
@@ -125,11 +128,15 @@ public class ChatConfiguration {
             parameters = @Parameter(name = "routeId", description = "채팅방의 노선 ID", example = "123456789"),
             responses = {
                 @ApiResponse(responseCode = "200", description = "채팅방을 사용할 수 있음",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ChatRoomResponse.class),
+                    content =
+                    @Content(mediaType = "application/json",
+                        schema = @Schema(implementation = ChatRoomResponse.class),
                         examples = @ExampleObject(value = ApiDocsExamples.CHAT_ROOM))),
                 @ApiResponse(responseCode = "404", description = "채팅이 꺼져 있거나 지원하지 않는 노선")
             }))
-    RouterFunction<ServerResponse> chatAvailabilityRoute(ChatAvailabilityHandler handler) {
+    RouterFunction<ServerResponse> chatAvailabilityRoute(
+        ChatAvailabilityHandler handler
+    ) {
         return RouterFunctions.route()
             .GET("/api/chat/rooms/{routeId}", handler::availability)
             .build();

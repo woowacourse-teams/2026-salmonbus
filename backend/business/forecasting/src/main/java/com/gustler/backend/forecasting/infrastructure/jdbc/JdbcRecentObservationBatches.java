@@ -1,6 +1,8 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.application.evaluation.RecentObservationBatches;
+import com.gustler.backend.forecasting.application.evaluation.RecentObservationBatches.Header;
+import com.gustler.backend.forecasting.application.evaluation.RecentObservationBatches.Row;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -8,14 +10,19 @@ import java.util.List;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
+/**
+ * 관측 배치 헤더와 원천 행을 제한된 개수로 조회해 메모리 전달 누락의 복원 근거를 제공한다.
+ */
 @Repository
 public class JdbcRecentObservationBatches implements RecentObservationBatches {
     private final JdbcClient jdbc;
 
-    public JdbcRecentObservationBatches(JdbcClient jdbc) { this.jdbc = jdbc; }
+    public JdbcRecentObservationBatches(JdbcClient jdbc) {
+        this.jdbc = jdbc;
+    }
 
     @Override
-    public List<Header> headers(long version, Instant after, int limit) {
+    public List<Header> headers(final long version, Instant after, final int limit) {
         return jdbc.sql("""
             SELECT b.id, b.attempt_number, b.response_received_at, COALESCE(b.stored_rows, -1) AS rows,
                    v.turn_sequence
@@ -30,8 +37,10 @@ public class JdbcRecentObservationBatches implements RecentObservationBatches {
     }
 
     @Override
-    public List<Row> restore(long version, List<Long> batches, int limit) {
-        if (batches.isEmpty()) return List.of();
+    public List<Row> restore(final long version, List<Long> batches, final int limit) {
+        if (batches.isEmpty()) {
+            return List.of();
+        }
         return jdbc.sql("""
             SELECT o.observation_batch_id, o.id, o.vehicle_id, o.route_version_id, o.passed_stop_order,
                    b.response_received_at, o.remaining_seats, o.crowd_level,
@@ -45,5 +54,4 @@ public class JdbcRecentObservationBatches implements RecentObservationBatches {
             .query((rs, n) -> new Row(rs.getLong("observation_batch_id"),
                 JdbcArrivalObservationQuery.candidate(rs))).list();
     }
-
 }

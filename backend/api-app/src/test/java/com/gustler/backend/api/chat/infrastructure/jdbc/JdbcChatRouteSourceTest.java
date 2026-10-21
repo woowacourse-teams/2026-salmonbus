@@ -14,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 @IntegrationTest
 @Transactional
 class JdbcChatRouteSourceTest {
-
     private static final OffsetDateTime FIRST_VERSION_AT = OffsetDateTime.parse("2026-08-01T00:00:00+09:00");
     private static final OffsetDateTime SECOND_VERSION_AT = OffsetDateTime.parse("2026-08-20T00:00:00+09:00");
 
@@ -43,7 +42,7 @@ class JdbcChatRouteSourceTest {
         );
     }
 
-    private long insertRoute(final String sourceRouteId, final String displayName) {
+    private long insertRoute(String sourceRouteId, String displayName) {
         return jdbcClient.sql("""
                 INSERT INTO route (
                     public_route_id, source_id, source_route_id,
@@ -58,9 +57,9 @@ class JdbcChatRouteSourceTest {
 
     private long insertVersion(
         final long routeId,
-        final String contentDigest,
-        final OffsetDateTime validFrom,
-        final OffsetDateTime validTo
+        String contentDigest,
+        OffsetDateTime validFrom,
+        OffsetDateTime validTo
     ) {
         return jdbcClient.sql("""
                 INSERT INTO route_version (route_id, content_digest, valid_from, valid_to)
@@ -72,7 +71,7 @@ class JdbcChatRouteSourceTest {
             .single();
     }
 
-    private void insertStop(final long routeVersionId, final int stopOrder, final String name) {
+    private void insertStop(final long routeVersionId, final int stopOrder, String name) {
         jdbcClient.sql("""
                 INSERT INTO route_stop (
                     route_version_id, stop_order, stop_id,

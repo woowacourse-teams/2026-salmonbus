@@ -1,7 +1,7 @@
 package com.gustler.backend.api.chat.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.gustler.backend.api.chat.configuration.ChatTestRoutesConfiguration;
 import com.gustler.backend.support.PostgresTestContainer;
@@ -12,10 +12,13 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpResponse.BodyHandlers;
 import java.time.Duration;
 import java.util.concurrent.ExecutionException;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.annotation.DirtiesContext;
@@ -23,11 +26,10 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.socket.CloseStatus;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @Import({PostgresTestContainer.class, ChatTestRoutesConfiguration.class})
 @DirtiesContext
 class ChatMongoUnavailableIntegrationTest {
-
     private static final int CLOSED_PORT = closedPort();
     private static final String SESSION_START = """
         {"v":1,"type":"session.start","clientSessionId":"0f8fad5b-d9cb-469f-a165-70867728950e"}
@@ -52,11 +54,13 @@ class ChatMongoUnavailableIntegrationTest {
         HttpResponse<String> availability = get("/api/chat/rooms/204000057");
 
         // then
-        assertThat(readyz.statusCode()).isEqualTo(200);
-        assertThat(readyz.body()).contains("\"status\":\"UP\"");
-        assertThat(health.statusCode()).isEqualTo(200);
-        assertThat(health.body()).contains("\"status\":\"UP\"");
-        assertThat(availability.statusCode()).isEqualTo(200);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(readyz.statusCode()).isEqualTo(200);
+            softly.assertThat(readyz.body()).contains("\"status\":\"UP\"");
+            softly.assertThat(health.statusCode()).isEqualTo(200);
+            softly.assertThat(health.body()).contains("\"status\":\"UP\"");
+            softly.assertThat(availability.statusCode()).isEqualTo(200);
+        }
         assertThat(availability.headers().firstValue("Cache-Control")).hasValue("no-store");
         assertThat(ChatContractExamples.parse(availability.body())).isEqualTo(ChatContractExamples.availability());
     }
@@ -76,14 +80,23 @@ class ChatMongoUnavailableIntegrationTest {
 
         // then
         assertThat(ChatContractExamples.parse(ready).get("type").stringValue()).isEqualTo("session.ready");
-        assertThat(error).isEqualTo(ChatContractExamples.compact(ChatContractExamples.serverFrame("error.unavailable")));
-        assertThat(elapsedMillis).isLessThan(3_000L);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(error).isEqualTo(
+                ChatContractExamples.compact(ChatContractExamples.serverFrame("error.unavailable")));
+            softly.assertThat(elapsedMillis).isLessThan(3_000L);
+        }
         assertThat(closeStatus.getCode()).isEqualTo(1011);
     }
 
     @Test
     void 허용하지_않은_Origin은_핸드셰이크를_거절한다() {
-        assertThatThrownBy(() -> ChatTestClient.connect(port, "204000057", "http://localhost:3000"))
+        // when
+        Throwable caughtFailure = catchThrowable(
+            () -> ChatTestClient.connect(port, "204000057", "http://localhost:3000"));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(ExecutionException.class)
             .rootCause()
             .hasMessageContaining("[403]");
@@ -111,9 +124,12 @@ class ChatMongoUnavailableIntegrationTest {
         CloseStatus closeStatus = client.closeStatus(Duration.ofSeconds(5));
 
         // then
-        assertThat(error).isEqualTo(ChatContractExamples.compact(ChatContractExamples.serverFrame("error.helloRequired")));
-        assertThat(elapsedMillis).isGreaterThanOrEqualTo(4_000L);
-        assertThat(closeStatus).isEqualTo(CloseStatus.POLICY_VIOLATION.withReason("HELLO_REQUIRED"));
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(error).isEqualTo(
+                ChatContractExamples.compact(ChatContractExamples.serverFrame("error.helloRequired")));
+            softly.assertThat(elapsedMillis).isGreaterThanOrEqualTo(4_000L);
+            softly.assertThat(closeStatus).isEqualTo(CloseStatus.POLICY_VIOLATION.withReason("HELLO_REQUIRED"));
+        }
     }
 
     private HttpResponse<String> get(String path) throws IOException, InterruptedException {
@@ -121,7 +137,7 @@ class ChatMongoUnavailableIntegrationTest {
             .timeout(Duration.ofSeconds(5))
             .GET()
             .build();
-        return http.send(request, HttpResponse.BodyHandlers.ofString());
+        return http.send(request, BodyHandlers.ofString());
     }
 
     private static int closedPort() {

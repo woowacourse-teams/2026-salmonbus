@@ -6,10 +6,9 @@ import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 public class BoardDatabaseFixture {
-
     private static final String NORMALIZATION_VERSION = "normalization-v1.0.0";
     private static final String COLLECTION_STRATEGY_VERSION = "adaptive-kst-v1.0.1";
-    /** 지나온 정류소 순번이 stop_order 와 같아지는 상태다. 이 픽스처는 차량 위치만 쓰고 상태는 안 본다. */
+    /** 지나온 정류소 순번이 stop_order와 같아지는 상태다. 이 픽스처는 차량 위치만 검증하고 상태는 보지 않는다. */
     private static final int RUNNING_STATE_DEPARTED = 2;
     /** 잔여석은 아는 값이거나 모르는 사유 둘 중 하나만 있어야 한다. 이 픽스처는 좌석을 안 본다. */
     private static final String NOT_REPORTED = "NOT_REPORTED";
@@ -117,6 +116,23 @@ public class BoardDatabaseFixture {
         return new RouteContext(route.routeId(), routeVersionId, route.sourceRouteId());
     }
 
+    public void updateHeadway(
+        RouteContext route,
+        String day,
+        Integer minMinutes,
+        Integer maxMinutes
+    ) {
+        jdbcClient.sql("""
+                UPDATE route_version
+                SET %1$s_min_headway_minutes = :minMinutes, %1$s_max_headway_minutes = :maxMinutes
+                WHERE id = :routeVersionId
+                """.formatted(day))
+            .param("minMinutes", minMinutes)
+            .param("maxMinutes", maxMinutes)
+            .param("routeVersionId", route.routeVersionId())
+            .update();
+    }
+
     public void insertStop(
         RouteContext route,
         final int sequence,
@@ -170,7 +186,7 @@ public class BoardDatabaseFixture {
             .param("activatedAt", trainedThrough)
             .param(
                 "retiredAt",
-                "RETIRED".equals(state) ? trainedThrough.plusSeconds(1) : null
+                retiredAt(state, trainedThrough)
             )
             .query(Long.class)
             .single();
@@ -243,9 +259,10 @@ public class BoardDatabaseFixture {
     }
 
     /**
-     * observedAt 은 더 이상 저장되지 않는다. vehicle_observation.observed_at 이 지워졌고
-     * 관측 시각은 묶음의 response_received_at 이 권위다. 이 클래스를 쓰는 테스트가 두 곳에
-     * 같은 값을 넘기고 있어 뜻은 그대로다. 파라미터를 지우려면 호출부까지 손봐야 해서 남겨뒀다.
+     * observedAt은 더 이상 저장되지 않는다. vehicle_observation.observed_at이 삭제되어
+     * 관측 시각은 묶음의 response_received_at을 기준으로 한다. 이 클래스를 쓰는 테스트는
+     * 두 곳에 같은 값을 전달하므로 의미는 유지된다. 파라미터를 제거하려면 호출부도
+     * 수정해야 하므로 남겨 두었다.
      */
     public long insertObservation(
         RouteContext route,
@@ -256,28 +273,46 @@ public class BoardDatabaseFixture {
         String stopId,
         OffsetDateTime observedAt
     ) {
+        return insertObservation(route, batchId, sourceRowNumber, vehicleId, stopOrder, stopId,
+            stopOrder, RUNNING_STATE_DEPARTED, null, NOT_REPORTED);
+    }
+
+    public long insertObservation(
+        RouteContext route,
+        final long batchId,
+        final int sourceRowNumber,
+        String vehicleId,
+        final int stopOrder,
+        String stopId,
+        final int passedStopOrder,
+        final int runningState,
+        Integer remainingSeats,
+        String seatUnknownReason
+    ) {
         return ConfirmedTripFixture.include(jdbcClient, jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
                     observation_batch_id, route_version_id, source_row_number,
                     vehicle_id, stop_order, stop_id,
-                    passed_stop_order, running_state, seat_unknown_reason
+                    passed_stop_order, running_state, remaining_seats, seat_unknown_reason
                 ) VALUES (
                     :batchId, :routeVersionId, :sourceRowNumber,
                     :vehicleId, :stopOrder, :stopId,
-                    :stopOrder, :runningState, :seatUnknownReason
+                    :passedStopOrder, :runningState, :remainingSeats, :seatUnknownReason
                 )
                 RETURNING id
                 """)
-            .param("batchId", batchId)
-            .param("routeVersionId", route.routeVersionId())
-            .param("sourceRowNumber", sourceRowNumber)
-            .param("vehicleId", vehicleId)
-            .param("stopOrder", stopOrder)
-            .param("stopId", stopId)
-            .param("runningState", RUNNING_STATE_DEPARTED)
-            .param("seatUnknownReason", NOT_REPORTED)
-            .query(Long.class)
-            .single());
+                .param("batchId", batchId)
+                .param("routeVersionId", route.routeVersionId())
+                .param("sourceRowNumber", sourceRowNumber)
+                .param("vehicleId", vehicleId)
+                .param("stopOrder", stopOrder)
+                .param("stopId", stopId)
+                .param("passedStopOrder", passedStopOrder)
+                .param("runningState", runningState)
+                .param("remainingSeats", remainingSeats)
+                .param("seatUnknownReason", seatUnknownReason)
+                .query(Long.class)
+                .single());
     }
 
     public void insertForecast(
@@ -336,7 +371,8 @@ public class BoardDatabaseFixture {
             .param("targetStopOrder", targetStopOrder)
             .param("routeVersionId", route.routeVersionId())
             .update();
-        jdbcClient.sql("UPDATE forecast_publication SET prediction_count = prediction_count + 1 WHERE id = :publicationId")
+        jdbcClient.sql(
+        "UPDATE forecast_publication SET prediction_count = prediction_count + 1 WHERE id = :publicationId")
             .param("publicationId", publicationId)
             .update();
     }
@@ -346,5 +382,12 @@ public class BoardDatabaseFixture {
         long routeVersionId,
         String sourceRouteId
     ) {
+    }
+
+    private static OffsetDateTime retiredAt(String state, OffsetDateTime trainedThrough) {
+        if ("RETIRED".equals(state)) {
+            return trainedThrough.plusSeconds(1);
+        }
+        return null;
     }
 }

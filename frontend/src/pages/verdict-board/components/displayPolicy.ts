@@ -1,5 +1,5 @@
 import type { ApiFailure } from "@/shared/api/client";
-import type { Board, Direction, DirectionInfo, StopState } from "@/shared/api/routeForecast.types";
+import type { Board, Direction, DirectionInfo, LiveVehicles, StopState } from "@/shared/api/routeForecast.types";
 import {
   arrivalViewsFor,
   representativeArrival,
@@ -16,7 +16,7 @@ export type BoardScreen =
   | { kind: "outOfService"; board: Board }
   | { kind: "error"; failure: ApiFailure };
 
-type ServicePhase = "before" | "running" | "ended" | "undetermined";
+type ServicePhase = "withinTimetable" | "outsideTimetable" | "undetermined";
 
 interface StopViewBase {
   sequence: number;
@@ -51,18 +51,21 @@ export interface DirectionView {
 const KST_LOCAL_TIME = /T(\d{2}):(\d{2})[^Z]*\+09:00$/;
 const CLOCK_TIME = /^(\d{1,2}):(\d{2})$/;
 
-export function serviceStateFor(board: Board, directionInfo: DirectionInfo): ServiceState {
-  switch (servicePhaseOf(directionInfo, board.observedAt)) {
-    case "before":
-    case "ended":
-      return "outOfService";
-    // 실제 운영 시간이라고 하더라도 운행 중인 차량이 하나도 없으면 예측 화면을 보여주지 않는다.
-    // 관측한 값일 뿐 계산된 판정이 아니라서, 실제 운영 중 시간대에서만 이 값을 보여준다.
-    // 시간표를 못 읽어 판정하지 못한 경우도 예보가 틀린 건 아니므로 판정화면을 보여주되 같은 기준으로 판단한다.
-    case "running":
-    case "undetermined":
-      return board.vehiclesInService > 0 ? "running" : "outOfService";
+export function serviceStateFor(
+  board: Board,
+  directionInfo: DirectionInfo,
+  pairedLiveVehicles: LiveVehicles | null,
+): ServiceState {
+  // 시간표의 막차 시각은 기점 출발 시각이라 그 뒤에도 막차는 종점까지 달린다.
+  if (servicePhaseOf(directionInfo, board.observedAt) === "outsideTimetable" && pairedLiveVehicles !== null) {
+    return pairedLiveVehicles.vehicles.some((vehicle) => vehicle.direction === directionInfo.id)
+      ? "running"
+      : "outOfService";
   }
+  // 실제 운영 시간이라고 하더라도 운행 중인 차량이 하나도 없으면 예측 화면을 보여주지 않는다.
+  // 관측한 값일 뿐 계산된 판정이 아니라서, 실제 운영 중 시간대에서만 이 값을 보여준다.
+  // 시간표를 못 읽었거나 차량 응답의 짝이 아직 없어 판정하지 못한 경우도 예보가 틀린 건 아니므로 판정화면을 보여주되 같은 기준으로 판단한다.
+  return board.vehiclesInService > 0 ? "running" : "outOfService";
 }
 
 export function directionInfoFor(board: Board, preferred: Direction | null): DirectionInfo {
@@ -124,10 +127,9 @@ function servicePhaseOf(directionInfo: DirectionInfo, observedAt: string): Servi
   if (observed === null || first === null || last === null) return "undetermined";
 
   if (first > last) {
-    return observed > last && observed < first ? "ended" : "running";
+    return observed >= first || observed <= last ? "withinTimetable" : "outsideTimetable";
   }
-  if (observed < first) return "before";
-  return observed > last ? "ended" : "running";
+  return first <= observed && observed <= last ? "withinTimetable" : "outsideTimetable";
 }
 
 function minutesOf(parsed: RegExpExecArray | null): number | null {

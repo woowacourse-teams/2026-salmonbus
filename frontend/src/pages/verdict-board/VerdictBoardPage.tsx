@@ -38,7 +38,7 @@ import * as styles from "./VerdictBoardPage.css";
 type BoardState =
   | { status: "loading" }
   | { status: "error"; failure: ApiFailure }
-  | { status: "ready"; board: Board; direction: DirectionInfo };
+  | { status: "ready"; board: Board; pairedLiveVehicles: LiveVehicles | null; direction: DirectionInfo };
 
 interface OperatingBoardProps {
   board: Board;
@@ -96,8 +96,9 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
   const status = screen.kind === "outOfService" ? "outOfService" : screen.kind === "error" ? "error" : "loading";
   const runningDirection =
     status === "outOfService" && state.status === "ready"
-      ? (state.board.route.directions.find((candidate) => serviceStateFor(state.board, candidate) === "running") ??
-        null)
+      ? (state.board.route.directions.find(
+          (candidate) => serviceStateFor(state.board, candidate, state.pairedLiveVehicles) === "running",
+        ) ?? null)
       : null;
   return (
     <main className={styles.noticePage}>
@@ -326,7 +327,12 @@ function boardStateOf(
 ): BoardState {
   if (snapshot !== null) {
     const board = snapshot.board.body;
-    return { status: "ready", board, direction: directionInfoFor(board, preferredDirection) };
+    return {
+      status: "ready",
+      board,
+      pairedLiveVehicles: snapshot.liveVehicles?.body ?? null,
+      direction: directionInfoFor(board, preferredDirection),
+    };
   }
   if (resource.status === "loadingError") {
     return { status: "error", failure: resource.failure };
@@ -341,7 +347,7 @@ function boardScreenOf(state: BoardState): BoardScreen {
     case "error":
       return { kind: "error", failure: state.failure };
     case "ready":
-      return serviceStateFor(state.board, state.direction) === "outOfService"
+      return serviceStateFor(state.board, state.direction, state.pairedLiveVehicles) === "outOfService"
         ? { kind: "outOfService", board: state.board }
         : { kind: "forecast", board: state.board, direction: state.direction.id };
   }

@@ -10,4 +10,4 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 docker run --rm \
   -v "$HERE":/rehearse:ro \
   -v "$HERE/..":/deploy:ro \
-  amazonlinux:2023 bash -c 'bash /rehearse/rehearse.sh && bash /rehearse/test-evaluation-work-transition.sh'
+  amazonlinux:2023 bash -c 'bash /rehearse/rehearse.sh && bash /rehearse/test-evaluation-work-transition.sh && bash /deploy/rehearsal/test-verify-revision.sh'

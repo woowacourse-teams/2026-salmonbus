@@ -26,7 +26,26 @@ for jar in "${jars[@]}"; do
   for yml in $(unzip -Z1 "$jar" | grep -E '^BOOT-INF/classes/application.*\.(ya?ml|properties)$' || true); do
     # 줄마다 본다. 파일 전체로 보면 같은 열이 다른 줄에서 자리표시자를 쓰는 것만으로 통과한다
     offending="$(unzip -p "$jar" "$yml" \
-      | grep -E '^[[:space:]]*(url|username|password|service-key(-[a-z])?)[[:space:]]*:' \
+      | awk '
+          # Swagger 문서의 고정 상대 경로만 허용한다. 다른 위치의 url은 계속 검사한다.
+          /^[[:space:]]*[A-Za-z0-9_-]+[[:space:]]*:/ {
+            line = $0
+            match(line, /[^[:space:]]/); indent = RSTART - 1
+            while (depth > 0 && levels[depth] >= indent) depth--
+            key = line
+            sub(/^[[:space:]]*/, "", key); sub(/[[:space:]]*:.*/, "", key)
+            path = ""
+            for (i = 1; i <= depth; i++) path = path keys[i] "."
+            path = path key
+            value = line
+            sub(/^[^:]*:[[:space:]]*/, "", value); sub(/[[:space:]]*$/, "", value)
+            if (path == "springdoc.swagger-ui.url" && value == "/api/docs/openapi") next
+            if (path ~ /^gbis\.(keys|named-keys)(\.|$)/ && value != "") { print "gbis-keys: " value; next }
+            depth++; levels[depth] = indent; keys[depth] = key
+          }
+          { print }
+        ' \
+      | grep -E '^[[:space:]]*(url|username|password|service-key(-[a-z])?|gbis-keys)[[:space:]]*:' \
       | grep -v '\${' || true)"
     if [ -n "$offending" ]; then
       keys="$(printf '%s\n' "$offending" \

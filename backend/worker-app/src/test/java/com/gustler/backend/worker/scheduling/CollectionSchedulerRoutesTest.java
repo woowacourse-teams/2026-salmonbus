@@ -1,19 +1,19 @@
 package com.gustler.backend.worker.scheduling;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
+
 import com.gustler.backend.gbis.api.GbisKey;
+import com.gustler.backend.gbis.api.GbisLocationResult.Success;
 import com.gustler.backend.gbis.api.GbisLocationSource;
+import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
+import com.gustler.backend.routecatalog.domain.RouteHeadways;
+import com.gustler.backend.routecatalog.domain.RouteSource;
+import com.gustler.backend.routecatalog.domain.RouteSourceResult;
 import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.UpstreamRoute;
 import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
-import com.gustler.backend.routecatalog.domain.RouteSourceResult;
-import com.gustler.backend.routecatalog.domain.RouteSource;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.BDDMockito.given;
-
-import com.gustler.backend.gbis.api.GbisLocationResult.Success;
-import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
 import com.gustler.backend.support.PostgresTestContainer;
 import com.gustler.backend.worker.configuration.CollectionRuntimeConfiguration;
 import java.util.List;
@@ -27,15 +27,15 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
- * 설정에 적은 노선으로 한 바퀴 도는 것을 본다.
+ * 설정에 적은 노선을 한 차례 수집하는지 확인한다.
  *
- * <p>주기 작업은 꺼둔 채로 스케줄러 메서드를 직접 부른다. 켜두면 뒤에서 첫 판이 도는 것과
- * 이 테스트가 겹쳐 무엇이 쌓은 행인지 흐려진다. 스케줄이 걸리는지는 ScheduledCollectionTest 가 본다.
+ * <p>주기 작업을 끄고 스케줄러 메서드를 직접 호출한다. 주기 작업을 켜면 최초 수집과
+ * 이 테스트가 겹쳐 어느 쪽이 행을 저장했는지 구분하기 어렵다.
+ * 스케줄 등록은 ScheduledCollectionTest 에서 확인한다.
  */
 @SpringBootTest(properties = "collection.route-ids[0]=204000057")
 @Import({PostgresTestContainer.class, CollectionRuntimeConfiguration.class})
 class CollectionSchedulerRoutesTest {
-
     private static final String ROUTE_3330 = "204000057";
     private static final String STOP_205000217 = "205000217";
     private static final String STOP_277103149 = "277103149";
@@ -98,11 +98,11 @@ class CollectionSchedulerRoutesTest {
                 new UpstreamRouteStop(1, STOP_205000217, "범계역"),
                 new UpstreamRouteStop(2, STOP_277103149, "안양대교(경유)"),
                 new UpstreamRouteStop(3, STOP_208000069, "안양역"))),
-            new RouteTimetable("05:00", "22:35", "05:00", "23:55"));
+            new RouteTimetable("05:00", "22:35", "05:00", "23:55", RouteHeadways.none()));
     }
 
     private int countOf(
-        final String sql
+        String sql
     ) {
         return jdbcClient.sql(sql).query(Integer.class).single();
     }
