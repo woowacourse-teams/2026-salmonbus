@@ -164,12 +164,18 @@ test("화면을 켜 둔 채 연결이 돌아오면 다음 폴링을 기다리지
   await expect(arrivals).toHaveText([/2정류장 전\s*시간 정보 없음\s*도착 시 9석 예상해요/]);
 });
 
-test("화면이 숨은 동안에는 연결이 돌아와도 요청하지 않고 다시 보일 때 한 번만 불러온다", async ({ page, api }) => {
+test("화면이 숨은 동안에는 연결이 돌아와도 요청하지 않고 다시 보일 때 한 번만 불러온다", async ({ page }) => {
   await openBoard(page);
   await setVisibility(page, "hidden");
   await page.context().setOffline(true);
-  const boardRequestsBeforeOnline = api.requests.board;
-  const vehicleRequestsBeforeOnline = api.requests.vehicles;
+
+  // 페이지가 요청을 보내는 순간에 세므로, 화면 복귀 요청이 앞 요청을 취소해도 횟수에 남는다.
+  const issuedRequests = { board: 0, vehicles: 0 };
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path === apiPaths.board) issuedRequests.board += 1;
+    if (path === apiPaths.vehicles) issuedRequests.vehicles += 1;
+  });
 
   // 리스너를 먼저 붙여 두어야 online 이벤트를 놓치지 않는다. 객체로 감싸 Promise를 기다리지 않고 핸들만 받는다.
   const onlineListener = await page.evaluateHandle(() => ({
@@ -178,16 +184,13 @@ test("화면이 숨은 동안에는 연결이 돌아와도 요청하지 않고 �
   await page.context().setOffline(false);
   await onlineListener.evaluate((listener) => listener.delivered);
 
-  // online에서 요청했다면 화면 복귀 요청보다 먼저 mock에 도착해 1이 아니라 2가 늘어난다.
-  // 복귀 요청이 online 요청을 mock에 닿기 전에 취소하면 1만 늘어 버그가 있어도 통과한다. online 전달을 기다린 뒤 복귀해서 이 틈을 좁힌다.
   const responded = (path: string) =>
     page.waitForResponse((response) => new URL(response.url()).pathname === path && response.status() === 200);
   const reloaded = Promise.all([responded(apiPaths.board), responded(apiPaths.vehicles)]);
   await setVisibility(page, "visible");
   await reloaded;
 
-  expect(api.requests.board).toBe(boardRequestsBeforeOnline + 1);
-  expect(api.requests.vehicles).toBe(vehicleRequestsBeforeOnline + 1);
+  expect(issuedRequests).toEqual({ board: 1, vehicles: 1 });
 });
 
 // Playwright는 탭 숨김을 직접 지원하지 않아서, 훅이 읽는 값을 덮어쓰고 이벤트를 보낸다.
