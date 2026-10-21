@@ -248,9 +248,7 @@ class RouteVersionLoaderTest {
         "saturday_min_headway_minutes = 0, saturday_max_headway_minutes = 10",
         "sunday_min_headway_minutes = 10, sunday_max_headway_minutes = 1441",
     "holiday_min_headway_minutes = 10"})
-    void 저장소는_영분_역전_하루_초과_한쪽만_있는_배차간격을_거부한다(
-        String assignment
-    ) {
+    void 저장소는_영분_역전_하루_초과_한쪽만_있는_배차간격을_거부한다(String assignment) {
         // given
         final long versionId = loader.load(routeId, threeStops(), TIMETABLE_1650, FIRST_READ_AT);
         entityManager.flush();
@@ -294,9 +292,7 @@ class RouteVersionLoaderTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"2026-08-19T11:14:04.911+09:00", "2026-08-12T11:14:04.911+09:00"})
-    void 새_판본은_직전_판본이_시작한_뒤의_시각에만_연다(
-        String readAt
-    ) {
+    void 새_판본은_직전_판본이_시작한_뒤의_시각에만_연다(String readAt) {
         // given
         loader.load(routeId, threeStops(), TIMETABLE_1650, FIRST_READ_AT);
 

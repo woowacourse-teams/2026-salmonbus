@@ -319,9 +319,7 @@ class EvaluateForecastsServiceTest {
         }
     }
 
-    private void givenArrivals(
-        ArrivalCandidate... candidates
-    ) {
+    private void givenArrivals(ArrivalCandidate... candidates) {
         when(arrivalObservationQuery.findAfter(anyLong(), anyString(), any(), anyInt()))
             .thenReturn(List.of(candidates));
     }

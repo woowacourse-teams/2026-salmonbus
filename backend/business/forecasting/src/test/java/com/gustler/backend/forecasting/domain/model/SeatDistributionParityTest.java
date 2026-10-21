@@ -28,9 +28,7 @@ class SeatDistributionParityTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("대조_사례")
-    void 좌석_71칸의_확률이_파이썬_정본과_같다(
-        ReferenceParityCase given
-    ) {
+    void 좌석_71칸의_확률이_파이썬_정본과_같다(ReferenceParityCase given) {
         // when
         double[] actual = given.seatChances();
 
@@ -40,9 +38,7 @@ class SeatDistributionParityTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("대조_사례")
-    void 중심_좌석이_파이썬_정본과_같다(
-        ReferenceParityCase given
-    ) {
+    void 중심_좌석이_파이썬_정본과_같다(ReferenceParityCase given) {
         // when
         final int actual = new SeatAnchor(given.anchorIntercept(), given.anchorSlope())
             .seatsOf(given.upstreamSeats(), given.capacity());

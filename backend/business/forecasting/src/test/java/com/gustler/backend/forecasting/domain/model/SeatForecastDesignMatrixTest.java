@@ -223,9 +223,7 @@ class SeatForecastDesignMatrixTest {
 
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 3, 4})
-    void 혼잡도_1등급부터_4등급까지_그_등급의_열만_1이다(
-        final int crowdLevel
-    ) {
+    void 혼잡도_1등급부터_4등급까지_그_등급의_열만_1이다(final int crowdLevel) {
         // when
         SeatForecastDesignMatrix actual = matrixOf(
             inputOf(observed(SEATS_LEFT_12, crowdLevel, MORNING_AT), fullStatistics()));

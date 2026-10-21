@@ -318,9 +318,7 @@ class BundleLoaderTest {
     @ValueSource(strings = {
         "234000050", "204000057", "204000070", "234000886", "233000392", "227000038", "228000184", "234000051"
     })
-    void 여덟_노선_묶음을_올리면_모든_수집_노선이_예보_범위_안이다(
-        String sourceRouteId
-    ) {
+    void 여덟_노선_묶음을_올리면_모든_수집_노선이_예보_범위_안이다(String sourceRouteId) {
         // when
         final boolean actual = DummyBundle.withRoutes(EIGHT_ROUTES).loadAt(directory).scope()
             .coversSourceRoute(sourceRouteId);

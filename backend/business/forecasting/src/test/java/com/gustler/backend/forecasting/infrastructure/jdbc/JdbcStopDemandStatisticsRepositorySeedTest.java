@@ -237,9 +237,7 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
         return seedImportId;
     }
 
-    private void insertSeedHourlyTotal(
-        UUID seedImportId
-    ) {
+    private void insertSeedHourlyTotal(UUID seedImportId) {
         jdbcClient.sql("""
                 INSERT INTO stop_demand_seed_hourly_total (
                     seed_import_id, route_version_id, stop_order, arrival_date_kst,
@@ -339,9 +337,7 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
             .single();
     }
 
-    private void insertRouteStop(
-        final int stopOrder
-    ) {
+    private void insertRouteStop(final int stopOrder) {
         jdbcClient.sql("""
                 INSERT INTO route_stop (
                     route_version_id, stop_order, stop_id, name, direction, boarding_allowed

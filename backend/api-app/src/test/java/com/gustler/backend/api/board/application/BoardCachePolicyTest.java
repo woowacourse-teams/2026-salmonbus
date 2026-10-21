@@ -20,9 +20,7 @@ class BoardCachePolicyTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"07:00:00", "08:59:59", "17:00:00", "22:59:59"})
-    void 오전_7시부터_8시와_오후_5시부터_10시는_15초를_캐시한다(
-        String time
-    ) {
+    void 오전_7시부터_8시와_오후_5시부터_10시는_15초를_캐시한다(String time) {
         // when
         Duration maxAge = maxAgeAt(time);
 
@@ -32,9 +30,7 @@ class BoardCachePolicyTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"01:00:00", "03:59:59"})
-    void 오전_1시부터_3시는_600초를_캐시한다(
-        String time
-    ) {
+    void 오전_1시부터_3시는_600초를_캐시한다(String time) {
         // when
         Duration maxAge = maxAgeAt(time);
 
@@ -51,9 +47,7 @@ class BoardCachePolicyTest {
         "16:59:59",
         "23:00:00"
     })
-    void 그_밖의_시간은_20초를_캐시한다(
-        String time
-    ) {
+    void 그_밖의_시간은_20초를_캐시한다(String time) {
         // when
         Duration maxAge = maxAgeAt(time);
 

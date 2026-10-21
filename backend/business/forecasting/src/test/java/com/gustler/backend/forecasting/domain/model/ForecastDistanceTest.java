@@ -32,9 +32,7 @@ class ForecastDistanceTest {
 
     @ParameterizedTest
     @ValueSource(ints = {1, 12})
-    void 다음_정류장부터_12정류장_앞까지_예보한다(
-        final int stopCount
-    ) {
+    void 다음_정류장부터_12정류장_앞까지_예보한다(final int stopCount) {
         // when
         Throwable caughtFailure = catchThrowable(() -> new ForecastDistance(stopCount));
 

@@ -380,9 +380,7 @@ class DemandSampleRecordingTest {
             .single();
     }
 
-    private void insertRouteStop(
-        final int stopOrder
-    ) {
+    private void insertRouteStop(final int stopOrder) {
         jdbcClient.sql("""
                 INSERT INTO route_stop (
                     route_version_id, stop_order, stop_id, name, direction, boarding_allowed

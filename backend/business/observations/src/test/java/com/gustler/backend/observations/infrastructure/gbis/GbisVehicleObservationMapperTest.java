@@ -59,9 +59,7 @@ class GbisVehicleObservationMapperTest {
 
     @ParameterizedTest
     @ValueSource(ints = {-1, -2, -99})
-    void 잔여석이_음수인_차량은_모른다고_알려준_것으로_판단한다(
-        final int remainingSeatCount
-    ) {
+    void 잔여석이_음수인_차량은_모른다고_알려준_것으로_판단한다(final int remainingSeatCount) {
         // given
         BusLocation bus = busWithSeats(remainingSeatCount);
 
@@ -88,9 +86,7 @@ class GbisVehicleObservationMapperTest {
 
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 3, 4})
-    void 혼잡도가_1에서_4까지면_그대로_쓴다(
-        final int crowdLevel
-    ) {
+    void 혼잡도가_1에서_4까지면_그대로_쓴다(final int crowdLevel) {
         // given
         BusLocation bus = busWithCrowdLevel(crowdLevel);
 
@@ -104,9 +100,7 @@ class GbisVehicleObservationMapperTest {
     @ParameterizedTest
     @NullSource
     @ValueSource(ints = {0, 5, -1})
-    void 혼잡도가_1에서_4가_아니면_모르는_것으로_판단한다(
-        Integer crowdLevel
-    ) {
+    void 혼잡도가_1에서_4가_아니면_모르는_것으로_판단한다(Integer crowdLevel) {
         // given
         BusLocation bus = busWithCrowdLevel(crowdLevel);
 
@@ -268,9 +262,7 @@ class GbisVehicleObservationMapperTest {
 
     @ParameterizedTest
     @ValueSource(ints = {0, 1, 2})
-    void 운행_상태_0과_1과_2는_뜻을_아는_값이다(
-        final int runningState
-    ) {
+    void 운행_상태_0과_1과_2는_뜻을_아는_값이다(final int runningState) {
         // given
         BusLocation bus = busAt(STOP_SEQUENCE_6, runningState);
 

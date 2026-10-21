@@ -479,9 +479,7 @@ class ObservationBatchLedgerTest {
         return jdbcClient.sql("SELECT count(*) FROM daily_call_quota").query(Integer.class).single();
     }
 
-    private void useUpQuotaOn(
-        LocalDate kstDate
-    ) {
+    private void useUpQuotaOn(LocalDate kstDate) {
         jdbcClient.sql("""
                 INSERT INTO daily_call_quota (provider, api_service, kst_date, reserved_calls, daily_limit)
                 VALUES (?, ?, ?, ?, ?)

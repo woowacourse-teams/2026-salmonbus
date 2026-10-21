@@ -117,9 +117,7 @@ class RouteStopsTest {
 
     @ParameterizedTest
     @ValueSource(ints = {0, 999})
-    void 회차_순번은_경유하는_정류소_중_하나의_순번이다(
-        final int turnSequence
-    ) {
+    void 회차_순번은_경유하는_정류소_중_하나의_순번이다(final int turnSequence) {
         // when
         Throwable actual = catchThrowable(() -> RouteStops.from(turnSequence, eightyFiveUpstreamStops()));
 

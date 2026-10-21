@@ -75,9 +75,7 @@ class VehicleStopTargetTest {
     @ParameterizedTest
     @NullSource
     @ValueSource(ints = {-1})
-    void 잔여석을_아는_차량만_예보한다(
-        Integer unknownSeats
-    ) {
+    void 잔여석을_아는_차량만_예보한다(Integer unknownSeats) {
         // given
         ObservedVehicle seatsUnknown = observed(44, unknownSeats);
 

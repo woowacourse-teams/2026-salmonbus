@@ -132,16 +132,12 @@ class RefreshDemandStatisticsServiceTest {
         assertThat(captured().dataUntil()).isEqualTo(COMPUTED_AT);
     }
 
-    private void givenHourlyTotals(
-        StopDemandHourlyTotals... hourlyTotals
-    ) {
+    private void givenHourlyTotals(StopDemandHourlyTotals... hourlyTotals) {
         when(stopDemandStatisticsRepository.readHourlyTotals(anyLong(), any()))
             .thenReturn(List.of(hourlyTotals));
     }
 
-    private void givenCurrentRevision(
-        final int revision
-    ) {
+    private void givenCurrentRevision(final int revision) {
         when(stopDemandStatisticsRepository.currentRevision(anyLong(), anyString())).thenReturn(revision);
     }
 

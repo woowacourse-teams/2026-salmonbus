@@ -160,9 +160,7 @@ class VehicleObservationTableTest {
 
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 3, 4})
-    void 혼잡도_1부터_4는_그대로_저장된다(
-        final int crowdLevel
-    ) {
+    void 혼잡도_1부터_4는_그대로_저장된다(final int crowdLevel) {
         // when
         insertObservationWithCrowdLevel(crowdLevel);
 
@@ -172,9 +170,7 @@ class VehicleObservationTableTest {
 
     @ParameterizedTest
     @ValueSource(ints = {0, 5})
-    void 혼잡도는_1부터_4까지만_저장된다(
-        final int crowdLevel
-    ) {
+    void 혼잡도는_1부터_4까지만_저장된다(final int crowdLevel) {
         // when
         Throwable caughtFailure = catchThrowable(() -> insertObservationWithCrowdLevel(crowdLevel));
 
@@ -186,9 +182,7 @@ class VehicleObservationTableTest {
 
     @ParameterizedTest
     @ValueSource(ints = {0, 1, 2})
-    void 운행_상태_0과_1과_2는_그대로_저장된다(
-        final int runningState
-    ) {
+    void 운행_상태_0과_1과_2는_그대로_저장된다(final int runningState) {
         // when
         insertObservationWithRunningState(runningState);
 
@@ -199,9 +193,7 @@ class VehicleObservationTableTest {
     @ParameterizedTest
     @NullSource
     @ValueSource(ints = {3, -1})
-    void 운행_상태는_0과_1과_2만_저장된다(
-        Integer runningState
-    ) {
+    void 운행_상태는_0과_1과_2만_저장된다(Integer runningState) {
         // when
         Throwable caughtFailure = catchThrowable(() -> insertObservationWithRunningState(runningState));
 
@@ -272,9 +264,7 @@ class VehicleObservationTableTest {
             .single();
     }
 
-    private void insertRouteStop(
-        final long versionId
-    ) {
+    private void insertRouteStop(final long versionId) {
         jdbcClient.sql("""
                 INSERT INTO route_stop (
                     route_version_id, stop_order, stop_id, name, direction, boarding_allowed
@@ -324,17 +314,13 @@ class VehicleObservationTableTest {
             RUNNING_STATE_DEPARTED, remainingSeats, seatUnknownReason, CROWD_LEVEL_3);
     }
 
-    private void insertObservationWithCrowdLevel(
-        Integer crowdLevel
-    ) {
+    private void insertObservationWithCrowdLevel(Integer crowdLevel) {
         insertObservation(
             batchId, VEHICLE_204003542, 0,
             RUNNING_STATE_DEPARTED, SEATS_43, null, crowdLevel);
     }
 
-    private void insertObservationWithRunningState(
-        Integer runningState
-    ) {
+    private void insertObservationWithRunningState(Integer runningState) {
         insertObservation(
             batchId, VEHICLE_204003542, 0,
             runningState, SEATS_43, null, CROWD_LEVEL_3);
@@ -380,9 +366,7 @@ class VehicleObservationTableTest {
             .update();
     }
 
-    private void insertObservationWithPassedStopOrder(
-        final int passedStopOrder
-    ) {
+    private void insertObservationWithPassedStopOrder(final int passedStopOrder) {
         jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
                     observation_batch_id, route_version_id, source_row_number,

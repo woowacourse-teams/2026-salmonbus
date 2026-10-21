@@ -55,9 +55,7 @@ class ArrivalQuotaPolicyTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"E", "e-1", "__total__", "abcdefghijklmnopq"})
-    void 장부에_쓸_수_없는_별칭은_막는다(
-        String alias
-    ) {
+    void 장부에_쓸_수_없는_별칭은_막는다(String alias) {
         // when
         Throwable caughtFailure = catchThrowable(
             () -> new ArrivalQuotaPolicy(TOTAL, Map.of("a", KEY_LIMIT, alias, KEY_LIMIT)));

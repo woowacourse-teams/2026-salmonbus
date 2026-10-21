@@ -484,9 +484,7 @@ class RuntimeProcessSeparationTest {
         }
     }
 
-    private static void destroy(
-        Process process
-    ) {
+    private static void destroy(Process process) {
         if (process != null && process.isAlive()) {
             process.destroyForcibly();
         }

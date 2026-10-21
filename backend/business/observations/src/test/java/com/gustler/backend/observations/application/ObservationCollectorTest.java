@@ -508,9 +508,7 @@ class ObservationCollectorTest {
             .toList();
     }
 
-    private void useUpQuotaOf(
-        CallQuota quota
-    ) {
+    private void useUpQuotaOf(CallQuota quota) {
         jdbcClient.sql("""
                 INSERT INTO daily_call_quota (provider, api_service, kst_date, reserved_calls, daily_limit)
                 VALUES (?, ?, ?, ?, ?)

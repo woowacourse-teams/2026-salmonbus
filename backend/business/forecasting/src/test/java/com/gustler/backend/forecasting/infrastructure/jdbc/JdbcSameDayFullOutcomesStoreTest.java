@@ -634,9 +634,7 @@ class JdbcSameDayFullOutcomesStoreTest {
         return laterVersionId;
     }
 
-    private void insertRouteStops(
-        final long versionId
-    ) {
+    private void insertRouteStops(final long versionId) {
         for (final int stopOrder : List.of(PASSED_STOP_ORDER, TARGET_STOP_ORDER)) {
             jdbcClient.sql("""
                     INSERT INTO route_stop (

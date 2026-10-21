@@ -352,31 +352,23 @@ class GbisLocationSourceTest {
         assertThat(actual).isInstanceOf(DailyQuotaExceeded.class);
     }
 
-    private void respondWithJson(
-        String body
-    ) {
+    private void respondWithJson(String body) {
         openApi.expect(requestTo(containsString(ROUTE_3330)))
             .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
     }
 
-    private void respondWithXml(
-        String body
-    ) {
+    private void respondWithXml(String body) {
         openApi.expect(requestTo(containsString(ROUTE_3330)))
             .andRespond(withSuccess(body, MediaType.APPLICATION_XML));
     }
 
-    private void respondWithPortalError(
-        String reasonCode
-    ) {
+    private void respondWithPortalError(String reasonCode) {
         openApi.expect(requestTo(containsString(ROUTE_3330)))
             .andRespond(withSuccess(
                 PORTAL_ERROR_XML.formatted(reasonCode), MediaType.APPLICATION_XML));
     }
 
-    private void respondWithPortalErrorAsJson(
-        String reasonCode
-    ) {
+    private void respondWithPortalErrorAsJson(String reasonCode) {
         openApi.expect(requestTo(containsString(ROUTE_3330)))
             .andRespond(withSuccess(
                 PORTAL_ERROR_JSON.formatted(reasonCode), MediaType.APPLICATION_JSON));

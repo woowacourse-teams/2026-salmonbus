@@ -16,9 +16,7 @@ class ObservedVehicleTest {
 
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 3, 4})
-    void 혼잡도는_1등급부터_4등급까지다(
-        final int crowdLevel
-    ) {
+    void 혼잡도는_1등급부터_4등급까지다(final int crowdLevel) {
         // when
         ObservedVehicle actual = observedWith(crowdLevel);
 

@@ -110,9 +110,7 @@ public final class DummyBundle {
         return LoadedBundle.from(writeTo(directory));
     }
 
-    private void fillTensors(
-        final int featureCount
-    ) {
+    private void fillTensors(final int featureCount) {
         Random values = new Random(20260901L);
         for (BundleTensor tensor : BundleTensor.values()) {
             int[] shape = tensor.shapeOf(routes.size(), HORIZON_COUNT, featureCount);
@@ -133,9 +131,7 @@ public final class DummyBundle {
         return filled;
     }
 
-    private void fillManifest(
-        final int featureCount
-    ) {
+    private void fillManifest(final int featureCount) {
         manifest.put("bundleSchemaVersion", BUNDLE_SCHEMA_VERSION);
         manifest.put("modelVersion", MODEL_VERSION);
         manifest.put("featureContractVersion", FEATURE_CONTRACT_VERSION);

@@ -46,9 +46,7 @@ class GbisLocationSourceTimeoutTest {
     private GbisLocationSource source;
 
     @DynamicPropertySource
-    static void pointAtSlowOpenApi(
-        DynamicPropertyRegistry registry
-    ) {
+    static void pointAtSlowOpenApi(DynamicPropertyRegistry registry) {
         registry.add("gbis.base-url",
             () -> "http://localhost:" + SLOW_OPEN_API.getAddress().getPort());
         registry.add("spring.http.clients.read-timeout", READ_TIMEOUT::toString);

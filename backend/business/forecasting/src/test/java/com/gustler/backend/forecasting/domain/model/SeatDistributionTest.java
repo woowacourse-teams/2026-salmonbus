@@ -33,9 +33,7 @@ class SeatDistributionTest {
 
     @ParameterizedTest
     @ValueSource(doubles = {-0.1, 1.5, Double.NaN, Double.POSITIVE_INFINITY})
-    void 좌석_수별_확률은_0과_1_사이의_수다(
-        final double notChance
-    ) {
+    void 좌석_수별_확률은_0과_1_사이의_수다(final double notChance) {
         // when
         Throwable caughtFailure = catchThrowable(() -> new SeatDistribution(List.of(notChance, 1.0 - notChance)));
 

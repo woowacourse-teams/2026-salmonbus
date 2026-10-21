@@ -111,9 +111,7 @@ class ApiExceptionHandlerTest {
 
     @ParameterizedTest
     @MethodSource("databaseUnavailableExceptions")
-    void DB_트랜잭션을_시작하거나_종료하지_못하면_서비스_불가로_응답한다(
-        RuntimeException exception
-    ) {
+    void DB_트랜잭션을_시작하거나_종료하지_못하면_서비스_불가로_응답한다(RuntimeException exception) {
         // when
         ResponseEntity<ErrorResponse> actual =
             handler.handleDatabaseUnavailable(exception);

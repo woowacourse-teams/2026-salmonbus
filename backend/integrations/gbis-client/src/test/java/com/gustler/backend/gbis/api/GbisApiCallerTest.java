@@ -31,9 +31,7 @@ class GbisApiCallerTest {
     private MockRestServiceServer openApi;
     private GbisApiCaller caller;
 
-    private void bind(
-        String serviceKey
-    ) {
+    private void bind(String serviceKey) {
         Builder builder = RestClient.builder().baseUrl(BASE_URL);
         openApi = MockRestServiceServer.bindTo(builder).build();
         caller = new GbisApiCaller(

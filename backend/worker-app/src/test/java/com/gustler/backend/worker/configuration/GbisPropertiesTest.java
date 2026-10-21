@@ -76,9 +76,7 @@ class GbisPropertiesTest {
     @ParameterizedTest
     @NullSource
     @ValueSource(strings = {"", "   "})
-    void 인증키가_없거나_비었거나_공백뿐이면_기동을_막는다(
-        String serviceKey
-    ) {
+    void 인증키가_없거나_비었거나_공백뿐이면_기동을_막는다(String serviceKey) {
         // when
         Throwable caughtFailure = catchThrowable(() -> new GbisProperties(BASE_URL, serviceKey, DAILY_LIMIT));
 
@@ -90,9 +88,7 @@ class GbisPropertiesTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"", "   "})
-    void 인증키가_비었거나_공백뿐이면_애플리케이션_컨텍스트가_뜨지_않는다(
-        String serviceKey
-    ) {
+    void 인증키가_비었거나_공백뿐이면_애플리케이션_컨텍스트가_뜨지_않는다(String serviceKey) {
         // when
         contextRunner()
             .withPropertyValues(
@@ -237,9 +233,7 @@ class GbisPropertiesTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"gbis.service-key-b", "gbis.service-key-c", "gbis.service-key-d"})
-    void 환경변수가_없으면_추가_슬롯은_빈_값으로_풀린다(
-        String property
-    ) {
+    void 환경변수가_없으면_추가_슬롯은_빈_값으로_풀린다(String property) {
         // when
         String resolved = propertyWithoutEnvironmentVariable(property);
 
@@ -407,9 +401,7 @@ class GbisPropertiesTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"", "   "})
-    void 새_형식의_값이_비었으면_기동을_막는다(
-        String serviceKey
-    ) {
+    void 새_형식의_값이_비었으면_기동을_막는다(String serviceKey) {
         // when
         Throwable caughtFailure = catchThrowable(() -> keysOnly(Map.of("a", "fake-key-a", "e", serviceKey)));
 
@@ -422,9 +414,7 @@ class GbisPropertiesTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"E", "e-1", "e_1", "e.1", "abcdefghijklmnopq"})
-    void 별칭이_소문자와_숫자_16자_규칙에_맞지_않으면_기동을_막는다(
-        String alias
-    ) {
+    void 별칭이_소문자와_숫자_16자_규칙에_맞지_않으면_기동을_막는다(String alias) {
         // when
         Throwable caughtFailure = catchThrowable(() -> keysOnly(Map.of("a", "fake-key-a", alias, "fake-key-x")));
 
@@ -560,9 +550,7 @@ class GbisPropertiesTest {
 
     @ParameterizedTest
     @ValueSource(ints = {0, -1})
-    void 키별_한도가_1보다_작으면_기동을_막는다(
-        final int limit
-    ) {
+    void 키별_한도가_1보다_작으면_기동을_막는다(final int limit) {
         // when
         Throwable caughtFailure = catchThrowable(() -> new GbisProperties(BASE_URL, ORIGINAL_KEY, null, null, null,
             Map.of("e", "fake-key-e"), DAILY_LIMIT, Map.of("e", limit)));

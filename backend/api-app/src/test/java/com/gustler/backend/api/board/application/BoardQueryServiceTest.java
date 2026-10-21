@@ -246,9 +246,7 @@ class BoardQueryServiceTest {
 
     @ParameterizedTest
     @ValueSource(doubles = {-0.1, 1.1, Double.NaN, Double.POSITIVE_INFINITY})
-    void 만석_확률이_범위_밖이거나_비유한값이면_차량을_유지하고_예보만_미제공한다(
-        final double invalidSeatFullChance
-    ) {
+    void 만석_확률이_범위_밖이거나_비유한값이면_차량을_유지하고_예보만_미제공한다(final double invalidSeatFullChance) {
         // when
         givenRoundTripBoard(List.of(
             prediction(3, "INVALID", 1, 1, invalidSeatFullChance, 10.0),
@@ -555,9 +553,7 @@ class BoardQueryServiceTest {
         );
     }
 
-    private void givenRoundTripBoard(
-        List<StoredPrediction> predictions
-    ) {
+    private void givenRoundTripBoard(List<StoredPrediction> predictions) {
         given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(roundTripSnapshot()));
         given(repository.findStops(1L)).willReturn(roundTripStops());
         given(repository.findPredictions(100L)).willReturn(predictions);

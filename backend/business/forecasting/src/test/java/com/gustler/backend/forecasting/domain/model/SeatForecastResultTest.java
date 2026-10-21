@@ -46,9 +46,7 @@ class SeatForecastResultTest {
 
     @ParameterizedTest
     @ValueSource(doubles = {-0.1, 1.5, Double.NaN, Double.POSITIVE_INFINITY})
-    void 보정_전_만석_확률은_0과_1_사이의_수다(
-        final double notChance
-    ) {
+    void 보정_전_만석_확률은_0과_1_사이의_수다(final double notChance) {
         // when
         Throwable caughtFailure = catchThrowable(() -> new SeatForecastResult(seatDistribution(), notChance));
 

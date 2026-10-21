@@ -98,9 +98,7 @@ class SeatDistributionPredictorTest {
 
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 44, 69, 70})
-    void 정원이_1석이든_70석이든_좌석_분포가_나온다(
-        final int capacity
-    ) {
+    void 정원이_1석이든_70석이든_좌석_분포가_나온다(final int capacity) {
         // when
         SeatForecastResult actual = predictor().predict(input(Math.min(20, capacity), capacity, null));
 

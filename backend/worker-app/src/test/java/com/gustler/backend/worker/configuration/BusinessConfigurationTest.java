@@ -113,9 +113,7 @@ class BusinessConfigurationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"0s", "-1h"})
-    void 예보를_꺼도_통계_주기가_양수가_아니면_기동을_멈춘다(
-        String interval
-    ) {
+    void 예보를_꺼도_통계_주기가_양수가_아니면_기동을_멈춘다(String interval) {
         // when
         Throwable caughtFailure = catchThrowable(() -> new BusinessConfiguration().demandStatisticsPolicy(interval));
 
