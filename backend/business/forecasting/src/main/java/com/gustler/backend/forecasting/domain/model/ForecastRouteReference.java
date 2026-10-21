@@ -10,9 +10,19 @@ import java.util.stream.Collectors;
 public final class ForecastRouteReference {
     public record Stop(int order, String id, boolean boardingAllowed, RouteDirection direction) {
         public Stop {
-            if (order < 1 || id == null || id.isBlank() || direction == null || direction == RouteDirection.UNKNOWN) {
+            if (!isValid(order, id, direction)) {
                 throw new IllegalArgumentException("학습 정류장에는 순번·ID·UP/DOWN이 필요하다");
             }
+        }
+
+        private static boolean isValid(int order, String id, RouteDirection direction) {
+            if (order < 1 || id == null) {
+                return false;
+            }
+            if (id.isBlank() || direction == null) {
+                return false;
+            }
+            return direction != RouteDirection.UNKNOWN;
         }
     }
 
@@ -52,14 +62,25 @@ public final class ForecastRouteReference {
         for (int index = 0; index < expected.size(); index++) {
             Stop trained = expected.get(index);
             RouteStop current = actual.stops().get(index);
-            if (trained.order() != current.stopOrder() || !trained.id().equals(current.stopId())
-                || trained.boardingAllowed() != current.boardingAllowed()
-                || trained.direction() != current.direction()) {
+            if (!matches(trained, current)) {
                 return false;
             }
         }
         checked.put(actual.routeVersionId(), actual);
         return true;
+    }
+
+    private boolean matches(Stop trained, RouteStop current) {
+        if (trained.order() != current.stopOrder()) {
+            return false;
+        }
+        if (!trained.id().equals(current.stopId())) {
+            return false;
+        }
+        if (trained.boardingAllowed() != current.boardingAllowed()) {
+            return false;
+        }
+        return trained.direction() == current.direction();
     }
 
     public void requireMatches(RouteStops actual) {

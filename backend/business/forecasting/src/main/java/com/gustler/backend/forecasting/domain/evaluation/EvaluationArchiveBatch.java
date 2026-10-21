@@ -13,12 +13,19 @@ public record EvaluationArchiveBatch(UUID id, long routeVersionId, long qualityR
         Objects.requireNonNull(leaseToken);
         Objects.requireNonNull(leaseUntil);
         Objects.requireNonNull(state);
-        if (routeVersionId <= 0 || qualityRevision <= 0 || rowCount < 1 || rowCount > 1000) {
+        if (!hasValidRange(routeVersionId, qualityRevision, rowCount)) {
             throw new IllegalArgumentException("이관 묶음의 노선·품질 판본·건수가 올바르지 않다");
         }
         if (!hasMatchingManifest(state, manifestSha256)) {
             throw new IllegalArgumentException("검증 상태와 파일 검증값이 일치하지 않는다");
         }
+    }
+
+    private static boolean hasValidRange(long routeVersionId, long qualityRevision, int rowCount) {
+        if (routeVersionId <= 0 || qualityRevision <= 0) {
+            return false;
+        }
+        return rowCount >= 1 && rowCount <= 1000;
     }
 
     public enum State {

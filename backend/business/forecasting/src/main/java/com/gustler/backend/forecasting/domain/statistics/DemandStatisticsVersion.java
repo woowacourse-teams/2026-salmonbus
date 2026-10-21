@@ -46,10 +46,11 @@ public record DemandStatisticsVersion(
 
         Set<MeasurementKey> keys = new HashSet<>();
         for (StopDemandMeasurement measurement : measurements) {
-            if (measurement == null || measurement.timeSlot() == null || measurement.cell() == null) {
+            if (!hasRequiredMeasurementValues(measurement)) {
                 throw new IllegalArgumentException("집계 결과에는 시간대와 정류장 통계가 필요하다");
             }
-            MeasurementKey key = new MeasurementKey(measurement.timeSlot(), measurement.cell().stopOrder());
+            StopDemandCell cell = measurement.cell();
+            MeasurementKey key = new MeasurementKey(measurement.timeSlot(), cell.stopOrder());
             if (!keys.add(key)) {
                 throw new IllegalArgumentException(
                     "같은 시간대의 정류장 통계가 중복되었다: %s, %d".formatted(key.timeSlot(), key.stopOrder())
@@ -57,6 +58,13 @@ public record DemandStatisticsVersion(
             }
         }
         measurements = List.copyOf(measurements);
+    }
+
+    private static boolean hasRequiredMeasurementValues(StopDemandMeasurement measurement) {
+        if (measurement == null || measurement.timeSlot() == null) {
+            return false;
+        }
+        return measurement.cell() != null;
     }
 
     private record MeasurementKey(TimeSlot timeSlot, int stopOrder) {

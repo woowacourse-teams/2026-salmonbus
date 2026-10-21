@@ -25,9 +25,13 @@ public final class OneWayTripClassifier {
     public record Route(int firstStop, int lastStop, Integer turnStop, Duration maximumGap) {
         public Route {
             maximumGap = Objects.requireNonNullElse(maximumGap, DEFAULT_MAXIMUM_GAP);
-            if (firstStop >= lastStop || maximumGap.isZero() || maximumGap.isNegative()) {
+            if (firstStop >= lastStop || isInvalidMaximumGap(maximumGap)) {
                 throw new IllegalArgumentException("정류장 범위와 관측 연결 간격을 확인해야 한다");
             }
+        }
+
+        private static boolean isInvalidMaximumGap(Duration maximumGap) {
+            return maximumGap.isZero() || maximumGap.isNegative();
         }
     }
     public record Start(int stopOrder, Integer runningState) {
@@ -157,10 +161,16 @@ public final class OneWayTripClassifier {
             && !Integer.valueOf(2).equals(state)) {
             return 1;
         }
-        if (stopOrder > route.turnStop()
-            || (stopOrder == route.turnStop() && Integer.valueOf(2).equals(state))) {
+        if (isInboundAtTurnStop(route, stopOrder, state)) {
             return 1;
         }
         return 0;
+    }
+
+    private static boolean isInboundAtTurnStop(Route route, int stopOrder, Integer state) {
+        if (stopOrder > route.turnStop()) {
+            return true;
+        }
+        return stopOrder == route.turnStop() && Integer.valueOf(2).equals(state);
     }
 }

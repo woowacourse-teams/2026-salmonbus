@@ -32,12 +32,19 @@ public record DailyStopDemand(
     }
 
     public DailyStopDemand plus(DailyStopDemand other) {
-        if (stopOrder != other.stopOrder || timeSlot != other.timeSlot || !arrivalDate.equals(other.arrivalDate)) {
+        if (!hasSameAggregationKey(other)) {
             throw new IllegalArgumentException("같은 정류장·시간대·날짜의 합계만 더할 수 있다");
         }
         return new DailyStopDemand(stopOrder, timeSlot, arrivalDate, fillRateTotal + other.fillRateTotal,
             Math.addExact(netBoardingTotal, other.netBoardingTotal), Math.addExact(capacityTotal, other.capacityTotal),
             Math.addExact(sampleCount, other.sampleCount));
+    }
+
+    private boolean hasSameAggregationKey(DailyStopDemand other) {
+        if (stopOrder != other.stopOrder || timeSlot != other.timeSlot) {
+            return false;
+        }
+        return arrivalDate.equals(other.arrivalDate);
     }
 
     public double fillRate() {

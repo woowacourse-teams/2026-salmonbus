@@ -46,12 +46,30 @@ public record DemandSample(
         Integer predictionRemainingSeats,
         Integer seatsOnArrival
     ) {
-        if (stopsToTarget != ONE_STOP_AHEAD || !targetBoardingAllowed || vehicleId == null
-            || arrivalObservationId == null || predictionRemainingSeats == null || seatsOnArrival == null) {
+        if (!isEligibleSettlement(stopsToTarget, targetBoardingAllowed)) {
+            return Optional.empty();
+        }
+        if (!hasRequiredValues(vehicleId, arrivalObservationId, predictionRemainingSeats, seatsOnArrival)) {
             return Optional.empty();
         }
         return Optional.of(new DemandSample(routeVersionId, predictionObservationId, arrivalObservationId, vehicleId,
             targetStopOrder, arrivedAt, scoredAt, predictionRemainingSeats, seatsOnArrival));
+    }
+
+    private static boolean isEligibleSettlement(int stopsToTarget, boolean targetBoardingAllowed) {
+        return stopsToTarget == ONE_STOP_AHEAD && targetBoardingAllowed;
+    }
+
+    private static boolean hasRequiredValues(
+        String vehicleId,
+        Long arrivalObservationId,
+        Integer predictionRemainingSeats,
+        Integer seatsOnArrival
+    ) {
+        if (vehicleId == null || arrivalObservationId == null) {
+            return false;
+        }
+        return predictionRemainingSeats != null && seatsOnArrival != null;
     }
 
     public Instant arrivedHourStart() {

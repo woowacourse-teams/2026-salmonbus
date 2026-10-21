@@ -20,11 +20,15 @@ public record ObservedVehicle(
     public static final int HIGHEST_CROWD_LEVEL = 4;
 
     public ObservedVehicle {
-        if (crowdLevel != null && (crowdLevel < LOWEST_CROWD_LEVEL || crowdLevel > HIGHEST_CROWD_LEVEL)) {
+        if (crowdLevel != null && isOutsideCrowdLevelRange(crowdLevel)) {
             throw new IllegalArgumentException(
                 "혼잡도는 %d등급부터 %d등급까지다: %d".formatted(LOWEST_CROWD_LEVEL, HIGHEST_CROWD_LEVEL, crowdLevel)
             );
         }
+    }
+
+    private static boolean isOutsideCrowdLevelRange(int crowdLevel) {
+        return crowdLevel < LOWEST_CROWD_LEVEL || crowdLevel > HIGHEST_CROWD_LEVEL;
     }
 
     public boolean hasKnownSeats() {

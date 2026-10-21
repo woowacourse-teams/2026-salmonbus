@@ -18,9 +18,24 @@ public record SameDayFullOutcomeCount(
     Instant settledThrough
 ) {
     public SameDayFullOutcomeCount {
-        if (rowCount < 0 || (rowCount == 0 && (stopsToTarget != 0 || actualFullCount != 0 || rawFullChanceSum != 0))) {
+        if (rowCount < 0 || hasValuesWithoutRows(stopsToTarget, rowCount, actualFullCount, rawFullChanceSum)) {
             throw new IllegalArgumentException("빈 집계 표시는 거리·건수·합계가 모두 0이어야 한다: " + rowCount);
         }
+    }
+
+    private static boolean hasValuesWithoutRows(
+        int stopsToTarget,
+        int rowCount,
+        int actualFullCount,
+        double rawFullChanceSum
+    ) {
+        if (rowCount != 0) {
+            return false;
+        }
+        if (stopsToTarget != 0 || actualFullCount != 0) {
+            return true;
+        }
+        return rawFullChanceSum != 0;
     }
 
     public SameDayFullOutcomes outcomes() {
