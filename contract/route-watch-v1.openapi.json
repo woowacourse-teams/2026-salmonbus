@@ -575,7 +575,8 @@
               "NICKNAME_LENGTH",
               "NICKNAME_CHARACTERS",
               "NICKNAME_RESERVED",
-              "NICKNAME_TAKEN"
+              "NICKNAME_TAKEN",
+              "REAUTH_REQUIRED"
             ]
           },
           "message": {

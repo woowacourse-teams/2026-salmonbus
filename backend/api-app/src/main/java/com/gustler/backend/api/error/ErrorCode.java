@@ -27,7 +27,8 @@ public enum ErrorCode {
     NICKNAME_LENGTH(HttpStatus.BAD_REQUEST, "닉네임은 2자 이상 10자 이하여야 합니다."),
     NICKNAME_CHARACTERS(HttpStatus.BAD_REQUEST, "닉네임은 한글, 영문, 숫자만 쓸 수 있습니다."),
     NICKNAME_RESERVED(HttpStatus.BAD_REQUEST, "쓸 수 없는 닉네임입니다."),
-    NICKNAME_TAKEN(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다.");
+    NICKNAME_TAKEN(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다."),
+    REAUTH_REQUIRED(HttpStatus.CONFLICT, "애플 계정으로 한 번 더 인증해야 탈퇴할 수 있습니다.");
 
     private final HttpStatus status;
     private final String message;

@@ -36,6 +36,17 @@ final class LoginBrowser {
             .POST(HttpRequest.BodyPublishers.noBody()));
     }
 
+    /** CSRF 쿠키를 헤더로 되돌려 보내는 JSON POST. 쿠키가 없으면 먼저 {@code /api/auth/session} 으로 받는다. */
+    HttpResponse<String> postJson(String path, String json) throws IOException, InterruptedException {
+        if (!cookies.containsKey(CSRF_COOKIE)) {
+            get("/api/auth/session");
+        }
+        return send(request(path)
+            .header("X-XSRF-TOKEN", cookies.getOrDefault(CSRF_COOKIE, ""))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(json)));
+    }
+
     static String location(HttpResponse<String> response) {
         return header(response, "Location");
     }

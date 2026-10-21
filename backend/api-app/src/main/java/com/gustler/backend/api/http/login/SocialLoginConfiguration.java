@@ -2,8 +2,13 @@ package com.gustler.backend.api.http.login;
 
 import com.gustler.backend.api.account.token.AccessTokens;
 import com.gustler.backend.api.account.token.AuthCookies;
+import com.gustler.backend.api.account.token.WithdrawalTickets;
 import com.gustler.backend.member.api.RefreshTokens;
 import com.gustler.backend.member.api.SignInWithSocialAccount;
+import com.gustler.backend.member.api.WithdrawMember;
+import io.micrometer.core.instrument.MeterRegistry;
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.time.Clock;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -13,9 +18,11 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
+import org.springframework.web.client.RestClient;
 
 /**
  * 켜진 제공자의 {@link ClientRegistration} 을 만들어 {@link SocialLogin} 으로 묶는다.
@@ -37,6 +44,8 @@ public class SocialLoginConfiguration {
     static final String APPLE = "apple";
 
     private static final String KAKAO = "kakao";
+    private static final Duration PROVIDER_CONNECT_TIMEOUT = Duration.ofSeconds(3);
+    private static final Duration PROVIDER_READ_TIMEOUT = Duration.ofSeconds(5);
 
     @Bean
     @ConditionalOnProperty(prefix = "auth", name = {"enabled", "kakao.enabled"}, havingValue = "true")
@@ -85,17 +94,40 @@ public class SocialLoginConfiguration {
     }
 
     @Bean
+    @ConditionalOnProperty(prefix = "auth", name = {"enabled", "apple.enabled"}, havingValue = "true")
+    AppleWithdrawal appleWithdrawal(
+        LoginProperties properties,
+        AppleClientSecret clientSecret,
+        WithdrawMember withdrawMember,
+        MeterRegistry meters
+    ) {
+        HttpClient httpClient = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1)
+            .connectTimeout(PROVIDER_CONNECT_TIMEOUT)
+            .build();
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+        requestFactory.setReadTimeout(PROVIDER_READ_TIMEOUT);
+        AppleRevokeClient revokeClient = new AppleRevokeClient(
+            RestClient.builder().requestFactory(requestFactory).build(),
+            properties.apple().clientId(), properties.apple().revokeUri(), clientSecret);
+        return new AppleWithdrawal(withdrawMember, revokeClient, meters);
+    }
+
+    @Bean
     SocialLogin socialLogin(
         ObjectProvider<ClientRegistration> registrations,
         ObjectProvider<AppleClientSecret> appleClientSecret,
         SignInWithSocialAccount signIn,
         RefreshTokens refreshTokens,
         ObjectProvider<AccessTokens> accessTokens,
-        ObjectProvider<AuthCookies> authCookies
+        ObjectProvider<AuthCookies> authCookies,
+        ObjectProvider<AppleWithdrawal> appleWithdrawal,
+        ObjectProvider<WithdrawalTickets> withdrawalTickets
     ) {
         Map<String, Supplier<String>> clientSecrets = appleClientSecret.stream()
             .collect(Collectors.toMap(secret -> APPLE, secret -> secret::issue));
         return new SocialLogin(
-            registrations.orderedStream().toList(), clientSecrets, signIn, refreshTokens, accessTokens, authCookies);
+            registrations.orderedStream().toList(), clientSecrets, signIn, refreshTokens, accessTokens, authCookies,
+            appleWithdrawal, withdrawalTickets);
     }
 }

@@ -2,12 +2,14 @@ package com.gustler.backend.api.http.login;
 
 import com.gustler.backend.api.account.token.AccessTokens;
 import com.gustler.backend.api.account.token.AuthCookies;
+import com.gustler.backend.api.account.token.WithdrawalTickets;
 import com.gustler.backend.member.api.RefreshTokens;
 import com.gustler.backend.member.api.SignInWithSocialAccount;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Supplier;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -18,6 +20,7 @@ import org.springframework.security.oauth2.client.endpoint.RestClientAuthorizati
 import org.springframework.security.oauth2.client.http.OAuth2ErrorResponseErrorHandler;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
 import org.springframework.security.oauth2.core.http.converter.OAuth2AccessTokenResponseHttpMessageConverter;
 import org.springframework.util.LinkedMultiValueMap;
@@ -47,6 +50,8 @@ public final class SocialLogin {
     private final RefreshTokens refreshTokens;
     private final ObjectProvider<AccessTokens> accessTokens;
     private final ObjectProvider<AuthCookies> authCookies;
+    private final ObjectProvider<AppleWithdrawal> appleWithdrawal;
+    private final ObjectProvider<WithdrawalTickets> withdrawalTickets;
 
     public SocialLogin(
         List<ClientRegistration> registrations,
@@ -54,7 +59,9 @@ public final class SocialLogin {
         SignInWithSocialAccount signIn,
         RefreshTokens refreshTokens,
         ObjectProvider<AccessTokens> accessTokens,
-        ObjectProvider<AuthCookies> authCookies
+        ObjectProvider<AuthCookies> authCookies,
+        ObjectProvider<AppleWithdrawal> appleWithdrawal,
+        ObjectProvider<WithdrawalTickets> withdrawalTickets
     ) {
         this.registrations = registrations;
         this.clientSecrets = clientSecrets;
@@ -62,6 +69,8 @@ public final class SocialLogin {
         this.refreshTokens = refreshTokens;
         this.accessTokens = accessTokens;
         this.authCookies = authCookies;
+        this.appleWithdrawal = appleWithdrawal;
+        this.withdrawalTickets = withdrawalTickets;
     }
 
     public void apply(HttpSecurity http) throws Exception {
@@ -80,8 +89,11 @@ public final class SocialLogin {
             .redirectionEndpoint(endpoint -> endpoint.baseUri(CALLBACK_PATTERN))
             .tokenEndpoint(endpoint -> endpoint.accessTokenResponseClient(tokenClient()))
             .successHandler(new SocialLoginSuccessHandler(
-                signIn, refreshTokens, accessTokens.getObject(), authCookies.getObject(), failureHandler))
+                signIn, refreshTokens, accessTokens.getObject(), authCookies.getObject(), failureHandler,
+                Optional.ofNullable(appleWithdrawal.getIfAvailable())))
             .failureHandler(failureHandler));
+        http.addFilterBefore(
+            new WithdrawStartGuard(withdrawalTickets.getObject()), OAuth2AuthorizationRequestRedirectFilter.class);
     }
 
     private OAuth2AccessTokenResponseClient<OAuth2AuthorizationCodeGrantRequest> tokenClient() {

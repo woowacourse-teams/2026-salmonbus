@@ -183,6 +183,59 @@ class MemberTableTest {
             .hasMessageContaining("fk_refresh_token_member");
     }
 
+    @Test
+    void 연결_해제_요청은_회원_없이_제공자_식별자만으로_저장된다() {
+        // when
+        insertProviderUnlink(KAKAO, "PENDING", 0);
+
+        // then
+        assertThat(jdbcClient.sql("SELECT count(*) FROM provider_unlink").query(Long.class).single()).isEqualTo(1);
+    }
+
+    @Test
+    void 등록되지_않은_제공자의_연결_해제_요청은_저장되지_않는다() {
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertProviderUnlink("GOOGLE", "PENDING", 0));
+
+        // then
+        assertThat(caughtFailure)
+            .isInstanceOf(DataIntegrityViolationException.class)
+            .hasMessageContaining("ck_provider_unlink_provider");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"DONE", "FAILED", "pending"})
+    void 연결_해제_요청의_상태는_대기와_포기만_저장된다(String status) {
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertProviderUnlink(KAKAO, status, 0));
+
+        // then
+        assertThat(caughtFailure)
+            .isInstanceOf(DataIntegrityViolationException.class)
+            .hasMessageContaining("ck_provider_unlink_status");
+    }
+
+    @Test
+    void 연결_해제_시도_횟수가_음수이면_저장되지_않는다() {
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertProviderUnlink(APPLE, "GAVE_UP", -1));
+
+        // then
+        assertThat(caughtFailure)
+            .isInstanceOf(DataIntegrityViolationException.class)
+            .hasMessageContaining("ck_provider_unlink_attempts");
+    }
+
+    private void insertProviderUnlink(String provider, String status, final int attempts) {
+        jdbcClient.sql("""
+                INSERT INTO provider_unlink
+                    (provider, subject, status, attempts, next_attempt_at, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """)
+            .params(provider, KAKAO_SUBJECT, status, attempts, JOINED_AT, JOINED_AT, JOINED_AT)
+            .update();
+    }
+
     private long insertMember(String nickname) {
         return jdbcClient.sql("""
                 INSERT INTO member (public_id, nickname, created_at, last_login_at)

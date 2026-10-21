@@ -43,6 +43,26 @@ CREATE INDEX ix_refresh_token_member ON refresh_token (member_id);
 -- 정리 작업이 만료된 계통을 찾는다.
 CREATE INDEX ix_refresh_token_expires ON refresh_token (expires_at);
 
+-- 탈퇴한 회원의 제공자 식별자를 연결 해제가 끝날 때까지만 보관한다. 해제에 성공하면 행을 지운다.
+-- 회원은 이미 지워졌으므로 member 를 참조하지 않는다. GAVE_UP 은 더 시도하지 않고 사람이 확인할 요청이다.
+CREATE TABLE provider_unlink (
+    id               bigint       GENERATED ALWAYS AS IDENTITY,
+    provider         varchar(20)  NOT NULL,
+    subject          varchar(255) NOT NULL,
+    status           varchar(20)  NOT NULL,
+    attempts         integer      NOT NULL DEFAULT 0,
+    next_attempt_at  timestamptz  NOT NULL,
+    last_error       varchar(200),
+    created_at       timestamptz  NOT NULL,
+    updated_at       timestamptz  NOT NULL,
+    CONSTRAINT pk_provider_unlink PRIMARY KEY (id),
+    CONSTRAINT ck_provider_unlink_provider CHECK (provider IN ('KAKAO', 'APPLE')),
+    CONSTRAINT ck_provider_unlink_status CHECK (status IN ('PENDING', 'GAVE_UP')),
+    CONSTRAINT ck_provider_unlink_attempts CHECK (attempts >= 0)
+);
+-- 주기 작업이 지금 다시 시도할 요청을 찾는다.
+CREATE INDEX ix_provider_unlink_due ON provider_unlink (next_attempt_at) WHERE status = 'PENDING';
+
 -- 아래 두 표는 spring-session-jdbc 4.1.0 의 schema-postgresql.sql 원문이다. 라이브러리가 표 이름과 열을 정하므로 바꾸지 않는다.
 CREATE TABLE SPRING_SESSION (
 	PRIMARY_ID CHAR(36) NOT NULL,

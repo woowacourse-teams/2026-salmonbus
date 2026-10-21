@@ -119,7 +119,7 @@ class AppleClientSecretTest {
     void 빠진_필수_설정은_환경_변수_이름으로_모두_알려_준다() {
         // given
         LoginProperties.Apple apple = new LoginProperties.Apple(
-            "", "TEAMTEST01", null, " ", SCOPES, "https://appleid.apple.com", "a", "t", "j");
+            "", "TEAMTEST01", null, " ", SCOPES, "https://appleid.apple.com", "a", "t", "j", "r");
 
         // when & then
         assertThatThrownBy(apple::requireComplete)
@@ -137,6 +137,7 @@ class AppleClientSecretTest {
         return new LoginProperties.Apple(
             "com.salmonbus.test.web", "TEAMTEST01", "KEYTEST001", privateKeyPath, SCOPES,
             "https://appleid.apple.com", "https://appleid.apple.com/auth/authorize",
-            "https://appleid.apple.com/auth/token", "https://appleid.apple.com/auth/keys");
+            "https://appleid.apple.com/auth/token", "https://appleid.apple.com/auth/keys",
+            "https://appleid.apple.com/auth/revoke");
     }
 }

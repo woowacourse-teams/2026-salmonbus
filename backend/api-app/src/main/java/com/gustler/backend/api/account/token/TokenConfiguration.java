@@ -24,6 +24,11 @@ public class TokenConfiguration {
     }
 
     @Bean
+    WithdrawalTickets withdrawalTickets(TokenProperties properties, Clock clock) {
+        return new WithdrawalTickets(properties.requireComplete(), clock);
+    }
+
+    @Bean
     AuthCookies authCookies(TokenProperties properties, Clock clock) {
         return new AuthCookies(properties, clock);
     }

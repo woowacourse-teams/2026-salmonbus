@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.api.account.NicknameInvalidException;
 import com.gustler.backend.api.account.NicknameTakenException;
+import com.gustler.backend.api.account.ReauthRequiredException;
 import com.gustler.backend.api.arrival.ArrivalQuery.Failure;
 import com.gustler.backend.api.board.ModelOutOfScopeException;
 import com.gustler.backend.api.board.NoRecentObservationException;
@@ -49,6 +50,7 @@ class ApiExceptionHandlerTest {
             new NicknameInvalidException(NicknameViolation.CHARACTERS),
             new NicknameInvalidException(NicknameViolation.RESERVED),
             new NicknameTakenException(),
+            new ReauthRequiredException(),
             new Failure(ErrorCode.STATION_NOT_FOUND),
             new Failure(ErrorCode.REFERENCE_VERSION_CONFLICT)
         );

@@ -96,6 +96,8 @@ auth:
     authorization-uri: https://kauth.kakao.com/oauth/authorize
     token-uri: https://kauth.kakao.com/oauth/token
     jwk-set-uri: https://kauth.kakao.com/.well-known/jwks.json
+    admin-key: ${AUTH_KAKAO_ADMIN_KEY:} # 탈퇴한 회원의 카카오 연결을 끊는 데 쓴다.
+    unlink-uri: https://kapi.kakao.com/v1/user/unlink
   apple:
     enabled: ${AUTH_APPLE_ENABLED:false}
     client-id: ${AUTH_APPLE_CLIENT_ID:}
@@ -107,6 +109,7 @@ auth:
     authorization-uri: https://appleid.apple.com/auth/authorize
     token-uri: https://appleid.apple.com/auth/token
     jwk-set-uri: https://appleid.apple.com/auth/keys
+    revoke-uri: https://appleid.apple.com/auth/revoke
 
 arrivals:
   enabled: ${ARRIVALS_ENABLED:false}

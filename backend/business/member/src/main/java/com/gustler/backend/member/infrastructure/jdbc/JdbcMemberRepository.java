@@ -1,6 +1,7 @@
 package com.gustler.backend.member.infrastructure.jdbc;
 
 import com.gustler.backend.member.api.LoginProvider;
+import com.gustler.backend.member.api.MemberIdentity;
 import com.gustler.backend.member.api.MemberProfile;
 import com.gustler.backend.member.domain.Member;
 import com.gustler.backend.member.domain.MemberRepository;
@@ -8,6 +9,8 @@ import com.gustler.backend.member.domain.NewMember;
 import com.gustler.backend.member.domain.Nickname;
 import com.gustler.backend.member.domain.NicknameUpdate;
 import com.gustler.backend.member.domain.RegistrationResult;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -54,6 +57,36 @@ public class JdbcMemberRepository implements MemberRepository {
         ON CONFLICT ON CONSTRAINT pk_member_identity DO NOTHING
         """;
 
+    private static final String FIND_IDENTITY = """
+        SELECT i.provider, i.subject
+        FROM member m
+        JOIN member_identity i ON i.member_id = m.id
+        WHERE m.public_id = ?
+        """;
+
+    /**
+     * 회원 행 삭제와 제공자 계정 읽기를 한 문장으로 한다. 바깥 SELECT 는 문장 시작 시점의 스냅숏을 보고 CASCADE 는 문장이
+     * 끝날 때 일어나므로 지우는 회원의 제공자 계정이 보인다. 같은 회원을 먼저 지운 트랜잭션이 있으면 DELETE 가 그 트랜잭션이
+     * 끝나기를 기다렸다가 행이 사라진 것을 보고 0행을 지우므로, 나중 호출은 빈 결과를 받는다.
+     */
+    private static final String DELETE_RETURNING_IDENTITY = """
+        WITH deleted AS (
+            DELETE FROM member WHERE public_id = ? RETURNING id
+        )
+        SELECT i.provider, i.subject
+        FROM deleted
+        LEFT JOIN member_identity i ON i.member_id = deleted.id
+        """;
+
+    /**
+     * 탈퇴한 뒤 같은 제공자 계정으로 다시 가입하면 그 계정의 남은 연결 해제 요청을 지운다. 남겨 두면 다시 시도할 때 새 회원의
+     * 제공자 연결이 끊긴다. 다시 가입했다는 것은 사용자가 연결을 원한다는 뜻이다. 이미 나가 있는 해제 호출은 막지 못한다.
+     * 탈퇴 직후 몇 초 안에 다시 가입하는 드문 경우라, 그때는 다음 로그인에서 동의를 다시 받는다.
+     */
+    private static final String DELETE_UNLINK_REQUESTS = """
+        DELETE FROM provider_unlink WHERE provider = ? AND subject = ?
+        """;
+
     private static final int ONE_ROW_CHANGED = 1;
 
     private final JdbcClient jdbcClient;
@@ -98,6 +131,9 @@ public class JdbcMemberRepository implements MemberRepository {
             jdbcClient.sql("DELETE FROM member WHERE id = ?").param(memberId.get()).update();
             return new RegistrationResult.AlreadyRegistered();
         }
+        jdbcClient.sql(DELETE_UNLINK_REQUESTS)
+            .params(newMember.provider().name(), newMember.subject())
+            .update();
         Member member = new Member(memberId.get(), newMember.publicId(), newMember.nickname().value());
         return new RegistrationResult.Registered(member);
     }
@@ -126,5 +162,30 @@ public class JdbcMemberRepository implements MemberRepository {
         } catch (DuplicateKeyException exception) {
             return NicknameUpdate.TAKEN;
         }
+    }
+
+    @Override
+    public Optional<MemberIdentity> findIdentity(UUID publicId) {
+        return jdbcClient.sql(FIND_IDENTITY)
+            .param(publicId)
+            .query((rows, rowNumber) -> identityOf(rows))
+            .optional();
+    }
+
+    /** 제공자 계정이 없는 회원은 가입 경로상 생길 수 없다. 만나면 예외로 트랜잭션을 되돌려 회원을 지우지 않는다. */
+    @Override
+    public Optional<MemberIdentity> delete(UUID publicId) {
+        return jdbcClient.sql(DELETE_RETURNING_IDENTITY)
+            .param(publicId)
+            .query((rows, rowNumber) -> identityOf(rows))
+            .optional();
+    }
+
+    private static MemberIdentity identityOf(ResultSet rows) throws SQLException {
+        String provider = rows.getString("provider");
+        if (provider == null) {
+            throw new IllegalStateException("제공자 계정이 없는 회원이다");
+        }
+        return new MemberIdentity(LoginProvider.valueOf(provider), rows.getString("subject"));
     }
 }

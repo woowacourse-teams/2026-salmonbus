@@ -47,6 +47,9 @@ final class FakeKakaoServer implements AutoCloseable {
     private final Map<String, Grant> grants = new ConcurrentHashMap<>();
     private final List<TokenRequest> tokenRequests = new ArrayList<>();
     private volatile int tokenStatus = 200;
+    private final List<TokenRequest> unlinkRequests = new ArrayList<>();
+    private volatile int unlinkStatus = 200;
+    private volatile String unlinkBody = "{\"id\":1}";
 
     FakeKakaoServer() throws Exception {
         signingKey = new RSAKeyGenerator(2048).keyID("test-key").generate();
@@ -54,6 +57,7 @@ final class FakeKakaoServer implements AutoCloseable {
         server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         server.createContext("/oauth/token", this::token);
         server.createContext("/jwks.json", this::jwks);
+        server.createContext("/v1/user/unlink", this::unlink);
         server.start();
     }
 
@@ -72,6 +76,31 @@ final class FakeKakaoServer implements AutoCloseable {
             tokenRequests.clear();
         }
         tokenStatus = 200;
+        synchronized (unlinkRequests) {
+            unlinkRequests.clear();
+        }
+        unlinkStatus = 200;
+        unlinkBody = "{\"id\":1}";
+    }
+
+    /** 연결 해제 요청에 이 상태 코드와 본문으로 답하게 한다. */
+    void answerUnlinkWith(int status, String body) {
+        unlinkStatus = status;
+        unlinkBody = body;
+    }
+
+    List<TokenRequest> unlinkRequests() {
+        synchronized (unlinkRequests) {
+            return List.copyOf(unlinkRequests);
+        }
+    }
+
+    private void unlink(HttpExchange exchange) throws IOException {
+        Map<String, String> form = form(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        synchronized (unlinkRequests) {
+            unlinkRequests.add(new TokenRequest(form, exchange.getRequestHeaders().getFirst("Authorization")));
+        }
+        respond(exchange, unlinkStatus, unlinkBody);
     }
 
     List<TokenRequest> tokenRequests() {

@@ -5,6 +5,9 @@ import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.member.api.RefreshTokens;
 import com.gustler.backend.member.api.SignInWithSocialAccount;
+import com.gustler.backend.member.api.WithdrawMember;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.Objects;
@@ -27,6 +30,8 @@ class AppleLoginConfigurationTest {
         .withBean(Clock.class, Clock::systemUTC)
         .withBean(SignInWithSocialAccount.class, () -> identity -> null)
         .withBean(RefreshTokens.class, () -> Mockito.mock(RefreshTokens.class))
+        .withBean(WithdrawMember.class, () -> Mockito.mock(WithdrawMember.class))
+        .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
         .withPropertyValues(
             "auth.public-base-url=https://www.salmonbus.test",
             "auth.apple.issuer=https://appleid.apple.com",

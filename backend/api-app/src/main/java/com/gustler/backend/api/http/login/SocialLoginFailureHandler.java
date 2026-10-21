@@ -16,7 +16,8 @@ import org.springframework.security.web.authentication.AuthenticationFailureHand
 import org.springframework.web.util.UriComponentsBuilder;
 
 /**
- * 로그인에 실패하면 돌아갈 경로에 {@code login=cancelled} 또는 {@code login=failed} 를 붙여 돌려보낸다.
+ * 로그인에 실패하면 돌아갈 경로에 {@code login=cancelled} 또는 {@code login=failed} 를 붙여 돌려보낸다. 탈퇴를 위한
+ * 재인증이었으면 {@code login} 대신 {@code withdraw} 를 붙인다.
  *
  * <p>사용자가 제공자 화면에서 취소한 경우만 {@code cancelled} 이고 나머지는 모두 {@code failed} 다. 취소는 카카오가
  * {@code access_denied}, 애플이 {@code user_cancelled_authorize} 로 알린다.
@@ -27,6 +28,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 final class SocialLoginFailureHandler implements AuthenticationFailureHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(SocialLoginFailureHandler.class);
     private static final String LOGIN_PARAMETER = "login";
+    private static final String WITHDRAW_PARAMETER = "withdraw";
     private static final Set<String> CANCELLATION_CODES = Set.of(
         OAuth2ErrorCodes.ACCESS_DENIED, "user_cancelled_authorize");
 
@@ -39,14 +41,18 @@ final class SocialLoginFailureHandler implements AuthenticationFailureHandler {
         String reason = reasonOf(exception);
         HttpSession session = request.getSession(false);
         String returnTo = ReturnTo.HOME;
+        String parameter = LOGIN_PARAMETER;
         if (session != null) {
             returnTo = LoginSessions.takeReturnTo(session);
+            if (LoginSessions.withdrawingMember(session).isPresent()) {
+                parameter = WITHDRAW_PARAMETER;
+            }
             session.invalidate();
         }
         LOGGER.warn("소셜 로그인에 실패했다. reason={} cause={}", reason, exception.getClass().getSimpleName());
         response.setStatus(HttpStatus.FOUND.value());
         response.setHeader(HttpHeaders.LOCATION,
-            UriComponentsBuilder.fromUriString(returnTo).replaceQueryParam(LOGIN_PARAMETER, reason).build().toString());
+            UriComponentsBuilder.fromUriString(returnTo).replaceQueryParam(parameter, reason).build().toString());
         response.setHeader(HttpHeaders.CACHE_CONTROL, CacheControl.noStore().getHeaderValue());
     }
 

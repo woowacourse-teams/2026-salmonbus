@@ -2,6 +2,7 @@ package com.gustler.backend.api.http.login;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
@@ -52,9 +53,22 @@ final class LoginStartResolver implements OAuth2AuthorizationRequestResolver {
     public OAuth2AuthorizationRequest resolve(HttpServletRequest request, String clientRegistrationId) {
         HttpSession session = request.getSession();
         session.setAttribute(LoginSessions.RETURN_TO_ATTRIBUTE, ReturnTo.sanitize(request.getParameter("returnTo")));
+        rememberWithdrawal(request, session);
         if (SocialLoginConfiguration.APPLE.equals(clientRegistrationId)) {
             return withoutPkce.resolve(request, clientRegistrationId);
         }
         return withPkce.resolve(request, clientRegistrationId);
+    }
+
+    /**
+     * 탈퇴 시작이면 탈퇴할 회원을 임시 세션에 두고, 아니면 지운다. 같은 브라우저가 10분 안에 탈퇴를 시작했다가 그만두고 일반
+     * 로그인을 시작하면, 지우지 않은 탈퇴 표시 때문에 로그인이 탈퇴로 처리될 수 있다.
+     */
+    private static void rememberWithdrawal(HttpServletRequest request, HttpSession session) {
+        if (request.getAttribute(WithdrawStartGuard.MEMBER_ATTRIBUTE) instanceof UUID member) {
+            session.setAttribute(LoginSessions.WITHDRAWING_MEMBER_ATTRIBUTE, member.toString());
+            return;
+        }
+        session.removeAttribute(LoginSessions.WITHDRAWING_MEMBER_ATTRIBUTE);
     }
 }

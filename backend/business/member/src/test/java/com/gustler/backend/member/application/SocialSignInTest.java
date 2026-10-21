@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.member.api.LoginProvider;
+import com.gustler.backend.member.api.MemberIdentity;
 import com.gustler.backend.member.api.MemberProfile;
 import com.gustler.backend.member.api.SignedInMember;
 import com.gustler.backend.member.api.SocialIdentity;
@@ -261,6 +262,16 @@ class SocialSignInTest {
         @Override
         public void recordLogin(long memberId, OffsetDateTime at) {
             loginRecords++;
+        }
+
+        @Override
+        public Optional<MemberIdentity> findIdentity(UUID publicId) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Optional<MemberIdentity> delete(UUID publicId) {
+            throw new UnsupportedOperationException();
         }
 
         private boolean isTaken(Nickname nickname) {

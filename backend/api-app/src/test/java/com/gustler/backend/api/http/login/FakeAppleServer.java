@@ -56,6 +56,8 @@ final class FakeAppleServer implements AutoCloseable {
     private final List<TokenRequest> tokenRequests = new ArrayList<>();
     private final List<String> idTokens = new ArrayList<>();
     private volatile int tokenStatus = 200;
+    private final List<TokenRequest> revokeRequests = new ArrayList<>();
+    private volatile int revokeStatus = 200;
 
     FakeAppleServer() throws Exception {
         signingKey = new RSAKeyGenerator(2048).keyID("apple-test-key").generate();
@@ -66,6 +68,7 @@ final class FakeAppleServer implements AutoCloseable {
         server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         server.createContext("/auth/token", this::token);
         server.createContext("/auth/keys", this::jwks);
+        server.createContext("/auth/revoke", this::revoke);
         server.start();
     }
 
@@ -94,6 +97,43 @@ final class FakeAppleServer implements AutoCloseable {
             idTokens.clear();
         }
         tokenStatus = 200;
+        synchronized (revokeRequests) {
+            revokeRequests.clear();
+        }
+        revokeStatus = 200;
+    }
+
+    /** 토큰 취소 요청을 이 상태 코드로 답하게 한다. 200 이면 정상이다. */
+    void answerRevokeWith(int status) {
+        revokeStatus = status;
+    }
+
+    /** 받은 토큰 취소 요청. {@code clientSecretValid} 는 요청의 {@code client_secret} 이 올바르게 서명됐는지다. */
+    List<RevokeRequest> revokeRequests() {
+        synchronized (revokeRequests) {
+            return revokeRequests.stream()
+                .map(request -> new RevokeRequest(
+                    request.single("token"), request.single("token_type_hint"), request.single("client_id"),
+                    clientSecretIsValid(request.form())))
+                .toList();
+        }
+    }
+
+    private void revoke(HttpExchange exchange) throws IOException {
+        Map<String, List<String>> form = form(new String(exchange.getRequestBody().readAllBytes(),
+            StandardCharsets.UTF_8));
+        synchronized (revokeRequests) {
+            revokeRequests.add(new TokenRequest(form, exchange.getRequestHeaders().getFirst("Authorization")));
+        }
+        if (revokeStatus != 200) {
+            respond(exchange, revokeStatus, "{\"error\":\"server_error\"}");
+            return;
+        }
+        if (!clientSecretIsValid(form)) {
+            respond(exchange, 400, "{\"error\":\"invalid_client\"}");
+            return;
+        }
+        respond(exchange, 200, "");
     }
 
     List<TokenRequest> tokenRequests() {
@@ -221,6 +261,9 @@ final class FakeAppleServer implements AutoCloseable {
     @Override
     public void close() {
         server.stop(0);
+    }
+
+    record RevokeRequest(String token, String tokenTypeHint, String clientId, boolean clientSecretValid) {
     }
 
     /** 같은 이름이 두 번 실렸는지 알 수 있도록 값을 모두 보관한다. */

@@ -39,7 +39,8 @@ public record LoginProperties(String publicBaseUrl, Kakao kakao, Apple apple) {
         String issuer,
         String authorizationUri,
         String tokenUri,
-        String jwkSetUri
+        String jwkSetUri,
+        String revokeUri
     ) {
         private static final String OPENID = "openid";
 

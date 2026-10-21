@@ -1,6 +1,8 @@
 package com.gustler.backend.api.http.login;
 
 import jakarta.servlet.http.HttpSession;
+import java.util.Optional;
+import java.util.UUID;
 
 /**
  * 로그인 시작부터 끝까지만 쓰는 임시 세션에 두는 값.
@@ -11,7 +13,17 @@ import jakarta.servlet.http.HttpSession;
 final class LoginSessions {
     static final String RETURN_TO_ATTRIBUTE = LoginSessions.class.getName() + ".RETURN_TO";
 
+    /** 탈퇴하려고 다시 인증하는 회원의 공개 식별자. 이 값이 있으면 콜백은 로그인이 아니라 탈퇴로 처리한다. */
+    static final String WITHDRAWING_MEMBER_ATTRIBUTE = LoginSessions.class.getName() + ".WITHDRAWING_MEMBER";
+
     private LoginSessions() {
+    }
+
+    static Optional<UUID> withdrawingMember(HttpSession session) {
+        if (session.getAttribute(WITHDRAWING_MEMBER_ATTRIBUTE) instanceof String memberId) {
+            return Optional.of(UUID.fromString(memberId));
+        }
+        return Optional.empty();
     }
 
     static String takeReturnTo(HttpSession session) {

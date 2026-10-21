@@ -1,5 +1,10 @@
 # 테스트 전용 값이다. 운영 비밀이 아니다. main 의 application.yml 위에 속성 단위로 덮어쓴다.
 auth:
+  unlink:
+    retry-cron: "-" # 테스트가 재시도·정리를 직접 부른다. 실제 스케줄과 겹치지 않게 끈다.
+    purge-cron: "-"
+  kakao:
+    admin-key: test-only-kakao-admin-key
   token:
     secret: test-only-secret-key-for-access-tokens-0123456789
   refresh-token:

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.member.api.LoginProvider;
+import com.gustler.backend.member.api.MemberIdentity;
 import com.gustler.backend.member.api.MemberProfile;
 import com.gustler.backend.member.api.NicknameChangeResult;
 import com.gustler.backend.member.api.NicknameViolation;
@@ -123,6 +124,16 @@ class NicknameChangerTest {
 
         @Override
         public void recordLogin(long memberId, OffsetDateTime at) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Optional<MemberIdentity> findIdentity(UUID publicId) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Optional<MemberIdentity> delete(UUID publicId) {
             throw new UnsupportedOperationException();
         }
     }
