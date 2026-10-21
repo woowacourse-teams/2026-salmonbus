@@ -1,6 +1,7 @@
 package com.gustler.backend.api.route.controller;
 
 import com.gustler.backend.api.docs.ApiDocsExamples;
+import com.gustler.backend.api.docs.ApiDocsTags;
 import com.gustler.backend.api.docs.RouteGeometryApiDocsExamples;
 import com.gustler.backend.api.error.ErrorResponse;
 import com.gustler.backend.api.route.RouteId;
@@ -15,6 +16,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Duration;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
@@ -29,6 +31,7 @@ import org.springframework.web.context.request.WebRequest;
  * 지도 형상과 방문 판본을 제공하고 ETag를 이용한 재검증 요청을 처리한다.
  */
 @RestController
+@Tag(name = ApiDocsTags.ROUTES)
 public class RouteGeometryController {
     private static final CacheControl CACHE = CacheControl.maxAge(Duration.ofMinutes(5)).cachePublic().mustRevalidate();
     private final RouteGeometryQueryService service;

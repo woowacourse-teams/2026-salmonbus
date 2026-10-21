@@ -13,6 +13,7 @@ import com.gustler.backend.api.account.token.AuthCookies;
 import com.gustler.backend.api.account.token.WithdrawalTickets;
 import com.gustler.backend.api.account.unlink.ProviderUnlinkRunner;
 import com.gustler.backend.api.docs.ApiDocsExamples;
+import com.gustler.backend.api.docs.ApiDocsTags;
 import com.gustler.backend.api.docs.AuthApiDocs;
 import com.gustler.backend.api.docs.AuthApiDocsExamples;
 import com.gustler.backend.api.error.ErrorResponse;
@@ -34,6 +35,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.HashMap;
 import java.util.Map;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -63,6 +65,7 @@ import org.springframework.web.util.UriComponentsBuilder;
  * 주소를 받아 그 주소로 이동한다. 이 요청은 다른 변경 요청처럼 CSRF 로 보호되므로 다른 사이트가 탈퇴를 시작시킬 수 없다.
  */
 @RestController
+@Tag(name = ApiDocsTags.MEMBER)
 @RequestMapping("/api/me")
 @ConditionalOnProperty(name = "auth.enabled", havingValue = "true")
 public class MeController {

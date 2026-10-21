@@ -48,7 +48,8 @@ public sealed interface SeatResponse permits Exact, Unknown {
 
     @Schema(name = "UnknownSeat", title = "UNKNOWN 좌석", requiredProperties = {"kind", "reason"})
     record Unknown(
-        @Schema(description = "좌석 수 미제공 사유: 미보고, 상류의 알 수 없음, 품질 판정으로 숨김")
+        @Schema(description = "좌석 수 미제공 사유. NOT_REPORTED=미보고, REPORTED_UNKNOWN=GBIS가 -1(알 수 없음)로 보고, "
+            + "QUALITY_WITHHELD=품질 판정으로 숨김")
         VehicleSeat.Unknown reason
     ) implements SeatResponse {
         public Unknown {

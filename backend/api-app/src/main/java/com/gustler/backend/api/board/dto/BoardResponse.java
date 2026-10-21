@@ -17,7 +17,7 @@ public record BoardResponse(
     BoardRouteResponse route,
     @Schema(description = "보드가 기준으로 사용한 관측 시각. ISO-8601 오프셋 포함")
     OffsetDateTime observedAt,
-    @Schema(description = "보드 기준 관측의 만료 시각. observedAt에서 5분 뒤")
+    @Schema(description = "보드 기준 관측의 만료 시각. 관측 후 5분, 관측 시각이 01~03시대면 10분")
     OffsetDateTime staleAt,
     @Schema(description = "보드 예보에 연결된 모델 정보")
     ModelInfoResponse model,

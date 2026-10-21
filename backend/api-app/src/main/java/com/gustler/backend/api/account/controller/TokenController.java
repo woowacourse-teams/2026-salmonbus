@@ -6,6 +6,7 @@ import com.gustler.backend.api.account.token.AccessTokens;
 import com.gustler.backend.api.account.token.AuthCookies;
 import com.gustler.backend.api.account.token.BearerTokens;
 import com.gustler.backend.api.docs.ApiDocsExamples;
+import com.gustler.backend.api.docs.ApiDocsTags;
 import com.gustler.backend.api.docs.AuthApiDocs;
 import com.gustler.backend.api.docs.AuthApiDocsExamples;
 import com.gustler.backend.api.error.ErrorResponse;
@@ -22,6 +23,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Optional;
@@ -46,6 +48,7 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>{@code auth.enabled} 가 {@code true} 일 때만 등록한다.
  */
 @RestController
+@Tag(name = ApiDocsTags.AUTH)
 @RequestMapping("/api/auth")
 @ConditionalOnProperty(name = "auth.enabled", havingValue = "true")
 public class TokenController {

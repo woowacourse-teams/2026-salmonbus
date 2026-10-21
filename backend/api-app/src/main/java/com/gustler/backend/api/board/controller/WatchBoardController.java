@@ -4,6 +4,7 @@ import com.gustler.backend.api.board.application.WatchBoardOverview;
 import com.gustler.backend.api.board.application.WatchBoardQueryService;
 import com.gustler.backend.api.board.dto.WatchBoardResponse;
 import com.gustler.backend.api.docs.ApiDocsExamples;
+import com.gustler.backend.api.docs.ApiDocsTags;
 import com.gustler.backend.api.error.ErrorResponse;
 import com.gustler.backend.api.route.RouteId;
 import io.swagger.v3.oas.annotations.Operation;
@@ -14,6 +15,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 같은 관측 기준의 탑승판·차량 통합 조회를 제공하고 캐시 헤더를 설정한다.
  */
 @RestController
+@Tag(name = ApiDocsTags.ROUTES)
 @RequestMapping("/api/v1/routes/{routeId}/watch")
 @RequiredArgsConstructor
 public class WatchBoardController {
@@ -41,7 +44,7 @@ public class WatchBoardController {
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "보드 상태별 정상 응답",
             headers = @Header(name = "Cache-Control",
-                description = "public, max-age는 관측 시각대별 정책값(첨두 15초, 평시 20초, 01~03시대 600초)과 "
+                description = "public, max-age는 관측 시각대별 정책값(07~08시·17~22시 15초, 01~03시대 600초, 그 밖의 시간 20초)과 "
                     + "staleAt까지 남은 시간 중 작은 값. staleAt을 넘겨 캐시하지 않는다", schema = @Schema(type = "string")),
             content =
             @Content(mediaType = "application/json", schema = @Schema(implementation = WatchBoardResponse.class),
