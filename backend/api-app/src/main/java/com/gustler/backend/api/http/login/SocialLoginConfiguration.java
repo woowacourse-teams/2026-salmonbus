@@ -34,7 +34,7 @@ import org.springframework.web.client.RestClient;
  * 카카오 프로필 닉네임은 받지 않는다. 비밀은 설정에서 받으며 코드와 저장소에 두지 않는다.
  *
  * <p>애플은 {@code client_secret_post} 로 인증하지만 비밀이 고정값이 아니라 요청마다 만드는 JWT 라
- * ({@link AppleClientSecret}) 등록에는 비밀을 두지 않는다. Spring Security 는 {@code requireProofKey} 기본값이 켜져 있어
+ * ({@link AppleClientAssertion}) 등록에는 비밀을 두지 않는다. Spring Security 는 {@code requireProofKey} 기본값이 켜져 있어
  * 인가 요청에 PKCE 를 걸므로 애플 등록에서는 명시적으로 끈다. 요청 범위는 {@code auth.apple.scopes} 이며 기본은
  * {@code openid} 다. Spring Security 는 {@code openid} 가 있어야 ID 토큰 흐름으로 처리한다.
  */
@@ -69,8 +69,8 @@ public class SocialLoginConfiguration {
 
     @Bean
     @ConditionalOnProperty(prefix = "auth", name = {"enabled", "apple.enabled"}, havingValue = "true")
-    AppleClientSecret appleClientSecret(LoginProperties properties, Clock clock) {
-        return AppleClientSecret.load(properties.apple(), clock);
+    AppleClientAssertion appleClientAssertion(LoginProperties properties, Clock clock) {
+        return AppleClientAssertion.load(properties.apple(), clock);
     }
 
     @Bean
@@ -97,7 +97,7 @@ public class SocialLoginConfiguration {
     @ConditionalOnProperty(prefix = "auth", name = {"enabled", "apple.enabled"}, havingValue = "true")
     AppleWithdrawal appleWithdrawal(
         LoginProperties properties,
-        AppleClientSecret clientSecret,
+        AppleClientAssertion clientSecret,
         WithdrawMember withdrawMember,
         MeterRegistry meters
     ) {
@@ -116,7 +116,7 @@ public class SocialLoginConfiguration {
     @Bean
     SocialLogin socialLogin(
         ObjectProvider<ClientRegistration> registrations,
-        ObjectProvider<AppleClientSecret> appleClientSecret,
+        ObjectProvider<AppleClientAssertion> appleClientAssertion,
         SignInWithSocialAccount signIn,
         RefreshTokens refreshTokens,
         ObjectProvider<AccessTokens> accessTokens,
@@ -124,7 +124,7 @@ public class SocialLoginConfiguration {
         ObjectProvider<AppleWithdrawal> appleWithdrawal,
         ObjectProvider<WithdrawalTickets> withdrawalTickets
     ) {
-        Map<String, Supplier<String>> clientSecrets = appleClientSecret.stream()
+        Map<String, Supplier<String>> clientSecrets = appleClientAssertion.stream()
             .collect(Collectors.toMap(secret -> APPLE, secret -> secret::issue));
         return new SocialLogin(
             registrations.orderedStream().toList(), clientSecrets, signIn, refreshTokens, accessTokens, authCookies,

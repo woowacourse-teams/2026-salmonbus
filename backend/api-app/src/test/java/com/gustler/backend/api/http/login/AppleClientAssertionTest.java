@@ -19,7 +19,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-class AppleClientSecretTest {
+class AppleClientAssertionTest {
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-21T03:00:00Z"), ZoneOffset.UTC);
     private static final List<String> SCOPES = List.of("openid");
 
@@ -31,7 +31,7 @@ class AppleClientSecretTest {
         // given
         KeyPair keyPair = TestAppleKeys.ecKeyPair("secp256r1");
         Path keyFile = TestAppleKeys.writePkcs8Pem(keyPair, directory.resolve("AuthKey.p8"));
-        AppleClientSecret secret = AppleClientSecret.load(apple(keyFile.toString()), CLOCK);
+        AppleClientAssertion secret = AppleClientAssertion.load(apple(keyFile.toString()), CLOCK);
 
         // when
         SignedJWT jwt = SignedJWT.parse(secret.issue());
@@ -57,8 +57,8 @@ class AppleClientSecretTest {
         Path keyFile = TestAppleKeys.writePkcs8Pem(
             TestAppleKeys.ecKeyPair("secp256r1"), directory.resolve("AuthKey.p8"));
         Instant later = CLOCK.instant().plusSeconds(60);
-        AppleClientSecret first = AppleClientSecret.load(apple(keyFile.toString()), CLOCK);
-        AppleClientSecret second = AppleClientSecret.load(
+        AppleClientAssertion first = AppleClientAssertion.load(apple(keyFile.toString()), CLOCK);
+        AppleClientAssertion second = AppleClientAssertion.load(
             apple(keyFile.toString()), Clock.fixed(later, ZoneOffset.UTC));
 
         // when
@@ -75,7 +75,7 @@ class AppleClientSecretTest {
         String missing = directory.resolve("missing.p8").toString();
 
         // when & then
-        assertThatThrownBy(() -> AppleClientSecret.load(apple(missing), CLOCK))
+        assertThatThrownBy(() -> AppleClientAssertion.load(apple(missing), CLOCK))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("private-key-path")
             .hasMessageContaining(missing);
@@ -87,7 +87,7 @@ class AppleClientSecretTest {
         Path garbage = Files.writeString(directory.resolve("garbage.p8"), "not-a-key-secret-content");
 
         // when & then
-        assertThatThrownBy(() -> AppleClientSecret.load(apple(garbage.toString()), CLOCK))
+        assertThatThrownBy(() -> AppleClientAssertion.load(apple(garbage.toString()), CLOCK))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("PKCS#8")
             .hasMessageNotContaining("secret-content");
@@ -99,7 +99,7 @@ class AppleClientSecretTest {
         Path rsa = TestAppleKeys.writePkcs8Pem(TestAppleKeys.rsaKeyPair(), directory.resolve("rsa.p8"));
 
         // when & then
-        assertThatThrownBy(() -> AppleClientSecret.load(apple(rsa.toString()), CLOCK))
+        assertThatThrownBy(() -> AppleClientAssertion.load(apple(rsa.toString()), CLOCK))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("PKCS#8");
     }
@@ -110,7 +110,7 @@ class AppleClientSecretTest {
         Path p384 = TestAppleKeys.writePkcs8Pem(TestAppleKeys.ecKeyPair("secp384r1"), directory.resolve("p384.p8"));
 
         // when & then
-        assertThatThrownBy(() -> AppleClientSecret.load(apple(p384.toString()), CLOCK))
+        assertThatThrownBy(() -> AppleClientAssertion.load(apple(p384.toString()), CLOCK))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("P-256");
     }

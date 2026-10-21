@@ -48,7 +48,7 @@ class AppleLoginConfigurationTest {
                 assertThat(context).hasNotFailed();
                 assertSoftly(softly -> {
                     softly.assertThat(context.getBeansOfType(ClientRegistration.class)).isEmpty();
-                    softly.assertThat(context.getBeansOfType(AppleClientSecret.class)).isEmpty();
+                    softly.assertThat(context.getBeansOfType(AppleClientAssertion.class)).isEmpty();
                 });
             });
     }
@@ -61,7 +61,7 @@ class AppleLoginConfigurationTest {
                 assertThat(context).hasNotFailed();
                 assertSoftly(softly -> {
                     softly.assertThat(context.getBeansOfType(ClientRegistration.class)).isEmpty();
-                    softly.assertThat(context.getBeansOfType(AppleClientSecret.class)).isEmpty();
+                    softly.assertThat(context.getBeansOfType(AppleClientAssertion.class)).isEmpty();
                 });
             });
     }

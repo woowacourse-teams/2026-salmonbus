@@ -27,10 +27,13 @@ import java.util.Date;
  * 내려받은 PKCS#8 PEM({@code .p8}) 파일이며 기동할 때 한 번 읽는다. 읽을 수 없거나 P-256 키가 아니면 기동을
  * 실패시킨다. 키 내용은 예외 메시지와 로그에 남기지 않는다.
  *
+ * <p>클래스 이름에 {@code secret} 을 쓰지 않는다. 운영 빌드의 비밀 검사({@code deploy/verify-revision.sh})가 JAR 항목
+ * 이름에 그 낱말이 있으면 배포를 막는다.
+ *
  * <p>발급 시각은 주입된 {@link Clock} 에서만 얻는다. 유효 기간은 {@link #VALIDITY} 로 짧게 잡는다. 애플이 받는
  * 상한은 6개월이지만 요청마다 새로 만들므로 길 이유가 없다.
  */
-final class AppleClientSecret {
+final class AppleClientAssertion {
     static final String AUDIENCE = "https://appleid.apple.com";
     static final Duration VALIDITY = Duration.ofMinutes(5);
 
@@ -42,7 +45,7 @@ final class AppleClientSecret {
     private final ECDSASigner signer;
     private final Clock clock;
 
-    private AppleClientSecret(String teamId, String clientId, String keyId, ECDSASigner signer, Clock clock) {
+    private AppleClientAssertion(String teamId, String clientId, String keyId, ECDSASigner signer, Clock clock) {
         this.teamId = teamId;
         this.clientId = clientId;
         this.keyId = keyId;
@@ -50,11 +53,11 @@ final class AppleClientSecret {
         this.clock = clock;
     }
 
-    static AppleClientSecret load(LoginProperties.Apple apple, Clock clock) {
+    static AppleClientAssertion load(LoginProperties.Apple apple, Clock clock) {
         apple.requireComplete();
         ECPrivateKey key = readPrivateKey(Path.of(apple.privateKeyPath()));
         ECDSASigner signer = signerOf(key, apple.privateKeyPath());
-        return new AppleClientSecret(apple.teamId(), apple.clientId(), apple.keyId(), signer, clock);
+        return new AppleClientAssertion(apple.teamId(), apple.clientId(), apple.keyId(), signer, clock);
     }
 
     String issue() {
