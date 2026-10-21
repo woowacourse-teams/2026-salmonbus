@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+import org.springframework.http.HttpStatus;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -56,13 +57,14 @@ public final class GbisArrivalSource implements ArrivalSource {
                 default -> upstreamReason(http.httpStatus());
             }, retryAfter);
         }
-        if (http.httpStatus() == 429) {
+        if (http.httpStatus() == HttpStatus.TOO_MANY_REQUESTS.value()) {
             return new Failed(Reason.RATE_LIMITED, retryAfter);
         }
-        if (http.httpStatus() == 401 || http.httpStatus() == 403) {
+        if (http.httpStatus() == HttpStatus.UNAUTHORIZED.value()
+            || http.httpStatus() == HttpStatus.FORBIDDEN.value()) {
             return new Failed(Reason.KEY_REJECTED, retryAfter);
         }
-        if (http.httpStatus() >= 400) {
+        if (http.httpStatus() >= HttpStatus.BAD_REQUEST.value()) {
             return new Failed(Reason.UPSTREAM_ERROR, retryAfter);
         }
         if (!(raw instanceof Received received)) {
@@ -96,7 +98,7 @@ public final class GbisArrivalSource implements ArrivalSource {
     }
 
     private static Reason upstreamReason(final int httpStatus) {
-        if (httpStatus == 429) {
+        if (httpStatus == HttpStatus.TOO_MANY_REQUESTS.value()) {
             return Reason.RATE_LIMITED;
         }
         return Reason.UPSTREAM_ERROR;
