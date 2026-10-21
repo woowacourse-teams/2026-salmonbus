@@ -19,7 +19,10 @@ public enum ErrorCode {
     INVALID_REQUEST(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다."),
     ENDPOINT_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 경로를 찾을 수 없습니다."),
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "이 경로에서 지원하지 않는 요청 방식입니다."),
-    INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "요청을 처리하지 못했습니다.");
+    INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "요청을 처리하지 못했습니다."),
+
+    UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."),
+    CSRF_REJECTED(HttpStatus.BAD_REQUEST, "요청을 확인하지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.");
 
     private final HttpStatus status;
     private final String message;
@@ -40,6 +43,9 @@ public enum ErrorCode {
         }
         if (status.isSameCodeAs(HttpStatus.METHOD_NOT_ALLOWED)) {
             return METHOD_NOT_ALLOWED;
+        }
+        if (status.isSameCodeAs(HttpStatus.UNAUTHORIZED)) {
+            return UNAUTHENTICATED;
         }
         if (status.isSameCodeAs(HttpStatus.SERVICE_UNAVAILABLE)) {
             return SERVICE_UNAVAILABLE;

@@ -569,7 +569,9 @@
               "INVALID_REQUEST",
               "ENDPOINT_NOT_FOUND",
               "METHOD_NOT_ALLOWED",
-              "INTERNAL_ERROR"
+              "INTERNAL_ERROR",
+              "UNAUTHENTICATED",
+              "CSRF_REJECTED"
             ]
           },
           "message": {

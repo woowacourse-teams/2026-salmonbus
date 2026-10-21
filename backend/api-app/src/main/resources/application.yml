@@ -4,6 +4,16 @@ server:
     enabled: true
     mime-types: application/json
     min-response-size: 2KB
+  servlet:
+    session:
+      timeout: 30d
+      cookie:
+        name: __Host-sb_session
+        path: /
+        http-only: true
+        secure: true
+        same-site: lax
+        max-age: 365d
 
 chat:
   enabled: ${CHAT_ENABLED:false}
@@ -15,6 +25,14 @@ chat:
 spring:
   application:
     name: backend-api
+
+  autoconfigure:
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+
+  session:
+    jdbc:
+      initialize-schema: never
+      cleanup-cron: "0 */10 * * * *"
 
   web:
     resources:
@@ -60,6 +78,9 @@ springdoc:
 logging:
   pattern:
     correlation: "[${spring.application.name:},%X{requestId:-}] "
+
+auth:
+  enabled: ${AUTH_ENABLED:false}
 
 arrivals:
   enabled: ${ARRIVALS_ENABLED:false}

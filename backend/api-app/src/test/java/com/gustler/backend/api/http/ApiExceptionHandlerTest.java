@@ -6,6 +6,7 @@ import com.gustler.backend.api.arrival.ArrivalQuery.Failure;
 import com.gustler.backend.api.board.ModelOutOfScopeException;
 import com.gustler.backend.api.board.NoRecentObservationException;
 import com.gustler.backend.api.error.ApiException;
+import com.gustler.backend.api.error.CsrfRejectedException;
 import com.gustler.backend.api.error.ErrorCode;
 import com.gustler.backend.api.error.ErrorResponse;
 import com.gustler.backend.api.error.ServiceUnavailableException;
@@ -38,6 +39,7 @@ class ApiExceptionHandlerTest {
             new ModelOutOfScopeException(),
             new NoRecentObservationException(),
             new ServiceUnavailableException(),
+            new CsrfRejectedException(),
             new Failure(ErrorCode.STATION_NOT_FOUND),
             new Failure(ErrorCode.REFERENCE_VERSION_CONFLICT)
         );
