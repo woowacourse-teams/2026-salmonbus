@@ -43,13 +43,17 @@ public class ObservationDeliveryService implements ObservationDeliveryReceiver {
         @Value("${forecast.evaluation.observation-cache.max-observations:100000}") final int capacity,
         @Value("${forecast.evaluation.observation-cache.retention:50m}") Duration retention
     ) {
-        if (capacity < 1 || retention.isNegative() || retention.isZero()) {
+        if (capacity < 1 || isInvalidRetention(retention)) {
             throw new IllegalArgumentException("관측 보관 개수와 시간은 양수여야 한다");
         }
         this.source = source;
         this.clock = clock;
         this.capacity = capacity;
         this.retention = retention;
+    }
+
+    private boolean isInvalidRetention(Duration retention) {
+        return retention.isNegative() || retention.isZero();
     }
 
     /** afterCommit에서 DB 연결을 사용하지 않는다. 초과분은 다음 조회에서 DB로 복원한다. */
@@ -61,9 +65,7 @@ public class ObservationDeliveryService implements ObservationDeliveryReceiver {
         if (previous != null && previous.attempt() > batch.attempt()) {
             return false;
         }
-        if (previous != null && previous.attempt() == batch.attempt()
-            && previous.revision() > qualityRevision
-            && batch.kind() == Kind.STORED) {
+        if (isSupersededStoredBatch(previous, batch, qualityRevision)) {
             return false;
         }
         if (batch.kind() == Kind.CLEARED) {
@@ -74,6 +76,16 @@ public class ObservationDeliveryService implements ObservationDeliveryReceiver {
             return false;
         }
         return put(key, new Entry(batch.attempt(), batch.observedAt(), qualityRevision, batch, List.of()));
+    }
+
+    private boolean isSupersededStoredBatch(Entry previous, ObservationDeliveryBatch batch, long qualityRevision) {
+        if (previous == null || batch.kind() != Kind.STORED) {
+            return false;
+        }
+        if (previous.attempt() != batch.attempt()) {
+            return false;
+        }
+        return previous.revision() > qualityRevision;
     }
 
     public synchronized Round begin(Instant now) {

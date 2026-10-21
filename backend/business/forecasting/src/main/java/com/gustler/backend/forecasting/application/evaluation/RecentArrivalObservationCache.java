@@ -35,12 +35,16 @@ public class RecentArrivalObservationCache {
         @Value("${forecast.evaluation.observation-cache.max-observations:100000}") final int capacity,
         @Value("${forecast.evaluation.observation-cache.retention:50m}") Duration retention
     ) {
-        if (capacity < 1 || retention.isZero() || retention.isNegative()) {
+        if (capacity < 1 || isInvalidRetention(retention)) {
             throw new IllegalArgumentException("관측 보관 개수와 시간은 양수여야 한다");
         }
         this.enabled = enabled;
         this.capacity = capacity;
         this.retention = retention;
+    }
+
+    private boolean isInvalidRetention(Duration retention) {
+        return retention.isZero() || retention.isNegative();
     }
 
     public synchronized Round begin(Instant now) {
@@ -51,11 +55,17 @@ public class RecentArrivalObservationCache {
 
     private synchronized ArrivalCandidate get(Key key, final long revision, Instant now) {
         Entry entry = entries.get(key);
-        if (entry == null || entry.revision() != revision
-            || !recent(entry.candidate(), now)) {
+        if (!isReusable(entry, revision, now)) {
             return null;
         }
         return entry.candidate();
+    }
+
+    private boolean isReusable(Entry entry, long revision, Instant now) {
+        if (entry == null || entry.revision() != revision) {
+            return false;
+        }
+        return recent(entry.candidate(), now);
     }
 
     private boolean recent(ArrivalCandidate candidate, Instant now) {
@@ -66,14 +76,16 @@ public class RecentArrivalObservationCache {
     private synchronized void publish(Map<Key, Entry> additions, Instant now) {
         entries.values().removeIf(entry -> !recent(entry.candidate(), now));
         for (Map.Entry<Key, Entry> addition : additions.entrySet()) {
-            Entry previous = entries.get(addition.getKey());
-            if (previous != null && previous.revision() > addition.getValue().revision()) {
+            Key key = addition.getKey();
+            Entry entry = addition.getValue();
+            Entry previous = entries.get(key);
+            if (previous != null && previous.revision() > entry.revision()) {
                 continue;
             }
-            if (!recent(addition.getValue().candidate(), now)) {
+            if (!recent(entry.candidate(), now)) {
                 continue;
             }
-            entries.put(addition.getKey(), addition.getValue());
+            entries.put(key, entry);
             trim(entries);
         }
     }

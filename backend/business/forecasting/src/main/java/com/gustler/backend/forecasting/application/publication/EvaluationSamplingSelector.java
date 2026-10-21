@@ -53,13 +53,10 @@ public class EvaluationSamplingSelector {
             .collect(Collectors.toSet());
         for (EvaluationSamplingSource source : sources) {
             EvaluationSamplingPoint current = source.point();
-            if (!predicted.contains(source.observationId())
-                || (!routes.isEmpty() && !routes.contains(source.sourceRouteId()))
-                || current.direction().equals("UNKNOWN")) {
+            if (shouldSkip(source, current, predicted)) {
                 continue;
             }
-            if (current.routeVersionId() != publication.routeVersionId()
-                || current.modelDeploymentId() != publication.modelDeploymentId()) {
+            if (!belongsToPublication(current, publication)) {
                 throw new IllegalArgumentException("평가 선택의 노선과 모델이 발행 정보와 다르다");
             }
             final boolean all = policy.includeAll(committed.get(Key.of(current)), current);
@@ -77,6 +74,22 @@ public class EvaluationSamplingSelector {
         return new Selection(new ForecastPublication(publication.sourceBatchId(), publication.routeVersionId(),
             publication.modelDeploymentId(), publication.demandStatisticsRevision(), publication.qualityRevision(),
             publication.observedAt(), publication.generatedAt(), publication.publishedAt(), selected), advances);
+    }
+
+    private boolean shouldSkip(
+        EvaluationSamplingSource source,
+        EvaluationSamplingPoint current,
+        Set<Long> predicted
+    ) {
+        if (!predicted.contains(source.observationId()) || current.direction().equals("UNKNOWN")) {
+            return true;
+        }
+        return !routes.isEmpty() && !routes.contains(source.sourceRouteId());
+    }
+
+    private boolean belongsToPublication(EvaluationSamplingPoint current, ForecastPublication publication) {
+        return current.routeVersionId() == publication.routeVersionId()
+            && current.modelDeploymentId() == publication.modelDeploymentId();
     }
 
     /**

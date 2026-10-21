@@ -37,9 +37,10 @@ public final class PendingEvaluationBuffer {
         final long workRevision,
         List<PendingForecast> forecasts
     ) {
-        if (forecasts == null || forecasts.isEmpty() || forecasts.size() > 12) {
+        if (hasInvalidForecastCount(forecasts)) {
             throw new IllegalArgumentException("복원할 관측의 미완료 예보가 필요하다");
         }
+
         List<PendingForecast> copy = List.copyOf(forecasts);
         Key key = keyOf(copy.getFirst());
         Set<Integer> targets = new HashSet<>();
@@ -56,6 +57,13 @@ public final class PendingEvaluationBuffer {
         entries.put(key, new Entry(key, qualityRevision, workRevision, copy));
         size = after;
         return true;
+    }
+
+    private boolean hasInvalidForecastCount(List<PendingForecast> forecasts) {
+        if (forecasts == null || forecasts.isEmpty()) {
+            return true;
+        }
+        return forecasts.size() > 12;
     }
 
     /** 평가 순서를 순환한다. 반환 자체로 대기를 완료하거나 삭제하지 않는다. */

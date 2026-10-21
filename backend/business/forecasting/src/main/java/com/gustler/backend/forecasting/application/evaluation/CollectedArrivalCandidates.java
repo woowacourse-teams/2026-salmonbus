@@ -27,12 +27,30 @@ final class CollectedArrivalCandidates {
     private static long direction(Row row, Integer turn) {
         Integer stop = row.stopOrder();
         Integer state = row.runningState();
-        if (turn != null && stop != null && (stop > turn
-                    || (stop.equals(turn) && Integer.valueOf(2).equals(state))
-                    || (stop == 1 && state != null && state != 2))) {
+        if (isInboundObservation(turn, stop, state)) {
             return 1;
         }
         return 0;
+    }
+
+    private static boolean isInboundObservation(Integer turn, Integer stop, Integer state) {
+        if (turn == null || stop == null) {
+            return false;
+        }
+        if (stop > turn) {
+            return true;
+        }
+        if (stop.equals(turn) && Integer.valueOf(2).equals(state)) {
+            return true;
+        }
+        return isReturningAtFirstStop(stop, state);
+    }
+
+    private static boolean isReturningAtFirstStop(int stop, Integer state) {
+        if (stop != 1 || state == null) {
+            return false;
+        }
+        return state != 2;
     }
 
     private static int passedStopOrder(Row row) {

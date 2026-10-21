@@ -108,9 +108,8 @@ public class ForecastBatchWriter {
             .flatMap(trajectory -> {
                 List<SeatForecast> forecasts = forecastsOfVehicleOrEmpty(
                     batch, trajectory, stops, statistics, sameDayOutcomes, runtime, generatedAt);
-                if (!forecasts.isEmpty() && trajectory.observation().vehicleId() != null
-                        && !trajectory.observation().vehicleId().isBlank()) {
-                    ObservedVehicle observation = trajectory.observation();
+                ObservedVehicle observation = trajectory.observation();
+                if (!forecasts.isEmpty() && hasVehicleId(observation)) {
                     String direction = stops.stops()
                         .stream()
                         .filter(stop -> stop.stopOrder() == observation.passedStopOrder())
@@ -125,6 +124,11 @@ public class ForecastBatchWriter {
                 return forecasts.stream();
             })
             .toList();
+    }
+
+    private boolean hasVehicleId(ObservedVehicle observation) {
+        String vehicleId = observation.vehicleId();
+        return vehicleId != null && !vehicleId.isBlank();
     }
 
     private List<SeatForecast> forecastsOfVehicleOrEmpty(

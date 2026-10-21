@@ -67,7 +67,7 @@ public class AdvanceDemandStatisticsService implements AdvanceDemandStatistics {
                 retryAt.put(version, now.plusSeconds(retryDelaySeconds(result.status())));
                 final boolean progress = result.status() == Status.PROGRESSED
                     && !now.isBefore(progressAt.getOrDefault(version, Instant.MIN));
-                if (result.status() == Status.STARTED || result.status() == Status.COMPLETED || progress) {
+                if (shouldLogProgress(result.status(), progress)) {
                     LOGGER.info(
                         "event=stop_demand_statistics status={} phase={} routeVersionId={} dataUntil={} stepDurationMs={}",
                         result.status(), result.phase(), version, formatDataUntil(result.dataUntil()),
@@ -82,6 +82,13 @@ public class AdvanceDemandStatisticsService implements AdvanceDemandStatistics {
             }
             return;
         }
+    }
+
+    private boolean shouldLogProgress(Status status, boolean progress) {
+        if (status == Status.STARTED || status == Status.COMPLETED) {
+            return true;
+        }
+        return progress;
     }
 
     private static long retryDelaySeconds(Status status) {
