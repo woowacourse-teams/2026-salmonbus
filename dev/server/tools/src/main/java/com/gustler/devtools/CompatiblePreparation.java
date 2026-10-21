@@ -9,7 +9,7 @@ final class CompatiblePreparation {
     static final String EVALUATION_DATA = "37b4cace323ff5054a45266d740b05ba938b8c62aaf995c011256c710c190dc3";
 
     // SAL-223: 특징 계산 코드의 컨벤션을 정리했다. 초기화 코드와 모델 번들의 내용은 그대로다.
-    static final String NEXT = "32cb16836ddc38fcf7be904cf98ea4a80473966f2d4103827a7e53b192f634fe";
+    static final String NEXT = "fb6c6841a0236e558219cb431f2fb4cdb7dbd28e3423efef31206fdbe10fd649";
 
     static boolean permits(RevisionStore.Revision previous, RevisionStore.Revision next) {
         var from = previous.files().get("tools/data-contract.sha256");
