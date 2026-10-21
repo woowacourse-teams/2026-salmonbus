@@ -96,16 +96,15 @@ public class ForecastMonitoring implements ForecastTelemetry, Listener {
             }
             Totals totals = accuracy.computeIfAbsent(key, ignored -> new Totals());
             totals.completed++;
-            final boolean eligible = result.state() == ScoringState.SETTLED && result.usableForCalibration()
-                && result.targetBoardingAllowed() && result.seatsOnArrival() != null && result.seatsOnArrival() >= 0;
+            final boolean eligible = isEligibleForAccuracy(result);
             if (!eligible) {
                 continue;
             }
-            if (d.expectedSeats() != null && Double.isFinite(d.expectedSeats()) && d.expectedSeats() >= 0) {
+            if (hasValidExpectedSeats(d.expectedSeats())) {
                 totals.maeCount++;
                 totals.absoluteError += Math.abs(d.expectedSeats() - result.seatsOnArrival());
             }
-            if (Double.isFinite(d.fullChance()) && d.fullChance() >= 0 && d.fullChance() <= 1) {
+            if (hasValidFullChance(d.fullChance())) {
                 final double actual = actualFullOutcome(result);
                 totals.probabilityCount++;
                 totals.brierSum += Math.pow(d.fullChance() - actual, 2);
@@ -113,6 +112,30 @@ public class ForecastMonitoring implements ForecastTelemetry, Listener {
                 totals.actualFullCount += (long) actual;
             }
         }
+    }
+
+    private boolean isEligibleForAccuracy(SettledEvaluation result) {
+        if (result.state() != ScoringState.SETTLED || !result.usableForCalibration()) {
+            return false;
+        }
+        if (!result.targetBoardingAllowed() || result.seatsOnArrival() == null) {
+            return false;
+        }
+        return result.seatsOnArrival() >= 0;
+    }
+
+    private boolean hasValidExpectedSeats(Double expectedSeats) {
+        if (expectedSeats == null || !Double.isFinite(expectedSeats)) {
+            return false;
+        }
+        return expectedSeats >= 0;
+    }
+
+    private boolean hasValidFullChance(double fullChance) {
+        if (!Double.isFinite(fullChance) || fullChance < 0) {
+            return false;
+        }
+        return fullChance <= 1;
     }
 
     @Override
@@ -184,9 +207,7 @@ public class ForecastMonitoring implements ForecastTelemetry, Listener {
         if (!(route instanceof Number number)) {
             return "";
         }
-        if (operation.startsWith("forecast_") || operation.startsWith("statistics_")
-                || operation.equals("settlement_pending_forecasts")
-                || operation.equals("settlement_arrival_candidates")) {
+        if (usesVersionName(operation)) {
             return nameContext(versionNames.get(number.longValue()));
         }
         if (operation.equals("same_day_read")) {
@@ -194,6 +215,14 @@ public class ForecastMonitoring implements ForecastTelemetry, Listener {
             return nameContext(stateName(state));
         }
         return "";
+    }
+
+    private boolean usesVersionName(String operation) {
+        if (operation.startsWith("forecast_") || operation.startsWith("statistics_")) {
+            return true;
+        }
+        return operation.equals("settlement_pending_forecasts")
+            || operation.equals("settlement_arrival_candidates");
     }
 
     /** 활성 노선 카탈로그만 1분마다 조회한다. 평가 테이블 재스캔은 없다. */

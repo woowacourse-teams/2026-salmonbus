@@ -176,12 +176,19 @@ public class JdbcEvaluationWorkStore implements EvaluationWorkStore {
         final long throughObservationId,
         final int limit
     ) {
-        if (afterObservationId < 0 || limit < 1 || limit > MAX_OBSERVATIONS) {
+        if (!hasValidPageRequest(afterObservationId, limit)) {
             throw new IllegalArgumentException("작업 탐색은 음수가 아닌 시작 위치와 제한된 개수가 필요하다");
         }
         return jdbc.sql(PAGE).param("version", version)
             .param("after", afterObservationId).param("through", throughObservationId)
             .param("limit", limit).query(Long.class).list();
+    }
+
+    private boolean hasValidPageRequest(long afterObservationId, int limit) {
+        if (afterObservationId < 0 || limit < 1) {
+            return false;
+        }
+        return limit <= MAX_OBSERVATIONS;
     }
 
     @Override

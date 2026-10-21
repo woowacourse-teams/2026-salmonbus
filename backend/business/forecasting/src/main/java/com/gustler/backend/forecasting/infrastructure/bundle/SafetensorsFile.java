@@ -49,8 +49,7 @@ final class SafetensorsFile {
         final long headerLength = ByteBuffer.wrap(content, 0, HEADER_LENGTH_BYTES)
             .order(ByteOrder.LITTLE_ENDIAN)
             .getLong();
-        if (headerLength < 0 || headerLength > LARGEST_HEADER_LENGTH
-            || HEADER_LENGTH_BYTES + headerLength > content.length) {
+        if (!hasValidHeaderLength(headerLength, content.length)) {
             throw new BundleRejectedException(
                 "계수 파일의 머리말 길이가 파일 크기를 넘는다: %d, %d"
                 .formatted(headerLength, content.length)
@@ -58,6 +57,13 @@ final class SafetensorsFile {
         }
         return new SafetensorsFile(
             tensorsOf(content, (int) headerLength, HEADER_LENGTH_BYTES + (int) headerLength));
+    }
+
+    private static boolean hasValidHeaderLength(long headerLength, int contentLength) {
+        if (headerLength < 0 || headerLength > LARGEST_HEADER_LENGTH) {
+            return false;
+        }
+        return HEADER_LENGTH_BYTES + headerLength <= contentLength;
     }
 
     private static Map<String, Tensor> tensorsOf(
@@ -102,7 +108,7 @@ final class SafetensorsFile {
                 "%s 의 값 구간은 시작과 끝 둘이다: %d개".formatted(name, offsets.size()));
         final long from = wholeNumberOf(offsets.get(0), name + " 의 값 구간 시작");
         final long until = wholeNumberOf(offsets.get(1), name + " 의 값 구간 끝");
-        if (from < 0 || until < from || until > (long) content.length - valuesFrom) {
+        if (!hasValidDataRange(from, until, content.length - (long) valuesFrom)) {
             throw new BundleRejectedException(
                     "%s 의 값 구간이 파일 밖을 가리킨다: %d, %d".formatted(name, from, until));
         }
@@ -115,6 +121,13 @@ final class SafetensorsFile {
         }
         return new Tensor(name, dataType, shape,
             valuesOf(content, valuesFrom + (int) from, Tensor.valueCountOf(shape), dataType));
+    }
+
+    private static boolean hasValidDataRange(long from, long until, long availableBytes) {
+        if (from < 0 || until < from) {
+            return false;
+        }
+        return until <= availableBytes;
     }
 
     private static int[] shapeOf(

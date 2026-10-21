@@ -63,10 +63,10 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
 
     @Override
     public Optional<EvaluationArchiveBatch> reserve(final long routeVersionId, List<Key> candidates) {
-        if (routeVersionId <= 0 || candidates == null || candidates.isEmpty() || candidates.size() > 1000
-            || candidates.stream().anyMatch(key -> key == null)) {
+        if (!hasValidCandidates(routeVersionId, candidates)) {
             throw new IllegalArgumentException("노선과 한정된 정산 후보가 필요하다");
         }
+
         List<Key> keys = candidates.stream()
             .distinct()
             .sorted(Comparator.comparingLong(Key::observationId).thenComparingInt(Key::stopOrder))
@@ -134,6 +134,16 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
             insert.update();
             return Optional.of(batch);
         });
+    }
+
+    private boolean hasValidCandidates(long routeVersionId, List<Key> candidates) {
+        if (routeVersionId <= 0 || candidates == null) {
+            return false;
+        }
+        if (candidates.isEmpty() || candidates.size() > 1000) {
+            return false;
+        }
+        return candidates.stream().noneMatch(key -> key == null);
     }
 
     @Override
@@ -337,9 +347,7 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
             }
             final int size = row.originalJson().getBytes(StandardCharsets.UTF_8).length;
             bytes = Math.addExact(bytes, size);
-            if (size > 64 * 1024 || bytes > 8 * 1024 * 1024
-                || !digest(row.originalJson()).equals(row.sha256())
-                || actual.putIfAbsent(row.key(), row.sha256()) != null) {
+            if (!hasValidArchivedRow(row, size, bytes, actual)) {
                 throw new IllegalArgumentException("보존 원본의 크기·검증값·중복을 확인하지 못했다");
             }
         }
@@ -347,6 +355,16 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
             || expected.stream().anyMatch(entry -> !entry.getValue().equals(actual.get(entry.getKey())))) {
             throw new IllegalArgumentException("보존 원본이 예약한 정산 키와 다르다");
         }
+    }
+
+    private boolean hasValidArchivedRow(Row row, int size, long totalBytes, Map<Key, String> actual) {
+        if (size > 64 * 1024 || totalBytes > 8 * 1024 * 1024) {
+            return false;
+        }
+        if (!digest(row.originalJson()).equals(row.sha256())) {
+            return false;
+        }
+        return actual.putIfAbsent(row.key(), row.sha256()) == null;
     }
 
     private void assertNoLiveRows(EvaluationArchiveBatch batch) {
