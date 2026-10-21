@@ -5,9 +5,7 @@ import java.text.Normalizer;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
-import java.util.random.RandomGenerator;
 import java.util.regex.Pattern;
-import java.util.stream.LongStream;
 
 /**
  * 회원이 서비스에서 쓰는 이름.
@@ -20,11 +18,9 @@ import java.util.stream.LongStream;
  */
 public record Nickname(String value) {
     private static final int MIN_LENGTH = 2;
-    private static final int MAX_LENGTH = 10;
+    static final int MAX_LENGTH = 10;
     private static final Pattern ALLOWED = Pattern.compile("[가-힣A-Za-z0-9]+");
     private static final List<String> RESERVED = List.of("관리자", "운영자", "연어버스", "salmonbus", "admin");
-    private static final String GENERATED_PREFIX = "연어";
-    private static final long DECIMAL_BASE = 10;
 
     public Nickname {
         value = normalize(value);
@@ -40,12 +36,6 @@ public record Nickname(String value) {
             return Optional.empty();
         }
         return Optional.of(new Nickname(raw));
-    }
-
-    /** 닉네임 앞에 붙는 접두사와 무작위 숫자로 만든 닉네임. {@code digits} 는 9 이하여야 한다. */
-    public static Nickname generated(RandomGenerator random, int digits) {
-        final int bound = Math.toIntExact(LongStream.range(0, digits).reduce(1, (left, right) -> left * DECIMAL_BASE));
-        return new Nickname(GENERATED_PREFIX + String.format("%0" + digits + "d", random.nextInt(bound)));
     }
 
     /** 정규화한 뒤 규칙을 어긴 이유를 돌려준다. 어기지 않았으면 비어 있다. */

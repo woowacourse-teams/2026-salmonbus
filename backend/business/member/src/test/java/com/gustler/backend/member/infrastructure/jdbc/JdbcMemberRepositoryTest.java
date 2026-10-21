@@ -153,7 +153,7 @@ class JdbcMemberRepositoryTest {
     @Test
     void 같은_계정이_동시에_처음_로그인해도_회원은_한_명이다() throws Exception {
         // given
-        SocialIdentity identity = new SocialIdentity(LoginProvider.KAKAO, "kakao-1", null);
+        SocialIdentity identity = new SocialIdentity(LoginProvider.KAKAO, "kakao-1");
 
         // when
         List<SignedInMember> actual = runConcurrently(index -> signIn.signIn(identity));
@@ -168,15 +168,18 @@ class JdbcMemberRepositoryTest {
     }
 
     @Test
-    void 서로_다른_사람이_같은_닉네임으로_동시에_가입하면_한_명만_그_닉네임을_얻는다() throws Exception {
+    void 서로_다른_사람이_같은_닉네임으로_동시에_가입하면_한_명만_성공하고_나머지는_닉네임이_겹친다() throws Exception {
         // when
-        runConcurrently(index -> signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, "kakao-" + index, "연어팬")));
+        List<RegistrationResult> actual = runConcurrently(
+            index -> memberRepository.register(newMember("연어팬", LoginProvider.KAKAO, "kakao-" + index)));
 
         // then
-        List<String> nicknames = jdbcClient.sql("SELECT nickname FROM member").query(String.class).list();
         assertSoftly(softly -> {
-            softly.assertThat(nicknames).hasSize(CONCURRENT_REQUESTS).doesNotHaveDuplicates();
-            softly.assertThat(nicknames.stream().filter("연어팬"::equals)).hasSize(1);
+            softly.assertThat(actual).filteredOn(RegistrationResult.Registered.class::isInstance).hasSize(1);
+            softly.assertThat(actual).filteredOn(RegistrationResult.NicknameTaken.class::isInstance)
+                .hasSize(CONCURRENT_REQUESTS - 1);
+            softly.assertThat(memberCount()).isEqualTo(1);
+            softly.assertThat(identityCount()).isEqualTo(1);
         });
     }
 
@@ -265,12 +268,12 @@ class JdbcMemberRepositoryTest {
         });
     }
 
-    private List<SignedInMember> runConcurrently(IntFunction<SignedInMember> task) throws Exception {
+    private <T> List<T> runConcurrently(IntFunction<T> task) throws Exception {
         ExecutorService executor = Executors.newFixedThreadPool(CONCURRENT_REQUESTS);
         try {
             CountDownLatch ready = new CountDownLatch(CONCURRENT_REQUESTS);
             CountDownLatch start = new CountDownLatch(1);
-            List<Future<SignedInMember>> futures = IntStream.range(0, CONCURRENT_REQUESTS)
+            List<Future<T>> futures = IntStream.range(0, CONCURRENT_REQUESTS)
                 .mapToObj(index -> executor.submit(() -> {
                     ready.countDown();
                     start.await();

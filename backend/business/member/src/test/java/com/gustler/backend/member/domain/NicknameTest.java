@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.gustler.backend.member.api.NicknameViolation;
 import java.text.Normalizer;
 import java.util.Optional;
-import java.util.Random;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -67,17 +66,6 @@ class NicknameTest {
 
         // then
         assertThat(actual).contains(NicknameViolation.LENGTH);
-    }
-
-    @ParameterizedTest
-    @CsvSource({"6,8", "8,10"})
-    void 자동_생성_닉네임은_접두사와_숫자_자리수를_지킨다(int digits, int length) {
-        // when
-        Nickname actual = Nickname.generated(new Random(1), digits);
-
-        // then
-        assertThat(actual.value()).hasSize(length).matches("연어\\d{" + digits + "}");
-        assertThat(Nickname.violationOf(actual.value())).isEmpty();
     }
 
     @Test

@@ -5,6 +5,7 @@ import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.api.account.token.AccessTokens;
 import com.gustler.backend.api.account.token.TokenProperties;
+import com.gustler.backend.member.api.ChangeNickname;
 import com.gustler.backend.member.api.LoginProvider;
 import com.gustler.backend.member.api.SignInWithSocialAccount;
 import com.gustler.backend.member.api.SocialIdentity;
@@ -37,6 +38,7 @@ import tools.jackson.databind.ObjectMapper;
  * 로그인한 회원의 정보 조회와 닉네임 변경을 실제 톰캣으로 검증한다.
  *
  * <p>카카오 흐름은 {@code KakaoLoginFlowTest} 가 검증하므로 여기서는 액세스 토큰을 직접 만들어 쿠키로 보낸다.
+ * 가입 닉네임은 무작위로 만들어지므로 가입한 뒤 알려진 닉네임으로 바꿔 두고 시작한다.
  */
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT, properties = "auth.enabled=true")
 @Import(PostgresTestContainer.class)
@@ -59,6 +61,9 @@ class MeControllerTest {
     private SignInWithSocialAccount signIn;
 
     @Autowired
+    private ChangeNickname changeNickname;
+
+    @Autowired
     private AccessTokens accessTokens;
 
     @Autowired
@@ -71,7 +76,8 @@ class MeControllerTest {
     @BeforeEach
     void 회원과_액세스_토큰을_만든다() throws Exception {
         jdbcClient.sql("DELETE FROM member").update();
-        memberId = signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, "kakao-1", "연어팬")).publicId();
+        memberId = signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, "kakao-1")).publicId();
+        changeNickname.change(memberId, "연어팬");
         sessionCookie = ACCESS_COOKIE + "=" + accessTokens.issue(memberId);
         csrfToken = csrfToken();
     }
@@ -223,7 +229,8 @@ class MeControllerTest {
     @Test
     void 다른_회원이_쓰는_닉네임이면_대소문자가_달라도_409다() throws Exception {
         // given
-        signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, "kakao-2", "Salmon"));
+        UUID other = signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, "kakao-2")).publicId();
+        changeNickname.change(other, "Salmon");
 
         // when
         HttpResponse<String> actual = patch("{\"nickname\":\"SALMON\"}");

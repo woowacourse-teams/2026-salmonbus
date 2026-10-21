@@ -55,7 +55,6 @@ import tools.jackson.databind.ObjectMapper;
 @Import(PostgresTestContainer.class)
 class AppleLoginFlowTest {
     private static final String SUBJECT = "001234.apple.subject";
-    private static final String NICKNAME_PATTERN = "연어\\d{6}";
 
     private static FakeAppleServer apple;
 
@@ -136,14 +135,14 @@ class AppleLoginFlowTest {
             softly.assertThat(location(callback)).isEqualTo("/routes/123456789?direction=UP");
             softly.assertThat(header(callback, "Cache-Control")).isEqualTo("no-store");
             softly.assertThat(session.path("authenticated").asBoolean()).isTrue();
-            softly.assertThat(session.path("member").path("nickname").asString()).matches(NICKNAME_PATTERN);
+            softly.assertThat(session.path("member").path("nickname").asString()).matches(SignUpNicknames.PATTERN);
             softly.assertThat(session.path("member").path("provider").asString()).isEqualTo("APPLE");
             softly.assertThat(memberCount()).isEqualTo(1);
             softly.assertThat(identityCount()).isEqualTo(1);
             softly.assertThat(jdbcClient.sql("SELECT provider FROM member_identity").query(String.class).single())
                 .isEqualTo("APPLE");
             softly.assertThat(jdbcClient.sql("SELECT nickname FROM member").query(String.class).single())
-                .matches(NICKNAME_PATTERN);
+                .matches(SignUpNicknames.PATTERN);
         });
     }
 

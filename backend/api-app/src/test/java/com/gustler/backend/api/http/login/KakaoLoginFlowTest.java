@@ -45,7 +45,7 @@ import tools.jackson.databind.ObjectMapper;
 @Import(PostgresTestContainer.class)
 class KakaoLoginFlowTest {
     private static final String SESSION_COOKIE = "__Host-sb_session";
-        private static final String SUBJECT = "kakao-subject-1";
+    private static final String SUBJECT = "kakao-subject-1";
     private static final int THIRTY_DAYS_SECONDS = 30 * 24 * 60 * 60;
     private static final int TEN_MINUTES_SECONDS = 10 * 60;
 
@@ -94,7 +94,7 @@ class KakaoLoginFlowTest {
     }
 
     @Test
-    void 처음_로그인하면_회원이_만들어지고_돌아갈_경로로_보낸다() throws Exception {
+    void 처음_로그인하면_생성한_닉네임으로_회원이_만들어지고_돌아갈_경로로_보낸다() throws Exception {
         // given
         TestBrowser browser = browser();
         HttpResponse<String> started = browser.get("/api/auth/kakao/start?returnTo=/routes/123456789?direction=UP");
@@ -102,7 +102,7 @@ class KakaoLoginFlowTest {
         MultiValueMap<String, String> query = queryOf(authorization);
 
         // when
-        String code = kakao.authorize(authorization, SUBJECT, "연어팬");
+        String code = kakao.authorize(authorization, claims -> claims.subject(SUBJECT).claim("nickname", "연어팬"), false);
         HttpResponse<String> callback = browser.get(callbackPath(authorization, code));
 
         // then
@@ -113,7 +113,7 @@ class KakaoLoginFlowTest {
             softly.assertThat(authorization).startsWith(kakao.baseUrl() + "/oauth/authorize");
             softly.assertThat(query.getFirst("response_type")).isEqualTo("code");
             softly.assertThat(query.getFirst("client_id")).isEqualTo(FakeKakaoServer.CLIENT_ID);
-            softly.assertThat(query.getFirst("scope")).isEqualTo("openid%20profile_nickname");
+            softly.assertThat(query.getFirst("scope")).isEqualTo("openid");
             softly.assertThat(query.getFirst("redirect_uri"))
                 .isEqualTo("https://www.salmonbus.test/api/auth/kakao/callback");
             softly.assertThat(query.getFirst("code_challenge_method")).isEqualTo("S256");
@@ -123,7 +123,8 @@ class KakaoLoginFlowTest {
             softly.assertThat(location(callback)).isEqualTo("/routes/123456789?direction=UP");
             softly.assertThat(header(callback, "Cache-Control")).isEqualTo("no-store");
             softly.assertThat(session.path("authenticated").asBoolean()).isTrue();
-            softly.assertThat(session.path("member").path("nickname").asString()).isEqualTo("연어팬");
+            softly.assertThat(session.path("member").path("nickname").asString())
+                .as("카카오가 닉네임 클레임을 보내도 쓰지 않는다").matches(SignUpNicknames.PATTERN);
             softly.assertThat(session.path("member").path("provider").asString()).isEqualTo("KAKAO");
             softly.assertThat(tokenRequest.form().get("client_secret")).isEqualTo(FakeKakaoServer.CLIENT_SECRET);
             softly.assertThat(tokenRequest.authorizationHeader()).isNull();
@@ -140,7 +141,7 @@ class KakaoLoginFlowTest {
         final long beforeLogin = maxInactiveInterval();
 
         // when
-        String code = kakao.authorize(authorization, SUBJECT, "연어팬");
+        String code = kakao.authorize(authorization, SUBJECT);
         HttpResponse<String> callback = browser.get(callbackPath(authorization, code));
 
         // then
@@ -165,19 +166,19 @@ class KakaoLoginFlowTest {
     }
 
     @Test
-    void 다시_로그인하면_같은_회원이고_닉네임을_덮어쓰지_않는다() throws Exception {
+    void 다시_로그인하면_같은_회원이고_닉네임을_바꾸지_않는다() throws Exception {
         // given
-        String firstId = signIn("연어팬");
+        String firstId = signIn();
+        String firstNickname = nickname();
 
         // when
-        String secondId = signIn("바뀐이름");
+        String secondId = signIn();
 
         // then
         assertSoftly(softly -> {
             softly.assertThat(secondId).isEqualTo(firstId);
             softly.assertThat(memberCount()).isEqualTo(1);
-            softly.assertThat(jdbcClient.sql("SELECT nickname FROM member").query(String.class).single())
-                .isEqualTo("연어팬");
+            softly.assertThat(nickname()).isEqualTo(firstNickname);
         });
     }
 
@@ -186,7 +187,7 @@ class KakaoLoginFlowTest {
         // given
         TestBrowser browser = browser();
         String authorization = location(browser.get("/api/auth/kakao/start"));
-        browser.get(callbackPath(authorization, kakao.authorize(authorization, SUBJECT, "연어팬")));
+        browser.get(callbackPath(authorization, kakao.authorize(authorization, SUBJECT)));
         browser.get("/api/auth/session");
 
         // when
@@ -227,7 +228,7 @@ class KakaoLoginFlowTest {
         // given
         TestBrowser browser = browser();
         String authorization = location(browser.get("/api/auth/kakao/start"));
-        String code = kakao.authorize(authorization, SUBJECT, "연어팬");
+        String code = kakao.authorize(authorization, SUBJECT);
 
         // when
         HttpResponse<String> callback = browser.get("/api/auth/kakao/callback?code=" + code + "&state=forged-state");
@@ -245,7 +246,7 @@ class KakaoLoginFlowTest {
         // given
         TestBrowser starter = browser();
         String authorization = location(starter.get("/api/auth/kakao/start"));
-        String code = kakao.authorize(authorization, SUBJECT, "연어팬");
+        String code = kakao.authorize(authorization, SUBJECT);
         TestBrowser stranger = browser();
 
         // when
@@ -263,7 +264,7 @@ class KakaoLoginFlowTest {
         // given
         TestBrowser browser = browser();
         String authorization = location(browser.get("/api/auth/kakao/start"));
-        String code = kakao.authorize(authorization, SUBJECT, "연어팬");
+        String code = kakao.authorize(authorization, SUBJECT);
         kakao.failTokenExchangeWith(500);
 
         // when
@@ -321,7 +322,7 @@ class KakaoLoginFlowTest {
         // given
         TestBrowser browser = browser();
         String authorization = location(browser.get("/api/auth/kakao/start"));
-        browser.get(callbackPath(authorization, kakao.authorize(authorization, SUBJECT, "연어팬")));
+        browser.get(callbackPath(authorization, kakao.authorize(authorization, SUBJECT)));
 
         // when
         HttpResponse<String> restarted = browser.get("/api/auth/kakao/start");
@@ -343,7 +344,7 @@ class KakaoLoginFlowTest {
         String authorization = location(browser.get("/api/auth/kakao/start?returnTo=//evil.com"));
 
         // when
-        String code = kakao.authorize(authorization, SUBJECT, "연어팬");
+        String code = kakao.authorize(authorization, SUBJECT);
         HttpResponse<String> callback = browser.get(callbackPath(authorization, code));
 
         // then
@@ -367,10 +368,10 @@ class KakaoLoginFlowTest {
         return new TestBrowser(port);
     }
 
-    private String signIn(String nickname) throws Exception {
+    private String signIn() throws Exception {
         TestBrowser browser = browser();
         String authorization = location(browser.get("/api/auth/kakao/start"));
-        browser.get(callbackPath(authorization, kakao.authorize(authorization, SUBJECT, nickname)));
+        browser.get(callbackPath(authorization, kakao.authorize(authorization, SUBJECT)));
         return objectMapper.readTree(browser.get("/api/auth/session").body()).path("member").path("id").asString();
     }
 
@@ -392,6 +393,10 @@ class KakaoLoginFlowTest {
 
     private static String header(HttpResponse<String> response, String name) {
         return response.headers().firstValue(name).orElse("");
+    }
+
+    private String nickname() {
+        return jdbcClient.sql("SELECT nickname FROM member").query(String.class).single();
     }
 
     private long longOf(String sql) {

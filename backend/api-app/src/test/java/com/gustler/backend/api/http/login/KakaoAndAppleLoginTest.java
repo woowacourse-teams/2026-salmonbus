@@ -107,7 +107,7 @@ class KakaoAndAppleLoginTest {
 
         // when
         HttpResponse<String> kakaoCallback = kakaoBrowser.get("/api/auth/kakao/callback?code="
-            + kakao.authorize(kakaoAuthorization, "kakao-subject", "연어팬") + "&state=" + stateOf(kakaoAuthorization));
+            + kakao.authorize(kakaoAuthorization, "kakao-subject") + "&state=" + stateOf(kakaoAuthorization));
         HttpResponse<String> appleCallback = appleBrowser.get("/api/auth/apple/callback?code="
             + apple.authorize(appleAuthorization, "apple-subject") + "&state=" + stateOf(appleAuthorization));
 
@@ -126,8 +126,9 @@ class KakaoAndAppleLoginTest {
             softly.assertThat(kakaoCallback.statusCode()).isEqualTo(HttpStatus.FOUND.value());
             softly.assertThat(appleCallback.statusCode()).isEqualTo(HttpStatus.FOUND.value());
             softly.assertThat(kakaoSession.path("member").path("provider").asString()).isEqualTo("KAKAO");
-            softly.assertThat(kakaoSession.path("member").path("nickname").asString()).isEqualTo("연어팬");
+            softly.assertThat(kakaoSession.path("member").path("nickname").asString()).matches(SignUpNicknames.PATTERN);
             softly.assertThat(appleSession.path("member").path("provider").asString()).isEqualTo("APPLE");
+            softly.assertThat(appleSession.path("member").path("nickname").asString()).matches(SignUpNicknames.PATTERN);
             softly.assertThat(kakaoToken.form().get("client_secret")).isEqualTo(FakeKakaoServer.CLIENT_SECRET);
             softly.assertThat(kakaoToken.form().get("code_verifier")).isNotBlank();
             softly.assertThat(appleToken.form().get("client_secret")).hasSize(1);

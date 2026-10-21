@@ -112,7 +112,7 @@ class KakaoWithdrawalTest {
         kakao.reset();
         jdbcClient.sql("DELETE FROM member").update();
         jdbcClient.sql("DELETE FROM provider_unlink").update();
-        memberId = signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, SUBJECT, "연어팬")).publicId();
+        memberId = signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, SUBJECT)).publicId();
         refreshToken = refreshTokens.issue(memberId).token();
         csrfToken = csrfToken();
     }
@@ -165,7 +165,7 @@ class KakaoWithdrawalTest {
         withdraw(accessTokens.issue(memberId));
 
         // when
-        UUID again = signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, SUBJECT, "연어팬")).publicId();
+        UUID again = signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, SUBJECT)).publicId();
 
         // then
         assertSoftly(softly -> {
@@ -221,7 +221,7 @@ class KakaoWithdrawalTest {
     @Test
     void 애플_회원은_다시_인증하라고_409로_답하고_지우지_않는다() throws Exception {
         // given
-        UUID appleMember = signIn.signIn(new SocialIdentity(LoginProvider.APPLE, "001.apple", null)).publicId();
+        UUID appleMember = signIn.signIn(new SocialIdentity(LoginProvider.APPLE, "001.apple")).publicId();
 
         // when
         HttpResponse<String> actual = withdraw(accessTokens.issue(appleMember));

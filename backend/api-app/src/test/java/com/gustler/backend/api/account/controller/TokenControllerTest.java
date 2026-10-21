@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.api.account.token.AccessTokens;
+import com.gustler.backend.member.api.ChangeNickname;
 import com.gustler.backend.member.api.IssuedRefreshToken;
 import com.gustler.backend.member.api.LoginProvider;
 import com.gustler.backend.member.api.RefreshTokens;
@@ -52,6 +53,9 @@ class TokenControllerTest {
     private SignInWithSocialAccount signIn;
 
     @Autowired
+    private ChangeNickname changeNickname;
+
+    @Autowired
     private RefreshTokens refreshTokens;
 
     @Autowired
@@ -64,7 +68,8 @@ class TokenControllerTest {
     @BeforeEach
     void 회원과_리프레시_토큰을_만든다() throws Exception {
         jdbcClient.sql("DELETE FROM member").update();
-        memberId = signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, "kakao-1", "연어팬")).publicId();
+        memberId = signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, "kakao-1")).publicId();
+        changeNickname.change(memberId, "연어팬");
         IssuedRefreshToken issued = refreshTokens.issue(memberId);
         refreshToken = issued.token();
         csrfToken = csrfToken();

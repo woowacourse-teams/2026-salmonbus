@@ -214,7 +214,7 @@ class MemberWithdrawalTest {
     }
 
     private UUID register(LoginProvider provider, String subject) {
-        return signIn.signIn(new SocialIdentity(provider, subject, null)).publicId();
+        return signIn.signIn(new SocialIdentity(provider, subject)).publicId();
     }
 
     private <T> List<T> runConcurrently(IntFunction<T> task) throws Exception {

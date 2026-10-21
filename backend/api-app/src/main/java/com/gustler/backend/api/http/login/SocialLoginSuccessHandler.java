@@ -46,7 +46,6 @@ import org.springframework.web.util.UriComponentsBuilder;
  */
 final class SocialLoginSuccessHandler implements AuthenticationSuccessHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(SocialLoginSuccessHandler.class);
-    private static final String NICKNAME_CLAIM = "nickname";
     private static final String WITHDRAWN_PARAMETER = "withdrawn";
     private static final String WITHDRAW_PARAMETER = "withdraw";
 
@@ -88,10 +87,9 @@ final class SocialLoginSuccessHandler implements AuthenticationSuccessHandler {
             completeWithdrawal(request, response, withdrawing.get(), new MemberIdentity(provider, user.getSubject()));
             return;
         }
-        String nickname = user.getClaimAsString(NICKNAME_CLAIM);
         HttpHeaders cookies = new HttpHeaders();
         try {
-            SignedInMember member = signIn.signIn(new SocialIdentity(provider, user.getSubject(), nickname));
+            SignedInMember member = signIn.signIn(new SocialIdentity(provider, user.getSubject()));
             String accessToken = accessTokens.issue(member.publicId());
             IssuedRefreshToken refreshToken = refreshTokens.issue(member.publicId());
             authCookies.write(cookies, accessToken, refreshToken);

@@ -292,7 +292,7 @@ class ProviderUnlinkRetryTest {
         final long otherSubject = insertUnlink("GAVE_UP", 10, Duration.ZERO, "KAKAO", IDENTITY.subject());
 
         // when
-        signIn.signIn(new SocialIdentity(IDENTITY.provider(), IDENTITY.subject(), null));
+        signIn.signIn(new SocialIdentity(IDENTITY.provider(), IDENTITY.subject()));
 
         // then
         List<Long> remaining = jdbcClient.sql("SELECT id FROM provider_unlink").query(Long.class).list();
@@ -300,7 +300,7 @@ class ProviderUnlinkRetryTest {
     }
 
     private PendingUnlink withdrawPending() {
-        SocialIdentity identity = new SocialIdentity(IDENTITY.provider(), IDENTITY.subject(), null);
+        SocialIdentity identity = new SocialIdentity(IDENTITY.provider(), IDENTITY.subject());
         return withdrawMember.withdraw(signIn.signIn(identity).publicId(), ProviderUnlink.PENDING)
             .orElseThrow()
             .pendingUnlink()

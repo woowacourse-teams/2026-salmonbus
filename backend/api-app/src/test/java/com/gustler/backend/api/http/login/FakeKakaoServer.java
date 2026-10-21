@@ -110,8 +110,8 @@ final class FakeKakaoServer implements AutoCloseable {
     }
 
     /** 사용자가 제공자 화면에서 동의했을 때 제공자가 콜백에 실어 보낼 코드를 만든다. */
-    String authorize(String authorizationLocation, String sub, String nickname) {
-        return authorize(authorizationLocation, claims -> claims.subject(sub).claim("nickname", nickname), false);
+    String authorize(String authorizationLocation, String sub) {
+        return authorize(authorizationLocation, claims -> claims.subject(sub), false);
     }
 
     String authorize(String authorizationLocation, Consumer<JWTClaimsSet.Builder> mutation, boolean signWithOtherKey) {
@@ -141,7 +141,7 @@ final class FakeKakaoServer implements AutoCloseable {
         try {
             String idToken = idToken(grant);
             respond(exchange, 200, "{\"access_token\":\"fake-access-token\",\"token_type\":\"bearer\","
-                + "\"expires_in\":21599,\"id_token\":\"" + idToken + "\",\"scope\":\"openid profile_nickname\"}");
+                + "\"expires_in\":21599,\"id_token\":\"" + idToken + "\",\"scope\":\"openid\"}");
         } catch (JOSEException exception) {
             throw new IOException(exception);
         }

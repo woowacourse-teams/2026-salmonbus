@@ -71,7 +71,7 @@ class KakaoLoginSignInFailureTest {
         jdbcClient.sql("DELETE FROM SPRING_SESSION").update();
         String authorization = browser.get("/api/auth/kakao/start").headers().firstValue("Location").orElseThrow();
         String state = UriComponentsBuilder.fromUriString(authorization).build().getQueryParams().getFirst("state");
-        String code = kakao.authorize(authorization, "kakao-subject-1", "연어팬");
+        String code = kakao.authorize(authorization, "kakao-subject-1");
 
         // when
         HttpResponse<String> callback = browser.get("/api/auth/kakao/callback?code=" + code + "&state=" + state);

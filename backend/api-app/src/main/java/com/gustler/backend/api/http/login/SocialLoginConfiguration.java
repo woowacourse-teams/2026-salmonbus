@@ -30,8 +30,8 @@ import org.springframework.web.client.RestClient;
  * <p>제공자는 {@code auth.enabled} 와 그 제공자의 {@code auth.<제공자>.enabled} 가 모두 {@code true} 일 때만 켜진다.
  * 로그인 전체를 끄는 스위치가 제공자 경로까지 끄지 못하면 운영 중에 로그인을 내릴 수 없다.
  *
- * <p>카카오는 {@code client_secret_post} 로 인증하고 {@code openid profile_nickname} 범위를 요청한다.
- * 비밀은 설정에서 받으며 코드와 저장소에 두지 않는다.
+ * <p>카카오는 {@code client_secret_post} 로 인증하고 {@code openid} 범위만 요청한다. 가입 닉네임은 회원 모듈이 만들므로
+ * 카카오 프로필 닉네임은 받지 않는다. 비밀은 설정에서 받으며 코드와 저장소에 두지 않는다.
  *
  * <p>애플은 {@code client_secret_post} 로 인증하지만 비밀이 고정값이 아니라 요청마다 만드는 JWT 라
  * ({@link AppleClientSecret}) 등록에는 비밀을 두지 않는다. Spring Security 는 {@code requireProofKey} 기본값이 켜져 있어
@@ -58,7 +58,7 @@ public class SocialLoginConfiguration {
             .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
             .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
             .redirectUri(properties.publicBaseUrl() + "/api/auth/" + KAKAO + "/callback")
-            .scope("openid", "profile_nickname")
+            .scope("openid")
             .issuerUri(kakao.issuer())
             .authorizationUri(kakao.authorizationUri())
             .tokenUri(kakao.tokenUri())
