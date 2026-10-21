@@ -114,73 +114,115 @@ public class ObservationDeliveryService implements ObservationDeliveryReceiver {
 
     private synchronized List<ArrivalCandidate> prepare(final long version, final long revision, Round round) {
         List<Header> headers = source.headers(version, round.cutoff, capacity + 1);
-        if (headers.size() > capacity || headers.stream().anyMatch(header -> header.rows() < 0)
-            || headers.stream()
-            .mapToLong(Header::rows)
-            .sum() > round.remaining) {
+        if (headersExceedRoundLimits(headers, round)) {
             return null;
         }
 
         Map<Long, List<ArrivalCandidate>> ready = new HashMap<>();
+        List<Header> missing = addReusableBatches(version, revision, headers, ready);
+        if (!restoreMissingBatchesWithinRoundLimits(version, missing, round, ready)) {
+            return null;
+        }
+        cacheReadyBatches(version, revision, headers, ready);
+        if (ready.size() != headers.size()) {
+            return null;
+        }
+        return sortReadyCandidatesAndConsumeBudget(ready, round);
+    }
+
+    private boolean headersExceedRoundLimits(List<Header> headers, Round round) {
+        return headers.size() > capacity || headers.stream().anyMatch(header -> header.rows() < 0)
+            || headers.stream().mapToLong(Header::rows).sum() > round.remaining;
+    }
+
+    private List<Header> addReusableBatches(
+        final long version,
+        final long revision,
+        List<Header> headers,
+        Map<Long, List<ArrivalCandidate>> ready
+    ) {
         List<Header> missing = new ArrayList<>();
         for (Header header : headers) {
             Entry entry = batches.get(new Key(version, header.batchId()));
-            if (entry == null || entry.attempt() != header.attempt()
-                || (entry.raw() == null && !entry.observedAt().equals(header.observedAt()))
-                || entry.size() != header.rows()) {
+            if (!canReuseBatch(entry, header, revision)) {
                 missing.add(header);
                 continue;
             }
-            if (entry.revision() != revision) {
-                missing.add(header);
-                continue;
-            }
-            if (entry.raw() == null) {
-                ready.put(header.batchId(), entry.candidates());
-                continue;
-            }
-            // Java 나노초와 PostgreSQL 마이크로초의 차이는 저장된 배치 시각으로 통일한다.
-            ready.put(header.batchId(), CollectedArrivalCandidates.from(
-                entry.raw(), header.turnSequence(), header.observedAt()));
+            ready.put(header.batchId(), candidatesFromCachedEntry(entry, header));
         }
+        return missing;
+    }
 
-        // 재시작이나 전달 누락 시에도 회차당 복원 배치 수와 본문 수를 제한한다.
+    private static boolean canReuseBatch(Entry entry, Header header, final long revision) {
+        return entry != null
+            && entry.attempt() == header.attempt()
+            && (entry.raw() != null || entry.observedAt().equals(header.observedAt()))
+            && entry.size() == header.rows()
+            && entry.revision() == revision;
+    }
+
+    private static List<ArrivalCandidate> candidatesFromCachedEntry(Entry entry, Header header) {
+        if (entry.raw() == null) {
+            return entry.candidates();
+        }
+        return CollectedArrivalCandidates.from(entry.raw(), header.turnSequence(), header.observedAt());
+    }
+
+    private boolean restoreMissingBatchesWithinRoundLimits(
+        final long version,
+        List<Header> missing,
+        Round round,
+        Map<Long, List<ArrivalCandidate>> ready
+    ) {
         List<Header> recovering = missing.stream()
             .limit(round.recoveryBatches)
             .toList();
         round.recoveryBatches -= recovering.size();
-        if (!recovering.isEmpty()) {
-            List<Long> ids = recovering.stream()
-                .map(Header::batchId)
-                .toList();
-            List<Row> rows = source.restore(version, ids, round.remaining + 1);
-            if (rows.size() > round.remaining) {
-                return null;
-            }
-            Map<Long, List<ArrivalCandidate>> grouped = rows.stream()
-                .collect(Collectors.groupingBy(Row::batchId, HashMap::new,
-                    Collectors.mapping(Row::candidate, Collectors.toCollection(ArrayList::new))));
-            for (Header header : recovering) {
-                List<ArrivalCandidate> candidates = List.copyOf(grouped.getOrDefault(header.batchId(), List.of()));
-                // 목록 확인 뒤 배치가 재수집/삭제됐거나 LIMIT에서 잘렸다면 완전한 자료가 아니다.
-                if (candidates.size() == header.rows()
-                    && candidates.stream().allMatch(row -> row.observedAt().equals(header.observedAt()))) {
-                    ready.put(header.batchId(), candidates);
-                }
+        if (recovering.isEmpty()) {
+            return true;
+        }
+        List<Long> batchIds = recovering.stream().map(Header::batchId).toList();
+        List<Row> rows = source.restore(version, batchIds, round.remaining + 1);
+        if (rows.size() > round.remaining) {
+            return false;
+        }
+        Map<Long, List<ArrivalCandidate>> candidatesByBatchId = rows.stream()
+            .collect(Collectors.groupingBy(Row::batchId, HashMap::new,
+                Collectors.mapping(Row::candidate, Collectors.toCollection(ArrayList::new))));
+        for (Header header : recovering) {
+            List<ArrivalCandidate> candidates =
+                List.copyOf(candidatesByBatchId.getOrDefault(header.batchId(), List.of()));
+            if (hasCompleteRecoveredBatch(header, candidates)) {
+                ready.put(header.batchId(), candidates);
             }
         }
+        return true;
+    }
 
+    private static boolean hasCompleteRecoveredBatch(Header header, List<ArrivalCandidate> candidates) {
+        return candidates.size() == header.rows()
+            && candidates.stream().allMatch(candidate -> candidate.observedAt().equals(header.observedAt()));
+    }
+
+    private void cacheReadyBatches(
+        final long version,
+        final long revision,
+        List<Header> headers,
+        Map<Long, List<ArrivalCandidate>> ready
+    ) {
         for (Header header : headers) {
             List<ArrivalCandidate> candidates = ready.get(header.batchId());
-            if (candidates == null) {
-                continue;
+            if (candidates != null) {
+                put(new Key(version, header.batchId()), new Entry(header.attempt(),
+                    header.observedAt(), revision, null, candidates));
             }
-            put(new Key(version, header.batchId()), new Entry(header.attempt(),
-                header.observedAt(), revision, null, candidates));
         }
-        if (ready.size() != headers.size()) {
-            return null;
-        }
+    }
+
+    private static List<ArrivalCandidate> sortReadyCandidatesAndConsumeBudget(
+        Map<Long, List<ArrivalCandidate>> ready,
+        Round round
+    ) {
         List<ArrivalCandidate> result = ready.values()
             .stream()
             .flatMap(List::stream)
