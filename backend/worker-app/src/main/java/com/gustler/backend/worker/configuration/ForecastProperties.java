@@ -51,9 +51,16 @@ public record ForecastProperties(
         String name,
         Duration value
     ) {
-        if (value == null || value.isNegative() || value.isZero()) {
+        if (!isPositive(value)) {
             throw new IllegalStateException("%s 는 0보다 길어야 한다: %s".formatted(name, value));
         }
+    }
+
+    private static boolean isPositive(Duration value) {
+        if (value == null || value.isNegative()) {
+            return false;
+        }
+        return !value.isZero();
     }
 
     private static void requireAtMost(

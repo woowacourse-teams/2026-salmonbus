@@ -15,12 +15,30 @@ public record ArrivalProperties(String internalToken, int keyDailyLimit, int que
     Duration startupDelay, Duration queueWait, Duration retention, Map<String, Integer> limits) {
     @ConstructorBinding
     public ArrivalProperties {
-        if (internalToken == null || internalToken.isBlank() || queueCapacity < 1 || queueCapacity > 100
-            || keyDailyLimit < 1
-            || retention == null || retention.compareTo(Duration.ofMinutes(1)) < 0) {
-            throw new IllegalArgumentException("도착 수집 설정과 내부 인증 토큰을 확인해야 한다");
+        if (!hasValidToken(internalToken) || !hasValidQueueCapacity(queueCapacity)) {
+            throw invalidProperties();
         }
+        if (keyDailyLimit < 1 || !hasValidRetention(retention)) {
+            throw invalidProperties();
+        }
+
         limits = positiveLimits(limits);
+    }
+
+    private static boolean hasValidToken(String internalToken) {
+        return internalToken != null && !internalToken.isBlank();
+    }
+
+    private static boolean hasValidQueueCapacity(int queueCapacity) {
+        return queueCapacity >= 1 && queueCapacity <= 100;
+    }
+
+    private static boolean hasValidRetention(Duration retention) {
+        return retention != null && retention.compareTo(Duration.ofMinutes(1)) >= 0;
+    }
+
+    private static IllegalArgumentException invalidProperties() {
+        return new IllegalArgumentException("도착 수집 설정과 내부 인증 토큰을 확인해야 한다");
     }
 
     private static Map<String, Integer> positiveLimits(Map<String, Integer> limits) {

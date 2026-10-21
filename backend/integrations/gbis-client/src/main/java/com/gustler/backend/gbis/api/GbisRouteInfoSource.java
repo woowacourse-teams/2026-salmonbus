@@ -63,28 +63,46 @@ public class GbisRouteInfoSource {
         String routeId
     ) {
         BusRouteInfoResponse response = read(ROUTE_INFO_PATH, routeId, BusRouteInfoResponse.class);
-        if (response == null
-            || response.response() == null
-            || response.response().header() == null
-            || GbisResultCode.from(response.response().header().resultCode()) != GbisResultCode.SUCCESS
-            || response.response().body() == null) {
+        if (!isSuccessful(response)) {
             return null;
         }
-        return response.response().body().routeInfo();
+        BusRouteInfoResponse.Response providerResponse = response.response();
+        return providerResponse.body().routeInfo();
+    }
+
+    private boolean isSuccessful(BusRouteInfoResponse response) {
+        if (response == null || response.response() == null) {
+            return false;
+        }
+        BusRouteInfoResponse.Response providerResponse = response.response();
+        if (providerResponse.header() == null || providerResponse.body() == null) {
+            return false;
+        }
+        BusRouteInfoResponse.Header header = providerResponse.header();
+        return GbisResultCode.from(header.resultCode()) == GbisResultCode.SUCCESS;
     }
 
     private List<RouteStationItem> readStations(
         String routeId
     ) {
         BusRouteStationResponse response = read(ROUTE_STATION_PATH, routeId, BusRouteStationResponse.class);
-        if (response == null
-            || response.response() == null
-            || response.response().header() == null
-            || GbisResultCode.from(response.response().header().resultCode()) != GbisResultCode.SUCCESS
-            || response.response().body() == null) {
+        if (!isSuccessful(response)) {
             return null;
         }
-        return response.response().body().stations();
+        BusRouteStationResponse.Response providerResponse = response.response();
+        return providerResponse.body().stations();
+    }
+
+    private boolean isSuccessful(BusRouteStationResponse response) {
+        if (response == null || response.response() == null) {
+            return false;
+        }
+        BusRouteStationResponse.Response providerResponse = response.response();
+        if (providerResponse.header() == null || providerResponse.body() == null) {
+            return false;
+        }
+        BusRouteStationResponse.Header header = providerResponse.header();
+        return GbisResultCode.from(header.resultCode()) == GbisResultCode.SUCCESS;
     }
 
     /** 응답이 오지 않거나 포털이 거부하거나 읽지 못하면 비운다. 호출한 쪽은 해당 노선을 건너뛴다. */

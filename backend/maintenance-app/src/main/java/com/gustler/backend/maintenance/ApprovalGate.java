@@ -80,9 +80,16 @@ public final class ApprovalGate {
             }
             return;
         }
-        if (value == null || !value.isString() || !expected.equals(value.stringValue())) {
+        if (!matchesExpectedText(value, expected)) {
             throw new MaintenanceException(code);
         }
+    }
+
+    private static boolean matchesExpectedText(JsonNode value, String expected) {
+        if (value == null || !value.isString()) {
+            return false;
+        }
+        return expected.equals(value.stringValue());
     }
 
     private static String text(
@@ -90,9 +97,16 @@ public final class ApprovalGate {
         String field
     ) {
         JsonNode value = root.get(field);
-        if (value == null || !value.isString() || value.stringValue().isBlank()) {
+        if (!hasText(value)) {
             throw new MaintenanceException("APPROVAL_FIELD_INVALID");
         }
         return value.stringValue();
+    }
+
+    private static boolean hasText(JsonNode value) {
+        if (value == null || !value.isString()) {
+            return false;
+        }
+        return !value.stringValue().isBlank();
     }
 }

@@ -120,11 +120,23 @@ public record DatabaseEnvironment(
         if (value.length() >= 2) {
             final char first = value.charAt(0);
             final char last = value.charAt(value.length() - 1);
-            if ((first == '\'' && last == '\'') || (first == '"' && last == '"')) {
+            if (hasMatchingQuotes(first, last)) {
                 return value.substring(1, value.length() - 1);
             }
         }
         return value;
+    }
+
+    private static boolean hasMatchingQuotes(char first, char last) {
+        return hasMatchingSingleQuotes(first, last) || hasMatchingDoubleQuotes(first, last);
+    }
+
+    private static boolean hasMatchingSingleQuotes(char first, char last) {
+        return first == '\'' && last == '\'';
+    }
+
+    private static boolean hasMatchingDoubleQuotes(char first, char last) {
+        return first == '"' && last == '"';
     }
 
     private static String required(
@@ -146,13 +158,21 @@ public record DatabaseEnvironment(
         }
         try {
             URI uri = new URI(jdbcUrl.substring("jdbc:".length()));
-            if (uri.getHost() == null || uri.getPath() == null || uri.getPath().length() < 2) {
+            if (!hasDatabaseAddress(uri)) {
                 throw new MaintenanceException("DATABASE_URL_INVALID");
             }
             return uri;
         } catch (URISyntaxException e) {
             throw new MaintenanceException("DATABASE_URL_INVALID", e);
         }
+    }
+
+    private static boolean hasDatabaseAddress(URI uri) {
+        String path = uri.getPath();
+        if (uri.getHost() == null || path == null) {
+            return false;
+        }
+        return path.length() >= 2;
     }
 
     private static int effectivePort(

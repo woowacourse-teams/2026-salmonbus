@@ -40,7 +40,7 @@ public final class GbisServiceKeyEnvironmentPostProcessor implements Environment
             }
             String alias = name.substring(PREFIX.length());
             Object value = variables.getProperty(name);
-            if (BOUND_BY_APPLICATION_YML.contains(alias) || value == null || value.toString().isBlank()) {
+            if (shouldIgnore(alias, value)) {
                 continue;
             }
             String property = "gbis.named-keys[" + alias.toLowerCase(Locale.ROOT) + "]";
@@ -53,5 +53,12 @@ public final class GbisServiceKeyEnvironmentPostProcessor implements Environment
         if (!keys.isEmpty()) {
             environment.getPropertySources().addLast(new MapPropertySource(PROPERTY_SOURCE, keys));
         }
+    }
+
+    private boolean shouldIgnore(String alias, Object value) {
+        if (BOUND_BY_APPLICATION_YML.contains(alias) || value == null) {
+            return true;
+        }
+        return value.toString().isBlank();
     }
 }

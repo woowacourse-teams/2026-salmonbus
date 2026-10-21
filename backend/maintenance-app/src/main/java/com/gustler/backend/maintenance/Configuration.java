@@ -41,10 +41,17 @@ public final class Configuration {
         String name
     ) {
         String value = values.getProperty(name);
-        if (value == null || value.isBlank() || value.startsWith("<")) {
+        if (!isConfigured(value)) {
             throw new MaintenanceException("CONFIG_REQUIRED_" + codeOf(name));
         }
         return value.strip();
+    }
+
+    private static boolean isConfigured(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        return !value.startsWith("<");
     }
 
     public Path requiredPath(

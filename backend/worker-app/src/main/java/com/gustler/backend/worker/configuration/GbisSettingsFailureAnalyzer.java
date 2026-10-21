@@ -26,12 +26,22 @@ public class GbisSettingsFailureAnalyzer extends AbstractFailureAnalyzer<BindExc
 
     private static String reasonOf(Throwable failure) {
         for (Throwable current = failure; current != null; current = current.getCause()) {
-            if (current instanceof IllegalStateException && current.getStackTrace().length > 0
-                && current.getStackTrace()[0].getClassName().equals(GbisProperties.class.getName())) {
+            if (isGbisPropertyFailure(current)) {
                 return current.getMessage();
             }
         }
         return "값의 형식이 맞지 않는다";
+    }
+
+    private static boolean isGbisPropertyFailure(Throwable failure) {
+        if (!(failure instanceof IllegalStateException)) {
+            return false;
+        }
+        StackTraceElement[] stackTrace = failure.getStackTrace();
+        if (stackTrace.length == 0) {
+            return false;
+        }
+        return stackTrace[0].getClassName().equals(GbisProperties.class.getName());
     }
 
     @Override
