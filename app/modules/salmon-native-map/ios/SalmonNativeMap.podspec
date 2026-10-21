@@ -12,5 +12,6 @@ Pod::Spec.new do |s|
   s.dependency 'ExpoModulesCore'
   s.dependency 'NMapsMap', '3.24.0'
   s.source_files = '**/*.{h,m,mm,swift}'
+  s.resources = 'Resources/*.png'
   s.swift_version = '5.9'
 end

@@ -72,6 +72,8 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   private var sceneState: MapSceneState?
   private var mapLayout: MapLayout?
   private var stopMarkers: [String: NMFMarker] = [:]
+  private var stopLabels: [String: NMFMarker] = [:]
+  private var vehicleAppearanceKeys: [String: String] = [:]
   private var vehicleMarkers: [String: NMFMarker] = [:]
   private var routeLines: [(String, NMFPath)] = []
   private var imageCache: [String: NMFOverlayImage] = [:]
@@ -111,6 +113,11 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     mapView.addLoadDelegate(delegate: self)
     mapView.addCameraDelegate(delegate: self)
     mapView.touchDelegate = self
+    mapView.locationOverlay.icon = NMFOverlayImage(image: MapMarkerImages.location())
+    mapView.locationOverlay.iconWidth = 50
+    mapView.locationOverlay.iconHeight = 50
+    mapView.locationOverlay.subIcon = nil
+    mapView.locationOverlay.circleRadius = 0
     NMFAuthManager.shared().delegate = self
     locationManager.delegate = self
     locationManager.desiredAccuracy = kCLLocationAccuracyBest
@@ -193,9 +200,12 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     stopDisplayLink()
     motions.removeAll()
     stopMarkers.values.forEach { $0.mapView = nil }
+    stopLabels.values.forEach { $0.mapView = nil }
     vehicleMarkers.values.forEach { $0.mapView = nil }
     routeLines.forEach { $0.1.mapView = nil }
     stopMarkers.removeAll()
+    stopLabels.removeAll()
+    vehicleAppearanceKeys.removeAll()
     vehicleMarkers.removeAll()
     routeLines.removeAll()
     imageCache.removeAll()
@@ -252,9 +262,9 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     if !missingDirections.isEmpty, nextScene.fullPath.count > 1 {
       let line = NMFPath()
       line.path = NMGLineString(points: nextScene.fullPath.map(\.naver))
-      line.width = 4
+      line.width = 6
       line.outlineWidth = 0
-      line.color = UIColor.systemGray
+      line.color = MapMarkerImages.mutedColor.withAlphaComponent(0.95)
       line.mapView = mapView
       line.zIndex = 0
       routeLines.append(("", line))
@@ -262,12 +272,13 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     for stop in nextScene.stops {
       let marker = NMFMarker(position: stop.coordinate.naver)
       marker.anchor = CGPoint(x: 0.5, y: 0.5)
-      marker.captionText = stop.name
-      marker.captionTextSize = 12
-      marker.captionMinZoom = 12
-      marker.captionColor = .white
-      marker.captionHaloColor = .black
-      marker.isHideCollidedCaptions = true
+      marker.isForceShowIcon = true
+      marker.minZoom = nextScene.paths.contains { $0.direction == stop.direction } ? 14 : 0
+      let label = NMFMarker(position: stop.coordinate.naver)
+      label.isForceShowIcon = true
+      label.minZoom = 14
+      label.mapView = mapView
+      stopLabels[stop.key] = label
       marker.touchHandler = { [weak self] _ in
         self?.emit("stopPress", ["selection": stop.selection.json])
         return true
@@ -292,34 +303,26 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
       guard let marker = stopMarkers[stop.key] else { continue }
       let selected = state.selectedStop == stop.selection
       let active = state.activeDirection == stop.direction
-      marker.iconImage = stopImage(selected: selected, active: active)
-      marker.width = selected ? 32 : 24
-      marker.height = selected ? 32 : 24
-      marker.zIndex = selected ? 20 : active ? 10 : 0
-      marker.captionText = active ? stop.name : ""
-      marker.isForceShowCaption = selected
-      marker.captionMinZoom = selected ? 0 : 12
+      marker.iconImage = overlayImage("stop:\(selected):\(active):\(stop.boardingAllowed)") {
+        MapMarkerImages.stop(selected: selected, active: active, boardingAllowed: stop.boardingAllowed)
+      }
+      marker.width = selected ? 44 : 36
+      marker.height = marker.width
+      marker.zIndex = selected ? 15 : active ? 6 : 5
     }
     refreshRouteStyles()
     let keys = Set(state.vehicles.map(\.key))
     for key in Array(vehicleMarkers.keys) where !keys.contains(key) {
       vehicleMarkers.removeValue(forKey: key)?.mapView = nil
       motions.removeValue(forKey: key)
+      vehicleAppearanceKeys.removeValue(forKey: key)
     }
     for vehicle in state.vehicles where vehicle.coordinate.valid {
       let marker = vehicleMarkers[vehicle.key] ?? NMFMarker(position: vehicle.coordinate.naver)
       if motions[vehicle.key] == nil { marker.position = vehicle.coordinate.naver }
-      marker.iconImage = vehicleImage(selected: state.selectedVehicleKey == vehicle.key)
-      marker.width = state.selectedVehicleKey == vehicle.key ? 40 : 34
-      marker.height = state.selectedVehicleKey == vehicle.key ? 48 : 40
-      marker.anchor = CGPoint(x: 0.5, y: 0.9)
-      marker.captionText = vehicle.caption
-      marker.captionColor = salmon
-      marker.captionTextSize = 12
-      marker.captionHaloColor = .white
+      marker.anchor = CGPoint(x: 0.5, y: 1)
       marker.isForceShowIcon = true
-      marker.isForceShowCaption = true
-      marker.zIndex = 30
+      marker.zIndex = state.selectedVehicleKey == vehicle.key ? 30 : 20
       marker.touchHandler = { [weak self] _ in
         self?.emit("vehiclePress", ["selection": vehicle.selection.json, "key": vehicle.key])
         return true
@@ -327,36 +330,67 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
       marker.mapView = mapView
       vehicleMarkers[vehicle.key] = marker
     }
+    refreshVehicleImages()
     refreshStopAnchors()
   }
 
   private func refreshStopAnchors() {
-    guard readySent, let scene, mapView.bounds.width > 1 else { return }
+    guard readySent, let scene, let state = sceneState, mapView.bounds.width > 1 else { return }
     let projected = scene.stops.compactMap { stop -> (stop: MapStop, point: CGPoint, size: CGFloat)? in
-      guard let marker = stopMarkers[stop.key] else { return nil }
       let point = mapView.projection.point(from: stop.coordinate.naver)
       guard point.x.isFinite, point.y.isFinite else { return nil }
-      return (stop, point, marker.width)
+      return (stop, point, state.selectedStop == stop.selection ? 32 : 24)
     }
     var offsets: [String: CGFloat] = [:]
     for up in projected where up.stop.direction == "UP" {
       for down in projected where down.stop.direction == "DOWN" {
-        let separation = (up.size + down.size) / 2 + 4
+        let separation = (up.size + down.size)/2 + 4
         let difference = up.point.x - down.point.x
         guard abs(difference) < separation, abs(up.point.y - down.point.y) < separation else { continue }
-        // Keep the geographic point fixed. Choose the nearer screen side without requiring an
-        // anchor outside the SDK's documented 0...1 range; identical points put UP on the right.
-        let offset = (separation - abs(difference)) / 2
-        let sign: CGFloat = difference >= 0 ? 1 : -1
-        let upOffset = sign * min(offset, up.size / 2)
-        let downOffset = -sign * min(offset, down.size / 2)
-        if abs(upOffset) > abs(offsets[up.stop.key] ?? 0) { offsets[up.stop.key] = upOffset }
-        if abs(downOffset) > abs(offsets[down.stop.key] ?? 0) { offsets[down.stop.key] = downOffset }
+        let offset = (separation - difference)/2
+        offsets[up.stop.key] = max(offsets[up.stop.key] ?? 0, offset)
+        offsets[down.stop.key] = min(offsets[down.stop.key] ?? 0, -offset)
       }
     }
     for item in projected {
+      guard let marker = stopMarkers[item.stop.key], let label = stopLabels[item.stop.key] else { continue }
       let offset = offsets[item.stop.key] ?? 0
-      stopMarkers[item.stop.key]?.anchor = CGPoint(x: 0.5 - offset / item.size, y: 0.5)
+      // Offset presentation coordinates so SDK anchors stay within their documented 0...1 range.
+      let coordinate = mapView.projection.latlng(from: CGPoint(x: item.point.x + offset, y: item.point.y))
+      marker.position = coordinate
+      let selected = state.selectedStop == item.stop.selection
+      let above = offset != 0 && item.stop.direction != state.activeDirection
+      let icon = overlayImage("label:\(item.stop.key):\(selected):\(above)") {
+        MapMarkerImages.stopName(item.stop.name, selected: selected, above: above)
+      }
+      if label.iconImage !== icon { label.iconImage = icon }
+      label.position = coordinate
+      label.anchor = CGPoint(x: 0.5, y: above ? 1 : 0)
+      label.zIndex = marker.zIndex
+    }
+  }
+
+  private func refreshVehicleImages() {
+    guard let state = sceneState else { return }
+    let showCount = mapView.cameraPosition.zoom >= 14
+    var counts: [String: Int] = [:]
+    for vehicle in state.vehicles {
+      guard let marker = vehicleMarkers[vehicle.key] else { continue }
+      let position = "\(marker.position.lat):\(marker.position.lng)"
+      let index = counts[position, default: 0]
+      counts[position] = index + 1
+      let selected = state.selectedVehicleKey == vehicle.key
+      let imageKey = "vehicle:\(vehicle.caption):\(showCount):\(showCount ? index : 0)"
+      let appearanceKey = "\(imageKey):\(selected)"
+      guard vehicleAppearanceKeys[vehicle.key] != appearanceKey else { continue }
+      let icon = overlayImage(imageKey) {
+        MapMarkerImages.vehicle(caption: vehicle.caption, showCount: showCount, stackIndex: index)
+      }
+      marker.iconImage = icon
+      let scale: CGFloat = selected ? 1.5 : 1
+      marker.width = icon.image.size.width * scale
+      marker.height = icon.image.size.height * scale
+      vehicleAppearanceKeys[vehicle.key] = appearanceKey
     }
   }
 
@@ -365,9 +399,9 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     let showBothDirections = mapView.cameraPosition.zoom >= 14
     for (direction, line) in routeLines {
       let active = direction == state.activeDirection
-      line.color = active ? salmon : UIColor.systemGray3
+      line.color = (active ? MapMarkerImages.routeColor : MapMarkerImages.mutedColor.withAlphaComponent(0.95))
       line.passedColor = line.color
-      line.zIndex = direction.isEmpty ? 0 : active ? 2 : 1
+      line.zIndex = active ? 2 : 1
       // Each directional path is already ordered in its own operating direction.
       line.patternIcon = !direction.isEmpty && (active || showBothDirections) ? routeArrowImage() : nil
     }
@@ -417,14 +451,15 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
 
   private func fitRoute() {
     guard let scene else { return }
-    let coordinates = scene.paths.flatMap(\.coordinates) + scene.fullPath + scene.stops.map(\.coordinate)
+    let route = scene.fullPath.isEmpty ? scene.paths.flatMap(\.coordinates) : scene.fullPath
+    let coordinates = route.isEmpty ? scene.stops.map(\.coordinate) : route
     guard let first = coordinates.first else { return }
     let south = coordinates.map(\.latitude).min() ?? first.latitude
     let north = coordinates.map(\.latitude).max() ?? first.latitude
     let west = coordinates.map(\.longitude).min() ?? first.longitude
     let east = coordinates.map(\.longitude).max() ?? first.longitude
     if south == north && west == east {
-      mapView.moveCamera(NMFCameraUpdate(scrollTo: first.naver, zoomTo: 14))
+      mapView.moveCamera(NMFCameraUpdate(scrollTo: first.naver, zoomTo: 13))
       return
     }
     let visibleHeight = max(1, mapContainer.bounds.height)
@@ -432,7 +467,10 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     let area = NMGLatLngBounds(southWest: NMGLatLng(lat: south, lng: west),
                               northEast: NMGLatLng(lat: north, lng: east))
     mapView.moveCamera(NMFCameraUpdate(fit: area,
-      paddingInsets: UIEdgeInsets(top: crop + 36, left: 36, bottom: crop + 36, right: 36)))
+      paddingInsets: UIEdgeInsets(top: crop + 28, left: 12, bottom: crop + 28, right: 12)))
+    if mapView.cameraPosition.zoom > 13 {
+      mapView.moveCamera(NMFCameraUpdate(scrollTo: mapView.cameraPosition.target, zoomTo: 13))
+    }
     #if DEBUG
     NSLog("[SalmonNativeMap] initial fit applied stops=%ld vehicles=%ld", stopMarkers.count, vehicleMarkers.count)
     #endif
@@ -506,6 +544,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
       if let coordinate { vehicleMarkers[key]?.position = coordinate.naver }
       active = active || moving
     }
+    refreshVehicleImages()
     if !active { stopDisplayLink() }
   }
 
@@ -540,9 +579,12 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     // The first scene may arrive while the SDK's renderer still has a zero-sized frame.
     // Bind every overlay to the loaded renderer before revealing the web map placeholder.
     for marker in stopMarkers.values { marker.mapView = nil; marker.mapView = mapView }
+    for marker in stopLabels.values { marker.mapView = nil; marker.mapView = mapView }
     for marker in vehicleMarkers.values { marker.mapView = nil; marker.mapView = mapView }
     for (_, line) in routeLines { line.mapView = nil; line.mapView = mapView }
     applyLayout()
+    refreshStopAnchors()
+    refreshVehicleImages()
     emit("ready", [:])
     updateVerificationSnapshot()
     #if DEBUG
@@ -561,6 +603,9 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   }
 
   public func mapView(_ mapView: NMFMapView, cameraIsChangingByReason reason: Int) {
+    refreshStopAnchors()
+    refreshVehicleImages()
+    refreshRouteStyles()
     #if DEBUG
     lastCameraChangeReason = reason
     #endif
@@ -569,6 +614,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   public func mapViewCameraIdle(_ mapView: NMFMapView) {
     vehicleFocusInFlight = false
     refreshStopAnchors()
+    refreshVehicleImages()
     refreshRouteStyles()
     #if DEBUG
     let target = mapView.cameraPosition.target
@@ -635,56 +681,15 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     onMapEvent(["message": message])
   }
 
-  private var salmon: UIColor { UIColor(red: 0.79, green: 0.35, blue: 0.31, alpha: 1) }
+  private func overlayImage(_ key: String, draw: () -> UIImage) -> NMFOverlayImage {
+    if let cached = imageCache[key] { return cached }
+    let image = NMFOverlayImage(image: draw())
+    imageCache[key] = image
+    return image
+  }
 
   private func routeArrowImage() -> NMFOverlayImage {
-    let key = "route-arrow"
-    if let cached = imageCache[key] { return cached }
-    let image = UIGraphicsImageRenderer(size: CGSize(width: 12, height: 6)).image { _ in
-      let arrow = UIBezierPath()
-      arrow.move(to: CGPoint(x: 4, y: 1))
-      arrow.addLine(to: CGPoint(x: 8, y: 3))
-      arrow.addLine(to: CGPoint(x: 4, y: 5))
-      arrow.lineWidth = 1.8
-      arrow.lineCapStyle = .round
-      arrow.lineJoinStyle = .round
-      UIColor.white.setStroke()
-      arrow.stroke()
-    }
-    let overlay = NMFOverlayImage(image: image)
-    imageCache[key] = overlay
-    return overlay
-  }
-
-  private func stopImage(selected: Bool, active: Bool) -> NMFOverlayImage {
-    let key = "stop:\(selected):\(active)"
-    if let cached = imageCache[key] { return cached }
-    let color = active ? salmon : UIColor.systemGray
-    let image = UIGraphicsImageRenderer(size: CGSize(width: 32, height: 32)).image { _ in
-      let circle = UIBezierPath(ovalIn: CGRect(x: 3, y: 3, width: 26, height: 26))
-      (selected ? color : UIColor.white).setFill(); circle.fill()
-      color.setStroke(); circle.lineWidth = 3; circle.stroke()
-      let symbol = UIImage(systemName: "bus.fill")?.withTintColor(selected ? .white : color, renderingMode: .alwaysOriginal)
-      symbol?.draw(in: CGRect(x: 9, y: 8, width: 14, height: 16))
-    }
-    let overlay = NMFOverlayImage(image: image)
-    imageCache[key] = overlay
-    return overlay
-  }
-
-  private func vehicleImage(selected: Bool) -> NMFOverlayImage {
-    let key = "vehicle:\(selected)"
-    if let cached = imageCache[key] { return cached }
-    let image = UIGraphicsImageRenderer(size: CGSize(width: 40, height: 48)).image { _ in
-      let body = UIBezierPath(roundedRect: CGRect(x: 3, y: 2, width: 34, height: 40), cornerRadius: 9)
-      salmon.setFill(); body.fill()
-      (selected ? UIColor.black : UIColor.white).setStroke(); body.lineWidth = selected ? 3 : 2; body.stroke()
-      UIImage(systemName: "bus.fill")?.withTintColor(.white, renderingMode: .alwaysOriginal)
-        .draw(in: CGRect(x: 10, y: 9, width: 20, height: 25))
-    }
-    let overlay = NMFOverlayImage(image: image)
-    imageCache[key] = overlay
-    return overlay
+    overlayImage("route-arrow") { MapMarkerImages.routeArrow() }
   }
 
   private func requestLocation(_ request: LocationRequest) {
