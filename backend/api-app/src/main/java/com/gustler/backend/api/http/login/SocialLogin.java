@@ -1,11 +1,15 @@
 package com.gustler.backend.api.http.login;
 
+import com.gustler.backend.api.account.token.AccessTokens;
+import com.gustler.backend.api.account.token.AuthCookies;
+import com.gustler.backend.member.api.RefreshTokens;
 import com.gustler.backend.member.api.SignInWithSocialAccount;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.oauth2.client.endpoint.OAuth2AccessTokenResponseClient;
@@ -40,15 +44,24 @@ public final class SocialLogin {
     private final List<ClientRegistration> registrations;
     private final Map<String, Supplier<String>> clientSecrets;
     private final SignInWithSocialAccount signIn;
+    private final RefreshTokens refreshTokens;
+    private final ObjectProvider<AccessTokens> accessTokens;
+    private final ObjectProvider<AuthCookies> authCookies;
 
     public SocialLogin(
         List<ClientRegistration> registrations,
         Map<String, Supplier<String>> clientSecrets,
-        SignInWithSocialAccount signIn
+        SignInWithSocialAccount signIn,
+        RefreshTokens refreshTokens,
+        ObjectProvider<AccessTokens> accessTokens,
+        ObjectProvider<AuthCookies> authCookies
     ) {
         this.registrations = registrations;
         this.clientSecrets = clientSecrets;
         this.signIn = signIn;
+        this.refreshTokens = refreshTokens;
+        this.accessTokens = accessTokens;
+        this.authCookies = authCookies;
     }
 
     public void apply(HttpSecurity http) throws Exception {
@@ -66,7 +79,8 @@ public final class SocialLogin {
                 .authorizationRequestResolver(new LoginStartResolver(repository)))
             .redirectionEndpoint(endpoint -> endpoint.baseUri(CALLBACK_PATTERN))
             .tokenEndpoint(endpoint -> endpoint.accessTokenResponseClient(tokenClient()))
-            .successHandler(new SocialLoginSuccessHandler(signIn, failureHandler))
+            .successHandler(new SocialLoginSuccessHandler(
+                signIn, refreshTokens, accessTokens.getObject(), authCookies.getObject(), failureHandler))
             .failureHandler(failureHandler));
     }
 

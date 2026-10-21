@@ -21,8 +21,8 @@ import org.springframework.web.util.UriComponentsBuilder;
  * <p>사용자가 제공자 화면에서 취소한 경우만 {@code cancelled} 이고 나머지는 모두 {@code failed} 다. 취소는 카카오가
  * {@code access_denied}, 애플이 {@code user_cancelled_authorize} 로 알린다.
  * 구분하지 않은 실패 원인은 로그에 남기지 않는다. {@code code}·{@code state}·토큰이 예외 메시지에 섞일 수 있다.
- * 로그인 전 세션은 쓸 곳이 없으므로 지운다. 이미 로그인한 세션은 지우지 않는다. 콜백은 GET 이라
- * 다른 사이트에서 보내는 요청으로 로그인한 사용자를 로그아웃시킬 수 있다.
+ * 로그인 전 세션은 쓸 곳이 없으므로 지운다. 로그인 상태는 이 세션에 없으므로 이미 로그인한 사용자의
+ * 로그인은 그대로다.
  */
 final class SocialLoginFailureHandler implements AuthenticationFailureHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(SocialLoginFailureHandler.class);
@@ -41,9 +41,7 @@ final class SocialLoginFailureHandler implements AuthenticationFailureHandler {
         String returnTo = ReturnTo.HOME;
         if (session != null) {
             returnTo = LoginSessions.takeReturnTo(session);
-            if (!LoginSessions.isSignedIn(session)) {
-                session.invalidate();
-            }
+            session.invalidate();
         }
         LOGGER.warn("소셜 로그인에 실패했다. reason={} cause={}", reason, exception.getClass().getSimpleName());
         response.setStatus(HttpStatus.FOUND.value());

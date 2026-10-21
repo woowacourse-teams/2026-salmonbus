@@ -6,7 +6,6 @@ import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import com.gustler.backend.support.PostgresTestContainer;
 import com.nimbusds.jwt.JWTClaimsSet;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
 import java.util.function.Consumer;
@@ -134,30 +133,34 @@ class KakaoLoginFlowTest {
     }
 
     @Test
-    void 로그인_전_세션은_10분_로그인_뒤에는_30일이고_제공자_정보는_세션에_남지_않는다() throws Exception {
+    void 로그인하면_임시_세션을_지우고_토큰_쿠키를_내리며_제공자_정보는_어디에도_남지_않는다() throws Exception {
         // given
         TestBrowser browser = browser();
         String authorization = location(browser.get("/api/auth/kakao/start"));
         final long beforeLogin = maxInactiveInterval();
 
         // when
-        browser.get(callbackPath(authorization, kakao.authorize(authorization, SUBJECT, "연어팬")));
+        String code = kakao.authorize(authorization, SUBJECT, "연어팬");
+        HttpResponse<String> callback = browser.get(callbackPath(authorization, code));
 
         // then
         String publicId = jdbcClient.sql("SELECT public_id::text FROM member").query(String.class).single();
-        byte[] attributes = jdbcClient.sql("SELECT ATTRIBUTE_BYTES FROM SPRING_SESSION_ATTRIBUTES")
-            .query(byte[].class).list().stream()
-            .reduce(new byte[0], KakaoLoginFlowTest::concat);
-        String stored = new String(attributes, StandardCharsets.ISO_8859_1);
+        String access = CookieHeaders.named(callback, "__Host-sb_at");
+        String refresh = CookieHeaders.named(callback, "__Host-sb_rt");
+        JsonNode claims = CookieHeaders.jwtPayload(CookieHeaders.valueOf(access), objectMapper);
         assertSoftly(softly -> {
             softly.assertThat(beforeLogin).isEqualTo(TEN_MINUTES_SECONDS);
-            softly.assertThat(maxInactiveInterval()).isEqualTo(THIRTY_DAYS_SECONDS);
-            softly.assertThat(sessionCount()).isEqualTo(1);
-            softly.assertThat(jdbcClient.sql("SELECT PRINCIPAL_NAME FROM SPRING_SESSION").query(String.class).single())
-                .isEqualTo(publicId);
-            softly.assertThat(stored).contains("MemberPrincipal");
-            softly.assertThat(stored)
-                .doesNotContain(SUBJECT, "fake-access-token", "연어팬", kakao.baseUrl(), "Oidc", "OAuth2");
+            softly.assertThat(sessionCount()).as("임시 세션은 로그인과 함께 지운다").isZero();
+            softly.assertThat(access).contains("HttpOnly", "Secure", "SameSite=Lax", "Path=/;");
+            softly.assertThat(CookieHeaders.maxAgeOf(access)).isEqualTo(15 * 60);
+            softly.assertThat(refresh).contains("HttpOnly", "Secure", "SameSite=Lax", "Path=/;");
+            softly.assertThat(CookieHeaders.maxAgeOf(refresh))
+                .isBetween(THIRTY_DAYS_SECONDS - 10L, (long) THIRTY_DAYS_SECONDS);
+            softly.assertThat(claims.propertyNames()).containsExactlyInAnyOrder("iss", "sub", "iat", "exp");
+            softly.assertThat(claims.path("sub").asString()).isEqualTo(publicId);
+            softly.assertThat(longOf("SELECT count(*) FROM refresh_token")).isEqualTo(1);
+            softly.assertThat(longOf("SELECT generation FROM refresh_token"))
+                .as("표에는 토큰 값이 없고 계통의 세대만 있다").isZero();
         });
     }
 
@@ -314,7 +317,7 @@ class KakaoLoginFlowTest {
     }
 
     @Test
-    void 이미_로그인한_브라우저가_시작해도_세션_수명은_그대로고_실패_콜백에도_로그아웃되지_않는다() throws Exception {
+    void 이미_로그인한_브라우저가_다시_시작하고_실패_콜백을_받아도_로그아웃되지_않는다() throws Exception {
         // given
         TestBrowser browser = browser();
         String authorization = location(browser.get("/api/auth/kakao/start"));
@@ -330,7 +333,6 @@ class KakaoLoginFlowTest {
             softly.assertThat(restarted.statusCode()).isEqualTo(HttpStatus.FOUND.value());
             softly.assertThat(location(forged)).isEqualTo("/?login=failed");
             softly.assertThat(session.path("authenticated").asBoolean()).isTrue();
-            softly.assertThat(maxInactiveInterval()).isEqualTo(THIRTY_DAYS_SECONDS);
         });
     }
 
@@ -392,11 +394,8 @@ class KakaoLoginFlowTest {
         return response.headers().firstValue(name).orElse("");
     }
 
-    private static byte[] concat(byte[] left, byte[] right) {
-        byte[] joined = new byte[left.length + right.length];
-        System.arraycopy(left, 0, joined, 0, left.length);
-        System.arraycopy(right, 0, joined, left.length, right.length);
-        return joined;
+    private long longOf(String sql) {
+        return jdbcClient.sql(sql).query(Long.class).single();
     }
 
     private long memberCount() {

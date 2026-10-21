@@ -12,6 +12,10 @@ import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 @SpringBootTest(classes = MemberTestConfiguration.class, webEnvironment = WebEnvironment.NONE,
-    properties = "spring.datasource.hikari.maximum-pool-size=12")
+    properties = {
+        "spring.datasource.hikari.maximum-pool-size=12",
+        "auth.enabled=true",
+        "auth.refresh-token.secret=member-module-test-only-refresh-secret-0001"
+    })
 public @interface MemberIntegrationTest {
 }

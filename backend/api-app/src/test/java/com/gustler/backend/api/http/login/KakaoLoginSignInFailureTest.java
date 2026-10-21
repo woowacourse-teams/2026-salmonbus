@@ -22,12 +22,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.web.util.UriComponentsBuilder;
 
-/**
- * 제공자 인증은 통과했지만 회원 처리가 실패하면 로그인된 상태로 남지 않는다.
- *
- * <p>세션 ID 교체가 DB에 반영되기 전에 세션을 무효화하면 이전 ID의 로그인 전 세션 행이 만료까지 남는다.
- * 그 행에는 로그인 정보가 없으므로 로그인 컨텍스트가 어떤 세션에도 없는지를 확인한다.
- */
+/** 제공자 인증은 통과했지만 회원 처리가 실패하면 토큰을 내리지 않고 로그인된 상태로 남지 않는다. */
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @Import(PostgresTestContainer.class)
 class KakaoLoginSignInFailureTest {
@@ -83,13 +78,12 @@ class KakaoLoginSignInFailureTest {
 
         // then
         HttpResponse<String> me = browser.get("/api/me");
-        final long signedInSessions = jdbcClient
-            .sql("SELECT count(*) FROM SPRING_SESSION_ATTRIBUTES WHERE ATTRIBUTE_NAME = 'SPRING_SECURITY_CONTEXT'")
-            .query(Long.class).single();
         assertSoftly(softly -> {
             softly.assertThat(callback.headers().firstValue("Location")).contains("/?login=failed");
+            softly.assertThat(callback.headers().allValues("Set-Cookie"))
+                .noneMatch(cookie -> cookie.startsWith("__Host-sb_at=") || cookie.startsWith("__Host-sb_rt="));
             softly.assertThat(me.statusCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
-            softly.assertThat(signedInSessions).isZero();
+            softly.assertThat(jdbcClient.sql("SELECT count(*) FROM refresh_token").query(Long.class).single()).isZero();
         });
     }
 }

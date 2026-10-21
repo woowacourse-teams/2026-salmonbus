@@ -1,0 +1,6 @@
+# 테스트 전용 값이다. 운영 비밀이 아니다. main 의 application.yml 위에 속성 단위로 덮어쓴다.
+auth:
+  token:
+    secret: test-only-secret-key-for-access-tokens-0123456789
+  refresh-token:
+    secret: test-only-secret-key-for-refresh-tokens-0123456789

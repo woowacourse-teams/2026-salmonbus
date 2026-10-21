@@ -1,8 +1,10 @@
 package com.gustler.backend.api.account.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
-import com.gustler.backend.api.account.MemberPrincipal;
+import com.gustler.backend.api.account.token.AccessTokens;
+import com.gustler.backend.api.account.token.TokenProperties;
 import com.gustler.backend.member.api.LoginProvider;
 import com.gustler.backend.member.api.SignInWithSocialAccount;
 import com.gustler.backend.member.api.SocialIdentity;
@@ -12,9 +14,10 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
-import java.util.List;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,26 +30,19 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
-import org.springframework.session.Session;
-import org.springframework.session.SessionRepository;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
  * 로그인한 회원의 정보 조회와 닉네임 변경을 실제 톰캣으로 검증한다.
  *
- * <p>카카오 흐름은 {@code KakaoLoginFlowTest} 가 검증하므로 여기서는 세션을 직접 만들어 쿠키로 보낸다.
+ * <p>카카오 흐름은 {@code KakaoLoginFlowTest} 가 검증하므로 여기서는 액세스 토큰을 직접 만들어 쿠키로 보낸다.
  */
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT, properties = "auth.enabled=true")
 @Import(PostgresTestContainer.class)
 class MeControllerTest {
-    private static final String SESSION_COOKIE = "__Host-sb_session";
-    private static final String CSRF_COOKIE = "XSRF-TOKEN";
+    private static final String ACCESS_COOKIE = "__Host-sb_at";
+    private static final String CSRF_COOKIE = "__Host-XSRF-TOKEN";
 
     private final HttpClient client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
 
@@ -63,19 +59,20 @@ class MeControllerTest {
     private SignInWithSocialAccount signIn;
 
     @Autowired
-    @SuppressWarnings("rawtypes")
-    private SessionRepository sessions;
+    private AccessTokens accessTokens;
+
+    @Autowired
+    private TokenProperties tokenProperties;
 
     private UUID memberId;
     private String sessionCookie;
     private String csrfToken;
 
     @BeforeEach
-    void 회원과_로그인_세션을_만든다() throws Exception {
+    void 회원과_액세스_토큰을_만든다() throws Exception {
         jdbcClient.sql("DELETE FROM member").update();
-        jdbcClient.sql("DELETE FROM SPRING_SESSION").update();
         memberId = signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, "kakao-1", "연어팬")).publicId();
-        sessionCookie = loginSession(memberId);
+        sessionCookie = ACCESS_COOKIE + "=" + accessTokens.issue(memberId);
         csrfToken = csrfToken();
     }
 
@@ -98,7 +95,7 @@ class MeControllerTest {
     }
 
     @Test
-    void 세션이_없으면_401이다() throws Exception {
+    void 토큰이_없으면_401이다() throws Exception {
         // when
         HttpResponse<String> actual = send(request("/api/me").GET());
 
@@ -110,7 +107,49 @@ class MeControllerTest {
     }
 
     @Test
-    void 탈퇴한_회원의_세션이_남아_있으면_401이다() throws Exception {
+    void Authorization_헤더로도_내_정보를_조회한다() throws Exception {
+        // when
+        HttpResponse<String> actual = send(request("/api/me")
+            .header("Authorization", "Bearer " + accessTokens.issue(memberId))
+            .GET());
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(actual.statusCode()).isEqualTo(HttpStatus.OK.value());
+            softly.assertThat(objectMapper.readTree(actual.body()).path("id").asString())
+                .isEqualTo(memberId.toString());
+        });
+    }
+
+    @Test
+    void 만료된_토큰이면_401이다() throws Exception {
+        // given
+        Clock longAgo = Clock.fixed(Instant.now().minus(Duration.ofHours(1)), ZoneOffset.UTC);
+        String expired = new AccessTokens(tokenProperties, longAgo).issue(memberId);
+
+        // when
+        HttpResponse<String> actual = send(request("/api/me").header("Cookie", ACCESS_COOKIE + "=" + expired).GET());
+
+        // then
+        assertThat(actual.statusCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+    }
+
+    @Test
+    void 다른_비밀로_서명한_토큰이면_401이다() throws Exception {
+        // given
+        TokenProperties other = new TokenProperties(
+            "another-secret-key-another-secret-key-12345", "k1", Duration.ofMinutes(15));
+        String forged = new AccessTokens(other, Clock.systemUTC()).issue(memberId);
+
+        // when
+        HttpResponse<String> actual = send(request("/api/me").header("Cookie", ACCESS_COOKIE + "=" + forged).GET());
+
+        // then
+        assertThat(actual.statusCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+    }
+
+    @Test
+    void 탈퇴한_회원의_토큰이_남아_있으면_401이다() throws Exception {
         // given
         jdbcClient.sql("DELETE FROM member").update();
 
@@ -125,7 +164,7 @@ class MeControllerTest {
     }
 
     @Test
-    void 탈퇴한_회원의_세션으로_닉네임을_바꾸려_하면_401이다() throws Exception {
+    void 탈퇴한_회원의_토큰으로_닉네임을_바꾸려_하면_401이다() throws Exception {
         // given
         jdbcClient.sql("DELETE FROM member").update();
 
@@ -226,7 +265,7 @@ class MeControllerTest {
     }
 
     @Test
-    void 세션이_없으면_CSRF_토큰이_있어도_401이다() throws Exception {
+    void 토큰이_없으면_CSRF_토큰이_있어도_401이다() throws Exception {
         // when
         HttpResponse<String> actual = send(request("/api/me")
             .header("Cookie", CSRF_COOKIE + "=" + csrfToken)
@@ -260,18 +299,6 @@ class MeControllerTest {
             .header("X-XSRF-TOKEN", csrfToken)
             .header("Content-Type", "application/json")
             .method("PATCH", HttpRequest.BodyPublishers.ofString(body)));
-    }
-
-    @SuppressWarnings("unchecked")
-    private String loginSession(UUID publicId) {
-        Session session = sessions.createSession();
-        SecurityContext context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
-            new MemberPrincipal(publicId), null, List.of(new SimpleGrantedAuthority("ROLE_MEMBER"))));
-        session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, context);
-        sessions.save(session);
-        String encodedId = Base64.getEncoder().encodeToString(session.getId().getBytes(StandardCharsets.UTF_8));
-        return SESSION_COOKIE + "=" + encodedId;
     }
 
     private String csrfToken() throws IOException, InterruptedException {

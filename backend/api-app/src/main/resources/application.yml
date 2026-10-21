@@ -6,14 +6,14 @@ server:
     min-response-size: 2KB
   servlet:
     session:
-      timeout: 30d
+      timeout: 10m # 로그인 중에만 쓰는 임시 세션이다. 로그인 상태는 토큰이 가진다.
       cookie:
         name: __Host-sb_session
         path: /
         http-only: true
         secure: true
         same-site: lax
-        max-age: 365d
+        max-age: 10m
 
 chat:
   enabled: ${CHAT_ENABLED:false}
@@ -82,6 +82,12 @@ logging:
 auth:
   enabled: ${AUTH_ENABLED:false}
   public-base-url: ${AUTH_PUBLIC_BASE_URL:http://localhost:8080}
+  token:
+    secret: ${AUTH_TOKEN_SECRET:}
+    key-id: k1
+    access-ttl: 15m
+  refresh-token:
+    secret: ${AUTH_REFRESH_TOKEN_SECRET:}
   kakao:
     enabled: ${AUTH_KAKAO_ENABLED:false}
     client-id: ${AUTH_KAKAO_CLIENT_ID:}

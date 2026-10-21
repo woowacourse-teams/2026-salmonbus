@@ -112,6 +112,77 @@ class MemberTableTest {
         assertThat(identityCount()).isZero();
     }
 
+    @Test
+    void 회원을_지우면_리프레시_토큰_계통도_함께_지워진다() {
+        // given
+        final long memberId = insertMember(NICKNAME);
+        final long otherMemberId = insertMember("연어둘");
+        insertRefreshToken(memberId, UUID.randomUUID(), 0);
+        insertRefreshToken(memberId, UUID.randomUUID(), 3);
+        insertRefreshToken(otherMemberId, UUID.randomUUID(), 0);
+
+        // when
+        jdbcClient.sql("DELETE FROM member WHERE id = ?").param(memberId).update();
+
+        // then
+        assertThat(refreshTokenCount()).isEqualTo(1);
+    }
+
+    @Test
+    void 같은_계통은_한_행만_저장된다() {
+        // given
+        final long memberId = insertMember(NICKNAME);
+        final UUID familyId = UUID.randomUUID();
+        insertRefreshToken(memberId, familyId, 0);
+
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertRefreshToken(memberId, familyId, 1));
+
+        // then
+        assertThat(caughtFailure)
+            .isInstanceOf(DataIntegrityViolationException.class)
+            .hasMessageContaining("pk_refresh_token");
+    }
+
+    @Test
+    void 한_회원은_계통을_여러_개_가질_수_있다() {
+        // given
+        final long memberId = insertMember(NICKNAME);
+        insertRefreshToken(memberId, UUID.randomUUID(), 0);
+
+        // when
+        insertRefreshToken(memberId, UUID.randomUUID(), 0);
+
+        // then
+        assertThat(refreshTokenCount()).isEqualTo(2);
+    }
+
+    @Test
+    void 세대가_음수이면_저장되지_않는다() {
+        // given
+        final long memberId = insertMember(NICKNAME);
+
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertRefreshToken(memberId, UUID.randomUUID(), -1));
+
+        // then
+        assertThat(caughtFailure)
+            .isInstanceOf(DataIntegrityViolationException.class)
+            .hasMessageContaining("ck_refresh_token_generation");
+    }
+
+    @Test
+    void 없는_회원의_리프레시_토큰은_저장되지_않는다() {
+        // when
+        Throwable caughtFailure = catchThrowable(
+            () -> insertRefreshToken(Long.MAX_VALUE, UUID.randomUUID(), 0));
+
+        // then
+        assertThat(caughtFailure)
+            .isInstanceOf(DataIntegrityViolationException.class)
+            .hasMessageContaining("fk_refresh_token_member");
+    }
+
     private long insertMember(String nickname) {
         return jdbcClient.sql("""
                 INSERT INTO member (public_id, nickname, created_at, last_login_at)
@@ -134,5 +205,18 @@ class MemberTableTest {
 
     private long identityCount() {
         return jdbcClient.sql("SELECT count(*) FROM member_identity").query(Long.class).single();
+    }
+
+    private void insertRefreshToken(long memberId, UUID familyId, int generation) {
+        jdbcClient.sql("""
+                INSERT INTO refresh_token (family_id, member_id, generation, rotated_at, expires_at)
+                VALUES (?, ?, ?, ?, ?)
+                """)
+            .params(familyId, memberId, generation, JOINED_AT, JOINED_AT.plusDays(30))
+            .update();
+    }
+
+    private long refreshTokenCount() {
+        return jdbcClient.sql("SELECT count(*) FROM refresh_token").query(Long.class).single();
     }
 }

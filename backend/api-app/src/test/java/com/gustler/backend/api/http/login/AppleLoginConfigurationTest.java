@@ -3,6 +3,7 @@ package com.gustler.backend.api.http.login;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
+import com.gustler.backend.member.api.RefreshTokens;
 import com.gustler.backend.member.api.SignInWithSocialAccount;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -11,6 +12,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mockito;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
@@ -24,6 +26,7 @@ class AppleLoginConfigurationTest {
         .withUserConfiguration(SocialLoginConfiguration.class)
         .withBean(Clock.class, Clock::systemUTC)
         .withBean(SignInWithSocialAccount.class, () -> identity -> null)
+        .withBean(RefreshTokens.class, () -> Mockito.mock(RefreshTokens.class))
         .withPropertyValues(
             "auth.public-base-url=https://www.salmonbus.test",
             "auth.apple.issuer=https://appleid.apple.com",
@@ -65,6 +68,7 @@ class AppleLoginConfigurationTest {
             .withUserConfiguration(SocialLoginConfiguration.class)
             .withBean(Clock.class, Clock::systemUTC)
             .withBean(SignInWithSocialAccount.class, () -> identity -> null)
+            .withBean(RefreshTokens.class, () -> Mockito.mock(RefreshTokens.class))
             .run(context -> assertThat(context).hasNotFailed());
     }
 

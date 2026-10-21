@@ -1,5 +1,8 @@
 package com.gustler.backend.api.http.login;
 
+import com.gustler.backend.api.account.token.AccessTokens;
+import com.gustler.backend.api.account.token.AuthCookies;
+import com.gustler.backend.member.api.RefreshTokens;
 import com.gustler.backend.member.api.SignInWithSocialAccount;
 import java.time.Clock;
 import java.util.Map;
@@ -85,10 +88,14 @@ public class SocialLoginConfiguration {
     SocialLogin socialLogin(
         ObjectProvider<ClientRegistration> registrations,
         ObjectProvider<AppleClientSecret> appleClientSecret,
-        SignInWithSocialAccount signIn
+        SignInWithSocialAccount signIn,
+        RefreshTokens refreshTokens,
+        ObjectProvider<AccessTokens> accessTokens,
+        ObjectProvider<AuthCookies> authCookies
     ) {
         Map<String, Supplier<String>> clientSecrets = appleClientSecret.stream()
             .collect(Collectors.toMap(secret -> APPLE, secret -> secret::issue));
-        return new SocialLogin(registrations.orderedStream().toList(), clientSecrets, signIn);
+        return new SocialLogin(
+            registrations.orderedStream().toList(), clientSecrets, signIn, refreshTokens, accessTokens, authCookies);
     }
 }

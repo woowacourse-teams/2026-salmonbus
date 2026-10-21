@@ -200,30 +200,28 @@ class AppleLoginFlowTest {
     }
 
     @Test
-    void 로그인_전_세션은_10분_로그인_뒤에는_30일이고_제공자_정보는_세션에_남지_않는다() throws Exception {
+    void 로그인하면_임시_세션을_지우고_토큰_쿠키를_내리며_제공자_정보는_어디에도_남지_않는다() throws Exception {
         // given
         LoginBrowser browser = new LoginBrowser(port);
         String authorization = location(browser.get("/api/auth/apple/start"));
         final long beforeLogin = maxInactiveInterval();
 
         // when
-        browser.get(callbackPath(authorization, apple.authorize(authorization, SUBJECT)));
+        String code = apple.authorize(authorization, SUBJECT);
+        HttpResponse<String> callback = browser.get(callbackPath(authorization, code));
 
         // then
         String publicId = jdbcClient.sql("SELECT public_id::text FROM member").query(String.class).single();
-        String stored = jdbcClient.sql("SELECT ATTRIBUTE_BYTES FROM SPRING_SESSION_ATTRIBUTES")
-            .query(byte[].class).list().stream()
-            .map(bytes -> new String(bytes, StandardCharsets.ISO_8859_1))
-            .reduce("", String::concat);
+        String access = CookieHeaders.named(callback, "__Host-sb_at");
+        String refresh = CookieHeaders.named(callback, "__Host-sb_rt");
+        JsonNode claims = CookieHeaders.jwtPayload(CookieHeaders.valueOf(access), objectMapper);
         assertSoftly(softly -> {
             softly.assertThat(beforeLogin).isEqualTo(Duration.ofMinutes(10).toSeconds());
-            softly.assertThat(maxInactiveInterval()).isEqualTo(Duration.ofDays(30).toSeconds());
-            softly.assertThat(sessionCount()).isEqualTo(1);
-            softly.assertThat(jdbcClient.sql("SELECT PRINCIPAL_NAME FROM SPRING_SESSION").query(String.class).single())
-                .isEqualTo(publicId);
-            softly.assertThat(stored).contains("MemberPrincipal");
-            softly.assertThat(stored)
-                .doesNotContain(SUBJECT, FakeAppleServer.ACCESS_TOKEN, apple.baseUrl(), "Oidc", "OAuth2", "APPLE");
+            softly.assertThat(sessionCount()).isZero();
+            softly.assertThat(access).contains("HttpOnly", "Secure", "SameSite=Lax");
+            softly.assertThat(refresh).contains("HttpOnly", "Secure", "SameSite=Lax", "Path=/;");
+            softly.assertThat(claims.propertyNames()).containsExactlyInAnyOrder("iss", "sub", "iat", "exp");
+            softly.assertThat(claims.path("sub").asString()).isEqualTo(publicId);
         });
     }
 

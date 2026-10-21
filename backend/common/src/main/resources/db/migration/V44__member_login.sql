@@ -26,6 +26,23 @@ CREATE TABLE member_identity (
 );
 CREATE INDEX ix_member_identity_member ON member_identity (member_id);
 
+-- 로그인 계통(family)마다 한 행이다. 토큰은 저장하지 않고 서버 비밀로 서명해 (family_id, generation) 에서 다시 계산한다.
+-- generation 은 지금 유효한 세대이고, rotated_at 은 그 세대를 발급한 시각이다.
+CREATE TABLE refresh_token (
+    family_id   uuid        NOT NULL,
+    member_id   bigint      NOT NULL,
+    generation  integer     NOT NULL,
+    rotated_at  timestamptz NOT NULL,
+    expires_at  timestamptz NOT NULL,
+    CONSTRAINT pk_refresh_token PRIMARY KEY (family_id),
+    CONSTRAINT fk_refresh_token_member FOREIGN KEY (member_id)
+        REFERENCES member (id) ON DELETE CASCADE,
+    CONSTRAINT ck_refresh_token_generation CHECK (generation >= 0)
+);
+CREATE INDEX ix_refresh_token_member ON refresh_token (member_id);
+-- 정리 작업이 만료된 계통을 찾는다.
+CREATE INDEX ix_refresh_token_expires ON refresh_token (expires_at);
+
 -- 아래 두 표는 spring-session-jdbc 4.1.0 의 schema-postgresql.sql 원문이다. 라이브러리가 표 이름과 열을 정하므로 바꾸지 않는다.
 CREATE TABLE SPRING_SESSION (
 	PRIMARY_ID CHAR(36) NOT NULL,

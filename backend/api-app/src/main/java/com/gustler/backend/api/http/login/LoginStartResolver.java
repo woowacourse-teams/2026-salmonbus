@@ -16,8 +16,8 @@ import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequ
  * <p>Spring Security 기본 주소는 {@code /oauth2/authorization/{id}} 라 우리 주소 규칙과 달라 직접 맞춘다.
  * 켜지 않은 제공자는 요청을 가로채지 않고 넘겨, 없는 경로로 응답한다.
  *
- * <p>시작 요청에서 세션이 처음 만들어진다. 이때 돌아갈 경로를 검증해 세션에 두고 수명을 짧게 잡는다.
- * 이미 로그인한 세션이면 수명은 그대로 둔다.
+ * <p>시작 요청에서 임시 세션이 만들어진다. 이때 돌아갈 경로를 검증해 세션에 둔다. 로그인 상태는 세션이 아니라 토큰이 가지므로
+ * 이미 로그인한 사용자가 다시 시작해도 그 로그인은 영향을 받지 않는다.
  * 애플을 뺀 모든 요청에 PKCE(S256)를 건다. 기본값은 비밀을 가진 클라이언트에는 PKCE를 걸지 않는다. 애플은 PKCE 를
  * 지원하지 않으므로 걸지 않고, 대신 {@code response_mode=query} 를 명시해 콜백이 쿼리로 돌아오게 한다. 폼 전송
  * ({@code form_post}) 으로 돌아오면 SameSite=Lax 세션 쿠키가 실리지 않아 로그인 전 세션을 잃는다.
@@ -51,9 +51,6 @@ final class LoginStartResolver implements OAuth2AuthorizationRequestResolver {
     @Override
     public OAuth2AuthorizationRequest resolve(HttpServletRequest request, String clientRegistrationId) {
         HttpSession session = request.getSession();
-        if (!LoginSessions.isSignedIn(session)) {
-            LoginSessions.expireAfter(session, LoginSessions.BEFORE_LOGIN);
-        }
         session.setAttribute(LoginSessions.RETURN_TO_ATTRIBUTE, ReturnTo.sanitize(request.getParameter("returnTo")));
         if (SocialLoginConfiguration.APPLE.equals(clientRegistrationId)) {
             return withoutPkce.resolve(request, clientRegistrationId);

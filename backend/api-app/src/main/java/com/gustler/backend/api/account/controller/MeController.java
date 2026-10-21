@@ -22,8 +22,9 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 로그인한 회원 본인의 정보를 조회하고 닉네임을 바꾼다.
  *
- * <p>세션이 없는 요청은 보안 필터가 401 로 거절한다. 세션은 있지만 회원이 이미 탈퇴한 경우에는 이 컨트롤러가
- * 401 로 답한다. 응답은 회원마다 다르므로 저장하지 않게 한다. {@code auth.enabled} 가 {@code true} 일 때만 등록한다.
+ * <p>유효한 액세스 토큰이 없는 요청은 보안 필터가 401 로 거절한다. 토큰은 유효하지만 회원이 이미 탈퇴한 경우에는 이
+ * 컨트롤러가 401 로 답한다. 액세스 토큰은 만료 전까지 취소할 수 없으므로 이 확인이 탈퇴를 바로 반영한다. 응답은 회원마다 다르므로 저장하지 않게 한다.
+ * {@code auth.enabled} 가 {@code true} 일 때만 등록한다.
  */
 @RestController
 @RequestMapping("/api/me")

@@ -13,7 +13,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 /** 쿠키를 저장해 다시 보내는 브라우저. 리다이렉트는 따라가지 않고 응답 그대로 돌려준다. */
 final class LoginBrowser {
-    private static final String CSRF_COOKIE = "XSRF-TOKEN";
+    private static final String CSRF_COOKIE = "__Host-XSRF-TOKEN";
 
     private final int port;
     private final HttpClient client = HttpClient.newBuilder()
