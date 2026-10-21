@@ -10,33 +10,23 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class RouteGeometryTest {
-    @Test
-    void 미제공이나_축이_뒤바뀐_좌표를_지도_마커로_내보내지_않는다() {
+    @ParameterizedTest
+    @CsvSource(value = {
+        "null, 37.0",
+        "0.0, 0.0",
+        "37.0, 127.0",
+        "NaN, 37.0"
+    }, nullValues = "null")
+    void 미제공이거나_표시할_수_없는_좌표를_지도_마커로_내보내지_않는다(Double x, Double y) {
         // when
-        Point point1 = Point.orNull(null, 37.0);
+        Point point = Point.orNull(x, y);
 
         // then
-        assertThat(point1).isNull();
-
-        // when
-        Point point2 = Point.orNull(0.0, 0.0);
-
-        // then
-        assertThat(point2).isNull();
-
-        // when
-        Point point3 = Point.orNull(37.0, 127.0);
-
-        // then
-        assertThat(point3).isNull();
-
-        // when
-        Point point4 = Point.orNull(Double.NaN, 37.0);
-
-        // then
-        assertThat(point4).isNull();
+        assertThat(point).isNull();
     }
 
     @Test
