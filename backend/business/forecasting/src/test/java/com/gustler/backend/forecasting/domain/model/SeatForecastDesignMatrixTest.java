@@ -96,8 +96,6 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 설계행렬은_31열이다() {
-        // given
-
         // when
         double[] actual = matrixOf(input()).toArray();
 
@@ -107,8 +105,6 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 지금_채우는_열과_계수를_기다리는_열과_늘_0인_열이_31열을_빠짐없이_나눈다() {
-        // given
-
         // when
         List<Integer> actual = new ArrayList<>();
         actual.addAll(SeatForecastDesignMatrix.COLUMNS_FILLED_NOW);
@@ -125,8 +121,6 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 지금_채우는_열은_스물한_개다() {
-        // given
-
         // when
 
         // then
@@ -154,8 +148,6 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 노선은_노선마다_따로_배워서_0이다() {
-        // given
-
         // when
         SeatForecastDesignMatrix actual = matrixOf(input());
 
@@ -166,8 +158,6 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 상수는_재료와_무관하게_1이다() {
-        // given
-
         // when
         SeatForecastDesignMatrix actual = matrixOf(input());
 
@@ -177,8 +167,6 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 아침으로_정해진_예보는_아침_열이_1이다() {
-        // given
-
         // when
         SeatForecastDesignMatrix actual = matrixOf(input());
 
@@ -188,8 +176,6 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 저녁으로_정해진_예보는_저녁_열이_1이다() {
-        // given
-
         // when
         SeatForecastDesignMatrix actual = matrixOf(
             inputOf(observed(SEATS_LEFT_12, CROWD_LEVEL_3, EVENING_AT), statisticsOf(TimeSlot.EVENING)));
@@ -200,8 +186,6 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 아침도_저녁도_아닌_예보는_두_열이_모두_0이다() {
-        // given
-
         // when
         SeatForecastDesignMatrix actual = matrixOf(
             inputOf(observed(SEATS_LEFT_12, CROWD_LEVEL_3, MIDDAY_AT), statisticsOf(TimeSlot.OTHER)));
@@ -212,8 +196,6 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 최대_44석을_보인_차량에_12석_남았으면_잔여석_비율은_12를_44로_나눈_값이다() {
-        // given
-
         // when
         SeatForecastDesignMatrix actual = matrixOf(input());
 
@@ -223,8 +205,6 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 잔여석이_0석이면_만석이_1이다() {
-        // given
-
         // when
         SeatForecastDesignMatrix actual = matrixOf(
             inputOf(observed(NO_SEAT_LEFT, CROWD_LEVEL_3, MORNING_AT), fullStatistics()));
@@ -235,8 +215,6 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 잔여석이_20석보다_많이_남으면_낮은_좌석_구간은_1이다() {
-        // given
-
         // when
         SeatForecastDesignMatrix actual = matrixOf(
             inputOf(observed(30, CROWD_LEVEL_3, MORNING_AT), fullStatistics()));
@@ -250,8 +228,6 @@ class SeatForecastDesignMatrixTest {
     void 혼잡도_1등급부터_4등급까지_그_등급의_열만_1이다(
         final int crowdLevel
     ) {
-        // given
-
         // when
         SeatForecastDesignMatrix actual = matrixOf(
             inputOf(observed(SEATS_LEFT_12, crowdLevel, MORNING_AT), fullStatistics()));
@@ -263,8 +239,6 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 혼잡도를_모르면_혼잡도_네_열이_모두_0이다() {
-        // given
-
         // when
         SeatForecastDesignMatrix actual = matrixOf(
             inputOf(observed(SEATS_LEFT_12, CROWD_LEVEL_UNKNOWN, MORNING_AT), fullStatistics()));
@@ -275,8 +249,6 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 최대_44석을_보인_차량은_최대_잔여석_비율이_44를_68로_나눈_값이다() {
-        // given
-
         // when
         SeatForecastDesignMatrix actual = matrixOf(input());
 
@@ -286,8 +258,6 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 상류에서_3석_줄었으면_좌석_기울기는_마이너스_3이다() {
-        // given
-
         // when
         SeatForecastDesignMatrix actual = matrixOf(input());
 
@@ -313,8 +283,6 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 만석이_3정류장째_이어지면_연속_만석은_3이다() {
-        // given
-
         // when
         SeatForecastDesignMatrix actual = matrixOf(input());
 
@@ -340,8 +308,6 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 직전_차량에_11석_남았으면_직전_잔여석_비율은_11을_44로_나눈_값이다() {
-        // given
-
         // when
         SeatForecastDesignMatrix actual = matrixOf(input());
 
@@ -368,8 +334,6 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 정류장_60개짜리_판본의_49번_정류장은_49를_60으로_나눈_자리다() {
-        // given
-
         // when
         SeatForecastDesignMatrix actual = matrixOf(input());
 
@@ -414,8 +378,6 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 같은_재료로_두_번_만들면_31열이_모두_같다() {
-        // given
-
         // when
         double[] actual = matrixOf(input()).toArray();
 

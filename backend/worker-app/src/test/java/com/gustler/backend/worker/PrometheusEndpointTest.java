@@ -33,8 +33,6 @@ class PrometheusEndpointTest {
 
     @Test
     void worker의_루프백_엔드포인트에서_JVM과_실제_DB풀을_조회한다() throws Exception {
-        // given
-
         // when
         WorkerOperationLog.run("monitoring_probe", "all", () -> {
         });

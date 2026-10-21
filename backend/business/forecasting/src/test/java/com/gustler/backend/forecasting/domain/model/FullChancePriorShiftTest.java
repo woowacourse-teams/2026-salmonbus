@@ -31,8 +31,6 @@ class FullChancePriorShiftTest {
 
     @Test
     void 오늘_도착이_확인된_예보가_하나도_없으면_만석_확률을_안_옮긴다() {
-        // given
-
         // when
         final double actual = FullChancePriorShift.shifted(0.3, null);
 
@@ -108,8 +106,6 @@ class FullChancePriorShiftTest {
 
     @Test
     void 만석_확률이_100퍼센트로_굳지_않는다() {
-        // given
-
         // when
         // 허들이 1 을 반환해도 원값 그대로 전달하지 않는다.
         final double actual = FullChancePriorShift.shifted(1.0, null);
@@ -120,8 +116,6 @@ class FullChancePriorShiftTest {
 
     @Test
     void 만석_확률이_0퍼센트로_굳지_않는다() {
-        // given
-
         // when
         final double actual = FullChancePriorShift.shifted(0.0, null);
 

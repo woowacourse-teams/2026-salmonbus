@@ -53,8 +53,6 @@ class ArrivalFirstResultRuntimeTest {
     @Test
     @Timeout(300)
     void 최초_결과_대기의_효과와_느린상류_동시요청_비용을_실행_JAR로_비교한다() throws Exception {
-        // given
-
         // when
         Files.createDirectories(DIRECTORY);
         Path agent = TimingAgentJar.create(DIRECTORY.resolve("timing-agent.jar"));

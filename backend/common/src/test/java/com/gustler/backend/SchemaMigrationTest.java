@@ -61,8 +61,6 @@ class SchemaMigrationTest {
 
     @Test
     void 최신_성공_관측_인덱스는_유지하고_미사용_배치_시도_인덱스는_제거한다() {
-        // given
-
         // when
         final boolean actual = jdbcClient.sql("""
                 SELECT to_regclass('ix_batch_forecast_candidates') IS NOT NULL

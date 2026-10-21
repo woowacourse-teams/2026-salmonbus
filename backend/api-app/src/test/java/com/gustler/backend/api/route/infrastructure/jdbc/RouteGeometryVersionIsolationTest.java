@@ -59,8 +59,6 @@ class RouteGeometryVersionIsolationTest {
 
     @Test
     void 판본이_바뀌면_같은_정류장_ID라도_옛_좌표와_형상을_재사용하지_않는다() {
-        // given
-
         // when
         final long route = insertRoute();
         final long oldVersion = insertVersion(route, FIRST_AT, "a");
@@ -113,8 +111,6 @@ class RouteGeometryVersionIsolationTest {
 
     @Test
     void 최신_정류장_좌표가_유효하지_않으면_이전_좌표로_가리지_않고_부분제공한다() {
-        // given
-
         // when
         final long version = insertVersion(insertRoute(), FIRST_AT, "a");
         insertCoordinates(version, FIRST_AT, 127, 37);

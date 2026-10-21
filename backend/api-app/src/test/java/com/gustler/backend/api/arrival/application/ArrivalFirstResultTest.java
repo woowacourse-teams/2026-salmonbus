@@ -53,8 +53,6 @@ class ArrivalFirstResultTest {
 
     @Test
     void 첫_수집이_끝나면_첫_응답에_실제_예측을_담고_갱신중_표시를_없앤다() {
-        // given
-
         // when
         ArrivalSnapshot collected = snapshot(NOW, true);
         when(repository.latest(STATION)).thenReturn(Optional.empty(), Optional.of(collected));
@@ -78,8 +76,6 @@ class ArrivalFirstResultTest {
 
     @Test
     void 정상_빈_수신은_예측이_나올때까지_기다리지_않고_NO_PREDICTION으로_반환한다() {
-        // given
-
         // when
         when(repository.latest(STATION)).thenReturn(Optional.empty(), Optional.of(snapshot(NOW, false)));
 
@@ -89,8 +85,6 @@ class ArrivalFirstResultTest {
 
     @Test
     void 대기_한도에_수신이_없으면_기존_COLLECTING으로_돌아간다() {
-        // given
-
         // when
         when(gateway.request(STATION, WAIT)).thenReturn(
             new ArrivalRefresh(Status.IN_PROGRESS, "COLLECTING", NOW.plusSeconds(2)));
@@ -108,8 +102,6 @@ class ArrivalFirstResultTest {
 
     @Test
     void 갱신_시각이_지나도_유효한_수신이_있으면_대기하지_않는다() {
-        // given
-
         // when
         when(repository.latest(STATION)).thenReturn(Optional.of(snapshot(NOW.minusSeconds(45), true)));
         when(gateway.request(STATION)).thenReturn(
@@ -124,8 +116,6 @@ class ArrivalFirstResultTest {
 
     @Test
     void 만료된_수신을_대기_시간만큼_연장하지_않는다() {
-        // given
-
         // when
         when(repository.latest(STATION)).thenReturn(Optional.of(snapshot(NOW.minusSeconds(60), true)));
         when(gateway.request(STATION, WAIT)).thenReturn(
@@ -143,8 +133,6 @@ class ArrivalFirstResultTest {
 
     @Test
     void 한도_초과나_실패_응답에는_추가_DB_조회를_하지_않는다() {
-        // given
-
         // when
         when(gateway.request(STATION, WAIT)).thenReturn(
             new ArrivalRefresh(Status.DEFERRED, "DAILY_QUOTA_EXHAUSTED", NOW.plusSeconds(100)));
@@ -158,8 +146,6 @@ class ArrivalFirstResultTest {
 
     @Test
     void 대기_슬롯이_차면_요청을_쌓지_않고_기존_빠른_접수를_사용한다() {
-        // given
-
         // when
         final boolean acquired = policy.tryAcquire();
 
@@ -182,8 +168,6 @@ class ArrivalFirstResultTest {
 
     @Test
     void 대기하는_사이에_판본이_바뀌면_이전_방문의_예측을_반환하지_않는다() {
-        // given
-
         // when
         when(repository.visits(STATION)).thenReturn(List.of(visit(1)), List.of(visit(2)));
         when(repository.latest(STATION)).thenReturn(Optional.empty(), Optional.of(snapshot(NOW, true)));
@@ -203,8 +187,6 @@ class ArrivalFirstResultTest {
 
     @Test
     void 대기는_명시적으로_켜야_하고_최대_1초까지만_설정한다() {
-        // given
-
         // when
         final boolean acquired = new ArrivalFirstResultPolicy(Duration.ZERO, 32).tryAcquire();
 

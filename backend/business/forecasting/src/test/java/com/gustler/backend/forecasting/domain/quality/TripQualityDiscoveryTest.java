@@ -11,8 +11,6 @@ import org.junit.jupiter.api.Test;
 class TripQualityDiscoveryTest {
     @Test
     void 조사를_재개할_때_기존의_종료_시각과_관측_연결_간격을_변경할_수_없다() {
-        // given
-
         // when
         Instant from = Instant.parse("2026-09-22T00:00:00Z");
         Instant until = from.plusSeconds(3_600);

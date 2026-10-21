@@ -41,8 +41,6 @@ class StationArrivalsControllerTest {
 
     @Test
     void 유효한_정보의_HTTP캐시는_최대5초다() throws Exception {
-        // given
-
         // when
         when(service.get(any())).thenReturn(response("READY", 10));
         mvc.perform(get("/api/v2/stations/206000637/arrivals"))
@@ -54,8 +52,6 @@ class StationArrivalsControllerTest {
 
     @Test
     void 갱신경계와_제공불가를_캐시로_가리지_않는다() throws Exception {
-        // given
-
         // when
         when(service.get(any())).thenReturn(response("READY", 39));
         mvc.perform(get("/api/v2/stations/206000637/arrivals"))
@@ -69,8 +65,6 @@ class StationArrivalsControllerTest {
 
     @Test
     void 잘못된_식별자는_공통_오류_형식을_사용한다() throws Exception {
-        // given
-
         // when
         mvc.perform(get("/api/v2/stations/bad/arrivals"))
             .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_REQUEST"))

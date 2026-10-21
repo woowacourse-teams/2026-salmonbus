@@ -90,8 +90,6 @@ class ChatFrameCodecTest {
 
     @Test
     void 계약_예시의_프레임마다_대응하는_값이_있다() {
-        // given
-
         // when
 
         // then
@@ -104,8 +102,6 @@ class ChatFrameCodecTest {
     @ParameterizedTest
     @MethodSource("serverFrameNames")
     void 서버_프레임을_계약_예시와_키_순서까지_같게_직렬화한다(String name) {
-        // given
-
         // when
         String encoded = codec.encode(SERVER_FRAMES.get(name));
 
@@ -116,8 +112,6 @@ class ChatFrameCodecTest {
     @ParameterizedTest
     @MethodSource("clientFrameNames")
     void 계약_예시의_클라이언트_프레임을_읽는다(String name) {
-        // given
-
         // when
         ClientFrame decoded = codec.decode(
             ChatContractExamples.compact(ChatContractExamples.clientFrame(name))
@@ -129,8 +123,6 @@ class ChatFrameCodecTest {
 
     @Test
     void UUID_v4가_아닌_클라이언트_ID를_거절한다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> codec.decode("""
             {"v":1,"type":"message.send","clientMessageId":"00000000-0000-1000-8000-000000000000","body":"안녕"}
@@ -144,8 +136,6 @@ class ChatFrameCodecTest {
 
     @Test
     void 버전이_1이_아니면_모양과_상관없이_지원하지_않는_프로토콜로_읽는다() {
-        // given
-
         // when
         ClientFrame send = codec.decode("""
             {"v":2,"type":"message.send","clientMessageId":"7c9e6679-7425-40de-944b-e07fc1f90ae7","text":"안녕"}

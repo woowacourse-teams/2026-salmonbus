@@ -17,8 +17,6 @@ class ArrivalLabelTest {
 
     @Test
     void 아직_도착하지_않은_판정으로는_평가를_확정하지_않는다() {
-        // given
-
         // when
         ArrivalLabel actual = new NotArrivedYet();
 
@@ -31,8 +29,6 @@ class ArrivalLabelTest {
 
     @Test
     void 도착을_판정한_결과로는_평가를_확정한다() {
-        // given
-
         // when
         List<ArrivalLabel> settling = List.of(
             new Settled(ARRIVAL_OBSERVATION_ID, SEATS_ON_ARRIVAL),

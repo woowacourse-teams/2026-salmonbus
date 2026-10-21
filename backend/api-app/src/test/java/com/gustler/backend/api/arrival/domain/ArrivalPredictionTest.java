@@ -12,8 +12,6 @@ class ArrivalPredictionTest {
 
     @Test
     void 초_정보가_없으면_분_정보를_수신시각에_더한다() {
-        // given
-
         // when
         Prediction source = new Prediction(null, 1, null, 3, null, null, "NOT_PROVIDED", null, null, null);
         ArrivalPrediction prediction = ArrivalPrediction.at(source, RECEIVED, RECEIVED.plusSeconds(10));
@@ -28,8 +26,6 @@ class ArrivalPredictionTest {
 
     @Test
     void 예상시각이_지났으면_실제_도착으로_취급하지_않는다() {
-        // given
-
         // when
         Prediction source = new Prediction("vehicle-1", 1, 30, 1, null, 0, null, null, null, null);
         ArrivalPrediction prediction = ArrivalPrediction.at(source, RECEIVED, RECEIVED.plusSeconds(31));
@@ -42,8 +38,6 @@ class ArrivalPredictionTest {
 
     @Test
     void 초_정보를_우선하고_남은_시간은_올림한다() {
-        // given
-
         // when
         Prediction source = new Prediction("vehicle-1", 1, 30, 1, null, 0, null, null, null, null);
         ArrivalPrediction prediction = ArrivalPrediction.at(source, RECEIVED, RECEIVED.plusMillis(29_500));

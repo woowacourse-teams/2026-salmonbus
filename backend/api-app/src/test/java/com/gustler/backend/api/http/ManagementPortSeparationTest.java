@@ -45,8 +45,6 @@ class ManagementPortSeparationTest {
 
     @Test
     void 관리_포트를_떼도_공개_포트는_우리_오류_응답_형식을_지킨다() throws IOException {
-        // given
-
         // when
         String actual = send(publicPort, "TRACE /api/v1/routes HTTP/1.1");
 
@@ -60,8 +58,6 @@ class ManagementPortSeparationTest {
 
     @Test
     void 관리_포트는_이_오류_응답_형식_밖이다() throws IOException {
-        // given
-
         // when
         String actual = send(managementPort, "TRACE /actuator/health HTTP/1.1");
 
@@ -75,8 +71,6 @@ class ManagementPortSeparationTest {
 
     @Test
     void 두_포트가_서로_다른_포트다() {
-        // given
-
         // when
 
         // then
@@ -85,8 +79,6 @@ class ManagementPortSeparationTest {
 
     @Test
     void 공개_포트의_readyz_가_UP_이다() throws IOException {
-        // given
-
         // when
         // validate.sh 가 8080 이 트래픽을 받을 상태인지 이 응답으로 확인한다
         String actual = send(publicPort, "GET /readyz HTTP/1.1");
@@ -100,8 +92,6 @@ class ManagementPortSeparationTest {
 
     @Test
     void 공개_포트에_actuator_경로가_없다() throws IOException {
-        // given
-
         // when
         String actual = send(publicPort, "GET /actuator/health HTTP/1.1");
 

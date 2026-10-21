@@ -147,8 +147,6 @@ class PublicApiDocsContractTest {
 
     @Test
     void 문서가_켜져도_기존_공개_조회에는_로그인이_필요하지_않다() throws Exception {
-        // given
-
         // when
         mockMvc.perform(get("/api/v1/routes"))
             .andExpect(status().isOk());

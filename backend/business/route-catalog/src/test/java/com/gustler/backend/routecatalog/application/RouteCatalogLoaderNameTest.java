@@ -21,8 +21,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 class RouteCatalogLoaderNameTest {
     @Test
     void 이미_받은_이름을_재사용하며_로그용_조회는_추가하지_않는다() {
-        // given
-
         // when
         CurrentRouteVersionQuery current = mock(CurrentRouteVersionQuery.class);
         ApiCallQuota quota = mock(ApiCallQuota.class);

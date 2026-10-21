@@ -62,8 +62,6 @@ class SafetensorsFileTest {
 
     @Test
     void 파일이_머리말_길이도_못_담을_만큼_짧으면_거절한다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> SafetensorsFile.of(new byte[] {1, 2, 3}));
 

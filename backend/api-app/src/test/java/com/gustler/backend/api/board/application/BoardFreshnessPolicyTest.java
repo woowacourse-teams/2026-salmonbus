@@ -15,8 +15,6 @@ class BoardFreshnessPolicyTest {
 
     @Test
     void 관측_후_5분까지는_유효하다() {
-        // given
-
         // when
         BoardFreshnessPolicy policy = policyAt("2026-08-26T23:05:00Z");
 
@@ -28,8 +26,6 @@ class BoardFreshnessPolicyTest {
 
     @Test
     void 관측_후_5분을_넘으면_낡았다() {
-        // given
-
         // when
         BoardFreshnessPolicy policy = policyAt("2026-08-26T23:05:00.000000001Z");
 
@@ -39,8 +35,6 @@ class BoardFreshnessPolicyTest {
 
     @Test
     void 심야_관측은_정확히_10분까지_유효하고_초과하면_낡았다() {
-        // given
-
         // when
         OffsetDateTime observedAt = OffsetDateTime.parse("2026-10-16T01:00:00+09:00");
 
@@ -53,8 +47,6 @@ class BoardFreshnessPolicyTest {
 
     @Test
     void 조회가_4시를_지나도_관측_시각의_심야_유효기간을_유지한다() {
-        // given
-
         // when
         OffsetDateTime observedAt = OffsetDateTime.parse("2026-10-16T03:59:00+09:00");
         BoardFreshnessPolicy afterNight = policyAt("2026-10-15T19:05:00Z");

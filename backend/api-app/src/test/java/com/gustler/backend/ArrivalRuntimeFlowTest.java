@@ -169,8 +169,6 @@ class ArrivalRuntimeFlowTest {
 
     @Test
     void 갱신실패는_기존_수신의_유효기간을_연장하지_않는다() throws Exception {
-        // given
-
         // when
         runtime.startWorker(false, Map.of());
         Reply ready = runtime.awaitValue(STATION, "/status", "READY", QUICK_TIMEOUT);
@@ -197,8 +195,6 @@ class ArrivalRuntimeFlowTest {
 
     @Test
     void HTTP429의_RetryAfter는_다른_정류장의_재호출도_막는다() throws Exception {
-        // given
-
         // when
         runtime.source.plan(STATION, Plan.error(429, "20"));
         runtime.startWorker(false, Map.of());
@@ -217,8 +213,6 @@ class ArrivalRuntimeFlowTest {
 
     @Test
     void 느린_상류에서_대기열은_8개까지만_받고_시간지난_작업은_예산을_쓰지_않는다() throws Exception {
-        // given
-
         // when
         runtime.source.plan(STATION, Plan.slow(Duration.ofSeconds(3)));
         runtime.startWorker(false, Map.of());
@@ -245,8 +239,6 @@ class ArrivalRuntimeFlowTest {
 
     @Test
     void 상류_5초_타임아웃은_수신기록을_만들지_않고_즉시_재호출하지_않는다() throws Exception {
-        // given
-
         // when
         Plan held = Plan.held();
         runtime.source.plan(STATION, held);
@@ -266,8 +258,6 @@ class ArrivalRuntimeFlowTest {
 
     @Test
     void Worker가_중단돼도_유효값을_제공하고_만료후에는_숨긴다() throws Exception {
-        // given
-
         // when
         runtime.startWorker(false, Map.of());
         Reply ready = runtime.awaitValue(STATION, "/status", "READY", QUICK_TIMEOUT);
@@ -286,8 +276,6 @@ class ArrivalRuntimeFlowTest {
 
     @Test
     void 키별_한도와_전체_한도는_Worker_재기동_후에도_유지된다() throws Exception {
-        // given
-
         // when
         Map<String, String> budget = Map.of("ARRIVALS_KEY_DAILY_LIMIT", "1",
             "GBIS_SERVICE_KEY_B", "fake-arrival-key-b");

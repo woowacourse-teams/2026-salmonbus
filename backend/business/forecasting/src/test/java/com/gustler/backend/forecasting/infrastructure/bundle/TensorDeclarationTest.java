@@ -90,8 +90,6 @@ class TensorDeclarationTest {
         TensorDeclaration first,
         TensorDeclaration second
     ) {
-        // given
-
         // when
         final boolean forward = first.equals(second);
         final boolean backward = second.equals(first);

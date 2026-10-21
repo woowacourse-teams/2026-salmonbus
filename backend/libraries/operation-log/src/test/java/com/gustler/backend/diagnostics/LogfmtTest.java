@@ -7,8 +7,6 @@ import org.junit.jupiter.api.Test;
 class LogfmtTest {
     @Test
     void 빈값과_특수문자를_한줄의_따옴표_문자열로_표현한다() {
-        // given
-
         // when
         String quotedValue1 = Logfmt.quote(null);
 

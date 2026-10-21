@@ -39,8 +39,6 @@ class V2ApiDocsContractTest {
 
     @Test
     void 실제_생성한_문서의_예시와_응답코드를_프론트_공유명세와_대조한다() throws Exception {
-        // given
-
         // when
         for (String[] entry : List.of(new String[]{ARRIVALS, "arrival.openapi.contract"},
             new String[]{GEOMETRY, "geometry.openapi.contract"})) {
@@ -82,8 +80,6 @@ class V2ApiDocsContractTest {
 
     @Test
     void ETA의_상태와_단위_좌석0_미제공_구분을_문서화한다() {
-        // given
-
         // when
         JsonNode schemas = document.at("/components/schemas");
 
@@ -105,8 +101,6 @@ class V2ApiDocsContractTest {
 
     @Test
     void geometry의_양방향과_명시적_null_필드를_필수항목으로_문서화한다() {
-        // given
-
         // when
         JsonNode schemas = document.at("/components/schemas");
 

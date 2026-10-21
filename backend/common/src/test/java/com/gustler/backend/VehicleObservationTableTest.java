@@ -58,8 +58,6 @@ class VehicleObservationTableTest {
 
     @Test
     void 차량_관측은_수집_묶음이_먼저_있어야_저장된다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> insertObservation(MISSING_BATCH_ID, VEHICLE_204000206, 0));
 
@@ -109,8 +107,6 @@ class VehicleObservationTableTest {
 
     @Test
     void 잔여석을_알면_모르는_사유가_비어_있어야_저장된다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> insertObservationWithSeats(SEATS_43, REPORTED_UNKNOWN));
 
@@ -122,8 +118,6 @@ class VehicleObservationTableTest {
 
     @Test
     void 잔여석을_모르면_사유만_두고_저장된다() {
-        // given
-
         // when
         insertObservationWithSeats(null, REPORTED_UNKNOWN);
 
@@ -133,8 +127,6 @@ class VehicleObservationTableTest {
 
     @Test
     void 잔여석과_모르는_사유_중_하나는_있어야_저장된다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> insertObservationWithSeats(null, null));
 
@@ -146,8 +138,6 @@ class VehicleObservationTableTest {
 
     @Test
     void 아는_잔여석은_0석_이상이어야_저장된다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> insertObservationWithSeats(-1, null));
 
@@ -159,8 +149,6 @@ class VehicleObservationTableTest {
 
     @Test
     void 잔여석을_모르는_사유는_REPORTED_UNKNOWN과_NOT_REPORTED만_저장된다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> insertObservationWithSeats(null, "SENSOR_BROKEN"));
 
@@ -175,8 +163,6 @@ class VehicleObservationTableTest {
     void 혼잡도_1부터_4는_그대로_저장된다(
         final int crowdLevel
     ) {
-        // given
-
         // when
         insertObservationWithCrowdLevel(crowdLevel);
 
@@ -189,8 +175,6 @@ class VehicleObservationTableTest {
     void 혼잡도는_1부터_4까지만_저장된다(
         final int crowdLevel
     ) {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> insertObservationWithCrowdLevel(crowdLevel));
 
@@ -205,8 +189,6 @@ class VehicleObservationTableTest {
     void 운행_상태_0과_1과_2는_그대로_저장된다(
         final int runningState
     ) {
-        // given
-
         // when
         insertObservationWithRunningState(runningState);
 
@@ -220,8 +202,6 @@ class VehicleObservationTableTest {
     void 운행_상태는_0과_1과_2만_저장된다(
         Integer runningState
     ) {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> insertObservationWithRunningState(runningState));
 
@@ -233,8 +213,6 @@ class VehicleObservationTableTest {
 
     @Test
     void 통과_순번은_0석_이상이어야_저장된다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> insertObservationWithPassedStopOrder(-1));
 
@@ -246,8 +224,6 @@ class VehicleObservationTableTest {
 
     @Test
     void 첫_정류소에_도착_중인_차량의_통과_순번_0도_저장된다() {
-        // given
-
         // when
         insertObservationWithPassedStopOrder(0);
 
@@ -261,8 +237,6 @@ class VehicleObservationTableTest {
      */
     @Test
     void 통과_순번이_없는_관측은_저장되지_않는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(this::insertObservationWithoutPassedStopOrder);
 

@@ -90,8 +90,6 @@ class ArrivalRefreshCoordinatorTest {
 
     @Test
     void 같은_정류장_천_요청은_한_작업과_한_호출로_합쳐진다() throws Exception {
-        // given
-
         // when
         List<ArrivalRefresh> replies = new ArrayList<>();
         try (ExecutorService callers = Executors.newFixedThreadPool(16)) {
@@ -118,8 +116,6 @@ class ArrivalRefreshCoordinatorTest {
 
     @Test
     void 실패_대기는_새_요청에_연장되지_않고_연속_실패에는_늘어난다() {
-        // given
-
         // when
         when(source.fetch(anyString(), anyString())).thenReturn(new Failed(Reason.TRANSPORT_ERROR));
         coordinator.request(STATION);
@@ -138,8 +134,6 @@ class ArrivalRefreshCoordinatorTest {
 
     @Test
     void 저장_중에도_합류하고_저장_재시도는_GBIS를_다시_부르지_않는다() {
-        // given
-
         // when
         AtomicInteger saves = new AtomicInteger();
         doAnswer(call -> {
@@ -161,8 +155,6 @@ class ArrivalRefreshCoordinatorTest {
 
     @Test
     void 대기열에서_만료된_작업은_예산을_쓰지_않는다() {
-        // given
-
         // when
         coordinator.request(STATION);
         millis.addAndGet(2_001);
@@ -175,8 +167,6 @@ class ArrivalRefreshCoordinatorTest {
 
     @Test
     void 대기열_거절은_진행중_표시를_남기지_않는다() {
-        // given
-
         // when
         AtomicBoolean full = new AtomicBoolean(true);
         coordinator = coordinator(command -> {
@@ -199,8 +189,6 @@ class ArrivalRefreshCoordinatorTest {
 
     @Test
     void 실행_직전_이미_갱신된_수신결과를_찾으면_호출하지_않는다() {
-        // given
-
         // when
         ArrivalSnapshot snapshot = new ArrivalSnapshot(UUID.randomUUID(), STATION, clock.instant(),
             clock.instant().plusSeconds(40), clock.instant().plusSeconds(60), null, List.of());
@@ -215,8 +203,6 @@ class ArrivalRefreshCoordinatorTest {
 
     @Test
     void 전체_제한이_발생하면_이미_대기중이던_다른_정류장도_호출하지_않는다() {
-        // given
-
         // when
         when(source.fetch(anyString(), anyString())).thenReturn(new Failed(Reason.RATE_LIMITED));
         coordinator.request(STATION);
@@ -232,8 +218,6 @@ class ArrivalRefreshCoordinatorTest {
 
     @Test
     void 재시작_유예와_예산소진은_추가_예약을_막는다() {
-        // given
-
         // when
         coordinator = coordinator(queue::add, 1000, 100);
 
@@ -250,8 +234,6 @@ class ArrivalRefreshCoordinatorTest {
 
     @Test
     void 토큰이_소진되면_다른_정류장은_예산예약_전에_대기한다() {
-        // given
-
         // when
         coordinator = coordinator(queue::add, 0.5, 1);
         millis.addAndGet(40_000);
@@ -268,8 +250,6 @@ class ArrivalRefreshCoordinatorTest {
 
     @Test
     void 상류의_RetryAfter가_더_길면_전체_호출을_그만큼_미룬다() {
-        // given
-
         // when
         when(source.fetch(anyString(), anyString())).thenReturn(new Failed(
             Reason.RATE_LIMITED, Duration.ofSeconds(120)));

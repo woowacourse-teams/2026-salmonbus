@@ -323,8 +323,6 @@ class BoardApiContractTest {
 
     @Test
     void routeId_형식이_잘못되면_INVALID_ROUTE_ID_400이다() throws Exception {
-        // given
-
         // when
         mockMvc.perform(get("/api/v1/routes/abc/board"))
             .andExpect(status().isBadRequest())
@@ -337,8 +335,6 @@ class BoardApiContractTest {
 
     @Test
     void 현재_노선이_없으면_ROUTE_NOT_FOUND_404이다() throws Exception {
-        // given
-
         // when
         mockMvc.perform(get("/api/v1/routes/999999999/board"))
             .andExpect(status().isNotFound())

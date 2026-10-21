@@ -27,8 +27,6 @@ class ProductionApiDocsDisabledTest {
 
     @Test
     void 운영_프로필이_겹쳐도_화면과_명세를_제공하지_않는다() throws Exception {
-        // given
-
         // when
         mockMvc.perform(get("/api/docs")).andExpect(status().isNotFound());
         mockMvc.perform(get("/api/docs/ui")).andExpect(status().isNotFound());

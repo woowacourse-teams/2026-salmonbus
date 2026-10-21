@@ -17,8 +17,6 @@ class FileModelBundleInspectorTest {
 
     @Test
     void 검수와_기동_로더가_같은_거절_규칙을_사용한다() {
-        // given
-
         // when
         DummyBundle.valid().put("featureContractVersion", "v".repeat(41)).writeTo(directory);
         BundleRejectedException loading = catchThrowableOfType(BundleRejectedException.class,
@@ -35,8 +33,6 @@ class FileModelBundleInspectorTest {
 
     @Test
     void 검수_결과에_검증한_번들의_신원을_반환한다() throws Exception {
-        // given
-
         // when
         BundleFiles files = DummyBundle.valid().writeTo(directory);
         byte[] manifest = Files.readAllBytes(files.manifest());

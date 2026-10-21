@@ -204,8 +204,6 @@ class DemandStatisticsPipelineTest {
 
     @Test
     void 누적_롤백은_합계와_대기_자료를_함께_되돌린다() {
-        // given
-
         // when
         givenStatisticsSample();
         jdbcClient.sql("SAVEPOINT before_accumulation").update();
@@ -280,8 +278,6 @@ class DemandStatisticsPipelineTest {
 
     @Test
     void 고정한_입력_범위나_기준시각_밖의_자료는_다음_처리를_위해_남긴다() {
-        // given
-
         // when
         givenStatisticsSample();
         final long id = jdbcClient.sql("SELECT id FROM stop_demand_pending_sample WHERE prediction_observation_id=?")
@@ -369,8 +365,6 @@ class DemandStatisticsPipelineTest {
 
     @Test
     void 다른_노선의_관측을_정정_페이지에_넣지_않는다() {
-        // given
-
         // when
         givenStatisticsSample();
         final long selectedVersion = routeVersionId;
@@ -400,8 +394,6 @@ class DemandStatisticsPipelineTest {
 
     @Test
     void 빈_묶음과_같은_시각의_묶음도_끝까지_진행한다() {
-        // given
-
         // when
         givenStatisticsSample();
         for (int i = 0; i < 40; i++) {
@@ -423,8 +415,6 @@ class DemandStatisticsPipelineTest {
 
     @Test
     void 큰_묶음을_나눠_처리하고_롤백_후에도_중복되지_않는다() {
-        // given
-
         // when
         givenStatisticsSample();
         final long arrivalBatch =
@@ -464,8 +454,6 @@ class DemandStatisticsPipelineTest {
 
     @Test
     void 재계산_시작_후_과거_시각으로_들어온_관측은_다음_누적에_남긴다() {
-        // given
-
         // when
         givenStatisticsSample();
         rebuildRequests.request(routeVersionId, RebuildScope.vehicle(VEHICLE_204000206));
@@ -481,8 +469,6 @@ class DemandStatisticsPipelineTest {
 
     @Test
     void 이전_방식으로_시작한_정정도_기존_커서로_완료한다() {
-        // given
-
         // when
         givenStatisticsSample();
         rebuildRequests.request(routeVersionId, RebuildScope.vehicle(VEHICLE_204000206));
@@ -516,8 +502,6 @@ class DemandStatisticsPipelineTest {
 
     @Test
     void 같은_차량의_새_요청은_다시_계산한다() {
-        // given
-
         // when
         givenStatisticsSample();
         rebuildRequests.request(routeVersionId, RebuildScope.vehicle(VEHICLE_204000206));
@@ -534,8 +518,6 @@ class DemandStatisticsPipelineTest {
 
     @Test
     void 전체_재계산_중에는_차량_계산을_진행하지_않는다() {
-        // given
-
         // when
         givenStatisticsSample();
         rebuildRequests.request(routeVersionId, RebuildScope.vehicle(VEHICLE_204000206));
@@ -549,8 +531,6 @@ class DemandStatisticsPipelineTest {
 
     @Test
     void 전체_재계산_뒤_차량_계산이_새_결과를_지우지_않는다() {
-        // given
-
         // when
         givenStatisticsSample();
         rebuildRequests.request(routeVersionId, RebuildScope.vehicle(VEHICLE_204000206));
@@ -658,8 +638,6 @@ class DemandStatisticsPipelineTest {
 
     @Test
     void 발행_도중_실패하면_통계와_완료_표시가_함께_취소된다() {
-        // given
-
         // when
         givenStatisticsSample();
         for (int i = 0; i < 100; i++) {
@@ -697,8 +675,6 @@ class DemandStatisticsPipelineTest {
 
     @Test
     void 빈_세대도_완료를_표현하고_완료_이전_관측에는_새_세대를_노출하지_않는다() {
-        // given
-
         // when
         finishPipeline();
         StopDemandStatistics ready = statistics.readAsOf(routeVersionId, TimeSlot.MORNING,

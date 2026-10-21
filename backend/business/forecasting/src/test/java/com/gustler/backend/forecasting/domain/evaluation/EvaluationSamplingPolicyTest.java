@@ -115,8 +115,6 @@ class EvaluationSamplingPolicyTest {
 
     @Test
     void 양수가_아닌_간격은_거부한다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new EvaluationSamplingPolicy(Duration.ZERO));
 

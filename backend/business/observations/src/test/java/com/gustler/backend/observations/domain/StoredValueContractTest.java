@@ -10,8 +10,6 @@ import org.junit.jupiter.api.Test;
 class StoredValueContractTest {
     @Test
     void 잔여석_미제공_사유는_관측_표의_CHECK와_같다() {
-        // given
-
         // when
         Set<String> allowed = SchemaCheck.allowedValues("V4__observation.sql", "seat_unknown_reason");
 
@@ -23,8 +21,6 @@ class StoredValueContractTest {
 
     @Test
     void 수집_결과는_배치_표의_CHECK와_같다() {
-        // given
-
         // when
         Set<String> allowed = SchemaCheck.allowedValues("V6__call_reservation.sql", "outcome");
 
@@ -36,8 +32,6 @@ class StoredValueContractTest {
 
     @Test
     void 수집_실패_사유는_배치_표의_CHECK와_같다() {
-        // given
-
         // when
         Set<String> allowed = SchemaCheck.allowedValues("V6__call_reservation.sql", "failure_code");
 

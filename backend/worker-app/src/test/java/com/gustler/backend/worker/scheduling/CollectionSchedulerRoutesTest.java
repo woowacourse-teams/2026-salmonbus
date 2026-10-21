@@ -75,8 +75,6 @@ class CollectionSchedulerRoutesTest {
 
     @Test
     void 설정에_적은_노선의_판본이_한_바퀴_만에_열린다() {
-        // given
-
         // when
         scheduler.collectAllRoutes();
 
@@ -86,8 +84,6 @@ class CollectionSchedulerRoutesTest {
 
     @Test
     void 설정에_적은_노선을_한_바퀴_돌면_관측이_쌓인다() {
-        // given
-
         // when
         scheduler.collectAllRoutes();
 

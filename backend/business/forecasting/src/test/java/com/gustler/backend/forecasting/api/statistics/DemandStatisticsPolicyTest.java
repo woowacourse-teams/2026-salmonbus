@@ -9,8 +9,6 @@ import org.junit.jupiter.api.Test;
 class DemandStatisticsPolicyTest {
     @Test
     void 통계_주기가_양수면_만든다() {
-        // given
-
         // when
         DemandStatisticsPolicy actual = new DemandStatisticsPolicy(Duration.ofHours(6));
 
@@ -20,8 +18,6 @@ class DemandStatisticsPolicyTest {
 
     @Test
     void 통계_주기가_0이거나_음수거나_없으면_거부한다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new DemandStatisticsPolicy(Duration.ZERO));
 

@@ -33,8 +33,6 @@ class RouteGeometryRefresherTest {
 
     @Test
     void 판본이나_노선서비스_예산이_없으면_호출하지_않는다() {
-        // given
-
         // when
         when(store.current("204000057")).thenReturn(Optional.empty());
 
@@ -49,8 +47,6 @@ class RouteGeometryRefresherTest {
 
     @Test
     void 읽기실패는_기존_형상에_쓰지_않고_예약을_환급하지_않는다() {
-        // given
-
         // when
         when(store.current("204000057")).thenReturn(Optional.of(reference));
         when(quota.reserveRouteCatalog(now, 1)).thenReturn(true);
@@ -65,8 +61,6 @@ class RouteGeometryRefresherTest {
 
     @Test
     void 정상값도_수집중_판본이_바뀌면_게시하지_않는다() {
-        // given
-
         // when
         Read read = new Read(new RouteShape(List.of(
             new Point(127, 37), new Point(127.1, 37.1))), now);

@@ -139,8 +139,6 @@ class WorkerQualityTransactionTest {
 
     @Test
     void 트랜잭션_없이_품질_변경을_등록하지_못한다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(changes::changing);
 

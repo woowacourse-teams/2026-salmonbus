@@ -29,8 +29,6 @@ class WorkerArrivalRefreshClientTest {
 
     @Test
     void 정류장과_내부_인증을_보내고_접수_결과를_해석한다() {
-        // given
-
         // when
         server.expect(requestTo("http://worker.invalid/internal/arrivals/refresh"))
             .andExpect(method(HttpMethod.POST)).andExpect(header("X-Arrival-Token", "test-token"))
@@ -47,8 +45,6 @@ class WorkerArrivalRefreshClientTest {
 
     @Test
     void Worker의_실패는_빠른_재조회_힌트를_가진_결과로_돌려준다() {
-        // given
-
         // when
         server.expect(requestTo("http://worker.invalid/internal/arrivals/refresh")).andRespond(withServerError());
 
@@ -59,8 +55,6 @@ class WorkerArrivalRefreshClientTest {
 
     @Test
     void 불완전한_접수_응답도_성공으로_처리하지_않는다() {
-        // given
-
         // when
         server.expect(requestTo("http://worker.invalid/internal/arrivals/refresh"))
             .andRespond(withSuccess("{\"status\":\"ACCEPTED\"}", MediaType.APPLICATION_JSON));

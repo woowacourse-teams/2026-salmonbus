@@ -29,8 +29,6 @@ class BusRouteInfoResponseTest {
 
     @Test
     void GBIS_필드명을_서버에서_이해하기_쉬운_변수명으로_매핑한다() {
-        // given
-
         // when
         BusRouteInfoResponse actual =
             objectMapper.readValue(ROUTE_INFO_JSON, BusRouteInfoResponse.class);

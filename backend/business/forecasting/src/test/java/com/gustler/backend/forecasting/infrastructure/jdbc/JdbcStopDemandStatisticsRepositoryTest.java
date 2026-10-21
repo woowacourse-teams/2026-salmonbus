@@ -150,8 +150,6 @@ class JdbcStopDemandStatisticsRepositoryTest {
 
     @Test
     void 도착_관측이_없는_정산_fixture는_실패하고_대기를_보존한다() {
-        // given
-
         // when
         final long sourceId = insertObservation(
             VEHICLE_204000206, TARGET_STOP_ORDER - NEXT_STOP_AHEAD, SEATS_ON_PREDICTION, FIRST_ARRIVED_AT);
@@ -196,8 +194,6 @@ class JdbcStopDemandStatisticsRepositoryTest {
 
     @Test
     void 세대가_없는_노선_판본은_빈_셀_목록으로_답한다() {
-        // given
-
         // when
         StopDemandStatistics actual =
             jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING, CALCULATION_VERSION,
@@ -210,8 +206,6 @@ class JdbcStopDemandStatisticsRepositoryTest {
 
     @Test
     void 세대가_없으면_세대_번호가_0이다() {
-        // given
-
         // when
         final int actual =
             jdbcStopDemandStatisticsRepository.currentRevision(routeVersionId, CALCULATION_VERSION);
@@ -488,8 +482,6 @@ class JdbcStopDemandStatisticsRepositoryTest {
 
     @Test
     void 시간대는_소문자로_저장된다() {
-        // given
-
         // when
         jdbcStopDemandStatisticsRepository.append(generationOf(FIRST_REVISION, CALCULATION_VERSION, List.of(
             measurementOf(TimeSlot.MORNING, TARGET_STOP_ORDER))));

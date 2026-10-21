@@ -152,8 +152,6 @@ class JdbcForecastEvaluationRepositoryTest {
 
     @Test
     void 제외_평가는_한번에_500개까지만_닫고_나머지는_다음_회차에서_닫는다() {
-        // given
-
         // when
         for (int stop = 7; stop <= 18; stop++) {
             if (stop != TARGET_STOP_ORDER && stop != NEXT_TARGET_STOP_ORDER) {
@@ -202,8 +200,6 @@ class JdbcForecastEvaluationRepositoryTest {
 
     @Test
     void 조사_완료된_제외_편도만_정산_대기에서_영구_제외한다() {
-        // given
-
         // when
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
         jdbcClient.sql("UPDATE vehicle_one_way_trip SET status='EXCLUDED' WHERE start_observation_id=?")
@@ -224,8 +220,6 @@ class JdbcForecastEvaluationRepositoryTest {
 
     @Test
     void 조사_중이거나_정상_편도인_평가는_대기로_유지한다() {
-        // given
-
         // when
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
         jdbcClient.sql("UPDATE vehicle_one_way_trip SET status='EXCLUDED' WHERE start_observation_id=?")
@@ -248,8 +242,6 @@ class JdbcForecastEvaluationRepositoryTest {
 
     @Test
     void 제외_처리도_롤백되며_재시도에서_정상적으로_닫힌다() throws Exception {
-        // given
-
         // when
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
         jdbcClient.sql("UPDATE vehicle_one_way_trip SET status='EXCLUDED' WHERE start_observation_id=?")
@@ -283,8 +275,6 @@ class JdbcForecastEvaluationRepositoryTest {
 
     @Test
     void 묶음_경계_전후의_정산을_빠짐없이_저장한다() {
-        // given
-
         // when
         ArrayList<ForecastEvaluation> inputs = new ArrayList<ForecastEvaluation>();
         for (int index = 0; index < 101; index++) {
@@ -305,8 +295,6 @@ class JdbcForecastEvaluationRepositoryTest {
 
     @Test
     void 같은_평가가_입력에_반복돼도_한번만_반환한다() {
-        // given
-
         // when
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
         ForecastEvaluation input =
@@ -318,8 +306,6 @@ class JdbcForecastEvaluationRepositoryTest {
 
     @Test
     void 첫_중복_입력이_품질_조건에_탈락하면_다음_입력으로_닫는다() {
-        // given
-
         // when
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
         final long batch = insertObservationBatch("duplicate-arrival", ARRIVAL_RESPONSE_RECEIVED_AT);
@@ -337,8 +323,6 @@ class JdbcForecastEvaluationRepositoryTest {
 
     @Test
     void 같은_관측의_여러_예보도_도착_근거를_각각_저장한다() {
-        // given
-
         // when
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT),
             forecastOf(NEXT_TARGET_STOP_ORDER, STOPS_TO_NEXT_TARGET, GENERATED_AT)));
@@ -629,8 +613,6 @@ class JdbcForecastEvaluationRepositoryTest {
     @ParameterizedTest
     @ValueSource(strings = {"정상", "차량 조사", "전체 조사", "제외 편도"})
     void 품질_보류된_관측의_예보는_정산_대상에서_제외한다(String condition) {
-        // given
-
         // when
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
         prepareQualityState(condition, vehicleObservationId, routeVersionId);
@@ -642,8 +624,6 @@ class JdbcForecastEvaluationRepositoryTest {
 
     @Test
     void 정산_대상은_품질을_통과한_노선의_미정산_예보만_오래된_순서로_제한한다() {
-        // given
-
         // when
         saveForecasts(List.of(
             forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT),
@@ -734,8 +714,6 @@ class JdbcForecastEvaluationRepositoryTest {
 
     @Test
     void 원본_관측을_공유하는_예보는_정류장별_상세와_두_시각을_유지한다() {
-        // given
-
         // when
         saveForecasts(List.of(
             forecastOf(NEXT_TARGET_STOP_ORDER, STOPS_TO_NEXT_TARGET, NEXT_GENERATED_AT),
@@ -751,8 +729,6 @@ class JdbcForecastEvaluationRepositoryTest {
 
     @Test
     void 품질_보류_묶음_뒤의_공유_관측이_페이지에_걸쳐도_누락하거나_중복하지_않는다() {
-        // given
-
         // when
         saveForecasts(List.of(
             forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT),

@@ -19,8 +19,6 @@ import org.springframework.web.client.RestClient.Builder;
 class ArrivalWaitHeaderClientTest {
     @Test
     void 완료_대기는_별도_헤더로_전달해_기존_Worker의_본문_계약을_유지한다() {
-        // given
-
         // when
         Builder builder = RestClient.builder().baseUrl("http://worker.invalid");
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();

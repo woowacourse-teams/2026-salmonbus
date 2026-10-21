@@ -35,8 +35,6 @@ class SameDayFullOutcomesInitializerTest extends SameDayTransactionBoundaryTest 
 
     @Test
     void 초기집계와_정산이_겹쳐도_각_정산은_한번만_합계에_반영된다() throws Exception {
-        // given
-
         // when
         committedSettlementWithoutCounts();
         final long secondBatch = insertBatch(OBSERVED_AT.plusSeconds(2));
@@ -66,8 +64,6 @@ class SameDayFullOutcomesInitializerTest extends SameDayTransactionBoundaryTest 
 
     @Test
     void 동시에_초기화를_요청해도_잠금_획득_후_다시_확인해_원본은_한번만_센다() throws Exception {
-        // given
-
         // when
         CountDownLatch read = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
@@ -90,8 +86,6 @@ class SameDayFullOutcomesInitializerTest extends SameDayTransactionBoundaryTest 
 
     @Test
     void 초기집계_SQL이_실패하면_집계를_남기지_않고_잠금도_해제한다() {
-        // given
-
         // when
         jdbc.sql("INSERT INTO route_data_quality(route_id) VALUES (?) ON CONFLICT DO NOTHING")
             .param(routeId).update();
@@ -118,8 +112,6 @@ class SameDayFullOutcomesInitializerTest extends SameDayTransactionBoundaryTest 
 
     @Test
     void 초기집계_재시도는_이미_커밋한_정산을_누락하거나_중복하지_않는다() {
-        // given
-
         // when
         committedSettlementWithoutCounts();
         doAnswer(call -> {
@@ -146,8 +138,6 @@ class SameDayFullOutcomesInitializerTest extends SameDayTransactionBoundaryTest 
 
     @Test
     void 원본이_0건이어도_초기화를_완료하고_재시도에서_다시_세지_않는다() {
-        // given
-
         // when
         List<Long> activeRouteIds = initializer.activeRouteIds();
 
@@ -172,8 +162,6 @@ class SameDayFullOutcomesInitializerTest extends SameDayTransactionBoundaryTest 
 
     @Test
     void 초기화가_완료되기_전에는_일부_거리의_집계만_다른_트랜잭션에_보이지_않는다() throws Exception {
-        // given
-
         // when
         committedSettlementWithoutCounts();
         CountDownLatch written = new CountDownLatch(1);
@@ -199,8 +187,6 @@ class SameDayFullOutcomesInitializerTest extends SameDayTransactionBoundaryTest 
 
     @Test
     void 초기화_중_품질_변경은_같은_노선_잠금으로_직렬화된다() throws Exception {
-        // given
-
         // when
         CountDownLatch read = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);

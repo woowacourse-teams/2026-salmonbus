@@ -180,8 +180,6 @@ class SameDayTransactionBoundaryTest {
 
     @Test
     void 정산_커밋_전에는_원본과_대기자료와_당일성적이_다른_트랜잭션에_보이지_않는다() throws Exception {
-        // given
-
         // when
         savePending();
         initializeEmptyDay();
@@ -208,8 +206,6 @@ class SameDayTransactionBoundaryTest {
 
     @Test
     void 당일성적_저장_실패는_원본_정산과_대기자료도_롤백하고_재시도는_한번만_반영한다() {
-        // given
-
         // when
         savePending();
         initializeEmptyDay();
@@ -237,8 +233,6 @@ class SameDayTransactionBoundaryTest {
 
     @Test
     void 같은_예보를_동시에_정산해도_원본과_대기자료와_당일성적은_한번만_반영한다() throws Exception {
-        // given
-
         // when
         savePending();
         initializeEmptyDay();
@@ -264,8 +258,6 @@ class SameDayTransactionBoundaryTest {
 
     @Test
     void 예보_커밋_전에는_예보와_묶음_완료표시가_다른_트랜잭션에_보이지_않는다() throws Exception {
-        // given
-
         // when
         CountDownLatch written = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
@@ -290,8 +282,6 @@ class SameDayTransactionBoundaryTest {
 
     @Test
     void 묶음_완료표시_후_실패하면_예보도_롤백하고_재시도는_중복없이_저장한다() {
-        // given
-
         // when
         doAnswer(call -> {
             call.callRealMethod();
@@ -316,8 +306,6 @@ class SameDayTransactionBoundaryTest {
 
     @Test
     void 별도_초기집계가_실패해도_예보와_묶음_완료는_커밋된다() {
-        // given
-
         // when
         doAnswer(call -> {
             timeout();
@@ -358,8 +346,6 @@ class SameDayTransactionBoundaryTest {
 
     @Test
     void 초기화_전후의_정산은_당일_합계에_정확히_한번씩_반영된다() {
-        // given
-
         // when
         savePending();
         settlement.settleArrivalLabels();
@@ -577,8 +563,6 @@ class SameDayTransactionBoundaryTest {
 
     @Test
     void 전체_완료와_차량_재시작은_함께_커밋된다() throws Exception {
-        // given
-
         // when
         savePending();
         settlement.settleArrivalLabels();

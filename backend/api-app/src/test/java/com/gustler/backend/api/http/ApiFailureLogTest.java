@@ -20,8 +20,6 @@ import org.springframework.web.servlet.HandlerMapping;
 class ApiFailureLogTest {
     @Test
     void 원인과_응답을_연결하되_요청값과_SQL_본문은_기록하지_않는다() {
-        // given
-
         // when
         Logger logger = (Logger) LoggerFactory.getLogger(ApiFailureLog.class);
         ListAppender<ILoggingEvent> logs = new ListAppender<>();

@@ -91,8 +91,6 @@ class ObservationLoaderTest {
 
     @Test
     void 차량이_있는_판은_수집_묶음_한_행을_남긴다() {
-        // given
-
         // when
         loadBuses(List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_DEPARTED)));
@@ -103,8 +101,6 @@ class ObservationLoaderTest {
 
     @Test
     void 차량이_있는_판은_본_차량만큼_관측을_쌓는다() {
-        // given
-
         // when
         loadBuses(List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_DEPARTED),
@@ -117,8 +113,6 @@ class ObservationLoaderTest {
 
     @Test
     void 차량이_한_대도_없는_판도_묶음_한_행이_남는다() {
-        // given
-
         // when
         loadBuses(List.of());
 
@@ -128,8 +122,6 @@ class ObservationLoaderTest {
 
     @Test
     void 차량이_한_대도_없는_판의_결말은_SUCCESS_EMPTY다() {
-        // given
-
         // when
         loadBuses(List.of());
 
@@ -139,8 +131,6 @@ class ObservationLoaderTest {
 
     @Test
     void 차량이_있는_판의_결말은_SUCCESS_ROWS다() {
-        // given
-
         // when
         loadBuses(List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_DEPARTED)));
@@ -151,8 +141,6 @@ class ObservationLoaderTest {
 
     @Test
     void 뜻을_모르는_운행_상태의_차량은_빼고_나머지가_저장된다() {
-        // given
-
         // when
         loadBuses(List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_DEPARTED),
@@ -165,8 +153,6 @@ class ObservationLoaderTest {
 
     @Test
     void 정류소_순번이_빈_차량이_섞여도_나머지가_저장된다() {
-        // given
-
         // when
         loadBuses(List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_DEPARTED),
@@ -179,8 +165,6 @@ class ObservationLoaderTest {
 
     @Test
     void 정류소_순번이_빈_차량이_있어도_수집_묶음은_남는다() {
-        // given
-
         // when
         loadBuses(List.of(
             busWithoutStopSequence(VEHICLE_204003542)));
@@ -191,8 +175,6 @@ class ObservationLoaderTest {
 
     @Test
     void 뺀_차량이_있어도_상류가_준_행_수는_그대로_남는다() {
-        // given
-
         // when
         loadBuses(List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_DEPARTED),
@@ -204,8 +186,6 @@ class ObservationLoaderTest {
 
     @Test
     void 뺀_차량_수가_묶음에_남는다() {
-        // given
-
         // when
         loadBuses(List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_DEPARTED),
@@ -217,8 +197,6 @@ class ObservationLoaderTest {
 
     @Test
     void 차량을_전부_뺀_판의_결말도_SUCCESS_ROWS다() {
-        // given
-
         // when
         loadBuses(List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_NEVER_OBSERVED)));
@@ -229,8 +207,6 @@ class ObservationLoaderTest {
 
     @Test
     void 정류소를_지난_차량의_통과_순번은_그_정류소_순번이다() {
-        // given
-
         // when
         loadBuses(List.of(
             busAt(VEHICLE_204000206, 2, STOP_277103149, RUNNING_STATE_DEPARTED)));
@@ -241,8 +217,6 @@ class ObservationLoaderTest {
 
     @Test
     void 도착_중인_차량의_통과_순번은_직전_정류소_순번이다() {
-        // given
-
         // when
         loadBuses(List.of(
             busAt(VEHICLE_204000206, 2, STOP_277103149, RUNNING_STATE_ARRIVED)));
@@ -253,8 +227,6 @@ class ObservationLoaderTest {
 
     @Test
     void 첫_정류소에_도착_중인_차량의_통과_순번은_0이다() {
-        // given
-
         // when
         loadBuses(List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_ARRIVED)));
@@ -265,8 +237,6 @@ class ObservationLoaderTest {
 
     @Test
     void 잔여석을_아는_차량은_좌석_수만_저장된다() {
-        // given
-
         // when
         loadBuses(List.of(
             busWithSeats(SEATS_43)));
@@ -277,8 +247,6 @@ class ObservationLoaderTest {
 
     @Test
     void 잔여석을_모른다고_알려준_차량은_사유만_저장된다() {
-        // given
-
         // when
         loadBuses(List.of(
             busWithSeats(SEATS_REPORTED_UNKNOWN)));
@@ -289,8 +257,6 @@ class ObservationLoaderTest {
 
     @Test
     void 잔여석을_안_알려준_차량은_사유만_저장된다() {
-        // given
-
         // when
         loadBuses(List.of(
             busWithSeats(null)));
@@ -301,8 +267,6 @@ class ObservationLoaderTest {
 
     @Test
     void 관측은_상류_응답에서_몇_번째_줄이었는지를_그대로_쌓는다() {
-        // given
-
         // when
         loadBuses(List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217, RUNNING_STATE_NEVER_OBSERVED),
@@ -314,8 +278,6 @@ class ObservationLoaderTest {
 
     @Test
     void 정규화_판이_묶음에_남는다() {
-        // given
-
         // when
         loadBuses(List.of());
 

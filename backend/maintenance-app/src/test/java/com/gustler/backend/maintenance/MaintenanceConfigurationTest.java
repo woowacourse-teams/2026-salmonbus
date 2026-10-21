@@ -42,8 +42,6 @@ class MaintenanceConfigurationTest {
 
     @Test
     void 폐기한_이관_명령은_정비_구성을_시작하기_전에_거절한다() {
-        // given
-
         // when
         Assertions.assertThatThrownBy(() ->
             MaintenanceApplication.run(CliArguments.parse(new String[] {"archive-import"})))

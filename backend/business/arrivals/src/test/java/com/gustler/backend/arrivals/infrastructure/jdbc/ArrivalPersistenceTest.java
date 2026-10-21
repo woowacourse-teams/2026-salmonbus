@@ -56,8 +56,6 @@ class ArrivalPersistenceTest {
 
     @Test
     void 수신결과는_불변이며_같은_작업의_저장재시도는_중복되지_않는다() {
-        // given
-
         // when
         ArrivalSnapshot snapshot = snapshot(UUID.randomUUID(), BASE);
         store.save(snapshot);
@@ -79,8 +77,6 @@ class ArrivalPersistenceTest {
 
     @Test
     void 새_수신은_INSERT하고_정류장별_최신_수신을_찾는다() {
-        // given
-
         // when
         ArrivalSnapshot first = snapshot(UUID.randomUUID(), BASE);
         ArrivalSnapshot second = snapshot(UUID.randomUUID(), BASE.plusSeconds(40));
@@ -95,8 +91,6 @@ class ArrivalPersistenceTest {
 
     @Test
     void 만료자료_정리는_제한된_건수만_삭제한다() {
-        // given
-
         // when
         store.save(snapshot(UUID.randomUUID(), BASE.minusSeconds(1000)));
         store.save(snapshot(UUID.randomUUID(), BASE.minusSeconds(900)));

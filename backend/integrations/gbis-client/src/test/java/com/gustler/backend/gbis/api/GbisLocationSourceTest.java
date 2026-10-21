@@ -86,8 +86,6 @@ class GbisLocationSourceTest {
 
     @Test
     void HTTP_상태를_수집_진단에_남기고_오류_본문_분류는_유지한다() {
-        // given
-
         // when
         MDC.put("collectionAttemptId", "test-attempt");
         try {

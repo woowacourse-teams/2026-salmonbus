@@ -20,8 +20,6 @@ class SameDayInitializationAttemptTest {
 
     @Test
     void 잠금_획득_실패는_원본_조회_미실행으로_기록한다() {
-        // given
-
         // when
         IllegalStateException failure = new IllegalStateException(new SQLException("fixture", "55P03"));
 
@@ -48,8 +46,6 @@ class SameDayInitializationAttemptTest {
 
     @Test
     void 원본_조회_시간초과는_실패_구간과_SQLSTATE를_기록한다() {
-        // given
-
         // when
         IllegalStateException failure = new IllegalStateException(new SQLException("fixture", "57014"));
 
@@ -76,8 +72,6 @@ class SameDayInitializationAttemptTest {
 
     @Test
     void 전체_시간은_커밋까지_포함하고_구간별_시간은_단조_시계로_잰다() {
-        // given
-
         // when
         attempt.run(Stage.LOCK, () -> advance(10));
         attempt.run(Stage.SOURCE, () -> advance(150));

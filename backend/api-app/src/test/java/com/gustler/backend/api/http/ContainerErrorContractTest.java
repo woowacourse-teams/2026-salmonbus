@@ -45,8 +45,6 @@ class ContainerErrorContractTest {
 
     @Test
     void 주소의_퍼센트_인코딩이_깨져도_오류_코드와_메시지가_실려_나간다() throws IOException {
-        // given
-
         // when
         // 톰캣이 주소를 해석하다 거절하므로 서블릿이 실행되지 않는다
         Response actual = send("GET /api/v1/routes/%zz/board HTTP/1.1");
@@ -60,8 +58,6 @@ class ContainerErrorContractTest {
 
     @Test
     void 컨테이너가_error_로_넘긴_응답도_오류_코드와_메시지가_실려_나간다() throws IOException {
-        // given
-
         // when
         // 스프링 부트가 이 경로에 기본 오류 컨트롤러를 두면 timestamp·status·error·path 가 반환된다
         Response actual = send("TRACE /api/v1/routes HTTP/1.1");
@@ -92,8 +88,6 @@ class ContainerErrorContractTest {
 
     @Test
     void JSON_을_안_받는_요청이_다른_오류와_겹쳐도_오류_코드와_메시지가_실려_나간다() throws IOException {
-        // given
-
         // when
         // 콘텐츠 협상에 맡기면 생성한 본문을 전송하지 못해 500 에 0바이트가 반환된다
         Response actual = send("GET /api/v1/routes/abc/board HTTP/1.1", "Accept: text/plain");
@@ -106,8 +100,6 @@ class ContainerErrorContractTest {
 
     @Test
     void 응답의_요청_식별자로_서버_로그를_찾을_수_있다(CapturedOutput 로그) throws IOException {
-        // given
-
         // when
         // 컨테이너가 /error 로 넘긴 요청이므로 예외 처리기를 거치지 않는다
         Response actual = send("TRACE /api/v1/routes HTTP/1.1");
@@ -119,8 +111,6 @@ class ContainerErrorContractTest {
 
     @Test
     void 응답_헤더의_요청_식별자가_본문의_것과_같다() throws IOException {
-        // given
-
         // when
         Response actual = send("GET /api/v1/routes/%zz/board HTTP/1.1");
 

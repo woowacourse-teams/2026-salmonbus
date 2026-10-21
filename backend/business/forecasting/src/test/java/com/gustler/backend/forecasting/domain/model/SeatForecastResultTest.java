@@ -35,8 +35,6 @@ class SeatForecastResultTest {
 
     @Test
     void 예보는_좌석_분포를_반드시_들고_있다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new SeatForecastResult(null, 0.35));
 
@@ -51,8 +49,6 @@ class SeatForecastResultTest {
     void 보정_전_만석_확률은_0과_1_사이의_수다(
         final double notChance
     ) {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new SeatForecastResult(seatDistribution(), notChance));
 

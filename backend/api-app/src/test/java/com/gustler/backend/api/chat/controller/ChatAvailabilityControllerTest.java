@@ -29,8 +29,6 @@ class ChatAvailabilityControllerTest {
 
     @Test
     void 지원_노선의_채팅_계약을_MongoDB_없이_반환한다() throws Exception {
-        // given
-
         // when
         mockMvc.perform(get("/api/chat/rooms/204000057"))
             .andExpect(status().isOk())
@@ -45,8 +43,6 @@ class ChatAvailabilityControllerTest {
 
     @Test
     void 지원하지_않는_노선은_404와_no_store를_반환한다() throws Exception {
-        // given
-
         // when
         mockMvc.perform(get("/api/chat/rooms/unknown"))
             .andExpect(status().isNotFound())

@@ -26,8 +26,6 @@ import org.springframework.web.servlet.HandlerMapping;
 class IndependentApiFailureLogTest {
     @Test
     void 요청_문맥과_예외가_없으면_UNKNOWN을_INFO로_한_번만_기록한다() {
-        // given
-
         // when
         List<ILoggingEvent> logs = capture(400, null, null);
 

@@ -19,8 +19,6 @@ class StopPositionOnRouteTest {
 
     @Test
     void 정류장_60개짜리_판본의_30번_정류장은_0점5다() {
-        // given
-
         // when
         final double actual = StopPositionOnRoute.of(30, stopsUpTo(60));
 
@@ -30,8 +28,6 @@ class StopPositionOnRouteTest {
 
     @Test
     void 마지막_정류장은_1이다() {
-        // given
-
         // when
         final double actual = StopPositionOnRoute.of(60, stopsUpTo(60));
 
@@ -41,8 +37,6 @@ class StopPositionOnRouteTest {
 
     @Test
     void 순번이_같아도_정류장_수가_다르면_다른_자리다() {
-        // given
-
         // when
         final double actual = StopPositionOnRoute.of(30, stopsUpTo(40));
 

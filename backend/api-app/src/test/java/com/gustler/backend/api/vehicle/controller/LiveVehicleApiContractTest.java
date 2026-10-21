@@ -112,8 +112,6 @@ class LiveVehicleApiContractTest {
     @ParameterizedTest
     @ValueSource(strings = {"NOT_REPORTED", "REPORTED_UNKNOWN"})
     void 원래_좌석이_없던_차량은_품질_조사_중에도_원래_사유를_반환한다(String reason) throws Exception {
-        // given
-
         // when
         RouteContext route = insertCurrentRoute();
         insertStop(route, 5, "205000005", "예시 정류장", "UP");
@@ -509,8 +507,6 @@ class LiveVehicleApiContractTest {
 
     @Test
     void 잘못된_노선_ID는_3필드_오류_봉투로_반환한다() throws Exception {
-        // given
-
         // when
         mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", "invalid"))
             .andExpect(status().isBadRequest())
@@ -526,8 +522,6 @@ class LiveVehicleApiContractTest {
 
     @Test
     void 등록되지_않은_노선은_3필드_오류_봉투로_반환한다() throws Exception {
-        // given
-
         // when
         mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", "999999999"))
             .andExpect(status().isNotFound())

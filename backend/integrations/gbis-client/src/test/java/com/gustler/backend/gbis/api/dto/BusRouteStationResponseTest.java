@@ -34,8 +34,6 @@ class BusRouteStationResponseTest {
 
     @Test
     void 정류소가_여럿이면_배열로_응답받고_리스트로_읽는다() {
-        // given
-
         // when
         BusRouteStationResponse actual =
             objectMapper.readValue(THREE_STATIONS_JSON, BusRouteStationResponse.class);
@@ -46,8 +44,6 @@ class BusRouteStationResponseTest {
 
     @Test
     void 정류소가_하나면_객체로_응답받고_리스트로_읽는다() {
-        // given
-
         // when
         BusRouteStationResponse actual =
             objectMapper.readValue(SINGLE_STATION_AS_OBJECT_JSON, BusRouteStationResponse.class);
@@ -58,8 +54,6 @@ class BusRouteStationResponseTest {
 
     @Test
     void GBIS_필드명을_서버에서_이해하기_쉬운_변수명으로_매핑한다() {
-        // given
-
         // when
         BusRouteStationResponse actual =
             objectMapper.readValue(THREE_STATIONS_JSON, BusRouteStationResponse.class);
@@ -72,8 +66,6 @@ class BusRouteStationResponseTest {
 
     @Test
     void 회차_지점인_정류소만_회차_표시가_붙는다() {
-        // given
-
         // when
         BusRouteStationResponse actual =
             objectMapper.readValue(THREE_STATIONS_JSON, BusRouteStationResponse.class);
@@ -86,8 +78,6 @@ class BusRouteStationResponseTest {
 
     @Test
     void 회차_순번은_모든_정류소_행에_같은_값으로_실려_온다() {
-        // given
-
         // when
         BusRouteStationResponse actual =
             objectMapper.readValue(THREE_STATIONS_JSON, BusRouteStationResponse.class);

@@ -122,8 +122,6 @@ class ObservationCollectorTest {
 
     @Test
     void 실제_FK_실패에_원본_정류장_증거를_남기고_관측은_롤백한다() {
-        // given
-
         // when
         given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME,
             List.of(busAt(VEHICLE_204000206, 1, "206000564"))));
@@ -157,8 +155,6 @@ class ObservationCollectorTest {
 
     @Test
     void 판본이_없던_노선은_상류에서_받아_판본을_연다() {
-        // given
-
         // when
         collector.collectOnce(ROUTE_3330);
 
@@ -168,8 +164,6 @@ class ObservationCollectorTest {
 
     @Test
     void 판본을_열_때_노선_행도_같이_생긴다() {
-        // given
-
         // when
         collector.collectOnce(ROUTE_3330);
 
@@ -192,8 +186,6 @@ class ObservationCollectorTest {
 
     @Test
     void 상류가_정상으로_답한_판은_SUCCESS_ROWS로_닫힌다() {
-        // given
-
         // when
         collector.collectOnce(ROUTE_3330);
 
@@ -276,8 +268,6 @@ class ObservationCollectorTest {
 
     @Test
     void 한_판마다_수집_주기_판본이_남는다() {
-        // given
-
         // when
         collector.collectOnce(ROUTE_3330);
 
@@ -288,8 +278,6 @@ class ObservationCollectorTest {
 
     @Test
     void 한_판은_위치정보_한도를_한_번_쓴다() {
-        // given
-
         // when
         collector.collectOnce(ROUTE_3330);
 
@@ -299,8 +287,6 @@ class ObservationCollectorTest {
 
     @Test
     void 노선정보를_한_번_읽는_데_한도를_두_번_쓴다() {
-        // given
-
         // when
         collector.collectOnce(ROUTE_3330);
 

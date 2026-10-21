@@ -61,8 +61,6 @@ class CallQuotaLedgerTest {
 
     @Test
     void 자리가_남은_장부는_예약을_받아준다() {
-        // given
-
         // when
         final boolean actual = ledger.reserveLocation(KOREA_8_28_LATE_NIGHT).isPresent();
 
@@ -72,8 +70,6 @@ class CallQuotaLedgerTest {
 
     @Test
     void 예약할_때마다_쓴_횟수가_하나씩_오른다() {
-        // given
-
         // when
         ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
         ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
@@ -122,8 +118,6 @@ class CallQuotaLedgerTest {
 
     @Test
     void 세계_표준시로_같은_날이어도_한국_날짜가_다르면_장부가_갈린다() {
-        // given
-
         // when
         ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
         ledger.reserveLocation(KOREA_8_29_MIDNIGHT);
@@ -151,8 +145,6 @@ class CallQuotaLedgerTest {
      */
     @Test
     void 예약은_부른_쪽_트랜잭션에_합류한다() {
-        // given
-
         // when
         transactionTemplate.executeWithoutResult(status -> {
             ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
@@ -221,8 +213,6 @@ class CallQuotaLedgerTest {
 
     @Test
     void 한_번에_두_자리를_잡으면_쓴_횟수가_2가_된다() {
-        // given
-
         // when
         ledger.reserveRouteCatalog(KOREA_8_28_LATE_NIGHT, TWO_CALLS);
 
@@ -256,8 +246,6 @@ class CallQuotaLedgerTest {
 
     @Test
     void 기존_장부는_첫_예약의_한도를_계속_사용한다() {
-        // given
-
         // when
         insertQuota(CallQuota.BUS_ROUTE, KOREA_8_28, 0, TWO_CALLS);
 
@@ -276,8 +264,6 @@ class CallQuotaLedgerTest {
 
     @Test
     void 자리를_여럿_잡는_예약도_부른_쪽_트랜잭션에_합류한다() {
-        // given
-
         // when
         transactionTemplate.executeWithoutResult(status -> {
             ledger.reserveRouteCatalog(KOREA_8_28_LATE_NIGHT, TWO_CALLS);
@@ -314,8 +300,6 @@ class CallQuotaLedgerTest {
 
     @Test
     void 빈_장부에_동시에_예약해도_한_행에서_두_호출을_센다() throws Exception {
-        // given
-
         // when
         List<Boolean> actual = reserveAtTheSameMoment();
 

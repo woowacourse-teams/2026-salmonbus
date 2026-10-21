@@ -34,8 +34,6 @@ class BoardFreshnessContractTest {
 
     @Test
     void 예보_신선도_창은_보드가_약속한_창보다_짧지_않다() {
-        // given
-
         // when
         Duration forecastWindow = DurationStyle.detectAndParse(workerStaleness());
 
@@ -47,8 +45,6 @@ class BoardFreshnessContractTest {
 
     @Test
     void 예보_신선도_창을_설정_파일_밖에서_정하지_않는다() {
-        // given
-
         // when
         String staleness = workerStaleness();
 

@@ -52,8 +52,6 @@ class SeatForecastInputTest {
 
     @Test
     void 손으로_만든_재료_넷만으로_모델_입력이_선다() {
-        // given
-
         // when
         SeatForecastInput actual = new SeatForecastInput(
             target(), trajectoryOf(observed(VEHICLE_204000206)), statisticsOf(ROUTE_VERSION_3330), stops(),
@@ -65,8 +63,6 @@ class SeatForecastInputTest {
 
     @Test
     void 궤적이_다른_차량의_것이면_모델_입력을_만들_수_없다() {
-        // given
-
         // when
         VehicleTrajectory otherVehicle = trajectoryOf(observed(VEHICLE_204003542));
 
@@ -85,8 +81,6 @@ class SeatForecastInputTest {
 
     @Test
     void 셀_통계가_다른_노선_판본의_것이면_모델_입력을_만들_수_없다() {
-        // given
-
         // when
         StopDemandStatistics otherVersion = statisticsOf(ROUTE_VERSION_1650);
 
@@ -106,8 +100,6 @@ class SeatForecastInputTest {
 
     @Test
     void 정류장_목록이_다른_노선_판본의_것이면_모델_입력을_만들_수_없다() {
-        // given
-
         // when
         RouteStops otherVersion = new RouteStops(
             ROUTE_VERSION_1650,

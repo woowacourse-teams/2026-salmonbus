@@ -104,8 +104,6 @@ class JdbcRouteVersionQueryTest {
 
     @Test
     void 정류장에_저장된_UP_DOWN을_예보_입력으로_읽는다() {
-        // given
-
         // when
         final long version = insertCurrentRouteVersion(ROUTE_204000057);
         insertBoardingStop(version, STOP_ORDER_1);

@@ -16,8 +16,6 @@ class SupportedForecastScopeTest {
     void 계수_묶음이_담는_노선은_예보_범위_안이다(
         String modelRoute
     ) {
-        // given
-
         // when
         final boolean actual = SCOPE.covers(modelRoute, 1);
 
@@ -27,8 +25,6 @@ class SupportedForecastScopeTest {
 
     @Test
     void 계수_묶음이_안_담는_노선은_예보_범위_밖이다() {
-        // given
-
         // when
         final boolean actual = SCOPE.covers("9000", 1);
 
@@ -41,8 +37,6 @@ class SupportedForecastScopeTest {
     void 예보_거리가_1정류장_앞부터_12정류장_앞까지면_예보_범위_안이다(
         final int stopsAhead
     ) {
-        // given
-
         // when
         final boolean actual = SCOPE.covers("1650", stopsAhead);
 
@@ -55,8 +49,6 @@ class SupportedForecastScopeTest {
     void 예보_거리가_0이거나_13정류장_앞이면_예보_범위_밖이다(
         final int stopsAhead
     ) {
-        // given
-
         // when
         final boolean actual = SCOPE.covers("1650", stopsAhead);
 
@@ -66,8 +58,6 @@ class SupportedForecastScopeTest {
 
     @Test
     void 노선_순서가_뒤집히면_다른_범위다() {
-        // given
-
         // when
         String actual = new SupportedForecastScope(List.of("3330", "1650")).digest();
 
@@ -80,8 +70,6 @@ class SupportedForecastScopeTest {
     void 계수_묶음이_담는_GBIS_노선은_예보_범위_안이다(
         String sourceRouteId
     ) {
-        // given
-
         // when
         final boolean actual = SCOPE.coversSourceRoute(sourceRouteId);
 
@@ -91,8 +79,6 @@ class SupportedForecastScopeTest {
 
     @Test
     void 모델_노선_매핑이_있어도_계수_묶음이_안_담는_GBIS_노선은_예보_범위_밖이다() {
-        // given
-
         // when
         final boolean actual = new SupportedForecastScope(List.of("1650")).coversSourceRoute("204000057");
 
@@ -105,8 +91,6 @@ class SupportedForecastScopeTest {
     void 두_노선_계수_묶음에서는_모델_노선_매핑이_있는_새_노선도_예보_범위_밖이다(
         String sourceRouteId
     ) {
-        // given
-
         // when
         final boolean actual = SCOPE.coversSourceRoute(sourceRouteId);
 
@@ -116,8 +100,6 @@ class SupportedForecastScopeTest {
 
     @Test
     void 모델_노선_매핑이_없는_GBIS_노선은_예보_범위_밖이다() {
-        // given
-
         // when
         final boolean actual = SCOPE.coversSourceRoute("999999999");
 

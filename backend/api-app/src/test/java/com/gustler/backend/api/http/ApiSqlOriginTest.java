@@ -11,8 +11,6 @@ import org.springframework.web.servlet.HandlerMapping;
 class ApiSqlOriginTest {
     @Test
     void SQL과_파라미터를_유지하며_고정된_업무_표식만_추가한다() {
-        // given
-
         // when
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/api/v1/routes/{routeId}/board");
@@ -34,8 +32,6 @@ class ApiSqlOriginTest {
 
     @Test
     void 앞쪽_주석과_문자열_리터럴을_보존한다() {
-        // given
-
         // when
         String inspectedSql1 = new ApiSqlOrigin().inspect("/* hibernate */\n-- read\nSELECT 'select secret'");
 

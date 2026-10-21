@@ -18,8 +18,6 @@ class DailyCallQuotaTest {
 
     @Test
     void 한국_자정을_기준으로_호출_날짜가_바뀐다() {
-        // given
-
         // when
         DailyCallQuota before = DailyCallQuota.at(CallQuota.BUS_LOCATION, "a", BEFORE_MIDNIGHT, 3);
         DailyCallQuota after = DailyCallQuota.at(CallQuota.BUS_LOCATION, "a", MIDNIGHT, 3);
@@ -34,8 +32,6 @@ class DailyCallQuotaTest {
 
     @Test
     void 시각의_오프셋이_달라도_한국_날짜가_같으면_기존_예약을_쓴다() {
-        // given
-
         // when
         DailyCallQuota quota = DailyCallQuota.at(CallQuota.BUS_LOCATION, "a", BEFORE_MIDNIGHT, 3);
 
@@ -45,8 +41,6 @@ class DailyCallQuotaTest {
 
     @Test
     void 여러_호출은_요청한_횟수_전체를_한번에_예약한다() {
-        // given
-
         // when
         DailyCallQuota quota = DailyCallQuota.at(CallQuota.BUS_ROUTE, "a", BEFORE_MIDNIGHT, 2);
 
@@ -56,8 +50,6 @@ class DailyCallQuotaTest {
 
     @Test
     void 설정된_하루_한도를_초과하는_요청은_예약하지_않는다() {
-        // given
-
         // when
         DailyCallQuota quota = DailyCallQuota.at(CallQuota.BUS_ROUTE, "a", BEFORE_MIDNIGHT, 1);
 
@@ -68,8 +60,6 @@ class DailyCallQuotaTest {
     @ParameterizedTest
     @ValueSource(ints = {0, -1, Integer.MIN_VALUE})
     void 호출_횟수는_양수여야_한다(final int calls) {
-        // given
-
         // when
         DailyCallQuota quota = DailyCallQuota.at(CallQuota.BUS_ROUTE, "a", BEFORE_MIDNIGHT, 3);
 
@@ -86,8 +76,6 @@ class DailyCallQuotaTest {
     @ParameterizedTest
     @ValueSource(ints = {0, -1})
     void 하루_한도는_양수여야_한다(final int limit) {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(
             () -> DailyCallQuota.at(CallQuota.BUS_LOCATION, "a", BEFORE_MIDNIGHT, limit));

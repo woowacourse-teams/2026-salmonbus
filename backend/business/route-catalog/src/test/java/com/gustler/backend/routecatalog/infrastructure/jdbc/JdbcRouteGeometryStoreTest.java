@@ -65,8 +65,6 @@ class JdbcRouteGeometryStoreTest {
 
     @Test
     void 같은_형상은_추가하지_않고_A에서_B로_바뀐_뒤_A로_돌아오면_기록한다() {
-        // given
-
         // when
         Reference ref = store.current("204000057").orElseThrow();
 
@@ -83,8 +81,6 @@ class JdbcRouteGeometryStoreTest {
 
     @Test
     void 닫힌_판본과_늦게_완료된_이전_응답은_현재_형상을_덮지_않는다() {
-        // given
-
         // when
         Reference ref = store.current("204000057").orElseThrow();
         store.publish(ref, read(2, 127.2));
@@ -99,8 +95,6 @@ class JdbcRouteGeometryStoreTest {
 
     @Test
     void 같은_정상변경이_겹쳐도_한번만_저장한다() throws Exception {
-        // given
-
         // when
         Reference ref = store.current("204000057").orElseThrow();
         try (ExecutorService callers = Executors.newFixedThreadPool(2)) {

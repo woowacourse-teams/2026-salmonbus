@@ -66,8 +66,6 @@ class SeatForecastTest {
 
     @Test
     void 기대_잔여석은_없어도_예보가_선다() {
-        // given
-
         // when
         SeatForecast actual = new SeatForecast(
             OBSERVATION_ID, ROUTE_VERSION_3330, 49, 5, 1L, DEMAND_STATISTICS_REVISION,
@@ -79,8 +77,6 @@ class SeatForecastTest {
 
     @Test
     void 기대_잔여석은_0석_이상이다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new SeatForecast(
             OBSERVATION_ID, ROUTE_VERSION_3330, 49, 5, 1L, DEMAND_STATISTICS_REVISION,
@@ -94,8 +90,6 @@ class SeatForecastTest {
 
     @Test
     void 예보는_1정류장_앞부터_12정류장_앞까지만_낸다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new SeatForecast(
             OBSERVATION_ID, ROUTE_VERSION_3330, 57, 13, 1L, DEMAND_STATISTICS_REVISION,

@@ -42,8 +42,6 @@ class PrometheusEndpointTest {
 
     @Test
     void DB에서_API_연결을_구분할_이름을_설정한다() throws Exception {
-        // given
-
         // when
         try (Connection connection = dataSource.getConnection();
             Statement statement = connection.createStatement();
@@ -81,8 +79,6 @@ class PrometheusEndpointTest {
 
     @Test
     void 실제_API_요청을_경로별_히스토그램에_기록하고_요청값은_라벨에_싣지_않는다() throws Exception {
-        // given
-
         // when
         final int statusCode1 = get(publicPort, "/api/v1/routes?probe=private-query-value").statusCode();
 
@@ -103,8 +99,6 @@ class PrometheusEndpointTest {
 
     @Test
     void JVM과_실제_커넥션_풀의_사용량을_노출한다() throws Exception {
-        // given
-
         // when
         try (Connection connection = dataSource.getConnection()) {
 

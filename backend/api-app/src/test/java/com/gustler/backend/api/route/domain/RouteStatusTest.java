@@ -18,8 +18,6 @@ class RouteStatusTest {
         final boolean forecastPublished,
         RouteStatus expected
     ) {
-        // given
-
         // when
         RouteStatus actual = RouteStatus.from(activeModelExists, forecastPublished);
 

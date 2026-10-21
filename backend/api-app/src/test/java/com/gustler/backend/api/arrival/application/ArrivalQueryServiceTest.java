@@ -67,8 +67,6 @@ class ArrivalQueryServiceTest {
 
     @Test
     void 공유_수신결과에서_선택한_노선과_방문만_반환한다() {
-        // given
-
         // when
         StationArrivalsOverview result = service.get(new ArrivalQuery(STATION, ROUTE, 7L, 22));
 
@@ -88,8 +86,6 @@ class ArrivalQueryServiceTest {
 
     @Test
     void 전체조회는_미등록_노선도_보존하되_판본을_만들어주지_않는다() {
-        // given
-
         // when
         StationArrivalsOverview result = service.get(new ArrivalQuery(STATION, null, null, null));
 
@@ -100,8 +96,6 @@ class ArrivalQueryServiceTest {
 
     @Test
     void 같은_정류장의_다른_방문을_도착정보_없음으로_단정하지_않는다() {
-        // given
-
         // when
         StationArrivalsOverview result = service.get(new ArrivalQuery(STATION, ROUTE, 7L, 65));
 
@@ -114,8 +108,6 @@ class ArrivalQueryServiceTest {
 
     @Test
     void 오래된_판본은_갱신요청_전에_충돌로_처리한다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> service.get(new ArrivalQuery(STATION, ROUTE, 6L, 22)));
 
@@ -130,8 +122,6 @@ class ArrivalQueryServiceTest {
 
     @Test
     void 갱신시점이_지난_유효값은_반환하고_갱신만_요청한다() {
-        // given
-
         // when
         StationArrivalsOverview result = serviceAt(45).get(new ArrivalQuery(STATION, ROUTE, 7L, 22));
 
@@ -147,8 +137,6 @@ class ArrivalQueryServiceTest {
 
     @Test
     void 만료된_값은_갱신실패해도_최신인_것처럼_반환하지_않는다() {
-        // given
-
         // when
         when(gateway.request(STATION)).thenReturn(new ArrivalRefresh(Status.UNAVAILABLE,
             "WORKER_UNAVAILABLE", RECEIVED.plusSeconds(63)));
@@ -165,8 +153,6 @@ class ArrivalQueryServiceTest {
 
     @Test
     void 정상_빈_수신과_최초_수집중을_구별한다() {
-        // given
-
         // when
         when(repository.latest(STATION)).thenReturn(Optional.of(snapshot(List.of())));
 
@@ -183,8 +169,6 @@ class ArrivalQueryServiceTest {
 
     @Test
     void 수신_이후에_생긴_판본으로_기존_ETA를_연결하지_않는다() {
-        // given
-
         // when
         when(repository.visits(STATION)).thenReturn(List.of(new ArrivalVisit(
             ROUTE, ROUTE, 8, 22, "UP", RECEIVED.plusSeconds(1))));
@@ -196,8 +180,6 @@ class ArrivalQueryServiceTest {
 
     @Test
     void 잘못된_필터조합은_입력_단계에서_거절한다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new ArrivalQuery(STATION, ROUTE, 7L, null));
 

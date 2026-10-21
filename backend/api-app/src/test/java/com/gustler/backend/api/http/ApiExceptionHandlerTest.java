@@ -70,8 +70,6 @@ class ApiExceptionHandlerTest {
     @ParameterizedTest
     @MethodSource("thrownExceptions")
     void 오류_응답은_저장하지_않게_하고_재시도_시각은_알리지_않는다(ApiException exception) {
-        // given
-
         // when
         ResponseEntity<ErrorResponse> actual = handler.handleApiException(exception);
 
@@ -116,8 +114,6 @@ class ApiExceptionHandlerTest {
     void DB_트랜잭션을_시작하거나_종료하지_못하면_서비스_불가로_응답한다(
         RuntimeException exception
     ) {
-        // given
-
         // when
         ResponseEntity<ErrorResponse> actual =
             handler.handleDatabaseUnavailable(exception);
@@ -146,8 +142,6 @@ class ApiExceptionHandlerTest {
         final int status,
         ErrorCode expected
     ) {
-        // given
-
         // when
         ResponseEntity<Object> actual = handler.handleExceptionInternal(
             new IllegalStateException("스프링이 잡은 예외"),
@@ -168,8 +162,6 @@ class ApiExceptionHandlerTest {
 
     @Test
     void 스프링이_잡은_오류도_JSON_으로_적는다고_못박는다() {
-        // given
-
         // when
         ResponseEntity<Object> actual = handler.handleExceptionInternal(
             new IllegalStateException("스프링이 잡은 예외"),
@@ -186,8 +178,6 @@ class ApiExceptionHandlerTest {
     @ParameterizedTest
     @MethodSource("thrownExceptions")
     void 우리가_던진_오류도_JSON_으로_적는다고_못박는다(ApiException exception) {
-        // given
-
         // when
         ResponseEntity<ErrorResponse> actual = handler.handleApiException(exception);
 
@@ -199,8 +189,6 @@ class ApiExceptionHandlerTest {
     @ParameterizedTest
     @MethodSource("databaseUnavailableExceptions")
     void DB_오류도_JSON_으로_적는다고_못박는다(RuntimeException exception) {
-        // given
-
         // when
         ResponseEntity<ErrorResponse> actual = handler.handleDatabaseUnavailable(exception);
 
@@ -210,8 +198,6 @@ class ApiExceptionHandlerTest {
 
     @Test
     void 예상하지_못한_오류도_JSON_으로_적는다고_못박는다() {
-        // given
-
         // when
         ResponseEntity<ErrorResponse> actual =
             handler.handleUnexpected(new IllegalStateException("아무도 모르는 오류"));
@@ -243,8 +229,6 @@ class ApiExceptionHandlerTest {
 
     @Test
     void 예상하지_못한_예외는_500으로_옮긴다() {
-        // given
-
         // when
         ResponseEntity<ErrorResponse> actual =
             handler.handleUnexpected(new IllegalStateException("아무도 모르는 오류"));

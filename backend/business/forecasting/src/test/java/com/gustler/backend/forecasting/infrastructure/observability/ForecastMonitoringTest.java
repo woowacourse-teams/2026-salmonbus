@@ -24,8 +24,6 @@ import org.slf4j.LoggerFactory;
 class ForecastMonitoringTest {
     @Test
     void 좌석오차는_예측좌석으로_계산하고_누락과_제외는_정답으로_세지_않는다() {
-        // given
-
         // when
         Logger logger = (Logger) LoggerFactory.getLogger(ForecastMonitoring.class);
         ListAppender<ILoggingEvent> logs = new ListAppender<>();
@@ -51,8 +49,6 @@ class ForecastMonitoringTest {
 
     @Test
     void 정상_실행도_처리시간_분포에_포함하고_노선별_히스토그램은_만들지_않는다() {
-        // given
-
         // when
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         ForecastMonitoring monitoring = new ForecastMonitoring(registry, mock(DataSource.class), Clock.systemUTC());
@@ -66,8 +62,6 @@ class ForecastMonitoringTest {
 
     @Test
     void 이름의_공백_따옴표_개행을_로그_필드에서_안전하게_표현한다() {
-        // given
-
         // when
         String quotedValue1 = ForecastMonitoring.quote("역 \"A\"\n출구");
 
@@ -77,8 +71,6 @@ class ForecastMonitoringTest {
 
     @Test
     void 재시작_직후는_미확인이고_빈_차량_수집과_미발행_지연을_구분한다() throws Exception {
-        // given
-
         // when
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         Clock clock = Clock.fixed(Instant.ofEpochSecond(1000), ZoneOffset.UTC);

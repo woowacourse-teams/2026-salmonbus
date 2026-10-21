@@ -44,8 +44,6 @@ class RouteGeometryControllerTest {
 
     @Test
     void 네이버식_형상과_반복정류장을_우리_방문순번으로_제공하고_ETag를_재검증한다() throws Exception {
-        // given
-
         // when
         when(service.get(any(), any())).thenReturn(geometry(127.1, true));
         MvcResult first = mvc.perform(get(PATH)).andExpect(status().isOk())
@@ -73,8 +71,6 @@ class RouteGeometryControllerTest {
 
     @Test
     void 같은_노선판본에서_좌표만_바뀌어도_캐시판본은_달라진다() throws Exception {
-        // given
-
         // when
         when(service.get(any(), any())).thenReturn(geometry(127.1, true));
         String old = mvc.perform(get(PATH)).andReturn().getResponse().getHeader("ETag");
@@ -91,8 +87,6 @@ class RouteGeometryControllerTest {
 
     @Test
     void 형상이_없으면_정류장_직선을_만들지_않고_판본충돌을_304로_가리지_않는다() throws Exception {
-        // given
-
         // when
         when(service.get(any(), any())).thenReturn(geometry(127.1, false));
         mvc.perform(get(PATH)).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("UNAVAILABLE"))

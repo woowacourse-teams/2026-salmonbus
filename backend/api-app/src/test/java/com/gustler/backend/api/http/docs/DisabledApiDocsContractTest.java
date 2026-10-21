@@ -25,8 +25,6 @@ class DisabledApiDocsContractTest {
 
     @Test
     void 기본_설정은_화면_명세_별도_계약을_제공하지_않는다() throws Exception {
-        // given
-
         // when
         mockMvc.perform(get("/api/docs")).andExpect(status().isNotFound());
         mockMvc.perform(get("/api/docs/ui")).andExpect(status().isNotFound());

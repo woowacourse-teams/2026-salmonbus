@@ -19,8 +19,6 @@ class ObservedVehicleTest {
     void 혼잡도는_1등급부터_4등급까지다(
         final int crowdLevel
     ) {
-        // given
-
         // when
         ObservedVehicle actual = observedWith(crowdLevel);
 
@@ -30,8 +28,6 @@ class ObservedVehicleTest {
 
     @Test
     void 혼잡도를_안_준_관측도_만들_수_있다() {
-        // given
-
         // when
         ObservedVehicle actual = observedWith(null);
 

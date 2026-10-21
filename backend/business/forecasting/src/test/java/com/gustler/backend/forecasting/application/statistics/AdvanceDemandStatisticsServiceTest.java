@@ -42,8 +42,6 @@ class AdvanceDemandStatisticsServiceTest {
 
     @Test
     void 실패한_노선은_즉시_재시도하지_않고_다른_노선을_처리한다() {
-        // given
-
         // when
         DemandStatisticsPipeline pipeline = mock(DemandStatisticsPipeline.class);
         RouteVersionQuery routes = mock(RouteVersionQuery.class);

@@ -60,8 +60,6 @@ class JdbcArrivalQuotaStoreTest {
 
     @Test
     void 여러_키가_있어도_전체의_마지막_자리를_동시에_예약하지_않는다() throws Exception {
-        // given
-
         // when
         List<ArrivalCallQuota> ledgers = List.of(quota(7, Map.of("a", 10, "b", 10)),
             quota(7, Map.of("a", 10, "b", 10)));
@@ -87,8 +85,6 @@ class JdbcArrivalQuotaStoreTest {
 
     @Test
     void 키가_다섯_개면_다섯_별칭에_고르게_나누고_키별_한도에서_멈춘다() {
-        // given
-
         // when
         ArrivalCallQuota quota = quota(100, Map.of("a", 2, "b", 2, "c", 2, "d", 2, "e", 2));
         for (int i = 0; i < 10; i++) {
@@ -105,8 +101,6 @@ class JdbcArrivalQuotaStoreTest {
 
     @Test
     void 키가_모두_소진되면_전체_예약도_롤백한다() {
-        // given
-
         // when
         ArrivalCallQuota quota = quota(10, Map.of("a", 1, "b", 1));
 
@@ -119,8 +113,6 @@ class JdbcArrivalQuotaStoreTest {
 
     @Test
     void 거절된_키는_다른_키의_기회를_소진하지_않는다() {
-        // given
-
         // when
         ArrivalCallQuota quota = quota(10, Map.of("a", 3, "b", 3));
         Reservation first = quota.reserve(BASE).orElseThrow();
@@ -136,8 +128,6 @@ class JdbcArrivalQuotaStoreTest {
 
     @Test
     void 한국_자정에_장부가_바뀌고_기존_예약은_유지한다() {
-        // given
-
         // when
         ArrivalCallQuota quota = quota(1, Map.of("a", 1));
         Instant before = Instant.parse("2026-10-14T14:59:59Z");
@@ -152,8 +142,6 @@ class JdbcArrivalQuotaStoreTest {
 
     @Test
     void 위치정보_장부의_소진은_도착정보_예약을_막지_않는다() {
-        // given
-
         // when
         jdbc.sql("""
             INSERT INTO daily_call_quota(provider, api_service, kst_date, key_alias, reserved_calls, daily_limit)

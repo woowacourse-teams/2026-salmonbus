@@ -44,8 +44,6 @@ class CollectionAttemptLogTest {
 
     @Test
     void 원본_노선과_정류장을_연결하고_민감정보를_빼낸다() {
-        // given
-
         // when
         GbisLocationSource source = mock(GbisLocationSource.class);
         when(source.read("234000886", "a")).thenReturn(new Success("time", List.of(
@@ -77,8 +75,6 @@ class CollectionAttemptLogTest {
 
     @Test
     void 응답에_없는_저장값은_상류에서_왔다고_단정하지_않는다() {
-        // given
-
         // when
         try (CollectionAttemptLog attempt = new CollectionAttemptLog("234000886")) {
             attempt.reply(at -> null);
@@ -93,8 +89,6 @@ class CollectionAttemptLogTest {
 
     @Test
     void 다른_제약_오류의_내용은_추출하지_않는다() {
-        // given
-
         // when
         try (CollectionAttemptLog attempt = new CollectionAttemptLog("234000886")) {
             attempt.failed(new IllegalStateException(new SQLException("private_column=SECRET", "23505")));
@@ -107,8 +101,6 @@ class CollectionAttemptLogTest {
 
     @Test
     void MDC를_원래대로_복원하고_다음_시도와_구분한다() {
-        // given
-
         // when
         MDC.put("requestId", "outer");
         MDC.put("collectionHttpStatus", "old");

@@ -62,8 +62,6 @@ class MaintenanceProcessTest {
 
     @Test
     void 폐기한_이관_명령은_실제_JAR에서도_종료코드_1로_거절한다() throws Exception {
-        // given
-
         // when
         Result result = execute("archive-import");
 
@@ -167,8 +165,6 @@ class MaintenanceProcessTest {
 
     @Test
     void 정비_JAR에는_다른_실행_앱과_완료된_이관_자원이_없다() throws Exception {
-        // given
-
         // when
         List<String> forbidden = new ArrayList<>();
         try (ZipFile jar = new ZipFile(jar().toFile())) {

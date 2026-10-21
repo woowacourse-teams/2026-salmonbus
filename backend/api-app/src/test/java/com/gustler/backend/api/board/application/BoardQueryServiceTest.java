@@ -140,8 +140,6 @@ class BoardQueryServiceTest {
 
     @Test
     void 예보_행이_있으면_그_행의_모델을_사용한다() {
-        // given
-
         // when
         givenRoundTripBoard(List.of(prediction(3, "A", 1, 1, 0.2, 10.0)));
 
@@ -207,8 +205,6 @@ class BoardQueryServiceTest {
 
     @Test
     void 기대_잔여석이_비유한값이어도_차량은_보드에_남는다() {
-        // given
-
         // when
         givenRoundTripBoard(List.of(
             prediction(3, "INFINITE", 1, 1, 0.2, Double.POSITIVE_INFINITY),
@@ -223,8 +219,6 @@ class BoardQueryServiceTest {
 
     @Test
     void 기대_잔여석이_비유한값인_차량은_기대_잔여석만_비운다() {
-        // given
-
         // when
         givenRoundTripBoard(List.of(
             prediction(3, "INFINITE", 1, 1, 0.2, Double.POSITIVE_INFINITY)
@@ -238,8 +232,6 @@ class BoardQueryServiceTest {
 
     @Test
     void 기대_잔여석이_비유한값이어도_빈자리_확률은_그대로_낸다() {
-        // given
-
         // when
         givenRoundTripBoard(List.of(
             prediction(3, "INFINITE", 1, 1, 0.2, Double.POSITIVE_INFINITY)
@@ -257,8 +249,6 @@ class BoardQueryServiceTest {
     void 만석_확률이_범위_밖이거나_비유한값이면_차량을_유지하고_예보만_미제공한다(
         final double invalidSeatFullChance
     ) {
-        // given
-
         // when
         givenRoundTripBoard(List.of(
             prediction(3, "INVALID", 1, 1, invalidSeatFullChance, 10.0),
@@ -275,8 +265,6 @@ class BoardQueryServiceTest {
 
     @Test
     void 승차_불가_정류장은_접근_차량을_비운다() {
-        // given
-
         // when
         givenRoundTripBoard(List.of(prediction(2, "IGNORED", 1, 1, 0.2, 10.0)));
 
@@ -287,8 +275,6 @@ class BoardQueryServiceTest {
 
     @Test
     void 예보_행이_없으면_ACTIVE_모델을_사용한다() {
-        // given
-
         // when
         given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(roundTripSnapshot()));
         given(repository.findStops(1L)).willReturn(roundTripStops());
@@ -300,8 +286,6 @@ class BoardQueryServiceTest {
 
     @Test
     void 하나의_관측_묶음에_여러_모델의_예보가_섞이면_서비스_불가다() {
-        // given
-
         // when
         ForecastModel anotherModel = new ForecastModel(
             8L,
@@ -328,8 +312,6 @@ class BoardQueryServiceTest {
 
     @Test
     void ACTIVE_모델이_없으면_모델_범위_밖_오류다() {
-        // given
-
         // when
         BoardSnapshot snapshot = new BoardSnapshot(
             1L,
@@ -354,8 +336,6 @@ class BoardQueryServiceTest {
 
     @Test
     void 발행된_예보도_정상_관측도_없으면_최근_관측_없음_오류다() {
-        // given
-
         // when
         BoardSnapshot snapshot = new BoardSnapshot(
             1L,
@@ -412,8 +392,6 @@ class BoardQueryServiceTest {
 
     @Test
     void 회차점_이하에_DOWN_정류장이_있으면_서비스_불가다() {
-        // given
-
         // when
         given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(roundTripSnapshot()));
         given(repository.findStops(1L)).willReturn(List.of(
@@ -455,8 +433,6 @@ class BoardQueryServiceTest {
 
     @Test
     void 모든_예보가_없어도_관측된_접근_차량을_유지한다() {
-        // given
-
         // when
         givenRoundTripBoard(List.of());
         given(repository.findObservedVehicles(100L, 1L)).willReturn(List.of(
@@ -469,8 +445,6 @@ class BoardQueryServiceTest {
 
     @Test
     void 차량_ID가_없거나_같아도_원본_행_번호로_예보를_연결한다() {
-        // given
-
         // when
         givenRoundTripBoard(List.of(prediction(3, null, 2, 1, 1.0, 0.0)));
         given(repository.findObservedVehicles(100L, 1L)).willReturn(List.of(
@@ -485,8 +459,6 @@ class BoardQueryServiceTest {
 
     @Test
     void 통과_정류장_기준_앞쪽_1부터_12정류장까지만_접근_차량을_표시한다() {
-        // given
-
         // when
         givenRoundTripBoard(List.of());
         given(repository.findStops(1L)).willReturn(List.of(

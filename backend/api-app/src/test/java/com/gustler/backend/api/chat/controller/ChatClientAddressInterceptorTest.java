@@ -21,8 +21,6 @@ class ChatClientAddressInterceptorTest {
 
     @Test
     void X_Forwarded_For의_마지막_값을_쓴다() {
-        // given
-
         // when
         String address = clientAddress(List.of("203.0.113.1, 203.0.113.2, 192.0.2.44"));
 
@@ -32,8 +30,6 @@ class ChatClientAddressInterceptorTest {
 
     @Test
     void 헤더가_여러_줄이면_마지막_줄의_마지막_값을_쓴다() {
-        // given
-
         // when
         String address = clientAddress(List.of("203.0.113.1, 203.0.113.2", "192.0.2.10, 192.0.2.44"));
 
@@ -43,8 +39,6 @@ class ChatClientAddressInterceptorTest {
 
     @Test
     void 값의_앞뒤_공백을_뗀다() {
-        // given
-
         // when
         String address = clientAddress(List.of("203.0.113.1 ,   192.0.2.44   "));
 
@@ -54,8 +48,6 @@ class ChatClientAddressInterceptorTest {
 
     @Test
     void 마지막_값이_비어_있으면_원격_주소를_쓴다() {
-        // given
-
         // when
         String trailingComma = clientAddress(List.of("192.0.2.44, "));
         String blankLine = clientAddress(List.of("192.0.2.44", "   "));
@@ -69,8 +61,6 @@ class ChatClientAddressInterceptorTest {
 
     @Test
     void 헤더가_없으면_원격_주소를_쓴다() {
-        // given
-
         // when
         String address = clientAddress(List.of());
 

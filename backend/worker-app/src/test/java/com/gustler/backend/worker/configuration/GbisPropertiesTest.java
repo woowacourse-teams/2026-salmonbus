@@ -37,8 +37,6 @@ class GbisPropertiesTest {
 
     @Test
     void 퍼센트로_바뀐_인증키를_원래_값으로_되돌린다() {
-        // given
-
         // when
         GbisProperties actual = new GbisProperties(BASE_URL, PERCENT_KEY, DAILY_LIMIT);
 
@@ -48,8 +46,6 @@ class GbisPropertiesTest {
 
     @Test
     void 원래_값으로_받은_인증키는_그대로_둔다() {
-        // given
-
         // when
         GbisProperties actual = new GbisProperties(BASE_URL, ORIGINAL_KEY, DAILY_LIMIT);
 
@@ -59,8 +55,6 @@ class GbisPropertiesTest {
 
     @Test
     void 퍼센트_형식이_깨진_인증키는_기동을_막는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new GbisProperties(BASE_URL, "ab%G0" + KEY_TAIL, DAILY_LIMIT));
 
@@ -72,8 +66,6 @@ class GbisPropertiesTest {
 
     @Test
     void 퍼센트_형식이_깨져도_인증키가_예외에_남지_않는다() {
-        // given
-
         // when
         Throwable thrown = catchThrowableOf("ab%G0" + KEY_TAIL);
 
@@ -87,8 +79,6 @@ class GbisPropertiesTest {
     void 인증키가_없거나_비었거나_공백뿐이면_기동을_막는다(
         String serviceKey
     ) {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new GbisProperties(BASE_URL, serviceKey, DAILY_LIMIT));
 
@@ -103,8 +93,6 @@ class GbisPropertiesTest {
     void 인증키가_비었거나_공백뿐이면_애플리케이션_컨텍스트가_뜨지_않는다(
         String serviceKey
     ) {
-        // given
-
         // when
         contextRunner()
             .withPropertyValues(
@@ -145,8 +133,6 @@ class GbisPropertiesTest {
 
     @Test
     void 환경변수가_없으면_인증키가_빈_값으로_풀린다() {
-        // given
-
         // when
         String serviceKey = serviceKeyWithoutEnvironmentVariable();
 
@@ -156,8 +142,6 @@ class GbisPropertiesTest {
 
     @Test
     void 환경변수가_없으면_기동을_막는다() {
-        // given
-
         // when
         String resolved = serviceKeyWithoutEnvironmentVariable();
 
@@ -174,8 +158,6 @@ class GbisPropertiesTest {
 
     @Test
     void 인증키가_있으면_애플리케이션_컨텍스트가_뜬다() {
-        // given
-
         // when
         contextRunner()
             .withPropertyValues(
@@ -213,8 +195,6 @@ class GbisPropertiesTest {
 
     @Test
     void 추가_슬롯의_퍼센트_형식이_깨지면_기동을_막는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(
             () -> new GbisProperties(BASE_URL, ORIGINAL_KEY, "ab%G0" + KEY_TAIL, null, null, DAILY_LIMIT));
@@ -244,8 +224,6 @@ class GbisPropertiesTest {
 
     @Test
     void 추가_키를_설정하면_애플리케이션_컨텍스트가_슬롯을_읽는다() {
-        // given
-
         // when
         contextRunner()
             .withPropertyValues(
@@ -266,8 +244,6 @@ class GbisPropertiesTest {
     void 환경변수가_없으면_추가_슬롯은_빈_값으로_풀린다(
         String property
     ) {
-        // given
-
         // when
         String resolved = propertyWithoutEnvironmentVariable(property);
 
@@ -277,8 +253,6 @@ class GbisPropertiesTest {
 
     @Test
     void 수집을_꺼도_인증키가_없으면_애플리케이션_컨텍스트가_뜨지_않는다() {
-        // given
-
         // when
         collectionConfigRunner()
             .withPropertyValues(
@@ -295,8 +269,6 @@ class GbisPropertiesTest {
 
     @Test
     void 수집을_꺼도_인증키를_읽는다() {
-        // given
-
         // when
         collectionConfigRunner()
             .withPropertyValues(
@@ -374,8 +346,6 @@ class GbisPropertiesTest {
 
     @Test
     void 기본_키_a가_없으면_새_형식의_다른_키가_있어도_기동을_막는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> keysOnly(Map.of("e", "fake-key-e")));
 
@@ -389,8 +359,6 @@ class GbisPropertiesTest {
 
     @Test
     void 같은_별칭을_기존_변수와_새_형식에서_함께_정하면_기동을_막는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new GbisProperties(BASE_URL, ORIGINAL_KEY, KEY_B, null, null,
             Map.of("b", "fake-key-other"), DAILY_LIMIT));
@@ -406,8 +374,6 @@ class GbisPropertiesTest {
 
     @Test
     void 같은_인증키를_두_별칭에_넣으면_어느_형식이든_기동을_막는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> keysOnly(Map.of("a", "fake-key-a", "e", "fake-key-a")));
 
@@ -432,8 +398,6 @@ class GbisPropertiesTest {
 
     @Test
     void 퍼센트로_바꾼_값과_원래_값이_같은_키면_중복으로_막는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> keysOnly(Map.of("a", ORIGINAL_KEY, "e", PERCENT_KEY)));
 
@@ -450,8 +414,6 @@ class GbisPropertiesTest {
     void 새_형식의_값이_비었으면_기동을_막는다(
         String serviceKey
     ) {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> keysOnly(Map.of("a", "fake-key-a", "e", serviceKey)));
 
@@ -467,8 +429,6 @@ class GbisPropertiesTest {
     void 별칭이_소문자와_숫자_16자_규칙에_맞지_않으면_기동을_막는다(
         String alias
     ) {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> keysOnly(Map.of("a", "fake-key-a", alias, "fake-key-x")));
 
@@ -481,8 +441,6 @@ class GbisPropertiesTest {
 
     @Test
     void 새_형식의_퍼센트_형식이_깨지면_값_없이_별칭만_알린다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> keysOnly(Map.of("a", "fake-key-a", "e", "ab%G0" + KEY_TAIL)));
 
@@ -508,8 +466,6 @@ class GbisPropertiesTest {
 
     @Test
     void 환경변수_GBIS_KEYS_별칭으로_새_키를_읽는다() {
-        // given
-
         // when
         environmentRunner(Map.of(
             "GBIS_BASE_URL", BASE_URL,
@@ -528,8 +484,6 @@ class GbisPropertiesTest {
 
     @Test
     void 환경변수를_새_형식으로만_주어도_기동한다() {
-        // given
-
         // when
         environmentRunner(Map.of(
             "GBIS_BASE_URL", BASE_URL,
@@ -545,8 +499,6 @@ class GbisPropertiesTest {
 
     @Test
     void 환경변수의_별칭이_기존_변수와_겹치면_키_값을_남기지_않고_기동을_막는다() {
-        // given
-
         // when
         environmentRunner(Map.of(
             "GBIS_BASE_URL", BASE_URL,
@@ -565,8 +517,6 @@ class GbisPropertiesTest {
 
     @Test
     void 키_목록을_한_줄로_넣으면_값을_남기지_않고_기동을_막는다() {
-        // given
-
         // when
         environmentRunner(Map.of(
             "GBIS_BASE_URL", BASE_URL,
@@ -601,8 +551,6 @@ class GbisPropertiesTest {
 
     @Test
     void 설정에_없는_별칭에_한도를_주면_기동을_막는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new GbisProperties(BASE_URL, ORIGINAL_KEY, null, null, null,
             Map.of("e", "fake-key-e"), DAILY_LIMIT, Map.of("f", 1_000)));
@@ -619,8 +567,6 @@ class GbisPropertiesTest {
     void 키별_한도가_1보다_작으면_기동을_막는다(
         final int limit
     ) {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new GbisProperties(BASE_URL, ORIGINAL_KEY, null, null, null,
             Map.of("e", "fake-key-e"), DAILY_LIMIT, Map.of("e", limit)));
@@ -634,8 +580,6 @@ class GbisPropertiesTest {
 
     @Test
     void 환경변수_GBIS_LIMITS_별칭으로_키별_한도를_읽는다() {
-        // given
-
         // when
         environmentRunner(Map.of(
             "GBIS_BASE_URL", BASE_URL,
@@ -666,8 +610,6 @@ class GbisPropertiesTest {
 
     @Test
     void 같은_별칭을_GBIS_SERVICE_KEY_별칭과_새_형식에서_함께_정하면_기동을_막는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new GbisProperties(BASE_URL, "fake-key-a", null, null, null,
             Map.of("e", "fake-key-other"), DAILY_LIMIT, Map.of(), Map.of("e", "fake-key-e")));
@@ -683,8 +625,6 @@ class GbisPropertiesTest {
 
     @Test
     void GBIS_SERVICE_KEY_A로_기본_키를_한_번_더_정하면_기동을_막는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> namedOnly(Map.of("a", "fake-key-other")));
 
@@ -698,8 +638,6 @@ class GbisPropertiesTest {
 
     @Test
     void GBIS_SERVICE_KEY_별칭이_영문과_숫자_16자_규칙에_맞지_않으면_기동을_막는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> namedOnly(Map.of("team_5", "fake-key-team5")));
 
@@ -713,8 +651,6 @@ class GbisPropertiesTest {
 
     @Test
     void GBIS_SERVICE_KEY_별칭의_퍼센트_형식이_깨지면_값_없이_변수_이름만_알린다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> namedOnly(Map.of("e", "ab%G0" + KEY_TAIL)));
 
@@ -728,8 +664,6 @@ class GbisPropertiesTest {
 
     @Test
     void GBIS_SERVICE_KEY_별칭의_값이_비었으면_기동을_막는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> namedOnly(Map.of("e", " ")));
 

@@ -55,8 +55,6 @@ class RouteHeadwaysTest {
 
     @Test
     void 읽지_못한_요일에_배차간격이_있으면_거부한다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new RouteHeadways(
             new HeadwayRange(10, 20), null, null, null, Set.of(ServiceDay.WEEKDAY)));

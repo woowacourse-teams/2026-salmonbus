@@ -367,8 +367,6 @@ class ForecastBatchWriterTest {
 
     @Test
     void 통계_사용_모델은_모델_이름이_아닌_통계_계산_버전으로_관측시점_자료를_읽는다() {
-        // given
-
         // when
         String version = ForecastFeatureContract.STATISTICS_CALCULATION_VERSION;
         when(statistics.readAsOf(1, STATISTICS.timeSlot(), version, NOW)).thenReturn(STATISTICS);

@@ -87,8 +87,6 @@ class GeometryConditionalRequestAuditTest {
     @ValueSource(strings = {"0", "-1", "9223372036854775808", "abc"})
     void 잘못된_판본은_ETag보다_먼저_검증하고_저장소에_접근하지_않는다(String referenceVersion)
         throws Exception {
-        // given
-
         // when
         ResultActions httpResponse3 = mvc.perform(get(PATH).param("referenceVersionId", referenceVersion).header("If-None-Match", "*"));
 

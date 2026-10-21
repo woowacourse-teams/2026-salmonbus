@@ -176,8 +176,6 @@ class SameDayFullOutcomesServiceTest {
 
     @Test
     void 도착_순서가_섞여도_가장_늦은_도착시각을_유지한다() {
-        // given
-
         // when
         when(repository.findCounts(ROUTE_3330, 1L, DAY)).thenReturn(List.of(TALLY));
         service.record(List.of(settledOn(ROUTE_3330, SETTLED_THROUGH.plusSeconds(60), 0),
@@ -190,8 +188,6 @@ class SameDayFullOutcomesServiceTest {
 
     @Test
     void KST_자정_전후의_정산을_다른_날짜로_묶는다() {
-        // given
-
         // when
         Instant before = Instant.parse("2026-08-19T14:59:59Z");
         Instant after = before.plusSeconds(1);
@@ -209,8 +205,6 @@ class SameDayFullOutcomesServiceTest {
 
     @Test
     void 같은_노선과_날짜라도_모델이_다르면_정산을_분리한다() {
-        // given
-
         // when
         when(repository.findCounts(ROUTE_3330, 1L, DAY)).thenReturn(List.of(TALLY));
         when(repository.findCounts(ROUTE_3330, 2L, DAY)).thenReturn(List.of(TALLY));
@@ -226,8 +220,6 @@ class SameDayFullOutcomesServiceTest {
 
     @Test
     void 새_모델의_집계가_없으면_이전_모델로_대체하지_않는다() {
-        // given
-
         // when
         when(repository.findCounts(ROUTE_3330, 2L, DAY)).thenReturn(List.of());
 

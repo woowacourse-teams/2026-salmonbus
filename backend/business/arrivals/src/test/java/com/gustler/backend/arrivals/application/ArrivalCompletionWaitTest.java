@@ -64,8 +64,6 @@ class ArrivalCompletionWaitTest {
 
     @Test
     void 같은_수집_완료를_여러_요청이_기다려도_상류는_한번만_호출한다() throws Exception {
-        // given
-
         // when
         try (ExecutorService worker = Executors.newSingleThreadExecutor(); ExecutorService callers =
             Executors.newFixedThreadPool(20)) {
@@ -104,8 +102,6 @@ class ArrivalCompletionWaitTest {
 
     @Test
     void 제한시간을_넘겨도_수집을_중복하거나_작업을_취소하지_않는다() throws Exception {
-        // given
-
         // when
         try (ExecutorService worker = Executors.newSingleThreadExecutor()) {
             ArrivalRefreshCoordinator coordinator = coordinator(worker);
@@ -133,8 +129,6 @@ class ArrivalCompletionWaitTest {
 
     @Test
     void 완료_대기가_상태_잠금을_잡지_않아_다른_정류장을_접수할_수_있다() throws Exception {
-        // given
-
         // when
         Queue<Runnable> jobs = new ConcurrentLinkedQueue<>();
         CountDownLatch queued = new CountDownLatch(1);
@@ -156,8 +150,6 @@ class ArrivalCompletionWaitTest {
 
     @Test
     void 상류_실패도_완료를_알리고_성공_상태로_꾸미지_않는다() {
-        // given
-
         // when
         ArrivalRefreshCoordinator coordinator = coordinator(Runnable::run);
         when(source.fetch(anyString(), anyString())).thenReturn(new Failed(Reason.UPSTREAM_ERROR));

@@ -252,8 +252,6 @@ class LiveVehicleQueryServiceTest {
 
     @Test
     void 현재_판본이_있는_노선이_없으면_찾을_수_없음_예외를_던진다() {
-        // given
-
         // when
         given(vehicleQueryRepository.findLatestSnapshot(ROUTE_ID)).willReturn(Optional.empty());
 

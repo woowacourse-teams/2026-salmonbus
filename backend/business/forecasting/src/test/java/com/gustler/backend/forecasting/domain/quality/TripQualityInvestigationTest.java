@@ -189,8 +189,6 @@ class TripQualityInvestigationTest {
 
     @Test
     void 시작점_탐색은_시작점_탐색_단계에서만_진행한다() {
-        // given
-
         // when
         BatchObservations anchor = row(1, 1, 2, 44);
         TripQualityInvestigation replaying = investigation(Phase.REPLAY, anchor, false);

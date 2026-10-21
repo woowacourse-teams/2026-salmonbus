@@ -84,8 +84,6 @@ class MigrationOrderTest {
 
     @Test
     void 이_브랜치가_더하는_마이그레이션이_마지막_번호를_차지한다() {
-        // given
-
         // when
         List<Integer> actual = thisBranchMigrations().stream()
             .map(this::versionOf)
@@ -102,8 +100,6 @@ class MigrationOrderTest {
 
     @Test
     void 마이그레이션_번호에_빈_자리도_겹치는_자리도_없다() {
-        // given
-
         // when
         List<Integer> actual = versionsOf(flywayAt("classpath:" + MIGRATION_LOCATION).info().all());
 

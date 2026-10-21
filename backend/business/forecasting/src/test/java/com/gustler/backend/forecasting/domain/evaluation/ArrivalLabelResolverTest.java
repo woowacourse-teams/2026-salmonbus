@@ -173,8 +173,6 @@ class ArrivalLabelResolverTest {
 
     @Test
     void 뒤_관측이_하나도_없어도_한도_전까지는_열어_둔다() {
-        // given
-
         // when
         ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), List.of(), STILL_WAITING_AT);
 
@@ -184,8 +182,6 @@ class ArrivalLabelResolverTest {
 
     @Test
     void 운행을_끝내_뒤_관측이_없는_차량은_한도가_지나면_닫힌다() {
-        // given
-
         // when
         ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), List.of(), WAITED_TOO_LONG_AT);
 

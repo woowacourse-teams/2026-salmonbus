@@ -10,8 +10,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 class ForecastDistanceTest {
     @Test
     void 예보는_관측한_정류장의_다음_정류장부터_시작한다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new ForecastDistance(0));
 
@@ -23,8 +21,6 @@ class ForecastDistanceTest {
 
     @Test
     void 도착_예정인_12개_정류장까지만_예보한다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new ForecastDistance(13));
 
@@ -39,8 +35,6 @@ class ForecastDistanceTest {
     void 다음_정류장부터_12정류장_앞까지_예보한다(
         final int stopCount
     ) {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new ForecastDistance(stopCount));
 

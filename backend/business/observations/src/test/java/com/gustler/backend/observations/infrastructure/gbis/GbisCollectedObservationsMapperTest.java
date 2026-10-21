@@ -110,8 +110,6 @@ class GbisCollectedObservationsMapperTest {
 
     @Test
     void 차량이_한_대도_없으면_쌓을_관측도_없다() {
-        // given
-
         // when
         CollectedObservations actual = GbisObservationMapper.collect(List.of());
 

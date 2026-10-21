@@ -39,8 +39,6 @@ class RouteGeometryQueryRepositoryTest {
 
     @Test
     void 모델과_차량관측_없이_정적자료를_제공하고_좌표변경을_판본에_반영한다() {
-        // given
-
         // when
         final long route = jdbc.sql("""
             INSERT INTO route(public_route_id,source_id,source_route_id,display_name,start_stop_name,end_stop_name)

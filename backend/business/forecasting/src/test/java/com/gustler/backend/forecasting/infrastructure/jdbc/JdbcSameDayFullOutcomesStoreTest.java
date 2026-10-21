@@ -99,8 +99,6 @@ class JdbcSameDayFullOutcomesStoreTest {
 
     @Test
     void 여러_정산의_증가분을_기존_합계에_더한다() {
-        // given
-
         // when
         repository.upsertCounts(routeId, modelDeploymentId, ARRIVAL_DAY, List.of(
             new SameDayFullOutcomeCount(STOPS_TO_TARGET, 10, 4, 2.0, ARRIVED_AT)));
@@ -114,8 +112,6 @@ class JdbcSameDayFullOutcomesStoreTest {
 
     @Test
     void 이전_품질_버전의_합계는_새_증가분으로_교체한다() {
-        // given
-
         // when
         repository.upsertCounts(routeId, modelDeploymentId, ARRIVAL_DAY, List.of(
             new SameDayFullOutcomeCount(STOPS_TO_TARGET, 10, 4, 2.0, ARRIVED_AT)));
@@ -131,8 +127,6 @@ class JdbcSameDayFullOutcomesStoreTest {
 
     @Test
     void 빈_초기화_표시는_정산_증가분으로_저장하지_않는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(
             () -> repository.addCounts(routeId, modelDeploymentId, ARRIVAL_DAY, List.of(
@@ -147,8 +141,6 @@ class JdbcSameDayFullOutcomesStoreTest {
 
     @Test
     void 만석으로_닫힌_예보를_더하면_집계_한_줄이_생긴다() {
-        // given
-
         // when
         repository.add(settleAsFull(vehicleObservationId, RAW_FULL_CHANCE));
 
@@ -159,8 +151,6 @@ class JdbcSameDayFullOutcomesStoreTest {
 
     @Test
     void 자리가_남은_채_닫힌_예보를_더하면_건수만_늘고_만석_수는_안_는다() {
-        // given
-
         // when
         repository.add(settleWithSeats(vehicleObservationId, RAW_FULL_CHANCE, SEATS_ON_ARRIVAL_WHEN_NOT_FULL));
 
@@ -479,8 +469,6 @@ class JdbcSameDayFullOutcomesStoreTest {
 
     @Test
     void 예측과_도착_관측의_차량번호가_모두_없어도_기존_집계_결과를_유지한다() {
-        // given
-
         // when
         settleAsFull(vehicleObservationId, RAW_FULL_CHANCE);
         jdbcClient.sql("""
@@ -496,8 +484,6 @@ class JdbcSameDayFullOutcomesStoreTest {
 
     @Test
     void 다른_노선의_품질_버전으로_당일_집계를_판정하지_않는다() {
-        // given
-
         // when
         settleAsFull(vehicleObservationId, RAW_FULL_CHANCE);
         final long otherRoute = jdbcClient.sql("""
@@ -521,8 +507,6 @@ class JdbcSameDayFullOutcomesStoreTest {
 
     @Test
     void 여러_예보가_같은_도착_관측을_사용해도_각_예보를_모두_집계한다() {
-        // given
-
         // when
         settleAsFull(vehicleObservationId, RAW_FULL_CHANCE);
         final long laterBatch =
@@ -543,8 +527,6 @@ class JdbcSameDayFullOutcomesStoreTest {
 
     @Test
     void 모델별_초기화는_이전_모델의_정산을_섞지_않는다() {
-        // given
-
         // when
         final long previousModel = modelDeploymentId;
         SettledForecast previousResult = settleAsFull(vehicleObservationId, RAW_FULL_CHANCE);

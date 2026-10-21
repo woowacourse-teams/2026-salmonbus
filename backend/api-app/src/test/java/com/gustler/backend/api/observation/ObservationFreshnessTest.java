@@ -22,8 +22,6 @@ class ObservationFreshnessTest {
         "2026-10-15T09:00:00-07:00, 10"
     })
     void 한국_관측_시각으로_시간대를_선택한다(String time, final int minutes) {
-        // given
-
         // when
         OffsetDateTime observedAt = OffsetDateTime.parse(time);
 

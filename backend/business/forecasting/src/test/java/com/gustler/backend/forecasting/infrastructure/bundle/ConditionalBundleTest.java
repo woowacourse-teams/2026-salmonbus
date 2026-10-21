@@ -46,8 +46,6 @@ class ConditionalBundleTest {
 
     @Test
     void 통계_사용_계약은_별도_버전과_정확한_통계_정책으로만_적재한다() {
-        // given
-
         // when
         LoadedBundle loaded = DummyBundle.conditional()
             .put("featureContractVersion", ForecastFeatureContract.STATISTICS_VERSION)
@@ -66,8 +64,6 @@ class ConditionalBundleTest {
 
     @Test
     void 통계_사용_모델을_통계_0_정책으로_표시하면_거절한다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> DummyBundle.conditional()
             .put("featureContractVersion", ForecastFeatureContract.STATISTICS_VERSION).loadAt(directory));
@@ -80,8 +76,6 @@ class ConditionalBundleTest {
 
     @Test
     void 기존_조건_모델의_통계_정책만_바꾸면_거절한다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> DummyBundle.conditional()
             .put("cellStatisticsPolicy", ForecastFeatureContract.STATISTICS_POLICY).loadAt(directory));
@@ -94,8 +88,6 @@ class ConditionalBundleTest {
 
     @Test
     void 새_파일을_검사하고_50열_모델로_실제_좌석분포를_계산한다() {
-        // given
-
         // when
         LoadedBundle loaded = DummyBundle.conditional().loadAt(directory);
         ModelRelease release = loaded.release();
@@ -115,8 +107,6 @@ class ConditionalBundleTest {
 
     @Test
     void 새_입력에서도_당일_보정_집계를_그대로_예측기에_전달한다() {
-        // given
-
         // when
         LoadedBundle loaded = DummyBundle.conditional().loadAt(directory);
         ModelRelease release = loaded.release();
@@ -138,8 +128,6 @@ class ConditionalBundleTest {
 
     @Test
     void 활성_배포를_바꾸면_입력_규칙도_같이_바뀌고_기존_번들로_복구된다() throws Exception {
-        // given
-
         // when
         Path legacyPath = Files.createDirectory(directory.resolve("legacy"));
         Path conditionalPath = Files.createDirectory(directory.resolve("conditional"));
@@ -170,8 +158,6 @@ class ConditionalBundleTest {
 
     @Test
     void 새로운_계약을_예전_파일_형식이라고_적으면_거절한다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> DummyBundle.conditional()
                 .put("bundleSchemaVersion", "a18-live-bundle-v1")
@@ -185,8 +171,6 @@ class ConditionalBundleTest {
 
     @Test
     void 모르는_새_계약이나_다른_시간_규칙을_거절한다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> DummyBundle.conditional()
                 .put("featureContractVersion", "unknown-v2")
@@ -210,8 +194,6 @@ class ConditionalBundleTest {
 
     @Test
     void 새_계약에_기존_31열_계수를_넣으면_거절한다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(
             () -> DummyBundle.valid().put("bundleSchemaVersion", "a18-live-bundle-v2")
@@ -225,8 +207,6 @@ class ConditionalBundleTest {
 
     @Test
     void 정류장_기준_파일이_없거나_바뀌면_적재를_거절한다() throws Exception {
-        // given
-
         // when
         DummyBundle.conditional().writeTo(directory);
         Path reference = directory.resolve("route-reference.json");
@@ -254,8 +234,6 @@ class ConditionalBundleTest {
 
     @Test
     void 정류장_기준의_symlink를_거절한다() throws Exception {
-        // given
-
         // when
         DummyBundle.conditional().writeTo(directory);
         Path reference = directory.resolve("route-reference.json");

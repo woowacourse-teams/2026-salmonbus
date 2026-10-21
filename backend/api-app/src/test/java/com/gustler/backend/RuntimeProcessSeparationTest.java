@@ -100,8 +100,6 @@ class RuntimeProcessSeparationTest {
 
     @Test
     void 서로_다른_JAR_두_프로세스가_서로_다른_포트에_같이_떠_있다() {
-        // given
-
         // when
         try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
             final boolean alive1 = api.isAlive();
@@ -132,8 +130,6 @@ class RuntimeProcessSeparationTest {
 
     @Test
     void 두_프로세스_모두_health_가_UP_이다() {
-        // given
-
         // when
         String responseBody1 = bodyOf(apiPort, HEALTH_PATH);
 
@@ -149,8 +145,6 @@ class RuntimeProcessSeparationTest {
 
     @Test
     void api_는_클라이언트_API_를_내준다() {
-        // given
-
         // when
         final int statusCode1 = statusOf(apiPort, CLIENT_API_PATH);
 
@@ -160,8 +154,6 @@ class RuntimeProcessSeparationTest {
 
     @Test
     void worker_는_클라이언트_API_를_안_내준다() {
-        // given
-
         // when
         final int statusCode1 = statusOf(workerPort, CLIENT_API_PATH);
 
@@ -171,8 +163,6 @@ class RuntimeProcessSeparationTest {
 
     @Test
     void api_는_서버_포트에_readyz_를_내준다() {
-        // given
-
         // when
         final int statusCode1 = statusOf(apiPort, READYZ_PATH);
 
@@ -188,8 +178,6 @@ class RuntimeProcessSeparationTest {
 
     @Test
     void api_가_적용한_V18_스키마에_기존_완료_평가_품질_컬럼이_없다() throws SQLException {
-        // given
-
         // when
         List<String> columns1 = queryStrings("""
             SELECT version FROM flyway_schema_history WHERE version = '26' AND success
@@ -218,8 +206,6 @@ class RuntimeProcessSeparationTest {
 
     @Test
     void 실행_JAR_에는_각_프로세스가_사용하는_프로젝트_라이브러리만_들어간다() throws IOException {
-        // given
-
         // when
         List<String> libraries1 = projectLibraries(API_JAR);
 
@@ -264,8 +250,6 @@ class RuntimeProcessSeparationTest {
 
     @Test
     void worker_는_수집을_켠_채_키가_없으면_못_뜬다() throws Exception {
-        // given
-
         // when
         Path log = Files.createTempFile("salmonbus-worker-nokey", ".log");
         Process nokey = start(WORKER_JAR, freePort(), Map.of("COLLECTION_ENABLED", "true"), log);

@@ -42,8 +42,6 @@ class ChatFeatureOffIntegrationTest {
 
     @Test
     void 기본_설정에서는_채팅_경로가_404이고_채팅_Mongo_WebSocket_빈이_없다() throws Exception {
-        // given
-
         // when
         mockMvc.perform(get("/api/chat/rooms/204000057"))
             .andExpect(status().isNotFound())
@@ -57,8 +55,6 @@ class ChatFeatureOffIntegrationTest {
 
     @Test
     void 기본_설정에서는_WebSocket_매핑과_하트비트와_Mongo_스레드가_없다() throws Exception {
-        // given
-
         // when
         mockMvc.perform(get("/api/chat/rooms/204000057/stream"))
             .andExpect(status().isNotFound());

@@ -51,8 +51,6 @@ class ArrivalRuntimeConfigurationTest {
 
     @Test
     void 기본값은_수집기를_만들지_않는다() {
-        // given
-
         // when
         context.withPropertyValues("arrivals.enabled=false").run(application ->
 
@@ -62,8 +60,6 @@ class ArrivalRuntimeConfigurationTest {
 
     @Test
     void 활성화하면_설정파일과_독립_실행기를_연결한다() {
-        // given
-
         // when
         context.withPropertyValues("arrivals.enabled=true", "arrivals.internal-token=local-test-token")
             .run(application -> {
@@ -80,8 +76,6 @@ class ArrivalRuntimeConfigurationTest {
 
     @Test
     void 내부_인증값이_없으면_활성화하지_않는다() {
-        // given
-
         // when
         context.withPropertyValues("arrivals.enabled=true", "arrivals.internal-token=")
             .run(application -> assertThat(application).hasFailed());
@@ -91,8 +85,6 @@ class ArrivalRuntimeConfigurationTest {
 
     @Test
     void 키를_늘리면_도착정보_전체_예산과_호출_속도도_키별_한도의_합으로_늘어난다() {
-        // given
-
         // when
         context.withPropertyValues("arrivals.enabled=true", "arrivals.internal-token=local-test-token",
             "gbis.keys.e=fake-key-e", "gbis.keys.f10=fake-key-f10")
@@ -118,8 +110,6 @@ class ArrivalRuntimeConfigurationTest {
 
     @Test
     void 도착정보_키별_한도를_주면_그_키만_그_한도로_센다() {
-        // given
-
         // when
         context.withPropertyValues("arrivals.enabled=true", "arrivals.internal-token=local-test-token",
             "gbis.keys.e=fake-key-e", "arrivals.limits.e=1000")
@@ -135,8 +125,6 @@ class ArrivalRuntimeConfigurationTest {
 
     @Test
     void 설정에_없는_별칭에_도착정보_한도를_주면_활성화하지_않는다() {
-        // given
-
         // when
         context.withPropertyValues("arrivals.enabled=true", "arrivals.internal-token=local-test-token",
         "arrivals.limits.zz=1000")

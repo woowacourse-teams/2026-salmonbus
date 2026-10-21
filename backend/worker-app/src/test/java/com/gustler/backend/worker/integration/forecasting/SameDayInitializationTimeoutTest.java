@@ -70,8 +70,6 @@ class SameDayInitializationTimeoutTest {
 
     @Test
     void 초기화는_2초를_넘긴_조회도_25초_SQL과_30초_트랜잭션_예산_안에서_완료한다() {
-        // given
-
         // when
         AtomicLong sourceQueryMs = new AtomicLong();
         doAnswer(call -> {

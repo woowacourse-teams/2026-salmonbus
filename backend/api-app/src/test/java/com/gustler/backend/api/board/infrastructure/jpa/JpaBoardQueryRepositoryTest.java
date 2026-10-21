@@ -36,8 +36,6 @@ class JpaBoardQueryRepositoryTest {
 
     @Test
     void 차량_관측_DB_조회_장애를_예보_없음으로_처리하지_않는다() {
-        // given
-
         // when
         given(vehicleObservationRepository.findAllByBatchIdAndRouteVersionId(100L, 1L))
             .willThrow(new DataAccessResourceFailureException("database unavailable"));
@@ -55,8 +53,6 @@ class JpaBoardQueryRepositoryTest {
 
     @Test
     void DB_조회_장애를_서비스_불가_예외로_변환한다() {
-        // given
-
         // when
         RouteId routeId = new RouteId("204000057");
         given(routeVersionRepository.findCurrent(routeId.value()))

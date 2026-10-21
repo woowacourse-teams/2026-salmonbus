@@ -45,8 +45,6 @@ class WorkerOperationLogTest {
 
     @Test
     void 빠른_정상_조회는_로그를_남기지_않고_결과를_그대로_반환한다() {
-        // given
-
         // when
         List<Integer> result = List.of(1, 2);
 
@@ -57,8 +55,6 @@ class WorkerOperationLogTest {
 
     @Test
     void 일초부터_소요시간과_반환행수를_기록하고_값은_숨긴다() {
-        // given
-
         // when
         recorder.measure("query", 1L, () -> {
             nanos.addAndGet(TimeUnit.SECONDS.toNanos(1));
@@ -73,8 +69,6 @@ class WorkerOperationLogTest {
 
     @Test
     void 중첩_실패는_가장_안쪽_작업과_SQLState만_한번_기록한다() {
-        // given
-
         // when
         DataAccessResourceFailureException failure =
             new DataAccessResourceFailureException("private query", new SQLException("private vehicle", "08006"));
@@ -98,8 +92,6 @@ class WorkerOperationLogTest {
 
     @Test
     void 같은_예외라도_다음_실행의_실패는_다시_기록한다() {
-        // given
-
         // when
         IllegalStateException failure = new IllegalStateException("private");
         for (int i = 0; i < 2; i++) {
@@ -120,8 +112,6 @@ class WorkerOperationLogTest {
 
     @Test
     void 다른_원인으로_실패하면_같은_실행에서도_숨기지_않는다() {
-        // given
-
         // when
         recorder.measure("outer", 1L, () -> {
             for (int i = 0; i < 2; i++) {
@@ -144,8 +134,6 @@ class WorkerOperationLogTest {
 
     @Test
     void transaction이_완료되기_전에는_느린_조회_성공을_기록하지_않는다() {
-        // given
-
         // when
         TestTransactionManager manager =
             new TestTransactionManager(false);
@@ -160,8 +148,6 @@ class WorkerOperationLogTest {
 
     @Test
     void commit_실패를_성공으로_기록하지_않고_호출경계에서_SQLState를_남긴다() {
-        // given
-
         // when
         TestTransactionManager manager =
             new TestTransactionManager(true);
@@ -185,8 +171,6 @@ class WorkerOperationLogTest {
 
     @Test
     void rollback된_느린_조회는_rollback으로_구분한다() {
-        // given
-
         // when
         new TransactionTemplate(new TestTransactionManager(false)).executeWithoutResult(status -> {
             slowQuery();
@@ -199,8 +183,6 @@ class WorkerOperationLogTest {
 
     @Test
     void 반복_경고는_분당_한번이고_다른_노선은_즉시_기록한다() {
-        // given
-
         // when
         recorder.warn("quota", 1L, "LIMIT");
         recorder.warn("quota", 1L, "LIMIT");
@@ -215,8 +197,6 @@ class WorkerOperationLogTest {
 
     @Test
     void 복구_후_재발한_경고는_일분_이내여도_즉시_기록한다() {
-        // given
-
         // when
         recorder.warn("quota", 1L, "LIMIT");
         recorder.recovered("quota", 1L);
@@ -228,8 +208,6 @@ class WorkerOperationLogTest {
 
     @Test
     void 같은_노선이라도_경고_사유가_다르면_즉시_기록한다() {
-        // given
-
         // when
         recorder.warn("quota", 1L, "DAILY_LIMIT");
         recorder.warn("quota", 1L, "NEXT_DAY_LIMIT");
@@ -265,8 +243,6 @@ class WorkerOperationLogTest {
 
     @Test
     void 정상과_실패_실행을_각각_계측하고_계측_실패는_업무_결과를_바꾸지_않는다() {
-        // given
-
         // when
         ArrayList<Boolean> outcomes = new ArrayList<>();
         WorkerOperationLog.setListener((operation, route, elapsed, failed) -> {
@@ -291,8 +267,6 @@ class WorkerOperationLogTest {
 
     @Test
     void 노선_표시명은_기존_필드_뒤에만_추가한다() {
-        // given
-
         // when
         WorkerOperationLog.setListener(new Listener() {
             @Override
@@ -319,8 +293,6 @@ class WorkerOperationLogTest {
 
     @Test
     void 수집_최신성은_외부_트랜잭션_커밋_뒤에만_갱신한다() {
-        // given
-
         // when
         AtomicLong calls = new AtomicLong();
         WorkerOperationLog.setListener(new Listener() {

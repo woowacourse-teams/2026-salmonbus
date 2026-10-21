@@ -18,8 +18,6 @@ class CallQuotaLedgerPolicyTest {
 
     @Test
     void 두_호출을_예약할_수_없는_설정이면_저장소를_변경하지_않는다() {
-        // given
-
         // when
         final boolean reserved = ledger.reserveRouteCatalog(REQUESTED_AT, 2);
 
@@ -31,8 +29,6 @@ class CallQuotaLedgerPolicyTest {
 
     @Test
     void 양수가_아닌_요청은_장부에_전달하지_않는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> ledger.reserveRouteCatalog(REQUESTED_AT, 0));
 
@@ -45,8 +41,6 @@ class CallQuotaLedgerPolicyTest {
 
     @Test
     void 같은_한국_날짜의_전송은_추가_예약하지_않는다() {
-        // given
-
         // when
         final boolean reserved = ledger.ensureLocationReservation("a", REQUESTED_AT,
             OffsetDateTime.parse("2026-08-28T23:59:59+09:00"));

@@ -41,8 +41,6 @@ class BoardHeadwaysApiDocsTest {
 
     @Test
     void 노선_배차간격은_기존_필수_필드를_바꾸지_않는_선택_필드다() {
-        // given
-
         // when
         JsonNode actual = document.at("/components/schemas/BoardRouteResponse");
 
@@ -59,8 +57,6 @@ class BoardHeadwaysApiDocsTest {
 
     @Test
     void 네_요일은_항상_있고_값이_없으면_null이다() {
-        // given
-
         // when
         JsonNode actual = document.at("/components/schemas/RouteHeadwaysResponse");
 
@@ -76,8 +72,6 @@ class BoardHeadwaysApiDocsTest {
 
     @Test
     void 배차간격은_1분부터_1440분까지의_최소와_최대다() {
-        // given
-
         // when
         JsonNode actual = document.at("/components/schemas/HeadwayRangeResponse");
 
@@ -92,8 +86,6 @@ class BoardHeadwaysApiDocsTest {
 
     @Test
     void 보드_응답_예시가_네_요일_배차간격을_보여준다() {
-        // given
-
         // when
         JsonNode examples = document.at(
             "/paths/~1api~1v1~1routes~1{routeId}~1board/get/responses/200/content/application~1json/examples");

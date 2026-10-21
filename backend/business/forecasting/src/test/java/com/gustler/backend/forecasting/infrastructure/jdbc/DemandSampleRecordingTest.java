@@ -185,8 +185,6 @@ class DemandSampleRecordingTest {
 
     @Test
     void 후속_작업의_롤백은_정산과_처리_대상을_함께_되돌린다() {
-        // given
-
         // when
         final long arrival = insertArrivalObservation();
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, 1, GENERATED_AT)));

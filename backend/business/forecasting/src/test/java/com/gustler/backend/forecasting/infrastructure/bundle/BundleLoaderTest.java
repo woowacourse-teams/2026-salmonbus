@@ -36,8 +36,6 @@ class BundleLoaderTest {
 
     @Test
     void 검사를_다_통과한_묶음은_노선과_거리로_계수를_꺼낼_수_있다() {
-        // given
-
         // when
         CoefficientBundle actual = BundleLoader.load(DummyBundle.valid().writeTo(directory));
 
@@ -47,8 +45,6 @@ class BundleLoaderTest {
 
     @Test
     void 계산_버전_40자는_허용하고_41자는_거절한다() {
-        // given
-
         // when
         BundleFiles accepted = DummyBundle.valid()
             .put("featureContractVersion", "v".repeat(40)).writeTo(directory);
@@ -63,8 +59,6 @@ class BundleLoaderTest {
 
     @Test
     void 출시_식별자_80자는_허용하고_81자는_거절한다() {
-        // given
-
         // when
         BundleFiles accepted = DummyBundle.valid().put("releaseId", "r".repeat(80)).writeTo(directory);
 
@@ -77,8 +71,6 @@ class BundleLoaderTest {
 
     @Test
     void 식별자_길이는_유니코드_문자_수로_검사한다() {
-        // given
-
         // when
         String supplementaryCharacter = new String(Character.toChars(0x1F68C));
         String acceptedVersion = supplementaryCharacter.repeat(40);
@@ -95,8 +87,6 @@ class BundleLoaderTest {
 
     @Test
     void 학습_종료_시각을_읽을_수_없으면_로딩에서_거절한다() {
-        // given
-
         // when
         Runnable loadAction = loading(DummyBundle.valid().put("dataThrough", "2026-08-30 14:59:56"));
         Throwable loadFailure = catchThrowable(loadAction::run);
@@ -139,8 +129,6 @@ class BundleLoaderTest {
 
     @Test
     void 설명_파일이_없으면_거절한다() {
-        // given
-
         // when
         Runnable loadAction4 = () -> BundleLoader.load(BundleFiles.under(directory));
         Throwable loadFailure4 = catchThrowable(loadAction4::run);
@@ -249,8 +237,6 @@ class BundleLoaderTest {
 
     @Test
     void 설명_파일이_수를_문자열로_적으면_거절한다() {
-        // given
-
         // when
         Runnable loadAction11 = loading(DummyBundle.valid().put("horizonStops", List.of("1", "2", "3")));
         Throwable loadFailure11 = catchThrowable(loadAction11::run);
@@ -261,8 +247,6 @@ class BundleLoaderTest {
 
     @Test
     void 설명_파일에_모르는_항목이_있으면_거절한다() {
-        // given
-
         // when
         Runnable loadAction12 = loading(DummyBundle.valid().put("leadSeconds", List.of(105.022, 90.104)));
         Throwable loadFailure12 = catchThrowable(loadAction12::run);
@@ -273,8 +257,6 @@ class BundleLoaderTest {
 
     @Test
     void 계수_묶음_버전이_다르면_거절한다() {
-        // given
-
         // when
         Runnable loadAction13 = loading(DummyBundle.valid().put("bundleSchemaVersion", "a18-live-bundle-v999"));
         Throwable loadFailure13 = catchThrowable(loadAction13::run);
@@ -285,8 +267,6 @@ class BundleLoaderTest {
 
     @Test
     void 모델_버전이_다르면_거절한다() {
-        // given
-
         // when
         Runnable loadAction14 = loading(DummyBundle.valid().put("modelVersion", "seat-distribution-a19-v1"));
         Throwable loadFailure14 = catchThrowable(loadAction14::run);
@@ -297,8 +277,6 @@ class BundleLoaderTest {
 
     @Test
     void 입력_규칙_버전이_비어_있으면_거절한다() {
-        // given
-
         // when
         Runnable loadAction15 = loading(DummyBundle.valid().put("featureContractVersion", " "));
         Throwable loadFailure15 = catchThrowable(loadAction15::run);
@@ -309,8 +287,6 @@ class BundleLoaderTest {
 
     @Test
     void 노선_참조_요약값이_64자리가_아니면_거절한다() {
-        // given
-
         // when
         Runnable loadAction16 = loading(DummyBundle.valid().put("routeReferenceDigest", "abc"));
         Throwable loadFailure16 = catchThrowable(loadAction16::run);
@@ -321,8 +297,6 @@ class BundleLoaderTest {
 
     @Test
     void 노선_순서가_뒤집히면_거절한다() {
-        // given
-
         // when
         Runnable loadAction17 = loading(DummyBundle.valid().put("routes", List.of("3330", "1650")));
         Throwable loadFailure17 = catchThrowable(loadAction17::run);
@@ -333,8 +307,6 @@ class BundleLoaderTest {
 
     @Test
     void 여덟_노선_묶음도_검사를_통과하고_새_노선의_계수를_꺼낼_수_있다() {
-        // given
-
         // when
         CoefficientBundle actual = BundleLoader.load(DummyBundle.withRoutes(EIGHT_ROUTES).writeTo(directory));
 
@@ -349,8 +321,6 @@ class BundleLoaderTest {
     void 여덟_노선_묶음을_올리면_모든_수집_노선이_예보_범위_안이다(
         String sourceRouteId
     ) {
-        // given
-
         // when
         final boolean actual = DummyBundle.withRoutes(EIGHT_ROUTES).loadAt(directory).scope()
             .coversSourceRoute(sourceRouteId);
@@ -376,8 +346,6 @@ class BundleLoaderTest {
 
     @Test
     void 여덟_노선_묶음의_순서가_계약과_다르면_거절한다() {
-        // given
-
         // when
         Runnable loadAction18 = loading(DummyBundle.withRoutes(
                 List.of("1650", "3330", "9300", "9007", "6011", "3000", "5600", "3500")));
@@ -389,8 +357,6 @@ class BundleLoaderTest {
 
     @Test
     void 계약에_없는_노선_목록은_거절한다() {
-        // given
-
         // when
         Runnable loadAction19 = loading(DummyBundle.withRoutes(List.of("1650", "3330", "9007")));
         Throwable loadFailure19 = catchThrowable(loadAction19::run);
@@ -401,8 +367,6 @@ class BundleLoaderTest {
 
     @Test
     void 예보_거리가_1부터_12까지가_아니면_거절한다() {
-        // given
-
         // when
         Runnable loadAction20 = loading(DummyBundle.valid().put("horizonStops", List.of(1, 2, 4, 8, 12)));
         Throwable loadFailure20 = catchThrowable(loadAction20::run);
@@ -426,8 +390,6 @@ class BundleLoaderTest {
 
     @Test
     void 입력값_이름이_우리_설계행렬에_없는_것이면_거절한다() {
-        // given
-
         // when
         Runnable loadAction22 = loading(DummyBundle.valid().put("featureNames", renamedFeatureNames()));
         Throwable loadFailure22 = catchThrowable(loadAction22::run);
@@ -453,8 +415,6 @@ class BundleLoaderTest {
 
     @Test
     void 좌석_분포에_필요한_배열_하나가_없으면_거절한다() {
-        // given
-
         // when
         Runnable loadAction24 = loading(DummyBundle.valid().withoutTensor(BundleTensor.ANCHOR));
         Throwable loadFailure24 = catchThrowable(loadAction24::run);
@@ -497,8 +457,6 @@ class BundleLoaderTest {
 
     @Test
     void 계수에_NaN_이_있으면_거절한다() {
-        // given
-
         // when
         Runnable loadAction26 = loading(DummyBundle.valid().withTensorValue(BundleTensor.FULL_CHANCE, 7, Double.NaN));
         Throwable loadFailure26 = catchThrowable(loadAction26::run);
@@ -509,8 +467,6 @@ class BundleLoaderTest {
 
     @Test
     void 계수에_Infinity_가_있으면_거절한다() {
-        // given
-
         // when
         Runnable loadAction27 = loading(DummyBundle.valid()
                 .withTensorValue(BundleTensor.FULL_CHANCE, 0, Double.POSITIVE_INFINITY));
@@ -522,8 +478,6 @@ class BundleLoaderTest {
 
     @Test
     void 학습됐는지_표시하는_값이_0도_1도_아니면_거절한다() {
-        // given
-
         // when
         Runnable loadAction28 = loading(DummyBundle.valid().withTensorValue(BundleTensor.RESIDUAL_BIN_FITTED, 3, 2.0));
         Throwable loadFailure28 = catchThrowable(loadAction28::run);
@@ -534,8 +488,6 @@ class BundleLoaderTest {
 
     @Test
     void 계수_파일_요약값이_다르면_거절한다() {
-        // given
-
         // when
         Runnable loadAction29 = loading(DummyBundle.valid().put("weightsDigest", "f".repeat(64)));
         Throwable loadFailure29 = catchThrowable(loadAction29::run);
@@ -577,8 +529,6 @@ class BundleLoaderTest {
 
     @Test
     void 출시_식별자를_묶은_요약값이_다르면_거절한다() {
-        // given
-
         // when
         Runnable loadAction32 = loading(DummyBundle.valid().put("identityDigest", "0".repeat(64)));
         Throwable loadFailure32 = catchThrowable(loadAction32::run);
@@ -614,8 +564,6 @@ class BundleLoaderTest {
      */
     @Test
     void 입력값이_24개인_계수_묶음은_거절한다() {
-        // given
-
         // when
         Runnable loadAction34 = loading(DummyBundle.withFeatureCount(24));
         Throwable loadFailure34 = catchThrowable(loadAction34::run);

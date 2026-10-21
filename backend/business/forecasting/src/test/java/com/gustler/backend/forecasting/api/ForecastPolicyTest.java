@@ -9,8 +9,6 @@ import org.junit.jupiter.api.Test;
 class ForecastPolicyTest {
     @Test
     void 기본_5분과_확장한_신선도_창을_모두_허용한다() {
-        // given
-
         // when
         for (Duration duration : new Duration[] {Duration.ofMinutes(5), Duration.ofMinutes(6), Duration.ofHours(1)}) {
 
@@ -21,8 +19,6 @@ class ForecastPolicyTest {
 
     @Test
     void 신선도_상한은_한_시간이다() {
-        // given
-
         // when
 
         // then

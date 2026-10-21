@@ -170,8 +170,6 @@ class DemandStatisticsVersionTest {
 
     @Test
     void 집계_결과_목록이_없으면_통계_버전을_만들_수_없다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> versionOf(null));
 
@@ -183,8 +181,6 @@ class DemandStatisticsVersionTest {
 
     @Test
     void 셀_없이_끝난_집계도_통계_버전으로_남긴다() {
-        // given
-
         // when
         DemandStatisticsVersion actual = versionOf(List.of());
 

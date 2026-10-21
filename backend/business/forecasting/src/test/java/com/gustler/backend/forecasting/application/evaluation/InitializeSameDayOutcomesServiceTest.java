@@ -43,8 +43,6 @@ class InitializeSameDayOutcomesServiceTest {
 
     @Test
     void 한_회차에는_노선_하나만_초기화하고_다음_노선으로_차례를_넘긴다() {
-        // given
-
         // when
         service.initializeNext();
 
@@ -92,8 +90,6 @@ class InitializeSameDayOutcomesServiceTest {
 
     @Test
     void 잠금_시간초과도_다음_노선의_초기화를_막지_않는다() {
-        // given
-
         // when
         when(initializer.initialize(eq(1L), any(), any())).thenThrow(new CannotAcquireLockException("fixture"));
 
@@ -111,8 +107,6 @@ class InitializeSameDayOutcomesServiceTest {
 
     @Test
     void KST_날짜가_바뀌면_새_날짜의_초기화를_시도한다() {
-        // given
-
         // when
         when(initializer.activeRouteIds()).thenReturn(List.of(1L));
         service.initializeNext();
@@ -126,8 +120,6 @@ class InitializeSameDayOutcomesServiceTest {
 
     @Test
     void 초기화_커밋이_실패하면_성공으로_기록하지_않는다() {
-        // given
-
         // when
         Logger logger = (Logger) LoggerFactory.getLogger(InitializeSameDayOutcomesService.class);
         ListAppender<ILoggingEvent> events = new ListAppender<ILoggingEvent>();
@@ -166,8 +158,6 @@ class InitializeSameDayOutcomesServiceTest {
 
     @Test
     void 실제_초기화와_완료된_집계의_건너뜀을_구분해_기록한다() {
-        // given
-
         // when
         Logger logger = (Logger) LoggerFactory.getLogger(InitializeSameDayOutcomesService.class);
         ListAppender<ILoggingEvent> events = new ListAppender<ILoggingEvent>();

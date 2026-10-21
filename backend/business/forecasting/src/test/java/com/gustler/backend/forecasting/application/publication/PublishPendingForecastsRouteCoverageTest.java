@@ -148,8 +148,6 @@ class PublishPendingForecastsRouteCoverageTest {
 
     @Test
     void 학습_정류장과_다른_노선은_건너뛰고_다음_노선은_계속_예보한다() {
-        // given
-
         // when
         SeatForecastModel model = new SeatForecastModel() {
             @Override
@@ -184,8 +182,6 @@ class PublishPendingForecastsRouteCoverageTest {
 
     @Test
     void 같은_모델로_반복_발행해도_사용_로그는_한번만_남긴다() {
-        // given
-
         // when
         prepareOneRoute();
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(RUNTIME));
@@ -202,8 +198,6 @@ class PublishPendingForecastsRouteCoverageTest {
 
     @Test
     void 모델을_교체하거나_이전_모델로_복구하면_다시_기록한다() {
-        // given
-
         // when
         prepareOneRoute();
         RuntimeSnapshot next = new RuntimeSnapshot(
@@ -224,8 +218,6 @@ class PublishPendingForecastsRouteCoverageTest {
 
     @Test
     void 발행_실패는_모델_사용_성공으로_기록하지_않고_재시도_성공때_기록한다() {
-        // given
-
         // when
         prepareOneRoute();
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(RUNTIME));
@@ -301,8 +293,6 @@ class PublishPendingForecastsRouteCoverageTest {
 
     @Test
     void 기준_불일치_로그는_반복하지_않고_복구한_모델을_다시_기록한다() {
-        // given
-
         // when
         ForecastModelUsageLog usage = new ForecastModelUsageLog();
         usage.referenceMismatch("204000057", "3330", 1, RUNTIME);
@@ -318,8 +308,6 @@ class PublishPendingForecastsRouteCoverageTest {
 
     @Test
     void 저장이_0건이면_사용_로그와_중복_억제_상태를_갱신하지_않는다() {
-        // given
-
         // when
         prepareOneRoute();
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(RUNTIME));
@@ -336,8 +324,6 @@ class PublishPendingForecastsRouteCoverageTest {
 
     @Test
     void 노선명을_모르면_ID를_유지하고_이름은_빈_문자열로_기록한다() {
-        // given
-
         // when
         new ForecastModelUsageLog().referenceMismatch("204000057", "", 1, RUNTIME);
 
@@ -348,8 +334,6 @@ class PublishPendingForecastsRouteCoverageTest {
 
     @Test
     void 외부_트랜잭션_커밋_실패는_기록하지_않고_성공_후에만_기록한다() {
-        // given
-
         // when
         prepareOneRoute();
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(RUNTIME));
@@ -398,8 +382,6 @@ class PublishPendingForecastsRouteCoverageTest {
 
     @Test
     void 특수문자_문자열은_필드_경계를_유지하고_원래_값으로_복원된다() {
-        // given
-
         // when
         String name = "3330 판교\"역\"\\분기\n다음\r\t";
         new ForecastModelUsageLog().committed("204000057", name, 1, 10, RUNTIME);

@@ -22,8 +22,6 @@ class BundleInspectionCommandTest {
 
     @Test
     void 검수_구성에_DB와_활성화_빈이_없다() {
-        // given
-
         // when
         try (AnnotationConfigApplicationContext context =
             new AnnotationConfigApplicationContext(BundleInspectionCommandConfiguration.class)) {
@@ -39,8 +37,6 @@ class BundleInspectionCommandTest {
 
     @Test
     void 검수는_번들_파일을_변경하지_않는다() throws Exception {
-        // given
-
         // when
         BundleInspectionFixture.write(directory);
         byte[] manifest = Files.readAllBytes(directory.resolve("manifest.json"));

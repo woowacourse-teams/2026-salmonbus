@@ -53,8 +53,6 @@ class RefreshDemandStatisticsServiceLoggingTest {
 
     @Test
     void writer가_반환한_뒤에만_KST_기준시각과_완료를_기록한다() {
-        // given
-
         // when
         when(routes.findActiveVersionIds()).thenReturn(List.of(1L));
         doAnswer(invocation -> {
@@ -76,8 +74,6 @@ class RefreshDemandStatisticsServiceLoggingTest {
 
     @Test
     void writer의_커밋_예외는_실패만_기록하고_그대로_전파한다() {
-        // given
-
         // when
         when(routes.findActiveVersionIds()).thenReturn(List.of(1L));
         TransactionSystemException failure = new TransactionSystemException("commit failed");

@@ -40,8 +40,6 @@ class ChatIdentityServiceTest {
 
     @Test
     void 노선이_달라지면_신원도_달라진다() {
-        // given
-
         // when
         UUID sessionId = UUID.fromString("0f8fad5b-d9cb-469f-a165-70867728950e");
 
@@ -52,8 +50,6 @@ class ChatIdentityServiceTest {
 
     @Test
     void 방마다_그_노선의_정류장_목록을_이_순서로_둔다() {
-        // given
-
         // when
         List<String> nicknameStops1 = room("204000057").nicknameStops();
 

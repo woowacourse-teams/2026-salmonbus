@@ -15,8 +15,6 @@ import org.springframework.context.annotation.Configuration;
 class DevApiDocsConfigurationTest {
     @Test
     void 실제_dev_설정은_문서_프로필을_포함한다() {
-        // given
-
         // when
         try (ConfigurableApplicationContext context = start()) {
 
@@ -29,8 +27,6 @@ class DevApiDocsConfigurationTest {
 
     @Test
     void 실제_dev_설정을_읽어도_운영_프로필에서는_문서를_제공하지_않는다() {
-        // given
-
         // when
         try (ConfigurableApplicationContext context = start("--spring.profiles.active=prod")) {
 

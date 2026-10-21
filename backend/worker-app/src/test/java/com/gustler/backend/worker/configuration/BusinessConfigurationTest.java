@@ -63,8 +63,6 @@ class BusinessConfigurationTest {
 
     @Test
     void 예보를_켜면_예보_설정을_읽는다() {
-        // given
-
         // when
         forecastPoliciesRunner(Map.of())
             .withPropertyValues("forecast.enabled=true")
@@ -80,8 +78,6 @@ class BusinessConfigurationTest {
 
     @Test
     void 예보를_켜면_환경변수로_신선도_창을_줄_때_기동을_멈춘다() {
-        // given
-
         // when
         forecastPoliciesRunner(Map.of(ENVIRONMENT_NAME, "3m"))
             .withPropertyValues("forecast.enabled=true")
@@ -96,8 +92,6 @@ class BusinessConfigurationTest {
 
     @Test
     void 예보를_끄면_예보_설정이_잘못되거나_신선도_창_환경변수가_있어도_기동한다() {
-        // given
-
         // when
         forecastPoliciesRunner(Map.of(ENVIRONMENT_NAME, "3m"))
             .withPropertyValues(
@@ -122,8 +116,6 @@ class BusinessConfigurationTest {
     void 예보를_꺼도_통계_주기가_양수가_아니면_기동을_멈춘다(
         String interval
     ) {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new BusinessConfiguration().demandStatisticsPolicy(interval));
 

@@ -178,8 +178,6 @@ class RouteTest {
 
     @Test
     void 현재_버전의_시작_시각에_버전을_교체하지_않는다() {
-        // given
-
         // when
         RouteVersion current = new RouteVersion(10L, OPENED, null, content(stops()));
 

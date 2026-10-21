@@ -13,8 +13,6 @@ import org.junit.jupiter.api.Test;
 class StoredValueContractTest {
     @Test
     void 관측_표에_저장된_잔여석_미제공_사유를_모두_읽을_수_있다() {
-        // given
-
         // when
         Set<String> stored = SchemaCheck.allowedValues("V4__observation.sql", "seat_unknown_reason");
 
@@ -25,8 +23,6 @@ class StoredValueContractTest {
 
     @Test
     void 평가_상태는_평가_표의_CHECK와_같다() {
-        // given
-
         // when
         Set<String> allowed = SchemaCheck.allowedValues("V28__quality_excluded_evaluation.sql", "scoring_state");
 
@@ -37,8 +33,6 @@ class StoredValueContractTest {
 
     @Test
     void 편도_판정_상태는_편도_표의_CHECK와_같다() {
-        // given
-
         // when
         Set<String> allowed = SchemaCheck.allowedValues("V15__one_way_trip_quality.sql", "status");
 

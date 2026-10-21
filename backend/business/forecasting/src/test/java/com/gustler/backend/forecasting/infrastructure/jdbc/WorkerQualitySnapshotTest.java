@@ -38,8 +38,6 @@ class WorkerQualitySnapshotTest {
 
     @Test
     void 품질_기록과_진행_중인_조사가_없으면_최초_버전과_빈_목록을_읽는다() {
-        // given
-
         // when
         Snapshot result = query.read(version);
 
@@ -79,8 +77,6 @@ class WorkerQualitySnapshotTest {
 
     @Test
     void 존재하지_않는_노선_버전을_정상_상태로_반환하지_않는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> query.read(-1));
 

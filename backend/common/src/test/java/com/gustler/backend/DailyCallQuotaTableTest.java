@@ -26,8 +26,6 @@ class DailyCallQuotaTableTest {
 
     @Test
     void 쓴_횟수가_한도와_같은_장부는_저장된다() {
-        // given
-
         // when
         insertQuota(DAILY_LIMIT_10000, DAILY_LIMIT_10000);
 
@@ -37,8 +35,6 @@ class DailyCallQuotaTableTest {
 
     @Test
     void 쓴_횟수가_한도를_넘는_장부는_저장되지_않는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> insertQuota(DAILY_LIMIT_10000 + 1, DAILY_LIMIT_10000));
 
@@ -50,8 +46,6 @@ class DailyCallQuotaTableTest {
 
     @Test
     void 쓴_횟수가_음수인_장부는_저장되지_않는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> insertQuota(-1, DAILY_LIMIT_10000));
 
@@ -63,8 +57,6 @@ class DailyCallQuotaTableTest {
 
     @Test
     void 한도가_0인_장부는_저장되지_않는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> insertQuota(0, 0));
 
@@ -76,8 +68,6 @@ class DailyCallQuotaTableTest {
 
     @Test
     void 키_별칭을_모르는_이전_예약_문장도_슬롯_a_장부에_센다() {
-        // given
-
         // when
         reserveWithoutKeyAlias();
         reserveWithoutKeyAlias();

@@ -18,8 +18,6 @@ class ArrivalFirstResultConfigurationTest {
 
     @Test
     void 기본은_500ms와_동시_32건이며_0ms로_비활성화할_수_있다() {
-        // given
-
         // when
         context.run(app -> {
             ArrivalFirstResultPolicy policy = app.getBean(ArrivalFirstResultPolicy.class);
@@ -40,8 +38,6 @@ class ArrivalFirstResultConfigurationTest {
 
     @Test
     void 잘못된_대기_설정은_기동_시_거절한다() {
-        // given
-
         // when
         for (String value : new String[]{"-1ms", "1001ms"}) {
             context.withPropertyValues("arrivals.first-result-wait=" + value).run(app ->

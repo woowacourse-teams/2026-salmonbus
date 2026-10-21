@@ -15,8 +15,6 @@ class RouteContentDigestTest {
 
     @Test
     void 정류소_목록이_같으면_같은_해시가_나온다() {
-        // given
-
         // when
         RouteContentDigest actual = RouteContentDigest.of(threeStops());
 
@@ -74,8 +72,6 @@ class RouteContentDigestTest {
 
     @Test
     void 판본_해시는_16진수_64글자다() {
-        // given
-
         // when
         RouteContentDigest actual = RouteContentDigest.of(threeStops());
 

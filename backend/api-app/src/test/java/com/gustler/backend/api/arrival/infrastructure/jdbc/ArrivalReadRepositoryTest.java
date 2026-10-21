@@ -47,8 +47,6 @@ class ArrivalReadRepositoryTest {
 
     @Test
     void 같은_정류장의_왕복방문과_전체수신결과를_실제_DB에서_읽는다() {
-        // given
-
         // when
         final long route = jdbc.sql("""
             INSERT INTO route(public_route_id, source_id, source_route_id, display_name, start_stop_name, end_stop_name)

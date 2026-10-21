@@ -10,8 +10,6 @@ import org.junit.jupiter.api.Test;
 class RemainingSeatsTest {
     @Test
     void 아는_잔여석은_음수일_수_없다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new Known(-1));
 
@@ -23,8 +21,6 @@ class RemainingSeatsTest {
 
     @Test
     void 잔여석을_모르는_경우에도_사유는_반드시_있다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new Unknown(null));
 

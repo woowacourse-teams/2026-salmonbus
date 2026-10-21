@@ -14,8 +14,6 @@ class HeadwayRangeTest {
         final int minMinutes,
         final int maxMinutes
     ) {
-        // given
-
         // when
         Optional<HeadwayRange> actual = HeadwayRange.of(minMinutes, maxMinutes);
 
@@ -30,8 +28,6 @@ class HeadwayRangeTest {
         Integer minMinutes,
         Integer maxMinutes
     ) {
-        // given
-
         // when
         Optional<HeadwayRange> actual = HeadwayRange.of(minMinutes, maxMinutes);
 
@@ -45,8 +41,6 @@ class HeadwayRangeTest {
         final int minMinutes,
         final int maxMinutes
     ) {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new HeadwayRange(minMinutes, maxMinutes));
 

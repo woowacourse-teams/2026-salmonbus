@@ -17,8 +17,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 class ForecastFeatureContractTest {
     @Test
     void 기존_계약은_통계까지_기존_31열을_그대로_계산한다() {
-        // given
-
         // when
         SeatForecastInput input = ForecastInputFixture.of("204000057");
 
@@ -30,8 +28,6 @@ class ForecastFeatureContractTest {
     @ParameterizedTest
     @EnumSource(TimeSlot.class)
     void 위치와_방향을_시간대별_열에_같은_순서로_전달한다(TimeSlot slot) {
-        // given
-
         // when
         double[] actual = ForecastFeatureContract.STOP_DIRECTION_TIME.vectorOf(input(slot, RouteDirection.DOWN));
 
@@ -51,8 +47,6 @@ class ForecastFeatureContractTest {
 
     @Test
     void 같은_정류장_ID라도_방향을_구분한다() {
-        // given
-
         // when
         double[] up = ForecastFeatureContract.STOP_DIRECTION_TIME.vectorOf(input(TimeSlot.MORNING, RouteDirection.UP));
         double[] down =
@@ -67,8 +61,6 @@ class ForecastFeatureContractTest {
 
     @Test
     void 새_계약은_방향을_모르면_임의로_추정하지_않는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> ForecastFeatureContract.STOP_DIRECTION_TIME.vectorOf(
             input(TimeSlot.MORNING, RouteDirection.UNKNOWN)));
@@ -80,8 +72,6 @@ class ForecastFeatureContractTest {
 
     @Test
     void 검증한_판본도_정류장_내용이_바뀌면_다시_거절한다() {
-        // given
-
         // when
         SeatForecastInput input = input(TimeSlot.MORNING, RouteDirection.DOWN);
         ForecastRouteReference reference = new ForecastRouteReference(Map.of("3330", input.stops()
@@ -115,8 +105,6 @@ class ForecastFeatureContractTest {
 
     @Test
     void 통계_사용_계약은_통계_세_열을_유지하고_기존_조건_계약은_0으로_둔다() {
-        // given
-
         // when
         SeatForecastInput seed = input(TimeSlot.MORNING, RouteDirection.DOWN);
         StopDemandStatistics statistics = new StopDemandStatistics(1L, TimeSlot.MORNING, 2, List.of(
@@ -142,8 +130,6 @@ class ForecastFeatureContractTest {
 
     @Test
     void 통계가_없으면_평균값과_결측_표시를_서로_구분한다() {
-        // given
-
         // when
         SeatForecastInput seed = input(TimeSlot.MORNING, RouteDirection.DOWN);
         SeatForecastInput input = new SeatForecastInput(seed.target(), seed.trajectory(),

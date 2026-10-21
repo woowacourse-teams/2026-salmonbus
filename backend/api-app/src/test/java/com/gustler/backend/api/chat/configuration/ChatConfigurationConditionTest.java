@@ -47,8 +47,6 @@ class ChatConfigurationConditionTest {
 
     @Test
     void 기본값에서는_채팅_객체와_Mongo_연결을_하나도_만들지_않는다() {
-        // given
-
         // when
         contextRunner.run(context -> {
 
@@ -60,8 +58,6 @@ class ChatConfigurationConditionTest {
 
     @Test
     void 명시적으로_false여도_채팅은_꺼져_있다() {
-        // given
-
         // when
         contextRunner.withPropertyValues("chat.enabled=false", "chat.mongodb-uri=mongodb://127.0.0.1:27017")
             .run(context -> {
@@ -74,8 +70,6 @@ class ChatConfigurationConditionTest {
 
     @Test
     void 켜져_있어도_URI가_비어_있으면_채팅만_끈_채로_뜨고_WARN을_한_번_남긴다(CapturedOutput output) {
-        // given
-
         // when
         contextRunner.withPropertyValues("chat.enabled=true", "chat.mongodb-uri=")
             .run(context -> {
@@ -91,8 +85,6 @@ class ChatConfigurationConditionTest {
 
     @Test
     void 켜져_있어도_URI_형식이_틀리면_채팅만_끈_채로_뜨고_값은_로그에_남기지_않는다(CapturedOutput output) {
-        // given
-
         // when
         contextRunner.withPropertyValues(
             "chat.enabled=true", "chat.mongodb-uri=mongdb://chat:typo-secret@127.0.0.1:27017/salmonbus_chat"
@@ -111,8 +103,6 @@ class ChatConfigurationConditionTest {
 
     @Test
     void 켜져_있어도_URI가_공백뿐이면_채팅만_끈_채로_뜬다(CapturedOutput output) {
-        // given
-
         // when
         contextRunner.withPropertyValues("chat.enabled=true")
             .withInitializer(context -> context.getEnvironment().getPropertySources().addFirst(

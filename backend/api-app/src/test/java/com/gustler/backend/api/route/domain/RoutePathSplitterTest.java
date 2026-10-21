@@ -32,8 +32,6 @@ class RoutePathSplitterTest {
 
     @Test
     void 회차점을_기존_선상에_넣고_서로_다른_왕복_경로를_운행순서대로_보존한다() {
-        // given
-
         // when
         List<Point> source = List.of(A, B, C, D, E);
         RouteGeometry geometry = geometry(2, List.of(A, new Point(127.0015, 37.00005), E), source);
@@ -53,8 +51,6 @@ class RoutePathSplitterTest {
 
     @Test
     void 회차점이_기존_꼭짓점이면_불필요한_중복점을_추가하지_않는다() {
-        // given
-
         // when
         RoutePaths paths = geometry(2, List.of(A, B, C), List.of(A, B, C)).paths();
 
@@ -65,8 +61,6 @@ class RoutePathSplitterTest {
 
     @Test
     void 원본의_길이0_선분과_반복좌표도_순서대로_남긴다() {
-        // given
-
         // when
         RoutePaths paths = geometry(2, List.of(A, B, C), List.of(A, A, B, B, C)).paths();
         ArrayList<Point> joined = new ArrayList<>(paths.up().points());
@@ -78,8 +72,6 @@ class RoutePathSplitterTest {
 
     @Test
     void 같은_좌표를_다시_지나도_앞선_방문순서로_올바른_회차_위치를_찾는다() {
-        // given
-
         // when
         Point beforeTurn = new Point(127.001, 37.001);
         Point last = new Point(127.001, 36.999);
@@ -94,8 +86,6 @@ class RoutePathSplitterTest {
 
     @Test
     void 다른_회차_위치가_같은_방문자료에_똑같이_맞으면_임의로_고르지_않는다() {
-        // given
-
         // when
         List<Point> source = List.of(A, B, C, D, E, A, B, C, D, E, A);
         RouteGeometry geometry = geometry(2, List.of(A, B, C), source);
@@ -110,8 +100,6 @@ class RoutePathSplitterTest {
 
     @Test
     void 회차_밖의_일부_정류장좌표가_없어도_양쪽_방문근거가_있으면_분리한다() {
-        // given
-
         // when
         RouteGeometry geometry = geometry(3, Arrays.asList(A, null, B, C), List.of(A, B, C));
 
@@ -124,8 +112,6 @@ class RoutePathSplitterTest {
     @ParameterizedTest
     @MethodSource("unavailable")
     void 분리_근거가_없으면_전체형상을_유지하고_paths만_비운다(RouteGeometry geometry) {
-        // given
-
         // when
         List<Point> original = geometry.points();
 
@@ -148,8 +134,6 @@ class RoutePathSplitterTest {
 
     @Test
     void 큰_자료의_가공량을_제한하고_전체형상은_그대로_제공한다() {
-        // given
-
         // when
         List<Point> stops = IntStream.range(0, 2001)
             .mapToObj(i -> {

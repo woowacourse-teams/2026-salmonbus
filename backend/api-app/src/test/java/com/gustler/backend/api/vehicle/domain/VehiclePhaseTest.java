@@ -19,8 +19,6 @@ class VehiclePhaseTest {
         final int runningState,
         VehiclePhase expected
     ) {
-        // given
-
         // when
         Optional<VehiclePhase> phase = VehiclePhase.fromRunningState(runningState);
 
@@ -30,8 +28,6 @@ class VehiclePhaseTest {
 
     @Test
     void 운행_상태가_비어_있으면_해석하지_않는다() {
-        // given
-
         // when
         Optional<VehiclePhase> phase = VehiclePhase.fromRunningState(null);
 
@@ -42,8 +38,6 @@ class VehiclePhaseTest {
     @ParameterizedTest
     @ValueSource(ints = {-1, 3, 9})
     void 문서_밖_운행_상태는_해석하지_않는다(final int runningState) {
-        // given
-
         // when
         Optional<VehiclePhase> phase = VehiclePhase.fromRunningState(runningState);
 

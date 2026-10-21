@@ -24,8 +24,6 @@ import org.junit.jupiter.api.Test;
 class ArrivalCollectingPollTest {
     @Test
     void 접수와_수집중_재조회는_1초뒤를_안내하고_같은_작업을_공유한다() {
-        // given
-
         // when
         Instant base = Instant.parse("2026-10-19T03:00:00Z");
         AtomicLong seconds = new AtomicLong();

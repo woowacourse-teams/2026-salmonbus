@@ -102,8 +102,6 @@ class ObservationBatchLedgerTest {
 
     @Test
     void 자리를_잡은_판은_RESERVED로_남는다() {
-        // given
-
         // when
         final long batchId = ledger.reserve(plan(), RESERVED_AT).batchId();
 
@@ -113,8 +111,6 @@ class ObservationBatchLedgerTest {
 
     @Test
     void 자리를_잡은_판은_한도를_한_번_쓴다() {
-        // given
-
         // when
         ledger.reserve(plan(), RESERVED_AT);
 

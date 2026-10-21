@@ -33,8 +33,6 @@ class ApiSqlOriginPostgresTest {
 
     @Test
     void PostgreSQL18은_SQL_맨_앞_주석을_통계에서_제외한다() throws Exception {
-        // given
-
         // when
         execute("/* salmonbus:api.other */ SELECT id FROM origin_check");
 
@@ -51,8 +49,6 @@ class ApiSqlOriginPostgresTest {
         "WITH rows AS (SELECT id FROM origin_check) SELECT * FROM rows"
     })
     void SQL_내부_표식은_실행_후_통계에도_남는다(String sql) throws Exception {
-        // given
-
         // when
         execute(new ApiSqlOrigin().inspect(sql));
 

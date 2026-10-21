@@ -70,8 +70,6 @@ class ForecastTriggerTest {
 
     @Test
     void 실행_전에_같은_노선_이벤트가_쌓이면_한_번만_예보한다() {
-        // given
-
         // when
         trigger.onObservationStored(ROUTE_VERSION_ID);
         trigger.onObservationStored(ROUTE_VERSION_ID);
@@ -132,8 +130,6 @@ class ForecastTriggerTest {
 
     @Test
     void 회차는_전체_노선을_예보하고_이벤트와_같은_예보_전용_실행기를_쓴다() throws Exception {
-        // given
-
         // when
         trigger.writeForecasts();
 

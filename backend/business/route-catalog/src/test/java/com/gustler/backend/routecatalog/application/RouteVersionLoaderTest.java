@@ -68,8 +68,6 @@ class RouteVersionLoaderTest {
 
     @Test
     void 판본이_하나도_없으면_새_판본을_넣는다() {
-        // given
-
         // when
         loader.load(routeId, threeStops(), TIMETABLE_1650, FIRST_READ_AT);
 
@@ -361,8 +359,6 @@ class RouteVersionLoaderTest {
 
     @Test
     void 같은_좌표를_반복_수신해도_이력은_늘지_않는다() {
-        // given
-
         // when
         final long versionId = loader.load(routeId, stopsWithCoordinates(127.0), TIMETABLE_1650, FIRST_READ_AT);
         final long again = loader.load(routeId, stopsWithCoordinates(127.0), TIMETABLE_1650, SECOND_READ_AT);
@@ -376,8 +372,6 @@ class RouteVersionLoaderTest {
 
     @Test
     void 좌표만_바뀌면_노선_버전은_유지하고_좌표_이력만_저장한다() {
-        // given
-
         // when
         final long versionId = loader.load(routeId, stopsWithCoordinates(127.0), TIMETABLE_1650, FIRST_READ_AT);
         final long again = loader.load(routeId, stopsWithCoordinates(127.1), TIMETABLE_1650, SECOND_READ_AT);
@@ -395,8 +389,6 @@ class RouteVersionLoaderTest {
 
     @Test
     void 처음_좌표가_없어도_나중에_받은_시점부터만_저장한다() {
-        // given
-
         // when
         final long versionId = loader.load(routeId, threeStops(), TIMETABLE_1650, FIRST_READ_AT);
 

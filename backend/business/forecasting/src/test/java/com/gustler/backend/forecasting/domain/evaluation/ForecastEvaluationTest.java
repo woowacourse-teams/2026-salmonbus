@@ -22,8 +22,6 @@ class ForecastEvaluationTest {
 
     @Test
     void 새_평가는_원_관측과_대상_정류장을_기억하고_결과를_기다린다() {
-        // given
-
         // when
         ForecastEvaluation evaluation = ForecastEvaluation.pending(OBSERVATION_ID, TARGET_STOP_ORDER);
 
@@ -94,8 +92,6 @@ class ForecastEvaluationTest {
 
     @Test
     void 도착_판정으로_생성해도_동일한_확정_규칙을_적용한다() {
-        // given
-
         // when
         ForecastEvaluation evaluation = ForecastEvaluation.completed(
             OBSERVATION_ID, TARGET_STOP_ORDER, new SeatMissing(20L), SCORED_AT);
@@ -118,8 +114,6 @@ class ForecastEvaluationTest {
 
     @Test
     void 도착_대기_판정으로_완료된_평가를_만들지_않는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> ForecastEvaluation.completed(
             OBSERVATION_ID, TARGET_STOP_ORDER, new NotArrivedYet(), SCORED_AT));
@@ -132,8 +126,6 @@ class ForecastEvaluationTest {
     @ParameterizedTest
     @MethodSource("invalidIdentities")
     void 유효한_관측과_대상_정류장이_필요하다(final long observationId, final int targetStopOrder) {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> ForecastEvaluation.pending(observationId, targetStopOrder));
 

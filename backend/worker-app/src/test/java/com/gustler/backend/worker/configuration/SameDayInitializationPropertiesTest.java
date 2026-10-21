@@ -11,8 +11,6 @@ class SameDayInitializationPropertiesTest {
     @ParameterizedTest
     @ValueSource(longs = {-1, 0})
     void 영_이하의_초기화_주기와_제한시간은_거부한다(final long millis) {
-        // given
-
         // when
         Duration valid = Duration.ofSeconds(1);
         Duration invalid = Duration.ofMillis(millis);

@@ -235,8 +235,6 @@ class JdbcForecastEvaluationTransactionTest {
 
     @Test
     void 관측은_실제_커밋_이후에만_전달하고_재정산은_중복_집계하지_않는다() {
-        // given
-
         // when
         initializeSameDayOutcomes();
         AtomicInteger count = new AtomicInteger();
@@ -438,8 +436,6 @@ class JdbcForecastEvaluationTransactionTest {
 
     @Test
     void 제외_처리가_잠금을_기다리는_동안_재조사가_시작되면_대기를_유지한다() throws Exception {
-        // given
-
         // when
         jdbc.sql("UPDATE vehicle_one_way_trip SET status='EXCLUDED' WHERE start_observation_id=?")
             .param(sourceObservationId).update();

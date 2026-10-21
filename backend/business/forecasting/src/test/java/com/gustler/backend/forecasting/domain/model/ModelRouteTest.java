@@ -22,8 +22,6 @@ class ModelRouteTest {
         String sourceRouteId,
         String expected
     ) {
-        // given
-
         // when
         String actual = ModelRoute.of(sourceRouteId);
 
@@ -33,8 +31,6 @@ class ModelRouteTest {
 
     @Test
     void 목록에_없는_GBIS_노선은_옮기지_않는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> ModelRoute.of("999999999"));
 
@@ -45,8 +41,6 @@ class ModelRouteTest {
 
     @Test
     void 목록에_없는_GBIS_노선은_예외를_안_쓰고도_가려낼_수_있다() {
-        // given
-
         // when
         final boolean actual = ModelRoute.covers("999999999");
 

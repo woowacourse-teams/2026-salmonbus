@@ -40,8 +40,6 @@ class RouteGeometrySupportDocsTest {
 
     @Test
     void 생성문서와_공유명세가_dev_정적자료_범위와_수집대기_상태를_함께_설명한다() {
-        // given
-
         // when
         JsonNode operation = operation(document);
         JsonNode shared = operation(contract);
@@ -66,8 +64,6 @@ class RouteGeometrySupportDocsTest {
 
     @Test
     void 마커와_형상을_구분하고_READY여도_방향분리가_없을_수_있음을_필드와_예시에_명시한다() {
-        // given
-
         // when
         JsonNode properties = document.at("/components/schemas/RouteGeometryResponse/properties");
 

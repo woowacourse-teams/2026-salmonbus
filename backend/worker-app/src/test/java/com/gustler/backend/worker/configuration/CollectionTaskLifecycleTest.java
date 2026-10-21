@@ -23,8 +23,6 @@ import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 class CollectionTaskLifecycleTest {
     @Test
     void 컨텍스트가_종료되면_관리하던_수집_예약을_취소한다() {
-        // given
-
         // when
         TaskScheduler scheduler = mock(TaskScheduler.class);
         ScheduledFuture<?> future = mock(ScheduledFuture.class);

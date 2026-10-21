@@ -29,8 +29,6 @@ class VehicleCachePolicyTest {
         OffsetDateTime pollAt,
         final long expectedSeconds
     ) {
-        // given
-
         // when
         Duration maxAge = policy.maxAgeAt(pollAt);
 

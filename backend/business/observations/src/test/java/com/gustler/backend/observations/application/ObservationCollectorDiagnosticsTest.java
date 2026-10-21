@@ -70,8 +70,6 @@ class ObservationCollectorDiagnosticsTest {
 
     @Test
     void 커밋_단계_실패를_성공으로_기록하지_않고_기존_예외를_전파한다() {
-        // given
-
         // when
         ObservationReply reply = at -> ObservationResponse.unconfirmed(at);
         when(source.read(anyString(), anyString())).thenReturn(reply);
@@ -99,8 +97,6 @@ class ObservationCollectorDiagnosticsTest {
 
     @Test
     void 정규화_실패와_DB_저장_실패를_구분한다() {
-        // given
-
         // when
         when(source.read(anyString(), anyString())).thenReturn(at -> {
             throw new IllegalArgumentException("bad input");
@@ -132,8 +128,6 @@ class ObservationCollectorDiagnosticsTest {
     @ParameterizedTest
     @MethodSource("externalFailures")
     void 외부_실패는_요약과_키_제외까지_WARN이고_ERROR를_남기지_않는다(GbisLocationResult result) {
-        // given
-
         // when
         GbisLocationSource location = mock(GbisLocationSource.class);
         when(location.read(anyString(), anyString())).thenReturn(result);
@@ -163,8 +157,6 @@ class ObservationCollectorDiagnosticsTest {
 
     @Test
     void 상류_호출_중_예상하지_못한_내부_예외는_ERROR를_유지한다() {
-        // given
-
         // when
         GbisLocationSource location = mock(GbisLocationSource.class);
         when(location.read(anyString(), anyString())).thenThrow(new IllegalStateException("private"));

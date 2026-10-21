@@ -63,8 +63,6 @@ class RouteVersionConcurrencyTest {
 
     @Test
     void 최초_등록을_동시에_요청해도_같은_버전_하나를_반환한다() throws Exception {
-        // given
-
         // when
         List<Long> versions = loadTogether(stops("종점"), FIRST);
 
@@ -90,8 +88,6 @@ class RouteVersionConcurrencyTest {
 
     @Test
     void 새_정류장_저장이_실패하면_이전_버전_종료도_롤백한다() {
-        // given
-
         // when
         final long previous = loader.load(routeId, stops("종점"), TIMETABLE, FIRST);
 

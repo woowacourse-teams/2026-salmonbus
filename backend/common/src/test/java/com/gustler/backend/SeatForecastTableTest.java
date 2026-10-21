@@ -83,8 +83,6 @@ class SeatForecastTableTest {
 
     @Test
     void 회수_상태는_다섯_값만_저장된다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> insertForecast(UNKNOWN_SCORING_STATE, null, null, SCORED_AT));
 
@@ -96,8 +94,6 @@ class SeatForecastTableTest {
 
     @Test
     void 회수가_끝난_행에만_회수_시각이_남는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> insertForecast("PENDING", null, null, SCORED_AT));
 
@@ -109,8 +105,6 @@ class SeatForecastTableTest {
 
     @Test
     void 만석으로_회수한_행에만_도착_잔여석이_남는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() ->
             insertForecast("SEAT_MISSING", arrivalObservationId, SEATS_ON_ARRIVAL, SCORED_AT));
@@ -123,8 +117,6 @@ class SeatForecastTableTest {
 
     @Test
     void 도착_관측을_찾은_행에만_도착_관측_id가_남는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(
             () -> insertForecast("SKIPPED", arrivalObservationId, null, SCORED_AT));
@@ -137,8 +129,6 @@ class SeatForecastTableTest {
 
     @Test
     void 도착_잔여석은_0석_이상만_저장된다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() ->
             insertForecast("SETTLED", arrivalObservationId, NEGATIVE_SEATS_ON_ARRIVAL, SCORED_AT));

@@ -108,8 +108,6 @@ class MongoChatMessageRepositoryIntegrationTest {
 
     @Test
     void 방이_다르면_같은_ID도_따로_저장한다() {
-        // given
-
         // when
         SaveResult first = repository.save(
             message(1, ROOM, "7c9e6679-7425-40de-944b-e07fc1f90ae7", "author-a", "안녕", BASE));
@@ -158,8 +156,6 @@ class MongoChatMessageRepositoryIntegrationTest {
 
     @Test
     void 초기화_스크립트가_두_인덱스를_만들고_TTL_인덱스는_없다() {
-        // given
-
         // when
         Map<String, Document> indexes = collection.listIndexes()
             .into(new ArrayList<>())
@@ -179,8 +175,6 @@ class MongoChatMessageRepositoryIntegrationTest {
 
     @Test
     void 새_ID는_저장할_수_있는_ObjectId_문자열이고_매번_다르다() {
-        // given
-
         // when
         String first = repository.nextId();
         String second = repository.nextId();

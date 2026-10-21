@@ -165,8 +165,6 @@ class SeatDistributionInputContractTest {
     @ParameterizedTest
     @MethodSource("invalidFeatures")
     void 특징의_null_빈값_비유한값을_기존과_같이_거절한다(double[] features) {
-        // given
-
         // when
         Throwable actual = catchThrowable(() -> inputOf(features, null));
 
@@ -178,8 +176,6 @@ class SeatDistributionInputContractTest {
     @NullSource
     @ValueSource(strings = {"", " "})
     void 노선의_null과_공백을_기존과_같이_거절한다(String route) {
-        // given
-
         // when
         Throwable actual = catchThrowable(() ->
             new SeatDistributionInput(new double[] {1.0}, route, 4, 20, 44, null));

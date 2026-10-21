@@ -30,8 +30,6 @@ class ArrivalWaitHeaderTest {
 
     @Test
     void 인증된_요청만_허용한_시간_내에서_수집_완료를_기다린다() throws Exception {
-        // given
-
         // when
         when(coordinator.requestAndAwait("206000637", Duration.ofMillis(500))).thenReturn(
             new ArrivalRefresh(Status.IDLE, null, Instant.parse("2026-10-19T03:00:40Z")));
@@ -47,8 +45,6 @@ class ArrivalWaitHeaderTest {
 
     @Test
     void 인증이_없으면_완료_대기도_시작하지_않는다() throws Exception {
-        // given
-
         // when
         mvc.perform(post("/internal/arrivals/refresh").header(ArrivalRefresh.WAIT_HEADER, "500")
                 .contentType(MediaType.APPLICATION_JSON).content("{\"stationId\":\"206000637\"}"))
@@ -60,8 +56,6 @@ class ArrivalWaitHeaderTest {
 
     @Test
     void 음수와_1초를_넘는_완료_대기는_거절한다() throws Exception {
-        // given
-
         // when
         for (final int wait : new int[]{-1, 1001}) {
             mvc.perform(post("/internal/arrivals/refresh").header("X-Arrival-Token", "test-internal-token")

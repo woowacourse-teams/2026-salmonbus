@@ -8,8 +8,6 @@ import org.junit.jupiter.api.Test;
 class ChatNicknameStopsTest {
     @Test
     void 정류장_이름에서_괄호와_마침표_뒤와_끝의_앞을_뗀다() {
-        // given
-
         // when
         String stopName1 = ChatNicknameStops.clean("서울역버스환승센터(5번승강장)(중)");
 

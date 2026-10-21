@@ -14,8 +14,6 @@ import org.junit.jupiter.api.Test;
 class RouteGeometryTest {
     @Test
     void 미제공이나_축이_뒤바뀐_좌표를_지도_마커로_내보내지_않는다() {
-        // given
-
         // when
         Point point1 = Point.orNull(null, 37.0);
 
@@ -43,8 +41,6 @@ class RouteGeometryTest {
 
     @Test
     void 표시영역은_도로_굴곡과_정류장_좌표를_모두_포함한다() {
-        // given
-
         // when
         Shape shape = new Shape(UUID.randomUUID(), Instant.EPOCH, List.of(
             new Point(127.0, 37.0), new Point(127.1, 37.3),

@@ -48,8 +48,6 @@ class GbisArrivalSourceTest {
 
     @Test
     void 만석0은_유지하고_빈_둘째차량은_생성하지_않는다() {
-        // given
-
         // when
         Success success = (Success) read("[" + row("") + "]");
 
@@ -62,8 +60,6 @@ class GbisArrivalSourceTest {
 
     @Test
     void 모든_노선을_보존하고_지원하지_않는_좌석0은_알수없음으로_정규화한다() {
-        // given
-
         // when
         String second = row("").replace("204000057", "204000155").replace("\"routeTypeCd\":12", "\"routeTypeCd\":13");
         Success success = (Success) read("[" + row("") + "," + second + "]");
@@ -77,8 +73,6 @@ class GbisArrivalSourceTest {
 
     @Test
     void 분_단위_대체와_미제공_좌석을_구분한다() {
-        // given
-
         // when
         Success success = (Success) read(row("").replace("\"predictTimeSec1\":180,", "")
                 .replace("\"remainSeatCnt1\":0", "\"remainSeatCnt1\":-1"));
@@ -92,8 +86,6 @@ class GbisArrivalSourceTest {
 
     @Test
     void 다른_정류장이나_깨진_필드는_빈_목록으로_바꾸지_않는다() {
-        // given
-
         // when
         Result differentStation = read(row("").replace("206000637", "206000532"));
 
@@ -118,8 +110,6 @@ class GbisArrivalSourceTest {
 
     @Test
     void 정상_빈_응답과_상류_거절은_다른_결과다() {
-        // given
-
         // when
         Success emptyResponse = (Success) read("[]");
 
@@ -141,8 +131,6 @@ class GbisArrivalSourceTest {
 
     @Test
     void 같은_노선_같은_방문의_중복행을_허용하지_않는다() {
-        // given
-
         // when
         Result actual = read("[" + row("") + "," + row("") + "]");
 
@@ -153,8 +141,6 @@ class GbisArrivalSourceTest {
 
     @Test
     void 과거에_확보한_정류장_27노선_응답을_오프라인으로_해석한다() throws Exception {
-        // given
-
         // when
         try (InputStream input = getClass().getResourceAsStream("/gbis-arrivals-station.json")) {
             String fixture = new String(Objects.requireNonNull(input).readAllBytes(),

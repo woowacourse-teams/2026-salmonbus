@@ -19,8 +19,6 @@ import org.springframework.scheduling.support.SimpleTriggerContext;
 class FixedCollectionIntervalTest {
     @Test
     void 기존_설정과_함께_선택적인_주기를_바인딩한다() {
-        // given
-
         // when
         MapConfigurationPropertySource source = new MapConfigurationPropertySource(Map.of("collection.enabled", "true",
             "collection.route-ids[0]", "234000050", "collection.fixed-interval", "20s"));
@@ -35,8 +33,6 @@ class FixedCollectionIntervalTest {
 
     @Test
     void 고정_주기는_시간대와_관계없이_완료_시각을_기준으로_한다() {
-        // given
-
         // when
         Instant started = Instant.parse("2026-10-06T16:00:00Z");
         Instant completed = started.plusSeconds(3);
@@ -51,8 +47,6 @@ class FixedCollectionIntervalTest {
 
     @Test
     void 주기를_생략하면_야간_적응형_일정을_유지한다() {
-        // given
-
         // when
         Instant at = Instant.parse("2026-10-06T16:00:00Z");
         AdaptiveCollectionTrigger trigger = new AdaptiveCollectionTrigger(Clock.fixed(at, ZoneOffset.UTC));
@@ -64,8 +58,6 @@ class FixedCollectionIntervalTest {
 
     @Test
     void 양수가_아니거나_1초_미만인_주기를_거절한다() {
-        // given
-
         // when
         for (Duration interval : List.of(Duration.ZERO, Duration.ofSeconds(-1), Duration.ofMillis(500))) {
 

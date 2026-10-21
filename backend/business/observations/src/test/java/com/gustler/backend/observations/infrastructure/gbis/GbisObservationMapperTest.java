@@ -45,8 +45,6 @@ class GbisObservationMapperTest {
 
     @Test
     void 차량_행이_있는_정상_응답의_결말은_SUCCESS_ROWS다() {
-        // given
-
         // when
         ObservationBatchConclusion actual =
             GbisObservationMapper.from(new Success(QUERY_TIME, List.of(bus())));
@@ -58,8 +56,6 @@ class GbisObservationMapperTest {
 
     @Test
     void 차량_행이_없는_정상_응답의_결말은_SUCCESS_EMPTY다() {
-        // given
-
         // when
         ObservationBatchConclusion actual =
             GbisObservationMapper.from(new Success(QUERY_TIME, List.of()));
@@ -71,8 +67,6 @@ class GbisObservationMapperTest {
 
     @Test
     void 운행_차량이_없다는_응답의_결말은_SUCCESS_EMPTY다() {
-        // given
-
         // when
         ObservationBatchConclusion actual =
             GbisObservationMapper.from(new NoVehicles(QUERY_TIME));
@@ -84,8 +78,6 @@ class GbisObservationMapperTest {
 
     @Test
     void 하루_한도_초과_응답의_실패_사유는_DAILY_QUOTA_EXCEEDED다() {
-        // given
-
         // when
         ObservationBatchConclusion actual =
             GbisObservationMapper.from(new DailyQuotaExceeded());
@@ -97,8 +89,6 @@ class GbisObservationMapperTest {
 
     @Test
     void 초당_한도_초과_응답의_실패_사유는_PER_SECOND_QUOTA_EXCEEDED다() {
-        // given
-
         // when
         ObservationBatchConclusion actual =
             GbisObservationMapper.from(new PerSecondQuotaExceeded());
@@ -110,8 +100,6 @@ class GbisObservationMapperTest {
 
     @Test
     void 게이트웨이가_거절한_응답의_실패_사유는_UPSTREAM_ERROR다() {
-        // given
-
         // when
         ObservationBatchConclusion actual = GbisObservationMapper.from(
             new GatewayRejected("30", "SERVICE_KEY_IS_NOT_REGISTERED_ERROR", "등록되지 않은 키입니다"));
@@ -123,8 +111,6 @@ class GbisObservationMapperTest {
 
     @Test
     void 상류_시스템_오류_응답의_실패_사유는_UPSTREAM_ERROR다() {
-        // given
-
         // when
         ObservationBatchConclusion actual =
             GbisObservationMapper.from(new GbisSystemError(QUERY_TIME, "시스템 오류가 발생하였습니다."));
@@ -136,8 +122,6 @@ class GbisObservationMapperTest {
 
     @Test
     void 필수_파라미터가_빠졌다는_응답의_실패_사유는_UPSTREAM_ERROR다() {
-        // given
-
         // when
         ObservationBatchConclusion actual = GbisObservationMapper.from(
             new MissingRequiredParameter(QUERY_TIME, "필수 파라미터가 누락되었습니다."));
@@ -149,8 +133,6 @@ class GbisObservationMapperTest {
 
     @Test
     void 뜻을_모르는_결과_코드의_응답은_그_코드를_원문_그대로_남긴다() {
-        // given
-
         // when
         ObservationBatchConclusion actual = GbisObservationMapper.from(
             new UnknownGbisResultCode(QUERY_TIME, RESULT_CODE_NEVER_SEEN, "알 수 없는 응답"));
@@ -162,8 +144,6 @@ class GbisObservationMapperTest {
 
     @Test
     void 응답이_오지_않은_판의_결말은_UNKNOWN_AFTER_DISPATCH다() {
-        // given
-
         // when
         ObservationBatchConclusion actual =
             GbisObservationMapper.from(new NoResponse("I/O error on GET request"));
@@ -175,8 +155,6 @@ class GbisObservationMapperTest {
 
     @Test
     void 읽지_못한_응답의_결말은_FAILED_UNREADABLE다() {
-        // given
-
         // when
         ObservationBatchConclusion actual =
             GbisObservationMapper.from(new UnreadableResponse("Open API 응답에 헤더가 없다"));
@@ -192,8 +170,6 @@ class GbisObservationMapperTest {
         GbisLocationResult result,
         Optional<String> expected
     ) {
-        // given
-
         // when
         Optional<String> actual = GbisObservationMapper.response(result, RECEIVED_AT).keyRejectionCode();
 

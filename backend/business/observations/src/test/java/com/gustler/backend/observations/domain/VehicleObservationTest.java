@@ -18,8 +18,6 @@ class VehicleObservationTest {
 
     @Test
     void 관측에는_잔여석이_아는_것이든_모르는_것이든_들어간다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new VehicleObservation(
             VEHICLE_204000206,

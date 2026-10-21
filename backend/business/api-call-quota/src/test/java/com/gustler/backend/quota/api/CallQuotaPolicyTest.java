@@ -15,8 +15,6 @@ class CallQuotaPolicyTest {
 
     @Test
     void API마다_받은_한도를_그대로_돌려준다() {
-        // given
-
         // when
         CallQuotaPolicy policy = new CallQuotaPolicy(limits(LOCATION_LIMIT, ROUTE_LIMIT));
 
@@ -27,8 +25,6 @@ class CallQuotaPolicyTest {
 
     @Test
     void 한도가_같은_설정은_모든_API에_같은_값을_준다() {
-        // given
-
         // when
         CallQuotaPolicy policy = CallQuotaPolicy.sameForEveryApi(SAME_LIMIT);
 
@@ -53,8 +49,6 @@ class CallQuotaPolicyTest {
 
     @Test
     void 한도가_1보다_작으면_거절한다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new CallQuotaPolicy(limits(LOCATION_LIMIT, 0)));
 
@@ -100,8 +94,6 @@ class CallQuotaPolicyTest {
 
     @Test
     void 키별_한도가_있는_키는_그_한도를_없는_키는_API_한도를_쓴다() {
-        // given
-
         // when
         CallQuotaPolicy policy = CallQuotaPolicy.sameForEveryApi(SAME_LIMIT, List.of("a", "e"), Map.of("e", 1));
 
@@ -112,8 +104,6 @@ class CallQuotaPolicyTest {
 
     @Test
     void 설정에_없는_키에_키별_한도를_주면_거절한다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(
             () -> CallQuotaPolicy.sameForEveryApi(SAME_LIMIT, List.of("a"), Map.of("e", 1)));

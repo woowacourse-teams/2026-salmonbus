@@ -53,8 +53,6 @@ class RouteCatalogRefreshSchedulerTest {
 
     @Test
     void 지도전용노선은_별도실행기에서_갱신하고_공통노선은_한번만_조회한다() {
-        // given
-
         // when
         RefreshRouteCatalog catalog = mock(RefreshRouteCatalog.class);
         RefreshRouteGeometry geometry = mock(RefreshRouteGeometry.class);
@@ -82,8 +80,6 @@ class RouteCatalogRefreshSchedulerTest {
 
     @Test
     void 차량관측을_끄고_형상만_켜면_HTTP는_모두_별도실행기에_맡긴다() {
-        // given
-
         // when
         RefreshRouteCatalog catalog = mock(RefreshRouteCatalog.class);
         RefreshRouteGeometry geometry = mock(RefreshRouteGeometry.class);
@@ -101,8 +97,6 @@ class RouteCatalogRefreshSchedulerTest {
 
     @Test
     void 실패_이유와_알려진_이름만_남기고_예외_본문은_노출하지_않는다() {
-        // given
-
         // when
         RefreshRouteCatalog catalog = mock(RefreshRouteCatalog.class);
         when(catalog.knownRouteName("id-1")).thenReturn("3330");

@@ -35,8 +35,6 @@ class RouteGeometryRuntimeTest {
     @Test
     @Timeout(90)
     void 지정한_기존_8노선_643방문을_수집하고_노선별_형상과_방향과_회차를_보존한다() throws Exception {
-        // given
-
         // when
         JsonNode catalogRows = JSON.readTree(Files.readString(Path.of(System.getProperty("geometry.routes.fixture"))))
             .path("routes");
@@ -144,8 +142,6 @@ class RouteGeometryRuntimeTest {
     @Test
     @Timeout(90)
     void 별도_Worker가_형상을_수집하고_API가_836점과_정류장_캐시와_압축을_제공한다() throws Exception {
-        // given
-
         // when
         try (ArrivalRuntime runtime = new ArrivalRuntime()) {
             URI uri = runtime.arrivalsUri().resolve("/api/v2/routes/204000057/geometry");

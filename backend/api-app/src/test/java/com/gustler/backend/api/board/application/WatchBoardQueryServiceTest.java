@@ -193,8 +193,6 @@ class WatchBoardQueryServiceTest {
 
     @Test
     void 보드와_차량을_한_스냅샷에서_읽도록_반복_읽기_트랜잭션을_선언한다() {
-        // given
-
         // when
         Transactional transactional = WatchBoardQueryService.class.getAnnotation(Transactional.class);
 

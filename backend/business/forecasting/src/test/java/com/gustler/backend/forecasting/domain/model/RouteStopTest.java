@@ -8,8 +8,6 @@ import org.junit.jupiter.api.Test;
 class RouteStopTest {
     @Test
     void 정류장_순번은_1번부터다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new RouteStop(1L, 0, "204000206", true));
 

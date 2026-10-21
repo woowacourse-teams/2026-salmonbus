@@ -12,8 +12,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 class SeatDistributionTest {
     @Test
     void 좌석_수마다의_확률을_모두_더하면_1이_된다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new SeatDistribution(List.of(0.2, 0.3, 0.5)));
 
@@ -24,8 +22,6 @@ class SeatDistributionTest {
 
     @Test
     void 분포는_합이_1인_확률만_받는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new SeatDistribution(List.of(0.2, 0.3)));
 
@@ -40,8 +36,6 @@ class SeatDistributionTest {
     void 좌석_수별_확률은_0과_1_사이의_수다(
         final double notChance
     ) {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new SeatDistribution(List.of(notChance, 1.0 - notChance)));
 

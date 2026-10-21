@@ -44,8 +44,6 @@ class DddStorageMigrationTest {
 
     @Test
     void 빈_DB는_별도_데이터_이관_없이_최종_구조로_설치한다() throws SQLException {
-        // given
-
         // when
         migrate("26");
 
@@ -59,8 +57,6 @@ class DddStorageMigrationTest {
 
     @Test
     void 최종_구조에서는_통계_발행_기록을_세대_표로_합치고_평가_표의_vacuum_기준을_낮춘다() throws SQLException {
-        // given
-
         // when
         migrate("26");
 
@@ -75,8 +71,6 @@ class DddStorageMigrationTest {
 
     @Test
     void 예보_표의_vacuum_시작_기준은_최종_구조에도_남는다() throws SQLException {
-        // given
-
         // when
         migrate("26");
 
@@ -113,8 +107,6 @@ class DddStorageMigrationTest {
 
     @Test
     void 검증하지_않은_기존_DB에서는_컬럼을_삭제하기_전에_전환을_거절한다() throws SQLException {
-        // given
-
         // when
         migrate("24");
         insertRoute();

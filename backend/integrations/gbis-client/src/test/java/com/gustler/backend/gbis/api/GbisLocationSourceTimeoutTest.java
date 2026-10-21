@@ -56,8 +56,6 @@ class GbisLocationSourceTimeoutTest {
 
     @Test
     void Open_API가_응답을_안_줘도_읽기_제한시간에_포기한다() {
-        // given
-
         // when
         final long startedAt = System.nanoTime();
         GbisLocationResult actual = source.read(ROUTE_3330);
@@ -70,8 +68,6 @@ class GbisLocationSourceTimeoutTest {
 
     @Test
     void 포기한_응답_사유에_서비스키가_남지_않는다() {
-        // given
-
         // when
         GbisLocationResult actual = source.read(ROUTE_3330);
 

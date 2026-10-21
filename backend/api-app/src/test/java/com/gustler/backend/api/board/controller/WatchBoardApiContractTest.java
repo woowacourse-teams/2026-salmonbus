@@ -278,8 +278,6 @@ class WatchBoardApiContractTest {
 
     @Test
     void 노선_ID가_잘못되면_400_없는_노선이면_404_POST면_405다() throws Exception {
-        // given
-
         // when
         ResultActions httpResponse8 = mockMvc.perform(get("/api/v1/routes/{routeId}/watch", "abc"));
 

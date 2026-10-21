@@ -156,8 +156,6 @@ class PublishPendingForecastsIntegrationTest {
 
     @Test
     void 예보를_발행하면_발행_정보와_입력_확정_시각을_기록한다() {
-        // given
-
         // when
         forecastJob.writeForecasts();
 
@@ -280,8 +278,6 @@ class PublishPendingForecastsIntegrationTest {
 
     @Test
     void 여정에_남은_정류장까지만_예보한다() {
-        // given
-
         // when
         forecastJob.writeForecasts();
 
@@ -334,8 +330,6 @@ class PublishPendingForecastsIntegrationTest {
 
     @Test
     void 예보에_남는_세대_번호는_모델에_넘긴_셀_통계의_세대다() {
-        // given
-
         // when
         forecastJob.writeForecasts();
 
@@ -347,8 +341,6 @@ class PublishPendingForecastsIntegrationTest {
 
     @Test
     void 설계행렬의_시간대와_셀_통계의_시간대가_같다() {
-        // given
-
         // when
         forecastJob.writeForecasts();
 
@@ -451,8 +443,6 @@ class PublishPendingForecastsIntegrationTest {
 
     @Test
     void 배치는_모델에_셀_통계와_정류장_목록까지_모아_넘긴다() {
-        // given
-
         // when
         forecastJob.writeForecasts();
 
@@ -464,8 +454,6 @@ class PublishPendingForecastsIntegrationTest {
 
     @Test
     void 배치가_넘기는_재료의_셀_통계는_그_노선_판본의_것이다() {
-        // given
-
         // when
         forecastJob.writeForecasts();
 
@@ -476,8 +464,6 @@ class PublishPendingForecastsIntegrationTest {
 
     @Test
     void 배치가_넘기는_재료에_그_차량이_보여_준_최대_잔여석이_들어_있다() {
-        // given
-
         // when
         forecastJob.writeForecasts();
 

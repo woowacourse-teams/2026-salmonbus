@@ -23,8 +23,6 @@ class ForecastScheduleDefaultTest {
 
     @Test
     void 기본_설정은_예보_배치를_꺼둔다() {
-        // given
-
         // when
         ArrivalLabelJob actual = applicationContext.getBeanProvider(ArrivalLabelJob.class).getIfAvailable();
 
@@ -34,8 +32,6 @@ class ForecastScheduleDefaultTest {
 
     @Test
     void 예보를_끄면_예보_설정을_바인딩하지_않는다() {
-        // given
-
         // when
 
         // then
@@ -48,8 +44,6 @@ class ForecastScheduleDefaultTest {
 
     @Test
     void 예보를_꺼도_통계_주기는_읽는다() {
-        // given
-
         // when
         DemandStatisticsPolicy actual = applicationContext.getBean(DemandStatisticsPolicy.class);
 

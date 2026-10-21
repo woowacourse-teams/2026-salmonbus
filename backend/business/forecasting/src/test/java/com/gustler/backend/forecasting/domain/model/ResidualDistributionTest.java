@@ -21,8 +21,6 @@ class ResidualDistributionTest {
 
     @Test
     void 어긋날_수_있는_경우를_91가지로_센다() {
-        // given
-
         // when
         double[] actual = allFitted().chancesByResidual(CoefficientsFixture.ONE_FEATURE, 20, 44);
 
@@ -32,8 +30,6 @@ class ResidualDistributionTest {
 
     @Test
     void 확률을_모두_더하면_1이다() {
-        // given
-
         // when
         double[] actual = allFitted().chancesByResidual(CoefficientsFixture.ONE_FEATURE, 20, 44);
 

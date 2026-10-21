@@ -321,8 +321,6 @@ class ForecastPublicationTransactionTest {
 
     @Test
     void 발행과_예측과_평가를_함께_저장하고_같은_배치를_다시_발행하면_새_계산으로_덮어쓴다() {
-        // given
-
         // when
         writer.writeForecastsOf(batch, stops, runtime);
 

@@ -26,8 +26,6 @@ class GbisRouteLineSourceTest {
 
     @Test
     void 경유정류장이_아닌_형상API를_한번_호출하고_순번으로_정렬한다() {
-        // given
-
         // when
         response("[{\"lineSeq\":2,\"x\":127.2,\"y\":37.2},{\"lineSeq\":1,\"x\":127.1,\"y\":37.1}]", 200);
         List<Point> points = source.read(ROUTE).orElseThrow();
@@ -41,8 +39,6 @@ class GbisRouteLineSourceTest {
 
     @Test
     void 빠진_순번이나_중복과_깨진_좌표는_부분형상으로_발행하지_않는다() {
-        // given
-
         // when
         for (String rows : new String[] {
             "[]", "[{\"lineSeq\":1,\"x\":127,\"y\":37}]",
@@ -59,8 +55,6 @@ class GbisRouteLineSourceTest {
 
     @Test
     void 다른_노선이나_HTTP오류는_기존_형상을_대체하지_않는다() {
-        // given
-
         // when
         String rows =
             "[{\"routeId\":\"204000155\",\"lineSeq\":1,\"x\":127,\"y\":37},{\"lineSeq\":2,\"x\":128,\"y\":38}]";

@@ -17,8 +17,6 @@ class AfterCommitTelemetryTest {
 
     @Test
     void 커밋_전에_성공을_기록하지_않고_커밋_후에만_기록한다() {
-        // given
-
         // when
         TransactionSynchronizationManager.initSynchronization();
         TransactionSynchronizationManager.setActualTransactionActive(true);
@@ -33,8 +31,6 @@ class AfterCommitTelemetryTest {
 
     @Test
     void 롤백과_트랜잭션_없는_호출은_성공으로_기록하지_않는다() {
-        // given
-
         // when
         AtomicInteger recorded = new AtomicInteger();
         AfterCommitTelemetry.record(recorded::incrementAndGet);
@@ -50,8 +46,6 @@ class AfterCommitTelemetryTest {
 
     @Test
     void 계측_오류는_이미_커밋된_업무를_실패로_바꾸지_않는다() {
-        // given
-
         // when
         TransactionSynchronizationManager.initSynchronization();
         TransactionSynchronizationManager.setActualTransactionActive(true);

@@ -494,8 +494,6 @@ class JdbcVehicleTrajectoryQueryTest {
 
     @Test
     void 없는_판을_물어보면_빈_목록을_준다() {
-        // given
-
         // when
         List<VehicleTrajectory> actual = repository.readTrajectories(MISSING_BATCH_ID);
 

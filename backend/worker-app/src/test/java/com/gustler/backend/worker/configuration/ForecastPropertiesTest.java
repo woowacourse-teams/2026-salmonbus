@@ -19,8 +19,6 @@ class ForecastPropertiesTest {
 
     @Test
     void 신선도_창이_한_시간을_넘으면_기동을_막는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> propertiesWith(TOO_LONG_STALENESS));
 
@@ -34,8 +32,6 @@ class ForecastPropertiesTest {
 
     @Test
     void 신선도_창이_한_시간이면_받는다() {
-        // given
-
         // when
         ForecastProperties actual = propertiesWith(LONGEST_ALLOWED_STALENESS);
 
@@ -45,8 +41,6 @@ class ForecastPropertiesTest {
 
     @Test
     void 신선도_창이_0이면_기동을_막는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> propertiesWith(Duration.ZERO));
 

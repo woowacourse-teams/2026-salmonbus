@@ -23,8 +23,6 @@ class BoardCachePolicyTest {
     void 오전_7시부터_8시와_오후_5시부터_10시는_15초를_캐시한다(
         String time
     ) {
-        // given
-
         // when
         Duration maxAge = maxAgeAt(time);
 
@@ -37,8 +35,6 @@ class BoardCachePolicyTest {
     void 오전_1시부터_3시는_600초를_캐시한다(
         String time
     ) {
-        // given
-
         // when
         Duration maxAge = maxAgeAt(time);
 
@@ -58,8 +54,6 @@ class BoardCachePolicyTest {
     void 그_밖의_시간은_20초를_캐시한다(
         String time
     ) {
-        // given
-
         // when
         Duration maxAge = maxAgeAt(time);
 

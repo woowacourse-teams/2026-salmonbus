@@ -58,8 +58,6 @@ class FullChanceCoefficientsTest {
 
     @Test
     void 계수는_설계행렬_열_수와_같은_31개다() {
-        // given
-
         // when
         FullChanceCoefficients actual = new FullChanceCoefficients(allZero());
 
@@ -69,8 +67,6 @@ class FullChanceCoefficientsTest {
 
     @Test
     void 계수가_31개가_아니면_묶음을_만들_수_없다() {
-        // given
-
         // when
         List<Double> tooFew = allZero().subList(0, 30);
 
@@ -88,8 +84,6 @@ class FullChanceCoefficientsTest {
 
     @Test
     void 계수가_전부_0이면_만석_확률은_0점5다() {
-        // given
-
         // when
         final double actual = new FullChanceCoefficients(allZero()).fullChanceBeforeCorrectionOf(matrix());
 

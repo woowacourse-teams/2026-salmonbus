@@ -22,8 +22,6 @@ class BundleInspectionProcessTest {
 
     @Test
     void 번들_검수는_DB_설정_없이_실행된다() throws Exception {
-        // given
-
         // when
         Path bundle = directory.resolve("bundle");
         BundleInspectionFixture.write(bundle);
@@ -41,8 +39,6 @@ class BundleInspectionProcessTest {
 
     @Test
     void 부적합_번들_검수는_실패_종료한다() throws Exception {
-        // given
-
         // when
         Path bundle = directory.resolve("bundle");
         BundleInspectionFixture.write(bundle);

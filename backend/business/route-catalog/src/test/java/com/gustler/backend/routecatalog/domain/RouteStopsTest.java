@@ -106,8 +106,6 @@ class RouteStopsTest {
 
     @Test
     void 한_판본에_같은_정류소_순번은_한_번만_나온다() {
-        // given
-
         // when
         Throwable actual = catchThrowable(() -> RouteStops.from(1, List.of(
             new UpstreamRouteStop(1, STOP_205000217, ANY_STOP_NAME),
@@ -122,8 +120,6 @@ class RouteStopsTest {
     void 회차_순번은_경유하는_정류소_중_하나의_순번이다(
         final int turnSequence
     ) {
-        // given
-
         // when
         Throwable actual = catchThrowable(() -> RouteStops.from(turnSequence, eightyFiveUpstreamStops()));
 

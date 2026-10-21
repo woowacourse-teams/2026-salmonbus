@@ -35,8 +35,6 @@ class JdbcCurrentGbisRoutesTest {
 
     @Test
     void 현재판본이_있는_GBIS_공개ID만_반환하고_추가와_폐쇄를_즉시_반영한다() {
-        // given
-
         // when
         final long current = route("204000002", "GBIS", "upstream-2");
         version(current, false);

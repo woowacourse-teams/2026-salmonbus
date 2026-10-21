@@ -89,8 +89,6 @@ class JdbcDemandStatisticsVersionTransactionTest {
 
     @Test
     void 같은_노선의_동시_집계는_서로_다른_버전을_순서대로_저장한다() throws Exception {
-        // given
-
         // when
         CountDownLatch start = new CountDownLatch(1);
         try (ExecutorService executor = Executors.newFixedThreadPool(2)) {

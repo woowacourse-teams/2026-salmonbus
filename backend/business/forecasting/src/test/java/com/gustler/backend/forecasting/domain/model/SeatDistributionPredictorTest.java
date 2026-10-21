@@ -17,8 +17,6 @@ class SeatDistributionPredictorTest {
 
     @Test
     void 좌석_분포는_71칸이다() {
-        // given
-
         // when
         SeatForecastResult actual = predictor().predict(input(20, 44, null));
 
@@ -28,8 +26,6 @@ class SeatDistributionPredictorTest {
 
     @Test
     void 어느_칸에도_NaN_이나_무한대가_없다() {
-        // given
-
         // when
         SeatForecastResult actual = predictor().predict(input(20, 44, null));
 
@@ -39,8 +35,6 @@ class SeatDistributionPredictorTest {
 
     @Test
     void 확률을_모두_더하면_1이다() {
-        // given
-
         // when
         SeatForecastResult actual = predictor().predict(input(20, 44, null));
 
@@ -76,8 +70,6 @@ class SeatDistributionPredictorTest {
 
     @Test
     void 오늘_도착이_확인된_예보가_없으면_만석_확률을_안_옮긴다() {
-        // given
-
         // when
         SeatForecastResult actual = predictor().predict(input(20, 44, null));
 
@@ -93,8 +85,6 @@ class SeatDistributionPredictorTest {
 
     @Test
     void 기대_잔여석은_좌석과_확률을_곱해_더한_값이다() {
-        // given
-
         // when
         SeatForecastResult actual = predictor().predict(input(20, 44, null));
 
@@ -111,8 +101,6 @@ class SeatDistributionPredictorTest {
     void 정원이_1석이든_70석이든_좌석_분포가_나온다(
         final int capacity
     ) {
-        // given
-
         // when
         SeatForecastResult actual = predictor().predict(input(Math.min(20, capacity), capacity, null));
 
@@ -127,8 +115,6 @@ class SeatDistributionPredictorTest {
 
     @Test
     void 정원보다_많은_좌석의_확률은_0이다() {
-        // given
-
         // when
         SeatForecastResult actual = predictor().predict(input(10, 30, null));
 

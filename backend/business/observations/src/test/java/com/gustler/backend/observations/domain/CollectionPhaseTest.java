@@ -21,8 +21,6 @@ class CollectionPhaseTest {
     void 자정부터_1시_전까지는_심야_꼬리다(
         final int hour
     ) {
-        // given
-
         // when
         CollectionPhase actual = CollectionPhase.atHour(hour);
 
@@ -35,8 +33,6 @@ class CollectionPhaseTest {
     void 새벽_1시부터_4시_전까지는_심야다(
         final int hour
     ) {
-        // given
-
         // when
         CollectionPhase actual = CollectionPhase.atHour(hour);
 
@@ -49,8 +45,6 @@ class CollectionPhaseTest {
     void 새벽_4시부터_7시_전까지는_이른_아침이다(
         final int hour
     ) {
-        // given
-
         // when
         CollectionPhase actual = CollectionPhase.atHour(hour);
 
@@ -63,8 +57,6 @@ class CollectionPhaseTest {
     void 아침_7시부터_9시_전까지는_아침_첨두다(
         final int hour
     ) {
-        // given
-
         // when
         CollectionPhase actual = CollectionPhase.atHour(hour);
 
@@ -77,8 +69,6 @@ class CollectionPhaseTest {
     void 아침_9시부터_오후_5시_전까지는_낮이다(
         final int hour
     ) {
-        // given
-
         // when
         CollectionPhase actual = CollectionPhase.atHour(hour);
 
@@ -91,8 +81,6 @@ class CollectionPhaseTest {
     void 오후_5시부터_8시_전까지는_저녁_첨두다(
         final int hour
     ) {
-        // given
-
         // when
         CollectionPhase actual = CollectionPhase.atHour(hour);
 
@@ -105,8 +93,6 @@ class CollectionPhaseTest {
     void 밤_8시부터_11시_전까지는_늦은_저녁이다(
         final int hour
     ) {
-        // given
-
         // when
         CollectionPhase actual = CollectionPhase.atHour(hour);
 
@@ -119,8 +105,6 @@ class CollectionPhaseTest {
     void 밤_11시부터_자정까지는_심야_꼬리다(
         final int hour
     ) {
-        // given
-
         // when
         CollectionPhase actual = CollectionPhase.atHour(hour);
 
@@ -130,8 +114,6 @@ class CollectionPhaseTest {
 
     @Test
     void 하루_스물네_시간이_모두_어느_한_단계에_든다() {
-        // given
-
         // when
         final long actual = IntStream.range(0, HOURS_PER_DAY)
             .mapToObj(CollectionPhase::atHour)
@@ -146,8 +128,6 @@ class CollectionPhaseTest {
     void 첨두와_늦은_저녁은_20초마다_부른다(
         CollectionPhase phase
     ) {
-        // given
-
         // when
         final int actual = phase.intervalSeconds();
 
@@ -160,8 +140,6 @@ class CollectionPhaseTest {
     void 이른_아침과_낮과_심야_꼬리는_30초마다_부른다(
         CollectionPhase phase
     ) {
-        // given
-
         // when
         final int actual = phase.intervalSeconds();
 
@@ -171,8 +149,6 @@ class CollectionPhaseTest {
 
     @Test
     void 심야는_600초마다_부른다() {
-        // given
-
         // when
         final int actual = CollectionPhase.DEEP_NIGHT.intervalSeconds();
 
@@ -195,8 +171,6 @@ class CollectionPhaseTest {
 
     @Test
     void 단계마다_하루를_다_돌았을_때의_호출_수를_센다() {
-        // given
-
         // when
         final int actual = CollectionPhase.DEEP_NIGHT.dailyCallsPerRoute();
 
@@ -206,8 +180,6 @@ class CollectionPhaseTest {
 
     @Test
     void 자정을_넘는_심야_꼬리도_두_시간으로_센다() {
-        // given
-
         // when
         final int actual = CollectionPhase.NIGHT_TAIL.dailyCallsPerRoute();
 
@@ -217,8 +189,6 @@ class CollectionPhaseTest {
 
     @Test
     void 어느_단계도_같은_시각을_두_번_담지_않는다() {
-        // given
-
         // when
         final long actual = IntStream.range(0, HOURS_PER_DAY)
             .mapToObj(hour -> Arrays.stream(CollectionPhase.values())

@@ -17,8 +17,6 @@ class VehiclePollOutcomeTest {
         String databaseValue,
         VehiclePollOutcome expected
     ) {
-        // given
-
         // when
         VehiclePollOutcome outcome = VehiclePollOutcome.fromDatabaseValue(databaseValue);
 
@@ -30,8 +28,6 @@ class VehiclePollOutcomeTest {
     @NullAndEmptySource
     @ValueSource(strings = {"TRANSPORT_FAILURE", "IN_PROGRESS", "UNEXPECTED"})
     void 정상이_아닌_DB_outcome은_UNKNOWN으로_해석한다(String databaseValue) {
-        // given
-
         // when
         VehiclePollOutcome outcome = VehiclePollOutcome.fromDatabaseValue(databaseValue);
 

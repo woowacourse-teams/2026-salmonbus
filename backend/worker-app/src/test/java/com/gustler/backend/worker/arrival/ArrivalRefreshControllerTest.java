@@ -28,8 +28,6 @@ class ArrivalRefreshControllerTest {
 
     @Test
     void 내부_인증_없이는_작업을_등록하지_않는다() throws Exception {
-        // given
-
         // when
         mvc.perform(post("/internal/arrivals/refresh").contentType(MediaType.APPLICATION_JSON)
             .content("{\"stationId\":\"206000637\"}"))
@@ -41,8 +39,6 @@ class ArrivalRefreshControllerTest {
 
     @Test
     void 인증된_요청은_완료를_기다리지_않고_접수_결과를_준다() throws Exception {
-        // given
-
         // when
         when(coordinator.request("206000637")).thenReturn(new ArrivalRefresh(Status.ACCEPTED,
             "COLLECTING", Instant.parse("2026-10-14T03:00:02Z")));
@@ -56,8 +52,6 @@ class ArrivalRefreshControllerTest {
 
     @Test
     void 내부_입력도_검증한다() throws Exception {
-        // given
-
         // when
         when(coordinator.request("bad")).thenThrow(new IllegalArgumentException());
         mvc.perform(post("/internal/arrivals/refresh").header("X-Arrival-Token", "test-internal-token")

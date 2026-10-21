@@ -35,8 +35,6 @@ class ObservationBatchTableTest {
 
     @Test
     void 자리만_잡고_아직_안_보낸_판은_보낸_시각_없이_저장된다() {
-        // given
-
         // when
         insertBatch("RESERVED", null, null);
 
@@ -60,8 +58,6 @@ class ObservationBatchTableTest {
 
     @Test
     void 뜻을_모르는_결말의_판은_저장되지_않는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> insertBatch("TIMED_OUT", SCHEDULED_AT, null));
 
@@ -73,8 +69,6 @@ class ObservationBatchTableTest {
 
     @Test
     void 뜻을_모르는_실패_사유의_판은_저장되지_않는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(
             () -> insertBatch("FAILED_UPSTREAM", SCHEDULED_AT, "CONNECTION_RESET"));

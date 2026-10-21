@@ -19,8 +19,6 @@ class ScheduledCollectionDisabledTest {
 
     @Test
     void 수집을_꺼두면_주기_작업을_아예_안_건다() {
-        // given
-
         // when
         final int actual = context.getBeanNamesForType(ScheduledTaskHolder.class).length;
 

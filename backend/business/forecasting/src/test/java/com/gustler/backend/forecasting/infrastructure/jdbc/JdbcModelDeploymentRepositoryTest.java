@@ -102,8 +102,6 @@ class JdbcModelDeploymentRepositoryTest {
 
     @Test
     void 적재_영수증은_STAGED_로_남는다() {
-        // given
-
         // when
         final long actual = repository.stage(staged());
 
@@ -113,8 +111,6 @@ class JdbcModelDeploymentRepositoryTest {
 
     @Test
     void 적재만_해서는_도는_배포가_되지_않는다() {
-        // given
-
         // when
         repository.stage(staged());
 

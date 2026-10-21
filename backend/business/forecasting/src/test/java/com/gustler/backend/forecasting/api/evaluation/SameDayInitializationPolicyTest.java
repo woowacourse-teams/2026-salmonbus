@@ -13,8 +13,6 @@ class SameDayInitializationPolicyTest {
 
     @Test
     void 재시도_간격과_시간_제한이_1밀리초_이상이면_만든다() {
-        // given
-
         // when
         SameDayInitializationPolicy actual = new SameDayInitializationPolicy(VALID, VALID, VALID);
 
@@ -55,8 +53,6 @@ class SameDayInitializationPolicyTest {
 
     @Test
     void 값이_없으면_거부한다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new SameDayInitializationPolicy(null, VALID, VALID));
 

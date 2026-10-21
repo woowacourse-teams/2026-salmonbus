@@ -123,8 +123,6 @@ class ForecastPublicationTest {
 
     @Test
     void 예측이_없어도_수집_배치와_계산에_사용한_버전을_발행_정보에_남긴다() {
-        // given
-
         // when
         ForecastPublication publication = publish(List.of());
 

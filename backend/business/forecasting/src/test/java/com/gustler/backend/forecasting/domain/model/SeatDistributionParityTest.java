@@ -31,8 +31,6 @@ class SeatDistributionParityTest {
     void 좌석_71칸의_확률이_파이썬_정본과_같다(
         ReferenceParityCase given
     ) {
-        // given
-
         // when
         double[] actual = given.seatChances();
 
@@ -45,8 +43,6 @@ class SeatDistributionParityTest {
     void 중심_좌석이_파이썬_정본과_같다(
         ReferenceParityCase given
     ) {
-        // given
-
         // when
         final int actual = new SeatAnchor(given.anchorIntercept(), given.anchorSlope())
             .seatsOf(given.upstreamSeats(), given.capacity());
@@ -57,8 +53,6 @@ class SeatDistributionParityTest {
 
     @Test
     void 대조_사례는_여덟_개다() {
-        // given
-
         // when
         List<ReferenceParityCase> actual = ReferenceParityCase.all();
 

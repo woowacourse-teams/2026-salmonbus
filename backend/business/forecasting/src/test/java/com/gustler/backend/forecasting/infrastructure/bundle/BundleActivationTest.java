@@ -74,8 +74,6 @@ class BundleActivationTest {
 
     @Test
     void 더미_계수_묶음을_적재하면_도는_배포가_선다() {
-        // given
-
         // when
         activation().activate(filesOf(DummyBundle.valid().writeTo(directory)));
 
@@ -252,8 +250,6 @@ class BundleActivationTest {
 
     @Test
     void 기동_설정이_없으면_DB나_파일을_변경하지_않는다() {
-        // given
-
         // when
         ModelLoadResult actual = startup().load(new LoadConfiguredModelCommand(null, false));
 
@@ -411,8 +407,6 @@ class BundleActivationTest {
 
     @Test
     void 새_입력_번들은_수동_승격하고_이전_번들로_돌아갈_수_있다() {
-        // given
-
         // when
         BundleFiles legacy = DummyBundle.valid().writeTo(directoryUnder("legacy"));
 
@@ -432,8 +426,6 @@ class BundleActivationTest {
 
     @Test
     void 정류장_파일이_변조된_새_번들은_기존_활성_배포를_바꾸지_않는다() throws Exception {
-        // given
-
         // when
         startUp(DummyBundle.valid().writeTo(directoryUnder("legacy")), false);
         ActiveModelDeployment before = deployments.findActive().orElseThrow();

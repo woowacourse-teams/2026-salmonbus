@@ -19,8 +19,6 @@ class BoardingPolicyTest {
         String stopId,
         final boolean expected
     ) {
-        // given
-
         // when
         final boolean actual = BoardingPolicy.allowsBoardingAt(stopId);
 

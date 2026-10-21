@@ -15,8 +15,6 @@ class RuntimeSnapshotTest {
 
     @Test
     void 예보_범위가_없는_배포로는_만들_수_없다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(
             () -> new RuntimeSnapshot(DEPLOYMENT, null, input -> null, DATA_UNTIL));

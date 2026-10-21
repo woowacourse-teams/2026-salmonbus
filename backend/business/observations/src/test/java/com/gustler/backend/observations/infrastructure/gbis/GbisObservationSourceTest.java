@@ -145,8 +145,6 @@ class GbisObservationSourceTest {
 
     @Test
     void 정규화_오류는_응답_미수신으로_바꾸지_않고_전파한다() {
-        // given
-
         // when
         given(source.read(ROUTE_ID, "a")).willReturn(new Success("query time", null));
 

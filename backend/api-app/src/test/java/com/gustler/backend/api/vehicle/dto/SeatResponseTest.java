@@ -12,8 +12,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 class SeatResponseTest {
     @Test
     void 정확한_좌석_응답은_EXACT_종류를_스스로_결정한다() {
-        // given
-
         // when
         Exact actual = (Exact) SeatResponse.from(
             new VehicleSeat.Exact(23)
@@ -29,8 +27,6 @@ class SeatResponseTest {
     @ParameterizedTest
     @EnumSource(Unknown.class)
     void 미상_좌석_응답은_UNKNOWN과_사유를_함께_반환한다(Unknown reason) {
-        // given
-
         // when
         SeatResponse.Unknown actual = (SeatResponse.Unknown) SeatResponse.from(
             reason

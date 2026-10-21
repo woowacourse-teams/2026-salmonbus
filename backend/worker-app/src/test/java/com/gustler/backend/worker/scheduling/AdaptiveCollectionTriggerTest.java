@@ -22,8 +22,6 @@ class AdaptiveCollectionTriggerTest {
 
     @Test
     void 처음_도는_판은_기다리지_않고_바로_부른다() {
-        // given
-
         // when
         Instant actual = trigger.nextExecution(new SimpleTriggerContext(clock));
 
@@ -33,8 +31,6 @@ class AdaptiveCollectionTriggerTest {
 
     @Test
     void 아침_첨두에_끝난_판의_다음_차례는_20초_뒤다() {
-        // given
-
         // when
         Instant actual = trigger.nextExecution(contextCompletedAt(MORNING_PEAK_MOMENT));
 
@@ -44,8 +40,6 @@ class AdaptiveCollectionTriggerTest {
 
     @Test
     void 심야에_끝난_판의_다음_차례는_600초_뒤다() {
-        // given
-
         // when
         Instant actual = trigger.nextExecution(contextCompletedAt(DEEP_NIGHT_MOMENT));
 

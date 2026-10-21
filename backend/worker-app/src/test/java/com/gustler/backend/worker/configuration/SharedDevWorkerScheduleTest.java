@@ -22,8 +22,6 @@ import org.springframework.scheduling.support.SimpleTriggerContext;
 class SharedDevWorkerScheduleTest {
     @Test
     void 공유_개발_환경은_운영_작업_주기와_수집_노선을_쓴다() throws Exception {
-        // given
-
         // when
         MockEnvironment base = environment(false);
         MockEnvironment shared = environment(true);

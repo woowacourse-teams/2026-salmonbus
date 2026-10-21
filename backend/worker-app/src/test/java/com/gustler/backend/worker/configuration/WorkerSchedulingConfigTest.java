@@ -81,8 +81,6 @@ class WorkerSchedulingConfigTest {
 
     @Test
     void 처리가_스레드를_사용하는_중에도_수집을_실행할_수_있다() throws Exception {
-        // given
-
         // when
         WorkerSchedulingConfig config = new WorkerSchedulingConfig();
         ThreadPoolTaskScheduler processing = config.processingScheduler();

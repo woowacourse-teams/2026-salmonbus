@@ -30,8 +30,6 @@ class ForecastScheduleConfigTest {
 
     @Test
     void 예보_스위치를_켜면_라벨_회수_배치가_선다() {
-        // given
-
         // when
         ArrivalLabelJob actual = applicationContext.getBeanProvider(ArrivalLabelJob.class).getIfAvailable();
 
@@ -54,8 +52,6 @@ class ForecastScheduleConfigTest {
 
     @Test
     void 예보_스위치를_켜면_배치_주기_설정이_같이_바인딩된다() {
-        // given
-
         // when
         ForecastProperties actual = applicationContext.getBean(ForecastProperties.class);
 
@@ -65,8 +61,6 @@ class ForecastScheduleConfigTest {
 
     @Test
     void 수집을_꺼도_예보를_켜면_이상_차량의_편도_조사를_등록한다() {
-        // given
-
         // when
         List<String> registeredTasks = applicationContext.getBeansOfType(ScheduledTaskHolder.class)
             .values()
@@ -82,8 +76,6 @@ class ForecastScheduleConfigTest {
 
     @Test
     void 예보_스위치를_켜면_30초_회차를_등록하고_관측_저장_이벤트를_받는다() {
-        // given
-
         // when
         List<String> registeredTasks = applicationContext.getBeansOfType(ScheduledTaskHolder.class)
             .values()

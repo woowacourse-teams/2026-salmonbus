@@ -18,8 +18,6 @@ class EvaluationResultTest {
     @ParameterizedTest
     @MethodSource("completedLabels")
     void 도착_판정의_상태와_근거를_평가_결과로_옮긴다(ArrivalLabel label, EvaluationResult expected) {
-        // given
-
         // when
         EvaluationResult result = EvaluationResult.from(label);
 
@@ -29,8 +27,6 @@ class EvaluationResultTest {
 
     @Test
     void 아직_도착하지_않은_판정은_확정_결과로_만들지_않는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> EvaluationResult.from(new NotArrivedYet()));
 
@@ -42,8 +38,6 @@ class EvaluationResultTest {
     @ParameterizedTest
     @MethodSource("invalidResults")
     void 상태와_맞지_않는_근거는_거절한다(ScoringState state, Long observationId, Integer seats) {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new EvaluationResult(state, observationId, seats));
 
@@ -54,8 +48,6 @@ class EvaluationResultTest {
 
     @Test
     void 상태나_도착_판정이_없으면_결과를_만들지_않는다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(() -> new EvaluationResult(null, null, null));
 

@@ -48,8 +48,6 @@ class ChatMongoUnavailableIntegrationTest {
 
     @Test
     void Mongo가_없어도_readyz와_health와_채팅_켜짐_확인이_200이다() throws Exception {
-        // given
-
         // when
         HttpResponse<String> readyz = get("/readyz");
         HttpResponse<String> health = get("/actuator/health");
@@ -92,8 +90,6 @@ class ChatMongoUnavailableIntegrationTest {
 
     @Test
     void 허용하지_않은_Origin은_핸드셰이크를_거절한다() {
-        // given
-
         // when
         Throwable caughtFailure = catchThrowable(
             () -> ChatTestClient.connect(port, "204000057", "http://localhost:3000"));
@@ -108,8 +104,6 @@ class ChatMongoUnavailableIntegrationTest {
 
     @Test
     void 켜져_있어도_지원하지_않는_노선의_켜짐_확인은_no_store_404다() throws Exception {
-        // given
-
         // when
         HttpResponse<String> availability = get("/api/chat/rooms/200000001");
 
