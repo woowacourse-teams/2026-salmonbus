@@ -2,9 +2,9 @@ import { useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { track } from "@/shared/analytics/track";
 import type { ApiFailure, ApiResult } from "@/shared/api/client";
-import type { PolledResource } from "@/shared/api/polledResource";
-import { fetchBoard } from "@/shared/api/routeForecast.api";
-import type { Board, Direction, DirectionInfo, LiveVehicles } from "@/shared/api/routeForecast.types";
+import { latestSuccessOf, type PolledResource } from "@/shared/api/polledResource";
+import { fetchRouteWatch } from "@/shared/api/routeForecast.api";
+import type { Board, Direction, DirectionInfo, RouteWatch, Vehicle } from "@/shared/api/routeForecast.types";
 import { usePolledRequest } from "@/shared/api/usePolledRequest";
 import { paths } from "@/shared/routing/paths";
 import {
@@ -16,15 +16,13 @@ import {
   type ExpandableStopView,
 } from "./components/displayPolicy";
 import { liveVehicleViewsFor } from "./components/liveVehiclePolicy";
-import { useFreshLiveVehicles, useLiveVehicles } from "./hooks/useLiveVehicles";
+import { liveMotionDurationOf, useFreshLiveVehicles } from "./hooks/useFreshLiveVehicles";
 import { useLiveVehicleMotion } from "./hooks/useLiveVehicleMotion";
 import { useStationArrivals } from "./hooks/useStationArrivals";
 import type { StopSelection } from "./components/stopSelection";
 import type { BoardSheetSnap } from "./components/boardSheetPolicy";
 import { BoardBottomSheet } from "./components/BoardBottomSheet";
 import { BoardRouteSummary } from "./components/BoardRouteSummary";
-import type { BoardSnapshot } from "./boardSnapshotPolicy";
-import { useBoardSnapshot } from "./useBoardSnapshot";
 import { DirectionTabs } from "./components/DirectionTabs";
 import { StopBoard } from "./components/StopBoard";
 import { useBoardVisitEvents } from "./analytics/useBoardVisitEvents";
@@ -38,20 +36,20 @@ import * as styles from "./VerdictBoardPage.css";
 type BoardState =
   | { status: "loading" }
   | { status: "error"; failure: ApiFailure }
-  | { status: "ready"; board: Board; pairedLiveVehicles: LiveVehicles | null; direction: DirectionInfo };
+  | { status: "ready"; watch: RouteWatch; direction: DirectionInfo };
 
 interface OperatingBoardProps {
   board: Board;
   direction: DirectionInfo;
-  liveVehicles: LiveVehicles | null;
+  liveVehicles: readonly Vehicle[] | null;
   liveMotionDurationMs: number;
   switched: boolean;
   onDirectionChange: (direction: Direction) => void;
   onStopExpand: (stop: ExpandableStopView, rowPosition: number) => void;
 }
 
-function loadBoard(routeId: string, signal: AbortSignal): Promise<ApiResult<Board>> {
-  return fetchBoard(routeId, { signal });
+function loadRouteWatch(routeId: string, signal: AbortSignal): Promise<ApiResult<RouteWatch>> {
+  return fetchRouteWatch(routeId, { signal });
 }
 
 export function VerdictBoardPage() {
@@ -60,15 +58,15 @@ export function VerdictBoardPage() {
 }
 
 function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
-  const boardResource = usePolledRequest(loadBoard, routeId);
-  const { liveVehicleResource, motionDurationMs } = useLiveVehicles(routeId);
-  const snapshot = useBoardSnapshot(routeId, boardResource, liveVehicleResource);
-  const freshLiveVehicles = useFreshLiveVehicles(snapshot?.liveVehicles ?? null);
+  const watchResource = usePolledRequest(loadRouteWatch, routeId);
+  const latestWatch = latestSuccessOf(watchResource);
+  const freshLiveVehicles = useFreshLiveVehicles(latestWatch);
+  const motionDurationMs = liveMotionDurationOf(watchResource);
   const [preferredDirection, setPreferredDirection] = useState<Direction | null>(null);
   const [switched, setSwitched] = useState(false);
-  const state = boardStateOf(boardResource, snapshot, preferredDirection);
+  const state = boardStateOf(watchResource, preferredDirection);
   const screen = boardScreenOf(state);
-  const { trackStopExpanded } = useBoardVisitEvents({ routeId, screen, latestSuccess: snapshot?.board ?? null });
+  const { trackStopExpanded } = useBoardVisitEvents({ routeId, screen, latestSuccess: latestWatch });
 
   function selectDirection(next: Direction) {
     if (state.status === "ready" && next !== state.direction.id) {
@@ -81,8 +79,8 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
   if (state.status === "ready" && screen.kind === "forecast") {
     return (
       <OperatingBoard
-        key={state.board.route.referenceVersionId}
-        board={state.board}
+        key={state.watch.route.referenceVersionId}
+        board={state.watch}
         direction={state.direction}
         switched={switched}
         liveVehicles={freshLiveVehicles}
@@ -96,9 +94,8 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
   const status = screen.kind === "outOfService" ? "outOfService" : screen.kind === "error" ? "error" : "loading";
   const runningDirection =
     status === "outOfService" && state.status === "ready"
-      ? (state.board.route.directions.find(
-          (candidate) =>
-            serviceStateFor(state.board, candidate, state.pairedLiveVehicles?.vehicles ?? []) === "running",
+      ? (state.watch.route.directions.find(
+          (candidate) => serviceStateFor(state.watch, candidate, state.watch.vehicles) === "running",
         ) ?? null)
       : null;
   return (
@@ -157,7 +154,7 @@ function OperatingBoard({
         };
   const stationArrivals = useStationArrivals(arrivalSelection);
   const vehicles = useMemo(
-    () => liveVehicleViewsFor(board, liveVehicles?.vehicles ?? null, direction.id),
+    () => liveVehicleViewsFor(board, liveVehicles, direction.id),
     [board, liveVehicles, direction.id],
   );
   const motion = useLiveVehicleMotion(vehicles, liveMotionDurationMs);
@@ -320,19 +317,11 @@ function BoardBackLink({ inHeader = false }: { inHeader?: boolean }) {
   );
 }
 
-function boardStateOf(
-  resource: PolledResource<Board>,
-  snapshot: BoardSnapshot | null,
-  preferredDirection: Direction | null,
-): BoardState {
-  if (snapshot !== null) {
-    const board = snapshot.board.body;
-    return {
-      status: "ready",
-      board,
-      pairedLiveVehicles: snapshot.liveVehicles?.body ?? null,
-      direction: directionInfoFor(board, preferredDirection),
-    };
+function boardStateOf(resource: PolledResource<RouteWatch>, preferredDirection: Direction | null): BoardState {
+  const latestWatch = latestSuccessOf(resource);
+  if (latestWatch !== null) {
+    const watch = latestWatch.body;
+    return { status: "ready", watch, direction: directionInfoFor(watch, preferredDirection) };
   }
   if (resource.status === "loadingError") {
     return { status: "error", failure: resource.failure };
@@ -340,6 +329,7 @@ function boardStateOf(
   return { status: "loading" };
 }
 
+// 낡은 판에서 숨기는 것은 차량 마커뿐이라, 운행 판단은 숨기기 전 응답의 차량으로 한다.
 function boardScreenOf(state: BoardState): BoardScreen {
   switch (state.status) {
     case "loading":
@@ -347,8 +337,8 @@ function boardScreenOf(state: BoardState): BoardScreen {
     case "error":
       return { kind: "error", failure: state.failure };
     case "ready":
-      return serviceStateFor(state.board, state.direction, state.pairedLiveVehicles?.vehicles ?? []) === "outOfService"
-        ? { kind: "outOfService", board: state.board }
-        : { kind: "forecast", board: state.board, direction: state.direction.id };
+      return serviceStateFor(state.watch, state.direction, state.watch.vehicles) === "outOfService"
+        ? { kind: "outOfService", board: state.watch }
+        : { kind: "forecast", board: state.watch, direction: state.direction.id };
   }
 }
