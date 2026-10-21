@@ -66,16 +66,20 @@ public record SeatForecast(
         final int demandStatisticsRevision,
         Instant generatedAt
     ) {
+        long routeVersionId = target.observation().routeVersionId();
+        int stopsToTarget = target.distance().stopCount();
+        Double expectedSeats = result.distribution().expectedSeats();
+
         return new SeatForecast(
             vehicleObservationId,
-            target.observation().routeVersionId(),
+            routeVersionId,
             target.stopOrder(),
-            target.distance().stopCount(),
+            stopsToTarget,
             modelDeploymentId,
             demandStatisticsRevision,
             result.fullChanceRaw(),
             result.fullChance(),
-            result.distribution().expectedSeats(),
+            expectedSeats,
             generatedAt);
     }
 

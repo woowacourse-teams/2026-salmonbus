@@ -86,16 +86,18 @@ public final class VehicleTrajectoryAssembler {
 
         TrajectoryObservation later = target;
         for (int index = batches.size() - 2; index >= 0; index--) {
-            Optional<TrajectoryObservation> earlier = batches.get(index).observationOf(later.vehicleId());
+            ObservedBatch batch = batches.get(index);
+            Optional<TrajectoryObservation> earlier = batch.observationOf(later.vehicleId());
             if (earlier.isEmpty()) {
                 return new LinkedChain(linked, TrajectoryGap.OBSERVATION_BATCH_MISSING);
             }
-            Optional<TrajectoryGap> gap = gapBetween(earlier.get(), later);
+            TrajectoryObservation earlierObservation = earlier.get();
+            Optional<TrajectoryGap> gap = gapBetween(earlierObservation, later);
             if (gap.isPresent()) {
                 return new LinkedChain(linked, gap.get());
             }
-            linked.add(earlier.get());
-            later = earlier.get();
+            linked.add(earlierObservation);
+            later = earlierObservation;
         }
         return new LinkedChain(linked, TrajectoryGap.NO_EARLIER_OBSERVATION);
     }
@@ -123,9 +125,12 @@ public final class VehicleTrajectoryAssembler {
         TrajectoryObservation earlier,
         TrajectoryObservation later
     ) {
-        return earlier.vehicleTripKey() != null
-            && later.vehicleTripKey() != null
-            && !earlier.vehicleTripKey().equals(later.vehicleTripKey());
+        String earlierTripKey = earlier.vehicleTripKey();
+        String laterTripKey = later.vehicleTripKey();
+        if (earlierTripKey == null || laterTripKey == null) {
+            return false;
+        }
+        return !earlierTripKey.equals(laterTripKey);
     }
 
     private static SeatSlope slopeOf(
@@ -134,8 +139,10 @@ public final class VehicleTrajectoryAssembler {
         if (!chain.hasEarlierObservation()) {
             return new Unknown(chain.gap());
         }
-        if (!(chain.latest().seats() instanceof Known later)
-                || !(chain.justBeforeLatest().seats() instanceof Known earlier)) {
+        TrajectoryObservation latest = chain.latest();
+        TrajectoryObservation justBeforeLatest = chain.justBeforeLatest();
+        if (!(latest.seats() instanceof Known later)
+                || !(justBeforeLatest.seats() instanceof Known earlier)) {
             return new Unknown(TrajectoryGap.SEATS_UNKNOWN);
         }
         return new SeatSlope.Known(later.seats() - earlier.seats());
@@ -181,7 +188,8 @@ public final class VehicleTrajectoryAssembler {
         TrajectoryObservation target
     ) {
         Map<String, StopEntry> entryByVehicle = stopEntriesAt(history, target.passedStopOrder());
-        Instant enteredAt = entryByVehicle.get(target.vehicleId()).enteredAt();
+        StopEntry targetEntry = entryByVehicle.get(target.vehicleId());
+        Instant enteredAt = targetEntry.enteredAt();
 
         StopEntry nearestAhead = null;
         for (StopEntry other : entryByVehicle.values()) {

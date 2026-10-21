@@ -62,9 +62,11 @@ public final class OneWayTripClassifier {
         if (!comparable) {
             return withSeatQuality(current, tripId, Status.BOUNDARY_UNCONFIRMED, Boundary.UNCONFIRMED);
         }
-        final int before = direction(route, previous.start().stopOrder(), previous.start().runningState());
+        Start previousStart = previous.start();
+        Observation previousObservation = previous.observation();
+        final int before = direction(route, previousStart.stopOrder(), previousStart.runningState());
         final int after = directionAfterObservation(route, previous, current, before);
-        final boolean forward = current.stopOrder() >= previous.observation().stopOrder();
+        final boolean forward = current.stopOrder() >= previousObservation.stopOrder();
         if (crossesDirectionBoundary(before, after, forward)) {
             return withSeatQuality(current, tripId, Status.ELIGIBLE, Boundary.DIRECTION_CHANGE);
         }
@@ -75,9 +77,14 @@ public final class OneWayTripClassifier {
     }
 
     private static boolean canCompareObservations(Previous previous, Observation current) {
-        return previous != null && current.vehicleId() != null
-            && Objects.equals(previous.observation().vehicleId(), current.vehicleId())
-            && !current.at().isBefore(previous.observation().at());
+        if (previous == null || current.vehicleId() == null) {
+            return false;
+        }
+        Observation previousObservation = previous.observation();
+        if (!Objects.equals(previousObservation.vehicleId(), current.vehicleId())) {
+            return false;
+        }
+        return !current.at().isBefore(previousObservation.at());
     }
 
     private static boolean isWithinMaximumGap(
@@ -86,8 +93,12 @@ public final class OneWayTripClassifier {
         Observation current,
         final boolean comparable
     ) {
-        return comparable
-            && Duration.between(previous.observation().at(), current.at()).compareTo(route.maximumGap()) <= 0;
+        if (!comparable) {
+            return false;
+        }
+        Instant previousAt = previous.observation().at();
+        Duration gap = Duration.between(previousAt, current.at());
+        return gap.compareTo(route.maximumGap()) <= 0;
     }
 
     private static boolean isRepeatedDeparture(
@@ -97,14 +108,21 @@ public final class OneWayTripClassifier {
         final boolean connected,
         final boolean departure
     ) {
-        return connected && departure
-            && previous.observation().stopOrder() == current.stopOrder()
-            && direction(route, previous.start().stopOrder(), previous.start().runningState())
-            == direction(route, current);
+        if (!connected || !departure) {
+            return false;
+        }
+        Observation previousObservation = previous.observation();
+        if (previousObservation.stopOrder() != current.stopOrder()) {
+            return false;
+        }
+        Start previousStart = previous.start();
+        int previousDirection = direction(route, previousStart.stopOrder(), previousStart.runningState());
+        return previousDirection == direction(route, current);
     }
 
     private static int directionAfterObservation(Route route, Previous previous, Observation current, final int before) {
-        if (current.stopOrder() == previous.observation().stopOrder()) {
+        Observation previousObservation = previous.observation();
+        if (current.stopOrder() == previousObservation.stopOrder()) {
             return before;
         }
         return direction(route, current);
@@ -137,7 +155,8 @@ public final class OneWayTripClassifier {
         Status status,
         Boundary boundary
     ) {
-        if (current.seats() != null && current.seats() > SeatGrid.LARGEST_SEATS) {
+        Integer seats = current.seats();
+        if (seats != null && seats > SeatGrid.LARGEST_SEATS) {
             return new Decision(tripId, Status.EXCLUDED, boundary);
         }
         return new Decision(tripId, status, boundary);

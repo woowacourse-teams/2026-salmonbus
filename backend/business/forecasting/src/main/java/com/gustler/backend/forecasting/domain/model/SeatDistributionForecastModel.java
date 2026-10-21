@@ -46,9 +46,9 @@ public final class SeatDistributionForecastModel implements SeatForecastModel {
         }
         return predictor.predict(new SeatDistributionInput(
             features.vectorOf(input),
-            ModelRoute.of(input.stops().sourceRouteId()),
-            input.target().distance().stopCount(),
-            input.target().remainingSeats(),
+            ModelRoute.of(input.sourceRouteId()),
+            input.stopsToTarget(),
+            input.targetRemainingSeats(),
             input.maximumSeatsEverObserved(),
             input.sameDayFullOutcomes()));
     }

@@ -67,6 +67,26 @@ public record SeatForecastInput(
         return target.observation();
     }
 
+    public RouteStop targetStop() {
+        return target.targetStop();
+    }
+
+    public int targetStopOrder() {
+        return target.stopOrder();
+    }
+
+    public int stopsToTarget() {
+        return target.distance().stopCount();
+    }
+
+    public int targetRemainingSeats() {
+        return target.remainingSeats();
+    }
+
+    public String sourceRouteId() {
+        return stops.sourceRouteId();
+    }
+
     /** 같은 노선 버전에서 해당 차량의 최대 관측 잔여석. 비율 계산의 분모로 사용한다. */
     public int maximumSeatsEverObserved() {
         return trajectory.maximumSeatsEverObserved();

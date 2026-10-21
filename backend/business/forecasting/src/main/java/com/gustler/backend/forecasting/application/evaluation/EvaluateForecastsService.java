@@ -157,7 +157,10 @@ public class EvaluateForecastsService implements EvaluateForecasts {
             .stream()
             .filter(entry -> entry.key().routeVersionId() == version)
             .collect(LinkedHashMap::new,
-                (byObservation, entry) -> byObservation.put(entry.key().observationId(), entry),
+                (byObservation, entry) -> {
+                    PendingEvaluationBuffer.Key key = entry.key();
+                    byObservation.put(key.observationId(), entry);
+                },
                 Map::putAll);
         Set<Long> checked = new LinkedHashSet<>();
         Map<Long, Long> workRevisions = new LinkedHashMap<>();

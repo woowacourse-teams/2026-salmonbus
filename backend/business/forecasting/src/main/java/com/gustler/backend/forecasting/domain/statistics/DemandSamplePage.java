@@ -31,8 +31,13 @@ public record DemandSamplePage(List<PendingSample> samples) {
             throw new IllegalStateException("품질을 통과하지 못한 입력이 섞인 묶음은 반영하지 않는다");
         }
         return samples.stream()
-            .filter(sample -> !sample.sample().scoredAt().isAfter(dataUntil))
+            .filter(sample -> isScoredBy(sample, dataUntil))
             .toList();
+    }
+
+    private boolean isScoredBy(PendingSample pending, Instant dataUntil) {
+        DemandSample sample = pending.sample();
+        return !sample.scoredAt().isAfter(dataUntil);
     }
 
     public List<VehicleHourlyDemand> totalsUntil(Instant dataUntil) {

@@ -31,7 +31,7 @@ public enum ForecastFeatureContract {
         if (this == LEGACY) {
             return original;
         }
-        RouteStop target = input.target().targetStop();
+        RouteStop target = input.targetStop();
         if (target.direction() == RouteDirection.UNKNOWN || !input.stops().stops().contains(target)) {
             throw new IllegalArgumentException("조건 모델에는 노선 기준과 일치하는 대상 정류장 방향이 필요하다");
         }

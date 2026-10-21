@@ -197,7 +197,9 @@ public final class SeatForecastDesignMatrix {
         double[] columns = new double[COLUMN_COUNT];
         ObservedVehicle observation = input.observation();
         TimeSlot timeSlot = input.timeSlot();
-        final int seatsLeft = input.target().remainingSeats();
+        VehicleTrajectory trajectory = input.trajectory();
+        final int seatsLeft = input.targetRemainingSeats();
+        final int targetStopOrder = input.targetStopOrder();
         final double maximumSeats = input.maximumSeatsEverObserved();
 
         putColumn(columns, CONSTANT, 1);
@@ -208,13 +210,13 @@ public final class SeatForecastDesignMatrix {
         putColumn(columns, LOW_SEAT_BAND, Math.min(seatsLeft, LOW_SEAT_BAND_WIDTH) / LOW_SEAT_BAND_WIDTH);
         putCrowdLevels(columns, observation);
         putColumn(columns, MAXIMUM_SEATS_RATIO, maximumSeats / LARGEST_SEAT_COUNT);
-        putSeatSlope(columns, input.trajectory().seatSlope());
-        putColumn(columns, FULL_SEAT_STREAK, input.trajectory().fullSeatStreak().stopCount());
-        putPrecedingVehicle(columns, input.trajectory().precedingVehicle(), maximumSeats);
+        putSeatSlope(columns, trajectory.seatSlope());
+        putColumn(columns, FULL_SEAT_STREAK, trajectory.fullSeatStreak().stopCount());
+        putPrecedingVehicle(columns, trajectory.precedingVehicle(), maximumSeats);
         putColumn(columns, STOP_POSITION_ON_ROUTE,
-            StopPositionOnRoute.of(input.target().stopOrder(), input.stops()));
-        putTargetStopDemand(columns, TargetStopDemand.of(input.statistics(), input.target().stopOrder(),
-            input.target().distance().stopCount()));
+            StopPositionOnRoute.of(targetStopOrder, input.stops()));
+        putTargetStopDemand(columns,
+            TargetStopDemand.of(input.statistics(), targetStopOrder, input.stopsToTarget()));
         return new SeatForecastDesignMatrix(columns);
     }
 
