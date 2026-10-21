@@ -1,0 +1,126 @@
+<div id="salmon-ios-architecture">
+  <style>
+    #salmon-ios-architecture { color:var(--foreground); }
+    #salmon-ios-architecture .architecture-header { padding-right:96px; margin-bottom:20px; }
+    #salmon-ios-architecture h2 { margin:0 0 8px; }
+    #salmon-ios-architecture .architecture-diagram { display:block; width:100%; overflow:visible; }
+    #salmon-ios-architecture .role-controls { margin:18px 0; }
+    #salmon-ios-architecture .role-detail { margin-top:18px; }
+    #salmon-ios-architecture .role-detail h3 { margin:0 0 14px; }
+    #salmon-ios-architecture .detail-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.5fr); gap:16px; padding:10px 0; border-bottom:1px solid var(--border); }
+    #salmon-ios-architecture .detail-row code { overflow-wrap:anywhere; }
+    #salmon-ios-architecture .screen-layout { margin-top:26px; }
+    #salmon-ios-architecture .screen-layout h3 { margin:0 0 12px; }
+    #salmon-ios-architecture svg text { fill:var(--foreground); font-family:inherit; font-size:14px; font-weight:400; }
+    #salmon-ios-architecture svg .secondary { fill:var(--muted-foreground); font-size:12px; }
+    #salmon-ios-architecture svg .node-label { font-weight:500; }
+    @media(max-width:460px) {
+      #salmon-ios-architecture .detail-row { grid-template-columns:1fr; gap:5px; }
+      #salmon-ios-architecture .architecture-header { padding-right:90px; }
+    }
+  </style>
+  <div class="architecture-header">
+    <h2>연어버스 iOS의 현재 구조</h2>
+    <span class="text-small text-muted">웹 UI와 Swift 지도를 RN 앱 안에서 함께 사용</span>
+  </div>
+  <svg class="architecture-diagram" id="salmon-architecture-flow" role="img" aria-label="React 웹이 RN을 통해 직접 작성한 Swift 코드와 통신하고, Swift가 네이버 iOS SDK를 제어하는 구조"></svg>
+  <div class="viz-row role-controls" role="group" aria-label="자세히 볼 코드 선택">
+    <button type="button" class="btn" data-role="web" aria-pressed="false">React 웹</button>
+    <button type="button" class="btn" data-role="rn" aria-pressed="false">React Native</button>
+    <button type="button" class="btn" data-role="swift" aria-pressed="true">직접 작성한 Swift</button>
+    <button type="button" class="btn" data-role="sdk" aria-pressed="false">네이버 iOS SDK</button>
+  </div>
+  <div class="role-detail" aria-live="polite" aria-atomic="true">
+    <h3 id="salmon-role-title"></h3>
+    <div id="salmon-role-rows"></div>
+  </div>
+  <div class="screen-layout">
+    <h3>아이폰 화면에서는 두 층이 겹침</h3>
+    <svg class="architecture-diagram" id="salmon-architecture-layers" role="img" aria-label="RN 앱 안의 Swift 컨테이너에서 WebView가 네이버 iOS 지도 위에 겹쳐지고, Swift가 웹 UI 영역과 지도 영역의 터치를 나눈다"></svg>
+  </div>
+  <script>
+    (() => {
+      const root = document.getElementById('salmon-ios-architecture');
+      const flow = root.querySelector('#salmon-architecture-flow');
+      const layers = root.querySelector('#salmon-architecture-layers');
+      const title = root.querySelector('#salmon-role-title');
+      const rows = root.querySelector('#salmon-role-rows');
+      const roles = [
+        { id:'web', name:'React 웹', sub:['API 조회 · 선택 상태','바텀시트 · 목록 · 채팅'] },
+        { id:'rn', name:'React Native', sub:['앱 실행','웹 ↔ Swift 메시지 중계'] },
+        { id:'swift', name:'직접 작성한 Swift', sub:['지도 · 마커 · 애니메이션','웹과 지도 터치 분배'] },
+        { id:'sdk', name:'네이버 iOS SDK', sub:['실제 지도 렌더링','드래그 · 확대 처리'] }
+      ];
+      const details = {
+        web:{ title:'React 웹 · 서비스 UI와 상태', rows:[['React 컴포넌트','검색 · 바텀시트 · 정류장 목록 · 채팅'],['nativeMapAdapter.ts','노선 좌표 · 선택 상태 · 이동 경로를 앱에 전달'],['overlayLayoutBridge.ts','지도와 웹 UI의 화면 영역을 앱에 전달']] },
+        rn:{ title:'React Native · 앱의 틀과 메시지 중계', rows:[['App.tsx','WebView 실행 · 지도 뷰와 연결'],['NativeRouteMap.tsx','Swift 뷰를 RN 컴포넌트로 불러오기'],['메시지 전달','웹의 명령을 Swift로, 지도 이벤트를 웹으로 전달']] },
+        swift:{ title:'직접 작성한 Swift · 연결을 넘어 지도 동작까지', rows:[['SalmonNativeMapModule.swift','RN에서 호출할 지도 뷰와 함수 등록'],['MapContract.swift','웹에서 받은 메시지를 Swift 데이터로 읽기 · 검사'],['NativeRouteMapHostView.swift','지도 · 노선 · 마커 배치, 카메라 이동, 버스 애니메이션, 위치 조회, 터치 분배'],['MapMarkerImages.swift','버스 핀 · 좌석 배지 · 정류장 아이콘과 이름 그리기']] },
+        sdk:{ title:'네이버 iOS SDK · 외부 라이브러리의 네이티브 코드', rows:[['NMFMapView','기본 지도 렌더링 · 지도 제스처 처리'],['NMFMarker · NMFPath','Swift가 지정한 마커와 노선을 지도 위에 표시'],['현재 경계','우리 Swift 코드가 SDK를 직접 호출']] }
+      };
+      const valid = value => roles.some(role => role.id === value);
+      const saved = window.openai?.widgetState?.privateContent?.selectedRole;
+      let selected = valid(saved) ? saved : 'swift';
+      const text = (x,y,value,cls='') => `<text x="${x}" y="${y}" text-anchor="middle" class="${cls}">${value}</text>`;
+      function draw() {
+        const w = Math.max(280,Math.round(root.getBoundingClientRect().width));
+        const mobile = w < 620;
+        const nodeW = mobile ? Math.min(330,w-20) : (w-78)/4;
+        const nodeH = 96;
+        const h = mobile ? 4*nodeH+3*42+20 : 136;
+        flow.setAttribute('viewBox',`0 0 ${w} ${h}`);
+        flow.style.height = h+'px';
+        let content = '<defs><marker id="salmon-architecture-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M1 1L8 5L1 9" fill="none" stroke="var(--muted-foreground)" stroke-width="1.5"/></marker></defs>';
+        roles.forEach((role,i) => {
+          const x = mobile ? (w-nodeW)/2 : 6+i*(nodeW+22);
+          const y = mobile ? 4+i*(nodeH+42) : 22;
+          const active = selected === role.id;
+          const fill = role.id === 'web' ? 'var(--viz-series-1)' : role.id === 'swift' ? 'var(--viz-series-2)' : 'var(--foreground)';
+          content += `<rect x="${x}" y="${y}" width="${nodeW}" height="${nodeH}" rx="7" fill="${fill}" fill-opacity="${active?'.12':'.035'}" stroke="${active?'var(--foreground)':'var(--border)'}" stroke-width="${active?'1.5':'1'}"/>`;
+          content += text(x+nodeW/2,y+27,role.name,'node-label');
+          content += text(x+nodeW/2,y+53,role.sub[0],'secondary');
+          content += text(x+nodeW/2,y+75,role.sub[1],'secondary');
+          if(i<3) {
+            const x1 = mobile ? w/2 : x+nodeW+4;
+            const y1 = mobile ? y+nodeH+7 : y+nodeH/2;
+            const x2 = mobile ? w/2 : x+nodeW+18;
+            const y2 = mobile ? y+nodeH+34 : y+nodeH/2;
+            content += `<path d="M${x1} ${y1}L${x2} ${y2}" fill="none" stroke="var(--muted-foreground)" stroke-width="1" marker-start="url(#salmon-architecture-arrow)" marker-end="url(#salmon-architecture-arrow)"/>`;
+          }
+        });
+        flow.innerHTML = content;
+        layers.setAttribute('viewBox',`0 0 ${w} 272`);
+        layers.style.height = '272px';
+        const x=10, bw=w-20;
+        layers.innerHTML = `<rect x="${x}" y="3" width="${bw}" height="257" rx="8" fill="none" stroke="var(--border)"/>`
+          +text(w/2,27,'React Native 앱','node-label')
+          +`<rect x="${x+12}" y="43" width="${bw-24}" height="202" rx="6" fill="var(--viz-series-2)" fill-opacity=".04" stroke="var(--border)"/>`
+          +text(w/2,67,'Swift 컨테이너 · 배치와 터치 분배','secondary')
+          +`<rect x="${x+24}" y="82" width="${bw-48}" height="61" rx="5" fill="var(--viz-series-1)" fill-opacity=".10"/>`
+          +text(w/2,106,'위층 · WebView 속 React 웹 UI','node-label')
+          +text(w/2,127,'바텀시트 · 버튼 · 목록 · 채팅','secondary')
+          +text(w/2,166,'투명한 부분으로 아래 지도가 보임','secondary')
+          +`<rect x="${x+24}" y="180" width="${bw-48}" height="52" rx="5" fill="var(--viz-series-2)" fill-opacity=".10"/>`
+          +text(w/2,201,'아래층 · 네이버 iOS 지도','node-label')
+          +text(w/2,221,'Swift가 노선 · 마커 · 카메라 제어','secondary');
+      }
+      function update(save) {
+        root.querySelectorAll('[data-role]').forEach(button => button.setAttribute('aria-pressed',String(button.dataset.role===selected)));
+        const detail=details[selected];
+        title.textContent=detail.title;
+        rows.replaceChildren();
+        detail.rows.forEach(([name,value]) => {
+          const row=document.createElement('div');row.className='detail-row';
+          const label=document.createElement(name.endsWith('.swift')||name.endsWith('.tsx')||name.endsWith('.ts')?'code':'span');label.textContent=name;
+          const description=document.createElement('span');description.textContent=value;
+          row.append(label,description);rows.append(row);
+        });
+        draw();
+        if(save && window.openai?.setWidgetState) window.openai.setWidgetState({modelContent:{selectedRole:selected},privateContent:{selectedRole:selected}}).catch(()=>{});
+      }
+      root.querySelectorAll('[data-role]').forEach(button=>button.addEventListener('click',()=>{selected=button.dataset.role;update(true);}));
+      window.addEventListener('openai:set_globals',event=>{const next=event.detail?.globals?.widgetState?.privateContent?.selectedRole;if(valid(next)){selected=next;update(false);}});
+      new ResizeObserver(draw).observe(root);
+      update(false);
+    })();
+  </script>
+</div>
