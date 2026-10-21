@@ -24,3 +24,14 @@ Simulator에서 로컬 웹 서버에 연결할 때는 `http://127.0.0.1:<port>`�
 웹은 API 요청과 선택 state를 유지합니다. native는 관측마다 받은 차량 이동 경로를 `CADisplayLink`로 보간하며, 매 프레임 WebView bridge를 통과하지 않습니다. 시트가 움직이는 동안 새 지도 touch를 막고 최종 영역을 적용한 뒤 다시 허용합니다. 이미 시작한 touch는 UIKit이 처음 정한 view에 남습니다.
 
 `pnpm test`, `pnpm typecheck`, `pnpm lint`로 config plugin과 TypeScript를 검사합니다. Swift와 SDK 연동은 Xcode Simulator build로 검사합니다. DEBUG build의 `[SalmonNativeMap]` 로그는 touch 대상, camera 이동 여부와 zoom, overlay 개수만 기록하며 클라이언트 키나 사용자 좌표를 기록하지 않습니다.
+
+마커 UI의 기준은 `frontend/src/pages/verdict-board/map/RouteMap.css.ts`와 `naverMapAdapter.ts`입니다. iOS의 `MapMarkerImages.swift`가 같은 치수·색상·글꼴로 이미지를 만들며, `ios/Resources`의 3x PNG는 웹의 원본 SVG에서 변환한 아이콘입니다. 아이콘 원본을 바꾸면 PNG도 함께 갱신합니다.
+
+`verification/MapMarkerImageChecks.swift`는 UIKit에서 정류장 8개 상태, 좌석 배지의 크기·중첩·줌아웃 상태를 검증하고 `/tmp/salmonbus-map-marker-preview.png`를 만듭니다. 부팅된 Apple Silicon iOS Simulator에서 `app` 디렉터리를 기준으로 실행합니다.
+
+```sh
+mkdir -p /tmp/SalmonMarkerChecks.app
+cp modules/salmon-native-map/ios/Resources/*.png /tmp/SalmonMarkerChecks.app/
+xcrun swiftc -parse-as-library -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" -target arm64-apple-ios16.4-simulator modules/salmon-native-map/ios/MapMarkerImages.swift verification/MapMarkerImageChecks.swift -o /tmp/SalmonMarkerChecks.app/SalmonMarkerChecks
+xcrun simctl spawn booted /tmp/SalmonMarkerChecks.app/SalmonMarkerChecks
+```
