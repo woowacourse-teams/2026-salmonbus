@@ -1,5 +1,6 @@
 package com.gustler.backend.api.http;
 
+import com.gustler.backend.api.http.login.SocialLogin;
 import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,7 +26,11 @@ public class ApiSecurityConfiguration {
     private static final String LOGOUT_PATH = "/api/auth/logout";
 
     @Bean
-    SecurityFilterChain apiSecurityFilterChain(HttpSecurity http, ObjectMapper objectMapper) throws Exception {
+    SecurityFilterChain apiSecurityFilterChain(
+        HttpSecurity http,
+        ObjectMapper objectMapper,
+        SocialLogin socialLogin
+    ) throws Exception {
         SecurityErrorResponder errors = new SecurityErrorResponder(objectMapper);
         CookieCsrfTokenRepository csrfTokens = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfTokens.setCookieCustomizer(cookie -> cookie.secure(true).sameSite("Lax"));
@@ -46,6 +51,7 @@ public class ApiSecurityConfiguration {
             .exceptionHandling(exceptions -> exceptions
                 .authenticationEntryPoint(errors)
                 .accessDeniedHandler(errors));
+        socialLogin.apply(http);
         return http.build();
     }
 }

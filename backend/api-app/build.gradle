@@ -5,10 +5,12 @@ plugins {
 
 dependencies {
     implementation project(':common')
+    implementation project(':member')
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
     implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-client'
     implementation 'org.springframework.boot:spring-boot-starter-session-jdbc'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-flyway'
@@ -92,14 +94,14 @@ tasks.named('processResources') {
     }
 }
 
-// API 실행 경로에 쓰기 업무나 다른 실행 앱이 간접 의존으로 들어오지 않게 확인한다.
+// API 실행 경로에 로그인용 회원 모듈 외의 쓰기 업무나 다른 실행 앱이 간접 의존으로 들어오지 않게 확인한다.
 tasks.register('verifyRuntimeProjects') {
     doLast {
         def projects = configurations.runtimeClasspath.incoming.resolutionResult.allComponents
             .findAll { it.id instanceof org.gradle.api.artifacts.component.ProjectComponentIdentifier }
             .collect { it.id.projectPath }
             .toSet()
-        def expected = [':api-app', ':common'] as Set
+        def expected = [':api-app', ':common', ':member'] as Set
         if (projects != expected) {
             throw new GradleException("API runtime project dependencies must be ${expected}, but were ${projects}")
         }

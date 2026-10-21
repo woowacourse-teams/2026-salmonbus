@@ -140,7 +140,7 @@ flywayMaxVersion=12
 공통    build.gradle · settings.gradle · gradle.properties · gradle.lockfile
         gradle/wrapper/gradle-wrapper.properties · gradle/libs.versions.toml
         deploy/runtime-source-inputs.sh
-api     common · api-app
+api     common · api-app · business/member
 worker  common · worker-app · business/route-catalog · business/observations
         business/forecasting · business/api-call-quota · integrations/gbis-client
         libraries/operation-log

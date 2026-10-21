@@ -81,6 +81,15 @@ logging:
 
 auth:
   enabled: ${AUTH_ENABLED:false}
+  public-base-url: ${AUTH_PUBLIC_BASE_URL:http://localhost:8080}
+  kakao:
+    enabled: ${AUTH_KAKAO_ENABLED:false}
+    client-id: ${AUTH_KAKAO_CLIENT_ID:}
+    client-secret: ${AUTH_KAKAO_CLIENT_SECRET:}
+    issuer: https://kauth.kakao.com
+    authorization-uri: https://kauth.kakao.com/oauth/authorize
+    token-uri: https://kauth.kakao.com/oauth/token
+    jwk-set-uri: https://kauth.kakao.com/.well-known/jwks.json
 
 arrivals:
   enabled: ${ARRIVALS_ENABLED:false}
