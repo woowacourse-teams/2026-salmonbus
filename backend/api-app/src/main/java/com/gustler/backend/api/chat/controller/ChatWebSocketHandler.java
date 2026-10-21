@@ -22,6 +22,7 @@ import com.gustler.backend.api.chat.dto.ChatServerFrame.MessageCreated;
 import com.gustler.backend.api.chat.dto.ChatServerFrame.SessionReady;
 import jakarta.websocket.Session;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -339,8 +340,9 @@ public final class ChatWebSocketHandler extends TextWebSocketHandler {
     private void close(SessionState state, CloseStatus status) {
         forget(state.session());
         try {
-            if (state.rawSession().isOpen()) {
-                state.rawSession().close(status);
+            WebSocketSession rawSession = state.rawSession();
+            if (rawSession.isOpen()) {
+                rawSession.close(status);
             }
         } catch (IOException alreadyForgotten) {
             return;
@@ -369,8 +371,9 @@ public final class ChatWebSocketHandler extends TextWebSocketHandler {
 
     private String routeId(WebSocketSession session) {
         String path = "";
-        if (session.getUri() != null) {
-            path = session.getUri().getPath();
+        URI uri = session.getUri();
+        if (uri != null) {
+            path = uri.getPath();
         }
         String prefix = "/api/chat/rooms/";
         String suffix = "/stream";

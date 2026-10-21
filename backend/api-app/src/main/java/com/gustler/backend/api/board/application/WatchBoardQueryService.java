@@ -1,5 +1,6 @@
 package com.gustler.backend.api.board.application;
 
+import com.gustler.backend.api.board.domain.Board;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.vehicle.application.VehicleQueryRepository;
 import com.gustler.backend.api.vehicle.domain.ObservedVehicle;
@@ -38,17 +39,19 @@ public class WatchBoardQueryService {
         RouteId routeId
     ) {
         BoardReading reading = boardQueryService.readBoard(routeId);
+        Board board = reading.board();
         List<ObservedVehicle> vehicles = vehicleQueryRepository.findVehicles(reading.observationBatchId());
-        if (vehicles.size() != reading.board().vehiclesInService()) {
+        if (vehicles.size() != board.vehiclesInService()) {
             warnMismatchOnce(routeId, reading, vehicles.size());
         }
-        return new WatchBoardOverview(reading.board(), vehicles, cacheMaxAgeOf(reading));
+        return new WatchBoardOverview(board, vehicles, cacheMaxAgeOf(reading));
     }
 
     private Duration cacheMaxAgeOf(
         BoardReading reading
     ) {
-        Duration untilStale = Duration.between(OffsetDateTime.now(clock), reading.board().staleAt());
+        Board board = reading.board();
+        Duration untilStale = Duration.between(OffsetDateTime.now(clock), board.staleAt());
         Duration bounded = untilStale;
         if (untilStale.isNegative()) {
             bounded = Duration.ZERO;
@@ -68,11 +71,12 @@ public class WatchBoardQueryService {
         if (previous != null && previous == reading.observationBatchId()) {
             return;
         }
+        Board board = reading.board();
         LOGGER.warn(
             "기준 관측의 차량 수와 읽어낸 차량 수가 다르다. 노선={} 묶음={} 기록={} 읽음={}",
             routeId.value(),
             reading.observationBatchId(),
-            reading.board().vehiclesInService(),
+            board.vehiclesInService(),
             readVehicles);
     }
 }

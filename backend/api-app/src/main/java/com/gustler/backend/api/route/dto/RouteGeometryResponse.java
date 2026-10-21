@@ -162,7 +162,9 @@ public record RouteGeometryResponse(
         if (paths == null) {
             return null;
         }
-        return new Paths(new Path(pointsOf(paths.up().points())), new Path(pointsOf(paths.down().points())));
+        RoutePaths.Path up = paths.up();
+        RoutePaths.Path down = paths.down();
+        return new Paths(new Path(pointsOf(up.points())), new Path(pointsOf(down.points())));
     }
 
     private static Boundary boundaryOf(RouteGeometry.Boundary boundary) {

@@ -199,6 +199,7 @@ public class BoardQueryService {
         RouteStatus status
     ) {
         Route route = snapshot.route();
+        DepartureSchedule schedule = snapshot.schedule();
         return new BoardRoute(
             route.id(),
             route.displayName(),
@@ -208,7 +209,7 @@ public class BoardQueryService {
             snapshot.turnSequence(),
             directionsOf(snapshot, stops),
             String.valueOf(snapshot.routeVersionId()),
-            snapshot.schedule().headways()
+            schedule.headways()
         );
     }
 

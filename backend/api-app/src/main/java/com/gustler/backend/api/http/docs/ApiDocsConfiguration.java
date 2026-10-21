@@ -1,11 +1,13 @@
 package com.gustler.backend.api.http.docs;
 
+import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.SpecVersion;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.servers.Server;
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.Set;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -22,10 +24,12 @@ public class ApiDocsConfiguration {
     @Bean
     OpenApiCustomizer nullableSchemas() {
         return document -> {
-            if (document.getComponents() == null || document.getComponents().getSchemas() == null) {
+            Components components = document.getComponents();
+            if (components == null || components.getSchemas() == null) {
                 return;
             }
-            for (Schema<?> model : document.getComponents().getSchemas().values()) {
+            Map<String, Schema> schemas = components.getSchemas();
+            for (Schema<?> model : schemas.values()) {
                 if (model.getProperties() == null) {
                     continue;
                 }

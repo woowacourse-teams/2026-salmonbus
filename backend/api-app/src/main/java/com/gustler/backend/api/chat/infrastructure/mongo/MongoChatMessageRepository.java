@@ -9,6 +9,7 @@ import com.gustler.backend.api.chat.application.ChatMessageRepository.SaveResult
 import com.gustler.backend.api.chat.domain.ChatMessage;
 import com.mongodb.ErrorCategory;
 import com.mongodb.MongoWriteException;
+import com.mongodb.WriteError;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Sorts;
@@ -40,7 +41,8 @@ public final class MongoChatMessageRepository implements ChatMessageRepository {
             collection.insertOne(toDocument(message));
             return new SaveResult(CREATED, message);
         } catch (MongoWriteException exception) {
-            if (exception.getError().getCategory() != ErrorCategory.DUPLICATE_KEY) {
+            WriteError error = exception.getError();
+            if (error.getCategory() != ErrorCategory.DUPLICATE_KEY) {
                 throw exception;
             }
             Document stored = collection.find(Filters.and(
@@ -82,14 +84,16 @@ public final class MongoChatMessageRepository implements ChatMessageRepository {
     }
 
     private ChatMessage fromDocument(Document document) {
+        ObjectId id = document.getObjectId("_id");
+        Date createdAt = document.getDate("createdAt");
         return new ChatMessage(
-            document.getObjectId("_id").toHexString(),
+            id.toHexString(),
             document.getString("roomId"),
             document.getString("clientMessageId"),
             document.getString("authorId"),
             document.getString("nickname"),
             document.getString("body"),
-            document.getDate("createdAt").toInstant()
+            createdAt.toInstant()
         );
     }
 }
