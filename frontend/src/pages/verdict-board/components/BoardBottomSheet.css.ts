@@ -9,7 +9,7 @@ export const sheet = style({
   flexDirection: "column",
   boxSizing: "border-box",
   overflow: "hidden",
-  borderRadius: "28px 28px 0 0",
+  borderRadius: `${vars.radius.boardSheet} ${vars.radius.boardSheet} 0 0`,
   paddingBottom: "env(safe-area-inset-bottom, 0px)",
   backgroundColor: vars.color.surface,
   boxShadow: "0 -5px 24px #3146320B",

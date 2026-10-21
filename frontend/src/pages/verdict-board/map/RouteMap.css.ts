@@ -5,8 +5,7 @@ export const region = style({
   position: "relative",
   width: "100%",
   height: "100%",
-  // 시트의 28px 둥근 모서리 뒤까지 지도를 표시하되 지도 높이와 컨트롤 위치는 유지한다.
-  clipPath: "inset(0 0 -28px)",
+  clipPath: `inset(0 0 calc(-1 * ${vars.radius.boardSheet}))`,
   isolation: "isolate",
   background: vars.color.surface,
 });
