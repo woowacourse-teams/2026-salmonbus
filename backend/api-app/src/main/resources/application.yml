@@ -90,6 +90,17 @@ auth:
     authorization-uri: https://kauth.kakao.com/oauth/authorize
     token-uri: https://kauth.kakao.com/oauth/token
     jwk-set-uri: https://kauth.kakao.com/.well-known/jwks.json
+  apple:
+    enabled: ${AUTH_APPLE_ENABLED:false}
+    client-id: ${AUTH_APPLE_CLIENT_ID:}
+    team-id: ${AUTH_APPLE_TEAM_ID:}
+    key-id: ${AUTH_APPLE_KEY_ID:}
+    private-key-path: ${AUTH_APPLE_PRIVATE_KEY_PATH:}
+    scopes: openid
+    issuer: https://appleid.apple.com
+    authorization-uri: https://appleid.apple.com/auth/authorize
+    token-uri: https://appleid.apple.com/auth/token
+    jwk-set-uri: https://appleid.apple.com/auth/keys
 
 arrivals:
   enabled: ${ARRIVALS_ENABLED:false}

@@ -4,6 +4,8 @@ import com.gustler.backend.member.api.SignInWithSocialAccount;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Supplier;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.oauth2.client.endpoint.OAuth2AccessTokenResponseClient;
@@ -14,6 +16,8 @@ import org.springframework.security.oauth2.client.registration.ClientRegistratio
 import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
 import org.springframework.security.oauth2.core.http.converter.OAuth2AccessTokenResponseHttpMessageConverter;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -22,6 +26,10 @@ import org.springframework.web.client.RestClient;
  * <p>시작은 {@code /api/auth/{provider}/start}, 콜백은 {@code /api/auth/{provider}/callback} 이다.
  * 제공자 토큰은 저장하지 않고, 토큰 교환은 제한 시간을 두어 제공자가 응답하지 않아도 요청 스레드가 매달리지 않는다.
  * 켜진 제공자가 없으면 아무것도 붙이지 않는다.
+ *
+ * <p>고정 비밀 대신 요청마다 만든 {@code client_secret} 을 쓰는 제공자(애플)는 등록 ID 별 발급기로 받는다. 이런
+ * 등록은 비밀 값 없이 {@code client_secret_post} 로 두고, 기본 변환기가 넣은 {@code client_secret} 자리를 발급기의
+ * 값으로 바꾼다. 덧붙이면 같은 이름이 두 번 전송된다.
  */
 public final class SocialLogin {
     static final String CALLBACK_PATTERN = "/api/auth/*/callback";
@@ -30,10 +38,16 @@ public final class SocialLogin {
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(5);
 
     private final List<ClientRegistration> registrations;
+    private final Map<String, Supplier<String>> clientSecrets;
     private final SignInWithSocialAccount signIn;
 
-    public SocialLogin(List<ClientRegistration> registrations, SignInWithSocialAccount signIn) {
+    public SocialLogin(
+        List<ClientRegistration> registrations,
+        Map<String, Supplier<String>> clientSecrets,
+        SignInWithSocialAccount signIn
+    ) {
         this.registrations = registrations;
+        this.clientSecrets = clientSecrets;
         this.signIn = signIn;
     }
 
@@ -56,7 +70,7 @@ public final class SocialLogin {
             .failureHandler(failureHandler));
     }
 
-    private static OAuth2AccessTokenResponseClient<OAuth2AuthorizationCodeGrantRequest> tokenClient() {
+    private OAuth2AccessTokenResponseClient<OAuth2AuthorizationCodeGrantRequest> tokenClient() {
         HttpClient httpClient = HttpClient.newBuilder()
             .version(HttpClient.Version.HTTP_1_1)
             .connectTimeout(CONNECT_TIMEOUT)
@@ -70,6 +84,16 @@ public final class SocialLogin {
                 .addCustomConverter(new OAuth2AccessTokenResponseHttpMessageConverter()))
             .defaultStatusHandler(new OAuth2ErrorResponseErrorHandler())
             .build());
+        client.setParametersConverter(this::generatedClientSecret);
         return client;
+    }
+
+    private MultiValueMap<String, String> generatedClientSecret(OAuth2AuthorizationCodeGrantRequest request) {
+        MultiValueMap<String, String> parameters = new LinkedMultiValueMap<>();
+        Supplier<String> clientSecret = clientSecrets.get(request.getClientRegistration().getRegistrationId());
+        if (clientSecret != null) {
+            parameters.set("client_secret", clientSecret.get());
+        }
+        return parameters;
     }
 }

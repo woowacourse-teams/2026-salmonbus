@@ -3,6 +3,7 @@ package com.gustler.backend.api.http.login;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.CacheControl;
@@ -17,7 +18,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 /**
  * 로그인에 실패하면 돌아갈 경로에 {@code login=cancelled} 또는 {@code login=failed} 를 붙여 돌려보낸다.
  *
- * <p>사용자가 제공자 화면에서 취소한 경우({@code access_denied})만 {@code cancelled} 이고 나머지는 모두 {@code failed} 다.
+ * <p>사용자가 제공자 화면에서 취소한 경우만 {@code cancelled} 이고 나머지는 모두 {@code failed} 다. 취소는 카카오가
+ * {@code access_denied}, 애플이 {@code user_cancelled_authorize} 로 알린다.
  * 구분하지 않은 실패 원인은 로그에 남기지 않는다. {@code code}·{@code state}·토큰이 예외 메시지에 섞일 수 있다.
  * 로그인 전 세션은 쓸 곳이 없으므로 지운다. 이미 로그인한 세션은 지우지 않는다. 콜백은 GET 이라
  * 다른 사이트에서 보내는 요청으로 로그인한 사용자를 로그아웃시킬 수 있다.
@@ -25,6 +27,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 final class SocialLoginFailureHandler implements AuthenticationFailureHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(SocialLoginFailureHandler.class);
     private static final String LOGIN_PARAMETER = "login";
+    private static final Set<String> CANCELLATION_CODES = Set.of(
+        OAuth2ErrorCodes.ACCESS_DENIED, "user_cancelled_authorize");
 
     @Override
     public void onAuthenticationFailure(
@@ -50,7 +54,7 @@ final class SocialLoginFailureHandler implements AuthenticationFailureHandler {
 
     private static String reasonOf(AuthenticationException exception) {
         if (exception instanceof OAuth2AuthenticationException oauth2
-            && OAuth2ErrorCodes.ACCESS_DENIED.equals(oauth2.getError().getErrorCode())) {
+            && CANCELLATION_CODES.contains(oauth2.getError().getErrorCode())) {
             return "cancelled";
         }
         return "failed";

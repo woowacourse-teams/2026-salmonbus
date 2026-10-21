@@ -18,18 +18,25 @@ import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequ
  *
  * <p>시작 요청에서 세션이 처음 만들어진다. 이때 돌아갈 경로를 검증해 세션에 두고 수명을 짧게 잡는다.
  * 이미 로그인한 세션이면 수명은 그대로 둔다.
- * 모든 요청에 PKCE(S256)를 건다. 기본값은 비밀을 가진 클라이언트에는 PKCE를 걸지 않는다.
+ * 애플을 뺀 모든 요청에 PKCE(S256)를 건다. 기본값은 비밀을 가진 클라이언트에는 PKCE를 걸지 않는다. 애플은 PKCE 를
+ * 지원하지 않으므로 걸지 않고, 대신 {@code response_mode=query} 를 명시해 콜백이 쿼리로 돌아오게 한다. 폼 전송
+ * ({@code form_post}) 으로 돌아오면 SameSite=Lax 세션 쿠키가 실리지 않아 로그인 전 세션을 잃는다.
  */
 final class LoginStartResolver implements OAuth2AuthorizationRequestResolver {
     private static final Pattern START_PATH = Pattern.compile("/api/auth/([a-z]+)/start");
+    private static final String RESPONSE_MODE = "response_mode";
 
     private final ClientRegistrationRepository registrations;
-    private final DefaultOAuth2AuthorizationRequestResolver delegate;
+    private final DefaultOAuth2AuthorizationRequestResolver withPkce;
+    private final DefaultOAuth2AuthorizationRequestResolver withoutPkce;
 
     LoginStartResolver(ClientRegistrationRepository registrations) {
         this.registrations = registrations;
-        this.delegate = new DefaultOAuth2AuthorizationRequestResolver(registrations);
-        this.delegate.setAuthorizationRequestCustomizer(OAuth2AuthorizationRequestCustomizers.withPkce());
+        this.withPkce = new DefaultOAuth2AuthorizationRequestResolver(registrations);
+        this.withPkce.setAuthorizationRequestCustomizer(OAuth2AuthorizationRequestCustomizers.withPkce());
+        this.withoutPkce = new DefaultOAuth2AuthorizationRequestResolver(registrations);
+        this.withoutPkce.setAuthorizationRequestCustomizer(builder -> builder
+            .additionalParameters(parameters -> parameters.put(RESPONSE_MODE, "query")));
     }
 
     @Override
@@ -48,6 +55,9 @@ final class LoginStartResolver implements OAuth2AuthorizationRequestResolver {
             LoginSessions.expireAfter(session, LoginSessions.BEFORE_LOGIN);
         }
         session.setAttribute(LoginSessions.RETURN_TO_ATTRIBUTE, ReturnTo.sanitize(request.getParameter("returnTo")));
-        return delegate.resolve(request, clientRegistrationId);
+        if (SocialLoginConfiguration.APPLE.equals(clientRegistrationId)) {
+            return withoutPkce.resolve(request, clientRegistrationId);
+        }
+        return withPkce.resolve(request, clientRegistrationId);
     }
 }
