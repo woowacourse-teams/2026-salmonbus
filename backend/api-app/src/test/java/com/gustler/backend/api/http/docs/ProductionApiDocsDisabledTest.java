@@ -36,7 +36,5 @@ class ProductionApiDocsDisabledTest {
         mockMvc.perform(get("/api/docs/chat")).andExpect(status().isNotFound());
         mockMvc.perform(get("/v3/api-docs")).andExpect(status().isNotFound());
         mockMvc.perform(get("/swagger-ui.html")).andExpect(status().isNotFound());
-
-        // then
     }
 }

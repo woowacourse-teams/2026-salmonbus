@@ -95,8 +95,6 @@ class RouteGeometryControllerTest {
         when(service.get(any(), eq(6L))).thenThrow(new RouteGeometryReferenceConflictException());
         mvc.perform(get(PATH).param("referenceVersionId", "6").header("If-None-Match", "*"))
             .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("REFERENCE_VERSION_CONFLICT"));
-
-        // then
     }
 
     private static Shape shapeOf(final boolean enabled) {

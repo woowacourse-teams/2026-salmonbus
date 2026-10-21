@@ -121,8 +121,6 @@ class SeatForecastDesignMatrixTest {
 
     @Test
     void 지금_채우는_열은_스물한_개다() {
-        // when
-
         // then
         // 계약을 넓히기 전에는 여섯 개였다
         assertThat(SeatForecastDesignMatrix.COLUMNS_FILLED_NOW).hasSize(21);

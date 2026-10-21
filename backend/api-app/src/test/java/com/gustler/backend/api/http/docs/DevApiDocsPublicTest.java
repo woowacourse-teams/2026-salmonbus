@@ -36,7 +36,5 @@ class DevApiDocsPublicTest {
         mockMvc.perform(get("/api/docs/openapi/swagger-config"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.supportedSubmitMethods").isEmpty());
-
-        // then
     }
 }

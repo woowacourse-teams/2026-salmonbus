@@ -71,8 +71,6 @@ class BoardControllerTest {
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].vehicleId").isEmpty())
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].expectedSeats")
                 .doesNotExist());
-
-        // then
     }
 
     @Test
@@ -135,8 +133,6 @@ class BoardControllerTest {
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast", aMapWithSize(2)))
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.expectedSeats").doesNotExist())
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].seatAvailableProbability").doesNotExist());
-
-        // then
     }
 
     @Test
@@ -151,8 +147,6 @@ class BoardControllerTest {
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.status").value("AVAILABLE"))
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.seatAvailableProbability").value(0.0))
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.expectedSeats").value(0.0));
-
-        // then
     }
 
     @Test
@@ -167,8 +161,6 @@ class BoardControllerTest {
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.status").value("UNAVAILABLE"))
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.seatAvailableProbability").doesNotExist())
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.expectedSeats").doesNotExist());
-
-        // then
     }
 
     private BoardOverview overview(VehicleForecast forecast) {

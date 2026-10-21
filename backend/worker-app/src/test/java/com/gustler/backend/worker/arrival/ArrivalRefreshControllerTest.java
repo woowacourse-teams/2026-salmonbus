@@ -46,8 +46,6 @@ class ArrivalRefreshControllerTest {
             .contentType(MediaType.APPLICATION_JSON).content("{\"stationId\":\"206000637\"}"))
             .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("ACCEPTED"))
             .andExpect(header().string("Cache-Control", "no-store"));
-
-        // then
     }
 
     @Test
@@ -57,7 +55,5 @@ class ArrivalRefreshControllerTest {
         mvc.perform(post("/internal/arrivals/refresh").header("X-Arrival-Token", "test-internal-token")
             .contentType(MediaType.APPLICATION_JSON).content("{\"stationId\":\"bad\"}"))
             .andExpect(status().isBadRequest());
-
-        // then
     }
 }

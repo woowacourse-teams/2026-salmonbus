@@ -47,7 +47,5 @@ class MaintenanceConfigurationTest {
             MaintenanceApplication.run(CliArguments.parse(new String[] {"archive-import"})))
             .isInstanceOfSatisfying(MaintenanceException.class,
                 error -> assertThat(error.code()).isEqualTo("UNKNOWN_COMMAND"));
-
-        // then
     }
 }

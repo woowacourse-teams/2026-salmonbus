@@ -125,8 +125,6 @@ class StatisticsExtractDownloaderTest {
         ArrayList<List<String>> commands = new ArrayList<List<String>>();
         TransactionSynchronizationManager.setActualTransactionActive(true);
 
-        // when
-
         // then
         try {
 

@@ -71,8 +71,6 @@ class WatchApiDocsContractTest {
         JsonNode sourceSchemas = contract.at("/components/schemas");
         JsonNode generatedSchemas = generated.at("/components/schemas");
 
-        // when
-
         // then
         try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
             for (String name : List.of(

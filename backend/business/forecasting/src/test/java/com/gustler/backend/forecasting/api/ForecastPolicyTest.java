@@ -19,8 +19,6 @@ class ForecastPolicyTest {
 
     @Test
     void 신선도_상한은_한_시간이다() {
-        // when
-
         // then
         assertThat(ForecastPolicy.MAX_STALENESS).isEqualTo(Duration.ofHours(1));
 

@@ -79,8 +79,6 @@ class ArrivalRuntimeConfigurationTest {
         // when
         context.withPropertyValues("arrivals.enabled=true", "arrivals.internal-token=")
             .run(application -> assertThat(application).hasFailed());
-
-        // then
     }
 
     @Test
@@ -129,7 +127,5 @@ class ArrivalRuntimeConfigurationTest {
         context.withPropertyValues("arrivals.enabled=true", "arrivals.internal-token=local-test-token",
         "arrivals.limits.zz=1000")
             .run(application -> assertThat(application).hasFailed());
-
-        // then
     }
 }

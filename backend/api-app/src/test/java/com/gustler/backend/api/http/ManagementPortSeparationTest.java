@@ -71,8 +71,6 @@ class ManagementPortSeparationTest {
 
     @Test
     void 두_포트가_서로_다른_포트다() {
-        // when
-
         // then
         assertThat(managementPort).isNotEqualTo(publicPort);
     }

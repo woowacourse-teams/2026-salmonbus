@@ -97,8 +97,6 @@ class StatisticsExtractUploaderTest {
         List<List<String>> commands = new ArrayList<>();
         TransactionSynchronizationManager.setActualTransactionActive(true);
 
-        // when
-
         // then
         try {
 

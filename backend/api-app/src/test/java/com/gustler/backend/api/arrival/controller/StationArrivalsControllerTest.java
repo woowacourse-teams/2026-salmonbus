@@ -46,8 +46,6 @@ class StationArrivalsControllerTest {
         mvc.perform(get("/api/v2/stations/206000637/arrivals"))
             .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "max-age=5, public"))
             .andExpect(jsonPath("$.status").value("READY"));
-
-        // then
     }
 
     @Test
@@ -59,8 +57,6 @@ class StationArrivalsControllerTest {
         when(service.get(any())).thenReturn(response("UNAVAILABLE", 61));
         mvc.perform(get("/api/v2/stations/206000637/arrivals"))
             .andExpect(header().string("Cache-Control", "no-store"));
-
-        // then
     }
 
     @Test

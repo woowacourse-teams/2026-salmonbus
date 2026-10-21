@@ -32,7 +32,5 @@ class DisabledApiDocsContractTest {
         mockMvc.perform(get("/api/docs/openapi.yaml")).andExpect(status().isNotFound());
         mockMvc.perform(get("/api/docs/chat")).andExpect(status().isNotFound());
         mockMvc.perform(get("/api/docs/chat/examples")).andExpect(status().isNotFound());
-
-        // then
     }
 }

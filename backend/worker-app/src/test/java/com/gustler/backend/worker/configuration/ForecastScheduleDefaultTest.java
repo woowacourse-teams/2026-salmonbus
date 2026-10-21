@@ -32,8 +32,6 @@ class ForecastScheduleDefaultTest {
 
     @Test
     void 예보를_끄면_예보_설정을_바인딩하지_않는다() {
-        // when
-
         // then
         try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
             softly.assertThat(applicationContext.getBeanNamesForType(ForecastProperties.class)).isEmpty();

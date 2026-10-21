@@ -75,8 +75,6 @@ class StatisticsInputReaderTest {
         // given
         List<StatisticsInputFile> files = List.of(file("first.jsonl", json(10)), file("second.jsonl", json(10)));
 
-        // when
-
         // then
         try (StatisticsInputReader reader = new StatisticsInputReader(directory, files, 4096)) {
 
@@ -94,8 +92,6 @@ class StatisticsInputReaderTest {
     void 파일을_모두_읽은_뒤_선언한_건수와_다르면_거부한다() throws Exception {
         // given
         List<StatisticsInputFile> files = List.of(file("rows.jsonl", json(10)));
-
-        // when
 
         // then
         try (StatisticsInputReader reader = new StatisticsInputReader(directory, files, 4096)) {
@@ -115,8 +111,6 @@ class StatisticsInputReaderTest {
     void 손상되거나_비어_있는_행은_정상_자료로_취급하지_않는다(String invalid) throws Exception {
         // given
         List<StatisticsInputFile> files = List.of(file("rows.jsonl", invalid + "\n"));
-
-        // when
 
         // then
         try (StatisticsInputReader reader = new StatisticsInputReader(directory, files, 4096)) {
@@ -143,8 +137,6 @@ class StatisticsInputReaderTest {
             valid + " {}",
             valid.replace("\"boardingAllowed\":true", "\"unknown\":true,\"boardingAllowed\":true"));
 
-        // when
-
         // then
         for (String invalid : invalidRows) {
             List<StatisticsInputFile> files = List.of(file("rows.jsonl", invalid));
@@ -164,8 +156,6 @@ class StatisticsInputReaderTest {
     void 지나치게_긴_행은_전체를_메모리에_올리기_전에_거부한다() throws Exception {
         // given
         List<StatisticsInputFile> files = List.of(file("rows.jsonl", "x".repeat(8192)));
-
-        // when
 
         // then
         try (StatisticsInputReader reader = new StatisticsInputReader(directory, files, 1024)) {

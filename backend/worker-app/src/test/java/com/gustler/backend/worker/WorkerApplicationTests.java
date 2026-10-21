@@ -10,9 +10,6 @@ import org.junit.jupiter.api.Test;
 class WorkerApplicationTests {
     @Test
     void 컨텍스트가_뜬다() {
-        // when
-
-        // then
     }
 
     @Test

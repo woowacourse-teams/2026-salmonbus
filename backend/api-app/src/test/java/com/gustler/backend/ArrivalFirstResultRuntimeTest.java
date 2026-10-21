@@ -82,8 +82,6 @@ class ArrivalFirstResultRuntimeTest {
                 }
             }
         }
-
-        // then
     }
 
     private void profile(final int waitMillis, Path agent) throws Exception {

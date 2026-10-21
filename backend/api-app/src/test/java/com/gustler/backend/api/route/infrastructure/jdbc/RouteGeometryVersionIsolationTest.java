@@ -160,8 +160,6 @@ class RouteGeometryVersionIsolationTest {
             .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"))
             .andExpect(header().string("Cache-Control", "no-store"))
             .andExpect(header().doesNotExist("ETag"));
-
-        // then
     }
 
     private RouteGeometry geometry() {

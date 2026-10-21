@@ -10,9 +10,6 @@ import org.junit.jupiter.api.Test;
 class ApiApplicationTests {
     @Test
     void GBIS_키_없이_컨텍스트가_뜬다() {
-        // when
-
-        // then
     }
 
     @Test

@@ -90,8 +90,6 @@ class ChatFrameCodecTest {
 
     @Test
     void 계약_예시의_프레임마다_대응하는_값이_있다() {
-        // when
-
         // then
         try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
             softly.assertThat(SERVER_FRAMES.keySet()).containsExactlyInAnyOrderElementsOf(serverFrameNames());

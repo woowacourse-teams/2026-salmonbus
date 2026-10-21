@@ -68,8 +68,6 @@ class WorkerSchedulingConfigTest {
         Method statistics = StopDemandPipelineJob.class.getMethod("advance");
         Method archive = EvaluationArchiveJob.class.getMethod("advance");
 
-        // when
-
         // then
         try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
             softly.assertThat(statistics.getAnnotation(Scheduled.class).scheduler())

@@ -92,7 +92,5 @@ class BoardDatabaseFailureContractTest {
             .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"))
             .andExpect(jsonPath("$.message").value("일시적인 서버 장애가 발생했습니다."))
             .andExpect(jsonPath("$.requestId").isNotEmpty());
-
-        // then
     }
 }

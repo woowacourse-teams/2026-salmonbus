@@ -100,8 +100,6 @@ class GbisPropertiesTest {
                 "gbis.service-key=" + serviceKey,
                 "gbis.daily-limit=" + DAILY_LIMIT)
             .run(context -> assertThat(context).hasFailed());
-
-        // then
     }
 
     /**
@@ -165,8 +163,6 @@ class GbisPropertiesTest {
                 "gbis.service-key=" + PERCENT_KEY,
                 "gbis.daily-limit=" + DAILY_LIMIT)
             .run(context -> assertThat(context).hasNotFailed());
-
-        // then
     }
 
     @Test

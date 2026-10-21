@@ -132,8 +132,6 @@ class BoardApiContractTest {
             .andExpect(jsonPath("$.stops[2].approachingVehicles[2].vehicleId").isEmpty())
             .andExpect(jsonPath("$.stops[2].approachingVehicles[2].forecast.expectedSeats")
                 .doesNotExist());
-
-        // then
     }
 
     @Test
@@ -221,8 +219,6 @@ class BoardApiContractTest {
             .andExpect(jsonPath("$.model.releaseId").value("model-second"))
             .andExpect(jsonPath("$.stops[2].approachingVehicles[0].vehicleId")
                 .value("SECOND"));
-
-        // then
     }
 
     @Test
@@ -240,8 +236,6 @@ class BoardApiContractTest {
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
             .andExpect(jsonPath("$", aMapWithSize(3)))
             .andExpect(jsonPath("$.code").value("MODEL_OUT_OF_SCOPE"));
-
-        // then
     }
 
     @Test
@@ -295,8 +289,6 @@ class BoardApiContractTest {
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
             .andExpect(jsonPath("$", aMapWithSize(3)))
             .andExpect(jsonPath("$.code").value("NO_RECENT_OBSERVATION"));
-
-        // then
     }
 
     @Test
@@ -317,8 +309,6 @@ class BoardApiContractTest {
         mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
             .andExpect(status().isServiceUnavailable())
             .andExpect(jsonPath("$.code").value("NO_RECENT_OBSERVATION"));
-
-        // then
     }
 
     @Test
@@ -329,8 +319,6 @@ class BoardApiContractTest {
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
             .andExpect(jsonPath("$", aMapWithSize(3)))
             .andExpect(jsonPath("$.code").value("INVALID_ROUTE_ID"));
-
-        // then
     }
 
     @Test
@@ -341,8 +329,6 @@ class BoardApiContractTest {
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
             .andExpect(jsonPath("$", aMapWithSize(3)))
             .andExpect(jsonPath("$.code").value("ROUTE_NOT_FOUND"));
-
-        // then
     }
 
     @Test
@@ -367,8 +353,6 @@ class BoardApiContractTest {
             .andExpect(jsonPath("$.stops[2].approachingVehicles[1].forecast.status").value("AVAILABLE"))
             .andExpect(jsonPath("$.stops[2].approachingVehicles[1].forecast.seatAvailableProbability").value(0.0))
             .andExpect(jsonPath("$.stops[2].approachingVehicles[1].forecast.expectedSeats").value(0.0));
-
-        // then
     }
 
     @Test
@@ -398,8 +382,6 @@ class BoardApiContractTest {
             .andExpect(jsonPath("$.vehicles[0].seat.kind").value("UNKNOWN"))
             .andExpect(jsonPath("$.vehicles[0].seat.remaining").doesNotExist())
             .andExpect(jsonPath("$.vehicles[0].forecast").doesNotExist());
-
-        // then
     }
 
     @Test

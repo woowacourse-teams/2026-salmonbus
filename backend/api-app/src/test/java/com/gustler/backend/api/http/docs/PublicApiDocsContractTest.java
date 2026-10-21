@@ -150,7 +150,5 @@ class PublicApiDocsContractTest {
         // when
         mockMvc.perform(get("/api/v1/routes"))
             .andExpect(status().isOk());
-
-        // then
     }
 }

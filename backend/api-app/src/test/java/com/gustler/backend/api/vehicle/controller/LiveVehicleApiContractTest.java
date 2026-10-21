@@ -205,8 +205,6 @@ class LiveVehicleApiContractTest {
             .andExpect(jsonPath("$.vehicles[3].currentStopSequence").value(2))
             .andExpect(jsonPath("$.vehicles[3].phase").value("IN_TRANSIT"))
             .andExpect(jsonPath("$.vehicles[3].seat.remaining").value(23));
-
-        // then
     }
 
     // 운행_상태를_해석할_수_없는_관측은_그_행만_빼고_나머지를_반환한다 시나리오는 여기서 만들 수 없다.
@@ -230,8 +228,6 @@ class LiveVehicleApiContractTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.observation.state").value("UNKNOWN"))
             .andExpect(jsonPath("$.vehicles").isEmpty());
-
-        // then
     }
 
     @Test
@@ -250,8 +246,6 @@ class LiveVehicleApiContractTest {
                 jsonTime(observedAt.plusMinutes(5))
             ))
             .andExpect(jsonPath("$.vehicles").isEmpty());
-
-        // then
     }
 
     @Test
@@ -288,8 +282,6 @@ class LiveVehicleApiContractTest {
             ))
             .andExpect(jsonPath("$.vehicles.length()").value(1))
             .andExpect(jsonPath("$.vehicles[0].vehicleId").value("last-success-bus"));
-
-        // then
     }
 
     @Test
@@ -326,8 +318,6 @@ class LiveVehicleApiContractTest {
             ))
             .andExpect(jsonPath("$.vehicles.length()").value(1))
             .andExpect(jsonPath("$.vehicles[0].vehicleId").value("completed-bus"));
-
-        // then
     }
 
     @Test
@@ -378,8 +368,6 @@ class LiveVehicleApiContractTest {
             .andExpect(jsonPath("$.observation.observedAt").value(jsonTime(laterReceivedAt)))
             .andExpect(jsonPath("$.vehicles.length()").value(1))
             .andExpect(jsonPath("$.vehicles[0].vehicleId").value("later-received-bus"));
-
-        // then
     }
 
     @Test
@@ -396,8 +384,6 @@ class LiveVehicleApiContractTest {
             .andExpect(jsonPath("$.observation.state").value("NO_VEHICLES_OBSERVED"))
             .andExpect(jsonPath("$.observation.observedAt").value(jsonTime(observedAt)))
             .andExpect(jsonPath("$.vehicles").isEmpty());
-
-        // then
     }
 
     @Test
@@ -430,8 +416,6 @@ class LiveVehicleApiContractTest {
             .andExpect(jsonPath("$.observation.state").value("NO_VEHICLES_OBSERVED"))
             .andExpect(jsonPath("$.observation.observedAt").value(jsonTime(emptyObservedAt)))
             .andExpect(jsonPath("$.vehicles").isEmpty());
-
-        // then
     }
 
     @Test
@@ -464,8 +448,6 @@ class LiveVehicleApiContractTest {
                 jsonTime(currentObservedAt)
             ))
             .andExpect(jsonPath("$.vehicles").isEmpty());
-
-        // then
     }
 
     @Test
@@ -484,8 +466,6 @@ class LiveVehicleApiContractTest {
                 jsonTime(observedAt.plusMinutes(5))
             ))
             .andExpect(jsonPath("$.vehicles").isEmpty());
-
-        // then
     }
 
     @Test
@@ -501,8 +481,6 @@ class LiveVehicleApiContractTest {
             .andExpect(jsonPath("$.observation.observedAt").value(nullValue()))
             .andExpect(jsonPath("$.observation.staleAt").value(nullValue()))
             .andExpect(jsonPath("$.vehicles").isEmpty());
-
-        // then
     }
 
     @Test
@@ -516,8 +494,6 @@ class LiveVehicleApiContractTest {
             .andExpect(jsonPath("$.message").isNotEmpty())
             .andExpect(jsonPath("$.requestId").isNotEmpty())
             .andExpect(jsonPath("$.retryable").doesNotExist());
-
-        // then
     }
 
     @Test
@@ -531,8 +507,6 @@ class LiveVehicleApiContractTest {
             .andExpect(jsonPath("$.message").isNotEmpty())
             .andExpect(jsonPath("$.requestId").isNotEmpty())
             .andExpect(jsonPath("$.retryable").doesNotExist());
-
-        // then
     }
 
     private RouteContext insertCurrentRoute() {

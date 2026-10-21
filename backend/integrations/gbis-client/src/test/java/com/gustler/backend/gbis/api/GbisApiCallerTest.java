@@ -93,8 +93,6 @@ class GbisApiCallerTest {
             .andRespond(withSuccess(EMPTY_JSON, MediaType.APPLICATION_JSON));
         caller.getByStation("/busarrivalservice/v2/getBusArrivalListv2", "206000637&format=xml", "a");
         openApi.verify();
-
-        // then
     }
 
     @Test

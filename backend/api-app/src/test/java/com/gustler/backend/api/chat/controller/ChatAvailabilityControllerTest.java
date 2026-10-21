@@ -37,8 +37,6 @@ class ChatAvailabilityControllerTest {
                 ChatContractExamples.compact(ChatContractExamples.availability()),
                 JsonCompareMode.STRICT
             ));
-
-        // then
     }
 
     @Test
@@ -47,7 +45,5 @@ class ChatAvailabilityControllerTest {
         mockMvc.perform(get("/api/chat/rooms/unknown"))
             .andExpect(status().isNotFound())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"));
-
-        // then
     }
 }
