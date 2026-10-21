@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,59 +34,121 @@ class EvaluationWorkPageReader {
         final boolean investigating,
         Map<Long, PendingEvaluationBuffer.Entry> cached
     ) {
-        if (limit < 1 || limit > 100) {
-            throw new IllegalArgumentException("한 번에 확인할 관측은 1개 이상 100개 이하이다");
-        }
+        validatePageLimit(limit);
         List<Long> ids = List.copyOf(work.page(version, after, through, limit));
         if (ids.isEmpty()) {
             return new Page(0, List.of(), List.of());
         }
         Map<Long, Long> revisions = work.revisions(version, ids);
+        Map<Long, PendingEvaluationBuffer.Entry> reusableEntries = findReusableEntries(
+            ids, cached, revisions, version, qualityRevision, investigating);
+        List<Long> observationIdsToRestore = findObservationIdsToRestore(ids, reusableEntries);
+        Map<Long, List<Restored>> restoredForecastsByObservationId =
+            restoreForecastsByObservationId(version, observationIdsToRestore);
+        List<Ready> readyEvaluations = createReadyEvaluations(
+            ids, reusableEntries, restoredForecastsByObservationId, revisions, qualityRevision);
+        return new Page(ids.getLast(), ids, readyEvaluations, revisions);
+    }
 
-        Map<Long, PendingEvaluationBuffer.Entry> reusable = new LinkedHashMap<>();
-        List<Long> restoreIds = new ArrayList<>();
+    private static void validatePageLimit(final int limit) {
+        if (limit < 1 || limit > 100) {
+            throw new IllegalArgumentException("한 번에 확인할 관측은 1개 이상 100개 이하이다");
+        }
+    }
+
+    private static Map<Long, PendingEvaluationBuffer.Entry> findReusableEntries(
+        List<Long> ids,
+        Map<Long, PendingEvaluationBuffer.Entry> cached,
+        Map<Long, Long> revisions,
+        final long version,
+        final long qualityRevision,
+        final boolean investigating
+    ) {
+        Map<Long, PendingEvaluationBuffer.Entry> reusableEntries = new LinkedHashMap<>();
         for (final long id : ids) {
             PendingEvaluationBuffer.Entry entry = cached.get(id);
-            if (!investigating && entry != null
-                && entry.key().routeVersionId() == version
-                && entry.key().observationId() == id
-                && entry.qualityRevision() == qualityRevision
-                && Objects.equals(revisions.get(id), entry.workRevision())) {
-                reusable.put(id, entry);
-                continue;
+            if (canReuseCachedEntry(entry, revisions.get(id), version, id, qualityRevision, investigating)) {
+                reusableEntries.put(id, entry);
             }
-            restoreIds.add(id);
         }
+        return reusableEntries;
+    }
 
-        List<Restored> restored = List.of();
-        if (!restoreIds.isEmpty()) {
-            restored = work.restore(version, restoreIds);
+    private static boolean canReuseCachedEntry(
+        PendingEvaluationBuffer.Entry entry,
+        Long workRevision,
+        final long version,
+        final long observationId,
+        final long qualityRevision,
+        final boolean investigating
+    ) {
+        return !investigating && entry != null
+            && entry.key().routeVersionId() == version
+            && entry.key().observationId() == observationId
+            && entry.qualityRevision() == qualityRevision
+            && Objects.equals(workRevision, entry.workRevision());
+    }
+
+    private static List<Long> findObservationIdsToRestore(
+        List<Long> ids,
+        Map<Long, PendingEvaluationBuffer.Entry> reusableEntries
+    ) {
+        return ids.stream()
+            .filter(id -> !reusableEntries.containsKey(id))
+            .toList();
+    }
+
+    private Map<Long, List<Restored>> restoreForecastsByObservationId(
+        final long version,
+        List<Long> observationIds
+    ) {
+        if (observationIds.isEmpty()) {
+            return Map.of();
         }
-        Map<Long, List<Restored>> byObservation = restored.stream()
+        return work.restore(version, observationIds)
+            .stream()
             .collect(Collectors.groupingBy(row -> row.key().observationId(), LinkedHashMap::new,
                 Collectors.toCollection(ArrayList::new)));
+    }
 
-        List<Ready> ready = new ArrayList<>();
+    private static List<Ready> createReadyEvaluations(
+        List<Long> ids,
+        Map<Long, PendingEvaluationBuffer.Entry> reusableEntries,
+        Map<Long, List<Restored>> restoredForecastsByObservationId,
+        Map<Long, Long> revisions,
+        final long qualityRevision
+    ) {
+        List<Ready> readyEvaluations = new ArrayList<>();
         for (final long id : ids) {
-            PendingEvaluationBuffer.Entry entry = reusable.get(id);
-            if (entry != null) {
-                ready.add(new Ready(id, qualityRevision, entry.workRevision(), entry.forecasts()));
-                continue;
-            }
-            List<Restored> rows = byObservation.getOrDefault(id, List.of());
-            // 상세를 읽지 못한 관측은 완료가 아니라 보류로 남긴다.
-            if (rows.isEmpty() || rows.stream().anyMatch(row -> row.forecast().isEmpty())) {
-                continue;
-            }
-            if (!revisions.containsKey(id)) {
-                continue;
-            }
-            ready.add(new Ready(id, qualityRevision, revisions.get(id),
-                rows.stream()
-                    .map(row -> row.forecast().orElseThrow())
-                    .toList()));
+            createReadyEvaluation(id, qualityRevision, reusableEntries.get(id),
+                restoredForecastsByObservationId.getOrDefault(id, List.of()), revisions.get(id))
+                .ifPresent(readyEvaluations::add);
         }
-        return new Page(ids.getLast(), ids, List.copyOf(ready), revisions);
+        return List.copyOf(readyEvaluations);
+    }
+
+    private static Optional<Ready> createReadyEvaluation(
+        final long observationId,
+        final long qualityRevision,
+        PendingEvaluationBuffer.Entry reusableEntry,
+        List<Restored> restoredRows,
+        Long workRevision
+    ) {
+        if (reusableEntry != null) {
+            return Optional.of(new Ready(observationId, qualityRevision, reusableEntry.workRevision(),
+                reusableEntry.forecasts()));
+        }
+        if (!hasCompleteForecasts(restoredRows) || workRevision == null) {
+            return Optional.empty();
+        }
+        List<PendingForecast> forecasts = restoredRows.stream()
+            .map(row -> row.forecast().orElseThrow())
+            .toList();
+        return Optional.of(new Ready(observationId, qualityRevision, workRevision, forecasts));
+    }
+
+    private static boolean hasCompleteForecasts(List<Restored> restoredRows) {
+        return !restoredRows.isEmpty() && restoredRows.stream().allMatch(row -> row.forecast().isPresent());
     }
 
     record Ready(long observationId, long qualityRevision, long workRevision, List<PendingForecast> forecasts) {
