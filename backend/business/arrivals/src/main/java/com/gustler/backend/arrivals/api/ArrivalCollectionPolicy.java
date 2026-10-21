@@ -9,16 +9,61 @@ public record ArrivalCollectionPolicy(Duration refreshInterval, Duration validit
     Duration retryMaximum, Duration startupDelay, Duration queueWait, int maximumStates,
     double callsPerSecond, int burst, int saveAttempts) {
     public ArrivalCollectionPolicy {
-        if (refreshInterval == null || refreshInterval.isNegative() || refreshInterval.isZero()
-            || validity == null || validity.compareTo(refreshInterval) <= 0
-            || retryBase == null || retryBase.isNegative() || retryBase.isZero()
-            || retryMaximum == null || retryMaximum.compareTo(retryBase) < 0
-            || startupDelay == null || startupDelay.compareTo(refreshInterval) < 0
-            || queueWait == null || queueWait.isNegative() || queueWait.isZero()
-            || maximumStates < 1 || !Double.isFinite(callsPerSecond) || callsPerSecond <= 0
-            || burst < 1 || saveAttempts < 1 || saveAttempts > 3) {
-            throw new IllegalArgumentException("도착 수집의 시간·용량·예산 설정이 올바르지 않다");
+        if (isInvalidRefreshWindow(refreshInterval, validity)) {
+            throw invalidPolicy();
         }
+        if (isInvalidRetryWindow(retryBase, retryMaximum)) {
+            throw invalidPolicy();
+        }
+        if (isInvalidSchedulingDelay(startupDelay, refreshInterval) || isInvalidDuration(queueWait)) {
+            throw invalidPolicy();
+        }
+        if (isInvalidExecutionLimit(maximumStates, callsPerSecond)) {
+            throw invalidPolicy();
+        }
+        if (burst < 1 || isInvalidSaveAttempts(saveAttempts)) {
+            throw invalidPolicy();
+        }
+    }
+
+    private static boolean isInvalidRefreshWindow(Duration refreshInterval, Duration validity) {
+        if (isInvalidDuration(refreshInterval) || validity == null) {
+            return true;
+        }
+        return validity.compareTo(refreshInterval) <= 0;
+    }
+
+    private static boolean isInvalidRetryWindow(Duration retryBase, Duration retryMaximum) {
+        if (isInvalidDuration(retryBase) || retryMaximum == null) {
+            return true;
+        }
+        return retryMaximum.compareTo(retryBase) < 0;
+    }
+
+    private static boolean isInvalidSchedulingDelay(Duration startupDelay, Duration refreshInterval) {
+        return startupDelay == null || startupDelay.compareTo(refreshInterval) < 0;
+    }
+
+    private static boolean isInvalidDuration(Duration duration) {
+        if (duration == null || duration.isNegative()) {
+            return true;
+        }
+        return duration.isZero();
+    }
+
+    private static boolean isInvalidExecutionLimit(int maximumStates, double callsPerSecond) {
+        if (maximumStates < 1 || !Double.isFinite(callsPerSecond)) {
+            return true;
+        }
+        return callsPerSecond <= 0;
+    }
+
+    private static boolean isInvalidSaveAttempts(int saveAttempts) {
+        return saveAttempts < 1 || saveAttempts > 3;
+    }
+
+    private static IllegalArgumentException invalidPolicy() {
+        return new IllegalArgumentException("도착 수집의 시간·용량·예산 설정이 올바르지 않다");
     }
 
     public static ArrivalCollectionPolicy defaults() {

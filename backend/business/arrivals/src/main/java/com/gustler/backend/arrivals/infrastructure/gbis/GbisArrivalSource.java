@@ -131,7 +131,7 @@ public final class GbisArrivalSource implements ArrivalSource {
             Integer seconds = nonnegative(row, "predictTimeSec" + ordinal);
             Integer minutes = nonnegative(row, "predictTime" + ordinal);
             // 둘째 차량이 없을 때의 기본 0 값으로 차량을 생성하지 않는다.
-            if (id == null && (seconds == null || seconds == 0) && (minutes == null || minutes == 0)) {
+            if (hasNoVehicleData(id, seconds, minutes)) {
                 continue;
             }
             if (seconds == null && minutes == null) {
@@ -140,7 +140,7 @@ public final class GbisArrivalSource implements ArrivalSource {
             Integer seats = supportedValue(row, "remainSeatCnt" + ordinal, type, SEAT_TYPES);
             String seatReason = seatUnavailableReason(seats, type);
             Integer congestion = supportedValue(row, "crowded" + ordinal, type, CROWD_TYPES);
-            if (congestion != null && (congestion < 1 || congestion > 4)) {
+            if (isUnsupportedCongestion(congestion)) {
                 congestion = null;
             }
             Integer tagless = number(row, "taglessCd" + ordinal);
@@ -150,6 +150,24 @@ public final class GbisArrivalSource implements ArrivalSource {
         }
         return new RouteArrival(text(row, "routeId"), text(row, "routeName"), stopOrderOf(order),
             type, text(row, "routeDestId"), text(row, "routeDestName"), text(row, "flag"), predictions);
+    }
+
+    private static boolean hasNoVehicleData(String id, Integer seconds, Integer minutes) {
+        if (id != null || hasArrivalTime(seconds)) {
+            return false;
+        }
+        return !hasArrivalTime(minutes);
+    }
+
+    private static boolean hasArrivalTime(Integer value) {
+        return value != null && value != 0;
+    }
+
+    private static boolean isUnsupportedCongestion(Integer congestion) {
+        if (congestion == null) {
+            return false;
+        }
+        return congestion < 1 || congestion > 4;
     }
 
     private static Integer supportedValue(
@@ -175,10 +193,14 @@ public final class GbisArrivalSource implements ArrivalSource {
     }
 
     private static Boolean taglessOf(Integer code) {
-        if (code == null || (code != 0 && code != 1)) {
+        if (!isTaglessCode(code)) {
             return null;
         }
         return code == 1;
+    }
+
+    private static boolean isTaglessCode(Integer code) {
+        return code != null && (code == 0 || code == 1);
     }
 
     private static int stopOrderOf(Integer order) {

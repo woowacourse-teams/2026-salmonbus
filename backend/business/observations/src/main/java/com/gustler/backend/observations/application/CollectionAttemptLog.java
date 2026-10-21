@@ -90,12 +90,13 @@ final class CollectionAttemptLog implements AutoCloseable {
         for (Throwable cause = failure; cause != null && seen.add(cause); cause = cause.getCause()) {
             root = cause;
             if (cause instanceof SQLException sql) {
-                if (sql.getSQLState() != null) {
-                    sqlState = safe(sql.getSQLState());
+                String currentSqlState = sql.getSQLState();
+                String message = sql.getMessage();
+                if (currentSqlState != null) {
+                    sqlState = safe(currentSqlState);
                 }
-                if ("23503".equals(sql.getSQLState()) && sql.getMessage() != null
-                    && sql.getMessage().contains("fk_observation_route_stop")) {
-                    Matcher match = STOP_REFERENCE.matcher(sql.getMessage());
+                if (isStopReferenceViolation(currentSqlState, message)) {
+                    Matcher match = STOP_REFERENCE.matcher(message);
                     if (match.find()) {
                         stop = " referenceRouteVersionId=" + match.group(1) + " stopOrder=" + match.group(2)
                             + " stopId=" + match.group(3)
@@ -107,6 +108,13 @@ final class CollectionAttemptLog implements AutoCloseable {
         String reason = exceptionReason(sqlState);
         LOGGER.error("{} sqlState={} exceptionType={} rootCause={}{}", summary("FAILED", reason), sqlState,
             failure.getClass().getSimpleName(), root.getClass().getSimpleName(), stop);
+    }
+
+    private boolean isStopReferenceViolation(String sqlState, String message) {
+        if (!"23503".equals(sqlState) || message == null) {
+            return false;
+        }
+        return message.contains("fk_observation_route_stop");
     }
 
     private String exceptionReason(String sqlState) {

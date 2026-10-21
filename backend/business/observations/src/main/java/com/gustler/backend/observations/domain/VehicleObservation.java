@@ -61,12 +61,14 @@ public record VehicleObservation(
         return stopSequence;
     }
 
-    private static Integer crowdLevelOf(
-        Integer crowdLevel
-    ) {
-        if (crowdLevel == null || crowdLevel < LOWEST_CROWD_LEVEL || crowdLevel > HIGHEST_CROWD_LEVEL) {
+    private static Integer crowdLevelOf(Integer crowdLevel) {
+        if (crowdLevel == null || isOutsideCrowdLevelRange(crowdLevel)) {
             return null;
         }
         return crowdLevel;
+    }
+
+    private static boolean isOutsideCrowdLevelRange(int crowdLevel) {
+        return crowdLevel < LOWEST_CROWD_LEVEL || crowdLevel > HIGHEST_CROWD_LEVEL;
     }
 }

@@ -125,16 +125,16 @@ public final class ArrivalRefreshCoordinator implements RefreshStationArrivals {
 
     @Override
     public ArrivalRefresh requestAndAwait(String value, Duration maximumWait) {
-        if (maximumWait == null || maximumWait.isNegative()
-            || maximumWait.compareTo(Duration.ofMillis(ArrivalRefresh.MAX_WAIT_MILLIS)) > 0) {
+        if (isInvalidMaximumWait(maximumWait)) {
             throw new IllegalArgumentException("ETA 수집 완료 대기 한도 초과");
         }
+
         final long deadlineNanos = System.nanoTime() + maximumWait.toNanos();
         ArrivalRefresh initial = request(value);
-        if (maximumWait.isZero() || (initial.status() != Status.ACCEPTED && initial.status() != Status.IN_PROGRESS)
-            || !waitingRequests.tryAcquire()) {
+        if (!shouldWaitForCompletion(maximumWait, initial)) {
             return initial;
         }
+
         try {
             StationId stationId = new StationId(value);
             Job job;
@@ -162,6 +162,25 @@ public final class ArrivalRefreshCoordinator implements RefreshStationArrivals {
         } finally {
             waitingRequests.release();
         }
+    }
+
+    private boolean isInvalidMaximumWait(Duration maximumWait) {
+        if (maximumWait == null || maximumWait.isNegative()) {
+            return true;
+        }
+        return maximumWait.compareTo(Duration.ofMillis(ArrivalRefresh.MAX_WAIT_MILLIS)) > 0;
+    }
+
+    private boolean shouldWaitForCompletion(Duration maximumWait, ArrivalRefresh initial) {
+        if (maximumWait.isZero() || !isCollectionInProgress(initial)) {
+            return false;
+        }
+        return waitingRequests.tryAcquire();
+    }
+
+    private boolean isCollectionInProgress(ArrivalRefresh initial) {
+        Status status = initial.status();
+        return status == Status.ACCEPTED || status == Status.IN_PROGRESS;
     }
 
     private synchronized ArrivalRefresh afterWait(StationId stationId, ArrivalRefresh initial) {

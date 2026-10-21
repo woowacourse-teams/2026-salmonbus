@@ -57,16 +57,23 @@ public class JdbcRouteGeometryStore implements RouteGeometryStore {
             """).param(reference.versionId()).query((row, index) ->
             new Previous(row.getString(1), row.getObject(2, OffsetDateTime.class))).optional();
         String digest = read.shape().digest();
-        if (previous.isPresent() && (previous.get().digest().equals(digest)
-            || !read.receivedAt().isAfter(previous.get().receivedAt()))) {
+        if (previous.isPresent() && isUnchanged(previous.get(), read, digest)) {
             return Publication.UNCHANGED;
         }
+
         jdbc.sql("""
             INSERT INTO route_geometry(id,route_version_id,received_at,content_digest,points)
             VALUES (?,?,?,?,CAST(? AS jsonb))
             """).params(UUID.randomUUID(), reference.versionId(), read.receivedAt(), digest,
             json.writeValueAsString(read.shape().points())).update();
         return Publication.UPDATED;
+    }
+
+    private boolean isUnchanged(Previous previous, Read read, String digest) {
+        if (previous.digest().equals(digest)) {
+            return true;
+        }
+        return !read.receivedAt().isAfter(previous.receivedAt());
     }
 
     private record Previous(String digest, OffsetDateTime receivedAt) {

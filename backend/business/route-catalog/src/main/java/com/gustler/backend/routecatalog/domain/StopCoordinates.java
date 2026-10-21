@@ -9,7 +9,10 @@ public record StopCoordinates(double x, double y) {
     }
 
     public static StopCoordinates ofNullable(Double x, Double y) {
-        if (x == null || y == null || !Double.isFinite(x) || !Double.isFinite(y)) {
+        if (x == null || y == null) {
+            return null;
+        }
+        if (!Double.isFinite(x) || !Double.isFinite(y)) {
             return null;
         }
         return new StopCoordinates(x, y);
