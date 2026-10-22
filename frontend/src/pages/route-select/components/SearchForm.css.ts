@@ -46,7 +46,6 @@ export const input = style({
   fontSize: "16px",
   color: vars.color.textStrong,
   "::placeholder": { color: vars.color.textSubtle },
-  ":placeholder-shown": { caretColor: "transparent" },
 });
 
 export const searchIcon = style({
