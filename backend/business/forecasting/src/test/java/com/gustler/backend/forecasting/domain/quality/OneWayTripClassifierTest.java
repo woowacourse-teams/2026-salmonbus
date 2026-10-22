@@ -303,6 +303,32 @@ class OneWayTripClassifierTest {
     }
 
     @Test
+    void 복귀_방향의_차량이_기점을_교차로통과로_지나면_새_편도를_시작한다() {
+        // given
+        Previous before = previous(row(1, 19, 2, 40), 1, Status.ELIGIBLE);
+        Observation current = row(2, 1, 0, 42);
+
+        // when
+        Decision actual = classify(ROUTE, before, current);
+
+        // then
+        assertThat(actual).isEqualTo(new Decision(2, Status.ELIGIBLE, Boundary.DIRECTION_CHANGE));
+    }
+
+    @Test
+    void 기점을_교차로통과로_지난_편도는_기점_출발_관측이_이어져도_같은_편도다() {
+        // given
+        Previous before = previous(row(2, 1, 0, 42), 2, Status.ELIGIBLE);
+        Observation current = row(3, 1, 2, 40);
+
+        // when
+        Decision actual = classify(ROUTE, before, current);
+
+        // then
+        assertThat(actual).isEqualTo(new Decision(2, Status.ELIGIBLE, Boundary.CONTINUATION));
+    }
+
+    @Test
     void 차량_ID가_없으면_기점_출발이어도_BOUNDARY_UNCONFIRMED를_반환한다() {
         // given
         Observation current = new Observation(1, null, T, 1, 2, 44);

@@ -10,7 +10,7 @@ import java.util.Objects;
  * 좌석 범위 위반은 경계 종류와 관계없이 마지막에 제외 상태로 반영한다.
  */
 public final class OneWayTripClassifier {
-    public static final String RULE_VERSION = "one-way-seat-range-v3";
+    public static final String RULE_VERSION = "one-way-seat-range-v4";
     public static final Duration DEFAULT_MAXIMUM_GAP = Duration.ofMinutes(10);
 
     public enum Status {
@@ -177,7 +177,7 @@ public final class OneWayTripClassifier {
             return 0;
         }
         if (stopOrder == route.firstStop()
-            && !Integer.valueOf(2).equals(state)) {
+            && Integer.valueOf(1).equals(state)) {
             return 1;
         }
         if (isInboundAtTurnStop(route, stopOrder, state)) {
