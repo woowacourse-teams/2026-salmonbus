@@ -142,8 +142,6 @@ export const login = style({
   background: vars.color.brand,
   color: "white",
 });
-globalStyle(`html:has(${login})`, { backgroundColor: vars.color.brand });
-
 export const greeting = style({
   fontSize: 46,
   fontWeight: 400,
