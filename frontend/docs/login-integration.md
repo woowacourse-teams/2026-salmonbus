@@ -48,19 +48,28 @@ Jest는 입력, 복귀 경로, API 응답 검사, CSRF, 갱신과 로그아웃�
 
 ## 2026-10-22 dev 실 API 점검
 
-백엔드 배포 후 `https://dev.salmonbus.com`을 조회하고, 로컬 프로덕션 빌드의 로그인 화면을 같은 origin에서 실행했다. API 응답은 모의하지 않았다. 로그인 버튼은 활성화됐지만, 브라우저에 저장된 쿠키가 없어 CSRF 쿠키 검증은 실패했다.
+배포 직후에는 CSRF·임시 세션 쿠키가 없고 POST 로그아웃이 HTML 200으로 반환됐다. 사용자가 CloudFront Behavior 우선순위를 수정한 뒤 같은 요청을 다시 보내 정상 응답을 확인했다.
 
-| 요청                        | 확인한 응답                                                                | 남은 문제                                      |
-| --------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------- |
-| `GET /api/v1/routes`        | 200 JSON                                                                   | 공개 조회 응답 정상                            |
-| `GET /api/auth/session`     | 200, `authenticated=false`, `refreshable=false`, `Cache-Control: no-store` | `Set-Cookie`와 `__Host-XSRF-TOKEN` 쿠키가 없음 |
-| `GET /api/me`               | 401 `UNAUTHENTICATED` JSON                                                 | 비회원 거절 응답 정상                          |
-| `GET /api/auth/kakao/start` | 302, 카카오 인가 주소, dev 콜백, PKCE S256                                 | 임시 세션 쿠키 `__Host-sb_session`이 없음      |
-| `GET /api/auth/apple/start` | 302, Apple 인가 주소, dev 콜백, `response_mode=query`                      | 임시 세션 쿠키 `__Host-sb_session`이 없음      |
-| `POST /api/auth/logout`     | 200, 프론트엔드 `index.html`                                               | 계약의 204 응답이 아님                         |
+`https://dev.salmonbus.com`에서 로컬 프로덕션 빌드를 실행해 Chromium·Firefox·WebKit의 새 브라우저 세션으로 검증했다. 아래 API 응답은 실제 dev 서버에서 받았다.
 
-POST 점검은 실제 회원 토큰과 리프레시 토큰 없이 독립된 요청으로 실행했다. 무효 액세스 쿠키와 합성 CSRF 값을 보낸 경우에도 같은 HTML 200이 반환됐다. 실제 계정 로그인, 닉네임 수정, 회원탈퇴는 실행하지 않았다.
+| 요청                                                                      | 확인한 응답                                                                                          |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/routes`                                                      | 200 JSON                                                                                             |
+| `GET /api/auth/session`                                                   | 200, `authenticated=false`, `refreshable=false`, `Cache-Control: no-store`. `__Host-XSRF-TOKEN` 발급 |
+| `GET /api/me`                                                             | 401 `UNAUTHENTICATED` JSON                                                                           |
+| `GET /api/auth/kakao/start`                                               | 302, 카카오 인가 주소, dev 콜백, PKCE S256. `__Host-sb_session` 발급                                 |
+| `GET /api/auth/apple/start`                                               | 302, Apple 인가 주소, dev 콜백, `response_mode=query`. `__Host-sb_session` 발급                      |
+| 제공자별 합성 취소 콜백                                                   | 302, `login=cancelled`. 임시 세션 쿠키 삭제                                                          |
+| 비회원 `POST /api/auth/logout`                                            | 204. 액세스·리프레시 쿠키를 `Max-Age=0`으로 삭제                                                     |
+| 무효 액세스 쿠키를 보내고 CSRF 헤더를 생략한 로그아웃                     | 400 `CSRF_REJECTED` JSON                                                                             |
+| 같은 무효 액세스 쿠키와 일치하는 CSRF 쿠키·헤더를 보낸 로그아웃           | 204                                                                                                  |
+| 리프레시 토큰 없는 `POST /api/auth/refresh`                               | 401 `UNAUTHENTICATED` JSON                                                                           |
+| 비회원 `PATCH /api/me`, `DELETE /api/me`, `POST /api/me/withdrawal/apple` | 각각 401. 회원 데이터 변경 없음                                                                      |
 
-인증 경로에 필요한 CloudFront Behavior가 dev 배포에 적용됐는지 확인해야 한다. `/api/auth/*`와 `/api/me*`가 기존 `/api/*`보다 앞에서 일치하고, HTTP 방법 전부와 쿠키 All, 쿼리스트링 All, `X-XSRF-TOKEN` 전달, TTL 0 설정을 사용해야 한다. 설정이 확인된 뒤 쿠키 발급과 POST 응답부터 다시 점검한다.
+세 브라우저 모두 CSRF 쿠키의 `Secure`, `SameSite=Lax`, `Path=/`와 스크립트 접근을 확인했다. 임시 세션 쿠키는 `Secure`, `HttpOnly`, `SameSite=Lax`이며 취소 콜백 뒤 삭제됐다.
 
-원본 서버의 직접 응답과 AWS 콘솔의 실제 설정은 아직 확인하지 못했다. 따라서 쿠키 누락의 원인은 확정하지 않았다. 다만 [AWS 문서](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Cookies.html)에 따르면 CloudFront가 쿠키를 전달하지 않는 Behavior에서는 응답의 `Set-Cookie`도 제거한다. [팀의 CloudFront 설정 기록](https://higgs95.atlassian.net/wiki/spaces/HEM52VQZUW/pages/58130445)에도 dev와 운영의 적용 여부는 별도 확인 대상으로 남아 있다.
+로그인 시작 요청은 실제 302 응답과 쿠키를 확인한 뒤 제공자 화면으로의 이동을 멈췄다. 발급된 state와 같은 브라우저 세션의 쿠키로 카카오 `access_denied`, Apple `user_cancelled_authorize` 오류를 서버 콜백에 보냈다. 서버가 반환한 복귀 주소를 로컬 화면으로 열어, 로그인 취소 안내와 `/mypage` 복귀 경로 보존, 결과 쿼리 삭제를 확인했다. 제공자의 실제 취소 조작을 검증한 것은 아니다.
+
+POST·PATCH·DELETE 점검은 실제 회원 토큰과 리프레시 토큰 없이 독립된 비회원 세션에서 실행했다. 실제 소셜 계정 로그인, 로그인된 회원의 토큰 갱신·닉네임 수정·회원탈퇴, iPhone 인증은 아직 검증하지 않았다. 이 점검을 로그인 성공 검증으로 기록하지 않는다.
+
+[팀의 CloudFront 설정 기록](https://higgs95.atlassian.net/wiki/spaces/HEM52VQZUW/pages/58130445)의 쿠키 전달과 메서드 설정이 실제 응답에 반영된 것을 확인했다. AWS 콘솔의 개별 설정값을 직접 읽은 것은 아니다. Dia MCP는 디버깅 포트 `127.0.0.1:9222` 연결이 거부돼 사용하지 못했고, 위 브라우저 검증은 독립된 Playwright 세션으로 실행했다.
