@@ -153,25 +153,6 @@ class MemberWithdrawalTest {
     }
 
     @Test
-    void 호출자가_연결_해제에_실패했으면_포기한_요청으로_남긴다() {
-        // given
-        UUID publicId = register(LoginProvider.KAKAO, SUBJECT);
-
-        // when
-        Optional<WithdrawnMember> actual = withdrawMember.withdraw(publicId, ProviderUnlink.FAILED);
-
-        // then
-        Row row = row(jdbcClient.sql("SELECT id FROM provider_unlink").query(Long.class).single());
-        assertSoftly(softly -> {
-            softly.assertThat(actual.orElseThrow().pendingUnlink()).isEmpty();
-            softly.assertThat(row.identity()).isEqualTo(IDENTITY);
-            softly.assertThat(row.status()).isEqualTo("GAVE_UP");
-            softly.assertThat(row.attempts()).isEqualTo(1);
-            softly.assertThat(row.lastError()).isEqualTo(ProviderUnlinkPolicy.CALLER_FAILED_ERROR);
-        });
-    }
-
-    @Test
     void 없는_회원이면_결과가_비어_있고_아무것도_기록하지_않는다() {
         // when
         Optional<WithdrawnMember> actual = withdrawMember.withdraw(UUID.randomUUID(), ProviderUnlink.PENDING);

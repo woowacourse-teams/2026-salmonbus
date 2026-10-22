@@ -78,6 +78,7 @@ springdoc:
     - /api/auth/refresh
     - /api/auth/logout
     - /api/me
+    - /api/me/sessions
     - /api/me/withdrawal/apple
 
 # 오류 응답에 실어 보낸 requestId 로 서버 로그를 찾을 수 있게 한다.

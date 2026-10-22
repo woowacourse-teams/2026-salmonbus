@@ -8,8 +8,9 @@ import java.util.Optional;
 /**
  * 요청에서 액세스 토큰과 리프레시 토큰을 꺼낸다.
  *
- * <p>액세스 토큰은 {@code Authorization: Bearer} 헤더를 먼저 보고 없으면 쿠키를 본다. 웹과 웹뷰는 쿠키, 헤더를 쓰는
- * 다른 클라이언트는 헤더로 같은 서버를 쓴다.
+ * <p>액세스 토큰은 {@code Authorization: Bearer} 헤더를 먼저 보고, 헤더가 없거나 토큰 값이 비어 있으면 쿠키를 본다. 웹과
+ * 웹뷰는 쿠키, 헤더를 쓰는 다른 클라이언트는 헤더로 같은 서버를 쓴다. 헤더에 토큰 값이 있으면 그 토큰이 검증에 실패해도
+ * 쿠키로 다시 보지 않는다. CSRF 면제 기준과 인증 수단을 같게 두기 위해서다.
  */
 public final class BearerTokens {
     private static final String BEARER_PREFIX = "Bearer ";

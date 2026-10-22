@@ -23,6 +23,7 @@ import com.gustler.backend.member.api.LoginProvider;
 import com.gustler.backend.member.api.MemberIdentity;
 import com.gustler.backend.member.api.NicknameChangeResult;
 import com.gustler.backend.member.api.ProviderUnlink;
+import com.gustler.backend.member.api.RefreshTokens;
 import com.gustler.backend.member.api.ViewMember;
 import com.gustler.backend.member.api.WithdrawMember;
 import com.gustler.backend.member.api.WithdrawnMember;
@@ -53,7 +54,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
 /**
- * 로그인한 회원 본인의 정보를 조회하고 닉네임을 바꾸고 탈퇴한다.
+ * 로그인한 회원 본인의 정보를 조회하고 닉네임을 바꾸고, 모든 기기에서 로그아웃하고 탈퇴한다.
  *
  * <p>유효한 액세스 토큰이 없는 요청은 보안 필터가 401 로 거절한다. 토큰은 유효하지만 회원이 이미 탈퇴한 경우에는 이
  * 컨트롤러가 401 로 답한다. 액세스 토큰은 만료 전까지 취소할 수 없으므로 이 확인이 탈퇴를 바로 반영한다.
@@ -63,6 +64,9 @@ import org.springframework.web.util.UriComponentsBuilder;
  * 시도한다. 해제 실패로 탈퇴를 되돌리지 않는다. 애플 회원은 애플 연결을 끊는 데 애플이 새로 발급한 토큰이 필요해 409
  * {@code REAUTH_REQUIRED} 로 답한다. 애플 회원은 {@code POST /api/me/withdrawal/apple} 로 짧은 수명의 탈퇴 티켓이 든 시작
  * 주소를 받아 그 주소로 이동한다. 이 요청은 다른 변경 요청처럼 CSRF 로 보호되므로 다른 사이트가 탈퇴를 시작시킬 수 없다.
+ *
+ * <p>모든 기기에서 로그아웃하면 회원의 리프레시 토큰 계통을 모두 폐기한다. 다른 기기는 다음 갱신에서 거절되지만, 이미 발급된
+ * 액세스 토큰은 만료까지 쓸 수 있다.
  */
 @RestController
 @Tag(name = ApiDocsTags.MEMBER)
@@ -77,6 +81,7 @@ public class MeController {
     private final ProviderUnlinkRunner unlinkRunner;
     private final AuthCookies authCookies;
     private final WithdrawalTickets withdrawalTickets;
+    private final RefreshTokens refreshTokens;
 
     public MeController(
         ViewMember viewMember,
@@ -84,7 +89,8 @@ public class MeController {
         WithdrawMember withdrawMember,
         ProviderUnlinkRunner unlinkRunner,
         AuthCookies authCookies,
-        WithdrawalTickets withdrawalTickets
+        WithdrawalTickets withdrawalTickets,
+        RefreshTokens refreshTokens
     ) {
         this.viewMember = viewMember;
         this.changeNickname = changeNickname;
@@ -92,6 +98,7 @@ public class MeController {
         this.unlinkRunner = unlinkRunner;
         this.authCookies = authCookies;
         this.withdrawalTickets = withdrawalTickets;
+        this.refreshTokens = refreshTokens;
     }
 
     @GetMapping
@@ -167,6 +174,41 @@ public class MeController {
         };
     }
 
+    @DeleteMapping("/sessions")
+    @Operation(operationId = "logoutAllSessions", summary = "모든 기기에서 로그아웃",
+        description = """
+            이 회원이 로그인한 모든 기기의 리프레시 토큰을 폐기하고, 이 요청의 인증 쿠키 두 개를 지운 뒤 204로 답합니다.
+            다른 기기는 다음 `POST /api/auth/refresh`에서 401을 받습니다.
+            이미 발급한 액세스 토큰은 만료(최대 15분)까지 취소되지 않으므로, 쿠키를 쓰지 않는 클라이언트는 보관한 토큰을 직접 버립니다.
+
+            """ + AuthApiDocs.ACCESS_TOKEN_RULE + " " + AuthApiDocs.CSRF_RULE,
+        parameters = @Parameter(name = AuthApiDocs.CSRF_HEADER, in = ParameterIn.HEADER,
+            description = AuthApiDocs.CSRF_HEADER_DESCRIPTION, schema = @Schema(type = "string")))
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "모든 기기에서 로그아웃함. 본문 없음", content = @Content,
+            headers = {
+                @Header(name = "Cache-Control", description = AuthApiDocs.NO_STORE,
+                    schema = @Schema(type = "string")),
+                @Header(name = "Set-Cookie", description = AuthApiDocs.CLEARED_COOKIES,
+                    schema = @Schema(type = "string"))
+            }),
+        @ApiResponse(responseCode = "400", description = "CSRF 토큰 확인 실패",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
+                examples = @ExampleObject(name = "csrfRejected", value = AuthApiDocsExamples.CSRF_REJECTED))),
+        @ApiResponse(responseCode = "401", description = "액세스 토큰이 없거나 만료·위조됨, 또는 탈퇴한 회원",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
+                examples = @ExampleObject(name = "unauthenticated", value = AuthApiDocsExamples.UNAUTHENTICATED)))
+    })
+    public ResponseEntity<Void> logoutAllSessions(
+        @Parameter(hidden = true) @AuthenticationPrincipal MemberPrincipal principal
+    ) {
+        viewMember.view(principal.publicId()).orElseThrow(UnauthenticatedException::new);
+        refreshTokens.revokeAll(principal.publicId());
+        HttpHeaders headers = new HttpHeaders();
+        authCookies.clear(headers);
+        return ResponseEntity.noContent().headers(headers).cacheControl(CacheControl.noStore()).build();
+    }
+
     @DeleteMapping
     @Operation(operationId = "withdraw", summary = "회원 탈퇴(카카오)",
         description = """
@@ -220,6 +262,7 @@ public class MeController {
             이 요청은 5분 동안 유효한 탈퇴 티켓이 든 시작 주소를 반환하고, 클라이언트는 브라우저를 그 주소로 이동시킵니다.
             - 탈퇴하면 `/?withdrawn=1`로 돌아오고 인증 쿠키가 지워집니다
             - 사용자가 취소하면 `returnTo`에 `withdraw=cancelled`, 그 밖의 실패는 `withdraw=failed`가 붙어 돌아옵니다
+            - 애플 토큰 취소에 실패하면 회원을 지우지 않고 `withdraw=failed`로 돌아옵니다. 인증 쿠키가 남아 다시 시도할 수 있습니다
             - `returnTo`는 `/` 또는 `/routes/{9자리}`(쿼리 `direction`·`stopId`만)이며, 그 밖의 값은 `/`로 바뀝니다
 
             본문은 생략할 수 있습니다. 카카오 회원이면 400 `INVALID_REQUEST`입니다.

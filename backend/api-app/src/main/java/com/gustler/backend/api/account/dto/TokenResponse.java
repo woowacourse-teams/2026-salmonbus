@@ -16,7 +16,7 @@ public record TokenResponse(
     long expiresIn,
     @Schema(description = "새 리프레시 토큰. 갱신할 때마다 바뀌므로 받은 값으로 바꿔 저장한다")
     String refreshToken,
-    @Schema(description = "리프레시 토큰 만료 시각. 이 세대를 발급한 시점부터 30일")
+    @Schema(description = "리프레시 토큰 만료 시각. 이 세대를 발급한 시점부터 30일이고, 처음 로그인한 뒤 180일을 넘지 않는다")
     OffsetDateTime refreshTokenExpiresAt
 ) {
 }

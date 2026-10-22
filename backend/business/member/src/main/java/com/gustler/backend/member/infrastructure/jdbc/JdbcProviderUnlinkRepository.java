@@ -23,14 +23,7 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class JdbcProviderUnlinkRepository implements ProviderUnlinkRepository {
-    private static final String INSERT = """
-        INSERT INTO provider_unlink
-            (provider, subject, status, attempts, next_attempt_at, last_error, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        RETURNING id
-        """;
-
-    private static final String INSERT_WITHOUT_ERROR = """
+    private static final String INSERT_PENDING = """
         INSERT INTO provider_unlink
             (provider, subject, status, attempts, next_attempt_at, created_at, updated_at)
         VALUES (?, ?, ?, 0, ?, ?, ?)
@@ -80,22 +73,8 @@ public class JdbcProviderUnlinkRepository implements ProviderUnlinkRepository {
 
     @Override
     public long savePending(MemberIdentity identity, OffsetDateTime leasedUntil, OffsetDateTime now) {
-        return jdbcClient.sql(INSERT_WITHOUT_ERROR)
+        return jdbcClient.sql(INSERT_PENDING)
             .params(identity.provider().name(), identity.subject(), UnlinkStatus.PENDING.name(), leasedUntil, now, now)
-            .query(Long.class)
-            .single();
-    }
-
-    @Override
-    public void saveGaveUp(
-        MemberIdentity identity,
-        int attempts,
-        String lastError,
-        OffsetDateTime now
-    ) {
-        jdbcClient.sql(INSERT)
-            .params(identity.provider().name(), identity.subject(), UnlinkStatus.GAVE_UP.name(), attempts, now,
-                lastError, now, now)
             .query(Long.class)
             .single();
     }

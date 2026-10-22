@@ -77,7 +77,8 @@ public class TokenController {
             리프레시 토큰을 다음 세대로 바꾸고 액세스 토큰을 새로 발급합니다.
             본문의 `refreshToken`을 먼저 보고, 없거나 비어 있으면 `__Host-sb_rt` 쿠키를 봅니다. 본문은 생략할 수 있습니다.
 
-            쿠키로 보낸 요청(웹·웹뷰)은 204와 함께 `__Host-sb_at`(15분)·`__Host-sb_rt`(30일) 쿠키를 새로 받습니다.
+            쿠키로 보낸 요청(웹·웹뷰)은 204와 함께 `__Host-sb_at`(15분)·`__Host-sb_rt` 쿠키를 새로 받습니다.
+            리프레시 토큰은 갱신할 때마다 다시 30일, 처음 로그인한 뒤 최대 180일 유효합니다.
             본문으로 보낸 요청(쿠키를 쓰지 않는 클라이언트)은 200 본문으로 새 토큰을 받습니다.
             리프레시 토큰은 갱신할 때마다 바뀌므로 받은 값으로 바꿔 저장합니다.
             직전 세대 토큰을 갱신 뒤 10초 안에 다시 보내면 동시 갱신으로 보고 지금 토큰을 다시 줍니다.
@@ -97,7 +98,8 @@ public class TokenController {
             headers = {
                 @Header(name = "Cache-Control", description = AuthApiDocs.NO_STORE, schema = @Schema(type = "string")),
                 @Header(name = "Set-Cookie",
-                    description = "__Host-sb_at(Max-Age 900)과 __Host-sb_rt(Max-Age는 리프레시 토큰 만료까지, 30일). "
+                    description = "__Host-sb_at(Max-Age 900)과 __Host-sb_rt(Max-Age는 리프레시 토큰 만료까지, "
+                        + "갱신할 때마다 다시 30일, 처음 로그인한 뒤 최대 180일). "
                         + "둘 다 HttpOnly; Secure; SameSite=Lax; Path=/",
                     schema = @Schema(type = "string"))
             }),

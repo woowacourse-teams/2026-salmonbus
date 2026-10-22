@@ -38,9 +38,6 @@ public final class ProviderUnlinkPolicy {
     /** 실패 원인을 알리지 않았을 때 남기는 문구. */
     public static final String UNKNOWN_ERROR = "원인을 알리지 않았다";
 
-    /** 호출자가 탈퇴 전에 해제를 시도했다가 실패해 곧바로 포기한 요청에 남기는 문구. */
-    public static final String CALLER_FAILED_ERROR = "호출자가 해제에 실패했다";
-
     private static final int MAX_SHIFT = 30;
 
     private ProviderUnlinkPolicy() {

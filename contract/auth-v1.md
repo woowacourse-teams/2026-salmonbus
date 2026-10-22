@@ -2,7 +2,7 @@
 
 프론트와 서버가 함께 지키는 소셜 로그인(카카오·애플) 계약이다.
 
-fetch로 부르는 API 7개의 요청·응답·오류 코드는 [`auth-v1.openapi.json`](auth-v1.openapi.json)이 원본이다. 서버 시험(`AuthApiDocsContractTest`)이 앱이 만든 명세와 이 파일을 대조한다. 이 문서는 명세에 담기지 않는 브라우저 이동 흐름과 쿠키 규칙을 적는다. 모양을 바꾸면 두 파일을 같은 PR에서 고친다.
+fetch로 부르는 API 8개의 요청·응답·오류 코드는 [`auth-v1.openapi.json`](auth-v1.openapi.json)이 원본이다. 서버 시험(`AuthApiDocsContractTest`)이 앱이 만든 명세와 이 파일을 대조한다. 이 문서는 명세에 담기지 않는 브라우저 이동 흐름과 쿠키 규칙을 적는다. 모양을 바꾸면 두 파일을 같은 PR에서 고친다.
 
 ## 켜짐
 
@@ -20,6 +20,7 @@ fetch로 부르는 API 7개의 요청·응답·오류 코드는 [`auth-v1.openap
 | `GET /api/me` | 200. 내 정보 | 401 `UNAUTHENTICATED` |
 | `PATCH /api/me` | 200. 바뀐 내 정보 | 400 `NICKNAME_LENGTH`·`NICKNAME_CHARACTERS`·`NICKNAME_RESERVED`·`CSRF_REJECTED`·`INVALID_REQUEST`, 401 `UNAUTHENTICATED`, 409 `NICKNAME_TAKEN` |
 | `DELETE /api/me` | 204. 카카오 회원 탈퇴, 인증 쿠키 삭제 | 400 `CSRF_REJECTED`, 401 `UNAUTHENTICATED`, 409 `REAUTH_REQUIRED`(애플 회원) |
+| `DELETE /api/me/sessions` | 204. 모든 기기에서 로그아웃, 인증 쿠키 삭제 | 400 `CSRF_REJECTED`, 401 `UNAUTHENTICATED` |
 | `POST /api/me/withdrawal/apple` | 200. 애플 재인증 탈퇴 시작 주소 | 400 `INVALID_REQUEST`(카카오 회원)·`CSRF_REJECTED`, 401 `UNAUTHENTICATED` |
 
 - 모든 응답은 `Cache-Control: no-store`다.
@@ -29,11 +30,14 @@ fetch로 부르는 API 7개의 요청·응답·오류 코드는 [`auth-v1.openap
 
 ## 인증
 
-- 액세스 토큰은 `Authorization: Bearer` 헤더를 먼저 보고, 없으면 `__Host-sb_at` 쿠키를 본다. 웹과 웹뷰는 쿠키, 쿠키를 쓰지 않는 클라이언트는 헤더를 쓴다.
+- 액세스 토큰은 `Authorization: Bearer` 헤더를 먼저 보고, 헤더가 없거나 토큰 값이 비어 있으면 `__Host-sb_at` 쿠키를 본다. 웹과 웹뷰는 쿠키, 쿠키를 쓰지 않는 클라이언트는 헤더를 쓴다.
+- 헤더에 토큰 값이 있으면 그 토큰이 검증에 실패해도 쿠키를 보지 않는다. `/api/me` 아래 요청이면 401 `UNAUTHENTICATED`이고, `GET /api/auth/session`은 `authenticated=false`로 답한다. 그래서 웹뷰 요청에는 헤더를 붙이지 않는다.
 - 리프레시 토큰은 `POST /api/auth/refresh`·`logout` 본문의 `refreshToken`을 먼저 보고, 없거나 비어 있으면 `__Host-sb_rt` 쿠키를 본다.
 - 갱신에 실패하면 이유를 구분하지 않고 401 `UNAUTHENTICATED`다. 쿠키로 보낸 요청이면 인증 쿠키 두 개를 지운다.
 - 리프레시 토큰은 갱신할 때마다 바뀐다. 직전 토큰을 갱신 뒤 10초 안에 다시 보내면 동시 갱신으로 보고 지금 토큰을 다시 준다. 10초가 지났거나 그보다 오래된 토큰이면 그 로그인 계통 전체가 폐기되어 다시 로그인해야 한다.
+- 리프레시 토큰은 갱신할 때마다 다시 30일, 처음 로그인한 뒤 최대 180일 유효하다. 180일이 지나면 갱신이 401이고 다시 로그인해야 한다.
 - 액세스 토큰은 만료(15분)까지 취소되지 않는다. 그래서 `/api/me` 아래 요청은 회원이 아직 있는지 매번 확인하고, 탈퇴했으면 401이다.
+- `DELETE /api/me/sessions`는 회원의 로그인 계통을 모두 지워 다른 기기의 세션까지 끊는다. 이미 발급된 액세스 토큰은 취소되지 않아 최대 15분 남는다.
 
 ## CSRF
 
@@ -47,7 +51,7 @@ fetch로 부르는 API 7개의 요청·응답·오류 코드는 [`auth-v1.openap
 | 이름 | 내용 | 속성 | 수명 |
 | --- | --- | --- | --- |
 | `__Host-sb_at` | 액세스 토큰 | `HttpOnly; Secure; SameSite=Lax; Path=/` | `Max-Age=900`(15분) |
-| `__Host-sb_rt` | 리프레시 토큰 | `HttpOnly; Secure; SameSite=Lax; Path=/` | 리프레시 토큰 만료까지. 발급 시점부터 30일이고 갱신할 때마다 새로 30일 |
+| `__Host-sb_rt` | 리프레시 토큰 | `HttpOnly; Secure; SameSite=Lax; Path=/` | 리프레시 토큰 만료까지. 갱신할 때마다 다시 30일, 처음 로그인한 뒤 최대 180일 |
 | `__Host-XSRF-TOKEN` | CSRF 토큰 | `Secure; SameSite=Lax; Path=/`. 스크립트가 읽을 수 있다 | 브라우저 세션 |
 | `__Host-sb_session` | 로그인 중 임시 세션 | `HttpOnly; Secure; SameSite=Lax; Path=/` | 10분. 로그인이 끝나면 지운다 |
 
@@ -98,11 +102,12 @@ fetch로 부르는 API 7개의 요청·응답·오류 코드는 [`auth-v1.openap
 | 탈퇴함 | `/?withdrawn=1`. `returnTo`와 상관없이 첫 화면 | 인증 쿠키 삭제 |
 | 사용자가 애플 화면에서 취소 | `returnTo`에 `withdraw=cancelled` | 바꾸지 않음 |
 | 티켓이 없거나 만료·위조됨 | `returnTo`에 `withdraw=failed`. 애플 화면으로 가지 않음 | 바꾸지 않음 |
+| 애플 토큰 취소에 실패함(애플이 토큰을 주지 않은 경우 포함) | `returnTo`에 `withdraw=failed`. 회원은 지우지 않음 | 바꾸지 않음 |
 | 다른 애플 계정으로 인증함, 그 밖의 실패 | `returnTo`에 `withdraw=failed` | 바꾸지 않음 |
 | 애플 화면에서 10분 넘게 머물러 임시 세션이 만료됨 | `/?login=failed`. 탈퇴 중이었다는 정보도 함께 사라진다 | 바꾸지 않음 |
 
 - 티켓은 CSRF로 보호되는 2번 요청으로만 받을 수 있다. 다른 사이트가 링크 하나로 탈퇴 흐름을 열지 못하게 하려는 것이다.
-- 애플 토큰 취소에 실패해도 회원은 지운다. 이때 사용자는 애플 ID 설정에서 직접 연결을 끊을 수 있다.
+- 회원은 애플 토큰을 취소한 뒤에만 지운다. 취소에 실패하면 회원과 로그인이 그대로 남으므로 사용자는 2번부터 다시 시도할 수 있다.
 
 ## 프론트 권장 순서
 

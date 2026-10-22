@@ -40,6 +40,7 @@ public class ApiDocsConfiguration {
         "/api/auth/refresh",
         "/api/auth/logout",
         "/api/me",
+        "/api/me/sessions",
         "/api/me/withdrawal/apple"
     );
 

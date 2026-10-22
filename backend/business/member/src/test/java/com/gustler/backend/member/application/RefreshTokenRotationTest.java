@@ -12,6 +12,7 @@ import com.gustler.backend.member.domain.RefreshTokenCodec;
 import com.gustler.backend.member.support.AdjustableClock;
 import com.gustler.backend.member.support.MemberIntegrationTest;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -66,6 +67,7 @@ class RefreshTokenRotationTest {
             softly.assertThat(tokenCount()).isEqualTo(1);
             softly.assertThat(row.generation()).isZero();
             softly.assertThat(generationOf(actual.token())).isZero();
+            softly.assertThat(row.startedAt().toInstant()).isEqualTo(clock.instant());
             softly.assertThat(row.rotatedAt().toInstant()).isEqualTo(clock.instant());
         });
     }
@@ -82,7 +84,8 @@ class RefreshTokenRotationTest {
 
         // then
         assertThat(actual)
-            .containsExactlyInAnyOrder("family_id", "member_id", "generation", "rotated_at", "expires_at");
+            .containsExactlyInAnyOrder(
+                "family_id", "member_id", "generation", "started_at", "rotated_at", "expires_at");
     }
 
     @Test
@@ -148,6 +151,7 @@ class RefreshTokenRotationTest {
             softly.assertThat(generationOf(rotated.next().token())).isEqualTo(1);
             softly.assertThat(rotated.next().expiresAt().toInstant()).isEqualTo(rotatedAt.plusDays(30).toInstant());
             softly.assertThat(row.generation()).isEqualTo(1);
+            softly.assertThat(row.startedAt().toInstant()).isEqualTo(AdjustableClock.INITIAL);
             softly.assertThat(row.rotatedAt().toInstant()).isEqualTo(clock.instant());
             softly.assertThat(row.expiresAt().toInstant()).isEqualTo(rotated.next().expiresAt().toInstant());
             softly.assertThat(tokenCount()).isEqualTo(1);
@@ -172,6 +176,45 @@ class RefreshTokenRotationTest {
             softly.assertThat(generationOf(latest)).isEqualTo(3);
             softly.assertThat(row(familyOf(latest)).generation()).isEqualTo(3);
             softly.assertThat(tokenCount()).isEqualTo(1);
+        });
+    }
+
+    @Test
+    void 처음_로그인한_뒤_180일에_가까워지면_갱신해도_만료가_180일째로_잘린다() {
+        // given
+        IssuedRefreshToken issued = refreshTokens.issue(insertMember());
+        String token = rotateEvery28Days(issued.token(), 5);
+        clock.advance(Duration.ofDays(20));
+
+        // when
+        RefreshResult actual = refreshTokens.rotate(token);
+
+        // then
+        RefreshResult.Rotated rotated = (RefreshResult.Rotated) actual;
+        Instant maxExpiresAt = AdjustableClock.INITIAL.plus(Duration.ofDays(180));
+        assertSoftly(softly -> {
+            softly.assertThat(generationOf(rotated.next().token())).isEqualTo(6);
+            softly.assertThat(rotated.next().expiresAt().toInstant()).isEqualTo(maxExpiresAt);
+            softly.assertThat(row(familyOf(token)).expiresAt().toInstant()).isEqualTo(maxExpiresAt);
+        });
+    }
+
+    @Test
+    void 처음_로그인한_뒤_180일이_되면_갱신하지_못하고_만료로_거절한다() {
+        // given
+        IssuedRefreshToken issued = refreshTokens.issue(insertMember());
+        String token = rotateEvery28Days(issued.token(), 5);
+        clock.advance(Duration.ofDays(20));
+        token = ((RefreshResult.Rotated) refreshTokens.rotate(token)).next().token();
+        clock.advance(Duration.ofDays(20));
+
+        // when
+        RefreshResult actual = refreshTokens.rotate(token);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(actual).isEqualTo(new RefreshResult.Rejected(Reason.EXPIRED));
+            softly.assertThat(tokenCount()).isZero();
         });
     }
 
@@ -475,6 +518,48 @@ class RefreshTokenRotationTest {
     }
 
     @Test
+    void 회원의_계통을_모두_폐기하면_어느_기기의_토큰도_갱신할_수_없고_다른_회원은_그대로다() {
+        // given
+        UUID publicId = insertMember();
+        IssuedRefreshToken phone = refreshTokens.issue(publicId);
+        IssuedRefreshToken laptopFirst = refreshTokens.issue(publicId);
+        RefreshResult.Rotated laptop = (RefreshResult.Rotated) refreshTokens.rotate(laptopFirst.token());
+        IssuedRefreshToken otherMember = refreshTokens.issue(insertMember());
+
+        // when
+        int actual = refreshTokens.revokeAll(publicId);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(actual).isEqualTo(2);
+            softly.assertThat(tokenCount()).isEqualTo(1);
+            softly.assertThat(refreshTokens.rotate(phone.token()))
+                .isEqualTo(new RefreshResult.Rejected(Reason.UNKNOWN));
+            softly.assertThat(refreshTokens.rotate(laptop.next().token()))
+                .isEqualTo(new RefreshResult.Rejected(Reason.UNKNOWN));
+            softly.assertThat(refreshTokens.rotate(otherMember.token())).isInstanceOf(ROTATED);
+        });
+    }
+
+    @Test
+    void 계통이_없거나_없는_회원의_계통을_모두_폐기하면_0이다() {
+        // given
+        UUID withoutFamily = insertMember();
+        refreshTokens.issue(insertMember());
+
+        // when
+        int withoutFamilyRevoked = refreshTokens.revokeAll(withoutFamily);
+        int unknownRevoked = refreshTokens.revokeAll(UUID.randomUUID());
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(withoutFamilyRevoked).isZero();
+            softly.assertThat(unknownRevoked).isZero();
+            softly.assertThat(tokenCount()).isEqualTo(1);
+        });
+    }
+
+    @Test
     void 정리하면_만료된_계통만_상한까지_지우고_두_번째_호출이_나머지를_지운다() {
         // given
         long memberId = insertMemberRow();
@@ -591,11 +676,20 @@ class RefreshTokenRotationTest {
     private void insertFamilies(long memberId, int count, Duration expiresFromNow) {
         OffsetDateTime expiresAt = OffsetDateTime.ofInstant(clock.instant(), clock.getZone()).plus(expiresFromNow);
         jdbcClient.sql("""
-                INSERT INTO refresh_token (family_id, member_id, generation, rotated_at, expires_at)
-                SELECT gen_random_uuid(), ?, 0, ?, ? FROM generate_series(1, ?)
+                INSERT INTO refresh_token (family_id, member_id, generation, started_at, rotated_at, expires_at)
+                SELECT gen_random_uuid(), ?, 0, ?, ?, ? FROM generate_series(1, ?)
                 """)
-            .params(memberId, expiresAt.minusDays(30), expiresAt, count)
+            .params(memberId, expiresAt.minusDays(30), expiresAt.minusDays(30), expiresAt, count)
             .update();
+    }
+
+    private String rotateEvery28Days(String token, int rounds) {
+        String current = token;
+        for (int round = 1; round <= rounds; round++) {
+            clock.advance(Duration.ofDays(28));
+            current = ((RefreshResult.Rotated) refreshTokens.rotate(current)).next().token();
+        }
+        return current;
     }
 
     private UUID familyOf(String token) {
@@ -607,11 +701,13 @@ class RefreshTokenRotationTest {
     }
 
     private Row row(UUID familyId) {
-        return jdbcClient.sql("SELECT generation, rotated_at, expires_at FROM refresh_token WHERE family_id = ?")
+        return jdbcClient.sql("""
+                SELECT generation, started_at, rotated_at, expires_at FROM refresh_token WHERE family_id = ?
+                """)
             .param(familyId)
             .query((rows, rowNumber) -> new Row(
-                rows.getInt("generation"), rows.getObject("rotated_at", OffsetDateTime.class),
-                rows.getObject("expires_at", OffsetDateTime.class)))
+                rows.getInt("generation"), rows.getObject("started_at", OffsetDateTime.class),
+                rows.getObject("rotated_at", OffsetDateTime.class), rows.getObject("expires_at", OffsetDateTime.class)))
             .single();
     }
 
@@ -619,6 +715,11 @@ class RefreshTokenRotationTest {
         return jdbcClient.sql("SELECT count(*) FROM refresh_token").query(Long.class).single();
     }
 
-    private record Row(int generation, OffsetDateTime rotatedAt, OffsetDateTime expiresAt) {
+    private record Row(
+        int generation,
+        OffsetDateTime startedAt,
+        OffsetDateTime rotatedAt,
+        OffsetDateTime expiresAt
+    ) {
     }
 }

@@ -87,6 +87,21 @@ class MemberTableTest {
     }
 
     @Test
+    void 한_회원에는_제공자_계정이_하나만_연결된다() {
+        // given
+        final long memberId = insertMember(NICKNAME);
+        insertIdentity(KAKAO, KAKAO_SUBJECT, memberId);
+
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertIdentity(APPLE, "apple-subject", memberId));
+
+        // then
+        assertThat(caughtFailure)
+            .isInstanceOf(DataIntegrityViolationException.class)
+            .hasMessageContaining("ux_member_identity_member");
+    }
+
+    @Test
     void 제공자가_다르면_같은_사용자_ID도_다른_계정으로_연결된다() {
         // given
         insertIdentity(KAKAO, KAKAO_SUBJECT, insertMember("연어하나"));
@@ -273,10 +288,10 @@ class MemberTableTest {
 
     private void insertRefreshToken(long memberId, UUID familyId, int generation) {
         jdbcClient.sql("""
-                INSERT INTO refresh_token (family_id, member_id, generation, rotated_at, expires_at)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO refresh_token (family_id, member_id, generation, started_at, rotated_at, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """)
-            .params(familyId, memberId, generation, JOINED_AT, JOINED_AT.plusDays(30))
+            .params(familyId, memberId, generation, JOINED_AT, JOINED_AT, JOINED_AT.plusDays(30))
             .update();
     }
 

@@ -84,7 +84,7 @@
     "/api/auth/refresh": {
       "post": {
         "summary": "리프레시 토큰으로 로그인 연장",
-        "description": "리프레시 토큰을 다음 세대로 바꾸고 액세스 토큰을 새로 발급합니다.\n본문의 `refreshToken`을 먼저 보고, 없거나 비어 있으면 `__Host-sb_rt` 쿠키를 봅니다. 본문은 생략할 수 있습니다.\n\n쿠키로 보낸 요청(웹·웹뷰)은 204와 함께 `__Host-sb_at`(15분)·`__Host-sb_rt`(30일) 쿠키를 새로 받습니다.\n본문으로 보낸 요청(쿠키를 쓰지 않는 클라이언트)은 200 본문으로 새 토큰을 받습니다.\n리프레시 토큰은 갱신할 때마다 바뀌므로 받은 값으로 바꿔 저장합니다.\n직전 세대 토큰을 갱신 뒤 10초 안에 다시 보내면 동시 갱신으로 보고 지금 토큰을 다시 줍니다.\n10초가 지났거나 그보다 오래된 세대 토큰이면 그 로그인 계통 전체를 폐기하고 401입니다.\n\n갱신에 실패하면 이유와 관계없이 401 `UNAUTHENTICATED`이고, 쿠키로 보낸 요청이면 인증 쿠키 두 개를 지웁니다.\n인증 쿠키(`__Host-sb_at`·`__Host-sb_rt`)가 실린 요청은 `Authorization: Bearer` 헤더가 없으면 `X-XSRF-TOKEN` 헤더에 `__Host-XSRF-TOKEN` 쿠키 값을 실어야 합니다.",
+        "description": "리프레시 토큰을 다음 세대로 바꾸고 액세스 토큰을 새로 발급합니다.\n본문의 `refreshToken`을 먼저 보고, 없거나 비어 있으면 `__Host-sb_rt` 쿠키를 봅니다. 본문은 생략할 수 있습니다.\n\n쿠키로 보낸 요청(웹·웹뷰)은 204와 함께 `__Host-sb_at`(15분)·`__Host-sb_rt` 쿠키를 새로 받습니다.\n리프레시 토큰은 갱신할 때마다 다시 30일, 처음 로그인한 뒤 최대 180일 유효합니다.\n본문으로 보낸 요청(쿠키를 쓰지 않는 클라이언트)은 200 본문으로 새 토큰을 받습니다.\n리프레시 토큰은 갱신할 때마다 바뀌므로 받은 값으로 바꿔 저장합니다.\n직전 세대 토큰을 갱신 뒤 10초 안에 다시 보내면 동시 갱신으로 보고 지금 토큰을 다시 줍니다.\n10초가 지났거나 그보다 오래된 세대 토큰이면 그 로그인 계통 전체를 폐기하고 401입니다.\n\n갱신에 실패하면 이유와 관계없이 401 `UNAUTHENTICATED`이고, 쿠키로 보낸 요청이면 인증 쿠키 두 개를 지웁니다.\n인증 쿠키(`__Host-sb_at`·`__Host-sb_rt`)가 실린 요청은 `Authorization: Bearer` 헤더가 없으면 `X-XSRF-TOKEN` 헤더에 `__Host-XSRF-TOKEN` 쿠키 값을 실어야 합니다.",
         "operationId": "refreshAuthTokens",
         "parameters": [
           {
@@ -147,7 +147,7 @@
                 }
               },
               "Set-Cookie": {
-                "description": "__Host-sb_at(Max-Age 900)과 __Host-sb_rt(Max-Age는 리프레시 토큰 만료까지, 30일). 둘 다 HttpOnly; Secure; SameSite=Lax; Path=/",
+                "description": "__Host-sb_at(Max-Age 900)과 __Host-sb_rt(Max-Age는 리프레시 토큰 만료까지, 갱신할 때마다 다시 30일, 처음 로그인한 뒤 최대 180일). 둘 다 HttpOnly; Secure; SameSite=Lax; Path=/",
                 "style": "simple",
                 "schema": {
                   "type": "string"
@@ -209,7 +209,7 @@
     "/api/auth/session": {
       "get": {
         "summary": "로그인 상태와 CSRF 토큰 쿠키",
-        "description": "현재 로그인 상태를 반환합니다. CSRF 토큰 쿠키 `__Host-XSRF-TOKEN`이 없으면 이 응답에서 발급합니다.\n상태를 바꾸는 요청(갱신·로그아웃·닉네임 변경·탈퇴)을 보내기 전에 호출하고, 쿠키 값을 `X-XSRF-TOKEN` 헤더에 그대로 싣습니다.\n\n액세스 토큰은 `Authorization: Bearer` 헤더를 먼저 보고, 없으면 `__Host-sb_at` 쿠키를 봅니다.\n토큰이 없거나 만료·위조됐거나 회원이 탈퇴했으면 401 대신 `authenticated=false`로 답합니다.\n이때 `__Host-sb_rt` 쿠키가 있으면 `refreshable=true`이므로 `POST /api/auth/refresh`로 로그인을 이어 갑니다.\n리프레시 토큰 쿠키는 스크립트가 읽을 수 없어 이 값으로 판단합니다. 리프레시 토큰이 유효한지는 확인하지 않습니다.\n\n로그인이 꺼져 있으면(`AUTH_ENABLED=false`) 이 경로는 404이고 명세에도 나오지 않습니다.\n",
+        "description": "현재 로그인 상태를 반환합니다. CSRF 토큰 쿠키 `__Host-XSRF-TOKEN`이 없으면 이 응답에서 발급합니다.\n상태를 바꾸는 요청(갱신·로그아웃·모든 기기 로그아웃·닉네임 변경·탈퇴)을 보내기 전에 호출하고, 쿠키 값을 `X-XSRF-TOKEN` 헤더에 그대로 싣습니다.\n\n액세스 토큰은 `Authorization: Bearer` 헤더를 먼저 보고, 헤더가 없거나 토큰 값이 비어 있으면 `__Host-sb_at` 쿠키를 봅니다. 헤더에 토큰 값이 있으면 그 토큰이 검증에 실패해도 쿠키를 보지 않습니다.\n토큰이 없거나 만료·위조됐거나 회원이 탈퇴했으면 401 대신 `authenticated=false`로 답합니다.\n이때 `__Host-sb_rt` 쿠키가 있으면 `refreshable=true`이므로 `POST /api/auth/refresh`로 로그인을 이어 갑니다.\n리프레시 토큰 쿠키는 스크립트가 읽을 수 없어 이 값으로 판단합니다. 리프레시 토큰이 유효한지는 확인하지 않습니다.\n\n로그인이 꺼져 있으면(`AUTH_ENABLED=false`) 이 경로는 404이고 명세에도 나오지 않습니다.\n",
         "operationId": "getAuthSession",
         "responses": {
           "200": {
@@ -275,7 +275,7 @@
     "/api/me": {
       "get": {
         "summary": "내 정보",
-        "description": "로그인한 회원의 공개 ID·닉네임·로그인 제공자·가입 시각을 반환합니다.\n토큰이 없거나 만료·위조됐거나 회원이 탈퇴했으면 401 `UNAUTHENTICATED`입니다.\n액세스 토큰이 만료됐으면 `POST /api/auth/refresh`로 갱신한 뒤 다시 요청합니다.\n액세스 토큰은 `Authorization: Bearer` 헤더를 먼저 보고, 없으면 `__Host-sb_at` 쿠키를 봅니다.",
+        "description": "로그인한 회원의 공개 ID·닉네임·로그인 제공자·가입 시각을 반환합니다.\n토큰이 없거나 만료·위조됐거나 회원이 탈퇴했으면 401 `UNAUTHENTICATED`입니다.\n액세스 토큰이 만료됐으면 `POST /api/auth/refresh`로 갱신한 뒤 다시 요청합니다.\n액세스 토큰은 `Authorization: Bearer` 헤더를 먼저 보고, 헤더가 없거나 토큰 값이 비어 있으면 `__Host-sb_at` 쿠키를 봅니다. 헤더에 토큰 값이 있으면 그 토큰이 검증에 실패해도 쿠키를 보지 않습니다.",
         "operationId": "getMyProfile",
         "responses": {
           "200": {
@@ -332,7 +332,7 @@
       },
       "delete": {
         "summary": "회원 탈퇴(카카오)",
-        "description": "카카오 회원은 이 요청으로 바로 탈퇴합니다. 회원을 지우고 인증 쿠키 두 개를 지운 뒤 204로 답합니다.\n카카오 연결 해제는 탈퇴 직후 한 번 시도하고, 실패하면 서버가 나중에 다시 시도합니다. 해제 실패로 탈퇴를 되돌리지 않습니다.\n\n애플 회원은 애플 계정으로 다시 인증해야 해서 409 `REAUTH_REQUIRED`입니다.\n이때는 `POST /api/me/withdrawal/apple`로 시작 주소를 받아 브라우저를 그 주소로 이동시킵니다.\n\n액세스 토큰은 `Authorization: Bearer` 헤더를 먼저 보고, 없으면 `__Host-sb_at` 쿠키를 봅니다. 인증 쿠키(`__Host-sb_at`·`__Host-sb_rt`)가 실린 요청은 `Authorization: Bearer` 헤더가 없으면 `X-XSRF-TOKEN` 헤더에 `__Host-XSRF-TOKEN` 쿠키 값을 실어야 합니다.",
+        "description": "카카오 회원은 이 요청으로 바로 탈퇴합니다. 회원을 지우고 인증 쿠키 두 개를 지운 뒤 204로 답합니다.\n카카오 연결 해제는 탈퇴 직후 한 번 시도하고, 실패하면 서버가 나중에 다시 시도합니다. 해제 실패로 탈퇴를 되돌리지 않습니다.\n\n애플 회원은 애플 계정으로 다시 인증해야 해서 409 `REAUTH_REQUIRED`입니다.\n이때는 `POST /api/me/withdrawal/apple`로 시작 주소를 받아 브라우저를 그 주소로 이동시킵니다.\n\n액세스 토큰은 `Authorization: Bearer` 헤더를 먼저 보고, 헤더가 없거나 토큰 값이 비어 있으면 `__Host-sb_at` 쿠키를 봅니다. 헤더에 토큰 값이 있으면 그 토큰이 검증에 실패해도 쿠키를 보지 않습니다. 인증 쿠키(`__Host-sb_at`·`__Host-sb_rt`)가 실린 요청은 `Authorization: Bearer` 헤더가 없으면 `X-XSRF-TOKEN` 헤더에 `__Host-XSRF-TOKEN` 쿠키 값을 실어야 합니다.",
         "operationId": "withdraw",
         "parameters": [
           {
@@ -428,7 +428,7 @@
       },
       "patch": {
         "summary": "닉네임 변경",
-        "description": "닉네임을 바꾸고 바뀐 내 정보를 반환합니다. 앞뒤 공백을 지운 값이 닉네임입니다.\n- 길이: 2자 이상 10자 이하. 없거나 비어 있으면 `NICKNAME_LENGTH`\n- 문자: 한글 완성형·영문·숫자만. 어기면 `NICKNAME_CHARACTERS`\n- 금칙어: 운영자로 오인할 수 있는 단어를 포함하면 `NICKNAME_RESERVED`\n- 중복: 다른 회원이 쓰는 닉네임이면 영문 대소문자를 구분하지 않고 409 `NICKNAME_TAKEN`\n\n액세스 토큰은 `Authorization: Bearer` 헤더를 먼저 보고, 없으면 `__Host-sb_at` 쿠키를 봅니다. 인증 쿠키(`__Host-sb_at`·`__Host-sb_rt`)가 실린 요청은 `Authorization: Bearer` 헤더가 없으면 `X-XSRF-TOKEN` 헤더에 `__Host-XSRF-TOKEN` 쿠키 값을 실어야 합니다.",
+        "description": "닉네임을 바꾸고 바뀐 내 정보를 반환합니다. 앞뒤 공백을 지운 값이 닉네임입니다.\n- 길이: 2자 이상 10자 이하. 없거나 비어 있으면 `NICKNAME_LENGTH`\n- 문자: 한글 완성형·영문·숫자만. 어기면 `NICKNAME_CHARACTERS`\n- 금칙어: 운영자로 오인할 수 있는 단어를 포함하면 `NICKNAME_RESERVED`\n- 중복: 다른 회원이 쓰는 닉네임이면 영문 대소문자를 구분하지 않고 409 `NICKNAME_TAKEN`\n\n액세스 토큰은 `Authorization: Bearer` 헤더를 먼저 보고, 헤더가 없거나 토큰 값이 비어 있으면 `__Host-sb_at` 쿠키를 봅니다. 헤더에 토큰 값이 있으면 그 토큰이 검증에 실패해도 쿠키를 보지 않습니다. 인증 쿠키(`__Host-sb_at`·`__Host-sb_rt`)가 실린 요청은 `Authorization: Bearer` 헤더가 없으면 `X-XSRF-TOKEN` 헤더에 `__Host-XSRF-TOKEN` 쿠키 값을 실어야 합니다.",
         "operationId": "changeMyNickname",
         "parameters": [
           {
@@ -576,10 +576,88 @@
         }
       }
     },
+    "/api/me/sessions": {
+      "delete": {
+        "summary": "모든 기기에서 로그아웃",
+        "description": "이 회원이 로그인한 모든 기기의 리프레시 토큰을 폐기하고, 이 요청의 인증 쿠키 두 개를 지운 뒤 204로 답합니다.\n다른 기기는 다음 `POST /api/auth/refresh`에서 401을 받습니다.\n이미 발급한 액세스 토큰은 만료(최대 15분)까지 취소되지 않으므로, 쿠키를 쓰지 않는 클라이언트는 보관한 토큰을 직접 버립니다.\n\n액세스 토큰은 `Authorization: Bearer` 헤더를 먼저 보고, 헤더가 없거나 토큰 값이 비어 있으면 `__Host-sb_at` 쿠키를 봅니다. 헤더에 토큰 값이 있으면 그 토큰이 검증에 실패해도 쿠키를 보지 않습니다. 인증 쿠키(`__Host-sb_at`·`__Host-sb_rt`)가 실린 요청은 `Authorization: Bearer` 헤더가 없으면 `X-XSRF-TOKEN` 헤더에 `__Host-XSRF-TOKEN` 쿠키 값을 실어야 합니다.",
+        "operationId": "logoutAllSessions",
+        "parameters": [
+          {
+            "name": "X-XSRF-TOKEN",
+            "in": "header",
+            "description": "__Host-XSRF-TOKEN 쿠키 값. 인증 쿠키가 실려 있고 Authorization: Bearer 헤더가 없으면 필수",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "모든 기기에서 로그아웃함. 본문 없음",
+            "headers": {
+              "Cache-Control": {
+                "description": "no-store",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Set-Cookie": {
+                "description": "__Host-sb_at과 __Host-sb_rt를 Max-Age=0으로 지움",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "CSRF 토큰 확인 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "csrfRejected": {
+                    "description": "csrfRejected",
+                    "value": {
+                      "code": "CSRF_REJECTED",
+                      "message": "요청을 확인하지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.",
+                      "requestId": "example-request"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "액세스 토큰이 없거나 만료·위조됨, 또는 탈퇴한 회원",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthenticated": {
+                    "description": "unauthenticated",
+                    "value": {
+                      "code": "UNAUTHENTICATED",
+                      "message": "로그인이 필요합니다.",
+                      "requestId": "example-request"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/me/withdrawal/apple": {
       "post": {
         "summary": "애플 회원 탈퇴 시작 주소 발급",
-        "description": "애플 회원은 애플 계정으로 다시 인증해야 탈퇴할 수 있습니다.\n이 요청은 5분 동안 유효한 탈퇴 티켓이 든 시작 주소를 반환하고, 클라이언트는 브라우저를 그 주소로 이동시킵니다.\n- 탈퇴하면 `/?withdrawn=1`로 돌아오고 인증 쿠키가 지워집니다\n- 사용자가 취소하면 `returnTo`에 `withdraw=cancelled`, 그 밖의 실패는 `withdraw=failed`가 붙어 돌아옵니다\n- `returnTo`는 `/` 또는 `/routes/{9자리}`(쿼리 `direction`·`stopId`만)이며, 그 밖의 값은 `/`로 바뀝니다\n\n본문은 생략할 수 있습니다. 카카오 회원이면 400 `INVALID_REQUEST`입니다.\n액세스 토큰은 `Authorization: Bearer` 헤더를 먼저 보고, 없으면 `__Host-sb_at` 쿠키를 봅니다. 인증 쿠키(`__Host-sb_at`·`__Host-sb_rt`)가 실린 요청은 `Authorization: Bearer` 헤더가 없으면 `X-XSRF-TOKEN` 헤더에 `__Host-XSRF-TOKEN` 쿠키 값을 실어야 합니다.",
+        "description": "애플 회원은 애플 계정으로 다시 인증해야 탈퇴할 수 있습니다.\n이 요청은 5분 동안 유효한 탈퇴 티켓이 든 시작 주소를 반환하고, 클라이언트는 브라우저를 그 주소로 이동시킵니다.\n- 탈퇴하면 `/?withdrawn=1`로 돌아오고 인증 쿠키가 지워집니다\n- 사용자가 취소하면 `returnTo`에 `withdraw=cancelled`, 그 밖의 실패는 `withdraw=failed`가 붙어 돌아옵니다\n- 애플 토큰 취소에 실패하면 회원을 지우지 않고 `withdraw=failed`로 돌아옵니다. 인증 쿠키가 남아 다시 시도할 수 있습니다\n- `returnTo`는 `/` 또는 `/routes/{9자리}`(쿼리 `direction`·`stopId`만)이며, 그 밖의 값은 `/`로 바뀝니다\n\n본문은 생략할 수 있습니다. 카카오 회원이면 400 `INVALID_REQUEST`입니다.\n액세스 토큰은 `Authorization: Bearer` 헤더를 먼저 보고, 헤더가 없거나 토큰 값이 비어 있으면 `__Host-sb_at` 쿠키를 봅니다. 헤더에 토큰 값이 있으면 그 토큰이 검증에 실패해도 쿠키를 보지 않습니다. 인증 쿠키(`__Host-sb_at`·`__Host-sb_rt`)가 실린 요청은 `Authorization: Bearer` 헤더가 없으면 `X-XSRF-TOKEN` 헤더에 `__Host-XSRF-TOKEN` 쿠키 값을 실어야 합니다.",
         "operationId": "startAppleWithdrawal",
         "parameters": [
           {
@@ -783,7 +861,7 @@
           "refreshTokenExpiresAt": {
             "type": "string",
             "format": "date-time",
-            "description": "리프레시 토큰 만료 시각. 이 세대를 발급한 시점부터 30일"
+            "description": "리프레시 토큰 만료 시각. 이 세대를 발급한 시점부터 30일이고, 처음 로그인한 뒤 180일을 넘지 않는다"
           }
         },
         "required": [

@@ -21,14 +21,11 @@ import org.springframework.transaction.annotation.Transactional;
  * 회원을 지우고 제공자 연결 해제 요청을 같은 트랜잭션에 기록한다.
  *
  * <p>회원 삭제를 먼저 해 이긴 호출만 요청을 기록한다. 대기 요청은 임대 시간만큼 뒤를 다음 시도 시각으로 두어, 호출자가
- * 곧바로 시도하는 동안 주기 작업이 같은 요청을 집어 가지 않게 한다. 호출자가 이미 실패한 요청은 실패 한 번으로 세어 포기한
- * 요청으로 남긴다.
+ * 곧바로 시도하는 동안 주기 작업이 같은 요청을 집어 가지 않게 한다.
  */
 @Component
 @Transactional
 public class MemberWithdrawal implements WithdrawMember {
-    private static final int CALLER_ATTEMPTS = 1;
-
     private final MemberRepository memberRepository;
     private final ProviderUnlinkRepository unlinkRepository;
     private final Clock clock;
@@ -55,7 +52,6 @@ public class MemberWithdrawal implements WithdrawMember {
         return switch (unlink) {
             case PENDING -> new WithdrawnMember(identity, Optional.of(pending(identity)));
             case DONE -> new WithdrawnMember(identity, Optional.empty());
-            case FAILED -> gaveUp(identity);
         };
     }
 
@@ -63,11 +59,6 @@ public class MemberWithdrawal implements WithdrawMember {
         OffsetDateTime now = now();
         final long id = unlinkRepository.savePending(identity, now.plus(ProviderUnlinkPolicy.LEASE), now);
         return new PendingUnlink(id, identity, 0);
-    }
-
-    private WithdrawnMember gaveUp(MemberIdentity identity) {
-        unlinkRepository.saveGaveUp(identity, CALLER_ATTEMPTS, ProviderUnlinkPolicy.CALLER_FAILED_ERROR, now());
-        return new WithdrawnMember(identity, Optional.empty());
     }
 
     /** PostgreSQL 의 {@code timestamptz} 정밀도에 맞춰 반환값과 저장값이 같게 한다. */

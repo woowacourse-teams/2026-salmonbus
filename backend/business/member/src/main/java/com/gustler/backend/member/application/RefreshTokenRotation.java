@@ -58,8 +58,8 @@ public class RefreshTokenRotation implements RefreshTokens {
         }
         RefreshTokenClaim presented = claim.get();
         OffsetDateTime now = now();
-        Optional<RotatedRefreshToken> rotated = repository.rotate(
-            presented.familyId(), presented.generation(), now, now.plus(RefreshTokenPolicy.LIFETIME));
+        Optional<RotatedRefreshToken> rotated = repository.rotate(presented.familyId(), presented.generation(), now,
+            now.plus(RefreshTokenPolicy.LIFETIME), RefreshTokenPolicy.MAX_LIFETIME);
         if (rotated.isPresent()) {
             return new RefreshResult.Rotated(rotated.get().publicId(),
                 new IssuedRefreshToken(codec.encode(presented.familyId(), rotated.get().generation()),
@@ -73,6 +73,11 @@ public class RefreshTokenRotation implements RefreshTokens {
     @Override
     public void revoke(String token) {
         codec.decode(token).ifPresent(claim -> repository.delete(claim.familyId()));
+    }
+
+    @Override
+    public int revokeAll(UUID publicId) {
+        return repository.deleteAllOf(publicId);
     }
 
     @Override

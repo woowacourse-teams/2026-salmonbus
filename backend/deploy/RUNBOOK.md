@@ -428,8 +428,8 @@ curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' http://127.0.0.1:8080/a
 - `auth.refresh.rejected{reason=REUSED}`가 늘면 탈취된 리프레시 토큰이 다시 쓰였을 수 있다. 같은 시각 로그에 "이전 세대 리프레시 토큰이 다시 제시되어" 경고가 남는다
 - `auth.unlink{result=not_linked}`는 카카오가 "이미 연결되지 않은 사용자"라고 답한 경우다. 해제된 것으로 보지만, 이 값이 탈퇴마다 나오면 `AUTH_KAKAO_ADMIN_KEY`가 다른 앱(dev 등)의 키일 수 있다. 해제 결과를 DB에 기록하지 못해 다시 시도한 요청에서도 한 번씩 나오므로, 가끔 나오는 것은 정상이다
 - `auth.unlink{result=failed}`는 카카오 연결 해제 실패다. 서버가 5분마다 확인해 1분부터 두 배씩 늘어나는 간격으로 다시 시도하고, 10번 실패하면 멈춘다. 멈춘 요청은 `SELECT id, provider, attempts, last_error, updated_at FROM provider_unlink WHERE status = 'GAVE_UP'`으로 본다
-- `auth.withdraw{provider=APPLE,result=revoke_failed}`는 애플 토큰 취소 실패다. 다시 시도할 토큰이 없어 `provider_unlink`에 `GAVE_UP`으로만 남는다. 사용자는 애플 ID 설정에서 직접 연결을 끊을 수 있다
-- `GAVE_UP` 행은 탈퇴한 회원의 제공자 식별자를 담고 있어 30일 뒤 서버가 지운다(매일 04:23). 그 전에 카카오 행은 아래처럼 손으로 끊고 지울 수 있다. 어드민 키는 출력하지 않는다. `subject`는 해당 행에서 따로 조회한다
+- `auth.withdraw{provider=APPLE,result=revoke_failed}`는 애플 토큰 취소 실패다. 이때는 회원을 지우지 않고 `withdraw=failed`로 돌려보내므로 회원과 로그인은 그대로 남고 사용자가 다시 시도한다. 탈퇴할 때마다 나오면 `AUTH_APPLE_*` 설정과 `.p8` 파일을 확인한다
+- `GAVE_UP` 행은 서버가 다시 시도하기를 멈춘 카카오 해제 요청이다. 탈퇴한 회원의 제공자 식별자를 담고 있어 30일 뒤 서버가 지운다(매일 04:23). 그 전에 아래처럼 손으로 끊고 지울 수 있다. 어드민 키는 출력하지 않는다. `subject`는 해당 행에서 따로 조회한다
 
 ```bash
 id=<provider_unlink id>; sub=<그 행의 subject>
@@ -445,7 +445,27 @@ sudo grep '^AUTH_KAKAO_ADMIN_KEY=' "$ETC/api.env" | cut -d= -f2- | sed 's/^/Auth
 
 **카카오 회원이나 대기 중인 카카오 해제 요청이 있는 동안 `AUTH_KAKAO_ENABLED`를 끄지 않는다.** 끄면 해제 클라이언트가 없어 대기 요청이 매번 실패하고, 약 8시간 반 뒤 포기된 다음 30일 뒤 식별자째 지워진다. 그동안 카카오 쪽 연결은 끊기지 않는다.
 
-로그인을 끄려면 `AUTH_ENABLED=false`로 바꾸고 API를 재시작한다. 테이블과 회원은 그대로 남는다. 만료된 리프레시 토큰 계통 정리(매시 17분), 연결 해제 재시도(5분마다), 포기한 요청 정리(매일 04:23)도 끈 동안에는 돌지 않는다.
+로그인을 끄려면 `AUTH_ENABLED=false`로 바꾸고 API를 재시작한다. 끄기는 로그인 공개를 되돌리는 스위치이고 이미 발급된 세션을 끊지 않는다. 테이블과 회원은 그대로 남고, 같은 `AUTH_REFRESH_TOKEN_SECRET`으로 다시 켜면 아직 만료되지 않은 세션이 이어진다. 세션을 끊어야 하면 아래 「모든 세션 끊기(보안 사고)」를 따른다.
+끈 동안에는 회원이 탈퇴할 수 없다. 만료된 리프레시 토큰 계통 정리(매시 17분), 연결 해제 재시도(5분마다), 포기한 요청 정리(매일 04:23)도 멈춘다.
+
+### 모든 세션 끊기(보안 사고)
+
+서명 비밀이 샜으면 두 비밀(`AUTH_REFRESH_TOKEN_SECRET`·`AUTH_TOKEN_SECRET`)을 모두 새로 만들고 API를 재시작한다. 모든 사용자가 다시 로그인해야 하고, 진행 중인 애플 탈퇴 티켓도 무효가 된다. 옛 줄을 지운 뒤 위의 비밀 생성 명령을 다시 실행한다.
+
+```bash
+sudo sed -i '/^AUTH_\(TOKEN\|REFRESH_TOKEN\)_SECRET=/d' "$ETC/api.env"
+# 여기서 위의 비밀 생성 명령을 실행한다. grep 결과가 2 이어야 한다
+sudo systemctl restart salmonbus-api
+```
+
+비밀은 안전하고 발급된 세션만 끊으려면 DB에서 리프레시 토큰 계통을 지운다. 재시작은 필요 없다. 이미 나간 액세스 토큰은 만료까지 최대 15분 더 쓰인다.
+
+```sql
+DELETE FROM refresh_token;  -- 모든 회원
+DELETE FROM refresh_token WHERE member_id = (SELECT id FROM member WHERE public_id = '<회원 public_id>');  -- 한 회원만
+```
+
+사용자는 스스로 `DELETE /api/me/sessions`로 다른 기기의 세션까지 끊을 수 있다.
 
 ## 평가 이관과 원본 삭제
 

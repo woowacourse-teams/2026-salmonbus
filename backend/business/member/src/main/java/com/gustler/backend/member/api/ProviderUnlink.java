@@ -6,6 +6,4 @@ public enum ProviderUnlink {
     PENDING,
     /** 호출자가 탈퇴 전에 이미 끊었다. 기록하지 않는다. */
     DONE,
-    /** 호출자가 끊으려 했지만 실패했고 다시 시도할 수단이 없다. 사람이 확인하도록 기록만 남긴다. */
-    FAILED,
 }

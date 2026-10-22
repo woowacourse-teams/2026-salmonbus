@@ -11,14 +11,6 @@ public interface ProviderUnlinkRepository {
     /** 실패 횟수 0 인 대기 요청을 저장하고 ID 를 돌려준다. {@code leasedUntil} 까지는 주기 작업이 집어 가지 않는다. */
     long savePending(MemberIdentity identity, OffsetDateTime leasedUntil, OffsetDateTime now);
 
-    /** 더 시도하지 않을 요청을 저장한다. */
-    void saveGaveUp(
-        MemberIdentity identity,
-        int attempts,
-        String lastError,
-        OffsetDateTime now
-    );
-
     /**
      * 다시 시도할 때가 된 대기 요청을 {@code limit} 개까지 한 문장으로 집어 {@code leasedUntil} 까지 임대한다.
      *

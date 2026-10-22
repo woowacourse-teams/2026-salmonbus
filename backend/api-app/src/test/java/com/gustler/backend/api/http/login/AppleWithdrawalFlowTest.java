@@ -8,6 +8,7 @@ import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import com.gustler.backend.api.account.token.TokenProperties;
 import com.gustler.backend.api.account.token.WithdrawalTickets;
 import com.gustler.backend.support.PostgresTestContainer;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.net.http.HttpResponse;
 import java.time.Clock;
@@ -35,7 +36,8 @@ import tools.jackson.databind.ObjectMapper;
  * 애플 회원이 애플로 다시 인증해 탈퇴하는 흐름을 실제 톰캣과 테스트용 애플 서버로 검증한다. 실제 애플은 부르지 않는다.
  *
  * <p>회원은 먼저 애플 로그인 흐름으로 로그인해 인증 쿠키를 가진 상태에서 시작한다. 탈퇴 시작은 CSRF 로 보호되는 POST 로
- * 티켓이 든 시작 주소를 받아 그 주소로 이동한다.
+ * 티켓이 든 시작 주소를 받아 그 주소로 이동한다. 애플 토큰을 취소해야 회원을 지우고, 취소하지 못하면 회원과 인증 쿠키를 그대로
+ * 둔다.
  */
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @Import(PostgresTestContainer.class)
@@ -56,6 +58,9 @@ class AppleWithdrawalFlowTest {
 
     @Autowired
     private TokenProperties tokenProperties;
+
+    @Autowired
+    private MeterRegistry meters;
 
     @BeforeAll
     static void 애플_서버를_띄운다() throws Exception {
@@ -148,21 +153,29 @@ class AppleWithdrawalFlowTest {
     }
 
     @Test
-    void 애플이_토큰_취소에_실패해도_탈퇴는_하고_사람이_확인할_대상으로_남긴다() throws Exception {
+    void 애플이_토큰_취소에_실패하면_탈퇴하지_않고_로그인을_유지한다() throws Exception {
         // given
         LoginBrowser browser = signedIn(SUBJECT);
         apple.answerRevokeWith(HttpStatus.SERVICE_UNAVAILABLE.value());
+        double revokeFailedBefore = revokeFailed();
 
         // when
-        HttpResponse<String> started = startWithdrawal(browser, "/");
+        HttpResponse<String> started = startWithdrawal(browser, "/routes/123456789");
         HttpResponse<String> callback = reauthenticate(browser, location(started), SUBJECT);
 
         // then
+        HttpResponse<String> session = browser.get("/api/auth/session");
         assertSoftly(softly -> {
-            softly.assertThat(location(callback)).isEqualTo("/?withdrawn=1");
-            softly.assertThat(count("member")).isZero();
-            softly.assertThat(jdbcClient.sql("SELECT status FROM provider_unlink").query(String.class).list())
-                .containsExactly("GAVE_UP");
+            softly.assertThat(location(callback)).isEqualTo("/routes/123456789?withdraw=failed");
+            softly.assertThat(header(callback, "Cache-Control")).isEqualTo("no-store");
+            softly.assertThat(callback.headers().allValues("Set-Cookie"))
+                .noneMatch(cookie -> cookie.startsWith("__Host-sb_at=") || cookie.startsWith("__Host-sb_rt="));
+            softly.assertThat(apple.revokeRequests()).hasSize(1);
+            softly.assertThat(count("member")).isEqualTo(1);
+            softly.assertThat(count("refresh_token")).isEqualTo(1);
+            softly.assertThat(count("provider_unlink")).isZero();
+            softly.assertThat(revokeFailed() - revokeFailedBefore).isEqualTo(1);
+            softly.assertThat(objectMapper.readTree(session.body()).path("authenticated").asBoolean()).isTrue();
         });
     }
 
@@ -314,5 +327,9 @@ class AppleWithdrawalFlowTest {
 
     private long count(String table) {
         return jdbcClient.sql("SELECT count(*) FROM " + table).query(Long.class).single();
+    }
+
+    private double revokeFailed() {
+        return meters.counter("auth.withdraw", "provider", "APPLE", "result", "revoke_failed").count();
     }
 }

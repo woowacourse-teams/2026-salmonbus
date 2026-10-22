@@ -67,7 +67,7 @@ class AuthApiDocsContractTest {
         // then
         try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
             softly.assertThat(generatedOperations).isEqualTo(contractOperations);
-            softly.assertThat(generatedOperations).hasSize(7);
+            softly.assertThat(generatedOperations).hasSize(8);
         }
     }
 

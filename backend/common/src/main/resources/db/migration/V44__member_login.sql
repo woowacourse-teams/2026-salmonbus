@@ -14,24 +14,27 @@ CREATE TABLE member (
 -- 영문 대소문자만 다른 닉네임도 같은 닉네임으로 본다.
 CREATE UNIQUE INDEX ux_member_nickname ON member (lower(nickname));
 
+-- 회원 한 명은 제공자 계정 하나로만 로그인한다.
 CREATE TABLE member_identity (
     provider    varchar(20)  NOT NULL,
     subject     varchar(255) NOT NULL,
     member_id   bigint       NOT NULL,
     created_at  timestamptz  NOT NULL,
     CONSTRAINT pk_member_identity PRIMARY KEY (provider, subject),
+    CONSTRAINT ux_member_identity_member UNIQUE (member_id),
     CONSTRAINT fk_member_identity_member FOREIGN KEY (member_id)
         REFERENCES member (id) ON DELETE CASCADE,
     CONSTRAINT ck_member_identity_provider CHECK (provider IN ('KAKAO', 'APPLE'))
 );
-CREATE INDEX ix_member_identity_member ON member_identity (member_id);
 
 -- 로그인 계통(family)마다 한 행이다. 토큰은 저장하지 않고 서버 비밀로 서명해 (family_id, generation) 에서 다시 계산한다.
 -- generation 은 지금 유효한 세대이고, rotated_at 은 그 세대를 발급한 시각이다.
+-- started_at 은 계통을 시작한 로그인 시각이다. 갱신해도 expires_at 은 started_at 뒤 180일을 넘지 않는다.
 CREATE TABLE refresh_token (
     family_id   uuid        NOT NULL,
     member_id   bigint      NOT NULL,
     generation  integer     NOT NULL,
+    started_at  timestamptz NOT NULL,
     rotated_at  timestamptz NOT NULL,
     expires_at  timestamptz NOT NULL,
     CONSTRAINT pk_refresh_token PRIMARY KEY (family_id),

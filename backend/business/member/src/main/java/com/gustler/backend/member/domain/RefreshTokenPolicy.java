@@ -2,13 +2,19 @@ package com.gustler.backend.member.domain;
 
 import java.time.Duration;
 
-/** 리프레시 토큰의 수명과 재제시 유예 시간. */
+/** 리프레시 토큰의 수명, 최대 유지 시간, 재제시 유예 시간. */
 public final class RefreshTokenPolicy {
     /**
-     * 현재 세대의 만료까지의 시간이다. 갱신할 때마다 이 시간을 다시 받으므로 쓰는 동안은 로그인이 이어지고,
-     * 30일 동안 쓰지 않으면 다시 로그인해야 한다.
+     * 현재 세대의 만료까지의 시간이다. 갱신할 때마다 다시 30일을 받으므로 쓰는 동안은 로그인이 이어지고,
+     * 30일 동안 쓰지 않으면 다시 로그인해야 한다. 다시 받는 만료도 처음 로그인한 뒤 {@link #MAX_LIFETIME} 을 넘지 않는다.
      */
     public static final Duration LIFETIME = Duration.ofDays(30);
+
+    /**
+     * 처음 로그인한 뒤 계통이 유지되는 최대 시간이다. 계속 갱신해도 처음 로그인한 뒤 180일이 지나면 다시 로그인해야 한다.
+     * 탈취된 토큰을 갱신만으로 끝없이 이어 쓰지 못하게 둔다.
+     */
+    public static final Duration MAX_LIFETIME = Duration.ofDays(180);
 
     /**
      * 한 세대 전 토큰을 다시 받아 줄 시간이다. 한 사용자의 탭 두 개가 같은 토큰으로 동시에 갱신하거나 응답이 유실되어

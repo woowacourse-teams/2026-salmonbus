@@ -40,7 +40,8 @@ import org.springframework.web.util.UriComponentsBuilder;
  * <p>회원 처리나 토큰 발급에 실패하면 쿠키를 내리지 않고 실패 경로로 돌려보낸다.
  *
  * <p>탈퇴를 위해 다시 인증한 콜백이면 로그인하지 않고 {@link AppleWithdrawal} 로 넘긴다. 탈퇴했으면 인증 쿠키를 지우고
- * {@code /?withdrawn=1} 로, 다시 인증한 계정이 다르거나 처리에 실패했으면 {@code withdraw=failed} 를 붙여 돌려보낸다.
+ * {@code /?withdrawn=1} 로 보낸다. 다시 인증한 계정이 다르거나 애플 토큰을 취소하지 못했거나 처리에 실패했으면 인증 쿠키를
+ * 그대로 두고 {@code withdraw=failed} 를 붙여 돌려보낸다.
  *
  * <p>리다이렉트 주소는 컨테이너가 절대 주소로 바꾸지 않도록 헤더에 직접 쓴다.
  */

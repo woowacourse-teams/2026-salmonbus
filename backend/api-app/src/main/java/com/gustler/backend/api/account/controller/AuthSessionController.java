@@ -5,6 +5,7 @@ import com.gustler.backend.api.account.dto.MemberResponse;
 import com.gustler.backend.api.account.token.AccessTokens;
 import com.gustler.backend.api.account.token.BearerTokens;
 import com.gustler.backend.api.docs.ApiDocsTags;
+import com.gustler.backend.api.docs.AuthApiDocs;
 import com.gustler.backend.api.docs.AuthApiDocsExamples;
 import com.gustler.backend.member.api.ViewMember;
 import io.swagger.v3.oas.annotations.Operation;
@@ -49,9 +50,10 @@ public class AuthSessionController {
     @Operation(operationId = "getAuthSession", summary = "로그인 상태와 CSRF 토큰 쿠키",
         description = """
             현재 로그인 상태를 반환합니다. CSRF 토큰 쿠키 `__Host-XSRF-TOKEN`이 없으면 이 응답에서 발급합니다.
-            상태를 바꾸는 요청(갱신·로그아웃·닉네임 변경·탈퇴)을 보내기 전에 호출하고, 쿠키 값을 `X-XSRF-TOKEN` 헤더에 그대로 싣습니다.
+            상태를 바꾸는 요청(갱신·로그아웃·모든 기기 로그아웃·닉네임 변경·탈퇴)을 보내기 전에 호출하고, 쿠키 값을 `X-XSRF-TOKEN` 헤더에 그대로 싣습니다.
 
-            액세스 토큰은 `Authorization: Bearer` 헤더를 먼저 보고, 없으면 `__Host-sb_at` 쿠키를 봅니다.
+            """ + AuthApiDocs.ACCESS_TOKEN_RULE + """
+
             토큰이 없거나 만료·위조됐거나 회원이 탈퇴했으면 401 대신 `authenticated=false`로 답합니다.
             이때 `__Host-sb_rt` 쿠키가 있으면 `refreshable=true`이므로 `POST /api/auth/refresh`로 로그인을 이어 갑니다.
             리프레시 토큰 쿠키는 스크립트가 읽을 수 없어 이 값으로 판단합니다. 리프레시 토큰이 유효한지는 확인하지 않습니다.

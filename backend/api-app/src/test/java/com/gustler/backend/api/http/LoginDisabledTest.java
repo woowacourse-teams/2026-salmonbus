@@ -51,6 +51,7 @@ class LoginDisabledTest {
             Arguments.of("GET", "/api/me"),
             Arguments.of("PATCH", "/api/me"),
             Arguments.of("DELETE", "/api/me"),
+            Arguments.of("DELETE", "/api/me/sessions"),
             Arguments.of("POST", "/api/me/withdrawal/apple"));
     }
 
