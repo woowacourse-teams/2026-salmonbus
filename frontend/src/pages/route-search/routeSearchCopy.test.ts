@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
-import { searchStatusLabel } from "./routeSelectCopy";
+import { searchStatusLabel } from "./routeSearchCopy";
 
 const route: RouteSummary = {
   id: "5600",

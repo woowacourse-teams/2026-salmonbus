@@ -9,7 +9,7 @@ import {
   matchedCountLabel,
   routeButtonLabel,
   searchStatusLabel,
-} from "../routeSelectCopy";
+} from "../routeSearchCopy";
 import * as styles from "./SearchResults.css";
 
 interface SearchResultsProps {

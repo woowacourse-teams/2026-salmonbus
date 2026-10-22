@@ -1,8 +1,8 @@
 import { globalStyle, style } from "@vanilla-extract/css";
+import { PHONE_MEDIA } from "@/shared/styles/media";
 import { vars } from "@/shared/styles/tokens.css";
-import { PHONE_MEDIA, PHONE_SEARCH_CENTER_DVH } from "./routeSelectLayout";
+import { PHONE_SEARCH_CENTER_DVH } from "./routeSelectLayout";
 
-const moveUp = "transform 400ms cubic-bezier(0.27, 1.05, 0.47, 0.97)";
 const SAFE_AREA_TOP = "env(safe-area-inset-top, 0px)";
 const SAFE_AREA_BOTTOM = "env(safe-area-inset-bottom, 0px)";
 
@@ -58,15 +58,13 @@ export const wordmark = style({
   filter: "brightness(0) invert(1)",
 });
 
-// 검색 중에는 safe area 아래 108px에 두고, 입력 전에는 safe area 안의 세로 가운데에 둔다.
-// 폰에서는 키보드가 올라올 때 iOS가 화면을 스크롤하지 않도록 가운데보다 위에 둔다.
+// 폰이 아니면 safe area 안의 세로 가운데에 둔다.
 export const searchArea = style({
   position: "absolute",
   top: `calc(108px + ${SAFE_AREA_TOP})`,
   right: "20px",
   left: "20px",
   transform: `translateY(calc(284px - (${SAFE_AREA_TOP} + ${SAFE_AREA_BOTTOM}) / 2))`,
-  transition: moveUp,
 
   "@media": {
     [PHONE_MEDIA]: {
@@ -74,19 +72,6 @@ export const searchArea = style({
         `translateY(calc(${PHONE_SEARCH_CENTER_DVH}vh - 138px - ${SAFE_AREA_TOP}))`,
         `translateY(calc(${PHONE_SEARCH_CENTER_DVH}dvh - 138px - ${SAFE_AREA_TOP}))`,
       ],
-    },
-    "(prefers-reduced-motion: reduce)": {
-      transition: "none",
-    },
-  },
-
-  // :has를 모르는 브라우저가 [data-filled]까지 버리지 않도록 두 선택자를 따로 둔다.
-  selectors: {
-    "&:has(input:focus)": {
-      transform: "none",
-    },
-    "&[data-filled]": {
-      transform: "none",
     },
   },
 });
@@ -104,22 +89,59 @@ export const question = style({
   lineHeight: 1.25,
   letterSpacing: "-0.6px",
   textAlign: "center",
-  transition: "opacity 150ms linear",
+});
 
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      transition: "none",
-    },
-  },
+const PRESS = 0.98;
 
+// 감쇠 스프링(누를 때 stiffness 1000, damping 55 / 뗄 때 800, 55)을 1/60초 간격으로 뽑은 곡선이다.
+// 배열 앞쪽은 linear()를 모르는 브라우저가 쓰는 값이다.
+const PRESS_IN = [
+  "scale 200ms cubic-bezier(0.35, 0.4, 0.15, 1)",
+  "scale 200ms linear(0, 0.103 8.3%, 0.304 16.7%, 0.508 25%, 0.677 33.3%, 0.802 41.7%, 0.887 50%, 0.941 58.3%, 0.973 66.7%, 0.991 75%, 0.999 83.3%, 1.003 91.7%, 1)",
+];
+const PRESS_OUT = [
+  "scale 350ms cubic-bezier(0.35, 0.8, 0.05, 1)",
+  "scale 350ms linear(0, 0.083 4.8%, 0.247 9.5%, 0.42 14.3%, 0.572 19%, 0.694 23.8%, 0.786 28.6%, 0.854 33.3%, 0.902 38.1%, 0.935 42.9%, 0.957 47.6%, 0.973 52.4%, 0.983 57.1%, 0.989 61.9%, 0.993 66.7%, 0.996 71.4%, 0.997 76.2%, 0.998 81%, 0.999 85.7%, 0.999 90.5%, 1 95.2%, 1)",
+];
+
+export const searchEntry = style({
+  display: "flex",
+  alignItems: "center",
+  height: "60px",
+  paddingLeft: "22px",
+  borderRadius: "30px",
+  backgroundColor: vars.color.surface,
+  color: vars.color.textSubtle,
+  fontSize: "16px",
+  textDecoration: "none",
+  // 평소에도 scale을 두어야 누르는 순간 stacking context가 새로 생기지 않는다.
+  scale: "1",
   selectors: {
-    [`${searchArea}:has(input:focus) &`]: {
-      opacity: 0,
-      pointerEvents: "none",
-    },
-    [`${searchArea}[data-filled] &`]: {
-      opacity: 0,
-      pointerEvents: "none",
+    "&:active": { scale: `${PRESS}` },
+  },
+  // 전환은 도착하는 상태의 값을 쓴다. 누를 때는 :active 쪽, 뗄 때는 기본 쪽 곡선이 돈다.
+  "@media": {
+    "(prefers-reduced-motion: no-preference)": {
+      transition: PRESS_OUT,
+      selectors: {
+        "&:active": { transition: PRESS_IN },
+      },
     },
   },
+});
+
+export const searchEntryText = style({
+  flex: 1,
+  minWidth: 0,
+});
+
+export const searchIcon = style({
+  flexShrink: 0,
+  width: "22px",
+  height: "22px",
+  marginRight: "19px",
+  fill: "none",
+  stroke: vars.color.brand,
+  strokeWidth: 2,
+  strokeLinecap: "round",
 });

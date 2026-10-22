@@ -1,15 +1,16 @@
 import { useRef } from "react";
-import { CLEAR_INPUT_LABEL, SEARCH_INPUT_LABEL, SEARCH_PLACEHOLDER } from "../routeSelectCopy";
+import { CLEAR_INPUT_LABEL, SEARCH_INPUT_LABEL, SEARCH_PLACEHOLDER } from "../routeSearchCopy";
 import * as styles from "./SearchForm.css";
 
 interface SearchFormProps {
   value: string;
+  autoFocus?: boolean;
   onChange: (value: string) => void;
   onClear: () => void;
   onSubmit: () => void;
 }
 
-export function SearchForm({ value, onChange, onClear, onSubmit }: SearchFormProps) {
+export function SearchForm({ value, autoFocus = false, onChange, onClear, onSubmit }: SearchFormProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   // 지우기 버튼은 입력이 비면 사라져서, 키보드로 누르면 포커스가 갈 곳을 잃는다.
@@ -33,6 +34,7 @@ export function SearchForm({ value, onChange, onClear, onSubmit }: SearchFormPro
         type="text"
         inputMode="numeric"
         autoComplete="off"
+        autoFocus={autoFocus}
         aria-label={SEARCH_INPUT_LABEL}
         placeholder={SEARCH_PLACEHOLDER}
         value={value}
