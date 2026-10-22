@@ -3,7 +3,7 @@ import { RouteSelectPage } from "@/pages/route-select";
 import { VerdictBoardPage } from "@/pages/verdict-board";
 import { paths } from "@/shared/routing/paths";
 import { LoginPage } from "@/pages/login";
-import { MyPage } from "@/pages/mypage";
+import { MyPage } from "@/pages/my-page";
 import { NicknamePage } from "@/pages/nickname";
 
 export function AppRoutes() {
