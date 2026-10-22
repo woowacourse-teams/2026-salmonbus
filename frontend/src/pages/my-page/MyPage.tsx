@@ -7,6 +7,7 @@ import { Notice } from "@/shared/components/Notice";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { authErrorOf } from "@/shared/utils/authErrorOf";
 import * as buttonStyles from "@/shared/styles/button.css";
+import pencilIcon from "./pencil.svg";
 import * as styles from "./MyPage.css";
 
 export function MyPage() {
@@ -54,7 +55,7 @@ export function MyPage() {
           <div className="amp-mask">
             <Link className={styles.nickname} to="/mypage/nickname" aria-label="닉네임 수정">
               <span>{state.member.nickname}님</span>
-              <span aria-hidden="true">✎</span>
+              <img src={pencilIcon} width="20" height="20" alt="" draggable={false} />
             </Link>
             <p className={styles.caption}>
               {state.member.provider === "KAKAO" ? "카카오" : "Apple"} 계정으로 로그인 중
