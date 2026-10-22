@@ -29,11 +29,11 @@ test("인증 API가 꺼져 있어도 노선을 검색하고 판정보드에 진�
 });
 
 for (const loginResult of ["failed", "cancelled"] as const) {
-  test(`인증 ${loginResult} 결과는 주소에서 지우고 로그인 화면에서 안내한다`, async ({ page, auth }) => {
+  test(`인증 ${loginResult} 결과는 복귀 경로를 보존하고 로그인 화면에서 안내한다`, async ({ page, auth }) => {
     auth.loginResult = loginResult;
-    await page.goto("/login");
+    await page.goto("/login?returnTo=%2Fmypage");
     await page.getByRole("button", { name: "카카오로 계속하기" }).click();
-    await expect(page).toHaveURL("/login?returnTo=%2F");
+    await expect(page).toHaveURL("/login?returnTo=%2Fmypage");
     if (loginResult === "failed") {
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();

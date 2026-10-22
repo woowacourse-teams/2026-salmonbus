@@ -8,7 +8,7 @@
 
 | 환경변수                   | 받아올 값                                                                  |
 | -------------------------- | -------------------------------------------------------------------------- |
-| `AUTH_KAKAO_CLIENT_ID`     | REST API 키. Native 앱 키와 JavaScript 키가 아니다                         |
+| `AUTH_KAKAO_CLIENT_ID`     | REST API 키 전체 값. 숫자 앱 ID, Native 앱 키, JavaScript 키가 아니다      |
 | `AUTH_KAKAO_CLIENT_SECRET` | 카카오 로그인 Client Secret                                                |
 | `AUTH_KAKAO_ADMIN_KEY`     | Admin Key. 탈퇴 시 연결 해제용이며, 현재 백엔드는 이 값도 기동 시 검증한다 |
 
@@ -33,7 +33,7 @@ chmod 600 env/.env.kakao-local
 
 ## 백엔드와 DB 실행
 
-Docker Desktop을 실행한 뒤 아래 명령을 실행한다. 기존 로컬 Compose에 카카오 환경변수만 덮어쓴다. API와 로컬 DB, MongoDB를 시작하고 개발 데이터를 준비하며, 별도 프론트엔드 컨테이너는 시작하지 않는다.
+Docker Desktop을 실행한 뒤 아래 명령을 실행한다. 기존 로컬 Compose에 카카오 환경변수를 덮어쓰되, `salmonbus-kakao-local` 전용 프로젝트와 볼륨을 사용한다. 기존 로컬 DB의 데이터를 변경하지 않고 새 DB에서 마이그레이션한다. API와 로컬 DB, MongoDB를 시작하고 개발 데이터를 준비하며, 별도 프론트엔드 컨테이너는 시작하지 않는다.
 
 ```sh
 docker compose --project-directory .. --env-file env/.env.kakao-local \
@@ -58,3 +58,18 @@ pnpm dev
 `http://localhost:3000/api/auth/session`이 JSON 200을 반환하는지 확인한 뒤 카카오 로그인 버튼을 누른다. 시작과 콜백을 모두 localhost:3000에서 받고, `/api` 요청은 개발 서버가 로컬 백엔드로 전달한다. 백엔드의 최종 복귀 주소도 같은 localhost:3000을 기준으로 열리므로 로그인 쿠키와 원래 화면 복귀가 유지된다.
 
 공유 dev·운영 서버의 설정은 바꾸지 않는다. 실제 카카오 계정의 로그인 성공은 로컬 비밀 설정을 채우고 기동한 뒤 별도로 검증한다.
+
+## 기동과 검증 결과 (2026-10-22)
+
+카카오 전용 프로젝트에서 API와 PostgreSQL·MongoDB를 정상 기동했고, 41개 노선의 초기 데이터 준비가 완료됐다. 기존 로컬 DB에는 V39 데이터 전환 승인이 필요한 데이터가 있어, 이 DB를 변경하지 않고 전용 프로젝트의 새 볼륨을 사용했다.
+
+실제 로컬 API로 다음을 확인했다.
+
+- `GET /api/auth/session`이 JSON 200을 반환하고 CSRF 쿠키를 발급한다.
+- 카카오 로그인 시작 응답의 `redirect_uri`는 `http://localhost:3000/api/auth/kakao/callback`이고, 카카오 계정 로그인 페이지로 연결된다.
+- Chrome·Firefox에서 실제 임시 세션 쿠키와 합성 취소 콜백을 사용해 localhost로 복귀하고, 원래 `/mypage` 경로를 보존한다.
+- 개발 모드에서 같은 복귀 결과를 두 번 소비하던 문제를 수정했다. 로그인·취소·탈퇴의 모의 응답 E2E 45개가 세 브라우저에서 통과했다.
+
+Playwright WebKit은 HTTP localhost에서 Secure 쿠키를 저장하지 않아 실제 로컬 쿠키 검증을 통과하지 못했다. HTTP 로컬 로그인 확인에는 Chrome·Dia 또는 Firefox를 사용한다. Secure 속성과 `__Host-` 쿠키 이름은 유지하며, Safari 계열의 실제 로그인 확인에는 별도의 HTTPS 콜백 환경이 필요하다.
+
+사용자가 실제 카카오 계정으로 인증한 뒤 `localhost:3000`의 마이페이지로 복귀한 것을 확인했다. 로컬 DB에도 KAKAO 회원 1명과 리프레시 토큰 계통 1개가 생성됐다. 계정 식별자와 토큰 값은 출력하지 않았다. 실제 회원의 닉네임 변경·탈퇴와 장기 토큰 갱신은 아직 확인하지 않았다.
