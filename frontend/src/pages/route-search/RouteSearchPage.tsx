@@ -1,12 +1,11 @@
 import { Link, useLocation, useNavigate } from "react-router";
 import { track } from "@/shared/analytics/track";
-import type { RouteSummary } from "@/shared/api/routeForecast.types";
 import { boardPathFor, paths } from "@/shared/routing/paths";
 import { routeSelectedPropertiesOf, unmatchedQueryOf } from "./analytics/searchEventPolicy";
 import { useUnmatchedSearchEvent } from "./analytics/useUnmatchedSearchEvent";
 import { SearchForm } from "./components/SearchForm";
 import { SearchResults } from "./components/SearchResults";
-import { submitTargetFor } from "./displayPolicy";
+import { submitSelectionFor, type RouteSelection } from "./displayPolicy";
 import { BACK_LABEL } from "./routeSearchCopy";
 import { useRouteSearch } from "./useRouteSearch";
 import * as styles from "./RouteSearchPage.css";
@@ -19,20 +18,20 @@ export function RouteSearchPage() {
 
   // 판정 보드에서 뒤로 가면 검색 화면을 거치지 않고 홈으로 간다.
   // 검색 화면이 첫 기록이면 그 자리를 홈으로 바꾼 뒤 보드를 쌓아서, 보드 앞에 홈이 있게 한다.
-  const handleSelect = (route: RouteSummary, position: number) => {
-    if (view.kind !== "matched") return;
-    track("route_selected", routeSelectedPropertiesOf(route, position, view.routes.length));
+  const handleSelect = (selection: RouteSelection) => {
+    track("route_selected", routeSelectedPropertiesOf(selection));
+    const boardPath = boardPathFor(selection.route.id);
     if (location.key === "default") {
       void navigate(paths.routeSelect, { replace: true });
-      void navigate(boardPathFor(route.id));
+      void navigate(boardPath);
       return;
     }
-    void navigate(boardPathFor(route.id), { replace: true });
+    void navigate(boardPath, { replace: true });
   };
 
   const handleSubmit = () => {
-    const route = submitTargetFor(view);
-    if (route) handleSelect(route, 0);
+    const selection = submitSelectionFor(view);
+    if (selection) handleSelect(selection);
   };
 
   return (

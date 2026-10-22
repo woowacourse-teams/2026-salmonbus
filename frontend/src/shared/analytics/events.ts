@@ -27,6 +27,7 @@ export interface EventMap {
   route_selected: {
     route_id: string;
     route_status: RouteStatus;
+    selected_from: "inService" | "searchResults";
     result_position: number;
     result_count: number;
   };

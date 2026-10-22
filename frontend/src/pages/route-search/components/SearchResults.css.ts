@@ -43,6 +43,13 @@ export const sheet = style({
   backgroundColor: vars.color.surface,
 });
 
+export const sectionTitle = style({
+  margin: "0 18px 4px",
+  color: vars.color.textSubtle,
+  fontSize: "12px",
+  fontWeight: 700,
+});
+
 export const count = style({
   margin: "0 18px 4px",
   color: vars.color.textSubtle,

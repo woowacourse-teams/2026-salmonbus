@@ -1,6 +1,8 @@
+import { useId } from "react";
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
-import type { SearchView } from "../displayPolicy";
+import type { RouteSelection, SearchView, SelectedFrom } from "../displayPolicy";
 import {
+  IN_SERVICE_TITLE,
   LOAD_FAILED_NOTICE,
   LOADING_NOTICE,
   RETRY_LABEL,
@@ -14,7 +16,7 @@ import * as styles from "./SearchResults.css";
 
 interface SearchResultsProps {
   view: SearchView;
-  onSelect: (route: RouteSummary, position: number) => void;
+  onSelect: (selection: RouteSelection) => void;
   onRetry: () => void;
 }
 
@@ -32,8 +34,8 @@ export function SearchResults({ view, onSelect, onRetry }: SearchResultsProps) {
 
 function renderView(view: SearchView, onSelect: SearchResultsProps["onSelect"], onRetry: () => void) {
   switch (view.kind) {
-    case "idle":
-      return null;
+    case "browse":
+      return <InServiceSection routes={view.inService} onSelect={onSelect} />;
     case "loading":
       return (
         <p className={styles.loadingNotice} aria-hidden="true">
@@ -67,29 +69,54 @@ function renderView(view: SearchView, onSelect: SearchResultsProps["onSelect"], 
           <p className={styles.count} aria-hidden="true">
             {matchedCountLabel(view.routes.length)}
           </p>
-          <ul className={styles.list}>
-            {view.routes.map((route, position) => (
-              <li key={route.id}>
-                <button
-                  className={styles.item}
-                  type="button"
-                  aria-label={routeButtonLabel(route)}
-                  onClick={() => onSelect(route, position)}
-                >
-                  <span className={styles.itemText}>
-                    <span className={styles.routeNumber}>{route.displayName}</span>
-                    <span className={styles.stops}>
-                      {route.startStopName} → {route.endStopName}
-                    </span>
-                  </span>
-                  <svg className={styles.chevron} viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="m9 6 6 6-6 6" />
-                  </svg>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <RouteItems selectedFrom="searchResults" routes={view.routes} onSelect={onSelect} />
         </section>
       );
   }
+}
+
+function InServiceSection({ routes, onSelect }: { routes: RouteSummary[]; onSelect: SearchResultsProps["onSelect"] }) {
+  const titleId = useId();
+
+  return (
+    <section className={styles.sheet} aria-labelledby={titleId}>
+      <h2 id={titleId} className={styles.sectionTitle}>
+        {IN_SERVICE_TITLE}
+      </h2>
+      <RouteItems selectedFrom="inService" routes={routes} onSelect={onSelect} />
+    </section>
+  );
+}
+
+interface RouteItemsProps {
+  selectedFrom: SelectedFrom;
+  routes: RouteSummary[];
+  onSelect: SearchResultsProps["onSelect"];
+}
+
+function RouteItems({ selectedFrom, routes, onSelect }: RouteItemsProps) {
+  return (
+    <ul className={styles.list}>
+      {routes.map((route, position) => (
+        <li key={route.id}>
+          <button
+            className={styles.item}
+            type="button"
+            aria-label={routeButtonLabel(route)}
+            onClick={() => onSelect({ route, selectedFrom, position, listedCount: routes.length })}
+          >
+            <span className={styles.itemText}>
+              <span className={styles.routeNumber}>{route.displayName}</span>
+              <span className={styles.stops}>
+                {route.startStopName} → {route.endStopName}
+              </span>
+            </span>
+            <svg className={styles.chevron} viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m9 6 6 6-6 6" />
+            </svg>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
 }

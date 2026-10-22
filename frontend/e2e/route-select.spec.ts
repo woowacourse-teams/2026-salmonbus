@@ -1,6 +1,7 @@
 import { apiPaths, routeId } from "./fixtures/mock-data";
 import { test, expect } from "./fixtures/api";
 import {
+  inServiceSection,
   openRouteSearch,
   pickRoute,
   routeButton,
@@ -111,7 +112,30 @@ test("지우기 버튼을 누르면 입력과 결과가 사라지고 입력창�
 
   await expect(input).toHaveValue("");
   await expect(input).toBeFocused();
-  await expect(routeButton(page)).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "검색 결과", exact: true })).toHaveCount(0);
+  await expect(inServiceSection(page)).toBeVisible();
+});
+
+test("입력 전에는 서비스 중인 노선 전체를 보여 주고, 누르면 그 노선의 판정 보드로 이동한다", async ({ page, api }) => {
+  api.data.routes.routes.push({
+    id: "200000002",
+    displayName: "1650",
+    startStopName: "다른 기점",
+    endStopName: "다른 종점",
+    status: "FORECAST_READY",
+  });
+  await page.goto("/");
+  await openRouteSearch(page);
+
+  const items = inServiceSection(page).getByRole("button");
+  await expect(items).toHaveText([/^3330/, /^1650/]);
+  await expect(page.getByRole("main").getByRole("status")).toHaveText("");
+
+  await inServiceSection(page)
+    .getByRole("button", { name: /^3330번 노선/ })
+    .click();
+
+  await expect(page).toHaveURL(`/routes/${routeId}`);
 });
 
 test("결과가 하나일 때 엔터를 누르면 그 노선의 판정 보드로 이동한다", async ({ page }) => {

@@ -1,18 +1,19 @@
 import type { EventMap } from "@/shared/analytics/events";
-import type { RouteSummary } from "@/shared/api/routeForecast.types";
-import type { SearchView } from "../displayPolicy";
+import type { RouteSelection, SearchView } from "../displayPolicy";
 import { searchDigitsFrom } from "../routeSearchPolicy";
 
-export function routeSelectedPropertiesOf(
-  route: RouteSummary,
-  position: number,
-  resultCount: number,
-): EventMap["route_selected"] {
+export function routeSelectedPropertiesOf({
+  route,
+  selectedFrom,
+  position,
+  listedCount,
+}: RouteSelection): EventMap["route_selected"] {
   return {
     route_id: route.id,
     route_status: route.status,
+    selected_from: selectedFrom,
     result_position: position,
-    result_count: resultCount,
+    result_count: listedCount,
   };
 }
 

@@ -14,6 +14,10 @@ export function routeSearchInput(page: Page) {
   return page.getByRole("textbox", { name: "노선 번호", exact: true });
 }
 
+export function inServiceSection(page: Page) {
+  return page.getByRole("region", { name: "서비스 중인 노선", exact: true });
+}
+
 export function routeSearchBackLink(page: Page) {
   return page.getByRole("link", { name: "노선 선택으로 돌아가기", exact: true });
 }
