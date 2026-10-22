@@ -10,15 +10,19 @@ import { useFavorites } from "./FavoritesContext";
 import { FavoritesNotice } from "./FavoritesNotice";
 import { exceedsFavoriteLimit, favoritePath, selectedGroups } from "./favoritePolicy";
 import { useFavoriteAction } from "./useFavoriteAction";
+import starOutline from "./star-outline.svg";
+import starFilled from "./star-filled.svg";
 import * as styles from "./favorites.css";
 
 export type FavoriteBoardRoute = Pick<FavoriteTarget, "routeId" | "direction"> & { directionName: string };
 
 export function FavoriteButton({
+  className,
   target,
   stopName,
   directionName,
 }: {
+  className: string;
   target: FavoriteTarget;
   stopName: string;
   directionName: string;
@@ -31,7 +35,7 @@ export function FavoriteButton({
     <>
       <button
         type="button"
-        className={styles.star}
+        className={`${styles.star} ${className}`}
         aria-label={`${stopName} 즐겨찾기`}
         aria-pressed={registered}
         onClick={() => {
@@ -39,18 +43,7 @@ export function FavoriteButton({
           setOpen(true);
         }}
       >
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill={registered ? "currentColor" : "none"}
-          stroke="currentColor"
-          strokeWidth="1.7"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="m12 3 2.8 5.8 6.4.9-4.6 4.5 1.1 6.4-5.7-3-5.7 3 1.1-6.4-4.6-4.5 6.4-.9Z" />
-        </svg>
+        <img src={registered ? starFilled : starOutline} width="19" height="19" alt="" draggable={false} />
       </button>
       {open &&
         (auth.status === "authenticated" ? (

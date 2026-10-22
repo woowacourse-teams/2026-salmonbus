@@ -140,16 +140,12 @@ export const choiceCount = style({ marginLeft: "auto", fontSize: 12, color: vars
 export const star = style({
   display: "grid",
   placeItems: "center",
-  position: "absolute",
-  top: 10,
-  right: 10,
   width: 32,
   height: 32,
   padding: 0,
   border: 0,
   borderRadius: "50%",
   background: "transparent",
-  color: vars.color.brand,
   cursor: "pointer",
 });
 export const sortItem = style({
