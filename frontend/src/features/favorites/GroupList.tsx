@@ -1,18 +1,34 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useFavorites } from "./FavoritesContext";
 import { FavoritesNotice } from "./FavoritesNotice";
-import { OrderDialog } from "./OrderDialog";
+import { FavoriteEditor } from "./FavoriteEditor";
+import { Notice } from "@/shared/components/Notice";
 import * as styles from "./favorites.css";
 
 export function GroupList() {
   const { groups, resource, reload } = useFavorites();
   const [ordering, setOrdering] = useState(false);
+  const [notice, showNotice] = useState(0);
+  const editButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    return ordering ? () => editButton.current?.focus() : undefined;
+  }, [ordering]);
+  if (ordering)
+    return (
+      <FavoriteEditor
+        onClose={(saved) => {
+          setOrdering(false);
+          if (saved) showNotice((value) => value + 1);
+        }}
+      />
+    );
   return (
     <section className={`${styles.section} amp-mask`} aria-label="즐겨찾기 그룹 관리">
       <h2 className={styles.heading}>
         내 그룹 {groups.length} / 3{" "}
         <button
+          ref={editButton}
           className={styles.action}
           disabled={groups.length === 0}
           onClick={() => setOrdering(true)}
@@ -40,7 +56,7 @@ export function GroupList() {
           ＋ 새 그룹 만들기
         </Link>
       )}
-      {ordering && <OrderDialog onClose={() => setOrdering(false)} />}
+      {notice > 0 && <Notice key={notice} message="변경 사항을 저장했어요" />}
     </section>
   );
 }

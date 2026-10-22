@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import * as styles from "./ConfirmDialog.css";
 
 export function ConfirmDialog({
@@ -6,22 +6,27 @@ export function ConfirmDialog({
   children,
   onCancel,
   className,
+  fallbackFocus,
 }: {
   title: string;
   children: ReactNode;
   onCancel: () => void;
   className?: string;
+  fallbackFocus?: RefObject<HTMLElement | null>;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = ref.current;
     const previouslyFocused = document.activeElement;
+    const fallbackTarget = fallbackFocus?.current;
     dialog?.showModal();
     return () => {
       dialog?.close();
-      if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) previouslyFocused.focus();
+      const target =
+        previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected ? previouslyFocused : fallbackTarget;
+      target?.focus();
     };
-  }, []);
+  }, [fallbackFocus]);
   return (
     <dialog
       ref={ref}

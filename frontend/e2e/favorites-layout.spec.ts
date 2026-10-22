@@ -62,8 +62,10 @@ for (const width of [320, 425]) {
     await dialog.getByRole("button", { name: "취소", exact: true }).click();
     await page.goto("/");
     await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
-    await expect(page.getByRole("dialog")).toBeVisible();
-    expect(await page.getByRole("dialog").evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
+    await expect(editor).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(await editor.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     if (width === 425 && browserName === "chromium")
       await page.screenshot({ path: "/private/tmp/salmonbus-sal249-qa/order.png" });
     expect(favorites.groups[0]!.id).toBe(defaultGroupId);

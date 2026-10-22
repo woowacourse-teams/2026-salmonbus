@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import {
   createFavoriteGroup,
@@ -14,7 +14,8 @@ import { LoginButton } from "@/shared/components/LoginButton";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useFavorites, useHomeFavorites } from "@/features/favorites/FavoritesContext";
 import { FavoritesNotice } from "@/features/favorites/FavoritesNotice";
-import { OrderDialog } from "@/features/favorites/OrderDialog";
+import { FavoriteEditor } from "@/features/favorites/FavoriteEditor";
+import { Notice } from "@/shared/components/Notice";
 import { groupNameError } from "@/features/favorites/favoritePolicy";
 import { useFavoriteAction } from "@/features/favorites/useFavoriteAction";
 import * as buttons from "@/shared/styles/button.css";
@@ -135,12 +136,27 @@ function GroupDetails({ group }: { group: FavoriteGroup }) {
   const { groups } = useFavorites();
   const [editing, setEditing] = useState(false);
   const [ordering, setOrdering] = useState(false);
+  const [notice, showNotice] = useState(0);
+  const editButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    return ordering ? () => editButton.current?.focus() : undefined;
+  }, [ordering]);
   const [deleting, setDeleting] = useState<"group" | SavedFavorite | null>(null);
   const [revision, retry] = useState(0);
   const summary = useHomeFavorites(group.id, revision);
   const favorites = latestSuccessOf(summary)?.body.groups[0]?.favorites ?? [];
   const { busy, error, setError, run } = useFavoriteAction();
   const navigate = useNavigate();
+  if (ordering)
+    return (
+      <FavoriteEditor
+        initialGroupId={group.id}
+        onClose={(saved) => {
+          setOrdering(false);
+          if (saved) showNotice((value) => value + 1);
+        }}
+      />
+    );
   if (editing)
     return (
       <>
@@ -196,7 +212,7 @@ function GroupDetails({ group }: { group: FavoriteGroup }) {
       </ul>
       {group.favorites.length === 0 && <p className={styles.subtle}>아직 등록한 즐겨찾기가 없어요.</p>}
       <div className={styles.actions}>
-        <button className={styles.action} onClick={() => setOrdering(true)}>
+        <button ref={editButton} className={styles.action} onClick={() => setOrdering(true)}>
           순서 편집
         </button>
         <button
@@ -209,7 +225,7 @@ function GroupDetails({ group }: { group: FavoriteGroup }) {
           그룹 삭제
         </button>
       </div>
-      {ordering && <OrderDialog onClose={() => setOrdering(false)} />}
+      {notice > 0 && <Notice key={notice} message="변경 사항을 저장했어요" />}
       {deleting !== null && (
         <ConfirmDialog
           title={

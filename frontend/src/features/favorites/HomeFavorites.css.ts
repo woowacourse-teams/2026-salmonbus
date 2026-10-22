@@ -2,6 +2,7 @@ import { style, styleVariants } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 import { card as cardBase } from "./favorites.css";
 
+export const editor = style({ marginTop: -8 });
 export const section = style({ width: "100%", maxWidth: 356, margin: "0 auto" });
 export const card = style([
   cardBase,

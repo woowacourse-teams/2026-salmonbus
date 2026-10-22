@@ -121,28 +121,6 @@ export const star = style({
   background: "transparent",
   cursor: "pointer",
 });
-export const sortItem = style({
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 12,
-  padding: "12px 0",
-  borderBottom: "1px solid #EEEAE6",
-  fontSize: 14,
-});
-export const grip = style([action, { touchAction: "none", width: 40, height: 40, fontSize: 20, cursor: "grab" }]);
-export const fullEditor = style({});
-globalStyle(`${fullEditor}${fullEditor}`, {
-  width: "100%",
-  maxWidth: 425,
-  height: "100dvh",
-  maxHeight: "100dvh",
-  margin: "0 auto",
-  borderRadius: 0,
-  padding: "calc(24px + env(safe-area-inset-top, 0px)) 32px calc(24px + env(safe-area-inset-bottom, 0px))",
-  overflowY: "auto",
-});
-
 export const homeEdit = style([
   action,
   { display: "grid", placeItems: "center", flexShrink: 0, width: 36, height: 32, padding: "6px 8px" },

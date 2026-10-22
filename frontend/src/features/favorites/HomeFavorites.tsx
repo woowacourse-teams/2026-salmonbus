@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { Link } from "react-router";
 import type { FavoriteStatus, FavoriteTarget, HomeFavorite } from "@/shared/api/favorites.types";
 import { latestSuccessOf } from "@/shared/api/polledResource";
@@ -7,7 +7,8 @@ import { toSeatLevel } from "@/shared/utils/seatGrade";
 import { boardPathFor } from "@/shared/routing/paths";
 import { useFavorites, useHomeFavorites } from "./FavoritesContext";
 import { FavoritesNotice } from "./FavoritesNotice";
-import { OrderDialog } from "./OrderDialog";
+import { FavoriteEditor } from "./FavoriteEditor";
+import { Notice } from "@/shared/components/Notice";
 import { favoritePath } from "./favoritePolicy";
 import bookmarkIcon from "./bookmark.svg";
 import editIcon from "./home-edit.svg";
@@ -27,6 +28,11 @@ export function HomeFavorites() {
   const [selected, setSelected] = useState<string | null>(null);
   const group = groups.find((candidate) => candidate.id === selected) ?? groups[0];
   const [ordering, setOrdering] = useState(false);
+  const [notice, showNotice] = useReducer((value: number) => value + 1, 0);
+  const editButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    return ordering ? () => editButton.current?.focus() : undefined;
+  }, [ordering]);
   const [revision, retry] = useReducer((value: number) => value + 1, 0);
   const summary = useHomeFavorites(group?.id ?? null, revision);
   const latest = latestSuccessOf(summary);
@@ -37,6 +43,18 @@ export function HomeFavorites() {
     return () => window.clearInterval(timer);
   }, [latest]);
   const favorites = latest?.body.groups.find((candidate) => candidate.id === group?.id)?.favorites ?? [];
+  if (ordering)
+    return (
+      <div className={homeStyles.editor}>
+        <FavoriteEditor
+          initialGroupId={group?.id}
+          onClose={(saved) => {
+            setOrdering(false);
+            if (saved) showNotice();
+          }}
+        />
+      </div>
+    );
   return (
     <section className={`${homeStyles.section} amp-mask`} aria-label="내 즐겨찾기">
       <FavoritesNotice resource={resource} onRetry={reload} />
@@ -75,6 +93,7 @@ export function HomeFavorites() {
             ))}
           </div>
           <button
+            ref={editButton}
             type="button"
             className={styles.homeEdit}
             aria-label="그룹과 즐겨찾기 순서 편집"
@@ -109,7 +128,7 @@ export function HomeFavorites() {
           ))}
         </ul>
       </div>
-      {ordering && <OrderDialog onClose={() => setOrdering(false)} />}
+      {notice > 0 && <Notice key={notice} message="변경 사항을 저장했어요" />}
     </section>
   );
 }
