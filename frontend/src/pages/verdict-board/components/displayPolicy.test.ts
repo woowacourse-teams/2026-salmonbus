@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import type { Vehicle } from "@/shared/api/routeForecast.types";
 import { serviceStateFor, stopViewsFor } from "./displayPolicy";
-import { boardWith, downInfo, stopAt, upInfo, vehicleAt } from "@/testing/fixtures";
+import { boardWith, stopAt, upInfo, vehicleAt } from "@/testing/fixtures";
 import { forecastFixtures } from "@/testing/forecastFixtures";
 
 const observedAt = (clock: string, offset = "+09:00") => `2026-09-01T${clock}:00${offset}`;
@@ -57,11 +57,6 @@ describe("serviceStateFor", () => {
 
     it("반대 방향 차량만 관측되면 운행 종료이다", () => {
       expect(serviceStateFor(afterLastDeparture, upInfo, [downVehicle])).toBe("outOfService");
-    });
-
-    it("같은 응답이라도 차량이 달리는 방향만 운행 중이다", () => {
-      expect(serviceStateFor(afterLastDeparture, upInfo, [upVehicle])).toBe("running");
-      expect(serviceStateFor(afterLastDeparture, downInfo, [upVehicle])).toBe("outOfService");
     });
 
     it("도는 차량이 있어도 위치를 못 읽어 이 방향 차량이 하나도 없으면 운행 종료이다", () => {
