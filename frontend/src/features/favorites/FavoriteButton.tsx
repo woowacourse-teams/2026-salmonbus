@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Link } from "react-router";
 import type { FavoriteTarget } from "@/shared/api/favorites.types";
 import { saveFavoriteSelections } from "@/shared/api/favorites.api";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
+import { LoginButton } from "@/shared/components/LoginButton";
 import { Notice } from "@/shared/components/Notice";
 import { useAuth } from "@/shared/hooks/useAuth";
 import * as buttons from "@/shared/styles/button.css";
@@ -12,6 +12,8 @@ import { exceedsFavoriteLimit, favoritePath, selectedGroups } from "./favoritePo
 import { useFavoriteAction } from "./useFavoriteAction";
 import starOutline from "./star-outline.svg";
 import starFilled from "./star-filled.svg";
+import closeIcon from "./login-close.svg";
+import * as promptStyles from "./LoginPrompt.css";
 import * as styles from "./favorites.css";
 
 export type FavoriteBoardRoute = Pick<FavoriteTarget, "routeId" | "direction"> & { directionName: string };
@@ -38,7 +40,8 @@ export function FavoriteButton({
         className={`${styles.star} ${className}`}
         aria-label={`${stopName} 즐겨찾기`}
         aria-pressed={registered}
-        onClick={() => {
+        onClick={(event) => {
+          event.currentTarget.focus({ preventScroll: true });
           reload();
           setOpen(true);
         }}
@@ -69,11 +72,16 @@ export function FavoriteButton({
 function LoginPrompt({ target, onClose }: { target: FavoriteTarget; onClose: () => void }) {
   const { state, reload } = useAuth();
   return (
-    <ConfirmDialog title="로그인하면 즐겨찾기를 등록할 수 있어요" onCancel={onClose}>
+    <ConfirmDialog title={"로그인하면 즐겨찾기를\n등록할 수 있어요"} className={promptStyles.dialog} onCancel={onClose}>
+      <button className={promptStyles.close} type="button" aria-label="닫기" onClick={onClose}>
+        <img src={closeIcon} width="17" height="17" alt="" draggable={false} />
+      </button>
+      <p className={promptStyles.description}>
+        로그인을 하면 자주 타는 노선과 정류장을
+        <br />내 그룹에 모아 볼 수 있어요.
+      </p>
       {state.status === "anonymous" ? (
-        <Link className={buttons.primary} to={`/login?${new URLSearchParams({ returnTo: favoritePath(target) })}`}>
-          로그인 / 회원가입
-        </Link>
+        <LoginButton returnTo={favoritePath(target)} className={promptStyles.login} />
       ) : (
         <>
           <p className={styles.subtle} role="status">
@@ -90,9 +98,6 @@ function LoginPrompt({ target, onClose }: { target: FavoriteTarget; onClose: () 
           )}
         </>
       )}
-      <button className={styles.action} type="button" onClick={onClose}>
-        닫기
-      </button>
     </ConfirmDialog>
   );
 }
