@@ -77,6 +77,39 @@ test("닉네임 중복 오류 후 입력을 수정해 저장하고 재접속해�
   ).toBe(true);
 });
 
+test("닉네임 저장 실패 후 같은 입력으로 재시도하면 이전 오류를 지우고 저장한다", async ({ page, auth }) => {
+  auth.member = { ...testMember };
+  auth.mutationFails = true;
+  await page.goto("/mypage/nickname");
+  const input = page.getByRole("textbox", { name: "닉네임", exact: true });
+  const save = page.getByRole("button", { name: "저장", exact: true });
+  const error = page.getByRole("alert");
+  await input.fill("새살몽");
+  await save.click();
+  await expect(error).toContainText("요청을 완료하지 못했어요");
+  await expect(save).toBeEnabled();
+
+  auth.mutationFails = false;
+  let finish!: () => void;
+  const release = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  await page.route("**/api/me", async (route) => {
+    await release;
+    await route.fallback();
+  });
+  try {
+    await save.click();
+    await expect(page.getByRole("button", { name: "저장 중…", exact: true })).toBeDisabled();
+    await expect(error).toBeEmpty();
+    await expect(input).toHaveValue("새살몽");
+  } finally {
+    finish();
+  }
+  await expect(page).toHaveURL("/mypage");
+  await expect(page.getByText("새살몽님", { exact: true })).toBeVisible();
+});
+
 for (const action of ["로그아웃", "회원탈퇴"] as const) {
   test(`${action} 취소와 요청 실패 시 회원을 유지하고 성공 시 비회원 홈으로 돌아간다`, async ({ page, auth }) => {
     auth.member = { ...testMember };

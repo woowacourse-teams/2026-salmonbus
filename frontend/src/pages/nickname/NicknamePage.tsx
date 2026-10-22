@@ -62,6 +62,7 @@ function NicknameForm({ current }: { current: string }) {
     event.preventDefault();
     if (busy || localError !== null || nickname.trim() === current) return;
     setBusy(true);
+    setError(null);
     const result = await changeNickname(nickname);
     if (!active.current) return;
     setBusy(false);
@@ -103,7 +104,7 @@ function NicknameForm({ current }: { current: string }) {
       <button
         className={buttonStyles.primary}
         type="submit"
-        disabled={busy || localError !== null || nickname.trim() === current || error !== null}
+        disabled={busy || localError !== null || nickname.trim() === current}
       >
         {busy ? "저장 중…" : "저장"}
       </button>
