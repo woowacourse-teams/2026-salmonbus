@@ -273,6 +273,8 @@ class RuntimeProcessSeparationTest {
     ) throws IOException {
         ProcessBuilder builder = new ProcessBuilder(
             Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+            "-Xmx256m",
+            "-XX:ActiveProcessorCount=2",
             "-jar",
             jarAt(jarProperty));
         Map<String, String> environment = builder.environment();

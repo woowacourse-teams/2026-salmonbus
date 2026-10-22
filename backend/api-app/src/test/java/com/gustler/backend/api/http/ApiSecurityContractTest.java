@@ -26,6 +26,9 @@ import tools.jackson.databind.ObjectMapper;
  * 로그인을 도입해도 공개 조회 API와 오류 응답 형식이 그대로인지 실제 톰캣으로 검증한다.
  *
  * <p>요청 ID 필터와 세션 필터, 보안 필터가 모두 실행되어야 하므로 MockMvc 대신 HTTP 요청을 보낸다.
+ *
+ * <p>로그인만 켜고 제공자는 하나도 켜지 않은 운영 기본 설정을 검증하므로, 제공자를 모두 켜는
+ * {@code LoginIntegrationTest} 와 컨텍스트를 함께 쓰지 않는다.
  */
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT, properties = "auth.enabled=true")
 @Import(PostgresTestContainer.class)

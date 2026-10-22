@@ -7,7 +7,6 @@ import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.api.account.token.TokenProperties;
 import com.gustler.backend.api.account.token.WithdrawalTickets;
-import com.gustler.backend.support.PostgresTestContainer;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.net.http.HttpResponse;
@@ -17,19 +16,12 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -39,13 +31,10 @@ import tools.jackson.databind.ObjectMapper;
  * 티켓이 든 시작 주소를 받아 그 주소로 이동한다. 애플 토큰을 취소해야 회원을 지우고, 취소하지 못하면 회원과 인증 쿠키를 그대로
  * 둔다.
  */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@Import(PostgresTestContainer.class)
+@LoginIntegrationTest
 class AppleWithdrawalFlowTest {
     private static final String SUBJECT = "001234.apple.member";
     private static final String OTHER_SUBJECT = "009999.apple.someone";
-
-    private static FakeAppleServer apple;
 
     @LocalServerPort
     private int port;
@@ -62,36 +51,8 @@ class AppleWithdrawalFlowTest {
     @Autowired
     private MeterRegistry meters;
 
-    @BeforeAll
-    static void 애플_서버를_띄운다() throws Exception {
-        if (apple == null) {
-            apple = new FakeAppleServer();
-        }
-    }
-
-    @AfterAll
-    static void 애플_서버를_내린다() {
-        apple.close();
-    }
-
-    @DynamicPropertySource
-    static void 로그인_설정(DynamicPropertyRegistry registry) throws Exception {
-        if (apple == null) {
-            apple = new FakeAppleServer();
-        }
-        registry.add("auth.enabled", () -> "true");
-        registry.add("auth.public-base-url", () -> "https://www.salmonbus.test");
-        registry.add("auth.apple.enabled", () -> "true");
-        registry.add("auth.apple.client-id", () -> FakeAppleServer.CLIENT_ID);
-        registry.add("auth.apple.team-id", () -> FakeAppleServer.TEAM_ID);
-        registry.add("auth.apple.key-id", () -> FakeAppleServer.KEY_ID);
-        registry.add("auth.apple.private-key-path", () -> apple.privateKeyFile().toString());
-        registry.add("auth.apple.issuer", apple::baseUrl);
-        registry.add("auth.apple.authorization-uri", () -> apple.baseUrl() + "/auth/authorize");
-        registry.add("auth.apple.token-uri", () -> apple.baseUrl() + "/auth/token");
-        registry.add("auth.apple.jwk-set-uri", () -> apple.baseUrl() + "/auth/keys");
-        registry.add("auth.apple.revoke-uri", () -> apple.baseUrl() + "/auth/revoke");
-    }
+    @Autowired
+    private FakeAppleServer apple;
 
     @BeforeEach
     void 상태를_비운다() {

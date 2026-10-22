@@ -5,22 +5,14 @@ import static com.gustler.backend.api.http.login.LoginBrowser.queryOf;
 import static com.gustler.backend.api.http.login.LoginBrowser.stateOf;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
-import com.gustler.backend.support.PostgresTestContainer;
 import java.net.http.HttpResponse;
 import java.util.List;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.util.MultiValueMap;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -31,12 +23,8 @@ import tools.jackson.databind.ObjectMapper;
  * <p>제공자마다 다른 규칙(카카오만 PKCE, 애플만 {@code response_mode} 와 생성한 {@code client_secret})이
  * 서로의 요청으로 새지 않아야 한다.
  */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@Import(PostgresTestContainer.class)
+@LoginIntegrationTest
 class KakaoAndAppleLoginTest {
-    private static FakeKakaoServer kakao;
-    private static FakeAppleServer apple;
-
     @LocalServerPort
     private int port;
 
@@ -46,46 +34,11 @@ class KakaoAndAppleLoginTest {
     @Autowired
     private JdbcClient jdbcClient;
 
-    @BeforeAll
-    static void 제공자_서버를_띄운다() throws Exception {
-        startServersIfAbsent();
-    }
+    @Autowired
+    private FakeKakaoServer kakao;
 
-    @AfterAll
-    static void 제공자_서버를_내린다() {
-        kakao.close();
-        apple.close();
-    }
-
-    @DynamicPropertySource
-    static void 로그인_설정(DynamicPropertyRegistry registry) throws Exception {
-        startServersIfAbsent();
-        registry.add("auth.enabled", () -> "true");
-        registry.add("auth.public-base-url", () -> "https://www.salmonbus.test");
-        registry.add("auth.kakao.enabled", () -> "true");
-        registry.add("auth.kakao.client-id", () -> FakeKakaoServer.CLIENT_ID);
-        registry.add("auth.kakao.client-secret", () -> FakeKakaoServer.CLIENT_SECRET);
-        registry.add("auth.kakao.issuer", kakao::baseUrl);
-        registry.add("auth.kakao.authorization-uri", () -> kakao.baseUrl() + "/oauth/authorize");
-        registry.add("auth.kakao.token-uri", () -> kakao.baseUrl() + "/oauth/token");
-        registry.add("auth.kakao.jwk-set-uri", () -> kakao.baseUrl() + "/jwks.json");
-        registry.add("auth.apple.enabled", () -> "true");
-        registry.add("auth.apple.client-id", () -> FakeAppleServer.CLIENT_ID);
-        registry.add("auth.apple.team-id", () -> FakeAppleServer.TEAM_ID);
-        registry.add("auth.apple.key-id", () -> FakeAppleServer.KEY_ID);
-        registry.add("auth.apple.private-key-path", () -> apple.privateKeyFile().toString());
-        registry.add("auth.apple.issuer", apple::baseUrl);
-        registry.add("auth.apple.authorization-uri", () -> apple.baseUrl() + "/auth/authorize");
-        registry.add("auth.apple.token-uri", () -> apple.baseUrl() + "/auth/token");
-        registry.add("auth.apple.jwk-set-uri", () -> apple.baseUrl() + "/auth/keys");
-    }
-
-    private static void startServersIfAbsent() throws Exception {
-        if (kakao == null) {
-            kakao = new FakeKakaoServer();
-            apple = new FakeAppleServer();
-        }
-    }
+    @Autowired
+    private FakeAppleServer apple;
 
     @BeforeEach
     void 상태를_비운다() {

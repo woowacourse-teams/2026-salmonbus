@@ -1,6 +1,15 @@
 # 테스트 전용 값이다. 운영 비밀이 아니다. main 의 application.yml 위에 속성 단위로 덮어쓴다.
 # 주기 작업은 실제 스케줄이 테스트 도중에 끼어들지 않게 끄고, 필요한 테스트가 직접 부르거나 속성으로 켠다.
-# 제공자 해제·취소 주소는 연결이 거부되는 주소로 둔다. 해제를 검증하는 테스트만 가짜 서버 주소로 덮는다.
+# 제공자 해제·취소 주소는 연결이 거부되는 주소로 둔다. 로그인을 켠 공통 시험 설정(LoginIntegrationTest)이 가짜 서버 주소로 덮는다.
+# 컨텍스트마다 DB 연결을 미리 여러 개 열어 두지 않게 풀을 작게 둔다.
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 1
+  session:
+    jdbc:
+      cleanup-cron: "-"
 auth:
   unlink:
     retry-cron: "-"

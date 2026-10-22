@@ -5,12 +5,12 @@ import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.api.account.token.AccessTokens;
 import com.gustler.backend.api.account.token.TokenProperties;
+import com.gustler.backend.api.http.login.LoginIntegrationTest;
 import com.gustler.backend.member.api.ChangeNickname;
 import com.gustler.backend.member.api.LoginProvider;
 import com.gustler.backend.member.api.RefreshTokens;
 import com.gustler.backend.member.api.SignInWithSocialAccount;
 import com.gustler.backend.member.api.SocialIdentity;
-import com.gustler.backend.support.PostgresTestContainer;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -27,10 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import tools.jackson.databind.JsonNode;
@@ -42,8 +39,7 @@ import tools.jackson.databind.ObjectMapper;
  * <p>카카오 흐름은 {@code KakaoLoginFlowTest} 가 검증하므로 여기서는 액세스 토큰을 직접 만들어 쿠키로 보낸다.
  * 가입 닉네임은 무작위로 만들어지므로 가입한 뒤 알려진 닉네임으로 바꿔 두고 시작한다.
  */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT, properties = "auth.enabled=true")
-@Import(PostgresTestContainer.class)
+@LoginIntegrationTest
 class MeControllerTest {
     private static final String ACCESS_COOKIE = "__Host-sb_at";
     private static final String REFRESH_COOKIE = "__Host-sb_rt";

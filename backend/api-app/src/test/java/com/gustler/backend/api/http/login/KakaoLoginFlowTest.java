@@ -3,15 +3,12 @@ package com.gustler.backend.api.http.login;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
-import com.gustler.backend.support.PostgresTestContainer;
 import com.nimbusds.jwt.JWTClaimsSet;
 import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.Date;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,16 +16,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.util.UriComponentsBuilder;
 import tools.jackson.databind.JsonNode;
@@ -41,15 +33,12 @@ import tools.jackson.databind.ObjectMapper;
  * 테스트가 인가 요청에서 읽은 {@code state}·{@code nonce} 로 직접 호출한다.
  */
 @ExtendWith(OutputCaptureExtension.class)
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@Import(PostgresTestContainer.class)
+@LoginIntegrationTest
 class KakaoLoginFlowTest {
     private static final String SESSION_COOKIE = "__Host-sb_session";
     private static final String SUBJECT = "kakao-subject-1";
     private static final int THIRTY_DAYS_SECONDS = 30 * 24 * 60 * 60;
     private static final int TEN_MINUTES_SECONDS = 10 * 60;
-
-    private static FakeKakaoServer kakao;
 
     @LocalServerPort
     private int port;
@@ -60,31 +49,8 @@ class KakaoLoginFlowTest {
     @Autowired
     private JdbcClient jdbcClient;
 
-    @BeforeAll
-    static void 카카오_서버를_띄운다() throws Exception {
-        kakao = new FakeKakaoServer();
-    }
-
-    @AfterAll
-    static void 카카오_서버를_내린다() {
-        kakao.close();
-    }
-
-    @DynamicPropertySource
-    static void 로그인_설정(DynamicPropertyRegistry registry) throws Exception {
-        if (kakao == null) {
-            kakao = new FakeKakaoServer();
-        }
-        registry.add("auth.enabled", () -> "true");
-        registry.add("auth.public-base-url", () -> "https://www.salmonbus.test");
-        registry.add("auth.kakao.enabled", () -> "true");
-        registry.add("auth.kakao.client-id", () -> FakeKakaoServer.CLIENT_ID);
-        registry.add("auth.kakao.client-secret", () -> FakeKakaoServer.CLIENT_SECRET);
-        registry.add("auth.kakao.issuer", kakao::baseUrl);
-        registry.add("auth.kakao.authorization-uri", () -> kakao.baseUrl() + "/oauth/authorize");
-        registry.add("auth.kakao.token-uri", () -> kakao.baseUrl() + "/oauth/token");
-        registry.add("auth.kakao.jwk-set-uri", () -> kakao.baseUrl() + "/jwks.json");
-    }
+    @Autowired
+    private FakeKakaoServer kakao;
 
     @BeforeEach
     void 상태를_비운다() {
@@ -352,18 +318,12 @@ class KakaoLoginFlowTest {
     }
 
     @Test
-    void 켜지지_않은_제공자와_기본_로그인_화면은_없다() throws Exception {
+    void 기본_로그인_화면은_없다() throws Exception {
         // when
-        HttpResponse<String> apple = browser().get("/api/auth/apple/start");
-        HttpResponse<String> appleWithdrawal = browser().get("/api/auth/apple/start?intent=withdraw");
         HttpResponse<String> loginPage = browser().get("/login");
 
         // then
-        assertSoftly(softly -> {
-            softly.assertThat(apple.statusCode()).isEqualTo(HttpStatus.NOT_FOUND.value());
-            softly.assertThat(appleWithdrawal.statusCode()).isEqualTo(HttpStatus.NOT_FOUND.value());
-            softly.assertThat(loginPage.statusCode()).isEqualTo(HttpStatus.NOT_FOUND.value());
-        });
+        assertThat(loginPage.statusCode()).isEqualTo(HttpStatus.NOT_FOUND.value());
     }
 
     private TestBrowser browser() {

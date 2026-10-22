@@ -5,13 +5,13 @@ import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.api.account.token.AccessTokens;
 import com.gustler.backend.api.account.token.TokenProperties;
+import com.gustler.backend.api.http.login.LoginIntegrationTest;
 import com.gustler.backend.member.api.ChangeNickname;
 import com.gustler.backend.member.api.IssuedRefreshToken;
 import com.gustler.backend.member.api.LoginProvider;
 import com.gustler.backend.member.api.RefreshTokens;
 import com.gustler.backend.member.api.SignInWithSocialAccount;
 import com.gustler.backend.member.api.SocialIdentity;
-import com.gustler.backend.support.PostgresTestContainer;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -26,18 +26,14 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /** 리프레시 토큰으로 로그인을 이어 가고 끝내는 API를 실제 톰캣으로 검증한다. */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT, properties = "auth.enabled=true")
-@Import(PostgresTestContainer.class)
+@LoginIntegrationTest
 class TokenControllerTest {
     private static final String ACCESS_COOKIE = "__Host-sb_at";
     private static final String REFRESH_COOKIE = "__Host-sb_rt";

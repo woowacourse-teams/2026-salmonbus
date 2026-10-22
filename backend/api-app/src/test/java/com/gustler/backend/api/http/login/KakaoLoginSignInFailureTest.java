@@ -2,73 +2,45 @@ package com.gustler.backend.api.http.login;
 
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
 
 import com.gustler.backend.member.api.SignInWithSocialAccount;
-import com.gustler.backend.support.PostgresTestContainer;
 import java.net.http.HttpResponse;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.web.util.UriComponentsBuilder;
 
 /** 제공자 인증은 통과했지만 회원 처리가 실패하면 토큰을 내리지 않고 로그인된 상태로 남지 않는다. */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@Import(PostgresTestContainer.class)
+@LoginIntegrationTest
 class KakaoLoginSignInFailureTest {
-    private static FakeKakaoServer kakao;
-
     @LocalServerPort
     private int port;
 
     @Autowired
     private JdbcClient jdbcClient;
 
-    @MockitoBean
+    @Autowired
+    private FakeKakaoServer kakao;
+
+    @Autowired
     private SignInWithSocialAccount signIn;
 
-    @BeforeAll
-    static void 카카오_서버를_띄운다() throws Exception {
-        kakao = new FakeKakaoServer();
-    }
-
-    @AfterAll
-    static void 카카오_서버를_내린다() {
-        kakao.close();
-    }
-
-    @DynamicPropertySource
-    static void 로그인_설정(DynamicPropertyRegistry registry) throws Exception {
-        if (kakao == null) {
-            kakao = new FakeKakaoServer();
-        }
-        registry.add("auth.enabled", () -> "true");
-        registry.add("auth.public-base-url", () -> "https://www.salmonbus.test");
-        registry.add("auth.kakao.enabled", () -> "true");
-        registry.add("auth.kakao.client-id", () -> FakeKakaoServer.CLIENT_ID);
-        registry.add("auth.kakao.client-secret", () -> FakeKakaoServer.CLIENT_SECRET);
-        registry.add("auth.kakao.issuer", kakao::baseUrl);
-        registry.add("auth.kakao.authorization-uri", () -> kakao.baseUrl() + "/oauth/authorize");
-        registry.add("auth.kakao.token-uri", () -> kakao.baseUrl() + "/oauth/token");
-        registry.add("auth.kakao.jwk-set-uri", () -> kakao.baseUrl() + "/jwks.json");
+    @BeforeEach
+    void 상태를_비운다() {
+        kakao.reset();
+        jdbcClient.sql("DELETE FROM member").update();
+        jdbcClient.sql("DELETE FROM SPRING_SESSION").update();
     }
 
     @Test
     void 회원_처리가_실패하면_failed로_돌려보내고_토큰을_내리지_않는다() throws Exception {
         // given
-        when(signIn.signIn(any())).thenThrow(new IllegalStateException("DB 장애"));
+        doThrow(new IllegalStateException("DB 장애")).when(signIn).signIn(any());
         TestBrowser browser = new TestBrowser(port);
-        jdbcClient.sql("DELETE FROM SPRING_SESSION").update();
         String authorization = browser.get("/api/auth/kakao/start").headers().firstValue("Location").orElseThrow();
         String state = UriComponentsBuilder.fromUriString(authorization).build().getQueryParams().getFirst("state");
         String code = kakao.authorize(authorization, "kakao-subject-1");

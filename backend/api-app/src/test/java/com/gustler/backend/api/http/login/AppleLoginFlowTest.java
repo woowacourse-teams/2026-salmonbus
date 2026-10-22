@@ -4,10 +4,8 @@ import static com.gustler.backend.api.http.login.LoginBrowser.header;
 import static com.gustler.backend.api.http.login.LoginBrowser.location;
 import static com.gustler.backend.api.http.login.LoginBrowser.queryOf;
 import static com.gustler.backend.api.http.login.LoginBrowser.stateOf;
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
-import com.gustler.backend.support.PostgresTestContainer;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.crypto.ECDSAVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
@@ -20,8 +18,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,16 +25,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.util.MultiValueMap;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -47,16 +38,12 @@ import tools.jackson.databind.ObjectMapper;
  * 애플 로그인 흐름을 실제 톰캣과 테스트용 애플 서버로 끝까지 검증한다. 실제 애플은 부르지 않는다.
  *
  * <p>카카오 흐름과 같은 방식으로 브라우저를 흉내 낸다. 애플 화면에서 사용자가 동의한 뒤 콜백으로 돌아오는 단계는
- * 테스트가 인가 요청에서 읽은 {@code state}·{@code nonce} 로 직접 호출한다. 카카오는 꺼 두어 애플만 등록한
- * 컨텍스트에서 확인한다.
+ * 테스트가 인가 요청에서 읽은 {@code state}·{@code nonce} 로 직접 호출한다.
  */
 @ExtendWith(OutputCaptureExtension.class)
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@Import(PostgresTestContainer.class)
+@LoginIntegrationTest
 class AppleLoginFlowTest {
     private static final String SUBJECT = "001234.apple.subject";
-
-    private static FakeAppleServer apple;
 
     @LocalServerPort
     private int port;
@@ -67,35 +54,8 @@ class AppleLoginFlowTest {
     @Autowired
     private JdbcClient jdbcClient;
 
-    @BeforeAll
-    static void 애플_서버를_띄운다() throws Exception {
-        if (apple == null) {
-            apple = new FakeAppleServer();
-        }
-    }
-
-    @AfterAll
-    static void 애플_서버를_내린다() {
-        apple.close();
-    }
-
-    @DynamicPropertySource
-    static void 로그인_설정(DynamicPropertyRegistry registry) throws Exception {
-        if (apple == null) {
-            apple = new FakeAppleServer();
-        }
-        registry.add("auth.enabled", () -> "true");
-        registry.add("auth.public-base-url", () -> "https://www.salmonbus.test");
-        registry.add("auth.apple.enabled", () -> "true");
-        registry.add("auth.apple.client-id", () -> FakeAppleServer.CLIENT_ID);
-        registry.add("auth.apple.team-id", () -> FakeAppleServer.TEAM_ID);
-        registry.add("auth.apple.key-id", () -> FakeAppleServer.KEY_ID);
-        registry.add("auth.apple.private-key-path", () -> apple.privateKeyFile().toString());
-        registry.add("auth.apple.issuer", apple::baseUrl);
-        registry.add("auth.apple.authorization-uri", () -> apple.baseUrl() + "/auth/authorize");
-        registry.add("auth.apple.token-uri", () -> apple.baseUrl() + "/auth/token");
-        registry.add("auth.apple.jwk-set-uri", () -> apple.baseUrl() + "/auth/keys");
-    }
+    @Autowired
+    private FakeAppleServer apple;
 
     @BeforeEach
     void 상태를_비운다() {
@@ -367,15 +327,6 @@ class AppleLoginFlowTest {
         });
     }
 
-    @Test
-    void 켜지지_않은_카카오는_시작할_수_없다() throws Exception {
-        // when
-        HttpResponse<String> kakao = new LoginBrowser(port).get("/api/auth/kakao/start");
-
-        // then
-        assertThat(kakao.statusCode()).isEqualTo(HttpStatus.NOT_FOUND.value());
-    }
-
     private String signIn() throws Exception {
         LoginBrowser browser = new LoginBrowser(port);
         String authorization = location(browser.get("/api/auth/apple/start"));
@@ -383,7 +334,7 @@ class AppleLoginFlowTest {
         return objectMapper.readTree(browser.get("/api/auth/session").body()).path("member").path("id").asString();
     }
 
-    private static boolean verifies(SignedJWT secret) throws Exception {
+    private boolean verifies(SignedJWT secret) throws Exception {
         return secret.verify(new ECDSAVerifier(apple.clientSecretPublicKey()));
     }
 

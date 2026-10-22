@@ -9,7 +9,6 @@ import com.gustler.backend.member.api.LoginProvider;
 import com.gustler.backend.member.api.RefreshTokens;
 import com.gustler.backend.member.api.SignInWithSocialAccount;
 import com.gustler.backend.member.api.SocialIdentity;
-import com.gustler.backend.support.PostgresTestContainer;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.net.URI;
@@ -18,19 +17,12 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.UUID;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -38,15 +30,12 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>로그인 흐름은 {@code KakaoLoginFlowTest} 가 검증하므로 여기서는 회원과 토큰을 직접 만든다.
  */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@Import(PostgresTestContainer.class)
+@LoginIntegrationTest
 class KakaoWithdrawalTest {
     private static final String ACCESS_COOKIE = "__Host-sb_at";
     private static final String REFRESH_COOKIE = "__Host-sb_rt";
     private static final String CSRF_COOKIE = "__Host-XSRF-TOKEN";
     private static final String SUBJECT = "4211234567";
-
-    private static FakeKakaoServer kakao;
 
     private final HttpClient client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
 
@@ -74,38 +63,12 @@ class KakaoWithdrawalTest {
     @Autowired
     private MeterRegistry meters;
 
+    @Autowired
+    private FakeKakaoServer kakao;
+
     private UUID memberId;
     private String refreshToken;
     private String csrfToken;
-
-    @BeforeAll
-    static void 카카오_서버를_띄운다() throws Exception {
-        if (kakao == null) {
-            kakao = new FakeKakaoServer();
-        }
-    }
-
-    @AfterAll
-    static void 카카오_서버를_내린다() {
-        kakao.close();
-    }
-
-    @DynamicPropertySource
-    static void 로그인_설정(DynamicPropertyRegistry registry) throws Exception {
-        if (kakao == null) {
-            kakao = new FakeKakaoServer();
-        }
-        registry.add("auth.enabled", () -> "true");
-        registry.add("auth.public-base-url", () -> "https://www.salmonbus.test");
-        registry.add("auth.kakao.enabled", () -> "true");
-        registry.add("auth.kakao.client-id", () -> FakeKakaoServer.CLIENT_ID);
-        registry.add("auth.kakao.client-secret", () -> FakeKakaoServer.CLIENT_SECRET);
-        registry.add("auth.kakao.issuer", kakao::baseUrl);
-        registry.add("auth.kakao.authorization-uri", () -> kakao.baseUrl() + "/oauth/authorize");
-        registry.add("auth.kakao.token-uri", () -> kakao.baseUrl() + "/oauth/token");
-        registry.add("auth.kakao.jwk-set-uri", () -> kakao.baseUrl() + "/jwks.json");
-        registry.add("auth.kakao.unlink-uri", () -> kakao.baseUrl() + "/v1/user/unlink");
-    }
 
     @BeforeEach
     void 회원과_토큰을_만든다() throws Exception {
