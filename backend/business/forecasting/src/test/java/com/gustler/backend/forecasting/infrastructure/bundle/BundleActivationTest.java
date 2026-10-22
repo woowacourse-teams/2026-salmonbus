@@ -8,6 +8,12 @@ import static org.assertj.core.api.Assertions.within;
 import com.gustler.backend.forecasting.api.model.LoadConfiguredModelCommand;
 import com.gustler.backend.forecasting.api.model.ModelLoadException;
 import com.gustler.backend.forecasting.api.model.ModelLoadResult;
+import com.gustler.backend.forecasting.api.model.ModelLoadResult.Activated;
+import com.gustler.backend.forecasting.api.model.ModelLoadResult.IdentityMismatch;
+import com.gustler.backend.forecasting.api.model.ModelLoadResult.NotConfigured;
+import com.gustler.backend.forecasting.api.model.ModelLoadResult.Promoted;
+import com.gustler.backend.forecasting.api.model.ModelLoadResult.Rejected;
+import com.gustler.backend.forecasting.api.model.ModelLoadResult.Reloaded;
 import com.gustler.backend.forecasting.application.deployment.ActiveForecastRuntimeResolver;
 import com.gustler.backend.forecasting.application.deployment.BundleActivation;
 import com.gustler.backend.forecasting.application.deployment.LoadedModelRegistry;
@@ -15,14 +21,17 @@ import com.gustler.backend.forecasting.application.deployment.ModelBundleFiles;
 import com.gustler.backend.forecasting.application.deployment.ModelStartupService;
 import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
 import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
+import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.deployment.StagedModelDeployment;
+import com.gustler.backend.forecasting.domain.model.ForecastFeatureContract;
 import com.gustler.backend.forecasting.domain.model.ModelRoute;
 import com.gustler.backend.forecasting.domain.model.SeatDistributionInput;
 import com.gustler.backend.forecasting.domain.model.SeatDistributionPredictor;
 import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
 import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcModelDeploymentRepository;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -38,14 +47,13 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 더미 계수 묶음으로 <b>적재부터 좌석 분포까지</b> 끝까지 돈다. 이 티켓의 완료 조건이다.
+ * 더미 계수 묶음으로 적재부터 좌석 분포 계산까지 전체 흐름을 검증한다. 이 티켓의 완료 조건이다.
  *
- * <p>진짜 계수 파일이 오면 이 테스트를 안 고치고 파일만 갈아 끼운다.
+ * <p>실제 계수 파일이 오면 테스트를 수정하지 않고 파일만 교체한다.
  */
 @ForecastingIntegrationTest
 @Transactional
 class BundleActivationTest {
-
     private static final int FOUR_STOPS_AHEAD = 4;
 
     @TempDir
@@ -88,7 +96,8 @@ class BundleActivationTest {
 
     @Test
     void 검사에_걸린_묶음은_배포_행을_안_남긴다() {
-        // given 노선 순서가 뒤집힌 묶음이다
+        // given
+        // 노선 순서가 뒤집힌 묶음이다
         DummyBundle given = DummyBundle.valid().put("routes", List.of("3330", "1650"));
 
         // when
@@ -101,57 +110,64 @@ class BundleActivationTest {
 
     @Test
     void 검사에_걸린_묶음은_이미_돌던_계수를_안_밀어낸다() {
-        // given 정상 묶음을 먼저 올려 둔다
+        // given
+        // 정상 묶음을 먼저 활성화한다
         activation().activate(filesOf(DummyBundle.valid().writeTo(directory)));
         RuntimeSnapshot before = resolver().resolveActive().orElseThrow();
 
-        // when 어긋난 묶음을 올리려다 걸린다
+        // when
+        // 검증에 실패하는 묶음의 활성화를 시도한다
         assertThatThrownBy(() -> activation().activate(filesOf(brokenBundle())))
             .isInstanceOf(BundleRejectedException.class);
 
-        // then 돌던 계수가 그대로다
+        // then
+        // 기존에 사용하던 계수를 유지한다
         assertThat(resolver().resolveActive().orElseThrow().bundleDigest())
             .isEqualTo(before.bundleDigest());
     }
 
     /**
-     * 동키가 짚은 자리다. A 가 돌고 있는데 B 승격이 실패하면, 예전 구조에서는 메모리에 B 가 남아
-     * DB 는 A 인데 신원이 안 맞아 예보가 통째로 멈췄다.
+     * 동키가 지적한 문제다. A 가 활성화된 상태에서 B 승격이 실패하면 예전 구조에서는 메모리에 B 가 남아
+     * DB 는 A 를 가리키는 식별 정보 불일치로 예보 전체가 중단되었다.
      *
-     * <p>지금은 도는 배포가 가리키는 요약값으로 계수를 찾는다. 그래서 실패한 B 가 남아 있어도
-     * A 가 그대로 골라진다.
+     * <p>현재는 활성 배포가 가리키는 요약값으로 계수를 조회하므로 실패한 B 가 메모리에 남아 있어도
+     * A 를 그대로 선택한다.
      */
     @Test
     void 승격에_실패한_묶음이_돌던_묶음을_못_밀어낸다() {
-        // given A 가 돌고 있다
+        // given
+        // A 가 활성화된 상태다
         activation().activate(filesOf(DummyBundle.valid().writeTo(directory)));
         RuntimeSnapshot before = resolver().resolveActive().orElseThrow();
 
-        // when B 를 올리는데 승격 직전에 다른 적재가 먼저 ACTIVE 를 가져간다
+        // when
+        // B 의 승격 직전에 다른 적재가 먼저 ACTIVE 를 차지한다
         assertThatThrownBy(() -> failingActivation().activate(filesOf(otherBundle())))
             .isInstanceOf(ModelLoadException.class)
             .hasMessageStartingWith("STAGED 에서 ACTIVE 로 못 올렸다. 그 사이 다른 적재가 먼저 올라갔다: ");
 
-        // then DB 도 메모리도 A 를 가리킨다
+        // then
+        // DB 도 메모리도 A 를 가리킨다
         assertThat(resolver().resolveActive().orElseThrow().releaseId())
             .isEqualTo(before.releaseId());
     }
 
     /**
-     * 계수 파일 요약값은 출시 식별자를 안 묶는다. 그래서 계수가 한 글자도 안 바뀌고 출시 식별자만
-     * 다시 붙은 파일은 요약값이 같다.
+     * 계수 파일 요약값에는 출시 식별자가 포함되지 않는다. 계수는 한 글자도 바뀌지 않고 출시 식별자만
+     * 다시 부여한 파일은 요약값이 같다.
      *
-     * <p>기동 적재가 요약값만 보면 그 파일을 "같은 것" 으로 보고 메모리에 올린다. 자리는 요약값이
-     * 열쇠라 <b>돌던 계수가 그 자리에서 밀려난다.</b> 그러면 도는 배포는 그대로인데 예보가 통째로
-     * 안 나간다.
+     * <p>기동 적재에서 요약값만 검사하면 이 파일을 같은 것으로 보고 메모리에 적재한다.
+     * 메모리는 요약값을 키로 사용하므로 기존 계수가 대체되어 활성 배포가 그대로여도 예보 전체가 중단된다.
      */
     @Test
     void 출시_식별자만_다른_계수_파일로_다시_띄워도_돌던_계수가_그대로_돈다() {
-        // given A 가 돌고 있다
+        // given
+        // A 가 활성화된 상태다
         activation().activate(filesOf(DummyBundle.valid().writeTo(directory)));
         RuntimeSnapshot before = resolver().resolveActive().orElseThrow();
 
-        // when 계수는 그대로고 출시 식별자만 다른 파일로 기동한다
+        // when
+        // 계수는 그대로고 출시 식별자만 다른 파일로 기동한다
         startUp(relabelledBundle(), false);
 
         // then
@@ -161,7 +177,8 @@ class BundleActivationTest {
 
     @Test
     void 계수_파일이_실은_대조_사례를_재현_못_하면_배포_행을_안_남긴다() {
-        // given 기대 잔여석만 한 석 어긋낸 묶음이다
+        // given
+        // 기대 잔여석만 한 석 어긋낸 묶음이다
         DummyBundle given = DummyBundle.valid();
         Map<String, Object> golden = new LinkedHashMap<>(given.goldenVectorFrom());
         golden.put("expectedSeats", ((double) golden.get("expectedSeats")) + 1.0);
@@ -201,13 +218,17 @@ class BundleActivationTest {
             featureVector(), ModelRoute.of("234000050"), 1, 44, 44, null));
 
         // then
-        assertThat(actual.distribution().chanceBySeats().stream()
-            .mapToDouble(Double::doubleValue).sum()).isEqualTo(1.0, within(1e-12));
+        assertThat(actual.distribution()
+            .chanceBySeats()
+            .stream()
+            .mapToDouble(Double::doubleValue)
+            .sum()).isEqualTo(1.0, within(1e-12));
     }
 
     @Test
     void 계수를_안_올린_채로_배포_행만_있으면_아무것도_안_낸다() {
-        // given 배포 행만 세우고 계수는 안 올린다
+        // given
+        // 배포 행만 생성하고 계수는 적재하지 않는다
         LoadedBundle bundle = LoadedBundle.from(DummyBundle.valid().writeTo(directory));
         deployments.promoteToActive(deployments.stage(new StagedModelDeployment(
             UUID.randomUUID(),
@@ -233,7 +254,7 @@ class BundleActivationTest {
         ModelLoadResult actual = startup().load(new LoadConfiguredModelCommand(null, false));
 
         // then
-        assertThat(actual).isEqualTo(new ModelLoadResult.NotConfigured());
+        assertThat(actual).isEqualTo(new NotConfigured());
         assertThat(deploymentCount()).isZero();
         assertThat(bundles.size()).isZero();
     }
@@ -247,7 +268,7 @@ class BundleActivationTest {
         ModelLoadResult actual = startup().load(new LoadConfiguredModelCommand(directory.toString(), false));
 
         // then
-        assertThat(actual).isEqualTo(new ModelLoadResult.Activated(deployments.findActive().orElseThrow().id()));
+        assertThat(actual).isEqualTo(new Activated(deployments.findActive().orElseThrow().id()));
         assertThat(resolver().resolveActive()).isPresent();
     }
 
@@ -261,7 +282,7 @@ class BundleActivationTest {
         ModelLoadResult actual = startup().load(new LoadConfiguredModelCommand(directory.toString(), false));
 
         // then
-        assertThat(actual).isEqualTo(new ModelLoadResult.Reloaded("dummy-release-0001"));
+        assertThat(actual).isEqualTo(new Reloaded("dummy-release-0001"));
         assertThat(deploymentCount()).isOne();
         assertThat(resolver().resolveActive()).isPresent();
     }
@@ -276,7 +297,7 @@ class BundleActivationTest {
         ModelLoadResult actual = startUp(relabelledBundle(), false);
 
         // then
-        assertThat(actual).isEqualTo(new ModelLoadResult.IdentityMismatch("dummy-release-0001", "dummy-release-0002"));
+        assertThat(actual).isEqualTo(new IdentityMismatch("dummy-release-0001", "dummy-release-0002"));
         assertThat(resolver().resolveActive().orElseThrow().releaseId()).isEqualTo(before.releaseId());
         assertThat(deploymentCount()).isOne();
     }
@@ -306,7 +327,7 @@ class BundleActivationTest {
 
         // then
         final long later = deployments.findActive().orElseThrow().id();
-        assertThat(actual).isEqualTo(new ModelLoadResult.Promoted("dummy-release-0001", "dummy-release-0002", later));
+        assertThat(actual).isEqualTo(new Promoted("dummy-release-0001", "dummy-release-0002", later));
         assertThat(stateOf(earlier)).isEqualTo("RETIRED");
         assertThat(resolver().resolveActive().orElseThrow().releaseId()).isEqualTo("dummy-release-0002");
     }
@@ -322,18 +343,21 @@ class BundleActivationTest {
         ModelLoadResult actual = startUp(files, false);
 
         // then
-        assertThat(actual).isEqualTo(new ModelLoadResult.Rejected(reason));
+        assertThat(actual).isEqualTo(new Rejected(reason));
         assertThat(deploymentCount()).isZero();
     }
 
     @Test
     void 잘못된_학습_시각은_최초_기동에서_거절된다() {
+        // given
         BundleFiles files = DummyBundle.valid().put("dataThrough", "2026-08-30 14:59:56")
             .writeTo(directory);
 
+        // when
         ModelLoadResult actual = startUp(files, false);
 
-        assertThat(actual).isInstanceOf(ModelLoadResult.Rejected.class);
+        // then
+        assertThat(actual).isInstanceOf(Rejected.class);
         assertThat(actual.toString()).contains(BundleCheck.DATA_THROUGH.name());
         assertThat(deploymentCount()).isZero();
         assertThat(resolver().resolveActive()).isEmpty();
@@ -341,15 +365,18 @@ class BundleActivationTest {
 
     @Test
     void 잘못된_학습_시각은_재기동에서도_메모리에_올리지_않는다() {
+        // given
         activation().activate(filesOf(DummyBundle.valid().writeTo(directory)));
         ActiveModelDeployment original = deployments.findActive().orElseThrow();
         bundles = new LoadedModelRegistry();
         BundleFiles unreadable = DummyBundle.valid().put("dataThrough", "2026-08-30 14:59:56")
             .writeTo(directoryUnder("unreadable"));
 
+        // when
         ModelLoadResult actual = startUp(unreadable, false);
 
-        assertThat(actual).isInstanceOf(ModelLoadResult.Rejected.class);
+        // then
+        assertThat(actual).isInstanceOf(Rejected.class);
         assertThat(actual.toString()).contains(BundleCheck.DATA_THROUGH.name());
         assertThat(deploymentCount()).isEqualTo(1);
         assertThat(deployments.findActive()).contains(original);
@@ -359,15 +386,18 @@ class BundleActivationTest {
 
     @Test
     void 길이를_초과한_번들은_배포_행과_기존_계수를_변경하지_않는다() {
+        // given
         activation().activate(filesOf(DummyBundle.valid().writeTo(directory)));
         ActiveModelDeployment original = deployments.findActive().orElseThrow();
-        var originalBundle = bundles.find(original.bundleDigest()).orElseThrow();
+        ModelRelease originalBundle = bundles.find(original.bundleDigest()).orElseThrow();
         BundleFiles invalid = DummyBundle.valid().put("featureContractVersion", "v".repeat(41))
             .writeTo(directoryUnder("too-long"));
 
+        // when
         ModelLoadResult actual = startUp(invalid, true);
 
-        assertThat(actual).isInstanceOf(ModelLoadResult.Rejected.class);
+        // then
+        assertThat(actual).isInstanceOf(Rejected.class);
         assertThat(actual.toString()).contains(BundleCheck.DEPLOYMENT_IDENTIFIER_LENGTH.name());
         assertThat(deploymentCount()).isEqualTo(1);
         assertThat(deployments.findActive()).contains(original);
@@ -377,32 +407,38 @@ class BundleActivationTest {
 
     @Test
     void 새_입력_번들은_수동_승격하고_이전_번들로_돌아갈_수_있다() {
+        // when
         BundleFiles legacy = DummyBundle.valid().writeTo(directoryUnder("legacy"));
-        assertThat(startUp(legacy, false)).isInstanceOf(ModelLoadResult.Activated.class);
-        var before = resolver().resolveActive().orElseThrow();
+
+        // then
+        assertThat(startUp(legacy, false)).isInstanceOf(Activated.class);
+        RuntimeSnapshot before = resolver().resolveActive().orElseThrow();
         BundleFiles conditional = DummyBundle.conditional().put("releaseId", "conditional-release")
             .writeTo(directoryUnder("conditional"));
-        assertThat(startUp(conditional, false)).isInstanceOf(ModelLoadResult.IdentityMismatch.class);
+        assertThat(startUp(conditional, false)).isInstanceOf(IdentityMismatch.class);
         assertThat(resolver().resolveActive().orElseThrow().bundleDigest()).isEqualTo(before.bundleDigest());
-        assertThat(startUp(conditional, true)).isInstanceOf(ModelLoadResult.Promoted.class);
+        assertThat(startUp(conditional, true)).isInstanceOf(Promoted.class);
         assertThat(resolver().resolveActive().orElseThrow().featureContractVersion())
-            .isEqualTo(com.gustler.backend.forecasting.domain.model.ForecastFeatureContract.CONDITIONAL_VERSION);
-        assertThat(startUp(legacy, true)).isInstanceOf(ModelLoadResult.Promoted.class);
+            .isEqualTo(ForecastFeatureContract.CONDITIONAL_VERSION);
+        assertThat(startUp(legacy, true)).isInstanceOf(Promoted.class);
         assertThat(resolver().resolveActive().orElseThrow().bundleDigest()).isEqualTo(before.bundleDigest());
     }
 
     @Test
     void 정류장_파일이_변조된_새_번들은_기존_활성_배포를_바꾸지_않는다() throws Exception {
+        // when
         startUp(DummyBundle.valid().writeTo(directoryUnder("legacy")), false);
-        var before = deployments.findActive().orElseThrow();
+        ActiveModelDeployment before = deployments.findActive().orElseThrow();
         BundleFiles conditional = DummyBundle.conditional().writeTo(directoryUnder("conditional"));
-        java.nio.file.Files.writeString(conditional.manifest().resolveSibling("route-reference.json"), "{}");
-        assertThat(startUp(conditional, true)).isInstanceOf(ModelLoadResult.Rejected.class);
+        Files.writeString(conditional.manifest().resolveSibling("route-reference.json"), "{}");
+
+        // then
+        assertThat(startUp(conditional, true)).isInstanceOf(Rejected.class);
         assertThat(deployments.findActive()).contains(before);
         assertThat(deploymentCount()).isEqualTo(1);
     }
 
-    /** 예보 경로는 모델 포트로 부르는데, 이 테스트는 열 31개를 곧바로 넣어 보려고 예측기를 꺼낸다. */
+    /** 예보 경로는 모델 포트를 호출하지만 이 테스트는 열 31개를 직접 입력하려고 예측기를 조회한다. */
     private SeatDistributionPredictor predictorOf(
         RuntimeSnapshot snapshot
     ) {
@@ -413,10 +449,9 @@ class BundleActivationTest {
         return new BundleActivation(deployments, bundles);
     }
 
-    /** 승격만 실패하는 적재. 적재와 STAGED 는 그대로 되고 마지막 한 걸음에서 못 올린다. */
+    /** 승격만 실패하는 적재. 적재와 STAGED 단계는 정상 수행하지만 마지막 승격은 실패한다. */
     private BundleActivation failingActivation() {
         return new BundleActivation(new ModelDeploymentRepository() {
-
             @Override
             public Optional<ActiveModelDeployment> findActive() {
                 return deployments.findActive();
@@ -462,7 +497,7 @@ class BundleActivationTest {
             .writeTo(directoryUnder("broken"));
     }
 
-    /** 계수는 그대로고 출시 식별자만 다시 붙은 파일. 계수 파일 요약값은 앞엣것과 같다. */
+    /** 계수는 그대로고 출시 식별자만 다시 부여한 파일. 계수 파일 요약값은 이전 파일과 같다. */
     private BundleFiles relabelledBundle() {
         return DummyBundle.valid()
             .put("releaseId", "dummy-release-0002")
@@ -491,7 +526,7 @@ class BundleActivationTest {
         double[] features = new double[DummyBundle.FEATURE_COUNT];
         features[0] = 1.0;
         for (int index = 1; index < features.length; index++) {
-            features[index] = index % 3 == 0 ? 0.5 : 0.0;
+            features[index] = fixtureCoefficient(index);
         }
         return features;
     }
@@ -507,5 +542,12 @@ class BundleActivationTest {
             .param(deploymentId)
             .query(String.class)
             .single();
+    }
+
+    private static double fixtureCoefficient(final int index) {
+        if (index % 3 == 0) {
+            return 0.5;
+        }
+        return 0.0;
     }
 }

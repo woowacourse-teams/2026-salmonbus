@@ -8,7 +8,6 @@ import org.springframework.context.annotation.Primary;
 
 @TestConfiguration(proxyBeanMethods = false)
 public class ChatTestRoutesConfiguration {
-
     @Bean
     @Primary
     ChatRouteSource testChatRouteSource() {

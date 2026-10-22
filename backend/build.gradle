@@ -22,12 +22,133 @@ subprojects {
 
     dependencyManagement {
         imports {
+            // Testcontainers 버전도 이 BOM 이 관리한다(testcontainers-bom 2.0.x).
             mavenBom 'org.springframework.boot:spring-boot-dependencies:4.1.0'
-            mavenBom 'org.testcontainers:testcontainers-bom:1.21.4' // Spring Boot 4.1 BOM 이 관리하지 않는다.
         }
     }
 
     tasks.named('test') {
         useJUnitPlatform()
+        // Gradle 이 테스트 JVM 에 주는 기본값과 같은 값이다. 동작은 그대로 두고, 병렬 실행의 메모리 예산을 이 값으로 셈하려고 적는다.
+        // 모자라면 OutOfMemoryError 로 실패하므로 조용히 통과하지 않는다.
+        maxHeapSize = '512m'
+    }
+
+    // 실행된 테스트 수(tests - skipped)를 test-baseline.properties 와 정확히 대조한다.
+    // 테스트가 꺼지거나 모듈을 옮기다 빠지면 수가 달라져 여기서 멈춘다. 늘어나도 같은 PR 에서 기준을 고쳐 리뷰에 드러나게 한다.
+    def verifyTestCount = tasks.register('verifyTestCount') {
+        group = 'verification'
+        description = '실행된 테스트 수를 test-baseline.properties 와 대조한다.'
+        def testTask = tasks.named('test', Test)
+        def results = testTask.flatMap { it.reports.junitXml.outputLocation }
+        def baselineFile = rootProject.file('test-baseline.properties')
+        def baselineKey = "executed.${project.name}.test".toString()
+        dependsOn testTask
+        // 테스트를 빼고 돌렸거나(-x test) 일부만 골라 돌린 결과(--tests)는 기준과 비교할 수 없다.
+        onlyIf('test 태스크가 전체 테스트를 돌렸다') {
+            gradle.taskGraph.hasTask(testTask.get())
+                && !gradle.startParameter.taskRequests.any { it.args.contains('--tests') }
+        }
+        doLast {
+            def baseline = new Properties()
+            baselineFile.withInputStream { baseline.load(it) }
+            def expected = baseline.getProperty(baselineKey)?.trim()
+            if (!expected) {
+                throw new GradleException("${baselineFile.name} 에 ${baselineKey} 값이 없다. 새 모듈이면 실행 테스트 수를 적는다.")
+            }
+            int executed = 0
+            fileTree(results.get().asFile).matching { include 'TEST-*.xml' }.each { report ->
+                report.withInputStream { stream ->
+                    def reader = javax.xml.stream.XMLInputFactory.newFactory().createXMLStreamReader(stream)
+                    try {
+                        while (!reader.startElement) {
+                            reader.next()
+                        }
+                        executed += (reader.getAttributeValue(null, 'tests') ?: '0') as int
+                        executed -= (reader.getAttributeValue(null, 'skipped') ?: '0') as int
+                    } finally {
+                        reader.close()
+                    }
+                }
+            }
+            if (executed != (expected as int)) {
+                throw new GradleException("${project.path} 실행 테스트 수가 기준과 다르다. 기준 ${expected}, 이번 ${executed}. " +
+                    "테스트를 더하거나 지우거나 끄거나 옮겼다면 같은 PR 에서 ${baselineFile.name} 의 ${baselineKey} 를 고친다.")
+            }
+        }
+    }
+
+    tasks.named('check') {
+        dependsOn verifyTestCount, ':verifyTestResourceRules'
+    }
+}
+
+// 테스트가 컨테이너를 직접 만들거나 Spring 컨텍스트를 버리는 곳을 허용 목록으로 묶는다.
+// 목록 밖에서 쓰면 컨텍스트마다 PG 서버가 다시 늘거나 컨텍스트가 재기동되므로 check 에서 멈춘다.
+// 목록에 넣는 이유는 그 클래스의 Javadoc 에 적는다. 이름은 파일 이름(클래스 이름)으로 대조한다.
+def testContainerOwners = [
+    'SharedPostgres',                   // 모듈 테스트 JVM 마다 하나 띄워 컨텍스트별 DB 를 나눠 준다
+    'DedicatedPostgresTestContainer',   // DB 를 멈추는 장애 테스트 전용
+    'DddStorageMigrationTest',          // 빈 서버에서 마이그레이션 자체를 검증한다
+    'PostgresMigrationTestSupport',     // 빈 서버에서 마이그레이션 자체를 검증한다
+    'ApiSqlOriginPostgresTest',         // pg_stat_statements 서버 설정이 필요하다
+    'MaintenanceProcessTest',           // 정비 boot JAR 을 자식 프로세스로 띄워 서버째 쓴다
+    'ChatMongoContainer',               // 채팅 Mongo 시험 클래스가 각자 띄운다. Mongo 공유 홀더는 아직 없다
+] as Set
+def dirtiesContextOwners = [
+    'DatabaseFailureContractTest',
+    'ChatWebSocketMongoIntegrationTest',
+    'ChatMongoUnavailableIntegrationTest',
+    'StatisticsArchiveAdoptionTest',
+    'JdbcStatisticsInputExtractorTest',
+    'JdbcEvaluationArchiveStoreTest',
+    'EvaluationArchiveRetentionTest',
+    'ArchivedDemandStatisticsRebuildTest',
+] as Set
+
+tasks.register('verifyTestResourceRules') {
+    group = 'verification'
+    description = '테스트 컨테이너 생성과 @DirtiesContext 를 허용 목록 안에서만 쓰는지 확인한다.'
+    def sources = files(subprojects.collect { module ->
+        module.fileTree('src') {
+            include '*/java/**/*.java'
+            exclude 'main/**'
+        }
+    })
+    inputs.files(sources)
+        .withPropertyName('testSources')
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    doLast {
+        def rules = [
+            [name   : '컨테이너 생성',
+             pattern: ~/\b(new|extends)\s+(PostgreSQLContainer|MongoDBContainer)\b/,
+             owners : testContainerOwners],
+            [name   : '@DirtiesContext',
+             pattern: ~/@([\w.]+\.)?DirtiesContext\b/,
+             owners : dirtiesContextOwners],
+        ]
+        def problems = []
+        rules.each { rule ->
+            def users = [] as Set
+            sources.each { source ->
+                def code = source.readLines()
+                    .findAll { line -> !(line.trim() ==~ /(\/\/|\/\*|\*).*/) }
+                    .join('\n')
+                if (code =~ rule.pattern) {
+                    def owner = source.name - '.java'
+                    users << owner
+                    if (!rule.owners.contains(owner)) {
+                        problems << "${rule.name}: 허용 목록 밖에서 쓴다 - ${relativePath(source)}"
+                    }
+                }
+            }
+            (rule.owners - users).each { owner ->
+                problems << "${rule.name}: 허용 목록에 있지만 쓰는 곳이 없다 - ${owner}"
+            }
+        }
+        if (problems) {
+            throw new GradleException("테스트 자원 허용 목록과 맞지 않는다. 루트 build.gradle 의 목록과 클래스 Javadoc 을 함께 고친다.\n"
+                + problems.join('\n'))
+        }
     }
 }

@@ -3,6 +3,7 @@ package com.gustler.backend.routecatalog.infrastructure.jdbc;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.routecatalog.domain.CurrentRouteVersionQuery;
+import com.gustler.backend.routecatalog.infrastructure.jdbc.JdbcCurrentGbisRoutesTest.Config;
 import com.gustler.backend.support.PostgresTestContainer;
 import java.time.OffsetDateTime;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,15 +15,18 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
-@SpringBootTest(classes = JdbcCurrentGbisRoutesTest.Config.class)
+@SpringBootTest(classes = Config.class)
 class JdbcCurrentGbisRoutesTest {
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration
     @Import({PostgresTestContainer.class, JdbcCurrentRouteVersionQuery.class})
-    static class Config { }
+    static class Config {
+    }
 
-    @Autowired CurrentRouteVersionQuery routes;
-    @Autowired JdbcClient jdbc;
+    @Autowired
+    CurrentRouteVersionQuery routes;
+    @Autowired
+    JdbcClient jdbc;
 
     @BeforeEach
     void reset() {
@@ -31,16 +35,18 @@ class JdbcCurrentGbisRoutesTest {
 
     @Test
     void 현재판본이_있는_GBIS_공개ID만_반환하고_추가와_폐쇄를_즉시_반영한다() {
-        long current = route("204000002", "GBIS", "upstream-2");
+        // when
+        final long current = route("204000002", "GBIS", "upstream-2");
         version(current, false);
-        long closed = route("204000003", "GBIS", "upstream-3");
+        final long closed = route("204000003", "GBIS", "upstream-3");
         version(closed, true);
         route("204000004", "GBIS", "upstream-4");
         version(route("204000005", "OTHER", "upstream-5"), false);
 
+        // then
         assertThat(routes.findCurrentGbisRouteIds()).containsExactly("204000002");
 
-        long added = route("204000001", "GBIS", "upstream-1");
+        final long added = route("204000001", "GBIS", "upstream-1");
         version(added, false);
         assertThat(routes.findCurrentGbisRouteIds()).containsExactly("204000001", "204000002");
 
@@ -56,11 +62,18 @@ class JdbcCurrentGbisRoutesTest {
             """).params(publicId, source, sourceId).query(Long.class).single();
     }
 
-    private void version(long route, boolean closed) {
+    private void version(final long route, final boolean closed) {
         jdbc.sql("""
             INSERT INTO route_version(route_id, content_digest, valid_from, valid_to)
             VALUES (?, ?, ?, ?)
             """).params(route, "a".repeat(64), OffsetDateTime.parse("2026-10-15T00:00:00Z"),
-                closed ? OffsetDateTime.parse("2026-10-16T00:00:00Z") : null).update();
+            closedAt(closed)).update();
+    }
+
+    private static OffsetDateTime closedAt(final boolean closed) {
+        if (closed) {
+            return OffsetDateTime.parse("2026-10-16T00:00:00Z");
+        }
+        return null;
     }
 }

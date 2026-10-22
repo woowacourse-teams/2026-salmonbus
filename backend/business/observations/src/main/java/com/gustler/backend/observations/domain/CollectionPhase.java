@@ -9,7 +9,6 @@ import java.util.Arrays;
  * 나머지 시간대는 30초다. 한 차례 수집이 끝난 시각을 기준으로 다음 간격을 정한다.
  */
 public enum CollectionPhase {
-
     /** 심야에는 호출 한도를 아끼도록 수집 간격을 늘린다. */
     DEEP_NIGHT(1, 4, 600),
     EARLY_MORNING(4, 7, 30),

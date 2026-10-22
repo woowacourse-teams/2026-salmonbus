@@ -1,17 +1,14 @@
 package com.gustler.backend.observations.infrastructure.gbis;
 
-import com.gustler.backend.observations.domain.CollectedObservations;
-import com.gustler.backend.observations.domain.UpstreamObservationRow;
-
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
+import com.gustler.backend.observations.domain.CollectedObservations;
+import com.gustler.backend.observations.domain.UpstreamObservationRow;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class GbisCollectedObservationsMapperTest {
-
     private static final String PLATE_NUMBER = "경기70아0001";
     private static final String ROUTE_3330 = "204000057";
     private static final String STOP_205000217 = "205000217";

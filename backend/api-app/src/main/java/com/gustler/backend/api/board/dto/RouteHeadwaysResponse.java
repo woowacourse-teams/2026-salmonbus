@@ -3,6 +3,10 @@ package com.gustler.backend.api.board.dto;
 import com.gustler.backend.api.board.domain.RouteHeadways;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+/**
+ * 요일 구분의 배차간격을 공개 응답으로 전달한다.
+ * 오늘이 공휴일인지 판정하는 값은 아니다.
+ */
 @Schema(requiredProperties = {"weekday", "saturday", "sunday", "holiday"})
 public record RouteHeadwaysResponse(
     @Schema(description = "평일 배차간격. 정보가 없으면 null", nullable = true)
@@ -15,7 +19,6 @@ public record RouteHeadwaysResponse(
         nullable = true)
     HeadwayRangeResponse holiday
 ) {
-
     static RouteHeadwaysResponse from(
         RouteHeadways headways
     ) {

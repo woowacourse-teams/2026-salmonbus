@@ -3,6 +3,7 @@ package com.gustler.backend.forecasting.application.publication;
 import com.gustler.backend.forecasting.api.ForecastTelemetry;
 import com.gustler.backend.forecasting.application.AfterCommitTelemetry;
 import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore;
+import com.gustler.backend.forecasting.application.publication.EvaluationSamplingSelector.Selection;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
 import com.gustler.backend.forecasting.domain.publication.ForecastPublicationRepository;
@@ -23,7 +24,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Component
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class ForecastBatchCommitter {
-    private static final Logger log = LoggerFactory.getLogger(ForecastBatchCommitter.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(ForecastBatchCommitter.class);
     private final ForecastPublicationRepository publications;
     private final EvaluationWorkStore work;
     private final RouteDataQualityAccess quality;
@@ -31,8 +32,13 @@ public class ForecastBatchCommitter {
     private final EvaluationSamplingSelector sampling;
     private ForecastTelemetry telemetry = ForecastTelemetry.NONE;
 
-    public ForecastBatchCommitter(ForecastPublicationRepository publications, EvaluationWorkStore work,
-        RouteDataQualityAccess quality, CollectionInputs inputs, EvaluationSamplingSelector sampling) {
+    public ForecastBatchCommitter(
+        ForecastPublicationRepository publications,
+        EvaluationWorkStore work,
+        RouteDataQualityAccess quality,
+        CollectionInputs inputs,
+        EvaluationSamplingSelector sampling
+    ) {
         this.publications = publications;
         this.work = work;
         this.quality = quality;
@@ -45,39 +51,54 @@ public class ForecastBatchCommitter {
         this.telemetry = telemetry;
     }
 
-    @Transactional
+    /**
+     * 품질 판본이 같은 경우에만 발행·평가 작업·입력 확정을 함께 저장한다. 표본 기준과 성공 지표는 실제 커밋 후 갱신한다.
+     */
+    @Transactional(readOnly = false)
     public int commit(PendingForecastBatch batch, ForecastPublication publication) {
         return commit(batch, publication, List.of());
     }
 
-    @Transactional
+    /**
+     * 품질 판본이 같은 경우에만 발행·평가 작업·입력 확정을 함께 저장한다. 표본 기준과 성공 지표는 실제 커밋 후 갱신한다.
+     */
+    @Transactional(readOnly = false)
     public int commit(PendingForecastBatch batch, ForecastPublication publication,
         List<EvaluationSamplingSource> sources) {
         quality.ensureExists(batch.routeVersionId());
-        long currentRevision = quality.current(batch.routeVersionId());
+        final long currentRevision = quality.current(batch.routeVersionId());
         if (currentRevision != publication.qualityRevision()) {
-            log.info("event=forecast_publication_skipped reason=QUALITY_CHANGED batchId={} routeVersionId={} expectedRevision={} actualRevision={}",
+            LOGGER.info(
+                "event=forecast_publication_skipped reason=QUALITY_CHANGED batchId={} routeVersionId={} expectedRevision={} actualRevision={}",
                 batch.observationBatchId(), batch.routeVersionId(), publication.qualityRevision(), currentRevision);
             return 0;
         }
 
-        EvaluationSamplingSelector.Selection selection = sampling.select(publication, sources);
-        boolean firstPublication = publications.save(selection.publication());
-        List<Long> observations = selection.publication().predictions().stream()
-            .map(SeatForecast::vehicleObservationId).distinct().toList();
+        Selection selection = sampling.select(publication, sources);
+        final boolean firstPublication = publications.save(selection.publication());
+        List<Long> observations = selection.publication()
+            .predictions()
+            .stream()
+            .map(SeatForecast::vehicleObservationId)
+            .distinct()
+            .toList();
         for (int from = 0; from < observations.size(); from += 100) {
-            work.register(batch.routeVersionId(), observations.subList(from, Math.min(from + 100, observations.size())));
+            work.register(batch.routeVersionId(),
+                observations.subList(from, Math.min(from + 100, observations.size())));
         }
         inputs.confirmInput(batch.observationBatchId(), publication.generatedAt());
         // 재발행은 DB에 남아 있는 최초 선택을 유지하므로 새 표본 기준으로 삼지 않는다.
         if (firstPublication && !selection.advances().isEmpty()) {
             if (!TransactionSynchronizationManager.isActualTransactionActive()
-                || !TransactionSynchronizationManager.isSynchronizationActive()) {
+                    || !TransactionSynchronizationManager.isSynchronizationActive()) {
                 throw new IllegalStateException("평가 표본 확정에는 실제 트랜잭션이 필요하다");
             }
             TransactionSynchronizationManager.registerSynchronization(
                 new TransactionSynchronization() {
-                    @Override public void afterCommit() { sampling.committed(selection); }
+                    @Override
+                    public void afterCommit() {
+                        sampling.committed(selection);
+                    }
                 });
         }
         AfterCommitTelemetry.record(() -> telemetry.published(batch.routeId(), batch.routeVersionId(),

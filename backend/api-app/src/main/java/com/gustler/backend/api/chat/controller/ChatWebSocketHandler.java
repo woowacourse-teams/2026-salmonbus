@@ -2,7 +2,8 @@ package com.gustler.backend.api.chat.controller;
 
 import com.gustler.backend.api.chat.application.ChatIdentity;
 import com.gustler.backend.api.chat.application.ChatIdentityService;
-import com.gustler.backend.api.chat.application.ChatMessageRepository;
+import com.gustler.backend.api.chat.application.ChatMessageRepository.SaveResult;
+import com.gustler.backend.api.chat.application.ChatMessageRepository.SaveResult.Status;
 import com.gustler.backend.api.chat.application.ChatRoom;
 import com.gustler.backend.api.chat.application.ChatRoomCatalog;
 import com.gustler.backend.api.chat.application.ChatService;
@@ -13,8 +14,15 @@ import com.gustler.backend.api.chat.controller.ChatFrameCodec.UnsupportedProtoco
 import com.gustler.backend.api.chat.domain.ChatMessage;
 import com.gustler.backend.api.chat.dto.ChatMessageResponse;
 import com.gustler.backend.api.chat.dto.ChatServerFrame;
+import com.gustler.backend.api.chat.dto.ChatServerFrame.Error;
+import com.gustler.backend.api.chat.dto.ChatServerFrame.HistoryBatch;
+import com.gustler.backend.api.chat.dto.ChatServerFrame.HistoryEnd;
+import com.gustler.backend.api.chat.dto.ChatServerFrame.MessageAck;
+import com.gustler.backend.api.chat.dto.ChatServerFrame.MessageCreated;
+import com.gustler.backend.api.chat.dto.ChatServerFrame.SessionReady;
 import jakarta.websocket.Session;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -38,8 +46,11 @@ import org.springframework.web.socket.adapter.NativeWebSocketSession;
 import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
+/**
+ * 채팅 연결의 세션 시작·메시지·생존 확인·종료 프로토콜을 처리한다.
+ * 본문의 업무 처리와 저장은 채팅 서비스에 맡긴다.
+ */
 public final class ChatWebSocketHandler extends TextWebSocketHandler {
-
     public static final int MAX_FRAME_BYTES = 1_024;
     private static final int HISTORY_BATCH_SIZE = 10;
     private static final Duration START_TIMEOUT = Duration.ofSeconds(5);
@@ -51,7 +62,7 @@ public final class ChatWebSocketHandler extends TextWebSocketHandler {
     private static final int SEND_BUFFER_LIMIT_BYTES = 64 * 1_024;
     private static final String TOMCAT_BLOCKING_SEND_TIMEOUT = "org.apache.tomcat.websocket.BLOCKING_SEND_TIMEOUT";
     private static final String STORE_UNAVAILABLE = "CHAT_UNAVAILABLE";
-    private static final Logger log = LoggerFactory.getLogger(ChatWebSocketHandler.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(ChatWebSocketHandler.class);
 
     private final ChatRoomCatalog rooms;
     private final ChatIdentityService identities;
@@ -122,14 +133,14 @@ public final class ChatWebSocketHandler extends TextWebSocketHandler {
         }
         switch (frame) {
             case UnsupportedProtocol unsupported ->
-                fail(state, unsupported.requestId(), "UNSUPPORTED_PROTOCOL", "지원하지 않는 프로토콜입니다.", null, true);
+            fail(state, unsupported.requestId(), "UNSUPPORTED_PROTOCOL", "지원하지 않는 프로토콜입니다.", null, true);
             case SessionStart start -> start(state, start);
             case MessageSend send -> {
                 if (state.started()) {
                     send(state, send);
-                } else {
-                    fail(state, send.clientMessageId(), "HELLO_REQUIRED", "먼저 세션을 시작해 주세요.", null, true);
+                    return;
                 }
+                fail(state, send.clientMessageId(), "HELLO_REQUIRED", "먼저 세션을 시작해 주세요.", null, true);
             }
         }
     }
@@ -155,6 +166,9 @@ public final class ChatWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    /**
+     * 등록된 연결의 유휴·전송 상태를 확인해 heartbeat 또는 종료를 수행한다. 연결별 실패는 다른 연결로 전파하지 않는다.
+     */
     public void heartbeat() {
         Instant now = clock.instant();
         for (SessionState state : new ArrayList<>(sessions.values())) {
@@ -176,6 +190,9 @@ public final class ChatWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    /**
+     * 관측 구간의 연결·거부·저장 실패 계수를 집계한다. 메시지 원문이나 연결 식별 정보는 기록하지 않는다.
+     */
     public void summarize() {
         final long created = createdCount.getAndSet(0);
         final long rejected = rejectedCount.getAndSet(0);
@@ -183,12 +200,32 @@ public final class ChatWebSocketHandler extends TextWebSocketHandler {
         final long overloaded = overloadedCount.getAndSet(0);
         String storeError = lastStoreError.getAndSet("-");
         List<SessionState> active = new ArrayList<>(sessions.values());
-        if (active.isEmpty() && created == 0 && rejected == 0 && storeErrors == 0 && overloaded == 0) {
+        if (hasNoActivity(active, created, rejected, storeErrors, overloaded)) {
             return;
         }
-        final long rooms = active.stream().map(SessionState::routeId).distinct().count();
-        log.info("채팅 1분 요약. 방={} 세션={} 보냄={} 거절={} 저장오류={} 연결초과={} 마지막저장오류={}",
+
+        final long rooms = active.stream()
+            .map(SessionState::routeId)
+            .distinct()
+            .count();
+        LOGGER.info("채팅 1분 요약. 방={} 세션={} 보냄={} 거절={} 저장오류={} 연결초과={} 마지막저장오류={}",
             rooms, active.size(), created, rejected, storeErrors, overloaded, storeError);
+    }
+
+    private boolean hasNoActivity(
+        List<SessionState> active,
+        long created,
+        long rejected,
+        long storeErrors,
+        long overloaded
+    ) {
+        if (!active.isEmpty() || created != 0) {
+            return false;
+        }
+        if (rejected != 0 || storeErrors != 0) {
+            return false;
+        }
+        return overloaded == 0;
     }
 
     private void start(SessionState state, SessionStart start) {
@@ -197,7 +234,7 @@ public final class ChatWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         ChatIdentity identity = identities.derive(state.room(), start.clientSessionId());
-        sendFrame(state, new ChatServerFrame.SessionReady(
+        sendFrame(state, new SessionReady(
             1, "session.ready", identity.authorId(), identity.nickname(), ChatService.MAX_BODY_CODE_POINTS
         ));
         state.start(identity);
@@ -206,10 +243,12 @@ public final class ChatWebSocketHandler extends TextWebSocketHandler {
             for (int index = 0; index < history.size(); index += HISTORY_BATCH_SIZE) {
                 List<ChatMessageResponse> batch = history
                     .subList(index, Math.min(index + HISTORY_BATCH_SIZE, history.size()))
-                    .stream().map(ChatMessageResponse::from).toList();
-                sendFrame(state, new ChatServerFrame.HistoryBatch(1, "history.batch", batch));
+                    .stream()
+                    .map(ChatMessageResponse::from)
+                    .toList();
+                sendFrame(state, new HistoryBatch(1, "history.batch", batch));
             }
-            sendFrame(state, new ChatServerFrame.HistoryEnd(1, "history.end"));
+            sendFrame(state, new HistoryEnd(1, "history.end"));
         } catch (RuntimeException exception) {
             lastStoreError.set(exception.getClass().getSimpleName());
             fail(state, null, STORE_UNAVAILABLE, "채팅을 잠시 사용할 수 없습니다.", null, false);
@@ -229,24 +268,24 @@ public final class ChatWebSocketHandler extends TextWebSocketHandler {
         }
 
         try {
-            ChatMessageRepository.SaveResult result = chatService.send(
+            SaveResult result = chatService.send(
                 state.routeId(), request.clientMessageId(), state.identity(), body
             );
-            if (result.status() == ChatMessageRepository.SaveResult.Status.CONFLICT) {
+            if (result.status() == Status.CONFLICT) {
                 fail(state, request.clientMessageId(), "ID_CONFLICT", "이미 사용된 메시지 ID입니다.", null, false);
                 return;
             }
             ChatMessageResponse response = ChatMessageResponse.from(result.message());
-            sendFrame(state, new ChatServerFrame.MessageAck(
+            sendFrame(state, new MessageAck(
                 1,
                 "message.ack",
                 request.clientMessageId(),
-                result.status() == ChatMessageRepository.SaveResult.Status.DUPLICATE,
+                result.status() == Status.DUPLICATE,
                 response
             ));
-            if (result.status() == ChatMessageRepository.SaveResult.Status.CREATED) {
+            if (result.status() == Status.CREATED) {
                 createdCount.incrementAndGet();
-                broadcast(state.routeId(), new ChatServerFrame.MessageCreated(1, "message.created", response));
+                broadcast(state.routeId(), new MessageCreated(1, "message.created", response));
             }
         } catch (RuntimeException exception) {
             lastStoreError.set(exception.getClass().getSimpleName());
@@ -270,17 +309,21 @@ public final class ChatWebSocketHandler extends TextWebSocketHandler {
         Long retryAfterMs,
         final boolean fatal
     ) {
-        if (STORE_UNAVAILABLE.equals(code)) {
-            storeErrorCount.incrementAndGet();
-        } else {
-            rejectedCount.incrementAndGet();
-        }
-        sendFrame(state, new ChatServerFrame.Error(
+        recordFailure(code);
+        sendFrame(state, new Error(
             1, "error", requestId, code, message, retryAfterMs, fatal
         ));
         if (fatal) {
             close(state, CloseStatus.POLICY_VIOLATION.withReason(code));
         }
+    }
+
+    private void recordFailure(String code) {
+        if (STORE_UNAVAILABLE.equals(code)) {
+            storeErrorCount.incrementAndGet();
+            return;
+        }
+        rejectedCount.incrementAndGet();
     }
 
     private void sendFrame(SessionState state, ChatServerFrame frame) {
@@ -291,19 +334,24 @@ public final class ChatWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    /**
+     * 먼저 서버 등록과 연결 슬롯을 해제한다. 전송 계층 종료가 실패해도 이미 해제한 상태를 되돌리지 않는다.
+     */
     private void close(SessionState state, CloseStatus status) {
         forget(state.session());
         try {
-            if (state.rawSession().isOpen()) {
-                state.rawSession().close(status);
+            WebSocketSession rawSession = state.rawSession();
+            if (rawSession.isOpen()) {
+                rawSession.close(status);
             }
-        } catch (IOException ignored) {
+        } catch (IOException alreadyForgotten) {
+            return;
         }
     }
 
     private void limitBlockingSend(WebSocketSession session) {
         if (session instanceof NativeWebSocketSession nativeSession
-            && nativeSession.getNativeSession() instanceof Session container) {
+                && nativeSession.getNativeSession() instanceof Session container) {
             container.getUserProperties().put(TOMCAT_BLOCKING_SEND_TIMEOUT, SEND_TIME_LIMIT.toMillis());
         }
     }
@@ -314,14 +362,19 @@ public final class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     private String clientAddress(WebSocketSession session) {
-        if (session.getAttributes().get(ChatClientAddressInterceptor.CLIENT_ADDRESS_ATTRIBUTE) instanceof String address) {
+        if (session.getAttributes()
+                .get(ChatClientAddressInterceptor.CLIENT_ADDRESS_ATTRIBUTE) instanceof String address) {
             return address;
         }
         return ChatClientAddressInterceptor.hostAddress(session.getRemoteAddress());
     }
 
     private String routeId(WebSocketSession session) {
-        String path = session.getUri() == null ? "" : session.getUri().getPath();
+        String path = "";
+        URI uri = session.getUri();
+        if (uri != null) {
+            path = uri.getPath();
+        }
         String prefix = "/api/chat/rooms/";
         String suffix = "/stream";
         if (!path.startsWith(prefix) || !path.endsWith(suffix)) {
@@ -340,7 +393,12 @@ public final class ChatWebSocketHandler extends TextWebSocketHandler {
         private volatile Instant lastSentAt;
         private volatile ChatIdentity identity;
 
-        private SessionState(WebSocketSession session, WebSocketSession rawSession, ChatRoom room, Instant connectedAt) {
+        private SessionState(
+            WebSocketSession session,
+            WebSocketSession rawSession,
+            ChatRoom room,
+            Instant connectedAt
+        ) {
             this.session = session;
             this.rawSession = rawSession;
             this.room = room;

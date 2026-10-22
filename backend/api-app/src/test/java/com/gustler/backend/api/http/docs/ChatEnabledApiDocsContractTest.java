@@ -1,6 +1,5 @@
 package com.gustler.backend.api.http.docs;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -8,9 +7,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.gustler.backend.api.chat.infrastructure.mongo.ChatMongoContainer;
 import com.gustler.backend.support.PostgresTestContainer;
 import java.nio.charset.StandardCharsets;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -23,12 +24,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(PostgresTestContainer.class)
 @ActiveProfiles("api-docs-local")
 class ChatEnabledApiDocsContractTest {
-
     @Container
     private static final ChatMongoContainer MONGO = new ChatMongoContainer();
 
@@ -46,16 +46,26 @@ class ChatEnabledApiDocsContractTest {
 
     @Test
     void 실제_채팅_가용성_HTTP만_명세에_추가하고_WebSocket은_별도_계약으로_둔다() throws Exception {
+        // given
         MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(applicationContext).build();
         String body = mockMvc.perform(get("/api/docs/openapi"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.paths['/api/chat/rooms/{routeId}'].get.responses['200']").exists())
-            .andExpect(jsonPath("$.paths['/api/chat/rooms/{routeId}'].get.responses['200'].content['application/json']").exists())
+            .andExpect(
+                jsonPath(
+                "$.paths['/api/chat/rooms/{routeId}'].get.responses['200'].content['application/json']").exists())
             .andExpect(jsonPath("$.paths['/api/chat/rooms/{routeId}'].get.responses['404']").exists())
-            .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+            .andReturn()
+            .getResponse()
+            .getContentAsString(StandardCharsets.UTF_8);
 
+        // when
         JsonNode paths = objectMapper.readTree(body).path("paths");
-        assertThat(paths.size()).isEqualTo(7);
-        assertThat(body).doesNotContain("/api/chat/rooms/{routeId}/stream");
+
+        // then
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(paths.size()).isEqualTo(7);
+            softly.assertThat(body).doesNotContain("/api/chat/rooms/{routeId}/stream");
+        }
     }
 }

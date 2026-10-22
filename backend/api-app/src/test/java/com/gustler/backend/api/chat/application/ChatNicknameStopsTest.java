@@ -6,14 +6,37 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ChatNicknameStopsTest {
-
     @Test
     void 정류장_이름에서_괄호와_마침표_뒤와_끝의_앞을_뗀다() {
-        assertThat(ChatNicknameStops.clean("서울역버스환승센터(5번승강장)(중)")).isEqualTo("서울역버스환승센터");
-        assertThat(ChatNicknameStops.clean("도촌초등학교.도촌종합사회복지관")).isEqualTo("도촌초등학교");
-        assertThat(ChatNicknameStops.clean("도촌동9단지앞")).isEqualTo("도촌동9단지");
-        assertThat(ChatNicknameStops.clean("앞")).isEqualTo("앞");
-        assertThat(ChatNicknameStops.clean("(중)")).isEmpty();
+        // when
+        String stopName1 = ChatNicknameStops.clean("서울역버스환승센터(5번승강장)(중)");
+
+        // then
+        assertThat(stopName1).isEqualTo("서울역버스환승센터");
+
+        // when
+        String stopName2 = ChatNicknameStops.clean("도촌초등학교.도촌종합사회복지관");
+
+        // then
+        assertThat(stopName2).isEqualTo("도촌초등학교");
+
+        // when
+        String stopName3 = ChatNicknameStops.clean("도촌동9단지앞");
+
+        // then
+        assertThat(stopName3).isEqualTo("도촌동9단지");
+
+        // when
+        String stopName4 = ChatNicknameStops.clean("앞");
+
+        // then
+        assertThat(stopName4).isEqualTo("앞");
+
+        // when
+        String stopName5 = ChatNicknameStops.clean("(중)");
+
+        // then
+        assertThat(stopName5).isEmpty();
     }
 
     @Test

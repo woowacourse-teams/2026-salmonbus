@@ -1,35 +1,36 @@
 package com.gustler.backend.observations.application;
 
-import com.gustler.backend.gbis.api.GbisKey;
-import com.gustler.backend.gbis.api.GbisLocationSource;
-import com.gustler.backend.observations.domain.CollectionSchedule;
-import com.gustler.backend.quota.api.CallQuota;
-import com.gustler.backend.quota.domain.CallQuotaStore;
-import com.gustler.backend.routecatalog.domain.RouteHeadways;
-import com.gustler.backend.routecatalog.domain.RouteStops;
-import com.gustler.backend.routecatalog.domain.RouteTimetable;
-import com.gustler.backend.routecatalog.domain.UpstreamRoute;
-import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
-import com.gustler.backend.routecatalog.domain.RouteSourceResult;
-import com.gustler.backend.routecatalog.infrastructure.gbis.GbisRouteSource;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 
 import ch.qos.logback.classic.Logger;
-import com.gustler.backend.diagnostics.WorkerOperationLog;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.gustler.backend.diagnostics.WorkerOperationLog;
+import com.gustler.backend.gbis.api.GbisKey;
 import com.gustler.backend.gbis.api.GbisLocationResult.DailyQuotaExceeded;
 import com.gustler.backend.gbis.api.GbisLocationResult.GbisSystemError;
 import com.gustler.backend.gbis.api.GbisLocationResult.NoVehicles;
 import com.gustler.backend.gbis.api.GbisLocationResult.Success;
+import com.gustler.backend.gbis.api.GbisLocationSource;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
+import com.gustler.backend.observations.domain.CollectionSchedule;
 import com.gustler.backend.observations.support.ObservationIntegrationTest;
+import com.gustler.backend.quota.api.CallQuota;
+import com.gustler.backend.quota.domain.CallQuotaStore;
+import com.gustler.backend.routecatalog.domain.RouteHeadways;
+import com.gustler.backend.routecatalog.domain.RouteSourceResult;
+import com.gustler.backend.routecatalog.domain.RouteSourceResult.Failed;
+import com.gustler.backend.routecatalog.domain.RouteStops;
+import com.gustler.backend.routecatalog.domain.RouteTimetable;
+import com.gustler.backend.routecatalog.domain.UpstreamRoute;
+import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
+import com.gustler.backend.routecatalog.infrastructure.gbis.GbisRouteSource;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -45,12 +46,11 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
- * 설정에 노선을 적고 수집을 한 판 돌리면 판본이 열리고 관측이 쌓이는지 본다.
+ * 설정에 노선을 적고 수집을 한 번 실행하면 판본이 열리고 관측이 저장되는지 확인한다.
  * 상류만 시험용 대역이고 나머지는 실제 배선과 DB 를 그대로 쓴다.
  */
 @ObservationIntegrationTest
 class ObservationCollectorTest {
-
     private static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
     /** 한국 시각 2026-08-28 11:14:04. 낮이라 20초 간격이다. */
     private static final Instant TICK = Instant.parse("2026-08-28T02:14:04Z");
@@ -122,14 +122,23 @@ class ObservationCollectorTest {
 
     @Test
     void 실제_FK_실패에_원본_정류장_증거를_남기고_관측은_롤백한다() {
+        // when
         given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME,
             List.of(busAt(VEHICLE_204000206, 1, "206000564"))));
-        var diagnostics = new ListAppender<ILoggingEvent>();
+        ListAppender<ILoggingEvent> diagnostics = new ListAppender<ILoggingEvent>();
         diagnostics.start();
         Logger logger = (Logger) LoggerFactory.getLogger(CollectionAttemptLog.class);
         logger.addAppender(diagnostics);
         try {
-            assertThatThrownBy(() -> collector.collectOnce(ROUTE_3330)).isInstanceOf(RuntimeException.class);
+
+            // then
+
+            // when
+            Throwable phaseFailure1 = catchThrowable(() -> collector.collectOnce(ROUTE_3330));
+
+            // then
+            assertThat(phaseFailure1)
+                .isNotNull().isInstanceOf(RuntimeException.class);
             assertThat(observationCount()).isZero();
             assertThat(onlyBatchColumn("outcome", String.class)).isEqualTo("DISPATCHING");
             assertThat(diagnostics.list).hasSize(1);
@@ -233,19 +242,24 @@ class ObservationCollectorTest {
             .when(callQuotaStore)
             .exclude(CallQuota.BUS_LOCATION, KOREA_8_28, GbisKey.PRIMARY);
 
-        // when 첫 제외만 실패한다
-        assertThatThrownBy(() -> collector.collectOnce(ROUTE_3330)).hasRootCause(firstExclusionFailure);
+        // when
+        // 첫 제외만 실패한다
+        Throwable exclusionFailure = catchThrowable(() -> collector.collectOnce(ROUTE_3330));
 
-        // then 수집 결과와 사용량은 먼저 커밋되어 있다
+        // then
+        assertThat(exclusionFailure).isNotNull().hasRootCause(firstExclusionFailure);
+        // 수집 결과와 사용량은 먼저 커밋되어 있다
         assertThat(onlyBatchColumn("outcome", String.class)).isEqualTo("FAILED_UPSTREAM");
         assertThat(onlyBatchColumn("failure_code", String.class)).isEqualTo("DAILY_QUOTA_EXCEEDED");
         assertThat(reservedCallsOf(CallQuota.BUS_LOCATION)).isEqualTo(1);
 
-        // when 다음 슬롯 차례에도 같은 키가 거절된다
+        // when
+        // 다음 슬롯 차례에도 같은 키가 거절된다
         given(clock.instant()).willReturn(NEXT_TICK);
         collector.collectOnce(ROUTE_3330);
 
-        // then 제외를 다시 시도해 그날 장부를 한도까지 채운다
+        // then
+        // 제외를 다시 시도해 그날 장부를 한도까지 채운다
         then(callQuotaStore).should(times(2))
             .exclude(CallQuota.BUS_LOCATION, KOREA_8_28, GbisKey.PRIMARY);
         assertThat(batchCount()).isEqualTo(2);
@@ -307,13 +321,15 @@ class ObservationCollectorTest {
 
     @Test
     void 같은_초에_두_번_부르면_관측도_마지막_시도의_것만_남는다() {
-        // given 첫 시도에는 차량이 둘이었다
+        // given
+        // 첫 시도에는 차량이 둘이었다
         given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME, List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217),
             busAt(VEHICLE_204003542, 3, STOP_208000069))));
         collector.collectOnce(ROUTE_3330);
 
-        // when 다시 부르니 차량이 하나다
+        // when
+        // 다시 부르니 차량이 하나다
         given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME, List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217))));
         collector.collectOnce(ROUTE_3330);
@@ -324,26 +340,30 @@ class ObservationCollectorTest {
 
     @Test
     void 노선_행_확보와_판본_열기가_한_트랜잭션에서_끝난다() {
-        // given 정류소 이름이 열 길이를 넘어 판본의 정류소를 넣는 데서 터진다
+        // given
+        // 정류소 이름이 열 길이를 초과해 판본의 정류소 저장에 실패한다
         given(routeSource.read(ROUTE_3330))
             .willReturn(new RouteSourceResult.Success(routeWithTooLongStopName()));
 
         // when
         assertThatThrownBy(() -> collector.collectOnce(ROUTE_3330)).isInstanceOf(RuntimeException.class);
 
-        // then 노선 행만 남고 판본이 없는 상태가 안 된다
+        // then
+        // 노선 행만 남고 판본이 없는 상태가 안 된다
         assertThat(routeRowCount()).isZero();
     }
 
     @Test
     void 상류를_부른_뒤_뜻밖의_예외가_나도_묶음이_DISPATCHING으로_안_남는다() {
-        // given RestClientException 이 아닌 것이라 GbisLocationSource 가 안 접어준다
+        // given
+        // RestClientException 이 아니므로 GbisLocationSource 가 변환하지 않는다
         given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willThrow(new IllegalStateException("파서가 터졌다"));
 
         // when
         collector.collectOnce(ROUTE_3330);
 
-        // then 보낸 것은 맞고 결과만 모르는 자리로 닫힌다
+        // then
+        // 전송했고 결과만 알 수 없는 상태로 닫힌다
         assertThat(onlyBatchColumn("outcome", String.class)).isEqualTo("UNKNOWN_AFTER_DISPATCH");
     }
 
@@ -352,8 +372,12 @@ class ObservationCollectorTest {
         // given
         given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME, null));
 
-        // when & then
-        assertThatThrownBy(() -> collector.collectOnce(ROUTE_3330)).isInstanceOf(NullPointerException.class);
+        // when
+        Throwable caughtFailure = catchThrowable(() -> collector.collectOnce(ROUTE_3330));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull().isInstanceOf(NullPointerException.class);
         assertThat(onlyBatchColumn("outcome", String.class)).isEqualTo("DISPATCHING");
         assertThat(onlyBatchColumn("response_received_at IS NULL", Boolean.class)).isTrue();
         assertThat(observationCount()).isZero();
@@ -404,13 +428,14 @@ class ObservationCollectorTest {
         collector.collectOnce(ROUTE_3330);
 
         // then
-        assertThat(warningMessages()).anyMatch(message -> message.contains("operation=collection_quota") && message.contains("reason=DAILY_LIMIT"));
+        assertThat(warningMessages()).anyMatch(message -> message.contains("operation=collection_quota")
+            && message.contains("reason=DAILY_LIMIT"));
     }
 
     @Test
     void 노선정보를_못_읽으면_판을_열지_않는다() {
         // given
-        given(routeSource.read(ROUTE_3330)).willReturn(new RouteSourceResult.Failed("상류가 답하지 않았다"));
+        given(routeSource.read(ROUTE_3330)).willReturn(new Failed("상류가 답하지 않았다"));
 
         // when
         collector.collectOnce(ROUTE_3330);
@@ -422,7 +447,7 @@ class ObservationCollectorTest {
     @Test
     void 노선정보를_못_읽으면_위치정보_한도를_안_쓴다() {
         // given
-        given(routeSource.read(ROUTE_3330)).willReturn(new RouteSourceResult.Failed("상류가 답하지 않았다"));
+        given(routeSource.read(ROUTE_3330)).willReturn(new Failed("상류가 답하지 않았다"));
 
         // when
         collector.collectOnce(ROUTE_3330);
@@ -433,7 +458,7 @@ class ObservationCollectorTest {
 
     /**
      * 정류소 이름이 route_stop.name 의 varchar(60) 을 넘는다.
-     * 노선 행은 들어가고 판본의 정류소를 넣는 데서 터지므로, 트랜잭션이 걸려 있으면 노선 행도 같이 되돌아간다.
+     * 노선 행을 저장한 뒤 판본의 정류소 저장에 실패하므로 트랜잭션이 적용돼 있으면 노선 행도 함께 롤백된다.
      */
     private static UpstreamRoute routeWithTooLongStopName() {
         return new UpstreamRoute(
@@ -483,9 +508,7 @@ class ObservationCollectorTest {
             .toList();
     }
 
-    private void useUpQuotaOf(
-        CallQuota quota
-    ) {
+    private void useUpQuotaOf(CallQuota quota) {
         jdbcClient.sql("""
                 INSERT INTO daily_call_quota (provider, api_service, kst_date, reserved_calls, daily_limit)
                 VALUES (?, ?, ?, ?, ?)
@@ -516,7 +539,7 @@ class ObservationCollectorTest {
     }
 
     private <T> T onlyBatchColumn(
-        final String column,
+        String column,
         Class<T> type
     ) {
         return jdbcClient.sql("SELECT %s FROM observation_batch".formatted(column))
@@ -540,7 +563,7 @@ class ObservationCollectorTest {
     }
 
     private String displayNameOf(
-        final String sourceRouteId
+        String sourceRouteId
     ) {
         return jdbcClient.sql("SELECT display_name FROM route WHERE public_route_id = ?")
             .param(sourceRouteId)

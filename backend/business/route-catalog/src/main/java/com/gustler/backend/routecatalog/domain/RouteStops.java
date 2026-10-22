@@ -2,11 +2,14 @@ package com.gustler.backend.routecatalog.domain;
 
 import java.util.List;
 
+/**
+ * 한 노선 판본의 방문 순서와 회차 근거다.
+ * 같은 정류장 ID의 반복 방문과 중복 순번은 구분한다.
+ */
 public record RouteStops(
     Integer turnSequence,
     List<RouteStop> stops
 ) {
-
     public RouteStops {
         stops = List.copyOf(stops);
         validateStopOrdersDoNotRepeat(stops);

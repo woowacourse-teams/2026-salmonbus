@@ -9,20 +9,19 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * 자리 잡기를 갱신 한 문장으로 끝낸다.
+ * 호출 예약을 갱신 한 문장으로 처리한다.
  *
- * <p>그날 행이 없으면 만들고, 있으면 자리가 남았을 때만 하나 올린다.
- * 둘이 동시에 들어오면 뒤엣것이 앞엣것의 커밋을 기다렸다가 갱신된 행을 다시 보고 판정한다.
- * 그래서 마지막 한 자리에 둘이 붙어도 하나만 잡는다.
+ * <p>그날 행이 없으면 만들고, 있으면 잔여 한도가 있을 때만 사용량을 하나 늘린다.
+ * 둘이 동시에 예약하면 나중 예약은 먼저 실행된 예약의 커밋을 기다린 뒤 갱신된 행으로 판정한다.
+ * 마지막 한 번의 호출 한도에 둘이 경합해도 하나만 예약된다.
  *
- * <p>JPA 를 안 쓴다. 영속성 컨텍스트가 flush 시점을 잡고 있으면 자리를 잡은 사실이 다른 트랜잭션에
- * 언제 보이는지가 흐려진다. 한도는 그 시점이 전부다.
+ * <p>JPA 를 사용하지 않는다. 영속성 컨텍스트가 flush 시점을 결정하면 예약이 다른 트랜잭션에
+ * 보이는 시점이 불분명해진다. 한도 판정은 이 시점에 달려 있다.
  */
 @Repository
 public class JdbcCallQuotaStore implements CallQuotaStore {
-
     /**
-     * 그날 행이 이미 있으면 daily_limit 은 안 건드린다.
+     * 그날 행이 이미 있으면 daily_limit 은 변경하지 않는다.
      * 설정을 바꿔도 그날 장부는 처음 정한 한도로 끝까지 센다.
      */
     private static final String RESERVE = """
@@ -55,7 +54,7 @@ public class JdbcCallQuotaStore implements CallQuotaStore {
         DailyCallQuota.Reservation reservation
     ) {
         DailyCallQuota quota = reservation.quota();
-        int calls = reservation.calls();
+        final int calls = reservation.calls();
         return jdbcClient.sql(RESERVE)
             .params(quota.service().provider(), quota.service().apiService(), quota.koreanDate(), quota.keyAlias(),
                 calls, quota.dailyLimit(), calls, calls)

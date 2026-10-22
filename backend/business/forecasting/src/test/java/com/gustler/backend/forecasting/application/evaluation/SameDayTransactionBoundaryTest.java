@@ -2,6 +2,7 @@ package com.gustler.backend.forecasting.application.evaluation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -9,22 +10,24 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
+import com.gustler.backend.forecasting.application.evaluation.SameDayTransactionBoundaryTest.FixedClock;
 import com.gustler.backend.forecasting.application.publication.ForecastBatchWriter;
 import com.gustler.backend.forecasting.application.quality.DemandStatisticsRebuildTrigger;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuilder;
-import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Settled;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationQuery;
+import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomeCount;
 import com.gustler.backend.forecasting.domain.evaluation.SeoulDay;
-import com.gustler.backend.forecasting.domain.model.FullSeatStreak;
-import com.gustler.backend.forecasting.domain.model.ObservedSeats;
+import com.gustler.backend.forecasting.domain.model.FullSeatStreak.SeenToEnd;
+import com.gustler.backend.forecasting.domain.model.ObservedSeats.Known;
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
-import com.gustler.backend.forecasting.domain.model.PrecedingVehicle;
+import com.gustler.backend.forecasting.domain.model.PrecedingVehicle.Unknown;
 import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.model.SeatDistribution;
@@ -39,6 +42,7 @@ import com.gustler.backend.forecasting.domain.publication.SeatForecast;
 import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryQuery;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
+import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcEvaluationWorkStore;
 import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcForecastEvaluationRepository;
 import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcForecastPublicationRepository;
 import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcSameDayFullOutcomesStore;
@@ -51,15 +55,16 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.ApplicationContext;
@@ -72,7 +77,9 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.AopTestUtils;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -82,7 +89,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 검증 스레드의 각 조회는 자동 커밋으로 실행되어 작업 트랜잭션에 참여하지 않는다.
  */
 @ForecastingIntegrationTest
-@Import(SameDayTransactionBoundaryTest.FixedClock.class)
+@Import(FixedClock.class)
 @TestPropertySource(properties = {
     "spring.datasource.hikari.data-source-properties.options=-c statement_timeout=5000 -c lock_timeout=2000",
     "forecast.same-day-initialization.retry-interval=60s",
@@ -107,7 +114,7 @@ class SameDayTransactionBoundaryTest {
     @MockitoSpyBean
     JdbcForecastEvaluationRepository evaluationsSpy;
     @MockitoSpyBean
-    com.gustler.backend.forecasting.infrastructure.jdbc.JdbcEvaluationWorkStore workSpy;
+    JdbcEvaluationWorkStore workSpy;
     @MockitoBean
     ArrivalObservationQuery arrivals;
     @MockitoBean
@@ -137,8 +144,8 @@ class SameDayTransactionBoundaryTest {
             .thenReturn(List.of(arrival()));
         when(trajectories.readTrajectories(batchId)).thenReturn(List.of(new VehicleTrajectory(sourceId,
             new ObservedVehicle("fixture-vehicle", versionId, 1, OBSERVED_AT, 12, null),
-            new ObservedSeats.Known(12), new SeatSlope.Known(0),
-            new PrecedingVehicle.Unknown(TrajectoryGap.NO_VEHICLE_AHEAD), new FullSeatStreak.SeenToEnd(0), 44)));
+            new Known(12), new SeatSlope.Known(0),
+            new Unknown(TrajectoryGap.NO_VEHICLE_AHEAD), new SeenToEnd(0), 44)));
         when(statistics.readAsOf(anyLong(), any(), anyString(), any())).thenReturn(new StopDemandStatistics(
             versionId, ForecastTimeSlot.of(batch(), Clock.fixed(NOW, ZoneOffset.UTC)), 1, List.of()));
     }
@@ -146,7 +153,7 @@ class SameDayTransactionBoundaryTest {
     @AfterEach
     void 작업을_정리한다() throws InterruptedException {
         workers.shutdownNow();
-        boolean stopped = workers.awaitTermination(10, TimeUnit.SECONDS);
+        final boolean stopped = workers.awaitTermination(10, TimeUnit.SECONDS);
         assertThat(stopped).as("테스트의 백그라운드 작업이 남지 않는다").isTrue();
     }
 
@@ -155,7 +162,7 @@ class SameDayTransactionBoundaryTest {
         // given
         savePending();
         when(arrivals.findAfter(anyLong(), anyString(), any(), anyInt())).thenReturn(List.of());
-        org.mockito.Mockito.clearInvocations(workSpy, arrivals);
+        Mockito.clearInvocations(workSpy, arrivals);
 
         // when
         settlement.settleArrivalLabels();
@@ -163,8 +170,8 @@ class SameDayTransactionBoundaryTest {
         settlement.settleArrivalLabels();
 
         // then
-        org.mockito.Mockito.verify(workSpy).restore(versionId, List.of(sourceId));
-        org.mockito.Mockito.verify(arrivals, org.mockito.Mockito.times(3))
+        Mockito.verify(workSpy).restore(versionId, List.of(sourceId));
+        Mockito.verify(arrivals, Mockito.times(3))
             .findAfter(versionId, "fixture-vehicle", GENERATED_AT, 400);
         assertThat(count("forecast_evaluation_work")).isOne();
         assertThat(count("forecast_evaluation_pending")).isOne();
@@ -173,10 +180,11 @@ class SameDayTransactionBoundaryTest {
 
     @Test
     void 정산_커밋_전에는_원본과_대기자료와_당일성적이_다른_트랜잭션에_보이지_않는다() throws Exception {
+        // when
         savePending();
         initializeEmptyDay();
-        var written = new CountDownLatch(1);
-        var release = new CountDownLatch(1);
+        CountDownLatch written = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
         doAnswer(call -> {
             call.callRealMethod();
             written.countDown();
@@ -186,6 +194,8 @@ class SameDayTransactionBoundaryTest {
         Future<?> running = workers.submit(settlement::settleArrivalLabels);
         try {
             await(written);
+
+            // then
             assertUnsettled();
         } finally {
             release.countDown();
@@ -196,6 +206,7 @@ class SameDayTransactionBoundaryTest {
 
     @Test
     void 당일성적_저장_실패는_원본_정산과_대기자료도_롤백하고_재시도는_한번만_반영한다() {
+        // when
         savePending();
         initializeEmptyDay();
         doAnswer(call -> {
@@ -204,7 +215,14 @@ class SameDayTransactionBoundaryTest {
             return null;
         }).when(countsSpy).addCounts(anyLong(), anyLong(), any(), any());
 
-        assertThatThrownBy(settlement::settleArrivalLabels).isInstanceOf(QueryTimeoutException.class);
+        // then
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(settlement::settleArrivalLabels);
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull().isInstanceOf(QueryTimeoutException.class);
         assertUnsettled();
 
         doAnswer(call -> call.callRealMethod()).when(countsSpy).addCounts(anyLong(), anyLong(), any(), any());
@@ -215,22 +233,34 @@ class SameDayTransactionBoundaryTest {
 
     @Test
     void 같은_예보를_동시에_정산해도_원본과_대기자료와_당일성적은_한번만_반영한다() throws Exception {
+        // when
         savePending();
         initializeEmptyDay();
-        var start = new CountDownLatch(1);
+        CountDownLatch start = new CountDownLatch(1);
         when(arrivals.findAfter(anyLong(), anyString(), any(), anyInt())).thenReturn(List.of(arrival()));
-        Future<?> first = workers.submit(() -> { await(start); settlement.settleArrivalLabels(); return null; });
-        Future<?> second = workers.submit(() -> { await(start); settlement.settleArrivalLabels(); return null; });
+        Future<?> first = workers.submit(() -> {
+            await(start);
+            settlement.settleArrivalLabels();
+            return null;
+        });
+        Future<?> second = workers.submit(() -> {
+            await(start);
+            settlement.settleArrivalLabels();
+            return null;
+        });
         start.countDown();
         first.get(10, TimeUnit.SECONDS);
         second.get(10, TimeUnit.SECONDS);
+
+        // then
         assertSettledOnce();
     }
 
     @Test
     void 예보_커밋_전에는_예보와_묶음_완료표시가_다른_트랜잭션에_보이지_않는다() throws Exception {
-        var written = new CountDownLatch(1);
-        var release = new CountDownLatch(1);
+        // when
+        CountDownLatch written = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
         doAnswer(call -> {
             Object published = call.callRealMethod();
             written.countDown();
@@ -240,6 +270,8 @@ class SameDayTransactionBoundaryTest {
         Future<?> running = workers.submit(this::writeForecast);
         try {
             await(written);
+
+            // then
             assertNoForecast();
         } finally {
             release.countDown();
@@ -250,12 +282,21 @@ class SameDayTransactionBoundaryTest {
 
     @Test
     void 묶음_완료표시_후_실패하면_예보도_롤백하고_재시도는_중복없이_저장한다() {
+        // when
         doAnswer(call -> {
             call.callRealMethod();
             timeout();
             return null;
         }).when(publications()).save(any());
-        assertThatThrownBy(this::writeForecast).isInstanceOf(QueryTimeoutException.class);
+
+        // then
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(this::writeForecast);
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull().isInstanceOf(QueryTimeoutException.class);
         assertNoForecast();
         doAnswer(call -> call.callRealMethod()).when(publications()).save(any());
         writeForecast();
@@ -265,9 +306,21 @@ class SameDayTransactionBoundaryTest {
 
     @Test
     void 별도_초기집계가_실패해도_예보와_묶음_완료는_커밋된다() {
-        doAnswer(call -> { timeout(); return call.callRealMethod(); })
+        // when
+        doAnswer(call -> {
+            timeout();
+            return call.callRealMethod();
+        })
             .when(countsSpy).countFromSource(anyLong(), anyLong(), any(), any());
-        assertThatThrownBy(() -> initializer().initialize(routeId, SeoulDay.containing(NOW)))
+
+        // then
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> initializer().initialize(routeId, SeoulDay.containing(NOW)));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull()
             .isInstanceOf(QueryTimeoutException.class);
 
         writeForecast();
@@ -278,10 +331,13 @@ class SameDayTransactionBoundaryTest {
 
     @Test
     void 미초기화_중에도_정산과_통계_대기자료는_함께_커밋된다() {
+        // given
         savePending();
 
+        // when
         settlement.settleArrivalLabels();
 
+        // then
         assertThat(jdbc.sql("SELECT scoring_state FROM forecast_evaluation WHERE vehicle_observation_id=?")
             .param(sourceId).query(String.class).single()).isEqualTo("SETTLED");
         assertThat(count("stop_demand_pending_sample")).isEqualTo(1);
@@ -290,12 +346,15 @@ class SameDayTransactionBoundaryTest {
 
     @Test
     void 초기화_전후의_정산은_당일_합계에_정확히_한번씩_반영된다() {
+        // when
         savePending();
         settlement.settleArrivalLabels();
+
+        // then
         assertThat(count("same_day_model_full_outcomes")).isZero();
         assertThat(initializer().initialize(routeId, SeoulDay.containing(NOW))).isTrue();
-        long laterBatch = insertBatch(OBSERVED_AT.plusSeconds(2));
-        long later = insertObservation(laterBatch, 1, 12);
+        final long laterBatch = insertBatch(OBSERVED_AT.plusSeconds(2));
+        final long later = insertObservation(laterBatch, 1, 12);
         publish(laterBatch, OBSERVED_AT.plusSeconds(2),
             new SeatForecast(later, versionId, 2, 1, modelId, 1, .25, .25, 12.5, GENERATED_AT));
         settlement.settleArrivalLabels();
@@ -312,7 +371,7 @@ class SameDayTransactionBoundaryTest {
         savePending();
         ArrivalCandidate candidate = arrival();
         when(arrivals.findAfter(anyLong(), anyString(), any(), anyInt())).thenAnswer(call -> {
-            assertThat(org.springframework.transaction.support.TransactionSynchronizationManager
+            assertThat(TransactionSynchronizationManager
                 .isActualTransactionActive()).isFalse();
             new TransactionTemplate(context.getBean(PlatformTransactionManager.class))
                 .executeWithoutResult(status -> context.getBean(RouteDataQualityAccess.class).lock(versionId));
@@ -332,14 +391,15 @@ class SameDayTransactionBoundaryTest {
         // given
         savePending();
         ArrivalCandidate candidate = arrival();
-        var changed = new java.util.concurrent.atomic.AtomicBoolean();
+        AtomicBoolean changed = new AtomicBoolean();
         when(arrivals.findAfter(anyLong(), anyString(), any(), anyInt())).thenAnswer(call -> {
             if (changed.compareAndSet(false, true)) {
-                new TransactionTemplate(context.getBean(PlatformTransactionManager.class)).executeWithoutResult(status -> {
-                    context.getBean(RouteDataQualityAccess.class).lock(versionId);
-                    jdbc.sql("UPDATE route_data_quality SET quality_revision=quality_revision+1 WHERE route_id=?")
-                        .param(routeId).update();
-                });
+                new TransactionTemplate(context.getBean(PlatformTransactionManager.class)).executeWithoutResult(
+                    status -> {
+                        context.getBean(RouteDataQualityAccess.class).lock(versionId);
+                        jdbc.sql("UPDATE route_data_quality SET quality_revision=quality_revision+1 WHERE route_id=?")
+                            .param(routeId).update();
+                    });
             }
             return List.of(candidate);
         });
@@ -389,8 +449,12 @@ class SameDayTransactionBoundaryTest {
         savePending();
         ArrivalCandidate firstArrival = arrival();
         OtherRoute other = otherRoute();
-        when(arrivals.findAfter(anyLong(), anyString(), any(), anyInt())).thenAnswer(call ->
-            List.of((long) call.getArgument(0) == versionId ? firstArrival : other.arrival()));
+        when(arrivals.findAfter(anyLong(), anyString(), any(), anyInt())).thenAnswer(call -> {
+            if ((long) call.getArgument(0) == versionId) {
+                return List.of(firstArrival);
+            }
+            return List.of(other.arrival());
+        });
         doAnswer(call -> {
             if ((long) call.getArgument(0) == other.version()) {
                 throw new IllegalStateException("두 번째 노선 작업 종료 실패");
@@ -405,9 +469,9 @@ class SameDayTransactionBoundaryTest {
 
         // then
         assertThat(jdbc.sql("SELECT scoring_state FROM forecast_evaluation WHERE vehicle_observation_id=?")
-            .param(sourceId).query(String.class).single()).isEqualTo("SETTLED");
+                .param(sourceId).query(String.class).single()).isEqualTo("SETTLED");
         assertThat(jdbc.sql("SELECT scoring_state FROM forecast_evaluation WHERE vehicle_observation_id=?")
-            .param(other.source()).query(String.class).single()).isEqualTo("PENDING");
+                .param(other.source()).query(String.class).single()).isEqualTo("PENDING");
         assertThat(count("stop_demand_pending_sample")).isOne();
         assertThat(count("forecast_evaluation_work")).isOne();
         doAnswer(call -> call.callRealMethod()).when(workStore()).releaseCompleted(anyLong(), any());
@@ -421,27 +485,27 @@ class SameDayTransactionBoundaryTest {
     void 외부_트랜잭션으로_여러_노선의_정산을_묶으려_하면_실행하지_않는다() {
         // given
         savePending();
-        var transaction = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
+        TransactionTemplate transaction = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
 
         // when
         assertThatThrownBy(() -> transaction.executeWithoutResult(status -> settlement.settleArrivalLabels()))
-            .isInstanceOf(org.springframework.transaction.IllegalTransactionStateException.class);
+            .isInstanceOf(IllegalTransactionStateException.class);
 
         // then
         assertThat(count("forecast_evaluation_result")).isZero();
         assertThat(count("forecast_evaluation_work")).isOne();
     }
 
-    private com.gustler.backend.forecasting.infrastructure.jdbc.JdbcEvaluationWorkStore workStore() {
+    private JdbcEvaluationWorkStore workStore() {
         return AopTestUtils.getUltimateTargetObject(workSpy);
     }
 
     private OtherRoute otherRoute() {
-        long firstRoute = routeId;
-        long firstVersion = versionId;
-        long firstBatch = batchId;
-        long firstSource = sourceId;
-        long firstArrival = arrivalId;
+        final long firstRoute = routeId;
+        final long firstVersion = versionId;
+        final long firstBatch = batchId;
+        final long firstSource = sourceId;
+        final long firstArrival = arrivalId;
         try {
             routeId = jdbc.sql("""
                 INSERT INTO route(public_route_id,source_id,source_route_id,display_name,start_stop_name,end_stop_name)
@@ -453,7 +517,7 @@ class SameDayTransactionBoundaryTest {
                 VALUES (?,?,?,20) RETURNING id
                 """).params(routeId, "1".repeat(64), OffsetDateTime.ofInstant(OBSERVED_AT, ZoneOffset.UTC))
                 .query(Long.class).single();
-            for (int stop : List.of(1, 2)) {
+            for (final int stop : List.of(1, 2)) {
                 jdbc.sql("INSERT INTO route_stop VALUES (?, ?, ?, ?, 'UP', true)")
                     .params(versionId, stop, "stop-" + stop, "stop-" + stop).update();
             }
@@ -471,7 +535,8 @@ class SameDayTransactionBoundaryTest {
         }
     }
 
-    private record OtherRoute(long version, long source, ArrivalCandidate arrival) { }
+    private record OtherRoute(long version, long source, ArrivalCandidate arrival) {
+    }
 
     SameDayFullOutcomesInitializer initializer() {
         return context.getBean(SameDayFullOutcomesInitializer.class);
@@ -479,7 +544,7 @@ class SameDayTransactionBoundaryTest {
 
     void assertUnsettled() {
         assertThat(jdbc.sql("SELECT scoring_state FROM forecast_evaluation WHERE vehicle_observation_id=?")
-            .param(sourceId).query(String.class).single()).isEqualTo("PENDING");
+                .param(sourceId).query(String.class).single()).isEqualTo("PENDING");
         assertThat(count("stop_demand_pending_sample")).isZero();
         assertThat(countsSpy.findCounts(routeId, modelId, SeoulDay.containing(ARRIVED_AT))).containsExactly(
             new SameDayFullOutcomeCount(0, 0, 0, 0, SeoulDay.containing(ARRIVED_AT).start()));
@@ -487,41 +552,61 @@ class SameDayTransactionBoundaryTest {
 
     void assertSettledOnce() {
         assertThat(jdbc.sql("SELECT scoring_state FROM forecast_evaluation WHERE vehicle_observation_id=?")
-            .param(sourceId).query(String.class).single()).isEqualTo("SETTLED");
+                .param(sourceId).query(String.class).single()).isEqualTo("SETTLED");
         assertThat(count("stop_demand_pending_sample")).isEqualTo(1);
-        assertThat(countsSpy.findCounts(routeId, modelId, SeoulDay.containing(ARRIVED_AT)).stream()
-            .filter(row -> row.rowCount() > 0).toList()).containsExactly(
-            new SameDayFullOutcomeCount(1, 1, 1, .25, ARRIVED_AT));
+        assertThat(countsSpy.findCounts(routeId, modelId, SeoulDay.containing(ARRIVED_AT))
+                .stream()
+                .filter(row -> row.rowCount() > 0)
+                .toList()).containsExactly(
+                    new SameDayFullOutcomeCount(1, 1, 1, .25, ARRIVED_AT));
     }
 
     @Test
     void 전체_완료와_차량_재시작은_함께_커밋된다() throws Exception {
+        // when
         savePending();
         settlement.settleArrivalLabels();
-        var quality = context.getBean(DemandStatisticsRebuildTrigger.class);
-        var rebuild = context.getBean(DemandStatisticsRebuilder.class);
-        quality.requestVehicle(versionId,"fixture-vehicle");
-        rebuild.step(versionId,"fixture-vehicle");
+        DemandStatisticsRebuildTrigger quality = context.getBean(DemandStatisticsRebuildTrigger.class);
+        DemandStatisticsRebuilder rebuild = context.getBean(DemandStatisticsRebuilder.class);
+        quality.requestVehicle(versionId, "fixture-vehicle");
+        rebuild.step(versionId, "fixture-vehicle");
         UUID before = vehicleRebuildRequest();
         quality.requestRoute(versionId);
-        for (int i=0; i<100; i++) {
-            String phase = jdbc.sql("SELECT phase FROM stop_demand_rebuild_progress WHERE route_version_id=? AND vehicle_id=''")
-                .param(versionId).query(String.class).optional().orElse("");
-            long totals = jdbc.sql("SELECT count(*) FROM stop_demand_rebuild_total WHERE route_version_id=? AND scope_vehicle_id=''")
-                .param(versionId).query(Long.class).single();
-            if (phase.equals("CLEAN") && totals==0) { break; }
-            assertThat(rebuild.step(versionId,"")).isTrue();
+        for (int i = 0; i < 100; i++) {
+            String phase =
+                jdbc.sql("SELECT phase FROM stop_demand_rebuild_progress WHERE route_version_id=? AND vehicle_id=''")
+                    .param(versionId)
+                    .query(String.class)
+                    .optional()
+                    .orElse("");
+            final long totals =
+                jdbc.sql(
+                    "SELECT count(*) FROM stop_demand_rebuild_total WHERE route_version_id=? AND scope_vehicle_id=''")
+                    .param(versionId)
+                    .query(Long.class)
+                    .single();
+            if (phase.equals("CLEAN") && totals == 0) {
+                break;
+            }
+
+            // then
+            assertThat(rebuild.step(versionId, "")).isTrue();
         }
         assertThat(jdbc.sql("SELECT phase FROM stop_demand_rebuild_progress WHERE route_version_id=? AND vehicle_id=''")
-            .param(versionId).query(String.class).single()).isEqualTo("CLEAN");
-        var staged = new CountDownLatch(1);
-        var release = new CountDownLatch(1);
-        var tx = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
+                        .param(versionId).query(String.class).single()).isEqualTo("CLEAN");
+        CountDownLatch staged = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        TransactionTemplate tx = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
         Future<?> running = workers.submit(() -> tx.executeWithoutResult(status -> {
-            rebuild.step(versionId,"");
+            rebuild.step(versionId, "");
             staged.countDown();
-            try { await(release); }
-            catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new IllegalStateException(e); }
+            try {
+                await(release);
+            }
+            catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
             throw new IllegalStateException("완료 저장 후 실패 주입");
         }));
         try {
@@ -529,12 +614,20 @@ class SameDayTransactionBoundaryTest {
             // 다른 트랜잭션에는 전체 완료도 새 차량 요청 번호도 아직 보이지 않는다.
             assertThat(globalRebuildRequests()).isEqualTo(1);
             assertThat(vehicleRebuildRequest()).isEqualTo(before);
-        } finally { release.countDown(); }
-        assertThatThrownBy(() -> running.get(10,TimeUnit.SECONDS)).hasRootCauseInstanceOf(IllegalStateException.class);
+        } finally {
+            release.countDown();
+        }
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> running.get(10, TimeUnit.SECONDS));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull().hasRootCauseInstanceOf(IllegalStateException.class);
         assertThat(globalRebuildRequests()).isEqualTo(1);
         assertThat(vehicleRebuildRequest()).isEqualTo(before);
 
-        rebuild.step(versionId,"");
+        rebuild.step(versionId, "");
 
         assertThat(globalRebuildRequests()).isZero();
         assertThat(vehicleRebuildRequest()).isNotEqualTo(before);
@@ -546,23 +639,28 @@ class SameDayTransactionBoundaryTest {
     }
 
     private UUID vehicleRebuildRequest() {
-        return jdbc.sql("SELECT request_id FROM stop_demand_rebuild_request WHERE route_version_id=? AND vehicle_id='fixture-vehicle'")
-            .param(versionId).query(UUID.class).single();
+        return jdbc.sql(
+        "SELECT request_id FROM stop_demand_rebuild_request WHERE route_version_id=? AND vehicle_id='fixture-vehicle'")
+            .param(versionId)
+            .query(UUID.class)
+            .single();
     }
 
     void assertNoForecast() {
         assertThat(count("seat_forecast")).isZero();
         assertThat(jdbc.sql("SELECT count(*) FROM forecast_publication WHERE source_batch_id=?")
-            .param(batchId).query(Long.class).single()).isZero();
+                        .param(batchId).query(Long.class).single()).isZero();
     }
 
     void assertForecastComplete() {
         assertThat(count("seat_forecast")).isEqualTo(1);
         assertThat(jdbc.sql("SELECT count(*) FROM forecast_publication WHERE source_batch_id=?")
-            .param(batchId).query(Long.class).single()).isEqualTo(1);
+                        .param(batchId).query(Long.class).single()).isEqualTo(1);
     }
 
-    long count(String table) { return jdbc.sql("SELECT count(*) FROM " + table).query(Long.class).single(); }
+    long count(String table) {
+        return jdbc.sql("SELECT count(*) FROM " + table).query(Long.class).single();
+    }
 
     @Test
     void 상세를_생략한_평가도_보정에_한번만_반영하고_집계를_다시_만들_수_있다() {
@@ -601,7 +699,11 @@ class SameDayTransactionBoundaryTest {
         // given
         saveCompactPending();
         initializeEmptyDay();
-        doAnswer(call -> { call.callRealMethod(); timeout(); return null; })
+        doAnswer(call -> {
+            call.callRealMethod();
+            timeout();
+            return null;
+        })
             .when(countsSpy).addCounts(anyLong(), anyLong(), any(), any());
 
         // when
@@ -654,14 +756,20 @@ class SameDayTransactionBoundaryTest {
         // given
         saveCompactPending();
         initializeEmptyDay();
-        var writer = context.getBean(ForecastEvaluationWriter.class);
-        var completed = ForecastEvaluation.completed(sourceId, 2,
-            new com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Settled(arrivalId, 0), NOW);
-        var start = new CountDownLatch(1);
+        ForecastEvaluationWriter writer = context.getBean(ForecastEvaluationWriter.class);
+        ForecastEvaluation completed = ForecastEvaluation.completed(sourceId, 2,
+            new Settled(arrivalId, 0), NOW);
+        CountDownLatch start = new CountDownLatch(1);
 
         // when
-        Future<?> first = workers.submit(() -> { await(start); return writer.complete(List.of(completed)); });
-        Future<?> second = workers.submit(() -> { await(start); return writer.complete(List.of(completed)); });
+        Future<?> first = workers.submit(() -> {
+            await(start);
+            return writer.complete(List.of(completed));
+        });
+        Future<?> second = workers.submit(() -> {
+            await(start);
+            return writer.complete(List.of(completed));
+        });
         start.countDown();
         first.get(10, TimeUnit.SECONDS);
         second.get(10, TimeUnit.SECONDS);
@@ -684,10 +792,13 @@ class SameDayTransactionBoundaryTest {
             .param(arrivalId).update();
 
         // then
-        assertThat(jdbc.sql("SELECT arrival_vehicle_trip_key FROM forecast_evaluation_compact WHERE vehicle_observation_id=?")
-            .param(sourceId).query(String.class).single()).isEqualTo(tripAtSettlement);
+        assertThat(
+            jdbc.sql("SELECT arrival_vehicle_trip_key FROM forecast_evaluation_compact WHERE vehicle_observation_id=?")
+                .param(sourceId)
+                .query(String.class)
+                .single()).isEqualTo(tripAtSettlement);
         assertThat(jdbc.sql("SELECT arrival_vehicle_trip_key FROM forecast_evaluation WHERE vehicle_observation_id=?")
-            .param(sourceId).query(String.class).single()).isEqualTo(tripAtSettlement);
+                .param(sourceId).query(String.class).single()).isEqualTo(tripAtSettlement);
     }
 
     @Test
@@ -716,13 +827,15 @@ class SameDayTransactionBoundaryTest {
         assertThat(count("forecast_evaluation_result")).isZero();
         assertThat(count("forecast_evaluation_compact")).isOne();
         assertThat(count("stop_demand_pending_sample")).isZero();
-        assertThat(countsSpy.findCounts(routeId, modelId, SeoulDay.containing(ARRIVED_AT)).stream()
-            .filter(row -> row.rowCount() > 0).toList()).containsExactly(
-            new SameDayFullOutcomeCount(2, 1, 1, .25, ARRIVED_AT));
+        assertThat(countsSpy.findCounts(routeId, modelId, SeoulDay.containing(ARRIVED_AT))
+                .stream()
+                .filter(row -> row.rowCount() > 0)
+                .toList()).containsExactly(
+                    new SameDayFullOutcomeCount(2, 1, 1, .25, ARRIVED_AT));
     }
 
     void initializeEmptyDay() {
-        var day = SeoulDay.containing(ARRIVED_AT);
+        SeoulDay day = SeoulDay.containing(ARRIVED_AT);
         countsSpy.upsertCounts(routeId, modelId, day, List.of(new SameDayFullOutcomeCount(0, 0, 0, 0, day.start())));
     }
 
@@ -735,7 +848,7 @@ class SameDayTransactionBoundaryTest {
         return AopTestUtils.getUltimateTargetObject(publicationsSpy);
     }
 
-    void publish(long batch, Instant observedAt, SeatForecast prediction) {
+    void publish(final long batch, Instant observedAt, SeatForecast prediction) {
         new TransactionTemplate(context.getBean(PlatformTransactionManager.class)).executeWithoutResult(status -> {
             publicationsSpy.save(new ForecastPublication(batch, versionId, modelId, 1,
                 context.getBean(RouteDataQualityAccess.class).lock(versionId), observedAt,
@@ -749,13 +862,16 @@ class SameDayTransactionBoundaryTest {
         forecast.writeForecastsOf(batch(), new RouteStops(versionId, "fixture", List.of(
             new RouteStop(versionId, 1, "stop-1", true), new RouteStop(versionId, 2, "stop-2", true))),
             new RuntimeSnapshot(new ActiveModelDeployment(modelId, "feature-v1", "fixture", "0".repeat(64)),
-                new SupportedForecastScope(List.of("3330")), input -> new SeatForecastResult(new SeatDistribution(List.of(.4, .6)), .4), OBSERVED_AT));
+                new SupportedForecastScope(List.of("3330")),
+                input -> new SeatForecastResult(new SeatDistribution(List.of(.4, .6)), .4), OBSERVED_AT));
     }
 
-    PendingForecastBatch batch() { return new PendingForecastBatch(batchId, versionId, routeId, OBSERVED_AT); }
+    PendingForecastBatch batch() {
+        return new PendingForecastBatch(batchId, versionId, routeId, OBSERVED_AT);
+    }
 
     ArrivalCandidate arrival() {
-        long direction = jdbc.sql("SELECT quality_direction FROM forecast_observation_quality WHERE id=?")
+        final long direction = jdbc.sql("SELECT quality_direction FROM forecast_observation_quality WHERE id=?")
             .param(arrivalId).query(Long.class).single();
         return new ArrivalCandidate(arrivalId,
             new ObservedVehicle("fixture-vehicle", versionId, 2, ARRIVED_AT, 0, null), direction, true);
@@ -776,9 +892,13 @@ class SameDayTransactionBoundaryTest {
             VALUES ('fixture','fixture','fixture','fixture','start','end') RETURNING id
             """).query(Long.class).single();
         jdbc.sql("INSERT INTO route_data_quality(route_id) VALUES (?)").param(routeId).update();
-        versionId = jdbc.sql("INSERT INTO route_version(route_id,content_digest,valid_from,turn_sequence) VALUES (?,? ,?,20) RETURNING id")
-            .params(routeId, "0".repeat(64), OffsetDateTime.ofInstant(OBSERVED_AT, ZoneOffset.UTC)).query(Long.class).single();
-        for (int stop : List.of(1, 2)) {
+        versionId =
+            jdbc.sql(
+            "INSERT INTO route_version(route_id,content_digest,valid_from,turn_sequence) VALUES (?,? ,?,20) RETURNING id")
+                .params(routeId, "0".repeat(64), OffsetDateTime.ofInstant(OBSERVED_AT, ZoneOffset.UTC))
+                .query(Long.class)
+                .single();
+        for (final int stop : List.of(1, 2)) {
             jdbc.sql("INSERT INTO route_stop VALUES (?, ?, ?, ?, 'UP', true)")
                 .params(versionId, stop, "stop-" + stop, "stop-" + stop).update();
         }
@@ -790,7 +910,7 @@ class SameDayTransactionBoundaryTest {
             """).params("0".repeat(64), "0".repeat(64), OffsetDateTime.ofInstant(OBSERVED_AT, ZoneOffset.UTC))
             .query(Long.class).single();
         batchId = insertBatch(OBSERVED_AT);
-        long arrivalBatch = insertBatch(ARRIVED_AT);
+        final long arrivalBatch = insertBatch(ARRIVED_AT);
         sourceId = insertObservation(batchId, 1, 12);
         arrivalId = insertObservation(arrivalBatch, 2, 0);
     }
@@ -801,11 +921,11 @@ class SameDayTransactionBoundaryTest {
                 response_received_at,outcome,normalization_version,collection_strategy_version)
             VALUES (?,?,1,?,?,'SUCCESS_ROWS','fixture','fixture') RETURNING id
             """).params(versionId, OffsetDateTime.ofInstant(at, ZoneOffset.UTC), at.toString(),
-                OffsetDateTime.ofInstant(at, ZoneOffset.UTC)).query(Long.class).single();
+            OffsetDateTime.ofInstant(at, ZoneOffset.UTC)).query(Long.class).single();
     }
 
-    long insertObservation(long batch, int stop, int seats) {
-        long id = jdbc.sql("""
+    long insertObservation(final long batch, final int stop, final int seats) {
+        final long id = jdbc.sql("""
             INSERT INTO vehicle_observation(observation_batch_id,route_version_id,source_row_number,
                 vehicle_id,stop_order,stop_id,passed_stop_order,running_state,remaining_seats)
             VALUES (?,?,1,'fixture-vehicle',?,?,?,2,?) RETURNING id

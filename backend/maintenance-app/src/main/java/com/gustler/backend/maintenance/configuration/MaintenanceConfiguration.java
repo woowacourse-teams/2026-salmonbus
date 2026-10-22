@@ -1,9 +1,9 @@
 package com.gustler.backend.maintenance.configuration;
 
 import com.gustler.backend.forecasting.configuration.QualityMaintenanceConfiguration;
-import java.time.Clock;
 import com.gustler.backend.maintenance.DatabaseEnvironment;
 import com.gustler.backend.maintenance.db.DatabaseConnections;
+import java.time.Clock;
 import javax.sql.DataSource;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,7 +18,6 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @Import(QualityMaintenanceConfiguration.class)
 @EnableTransactionManagement(proxyTargetClass = true)
 public class MaintenanceConfiguration {
-
     @Bean
     Clock clock() {
         return Clock.systemUTC();

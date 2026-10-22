@@ -5,13 +5,12 @@ import java.util.Optional;
 
 /** 한 노선의 버전 교체를 결정한다. 과거 버전 전체를 로딩할 필요는 없다. */
 public final class Route {
-
     private final long id;
     private RouteVersion currentVersion;
     private RouteVersion closedVersion;
     private RouteStops newVersionStops;
 
-    public Route(long id, RouteVersion latestVersion) {
+    public Route(final long id, RouteVersion latestVersion) {
         if (id < 1) {
             throw new IllegalArgumentException("노선 ID는 양수여야 한다");
         }
@@ -19,9 +18,12 @@ public final class Route {
         this.currentVersion = latestVersion;
     }
 
+    /**
+     * 수신한 정류장·시간표의 내용 지문으로 현재 판본을 유지·수정·교체한다. 판본 교체 시 기존 유효기간도 함께 닫는다.
+     */
     public void accept(RouteStops stops, RouteTimetable timetable, OffsetDateTime at) {
         RouteTimetable readable = timetable.keepingUnreadableHeadwaysOf(
-            currentVersion == null ? null : currentVersion.content().timetable());
+            previousTimetable());
         RouteVersionContent incoming = RouteVersionContent.of(stops, readable);
         if (currentVersion == null) {
             openVersion(stops, incoming, at);
@@ -33,8 +35,16 @@ public final class Route {
                 openVersion(stops, incoming, at);
             }
             case REVISE_TIMETABLE -> currentVersion = currentVersion.reviseTimetable(readable);
-            case KEEP_CURRENT_VERSION -> { }
+            case KEEP_CURRENT_VERSION -> {
+            }
         }
+    }
+
+    private RouteTimetable previousTimetable() {
+        if (currentVersion == null) {
+            return null;
+        }
+        return currentVersion.content().timetable();
     }
 
     private void openVersion(RouteStops stops, RouteVersionContent content, OffsetDateTime at) {

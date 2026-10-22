@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.vehicle.application.VehicleQueryRepository;
+import com.gustler.backend.api.vehicle.infrastructure.jpa.VehicleLatestObservedQuerySqlTest.SqlCaptureConfig;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -21,9 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @IntegrationTest
 @Transactional
-@Import(VehicleLatestObservedQuerySqlTest.SqlCaptureConfig.class)
+@Import(SqlCaptureConfig.class)
 class VehicleLatestObservedQuerySqlTest {
-
     private static final String ROUTE_ID = "204000057";
 
     @Autowired
@@ -37,15 +37,20 @@ class VehicleLatestObservedQuerySqlTest {
 
     @Test
     void 생성_SQL의_정상_조건이_리터럴이고_수신_시각순으로_정렬한다() {
+        // given
         insertRouteWithSuccessfulBatch();
         sqlCapture.clear();
 
         repository.findLatestSnapshot(new RouteId(ROUTE_ID));
 
-        String sql = sqlCapture.statements().stream()
+        // when
+        String sql = sqlCapture.statements()
+            .stream()
             .filter(statement -> statement.contains("from observation_batch"))
             .findFirst()
             .orElseThrow();
+
+        // then
         assertThat(sql)
             .contains("outcome in ('SUCCESS_ROWS','SUCCESS_EMPTY')")
             .contains("response_received_at is not null")
@@ -54,7 +59,7 @@ class VehicleLatestObservedQuerySqlTest {
 
     private void insertRouteWithSuccessfulBatch() {
         OffsetDateTime observedAt = OffsetDateTime.parse("2026-08-27T12:00:00+09:00");
-        long routeId = jdbcClient.sql("""
+        final long routeId = jdbcClient.sql("""
                 INSERT INTO route (
                     public_route_id, source_id, source_route_id,
                     display_name, start_stop_name, end_stop_name
@@ -64,7 +69,7 @@ class VehicleLatestObservedQuerySqlTest {
             .params(ROUTE_ID, "GBIS", ROUTE_ID, "3330", "도촌동9단지앞", "안양역")
             .query(Long.class)
             .single();
-        long routeVersionId = jdbcClient.sql("""
+        final long routeVersionId = jdbcClient.sql("""
                 INSERT INTO route_version (route_id, content_digest, valid_from)
                 VALUES (?, ?, ?)
                 RETURNING id
@@ -99,7 +104,6 @@ class VehicleLatestObservedQuerySqlTest {
     }
 
     static final class SqlCapture implements StatementInspector {
-
         private final List<String> statements = new CopyOnWriteArrayList<>();
 
         @Override
@@ -119,7 +123,6 @@ class VehicleLatestObservedQuerySqlTest {
 
     @TestConfiguration(proxyBeanMethods = false)
     static class SqlCaptureConfig {
-
         @Bean
         SqlCapture vehicleSqlCapture() {
             return new SqlCapture();

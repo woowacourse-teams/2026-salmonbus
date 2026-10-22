@@ -2,6 +2,7 @@ package com.gustler.backend.quota.infrastructure.jdbc;
 
 import com.gustler.backend.quota.api.ArrivalQuotaPolicy;
 import com.gustler.backend.quota.domain.ArrivalQuotaStore;
+import com.gustler.backend.quota.domain.ArrivalQuotaStore.KeyLimit;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -27,18 +28,22 @@ public final class JdbcArrivalQuotaStore implements ArrivalQuotaStore {
     }
 
     @Override
-    public Optional<String> reserve(LocalDate date, int totalLimit, List<KeyLimit> orderedKeys) {
+    public Optional<String> reserve(LocalDate date, final int totalLimit, List<KeyLimit> orderedKeys) {
         return transactions.execute(status -> {
-            if (!reserve(date, ArrivalQuotaPolicy.TOTAL, totalLimit)) return Optional.empty();
+            if (!reserve(date, ArrivalQuotaPolicy.TOTAL, totalLimit)) {
+                return Optional.empty();
+            }
             for (KeyLimit key : orderedKeys) {
-                if (reserve(date, key.alias(), key.limit())) return Optional.of(key.alias());
+                if (reserve(date, key.alias(), key.limit())) {
+                    return Optional.of(key.alias());
+                }
             }
             status.setRollbackOnly();
             return Optional.empty();
         });
     }
 
-    private boolean reserve(LocalDate date, String alias, int limit) {
+    private boolean reserve(LocalDate date, String alias, final int limit) {
         return jdbc.sql(RESERVE).params(date, alias, limit, limit).update() == 1;
     }
 

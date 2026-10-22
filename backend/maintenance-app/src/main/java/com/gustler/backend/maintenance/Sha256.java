@@ -5,8 +5,11 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
+/**
+ * 유지보수 자료의 동일성을 대조할 SHA-256 값을 계산한다.
+ * 입력 자료 자체를 출력하지 않는다.
+ */
 public final class Sha256 {
-
     private static final String ALGORITHM = "SHA-256";
 
     private Sha256() {

@@ -8,9 +8,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * 탑승판의 발행·관측 기준 배치를 고르는 JPA 조회 경계다.
+ */
 public interface BoardObservationBatchEntityRepository
     extends Repository<ObservationBatchJpaEntity, Long> {
-
     @Query("""
         SELECT batch
         FROM BoardObservationBatchJpaEntity batch

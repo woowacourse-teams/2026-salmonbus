@@ -2,7 +2,6 @@ package com.gustler.backend.api.docs;
 
 /** 공개 문서에만 쓰는 합성 요청·응답 예시다. */
 public final class ApiDocsExamples {
-
     public static final String ROUTES = """
         {
           "routes": [
@@ -44,7 +43,7 @@ public final class ApiDocsExamples {
                 "lastDepartureTime": "23:00"
               }
             ],
-            "referenceVersionId": "example-version",
+            "referenceVersionId": "7",
             "headways": {
               "weekday": {
                 "minMinutes": 10,
@@ -134,7 +133,7 @@ public final class ApiDocsExamples {
                 "lastDepartureTime": "23:00"
               }
             ],
-            "referenceVersionId": "example-version",
+            "referenceVersionId": "7",
             "headways": {
               "weekday": null,
               "saturday": null,
@@ -213,7 +212,7 @@ public final class ApiDocsExamples {
                 "lastDepartureTime": "23:00"
               }
             ],
-            "referenceVersionId": "example-version",
+            "referenceVersionId": "7",
             "headways": {
               "weekday": {
                 "minMinutes": 10,
@@ -317,7 +316,7 @@ public final class ApiDocsExamples {
                 "lastDepartureTime": "23:00"
               }
             ],
-            "referenceVersionId": "example-version",
+            "referenceVersionId": "7",
             "headways": {
               "weekday": null,
               "saturday": null,
@@ -386,7 +385,7 @@ public final class ApiDocsExamples {
     public static final String VEHICLES_PRESENT = """
         {
           "routeId": "123456789",
-          "referenceVersionId": "example-version",
+          "referenceVersionId": "7",
           "observation": {
             "state": "VEHICLES_PRESENT",
             "observedAt": "2026-10-01T12:00:00+09:00",
@@ -424,7 +423,7 @@ public final class ApiDocsExamples {
     public static final String VEHICLES_UNKNOWN = """
         {
           "routeId": "123456789",
-          "referenceVersionId": "example-version",
+          "referenceVersionId": "7",
           "observation": {
             "state": "UNKNOWN",
             "observedAt": null,

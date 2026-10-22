@@ -2,20 +2,26 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Lost;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.SeatMissing;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Settled;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Skipped;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabelResolver;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
-import com.gustler.backend.forecasting.domain.publication.SeatForecast;
 import com.gustler.backend.forecasting.domain.evaluation.SettledEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.SettledForecast;
-import com.gustler.backend.support.ConfirmedTripFixture;
+import com.gustler.backend.forecasting.domain.publication.SeatForecast;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
+import com.gustler.backend.support.ConfirmedTripFixture;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -27,12 +33,11 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class JdbcForecastEvaluationRepositoryTest {
-
-    /** 판마다 남는 두 판본. 기본값이 없어서 픽스처가 직접 넣는다. */
+    /** 수집 배치마다 기록할 두 판본. 기본값이 없어 픽스처에서 직접 지정한다. */
     private static final String NORMALIZATION_VERSION = "normalization-v1.0.0";
     private static final String COLLECTION_STRATEGY_VERSION = "adaptive-kst-v1.0.1";
 
-    /** 지나감(2)으로 넣어서 통과 순번이 상류 순번과 같다. 관측 시각 열은 SAL-84 가 지웠다. */
+    /** 운행 상태를 지나감(2)으로 설정해 통과 순번이 상류 순번과 같다. 관측 시각 열은 SAL-84 에서 제거했다. */
     private static final int RUNNING_STATE_DEPARTED = 2;
     private static final int SEATS_LEFT = 12;
 
@@ -48,12 +53,12 @@ class JdbcForecastEvaluationRepositoryTest {
     private static final int STOPS_TO_NEXT_TARGET = NEXT_TARGET_STOP_ORDER - PASSED_STOP_ORDER;
     private static final int DEMAND_STATISTICS_REVISION = 3;
 
-    /** 판이 상류 응답을 받은 시각. 관측 시각의 권위가 여기 있다. */
+    /** 수집 배치가 상류 응답을 받은 시각. 관측 시각의 기준이다. */
     private static final OffsetDateTime RESPONSE_RECEIVED_AT =
         OffsetDateTime.parse("2026-08-19T11:14:04.911+09:00");
 
     /**
-     * 관측 행에 적힌 시각. 판이 받은 시각과 일부러 다르게 넣는다.
+     * 관측 행에 적힌 시각. 수집 배치의 응답 시각과 의도적으로 다르게 설정한다.
      *
      * <p>이 열은 없어질 예정이라 회수 대상을 읽을 때 안 본다. 값이 다르면 어느 쪽을 읽었는지 드러난다.
      */
@@ -105,12 +110,12 @@ class JdbcForecastEvaluationRepositoryTest {
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT),
             forecastOf(NEXT_TARGET_STOP_ORDER, STOPS_TO_NEXT_TARGET, NEXT_GENERATED_AT)));
         evaluationRepository.settle(List.of(ForecastEvaluation.completed(vehicleObservationId,
-            TARGET_STOP_ORDER, new ArrivalLabel.Lost(), SCORED_AT)));
+            TARGET_STOP_ORDER, new Lost(), SCORED_AT)));
         assertThat(work.releaseCompleted(routeVersionId, List.of(vehicleObservationId))).isEmpty();
 
         // when
         evaluationRepository.settle(List.of(ForecastEvaluation.completed(vehicleObservationId,
-            NEXT_TARGET_STOP_ORDER, new ArrivalLabel.Lost(), SCORED_AT)));
+            NEXT_TARGET_STOP_ORDER, new Lost(), SCORED_AT)));
         List<Long> released = work.releaseCompleted(routeVersionId, List.of(vehicleObservationId));
 
         // then
@@ -147,13 +152,16 @@ class JdbcForecastEvaluationRepositoryTest {
 
     @Test
     void 제외_평가는_한번에_500개까지만_닫고_나머지는_다음_회차에서_닫는다() {
+        // when
         for (int stop = 7; stop <= 18; stop++) {
-            if (stop != TARGET_STOP_ORDER && stop != NEXT_TARGET_STOP_ORDER) { insertRouteStop(stop); }
+            if (stop != TARGET_STOP_ORDER && stop != NEXT_TARGET_STOP_ORDER) {
+                insertRouteStop(stop);
+            }
         }
         for (int vehicle = 0; vehicle < 42; vehicle++) {
             String vehicleId = "excluded-budget-" + vehicle;
-            long source = insertObservation(observationBatchId, vehicleId, vehicle + 1, PASSED_STOP_ORDER);
-            var forecasts = new java.util.ArrayList<SeatForecast>();
+            final long source = insertObservation(observationBatchId, vehicleId, vehicle + 1, PASSED_STOP_ORDER);
+            ArrayList<SeatForecast> forecasts = new ArrayList<SeatForecast>();
             for (int target = 7; target <= 18; target++) {
                 forecasts.add(new SeatForecast(source, routeVersionId, target, target - PASSED_STOP_ORDER,
                     modelDeploymentId, DEMAND_STATISTICS_REVISION, 0.41, 0.38, 12.5, GENERATED_AT));
@@ -166,40 +174,62 @@ class JdbcForecastEvaluationRepositoryTest {
                 VALUES(?,?,?,true,'DONE')
                 """).params(routeVersionId, vehicleId, RESPONSE_RECEIVED_AT).update();
         }
+
+        // then
         assertThat(evaluationRepository.findPending(routeVersionId, 3000)).isEmpty();
-        assertThat(jdbcClient.sql("SELECT count(*) FROM forecast_evaluation WHERE route_version_id=? AND scoring_state='QUALITY_EXCLUDED'")
-            .param(routeVersionId).query(Integer.class).single()).isEqualTo(500);
-        assertThat(jdbcClient.sql("SELECT count(*) FROM forecast_evaluation WHERE route_version_id=? AND scoring_state='PENDING'")
-            .param(routeVersionId).query(Integer.class).single()).isEqualTo(4);
+        assertThat(
+            jdbcClient.sql(
+            "SELECT count(*) FROM forecast_evaluation WHERE route_version_id=? AND scoring_state='QUALITY_EXCLUDED'")
+                .param(routeVersionId)
+                .query(Integer.class)
+                .single()).isEqualTo(500);
+        assertThat(
+            jdbcClient.sql(
+            "SELECT count(*) FROM forecast_evaluation WHERE route_version_id=? AND scoring_state='PENDING'")
+                .param(routeVersionId)
+                .query(Integer.class)
+                .single()).isEqualTo(4);
         assertThat(evaluationRepository.findPending(routeVersionId, 3000)).isEmpty();
-        assertThat(jdbcClient.sql("SELECT count(*) FROM forecast_evaluation WHERE route_version_id=? AND scoring_state='QUALITY_EXCLUDED'")
-            .param(routeVersionId).query(Integer.class).single()).isEqualTo(504);
+        assertThat(
+            jdbcClient.sql(
+            "SELECT count(*) FROM forecast_evaluation WHERE route_version_id=? AND scoring_state='QUALITY_EXCLUDED'")
+                .param(routeVersionId)
+                .query(Integer.class)
+                .single()).isEqualTo(504);
     }
 
     @Test
     void 조사_완료된_제외_편도만_정산_대기에서_영구_제외한다() {
+        // when
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
         jdbcClient.sql("UPDATE vehicle_one_way_trip SET status='EXCLUDED' WHERE start_observation_id=?")
             .param(vehicleObservationId).update();
         completeInvestigation();
+
+        // then
         assertThat(evaluationRepository.findPending(routeVersionId, 10)).isEmpty();
         assertThat(storedState(vehicleObservationId)).isEqualTo("QUALITY_EXCLUDED");
         assertThat(evaluationRepository.findRouteVersionIdsWithPendingForecasts()).doesNotContain(routeVersionId);
         assertThat(jdbcClient.sql("SELECT count(*) FROM stop_demand_pending_sample WHERE route_version_id=?")
-            .param(routeVersionId).query(Integer.class).single()).isZero();
+                .param(routeVersionId).query(Integer.class).single()).isZero();
         assertThat(jdbcClient.sql("SELECT count(*) FROM same_day_model_full_outcomes WHERE route_id=?")
-            .param(routeId).query(Integer.class).single()).isZero();
+                .param(routeId).query(Integer.class).single()).isZero();
         assertThat(jdbcClient.sql("SELECT remaining_seats FROM vehicle_observation WHERE id=?")
-            .param(vehicleObservationId).query(Integer.class).single()).isEqualTo(SEATS_LEFT);
+                .param(vehicleObservationId).query(Integer.class).single()).isEqualTo(SEATS_LEFT);
     }
 
     @Test
     void 조사_중이거나_정상_편도인_평가는_대기로_유지한다() {
+        // when
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
         jdbcClient.sql("UPDATE vehicle_one_way_trip SET status='EXCLUDED' WHERE start_observation_id=?")
             .param(vehicleObservationId).update();
-        jdbcClient.sql("INSERT INTO trip_quality_rebuild(route_version_id,vehicle_id,until_at,phase) VALUES(?,?,?,'REPLAY')")
-            .params(routeVersionId, VEHICLE_204000206, RESPONSE_RECEIVED_AT).update();
+        jdbcClient.sql(
+        "INSERT INTO trip_quality_rebuild(route_version_id,vehicle_id,until_at,phase) VALUES(?,?,?,'REPLAY')")
+            .params(routeVersionId, VEHICLE_204000206, RESPONSE_RECEIVED_AT)
+            .update();
+
+        // then
         assertThat(evaluationRepository.findPending(routeVersionId, 10)).isEmpty();
         assertThat(storedState(vehicleObservationId)).isEqualTo("PENDING");
         jdbcClient.sql("UPDATE vehicle_one_way_trip SET status='ELIGIBLE' WHERE start_observation_id=?")
@@ -212,12 +242,15 @@ class JdbcForecastEvaluationRepositoryTest {
 
     @Test
     void 제외_처리도_롤백되며_재시도에서_정상적으로_닫힌다() throws Exception {
+        // when
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
         jdbcClient.sql("UPDATE vehicle_one_way_trip SET status='EXCLUDED' WHERE start_observation_id=?")
             .param(vehicleObservationId).update();
         completeInvestigation();
         jdbcClient.sql("SAVEPOINT before_exclusion").update();
         evaluationRepository.findPending(routeVersionId, 10);
+
+        // then
         assertThat(storedState(vehicleObservationId)).isEqualTo("QUALITY_EXCLUDED");
         jdbcClient.sql("ROLLBACK TO SAVEPOINT before_exclusion").update();
         assertThat(storedState(vehicleObservationId)).isEqualTo("PENDING");
@@ -232,55 +265,75 @@ class JdbcForecastEvaluationRepositoryTest {
             """).params(routeVersionId, VEHICLE_204000206, RESPONSE_RECEIVED_AT).update();
     }
 
-    private String storedState(long observation) {
-        return jdbcClient.sql("SELECT scoring_state FROM forecast_evaluation WHERE vehicle_observation_id=? AND target_stop_order=?")
-            .params(observation, TARGET_STOP_ORDER).query(String.class).single();
+    private String storedState(final long observation) {
+        return jdbcClient.sql(
+        "SELECT scoring_state FROM forecast_evaluation WHERE vehicle_observation_id=? AND target_stop_order=?")
+            .params(observation, TARGET_STOP_ORDER)
+            .query(String.class)
+            .single();
     }
 
     @Test
     void 묶음_경계_전후의_정산을_빠짐없이_저장한다() {
-        var inputs = new java.util.ArrayList<ForecastEvaluation>();
+        // when
+        ArrayList<ForecastEvaluation> inputs = new ArrayList<ForecastEvaluation>();
         for (int index = 0; index < 101; index++) {
-            long observation = insertObservation(observationBatchId, "batch-test-" + index, index + 1, PASSED_STOP_ORDER);
+            final long observation =
+                insertObservation(observationBatchId, "batch-test-" + index, index + 1, PASSED_STOP_ORDER);
             saveForecasts(List.of(new SeatForecast(observation, routeVersionId, TARGET_STOP_ORDER, STOPS_TO_TARGET,
                 modelDeploymentId, DEMAND_STATISTICS_REVISION, 0.41, 0.38, 12.5, GENERATED_AT)));
-            inputs.add(ForecastEvaluation.completed(observation, TARGET_STOP_ORDER, new ArrivalLabel.Skipped(), SCORED_AT));
+            inputs.add(ForecastEvaluation.completed(observation, TARGET_STOP_ORDER, new Skipped(), SCORED_AT));
         }
+
+        // then
         assertThat(evaluationRepository.settle(inputs)).extracting(SettledEvaluation::vehicleObservationId)
-            .containsExactlyElementsOf(inputs.stream().map(ForecastEvaluation::vehicleObservationId).toList());
+            .containsExactlyElementsOf(inputs.stream()
+                .map(ForecastEvaluation::vehicleObservationId)
+                .toList());
         assertThat(evaluationRepository.settle(inputs)).isEmpty();
     }
 
     @Test
     void 같은_평가가_입력에_반복돼도_한번만_반환한다() {
+        // when
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
-        var input = ForecastEvaluation.completed(vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Skipped(), SCORED_AT);
+        ForecastEvaluation input =
+            ForecastEvaluation.completed(vehicleObservationId, TARGET_STOP_ORDER, new Skipped(), SCORED_AT);
+
+        // then
         assertThat(evaluationRepository.settle(List.of(input, input))).hasSize(1);
     }
 
     @Test
     void 첫_중복_입력이_품질_조건에_탈락하면_다음_입력으로_닫는다() {
+        // when
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
-        long batch = insertObservationBatch("duplicate-arrival", ARRIVAL_RESPONSE_RECEIVED_AT);
-        long wrong = insertObservation(batch, "different-vehicle", 0, ARRIVAL_STOP_ORDER);
-        long right = insertObservation(batch, VEHICLE_204000206, 1, ARRIVAL_STOP_ORDER);
-        var invalid = ForecastEvaluation.completed(vehicleObservationId, TARGET_STOP_ORDER,
-            new ArrivalLabel.Settled(wrong, 0), SCORED_AT);
-        var valid = ForecastEvaluation.completed(vehicleObservationId, TARGET_STOP_ORDER,
-            new ArrivalLabel.Settled(right, 0), SCORED_AT);
+        final long batch = insertObservationBatch("duplicate-arrival", ARRIVAL_RESPONSE_RECEIVED_AT);
+        final long wrong = insertObservation(batch, "different-vehicle", 0, ARRIVAL_STOP_ORDER);
+        final long right = insertObservation(batch, VEHICLE_204000206, 1, ARRIVAL_STOP_ORDER);
+        ForecastEvaluation invalid = ForecastEvaluation.completed(vehicleObservationId, TARGET_STOP_ORDER,
+            new Settled(wrong, 0), SCORED_AT);
+        ForecastEvaluation valid = ForecastEvaluation.completed(vehicleObservationId, TARGET_STOP_ORDER,
+            new Settled(right, 0), SCORED_AT);
+
+        // then
         assertThat(evaluationRepository.settle(List.of(invalid, valid)))
             .extracting(SettledEvaluation::arrivalObservationId).containsExactly(right);
     }
 
     @Test
     void 같은_관측의_여러_예보도_도착_근거를_각각_저장한다() {
+        // when
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT),
             forecastOf(NEXT_TARGET_STOP_ORDER, STOPS_TO_NEXT_TARGET, GENERATED_AT)));
-        long batch = insertObservationBatch("shared-arrival", ARRIVAL_RESPONSE_RECEIVED_AT);
-        long arrival = insertObservation(batch, VEHICLE_204000206, 0, NEXT_TARGET_STOP_ORDER);
-        var result = evaluationRepository.settle(List.of(
-            ForecastEvaluation.completed(vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT),
-            ForecastEvaluation.completed(vehicleObservationId, NEXT_TARGET_STOP_ORDER, new ArrivalLabel.SeatMissing(arrival), SCORED_AT)));
+        final long batch = insertObservationBatch("shared-arrival", ARRIVAL_RESPONSE_RECEIVED_AT);
+        final long arrival = insertObservation(batch, VEHICLE_204000206, 0, NEXT_TARGET_STOP_ORDER);
+        List<SettledEvaluation> result = evaluationRepository.settle(List.of(
+            ForecastEvaluation.completed(vehicleObservationId, TARGET_STOP_ORDER, new Settled(arrival, 0), SCORED_AT),
+            ForecastEvaluation.completed(vehicleObservationId, NEXT_TARGET_STOP_ORDER, new SeatMissing(arrival),
+                SCORED_AT)));
+
+        // then
         assertThat(result).extracting(SettledEvaluation::arrivalObservationId).containsExactly(arrival, arrival);
         assertThat(result).extracting(SettledEvaluation::seatsOnArrival).containsExactly(0, null);
     }
@@ -292,7 +345,7 @@ class JdbcForecastEvaluationRepositoryTest {
             forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT),
             forecastOf(NEXT_TARGET_STOP_ORDER, STOPS_TO_NEXT_TARGET, GENERATED_AT)));
         evaluationRepository.settle(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Skipped(), SCORED_AT)));
+            vehicleObservationId, TARGET_STOP_ORDER, new Skipped(), SCORED_AT)));
 
         // when
         List<PendingForecast> actual = evaluationRepository.findPending(routeVersionId, READ_LIMIT);
@@ -342,7 +395,7 @@ class JdbcForecastEvaluationRepositoryTest {
         evaluationRepository.settle(List.of(ForecastEvaluation.completed(
             vehicleObservationId,
             TARGET_STOP_ORDER,
-            new ArrivalLabel.Settled(arrivalObservationId, SEATS_ON_ARRIVAL_WHEN_FULL),
+            new Settled(arrivalObservationId, SEATS_ON_ARRIVAL_WHEN_FULL),
             SCORED_AT)));
 
         // then
@@ -361,7 +414,7 @@ class JdbcForecastEvaluationRepositoryTest {
         evaluationRepository.settle(List.of(ForecastEvaluation.completed(
             vehicleObservationId,
             TARGET_STOP_ORDER,
-            new ArrivalLabel.SeatMissing(arrivalObservationId),
+            new SeatMissing(arrivalObservationId),
             SCORED_AT)));
 
         // then
@@ -376,7 +429,7 @@ class JdbcForecastEvaluationRepositoryTest {
 
         // when
         evaluationRepository.settle(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Skipped(), SCORED_AT)));
+            vehicleObservationId, TARGET_STOP_ORDER, new Skipped(), SCORED_AT)));
 
         // then
         StoredLabel actual = readStoredLabel(TARGET_STOP_ORDER);
@@ -390,15 +443,17 @@ class JdbcForecastEvaluationRepositoryTest {
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
 
         // when
-        List<SettledForecast> actual = calibrationOutcomes(evaluationRepository.settle(List.of(ForecastEvaluation.completed(
-            vehicleObservationId,
-            TARGET_STOP_ORDER,
-            new ArrivalLabel.Settled(arrivalObservationId, SEATS_ON_ARRIVAL_WHEN_FULL),
-            SCORED_AT))));
+        List<SettledForecast> actual =
+            calibrationOutcomes(evaluationRepository.settle(List.of(ForecastEvaluation.completed(
+                vehicleObservationId,
+                TARGET_STOP_ORDER,
+                new Settled(arrivalObservationId, SEATS_ON_ARRIVAL_WHEN_FULL),
+                SCORED_AT))));
 
         // then
         assertThat(actual).containsExactly(new SettledForecast(
-            routeId, modelDeploymentId, STOPS_TO_TARGET, 0.41, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant(), SEATS_ON_ARRIVAL_WHEN_FULL));
+            routeId, modelDeploymentId, STOPS_TO_TARGET, 0.41, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant(),
+            SEATS_ON_ARRIVAL_WHEN_FULL));
     }
 
     @Test
@@ -412,9 +467,9 @@ class JdbcForecastEvaluationRepositoryTest {
         // when
         List<SettledForecast> actual = calibrationOutcomes(evaluationRepository.settle(List.of(
             ForecastEvaluation.completed(
-                vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.SeatMissing(arrivalObservationId), SCORED_AT),
+                vehicleObservationId, TARGET_STOP_ORDER, new SeatMissing(arrivalObservationId), SCORED_AT),
             ForecastEvaluation.completed(
-                vehicleObservationId, NEXT_TARGET_STOP_ORDER, new ArrivalLabel.Skipped(), SCORED_AT))));
+                vehicleObservationId, NEXT_TARGET_STOP_ORDER, new Skipped(), SCORED_AT))));
 
         // then
         assertThat(actual).isEmpty();
@@ -428,7 +483,7 @@ class JdbcForecastEvaluationRepositoryTest {
         ForecastEvaluation settlement = ForecastEvaluation.completed(
             vehicleObservationId,
             TARGET_STOP_ORDER,
-            new ArrivalLabel.Settled(arrivalObservationId, SEATS_ON_ARRIVAL_WHEN_FULL),
+            new Settled(arrivalObservationId, SEATS_ON_ARRIVAL_WHEN_FULL),
             SCORED_AT);
         evaluationRepository.settle(List.of(settlement));
 
@@ -444,11 +499,11 @@ class JdbcForecastEvaluationRepositoryTest {
         // given
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
         evaluationRepository.settle(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Skipped(), SCORED_AT)));
+            vehicleObservationId, TARGET_STOP_ORDER, new Skipped(), SCORED_AT)));
 
         // when
         evaluationRepository.settle(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Lost(), SCORED_AT.plusSeconds(60))));
+            vehicleObservationId, TARGET_STOP_ORDER, new Lost(), SCORED_AT.plusSeconds(60))));
 
         // then
         assertThat(readStoredLabel(TARGET_STOP_ORDER)).isEqualTo(new StoredLabel("SKIPPED", null, null, SCORED_AT));
@@ -460,15 +515,16 @@ class JdbcForecastEvaluationRepositoryTest {
         final long arrivalId = insertArrivalObservation();
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
         evaluationRepository.settle(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.SeatMissing(arrivalId), SCORED_AT)));
+            vehicleObservationId, TARGET_STOP_ORDER, new SeatMissing(arrivalId), SCORED_AT)));
 
         // when
-        var settled = evaluationRepository.settle(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrivalId, 0), SCORED_AT.plusSeconds(60))));
+        List<SettledEvaluation> settled = evaluationRepository.settle(List.of(ForecastEvaluation.completed(
+            vehicleObservationId, TARGET_STOP_ORDER, new Settled(arrivalId, 0), SCORED_AT.plusSeconds(60))));
 
         // then
         assertThat(settled).isEmpty();
-        assertThat(readStoredLabel(TARGET_STOP_ORDER)).isEqualTo(new StoredLabel("SEAT_MISSING", arrivalId, null, SCORED_AT));
+        assertThat(readStoredLabel(TARGET_STOP_ORDER)).isEqualTo(
+            new StoredLabel("SEAT_MISSING", arrivalId, null, SCORED_AT));
     }
 
     @Test
@@ -479,7 +535,7 @@ class JdbcForecastEvaluationRepositoryTest {
 
         // when
         evaluationRepository.settle(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrivalId, 0), SCORED_AT)));
+            vehicleObservationId, TARGET_STOP_ORDER, new Settled(arrivalId, 0), SCORED_AT)));
 
         // then
         assertThat(jdbcClient.sql("""
@@ -492,7 +548,6 @@ class JdbcForecastEvaluationRepositoryTest {
             WHERE vehicle_observation_id = ? AND target_stop_order = ?
             """).params(vehicleObservationId, TARGET_STOP_ORDER).query(String.class).single())
             .isEqualTo(VEHICLE_204000206);
-
     }
 
     @Test
@@ -509,20 +564,21 @@ class JdbcForecastEvaluationRepositoryTest {
 
         // when
         evaluationRepository.settle(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrivalId, 0), SCORED_AT)));
+            vehicleObservationId, TARGET_STOP_ORDER, new Settled(arrivalId, 0), SCORED_AT)));
 
         // then
         assertThat(jdbcClient.sql("SELECT count(*) FROM forecast_evaluation_result WHERE vehicle_observation_id = ?")
-            .param(vehicleObservationId).query(Long.class).single()).isZero();
+                .param(vehicleObservationId).query(Long.class).single()).isZero();
         assertThat(jdbcClient.sql("SELECT count(*) FROM forecast_evaluation_compact WHERE vehicle_observation_id = ?")
-            .param(vehicleObservationId).query(Long.class).single()).isZero();
+                .param(vehicleObservationId).query(Long.class).single()).isZero();
         assertThat(jdbcClient.sql("SELECT count(*) FROM forecast_evaluation_pending WHERE vehicle_observation_id = ?")
-            .param(vehicleObservationId).query(Long.class).single()).isOne();
+                .param(vehicleObservationId).query(Long.class).single()).isOne();
     }
 
     @Test
     void 접근_관측은_통과_순번으로_평가하고_근거에는_원_정류장_순번을_남긴다() {
-        // given 상태 1은 다음 정류장에 도착 중이므로 통과 순번이 원 순번보다 하나 작다.
+        // given
+        // 상태 1은 다음 정류장에 도착 중이므로 통과 순번이 원 순번보다 하나 작다.
         final int approaching = 1;
         final int rawStopOrder = TARGET_STOP_ORDER + 1;
         final long arrivalBatch = insertObservationBatch("approaching-next-stop", RESPONSE_RECEIVED_AT.plusSeconds(60));
@@ -540,50 +596,51 @@ class JdbcForecastEvaluationRepositoryTest {
             vehicleObservationId, TARGET_STOP_ORDER, label, SCORED_AT)));
 
         // then
-        assertThat(candidates).singleElement().extracting(ArrivalCandidate::passedStopOrder).isEqualTo(TARGET_STOP_ORDER);
-        assertThat(label).isEqualTo(new ArrivalLabel.Settled(arrivalId, SEATS_LEFT));
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(candidates).singleElement()
+                .extracting(ArrivalCandidate::passedStopOrder)
+                .isEqualTo(TARGET_STOP_ORDER);
+            softly.assertThat(label).isEqualTo(new Settled(arrivalId, SEATS_LEFT));
+        }
         assertThat(jdbcClient.sql("""
             SELECT arrival_stop_order, arrival_running_state FROM forecast_evaluation
             WHERE vehicle_observation_id = ? AND target_stop_order = ?
             """).params(vehicleObservationId, TARGET_STOP_ORDER)
-            .query((row, index) -> List.of(row.getInt("arrival_stop_order"), row.getInt("arrival_running_state")))
-            .single()).containsExactly(rawStopOrder, approaching);
+                .query((row, index) -> List.of(row.getInt("arrival_stop_order"), row.getInt("arrival_running_state")))
+                .single()).containsExactly(rawStopOrder, approaching);
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"정상", "차량 조사", "전체 조사", "제외 편도"})
     void 품질_보류된_관측의_예보는_정산_대상에서_제외한다(String condition) {
+        // when
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
-        if (condition.equals("제외 편도")) {
-            jdbcClient.sql("UPDATE vehicle_one_way_trip SET status = 'EXCLUDED' WHERE start_observation_id = ?")
-                .param(vehicleObservationId).update();
-        } else if (!condition.equals("정상")) {
-            jdbcClient.sql("INSERT INTO trip_quality_rebuild(route_version_id, vehicle_id, until_at) VALUES (?, ?, ?)")
-                .params(routeVersionId, condition.equals("전체 조사") ? "" : VEHICLE_204000206, RESPONSE_RECEIVED_AT)
-                .update();
-        }
+        prepareQualityState(condition, vehicleObservationId, routeVersionId);
 
+        // then
         assertThat(evaluationRepository.findPending(routeVersionId, READ_LIMIT))
-            .hasSize(condition.equals("정상") ? 1 : 0);
+            .hasSize(expectedPendingCount(condition));
     }
 
     @Test
     void 정산_대상은_품질을_통과한_노선의_미정산_예보만_오래된_순서로_제한한다() {
+        // when
         saveForecasts(List.of(
             forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT),
             forecastOf(NEXT_TARGET_STOP_ORDER, STOPS_TO_NEXT_TARGET, NEXT_GENERATED_AT)));
-        long excluded = insertObservation(observationBatchId, "excluded-test", 1, PASSED_STOP_ORDER);
+        final long excluded = insertObservation(observationBatchId, "excluded-test", 1, PASSED_STOP_ORDER);
         saveForecasts(List.of(new SeatForecast(
             excluded, routeVersionId, TARGET_STOP_ORDER, STOPS_TO_TARGET,
             modelDeploymentId, DEMAND_STATISTICS_REVISION, 0.41, 0.38, 12.5, GENERATED_AT.minusSeconds(1))));
         jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats = 82 WHERE id = ?").param(excluded).update();
 
+        // then
         assertThat(evaluationRepository.findPending(routeVersionId, 1))
             .extracting(PendingForecast::targetStopOrder).containsExactly(TARGET_STOP_ORDER);
         assertThat(evaluationRepository.findPending(-1L, READ_LIMIT)).isEmpty();
 
         evaluationRepository.settle(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Skipped(), SCORED_AT)));
+            vehicleObservationId, TARGET_STOP_ORDER, new Skipped(), SCORED_AT)));
         assertThat(evaluationRepository.findPending(routeVersionId, 1))
             .extracting(PendingForecast::targetStopOrder).containsExactly(NEXT_TARGET_STOP_ORDER);
     }
@@ -591,7 +648,7 @@ class JdbcForecastEvaluationRepositoryTest {
     @Test
     void 정산_대상은_관측_순서로_오래된_예보부터_고른다() {
         // given
-        long laterObservationId = insertObservation(observationBatchId, "204000207", 1, PASSED_STOP_ORDER);
+        final long laterObservationId = insertObservation(observationBatchId, "204000207", 1, PASSED_STOP_ORDER);
         saveForecasts(List.of(
             forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, NEXT_GENERATED_AT),
             new SeatForecast(
@@ -610,7 +667,7 @@ class JdbcForecastEvaluationRepositoryTest {
     @Test
     void 품질_보류된_예보가_앞에_있어도_다음_예보로_정산_대상을_채운다() {
         // given
-        long laterObservationId = insertObservation(observationBatchId, "204000207", 1, PASSED_STOP_ORDER);
+        final long laterObservationId = insertObservation(observationBatchId, "204000207", 1, PASSED_STOP_ORDER);
         saveForecasts(List.of(
             forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT),
             new SeatForecast(
@@ -636,14 +693,15 @@ class JdbcForecastEvaluationRepositoryTest {
         jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats = 82 WHERE id = ?")
             .param(vehicleObservationId)
             .update();
-        long second = insertObservation(observationBatchId, "204000207", 1, PASSED_STOP_ORDER);
-        long third = insertObservation(observationBatchId, "204000208", 2, PASSED_STOP_ORDER);
-        long fourth = insertObservation(observationBatchId, "204000209", 3, PASSED_STOP_ORDER);
-        saveForecasts(List.of(second, third, fourth).stream()
-            .map(observationId -> new SeatForecast(
-                observationId, routeVersionId, TARGET_STOP_ORDER, STOPS_TO_TARGET,
-                modelDeploymentId, DEMAND_STATISTICS_REVISION, 0.41, 0.38, 12.5, GENERATED_AT))
-            .toList());
+        final long second = insertObservation(observationBatchId, "204000207", 1, PASSED_STOP_ORDER);
+        final long third = insertObservation(observationBatchId, "204000208", 2, PASSED_STOP_ORDER);
+        final long fourth = insertObservation(observationBatchId, "204000209", 3, PASSED_STOP_ORDER);
+        saveForecasts(List.of(second, third, fourth)
+                .stream()
+                .map(observationId -> new SeatForecast(
+                    observationId, routeVersionId, TARGET_STOP_ORDER, STOPS_TO_TARGET,
+                    modelDeploymentId, DEMAND_STATISTICS_REVISION, 0.41, 0.38, 12.5, GENERATED_AT))
+                .toList());
 
         // when
         List<PendingForecast> actual = evaluationRepository.findPending(routeVersionId, 2);
@@ -656,10 +714,12 @@ class JdbcForecastEvaluationRepositoryTest {
 
     @Test
     void 원본_관측을_공유하는_예보는_정류장별_상세와_두_시각을_유지한다() {
+        // when
         saveForecasts(List.of(
             forecastOf(NEXT_TARGET_STOP_ORDER, STOPS_TO_NEXT_TARGET, NEXT_GENERATED_AT),
             forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
 
+        // then
         assertThat(evaluationRepository.findPending(routeVersionId, READ_LIMIT)).containsExactly(
             new PendingForecast(vehicleObservationId, TARGET_STOP_ORDER, routeVersionId,
                 VEHICLE_204000206, STOPS_TO_TARGET, RESPONSE_RECEIVED_AT.toInstant(), GENERATED_AT, 0L),
@@ -669,18 +729,20 @@ class JdbcForecastEvaluationRepositoryTest {
 
     @Test
     void 품질_보류_묶음_뒤의_공유_관측이_페이지에_걸쳐도_누락하거나_중복하지_않는다() {
+        // when
         saveForecasts(List.of(
             forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT),
             forecastOf(NEXT_TARGET_STOP_ORDER, STOPS_TO_NEXT_TARGET, NEXT_GENERATED_AT)));
         jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats=82 WHERE id=?")
             .param(vehicleObservationId).update();
-        long next = insertObservation(observationBatchId, "shared-page-test", 1, PASSED_STOP_ORDER);
+        final long next = insertObservation(observationBatchId, "shared-page-test", 1, PASSED_STOP_ORDER);
         saveForecasts(List.of(
             new SeatForecast(next, routeVersionId, TARGET_STOP_ORDER, STOPS_TO_TARGET,
                 modelDeploymentId, DEMAND_STATISTICS_REVISION, 0.41, 0.38, 12.5, GENERATED_AT),
             new SeatForecast(next, routeVersionId, NEXT_TARGET_STOP_ORDER, STOPS_TO_NEXT_TARGET,
                 modelDeploymentId, DEMAND_STATISTICS_REVISION, 0.41, 0.38, 12.5, NEXT_GENERATED_AT)));
 
+        // then
         assertThat(evaluationRepository.findPending(routeVersionId, 1))
             .extracting(PendingForecast::targetStopOrder).containsExactly(TARGET_STOP_ORDER);
         assertThat(evaluationRepository.findPending(routeVersionId, 2))
@@ -707,7 +769,7 @@ class JdbcForecastEvaluationRepositoryTest {
         // given
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
         evaluationRepository.settle(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Skipped(), SCORED_AT)));
+            vehicleObservationId, TARGET_STOP_ORDER, new Skipped(), SCORED_AT)));
 
         // when
         List<Long> actual = evaluationRepository.findRouteVersionIdsWithPendingForecasts();
@@ -723,7 +785,7 @@ class JdbcForecastEvaluationRepositoryTest {
         jdbcClient.sql("UPDATE route_version SET valid_to = ? WHERE id = ?")
             .params(ARRIVAL_RESPONSE_RECEIVED_AT, routeVersionId)
             .update();
-        long nextRouteVersionId = jdbcClient.sql("""
+        final long nextRouteVersionId = jdbcClient.sql("""
                 INSERT INTO route_version (route_id, content_digest, valid_from)
                 VALUES (?, ?, ?)
                 RETURNING id
@@ -762,56 +824,59 @@ class JdbcForecastEvaluationRepositoryTest {
     void 이전_판정_버전의_예보는_도착_좌석을_저장하되_후보정_증분에는_포함하지_않는다() {
         // given
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
-        long arrival = insertArrivalObservation();
+        final long arrival = insertArrivalObservation();
         jdbcClient.sql("UPDATE route_data_quality SET quality_revision = quality_revision + 1 WHERE route_id = ?")
             .param(routeId).update();
 
         // when
-        List<SettledForecast> actual = calibrationOutcomes(evaluationRepository.settle(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT))));
+        List<SettledForecast> actual =
+            calibrationOutcomes(evaluationRepository.settle(List.of(ForecastEvaluation.completed(
+                vehicleObservationId, TARGET_STOP_ORDER, new Settled(arrival, 0), SCORED_AT))));
 
         // then
         assertThat(actual).isEmpty();
         assertThat(jdbcClient.sql("SELECT scoring_state FROM forecast_evaluation WHERE vehicle_observation_id = ?")
-            .param(vehicleObservationId).query(String.class).single()).isEqualTo("SETTLED");
+                .param(vehicleObservationId).query(String.class).single()).isEqualTo("SETTLED");
         assertThat(jdbcClient.sql("SELECT seats_on_arrival FROM forecast_evaluation WHERE vehicle_observation_id = ?")
-            .param(vehicleObservationId).query(Integer.class).single()).isZero();
+                .param(vehicleObservationId).query(Integer.class).single()).isZero();
     }
 
     @Test
     void 편도가_제외된_뒤에는_도착_결과와_후보정_증분을_저장하지_않는다() {
         // given
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
-        long arrival = insertArrivalObservation();
+        final long arrival = insertArrivalObservation();
         jdbcClient.sql("UPDATE vehicle_one_way_trip SET status = 'EXCLUDED' WHERE start_observation_id = ?")
             .param(vehicleObservationId).update();
 
         // when
-        List<SettledForecast> actual = calibrationOutcomes(evaluationRepository.settle(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT))));
+        List<SettledForecast> actual =
+            calibrationOutcomes(evaluationRepository.settle(List.of(ForecastEvaluation.completed(
+                vehicleObservationId, TARGET_STOP_ORDER, new Settled(arrival, 0), SCORED_AT))));
 
         // then
         assertThat(actual).isEmpty();
         assertThat(jdbcClient.sql("SELECT scoring_state FROM forecast_evaluation WHERE vehicle_observation_id = ?")
-            .param(vehicleObservationId).query(String.class).single()).isEqualTo("PENDING");
+                .param(vehicleObservationId).query(String.class).single()).isEqualTo("PENDING");
     }
 
     @Test
     void 다른_방향의_도착_관측으로_예보를_닫지_않는다() {
         // given
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
-        long arrival = insertArrivalObservation();
+        final long arrival = insertArrivalObservation();
         jdbcClient.sql("UPDATE route_version SET turn_sequence = 8 WHERE id = ?")
             .param(routeVersionId).update();
 
         // when
-        List<SettledForecast> actual = calibrationOutcomes(evaluationRepository.settle(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT))));
+        List<SettledForecast> actual =
+            calibrationOutcomes(evaluationRepository.settle(List.of(ForecastEvaluation.completed(
+                vehicleObservationId, TARGET_STOP_ORDER, new Settled(arrival, 0), SCORED_AT))));
 
         // then
         assertThat(actual).isEmpty();
         assertThat(jdbcClient.sql("SELECT scoring_state FROM forecast_evaluation WHERE vehicle_observation_id = ?")
-            .param(vehicleObservationId).query(String.class).single()).isEqualTo("PENDING");
+                .param(vehicleObservationId).query(String.class).single()).isEqualTo("PENDING");
     }
 
     private long insertArrivalObservation() {
@@ -856,7 +921,10 @@ class JdbcForecastEvaluationRepositoryTest {
     private static Instant instantOf(
         OffsetDateTime timestamp
     ) {
-        return timestamp == null ? null : timestamp.toInstant();
+        if (timestamp == null) {
+            return null;
+        }
+        return timestamp.toInstant();
     }
 
     private long insertRoute() {
@@ -885,9 +953,7 @@ class JdbcForecastEvaluationRepositoryTest {
             .single();
     }
 
-    private void insertRouteStop(
-        final int stopOrder
-    ) {
+    private void insertRouteStop(final int stopOrder) {
         jdbcClient.sql("""
                 INSERT INTO route_stop (
                     route_version_id, stop_order, stop_id, name, direction, boarding_allowed
@@ -951,13 +1017,13 @@ class JdbcForecastEvaluationRepositoryTest {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
-            .params(
-                batchId, routeVersionId, sourceRowNumber,
-                vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
-                RUNNING_STATE_DEPARTED, SEATS_LEFT
-            )
-            .query(Long.class)
-            .single());
+                    .params(
+                        batchId, routeVersionId, sourceRowNumber,
+                        vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
+                        RUNNING_STATE_DEPARTED, SEATS_LEFT
+                    )
+                    .query(Long.class)
+                    .single());
     }
 
     private static String stopIdOf(
@@ -978,6 +1044,41 @@ class JdbcForecastEvaluationRepositoryTest {
     private static List<SettledForecast> calibrationOutcomes(
         List<SettledEvaluation> settled
     ) {
-        return settled.stream().flatMap(result -> result.calibrationOutcome().stream()).toList();
+        return settled.stream()
+            .flatMap(result -> result.calibrationOutcome()
+                    .stream())
+            .toList();
+    }
+
+    private void prepareQualityState(
+        String condition,
+        final long vehicleObservationId,
+        final long routeVersionId
+    ) {
+        if (condition.equals("제외 편도")) {
+            jdbcClient.sql("UPDATE vehicle_one_way_trip SET status = 'EXCLUDED' WHERE start_observation_id = ?")
+                .param(vehicleObservationId).update();
+
+            return;
+        }
+        if (!condition.equals("정상")) {
+            jdbcClient.sql("INSERT INTO trip_quality_rebuild(route_version_id, vehicle_id, until_at) VALUES (?, ?, ?)")
+                .params(routeVersionId, vehicleScopeFor(condition), RESPONSE_RECEIVED_AT)
+                .update();
+        }
+    }
+
+    private static String vehicleScopeFor(String condition) {
+        if (condition.equals("전체 조사")) {
+            return "";
+        }
+        return VEHICLE_204000206;
+    }
+
+    private static int expectedPendingCount(String condition) {
+        if (condition.equals("정상")) {
+            return 1;
+        }
+        return 0;
     }
 }

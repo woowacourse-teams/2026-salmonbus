@@ -7,19 +7,19 @@ import static org.assertj.core.api.Assertions.within;
 import org.junit.jupiter.api.Test;
 
 /**
- * 그 차량이 목표 정류장에 닿을 때 만석일 확률을 낸다.
+ * 차량이 목표 정류장에 도착할 때 만석일 확률을 계산한다.
  *
- * <p>입력값 하나하나에 계수를 곱해 더하고, 그 값을 0 과 1 사이의 확률로 옮긴다.
- * 옮기기 전에 값을 잘라서 <b>확률이 0퍼센트나 100퍼센트로 굳지 않게</b> 한다.
- * 굳어 버리면 뒤에서 오늘 성적으로 확률을 옮길 때 계산이 무너진다.
+ * <p>각 입력값에 계수를 곱해 더하고 0 과 1 사이의 확률로 변환한다.
+ * 변환 전에 값을 제한해 확률이 0퍼센트나 100퍼센트로 포화되지 않도록 한다.
+ * 포화되면 당일 성적으로 확률을 보정할 때 계산이 성립하지 않는다.
  */
 class FullChanceHurdleTest {
-
     private static final double TOLERANCE = 1e-15;
 
     @Test
     void 입력값과_계수로_만석_확률을_낸다() {
-        // given 입력 1 과 2 에 계수 0.5 와 0.25 를 곱해 더하면 1 이다
+        // given
+        // 입력 1 과 2 에 계수 0.5 와 0.25 를 곱해 더하면 1 이다
         FullChanceHurdle hurdle = new FullChanceHurdle(new double[] {0.5, 0.25});
 
         // when
@@ -55,11 +55,15 @@ class FullChanceHurdleTest {
 
     @Test
     void 입력값_개수가_계수_개수와_다르면_예보하지_않는다() {
-        // given 계수는 둘인데 입력을 하나만 넣는다
+        // given
+        // 계수는 둘인데 입력을 하나만 넣는다
         FullChanceHurdle hurdle = new FullChanceHurdle(new double[] {1.0, 2.0});
 
-        // when & then
-        assertThat(catchThrowable(() -> hurdle.rawFullChanceOf(new double[] {1.0})))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> hurdle.rawFullChanceOf(new double[] {1.0}));
+
+        // then
+        assertThat(caughtFailure)
             .isInstanceOf(IllegalArgumentException.class);
     }
 }

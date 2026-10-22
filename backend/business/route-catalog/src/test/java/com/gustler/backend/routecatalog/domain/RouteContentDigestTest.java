@@ -6,12 +6,11 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class RouteContentDigestTest {
-
     private static final int TURN_SEQUENCE = 2;
     private static final String STOP_205000217 = "205000217";
     private static final String STOP_208000069 = "208000069";
-    private static final String STOP_NAME_범계역 = "범계역";
-    private static final String STOP_NAME_안양역 = "안양역";
+    private static final String BEOMGYE_STOP_NAME = "범계역";
+    private static final String ANYANG_STOP_NAME = "안양역";
     private static final String HEXADECIMAL_64 = "^[0-9a-f]{64}$";
 
     @Test
@@ -27,9 +26,9 @@ class RouteContentDigestTest {
     void 정류소_하나의_순번이_바뀌면_다른_해시가_나온다() {
         // given
         RouteStops moved = RouteStops.from(TURN_SEQUENCE, List.of(
-            new UpstreamRouteStop(1, STOP_205000217, STOP_NAME_범계역),
-            new UpstreamRouteStop(2, STOP_208000069, STOP_NAME_안양역),
-            new UpstreamRouteStop(4, STOP_205000217, STOP_NAME_범계역)
+            new UpstreamRouteStop(1, STOP_205000217, BEOMGYE_STOP_NAME),
+            new UpstreamRouteStop(2, STOP_208000069, ANYANG_STOP_NAME),
+            new UpstreamRouteStop(4, STOP_205000217, BEOMGYE_STOP_NAME)
         ));
 
         // when
@@ -43,9 +42,9 @@ class RouteContentDigestTest {
     void 정류소_이름이_바뀌면_다른_해시가_나온다() {
         // given
         RouteStops renamed = RouteStops.from(TURN_SEQUENCE, List.of(
-            new UpstreamRouteStop(1, STOP_205000217, STOP_NAME_범계역),
+            new UpstreamRouteStop(1, STOP_205000217, BEOMGYE_STOP_NAME),
             new UpstreamRouteStop(2, STOP_208000069, "안양역(경유)"),
-            new UpstreamRouteStop(3, STOP_205000217, STOP_NAME_범계역)
+            new UpstreamRouteStop(3, STOP_205000217, BEOMGYE_STOP_NAME)
         ));
 
         // when
@@ -59,9 +58,9 @@ class RouteContentDigestTest {
     void 회차_순번이_바뀌면_다른_해시가_나온다() {
         // given
         RouteStops turnedElsewhere = RouteStops.from(1, List.of(
-            new UpstreamRouteStop(1, STOP_205000217, STOP_NAME_범계역),
-            new UpstreamRouteStop(2, STOP_208000069, STOP_NAME_안양역),
-            new UpstreamRouteStop(3, STOP_205000217, STOP_NAME_범계역)
+            new UpstreamRouteStop(1, STOP_205000217, BEOMGYE_STOP_NAME),
+            new UpstreamRouteStop(2, STOP_208000069, ANYANG_STOP_NAME),
+            new UpstreamRouteStop(3, STOP_205000217, BEOMGYE_STOP_NAME)
         ));
 
         // when
@@ -86,8 +85,8 @@ class RouteContentDigestTest {
         RouteStops oneStopWithSeparatorInName = RouteStops.from(1, List.of(
             new UpstreamRouteStop(1, STOP_205000217, "범계역\n2|208000069|안양역")));
         RouteStops twoStops = RouteStops.from(1, List.of(
-            new UpstreamRouteStop(1, STOP_205000217, STOP_NAME_범계역),
-            new UpstreamRouteStop(2, STOP_208000069, STOP_NAME_안양역)));
+            new UpstreamRouteStop(1, STOP_205000217, BEOMGYE_STOP_NAME),
+            new UpstreamRouteStop(2, STOP_208000069, ANYANG_STOP_NAME)));
 
         // when
         RouteContentDigest actual = RouteContentDigest.of(oneStopWithSeparatorInName);
@@ -98,9 +97,9 @@ class RouteContentDigestTest {
 
     private RouteStops threeStops() {
         return RouteStops.from(TURN_SEQUENCE, List.of(
-            new UpstreamRouteStop(1, STOP_205000217, STOP_NAME_범계역),
-            new UpstreamRouteStop(2, STOP_208000069, STOP_NAME_안양역),
-            new UpstreamRouteStop(3, STOP_205000217, STOP_NAME_범계역)
+            new UpstreamRouteStop(1, STOP_205000217, BEOMGYE_STOP_NAME),
+            new UpstreamRouteStop(2, STOP_208000069, ANYANG_STOP_NAME),
+            new UpstreamRouteStop(3, STOP_205000217, BEOMGYE_STOP_NAME)
         ));
     }
 }

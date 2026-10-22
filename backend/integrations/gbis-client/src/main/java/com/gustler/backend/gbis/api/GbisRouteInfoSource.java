@@ -25,8 +25,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Component
 public class GbisRouteInfoSource {
-
-    /** 한 노선을 읽는 데 드는 상류 호출 수. 장부에서 이만큼 자리를 잡고 부른다. */
+    /** 한 노선을 읽는 데 드는 상류 호출 수. 장부에서 이 호출 수를 예약한 뒤 호출한다. */
     public static final int UPSTREAM_CALLS_PER_READ = 2;
 
     private static final String ROUTE_INFO_PATH = "/busrouteservice/v2/getBusRouteInfoItemv2";
@@ -43,6 +42,9 @@ public class GbisRouteInfoSource {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * GBIS 노선 정보를 호출해 원천 필드를 반환한다. 알 수 없는 값과 조회 실패를 임의의 정상 기본값으로 채우지 않는다.
+     */
     public GbisRouteResult read(
         String routeId
     ) {
@@ -61,31 +63,49 @@ public class GbisRouteInfoSource {
         String routeId
     ) {
         BusRouteInfoResponse response = read(ROUTE_INFO_PATH, routeId, BusRouteInfoResponse.class);
-        if (response == null
-            || response.response() == null
-            || response.response().header() == null
-            || GbisResultCode.from(response.response().header().resultCode()) != GbisResultCode.SUCCESS
-            || response.response().body() == null) {
+        if (!isSuccessful(response)) {
             return null;
         }
-        return response.response().body().routeInfo();
+        BusRouteInfoResponse.Response providerResponse = response.response();
+        return providerResponse.body().routeInfo();
+    }
+
+    private boolean isSuccessful(BusRouteInfoResponse response) {
+        if (response == null || response.response() == null) {
+            return false;
+        }
+        BusRouteInfoResponse.Response providerResponse = response.response();
+        if (providerResponse.header() == null || providerResponse.body() == null) {
+            return false;
+        }
+        BusRouteInfoResponse.Header header = providerResponse.header();
+        return GbisResultCode.from(header.resultCode()) == GbisResultCode.SUCCESS;
     }
 
     private List<RouteStationItem> readStations(
         String routeId
     ) {
         BusRouteStationResponse response = read(ROUTE_STATION_PATH, routeId, BusRouteStationResponse.class);
-        if (response == null
-            || response.response() == null
-            || response.response().header() == null
-            || GbisResultCode.from(response.response().header().resultCode()) != GbisResultCode.SUCCESS
-            || response.response().body() == null) {
+        if (!isSuccessful(response)) {
             return null;
         }
-        return response.response().body().stations();
+        BusRouteStationResponse.Response providerResponse = response.response();
+        return providerResponse.body().stations();
     }
 
-    /** 응답이 안 왔거나 포털이 막았거나 읽지 못하면 비운다. 부른 쪽이 그 노선을 건너뛴다. */
+    private boolean isSuccessful(BusRouteStationResponse response) {
+        if (response == null || response.response() == null) {
+            return false;
+        }
+        BusRouteStationResponse.Response providerResponse = response.response();
+        if (providerResponse.header() == null || providerResponse.body() == null) {
+            return false;
+        }
+        BusRouteStationResponse.Header header = providerResponse.header();
+        return GbisResultCode.from(header.resultCode()) == GbisResultCode.SUCCESS;
+    }
+
+    /** 응답이 오지 않거나 포털이 거부하거나 읽지 못하면 비운다. 호출한 쪽은 해당 노선을 건너뛴다. */
     private <T> T read(
         String path,
         String routeId,
@@ -104,7 +124,7 @@ public class GbisRouteInfoSource {
     ) {
         try {
             return objectMapper.readValue(body, responseType);
-        } catch (final JacksonException e) {
+        } catch (JacksonException e) {
             return null;
         }
     }

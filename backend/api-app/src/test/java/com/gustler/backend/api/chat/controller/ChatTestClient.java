@@ -17,7 +17,6 @@ import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 final class ChatTestClient extends TextWebSocketHandler {
-
     static final String ALLOWED_ORIGIN = "https://www.salmonbus.com";
 
     private final BlockingQueue<String> frames = new LinkedBlockingQueue<>();

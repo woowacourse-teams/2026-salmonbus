@@ -4,17 +4,18 @@ import com.github.dockerjava.api.command.InspectContainerResponse;
 import java.io.IOException;
 import java.nio.file.Path;
 import org.testcontainers.containers.Container.ExecResult;
-import org.testcontainers.containers.MongoDBContainer;
+import org.testcontainers.mongodb.MongoDBContainer;
 import org.testcontainers.utility.MountableFile;
 
 public final class ChatMongoContainer extends MongoDBContainer {
-
     private static final String IMAGE = "mongo:8.0";
     private static final String INIT_SCRIPT_PROPERTY = "chat.init.script";
     private static final String INIT_SCRIPT_IN_CONTAINER = "/tmp/init-chat-db.js";
 
     public ChatMongoContainer() {
         super(IMAGE);
+        // Testcontainers 2.0 기본값은 단독 서버다. 1.x 에서 시험하던 단일 노드 replica set 조건을 유지한다.
+        withReplicaSet();
     }
 
     @Override

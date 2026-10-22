@@ -1,16 +1,16 @@
 package com.gustler.backend.worker.configuration;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.gustler.backend.observations.api.ObservationDeliveryHook;
+import com.gustler.backend.support.IntegrationTest;
 import com.gustler.backend.worker.scheduling.ArrivalLabelJob;
 import com.gustler.backend.worker.scheduling.ForecastTrigger;
 import com.gustler.backend.worker.scheduling.TripQualityInvestigationJob;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
-import com.gustler.backend.support.IntegrationTest;
 import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
@@ -19,10 +19,9 @@ import org.springframework.test.context.TestPropertySource;
 @IntegrationTest
 @TestPropertySource(properties = "forecast.enabled=true")
 class ForecastScheduleConfigTest {
-
     /**
-     * 예보 행이 하루에 얼마나 들어오나. 노선당 98만 행이 에픽이 잡은 상한이고 지금 노선이 둘이다.
-     * 회수가 이보다 느리면 안 닫힌 행이 날마다 쌓인다.
+     * 예보 행의 하루 유입량을 계산한다. 에픽이 정한 상한은 노선당 98만 행이고 현재 노선은 둘이다.
+     * 회수가 이보다 느리면 닫히지 않은 행이 날마다 쌓인다.
      */
     private static final long LARGEST_DAILY_FORECAST_ROWS = 980_000L * 2;
 
@@ -63,8 +62,11 @@ class ForecastScheduleConfigTest {
     @Test
     void 수집을_꺼도_예보를_켜면_이상_차량의_편도_조사를_등록한다() {
         // when
-        List<String> registeredTasks = applicationContext.getBeansOfType(ScheduledTaskHolder.class).values().stream()
-            .flatMap(holder -> holder.getScheduledTasks().stream())
+        List<String> registeredTasks = applicationContext.getBeansOfType(ScheduledTaskHolder.class)
+            .values()
+            .stream()
+            .flatMap(holder -> holder.getScheduledTasks()
+                .stream())
             .map(scheduled -> scheduled.getTask().toString())
             .toList();
 
@@ -75,15 +77,18 @@ class ForecastScheduleConfigTest {
     @Test
     void 예보_스위치를_켜면_30초_회차를_등록하고_관측_저장_이벤트를_받는다() {
         // when
-        List<String> registeredTasks = applicationContext.getBeansOfType(ScheduledTaskHolder.class).values().stream()
-            .flatMap(holder -> holder.getScheduledTasks().stream())
+        List<String> registeredTasks = applicationContext.getBeansOfType(ScheduledTaskHolder.class)
+            .values()
+            .stream()
+            .flatMap(holder -> holder.getScheduledTasks()
+                .stream())
             .map(scheduled -> scheduled.getTask().toString())
             .toList();
 
         // then
         assertThat(registeredTasks).contains(ForecastTrigger.class.getName() + ".writeForecasts");
         assertThat(applicationContext.getBeansOfType(ObservationDeliveryHook.class).values())
-            .anySatisfy(hook -> assertThat(org.springframework.aop.support.AopUtils.getTargetClass(hook))
+            .anySatisfy(hook -> assertThat(AopUtils.getTargetClass(hook))
                 .isEqualTo(ForecastTrigger.class));
     }
 }

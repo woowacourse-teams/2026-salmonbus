@@ -1,7 +1,7 @@
 package com.gustler.backend;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.gustler.backend.support.IntegrationTest;
 import java.time.LocalDateTime;
@@ -20,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 @IntegrationTest
 @Transactional
 class VehicleObservationTableTest {
-
     private static final String SOURCE_ID = "GBIS";
     private static final String ROUTE_204000057 = "204000057";
     private static final String STOP_205000217 = "205000217";
@@ -59,8 +58,12 @@ class VehicleObservationTableTest {
 
     @Test
     void 차량_관측은_수집_묶음이_먼저_있어야_저장된다() {
-        // when & then
-        assertThatThrownBy(() -> insertObservation(MISSING_BATCH_ID, VEHICLE_204000206, 0))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertObservation(MISSING_BATCH_ID, VEHICLE_204000206, 0));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -69,8 +72,12 @@ class VehicleObservationTableTest {
         // given
         insertObservation(batchId, VEHICLE_204000206, 0);
 
-        // when & then
-        assertThatThrownBy(() -> insertObservation(batchId, VEHICLE_204000206, 1))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertObservation(batchId, VEHICLE_204000206, 1));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -100,8 +107,12 @@ class VehicleObservationTableTest {
 
     @Test
     void 잔여석을_알면_모르는_사유가_비어_있어야_저장된다() {
-        // when & then
-        assertThatThrownBy(() -> insertObservationWithSeats(SEATS_43, REPORTED_UNKNOWN))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertObservationWithSeats(SEATS_43, REPORTED_UNKNOWN));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -116,30 +127,40 @@ class VehicleObservationTableTest {
 
     @Test
     void 잔여석과_모르는_사유_중_하나는_있어야_저장된다() {
-        // when & then
-        assertThatThrownBy(() -> insertObservationWithSeats(null, null))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertObservationWithSeats(null, null));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void 아는_잔여석은_0석_이상이어야_저장된다() {
-        // when & then
-        assertThatThrownBy(() -> insertObservationWithSeats(-1, null))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertObservationWithSeats(-1, null));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void 잔여석을_모르는_사유는_REPORTED_UNKNOWN과_NOT_REPORTED만_저장된다() {
-        // when & then
-        assertThatThrownBy(() -> insertObservationWithSeats(null, "SENSOR_BROKEN"))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertObservationWithSeats(null, "SENSOR_BROKEN"));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 3, 4})
-    void 혼잡도_1부터_4는_그대로_저장된다(
-        final int crowdLevel
-    ) {
+    void 혼잡도_1부터_4는_그대로_저장된다(final int crowdLevel) {
         // when
         insertObservationWithCrowdLevel(crowdLevel);
 
@@ -149,19 +170,19 @@ class VehicleObservationTableTest {
 
     @ParameterizedTest
     @ValueSource(ints = {0, 5})
-    void 혼잡도는_1부터_4까지만_저장된다(
-        final int crowdLevel
-    ) {
-        // when & then
-        assertThatThrownBy(() -> insertObservationWithCrowdLevel(crowdLevel))
+    void 혼잡도는_1부터_4까지만_저장된다(final int crowdLevel) {
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertObservationWithCrowdLevel(crowdLevel));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @ParameterizedTest
     @ValueSource(ints = {0, 1, 2})
-    void 운행_상태_0과_1과_2는_그대로_저장된다(
-        final int runningState
-    ) {
+    void 운행_상태_0과_1과_2는_그대로_저장된다(final int runningState) {
         // when
         insertObservationWithRunningState(runningState);
 
@@ -172,18 +193,24 @@ class VehicleObservationTableTest {
     @ParameterizedTest
     @NullSource
     @ValueSource(ints = {3, -1})
-    void 운행_상태는_0과_1과_2만_저장된다(
-        Integer runningState
-    ) {
-        // when & then
-        assertThatThrownBy(() -> insertObservationWithRunningState(runningState))
+    void 운행_상태는_0과_1과_2만_저장된다(Integer runningState) {
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertObservationWithRunningState(runningState));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void 통과_순번은_0석_이상이어야_저장된다() {
-        // when & then
-        assertThatThrownBy(() -> insertObservationWithPassedStopOrder(-1))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertObservationWithPassedStopOrder(-1));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -197,13 +224,17 @@ class VehicleObservationTableTest {
     }
 
     /**
-     * 통과 순번이 빈 관측은 궤적을 못 잇는다. 어느 정류소를 지났는지 모르면
-     * 좌석 변화도 연속 만석도 잴 자리가 없다. 읽는 쪽에서 거르지 않고 저장 단계에서 막는다.
+     * 통과 순번이 없는 관측은 궤적을 연결할 수 없다. 어느 정류소를 지났는지 알 수 없으면
+     * 좌석 변화와 연속 만석을 계산할 수 없으므로 조회에서 거르지 않고 저장 단계에서 차단한다.
      */
     @Test
     void 통과_순번이_없는_관측은_저장되지_않는다() {
-        // when & then
-        assertThatThrownBy(this::insertObservationWithoutPassedStopOrder)
+        // when
+        Throwable caughtFailure = catchThrowable(this::insertObservationWithoutPassedStopOrder);
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -233,9 +264,7 @@ class VehicleObservationTableTest {
             .single();
     }
 
-    private void insertRouteStop(
-        final long versionId
-    ) {
+    private void insertRouteStop(final long versionId) {
         jdbcClient.sql("""
                 INSERT INTO route_stop (
                     route_version_id, stop_order, stop_id, name, direction, boarding_allowed
@@ -285,17 +314,13 @@ class VehicleObservationTableTest {
             RUNNING_STATE_DEPARTED, remainingSeats, seatUnknownReason, CROWD_LEVEL_3);
     }
 
-    private void insertObservationWithCrowdLevel(
-        Integer crowdLevel
-    ) {
+    private void insertObservationWithCrowdLevel(Integer crowdLevel) {
         insertObservation(
             batchId, VEHICLE_204003542, 0,
             RUNNING_STATE_DEPARTED, SEATS_43, null, crowdLevel);
     }
 
-    private void insertObservationWithRunningState(
-        Integer runningState
-    ) {
+    private void insertObservationWithRunningState(Integer runningState) {
         insertObservation(
             batchId, VEHICLE_204003542, 0,
             runningState, SEATS_43, null, CROWD_LEVEL_3);
@@ -341,9 +366,7 @@ class VehicleObservationTableTest {
             .update();
     }
 
-    private void insertObservationWithPassedStopOrder(
-        final int passedStopOrder
-    ) {
+    private void insertObservationWithPassedStopOrder(final int passedStopOrder) {
         jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
                     observation_batch_id, route_version_id, source_row_number,

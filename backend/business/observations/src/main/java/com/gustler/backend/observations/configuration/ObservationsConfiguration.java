@@ -7,6 +7,9 @@ import com.gustler.backend.observations.infrastructure.gbis.GbisObservationSourc
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
+/**
+ * 관측 수집·정규화·저장 구성 요소를 Worker의 업무 경계로 등록한다.
+ */
 @Configuration
 @Import({ObservationPersistenceConfiguration.class, GbisObservationSource.class, ObservationCollector.class,
     ObservationBatchLedger.class, ObservationLoader.class})

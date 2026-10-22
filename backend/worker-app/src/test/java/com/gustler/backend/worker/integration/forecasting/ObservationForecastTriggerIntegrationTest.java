@@ -67,7 +67,10 @@ class ObservationForecastTriggerIntegrationTest {
         final long routeId = jdbc.sql("""
             INSERT INTO route (public_route_id, source_id, source_route_id, display_name, start_stop_name, end_stop_name)
             VALUES (:source, 'GBIS', :source, '3330', '출발', '도착') RETURNING id
-            """).param("source", SOURCE_ROUTE).query(Long.class).single();
+            """)
+            .param("source", SOURCE_ROUTE)
+            .query(Long.class)
+            .single();
         routeVersionId = jdbc.sql("""
             INSERT INTO route_version (route_id, content_digest, valid_from, turn_sequence)
             VALUES (:route, :digest, :at, 3) RETURNING id
@@ -84,7 +87,10 @@ class ObservationForecastTriggerIntegrationTest {
                 prediction_target_version, calculation_version, supported_scope_digest, data_until, state)
             VALUES (?, 'trigger-test', 'seat-full-chance', '1', ?, 'SEAT_FULL_CHANCE_V1', 'CALCULATION_V1', ?, ?, 'ACTIVE')
             RETURNING id
-            """).params(UUID.randomUUID(), "0".repeat(64), "0".repeat(64), validFrom).query(Long.class).single();
+            """)
+            .params(UUID.randomUUID(), "0".repeat(64), "0".repeat(64), validFrom)
+            .query(Long.class)
+            .single();
         RuntimeSnapshot runtime = new RuntimeSnapshot(
             new ActiveModelDeployment(deploymentId, "CALCULATION_V1", "trigger-test", "0".repeat(64)),
             new SupportedForecastScope(List.of(ModelRoute.of(SOURCE_ROUTE))),
@@ -102,9 +108,9 @@ class ObservationForecastTriggerIntegrationTest {
     void 관측_저장이_커밋되면_회차를_기다리지_않고_그_batch의_예보를_발행한다() throws Exception {
         // given
         OffsetDateTime at = OffsetDateTime.now(SEOUL).truncatedTo(ChronoUnit.MILLIS);
-        long batchId = ledger.reserve(new CollectionPlan(routeVersionId, at, "trigger-test"), at).batchId();
+        final long batchId = ledger.reserve(new CollectionPlan(routeVersionId, at, "trigger-test"), at).batchId();
         ledger.markDispatching(batchId, at, at, "a");
-        var bus = new BusLocation("경기70아0001", "trigger-test-vehicle", 0, SOURCE_ROUTE, 11,
+        BusLocation bus = new BusLocation("경기70아0001", "trigger-test-vehicle", 0, SOURCE_ROUTE, 11,
             "stop-one", 1, 2, 20, 3, 1);
 
         // when

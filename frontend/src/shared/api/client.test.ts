@@ -39,6 +39,18 @@ function failureOf(result: ApiResult<unknown>): ApiFailure {
 }
 
 describe("requestJson", () => {
+  it.each(["/api/auth/session", "/api/me"])(
+    "회원 API %s의 잘못된 응답 본문은 오류 수집에 남기지 않는다",
+    async (url) => {
+      respondText(200, "<html>private member data</html>");
+      expect(failureOf(await requestJson(url))).toMatchObject({ kind: "malformed" });
+      expect(reportApiFailure).toHaveBeenCalledWith(
+        url,
+        expect.anything(),
+        expect.objectContaining({ rawResponse: null }),
+      );
+    },
+  );
   it("판정보드 노선 정보는 URL에서 추측하지 않고 API 호출자가 전달한다", async () => {
     const url = "/api/v1/routes/123456789/watch";
     const controller = new AbortController();

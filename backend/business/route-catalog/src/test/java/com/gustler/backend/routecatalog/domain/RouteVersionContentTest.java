@@ -4,14 +4,13 @@ import static com.gustler.backend.routecatalog.domain.RouteVersionDecision.KEEP_
 import static com.gustler.backend.routecatalog.domain.RouteVersionDecision.OPEN_NEW_VERSION;
 import static com.gustler.backend.routecatalog.domain.RouteVersionDecision.REVISE_TIMETABLE;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class RouteVersionContentTest {
-
     private static final String STOP_205000217 = "205000217";
     private static final String STOP_208000069 = "208000069";
     private static final RouteTimetable TIMETABLE_1650 =
@@ -91,8 +90,12 @@ class RouteVersionContentTest {
         RouteTimetable unresolved = new RouteTimetable("05:00", "22:35", "05:00", "23:55",
             new RouteHeadways(null, null, null, null, Set.of(ServiceDay.WEEKDAY)));
 
-        // when & then
-        assertThatThrownBy(() -> RouteVersionContent.of(twoStops(), unresolved))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> RouteVersionContent.of(twoStops(), unresolved));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 

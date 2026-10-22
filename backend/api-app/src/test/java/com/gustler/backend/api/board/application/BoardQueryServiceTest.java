@@ -1,7 +1,7 @@
 package com.gustler.backend.api.board.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -17,7 +17,8 @@ import com.gustler.backend.api.board.domain.ForecastModel;
 import com.gustler.backend.api.board.domain.HeadwayRange;
 import com.gustler.backend.api.board.domain.RouteHeadways;
 import com.gustler.backend.api.board.domain.StopState;
-import com.gustler.backend.api.board.domain.VehicleForecast;
+import com.gustler.backend.api.board.domain.VehicleForecast.Available;
+import com.gustler.backend.api.board.domain.VehicleForecast.Unavailable;
 import com.gustler.backend.api.error.ServiceUnavailableException;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.domain.Route;
@@ -29,6 +30,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,7 +41,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class BoardQueryServiceTest {
-
     private static final RouteId ROUTE_ID = new RouteId("204000057");
     private static final OffsetDateTime OBSERVED_AT = OffsetDateTime.parse(
         "2026-08-27T08:00:00+09:00"
@@ -75,14 +76,20 @@ class BoardQueryServiceTest {
 
     @Test
     void 관측_정보와_노선_방향으로_Board를_조립한다() {
+        // given
         givenRoundTripBoard(List.of(prediction(3, "A", 1, 1, 0.2, 10.0)));
 
         BoardOverview overview = service.getBoard(ROUTE_ID);
 
+        // when
         Board board = overview.board();
-        assertThat(board.observedAt()).isEqualTo(OBSERVED_AT);
-        assertThat(board.vehiclesInService()).isEqualTo(4);
-        assertThat(overview.cacheMaxAge()).isEqualTo(Duration.ofSeconds(15));
+
+        // then
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(board.observedAt()).isEqualTo(OBSERVED_AT);
+            softly.assertThat(board.vehiclesInService()).isEqualTo(4);
+            softly.assertThat(overview.cacheMaxAge()).isEqualTo(Duration.ofSeconds(15));
+        }
         assertThat(board.route().directions())
             .extracting(direction -> direction.name())
             .containsExactly("회차점 방면", "종점 방면");
@@ -124,20 +131,25 @@ class BoardQueryServiceTest {
         BoardReading reading = service.readBoard(ROUTE_ID);
 
         // then
-        assertThat(reading.observationBatchId()).isEqualTo(100L);
-        assertThat(reading.board()).isEqualTo(service.getBoard(ROUTE_ID).board());
-        assertThat(reading.cacheMaxAge()).isEqualTo(Duration.ofSeconds(15));
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(reading.observationBatchId()).isEqualTo(100L);
+            softly.assertThat(reading.board()).isEqualTo(service.getBoard(ROUTE_ID).board());
+            softly.assertThat(reading.cacheMaxAge()).isEqualTo(Duration.ofSeconds(15));
+        }
     }
 
     @Test
     void 예보_행이_있으면_그_행의_모델을_사용한다() {
+        // when
         givenRoundTripBoard(List.of(prediction(3, "A", 1, 1, 0.2, 10.0)));
 
+        // then
         assertThat(service.getBoard(ROUTE_ID).board().model()).isEqualTo(SNAPSHOT_MODEL);
     }
 
     @Test
     void 접근_차량을_거리순으로_정렬해_정류장별_최대_3대를_조립한다() {
+        // given
         givenRoundTripBoard(List.of(
             prediction(3, "C", 5, 3, 0.4, 12.0),
             prediction(3, null, 4, 1, 0.2, null),
@@ -146,8 +158,10 @@ class BoardQueryServiceTest {
             prediction(3, "D", 1, 1, 0.5, 18.0)
         ));
 
+        // when
         StopState boardingStop = service.getBoard(ROUTE_ID).board().stops().get(2);
 
+        // then
         assertThat(boardingStop.approachingVehicles())
             .extracting(ApproachingVehicle::vehicleId)
             .containsExactly("B", "D", null);
@@ -155,8 +169,10 @@ class BoardQueryServiceTest {
 
     @Test
     void 만석_확률을_뒤집은_빈자리_확률이_소수점까지_그대로_나온다() {
+        // given
         givenRoundTripBoard(List.of(prediction(3, "A", 1, 1, 0.004, 10.0)));
 
+        // when
         ApproachingVehicle vehicle = service.getBoard(ROUTE_ID)
             .board()
             .stops()
@@ -164,32 +180,38 @@ class BoardQueryServiceTest {
             .approachingVehicles()
             .getFirst();
 
-        assertThat(((VehicleForecast.Available) vehicle.forecast()).seatAvailableProbability()).isEqualTo(0.996d);
+        // then
+        assertThat(((Available) vehicle.forecast()).seatAvailableProbability()).isEqualTo(0.996d);
     }
 
     @Test
     void 기대_잔여석이_없어도_예보_차량을_유지한다() {
+        // given
         givenRoundTripBoard(List.of(prediction(3, "A", 1, 1, 0.2, null)));
 
+        // when
         List<ApproachingVehicle> vehicles = service.getBoard(ROUTE_ID)
             .board()
             .stops()
             .get(2)
             .approachingVehicles();
 
+        // then
         assertThat(vehicles).singleElement().satisfies(vehicle -> {
             assertThat(vehicle.vehicleId()).isEqualTo("A");
-            assertThat(((VehicleForecast.Available) vehicle.forecast()).expectedSeats()).isNull();
+            assertThat(((Available) vehicle.forecast()).expectedSeats()).isNull();
         });
     }
 
     @Test
     void 기대_잔여석이_비유한값이어도_차량은_보드에_남는다() {
+        // when
         givenRoundTripBoard(List.of(
             prediction(3, "INFINITE", 1, 1, 0.2, Double.POSITIVE_INFINITY),
             prediction(3, "VALID", 2, 2, 0.3, 10.0)
         ));
 
+        // then
         assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
             .extracting(ApproachingVehicle::vehicleId)
             .containsExactly("INFINITE", "VALID");
@@ -197,63 +219,72 @@ class BoardQueryServiceTest {
 
     @Test
     void 기대_잔여석이_비유한값인_차량은_기대_잔여석만_비운다() {
+        // when
         givenRoundTripBoard(List.of(
             prediction(3, "INFINITE", 1, 1, 0.2, Double.POSITIVE_INFINITY)
         ));
 
+        // then
         assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
             .singleElement()
-            .satisfies(vehicle -> assertThat(((VehicleForecast.Available) vehicle.forecast()).expectedSeats()).isNull());
+            .satisfies(vehicle -> assertThat(((Available) vehicle.forecast()).expectedSeats()).isNull());
     }
 
     @Test
     void 기대_잔여석이_비유한값이어도_빈자리_확률은_그대로_낸다() {
+        // when
         givenRoundTripBoard(List.of(
             prediction(3, "INFINITE", 1, 1, 0.2, Double.POSITIVE_INFINITY)
         ));
 
+        // then
         assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
             .singleElement()
             .satisfies(vehicle ->
-                assertThat(((VehicleForecast.Available) vehicle.forecast()).seatAvailableProbability()).isEqualTo(0.8d));
+                assertThat(((Available) vehicle.forecast()).seatAvailableProbability()).isEqualTo(0.8d));
     }
 
     @ParameterizedTest
     @ValueSource(doubles = {-0.1, 1.1, Double.NaN, Double.POSITIVE_INFINITY})
-    void 만석_확률이_범위_밖이거나_비유한값이면_차량을_유지하고_예보만_미제공한다(
-        final double invalidSeatFullChance
-    ) {
+    void 만석_확률이_범위_밖이거나_비유한값이면_차량을_유지하고_예보만_미제공한다(final double invalidSeatFullChance) {
+        // when
         givenRoundTripBoard(List.of(
             prediction(3, "INVALID", 1, 1, invalidSeatFullChance, 10.0),
             prediction(3, "VALID", 2, 2, 0.3, 10.0)
         ));
 
+        // then
         assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
             .extracting(ApproachingVehicle::vehicleId)
             .containsExactly("INVALID", "VALID");
         assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles().getFirst().forecast())
-            .isInstanceOf(VehicleForecast.Unavailable.class);
+            .isInstanceOf(Unavailable.class);
     }
 
     @Test
     void 승차_불가_정류장은_접근_차량을_비운다() {
+        // when
         givenRoundTripBoard(List.of(prediction(2, "IGNORED", 1, 1, 0.2, 10.0)));
 
+        // then
         assertThat(service.getBoard(ROUTE_ID).board().stops().get(1).approachingVehicles())
             .isEmpty();
     }
 
     @Test
     void 예보_행이_없으면_ACTIVE_모델을_사용한다() {
+        // when
         given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(roundTripSnapshot()));
         given(repository.findStops(1L)).willReturn(roundTripStops());
         given(repository.findPredictions(100L)).willReturn(List.of());
 
+        // then
         assertThat(service.getBoard(ROUTE_ID).board().model()).isEqualTo(ACTIVE_MODEL);
     }
 
     @Test
     void 하나의_관측_묶음에_여러_모델의_예보가_섞이면_서비스_불가다() {
+        // when
         ForecastModel anotherModel = new ForecastModel(
             8L,
             "model-another",
@@ -266,12 +297,20 @@ class BoardQueryServiceTest {
             prediction(3, "B", 2, 2, 0.3, 11.0, anotherModel)
         ));
 
-        assertThatThrownBy(() -> service.getBoard(ROUTE_ID))
+        // then
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> service.getBoard(ROUTE_ID));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull()
             .isInstanceOf(ServiceUnavailableException.class);
     }
 
     @Test
     void ACTIVE_모델이_없으면_모델_범위_밖_오류다() {
+        // when
         BoardSnapshot snapshot = new BoardSnapshot(
             1L,
             route(),
@@ -282,12 +321,20 @@ class BoardQueryServiceTest {
         );
         given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(snapshot));
 
-        assertThatThrownBy(() -> service.getBoard(ROUTE_ID))
+        // then
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> service.getBoard(ROUTE_ID));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull()
             .isInstanceOf(ModelOutOfScopeException.class);
     }
 
     @Test
     void 발행된_예보도_정상_관측도_없으면_최근_관측_없음_오류다() {
+        // when
         BoardSnapshot snapshot = new BoardSnapshot(
             1L,
             route(),
@@ -298,12 +345,20 @@ class BoardQueryServiceTest {
         );
         given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(snapshot));
 
-        assertThatThrownBy(() -> service.getBoard(ROUTE_ID))
+        // then
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> service.getBoard(ROUTE_ID));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull()
             .isInstanceOf(NoRecentObservationException.class);
     }
 
     @Test
     void 단방향은_하나의_방향과_그_방향의_시간표만_사용한다() {
+        // given
         BoardSnapshot snapshot = new BoardSnapshot(
             2L,
             route(),
@@ -319,8 +374,10 @@ class BoardQueryServiceTest {
         ));
         given(repository.findPredictions(100L)).willReturn(List.of());
 
+        // when
         Board board = service.getBoard(ROUTE_ID).board();
 
+        // then
         assertThat(board.route().turnSequence()).isNull();
         assertThat(board.route().directions()).singleElement().satisfies(direction -> {
             assertThat(direction.id()).isEqualTo(BoardDirection.UP);
@@ -333,6 +390,7 @@ class BoardQueryServiceTest {
 
     @Test
     void 회차점_이하에_DOWN_정류장이_있으면_서비스_불가다() {
+        // when
         given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(roundTripSnapshot()));
         given(repository.findStops(1L)).willReturn(List.of(
             stop(1, "기점", BoardDirection.UP, true),
@@ -341,12 +399,20 @@ class BoardQueryServiceTest {
         ));
         given(repository.findPredictions(100L)).willReturn(List.of());
 
-        assertThatThrownBy(() -> service.getBoard(ROUTE_ID))
+        // then
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> service.getBoard(ROUTE_ID));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull()
             .isInstanceOf(ServiceUnavailableException.class);
     }
 
     @Test
     void 예보가_없는_차량도_거리순_최대_3대에_포함한다() {
+        // given
         givenRoundTripBoard(List.of(prediction(3, "FAR", 4, 2, 0.2, 10.0)));
         given(repository.findObservedVehicles(100L, 1L)).willReturn(List.of(
             new BoardVehicleObservation("FAR", 4, 1),
@@ -354,37 +420,44 @@ class BoardQueryServiceTest {
             new BoardVehicleObservation("B", 2, 2),
             new BoardVehicleObservation("A", 1, 2)));
 
+        // when
         List<ApproachingVehicle> vehicles = service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles();
 
+        // then
         assertThat(vehicles).extracting(ApproachingVehicle::vehicleId).containsExactly("A", "B", "C");
         assertThat(vehicles).allSatisfy(vehicle ->
-            assertThat(vehicle.forecast()).isInstanceOf(VehicleForecast.Unavailable.class));
+            assertThat(vehicle.forecast()).isInstanceOf(Unavailable.class));
     }
 
     @Test
     void 모든_예보가_없어도_관측된_접근_차량을_유지한다() {
+        // when
         givenRoundTripBoard(List.of());
         given(repository.findObservedVehicles(100L, 1L)).willReturn(List.of(
             new BoardVehicleObservation("A", 1, 2)));
 
+        // then
         assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
-            .containsExactly(new ApproachingVehicle("A", 1, new VehicleForecast.Unavailable()));
+            .containsExactly(new ApproachingVehicle("A", 1, new Unavailable()));
     }
 
     @Test
     void 차량_ID가_없거나_같아도_원본_행_번호로_예보를_연결한다() {
+        // when
         givenRoundTripBoard(List.of(prediction(3, null, 2, 1, 1.0, 0.0)));
         given(repository.findObservedVehicles(100L, 1L)).willReturn(List.of(
             new BoardVehicleObservation(null, 1, 2), new BoardVehicleObservation(null, 2, 2)));
 
+        // then
         assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
             .containsExactly(
-                new ApproachingVehicle(null, 1, new VehicleForecast.Unavailable()),
-                new ApproachingVehicle(null, 1, new VehicleForecast.Available(0.0, 0.0)));
+                new ApproachingVehicle(null, 1, new Unavailable()),
+                new ApproachingVehicle(null, 1, new Available(0.0, 0.0)));
     }
 
     @Test
     void 통과_정류장_기준_앞쪽_1부터_12정류장까지만_접근_차량을_표시한다() {
+        // when
         givenRoundTripBoard(List.of());
         given(repository.findStops(1L)).willReturn(List.of(
             stop(1, "기점", BoardDirection.UP, true),
@@ -397,6 +470,7 @@ class BoardQueryServiceTest {
             new BoardVehicleObservation("BOUNDARY", 4, 1),
             new BoardVehicleObservation("TOO_FAR", 5, 0)));
 
+        // then
         assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
             .extracting(ApproachingVehicle::vehicleId).containsExactly("NEAR", "BOUNDARY");
     }
@@ -412,17 +486,19 @@ class BoardQueryServiceTest {
             new BoardVehicleObservation("B", 2, 1)));
 
         // when
-        final BoardOverview actual = service.getBoard(ROUTE_ID);
+        BoardOverview actual = service.getBoard(ROUTE_ID);
 
         // then
-        assertThat(actual.board().route().status()).isEqualTo(RouteStatus.PREPARING);
-        assertThat(actual.board().model()).isEqualTo(ACTIVE_MODEL);
-        assertThat(actual.board().observedAt()).isEqualTo(OBSERVED_AT);
-        assertThat(actual.board().vehiclesInService()).isEqualTo(2);
-        assertThat(actual.cacheMaxAge()).isEqualTo(Duration.ofSeconds(15));
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(actual.board().route().status()).isEqualTo(RouteStatus.PREPARING);
+            softly.assertThat(actual.board().model()).isEqualTo(ACTIVE_MODEL);
+            softly.assertThat(actual.board().observedAt()).isEqualTo(OBSERVED_AT);
+            softly.assertThat(actual.board().vehiclesInService()).isEqualTo(2);
+            softly.assertThat(actual.cacheMaxAge()).isEqualTo(Duration.ofSeconds(15));
+        }
         assertThat(actual.board().stops().get(2).approachingVehicles())
             .extracting(ApproachingVehicle::forecast)
-            .containsExactly(new VehicleForecast.Unavailable(), new VehicleForecast.Unavailable());
+            .containsExactly(new Unavailable(), new Unavailable());
         verify(repository, never()).findPredictions(anyLong());
     }
 
@@ -432,7 +508,7 @@ class BoardQueryServiceTest {
         givenRoundTripBoard(List.of(prediction(3, "A", 1, 1, 0.2, 10.0)));
 
         // when
-        final Board actual = service.getBoard(ROUTE_ID).board();
+        Board actual = service.getBoard(ROUTE_ID).board();
 
         // then
         assertThat(actual.route().status()).isEqualTo(RouteStatus.FORECAST_READY);
@@ -444,8 +520,12 @@ class BoardQueryServiceTest {
         given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(snapshotObserving(
             new SnapshotObservation(100L, OBSERVED_AT.minusMinutes(1), 2, false))));
 
-        // when & then
-        assertThatThrownBy(() -> service.getBoard(ROUTE_ID))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> service.getBoard(ROUTE_ID));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(NoRecentObservationException.class);
     }
 
@@ -473,16 +553,15 @@ class BoardQueryServiceTest {
         );
     }
 
-    private void givenRoundTripBoard(
-        List<StoredPrediction> predictions
-    ) {
+    private void givenRoundTripBoard(List<StoredPrediction> predictions) {
         given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(roundTripSnapshot()));
         given(repository.findStops(1L)).willReturn(roundTripStops());
         given(repository.findPredictions(100L)).willReturn(predictions);
         given(repository.findObservedVehicles(100L, 1L)).willReturn(predictions.stream()
-            .map(p -> new BoardVehicleObservation(p.vehicleId(), p.sourceRowNumber(),
-                p.targetStopOrder() - p.stopsToTarget()))
-            .distinct().toList());
+                .map(p -> new BoardVehicleObservation(p.vehicleId(), p.sourceRowNumber(),
+                    p.targetStopOrder() - p.stopsToTarget()))
+                .distinct()
+                .toList());
     }
 
     private Route route() {

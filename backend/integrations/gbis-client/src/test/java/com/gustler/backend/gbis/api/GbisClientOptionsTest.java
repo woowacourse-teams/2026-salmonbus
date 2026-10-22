@@ -1,13 +1,12 @@
 package com.gustler.backend.gbis.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class GbisClientOptionsTest {
-
     private static final String BASE_URL = "https://gbis.test";
     private static final String SERVICE_KEY = "fake-key-a";
     private static final String SERVICE_KEY_B = "fake-key-b";
@@ -30,8 +29,12 @@ class GbisClientOptionsTest {
         // given
         GbisClientOptions options = new GbisClientOptions(BASE_URL, SERVICE_KEY);
 
-        // when & then
-        assertThatThrownBy(() -> options.serviceKeyOf("b"))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> options.serviceKeyOf("b"));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 

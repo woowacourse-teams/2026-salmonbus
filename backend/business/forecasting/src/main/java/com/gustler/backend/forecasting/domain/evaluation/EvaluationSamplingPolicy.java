@@ -12,24 +12,40 @@ public record EvaluationSamplingPolicy(Duration interval) {
         }
     }
 
+    /**
+     * 차량·방향·판본이 바뀌거나 표본 간격을 넘으면 전체 평가를 선택한다. 역순 입력은 기준을 뒤로 옮기지 않고 보존한다.
+     */
     public boolean includeAll(EvaluationSamplingPoint previous, EvaluationSamplingPoint current) {
         Objects.requireNonNull(current);
         if (previous == null) {
             return true;
         }
-        if (previous.routeVersionId() != current.routeVersionId()
-            || previous.modelDeploymentId() != current.modelDeploymentId()
-            || !previous.vehicleId().equals(current.vehicleId())
-            || previous.passedStopOrder() != current.passedStopOrder()
-            || !previous.direction().equals(current.direction())) {
+        if (hasDifferentSamplingGroup(previous, current)) {
             return true;
         }
+
         // 역순 재처리는 새 관측의 표본 기준을 뒤로 옮기지 않고 모두 보존한다.
         return !current.observedAt().isAfter(previous.observedAt())
             || Duration.between(previous.observedAt(), current.observedAt()).compareTo(interval) >= 0;
     }
 
-    public boolean includesDistance(boolean includeAll, int stopsToTarget) {
+    private boolean hasDifferentSamplingGroup(EvaluationSamplingPoint previous, EvaluationSamplingPoint current) {
+        if (previous.routeVersionId() != current.routeVersionId()) {
+            return true;
+        }
+        if (previous.modelDeploymentId() != current.modelDeploymentId()) {
+            return true;
+        }
+        if (!previous.vehicleId().equals(current.vehicleId())) {
+            return true;
+        }
+        if (previous.passedStopOrder() != current.passedStopOrder()) {
+            return true;
+        }
+        return !previous.direction().equals(current.direction());
+    }
+
+    public boolean includesDistance(final boolean includeAll, final int stopsToTarget) {
         return includeAll || stopsToTarget == 1;
     }
 }

@@ -12,6 +12,9 @@ export function createApiMockRouter(page: Page): ApiMockRouter {
   const errors: unknown[] = [];
 
   const onRequest = (request: Request) => {
+    const previous = request.redirectedFrom();
+    // Firefox는 가로챈 302의 requestfinished를 생략할 수 있어 다음 요청에서도 종료한다.
+    if (previous !== null) onRequestFinished(previous);
     if (!new URL(request.url()).pathname.startsWith("/api/")) return;
 
     let finish!: () => void;

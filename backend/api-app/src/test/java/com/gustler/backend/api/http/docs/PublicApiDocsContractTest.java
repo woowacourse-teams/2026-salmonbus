@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.gustler.backend.support.IntegrationTest;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +24,6 @@ import tools.jackson.databind.ObjectMapper;
 @IntegrationTest
 @ActiveProfiles("api-docs-local")
 class PublicApiDocsContractTest {
-
     @Autowired
     private WebApplicationContext applicationContext;
 
@@ -39,6 +39,7 @@ class PublicApiDocsContractTest {
 
     @Test
     void 익명_방문자에게_현재_구현된_HTTP_GET만_명세로_보인다() throws Exception {
+        // given
         String body = mockMvc.perform(get("/api/docs/openapi"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.paths['/api/v1/routes'].get").exists())
@@ -49,8 +50,11 @@ class PublicApiDocsContractTest {
             .andExpect(jsonPath("$.paths['/api/v2/routes/{routeId}/geometry'].get").exists())
             .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
 
+        // when
         JsonNode document = objectMapper.readTree(body);
         JsonNode paths = document.path("paths");
+
+        // then
         assertThat(paths.size()).isEqualTo(6);
         assertThat(document.path("servers").get(0).path("url").asText()).isEqualTo("/");
         assertThat(document.path("components").path("schemas")
@@ -83,8 +87,9 @@ class PublicApiDocsContractTest {
             .path("responses").path("200").path("content");
         assertThat(successContent.toString()).contains("application/json").doesNotContain("*/*");
         for (String route : List.of("/api/v1/routes", "/api/v1/routes/{routeId}/board",
-            "/api/v1/routes/{routeId}/vehicles", "/api/v1/routes/{routeId}/watch", "/api/v2/stations/{stationId}/arrivals",
-            "/api/v2/routes/{routeId}/geometry")) {
+            "/api/v1/routes/{routeId}/vehicles", "/api/v1/routes/{routeId}/watch",
+            "/api/v2/stations/{stationId}/arrivals",
+        "/api/v2/routes/{routeId}/geometry")) {
             JsonNode responses = paths.path(route).path("get").path("responses");
             for (String statusCode : List.of("200", "503", "405", "500")) {
                 JsonNode content = responses.path(statusCode).path("content").path("application/json");
@@ -94,12 +99,16 @@ class PublicApiDocsContractTest {
                     .isPositive();
             }
         }
-        assertThat(body).doesNotContain("/api/chat/rooms/{routeId}/stream", "/actuator", "/readyz", "/internal/arrivals/refresh");
-        assertThat(body).doesNotContain("DB_URL", "CHAT_MONGODB_URI", "jdbc:", "clientSecret");
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(body).doesNotContain("/api/chat/rooms/{routeId}/stream", "/actuator", "/readyz",
+            "/internal/arrivals/refresh");
+            softly.assertThat(body).doesNotContain("DB_URL", "CHAT_MONGODB_URI", "jdbc:", "clientSecret");
+        }
     }
 
     @Test
     void 익명_방문자가_UI_설정과_별도_WebSocket_계약을_보되_시험_요청은_할_수_없다() throws Exception {
+        // given
         mockMvc.perform(get("/api/docs"))
             .andExpect(status().isFound())
             .andExpect(header().string(HttpHeaders.LOCATION, "/api/docs/ui"));
@@ -114,11 +123,16 @@ class PublicApiDocsContractTest {
         mockMvc.perform(get("/api/docs/swagger-ui/index.html"))
             .andExpect(status().isOk());
 
+        // when
         String chatContract = mockMvc.perform(get("/api/docs/chat"))
             .andExpect(status().isOk())
             .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
-        assertThat(chatContract).contains("# 노선 채팅 계약 v1", "session.start");
-        assertThat(chatContract).doesNotContain("salmonbus_chat", "room_client_message_unique", "MongoDB");
+
+        // then
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(chatContract).contains("# 노선 채팅 계약 v1", "session.start");
+            softly.assertThat(chatContract).doesNotContain("salmonbus_chat", "room_client_message_unique", "MongoDB");
+        }
 
         String chatExamples = mockMvc.perform(get("/api/docs/chat/examples"))
             .andExpect(status().isOk())
@@ -133,6 +147,7 @@ class PublicApiDocsContractTest {
 
     @Test
     void 문서가_켜져도_기존_공개_조회에는_로그인이_필요하지_않다() throws Exception {
+        // when
         mockMvc.perform(get("/api/v1/routes"))
             .andExpect(status().isOk());
     }

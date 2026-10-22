@@ -13,8 +13,11 @@ import tools.jackson.databind.SerializationFeature;
 import tools.jackson.databind.cfg.JsonNodeFeature;
 import tools.jackson.databind.json.JsonMapper;
 
+/**
+ * 유지보수 입출력의 JSON을 일관된 표현으로 읽고 쓴다.
+ * 파일 입력은 엄격한 UTF-8 해석을 사용한다.
+ */
 public final class CanonicalJson {
-
     private static final ObjectMapper READER = new ObjectMapper();
     private static final ObjectMapper WRITER = JsonMapper.builder()
         .enable(JsonNodeFeature.WRITE_PROPERTIES_SORTED)
@@ -42,6 +45,9 @@ public final class CanonicalJson {
         }
     }
 
+    /**
+     * 파일을 읽어 정규 JSON 표현을 검증한다. 허용되지 않는 표현은 번들 검증 실패로 처리한다.
+     */
     public static JsonNode readCanonical(
         Path path,
         String errorCode

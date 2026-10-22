@@ -1,6 +1,8 @@
 package com.gustler.backend.api.http;
 
 import java.util.Map;
+import java.util.Objects;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.hibernate.resource.jdbc.spi.StatementInspector;
 import org.springframework.boot.hibernate.autoconfigure.HibernatePropertiesCustomizer;
@@ -19,23 +21,33 @@ public class ApiSqlOrigin implements HibernatePropertiesCustomizer, StatementIns
         "\\A(?:\\s|/\\*.*?\\*/|--[^\\r\\n]*(?:\\r?\\n|$))*(select|insert|update|delete|with)\\b",
         Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
-    @Override public void customize(Map<String, Object> properties) {
+    @Override
+    public void customize(Map<String, Object> properties) {
         properties.put("hibernate.session_factory.statement_inspector", this);
     }
 
-    @Override public String inspect(String sql) {
-        Object pattern = RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes a
-            ? a.getRequest().getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE) : null;
-        String origin = switch (pattern == null ? "" : pattern.toString()) {
+    @Override
+    public String inspect(String sql) {
+        Object pattern = requestPattern();
+        String origin = switch (Objects.toString(pattern, "")) {
             case "/api/v1/routes/{routeId}/board" -> "api.board";
             case "/api/v1/routes/{routeId}/vehicles" -> "api.vehicles";
             case "/api/v1/routes/{routeId}/watch" -> "api.watch";
             case "/api/v1/routes" -> "api.routes";
             default -> "api.other";
         };
-        var start = STATEMENT_START.matcher(sql);
-        if (!start.find()) { return sql; }
-        int keywordEnd = start.end(1);
+        Matcher start = STATEMENT_START.matcher(sql);
+        if (!start.find()) {
+            return sql;
+        }
+        final int keywordEnd = start.end(1);
         return sql.substring(0, keywordEnd) + " /* salmonbus:" + origin + " */" + sql.substring(keywordEnd);
+    }
+
+    private static Object requestPattern() {
+        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
+            return attributes.getRequest().getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+        }
+        return null;
     }
 }

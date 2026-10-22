@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { LiveVehicleView } from "../components/liveVehiclePolicy";
+import type { Direction } from "@/shared/api/routeForecast.types";
 
 export interface LiveVehicleMotionFrame {
   key: string;
@@ -9,6 +10,18 @@ export interface LiveVehicleMotionFrame {
 export interface LiveVehicleMotionStore {
   readonly frames: readonly LiveVehicleMotionFrame[];
   subscribe: (listener: () => void) => () => void;
+  readonly plans: readonly LiveVehicleMotionPlan[];
+  subscribePlans: (listener: () => void) => () => void;
+}
+
+export interface LiveVehicleMotionPlan {
+  key: string;
+  direction: Direction;
+  signature: string;
+  start: number;
+  end: number;
+  durationMs: number;
+  startedAt: number;
 }
 
 interface MotionTarget {
@@ -40,9 +53,19 @@ const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 // 지도와 목록은 같은 순번 좌표를 구독하고, 각자의 화면 좌표로만 변환한다.
 export function createLiveVehicleMotionStore(): LiveVehicleMotionController {
   let motions = new Map<string, VehicleMotion>();
+  let directions = new Map<string, Direction>();
   let frames: readonly LiveVehicleMotionFrame[] = [];
   let reducedMotion = false;
   const listeners = new Set<() => void>();
+  const planListeners = new Set<() => void>();
+  let plans: readonly LiveVehicleMotionPlan[] = [];
+
+  function publishPlans() {
+    const next = Array.from(motions, ([key, motion]) => ({ key, direction: directions.get(key)!, ...motion }));
+    if (JSON.stringify(plans) === JSON.stringify(next)) return;
+    plans = next;
+    planListeners.forEach((listener) => listener());
+  }
 
   function publish(nextFrames: readonly LiveVehicleMotionFrame[]) {
     if (
@@ -74,11 +97,19 @@ export function createLiveVehicleMotionStore(): LiveVehicleMotionController {
     get frames() {
       return frames;
     },
+    get plans() {
+      return plans;
+    },
+    subscribePlans(listener) {
+      planListeners.add(listener);
+      return () => planListeners.delete(listener);
+    },
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
     update(views, durationMs, now) {
+      directions = new Map(views.map((view) => [view.key, view.vehicle.direction]));
       const nextMotions = new Map<string, VehicleMotion>();
       views.forEach((view) => {
         const target = targetFor(view, durationMs);
@@ -113,6 +144,7 @@ export function createLiveVehicleMotionStore(): LiveVehicleMotionController {
       });
       motions = nextMotions;
       advance(now);
+      publishPlans();
     },
     advance,
     setReducedMotion(next, now) {
@@ -124,10 +156,13 @@ export function createLiveVehicleMotionStore(): LiveVehicleMotionController {
         });
       }
       advance(now);
+      publishPlans();
     },
     clear() {
       motions.clear();
+      directions.clear();
       publish([]);
+      publishPlans();
     },
   };
 }
@@ -181,7 +216,7 @@ function targetFor(view: LiveVehicleView, durationMs: number): MotionTarget {
 
 function signatureFor(view: LiveVehicleView): string {
   const { fromStopSequence, toStopSequence, startProgress, endProgress } = view.motionSegment;
-  return `${view.vehicle.phase}:${fromStopSequence}:${toStopSequence}:${startProgress}:${endProgress}`;
+  return `${view.vehicle.direction}:${view.vehicle.phase}:${fromStopSequence}:${toStopSequence}:${startProgress}:${endProgress}`;
 }
 
 function movingMotionFor(

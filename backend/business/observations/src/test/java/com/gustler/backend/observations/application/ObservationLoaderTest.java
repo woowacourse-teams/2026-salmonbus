@@ -1,24 +1,20 @@
 package com.gustler.backend.observations.application;
 
-import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
+import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gustler.backend.gbis.api.GbisLocationResult.Success;
+import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
 import com.gustler.backend.observations.domain.CollectedObservations;
 import com.gustler.backend.observations.domain.CollectionBatch;
 import com.gustler.backend.observations.domain.CollectionBatchRepository;
 import com.gustler.backend.observations.domain.CollectionPlan;
-import com.gustler.backend.observations.domain.ObservationBatchConclusion;
+import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
+import com.gustler.backend.observations.support.ObservationIntegrationTest;
 import com.gustler.backend.routecatalog.application.RouteVersionLoader;
 import com.gustler.backend.routecatalog.domain.RouteHeadways;
 import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import com.gustler.backend.gbis.api.GbisLocationResult.Success;
-import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
-import com.gustler.backend.observations.support.ObservationIntegrationTest;
 import jakarta.persistence.EntityManager;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -31,7 +27,6 @@ import org.springframework.transaction.annotation.Transactional;
 @ObservationIntegrationTest
 @Transactional
 class ObservationLoaderTest {
-
     private static final String SOURCE_ID = "GBIS";
     private static final String ROUTE_204000057 = "204000057";
 
@@ -297,10 +292,8 @@ class ObservationLoaderTest {
     ) {
     }
 
-    /** 상류가 정상으로 답한 판. 결말은 프로덕션과 같은 길로 응답에서 뽑는다. */
-    private void loadBuses(
-        List<BusLocation> buses
-    ) {
+    /** 상류가 정상으로 응답한 수집 배치. 결과는 프로덕션과 같은 경로로 응답에서 얻는다. */
+    private void loadBuses(List<BusLocation> buses) {
         loader.load(
             batchId,
             GbisObservationMapper.from(new Success(QUERY_TIME, buses)),
@@ -468,7 +461,7 @@ class ObservationLoaderTest {
     }
 
     private int queryForInt(
-        final String sql,
+        String sql,
         final long batchId
     ) {
         entityManager.flush();

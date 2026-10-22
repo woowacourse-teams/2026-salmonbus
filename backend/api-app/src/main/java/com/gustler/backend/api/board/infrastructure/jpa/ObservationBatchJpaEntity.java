@@ -14,10 +14,13 @@ import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
+/**
+ * API 조회에서 수집 배치의 결과와 수신 시각을 읽는 매핑이다.
+ * 쓰기 업무의 엔티티와 실행 경계를 공유하지 않는다.
+ */
 @Entity(name = "BoardObservationBatchJpaEntity")
 @Table(name = "observation_batch")
 public class ObservationBatchJpaEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

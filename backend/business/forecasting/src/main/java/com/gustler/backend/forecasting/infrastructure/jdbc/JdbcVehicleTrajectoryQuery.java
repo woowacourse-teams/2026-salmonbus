@@ -1,16 +1,16 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
-import com.gustler.backend.forecasting.domain.publication.ObservationHistory;
-import com.gustler.backend.forecasting.domain.publication.ObservedBatch;
 import com.gustler.backend.forecasting.domain.model.ObservedSeats;
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
-import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
+import com.gustler.backend.forecasting.domain.model.SeatGrid;
 import com.gustler.backend.forecasting.domain.model.SeatUnknownReason;
-import com.gustler.backend.forecasting.domain.publication.TrajectoryObservation;
 import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
+import com.gustler.backend.forecasting.domain.publication.ObservationHistory;
+import com.gustler.backend.forecasting.domain.publication.ObservedBatch;
+import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
+import com.gustler.backend.forecasting.domain.publication.TrajectoryObservation;
 import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryAssembler;
 import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryQuery;
-import com.gustler.backend.forecasting.domain.model.SeatGrid;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -26,17 +26,16 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * 관측 표를 SQL 로 직접 읽는다. observations 의 JPA 엔티티를 쓰지 않는다.
+ * 관측 표를 SQL로 직접 읽는다. observations 의 JPA 엔티티를 쓰지 않는다.
  *
- * <p>관측 시각은 vehicle_observation 에 없다. observation_batch.response_received_at 이
- * 관측 시각의 권위라서 판을 조인해 채운다.
+ * <p>관측 시각은 vehicle_observation 에 없다. observation_batch.response_received_at 을
+ * 관측 시각의 기준으로 사용하므로 수집 배치를 조인해 채운다.
  *
- * <p>결손 판정은 여기서 안 한다. 판을 빠짐없이 늘어놓아 넘기고 판정은 도메인이 한다.
- * 창을 SQL 에서 걸러내면 판 결손과 구분이 안 된다.
+ * <p>결손 판정은 도메인이 담당한다. 수집 배치를 빠짐없이 전달하며 창을 SQL에서 걸러내지 않는다.
+ * 창을 미리 걸러내면 수집 배치 결손과 구분할 수 없기 때문이다.
  */
 @Repository
 public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
-
     /**
      * 궤적을 잇는 데 거슬러 볼 시간.
      *
@@ -82,10 +81,10 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
         """;
 
     /**
-     * 창 안의 판을 하나도 빠뜨리지 않고 오래된 것부터. 차가 없던 판도 같이 온다.
+     * 창 안의 수집 배치를 오래된 순서대로 빠짐없이 읽는다. 차량이 없던 수집 배치도 포함한다.
      *
-     * <p>끝을 시각만으로 끊지 않고 (시각, id) 쌍으로 끊는다. 같은 시각의 판이 둘이면
-     * 시각만으로는 물어본 판이 맨 뒤에 온다는 보장이 없고, 그러면 엉뚱한 판의 궤적이 나간다.
+     * <p>끝은 시각만이 아니라 (시각, id) 쌍으로 구분한다. 시각이 같은 수집 배치가 둘이면 시각만으로는
+     * 대상 수집 배치가 맨 뒤에 온다는 보장이 없어 다른 수집 배치의 궤적을 반환할 수 있다.
      */
     private static final String SELECT_BATCHES_IN_WINDOW = """
         SELECT /* salmonbus:vehicle_trajectory_query.select_batches_in_window */ id, response_received_at
@@ -114,21 +113,22 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
         """;
 
     /**
-     * 차량마다 현재 사용 가능한 편도에서 지금까지 보여 준 가장 많은 잔여석.
+     * 차량마다 현재 사용 가능한 편도에서 관측된 최대 잔여석을 조회한다.
      *
-     * <p><b>궤적을 잇는 30분 창을 안 쓴다.</b> 셀 통계 집계가 같은 값을 그 차량의 관측 전부에서
-     * 세고 있어서, 창으로 자르면 집계 쪽 분모와 서빙 쪽 분모가 갈린다. 양쪽 모두 제외/보류 편도는 사용하지 않는다. 그러면 설계행렬의
-     * 잔여석 비율과 셀 통계의 z값이 서로 다른 수로 나눈 값이 된다.
+     * <p>궤적을 연결하는 30분 창으로 제한하지 않는다. 셀 통계 집계는 그 차량의 전체 관측에서
+     * 같은 값을 구하므로 조회에만 창을 적용하면 집계와 서빙의 분모가 달라진다. 그러면 설계행렬의
+     * 잔여석 비율과 셀 통계의 z값이 서로 다른 수를 기준으로 계산된다. 양쪽 모두 제외/보류 편도는
+     * 사용하지 않는다.
      *
-     * <p>기준 시각으로 자르는 것도 집계와 같다. 자르지 않으면 나중에 더 큰 잔여석이 들어올 때
-     * 예전 예보를 같은 시각으로 다시 계산해도 다른 값이 나온다.
+     * <p>기준 시각으로 제한하는 것도 집계와 같다. 제한하지 않으면 나중에 더 큰 잔여석이 관측될 때
+     * 과거 예보를 같은 시각으로 다시 계산해도 다른 값이 나온다.
      *
-     * <p><b>시각 하나가 아니라 (시각, id) 쌍으로 자른다.</b> 같은 시각의 batch 가 둘이면 시각만으로는
-     * 물어본 batch 뒤의 것이 안 걸러진다. 바로 위 이력 조회가 같은 이유로 같은 커서를 쓴다.
+     * <p>시각만이 아니라 (시각, id) 쌍으로 제한한다. 같은 시각의 batch가 둘이면 시각만으로는
+     * 기준 batch 뒤의 것을 거를 수 없다. 앞의 이력 조회도 같은 이유로 같은 커서를 사용한다.
      *
-     * <p><b>줄곧 만석이던 차량은 결과에 안 담는다.</b> 최대 잔여석이 0석이라 정원을 모르는 것이고,
-     * 1석으로 꾸며 내면 값은 나오는데 뜻이 없는 예보가 나간다. 잔여석을 한 번도 안 보여 준 차량이
-     * 애초에 결과에 없는 것과 같은 자리다. 그 차량들은 궤적이 안 만들어져 예보도 안 나간다.
+     * <p>최대 잔여석이 0석인 차량은 정원을 알 수 없어 결과에서 제외한다. 정원을 1석으로
+     * 임의 설정하면 의미 없는 계산값으로 예보가 발행된다. 잔여석을 한 번도 제공하지 않은 차량과
+     * 마찬가지로 궤적을 만들지 않으며 예보도 발행하지 않는다.
      *
      * <p>차량마다 기존 잔여석 인덱스를 역순으로 읽어 조건에 맞는 첫 양수 값을 선택한다.
      * 기준 시각과 품질 검사는 LIMIT 전에 수행해야 미래/제외 관측을 제외한 최대값을 얻는다.
@@ -207,11 +207,16 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
             return List.of();
         }
         ObservationHistory history = historyEndingAt(target.get());
-        Set<Long> eligibleIds = history.targetBatch().observations().stream()
+        Set<Long> eligibleIds = history.targetBatch()
+            .observations()
+            .stream()
             .filter(TrajectoryObservation::isForecastEligible)
-            .map(TrajectoryObservation::vehicleObservationId).collect(Collectors.toSet());
+            .map(TrajectoryObservation::vehicleObservationId)
+            .collect(Collectors.toSet());
         return VehicleTrajectoryAssembler.assemble(history, maximumSeatsEverObservedOf(target.get(), history))
-            .stream().filter(trajectory -> eligibleIds.contains(trajectory.vehicleObservationId())).toList();
+            .stream()
+            .filter(trajectory -> eligibleIds.contains(trajectory.vehicleObservationId()))
+            .toList();
     }
 
     /**
@@ -224,7 +229,9 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
         TargetBatch target,
         ObservationHistory history
     ) {
-        List<String> vehicleIds = history.targetBatch().observations().stream()
+        List<String> vehicleIds = history.targetBatch()
+            .observations()
+            .stream()
             .filter(TrajectoryObservation::isForecastEligible)
             .map(TrajectoryObservation::vehicleId)
             .distinct()
@@ -242,16 +249,16 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
                 resultSet.getString("vehicle_id"), resultSet.getInt("maximum_seats")))
             .list();
 
-        Map<String, Integer> maximumSeatsByVehicle = new LinkedHashMap<>();
-        for (VehicleMaximumSeats row : rows) {
-            maximumSeatsByVehicle.put(row.vehicleId(), row.maximumSeats());
-        }
+        Map<String, Integer> maximumSeatsByVehicle = rows.stream()
+            .collect(LinkedHashMap::new,
+                (byVehicle, row) -> byVehicle.put(row.vehicleId(), row.maximumSeats()),
+                Map::putAll);
         return maximumSeatsByVehicle;
     }
 
     /**
-     * 관측 시각이 없는 판은 궤적을 못 낸다. 언제 본 것인지 모르면 앞뒤로 늘어놓을 수가 없다.
-     * 없는 판을 물어봐도 같은 답이다.
+     * 관측 시각이 없는 수집 배치는 관측 순서를 정할 수 없어 궤적을 만들 수 없다.
+     * 수집 배치 자체가 없는 경우에도 같은 결과를 반환한다.
      */
     private Optional<TargetBatch> findTargetBatch(
         final long observationBatchId
@@ -271,13 +278,12 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
         List<WindowBatch> window = readWindow(target);
         Map<Long, List<TrajectoryObservation>> observationsByBatch = readObservations(window);
 
-        List<ObservedBatch> batches = new ArrayList<>();
-        for (WindowBatch batch : window) {
-            batches.add(new ObservedBatch(
+        List<ObservedBatch> batches = window.stream()
+            .map(batch -> new ObservedBatch(
                 batch.observationBatchId(),
                 batch.responseReceivedAt(),
-                observationsByBatch.getOrDefault(batch.observationBatchId(), List.of())));
-        }
+                observationsByBatch.getOrDefault(batch.observationBatchId(), List.of())))
+            .collect(Collectors.toCollection(ArrayList::new));
         return new ObservationHistory(batches);
     }
 
@@ -299,10 +305,10 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
     private Map<Long, List<TrajectoryObservation>> readObservations(
         List<WindowBatch> window
     ) {
-        Map<Long, Instant> observedAtByBatch = new LinkedHashMap<>();
-        for (WindowBatch batch : window) {
-            observedAtByBatch.put(batch.observationBatchId(), batch.responseReceivedAt());
-        }
+        Map<Long, Instant> observedAtByBatch = window.stream()
+            .collect(LinkedHashMap::new,
+                (byBatch, batch) -> byBatch.put(batch.observationBatchId(), batch.responseReceivedAt()),
+                Map::putAll);
 
         List<ObservationRow> rows = jdbcClient.sql(SELECT_OBSERVATIONS_IN_BATCHES)
             .param("observationBatchIds", observedAtByBatch.keySet())
@@ -318,12 +324,13 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
                 resultSet.getObject("crowd_level", Integer.class)))
             .list();
 
-        Map<Long, List<TrajectoryObservation>> observationsByBatch = new LinkedHashMap<>();
-        for (ObservationRow row : rows) {
-            observationsByBatch
-                .computeIfAbsent(row.observationBatchId(), batchId -> new ArrayList<>())
-                .add(row.toObservation(observedAtByBatch.get(row.observationBatchId())));
-        }
+        Map<Long, List<TrajectoryObservation>> observationsByBatch = rows.stream()
+            .collect(LinkedHashMap::new,
+                (byBatch, row) -> byBatch
+                    .computeIfAbsent(row.observationBatchId(), batchId -> new ArrayList<>())
+                    .add(row.toObservation(observedAtByBatch.get(row.observationBatchId()))),
+                (left, right) -> right.forEach((key, values) -> left
+                    .computeIfAbsent(key, ignored -> new ArrayList<>()).addAll(values)));
         return observationsByBatch;
     }
 
@@ -352,14 +359,14 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
     ) {
     }
 
-    /** 차량 하나가 지금까지 보여 준 가장 많은 잔여석. */
+    /** 차량 하나에서 지금까지 관측한 최대 잔여석. */
     private record VehicleMaximumSeats(
         String vehicleId,
         int maximumSeats
     ) {
     }
 
-    /** 관측 한 행. 관측 시각만 자기 판에서 받아 채운다. */
+    /** 관측 한 행. 관측 시각은 해당 수집 배치에서 가져온다. */
     private record ObservationRow(
         long id,
         long observationBatchId,
@@ -371,7 +378,6 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
         String seatUnknownReason,
         Integer crowdLevel
     ) {
-
         TrajectoryObservation toObservation(
             Instant observedAt
         ) {
@@ -383,7 +389,7 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
                 ObservedSeats.of(remainingSeats, seatUnknownReasonOf()));
         }
 
-        /** 값 목록은 V4 의 CHECK 이 둘로 묶어 둔다. 그 밖의 값이 오면 스키마가 어긋난 것이라 멈춘다. */
+        /** 값 목록은 V4 의 CHECK 에서 두 값으로 제한한다. 다른 값이 오면 스키마 불일치로 보고 중단한다. */
         private SeatUnknownReason seatUnknownReasonOf() {
             if (seatUnknownReason == null) {
                 return null;

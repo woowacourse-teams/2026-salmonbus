@@ -4,7 +4,6 @@ import java.time.Clock;
 import java.util.List;
 
 public final class ChatTestRoutes {
-
     public static final ChatRoute ROUTE_3330 = new ChatRoute("204000057", "3330", List.of(
         "분재단지", "매화마을", "연꽃마을", "야탑역", "성남아트센터", "이매역", "서현역", "판교역",
         "도촌동", "농수산물시장", "안양시청", "범계역", "명학역", "문화의거리", "댕리단길", "안양역"

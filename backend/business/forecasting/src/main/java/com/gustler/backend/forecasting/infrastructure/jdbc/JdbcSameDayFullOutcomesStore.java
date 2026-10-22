@@ -13,9 +13,12 @@ import java.util.List;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
+/**
+ * 노선·모델·한국 날짜별 당일 정산 합계를 조회·가산·초기화한다.
+ * 미초기화와 값이 없는 집계를 구분한다.
+ */
 @Repository
 public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
-
     private static final String SELECT_COUNTS = """
         SELECT stops_to_target, row_count, actual_full_count, raw_full_chance_sum, settled_through
         FROM same_day_model_full_outcomes
@@ -118,7 +121,7 @@ public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
     @Override
     public List<SameDayFullOutcomeCount> findCounts(
         final long routeId,
-        long modelDeploymentId,
+        final long modelDeploymentId,
         SeoulDay day
     ) {
         return jdbcClient.sql(SELECT_COUNTS)
@@ -132,14 +135,14 @@ public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
     @Override
     public void upsertCounts(
         final long routeId,
-        long modelDeploymentId,
+        final long modelDeploymentId,
         SeoulDay day,
         List<SameDayFullOutcomeCount> counts
     ) {
         for (SameDayFullOutcomeCount count : counts) {
             jdbcClient.sql(UPSERT_COUNT)
                 .param("routeId", routeId)
-            .param("modelDeploymentId", modelDeploymentId)
+                .param("modelDeploymentId", modelDeploymentId)
                 .param("outcomeDate", day.date())
                 .param("stopsToTarget", count.stopsToTarget())
                 .param("rowCount", count.rowCount())
@@ -155,12 +158,17 @@ public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
         SettledForecast settled
     ) {
         addCounts(settled.routeId(), settled.modelDeploymentId(), SeoulDay.containing(settled.arrivedAt()), List.of(
-            new SameDayFullOutcomeCount(settled.stopsToTarget(), 1, settled.wasFull() ? 1 : 0,
+            new SameDayFullOutcomeCount(settled.stopsToTarget(), 1, fullCount(settled.wasFull()),
                 settled.rawFullChance(), settled.arrivedAt())));
     }
 
     @Override
-    public void addCounts(long routeId, long modelDeploymentId, SeoulDay day, List<SameDayFullOutcomeCount> increments) {
+    public void addCounts(
+        final long routeId,
+        final long modelDeploymentId,
+        SeoulDay day,
+        List<SameDayFullOutcomeCount> increments
+    ) {
         for (SameDayFullOutcomeCount count : increments) {
             if (count.rowCount() <= 0 || count.stopsToTarget() <= 0) {
                 throw new IllegalArgumentException("증가분에는 실제 정산 결과가 필요합니다");
@@ -169,7 +177,7 @@ public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
         for (SameDayFullOutcomeCount count : increments) {
             jdbcClient.sql(ADD_TO_COUNT)
                 .param("routeId", routeId)
-            .param("modelDeploymentId", modelDeploymentId)
+                .param("modelDeploymentId", modelDeploymentId)
                 .param("outcomeDate", day.date())
                 .param("stopsToTarget", count.stopsToTarget())
                 .param("rowCount", count.rowCount())
@@ -183,7 +191,7 @@ public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
     @Override
     public List<SameDayFullOutcomeCount> countFromSource(
         final long routeId,
-        long modelDeploymentId,
+        final long modelDeploymentId,
         SeoulDay day,
         Instant until
     ) {
@@ -219,5 +227,12 @@ public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
         Instant timestamp
     ) {
         return timestamp.atOffset(ZoneOffset.UTC);
+    }
+
+    private static int fullCount(final boolean wasFull) {
+        if (wasFull) {
+            return 1;
+        }
+        return 0;
     }
 }

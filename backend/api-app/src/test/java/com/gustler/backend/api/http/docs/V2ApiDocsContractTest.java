@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map.Entry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,8 +24,10 @@ import tools.jackson.databind.ObjectMapper;
 class V2ApiDocsContractTest {
     private static final String ARRIVALS = "/api/v2/stations/{stationId}/arrivals";
     private static final String GEOMETRY = "/api/v2/routes/{routeId}/geometry";
-    @Autowired private WebApplicationContext context;
-    @Autowired private ObjectMapper json;
+    @Autowired
+    private WebApplicationContext context;
+    @Autowired
+    private ObjectMapper json;
     private JsonNode document;
 
     @BeforeEach
@@ -36,13 +39,16 @@ class V2ApiDocsContractTest {
 
     @Test
     void 실제_생성한_문서의_예시와_응답코드를_프론트_공유명세와_대조한다() throws Exception {
-        for (var entry : List.of(new String[]{ARRIVALS, "arrival.openapi.contract"},
+        // when
+        for (String[] entry : List.of(new String[]{ARRIVALS, "arrival.openapi.contract"},
             new String[]{GEOMETRY, "geometry.openapi.contract"})) {
-            var contract = json.readTree(Files.readString(Path.of(System.getProperty(entry[1]))));
-            var source = contract.path("paths").path(entry[0]).path("get");
-            var generated = operation(entry[0]);
+            JsonNode contract = json.readTree(Files.readString(Path.of(System.getProperty(entry[1]))));
+            JsonNode source = contract.path("paths").path(entry[0]).path("get");
+            JsonNode generated = operation(entry[0]);
+
+            // then
             assertThat(generated.path("operationId")).isEqualTo(source.path("operationId"));
-            for (var parameter : generated.path("parameters")) {
+            for (JsonNode parameter : generated.path("parameters")) {
                 String name = parameter.path("name").asString();
                 if (name.equals("stationId") || name.equals("routeId")
                     || entry[0].equals(GEOMETRY) && name.equals("referenceVersionId")) {
@@ -50,28 +56,34 @@ class V2ApiDocsContractTest {
                     assertThat(parameter.path("example").isTextual()).as(entry[0] + " " + name).isTrue();
                 }
             }
-            var sourceExamples = source.at("/responses/200/content/application~1json/examples");
-            var generatedExamples = generated.at("/responses/200/content/application~1json/examples");
+            JsonNode sourceExamples = source.at("/responses/200/content/application~1json/examples");
+            JsonNode generatedExamples = generated.at("/responses/200/content/application~1json/examples");
             assertThat(generatedExamples.size()).isEqualTo(sourceExamples.size());
-            for (var example : sourceExamples.properties()) {
+            for (Entry<String, JsonNode> example : sourceExamples.properties()) {
                 assertThat(generatedExamples.path(example.getKey()).path("value"))
                     .as(entry[0] + " " + example.getKey()).isEqualTo(example.getValue().path("value"));
             }
             for (String code : List.of("200", "400", "404", "409", "503", "405", "500")) {
-                var response = generated.path("responses").path(code);
-                assertThat(response.at("/content/application~1json/schema").isMissingNode()).as(entry[0] + " " + code).isFalse();
+                JsonNode response = generated.path("responses").path(code);
+                assertThat(response.at("/content/application~1json/schema")
+                    .isMissingNode()).as(entry[0] + " " + code)
+                    .isFalse();
             }
         }
         assertThat(operation(GEOMETRY).at("/responses/304/content").isMissingNode()).isTrue();
         assertThat(operation(GEOMETRY).at("/responses/200/headers/ETag").isMissingNode()).isFalse();
         assertThat(operation(ARRIVALS).at("/responses/200/headers/Cache-Control").isMissingNode()).isFalse();
         Files.createDirectories(Path.of("build/reports"));
-        Files.writeString(Path.of("build/reports/v2-generated-openapi.json"), json.writerWithDefaultPrettyPrinter().writeValueAsString(document));
+        Files.writeString(Path.of("build/reports/v2-generated-openapi.json"), json.writerWithDefaultPrettyPrinter()
+            .writeValueAsString(document));
     }
 
     @Test
     void ETA의_상태와_단위_좌석0_미제공_구분을_문서화한다() {
-        var schemas = document.at("/components/schemas");
+        // when
+        JsonNode schemas = document.at("/components/schemas");
+
+        // then
         assertThat(schemas.at("/StationArrivalsResponse/properties/status/enum").toString())
             .contains("READY", "NO_PREDICTION", "UNAVAILABLE");
         assertThat(schemas.at("/ArrivalRefresh/properties/status/enum").toString())
@@ -81,14 +93,20 @@ class V2ApiDocsContractTest {
         assertThat(schemas.at("/ArrivalSeat/required").toString()).contains("kind", "remaining", "reason");
         assertThat(schemas.at("/ArrivalSeat/properties/remaining/minimum").intValue()).isZero();
         assertThat(schemas.at("/ArrivalVehicle/properties").has("ratio")).isFalse();
-        assertThat(schemas.at("/ArrivalSnapshot/properties/sourceObservedAt/description").asString()).contains("알 수 없어", "null");
-        assertThat(schemas.at("/ArrivalTargetVisit/properties/direction/enum").toString()).contains("UP", "DOWN", "null");
+        assertThat(schemas.at("/ArrivalSnapshot/properties/sourceObservedAt/description")
+            .asString()).contains("알 수 없어", "null");
+        assertThat(schemas.at("/ArrivalTargetVisit/properties/direction/enum")
+            .toString()).contains("UP", "DOWN", "null");
     }
 
     @Test
     void geometry의_양방향과_명시적_null_필드를_필수항목으로_문서화한다() {
-        var schemas = document.at("/components/schemas");
-        assertThat(schemas.at("/RouteGeometryResponse/required").toString()).contains("paths", "turningPoint", "boundary");
+        // when
+        JsonNode schemas = document.at("/components/schemas");
+
+        // then
+        assertThat(schemas.at("/RouteGeometryResponse/required")
+            .toString()).contains("paths", "turningPoint", "boundary");
         assertThat(schemas.at("/RouteGeometryPaths/required").toString()).contains("UP", "DOWN");
         assertThat(schemas.at("/RouteGeometryPaths/properties").size()).isEqualTo(2);
         assertThat(schemas.at("/RouteGeometryPaths/additionalProperties").booleanValue()).isFalse();
@@ -96,20 +114,25 @@ class V2ApiDocsContractTest {
         assertThat(schemas.at("/RouteGeometryPoint/properties/x/description").asString()).contains("경도");
         assertThat(schemas.at("/RouteGeometryPoint/properties/y/description").asString()).contains("위도");
         assertThat(schemas.at("/RouteGeometryStop/required").toString()).contains("point", "stopSequence");
-        for (var field : List.of(new String[]{"RouteGeometryResponse", "paths", "RouteGeometryPaths"},
+        for (String[] field : List.of(new String[]{"RouteGeometryResponse", "paths", "RouteGeometryPaths"},
             new String[]{"RouteGeometryResponse", "turningPoint", "RouteTurningPoint"},
             new String[]{"RouteGeometryResponse", "boundary", "RouteGeometryBoundary"},
             new String[]{"RouteGeometryStop", "point", "RouteGeometryPoint"},
             new String[]{"StationArrivalsResponse", "snapshot", "ArrivalSnapshot"})) {
-            var property = schemas.path(field[0]).path("properties").path(field[1]);
+            JsonNode property = schemas.path(field[0]).path("properties").path(field[1]);
             assertThat(property.has("$ref")).as(field[1]).isFalse();
             assertThat(property.has("type")).as(field[1]).isFalse();
-            assertThat(property.path("anyOf").get(0).path("$ref").asString()).isEqualTo("#/components/schemas/" + field[2]);
+            assertThat(property.path("anyOf")
+                .get(0)
+                .path("$ref")
+                .asString()).isEqualTo("#/components/schemas/" + field[2]);
             assertThat(property.path("anyOf").get(1).path("type").asString()).isEqualTo("null");
             assertThat(schemas.path(field[2]).path("type").asString()).isEqualTo("object");
         }
         assertThat(schemas.at("/ArrivalEta/properties/remainingSeconds/type").toString()).contains("integer", "null");
     }
 
-    private JsonNode operation(String path) { return document.path("paths").path(path).path("get"); }
+    private JsonNode operation(String path) {
+        return document.path("paths").path(path).path("get");
+    }
 }

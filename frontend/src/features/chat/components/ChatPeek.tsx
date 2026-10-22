@@ -29,6 +29,7 @@ export function ChatPeek({ launcherRef, sheetId, displayName, unread, teaser, on
         aria-controls={sheetId}
         aria-label={launcherLabel(displayName, unread)}
         onClick={onOpen}
+        data-native-map-hit
       >
         <MessageIcon />
         <span key={label} ref={labelRef} className={teaser === null ? styles.label : styles.teaser}>

@@ -10,6 +10,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
 
+/**
+ * 한 차량·도착 시간대의 통계 합계다.
+ * 날짜별 통계로 변환할 때 같은 시간대 기준을 사용한다.
+ */
 public record VehicleHourlyDemand(
     String vehicleId,
     Instant arrivedHourStart,
@@ -18,7 +22,6 @@ public record VehicleHourlyDemand(
     long arrivalSeatsSum,
     long netBoardingSum
 ) {
-
     private static final Comparator<Key> KEY_ORDER = Comparator.comparing(Key::vehicleId)
         .thenComparing(Key::arrivedHourStart).thenComparingInt(Key::targetStopOrder);
 
@@ -33,22 +36,22 @@ public record VehicleHourlyDemand(
         }
     }
 
-    public static List<VehicleHourlyDemand> sumOf(final Collection<DemandSample> samples) {
-        final Map<Key, long[]> sums = new TreeMap<>(KEY_ORDER);
-        for (final DemandSample sample : samples) {
-            final long[] sum = sums.computeIfAbsent(
+    public static List<VehicleHourlyDemand> sumOf(Collection<DemandSample> samples) {
+        Map<Key, long[]> sums = new TreeMap<>(KEY_ORDER);
+        for (DemandSample sample : samples) {
+            long[] sum = sums.computeIfAbsent(
                 new Key(sample.vehicleId(), sample.arrivedHourStart(), sample.targetStopOrder()), key -> new long[3]);
             sum[0]++;
             sum[1] += sample.arrivalRemainingSeats();
             sum[2] += sample.netBoarding();
         }
-        final List<VehicleHourlyDemand> totals = new ArrayList<>();
+        List<VehicleHourlyDemand> totals = new ArrayList<>();
         sums.forEach((key, sum) -> totals.add(new VehicleHourlyDemand(
             key.vehicleId(), key.arrivedHourStart(), key.targetStopOrder(), sum[0], sum[1], sum[2])));
         return List.copyOf(totals);
     }
 
-    public DailyStopDemand onDay(final int capacity, final Clock clock) {
+    public DailyStopDemand onDay(final int capacity, Clock clock) {
         if (capacity < 1) {
             throw new IllegalArgumentException("정원은 1 이상이어야 한다: " + capacity);
         }

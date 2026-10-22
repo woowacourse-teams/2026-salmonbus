@@ -5,18 +5,20 @@ import static org.assertj.core.groups.Tuple.tuple;
 
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityChanges;
 import com.gustler.backend.forecasting.application.quality.TripQualityInvestigationService;
-import com.gustler.backend.forecasting.domain.quality.QualityObservationBatch;
-import com.gustler.backend.forecasting.domain.model.FullSeatStreak;
-import com.gustler.backend.forecasting.domain.model.ObservedSeats;
+import com.gustler.backend.forecasting.domain.model.FullSeatStreak.SeenToEnd;
+import com.gustler.backend.forecasting.domain.model.ObservedSeats.Known;
+import com.gustler.backend.forecasting.domain.model.ObservedSeats.Unknown;
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
-import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.domain.model.PrecedingVehicle;
 import com.gustler.backend.forecasting.domain.model.SeatSlope;
 import com.gustler.backend.forecasting.domain.model.SeatUnknownReason;
 import com.gustler.backend.forecasting.domain.model.TrajectoryGap;
 import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
-import com.gustler.backend.support.ConfirmedTripFixture;
+import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
+import com.gustler.backend.forecasting.domain.quality.QualityObservationBatch;
+import com.gustler.backend.forecasting.domain.quality.QualityObservationBatch.Row;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
+import com.gustler.backend.support.ConfirmedTripFixture;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -32,7 +34,6 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class JdbcVehicleTrajectoryQueryTest {
-
     private static final String SOURCE_ID = "GBIS";
     private static final String ROUTE_204000057 = "204000057";
     private static final String ROUTE_204000121 = "204000121";
@@ -122,7 +123,7 @@ class JdbcVehicleTrajectoryQueryTest {
         assertThat(actual).contains(readResponseReceivedAt(left));
     }
 
-    /** 옮겨 넣은 관측이 이 자리다. 예보를 받을 일이 없어 완료 표시가 영영 안 찍힌다. */
+    /** 이관한 관측이다. 예보 대상이 아니므로 완료 표시가 남지 않는다. */
     @Test
     void 거슬러_보는_폭보다_오래된_판은_안_준다() {
         // given
@@ -265,16 +266,17 @@ class JdbcVehicleTrajectoryQueryTest {
             observationId,
             new ObservedVehicle(
                 VEHICLE_204000206, routeVersionId, STOP_6, LATER_POLL.toInstant(), 40, CROWD_LEVEL_3),
-            new ObservedSeats.Known(40),
+            new Known(40),
             new SeatSlope.Known(-3),
             new PrecedingVehicle.Known(VEHICLE_204003542, NO_SEAT_LEFT, EARLIER_POLL.toInstant()),
-            new FullSeatStreak.SeenToEnd(0),
+            new SeenToEnd(0),
             43));
     }
 
     @Test
     void 줄곧_만석이던_차량은_궤적이_안_나온다() {
-        // given 한 번도 빈자리를 안 보여 줘서 정원을 모르는 차량이다
+        // given
+        // 한 번도 빈자리를 안 보여 줘서 정원을 모르는 차량이다
         final long earlier = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
         insertObservation(earlier, VEHICLE_204000206, STOP_5, NO_SEAT_LEFT);
         final long later = insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
@@ -283,7 +285,8 @@ class JdbcVehicleTrajectoryQueryTest {
         // when
         List<VehicleTrajectory> actual = repository.readTrajectories(later);
 
-        // then 1석으로 꾸며 내면 값은 나오는데 뜻이 없는 예보가 나간다
+        // then
+        // 정원을 1석으로 임의 설정하면 의미 없는 계산값으로 예보가 발행된다
         assertThat(actual).isEmpty();
     }
 
@@ -302,7 +305,8 @@ class JdbcVehicleTrajectoryQueryTest {
 
     @Test
     void 최대_잔여석은_궤적을_잇는_30분_창_밖의_관측에서도_나온다() {
-        // given 궤적은 30분까지만 거슬러 보는데 정원은 그 창 밖에서도 온다
+        // given
+        // 궤적은 30분까지만 거슬러 보지만 정원 산출에는 그 창 밖의 관측도 사용한다
         final long longAgoBatchId = insertBatch(
             routeVersionId, LATER_POLL.minusMinutes(40), SUCCESS_ROWS, null);
         insertObservation(longAgoBatchId, VEHICLE_204000206, STOP_5, 44);
@@ -318,7 +322,8 @@ class JdbcVehicleTrajectoryQueryTest {
 
     @Test
     void 최대_잔여석은_예보를_내는_시각까지의_관측에서만_나온다() {
-        // given 나중에 더 큰 잔여석이 들어와도 예전 예보를 다시 계산하면 같은 값이 나와야 한다
+        // given
+        // 나중에 더 큰 잔여석이 들어와도 예전 예보를 다시 계산하면 같은 값이 나와야 한다
         final long targetBatchId = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
         insertObservation(targetBatchId, VEHICLE_204000206, STOP_5, 12);
         final long laterBatchId = insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
@@ -333,7 +338,8 @@ class JdbcVehicleTrajectoryQueryTest {
 
     @Test
     void 같은_시각의_뒤_batch_는_최대_잔여석에_안_들어간다() {
-        // given 시각이 같고 id 만 큰 batch 가 뒤에 하나 더 있다
+        // given
+        // 시각이 같고 id 만 큰 batch 가 뒤에 하나 더 있다
         final long targetBatchId = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
         insertObservation(targetBatchId, VEHICLE_204000206, STOP_5, 12);
         final long sameTimeLaterBatchId = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
@@ -342,7 +348,8 @@ class JdbcVehicleTrajectoryQueryTest {
         // when
         List<VehicleTrajectory> actual = repository.readTrajectories(targetBatchId);
 
-        // then 시각만으로 자르면 44가 새어 들어온다
+        // then
+        // 시각만 기준으로 자르면 44가 조회 결과에 포함된다
         assertThat(actual.getFirst().maximumSeatsEverObserved()).isEqualTo(12);
     }
 
@@ -393,7 +400,8 @@ class JdbcVehicleTrajectoryQueryTest {
 
     @Test
     void 잔여석을_모르면_왜_모르는지까지_같이_준다() {
-        // given 지금은 잔여석을 모르지만 예전에 빈자리를 보여 줘서 정원은 아는 차량이다
+        // given
+        // 지금은 잔여석을 모르지만 예전에 빈자리를 보여 줘서 정원은 아는 차량이다
         final long earlier = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
         insertObservation(earlier, VEHICLE_204000206, STOP_5, 44);
         final long later = insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
@@ -404,7 +412,7 @@ class JdbcVehicleTrajectoryQueryTest {
 
         // then
         assertThat(actual.getFirst().seats())
-            .isEqualTo(new ObservedSeats.Unknown(SeatUnknownReason.REPORTED_UNKNOWN));
+            .isEqualTo(new Unknown(SeatUnknownReason.REPORTED_UNKNOWN));
     }
 
     @Test
@@ -495,19 +503,19 @@ class JdbcVehicleTrajectoryQueryTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    void 같은_편도에서_82석을_발견하면_앞선_관측도_예측에서_제외하고_다른_차량은_유지한다(boolean configured) {
+    void 같은_편도에서_82석을_발견하면_앞선_관측도_예측에서_제외하고_다른_차량은_유지한다(final boolean configured) {
         // given
         if (configured) {
             qualityPolicy();
         }
-        long first = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
-        long badStart = insertObservation(first, VEHICLE_204000206, 1, 44);
+        final long first = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
+        final long badStart = insertObservation(first, VEHICLE_204000206, 1, 44);
         insertObservation(first, VEHICLE_204003542, 1, 44);
-        long later = insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
+        final long later = insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
         insertObservation(later, VEHICLE_204000206, 2, 82);
         insertObservation(later, VEHICLE_204003542, 2, 43);
         clearSyntheticMemberships();
-        var quality = quality();
+        TripQualityInvestigationService quality = quality();
         signal(quality, first);
         assertThat(repository.readTrajectories(first)).hasSize(2);
 
@@ -519,30 +527,42 @@ class JdbcVehicleTrajectoryQueryTest {
             .doesNotContain(badStart).hasSize(1);
         assertThat(repository.readTrajectories(later)).hasSize(1);
         assertThat(jdbcClient.sql("SELECT remaining_seats FROM vehicle_observation WHERE id = ?")
-            .param(badStart).query(Integer.class).single()).isEqualTo(44);
-        assertThat(jdbcClient.sql("SELECT quality_revision FROM route_data_quality WHERE route_id=(SELECT route_id FROM route_version WHERE id=?)").param(routeVersionId).query(Long.class).single()).isEqualTo(2);
+                    .param(badStart).query(Integer.class).single()).isEqualTo(44);
+        assertThat(
+            jdbcClient.sql(
+            "SELECT quality_revision FROM route_data_quality WHERE route_id=(SELECT route_id FROM route_version WHERE id=?)")
+                .param(routeVersionId)
+                .query(Long.class)
+                .single()).isEqualTo(2);
 
-        // when: 같은 관측 묶음을 다시 판정한다.
+        // when
+        // 같은 관측 묶음을 다시 판정한다.
         signal(quality, later);
 
-        // then: 계산 자료 버전을 중복 증가시키지 않는다.
-        assertThat(jdbcClient.sql("SELECT quality_revision FROM route_data_quality WHERE route_id=(SELECT route_id FROM route_version WHERE id=?)").param(routeVersionId).query(Long.class).single()).isEqualTo(2);
+        // then
+        // 계산 자료 버전을 중복 증가시키지 않는다.
+        assertThat(
+            jdbcClient.sql(
+            "SELECT quality_revision FROM route_data_quality WHERE route_id=(SELECT route_id FROM route_version WHERE id=?)")
+                .param(routeVersionId)
+                .query(Long.class)
+                .single()).isEqualTo(2);
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    void 잔여석이_82석인_편도_이후_회차지에서_44석으로_출발하면_최대_잔여석은_44다(boolean configured) {
+    void 잔여석이_82석인_편도_이후_회차지에서_44석으로_출발하면_최대_잔여석은_44다(final boolean configured) {
         // given
         if (configured) {
             qualityPolicy();
         }
         jdbcClient.sql("UPDATE route_version SET turn_sequence = 5 WHERE id = ?").param(routeVersionId).update();
-        long first = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
+        final long first = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
         insertObservation(first, VEHICLE_204000206, 1, 82);
-        long next = insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
+        final long next = insertBatch(routeVersionId, LATER_POLL, SUCCESS_ROWS, null);
         insertObservation(next, VEHICLE_204000206, 5, 44);
         clearSyntheticMemberships();
-        var quality = quality();
+        TripQualityInvestigationService quality = quality();
 
         // when
         signal(quality, first);
@@ -560,12 +580,12 @@ class JdbcVehicleTrajectoryQueryTest {
     void 정상_차량은_관측_간격이_길어도_사전_편도_판정으로_제외하지_않는다() {
         // given
         qualityPolicy();
-        long first = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
+        final long first = insertBatch(routeVersionId, EARLIER_POLL, SUCCESS_ROWS, null);
         insertObservation(first, VEHICLE_204000206, 1, 44);
-        long gap = insertBatch(routeVersionId, EARLIER_POLL.plusMinutes(10), SUCCESS_ROWS, null);
+        final long gap = insertBatch(routeVersionId, EARLIER_POLL.plusMinutes(10), SUCCESS_ROWS, null);
         insertObservation(gap, VEHICLE_204000206, 3, 40);
         clearSyntheticMemberships();
-        var quality = quality();
+        TripQualityInvestigationService quality = quality();
 
         // when
         signal(quality, first);
@@ -579,14 +599,19 @@ class JdbcVehicleTrajectoryQueryTest {
         return new TripQualityInvestigationService(new JdbcTripQualityInvestigationRepository(jdbcClient),
             new JdbcTripQualityStore(jdbcClient),
             new JdbcRouteDataQualityAccess(jdbcClient), new RouteDataQualityChanges(
-                new JdbcRouteDataQualityRepository(jdbcClient), new JdbcDemandStatisticsRebuildRequestStore(jdbcClient)));
+                new JdbcRouteDataQualityRepository(jdbcClient),
+                new JdbcDemandStatisticsRebuildRequestStore(jdbcClient)));
     }
 
-    private void signal(TripQualityInvestigationService quality, long batch) {
-        var at = jdbcClient.sql("SELECT response_received_at FROM observation_batch WHERE id = ?")
+    private void signal(TripQualityInvestigationService quality, final long batch) {
+        OffsetDateTime at = jdbcClient.sql("SELECT response_received_at FROM observation_batch WHERE id = ?")
             .param(batch).query(OffsetDateTime.class).single();
-        var rows = jdbcClient.sql("SELECT id, vehicle_id, remaining_seats FROM vehicle_observation WHERE observation_batch_id = ?")
-            .param(batch).query((rs, n) -> new QualityObservationBatch.Row(rs.getLong(1), rs.getString(2), rs.getObject(3, Integer.class))).list();
+        List<Row> rows =
+            jdbcClient.sql(
+                "SELECT id, vehicle_id, remaining_seats FROM vehicle_observation WHERE observation_batch_id = ?")
+                .param(batch)
+                .query((rs, n) -> new Row(rs.getLong(1), rs.getString(2), rs.getObject(3, Integer.class)))
+                .list();
         quality.observationsStored(new QualityObservationBatch(batch, routeVersionId, at.toInstant(), rows));
     }
 
@@ -596,7 +621,9 @@ class JdbcVehicleTrajectoryQueryTest {
                 INSERT INTO route_version_quality_policy(route_version_id,maximum_observation_gap_seconds,observation_gap_evidence)
                 VALUES (?,60,'synthetic test') ON CONFLICT(route_version_id) DO UPDATE
                 SET maximum_observation_gap_seconds=60,observation_gap_evidence='synthetic test'
-                """).param(routeVersionId).update();
+                """)
+            .param(routeVersionId)
+            .update();
     }
 
     private void clearSyntheticMemberships() {
@@ -701,7 +728,7 @@ class JdbcVehicleTrajectoryQueryTest {
         return insertObservation(versionId, batchId, vehicleId, stopOrder, remainingSeats, null);
     }
 
-    /** 통과 순번은 지나감(2)이라 상류 순번과 같다. 관측 시각 열은 SAL-84 가 지웠다. */
+    /** 통과 순번은 지나감(2)이라 상류 순번과 같다. 관측 시각 열은 SAL-84 에서 제거했다. */
     private long insertObservation(
         final long versionId,
         final long batchId,
@@ -718,13 +745,13 @@ class JdbcVehicleTrajectoryQueryTest {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
-            .params(
-                batchId, versionId, nextRowNumber(batchId),
-                vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
-                RUNNING_STATE_DEPARTED, remainingSeats, seatUnknownReason, CROWD_LEVEL_3
-            )
-            .query(Long.class)
-            .single());
+                    .params(
+                        batchId, versionId, nextRowNumber(batchId),
+                        vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
+                        RUNNING_STATE_DEPARTED, remainingSeats, seatUnknownReason, CROWD_LEVEL_3
+                    )
+                    .query(Long.class)
+                    .single());
     }
 
     private int nextRowNumber(

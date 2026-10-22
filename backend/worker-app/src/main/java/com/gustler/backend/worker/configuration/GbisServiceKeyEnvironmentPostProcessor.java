@@ -12,8 +12,11 @@ import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.StandardEnvironment;
 
+/**
+ * 키 별칭 환경 설정을 GBIS 속성으로 연결한다.
+ * 인증값 원문을 기동 진단에 출력하지 않는다.
+ */
 public final class GbisServiceKeyEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
-
     static final String PROPERTY_SOURCE = "gbisServiceKeys";
 
     private static final String PREFIX = "GBIS_SERVICE_KEY_";
@@ -37,7 +40,7 @@ public final class GbisServiceKeyEnvironmentPostProcessor implements Environment
             }
             String alias = name.substring(PREFIX.length());
             Object value = variables.getProperty(name);
-            if (BOUND_BY_APPLICATION_YML.contains(alias) || value == null || value.toString().isBlank()) {
+            if (shouldIgnore(alias, value)) {
                 continue;
             }
             String property = "gbis.named-keys[" + alias.toLowerCase(Locale.ROOT) + "]";
@@ -50,5 +53,12 @@ public final class GbisServiceKeyEnvironmentPostProcessor implements Environment
         if (!keys.isEmpty()) {
             environment.getPropertySources().addLast(new MapPropertySource(PROPERTY_SOURCE, keys));
         }
+    }
+
+    private boolean shouldIgnore(String alias, Object value) {
+        if (BOUND_BY_APPLICATION_YML.contains(alias) || value == null) {
+            return true;
+        }
+        return value.toString().isBlank();
     }
 }

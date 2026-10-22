@@ -17,10 +17,13 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
+/**
+ * 최신 배치 결과와 그 배치의 차량을 같은 조회 경계에서 읽는다.
+ * 관측 시각은 응답 계약의 시간대로 변환한다.
+ */
 @Repository
 @RequiredArgsConstructor
 public class JpaVehicleQueryRepository implements VehicleQueryRepository {
-
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final Pageable FIRST_RESULT_PAGE = PageRequest.of(0, 1);
 
@@ -60,7 +63,9 @@ public class JpaVehicleQueryRepository implements VehicleQueryRepository {
             observationBatchRepository.findLatestSuccessfulByRouteVersion(
                 routeVersion,
                 FIRST_RESULT_PAGE
-            ).stream().findFirst();
+            )
+                .stream()
+                .findFirst();
 
         return new VehicleSnapshot(
             routeId.value(),

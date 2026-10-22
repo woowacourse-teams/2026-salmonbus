@@ -1,5 +1,6 @@
 package com.gustler.backend.api.board.application;
 
+import com.gustler.backend.api.board.domain.Board;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.vehicle.application.VehicleQueryRepository;
 import com.gustler.backend.api.vehicle.domain.ObservedVehicle;
@@ -16,35 +17,49 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 탑승판과 지도 차량을 같은 관측 배치로 조회한다.
+ * 두 결과의 차량 수 차이는 기록하고 더 짧은 유효 시간으로 캐시를 제한한다.
+ */
 @Service
 @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 @RequiredArgsConstructor
 public class WatchBoardQueryService {
-
-    private static final Logger log = LoggerFactory.getLogger(WatchBoardQueryService.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(WatchBoardQueryService.class);
 
     private final BoardQueryService boardQueryService;
     private final VehicleQueryRepository vehicleQueryRepository;
     private final Clock clock;
     private final Map<String, Long> lastMismatchedBatchByRoute = new ConcurrentHashMap<>();
 
+    /**
+     * 승차판에 선택된 관측 묶음의 차량을 함께 조회한다. 두 결과의 관측 기준을 맞추고 만료 시각까지 캐시를 제한한다.
+     */
     public WatchBoardOverview getWatchBoard(
         RouteId routeId
     ) {
         BoardReading reading = boardQueryService.readBoard(routeId);
+        Board board = reading.board();
         List<ObservedVehicle> vehicles = vehicleQueryRepository.findVehicles(reading.observationBatchId());
-        if (vehicles.size() != reading.board().vehiclesInService()) {
+        if (vehicles.size() != board.vehiclesInService()) {
             warnMismatchOnce(routeId, reading, vehicles.size());
         }
-        return new WatchBoardOverview(reading.board(), vehicles, cacheMaxAgeOf(reading));
+        return new WatchBoardOverview(board, vehicles, cacheMaxAgeOf(reading));
     }
 
     private Duration cacheMaxAgeOf(
         BoardReading reading
     ) {
-        Duration untilStale = Duration.between(OffsetDateTime.now(clock), reading.board().staleAt());
-        Duration bounded = untilStale.isNegative() ? Duration.ZERO : untilStale;
-        return bounded.compareTo(reading.cacheMaxAge()) < 0 ? bounded : reading.cacheMaxAge();
+        Board board = reading.board();
+        Duration untilStale = Duration.between(OffsetDateTime.now(clock), board.staleAt());
+        Duration bounded = untilStale;
+        if (untilStale.isNegative()) {
+            bounded = Duration.ZERO;
+        }
+        if (bounded.compareTo(reading.cacheMaxAge()) < 0) {
+            return bounded;
+        }
+        return reading.cacheMaxAge();
     }
 
     private void warnMismatchOnce(
@@ -56,11 +71,12 @@ public class WatchBoardQueryService {
         if (previous != null && previous == reading.observationBatchId()) {
             return;
         }
-        log.warn(
+        Board board = reading.board();
+        LOGGER.warn(
             "기준 관측의 차량 수와 읽어낸 차량 수가 다르다. 노선={} 묶음={} 기록={} 읽음={}",
             routeId.value(),
             reading.observationBatchId(),
-            reading.board().vehiclesInService(),
+            board.vehiclesInService(),
             readVehicles);
     }
 }

@@ -1,8 +1,8 @@
 package com.gustler.backend.quota.application;
 
 import com.gustler.backend.quota.api.ApiCallQuota;
-import com.gustler.backend.quota.api.CallQuotaPolicy;
 import com.gustler.backend.quota.api.CallQuota;
+import com.gustler.backend.quota.api.CallQuotaPolicy;
 import com.gustler.backend.quota.domain.CallQuotaStore;
 import com.gustler.backend.quota.domain.DailyCallQuota;
 import java.time.OffsetDateTime;
@@ -27,7 +27,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Component
 public class CallQuotaLedger implements ApiCallQuota {
-
     private static final int ONE_CALL = 1;
 
     private final CallQuotaStore callQuotaStore;
@@ -44,7 +43,7 @@ public class CallQuotaLedger implements ApiCallQuota {
 
     /** 호출 한 번을 예약한다. 위치정보는 한 batch가 호출 한 번이다. */
     @Override
-    @Transactional
+    @Transactional(readOnly = false)
     public Optional<String> reserveLocation(
         OffsetDateTime requestedAt
     ) {
@@ -61,28 +60,6 @@ public class CallQuotaLedger implements ApiCallQuota {
         return Optional.empty();
     }
 
-    /** 요청한 호출 횟수를 예약한다. 노선정보는 한 노선을 읽는 데 호출 두 번이 든다. */
-    @Override
-    @Transactional
-    public boolean reserveRouteCatalog(
-        OffsetDateTime requestedAt,
-        final int calls
-    ) {
-        return reserveCalls(CallQuota.BUS_ROUTE, CallQuotaPolicy.PRIMARY_KEY_ALIAS, requestedAt, calls);
-    }
-
-    private boolean reserveCalls(
-        CallQuota quota,
-        String keyAlias,
-        OffsetDateTime requestedAt,
-        final int calls
-    ) {
-        return DailyCallQuota.at(quota, keyAlias, requestedAt, policy.limitOf(quota, keyAlias))
-            .reservationFor(calls)
-            .map(callQuotaStore::reserve)
-            .orElse(false);
-    }
-
     /**
      * 전송 날짜의 호출 예약이 있는지 확인하고 없으면 새로 예약한다.
      *
@@ -91,21 +68,38 @@ public class CallQuotaLedger implements ApiCallQuota {
      * 다음 날 한도에서도 차감하지 않으면 상류 한도를 초과한다.
      */
     @Override
-    @Transactional
+    @Transactional(readOnly = false)
     public boolean ensureLocationReservation(
         String keyAlias,
         OffsetDateTime reservedAt,
         OffsetDateTime dispatchAt
     ) {
-        if (DailyCallQuota.at(CallQuota.BUS_LOCATION, keyAlias, reservedAt, policy.limitOf(CallQuota.BUS_LOCATION, keyAlias))
-            .covers(dispatchAt)) {
+        if (
+            DailyCallQuota.at(CallQuota.BUS_LOCATION, keyAlias, reservedAt,
+                policy.limitOf(CallQuota.BUS_LOCATION, keyAlias))
+                .covers(dispatchAt)) {
             return true;
         }
         return reserveCalls(CallQuota.BUS_LOCATION, keyAlias, dispatchAt, ONE_CALL);
     }
 
+    private boolean reserveCalls(
+        CallQuota quota,
+        String keyAlias,
+        OffsetDateTime requestedAt,
+        final int calls
+    ) {
+        Optional<DailyCallQuota.Reservation> reservation = DailyCallQuota.at(
+            quota, keyAlias, requestedAt, policy.limitOf(quota, keyAlias))
+            .reservationFor(calls);
+        if (reservation.isEmpty()) {
+            return false;
+        }
+        return callQuotaStore.reserve(reservation.get());
+    }
+
     @Override
-    @Transactional
+    @Transactional(readOnly = false)
     public Optional<Integer> excludeLocationKey(
         String keyAlias,
         OffsetDateTime requestedAt
@@ -113,5 +107,15 @@ public class CallQuotaLedger implements ApiCallQuota {
         DailyCallQuota quota = DailyCallQuota.at(
             CallQuota.BUS_LOCATION, keyAlias, requestedAt, policy.limitOf(CallQuota.BUS_LOCATION, keyAlias));
         return callQuotaStore.exclude(quota.service(), quota.koreanDate(), quota.keyAlias());
+    }
+
+    /** 요청한 호출 횟수를 예약한다. 노선정보는 한 노선을 읽는 데 호출 두 번이 든다. */
+    @Override
+    @Transactional(readOnly = false)
+    public boolean reserveRouteCatalog(
+        OffsetDateTime requestedAt,
+        final int calls
+    ) {
+        return reserveCalls(CallQuota.BUS_ROUTE, CallQuotaPolicy.PRIMARY_KEY_ALIAS, requestedAt, calls);
     }
 }

@@ -17,5 +17,6 @@ public class ForecastEligibleObservationJpaEntity {
     @Column(name = "observation_batch_id")
     private Long observationBatchId;
 
-    protected ForecastEligibleObservationJpaEntity() { }
+    protected ForecastEligibleObservationJpaEntity() {
+    }
 }

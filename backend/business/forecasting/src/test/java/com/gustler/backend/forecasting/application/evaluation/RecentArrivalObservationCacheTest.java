@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import com.gustler.backend.forecasting.application.evaluation.RecentArrivalObservationCache.Round;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationQuery;
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
@@ -27,12 +28,12 @@ class RecentArrivalObservationCacheTest {
         // given
         ArrivalCandidate row = candidate(10, NOW.minusSeconds(15));
         givenRows(row);
-        var first = cache.begin(NOW);
+        Round first = cache.begin(NOW);
         read(first, 1, false);
         first.committed(NOW);
 
         // when
-        var result = read(cache.begin(NOW.plusSeconds(10)), 1, false);
+        List<ArrivalCandidate> result = read(cache.begin(NOW.plusSeconds(10)), 1, false);
 
         // then
         assertThat(result).containsExactly(row);
@@ -45,7 +46,7 @@ class RecentArrivalObservationCacheTest {
         // given
         ArrivalCandidate later = candidate(20, NOW.minusSeconds(15));
         givenRows(later);
-        var first = cache.begin(NOW);
+        Round first = cache.begin(NOW);
         read(first, 1, false);
         first.committed(NOW);
         ArrivalCandidate delayed = candidate(5, NOW.minusSeconds(30));
@@ -53,7 +54,7 @@ class RecentArrivalObservationCacheTest {
         when(query.findByIds(1, "bus", List.of(5L))).thenReturn(List.of(delayed));
 
         // when
-        var result = read(cache.begin(NOW), 1, false);
+        List<ArrivalCandidate> result = read(cache.begin(NOW), 1, false);
 
         // then
         assertThat(result).containsExactly(delayed, later);
@@ -68,7 +69,7 @@ class RecentArrivalObservationCacheTest {
         when(query.findByIds(1, "bus", List.of(10L, 20L))).thenReturn(List.of(second, first));
 
         // when
-        var result = read(cache.begin(NOW), 1, false);
+        List<ArrivalCandidate> result = read(cache.begin(NOW), 1, false);
 
         // then
         assertThat(result).containsExactly(first, second);
@@ -79,14 +80,14 @@ class RecentArrivalObservationCacheTest {
         // given
         ArrivalCandidate before = candidate(10, NOW.minusSeconds(15));
         givenRows(before);
-        var first = cache.begin(NOW);
+        Round first = cache.begin(NOW);
         read(first, 1, false);
         first.committed(NOW);
         ArrivalCandidate changed = new ArrivalCandidate(10, before.vehicle(), null, true);
         when(query.findByIds(1, "bus", List.of(10L))).thenReturn(List.of(changed));
 
         // when
-        var result = read(cache.begin(NOW), 2, false);
+        List<ArrivalCandidate> result = read(cache.begin(NOW), 2, false);
 
         // then
         assertThat(result).containsExactly(changed);
@@ -98,13 +99,13 @@ class RecentArrivalObservationCacheTest {
         // given
         ArrivalCandidate row = candidate(10, NOW.minusSeconds(15));
         givenRows(row);
-        var first = cache.begin(NOW);
+        Round first = cache.begin(NOW);
         read(first, 1, false);
         first.committed(NOW);
         when(query.findAfter(1, "bus", AFTER, 400)).thenReturn(List.of());
 
         // when
-        var result = read(cache.begin(NOW), 1, true);
+        List<ArrivalCandidate> result = read(cache.begin(NOW), 1, true);
 
         // then
         assertThat(result).isEmpty();
@@ -121,14 +122,14 @@ class RecentArrivalObservationCacheTest {
         when(query.findIdsAfter(1, "bus", AFTER, 400)).thenReturn(List.of(10L, 20L, 30L));
         when(query.findByIds(1, "bus", List.of(10L, 20L, 30L)))
             .thenReturn(List.of(first, second, third));
-        var round = cache.begin(NOW);
+        Round round = cache.begin(NOW);
         read(round, 1, false);
         round.committed(NOW);
         when(query.findIdsAfter(1, "bus", AFTER, 400)).thenReturn(List.of(10L));
         when(query.findByIds(1, "bus", List.of(10L))).thenReturn(List.of(first));
 
         // when
-        var result = read(cache.begin(NOW), 1, false);
+        List<ArrivalCandidate> result = read(cache.begin(NOW), 1, false);
 
         // then
         assertThat(result).containsExactly(first);
@@ -141,16 +142,16 @@ class RecentArrivalObservationCacheTest {
         ArrivalCandidate first = candidate(10, NOW.minusSeconds(30));
         ArrivalCandidate second = candidate(20, NOW.minusSeconds(20));
         ArrivalCandidate third = candidate(30, NOW.minusSeconds(10));
-        for (var candidate : List.of(first, second, third)) {
+        for (ArrivalCandidate candidate : List.of(first, second, third)) {
             givenRows(candidate);
-            var round = cache.begin(NOW);
+            Round round = cache.begin(NOW);
             read(round, 1, false);
             round.committed(NOW);
         }
         givenRows(first);
 
         // when
-        var result = read(cache.begin(NOW), 1, false);
+        List<ArrivalCandidate> result = read(cache.begin(NOW), 1, false);
 
         // then
         assertThat(result).containsExactly(first);
@@ -162,12 +163,12 @@ class RecentArrivalObservationCacheTest {
         // given
         ArrivalCandidate row = candidate(10, NOW.minusSeconds(1799));
         givenRows(row);
-        var first = cache.begin(NOW);
+        Round first = cache.begin(NOW);
         read(first, 1, false);
         first.committed(NOW.plusSeconds(1));
 
         // when
-        var result = read(cache.begin(NOW.plusSeconds(1)), 1, false);
+        List<ArrivalCandidate> result = read(cache.begin(NOW.plusSeconds(1)), 1, false);
 
         // then
         assertThat(result).containsExactly(row);
@@ -179,12 +180,12 @@ class RecentArrivalObservationCacheTest {
         // given
         ArrivalCandidate row = candidate(10, NOW.minusSeconds(1799));
         givenRows(row);
-        var first = cache.begin(NOW);
+        Round first = cache.begin(NOW);
         read(first, 1, false);
         first.committed(NOW);
 
         // when
-        var result = read(cache.begin(NOW.plusSeconds(1)), 1, false);
+        List<ArrivalCandidate> result = read(cache.begin(NOW.plusSeconds(1)), 1, false);
 
         // then
         assertThat(result).containsExactly(row);
@@ -209,13 +210,13 @@ class RecentArrivalObservationCacheTest {
         // given
         ArrivalCandidate row = candidate(10, NOW.minusSeconds(15));
         givenRows(row);
-        var first = cache.begin(NOW);
+        Round first = cache.begin(NOW);
         read(first, 1, false);
         first.committed(NOW);
-        var restarted = cache(true, 2);
+        RecentArrivalObservationCache restarted = cache(true, 2);
 
         // when
-        var result = read(restarted.begin(NOW), 1, false);
+        List<ArrivalCandidate> result = read(restarted.begin(NOW), 1, false);
 
         // then
         assertThat(result).containsExactly(row);
@@ -229,7 +230,7 @@ class RecentArrivalObservationCacheTest {
         when(query.findAfter(1, "bus", AFTER, 400)).thenReturn(List.of(row));
 
         // when
-        var result = read(cache(false, 2).begin(NOW), 1, false);
+        List<ArrivalCandidate> result = read(cache(false, 2).begin(NOW), 1, false);
 
         // then
         assertThat(result).containsExactly(row);
@@ -245,7 +246,7 @@ class RecentArrivalObservationCacheTest {
         when(query.findAfter(1, "bus", AFTER, 400)).thenReturn(List.of());
 
         // when
-        var result = read(cache.begin(NOW), 1, false);
+        List<ArrivalCandidate> result = read(cache.begin(NOW), 1, false);
 
         // then
         assertThat(result).isEmpty();
@@ -257,25 +258,25 @@ class RecentArrivalObservationCacheTest {
         // given
         ArrivalCandidate old = candidate(10, NOW.minusSeconds(15));
         givenRows(old);
-        var previous = cache.begin(NOW);
+        Round previous = cache.begin(NOW);
         read(previous, 1, false);
         ArrivalCandidate changed = new ArrivalCandidate(10, old.vehicle(), null, true);
         when(query.findByIds(1, "bus", List.of(10L))).thenReturn(List.of(changed));
-        var latest = cache.begin(NOW);
+        Round latest = cache.begin(NOW);
         read(latest, 2, false);
         latest.committed(NOW);
         previous.committed(NOW);
 
         // when
-        var result = read(cache.begin(NOW), 2, false);
+        List<ArrivalCandidate> result = read(cache.begin(NOW), 2, false);
 
         // then
         assertThat(result).containsExactly(changed);
         verify(query, times(2)).findByIds(1, "bus", List.of(10L));
     }
 
-    private List<ArrivalCandidate> read(RecentArrivalObservationCache.Round round,
-        long revision, boolean investigating) {
+    private List<ArrivalCandidate> read(Round round,
+        final long revision, final boolean investigating) {
         return round.read(query, 1, revision, investigating, "bus", AFTER, 400);
     }
 
@@ -284,11 +285,11 @@ class RecentArrivalObservationCacheTest {
         when(query.findByIds(1, "bus", List.of(row.observationId()))).thenReturn(List.of(row));
     }
 
-    private static RecentArrivalObservationCache cache(boolean enabled, int capacity) {
+    private static RecentArrivalObservationCache cache(final boolean enabled, final int capacity) {
         return new RecentArrivalObservationCache(enabled, capacity, Duration.ofMinutes(30));
     }
 
-    private static ArrivalCandidate candidate(long id, Instant at) {
+    private static ArrivalCandidate candidate(final long id, Instant at) {
         return new ArrivalCandidate(id, new ObservedVehicle("bus", 1, 5, at, 20, 1), 0L, true);
     }
 }

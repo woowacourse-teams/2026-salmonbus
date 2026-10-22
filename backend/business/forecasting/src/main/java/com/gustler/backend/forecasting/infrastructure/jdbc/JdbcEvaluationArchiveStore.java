@@ -1,7 +1,9 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
-import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveStore;
 import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveRetentionStore;
+import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveRetentionStore.Location;
+import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveRetentionStore.Snapshot;
+import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveStore;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch.Key;
@@ -16,19 +18,28 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.core.simple.JdbcClient.StatementSpec;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+/**
+ * 이관 묶음의 소유권·검증·원본 보존 위치를 DB 트랜잭션으로 확정한다.
+ * 삭제·복원은 같은 검증 원본인지 다시 확인한다.
+ */
 @Repository
 public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, EvaluationArchiveRetentionStore {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
@@ -37,8 +48,12 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
     private final Clock clock;
     private final TransactionTemplate transaction;
 
-    public JdbcEvaluationArchiveStore(JdbcClient jdbc, RouteDataQualityAccess quality, Clock clock,
-        PlatformTransactionManager transactions) {
+    public JdbcEvaluationArchiveStore(
+        JdbcClient jdbc,
+        RouteDataQualityAccess quality,
+        Clock clock,
+        PlatformTransactionManager transactions
+    ) {
         this.jdbc = jdbc;
         this.quality = quality;
         this.clock = clock;
@@ -47,25 +62,26 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
     }
 
     @Override
-    public Optional<EvaluationArchiveBatch> reserve(long routeVersionId, List<Key> candidates) {
-        if (routeVersionId <= 0 || candidates == null || candidates.isEmpty() || candidates.size() > 1000
-            || candidates.stream().anyMatch(key -> key == null)) {
+    public Optional<EvaluationArchiveBatch> reserve(final long routeVersionId, List<Key> candidates) {
+        if (!hasValidCandidates(routeVersionId, candidates)) {
             throw new IllegalArgumentException("노선과 한정된 정산 후보가 필요하다");
         }
-        List<Key> keys = candidates.stream().distinct()
-            .sorted(Comparator.comparingLong(Key::observationId).thenComparingInt(Key::stopOrder)).toList();
+
+        List<Key> keys = candidates.stream()
+            .distinct()
+            .sorted(Comparator.comparingLong(Key::observationId).thenComparingInt(Key::stopOrder))
+            .toList();
         return inTransaction(() -> {
-            long revision = quality.lock(routeVersionId);
+            final long revision = quality.lock(routeVersionId);
             if (quality.anyInvestigationPending(routeVersionId)) {
                 return Optional.empty();
             }
-            var before = clock.instant().atZone(SEOUL).toLocalDate().atStartOfDay(SEOUL)
+            OffsetDateTime before = clock.instant().atZone(SEOUL).toLocalDate().atStartOfDay(SEOUL)
                 .toInstant().atOffset(ZoneOffset.UTC);
-            var keyValues = new java.util.StringJoiner(",");
-            for (int index = 0; index < keys.size(); index++) {
-                keyValues.add("(CAST(:observation%d AS bigint),CAST(:stop%d AS integer))".formatted(index, index));
-            }
-            var query = jdbc.sql("""
+            String keyValues = IntStream.range(0, keys.size())
+                .mapToObj(index -> "(CAST(:observation%d AS bigint),CAST(:stop%d AS integer))".formatted(index, index))
+                .collect(Collectors.joining(","));
+            StatementSpec query = jdbc.sql("""
                 WITH keys(observation_id,stop_order) AS (VALUES %s)
                 SELECT e.vehicle_observation_id,e.target_stop_order,to_jsonb(e)::text AS original
                 FROM forecast_evaluation_result e JOIN keys k
@@ -91,18 +107,22 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
                 return Optional.empty();
             }
             UUID id = UUID.randomUUID();
-            var batch = jdbc.sql("""
+            EvaluationArchiveBatch batch = jdbc.sql("""
                 INSERT INTO evaluation_archive_batch(id,route_version_id,quality_revision,lease_token,lease_until,row_count)
                 VALUES(:id,:route,:revision,:token,clock_timestamp()+interval '5 minutes',:count)
                 RETURNING *
-                """).param("id", id).param("route", routeVersionId).param("revision", revision)
-                .param("token", UUID.randomUUID()).param("count", rows.size())
-                .query(JdbcEvaluationArchiveStore::batchOf).single();
-            var memberValues = new java.util.StringJoiner(",");
-            for (int index = 0; index < rows.size(); index++) {
-                memberValues.add("(:observation%d,:stop%d,:route,:batch,:digest%d)".formatted(index, index, index));
-            }
-            var insert = jdbc.sql("""
+                """)
+                .param("id", id)
+                .param("route", routeVersionId)
+                .param("revision", revision)
+                .param("token", UUID.randomUUID())
+                .param("count", rows.size())
+                .query(JdbcEvaluationArchiveStore::batchOf)
+                .single();
+            String memberValues = IntStream.range(0, rows.size())
+                .mapToObj(index -> "(:observation%d,:stop%d,:route,:batch,:digest%d)".formatted(index, index, index))
+                .collect(Collectors.joining(","));
+            StatementSpec insert = jdbc.sql("""
                 INSERT INTO evaluation_archive_member(vehicle_observation_id,target_stop_order,
                     route_version_id,batch_id,original_sha256) VALUES %s
                 """.formatted(memberValues)).param("route", routeVersionId).param("batch", id);
@@ -116,10 +136,20 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
         });
     }
 
+    private boolean hasValidCandidates(long routeVersionId, List<Key> candidates) {
+        if (routeVersionId <= 0 || candidates == null) {
+            return false;
+        }
+        if (candidates.isEmpty() || candidates.size() > 1000) {
+            return false;
+        }
+        return candidates.stream().noneMatch(key -> key == null);
+    }
+
     @Override
     public Optional<EvaluationArchiveBatch> reclaim(UUID batchId) {
         return inTransaction(() -> {
-            long route = jdbc.sql("SELECT route_version_id FROM evaluation_archive_batch WHERE id=?")
+            final long route = jdbc.sql("SELECT route_version_id FROM evaluation_archive_batch WHERE id=?")
                 .param(batchId).query(Long.class).single();
             quality.lock(route);
             return jdbc.sql("""
@@ -147,7 +177,7 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
         inTransaction(() -> {
             assertOwned(batch);
             readUnchanged(batch);
-            int changed = jdbc.sql("""
+            final int changed = jdbc.sql("""
                 UPDATE evaluation_archive_batch SET state='VERIFIED',manifest_sha256=:digest,
                     verified_at=COALESCE(verified_at,clock_timestamp())
                 WHERE id=:id AND lease_token=:token AND lease_until>clock_timestamp()
@@ -165,8 +195,7 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
     public Snapshot preparePurge(EvaluationArchiveBatch owned) {
         return inTransaction(() -> {
             Snapshot snapshot = retentionOf(owned);
-            if (snapshot.location() == Location.PURGED) assertNoLiveRows(snapshot.batch());
-            else assertPurgeReady(snapshot);
+            validatePurgeSnapshot(snapshot);
             return snapshot;
         });
     }
@@ -187,7 +216,7 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
             assertPurgeReady(current);
             assertArchivedRows(current.batch(), verifiedRows);
             readUnchanged(current.batch());
-            int removed = jdbc.sql("""
+            final int removed = jdbc.sql("""
                 DELETE FROM forecast_evaluation_result e USING evaluation_archive_member m
                 WHERE m.batch_id=:batch AND e.vehicle_observation_id=m.vehicle_observation_id
                   AND e.target_stop_order=m.target_stop_order AND e.route_version_id=m.route_version_id
@@ -218,7 +247,7 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
             }
             int restored = 0;
             for (Row row : verifiedRows) {
-                var existing = jdbc.sql("""
+                Optional<String> existing = jdbc.sql("""
                     SELECT to_jsonb(e)::text FROM forecast_evaluation_result e
                     WHERE vehicle_observation_id=? AND target_stop_order=? FOR UPDATE
                     """).params(row.key().observationId(), row.key().stopOrder()).query(String.class).optional();
@@ -239,7 +268,7 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
     }
 
     private Snapshot retentionOf(EvaluationArchiveBatch owned) {
-        long revision = quality.lock(owned.routeVersionId());
+        final long revision = quality.lock(owned.routeVersionId());
         if (quality.anyInvestigationPending(owned.routeVersionId())) {
             throw new IllegalStateException("품질 조사 중에는 원본 위치를 바꾸지 않는다");
         }
@@ -264,8 +293,8 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
     }
 
     private void assertPurgeReady(Snapshot snapshot) {
-        var batch = snapshot.batch();
-        boolean restored = jdbc.sql("SELECT restored_at IS NOT NULL FROM evaluation_archive_batch WHERE id=?")
+        EvaluationArchiveBatch batch = snapshot.batch();
+        final boolean restored = jdbc.sql("SELECT restored_at IS NOT NULL FROM evaluation_archive_batch WHERE id=?")
             .param(batch.id()).query(Boolean.class).single();
         if (restored) {
             throw new IllegalStateException("복원한 원본은 다시 삭제하지 않는다");
@@ -274,9 +303,9 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
             throw new IllegalStateException("원본 검증 이후 품질 기준이 바뀌었다");
         }
         readUnchanged(batch);
-        var before = clock.instant().atZone(SEOUL).toLocalDate().atStartOfDay(SEOUL)
+        OffsetDateTime before = clock.instant().atZone(SEOUL).toLocalDate().atStartOfDay(SEOUL)
             .toInstant().atOffset(ZoneOffset.UTC);
-        boolean ready = jdbc.sql("""
+        final boolean ready = jdbc.sql("""
             SELECT EXISTS(SELECT 1 FROM stop_demand_baseline base
                 JOIN stop_demand_run run USING(route_version_id)
                 WHERE base.route_version_id=:route AND base.initialized
@@ -304,21 +333,21 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
         if (rows == null || rows.size() != batch.rowCount()) {
             throw new IllegalArgumentException("보존 원본의 건수가 묶음과 다르다");
         }
-        var expected = jdbc.sql("""
+        List<Entry<Key, String>> expected = jdbc.sql("""
             SELECT vehicle_observation_id,target_stop_order,original_sha256
             FROM evaluation_archive_member WHERE batch_id=?
-            """).param(batch.id()).query((rs, n) -> java.util.Map.entry(
-                new Key(rs.getLong("vehicle_observation_id"), rs.getInt("target_stop_order")),
-                rs.getString("original_sha256"))).list();
-        var actual = new java.util.HashMap<Key, String>();
+            """).param(batch.id()).query((rs, n) -> Map.entry(
+            new Key(rs.getLong("vehicle_observation_id"), rs.getInt("target_stop_order")),
+            rs.getString("original_sha256"))).list();
+        HashMap<Key, String> actual = new HashMap<Key, String>();
         long bytes = 0;
         for (Row row : rows) {
-            if (row == null) throw new IllegalArgumentException("보존 원본이 비어 있다");
-            int size = row.originalJson().getBytes(StandardCharsets.UTF_8).length;
+            if (row == null) {
+                throw new IllegalArgumentException("보존 원본이 비어 있다");
+            }
+            final int size = row.originalJson().getBytes(StandardCharsets.UTF_8).length;
             bytes = Math.addExact(bytes, size);
-            if (size > 64 * 1024 || bytes > 8 * 1024 * 1024
-                || !digest(row.originalJson()).equals(row.sha256())
-                || actual.putIfAbsent(row.key(), row.sha256()) != null) {
+            if (!hasValidArchivedRow(row, size, bytes, actual)) {
                 throw new IllegalArgumentException("보존 원본의 크기·검증값·중복을 확인하지 못했다");
             }
         }
@@ -328,16 +357,28 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
         }
     }
 
+    private boolean hasValidArchivedRow(Row row, int size, long totalBytes, Map<Key, String> actual) {
+        if (size > 64 * 1024 || totalBytes > 8 * 1024 * 1024) {
+            return false;
+        }
+        if (!digest(row.originalJson()).equals(row.sha256())) {
+            return false;
+        }
+        return actual.putIfAbsent(row.key(), row.sha256()) == null;
+    }
+
     private void assertNoLiveRows(EvaluationArchiveBatch batch) {
-        boolean exists = jdbc.sql("""
+        final boolean exists = jdbc.sql("""
             SELECT EXISTS(SELECT 1 FROM evaluation_archive_member m
                 JOIN forecast_evaluation_result e USING(vehicle_observation_id,target_stop_order) WHERE m.batch_id=?)
             """).param(batch.id()).query(Boolean.class).single();
-        if (exists) throw new IllegalStateException("삭제 기록과 달리 DB 원본이 존재한다");
+        if (exists) {
+            throw new IllegalStateException("삭제 기록과 달리 DB 원본이 존재한다");
+        }
     }
 
     private void recordLocation(Snapshot snapshot, Location location) {
-        int changed = jdbc.sql("""
+        final int changed = jdbc.sql("""
             UPDATE evaluation_archive_batch SET storage_state=:state,storage_revision=storage_revision+1,
                 purged_at=CASE WHEN :state='PURGED' THEN clock_timestamp() ELSE purged_at END,
                 restored_at=CASE WHEN :state='LIVE' THEN clock_timestamp() ELSE restored_at END
@@ -350,11 +391,11 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
     }
 
     private void assertOwned(EvaluationArchiveBatch batch) {
-        long revision = quality.lock(batch.routeVersionId());
+        final long revision = quality.lock(batch.routeVersionId());
         if (revision != batch.qualityRevision() || quality.anyInvestigationPending(batch.routeVersionId())) {
             throw new IllegalStateException("이관 예약 이후 품질 기준이 바뀌었다");
         }
-        boolean owned = jdbc.sql("""
+        final boolean owned = jdbc.sql("""
             SELECT EXISTS(SELECT 1 FROM evaluation_archive_batch WHERE id=:id AND route_version_id=:route
               AND quality_revision=:quality AND row_count=:count AND lease_token=:token
               AND lease_until>clock_timestamp() AND abandoned_at IS NULL)
@@ -375,9 +416,10 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
             WHERE m.batch_id=:id ORDER BY m.vehicle_observation_id,m.target_stop_order
             FOR UPDATE OF e
             """).param("id", batch.id()).query((rs, n) -> new Row(
-                new Key(rs.getLong("vehicle_observation_id"), rs.getInt("target_stop_order")),
-                rs.getString("original"), rs.getString("original_sha256"))).list();
-        if (rows.size() != batch.rowCount() || rows.stream().anyMatch(row -> !digest(row.originalJson()).equals(row.sha256()))) {
+            new Key(rs.getLong("vehicle_observation_id"), rs.getInt("target_stop_order")),
+            rs.getString("original"), rs.getString("original_sha256"))).list();
+        if (rows.size() != batch.rowCount() || rows.stream()
+            .anyMatch(row -> !digest(row.originalJson()).equals(row.sha256()))) {
             throw new IllegalStateException("예약한 완료 정산의 원본이 바뀌었거나 없어졌다");
         }
         return rows;
@@ -396,7 +438,7 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
         });
     }
 
-    private static EvaluationArchiveBatch batchOf(ResultSet rs, int row) throws SQLException {
+    private static EvaluationArchiveBatch batchOf(ResultSet rs, final int row) throws SQLException {
         return new EvaluationArchiveBatch(rs.getObject("id", UUID.class), rs.getLong("route_version_id"),
             rs.getLong("quality_revision"), rs.getObject("lease_token", UUID.class),
             rs.getObject("lease_until", OffsetDateTime.class).toInstant(), State.valueOf(rs.getString("state")),
@@ -410,5 +452,13 @@ public class JdbcEvaluationArchiveStore implements EvaluationArchiveStore, Evalu
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException(exception);
         }
+    }
+
+    private void validatePurgeSnapshot(Snapshot snapshot) {
+        if (snapshot.location() == Location.PURGED) {
+            assertNoLiveRows(snapshot.batch());
+            return;
+        }
+        assertPurgeReady(snapshot);
     }
 }

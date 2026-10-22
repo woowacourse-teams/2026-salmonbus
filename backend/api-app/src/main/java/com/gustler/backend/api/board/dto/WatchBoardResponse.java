@@ -5,8 +5,14 @@ import com.gustler.backend.api.board.domain.Board;
 import com.gustler.backend.api.vehicle.dto.VehicleResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
+/**
+ * 같은 관측 기준의 탑승판과 차량을 한 응답으로 제공한다.
+ * 관측 만료와 캐시 수명은 조회 결과의 기준을 따른다.
+ */
 @Schema(requiredProperties = {"route", "observedAt", "staleAt", "model", "vehiclesInService", "stops", "vehicles"})
 public record WatchBoardResponse(
     @Schema(description = "노선과 현재 판본의 방향 정보")
@@ -26,6 +32,15 @@ public record WatchBoardResponse(
         + "차량의 예보는 DOWN 정류장에 붙는다")
     List<VehicleResponse> vehicles
 ) {
+    /** 원본 참조와 분리하고 기존 null·원소·순서를 보존한다. */
+    public WatchBoardResponse {
+        if (stops != null) {
+            stops = Collections.unmodifiableList(new ArrayList<>(stops));
+        }
+        if (vehicles != null) {
+            vehicles = Collections.unmodifiableList(new ArrayList<>(vehicles));
+        }
+    }
 
     public static WatchBoardResponse from(
         WatchBoardOverview overview
@@ -37,10 +52,12 @@ public record WatchBoardResponse(
             board.staleAt(),
             ModelInfoResponse.from(board.model()),
             board.vehiclesInService(),
-            board.stops().stream()
+            board.stops()
+                .stream()
                 .map(StopStateResponse::from)
                 .toList(),
-            overview.vehicles().stream()
+            overview.vehicles()
+                .stream()
                 .map(VehicleResponse::from)
                 .toList()
         );

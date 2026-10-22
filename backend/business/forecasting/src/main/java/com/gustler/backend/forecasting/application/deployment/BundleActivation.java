@@ -5,8 +5,10 @@ import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentReposito
 import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import java.util.UUID;
 
+/**
+ * 검증된 계수 묶음의 활성화를 배포 기록과 런타임 모델에 연결한다.
+ */
 public final class BundleActivation {
-
     private final ModelDeploymentRepository deployments;
     private final LoadedModelRegistry bundles;
 
@@ -18,6 +20,9 @@ public final class BundleActivation {
         this.bundles = bundles;
     }
 
+    /**
+     * 검증한 번들을 메모리에 적재하고 STAGED 배포를 ACTIVE로 승격한다. 승격에 실패하면 적재한 번들을 제거하고 예외로 실패한다.
+     */
     public long activate(
         ModelBundleFiles files
     ) {

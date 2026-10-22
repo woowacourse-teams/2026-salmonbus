@@ -2,13 +2,16 @@ package com.gustler.backend.api.board.infrastructure.jpa;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gustler.backend.api.board.application.BoardSnapshot;
 import com.gustler.backend.api.board.application.BoardVehicleObservation;
+import com.gustler.backend.api.board.application.SnapshotObservation;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture.RouteContext;
 import com.gustler.backend.api.observation.ObservationFreshness;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.OffsetDateTime;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -17,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 @IntegrationTest
 @Transactional
 class JpaBoardQueryRepositoryIntegrationTest {
-
     @Autowired
     private JpaBoardQueryRepository repository;
 
@@ -26,21 +28,25 @@ class JpaBoardQueryRepositoryIntegrationTest {
 
     @Test
     void 예보가_없어도_선택한_관측_묶음과_노선_판본의_차량을_조회한다() {
+        // given
         BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbcClient);
         OffsetDateTime now = OffsetDateTime.now();
         RouteContext route = route(fixture, "204000057", now);
         RouteContext otherRoute = route(fixture, "234000050", now);
-        long batch = fixture.insertBatch(route, now, "SUCCESS_ROWS", 2);
-        long otherBatch = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_ROWS", 1);
-        long otherRouteBatch = fixture.insertBatch(otherRoute, now, "SUCCESS_ROWS", 1);
-        long observation = fixture.insertObservation(route, batch, 1, null, 1, "STOP-1", now);
+        final long batch = fixture.insertBatch(route, now, "SUCCESS_ROWS", 2);
+        final long otherBatch = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_ROWS", 1);
+        final long otherRouteBatch = fixture.insertBatch(otherRoute, now, "SUCCESS_ROWS", 1);
+        final long observation = fixture.insertObservation(route, batch, 1, null, 1, "STOP-1", now);
         fixture.insertObservation(route, batch, 2, null, 1, "STOP-1", now);
         fixture.insertObservation(route, otherBatch, 1, "OLD", 1, "STOP-1", now);
         fixture.insertObservation(otherRoute, otherRouteBatch, 1, "OTHER", 1, "STOP-1", now);
         // 정류장에 도착한 차량의 통과 순번은 현재 정류장 순번보다 하나 작다.
+
+        // when
         jdbcClient.sql("UPDATE vehicle_observation SET passed_stop_order = 0, running_state = 1 WHERE id = :id")
             .param("id", observation).update();
 
+        // then
         assertThat(repository.findObservedVehicles(batch, route.routeVersionId()))
             .containsExactlyInAnyOrder(new BoardVehicleObservation(null, 1, 0),
                 new BoardVehicleObservation(null, 2, 1));
@@ -55,24 +61,26 @@ class JpaBoardQueryRepositoryIntegrationTest {
         OffsetDateTime now = OffsetDateTime.now().withNano(0);
         RouteContext route = route(fixture, "204000057", now);
         fixture.insertStop(route, 2, "STOP-2", "다음 정류장", "UP", true);
-        long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
-        long earlierBatch = fixture.insertBatch(route, now.minusMinutes(2), "SUCCESS_ROWS", 1);
-        long observation = fixture.insertObservation(route, earlierBatch, 1, "OLD", 1, "STOP-1", now);
+        final long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        final long earlierBatch = fixture.insertBatch(route, now.minusMinutes(2), "SUCCESS_ROWS", 1);
+        final long observation = fixture.insertObservation(route, earlierBatch, 1, "OLD", 1, "STOP-1", now);
         // 발행 시각이 늦어도 이전 관측이 최신 빈 발행을 대신하지 않는다.
         fixture.insertPublication(earlierBatch, model, now.minusSeconds(10), now.minusSeconds(5));
         fixture.insertForecast(route, observation, 2, 1, model, 0.2, 20.0, now.minusSeconds(10));
-        long emptyBatch = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
+        final long emptyBatch = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
         fixture.insertPublication(emptyBatch, model, now.minusSeconds(50), now.minusSeconds(50));
         fixture.insertBatch(route, now, "SUCCESS_ROWS", 1);
 
         // when
-        var selected = repository.findSnapshot(new RouteId(route.sourceRouteId()))
+        SnapshotObservation selected = repository.findSnapshot(new RouteId(route.sourceRouteId()))
             .orElseThrow().observation().orElseThrow();
 
         // then
-        assertThat(selected.batchId()).isEqualTo(emptyBatch);
-        assertThat(selected.observedAt().toInstant()).isEqualTo(now.minusMinutes(1).toInstant());
-        assertThat(selected.vehiclesInService()).isZero();
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(selected.batchId()).isEqualTo(emptyBatch);
+            softly.assertThat(selected.observedAt().toInstant()).isEqualTo(now.minusMinutes(1).toInstant());
+            softly.assertThat(selected.vehiclesInService()).isZero();
+        }
         assertThat(repository.findPredictions(earlierBatch)).hasSize(1);
         assertThat(repository.findPredictions(selected.batchId())).isEmpty();
     }
@@ -92,12 +100,14 @@ class JpaBoardQueryRepositoryIntegrationTest {
         fixture.insertBatch(route, now.minusSeconds(30), "FAILED_UNREADABLE", null);
 
         // when
-        var selected = repository.findSnapshot(new RouteId(route.sourceRouteId()))
+        SnapshotObservation selected = repository.findSnapshot(new RouteId(route.sourceRouteId()))
             .orElseThrow().observation().orElseThrow();
 
         // then
-        assertThat(selected.batchId()).isEqualTo(latestNormalBatch);
-        assertThat(selected.forecastPublished()).isFalse();
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(selected.batchId()).isEqualTo(latestNormalBatch);
+            softly.assertThat(selected.forecastPublished()).isFalse();
+        }
     }
 
     @Test
@@ -112,12 +122,14 @@ class JpaBoardQueryRepositoryIntegrationTest {
         fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
 
         // when
-        var selected = repository.findSnapshot(new RouteId(route.sourceRouteId()))
+        SnapshotObservation selected = repository.findSnapshot(new RouteId(route.sourceRouteId()))
             .orElseThrow().observation().orElseThrow();
 
         // then
-        assertThat(selected.batchId()).isEqualTo(publishedBatch);
-        assertThat(selected.forecastPublished()).isTrue();
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(selected.batchId()).isEqualTo(publishedBatch);
+            softly.assertThat(selected.forecastPublished()).isTrue();
+        }
     }
 
     @Test
@@ -133,7 +145,7 @@ class JpaBoardQueryRepositoryIntegrationTest {
         fixture.insertBatch(route, now.minusSeconds(30), "SUCCESS_EMPTY", 0);
 
         // when
-        var snapshot = repository.findSnapshot(new RouteId(route.sourceRouteId())).orElseThrow();
+        BoardSnapshot snapshot = repository.findSnapshot(new RouteId(route.sourceRouteId())).orElseThrow();
 
         // then
         assertThat(snapshot.observation()).isEmpty();
@@ -148,7 +160,7 @@ class JpaBoardQueryRepositoryIntegrationTest {
         fixture.insertBatch(route, now.minus(ObservationFreshness.MAX_WINDOW).minusSeconds(1), "SUCCESS_EMPTY", 0);
 
         // when
-        var snapshot = repository.findSnapshot(new RouteId(route.sourceRouteId())).orElseThrow();
+        BoardSnapshot snapshot = repository.findSnapshot(new RouteId(route.sourceRouteId())).orElseThrow();
 
         // then
         assertThat(snapshot.observation()).isEmpty();

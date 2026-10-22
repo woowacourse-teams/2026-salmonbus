@@ -1,21 +1,22 @@
 package com.gustler.backend.forecasting.application.publication;
 
-import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
-import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
-import com.gustler.backend.forecasting.domain.model.SeatDistribution;
-import com.gustler.backend.forecasting.domain.model.SeatForecastInput;
-import com.gustler.backend.forecasting.domain.model.SeatForecastModel;
-import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
-import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
+import com.gustler.backend.forecasting.application.publication.PublishPendingForecastsIntegrationTest
+    .FixedSeatForecastModel;
+import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
+import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
+import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
-import com.gustler.backend.support.ConfirmedTripFixture;
+import com.gustler.backend.forecasting.domain.model.SeatDistribution;
+import com.gustler.backend.forecasting.domain.model.SeatForecastInput;
+import com.gustler.backend.forecasting.domain.model.SeatForecastModel;
+import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
+import com.gustler.backend.support.ConfirmedTripFixture;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -23,8 +24,9 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import org.junit.jupiter.api.BeforeEach;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -43,14 +45,13 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  * 테스트가 끝나면 일회용 PostgreSQL의 노선·모델 및 연결된 테스트 자료를 정리한다.
  */
 @ForecastingIntegrationTest
-@Import(PublishPendingForecastsIntegrationTest.FixedSeatForecastModel.class)
+@Import(FixedSeatForecastModel.class)
 class PublishPendingForecastsIntegrationTest {
-
-    /** 판마다 남는 두 판본. 기본값이 없어서 픽스처가 직접 넣는다. */
+    /** 수집 배치마다 기록할 두 판본. 기본값이 없어 픽스처에서 직접 지정한다. */
     private static final String NORMALIZATION_VERSION = "normalization-v1.0.0";
     private static final String COLLECTION_STRATEGY_VERSION = "adaptive-kst-v1.0.1";
 
-    /** 지나감(2)으로 넣어서 통과 순번이 상류 순번과 같다. 관측 시각 열은 SAL-84 가 지웠다. */
+    /** 운행 상태를 지나감(2)으로 설정해 통과 순번이 상류 순번과 같다. 관측 시각 열은 SAL-84 에서 제거했다. */
     private static final int RUNNING_STATE_DEPARTED = 2;
     private static final int SEATS_LEFT = 12;
     private static final String SEAT_UNKNOWN_REASON = "REPORTED_UNKNOWN";
@@ -62,7 +63,7 @@ class PublishPendingForecastsIntegrationTest {
     private static final String VEHICLE_204000207 = "204000207";
     private static final String VEHICLE_204000208 = "204000208";
 
-    /** 예보를 붙일 수 있는 판의 결말. 차가 한 대도 없던 판은 SUCCESS_EMPTY 로 남는다. */
+    /** 예보를 발행할 수 있는 수집 배치의 결과 상태. 차량이 없던 수집 배치는 SUCCESS_EMPTY 로 남는다. */
     private static final String OUTCOME_WITH_ROWS = "SUCCESS_ROWS";
     private static final String OUTCOME_WITHOUT_ROWS = "SUCCESS_EMPTY";
 
@@ -88,7 +89,7 @@ class PublishPendingForecastsIntegrationTest {
 
     private static final long NO_FORECAST_ROW = 0L;
 
-    /** 판이 상류 응답을 받은 시각. 관측 시각의 권위가 여기 있다. */
+    /** 수집 배치가 상류 응답을 받은 시각. 관측 시각의 기준이다. */
     private static final OffsetDateTime RESPONSE_RECEIVED_AT =
         OffsetDateTime.parse("2026-08-19T11:14:04.911+09:00");
     private static final OffsetDateTime EMPTY_RESPONSE_RECEIVED_AT =
@@ -160,12 +161,14 @@ class PublishPendingForecastsIntegrationTest {
 
         // then
         StoredPublication publication = readPublication(observationBatchId);
-        assertThat(publication.modelDeploymentId()).isEqualTo(modelDeploymentId);
-        assertThat(publication.statisticsRevision())
-            .isEqualTo(seatForecastModel.firstReceivedInput().statistics().revision());
-        assertThat(publication.qualityRevision()).isEqualTo(1);
-        assertThat(publication.observedAt()).isEqualTo(RESPONSE_RECEIVED_AT.toInstant());
-        assertThat(publication.predictionCount()).isEqualTo(TARGET_COUNT_AHEAD_OF_PASSED_STOP);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(publication.modelDeploymentId()).isEqualTo(modelDeploymentId);
+            softly.assertThat(publication.statisticsRevision())
+                .isEqualTo(seatForecastModel.firstReceivedInput().statistics().revision());
+            softly.assertThat(publication.qualityRevision()).isEqualTo(1);
+            softly.assertThat(publication.observedAt()).isEqualTo(RESPONSE_RECEIVED_AT.toInstant());
+            softly.assertThat(publication.predictionCount()).isEqualTo(TARGET_COUNT_AHEAD_OF_PASSED_STOP);
+        }
         assertThat(readDistinctGeneratedAt()).containsExactly(publication.generatedAt());
         assertThat(publication.publishedAt()).isEqualTo(publication.generatedAt());
         assertThat(readInputConfirmedAt(observationBatchId)).isEqualTo(publication.generatedAt());
@@ -248,10 +251,12 @@ class PublishPendingForecastsIntegrationTest {
 
         // then
         StoredPublication publication = readPublication(emptyBatchId);
-        assertThat(publication.modelDeploymentId()).isEqualTo(modelDeploymentId);
-        assertThat(publication.qualityRevision()).isEqualTo(1);
-        assertThat(publication.predictionCount()).isZero();
-        assertThat(publication.observedAt()).isEqualTo(EMPTY_RESPONSE_RECEIVED_AT.toInstant());
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(publication.modelDeploymentId()).isEqualTo(modelDeploymentId);
+            softly.assertThat(publication.qualityRevision()).isEqualTo(1);
+            softly.assertThat(publication.predictionCount()).isZero();
+            softly.assertThat(publication.observedAt()).isEqualTo(EMPTY_RESPONSE_RECEIVED_AT.toInstant());
+        }
         assertThat(publication.generatedAt()).isNotNull();
         assertThat(publication.publishedAt()).isNotNull();
         assertThat(readInputConfirmedAt(emptyBatchId)).isNotNull();
@@ -328,7 +333,8 @@ class PublishPendingForecastsIntegrationTest {
         // when
         forecastJob.writeForecasts();
 
-        // then 값과 세대 번호를 따로 읽으면 그 사이 집계 교체에 두 값이 갈린다
+        // then
+        // 값과 세대 번호를 따로 읽으면 그 사이 집계 교체에 두 값이 갈린다
         final int actual = seatForecastModel.firstReceivedInput().statistics().revision();
         assertThat(readDemandStatisticsRevisions()).isNotEmpty().containsOnly(actual);
     }
@@ -338,7 +344,8 @@ class PublishPendingForecastsIntegrationTest {
         // when
         forecastJob.writeForecasts();
 
-        // then 두 곳이 각자 정하면 경계에서 한 예보 행이 두 시간대를 섞는다
+        // then
+        // 두 곳이 각자 정하면 경계에서 한 예보 행이 두 시간대를 섞는다
         SeatForecastInput actual = seatForecastModel.firstReceivedInput();
         assertThat(actual.timeSlot()).isEqualTo(actual.statistics().timeSlot());
     }
@@ -439,7 +446,8 @@ class PublishPendingForecastsIntegrationTest {
         // when
         forecastJob.writeForecasts();
 
-        // then 모델이 DB 를 안 읽으므로 배치가 재료를 다 챙겨야 한다
+        // then
+        // 모델이 DB 를 조회하지 않으므로 배치에서 입력 자료를 모두 준비해야 한다
         SeatForecastInput actual = seatForecastModel.firstReceivedInput();
         assertThat(actual.stops().largestStopOrder()).isEqualTo(LAST_STOP_ORDER);
     }
@@ -485,9 +493,7 @@ class PublishPendingForecastsIntegrationTest {
             .update();
     }
 
-    private void blockBoardingAt(
-        final int stopOrder
-    ) {
+    private void blockBoardingAt(final int stopOrder) {
         jdbcClient.sql("""
                 UPDATE route_stop
                 SET boarding_allowed = false
@@ -510,7 +516,10 @@ class PublishPendingForecastsIntegrationTest {
     private static Instant instantOf(
         OffsetDateTime timestamp
     ) {
-        return timestamp == null ? null : timestamp.toInstant();
+        if (timestamp == null) {
+            return null;
+        }
+        return timestamp.toInstant();
     }
 
     private long insertRoute() {
@@ -539,9 +548,7 @@ class PublishPendingForecastsIntegrationTest {
             .single();
     }
 
-    private void insertRouteStop(
-        final int stopOrder
-    ) {
+    private void insertRouteStop(final int stopOrder) {
         jdbcClient.sql("""
                 INSERT INTO route_stop (
                     route_version_id, stop_order, stop_id, name, direction, boarding_allowed
@@ -628,13 +635,13 @@ class PublishPendingForecastsIntegrationTest {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
-            .params(
-                observationBatchId, routeVersionId, sourceRowNumber,
-                vehicleId, passedStopOrder, stopIdOf(passedStopOrder), passedStopOrder,
-                RUNNING_STATE_DEPARTED, remainingSeats, seatUnknownReason
-            )
-            .query(Long.class)
-            .single());
+                    .params(
+                        observationBatchId, routeVersionId, sourceRowNumber,
+                        vehicleId, passedStopOrder, stopIdOf(passedStopOrder), passedStopOrder,
+                        RUNNING_STATE_DEPARTED, remainingSeats, seatUnknownReason
+                    )
+                    .query(Long.class)
+                    .single());
     }
 
     private static String stopIdOf(
@@ -669,24 +676,23 @@ class PublishPendingForecastsIntegrationTest {
     }
 
     /**
-     * 늘 같은 값을 내고 받은 재료를 적어 두는 좌석 예보 모델.
+     * 항상 같은 값을 반환하고 받은 입력을 기록하는 좌석 예보 모델이다.
      *
-     * <p>계수 번들이 없어 {@link SeatForecastModel} 구현이 아직 없다. 배치가 판을 열려면 모델 빈이
-     * 있어야 해서 테스트가 하나 올린다. 값이 고정이라 예보 행의 확률과 기대 잔여석이 실행마다 같다.
+     * <p>계수 번들이 없어 {@link SeatForecastModel} 구현이 아직 없다. 배치를 발행하려면 모델 빈이
+     * 필요하므로 테스트에서 등록한다. 값이 고정돼 예보 행의 확률과 기대 잔여석이 실행마다 같다.
      *
-     * <p>받은 재료를 적어 두는 이유는 배치가 모델에 무엇을 넘기는지가 이 티켓에서 바뀌었기 때문이다.
-     * 예보 행만 보면 재료가 빈 채로 넘어가도 알 수 없다.
+     * <p>이 티켓에서 배치가 모델에 넘기는 입력이 바뀌었으므로 받은 입력도 기록한다.
+     * 예보 행만 확인하면 입력이 빈 채로 전달돼도 알 수 없다.
      */
     @TestConfiguration(proxyBeanMethods = false)
     static class FixedSeatForecastModel {
-
         private static final Instant DATA_UNTIL = Instant.parse("2026-08-30T14:59:56Z");
 
         /**
-         * 픽스처의 판을 신선도 창 안에 두는 시각. 두 판 중 늦은 것보다 1분쯤 뒤다.
+         * 픽스처의 수집 배치를 신선도 창 안에 두는 시각이다. 두 수집 배치 중 늦은 것보다 1분쯤 뒤다.
          *
-         * <p>실시계로 두면 고정된 과거인 픽스처가 기본 창 5분 밖이라 판이 하나도 안 열린다.
-         * 창을 넓혀서 비키면 그 값이 운영에서 쓸 수 없는 크기가 된다.
+         * <p>실제 시계를 사용하면 과거로 고정된 픽스처가 기본 창 5분 밖에 있어 수집 배치가 하나도 발행되지 않는다.
+         * 이를 피하려고 창을 넓히면 운영에서 사용할 수 없는 크기가 된다.
          */
         private static final Instant JUST_AFTER_FIXTURE = Instant.parse("2026-08-19T02:17:00Z");
 
@@ -703,10 +709,10 @@ class PublishPendingForecastsIntegrationTest {
         }
 
         /**
-         * 도는 배포와 모델을 한 덩어리로 내는 자리를 가짜로 바꾼다.
+         * 활성 배포와 모델을 함께 반환하는 경계를 대역으로 바꾼다.
          *
-         * <p>계수 파일이 없어서 진짜 자리는 아무것도 안 낸다. 배치가 무엇을 모델에 넘기는지를 보려면
-         * 그 자리가 배포 행과 이 가짜 모델을 묶어 내야 한다.
+         * <p>계수 파일이 없어 실제 구현은 아무것도 반환하지 않는다. 배치가 모델에 넘기는 입력을 확인하려면
+         * 이 경계가 배포 행과 테스트 모델을 함께 반환해야 한다.
          */
         @Bean
         @Primary
@@ -723,7 +729,6 @@ class PublishPendingForecastsIntegrationTest {
     }
 
     static class RecordingSeatForecastModel implements SeatForecastModel {
-
         private static final double FULL_CHANCE_RAW = 0.4;
 
         /** 0석 남을 확률 0.4, 1석 남을 확률 0.6. 합이 1이라 분포 규칙을 지킨다. */

@@ -6,8 +6,10 @@ import org.springframework.boot.diagnostics.AbstractFailureAnalyzer;
 import org.springframework.boot.diagnostics.FailureAnalysis;
 import org.springframework.core.Ordered;
 
+/**
+ * GBIS 설정 기동 실패를 인증값을 노출하지 않는 설명과 조치 안내로 바꾼다.
+ */
 public class GbisSettingsFailureAnalyzer extends AbstractFailureAnalyzer<BindException> implements Ordered {
-
     private static final ConfigurationPropertyName GBIS = ConfigurationPropertyName.of("gbis");
 
     private static final String ACTION = "인증키는 GBIS_SERVICE_KEY, GBIS_SERVICE_KEY_<별칭> 또는 GBIS_KEYS_<별칭>=<키> 형식으로 "
@@ -24,12 +26,22 @@ public class GbisSettingsFailureAnalyzer extends AbstractFailureAnalyzer<BindExc
 
     private static String reasonOf(Throwable failure) {
         for (Throwable current = failure; current != null; current = current.getCause()) {
-            if (current instanceof IllegalStateException && current.getStackTrace().length > 0
-                && current.getStackTrace()[0].getClassName().equals(GbisProperties.class.getName())) {
+            if (isGbisPropertyFailure(current)) {
                 return current.getMessage();
             }
         }
         return "값의 형식이 맞지 않는다";
+    }
+
+    private static boolean isGbisPropertyFailure(Throwable failure) {
+        if (!(failure instanceof IllegalStateException)) {
+            return false;
+        }
+        StackTraceElement[] stackTrace = failure.getStackTrace();
+        if (stackTrace.length == 0) {
+            return false;
+        }
+        return stackTrace[0].getClassName().equals(GbisProperties.class.getName());
     }
 
     @Override

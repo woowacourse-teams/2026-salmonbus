@@ -15,7 +15,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 public class WorkerQualityMemoryConfiguration {
     @Bean
     WorkerQualityState workerQualityState(JdbcClient jdbc,
-        @Value("${forecast.quality-memory.max-routes:100}") int maxRoutes) {
+        @Value("${forecast.quality-memory.max-routes:100}") final int maxRoutes) {
         return new WorkerQualityState(new JdbcWorkerQualitySnapshotQuery(jdbc)::read, maxRoutes);
     }
 

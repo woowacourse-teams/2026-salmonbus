@@ -9,10 +9,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.stereotype.Repository;
 
+/**
+ * 현재 공개 노선과 활성 모델·예보 발행 상태를 노선 목록 조회에 제공한다.
+ */
 @Repository
 @RequiredArgsConstructor
 public class JpaRouteQueryRepository implements RouteQueryRepository {
-
     private final RouteEntityRepository routeRepository;
     private final ModelDeploymentEntityRepository modelDeploymentRepository;
 

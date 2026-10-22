@@ -4,8 +4,8 @@ import com.gustler.backend.routecatalog.domain.HeadwayRange;
 import com.gustler.backend.routecatalog.domain.RouteContentDigest;
 import com.gustler.backend.routecatalog.domain.RouteHeadways;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
-import com.gustler.backend.routecatalog.domain.RouteVersionContent;
 import com.gustler.backend.routecatalog.domain.RouteVersion;
+import com.gustler.backend.routecatalog.domain.RouteVersionContent;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -19,12 +19,15 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+/**
+ * 노선 판본의 유효 기간과 정류장·시간표 기준을 저장 행에 대응시킨다.
+ * 판본을 바꾸는 규칙은 도메인이 결정한다.
+ */
 @Entity(name = "RouteVersion")
 @Table(name = "route_version")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RouteVersionJpaEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -154,12 +157,18 @@ public class RouteVersionJpaEntity {
     private Integer minMinutesOf(
         HeadwayRange headway
     ) {
-        return headway == null ? null : headway.minMinutes();
+        if (headway == null) {
+            return null;
+        }
+        return headway.minMinutes();
     }
 
     private Integer maxMinutesOf(
         HeadwayRange headway
     ) {
-        return headway == null ? null : headway.maxMinutes();
+        if (headway == null) {
+            return null;
+        }
+        return headway.maxMinutes();
     }
 }

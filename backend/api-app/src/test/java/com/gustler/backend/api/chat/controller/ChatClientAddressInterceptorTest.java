@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.server.ServletServerHttpRequest;
 import org.springframework.http.server.ServletServerHttpResponse;
@@ -14,7 +15,6 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.socket.WebSocketHandler;
 
 class ChatClientAddressInterceptorTest {
-
     private static final String REMOTE_ADDRESS = "198.51.100.9";
 
     private final ChatClientAddressInterceptor interceptor = new ChatClientAddressInterceptor();
@@ -53,8 +53,10 @@ class ChatClientAddressInterceptorTest {
         String blankLine = clientAddress(List.of("192.0.2.44", "   "));
 
         // then
-        assertThat(trailingComma).isEqualTo(REMOTE_ADDRESS);
-        assertThat(blankLine).isEqualTo(REMOTE_ADDRESS);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(trailingComma).isEqualTo(REMOTE_ADDRESS);
+            softly.assertThat(blankLine).isEqualTo(REMOTE_ADDRESS);
+        }
     }
 
     @Test
@@ -81,8 +83,10 @@ class ChatClientAddressInterceptorTest {
         );
 
         // then
-        assertThat(proceed).isTrue();
-        assertThat(attributes).containsOnlyKeys(ChatClientAddressInterceptor.CLIENT_ADDRESS_ATTRIBUTE);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(proceed).isTrue();
+            softly.assertThat(attributes).containsOnlyKeys(ChatClientAddressInterceptor.CLIENT_ADDRESS_ATTRIBUTE);
+        }
     }
 
     private String clientAddress(List<String> forwardedForLines) {

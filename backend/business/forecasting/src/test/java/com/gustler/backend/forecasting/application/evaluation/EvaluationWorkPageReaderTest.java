@@ -8,33 +8,39 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkPageReader.Page;
+import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore.Key;
+import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore.Restored;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 class EvaluationWorkPageReaderTest {
     private final EvaluationWorkStore work = mock(EvaluationWorkStore.class);
     private final EvaluationWorkPageReader reader = new EvaluationWorkPageReader(work);
 
-    @org.junit.jupiter.api.BeforeEach
+    @BeforeEach
     void 작업의_현재_갱신_번호를_준비한다() {
-        org.mockito.Mockito.lenient().when(work.revisions(1, List.of(10L))).thenReturn(Map.of(10L, 1L));
+        Mockito.lenient().when(work.revisions(1, List.of(10L))).thenReturn(Map.of(10L, 1L));
     }
 
     @Test
     void 같은_관측의_예보가_갱신되면_메모리를_재사용하지_않는다() {
         // given
-        var buffer = cached();
+        PendingEvaluationBuffer buffer = cached();
         when(work.page(1, 0, 10, 100)).thenReturn(List.of(10L));
         when(work.revisions(1, List.of(10L))).thenReturn(Map.of(10L, 2L));
         when(work.restore(1, List.of(10L))).thenReturn(List.of(
-            new EvaluationWorkStore.Restored(new EvaluationWorkStore.Key(10, 2), Optional.of(forecast()))));
+            new Restored(new Key(10, 2), Optional.of(forecast()))));
 
         // when
-        var page = reader.read(1, 0, 10, 100, 1, false, Map.of(10L, buffer.next(1).getFirst()));
+        Page page = reader.read(1, 0, 10, 100, 1, false, Map.of(10L, buffer.next(1).getFirst()));
 
         // then
         verify(work).restore(1, List.of(10L));
@@ -44,11 +50,11 @@ class EvaluationWorkPageReaderTest {
     @Test
     void 메모리의_품질_정보가_같으면_대기_상세를_다시_읽지_않는다() {
         // given
-        var buffer = cached();
+        PendingEvaluationBuffer buffer = cached();
         when(work.page(1, 0, 10, 100)).thenReturn(List.of(10L));
 
         // when
-        var page = reader.read(1, 0, 10, 100, 1, false, Map.of(10L, buffer.next(1).getFirst()));
+        Page page = reader.read(1, 0, 10, 100, 1, false, Map.of(10L, buffer.next(1).getFirst()));
 
         // then
         assertThat(page.ready().getFirst().forecasts()).containsExactly(forecast());
@@ -58,14 +64,14 @@ class EvaluationWorkPageReaderTest {
     @Test
     void 품질_정보가_바뀌면_메모리_대신_DB에서_다시_읽는다() {
         // given
-        var buffer = cached();
+        PendingEvaluationBuffer buffer = cached();
         when(work.page(1, 0, 10, 100)).thenReturn(List.of(10L));
         when(work.restore(1, List.of(10L))).thenReturn(List.of(
-            new EvaluationWorkStore.Restored(new EvaluationWorkStore.Key(10, 2),
+            new Restored(new Key(10, 2),
                 Optional.of(forecast()))));
 
         // when
-        var page = reader.read(1, 0, 10, 100, 2, false, Map.of(10L, buffer.next(1).getFirst()));
+        Page page = reader.read(1, 0, 10, 100, 2, false, Map.of(10L, buffer.next(1).getFirst()));
 
         // then
         verify(work).restore(1, List.of(10L));
@@ -75,13 +81,13 @@ class EvaluationWorkPageReaderTest {
     @Test
     void 품질_조사로_상세를_읽을_수_없으면_평가하지_않고_보류한다() {
         // given
-        var buffer = cached();
+        PendingEvaluationBuffer buffer = cached();
         when(work.page(1, 0, 10, 100)).thenReturn(List.of(10L));
         when(work.restore(1, List.of(10L))).thenReturn(List.of(
-            new EvaluationWorkStore.Restored(new EvaluationWorkStore.Key(10, 2), Optional.empty())));
+            new Restored(new Key(10, 2), Optional.empty())));
 
         // when
-        var page = reader.read(1, 0, 10, 100, 1, true, Map.of(10L, buffer.next(1).getFirst()));
+        Page page = reader.read(1, 0, 10, 100, 1, true, Map.of(10L, buffer.next(1).getFirst()));
 
         // then
         assertThat(page.checkedIds()).containsExactly(10L);
@@ -95,7 +101,7 @@ class EvaluationWorkPageReaderTest {
         when(work.page(1, 10, 10, 100)).thenReturn(List.of());
 
         // when
-        var page = reader.read(1, 10, 10, 100, 1, false, Map.of());
+        Page page = reader.read(1, 10, 10, 100, 1, false, Map.of());
 
         // then
         assertThat(page.nextAfter()).isZero();
@@ -108,18 +114,18 @@ class EvaluationWorkPageReaderTest {
         // given
         when(work.page(1, 0, 10, 100)).thenReturn(List.of(10L));
         when(work.restore(1, List.of(10L))).thenReturn(List.of(
-            new EvaluationWorkStore.Restored(new EvaluationWorkStore.Key(10, 2), Optional.empty())));
+            new Restored(new Key(10, 2), Optional.empty())));
 
         // when
-        var page = reader.read(1, 0, 10, 100, 1, false, Map.of());
+        Page page = reader.read(1, 0, 10, 100, 1, false, Map.of());
 
         // then
         assertThat(page.workRevisions()).containsEntry(10L, 1L);
-        verify(work, never()).closeExcluded(anyLong(), anyList(), org.mockito.ArgumentMatchers.anyInt());
+        verify(work, never()).closeExcluded(anyLong(), anyList(), ArgumentMatchers.anyInt());
     }
 
     private static PendingEvaluationBuffer cached() {
-        var buffer = new PendingEvaluationBuffer(12);
+        PendingEvaluationBuffer buffer = new PendingEvaluationBuffer(12);
         buffer.restore(1, List.of(forecast()));
         return buffer;
     }

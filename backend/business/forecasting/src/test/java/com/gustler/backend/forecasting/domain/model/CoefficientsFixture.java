@@ -1,14 +1,13 @@
 package com.gustler.backend.forecasting.domain.model;
 
 /**
- * 테스트가 계수를 손으로 세우는 자리.
+ * 테스트에서 계수를 직접 구성한다.
  *
- * <p>특징 벡터를 {@code {1.0}} 한 칸으로 두면 계수 하나가 곧 로짓이 된다. 그래서 원하는
- * 확률을 로짓으로 적어 넣으면 그 확률이 그대로 나온다. 계산이 아니라 규칙을 보는 테스트에서
- * 값을 눈으로 따라갈 수 있다.
+ * <p>특징 벡터를 {@code {1.0}} 한 칸으로 두면 계수 하나가 곧 로짓이 된다. 원하는
+ * 확률을 로짓으로 입력하면 해당 확률이 그대로 계산되므로 계산식보다 규칙을 검증하는 테스트에서
+ * 값을 쉽게 확인할 수 있다.
  */
 public final class CoefficientsFixture {
-
     static final double[] ONE_FEATURE = {1.0};
 
     public static final double[] RELATIVE_EDGES =

@@ -4,8 +4,8 @@ import com.gustler.backend.quota.api.CallQuota;
 import java.time.LocalDate;
 import java.util.Optional;
 
+/** 서비스·한국 날짜·키별 호출 한도의 원자 갱신을 제공하는 저장 포트다. */
 public interface CallQuotaStore {
-
     /**
      * 해당 날짜의 한도에서 요청한 호출 횟수를 예약한다. 전부 예약하면 참, 한도가 부족하면 거짓을 반환한다.
      *
@@ -14,5 +14,6 @@ public interface CallQuotaStore {
      */
     boolean reserve(DailyCallQuota.Reservation reservation);
 
+    /** 장부를 소진 처리하고 기존 예약 횟수를 반환한다. 해당 장부가 없으면 빈 값이다. */
     Optional<Integer> exclude(CallQuota service, LocalDate koreanDate, String keyAlias);
 }

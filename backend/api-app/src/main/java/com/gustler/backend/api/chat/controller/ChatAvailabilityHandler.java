@@ -8,8 +8,10 @@ import org.springframework.http.CacheControl;
 import org.springframework.web.servlet.function.ServerRequest;
 import org.springframework.web.servlet.function.ServerResponse;
 
+/**
+ * 현재 노선의 채팅방 이용 가능 여부를 조회해 HTTP 응답으로 제공한다.
+ */
 public final class ChatAvailabilityHandler {
-
     private final ChatRoomCatalog rooms;
 
     public ChatAvailabilityHandler(ChatRoomCatalog rooms) {

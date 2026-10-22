@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
-import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteDirection;
+import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.publication.RouteStopsQuery;
 import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
@@ -17,14 +17,13 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class JdbcRouteVersionQuery implements RouteVersionQuery, RouteStopsQuery {
-
     /**
-     * 유효 기간이 안 닫힌 판본. 노선 하나에 valid_to 가 NULL 인 행이 지금 쓰는 판본이다.
+     * 유효 기간이 종료되지 않은 판본이다. 노선별로 valid_to 가 NULL 인 행이 현재 사용하는 판본이다.
      *
-     * <p>노선마다 하나로 좁히는 조건을 안 건다. ex_route_version_no_overlap 이 한 노선의
-     * 유효 기간이 겹치는 것을 이미 막아서, 열려 있는 행은 노선마다 많아야 하나다.
+     * <p>노선마다 하나로 제한하는 조건은 추가하지 않는다. ex_route_version_no_overlap 이 한 노선의
+     * 유효 기간 중복을 이미 막으므로 열려 있는 행은 노선마다 최대 하나다.
      *
-     * <p>id 오름차순으로 준다. 배치가 판본을 도는 차례가 실행마다 달라지면 재현이 안 된다.
+     * <p>id 오름차순으로 반환한다. 배치의 판본 처리 순서가 실행마다 달라지면 재현할 수 없다.
      */
     private static final String SELECT_ACTIVE_VERSION_IDS = """
         SELECT id
@@ -34,10 +33,10 @@ public class JdbcRouteVersionQuery implements RouteVersionQuery, RouteStopsQuery
         """;
 
     /**
-     * 한 판본의 정류장 전부. 순번 오름차순이다.
+     * 한 판본의 전체 정류장을 순번 오름차순으로 반환한다.
      *
-     * <p>승차할 수 없는 경유 지점도 빼지 않고 준다. 예보 대상에서 거르는 판정은 RouteStops 가
-     * boarding_allowed 를 보고 한다. 여기서 걸러 버리면 도메인이 그 자리를 아예 못 본다.
+     * <p>승차할 수 없는 경유 지점도 포함한다. 예보 대상 제외는 RouteStops 가
+     * boarding_allowed 를 보고 판정한다. 여기서 제외하면 도메인이 해당 정류장을 확인할 수 없다.
      *
      * <p>정류장 이름 대신 순번과 실제 UP/DOWN 방향을 예보 입력에 전달한다.
      */

@@ -1,6 +1,8 @@
 package com.gustler.backend.forecasting.infrastructure.statistics;
 
+import com.gustler.backend.forecasting.infrastructure.statistics.StatisticsExtractWriter.Bundle;
 import java.io.IOException;
+import java.lang.ProcessBuilder.Redirect;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -16,10 +18,15 @@ final class StatisticsExtractUploader {
     private static final String ROOT = "salmonbus-be/statistics-input/v1/";
     private final Command command;
 
-    StatisticsExtractUploader() { this(StatisticsExtractUploader::execute); }
-    StatisticsExtractUploader(Command command) { this.command = command; }
+    StatisticsExtractUploader() {
+        this(StatisticsExtractUploader::execute);
+    }
 
-    String upload(StatisticsExtractWriter.Bundle bundle, UUID exportId) {
+    StatisticsExtractUploader(Command command) {
+        this.command = command;
+    }
+
+    String upload(Bundle bundle, UUID exportId) {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("DB 트랜잭션 안에서는 S3 전송을 시작하지 않는다");
         }
@@ -33,7 +40,10 @@ final class StatisticsExtractUploader {
         }
         try {
             if (Files.size(manifestPath) > 1024 * 1024
-                || !Files.readString(manifestPath).equals(JsonMapper.builder().build().writeValueAsString(bundle.manifest()))) {
+                || !Files.readString(manifestPath)
+                .equals(JsonMapper.builder()
+                    .build()
+                    .writeValueAsString(bundle.manifest()))) {
                 throw new IllegalArgumentException("파일 설명서가 검증된 내용과 다르다");
             }
         } catch (IOException exception) {
@@ -41,7 +51,7 @@ final class StatisticsExtractUploader {
         }
         String prefix = ROOT + "route-version=" + bundle.manifest().scope().routeVersionId()
             + "/export-id=" + exportId + "/";
-        for (var file : bundle.manifest().files()) {
+        for (StatisticsInputFile file : bundle.manifest().files()) {
             put(prefix + file.name(), bundle.directory().resolve(file.name()));
         }
         // 모든 자료 파일이 성공한 경우에만 묶음 설명서를 게시한다.
@@ -61,9 +71,9 @@ final class StatisticsExtractUploader {
     static void execute(List<String> arguments) {
         Process process = null;
         try {
-            var builder = new ProcessBuilder(new ArrayList<>(arguments));
-            builder.redirectOutput(ProcessBuilder.Redirect.DISCARD);
-            builder.redirectError(ProcessBuilder.Redirect.DISCARD);
+            ProcessBuilder builder = new ProcessBuilder(new ArrayList<>(arguments));
+            builder.redirectOutput(Redirect.DISCARD);
+            builder.redirectError(Redirect.DISCARD);
             builder.environment().put("AWS_MAX_ATTEMPTS", "2");
             process = builder.start();
             if (!process.waitFor(45, TimeUnit.SECONDS)) {
@@ -85,5 +95,7 @@ final class StatisticsExtractUploader {
     }
 
     @FunctionalInterface
-    interface Command { void run(List<String> arguments); }
+    interface Command {
+        void run(List<String> arguments);
+    }
 }

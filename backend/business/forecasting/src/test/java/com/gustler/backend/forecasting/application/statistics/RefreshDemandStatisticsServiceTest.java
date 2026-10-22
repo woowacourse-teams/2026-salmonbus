@@ -1,10 +1,5 @@
 package com.gustler.backend.forecasting.application.statistics;
 
-import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
-import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion;
-import com.gustler.backend.forecasting.domain.statistics.StopDemandHourlyTotals;
-import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -13,6 +8,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion;
+import com.gustler.backend.forecasting.domain.statistics.StopDemandHourlyTotals;
+import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -28,7 +27,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class RefreshDemandStatisticsServiceTest {
-
     private static final long ROUTE_VERSION_3330 = 1L;
     private static final Instant COMPUTED_AT = Instant.parse("2026-08-25T00:00:00Z");
     private static final int STOP_ORDER = 44;
@@ -48,7 +46,8 @@ class RefreshDemandStatisticsServiceTest {
     void 집계_배치를_멈춘_시계로_세운다() {
         job = new RefreshDemandStatisticsService(
             routeVersions,
-            new StopDemandStatisticsWriter(stopDemandStatisticsRepository, Clock.fixed(COMPUTED_AT, ZoneId.of("Asia/Seoul"))),
+            new StopDemandStatisticsWriter(stopDemandStatisticsRepository,
+                Clock.fixed(COMPUTED_AT, ZoneId.of("Asia/Seoul"))),
             Clock.fixed(COMPUTED_AT, ZoneId.of("Asia/Seoul")));
         when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
     }
@@ -133,16 +132,12 @@ class RefreshDemandStatisticsServiceTest {
         assertThat(captured().dataUntil()).isEqualTo(COMPUTED_AT);
     }
 
-    private void givenHourlyTotals(
-        StopDemandHourlyTotals... hourlyTotals
-    ) {
+    private void givenHourlyTotals(StopDemandHourlyTotals... hourlyTotals) {
         when(stopDemandStatisticsRepository.readHourlyTotals(anyLong(), any()))
             .thenReturn(List.of(hourlyTotals));
     }
 
-    private void givenCurrentRevision(
-        final int revision
-    ) {
+    private void givenCurrentRevision(final int revision) {
         when(stopDemandStatisticsRepository.currentRevision(anyLong(), anyString())).thenReturn(revision);
     }
 

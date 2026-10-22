@@ -2,7 +2,6 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
 import com.gustler.backend.forecasting.domain.publication.ForecastPublicationRepository;
-import com.gustler.backend.forecasting.domain.publication.SeatForecast;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -14,9 +13,12 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 예보 발행 기록과 예보 행을 저장 경계에 반영한다.
+ * 관측·노선·모델·품질 판본을 함께 보존한다.
+ */
 @Repository
 public class JdbcForecastPublicationRepository implements ForecastPublicationRepository {
-
     private static final String INSERT_PUBLICATION = """
         INSERT /* salmonbus:forecast_publication.insert_publication */ INTO forecast_publication (
             source_batch_id, route_version_id, model_deployment_id,
@@ -75,9 +77,9 @@ public class JdbcForecastPublicationRepository implements ForecastPublicationRep
     }
 
     @Override
-    @Transactional(propagation = Propagation.MANDATORY)
+    @Transactional(readOnly = false, propagation = Propagation.MANDATORY)
     public boolean save(ForecastPublication publication) {
-        final Optional<Long> existing = jdbc.sql("SELECT id FROM forecast_publication WHERE source_batch_id = ?")
+        Optional<Long> existing = jdbc.sql("SELECT id FROM forecast_publication WHERE source_batch_id = ?")
             .param(publication.sourceBatchId()).query(Long.class).optional();
         final long publicationId = existing.orElseGet(() -> jdbc.sql(INSERT_PUBLICATION)
             .params(publication.sourceBatchId(), publication.routeVersionId(), publication.modelDeploymentId(),
@@ -90,7 +92,8 @@ public class JdbcForecastPublicationRepository implements ForecastPublicationRep
                 publication.qualityRevision(), offset(publication.observedAt()), offset(publication.generatedAt()),
                 offset(publication.publishedAt()), id)
             .update());
-        List<Object[]> rows = publication.predictions().stream()
+        List<Object[]> rows = publication.predictions()
+            .stream()
             .map(prediction -> new Object[] {publicationId, prediction.vehicleObservationId(),
                 prediction.targetStopOrder(), prediction.routeVersionId(), prediction.stopsToTarget(),
                 prediction.modelDeploymentId(), prediction.demandStatisticsRevision(), prediction.seatFullChanceRaw(),

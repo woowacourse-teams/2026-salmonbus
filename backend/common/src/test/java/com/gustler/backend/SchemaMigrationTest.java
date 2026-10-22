@@ -18,7 +18,6 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 @IntegrationTest
 class SchemaMigrationTest {
-
     @Autowired
     private Flyway flyway;
 
@@ -27,9 +26,10 @@ class SchemaMigrationTest {
 
     @Test
     void 앱_부팅_시_Flyway가_마이그레이션을_V1부터_순차적으로_모두_실행한다() throws IOException {
-        // given DB 이력이 아닌 실제 SQL 파일에서 예상 버전을 읽는다.
+        // given
+        // DB 이력이 아닌 실제 SQL 파일에서 예상 버전을 읽는다.
         List<MigrationVersion> expected = Arrays.stream(new PathMatchingResourcePatternResolver()
-                .getResources("classpath:db/migration/V*__*.sql"))
+            .getResources("classpath:db/migration/V*__*.sql"))
             .map(Resource::getFilename)
             .map(name -> MigrationVersion.fromVersion(name.substring(1, name.indexOf("__"))))
             .sorted()
@@ -62,7 +62,7 @@ class SchemaMigrationTest {
     @Test
     void 최신_성공_관측_인덱스는_유지하고_미사용_배치_시도_인덱스는_제거한다() {
         // when
-        boolean actual = jdbcClient.sql("""
+        final boolean actual = jdbcClient.sql("""
                 SELECT to_regclass('ix_batch_forecast_candidates') IS NOT NULL
                    AND to_regclass('ix_batch_latest_attempt') IS NULL
                 """)

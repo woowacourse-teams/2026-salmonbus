@@ -11,7 +11,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class CollectionPhaseTest {
-
     private static final int PEAK_INTERVAL_SECONDS = 20;
     private static final int OFF_PEAK_INTERVAL_SECONDS = 30;
     private static final int DEEP_NIGHT_INTERVAL_SECONDS = 600;
@@ -19,11 +18,9 @@ class CollectionPhaseTest {
 
     @ParameterizedTest
     @ValueSource(ints = {0})
-    void 자정부터_1시_전까지는_심야_꼬리다(
-        final int hour
-    ) {
+    void 자정부터_1시_전까지는_심야_꼬리다(final int hour) {
         // when
-        final CollectionPhase actual = CollectionPhase.atHour(hour);
+        CollectionPhase actual = CollectionPhase.atHour(hour);
 
         // then
         assertThat(actual).isEqualTo(CollectionPhase.NIGHT_TAIL);
@@ -31,11 +28,9 @@ class CollectionPhaseTest {
 
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 3})
-    void 새벽_1시부터_4시_전까지는_심야다(
-        final int hour
-    ) {
+    void 새벽_1시부터_4시_전까지는_심야다(final int hour) {
         // when
-        final CollectionPhase actual = CollectionPhase.atHour(hour);
+        CollectionPhase actual = CollectionPhase.atHour(hour);
 
         // then
         assertThat(actual).isEqualTo(CollectionPhase.DEEP_NIGHT);
@@ -43,11 +38,9 @@ class CollectionPhaseTest {
 
     @ParameterizedTest
     @ValueSource(ints = {4, 5, 6})
-    void 새벽_4시부터_7시_전까지는_이른_아침이다(
-        final int hour
-    ) {
+    void 새벽_4시부터_7시_전까지는_이른_아침이다(final int hour) {
         // when
-        final CollectionPhase actual = CollectionPhase.atHour(hour);
+        CollectionPhase actual = CollectionPhase.atHour(hour);
 
         // then
         assertThat(actual).isEqualTo(CollectionPhase.EARLY_MORNING);
@@ -55,11 +48,9 @@ class CollectionPhaseTest {
 
     @ParameterizedTest
     @ValueSource(ints = {7, 8})
-    void 아침_7시부터_9시_전까지는_아침_첨두다(
-        final int hour
-    ) {
+    void 아침_7시부터_9시_전까지는_아침_첨두다(final int hour) {
         // when
-        final CollectionPhase actual = CollectionPhase.atHour(hour);
+        CollectionPhase actual = CollectionPhase.atHour(hour);
 
         // then
         assertThat(actual).isEqualTo(CollectionPhase.MORNING_PEAK);
@@ -67,11 +58,9 @@ class CollectionPhaseTest {
 
     @ParameterizedTest
     @ValueSource(ints = {9, 10, 11, 12, 13, 14, 15, 16})
-    void 아침_9시부터_오후_5시_전까지는_낮이다(
-        final int hour
-    ) {
+    void 아침_9시부터_오후_5시_전까지는_낮이다(final int hour) {
         // when
-        final CollectionPhase actual = CollectionPhase.atHour(hour);
+        CollectionPhase actual = CollectionPhase.atHour(hour);
 
         // then
         assertThat(actual).isEqualTo(CollectionPhase.DAYTIME);
@@ -79,11 +68,9 @@ class CollectionPhaseTest {
 
     @ParameterizedTest
     @ValueSource(ints = {17, 18, 19})
-    void 오후_5시부터_8시_전까지는_저녁_첨두다(
-        final int hour
-    ) {
+    void 오후_5시부터_8시_전까지는_저녁_첨두다(final int hour) {
         // when
-        final CollectionPhase actual = CollectionPhase.atHour(hour);
+        CollectionPhase actual = CollectionPhase.atHour(hour);
 
         // then
         assertThat(actual).isEqualTo(CollectionPhase.EVENING_PEAK);
@@ -91,11 +78,9 @@ class CollectionPhaseTest {
 
     @ParameterizedTest
     @ValueSource(ints = {20, 21, 22})
-    void 밤_8시부터_11시_전까지는_늦은_저녁이다(
-        final int hour
-    ) {
+    void 밤_8시부터_11시_전까지는_늦은_저녁이다(final int hour) {
         // when
-        final CollectionPhase actual = CollectionPhase.atHour(hour);
+        CollectionPhase actual = CollectionPhase.atHour(hour);
 
         // then
         assertThat(actual).isEqualTo(CollectionPhase.LATE_EVENING);
@@ -103,11 +88,9 @@ class CollectionPhaseTest {
 
     @ParameterizedTest
     @ValueSource(ints = {23})
-    void 밤_11시부터_자정까지는_심야_꼬리다(
-        final int hour
-    ) {
+    void 밤_11시부터_자정까지는_심야_꼬리다(final int hour) {
         // when
-        final CollectionPhase actual = CollectionPhase.atHour(hour);
+        CollectionPhase actual = CollectionPhase.atHour(hour);
 
         // then
         assertThat(actual).isEqualTo(CollectionPhase.NIGHT_TAIL);
@@ -126,9 +109,7 @@ class CollectionPhaseTest {
 
     @ParameterizedTest
     @EnumSource(value = CollectionPhase.class, names = {"MORNING_PEAK", "EVENING_PEAK", "LATE_EVENING"})
-    void 첨두와_늦은_저녁은_20초마다_부른다(
-        CollectionPhase phase
-    ) {
+    void 첨두와_늦은_저녁은_20초마다_부른다(CollectionPhase phase) {
         // when
         final int actual = phase.intervalSeconds();
 
@@ -138,9 +119,7 @@ class CollectionPhaseTest {
 
     @ParameterizedTest
     @EnumSource(value = CollectionPhase.class, names = {"EARLY_MORNING", "DAYTIME", "NIGHT_TAIL"})
-    void 이른_아침과_낮과_심야_꼬리는_30초마다_부른다(
-        CollectionPhase phase
-    ) {
+    void 이른_아침과_낮과_심야_꼬리는_30초마다_부른다(CollectionPhase phase) {
         // when
         final int actual = phase.intervalSeconds();
 
@@ -159,11 +138,12 @@ class CollectionPhaseTest {
 
     @Test
     void 세계_표준시가_아니라_한국_시각으로_단계를_고른다() {
-        // given 세계 표준시로는 20시라 늦은 저녁이지만 한국 시각으로는 다음날 새벽 5시다
-        final Instant utcEvening = Instant.parse("2026-08-28T20:00:00Z");
+        // given
+        // 세계 표준시로는 20시라 늦은 저녁이지만 한국 시각으로는 다음날 새벽 5시다
+        Instant utcEvening = Instant.parse("2026-08-28T20:00:00Z");
 
         // when
-        final CollectionPhase actual = CollectionPhase.at(utcEvening);
+        CollectionPhase actual = CollectionPhase.at(utcEvening);
 
         // then
         assertThat(actual).isEqualTo(CollectionPhase.EARLY_MORNING);

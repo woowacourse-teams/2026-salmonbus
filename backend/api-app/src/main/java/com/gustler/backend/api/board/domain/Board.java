@@ -1,10 +1,15 @@
 package com.gustler.backend.api.board.domain;
 
+import com.gustler.backend.api.board.domain.VehicleForecast.Available;
 import com.gustler.backend.api.route.domain.RouteStatus;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 관측·모델·현재 노선 판본에 연결된 정류장별 탑승판 값이다.
+ * 좌석 예보 부재와 차량 부재를 구분한다.
+ */
 public record Board(
     BoardRoute route,
     OffsetDateTime observedAt,
@@ -13,7 +18,6 @@ public record Board(
     int vehiclesInService,
     List<StopState> stops
 ) {
-
     public Board {
         Objects.requireNonNull(route, "route는 null일 수 없습니다.");
         Objects.requireNonNull(observedAt, "observedAt은 null일 수 없습니다.");
@@ -30,7 +34,8 @@ public record Board(
         List<StopState> stops
     ) {
         return stops.stream()
-            .flatMap(stop -> stop.approachingVehicles().stream())
-            .anyMatch(vehicle -> vehicle.forecast() instanceof VehicleForecast.Available);
+            .flatMap(stop -> stop.approachingVehicles()
+                .stream())
+            .anyMatch(vehicle -> vehicle.forecast() instanceof Available);
     }
 }

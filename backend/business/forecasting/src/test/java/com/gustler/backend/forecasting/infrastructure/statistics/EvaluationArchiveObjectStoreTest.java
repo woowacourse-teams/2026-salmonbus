@@ -2,7 +2,12 @@ package com.gustler.backend.forecasting.infrastructure.statistics;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
+import com.gustler.backend.forecasting.api.evaluation.EvaluationArchivePolicy;
+import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveStorage.Verification;
+import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader;
+import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Reference;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch.Key;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch.Row;
@@ -18,16 +23,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
 
 /** AWS CLI 경계 대체 시험. 실제 S3 왕복 검증과 구분한다. */
 class EvaluationArchiveObjectStoreTest {
-    @TempDir Path directory;
-    private final MemoryObjects objects = new MemoryObjects();
-    private final EvaluationArchiveBatch batch = new EvaluationArchiveBatch(UUID.randomUUID(), 3, 1,
-        UUID.randomUUID(), Instant.now().plusSeconds(300), State.RESERVED, 1, null);
     private static final String ORIGINAL = """
         {"vehicle_observation_id":7,"target_stop_order":9,"route_version_id":3,"scoring_state":"LOST",\
         "arrival_observation_id":null,"seats_on_arrival":null,"scored_at":"2026-10-08T10:00:00+00:00",\
@@ -35,32 +40,39 @@ class EvaluationArchiveObjectStoreTest {
         "arrival_running_state":null,"arrival_remaining_seats":null,"arrival_seat_unknown_reason":null,\
         "arrival_vehicle_trip_key":null,"arrival_quality_direction":null}\
         """;
+    private final MemoryObjects objects = new MemoryObjects();
+    private final EvaluationArchiveBatch batch = new EvaluationArchiveBatch(UUID.randomUUID(), 3, 1,
+        UUID.randomUUID(), Instant.now().plusSeconds(300), State.RESERVED, 1, null);
+    @TempDir
+    Path directory;
 
     @Test
     void 원본의_모든_열과_빈값을_보존하고_다시_받은_내용을_확인한다() throws Exception {
         // given
-        var store = store(1024 * 1024);
+        EvaluationArchiveObjectStore store = store(1024 * 1024);
 
         // when
-        var verified = store.storeAndVerify(batch, List.of(row(ORIGINAL)));
+        Verification verified = store.storeAndVerify(batch, List.of(row(ORIGINAL)));
 
         // then
         assertThat(objects.values).hasSize(2);
         String copied = new String(objects.values.get(prefix() + "evaluations.jsonl"), StandardCharsets.UTF_8);
         assertThat(copied).isEqualTo(ORIGINAL + "\n");
         assertThat(JsonMapper.builder().build().readTree(copied).size()).isEqualTo(16);
-        assertThat(verified.manifestSha256()).isEqualTo(EvaluationArchiveFiles.digest(objects.values.get(prefix() + "manifest.json")));
-        assertThat(objects.actions).containsExactly("put:evaluations.jsonl", "get:evaluations.jsonl", "put:manifest.json", "get:manifest.json");
+        assertThat(verified.manifestSha256()).isEqualTo(
+            EvaluationArchiveFiles.digest(objects.values.get(prefix() + "manifest.json")));
+        assertThat(objects.actions).containsExactly("put:evaluations.jsonl", "get:evaluations.jsonl",
+            "put:manifest.json", "get:manifest.json");
         assertDirectoryEmpty();
     }
 
     @Test
     void 같은_묶음을_재시도하면_저장된_내용을_검증하고_같은_결과를_반환한다() {
         // given
-        var first = store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL)));
+        Verification first = store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL)));
 
         // when
-        var repeated = store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL)));
+        Verification repeated = store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL)));
 
         // then
         assertThat(repeated).isEqualTo(first);
@@ -91,8 +103,13 @@ class EvaluationArchiveObjectStoreTest {
         byte[] different = "다른 원본".getBytes(StandardCharsets.UTF_8);
         objects.values.put(prefix() + "evaluations.jsonl", different);
 
-        // when & then
-        assertThatThrownBy(() -> store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL))))
+        // when
+        Throwable caughtFailure = catchThrowable(
+            () -> store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL))));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalStateException.class);
         assertThat(objects.values.get(prefix() + "evaluations.jsonl")).isEqualTo(different);
         assertThat(objects.values).doesNotContainKey(prefix() + "manifest.json");
@@ -104,8 +121,13 @@ class EvaluationArchiveObjectStoreTest {
         // given
         objects.corruptDownloads = true;
 
-        // when & then
-        assertThatThrownBy(() -> store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL))))
+        // when
+        Throwable caughtFailure = catchThrowable(
+            () -> store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL))));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalStateException.class);
         assertThat(objects.values).doesNotContainKey(prefix() + "manifest.json");
     }
@@ -113,10 +135,14 @@ class EvaluationArchiveObjectStoreTest {
     @Test
     void 파일_한도를_넘으면_외부_저장소에_쓰지_않는다() throws Exception {
         // given
-        var store = store(10);
+        EvaluationArchiveObjectStore store = store(10);
 
-        // when & then
-        assertThatThrownBy(() -> store.storeAndVerify(batch, List.of(row(ORIGINAL))))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> store.storeAndVerify(batch, List.of(row(ORIGINAL))));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
         assertThat(objects.actions).isEmpty();
         assertDirectoryEmpty();
@@ -127,8 +153,13 @@ class EvaluationArchiveObjectStoreTest {
         // given
         String incomplete = ORIGINAL.replace(",\"arrival_quality_direction\":null", "");
 
-        // when & then
-        assertThatThrownBy(() -> store(1024 * 1024).storeAndVerify(batch, List.of(row(incomplete))))
+        // when
+        Throwable caughtFailure = catchThrowable(
+            () -> store(1024 * 1024).storeAndVerify(batch, List.of(row(incomplete))));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
         assertThat(objects.actions).isEmpty();
     }
@@ -138,8 +169,13 @@ class EvaluationArchiveObjectStoreTest {
         // given
         String changedKey = ORIGINAL.replace("\"vehicle_observation_id\":7", "\"vehicle_observation_id\":8");
 
-        // when & then
-        assertThatThrownBy(() -> store(1024 * 1024).storeAndVerify(batch, List.of(row(changedKey))))
+        // when
+        Throwable caughtFailure = catchThrowable(
+            () -> store(1024 * 1024).storeAndVerify(batch, List.of(row(changedKey))));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
         assertThat(objects.actions).isEmpty();
     }
@@ -147,10 +183,17 @@ class EvaluationArchiveObjectStoreTest {
     @Test
     void 같은_원본_키가_반복되면_건수가_맞아도_전송하지_않는다() {
         // given
-        var duplicate = new EvaluationArchiveBatch(batch.id(), 3, 1, batch.leaseToken(), batch.leaseUntil(), State.RESERVED, 2, null);
+        EvaluationArchiveBatch duplicate =
+            new EvaluationArchiveBatch(batch.id(), 3, 1, batch.leaseToken(), batch.leaseUntil(), State.RESERVED, 2,
+                null);
 
-        // when & then
-        assertThatThrownBy(() -> store(1024 * 1024).storeAndVerify(duplicate, List.of(row(ORIGINAL), row(ORIGINAL))))
+        // when
+        Throwable caughtFailure = catchThrowable(
+            () -> store(1024 * 1024).storeAndVerify(duplicate, List.of(row(ORIGINAL), row(ORIGINAL))));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
         assertThat(objects.actions).isEmpty();
     }
@@ -160,8 +203,13 @@ class EvaluationArchiveObjectStoreTest {
         // given
         objects.values.put(prefix() + "evaluations.jsonl", (ORIGINAL + "\n다른 행").getBytes(StandardCharsets.UTF_8));
 
-        // when & then
-        assertThatThrownBy(() -> store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL))))
+        // when
+        Throwable caughtFailure = catchThrowable(
+            () -> store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL))));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalStateException.class);
         assertThat(objects.values).doesNotContainKey(prefix() + "manifest.json");
     }
@@ -169,12 +217,13 @@ class EvaluationArchiveObjectStoreTest {
     @Test
     void 작업을_이어받아_소유권이_바뀌어도_같은_자료의_설명_파일은_달라지지_않는다() {
         // given
-        var first = store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL)));
-        var resumed = new EvaluationArchiveBatch(batch.id(), batch.routeVersionId(), batch.qualityRevision(),
-            UUID.randomUUID(), Instant.now().plusSeconds(600), State.RESERVED, batch.rowCount(), null);
+        Verification first = store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL)));
+        EvaluationArchiveBatch resumed =
+            new EvaluationArchiveBatch(batch.id(), batch.routeVersionId(), batch.qualityRevision(),
+                UUID.randomUUID(), Instant.now().plusSeconds(600), State.RESERVED, batch.rowCount(), null);
 
         // when
-        var second = store(1024 * 1024).storeAndVerify(resumed, List.of(row(ORIGINAL)));
+        Verification second = store(1024 * 1024).storeAndVerify(resumed, List.of(row(ORIGINAL)));
 
         // then
         assertThat(second).isEqualTo(first);
@@ -207,13 +256,14 @@ class EvaluationArchiveObjectStoreTest {
     void 품질_검사로_제외된_정산도_파일에_보관하고_같은_내용으로_다시_읽는다() throws Exception {
         // given
         String excluded = ORIGINAL.replace("\"LOST\"", "\"QUALITY_EXCLUDED\"");
-        var storage = store(1024 * 1024);
+        EvaluationArchiveObjectStore storage = store(1024 * 1024);
 
         // when
-        var saved = storage.storeAndVerify(batch, List.of(row(excluded)));
-        var verified = new EvaluationArchiveBatch(batch.id(), batch.routeVersionId(), batch.qualityRevision(),
-            batch.leaseToken(), batch.leaseUntil(), State.VERIFIED, batch.rowCount(), saved.manifestSha256());
-        var restored = storage.readOriginal(verified);
+        Verification saved = storage.storeAndVerify(batch, List.of(row(excluded)));
+        EvaluationArchiveBatch verified =
+            new EvaluationArchiveBatch(batch.id(), batch.routeVersionId(), batch.qualityRevision(),
+                batch.leaseToken(), batch.leaseUntil(), State.VERIFIED, batch.rowCount(), saved.manifestSha256());
+        List<Row> restored = storage.readOriginal(verified);
 
         // then
         assertThat(restored).containsExactly(row(excluded));
@@ -225,29 +275,33 @@ class EvaluationArchiveObjectStoreTest {
         // given
         String pending = ORIGINAL.replace("\"LOST\"", "\"PENDING\"");
 
-        // when & then
-        assertThatThrownBy(() -> store(1024 * 1024).storeAndVerify(batch, List.of(row(pending))))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> store(1024 * 1024).storeAndVerify(batch, List.of(row(pending))));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
         assertThat(objects.actions).isEmpty();
     }
 
-    private EvaluationArchiveObjectStore store(long maxBytes) {
+    private EvaluationArchiveObjectStore store(final long maxBytes) {
         return new EvaluationArchiveObjectStore(directory, maxBytes, objects::run);
     }
 
     @Test
     void 저장_당시_검증_기록으로_다시_읽어_같은_정산을_반환한다() throws Exception {
         // given
-        var stored = store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL)));
-        var reference = new com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Reference(
+        Verification stored = store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL)));
+        Reference reference = new Reference(
             batch.id(), batch.routeVersionId(), batch.qualityRevision(), batch.rowCount(), stored.manifestSha256());
 
         // when
-        var rows = store(1024 * 1024).read(reference);
+        List<StatisticsArchiveReader.Row> rows = store(1024 * 1024).read(reference);
 
         // then
-        assertThat(rows).containsExactly(new com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Row(
-            new com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Key(7, 9),
+        assertThat(rows).containsExactly(new StatisticsArchiveReader.Row(
+            new StatisticsArchiveReader.Key(7, 9),
             ORIGINAL, EvaluationArchiveFiles.digest(ORIGINAL.getBytes(StandardCharsets.UTF_8))));
         assertDirectoryEmpty();
     }
@@ -255,12 +309,13 @@ class EvaluationArchiveObjectStoreTest {
     @Test
     void 삭제와_복원을_위한_원본도_저장한_모든_열과_검증값을_그대로_반환한다() throws Exception {
         // given
-        var saved = store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL)));
-        var verified = new EvaluationArchiveBatch(batch.id(), batch.routeVersionId(), batch.qualityRevision(),
-            batch.leaseToken(), batch.leaseUntil(), State.VERIFIED, batch.rowCount(), saved.manifestSha256());
+        Verification saved = store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL)));
+        EvaluationArchiveBatch verified =
+            new EvaluationArchiveBatch(batch.id(), batch.routeVersionId(), batch.qualityRevision(),
+                batch.leaseToken(), batch.leaseUntil(), State.VERIFIED, batch.rowCount(), saved.manifestSha256());
 
         // when
-        var rows = store(1024 * 1024).readOriginal(verified);
+        List<Row> rows = store(1024 * 1024).readOriginal(verified);
 
         // then
         assertThat(rows).containsExactly(row(ORIGINAL));
@@ -270,46 +325,58 @@ class EvaluationArchiveObjectStoreTest {
     @Test
     void 저장_완료_뒤_원본_객체가_바뀌면_재집계_입력으로_사용하지_않는다() {
         // given
-        var stored = store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL)));
-        var reference = new com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Reference(
+        Verification stored = store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL)));
+        Reference reference = new Reference(
             batch.id(), batch.routeVersionId(), batch.qualityRevision(), batch.rowCount(), stored.manifestSha256());
         objects.values.get(prefix() + "evaluations.jsonl")[0] ^= 1;
 
-        // when & then
-        assertThatThrownBy(() -> store(1024 * 1024).read(reference)).isInstanceOf(IllegalArgumentException.class);
+        // when
+        Throwable caughtFailure = catchThrowable(() -> store(1024 * 1024).read(reference));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull().isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void 설명_파일이_다른_묶음으로_바뀌면_원본을_읽지_않는다() {
         // given
-        var stored = store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL)));
-        var reference = new com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Reference(
+        Verification stored = store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL)));
+        Reference reference = new Reference(
             batch.id(), batch.routeVersionId(), batch.qualityRevision(), batch.rowCount(), stored.manifestSha256());
         objects.values.get(prefix() + "manifest.json")[0] ^= 1;
         objects.actions.clear();
 
-        // when & then
-        assertThatThrownBy(() -> store(1024 * 1024).read(reference)).isInstanceOf(IllegalArgumentException.class);
+        // when
+        Throwable caughtFailure = catchThrowable(() -> store(1024 * 1024).read(reference));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull().isInstanceOf(IllegalArgumentException.class);
         assertThat(objects.actions).containsExactly("get:manifest.json");
     }
 
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(ints = {500, 1000})
-    void 확대된_묶음을_파일로_검증하고_통계와_복원에서_다시_읽는다(int size) throws Exception {
+    @ParameterizedTest
+    @ValueSource(ints = {500, 1000})
+    void 확대된_묶음을_파일로_검증하고_통계와_복원에서_다시_읽는다(final int size) throws Exception {
         // given
-        var large = new EvaluationArchiveBatch(batch.id(), 3, 1, batch.leaseToken(),
+        EvaluationArchiveBatch large = new EvaluationArchiveBatch(batch.id(), 3, 1, batch.leaseToken(),
             batch.leaseUntil(), State.RESERVED, size, null);
-        var rows = java.util.stream.IntStream.rangeClosed(1, size).mapToObj(index -> {
-            String json = ORIGINAL.replace("\"vehicle_observation_id\":7", "\"vehicle_observation_id\":" + index);
-            return new Row(new Key(index, 9), json, EvaluationArchiveFiles.digest(json.getBytes(StandardCharsets.UTF_8)));
-        }).toList();
-        var storage = store(4 * 1024 * 1024);
+        List<Row> rows = IntStream.rangeClosed(1, size)
+            .mapToObj(index -> {
+                String json = ORIGINAL.replace("\"vehicle_observation_id\":7", "\"vehicle_observation_id\":" + index);
+                return new Row(new Key(index, 9), json,
+                    EvaluationArchiveFiles.digest(json.getBytes(StandardCharsets.UTF_8)));
+            })
+            .toList();
+        EvaluationArchiveObjectStore storage = store(4 * 1024 * 1024);
 
         // when
-        var saved = storage.storeAndVerify(large, rows);
-        var verified = new EvaluationArchiveBatch(large.id(), 3, 1, large.leaseToken(), large.leaseUntil(),
-            State.VERIFIED, size, saved.manifestSha256());
-        var reference = new com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Reference(
+        Verification saved = storage.storeAndVerify(large, rows);
+        EvaluationArchiveBatch verified =
+            new EvaluationArchiveBatch(large.id(), 3, 1, large.leaseToken(), large.leaseUntil(),
+                State.VERIFIED, size, saved.manifestSha256());
+        Reference reference = new Reference(
             large.id(), 3, 1, size, saved.manifestSha256());
 
         // then
@@ -320,11 +387,24 @@ class EvaluationArchiveObjectStoreTest {
 
     @Test
     void 천행을_넘는_설정과_이관_묶음은_거절한다() {
-        // given / when / then
-        assertThatThrownBy(() -> new com.gustler.backend.forecasting.api.evaluation.EvaluationArchivePolicy(true, 1001))
+        // given
+        // / when / then
+
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new EvaluationArchivePolicy(true, 1001));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new EvaluationArchiveBatch(batch.id(), 3, 1, batch.leaseToken(),
-            batch.leaseUntil(), State.RESERVED, 1001, null)).isInstanceOf(IllegalArgumentException.class);
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> new EvaluationArchiveBatch(batch.id(), 3, 1, batch.leaseToken(),
+            batch.leaseUntil(), State.RESERVED, 1001, null));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull().isInstanceOf(IllegalArgumentException.class);
     }
 
     private Row row(String json) {
@@ -336,7 +416,7 @@ class EvaluationArchiveObjectStoreTest {
     }
 
     private void assertDirectoryEmpty() throws IOException {
-        try (var files = Files.list(directory)) {
+        try (Stream<Path> files = Files.list(directory)) {
             assertThat(files.toList()).isEmpty();
         }
     }
@@ -360,19 +440,21 @@ class EvaluationArchiveObjectStoreTest {
                         throw new IllegalStateException("업로드 실패 주입");
                     }
                     values.put(key, Files.readAllBytes(Path.of(value(args, "--body"))));
-                } else {
-                    actions.add("get:" + key.substring(key.lastIndexOf('/') + 1));
-                    byte[] bytes = values.get(key);
-                    if (bytes == null) {
-                        throw new IllegalStateException("객체 없음");
-                    }
-                    int requested = Integer.parseInt(value(args, "--range").substring("bytes=0-".length())) + 1;
-                    byte[] copied = Arrays.copyOf(bytes, Math.min(requested, bytes.length));
-                    if (corruptDownloads) {
-                        copied[0] ^= 1;
-                    }
-                    Files.write(Path.of(args.getLast()), copied);
+
+                    return;
                 }
+
+                actions.add("get:" + key.substring(key.lastIndexOf('/') + 1));
+                byte[] bytes = values.get(key);
+                if (bytes == null) {
+                    throw new IllegalStateException("객체 없음");
+                }
+                final int requested = Integer.parseInt(value(args, "--range").substring("bytes=0-".length())) + 1;
+                byte[] copied = Arrays.copyOf(bytes, Math.min(requested, bytes.length));
+                if (corruptDownloads) {
+                    copied[0] ^= 1;
+                }
+                Files.write(Path.of(args.getLast()), copied);
             } catch (IOException exception) {
                 throw new IllegalStateException(exception);
             }

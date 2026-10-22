@@ -1,14 +1,13 @@
 package com.gustler.backend.routecatalog.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.util.Optional;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class HeadwayRangeTest {
-
     @ParameterizedTest
     @CsvSource({"10, 20", "15, 15", "1, 1440"})
     void 최소가_최대보다_크지_않은_1분부터_1440분까지의_범위를_받는다(
@@ -42,8 +41,12 @@ class HeadwayRangeTest {
         final int minMinutes,
         final int maxMinutes
     ) {
-        // when & then
-        assertThatThrownBy(() -> new HeadwayRange(minMinutes, maxMinutes))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new HeadwayRange(minMinutes, maxMinutes));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 }

@@ -1,13 +1,13 @@
 package com.gustler.backend.routecatalog.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.util.Set;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 
 class RouteHeadwaysTest {
-
     private static final RouteHeadways STORED = new RouteHeadways(
         new HeadwayRange(10, 20), new HeadwayRange(12, 25), new HeadwayRange(15, 30), new HeadwayRange(16, 35));
 
@@ -35,8 +35,10 @@ class RouteHeadwaysTest {
         RouteHeadways actual = incoming.keepingUnreadableDaysFrom(null);
 
         // then
-        assertThat(actual).isEqualTo(new RouteHeadways(null, new HeadwayRange(8, 18), null, null));
-        assertThat(actual.hasUnreadableDays()).isFalse();
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(actual).isEqualTo(new RouteHeadways(null, new HeadwayRange(8, 18), null, null));
+            softly.assertThat(actual.hasUnreadableDays()).isFalse();
+        }
     }
 
     @Test
@@ -53,9 +55,13 @@ class RouteHeadwaysTest {
 
     @Test
     void 읽지_못한_요일에_배차간격이_있으면_거부한다() {
-        // when & then
-        assertThatThrownBy(() -> new RouteHeadways(
-            new HeadwayRange(10, 20), null, null, null, Set.of(ServiceDay.WEEKDAY)))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new RouteHeadways(
+            new HeadwayRange(10, 20), null, null, null, Set.of(ServiceDay.WEEKDAY)));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 }

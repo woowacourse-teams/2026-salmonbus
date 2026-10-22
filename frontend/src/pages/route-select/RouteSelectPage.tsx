@@ -1,20 +1,25 @@
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
+import { useAuth } from "@/shared/hooks/useAuth";
+import { Brand } from "@/shared/components/Brand";
+import { BottomNavigation } from "@/shared/components/BottomNavigation";
+import { LoginButton } from "@/shared/components/LoginButton";
+import { Notice } from "@/shared/components/Notice";
 import { track } from "@/shared/analytics/track";
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
-import salmongProud from "@/shared/assets/images/salmong-logo/salmong-proud.png";
-import salmonbusWordmark from "@/shared/assets/images/salmonbus-wordmark.webp";
 import { boardPathFor } from "@/shared/routing/paths";
 import { routeSelectedPropertiesOf, unmatchedQueryOf } from "./analytics/searchEventPolicy";
 import { useUnmatchedSearchEvent } from "./analytics/useUnmatchedSearchEvent";
 import { SearchForm } from "./components/SearchForm";
 import { SearchResults } from "./components/SearchResults";
 import { submitTargetFor } from "./displayPolicy";
-import { SEARCH_QUESTION } from "./routeSelectCopy";
 import { useRouteSearch } from "./useRouteSearch";
 import * as styles from "./RouteSelectPage.css";
 
 export function RouteSelectPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { state: auth } = useAuth();
+  const notice: unknown = location.state?.notice;
   const { input, view, changeInput, retry } = useRouteSearch();
   useUnmatchedSearchEvent(unmatchedQueryOf(view, input));
 
@@ -31,19 +36,30 @@ export function RouteSelectPage() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <div className={styles.brandLockup}>
-          <img className={styles.mascot} src={salmongProud} alt="연어 버스 로고" />
-          <img className={styles.wordmark} src={salmonbusWordmark} width={175} height={45} alt="연어 버스 글자 로고" />
-        </div>
-      </header>
       <main>
-        <div className={styles.searchArea} data-filled={input === "" ? undefined : ""}>
-          <h1 className={styles.question}>{SEARCH_QUESTION}</h1>
-          <SearchForm value={input} onChange={changeInput} onClear={() => changeInput("")} onSubmit={handleSubmit} />
-          <SearchResults view={view} onSelect={handleSelect} onRetry={retry} />
-        </div>
+        <header className={styles.header}>
+          <h1 style={{ margin: 0 }}>
+            <Brand />
+          </h1>
+          <div className={styles.searchArea}>
+            <SearchForm value={input} onChange={changeInput} onClear={() => changeInput("")} onSubmit={handleSubmit} />
+            <SearchResults view={view} onSelect={handleSelect} onRetry={retry} />
+          </div>
+        </header>
+        {input === "" && (
+          <section className={styles.account} aria-label="회원 안내">
+            {auth.status === "authenticated" ? (
+              <p className={styles.welcome}>어서오세요 연어버스입니다!</p>
+            ) : auth.status === "loading" ? (
+              <p>로그인 상태를 확인하고 있어요…</p>
+            ) : (
+              <LoginButton returnTo="/" />
+            )}
+          </section>
+        )}
       </main>
+      <BottomNavigation />
+      {typeof notice === "string" && <Notice key={notice} message={notice} />}
     </div>
   );
 }

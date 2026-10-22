@@ -1,7 +1,7 @@
 package com.gustler.backend.routecatalog.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.gustler.backend.routecatalog.domain.RouteHeadways;
 import com.gustler.backend.routecatalog.domain.RouteStops;
@@ -12,7 +12,9 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,7 +25,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @RouteCatalogIntegrationTest
 class RouteVersionConcurrencyTest {
-
     private static final OffsetDateTime FIRST = OffsetDateTime.parse("2026-09-01T09:00:00+09:00");
     private static final OffsetDateTime SECOND = FIRST.plusDays(1);
     private static final RouteTimetable TIMETABLE =
@@ -51,8 +52,10 @@ class RouteVersionConcurrencyTest {
     @AfterEach
     void removeRoute() {
         transaction.executeWithoutResult(status -> {
-            jdbc.sql("DELETE FROM route_stop WHERE route_version_id IN (SELECT id FROM route_version WHERE route_id = ?)")
-                .param(routeId).update();
+            jdbc.sql(
+            "DELETE FROM route_stop WHERE route_version_id IN (SELECT id FROM route_version WHERE route_id = ?)")
+                .param(routeId)
+                .update();
             jdbc.sql("DELETE FROM route_version WHERE route_id = ?").param(routeId).update();
             jdbc.sql("DELETE FROM route WHERE id = ?").param(routeId).update();
         });
@@ -60,18 +63,23 @@ class RouteVersionConcurrencyTest {
 
     @Test
     void 최초_등록을_동시에_요청해도_같은_버전_하나를_반환한다() throws Exception {
+        // when
         List<Long> versions = loadTogether(stops("종점"), FIRST);
 
+        // then
         assertThat(versions.getFirst()).isEqualTo(versions.getLast());
         assertThat(versionCount()).isEqualTo(1);
     }
 
     @Test
     void 같은_개편을_동시에_적용해도_기간이_겹치지_않는_새_버전_하나만_연다() throws Exception {
-        long previous = loader.load(routeId, stops("종점"), TIMETABLE, FIRST);
+        // given
+        final long previous = loader.load(routeId, stops("종점"), TIMETABLE, FIRST);
 
+        // when
         List<Long> versions = loadTogether(stops("변경된 종점"), SECOND);
 
+        // then
         assertThat(versions.getFirst()).isEqualTo(versions.getLast()).isNotEqualTo(previous);
         assertThat(versionCount()).isEqualTo(2);
         assertThat(jdbc.sql("SELECT valid_to FROM route_version WHERE id = ?")
@@ -80,9 +88,17 @@ class RouteVersionConcurrencyTest {
 
     @Test
     void 새_정류장_저장이_실패하면_이전_버전_종료도_롤백한다() {
-        long previous = loader.load(routeId, stops("종점"), TIMETABLE, FIRST);
+        // when
+        final long previous = loader.load(routeId, stops("종점"), TIMETABLE, FIRST);
 
-        assertThatThrownBy(() -> loader.load(routeId, stops("긴".repeat(61)), TIMETABLE, SECOND))
+        // then
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> loader.load(routeId, stops("긴".repeat(61)), TIMETABLE, SECOND));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull()
             .isInstanceOf(RuntimeException.class);
 
         assertThat(versionCount()).isEqualTo(1);
@@ -92,12 +108,12 @@ class RouteVersionConcurrencyTest {
 
     private List<Long> loadTogether(RouteStops stops, OffsetDateTime at) throws Exception {
         CountDownLatch start = new CountDownLatch(1);
-        try (var threads = Executors.newFixedThreadPool(2)) {
-            var first = threads.submit(() -> {
+        try (ExecutorService threads = Executors.newFixedThreadPool(2)) {
+            Future<Long> first = threads.submit(() -> {
                 start.await();
                 return loader.load(routeId, stops, TIMETABLE, at);
             });
-            var second = threads.submit(() -> {
+            Future<Long> second = threads.submit(() -> {
                 start.await();
                 return loader.load(routeId, stops, TIMETABLE, at);
             });

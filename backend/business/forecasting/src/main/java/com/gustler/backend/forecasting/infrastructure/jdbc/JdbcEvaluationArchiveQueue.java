@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveQueue;
+import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveQueue.Candidates;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch.Key;
@@ -8,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.HexFormat;
@@ -21,6 +23,10 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+/**
+ * 완료 정산의 이관 후보와 재시도 시각을 관리한다.
+ * 품질이나 원본이 바뀐 예약은 재사용하지 않는다.
+ */
 @Repository
 public class JdbcEvaluationArchiveQueue implements EvaluationArchiveQueue {
     private final JdbcClient jdbc;
@@ -28,8 +34,12 @@ public class JdbcEvaluationArchiveQueue implements EvaluationArchiveQueue {
     private final Clock clock;
     private final TransactionTemplate transaction;
 
-    public JdbcEvaluationArchiveQueue(JdbcClient jdbc, RouteDataQualityAccess quality, Clock clock,
-        PlatformTransactionManager transactions) {
+    public JdbcEvaluationArchiveQueue(
+        JdbcClient jdbc,
+        RouteDataQualityAccess quality,
+        Clock clock,
+        PlatformTransactionManager transactions
+    ) {
         this.jdbc = jdbc;
         this.quality = quality;
         this.clock = clock;
@@ -44,7 +54,7 @@ public class JdbcEvaluationArchiveQueue implements EvaluationArchiveQueue {
     }
 
     @Override
-    public Optional<UUID> resumable(boolean deleteEnabled) {
+    public Optional<UUID> resumable(final boolean deleteEnabled) {
         return inTransaction(() -> jdbc.sql("""
             SELECT id FROM evaluation_archive_batch WHERE storage_state='LIVE' AND abandoned_at IS NULL
               AND restored_at IS NULL
@@ -54,15 +64,19 @@ public class JdbcEvaluationArchiveQueue implements EvaluationArchiveQueue {
     }
 
     @Override
-    public Optional<Candidates> next(int limit) {
-        if (limit < 1 || limit > 1000) throw new IllegalArgumentException("탐색 페이지는 1~1000개여야 한다");
+    public Optional<Candidates> next(final int limit) {
+        if (limit < 1 || limit > 1000) {
+            throw new IllegalArgumentException("탐색 페이지는 1~1000개여야 한다");
+        }
         return inTransaction(() -> {
-            var cursor = jdbc.sql("""
+            Optional<Cursor> cursor = jdbc.sql("""
                 SELECT observation_id,stop_order FROM evaluation_archive_scan
                 WHERE id=1 AND next_attempt_at<=clock_timestamp() FOR UPDATE SKIP LOCKED
                 """).query((rs, n) -> new Cursor(rs.getLong(1), rs.getInt(2))).optional();
-            if (cursor.isEmpty()) return Optional.empty();
-            var before = clock.instant().atZone(ZoneId.of("Asia/Seoul")).toLocalDate()
+            if (cursor.isEmpty()) {
+                return Optional.empty();
+            }
+            OffsetDateTime before = clock.instant().atZone(ZoneId.of("Asia/Seoul")).toLocalDate()
                 .atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant().atOffset(ZoneOffset.UTC);
             List<Candidate> page = jdbc.sql("""
                 WITH page AS MATERIALIZED (
@@ -86,53 +100,75 @@ public class JdbcEvaluationArchiveQueue implements EvaluationArchiveQueue {
                           WHERE s.prediction_observation_id=p.vehicle_observation_id AND s.target_stop_order=p.target_stop_order)
                     ) AS eligible
                 FROM page p ORDER BY vehicle_observation_id,target_stop_order
-                """).param("observation", cursor.get().observation()).param("stop", cursor.get().stop())
-                .param("limit", limit).param("before", before).query((rs, n) -> new Candidate(
-                    rs.getLong("route_version_id"), new Key(rs.getLong("vehicle_observation_id"), rs.getInt("target_stop_order")),
-                    rs.getBoolean("eligible"))).list();
+                """)
+                .param("observation", cursor.get().observation())
+                .param("stop", cursor.get().stop())
+                .param("limit", limit)
+                .param("before", before)
+                .query((rs, n) -> new Candidate(
+                    rs.getLong("route_version_id"),
+                    new Key(rs.getLong("vehicle_observation_id"), rs.getInt("target_stop_order")),
+                    rs.getBoolean("eligible")))
+                .list();
             if (page.isEmpty()) {
                 jdbc.sql("UPDATE evaluation_archive_scan SET observation_id=0,stop_order=0 WHERE id=1").update();
                 return Optional.empty();
             }
             // 다음 노선의 행은 건너뛰지 않는다. 다음 호출이 같은 키부터 이어 읽는다.
-            long route = page.getFirst().route();
-            List<Candidate> prefix = page.stream().takeWhile(row -> row.route() == route).toList();
+            final long route = page.getFirst().route();
+            List<Candidate> prefix = page.stream()
+                .takeWhile(row -> row.route() == route)
+                .toList();
             Key last = prefix.getLast().key();
             jdbc.sql("UPDATE evaluation_archive_scan SET observation_id=?,stop_order=? WHERE id=1")
                 .params(last.observationId(), last.stopOrder()).update();
-            List<Key> keys = prefix.stream().filter(Candidate::eligible).map(Candidate::key).toList();
-            return keys.isEmpty() ? Optional.empty() : Optional.of(new Candidates(route, keys));
+            List<Key> keys = prefix.stream()
+                .filter(Candidate::eligible)
+                .map(Candidate::key)
+                .toList();
+            if (keys.isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.of(new Candidates(route, keys));
         });
     }
 
     @Override
     public boolean retireChanged(EvaluationArchiveBatch owned) {
         return inTransaction(() -> {
-            long revision = quality.lock(owned.routeVersionId());
-            boolean active = jdbc.sql("""
+            final long revision = quality.lock(owned.routeVersionId());
+            final boolean active = jdbc.sql("""
                 SELECT EXISTS(SELECT 1 FROM evaluation_archive_batch WHERE id=:id AND lease_token=:token
                     AND lease_until>clock_timestamp() AND storage_state='LIVE' AND abandoned_at IS NULL
                     AND restored_at IS NULL)
                 """).param("id", owned.id()).param("token", owned.leaseToken()).query(Boolean.class).single();
-            if (!active) return false;
-            var rows = jdbc.sql("""
+            if (!active) {
+                return false;
+            }
+            List<Original> rows = jdbc.sql("""
                 SELECT m.original_sha256,to_jsonb(e)::text AS original
                 FROM evaluation_archive_member m JOIN forecast_evaluation_result e
                   ON e.vehicle_observation_id=m.vehicle_observation_id AND e.target_stop_order=m.target_stop_order
                 WHERE m.batch_id=? ORDER BY m.vehicle_observation_id,m.target_stop_order FOR UPDATE OF e
                 """).param(owned.id()).query((rs, n) -> new Original(rs.getString(1), rs.getString(2))).list();
             // 원본이 하나라도 없으면 키 기록을 지우지 않는다.
-            if (rows.size() != owned.rowCount() || rows.stream().anyMatch(row -> row.json() == null)) return false;
+            if (rows.size() != owned.rowCount() || rows.stream().anyMatch(row -> row.json() == null)) {
+                return false;
+            }
             if (revision == owned.qualityRevision()
-                && rows.stream().allMatch(row -> digest(row.json()).equals(row.sha256()))) return false;
+                && rows.stream().allMatch(row -> digest(row.json()).equals(row.sha256()))) {
+                return false;
+            }
             jdbc.sql("DELETE FROM evaluation_archive_member WHERE batch_id=?").param(owned.id()).update();
-            int changed = jdbc.sql("""
+            final int changed = jdbc.sql("""
                 UPDATE evaluation_archive_batch SET abandoned_at=clock_timestamp()
                 WHERE id=? AND lease_token=? AND lease_until>clock_timestamp() AND storage_state='LIVE'
                   AND abandoned_at IS NULL
                   AND restored_at IS NULL
                 """).params(owned.id(), owned.leaseToken()).update();
-            if (changed != 1) throw new IllegalStateException("변경된 예약을 중단하기 전에 작업 소유권이 만료됐다");
+            if (changed != 1) {
+                throw new IllegalStateException("변경된 예약을 중단하기 전에 작업 소유권이 만료됐다");
+            }
             return true;
         });
     }
@@ -147,7 +183,9 @@ public class JdbcEvaluationArchiveQueue implements EvaluationArchiveQueue {
                     WHERE id=? AND lease_token=? AND storage_state='LIVE' AND abandoned_at IS NULL
                     """).params(owned.id(), owned.leaseToken()).update();
             }
-            jdbc.sql("UPDATE evaluation_archive_scan SET next_attempt_at=clock_timestamp()+interval '60 seconds' WHERE id=1").update();
+            jdbc.sql(
+            "UPDATE evaluation_archive_scan SET next_attempt_at=clock_timestamp()+interval '60 seconds' WHERE id=1")
+                .update();
             return null;
         });
     }
@@ -166,12 +204,17 @@ public class JdbcEvaluationArchiveQueue implements EvaluationArchiveQueue {
 
     private static String digest(String value) {
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of()
+                .formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException(exception);
         }
     }
-    private record Cursor(long observation, int stop) { }
-    private record Candidate(long route, Key key, boolean eligible) { }
-    private record Original(String sha256, String json) { }
+    private record Cursor(long observation, int stop) {
+    }
+    private record Candidate(long route, Key key, boolean eligible) {
+    }
+    private record Original(String sha256, String json) {
+    }
 }

@@ -7,9 +7,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * 노선 판본의 정상 수신 관측 묶음을 최신 수신 시각과 식별자 순으로 찾는 JPA 조회 경계다.
+ */
 public interface ObservationBatchEntityRepository
     extends Repository<ObservationBatchJpaEntity, Long> {
-
     @Query("""
         SELECT batch
         FROM ObservationBatchJpaEntity batch

@@ -1,7 +1,7 @@
 package com.gustler.backend.api.board.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -22,12 +22,13 @@ import com.gustler.backend.api.vehicle.application.VehicleQueryRepository;
 import com.gustler.backend.api.vehicle.domain.ObservedVehicle;
 import com.gustler.backend.api.vehicle.domain.VehicleDirection;
 import com.gustler.backend.api.vehicle.domain.VehiclePhase;
-import com.gustler.backend.api.vehicle.domain.VehicleSeat;
+import com.gustler.backend.api.vehicle.domain.VehicleSeat.Exact;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,7 +41,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 @ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 class WatchBoardQueryServiceTest {
-
     private static final RouteId ROUTE_ID = new RouteId("204000057");
     private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-08-27T12:00:00+09:00");
     private static final long BATCH_ID = 100L;
@@ -64,23 +64,27 @@ class WatchBoardQueryServiceTest {
         // given
         Board board = board(NOW.minusMinutes(1), 1);
         List<ObservedVehicle> vehicles = List.of(vehicle("V1"));
-        given(boardQueryService.readBoard(ROUTE_ID)).willReturn(new BoardReading(board, BATCH_ID, Duration.ofSeconds(20)));
+        given(boardQueryService.readBoard(ROUTE_ID)).willReturn(
+            new BoardReading(board, BATCH_ID, Duration.ofSeconds(20)));
         given(vehicleQueryRepository.findVehicles(BATCH_ID)).willReturn(vehicles);
 
         // when
         WatchBoardOverview overview = service.getWatchBoard(ROUTE_ID);
 
         // then
-        assertThat(overview.board()).isEqualTo(board);
-        assertThat(overview.vehicles()).isEqualTo(vehicles);
-        assertThat(overview.cacheMaxAge()).isEqualTo(Duration.ofSeconds(20));
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(overview.board()).isEqualTo(board);
+            softly.assertThat(overview.vehicles()).isEqualTo(vehicles);
+            softly.assertThat(overview.cacheMaxAge()).isEqualTo(Duration.ofSeconds(20));
+        }
     }
 
     @Test
     void 만료까지_남은_시간이_캐시_정책보다_짧으면_남은_시간만큼만_캐시한다() {
         // given
         Board board = board(NOW.minusMinutes(9), 0);
-        given(boardQueryService.readBoard(ROUTE_ID)).willReturn(new BoardReading(board, BATCH_ID, Duration.ofSeconds(600)));
+        given(boardQueryService.readBoard(ROUTE_ID)).willReturn(
+            new BoardReading(board, BATCH_ID, Duration.ofSeconds(600)));
         given(vehicleQueryRepository.findVehicles(BATCH_ID)).willReturn(List.of());
 
         // when
@@ -94,7 +98,8 @@ class WatchBoardQueryServiceTest {
     void 만료_시각이면_캐시하지_않는다() {
         // given
         Board board = board(NOW.minusMinutes(10), 0);
-        given(boardQueryService.readBoard(ROUTE_ID)).willReturn(new BoardReading(board, BATCH_ID, Duration.ofSeconds(600)));
+        given(boardQueryService.readBoard(ROUTE_ID)).willReturn(
+            new BoardReading(board, BATCH_ID, Duration.ofSeconds(600)));
         given(vehicleQueryRepository.findVehicles(BATCH_ID)).willReturn(List.of());
 
         // when
@@ -108,7 +113,8 @@ class WatchBoardQueryServiceTest {
     void 판정_직후_만료_시각을_넘겨도_캐시_시간은_음수가_되지_않는다() {
         // given
         Board board = board(NOW.minusMinutes(10).minusSeconds(1), 0);
-        given(boardQueryService.readBoard(ROUTE_ID)).willReturn(new BoardReading(board, BATCH_ID, Duration.ofSeconds(600)));
+        given(boardQueryService.readBoard(ROUTE_ID)).willReturn(
+            new BoardReading(board, BATCH_ID, Duration.ofSeconds(600)));
         given(vehicleQueryRepository.findVehicles(BATCH_ID)).willReturn(List.of());
 
         // when
@@ -123,8 +129,12 @@ class WatchBoardQueryServiceTest {
         // given
         given(boardQueryService.readBoard(ROUTE_ID)).willThrow(new NoRecentObservationException());
 
-        // when & then
-        assertThatThrownBy(() -> service.getWatchBoard(ROUTE_ID)).isInstanceOf(NoRecentObservationException.class);
+        // when
+        Throwable caughtFailure = catchThrowable(() -> service.getWatchBoard(ROUTE_ID));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull().isInstanceOf(NoRecentObservationException.class);
         verify(vehicleQueryRepository, never()).findVehicles(anyLong());
     }
 
@@ -135,8 +145,12 @@ class WatchBoardQueryServiceTest {
             .willReturn(new BoardReading(board(NOW.minusMinutes(1), 1), BATCH_ID, Duration.ofSeconds(20)));
         given(vehicleQueryRepository.findVehicles(BATCH_ID)).willThrow(new ServiceUnavailableException());
 
-        // when & then
-        assertThatThrownBy(() -> service.getWatchBoard(ROUTE_ID)).isInstanceOf(ServiceUnavailableException.class);
+        // when
+        Throwable caughtFailure = catchThrowable(() -> service.getWatchBoard(ROUTE_ID));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull().isInstanceOf(ServiceUnavailableException.class);
     }
 
     @Test
@@ -193,12 +207,13 @@ class WatchBoardQueryServiceTest {
             List.of(new DirectionInfo(BoardDirection.UP, "종점 방면", "기점", "종점", "04:50", "23:30")), "1",
             RouteHeadways.none());
         StopState stop = new StopState(1, "STOP-1", "기점", BoardDirection.UP, true, List.of());
-        return new Board(route, observedAt, observedAt.plusMinutes(10), new ForecastModel(7L, "model-7", NOW.minusDays(1)),
+        return new Board(route, observedAt, observedAt.plusMinutes(10),
+            new ForecastModel(7L, "model-7", NOW.minusDays(1)),
             vehiclesInService, List.of(stop));
     }
 
     private static ObservedVehicle vehicle(String vehicleId) {
         return new ObservedVehicle(vehicleId, VehicleDirection.UP, 1, "STOP-1", "기점", VehiclePhase.DEPARTED,
-            new VehicleSeat.Exact(7));
+            new Exact(7));
     }
 }

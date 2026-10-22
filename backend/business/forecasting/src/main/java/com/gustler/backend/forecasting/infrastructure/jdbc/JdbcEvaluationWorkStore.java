@@ -1,23 +1,27 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore;
+import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore.Key;
+import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore.Restored;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 관측별 미완료 정산 작업과 변경 판본을 관리한다.
+ * 복원에 실패한 상세는 완료 처리하지 않는다.
+ */
 @Repository
-@Transactional(propagation = Propagation.MANDATORY)
+@Transactional(readOnly = false, propagation = Propagation.MANDATORY)
 public class JdbcEvaluationWorkStore implements EvaluationWorkStore {
     private static final int MAX_OBSERVATIONS = 100;
-    private final JdbcClient jdbc;
-
-    public JdbcEvaluationWorkStore(JdbcClient jdbc) { this.jdbc = jdbc; }
-
     private static final String REGISTER = """
         INSERT /* salmonbus:evaluation_work.register */ INTO forecast_evaluation_work
             (vehicle_observation_id, route_version_id)
@@ -126,10 +130,18 @@ public class JdbcEvaluationWorkStore implements EvaluationWorkStore {
         RETURNING vehicle_observation_id
         """;
 
+    private final JdbcClient jdbc;
+
+    public JdbcEvaluationWorkStore(JdbcClient jdbc) {
+        this.jdbc = jdbc;
+    }
+
     @Override
-    public void register(long version, List<Long> observationIds) {
+    public void register(final long version, List<Long> observationIds) {
         List<Long> ids = checked(observationIds);
-        if (ids.isEmpty()) return;
+        if (ids.isEmpty()) {
+            return;
+        }
         jdbc.sql(REGISTER).param("version", version).param("ids", ids).update();
     }
 
@@ -145,17 +157,26 @@ public class JdbcEvaluationWorkStore implements EvaluationWorkStore {
 
     @Override
     @Transactional(readOnly = true, propagation = Propagation.SUPPORTS)
-    public long lastObservationId(long version) {
+    public long lastObservationId(final long version) {
         return jdbc.sql("""
             SELECT /* salmonbus:evaluation_work.last_observation */ vehicle_observation_id FROM forecast_evaluation_work WHERE route_version_id=:version
             ORDER BY vehicle_observation_id DESC LIMIT 1
-            """).param("version", version).query(Long.class).optional().orElse(0L);
+            """)
+            .param("version", version)
+            .query(Long.class)
+            .optional()
+            .orElse(0L);
     }
 
     @Override
     @Transactional(readOnly = true, propagation = Propagation.SUPPORTS)
-    public List<Long> page(long version, long afterObservationId, long throughObservationId, int limit) {
-        if (afterObservationId < 0 || limit < 1 || limit > MAX_OBSERVATIONS) {
+    public List<Long> page(
+        final long version,
+        final long afterObservationId,
+        final long throughObservationId,
+        final int limit
+    ) {
+        if (!hasValidPageRequest(afterObservationId, limit)) {
             throw new IllegalArgumentException("작업 탐색은 음수가 아닌 시작 위치와 제한된 개수가 필요하다");
         }
         return jdbc.sql(PAGE).param("version", version)
@@ -163,15 +184,48 @@ public class JdbcEvaluationWorkStore implements EvaluationWorkStore {
             .param("limit", limit).query(Long.class).list();
     }
 
+    private boolean hasValidPageRequest(long afterObservationId, int limit) {
+        if (afterObservationId < 0 || limit < 1) {
+            return false;
+        }
+        return limit <= MAX_OBSERVATIONS;
+    }
+
     @Override
     @Transactional(readOnly = true, propagation = Propagation.SUPPORTS)
-    public List<Restored> restore(long version, List<Long> observationIds) {
+    public Map<Long, Long> revisions(final long version, List<Long> observationIds) {
         List<Long> ids = checked(observationIds);
-        if (ids.isEmpty()) return List.of();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return jdbc.sql("""
+            SELECT /* salmonbus:evaluation_work.revisions */ vehicle_observation_id, revision FROM forecast_evaluation_work
+            WHERE route_version_id=:version AND vehicle_observation_id IN (:ids)
+            """)
+            .param("version", version)
+            .param("ids", ids)
+            .query(rs -> {
+                Map<Long, Long> result = new LinkedHashMap<>();
+                while (rs.next()) {
+                    result.put(rs.getLong(1), rs.getLong(2));
+                }
+                return Map.copyOf(result);
+            });
+    }
+
+    @Override
+    @Transactional(readOnly = true, propagation = Propagation.SUPPORTS)
+    public List<Restored> restore(final long version, List<Long> observationIds) {
+        List<Long> ids = checked(observationIds);
+        if (ids.isEmpty()) {
+            return List.of();
+        }
         return jdbc.sql(RESTORE).param("version", version).param("ids", ids)
             .query((rs, index) -> {
                 Key key = new Key(rs.getLong("vehicle_observation_id"), rs.getInt("target_stop_order"));
-                if (!rs.getBoolean("eligible")) return new Restored(key, Optional.empty());
+                if (!rs.getBoolean("eligible")) {
+                    return new Restored(key, Optional.empty());
+                }
                 PendingForecast forecast = new PendingForecast(
                     key.observationId(), key.targetStopOrder(), rs.getLong("route_version_id"),
                     rs.getString("vehicle_id"), rs.getInt("stops_to_target"),
@@ -183,34 +237,25 @@ public class JdbcEvaluationWorkStore implements EvaluationWorkStore {
     }
 
     @Override
-    @Transactional(readOnly = true, propagation = Propagation.SUPPORTS)
-    public java.util.Map<Long, Long> revisions(long version, List<Long> observationIds) {
+    public List<Key> closeExcluded(final long version, List<Long> observationIds, final int limit) {
         List<Long> ids = checked(observationIds);
-        if (ids.isEmpty()) return java.util.Map.of();
-        return jdbc.sql("""
-            SELECT /* salmonbus:evaluation_work.revisions */ vehicle_observation_id, revision FROM forecast_evaluation_work
-            WHERE route_version_id=:version AND vehicle_observation_id IN (:ids)
-            """).param("version", version).param("ids", ids).query(rs -> {
-                java.util.Map<Long, Long> result = new java.util.LinkedHashMap<>();
-                while (rs.next()) result.put(rs.getLong(1), rs.getLong(2));
-                return java.util.Map.copyOf(result);
-            });
-    }
-
-    @Override
-    public List<Key> closeExcluded(long version, List<Long> observationIds, int limit) {
-        List<Long> ids = checked(observationIds);
-        if (limit < 0 || limit > 500) throw new IllegalArgumentException("품질 제외 처리 한도를 벗어났다");
-        if (ids.isEmpty() || limit == 0) return List.of();
+        if (limit < 0 || limit > 500) {
+            throw new IllegalArgumentException("품질 제외 처리 한도를 벗어났다");
+        }
+        if (ids.isEmpty() || limit == 0) {
+            return List.of();
+        }
         return jdbc.sql(EXCLUDE).param("version", version).param("ids", ids).param("limit", limit)
             .query((rs, index) -> new Key(rs.getLong("vehicle_observation_id"),
                 rs.getInt("target_stop_order"))).list();
     }
 
     @Override
-    public List<Key> completed(long version, List<Long> observationIds) {
+    public List<Key> completed(final long version, List<Long> observationIds) {
         List<Long> ids = checked(observationIds);
-        if (ids.isEmpty()) return List.of();
+        if (ids.isEmpty()) {
+            return List.of();
+        }
         return jdbc.sql("""
             SELECT /* salmonbus:evaluation_work.completed */ result.vehicle_observation_id, result.target_stop_order
             FROM forecast_evaluation_result result
@@ -231,9 +276,11 @@ public class JdbcEvaluationWorkStore implements EvaluationWorkStore {
     }
 
     @Override
-    public List<Long> releaseCompleted(long version, List<Long> observationIds) {
+    public List<Long> releaseCompleted(final long version, List<Long> observationIds) {
         List<Long> ids = checked(observationIds);
-        if (ids.isEmpty()) return List.of();
+        if (ids.isEmpty()) {
+            return List.of();
+        }
         return jdbc.sql(RELEASE).param("version", version).param("ids", ids).query(Long.class).list();
     }
 
@@ -242,6 +289,8 @@ public class JdbcEvaluationWorkStore implements EvaluationWorkStore {
         if (ids.size() > MAX_OBSERVATIONS || ids.stream().anyMatch(id -> id <= 0)) {
             throw new IllegalArgumentException("작업은 양수 관측 ID로 한 번에 제한된 개수만 처리한다");
         }
-        return ids.stream().distinct().toList();
+        return ids.stream()
+            .distinct()
+            .toList();
     }
 }

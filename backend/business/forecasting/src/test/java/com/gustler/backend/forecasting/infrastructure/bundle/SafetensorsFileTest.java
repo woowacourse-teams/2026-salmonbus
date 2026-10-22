@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.bundle;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -9,13 +9,12 @@ import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 
 /**
- * 계수 파일을 믿고 읽지 않는지 본다.
+ * 계수 파일을 읽을 때 필요한 검증을 수행하는지 확인한다.
  *
- * <p>머리말이 적은 구간을 그대로 믿으면 파일 밖을 읽거나, 크기와 안 맞는 바이트를 계수로 읽는다.
- * 뒤엣것이 더 나쁘다. 예외가 안 나고 아무 수나 계수가 된다.
+ * <p>머리말에 명시된 구간을 그대로 신뢰하면 파일 밖을 읽거나 크기가 맞지 않는 바이트를 계수로 읽는다.
+ * 후자는 예외 없이 임의의 값이 계수로 사용되는 문제다.
  */
 class SafetensorsFileTest {
-
     @Test
     void 실수_배열을_적힌_크기대로_읽는다() {
         // given
@@ -52,46 +51,69 @@ class SafetensorsFileTest {
             .with("bin_fitted", TensorDataType.UINT8, new int[] {1}, new double[] {1})
             .toBytes();
 
-        // when & then
-        assertThatThrownBy(() -> SafetensorsFile.of(given).get("hurdle_coefficients"))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> SafetensorsFile.of(given).get("hurdle_coefficients"));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(BundleRejectedException.class);
     }
 
     @Test
     void 파일이_머리말_길이도_못_담을_만큼_짧으면_거절한다() {
-        // when & then
-        assertThatThrownBy(() -> SafetensorsFile.of(new byte[] {1, 2, 3}))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> SafetensorsFile.of(new byte[] {1, 2, 3}));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(BundleRejectedException.class);
     }
 
     @Test
     void 머리말_길이가_파일_크기를_넘으면_거절한다() {
-        // given 머리말이 실제보다 길다고 적힌 파일이다
+        // given
+        // 머리말이 실제보다 길다고 적힌 파일이다
         byte[] given = withHeaderLength(headerOf("F64", 1, 8), 8, 4096);
 
-        // when & then
-        assertThatThrownBy(() -> SafetensorsFile.of(given))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> SafetensorsFile.of(given));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(BundleRejectedException.class);
     }
 
     @Test
     void 값_구간_길이가_크기와_자료형에_안_맞으면_거절한다() {
-        // given 실수 하나는 8바이트인데 구간이 4바이트로 적혀 있다
+        // given
+        // 실수 하나는 8바이트인데 구간이 4바이트로 적혀 있다
         byte[] given = fileOf(headerOf("F64", 1, 4), 8);
 
-        // when & then
-        assertThatThrownBy(() -> SafetensorsFile.of(given))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> SafetensorsFile.of(given));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(BundleRejectedException.class)
             .hasMessageContaining("값 구간 길이");
     }
 
     @Test
     void 값_구간이_파일_밖을_가리키면_거절한다() {
-        // given 구간은 8바이트라고 적혀 있는데 값이 하나도 안 붙어 있다
+        // given
+        // 구간은 8바이트라고 적혀 있는데 값이 하나도 안 붙어 있다
         byte[] given = fileOf(headerOf("F64", 1, 8), 0);
 
-        // when & then
-        assertThatThrownBy(() -> SafetensorsFile.of(given))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> SafetensorsFile.of(given));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(BundleRejectedException.class)
             .hasMessageContaining("파일 밖");
     }
@@ -101,8 +123,12 @@ class SafetensorsFileTest {
         // given
         byte[] given = fileOf("계수가 여기 있어요".getBytes(StandardCharsets.UTF_8), 8);
 
-        // when & then
-        assertThatThrownBy(() -> SafetensorsFile.of(given))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> SafetensorsFile.of(given));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(BundleRejectedException.class);
     }
 
@@ -111,10 +137,14 @@ class SafetensorsFileTest {
         // given
         byte[] given = fileOf(
             "{\"hurdle_coefficients\":{\"dtype\":\"F64\",\"shape\":[0],\"data_offsets\":[0,0]}}"
-                .getBytes(StandardCharsets.UTF_8), 0);
+                    .getBytes(StandardCharsets.UTF_8), 0);
 
-        // when & then
-        assertThatThrownBy(() -> SafetensorsFile.of(given))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> SafetensorsFile.of(given));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(BundleRejectedException.class);
     }
 
@@ -123,10 +153,14 @@ class SafetensorsFileTest {
         // given
         byte[] given = fileOf(
             "{\"hurdle_coefficients\":{\"shape\":[1],\"data_offsets\":[0,8]}}"
-                .getBytes(StandardCharsets.UTF_8), 8);
+                    .getBytes(StandardCharsets.UTF_8), 8);
 
-        // when & then 안 보고 꺼내면 거절이 아니라 NullPointerException 으로 끝난다
-        assertThatThrownBy(() -> SafetensorsFile.of(given))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> SafetensorsFile.of(given));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(BundleRejectedException.class);
     }
 
@@ -135,42 +169,57 @@ class SafetensorsFileTest {
         // given
         byte[] given = fileOf(
             "{\"hurdle_coefficients\":{\"dtype\":\"F64\",\"shape\":[1],\"data_offsets\":[0]}}"
-                .getBytes(StandardCharsets.UTF_8), 8);
+                    .getBytes(StandardCharsets.UTF_8), 8);
 
-        // when & then
-        assertThatThrownBy(() -> SafetensorsFile.of(given))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> SafetensorsFile.of(given));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(BundleRejectedException.class);
     }
 
     @Test
     void 값_구간이_파일_크기보다_아득히_크면_거절한다() {
-        // given 구간 길이는 실수 하나와 맞는데 자리가 파일 크기와 견줄 수 없을 만큼 뒤다
+        // given
+        // 구간 길이는 실수 하나와 맞지만 값의 위치가 파일 크기보다 훨씬 뒤에 있다
         byte[] given = fileOf(
             ("{\"hurdle_coefficients\":{\"dtype\":\"F64\",\"shape\":[1],"
                 + "\"data_offsets\":[9223372036854775799,9223372036854775807]}}")
                 .getBytes(StandardCharsets.UTF_8), 8);
 
-        // when & then 더해서 재면 넘쳐서 음수가 되고 검사를 그냥 통과한다
-        assertThatThrownBy(() -> SafetensorsFile.of(given))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> SafetensorsFile.of(given));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(BundleRejectedException.class)
             .hasMessageContaining("파일 밖");
     }
 
     @Test
     void 배열의_칸_수가_셀_수_있는_범위를_넘으면_거절한다() {
-        // given 크기 둘을 곱하면 43억 칸인데 값은 한 칸도 안 붙어 있다
+        // given
+        // 크기 둘을 곱하면 43억 칸인데 값은 한 칸도 안 붙어 있다
         byte[] given = fileOf(
             ("{\"hurdle_coefficients\":{\"dtype\":\"F64\",\"shape\":[65536,65536],"
                 + "\"data_offsets\":[0,0]}}").getBytes(StandardCharsets.UTF_8), 0);
 
-        // when & then 곱을 int 로 세면 43억이 조용히 0 이 돼서, 값 0칸과 앞뒤가 맞아 통과한다
-        assertThatThrownBy(() -> SafetensorsFile.of(given))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> SafetensorsFile.of(given));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(BundleRejectedException.class);
     }
 
     @Test
     void 머리말이_자기_정보를_담은_자리는_배열로_안_읽는다() {
-        // given safetensors 는 __metadata__ 에 배열이 아닌 것을 담는다
+        // given
+        // safetensors 는 __metadata__ 에 배열이 아닌 것을 담는다
         byte[] given = fileOf(
             ("{\"__metadata__\":{\"format\":\"pt\"},"
                 + "\"bin_fitted\":{\"dtype\":\"U8\",\"shape\":[1],\"data_offsets\":[0,1]}}")
@@ -189,7 +238,7 @@ class SafetensorsFileTest {
         final int valueBytes
     ) {
         return ("{\"hurdle_coefficients\":{\"dtype\":\"%s\",\"shape\":[%d],\"data_offsets\":[0,%d]}}"
-            .formatted(dataType, length, valueBytes)).getBytes(StandardCharsets.UTF_8);
+                .formatted(dataType, length, valueBytes)).getBytes(StandardCharsets.UTF_8);
     }
 
     private static byte[] fileOf(

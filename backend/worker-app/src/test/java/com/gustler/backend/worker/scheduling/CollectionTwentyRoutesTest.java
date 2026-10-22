@@ -1,21 +1,21 @@
 package com.gustler.backend.worker.scheduling;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
+
 import com.gustler.backend.gbis.api.GbisKey;
+import com.gustler.backend.gbis.api.GbisLocationResult.Success;
 import com.gustler.backend.gbis.api.GbisLocationSource;
+import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
 import com.gustler.backend.routecatalog.domain.RouteHeadways;
+import com.gustler.backend.routecatalog.domain.RouteSource;
+import com.gustler.backend.routecatalog.domain.RouteSourceResult;
 import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.UpstreamRoute;
 import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
-import com.gustler.backend.routecatalog.domain.RouteSourceResult;
-import com.gustler.backend.routecatalog.domain.RouteSource;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.BDDMockito.given;
-
-import com.gustler.backend.gbis.api.GbisLocationResult.Success;
-import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
 import com.gustler.backend.support.PostgresTestContainer;
+import com.gustler.backend.worker.configuration.CollectionProperties;
 import com.gustler.backend.worker.configuration.CollectionRuntimeConfiguration;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -28,15 +28,15 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
- * 설정에 적은 노선으로 한 바퀴 도는 것을 본다.
+ * 설정에 적은 노선을 한 차례 수집하는지 확인한다.
  *
- * <p>주기 작업은 꺼둔 채로 스케줄러 메서드를 직접 부른다. 켜두면 뒤에서 첫 판이 도는 것과
- * 이 테스트가 겹쳐 무엇이 쌓은 행인지 흐려진다. 스케줄이 걸리는지는 ScheduledCollectionTest 가 본다.
+ * <p>주기 작업을 끄고 스케줄러 메서드를 직접 호출한다. 주기 작업을 켜면 최초 수집과
+ * 이 테스트가 겹쳐 어느 쪽이 행을 저장했는지 구분하기 어렵다.
+ * 스케줄 등록은 ScheduledCollectionTest 에서 확인한다.
  */
 @SpringBootTest
 @Import({PostgresTestContainer.class, CollectionRuntimeConfiguration.class})
 class CollectionTwentyRoutesTest {
-
     private static final String STOP_205000217 = "205000217";
     private static final String STOP_277103149 = "277103149";
     private static final String STOP_208000069 = "208000069";
@@ -53,7 +53,7 @@ class CollectionTwentyRoutesTest {
     private CollectionScheduler scheduler;
 
     @Autowired
-    private com.gustler.backend.worker.configuration.CollectionProperties properties;
+    private CollectionProperties properties;
 
     @Autowired
     private JdbcClient jdbcClient;
@@ -61,7 +61,7 @@ class CollectionTwentyRoutesTest {
     @BeforeEach
     void 상류_대역을_세운다() {
         given(routeSource.requiredCallsPerRead()).willReturn(2);
-        for (var routeId : properties.routeIds()) {
+        for (String routeId : properties.routeIds()) {
             given(routeSource.read(routeId)).willReturn(new RouteSourceResult.Success(upstreamRoute(routeId)));
             given(locationSource.read(routeId, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME, List.of(
                 new BusLocation("테스트차량", "V" + routeId, 0, routeId, 11,
@@ -80,10 +80,13 @@ class CollectionTwentyRoutesTest {
 
     @Test
     void 추가한_12개_노선의_관측을_수집한다() {
+        // given
         assertThat(properties.routeIds()).hasSize(20);
 
+        // when
         scheduler.collectAllRoutes();
 
+        // then
         assertThat(countOf("SELECT count(*) FROM vehicle_observation")).isEqualTo(20);
         assertThat(jdbcClient.sql("SELECT source_route_id FROM route").query(String.class).list())
             .contains("204000081", "234000002", "234000313", "234000878", "234000882", "204000082",
@@ -92,20 +95,26 @@ class CollectionTwentyRoutesTest {
 
     @Test
     void 등록된_노선_정보를_중복으로_생성하지_않는다() {
+        // given
         scheduler.collectAllRoutes();
 
+        // when
         scheduler.collectAllRoutes();
 
+        // then
         assertThat(countOf("SELECT count(*) FROM route")).isEqualTo(20);
         assertThat(countOf("SELECT count(*) FROM route_version")).isEqualTo(20);
     }
 
     @Test
     void 한_노선의_수집이_실패해도_다른_노선을_계속_수집한다() {
+        // given
         given(locationSource.read("204000081", GbisKey.PRIMARY)).willThrow(new IllegalStateException("test failure"));
 
+        // when
         scheduler.collectAllRoutes();
 
+        // then
         assertThat(countOf("SELECT count(*) FROM vehicle_observation")).isEqualTo(19);
     }
 
@@ -120,7 +129,7 @@ class CollectionTwentyRoutesTest {
     }
 
     private int countOf(
-        final String sql
+        String sql
     ) {
         return jdbcClient.sql(sql).query(Integer.class).single();
     }

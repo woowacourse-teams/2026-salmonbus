@@ -16,14 +16,15 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Collectors;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.core.simple.JdbcClient.StatementSpec;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 /** 통계 버전과 해당 정류장·시간대의 집계값을 함께 저장하고 조회한다. */
 @Repository
 public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsRepository {
-
     /** 아직 사용할 통계 버전이 없는 상태. */
     private static final int NO_STATISTICS_YET = 0;
 
@@ -118,7 +119,6 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
         ORDER BY forecast.target_stop_order, arrived_hour_start
         """;
 
-
     private static final String INSERT_VERSION = """
         INSERT INTO demand_statistics_version (
             route_version_id, calculation_version, revision, data_until, computed_at,
@@ -170,12 +170,10 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
                 resultSet.getInt("revision"),
                 cellOf(resultSet)))
             .list();
-        List<StopDemandCell> cells = new ArrayList<>();
-        for (VersionedCell row : rows) {
-            if (row.cell() != null) {
-                cells.add(row.cell());
-            }
-        }
+        List<StopDemandCell> cells = rows.stream()
+            .filter(row -> row.cell() != null)
+            .map(VersionedCell::cell)
+            .collect(Collectors.toCollection(ArrayList::new));
         return new StopDemandStatistics(routeVersionId, timeSlot, revisionOf(rows), cells);
     }
 
@@ -198,15 +196,20 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
     ) {
         // read→aggregate→append 동안 판정 변경을 막는다. 호출 writer가 노선별 transaction을 연다.
         qualityAccess.lock(routeVersionId);
-        boolean archived = jdbcClient.sql("""
+        final boolean archived = jdbcClient.sql("""
             SELECT EXISTS(SELECT 1 FROM evaluation_archive_batch b JOIN evaluation_archive_member m ON m.batch_id=b.id
                 JOIN seat_forecast f ON f.vehicle_observation_id=m.vehicle_observation_id
                   AND f.target_stop_order=m.target_stop_order AND f.stops_to_target=1
                 WHERE b.route_version_id=:route AND NOT EXISTS(SELECT 1 FROM forecast_evaluation_result e
                     WHERE e.vehicle_observation_id=m.vehicle_observation_id AND e.target_stop_order=m.target_stop_order))
-            """).param("route", routeVersionId).query(Boolean.class).single();
-        if (archived) throw new IllegalStateException("DB 원본만 읽는 일괄 집계는 이관된 정산을 처리할 수 없다");
-        JdbcClient.StatementSpec statement = jdbcClient.sql(SELECT_HOURLY_TOTALS)
+            """)
+            .param("route", routeVersionId)
+            .query(Boolean.class)
+            .single();
+        if (archived) {
+            throw new IllegalStateException("DB 원본만 읽는 일괄 집계는 이관된 정산을 처리할 수 없다");
+        }
+        StatementSpec statement = jdbcClient.sql(SELECT_HOURLY_TOTALS)
             .param("routeVersionId", routeVersionId)
             .param("dataUntil", offsetOf(dataUntil));
         return statement
@@ -222,7 +225,7 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
 
     /** 버전 정보와 모든 셀을 같은 트랜잭션으로 저장해 일부만 공개되는 것을 막는다. */
     @Override
-    @Transactional
+    @Transactional(readOnly = false)
     public void append(
         DemandStatisticsVersion version
     ) {
@@ -263,7 +266,7 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
             .update();
     }
 
-    /** 그 시간대에 셀이 없으면 LEFT JOIN 이 빈 자리를 준다. 그때는 셀이 없다고 답한다. */
+    /** 해당 시간대에 셀이 없으면 LEFT JOIN 이 빈 값을 반환한다. 이 경우 셀이 없다고 응답한다. */
     private static StopDemandCell cellOf(
         ResultSet resultSet
     ) throws SQLException {
@@ -292,7 +295,7 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
     /**
      * 저장하는 시간대 값. V3 의 열 주석이 morning · evening · other 를 적고 있다.
      *
-     * <p>Locale.ROOT 로 내린다. 터키어 로캘에서는 대문자 I 가 점 없는 소문자로 내려가서
+     * <p>Locale.ROOT 로 소문자로 변환한다. 터키어 로캘에서는 대문자 I 가 점 없는 소문자로 변환되므로
      * 기본 로캘을 따르면 배포 지역에 따라 저장되는 글자가 달라진다.
      */
     private static String storedTimeSlotOf(

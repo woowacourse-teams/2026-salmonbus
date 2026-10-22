@@ -4,15 +4,18 @@ import com.gustler.backend.api.board.application.BoardOverview;
 import com.gustler.backend.api.board.application.BoardQueryService;
 import com.gustler.backend.api.board.dto.BoardResponse;
 import com.gustler.backend.api.docs.ApiDocsExamples;
+import com.gustler.backend.api.docs.ApiDocsTags;
 import com.gustler.backend.api.error.ErrorResponse;
 import com.gustler.backend.api.route.RouteId;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -21,21 +24,34 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 탑승판 조회 결과를 공개 응답으로 변환하고 결과의 캐시 수명을 HTTP 헤더에 반영한다.
+ */
 @RestController
+@Tag(name = ApiDocsTags.ROUTES)
 @RequestMapping("/api/v1/routes/{routeId}/board")
 @RequiredArgsConstructor
 public class BoardController {
-
     private final BoardQueryService boardQueryService;
 
+    /**
+     * 노선 승차판을 조회해 응답 DTO와 신선도 헤더를 조립한다. 조회 중 계산한 새 예측을 저장하지 않는다.
+     */
     @GetMapping
-    @Operation(summary = "노선별 판정 보드", description = "발행된 예보가 있으면 해당 관측을, 없으면 최신 정상 관측을 기준으로 보드를 구성합니다. 신선도는 관측 후 5분입니다.")
+    @Operation(summary = "노선별 판정 보드",
+        description = "발행된 예보가 있으면 해당 관측을, 없으면 최신 정상 관측을 기준으로 보드를 구성합니다. "
+            + "신선도는 관측 후 5분, 관측 시각이 01~03시대면 10분입니다. 차량 위치도 함께 필요하면 watch를 사용합니다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "보드 상태별 정상 응답",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = BoardResponse.class), examples = {
-                @ExampleObject(name = "FORECAST_READY", value = ApiDocsExamples.BOARD_READY),
-                @ExampleObject(name = "PREPARING", value = ApiDocsExamples.BOARD_PREPARING)
-            })),
+            headers = @Header(name = "Cache-Control",
+                description = "public, max-age는 관측 시각대별 정책값(07~08시·17~22시 15초, 01~03시대 600초, 그 밖의 시간 20초)",
+                schema = @Schema(type = "string")),
+            content =
+            @Content(mediaType = "application/json", schema = @Schema(implementation = BoardResponse.class),
+                examples = {
+                    @ExampleObject(name = "FORECAST_READY", value = ApiDocsExamples.BOARD_READY),
+                    @ExampleObject(name = "PREPARING", value = ApiDocsExamples.BOARD_PREPARING)
+                })),
         @ApiResponse(responseCode = "400", description = "노선 ID 형식이 올바르지 않음",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
                 examples = @ExampleObject(value = ApiDocsExamples.INVALID_ROUTE))),
@@ -43,11 +59,13 @@ public class BoardController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
                 examples = @ExampleObject(value = ApiDocsExamples.ROUTE_NOT_FOUND))),
         @ApiResponse(responseCode = "503", description = "모델 범위 밖, 최근 정상 관측 없음 또는 DB 사용 불가",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class), examples = {
-                @ExampleObject(name = "MODEL_OUT_OF_SCOPE", value = ApiDocsExamples.MODEL_OUT_OF_SCOPE),
-                @ExampleObject(name = "NO_RECENT_OBSERVATION", value = ApiDocsExamples.NO_RECENT_OBSERVATION),
-                @ExampleObject(name = "SERVICE_UNAVAILABLE", value = ApiDocsExamples.SERVICE_UNAVAILABLE)
-            })),
+            content =
+            @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
+                examples = {
+                    @ExampleObject(name = "MODEL_OUT_OF_SCOPE", value = ApiDocsExamples.MODEL_OUT_OF_SCOPE),
+                    @ExampleObject(name = "NO_RECENT_OBSERVATION", value = ApiDocsExamples.NO_RECENT_OBSERVATION),
+                    @ExampleObject(name = "SERVICE_UNAVAILABLE", value = ApiDocsExamples.SERVICE_UNAVAILABLE)
+                })),
         @ApiResponse(responseCode = "405", description = "지원하지 않는 요청 방식",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
                 examples = @ExampleObject(value = ApiDocsExamples.METHOD_NOT_ALLOWED))),

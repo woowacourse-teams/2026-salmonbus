@@ -6,9 +6,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * 탑승판이 사용할 현재 노선 판본을 읽는 JPA 경계다.
+ */
 public interface BoardRouteVersionEntityRepository
     extends Repository<RouteVersionJpaEntity, Long> {
-
     @Query("""
         SELECT version
         FROM RouteVersionJpaEntity version

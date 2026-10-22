@@ -4,8 +4,10 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * 유지보수 명령과 옵션을 해석하고 필수 값·경로의 누락을 명령 오류로 전달한다.
+ */
 final class CliArguments {
-
     private final String command;
     private final Map<String, String> options;
 
@@ -55,5 +57,4 @@ final class CliArguments {
     ) {
         return Path.of(required(name)).toAbsolutePath().normalize();
     }
-
 }

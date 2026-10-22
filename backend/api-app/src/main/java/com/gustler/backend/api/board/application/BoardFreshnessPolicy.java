@@ -7,20 +7,23 @@ import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+/**
+ * 탑승판의 기준 관측 시각으로 만료 시각을 계산하고 사용 가능 여부를 판단한다.
+ */
 @Component
 @RequiredArgsConstructor
 public class BoardFreshnessPolicy {
-
     /**
-     * 조회가 최신으로 인정하는 관측의 최대 나이다. 심야 관측은 10분, 그 외는 5분이다.
-     * worker 의 {@code forecast.staleness} 와 짝이다.
+     * 조회에서 최신으로 인정하는 관측의 최대 경과 시간이다. 심야 관측은 10분, 그 외는 5분이며
+     * worker의 {@code forecast.staleness}와 함께 관리한다.
      *
-     * <p>관계는 등호가 아니라 <b>예보 창 ≥ 조회 창</b>이다. 예보 창이 이보다 짧으면 그 사이 관측은
-     * 영영 발행되지 않아 보드가 집을 최신 발행이 없어진다. 넓히는 쪽은 계약이 허용하지만 공짜가
-     * 아니다 — 발행 큐가 관측 시각 오름차순이라 오래된 판이 회차를 채워 새 판이 밀린다. 이 창은
-     * 그것을 막지 못하고, 밀려서 오래된 판을 보여주지 않게 할 뿐이다.
-     * 모듈이 갈려 상수를 안 나눠 쓰고, 두 값의 관계는 BoardFreshnessContractTest 가 worker 의
-     * 실행 JAR 을 읽어 고정한다.
+     * <p><b>예보 창 ≥ 조회 창</b>의 관계를 지켜야 한다. 예보 창이 더 짧으면 두 창 사이의 관측이
+     * 발행되지 않아 보드에서 조회할 최신 발행이 없어진다. 예보 창을 넓히는 것은 계약이 허용하지만,
+     * 발행 큐가 관측 시각 오름차순이므로 오래된 판이 한 회차를 채우면 새 판의 발행이 밀린다.
+     * 이 조회 창은 발행 지연을 막지 못하며, 지연된 오래된 판을 보여주지 않도록 제한한다.
+     *
+     * <p>모듈이 분리되어 상수는 공유하지 않는다. 두 값의 관계는 BoardFreshnessContractTest가
+     * worker의 실행 JAR을 읽어 검증한다.
      */
     static final Duration FRESHNESS_WINDOW = ObservationFreshness.MAX_WINDOW;
 

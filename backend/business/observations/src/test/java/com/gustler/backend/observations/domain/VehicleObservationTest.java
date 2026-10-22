@@ -1,6 +1,7 @@
 package com.gustler.backend.observations.domain;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import org.junit.jupiter.api.Test;
 
@@ -17,8 +18,8 @@ class VehicleObservationTest {
 
     @Test
     void 관측에는_잔여석이_아는_것이든_모르는_것이든_들어간다() {
-        // when & then
-        assertThatThrownBy(() -> new VehicleObservation(
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new VehicleObservation(
             VEHICLE_204000206,
             PLATE_NUMBER,
             STOP_SEQUENCE_6,
@@ -28,7 +29,11 @@ class VehicleObservationTest {
             CROWD_LEVEL_3,
             NORMAL_BUS,
             ROUTE_TYPE_11,
-            TAGLESS_1))
+            TAGLESS_1));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(NullPointerException.class);
     }
 }

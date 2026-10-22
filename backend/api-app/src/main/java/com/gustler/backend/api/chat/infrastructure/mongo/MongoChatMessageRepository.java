@@ -5,9 +5,11 @@ import static com.gustler.backend.api.chat.application.ChatMessageRepository.Sav
 import static com.gustler.backend.api.chat.application.ChatMessageRepository.SaveResult.Status.DUPLICATE;
 
 import com.gustler.backend.api.chat.application.ChatMessageRepository;
+import com.gustler.backend.api.chat.application.ChatMessageRepository.SaveResult;
 import com.gustler.backend.api.chat.domain.ChatMessage;
 import com.mongodb.ErrorCategory;
 import com.mongodb.MongoWriteException;
+import com.mongodb.WriteError;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Sorts;
@@ -17,8 +19,11 @@ import java.util.List;
 import org.bson.Document;
 import org.bson.types.ObjectId;
 
+/**
+ * MongoDB에 채팅 메시지를 저장하고 재전송·충돌을 구분한다.
+ * 최근 메시지는 화면에 표시할 시간 순서로 반환한다.
+ */
 public final class MongoChatMessageRepository implements ChatMessageRepository {
-
     private final MongoCollection<Document> collection;
 
     public MongoChatMessageRepository(MongoCollection<Document> collection) {
@@ -36,7 +41,8 @@ public final class MongoChatMessageRepository implements ChatMessageRepository {
             collection.insertOne(toDocument(message));
             return new SaveResult(CREATED, message);
         } catch (MongoWriteException exception) {
-            if (exception.getError().getCategory() != ErrorCategory.DUPLICATE_KEY) {
+            WriteError error = exception.getError();
+            if (error.getCategory() != ErrorCategory.DUPLICATE_KEY) {
                 throw exception;
             }
             Document stored = collection.find(Filters.and(
@@ -49,7 +55,10 @@ public final class MongoChatMessageRepository implements ChatMessageRepository {
             ChatMessage existing = fromDocument(stored);
             final boolean sameRequest = existing.authorId().equals(message.authorId())
                 && existing.body().equals(message.body());
-            return new SaveResult(sameRequest ? DUPLICATE : CONFLICT, existing);
+            if (sameRequest) {
+                return new SaveResult(DUPLICATE, existing);
+            }
+            return new SaveResult(CONFLICT, existing);
         }
     }
 
@@ -75,14 +84,16 @@ public final class MongoChatMessageRepository implements ChatMessageRepository {
     }
 
     private ChatMessage fromDocument(Document document) {
+        ObjectId id = document.getObjectId("_id");
+        Date createdAt = document.getDate("createdAt");
         return new ChatMessage(
-            document.getObjectId("_id").toHexString(),
+            id.toHexString(),
             document.getString("roomId"),
             document.getString("clientMessageId"),
             document.getString("authorId"),
             document.getString("nickname"),
             document.getString("body"),
-            document.getDate("createdAt").toInstant()
+            createdAt.toInstant()
         );
     }
 }

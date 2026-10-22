@@ -6,10 +6,13 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
+/**
+ * 정류장 방문 구성의 동일성을 비교할 요약값이다.
+ * 표시 자료의 단순 문자열 연결로 경계를 섞지 않는다.
+ */
 public record RouteContentDigest(
     String value
 ) {
-
     private static final String ALGORITHM = "SHA-256";
     private static final String NO_TURN_SEQUENCE = "단방향";
 

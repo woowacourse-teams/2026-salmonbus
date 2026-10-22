@@ -10,16 +10,34 @@ public final class ArrivalFirstResultPolicy {
     private final Semaphore slots;
 
     public ArrivalFirstResultPolicy(Duration maximumWait, final int maximumWaiters) {
-        if (maximumWait == null || maximumWait.isNegative()
-            || maximumWait.compareTo(Duration.ofMillis(ArrivalRefresh.MAX_WAIT_MILLIS)) > 0
-            || maximumWaiters < 1 || maximumWaiters > 64) {
+        if (isInvalidWait(maximumWait) || isInvalidWaiterLimit(maximumWaiters)) {
             throw new IllegalArgumentException("최초 ETA 대기의 시간·동시 요청 한도가 올바르지 않다");
         }
+
         this.maximumWait = maximumWait;
         this.slots = new Semaphore(maximumWaiters);
     }
 
-    public Duration maximumWait() { return maximumWait; }
-    public boolean tryAcquire() { return !maximumWait.isZero() && slots.tryAcquire(); }
-    public void release() { slots.release(); }
+    private static boolean isInvalidWait(Duration maximumWait) {
+        if (maximumWait == null || maximumWait.isNegative()) {
+            return true;
+        }
+        return maximumWait.compareTo(Duration.ofMillis(ArrivalRefresh.MAX_WAIT_MILLIS)) > 0;
+    }
+
+    private static boolean isInvalidWaiterLimit(int maximumWaiters) {
+        return maximumWaiters < 1 || maximumWaiters > 64;
+    }
+
+    public Duration maximumWait() {
+        return maximumWait;
+    }
+
+    public boolean tryAcquire() {
+        return !maximumWait.isZero() && slots.tryAcquire();
+    }
+
+    public void release() {
+        slots.release();
+    }
 }

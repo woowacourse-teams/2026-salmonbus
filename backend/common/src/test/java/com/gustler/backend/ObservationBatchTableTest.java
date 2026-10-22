@@ -1,7 +1,7 @@
 package com.gustler.backend;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.gustler.backend.support.IntegrationTest;
 import java.time.OffsetDateTime;
@@ -15,7 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 @IntegrationTest
 @Transactional
 class ObservationBatchTableTest {
-
     private static final String SOURCE_ID = "GBIS";
     private static final String ROUTE_204000057 = "204000057";
     private static final String CONTENT_DIGEST = "0".repeat(64);
@@ -48,22 +47,35 @@ class ObservationBatchTableTest {
         // given
         insertBatch("RESERVED", null, null);
 
-        // when & then
-        assertThatThrownBy(() -> insertBatch("RESERVED", null, null))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertBatch("RESERVED", null, null));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void 뜻을_모르는_결말의_판은_저장되지_않는다() {
-        // when & then
-        assertThatThrownBy(() -> insertBatch("TIMED_OUT", SCHEDULED_AT, null))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertBatch("TIMED_OUT", SCHEDULED_AT, null));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void 뜻을_모르는_실패_사유의_판은_저장되지_않는다() {
-        // when & then
-        assertThatThrownBy(() -> insertBatch("FAILED_UPSTREAM", SCHEDULED_AT, "CONNECTION_RESET"))
+        // when
+        Throwable caughtFailure = catchThrowable(
+            () -> insertBatch("FAILED_UPSTREAM", SCHEDULED_AT, "CONNECTION_RESET"));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 

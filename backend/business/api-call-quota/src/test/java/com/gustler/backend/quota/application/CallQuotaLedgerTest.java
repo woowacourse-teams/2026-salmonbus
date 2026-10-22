@@ -1,17 +1,18 @@
 package com.gustler.backend.quota.application;
 
-import com.gustler.backend.quota.api.ApiCallQuota;
-import com.gustler.backend.quota.api.CallQuotaPolicy;
-import com.gustler.backend.quota.api.CallQuota;
-import com.gustler.backend.quota.domain.CallQuotaStore;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gustler.backend.quota.api.ApiCallQuota;
+import com.gustler.backend.quota.api.CallQuota;
+import com.gustler.backend.quota.api.CallQuotaPolicy;
+import com.gustler.backend.quota.domain.CallQuotaStore;
 import com.gustler.backend.quota.support.QuotaIntegrationTest;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -24,12 +25,11 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 예약은 제 트랜잭션에서 커밋되므로 테스트에 @Transactional 을 붙이면 정리가 안 된다.
+ * 예약은 자체 트랜잭션에서 커밋되므로 테스트에 @Transactional 을 붙이면 정리가 안 된다.
  * 매번 장부를 비우고 시작한다.
  */
 @QuotaIntegrationTest
 class CallQuotaLedgerTest {
-
     private static final OffsetDateTime KOREA_8_28_LATE_NIGHT = OffsetDateTime.parse("2026-08-28T14:59:59Z");
     private static final OffsetDateTime KOREA_8_29_MIDNIGHT = OffsetDateTime.parse("2026-08-28T15:00:00Z");
     private static final LocalDate KOREA_8_28 = LocalDate.of(2026, 8, 28);
@@ -139,8 +139,9 @@ class CallQuotaLedgerTest {
     }
 
     /**
-     * 트랜잭션 경계를 부르는 쪽이 갖는다. 여기서 제 트랜잭션을 열면 자리는 잡혔는데
-     * 그 자리를 쓸 판이 안 열리는 틈이 생긴다. 되돌아가도 남는 것은 ObservationBatchLedger 가 보장한다.
+     * 트랜잭션 경계는 호출자가 정한다. 여기서 자체 트랜잭션을 열면 예약만 남고
+     * 이를 사용할 수집 배치가 생성되지 않는 틈이 생긴다. 이후 실패해도 예약을 보존하는 처리는
+     * ObservationBatchLedger가 보장한다.
      */
     @Test
     void 예약은_부른_쪽_트랜잭션에_합류한다() {
@@ -168,7 +169,8 @@ class CallQuotaLedgerTest {
 
     @Test
     void 자리를_잡고_보내기_전에_한국_자정이_지나면_다음_날_자리를_새로_잡는다() {
-        // given 한국 시각 23:59:59 에 잡고 00:00:00 에 보낸다
+        // given
+        // 한국 시각 23:59:59 에 예약하고 00:00:00 에 보낸다
         ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
 
         // when
@@ -193,9 +195,13 @@ class CallQuotaLedgerTest {
 
     @Test
     void 자정_재예약도_호출자_트랜잭션과_함께_롤백하고_전날_예약은_보존한다() {
+        // given
         ledger.reserveLocation(KOREA_8_28_LATE_NIGHT);
 
+        // when
         transactionTemplate.executeWithoutResult(status -> {
+
+            // then
             assertThat(ledger.ensureLocationReservation("a", KOREA_8_28_LATE_NIGHT, KOREA_8_29_MIDNIGHT))
                 .isTrue();
             status.setRollbackOnly();
@@ -240,8 +246,10 @@ class CallQuotaLedgerTest {
 
     @Test
     void 기존_장부는_첫_예약의_한도를_계속_사용한다() {
+        // when
         insertQuota(CallQuota.BUS_ROUTE, KOREA_8_28, 0, TWO_CALLS);
 
+        // then
         assertThat(ledger.reserveRouteCatalog(KOREA_8_28_LATE_NIGHT, TWO_CALLS)).isTrue();
         assertThat(ledger.reserveRouteCatalog(KOREA_8_28_LATE_NIGHT, 1)).isFalse();
 
@@ -272,7 +280,7 @@ class CallQuotaLedgerTest {
         insertQuota(CallQuota.BUS_LOCATION, KOREA_8_28, NO_SEAT_LEFT, ONE_SEAT_LEFT);
 
         // when
-        final List<Boolean> actual = reserveAtTheSameMoment();
+        List<Boolean> actual = reserveAtTheSameMoment();
 
         // then
         assertThat(actual).containsExactlyInAnyOrder(true, false);
@@ -292,14 +300,18 @@ class CallQuotaLedgerTest {
 
     @Test
     void 빈_장부에_동시에_예약해도_한_행에서_두_호출을_센다() throws Exception {
-        assertThat(reserveAtTheSameMoment()).containsExactly(true, true);
+        // when
+        List<Boolean> actual = reserveAtTheSameMoment();
+
+        // then
+        assertThat(actual).containsExactly(true, true);
 
         assertThat(quotaRowCountOn(KOREA_8_28, CallQuota.BUS_LOCATION)).isEqualTo(1);
         assertThat(reservedCallsOn(KOREA_8_28, CallQuota.BUS_LOCATION)).isEqualTo(2);
     }
 
     private List<Boolean> reserveAtTheSameMoment() throws Exception {
-        final CountDownLatch startTogether = new CountDownLatch(1);
+        CountDownLatch startTogether = new CountDownLatch(1);
 
         try (ExecutorService threads = Executors.newFixedThreadPool(2)) {
             Future<Boolean> first = threads.submit(() -> reserveAfter(startTogether));
@@ -425,7 +437,8 @@ class CallQuotaLedgerTest {
     private CallQuotaLedger ledgerOverTwoKeys() {
         return new CallQuotaLedger(
             callQuotaStore,
-            CallQuotaPolicy.sameForEveryApi(DAILY_LIMIT_10000, List.of(CallQuotaPolicy.PRIMARY_KEY_ALIAS, KEY_ALIAS_B)));
+            CallQuotaPolicy.sameForEveryApi(DAILY_LIMIT_10000,
+                List.of(CallQuotaPolicy.PRIMARY_KEY_ALIAS, KEY_ALIAS_B)));
     }
 
     private void insertQuotaOf(
@@ -444,7 +457,7 @@ class CallQuotaLedgerTest {
             .update();
     }
 
-    private List<Map.Entry<String, Integer>> reservedCallsByKeyOn(
+    private List<Entry<String, Integer>> reservedCallsByKeyOn(
         LocalDate kstDate
     ) {
         return jdbcClient.sql("""
@@ -456,13 +469,14 @@ class CallQuotaLedgerTest {
             .query((rs, n) -> Map.entry(rs.getString(1), rs.getInt(2)))
             .list();
     }
+
     @Test
     void 위치정보는_키_다섯_개를_차례로_돌려_쓰고_한도가_찬_키는_건너뛴다() {
         // given
         ApiCallQuota fiveKeys = ledgerOf(List.of("a", "b", "c", "d", "e"), TWO_CALLS);
 
         // when
-        List<String> aliases = new java.util.ArrayList<>();
+        List<String> aliases = new ArrayList<>();
         for (int call = 0; call < 10; call++) {
             aliases.add(fiveKeys.reserveLocation(KOREA_8_28_LATE_NIGHT).orElseThrow());
         }
@@ -483,7 +497,7 @@ class CallQuotaLedgerTest {
 
         // when
         ApiCallQuota restored = ledgerOf(List.of("a", "e"), TWO_CALLS);
-        List<String> aliases = new java.util.ArrayList<>();
+        List<String> aliases = new ArrayList<>();
         restored.reserveLocation(KOREA_8_28_LATE_NIGHT).ifPresent(aliases::add);
         restored.reserveLocation(KOREA_8_28_LATE_NIGHT).ifPresent(aliases::add);
 
@@ -503,7 +517,7 @@ class CallQuotaLedgerTest {
 
         // when
         ApiCallQuota restarted = ledgerOf(List.of("a", "e"), DAILY_LIMIT_10000);
-        List<String> aliases = new java.util.ArrayList<>();
+        List<String> aliases = new ArrayList<>();
         for (int call = 0; call < 3; call++) {
             restarted.reserveLocation(KOREA_8_28_LATE_NIGHT).ifPresent(aliases::add);
         }
@@ -519,7 +533,7 @@ class CallQuotaLedgerTest {
             CallQuotaPolicy.sameForEveryApi(TWO_CALLS, List.of("a", "e"), Map.of("e", 1)));
 
         // when
-        List<String> aliases = new java.util.ArrayList<>();
+        List<String> aliases = new ArrayList<>();
         for (int call = 0; call < 4; call++) {
             ledger.reserveLocation(KOREA_8_28_LATE_NIGHT).ifPresent(aliases::add);
         }

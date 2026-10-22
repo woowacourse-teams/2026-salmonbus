@@ -1,30 +1,32 @@
 package com.gustler.backend.forecasting.application.publication;
 
-import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
-import com.gustler.backend.forecasting.domain.publication.RouteStopsQuery;
-import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
-import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryQuery;
-import com.gustler.backend.forecasting.api.ForecastPolicy;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.gustler.backend.forecasting.api.ForecastPolicy;
+import com.gustler.backend.forecasting.api.ForecastTelemetry;
 import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
+import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
 import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
+import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
+import com.gustler.backend.forecasting.domain.publication.RouteStopsQuery;
+import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryQuery;
+import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -37,13 +39,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
 
 @ExtendWith(MockitoExtension.class)
 class PublishPendingForecastsStalenessTest {
-
     private static final Instant NOW = Instant.parse("2026-09-03T02:30:00Z");
     private static final Duration STALENESS = Duration.ofMinutes(5);
     private static final long ROUTE_VERSION_3330 = 1L;
@@ -58,7 +61,6 @@ class PublishPendingForecastsStalenessTest {
     @Mock
 
     private RouteVersionQuery routeVersions;
-
 
     private final RouteStopsQuery routeStops = PublishPendingForecastsStalenessTest::stopsOf;
 
@@ -101,18 +103,51 @@ class PublishPendingForecastsStalenessTest {
 
     @Test
     void 저장이_실패해도_처리대상_관측을_먼저_계측한다() {
-        var telemetry = org.mockito.Mockito.mock(com.gustler.backend.forecasting.api.ForecastTelemetry.class);
+        // given
+        ForecastTelemetry telemetry = Mockito.mock(ForecastTelemetry.class);
         job.setTelemetry(telemetry);
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
         when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
-        var batch = new com.gustler.backend.forecasting.domain.publication.PendingForecastBatch(
+        PendingForecastBatch batch = new PendingForecastBatch(
             10L, ROUTE_VERSION_3330, 1L, NOW.minusSeconds(30));
         when(vehicleTrajectoryQuery.findBatchesAwaitingForecast(anyLong(), any(), anyInt())).thenReturn(List.of(batch));
-        when(forecastBatchWriter.writeForecastsOf(any(), any(), any())).thenThrow(new IllegalStateException("commit failed"));
+        when(forecastBatchWriter.writeForecastsOf(any(), any(), any())).thenThrow(
+            new IllegalStateException("commit failed"));
+
+        // when
         job.writeForecasts();
-        var order = inOrder(telemetry, forecastBatchWriter);
+
+        // then
+        InOrder order = inOrder(telemetry, forecastBatchWriter);
         order.verify(telemetry).pending(ROUTE_VERSION_3330, NOW.minusSeconds(30));
         order.verify(forecastBatchWriter).writeForecastsOf(any(), any(), any());
+    }
+
+    @Test
+    void 대상_계측이_실패해도_모든_배치를_순서대로_발행한다() {
+        // given
+        ForecastTelemetry telemetry = Mockito.mock(ForecastTelemetry.class);
+        job.setTelemetry(telemetry);
+        when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
+        when(routeVersions.findActiveVersionIds()).thenReturn(List.of(ROUTE_VERSION_3330));
+        PendingForecastBatch first = new PendingForecastBatch(
+            10L, ROUTE_VERSION_3330, 1L, NOW.minusSeconds(30));
+        PendingForecastBatch second = new PendingForecastBatch(
+            11L, ROUTE_VERSION_3330, 1L, NOW.minusSeconds(20));
+        when(vehicleTrajectoryQuery.findBatchesAwaitingForecast(anyLong(), any(), anyInt()))
+            .thenReturn(List.of(first, second));
+        doThrow(new IllegalStateException("diagnostic failure"))
+            .when(telemetry).pending(ROUTE_VERSION_3330, first.responseReceivedAt());
+
+        // when
+        job.writeForecasts();
+
+        // then
+        InOrder order = inOrder(telemetry, forecastBatchWriter);
+        order.verify(telemetry).pending(ROUTE_VERSION_3330, first.responseReceivedAt());
+        order.verify(forecastBatchWriter).writeForecastsOf(eq(first), any(), eq(runtime));
+        order.verify(forecastBatchWriter).writeForecastsOf(eq(second), any(), eq(runtime));
+        order.verifyNoMoreInteractions();
     }
 
     @Test
@@ -172,7 +207,7 @@ class PublishPendingForecastsStalenessTest {
         job.writeForecasts();
 
         // then
-        var order = inOrder(forecastBatchWriter, forecastRuntime);
+        InOrder order = inOrder(forecastBatchWriter, forecastRuntime);
         order.verify(forecastRuntime).resolveActive();
         verify(forecastBatchWriter, never()).writeForecastsOf(any(), any(), any());
     }
@@ -222,7 +257,8 @@ class PublishPendingForecastsStalenessTest {
         when(vehicleTrajectoryQuery.findOldestLeftBehindAt(eq(ROUTE_VERSION_3330), any(), any()))
             .thenReturn(Optional.of(LEFT_BEHIND_AT));
 
-        // when 멈춘 시계라 두 회차가 같은 순간에 돈다
+        // when
+        // 멈춘 시계라 두 회차가 같은 순간에 돈다
         job.writeForecasts();
         job.writeForecasts();
 
@@ -331,7 +367,14 @@ class PublishPendingForecastsStalenessTest {
     }
 
     private static RouteStops stopsOf(final long routeVersionId) {
-        String sourceRouteId = routeVersionId == ROUTE_VERSION_1650 ? "234000050" : "204000057";
+        String sourceRouteId = sourceRouteIdOf(routeVersionId);
         return new RouteStops(routeVersionId, sourceRouteId, List.of(new RouteStop(routeVersionId, 1, "stop-1", true)));
+    }
+
+    private static String sourceRouteIdOf(final long routeVersionId) {
+        if (routeVersionId == ROUTE_VERSION_1650) {
+            return "234000050";
+        }
+        return "204000057";
     }
 }

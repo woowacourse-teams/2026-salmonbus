@@ -8,14 +8,14 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 /**
- * 테스트가 safetensors 파일을 만든다.
+ * 테스트에서 safetensors 파일을 생성한다.
  *
- * <p>읽는 쪽을 재려면 쓰는 쪽이 있어야 한다. 여기서 일부러 망가뜨린 파일도 만든다.
+ * <p>읽기 검증에 필요한 파일과 의도적으로 잘못 구성한 파일을 함께 만든다.
  */
 final class SafetensorsWriter {
-
     private final Map<String, Written> tensors = new LinkedHashMap<>();
 
     private record Written(
@@ -46,7 +46,7 @@ final class SafetensorsWriter {
         List<String> entries = new ArrayList<>();
         ByteArrayOutputStream values = new ByteArrayOutputStream();
         int offset = 0;
-        for (Map.Entry<String, Written> entry : tensors.entrySet()) {
+        for (Entry<String, Written> entry : tensors.entrySet()) {
             Written written = entry.getValue();
             byte[] encoded = encode(written);
             entries.add("\"%s\":{\"dtype\":\"%s\",\"shape\":%s,\"data_offsets\":[%d,%d]}".formatted(
@@ -74,11 +74,7 @@ final class SafetensorsWriter {
             .allocate(written.values().length * written.dataType().byteCount())
             .order(ByteOrder.LITTLE_ENDIAN);
         for (final double value : written.values()) {
-            if (written.dataType() == TensorDataType.FLOAT64) {
-                buffer.putDouble(value);
-            } else {
-                buffer.put((byte) value);
-            }
+            writeValue(buffer, written.dataType(), value);
         }
         return buffer.array();
     }
@@ -91,5 +87,13 @@ final class SafetensorsWriter {
             axes.add(String.valueOf(length));
         }
         return "[" + String.join(",", axes) + "]";
+    }
+
+    private static void writeValue(ByteBuffer buffer, TensorDataType dataType, final double value) {
+        if (dataType == TensorDataType.FLOAT64) {
+            buffer.putDouble(value);
+            return;
+        }
+        buffer.put((byte) value);
     }
 }

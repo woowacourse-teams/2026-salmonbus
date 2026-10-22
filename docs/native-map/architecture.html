@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>지도는 iOS SDK, 시트는 기존 웹 · Salmonbus 설계 설명</title>
+<style>
+:root { color-scheme: light; --foreground:#253443; --background:#fff; --border:#d8dfe5; --muted:#f2f5f7; --muted-foreground:#526274; --viz-series-1:#147d68; --viz-series-2:#d2573e; --viz-series-3:#7a5bb5; }
+* { box-sizing:border-box; }
+body { margin:0; background:#f5f7f9; color:var(--foreground); font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; font-size:16px; line-height:1.6; }
+main { max-width:1160px; margin:28px auto; padding:30px; background:#fff; border:1px solid var(--border); border-radius:18px; }
+a { color:#116c58; text-underline-offset:3px; }
+h1 { margin:0 0 12px; font-size:17px; font-weight:600; color:var(--muted-foreground); }
+h2 { font-size:29px; line-height:1.25; letter-spacing:-.7px; }
+.intro { margin:0 0 24px; max-width:900px; }
+.notice { background:#f4f1fa; border-left:3px solid var(--viz-series-3); padding:12px 16px; margin:0 0 24px; font-size:14px; }
+.text-small { font-size:14px; color:var(--muted-foreground); }
+.tabular-nums { font-variant-numeric:tabular-nums; }
+.nav { display:flex; flex-wrap:wrap; gap:8px; padding:0 0 16px; border-bottom:1px solid var(--border); }
+button,input,select { font:inherit; }
+button,.cursor-interaction { cursor:pointer; }
+button { line-height:1.4; }
+.nav-link,.btn { border:1px solid var(--border); border-radius:9px; background:#fff; color:var(--foreground); padding:9px 14px; }
+.nav-link.active,.btn-primary { color:#fff; background:#253443; border-color:#253443; }
+.btn:hover,.nav-link:hover { box-shadow:0 0 0 2px #dce8e3; }
+:focus-visible { outline:3px solid #156da8; outline-offset:3px; }
+.viz-controls { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+.form-label { display:grid; gap:5px; max-width:100%; }
+.form-range { width:100%; accent-color:var(--viz-series-2); }
+.form-check { display:flex; gap:9px; align-items:center; }
+.form-check-input { width:18px; height:18px; accent-color:var(--viz-series-2); }
+.form-select { max-width:100%; padding:9px 12px; border:1px solid var(--border); border-radius:8px; background:#fff; color:var(--foreground); }
+.table { border-collapse:collapse; font-size:14px; }
+.table th,.table td { text-align:left; padding:9px; border-bottom:1px solid var(--border); vertical-align:top; }
+.table th { background:var(--muted); }
+summary { cursor:pointer; font-weight:600; }
+footer { margin-top:28px; padding-top:18px; border-top:1px solid var(--border); display:flex; flex-wrap:wrap; gap:12px 24px; font-size:14px; }
+@media(max-width:600px) { main { margin:0; padding:20px 16px; border:0; border-radius:0; } h2 { font-size:25px; } .nav-link { padding:9px 11px; } }
+</style>
+</head>
+<body>
+<main>
+<h1>Salmonbus · iOS native 지도 설계</h1>
+<p class="intro">앱에서는 <strong>네이버 iOS SDK로 지도만 그리고</strong>, 지금의 웹 Bottom Sheet와 정류장 목록을 그 위에 겹칩니다. 탭을 눌러 화면의 두 레이어, 터치 담당, 데이터 흐름, 준비와 복구를 차례로 살펴볼 수 있습니다.</p>
+<p class="notice">이 페이지는 구조를 이해하기 위한 설명용 시뮬레이션입니다. 실제 네이버 지도·UIKit 제스처를 실행하지 않습니다. 영역 적용 지연은 설명을 위해 단순화했으며, 실제 구현과 검증 범위는 <a href="README.md">설계 문서</a>와 PR 본문에서 구분합니다.</p>
+<div id="salmon-native-map-explainer">
+  <div class="nm-heading">
+    <h2>지도는 iOS, 시트는 기존 웹</h2>
+    <span class="text-small">구조 설명 · 실제 앱 검증 결과는 PR 본문 참고</span>
+  </div>
+  <div class="nm-legend" aria-label="구성요소 범례">
+    <span><i class="nm-swatch nm-native-fill"></i>Native: iOS가 그리는 지도</span>
+    <span><i class="nm-swatch nm-web-fill"></i>WebView: 앱 안의 웹 UI</span>
+    <span><i class="nm-swatch nm-gate-fill"></i>TouchGate: 터치 담당 선택</span>
+  </div>
+
+  <div class="nav nav-pills" role="tablist" aria-label="설계 살펴보기">
+    <button class="nav-link active" id="nm-tab-layers" type="button" role="tab" aria-controls="nm-panel-layers" aria-selected="true">화면 구조</button>
+    <button class="nav-link" id="nm-tab-touch" type="button" role="tab" aria-controls="nm-panel-touch" aria-selected="false">터치 분배</button>
+    <button class="nav-link" id="nm-tab-data" type="button" role="tab" aria-controls="nm-panel-data" aria-selected="false">데이터 왕복</button>
+    <button class="nav-link" id="nm-tab-lifecycle" type="button" role="tab" aria-controls="nm-panel-lifecycle" aria-selected="false">준비와 복구</button>
+  </div>
+
+  <section id="nm-panel-layers" role="tabpanel" aria-labelledby="nm-tab-layers">
+    <div class="viz-controls">
+      <button type="button" class="btn btn-primary" id="nm-layer-toggle" aria-pressed="false">두 화면 분리해서 보기</button>
+      <span class="text-small" id="nm-layer-mode">사용자가 보는 겹친 화면</span>
+    </div>
+    <div class="nm-layer-grid">
+      <figure class="nm-layer-stage" id="nm-layer-stage" aria-label="아래 native 지도 위에 투명 WebView와 웹 Bottom Sheet가 겹친 화면 모식도">
+        <div class="nm-phone-plane nm-plane-native">
+          <div class="nm-plane-caption">네이버 iOS SDK</div>
+          <div class="nm-native-title"><span>NMFMapView</span></div>
+          <div class="nm-native-mark nm-stop-one">정류장 A</div>
+          <div class="nm-native-mark nm-bus-one">버스</div>
+          <div class="nm-native-mark nm-stop-two">정류장 B</div>
+          <div class="nm-under-sheet">시트가 움직여도 같은 지도 view 유지</div>
+          <span class="nm-sdk-label text-small">SDK 로고·출처</span>
+        </div>
+        <div class="nm-phone-plane nm-plane-web">
+          <div class="nm-web-plane-label">WebView</div>
+          <div class="nm-web-transparent"><span class="text-small">투명한 웹 지도 자리</span></div>
+          <div class="nm-web-back">뒤로</div>
+          <div class="nm-web-locate">내 위치</div>
+          <div class="nm-web-chat">채팅</div>
+          <div class="nm-web-sheet">
+            <div class="nm-sheet-handle" aria-hidden="true"></div>
+            <div class="nm-plane-caption">기존 웹 Bottom Sheet</div>
+            <div class="nm-sheet-row">노선 요약 · 방향 선택</div>
+            <div class="nm-sheet-row">정류장 A <span>버스 선택</span></div>
+            <div class="nm-sheet-row">정류장 B <span>도착 정보</span></div>
+          </div>
+        </div>
+      </figure>
+      <div class="nm-tree" aria-label="RN 앱의 native view 계층">
+        <div class="nm-root-label"> RN 앱 · NativeRouteMapHostView</div>
+        <div class="nm-tree-branch">
+          <button type="button" class="nm-node nm-native-node cursor-interaction" data-layer="native">
+            <span class="nm-node-kicker text-small">아래 · 실제 지도</span>
+            <span>NMFMapView</span>
+            <span class="text-small">노선 / 정류장 / 버스 / 지도 제스처</span>
+          </button>
+          <button type="button" class="nm-node nm-gate-node cursor-interaction" data-layer="gate">
+            <span class="nm-node-kicker text-small">보이지 않는 native 부모 view</span>
+            <span>WebOverlayGate</span>
+            <span class="text-small">시작 위치에 따라 웹 또는 지도 선택</span>
+          </button>
+          <div class="nm-tree-child">
+            <button type="button" class="nm-node nm-web-node cursor-interaction" data-layer="web">
+              <span class="nm-node-kicker text-small">위 · 기존 웹 UI</span>
+              <span>WebView</span>
+              <span class="text-small">Bottom Sheet / 목록 / 버튼 / 채팅</span>
+            </button>
+          </div>
+        </div>
+        <div class="nm-selected-detail" id="nm-layer-detail" aria-live="polite">Native 지도와 WebView는 별도 view. 웹의 div 안에 native 지도를 넣지 않음.</div>
+      </div>
+    </div>
+    <div class="nm-comparison" aria-label="현재 구조와 제안 구조 비교">
+      <div><span class="text-small">변경 전</span><span>WebView 안에서 JS 지도 + 웹 UI</span></div>
+      <span class="nm-compare-arrow" aria-hidden="true">→</span>
+      <div><span class="text-small">변경 후</span><span>iOS 지도 위에 기존 웹 UI</span></div>
+    </div>
+  </section>
+
+  <section id="nm-panel-touch" role="tabpanel" aria-labelledby="nm-tab-touch" hidden>
+    <div class="nm-touch-controls">
+      <label class="form-label" for="nm-snap">시트 높이 <span class="tabular-nums" id="nm-snap-name">절반</span>
+        <input class="form-range" id="nm-snap" type="range" min="0" max="3" step="1" value="1">
+      </label>
+      <label class="form-check"><input type="checkbox" class="form-check-input" id="nm-modal"><span class="form-check-label">전체 채팅 열기</span></label>
+    </div>
+    <div class="nm-touch-grid">
+      <figure class="nm-touch-figure">
+        <div class="nm-touch-canvas cursor-interaction" id="nm-touch-canvas" role="img" aria-label="터치 분배 모식도. 아래 예시 버튼으로도 조작할 수 있음">
+          <div class="nm-touch-native"><span>네이버 iOS 지도</span><span class="text-small">이동 · 핀치 줌 · 마커</span></div>
+          <div class="nm-touch-back">뒤로</div>
+          <div class="nm-touch-locate" id="nm-touch-locate">내 위치</div>
+          <div class="nm-touch-chat" id="nm-touch-chat">채팅</div>
+          <div class="nm-touch-sheet" id="nm-touch-sheet">
+            <div class="nm-sheet-handle" aria-hidden="true"></div>
+            <span>웹 Bottom Sheet</span>
+            <span class="text-small">빈 여백도 웹 터치 영역</span>
+            <div class="nm-sheet-row">정류장 A</div><div class="nm-sheet-row">정류장 B</div><div class="nm-sheet-row">정류장 C</div>
+          </div>
+          <div class="nm-touch-modal" id="nm-touch-modal" hidden><span>전체 채팅 · 웹</span><span class="text-small">뒤 지도 조작 차단 · 접근성 별도 확인</span></div>
+          <span class="nm-tap-dot" id="nm-tap-dot" hidden aria-hidden="true"></span>
+        </div>
+        <figcaption class="text-small">영역을 누르거나 아래 예시 선택 · 설명용 동작 모형 · 실제 UIKit 터치가 아님</figcaption>
+      </figure>
+      <div class="nm-touch-path">
+        <div class="nm-flow-label text-small">터치가 전달되는 경로</div>
+        <div class="nm-route-node" id="nm-touch-origin">지도 영역에서 시작</div>
+        <div class="nm-down-arrow" aria-hidden="true">↓</div>
+        <div class="nm-node nm-gate-node"><span>TouchGate · native</span><span class="text-small">미리 받은 터치 영역으로 판정</span></div>
+        <div class="nm-down-arrow" aria-hidden="true">↓</div>
+        <div class="nm-node nm-native-node" id="nm-touch-destination"><span id="nm-touch-owner">Native 지도</span><span class="text-small" id="nm-touch-action">지도 이동·줌</span></div>
+        <div class="nm-selected-detail" id="nm-touch-rule" aria-live="polite">터치 시 JavaScript 응답을 기다리지 않음.</div>
+      </div>
+    </div>
+    <div class="viz-controls" aria-label="터치 시작 위치 예시">
+      <button type="button" class="btn" data-touch="map">지도에서 시작</button>
+      <button type="button" class="btn" data-touch="sheet">시트에서 시작</button>
+      <button type="button" class="btn" data-touch="location">내 위치 버튼</button>
+      <button type="button" class="btn" data-touch="chat">채팅에서 시작</button>
+    </div>
+    <div class="nm-revision text-small" id="nm-layout-status" role="status">터치 영역 버전 1 적용 완료 · 새 지도 조작 허용</div>
+    <div class="nm-gesture-line"><span>시트에서 시작 → 경계를 넘어 이동 → 끝까지 웹 담당</span><span class="text-small">추가 손가락·빠른 경계 제스처는 실기기 검증 대상</span></div>
+  </section>
+
+  <section id="nm-panel-data" role="tabpanel" aria-labelledby="nm-tab-data" hidden>
+    <div class="viz-controls">
+      <label class="form-label" for="nm-scenario">동작 예시
+        <select class="form-select" id="nm-scenario">
+          <option value="marker">지도에서 버스 마커 선택</option>
+          <option value="list">웹 목록에서 버스 선택</option>
+          <option value="vehicles">차량 데이터 갱신</option>
+          <option value="layout">Bottom Sheet 높이 변경</option>
+        </select>
+      </label>
+    </div>
+    <div class="nm-data-grid">
+      <figure class="nm-system" aria-label="웹이 API와 state를 소유하고 native가 지도를 그리는 구조">
+        <div class="nm-node"><span>기존 Backend API</span><span class="text-small">노선 / 정류장 / 차량</span></div>
+        <div class="nm-edge-label">↓ 웹에서 요청</div>
+        <div class="nm-node nm-web-node" data-system="web"><span>기존 웹</span><span class="text-small">API 요청 · 선택값(state) · 목록</span></div>
+        <div class="nm-message-edge"><span aria-hidden="true">↕</span><span>Bridge</span><span class="text-small">웹 ↔ 앱 JSON 메시지 통로</span></div>
+        <div class="nm-node nm-native-node" data-system="native"><span>Native 지도 controller</span><span class="text-small">경로 · 마커 · 카메라 · 차량 이동</span></div>
+        <div class="nm-edge-label">↓ SDK 호출</div>
+        <div class="nm-node nm-native-node"><span>NMFMapView</span><span class="text-small">실제 지도 렌더링</span></div>
+      </figure>
+      <div>
+        <div class="nm-flow-label" id="nm-flow-title">지도에서 선택 → 웹 목록 갱신</div>
+        <ol class="nm-flow-steps" id="nm-flow-steps"></ol>
+      </div>
+    </div>
+    <div class="nm-selected-detail" id="nm-flow-detail" aria-live="polite"></div>
+    <details class="nm-details">
+      <summary>메시지와 상태의 구체적인 경계</summary>
+      <table class="table table-sm">
+        <thead><tr><th>전달 항목</th><th>규칙</th></tr></thead>
+        <tbody>
+          <tr><td>경로·정류장</td><td>노선·판본 변경 시 전달</td></tr>
+          <tr><td>차량·잔여석</td><td>관측값 변경 시 전달</td></tr>
+          <tr><td>차량 애니메이션</td><td>keyframe 경로·이동 시간 전달 → CADisplayLink에서 프레임별 위치 계산</td></tr>
+          <tr><td>선택 state</td><td>웹이 소유. Native는 선택 이벤트를 웹에 전달</td></tr>
+          <tr><td>메시지 sessionId</td><td>현재 노선 세션과 다르면 무시</td></tr>
+          <tr><td>영역 revision</td><td>최신 영역만 적용. 적용 후 ack 응답</td></tr>
+        </tbody>
+      </table>
+    </details>
+  </section>
+
+  <section id="nm-panel-lifecycle" role="tabpanel" aria-labelledby="nm-tab-lifecycle" hidden>
+    <div class="viz-controls">
+      <label class="form-label" for="nm-life-scenario">앱 상태
+        <select class="form-select" id="nm-life-scenario">
+          <option value="ready">처음 노선 화면 열기</option>
+          <option value="error">Native 지도 오류</option>
+          <option value="reload">노선 전환·웹 재로드</option>
+          <option value="modal">전체 채팅 열고 닫기</option>
+        </select>
+      </label>
+    </div>
+    <div class="nm-platforms" aria-label="지도 renderer 선택">
+      <div class="nm-platform"><span>브라우저</span><span class="text-small">기존 네이버 JS SDK</span></div>
+      <div class="nm-platform nm-platform-native"><span>기능을 지원하는 iOS 앱</span><span class="text-small">네이버 iOS SDK · 앱 기능 정보로 선택</span></div>
+    </div>
+    <ol class="nm-life-steps" id="nm-life-steps"></ol>
+    <div class="nm-life-outcome" id="nm-life-outcome" aria-live="polite"></div>
+    <details class="nm-details">
+      <summary>코드의 책임과 별도 검증 범위</summary>
+      <table class="table table-sm">
+        <thead><tr><th>구성요소</th><th>구현 범위</th></tr></thead>
+        <tbody>
+          <tr><td>웹 RouteMap</td><td>SDK 로드 전 분기. 앱에서는 투명한 지도 자리와 기존 버튼 표시</td></tr>
+          <tr><td>Native map adapter</td><td>경로·차량·선택·카메라 명령 ↔ native 이벤트</td></tr>
+          <tr><td>웹 layout 측정</td><td>시트·버튼·채팅 실제 DOM 영역·visualViewport 측정. 좌표 변환은 native에서 수행</td></tr>
+          <tr><td>RN 앱 화면</td><td>아래 지도 + 위 WebView 배치. 세션·연결·복구</td></tr>
+          <tr><td>iOS 로컬 Expo module</td><td>NMFMapView·마커·카메라·위치 권한·TouchGate</td></tr>
+          <tr><td>실기기 PoC</td><td>빠른 시트 이동·경계 터치·핀치·키보드·VoiceOver·복귀</td></tr>
+        </tbody>
+      </table>
+    </details>
+    <details class="nm-details">
+      <summary>SDK와 플랫폼의 기술 근거</summary>
+      <div class="nm-source-links">
+        <a href="https://navermaps.github.io/ios-map-sdk/guide-ko/1.html" target="_blank" rel="noopener noreferrer">네이버 iOS SDK · 지도 표시</a>
+        <a href="https://developer.apple.com/documentation/uikit/uiview/hittest(_:with:)" target="_blank" rel="noopener noreferrer">UIKit · 터치 대상 선택</a>
+        <a href="https://navermaps.github.io/ios-map-sdk/reference/Classes/NMFMapView.html" target="_blank" rel="noopener noreferrer">NMFMapView · 카메라·로고 배치</a>
+      </div>
+    </details>
+  </section>
+</div>
+
+<style>
+#salmon-native-map-explainer { color: var(--foreground); display: grid; gap: 18px; }
+#salmon-native-map-explainer * { box-sizing: border-box; }
+#salmon-native-map-explainer [hidden] { display: none !important; }
+#salmon-native-map-explainer figure { margin: 0; }
+#salmon-native-map-explainer h2 { margin: 0; }
+#salmon-native-map-explainer .nm-heading { display: grid; gap: 4px; padding-right: 90px; }
+#salmon-native-map-explainer .nm-legend { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+#salmon-native-map-explainer .nm-legend > span { display: inline-flex; align-items: center; gap: 7px; }
+#salmon-native-map-explainer .nm-swatch { width: 13px; height: 13px; display: inline-block; flex-shrink: 0; }
+#salmon-native-map-explainer .nm-native-fill { background: var(--viz-series-1); }
+#salmon-native-map-explainer .nm-web-fill { background: var(--viz-series-2); }
+#salmon-native-map-explainer .nm-gate-fill { background: var(--viz-series-3); }
+#salmon-native-map-explainer [role="tabpanel"] { display: grid; gap: 18px; }
+#salmon-native-map-explainer .nm-layer-grid { display: grid; grid-template-columns: minmax(270px, 1fr) minmax(240px, 1fr); gap: 24px; align-items: center; }
+#salmon-native-map-explainer .nm-layer-stage { position: relative; height: 454px; min-width: 0; }
+#salmon-native-map-explainer .nm-phone-plane { position: absolute; width: min(260px, calc(100% - 40px)); height: 414px; left: 50%; top: 20px; margin-left: calc(min(260px, 100% - 40px) / -2); border: 1px solid var(--border); border-radius: 20px; overflow: hidden; transition: transform 400ms ease; }
+#salmon-native-map-explainer .nm-plane-native { background: color-mix(in srgb, var(--viz-series-1) 8%, var(--background)); }
+#salmon-native-map-explainer .nm-plane-native > .nm-plane-caption { padding: 14px; text-align: right; }
+#salmon-native-map-explainer .nm-plane-web { background: transparent; }
+#salmon-native-map-explainer .nm-layer-grid:has(.is-exploded) { grid-template-columns: minmax(0, 1fr); }
+#salmon-native-map-explainer .nm-layer-stage.is-exploded { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; height: 430px; }
+#salmon-native-map-explainer .nm-layer-stage.is-exploded .nm-phone-plane { position: relative; left: auto; top: 0; margin-left: 0; transform: none; width: min(260px, 100%); justify-self: center; }
+#salmon-native-map-explainer .nm-web-plane-label { display: none; position: absolute; top: 14px; right: 14px; }
+#salmon-native-map-explainer .is-exploded .nm-web-plane-label { display: block; }
+#salmon-native-map-explainer .nm-native-title { display: flex; gap: 8px; position: absolute; top: 90px; left: 20px; align-items: center; }
+#salmon-native-map-explainer .nm-native-mark { position: absolute; padding: 4px 7px; background: var(--background); border: 1px solid var(--border); display: flex; align-items: center; gap: 6px; }
+#salmon-native-map-explainer .nm-stop-one { top: 137px; left: 28px; }
+#salmon-native-map-explainer .nm-bus-one { top: 136px; right: 20px; }
+#salmon-native-map-explainer .nm-stop-two { top: 278px; left: 32px; }
+#salmon-native-map-explainer .nm-under-sheet { position: absolute; left: 22px; right: 22px; bottom: 52px; }
+#salmon-native-map-explainer .nm-sdk-label { position: absolute; top: 200px; left: 68px; right: 86px; text-align: center; white-space: nowrap; }
+#salmon-native-map-explainer .nm-web-transparent { position: absolute; inset: 0 0 auto; height: 220px; border-bottom: 1px dashed var(--border); }
+#salmon-native-map-explainer .nm-web-transparent > span { position: absolute; left: 13px; top: 48px; background: var(--background); padding: 2px 4px; }
+#salmon-native-map-explainer .nm-web-back, #salmon-native-map-explainer .nm-web-locate, #salmon-native-map-explainer .nm-web-chat { position: absolute; padding: 4px 8px; background: color-mix(in srgb, var(--viz-series-2) 15%, var(--background)); border: 1px solid var(--border); }
+#salmon-native-map-explainer .nm-web-back { top: 12px; left: 12px; }
+#salmon-native-map-explainer .nm-web-locate { top: 178px; right: 12px; }
+#salmon-native-map-explainer .nm-web-chat { top: 178px; left: 12px; }
+#salmon-native-map-explainer .nm-web-sheet { position: absolute; top: 224px; bottom: 0; left: 0; right: 0; background: color-mix(in srgb, var(--viz-series-2) 12%, var(--background)); border-top: 1px solid var(--border); border-radius: 22px 22px 0 0; padding: 12px 16px; }
+#salmon-native-map-explainer .nm-sheet-handle { height: 4px; width: 30px; border-radius: 2px; background: var(--muted-foreground); margin: 0 auto 10px; }
+#salmon-native-map-explainer .nm-sheet-row { padding: 6px 0; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: space-between; }
+#salmon-native-map-explainer .nm-sheet-row > span { color: var(--muted-foreground); }
+#salmon-native-map-explainer .nm-plane-caption { font-weight: 500; }
+#salmon-native-map-explainer .nm-root-label { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+#salmon-native-map-explainer .nm-tree-branch { border-left: 1px solid var(--border); margin-left: 10px; padding-left: 16px; display: grid; gap: 14px; }
+#salmon-native-map-explainer .nm-node { border: 1px solid var(--border); padding: 12px 14px; text-align: left; display: grid; gap: 4px; color: var(--foreground); background: transparent; width: 100%; font: inherit; }
+#salmon-native-map-explainer .nm-native-node { background: color-mix(in srgb, var(--viz-series-1) 7%, var(--background)); }
+#salmon-native-map-explainer .nm-web-node { background: color-mix(in srgb, var(--viz-series-2) 12%, var(--background)); }
+#salmon-native-map-explainer .nm-gate-node { background: color-mix(in srgb, var(--viz-series-3) 10%, var(--background)); }
+#salmon-native-map-explainer .nm-tree-child { border-left: 1px solid var(--border); margin-left: 10px; padding-left: 14px; }
+#salmon-native-map-explainer .nm-selected-detail { margin-top: 4px; padding-left: 12px; border-left: 2px solid var(--border); overflow-wrap: anywhere; }
+#salmon-native-map-explainer .nm-tree > .nm-selected-detail { margin-top: 16px; }
+#salmon-native-map-explainer .nm-comparison { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; }
+#salmon-native-map-explainer .nm-comparison > div { display: grid; gap: 4px; }
+#salmon-native-map-explainer .nm-touch-controls { display: flex; flex-wrap: wrap; gap: 18px 30px; align-items: center; }
+#salmon-native-map-explainer .nm-touch-controls > .form-label { flex: 1 1 210px; }
+#salmon-native-map-explainer .nm-touch-controls .tabular-nums { margin-left: 12px; }
+#salmon-native-map-explainer .nm-touch-grid { display: grid; grid-template-columns: minmax(250px, 1fr) minmax(230px, 1fr); gap: 24px; align-items: center; }
+#salmon-native-map-explainer .nm-touch-figure { display: grid; justify-items: center; gap: 10px; }
+#salmon-native-map-explainer .nm-touch-canvas { position: relative; width: min(280px, 100%); height: 380px; border: 1px solid var(--border); border-radius: 20px; overflow: hidden; background: color-mix(in srgb, var(--viz-series-1) 7%, var(--background)); touch-action: manipulation; }
+#salmon-native-map-explainer .nm-touch-native { position: absolute; inset: 76px 12px auto; display: grid; justify-items: center; gap: 8px; }
+#salmon-native-map-explainer .nm-touch-back, #salmon-native-map-explainer .nm-touch-locate, #salmon-native-map-explainer .nm-touch-chat { position: absolute; background: color-mix(in srgb, var(--viz-series-2) 14%, var(--background)); border: 1px solid var(--border); padding: 4px 8px; }
+#salmon-native-map-explainer .nm-touch-back { top: 12px; left: 12px; }
+#salmon-native-map-explainer .nm-touch-locate { right: 12px; top: 145px; transition: top 280ms ease; }
+#salmon-native-map-explainer .nm-touch-chat { left: 12px; top: 145px; transition: top 280ms ease; }
+#salmon-native-map-explainer .nm-touch-sheet { position: absolute; top: 52%; bottom: 0; left: 0; right: 0; padding: 14px; border-top: 1px solid var(--border); background: color-mix(in srgb, var(--viz-series-2) 12%, var(--background)); border-radius: 24px 24px 0 0; display: flex; flex-direction: column; gap: 8px; transition: top 280ms ease; overflow: hidden; }
+#salmon-native-map-explainer .nm-touch-modal { position: absolute; inset: 0; background: color-mix(in srgb, var(--viz-series-2) 12%, var(--background)); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 14px; padding: 14px; }
+#salmon-native-map-explainer .nm-tap-dot { position: absolute; width: 20px; height: 20px; border: 2px solid var(--foreground); border-radius: 50%; transform: translate(-50%, -50%); background: color-mix(in srgb, var(--foreground) 15%, transparent); pointer-events: none; }
+#salmon-native-map-explainer .nm-touch-path { display: grid; gap: 6px; }
+#salmon-native-map-explainer .nm-flow-label { margin-bottom: 8px; font-weight: 500; }
+#salmon-native-map-explainer .nm-route-node { padding: 8px 0; }
+#salmon-native-map-explainer .nm-down-arrow { padding-left: 14px; }
+#salmon-native-map-explainer .nm-revision { display: flex; align-items: center; gap: 8px; }
+#salmon-native-map-explainer .nm-revision::before { content: ''; width: 8px; height: 8px; background: var(--viz-series-3); display: inline-block; flex-shrink: 0; }
+#salmon-native-map-explainer .nm-revision.is-pending::before { background: var(--viz-series-2); }
+#salmon-native-map-explainer .nm-gesture-line { display: grid; gap: 4px; padding-top: 12px; border-top: 1px solid var(--border); }
+#salmon-native-map-explainer .nm-data-grid { display: grid; grid-template-columns: minmax(230px, .9fr) minmax(260px, 1.1fr); gap: 30px; }
+#salmon-native-map-explainer .nm-system { display: grid; gap: 8px; align-content: start; }
+#salmon-native-map-explainer .nm-edge-label { text-align: center; }
+#salmon-native-map-explainer .nm-message-edge { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; padding: 8px 0; }
+#salmon-native-map-explainer .nm-flow-steps, #salmon-native-map-explainer .nm-life-steps { padding: 0; margin: 0; list-style: none; counter-reset: nm-step; display: grid; }
+#salmon-native-map-explainer .nm-flow-step, #salmon-native-map-explainer .nm-life-step { counter-increment: nm-step; position: relative; display: grid; gap: 4px; padding: 0 0 20px 38px; min-width: 0; overflow-wrap: anywhere; }
+#salmon-native-map-explainer .nm-flow-step:not(:last-child)::after, #salmon-native-map-explainer .nm-life-step:not(:last-child)::after { content: ''; position: absolute; top: 28px; bottom: 5px; left: 12px; width: 1px; background: var(--border); }
+#salmon-native-map-explainer .nm-flow-step::before, #salmon-native-map-explainer .nm-life-step::before { content: counter(nm-step); position: absolute; top: 0; left: 0; width: 26px; height: 26px; display: grid; place-items: center; background: var(--muted); color: var(--foreground); }
+#salmon-native-map-explainer .nm-flow-step[data-owner="web"]::before, #salmon-native-map-explainer .nm-life-step[data-owner="web"]::before { background: color-mix(in srgb, var(--viz-series-2) 22%, var(--background)); }
+#salmon-native-map-explainer .nm-flow-step[data-owner="native"]::before, #salmon-native-map-explainer .nm-life-step[data-owner="native"]::before { background: color-mix(in srgb, var(--viz-series-1) 15%, var(--background)); }
+#salmon-native-map-explainer .nm-flow-step[data-owner="gate"]::before, #salmon-native-map-explainer .nm-life-step[data-owner="gate"]::before { background: color-mix(in srgb, var(--viz-series-3) 22%, var(--background)); }
+#salmon-native-map-explainer .nm-step-owner { display: inline-flex; align-items: center; gap: 6px; }
+#salmon-native-map-explainer .nm-step-owner::before { content: ''; display: inline-block; width: 8px; height: 8px; background: var(--border); }
+#salmon-native-map-explainer [data-owner="web"] .nm-step-owner::before { background: var(--viz-series-2); }
+#salmon-native-map-explainer [data-owner="native"] .nm-step-owner::before { background: var(--viz-series-1); }
+#salmon-native-map-explainer [data-owner="gate"] .nm-step-owner::before { background: var(--viz-series-3); }
+#salmon-native-map-explainer .nm-details { padding-top: 14px; border-top: 1px solid var(--border); }
+#salmon-native-map-explainer .nm-details > summary { margin-bottom: 8px; }
+#salmon-native-map-explainer .nm-details table { table-layout: fixed; width: 100%; }
+#salmon-native-map-explainer .nm-details th:first-child { width: 32%; }
+#salmon-native-map-explainer .nm-details td { overflow-wrap: anywhere; }
+#salmon-native-map-explainer .nm-platforms { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+#salmon-native-map-explainer .nm-platform { padding: 0 0 12px; border-bottom: 1px solid var(--border); display: grid; gap: 4px; }
+#salmon-native-map-explainer .nm-platform-native { border-bottom-color: var(--viz-series-1); }
+#salmon-native-map-explainer .nm-life-outcome { padding-left: 12px; border-left: 2px solid var(--border); }
+#salmon-native-map-explainer .nm-source-links { display: grid; gap: 10px; }
+@media (max-width: 600px) {
+  #salmon-native-map-explainer .nm-layer-grid, #salmon-native-map-explainer .nm-touch-grid, #salmon-native-map-explainer .nm-data-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  #salmon-native-map-explainer .nm-layer-stage { height: 454px; }
+  #salmon-native-map-explainer .nm-layer-stage.is-exploded { grid-template-columns: minmax(0, 1fr); height: auto; gap: 18px; }
+  #salmon-native-map-explainer .nm-platforms { grid-template-columns: minmax(0, 1fr); }
+  #salmon-native-map-explainer .nm-comparison { grid-template-columns: minmax(0, 1fr); }
+  #salmon-native-map-explainer .nm-compare-arrow { transform: rotate(90deg); width: 20px; }
+  #salmon-native-map-explainer .nm-heading { padding-right: 50px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #salmon-native-map-explainer .nm-phone-plane, #salmon-native-map-explainer .nm-touch-sheet, #salmon-native-map-explainer .nm-touch-locate, #salmon-native-map-explainer .nm-touch-chat { transition: none; }
+}
+</style>
+
+<script>
+(function () {
+  const root = document.getElementById('salmon-native-map-explainer');
+  const q = function (selector) { return root.querySelector(selector); };
+  const qa = function (selector) { return Array.from(root.querySelectorAll(selector)); };
+  const names = ['요약만', '절반', '70%', '전체'];
+  const tops = [0.78, 0.52, 0.32, 0.08];
+  const ownerNames = { web: '웹', native: 'Native', gate: 'Bridge / TouchGate', api: 'Backend API' };
+  const state = { exploded: false, snap: 1, modal: false, scenario: 'marker', lifecycle: 'ready', tab: 'layers' };
+  let moving = false;
+  let revision = 1;
+  let settleTimer = null;
+
+  const scenarios = {
+    marker: {
+      title: '지도에서 선택 → 웹 목록 갱신',
+      steps: [
+        ['native', '버스 마커 누름', '선택한 vehicleKey 확인'],
+        ['gate', '웹으로 선택 이벤트 전달', 'vehiclePress'],
+        ['web', '선택 state 변경', '선택한 vehicleKey + 목록 스크롤 대상'],
+        ['web', '해당 정류장으로 목록 스크롤', '기존 선택·스크롤 함수 사용'],
+        ['gate', '기존 선택 흐름대로 카메라 명령 전달', 'camera: command = vehicle'],
+        ['native', '선택한 마커 강조·카메라 이동', '웹에서 확정한 선택 state 반영']
+      ],
+      detail: '선택 state의 최종 소유자는 웹. 기존 웹처럼 지도 마커에서 선택한 경우에도 카메라 이동 명령이 이어짐.'
+    },
+    list: {
+      title: '웹 목록에서 선택 → native 카메라 이동',
+      steps: [
+        ['web', '목록의 버스 누름', '기존 웹 클릭 이벤트'],
+        ['web', '선택 state 변경', '필요하면 시트를 지도 노출 단계로 변경'],
+        ['gate', '카메라 명령 전달', 'camera: command = vehicle'],
+        ['native', '버스를 노출 지도 영역으로 이동', '시트에 가려진 영역을 제외한 카메라 기준'],
+        ['native', '선택 마커 강조', '지도 view는 유지']
+      ],
+      detail: '지도 view는 유지하고 노출 영역으로 잘라 표시. 카메라는 보이는 지도 가운데로 대상을 이동.'
+    },
+    vehicles: {
+      title: '관측값 갱신 → native에서 부드럽게 이동',
+      steps: [
+        ['api', '차량 관측값 응답', '기존 Backend API'],
+        ['web', '차량 표시·이동 구간 계산', '웹 목록도 같은 관측값과 이동 계획 사용'],
+        ['gate', '변경된 데이터 전달', 'updateScene / motion'],
+        ['native', '잔여석·마커 갱신', 'keyframe 경로·진행률·이동 시간 수신'],
+        ['native', '중간 위치를 계산하며 이동', '프레임마다 WebView 메시지를 보내지 않음']
+      ],
+      detail: 'API 요청은 웹에서 한 번. Native 지도는 화면에 그리는 일과 프레임별 차량 이동을 담당.'
+    },
+    layout: {
+      title: '시트 이동 → 터치 영역 갱신 → 적용 확인',
+      steps: [
+        ['web', '웹 시트 드래그·애니메이션', '기존 CSS와 Pointer Event 유지'],
+        ['web', '실제 영역 측정', '시트 + 버튼 + 별도 채팅 영역'],
+        ['gate', '좌표 변환 후 최신 영역 저장', 'layout + revision'],
+        ['native', '최종 영역 적용·터치 판정 갱신', 'transitioning=false + 지도 ready 상태 확인'],
+        ['gate', '웹으로 적용 완료 알림', 'ack(revision) · 웹이 ACK를 기다려 해제하는 구조는 아님']
+      ],
+      detail: 'revision은 최신 명령 순서, ack는 layout 적용 알림. Native가 적용 시점에 터치를 판정하며 전달 지연은 남아 있음.'
+    }
+  };
+
+  const lifecycles = {
+    ready: {
+      steps: [
+        ['gate', '앱 기능 정보 확인', 'window.SalmonNativeMap · version: 1 · platform: ios'],
+        ['native', '네이버 iOS 지도 준비', '새 sessionId · 경로와 마커 초기화'],
+        ['web', '현재 화면 데이터 전체 전달', '경로 + 차량 + 선택 state + 웹 영역'],
+        ['native', '데이터·영역 적용 완료', 'ready + ack'],
+        ['gate', '투명 지도 자리와 조작 활성화', '기존 웹 Bottom Sheet 유지']
+      ],
+      outcome: '지도: iOS SDK · 목록과 시트: 기존 웹 · 앱의 JS 지도 SDK는 로드하지 않음.'
+    },
+    error: {
+      steps: [
+        ['native', '준비 시간 초과·인증 실패', 'native 오류 또는 웹의 15초 제한으로 감지'],
+        ['gate', 'Native 세션 정리', '지도를 숨기고 모든 터치를 웹으로 전달'],
+        ['web', '기존 JS 지도로 전환', '선택 state·차량 이동 유지, Sentry에 원인 기록'],
+        ['web', '같은 화면에서는 JS 지도 유지', '늦게 도착한 native 이벤트 무시'],
+        ['web', 'JS 지도도 실패하면 오류 안내', '정류장 목록은 계속 사용 가능']
+      ],
+      outcome: '준비 시간 초과·인증 실패 시 JS 지도 사용. 그 외 native 오류나 JS 지도 실패 시 오류 안내와 목록 유지.'
+    },
+    reload: {
+      steps: [
+        ['gate', '기존 지도 세션 종료', '노선 변경 / 웹 재로드 / 화면 종료'],
+        ['native', '지도 조작 차단·이전 상태 정리', '이전 sessionId 메시지는 무시'],
+        ['gate', '새 sessionId로 연결', '기능 확인 후 새 노선 세션 생성'],
+        ['web', '최신 snapshot과 영역 전달', '이전 프레임 대신 현재 화면 전체 상태'],
+        ['native', '최신 적용 확인 후 재개', '지도 ready + 최신 영역 적용']
+      ],
+      outcome: '페이지가 바뀌면 이전 마커·클릭·응답을 새 노선에 적용하지 않음.'
+    },
+    modal: {
+      steps: [
+        ['web', '전체 채팅 열기', '웹 modal state 변경'],
+        ['gate', '웹이 전체 터치 수신', 'captureAll = true'],
+        ['native', '뒤 지도 조작 차단 · 접근성 별도 확인', 'DOM inert만으로 native 지도는 막히지 않음'],
+        ['web', '채팅 닫고 실제 영역 재측정', '최신 layout revision 전달'],
+        ['gate', 'Native가 최신 영역 적용 시 지도 조작 재개', '노출 지도는 native, 나머지는 웹']
+      ],
+      outcome: '채팅과 키보드도 기존 웹 UI. Native 지도는 modal 뒤에서 새 터치를 받지 않도록 차단. VoiceOver 탐색 차단은 기기 검증 대상.'
+    }
+  };
+
+  function save() {}
+
+  function createStep(step, cls) {
+    const li = document.createElement('li');
+    li.className = cls;
+    li.dataset.owner = step[0];
+    const owner = document.createElement('span');
+    owner.className = 'nm-step-owner text-small';
+    owner.textContent = ownerNames[step[0]];
+    const action = document.createElement('span');
+    action.textContent = step[1];
+    const detail = document.createElement('span');
+    detail.className = 'text-small';
+    detail.textContent = step[2];
+    li.append(owner, action, detail);
+    return li;
+  }
+
+  function renderFlow() {
+    const selected = scenarios[state.scenario];
+    q('#nm-flow-title').textContent = selected.title;
+    q('#nm-flow-steps').replaceChildren.apply(q('#nm-flow-steps'), selected.steps.map(function (step) { return createStep(step, 'nm-flow-step'); }));
+    q('#nm-flow-detail').textContent = selected.detail;
+    q('#nm-scenario').value = state.scenario;
+  }
+
+  function renderLife() {
+    const selected = lifecycles[state.lifecycle];
+    q('#nm-life-steps').replaceChildren.apply(q('#nm-life-steps'), selected.steps.map(function (step) { return createStep(step, 'nm-life-step'); }));
+    q('#nm-life-outcome').textContent = selected.outcome;
+    q('#nm-life-scenario').value = state.lifecycle;
+  }
+
+  function renderLayers() {
+    q('#nm-layer-stage').classList.toggle('is-exploded', state.exploded);
+    q('#nm-layer-toggle').setAttribute('aria-pressed', String(state.exploded));
+    q('#nm-layer-toggle').textContent = state.exploded ? '다시 겹쳐서 보기' : '두 화면 분리해서 보기';
+    q('#nm-layer-mode').textContent = state.exploded ? '왼쪽·위: iOS 지도 / 오른쪽·아래: 웹 화면' : '사용자가 보는 겹친 화면';
+  }
+
+  function status() {
+    const node = q('#nm-layout-status');
+    node.classList.toggle('is-pending', moving);
+    if (moving) node.textContent = '터치 영역 버전 ' + revision + ' 전달·적용 중 · 새 지도 조작 잠시 차단';
+    else if (state.modal) node.textContent = '터치 영역 버전 ' + revision + ' 적용 완료 · 전체 채팅이 터치 수신';
+    else if (state.snap === 3) node.textContent = '터치 영역 버전 ' + revision + ' 적용 완료 · 전체 시트로 지도 조작 차단';
+    else node.textContent = '터치 영역 버전 ' + revision + ' 적용 완료 · 새 지도 조작 허용';
+  }
+
+  function renderTouch() {
+    q('#nm-snap').value = String(state.snap);
+    q('#nm-snap-name').textContent = names[state.snap];
+    q('#nm-modal').checked = state.modal;
+    q('#nm-touch-sheet').style.top = (tops[state.snap] * 100) + '%';
+    const controlTop = Math.max(54, tops[state.snap] * 380 - 45);
+    q('#nm-touch-locate').style.top = controlTop + 'px';
+    q('#nm-touch-chat').style.top = controlTop + 'px';
+    q('#nm-touch-locate').hidden = state.snap === 3;
+    q('#nm-touch-chat').hidden = state.snap === 3;
+    q('#nm-touch-modal').hidden = !state.modal;
+    status();
+  }
+
+  function routeTouch(target) {
+    const labels = { map: '지도 영역에서 시작', sheet: '시트 영역에서 시작', location: '웹 내 위치 버튼에서 시작', chat: '채팅 영역에서 시작', back: '웹 뒤로가기에서 시작' };
+    let web = target !== 'map';
+    let action = target === 'sheet' ? '시트 드래그·목록 스크롤' : target === 'location' ? '웹 클릭 → native 위치 조회 명령' : target === 'chat' ? '웹 채팅 열기·조작' : target === 'back' ? '기존 웹 뒤로가기' : '지도 이동·줌';
+    let rule = web ? '시트·웹 UI의 시작 터치는 WebView가 수신.' : '터치 시 JavaScript 응답을 기다리지 않음.';
+    if (state.modal) { web = true; action = '전체 채팅 조작'; rule = 'captureAll: 노출 위치와 관계없이 웹이 수신.'; }
+    else if (moving) { web = true; action = '새 지도 제스처 차단'; rule = '시트 이동·영역 적용 중. 기존 웹 드래그는 계속 유지.'; }
+    else if (state.snap === 3) { web = true; action = '전체 시트 조작'; rule = '시트 전체 펼침: native 지도 조작 비활성.'; }
+    q('#nm-touch-origin').textContent = labels[target] || labels.map;
+    q('#nm-touch-owner').textContent = web ? 'WebView · 기존 웹' : 'Native 지도 · iOS SDK';
+    q('#nm-touch-action').textContent = action;
+    q('#nm-touch-rule').textContent = rule;
+    q('#nm-touch-destination').classList.toggle('nm-native-node', !web);
+    q('#nm-touch-destination').classList.toggle('nm-web-node', web);
+  }
+
+  function layoutChange() {
+    revision += 1;
+    moving = true;
+    clearTimeout(settleTimer);
+    q('#nm-tap-dot').hidden = true;
+    renderTouch();
+    routeTouch('map');
+    settleTimer = setTimeout(function () { moving = false; status(); routeTouch('map'); }, 440);
+  }
+
+  function restore(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') return;
+    const model = snapshot.modelContent || {};
+    const priv = snapshot.privateContent || {};
+    if (['layers', 'touch', 'data', 'lifecycle'].includes(model.view)) state.tab = model.view;
+    if (scenarios[model.scenario]) state.scenario = model.scenario;
+    if (lifecycles[model.lifecycle]) state.lifecycle = model.lifecycle;
+    if (Number.isInteger(priv.snap) && priv.snap >= 0 && priv.snap <= 3) state.snap = priv.snap;
+    if (typeof model.modal === 'boolean') state.modal = model.modal;
+    if (typeof priv.exploded === 'boolean') state.exploded = priv.exploded;
+    renderLayers(); renderTouch(); renderFlow(); renderLife(); routeTouch('map');
+    const tab = q('#nm-tab-' + state.tab);
+    if (tab && tab.getAttribute('aria-selected') !== 'true') {
+      qa('[role="tab"]').forEach(function (node) {
+        const selected = node === tab;
+        node.classList.toggle('active', selected);
+        node.setAttribute('aria-selected', String(selected));
+        q('#' + node.getAttribute('aria-controls')).hidden = !selected;
+      });
+    }
+  }
+
+  q('#nm-layer-toggle').addEventListener('click', function () { state.exploded = !state.exploded; renderLayers(); save(); });
+  qa('[data-layer]').forEach(function (node) {
+    node.addEventListener('click', function () {
+      const details = {
+        native: '실제 지도는 NMFMapView. 경로·마커·카메라·지도 제스처는 iOS에서 실행.',
+        web: 'Bottom Sheet와 목록은 기존 웹. 지도 자리만 투명하게 하여 아래 native 지도를 노출.',
+        gate: '보이지 않는 native 부모 view. 캐시된 웹 영역 밖에서는 WebView 하위 트리를 터치 대상에서 제외.'
+      };
+      q('#nm-layer-detail').textContent = details[node.dataset.layer];
+    });
+  });
+  q('#nm-snap').addEventListener('input', function (event) { state.snap = Number(event.target.value); layoutChange(); });
+  q('#nm-snap').addEventListener('change', save);
+  q('#nm-modal').addEventListener('change', function (event) { state.modal = event.target.checked; layoutChange(); save(); });
+  qa('[data-touch]').forEach(function (node) { node.addEventListener('click', function () { routeTouch(node.dataset.touch); }); });
+  q('#nm-touch-canvas').addEventListener('pointerdown', function (event) {
+    const canvas = event.currentTarget;
+    const bounds = canvas.getBoundingClientRect();
+    const x = event.clientX - bounds.left;
+    const y = event.clientY - bounds.top;
+    let target = y >= tops[state.snap] * bounds.height ? 'sheet' : 'map';
+    if (y >= 12 && y <= 48 && x >= 12 && x <= 64) target = 'back';
+    const controlTop = Math.max(54, tops[state.snap] * 380 - 45);
+    if (state.snap !== 3 && y >= controlTop && y <= controlTop + 36) {
+      if (x > bounds.width - 96) target = 'location';
+      else if (x < 84) target = 'chat';
+    }
+    const dot = q('#nm-tap-dot');
+    dot.style.left = x + 'px'; dot.style.top = y + 'px'; dot.hidden = false;
+    routeTouch(target);
+  });
+  q('#nm-scenario').addEventListener('change', function (event) { state.scenario = event.target.value; renderFlow(); save(); });
+  q('#nm-life-scenario').addEventListener('change', function (event) { state.lifecycle = event.target.value; renderLife(); save(); });
+  qa('[role="tab"]').forEach(function (node, index, tabs) {
+    node.tabIndex = index === 0 ? 0 : -1;
+    node.addEventListener('click', function () {
+      state.tab = node.id.replace('nm-tab-', '');
+      tabs.forEach(function (tab) {
+        const selected = tab === node;
+        tab.classList.toggle('active', selected);
+        tab.setAttribute('aria-selected', String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+        q('#' + tab.getAttribute('aria-controls')).hidden = !selected;
+      });
+    });
+    node.addEventListener('keydown', function (event) {
+      let next = index;
+      if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+      else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+      else if (event.key === 'Home') next = 0;
+      else if (event.key === 'End') next = tabs.length - 1;
+      else return;
+      event.preventDefault(); tabs[next].focus(); tabs[next].click();
+    });
+  });
+  renderLayers(); renderTouch(); renderFlow(); renderLife(); routeTouch('map');
+})();
+</script>
+
+<footer><a href="README.md">상세 설계 문서</a><a href="overview.svg">한 장으로 보는 구조</a><a href="https://higgs95.atlassian.net/browse/SAL-214">SAL-214</a><span>외부 라이브러리·네트워크 연결 없이 열 수 있는 설명 HTML</span></footer>
+</main>
+</body>
+</html>

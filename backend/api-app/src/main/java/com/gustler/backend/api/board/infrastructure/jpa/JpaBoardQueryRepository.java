@@ -27,10 +27,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
+/**
+ * 쓰기 모듈의 엔티티를 참조하지 않고 탑승판에 필요한 노선·모델·관측·예보를 조회한다.
+ */
 @Repository
 @RequiredArgsConstructor
 public class JpaBoardQueryRepository implements BoardQueryRepository {
-
     private static final Pageable FIRST_RESULT = PageRequest.of(0, 1);
 
     private final Clock clock;
@@ -83,7 +85,8 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
     }
 
     @Override
-    public List<BoardVehicleObservation> findObservedVehicles(long observationBatchId, long routeVersionId) {
+    public List<BoardVehicleObservation> findObservedVehicles(final long observationBatchId,
+        final long routeVersionId) {
         try {
             return vehicleObservationRepository.findAllByBatchIdAndRouteVersionId(observationBatchId, routeVersionId)
                 .stream()

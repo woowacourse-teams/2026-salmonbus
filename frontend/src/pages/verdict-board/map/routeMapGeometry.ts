@@ -65,6 +65,49 @@ export function routeMapCoordinateForSequence(
   return interpolatedCoordinateFor(from, to, (distance - startDistance) / (endDistance - startDistance));
 }
 
+/** Send one timed road path per observation, rather than coordinates every animation frame. */
+export function routeMapMotionPathFor(
+  data: RouteMapData,
+  start: number,
+  end: number,
+  direction: Direction,
+): (GeoCoordinate & { progress: number })[] {
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return [];
+  const first = routeMapCoordinateForSequence(data, start, direction);
+  const last = routeMapCoordinateForSequence(data, end, direction);
+  if (first === null || last === null) return [];
+  if (start === end)
+    return [
+      { ...first, progress: 0 },
+      { ...last, progress: 1 },
+    ];
+  const prepared = pathCache.get(data)?.get(direction);
+  const sequences = new Set([start, end]);
+  if (prepared !== undefined) {
+    for (let index = 0; index < prepared.stopSequences.length - 1; index += 1) {
+      const fromSequence = prepared.stopSequences[index]!;
+      const toSequence = prepared.stopSequences[index + 1]!;
+      const fromDistance = prepared.stopDistances[index]!;
+      const toDistance = prepared.stopDistances[index + 1]!;
+      if (fromSequence > start && fromSequence < end) sequences.add(fromSequence);
+      if (toSequence > start && toSequence < end) sequences.add(toSequence);
+      if (toSequence < start || fromSequence > end || toDistance <= fromDistance) continue;
+      for (const distance of prepared.distances) {
+        if (distance <= fromDistance || distance >= toDistance) continue;
+        const sequence =
+          fromSequence + ((distance - fromDistance) / (toDistance - fromDistance)) * (toSequence - fromSequence);
+        if (sequence > start && sequence < end) sequences.add(sequence);
+      }
+    }
+  }
+  return Array.from(sequences)
+    .sort((a, b) => a - b)
+    .flatMap((sequence) => {
+      const coordinate = routeMapCoordinateForSequence(data, sequence, direction);
+      return coordinate === null ? [] : [{ ...coordinate, progress: (sequence - start) / (end - start) }];
+    });
+}
+
 function preparedRoutePathFor(data: RouteMapData, direction: Direction): PreparedRoutePath {
   const stops = data.stops.filter((stop) => stop.direction === direction).sort((a, b) => a.sequence - b.sequence);
   const coordinates = data.paths.find((path) => path.direction === direction)?.coordinates ?? [];

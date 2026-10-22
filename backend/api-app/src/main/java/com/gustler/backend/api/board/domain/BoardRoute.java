@@ -4,6 +4,9 @@ import com.gustler.backend.api.route.domain.RouteStatus;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 현재 노선 판본의 표시명·방문 방향·운행 시간·배차간격을 함께 전달한다.
+ */
 public record BoardRoute(
     String id,
     String displayName,
@@ -15,7 +18,6 @@ public record BoardRoute(
     String referenceVersionId,
     RouteHeadways headways
 ) {
-
     public BoardRoute {
         Objects.requireNonNull(id, "id는 null일 수 없습니다.");
         Objects.requireNonNull(displayName, "displayName은 null일 수 없습니다.");

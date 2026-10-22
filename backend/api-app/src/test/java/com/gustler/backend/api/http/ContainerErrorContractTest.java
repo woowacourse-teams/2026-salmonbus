@@ -16,28 +16,28 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
 
 /**
- * 컨트롤러까지 안 오는 요청도 오류 응답 형식을 지키는지 실제 톰캣으로 잰다.
+ * 컨트롤러까지 전달되지 않는 요청도 오류 응답 형식을 지키는지 실제 톰캣으로 검증한다.
  *
- * <p>MockMvc 로는 못 잡는 것들이다. 주소 해석 실패와 요청 헤더 초과는 서블릿이 돌기 전에
+ * <p>MockMvc 로는 검증할 수 없는 경우다. 주소 해석 실패와 요청 헤더 초과는 서블릿이 실행되기 전에
  * 톰캣이 거절하고, {@code TRACE} 는 컨테이너가 {@code /error} 로 넘긴다.
  *
- * <p>날 것 소켓으로 보낸다. 자바 HTTP 클라이언트는 주소를 먼저 정규화해서 깨진 퍼센트 인코딩을
+ * <p>소켓으로 직접 전송한다. 자바 HTTP 클라이언트는 주소를 먼저 정규화해서 깨진 퍼센트 인코딩을
  * 서버까지 보내지 않는다.
  *
- * <p>2026-09-02 PR #56 리뷰에서 나온 조합이다. <b>하나씩 치면 통과하고 겹쳐 치면 깨지던</b>
- * 자리라 조합으로 고정한다.
+ * <p>2026-09-02 PR #56 리뷰에서 나온 조합이다. 개별 조건에서는 통과했지만 조건을 겹치면 실패했던
+ * 경우이므로 조합을 테스트로 고정한다.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @Import(PostgresTestContainer.class)
 @ExtendWith(OutputCaptureExtension.class)
 class ContainerErrorContractTest {
-
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
 
     @LocalServerPort
@@ -45,7 +45,8 @@ class ContainerErrorContractTest {
 
     @Test
     void 주소의_퍼센트_인코딩이_깨져도_오류_코드와_메시지가_실려_나간다() throws IOException {
-        // when 톰캣이 주소를 해석하다 거절해서 서블릿이 아예 안 돈다
+        // when
+        // 톰캣이 주소를 해석하다 거절하므로 서블릿이 실행되지 않는다
         Response actual = send("GET /api/v1/routes/%zz/board HTTP/1.1");
 
         // then
@@ -57,7 +58,8 @@ class ContainerErrorContractTest {
 
     @Test
     void 컨테이너가_error_로_넘긴_응답도_오류_코드와_메시지가_실려_나간다() throws IOException {
-        // when 스프링 부트가 이 자리에 기본 오류 컨트롤러를 두면 timestamp·status·error·path 가 나간다
+        // when
+        // 스프링 부트가 이 경로에 기본 오류 컨트롤러를 두면 timestamp·status·error·path 가 반환된다
         Response actual = send("TRACE /api/v1/routes HTTP/1.1");
 
         // then
@@ -86,7 +88,8 @@ class ContainerErrorContractTest {
 
     @Test
     void JSON_을_안_받는_요청이_다른_오류와_겹쳐도_오류_코드와_메시지가_실려_나간다() throws IOException {
-        // when 협상에 맡기면 본문을 만들고도 못 써서 500 에 0바이트가 나간다
+        // when
+        // 콘텐츠 협상에 맡기면 생성한 본문을 전송하지 못해 500 에 0바이트가 반환된다
         Response actual = send("GET /api/v1/routes/abc/board HTTP/1.1", "Accept: text/plain");
 
         // then
@@ -97,10 +100,12 @@ class ContainerErrorContractTest {
 
     @Test
     void 응답의_요청_식별자로_서버_로그를_찾을_수_있다(CapturedOutput 로그) throws IOException {
-        // when 컨테이너가 /error 로 넘긴 요청이라 예외 처리기를 안 지난다
+        // when
+        // 컨테이너가 /error 로 넘긴 요청이므로 예외 처리기를 거치지 않는다
         Response actual = send("TRACE /api/v1/routes HTTP/1.1");
 
-        // then 응답에만 있고 로그에 없으면 그 식별자로 찾을 것이 없다
+        // then
+        // 식별자가 응답에만 있고 로그에 없으면 해당 요청의 서버 로그를 찾을 수 없다
         assertThat(로그.getOut()).contains(bodyRequestId(actual.body));
     }
 
@@ -109,7 +114,8 @@ class ContainerErrorContractTest {
         // when
         Response actual = send("GET /api/v1/routes/%zz/board HTTP/1.1");
 
-        // then 클라이언트가 받은 식별자로 서버 로그를 찾을 수 있어야 한다
+        // then
+        // 클라이언트가 받은 식별자로 서버 로그를 찾을 수 있어야 한다
         assertThat(actual.header(RequestId.HEADER))
             .isNotNull()
             .isEqualTo(bodyRequestId(actual.body));
@@ -149,7 +155,6 @@ class ContainerErrorContractTest {
         List<String> headers,
         String body
     ) {
-
         static Response read(
             Socket socket
         ) throws IOException {

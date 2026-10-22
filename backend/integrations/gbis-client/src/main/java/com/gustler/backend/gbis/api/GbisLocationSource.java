@@ -20,9 +20,12 @@ import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
+/**
+ * 위치정보 HTTP 응답과 포털 거부 사유를 수집 결과로 해석한다.
+ * 응답 봉투의 구조는 이 경계에서만 다룬다.
+ */
 @Component
 public class GbisLocationSource {
-
     private static final String BUS_LOCATION_PATH = "/buslocationservice/v2/getBusLocationListv2";
 
     private static final String PARSE_FAILURE = "Open API 응답을 파싱하지 못했다: ";
@@ -39,12 +42,18 @@ public class GbisLocationSource {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * GBIS 차량 위치를 호출하고 정상·키 거부·원천 실패를 구별한다. 원천 응답 형식을 업무 관측으로 직접 저장하지 않는다.
+     */
     public GbisLocationResult read(
         String routeId
     ) {
         return read(routeId, GbisKey.PRIMARY);
     }
 
+    /**
+     * GBIS 차량 위치를 호출하고 정상·키 거부·원천 실패를 구별한다. 원천 응답 형식을 업무 관측으로 직접 저장하지 않는다.
+     */
     public GbisLocationResult read(
         String routeId,
         String keyAlias
@@ -63,7 +72,7 @@ public class GbisLocationSource {
             case DAILY_QUOTA_EXCEEDED -> new DailyQuotaExceeded();
             case PER_SECOND_QUOTA_EXCEEDED -> new PerSecondQuotaExceeded();
             case UNREGISTERED_KEY, EXPIRED_KEY, OTHER ->
-                new GatewayRejected(rejected.reasonCode(), rejected.errorCode(), rejected.message());
+            new GatewayRejected(rejected.reasonCode(), rejected.errorCode(), rejected.message());
         };
     }
 

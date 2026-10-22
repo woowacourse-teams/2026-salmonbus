@@ -1,9 +1,11 @@
 package com.gustler.backend.quota.api;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 
 /**
@@ -16,7 +18,6 @@ public record CallQuotaPolicy(
     List<String> locationKeyAliases,
     Map<String, Integer> keyDailyLimits
 ) {
-
     public static final String PRIMARY_KEY_ALIAS = "a";
 
     public CallQuotaPolicy {
@@ -30,18 +31,35 @@ public record CallQuotaPolicy(
             }
         }
         dailyLimits = Collections.unmodifiableMap(limits);
+
         Objects.requireNonNull(locationKeyAliases, "위치정보 키 별칭이 필요하다");
-        if (!locationKeyAliases.contains(PRIMARY_KEY_ALIAS)
-            || locationKeyAliases.stream().anyMatch(alias -> alias == null || alias.isBlank())) {
+        if (hasInvalidLocationKeyAliases(locationKeyAliases)) {
             throw new IllegalArgumentException("위치정보 키 별칭에는 기본 키가 있어야 한다: " + locationKeyAliases);
         }
         locationKeyAliases = List.copyOf(locationKeyAliases);
-        keyDailyLimits = keyDailyLimits == null ? Map.of() : Map.copyOf(keyDailyLimits);
-        for (Map.Entry<String, Integer> limit : keyDailyLimits.entrySet()) {
-            if (!locationKeyAliases.contains(limit.getKey()) || limit.getValue() == null || limit.getValue() <= 0) {
-                throw new IllegalArgumentException("키별 하루 한도는 설정한 키에만 1 이상으로 줄 수 있다: " + limit.getKey());
+
+        keyDailyLimits = copyKeyLimits(keyDailyLimits);
+        for (Entry<String, Integer> limit : keyDailyLimits.entrySet()) {
+            String keyAlias = limit.getKey();
+            Integer dailyLimit = limit.getValue();
+            if (hasInvalidKeyLimit(locationKeyAliases, keyAlias, dailyLimit)) {
+                throw new IllegalArgumentException("키별 하루 한도는 설정한 키에만 1 이상으로 줄 수 있다: " + keyAlias);
             }
         }
+    }
+
+    private static boolean hasInvalidLocationKeyAliases(List<String> locationKeyAliases) {
+        if (!locationKeyAliases.contains(PRIMARY_KEY_ALIAS)) {
+            return true;
+        }
+        return locationKeyAliases.stream().anyMatch(alias -> alias == null || alias.isBlank());
+    }
+
+    private static boolean hasInvalidKeyLimit(List<String> locationKeyAliases, String keyAlias, Integer dailyLimit) {
+        if (!locationKeyAliases.contains(keyAlias) || dailyLimit == null) {
+            return true;
+        }
+        return dailyLimit <= 0;
     }
 
     public CallQuotaPolicy(Map<CallQuota, Integer> dailyLimits, List<String> locationKeyAliases) {
@@ -66,10 +84,10 @@ public record CallQuotaPolicy(
         List<String> locationKeyAliases,
         Map<String, Integer> keyDailyLimits
     ) {
-        Map<CallQuota, Integer> limits = new EnumMap<>(CallQuota.class);
-        for (CallQuota service : CallQuota.values()) {
-            limits.put(service, dailyLimit);
-        }
+        Map<CallQuota, Integer> limits = Arrays.stream(CallQuota.values())
+            .collect(() -> new EnumMap<>(CallQuota.class),
+                (byService, service) -> byService.put(service, dailyLimit),
+                Map::putAll);
         return new CallQuotaPolicy(limits, locationKeyAliases, keyDailyLimits);
     }
 
@@ -79,5 +97,12 @@ public record CallQuotaPolicy(
 
     public int limitOf(CallQuota service, String keyAlias) {
         return keyDailyLimits.getOrDefault(keyAlias, limitOf(service));
+    }
+
+    private static Map<String, Integer> copyKeyLimits(Map<String, Integer> keyDailyLimits) {
+        if (keyDailyLimits == null) {
+            return Map.of();
+        }
+        return Map.copyOf(keyDailyLimits);
     }
 }

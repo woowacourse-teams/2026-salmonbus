@@ -5,6 +5,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 최신 관측의 상태·유효 시각·차량 목록을 공개 응답으로 전달한다.
+ */
 @Schema(requiredProperties = {"routeId", "referenceVersionId", "observation", "vehicles"})
 public record LiveVehicleResponse(
     @Schema(description = "조회한 9자리 GBIS 노선 ID")
@@ -16,7 +19,6 @@ public record LiveVehicleResponse(
     @Schema(description = "응답에 포함된 차량 목록. 관측이 없거나 불확실하면 빈 배열")
     List<VehicleResponse> vehicles
 ) {
-
     public LiveVehicleResponse {
         Objects.requireNonNull(routeId, "routeId는 null일 수 없습니다.");
         Objects.requireNonNull(referenceVersionId, "referenceVersionId는 null일 수 없습니다.");
@@ -30,7 +32,8 @@ public record LiveVehicleResponse(
             overview.routeId(),
             overview.referenceVersionId(),
             ObservationResponse.from(overview),
-            overview.vehicles().stream()
+            overview.vehicles()
+                .stream()
                 .map(VehicleResponse::from)
                 .toList()
         );

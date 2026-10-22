@@ -10,7 +10,10 @@ import static org.mockito.Mockito.verify;
 
 import com.gustler.backend.forecasting.api.publication.PublishPendingForecasts;
 import com.gustler.backend.observations.api.ObservationDeliveryBatch;
+import com.gustler.backend.observations.api.ObservationDeliveryBatch.Kind;
+import java.time.Instant;
 import java.util.ArrayDeque;
+import java.util.List;
 import java.util.Queue;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -38,7 +41,7 @@ class ForecastTriggerTest {
     void 관측_저장이_커밋된_뒤에만_그_노선의_예보를_예약한다() {
         // given
         TransactionSynchronizationManager.initSynchronization();
-        trigger.record(batch(ObservationDeliveryBatch.Kind.STORED));
+        trigger.record(batch(Kind.STORED));
         assertThat(executor.tasks).isEmpty();
 
         // when
@@ -53,8 +56,8 @@ class ForecastTriggerTest {
     void 롤백된_관측과_관측_삭제_전달은_예보를_예약하지_않는다() {
         // given
         TransactionSynchronizationManager.initSynchronization();
-        trigger.record(batch(ObservationDeliveryBatch.Kind.STORED));
-        trigger.record(batch(ObservationDeliveryBatch.Kind.CLEARED));
+        trigger.record(batch(Kind.STORED));
+        trigger.record(batch(Kind.CLEARED));
 
         // when
         TransactionSynchronizationManager.getSynchronizations()
@@ -137,8 +140,8 @@ class ForecastTriggerTest {
             .isEqualTo("forecastTaskScheduler");
     }
 
-    private static ObservationDeliveryBatch batch(ObservationDeliveryBatch.Kind kind) {
-        return new ObservationDeliveryBatch(1L, ROUTE_VERSION_ID, 1, kind, java.time.Instant.EPOCH, java.util.List.of());
+    private static ObservationDeliveryBatch batch(Kind kind) {
+        return new ObservationDeliveryBatch(1L, ROUTE_VERSION_ID, 1, kind, Instant.EPOCH, List.of());
     }
 
     private static final class QueuedExecutor implements TaskExecutor {

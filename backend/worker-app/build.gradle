@@ -32,9 +32,17 @@ tasks.named('test') {
     environment = environment.findAll { name, value ->
         !name.startsWith('GBIS_SERVICE_KEY_') && !name.startsWith('GBIS_KEYS')
     }
+    // 기능 스위치는 빌드 호스트 환경변수와 무관하게 꺼 둔다. 켜야 하는 시험은 시험 속성으로 켠다.
+    environment 'COLLECTION_ENABLED', 'false'
+    environment 'FORECAST_ENABLED', 'false'
+    environment 'FORECAST_ARCHIVE_ENABLED', 'false'
     environment 'ARRIVALS_ENABLED', 'false'
     environment 'ROUTE_GEOMETRY_ENABLED', 'false'
     environment 'GBIS_SERVICE_KEY', 'fake-service-key-for-test'
+    // SharedDevWorkerScheduleTest 가 dev 서버 설정을 상대 경로로 읽는다.
+    inputs.file(rootProject.file('../dev/server/worker.yml'))
+        .withPropertyName('devWorkerConfig')
+        .withPathSensitivity(PathSensitivity.NONE)
 }
 
 springBoot {

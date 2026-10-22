@@ -15,25 +15,32 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 최신 수집 결과의 성공 여부와 유효 시간을 먼저 확인한 뒤 차량을 제공한다.
+ * 해석 실패를 차량이 없는 정상 관측으로 바꾸지 않는다.
+ */
 @Service
-@RequiredArgsConstructor
 @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+@RequiredArgsConstructor
 public class LiveVehicleQueryService {
-
-    private static final Logger log = LoggerFactory.getLogger(LiveVehicleQueryService.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(LiveVehicleQueryService.class);
 
     private final VehicleQueryRepository vehicleQueryRepository;
     private final VehicleFreshnessPolicy freshnessPolicy;
     private final VehicleCachePolicy cachePolicy;
     private final Clock clock;
 
+    /**
+     * 현재 판본의 최신 관측을 조회해 화면 상태를 계산한다. 모형 지원 여부와 관측 부재·신선도를 별도로 판단한다.
+     */
     public LiveVehicleOverview getLiveVehicles(RouteId routeId) {
         VehicleSnapshot snapshot = vehicleQueryRepository.findLatestSnapshot(routeId)
             .orElseThrow(RouteNotFoundException::new);
         OffsetDateTime observedAt = snapshot.observedAt();
-        OffsetDateTime staleAt = observedAt == null
-            ? null
-            : freshnessPolicy.staleAt(observedAt);
+        OffsetDateTime staleAt = null;
+        if (observedAt != null) {
+            staleAt = freshnessPolicy.staleAt(observedAt);
+        }
 
         if (!isUsableLatestSnapshot(snapshot, staleAt)) {
             return overviewOf(
@@ -71,20 +78,20 @@ public class LiveVehicleQueryService {
     }
 
     /**
-     * 상류가 차량 행을 줬는데 우리가 하나도 못 읽은 상태.
+     * 상류가 보낸 차량 행을 하나도 해석하지 못한 상태다.
      *
-     * <p>"차가 없다"(NO_VEHICLES_OBSERVED)로 내면 안 된다. 상류가 없다고 한 적이 없다.
-     * 상류가 필드 형식을 바꾸면 그때부터 모든 행이 걸러지는데, 0대로 보이면 이상을 알아챌 수가 없다.
-     * 지금 무엇이 다니는지 말해줄 수 없다는 뜻이라 UNKNOWN 이 맞는 자리다.
+     * <p>상류가 차량 부재를 알린 적이 없으므로 NO_VEHICLES_OBSERVED로 응답하면 안 된다.
+     * 필드 형식이 바뀌어 모든 행이 걸러진 상황을 0대로 표시하면 이상을 알아채기 어렵다.
+     * 현재 운행 상태를 알 수 없으므로 UNKNOWN으로 응답한다.
      *
-     * <p>계속 나면 상류 계약이 바뀐 것이다. 운영이 알아채라고 WARN 을 남긴다.
+     * <p>이 상태가 계속되면 상류 계약이 바뀐 것이므로 운영에서 확인할 수 있도록 WARN을 남긴다.
      */
     private LiveVehicleOverview unreadableObservation(
         VehicleSnapshot snapshot,
         OffsetDateTime observedAt,
         OffsetDateTime staleAt
     ) {
-        log.warn(
+        LOGGER.warn(
             "상류가 차량 행을 줬는데 읽어낸 관측이 없다. 노선={} 묶음={}",
             snapshot.routeId(),
             snapshot.latestBatchId());
@@ -101,9 +108,10 @@ public class LiveVehicleQueryService {
         VehicleSnapshot snapshot,
         OffsetDateTime staleAt
     ) {
-        if (!snapshot.latestOutcome().isNormal()
-            || snapshot.latestBatchId() == null
-            || staleAt == null) {
+        if (snapshot.latestBatchId() == null || staleAt == null) {
+            return false;
+        }
+        if (!snapshot.latestOutcome().isNormal()) {
             return false;
         }
         return !freshnessPolicy.isStale(staleAt);

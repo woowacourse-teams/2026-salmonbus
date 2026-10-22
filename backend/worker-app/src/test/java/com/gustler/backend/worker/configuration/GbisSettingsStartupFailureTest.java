@@ -1,10 +1,11 @@
 package com.gustler.backend.worker.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -20,11 +21,10 @@ import org.springframework.core.env.SystemEnvironmentPropertySource;
 
 @ExtendWith(OutputCaptureExtension.class)
 class GbisSettingsStartupFailureTest {
-
     private static final String SECRET = "fake-key-must-not-be-printed";
 
-    static java.util.stream.Stream<Arguments> 잘못된_키_설정() {
-        return java.util.stream.Stream.of(
+    static Stream<Arguments> 잘못된_키_설정() {
+        return Stream.of(
             Arguments.of("한 줄 목록", Map.of("GBIS_SERVICE_KEY", "fake-key-a", "GBIS_KEYS", "e=" + SECRET)),
             Arguments.of("별칭 중복", Map.of("GBIS_SERVICE_KEY", SECRET, "GBIS_KEYS_A", "fake-key-other")),
             Arguments.of("깨진 인코딩", Map.of("GBIS_KEYS_A", "fake-key-a", "GBIS_KEYS_E", "ab%G0" + SECRET)),
@@ -50,11 +50,16 @@ class GbisSettingsStartupFailureTest {
         application.setWebApplicationType(WebApplicationType.NONE);
         StandardEnvironment standard = new StandardEnvironment();
         standard.getPropertySources().replace(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
-            new SystemEnvironmentPropertySource(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME, environment));
+            new SystemEnvironmentPropertySource(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
+                environment));
         application.setEnvironment(standard);
 
-        // when & then
-        assertThatThrownBy(application::run).isInstanceOf(RuntimeException.class);
+        // when
+        Throwable caughtFailure = catchThrowable(application::run);
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull().isInstanceOf(RuntimeException.class);
         assertThat(output.getAll())
             .contains("GBIS 설정")
             .contains("GBIS_KEYS_<별칭>")

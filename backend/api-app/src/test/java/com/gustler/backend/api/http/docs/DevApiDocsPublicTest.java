@@ -16,7 +16,6 @@ import org.springframework.web.context.WebApplicationContext;
 @IntegrationTest
 @ActiveProfiles("api-docs-dev")
 class DevApiDocsPublicTest {
-
     @Autowired
     private WebApplicationContext applicationContext;
 
@@ -29,6 +28,7 @@ class DevApiDocsPublicTest {
 
     @Test
     void dev_프로필에서는_익명_문서_조회만_켜고_시험_요청은_끄고_둔다() throws Exception {
+        // when
         mockMvc.perform(get("/api/docs/openapi"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.paths['/api/v2/stations/{stationId}/arrivals'].get").exists())

@@ -2,15 +2,21 @@ package com.gustler.backend.api.http;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gustler.backend.api.account.NicknameInvalidException;
+import com.gustler.backend.api.account.NicknameTakenException;
+import com.gustler.backend.api.account.ReauthRequiredException;
+import com.gustler.backend.api.arrival.ArrivalQuery.Failure;
 import com.gustler.backend.api.board.ModelOutOfScopeException;
 import com.gustler.backend.api.board.NoRecentObservationException;
 import com.gustler.backend.api.error.ApiException;
+import com.gustler.backend.api.error.CsrfRejectedException;
 import com.gustler.backend.api.error.ErrorCode;
 import com.gustler.backend.api.error.ErrorResponse;
 import com.gustler.backend.api.error.ServiceUnavailableException;
-import com.gustler.backend.api.arrival.ArrivalQuery;
+import com.gustler.backend.api.error.UnauthenticatedException;
 import com.gustler.backend.api.route.InvalidRouteIdException;
 import com.gustler.backend.api.route.RouteNotFoundException;
+import com.gustler.backend.member.api.NicknameViolation;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
@@ -29,7 +35,6 @@ import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.transaction.CannotCreateTransactionException;
 
 class ApiExceptionHandlerTest {
-
     private final ApiExceptionHandler handler = new ApiExceptionHandler();
 
     private static List<ApiException> thrownExceptions() {
@@ -39,8 +44,15 @@ class ApiExceptionHandlerTest {
             new ModelOutOfScopeException(),
             new NoRecentObservationException(),
             new ServiceUnavailableException(),
-            new ArrivalQuery.Failure(ErrorCode.STATION_NOT_FOUND),
-            new ArrivalQuery.Failure(ErrorCode.REFERENCE_VERSION_CONFLICT)
+            new CsrfRejectedException(),
+            new UnauthenticatedException(),
+            new NicknameInvalidException(NicknameViolation.LENGTH),
+            new NicknameInvalidException(NicknameViolation.CHARACTERS),
+            new NicknameInvalidException(NicknameViolation.RESERVED),
+            new NicknameTakenException(),
+            new ReauthRequiredException(),
+            new Failure(ErrorCode.STATION_NOT_FOUND),
+            new Failure(ErrorCode.REFERENCE_VERSION_CONFLICT)
         );
     }
 
@@ -112,9 +124,7 @@ class ApiExceptionHandlerTest {
 
     @ParameterizedTest
     @MethodSource("databaseUnavailableExceptions")
-    void DB_트랜잭션을_시작하거나_종료하지_못하면_서비스_불가로_응답한다(
-        RuntimeException exception
-    ) {
+    void DB_트랜잭션을_시작하거나_종료하지_못하면_서비스_불가로_응답한다(RuntimeException exception) {
         // when
         ResponseEntity<ErrorResponse> actual =
             handler.handleDatabaseUnavailable(exception);
@@ -182,7 +192,8 @@ class ApiExceptionHandlerTest {
         // when
         ResponseEntity<ErrorResponse> actual = handler.handleApiException(exception);
 
-        // then 협상에 맡기면 Accept 가 JSON 이 아닌 요청에서 본문이 통째로 사라진다
+        // then
+        // 콘텐츠 협상에 맡기면 Accept 가 JSON 이 아닌 요청에서 본문이 사라진다
         assertThat(actual.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_JSON);
     }
 
