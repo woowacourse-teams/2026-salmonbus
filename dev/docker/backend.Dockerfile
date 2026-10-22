@@ -23,6 +23,7 @@ COPY --chown=developer:developer backend/business/api-call-quota/build.gradle ./
 COPY --chown=developer:developer backend/business/member/build.gradle ./business/member/build.gradle
 COPY --chown=developer:developer backend/integrations/gbis-client/build.gradle ./integrations/gbis-client/build.gradle
 COPY --chown=developer:developer backend/libraries/operation-log/build.gradle ./libraries/operation-log/build.gradle
+COPY --chown=developer:developer backend/runtime-test/build.gradle ./runtime-test/build.gradle
 COPY --chown=developer:developer dev/docker/dependencies.init dev/docker/gradle.properties /local-build/
 USER developer
 ARG TARGETARCH

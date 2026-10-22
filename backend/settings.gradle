@@ -11,6 +11,7 @@ include 'operation-log'
 include 'api-app'
 include 'worker-app'
 include 'maintenance-app'
+include 'runtime-test'
 include 'common'
 
 project(':route-catalog').projectDir = file('business/route-catalog')

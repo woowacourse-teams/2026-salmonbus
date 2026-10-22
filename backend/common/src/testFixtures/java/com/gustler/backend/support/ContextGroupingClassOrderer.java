@@ -1,4 +1,4 @@
-package com.gustler.backend.api.support;
+package com.gustler.backend.support;
 
 import java.util.Comparator;
 import java.util.HashMap;

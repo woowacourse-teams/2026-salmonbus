@@ -25,8 +25,13 @@ class ArrivalFirstResultDefaultRuntimeTest {
             String fast = FakeGbisArrivalServer.STATIONS.getFirst();
             runtime.source.plan(fast, Plan.slow(Duration.ofMillis(100)));
             runtime.startWorker(false, Map.of());
-            Thread.sleep(2100);
+            // 시작 지연 동안의 응답은 수집을 접수하지 않는다.
+            // 처음으로 시작 지연이 아닌 응답이 500ms 첫 결과 대기를 거친 응답이라 그 응답을 그대로 검증한다.
             Reply first = runtime.get(fast);
+            while ("STARTING".equals(first.value("/refresh/reason"))) {
+                Thread.sleep(50);
+                first = runtime.get(fast);
+            }
 
             // then
             assertThat(first.httpStatus()).isEqualTo(200);

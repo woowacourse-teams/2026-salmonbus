@@ -240,7 +240,8 @@ for runtime_path in common/src/main/java/Marker.java common/src/main/resources/d
   check_runtime_change "$runtime_path" changed changed
 done
 for runtime_path in maintenance-app/src/main/java/Marker.java maintenance-app/src/main/resources/maintenance.properties \
-  maintenance-app/build.gradle worker-app/src/test/java/MarkerTest.java \
+  maintenance-app/build.gradle runtime-test/build.gradle runtime-test/src/test/java/MarkerTest.java \
+  worker-app/src/test/java/MarkerTest.java \
   business/forecasting/src/test/java/MarkerTest.java business/forecasting/src/testFixtures/java/Fixture.java \
   ../docs/design.md ../frontend/src/page.ts; do
   check_runtime_change "$runtime_path" unchanged unchanged

@@ -24,11 +24,10 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
-    testImplementation 'net.bytebuddy:byte-buddy' // 별도 JVM에서 실행하는 선택적 성능 계측 에이전트
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
-    testImplementation 'org.testcontainers:junit-jupiter'
-    testImplementation 'org.testcontainers:postgresql'
-    testImplementation 'org.testcontainers:mongodb'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    testImplementation 'org.testcontainers:testcontainers-postgresql'
+    testImplementation 'org.testcontainers:testcontainers-mongodb'
     testImplementation testFixtures(project(':common'))
     testCompileOnly 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -42,21 +41,8 @@ springBoot {
 tasks.named('test') {
     environment 'ARRIVALS_ENABLED', 'false'
     environment 'ROUTE_GEOMETRY_ENABLED', 'false'
-    // 상세 성능 계측은 명시적으로 요청할 때만 실행한다.
-    systemProperty 'arrival.profile', providers.gradleProperty('arrivalProfile').getOrElse('false')
-    systemProperty 'arrival.firstResultProfile', providers.gradleProperty('arrivalFirstResultProfile').getOrElse('false')
-    def apiJar = tasks.named('bootJar').flatMap { it.archiveFile }
-    // Worker 프로젝트가 구성된 뒤 실제 Boot JAR 출력 파일을 조회한다.
-    def workerJar = providers.provider {
-        project(':worker-app').tasks.named('bootJar').get().archiveFile.get()
-    }
-    dependsOn tasks.named('bootJar'), ':worker-app:bootJar'
-    inputs.files(apiJar, workerJar)
-        .withPropertyName('runtimeJars')
-        .withPathSensitivity(PathSensitivity.NONE)
     def chatContractExamples = rootProject.file('../contract/examples/chat-v1.json')
     def chatInitScript = rootProject.file('deploy/chat/init-chat-db.js')
-    def geometryRoutesFixture = rootProject.file('../dev/data/routes.json')
     def arrivalsContract = rootProject.file('../contract/station-arrivals-v2.openapi.json')
     def geometryContract = rootProject.file('../contract/route-geometry-v2.openapi.json')
     def watchContract = rootProject.file('../contract/route-watch-v1.openapi.json')
@@ -67,18 +53,16 @@ tasks.named('test') {
     inputs.file(chatInitScript)
         .withPropertyName('chatInitScript')
         .withPathSensitivity(PathSensitivity.NONE)
-    inputs.file(geometryRoutesFixture)
-        .withPropertyName('geometryRoutesFixture')
-        .withPathSensitivity(PathSensitivity.NONE)
     inputs.files(arrivalsContract, geometryContract, watchContract, authContract)
         .withPropertyName('v2OpenApiContracts')
         .withPathSensitivity(PathSensitivity.NONE)
+    // DevApiDocsConfigurationTest 가 dev 서버 설정을 상대 경로로 찾아 읽는다.
+    inputs.file(rootProject.file('../dev/server/api.yml'))
+        .withPropertyName('devApiConfig')
+        .withPathSensitivity(PathSensitivity.NONE)
     doFirst {
-        systemProperty 'api.boot.jar', apiJar.get().asFile.absolutePath
-        systemProperty 'worker.boot.jar', workerJar.get().asFile.absolutePath
         systemProperty 'chat.contract.examples', chatContractExamples.absolutePath
         systemProperty 'chat.init.script', chatInitScript.absolutePath
-        systemProperty 'geometry.routes.fixture', geometryRoutesFixture.absolutePath
         systemProperty 'arrival.openapi.contract', arrivalsContract.absolutePath
         systemProperty 'geometry.openapi.contract', geometryContract.absolutePath
         systemProperty 'watch.openapi.contract', watchContract.absolutePath

@@ -32,7 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.databind.DeserializationFeature;
@@ -51,7 +51,7 @@ class MaintenanceProcessTest {
         .build();
 
     @Container
-    private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18")
+    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:18")
         .withUsername("maintenance_process_user")
         .withPassword("maintenance-process-secret");
 
@@ -225,7 +225,7 @@ class MaintenanceProcessTest {
     private Result execute(String... arguments) throws Exception {
         List<String> command = new ArrayList<>(List.of(Path.of(System.getProperty("java.home"), "bin", "java")
                 .toString(),
-            "-jar", jar().toString()));
+            "-Xmx256m", "-jar", jar().toString()));
         command.addAll(List.of(arguments));
         Path stdout = directory.resolve("process-" + (++processSequence) + ".out");
         Path stderr = directory.resolve("process-" + processSequence + ".err");

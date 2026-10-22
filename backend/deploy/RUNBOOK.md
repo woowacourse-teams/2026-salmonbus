@@ -162,7 +162,7 @@ worker  common · worker-app · business/route-catalog · business/observations
 ```
 
 정본 목록은 `deploy/runtime-source-inputs.sh`의 `runtime_source_inputs()`다. 목록에 적혀 있어도 아직 없는 파일은
-건너뛰고, 그 파일이 생기는 순간부터 지문에 들어간다. `maintenance-app`과 `src/test`는 어느 지문에도 들어가지 않는다.
+건너뛰고, 그 파일이 생기는 순간부터 지문에 들어간다. `maintenance-app`, 실행 JAR 시험 모듈 `runtime-test`, 각 모듈의 `src/test`는 어느 지문에도 들어가지 않는다.
 
 **JAR 지문으로는 소스 변경 여부를 판단할 수 없다.** `buildInfo()`가 추가하는 `build.time` 때문에 같은 소스를 다시 빌드해도
 JAR의 SHA-256이 달라진다. 실측으로 확인했다. 소스 지문을 쓰면 테스트·문서·프론트만 바뀐 배포에서는

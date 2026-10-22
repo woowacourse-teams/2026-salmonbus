@@ -6,7 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.DriverManager;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class FrontendReadinessTest {
     @Test
@@ -14,7 +14,7 @@ class FrontendReadinessTest {
         // given: 실제 대기 스크립트의 SQL을 작은 DB로 검증한다.
         String query = Files.readString(Path.of(System.getProperty("dev.data.directory"))
             .resolveSibling("docker").resolve("forecast-ready.sql"));
-        try (var database = new PostgreSQLContainer<>("postgres:18-alpine")) {
+        try (var database = new PostgreSQLContainer("postgres:18-alpine")) {
             database.start();
             try (var connection = DriverManager.getConnection(database.getJdbcUrl(), database.getUsername(), database.getPassword());
                  var sql = connection.createStatement()) {

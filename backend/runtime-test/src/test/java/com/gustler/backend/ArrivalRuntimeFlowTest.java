@@ -36,8 +36,8 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * 실제 두 실행 JAR·임시 DB·가짜 GBIS를 연결한다. 실제 공공 API를 호출하지 않는다.
  *
- * <p>실행: {@code ./gradlew :api-app:test --tests com.gustler.backend.ArrivalRuntimeFlowTest}
- * 기본 시간 설정의 시나리오는 실제 40초 갱신을 기다리고, 나머지는 2초/4초로 단축한다.
+ * <p>실행: {@code ./gradlew :runtime-test:test --tests com.gustler.backend.ArrivalRuntimeFlowTest}
+ * 기본 시간 설정의 시나리오는 실제 40초 갱신을 기다리고, 나머지는 갱신 1초·유효 4초로 단축한다.
  */
 @Execution(ExecutionMode.SAME_THREAD)
 @Timeout(180)
@@ -172,6 +172,7 @@ class ArrivalRuntimeFlowTest {
         // when
         runtime.startWorker(false, Map.of());
         Reply ready = runtime.awaitValue(STATION, "/status", "READY", QUICK_TIMEOUT);
+        // Retry-After 20초가 유효 기간(4초) 안의 재시도를 막는다. 아래 calls()==2는 이 응답 헤더에 기댄다.
         runtime.source.plan(STATION, Plan.error(503, "20"));
         pauseUntil(instant(ready, "refreshAfterAt").plusMillis(20));
         Reply failed = runtime.awaitValue(STATION, "/refresh/reason", "UPSTREAM_ERROR", QUICK_TIMEOUT);

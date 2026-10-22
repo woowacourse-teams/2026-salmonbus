@@ -6,7 +6,6 @@ import com.gustler.backend.support.PostgresTestContainer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.context.annotation.Import;
 import org.springframework.scheduling.annotation.ScheduledAnnotationBeanPostProcessor;
 
@@ -15,7 +14,7 @@ import org.springframework.scheduling.annotation.ScheduledAnnotationBeanPostProc
  *
  * <p>테스트 설정은 정리 주기를 끄므로 여기서만 운영 기본 주기({@link RefreshTokenPurge#DEFAULT_CRON})로 켠다.
  */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT, properties = {
+@SpringBootTest(properties = {
     "auth.enabled=true",
     "auth.token.purge-cron=" + RefreshTokenPurge.DEFAULT_CRON,
 })

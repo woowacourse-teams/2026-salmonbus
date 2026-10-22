@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.fail;
 import com.gustler.backend.arrival.contract.ArrivalSnapshot;
 import com.gustler.backend.arrival.contract.ArrivalSnapshot.Prediction;
 import com.gustler.backend.arrival.contract.ArrivalSnapshot.RouteArrival;
+import com.gustler.backend.support.TestDatabase;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.ServerSocket;
@@ -17,7 +18,6 @@ import java.net.http.HttpResponse.BodyHandlers;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -32,21 +32,20 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
-import org.testcontainers.containers.PostgreSQLContainer;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
-/** 같은 임시 PostgreSQL을 사용하는 API·Worker 두 Boot JAR의 실행 환경. */
+/** 공유 PostgreSQL 서버 안의 같은 임시 DB를 사용하는 API·Worker 두 Boot JAR의 실행 환경. */
 public final class ArrivalRuntime implements AutoCloseable {
     private static final String TOKEN = "local-arrival-runtime-token";
     private static final Duration BOOT_TIMEOUT = Duration.ofSeconds(60);
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
-    private final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18");
     public final FakeGbisArrivalServer source;
     private final Path logs = Path.of("build/reports/arrival-runtime-logs").toAbsolutePath();
     private final int apiPort = freePort();
     private final int workerPort = anotherPort(apiPort);
+    private TestDatabase database;
     private Process api;
     private Process worker;
     private int workerNumber;
@@ -63,7 +62,7 @@ public final class ArrivalRuntime implements AutoCloseable {
         Files.createDirectories(logs);
         source = new FakeGbisArrivalServer();
         try {
-            postgres.start();
+            database = TestDatabase.create();
             Map<String, String> settings = new HashMap<>(apiSettings);
             settings.put("ARRIVAL_WORKER_BASE_URL", workerUrl());
             api = start("api.boot.jar", apiPort, settings, logs.resolve("api.log"));
@@ -119,9 +118,10 @@ public final class ArrivalRuntime implements AutoCloseable {
         settings.put("GBIS_BASE_URL", source.baseUrl());
         settings.put("GBIS_SERVICE_KEY", "fake-arrival-key-a");
         if (!productionTimings) {
-            settings.put("ARRIVALS_REFRESH_INTERVAL", "2s");
+            // Worker는 시작 지연이 갱신 주기 이상이고 유효 기간이 갱신 주기보다 길어야 뜬다(ArrivalCollectionPolicy).
+            settings.put("ARRIVALS_REFRESH_INTERVAL", "1s");
             settings.put("ARRIVALS_VALIDITY", "4s");
-            settings.put("ARRIVALS_STARTUP_DELAY", "2s");
+            settings.put("ARRIVALS_STARTUP_DELAY", "1s");
             settings.put("ARRIVALS_RETRY_BASE", "2s");
             settings.put("ARRIVALS_RETRY_MAXIMUM", "4s");
         }
@@ -210,7 +210,7 @@ public final class ArrivalRuntime implements AutoCloseable {
     }
 
     private Connection connection() throws SQLException {
-        return DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+        return database.connection();
     }
 
     private void seedCatalog() throws SQLException {
@@ -274,8 +274,8 @@ public final class ArrivalRuntime implements AutoCloseable {
         Map<String, String> environment = builder.environment();
         environment.clear();
         environment.putAll(Map.of("SERVER_PORT", Integer.toString(port), "SERVER_ADDRESS", "127.0.0.1",
-            "SPRING_CONFIG_LOCATION", "classpath:/application.yml", "DB_URL", postgres.getJdbcUrl(),
-            "DB_USERNAME", postgres.getUsername(), "DB_PASSWORD", postgres.getPassword(),
+            "SPRING_CONFIG_LOCATION", "classpath:/application.yml", "DB_URL", database.jdbcUrl(),
+            "DB_USERNAME", database.username(), "DB_PASSWORD", database.password(),
             "COLLECTION_ENABLED", "false", "FORECAST_ENABLED", "false", "ARRIVALS_ENABLED", "true",
             "ARRIVAL_INTERNAL_TOKEN", TOKEN));
         environment.put("LOGGING_LEVEL_ROOT", "WARN");
@@ -370,8 +370,8 @@ public final class ArrivalRuntime implements AutoCloseable {
             }
             finally {
                 source.close();
-                if (postgres.isRunning()) {
-                    postgres.stop();
+                if (database != null) {
+                    database.close();
                 }
             }
         }

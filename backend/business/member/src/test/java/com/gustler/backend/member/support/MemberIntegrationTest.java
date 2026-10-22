@@ -14,6 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 @SpringBootTest(classes = MemberTestConfiguration.class, webEnvironment = WebEnvironment.NONE,
     properties = {
         "spring.datasource.hikari.maximum-pool-size=12",
+        "spring.datasource.hikari.minimum-idle=1",
         "auth.enabled=true",
         "auth.refresh-token.secret=member-module-test-only-refresh-secret-0001"
     })

@@ -3,6 +3,7 @@ package com.gustler.backend;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
+import com.gustler.backend.support.TestDatabase;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.ServerSocket;
@@ -13,7 +14,6 @@ import java.net.http.HttpResponse.BodyHandlers;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -27,11 +27,19 @@ import java.util.jar.JarFile;
 import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.junit.jupiter.api.TestMethodOrder;
 
+/**
+ * API·Worker 실행 JAR 를 별도 프로세스로 띄워 역할 분리를 검증한다.
+ *
+ * <p>API 기동과 마이그레이션은 {@code @BeforeAll} 에서 끝낸다. Worker 는 처음 필요한 시험에서 띄운다. 키 없는 Worker 기동
+ * 실패 시험을 먼저 돌려, 그 시험이 띄우는 세 번째 실행 JAR 이 API·Worker 와 겹치지 않게 한다.
+ */
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class RuntimeProcessSeparationTest {
-    private static final String POSTGRES_IMAGE = "postgres:18";
     private static final String API_JAR = "api.boot.jar";
     private static final String WORKER_JAR = "worker.boot.jar";
     private static final String SERVICE_KEY = "fake-service-key-for-test";
@@ -45,7 +53,7 @@ class RuntimeProcessSeparationTest {
     private static final Duration DISABLED_JOB_OBSERVATION = Duration.ofSeconds(2);
     private static final Set<String> PROJECT_MODULES = Set.of(
         "api-app", "worker-app", "maintenance-app", "common", "route-catalog",
-        "observations", "arrivals", "forecasting", "api-call-quota", "gbis-client", "operation-log", "member"
+        "observations", "arrivals", "forecasting", "api-call-quota", "gbis-client", "operation-log", "member", "runtime-test"
     );
     private static final int LOG_TAIL = 4000;
 
@@ -53,16 +61,15 @@ class RuntimeProcessSeparationTest {
         .connectTimeout(Duration.ofSeconds(2))
         .build();
 
-    private static PostgreSQLContainer<?> postgres;
+    private static TestDatabase database;
     private static Process api;
     private static Process worker;
     private static int apiPort;
     private static int workerPort;
 
     @BeforeAll
-    static void api_가_빈_DB_를_V18_로_옮긴_다음_worker_를_띄운다() throws Exception {
-        postgres = new PostgreSQLContainer<>(POSTGRES_IMAGE);
-        postgres.start();
+    static void api_가_빈_DB_를_V18_로_옮기고_쓰기_감사를_설치한다() throws Exception {
+        database = TestDatabase.create();
 
         Path apiLog = Files.createTempFile("salmonbus-api", ".log");
         apiPort = freePort();
@@ -74,32 +81,22 @@ class RuntimeProcessSeparationTest {
 
         // API가 만든 최종 스키마에 설치한다. Worker 기동 중 롤백된 쓰기도 기록한다.
         installWriteAudit();
-        Path workerLog = Files.createTempFile("salmonbus-worker", ".log");
-        workerPort = freePort();
-        worker = start(WORKER_JAR, workerPort, Map.of(
-            "GBIS_SERVICE_KEY", SERVICE_KEY,
-            "DB_URL", postgres.getJdbcUrl() + (querySeparator(postgres.getJdbcUrl()))
-                + "ApplicationName=" + DISABLED_WORKER_APPLICATION_NAME,
-            "MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE", "health,info,scheduledtasks",
-            "FORECAST_INTERVAL", "100ms",
-            "FORECAST_SETTLEMENT_INTERVAL", "100ms",
-            "FORECAST_STATISTICS_INTERVAL", "100ms",
-            "FORECAST_QUALITY_INVESTIGATION_INTERVAL", "100ms"
-        ), workerLog);
-        awaitHealthy(worker, workerPort, workerLog);
     }
 
     @AfterAll
     static void 띄운_것을_모두_내린다() {
         destroy(api);
         destroy(worker);
-        if (postgres != null) {
-            postgres.stop();
+        if (database != null) {
+            database.close();
         }
     }
 
     @Test
-    void 서로_다른_JAR_두_프로세스가_서로_다른_포트에_같이_떠_있다() {
+    void 서로_다른_JAR_두_프로세스가_서로_다른_포트에_같이_떠_있다() throws Exception {
+        // given
+        workerStarted();
+
         // when
         try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
             final boolean alive1 = api.isAlive();
@@ -129,7 +126,10 @@ class RuntimeProcessSeparationTest {
     }
 
     @Test
-    void 두_프로세스_모두_health_가_UP_이다() {
+    void 두_프로세스_모두_health_가_UP_이다() throws Exception {
+        // given
+        workerStarted();
+
         // when
         String responseBody1 = bodyOf(apiPort, HEALTH_PATH);
 
@@ -153,7 +153,10 @@ class RuntimeProcessSeparationTest {
     }
 
     @Test
-    void worker_는_클라이언트_API_를_안_내준다() {
+    void worker_는_클라이언트_API_를_안_내준다() throws Exception {
+        // given
+        workerStarted();
+
         // when
         final int statusCode1 = statusOf(workerPort, CLIENT_API_PATH);
 
@@ -223,9 +226,9 @@ class RuntimeProcessSeparationTest {
     }
 
     @Test
-    void 수집과_예보를_끄면_worker_는_스케줄을_등록하거나_DB에_쓰지_않는다()
-        throws SQLException, InterruptedException {
+    void 수집과_예보를_끄면_worker_는_스케줄을_등록하거나_DB에_쓰지_않는다() throws Exception {
         // given
+        workerStarted();
         assertDisabledWorkerConnection();
         assertNoScheduledTasks();
         assertNoWrites();
@@ -249,6 +252,7 @@ class RuntimeProcessSeparationTest {
     }
 
     @Test
+    @Order(1)
     void worker_는_수집을_켠_채_키가_없으면_못_뜬다() throws Exception {
         // when
         Path log = Files.createTempFile("salmonbus-worker-nokey", ".log");
@@ -263,6 +267,25 @@ class RuntimeProcessSeparationTest {
         } finally {
             destroy(nokey);
         }
+    }
+
+    private static synchronized void workerStarted() throws Exception {
+        if (worker != null) {
+            return;
+        }
+        Path workerLog = Files.createTempFile("salmonbus-worker", ".log");
+        workerPort = freePort();
+        worker = start(WORKER_JAR, workerPort, Map.of(
+            "GBIS_SERVICE_KEY", SERVICE_KEY,
+            "DB_URL", database.jdbcUrl() + (querySeparator(database.jdbcUrl()))
+                + "ApplicationName=" + DISABLED_WORKER_APPLICATION_NAME,
+            "MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE", "health,info,scheduledtasks",
+            "FORECAST_INTERVAL", "100ms",
+            "FORECAST_SETTLEMENT_INTERVAL", "100ms",
+            "FORECAST_STATISTICS_INTERVAL", "100ms",
+            "FORECAST_QUALITY_INVESTIGATION_INTERVAL", "100ms"
+        ), workerLog);
+        awaitHealthy(worker, workerPort, workerLog);
     }
 
     private static Process start(
@@ -283,9 +306,9 @@ class RuntimeProcessSeparationTest {
                 || name.startsWith("FORECAST_") || name.startsWith("MANAGEMENT_")
                 || name.equals("SPRING_APPLICATION_JSON"));
         environment.put("SERVER_PORT", String.valueOf(port));
-        environment.put("DB_URL", postgres.getJdbcUrl());
-        environment.put("DB_USERNAME", postgres.getUsername());
-        environment.put("DB_PASSWORD", postgres.getPassword());
+        environment.put("DB_URL", database.jdbcUrl());
+        environment.put("DB_USERNAME", database.username());
+        environment.put("DB_PASSWORD", database.password());
         environment.put("COLLECTION_ENABLED", "false");
         environment.put("FORECAST_ENABLED", "false");
         environment.putAll(extra);
@@ -444,7 +467,7 @@ class RuntimeProcessSeparationTest {
     }
 
     private static Connection databaseConnection() throws SQLException {
-        return DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+        return database.connection();
     }
 
     private static List<String> projectLibraries(String jarProperty) throws IOException {

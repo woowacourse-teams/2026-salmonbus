@@ -32,7 +32,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * 실행: ./gradlew :api-app:test --tests com.gustler.backend.ArrivalLatencyProfileTest -ParrivalProfile=true
+ * 실행: ./gradlew :runtime-test:test --tests com.gustler.backend.ArrivalLatencyProfileTest -ParrivalProfile=true
  * 성능 수치에 합격선을 두지 않는다. 구간 계측이 실제 요청과 대응되는지와 응답 정합성만 검사한다.
  */
 @EnabledIfSystemProperty(named = "arrival.profile", matches = "true")
