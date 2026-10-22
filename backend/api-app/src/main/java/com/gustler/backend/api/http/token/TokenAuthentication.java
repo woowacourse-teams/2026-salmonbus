@@ -20,7 +20,7 @@ import org.springframework.security.oauth2.server.resource.web.authentication.Be
  * 액세스 토큰으로 회원을 인증하는 필터를 보안 필터 체인에 붙인다.
  *
  * <p>리졸버는 {@code Authorization} 헤더만 본다. 쿠키의 토큰은 CSRF 검사가 끝난 뒤 {@link CookieAccessTokenFilter} 가
- * 헤더로 옮긴다. 리졸버가 쿠키까지 보면 Spring Security 가 "베어러 토큰이 있는 요청"으로 보고 CSRF 검사를 면제해 버린다.
+ * 헤더로 옮긴다. 리졸버가 쿠키까지 보면 Spring Security 가 "Bearer 토큰이 있는 요청"으로 보고 CSRF 검사를 면제해 버린다.
  *
  * <p>토큰을 읽는 경로는 로그인이 필요한 {@code /api/me} 아래뿐이다. 공개 조회와 {@code /api/auth} 아래 경로는 만료되거나
  * 깨진 토큰이 실려 와도 거절하지 않는다. 그렇지 않으면 오래된 쿠키 때문에 공개 API가 401을 내거나, 만료된 토큰으로는 갱신조차

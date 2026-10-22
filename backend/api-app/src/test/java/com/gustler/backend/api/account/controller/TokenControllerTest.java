@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.api.account.token.AccessTokens;
+import com.gustler.backend.api.account.token.TokenProperties;
 import com.gustler.backend.member.api.ChangeNickname;
 import com.gustler.backend.member.api.IssuedRefreshToken;
 import com.gustler.backend.member.api.LoginProvider;
@@ -16,6 +17,10 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,6 +65,9 @@ class TokenControllerTest {
 
     @Autowired
     private AccessTokens accessTokens;
+
+    @Autowired
+    private TokenProperties tokenProperties;
 
     private UUID memberId;
     private String refreshToken;
@@ -136,6 +144,37 @@ class TokenControllerTest {
             softly.assertThat(code(actual)).isEqualTo("UNAUTHENTICATED");
             softly.assertThat(setCookie(actual, ACCESS_COOKIE)).contains("Max-Age=0");
             softly.assertThat(setCookie(actual, REFRESH_COOKIE)).contains("Max-Age=0");
+        });
+    }
+
+    @Test
+    void 본문으로_보낸_토큰이_거절되면_401이고_인증_쿠키는_건드리지_않는다() throws Exception {
+        // when
+        HttpResponse<String> actual = send(request("/api/auth/refresh")
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString("{\"refreshToken\":\"unknown-token\"}")));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(actual.statusCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+            softly.assertThat(code(actual)).isEqualTo("UNAUTHENTICATED");
+            softly.assertThat(actual.headers().allValues("Set-Cookie")).isEmpty();
+        });
+    }
+
+    @Test
+    void 본문이_JSON이_아니면_400_INVALID_REQUEST다() throws Exception {
+        // when
+        HttpResponse<String> actual = send(request("/api/auth/refresh")
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString("not json")));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(actual.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+            softly.assertThat(code(actual)).isEqualTo("INVALID_REQUEST");
+            softly.assertThat(jdbcClient.sql("SELECT generation FROM refresh_token").query(Integer.class).single())
+                .isZero();
         });
     }
 
@@ -233,8 +272,12 @@ class TokenControllerTest {
 
     @Test
     void 액세스_토큰이_만료됐어도_리프레시_쿠키가_있으면_갱신_가능으로_알린다() throws Exception {
+        // given
+        Clock longAgo = Clock.fixed(Instant.now().minus(Duration.ofHours(1)), ZoneOffset.UTC);
+        String expired = new AccessTokens(tokenProperties, longAgo).issue(memberId);
+
         // when
-        JsonNode refreshable = session(ACCESS_COOKIE + "=expired; " + REFRESH_COOKIE + "=" + refreshToken);
+        JsonNode refreshable = session(ACCESS_COOKIE + "=" + expired + "; " + REFRESH_COOKIE + "=" + refreshToken);
         JsonNode anonymous = session("");
         JsonNode signedIn = session(ACCESS_COOKIE + "=" + accessTokens.issue(memberId));
 
@@ -245,6 +288,26 @@ class TokenControllerTest {
             softly.assertThat(anonymous.path("refreshable").asBoolean()).isFalse();
             softly.assertThat(signedIn.path("authenticated").asBoolean()).isTrue();
             softly.assertThat(signedIn.path("member").path("nickname").asString()).isEqualTo("연어팬");
+        });
+    }
+
+    @Test
+    void 탈퇴한_회원의_토큰이면_로그인_상태를_비로그인으로_답한다() throws Exception {
+        // given
+        String accessToken = accessTokens.issue(memberId);
+        jdbcClient.sql("DELETE FROM member").update();
+
+        // when
+        HttpResponse<String> actual = send(request("/api/auth/session")
+            .header("Cookie", ACCESS_COOKIE + "=" + accessToken)
+            .GET());
+
+        // then
+        JsonNode body = objectMapper.readTree(actual.body());
+        assertSoftly(softly -> {
+            softly.assertThat(actual.statusCode()).isEqualTo(HttpStatus.OK.value());
+            softly.assertThat(body.path("authenticated").asBoolean()).isFalse();
+            softly.assertThat(body.has("member")).isFalse();
         });
     }
 

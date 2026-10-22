@@ -46,12 +46,12 @@ class ApiSecurityContractTest {
     private JdbcClient jdbcClient;
 
     @BeforeEach
-    void 세션을_비운다() {
+    void 임시_세션을_비운다() {
         jdbcClient.sql("DELETE FROM SPRING_SESSION").update();
     }
 
     @Test
-    void 로그인이_필요한_경로에_세션이_없으면_401과_기존_오류_형식으로_답한다() throws Exception {
+    void 로그인이_필요한_경로에_토큰이_없으면_401과_기존_오류_형식으로_답한다() throws Exception {
         // when
         HttpResponse<String> actual = send(request("/api/me").GET());
 

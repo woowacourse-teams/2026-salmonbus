@@ -16,9 +16,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * 쿠키의 액세스 토큰을 {@code Authorization} 헤더로 옮긴다.
  *
- * <p>CSRF 필터 뒤, 베어러 토큰 필터 앞에 둔다. 순서가 중요하다. 헤더 인증 요청은 CSRF 검사를 면제받는데, 쿠키 요청을
- * CSRF 필터 앞에서 헤더로 바꾸면 쿠키로 인증한 요청도 면제받는다. 이 필터는 로그인이 필요한 경로에서 헤더가 없을 때만
- * 동작한다.
+ * <p>CSRF 필터 뒤, Bearer 토큰 필터 앞에 둔다. 헤더 인증 요청은 CSRF 검사를 면제받으므로, 쿠키 요청을 CSRF 필터 앞에서
+ * 헤더로 바꾸면 쿠키로 인증한 요청도 면제받는다. 이 필터는 로그인이 필요한 경로에서 헤더가 없을 때만 동작한다.
  */
 final class CookieAccessTokenFilter extends OncePerRequestFilter {
     static boolean isProtectedPath(HttpServletRequest request) {

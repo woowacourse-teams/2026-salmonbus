@@ -225,7 +225,7 @@ class AppleLoginFlowTest {
     }
 
     @Test
-    void 애플_화면에서_취소하면_cancelled로_돌려보내고_세션을_지운다(CapturedOutput output) throws Exception {
+    void 애플_화면에서_취소하면_cancelled로_돌려보내고_임시_세션을_지운다(CapturedOutput output) throws Exception {
         // given
         LoginBrowser browser = new LoginBrowser(port);
         String authorization = location(browser.get("/api/auth/apple/start?returnTo=/routes/123456789"));
@@ -287,7 +287,7 @@ class AppleLoginFlowTest {
         LoginBrowser browser = new LoginBrowser(port);
         String authorization = location(browser.get("/api/auth/apple/start"));
         String code = apple.authorize(authorization, SUBJECT);
-        apple.failTokenExchangeWith(500);
+        apple.failTokenExchangeWith(HttpStatus.INTERNAL_SERVER_ERROR.value());
 
         // when
         HttpResponse<String> callback = browser.get(callbackPath(authorization, code));

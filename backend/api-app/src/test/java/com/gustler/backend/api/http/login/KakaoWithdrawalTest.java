@@ -151,11 +151,20 @@ class KakaoWithdrawalTest {
         HttpResponse<String> refreshed = send(request("/api/auth/refresh")
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString("{\"refreshToken\":\"" + refreshToken + "\"}")));
+        HttpResponse<String> withdrawnAgain = withdraw(accessToken);
+        HttpResponse<String> appleTicket = send(request("/api/me/withdrawal/apple")
+            .header("Authorization", "Bearer " + accessToken)
+            .POST(HttpRequest.BodyPublishers.noBody()));
 
         // then
         assertSoftly(softly -> {
             softly.assertThat(me.statusCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
             softly.assertThat(refreshed.statusCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+            softly.assertThat(withdrawnAgain.statusCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+            softly.assertThat(code(withdrawnAgain)).isEqualTo("UNAUTHENTICATED");
+            softly.assertThat(appleTicket.statusCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+            softly.assertThat(code(appleTicket)).isEqualTo("UNAUTHENTICATED");
+            softly.assertThat(kakao.unlinkRequests()).as("두 번째 탈퇴 요청은 카카오를 부르지 않는다").hasSize(1);
         });
     }
 
@@ -290,6 +299,7 @@ class KakaoWithdrawalTest {
         // then
         assertSoftly(softly -> {
             softly.assertThat(actual.statusCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+            softly.assertThat(code(actual)).isEqualTo("UNAUTHENTICATED");
             softly.assertThat(count("member")).isEqualTo(1);
         });
     }

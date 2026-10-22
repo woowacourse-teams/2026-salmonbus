@@ -12,7 +12,12 @@ public interface ProviderUnlinkRepository {
     long savePending(MemberIdentity identity, OffsetDateTime leasedUntil, OffsetDateTime now);
 
     /** 더 시도하지 않을 요청을 저장한다. */
-    void saveGaveUp(MemberIdentity identity, int attempts, String lastError, OffsetDateTime now);
+    void saveGaveUp(
+        MemberIdentity identity,
+        int attempts,
+        String lastError,
+        OffsetDateTime now
+    );
 
     /**
      * 다시 시도할 때가 된 대기 요청을 {@code limit} 개까지 한 문장으로 집어 {@code leasedUntil} 까지 임대한다.
@@ -24,7 +29,12 @@ public interface ProviderUnlinkRepository {
     /** 대기 요청의 실패 횟수를 읽고 트랜잭션이 끝날 때까지 행을 잠근다. 없거나 포기한 요청이면 비어 있다. */
     Optional<Integer> lockPendingAttempts(long id);
 
-    void recordFailure(long id, UnlinkFailure failure, String lastError, OffsetDateTime now);
+    void recordFailure(
+        long id,
+        UnlinkFailure failure,
+        String lastError,
+        OffsetDateTime now
+    );
 
     /** 요청을 지운다. 없으면 아무 일도 하지 않는다. */
     void delete(long id);

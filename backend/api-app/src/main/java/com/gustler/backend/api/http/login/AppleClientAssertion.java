@@ -45,7 +45,13 @@ final class AppleClientAssertion {
     private final ECDSASigner signer;
     private final Clock clock;
 
-    private AppleClientAssertion(String teamId, String clientId, String keyId, ECDSASigner signer, Clock clock) {
+    private AppleClientAssertion(
+        String teamId,
+        String clientId,
+        String keyId,
+        ECDSASigner signer,
+        Clock clock
+    ) {
         this.teamId = teamId;
         this.clientId = clientId;
         this.keyId = keyId;

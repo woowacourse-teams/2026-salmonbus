@@ -37,10 +37,21 @@ class MemberTableTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"연", "열한글자열한글자열한글", "연어 버스", "ㄱㄴ", "연어!", "연어😀"})
+    @ValueSource(strings = {"연", "연어 버스", "ㄱㄴ", "연어!", "연어😀"})
     void 닉네임이_규칙을_벗어나면_저장되지_않는다(String nickname) {
         // when
         Throwable caughtFailure = catchThrowable(() -> insertMember(nickname));
+
+        // then
+        assertThat(caughtFailure)
+            .isInstanceOf(DataIntegrityViolationException.class)
+            .hasMessageContaining("ck_member_nickname");
+    }
+
+    @Test
+    void 닉네임이_10자를_넘으면_저장되지_않는다() {
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertMember("열한글자열한글자열한글"));
 
         // then
         assertThat(caughtFailure).isInstanceOf(DataIntegrityViolationException.class);
@@ -132,7 +143,7 @@ class MemberTableTest {
     void 같은_계통은_한_행만_저장된다() {
         // given
         final long memberId = insertMember(NICKNAME);
-        final UUID familyId = UUID.randomUUID();
+        UUID familyId = UUID.randomUUID();
         insertRefreshToken(memberId, familyId, 0);
 
         // when

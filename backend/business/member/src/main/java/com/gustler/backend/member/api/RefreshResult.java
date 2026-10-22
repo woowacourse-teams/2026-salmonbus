@@ -2,7 +2,6 @@ package com.gustler.backend.member.api;
 
 import java.util.UUID;
 
-/** 리프레시 토큰을 갱신한 결과. */
 public sealed interface RefreshResult {
     /** 갱신에 성공했다. 사용한 토큰은 더 이상 쓸 수 없고 {@code next} 로 이어서 갱신한다. */
     record Rotated(UUID publicId, IssuedRefreshToken next) implements RefreshResult {

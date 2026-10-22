@@ -20,7 +20,7 @@ class AuthCookiesTest {
         Clock.fixed(NOW, ZoneOffset.UTC));
 
     @Test
-    void 액세스_쿠키는_모든_경로로_가고_리프레시_쿠키는_인증_경로에만_간다() {
+    void 두_인증_쿠키_모두_호스트_전용_속성과_Path_슬래시로_내려간다() {
         // given
         HttpHeaders headers = new HttpHeaders();
         OffsetDateTime expiresAt = OffsetDateTime.ofInstant(NOW.plus(Duration.ofDays(30)), ZoneOffset.UTC);

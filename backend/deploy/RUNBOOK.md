@@ -107,10 +107,10 @@ GitHub push 웹훅이 파이프라인을 시작한다. 파이프라인별 웹훅
 머지 뒤 파이프라인이 시작되지 않으면 콘솔에서 `변경 사항 릴리스`를 누른다. 아래는 운영 파이프라인 기준이다. **수동 승인 단계는 없다**(2026-09-15 확인).
 
 릴리즈 PR을 머지하기 전에 후보 커밋으로 bootJar를 만들고 `backend/buildspec.yml`의 패키징과 `deploy/verify-revision.sh`를 실제 JAR에 돌려 통과를 확인한다.
-이 검사는 운영 빌드에서만 실제 JAR로 돈다. v1.0.0 운영 빌드가 dev에서 거치지 않은 이 검사에서만 실패했다.
+이 검사는 운영 빌드에서만 실제 JAR로 돈다. dev 빌드는 이 검사를 거치지 않아, v1.0.0은 운영 빌드에서 이 검사에 처음 걸려 실패했다.
 
 dev 파이프라인은 `dev/server/buildspec.yml`로 빌드하고 `dev/server/deploy`의 훅으로 배포한다. dev 배포는 `dev/data/java`·`dev/data/models`·
-`ForecastFeatureContract.java`가 바뀌면 데이터 전환 승인을 요구하며 멈춘다. 그 밖의 변경(마이그레이션 포함)은 이 검사에 걸리지 않는다.
+`ForecastFeatureContract.java`가 바뀌면 데이터 전환 승인을 요구하며 멈춘다. 그 밖의 변경(마이그레이션 포함)은 이 승인 단계에서 멈추지 않는다.
 
 ```text
 Source   GitHub main에서 코드를 가져온다
@@ -375,8 +375,8 @@ done
 아래 명령은 운영 경로(`/etc/salmonbus`) 기준이다. **dev 서버는 `/etc/salmonbus-dev`다.** 서비스 이름(`salmonbus-api`)과 실행 사용자(`salmonbus`)는 같다.
 명령 앞에서 `ETC=/etc/salmonbus`(dev는 `ETC=/etc/salmonbus-dev`)를 정하고 시작한다.
 
-기본은 꺼져 있다(`AUTH_ENABLED=false`). 꺼져 있으면 `/api/auth/*`·`/api/me`가 404이고 공개 조회 API는 로그인과 무관하게 동작한다.
-**켠 API에 필수 값이 비어 있거나 짧으면 API가 시작하지 않는다.** 비밀은 dev와 운영에서 서로 다른 값을 쓴다.
+기본은 꺼져 있다(`AUTH_ENABLED=false`). 꺼져 있으면 남은 인증 쿠키가 있어도 `/api/auth/*`·`/api/me`가 404이고 공개 조회 API는 로그인과 무관하게 동작한다.
+**로그인을 켰는데 필수 값이 비어 있거나 짧으면 API가 시작하지 않는다.** 비밀은 dev와 운영에서 서로 다른 값을 쓴다.
 
 | `$ETC/api.env`에 넣는 줄 | 값 |
 | --- | --- |
@@ -445,7 +445,7 @@ sudo grep '^AUTH_KAKAO_ADMIN_KEY=' "$ETC/api.env" | cut -d= -f2- | sed 's/^/Auth
 
 **카카오 회원이나 대기 중인 카카오 해제 요청이 있는 동안 `AUTH_KAKAO_ENABLED`를 끄지 않는다.** 끄면 해제 클라이언트가 없어 대기 요청이 매번 실패하고, 약 8시간 반 뒤 포기된 다음 30일 뒤 식별자째 지워진다. 그동안 카카오 쪽 연결은 끊기지 않는다.
 
-로그인을 끄려면 `AUTH_ENABLED=false`로 바꾸고 API를 재시작한다. 표와 회원은 그대로 남는다. 만료된 리프레시 토큰 계통 정리(매시 17분), 연결 해제 재시도(5분마다), 포기한 요청 정리(매일 04:23)도 끈 동안에는 돌지 않는다.
+로그인을 끄려면 `AUTH_ENABLED=false`로 바꾸고 API를 재시작한다. 테이블과 회원은 그대로 남는다. 만료된 리프레시 토큰 계통 정리(매시 17분), 연결 해제 재시도(5분마다), 포기한 요청 정리(매일 04:23)도 끈 동안에는 돌지 않는다.
 
 ## 평가 이관과 원본 삭제
 

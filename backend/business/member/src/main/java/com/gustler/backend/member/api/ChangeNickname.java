@@ -2,7 +2,6 @@ package com.gustler.backend.member.api;
 
 import java.util.UUID;
 
-/** 회원이 닉네임을 바꾼다. */
 public interface ChangeNickname {
     /**
      * 앞뒤 공백 제거와 NFC 정규화는 이 안에서 한다. 자기 닉네임과 같은 값으로 바꾸거나 대소문자만 바꾸는 것은 성공한다.

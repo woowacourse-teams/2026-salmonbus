@@ -311,7 +311,13 @@ class ProviderUnlinkRetryTest {
         return insertUnlink(status, attempts, dueFromNow, IDENTITY.provider().name(), IDENTITY.subject());
     }
 
-    private long insertUnlink(String status, final int attempts, Duration dueFromNow, String provider, String subject) {
+    private long insertUnlink(
+        String status,
+        final int attempts,
+        Duration dueFromNow,
+        String provider,
+        String subject
+    ) {
         OffsetDateTime now = now();
         return jdbcClient.sql("""
                 INSERT INTO provider_unlink
@@ -377,6 +383,11 @@ class ProviderUnlinkRetryTest {
             .single();
     }
 
-    private record Row(String status, int attempts, OffsetDateTime nextAttemptAt, String lastError) {
+    private record Row(
+        String status,
+        int attempts,
+        OffsetDateTime nextAttemptAt,
+        String lastError
+    ) {
     }
 }

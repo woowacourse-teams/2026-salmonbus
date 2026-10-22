@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnProperty(name = "auth.enabled", havingValue = "true")
 public class RefreshTokenPurge {
+    static final String DEFAULT_CRON = "0 17 * * * *";
     static final int MAX_BATCHES_PER_RUN = 100;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RefreshTokenPurge.class);
@@ -27,7 +28,7 @@ public class RefreshTokenPurge {
         this.refreshTokens = refreshTokens;
     }
 
-    @Scheduled(cron = "${auth.token.purge-cron:0 17 * * * *}")
+    @Scheduled(cron = "${auth.token.purge-cron:" + DEFAULT_CRON + "}")
     public void purge() {
         int total = 0;
         for (int batch = 0; batch < MAX_BATCHES_PER_RUN; batch++) {

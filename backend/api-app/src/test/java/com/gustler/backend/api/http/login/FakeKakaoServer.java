@@ -28,6 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.springframework.http.HttpStatus;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -46,9 +47,9 @@ final class FakeKakaoServer implements AutoCloseable {
     private final RSAKey otherKey;
     private final Map<String, Grant> grants = new ConcurrentHashMap<>();
     private final List<TokenRequest> tokenRequests = new ArrayList<>();
-    private volatile int tokenStatus = 200;
+    private volatile int tokenStatus = HttpStatus.OK.value();
     private final List<TokenRequest> unlinkRequests = new ArrayList<>();
-    private volatile int unlinkStatus = 200;
+    private volatile int unlinkStatus = HttpStatus.OK.value();
     private volatile String unlinkBody = "{\"id\":1}";
 
     FakeKakaoServer() throws Exception {
@@ -75,11 +76,11 @@ final class FakeKakaoServer implements AutoCloseable {
         synchronized (tokenRequests) {
             tokenRequests.clear();
         }
-        tokenStatus = 200;
+        tokenStatus = HttpStatus.OK.value();
         synchronized (unlinkRequests) {
             unlinkRequests.clear();
         }
-        unlinkStatus = 200;
+        unlinkStatus = HttpStatus.OK.value();
         unlinkBody = "{\"id\":1}";
     }
 
@@ -129,19 +130,20 @@ final class FakeKakaoServer implements AutoCloseable {
             tokenRequests.add(new TokenRequest(form, exchange.getRequestHeaders().getFirst("Authorization")));
         }
         Grant grant = grants.get(form.get("code"));
-        if (tokenStatus != 200) {
+        if (tokenStatus != HttpStatus.OK.value()) {
             respond(exchange, tokenStatus, "{\"error\":\"server_error\"}");
             return;
         }
         final boolean authenticated = CLIENT_SECRET.equals(form.get("client_secret"));
         if (grant == null || !authenticated || !grant.matches(form.get("code_verifier"))) {
-            respond(exchange, 400, "{\"error\":\"invalid_grant\"}");
+            respond(exchange, HttpStatus.BAD_REQUEST.value(), "{\"error\":\"invalid_grant\"}");
             return;
         }
         try {
             String idToken = idToken(grant);
-            respond(exchange, 200, "{\"access_token\":\"fake-access-token\",\"token_type\":\"bearer\","
-                + "\"expires_in\":21599,\"id_token\":\"" + idToken + "\",\"scope\":\"openid\"}");
+            respond(exchange, HttpStatus.OK.value(), "{\"access_token\":\"fake-access-token\","
+                + "\"token_type\":\"bearer\",\"expires_in\":21599,"
+                + "\"id_token\":\"" + idToken + "\",\"scope\":\"openid\"}");
         } catch (JOSEException exception) {
             throw new IOException(exception);
         }
@@ -167,7 +169,7 @@ final class FakeKakaoServer implements AutoCloseable {
     }
 
     private void jwks(HttpExchange exchange) throws IOException {
-        respond(exchange, 200, new JWKSet(signingKey.toPublicJWK()).toString());
+        respond(exchange, HttpStatus.OK.value(), new JWKSet(signingKey.toPublicJWK()).toString());
     }
 
     private static void respond(HttpExchange exchange, int status, String body) throws IOException {

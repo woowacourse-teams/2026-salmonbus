@@ -21,7 +21,12 @@ final class AppleRevokeClient {
     private final String revokeUri;
     private final AppleClientAssertion clientSecret;
 
-    AppleRevokeClient(RestClient restClient, String clientId, String revokeUri, AppleClientAssertion clientSecret) {
+    AppleRevokeClient(
+        RestClient restClient,
+        String clientId,
+        String revokeUri,
+        AppleClientAssertion clientSecret
+    ) {
         this.restClient = restClient;
         this.clientId = clientId;
         this.revokeUri = revokeUri;

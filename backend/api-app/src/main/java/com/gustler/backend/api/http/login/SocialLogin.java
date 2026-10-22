@@ -32,7 +32,8 @@ import org.springframework.web.client.RestClient;
  *
  * <p>시작은 {@code /api/auth/{provider}/start}, 콜백은 {@code /api/auth/{provider}/callback} 이다.
  * 제공자 토큰은 저장하지 않고, 토큰 교환은 제한 시간을 두어 제공자가 응답하지 않아도 요청 스레드가 매달리지 않는다.
- * 켜진 제공자가 없으면 아무것도 붙이지 않는다.
+ * 켜진 제공자가 없으면 아무것도 붙이지 않는다. 애플 탈퇴 시작을 막는 검사는 애플이 켜져 있을 때만 붙인다. 꺼져 있으면
+ * 애플 시작 경로는 다른 꺼진 제공자처럼 404 로 답한다.
  *
  * <p>고정 비밀 대신 요청마다 만든 {@code client_secret} 을 쓰는 제공자(애플)는 등록 ID 별 발급기로 받는다. 이런
  * 등록은 비밀 값 없이 {@code client_secret_post} 로 두고, 기본 변환기가 넣은 {@code client_secret} 자리를 발급기의
@@ -80,6 +81,7 @@ public final class SocialLogin {
         InMemoryClientRegistrationRepository repository = new InMemoryClientRegistrationRepository(registrations);
         OAuth2AuthorizedClientRepository discardingTokens = new DiscardingAuthorizedClientRepository();
         SocialLoginFailureHandler failureHandler = new SocialLoginFailureHandler();
+        Optional<AppleWithdrawal> withdrawal = Optional.ofNullable(appleWithdrawal.getIfAvailable());
         http.oauth2Login(login -> login
             .clientRegistrationRepository(repository)
             .authorizedClientRepository(discardingTokens)
@@ -90,10 +92,12 @@ public final class SocialLogin {
             .tokenEndpoint(endpoint -> endpoint.accessTokenResponseClient(tokenClient()))
             .successHandler(new SocialLoginSuccessHandler(
                 signIn, refreshTokens, accessTokens.getObject(), authCookies.getObject(), failureHandler,
-                Optional.ofNullable(appleWithdrawal.getIfAvailable())))
+                withdrawal))
             .failureHandler(failureHandler));
-        http.addFilterBefore(
-            new WithdrawStartGuard(withdrawalTickets.getObject()), OAuth2AuthorizationRequestRedirectFilter.class);
+        if (withdrawal.isPresent()) {
+            http.addFilterBefore(
+                new WithdrawStartGuard(withdrawalTickets.getObject()), OAuth2AuthorizationRequestRedirectFilter.class);
+        }
     }
 
     private OAuth2AccessTokenResponseClient<OAuth2AuthorizationCodeGrantRequest> tokenClient() {

@@ -7,7 +7,6 @@ import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
-/** 회원 저장소. */
 public interface MemberRepository {
     Optional<Member> findByIdentity(LoginProvider provider, String subject);
 

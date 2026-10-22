@@ -31,6 +31,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
+import org.springframework.http.HttpStatus;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -55,9 +56,9 @@ final class FakeAppleServer implements AutoCloseable {
     private final Map<String, Grant> grants = new ConcurrentHashMap<>();
     private final List<TokenRequest> tokenRequests = new ArrayList<>();
     private final List<String> idTokens = new ArrayList<>();
-    private volatile int tokenStatus = 200;
+    private volatile int tokenStatus = HttpStatus.OK.value();
     private final List<TokenRequest> revokeRequests = new ArrayList<>();
-    private volatile int revokeStatus = 200;
+    private volatile int revokeStatus = HttpStatus.OK.value();
 
     FakeAppleServer() throws Exception {
         signingKey = new RSAKeyGenerator(2048).keyID("apple-test-key").generate();
@@ -96,11 +97,11 @@ final class FakeAppleServer implements AutoCloseable {
             tokenRequests.clear();
             idTokens.clear();
         }
-        tokenStatus = 200;
+        tokenStatus = HttpStatus.OK.value();
         synchronized (revokeRequests) {
             revokeRequests.clear();
         }
-        revokeStatus = 200;
+        revokeStatus = HttpStatus.OK.value();
     }
 
     /** 토큰 취소 요청을 이 상태 코드로 답하게 한다. 200 이면 정상이다. */
@@ -125,15 +126,15 @@ final class FakeAppleServer implements AutoCloseable {
         synchronized (revokeRequests) {
             revokeRequests.add(new TokenRequest(form, exchange.getRequestHeaders().getFirst("Authorization")));
         }
-        if (revokeStatus != 200) {
+        if (revokeStatus != HttpStatus.OK.value()) {
             respond(exchange, revokeStatus, "{\"error\":\"server_error\"}");
             return;
         }
         if (!clientSecretIsValid(form)) {
-            respond(exchange, 400, "{\"error\":\"invalid_client\"}");
+            respond(exchange, HttpStatus.BAD_REQUEST.value(), "{\"error\":\"invalid_client\"}");
             return;
         }
-        respond(exchange, 200, "");
+        respond(exchange, HttpStatus.OK.value(), "");
     }
 
     List<TokenRequest> tokenRequests() {
@@ -168,13 +169,13 @@ final class FakeAppleServer implements AutoCloseable {
         synchronized (tokenRequests) {
             tokenRequests.add(new TokenRequest(form, exchange.getRequestHeaders().getFirst("Authorization")));
         }
-        if (tokenStatus != 200) {
+        if (tokenStatus != HttpStatus.OK.value()) {
             respond(exchange, tokenStatus, "{\"error\":\"server_error\"}");
             return;
         }
         Grant grant = grants.get(first(form, "code"));
         if (grant == null || !clientSecretIsValid(form)) {
-            respond(exchange, 400, "{\"error\":\"invalid_client\"}");
+            respond(exchange, HttpStatus.BAD_REQUEST.value(), "{\"error\":\"invalid_client\"}");
             return;
         }
         try {
@@ -182,9 +183,9 @@ final class FakeAppleServer implements AutoCloseable {
             synchronized (tokenRequests) {
                 idTokens.add(idToken);
             }
-            respond(exchange, 200, "{\"access_token\":\"" + ACCESS_TOKEN + "\",\"token_type\":\"Bearer\","
-                + "\"expires_in\":3600,\"refresh_token\":\"fake-apple-refresh-token\",\"id_token\":\""
-                + idToken + "\"}");
+            respond(exchange, HttpStatus.OK.value(), "{\"access_token\":\"" + ACCESS_TOKEN + "\","
+                + "\"token_type\":\"Bearer\",\"expires_in\":3600,"
+                + "\"refresh_token\":\"fake-apple-refresh-token\",\"id_token\":\"" + idToken + "\"}");
         } catch (JOSEException exception) {
             throw new IOException(exception);
         }
@@ -231,7 +232,7 @@ final class FakeAppleServer implements AutoCloseable {
     }
 
     private void jwks(HttpExchange exchange) throws IOException {
-        respond(exchange, 200, new JWKSet(signingKey.toPublicJWK()).toString());
+        respond(exchange, HttpStatus.OK.value(), new JWKSet(signingKey.toPublicJWK()).toString());
     }
 
     private static void respond(HttpExchange exchange, int status, String body) throws IOException {
@@ -263,7 +264,12 @@ final class FakeAppleServer implements AutoCloseable {
         server.stop(0);
     }
 
-    record RevokeRequest(String token, String tokenTypeHint, String clientId, boolean clientSecretValid) {
+    record RevokeRequest(
+        String token,
+        String tokenTypeHint,
+        String clientId,
+        boolean clientSecretValid
+    ) {
     }
 
     /** 같은 이름이 두 번 실렸는지 알 수 있도록 값을 모두 보관한다. */

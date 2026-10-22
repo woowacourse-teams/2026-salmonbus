@@ -2,6 +2,7 @@ package com.gustler.backend.member.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.member.api.NicknameViolation;
 import java.text.Normalizer;
@@ -53,8 +54,10 @@ class NicknameTest {
         Optional<NicknameViolation> actual = Nickname.violationOf(raw);
 
         // then
-        assertThat(actual).contains(expected);
-        assertThat(Nickname.of(raw)).isEmpty();
+        assertSoftly(softly -> {
+            softly.assertThat(actual).contains(expected);
+            softly.assertThat(Nickname.of(raw)).isEmpty();
+        });
     }
 
     @ParameterizedTest

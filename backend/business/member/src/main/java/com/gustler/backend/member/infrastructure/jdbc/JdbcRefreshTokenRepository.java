@@ -10,7 +10,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * 계통마다 한 행을 두고, 세대를 올리는 일을 한 문장으로 닫는다.
+ * 계통마다 한 행을 두고, 세대 올리기를 UPDATE 한 문장으로 처리한다.
  *
  * <p>세대 올리기는 {@code UPDATE ... WHERE generation = ? AND expires_at > ? RETURNING} 한 문장이다.
  * READ COMMITTED 에서 같은 행을 먼저 바꾼 트랜잭션이 있으면 이 문장은 그 트랜잭션이 끝나기를 기다렸다가 조건을 다시
@@ -65,7 +65,12 @@ public class JdbcRefreshTokenRepository implements RefreshTokenRepository {
     }
 
     @Override
-    public boolean startFamily(UUID publicId, UUID familyId, OffsetDateTime now, OffsetDateTime expiresAt) {
+    public boolean startFamily(
+        UUID publicId,
+        UUID familyId,
+        OffsetDateTime now,
+        OffsetDateTime expiresAt
+    ) {
         final int saved = jdbcClient.sql(START_FAMILY)
             .params(familyId, now, expiresAt, publicId)
             .update();
@@ -74,7 +79,11 @@ public class JdbcRefreshTokenRepository implements RefreshTokenRepository {
 
     @Override
     public Optional<RotatedRefreshToken> rotate(
-        UUID familyId, int generation, OffsetDateTime now, OffsetDateTime expiresAt) {
+        UUID familyId,
+        int generation,
+        OffsetDateTime now,
+        OffsetDateTime expiresAt
+    ) {
         return jdbcClient.sql(ROTATE)
             .params(now, expiresAt, familyId, generation, now)
             .query((rows, rowNumber) -> new RotatedRefreshToken(

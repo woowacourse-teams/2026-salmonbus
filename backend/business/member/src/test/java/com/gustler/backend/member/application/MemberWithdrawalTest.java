@@ -263,6 +263,11 @@ class MemberWithdrawalTest {
     }
 
     private record Row(
-        MemberIdentity identity, String status, int attempts, OffsetDateTime nextAttemptAt, String lastError) {
+        MemberIdentity identity,
+        String status,
+        int attempts,
+        OffsetDateTime nextAttemptAt,
+        String lastError
+    ) {
     }
 }

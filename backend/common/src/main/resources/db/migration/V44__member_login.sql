@@ -63,7 +63,7 @@ CREATE TABLE provider_unlink (
 -- 주기 작업이 지금 다시 시도할 요청을 찾는다.
 CREATE INDEX ix_provider_unlink_due ON provider_unlink (next_attempt_at) WHERE status = 'PENDING';
 
--- 아래 두 표는 spring-session-jdbc 4.1.0 의 schema-postgresql.sql 원문이다. 라이브러리가 표 이름과 열을 정하므로 바꾸지 않는다.
+-- 아래 두 테이블은 spring-session-jdbc 4.1.0 의 schema-postgresql.sql 원문이다. 라이브러리가 테이블 이름과 열을 정하므로 바꾸지 않는다.
 CREATE TABLE SPRING_SESSION (
 	PRIMARY_ID CHAR(36) NOT NULL,
 	SESSION_ID CHAR(36) NOT NULL,

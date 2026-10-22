@@ -64,7 +64,7 @@ class KakaoLoginSignInFailureTest {
     }
 
     @Test
-    void 회원_처리가_실패하면_failed로_돌려보내고_로그인된_세션을_남기지_않는다() throws Exception {
+    void 회원_처리가_실패하면_failed로_돌려보내고_토큰을_내리지_않는다() throws Exception {
         // given
         when(signIn.signIn(any())).thenThrow(new IllegalStateException("DB 장애"));
         TestBrowser browser = new TestBrowser(port);

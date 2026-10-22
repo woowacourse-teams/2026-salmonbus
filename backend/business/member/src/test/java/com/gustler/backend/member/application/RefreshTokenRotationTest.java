@@ -71,7 +71,7 @@ class RefreshTokenRotationTest {
     }
 
     @Test
-    void 표에는_토큰_원문도_해시도_저장하지_않는다() {
+    void 테이블에는_토큰_원문도_해시도_저장하지_않는다() {
         // when
         List<String> actual = jdbcClient.sql("""
                 SELECT column_name FROM information_schema.columns

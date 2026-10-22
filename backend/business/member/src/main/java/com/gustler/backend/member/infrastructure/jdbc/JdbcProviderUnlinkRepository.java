@@ -87,7 +87,12 @@ public class JdbcProviderUnlinkRepository implements ProviderUnlinkRepository {
     }
 
     @Override
-    public void saveGaveUp(MemberIdentity identity, int attempts, String lastError, OffsetDateTime now) {
+    public void saveGaveUp(
+        MemberIdentity identity,
+        int attempts,
+        String lastError,
+        OffsetDateTime now
+    ) {
         jdbcClient.sql(INSERT)
             .params(identity.provider().name(), identity.subject(), UnlinkStatus.GAVE_UP.name(), attempts, now,
                 lastError, now, now)
@@ -112,7 +117,12 @@ public class JdbcProviderUnlinkRepository implements ProviderUnlinkRepository {
     }
 
     @Override
-    public void recordFailure(long id, UnlinkFailure failure, String lastError, OffsetDateTime now) {
+    public void recordFailure(
+        long id,
+        UnlinkFailure failure,
+        String lastError,
+        OffsetDateTime now
+    ) {
         jdbcClient.sql(RECORD_FAILURE)
             .params(failure.attempts(), failure.status().name(), failure.nextAttemptAt(), lastError, now, id)
             .update();

@@ -161,7 +161,7 @@ class KakaoLoginFlowTest {
             softly.assertThat(claims.path("sub").asString()).isEqualTo(publicId);
             softly.assertThat(longOf("SELECT count(*) FROM refresh_token")).isEqualTo(1);
             softly.assertThat(longOf("SELECT generation FROM refresh_token"))
-                .as("표에는 토큰 값이 없고 계통의 세대만 있다").isZero();
+                .as("테이블에는 토큰 값이 없고 계통의 세대만 있다").isZero();
         });
     }
 
@@ -183,7 +183,7 @@ class KakaoLoginFlowTest {
     }
 
     @Test
-    void 로그아웃하면_세션이_사라지고_다시_비로그인이다() throws Exception {
+    void 로그아웃하면_다시_비로그인이다() throws Exception {
         // given
         TestBrowser browser = browser();
         String authorization = location(browser.get("/api/auth/kakao/start"));
@@ -204,7 +204,7 @@ class KakaoLoginFlowTest {
     }
 
     @Test
-    void 제공자_화면에서_취소하면_cancelled로_돌려보내고_세션을_지운다(CapturedOutput output) throws Exception {
+    void 제공자_화면에서_취소하면_cancelled로_돌려보내고_임시_세션을_지운다(CapturedOutput output) throws Exception {
         // given
         TestBrowser browser = browser();
         String authorization = location(browser.get("/api/auth/kakao/start?returnTo=/routes/123456789"));
@@ -265,7 +265,7 @@ class KakaoLoginFlowTest {
         TestBrowser browser = browser();
         String authorization = location(browser.get("/api/auth/kakao/start"));
         String code = kakao.authorize(authorization, SUBJECT);
-        kakao.failTokenExchangeWith(500);
+        kakao.failTokenExchangeWith(HttpStatus.INTERNAL_SERVER_ERROR.value());
 
         // when
         HttpResponse<String> callback = browser.get(callbackPath(authorization, code));
@@ -355,11 +355,13 @@ class KakaoLoginFlowTest {
     void 켜지지_않은_제공자와_기본_로그인_화면은_없다() throws Exception {
         // when
         HttpResponse<String> apple = browser().get("/api/auth/apple/start");
+        HttpResponse<String> appleWithdrawal = browser().get("/api/auth/apple/start?intent=withdraw");
         HttpResponse<String> loginPage = browser().get("/login");
 
         // then
         assertSoftly(softly -> {
             softly.assertThat(apple.statusCode()).isEqualTo(HttpStatus.NOT_FOUND.value());
+            softly.assertThat(appleWithdrawal.statusCode()).isEqualTo(HttpStatus.NOT_FOUND.value());
             softly.assertThat(loginPage.statusCode()).isEqualTo(HttpStatus.NOT_FOUND.value());
         });
     }

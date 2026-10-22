@@ -3,7 +3,6 @@ package com.gustler.backend.member.api;
 import java.util.Optional;
 import java.util.UUID;
 
-/** 회원이 탈퇴한다. */
 public interface WithdrawMember {
     /** 회원의 제공자 계정. 탈퇴했거나 없는 회원이면 비어 있다. */
     Optional<MemberIdentity> identityOf(UUID publicId);

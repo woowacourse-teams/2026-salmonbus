@@ -70,7 +70,7 @@ class MeControllerTest {
     private TokenProperties tokenProperties;
 
     private UUID memberId;
-    private String sessionCookie;
+    private String accessCookie;
     private String csrfToken;
 
     @BeforeEach
@@ -78,14 +78,14 @@ class MeControllerTest {
         jdbcClient.sql("DELETE FROM member").update();
         memberId = signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, "kakao-1")).publicId();
         changeNickname.change(memberId, "연어팬");
-        sessionCookie = ACCESS_COOKIE + "=" + accessTokens.issue(memberId);
+        accessCookie = ACCESS_COOKIE + "=" + accessTokens.issue(memberId);
         csrfToken = csrfToken();
     }
 
     @Test
     void 내_정보를_조회한다() throws Exception {
         // when
-        HttpResponse<String> actual = send(request("/api/me").header("Cookie", sessionCookie).GET());
+        HttpResponse<String> actual = send(request("/api/me").header("Cookie", accessCookie).GET());
 
         // then
         JsonNode body = objectMapper.readTree(actual.body());
@@ -160,7 +160,7 @@ class MeControllerTest {
         jdbcClient.sql("DELETE FROM member").update();
 
         // when
-        HttpResponse<String> actual = send(request("/api/me").header("Cookie", sessionCookie).GET());
+        HttpResponse<String> actual = send(request("/api/me").header("Cookie", accessCookie).GET());
 
         // then
         assertSoftly(softly -> {
@@ -191,7 +191,7 @@ class MeControllerTest {
 
         // then
         JsonNode body = objectMapper.readTree(actual.body());
-        HttpResponse<String> lookup = send(request("/api/me").header("Cookie", sessionCookie).GET());
+        HttpResponse<String> lookup = send(request("/api/me").header("Cookie", accessCookie).GET());
         JsonNode afterwards = objectMapper.readTree(lookup.body());
         assertSoftly(softly -> {
             softly.assertThat(actual.statusCode()).isEqualTo(HttpStatus.OK.value());
@@ -259,7 +259,7 @@ class MeControllerTest {
     void CSRF_토큰이_없으면_닉네임을_바꿀_수_없다() throws Exception {
         // when
         HttpResponse<String> actual = send(request("/api/me")
-            .header("Cookie", sessionCookie)
+            .header("Cookie", accessCookie)
             .header("Content-Type", "application/json")
             .method("PATCH", HttpRequest.BodyPublishers.ofString("{\"nickname\":\"새이름\"}")));
 
@@ -302,7 +302,7 @@ class MeControllerTest {
 
     private HttpResponse<String> patch(String body) throws IOException, InterruptedException {
         return send(request("/api/me")
-            .header("Cookie", sessionCookie + "; " + CSRF_COOKIE + "=" + csrfToken)
+            .header("Cookie", accessCookie + "; " + CSRF_COOKIE + "=" + csrfToken)
             .header("X-XSRF-TOKEN", csrfToken)
             .header("Content-Type", "application/json")
             .method("PATCH", HttpRequest.BodyPublishers.ofString(body)));

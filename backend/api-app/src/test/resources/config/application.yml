@@ -1,11 +1,17 @@
 # 테스트 전용 값이다. 운영 비밀이 아니다. main 의 application.yml 위에 속성 단위로 덮어쓴다.
+# 주기 작업은 실제 스케줄이 테스트 도중에 끼어들지 않게 끄고, 필요한 테스트가 직접 부르거나 속성으로 켠다.
+# 제공자 해제·취소 주소는 연결이 거부되는 주소로 둔다. 해제를 검증하는 테스트만 가짜 서버 주소로 덮는다.
 auth:
   unlink:
-    retry-cron: "-" # 테스트가 재시도·정리를 직접 부른다. 실제 스케줄과 겹치지 않게 끈다.
+    retry-cron: "-"
     purge-cron: "-"
   kakao:
     admin-key: test-only-kakao-admin-key
+    unlink-uri: http://127.0.0.1:9/v1/user/unlink
+  apple:
+    revoke-uri: http://127.0.0.1:9/auth/revoke
   token:
     secret: test-only-secret-key-for-access-tokens-0123456789
+    purge-cron: "-"
   refresh-token:
     secret: test-only-secret-key-for-refresh-tokens-0123456789

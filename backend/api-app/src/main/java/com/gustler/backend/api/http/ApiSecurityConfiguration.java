@@ -4,6 +4,7 @@ import com.gustler.backend.api.account.token.BearerTokens;
 import com.gustler.backend.api.http.login.SocialLogin;
 import com.gustler.backend.api.http.token.TokenAuthentication;
 import jakarta.servlet.DispatcherType;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -29,6 +30,11 @@ import tools.jackson.databind.ObjectMapper;
  * 고정 공격의 대상이 없다. 켜 두면 세션 ID 교체가 저장되기 전에 세션을 지우는 탓에 행이 만료까지 남는다.
  *
  * <p>요청 캐시를 끈다. 켜 두면 로그인이 필요한 요청을 거절할 때 그 요청을 저장하려고 세션을 만든다.
+ *
+ * <p>로그인이 꺼져 있으면({@code auth.enabled} 가 {@code true} 가 아니면) 회원 경로에 로그인을 요구하지 않고 CSRF 검사도
+ * 하지 않는다. 로그인 경로는 컨트롤러가 등록되지 않으므로, 남은 인증 쿠키가 실려 와도 모두 404 로 답한다. 스위치는
+ * 컨트롤러의 등록 조건({@code havingValue = "true"})과 같은 기준으로 읽는다. {@code boolean} 으로 받으면 {@code 1}·{@code on}
+ * 같은 값을 켜짐으로 읽어 두 기준이 갈린다.
  */
 @Configuration(proxyBeanMethods = false)
 public class ApiSecurityConfiguration {
@@ -39,21 +45,26 @@ public class ApiSecurityConfiguration {
         HttpSecurity http,
         ObjectMapper objectMapper,
         SocialLogin socialLogin,
-        TokenAuthentication tokenAuthentication
+        TokenAuthentication tokenAuthentication,
+        @Value("${auth.enabled:false}") String loginSwitch
     ) throws Exception {
+        boolean loginEnabled = "true".equalsIgnoreCase(loginSwitch);
         SecurityErrorResponder errors = new SecurityErrorResponder(objectMapper);
         CookieCsrfTokenRepository csrfTokens = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfTokens.setCookieName(CSRF_COOKIE);
         csrfTokens.setCookieCustomizer(cookie -> cookie.secure(true).sameSite("Lax").path("/"));
         http
-            .authorizeHttpRequests(requests -> requests
-                .dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.FORWARD).permitAll()
-                .requestMatchers("/api/me", "/api/me/**").authenticated()
-                .anyRequest().permitAll())
+            .authorizeHttpRequests(requests -> {
+                requests.dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.FORWARD).permitAll();
+                if (loginEnabled) {
+                    requests.requestMatchers("/api/me", "/api/me/**").authenticated();
+                }
+                requests.anyRequest().permitAll();
+            })
             .csrf(csrf -> csrf
                 .csrfTokenRepository(csrfTokens)
                 .csrfTokenRequestHandler(new HeaderOnlyCsrfTokenRequestHandler())
-                .ignoringRequestMatchers(request -> !BearerTokens.usesAmbientCredentials(request)))
+                .ignoringRequestMatchers(request -> !loginEnabled || !BearerTokens.usesAmbientCredentials(request)))
             .requestCache(AbstractHttpConfigurer::disable)
             .formLogin(AbstractHttpConfigurer::disable)
             .httpBasic(AbstractHttpConfigurer::disable)
