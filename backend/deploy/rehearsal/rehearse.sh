@@ -226,7 +226,9 @@ for runtime_module in worker-app business/route-catalog business/observations bu
   check_runtime_change "$runtime_module/src/main/resources/module.properties" unchanged changed
   check_runtime_change "$runtime_module/build.gradle" unchanged changed
 done
-for runtime_path in api-app/src/main/java/Marker.java api-app/src/main/resources/application.yml api-app/build.gradle; do
+for runtime_path in api-app/src/main/java/Marker.java api-app/src/main/resources/application.yml api-app/build.gradle \
+  business/member/src/main/java/Marker.java business/member/src/main/resources/module.properties \
+  business/member/build.gradle; do
   check_runtime_change "$runtime_path" changed unchanged
 done
 for runtime_path in ../contract/examples/chat-v1.json ../docs/api/chat-websocket-public.md; do

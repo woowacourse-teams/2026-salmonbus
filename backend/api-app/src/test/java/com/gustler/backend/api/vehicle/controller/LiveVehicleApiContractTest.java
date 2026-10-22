@@ -8,12 +8,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.gustler.backend.api.vehicle.controller.LiveVehicleApiContractTest.FixedClockConfig;
+import com.gustler.backend.api.support.FixedDaytimeClockConfig;
 import com.gustler.backend.support.ConfirmedTripFixture;
 import com.gustler.backend.support.IntegrationTest;
-import java.time.Clock;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,10 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
@@ -34,7 +29,7 @@ import org.springframework.web.context.WebApplicationContext;
 
 @IntegrationTest
 @Transactional
-@Import(FixedClockConfig.class)
+@Import(FixedDaytimeClockConfig.class)
 class LiveVehicleApiContractTest {
     private static final String ROUTE_ID = "204000057";
     private static final OffsetDateTime NOW = OffsetDateTime.parse(
@@ -751,15 +746,6 @@ class LiveVehicleApiContractTest {
     }
 
     private record RouteContext(long routeId, long routeVersionId) {
-    }
-
-    @TestConfiguration(proxyBeanMethods = false)
-    static class FixedClockConfig {
-        @Bean
-        @Primary
-        Clock fixedVehicleClock() {
-            return Clock.fixed(NOW.toInstant(), ZoneId.of("Asia/Seoul"));
-        }
     }
 
     private static String tripState(String reason) {

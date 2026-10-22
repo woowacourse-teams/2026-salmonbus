@@ -95,11 +95,25 @@ aws ssm get-parameter --name /salmonbus/probe --with-decryption --region ap-nort
 
 ## 배포하기
 
-CodePipeline `salmonbus-backend-cd`에서 `변경 사항 릴리스`를 누른다. **수동 승인 단계는 없다.**
-누르면 Source → Build → Deploy가 멈추지 않고 이어진다. (2026-09-15 콘솔에서 확인)
+브랜치마다 파이프라인과 배포 대상이 따로 있다. 2026-10-13 콘솔 읽기 검증과 2026-10-17 v1.0.0 배포에서 확인했다.
+
+| 브랜치 | 파이프라인 | 배포 대상 | 서버 설정 경로 |
+| --- | --- | --- | --- |
+| `dev` | `salmonbus-backend-dev-cd` | 공유 dev 서버(`dev.salmonbus.com`) | `/etc/salmonbus-dev/` |
+| `main` | `salmonbus-backend-cd` | 운영 EC2(`www.salmonbus.com`) | `/etc/salmonbus/` |
+
+**운영 배포는 `dev` → `main` 릴리즈 PR을 머지하는 것이다.** 기능 PR은 `dev`에 머지하고 dev 서버에서 확인한 뒤 릴리즈 PR로 모아 낸다.
+GitHub push 웹훅이 파이프라인을 시작한다. 파이프라인별 웹훅 필터는 권한이 없어 확인하지 못했다.
+머지 뒤 파이프라인이 시작되지 않으면 콘솔에서 `변경 사항 릴리스`를 누른다. 아래는 운영 파이프라인 기준이다. **수동 승인 단계는 없다**(2026-09-15 확인).
+
+릴리즈 PR을 머지하기 전에 후보 커밋으로 bootJar를 만들고 `backend/buildspec.yml`의 패키징과 `deploy/verify-revision.sh`를 실제 JAR에 돌려 통과를 확인한다.
+이 검사는 운영 빌드에서만 실제 JAR로 돈다. dev 빌드는 이 검사를 거치지 않아, v1.0.0은 운영 빌드에서 이 검사에 처음 걸려 실패했다.
+
+dev 파이프라인은 `dev/server/buildspec.yml`로 빌드하고 `dev/server/deploy`의 훅으로 배포한다. dev 배포는 `dev/data/java`·`dev/data/models`·
+`ForecastFeatureContract.java`가 바뀌면 데이터 전환 승인을 요구하며 멈춘다. 그 밖의 변경(마이그레이션 포함)은 이 승인 단계에서 멈추지 않는다.
 
 ```text
-Source   GitHub dev에서 코드를 가져온다
+Source   GitHub main에서 코드를 가져온다
 Build    salmonbus-backend-build가 backend/buildspec.yml을 읽는다
          ./gradlew clean build --no-daemon 으로 전체 테스트를 다시 실행하고
          ApiRevision · WorkerRevision 두 배포 패키지를 생성한다
@@ -140,7 +154,7 @@ flywayMaxVersion=12
 공통    build.gradle · settings.gradle · gradle.properties · gradle.lockfile
         gradle/wrapper/gradle-wrapper.properties · gradle/libs.versions.toml
         deploy/runtime-source-inputs.sh
-api     common · api-app
+api     common · api-app · business/member
 worker  common · worker-app · business/route-catalog · business/observations
         business/forecasting · business/api-call-quota · integrations/gbis-client
         libraries/operation-log
@@ -355,6 +369,103 @@ done
 - 도착 정보와 형상 조회는 쿼리스트링을 쓴다. CloudFront의 `/api/*` 동작이 쿼리스트링을 원본으로 넘겨야 한다
 - 지도는 FE 운영 CodeBuild의 `WEBPACK_NAVER_MAP_KEY_ID`와 NAVER Cloud Web 서비스 URL에 운영 주소가 있어야 표시된다
 - 형상은 카탈로그를 갱신한 뒤 노선마다 한 번 수집한다. 그 전에는 형상 조회가 미수집 상태로 응답한다
+
+## 로그인 켜기
+
+아래 명령은 운영 경로(`/etc/salmonbus`) 기준이다. **dev 서버는 `/etc/salmonbus-dev`다.** 서비스 이름(`salmonbus-api`)과 실행 사용자(`salmonbus`)는 같다.
+명령 앞에서 `ETC=/etc/salmonbus`(dev는 `ETC=/etc/salmonbus-dev`)를 정하고 시작한다.
+
+기본은 꺼져 있다(`AUTH_ENABLED=false`). 꺼져 있으면 남은 인증 쿠키가 있어도 `/api/auth/*`·`/api/me`가 404이고 공개 조회 API는 로그인과 무관하게 동작한다.
+**로그인을 켰는데 필수 값이 비어 있거나 짧으면 API가 시작하지 않는다.** 비밀은 dev와 운영에서 서로 다른 값을 쓴다.
+
+| `$ETC/api.env`에 넣는 줄 | 값 |
+| --- | --- |
+| `AUTH_ENABLED` | `true` |
+| `AUTH_PUBLIC_BASE_URL` | 사용자가 보는 주소. 운영 `https://www.salmonbus.com`, dev `https://dev.salmonbus.com`. 제공자 콘솔에 등록한 콜백 주소(`<주소>/api/auth/{kakao,apple}/callback`)와 글자 하나까지 같아야 한다 |
+| `AUTH_TOKEN_SECRET` | 액세스 토큰 서명 비밀. 32바이트 이상. 바꾸면 발급된 액세스 토큰만 무효가 되고 클라이언트가 갱신으로 이어 간다 |
+| `AUTH_REFRESH_TOKEN_SECRET` | 리프레시 토큰 서명 비밀. 32바이트 이상. **바꾸면 모든 사용자가 다시 로그인해야 한다** |
+| `AUTH_KAKAO_ENABLED` · `AUTH_KAKAO_CLIENT_ID` · `AUTH_KAKAO_CLIENT_SECRET` · `AUTH_KAKAO_ADMIN_KEY` | 카카오 앱의 REST API 키, 클라이언트 시크릿, 어드민 키. 어드민 키는 탈퇴한 회원의 카카오 연결을 끊는 데 쓴다 |
+| `AUTH_APPLE_ENABLED` · `AUTH_APPLE_CLIENT_ID` · `AUTH_APPLE_TEAM_ID` · `AUTH_APPLE_KEY_ID` · `AUTH_APPLE_PRIVATE_KEY_PATH` | 애플 Services ID, Team ID, 키 ID, `.p8` 파일 경로. 키 내용은 env에 넣지 않는다 |
+
+두 서명 비밀은 서버에서 만들고 출력하지 않는다.
+
+```bash
+for name in AUTH_TOKEN_SECRET AUTH_REFRESH_TOKEN_SECRET; do
+  printf '%s=%s\n' "$name" "$(openssl rand -hex 32)" | sudo tee -a "$ETC/api.env" >/dev/null
+done
+sudo grep -cE '^AUTH_(TOKEN|REFRESH_TOKEN)_SECRET=[0-9a-f]{64}$' "$ETC/api.env"   # 2 이어야 한다
+```
+
+애플 `.p8` 파일은 API 프로세스(`salmonbus` 사용자)만 읽게 둔다. 유닛이 `ProtectHome=true`라 홈 디렉터리에 두면 읽지 못한다.
+
+```bash
+sudo install -d -m 750 -o root -g salmonbus "$ETC/apple"
+sudo install -m 640 -o root -g salmonbus AuthKey_<키ID>.p8 "$ETC/apple/"
+echo "AUTH_APPLE_PRIVATE_KEY_PATH=$ETC/apple/AuthKey_<키ID>.p8" | sudo tee -a "$ETC/api.env" >/dev/null
+sudo -u salmonbus test -r "$ETC/apple/AuthKey_<키ID>.p8" && echo readable
+```
+
+CloudFront에는 로그인 경로 동작을 `/api/*`보다 **앞 순서로** 추가한다. dev와 운영은 CloudFront 배포가 따로라 각각 추가한다. 공개 조회 경로는 지금처럼 쿠키를 받지 않는다.
+
+| 경로 | 설정 |
+| --- | --- |
+| `/api/auth/*`, `/api/me`, `/api/me/*` | 허용 메서드 전부(GET·HEAD·OPTIONS·PUT·POST·PATCH·DELETE). 캐시 끔. 원본으로 쿠키 `__Host-sb_at`·`__Host-sb_rt`·`__Host-XSRF-TOKEN`·`__Host-sb_session`, 쿼리스트링 전부, 헤더 `Authorization`·`X-XSRF-TOKEN`·`Origin`을 넘긴다 |
+
+- 지금 `/api/*` 동작은 GET·HEAD만 허용해 POST가 `index.html` 200으로 샌다. 위 동작이 없으면 로그아웃·갱신·닉네임 변경·탈퇴가 조용히 실패한다
+- 오류 응답 403은 CloudFront가 `index.html`로 바꾸므로 API는 403을 쓰지 않는다. 로그인 경로도 401·400·409로만 거절한다
+- `/api/auth/*/start`는 익명 요청마다 10분짜리 임시 세션 행을 만든다. WAF에서 이 경로와 `/api/auth/refresh`에 IP별 요청 제한을 건다
+
+켠 뒤 확인할 것:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/api/auth/session                  # 200
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/api/me                            # 401
+curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' http://127.0.0.1:8080/api/auth/kakao/start  # 302 카카오 주소
+```
+
+운영 중 확인할 지표와 로그:
+
+- `auth.refresh.rejected{reason=REUSED}`가 늘면 탈취된 리프레시 토큰이 다시 쓰였을 수 있다. 같은 시각 로그에 "이전 세대 리프레시 토큰이 다시 제시되어" 경고가 남는다
+- `auth.unlink{result=not_linked}`는 카카오가 "이미 연결되지 않은 사용자"라고 답한 경우다. 해제된 것으로 보지만, 이 값이 탈퇴마다 나오면 `AUTH_KAKAO_ADMIN_KEY`가 다른 앱(dev 등)의 키일 수 있다. 해제 결과를 DB에 기록하지 못해 다시 시도한 요청에서도 한 번씩 나오므로, 가끔 나오는 것은 정상이다
+- `auth.unlink{result=failed}`는 카카오 연결 해제 실패다. 서버가 5분마다 확인해 1분부터 두 배씩 늘어나는 간격으로 다시 시도하고, 10번 실패하면 멈춘다. 멈춘 요청은 `SELECT id, provider, attempts, last_error, updated_at FROM provider_unlink WHERE status = 'GAVE_UP'`으로 본다
+- `auth.withdraw{provider=APPLE,result=revoke_failed}`는 애플 토큰 취소 실패다. 이때는 회원을 지우지 않고 `withdraw=failed`로 돌려보내므로 회원과 로그인은 그대로 남고 사용자가 다시 시도한다. 탈퇴할 때마다 나오면 `AUTH_APPLE_*` 설정과 `.p8` 파일을 확인한다
+- `GAVE_UP` 행은 서버가 다시 시도하기를 멈춘 카카오 해제 요청이다. 탈퇴한 회원의 제공자 식별자를 담고 있어 30일 뒤 서버가 지운다(매일 04:23). 그 전에 아래처럼 손으로 끊고 지울 수 있다. 어드민 키는 출력하지 않는다. `subject`는 해당 행에서 따로 조회한다
+
+```bash
+id=<provider_unlink id>; sub=<그 행의 subject>
+sudo grep '^AUTH_KAKAO_ADMIN_KEY=' "$ETC/api.env" | cut -d= -f2- | sed 's/^/Authorization: KakaoAK /' \
+  | curl -s -o /dev/null -w '%{http_code}\n' -X POST https://kapi.kakao.com/v1/user/unlink \
+      -H @- -d target_id_type=user_id -d "target_id=$sub"   # 키는 표준 입력으로만 넘긴다
+# 200 이면 끊겼다. 400 이고 본문 code 가 -101 이면 이미 끊긴 것이다. 둘 다 DB 에서 DELETE FROM provider_unlink WHERE id = <id>; 로 지운다
+```
+
+켠 직후에는 테스트 계정으로 카카오 로그인 → 탈퇴(`DELETE /api/me`)를 한 번 해 본다. 다시 로그인할 때 카카오 동의 화면이 다시 뜨면 연결 해제까지 동작한 것이다.
+
+**애플 회원이 있는 동안 `AUTH_APPLE_ENABLED`를 끄지 않는다.** 애플 회원은 애플 재인증으로만 탈퇴할 수 있어 끄면 탈퇴할 길이 없어진다.
+
+**카카오 회원이나 대기 중인 카카오 해제 요청이 있는 동안 `AUTH_KAKAO_ENABLED`를 끄지 않는다.** 끄면 해제 클라이언트가 없어 대기 요청이 매번 실패하고, 약 8시간 반 뒤 포기된 다음 30일 뒤 식별자째 지워진다. 그동안 카카오 쪽 연결은 끊기지 않는다.
+
+로그인을 끄려면 `AUTH_ENABLED=false`로 바꾸고 API를 재시작한다. 끄기는 로그인 공개를 되돌리는 스위치이고 이미 발급된 세션을 끊지 않는다. 테이블과 회원은 그대로 남고, 같은 `AUTH_REFRESH_TOKEN_SECRET`으로 다시 켜면 아직 만료되지 않은 세션이 이어진다. 세션을 끊어야 하면 아래 「모든 세션 끊기(보안 사고)」를 따른다.
+끈 동안에는 회원이 탈퇴할 수 없다. 만료된 리프레시 토큰 계통 정리(매시 17분), 연결 해제 재시도(5분마다), 포기한 요청 정리(매일 04:23)도 멈춘다.
+
+### 모든 세션 끊기(보안 사고)
+
+서명 비밀이 샜으면 두 비밀(`AUTH_REFRESH_TOKEN_SECRET`·`AUTH_TOKEN_SECRET`)을 모두 새로 만들고 API를 재시작한다. 모든 사용자가 다시 로그인해야 하고, 진행 중인 애플 탈퇴 티켓도 무효가 된다. 옛 줄을 지운 뒤 위의 비밀 생성 명령을 다시 실행한다.
+
+```bash
+sudo sed -i '/^AUTH_\(TOKEN\|REFRESH_TOKEN\)_SECRET=/d' "$ETC/api.env"
+# 여기서 위의 비밀 생성 명령을 실행한다. grep 결과가 2 이어야 한다
+sudo systemctl restart salmonbus-api
+```
+
+비밀은 안전하고 발급된 세션만 끊으려면 DB에서 리프레시 토큰 계통을 지운다. 재시작은 필요 없다. 이미 나간 액세스 토큰은 만료까지 최대 15분 더 쓰인다.
+
+```sql
+DELETE FROM refresh_token;  -- 모든 회원
+DELETE FROM refresh_token WHERE member_id = (SELECT id FROM member WHERE public_id = '<회원 public_id>');  -- 한 회원만
+```
+
+사용자는 스스로 `DELETE /api/me/sessions`로 다른 기기의 세션까지 끊을 수 있다.
 
 ## 평가 이관과 원본 삭제
 

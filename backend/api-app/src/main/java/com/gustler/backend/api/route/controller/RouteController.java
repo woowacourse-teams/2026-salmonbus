@@ -1,15 +1,18 @@
 package com.gustler.backend.api.route.controller;
 
 import com.gustler.backend.api.docs.ApiDocsExamples;
+import com.gustler.backend.api.docs.ApiDocsTags;
 import com.gustler.backend.api.error.ErrorResponse;
 import com.gustler.backend.api.route.application.RouteQueryService;
 import com.gustler.backend.api.route.dto.RouteListResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Duration;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
@@ -22,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 현재 공개 노선 목록을 조회해 클라이언트용 응답으로 변환한다.
  */
 @RestController
+@Tag(name = ApiDocsTags.ROUTES)
 @RequestMapping("/api/v1/routes")
 @RequiredArgsConstructor
 public class RouteController {
@@ -35,9 +39,12 @@ public class RouteController {
      * 현재 노선 목록과 예측 지원 상태를 응답 DTO로 변환하고 목록의 캐시 헤더를 설정한다.
      */
     @GetMapping
-    @Operation(summary = "현재 노선 목록", description = "현재 판본이 있는 노선을 반환합니다. 예보 상태는 노선마다 달라질 수 있습니다. 응답은 5분 공개 캐시가 가능합니다.")
+    @Operation(summary = "현재 노선 목록",
+        description = "현재 판본이 있는 노선을 반환합니다. 예보 준비 상태는 노선마다 `status`로 구분합니다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "현재 판본이 있는 노선 목록",
+            headers = @Header(name = "Cache-Control", description = "public, max-age=300",
+                schema = @Schema(type = "string")),
             content =
             @Content(mediaType = "application/json", schema = @Schema(implementation = RouteListResponse.class),
                 examples = @ExampleObject(value = ApiDocsExamples.ROUTES))),

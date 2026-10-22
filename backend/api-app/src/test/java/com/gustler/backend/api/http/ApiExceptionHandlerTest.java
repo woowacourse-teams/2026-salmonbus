@@ -2,15 +2,21 @@ package com.gustler.backend.api.http;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gustler.backend.api.account.NicknameInvalidException;
+import com.gustler.backend.api.account.NicknameTakenException;
+import com.gustler.backend.api.account.ReauthRequiredException;
 import com.gustler.backend.api.arrival.ArrivalQuery.Failure;
 import com.gustler.backend.api.board.ModelOutOfScopeException;
 import com.gustler.backend.api.board.NoRecentObservationException;
 import com.gustler.backend.api.error.ApiException;
+import com.gustler.backend.api.error.CsrfRejectedException;
 import com.gustler.backend.api.error.ErrorCode;
 import com.gustler.backend.api.error.ErrorResponse;
 import com.gustler.backend.api.error.ServiceUnavailableException;
+import com.gustler.backend.api.error.UnauthenticatedException;
 import com.gustler.backend.api.route.InvalidRouteIdException;
 import com.gustler.backend.api.route.RouteNotFoundException;
+import com.gustler.backend.member.api.NicknameViolation;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
@@ -38,6 +44,13 @@ class ApiExceptionHandlerTest {
             new ModelOutOfScopeException(),
             new NoRecentObservationException(),
             new ServiceUnavailableException(),
+            new CsrfRejectedException(),
+            new UnauthenticatedException(),
+            new NicknameInvalidException(NicknameViolation.LENGTH),
+            new NicknameInvalidException(NicknameViolation.CHARACTERS),
+            new NicknameInvalidException(NicknameViolation.RESERVED),
+            new NicknameTakenException(),
+            new ReauthRequiredException(),
             new Failure(ErrorCode.STATION_NOT_FOUND),
             new Failure(ErrorCode.REFERENCE_VERSION_CONFLICT)
         );

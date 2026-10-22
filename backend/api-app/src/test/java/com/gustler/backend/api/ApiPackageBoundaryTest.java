@@ -24,6 +24,9 @@ import java.util.stream.Stream;
  * 간접 프로젝트 의존성까지 검사한다. {@code compileOnly}처럼 런타임 클래스패스에 없는
  * 의존성은 이 규칙이 검사하고, 우리 패키지 이름을 거치지 않는 경로는 Gradle 검사가 담당한다.
  *
+ * <p>회원 모듈({@code member})은 로그인 경로가 쓰는 쓰기 모듈이라 위 금지 목록에 두지 않는다. 대신 공개 계약
+ * 패키지 {@code member.api}로만 쓰게 아래 규칙으로 막는다.
+ *
  * <p>오류 처리는 두 패키지로 나뉜다. {@code api.error}는 외부 계약인 코드·메시지·본문 형식을,
  * {@code api.http}는 예외 처리기·오류 컨트롤러·필터·Valve 같은 요청 처리 장치를 담는다.
  * 조회 계층은 계약만 참조한다.
@@ -47,6 +50,13 @@ class ApiPackageBoundaryTest {
     static final ArchRule READ_PATH_DOES_NOT_USE_BUSINESS_WRITE_MODULES = noClasses()
         .that().resideInAPackage("com.gustler.backend..")
         .should().dependOnClassesThat().resideInAnyPackage(BUSINESS_MODULES.toArray(String[]::new));
+
+    @ArchTest
+    static final ArchRule MEMBER_MODULE_IS_USED_ONLY_THROUGH_ITS_API = noClasses()
+        .that().resideInAPackage("com.gustler.backend.api..")
+        .should().dependOnClassesThat().resideInAnyPackage(
+            "com.gustler.backend.member.domain..", "com.gustler.backend.member.application..",
+            "com.gustler.backend.member.infrastructure..", "com.gustler.backend.member.configuration..");
 
     @ArchTest
     static final ArchRule DOMAIN_USES_ONLY_PLAIN_TYPES = noClasses()

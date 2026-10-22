@@ -4,6 +4,16 @@ server:
     enabled: true
     mime-types: application/json
     min-response-size: 2KB
+  servlet:
+    session:
+      timeout: 10m # 로그인 중에만 쓰는 임시 세션이다. 로그인 상태는 토큰이 가진다.
+      cookie:
+        name: __Host-sb_session
+        path: /
+        http-only: true
+        secure: true
+        same-site: lax
+        max-age: 10m
 
 chat:
   enabled: ${CHAT_ENABLED:false}
@@ -15,6 +25,14 @@ chat:
 spring:
   application:
     name: backend-api
+
+  autoconfigure:
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+
+  session:
+    jdbc:
+      initialize-schema: never
+      cleanup-cron: "0 */10 * * * *"
 
   web:
     resources:
@@ -54,12 +72,52 @@ springdoc:
     - /api/v2/stations/{stationId}/arrivals
     - /api/v2/routes/{routeId}/geometry
     - /api/chat/rooms/{routeId}
+    # 로그인 API 는 auth.enabled=true 일 때만 컨트롤러가 등록되므로 꺼져 있으면 명세에도 없다.
+    # 브라우저 이동 경로(/api/auth/{provider}/start, /callback)는 보안 필터가 처리해 명세 대신 contract/auth-v1.md 에 적는다.
+    - /api/auth/session
+    - /api/auth/refresh
+    - /api/auth/logout
+    - /api/me
+    - /api/me/sessions
+    - /api/me/withdrawal/apple
 
 # 오류 응답에 실어 보낸 requestId 로 서버 로그를 찾을 수 있게 한다.
 # 이 줄이 없으면 MDC 에 넣어도 로그 줄에 안 찍혀서, 클라이언트가 받은 ID 로 검색할 것이 없다.
 logging:
   pattern:
     correlation: "[${spring.application.name:},%X{requestId:-}] "
+
+auth:
+  enabled: ${AUTH_ENABLED:false}
+  public-base-url: ${AUTH_PUBLIC_BASE_URL:http://localhost:8080}
+  token:
+    secret: ${AUTH_TOKEN_SECRET:}
+    key-id: k1
+    access-ttl: 15m
+  refresh-token:
+    secret: ${AUTH_REFRESH_TOKEN_SECRET:}
+  kakao:
+    enabled: ${AUTH_KAKAO_ENABLED:false}
+    client-id: ${AUTH_KAKAO_CLIENT_ID:}
+    client-secret: ${AUTH_KAKAO_CLIENT_SECRET:}
+    issuer: https://kauth.kakao.com
+    authorization-uri: https://kauth.kakao.com/oauth/authorize
+    token-uri: https://kauth.kakao.com/oauth/token
+    jwk-set-uri: https://kauth.kakao.com/.well-known/jwks.json
+    admin-key: ${AUTH_KAKAO_ADMIN_KEY:} # 탈퇴한 회원의 카카오 연결을 끊는 데 쓴다.
+    unlink-uri: https://kapi.kakao.com/v1/user/unlink
+  apple:
+    enabled: ${AUTH_APPLE_ENABLED:false}
+    client-id: ${AUTH_APPLE_CLIENT_ID:}
+    team-id: ${AUTH_APPLE_TEAM_ID:}
+    key-id: ${AUTH_APPLE_KEY_ID:}
+    private-key-path: ${AUTH_APPLE_PRIVATE_KEY_PATH:}
+    scopes: openid
+    issuer: https://appleid.apple.com
+    authorization-uri: https://appleid.apple.com/auth/authorize
+    token-uri: https://appleid.apple.com/auth/token
+    jwk-set-uri: https://appleid.apple.com/auth/keys
+    revoke-uri: https://appleid.apple.com/auth/revoke
 
 arrivals:
   enabled: ${ARRIVALS_ENABLED:false}

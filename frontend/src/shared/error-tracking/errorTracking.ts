@@ -113,6 +113,14 @@ export function initErrorTracking(configuration: ErrorTrackingConfiguration) {
   };
 }
 
+export function reportNativeMapFailure(reason: "timeout" | "auth", routeId: string) {
+  Sentry.captureException(new Error(`Native map initialization failed: ${reason}`), {
+    level: "warning",
+    tags: { source: "native-map", failure_kind: reason, route_id: routeId },
+    fingerprint: ["native-map", reason],
+  });
+}
+
 export function createReactErrorHandlers(captureReactException: typeof Sentry.captureReactException): RootOptions {
   const createHandler =
     (kind: "caught" | "uncaught" | "recoverable") =>

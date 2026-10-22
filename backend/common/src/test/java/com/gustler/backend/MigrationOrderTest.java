@@ -40,10 +40,10 @@ class MigrationOrderTest {
      * 번호가 거꾸로 배정되어도 다른 파일을 제외해 항상 통과하게 된다. 파일 이름으로 선택하고,
      * 해당 파일이 실제로 마지막 번호인지는 아래에서 별도로 검증한다.
      *
-     * <p>이 브랜치는 V41 인덱스 제거 이후 평가 선택 열과 이관 묶음 한도를 추가한다.
+     * <p>이 브랜치는 회원 로그인 테이블과 세션 테이블을 추가한다.
      */
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
-        List.of("forecast_evaluation_sampling", "evaluation_archive_batch_limit");
+        List.of("member_login");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";

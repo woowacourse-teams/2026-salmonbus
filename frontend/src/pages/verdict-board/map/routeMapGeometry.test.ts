@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { routeArrowsFor, routeMapCoordinateForSequence } from "./routeMapGeometry";
+import { routeArrowsFor, routeMapCoordinateForSequence, routeMapMotionPathFor } from "./routeMapGeometry";
 import type { RouteMapData } from "./routeMapModel";
 
 const data: RouteMapData = {
@@ -21,6 +21,43 @@ const data: RouteMapData = {
 };
 
 describe("지도 차량 좌표", () => {
+  it("native 시간 경로도 굴곡과 정류장별 속도 변화를 웹 보간과 동일하게 유지한다", () => {
+    const curved: RouteMapData = {
+      ...data,
+      stops: [
+        { sequence: 1, stopId: "1", direction: "UP", coordinate: { latitude: 0, longitude: 0 } },
+        { sequence: 2, stopId: "2", direction: "UP", coordinate: { latitude: 2, longitude: 1 } },
+        { sequence: 5, stopId: "3", direction: "UP", coordinate: { latitude: 0, longitude: 2 } },
+      ],
+      paths: [
+        {
+          direction: "UP",
+          coordinates: [
+            { latitude: 0, longitude: 0 },
+            { latitude: 2, longitude: 0 },
+            { latitude: 2, longitude: 1 },
+            { latitude: 2, longitude: 2 },
+            { latitude: 0, longitude: 2 },
+          ],
+        },
+      ],
+    };
+    const path = routeMapMotionPathFor(curved, 1.2, 4.5, "UP");
+    expect(path[0]?.progress).toBe(0);
+    expect(path.at(-1)?.progress).toBe(1);
+    for (let progress = 0; progress < 1; progress += 0.01) {
+      const end = path.findIndex((point) => point.progress > progress);
+      const from = path[Math.max(0, end - 1)]!;
+      const to = path[end]!;
+      const fraction = (progress - from.progress) / (to.progress - from.progress);
+      const expected = routeMapCoordinateForSequence(curved, 1.2 + 3.3 * progress, "UP")!;
+      expect(from.latitude + (to.latitude - from.latitude) * fraction).toBeCloseTo(expected.latitude, 8);
+      expect(from.longitude + (to.longitude - from.longitude) * fraction).toBeCloseTo(expected.longitude, 8);
+    }
+    expect(routeMapMotionPathFor({ ...curved, paths: [] }, 1.2, 2, "UP")).toEqual([]);
+    expect(routeMapMotionPathFor(curved, 3, 2, "UP")).toEqual([]);
+  });
+
   it("목록과 공유한 순번 진행률을 제공된 방향별 경로 위에서 보간한다", () => {
     expect(routeMapCoordinateForSequence(data, 1.25, "UP")).toEqual({ latitude: 37.25, longitude: 127.5 });
     expect(routeMapCoordinateForSequence(data, 0, "UP")).toEqual(data.stops[0]?.coordinate);

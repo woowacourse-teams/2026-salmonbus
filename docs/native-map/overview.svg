@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1020" viewBox="0 0 1280 1020" role="img" aria-labelledby="title desc">
+  <title id="title">네이버 iOS 지도 위에 기존 웹 Bottom Sheet를 겹치는 설계</title>
+  <desc id="desc">네이티브 지도와 투명 WebView를 겹친 화면, TouchGate의 역할, 웹과 iOS 사이의 메시지 흐름을 설명하는 구조 모식도입니다. 실제 앱의 검증 결과가 아닙니다.</desc>
+  <defs>
+    <pattern id="mapGrid" width="42" height="42" patternUnits="userSpaceOnUse"><path d="M 42 0 L 0 0 0 42" fill="none" stroke="#c8ddd7" stroke-width="1"/></pattern>
+    <pattern id="clearGrid" width="18" height="18" patternUnits="userSpaceOnUse"><rect width="18" height="18" fill="#fff"/><path d="M0 0h9v9H0zM9 9h9v9H9z" fill="#f4f2f0"/></pattern>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="none" stroke="#475467" stroke-width="1.5"/></marker>
+    <style>
+      text{font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;fill:#253443}
+      .title{font-size:31px;font-weight:750;letter-spacing:-.7px}.heading{font-size:21px;font-weight:700}.body{font-size:17px}.small{font-size:15px}.muted{fill:#526274}.native{fill:#116c58}.web{fill:#b74632}.gate{fill:#69469b}.bold{font-weight:700}
+      .panel{fill:#fff;stroke:#d8dfe5;stroke-width:1.5}.line{fill:none;stroke:#475467;stroke-width:1.7;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="1280" height="1020" rx="22" fill="#f7f8fa"/>
+  <text x="42" y="55" class="title">지도는 iOS SDK, 시트는 기존 웹</text>
+  <text x="42" y="88" class="body muted">앱이 두 화면을 겹쳐 배치합니다. 지도는 웹의 div 안에 들어가는 구조가 아닙니다.</text>
+  <rect x="42" y="114" width="1196" height="42" rx="10" fill="#fff" stroke="#d8dfe5"/>
+  <circle cx="64" cy="135" r="6" fill="#147d68"/><text x="79" y="141" class="small">Native · iOS 지도</text>
+  <circle cx="273" cy="135" r="6" fill="#d2573e"/><text x="288" y="141" class="small">WebView · 기존 웹 UI</text>
+  <circle cx="519" cy="135" r="6" fill="#7a5bb5"/><text x="534" y="141" class="small">TouchGate · 터치 담당 선택</text>
+  <text x="1217" y="141" text-anchor="end" class="small muted">구조 모식도 · 실행 결과 아님</text>
+
+  <text x="47" y="203" class="heading">① 겉으로 보이는 화면</text>
+  <rect x="47" y="224" width="270" height="491" rx="26" fill="#e8f3ef" stroke="#147d68" stroke-width="2"/>
+  <rect x="48" y="225" width="268" height="489" rx="25" fill="url(#mapGrid)"/>
+  <path d="M94 582L137 468L113 400L183 350L229 274" fill="none" stroke="#147d68" stroke-width="7" stroke-linecap="round"/>
+  <rect x="66" y="242" width="59" height="32" rx="8" fill="#fff0ea" stroke="#d2573e"/><text x="95" y="263" text-anchor="middle" class="small web">뒤로</text>
+  <rect x="229" y="242" width="69" height="32" rx="8" fill="#fff0ea" stroke="#d2573e"/><text x="263" y="263" text-anchor="middle" class="small web">내 위치</text>
+  <circle cx="183" cy="350" r="8" fill="#fff" stroke="#147d68" stroke-width="3"/>
+  <rect x="91" y="385" width="85" height="37" rx="10" fill="#147d68"/><text x="133" y="410" text-anchor="middle" font-size="17" style="fill:#fff;font-weight:700">버스 ●</text>
+  <text x="182" y="310" text-anchor="middle" class="body native bold">iOS가 그리는 지도</text>
+  <text x="182" y="461" text-anchor="middle" class="small native">SDK 로고·출처가 보이는 영역</text>
+  <rect x="48" y="486" width="268" height="228" rx="25" fill="#fff0ea" stroke="#d2573e" stroke-width="1.5"/>
+  <path d="M48 510V689Q48 714 73 714H291Q316 714 316 689V510" fill="#fff0ea"/>
+  <rect x="160" y="498" width="44" height="4" rx="2" fill="#d09a8e"/>
+  <text x="68" y="536" class="body web bold">기존 웹 Bottom Sheet</text>
+  <text x="68" y="566" class="small web">노선 요약 · 방향 선택</text>
+  <path d="M67 582H297M67 625H297M67 668H297" stroke="#e5c2b9"/>
+  <text x="68" y="610" class="body">정류장 A</text><text x="290" y="610" text-anchor="end" class="small web">잔여석</text>
+  <text x="68" y="653" class="body">정류장 B</text><text x="290" y="653" text-anchor="end" class="small web">도착 정보</text>
+  <text x="68" y="695" class="small muted">목록·시트·채팅은 기존 웹</text>
+
+  <text x="364" y="203" class="heading">② 내부에서 겹친 두 화면</text>
+  <rect x="364" y="224" width="271" height="215" rx="16" fill="#fff0ea" stroke="#d2573e" stroke-width="2"/>
+  <text x="383" y="256" class="heading web">위 · WebView</text>
+  <rect x="383" y="272" width="233" height="65" rx="8" fill="url(#clearGrid)" stroke="#d8dfe5" stroke-dasharray="5 5"/>
+  <text x="500" y="299" text-anchor="middle" class="small muted">지도 자리는 투명</text>
+  <text x="500" y="321" text-anchor="middle" class="small muted">아래 iOS 지도가 보임</text>
+  <rect x="383" y="352" width="233" height="68" rx="8" fill="#fff" stroke="#d2573e"/>
+  <text x="500" y="380" text-anchor="middle" class="body web bold">시트·목록·버튼·채팅</text>
+  <text x="500" y="404" text-anchor="middle" class="small web">기존 HTML / CSS / React</text>
+  <path d="M500 448V469" class="line"/>
+  <text x="500" y="494" text-anchor="middle" class="small muted">두 화면은 같은 앱 좌표를 사용</text>
+  <rect x="364" y="512" width="271" height="203" rx="16" fill="#e3f4ef" stroke="#147d68" stroke-width="2"/>
+  <text x="383" y="545" class="heading native">아래 · NMFMapView</text>
+  <text x="383" y="579" class="body native">네이버 iOS SDK</text>
+  <text x="383" y="608" class="small">노선·정류장·차량 마커</text>
+  <text x="383" y="637" class="small">지도 이동·핀치 줌·카메라</text>
+  <path d="M383 657H615" stroke="#b8dcd0"/>
+  <text x="383" y="683" class="small native bold">같은 지도 view를 계속 유지</text>
+  <text x="383" y="704" class="small muted">보이는 영역으로 잘라 표시</text>
+
+  <rect x="678" y="184" width="560" height="531" rx="18" class="panel"/>
+  <text x="702" y="220" class="heading">③ 투명도와 터치 분배는 별개입니다</text>
+  <text x="702" y="253" class="body muted">투명한 WebView도 터치를 받을 수 있습니다.</text>
+  <rect x="702" y="277" width="512" height="89" rx="12" fill="#f0ebff" stroke="#7a5bb5"/>
+  <text x="721" y="307" class="heading gate">TouchGate · 보이지 않는 native 로직</text>
+  <text x="721" y="335" class="body">웹이 미리 보낸 영역으로 시작 터치를 판정</text>
+  <text x="721" y="357" class="small muted">터치할 때 JavaScript 응답을 기다리지 않음</text>
+  <path d="M958 375V395" class="line"/>
+  <rect x="702" y="409" width="245" height="87" rx="12" fill="#fff0ea" stroke="#d2573e"/>
+  <text x="719" y="438" class="body web bold">시트·버튼·채팅 안</text>
+  <text x="719" y="467" class="body">→ WebView가 받음</text>
+  <rect x="969" y="409" width="245" height="87" rx="12" fill="#e3f4ef" stroke="#147d68"/>
+  <text x="986" y="438" class="body native bold">노출된 지도 안</text>
+  <text x="986" y="467" class="body">→ iOS 지도가 받음</text>
+  <text x="702" y="532" class="body bold">시트에서 시작한 드래그는 웹이 계속 담당</text>
+  <text x="702" y="560" class="small muted">경계를 넘어도 중간에 터치 대상을 바꾸지 않음</text>
+  <path d="M702 581H1214" stroke="#d8dfe5"/>
+  <text x="702" y="609" class="body gate bold">시트 이동 중에는 새 지도 조작 잠시 차단</text>
+  <text x="702" y="636" class="small muted">새 영역 전달 → native 적용 → ack 응답</text>
+  <text x="702" y="662" class="small muted">같은 세션의 최신 revision으로 영역 순서를 구분</text>
+  <text x="702" y="694" class="small muted">두 손가락·빠른 경계 터치는 실기기 검증 필요</text>
+
+  <text x="47" y="771" class="heading">④ 데이터와 선택 state는 웹에, 지도 그리기는 iOS에 둡니다</text>
+  <rect x="47" y="796" width="209" height="120" rx="14" class="panel"/>
+  <text x="65" y="830" class="body bold">기존 Backend API</text>
+  <text x="65" y="858" class="small muted">노선·정류장·차량 응답</text>
+  <text x="65" y="886" class="small muted">웹에서 요청</text>
+  <path d="M265 856H296" class="line"/>
+  <rect x="308" y="796" width="242" height="120" rx="14" fill="#fff0ea" stroke="#d2573e"/>
+  <text x="327" y="830" class="body web bold">웹 · 최종 선택 state</text>
+  <text x="327" y="858" class="small">API 요청·목록·시트</text>
+  <text x="327" y="886" class="small">차량 이동 계획·웹 영역 측정</text>
+  <path d="M560 836H672" class="line"/>
+  <path d="M676 877H563" class="line"/>
+  <text x="617" y="825" text-anchor="middle" class="small">JSON 명령</text>
+  <text x="617" y="909" text-anchor="middle" class="small">선택·적용 응답</text>
+  <rect x="689" y="796" width="263" height="120" rx="14" fill="#e3f4ef" stroke="#147d68"/>
+  <text x="708" y="830" class="body native bold">iOS 지도 controller</text>
+  <text x="708" y="858" class="small">마커·카메라·터치 분배</text>
+  <text x="708" y="886" class="small">이동 계획으로 프레임별 보간</text>
+  <path d="M962 856H994" class="line"/>
+  <rect x="1008" y="796" width="230" height="120" rx="14" fill="#e3f4ef" stroke="#147d68"/>
+  <text x="1027" y="830" class="body native bold">NMFMapView</text>
+  <text x="1027" y="858" class="small">실제 지도를 그리는 view</text>
+  <text x="1027" y="886" class="small">네이버 iOS SDK</text>
+  <text x="47" y="956" class="body muted">Bridge는 메시지 통로입니다. 터치 자체를 메시지로 전송하거나 매 프레임 차량 좌표를 보내지 않습니다.</text>
+  <text x="47" y="987" class="small muted">브라우저: 기존 JS SDK 유지  ·  지원하는 iOS 앱: iOS SDK 사용  ·  실제 검증 결과는 PR 본문에서 별도 확인</text>
+</svg>

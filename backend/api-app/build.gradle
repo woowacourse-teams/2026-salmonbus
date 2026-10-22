@@ -5,9 +5,14 @@ plugins {
 
 dependencies {
     implementation project(':common')
+    implementation project(':member')
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-client'
+    implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
+    implementation 'org.springframework.boot:spring-boot-starter-session-jdbc'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-flyway'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
@@ -18,6 +23,7 @@ dependencies {
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
     annotationProcessor 'org.projectlombok:lombok'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
     testImplementation 'net.bytebuddy:byte-buddy' // 별도 JVM에서 실행하는 선택적 성능 계측 에이전트
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.testcontainers:junit-jupiter'
@@ -54,6 +60,7 @@ tasks.named('test') {
     def arrivalsContract = rootProject.file('../contract/station-arrivals-v2.openapi.json')
     def geometryContract = rootProject.file('../contract/route-geometry-v2.openapi.json')
     def watchContract = rootProject.file('../contract/route-watch-v1.openapi.json')
+    def authContract = rootProject.file('../contract/auth-v1.openapi.json')
     inputs.file(chatContractExamples)
         .withPropertyName('chatContractExamples')
         .withPathSensitivity(PathSensitivity.NONE)
@@ -63,7 +70,7 @@ tasks.named('test') {
     inputs.file(geometryRoutesFixture)
         .withPropertyName('geometryRoutesFixture')
         .withPathSensitivity(PathSensitivity.NONE)
-    inputs.files(arrivalsContract, geometryContract, watchContract)
+    inputs.files(arrivalsContract, geometryContract, watchContract, authContract)
         .withPropertyName('v2OpenApiContracts')
         .withPathSensitivity(PathSensitivity.NONE)
     doFirst {
@@ -75,6 +82,7 @@ tasks.named('test') {
         systemProperty 'arrival.openapi.contract', arrivalsContract.absolutePath
         systemProperty 'geometry.openapi.contract', geometryContract.absolutePath
         systemProperty 'watch.openapi.contract', watchContract.absolutePath
+        systemProperty 'auth.openapi.contract', authContract.absolutePath
     }
 }
 
@@ -89,14 +97,14 @@ tasks.named('processResources') {
     }
 }
 
-// API 실행 경로에 쓰기 업무나 다른 실행 앱이 간접 의존으로 들어오지 않게 확인한다.
+// API 실행 경로에 로그인용 회원 모듈 외의 쓰기 업무나 다른 실행 앱이 간접 의존으로 들어오지 않게 확인한다.
 tasks.register('verifyRuntimeProjects') {
     doLast {
         def projects = configurations.runtimeClasspath.incoming.resolutionResult.allComponents
             .findAll { it.id instanceof org.gradle.api.artifacts.component.ProjectComponentIdentifier }
             .collect { it.id.projectPath }
             .toSet()
-        def expected = [':api-app', ':common'] as Set
+        def expected = [':api-app', ':common', ':member'] as Set
         if (projects != expected) {
             throw new GradleException("API runtime project dependencies must be ${expected}, but were ${projects}")
         }

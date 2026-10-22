@@ -12,7 +12,7 @@ import java.util.Objects;
 @Schema(requiredProperties = {"vehicleId", "direction", "currentStopSequence", "stopId",
     "stopName", "phase", "seat"})
 public record VehicleResponse(
-    @Schema(description = "상류 차량 식별자. 제공되지 않으면 null", nullable = true)
+    @Schema(description = "GBIS 차량 ID. 제공되지 않으면 null", nullable = true)
     String vehicleId,
     @Schema(description = "현재 노선 판본의 UP 또는 DOWN")
     VehicleDirection direction,
@@ -22,7 +22,7 @@ public record VehicleResponse(
     String stopId,
     @Schema(description = "현재 정류장 이름")
     String stopName,
-    @Schema(description = "상류 운행 상태를 해석한 ARRIVING, DEPARTED 또는 IN_TRANSIT")
+    @Schema(description = "GBIS 운행 상태를 해석한 ARRIVING, DEPARTED 또는 IN_TRANSIT")
     VehiclePhase phase,
     @Schema(description = "좌석 수가 알려져 있으면 EXACT, 숨기거나 미제공이면 UNKNOWN")
     SeatResponse seat

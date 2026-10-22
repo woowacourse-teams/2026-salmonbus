@@ -20,6 +20,7 @@
   "scripts": {
     "start": "expo start",
     "ios": "expo run:ios",
+    "test": "node --test plugins/*.test.cjs",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint"
   },

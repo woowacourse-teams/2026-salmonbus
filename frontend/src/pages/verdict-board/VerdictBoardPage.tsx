@@ -336,6 +336,7 @@ function BoardBackLink({ inHeader = false }: { inHeader?: boolean }) {
         void navigate(-1);
       }}
       className={inHeader ? styles.fullBack : styles.back}
+      data-native-map-hit
       aria-label="노선 선택으로 돌아가기"
     >
       <svg

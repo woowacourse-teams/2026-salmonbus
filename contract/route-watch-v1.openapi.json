@@ -28,7 +28,7 @@
             "description": "보드 상태별 정상 응답",
             "headers": {
               "Cache-Control": {
-                "description": "public, max-age는 관측 시각대별 정책값(첨두 15초, 평시 20초, 01~03시대 600초)과 staleAt까지 남은 시간 중 작은 값. staleAt을 넘겨 캐시하지 않는다",
+                "description": "public, max-age는 관측 시각대별 정책값(07~08시·17~22시 15초, 01~03시대 600초, 그 밖의 시간 20초)과 staleAt까지 남은 시간 중 작은 값. staleAt을 넘겨 캐시하지 않는다",
                 "style": "simple",
                 "schema": {
                   "type": "string"
@@ -69,7 +69,7 @@
                             "lastDepartureTime": "23:00"
                           }
                         ],
-                        "referenceVersionId": "example-version",
+                        "referenceVersionId": "7",
                         "headways": {
                           "weekday": {
                             "minMinutes": 10,
@@ -173,7 +173,7 @@
                             "lastDepartureTime": "23:00"
                           }
                         ],
-                        "referenceVersionId": "example-version",
+                        "referenceVersionId": "7",
                         "headways": {
                           "weekday": null,
                           "saturday": null,
@@ -569,7 +569,14 @@
               "INVALID_REQUEST",
               "ENDPOINT_NOT_FOUND",
               "METHOD_NOT_ALLOWED",
-              "INTERNAL_ERROR"
+              "INTERNAL_ERROR",
+              "UNAUTHENTICATED",
+              "CSRF_REJECTED",
+              "NICKNAME_LENGTH",
+              "NICKNAME_CHARACTERS",
+              "NICKNAME_RESERVED",
+              "NICKNAME_TAKEN",
+              "REAUTH_REQUIRED"
             ]
           },
           "message": {
@@ -777,7 +784,7 @@
         "properties": {
           "reason": {
             "type": "string",
-            "description": "좌석 수 미제공 사유: 미보고, 상류의 알 수 없음, 품질 판정으로 숨김",
+            "description": "좌석 수 미제공 사유. NOT_REPORTED=미보고, REPORTED_UNKNOWN=GBIS가 -1(알 수 없음)로 보고, QUALITY_WITHHELD=품질 판정으로 숨김",
             "enum": [
               "NOT_REPORTED",
               "REPORTED_UNKNOWN",
@@ -806,7 +813,7 @@
               "string",
               "null"
             ],
-            "description": "상류 차량 식별자. 제공되지 않으면 null"
+            "description": "GBIS 차량 ID. 제공되지 않으면 null"
           },
           "direction": {
             "type": "string",
@@ -831,7 +838,7 @@
           },
           "phase": {
             "type": "string",
-            "description": "상류 운행 상태를 해석한 ARRIVING, DEPARTED 또는 IN_TRANSIT",
+            "description": "GBIS 운행 상태를 해석한 ARRIVING, DEPARTED 또는 IN_TRANSIT",
             "enum": [
               "ARRIVING",
               "DEPARTED",
