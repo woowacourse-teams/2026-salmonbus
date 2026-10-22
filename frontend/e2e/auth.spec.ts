@@ -5,17 +5,22 @@ import { routeId } from "./fixtures/mock-data";
 
 test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
 
-test("비회원 홈과 마이페이지에서 로그인하고 원래 회원 화면으로 복귀한다", async ({ page, auth }) => {
-  await page.goto("/");
-  await expect(page.getByRole("link", { name: "로그인 / 회원가입", exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "마이페이지", exact: true }).click();
-  await expect(page).toHaveURL("/mypage");
-  await page.getByRole("link", { name: "로그인 / 회원가입", exact: true }).click();
-  await page.getByRole("button", { name: "카카오로 계속하기" }).click();
-  await expect(page).toHaveURL("/mypage");
-  await expect(page.getByText("살몽님", { exact: true })).toBeVisible();
-  expect(auth.requests.some((request) => request.path === "/api/auth/kakao/start")).toBe(true);
-});
+for (const { name, path } of [
+  { name: "홈", path: "/" },
+  { name: "마이페이지", path: "/mypage" },
+]) {
+  test(`${name}에서 로그인하면 같은 화면으로 복귀한다`, async ({ page, auth }) => {
+    await page.goto("/");
+    if (path === "/mypage") await page.getByRole("link", { name: "마이페이지", exact: true }).click();
+    await expect(page).toHaveURL(path);
+    await page.getByRole("link", { name: "로그인 / 회원가입", exact: true }).click();
+    await expect(page).toHaveURL(`/login?${new URLSearchParams({ returnTo: path })}`);
+    await page.getByRole("button", { name: "카카오로 계속하기" }).click();
+    await expect(page).toHaveURL(path);
+    await expect(page.getByText(path === "/" ? "어서오세요 연어버스입니다!" : "살몽님", { exact: true })).toBeVisible();
+    expect(auth.requests.some((request) => request.path === "/api/auth/kakao/start")).toBe(true);
+  });
+}
 
 test("인증 API가 꺼져 있어도 노선을 검색하고 판정보드에 진입한다", async ({ page, auth }) => {
   auth.enabled = false;

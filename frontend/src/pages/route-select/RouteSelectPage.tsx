@@ -53,7 +53,7 @@ export function RouteSelectPage() {
             ) : auth.status === "loading" ? (
               <p>로그인 상태를 확인하고 있어요…</p>
             ) : (
-              <LoginButton />
+              <LoginButton returnTo="/" />
             )}
           </section>
         )}
