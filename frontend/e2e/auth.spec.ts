@@ -158,24 +158,6 @@ test("방면·정류장이 담긴 판정보드 주소는 로그인 후에도 유
   ).toBeVisible();
 });
 
-test("iOS 카카오 요청은 앱으로 보내고 제공자 인증만으로 회원 상태를 만들지 않는다", async ({ page }) => {
-  await page.addInitScript(() => {
-    window.__SALMONBUS_NATIVE_AUTH__ = true;
-    window.ReactNativeWebView = {
-      postMessage: (message: string) => {
-        if (JSON.parse(message).type === "auth.login")
-          window.dispatchEvent(new CustomEvent("salmonbus:auth", { detail: { status: "providerAuthenticated" } }));
-      },
-    };
-  });
-  await page.goto("/login");
-  await page.getByRole("button", { name: "카카오로 계속하기" }).click();
-  await expect(page.getByText("카카오 인증은 완료됐어요. 연어버스 로그인 연결은 준비 중이에요.")).toBeVisible();
-  await expect(page).toHaveURL("/login");
-  await page.getByRole("link", { name: "돌아가기" }).click();
-  await expect(page.getByRole("link", { name: "로그인 / 회원가입", exact: true })).toBeVisible();
-});
-
 test("갱신 토큰도 만료되면 비회원으로 복귀하고 갱신을 반복하지 않는다", async ({ page, auth }) => {
   auth.refreshable = true;
   auth.refreshFails = true;

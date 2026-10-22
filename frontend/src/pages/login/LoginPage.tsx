@@ -9,23 +9,14 @@ import { localReturnTo, boardReturnTo } from "@/shared/routing/loginReturnPolicy
 import * as buttonStyles from "@/shared/styles/button.css";
 import * as styles from "./LoginPage.css";
 
-declare global {
-  interface Window {
-    ReactNativeWebView?: { postMessage: (message: string) => void };
-    __SALMONBUS_NATIVE_AUTH__?: boolean;
-  }
-}
-
 export function LoginPage() {
   const { state, reload } = useAuth();
   const [query, setQuery] = useSearchParams();
   const navigate = useNavigate();
   const returnTo = localReturnTo(query.get("returnTo"));
   const [pending, setPending] = useState(false);
-  const [nativeError, setNativeError] = useState<string | null>(null);
   const [loginResult, setLoginResult] = useState(() => query.get("login"));
   const failed = loginResult === "failed";
-  const native = Boolean(window.__SALMONBUS_NATIVE_AUTH__);
 
   useEffect(() => {
     if (!query.has("login")) return;
@@ -40,38 +31,14 @@ export function LoginPage() {
   }, [query, setQuery]);
 
   useEffect(() => {
-    const onNative = (event: Event) => {
-      const detail: unknown = (event as CustomEvent).detail;
-      if (typeof detail !== "object" || detail === null || !("status" in detail)) return;
-      setPending(false);
-      if (detail.status === "cancelled") return;
-      if (detail.status === "failed") setNativeError("카카오 로그인을 완료하지 못했어요. 다시 시도해 주세요.");
-      else if (detail.status === "providerAuthenticated")
-        setNativeError("카카오 인증은 완료됐어요. 연어버스 로그인 연결은 준비 중이에요.");
-      else setNativeError("앱 로그인을 준비 중이에요.");
-    };
-    window.addEventListener("salmonbus:auth", onNative);
     const onPageShow = () => setPending(false);
     window.addEventListener("pageshow", onPageShow);
-    return () => {
-      window.removeEventListener("salmonbus:auth", onNative);
-      window.removeEventListener("pageshow", onPageShow);
-    };
+    return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
 
   function login(provider: LoginProvider) {
     if (pending) return;
-    setNativeError(null);
     setLoginResult(null);
-    if (native && provider === "APPLE") {
-      setNativeError("앱의 Apple 로그인을 준비 중이에요.");
-      return;
-    }
-    if (provider === "KAKAO" && window.__SALMONBUS_NATIVE_AUTH__ && window.ReactNativeWebView) {
-      setPending(true);
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: "auth.login", provider: "KAKAO" }));
-      return;
-    }
     saveLoginReturn(returnTo, provider);
     setPending(true);
     window.location.assign(
@@ -105,11 +72,7 @@ export function LoginPage() {
         <button
           type="button"
           className={styles.kakao}
-          disabled={
-            pending ||
-            state.status === "loading" ||
-            (!native && (state.status === "unavailable" || state.status === "error"))
-          }
+          disabled={pending || state.status === "loading" || state.status === "unavailable" || state.status === "error"}
           onClick={() => login("KAKAO")}
         >
           <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -159,11 +122,6 @@ export function LoginPage() {
         {loginResult === "cancelled" && (
           <p className={styles.loginNotice} role="status">
             로그인을 취소했어요.
-          </p>
-        )}
-        {nativeError && (
-          <p className={styles.loginNotice} role="status">
-            {nativeError}
           </p>
         )}
       </div>

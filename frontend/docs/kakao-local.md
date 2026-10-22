@@ -68,7 +68,7 @@ pnpm dev
 - `GET /api/auth/session`이 JSON 200을 반환하고 CSRF 쿠키를 발급한다.
 - 카카오 로그인 시작 응답의 `redirect_uri`는 `http://localhost:3000/api/auth/kakao/callback`이고, 카카오 계정 로그인 페이지로 연결된다.
 - Chrome·Firefox에서 실제 임시 세션 쿠키와 합성 취소 콜백을 사용해 localhost로 복귀하고, 원래 `/mypage` 경로를 보존한다.
-- 개발 모드에서 같은 복귀 결과를 두 번 소비하던 문제를 수정했다. 로그인·취소·탈퇴의 모의 응답 E2E 45개가 세 브라우저에서 통과했다.
+- 개발 모드에서 같은 복귀 결과를 두 번 소비하던 문제를 수정했다. 홈·마이페이지 복귀와 로그인·취소·탈퇴의 모의 응답 E2E 45개가 세 브라우저에서 통과했다.
 
 Playwright WebKit은 HTTP localhost에서 Secure 쿠키를 저장하지 않아 실제 로컬 쿠키 검증을 통과하지 못했다. HTTP 로컬 로그인 확인에는 Chrome·Dia 또는 Firefox를 사용한다. Secure 속성과 `__Host-` 쿠키 이름은 유지하며, Safari 계열의 실제 로그인 확인에는 별도의 HTTPS 콜백 환경이 필요하다.
 

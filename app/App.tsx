@@ -1,11 +1,9 @@
 import { useRef, useState } from 'react';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { Platform, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { LoadFailedView } from './LoadFailedView';
-import { beginKakaoLogin } from './kakaoLogin';
-import { isLoginRequest, loginResultScript } from './loginBridge';
 import {
   NativeRouteMap, NATIVE_MAP_BOOTSTRAP, isNativeMapMessage, nativeMapEventScript,
   type NativeRouteMapRef,
@@ -31,18 +29,6 @@ export default function App() {
   const commandQueue = useRef(Promise.resolve());
   const documentEpoch = useRef(0);
   const [loadFailed, setLoadFailed] = useState(false);
-  const loginPending = useRef(false);
-
-  const handleLogin = async (data: string, sourceUrl: string) => {
-    if (Platform.OS !== 'ios' || loginPending.current || !isLoginRequest(data, sourceUrl, WEB_URL)) return;
-    loginPending.current = true;
-    try {
-      const result = await beginKakaoLogin();
-      webViewRef.current?.injectJavaScript(loginResultScript(result));
-    } finally {
-      loginPending.current = false;
-    }
-  };
 
   const showLoadFailed = () => {
     resetNativeMap();
@@ -86,15 +72,9 @@ export default function App() {
       automaticallyAdjustContentInsets={NativeRouteMap !== null ? false : undefined}
       contentInsetAdjustmentBehavior={NativeRouteMap !== null ? 'never' : undefined}
       bounces={NativeRouteMap !== null ? false : undefined}
-      injectedJavaScriptBeforeContentLoaded={
-        (Platform.OS === 'ios' ? 'window.__SALMONBUS_NATIVE_AUTH__ = true;' : '') +
-        (NativeRouteMap !== null ? NATIVE_MAP_BOOTSTRAP : 'true;')
-      }
+      injectedJavaScriptBeforeContentLoaded={NativeRouteMap !== null ? NATIVE_MAP_BOOTSTRAP : undefined}
       injectedJavaScriptBeforeContentLoadedForMainFrameOnly
-      onMessage={(event) => {
-        void handleLogin(event.nativeEvent.data, event.nativeEvent.url);
-        if (NativeRouteMap !== null) handleMapMessage(event);
-      }}
+      onMessage={NativeRouteMap !== null ? handleMapMessage : undefined}
       onLoadStart={resetNativeMap}
       onLoadEnd={SplashScreen.hide}
       onError={showLoadFailed}
