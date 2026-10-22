@@ -38,6 +38,7 @@ final class Environment {
                                     "MONGO_INITDB_ROOT_PASSWORD",
                                     "MONGO_CHAT_PASSWORD"),
                     "infra", Set.of("DEV_REVISION"));
+    static final Map<String, Set<String>> OPTIONAL_KEYS = Map.of("api", LoginSettings.KEYS);
     static final Set<String> RELEASE_KEYS =
             Set.of(
                     "INFO_COMPONENT",
@@ -49,6 +50,10 @@ final class Environment {
     private Environment() {}
 
     static Map<String, String> parse(String text, Set<String> keys) {
+        return parse(text, keys, Set.of());
+    }
+
+    static Map<String, String> parse(String text, Set<String> keys, Set<String> optional) {
         var values = new TreeMap<String, String>();
         for (var line : text.split("\n", -1)) {
             if (line.isEmpty() || line.startsWith("#")) {
@@ -58,7 +63,9 @@ final class Environment {
             Checks.require(separator > 0, "ENV_KEYS");
             var key = line.substring(0, separator);
             var value = line.substring(separator + 1);
-            Checks.require(keys.contains(key) && !values.containsKey(key), "ENV_KEYS");
+            Checks.require(
+                    (keys.contains(key) || optional.contains(key)) && !values.containsKey(key),
+                    "ENV_KEYS");
             Checks.require(
                     value.chars()
                             .noneMatch(
@@ -68,7 +75,7 @@ final class Environment {
                     "ENV_VALUE");
             values.put(key, value);
         }
-        Checks.require(values.keySet().equals(keys), "ENV_KEYS");
+        Checks.require(values.keySet().containsAll(keys), "ENV_KEYS");
         return values;
     }
 
@@ -80,7 +87,16 @@ final class Environment {
     }
 
     static void origin(String value) {
-        var uri = URI.create(value);
+        origin(value, "DEV_FRONTEND_ORIGIN");
+    }
+
+    static void origin(String value, String code) {
+        URI uri;
+        try {
+            uri = URI.create(value);
+        } catch (IllegalArgumentException error) {
+            throw new IllegalArgumentException(code);
+        }
         var host = uri.getHost();
         Checks.require(
                 "https".equals(uri.getScheme())
@@ -92,7 +108,7 @@ final class Environment {
                         && uri.getRawFragment() == null
                         && uri.getRawPath().isEmpty()
                         && uri.getPort() == -1,
-                "DEV_FRONTEND_ORIGIN");
+                code);
     }
 
     static Map<String, Map<String, String>> load(Path directory) throws Exception {
@@ -102,7 +118,8 @@ final class Environment {
                     entry.getKey(),
                     parse(
                             FileOps.privateText(directory.resolve(entry.getKey() + ".env")),
-                            entry.getValue()));
+                            entry.getValue(),
+                            OPTIONAL_KEYS.getOrDefault(entry.getKey(), Set.of())));
         }
         validate(values, DatabaseTarget.url(directory));
         ArrivalSettings.validateIfPresent(directory);
@@ -160,6 +177,7 @@ final class Environment {
                         .equals(api.get("CHAT_MONGODB_URI")),
                 "DEV_MONGO_URI");
         origin(api.get("CHAT_ALLOWED_ORIGINS"));
+        LoginSettings.validate(api);
         Checks.require(
                 settings.get("infra").get("DEV_REVISION").matches("[0-9a-f]{40}"), "DEV_REVISION");
     }
@@ -182,6 +200,7 @@ final class Environment {
                         "GBIS_",
                         "DB_",
                         "CHAT_",
+                        "AUTH_",
                         "MODEL_",
                         "COLLECTION_",
                         "FORECAST_",

@@ -143,10 +143,12 @@ final class SettingsPreparation {
                 0600);
         DatabaseTarget.preserve(layout.config(), destination, writer);
         ArrivalSettings.preserve(layout.config(), destination, writer);
+        LoginSettings.preserve(layout.config(), destination, writer);
         var updated = Environment.load(destination);
         for (var name : java.util.List.of("api", "worker", "postgres", "mongodb")) {
             Checks.require(updated.get(name).equals(settings.get(name)), "DEV_SECRETS_CHANGED");
         }
+        LoginSettings.requireAppleKey(destination, updated.get("api"), group);
         FileOps.owner(destination, 0, group);
         FileOps.mode(destination, 0750);
         FileOps.sync(destination);

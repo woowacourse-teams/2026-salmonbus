@@ -377,6 +377,7 @@ done
 
 기본은 꺼져 있다(`AUTH_ENABLED=false`). 꺼져 있으면 남은 인증 쿠키가 있어도 `/api/auth/*`·`/api/me`가 404이고 공개 조회 API는 로그인과 무관하게 동작한다.
 **로그인을 켰는데 필수 값이 비어 있거나 짧으면 API가 시작하지 않는다.** 비밀은 dev와 운영에서 서로 다른 값을 쓴다.
+**dev는 로그인 키를 받는 개발 서버 도구가 dev에 배포된 뒤에만 `AUTH_*` 줄을 넣는다.** 아래 「dev 서버에서 넣을 때」를 먼저 본다.
 
 | `$ETC/api.env`에 넣는 줄 | 값 |
 | --- | --- |
@@ -447,6 +448,42 @@ sudo grep '^AUTH_KAKAO_ADMIN_KEY=' "$ETC/api.env" | cut -d= -f2- | sed 's/^/Auth
 
 로그인을 끄려면 `AUTH_ENABLED=false`로 바꾸고 API를 재시작한다. 끄기는 로그인 공개를 되돌리는 스위치이고 이미 발급된 세션을 끊지 않는다. 테이블과 회원은 그대로 남고, 같은 `AUTH_REFRESH_TOKEN_SECRET`으로 다시 켜면 아직 만료되지 않은 세션이 이어진다. 세션을 끊어야 하면 아래 「모든 세션 끊기(보안 사고)」를 따른다.
 끈 동안에는 회원이 탈퇴할 수 없다. 만료된 리프레시 토큰 계통 정리(매시 17분), 연결 해제 재시도(5분마다), 포기한 요청 정리(매일 04:23)도 멈춘다.
+
+### dev 서버에서 넣을 때
+
+dev는 API·worker·infra 유닛이 시작 전에 각각 `shared-dev-tools.jar preflight <유닛>`을 돌리고, 셋 모두 `/etc/salmonbus-dev/api.env`를 검사한다. 로그인 키를 받지 않는 이전 도구는 `AUTH_*` 줄을 모르는 키(`ENV_KEYS`)로 보고 API·worker·infra(dev 전체)의 시작과 basis 갱신을 막는다. 그래서 순서는 이 도구 변경의 dev 배포가 먼저이고, 키와 `/etc/salmonbus-dev/apple`은 그 뒤에 넣는다.
+
+도구를 배포하기 전에 systemd drop-in으로 넣어 둔 `AUTH_*` 값이 없는지 본다. 새 도구는 `api.env`에 없는 `AUTH_*` 값이 프로세스 환경에 있으면 `DEV_EFFECTIVE_ENV`로 시작을 막는다.
+
+```bash
+systemctl show salmonbus-api salmonbus-worker -p Environment -p EnvironmentFiles   # AUTH_ 없음, 파일은 유닛의 세 개뿐
+sudo grep -rn 'AUTH_' /etc/systemd/system/salmonbus-*.service.d/ 2>/dev/null       # 출력 없음
+```
+
+있으면 배포 전에 그 줄을 지우고 `sudo systemctl daemon-reload` 한다. 값은 배포 뒤 `api.env`에 넣는다(배포 전에 `api.env`로 옮기면 이전 도구가 막는다).
+
+배포 뒤에는 로그인을 끈 채 값을 모두 넣고 마지막에 켠다. 도구는 `AUTH_ENABLED=true`일 때 값을 검사하고, 어긋나면 `DEV_AUTH_`로 시작하는 오류 코드로 API뿐 아니라 worker·infra 시작과 basis 갱신도 막는다. 비밀 값은 출력하지 않는다. 켠 상태에서 값이 빠져 있으면 그사이 worker가 재시작되거나 infra가 다시 뜰 때 수집과 DB까지 멈춘다.
+
+1. `AUTH_ENABLED=false`로 시작해 위 표의 나머지 값, 두 서명 비밀, 애플 키 파일과 `AUTH_APPLE_PRIVATE_KEY_PATH`를 넣는다. `false`이면 나머지 값은 검사하지 않는다
+2. `AUTH_ENABLED=true`로 바꾸고 바로 도구로 확인한다. 실패하면 오류 코드를 보고 곧바로 `false`로 되돌린 뒤 고친다
+
+   ```bash
+   sudo sed -i 's/^AUTH_ENABLED=false$/AUTH_ENABLED=true/' /etc/salmonbus-dev/api.env
+   sudo /usr/bin/java -jar /opt/salmonbus-dev/tools/shared-dev-tools.jar preflight prepare && echo ok
+   ```
+
+3. 통과하면 `sudo systemctl restart salmonbus-api` 한다
+
+도구가 검사하는 것:
+
+- `AUTH_*` 줄이 하나라도 있으면 `AUTH_ENABLED`가 `true` 또는 `false`로 있어야 한다
+- `AUTH_PUBLIC_BASE_URL`은 `https` 주소이고 운영 주소(`salmonbus.com`·`www.salmonbus.com`)가 아니며 경로·쿼리·포트가 없어야 한다
+- 두 서명 비밀은 위 명령이 만드는 형식(`openssl rand -hex 32`, 소문자 16진수 64자)이고 서로 달라야 한다
+- 켠 제공자(`AUTH_KAKAO_ENABLED=true`·`AUTH_APPLE_ENABLED=true`)의 값은 비어 있으면 안 된다. 두 제공자를 모두 끈 채 로그인을 켜는 것은 API가 허용하므로 도구도 막지 않는다
+- 애플 키는 `/etc/salmonbus-dev/apple/` 바로 아래 `.p8` 파일이다. 애플 로그인을 켜면 디렉터리는 `root:salmonbus` `0750`, 파일은 `root:salmonbus` `0640`이어야 한다(위 `install` 명령 그대로). 파일은 다른 사용자가 읽거나 그룹이 쓸 수 있으면 거절된다
+- basis 갱신은 설정 디렉터리를 새로 만들면서 `apple` 디렉터리를 로그인 상태와 관계없이 소유자·권한 그대로 옮긴다. 일반 파일이 아닌 항목(심볼릭 링크·하위 디렉터리)이 있으면 `preflight prepare`와 basis 갱신이 `DEV_AUTH_APPLE_DIRECTORY`로 멈춘다
+
+이 도구 변경 이전 번들로 되돌리면 그 번들의 이전 도구가 basis를 교체한다. 이전 도구는 `AUTH_*` 줄을 `ENV_KEYS`로 거절해 교체와 dev 전체 시작을 막고, `apple` 디렉터리를 새 설정으로 옮기지 않는다. 되돌리기 전에 `AUTH_*` 줄을 지우고 애플 키를 따로 보관한다.
 
 ### 모든 세션 끊기(보안 사고)
 

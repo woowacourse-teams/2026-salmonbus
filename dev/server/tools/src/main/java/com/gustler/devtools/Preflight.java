@@ -44,8 +44,9 @@ final class Preflight {
             Checks.require(FileOps.sha(file).equals(entry.getValue().asText()), "DEV_CONFIG");
         }
         var settings = Environment.load(directory);
+        LoginSettings.requireAppleKey(directory, settings.get("api"), host.account().gid());
         switch (component) {
-            case "prepare" -> {}
+            case "prepare" -> LoginSettings.requireCopyable(directory);
             case "infra" -> Environment.effective(settings.get("infra"), effective);
             case "api", "worker" -> {
                 Checks.require(

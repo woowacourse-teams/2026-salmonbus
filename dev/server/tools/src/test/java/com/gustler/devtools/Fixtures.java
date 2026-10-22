@@ -12,6 +12,23 @@ import java.util.Map;
 final class Fixtures {
     static final String ORIGIN = "https://dev.example.test";
     static final String COMMIT = "a".repeat(40);
+    static final Map<String, String> LOGIN =
+            Map.ofEntries(
+                    Map.entry("AUTH_ENABLED", "true"),
+                    Map.entry("AUTH_PUBLIC_BASE_URL", "https://dev.example.test"),
+                    Map.entry("AUTH_TOKEN_SECRET", "1".repeat(64)),
+                    Map.entry("AUTH_REFRESH_TOKEN_SECRET", "2".repeat(64)),
+                    Map.entry("AUTH_KAKAO_ENABLED", "true"),
+                    Map.entry("AUTH_KAKAO_CLIENT_ID", "kakao-client"),
+                    Map.entry("AUTH_KAKAO_CLIENT_SECRET", "kakao-secret"),
+                    Map.entry("AUTH_KAKAO_ADMIN_KEY", "kakao-admin"),
+                    Map.entry("AUTH_APPLE_ENABLED", "true"),
+                    Map.entry("AUTH_APPLE_CLIENT_ID", "test.salmonbus.dev"),
+                    Map.entry("AUTH_APPLE_TEAM_ID", "TEAM000000"),
+                    Map.entry("AUTH_APPLE_KEY_ID", "KEY0000000"),
+                    Map.entry(
+                            "AUTH_APPLE_PRIVATE_KEY_PATH",
+                            "/etc/salmonbus-dev/apple/AuthKey_KEY0000000.p8"));
     final Layout layout;
     final Path source;
     final FakeHost host = new FakeHost();

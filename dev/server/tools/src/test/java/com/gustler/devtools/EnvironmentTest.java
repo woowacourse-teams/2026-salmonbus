@@ -143,6 +143,182 @@ class EnvironmentTest {
         }
     }
 
+    private Map<String, String> parsedApi() {
+        return Environment.parse(
+                Environment.text(settings.get("api")),
+                Environment.KEYS.get("api"),
+                Environment.OPTIONAL_KEYS.get("api"));
+    }
+
+    @Test
+    void acceptsExistingApiSettingsWithoutLoginKeys() {
+        assertEquals(settings.get("api"), parsedApi());
+        assertDoesNotThrow(() -> Environment.validate(settings));
+    }
+
+    @Test
+    void acceptsPartialLoginValuesWhileLoginIsOff() {
+        settings.get("api").put("AUTH_ENABLED", "false");
+        settings.get("api").put("AUTH_TOKEN_SECRET", "short");
+        settings.get("api").put("AUTH_PUBLIC_BASE_URL", "https://salmonbus.com");
+        settings.get("api").put("AUTH_APPLE_ENABLED", "yes");
+        settings.get("api").put("AUTH_APPLE_PRIVATE_KEY_PATH", "/home/user/key.p8");
+        assertEquals(settings.get("api"), parsedApi());
+        assertDoesNotThrow(() -> Environment.validate(settings));
+    }
+
+    @Test
+    void acceptsCompleteLoginSettings() {
+        settings.get("api").putAll(Fixtures.LOGIN);
+        assertEquals(settings.get("api"), parsedApi());
+        assertDoesNotThrow(() -> Environment.validate(settings));
+        settings.get("api").put("AUTH_KAKAO_ENABLED", "false");
+        settings.get("api").remove("AUTH_APPLE_ENABLED");
+        settings.get("api").put("AUTH_APPLE_PRIVATE_KEY_PATH", "");
+        assertDoesNotThrow(() -> Environment.validate(settings));
+    }
+
+    @Test
+    void rejectsLoginKeysWithoutBooleanSwitch() {
+        settings.get("api").put("AUTH_TOKEN_SECRET", "1".repeat(64));
+        rejected("DEV_AUTH_ENABLED");
+        for (var value : java.util.List.of("", "TRUE", "1")) {
+            settings.get("api").put("AUTH_ENABLED", value);
+            rejected("DEV_AUTH_ENABLED");
+        }
+    }
+
+    @Test
+    void rejectsMalformedAndSharedTokenSecrets() {
+        settings.get("api").putAll(Fixtures.LOGIN);
+        for (var key : java.util.List.of("AUTH_TOKEN_SECRET", "AUTH_REFRESH_TOKEN_SECRET")) {
+            var previous = settings.get("api").get(key);
+            for (var value :
+                    java.util.List.of("", "1".repeat(63), "A".repeat(64), "g".repeat(64))) {
+                settings.get("api").put(key, value);
+                rejected("DEV_AUTH_TOKEN_SECRET");
+            }
+            settings.get("api").remove(key);
+            rejected("DEV_AUTH_TOKEN_SECRET");
+            settings.get("api").put(key, previous);
+        }
+        settings.get("api").put("AUTH_REFRESH_TOKEN_SECRET", "1".repeat(64));
+        rejected("DEV_AUTH_TOKEN_SECRET");
+    }
+
+    @Test
+    void rejectsProductionAndNonOriginLoginAddresses() {
+        settings.get("api").putAll(Fixtures.LOGIN);
+        for (var value :
+                java.util.List.of(
+                        "https://salmonbus.com",
+                        "https://www.salmonbus.com",
+                        "http://dev.example.test",
+                        "https://dev.example.test/",
+                        "https://dev.example.test?next=1",
+                        "https://dev.example.test:8443",
+                        "dev.example.test")) {
+            settings.get("api").put("AUTH_PUBLIC_BASE_URL", value);
+            rejected("DEV_AUTH_PUBLIC_BASE_URL");
+        }
+        settings.get("api").remove("AUTH_PUBLIC_BASE_URL");
+        rejected("DEV_AUTH_PUBLIC_BASE_URL");
+    }
+
+    @Test
+    void rejectsIncompleteEnabledProviders() {
+        settings.get("api").putAll(Fixtures.LOGIN);
+        for (var key :
+                java.util.List.of(
+                        "AUTH_KAKAO_CLIENT_ID",
+                        "AUTH_KAKAO_CLIENT_SECRET",
+                        "AUTH_KAKAO_ADMIN_KEY")) {
+            var previous = settings.get("api").put(key, "");
+            rejected("DEV_AUTH_KAKAO");
+            settings.get("api").remove(key);
+            rejected("DEV_AUTH_KAKAO");
+            settings.get("api").put(key, previous);
+        }
+        settings.get("api").put("AUTH_KAKAO_ENABLED", "yes");
+        rejected("DEV_AUTH_KAKAO");
+        settings.get("api").put("AUTH_KAKAO_ENABLED", "true");
+        for (var key :
+                java.util.List.of(
+                        "AUTH_APPLE_CLIENT_ID",
+                        "AUTH_APPLE_TEAM_ID",
+                        "AUTH_APPLE_KEY_ID",
+                        "AUTH_APPLE_PRIVATE_KEY_PATH")) {
+            var previous = settings.get("api").put(key, "");
+            rejected("DEV_AUTH_APPLE");
+            settings.get("api").put(key, previous);
+        }
+        settings.get("api").put("AUTH_APPLE_ENABLED", "on");
+        rejected("DEV_AUTH_APPLE");
+    }
+
+    @Test
+    void rejectsAppleKeysOutsideTheDevAppleDirectory() {
+        settings.get("api").putAll(Fixtures.LOGIN);
+        for (var path :
+                java.util.List.of(
+                        "/etc/salmonbus/apple/AuthKey_KEY0000000.p8",
+                        "/etc/salmonbus-dev/AuthKey_KEY0000000.p8",
+                        "/etc/salmonbus-dev/apple/AuthKey_KEY0000000.pem",
+                        "/etc/salmonbus-dev/apple/../api.env.p8",
+                        "/etc/salmonbus-dev/apple/keys/AuthKey_KEY0000000.p8",
+                        "/etc/salmonbus-dev/apple/.p8",
+                        "/home/salmonbus/AuthKey_KEY0000000.p8",
+                        "etc/salmonbus-dev/apple/AuthKey_KEY0000000.p8")) {
+            settings.get("api").put("AUTH_APPLE_PRIVATE_KEY_PATH", path);
+            rejected("DEV_AUTH_APPLE");
+        }
+    }
+
+    @Test
+    void rejectsUnknownAndRepeatedLoginKeys() {
+        for (var line :
+                java.util.List.of(
+                        "AUTH_UNKNOWN=value\n",
+                        "AUTH_APPLE_PRIVATE_KEY=value\n",
+                        "AUTH_ENABLED=false\nAUTH_ENABLED=true\n")) {
+            assertEquals(
+                    "ENV_KEYS",
+                    assertThrows(
+                                    IllegalArgumentException.class,
+                                    () ->
+                                            Environment.parse(
+                                                    Environment.text(settings.get("api")) + line,
+                                                    Environment.KEYS.get("api"),
+                                                    Environment.OPTIONAL_KEYS.get("api")))
+                            .getMessage());
+        }
+        assertEquals(
+                "ENV_KEYS",
+                assertThrows(
+                                IllegalArgumentException.class,
+                                () ->
+                                        Environment.parse(
+                                                Environment.text(settings.get("worker"))
+                                                        + "AUTH_ENABLED=false\n",
+                                                Environment.KEYS.get("worker"),
+                                                Environment.OPTIONAL_KEYS.getOrDefault(
+                                                        "worker", Set.of())))
+                        .getMessage());
+        var withoutRequired = new HashMap<>(settings.get("api"));
+        withoutRequired.remove("CHAT_ENABLED");
+        withoutRequired.put("AUTH_ENABLED", "false");
+        assertEquals(
+                "ENV_KEYS",
+                assertThrows(
+                                IllegalArgumentException.class,
+                                () ->
+                                        Environment.parse(
+                                                Environment.text(withoutRequired),
+                                                Environment.KEYS.get("api"),
+                                                Environment.OPTIONAL_KEYS.get("api")))
+                        .getMessage());
+    }
+
     @Test
     void rejectsWrongInstanceAccountAndEnvironment() {
         var identity =
@@ -189,6 +365,22 @@ class EnvironmentTest {
     }
 
     @Test
+    void acceptsLoginSettingsOnlyWithTheValuesFromApiEnv() {
+        var expected = Environment.combined(settings.get("api"), Fixtures.LOGIN);
+        Environment.effective(expected, Environment.combined(expected, Map.of("PATH", "/usr/bin")));
+        assertEquals(
+                "DEV_EFFECTIVE_ENV",
+                assertThrows(
+                                IllegalArgumentException.class,
+                                () ->
+                                        Environment.effective(
+                                                expected,
+                                                Environment.combined(
+                                                        expected, Map.of("AUTH_ENABLED", "false"))))
+                        .getMessage());
+    }
+
+    @Test
     void rejectsInheritedConnectionAndJvmOverrides() {
         var expected = settings.get("api");
         Environment.effective(expected, Environment.combined(expected, Map.of("PATH", "/usr/bin")));
@@ -199,6 +391,7 @@ class EnvironmentTest {
                         Map.of("SPRING_APPLICATION_JSON", "{}"),
                         Map.of("JAVA_TOOL_OPTIONS", "-Dgbis.base-url=https://external.invalid"),
                         Map.of("DOCKER_HOST", "tcp://external.invalid:2375"),
+                        Map.of("AUTH_ENABLED", "true"),
                         Map.of("COMPOSE_PROJECT_NAME", "other"))) {
             assertThrows(
                     IllegalArgumentException.class,

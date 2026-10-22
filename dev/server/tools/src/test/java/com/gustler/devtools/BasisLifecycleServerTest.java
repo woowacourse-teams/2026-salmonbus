@@ -172,6 +172,79 @@ class BasisLifecycleServerTest {
     }
 
     @Test
+    void updateKeepsEnabledAppleLoginKeyReadableByTheServiceGroup() throws Exception {
+        var api = fixture.layout.config().resolve("api.env");
+        Files.writeString(api, Files.readString(api) + Environment.text(Fixtures.LOGIN));
+        var keys =
+                Files.createDirectory(
+                        fixture.layout.config().resolve(LoginSettings.APPLE_DIRECTORY));
+        FileOps.owner(keys, 0, host.account().gid());
+        FileOps.mode(keys, 0750);
+        var key = keys.resolve("AuthKey_KEY0000000.p8");
+        FileOps.writeNew(key, "test apple key\n".getBytes(), 0640);
+        FileOps.owner(key, 0, host.account().gid());
+        new Preflight(fixture.layout, host).check("prepare", Map.of());
+        var before = secrets();
+        new BasisLifecycle(fixture.layout, host).change(incoming, true);
+        assertEquals(
+                RevisionStore.verify(incoming, true).releaseId(),
+                fixture.layout
+                        .root()
+                        .resolve("basis/current")
+                        .toRealPath()
+                        .getFileName()
+                        .toString());
+        assertEquals("test apple key\n", Files.readString(key));
+        new Preflight(fixture.layout, host).check("prepare", Map.of());
+        preserved(before);
+    }
+
+    @Test
+    void checkAndUpdateAgreeOnAStagedAppleDirectoryWhileLoginIsOff() throws Exception {
+        var api = fixture.layout.config().resolve("api.env");
+        Files.writeString(
+                api,
+                Files.readString(api)
+                        + "AUTH_ENABLED=false\nAUTH_APPLE_ENABLED=true\n"
+                        + "AUTH_APPLE_PRIVATE_KEY_PATH="
+                        + Fixtures.LOGIN.get("AUTH_APPLE_PRIVATE_KEY_PATH")
+                        + "\n");
+        var keys =
+                Files.createDirectory(
+                        fixture.layout.config().resolve(LoginSettings.APPLE_DIRECTORY));
+        FileOps.mode(keys, 0755);
+        var notes = keys.resolve("notes.txt");
+        FileOps.writeNew(notes, "staged\n".getBytes(), 0600);
+        Files.createDirectory(keys.resolve("old"));
+        var before = secrets();
+        var lifecycle = new BasisLifecycle(fixture.layout, host);
+        for (final boolean apply : List.of(false, true)) {
+            assertEquals(
+                    "DEV_AUTH_APPLE_DIRECTORY",
+                    assertThrows(
+                                    IllegalArgumentException.class,
+                                    () -> lifecycle.change(incoming, apply))
+                            .getMessage());
+        }
+        assertEquals(original, fixture.layout.root().resolve("basis/current").toRealPath());
+        Files.delete(keys.resolve("old"));
+        assertEquals("check", lifecycle.change(incoming, false).get("mode"));
+        lifecycle.change(incoming, true);
+        assertEquals(
+                RevisionStore.verify(incoming, true).releaseId(),
+                fixture.layout
+                        .root()
+                        .resolve("basis/current")
+                        .toRealPath()
+                        .getFileName()
+                        .toString());
+        assertEquals(0755, FileOps.attribute(keys, "mode") & 07777);
+        assertEquals("staged\n", Files.readString(notes));
+        assertEquals(0600, FileOps.attribute(notes, "mode") & 07777);
+        preserved(before);
+    }
+
+    @Test
     void restartFailureAutomaticallyRestoresPreviousConfiguration() throws Exception {
         var before = secrets();
         host.startFailures = 1;
