@@ -169,14 +169,20 @@ function GroupDetails({ group }: { group: FavoriteGroup }) {
           return (
             <li className={styles.groupRow} key={favorite.id}>
               <span>
-                {item ? `${item.route.displayName} · ${item.stop.name}` : `즐겨찾기 ${index + 1}`}
+                {item
+                  ? `${item.route.displayName || "노선 정보 없음"} · ${item.stop.name || "정류장 정보 없음"}`
+                  : `즐겨찾기 ${index + 1}`}
                 <span className={styles.subtle} style={{ display: "block" }}>
-                  {item ? `${item.route.directionName} 방면` : favorite.direction === "UP" ? "상행" : "하행"}
+                  {item?.route.terminalStopName?.trim()
+                    ? `${item.route.terminalStopName.trim()} 방면`
+                    : favorite.direction === "UP"
+                      ? "상행"
+                      : "하행"}
                 </span>
               </span>
               <button
                 className={styles.action}
-                aria-label={`${item?.stop.name ?? `즐겨찾기 ${index + 1}`} 삭제`}
+                aria-label={`${item?.stop.name || `즐겨찾기 ${index + 1}`} 삭제`}
                 onClick={() => {
                   setError(null);
                   setDeleting(favorite);

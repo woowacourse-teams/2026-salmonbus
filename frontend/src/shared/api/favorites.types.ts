@@ -34,8 +34,8 @@ export interface FavoriteArrival {
 export interface HomeFavorite {
   id: string;
   status: FavoriteStatus;
-  route: { id: string; displayName: string; directionName: string };
-  stop: { stopId: string; name: string; direction: Direction };
+  route: { id: string; displayName?: string; terminalStopName?: string };
+  stop: { stopId: string; name?: string; direction?: Direction };
   approachingVehicles: FavoriteArrival[];
 }
 

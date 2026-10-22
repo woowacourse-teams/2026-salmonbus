@@ -181,7 +181,7 @@ for (const [status, label] of [
     await page.goto("/");
     const panel = page.getByRole("tabpanel");
     await expect(panel.getByText(label, { exact: true })).toBeVisible();
-    await expect(panel.getByRole("link")).toContainText(stop.name);
+    await expect(panel.getByRole("link")).toContainText(status === "NO_VEHICLE" ? stop.name : "정류장 정보 없음");
     if (status === "ERROR") {
       favorites.statuses[saved.id] = "READY";
       await panel.getByRole("button", { name: "다시 확인하기", exact: true }).click();
@@ -190,6 +190,34 @@ for (const [status, label] of [
     expect(favorites.groups[0]!.favorites).toHaveLength(1);
   });
 }
+
+test("표시 정보가 생략된 항목도 정상 카드와 함께 남기고 저장한 방면으로 이동한다", async ({ page, favorites, api }) => {
+  const up = api.data.board.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+  const down = api.data.board.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed)!;
+  const unavailable = storedFavorite({ routeId, stopId: down.stopId, direction: "DOWN" });
+  favorites.groups[0]!.favorites = [unavailable, storedFavorite({ routeId, stopId: up.stopId, direction: "UP" }, 5)];
+  favorites.statuses[unavailable.id] = "UNAVAILABLE";
+  await page.goto("/");
+  const panel = page.getByRole("tabpanel");
+  await expect(panel.getByRole("link")).toHaveCount(2);
+  await expect(panel.getByText(up.name, { exact: true })).toBeVisible();
+  const fallback = panel.getByRole("link").filter({ hasText: "정류장 정보 없음" });
+  await expect(fallback).toContainText("노선 정보 없음");
+  await expect(fallback).toContainText("하행");
+  await expect(fallback).toHaveAttribute("href", `/routes/${routeId}?direction=DOWN&stopId=${down.stopId}`);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await fallback.click();
+  await expect(page).toHaveURL(`/routes/${routeId}?direction=DOWN&stopId=${down.stopId}`);
+
+  await page.goto(`/mypage/groups/${defaultGroupId}`);
+  await expect(page.getByText("노선 정보 없음 · 정류장 정보 없음")).toBeVisible();
+  await expect(page.getByRole("button", { name: "즐겨찾기 1 삭제", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "순서 편집", exact: true }).click();
+  await expect(
+    page.getByRole("dialog").getByRole("button", { name: "노선 정보 없음 · 정류장 정보 없음 순서 변경", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/undefined/)).toHaveCount(0);
+});
 
 test("순서 일부가 저장된 뒤 실패하면 저장된 부분을 유지하고 남은 요청만 재시도한다", async ({
   page,

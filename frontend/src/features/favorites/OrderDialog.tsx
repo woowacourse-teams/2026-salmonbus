@@ -87,7 +87,7 @@ export function OrderDialog({ onClose }: { onClose: () => void }) {
             label={(favorite) => {
               const summary = favorites.find((candidate) => candidate.id === favorite.id);
               return summary
-                ? `${summary.route.displayName} · ${summary.stop.name}`
+                ? `${summary.route.displayName || "노선 정보 없음"} · ${summary.stop.name || "정류장 정보 없음"}`
                 : `즐겨찾기 ${group.favorites.indexOf(favorite) + 1}`;
             }}
             onMove={(from, to) =>

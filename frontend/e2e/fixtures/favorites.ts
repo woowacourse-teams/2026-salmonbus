@@ -86,17 +86,22 @@ export const test = authTest.extend<{ favorites: FavoritesMock }>({
                   (stop) => stop.stopId === favorite.stopId && stop.direction === favorite.direction,
                 );
                 const status = favorites.statuses[favorite.id] ?? "READY";
+                const hasBoard = status === "READY" || status === "NO_VEHICLE";
                 return {
                   id: favorite.id,
                   status,
-                  route: {
-                    id: favorite.routeId,
-                    displayName: api.data.board.route.displayName,
-                    directionName: api.data.board.route.directions.find(
-                      (direction) => direction.id === favorite.direction,
-                    )!.terminalStopName,
-                  },
-                  stop: { stopId: favorite.stopId, name: stop?.name ?? "저장한 정류장", direction: favorite.direction },
+                  route: hasBoard
+                    ? {
+                        id: favorite.routeId,
+                        displayName: api.data.board.route.displayName,
+                        terminalStopName: api.data.board.route.directions.find(
+                          (direction) => direction.id === favorite.direction,
+                        )!.terminalStopName,
+                      }
+                    : { id: favorite.routeId },
+                  stop: hasBoard
+                    ? { stopId: favorite.stopId, name: stop?.name ?? "저장한 정류장", direction: favorite.direction }
+                    : { stopId: favorite.stopId },
                   approachingVehicles:
                     status === "READY"
                       ? [0, 1, 2].map((index) => ({

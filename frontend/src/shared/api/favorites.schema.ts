@@ -98,13 +98,12 @@ function isHomeFavorite(value: unknown): value is HomeFavorite {
   return (
     record(value.route) &&
     identifier(value.route.id) &&
-    typeof value.route.displayName === "string" &&
-    typeof value.route.directionName === "string" &&
-    value.route.directionName.trim().length > 0 &&
+    (value.route.displayName === undefined || typeof value.route.displayName === "string") &&
+    (value.route.terminalStopName === undefined || typeof value.route.terminalStopName === "string") &&
     record(value.stop) &&
     identifier(value.stop.stopId) &&
-    typeof value.stop.name === "string" &&
-    direction(value.stop.direction) &&
+    (value.stop.name === undefined || typeof value.stop.name === "string") &&
+    (value.stop.direction === undefined || direction(value.stop.direction)) &&
     Array.isArray(value.approachingVehicles) &&
     value.approachingVehicles.length <= 3 &&
     value.approachingVehicles.every(isArrival)

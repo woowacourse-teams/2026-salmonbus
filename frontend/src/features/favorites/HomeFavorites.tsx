@@ -1,9 +1,10 @@
 import { useEffect, useReducer, useState } from "react";
 import { Link } from "react-router";
-import type { FavoriteStatus, HomeFavorite } from "@/shared/api/favorites.types";
+import type { FavoriteStatus, FavoriteTarget, HomeFavorite } from "@/shared/api/favorites.types";
 import { latestSuccessOf } from "@/shared/api/polledResource";
 import { SeatCountBadge } from "@/shared/components/SeatCountBadge";
 import { toSeatLevel } from "@/shared/utils/seatGrade";
+import { boardPathFor } from "@/shared/routing/paths";
 import { useFavorites, useHomeFavorites } from "./FavoritesContext";
 import { FavoritesNotice } from "./FavoritesNotice";
 import { OrderDialog } from "./OrderDialog";
@@ -89,6 +90,7 @@ export function HomeFavorites() {
             <FavoriteCard
               key={favorite.id}
               favorite={favorite}
+              savedDirection={group?.favorites.find((candidate) => candidate.id === favorite.id)?.direction}
               elapsed={Math.max(0, (now - (latest?.receivedAt ?? now)) / 1000)}
               onRetry={retry}
             />
@@ -102,28 +104,38 @@ export function HomeFavorites() {
 
 function FavoriteCard({
   favorite,
+  savedDirection,
   elapsed,
   onRetry,
 }: {
   favorite: HomeFavorite;
+  savedDirection: FavoriteTarget["direction"] | undefined;
   elapsed: number;
   onRetry: () => void;
 }) {
+  const direction = favorite.stop.direction ?? savedDirection;
+  const terminalStopName = favorite.route.terminalStopName?.trim();
   return (
     <li className={styles.card}>
       <Link
         className={styles.cardLink}
-        to={favoritePath({
-          routeId: favorite.route.id,
-          stopId: favorite.stop.stopId,
-          direction: favorite.stop.direction,
-        })}
+        to={
+          direction
+            ? favoritePath({ routeId: favorite.route.id, stopId: favorite.stop.stopId, direction })
+            : boardPathFor(favorite.route.id)
+        }
       >
         <div className={styles.cardHeading}>
-          <span className={styles.route}>{favorite.route.displayName}</span>
-          <span style={{ flex: 1 }}>{favorite.stop.name}</span>
+          <span className={styles.route}>{favorite.route.displayName || "노선 정보 없음"}</span>
+          <span style={{ flex: 1 }}>{favorite.stop.name || "정류장 정보 없음"}</span>
           <span className={styles.subtle} style={{ fontSize: 10, whiteSpace: "nowrap" }}>
-            {favorite.route.directionName} 방면
+            {terminalStopName
+              ? `${terminalStopName} 방면`
+              : direction === "UP"
+                ? "상행"
+                : direction === "DOWN"
+                  ? "하행"
+                  : "방면 정보 없음"}
           </span>
         </div>
         {favorite.status === "READY" && favorite.approachingVehicles.length > 0 ? (
