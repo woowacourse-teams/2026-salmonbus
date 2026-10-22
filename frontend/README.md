@@ -1,5 +1,7 @@
 # 프런트엔드 환경변수
 
+카카오 로그인을 localhost에서 완료하려면 [카카오 로컬 로그인 설정](docs/kakao-local.md)을 따른다. 로컬 백엔드의 비밀 설정은 `env/.env.kakao-local`에 넣고, 공개 프론트엔드 환경변수와 분리한다.
+
 ## 배포된 dev API로 로컬 실행
 
 `env/.env.development`에 `API_PROXY_TARGET=https://dev.salmonbus.com`을 설정합니다. 이 값은 webpack 개발 서버를 시작할 때 읽으므로, 변경한 뒤 `pnpm dev`를 다시 실행해야 합니다. 값을 비우면 로컬 백엔드(`http://localhost:8080`)로 요청합니다.

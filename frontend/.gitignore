@@ -3,6 +3,7 @@ dist/
 
 env/.env*
 !env/.env.example
+!env/.env.kakao-local.example
 
 *storybook.log
 storybook-static
