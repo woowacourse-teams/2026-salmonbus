@@ -146,6 +146,7 @@ for (const action of ["로그아웃", "회원탈퇴"] as const) {
     await page.getByRole("dialog").getByRole("button", { name: action, exact: true }).click();
     await expect(page).toHaveURL("/");
     await expect(page.getByRole("link", { name: "로그인 / 회원가입", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "내 정류장을 저장해 보세요", exact: true })).toBeVisible();
   });
 }
 
