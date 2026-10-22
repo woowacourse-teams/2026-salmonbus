@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { useAuth } from "./AuthProvider";
-import { clearLoginReturn, readLoginReturn } from "./loginReturn";
+import { useAuth } from "@/shared/hooks/useAuth";
+import { clearLoginReturn, readLoginReturn } from "@/shared/routing/loginReturn";
 
 export function AuthReturn() {
   const { state } = useAuth();

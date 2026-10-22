@@ -1,5 +1,5 @@
-import { requestJson, type ApiResult, type RequestOptions } from "@/shared/api/client";
-import { isAuthSession, isMember } from "./authPolicy";
+import { requestJson, type ApiResult, type RequestOptions } from "./client";
+import { isAuthSession, isMember } from "./auth.schema";
 import type { AuthSession, Member } from "./auth.types";
 
 let generation = 0;

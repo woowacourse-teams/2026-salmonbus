@@ -9,10 +9,3 @@ export interface Member {
 export type AuthSession =
   | { authenticated: true; refreshable: false; member: Member }
   | { authenticated: false; refreshable: boolean; member?: never };
-
-export type AuthState =
-  | { status: "loading" }
-  | { status: "anonymous" }
-  | { status: "authenticated"; member: Member }
-  | { status: "unavailable" }
-  | { status: "error" };

@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
-import { useAuth, authErrorOf } from "@/features/auth";
-import { AccountLayout, ConfirmDialog, LoginButton, Notice } from "@/features/auth/AccountLayout";
-import * as styles from "@/features/auth/account.css";
+import { AccountLayout } from "@/shared/components/AccountLayout";
+import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
+import { LoginButton } from "@/shared/components/LoginButton";
+import { Notice } from "@/shared/components/Notice";
+import { useAuth } from "@/shared/hooks/useAuth";
+import { authErrorOf } from "@/shared/utils/authErrorOf";
+import * as buttonStyles from "@/shared/styles/button.css";
+import * as styles from "./MyPage.css";
 
 export function MyPage() {
   const active = useRef(false);
@@ -118,10 +123,10 @@ export function MyPage() {
             </p>
           )}
           <div className={styles.actions}>
-            <button type="button" className={styles.primary} disabled={busy} onClick={() => void confirm()}>
+            <button type="button" className={buttonStyles.primary} disabled={busy} onClick={() => void confirm()}>
               {busy ? "처리 중…" : action === "logout" ? "로그아웃" : "회원탈퇴"}
             </button>
-            <button type="button" className={styles.secondary} disabled={busy} onClick={() => setAction(null)}>
+            <button type="button" className={buttonStyles.secondary} disabled={busy} onClick={() => setAction(null)}>
               취소
             </button>
           </div>

@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import { useAuth, localReturnTo, boardReturnTo, type LoginProvider } from "@/features/auth";
-import { Brand, ConfirmDialog } from "@/features/auth/AccountLayout";
-import { clearLoginReturn, saveLoginReturn } from "@/features/auth/loginReturn";
-import * as styles from "@/features/auth/account.css";
+import type { LoginProvider } from "@/shared/api/auth.types";
+import { Brand } from "@/shared/components/Brand";
+import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
+import { useAuth } from "@/shared/hooks/useAuth";
+import { clearLoginReturn, saveLoginReturn } from "@/shared/routing/loginReturn";
+import { localReturnTo, boardReturnTo } from "@/shared/routing/loginReturnPolicy";
+import * as buttonStyles from "@/shared/styles/button.css";
+import * as styles from "./LoginPage.css";
 
 declare global {
   interface Window {
@@ -167,11 +171,11 @@ export function LoginPage() {
         <ConfirmDialog title="로그인을 완료하지 못했어요" onCancel={dismissFailure}>
           <p className={styles.caption}>다시 로그인하거나 돌아가서 노선을 검색할 수 있어요.</p>
           <div className={styles.actions}>
-            <button className={styles.primary} type="button" onClick={dismissFailure}>
+            <button className={buttonStyles.primary} type="button" onClick={dismissFailure}>
               다시 로그인
             </button>
             <button
-              className={styles.secondary}
+              className={buttonStyles.secondary}
               type="button"
               onClick={() => {
                 clearLoginReturn();

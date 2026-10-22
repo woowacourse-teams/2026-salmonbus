@@ -1,5 +1,5 @@
-import type { LoginProvider } from "./auth.types";
-import { localReturnTo } from "./authPolicy";
+import type { LoginProvider } from "@/shared/api/auth.types";
+import { localReturnTo } from "./loginReturnPolicy";
 
 const STORAGE_KEY = "salmonbus.loginReturn";
 const TTL = 10 * 60_000;

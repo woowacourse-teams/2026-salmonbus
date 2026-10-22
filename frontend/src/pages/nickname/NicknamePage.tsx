@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
-import { useAuth, nicknameErrorOf, authErrorOf } from "@/features/auth";
-import { AccountLayout, LoginButton } from "@/features/auth/AccountLayout";
-import * as styles from "@/features/auth/account.css";
+import { AccountLayout } from "@/shared/components/AccountLayout";
+import { LoginButton } from "@/shared/components/LoginButton";
+import { useAuth } from "@/shared/hooks/useAuth";
+import { authErrorOf } from "@/shared/utils/authErrorOf";
+import { nicknameErrorOf } from "./components/nicknamePolicy";
+import * as buttonStyles from "@/shared/styles/button.css";
+import * as styles from "./NicknamePage.css";
 
 export function NicknamePage() {
   const { state } = useAuth();
@@ -85,7 +89,7 @@ function NicknameForm({ current }: { current: string }) {
         내부 공백 · 특수문자 · 이모지는 사용할 수 없어요.
       </p>
       <button
-        className={styles.primary}
+        className={buttonStyles.primary}
         type="submit"
         disabled={busy || localError !== null || nickname.trim() === current || error !== null}
       >

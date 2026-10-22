@@ -1,6 +1,9 @@
 import { useLocation, useNavigate } from "react-router";
-import { useAuth } from "@/features/auth";
-import { Brand, BottomNavigation, LoginButton, Notice } from "@/features/auth/AccountLayout";
+import { useAuth } from "@/shared/hooks/useAuth";
+import { Brand } from "@/shared/components/Brand";
+import { BottomNavigation } from "@/shared/components/BottomNavigation";
+import { LoginButton } from "@/shared/components/LoginButton";
+import { Notice } from "@/shared/components/Notice";
 import { track } from "@/shared/analytics/track";
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
 import { boardPathFor } from "@/shared/routing/paths";

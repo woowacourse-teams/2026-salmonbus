@@ -1,17 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { ApiResult } from "@/shared/api/client";
-import * as api from "./auth.api";
-import type { AuthSession, AuthState, Member } from "./auth.types";
-
-interface AuthContextValue {
-  state: AuthState;
-  reload: () => Promise<void>;
-  changeNickname: (nickname: string) => Promise<ApiResult<Member>>;
-  signOut: () => Promise<ApiResult<void>>;
-  withdraw: () => Promise<ApiResult<void | { startUrl: string }>>;
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null);
+import * as api from "@/shared/api/auth.api";
+import type { AuthSession } from "@/shared/api/auth.types";
+import { AuthContext, type AuthState } from "@/shared/hooks/useAuth";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ status: "loading" });
@@ -78,12 +69,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return <AuthContext value={{ state, reload, changeNickname, signOut, withdraw }}>{children}</AuthContext>;
-}
-
-export function useAuth(): AuthContextValue {
-  const value = useContext(AuthContext);
-  if (value === null) throw new Error("AuthProvider 안에서 사용해야 합니다.");
-  return value;
 }
 
 function stateOf(result: ApiResult<AuthSession>): AuthState {

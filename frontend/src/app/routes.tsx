@@ -2,9 +2,9 @@ import { Route, Routes } from "react-router";
 import { RouteSelectPage } from "@/pages/route-select";
 import { VerdictBoardPage } from "@/pages/verdict-board";
 import { paths } from "@/shared/routing/paths";
-import { LoginPage } from "@/pages/account/LoginPage";
-import { MyPage } from "@/pages/account/MyPage";
-import { NicknamePage } from "@/pages/account/NicknamePage";
+import { LoginPage } from "@/pages/login";
+import { MyPage } from "@/pages/mypage";
+import { NicknamePage } from "@/pages/nickname";
 
 export function AppRoutes() {
   return (

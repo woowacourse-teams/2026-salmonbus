@@ -1,0 +1,1 @@
+export { NicknamePage } from "./NicknamePage";
