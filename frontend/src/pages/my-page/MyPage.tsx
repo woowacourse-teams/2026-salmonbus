@@ -110,11 +110,7 @@ export function MyPage() {
             if (!busy) setAction(null);
           }}
         >
-          <p className={styles.caption}>
-            {action === "logout"
-              ? "로그아웃하면 비회원 홈으로 돌아가요. 다시 로그인해서 이용할 수 있어요."
-              : "탈퇴하면 이 계정의 회원 정보가 삭제돼요. 다시 이용하려면 가입해야 해요."}
-          </p>
+          {action === "withdraw" && <p className={styles.caption}>탈퇴하면 이 계정의 회원 정보가 삭제돼요.</p>}
           {action === "withdraw" && state.status === "authenticated" && state.member.provider === "APPLE" && (
             <p className={styles.caption}>탈퇴를 완료하려면 Apple 계정으로 한 번 더 인증해야 해요.</p>
           )}

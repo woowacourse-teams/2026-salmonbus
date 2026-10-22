@@ -14,7 +14,19 @@ export function NicknamePage() {
     <AccountLayout>
       <div className={styles.backTitle}>
         <Link className={styles.backIcon} to="/mypage" aria-label="마이페이지로 돌아가기">
-          ‹
+          <svg
+            width="17"
+            height="17"
+            viewBox="0 0 17 17"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M13.6 8.5H3.4M7.9 4 3.4 8.5 7.9 13" />
+          </svg>
         </Link>
         <h1 className={styles.title} style={{ margin: 0 }}>
           닉네임 수정
