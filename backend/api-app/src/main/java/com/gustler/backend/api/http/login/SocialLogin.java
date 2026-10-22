@@ -3,6 +3,7 @@ package com.gustler.backend.api.http.login;
 import com.gustler.backend.api.account.token.AccessTokens;
 import com.gustler.backend.api.account.token.AuthCookies;
 import com.gustler.backend.api.account.token.WithdrawalTickets;
+import com.gustler.backend.api.favorite.application.DefaultFavoriteGroupService;
 import com.gustler.backend.member.api.RefreshTokens;
 import com.gustler.backend.member.api.SignInWithSocialAccount;
 import java.net.http.HttpClient;
@@ -51,6 +52,7 @@ public final class SocialLogin {
     private final RefreshTokens refreshTokens;
     private final ObjectProvider<AccessTokens> accessTokens;
     private final ObjectProvider<AuthCookies> authCookies;
+    private final DefaultFavoriteGroupService defaultGroups;
     private final ObjectProvider<AppleWithdrawal> appleWithdrawal;
     private final ObjectProvider<WithdrawalTickets> withdrawalTickets;
 
@@ -61,6 +63,7 @@ public final class SocialLogin {
         RefreshTokens refreshTokens,
         ObjectProvider<AccessTokens> accessTokens,
         ObjectProvider<AuthCookies> authCookies,
+        DefaultFavoriteGroupService defaultGroups,
         ObjectProvider<AppleWithdrawal> appleWithdrawal,
         ObjectProvider<WithdrawalTickets> withdrawalTickets
     ) {
@@ -70,6 +73,7 @@ public final class SocialLogin {
         this.refreshTokens = refreshTokens;
         this.accessTokens = accessTokens;
         this.authCookies = authCookies;
+        this.defaultGroups = defaultGroups;
         this.appleWithdrawal = appleWithdrawal;
         this.withdrawalTickets = withdrawalTickets;
     }
@@ -91,8 +95,8 @@ public final class SocialLogin {
             .redirectionEndpoint(endpoint -> endpoint.baseUri(CALLBACK_PATTERN))
             .tokenEndpoint(endpoint -> endpoint.accessTokenResponseClient(tokenClient()))
             .successHandler(new SocialLoginSuccessHandler(
-                signIn, refreshTokens, accessTokens.getObject(), authCookies.getObject(), failureHandler,
-                withdrawal))
+                signIn, refreshTokens, accessTokens.getObject(), authCookies.getObject(), defaultGroups,
+                failureHandler, withdrawal))
             .failureHandler(failureHandler));
         if (withdrawal.isPresent()) {
             http.addFilterBefore(

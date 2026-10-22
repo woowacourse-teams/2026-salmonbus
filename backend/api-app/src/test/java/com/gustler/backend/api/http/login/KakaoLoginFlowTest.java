@@ -2,7 +2,10 @@ package com.gustler.backend.api.http.login;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 
+import com.gustler.backend.api.favorite.application.DefaultFavoriteGroupService;
 import com.nimbusds.jwt.JWTClaimsSet;
 import java.net.http.HttpResponse;
 import java.time.Instant;
@@ -52,6 +55,9 @@ class KakaoLoginFlowTest {
     @Autowired
     private FakeKakaoServer kakao;
 
+    @Autowired
+    private DefaultFavoriteGroupService defaultGroups;
+
     @BeforeEach
     void 상태를_비운다() {
         kakao.reset();
@@ -96,6 +102,30 @@ class KakaoLoginFlowTest {
             softly.assertThat(tokenRequest.authorizationHeader()).isNull();
             softly.assertThat(memberCount()).isEqualTo(1);
             softly.assertThat(identityCount()).isEqualTo(1);
+            softly.assertThat(favoriteGroupCount()).isEqualTo(1);
+            softly.assertThat(favoriteGroupName()).isEqualTo("즐겨찾기");
+        });
+    }
+
+    @Test
+    void 기본_그룹을_만들지_못해도_회원가입과_로그인은_완료한다() throws Exception {
+        // given
+        doThrow(new IllegalStateException("기본 그룹 생성 실패"))
+            .when(defaultGroups).ensure(any());
+        TestBrowser browser = browser();
+        String authorization = location(browser.get("/api/auth/kakao/start"));
+
+        // when
+        String code = kakao.authorize(authorization, SUBJECT);
+        HttpResponse<String> callback = browser.get(callbackPath(authorization, code));
+
+        // then
+        JsonNode session = objectMapper.readTree(browser.get("/api/auth/session").body());
+        assertSoftly(softly -> {
+            softly.assertThat(callback.statusCode()).isEqualTo(HttpStatus.FOUND.value());
+            softly.assertThat(session.path("authenticated").asBoolean()).isTrue();
+            softly.assertThat(memberCount()).isEqualTo(1);
+            softly.assertThat(favoriteGroupCount()).isZero();
         });
     }
 
@@ -371,6 +401,14 @@ class KakaoLoginFlowTest {
 
     private long identityCount() {
         return jdbcClient.sql("SELECT count(*) FROM member_identity").query(Long.class).single();
+    }
+
+    private long favoriteGroupCount() {
+        return jdbcClient.sql("SELECT count(*) FROM favorite_group").query(Long.class).single();
+    }
+
+    private String favoriteGroupName() {
+        return jdbcClient.sql("SELECT name FROM favorite_group").query(String.class).single();
     }
 
     private long sessionCount() {

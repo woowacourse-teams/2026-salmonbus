@@ -28,7 +28,7 @@ public record ForecastResponse(
         AVAILABLE, UNAVAILABLE
     }
 
-    static ForecastResponse from(VehicleForecast forecast) {
+    public static ForecastResponse from(VehicleForecast forecast) {
         return switch (forecast) {
             case Available available -> new ForecastResponse(
                 Status.AVAILABLE, available.seatAvailableProbability(), available.expectedSeats());

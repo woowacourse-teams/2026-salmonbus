@@ -40,6 +40,13 @@ public class ApiDocsConfiguration {
         "/api/auth/refresh",
         "/api/auth/logout",
         "/api/me",
+        "/api/me/favorite-groups",
+        "/api/me/favorite-groups/{groupId}",
+        "/api/me/favorite-groups/order",
+        "/api/me/favorite-groups/{groupId}/favorites/{favoriteId}",
+        "/api/me/favorite-groups/{groupId}/favorites/order",
+        "/api/me/favorite-selections",
+        "/api/me/favorites",
         "/api/me/sessions",
         "/api/me/withdrawal/apple"
     );
