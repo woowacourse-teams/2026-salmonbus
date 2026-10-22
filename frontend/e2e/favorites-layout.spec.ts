@@ -24,10 +24,19 @@ for (const width of [320, 425]) {
     favorites.groups.push({ id: "10000000-0000-4000-8000-000000000003", name: "통학", favorites: [] });
     await page.goto("/");
     await expect(page.getByRole("tabpanel").getByRole("link")).toHaveCount(2);
+    await page.evaluate(() => document.fonts.ready);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await testInfo.attach("즐겨찾기 홈", { body: await page.screenshot(), contentType: "image/png" });
-    if (width === 425 && browserName === "chromium")
+    if (browserName === "chromium")
+      await page.screenshot({ path: `/private/tmp/salmonbus-sal249-qa/home-${width}.png` });
+    if (width === 425 && browserName === "chromium") {
       await page.screenshot({ path: "/private/tmp/salmonbus-sal249-qa/home.png" });
+      await page
+        .getByRole("tabpanel")
+        .locator(":scope > ul > li")
+        .first()
+        .screenshot({ path: "/private/tmp/salmonbus-sal249-qa/home-card.png" });
+    }
 
     await page.getByRole("link", { name: "마이페이지", exact: true }).click();
     await expect(page.getByRole("region", { name: "즐겨찾기 그룹 관리" }).getByRole("link")).toHaveCount(3);

@@ -28,24 +28,6 @@ export const card = style({
   color: vars.color.textStrong,
   textDecoration: "none",
 });
-export const cardLink = style({ display: "block", color: "inherit", textDecoration: "none" });
-export const cardHeading = style({
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 10,
-  marginBottom: 12,
-  fontSize: 14,
-  fontWeight: 600,
-});
-export const route = style({
-  flexShrink: 0,
-  borderRadius: 4,
-  padding: "2px 6px",
-  color: vars.color.brand,
-  background: "#FFF0EC",
-  fontSize: 12,
-});
 export const subtle = style({ margin: "8px 0", color: vars.color.textSubtle, fontSize: 12, lineHeight: 1.6 });
 export const error = style({ margin: "12px 0", color: "#BA3529", fontSize: 13, lineHeight: 1.6 });
 export const action = style({
@@ -88,15 +70,6 @@ export const tab = style({
   fontSize: 13,
   cursor: "pointer",
   selectors: { '&[aria-selected="true"]': { background: vars.color.brand, color: "white" } },
-});
-export const rows = style({ padding: 8, margin: 0, listStyle: "none", borderRadius: 8, background: "#F8F7F4" });
-export const arrival = style({
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 6,
-  padding: "6px 0",
-  fontSize: 12,
 });
 export const title = style({ display: "flex", alignItems: "center", gap: 12, margin: "0 0 28px", fontSize: 25 });
 export const back = style({

@@ -11,6 +11,7 @@ import { OrderDialog } from "./OrderDialog";
 import { favoritePath } from "./favoritePolicy";
 import bookmarkIcon from "./bookmark.svg";
 import editIcon from "./home-edit.svg";
+import * as homeStyles from "./HomeFavorites.css";
 import * as styles from "./favorites.css";
 
 const STATUS_LABEL: Record<Exclude<FavoriteStatus, "READY">, string> = {
@@ -37,7 +38,7 @@ export function HomeFavorites() {
   }, [latest]);
   const favorites = latest?.body.groups.find((candidate) => candidate.id === group?.id)?.favorites ?? [];
   return (
-    <section className="amp-mask" aria-label="내 즐겨찾기">
+    <section className={`${homeStyles.section} amp-mask`} aria-label="내 즐겨찾기">
       <FavoritesNotice resource={resource} onRetry={reload} />
       {groups.length > 0 && (
         <div className={styles.tabs}>
@@ -127,19 +128,19 @@ function FavoriteCard({
   const direction = favorite.stop.direction ?? savedDirection;
   const terminalStopName = favorite.route.terminalStopName?.trim();
   return (
-    <li className={styles.card}>
+    <li className={homeStyles.card}>
       <Link
-        className={styles.cardLink}
+        className={homeStyles.link}
         to={
           direction
             ? favoritePath({ routeId: favorite.route.id, stopId: favorite.stop.stopId, direction })
             : boardPathFor(favorite.route.id)
         }
       >
-        <div className={styles.cardHeading}>
-          <span className={styles.route}>{favorite.route.displayName || "노선 정보 없음"}</span>
-          <span style={{ flex: 1 }}>{favorite.stop.name || "정류장 정보 없음"}</span>
-          <span className={styles.subtle} style={{ fontSize: 10, whiteSpace: "nowrap" }}>
+        <div className={homeStyles.heading}>
+          <span className={homeStyles.route}>{favorite.route.displayName || "노선 정보 없음"}</span>
+          <span className={homeStyles.stop}>{favorite.stop.name || "정류장 정보 없음"}</span>
+          <span className={homeStyles.direction}>
             {terminalStopName
               ? `${terminalStopName} 방면`
               : direction === "UP"
@@ -149,42 +150,39 @@ function FavoriteCard({
                   : "방면 정보 없음"}
           </span>
         </div>
-        {favorite.status === "READY" && favorite.approachingVehicles.length > 0 ? (
-          <ul className={styles.rows}>
-            {favorite.approachingVehicles.map((vehicle, index) => {
-              const remaining =
-                vehicle.eta.status === "AVAILABLE" ? Math.max(0, vehicle.eta.remainingSeconds - elapsed) : null;
-              const forecast = vehicle.forecast;
-              const label =
-                forecast.status !== "AVAILABLE" || forecast.expectedSeats === undefined
-                  ? "좌석 정보 없음"
-                  : forecast.expectedSeats < 1
-                    ? "도착 시 남은 좌석 없어요"
+        <div className={homeStyles.forecast}>
+          {favorite.status === "READY" && favorite.approachingVehicles.length > 0 ? (
+            <ul className={homeStyles.rows}>
+              {favorite.approachingVehicles.map((vehicle, index) => {
+                const remaining =
+                  vehicle.eta.status === "AVAILABLE" ? Math.max(0, vehicle.eta.remainingSeconds - elapsed) : null;
+                const forecast = vehicle.forecast;
+                const timingAvailable = remaining !== null && remaining > 0;
+                const tone =
+                  forecast.status === "AVAILABLE" ? toSeatLevel(forecast.seatAvailableProbability) : "unavailable";
+                const label =
+                  forecast.status !== "AVAILABLE" || forecast.expectedSeats === undefined
+                    ? "좌석 정보 없음"
                     : `도착 시 ${Math.floor(forecast.expectedSeats)}석 예상해요`;
-              return (
-                <li className={styles.arrival} key={vehicle.vehicleId ?? index}>
-                  <span>
-                    <strong>{vehicle.horizonStops}정류장 전</strong>
-                    <span className={styles.subtle}>
-                      {" "}
-                      {remaining === null || remaining <= 0 ? "도착 정보 없음" : `${Math.ceil(remaining / 60)}분 후`}
+                return (
+                  <li className={homeStyles.arrival} key={vehicle.vehicleId ?? index}>
+                    <span className={homeStyles.timing}>
+                      <span className={timingAvailable ? homeStyles.eta : homeStyles.unavailableEta}>
+                        {timingAvailable ? `${Math.ceil(remaining / 60)}분 남음` : "도착 정보 없음"}
+                      </span>
+                      <span className={homeStyles.distance}>{vehicle.horizonStops}정류장 전</span>
                     </span>
-                  </span>
-                  <SeatCountBadge
-                    tone={
-                      forecast.status === "AVAILABLE" ? toSeatLevel(forecast.seatAvailableProbability) : "unavailable"
-                    }
-                    label={label}
-                  />
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className={styles.subtle}>
-            {favorite.status === "READY" ? STATUS_LABEL.NO_VEHICLE : STATUS_LABEL[favorite.status]}
-          </p>
-        )}
+                    <SeatCountBadge tone={tone} className={homeStyles.seatBadge[tone]} label={label} />
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className={homeStyles.notice}>
+              {favorite.status === "READY" ? STATUS_LABEL.NO_VEHICLE : STATUS_LABEL[favorite.status]}
+            </p>
+          )}
+        </div>
       </Link>
       {favorite.status === "ERROR" && (
         <button type="button" className={styles.action} onClick={onRetry}>
