@@ -17,7 +17,7 @@ const PRESS_OUT = [
 export const form = style({
   display: "flex",
   alignItems: "center",
-  height: "60px",
+  height: "48px",
   paddingLeft: "22px",
   borderRadius: "30px",
   backgroundColor: vars.color.surface,

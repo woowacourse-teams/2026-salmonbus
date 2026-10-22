@@ -41,6 +41,14 @@ export const test = base.extend<{ api: MockApi }>({
         const request = route.request();
         const url = new URL(request.url());
         const path = url.pathname;
+        if (path === "/api/auth/session") {
+          await route.fulfill({
+            status: 404,
+            headers: { "Cache-Control": "no-store" },
+            json: { code: "ENDPOINT_NOT_FOUND", message: "로그인 꺼짐", requestId: "test-auth-off" },
+          });
+          return;
+        }
         if (request.method() === "GET" && /^\/api\/chat\/rooms\/[^/]+$/.test(path)) {
           await route.fulfill({ status: 404, headers: { "Cache-Control": "no-store" } });
           return;

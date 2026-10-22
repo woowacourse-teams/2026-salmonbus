@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { track } from "@/shared/analytics/track";
 import type { ApiFailure, ApiResult } from "@/shared/api/client";
 import type { PolledResource } from "@/shared/api/polledResource";
@@ -19,7 +19,7 @@ import { liveVehicleViewsFor } from "./components/liveVehiclePolicy";
 import { useFreshLiveVehicles, useLiveVehicles } from "./hooks/useLiveVehicles";
 import { useLiveVehicleMotion } from "./hooks/useLiveVehicleMotion";
 import { useStationArrivals } from "./hooks/useStationArrivals";
-import type { StopSelection } from "./components/stopSelection";
+import { stopSelectionFrom, type StopSelection } from "./components/stopSelection";
 import type { BoardSheetSnap } from "./components/boardSheetPolicy";
 import { BoardBottomSheet } from "./components/BoardBottomSheet";
 import { BoardRouteSummary } from "./components/BoardRouteSummary";
@@ -60,22 +60,33 @@ export function VerdictBoardPage() {
 }
 
 function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
+  const [search, setSearch] = useSearchParams();
   const boardResource = usePolledRequest(loadBoard, routeId);
   const { liveVehicleResource, motionDurationMs } = useLiveVehicles(routeId);
   const snapshot = useBoardSnapshot(routeId, boardResource, liveVehicleResource);
   const freshLiveVehicles = useFreshLiveVehicles(snapshot?.liveVehicles ?? null);
-  const [preferredDirection, setPreferredDirection] = useState<Direction | null>(null);
+  const [preferredDirection, setPreferredDirection] = useState<Direction | null>(() =>
+    search.get("direction") === "UP" ? "UP" : search.get("direction") === "DOWN" ? "DOWN" : null,
+  );
   const [switched, setSwitched] = useState(false);
   const state = boardStateOf(boardResource, snapshot, preferredDirection);
   const screen = boardScreenOf(state);
   const { trackStopExpanded } = useBoardVisitEvents({ routeId, screen, latestSuccess: snapshot?.board ?? null });
 
   function selectDirection(next: Direction) {
+    setPreferredDirection(next);
     if (state.status === "ready" && next !== state.direction.id) {
       setSwitched(true);
       track("direction_switched", { route_id: routeId, to_direction: next });
     }
-    setPreferredDirection(next);
+    setSearch(
+      (previous) => {
+        if (previous.get("direction") !== next) previous.delete("stopId");
+        previous.set("direction", next);
+        return previous;
+      },
+      { replace: true },
+    );
   }
 
   if (state.status === "ready" && screen.kind === "forecast") {
@@ -133,10 +144,13 @@ function OperatingBoard({
   onStopExpand,
 }: OperatingBoardProps) {
   const viewport = useBoardViewport();
+  const [search, setSearch] = useSearchParams();
   const pageRef = useRef<HTMLDivElement>(null);
   const [snap, setSnap] = useState<BoardSheetSnap>("half");
-  const [selected, setSelected] = useState<StopSelection | null>(null);
-  const [scrollRequest, setScrollRequest] = useState<StopSelection | null>(null);
+  const [selected, setSelected] = useState<StopSelection | null>(() =>
+    stopSelectionFrom(board, direction.id, search.get("stopId")),
+  );
+  const [scrollRequest, setScrollRequest] = useState<StopSelection | null>(selected);
   const [vehicleFocusRequest, setVehicleFocusRequest] = useState<{ key: string; focusMarker: boolean } | null>(null);
   const selectedVehicleKey = vehicleFocusRequest?.key ?? null;
   const stops = useMemo(() => stopViewsFor(board, direction.id), [board, direction.id]);
@@ -164,10 +178,30 @@ function OperatingBoard({
   const mapVisible = snap !== "full";
   useBoardOverlayAnchors(pageRef, snap, viewport.height);
 
+  function rememberSelection(selection: StopSelection | null) {
+    const stop =
+      selection === null
+        ? undefined
+        : board.stops.find(
+            (candidate) => candidate.sequence === selection.sequence && candidate.direction === selection.direction,
+          );
+    setSearch(
+      (previous) => {
+        if (stop) {
+          previous.set("direction", stop.direction);
+          previous.set("stopId", stop.stopId);
+        } else previous.delete("stopId");
+        return previous;
+      },
+      { replace: true },
+    );
+  }
+
   function selectFromMap(selection: StopSelection) {
     setSelected(selection);
     setVehicleFocusRequest(null);
     scrollToStop(selection);
+    rememberSelection(selection);
   }
 
   function scrollToStop(selection: StopSelection) {
@@ -184,6 +218,7 @@ function OperatingBoard({
 
   function clearMapSelection() {
     setSelected(null);
+    rememberSelection(null);
     clearVehicleSelection();
   }
 
@@ -200,11 +235,12 @@ function OperatingBoard({
 
   function toggleFromList(sequence: number) {
     setVehicleFocusRequest(null);
-    setSelected((current) =>
-      current?.direction === direction.id && current.sequence === sequence
+    const next =
+      selected?.direction === direction.id && selected.sequence === sequence
         ? null
-        : { direction: direction.id, sequence },
-    );
+        : { direction: direction.id, sequence };
+    setSelected(next);
+    rememberSelection(next);
     setScrollRequest(null);
   }
 

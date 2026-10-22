@@ -525,6 +525,25 @@ export const liveVehiclesRevisedMock = {
 } satisfies LiveVehicles;
 
 export const errorResponseMocks = {
+  UNAUTHENTICATED: { code: "UNAUTHENTICATED", message: "로그인이 필요합니다.", requestId: "req-auth" },
+  CSRF_REJECTED: { code: "CSRF_REJECTED", message: "요청을 확인하지 못했습니다.", requestId: "req-csrf" },
+  NICKNAME_LENGTH: {
+    code: "NICKNAME_LENGTH",
+    message: "닉네임은 2자 이상 10자 이하여야 합니다.",
+    requestId: "req-nickname",
+  },
+  NICKNAME_CHARACTERS: {
+    code: "NICKNAME_CHARACTERS",
+    message: "닉네임은 한글, 영문, 숫자만 쓸 수 있습니다.",
+    requestId: "req-nickname",
+  },
+  NICKNAME_RESERVED: { code: "NICKNAME_RESERVED", message: "쓸 수 없는 닉네임입니다.", requestId: "req-nickname" },
+  NICKNAME_TAKEN: { code: "NICKNAME_TAKEN", message: "이미 사용 중인 닉네임입니다.", requestId: "req-nickname" },
+  REAUTH_REQUIRED: {
+    code: "REAUTH_REQUIRED",
+    message: "애플 계정으로 한 번 더 인증해야 탈퇴할 수 있습니다.",
+    requestId: "req-reauth",
+  },
   INVALID_ROUTE_ID: {
     code: "INVALID_ROUTE_ID",
     message: "routeId는 9자리 숫자여야 합니다.",

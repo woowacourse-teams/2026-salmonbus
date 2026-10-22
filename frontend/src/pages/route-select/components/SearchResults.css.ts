@@ -39,7 +39,7 @@ export const retryButton = style({
 });
 
 export const sheet = style({
-  maxHeight: `calc(634px - ${SAFE_AREA_TOP} - ${SAFE_AREA_BOTTOM})`,
+  maxHeight: `calc(100dvh - 222px - ${SAFE_AREA_TOP} - ${SAFE_AREA_BOTTOM})`,
   overflowY: "auto",
   marginTop: "8px",
   padding: "10px 0",
@@ -49,8 +49,8 @@ export const sheet = style({
   "@media": {
     [PHONE_MEDIA]: {
       maxHeight: [
-        `calc(100vh - 210px - ${SAFE_AREA_TOP} - ${SAFE_AREA_BOTTOM})`,
-        `calc(100dvh - 210px - ${SAFE_AREA_TOP} - ${SAFE_AREA_BOTTOM})`,
+        `calc(100vh - 222px - ${SAFE_AREA_TOP} - ${SAFE_AREA_BOTTOM})`,
+        `calc(100dvh - 222px - ${SAFE_AREA_TOP} - ${SAFE_AREA_BOTTOM})`,
       ],
     },
   },

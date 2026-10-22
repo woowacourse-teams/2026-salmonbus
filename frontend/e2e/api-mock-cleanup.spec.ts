@@ -24,6 +24,19 @@ async function captureForwardedRequests(page: Page) {
   return forwarded;
 }
 
+test("API에서 페이지로 리다이렉트한 요청도 mock 해제 전에 종료한다", async ({ page, browserName }) => {
+  test.skip(browserName === "webkit", "WebKit의 route.fulfill은 302 응답을 지원하지 않는다");
+  const router = createApiMockRouter(page);
+  await router.route((route) =>
+    new URL(route.request().url()).pathname === "/api/redirect-start"
+      ? route.fulfill({ status: 302, headers: { Location: "/?redirect=finished" } })
+      : route.fulfill({ status: 404, json: { code: "ENDPOINT_NOT_FOUND", message: "test", requestId: "test" } }),
+  );
+  await page.goto("/api/redirect-start");
+  await expect(page).toHaveURL("/?redirect=finished");
+  await router.dispose();
+});
+
 test("빠른 채팅 mock이 끝나도 느린 보드와 차량 mock이 완료된 뒤 해제한다", async ({ page }) => {
   const forwarded = await captureForwardedRequests(page);
   const router = createApiMockRouter(page);
