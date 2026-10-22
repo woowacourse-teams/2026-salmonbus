@@ -45,3 +45,22 @@ Jest는 입력, 복귀 경로, API 응답 검사, CSRF, 갱신과 로그아웃�
 - 확정한 네이티브 인증 교환과 Apple 앱 로그인·탈퇴 연결
 
 모의 응답 통과를 실제 로그인 완료로 기록하지 않는다. Jira는 실연동 확인 전까지 진행 상태로 둔다.
+
+## 2026-10-22 dev 실 API 점검
+
+백엔드 배포 후 `https://dev.salmonbus.com`을 조회하고, 로컬 프로덕션 빌드의 로그인 화면을 같은 origin에서 실행했다. API 응답은 모의하지 않았다. 로그인 버튼은 활성화됐지만, 브라우저에 저장된 쿠키가 없어 CSRF 쿠키 검증은 실패했다.
+
+| 요청                        | 확인한 응답                                                                | 남은 문제                                      |
+| --------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------- |
+| `GET /api/v1/routes`        | 200 JSON                                                                   | 공개 조회 응답 정상                            |
+| `GET /api/auth/session`     | 200, `authenticated=false`, `refreshable=false`, `Cache-Control: no-store` | `Set-Cookie`와 `__Host-XSRF-TOKEN` 쿠키가 없음 |
+| `GET /api/me`               | 401 `UNAUTHENTICATED` JSON                                                 | 비회원 거절 응답 정상                          |
+| `GET /api/auth/kakao/start` | 302, 카카오 인가 주소, dev 콜백, PKCE S256                                 | 임시 세션 쿠키 `__Host-sb_session`이 없음      |
+| `GET /api/auth/apple/start` | 302, Apple 인가 주소, dev 콜백, `response_mode=query`                      | 임시 세션 쿠키 `__Host-sb_session`이 없음      |
+| `POST /api/auth/logout`     | 200, 프론트엔드 `index.html`                                               | 계약의 204 응답이 아님                         |
+
+POST 점검은 실제 회원 토큰과 리프레시 토큰 없이 독립된 요청으로 실행했다. 무효 액세스 쿠키와 합성 CSRF 값을 보낸 경우에도 같은 HTML 200이 반환됐다. 실제 계정 로그인, 닉네임 수정, 회원탈퇴는 실행하지 않았다.
+
+인증 경로에 필요한 CloudFront Behavior가 dev 배포에 적용됐는지 확인해야 한다. `/api/auth/*`와 `/api/me*`가 기존 `/api/*`보다 앞에서 일치하고, HTTP 방법 전부와 쿠키 All, 쿼리스트링 All, `X-XSRF-TOKEN` 전달, TTL 0 설정을 사용해야 한다. 설정이 확인된 뒤 쿠키 발급과 POST 응답부터 다시 점검한다.
+
+원본 서버의 직접 응답과 AWS 콘솔의 실제 설정은 아직 확인하지 못했다. 따라서 쿠키 누락의 원인은 확정하지 않았다. 다만 [AWS 문서](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Cookies.html)에 따르면 CloudFront가 쿠키를 전달하지 않는 Behavior에서는 응답의 `Set-Cookie`도 제거한다. [팀의 CloudFront 설정 기록](https://higgs95.atlassian.net/wiki/spaces/HEM52VQZUW/pages/58130445)에도 dev와 운영의 적용 여부는 별도 확인 대상으로 남아 있다.
