@@ -40,7 +40,12 @@ export function RouteSelectPage() {
       <main>
         <header className={styles.header}>
           <h1 style={{ margin: 0 }}>
-            <Brand />
+            <Brand
+              onClick={(event) => {
+                if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey)
+                  changeInput("");
+              }}
+            />
           </h1>
           <div className={styles.searchArea}>
             <SearchForm value={input} onChange={changeInput} onClear={() => changeInput("")} onSubmit={handleSubmit} />

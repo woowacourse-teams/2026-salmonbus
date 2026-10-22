@@ -173,3 +173,20 @@ test("번호를 한 글자씩 쳐도 방문 기록이 늘지 않는다", async (
   await expect(page).toHaveURL("/?q=3330");
   expect(await page.evaluate(() => history.length)).toBe(historyLength);
 });
+
+test("상단 로고는 검색을 초기화하고 로그인 화면에서도 홈으로 이동한다", async ({ page }) => {
+  await page.goto("/");
+  await routeSearchInput(page).fill("3330");
+  await expect(page.getByRole("region", { name: "검색 결과", exact: true })).toBeVisible();
+  const logo = page.getByRole("link", { name: "Salmonbus 홈으로 이동", exact: true });
+  await expect(logo).toHaveAttribute("href", "/");
+  await logo.click();
+  await expect(page).toHaveURL("/");
+  await expect(routeSearchInput(page)).toHaveValue("");
+  await expect(page.getByRole("region", { name: "검색 결과", exact: true })).toHaveCount(0);
+
+  await page.goto("/login?returnTo=%2Fmypage");
+  await logo.press("Enter");
+  await expect(page).toHaveURL("/");
+  await expect(routeSearchInput(page)).toHaveValue("");
+});
