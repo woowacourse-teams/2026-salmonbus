@@ -96,25 +96,20 @@ export const stop = style({
   width: 24,
   height: 24,
   padding: 0,
-  border: "2px solid #C95A50",
+  border: 0,
   borderRadius: "50%",
-  background: vars.color.surface,
-  color: "#C95A50",
-  boxShadow: "0 1px 4px #0002",
+  background: "transparent",
+  color: "#DC7866",
   cursor: "pointer",
   selectors: {
     [`${canvas}[data-overlays-ready="false"] &`]: { visibility: "hidden" },
     '&[data-active="false"]': {
-      borderColor: vars.color.textMuted,
-      background: vars.color.mutedChipSurface,
       color: vars.color.textMuted,
     },
     '&[aria-pressed="true"]': {
       width: 32,
       height: 32,
-      background: "#C95A50",
-      color: vars.color.surface,
-      borderWidth: 3,
+      color: "#D46953",
     },
     "&:focus-visible": { outline: `3px solid ${vars.color.focusRing}`, outlineOffset: 2 },
   },
@@ -134,6 +129,14 @@ export const stopName = style({
   fontWeight: 800,
   pointerEvents: "none",
   selectors: {
+    [`${stop}[aria-pressed="true"] &`]: {
+      padding: "5px 8px",
+      borderRadius: 8,
+      background: vars.color.surface,
+      color: "#B45544",
+      WebkitTextStroke: "0",
+      boxShadow: "0 2px 8px #593D3026",
+    },
     [`${stop}[data-label-above="true"] &`]: {
       top: "auto",
       bottom: "calc(100% + 4px)",
@@ -141,7 +144,42 @@ export const stopName = style({
   },
 });
 
-export const stopIcon = style({ width: "65%", height: "65%", display: "block" });
+export const stopIcon = style({
+  display: "block",
+  width: 16,
+  height: 16,
+  border: "2.5px solid currentColor",
+  borderRadius: "50%",
+  background: vars.color.surface,
+  transitionProperty: "width, height, border-width, box-shadow, background-color",
+  transitionDuration: vars.duration.base,
+  transitionTimingFunction: vars.easing.slide,
+  "@media": {
+    "(prefers-reduced-motion: reduce)": { transition: "none" },
+  },
+  selectors: {
+    [`${stop}[data-active="false"] &`]: { background: vars.color.mutedChipSurface },
+    [`${stop}[data-boarding-allowed="false"] &`]: {
+      width: 6,
+      height: 6,
+      border: 0,
+      background: "currentColor",
+    },
+    [`${stop}[aria-pressed="true"] &`]: {
+      width: 20,
+      height: 20,
+      borderWidth: 4,
+      background: vars.color.surface,
+      boxShadow: `0 0 0 2px ${vars.color.surface}, 0 0 0 5px #F2DDD5, 0 2px 8px #78443826`,
+    },
+    [`${stop}[data-boarding-allowed="false"][aria-pressed="true"] &`]: {
+      width: 8,
+      height: 8,
+      border: 0,
+      background: "currentColor",
+    },
+  },
+});
 export const bus = style({
   position: "relative",
   display: "block",
