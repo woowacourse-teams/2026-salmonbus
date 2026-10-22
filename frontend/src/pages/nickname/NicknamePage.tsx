@@ -9,7 +9,7 @@ import * as buttonStyles from "@/shared/styles/button.css";
 import * as styles from "./NicknamePage.css";
 
 export function NicknamePage() {
-  const { state } = useAuth();
+  const { state, reload } = useAuth();
   return (
     <AccountLayout>
       <div className={styles.backTitle}>
@@ -36,6 +36,15 @@ export function NicknamePage() {
         <NicknameForm key={state.member.id} current={state.member.nickname} />
       ) : state.status === "loading" ? (
         <p role="status">로그인 상태를 확인하고 있어요…</p>
+      ) : state.status === "error" ? (
+        <>
+          <p className={styles.error} role="alert">
+            로그인 상태를 확인하지 못했어요.
+          </p>
+          <button className={buttonStyles.secondary} type="button" onClick={() => void reload()}>
+            다시 확인하기
+          </button>
+        </>
       ) : (
         <LoginButton returnTo="/mypage" />
       )}

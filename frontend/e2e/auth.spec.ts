@@ -55,6 +55,26 @@ test("만료된 액세스 토큰은 한 번 갱신해 로그인 상태를 복원
   expect(auth.requests.filter((request) => request.path === "/api/auth/refresh")).toHaveLength(1);
 });
 
+test("닉네임 화면에서 로그인 상태 조회 실패 후 다시 확인하면 수정 폼을 복원한다", async ({ page, auth }) => {
+  auth.member = { ...testMember };
+  await page.route("**/api/auth/session", (route) =>
+    route.fulfill({
+      status: 503,
+      json: { code: "SERVICE_UNAVAILABLE", message: "SERVICE_UNAVAILABLE", requestId: "auth-e2e" },
+      headers: { "Cache-Control": "no-store" },
+    }),
+  );
+  await page.goto("/mypage/nickname");
+  await expect(page.getByRole("alert")).toHaveText("로그인 상태를 확인하지 못했어요.");
+  await expect(page.getByRole("link", { name: "로그인 / 회원가입", exact: true })).toHaveCount(0);
+
+  await page.unroute("**/api/auth/session");
+  await page.getByRole("button", { name: "다시 확인하기", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "닉네임", exact: true })).toHaveValue("살몽");
+  await expect(page.getByRole("alert")).toBeEmpty();
+  expect(auth.requests.some((request) => /\/api\/auth\/(kakao|apple)\/start$/.test(request.path))).toBe(false);
+});
+
 test("닉네임 중복 오류 후 입력을 수정해 저장하고 재접속해도 유지한다", async ({ page, auth }) => {
   auth.member = { ...testMember };
   auth.nicknameError = "NICKNAME_TAKEN";
