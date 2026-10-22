@@ -83,7 +83,7 @@ class ReplayEngineTest {
     }
 
     @Test
-    void reachesBothEndsPausesAndRestartsWithNewVehicleIds() {
+    void reachesBothEndsPausesAndRestartsWithTheSameVehicleIds() {
         for (var route : dataset.routes()) {
             time.set(0);
             var fresh = new ReplayEngine(dataset, new ReplayEngine.Configuration("local-replay-v1", 30, 60),
@@ -105,7 +105,7 @@ class ReplayEngineTest {
             time.addAndGet(60_000_000_000L);
             var restarted = vehicles(fresh.response("location", "normal", route.routeId()));
             assertEquals(1, restarted.get(0).get("stationSeq"));
-            assertNotEquals(initial.get(0).get("vehId"), restarted.get(0).get("vehId"));
+            assertEquals(initial.get(0).get("vehId"), restarted.get(0).get("vehId"));
         }
     }
 

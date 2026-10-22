@@ -111,7 +111,7 @@ class ReplayObservationStatesTest {
     }
 
     @Test
-    void eachDirectionLeavesItsTerminalAndRestartsAsANewRun() throws Exception {
+    void eachDirectionLeavesItsTerminalAndRestartsWithTheSameVehicle() throws Exception {
         var data = ReplayEngine.readRoutes(Path.of(System.getProperty("routes.file")));
         for (var route : data.routes()) {
             for (String direction : List.of("U", "D")) {
@@ -133,7 +133,7 @@ class ReplayObservationStatesTest {
                 var restarted = vehicles(engine.response("location", "normal", route.routeId())).stream()
                     .filter(bus -> plate.equals(bus.get("plateNo"))).findFirst().orElseThrow();
                 assertEquals(first, restarted.get("stationSeq"));
-                assertNotEquals(initial.get("vehId"), restarted.get("vehId"));
+                assertEquals(initial.get("vehId"), restarted.get("vehId"));
             }
         }
     }
