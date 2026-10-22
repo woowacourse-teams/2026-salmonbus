@@ -93,7 +93,7 @@ public final class ApiDocsExamples {
               "approachingVehicles": [
                 {
                   "vehicleId": "example-vehicle",
-                  "horizonStops": 2,
+                  "remainingStops": 2,
                   "forecast": {
                     "status": "AVAILABLE",
                     "seatAvailableProbability": 0.7,
@@ -174,7 +174,7 @@ public final class ApiDocsExamples {
               "approachingVehicles": [
                 {
                   "vehicleId": "example-vehicle",
-                  "horizonStops": 2,
+                  "remainingStops": 2,
                   "forecast": {
                     "status": "UNAVAILABLE"
                   }
@@ -262,7 +262,7 @@ public final class ApiDocsExamples {
               "approachingVehicles": [
                 {
                   "vehicleId": "example-vehicle",
-                  "horizonStops": 2,
+                  "remainingStops": 1,
                   "forecast": {
                     "status": "AVAILABLE",
                     "seatAvailableProbability": 0.7,
@@ -357,7 +357,7 @@ public final class ApiDocsExamples {
               "approachingVehicles": [
                 {
                   "vehicleId": "example-vehicle",
-                  "horizonStops": 2,
+                  "remainingStops": 1,
                   "forecast": {
                     "status": "UNAVAILABLE"
                   }

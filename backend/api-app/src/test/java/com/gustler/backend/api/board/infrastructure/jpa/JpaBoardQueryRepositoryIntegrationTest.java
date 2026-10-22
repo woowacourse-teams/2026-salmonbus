@@ -48,8 +48,8 @@ class JpaBoardQueryRepositoryIntegrationTest {
 
         // then
         assertThat(repository.findObservedVehicles(batch, route.routeVersionId()))
-            .containsExactlyInAnyOrder(new BoardVehicleObservation(null, 1, 0),
-                new BoardVehicleObservation(null, 2, 1));
+            .containsExactlyInAnyOrder(new BoardVehicleObservation(null, 1, 0, 1),
+                new BoardVehicleObservation(null, 2, 1, 1));
         assertThat(repository.findObservedVehicles(batch, otherRoute.routeVersionId())).isEmpty();
         assertThat(repository.findPredictions(batch)).isEmpty();
     }

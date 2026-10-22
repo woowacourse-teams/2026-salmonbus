@@ -34,6 +34,9 @@ public class VehicleObservationJpaEntity {
     @Column(name = "route_version_id", nullable = false)
     private Long routeVersionId;
 
+    @Column(name = "stop_order", nullable = false)
+    private Integer stopOrder;
+
     @Column(name = "passed_stop_order", nullable = false)
     private Integer passedStopOrder;
 
@@ -49,6 +52,6 @@ public class VehicleObservationJpaEntity {
     }
 
     public BoardVehicleObservation toDomain() {
-        return new BoardVehicleObservation(vehicleId, sourceRowNumber, passedStopOrder);
+        return new BoardVehicleObservation(vehicleId, sourceRowNumber, passedStopOrder, stopOrder);
     }
 }
