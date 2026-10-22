@@ -58,20 +58,23 @@ export async function fetchSession(): Promise<ApiResult<AuthSession>> {
   return checked(result, isAuthSession);
 }
 
-export async function memberRequest<T>(options: RequestOptions = {}): Promise<ApiResult<T>> {
+export async function memberRequest<T>(url: string, options: RequestOptions = {}): Promise<ApiResult<T>> {
   const started = generation;
-  let result = await authRequest<T>("/api/me", options);
+  let result = await authRequest<T>(url, options);
   if (!result.ok && "status" in result.failure && result.failure.status === 401 && started === generation) {
     const refreshed = await refreshAuth();
     if (!refreshed.ok) return refreshed;
     if (started !== generation) return { ok: false, failure: { kind: "aborted" } };
-    result = await authRequest<T>("/api/me", options);
+    result = await authRequest<T>(url, options);
   }
   return result;
 }
 
 export async function updateNickname(nickname: string): Promise<ApiResult<Member>> {
-  return checked(await memberRequest<unknown>({ method: "PATCH", body: { nickname: nickname.trim() } }), isMember);
+  return checked(
+    await memberRequest<unknown>("/api/me", { method: "PATCH", body: { nickname: nickname.trim() } }),
+    isMember,
+  );
 }
 
 export async function logout(): Promise<ApiResult<void>> {
@@ -83,9 +86,9 @@ export async function logout(): Promise<ApiResult<void>> {
 export async function withdraw(): Promise<ApiResult<void | { startUrl: string }>> {
   generation += 1;
   await refreshing;
-  const result = await memberRequest<void>({ method: "DELETE" });
+  const result = await memberRequest<void>("/api/me", { method: "DELETE" });
   if (result.ok || result.failure.kind !== "contract" || result.failure.error.code !== "REAUTH_REQUIRED") return result;
-  const start = await authRequest<unknown>("/api/me/withdrawal/apple", { method: "POST", body: { returnTo: "/" } });
+  const start = await memberRequest<unknown>("/api/me/withdrawal/apple", { method: "POST", body: { returnTo: "/" } });
   return checked(start, (value): value is { startUrl: string } => {
     if (typeof value !== "object" || value === null || !("startUrl" in value) || typeof value.startUrl !== "string")
       return false;

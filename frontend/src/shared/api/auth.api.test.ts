@@ -1,11 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import contract from "../../../../contract/auth-v1.openapi.json";
 import { fetchSession, logout, memberRequest, updateNickname, withdraw } from "./auth.api";
 
-const member = { id: "00000000-0000-4000-8000-000000000001", nickname: "살몽", provider: "KAKAO" };
-const session = { authenticated: true, refreshable: false, member };
+const sessionExamples = contract.paths["/api/auth/session"].get.responses["200"].content["application/json"].examples;
+const member = contract.paths["/api/me"].patch.responses["200"].content["application/json"].examples.profile.value;
+const session = sessionExamples.authenticated.value;
+const reauthRequired =
+  contract.paths["/api/me"].delete.responses["409"].content["application/json"].examples.reauthRequired.value;
+const appleWithdrawal =
+  contract.paths["/api/me/withdrawal/apple"].post.responses["200"].content["application/json"].examples.startUrl.value;
 const originalFetch = global.fetch;
 const unauthenticated = () =>
-  response(401, { code: "UNAUTHENTICATED", message: "로그인이 필요합니다.", requestId: "test" });
+  response(
+    401,
+    contract.paths["/api/me"].get.responses["401"].content["application/json"].examples.unauthenticated.value,
+  );
 function response(status: number, body?: unknown) {
   return new Response(status === 204 ? null : JSON.stringify(body), { status });
 }
@@ -30,7 +39,7 @@ describe("쿠키 인증 API", () => {
   it("갱신 가능한 세션이면 한 번 갱신하고 회원을 조회한다", async () => {
     global.fetch = jest
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(response(200, { authenticated: false, refreshable: true }))
+      .mockResolvedValueOnce(response(200, sessionExamples.refreshable.value))
       .mockResolvedValueOnce(response(204))
       .mockResolvedValueOnce(response(200, session));
     expect(await fetchSession()).toMatchObject({ ok: true, body: session });
@@ -44,9 +53,9 @@ describe("쿠키 인증 API", () => {
   it("갱신이 401이면 다시 갱신하지 않고 비회원이 된다", async () => {
     global.fetch = jest
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(response(200, { authenticated: false, refreshable: true }))
+      .mockResolvedValueOnce(response(200, sessionExamples.refreshable.value))
       .mockResolvedValueOnce(unauthenticated());
-    expect(await fetchSession()).toMatchObject({ ok: true, body: { authenticated: false, refreshable: false } });
+    expect(await fetchSession()).toMatchObject({ ok: true, body: sessionExamples.anonymous.value });
     expect(global.fetch).toHaveBeenCalledTimes(2);
   });
   it("동시에 만료된 회원 요청은 갱신 하나를 공유하고 각 요청만 한 번 재시도한다", async () => {
@@ -64,7 +73,7 @@ describe("쿠키 인증 API", () => {
       memberCount += 1;
       return memberCount <= 2 ? unauthenticated() : response(200, member);
     });
-    const requests = [memberRequest(), memberRequest()];
+    const requests = [memberRequest("/api/me"), memberRequest("/api/me")];
     await new Promise((resolve) => setImmediate(resolve));
     expect(refreshCount).toBe(1);
     finish(response(204));
@@ -76,12 +85,12 @@ describe("쿠키 인증 API", () => {
   });
   it("닉네임을 trim하고 JSON·CSRF를 함께 보낸다", async () => {
     global.fetch = jest.fn<typeof fetch>().mockResolvedValue(response(200, member));
-    expect(await updateNickname("  살몽  ")).toMatchObject({ ok: true, body: member });
+    expect(await updateNickname(`  ${member.nickname}  `)).toMatchObject({ ok: true, body: member });
     expect(global.fetch).toHaveBeenCalledWith(
       "/api/me",
       expect.objectContaining({
         method: "PATCH",
-        body: '{"nickname":"살몽"}',
+        body: JSON.stringify({ nickname: member.nickname }),
         headers: expect.objectContaining({ "X-XSRF-TOKEN": "csrf-test", "Content-Type": "application/json" }),
       }),
     );
@@ -104,7 +113,7 @@ describe("쿠키 인증 API", () => {
       memberCount += 1;
       return unauthenticated();
     });
-    const pending = memberRequest();
+    const pending = memberRequest("/api/me");
     await new Promise((resolve) => setImmediate(resolve));
     const signOut = logout();
     expect(order).not.toContain("/api/auth/logout");
@@ -131,9 +140,47 @@ describe("쿠키 인증 API", () => {
   it("Apple 탈퇴는 서버가 발급한 같은 origin의 재인증 주소로만 진행한다", async () => {
     global.fetch = jest
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(response(409, { code: "REAUTH_REQUIRED", message: "재인증", requestId: "test" }))
+      .mockResolvedValueOnce(response(409, reauthRequired))
       .mockResolvedValueOnce(response(200, { startUrl: "https://evil.test/steal" }));
     expect(await withdraw()).toMatchObject({ ok: false, failure: { kind: "malformed" } });
+  });
+  it("Apple 탈퇴 시작도 액세스 토큰이 만료되면 갱신 후 같은 주소로 한 번 재시도한다", async () => {
+    global.fetch = jest
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(response(409, reauthRequired))
+      .mockResolvedValueOnce(unauthenticated())
+      .mockResolvedValueOnce(response(204))
+      .mockResolvedValueOnce(response(200, appleWithdrawal));
+
+    expect(await withdraw()).toMatchObject({ ok: true, body: appleWithdrawal });
+    expect(jest.mocked(global.fetch).mock.calls.map(([url]) => url)).toEqual([
+      "/api/me",
+      "/api/me/withdrawal/apple",
+      "/api/auth/refresh",
+      "/api/me/withdrawal/apple",
+    ]);
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      "/api/me/withdrawal/apple",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ returnTo: "/" }),
+        headers: expect.objectContaining({ "X-XSRF-TOKEN": "csrf-test" }),
+      }),
+    );
+  });
+  it("Apple 탈퇴 시작의 갱신도 401이면 시작 요청을 반복하지 않는다", async () => {
+    global.fetch = jest
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(response(409, reauthRequired))
+      .mockResolvedValueOnce(unauthenticated())
+      .mockResolvedValueOnce(unauthenticated());
+
+    expect(await withdraw()).toMatchObject({ ok: false, failure: { status: 401 } });
+    expect(jest.mocked(global.fetch).mock.calls.map(([url]) => url)).toEqual([
+      "/api/me",
+      "/api/me/withdrawal/apple",
+      "/api/auth/refresh",
+    ]);
   });
   it("깨진 세션 응답을 비회원이나 회원으로 오인하지 않는다", async () => {
     global.fetch = jest.fn<typeof fetch>().mockResolvedValue(response(200, { authenticated: true }));

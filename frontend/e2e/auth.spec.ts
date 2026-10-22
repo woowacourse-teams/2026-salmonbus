@@ -1,4 +1,5 @@
 import { test, expect, testMember, redirectAuth } from "./fixtures/auth";
+import contract from "../../contract/auth-v1.openapi.json" with { type: "json" };
 import { routeButton, routeSearchInput } from "./utils/route-select";
 import { routeId } from "./fixtures/mock-data";
 
@@ -90,19 +91,52 @@ for (const action of ["로그아웃", "회원탈퇴"] as const) {
   });
 }
 
-test("Apple 탈퇴는 재인증을 안내하고 서버의 재인증 시작 주소로 이동한다", async ({ page, auth, browserName }) => {
+for (const result of ["cancelled", "failed"] as const) {
+  test(`Apple 탈퇴 ${result} 후 회원을 유지하고 재시도할 수 있다`, async ({ page, auth, browserName }) => {
+    auth.member = { ...testMember, provider: "APPLE" };
+    await page.goto("/mypage");
+    await page.getByRole("button", { name: "회원탈퇴", exact: true }).click();
+    await expect(page.getByText("탈퇴를 완료하려면 Apple 계정으로 한 번 더 인증해야 해요.")).toBeVisible();
+    await page.route("**/api/auth/apple/start?**", (route) => redirectAuth(route, `/?withdraw=${result}`, browserName));
+    await page.getByRole("dialog").getByRole("button", { name: "회원탈퇴", exact: true }).click();
+    await expect(page).toHaveURL("/mypage");
+    await expect(
+      page.getByRole("status").filter({
+        hasText: result === "cancelled" ? "회원탈퇴를 취소했어요" : "회원탈퇴를 완료하지 못했어요. 다시 시도해 주세요.",
+      }),
+    ).toBeVisible();
+    await expect(page.getByText("살몽님", { exact: true })).toBeVisible();
+    expect(
+      auth.requests.some((request) => request.path === "/api/me/withdrawal/apple" && request.csrf === "e2e-csrf"),
+    ).toBe(true);
+    await page.getByRole("button", { name: "회원탈퇴", exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+  });
+}
+
+test("Apple 탈퇴 시작이 401이면 갱신 후 같은 요청을 재시도한다", async ({ page, auth, browserName }) => {
   auth.member = { ...testMember, provider: "APPLE" };
+  let attempts = 0;
+  await page.route("**/api/me/withdrawal/apple", async (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      await route.fulfill({
+        status: 401,
+        json: contract.paths["/api/me/withdrawal/apple"].post.responses["401"].content["application/json"].examples
+          .unauthenticated.value,
+        headers: { "Cache-Control": "no-store" },
+      });
+    } else await route.fallback();
+  });
+  await page.route("**/api/auth/apple/start?**", (route) => redirectAuth(route, "/?withdraw=cancelled", browserName));
   await page.goto("/mypage");
   await page.getByRole("button", { name: "회원탈퇴", exact: true }).click();
-  await expect(page.getByText("탈퇴를 완료하려면 Apple 계정으로 한 번 더 인증해야 해요.")).toBeVisible();
-  await page.route("**/api/auth/apple/start?**", (route) => redirectAuth(route, "/?withdraw=cancelled", browserName));
   await page.getByRole("dialog").getByRole("button", { name: "회원탈퇴", exact: true }).click();
   await expect(page).toHaveURL("/mypage");
   await expect(page.getByRole("status").filter({ hasText: "회원탈퇴를 취소했어요" })).toBeVisible();
-  await expect(page.getByText("살몽님", { exact: true })).toBeVisible();
-  expect(
-    auth.requests.some((request) => request.path === "/api/me/withdrawal/apple" && request.csrf === "e2e-csrf"),
-  ).toBe(true);
+  await expect(page.getByText("Apple 계정으로 로그인 중")).toBeVisible();
+  expect(attempts).toBe(2);
+  expect(auth.requests.filter((request) => request.path === "/api/auth/refresh")).toHaveLength(1);
 });
 
 test("방면·정류장이 담긴 판정보드 주소는 로그인 후에도 유지한다", async ({ page, api }) => {

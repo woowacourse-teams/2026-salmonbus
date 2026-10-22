@@ -1,5 +1,12 @@
 import { test as apiTest, expect } from "./api";
 import type { Route } from "@playwright/test";
+import contract from "../../../contract/auth-v1.openapi.json" with { type: "json" };
+
+const memberExample =
+  contract.paths["/api/auth/session"].get.responses["200"].content["application/json"].examples.authenticated.value
+    .member;
+const profileExample =
+  contract.paths["/api/me"].patch.responses["200"].content["application/json"].examples.profile.value;
 
 export function redirectAuth(route: Route, destination: string, browserName: string) {
   // WebKit의 route.fulfill은 302를 지원하지 않아 같은 목적지의 페이지 이동으로 대체한다.
@@ -12,7 +19,7 @@ export function redirectAuth(route: Route, destination: string, browserName: str
 }
 
 export const testMember = {
-  id: "00000000-0000-4000-8000-000000000001",
+  ...memberExample,
   nickname: "살몽",
   provider: "KAKAO" as "KAKAO" | "APPLE",
 };
@@ -83,7 +90,7 @@ export const test = apiTest.extend<{ auth: AuthMock }>({
         } else if (path === "/api/auth/refresh") {
           if (auth.refreshFails) await error(401, "UNAUTHENTICATED");
           else {
-            auth.member = { ...testMember };
+            auth.member ??= { ...testMember };
             auth.refreshable = false;
             await route.fulfill({ status: 204 });
           }
@@ -97,7 +104,7 @@ export const test = apiTest.extend<{ auth: AuthMock }>({
           else if (!auth.member) await error(401, "UNAUTHENTICATED");
           else {
             auth.member = { ...auth.member, nickname: request.postDataJSON().nickname };
-            await route.fulfill({ json: { ...auth.member, createdAt: "2026-10-22T00:00:00Z" } });
+            await route.fulfill({ json: { ...profileExample, ...auth.member } });
           }
         } else if (path === "/api/me" && request.method() === "DELETE") {
           if (auth.member?.provider === "APPLE") await error(409, "REAUTH_REQUIRED");
