@@ -51,6 +51,7 @@ export function startOverlayLayoutBridge(channel: NativeMapChannel, mapRegion: H
       mapRect: rectFor(mapRegion.getBoundingClientRect()),
       webRects: elements.filter(visible).map((element) => rectFor(element.getBoundingClientRect())),
       captureAll:
+        document.querySelector("dialog[open]") !== null ||
         document.getElementById("root")?.inert === true ||
         mapRegion.getAttribute("aria-hidden") === "true" ||
         mapRegion.getAttribute("aria-busy") === "true",
@@ -111,6 +112,7 @@ export function startOverlayLayoutBridge(channel: NativeMapChannel, mapRegion: H
       "data-snap",
       "data-dragging",
       "hidden",
+      "open",
     ],
   });
   document.addEventListener("transitionrun", transitionStart);

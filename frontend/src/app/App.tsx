@@ -3,14 +3,17 @@ import { ChatGate } from "@/features/chat";
 import { AuthProvider } from "./providers/AuthProvider";
 import { AuthReturn } from "./AuthReturn";
 import { AppRoutes } from "./routes";
+import { FavoritesProvider } from "@/features/favorites/FavoritesContext";
 
 export function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AuthReturn />
-        <AppRoutes />
-        <ChatGate />
+        <FavoritesProvider>
+          <AuthReturn />
+          <AppRoutes />
+          <ChatGate />
+        </FavoritesProvider>
       </AuthProvider>
     </BrowserRouter>
   );

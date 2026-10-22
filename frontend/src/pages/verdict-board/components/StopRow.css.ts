@@ -101,6 +101,7 @@ export const head = styleVariants({
 });
 
 export const headStack = style([stack, { flex: 1, gap: HEAD_GAP }]);
+export const favoriteHead = style({ paddingRight: 44 });
 
 const chipSlotBase = style({
   display: "flex",

@@ -13,7 +13,8 @@ export function directionButton(page: Page, direction: Direction) {
 export function targetStop(page: Page, direction: Direction) {
   return page
     .getByRole("region", { name: "판정보드 정류장 목록", exact: true })
-    .getByRole("button", { name: new RegExp(`^${targetStopNames[direction]}`) });
+    .getByRole("button", { name: new RegExp(`^${targetStopNames[direction]}`) })
+    .and(page.locator("button[aria-expanded]"));
 }
 
 export function targetRow(page: Page, direction: Direction) {

@@ -4,6 +4,7 @@ import { Brand } from "@/shared/components/Brand";
 import { BottomNavigation } from "@/shared/components/BottomNavigation";
 import { LoginButton } from "@/shared/components/LoginButton";
 import { Notice } from "@/shared/components/Notice";
+import { HomeFavorites } from "@/features/favorites/HomeFavorites";
 import { track } from "@/shared/analytics/track";
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
 import { boardPathFor } from "@/shared/routing/paths";
@@ -49,7 +50,7 @@ export function RouteSelectPage() {
         {input === "" && (
           <section className={styles.account} aria-label="회원 안내">
             {auth.status === "authenticated" ? (
-              <p className={styles.welcome}>어서오세요 연어버스입니다!</p>
+              <HomeFavorites key={auth.member.id} />
             ) : auth.status === "loading" ? (
               <p>로그인 상태를 확인하고 있어요…</p>
             ) : (

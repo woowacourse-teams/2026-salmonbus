@@ -4,6 +4,7 @@ export const paths = {
   login: "/login",
   mypage: "/mypage",
   nickname: "/mypage/nickname",
+  favoriteGroup: "/mypage/groups/:groupId",
 } as const;
 
 export function boardPathFor(routeId: string): string {

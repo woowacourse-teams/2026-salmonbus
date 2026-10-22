@@ -2,11 +2,22 @@ import { cacheLifetimeFrom, type CacheLifetime } from "./cacheControl";
 import { referenceClockFrom, type ReferenceClock } from "./referenceClock";
 import { retryAfterMillisFrom } from "./retryAfter";
 import type { ErrorCode, ErrorResponse } from "./routeForecast.types";
+import type { FavoriteErrorCode } from "./favorites.types";
 
 const REQUEST_TIMEOUT_MS = 10_000;
 const TIMEOUT_REASON = "timeout";
 
-const ERROR_CODE_KEYS: Record<ErrorCode, true> = {
+const ERROR_CODE_KEYS: Record<ErrorCode | FavoriteErrorCode, true> = {
+  INVALID_FAVORITE_GROUP_NAME: true,
+  INVALID_ORDER: true,
+  FAVORITE_GROUP_NOT_FOUND: true,
+  FAVORITE_NOT_FOUND: true,
+  FAVORITE_GROUP_LIMIT_EXCEEDED: true,
+  FAVORITE_GROUP_NAME_CONFLICT: true,
+  LAST_FAVORITE_GROUP: true,
+  FAVORITE_LIMIT_EXCEEDED: true,
+  FAVORITE_TARGET_AMBIGUOUS: true,
+  FAVORITE_TARGET_UNAVAILABLE: true,
   INVALID_ROUTE_ID: true,
   INVALID_REQUEST: true,
   ROUTE_NOT_FOUND: true,
@@ -39,7 +50,7 @@ export interface ApiSuccess<T> {
 }
 
 export type ApiFailure =
-  | { kind: "contract"; error: ErrorResponse; status: number; retryAfterMs: number | null }
+  | { kind: "contract"; error: ContractError; status: number; retryAfterMs: number | null }
   | { kind: "rateLimited"; status: number; retryAfterMs: number | null; requestId: string | null }
   | { kind: "malformed"; status: number; requestId: string | null }
   | { kind: "timeout" }
@@ -77,7 +88,8 @@ export function resetApiFailureReporter(): void {
 }
 
 export interface RequestOptions {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  errorRequestIdOptional?: boolean;
   body?: unknown;
   headers?: Record<string, string>;
   signal?: AbortSignal;
@@ -144,10 +156,11 @@ async function executeRequest<T>(url: string, options: RequestOptions): Promise<
       return outcomeOf(failed(infrastructureFailure));
     }
 
-    if (response.status === 204) return outcomeOf(interpret<T>(response, undefined, clock));
+    if (response.status === 204)
+      return outcomeOf(interpret<T>(response, undefined, clock, options.errorRequestIdOptional));
     responseBody = await response.text();
     const body: unknown = JSON.parse(responseBody);
-    return outcomeOf(interpret<T>(response, body, clock));
+    return outcomeOf(interpret<T>(response, body, clock, options.errorRequestIdOptional));
   } catch (cause) {
     if (controller.signal.aborted) {
       return outcomeOf(failed(controller.signal.reason === TIMEOUT_REASON ? { kind: "timeout" } : { kind: "aborted" }));
@@ -174,7 +187,17 @@ function infrastructureFailureOf(response: Response, clock: ReferenceClock | nul
   return null;
 }
 
-function interpret<T>(response: Response, body: unknown, clock: ReferenceClock | null): ApiResult<T> {
+type ContractError = Omit<ErrorResponse, "code" | "requestId"> & {
+  code: ErrorCode | FavoriteErrorCode;
+  requestId?: string;
+};
+
+function interpret<T>(
+  response: Response,
+  body: unknown,
+  clock: ReferenceClock | null,
+  errorRequestIdOptional = false,
+): ApiResult<T> {
   const requestId = requestIdOf(response);
 
   if (response.ok) {
@@ -188,7 +211,7 @@ function interpret<T>(response: Response, body: unknown, clock: ReferenceClock |
     };
   }
 
-  if (isErrorResponse(body)) {
+  if (isErrorResponse(body, errorRequestIdOptional)) {
     return failed({
       kind: "contract",
       error: body,
@@ -200,7 +223,7 @@ function interpret<T>(response: Response, body: unknown, clock: ReferenceClock |
   return failed({ kind: "malformed", status: response.status, requestId });
 }
 
-function isErrorResponse(value: unknown): value is ErrorResponse {
+function isErrorResponse(value: unknown, errorRequestIdOptional: boolean): value is ContractError {
   if (typeof value !== "object" || value === null) {
     return false;
   }
@@ -210,7 +233,7 @@ function isErrorResponse(value: unknown): value is ErrorResponse {
     typeof candidate.code === "string" &&
     ERROR_CODES.has(candidate.code) &&
     typeof candidate.message === "string" &&
-    typeof candidate.requestId === "string"
+    (typeof candidate.requestId === "string" || (errorRequestIdOptional && candidate.requestId === undefined))
   );
 }
 

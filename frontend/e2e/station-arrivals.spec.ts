@@ -151,6 +151,7 @@ test("선택 정류장과 방향을 바꾸면 이전 방문의 시간정보를 �
   await page
     .getByRole("region", { name: "판정보드 정류장 목록", exact: true })
     .getByRole("button", { name: new RegExp(`^${nextStop.name}`) })
+    .and(page.locator("button[aria-expanded]"))
     .click();
   await expect.poll(() => api.requests.arrivals).toBe(2);
   expect(api.arrivalRequests[1]!.pathname).toBe(`/api/v2/stations/${nextStop.stopId}/arrivals`);

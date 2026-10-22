@@ -301,6 +301,11 @@ function OperatingBoard({
           <StopBoard
             key={direction.id}
             status="ready"
+            favoriteRoute={{
+              routeId: board.route.id,
+              direction: direction.id,
+              directionName: direction.terminalStopName,
+            }}
             stationArrivals={
               arrivalSelection === null ? null : { selection: arrivalSelection, resource: stationArrivals }
             }

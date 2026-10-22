@@ -17,7 +17,9 @@ for (const { name, path } of [
     await expect(page).toHaveURL(`/login?${new URLSearchParams({ returnTo: path })}`);
     await page.getByRole("button", { name: "카카오로 계속하기" }).click();
     await expect(page).toHaveURL(path);
-    await expect(page.getByText(path === "/" ? "어서오세요 연어버스입니다!" : "살몽님", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText(path === "/" ? "아직 등록한 즐겨찾기가 없어요" : "살몽님", { exact: true }),
+    ).toBeVisible();
     expect(auth.requests.some((request) => request.path === "/api/auth/kakao/start")).toBe(true);
   });
 }
@@ -240,5 +242,5 @@ test("닉네임 저장 중 홈으로 이동하면 늦은 응답이 마이페이�
   await (await response).finished();
   await page.clock.runFor(32);
   await expect(page).toHaveURL("/");
-  await expect(page.getByText("어서오세요 연어버스입니다!")).toBeVisible();
+  await expect(page.getByText("아직 등록한 즐겨찾기가 없어요", { exact: true })).toBeVisible();
 });

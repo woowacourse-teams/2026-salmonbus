@@ -3,10 +3,12 @@ import { test as chatTest, expect, chatRouteId, chatAvailability } from "./fixtu
 import { test as mapTest } from "./fixtures/naver-map";
 import { routeId } from "./fixtures/mock-data";
 import type { NativeMapMessage, NativeMapEvent } from "../src/shared/native-map/protocol";
+import { test as favoritesTest } from "./fixtures/favorites";
 
 const test = mergeTests(chatTest, mapTest).extend<{ nativeReady: boolean }>({
   nativeReady: [true, { option: true }],
 });
+const favoriteNativeTest = mergeTests(test, favoritesTest);
 
 declare global {
   interface Window {
@@ -213,6 +215,18 @@ test("body portal 채팅을 hit region에 포함하고 전체 modal은 native �
   const layout = (await messages(page)).filter((message) => message.type === "layout").at(-1)!;
   expect(layout.payload.captureAll).toBe(true);
   expect(layout.payload.webRects.some((rect) => rect.height > 800)).toBe(true);
+});
+
+favoriteNativeTest("즐겨찾기 dialog를 열면 native 지도 입력을 차단하고 닫으면 복구한다", async ({ page, api }) => {
+  await open(page);
+  const stop = api.data.board.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+  await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.clock.runFor(32);
+  expect((await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.captureAll).toBe(true);
+  await page.getByRole("dialog").getByRole("button", { name: "취소", exact: true }).click();
+  await page.clock.runFor(32);
+  expect((await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.captureAll).toBe(false);
 });
 
 test("native 지도 오류 후에도 웹 목록을 유지하고 앱 전용 투명 모드를 정리한다", async ({ page }) => {

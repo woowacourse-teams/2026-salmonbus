@@ -4,6 +4,7 @@ import { AccountLayout } from "@/shared/components/AccountLayout";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { LoginButton } from "@/shared/components/LoginButton";
 import { Notice } from "@/shared/components/Notice";
+import { GroupList } from "@/features/favorites/GroupList";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { authErrorOf } from "@/shared/utils/authErrorOf";
 import * as buttonStyles from "@/shared/styles/button.css";
@@ -61,6 +62,7 @@ export function MyPage() {
               {state.member.provider === "KAKAO" ? "카카오" : "Apple"} 계정으로 로그인 중
             </p>
           </div>
+          <GroupList />
           <button
             className={styles.row}
             type="button"

@@ -18,5 +18,4 @@ export const header = style({
   background: vars.color.brand,
 });
 export const searchArea = style({ marginTop: 12 });
-export const account = style({ padding: "32px", textAlign: "center" });
-export const welcome = style({ margin: "116px 0 0", color: "#68645F", fontSize: 14, lineHeight: 1.6 });
+export const account = style({ padding: "24px 32px", textAlign: "left" });

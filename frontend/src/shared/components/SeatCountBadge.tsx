@@ -1,8 +1,8 @@
-import type { ArrivalTone } from "./arrivalPolicy";
+import type { SeatLevel } from "@/shared/utils/seatGrade";
 import * as styles from "./SeatCountBadge.css";
 
 interface SeatCountBadgeProps {
-  tone: ArrivalTone;
+  tone: SeatLevel | "unavailable";
   label: string;
 }
 

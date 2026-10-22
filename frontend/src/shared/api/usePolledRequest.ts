@@ -12,6 +12,7 @@ interface PolledState<T> {
 export function usePolledRequest<T>(
   request: (key: string, signal: AbortSignal) => Promise<ApiResult<T>>,
   key: string,
+  revision: string | number = 0,
 ): PolledResource<T> {
   const [state, setState] = useState<PolledState<T> | null>(null);
   const requestResource = useEffectEvent(request);
@@ -76,7 +77,7 @@ export function usePolledRequest<T>(
       window.removeEventListener("online", onOnline);
       gate.close();
     };
-  }, [key]);
+  }, [key, revision]);
 
   return state?.key === key ? state.resource : PENDING_RESOURCE;
 }

@@ -5,10 +5,12 @@ export function ConfirmDialog({
   title,
   children,
   onCancel,
+  className,
 }: {
   title: string;
   children: ReactNode;
   onCancel: () => void;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -23,7 +25,7 @@ export function ConfirmDialog({
   return (
     <dialog
       ref={ref}
-      className={styles.dialog}
+      className={`${styles.dialog} ${className ?? ""}`}
       aria-labelledby="account-dialog-title"
       onCancel={(event) => {
         event.preventDefault();
