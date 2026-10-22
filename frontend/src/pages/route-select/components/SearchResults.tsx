@@ -1,5 +1,5 @@
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
-import type { SearchView } from "../displayPolicy";
+import type { SearchView } from "./displayPolicy";
 import {
   LOAD_FAILED_NOTICE,
   LOADING_NOTICE,
@@ -9,7 +9,7 @@ import {
   matchedCountLabel,
   routeButtonLabel,
   searchStatusLabel,
-} from "../routeSelectCopy";
+} from "./routeSelectCopy";
 import * as styles from "./SearchResults.css";
 
 interface SearchResultsProps {

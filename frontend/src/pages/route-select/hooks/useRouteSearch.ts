@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
 import { createLatestRequestGate } from "@/shared/api/latestRequestGate";
 import { fetchRoutes } from "@/shared/api/routeForecast.api";
-import { searchViewFor, type RoutesState } from "./displayPolicy";
+import { searchViewFor, type RoutesState } from "../components/displayPolicy";
 
 export function useRouteSearch() {
   const [searchParams, setSearchParams] = useSearchParams();

@@ -7,7 +7,7 @@ import { LOADING_NOTICE, LOAD_FAILED_NOTICE, OUT_OF_SERVICE_NOTICE } from "./ver
 import { StopList } from "./StopList";
 import type { StationArrivalDetails } from "./stationArrivalPolicy";
 import * as styles from "./StopBoard.css";
-import type { FavoriteBoardRoute } from "@/features/favorites/FavoriteButton";
+import type { FavoriteBoardRoute } from "./FavoriteButton";
 
 type NoticeStatus = "loading" | "error" | "outOfService";
 

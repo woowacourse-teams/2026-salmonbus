@@ -1,6 +1,7 @@
 import { style, styleVariants } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
-import { card as cardBase } from "./favorites.css";
+import { card as cardBase } from "@/shared/styles/surface.css";
+import { text } from "@/shared/styles/button.css";
 
 export const editor = style({ marginTop: -8 });
 export const section = style({ width: "100%", maxWidth: 356, margin: "0 auto" });
@@ -23,16 +24,6 @@ export const link = style({
   textDecoration: "none",
 });
 export const heading = style({ display: "flex", alignItems: "center", gap: 8, minWidth: 0, height: 23 });
-export const route = style({
-  flexShrink: 0,
-  padding: "3px 7px",
-  borderRadius: 6,
-  background: "#FFF0EB",
-  color: vars.color.liveBus,
-  fontSize: 11,
-  fontWeight: 700,
-  lineHeight: "16px",
-});
 export const stop = style({
   flex: 1,
   minWidth: 0,
@@ -118,3 +109,40 @@ export const notice = style({
   fontSize: 12,
   textAlign: "center",
 });
+
+export const list = style({
+  display: "flex",
+  flexDirection: "column",
+  gap: 12,
+  padding: 0,
+  margin: 0,
+  listStyle: "none",
+});
+export const tabs = style({ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 });
+export const tab = style({
+  border: 0,
+  borderRadius: 20,
+  padding: "8px 14px",
+  background: "#EEECE7",
+  color: vars.color.textBody,
+  font: "inherit",
+  fontSize: 13,
+  cursor: "pointer",
+  selectors: { '&[aria-selected="true"]': { background: vars.color.brand, color: "white" } },
+});
+export const homeEdit = style([
+  text,
+  { display: "grid", placeItems: "center", flexShrink: 0, width: 36, height: 32, padding: "6px 8px" },
+]);
+export const homeEmpty = style({
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 18,
+  minHeight: 260,
+  color: "#837B74",
+  textAlign: "center",
+});
+export const homeEmptyTitle = style({ margin: 0, fontSize: 16, fontWeight: 500 });
+export const homeEmptyDescription = style({ margin: 0, fontSize: 13, lineHeight: 1.6 });

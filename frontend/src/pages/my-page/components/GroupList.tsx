@@ -1,10 +1,12 @@
+import * as surface from "@/shared/styles/surface.css";
+import * as buttons from "@/shared/styles/button.css";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import { useFavorites } from "./FavoritesContext";
-import { FavoritesNotice } from "./FavoritesNotice";
-import { FavoriteEditor } from "./FavoriteEditor";
+import { useFavorites } from "@/shared/hooks/useFavorites";
+import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
+import { FavoriteEditor } from "@/shared/components/favorite-editor/FavoriteEditor";
 import { Notice } from "@/shared/components/Notice";
-import * as styles from "./favorites.css";
+import * as styles from "./GroupList.css";
 
 export function GroupList() {
   const { groups, resource, reload } = useFavorites();
@@ -29,7 +31,7 @@ export function GroupList() {
         내 그룹 {groups.length} / 3{" "}
         <button
           ref={editButton}
-          className={styles.action}
+          className={buttons.text}
           disabled={groups.length === 0}
           onClick={() => setOrdering(true)}
           aria-label="그룹과 즐겨찾기 순서 편집"
@@ -41,7 +43,7 @@ export function GroupList() {
       <ul className={styles.list}>
         {groups.map((group) => (
           <li key={group.id}>
-            <Link className={styles.groupRow} to={`/mypage/groups/${encodeURIComponent(group.id)}`}>
+            <Link className={surface.row} to={`/mypage/groups/${encodeURIComponent(group.id)}`}>
               <span>
                 {group.name}
                 <span className={styles.count}>{group.favorites.length} / 2</span>

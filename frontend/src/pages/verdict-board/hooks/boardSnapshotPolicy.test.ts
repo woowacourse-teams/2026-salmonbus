@@ -2,7 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 import { PENDING_RESOURCE, type LatestSuccess, type PolledResource } from "@/shared/api/polledResource";
 import type { Board, DirectionInfo, LiveVehicles, ObservationState } from "@/shared/api/routeForecast.types";
 import { boardWith, downInfo, liveVehiclesWith, upInfo, vehicleAt } from "@/testing/fixtures";
-import { serviceStateFor } from "./components/displayPolicy";
+import { serviceStateFor } from "../components/displayPolicy";
 import {
   boardHistoriesWith,
   boardObservedAtOf,

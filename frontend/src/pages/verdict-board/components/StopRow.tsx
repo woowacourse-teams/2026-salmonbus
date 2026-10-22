@@ -7,7 +7,7 @@ import { StopName } from "./StopName";
 import { TimelineMarker, type RoutePosition } from "./TimelineMarker";
 import { VerdictChip } from "./VerdictChip";
 import * as styles from "./StopRow.css";
-import { FavoriteButton, type FavoriteBoardRoute } from "@/features/favorites/FavoriteButton";
+import { FavoriteButton, type FavoriteBoardRoute } from "./FavoriteButton";
 
 type ChevronDirection = "right" | "up";
 

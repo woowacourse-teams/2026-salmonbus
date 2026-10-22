@@ -1,6 +1,6 @@
 import type { ApiFailure } from "@/shared/api/client";
 import type { FavoriteGroup, FavoriteTarget } from "@/shared/api/favorites.types";
-import { authErrorOf } from "@/shared/utils/authErrorOf";
+import { authErrorOf } from "./authErrorOf";
 
 export function sameFavorite(left: FavoriteTarget, right: FavoriteTarget): boolean {
   return left.routeId === right.routeId && left.stopId === right.stopId && left.direction === right.direction;
@@ -29,8 +29,7 @@ export function groupNameError(name: string): string | null {
 export function moveItem<T>(items: T[], from: number, to: number): T[] {
   if (from < 0 || from >= items.length || to < 0 || to >= items.length || from === to) return items;
   const next = [...items];
-  const [item] = next.splice(from, 1);
-  next.splice(to, 0, item!);
+  next.splice(to, 0, ...next.splice(from, 1));
   return next;
 }
 

@@ -1,3 +1,4 @@
+import { isRecord } from "@/shared/utils/valueGuards";
 import { cacheLifetimeFrom, type CacheLifetime } from "./cacheControl";
 import { referenceClockFrom, type ReferenceClock } from "./referenceClock";
 import { retryAfterMillisFrom } from "./retryAfter";
@@ -7,38 +8,38 @@ import type { FavoriteErrorCode } from "./favorites.types";
 const REQUEST_TIMEOUT_MS = 10_000;
 const TIMEOUT_REASON = "timeout";
 
-const ERROR_CODE_KEYS: Record<ErrorCode | FavoriteErrorCode, true> = {
-  INVALID_FAVORITE_GROUP_NAME: true,
-  INVALID_ORDER: true,
-  FAVORITE_GROUP_NOT_FOUND: true,
-  FAVORITE_NOT_FOUND: true,
-  FAVORITE_GROUP_LIMIT_EXCEEDED: true,
-  FAVORITE_GROUP_NAME_CONFLICT: true,
-  LAST_FAVORITE_GROUP: true,
-  FAVORITE_LIMIT_EXCEEDED: true,
-  FAVORITE_TARGET_AMBIGUOUS: true,
-  FAVORITE_TARGET_UNAVAILABLE: true,
-  INVALID_ROUTE_ID: true,
-  INVALID_REQUEST: true,
-  ROUTE_NOT_FOUND: true,
-  STATION_NOT_FOUND: true,
-  REFERENCE_VERSION_CONFLICT: true,
-  ENDPOINT_NOT_FOUND: true,
-  METHOD_NOT_ALLOWED: true,
-  INTERNAL_ERROR: true,
-  UNAUTHENTICATED: true,
-  CSRF_REJECTED: true,
-  NICKNAME_LENGTH: true,
-  NICKNAME_CHARACTERS: true,
-  NICKNAME_RESERVED: true,
-  NICKNAME_TAKEN: true,
-  REAUTH_REQUIRED: true,
-  SERVICE_UNAVAILABLE: true,
-  MODEL_OUT_OF_SCOPE: true,
-  NO_RECENT_OBSERVATION: true,
+const ERROR_CODE_VALUES: { [Code in ErrorCode | FavoriteErrorCode]: Code } = {
+  INVALID_FAVORITE_GROUP_NAME: "INVALID_FAVORITE_GROUP_NAME",
+  INVALID_ORDER: "INVALID_ORDER",
+  FAVORITE_GROUP_NOT_FOUND: "FAVORITE_GROUP_NOT_FOUND",
+  FAVORITE_NOT_FOUND: "FAVORITE_NOT_FOUND",
+  FAVORITE_GROUP_LIMIT_EXCEEDED: "FAVORITE_GROUP_LIMIT_EXCEEDED",
+  FAVORITE_GROUP_NAME_CONFLICT: "FAVORITE_GROUP_NAME_CONFLICT",
+  LAST_FAVORITE_GROUP: "LAST_FAVORITE_GROUP",
+  FAVORITE_LIMIT_EXCEEDED: "FAVORITE_LIMIT_EXCEEDED",
+  FAVORITE_TARGET_AMBIGUOUS: "FAVORITE_TARGET_AMBIGUOUS",
+  FAVORITE_TARGET_UNAVAILABLE: "FAVORITE_TARGET_UNAVAILABLE",
+  INVALID_ROUTE_ID: "INVALID_ROUTE_ID",
+  INVALID_REQUEST: "INVALID_REQUEST",
+  ROUTE_NOT_FOUND: "ROUTE_NOT_FOUND",
+  STATION_NOT_FOUND: "STATION_NOT_FOUND",
+  REFERENCE_VERSION_CONFLICT: "REFERENCE_VERSION_CONFLICT",
+  ENDPOINT_NOT_FOUND: "ENDPOINT_NOT_FOUND",
+  METHOD_NOT_ALLOWED: "METHOD_NOT_ALLOWED",
+  INTERNAL_ERROR: "INTERNAL_ERROR",
+  UNAUTHENTICATED: "UNAUTHENTICATED",
+  CSRF_REJECTED: "CSRF_REJECTED",
+  NICKNAME_LENGTH: "NICKNAME_LENGTH",
+  NICKNAME_CHARACTERS: "NICKNAME_CHARACTERS",
+  NICKNAME_RESERVED: "NICKNAME_RESERVED",
+  NICKNAME_TAKEN: "NICKNAME_TAKEN",
+  REAUTH_REQUIRED: "REAUTH_REQUIRED",
+  SERVICE_UNAVAILABLE: "SERVICE_UNAVAILABLE",
+  MODEL_OUT_OF_SCOPE: "MODEL_OUT_OF_SCOPE",
+  NO_RECENT_OBSERVATION: "NO_RECENT_OBSERVATION",
 };
 
-const ERROR_CODES: ReadonlySet<string> = new Set(Object.keys(ERROR_CODE_KEYS));
+const ERROR_CODES = Object.values(ERROR_CODE_VALUES);
 
 export interface ApiSuccess<T> {
   ok: true;
@@ -203,6 +204,7 @@ function interpret<T>(
   if (response.ok) {
     return {
       ok: true,
+      // shortcut: 기존 REST 성공 본문은 미검증이며 SAL-140에서 파서 경계로 교체한다.
       body: body as T,
       status: response.status,
       requestId,
@@ -211,10 +213,11 @@ function interpret<T>(
     };
   }
 
-  if (isErrorResponse(body, errorRequestIdOptional)) {
+  const error = errorResponseFrom(body, errorRequestIdOptional);
+  if (error !== null) {
     return failed({
       kind: "contract",
-      error: body,
+      error,
       status: response.status,
       retryAfterMs: retryAfterMsOf(response, clock),
     });
@@ -223,18 +226,12 @@ function interpret<T>(
   return failed({ kind: "malformed", status: response.status, requestId });
 }
 
-function isErrorResponse(value: unknown, errorRequestIdOptional: boolean): value is ContractError {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.code === "string" &&
-    ERROR_CODES.has(candidate.code) &&
-    typeof candidate.message === "string" &&
-    (typeof candidate.requestId === "string" || (errorRequestIdOptional && candidate.requestId === undefined))
-  );
+function errorResponseFrom(value: unknown, errorRequestIdOptional: boolean): ContractError | null {
+  if (!isRecord(value) || typeof value.message !== "string") return null;
+  const code = ERROR_CODES.find((code) => code === value.code);
+  if (code === undefined) return null;
+  if (typeof value.requestId === "string") return { code, message: value.message, requestId: value.requestId };
+  return errorRequestIdOptional && value.requestId === undefined ? { code, message: value.message } : null;
 }
 
 function retryAfterMsOf(response: Response, clock: ReferenceClock | null): number | null {

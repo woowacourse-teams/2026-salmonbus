@@ -3,17 +3,18 @@ import { Link } from "react-router";
 import type { FavoriteStatus, FavoriteTarget, HomeFavorite } from "@/shared/api/favorites.types";
 import { latestSuccessOf } from "@/shared/api/polledResource";
 import { SeatCountBadge } from "@/shared/components/SeatCountBadge";
-import { toSeatLevel } from "@/shared/utils/seatGrade";
+import { toSeatEstimate, toSeatLevel } from "@/shared/utils/seatGrade";
 import { boardPathFor } from "@/shared/routing/paths";
-import { useFavorites, useHomeFavorites } from "./FavoritesContext";
-import { FavoritesNotice } from "./FavoritesNotice";
-import { FavoriteEditor } from "./FavoriteEditor";
+import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
+import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
+import { FavoriteEditor } from "@/shared/components/favorite-editor/FavoriteEditor";
 import { Notice } from "@/shared/components/Notice";
-import { favoritePath } from "./favoritePolicy";
-import bookmarkIcon from "./bookmark.svg";
-import editIcon from "./home-edit.svg";
+import { favoritePath } from "@/shared/utils/favoritePolicy";
+import bookmarkIcon from "@/shared/assets/icons/bookmark.svg";
+import editIcon from "../assets/home-edit.svg";
 import * as homeStyles from "./HomeFavorites.css";
-import * as styles from "./favorites.css";
+import * as buttons from "@/shared/styles/button.css";
+import { RouteBadge } from "@/shared/components/RouteBadge";
 
 const STATUS_LABEL: Record<Exclude<FavoriteStatus, "READY">, string> = {
   NO_VEHICLE: "도착 예정 차량이 없어요",
@@ -47,7 +48,7 @@ export function HomeFavorites() {
     return (
       <div className={homeStyles.editor}>
         <FavoriteEditor
-          initialGroupId={group?.id}
+          {...(group ? { initialGroupId: group.id } : {})}
           onClose={(saved) => {
             setOrdering(false);
             if (saved) showNotice();
@@ -59,11 +60,16 @@ export function HomeFavorites() {
     <section className={`${homeStyles.section} amp-mask`} aria-label="내 즐겨찾기">
       <FavoritesNotice resource={resource} onRetry={reload} />
       {groups.length > 0 && (
-        <div className={styles.tabs}>
-          <div role="tablist" aria-label="즐겨찾기 그룹" className={styles.tabs} style={{ marginBottom: 0, flex: 1 }}>
+        <div className={homeStyles.tabs}>
+          <div
+            role="tablist"
+            aria-label="즐겨찾기 그룹"
+            className={homeStyles.tabs}
+            style={{ marginBottom: 0, flex: 1 }}
+          >
             {groups.map((candidate, index) => (
               <button
-                className={styles.tab}
+                className={homeStyles.tab}
                 role="tab"
                 id={`group-tab-${candidate.id}`}
                 aria-controls="home-favorites"
@@ -83,8 +89,10 @@ export function HomeFavorites() {
                             ? groups.length - 1
                             : null;
                   if (next === null) return;
+                  const nextGroup = groups[next];
+                  if (nextGroup === undefined) return;
                   event.preventDefault();
-                  setSelected(groups[next]!.id);
+                  setSelected(nextGroup.id);
                   event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
                 }}
               >
@@ -95,7 +103,7 @@ export function HomeFavorites() {
           <button
             ref={editButton}
             type="button"
-            className={styles.homeEdit}
+            className={homeStyles.homeEdit}
             aria-label="그룹과 즐겨찾기 순서 편집"
             onClick={() => setOrdering(true)}
           >
@@ -110,18 +118,18 @@ export function HomeFavorites() {
         aria-labelledby={group ? `group-tab-${group.id}` : undefined}
       >
         {((resource.status === "success" && !group) || (latest !== null && favorites.length === 0)) && (
-          <div className={styles.homeEmpty}>
+          <div className={homeStyles.homeEmpty}>
             <img src={bookmarkIcon} width="34" height="34" alt="" draggable={false} />
-            <p className={styles.homeEmptyTitle}>등록된 즐겨찾기가 없어요</p>
-            <p className={styles.homeEmptyDescription}>자주 타는 노선에서 즐겨찾기를 추가해 보세요!</p>
+            <p className={homeStyles.homeEmptyTitle}>등록된 즐겨찾기가 없어요</p>
+            <p className={homeStyles.homeEmptyDescription}>자주 타는 노선에서 즐겨찾기를 추가해 보세요!</p>
           </div>
         )}
-        <ul className={styles.list}>
+        <ul className={homeStyles.list}>
           {favorites.map((favorite) => (
             <FavoriteCard
               key={favorite.id}
               favorite={favorite}
-              savedDirection={group?.favorites.find((candidate) => candidate.id === favorite.id)?.direction}
+              savedDirection={group?.favorites.find((candidate) => candidate.id === favorite.id)?.direction ?? null}
               elapsed={Math.max(0, (now - (latest?.receivedAt ?? now)) / 1000)}
               onRetry={retry}
             />
@@ -133,17 +141,14 @@ export function HomeFavorites() {
   );
 }
 
-function FavoriteCard({
-  favorite,
-  savedDirection,
-  elapsed,
-  onRetry,
-}: {
+interface FavoriteCardProps {
   favorite: HomeFavorite;
-  savedDirection: FavoriteTarget["direction"] | undefined;
+  savedDirection: FavoriteTarget["direction"] | null;
   elapsed: number;
   onRetry: () => void;
-}) {
+}
+
+function FavoriteCard({ favorite, savedDirection, elapsed, onRetry }: FavoriteCardProps) {
   const direction = favorite.stop.direction ?? savedDirection;
   const terminalStopName = favorite.route.terminalStopName?.trim();
   return (
@@ -157,7 +162,7 @@ function FavoriteCard({
         }
       >
         <div className={homeStyles.heading}>
-          <span className={homeStyles.route}>{favorite.route.displayName || "노선 정보 없음"}</span>
+          <RouteBadge>{favorite.route.displayName || "노선 정보 없음"}</RouteBadge>
           <span className={homeStyles.stop}>{favorite.stop.name || "정류장 정보 없음"}</span>
           <span className={homeStyles.direction}>
             {terminalStopName
@@ -179,10 +184,8 @@ function FavoriteCard({
                 const timingAvailable = remaining !== null && remaining > 0;
                 const tone =
                   forecast.status === "AVAILABLE" ? toSeatLevel(forecast.seatAvailableProbability) : "unavailable";
-                const label =
-                  forecast.status !== "AVAILABLE" || forecast.expectedSeats === undefined
-                    ? "좌석 정보 없음"
-                    : `도착 시 ${Math.floor(forecast.expectedSeats)}석 예상해요`;
+                const estimate = toSeatEstimate(forecast.status === "AVAILABLE" ? forecast.expectedSeats : undefined);
+                const label = estimate.kind === "unknown" ? "좌석 정보 없음" : `도착 시 ${estimate.seats}석 예상해요`;
                 return (
                   <li className={homeStyles.arrival} key={vehicle.vehicleId ?? index}>
                     <span className={homeStyles.timing}>
@@ -204,7 +207,7 @@ function FavoriteCard({
         </div>
       </Link>
       {favorite.status === "ERROR" && (
-        <button type="button" className={styles.action} onClick={onRetry}>
+        <button type="button" className={buttons.text} onClick={onRetry}>
           다시 확인하기
         </button>
       )}

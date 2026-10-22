@@ -1,5 +1,4 @@
-import { globalStyle, style } from "@vanilla-extract/css";
-import { dialogTitle } from "@/shared/components/ConfirmDialog.css";
+import { style } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 
 export const dialog = style({
@@ -14,15 +13,19 @@ export const dialog = style({
   },
 });
 
-globalStyle(`${dialog} ${dialogTitle}`, {
-  paddingRight: 42,
-  margin: "0 0 16px",
-  fontSize: 21,
-  fontWeight: 700,
-  lineHeight: 1.4,
-  letterSpacing: "-0.6px",
-  whiteSpace: "pre-line",
-  wordBreak: "keep-all",
+export const title = style({
+  selectors: {
+    "&&": {
+      paddingRight: 42,
+      margin: "0 0 16px",
+      fontSize: 21,
+      fontWeight: 700,
+      lineHeight: 1.4,
+      letterSpacing: "-0.6px",
+      whiteSpace: "pre-line",
+      wordBreak: "keep-all",
+    },
+  },
 });
 
 export const close = style({

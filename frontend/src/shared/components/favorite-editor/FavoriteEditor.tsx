@@ -2,23 +2,30 @@ import { useEffect, useRef, useState } from "react";
 import { deleteFavorite, saveFavoriteOrder, saveGroupOrder } from "@/shared/api/favorites.api";
 import type { FavoriteGroup, SavedFavorite } from "@/shared/api/favorites.types";
 import { latestSuccessOf } from "@/shared/api/polledResource";
+import { RouteBadge } from "@/shared/components/RouteBadge";
+import { visuallyHidden } from "@/shared/styles/accessibility.css";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
-import { useFavorites, useHomeFavorites } from "./FavoritesContext";
-import { FavoritesNotice } from "./FavoritesNotice";
+import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
+import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
 import { SortableList } from "./SortableList";
-import { moveItem } from "./favoritePolicy";
-import { useFavoriteAction } from "./useFavoriteAction";
-import trashIcon from "./trash.svg";
+import { moveItem } from "@/shared/utils/favoritePolicy";
+import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
+import trashIcon from "@/shared/assets/icons/trash.svg";
 import * as styles from "./FavoriteEditor.css";
-import * as common from "./favorites.css";
+import * as common from "@/shared/styles/form.css";
+import * as buttons from "@/shared/styles/button.css";
 
-export function FavoriteEditor({
-  onClose,
-  initialGroupId,
-}: {
+interface FavoriteEditorProps {
   onClose: (saved: boolean) => void;
-  initialGroupId?: string | undefined;
-}) {
+  initialGroupId?: string;
+}
+
+interface FavoriteOrderChange {
+  groupId: string | null;
+  ids: string[];
+}
+
+export function FavoriteEditor({ onClose, initialGroupId }: FavoriteEditorProps) {
   const { groups, reload } = useFavorites();
   const [saved, setSaved] = useState(groups);
   const [draft, setDraft] = useState(groups);
@@ -42,7 +49,7 @@ export function FavoriteEditor({
   };
   const close = () => {
     if (busy) return;
-    if (partial) reload();
+    if (partial || error) reload();
     onClose(false);
   };
   async function remove() {
@@ -60,7 +67,7 @@ export function FavoriteEditor({
     }
   }
   async function save() {
-    const changes: { groupId: string | null; ids: string[] }[] = [];
+    const changes: FavoriteOrderChange[] = [];
     if (JSON.stringify(idsOf(draft)) !== JSON.stringify(idsOf(saved)))
       changes.push({ groupId: null, ids: idsOf(draft) });
     for (const group of draft) {
@@ -68,13 +75,14 @@ export function FavoriteEditor({
       if (JSON.stringify(group.favorites) !== JSON.stringify(before?.favorites))
         changes.push({ groupId: group.id, ids: idsOf(group.favorites) });
     }
-    if (changes.length === 0) {
+    const [first, ...remaining] = changes;
+    if (first === undefined) {
       onClose(true);
       return;
     }
     const ok = await run(async () => {
       let completed = 0;
-      const persist = async (change: (typeof changes)[number]) => {
+      const persist = async (change: FavoriteOrderChange) => {
         const result = await (change.groupId === null
           ? saveGroupOrder(change.ids)
           : saveFavoriteOrder(change.groupId, change.ids));
@@ -82,12 +90,14 @@ export function FavoriteEditor({
           completed += 1;
           setSaved((current) =>
             change.groupId === null
-              ? change.ids.map((id) => current.find((group) => group.id === id)!)
+              ? [...current].sort((left, right) => change.ids.indexOf(left.id) - change.ids.indexOf(right.id))
               : current.map((group) =>
                   group.id === change.groupId
                     ? {
                         ...group,
-                        favorites: change.ids.map((id) => group.favorites.find((favorite) => favorite.id === id)!),
+                        favorites: [...group.favorites].sort(
+                          (left, right) => change.ids.indexOf(left.id) - change.ids.indexOf(right.id),
+                        ),
                       }
                     : group,
                 ),
@@ -95,8 +105,8 @@ export function FavoriteEditor({
         } else if (completed > 0) setPartial(true);
         return result;
       };
-      let result = await persist(changes[0]!);
-      for (const change of changes.slice(1)) {
+      let result = await persist(first);
+      for (const change of remaining) {
         if (!result.ok) return result;
         result = await persist(change);
       }
@@ -113,8 +123,8 @@ export function FavoriteEditor({
         if (event.key === "Escape" && deleting === null) close();
       }}
     >
-      <h2 className={styles.srOnly}>즐겨찾기 편집</h2>
-      <p id="favorite-sort-help" className={styles.srOnly}>
+      <h2 className={visuallyHidden}>즐겨찾기 편집</h2>
+      <p id="favorite-sort-help" className={visuallyHidden}>
         손잡이를 끌거나 선택 후 그룹은 왼쪽·오른쪽, 정류장은 위·아래 방향키로 순서를 바꿀 수 있어요. Escape 키를 누르면
         취소해요.
       </p>
@@ -161,7 +171,7 @@ export function FavoriteEditor({
               <>
                 <div className={styles.info}>
                   <div className={styles.cardHeading}>
-                    <span className={styles.route}>{item?.route.displayName || "노선 정보 없음"}</span>
+                    <RouteBadge>{item?.route.displayName || "노선 정보 없음"}</RouteBadge>
                     <span className={styles.stop}>{item?.stop.name || "정류장 정보 없음"}</span>
                   </div>
                   <span className={styles.direction}>
@@ -205,8 +215,8 @@ export function FavoriteEditor({
       <button ref={doneButton} type="button" className={styles.done} disabled={busy} onClick={() => void save()}>
         {busy ? "저장 중…" : "완료"}
       </button>
-      {partial && (
-        <button type="button" className={common.action} disabled={busy} onClick={close}>
+      {(partial || error) && (
+        <button type="button" className={buttons.text} disabled={busy} onClick={close}>
           닫기
         </button>
       )}
@@ -214,6 +224,7 @@ export function FavoriteEditor({
         <ConfirmDialog
           title="즐겨찾기를 삭제할까요?"
           className={styles.deleteDialog}
+          titleClassName={styles.deleteTitle}
           fallbackFocus={doneButton}
           onCancel={() => {
             if (!busy) setDeleting(null);

@@ -3,7 +3,7 @@ import { ChatGate } from "@/features/chat";
 import { AuthProvider } from "./providers/AuthProvider";
 import { AuthReturn } from "./AuthReturn";
 import { AppRoutes } from "./routes";
-import { FavoritesProvider } from "@/features/favorites/FavoritesContext";
+import { FavoritesProvider } from "./providers/FavoritesProvider";
 
 export function App() {
   return (

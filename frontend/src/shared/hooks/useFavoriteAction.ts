@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ApiResult } from "@/shared/api/client";
-import { useFavorites } from "./FavoritesContext";
-import { favoriteErrorOf } from "./favoritePolicy";
+import { useFavorites } from "./useFavorites";
+import { favoriteErrorOf } from "@/shared/utils/favoritePolicy";
 
 export function useFavoriteAction() {
   const active = useRef(false);

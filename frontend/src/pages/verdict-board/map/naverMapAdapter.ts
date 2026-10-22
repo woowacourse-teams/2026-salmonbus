@@ -1,5 +1,5 @@
 import type { Board, Direction } from "@/shared/api/routeForecast.types";
-import busFrontIcon from "./bus-front.svg";
+import busFrontIcon from "../assets/bus-front.svg";
 import type { StopSelection } from "../components/stopSelection";
 import type { LiveVehicleView } from "../components/liveVehiclePolicy";
 import type { GeoCoordinate, RouteMapData } from "./routeMapModel";

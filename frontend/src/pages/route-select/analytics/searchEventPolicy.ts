@@ -1,7 +1,7 @@
 import type { EventMap } from "@/shared/analytics/events";
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
-import type { SearchView } from "../displayPolicy";
-import { searchDigitsFrom } from "../routeSearchPolicy";
+import type { SearchView } from "../components/displayPolicy";
+import { searchDigitsFrom } from "../components/routeSearchPolicy";
 
 export function routeSelectedPropertiesOf(
   route: RouteSummary,

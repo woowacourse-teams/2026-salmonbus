@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { CLEAR_INPUT_LABEL, SEARCH_INPUT_LABEL, SEARCH_PLACEHOLDER } from "../routeSelectCopy";
+import { CLEAR_INPUT_LABEL, SEARCH_INPUT_LABEL, SEARCH_PLACEHOLDER } from "./routeSelectCopy";
 import * as styles from "./SearchForm.css";
 
 interface SearchFormProps {

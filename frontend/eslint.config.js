@@ -25,9 +25,9 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ["@/pages/**"],
+              group: ["@/pages/**", "@/features/**"],
               message:
-                "페이지 간 직접 import는 금지입니다. 공유가 필요하면 shared/로 승격하세요. (같은 페이지 안에서는 상대경로를 사용)",
+                "페이지 전용 코드는 페이지 안에서, 공유 코드는 shared/에서 가져오세요. (같은 페이지 안에서는 상대경로를 사용)",
             },
           ],
         },
@@ -42,12 +42,22 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ["@/app/**", "@/pages/**"],
-              message: "shared/는 상위 계층(app, pages)을 import할 수 없습니다.",
+              group: ["@/app/**", "@/pages/**", "@/features/**"],
+              message: "shared/는 app, pages, features에 의존할 수 없습니다.",
             },
           ],
         },
       ],
+    },
+  },
+  {
+    files: ["src/**/*{Favorite,favorite}*.{ts,tsx}", "src/shared/components/favorite-editor/**/*.{ts,tsx}"],
+    ignores: ["src/**/*.test.ts", "src/**/*.typeTest.ts"],
+    rules: {
+      "@typescript-eslint/consistent-type-definitions": ["error", "interface"],
+      "@typescript-eslint/method-signature-style": ["error", "property"],
+      "@typescript-eslint/consistent-type-assertions": ["error", { assertionStyle: "never" }],
+      "@typescript-eslint/no-non-null-assertion": "error",
     },
   },
   {

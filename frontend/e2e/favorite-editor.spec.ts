@@ -214,3 +214,35 @@ test("너비가 다른 그룹 세 개도 가로 손잡이로 맨 뒤에서 맨 �
   await expect(editor).toHaveCount(0);
   expect(favorites.groups.map((group) => group.id)).toEqual([thirdGroupId, defaultGroupId, secondGroupId]);
 });
+
+test("편집 중 홈 로고를 누르면 미저장 순서를 버리고 일반 홈으로 돌아간다", async ({ page, favorites }) => {
+  favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [] });
+  await page.goto("/");
+  await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
+  const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
+  await editor.getByRole("button", { name: "즐겨찾기 순서 변경", exact: true }).press("ArrowRight");
+  await page.getByRole("link", { name: "Salmonbus 홈으로 이동", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "즐겨찾기", exact: true })).toBeVisible();
+  expect(favorites.groups.map((group) => group.id)).toEqual([defaultGroupId, secondGroupId]);
+  expect(favorites.requests.filter((request) => request.method === "PUT")).toHaveLength(0);
+});
+
+test("편집 중 서버 그룹이 바뀌면 오류 화면을 닫아 새 목록으로 다시 저장할 수 있다", async ({ page, favorites }) => {
+  const thirdGroupId = "10000000-0000-4000-8000-000000000004";
+  favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [] });
+  await page.goto("/");
+  await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
+  const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
+  await editor.getByRole("button", { name: "즐겨찾기 순서 변경", exact: true }).press("ArrowRight");
+  favorites.groups.push({ id: thirdGroupId, name: "주말", favorites: [] });
+  await editor.getByRole("button", { name: "완료", exact: true }).click();
+  await expect(editor.getByRole("alert")).toContainText("목록이 변경됐어요");
+  await editor.getByRole("button", { name: "닫기", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "주말", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
+  await editor.getByRole("button", { name: "즐겨찾기 순서 변경", exact: true }).press("ArrowRight");
+  await editor.getByRole("button", { name: "완료", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  expect(favorites.groups.map((group) => group.id)).toEqual([secondGroupId, defaultGroupId, thirdGroupId]);
+});

@@ -1,4 +1,4 @@
-import { isPositiveInteger, isRecord } from "./valueGuards";
+import { isPositiveInteger, isRecord } from "@/shared/utils/valueGuards";
 
 export interface ChatAvailability {
   routeId: string;

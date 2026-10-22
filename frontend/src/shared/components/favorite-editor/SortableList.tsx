@@ -1,35 +1,59 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import * as styles from "./FavoriteEditor.css";
+import { visuallyHidden } from "@/shared/styles/accessibility.css";
+import * as styles from "./SortableList.css";
 
-export function SortableList<T extends { id: string }>({
-  items,
-  horizontal = false,
-  disabled,
-  label,
-  render,
-  onMove,
-}: {
+interface SortableItem {
+  id: string;
+}
+
+interface SortableListProps<T extends SortableItem> {
   items: T[];
   horizontal?: boolean;
   disabled: boolean;
   label: (item: T) => string;
   render: (item: T, handle: ReactNode) => ReactNode;
   onMove: (from: number, to: number) => void;
-}) {
+}
+
+interface PositionBox {
+  start: number;
+  size: number;
+}
+interface DragSession {
+  pointerId: number;
+  from: number;
+  start: number;
+  shift: number;
+  boxes: PositionBox[];
+}
+interface DragState {
+  from: number;
+  to: number;
+  offset: number;
+  shift: number;
+}
+
+export function SortableList<T extends SortableItem>({
+  items,
+  horizontal = false,
+  disabled,
+  label,
+  render,
+  onMove,
+}: SortableListProps<T>) {
   const list = useRef<HTMLUListElement>(null);
-  const session = useRef<{
-    pointerId: number;
-    from: number;
-    start: number;
-    shift: number;
-    boxes: { start: number; size: number }[];
-  } | null>(null);
-  const [drag, setDrag] = useState<{ from: number; to: number; offset: number; shift: number } | null>(null);
+  const session = useRef<DragSession | null>(null);
+  const [drag, setDrag] = useState<DragState | null>(null);
   const previous = useRef<Map<string, DOMRect> | null>(null);
   const [announcement, announce] = useState("");
-  const rows = () => Array.from(list.current?.children ?? []) as HTMLLIElement[];
+  const rows = () => Array.from(list.current?.children ?? []).filter((row) => row instanceof HTMLLIElement);
   const remember = () => {
-    previous.current = new Map(rows().map((row) => [row.dataset.sortId!, row.getBoundingClientRect()]));
+    const positions = new Map<string, DOMRect>();
+    for (const row of rows()) {
+      const id = row.dataset.sortId;
+      if (id !== undefined) positions.set(id, row.getBoundingClientRect());
+    }
+    previous.current = positions;
   };
 
   useLayoutEffect(() => {
@@ -37,7 +61,8 @@ export function SortableList<T extends { id: string }>({
     previous.current = null;
     if (!before || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     for (const row of rows()) {
-      const old = before.get(row.dataset.sortId!);
+      const id = row.dataset.sortId;
+      const old = id === undefined ? undefined : before.get(id);
       const next = row.getBoundingClientRect();
       if (old)
         row.animate(
@@ -57,9 +82,10 @@ export function SortableList<T extends { id: string }>({
     if (!session.current || !drag) return;
     remember();
     session.current = null;
-    if (commit && drag.from !== drag.to) {
+    const item = items[drag.from];
+    if (commit && drag.from !== drag.to && item !== undefined) {
       onMove(drag.from, drag.to);
-      announce(`${label(items[drag.from]!)}: ${drag.to + 1}번째로 이동했어요.`);
+      announce(`${label(item)}: ${drag.to + 1}번째로 이동했어요.`);
     }
     setDrag(null);
   }
@@ -122,7 +148,8 @@ export function SortableList<T extends { id: string }>({
                     announce(`${label(item)}: ${target + 1}번째로 이동했어요.`);
                   }}
                   onPointerDown={(event) => {
-                    if (!event.isPrimary || event.button !== 0) return;
+                    const element = list.current;
+                    if (!event.isPrimary || event.button !== 0 || element === null) return;
                     event.preventDefault();
                     event.currentTarget.focus();
                     rows().forEach((row) => row.getAnimations().forEach((animation) => animation.cancel()));
@@ -130,8 +157,10 @@ export function SortableList<T extends { id: string }>({
                       const box = row.getBoundingClientRect();
                       return { start: horizontal ? box.x : box.y, size: horizontal ? box.width : box.height };
                     });
-                    const gap = parseFloat(getComputedStyle(list.current!)[horizontal ? "columnGap" : "rowGap"]);
-                    const shift = boxes[index]!.size + gap;
+                    const gap = parseFloat(getComputedStyle(element)[horizontal ? "columnGap" : "rowGap"]);
+                    const origin = boxes[index];
+                    if (origin === undefined || !Number.isFinite(gap)) return;
+                    const shift = origin.size + gap;
                     session.current = {
                       pointerId: event.pointerId,
                       from: index,
@@ -145,9 +174,10 @@ export function SortableList<T extends { id: string }>({
                   onPointerMove={(event) => {
                     const current = session.current;
                     if (!current || current.pointerId !== event.pointerId) return;
-                    const origin = current.boxes[current.from]!;
-                    const first = current.boxes[0]!;
-                    const last = current.boxes[current.boxes.length - 1]!;
+                    const origin = current.boxes[current.from];
+                    const first = current.boxes[0];
+                    const last = current.boxes.at(-1);
+                    if (origin === undefined || first === undefined || last === undefined) return;
                     const offset = Math.max(
                       first.start - origin.start,
                       Math.min(
@@ -158,8 +188,7 @@ export function SortableList<T extends { id: string }>({
                     const position = origin.start + offset;
                     let to = current.from;
                     let distance = Math.abs(offset);
-                    for (let i = 0; i < current.boxes.length; i++) {
-                      const box = current.boxes[i]!;
+                    for (const [i, box] of current.boxes.entries()) {
                       const slot = i > current.from ? box.start + box.size - origin.size : box.start;
                       if (Math.abs(position - slot) < distance) {
                         to = i;
@@ -177,7 +206,7 @@ export function SortableList<T extends { id: string }>({
           );
         })}
       </ul>
-      <span className={styles.srOnly} role="status">
+      <span className={visuallyHidden} role="status">
         {announcement}
       </span>
     </>

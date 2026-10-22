@@ -8,7 +8,7 @@ import type { StationArrivalDetails } from "./stationArrivalPolicy";
 import type { RoutePosition } from "./TimelineMarker";
 import type { StopSelection } from "./stopSelection";
 import * as styles from "./StopList.css";
-import type { FavoriteBoardRoute } from "@/features/favorites/FavoriteButton";
+import type { FavoriteBoardRoute } from "./FavoriteButton";
 
 interface StopListProps {
   favoriteRoute?: FavoriteBoardRoute;

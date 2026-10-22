@@ -1,6 +1,6 @@
 import { keyframes, style } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
-import { PHONE_MEDIA } from "../routeSelectLayout";
+import { PHONE_MEDIA } from "./routeSelectLayout";
 
 const SAFE_AREA_TOP = "env(safe-area-inset-top, 0px)";
 const SAFE_AREA_BOTTOM = "env(safe-area-inset-bottom, 0px)";

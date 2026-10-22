@@ -26,21 +26,53 @@ export interface FavoriteArrival {
   vehicleId: string | null;
   horizonStops: number;
   forecast: VehicleForecast;
-  eta:
-    | { status: "AVAILABLE"; expectedArrivalAt: string; remainingSeconds: number }
-    | { status: "UNAVAILABLE"; reason: string };
+  eta: FavoriteEta;
+}
+
+export interface AvailableFavoriteEta {
+  status: "AVAILABLE";
+  expectedArrivalAt: string;
+  remainingSeconds: number;
+  reason?: never;
+}
+
+export interface UnavailableFavoriteEta {
+  status: "UNAVAILABLE";
+  reason: string;
+  expectedArrivalAt?: never;
+  remainingSeconds?: never;
+}
+
+export type FavoriteEta = AvailableFavoriteEta | UnavailableFavoriteEta;
+
+export interface FavoriteRoute {
+  id: string;
+  displayName?: string;
+  terminalStopName?: string;
+}
+
+export interface FavoriteStop {
+  stopId: string;
+  name?: string;
+  direction?: Direction;
 }
 
 export interface HomeFavorite {
   id: string;
   status: FavoriteStatus;
-  route: { id: string; displayName?: string; terminalStopName?: string };
-  stop: { stopId: string; name?: string; direction?: Direction };
+  route: FavoriteRoute;
+  stop: FavoriteStop;
   approachingVehicles: FavoriteArrival[];
 }
 
+export interface HomeFavoriteGroup {
+  id: string;
+  name: string;
+  favorites: HomeFavorite[];
+}
+
 export interface HomeFavorites {
-  groups: { id: string; name: string; favorites: HomeFavorite[] }[];
+  groups: HomeFavoriteGroup[];
 }
 
 export type FavoriteErrorCode =
