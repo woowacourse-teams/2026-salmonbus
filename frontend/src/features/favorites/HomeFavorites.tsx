@@ -9,6 +9,8 @@ import { useFavorites, useHomeFavorites } from "./FavoritesContext";
 import { FavoritesNotice } from "./FavoritesNotice";
 import { OrderDialog } from "./OrderDialog";
 import { favoritePath } from "./favoritePolicy";
+import bookmarkIcon from "./bookmark.svg";
+import editIcon from "./home-edit.svg";
 import * as styles from "./favorites.css";
 
 const STATUS_LABEL: Record<Exclude<FavoriteStatus, "READY">, string> = {
@@ -71,8 +73,13 @@ export function HomeFavorites() {
               </button>
             ))}
           </div>
-          <button className={styles.action} aria-label="그룹과 즐겨찾기 순서 편집" onClick={() => setOrdering(true)}>
-            ☷
+          <button
+            type="button"
+            className={styles.homeEdit}
+            aria-label="그룹과 즐겨찾기 순서 편집"
+            onClick={() => setOrdering(true)}
+          >
+            <img src={editIcon} width="20" height="20" alt="" draggable={false} />
           </button>
         </div>
       )}
@@ -83,7 +90,11 @@ export function HomeFavorites() {
         aria-labelledby={group ? `group-tab-${group.id}` : undefined}
       >
         {((resource.status === "success" && !group) || (latest !== null && favorites.length === 0)) && (
-          <p className={styles.subtle}>아직 등록한 즐겨찾기가 없어요</p>
+          <div className={styles.homeEmpty}>
+            <img src={bookmarkIcon} width="34" height="34" alt="" draggable={false} />
+            <p className={styles.homeEmptyTitle}>등록된 즐겨찾기가 없어요</p>
+            <p className={styles.homeEmptyDescription}>자주 타는 노선에서 즐겨찾기를 추가해 보세요!</p>
+          </div>
         )}
         <ul className={styles.list}>
           {favorites.map((favorite) => (

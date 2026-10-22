@@ -173,3 +173,20 @@ globalStyle(`${fullEditor}${fullEditor}`, {
   padding: "calc(24px + env(safe-area-inset-top, 0px)) 32px calc(24px + env(safe-area-inset-bottom, 0px))",
   overflowY: "auto",
 });
+
+export const homeEdit = style([
+  action,
+  { display: "grid", placeItems: "center", flexShrink: 0, width: 36, height: 32, padding: "6px 8px" },
+]);
+export const homeEmpty = style({
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 18,
+  minHeight: 260,
+  color: "#837B74",
+  textAlign: "center",
+});
+export const homeEmptyTitle = style({ margin: 0, fontSize: 16, fontWeight: 500 });
+export const homeEmptyDescription = style({ margin: 0, fontSize: 13, lineHeight: 1.6 });
