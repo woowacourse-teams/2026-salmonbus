@@ -241,6 +241,23 @@ test("native 지도 오류 후에도 웹 목록을 유지하고 앱 전용 투�
 test.describe("native 지도 준비 실패 시 JS 지도 전환", () => {
   test.use({ nativeReady: false });
 
+  test("즐겨찾기 정류장 이동은 native ready 이후 한 번 전달한다", async ({ page, api }) => {
+    const stop = api.data.board.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed)!;
+    await page.goto(`/routes/${routeId}?direction=DOWN&stopId=${stop.stopId}`);
+    await expect.poll(async () => (await messages(page)).some((message) => message.type === "mount")).toBe(true);
+    const stopCommands = async () =>
+      (await messages(page)).filter((message) => message.type === "camera" && message.payload.command === "stop");
+    expect(await stopCommands()).toHaveLength(0);
+    await emit(page, { type: "ready", payload: {} });
+    await expect.poll(stopCommands).toHaveLength(1);
+    expect((await stopCommands())[0]?.payload).toEqual({
+      command: "stop",
+      selection: { direction: "DOWN", sequence: stop.sequence },
+    });
+    await page.clock.runFor(1_000);
+    expect(await stopCommands()).toHaveLength(1);
+  });
+
   for (const failure of ["timeout", "native-timeout", "auth"] as const) {
     test(`${failure} 후 JS 지도를 유지하고 선택과 차량 이동을 연결한다`, async ({ page, naverMap, api }) => {
       api.cacheMaxAgeSeconds = 60;
@@ -262,6 +279,9 @@ test.describe("native 지도 준비 실패 시 JS 지도 전환", () => {
       expect(await page.locator("html").getAttribute("data-native-map")).toBeNull();
       expect((await messages(page)).filter((message) => message.type === "unmount")).toHaveLength(1);
       await expect(map.locator('button[data-map-stop-sequence="1"][aria-pressed="true"]')).toHaveCount(1);
+
+      await page.clock.runFor(600);
+      expect((await naverMap.snapshot()).zoom).toBe(15);
 
       const camera = await naverMap.snapshot();
       const mountCount = (await messages(page)).filter((message) => message.type === "mount").length;

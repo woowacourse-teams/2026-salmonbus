@@ -48,6 +48,7 @@ export function RouteMap(props: RouteMapProps) {
   const regionRef = useRef<HTMLElement | null>(null);
   const elementRef = useRef<HTMLDivElement>(null);
   const adapterRef = useRef<RouteMapAdapter | NativeRouteMapAdapter | null>(null);
+  const initialStopFocusPending = useRef(true);
   const lastVehicleFocusRequest = useRef<RouteMapProps["vehicleFocusRequest"]>(null);
   const propsRef = useRef(props);
   const locationRequest = useRef(0);
@@ -63,6 +64,7 @@ export function RouteMap(props: RouteMapProps) {
     const adapter = adapterRef.current;
     adapterRef.current = null;
     lastVehicleFocusRequest.current = null;
+    initialStopFocusPending.current = true;
     locationRequest.current += 1;
     adapter?.destroy();
     elementRef.current?.replaceChildren();
@@ -149,7 +151,6 @@ export function RouteMap(props: RouteMapProps) {
             current.liveVehicleViews,
             current.selectedVehicleKey,
           );
-          if (current.selected !== null) adapter.focus(current.selected);
         } catch (error) {
           failActiveMap(error);
         }
@@ -185,7 +186,6 @@ export function RouteMap(props: RouteMapProps) {
         adapterRef.current = adapter;
         adapter.update(current.selected, current.activeDirection, current.liveVehicleViews, current.selectedVehicleKey);
         adapter.moveVehicles(current.motion.frames);
-        if (current.selected !== null) adapter.focus(current.selected);
         if (failed) {
           disposeMap();
           return;
@@ -209,8 +209,11 @@ export function RouteMap(props: RouteMapProps) {
   }, [selected, activeDirection, liveVehicleViews, motion, selectedVehicleKey, mapState, runMapAction]);
 
   useEffect(() => {
-    if (selected !== null) runMapAction((adapter) => adapter.focus(selected));
-  }, [selected, runMapAction]);
+    if (mapState.status !== "ready" || mapState.data !== data) return;
+    const animate = initialStopFocusPending.current;
+    initialStopFocusPending.current = false;
+    if (selected !== null) runMapAction((adapter) => adapter.focus(selected, { animate }));
+  }, [selected, mapState, data, runMapAction]);
 
   useEffect(() => {
     if (mapState.status !== "ready" || !visible) {

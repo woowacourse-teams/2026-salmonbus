@@ -365,6 +365,50 @@ function visibleArrowDirections(native: ReturnType<typeof createRecordingSdk>) {
 }
 
 describe("네이버 지도 adapter", () => {
+  it("즐겨찾기 정류장은 현재 화면에서 중간 위치와 연속 줌을 거쳐 확대한다", () => {
+    const { native, adapter, data, flushFrames, windowListeners } = setup();
+    const selection = { direction: "UP" as const, sequence: 15 };
+    const stop = data.stops.find(
+      (stop) => stop.direction === selection.direction && stop.sequence === selection.sequence,
+    )!;
+    const before = native.map.center;
+    const zoom = native.map.zoom;
+    adapter.focus(selection, { animate: true });
+    expect(native.map.center).toBe(before);
+    expect(native.map.zoom).toBe(zoom);
+    flushFrames();
+    flushFrames(140);
+    expect(native.map.zoom).toBeGreaterThan(zoom);
+    expect(native.map.zoom).toBeLessThan(15);
+    expect(native.map.center.lat()).not.toBe(before.lat());
+    expect(native.map.center.lat()).not.toBe(stop.coordinate.latitude);
+    flushFrames(420);
+    expect(native.map.zoom).toBe(15);
+    expect(native.map.center.lat()).toBeCloseTo(stop.coordinate.latitude, 12);
+    expect(native.map.center.lng()).toBeCloseTo(stop.coordinate.longitude, 12);
+    expect(windowListeners.size).toBe(0);
+  });
+
+  it("정류장 확대 중 사용자 조작은 자동 이동을 취소하고 모션 줄이기는 즉시 이동한다", () => {
+    const selection = { direction: "UP" as const, sequence: 15 };
+    const { native, adapter, flushFrames, windowListeners } = setup();
+    adapter.focus(selection, { animate: true });
+    flushFrames();
+    flushFrames(140);
+    windowListeners.get("touchstart")!();
+    const center = native.map.center;
+    const zoom = native.map.zoom;
+    flushFrames(420);
+    expect(native.map.center).toBe(center);
+    expect(native.map.zoom).toBe(zoom);
+    adapter.destroy();
+
+    const reduced = setup(true, { reducedMotion: true });
+    reduced.adapter.focus(selection, { animate: true });
+    expect(reduced.native.map.zoom).toBe(15);
+    expect(reduced.windowListeners.size).toBe(0);
+  });
+
   it.each(["click", "tap"])("지도 배경의 %s는 카메라 이동 없이 선택 해제를 요청한다", (eventName) => {
     const { native, adapter, onDeselect, onSelect, onVehicleSelect } = setup();
     const selection = { direction: "UP" as const, sequence: 15 };
