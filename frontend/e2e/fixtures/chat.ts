@@ -7,8 +7,7 @@ export const clientFrames = examples.clientFrames;
 export const serverFrames = examples.serverFrames;
 export const chatRouteId = chatAvailability.routeId;
 export const chatPaths = {
-  board: `/api/v1/routes/${chatRouteId}/board`,
-  vehicles: `/api/v1/routes/${chatRouteId}/vehicles`,
+  watch: `/api/v1/routes/${chatRouteId}/watch`,
   availability: `/api/chat/rooms/${chatRouteId}`,
   stream: `/api/chat/rooms/${chatRouteId}/stream`,
 };
@@ -34,8 +33,7 @@ export function isChatChunk(url: string): boolean {
 }
 
 function chatRouteResponse(data: ReturnType<typeof createApiData>, path: string) {
-  if (path === chatPaths.board) return { ...data.board, route: { ...data.board.route, id: chatRouteId } };
-  if (path === chatPaths.vehicles) return { ...data.vehicles, routeId: chatRouteId };
+  if (path === chatPaths.watch) return { ...data.watch, route: { ...data.watch.route, id: chatRouteId } };
   return null;
 }
 

@@ -249,7 +249,7 @@ test("서버가 지원하지 않는 노선은 켜짐 확인 뒤 채팅을 숨긴
 
   // when
   await page.goto(`/routes/${unsupportedRouteId}`);
-  await expect(page.getByRole("heading", { name: api.data.board.route.displayName, exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: api.data.watch.route.displayName, exact: true })).toBeVisible();
   await settleAfterLoad(page);
 
   // then
@@ -901,15 +901,12 @@ for (const [routeId, displayName] of [
           headers: { "Cache-Control": "no-store" },
           json: { ...chatAvailability, routeId, displayName },
         });
-      } else if (path === `${prefix}/board` || path === `${prefix}/vehicles`) {
+      } else if (path === `${prefix}/watch`) {
         const now = await page.evaluate(() => Date.now());
         await route.fulfill({
           status: 200,
           headers: { Date: new Date(now).toUTCString(), "Cache-Control": "public, max-age=60" },
-          json:
-            path === `${prefix}/board`
-              ? { ...api.data.board, route: { ...api.data.board.route, id: routeId, displayName } }
-              : { ...api.data.vehicles, routeId },
+          json: { ...api.data.watch, route: { ...api.data.watch.route, id: routeId, displayName } },
         });
       } else {
         await route.fallback();

@@ -30,8 +30,8 @@ export const test = base.extend<{ api: MockApi }>({
       const api: MockApi = {
         route: router.route,
         data: createApiData(),
-        mode: { routes: "success", board: "success", vehicles: "success", geometry: "success", arrivals: "success" },
-        requests: { routes: 0, board: 0, vehicles: 0, geometry: 0, arrivals: 0 },
+        mode: { routes: "success", watch: "success", geometry: "success", arrivals: "success" },
+        requests: { routes: 0, watch: 0, geometry: 0, arrivals: 0 },
         arrivalRequests: [],
         cacheMaxAgeSeconds: pollIntervalMs / 1_000,
       };
