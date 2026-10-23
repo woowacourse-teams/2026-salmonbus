@@ -15,6 +15,7 @@ for (const width of [320, 425]) {
     const name = head.getByText(stop.name, { exact: true });
     await head.scrollIntoViewIfNeeded();
     await expect(head).toHaveAttribute("aria-expanded", "false");
+    await expect(star).toHaveCSS("transition-duration", "0s");
     await expect.poll(async () => Math.abs((await centerY(star)) - (await centerY(head)))).toBeLessThan(0.75);
 
     await head.click();
@@ -41,3 +42,47 @@ for (const width of [320, 425]) {
     await expect.poll(async () => Math.abs((await centerY(star)) - (await centerY(head)))).toBeLessThan(0.75);
   });
 }
+
+test("정류장을 펼치고 접으면 별이 상세 영역과 같은 속도로 중간 위치를 거쳐 이동한다", async ({ page, api }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  const stop = api.data.board.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+  await page.goto(`/routes/${routeId}`);
+  const star = page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true });
+  const row = page.locator("li[data-stop-sequence]").filter({ has: star });
+  const head = row.locator("button[aria-expanded]");
+  await head.scrollIntoViewIfNeeded();
+  const timing = await head.evaluate((element) => ({
+    duration: getComputedStyle(element).transitionDuration,
+    easing: getComputedStyle(element).transitionTimingFunction,
+  }));
+  await expect(star).toHaveCSS("transition-duration", timing.duration);
+  await expect(star).toHaveCSS("transition-timing-function", timing.easing);
+  const collapsed = await star.evaluate((element) => parseFloat(getComputedStyle(element).top));
+  for (const expanded of [true, false]) {
+    const from = await star.evaluate((element) => parseFloat(getComputedStyle(element).top));
+    await head.evaluate((element) => {
+      if (!(element instanceof HTMLButtonElement)) throw new Error("정류장 펼침 버튼이 필요합니다.");
+      element.click();
+    });
+    const middle = await star.evaluate((element) => {
+      getComputedStyle(element).top;
+      const animation = element
+        .getAnimations()
+        .find((animation) => animation instanceof CSSTransition && animation.transitionProperty === "top");
+      if (!animation) return null;
+      animation.pause();
+      animation.currentTime = Number(animation.effect!.getTiming().duration) / 2;
+      return parseFloat(getComputedStyle(element).top);
+    });
+    expect(middle).not.toBeNull();
+    await star.evaluate((element) => element.getAnimations().forEach((animation) => animation.finish()));
+    const to = await star.evaluate((element) => parseFloat(getComputedStyle(element).top));
+    expect(middle!).toBeGreaterThan(Math.min(from, to));
+    expect(middle!).toBeLessThan(Math.max(from, to));
+    expect(expanded ? to < from : to > from).toBe(true);
+    await row.evaluate((element) =>
+      Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished)),
+    );
+  }
+  expect(await star.evaluate((element) => parseFloat(getComputedStyle(element).top))).toBeCloseTo(collapsed, 2);
+});

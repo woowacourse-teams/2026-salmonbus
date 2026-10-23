@@ -103,7 +103,14 @@ export const head = styleVariants({
 export const headStack = style([stack, { flex: 1, gap: HEAD_GAP }]);
 export const favoriteHead = style({ paddingRight: 44 });
 
-const favoriteBase = style({ position: "absolute", right: 10 });
+const favoriteBase = style({
+  position: "absolute",
+  right: 10,
+  transition: `top ${GROW}`,
+  "@media": {
+    "(prefers-reduced-motion: reduce)": { transition: "none" },
+  },
+});
 export const favorite = styleVariants({
   collapsed: [favoriteBase, { top: `calc((${vars.layout.headHeight} - 32px) / 2)` }],
   expanded: [
