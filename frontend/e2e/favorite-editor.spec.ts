@@ -294,6 +294,8 @@ for (const width of [320, 425]) {
       const button = editor.getByRole("button", { name: tab.name, exact: true });
       const group = button.locator("..");
       const box = (await group.boundingBox())!;
+      expect(box.height).toBe(37);
+      expect(box.width).toBeCloseTo(tab.name === "출퇴근" ? 81 : 69, 0);
       for (const key of ["x", "y", "width", "height"] as const) expect(box[key]).toBeCloseTo(tab[key], 1);
       await expect(group).toHaveCSS("background-color", tab.background);
       const handle = group.getByRole("button", { name: `${tab.name} 순서 변경`, exact: true });
@@ -303,7 +305,9 @@ for (const width of [320, 425]) {
         range.selectNodeContents(element);
         return range.getBoundingClientRect().right;
       });
-      expect(grip.x - textRight).toBeGreaterThanOrEqual(3.9);
+      expect(grip.x - textRight).toBeCloseTo(6, 1);
+      expect(grip.width).toBe(15);
+      expect(box.x + box.width - grip.x - grip.width).toBeCloseTo(12, 1);
       expect(grip.x).toBeGreaterThan(box.x + box.width / 2);
       expect(grip.x + grip.width).toBeLessThanOrEqual(box.x + box.width);
     }
@@ -317,5 +321,6 @@ for (const width of [320, 425]) {
     await expect(card).toHaveCSS("outline", surface.outline);
     await expect(card).toHaveCSS("outline-offset", surface.offset);
     await expect(card).toHaveCSS("background-color", surface.background);
+    if (width === 425) await page.screenshot({ path: `/private/tmp/salmonbus-srksd-${test.info().project.name}.png` });
   });
 }

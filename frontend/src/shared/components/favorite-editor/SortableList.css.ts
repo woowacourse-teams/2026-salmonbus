@@ -5,7 +5,7 @@ import { outlinedCard } from "@/shared/styles/surface.css";
 import { vars } from "@/shared/styles/tokens.css";
 
 const list = style({ display: "flex", gap: 12, margin: 0, padding: 0, listStyle: "none" });
-export const groups = style([list, { gap: 8, minHeight: 32, alignItems: "center" }]);
+export const groups = style([list, { gap: 8, minHeight: 37, alignItems: "center" }]);
 export const cards = style([list, { flexDirection: "column" }]);
 const item = style({
   position: "relative",
@@ -20,9 +20,10 @@ export const group = style([
   {
     display: "flex",
     alignItems: "center",
-    padding: 0,
+    padding: "0 12px",
+    gap: 6,
     selectors: {
-      '&:has([aria-pressed="true"])': { background: vars.color.brand, color: "white" },
+      '&:has([aria-pressed="true"])': { background: vars.color.liveBus, color: "white" },
     },
   },
 ]);
@@ -65,13 +66,13 @@ export const grip = style({
 export const groupGrip = style([
   grip,
   {
-    position: "absolute",
-    right: 0,
-    top: 0,
-    width: 14,
-    height: "100%",
-    color: "inherit",
-    selectors: { "&::before": { width: 12, height: 12 } },
+    width: 15,
+    height: 37,
+    color: "#837B74",
+    selectors: {
+      "&::before": { width: 15, height: 15 },
+      '[aria-pressed="true"] + &': { color: "white" },
+    },
   },
 ]);
 globalStyle(`${list}[data-sorting="true"] > li:not([data-dragging="true"])`, {

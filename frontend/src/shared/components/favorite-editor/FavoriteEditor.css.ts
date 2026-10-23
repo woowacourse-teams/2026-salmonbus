@@ -13,10 +13,10 @@ export const editor = style({
 });
 export const groupName = style({
   minWidth: 0,
-  padding: "8px 18px",
+  padding: "9px 0",
   border: 0,
   background: "transparent",
-  color: "inherit",
+  color: "#706B66",
   selectors: { '&[aria-pressed="true"]': { color: "white" } },
   font: "inherit",
   fontSize: 13,
