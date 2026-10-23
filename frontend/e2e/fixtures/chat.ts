@@ -30,7 +30,7 @@ interface ChatMock {
 }
 
 export function isChatChunk(url: string): boolean {
-  return /features_chat_ChatWidget/.test(new URL(url).pathname);
+  return /\/chat\.([^/]+\.)?js$/.test(new URL(url).pathname);
 }
 
 function chatRouteResponse(data: ReturnType<typeof createApiData>, path: string) {

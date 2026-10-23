@@ -16,7 +16,7 @@ interface ChatErrorBoundaryState {
 }
 
 const ChatWidget = lazy(async () => {
-  const module = await import("./ChatWidget");
+  const module = await import(/* webpackChunkName: "chat" */ "./ChatWidget");
   return { default: module.ChatWidget };
 });
 
