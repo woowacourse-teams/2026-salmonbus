@@ -12,8 +12,6 @@ import com.gustler.backend.api.favorite.dto.FavoriteGroupResponse;
 import com.gustler.backend.api.favorite.dto.FavoriteTargetRequest;
 import com.gustler.backend.api.favorite.dto.RenameFavoriteGroupRequest;
 import com.gustler.backend.api.favorite.dto.ReorderFavoriteGroupsRequest;
-import java.net.URI;
-import java.util.UUID;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.headers.Header;
@@ -22,6 +20,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.net.URI;
+import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -49,7 +49,8 @@ public class FavoriteGroupController {
 
     @GetMapping
     @Operation(operationId = "getMyFavoriteGroups", summary = "내 즐겨찾기 그룹 조회",
-        description = "그룹과 각 그룹의 노선 정류장 항목을 저장된 순서대로 반환합니다.")
+        description = "그룹과 각 그룹의 노선 정류장 항목을 저장된 순서대로 반환합니다. "
+            + "첫 번째 그룹이 대표 그룹입니다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "즐겨찾기 그룹 목록",
             headers = @Header(name = "Cache-Control", description = "회원별 응답이므로 no-store",
@@ -67,7 +68,8 @@ public class FavoriteGroupController {
 
     @PostMapping
     @Operation(operationId = "createMyFavoriteGroup", summary = "즐겨찾기 그룹 생성",
-        description = "그룹은 회원당 최대 3개입니다. initialFavorite을 보내면 첫 항목을 같은 트랜잭션에서 저장합니다.")
+        description = "그룹은 회원당 최대 3개입니다. "
+            + "initialFavorite을 보내면 첫 항목을 같은 트랜잭션에서 저장합니다.")
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "생성된 즐겨찾기 그룹",
             headers = @Header(name = "Cache-Control", description = "회원별 응답이므로 no-store",
@@ -133,7 +135,8 @@ public class FavoriteGroupController {
             content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @ApiResponse(responseCode = "404", description = "내 즐겨찾기 그룹을 찾을 수 없음",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "409", description = "마지막 남은 즐겨찾기 그룹은 삭제할 수 없음",
+        @ApiResponse(responseCode = "409",
+            description = "첫 번째 순서인 대표 즐겨찾기 그룹은 삭제할 수 없음",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<Void> delete(
@@ -166,7 +169,10 @@ public class FavoriteGroupController {
     }
 
     private FavoriteTarget targetOf(FavoriteTargetRequest request) {
-        return request == null ? null : service.targetOf(request.routeId(), request.stopId(), request.direction());
+        if (request == null) {
+            return null;
+        }
+        return service.targetOf(request.routeId(), request.stopId(), request.direction());
     }
 
     private static <T> ResponseEntity<T> ok(T body) {

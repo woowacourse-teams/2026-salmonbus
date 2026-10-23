@@ -15,7 +15,9 @@ public record FavoriteGroupName(
         value = value.strip();
         final long graphemes = GRAPHEME.matcher(value).results().count();
         if (graphemes == 0 || graphemes > MAX_GRAPHEMES) {
-            throw new IllegalArgumentException("즐겨찾기 그룹 이름은 1자 이상 10자 이하여야 합니다.");
+            throw new IllegalArgumentException(
+                "즐겨찾기 그룹 이름은 1자 이상 10자 이하여야 합니다."
+            );
         }
     }
 }

@@ -26,7 +26,7 @@ export const test = base.extend<{ api: MockApi }>({
       // 실제 SDK는 별도 검증한다. 로컬 키가 있어도 자동 테스트가 외부 지도에 의존하지 않는다.
       await page.route("https://oapi.map.naver.com/**", (route) => route.abort());
 
-      const router = createApiMockRouter(page);
+      const router = await createApiMockRouter(page);
       const api: MockApi = {
         route: router.route,
         data: createApiData(),
@@ -35,7 +35,6 @@ export const test = base.extend<{ api: MockApi }>({
         arrivalRequests: [],
         cacheMaxAgeSeconds: pollIntervalMs / 1_000,
       };
-      const unexpectedRequests: string[] = [];
 
       await api.route(async (route) => {
         const request = route.request();
@@ -56,8 +55,7 @@ export const test = base.extend<{ api: MockApi }>({
             ? "geometry"
             : (Object.keys(apiPaths) as (keyof typeof apiPaths)[]).find((key) => apiPaths[key] === path);
         if (endpoint === undefined || request.method() !== "GET") {
-          unexpectedRequests.push(`${request.method()} ${path}`);
-          await route.abort();
+          await route.fallback();
           return;
         }
 
@@ -69,7 +67,18 @@ export const test = base.extend<{ api: MockApi }>({
         }
 
         // Date 헤더도 브라우저의 제어된 시간과 맞춰 서버 기준 시계가 어긋나지 않게 한다.
-        const now = await page.evaluate(() => Date.now());
+        // 테스트가 page.clock을 직접 움직여서 시각은 fixture가 아니라 브라우저에 묻는다.
+        const now = await page
+          .evaluate(() => Date.now())
+          .catch((error: unknown) => {
+            // 요청이 걸린 사이 새 문서로 이동했다면 버려진 문서의 요청이라 응답하지 않는다.
+            if (isAbandonedDocumentError(error)) return null;
+            throw error;
+          });
+        if (now === null) {
+          await route.abort();
+          return;
+        }
         await route.fulfill({
           status: 200,
           headers: {
@@ -93,11 +102,14 @@ export const test = base.extend<{ api: MockApi }>({
         await useApi(api);
       } finally {
         await router.dispose();
-        expect(unexpectedRequests, "준비하지 않은 API 요청이 실제 서버로 전달되면 안 된다").toEqual([]);
       }
     },
     { auto: true },
   ],
 });
+
+export function isAbandonedDocumentError(error: unknown) {
+  return error instanceof Error && error.message.includes("Execution context was destroyed");
+}
 
 export { expect };

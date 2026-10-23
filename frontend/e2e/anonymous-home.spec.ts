@@ -21,8 +21,8 @@ for (const width of [320, 425]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await testInfo.attach("비회원 홈 안내", { body: await page.screenshot(), contentType: "image/png" });
     if (browserName === "chromium" && width === 425) {
-      await page.screenshot({ path: "/private/tmp/salmonbus-sal249-qa/anonymous-home.png" });
-      await card.screenshot({ path: "/private/tmp/salmonbus-sal249-qa/anonymous-card.png" });
+      await page.screenshot({ path: test.info().outputPath("anonymous-home.png") });
+      await card.screenshot({ path: test.info().outputPath("anonymous-card.png") });
     }
 
     await openRouteSearch(page);

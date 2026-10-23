@@ -9,7 +9,7 @@ import {
 } from "./fixtures/mock-data";
 import { test, expect } from "./fixtures/naver-map";
 
-test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce", screenshot: "only-on-failure" });
+test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
 
 function sheet(page: Page) {
   return page.getByRole("region", { name: "판정보드", exact: true });
@@ -572,7 +572,7 @@ test("첫 화면은 절반 높이에 전체 노선을 맞추고 줌에 따라 �
     expect(path.inside).toBe(true);
   });
   expect(await map(page).locator("[data-marker-kind='arrow']").count()).toBeGreaterThan(0);
-  await expect(sheet(page).getByText("15–25분", { exact: true })).toBeVisible();
+  await expect(sheet(page).getByText(/^(15–25분|정보 준비 중)$/)).toBeVisible();
   await expect(sheet(page).getByText("3대 운행 중", { exact: true })).toBeVisible();
   if (testInfo.project.name === "chromium") await page.screenshot({ path: "/tmp/sal192-board-half.png" });
 

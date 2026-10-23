@@ -45,6 +45,7 @@ public class ApiDocsConfiguration {
         "/api/me/favorite-groups/{groupId}/favorites/{favoriteId}",
         "/api/me/favorite-groups/{groupId}/favorites/order",
         "/api/me/favorite-selections",
+        "/api/me/favorite-order",
         "/api/me/favorites",
         "/api/me/sessions",
         "/api/me/withdrawal/apple"

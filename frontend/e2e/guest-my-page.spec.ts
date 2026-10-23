@@ -27,7 +27,7 @@ for (const width of [320, 425]) {
       .evaluate((element) => Promise.all(element.getAnimations().map((animation) => animation.finished)));
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     if (width === 425 && browserName === "chromium")
-      await page.screenshot({ path: "/private/tmp/salmonbus-guest-mypage.png" });
+      await page.screenshot({ path: test.info().outputPath("salmonbus-guest-mypage.png") });
     await login.click();
     await page.getByRole("button", { name: "카카오로 계속하기", exact: true }).click();
     await expect(page).toHaveURL("/mypage");

@@ -1,6 +1,6 @@
 package com.gustler.backend.api.favorite.dto;
 
-import com.gustler.backend.api.favorite.application.FavoriteOverview.Group;
+import com.gustler.backend.api.favorite.application.FavoriteOverview;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.UUID;
@@ -16,7 +16,7 @@ public record FavoriteOverviewGroupResponse(
         favorites = List.copyOf(favorites);
     }
 
-    static FavoriteOverviewGroupResponse from(Group group) {
+    static FavoriteOverviewGroupResponse from(FavoriteOverview.Group group) {
         return new FavoriteOverviewGroupResponse(group.id(), group.name(), group.favorites().stream()
             .map(FavoriteItemResponse::from)
             .toList());

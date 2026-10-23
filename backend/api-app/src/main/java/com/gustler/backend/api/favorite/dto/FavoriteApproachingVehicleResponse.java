@@ -1,7 +1,7 @@
 package com.gustler.backend.api.favorite.dto;
 
 import com.gustler.backend.api.board.dto.ForecastResponse;
-import com.gustler.backend.api.favorite.application.FavoriteOverview.Vehicle;
+import com.gustler.backend.api.favorite.application.FavoriteOverview;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 @Schema(requiredProperties = {"vehicleId", "horizonStops", "forecast", "eta"})
@@ -15,7 +15,7 @@ public record FavoriteApproachingVehicleResponse(
     @Schema(description = "차량 ID로 확인한 대상 정류장 ETA")
     FavoriteEtaResponse eta
 ) {
-    static FavoriteApproachingVehicleResponse from(Vehicle vehicle) {
+    static FavoriteApproachingVehicleResponse from(FavoriteOverview.Vehicle vehicle) {
         return new FavoriteApproachingVehicleResponse(vehicle.watch().vehicleId(), vehicle.watch().horizonStops(),
             ForecastResponse.from(vehicle.watch().forecast()), FavoriteEtaResponse.from(vehicle.eta()));
     }

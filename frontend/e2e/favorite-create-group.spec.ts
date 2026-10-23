@@ -22,7 +22,7 @@ for (const width of [320, 425]) {
     await expect(dialog.getByRole("button", { name: "저장", exact: true })).toHaveCount(0);
     expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     if (width === 425 && browserName === "chromium")
-      await page.screenshot({ path: "/private/tmp/salmonbus-create-group-form.png" });
+      await page.screenshot({ path: test.info().outputPath("salmonbus-create-group-form.png") });
     await input.press("Enter");
     await expect(dialog.getByRole("textbox")).toHaveCount(0);
     await expect(dialog.getByRole("checkbox", { name: /🚌 통학/ })).toBeChecked();
@@ -32,7 +32,7 @@ for (const width of [320, 425]) {
     const save = dialog.getByRole("button", { name: "저장", exact: true });
     await expect(save).toBeEnabled();
     if (width === 425 && browserName === "chromium")
-      await page.screenshot({ path: "/private/tmp/salmonbus-create-group-selected.png" });
+      await page.screenshot({ path: test.info().outputPath("salmonbus-create-group-selected.png") });
     await save.click();
     await expect(dialog).toHaveCount(0);
     expect(

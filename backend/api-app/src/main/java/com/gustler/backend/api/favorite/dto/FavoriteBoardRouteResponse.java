@@ -1,7 +1,7 @@
 package com.gustler.backend.api.favorite.dto;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.gustler.backend.api.board.domain.BoardRoute;
 import com.gustler.backend.api.favorite.domain.FavoriteDirection;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -13,7 +13,9 @@ public record FavoriteBoardRouteResponse(
     String id,
     @Schema(description = "watch와 같은 화면 표시용 노선 이름")
     String displayName,
-    @Schema(description = "선택한 방향의 종점 정류장 이름. 화면에서 방면 문구를 조합할 때 사용")
+    @Schema(
+        description = "선택한 방향의 종점 정류장 이름. 화면에서 방면 문구를 조합할 때 사용"
+    )
     String terminalStopName
 ) {
     static FavoriteBoardRouteResponse from(String routeId, FavoriteDirection direction, BoardRoute route) {

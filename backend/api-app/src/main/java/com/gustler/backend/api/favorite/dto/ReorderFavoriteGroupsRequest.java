@@ -9,4 +9,9 @@ public record ReorderFavoriteGroupsRequest(
     @Schema(description = "현재 내 그룹 ID를 원하는 순서로 빠짐없이 담은 목록")
     List<UUID> groupIds
 ) {
+    public ReorderFavoriteGroupsRequest {
+        if (groupIds != null) {
+            groupIds = List.copyOf(groupIds);
+        }
+    }
 }

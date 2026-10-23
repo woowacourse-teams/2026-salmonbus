@@ -27,6 +27,6 @@ for (const width of [320, 425]) {
     expect(removeBounds.x + removeBounds.width).toBeCloseTo(emptyBounds.x + emptyBounds.width - 8, 1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     if (width === 425 && browserName === "chromium")
-      await page.screenshot({ path: "/private/tmp/salmonbus-empty-detail.png" });
+      await page.screenshot({ path: test.info().outputPath("salmonbus-empty-detail.png") });
   });
 }
