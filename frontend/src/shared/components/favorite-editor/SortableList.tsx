@@ -152,7 +152,9 @@ export function SortableList<T extends SortableItem>({
                     if (!event.isPrimary || event.button !== 0 || element === null) return;
                     event.preventDefault();
                     event.currentTarget.focus();
-                    rows().forEach((row) => row.getAnimations().forEach((animation) => animation.cancel()));
+                    rows().forEach((row) =>
+                      row.getAnimations({ subtree: true }).forEach((animation) => animation.cancel()),
+                    );
                     const boxes = rows().map((row) => {
                       const box = row.getBoundingClientRect();
                       return { start: horizontal ? box.x : box.y, size: horizontal ? box.width : box.height };

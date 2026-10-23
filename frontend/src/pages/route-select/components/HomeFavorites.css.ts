@@ -119,7 +119,6 @@ export const tabs = style({ display: "flex", alignItems: "center", gap: 8, margi
 export const tab = style([
   pill,
   {
-    paddingRight: 33,
     cursor: "pointer",
     selectors: { '&[aria-selected="true"]': { background: vars.color.liveBus, color: "white" } },
   },

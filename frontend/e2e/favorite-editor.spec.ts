@@ -199,6 +199,9 @@ test("너비가 다른 그룹 세 개도 가로 손잡이로 맨 뒤에서 맨 �
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
   const groupList = editor.getByRole("list", { name: "그룹 순서", exact: true });
+  await groupList.evaluate((element) =>
+    Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished)),
+  );
   const from = (await groupList.getByRole("button", { name: "주말 순서 변경", exact: true }).boundingBox())!;
   const to = (await groupList.getByRole("button", { name: "출퇴근용즐겨찾기 순서 변경", exact: true }).boundingBox())!;
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
@@ -248,7 +251,7 @@ test("편집 중 서버 그룹이 바뀌면 오류 화면을 닫아 새 목록�
 });
 
 for (const width of [320, 425]) {
-  test(`${width}px 홈 편집 진입 전후 그룹 버튼 크기·위치와 카드 테두리를 유지한다`, async ({
+  test(`${width}px 홈 편집은 손잡이 자리만 추가하고 탭 높이와 카드 테두리를 유지한다`, async ({
     page,
     favorites,
     api,
@@ -290,13 +293,22 @@ for (const width of [320, 425]) {
     });
     await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
     const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
-    for (const tab of tabs) {
+    await editor
+      .getByRole("list", { name: "그룹 순서", exact: true })
+      .evaluate((element) =>
+        Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished)),
+      );
+    for (const [index, tab] of tabs.entries()) {
       const button = editor.getByRole("button", { name: tab.name, exact: true });
       const group = button.locator("..");
       const box = (await group.boundingBox())!;
       expect(box.height).toBe(37);
       expect(box.width).toBeCloseTo(tab.name === "출퇴근" ? 81 : 69, 0);
-      for (const key of ["x", "y", "width", "height"] as const) expect(box[key]).toBeCloseTo(tab[key], 1);
+      expect(tab.width).toBeCloseTo(tab.name === "출퇴근" ? 60 : 48, 0);
+      expect(box.width).toBeCloseTo(tab.width + 21, 1);
+      expect(box.x).toBeCloseTo(tab.x + index * 21, 1);
+      expect(box.y).toBeCloseTo(tab.y, 1);
+      expect(box.height).toBeCloseTo(tab.height, 1);
       await expect(group).toHaveCSS("background-color", tab.background);
       const handle = group.getByRole("button", { name: `${tab.name} 순서 변경`, exact: true });
       const grip = (await handle.boundingBox())!;
@@ -324,3 +336,59 @@ for (const width of [320, 425]) {
     if (width === 425) await page.screenshot({ path: `/private/tmp/salmonbus-srksd-${test.info().project.name}.png` });
   });
 }
+
+test("편집을 누를 때만 손잡이 공간이 열리며 모션 줄이기에서는 즉시 표시한다", async ({ page, favorites }) => {
+  favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [] });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "즐겨찾기 순서 변경", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
+  const handle = page.getByRole("button", { name: "즐겨찾기 순서 변경", exact: true });
+  const samples = await handle.evaluate((element) => {
+    getComputedStyle(element).width;
+    const animation = element.getAnimations()[0];
+    if (!animation) return null;
+    animation.pause();
+    animation.currentTime = 0;
+    const start = parseFloat(getComputedStyle(element).width);
+    const startOpacity = getComputedStyle(element).opacity;
+    animation.currentTime = Number(animation.effect!.getTiming().duration) / 2;
+    const middle = parseFloat(getComputedStyle(element).width);
+    animation.finish();
+    return {
+      start,
+      middle,
+      end: parseFloat(getComputedStyle(element).width),
+      startOpacity,
+      endOpacity: getComputedStyle(element).opacity,
+    };
+  });
+  expect(samples).not.toBeNull();
+  expect(samples!.start).toBe(0);
+  expect(samples!.middle).toBeGreaterThan(0);
+  expect(samples!.middle).toBeLessThan(15);
+  expect(samples!.end).toBe(15);
+  expect(samples!.startOpacity).toBe("0");
+  expect(samples!.endOpacity).toBe("1");
+  await page.keyboard.press("Escape");
+  await expect(handle).toHaveCount(0);
+  await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
+  const groups = page.getByRole("list", { name: "그룹 순서", exact: true });
+  await groups.evaluate((element) =>
+    element.getAnimations({ subtree: true }).forEach((animation) => {
+      animation.pause();
+      animation.currentTime = Number(animation.effect!.getTiming().duration) / 2;
+    }),
+  );
+  const grip = (await handle.boundingBox())!;
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip.x + 200, grip.y + grip.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect(groups.getByRole("listitem").first()).toContainText("통학");
+  await page.keyboard.press("Escape");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
+  await expect(handle).toHaveCSS("animation-name", "none");
+  await expect(handle).toHaveCSS("width", "15px");
+});

@@ -1,4 +1,4 @@
-import { globalStyle, style } from "@vanilla-extract/css";
+import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import gripIcon from "@/shared/assets/icons/grip.svg";
 import { pill } from "@/shared/styles/selection.css";
 import { outlinedCard } from "@/shared/styles/surface.css";
@@ -21,7 +21,6 @@ export const group = style([
     display: "flex",
     alignItems: "center",
     padding: "0 12px",
-    gap: 6,
     selectors: {
       '&:has([aria-pressed="true"])': { background: vars.color.liveBus, color: "white" },
     },
@@ -63,11 +62,20 @@ export const grip = style({
     "&:active": { cursor: "grabbing" },
   },
 });
+const revealGroupGrip = keyframes({
+  from: { width: 0, marginLeft: 0, opacity: 0 },
+  to: { width: 15, marginLeft: 6, opacity: 1 },
+});
+
 export const groupGrip = style([
   grip,
   {
     width: 15,
     height: 37,
+    marginLeft: 6,
+    overflow: "hidden",
+    animation: `${revealGroupGrip} ${vars.duration.spring} ${vars.easing.slide} both`,
+    "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } },
     color: "#837B74",
     selectors: {
       "&::before": { width: 15, height: 15 },
