@@ -7,7 +7,13 @@ import { useFavorites } from "@/shared/hooks/useFavorites";
 import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
 import * as buttons from "@/shared/styles/button.css";
 import * as formStyles from "@/shared/styles/form.css";
-import { exceedsFavoriteLimit, groupNameError, selectedGroups } from "@/shared/utils/favoritePolicy";
+import {
+  MAX_FAVORITE_GROUPS,
+  MAX_FAVORITES_PER_GROUP,
+  exceedsFavoriteLimit,
+  groupNameError,
+  selectedGroups,
+} from "@/shared/utils/favoritePolicy";
 import plusIcon from "@/shared/assets/icons/favorite-group-plus.svg";
 import * as styles from "./FavoriteButton.css";
 
@@ -32,7 +38,7 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
   const missing = !refreshingGroups && ids.some((id) => !groups.some((group) => group.id === id));
   async function createGroup(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || invalidName || groups.length >= 3 || resource.status !== "success") return;
+    if (busy || invalidName || groups.length >= MAX_FAVORITE_GROUPS || resource.status !== "success") return;
     await run(async () => {
       const result = await createFavoriteGroup(name);
       if (result.ok) {
@@ -60,7 +66,9 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
       {groups.map((group) => (
         <label className={`${styles.choice} amp-mask`} key={group.id}>
           <span>{group.name}</span>
-          <span className={styles.choiceCount}>{group.favorites.length} / 2</span>
+          <span className={styles.choiceCount}>
+            {group.favorites.length} / {MAX_FAVORITES_PER_GROUP}
+          </span>
           <input
             type="checkbox"
             checked={ids.includes(group.id)}
@@ -97,7 +105,9 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
           <div className={formStyles.actions}>
             <button
               className={buttons.primary}
-              disabled={busy || invalidName !== null || groups.length >= 3 || resource.status !== "success"}
+              disabled={
+                busy || invalidName !== null || groups.length >= MAX_FAVORITE_GROUPS || resource.status !== "success"
+              }
             >
               {busy ? "만드는 중…" : "만들기"}
             </button>
@@ -117,7 +127,7 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
         </form>
       ) : (
         resource.status === "success" &&
-        groups.length < 3 && (
+        groups.length < MAX_FAVORITE_GROUPS && (
           <button
             className={styles.addGroup}
             type="button"
@@ -139,7 +149,7 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
           {error ??
             (missing
               ? "그룹 목록이 변경됐어요. 다시 확인해 주세요."
-              : "한 그룹에는 즐겨찾기를 2개까지 저장할 수 있어요.")}
+              : `한 그룹에는 즐겨찾기를 ${MAX_FAVORITES_PER_GROUP}개까지 저장할 수 있어요.`)}
         </p>
       )}
       {missing && (

@@ -2,6 +2,9 @@ import type { ApiFailure } from "@/shared/api/client";
 import type { FavoriteGroup, FavoriteTarget } from "@/shared/api/favorites.types";
 import { authErrorOf } from "./authErrorOf";
 
+export const MAX_FAVORITE_GROUPS = 3;
+export const MAX_FAVORITES_PER_GROUP = 2;
+
 export function sameFavorite(left: FavoriteTarget, right: FavoriteTarget): boolean {
   return left.routeId === right.routeId && left.stopId === right.stopId && left.direction === right.direction;
 }
@@ -16,7 +19,7 @@ export function exceedsFavoriteLimit(groups: FavoriteGroup[], target: FavoriteTa
   return groups.some(
     (group) =>
       ids.includes(group.id) &&
-      group.favorites.length >= 2 &&
+      group.favorites.length >= MAX_FAVORITES_PER_GROUP &&
       !group.favorites.some((favorite) => sameFavorite(favorite, target)),
   );
 }
@@ -45,11 +48,11 @@ export function favoriteErrorOf(failure: ApiFailure): string {
       case "FAVORITE_GROUP_NAME_CONFLICT":
         return "이미 사용 중인 그룹 이름이에요.";
       case "FAVORITE_GROUP_LIMIT_EXCEEDED":
-        return "그룹은 3개까지 만들 수 있어요.";
+        return `그룹은 ${MAX_FAVORITE_GROUPS}개까지 만들 수 있어요.`;
       case "LAST_FAVORITE_GROUP":
         return "대표 그룹은 삭제할 수 없어요.";
       case "FAVORITE_LIMIT_EXCEEDED":
-        return "한 그룹에는 즐겨찾기를 2개까지 저장할 수 있어요.";
+        return `한 그룹에는 즐겨찾기를 ${MAX_FAVORITES_PER_GROUP}개까지 저장할 수 있어요.`;
       case "FAVORITE_GROUP_NOT_FOUND":
         return "그룹을 찾지 못했어요. 목록을 다시 확인해 주세요.";
       case "FAVORITE_NOT_FOUND":

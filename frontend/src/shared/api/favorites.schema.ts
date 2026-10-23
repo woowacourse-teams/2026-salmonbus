@@ -1,3 +1,4 @@
+import { MAX_FAVORITE_GROUPS, MAX_FAVORITES_PER_GROUP } from "@/shared/utils/favoritePolicy";
 import { isRecord } from "@/shared/utils/valueGuards";
 import type { Direction, VehicleForecast } from "./routeForecast.types";
 import type {
@@ -66,7 +67,7 @@ export function groupNameFrom(value: unknown): Pick<FavoriteGroup, "id" | "name"
 export function favoriteGroupFrom(value: unknown): FavoriteGroup | null {
   if (!isRecord(value)) return null;
   const group = groupNameFrom(value);
-  const favorites = listFrom(value.favorites, 2, savedFavoriteFrom);
+  const favorites = listFrom(value.favorites, MAX_FAVORITES_PER_GROUP, savedFavoriteFrom);
   if (group === null || favorites === null || new Set(favorites.map((item) => item.id)).size !== favorites.length)
     return null;
   return { id: group.id, name: group.name, favorites };
@@ -74,7 +75,7 @@ export function favoriteGroupFrom(value: unknown): FavoriteGroup | null {
 
 export function favoriteGroupsFrom(value: unknown): FavoriteGroups | null {
   if (!isRecord(value)) return null;
-  const groups = listFrom(value.groups, 3, favoriteGroupFrom);
+  const groups = listFrom(value.groups, MAX_FAVORITE_GROUPS, favoriteGroupFrom);
   if (groups === null || new Set(groups.map((group) => group.id)).size !== groups.length) return null;
   return { groups };
 }
@@ -184,7 +185,7 @@ function homeFavoriteFrom(value: unknown): HomeFavorite | null {
 function homeGroupFrom(value: unknown): HomeFavorites["groups"][number] | null {
   if (!isRecord(value)) return null;
   const group = groupNameFrom(value);
-  const favorites = listFrom(value.favorites, 2, homeFavoriteFrom);
+  const favorites = listFrom(value.favorites, MAX_FAVORITES_PER_GROUP, homeFavoriteFrom);
   if (group === null || favorites === null || new Set(favorites.map((item) => item.id)).size !== favorites.length)
     return null;
   return { id: group.id, name: group.name, favorites };
@@ -192,7 +193,7 @@ function homeGroupFrom(value: unknown): HomeFavorites["groups"][number] | null {
 
 export function homeFavoritesFrom(value: unknown): HomeFavorites | null {
   if (!isRecord(value)) return null;
-  const groups = listFrom(value.groups, 3, homeGroupFrom);
+  const groups = listFrom(value.groups, MAX_FAVORITE_GROUPS, homeGroupFrom);
   if (groups === null || new Set(groups.map((group) => group.id)).size !== groups.length) return null;
   return { groups };
 }

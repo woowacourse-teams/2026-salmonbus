@@ -1,3 +1,4 @@
+import { MAX_FAVORITE_GROUPS, MAX_FAVORITES_PER_GROUP } from "@/shared/utils/favoritePolicy";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { deleteFavoriteGroup } from "@/shared/api/favorites.api";
@@ -76,7 +77,7 @@ export function GroupList() {
   return (
     <section className={`${styles.section} amp-mask`} aria-label="즐겨찾기 그룹 관리">
       <h2 className={styles.heading}>
-        <span>{`내 그룹  ${groups.length} / 3`}</span>
+        <span>{`내 그룹  ${groups.length} / ${MAX_FAVORITE_GROUPS}`}</span>
         {deleting ? (
           <button className={styles.cancelSelection} disabled={busy} onClick={() => finishDeletion(deletedCount)}>
             취소
@@ -118,7 +119,9 @@ export function GroupList() {
                 {group.name}
                 {!deleting && index === 0 && " · 대표 그룹"}
               </span>
-              <span className={styles.count}>{group.favorites.length} / 2</span>
+              <span className={styles.count}>
+                {group.favorites.length} / {MAX_FAVORITES_PER_GROUP}
+              </span>
             </span>
           );
           return (
@@ -171,7 +174,7 @@ export function GroupList() {
         </button>
       ) : (
         resource.status === "success" &&
-        groups.length < 3 && (
+        groups.length < MAX_FAVORITE_GROUPS && (
           <Link className={styles.add} to="/mypage/groups/new">
             <img src={plusIcon} width="18" height="18" alt="" draggable={false} />새 그룹 만들기
           </Link>

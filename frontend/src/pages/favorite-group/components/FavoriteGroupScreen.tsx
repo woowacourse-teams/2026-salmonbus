@@ -1,3 +1,4 @@
+import { MAX_FAVORITE_GROUPS } from "@/shared/utils/favoritePolicy";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { AccountLayout } from "@/shared/components/AccountLayout";
@@ -72,12 +73,12 @@ export function FavoriteGroupScreen() {
           <>
             <FavoritesNotice resource={resource} onRetry={reload} />
             {groupId === "new" ? (
-              groups.length < 3 && resource.status === "success" ? (
+              groups.length < MAX_FAVORITE_GROUPS && resource.status === "success" ? (
                 <GroupNameForm />
               ) : (
                 resource.status === "success" && (
                   <p className={formStyles.error} role="alert">
-                    그룹은 3개까지 만들 수 있어요.
+                    {`그룹은 ${MAX_FAVORITE_GROUPS}개까지 만들 수 있어요.`}
                   </p>
                 )
               )
