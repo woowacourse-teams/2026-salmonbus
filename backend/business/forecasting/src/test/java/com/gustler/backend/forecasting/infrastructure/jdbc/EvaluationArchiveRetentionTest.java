@@ -57,7 +57,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** 삭제는 이 테스트 전용 PostgreSQL에서만 실행한다. 외부 저장소는 원본 목록 대역이다. */
+/** 삭제는 이 테스트 컨텍스트 전용 DB에서만 실행한다. 외부 저장소는 원본 목록 대역이다. */
 @ForecastingIntegrationTest
 @TestPropertySource(properties = "sal175.archive-retention-test=true")
 @DirtiesContext(classMode = ClassMode.AFTER_CLASS)

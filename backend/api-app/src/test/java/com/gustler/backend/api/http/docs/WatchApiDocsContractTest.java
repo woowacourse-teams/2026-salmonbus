@@ -74,8 +74,9 @@ class WatchApiDocsContractTest {
         // then
         try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
             for (String name : List.of(
-                "WatchBoardResponse", "VehicleResponse", "SeatResponse", "ExactSeat", "UnknownSeat", "StopStateResponse",
-                "ApproachingVehicleResponse", "ForecastResponse", "BoardRouteResponse"
+                "WatchBoardResponse", "VehicleResponse", "SeatResponse", "ExactSeat", "UnknownSeat",
+                "StopStateResponse", "ApproachingVehicleResponse", "ForecastResponse", "BoardRouteResponse",
+                "ErrorResponse"
             )) {
                 softly.assertThat(generatedSchemas.path(name)).as(name).isEqualTo(sourceSchemas.path(name));
             }

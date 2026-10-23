@@ -6,14 +6,14 @@ import java.sql.SQLException;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 abstract class PostgresMigrationTestSupport {
-    static PostgreSQLContainer<?> postgres;
+    static PostgreSQLContainer postgres;
 
     @BeforeAll
     static void startPostgres() {
-        postgres = new PostgreSQLContainer<>("postgres:18");
+        postgres = new PostgreSQLContainer("postgres:18");
         postgres.start();
         Flyway.configure()
             .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())

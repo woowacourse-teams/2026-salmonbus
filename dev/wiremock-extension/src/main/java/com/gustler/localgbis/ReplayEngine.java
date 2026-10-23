@@ -231,12 +231,11 @@ final class ReplayEngine {
                 : period * (slot / 3) / groups + (long) (slot % 3) * 3 * configuration.stepSeconds()
                     + (long) (slot % 3) * configuration.stepSeconds() / 3) % period;
             final long shifted = elapsed + offset;
-            final long trip = shifted / period * requestedFleet + slot;
             final int step = (int) ((shifted % period) / configuration.stepSeconds());
             final long withinStep = shifted % configuration.stepSeconds();
             final int phase = phaseOf(mode, withinStep, step == count - 1, legacyLayout);
             if (step < count) {
-                vehicles.add(new Observation(vehicle(route, firstSequence + step, step, trip, slot, phase,
+                vehicles.add(new Observation(vehicle(route, firstSequence + step, step, slot, phase,
                     legacyLayout, direction, mode, vehicleRun), direction, withinStep));
             }
         }
@@ -316,7 +315,7 @@ final class ReplayEngine {
     }
 
     private Map<String, Object> vehicle(Route route, final int sequence,
-                                      final int step, final long cycle, final int slot, final int phase,
+                                      final int step, final int slot, final int phase,
                                       final boolean legacyLayout, String direction, String mode, String vehicleRun) {
         Stop stop = route.stops().get(sequence - 1);
         Integer remaining = switch (mode) {
@@ -340,7 +339,7 @@ final class ReplayEngine {
         if (!mode.equals("anonymous")) {
             value.put("plateNo", "LOCAL-" + route.displayName()
                 + (legacyLayout ? "" : "-" + slot) + "-" + direction);
-            value.put("vehId", "L" + vehicleRun + "-" + route.routeId() + "-" + cycle + direction);
+            value.put("vehId", "L" + vehicleRun + "-" + route.routeId() + "-" + slot + direction);
         }
         value.put("lowPlate", 2);
         value.put("routeId", route.routeId());

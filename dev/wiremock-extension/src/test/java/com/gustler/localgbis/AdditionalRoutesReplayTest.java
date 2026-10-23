@@ -55,7 +55,7 @@ class AdditionalRoutesReplayTest {
             seconds.set(route.turnSequence() * 30L + 60);
             var restarted = vehicles(engine.response("location", "normal", id)).get(0);
             assertEquals(1, restarted.get("stationSeq"));
-            assertNotEquals(first.get("vehId"), restarted.get("vehId"));
+            assertEquals(first.get("vehId"), restarted.get("vehId"));
         }
     }
 

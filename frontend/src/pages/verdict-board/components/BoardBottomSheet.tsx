@@ -40,11 +40,12 @@ export function BoardBottomSheet({ snap, onSnapChange, viewportHeight, header, c
       style={{ height }}
       data-snap={snap}
       data-dragging={dragging}
+      data-native-map-hit
       aria-label="판정보드"
     >
       <span ref={safeTopRef} className={styles.safeTop} aria-hidden="true" />
       <span ref={safeBottomRef} className={styles.safeBottom} aria-hidden="true" />
-      <div ref={headerRef} className={styles.header} {...dragHandlers}>
+      <div ref={headerRef} className={styles.header} data-native-map-drag {...dragHandlers}>
         <div
           className={styles.handle}
           role="slider"

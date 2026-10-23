@@ -13,6 +13,6 @@ import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 @Retention(RetentionPolicy.RUNTIME)
 @SpringBootTest(classes = QuotaTestConfiguration.class,
     webEnvironment = WebEnvironment.NONE,
-    properties = {"spring.datasource.hikari.maximum-pool-size=3"})
+    properties = {"spring.datasource.hikari.maximum-pool-size=3", "spring.datasource.hikari.minimum-idle=1"})
 public @interface QuotaIntegrationTest {
 }

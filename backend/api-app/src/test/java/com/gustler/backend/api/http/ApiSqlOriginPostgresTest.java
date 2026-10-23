@@ -10,7 +10,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -18,7 +18,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class ApiSqlOriginPostgresTest {
     // CodeBuild에서 cgroup 설정 오류가 발생해 컨테이너별 CPU/메모리 제한은 지정하지 않는다.
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18")
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:18")
         .withCommand("postgres", "-c", "shared_preload_libraries=pg_stat_statements",
             "-c", "shared_buffers=16MB");
 

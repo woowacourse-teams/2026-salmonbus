@@ -242,14 +242,12 @@ export function createNaverRouteMap(
     button.type = "button";
     button.className = styles.stop;
     button.dataset.mapStopSequence = String(stop.sequence);
+    button.dataset.boardingAllowed = String(stopState.boardingAllowed);
     button.setAttribute("aria-label", `${stopState.name} ${terminalStopName} 방면 정류장 지도에서 선택`);
     button.setAttribute("aria-pressed", "false");
     const symbol = document.createElement("span");
     symbol.className = styles.stopIcon;
     symbol.setAttribute("aria-hidden", "true");
-    symbol.innerHTML = stopState.boardingAllowed
-      ? '<svg width="100%" height="100%" viewBox="0 0 14 14"><path d="M0 0l0 6.1985" transform="translate(2.42578 3.63132) scale(1 1.4)" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" vector-effect="non-scaling-stroke"/><path d="M0 0l0 6.1985" transform="translate(11.56932 3.63132) scale(1 1.4)" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" vector-effect="non-scaling-stroke"/><path d="M0.30955 0.091l-0.26775 0.4025c-0.10675 0.16625 0.00175 0.36225 0.203 0.36225l7.938 0c0.203 0 0.30975-0.196 0.20125-0.36225l-0.2695-0.4025c-0.0385-0.05775-0.11375-0.091-0.18725-0.091l-7.42875 0c-0.07525 0-0.1505 0.03325-0.189 0.091z" transform="translate(1.09326 2.4332) scale(1.4)" fill="currentColor"/><rect x="3.31016" y="9.68254" width="7.37142" height="1.2" rx=".6" fill="currentColor"/></svg>'
-      : '<svg width="100%" height="100%" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3" fill="currentColor"/></svg>';
     const label = document.createElement("span");
     label.className = styles.stopName;
     label.textContent = stopState.name;

@@ -17,7 +17,27 @@ API 문서는 `api-app`이 현재 Controller/DTO에서 생성한다. 같은 빌�
 | `/api/docs/chat` | WebSocket 메시지·연결·재접속 계약 |
 | `/api/docs/chat/examples` | WebSocket 프레임 합성 예시 |
 
-문서에는 구현된 HTTP 조회만 표시한다. v1의 노선 목록·보드·차량 관측과 v2의 정류장 도착정보·노선 geometry를 포함한다. 채팅이 꺼져 있으면 채팅방 가용성 GET도 명세에서 빠진다. WebSocket `/stream`은 HTTP operation으로 표시하지 않고 별도 계약에서 설명한다. 차량의 구간 진행률은 제공하지 않으며 미구현 설계를 명세에 포함하지 않는다.
+문서에는 구현된 HTTP API만 표시한다. v1의 노선 목록·보드·차량 관측과 v2의 정류장 도착정보·노선 geometry를 포함한다. 채팅이 꺼져 있으면 채팅방 가용성 GET도 명세에서 빠진다. 로그인이 켜져 있으면 아래 로그인 API도 표시한다. WebSocket `/stream`은 HTTP operation으로 표시하지 않고 별도 계약에서 설명한다. 차량의 구간 진행률은 제공하지 않으며 미구현 설계를 명세에 포함하지 않는다.
+
+## 로그인 API
+
+로그인은 `AUTH_ENABLED=true`일 때만 켜진다. 꺼져 있으면 로그인 컨트롤러가 등록되지 않아 `/api/auth/*`·`/api/me`가 404이고, 명세에도 나오지 않는다. 문서 프로필(`api-docs-local`·`api-docs-dev`)은 로그인을 켜지 않는다. 로그인을 켜려면 토큰 서명 비밀이 필요해서, 문서를 보려고 켜면 비밀 없는 로컬 실행이 시작하지 못한다. dev 서버에서 로그인을 켜면 dev 문서에도 로그인 API가 나온다. 켜는 방법은 `backend/deploy/RUNBOOK.md`의 "로그인 켜기"에 있다.
+
+Swagger에 나오는 것은 fetch로 부르는 API 7개다.
+
+| 경로 | 내용 |
+| --- | --- |
+| `GET /api/auth/session` | 로그인 상태와 CSRF 토큰 쿠키 발급 |
+| `POST /api/auth/refresh` | 리프레시 토큰으로 로그인 연장 |
+| `POST /api/auth/logout` | 로그아웃 |
+| `GET /api/me` | 내 정보 |
+| `PATCH /api/me` | 닉네임 변경 |
+| `DELETE /api/me` | 카카오 회원 탈퇴 |
+| `POST /api/me/withdrawal/apple` | 애플 회원 탈퇴 시작 주소 발급 |
+
+브라우저를 이동시키는 경로(`/api/auth/{kakao,apple}/start`, `/api/auth/{kakao,apple}/callback`)는 컨트롤러가 아니라 보안 필터가 처리해 Swagger에 나오지 않는다. 이 흐름과 `returnTo` 규칙, 결과 쿼리(`login`, `withdrawn`, `withdraw`), 쿠키 3개(`__Host-sb_at`·`__Host-sb_rt`·`__Host-XSRF-TOKEN`)는 `contract/auth-v1.md`에 있다.
+
+fetch API의 공유 명세는 `contract/auth-v1.openapi.json`이다. 문서 테스트(`AuthApiDocsContractTest`)는 로그인을 켠 앱이 만든 명세와 이 파일의 operation 식별자·파라미터·요청 본문·응답 코드·헤더·예시·스키마를 대조한다. 설명 문구는 대조하지 않는다. 오류 응답 `ErrorResponse`의 오류 코드 목록은 이 파일과 `contract/route-watch-v1.openapi.json`에 같이 있고, 두 문서 테스트가 모두 코드의 `ErrorCode`와 대조한다.
 
 ## 정류장 도착정보와 지도 geometry
 
@@ -51,9 +71,11 @@ dev Worker는 형상 수집과 카탈로그 전체 포함을 켜서 현재 GBIS 
 
 ## 새 API가 생길 때
 
-springdoc은 앱이 뜰 때 Spring Controller와 DTO에서 명세를 만든다. 현재 `springdoc.paths-to-match`는 `/api/v1/**`, 위의 v2 두 경로, 채팅방 가용성 경로를 포함한다. 이 범위의 `@RestController` 경로와 DTO 기본 구조는 다음 빌드·배포 때 자동 반영된다. 다른 경로는 포함 범위를 먼저 검토해야 한다. 채팅처럼 `RouterFunction`으로 등록한 HTTP 경로에는 명시적인 `@RouterOperation`이 필요하다. WebSocket 프레임은 OpenAPI HTTP 경로로 자동 생성되지 않는다.
+springdoc은 앱이 뜰 때 Spring Controller와 DTO에서 명세를 만든다. 현재 `springdoc.paths-to-match`는 `/api/v1/**`, 위의 v2 두 경로, 채팅방 가용성 경로, 로그인 API 경로 5개를 포함한다. 이 범위의 `@RestController` 경로와 DTO 기본 구조는 다음 빌드·배포 때 자동 반영된다. 다른 경로는 포함 범위를 먼저 검토해야 한다. 채팅처럼 `RouterFunction`으로 등록한 HTTP 경로에는 명시적인 `@RouterOperation`이 필요하다. WebSocket 프레임은 OpenAPI HTTP 경로로 자동 생성되지 않는다.
 
-자동 생성만으로 필드 의미·단위, null과 생략의 차이, 상태별 정상/오류 예시가 채워지지는 않는다. 새 API를 추가할 때 Controller의 응답 설명과 합성 예시, DTO의 `@Schema`, WebSocket 공개 안내를 실제 계약에 맞게 갱신한다. 현재 문서 테스트는 경로 5개(채팅 on이면 6개)를 확인하므로 새 경로가 생기면 테스트가 실패한다. 이는 공개 문서에 새 API가 실리기 전에 범위와 예시를 검토하도록 하는 신호다. 문서 파일을 별도로 업로드할 필요는 없으며 검토를 마친 코드를 배포하면 같은 앱의 Swagger 화면이 새 명세를 보여준다.
+Swagger UI는 API를 노선·정류장 도착정보·채팅·로그인·회원 묶음으로 나눠 보여 준다. 새 컨트롤러에는 `@Tag(name = ApiDocsTags.<묶음>)`을 붙인다. 묶음 이름과 순서는 `ApiDocsTags`에 있고, 문서에 operation이 없는 묶음은 표시하지 않는다.
+
+자동 생성만으로 필드 의미·단위, null과 생략의 차이, 상태별 정상/오류 예시가 채워지지는 않는다. 새 API를 추가할 때 Controller의 응답 설명과 합성 예시, DTO의 `@Schema`, WebSocket 공개 안내를 실제 계약에 맞게 갱신한다. 현재 문서 테스트는 경로 6개(채팅 on이면 7개)를 확인하므로 새 경로가 생기면 테스트가 실패한다. 로그인 경로는 로그인을 켠 문서 테스트가 따로 확인한다. 이는 공개 문서에 새 API가 실리기 전에 범위와 예시를 검토하도록 하는 신호다. 문서 파일을 별도로 업로드할 필요는 없으며 검토를 마친 코드를 배포하면 같은 앱의 Swagger 화면이 새 명세를 보여준다.
 
 ## Try it out과 dev 연결
 

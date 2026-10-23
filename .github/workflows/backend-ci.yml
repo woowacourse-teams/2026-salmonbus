@@ -1,28 +1,32 @@
 name: BACKEND-CI
 
+# paths 필터를 두지 않는다. 필터로 워크플로가 돌지 않으면 필수 체크가 대기 상태로 남는다.
+# 각 잡이 먼저 변경 경로를 보고, 아래 CHANGED_PATH_PATTERNS 밖의 변경이면 검사 단계를 건너뛰고 성공으로 끝난다.
 on:
   push:
     branches: [ "dev", "main" ]
-    paths:
-      - 'backend/**'
-      - 'contract/examples/chat-v1.json'
-      - 'contract/*.openapi.json'
-      - 'docs/api/chat-websocket-public.md'
-      - 'dev/server/api.yml'
-      - '.github/workflows/backend-ci.yml'
   pull_request:
     branches: [ "dev", "main" ]
-    paths:
-      - 'backend/**'
-      - 'contract/examples/chat-v1.json'
-      - 'contract/*.openapi.json'
-      - 'docs/api/chat-websocket-public.md'
-      - 'dev/server/api.yml'
-      - '.github/workflows/backend-ci.yml'
 
+# PR 은 같은 PR 의 앞 실행을 취소한다. push 는 브랜치와 커밋마다 그룹을 나눠, 앞 커밋의 실행이나
+# 같은 커밋을 다른 브랜치(dev·main)에 push 한 실행이 결과 없이 취소되지 않게 한다.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || format('{0}-{1}', github.ref, github.sha) }}
   cancel-in-progress: true
+
+env:
+  # backend 밖에서 backend 테스트가 읽는 파일도 넣는다(dev/server/api.yml·worker.yml, dev/data/routes.json, dev/data/java).
+  CHANGED_PATH_PATTERNS: >-
+    backend/*
+    contract/examples/chat-v1.json
+    contract/*.openapi.json
+    docs/api/chat-websocket-public.md
+    dev/server/api.yml
+    dev/server/worker.yml
+    dev/data/routes.json
+    dev/data/java/*
+    .github/workflows/backend-ci.yml
+    .github/scripts/*
 
 jobs:
   backend-deploy-contract:
@@ -34,7 +38,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 2
+      - name: Check changed paths
+        id: scope
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: bash .github/scripts/changed-paths.sh
       - name: Verify deployment hooks and runtime source inputs
+        if: ${{ steps.scope.outputs.relevant == 'true' }}
         run: bash backend/deploy/rehearsal/run.sh
 
   backend-build:
@@ -54,68 +65,59 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 2
+
+      - name: Check changed paths
+        id: scope
+        working-directory: .
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: bash .github/scripts/changed-paths.sh
 
       - name: Set up JDK 21
+        if: ${{ steps.scope.outputs.relevant == 'true' }}
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'corretto'
 
       - name: Set up Gradle
+        if: ${{ steps.scope.outputs.relevant == 'true' }}
         uses: gradle/actions/setup-gradle@v6
 
       - name: Verify build environment
+        if: ${{ steps.scope.outputs.relevant == 'true' }}
         run: bash deploy/verify-build-environment.sh
 
+      # 병렬 실행·작업자 수·JVM 옵션은 backend/gradle.properties 에서 CodeBuild 와 같은 값을 읽는다.
       - name: Build with Gradle
+        if: ${{ steps.scope.outputs.relevant == 'true' }}
         run: ./gradlew clean build --continue --no-daemon
 
       - name: Package and verify actual API and worker revisions
+        if: ${{ steps.scope.outputs.relevant == 'true' }}
         env:
           REVISION_COMMIT: ${{ github.sha }}
         run: bash deploy/package-revision.sh "$REVISION_COMMIT"
 
+      # 이 단계가 만드는 'BE 테스트 결과' 체크는 경로 밖 변경에서 생기지 않는다. 필수 체크에는 잡 이름만 넣는다.
       - name: Publish test report
-        if: ${{ !cancelled() && hashFiles('backend/**/build/test-results/*/TEST-*.xml') != '' }}
+        if: ${{ !cancelled() && steps.scope.outputs.relevant == 'true' && hashFiles('backend/**/build/test-results/*/TEST-*.xml') != '' }}
         uses: mikepenz/action-junit-report@v6
         with:
           report_paths: 'backend/**/build/test-results/*/TEST-*.xml'
           check_name: 'BE 테스트 결과'
           detailed_summary: true
 
-      - name: Summarize slow test classes
-        if: ${{ !cancelled() && hashFiles('backend/**/build/test-results/*/TEST-*.xml') != '' }}
-        run: |
-          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import glob
-          import xml.etree.ElementTree as ET
-          from collections import defaultdict
-
-          suites = []
-          modules = defaultdict(float)
-          for path in glob.glob('**/build/test-results/*/TEST-*.xml', recursive=True):
-              suite = ET.parse(path).getroot()
-              module = path.split('/build/test-results/')[0]
-              seconds = float(suite.get('time', 0))
-              suites.append((seconds, module, suite.get('name'), int(suite.get('tests', 0))))
-              modules[module] += seconds
-
-          print('### 테스트 시간')
-          print('Spring 컨텍스트와 컨테이너 시작 시간은 그것을 처음 쓴 클래스에 더해진다.')
-          print()
-          print('| 모듈 | 클래스 시간 합계(초) |')
-          print('|---|---:|')
-          for module, seconds in sorted(modules.items(), key=lambda item: -item[1]):
-              print(f'| {module} | {seconds:.1f} |')
-          print()
-          print('| 느린 클래스 | 모듈 | 테스트 수 | 시간(초) |')
-          print('|---|---|---:|---:|')
-          for seconds, module, name, tests in sorted(suites, reverse=True)[:20]:
-              print(f'| {name} | {module} | {tests} | {seconds:.1f} |')
-          PY
+      # 실행 수 대조는 각 모듈의 verifyTestCount 가 빌드에서 한다. 여기서는 수와 무거운 자원 기동 횟수를 보여 준다.
+      - name: Summarize test counts and slow test classes
+        if: ${{ !cancelled() && steps.scope.outputs.relevant == 'true' && hashFiles('backend/**/build/test-results/*/TEST-*.xml') != '' }}
+        run: >-
+          python3 ../.github/scripts/summarize-test-results.py
+          --baseline test-baseline.properties --output "$GITHUB_STEP_SUMMARY" .
 
       - name: Upload test results
-        if: ${{ !cancelled() && hashFiles('backend/**/build/test-results/*/TEST-*.xml') != '' }}
+        if: ${{ !cancelled() && steps.scope.outputs.relevant == 'true' && hashFiles('backend/**/build/test-results/*/TEST-*.xml') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: backend-test-results

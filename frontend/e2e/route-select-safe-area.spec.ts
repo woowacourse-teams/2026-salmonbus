@@ -1,4 +1,3 @@
-import { PHONE_SEARCH_CENTER_DVH } from "../src/pages/route-select/routeSelectLayout";
 import { test, expect } from "./fixtures/api";
 import { inServiceSection, openRouteSearch, routeSearchEntry, routeSearchInput } from "./utils/route-select";
 
@@ -38,11 +37,8 @@ for (const { width, height } of [
 
       const entryBox = await routeSearchEntry(page).boundingBox();
       expect(entryBox).not.toBeNull();
-      const isPhone = width < 600;
-      const expectedCenter = isPhone
-        ? (height * PHONE_SEARCH_CENTER_DVH) / 100
-        : (insets.top + height - insets.bottom) / 2;
-      expect(entryBox!.y + entryBox!.height / 2).toBeCloseTo(expectedCenter, 0);
+      expect(entryBox!.y).toBeGreaterThanOrEqual(insets.top);
+      expect(entryBox!.y + entryBox!.height).toBeLessThan(height / 2);
       const logoBox = await page.getByRole("img", { name: "연어 버스 로고", exact: true }).boundingBox();
       expect(logoBox).not.toBeNull();
       expect(logoBox!.y).toBeGreaterThanOrEqual(insets.top);

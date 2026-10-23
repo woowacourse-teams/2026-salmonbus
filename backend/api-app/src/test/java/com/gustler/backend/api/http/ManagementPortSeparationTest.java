@@ -16,6 +16,7 @@ import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalManagementPort;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 
 /**
  * Actuator 를 별도 포트로 분리해도 공개 포트의 오류 응답이 바뀌지 않는지 검증한다.
@@ -31,10 +32,13 @@ import org.springframework.context.annotation.Import;
  * <p>공개 포트에 있는 Actuator 는 {@code add-additional-paths} 로 연 {@code /livez}·{@code /readyz}
  * 뿐이다. 배포 검증({@code validate.sh})은 8080 이 트래픽을 받을 상태인지 {@code /readyz} 로 확인한다.
  * 나머지 Actuator 가 공개 포트에 노출되지 않는 것도 검증한다.
+ *
+ * <p>배포처럼 {@code observability} 프로필을 켠다. 같은 설정인 {@code PrometheusEndpointTest} 와 컨텍스트를 함께 쓴다.
  */
 @SpringBootTest(
     webEnvironment = WebEnvironment.RANDOM_PORT,
     properties = "management.server.port=0")
+@ActiveProfiles("observability")
 @Import(PostgresTestContainer.class)
 class ManagementPortSeparationTest {
     @LocalServerPort

@@ -6,8 +6,7 @@ import static org.springframework.test.util.ReflectionTestUtils.getField;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.diagnostics.WorkerOperationLog.Listener;
-import com.gustler.backend.support.PostgresTestContainer;
-import com.gustler.backend.worker.WorkerApplication;
+import com.gustler.backend.support.IntegrationTest;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -24,8 +23,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -34,14 +31,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** 실제 PostgreSQL 트랜잭션의 완료와 수집 계측 callback 사이의 경계를 검증한다. */
-@SpringBootTest(classes = WorkerApplication.class, properties = {
-    "collection.enabled=false",
-    "route-geometry.enabled=false",
-    "forecast.enabled=false",
-    "forecast.archive.enabled=false",
-    "arrivals.enabled=false"
-})
-@Import(PostgresTestContainer.class)
+@IntegrationTest
 class WorkerOperationLogCommitIntegrationTest {
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-20T00:00:00Z"), ZoneOffset.UTC);
     private static final long OBSERVED_EPOCH_SECOND = CLOCK.instant().minusSeconds(2).getEpochSecond();

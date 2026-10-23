@@ -15,6 +15,13 @@ const ERROR_CODE_KEYS: Record<ErrorCode, true> = {
   ENDPOINT_NOT_FOUND: true,
   METHOD_NOT_ALLOWED: true,
   INTERNAL_ERROR: true,
+  UNAUTHENTICATED: true,
+  CSRF_REJECTED: true,
+  NICKNAME_LENGTH: true,
+  NICKNAME_CHARACTERS: true,
+  NICKNAME_RESERVED: true,
+  NICKNAME_TAKEN: true,
+  REAUTH_REQUIRED: true,
   SERVICE_UNAVAILABLE: true,
   MODEL_OUT_OF_SCOPE: true,
   NO_RECENT_OBSERVATION: true,
@@ -70,6 +77,9 @@ export function resetApiFailureReporter(): void {
 }
 
 export interface RequestOptions {
+  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  body?: unknown;
+  headers?: Record<string, string>;
   signal?: AbortSignal;
   errorContext?: RequestErrorContext;
 }
@@ -100,7 +110,10 @@ async function executeRequest<T>(url: string, options: RequestOptions): Promise<
       context: options.errorContext ?? null,
       abortReason: options.signal?.reason ?? null,
       rawResponse:
-        !result.ok && result.failure.kind === "malformed" && responseBody !== undefined
+        !result.ok &&
+        result.failure.kind === "malformed" &&
+        responseBody !== undefined &&
+        !/^\/api\/(auth|me)(\/|$)/.test(url)
           ? { body: responseBody, contentType }
           : null,
     },
@@ -114,7 +127,16 @@ async function executeRequest<T>(url: string, options: RequestOptions): Promise<
 
   let response: Response | null = null;
   try {
-    response = await fetch(url, { headers: { Accept: "application/json" }, signal: controller.signal });
+    response = await fetch(url, {
+      method: options.method ?? "GET",
+      headers: {
+        Accept: "application/json",
+        ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...options.headers,
+      },
+      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+      signal: controller.signal,
+    });
     contentType = response.headers.get("content-type");
     const clock = referenceClockFrom(response.headers);
     const infrastructureFailure = infrastructureFailureOf(response, clock);
@@ -122,6 +144,7 @@ async function executeRequest<T>(url: string, options: RequestOptions): Promise<
       return outcomeOf(failed(infrastructureFailure));
     }
 
+    if (response.status === 204) return outcomeOf(interpret<T>(response, undefined, clock));
     responseBody = await response.text();
     const body: unknown = JSON.parse(responseBody);
     return outcomeOf(interpret<T>(response, body, clock));

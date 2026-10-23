@@ -17,7 +17,8 @@ import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
     properties = {
         "spring.jpa.hibernate.ddl-auto=validate",
         "spring.jpa.open-in-view=false",
-        "spring.datasource.hikari.maximum-pool-size=3"
+        "spring.datasource.hikari.maximum-pool-size=3",
+        "spring.datasource.hikari.minimum-idle=1"
     }
 )
 public @interface RouteCatalogIntegrationTest {
