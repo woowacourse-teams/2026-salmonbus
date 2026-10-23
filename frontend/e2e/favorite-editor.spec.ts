@@ -298,6 +298,12 @@ for (const width of [320, 425]) {
       await expect(group).toHaveCSS("background-color", tab.background);
       const handle = group.getByRole("button", { name: `${tab.name} 순서 변경`, exact: true });
       const grip = (await handle.boundingBox())!;
+      const textRight = await button.evaluate((element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return range.getBoundingClientRect().right;
+      });
+      expect(grip.x - textRight).toBeGreaterThanOrEqual(3.9);
       expect(grip.x).toBeGreaterThan(box.x + box.width / 2);
       expect(grip.x + grip.width).toBeLessThanOrEqual(box.x + box.width);
     }

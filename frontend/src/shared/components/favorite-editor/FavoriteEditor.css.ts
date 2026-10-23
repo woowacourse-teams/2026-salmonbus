@@ -13,7 +13,7 @@ export const editor = style({
 });
 export const groupName = style({
   minWidth: 0,
-  padding: "8px 14px",
+  padding: "8px 18px",
   border: 0,
   background: "transparent",
   color: "inherit",
