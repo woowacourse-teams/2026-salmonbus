@@ -4,6 +4,7 @@ import { AccountLayout } from "@/shared/components/AccountLayout";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { LoginButton } from "@/shared/components/LoginButton";
 import { Notice } from "@/shared/components/Notice";
+import { GuestMyPage } from "./GuestMyPage";
 import { GroupList } from "./GroupList";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { authErrorOf } from "@/shared/utils/authErrorOf";
@@ -47,6 +48,14 @@ export function MyPageScreen() {
       state: { notice: action === "logout" ? "로그아웃했어요" : "회원탈퇴가 완료됐어요" },
     });
   }
+
+  if (state.status === "anonymous")
+    return (
+      <AccountLayout>
+        <GuestMyPage />
+        {typeof notice === "string" && <Notice key={notice} message={notice} />}
+      </AccountLayout>
+    );
 
   return (
     <AccountLayout>
