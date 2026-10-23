@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react';
+import * as Application from 'expo-application';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { LoadFailedView } from './LoadFailedView';
-import {
-  NativeRouteMap, NATIVE_MAP_BOOTSTRAP, isNativeMapMessage, nativeMapEventScript,
-  type NativeRouteMapRef,
-} from './native-map/NativeRouteMap';
+import { appBootstrapScriptFor, bridgeEventScriptFor, bridgeMessageFrom } from './bridge/bridge';
+import { NativeRouteMap, type NativeRouteMapRef } from './native-map/NativeRouteMap';
+import { NATIVE_MAP_CAPABILITIES } from './native-map/nativeMapMessages';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -22,6 +22,11 @@ function readWebUrl() {
 const WEB_URL = readWebUrl();
 const IN_APP_ORIGINS = [new URL(WEB_URL).origin];
 const SPLASH_BACKGROUND_COLOR = '#E8533F';
+const APP_CAPABILITIES: readonly string[] = NativeRouteMap !== null ? NATIVE_MAP_CAPABILITIES : [];
+const APP_BOOTSTRAP = appBootstrapScriptFor({
+  appVersion: Application.nativeApplicationVersion ?? 'unknown',
+  capabilities: APP_CAPABILITIES,
+});
 
 export default function App() {
   const webViewRef = useRef<WebView>(null);
@@ -45,20 +50,34 @@ export default function App() {
       .then(() => nativeMapRef.current?.reset());
   }
 
-  function handleMapMessage(event: WebViewMessageEvent) {
-    const message = event.nativeEvent.data;
-    if (!isNativeMapMessage(message)) return;
+  function handleMessage(event: WebViewMessageEvent) {
     try {
       if (!IN_APP_ORIGINS.includes(new URL(event.nativeEvent.url).origin)) return;
     } catch { return; }
+    const raw = event.nativeEvent.data;
+    const message = bridgeMessageFrom(raw);
+    if (message === null || !APP_CAPABILITIES.includes(message.type)) return;
+    if (message.type.startsWith('map.')) handleMapMessage(raw);
+  }
+
+  function handleMapMessage(raw: string) {
     const epoch = documentEpoch.current;
     // Imperative commands preserve ordering without a React render for every geometry update.
     commandQueue.current = commandQueue.current
       .catch(() => undefined)
       .then(async () => {
         if (epoch !== documentEpoch.current) return;
-        await nativeMapRef.current?.handleMessage(message);
+        await nativeMapRef.current?.handleMessage(raw);
       });
+  }
+
+  function forwardMapEvent(raw: string) {
+    const message = bridgeMessageFrom(raw);
+    if (message === null) {
+      if (__DEV__) console.warn('지도 모듈이 보낸 이벤트의 envelope 형식이 맞지 않아 버립니다');
+      return;
+    }
+    webViewRef.current?.injectJavaScript(bridgeEventScriptFor(message));
   }
 
   const webView = (
@@ -72,9 +91,9 @@ export default function App() {
       automaticallyAdjustContentInsets={NativeRouteMap !== null ? false : undefined}
       contentInsetAdjustmentBehavior={NativeRouteMap !== null ? 'never' : undefined}
       bounces={NativeRouteMap !== null ? false : undefined}
-      injectedJavaScriptBeforeContentLoaded={NativeRouteMap !== null ? NATIVE_MAP_BOOTSTRAP : undefined}
+      injectedJavaScriptBeforeContentLoaded={APP_BOOTSTRAP}
       injectedJavaScriptBeforeContentLoadedForMainFrameOnly
-      onMessage={NativeRouteMap !== null ? handleMapMessage : undefined}
+      onMessage={handleMessage}
       onLoadStart={resetNativeMap}
       onLoadEnd={SplashScreen.hide}
       onError={showLoadFailed}
@@ -92,7 +111,7 @@ export default function App() {
           <NativeRouteMap
             ref={nativeMapRef}
             style={styles.host}
-            onMapEvent={(event) => webViewRef.current?.injectJavaScript(nativeMapEventScript(event.nativeEvent.message))}
+            onMapEvent={(event) => forwardMapEvent(event.nativeEvent.message)}
           >
             {webView}
           </NativeRouteMap>

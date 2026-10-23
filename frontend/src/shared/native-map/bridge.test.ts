@@ -12,6 +12,20 @@ function appWindow(capabilities: readonly string[] = NATIVE_MAP_CAPABILITIES) {
   return { bridgeWindow, postMessage };
 }
 
+describe("native map 메시지 목록", () => {
+  it("앱의 app/native-map/nativeMapMessages.ts와 같은 목록이다", () => {
+    expect(NATIVE_MAP_CAPABILITIES).toEqual([
+      "map.mount",
+      "map.updateScene",
+      "map.motion",
+      "map.layout",
+      "map.camera",
+      "map.location",
+      "map.unmount",
+    ]);
+  });
+});
+
 describe("native map 사용 여부", () => {
   it("지도 명령을 전부 받는 앱에서만 native 지도를 쓴다", () => {
     expect(isNativeMapAvailable({})).toBe(false);

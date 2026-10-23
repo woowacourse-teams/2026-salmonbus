@@ -2,11 +2,16 @@ import CoreGraphics
 import Foundation
 import NMapsMap
 
-struct MapEnvelope: Decodable {
-  let v: Int
+struct MapSession: Decodable {
   let sessionId: String
   let revision: Int
+}
+
+// 웹과 같은 bridge envelope. 지도 세션 값은 payload 안에 있다.
+struct MapEnvelope: Decodable {
+  let v: Int
   let type: String
+  let payload: MapSession
 }
 
 struct MapCoordinate: Decodable {

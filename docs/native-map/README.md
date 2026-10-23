@@ -189,27 +189,30 @@ Native는 선택 이벤트를 웹에 알리고, 웹에서 확정한 선택값을
 
 ## 7. 앱을 구분하고, 오래된 메시지를 버립니다
 
-Native 지도는 User-Agent로 판단하지 않습니다. 앱이 페이지 로드 전에 다음 기능 정보를 주입한 경우에만 선택합니다.
+Native 지도는 User-Agent로 판단하지 않습니다. 앱이 페이지 로드 전에 다음 앱 정보를 주입하고, `capabilities`에 지도 명령 7개(`map.mount`부터 `map.unmount`까지)가 모두 있을 때만 선택합니다.
 
 ```ts
-window.SalmonNativeMap = {
-  version: 1,
-  platform: 'ios',
-  postMessage: (message: string) => { /* 앱으로 전달 */ },
+window.__SALMONBUS_APP__ = {
+  appVersion: '1.0.0',
+  capabilities: ['map.mount', 'map.updateScene', /* ... */ 'map.unmount'],
 };
 ```
 
-기능 정보가 없는 브라우저는 기존 JS SDK를 사용합니다. 앱에서 native 지도 준비가 15초 안에 끝나지 않거나 인증이 실패하면 native 지도를 정리하고 기존 JS 지도로 전환합니다. 같은 화면에서는 JS 지도를 유지하며, 늦게 도착한 native 이벤트로 다시 전환하지 않습니다. 선택 state와 차량 이동도 JS 지도에 연결하고, JS 지도까지 실패하면 오류 안내와 정류장 목록을 유지합니다. 그 외 native 오류는 기존 오류 안내를 표시합니다.
+앱 정보가 없는 브라우저와 지도 명령을 모두 받지 못하는 앱은 기존 JS SDK를 사용합니다. 앱에서 native 지도 준비가 15초 안에 끝나지 않거나 인증이 실패하면 native 지도를 정리하고 기존 JS 지도로 전환합니다. 같은 화면에서는 JS 지도를 유지하며, 늦게 도착한 native 이벤트로 다시 전환하지 않습니다. 선택 state와 차량 이동도 JS 지도에 연결하고, JS 지도까지 실패하면 오류 안내와 정류장 목록을 유지합니다. 그 외 native 오류는 기존 오류 안내를 표시합니다.
 
 전환 원인은 기존 Sentry에 `source:native-map`, `failure_kind:timeout` 또는 `failure_kind:auth`로 기록합니다. 노선 ID를 함께 기록하며 좌표나 원본 native 오류 메시지는 보내지 않습니다. 수집은 기존 production 설정을 따르고, 같은 오류의 반복 전송은 기존 1분 제한을 적용하므로 이벤트 수가 전체 실패 횟수와 같지는 않습니다. Native 준비 대기 뒤 JS SDK 로딩 시간이 추가될 수 있습니다.
 
-이번 구현은 iOS용입니다. Android나 native module이 없는 실행 환경에서는 이 기능 정보를 주입하지 않으므로 기존 WebView의 JS 지도 경로를 사용합니다.
+이번 구현은 iOS용입니다. Android나 native module이 없는 실행 환경에서는 `capabilities`에 지도 명령을 넣지 않으므로 기존 WebView의 JS 지도 경로를 사용합니다.
 
-메시지의 공통 형식은 다음과 같습니다. 실제 타입의 기준은 [`protocol.ts`](../../frontend/src/shared/native-map/protocol.ts)입니다.
+지도 메시지는 앱의 다른 기능과 같은 bridge envelope를 씁니다. 웹은 `window.ReactNativeWebView.postMessage`로 보내고, 앱은 `salmon:bridge` CustomEvent로 돌려줍니다. type 앞에는 영역 이름 `map.`이 붙고, 지도 세션 값은 payload 안에 있습니다. 실제 타입의 기준은 [`protocol.ts`](../../frontend/src/shared/native-map/protocol.ts)와 [`bridge.types.ts`](../../frontend/src/shared/bridge/bridge.types.ts)입니다.
 
 ```ts
-{ v: 1, sessionId, revision, type, payload }
+{ v: 1, type: 'map.updateScene', payload: { sessionId, revision, ...명령 내용 } }
 ```
+
+지도 이벤트 payload에서 `sessionId`와 `revision`은 세션 값이 쓰는 이름이라 다른 필드 이름으로 쓰지 않습니다. layout 적용 결과를 `appliedRevision`으로 부르는 이유입니다.
+
+아래 표의 이름은 `map.`을 뗀 이름입니다.
 
 | 방향 | 명령 또는 이벤트 | 의미 |
 | --- | --- | --- |
@@ -220,7 +223,7 @@ window.SalmonNativeMap = {
 | 웹 → 앱 | `camera` | 대상 위치로 지도 카메라를 이동합니다. |
 | 웹 → 앱 | `location` | 현재 위치 권한·조회를 요청합니다. |
 | 웹 → 앱 | `unmount` | 현재 지도 세션을 종료합니다. |
-| 앱 → 웹 | `ready`, `ack` | 지도 준비와 layout 적용 결과를 알립니다. |
+| 앱 → 웹 | `ready`, `ack` | 지도 준비와 layout 적용 결과(`appliedRevision`)를 알립니다. |
 | 앱 → 웹 | `stopPress`, `vehiclePress` | 지도에서 누른 대상을 알립니다. |
 | 앱 → 웹 | `mapPress` | 지도 빈 영역 클릭에 따라 웹의 선택을 해제합니다. |
 | 앱 → 웹 | `locationResult`, `error` | 위치 결과나 오류를 알립니다. |
