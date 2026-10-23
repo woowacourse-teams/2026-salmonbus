@@ -6,6 +6,9 @@ for (const width of [320, 425]) {
     await page.goto("/");
     const card = page.getByRole("region", { name: "내 정류장을 저장해 보세요", exact: true });
     await expect(card).toBeVisible();
+    await expect(card.getByRole("heading")).toHaveCSS("font-size", "22px");
+    await expect(card.getByRole("heading")).toHaveCSS("line-height", "32px");
+    await expect(card.locator("p")).toHaveCSS("font-size", "14px");
     await expect(card).toContainText("로그인을 하면 자주 타는 노선과 정류장을");
     await expect(card).toContainText("내 그룹에 모아 볼 수 있어요.");
     await expect(card.getByRole("link", { name: "로그인 / 회원가입", exact: true })).toHaveAttribute(

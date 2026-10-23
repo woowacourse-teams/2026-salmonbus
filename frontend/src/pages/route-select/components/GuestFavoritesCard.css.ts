@@ -24,13 +24,20 @@ export const guestIcon = style({
   background: vars.color.liveBus,
   mask: `url(${bookmarkIcon}) center / contain no-repeat`,
 });
-export const guestTitle = style({ margin: 0, color: "#292A2D", fontSize: 18, fontWeight: 700, lineHeight: "26px" });
+export const guestTitle = style({
+  margin: 0,
+  color: "#292A2D",
+  fontSize: 22,
+  fontWeight: 700,
+  lineHeight: "32px",
+  wordBreak: "keep-all",
+});
 export const guestDescription = style({
   width: "100%",
   margin: 0,
   color: "#76706A",
   fontSize: 14,
-  lineHeight: 1.65,
+  lineHeight: 1.6,
   wordBreak: "keep-all",
 });
 export const guestLogin = style({
