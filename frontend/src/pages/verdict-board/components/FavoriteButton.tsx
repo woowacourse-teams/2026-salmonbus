@@ -28,8 +28,8 @@ interface FavoriteButtonProps {
 
 export function FavoriteButton({ className, target, stopName, directionName }: FavoriteButtonProps) {
   const { auth, groups, reload } = useFavorites();
-  const [open, setOpen] = useState(false);
-  const [notice, setNotice] = useState(0);
+  const [open, setOpen] = useState<"new" | "edit" | null>(null);
+  const [notice, setNotice] = useState({ id: 0, message: "" });
   const registered = selectedGroups(groups, target).length > 0;
   return (
     <>
@@ -41,7 +41,7 @@ export function FavoriteButton({ className, target, stopName, directionName }: F
         onClick={(event) => {
           event.currentTarget.focus({ preventScroll: true });
           reload();
-          setOpen(true);
+          setOpen(registered ? "edit" : "new");
         }}
       >
         <img src={registered ? starFilled : starOutline} width="19" height="19" alt="" draggable={false} />
@@ -53,16 +53,19 @@ export function FavoriteButton({ className, target, stopName, directionName }: F
             target={target}
             stopName={stopName}
             directionName={directionName}
-            onClose={() => setOpen(false)}
+            onClose={() => setOpen(null)}
             onSaved={() => {
-              setOpen(false);
-              setNotice((value) => value + 1);
+              setOpen(null);
+              setNotice((value) => ({
+                id: value.id + 1,
+                message: open === "edit" ? "변경사항을 저장했습니다" : "즐겨찾기를 저장했습니다",
+              }));
             }}
           />
         ) : (
-          <LoginPrompt target={target} onClose={() => setOpen(false)} />
+          <LoginPrompt target={target} onClose={() => setOpen(null)} />
         ))}
-      {notice > 0 && <Notice key={notice} message="즐겨찾기를 저장했어요" />}
+      {notice.id > 0 && <Notice key={notice.id} message={notice.message} />}
     </>
   );
 }

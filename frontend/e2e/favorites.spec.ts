@@ -140,12 +140,14 @@ test("서버의 일괄 저장 실패 시 선택과 기존 등록을 유지하고
   await choice.check();
   await dialog.getByRole("button", { name: "저장", exact: true }).click();
   await expect(dialog.getByRole("alert")).toContainText("2개까지");
+  await expect(page.getByText("즐겨찾기를 저장했습니다", { exact: true })).toHaveCount(0);
   await expect(choice).toBeChecked();
   expect(favorites.groups[0]!.favorites).toHaveLength(0);
   favorites.mutationError = null;
   await dialog.getByRole("button", { name: "저장", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   expect(favorites.groups[0]!.favorites).toHaveLength(1);
+  await expect(page.getByText("즐겨찾기를 저장했습니다", { exact: true })).toBeVisible();
 });
 
 test("가득 찬 그룹의 기존 선택은 유지하고 한 그룹씩 또는 전체에서 해제한다", async ({ page, favorites, api }) => {
@@ -165,10 +167,12 @@ test("가득 찬 그룹의 기존 선택은 유지하고 한 그룹씩 또는 �
   await expect(star).toHaveAttribute("aria-pressed", "true");
   await star.click();
   dialog = page.getByRole("dialog");
+  await expect(page.getByText("변경사항을 저장했습니다", { exact: true })).toBeVisible();
   await dialog.getByRole("checkbox", { name: /통학/ }).uncheck();
   await dialog.getByRole("button", { name: "저장", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   await expect(star).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByText("변경사항을 저장했습니다", { exact: true })).toBeVisible();
   expect(favorites.groups[0]!.favorites.map((favorite) => favorite.stopId)).toEqual([second!.stopId]);
   expect(favorites.groups[1]!.favorites).toHaveLength(0);
 });
