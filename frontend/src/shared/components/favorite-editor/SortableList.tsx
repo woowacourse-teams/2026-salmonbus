@@ -61,6 +61,8 @@ export function SortableList<T extends SortableItem>({
     previous.current = null;
     if (!before || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     for (const row of rows()) {
+      // DOM 이동 후 남은 전환이 새 위치 측정에 섞이지 않도록 취소한다.
+      row.getAnimations().forEach((animation) => animation.cancel());
       const id = row.dataset.sortId;
       const old = id === undefined ? undefined : before.get(id);
       const next = row.getBoundingClientRect();
