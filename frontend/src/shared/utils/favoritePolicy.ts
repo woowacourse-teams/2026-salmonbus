@@ -29,17 +29,6 @@ export function groupNameError(name: string): string | null {
   return length < 1 || length > 10 ? "그룹 이름은 앞뒤 공백을 제외한 1~10자로 입력해 주세요." : null;
 }
 
-export function moveItem<T>(items: T[], from: number, to: number): T[] {
-  if (from < 0 || from >= items.length || to < 0 || to >= items.length || from === to) return items;
-  const next = [...items];
-  next.splice(to, 0, ...next.splice(from, 1));
-  return next;
-}
-
-export function favoritePath(target: FavoriteTarget): string {
-  return `/routes/${encodeURIComponent(target.routeId)}?${new URLSearchParams({ direction: target.direction, stopId: target.stopId })}`;
-}
-
 export function favoriteErrorOf(failure: ApiFailure): string {
   if (failure.kind === "contract") {
     switch (failure.error.code) {

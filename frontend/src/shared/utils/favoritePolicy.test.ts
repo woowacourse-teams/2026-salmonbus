@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { exceedsFavoriteLimit, favoritePath, groupNameError, moveItem, selectedGroups } from "./favoritePolicy";
+import { exceedsFavoriteLimit, groupNameError, selectedGroups } from "./favoritePolicy";
 import type { FavoriteGroup, FavoriteTarget } from "@/shared/api/favorites.types";
 
 const target: FavoriteTarget = { routeId: "200000001", stopId: "200000011", direction: "UP" };
@@ -16,7 +16,6 @@ describe("즐겨찾기 정책", () => {
   it("같은 정류장이어도 방면이 다르면 다른 즐겨찾기로 구분한다", () => {
     expect(selectedGroups([group], { ...target, stopId: "200000012" })).toEqual([]);
     expect(selectedGroups([group], target)).toEqual(["g1"]);
-    expect(favoritePath(target)).toBe("/routes/200000001?direction=UP&stopId=200000011");
   });
   it("2개가 찬 그룹의 기존 선택 유지와 해제는 허용하고 새 등록만 제한한다", () => {
     expect(exceedsFavoriteLimit([group], target, [group.id])).toBe(false);
@@ -29,12 +28,5 @@ describe("즐겨찾기 정책", () => {
   });
   it.each([" 출근 ", "👨‍👩‍👧‍👦".repeat(10), "🇰🇷".repeat(10)])("보이는 문자 기준으로 이름을 검증한다: %s", (name) => {
     expect(groupNameError(name)).toBeNull();
-  });
-  it("순서를 바꾸어도 전체 ID를 보존하고 원본은 변경하지 않는다", () => {
-    const ids = ["a", "b", "c"];
-    expect(moveItem(ids, 0, 2)).toEqual(["b", "c", "a"]);
-    expect(moveItem(ids, 0, -1)).toBe(ids);
-    expect(moveItem(ids, 3, 0)).toBe(ids);
-    expect(ids).toEqual(["a", "b", "c"]);
   });
 });

@@ -9,7 +9,7 @@ import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
 import { SortableList } from "./SortableList";
-import { moveItem } from "@/shared/utils/favoritePolicy";
+import { moveItem } from "@/shared/utils/moveItem";
 import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
 import trashIcon from "@/shared/assets/icons/trash.svg";
 import * as styles from "./FavoriteEditor.css";

@@ -4,7 +4,7 @@ import { LoginButton } from "@/shared/components/LoginButton";
 import { useAuth } from "@/shared/hooks/useAuth";
 import * as buttons from "@/shared/styles/button.css";
 import * as formStyles from "@/shared/styles/form.css";
-import { favoritePath } from "@/shared/utils/favoritePolicy";
+import { favoritePath } from "@/shared/routing/paths";
 import closeIcon from "../assets/login-close.svg";
 import * as promptStyles from "./LoginPrompt.css";
 

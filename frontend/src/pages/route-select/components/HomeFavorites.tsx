@@ -4,12 +4,11 @@ import type { FavoriteStatus, FavoriteTarget, HomeFavorite } from "@/shared/api/
 import { latestSuccessOf } from "@/shared/api/polledResource";
 import { SeatCountBadge } from "@/shared/components/SeatCountBadge";
 import { toSeatEstimate, toSeatLevel } from "@/shared/utils/seatGrade";
-import { boardPathFor } from "@/shared/routing/paths";
+import { boardPathFor, favoritePath } from "@/shared/routing/paths";
 import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
 import { FavoriteEditor } from "@/shared/components/favorite-editor/FavoriteEditor";
 import { Notice } from "@/shared/components/Notice";
-import { favoritePath } from "@/shared/utils/favoritePolicy";
 import bookmarkIcon from "@/shared/assets/icons/bookmark.svg";
 import editIcon from "@/shared/assets/icons/favorite-edit.svg";
 import * as homeStyles from "./HomeFavorites.css";

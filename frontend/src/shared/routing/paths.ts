@@ -1,3 +1,5 @@
+import type { FavoriteTarget } from "@/shared/api/favorites.types";
+
 export const paths = {
   routeSelect: "/",
   board: "/routes/:routeId",
@@ -9,4 +11,8 @@ export const paths = {
 
 export function boardPathFor(routeId: string): string {
   return `/routes/${encodeURIComponent(routeId)}`;
+}
+
+export function favoritePath(target: FavoriteTarget): string {
+  return `/routes/${encodeURIComponent(target.routeId)}?${new URLSearchParams({ direction: target.direction, stopId: target.stopId })}`;
 }
