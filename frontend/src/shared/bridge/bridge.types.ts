@@ -14,7 +14,11 @@ export interface BridgeEnvelope extends BridgeMessage {
   v: 1;
 }
 
-/** 웹이 앱에 보내는 메시지 전체 목록. 앱 App.tsx의 CAPABILITIES_BY_DOMAIN이 받는 목록과 같아야 한다. */
+/**
+ * 웹이 앱에 보내는 메시지 전체 목록. 앱 App.tsx의 CAPABILITIES_BY_DOMAIN이 받는 목록과 같아야 한다.
+ * payload 값이 늘면 새 type을 만든다. 옛 앱이 새 type을 모를 때는 웹이 정한다:
+ * 보조 피드백은 가까운 값으로 대신하고, 사용자가 누르는 기능과 결과가 중요한 요청은 숨긴다.
+ */
 export type AppCommands = NativeMapBridgeCommands & HapticCommands;
 export type AppCommandType = keyof AppCommands;
 
