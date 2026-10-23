@@ -19,12 +19,14 @@ export function GroupList() {
   }, [ordering]);
   if (ordering)
     return (
-      <FavoriteEditor
-        onClose={(saved) => {
-          setOrdering(false);
-          if (saved) showNotice((value) => value + 1);
-        }}
-      />
+      <div className={styles.section}>
+        <FavoriteEditor
+          onClose={(saved) => {
+            setOrdering(false);
+            if (saved) showNotice((value) => value + 1);
+          }}
+        />
+      </div>
     );
   return (
     <section className={`${styles.section} amp-mask`} aria-label="즐겨찾기 그룹 관리">

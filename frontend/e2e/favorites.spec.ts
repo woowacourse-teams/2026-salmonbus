@@ -329,6 +329,14 @@ test("손잡이를 끌어서 그룹 순서를 바꾸고 저장한다", async ({ 
   await page.goto("/mypage");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
+  const doneBounds = (await editor.getByRole("button", { name: "완료", exact: true }).boundingBox())!;
+  const logoutBounds = (await page.getByRole("button", { name: "로그아웃", exact: false }).boundingBox())!;
+  expect(logoutBounds.y - doneBounds.y - doneBounds.height).toBeCloseTo(24, 1);
+  await editor
+    .getByRole("list", { name: "그룹 순서", exact: true })
+    .evaluate((element) =>
+      Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished)),
+    );
   const first = await editor.getByRole("button", { name: "즐겨찾기 순서 변경", exact: true }).boundingBox();
   const second = await editor.getByRole("button", { name: "통학 순서 변경", exact: true }).boundingBox();
   await page.mouse.move(first!.x + first!.width / 2, first!.y + first!.height / 2);
