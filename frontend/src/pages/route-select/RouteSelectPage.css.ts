@@ -63,6 +63,15 @@ export const searchEntry = style({
 export const searchEntryText = style({
   flex: 1,
   minWidth: 0,
+  height: "100%",
+  padding: 0,
+  border: "none",
+  outline: "none",
+  background: "transparent",
+  // 16px보다 작으면 iOS가 포커스할 때 화면을 확대한다.
+  fontSize: "16px",
+  color: vars.color.textStrong,
+  "::placeholder": { color: vars.color.textSubtle },
 });
 
 export const searchIcon = style({

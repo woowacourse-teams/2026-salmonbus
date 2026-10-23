@@ -32,7 +32,7 @@ export function SearchForm({ value, autoFocus = false, onChange, onClear, onSubm
         ref={inputRef}
         className={styles.input}
         type="text"
-        // 홈에서 들어올 때는 shared/keypad의 openNumericKeypad가 숫자 키패드를 먼저 띄운다. 바꾸면 함께 바꾼다.
+        // 홈 검색바(route-select)가 띄운 숫자 키패드를 그대로 이어받는다. 바꾸면 홈 검색바도 함께 바꾼다.
         inputMode="numeric"
         autoComplete="off"
         autoFocus={autoFocus}

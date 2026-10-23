@@ -1,11 +1,11 @@
-import { Link, useLocation } from "react-router";
+import { useLocation } from "react-router";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { BottomNavigation } from "@/shared/components/BottomNavigation";
 import { Brand } from "@/shared/components/Brand";
 import { LoginButton } from "@/shared/components/LoginButton";
 import { Notice } from "@/shared/components/Notice";
-import { useOpenNumericKeypad } from "@/shared/keypad/NumericKeypadProvider";
 import { paths } from "@/shared/routing/paths";
+import { useNavigateKeepingFocus } from "@/shared/routing/focusKeepingNavigation";
 import { SEARCH_ENTRY_LABEL } from "./routeSelectCopy";
 import * as styles from "./RouteSelectPage.css";
 
@@ -13,7 +13,11 @@ export function RouteSelectPage() {
   const location = useLocation();
   const { state: auth } = useAuth();
   const notice: unknown = location.state?.notice;
-  const openNumericKeypad = useOpenNumericKeypad();
+  const navigateKeepingFocus = useNavigateKeepingFocus();
+
+  // 사용자가 진짜 입력창을 직접 눌러야 iOS가 숫자 키패드를 확실히 띄운다.
+  // 검색 화면으로는 탭 처리가 끝난 click에서 넘어간다. 포커스 순간에 넘어가면 남은 탭 이벤트가 검색 화면에 떨어져 포커스를 빼앗는다.
+  const openRouteSearch = () => navigateKeepingFocus(paths.routeSearch);
 
   return (
     <div className={styles.page}>
@@ -23,21 +27,25 @@ export function RouteSelectPage() {
             <Brand />
           </h1>
           <div className={styles.searchArea}>
-            <Link
-              className={styles.searchEntry}
-              to={paths.routeSearch}
-              onClick={(event) => {
-                // 새 탭으로 여는 클릭은 이 화면에 머물러서, 키패드를 띄우면 넘겨받을 입력창이 없다.
-                if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-                openNumericKeypad();
-              }}
-            >
-              <span className={styles.searchEntryText}>{SEARCH_ENTRY_LABEL}</span>
+            <label className={styles.searchEntry}>
+              <input
+                className={styles.searchEntryText}
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder={SEARCH_ENTRY_LABEL}
+                aria-label={SEARCH_ENTRY_LABEL}
+                onClick={openRouteSearch}
+                onChange={openRouteSearch}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") openRouteSearch();
+                }}
+              />
               <svg className={styles.searchIcon} viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="11" cy="11" r="7" />
                 <path d="m20 20-3.5-3.5" />
               </svg>
-            </Link>
+            </label>
           </div>
         </header>
         <section className={styles.account} aria-label="회원 안내">

@@ -1,6 +1,7 @@
 import { apiPaths, routeId } from "./fixtures/mock-data";
 import { test, expect } from "./fixtures/api";
 import {
+  finishSearchNavigation,
   inServiceSection,
   openRouteSearch,
   pickRoute,
@@ -26,6 +27,16 @@ test("홈에서 검색창을 누르면 검색 화면으로 이동하고 입력�
 
   await expect(routeSearchInput(page)).toBeFocused();
   await expect(routeSearchInput(page)).toHaveValue("");
+});
+
+test("키보드로 홈 검색바에 들어와 Enter를 누르면 검색 화면으로 이동한다", async ({ page }) => {
+  await page.goto("/");
+  await routeSearchEntry(page).focus();
+
+  await routeSearchEntry(page).press("Enter");
+  await finishSearchNavigation(page);
+
+  await expect(routeSearchInput(page)).toBeFocused();
 });
 
 test("노선 조회 실패 후 재시도에 성공하면 노선을 선택할 수 있다", async ({ page, api }) => {
