@@ -6,8 +6,6 @@ import { boardBackLink } from "./utils/verdict-board";
 test.use({
   viewport: { width: 390, height: 844 },
   reducedMotion: "reduce",
-  screenshot: "only-on-failure",
-  trace: "retain-on-failure",
 });
 
 test("노선 조회 실패 후 재시도에 성공하면 노선을 선택할 수 있다", async ({ page, api }) => {

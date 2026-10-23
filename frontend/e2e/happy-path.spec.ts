@@ -6,8 +6,6 @@ import { directionButton, expectDirection, openBoard, targetRow, targetStop } fr
 test.use({
   viewport: { width: 390, height: 844 },
   reducedMotion: "no-preference",
-  screenshot: "only-on-failure",
-  trace: "retain-on-failure",
 });
 
 for (const { direction, label, sequence, expectedArrivals } of [

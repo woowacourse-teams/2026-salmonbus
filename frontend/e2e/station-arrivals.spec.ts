@@ -4,7 +4,7 @@ import { observedAt, routeId, targetStopNames } from "./fixtures/mock-data";
 import { createStationArrivalsData } from "./fixtures/station-arrivals";
 import { directionButton, openBoard, targetRow, targetStop } from "./utils/verdict-board";
 
-test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce", screenshot: "only-on-failure" });
+test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
 
 const now = Date.parse(observedAt) + 1_000;
 const arrivalsPath = "/api/v2/stations/10011/arrivals";

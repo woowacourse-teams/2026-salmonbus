@@ -9,7 +9,7 @@ import {
 } from "./fixtures/mock-data";
 import { test, expect } from "./fixtures/naver-map";
 
-test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce", screenshot: "only-on-failure" });
+test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
 
 function sheet(page: Page) {
   return page.getByRole("region", { name: "판정보드", exact: true });

@@ -18,8 +18,6 @@ const phoneViewport = { width: 390, height: 844 };
 test.use({
   viewport: phoneViewport,
   reducedMotion: "reduce",
-  screenshot: "only-on-failure",
-  trace: "retain-on-failure",
 });
 
 const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
