@@ -27,12 +27,39 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  playwright-version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.lockfile.outputs.version }}
+
+    steps:
+      - name: Checkout lockfile
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          sparse-checkout: frontend/pnpm-lock.yaml
+          sparse-checkout-cone-mode: false
+
+      - name: Read Playwright version from lockfile
+        id: lockfile
+        run: |
+          versions=$(sed -n "s/^  '@playwright\/test@\([0-9][0-9.]*\)':$/\1/p" frontend/pnpm-lock.yaml | sort -u)
+          if [ "$(printf '%s\n' "$versions" | grep -c .)" -ne 1 ]; then
+            echo "::error::pnpm-lock.yaml에서 @playwright/test 버전을 하나로 읽지 못했습니다: $(echo ${versions:-없음})"
+            exit 1
+          fi
+          echo "version=$versions" >> "$GITHUB_OUTPUT"
+
   frontend-build:
+    needs: playwright-version
     runs-on: ubuntu-latest
     timeout-minutes: ${{ github.event_name == 'pull_request' && 30 || 45 }}
+    container:
+      image: mcr.microsoft.com/playwright:v${{ needs.playwright-version.outputs.version }}-noble
+      options: --user 1001 --ipc=host
 
     env:
-      E2E_BROWSERS: ${{ github.event_name == 'pull_request' && 'chromium webkit' || 'chromium firefox webkit' }}
       E2E_PROJECTS: ${{ github.event_name == 'pull_request' && '--project=chromium --project=iphone-15' || '' }}
 
     defaults:
@@ -77,9 +104,6 @@ jobs:
         env:
           APP_VERSION: local
         run: pnpm exec webpack --config webpack/webpack.local.cjs --output-path "$RUNNER_TEMP/local-frontend-build"
-
-      - name: Install Playwright browsers
-        run: pnpm exec playwright install --with-deps $E2E_BROWSERS
 
       - name: Run E2E tests
         run: pnpm test:e2e $E2E_PROJECTS
