@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { deleteFavorite, deleteFavoriteGroup } from "@/shared/api/favorites.api";
 import type { FavoriteGroup, SavedFavorite } from "@/shared/api/favorites.types";
@@ -27,6 +27,19 @@ export function GroupDetails({ group, editing, onEditEnd }: GroupDetailsProps) {
   const favorites = latestSuccessOf(summary)?.body.groups[0]?.favorites ?? [];
   const { busy, error, setError, run } = useFavoriteAction();
   const navigate = useNavigate();
+  const groupDeleteButton = useRef<HTMLButtonElement>(null);
+  const focusAfterDelete = useRef(false);
+  useEffect(() => {
+    if (deleting === null && focusAfterDelete.current) {
+      focusAfterDelete.current = false;
+      groupDeleteButton.current?.focus();
+    }
+  }, [deleting]);
+  const deletingItem =
+    deleting !== null && deleting !== "group" ? favorites.find((item) => item.id === deleting.id) : undefined;
+  const lastCode = group.name.charCodeAt(group.name.length - 1);
+  const objectParticle =
+    lastCode >= 0xac00 && lastCode <= 0xd7a3 ? ((lastCode - 0xac00) % 28 === 0 ? "를" : "을") : " 그룹을";
   if (editing)
     return (
       <>
@@ -66,7 +79,8 @@ export function GroupDetails({ group, editing, onEditEnd }: GroupDetailsProps) {
               <button
                 className={styles.remove}
                 aria-label={`${item?.stop.name || `즐겨찾기 ${index + 1}`} 삭제`}
-                onClick={() => {
+                onClick={(event) => {
+                  event.currentTarget.focus();
                   setError(null);
                   setDeleting(favorite);
                 }}
@@ -80,8 +94,10 @@ export function GroupDetails({ group, editing, onEditEnd }: GroupDetailsProps) {
       {group.favorites.length === 0 && <p className={formStyles.subtle}>아직 등록한 즐겨찾기가 없어요.</p>}
       <div className={styles.groupActions}>
         <button
+          ref={groupDeleteButton}
           className={styles.deleteGroup}
-          onClick={() => {
+          onClick={(event) => {
+            event.currentTarget.focus();
             setError(null);
             setDeleting("group");
           }}
@@ -91,44 +107,63 @@ export function GroupDetails({ group, editing, onEditEnd }: GroupDetailsProps) {
       </div>
       {deleting !== null && (
         <ConfirmDialog
+          className={deleting === "group" ? styles.dialog : `${styles.dialog} ${styles.favoriteDialog}`}
+          titleClassName={deleting === "group" ? styles.groupTitle : styles.dialogTitle}
+          fallbackFocus={groupDeleteButton}
           title={
             lastGroup
               ? "마지막 그룹은 삭제할 수 없어요"
               : deleting === "group"
-                ? `${group.name} 그룹을 삭제할까요?`
-                : "즐겨찾기를 삭제할까요?"
+                ? `${group.name}${objectParticle} 삭제할까요?`
+                : "정말 삭제 하시겠습니까?"
           }
           onCancel={() => {
             if (!busy) setDeleting(null);
           }}
         >
-          <p className={formStyles.subtle}>
-            {lastGroup
-              ? "즐겨찾기를 담을 그룹을 한 개 이상 남겨 주세요."
-              : deleting === "group"
-                ? "그룹 안의 즐겨찾기도 함께 삭제돼요. 다른 그룹의 즐겨찾기는 유지돼요."
-                : "이 그룹에서만 즐겨찾기를 삭제해요."}
-          </p>
+          {deleting !== "group" && (
+            <div className={styles.target}>
+              <div className={styles.targetHeading}>
+                <RouteBadge>{deletingItem?.route.displayName || "노선 정보 없음"}</RouteBadge>
+                <span className={styles.targetStop}>{deletingItem?.stop.name || "정류장 정보 없음"}</span>
+              </div>
+              <span className={styles.direction}>
+                {deletingItem?.route.terminalStopName?.trim()
+                  ? `${deletingItem.route.terminalStopName.trim()} 방면`
+                  : deleting.direction === "UP"
+                    ? "상행"
+                    : "하행"}
+              </span>
+            </div>
+          )}
+          {deleting === "group" && (
+            <p className={styles.description}>
+              {lastGroup
+                ? "즐겨찾기를 담을 그룹을 한 개 이상 남겨 주세요."
+                : `이 그룹과 즐겨찾기 ${group.favorites.length}개가 함께 삭제돼요. 다른 그룹에 저장된 즐겨찾기는 그대로 유지돼요.`}
+            </p>
+          )}
           {error && (
             <p className={formStyles.error} role="alert">
               {error}
             </p>
           )}
-          <div className={formStyles.actions}>
+          <div className={deleting === "group" ? styles.groupDialogActions : styles.dialogActions}>
             {lastGroup ? (
-              <button className={buttons.primary} onClick={() => setDeleting(null)}>
+              <button className={styles.confirm} onClick={() => setDeleting(null)}>
                 확인
               </button>
             ) : (
               <>
                 <button
-                  className={buttons.primary}
+                  className={styles.confirm}
                   disabled={busy}
                   onClick={() =>
                     void run(() =>
                       deleting === "group" ? deleteFavoriteGroup(group.id) : deleteFavorite(group.id, deleting.id),
                     ).then((ok) => {
                       if (!ok) return;
+                      focusAfterDelete.current = deleting !== "group";
                       setDeleting(null);
                       if (deleting === "group")
                         void navigate("/mypage", { replace: true, state: { notice: "그룹을 삭제했어요" } });
@@ -137,7 +172,7 @@ export function GroupDetails({ group, editing, onEditEnd }: GroupDetailsProps) {
                 >
                   {busy ? "삭제 중…" : "삭제"}
                 </button>
-                <button className={buttons.secondary} disabled={busy} onClick={() => setDeleting(null)}>
+                <button className={styles.cancel} disabled={busy} onClick={() => setDeleting(null)}>
                   취소
                 </button>
               </>
