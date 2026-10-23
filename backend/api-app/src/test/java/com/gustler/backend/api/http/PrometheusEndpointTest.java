@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import com.gustler.backend.support.PostgresTestContainer;
+import com.gustler.backend.api.monitoring.UserMonitoring;
+import com.gustler.backend.api.monitoring.UserMonitoring.LoginResult;
+import com.gustler.backend.api.monitoring.UserMonitoring.MemberKind;
+import com.gustler.backend.member.api.LoginProvider;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -39,6 +43,9 @@ class PrometheusEndpointTest {
 
     @Autowired
     private DataSource dataSource;
+
+    @Autowired
+    private UserMonitoring userMonitoring;
 
     @Test
     void DB에서_API_연결을_구분할_이름을_설정한다() throws Exception {
@@ -113,6 +120,30 @@ class PrometheusEndpointTest {
                     .anyMatch(line -> Double.parseDouble(line.substring(line.lastIndexOf(' ') + 1)) >= 1);
             });
         }
+    }
+
+    @Test
+    void 사용자_지표는_관리_포트에만_노출하고_사용자_식별값을_싣지_않는다() throws Exception {
+        // given
+        userMonitoring.refreshCurrentMembers();
+        userMonitoring.succeeded(LoginProvider.KAKAO);
+        userMonitoring.login(LoginProvider.KAKAO, LoginResult.SUCCESS, MemberKind.NEW);
+
+        // when
+        String metrics = get(managementPort, "/actuator/prometheus").body();
+
+        // then
+        assertThat(metrics.lines().filter(line -> line.startsWith("salmonbus_users_current{")))
+            .anyMatch(line -> line.contains("application=\"backend-api\""));
+        assertThat(metrics.lines().filter(line -> line.startsWith("salmonbus_users_snapshot_timestamp{")))
+            .anyMatch(line -> line.contains("application=\"backend-api\""));
+        assertThat(metrics.lines().filter(line -> line.startsWith("salmonbus_user_registration_total{")))
+            .anyMatch(line -> line.contains("provider=\"kakao\"") && line.contains("result=\"success\""));
+        assertThat(metrics.lines().filter(line -> line.startsWith("salmonbus_user_login_total{")))
+            .anyMatch(line -> line.contains("provider=\"kakao\"") && line.contains("result=\"success\"")
+                && line.contains("member=\"new\""));
+        assertThat(metrics).doesNotContain("public_id", "email", "token", "subject");
+        assertThat(get(publicPort, "/actuator/prometheus").statusCode()).isEqualTo(404);
     }
 
     private HttpResponse<String> get(final int port, String path) throws Exception {

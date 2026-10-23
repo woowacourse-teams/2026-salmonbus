@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.api.favorite.application.DefaultFavoriteGroupService;
+import com.gustler.backend.api.monitoring.UserMonitoring;
 import com.gustler.backend.member.api.RefreshTokens;
 import com.gustler.backend.member.api.SignInWithSocialAccount;
 import com.gustler.backend.member.api.WithdrawMember;
@@ -33,6 +34,7 @@ class AppleLoginConfigurationTest {
         .withBean(RefreshTokens.class, () -> Mockito.mock(RefreshTokens.class))
         .withBean(WithdrawMember.class, () -> Mockito.mock(WithdrawMember.class))
         .withBean(DefaultFavoriteGroupService.class, () -> Mockito.mock(DefaultFavoriteGroupService.class))
+        .withBean(UserMonitoring.class, () -> Mockito.mock(UserMonitoring.class))
         .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
         .withPropertyValues(
             "auth.public-base-url=https://www.salmonbus.test",
@@ -77,6 +79,7 @@ class AppleLoginConfigurationTest {
             .withBean(SignInWithSocialAccount.class, () -> identity -> null)
             .withBean(RefreshTokens.class, () -> Mockito.mock(RefreshTokens.class))
             .withBean(DefaultFavoriteGroupService.class, () -> Mockito.mock(DefaultFavoriteGroupService.class))
+            .withBean(UserMonitoring.class, () -> Mockito.mock(UserMonitoring.class))
             .run(context -> assertThat(context).hasNotFailed());
     }
 

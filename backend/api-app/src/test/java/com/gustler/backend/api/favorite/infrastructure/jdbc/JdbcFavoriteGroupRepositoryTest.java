@@ -65,7 +65,7 @@ class JdbcFavoriteGroupRepositoryTest {
     void 기본_그룹은_여러_번_요청해도_한_개만_만든다() {
         // given
         UUID member = insertMember("연어하나");
-        FavoriteGroup firstCandidate = emptyGroup("즐겨찾기");
+        FavoriteGroup firstCandidate = emptyGroup("출퇴근");
         FavoriteGroup secondCandidate = emptyGroup("다른 이름");
 
         // when

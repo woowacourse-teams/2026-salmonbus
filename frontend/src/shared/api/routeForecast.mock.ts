@@ -3,9 +3,10 @@ import type {
   Board,
   ErrorCode,
   ErrorResponse,
-  LiveVehicles,
   RouteListResponse,
+  RouteWatch,
   StopState,
+  Vehicle,
 } from "./routeForecast.types";
 
 export const routeListMock = {
@@ -358,7 +359,7 @@ const liveVehicleFixtures = [
     phase: "DEPARTED",
     seat: { kind: "UNKNOWN" },
   },
-] satisfies LiveVehicles["vehicles"];
+] satisfies Vehicle[];
 
 const MAX_MOCK_FORECAST_HORIZON = 12;
 
@@ -452,6 +453,11 @@ export const boardMock = {
   })),
 } satisfies Board;
 
+export const routeWatchMock = {
+  ...boardMock,
+  vehicles: liveVehicleFixtures,
+} satisfies RouteWatch;
+
 export const boardClosedMock = {
   route: boardMock.route,
   observedAt: "2026-08-18T23:58:20+09:00",
@@ -469,60 +475,6 @@ export const boardQuietMock = {
   vehiclesInService: 1,
   stops: route3330Stops.map((stop) => ({ ...stop, approachingVehicles: [] })),
 } satisfies Board;
-
-export const liveVehiclesMock = {
-  routeId: "204000057",
-  referenceVersionId: "1",
-  observation: {
-    state: "VEHICLES_PRESENT",
-    observedAt: "2026-09-03T08:12:31+09:00",
-    staleAt: "2026-09-03T08:17:31+09:00",
-  },
-  vehicles: liveVehicleFixtures,
-} satisfies LiveVehicles;
-
-export const liveVehiclesEmptyMock = {
-  routeId: "204000057",
-  referenceVersionId: "1",
-  observation: {
-    state: "NO_VEHICLES_OBSERVED",
-    observedAt: "2026-08-18T23:59:02+09:00",
-    staleAt: "2026-08-19T00:04:02+09:00",
-  },
-  vehicles: [],
-} satisfies LiveVehicles;
-
-export const liveVehiclesUnknownMock = {
-  routeId: "204000057",
-  referenceVersionId: "1",
-  observation: {
-    state: "UNKNOWN",
-    observedAt: null,
-    staleAt: null,
-  },
-  vehicles: [],
-} satisfies LiveVehicles;
-
-export const liveVehiclesRevisedMock = {
-  routeId: "204000057",
-  referenceVersionId: "2",
-  observation: {
-    state: "VEHICLES_PRESENT",
-    observedAt: "2026-08-25T09:40:12+09:00",
-    staleAt: "2026-08-25T09:45:12+09:00",
-  },
-  vehicles: [
-    {
-      vehicleId: "V-3330-UP-05",
-      direction: "UP",
-      currentStopSequence: 8,
-      stopId: "205000175",
-      stopName: "매화마을주공3단지",
-      phase: "IN_TRANSIT",
-      seat: { kind: "EXACT", remaining: 27 },
-    },
-  ],
-} satisfies LiveVehicles;
 
 export const errorResponseMocks = {
   UNAUTHENTICATED: { code: "UNAUTHENTICATED", message: "로그인이 필요합니다.", requestId: "req-auth" },

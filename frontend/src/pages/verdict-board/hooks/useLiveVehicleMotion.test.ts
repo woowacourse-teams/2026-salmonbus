@@ -1,5 +1,5 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import { boardWith, liveVehiclesWith, stopAt, vehicleAt } from "@/testing/fixtures";
+import { boardWith, stopAt, vehicleAt } from "@/testing/fixtures";
 import type { Phase } from "@/shared/api/routeForecast.types";
 import { liveVehicleViewsFor, type LiveVehicleView } from "../components/liveVehiclePolicy";
 import { createLiveVehicleMotionStore, type LiveVehicleMotionStore } from "./useLiveVehicleMotion";
@@ -9,7 +9,7 @@ const DURATION = 20_000;
 function viewFor(phase: Phase, sequence = 1, board = boardWith()): LiveVehicleView {
   return liveVehicleViewsFor(
     board,
-    liveVehiclesWith([vehicleAt(sequence, { vehicleId: "moving-bus", phase, direction: "UP" })]),
+    [vehicleAt(sequence, { vehicleId: "moving-bus", phase, direction: "UP" })],
     "UP",
   )[0]!;
 }

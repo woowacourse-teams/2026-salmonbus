@@ -1,5 +1,6 @@
 export const paths = {
   routeSelect: "/",
+  routeSearch: "/search",
   board: "/routes/:routeId",
   login: "/login",
   mypage: "/mypage",

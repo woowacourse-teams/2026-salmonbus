@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
 /** 회원이 즐겨찾기 기능을 사용할 때 최소 한 개의 그룹을 갖도록 보장한다. */
 @Service
 public class DefaultFavoriteGroupService {
-    static final String DEFAULT_GROUP_NAME = "즐겨찾기";
+    static final String DEFAULT_GROUP_NAME = "출퇴근";
 
     private final FavoriteGroupRepository repository;
 

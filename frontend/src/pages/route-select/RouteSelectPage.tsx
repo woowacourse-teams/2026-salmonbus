@@ -1,38 +1,25 @@
-import { useLocation, useNavigate } from "react-router";
+import { useLocation } from "react-router";
 import { useAuth } from "@/shared/hooks/useAuth";
-import { Brand } from "@/shared/components/Brand";
 import { BottomNavigation } from "@/shared/components/BottomNavigation";
+import { Brand } from "@/shared/components/Brand";
 import { LoginButton } from "@/shared/components/LoginButton";
 import { Notice } from "@/shared/components/Notice";
-import { track } from "@/shared/analytics/track";
-import type { RouteSummary } from "@/shared/api/routeForecast.types";
-import { boardPathFor } from "@/shared/routing/paths";
-import { routeSelectedPropertiesOf, unmatchedQueryOf } from "./analytics/searchEventPolicy";
-import { useUnmatchedSearchEvent } from "./analytics/useUnmatchedSearchEvent";
-import { SearchForm } from "./components/SearchForm";
-import { SearchResults } from "./components/SearchResults";
-import { submitTargetFor } from "./displayPolicy";
-import { useRouteSearch } from "./useRouteSearch";
+import { paths } from "@/shared/routing/paths";
+import { useNavigateKeepingFocus } from "@/shared/routing/focusKeepingNavigation";
+import { routeSearchStateFor } from "@/shared/routing/routeSearchEntry";
+import { SEARCH_ENTRY_LABEL } from "./routeSelectCopy";
 import * as styles from "./RouteSelectPage.css";
 
 export function RouteSelectPage() {
-  const navigate = useNavigate();
   const location = useLocation();
   const { state: auth } = useAuth();
   const notice: unknown = location.state?.notice;
-  const { input, view, changeInput, retry } = useRouteSearch();
-  useUnmatchedSearchEvent(unmatchedQueryOf(view, input));
+  const navigateKeepingFocus = useNavigateKeepingFocus();
 
-  const handleSelect = (route: RouteSummary, position: number) => {
-    if (view.kind !== "matched") return;
-    track("route_selected", routeSelectedPropertiesOf(route, position, view.routes.length));
-    void navigate(boardPathFor(route.id));
-  };
-
-  const handleSubmit = () => {
-    const route = submitTargetFor(view);
-    if (route) handleSelect(route, 0);
-  };
+  // 사용자가 진짜 입력창을 직접 눌러야 iOS가 숫자 키패드를 확실히 띄운다.
+  // 검색 화면으로는 탭 처리가 끝난 click에서 넘어간다. 포커스 순간에 넘어가면 남은 탭 이벤트가 검색 화면에 떨어져 포커스를 빼앗는다.
+  const openRouteSearch = () => navigateKeepingFocus(paths.routeSearch);
+  const openRouteSearchWith = (input: string) => navigateKeepingFocus(paths.routeSearch, routeSearchStateFor(input));
 
   return (
     <div className={styles.page}>
@@ -42,21 +29,36 @@ export function RouteSelectPage() {
             <Brand />
           </h1>
           <div className={styles.searchArea}>
-            <SearchForm value={input} onChange={changeInput} onClear={() => changeInput("")} onSubmit={handleSubmit} />
-            <SearchResults view={view} onSelect={handleSelect} onRetry={retry} />
+            <label className={styles.searchEntry}>
+              <input
+                className={styles.searchEntryText}
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder={SEARCH_ENTRY_LABEL}
+                aria-label={SEARCH_ENTRY_LABEL}
+                onClick={openRouteSearch}
+                onChange={(event) => openRouteSearchWith(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") openRouteSearch();
+                }}
+              />
+              <svg className={styles.searchIcon} viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
+            </label>
           </div>
         </header>
-        {input === "" && (
-          <section className={styles.account} aria-label="회원 안내">
-            {auth.status === "authenticated" ? (
-              <p className={styles.welcome}>어서오세요 연어버스입니다!</p>
-            ) : auth.status === "loading" ? (
-              <p>로그인 상태를 확인하고 있어요…</p>
-            ) : (
-              <LoginButton returnTo="/" />
-            )}
-          </section>
-        )}
+        <section className={styles.account} aria-label="회원 안내">
+          {auth.status === "authenticated" ? (
+            <p className={styles.welcome}>어서오세요 연어버스입니다!</p>
+          ) : auth.status === "loading" ? (
+            <p>로그인 상태를 확인하고 있어요…</p>
+          ) : (
+            <LoginButton returnTo="/" />
+          )}
+        </section>
       </main>
       <BottomNavigation />
       {typeof notice === "string" && <Notice key={notice} message={notice} />}

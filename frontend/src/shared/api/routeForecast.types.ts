@@ -124,17 +124,6 @@ export interface Vehicle {
   seat: SeatInfo;
 }
 
-export type ObservationState = "VEHICLES_PRESENT" | "NO_VEHICLES_OBSERVED" | "UNKNOWN";
-
-export interface Observation {
-  state: ObservationState;
-  observedAt: string | null;
-  staleAt: string | null;
-}
-
-export interface LiveVehicles {
-  routeId: string;
-  referenceVersionId: string;
-  observation: Observation;
+export interface RouteWatch extends Board {
   vehicles: Vehicle[];
 }
