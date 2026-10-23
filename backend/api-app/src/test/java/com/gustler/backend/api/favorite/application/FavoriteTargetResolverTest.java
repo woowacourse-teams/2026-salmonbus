@@ -10,8 +10,7 @@ import com.gustler.backend.api.favorite.FavoriteTargetUnavailableException;
 import com.gustler.backend.api.favorite.domain.FavoriteDirection;
 import com.gustler.backend.api.favorite.domain.FavoriteTarget;
 import com.gustler.backend.api.route.application.RouteGeometryQueryRepository;
-import com.gustler.backend.api.route.application.RouteGeometryQueryRepository.Reference;
-import com.gustler.backend.api.route.domain.RouteGeometry.Stop;
+import com.gustler.backend.api.route.domain.RouteGeometry;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -23,7 +22,7 @@ class FavoriteTargetResolverTest {
 
     @Test
     void 현재_판본의_유일한_승차_방문을_찾는다() {
-        routeStops(new Stop(TARGET.stopId(), 1, "강남역", "UP", true, null));
+        routeStops(new RouteGeometry.Stop(TARGET.stopId(), 1, "강남역", "UP", true, null));
 
         assertThat(resolver.requireAvailable(TARGET)).isEqualTo(TARGET);
     }
@@ -39,8 +38,8 @@ class FavoriteTargetResolverTest {
     @Test
     void 같은_정류장의_다른_방향은_선택한_방문으로_구분한다() {
         routeStops(
-            new Stop(TARGET.stopId(), 1, "강남역", "UP", true, null),
-            new Stop(TARGET.stopId(), 9, "강남역", "DOWN", true, null));
+            new RouteGeometry.Stop(TARGET.stopId(), 1, "강남역", "UP", true, null),
+            new RouteGeometry.Stop(TARGET.stopId(), 9, "강남역", "DOWN", true, null));
 
         assertThat(resolver.requireAvailable(TARGET)).isEqualTo(TARGET);
     }
@@ -48,16 +47,23 @@ class FavoriteTargetResolverTest {
     @Test
     void 같은_방향의_승차_방문이_여러_개면_임의로_고르지_않는다() {
         routeStops(
-            new Stop(TARGET.stopId(), 1, "강남역", "UP", true, null),
-            new Stop(TARGET.stopId(), 9, "강남역", "UP", true, null));
+            new RouteGeometry.Stop(TARGET.stopId(), 1, "강남역", "UP", true, null),
+            new RouteGeometry.Stop(TARGET.stopId(), 9, "강남역", "UP", true, null));
 
         assertThatThrownBy(() -> resolver.requireAvailable(TARGET))
             .isInstanceOf(FavoriteTargetAmbiguousException.class);
     }
 
-    private void routeStops(Stop... stops) {
+    private void routeStops(RouteGeometry.Stop... stops) {
         when(routes.reference(TARGET.routeId()))
-            .thenReturn(Optional.of(new Reference(TARGET.routeId(), 12L, "노선", "기점", "종점", null)));
+            .thenReturn(Optional.of(new RouteGeometryQueryRepository.Reference(
+                TARGET.routeId(),
+                12L,
+                "노선",
+                "기점",
+                "종점",
+                null
+            )));
         when(routes.stops(12L)).thenReturn(List.of(stops));
     }
 }

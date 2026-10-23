@@ -1,6 +1,6 @@
 import { test, expect, testMember, redirectAuth } from "./fixtures/auth";
 import contract from "../../contract/auth-v1.openapi.json" with { type: "json" };
-import { routeButton, routeSearchInput } from "./utils/route-select";
+import { selectRoute } from "./utils/route-select";
 import { routeId } from "./fixtures/mock-data";
 
 test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
@@ -17,7 +17,7 @@ for (const { name, path } of [
     await expect(page).toHaveURL(`/login?${new URLSearchParams({ returnTo: path })}`);
     await page.getByRole("button", { name: "카카오로 계속하기" }).click();
     await expect(page).toHaveURL(path);
-    await expect(page.getByText(path === "/" ? "어서오세요 연어버스입니다!" : "살몽님", { exact: true })).toBeVisible();
+    await expect(page.getByText(path === "/" ? "등록된 즐겨찾기가 없어요" : "살몽님", { exact: true })).toBeVisible();
     expect(auth.requests.some((request) => request.path === "/api/auth/kakao/start")).toBe(true);
   });
 }
@@ -28,9 +28,7 @@ test("인증 API가 꺼져 있어도 노선을 검색하고 판정보드에 진�
   await expect(page.getByText("로그인 기능을 준비 중이에요. 노선 검색은 계속 이용할 수 있어요.")).toBeVisible();
   await expect(page.getByRole("button", { name: "카카오로 계속하기" })).toBeDisabled();
   await page.getByRole("link", { name: "돌아가기" }).click();
-  await routeSearchInput(page).fill("3330");
-  await routeButton(page).click();
-  await expect(page).toHaveURL(`/routes/${routeId}`);
+  await selectRoute(page);
 });
 
 for (const loginResult of ["failed", "cancelled"] as const) {
@@ -79,6 +77,8 @@ test("닉네임 중복 오류 후 입력을 수정해 저장하고 재접속해�
   auth.member = { ...testMember };
   auth.nicknameError = "NICKNAME_TAKEN";
   await page.goto("/mypage");
+  await page.getByText(`${testMember.nickname}님`, { exact: true }).click();
+  await expect(page).toHaveURL("/mypage");
   await page.getByRole("link", { name: "닉네임 수정" }).click();
   const input = page.getByRole("textbox", { name: "닉네임", exact: true });
   await input.fill("연어");
@@ -146,6 +146,7 @@ for (const action of ["로그아웃", "회원탈퇴"] as const) {
     await page.getByRole("dialog").getByRole("button", { name: action, exact: true }).click();
     await expect(page).toHaveURL("/");
     await expect(page.getByRole("link", { name: "로그인 / 회원가입", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "내 정류장을 저장해 보세요", exact: true })).toBeVisible();
   });
 }
 
@@ -198,7 +199,7 @@ test("Apple 탈퇴 시작이 401이면 갱신 후 같은 요청을 재시도한�
 });
 
 test("방면·정류장이 담긴 판정보드 주소는 로그인 후에도 유지한다", async ({ page, api }) => {
-  const stop = api.data.board.stops.find((candidate) => candidate.direction === "DOWN" && candidate.boardingAllowed)!;
+  const stop = api.data.watch.stops.find((candidate) => candidate.direction === "DOWN" && candidate.boardingAllowed)!;
   const returnTo = `/routes/${routeId}?direction=DOWN&stopId=${stop.stopId}`;
   await page.goto(`/login?${new URLSearchParams({ returnTo })}`);
   await page.getByRole("button", { name: "카카오로 계속하기" }).click();
@@ -240,5 +241,5 @@ test("닉네임 저장 중 홈으로 이동하면 늦은 응답이 마이페이�
   await (await response).finished();
   await page.clock.runFor(32);
   await expect(page).toHaveURL("/");
-  await expect(page.getByText("어서오세요 연어버스입니다!")).toBeVisible();
+  await expect(page.getByText("등록된 즐겨찾기가 없어요", { exact: true })).toBeVisible();
 });

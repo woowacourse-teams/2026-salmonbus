@@ -433,15 +433,6 @@ public final class ApiDocsExamples {
         }
         """;
 
-    public static final String CHAT_ROOM = """
-        {
-          "routeId": "123456789",
-          "displayName": "예시 노선",
-          "historySize": 50,
-          "maxBodyCodePoints": 200
-        }
-        """;
-
     public static final String INVALID_ROUTE = """
         {
           "code": "INVALID_ROUTE_ID",

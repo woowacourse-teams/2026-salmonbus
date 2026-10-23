@@ -1,0 +1,1 @@
+export { FavoriteGroupPage } from "./FavoriteGroupPage";

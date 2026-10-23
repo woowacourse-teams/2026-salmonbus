@@ -9,17 +9,8 @@ import com.gustler.backend.api.board.domain.DirectionInfo;
 import com.gustler.backend.api.board.domain.RouteHeadways;
 import com.gustler.backend.api.board.domain.VehicleForecast;
 import com.gustler.backend.api.favorite.application.FavoriteOverview;
-import com.gustler.backend.api.favorite.application.FavoriteOverview.BoardSlice;
-import com.gustler.backend.api.favorite.application.FavoriteOverview.Eta;
-import com.gustler.backend.api.favorite.application.FavoriteOverview.EtaReason;
-import com.gustler.backend.api.favorite.application.FavoriteOverview.Group;
-import com.gustler.backend.api.favorite.application.FavoriteOverview.Item;
-import com.gustler.backend.api.favorite.application.FavoriteOverview.ItemReason;
-import com.gustler.backend.api.favorite.application.FavoriteOverview.ItemStatus;
-import com.gustler.backend.api.favorite.application.FavoriteOverview.Stop;
-import com.gustler.backend.api.favorite.application.FavoriteOverview.Vehicle;
-import com.gustler.backend.api.favorite.domain.FavoriteTarget;
 import com.gustler.backend.api.favorite.domain.FavoriteDirection;
+import com.gustler.backend.api.favorite.domain.FavoriteTarget;
 import com.gustler.backend.api.route.domain.RouteStatus;
 import java.util.List;
 import java.util.UUID;
@@ -39,13 +30,30 @@ class FavoriteOverviewResponseTest {
             "12", RouteHeadways.none());
         ApproachingVehicle watch = new ApproachingVehicle("vehicle-1", 2,
             new VehicleForecast.Available(0.8, 12.0));
-        Stop stop = new Stop(TARGET.stopId(), "강남역", BoardDirection.UP,
-            List.of(new Vehicle(watch, Eta.unavailable(EtaReason.ARRIVAL_UNAVAILABLE))));
-        Item item = new Item(UUID.randomUUID(), TARGET, ItemStatus.READY, null,
-            new BoardSlice(route, stop));
+        FavoriteOverview.Stop stop = new FavoriteOverview.Stop(
+            TARGET.stopId(),
+            "강남역",
+            BoardDirection.UP,
+            List.of(new FavoriteOverview.Vehicle(
+                watch,
+                FavoriteOverview.Eta.unavailable(FavoriteOverview.EtaReason.ARRIVAL_UNAVAILABLE)
+            ))
+        );
+        FavoriteOverview.Item item = new FavoriteOverview.Item(
+            UUID.randomUUID(),
+            TARGET,
+            FavoriteOverview.ItemStatus.READY,
+            null,
+            new FavoriteOverview.BoardSlice(route, stop)
+        );
 
         JsonNode body = json.valueToTree(FavoriteOverviewResponse.from(
-            new FavoriteOverview(List.of(new Group(UUID.randomUUID(), "출근", List.of(item))))));
+            new FavoriteOverview(List.of(new FavoriteOverview.Group(
+                UUID.randomUUID(),
+                "출근",
+                List.of(item)
+            )))
+        ));
         JsonNode actual = body.at("/groups/0/favorites/0");
 
         assertThat(actual.at("/route/id").asString()).isEqualTo(TARGET.routeId());
@@ -64,11 +72,21 @@ class FavoriteOverviewResponseTest {
 
     @Test
     void 판정보드를_읽지_못한_항목도_저장_대상과_상태를_남긴다() {
-        Item item = new Item(UUID.randomUUID(), TARGET, ItemStatus.UNAVAILABLE,
-            ItemReason.OBSERVATION_UNAVAILABLE, null);
+        FavoriteOverview.Item item = new FavoriteOverview.Item(
+            UUID.randomUUID(),
+            TARGET,
+            FavoriteOverview.ItemStatus.UNAVAILABLE,
+            FavoriteOverview.ItemReason.OBSERVATION_UNAVAILABLE,
+            null
+        );
 
         JsonNode body = json.valueToTree(FavoriteOverviewResponse.from(
-            new FavoriteOverview(List.of(new Group(UUID.randomUUID(), "출근", List.of(item))))));
+            new FavoriteOverview(List.of(new FavoriteOverview.Group(
+                UUID.randomUUID(),
+                "출근",
+                List.of(item)
+            )))
+        ));
         JsonNode actual = body.at("/groups/0/favorites/0");
 
         assertThat(actual.at("/route/id").asString()).isEqualTo(TARGET.routeId());

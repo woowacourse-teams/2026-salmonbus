@@ -56,7 +56,7 @@ class ArrivalSettingsServerTest {
                 fixture.host.identity(), "test-volume", "b".repeat(40), fixture.host.account().gid());
         assertTrue(before.equals(FileOps.sha(destination.resolve(ArrivalSettings.FILE))));
         assertEquals(0600, FileOps.attribute(destination.resolve(ArrivalSettings.FILE), "mode") & 0777);
-        for (var name : java.util.List.of("api", "worker", "postgres", "mongodb")) {
+        for (var name : java.util.List.of("api", "worker", "postgres")) {
             assertTrue(FileOps.sha(fixture.layout.config().resolve(name + ".env"))
                     .equals(FileOps.sha(destination.resolve(name + ".env"))));
         }

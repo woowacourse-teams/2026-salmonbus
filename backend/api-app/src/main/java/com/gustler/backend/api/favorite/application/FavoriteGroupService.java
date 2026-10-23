@@ -4,13 +4,14 @@ import com.gustler.backend.api.error.UnauthenticatedException;
 import com.gustler.backend.api.favorite.FavoriteGroupNameConflictException;
 import com.gustler.backend.api.favorite.FavoriteGroupNotFoundException;
 import com.gustler.backend.api.favorite.InvalidFavoriteGroupNameException;
-import com.gustler.backend.api.favorite.InvalidFavoriteGroupOrderException;
+import com.gustler.backend.api.favorite.InvalidFavoriteOrderException;
 import com.gustler.backend.api.favorite.InvalidFavoriteRequestException;
 import com.gustler.backend.api.favorite.domain.Favorite;
 import com.gustler.backend.api.favorite.domain.FavoriteDirection;
 import com.gustler.backend.api.favorite.domain.FavoriteGroup;
 import com.gustler.backend.api.favorite.domain.FavoriteGroupId;
 import com.gustler.backend.api.favorite.domain.FavoriteGroupName;
+import com.gustler.backend.api.favorite.domain.FavoriteGroupOrder;
 import com.gustler.backend.api.favorite.domain.FavoriteId;
 import com.gustler.backend.api.favorite.domain.FavoriteTarget;
 import com.gustler.backend.api.favorite.domain.MemberFavoriteGroups;
@@ -40,8 +41,8 @@ public class FavoriteGroupService {
         if (initialFavorite != null) {
             targetResolver.requireAvailable(initialFavorite);
         }
-        FavoriteGroup created = new FavoriteGroup(new FavoriteGroupId(UUID.randomUUID()), name,
-            initialFavorite == null ? List.of() : List.of(new Favorite(new FavoriteId(UUID.randomUUID()), initialFavorite)));
+        List<Favorite> favorites = initialFavorites(initialFavorite);
+        FavoriteGroup created = new FavoriteGroup(new FavoriteGroupId(UUID.randomUUID()), name, favorites);
         return repository.update(memberPublicId, groups -> {
             requireUniqueName(groups, name, null);
             return groups.append(created);
@@ -68,21 +69,52 @@ public class FavoriteGroupService {
 
     public void reorder(UUID memberPublicId, List<UUID> rawGroupIds) {
         if (rawGroupIds == null) {
-            throw new InvalidFavoriteGroupOrderException();
+            throw new InvalidFavoriteOrderException();
         }
         List<FavoriteGroupId> groupIds;
         try {
             groupIds = rawGroupIds.stream().map(FavoriteGroupId::new).toList();
         } catch (RuntimeException exception) {
-            throw new InvalidFavoriteGroupOrderException();
+            throw new InvalidFavoriteOrderException();
         }
         repository.update(memberPublicId, groups -> {
             try {
                 return groups.reorder(groupIds);
             } catch (IllegalArgumentException exception) {
-                throw new InvalidFavoriteGroupOrderException();
+                throw new InvalidFavoriteOrderException();
             }
         }).orElseThrow(UnauthenticatedException::new);
+    }
+
+    public void reorderAll(UUID memberPublicId, List<Order> rawOrders) {
+        if (rawOrders == null) {
+            throw new InvalidFavoriteOrderException();
+        }
+        List<FavoriteGroupOrder> orders;
+        try {
+            orders = rawOrders.stream()
+                .map(order -> new FavoriteGroupOrder(
+                    new FavoriteGroupId(order.groupId()),
+                    order.favoriteIds().stream().map(FavoriteId::new).toList()))
+                .toList();
+        } catch (RuntimeException exception) {
+            throw new InvalidFavoriteOrderException();
+        }
+        repository.update(memberPublicId, groups -> {
+            try {
+                return groups.reorderAll(orders);
+            } catch (IllegalArgumentException exception) {
+                throw new InvalidFavoriteOrderException();
+            }
+        }).orElseThrow(UnauthenticatedException::new);
+    }
+
+    public record Order(UUID groupId, List<UUID> favoriteIds) {
+        public Order {
+            if (favoriteIds != null) {
+                favoriteIds = List.copyOf(favoriteIds);
+            }
+        }
     }
 
     public FavoriteTarget targetOf(String routeId, String stopId, FavoriteDirection direction) {
@@ -101,6 +133,13 @@ public class FavoriteGroupService {
         }
     }
 
+    private static List<Favorite> initialFavorites(FavoriteTarget initialFavorite) {
+        if (initialFavorite == null) {
+            return List.of();
+        }
+        return List.of(new Favorite(new FavoriteId(UUID.randomUUID()), initialFavorite));
+    }
+
     private static void requireGroup(MemberFavoriteGroups groups, FavoriteGroupId groupId) {
         if (groups.find(groupId).isEmpty()) {
             throw new FavoriteGroupNotFoundException();
@@ -108,7 +147,7 @@ public class FavoriteGroupService {
     }
 
     private static void requireUniqueName(MemberFavoriteGroups groups, FavoriteGroupName name, FavoriteGroupId except) {
-        boolean duplicate = groups.values().stream()
+        final boolean duplicate = groups.values().stream()
             .anyMatch(group -> group.name().equals(name) && !group.id().equals(except));
         if (duplicate) {
             throw new FavoriteGroupNameConflictException();

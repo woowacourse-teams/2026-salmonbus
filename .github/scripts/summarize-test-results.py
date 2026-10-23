@@ -27,7 +27,6 @@ from pathlib import Path
 
 CONTEXT_STARTED = re.compile(r'Started (\S+) in [0-9.]+ seconds')
 POSTGRES_STARTED = re.compile(r'Container postgres:\S+ started in')
-MONGO_STARTED = re.compile(r'Container mongo:\S+ started in')
 FLYWAY_APPLIED = re.compile(
     r'Successfully applied (\d+) migrations? to schema .*?\(execution time (\d+):(\d+\.\d+)s\)')
 TESTCONTAINERS_VERSION = re.compile(r'Testcontainers version: (\S+)')
@@ -61,7 +60,7 @@ def log_text(suite):
 def new_stats():
     return {
         'classes': 0, 'tests': 0, 'skipped': 0, 'failed': 0, 'seconds': 0.0,
-        'contexts': 0, 'postgres': 0, 'mongo': 0, 'flyway': [],
+        'contexts': 0, 'postgres': 0, 'flyway': [],
     }
 
 
@@ -83,7 +82,6 @@ def collect(roots):
         entry['contexts'] += sum(1 for match in CONTEXT_STARTED.finditer(text)
                                  if match.group(1) != 'GradleWorkerMain')
         entry['postgres'] += len(POSTGRES_STARTED.findall(text))
-        entry['mongo'] += len(MONGO_STARTED.findall(text))
         for match in FLYWAY_APPLIED.finditer(text):
             entry['flyway'].append((int(match.group(1)), int(match.group(2)) * 60 + float(match.group(3))))
         versions.update(TESTCONTAINERS_VERSION.findall(text))
@@ -141,11 +139,11 @@ def summarize(stats, suites, versions, baseline, check, required, out):
     full_migrations = max((count for entry in stats.values() for count, _ in entry['flyway']), default=0)
 
     emit('### 테스트 수와 무거운 자원')
-    emit('실행 = tests - skipped. 컨텍스트·PG·Mongo·Flyway 는 테스트 로그 문구로 센 횟수다.')
+    emit('실행 = tests - skipped. 컨텍스트·PG·Flyway 는 테스트 로그 문구로 센 횟수다.')
     emit()
-    emit('| 태스크 | 클래스 | 실행 | 건너뜀 | 실패 | 실행 기준 | 컨텍스트 | PG | Mongo '
+    emit('| 태스크 | 클래스 | 실행 | 건너뜀 | 실패 | 실행 기준 | 컨텍스트 | PG '
          f'| Flyway {full_migrations}개 적용 | Flyway 합(초) | 클래스 시간 합(초) |')
-    emit('|---|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|')
+    emit('|---|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|')
     for key in sorted(stats, key=lambda name: -stats[name]['seconds']):
         entry = stats[key]
         executed = entry['tests'] - entry['skipped']
@@ -153,7 +151,7 @@ def summarize(stats, suites, versions, baseline, check, required, out):
         check_budgets(key, entry, executed, baseline, warnings)
         applied = [seconds for count, seconds in entry['flyway'] if count == full_migrations]
         emit(f"| {key} | {entry['classes']} | {executed} | {entry['skipped']} | {entry['failed']} | {verdict} "
-             f"| {entry['contexts']} | {entry['postgres']} | {entry['mongo']} "
+             f"| {entry['contexts']} | {entry['postgres']} "
              f"| {len(applied)} | {sum(applied):.2f} | {entry['seconds']:.1f} |")
 
     if sum(entry['postgres'] for entry in stats.values()) > 0 and full_migrations == 0:

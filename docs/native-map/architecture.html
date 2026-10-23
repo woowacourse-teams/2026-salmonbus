@@ -82,7 +82,6 @@ footer { margin-top:28px; padding-top:18px; border-top:1px solid var(--border); 
           <div class="nm-web-transparent"><span class="text-small">투명한 웹 지도 자리</span></div>
           <div class="nm-web-back">뒤로</div>
           <div class="nm-web-locate">내 위치</div>
-          <div class="nm-web-chat">채팅</div>
           <div class="nm-web-sheet">
             <div class="nm-sheet-handle" aria-hidden="true"></div>
             <div class="nm-plane-caption">기존 웹 Bottom Sheet</div>
@@ -109,7 +108,7 @@ footer { margin-top:28px; padding-top:18px; border-top:1px solid var(--border); 
             <button type="button" class="nm-node nm-web-node cursor-interaction" data-layer="web">
               <span class="nm-node-kicker text-small">위 · 기존 웹 UI</span>
               <span>WebView</span>
-              <span class="text-small">Bottom Sheet / 목록 / 버튼 / 채팅</span>
+              <span class="text-small">Bottom Sheet / 목록 / 버튼</span>
             </button>
           </div>
         </div>
@@ -128,7 +127,7 @@ footer { margin-top:28px; padding-top:18px; border-top:1px solid var(--border); 
       <label class="form-label" for="nm-snap">시트 높이 <span class="tabular-nums" id="nm-snap-name">절반</span>
         <input class="form-range" id="nm-snap" type="range" min="0" max="3" step="1" value="1">
       </label>
-      <label class="form-check"><input type="checkbox" class="form-check-input" id="nm-modal"><span class="form-check-label">전체 채팅 열기</span></label>
+      <label class="form-check"><input type="checkbox" class="form-check-input" id="nm-modal"><span class="form-check-label">전체 모달 열기</span></label>
     </div>
     <div class="nm-touch-grid">
       <figure class="nm-touch-figure">
@@ -136,14 +135,13 @@ footer { margin-top:28px; padding-top:18px; border-top:1px solid var(--border); 
           <div class="nm-touch-native"><span>네이버 iOS 지도</span><span class="text-small">이동 · 핀치 줌 · 마커</span></div>
           <div class="nm-touch-back">뒤로</div>
           <div class="nm-touch-locate" id="nm-touch-locate">내 위치</div>
-          <div class="nm-touch-chat" id="nm-touch-chat">채팅</div>
           <div class="nm-touch-sheet" id="nm-touch-sheet">
             <div class="nm-sheet-handle" aria-hidden="true"></div>
             <span>웹 Bottom Sheet</span>
             <span class="text-small">빈 여백도 웹 터치 영역</span>
             <div class="nm-sheet-row">정류장 A</div><div class="nm-sheet-row">정류장 B</div><div class="nm-sheet-row">정류장 C</div>
           </div>
-          <div class="nm-touch-modal" id="nm-touch-modal" hidden><span>전체 채팅 · 웹</span><span class="text-small">뒤 지도 조작 차단 · 접근성 별도 확인</span></div>
+          <div class="nm-touch-modal" id="nm-touch-modal" hidden><span>전체 모달 · 웹</span><span class="text-small">뒤 지도 조작 차단 · 접근성 별도 확인</span></div>
           <span class="nm-tap-dot" id="nm-tap-dot" hidden aria-hidden="true"></span>
         </div>
         <figcaption class="text-small">영역을 누르거나 아래 예시 선택 · 설명용 동작 모형 · 실제 UIKit 터치가 아님</figcaption>
@@ -162,7 +160,6 @@ footer { margin-top:28px; padding-top:18px; border-top:1px solid var(--border); 
       <button type="button" class="btn" data-touch="map">지도에서 시작</button>
       <button type="button" class="btn" data-touch="sheet">시트에서 시작</button>
       <button type="button" class="btn" data-touch="location">내 위치 버튼</button>
-      <button type="button" class="btn" data-touch="chat">채팅에서 시작</button>
     </div>
     <div class="nm-revision text-small" id="nm-layout-status" role="status">터치 영역 버전 1 적용 완료 · 새 지도 조작 허용</div>
     <div class="nm-gesture-line"><span>시트에서 시작 → 경계를 넘어 이동 → 끝까지 웹 담당</span><span class="text-small">추가 손가락·빠른 경계 제스처는 실기기 검증 대상</span></div>
@@ -218,7 +215,7 @@ footer { margin-top:28px; padding-top:18px; border-top:1px solid var(--border); 
           <option value="ready">처음 노선 화면 열기</option>
           <option value="error">Native 지도 오류</option>
           <option value="reload">노선 전환·웹 재로드</option>
-          <option value="modal">전체 채팅 열고 닫기</option>
+          <option value="modal">전체 모달 열고 닫기</option>
         </select>
       </label>
     </div>
@@ -235,7 +232,7 @@ footer { margin-top:28px; padding-top:18px; border-top:1px solid var(--border); 
         <tbody>
           <tr><td>웹 RouteMap</td><td>SDK 로드 전 분기. 앱에서는 투명한 지도 자리와 기존 버튼 표시</td></tr>
           <tr><td>Native map adapter</td><td>경로·차량·선택·카메라 명령 ↔ native 이벤트</td></tr>
-          <tr><td>웹 layout 측정</td><td>시트·버튼·채팅 실제 DOM 영역·visualViewport 측정. 좌표 변환은 native에서 수행</td></tr>
+          <tr><td>웹 layout 측정</td><td>시트·버튼 실제 DOM 영역·visualViewport 측정. 좌표 변환은 native에서 수행</td></tr>
           <tr><td>RN 앱 화면</td><td>아래 지도 + 위 WebView 배치. 세션·연결·복구</td></tr>
           <tr><td>iOS 로컬 Expo module</td><td>NMFMapView·마커·카메라·위치 권한·TouchGate</td></tr>
           <tr><td>실기기 PoC</td><td>빠른 시트 이동·경계 터치·핀치·키보드·VoiceOver·복귀</td></tr>
@@ -287,10 +284,9 @@ footer { margin-top:28px; padding-top:18px; border-top:1px solid var(--border); 
 #salmon-native-map-explainer .nm-sdk-label { position: absolute; top: 200px; left: 68px; right: 86px; text-align: center; white-space: nowrap; }
 #salmon-native-map-explainer .nm-web-transparent { position: absolute; inset: 0 0 auto; height: 220px; border-bottom: 1px dashed var(--border); }
 #salmon-native-map-explainer .nm-web-transparent > span { position: absolute; left: 13px; top: 48px; background: var(--background); padding: 2px 4px; }
-#salmon-native-map-explainer .nm-web-back, #salmon-native-map-explainer .nm-web-locate, #salmon-native-map-explainer .nm-web-chat { position: absolute; padding: 4px 8px; background: color-mix(in srgb, var(--viz-series-2) 15%, var(--background)); border: 1px solid var(--border); }
+#salmon-native-map-explainer .nm-web-back, #salmon-native-map-explainer .nm-web-locate { position: absolute; padding: 4px 8px; background: color-mix(in srgb, var(--viz-series-2) 15%, var(--background)); border: 1px solid var(--border); }
 #salmon-native-map-explainer .nm-web-back { top: 12px; left: 12px; }
 #salmon-native-map-explainer .nm-web-locate { top: 178px; right: 12px; }
-#salmon-native-map-explainer .nm-web-chat { top: 178px; left: 12px; }
 #salmon-native-map-explainer .nm-web-sheet { position: absolute; top: 224px; bottom: 0; left: 0; right: 0; background: color-mix(in srgb, var(--viz-series-2) 12%, var(--background)); border-top: 1px solid var(--border); border-radius: 22px 22px 0 0; padding: 12px 16px; }
 #salmon-native-map-explainer .nm-sheet-handle { height: 4px; width: 30px; border-radius: 2px; background: var(--muted-foreground); margin: 0 auto 10px; }
 #salmon-native-map-explainer .nm-sheet-row { padding: 6px 0; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: space-between; }
@@ -314,10 +310,9 @@ footer { margin-top:28px; padding-top:18px; border-top:1px solid var(--border); 
 #salmon-native-map-explainer .nm-touch-figure { display: grid; justify-items: center; gap: 10px; }
 #salmon-native-map-explainer .nm-touch-canvas { position: relative; width: min(280px, 100%); height: 380px; border: 1px solid var(--border); border-radius: 20px; overflow: hidden; background: color-mix(in srgb, var(--viz-series-1) 7%, var(--background)); touch-action: manipulation; }
 #salmon-native-map-explainer .nm-touch-native { position: absolute; inset: 76px 12px auto; display: grid; justify-items: center; gap: 8px; }
-#salmon-native-map-explainer .nm-touch-back, #salmon-native-map-explainer .nm-touch-locate, #salmon-native-map-explainer .nm-touch-chat { position: absolute; background: color-mix(in srgb, var(--viz-series-2) 14%, var(--background)); border: 1px solid var(--border); padding: 4px 8px; }
+#salmon-native-map-explainer .nm-touch-back, #salmon-native-map-explainer .nm-touch-locate { position: absolute; background: color-mix(in srgb, var(--viz-series-2) 14%, var(--background)); border: 1px solid var(--border); padding: 4px 8px; }
 #salmon-native-map-explainer .nm-touch-back { top: 12px; left: 12px; }
 #salmon-native-map-explainer .nm-touch-locate { right: 12px; top: 145px; transition: top 280ms ease; }
-#salmon-native-map-explainer .nm-touch-chat { left: 12px; top: 145px; transition: top 280ms ease; }
 #salmon-native-map-explainer .nm-touch-sheet { position: absolute; top: 52%; bottom: 0; left: 0; right: 0; padding: 14px; border-top: 1px solid var(--border); background: color-mix(in srgb, var(--viz-series-2) 12%, var(--background)); border-radius: 24px 24px 0 0; display: flex; flex-direction: column; gap: 8px; transition: top 280ms ease; overflow: hidden; }
 #salmon-native-map-explainer .nm-touch-modal { position: absolute; inset: 0; background: color-mix(in srgb, var(--viz-series-2) 12%, var(--background)); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 14px; padding: 14px; }
 #salmon-native-map-explainer .nm-tap-dot { position: absolute; width: 20px; height: 20px; border: 2px solid var(--foreground); border-radius: 50%; transform: translate(-50%, -50%); background: color-mix(in srgb, var(--foreground) 15%, transparent); pointer-events: none; }
@@ -365,7 +360,7 @@ footer { margin-top:28px; padding-top:18px; border-top:1px solid var(--border); 
   #salmon-native-map-explainer .nm-heading { padding-right: 50px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  #salmon-native-map-explainer .nm-phone-plane, #salmon-native-map-explainer .nm-touch-sheet, #salmon-native-map-explainer .nm-touch-locate, #salmon-native-map-explainer .nm-touch-chat { transition: none; }
+  #salmon-native-map-explainer .nm-phone-plane, #salmon-native-map-explainer .nm-touch-sheet, #salmon-native-map-explainer .nm-touch-locate { transition: none; }
 }
 </style>
 
@@ -421,7 +416,7 @@ footer { margin-top:28px; padding-top:18px; border-top:1px solid var(--border); 
       title: '시트 이동 → 터치 영역 갱신 → 적용 확인',
       steps: [
         ['web', '웹 시트 드래그·애니메이션', '기존 CSS와 Pointer Event 유지'],
-        ['web', '실제 영역 측정', '시트 + 버튼 + 별도 채팅 영역'],
+        ['web', '실제 영역 측정', '시트 + 버튼 영역'],
         ['gate', '좌표 변환 후 최신 영역 저장', 'layout + revision'],
         ['native', '최종 영역 적용·터치 판정 갱신', 'transitioning=false + 지도 ready 상태 확인'],
         ['gate', '웹으로 적용 완료 알림', 'ack(revision) · 웹이 ACK를 기다려 해제하는 구조는 아님']
@@ -463,13 +458,13 @@ footer { margin-top:28px; padding-top:18px; border-top:1px solid var(--border); 
     },
     modal: {
       steps: [
-        ['web', '전체 채팅 열기', '웹 modal state 변경'],
+        ['web', '전체 모달 열기', '웹 modal state 변경'],
         ['gate', '웹이 전체 터치 수신', 'captureAll = true'],
         ['native', '뒤 지도 조작 차단 · 접근성 별도 확인', 'DOM inert만으로 native 지도는 막히지 않음'],
-        ['web', '채팅 닫고 실제 영역 재측정', '최신 layout revision 전달'],
+        ['web', '모달 닫고 실제 영역 재측정', '최신 layout revision 전달'],
         ['gate', 'Native가 최신 영역 적용 시 지도 조작 재개', '노출 지도는 native, 나머지는 웹']
       ],
-      outcome: '채팅과 키보드도 기존 웹 UI. Native 지도는 modal 뒤에서 새 터치를 받지 않도록 차단. VoiceOver 탐색 차단은 기기 검증 대상.'
+      outcome: '모달과 키보드는 웹 UI. Native 지도는 modal 뒤에서 새 터치를 받지 않도록 차단. VoiceOver 탐색 차단은 기기 검증 대상.'
     }
   };
 
@@ -517,7 +512,7 @@ footer { margin-top:28px; padding-top:18px; border-top:1px solid var(--border); 
     const node = q('#nm-layout-status');
     node.classList.toggle('is-pending', moving);
     if (moving) node.textContent = '터치 영역 버전 ' + revision + ' 전달·적용 중 · 새 지도 조작 잠시 차단';
-    else if (state.modal) node.textContent = '터치 영역 버전 ' + revision + ' 적용 완료 · 전체 채팅이 터치 수신';
+    else if (state.modal) node.textContent = '터치 영역 버전 ' + revision + ' 적용 완료 · 전체 모달이 터치 수신';
     else if (state.snap === 3) node.textContent = '터치 영역 버전 ' + revision + ' 적용 완료 · 전체 시트로 지도 조작 차단';
     else node.textContent = '터치 영역 버전 ' + revision + ' 적용 완료 · 새 지도 조작 허용';
   }
@@ -529,19 +524,17 @@ footer { margin-top:28px; padding-top:18px; border-top:1px solid var(--border); 
     q('#nm-touch-sheet').style.top = (tops[state.snap] * 100) + '%';
     const controlTop = Math.max(54, tops[state.snap] * 380 - 45);
     q('#nm-touch-locate').style.top = controlTop + 'px';
-    q('#nm-touch-chat').style.top = controlTop + 'px';
     q('#nm-touch-locate').hidden = state.snap === 3;
-    q('#nm-touch-chat').hidden = state.snap === 3;
     q('#nm-touch-modal').hidden = !state.modal;
     status();
   }
 
   function routeTouch(target) {
-    const labels = { map: '지도 영역에서 시작', sheet: '시트 영역에서 시작', location: '웹 내 위치 버튼에서 시작', chat: '채팅 영역에서 시작', back: '웹 뒤로가기에서 시작' };
+    const labels = { map: '지도 영역에서 시작', sheet: '시트 영역에서 시작', location: '웹 내 위치 버튼에서 시작', back: '웹 뒤로가기에서 시작' };
     let web = target !== 'map';
-    let action = target === 'sheet' ? '시트 드래그·목록 스크롤' : target === 'location' ? '웹 클릭 → native 위치 조회 명령' : target === 'chat' ? '웹 채팅 열기·조작' : target === 'back' ? '기존 웹 뒤로가기' : '지도 이동·줌';
+    let action = target === 'sheet' ? '시트 드래그·목록 스크롤' : target === 'location' ? '웹 클릭 → native 위치 조회 명령' : target === 'back' ? '기존 웹 뒤로가기' : '지도 이동·줌';
     let rule = web ? '시트·웹 UI의 시작 터치는 WebView가 수신.' : '터치 시 JavaScript 응답을 기다리지 않음.';
-    if (state.modal) { web = true; action = '전체 채팅 조작'; rule = 'captureAll: 노출 위치와 관계없이 웹이 수신.'; }
+    if (state.modal) { web = true; action = '전체 모달 조작'; rule = 'captureAll: 노출 위치와 관계없이 웹이 수신.'; }
     else if (moving) { web = true; action = '새 지도 제스처 차단'; rule = '시트 이동·영역 적용 중. 기존 웹 드래그는 계속 유지.'; }
     else if (state.snap === 3) { web = true; action = '전체 시트 조작'; rule = '시트 전체 펼침: native 지도 조작 비활성.'; }
     q('#nm-touch-origin').textContent = labels[target] || labels.map;
@@ -609,7 +602,6 @@ footer { margin-top:28px; padding-top:18px; border-top:1px solid var(--border); 
     const controlTop = Math.max(54, tops[state.snap] * 380 - 45);
     if (state.snap !== 3 && y >= controlTop && y <= controlTop + 36) {
       if (x > bounds.width - 96) target = 'location';
-      else if (x < 84) target = 'chat';
     }
     const dot = q('#nm-tap-dot');
     dot.style.left = x + 'px'; dot.style.top = y + 'px'; dot.hidden = false;

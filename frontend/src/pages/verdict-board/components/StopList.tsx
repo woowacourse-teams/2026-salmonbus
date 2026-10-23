@@ -8,8 +8,10 @@ import type { StationArrivalDetails } from "./stationArrivalPolicy";
 import type { RoutePosition } from "./TimelineMarker";
 import type { StopSelection } from "./stopSelection";
 import * as styles from "./StopList.css";
+import type { FavoriteBoardRoute } from "./FavoriteButton";
 
 interface StopListProps {
+  favoriteRoute?: FavoriteBoardRoute;
   stops: StopView[];
   liveVehicleViews: LiveVehicleView[];
   motion: LiveVehicleMotionStore;
@@ -52,6 +54,7 @@ export function StopList({
   onVehicleSelect,
   scrollContainerRef,
   onStopExpand,
+  favoriteRoute,
 }: StopListProps) {
   const routeCanvasRef = useRef<HTMLDivElement>(null);
   const markerRefs = useRef(new Map<string, HTMLDivElement>());
@@ -92,6 +95,7 @@ export function StopList({
             expanded={stop.kind !== "passThrough" && selectedSequence === stop.sequence}
             stationArrivals={stationArrivals?.selection.stopSequence === stop.sequence ? stationArrivals : null}
             onToggle={(expandableStop) => toggle(expandableStop, index)}
+            {...(favoriteRoute ? { favoriteRoute } : {})}
           />
         ))}
       </ul>

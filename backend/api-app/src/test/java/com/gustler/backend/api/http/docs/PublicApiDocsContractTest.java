@@ -107,7 +107,7 @@ class PublicApiDocsContractTest {
     }
 
     @Test
-    void 익명_방문자가_UI_설정과_별도_WebSocket_계약을_보되_시험_요청은_할_수_없다() throws Exception {
+    void 익명_방문자가_UI_설정을_보되_시험_요청은_할_수_없다() throws Exception {
         // given
         mockMvc.perform(get("/api/docs"))
             .andExpect(status().isFound())
@@ -123,26 +123,18 @@ class PublicApiDocsContractTest {
         mockMvc.perform(get("/api/docs/swagger-ui/index.html"))
             .andExpect(status().isOk());
 
-        // when
-        String chatContract = mockMvc.perform(get("/api/docs/chat"))
-            .andExpect(status().isOk())
-            .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
-
-        // then
-        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
-            softly.assertThat(chatContract).contains("# 노선 채팅 계약 v1", "session.start");
-            softly.assertThat(chatContract).doesNotContain("salmonbus_chat", "room_client_message_unique", "MongoDB");
-        }
-
-        String chatExamples = mockMvc.perform(get("/api/docs/chat/examples"))
-            .andExpect(status().isOk())
-            .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
-        assertThat(objectMapper.readTree(chatExamples).path("clientFrames")
-            .path("session.start").path("v").asInt()).isEqualTo(1);
         String yaml = mockMvc.perform(get("/api/docs/openapi.yaml"))
             .andExpect(status().isOk())
             .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         assertThat(yaml).contains("openapi:", "/api/v1/routes", "/api/v2/stations/", "/api/v2/routes/");
+    }
+
+    @Test
+    void 종료한_채팅_HTTP와_연결_문서_경로는_더_이상_제공하지_않는다() throws Exception {
+        for (String path : List.of("/api/chat/rooms/234000050",
+            "/api/chat/rooms/234000050/stream", "/api/docs/chat", "/api/docs/chat/examples")) {
+            mockMvc.perform(get(path)).andExpect(status().isNotFound());
+        }
     }
 
     @Test

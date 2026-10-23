@@ -36,10 +36,12 @@ public class FavoriteOverviewController {
 
     @GetMapping
     @Operation(operationId = "getMyFavoriteOverview", summary = "즐겨찾기별 접근 차량 조회",
-        description = "groupId를 생략하면 전체 그룹을, 보내면 회원이 소유한 해당 그룹 하나만 groups 배열로 반환합니다. "
-            + "회원이 정한 그룹과 즐겨찾기 순서대로 현재 watch의 정류장 정보와 접근 차량을 반환합니다. "
+        description = "groupId를 생략하면 전체 그룹을 반환합니다. "
+            + "보내면 회원이 소유한 해당 그룹 하나만 groups 배열로 반환합니다. "
+            + "회원이 정한 순서대로 현재 watch의 정류장 정보와 접근 차량을 반환합니다. "
             + "접근 차량의 필드 이름과 좌석 예보는 watch 계약을 유지하며 ETA만 추가합니다. "
-            + "세 번째 차량의 ETA는 UNAVAILABLE, SOURCE_NOT_PROVIDED입니다. 한 항목의 실패는 다른 항목을 숨기지 않습니다.")
+            + "세 번째 차량의 ETA는 UNAVAILABLE, SOURCE_NOT_PROVIDED입니다. "
+            + "한 항목의 실패는 다른 항목을 숨기지 않습니다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "즐겨찾기 그룹별 노선 정류장 항목",
             headers = @Header(name = "Cache-Control", description = "회원별 응답이므로 no-store",
@@ -49,7 +51,8 @@ public class FavoriteOverviewController {
         @ApiResponse(responseCode = "401", description = "액세스 토큰이 없거나 유효하지 않음",
             content = @Content(mediaType = "application/json",
                 schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "404", description = "지정한 즐겨찾기 그룹이 없거나 내 소유가 아님",
+        @ApiResponse(responseCode = "404",
+            description = "지정한 즐겨찾기 그룹이 없거나 내 소유가 아님",
             content = @Content(mediaType = "application/json",
                 schema = @Schema(implementation = ErrorResponse.class)))
     })

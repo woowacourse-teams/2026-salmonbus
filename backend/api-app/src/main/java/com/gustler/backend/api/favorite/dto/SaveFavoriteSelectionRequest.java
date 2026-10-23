@@ -16,4 +16,9 @@ public record SaveFavoriteSelectionRequest(
     @Schema(description = "이 노선 정류장 항목을 저장할 내 즐겨찾기 그룹 ID 전체")
     List<UUID> favoriteGroupIds
 ) {
+    public SaveFavoriteSelectionRequest {
+        if (favoriteGroupIds != null) {
+            favoriteGroupIds = List.copyOf(favoriteGroupIds);
+        }
+    }
 }

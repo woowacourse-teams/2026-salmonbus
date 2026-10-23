@@ -29,7 +29,7 @@ final class Bootstrap {
     Map<String, Object> prepare(Path incoming, String origin, final boolean apply)
             throws Exception {
         Checks.require(host.root(), "ROOT_REQUIRED");
-        Environment.origin(origin);
+        if (origin != null) Environment.origin(origin);
         var metadata = RevisionStore.verify(incoming, true);
         Checks.require(metadata.kind().equals("basis"), "DEV_BASIS_REVISION");
         Checks.require(
@@ -146,10 +146,9 @@ final class Bootstrap {
                         RevisionStore.verify(target, true).equals(metadata), "DEV_BASIS_COPY");
                 link(layout.root().resolve("basis/current"), "releases/" + metadata.releaseId());
                 link(layout.tools(), "basis/current/tools");
-                link(layout.root().resolve("config"), "basis/current/config");
                 FileOps.directory(layout.root().resolve("infra"), 0755);
                 link(layout.root().resolve("infra/current"), "../basis/current/infra");
-                for (var name : List.of("postgres", "mongodb")) {
+                for (var name : List.of("postgres")) {
                     FileOps.directory(layout.data().resolve(name), 0700);
                 }
                 new SettingsPreparation(layout)

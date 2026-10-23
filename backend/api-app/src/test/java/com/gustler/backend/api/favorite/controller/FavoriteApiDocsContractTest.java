@@ -73,6 +73,18 @@ class FavoriteApiDocsContractTest {
     }
 
     @Test
+    void 전체_순서_저장은_그룹과_그룹별_즐겨찾기_ID를_한번에_받는다() {
+        JsonNode operation = document.at("/paths/~1api~1me~1favorite-order/put");
+        JsonNode request = document.at("/components/schemas/SaveFavoriteOrderRequest");
+        JsonNode group = document.at("/components/schemas/FavoriteGroupOrderRequest");
+
+        assertThat(operation.path("operationId").asString()).isEqualTo("saveMyFavoriteOrder");
+        assertThat(operation.at("/responses/204").isMissingNode()).isFalse();
+        assertThat(names(request.path("properties"))).containsExactly("groups");
+        assertThat(names(group.path("properties"))).containsExactlyInAnyOrder("groupId", "favoriteIds");
+    }
+
+    @Test
     void 접근_차량은_watch_필드와_좌석_예보를_유지하고_ETA만_추가한다() {
         JsonNode favoriteVehicle = document.at("/components/schemas/FavoriteApproachingVehicleResponse/properties");
         JsonNode watchVehicle = document.at("/components/schemas/ApproachingVehicleResponse/properties");

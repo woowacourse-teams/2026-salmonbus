@@ -38,9 +38,7 @@ RUN --mount=type=cache,id=salmonbus-backend-gradle-${TARGETARCH},target=/depende
 
 FROM dependencies AS development
 COPY --chown=developer:developer backend/ ./
-COPY --chown=developer:developer contract/examples/chat-v1.json /workspace/contract/examples/
 COPY --chown=developer:developer contract/station-arrivals-v2.openapi.json contract/route-geometry-v2.openapi.json contract/route-watch-v1.openapi.json contract/auth-v1.openapi.json /workspace/contract/
-COPY --chown=developer:developer docs/api/chat-websocket-public.md /workspace/docs/api/
 COPY --chown=developer:developer dev/data/ /local/data/
 COPY --chmod=755 dev/docker/run-backend.sh /usr/local/bin/run-backend
 ARG DEV_COMPONENT=api-app

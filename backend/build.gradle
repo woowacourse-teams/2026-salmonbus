@@ -93,12 +93,9 @@ def testContainerOwners = [
     'PostgresMigrationTestSupport',     // 빈 서버에서 마이그레이션 자체를 검증한다
     'ApiSqlOriginPostgresTest',         // pg_stat_statements 서버 설정이 필요하다
     'MaintenanceProcessTest',           // 정비 boot JAR 을 자식 프로세스로 띄워 서버째 쓴다
-    'ChatMongoContainer',               // 채팅 Mongo 시험 클래스가 각자 띄운다. Mongo 공유 홀더는 아직 없다
 ] as Set
 def dirtiesContextOwners = [
     'DatabaseFailureContractTest',
-    'ChatWebSocketMongoIntegrationTest',
-    'ChatMongoUnavailableIntegrationTest',
     'StatisticsArchiveAdoptionTest',
     'JdbcStatisticsInputExtractorTest',
     'JdbcEvaluationArchiveStoreTest',

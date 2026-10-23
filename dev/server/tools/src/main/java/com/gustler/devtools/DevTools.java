@@ -72,8 +72,8 @@ public final class DevTools {
                 Checks.require(args.length == 1, "ARGUMENTS");
                 var settings = new Preflight(layout, host).check("infra", environment);
                 var services = Environment.DATABASE.equals(settings.get("api").get("DB_URL"))
-                        ? java.util.List.of("postgres", "mongodb", "gbis-mock")
-                        : java.util.List.of("mongodb", "gbis-mock");
+                        ? java.util.List.of("postgres", "gbis-mock")
+                        : java.util.List.of("gbis-mock");
                 var command = new java.util.ArrayList<>(java.util.List.of(
                         "/usr/bin/docker", "compose", "--env-file", "/dev/null", "--file", "compose.yaml",
                         "up", "--detach", "--no-build", "--wait", "--wait-timeout", "180"));
@@ -112,7 +112,7 @@ public final class DevTools {
                                             layout.tools(),
                                             identity,
                                             mount.path("uuid").asText(),
-                                            required(options, "--frontend-origin"),
+                                            options.get("--frontend-origin"),
                                             required(options, "--revision"),
                                             host.account().gid());
                     Json.output(Map.of("status", "ok", "result", result));
@@ -125,7 +125,7 @@ public final class DevTools {
                         new Bootstrap(layout, host)
                                 .prepare(
                                         Path.of(required(options, "--bundle")).toAbsolutePath(),
-                                        required(options, "--frontend-origin"),
+                                        options.get("--frontend-origin"),
                                         options.containsKey("--apply")));
             }
             case "update-basis", "restore-basis" -> {

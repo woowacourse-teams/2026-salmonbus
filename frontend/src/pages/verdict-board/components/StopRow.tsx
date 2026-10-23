@@ -7,6 +7,7 @@ import { StopName } from "./StopName";
 import { TimelineMarker, type RoutePosition } from "./TimelineMarker";
 import { VerdictChip } from "./VerdictChip";
 import * as styles from "./StopRow.css";
+import { FavoriteButton, type FavoriteBoardRoute } from "./FavoriteButton";
 
 type ChevronDirection = "right" | "up";
 
@@ -17,13 +18,22 @@ interface StopRowProps {
   expanded: boolean;
   stationArrivals: StationArrivalDetails | null;
   onToggle: (stop: ExpandableStopView) => void;
+  favoriteRoute?: FavoriteBoardRoute;
 }
 
 interface ChevronProps {
   direction: ChevronDirection;
 }
 
-export function StopRow({ stop, routePosition, selected, expanded, stationArrivals, onToggle }: StopRowProps) {
+export function StopRow({
+  stop,
+  routePosition,
+  selected,
+  expanded,
+  stationArrivals,
+  onToggle,
+  favoriteRoute,
+}: StopRowProps) {
   const panelId = useId();
 
   if (stop.kind === "passThrough") {
@@ -46,7 +56,7 @@ export function StopRow({ stop, routePosition, selected, expanded, stationArriva
       <TimelineMarker sequence={stop.sequence} routePosition={routePosition} tone={tone} band="stop" />
       <button
         type="button"
-        className={expanded ? styles.head.expanded : styles.head.collapsed}
+        className={`${expanded ? styles.head.expanded : styles.head.collapsed} ${favoriteRoute ? styles.favoriteHead : ""}`}
         aria-expanded={expanded}
         aria-controls={panelId}
         onClick={() => onToggle(stop)}
@@ -57,8 +67,15 @@ export function StopRow({ stop, routePosition, selected, expanded, stationArriva
             <VerdictChip tone={tone} />
           </span>
         </span>
-        <Chevron direction={expanded ? "up" : "right"} />
+        {!favoriteRoute && <Chevron direction={expanded ? "up" : "right"} />}
       </button>
+      {favoriteRoute && (
+        <FavoriteButton
+          className={expanded ? styles.favorite.expanded : styles.favorite.collapsed}
+          target={{ routeId: favoriteRoute.routeId, direction: favoriteRoute.direction, stopId: stop.stopId }}
+          stopName={stop.name}
+        />
+      )}
       <div
         className={expanded ? styles.detail.open : styles.detail.closed}
         inert={!expanded}

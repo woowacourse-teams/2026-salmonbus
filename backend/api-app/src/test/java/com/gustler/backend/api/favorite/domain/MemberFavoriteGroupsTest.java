@@ -1,31 +1,35 @@
 package com.gustler.backend.api.favorite.domain;
 
 import static com.gustler.backend.api.favorite.domain.FavoriteDomainFixture.emptyGroup;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gustler.backend.api.favorite.FavoriteGroupLimitExceededException;
-import com.gustler.backend.api.favorite.LastFavoriteGroupException;
+import com.gustler.backend.api.favorite.RepresentativeFavoriteGroupDeletionException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class MemberFavoriteGroupsTest {
     @Test
-    void 마지막_즐겨찾기_그룹은_삭제하지_않는다() {
-        FavoriteGroup only = emptyGroup("즐겨찾기");
-        MemberFavoriteGroups groups = new MemberFavoriteGroups(List.of(only));
-
-        assertThatThrownBy(() -> groups.remove(only.id()))
-            .isInstanceOf(LastFavoriteGroupException.class);
-    }
-
-    @Test
-    void 다른_그룹이_남으면_즐겨찾기_그룹을_삭제한다() {
+    void 첫_번째_즐겨찾기_그룹은_대표이므로_삭제하지_않는다() {
         FavoriteGroup first = emptyGroup("출근");
         FavoriteGroup second = emptyGroup("퇴근");
         MemberFavoriteGroups groups = new MemberFavoriteGroups(List.of(first, second));
 
-        assertThat(groups.remove(first.id()).values()).containsExactly(second);
+        assertThatThrownBy(() -> groups.remove(first.id()))
+            .isInstanceOf(RepresentativeFavoriteGroupDeletionException.class);
+    }
+
+    @Test
+    void 순서를_바꾸면_새로운_첫_번째_그룹이_대표가_된다() {
+        FavoriteGroup first = emptyGroup("출근");
+        FavoriteGroup second = emptyGroup("퇴근");
+        MemberFavoriteGroups groups = new MemberFavoriteGroups(List.of(first, second));
+        MemberFavoriteGroups reordered = groups.reorder(List.of(second.id(), first.id()));
+
+        assertThatThrownBy(() -> reordered.remove(second.id()))
+            .isInstanceOf(RepresentativeFavoriteGroupDeletionException.class);
+        assertThat(reordered.remove(first.id()).values()).containsExactly(second);
     }
 
     @Test
@@ -37,7 +41,6 @@ class MemberFavoriteGroupsTest {
             emptyGroup("주말")
         ));
 
-        // when & then
         assertThatThrownBy(() -> groups.append(emptyGroup("추가")))
             .isInstanceOf(FavoriteGroupLimitExceededException.class);
     }
@@ -48,7 +51,6 @@ class MemberFavoriteGroupsTest {
         FavoriteGroup first = emptyGroup("출근");
         FavoriteGroup otherIdWithSameName = emptyGroup("퇴근").rename(new FavoriteGroupName("출근"));
 
-        // when & then
         assertThatThrownBy(() -> new MemberFavoriteGroups(List.of(first, otherIdWithSameName)))
             .isInstanceOf(IllegalArgumentException.class);
     }

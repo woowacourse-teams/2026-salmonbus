@@ -9,10 +9,13 @@ export interface LatestSuccess<T> {
 }
 
 export type PolledResource<T> =
+  | { status: "idle" }
   | { status: "pending" }
   | { status: "loadingError"; failure: ApiFailure }
   | { status: "success"; latestSuccess: LatestSuccess<T>; lifetime: CacheLifetime }
   | { status: "refetchError"; failure: ApiFailure; latestSuccess: LatestSuccess<T> };
+
+export const IDLE_RESOURCE: PolledResource<never> = { status: "idle" };
 
 export const PENDING_RESOURCE: PolledResource<never> = { status: "pending" };
 

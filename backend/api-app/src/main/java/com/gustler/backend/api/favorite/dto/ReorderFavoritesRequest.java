@@ -6,7 +6,14 @@ import java.util.UUID;
 
 @Schema(requiredProperties = "favoriteIds")
 public record ReorderFavoritesRequest(
-    @Schema(description = "그룹의 현재 노선 정류장 항목 ID를 원하는 순서로 빠짐없이 담은 목록")
+    @Schema(
+        description = "그룹의 현재 노선 정류장 항목 ID를 원하는 순서로 빠짐없이 담은 목록"
+    )
     List<UUID> favoriteIds
 ) {
+    public ReorderFavoritesRequest {
+        if (favoriteIds != null) {
+            favoriteIds = List.copyOf(favoriteIds);
+        }
+    }
 }

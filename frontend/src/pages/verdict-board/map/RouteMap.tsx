@@ -48,6 +48,7 @@ export function RouteMap(props: RouteMapProps) {
   const regionRef = useRef<HTMLElement | null>(null);
   const elementRef = useRef<HTMLDivElement>(null);
   const adapterRef = useRef<RouteMapAdapter | NativeRouteMapAdapter | null>(null);
+  const lastFocusedStop = useRef<StopSelection | null>(null);
   const lastVehicleFocusRequest = useRef<RouteMapProps["vehicleFocusRequest"]>(null);
   const propsRef = useRef(props);
   const locationRequest = useRef(0);
@@ -63,6 +64,7 @@ export function RouteMap(props: RouteMapProps) {
     const adapter = adapterRef.current;
     adapterRef.current = null;
     lastVehicleFocusRequest.current = null;
+    lastFocusedStop.current = null;
     locationRequest.current += 1;
     adapter?.destroy();
     elementRef.current?.replaceChildren();
@@ -120,6 +122,7 @@ export function RouteMap(props: RouteMapProps) {
             board: current.board,
             data,
             motion: current.motion,
+            initialSelection: current.selected,
             onSelect: (selection) => propsRef.current.onSelect(selection),
             onVehicleSelect: (selection, key) => propsRef.current.onVehicleSelect(selection, key),
             onDeselect: () => propsRef.current.onDeselect(),
@@ -138,18 +141,22 @@ export function RouteMap(props: RouteMapProps) {
             },
             onReady: () => {
               if (!active || failed || propsRef.current.data !== data) return;
+              // 이전 앱도 초기 정류장을 확대할 수 있도록 준비 후 카메라 명령은 유지한다.
+              const selection = propsRef.current.selected;
+              if (selection !== null) adapterRef.current?.focus(selection);
+              lastFocusedStop.current = selection;
               setMapState({ status: "ready", data });
               setLocationState({ status: "idle" });
             },
           });
           adapterRef.current = adapter;
+          lastFocusedStop.current = current.selected;
           adapter.update(
             current.selected,
             current.activeDirection,
             current.liveVehicleViews,
             current.selectedVehicleKey,
           );
-          if (current.selected !== null) adapter.focus(current.selected);
         } catch (error) {
           failActiveMap(error);
         }
@@ -176,16 +183,20 @@ export function RouteMap(props: RouteMapProps) {
           () => failActiveMap(null),
           () => {
             if (!active || failed || propsRef.current.data !== data) return;
+            const selection = propsRef.current.selected;
+            if (selection !== null) adapterRef.current?.focus(selection, { animate: true });
+            lastFocusedStop.current = selection;
             setMapState({ status: "ready", data });
             setLocationState({ status: "idle" });
           },
           (selection, key) => propsRef.current.onVehicleSelect(selection, key),
           () => propsRef.current.onDeselect(),
+          current.selected,
         );
         adapterRef.current = adapter;
+        lastFocusedStop.current = current.selected;
         adapter.update(current.selected, current.activeDirection, current.liveVehicleViews, current.selectedVehicleKey);
         adapter.moveVehicles(current.motion.frames);
-        if (current.selected !== null) adapter.focus(current.selected);
         if (failed) {
           disposeMap();
           return;
@@ -209,8 +220,12 @@ export function RouteMap(props: RouteMapProps) {
   }, [selected, activeDirection, liveVehicleViews, motion, selectedVehicleKey, mapState, runMapAction]);
 
   useEffect(() => {
-    if (selected !== null) runMapAction((adapter) => adapter.focus(selected));
-  }, [selected, runMapAction]);
+    if (mapState.status !== "ready" || mapState.data !== data) return;
+    const previous = lastFocusedStop.current;
+    lastFocusedStop.current = selected;
+    if (selected !== null && (selected.direction !== previous?.direction || selected.sequence !== previous?.sequence))
+      runMapAction((adapter) => adapter.focus(selected));
+  }, [selected, mapState, data, runMapAction]);
 
   useEffect(() => {
     if (mapState.status !== "ready" || !visible) {

@@ -1,10 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unused-vars -- 아래 함수들은 호출용이 아니라 컴파일 검사용이라서 어디서도 쓰지 않는다 */
+import type { ErrorResponse } from "./apiError";
 import type {
   ApproachingVehicle,
   Board,
   BoardRoute,
-  ErrorResponse,
-  Observation,
   SeatInfo,
   StopState,
   Vehicle,
@@ -60,11 +59,6 @@ function rejectsUncheckedTurnSequence(route: BoardRoute): number {
   // @ts-expect-error turnSequence도 null일 수 있어서, null 확인 없이 바로 쓰면 막혀야 한다
   const sequence: number = route.turnSequence;
   return sequence;
-}
-
-function rejectsUncheckedObservedAt(observation: Observation): string {
-  // @ts-expect-error 관측이 없으면 observedAt이 null이라, null 확인 없이 바로 쓰면 막혀야 한다
-  return observation.observedAt.slice(0, 10);
 }
 
 function rejectsLegacyStationId(stop: StopState): string {
