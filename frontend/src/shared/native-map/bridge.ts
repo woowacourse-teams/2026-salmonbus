@@ -2,16 +2,21 @@ import { isSupportedInApp, sendToApp, subscribeToApp, type BridgeWindow } from "
 import type { AppCommands, AppCommandType, BridgeMessage } from "../bridge/bridge.types";
 import type { NativeMapCommands, NativeMapEvent, NativeMapEvents } from "./protocol";
 
+// NativeMapCommands에 명령이 늘면 여기서 tsc가 막는다. 앱의 app/native-map/nativeMapMessages.ts 목록도 같이 늘린다.
+const nativeMapCommandTypes = {
+  mount: true,
+  updateScene: true,
+  motion: true,
+  layout: true,
+  camera: true,
+  location: true,
+  unmount: true,
+} satisfies Record<keyof NativeMapCommands, true>;
+
 /** native 지도를 쓰려면 앱이 받아야 하는 메시지 전체. 테스트의 가짜 앱도 이 목록을 쓴다. */
-export const NATIVE_MAP_CAPABILITIES = [
-  "map.mount",
-  "map.updateScene",
-  "map.motion",
-  "map.layout",
-  "map.camera",
-  "map.location",
-  "map.unmount",
-] as const satisfies readonly AppCommandType[];
+export const NATIVE_MAP_CAPABILITIES: readonly AppCommandType[] = (
+  Object.keys(nativeMapCommandTypes) as (keyof NativeMapCommands)[]
+).map((type) => `map.${type}` as const);
 
 // 지도 명령을 전부 받는 앱에서만 native 지도를 사용하고, 브라우저와 옛 앱은 JS SDK를 사용한다.
 export function isNativeMapAvailable(bridgeWindow?: BridgeWindow): boolean {
