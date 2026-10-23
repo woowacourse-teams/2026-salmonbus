@@ -35,8 +35,9 @@ export const remove = style({
   fontWeight: 600,
   cursor: "pointer",
 });
-export const groupActions = style({ display: "flex", justifyContent: "flex-end", paddingTop: 32 });
+export const groupActions = style({ width: "100%", display: "flex", justifyContent: "flex-end", paddingTop: 32 });
 export const deleteGroup = style({
+  margin: 0,
   padding: 0,
   border: 0,
   background: "transparent",
