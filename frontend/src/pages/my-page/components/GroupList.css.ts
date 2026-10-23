@@ -1,8 +1,10 @@
 import { style } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 import { card } from "@/shared/styles/surface.css";
+import { text } from "@/shared/styles/button.css";
 
 export const section = style({ margin: "0 0 24px" });
+export const edit = style([text, { display: "grid", placeItems: "center" }]);
 export const heading = style({
   display: "flex",
   alignItems: "center",

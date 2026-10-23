@@ -1,5 +1,4 @@
 import * as surface from "@/shared/styles/surface.css";
-import * as buttons from "@/shared/styles/button.css";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useFavorites } from "@/shared/hooks/useFavorites";
@@ -7,6 +6,7 @@ import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
 import { FavoriteEditor } from "@/shared/components/favorite-editor/FavoriteEditor";
 import { Notice } from "@/shared/components/Notice";
 import * as styles from "./GroupList.css";
+import pencilIcon from "../assets/pencil.svg";
 
 export function GroupList() {
   const { groups, resource, reload } = useFavorites();
@@ -31,12 +31,12 @@ export function GroupList() {
         내 그룹 {groups.length} / 3{" "}
         <button
           ref={editButton}
-          className={buttons.text}
+          className={styles.edit}
           disabled={groups.length === 0}
           onClick={() => setOrdering(true)}
           aria-label="그룹과 즐겨찾기 순서 편집"
         >
-          ✎
+          <img src={pencilIcon} width="20" height="20" alt="" draggable={false} />
         </button>
       </h2>
       <FavoritesNotice resource={resource} onRetry={reload} />
