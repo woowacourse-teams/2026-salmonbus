@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { track } from "@/shared/analytics/track";
 import type { ApiFailure, ApiResult } from "@/shared/api/client";
@@ -29,7 +29,6 @@ import { useBoardVisitEvents } from "../analytics/useBoardVisitEvents";
 import { RouteMap } from "../map/RouteMap";
 import { useRouteMapData } from "../map/useRouteMapData";
 import { useBoardViewport } from "../hooks/useBoardViewport";
-import { useBoardOverlayAnchors } from "../hooks/useBoardOverlayAnchors";
 import { OUT_OF_SERVICE_NOTICE } from "./verdictCopy";
 import * as styles from "./VerdictBoardScreen.css";
 
@@ -143,7 +142,6 @@ function OperatingBoard({
 }: OperatingBoardProps) {
   const viewport = useBoardViewport();
   const [search, setSearch] = useSearchParams();
-  const pageRef = useRef<HTMLDivElement>(null);
   const [snap, setSnap] = useState<BoardSheetSnap>("half");
   const [selected, setSelected] = useState<StopSelection | null>(() =>
     stopSelectionFrom(board, direction.id, search.get("stopId")),
@@ -174,7 +172,6 @@ function OperatingBoard({
   const motion = useLiveVehicleMotion(vehicles, liveMotionDurationMs);
   const mapData = useRouteMapData(board);
   const mapVisible = snap !== "full";
-  useBoardOverlayAnchors(pageRef, snap, viewport.height);
 
   function rememberSelection(selection: StopSelection | null) {
     const stop =
@@ -251,7 +248,7 @@ function OperatingBoard({
   }
 
   return (
-    <div ref={pageRef} className={styles.page} style={{ height: viewport.height, top: viewport.top }}>
+    <div className={styles.page} style={{ height: viewport.height, top: viewport.top }}>
       <main className={styles.content}>
         <div className={styles.mapSlot} inert={!mapVisible} aria-hidden={!mapVisible}>
           <RouteMap

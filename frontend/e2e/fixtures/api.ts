@@ -49,11 +49,6 @@ export const test = base.extend<{ api: MockApi }>({
           });
           return;
         }
-        if (request.method() === "GET" && /^\/api\/chat\/rooms\/[^/]+$/.test(path)) {
-          await route.fulfill({ status: 404, headers: { "Cache-Control": "no-store" } });
-          return;
-        }
-        // 채팅 테스트가 가상 노선을 재사용하므로 geometry도 요청한 노선 ID로 응답한다.
         const geometryRoute = /^\/api\/v2\/routes\/([^/]+)\/geometry$/.exec(path)?.[1];
         const endpoint: Endpoint | undefined = /^\/api\/v2\/stations\/[^/]+\/arrivals$/.test(path)
           ? "arrivals"

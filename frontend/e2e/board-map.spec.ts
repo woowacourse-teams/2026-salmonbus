@@ -1509,10 +1509,7 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
     expect(moved.list).toBeGreaterThan(stopped.list + 1);
   });
 
-  test(`드래그 중 지도와 채팅 위치가 시트 경계를 따라가고 지도 시점은 유지된다 (${reducedMotion})`, async ({
-    page,
-    naverMap,
-  }) => {
+  test(`드래그 중 지도가 시트 경계를 따라가고 지도 시점은 유지된다 (${reducedMotion})`, async ({ page, naverMap }) => {
     await page.emulateMedia({ reducedMotion });
     await openMap(page);
     await naverMap.setZoom(14);
@@ -1540,15 +1537,6 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
       await expect(sheet(page)).toHaveAttribute("data-dragging", "true");
       await expectSheetAndMapHeights(page, bounds.height - offset, 844 - bounds.height + offset);
       await expectMapToFillRegion(page);
-      await expect
-        .poll(async () => {
-          await page.clock.runFor(32);
-          return sheet(page).evaluate((element) => {
-            const chatTop = Number.parseFloat(document.documentElement.style.getPropertyValue("--board-chat-top"));
-            return Math.abs(chatTop - (element.getBoundingClientRect().top - 52));
-          });
-        })
-        .toBeLessThanOrEqual(1);
       expect(await naverMap.snapshot()).toEqual(originalView);
     }
 
