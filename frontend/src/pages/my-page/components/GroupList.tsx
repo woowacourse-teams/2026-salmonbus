@@ -44,11 +44,14 @@ export function GroupList() {
       </h2>
       <FavoritesNotice resource={resource} onRetry={reload} />
       <ul className={styles.list}>
-        {groups.map((group) => (
+        {groups.map((group, index) => (
           <li key={group.id}>
             <Link className={styles.group} to={`/mypage/groups/${encodeURIComponent(group.id)}`}>
               <span className={styles.info}>
-                <span className={styles.name}>{group.name}</span>
+                <span className={styles.name}>
+                  {group.name}
+                  {index === 0 && " · 대표 그룹"}
+                </span>
                 <span className={styles.count}>{group.favorites.length} / 2</span>
               </span>
               <img src={chevronIcon} width="18" height="18" alt="" draggable={false} />

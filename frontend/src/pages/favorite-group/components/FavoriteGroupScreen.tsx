@@ -18,6 +18,7 @@ export function FavoriteGroupScreen() {
   const { reload: reloadAuth } = useAuth();
   const [editingId, setEditingId] = useState<string | null>(null);
   const group = groups.find((candidate) => candidate.id === groupId);
+  const representative = group !== undefined && groups[0]?.id === group.id;
   const editing = auth.status === "authenticated" && group !== undefined && editingId === group.id;
   return (
     <AccountLayout>
@@ -37,9 +38,12 @@ export function FavoriteGroupScreen() {
               <img src={backArrow} width="17" height="17" alt="" draggable={false} />
             </Link>
           )}
-          <h1 className={styles.name}>
-            {editing ? "이름 변경" : groupId === "new" ? "그룹 만들기" : (group?.name ?? "그룹 관리")}
-          </h1>
+          <div className={styles.titleLabel}>
+            <h1 className={styles.name}>
+              {editing ? "이름 변경" : groupId === "new" ? "그룹 만들기" : (group?.name ?? "그룹 관리")}
+            </h1>
+            {!editing && representative && <span className={styles.representative}>대표</span>}
+          </div>
           {group && auth.status === "authenticated" && editingId !== group.id && (
             <button
               type="button"
@@ -81,7 +85,7 @@ export function FavoriteGroupScreen() {
               editing ? (
                 <GroupNameForm key={group.id} group={group} onRenamed={() => setEditingId(null)} />
               ) : (
-                <GroupDetails key={group.id} group={group} />
+                <GroupDetails key={group.id} group={group} representative={representative} />
               )
             ) : (
               resource.status === "success" && (

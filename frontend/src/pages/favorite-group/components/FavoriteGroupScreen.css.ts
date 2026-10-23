@@ -8,8 +8,18 @@ export const screen = style({
   color: "#292A2D",
 });
 export const title = style({ display: "flex", alignItems: "center", gap: 10, margin: "0 0 16px", paddingRight: 12 });
+export const titleLabel = style({ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 });
+export const representative = style({
+  flexShrink: 0,
+  padding: "4px 8px",
+  borderRadius: 12,
+  background: "#FFEAE4",
+  color: "#B94130",
+  fontSize: 11,
+  fontWeight: 700,
+  lineHeight: 1.3,
+});
 export const name = style({
-  flex: 1,
   minWidth: 0,
   overflowWrap: "anywhere",
   margin: 0,

@@ -5,7 +5,7 @@ import type { FavoriteGroup, SavedFavorite } from "@/shared/api/favorites.types"
 import { latestSuccessOf } from "@/shared/api/polledResource";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
-import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
+import { useHomeFavorites } from "@/shared/hooks/useFavorites";
 import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
 import { RouteBadge } from "@/shared/components/RouteBadge";
 import { EmptyFavoriteGroup } from "@/shared/components/EmptyFavoriteGroup";
@@ -14,10 +14,10 @@ import * as styles from "./GroupDetails.css";
 
 interface GroupDetailsProps {
   group: FavoriteGroup;
+  representative: boolean;
 }
 
-export function GroupDetails({ group }: GroupDetailsProps) {
-  const { groups } = useFavorites();
+export function GroupDetails({ group, representative }: GroupDetailsProps) {
   const [deleting, setDeleting] = useState<"group" | SavedFavorite | null>(null);
   const [revision, retry] = useState(0);
   const summary = useHomeFavorites(group.id, revision);
@@ -37,7 +37,7 @@ export function GroupDetails({ group }: GroupDetailsProps) {
   const lastCode = group.name.charCodeAt(group.name.length - 1);
   const objectParticle =
     lastCode >= 0xac00 && lastCode <= 0xd7a3 ? ((lastCode - 0xac00) % 28 === 0 ? "를" : "을") : " 그룹을";
-  const lastGroup = deleting === "group" && groups.length === 1;
+  const protectedGroup = deleting === "group" && representative;
   return (
     <section className="amp-mask">
       <FavoritesNotice resource={summary} onRetry={() => retry((value) => value + 1)} />
@@ -96,8 +96,8 @@ export function GroupDetails({ group }: GroupDetailsProps) {
           titleClassName={deleting === "group" ? styles.groupTitle : styles.dialogTitle}
           fallbackFocus={groupDeleteButton}
           title={
-            lastGroup
-              ? "마지막 그룹은 삭제할 수 없어요"
+            protectedGroup
+              ? "대표 그룹은 삭제할 수 없어요"
               : deleting === "group"
                 ? `${group.name}${objectParticle} 삭제할까요?`
                 : "정말 삭제 하시겠습니까?"
@@ -123,8 +123,8 @@ export function GroupDetails({ group }: GroupDetailsProps) {
           )}
           {deleting === "group" && (
             <p className={styles.description}>
-              {lastGroup
-                ? "즐겨찾기를 담을 그룹을 한 개 이상 남겨 주세요."
+              {protectedGroup
+                ? "첫 번째로 설정된 대표 그룹은 삭제할 수 없어요."
                 : `이 그룹과 즐겨찾기 ${group.favorites.length}개가 함께 삭제돼요. 다른 그룹에 저장된 즐겨찾기는 그대로 유지돼요.`}
             </p>
           )}
@@ -134,7 +134,7 @@ export function GroupDetails({ group }: GroupDetailsProps) {
             </p>
           )}
           <div className={deleting === "group" ? styles.groupDialogActions : styles.dialogActions}>
-            {lastGroup ? (
+            {protectedGroup ? (
               <button className={styles.confirm} onClick={() => setDeleting(null)}>
                 확인
               </button>

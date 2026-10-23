@@ -93,12 +93,32 @@ for (const width of [320, 425]) {
   }
 }
 
-test("마지막 그룹은 삭제 모달에서 확인만 가능하고 삭제 요청을 보내지 않는다", async ({ page, favorites }) => {
-  await page.goto(`/mypage/groups/${defaultGroupId}`);
-  await page.getByRole("button", { name: "그룹 삭제", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "마지막 그룹은 삭제할 수 없어요" });
-  await expect(dialog.getByRole("button", { name: "삭제", exact: true })).toHaveCount(0);
-  await dialog.getByRole("button", { name: "확인", exact: true }).click();
-  await expect(dialog).toHaveCount(0);
-  expect(favorites.requests.filter((r) => r.method === "DELETE")).toHaveLength(0);
-});
+for (const width of [320, 425]) {
+  for (const count of [1, 2]) {
+    test(`${width}px 대표 그룹은 ${count}개 그룹일 때 이름과 무관하게 삭제를 막는다`, async ({
+      page,
+      favorites,
+      browserName,
+    }) => {
+      await page.setViewportSize({ width, height: 844 });
+      favorites.groups[0]!.name = "이름을바꾼대표그룹";
+      if (count === 2) favorites.groups.push({ id: schoolId, name: "통학", favorites: [] });
+      await page.goto("/mypage");
+      await page.getByRole("link", { name: /이름을바꾼대표그룹 · 대표 그룹/ }).click();
+      const header = page.getByRole("heading", { name: "이름을바꾼대표그룹", exact: true }).locator("..");
+      await expect(header.getByText("대표", { exact: true })).toHaveCSS("background-color", "rgb(255, 234, 228)");
+      await page.getByRole("button", { name: "그룹 삭제", exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "대표 그룹은 삭제할 수 없어요" });
+      await expect(dialog).toContainText("첫 번째로 설정된 대표 그룹은 삭제할 수 없어요.");
+      await expect(dialog.getByRole("button")).toHaveCount(1);
+      await expect(dialog.getByRole("button", { name: "삭제", exact: true })).toHaveCount(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      if (width === 425 && count === 2 && browserName === "chromium")
+        await page.screenshot({ path: "/private/tmp/salmonbus-representative.png" });
+      await dialog.getByRole("button", { name: "확인", exact: true }).click();
+      await expect(dialog).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "그룹 삭제", exact: true })).toBeFocused();
+      expect(favorites.requests.filter((r) => r.method === "DELETE")).toHaveLength(0);
+    });
+  }
+}

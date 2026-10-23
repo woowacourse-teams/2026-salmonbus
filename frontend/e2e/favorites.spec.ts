@@ -177,10 +177,10 @@ test("가득 찬 그룹의 기존 선택은 유지하고 한 그룹씩 또는 �
   expect(favorites.groups[1]!.favorites).toHaveLength(0);
 });
 
-test("기본 그룹도 다른 그룹이 남으면 삭제하고 이름이 바뀌어도 마지막 그룹은 보호한다", async ({ page, favorites }) => {
+test("대표 그룹은 이름이 바뀌어도 보호하고 일반 그룹은 삭제한다", async ({ page, favorites }) => {
   await page.goto(`/mypage/groups/${defaultGroupId}`);
   await page.getByRole("button", { name: "그룹 삭제", exact: true }).click();
-  await expect(page.getByRole("dialog")).toContainText("마지막 그룹은 삭제할 수 없어요");
+  await expect(page.getByRole("dialog")).toContainText("대표 그룹은 삭제할 수 없어요");
   await page.getByRole("dialog").getByRole("button", { name: "확인", exact: true }).click();
   expect(favorites.requests.some((request) => request.method === "DELETE")).toBe(false);
   await page.getByRole("link", { name: "마이페이지로 돌아가기" }).click();
@@ -196,14 +196,19 @@ test("기본 그룹도 다른 그룹이 남으면 삭제하고 이름이 바뀌�
   await page.getByRole("textbox", { name: "변경할 그룹 이름", exact: true }).fill("주말");
   await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByRole("heading", { name: "주말", exact: true })).toBeVisible();
-  await page.goto(`/mypage/groups/${defaultGroupId}`);
   await page.getByRole("button", { name: "그룹 삭제", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "삭제", exact: true }).click();
   await expect(page).toHaveURL("/mypage");
-  expect(favorites.groups.map((group) => group.name)).toEqual(["주말"]);
-  await page.getByRole("link", { name: /주말/ }).click();
+  expect(favorites.groups.map((group) => group.id)).toEqual([defaultGroupId]);
+  await page.getByRole("link", { name: /즐겨찾기 · 대표 그룹/ }).click();
+  await page.getByRole("button", { name: "그룹 이름 변경", exact: true }).click();
+  await expect(page.getByText("대표", { exact: true })).toHaveCount(0);
+  await page.getByRole("textbox", { name: "변경할 그룹 이름", exact: true }).fill("출퇴근");
+  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "출퇴근", exact: true })).toBeVisible();
+  await expect(page.getByText("대표", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "그룹 삭제", exact: true }).click();
-  await expect(page.getByRole("dialog")).toContainText("마지막 그룹은 삭제할 수 없어요");
+  await expect(page.getByRole("dialog")).toContainText("대표 그룹은 삭제할 수 없어요");
 });
 
 test("그룹과 즐겨찾기 순서를 키보드로 편집하고 전체 ID 목록으로 저장한다", async ({ page, favorites, api }) => {
@@ -231,6 +236,17 @@ test("그룹과 즐겨찾기 순서를 키보드로 편집하고 전체 ID 목�
   });
   await page.reload();
   await expect(page.getByRole("tab", { name: "통학", exact: true })).toHaveAttribute("aria-selected", "true");
+  await page.goto("/mypage");
+  await expect(page.getByRole("link", { name: /통학 · 대표 그룹/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /즐겨찾기 · 대표 그룹/ })).toHaveCount(0);
+  await page.getByRole("link", { name: /통학 · 대표 그룹/ }).click();
+  await page.getByRole("button", { name: "그룹 삭제", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "대표 그룹은 삭제할 수 없어요" })).toBeVisible();
+  await page.getByRole("dialog").getByRole("button", { name: "확인", exact: true }).click();
+  await page.goto(`/mypage/groups/${defaultGroupId}`);
+  await expect(page.getByText("대표", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "그룹 삭제", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "즐겨찾기를 삭제할까요?" })).toBeVisible();
 });
 
 for (const [status, label] of [
@@ -329,9 +345,14 @@ test("손잡이를 끌어서 그룹 순서를 바꾸고 저장한다", async ({ 
   await page.goto("/mypage");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
-  const doneBounds = (await editor.getByRole("button", { name: "완료", exact: true }).boundingBox())!;
-  const logoutBounds = (await page.getByRole("button", { name: "로그아웃", exact: false }).boundingBox())!;
-  expect(logoutBounds.y - doneBounds.y - doneBounds.height).toBeCloseTo(24, 1);
+  await expect(editor.getByText("아직 등록한 정류장이 없어요", { exact: true })).toBeVisible();
+  await expect
+    .poll(async () => {
+      const doneBounds = (await editor.getByRole("button", { name: "완료", exact: true }).boundingBox())!;
+      const logoutBounds = (await page.getByRole("button", { name: "로그아웃", exact: false }).boundingBox())!;
+      return logoutBounds.y - doneBounds.y - doneBounds.height;
+    })
+    .toBeCloseTo(24, 1);
   await editor
     .getByRole("list", { name: "그룹 순서", exact: true })
     .evaluate((element) =>
