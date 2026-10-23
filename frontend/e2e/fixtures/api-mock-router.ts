@@ -10,6 +10,15 @@ export interface ApiMockRouter {
 export function createApiMockRouter(page: Page): ApiMockRouter {
   const requests = new Map<Request, { finished: Promise<void>; finish: () => void }>();
   const errors: unknown[] = [];
+  let disposing = false;
+  // 페이지 mock을 해제한 뒤에도 context가 닫힐 때까지 실제 API 전송을 막는다.
+  const guardReady = page.context().route("**/api/**", async (route) => {
+    if (!disposing) {
+      const request = route.request();
+      errors.push(new Error(`API mock을 벗어난 요청: ${request.method()} ${request.url()}`));
+    }
+    await route.abort();
+  });
 
   const onRequest = (request: Request) => {
     const previous = request.redirectedFrom();
@@ -34,6 +43,7 @@ export function createApiMockRouter(page: Page): ApiMockRouter {
 
   return {
     async route(handler: ApiRouteHandler) {
+      await guardReady;
       await page.route("**/api/**", async (route) => {
         try {
           await handler(route);
@@ -46,7 +56,9 @@ export function createApiMockRouter(page: Page): ApiMockRouter {
       });
     },
     async dispose() {
+      disposing = true;
       try {
+        await guardReady;
         // fallback으로 다음 콜백에 넘어가는 동안에도 요청 완료까지 mock 등록을 유지한다.
         while (requests.size > 0) {
           await Promise.all(Array.from(requests.values(), (request) => request.finished));

@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Request, type Route } from "@playwright/test";
 import { createApiMockRouter } from "./fixtures/api-mock-router";
+import { apiPaths } from "./fixtures/mock-data";
 
 function deferred() {
   let resolve!: () => void;
@@ -23,6 +24,49 @@ async function captureForwardedRequests(page: Page) {
   });
   return forwarded;
 }
+
+test("mock 해제 뒤의 API 요청은 실제 서버로 전달하지 않고 차단한다", async ({ page }) => {
+  const forwarded = await captureForwardedRequests(page);
+  const router = createApiMockRouter(page);
+  await router.route((route) => route.fulfill({ json: { mocked: true } }));
+
+  const mocked = await page.evaluate(async (path) => (await fetch(path)).json(), apiPaths.watch);
+  expect(mocked).toEqual({ mocked: true });
+  expect(forwarded).toEqual([]);
+
+  await router.dispose();
+  const blocked = await page.evaluate(async (path) => {
+    try {
+      await fetch(path);
+      return false;
+    } catch {
+      return true;
+    }
+  }, apiPaths.watch);
+  expect(blocked).toBe(true);
+  expect(forwarded).toEqual([]);
+});
+
+test("실행 중 mock을 벗어난 API 요청은 차단하고 누출된 경로를 보고한다", async ({ page }) => {
+  const forwarded = await captureForwardedRequests(page);
+  const router = createApiMockRouter(page);
+  await router.route((route) => route.fulfill({ json: { mocked: true } }));
+  await page.unrouteAll({ behavior: "wait" });
+
+  const blocked = await page.evaluate(async (path) => {
+    try {
+      await fetch(path);
+      return false;
+    } catch {
+      return true;
+    }
+  }, apiPaths.watch);
+  expect(blocked).toBe(true);
+  expect(forwarded).toEqual([]);
+  await expect(router.dispose()).rejects.toMatchObject({
+    errors: [expect.objectContaining({ message: expect.stringContaining(apiPaths.watch) })],
+  });
+});
 
 test("API에서 페이지로 리다이렉트한 요청도 mock 해제 전에 종료한다", async ({ page, browserName }) => {
   test.skip(browserName === "webkit", "WebKit의 route.fulfill은 302 응답을 지원하지 않는다");
