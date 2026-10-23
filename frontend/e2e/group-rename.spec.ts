@@ -47,7 +47,7 @@ for (const width of [320, 425]) {
     await page.evaluate(() => document.fonts.ready);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     if (width === 425 && browserName === "chromium")
-      await page.screenshot({ path: "/private/tmp/salmonbus-group-rename.png" });
+      await page.screenshot({ path: test.info().outputPath("salmonbus-group-rename.png") });
     await save.click();
     await expect(page.getByRole("heading", { name: "회사 가는 길", exact: true })).toBeVisible();
     expect(favorites.groups[0]!.name).toBe("회사 가는 길");

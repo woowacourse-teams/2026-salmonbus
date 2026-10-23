@@ -35,8 +35,8 @@ for (const width of [320, 425]) {
     expect(bounds.y + bounds.height).toBeLessThanOrEqual(844);
     await testInfo.attach("비회원 즐겨찾기 로그인 안내", { body: await page.screenshot(), contentType: "image/png" });
     if (browserName === "chromium" && width === 425) {
-      await page.screenshot({ path: "/private/tmp/salmonbus-sal249-qa/favorite-login.png" });
-      await dialog.screenshot({ path: "/private/tmp/salmonbus-sal249-qa/favorite-login-dialog.png" });
+      await page.screenshot({ path: test.info().outputPath("favorite-login.png") });
+      await dialog.screenshot({ path: test.info().outputPath("favorite-login-dialog.png") });
     }
 
     await dialog.getByRole("button", { name: "닫기", exact: true }).click();

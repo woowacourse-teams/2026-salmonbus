@@ -61,7 +61,7 @@ for (const width of [320, 425]) {
       expect((await remove.boundingBox())!.height).toBeCloseTo(48, 2);
       expect((await cancel.boundingBox())!.height).toBeCloseTo(48, 2);
       if (width === 425 && browserName === "chromium")
-        await page.screenshot({ path: `/private/tmp/salmonbus-group-delete-${kind}.png` });
+        await page.screenshot({ path: test.info().outputPath(`salmonbus-group-delete-${kind}.png`) });
       await cancel.click();
       await expect(dialog).toHaveCount(0);
       await expect(trigger).toBeFocused();
@@ -114,7 +114,7 @@ for (const width of [320, 425]) {
       await expect(dialog.getByRole("button", { name: "삭제", exact: true })).toHaveCount(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       if (width === 425 && count === 2 && browserName === "chromium")
-        await page.screenshot({ path: "/private/tmp/salmonbus-representative.png" });
+        await page.screenshot({ path: test.info().outputPath("salmonbus-representative.png") });
       await dialog.getByRole("button", { name: "확인", exact: true }).click();
       await expect(dialog).toHaveCount(0);
       await expect(page.getByRole("button", { name: "그룹 삭제", exact: true })).toBeFocused();

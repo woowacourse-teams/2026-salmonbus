@@ -182,7 +182,7 @@ test("홈 영역이 편집 화면으로 바뀌고 카드를 잡고 이동·놓�
   const cards = editor.getByRole("list", { name: "즐겨찾기 순서", exact: true }).getByRole("listitem");
   await expect(cards.first()).toContainText(first!.name);
   await page.evaluate(() => document.fonts.ready);
-  if (browserName === "chromium") await page.screenshot({ path: "/private/tmp/salmonbus-sal249-qa/editor.png" });
+  if (browserName === "chromium") await page.screenshot({ path: test.info().outputPath("editor.png") });
   const grip = editor.getByRole("button", {
     name: `${api.data.watch.route.displayName} · ${first!.name} 순서 변경`,
     exact: true,
@@ -200,7 +200,7 @@ test("홈 영역이 편집 화면으로 바뀌고 카드를 잡고 이동·놓�
   await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2 + secondBox.y - before.y, {
     steps: 12,
   });
-  if (browserName === "chromium") await page.screenshot({ path: "/private/tmp/salmonbus-sal249-qa/editor-drag.png" });
+  if (browserName === "chromium") await page.screenshot({ path: test.info().outputPath("editor-drag.png") });
   await page.mouse.up();
   await expect(cards.first()).toContainText(second!.name);
   expect(favorites.groups[0]!.favorites[0]!.stopId).toBe(first!.stopId);
@@ -215,8 +215,7 @@ test("홈 영역이 편집 화면으로 바뀌고 카드를 잡고 이동·놓�
   const nav = (await page.getByRole("link", { name: "홈", exact: true }).boundingBox())!;
   expect(toastBox.y + toastBox.height).toBeLessThan(nav.y);
   await testInfo.attach("즐겨찾기 편집 완료", { body: await page.screenshot(), contentType: "image/png" });
-  if (browserName === "chromium")
-    await page.screenshot({ path: "/private/tmp/salmonbus-sal249-qa/editor-complete.png" });
+  if (browserName === "chromium") await page.screenshot({ path: test.info().outputPath("editor-complete.png") });
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
   await editor.getByRole("button", { name: "완료", exact: true }).click();
   await expect(toast).toBeVisible();
@@ -246,7 +245,7 @@ test("편집 중 삭제는 확인·실패·재시도가 가능하고 다른 그�
   const dialog = page.getByRole("dialog", { name: "즐겨찾기를 삭제할까요?" });
   await expect(dialog).toContainText("출퇴근 그룹에서만 삭제돼요.");
   await expect(dialog).toContainText("필요하면 언제든 다시 추가할 수 있어요.");
-  if (browserName === "chromium") await page.screenshot({ path: "/private/tmp/salmonbus-sal249-qa/editor-delete.png" });
+  if (browserName === "chromium") await page.screenshot({ path: test.info().outputPath("editor-delete.png") });
   await dialog.getByRole("button", { name: "취소", exact: true }).click();
   await expect(trash).toBeFocused();
   expect(favorites.requests.filter((request) => request.method === "DELETE")).toHaveLength(0);
@@ -491,7 +490,8 @@ for (const width of [320, 425]) {
     await expect(card).toHaveCSS("outline", surface.outline);
     await expect(card).toHaveCSS("outline-offset", surface.offset);
     await expect(card).toHaveCSS("background-color", surface.background);
-    if (width === 425) await page.screenshot({ path: `/private/tmp/salmonbus-srksd-${test.info().project.name}.png` });
+    if (width === 425)
+      await page.screenshot({ path: test.info().outputPath(`salmonbus-srksd-${test.info().project.name}.png`) });
   });
 }
 
@@ -579,7 +579,7 @@ for (const width of [320, 425]) {
     await expect(editor.getByRole("list", { name: "즐겨찾기 순서", exact: true })).toHaveCount(0);
     await expect(editor.getByRole("button", { name: "완료", exact: true })).toBeEnabled();
     if (width === 425 && browserName === "chromium")
-      await page.screenshot({ path: "/private/tmp/salmonbus-cnyge.png" });
+      await page.screenshot({ path: test.info().outputPath("salmonbus-cnyge.png") });
     await editor.getByRole("button", { name: "통학", exact: true }).click();
     await expect(empty).toHaveCount(0);
     const remove = editor.getByRole("button", { name: `${stop.name} 삭제`, exact: true });
