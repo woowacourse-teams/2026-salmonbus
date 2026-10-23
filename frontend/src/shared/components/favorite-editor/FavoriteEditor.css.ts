@@ -26,6 +26,16 @@ export const groupName = style({
   cursor: "pointer",
 });
 export const info = style({ display: "flex", flexDirection: "column", gap: 6, flex: 1, minWidth: 0 });
+export const empty = style({
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 8,
+  padding: "36px 0",
+  textAlign: "center",
+});
+export const emptyCount = style({ margin: 0, color: vars.color.liveBus, fontSize: 15, lineHeight: 1.6 });
+export const emptyDescription = style({ margin: 0, color: "#837B74", fontSize: 14, lineHeight: 1.6 });
 export const cardHeading = style({ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flexWrap: "wrap" });
 export const stop = style({
   flex: "1 1 100px",

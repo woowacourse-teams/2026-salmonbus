@@ -150,7 +150,7 @@ export function FavoriteEditor({ onClose, initialGroupId }: FavoriteEditorProps)
         )}
       />
       <FavoritesNotice resource={summaries} onRetry={() => retry((value) => value + 1)} />
-      {group && (
+      {group && group.favorites.length > 0 && (
         <SortableList
           key={group.id}
           items={group.favorites}
@@ -201,7 +201,12 @@ export function FavoriteEditor({ onClose, initialGroupId }: FavoriteEditorProps)
           }}
         />
       )}
-      {group?.favorites.length === 0 && <p className={common.subtle}>아직 등록한 즐겨찾기가 없어요.</p>}
+      {group?.favorites.length === 0 && (
+        <div className={styles.empty}>
+          <p className={styles.emptyCount}>0 / 2</p>
+          <p className={styles.emptyDescription}>아직 등록한 정류장이 없어요</p>
+        </div>
+      )}
       {error && deleting === null && (
         <p className={common.error} role="alert">
           {error}

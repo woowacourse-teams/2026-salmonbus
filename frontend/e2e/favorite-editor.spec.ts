@@ -392,3 +392,46 @@ test("편집을 누를 때만 손잡이 공간이 열리며 모션 줄이기에�
   await expect(handle).toHaveCSS("animation-name", "none");
   await expect(handle).toHaveCSS("width", "15px");
 });
+
+for (const width of [320, 425]) {
+  test(`${width}px 편집 중 빈 그룹은 CnyGe 안내를 표시하고 그룹 전환과 마지막 항목 삭제에도 반영한다`, async ({
+    page,
+    favorites,
+    api,
+    browserName,
+  }) => {
+    await page.setViewportSize({ width, height: 844 });
+    const stop = api.data.board.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+    favorites.groups.push({
+      id: secondGroupId,
+      name: "통학",
+      favorites: [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })],
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
+    const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
+    const empty = editor.getByText("아직 등록한 정류장이 없어요", { exact: true }).locator("..");
+    await expect(empty).toBeVisible();
+    await expect(empty.getByText("0 / 2", { exact: true })).toHaveCSS("color", "rgb(232, 83, 63)");
+    await expect(empty).toHaveCSS("padding-top", "36px");
+    await expect(empty).toHaveCSS("padding-bottom", "36px");
+    await expect(empty).toHaveCSS("gap", "8px");
+    await expect(empty).toHaveCSS("text-align", "center");
+    await expect(editor.getByText("아직 등록한 즐겨찾기가 없어요.", { exact: true })).toHaveCount(0);
+    await expect(editor.getByRole("list", { name: "즐겨찾기 순서", exact: true })).toHaveCount(0);
+    await expect(editor.getByRole("button", { name: "완료", exact: true })).toBeEnabled();
+    if (width === 425 && browserName === "chromium")
+      await page.screenshot({ path: "/private/tmp/salmonbus-cnyge.png" });
+    await editor.getByRole("button", { name: "통학", exact: true }).click();
+    await expect(empty).toHaveCount(0);
+    const remove = editor.getByRole("button", { name: `${stop.name} 삭제`, exact: true });
+    await expect(remove).toBeVisible();
+    await remove.click();
+    await page.getByRole("dialog").getByRole("button", { name: "삭제하기", exact: true }).click();
+    await expect(empty).toBeVisible();
+    expect(favorites.groups[1]!.favorites).toHaveLength(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await editor.getByRole("button", { name: "완료", exact: true }).click();
+    await expect(editor).toHaveCount(0);
+  });
+}
