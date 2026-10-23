@@ -34,11 +34,9 @@ const PHASE_MOTION_RULE: Record<Phase, PhaseMotionRule> = {
 
 export function liveVehicleViewsFor(
   board: Board,
-  vehicles: readonly Vehicle[] | null,
+  vehicles: readonly Vehicle[],
   direction: Direction,
 ): LiveVehicleView[] {
-  if (vehicles === null) return [];
-
   const stopSequences = board.stops
     .filter((stop) => stop.direction === direction)
     .map((stop) => stop.sequence)

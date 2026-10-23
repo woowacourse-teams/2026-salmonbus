@@ -4,8 +4,10 @@ import type { RouteWatch, Vehicle } from "@/shared/api/routeForecast.types";
 
 export const DEFAULT_LIVE_MOTION_DURATION_MS = 20_000;
 const MIN_LIVE_MOTION_DURATION_MS = 5_000;
+// 렌더마다 새 빈 배열을 만들면 마커 계산과 이동 효과가 매번 다시 돈다.
+const NO_VEHICLES: readonly Vehicle[] = [];
 
-export function useFreshLiveVehicles(latestSuccess: LatestSuccess<RouteWatch> | null): readonly Vehicle[] | null {
+export function useFreshLiveVehicles(latestSuccess: LatestSuccess<RouteWatch> | null): readonly Vehicle[] {
   const watch = latestSuccess?.body ?? null;
   const staleAtMillis = watch === null ? null : Date.parse(watch.staleAt);
   const serverClock = latestSuccess?.clock ?? null;
@@ -23,12 +25,12 @@ export function useFreshLiveVehicles(latestSuccess: LatestSuccess<RouteWatch> | 
     return () => window.clearTimeout(expiryTimer);
   }, [observationKey, serverClock, staleAtMillis]);
 
-  if (latestSuccess === null || staleAtMillis === null) return null;
+  if (latestSuccess === null || staleAtMillis === null) return NO_VEHICLES;
 
   const referenceAtReceipt = latestSuccess.clock?.servedAt ?? latestSuccess.receivedAt;
   const expiredBeforeReceipt = Number.isNaN(staleAtMillis) || staleAtMillis <= referenceAtReceipt;
 
-  return !expiredBeforeReceipt && expiredObservationKey !== observationKey ? latestSuccess.body.vehicles : null;
+  return !expiredBeforeReceipt && expiredObservationKey !== observationKey ? latestSuccess.body.vehicles : NO_VEHICLES;
 }
 
 export function liveMotionDurationOf(resource: PolledResource<RouteWatch>): number {

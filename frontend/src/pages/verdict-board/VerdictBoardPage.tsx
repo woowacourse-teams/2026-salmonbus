@@ -41,7 +41,7 @@ type BoardState =
 interface OperatingBoardProps {
   board: Board;
   direction: DirectionInfo;
-  liveVehicles: readonly Vehicle[] | null;
+  liveVehicles: readonly Vehicle[];
   liveMotionDurationMs: number;
   switched: boolean;
   onDirectionChange: (direction: Direction) => void;
