@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState, type KeyboardEvent } from "react";
 import { Link } from "react-router";
 import type { FavoriteStatus, FavoriteTarget, HomeFavorite } from "@/shared/api/favorites.types";
 import { latestSuccessOf } from "@/shared/api/polledResource";
@@ -54,6 +54,24 @@ export function HomeFavorites() {
     setAnimateGroup(true);
     setSelected(id);
   };
+  function handleGroupTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    const next =
+      event.key === "ArrowRight"
+        ? (index + 1) % groups.length
+        : event.key === "ArrowLeft"
+          ? (index + groups.length - 1) % groups.length
+          : event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? groups.length - 1
+              : null;
+    if (next === null) return;
+    const nextGroup = groups[next];
+    if (nextGroup === undefined) return;
+    event.preventDefault();
+    selectGroup(nextGroup.id);
+    event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+  }
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (shownLatest === null) return;
@@ -104,24 +122,7 @@ export function HomeFavorites() {
                 tabIndex={group?.id === candidate.id ? 0 : -1}
                 key={candidate.id}
                 onClick={() => selectGroup(candidate.id)}
-                onKeyDown={(event) => {
-                  const next =
-                    event.key === "ArrowRight"
-                      ? (index + 1) % groups.length
-                      : event.key === "ArrowLeft"
-                        ? (index + groups.length - 1) % groups.length
-                        : event.key === "Home"
-                          ? 0
-                          : event.key === "End"
-                            ? groups.length - 1
-                            : null;
-                  if (next === null) return;
-                  const nextGroup = groups[next];
-                  if (nextGroup === undefined) return;
-                  event.preventDefault();
-                  selectGroup(nextGroup.id);
-                  event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
-                }}
+                onKeyDown={(event) => handleGroupTabKeyDown(event, index)}
               >
                 {candidate.name}
               </button>
