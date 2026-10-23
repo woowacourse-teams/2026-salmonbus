@@ -5,7 +5,9 @@ import { StatusBar } from 'expo-status-bar';
 import { StyleSheet } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { LoadFailedView } from './LoadFailedView';
-import { appBootstrapScriptFor, bridgeEventScriptFor, bridgeMessageFrom } from './bridge/bridge';
+import { appBootstrapScriptFor, bridgeEventScriptFor, bridgeMessageFrom, type BridgeMessage } from './bridge/bridge';
+import { HAPTIC_CAPABILITIES } from './haptic/hapticMessages';
+import { playHaptic } from './haptic/playHaptic';
 import { NativeRouteMap, type NativeRouteMapRef } from './native-map/NativeRouteMap';
 import { NATIVE_MAP_CAPABILITIES } from './native-map/nativeMapMessages';
 
@@ -22,7 +24,19 @@ function readWebUrl() {
 const WEB_URL = readWebUrl();
 const IN_APP_ORIGINS = [new URL(WEB_URL).origin];
 const SPLASH_BACKGROUND_COLOR = '#E8533F';
-const APP_CAPABILITIES: readonly string[] = NativeRouteMap !== null ? NATIVE_MAP_CAPABILITIES : [];
+// 영역 키와 그 영역 메시지의 type 앞부분이 다르면 tsc가 막는다 (map 키에는 map.* 만).
+type DomainCapabilities<T> = { [K in keyof T]: readonly `${K & string}.${string}`[] };
+function domainCapabilitiesOf<T extends DomainCapabilities<T>>(capabilities: T): T {
+  return capabilities;
+}
+
+// 영역마다 앱이 받는 메시지 목록. 처리 함수(handlersByDomain)도 같은 키로 둔다.
+const CAPABILITIES_BY_DOMAIN = domainCapabilitiesOf({
+  map: NativeRouteMap !== null ? NATIVE_MAP_CAPABILITIES : [],
+  haptic: HAPTIC_CAPABILITIES,
+});
+type BridgeDomain = keyof typeof CAPABILITIES_BY_DOMAIN;
+const APP_CAPABILITIES: readonly string[] = Object.values(CAPABILITIES_BY_DOMAIN).flat();
 const APP_BOOTSTRAP = appBootstrapScriptFor({
   appVersion: Application.nativeApplicationVersion ?? 'unknown',
   capabilities: APP_CAPABILITIES,
@@ -57,8 +71,15 @@ export default function App() {
     const raw = event.nativeEvent.data;
     const message = bridgeMessageFrom(raw);
     if (message === null || !APP_CAPABILITIES.includes(message.type)) return;
-    if (message.type.startsWith('map.')) handleMapMessage(raw);
+    const domain = message.type.slice(0, message.type.indexOf('.')) as BridgeDomain;
+    handlersByDomain[domain](message, raw);
   }
+
+  // message는 검사를 마친 envelope이고, raw는 받은 JSON 그대로다. 지도 모듈은 raw를 Swift에서 다시 읽는다.
+  const handlersByDomain: Record<BridgeDomain, (message: BridgeMessage, raw: string) => void> = {
+    map: (_message, raw) => handleMapMessage(raw),
+    haptic: (message) => playHaptic(message),
+  };
 
   function handleMapMessage(raw: string) {
     const epoch = documentEpoch.current;

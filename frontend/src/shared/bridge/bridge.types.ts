@@ -1,3 +1,4 @@
+import type { HapticCommands } from "../haptic/haptic.types";
 import type { NativeMapBridgeCommands, NativeMapBridgeEvents } from "../native-map/protocol";
 
 /**
@@ -13,8 +14,8 @@ export interface BridgeEnvelope extends BridgeMessage {
   v: 1;
 }
 
-/** 웹이 앱에 보내는 메시지 전체 목록. 앱의 메시지 목록(app/bridge)과 같아야 한다. */
-export type AppCommands = NativeMapBridgeCommands;
+/** 웹이 앱에 보내는 메시지 전체 목록. 앱 App.tsx의 CAPABILITIES_BY_DOMAIN이 받는 목록과 같아야 한다. */
+export type AppCommands = NativeMapBridgeCommands & HapticCommands;
 export type AppCommandType = keyof AppCommands;
 
 /** 앱이 웹에 보내는 메시지 전체 목록. */
