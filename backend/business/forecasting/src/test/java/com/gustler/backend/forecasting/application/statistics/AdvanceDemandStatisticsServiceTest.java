@@ -1,7 +1,13 @@
 package com.gustler.backend.forecasting.application.statistics;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline.Step;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline.Step.Status;
@@ -15,14 +21,19 @@ import org.junit.jupiter.api.Test;
 class AdvanceDemandStatisticsServiceTest {
     @Test
     void 한_호출에_한_노선만_처리하고_다음_호출은_다른_노선으로_넘긴다() {
-        var pipeline=mock(DemandStatisticsPipeline.class);
-        var routes=mock(RouteVersionQuery.class);
-        var now=Instant.parse("2026-09-25T00:00:00Z");
-        var service=new AdvanceDemandStatisticsService(pipeline,routes,Clock.fixed(now,ZoneId.of("Asia/Seoul")));
-        when(routes.findActiveVersionIds()).thenReturn(List.of(2L,1L));
-        when(pipeline.step(anyLong())).thenReturn(new Step(Status.PROGRESSED,"FOLD",now));
+        // given
+        DemandStatisticsPipeline pipeline = mock(DemandStatisticsPipeline.class);
+        RouteVersionQuery routes = mock(RouteVersionQuery.class);
+        Instant now = Instant.parse("2026-09-25T00:00:00Z");
+        AdvanceDemandStatisticsService service =
+            new AdvanceDemandStatisticsService(pipeline, routes, Clock.fixed(now, ZoneId.of("Asia/Seoul")));
+        when(routes.findActiveVersionIds()).thenReturn(List.of(2L, 1L));
+        when(pipeline.step(anyLong())).thenReturn(new Step(Status.PROGRESSED, "FOLD", now));
 
+        // when
         service.advance();
+
+        // then
         verify(pipeline).step(1L);
         verifyNoMoreInteractions(pipeline);
         service.advance();
@@ -31,20 +42,29 @@ class AdvanceDemandStatisticsServiceTest {
 
     @Test
     void 실패한_노선은_즉시_재시도하지_않고_다른_노선을_처리한다() {
-        var pipeline=mock(DemandStatisticsPipeline.class);
-        var routes=mock(RouteVersionQuery.class);
-        var now=Instant.parse("2026-09-25T00:00:00Z");
-        var service=new AdvanceDemandStatisticsService(pipeline,routes,Clock.fixed(now,ZoneId.of("Asia/Seoul")));
-        when(routes.findActiveVersionIds()).thenReturn(List.of(1L,2L));
-        var failure=new IllegalStateException("synthetic failure");
+        // when
+        DemandStatisticsPipeline pipeline = mock(DemandStatisticsPipeline.class);
+        RouteVersionQuery routes = mock(RouteVersionQuery.class);
+        Instant now = Instant.parse("2026-09-25T00:00:00Z");
+        AdvanceDemandStatisticsService service =
+            new AdvanceDemandStatisticsService(pipeline, routes, Clock.fixed(now, ZoneId.of("Asia/Seoul")));
+        when(routes.findActiveVersionIds()).thenReturn(List.of(1L, 2L));
+        IllegalStateException failure = new IllegalStateException("synthetic failure");
         when(pipeline.step(1L)).thenThrow(failure);
-        when(pipeline.step(2L)).thenReturn(new Step(Status.PROGRESSED,"FOLD",now));
+        when(pipeline.step(2L)).thenReturn(new Step(Status.PROGRESSED, "FOLD", now));
 
-        assertThatThrownBy(service::advance).isSameAs(failure);
+        // then
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(service::advance);
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull().isSameAs(failure);
         service.advance();
         service.advance();
 
-        verify(pipeline,times(1)).step(1L);
-        verify(pipeline,times(2)).step(2L);
+        verify(pipeline, times(1)).step(1L);
+        verify(pipeline, times(2)).step(2L);
     }
 }

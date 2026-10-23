@@ -1,7 +1,10 @@
 package com.gustler.backend.forecasting.infrastructure.statistics;
 
+/**
+ * 통계 입력 파일의 식별·범위·검증 정보를 전달한다.
+ * 파일 내용은 별도 읽기 경계에서 확인한다.
+ */
 record StatisticsInputFile(String name, long byteCount, String sha256) {
-
     StatisticsInputFile {
         if (name == null || !name.matches("[a-zA-Z0-9][a-zA-Z0-9._-]*")) {
             throw new IllegalArgumentException("입력 파일 이름은 하위 경로 없이 지정해야 한다");

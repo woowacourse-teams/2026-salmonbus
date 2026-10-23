@@ -6,9 +6,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
- * 예보 쪽 배치를 배선한다. {@code forecast.enabled} 가 참일 때만 선다.
+ * 예보 배치를 구성한다. {@code forecast.enabled} 가 참일 때만 활성화한다.
  *
- * <p>끄는 방식을 수집 쪽과 맞췄다. 두 배치가 서로 다른 방식으로 꺼져 있으면 나중에 켤 때
+ * <p>비활성화 방식을 수집 배치와 맞췄다. 두 배치를 서로 다른 방식으로 비활성화하면 다시 켤 때
  * 한쪽을 빠뜨린다.
  */
 @Configuration

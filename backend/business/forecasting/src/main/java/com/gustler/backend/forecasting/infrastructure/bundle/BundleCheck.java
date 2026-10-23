@@ -1,16 +1,15 @@
 package com.gustler.backend.forecasting.infrastructure.bundle;
 
 /**
- * 계수 묶음을 ACTIVE 로 올리기 전에 통과해야 하는 검사.
+ * 계수 묶음을 ACTIVE 로 승격하기 전에 통과해야 하는 검사.
  *
- * <p>하나라도 어긋나면 안 올린다. 목록을 여기 한 곳에 모아 둔 이유는 특징 계약이 아직 확정되지
- * 않아서다. v4-1 정본 3.3절이 정규화 상수 · 노선 열 · 정류장 순번 분모 · spline 매듭을 미결로
- * 뒀다. 확정되면 이 파일과 {@link BundleTensor} 만 고치면 된다.
+ * <p>하나라도 어긋나면 승격하지 않는다. 특징 계약이 아직 확정되지 않아 검사 목록을 한곳에 모았다.
+ * v4-1 정본 3.3절이 정규화 상수 · 노선 열 · 정류장 순번 분모 · spline 매듭을 미결로
+ * 두었으므로, 확정되면 이 파일과 {@link BundleTensor} 만 수정한다.
  *
- * <p>상수 이름이 곧 거절 사유다. 무엇이 어긋나 안 올렸는지가 로그에 이 이름으로 남는다.
+ * <p>상수 이름이 거절 사유이며, 통과하지 못한 검사 이름이 로그에 남는다.
  */
 enum BundleCheck {
-
     BUNDLE_DIRECTORY_IS_NOT_SYMBOLIC_LINK("계수 묶음 자리가 symlink 다"),
     MANIFEST_IS_REGULAR_FILE("설명 파일이 일반 파일이 아니다"),
     WEIGHTS_IS_REGULAR_FILE("계수 파일이 일반 파일이 아니다"),

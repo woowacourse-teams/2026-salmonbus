@@ -11,16 +11,19 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 class EvaluationArchiveConfigurationTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
 
     @Test
     void 자동_이관을_꺼도_기존_S3_자료를_읽는_기능은_남는다() {
         // given
-        var runner = new ApplicationContextRunner().withUserConfiguration(EvaluationArchiveConfiguration.class)
-            .withPropertyValues("forecast.archive.enabled=false", "forecast.archive.work-directory=" + directory);
+        ApplicationContextRunner runner =
+            new ApplicationContextRunner().withUserConfiguration(EvaluationArchiveConfiguration.class)
+                .withPropertyValues("forecast.archive.enabled=false", "forecast.archive.work-directory=" + directory);
 
         // when
         runner.run(context -> {
+
             // then
             assertThat(context).hasNotFailed().doesNotHaveBean(AdvanceEvaluationArchive.class);
             assertThat(context.getBeanProvider(StatisticsArchiveReader.class).getIfAvailable()).isNotNull();
@@ -30,11 +33,14 @@ class EvaluationArchiveConfigurationTest {
     @Test
     void 이관_자료를_읽지_않는_서버는_작업_폴더가_없어도_시작한다() {
         // given
-        var runner = new ApplicationContextRunner().withUserConfiguration(EvaluationArchiveConfiguration.class)
-            .withPropertyValues("forecast.archive.enabled=false", "forecast.archive.work-directory=" + directory.resolve("absent"));
+        ApplicationContextRunner runner =
+            new ApplicationContextRunner().withUserConfiguration(EvaluationArchiveConfiguration.class)
+                .withPropertyValues("forecast.archive.enabled=false",
+                    "forecast.archive.work-directory=" + directory.resolve("absent"));
 
         // when
         runner.run(context -> {
+
             // then
             assertThat(context).hasNotFailed().doesNotHaveBean(AdvanceEvaluationArchive.class);
         });

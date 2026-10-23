@@ -1,10 +1,12 @@
 package com.gustler.backend.forecasting.infrastructure.bundle;
 
 import com.gustler.backend.forecasting.domain.model.CoefficientsFixture;
+import com.gustler.backend.forecasting.domain.model.ForecastFeatureContract;
 import com.gustler.backend.forecasting.domain.model.SeatDistributionInput;
 import com.gustler.backend.forecasting.domain.model.SeatDistributionPredictor;
+import com.gustler.backend.forecasting.domain.model.SeatForecastDesignMatrix;
+import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
 import com.gustler.backend.forecasting.domain.model.Sha256;
-
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -13,21 +15,21 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
 import java.util.Map;
-import com.gustler.backend.forecasting.domain.model.SeatForecastDesignMatrix;
+import java.util.Map.Entry;
 import java.util.Random;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 /**
- * 검사를 통과하는 더미 계수 묶음을 만들고, 요청하면 한 군데씩 망가뜨린다.
+ * 검사를 통과하는 더미 계수 묶음을 만들고 요청에 따라 한 항목씩 잘못된 값으로 바꾼다.
  *
- * <p>진짜 계수 파일이 아직 없다. 그래서 크기와 자료형만 계약대로 맞추고 계수 값은 아무 수나
- * 넣는다. 이 티켓이 재는 것은 값의 정확도가 아니라 <b>검사가 실제로 막는지</b>다.
+ * <p>실제 계수 파일이 아직 없어 크기와 자료형만 계약에 맞추고 계수 값은 임의로 정한다.
+ * 이 티켓에서는 값의 정확도가 아니라 검사가 잘못된 묶음을 실제로 거절하는지 확인한다.
  *
- * <p>진짜 파일이 오면 이 픽스처를 안 고치고 파일만 갈아 끼운다.
+ * <p>실제 파일이 오면 픽스처를 수정하지 않고 파일만 교체한다.
  */
 public final class DummyBundle {
-
     static final String BUNDLE_SCHEMA_VERSION = "a18-live-bundle-v1";
     static final String MODEL_VERSION = "seat-distribution-a18-v1";
     static final String FEATURE_CONTRACT_VERSION = "seat-feature-contract-v4-1-draft";
@@ -44,20 +46,16 @@ public final class DummyBundle {
     private static final int GOLDEN_CURRENT_SEATS = 20;
     private static final int GOLDEN_CAPACITY = 44;
 
-    private byte[] routeReference;
-
     private final Map<String, Object> manifest = new LinkedHashMap<>();
+
     private final SafetensorsWriter weights = new SafetensorsWriter();
     private final List<String> routes;
+    private byte[] routeReference;
 
     private DummyBundle(
         List<String> routes
     ) {
         this.routes = routes;
-    }
-
-    public LoadedBundle loadAt(Path directory) {
-        return LoadedBundle.from(writeTo(directory));
     }
 
     public static DummyBundle valid() {
@@ -78,15 +76,15 @@ public final class DummyBundle {
         bundle.fillTensors(50);
         bundle.fillManifest(50);
         bundle.put("bundleSchemaVersion", "a18-live-bundle-v2");
-        bundle.put("featureContractVersion", com.gustler.backend.forecasting.domain.model.ForecastFeatureContract.CONDITIONAL_VERSION);
-        bundle.put("featureNames", com.gustler.backend.forecasting.domain.model.ForecastFeatureContract.STOP_DIRECTION_TIME.featureNames());
+        bundle.put("featureContractVersion", ForecastFeatureContract.CONDITIONAL_VERSION);
+        bundle.put("featureNames", ForecastFeatureContract.STOP_DIRECTION_TIME.featureNames());
         bundle.put("normalizationConstants", Map.of("largestSeatCount", 68.0, "lowSeatBandWidth", 20.0));
         bundle.put("timeSlotSource", "observation_batch.response_received_at;Asia/Seoul;new_time_slot=0");
         bundle.put("cellStatisticsPolicy", "statistics-inputs-zero");
         List<Map<String, Object>> references = new ArrayList<>();
         for (String route : ROUTES) {
             references.add(Map.of("modelRoute", route,
-                "sourceRouteId", route.equals("1650") ? "234000050" : "204000057",
+                "sourceRouteId", sourceRouteIdOf(route),
                 "stops", List.of(
                     Map.of("order", 1, "id", "same", "boardingAllowed", true, "direction", "UP"),
                     Map.of("order", 2, "id", "same", "boardingAllowed", true, "direction", "DOWN"),
@@ -98,9 +96,21 @@ public final class DummyBundle {
         return bundle;
     }
 
-    private void fillTensors(
+    /** 특징 개수를 바꿔서 계수 길이와 이름 개수가 같이 움직이는지 본다. */
+    static DummyBundle withFeatureCount(
         final int featureCount
     ) {
+        DummyBundle bundle = new DummyBundle(ROUTES);
+        bundle.fillTensors(featureCount);
+        bundle.fillManifest(featureCount);
+        return bundle;
+    }
+
+    public LoadedBundle loadAt(Path directory) {
+        return LoadedBundle.from(writeTo(directory));
+    }
+
+    private void fillTensors(final int featureCount) {
         Random values = new Random(20260901L);
         for (BundleTensor tensor : BundleTensor.values()) {
             int[] shape = tensor.shapeOf(routes.size(), HORIZON_COUNT, featureCount);
@@ -116,16 +126,12 @@ public final class DummyBundle {
     ) {
         double[] filled = new double[count];
         for (int index = 0; index < count; index++) {
-            filled[index] = tensor.dataType() == TensorDataType.FLOAT64
-                ? Math.round(values.nextGaussian() * 4e11) / 1e12
-                : (values.nextInt(10) == 0 ? 0 : 1);
+            filled[index] = randomValue(tensor.dataType(), values);
         }
         return filled;
     }
 
-    private void fillManifest(
-        final int featureCount
-    ) {
+    private void fillManifest(final int featureCount) {
         manifest.put("bundleSchemaVersion", BUNDLE_SCHEMA_VERSION);
         manifest.put("modelVersion", MODEL_VERSION);
         manifest.put("featureContractVersion", FEATURE_CONTRACT_VERSION);
@@ -150,9 +156,9 @@ public final class DummyBundle {
     }
 
     /**
-     * 열 이름은 지어내지 않는다. 설계행렬이 든 것을 그대로 쓴다.
+     * 설계행렬에 정의된 열 이름을 그대로 사용한다.
      *
-     * <p>열 수를 줄여 보는 픽스처는 뒤에서 잘라 쓴다. 적재가 그것을 거절하는지 보는 자리다.
+     * <p>열 수를 줄이는 픽스처는 뒤쪽 열 이름을 잘라서 적재 검사가 이를 거절하는지 확인한다.
      */
     private static List<String> featureNames(
         final int featureCount
@@ -162,13 +168,13 @@ public final class DummyBundle {
     }
 
     /**
-     * 더미의 대조 사례를 만든다.
+     * 더미의 대조 사례를 생성한다.
      *
-     * <p>진짜 계수 파일이면 <b>학습 쪽 구현</b>이 이 값을 만들어 싣는다. 더미는 그럴 상대가 없어서
-     * 우리 예측기로 만든다. 그래서 이 값은 계산이 맞는지를 못 재고 <b>검사가 실제로 도는지</b>만
-     * 잰다. 어긋난 사례를 넣어 거절되는지 보는 테스트가 그 짝이다.
+     * <p>실제 계수 파일의 대조 사례는 학습 쪽 구현에서 생성하지만 더미는 예측기로 생성한다.
+     * 따라서 계산의 정확성은 검증할 수 없으며 검사가 실제 실행되는지만 확인한다.
+     * 잘못된 대조 사례를 입력해 거절되는지 확인하는 테스트와 함께 사용한다.
      *
-     * <p>적재를 거쳐 만들면 자기를 다시 부르게 되므로 계수 묶음을 곧바로 세워 쓴다.
+     * <p>적재를 거쳐 생성하면 재귀 호출이 발생하므로 계수 묶음을 직접 구성한다.
      */
     @SuppressWarnings("unchecked")
     private static Map<String, Object> castGolden(
@@ -177,14 +183,15 @@ public final class DummyBundle {
         return (Map<String, Object>) golden;
     }
 
-    /** 적재 쪽이 재는 것과 같은 순서로 잇는다. 한쪽만 고치면 정상 묶음이 거절된다. */
+    /** 적재 검증과 같은 순서로 이어 붙인다. 한쪽만 바꾸면 정상 묶음도 거절된다. */
     @SuppressWarnings("unchecked")
     private static String goldenVectorTextOf(
         Map<String, Object> golden
     ) {
         return String.join("\n",
             ((List<Double>) golden.get("featureVector")).stream()
-                .map(String::valueOf).collect(java.util.stream.Collectors.joining(",")),
+                .map(String::valueOf)
+                .collect(Collectors.joining(",")),
             String.valueOf(golden.get("modelRoute")),
             String.valueOf(golden.get("stopsAhead")),
             String.valueOf(golden.get("currentSeats")),
@@ -193,7 +200,7 @@ public final class DummyBundle {
             String.valueOf(golden.get("expectedSeats")));
     }
 
-    /** 정상 묶음이 실을 대조 사례. 어긋낸 사례를 만들어 보는 테스트가 여기서 가져간다. */
+    /** 정상 묶음에 포함할 대조 사례. 잘못된 사례를 만드는 테스트에서도 이 값을 사용한다. */
     Map<String, Object> goldenVectorFrom() {
         return goldenVectorOf(FEATURE_COUNT);
     }
@@ -207,7 +214,7 @@ public final class DummyBundle {
         double[] featureVector = new double[featureCount];
         featureVector[0] = 1.0;
         for (int index = 1; index < featureVector.length; index++) {
-            featureVector[index] = index % 3 == 0 ? 0.5 : 0.0;
+            featureVector[index] = fixtureCoefficient(index);
         }
         SeatForecastResult result = new SeatDistributionPredictor(
             coefficientsWithout(featureCount), CoefficientsFixture.RELATIVE_EDGES)
@@ -227,8 +234,8 @@ public final class DummyBundle {
     }
 
     /**
-     * 배열이 빠진 픽스처는 대조 사례를 만들 수 없다. 만들려다 여기서 먼저 터지면 적재 검사가
-     * 무엇에 걸렸는지 못 보게 되므로, 자리만 채운 사례를 놓고 적재 쪽이 거절하게 둔다.
+     * 배열이 빠진 픽스처는 대조 사례를 만들 수 없다. 여기서 먼저 실패하면 적재 검사가
+     * 어느 조건에서 거절하는지 확인할 수 없으므로 임시 사례를 채우고 적재 검사에서 거절하도록 한다.
      */
     private boolean hasEveryTensor() {
         SafetensorsFile file = SafetensorsFile.of(weights.toBytes());
@@ -254,7 +261,7 @@ public final class DummyBundle {
         return golden;
     }
 
-    /** 설명 파일을 안 거치고 계수 묶음만 세운다. 대조 사례를 만드는 자리에서만 쓴다. */
+    /** 설명 파일을 거치지 않고 계수 묶음을 직접 구성한다. 대조 사례 생성에만 사용한다. */
     private CoefficientBundle coefficientsWithout(
         final int featureCount
     ) {
@@ -326,16 +333,6 @@ public final class DummyBundle {
         return withTensor(tensor.tensorName(), tensor.dataType(), current.shape(), values);
     }
 
-    /** 특징 개수를 바꿔서 계수 길이와 이름 개수가 같이 움직이는지 본다. */
-    static DummyBundle withFeatureCount(
-        final int featureCount
-    ) {
-        DummyBundle bundle = new DummyBundle(ROUTES);
-        bundle.fillTensors(featureCount);
-        bundle.fillManifest(featureCount);
-        return bundle;
-    }
-
     byte[] weightsBytes() {
         return weights.toBytes();
     }
@@ -345,25 +342,16 @@ public final class DummyBundle {
         byte[] weightsContent = weights.toBytes();
         Map<String, Object> written = new LinkedHashMap<>(manifest);
         written.put("tensors", declarations());
-        written.put("weightsDigest", manifest.containsKey("weightsDigest")
-            ? manifest.get("weightsDigest")
-            : Sha256.of(weightsContent));
-        written.put("releaseId", manifest.containsKey("releaseId")
-            ? manifest.get("releaseId")
-            : "dummy-release-0001");
-        written.put("normalizationConstants", manifest.containsKey("normalizationConstants")
-            ? manifest.get("normalizationConstants")
-            : Map.of("lowSeatBand", 20.0, "largestSeatCount", 68.0));
-        Map<String, Object> golden = manifest.containsKey("goldenVector")
-            ? castGolden(manifest.get("goldenVector"))
-            : goldenVectorOf(featureNamesOf(written).size());
+        written.put("weightsDigest", manifestValueOrCompute("weightsDigest", () -> Sha256.of(weightsContent)));
+        written.put("releaseId", manifestValueOrCompute("releaseId", () -> "dummy-release-0001"));
+        written.put("normalizationConstants",
+            manifestValueOrCompute("normalizationConstants",
+                () -> Map.of("lowSeatBand", 20.0, "largestSeatCount", 68.0)));
+        Map<String, Object> golden = goldenVectorFor(written);
         written.put("goldenVector", golden);
-        written.put("goldenVectorDigest", manifest.containsKey("goldenVectorDigest")
-            ? manifest.get("goldenVectorDigest")
-            : Sha256.of(goldenVectorTextOf(golden)));
-        written.put("identityDigest", manifest.containsKey("identityDigest")
-            ? manifest.get("identityDigest")
-            : identityDigestOf(written));
+        written.put("goldenVectorDigest",
+            manifestValueOrCompute("goldenVectorDigest", () -> Sha256.of(goldenVectorTextOf(golden))));
+        written.put("identityDigest", manifestValueOrCompute("identityDigest", () -> identityDigestOf(written)));
         return Json.of(reordered(written)).getBytes(StandardCharsets.UTF_8);
     }
 
@@ -392,7 +380,7 @@ public final class DummyBundle {
         return (Map<String, Double>) written.get("normalizationConstants");
     }
 
-    /** 적재 쪽이 재는 것과 같은 순서로 잇는다. 한쪽만 고치면 정상 묶음이 거절된다. */
+    /** 적재 검증과 같은 순서로 이어 붙인다. 한쪽만 바꾸면 정상 묶음도 거절된다. */
     private static String identityDigestOf(
         Map<String, Object> written
     ) {
@@ -404,10 +392,11 @@ public final class DummyBundle {
             String.valueOf(written.get("routeReferenceDigest")),
             String.valueOf(written.get("weightsDigest")),
             String.join(",", featureNamesOf(written)),
-            normalizationOf(written).entrySet().stream()
-                .sorted(Map.Entry.comparingByKey())
+            normalizationOf(written).entrySet()
+                .stream()
+                .sorted(Entry.comparingByKey())
                 .map(constant -> constant.getKey() + "=" + constant.getValue())
-                .collect(java.util.stream.Collectors.joining(",")),
+                .collect(Collectors.joining(",")),
             String.valueOf(written.get("timeSlotSource")),
             String.valueOf(written.get("capacityPolicy")),
             String.valueOf(written.get("cellStatisticsPolicy")),
@@ -449,5 +438,45 @@ public final class DummyBundle {
         } catch (IOException error) {
             throw new UncheckedIOException(error);
         }
+    }
+
+    private static String sourceRouteIdOf(String route) {
+        if (route.equals("1650")) {
+            return "234000050";
+        }
+        return "204000057";
+    }
+
+    /** 자료형별 RNG 호출을 선택된 경로에서만 실행해 더미 계수의 난수 소비 순서를 유지한다. */
+    private static double randomValue(TensorDataType dataType, Random values) {
+        if (dataType == TensorDataType.FLOAT64) {
+            return Math.round(values.nextGaussian() * 4e11) / 1e12;
+        }
+        if (values.nextInt(10) == 0) {
+            return 0;
+        }
+        return 1;
+    }
+
+    private static double fixtureCoefficient(final int index) {
+        if (index % 3 == 0) {
+            return 0.5;
+        }
+        return 0.0;
+    }
+
+    /** 명시적인 null도 그대로 보존하며, 키가 없을 때에만 기본값을 계산한다. 입력 manifest는 바꾸지 않는다. */
+    private Object manifestValueOrCompute(String key, Supplier<Object> fallback) {
+        if (manifest.containsKey(key)) {
+            return manifest.get(key);
+        }
+        return fallback.get();
+    }
+
+    private Map<String, Object> goldenVectorFor(Map<String, Object> written) {
+        if (manifest.containsKey("goldenVector")) {
+            return castGolden(manifest.get("goldenVector"));
+        }
+        return goldenVectorOf(featureNamesOf(written).size());
     }
 }

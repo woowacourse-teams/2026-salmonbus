@@ -8,7 +8,7 @@ import java.util.Optional;
  * 기존 트랜잭션이 있으면 참여하고, 없으면 예약만 짧은 트랜잭션으로 확정한다.
  */
 public interface ApiCallQuota {
-
+    /** 위치정보 호출 한 번을 예약하고 키 별칭을 반환한다. 모든 키가 소진되면 빈 값이다. */
     Optional<String> reserveLocation(OffsetDateTime requestedAt);
 
     /**
@@ -18,6 +18,7 @@ public interface ApiCallQuota {
      */
     boolean ensureLocationReservation(String keyAlias, OffsetDateTime reservedAt, OffsetDateTime requestedAt);
 
+    /** 해당 한국 날짜의 키를 소진 처리하고 변경 전 예약 횟수를 반환한다. 장부가 없으면 빈 값이다. */
     Optional<Integer> excludeLocationKey(String keyAlias, OffsetDateTime requestedAt);
 
     /** 노선 조회에 필요한 호출을 전부 예약하거나 하나도 예약하지 않는다. */

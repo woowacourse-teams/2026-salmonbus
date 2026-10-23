@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { LiveVehicleView } from "../components/liveVehiclePolicy";
+import type { Direction } from "@/shared/api/routeForecast.types";
 
 export interface LiveVehicleMotionFrame {
   key: string;
@@ -9,6 +10,18 @@ export interface LiveVehicleMotionFrame {
 export interface LiveVehicleMotionStore {
   readonly frames: readonly LiveVehicleMotionFrame[];
   subscribe: (listener: () => void) => () => void;
+  readonly plans: readonly LiveVehicleMotionPlan[];
+  subscribePlans: (listener: () => void) => () => void;
+}
+
+export interface LiveVehicleMotionPlan {
+  key: string;
+  direction: Direction;
+  signature: string;
+  start: number;
+  end: number;
+  durationMs: number;
+  startedAt: number;
 }
 
 interface MotionTarget {
@@ -18,6 +31,7 @@ interface MotionTarget {
 }
 
 interface VehicleMotion extends MotionTarget {
+  segmentIndex: number;
   signature: string;
   startedAt: number;
 }
@@ -39,9 +53,19 @@ const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 // 지도와 목록은 같은 순번 좌표를 구독하고, 각자의 화면 좌표로만 변환한다.
 export function createLiveVehicleMotionStore(): LiveVehicleMotionController {
   let motions = new Map<string, VehicleMotion>();
+  let directions = new Map<string, Direction>();
   let frames: readonly LiveVehicleMotionFrame[] = [];
   let reducedMotion = false;
   const listeners = new Set<() => void>();
+  const planListeners = new Set<() => void>();
+  let plans: readonly LiveVehicleMotionPlan[] = [];
+
+  function publishPlans() {
+    const next = Array.from(motions, ([key, motion]) => ({ key, direction: directions.get(key)!, ...motion }));
+    if (JSON.stringify(plans) === JSON.stringify(next)) return;
+    plans = next;
+    planListeners.forEach((listener) => listener());
+  }
 
   function publish(nextFrames: readonly LiveVehicleMotionFrame[]) {
     if (
@@ -73,11 +97,19 @@ export function createLiveVehicleMotionStore(): LiveVehicleMotionController {
     get frames() {
       return frames;
     },
+    get plans() {
+      return plans;
+    },
+    subscribePlans(listener) {
+      planListeners.add(listener);
+      return () => planListeners.delete(listener);
+    },
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
     update(views, durationMs, now) {
+      directions = new Map(views.map((view) => [view.key, view.vehicle.direction]));
       const nextMotions = new Map<string, VehicleMotion>();
       views.forEach((view) => {
         const target = targetFor(view, durationMs);
@@ -91,16 +123,28 @@ export function createLiveVehicleMotionStore(): LiveVehicleMotionController {
           return;
         }
 
-        const start = sample?.position ?? target.start;
+        const { segmentIndex } = view.motionSegment;
+        const skipsSegments = previous !== undefined && segmentIndex - previous.segmentIndex >= 2;
+        const currentPosition = sample?.position ?? target.start;
+        // 관측이 두 구간 이상 앞서면 밀린 거리를 재생하지 않고 최신 구간부터 이어간다.
+        const start = skipsSegments ? Math.max(currentPosition, target.start) : currentPosition;
         // 뒤쪽 목표는 현재 위치에서 멈추고, 앞선 목표가 올 때 같은 위치에서 이어간다.
         const end = Math.max(start, target.end);
         nextMotions.set(
           view.key,
-          movingMotionFor(signature, reducedMotion ? end : start, end, reducedMotion ? 0 : target.durationMs, now),
+          movingMotionFor(
+            signature,
+            reducedMotion ? end : start,
+            end,
+            reducedMotion ? 0 : target.durationMs,
+            now,
+            segmentIndex,
+          ),
         );
       });
       motions = nextMotions;
       advance(now);
+      publishPlans();
     },
     advance,
     setReducedMotion(next, now) {
@@ -108,14 +152,17 @@ export function createLiveVehicleMotionStore(): LiveVehicleMotionController {
       if (next) {
         motions.forEach((motion, key) => {
           const target = motion.end;
-          motions.set(key, movingMotionFor(motion.signature, target, target, 0, now));
+          motions.set(key, movingMotionFor(motion.signature, target, target, 0, now, motion.segmentIndex));
         });
       }
       advance(now);
+      publishPlans();
     },
     clear() {
       motions.clear();
+      directions.clear();
       publish([]);
+      publishPlans();
     },
   };
 }
@@ -169,7 +216,7 @@ function targetFor(view: LiveVehicleView, durationMs: number): MotionTarget {
 
 function signatureFor(view: LiveVehicleView): string {
   const { fromStopSequence, toStopSequence, startProgress, endProgress } = view.motionSegment;
-  return `${view.vehicle.phase}:${fromStopSequence}:${toStopSequence}:${startProgress}:${endProgress}`;
+  return `${view.vehicle.direction}:${view.vehicle.phase}:${fromStopSequence}:${toStopSequence}:${startProgress}:${endProgress}`;
 }
 
 function movingMotionFor(
@@ -178,8 +225,9 @@ function movingMotionFor(
   end: number,
   durationMs: number,
   startedAt: number,
+  segmentIndex: number,
 ): VehicleMotion {
-  return { signature, start, end, durationMs, startedAt };
+  return { signature, start, end, durationMs, startedAt, segmentIndex };
 }
 
 function motionSampleFor(motion: VehicleMotion, now: number): MotionSample {

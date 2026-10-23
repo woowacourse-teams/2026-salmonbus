@@ -1,7 +1,8 @@
 package com.gustler.backend.forecasting.application.quality;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -14,7 +15,7 @@ class InvestigateTripQualityServiceTest {
     @Test
     void 잠금_시간_초과는_다음_실행으로_미루고_같은_실행에서_반복하지_않는다() {
         // given
-        var investigation = mock(TripQualityInvestigationService.class);
+        TripQualityInvestigationService investigation = mock(TripQualityInvestigationService.class);
         when(investigation.investigateNext()).thenThrow(new UncategorizedSQLException(
             "investigation", "SELECT", new SQLException("lock timeout", "55P03")));
 
@@ -28,11 +29,16 @@ class InvestigateTripQualityServiceTest {
     @Test
     void 잠금_시간_초과가_아닌_DB_오류는_그대로_전파한다() {
         // given
-        var investigation = mock(TripQualityInvestigationService.class);
-        var failure = new UncategorizedSQLException("investigation", "SELECT", new SQLException("connection lost", "08006"));
+        TripQualityInvestigationService investigation = mock(TripQualityInvestigationService.class);
+        UncategorizedSQLException failure =
+            new UncategorizedSQLException("investigation", "SELECT", new SQLException("connection lost", "08006"));
         when(investigation.investigateNext()).thenThrow(failure);
 
-        // when & then
-        assertThatThrownBy(new InvestigateTripQualityService(investigation)::investigate).isSameAs(failure);
+        // when
+        Throwable caughtFailure = catchThrowable(new InvestigateTripQualityService(investigation)::investigate);
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull().isSameAs(failure);
     }
 }

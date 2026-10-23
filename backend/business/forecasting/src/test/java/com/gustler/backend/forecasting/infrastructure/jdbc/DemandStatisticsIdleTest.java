@@ -12,6 +12,8 @@ import static org.mockito.Mockito.when;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.application.statistics.ArchivedDemandStatisticsRebuilder;
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline;
+import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline.Step;
+import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline.Step.Status;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRunRepository;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import java.time.Clock;
@@ -19,9 +21,13 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,14 +48,22 @@ import org.springframework.transaction.support.TransactionTemplate;
 class DemandStatisticsIdleTest {
     private static final Instant NOW = Instant.parse("2026-10-01T12:00:00Z");
     private static final Instant DATA_UNTIL = NOW.minusSeconds(60);
-    @Autowired JdbcClient jdbc;
-    @Autowired DemandStatisticsPipeline pipeline;
-    @Autowired DemandStatisticsRunRepository runs;
-    @Autowired PlatformTransactionManager transactions;
-    @MockitoSpyBean JdbcDemandStatisticsStore store;
-    @MockitoSpyBean RouteDataQualityAccess quality;
-    @MockitoBean ArchivedDemandStatisticsRebuilder archived;
-    @MockitoBean Clock clock;
+    @Autowired
+    JdbcClient jdbc;
+    @Autowired
+    DemandStatisticsPipeline pipeline;
+    @Autowired
+    DemandStatisticsRunRepository runs;
+    @Autowired
+    PlatformTransactionManager transactions;
+    @MockitoSpyBean
+    JdbcDemandStatisticsStore store;
+    @MockitoSpyBean
+    RouteDataQualityAccess quality;
+    @MockitoBean
+    ArchivedDemandStatisticsRebuilder archived;
+    @MockitoBean
+    Clock clock;
     private long route;
     private long version;
 
@@ -93,11 +107,13 @@ class DemandStatisticsIdleTest {
         UUID runId = runs.find(version).orElseThrow().runId();
 
         // when
-        var step = pipeline.step(version);
+        Step step = pipeline.step(version);
 
         // then
-        assertThat(step.status()).isEqualTo(DemandStatisticsPipeline.Step.Status.IDLE);
-        assertThat(step.dataUntil()).isEqualTo(DATA_UNTIL);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(step.status()).isEqualTo(Status.IDLE);
+            softly.assertThat(step.dataUntil()).isEqualTo(DATA_UNTIL);
+        }
         assertThat(runs.find(version).orElseThrow().runId()).isEqualTo(runId);
         verify(quality, never()).lock(anyLong());
         verify(store, never()).baseline(anyLong());
@@ -107,18 +123,18 @@ class DemandStatisticsIdleTest {
     @Test
     void 다른_작업이_품질_행을_잠그고_있어도_할_일_없는_집계는_종료한다() throws InterruptedException {
         // given
-        var worker = Executors.newSingleThreadExecutor();
+        ExecutorService worker = Executors.newSingleThreadExecutor();
         try {
             new TransactionTemplate(transactions).executeWithoutResult(status -> {
                 quality.lock(version);
 
                 // when
-                var running = worker.submit(() -> pipeline.step(version));
+                Future<Step> running = worker.submit(() -> pipeline.step(version));
 
                 // then
                 try {
                     assertThat(running.get(2, TimeUnit.SECONDS).status())
-                        .isEqualTo(DemandStatisticsPipeline.Step.Status.IDLE);
+                        .isEqualTo(Status.IDLE);
                 } catch (Exception failure) {
                     throw new AssertionError("유휴 집계가 다른 트랜잭션의 품질 잠금을 기다렸다", failure);
                 }
@@ -134,18 +150,26 @@ class DemandStatisticsIdleTest {
     void 작업이_남아_있으면_최근에_발행했어도_유휴로_판단하지_않는다(String condition) {
         // given
         switch (condition) {
-            case "진행중" -> jdbc.sql("UPDATE stop_demand_run SET phase='FOLD' WHERE route_version_id=?").param(version).update();
-            case "품질변경" -> jdbc.sql("UPDATE route_data_quality SET quality_revision=2 WHERE route_id=?").param(route).update();
+            case "진행중" -> jdbc.sql("UPDATE stop_demand_run SET phase='FOLD' WHERE route_version_id=?")
+                .param(version)
+                .update();
+            case "품질변경" -> jdbc.sql("UPDATE route_data_quality SET quality_revision=2 WHERE route_id=?")
+                .param(route)
+                .update();
             case "차량재집계", "전체재집계" -> jdbc.sql("""
                 INSERT INTO stop_demand_rebuild_request(route_version_id,vehicle_id,request_id) VALUES (?,?,?)
-                """).params(version, condition.equals("전체재집계") ? "" : "bus", UUID.randomUUID()).update();
-            case "초기집계미완료" -> jdbc.sql("UPDATE stop_demand_baseline SET initialized=false WHERE route_version_id=?").param(version).update();
-            case "초기집계기록없음" -> jdbc.sql("DELETE FROM stop_demand_baseline WHERE route_version_id=?").param(version).update();
+                """).params(version, vehicleScopeFor(condition), UUID.randomUUID()).update();
+            case "초기집계미완료" -> jdbc.sql("UPDATE stop_demand_baseline SET initialized=false WHERE route_version_id=?")
+                .param(version)
+                .update();
+            case "초기집계기록없음" -> jdbc.sql("DELETE FROM stop_demand_baseline WHERE route_version_id=?")
+                .param(version)
+                .update();
             default -> throw new AssertionError(condition);
         }
 
         // when
-        var idle = store.idleDataUntil(version, NOW.minus(Duration.ofHours(6)));
+        Optional<Instant> idle = store.idleDataUntil(version, NOW.minus(Duration.ofHours(6)));
 
         // then
         assertThat(idle).isEmpty();
@@ -158,11 +182,13 @@ class DemandStatisticsIdleTest {
             .params(at(NOW.minus(Duration.ofHours(6))), version).update();
 
         // when
-        var step = pipeline.step(version);
+        Step step = pipeline.step(version);
 
         // then
-        assertThat(step.status()).isEqualTo(DemandStatisticsPipeline.Step.Status.PROGRESSED);
-        assertThat(step.phase()).isEqualTo("CLEAN");
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(step.status()).isEqualTo(Status.PROGRESSED);
+            softly.assertThat(step.phase()).isEqualTo("CLEAN");
+        }
         verify(quality).lock(version);
     }
 
@@ -174,7 +200,7 @@ class DemandStatisticsIdleTest {
         UUID runId = runs.find(version).orElseThrow().runId();
         doAnswer(call -> {
             Object stale = call.callRealMethod();
-            var other = new TransactionTemplate(transactions);
+            TransactionTemplate other = new TransactionTemplate(transactions);
             other.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             other.executeWithoutResult(status ->
                 jdbc.sql("UPDATE stop_demand_run SET completed_at=? WHERE route_version_id=?")
@@ -183,10 +209,10 @@ class DemandStatisticsIdleTest {
         }).when(store).idleDataUntil(anyLong(), any());
 
         // when
-        var step = pipeline.step(version);
+        Step step = pipeline.step(version);
 
         // then
-        assertThat(step.status()).isEqualTo(DemandStatisticsPipeline.Step.Status.IDLE);
+        assertThat(step.status()).isEqualTo(Status.IDLE);
         assertThat(runs.find(version).orElseThrow().runId()).isEqualTo(runId);
         verify(quality).lock(version);
     }
@@ -194,12 +220,12 @@ class DemandStatisticsIdleTest {
     @Test
     void 유휴_판단_직후_들어온_재집계_요청은_지우지_않고_다음_조회에서_발견한다() {
         // given
-        assertThat(pipeline.step(version).status()).isEqualTo(DemandStatisticsPipeline.Step.Status.IDLE);
+        assertThat(pipeline.step(version).status()).isEqualTo(Status.IDLE);
         jdbc.sql("INSERT INTO stop_demand_rebuild_request(route_version_id,vehicle_id,request_id) VALUES (?,'bus',?)")
             .params(version, UUID.randomUUID()).update();
 
         // when
-        var idle = store.idleDataUntil(version, NOW.minus(Duration.ofHours(6)));
+        Optional<Instant> idle = store.idleDataUntil(version, NOW.minus(Duration.ofHours(6)));
 
         // then
         assertThat(idle).isEmpty();
@@ -209,5 +235,12 @@ class DemandStatisticsIdleTest {
 
     private static OffsetDateTime at(Instant time) {
         return OffsetDateTime.ofInstant(time, ZoneOffset.UTC);
+    }
+
+    private static String vehicleScopeFor(String condition) {
+        if (condition.equals("전체재집계")) {
+            return "";
+        }
+        return "bus";
     }
 }

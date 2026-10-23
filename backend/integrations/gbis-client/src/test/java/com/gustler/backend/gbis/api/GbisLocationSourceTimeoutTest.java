@@ -1,10 +1,10 @@
 package com.gustler.backend.gbis.api;
 
-import com.gustler.backend.gbis.configuration.GbisClientConfig;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.gbis.api.GbisLocationResult.NoResponse;
+import com.gustler.backend.gbis.api.GbisLocationSourceTimeoutTest.ClientOptions;
+import com.gustler.backend.gbis.configuration.GbisClientConfig;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -19,10 +19,14 @@ import org.springframework.boot.http.client.autoconfigure.imperative.ImperativeH
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-@SpringBootTest(classes = {GbisClientConfig.class, GbisApiCaller.class, GbisLocationSource.class, GbisLocationSourceTimeoutTest.ClientOptions.class})
+@SpringBootTest(classes =
+    {GbisClientConfig.class, GbisApiCaller.class, GbisLocationSource.class,
+        ClientOptions.class})
 @ImportAutoConfiguration({
     HttpClientAutoConfiguration.class,
     ImperativeHttpClientAutoConfiguration.class,
@@ -30,7 +34,6 @@ import org.springframework.test.context.DynamicPropertySource;
     JacksonAutoConfiguration.class,
 })
 class GbisLocationSourceTimeoutTest {
-
     private static final Duration READ_TIMEOUT = Duration.ofMillis(300);
     private static final Duration RESPONSE_DELAY = Duration.ofSeconds(5);
     private static final Duration MAX_ACCEPTABLE_WAIT = Duration.ofSeconds(3);
@@ -43,9 +46,7 @@ class GbisLocationSourceTimeoutTest {
     private GbisLocationSource source;
 
     @DynamicPropertySource
-    static void pointAtSlowOpenApi(
-        DynamicPropertyRegistry registry
-    ) {
+    static void pointAtSlowOpenApi(DynamicPropertyRegistry registry) {
         registry.add("gbis.base-url",
             () -> "http://localhost:" + SLOW_OPEN_API.getAddress().getPort());
         registry.add("spring.http.clients.read-timeout", READ_TIMEOUT::toString);
@@ -73,9 +74,9 @@ class GbisLocationSourceTimeoutTest {
             noResponse -> assertThat(noResponse.message()).doesNotContain(FAKE_SERVICE_KEY));
     }
 
-    @org.springframework.boot.test.context.TestConfiguration
+    @TestConfiguration
     static class ClientOptions {
-        @org.springframework.context.annotation.Bean
+        @Bean
         GbisClientOptions gbisClientOptions() {
             return new GbisClientOptions("http://localhost:" + SLOW_OPEN_API.getAddress().getPort(), FAKE_SERVICE_KEY);
         }

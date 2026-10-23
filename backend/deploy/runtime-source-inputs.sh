@@ -7,8 +7,7 @@ runtime_source_inputs() {
   local modules=(common)
   case "$component" in
     api)
-      modules+=(api-app)
-      printf '%s\n' ../contract/examples/chat-v1.json ../docs/api/chat-websocket-public.md
+      modules+=(api-app business/member)
       ;;
     worker)
       modules+=(worker-app business/route-catalog business/observations business/arrivals

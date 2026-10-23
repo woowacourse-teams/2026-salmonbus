@@ -2,6 +2,7 @@ package com.gustler.backend.forecasting.domain.model;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -9,9 +10,19 @@ import java.util.stream.Collectors;
 public final class ForecastRouteReference {
     public record Stop(int order, String id, boolean boardingAllowed, RouteDirection direction) {
         public Stop {
-            if (order < 1 || id == null || id.isBlank() || direction == null || direction == RouteDirection.UNKNOWN) {
+            if (!isValid(order, id, direction)) {
                 throw new IllegalArgumentException("학습 정류장에는 순번·ID·UP/DOWN이 필요하다");
             }
+        }
+
+        private static boolean isValid(int order, String id, RouteDirection direction) {
+            if (order < 1 || id == null) {
+                return false;
+            }
+            if (id.isBlank() || direction == null) {
+                return false;
+            }
+            return direction != RouteDirection.UNKNOWN;
         }
     }
 
@@ -19,8 +30,10 @@ public final class ForecastRouteReference {
     private final Map<Long, RouteStops> checked = new ConcurrentHashMap<>();
 
     public ForecastRouteReference(Map<String, List<Stop>> routes) {
-        this.routes = routes.entrySet().stream().collect(Collectors.toUnmodifiableMap(
-            Map.Entry::getKey, entry -> List.copyOf(entry.getValue())));
+        this.routes = routes.entrySet()
+            .stream()
+            .collect(Collectors.toUnmodifiableMap(
+                Entry::getKey, entry -> List.copyOf(entry.getValue())));
         for (List<Stop> stops : this.routes.values()) {
             int previous = 0;
             for (Stop stop : stops) {
@@ -49,13 +62,25 @@ public final class ForecastRouteReference {
         for (int index = 0; index < expected.size(); index++) {
             Stop trained = expected.get(index);
             RouteStop current = actual.stops().get(index);
-            if (trained.order() != current.stopOrder() || !trained.id().equals(current.stopId())
-                || trained.boardingAllowed() != current.boardingAllowed() || trained.direction() != current.direction()) {
+            if (!matches(trained, current)) {
                 return false;
             }
         }
         checked.put(actual.routeVersionId(), actual);
         return true;
+    }
+
+    private boolean matches(Stop trained, RouteStop current) {
+        if (trained.order() != current.stopOrder()) {
+            return false;
+        }
+        if (!trained.id().equals(current.stopId())) {
+            return false;
+        }
+        if (trained.boardingAllowed() != current.boardingAllowed()) {
+            return false;
+        }
+        return trained.direction() == current.direction();
     }
 
     public void requireMatches(RouteStops actual) {

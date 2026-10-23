@@ -12,7 +12,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,7 +27,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @ForecastingIntegrationTest
 class JdbcDemandStatisticsVersionTransactionTest {
-
     private static final String CALCULATION_VERSION = "observed-max-capacity-v1";
     private static final Instant DATA_UNTIL = Instant.parse("2026-08-19T04:00:00Z");
 
@@ -73,7 +74,8 @@ class JdbcDemandStatisticsVersionTransactionTest {
 
     @Test
     void 셀_저장에_실패하면_앞서_저장한_버전과_셀도_함께_취소한다() {
-        // given 두 번째 정류장은 노선에 존재하지 않는다.
+        // given
+        // 두 번째 정류장은 노선에 존재하지 않는다.
         DemandStatisticsVersion version = version(1, List.of(measurement(1), measurement(2)));
 
         // when
@@ -87,15 +89,17 @@ class JdbcDemandStatisticsVersionTransactionTest {
 
     @Test
     void 같은_노선의_동시_집계는_서로_다른_버전을_순서대로_저장한다() throws Exception {
+        // when
         CountDownLatch start = new CountDownLatch(1);
-        try (var executor = Executors.newFixedThreadPool(2)) {
-            var first = executor.submit(() -> appendNextVersion(start));
-            var second = executor.submit(() -> appendNextVersion(start));
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<?> first = executor.submit(() -> appendNextVersion(start));
+            Future<?> second = executor.submit(() -> appendNextVersion(start));
             start.countDown();
             first.get(10, TimeUnit.SECONDS);
             second.get(10, TimeUnit.SECONDS);
         }
 
+        // then
         assertThat(repository.currentRevision(routeVersionId, CALCULATION_VERSION)).isEqualTo(2);
         assertThat(count("demand_statistics_version")).isEqualTo(2);
         assertThat(count("stop_demand_statistics")).isEqualTo(2);

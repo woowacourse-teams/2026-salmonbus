@@ -6,8 +6,8 @@ import java.util.Optional;
 
 /** 외부 조회를 분류한 결과와 정규화한 관측. 실패한 조회에는 정상 응답의 행 수를 기록하지 않는다. */
 public record ObservationResponse(ObservationBatchConclusion conclusion,
-                                  Optional<CollectedObservations> observations, OffsetDateTime receivedAt,
-                                  Optional<String> keyRejectionCode) {
+    Optional<CollectedObservations> observations, OffsetDateTime receivedAt,
+    Optional<String> keyRejectionCode) {
     public ObservationResponse {
         Objects.requireNonNull(conclusion);
         Objects.requireNonNull(observations);
@@ -24,7 +24,7 @@ public record ObservationResponse(ObservationBatchConclusion conclusion,
     }
 
     public static ObservationResponse received(ObservationBatchConclusion conclusion,
-                                                CollectedObservations observations, OffsetDateTime receivedAt) {
+        CollectedObservations observations, OffsetDateTime receivedAt) {
         return new ObservationResponse(conclusion, Optional.of(observations), receivedAt, Optional.empty());
     }
 
@@ -32,12 +32,14 @@ public record ObservationResponse(ObservationBatchConclusion conclusion,
         return new ObservationResponse(conclusion, Optional.empty(), receivedAt, Optional.empty());
     }
 
-    public static ObservationResponse failedByRejectedKey(ObservationBatchConclusion conclusion, OffsetDateTime receivedAt,
-                                                          String keyRejectionCode) {
+    public static ObservationResponse failedByRejectedKey(ObservationBatchConclusion conclusion,
+        OffsetDateTime receivedAt,
+        String keyRejectionCode) {
         return new ObservationResponse(conclusion, Optional.empty(), receivedAt, Optional.of(keyRejectionCode));
     }
 
     public static ObservationResponse unconfirmed(OffsetDateTime receivedAt) {
-        return failed(new ObservationBatchConclusion(ObservationBatchOutcome.UNKNOWN_AFTER_DISPATCH, null, null), receivedAt);
+        return failed(new ObservationBatchConclusion(ObservationBatchOutcome.UNKNOWN_AFTER_DISPATCH, null, null),
+            receivedAt);
     }
 }

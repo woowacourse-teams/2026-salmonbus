@@ -13,7 +13,15 @@ public final class RouteDataQuality {
         this.revision = revision;
     }
 
-    public void changeEligibility() { revision = Math.incrementExact(revision); }
-    public long routeId() { return routeId; }
-    public long revision() { return revision; }
+    public void changeEligibility() {
+        revision = Math.incrementExact(revision);
+    }
+
+    public long routeId() {
+        return routeId;
+    }
+
+    public long revision() {
+        return revision;
+    }
 }

@@ -1,0 +1,14 @@
+name: salmonbus-kakao-local
+
+services:
+  api:
+    environment:
+      AUTH_ENABLED: "true"
+      AUTH_KAKAO_ENABLED: "true"
+      AUTH_APPLE_ENABLED: "false"
+      AUTH_PUBLIC_BASE_URL: http://localhost:3000
+      AUTH_KAKAO_CLIENT_ID: ${AUTH_KAKAO_CLIENT_ID:?카카오 REST API 키를 env/.env.kakao-local에 입력하세요}
+      AUTH_KAKAO_CLIENT_SECRET: ${AUTH_KAKAO_CLIENT_SECRET:?카카오 Client Secret을 env/.env.kakao-local에 입력하세요}
+      AUTH_KAKAO_ADMIN_KEY: ${AUTH_KAKAO_ADMIN_KEY:?카카오 Admin Key를 env/.env.kakao-local에 입력하세요}
+      AUTH_TOKEN_SECRET: ${AUTH_TOKEN_SECRET:?로컬 액세스 토큰 서명키를 생성하세요}
+      AUTH_REFRESH_TOKEN_SECRET: ${AUTH_REFRESH_TOKEN_SECRET:?로컬 리프레시 토큰 서명키를 생성하세요}

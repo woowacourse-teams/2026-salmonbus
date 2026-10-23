@@ -2,20 +2,28 @@ package com.gustler.backend.routecatalog.infrastructure.gbis;
 
 import com.gustler.backend.gbis.api.GbisRouteInfoSource;
 import com.gustler.backend.gbis.api.GbisRouteResult;
-import com.gustler.backend.routecatalog.domain.RouteStops;
-import com.gustler.backend.routecatalog.domain.RouteSource;
-import com.gustler.backend.routecatalog.domain.RouteSourceResult;
-import com.gustler.backend.routecatalog.domain.RouteTimetable;
-import com.gustler.backend.routecatalog.domain.UpstreamRoute;
-import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
-
-import com.gustler.backend.routecatalog.domain.RouteSourceResult.Failed;
-import com.gustler.backend.routecatalog.domain.RouteSourceResult.Success;
+import com.gustler.backend.gbis.api.GbisRouteResult.RouteInfoUnavailable;
+import com.gustler.backend.gbis.api.GbisRouteResult.StationsUnavailable;
 import com.gustler.backend.gbis.api.dto.BusRouteInfoResponse.RouteInfoItem;
 import com.gustler.backend.gbis.api.dto.BusRouteStationResponse.RouteStationItem;
+import com.gustler.backend.routecatalog.domain.HeadwayRange;
+import com.gustler.backend.routecatalog.domain.RouteHeadways;
+import com.gustler.backend.routecatalog.domain.RouteSource;
+import com.gustler.backend.routecatalog.domain.RouteSourceResult;
+import com.gustler.backend.routecatalog.domain.RouteSourceResult.Failed;
+import com.gustler.backend.routecatalog.domain.RouteSourceResult.Success;
+import com.gustler.backend.routecatalog.domain.RouteStops;
+import com.gustler.backend.routecatalog.domain.RouteTimetable;
+import com.gustler.backend.routecatalog.domain.ServiceDay;
+import com.gustler.backend.routecatalog.domain.StopCoordinates;
+import com.gustler.backend.routecatalog.domain.UpstreamRoute;
+import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -28,8 +36,8 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class GbisRouteSource implements RouteSource {
-
-    private static final Logger log = LoggerFactory.getLogger(GbisRouteSource.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(GbisRouteSource.class);
+    private static final Pattern MINUTES = Pattern.compile("[0-9]{1,4}");
 
     private final GbisRouteInfoSource routes;
 
@@ -46,15 +54,15 @@ public class GbisRouteSource implements RouteSource {
 
     @Override
     public RouteSourceResult read(
-        final String routeId
+        String routeId
     ) {
         return switch (routes.read(routeId)) {
-            case GbisRouteResult.RouteInfoUnavailable ignored ->
-                new Failed("노선 %s 의 기본 정보를 읽지 못했다".formatted(routeId));
-            case GbisRouteResult.StationsUnavailable ignored ->
-                new Failed("노선 %s 의 경유 정류소를 읽지 못했다".formatted(routeId));
+            case RouteInfoUnavailable ignored ->
+            new Failed("노선 %s 의 기본 정보를 읽지 못했다".formatted(routeId));
+            case StationsUnavailable ignored ->
+            new Failed("노선 %s 의 경유 정류소를 읽지 못했다".formatted(routeId));
             case GbisRouteResult.Success read when read.stations().isEmpty() ->
-                new Failed("노선 %s 의 경유 정류소를 읽지 못했다".formatted(routeId));
+            new Failed("노선 %s 의 경유 정류소를 읽지 못했다".formatted(routeId));
             case GbisRouteResult.Success read -> toSuccess(routeId, read.routeInfo(), read.stations());
         };
     }
@@ -71,9 +79,9 @@ public class GbisRouteSource implements RouteSource {
                 routeInfo.startStopName(),
                 routeInfo.endStopName(),
                 RouteStops.from(turnSequenceOf(stations), toUpstreamStops(stations)),
-                timetableOf(routeInfo)));
-        } catch (final IllegalArgumentException e) {
-            // 순번이 겹치거나 회차 순번이 정류소 목록에 없는 응답. 판본으로 열면 뜻이 없는 노선이 된다.
+                timetableOf(routeId, routeInfo)));
+        } catch (IllegalArgumentException e) {
+            // 순번이 겹치거나 회차 순번이 정류소 목록에 없는 응답. 이 응답으로는 유효한 노선 판본을 만들 수 없다.
             return new Failed("노선 %s 의 정류소 목록이 성립하지 않는다: %s".formatted(routeId, e.getMessage()));
         }
     }
@@ -83,14 +91,14 @@ public class GbisRouteSource implements RouteSource {
      *
      * <p>정상 응답은 <b>모든 정류소 행에 같은 {@code turnSeq}</b> 가 실리고
      * <b>회차하는 정류소 하나만 {@code turnYn} 이 Y</b> 다. 셋 중 하나라도 어긋나면 회차 없음으로
-     * 본다. 잘못 고른 순번으로 판본을 열면 정류소 절반의 방향이 뒤집힌 채 그럴듯하게 돌아간다.
+     * 본다. 잘못 고른 순번으로 판본을 열면 정류소 절반의 방향이 뒤집힌 상태로 동작한다.
      *
      * <ul>
-     *   <li>값이 빠진 행이 하나라도 있으면 안 쓴다. 남은 행만으로 고르면 그 노선이 정말 회차하는지
+     *   <li>값이 빠진 행이 하나라도 있으면 사용하지 않는다. 남은 행만으로 고르면 그 노선이 회차하는지
      *       알 수 없다
-     *   <li>서로 다른 값이 오면 안 쓴다
-     *   <li>회차 표시가 없거나 둘 이상이면 안 쓴다
-     *   <li>표시가 붙은 정류소의 순번이 {@code turnSeq} 와 다르면 안 쓴다
+     *   <li>서로 다른 값이 오면 사용하지 않는다
+     *   <li>회차 표시가 없거나 둘 이상이면 사용하지 않는다
+     *   <li>표시가 붙은 정류소의 순번이 {@code turnSeq} 와 다르면 사용하지 않는다
      * </ul>
      */
     private Integer turnSequenceOf(
@@ -125,7 +133,7 @@ public class GbisRouteSource implements RouteSource {
         String message,
         Object detail
     ) {
-        log.warn("회차 메타데이터가 성립하지 않아 단방향 노선으로 읽는다. " + message, detail);
+        LOGGER.warn("회차 메타데이터가 성립하지 않아 단방향 노선으로 읽는다. " + message, detail);
 
         return null;
     }
@@ -135,17 +143,73 @@ public class GbisRouteSource implements RouteSource {
     ) {
         return stations.stream()
             .map(station -> new UpstreamRouteStop(station.stopOrder(), station.stopId(), station.name(),
-                com.gustler.backend.routecatalog.domain.StopCoordinates.ofNullable(station.x(), station.y())))
+                StopCoordinates.ofNullable(station.x(), station.y())))
             .toList();
     }
 
     private RouteTimetable timetableOf(
+        String routeId,
         RouteInfoItem routeInfo
     ) {
         return new RouteTimetable(
             routeInfo.upFirstDepartureTime(),
             routeInfo.upLastDepartureTime(),
             routeInfo.downFirstDepartureTime(),
-            routeInfo.downLastDepartureTime());
+            routeInfo.downLastDepartureTime(),
+            headwaysOf(routeId, routeInfo));
+    }
+
+    private RouteHeadways headwaysOf(
+        String routeId,
+        RouteInfoItem routeInfo
+    ) {
+        Set<ServiceDay> unreadableDays = EnumSet.noneOf(ServiceDay.class);
+        HeadwayRange weekday = headwayOf(routeId, ServiceDay.WEEKDAY,
+            routeInfo.weekdayMinHeadway(), routeInfo.weekdayMaxHeadway(), unreadableDays);
+        HeadwayRange saturday = headwayOf(routeId, ServiceDay.SATURDAY,
+            routeInfo.saturdayMinHeadway(), routeInfo.saturdayMaxHeadway(), unreadableDays);
+        HeadwayRange sunday = headwayOf(routeId, ServiceDay.SUNDAY,
+            routeInfo.sundayMinHeadway(), routeInfo.sundayMaxHeadway(), unreadableDays);
+        HeadwayRange holiday = headwayOf(routeId, ServiceDay.HOLIDAY,
+            routeInfo.holidayMinHeadway(), routeInfo.holidayMaxHeadway(), unreadableDays);
+        return new RouteHeadways(weekday, saturday, sunday, holiday, unreadableDays);
+    }
+
+    private HeadwayRange headwayOf(
+        String routeId,
+        ServiceDay day,
+        String minText,
+        String maxText,
+        Set<ServiceDay> unreadableDays
+    ) {
+        if (isBlank(minText) && isBlank(maxText)) {
+            return null;
+        }
+        Optional<HeadwayRange> headway = HeadwayRange.of(minutesOf(minText), minutesOf(maxText));
+        if (headway.isEmpty()) {
+            unreadableDays.add(day);
+            LOGGER.warn("event=route_headway_unreadable routeId={} day={} min={} max={}", routeId, day, minText,
+                maxText);
+        }
+        return headway.orElse(null);
+    }
+
+    private boolean isBlank(
+        String text
+    ) {
+        return text == null || text.isBlank();
+    }
+
+    private Integer minutesOf(
+        String text
+    ) {
+        if (text == null) {
+            return null;
+        }
+        String minutes = text.strip();
+        if (!MINUTES.matcher(minutes).matches()) {
+            return null;
+        }
+        return Integer.valueOf(minutes);
     }
 }

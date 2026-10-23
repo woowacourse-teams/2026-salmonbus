@@ -8,7 +8,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class VehicleCachePolicyTest {
-
     private final VehicleCachePolicy policy = new VehicleCachePolicy();
 
     @ParameterizedTest
@@ -30,6 +29,10 @@ class VehicleCachePolicyTest {
         OffsetDateTime pollAt,
         final long expectedSeconds
     ) {
-        assertThat(policy.maxAgeAt(pollAt)).isEqualTo(Duration.ofSeconds(expectedSeconds));
+        // when
+        Duration maxAge = policy.maxAgeAt(pollAt);
+
+        // then
+        assertThat(maxAge).isEqualTo(Duration.ofSeconds(expectedSeconds));
     }
 }

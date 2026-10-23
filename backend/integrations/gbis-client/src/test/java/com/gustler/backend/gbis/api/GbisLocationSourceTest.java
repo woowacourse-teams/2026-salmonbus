@@ -1,7 +1,5 @@
 package com.gustler.backend.gbis.api;
 
-import com.gustler.backend.gbis.api.GbisClientOptions;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.queryParam;
@@ -9,6 +7,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.gustler.backend.gbis.api.GbisClientOptions;
 import com.gustler.backend.gbis.api.GbisLocationResult.DailyQuotaExceeded;
 import com.gustler.backend.gbis.api.GbisLocationResult.GatewayRejected;
 import com.gustler.backend.gbis.api.GbisLocationResult.GbisSystemError;
@@ -25,13 +24,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClient.Builder;
 import tools.jackson.databind.ObjectMapper;
 
 class GbisLocationSourceTest {
-
     private static final String BASE_URL = "https://gbis.test";
     private static final String SERVICE_KEY = "fake-service-key-for-test";
     private static final String SERVICE_KEY_B = "fake-service-key-b-for-test";
@@ -73,7 +73,7 @@ class GbisLocationSourceTest {
 
     @BeforeEach
     void setUp() {
-        RestClient.Builder builder = RestClient.builder().baseUrl(BASE_URL);
+        Builder builder = RestClient.builder().baseUrl(BASE_URL);
         openApi = MockRestServiceServer.bindTo(builder).build();
         ObjectMapper objectMapper = new ObjectMapper();
         source = new GbisLocationSource(
@@ -86,16 +86,19 @@ class GbisLocationSourceTest {
 
     @Test
     void HTTP_상태를_수집_진단에_남기고_오류_본문_분류는_유지한다() {
-        org.slf4j.MDC.put("collectionAttemptId", "test-attempt");
+        // when
+        MDC.put("collectionAttemptId", "test-attempt");
         try {
             openApi.expect(requestTo(containsString(BUS_LOCATION_PATH)))
                 .andRespond(withServerError().body("not-json"));
+
+            // then
             assertThat(source.read(ROUTE_3330)).isInstanceOf(UnreadableResponse.class);
-            assertThat(org.slf4j.MDC.get("collectionHttpStatus")).isEqualTo("500");
-            assertThat(org.slf4j.MDC.get("collectionTransport")).isEqualTo("RECEIVED");
+            assertThat(MDC.get("collectionHttpStatus")).isEqualTo("500");
+            assertThat(MDC.get("collectionTransport")).isEqualTo("RECEIVED");
             openApi.verify();
         } finally {
-            org.slf4j.MDC.clear();
+            MDC.clear();
         }
     }
 
@@ -119,7 +122,7 @@ class GbisLocationSourceTest {
     @Test
     void 별칭을_주면_그_슬롯의_키로_부른다() {
         // given
-        RestClient.Builder builder = RestClient.builder().baseUrl(BASE_URL);
+        Builder builder = RestClient.builder().baseUrl(BASE_URL);
         MockRestServiceServer twoKeysApi = MockRestServiceServer.bindTo(builder).build();
         ObjectMapper objectMapper = new ObjectMapper();
         GbisLocationSource twoKeys = new GbisLocationSource(
@@ -349,31 +352,23 @@ class GbisLocationSourceTest {
         assertThat(actual).isInstanceOf(DailyQuotaExceeded.class);
     }
 
-    private void respondWithJson(
-        String body
-    ) {
+    private void respondWithJson(String body) {
         openApi.expect(requestTo(containsString(ROUTE_3330)))
             .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
     }
 
-    private void respondWithXml(
-        String body
-    ) {
+    private void respondWithXml(String body) {
         openApi.expect(requestTo(containsString(ROUTE_3330)))
             .andRespond(withSuccess(body, MediaType.APPLICATION_XML));
     }
 
-    private void respondWithPortalError(
-        String reasonCode
-    ) {
+    private void respondWithPortalError(String reasonCode) {
         openApi.expect(requestTo(containsString(ROUTE_3330)))
             .andRespond(withSuccess(
                 PORTAL_ERROR_XML.formatted(reasonCode), MediaType.APPLICATION_XML));
     }
 
-    private void respondWithPortalErrorAsJson(
-        String reasonCode
-    ) {
+    private void respondWithPortalErrorAsJson(String reasonCode) {
         openApi.expect(requestTo(containsString(ROUTE_3330)))
             .andRespond(withSuccess(
                 PORTAL_ERROR_JSON.formatted(reasonCode), MediaType.APPLICATION_JSON));

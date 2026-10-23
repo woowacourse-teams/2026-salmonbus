@@ -6,7 +6,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class RouteStatusTest {
-
     @ParameterizedTest
     @CsvSource({
         "true, true, FORECAST_READY",
@@ -20,7 +19,7 @@ class RouteStatusTest {
         RouteStatus expected
     ) {
         // when
-        final RouteStatus actual = RouteStatus.from(activeModelExists, forecastPublished);
+        RouteStatus actual = RouteStatus.from(activeModelExists, forecastPublished);
 
         // then
         assertThat(actual).isEqualTo(expected);

@@ -1,9 +1,11 @@
 package com.gustler.backend.routecatalog.infrastructure.jpa;
 
+import com.gustler.backend.routecatalog.domain.HeadwayRange;
 import com.gustler.backend.routecatalog.domain.RouteContentDigest;
+import com.gustler.backend.routecatalog.domain.RouteHeadways;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
-import com.gustler.backend.routecatalog.domain.RouteVersionContent;
 import com.gustler.backend.routecatalog.domain.RouteVersion;
+import com.gustler.backend.routecatalog.domain.RouteVersionContent;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -17,12 +19,15 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+/**
+ * 노선 판본의 유효 기간과 정류장·시간표 기준을 저장 행에 대응시킨다.
+ * 판본을 바꾸는 규칙은 도메인이 결정한다.
+ */
 @Entity(name = "RouteVersion")
 @Table(name = "route_version")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RouteVersionJpaEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -44,6 +49,30 @@ public class RouteVersionJpaEntity {
 
     @Column(name = "down_last_departure_time")
     private String downLastDepartureTime;
+
+    @Column(name = "weekday_min_headway_minutes")
+    private Integer weekdayMinHeadwayMinutes;
+
+    @Column(name = "weekday_max_headway_minutes")
+    private Integer weekdayMaxHeadwayMinutes;
+
+    @Column(name = "saturday_min_headway_minutes")
+    private Integer saturdayMinHeadwayMinutes;
+
+    @Column(name = "saturday_max_headway_minutes")
+    private Integer saturdayMaxHeadwayMinutes;
+
+    @Column(name = "sunday_min_headway_minutes")
+    private Integer sundayMinHeadwayMinutes;
+
+    @Column(name = "sunday_max_headway_minutes")
+    private Integer sundayMaxHeadwayMinutes;
+
+    @Column(name = "holiday_min_headway_minutes")
+    private Integer holidayMinHeadwayMinutes;
+
+    @Column(name = "holiday_max_headway_minutes")
+    private Integer holidayMaxHeadwayMinutes;
 
     @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "content_digest")
@@ -86,8 +115,20 @@ public class RouteVersionJpaEntity {
             upFirstDepartureTime,
             upLastDepartureTime,
             downFirstDepartureTime,
-            downLastDepartureTime
+            downLastDepartureTime,
+            new RouteHeadways(
+                headwayOf(weekdayMinHeadwayMinutes, weekdayMaxHeadwayMinutes),
+                headwayOf(saturdayMinHeadwayMinutes, saturdayMaxHeadwayMinutes),
+                headwayOf(sundayMinHeadwayMinutes, sundayMaxHeadwayMinutes),
+                headwayOf(holidayMinHeadwayMinutes, holidayMaxHeadwayMinutes))
         );
+    }
+
+    private HeadwayRange headwayOf(
+        Integer minMinutes,
+        Integer maxMinutes
+    ) {
+        return HeadwayRange.of(minMinutes, maxMinutes).orElse(null);
     }
 
     private void applyTimetable(
@@ -97,5 +138,37 @@ public class RouteVersionJpaEntity {
         this.upLastDepartureTime = timetable.upLastDepartureTime();
         this.downFirstDepartureTime = timetable.downFirstDepartureTime();
         this.downLastDepartureTime = timetable.downLastDepartureTime();
+        applyHeadways(timetable.headways());
+    }
+
+    private void applyHeadways(
+        RouteHeadways headways
+    ) {
+        this.weekdayMinHeadwayMinutes = minMinutesOf(headways.weekday());
+        this.weekdayMaxHeadwayMinutes = maxMinutesOf(headways.weekday());
+        this.saturdayMinHeadwayMinutes = minMinutesOf(headways.saturday());
+        this.saturdayMaxHeadwayMinutes = maxMinutesOf(headways.saturday());
+        this.sundayMinHeadwayMinutes = minMinutesOf(headways.sunday());
+        this.sundayMaxHeadwayMinutes = maxMinutesOf(headways.sunday());
+        this.holidayMinHeadwayMinutes = minMinutesOf(headways.holiday());
+        this.holidayMaxHeadwayMinutes = maxMinutesOf(headways.holiday());
+    }
+
+    private Integer minMinutesOf(
+        HeadwayRange headway
+    ) {
+        if (headway == null) {
+            return null;
+        }
+        return headway.minMinutes();
+    }
+
+    private Integer maxMinutesOf(
+        HeadwayRange headway
+    ) {
+        if (headway == null) {
+            return null;
+        }
+        return headway.maxMinutes();
     }
 }

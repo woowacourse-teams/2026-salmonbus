@@ -1,26 +1,11 @@
+import { isRecord } from "@/shared/utils/valueGuards";
 import { cacheLifetimeFrom, type CacheLifetime } from "./cacheControl";
 import { referenceClockFrom, type ReferenceClock } from "./referenceClock";
 import { retryAfterMillisFrom } from "./retryAfter";
-import type { ErrorCode, ErrorResponse } from "./routeForecast.types";
+import { ERROR_CODES, type ErrorResponse } from "./apiError";
 
 const REQUEST_TIMEOUT_MS = 10_000;
 const TIMEOUT_REASON = "timeout";
-
-const ERROR_CODE_KEYS: Record<ErrorCode, true> = {
-  INVALID_ROUTE_ID: true,
-  INVALID_REQUEST: true,
-  ROUTE_NOT_FOUND: true,
-  STATION_NOT_FOUND: true,
-  REFERENCE_VERSION_CONFLICT: true,
-  ENDPOINT_NOT_FOUND: true,
-  METHOD_NOT_ALLOWED: true,
-  INTERNAL_ERROR: true,
-  SERVICE_UNAVAILABLE: true,
-  MODEL_OUT_OF_SCOPE: true,
-  NO_RECENT_OBSERVATION: true,
-};
-
-const ERROR_CODES: ReadonlySet<string> = new Set(Object.keys(ERROR_CODE_KEYS));
 
 export interface ApiSuccess<T> {
   ok: true;
@@ -70,6 +55,9 @@ export function resetApiFailureReporter(): void {
 }
 
 export interface RequestOptions {
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  body?: unknown;
+  headers?: Record<string, string>;
   signal?: AbortSignal;
   errorContext?: RequestErrorContext;
 }
@@ -100,7 +88,10 @@ async function executeRequest<T>(url: string, options: RequestOptions): Promise<
       context: options.errorContext ?? null,
       abortReason: options.signal?.reason ?? null,
       rawResponse:
-        !result.ok && result.failure.kind === "malformed" && responseBody !== undefined
+        !result.ok &&
+        result.failure.kind === "malformed" &&
+        responseBody !== undefined &&
+        !/^\/api\/(auth|me)(\/|$)/.test(url)
           ? { body: responseBody, contentType }
           : null,
     },
@@ -114,7 +105,16 @@ async function executeRequest<T>(url: string, options: RequestOptions): Promise<
 
   let response: Response | null = null;
   try {
-    response = await fetch(url, { headers: { Accept: "application/json" }, signal: controller.signal });
+    response = await fetch(url, {
+      method: options.method ?? "GET",
+      headers: {
+        Accept: "application/json",
+        ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...options.headers,
+      },
+      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+      signal: controller.signal,
+    });
     contentType = response.headers.get("content-type");
     const clock = referenceClockFrom(response.headers);
     const infrastructureFailure = infrastructureFailureOf(response, clock);
@@ -122,6 +122,7 @@ async function executeRequest<T>(url: string, options: RequestOptions): Promise<
       return outcomeOf(failed(infrastructureFailure));
     }
 
+    if (response.status === 204) return outcomeOf(interpret<T>(response, undefined, clock));
     responseBody = await response.text();
     const body: unknown = JSON.parse(responseBody);
     return outcomeOf(interpret<T>(response, body, clock));
@@ -157,6 +158,7 @@ function interpret<T>(response: Response, body: unknown, clock: ReferenceClock |
   if (response.ok) {
     return {
       ok: true,
+      // shortcut: 기존 REST 성공 본문은 미검증이며 SAL-140에서 파서 경계로 교체한다.
       body: body as T,
       status: response.status,
       requestId,
@@ -165,10 +167,11 @@ function interpret<T>(response: Response, body: unknown, clock: ReferenceClock |
     };
   }
 
-  if (isErrorResponse(body)) {
+  const error = errorResponseFrom(body);
+  if (error !== null) {
     return failed({
       kind: "contract",
-      error: body,
+      error,
       status: response.status,
       retryAfterMs: retryAfterMsOf(response, clock),
     });
@@ -177,18 +180,11 @@ function interpret<T>(response: Response, body: unknown, clock: ReferenceClock |
   return failed({ kind: "malformed", status: response.status, requestId });
 }
 
-function isErrorResponse(value: unknown): value is ErrorResponse {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.code === "string" &&
-    ERROR_CODES.has(candidate.code) &&
-    typeof candidate.message === "string" &&
-    typeof candidate.requestId === "string"
-  );
+function errorResponseFrom(value: unknown): ErrorResponse | null {
+  if (!isRecord(value) || typeof value.message !== "string" || typeof value.requestId !== "string") return null;
+  const code = ERROR_CODES.find((code) => code === value.code);
+  if (code === undefined) return null;
+  return { code, message: value.message, requestId: value.requestId };
 }
 
 function retryAfterMsOf(response: Response, clock: ReferenceClock | null): number | null {

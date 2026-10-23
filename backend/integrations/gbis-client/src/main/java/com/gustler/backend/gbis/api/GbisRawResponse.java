@@ -1,13 +1,12 @@
 package com.gustler.backend.gbis.api;
 
 /**
- * GBIS 를 한 번 부르고 받은 것. 아직 무슨 API 였는지는 모른다.
+ * GBIS 를 한 번 호출한 결과다. 아직 무슨 API 였는지는 알 수 없다.
  *
- * <p>응답이 아예 안 온 경우와 포털이 GBIS 앞에서 막은 경우는 어느 API 를 불렀든 같은 모양이라
- * 여기서 갈라둔다. 그 뒤의 해석은 부른 쪽이 한다.
+ * <p>응답이 오지 않은 경우와 포털이 GBIS 앞에서 거부한 경우는 어느 API 에서나 같은 형태이므로
+ * 여기서 구분한다. 이후 해석은 호출한 쪽이 담당한다.
  */
 public sealed interface GbisRawResponse {
-
     /** 본문을 받았다. GBIS 가 정상으로 답했는지는 아직 모른다. */
     record Received(
         String body
@@ -20,7 +19,7 @@ public sealed interface GbisRawResponse {
     ) implements GbisRawResponse {
     }
 
-    /** 공공데이터포털이 GBIS 에 닿기 전에 막았다. 한도 초과와 키 거부가 여기로 온다. */
+    /** 공공데이터포털이 GBIS 에 도달하기 전에 요청을 거부했다. 한도 초과와 키 거부가 여기에 해당한다. */
     record PortalRejected(
         PortalReasonCode reason,
         String reasonCode,

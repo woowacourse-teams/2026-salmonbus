@@ -39,7 +39,6 @@ import org.slf4j.LoggerFactory;
 
 @ExtendWith(MockitoExtension.class)
 class ObservationCollectorKeyTest {
-
     private static final String ROUTE_3330 = "204000057";
     private static final long ROUTE_VERSION_ID = 1L;
     private static final long BATCH_ID = 1L;
@@ -58,6 +57,8 @@ class ObservationCollectorKeyTest {
     private static final int NOT_EXCLUDED = 0;
     private static final int RESERVED_BEFORE_764 = 764;
 
+    private final ListAppender<ILoggingEvent> collectorLog = new ListAppender<>();
+
     @Mock
     private CurrentRouteVersion currentRouteVersion;
 
@@ -69,8 +70,6 @@ class ObservationCollectorKeyTest {
 
     @Mock
     private ObservationSource observationSource;
-
-    private final ListAppender<ILoggingEvent> collectorLog = new ListAppender<>();
 
     @AfterEach
     void 로그_수집을_멈춘다() {
@@ -129,15 +128,19 @@ class ObservationCollectorKeyTest {
 
     private static Stream<Arguments> rejectionsAndReasonCodes() {
         return Stream.of(
-            Arguments.of(ObservationResponse.failedByRejectedKey(DAILY_QUOTA_EXCEEDED, KOREA_NOON_DISPATCH, "22"), "22"),
+            Arguments.of(ObservationResponse.failedByRejectedKey(DAILY_QUOTA_EXCEEDED, KOREA_NOON_DISPATCH, "22"),
+            "22"),
             Arguments.of(ObservationResponse.failedByRejectedKey(GATEWAY_REJECTED, KOREA_NOON_DISPATCH, "31"), "31"));
     }
 
     private static Stream<Arguments> responsesAndExclusions() {
         return Stream.of(
-            Arguments.of(ObservationResponse.failedByRejectedKey(DAILY_QUOTA_EXCEEDED, KOREA_NOON_DISPATCH, "22"), EXCLUDED),
-            Arguments.of(ObservationResponse.failedByRejectedKey(GATEWAY_REJECTED, KOREA_NOON_DISPATCH, "30"), EXCLUDED),
-            Arguments.of(ObservationResponse.failedByRejectedKey(GATEWAY_REJECTED, KOREA_NOON_DISPATCH, "31"), EXCLUDED),
+            Arguments.of(ObservationResponse.failedByRejectedKey(DAILY_QUOTA_EXCEEDED, KOREA_NOON_DISPATCH, "22"),
+                EXCLUDED),
+            Arguments.of(ObservationResponse.failedByRejectedKey(GATEWAY_REJECTED, KOREA_NOON_DISPATCH, "30"),
+                EXCLUDED),
+            Arguments.of(ObservationResponse.failedByRejectedKey(GATEWAY_REJECTED, KOREA_NOON_DISPATCH, "31"),
+                EXCLUDED),
             Arguments.of(ObservationResponse.failed(PER_SECOND_QUOTA_EXCEEDED, KOREA_NOON_DISPATCH), NOT_EXCLUDED),
             Arguments.of(ObservationResponse.failed(GATEWAY_REJECTED, KOREA_NOON_DISPATCH), NOT_EXCLUDED),
             Arguments.of(ObservationResponse.unconfirmed(KOREA_NOON_DISPATCH), NOT_EXCLUDED));

@@ -2,6 +2,10 @@ package com.gustler.backend.forecasting.domain.statistics;
 
 import java.util.Objects;
 
+/**
+ * 한 정류장·시간대의 합산 가능한 통계 중간값이다.
+ * 일별 기여를 원래 순서대로 더해 발행 수치로 변환한다.
+ */
 public record StopDemandCellTotals(
     int stopOrder,
     TimeSlot timeSlot,
@@ -10,7 +14,6 @@ public record StopDemandCellTotals(
     long sampleCount,
     int dayCount
 ) {
-
     public StopDemandCellTotals {
         Objects.requireNonNull(timeSlot, "시간대가 필요하다");
         if (dayCount < 1 || sampleCount < dayCount) {
@@ -19,12 +22,12 @@ public record StopDemandCellTotals(
         }
     }
 
-    public static StopDemandCellTotals ofDay(final DailyStopDemand day) {
+    public static StopDemandCellTotals ofDay(DailyStopDemand day) {
         return new StopDemandCellTotals(day.stopOrder(), day.timeSlot(), day.fillRate(), day.netBoardingRate(),
             day.sampleCount(), 1);
     }
 
-    public StopDemandCellTotals plus(final StopDemandCellTotals other) {
+    public StopDemandCellTotals plus(StopDemandCellTotals other) {
         if (stopOrder != other.stopOrder || timeSlot != other.timeSlot) {
             throw new IllegalArgumentException("같은 정류장·시간대의 합계만 더할 수 있다");
         }

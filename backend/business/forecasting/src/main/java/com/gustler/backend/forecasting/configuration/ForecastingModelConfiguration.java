@@ -10,19 +10,39 @@ import com.gustler.backend.forecasting.infrastructure.bundle.FileModelBundleLoad
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * 모델 파일 검증·활성 배포·런타임 해석을 각각의 협력 객체로 연결한다.
+ */
 @Configuration(proxyBeanMethods = false)
 public class ForecastingModelConfiguration {
-    @Bean public LoadedModelRegistry loadedModelRegistry() { return new LoadedModelRegistry(); }
-    @Bean public ModelBundleLoader modelBundleLoader() { return new FileModelBundleLoader(); }
-    @Bean public BundleActivation bundleActivation(ModelDeploymentRepository deployments, LoadedModelRegistry bundles) {
+    @Bean
+    public LoadedModelRegistry loadedModelRegistry() {
+        return new LoadedModelRegistry();
+    }
+
+    @Bean
+    public ModelBundleLoader modelBundleLoader() {
+        return new FileModelBundleLoader();
+    }
+
+    @Bean
+    public BundleActivation bundleActivation(ModelDeploymentRepository deployments, LoadedModelRegistry bundles) {
         return new BundleActivation(deployments, bundles);
     }
-    @Bean public ModelStartupService modelStartupService(ModelBundleLoader loader, ModelDeploymentRepository deployments,
-            LoadedModelRegistry bundles, BundleActivation activation) {
+
+    @Bean
+    public ModelStartupService modelStartupService(
+        ModelBundleLoader loader,
+        ModelDeploymentRepository deployments,
+        LoadedModelRegistry bundles,
+        BundleActivation activation
+    ) {
         return new ModelStartupService(loader, deployments, bundles, activation);
     }
-    @Bean public ActiveForecastRuntimeResolver activeForecastRuntimeResolver(ModelDeploymentRepository deployments,
-                                                                            LoadedModelRegistry bundles) {
+
+    @Bean
+    public ActiveForecastRuntimeResolver activeForecastRuntimeResolver(ModelDeploymentRepository deployments,
+        LoadedModelRegistry bundles) {
         return new ActiveForecastRuntimeResolver(deployments, bundles);
     }
 }

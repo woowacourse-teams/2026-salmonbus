@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
 import java.io.InputStream;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.json.JsonTest;
@@ -11,7 +12,6 @@ import tools.jackson.databind.ObjectMapper;
 
 @JsonTest
 class BusLocationResponseTest {
-
     @Autowired
     private ObjectMapper objectMapper;
 
@@ -56,17 +56,19 @@ class BusLocationResponseTest {
 
         // then
         BusLocation actualBus = actualResponse.response().body().busLocations().getFirst();
-        assertThat(actualBus.plateNumber()).isEqualTo("경기70아0001");
-        assertThat(actualBus.vehicleId()).isEqualTo("204000206");
-        assertThat(actualBus.vehicleType()).isEqualTo(2);
-        assertThat(actualBus.routeId()).isEqualTo("204000057");
-        assertThat(actualBus.routeType()).isEqualTo(11);
-        assertThat(actualBus.stopId()).isEqualTo("205000217");
-        assertThat(actualBus.stopSequence()).isEqualTo(6);
-        assertThat(actualBus.runningStatus()).isEqualTo(2);
-        assertThat(actualBus.remainingSeatCount()).isEqualTo(67);
-        assertThat(actualBus.crowdLevel()).isZero();
-        assertThat(actualBus.taglessCode()).isEqualTo(1);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(actualBus.plateNumber()).isEqualTo("경기70아0001");
+            softly.assertThat(actualBus.vehicleId()).isEqualTo("204000206");
+            softly.assertThat(actualBus.vehicleType()).isEqualTo(2);
+            softly.assertThat(actualBus.routeId()).isEqualTo("204000057");
+            softly.assertThat(actualBus.routeType()).isEqualTo(11);
+            softly.assertThat(actualBus.stopId()).isEqualTo("205000217");
+            softly.assertThat(actualBus.stopSequence()).isEqualTo(6);
+            softly.assertThat(actualBus.runningStatus()).isEqualTo(2);
+            softly.assertThat(actualBus.remainingSeatCount()).isEqualTo(67);
+            softly.assertThat(actualBus.crowdLevel()).isZero();
+            softly.assertThat(actualBus.taglessCode()).isEqualTo(1);
+        }
     }
 
     private InputStream fixture(

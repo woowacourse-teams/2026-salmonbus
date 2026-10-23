@@ -15,7 +15,6 @@ import org.springframework.web.context.WebApplicationContext;
 @IntegrationTest
 @ActiveProfiles({"api-docs-dev", "prod"})
 class ProductionApiDocsDisabledTest {
-
     @Autowired
     private WebApplicationContext applicationContext;
 
@@ -28,6 +27,7 @@ class ProductionApiDocsDisabledTest {
 
     @Test
     void 운영_프로필이_겹쳐도_화면과_명세를_제공하지_않는다() throws Exception {
+        // when
         mockMvc.perform(get("/api/docs")).andExpect(status().isNotFound());
         mockMvc.perform(get("/api/docs/ui")).andExpect(status().isNotFound());
         mockMvc.perform(get("/api/docs/openapi")).andExpect(status().isNotFound());

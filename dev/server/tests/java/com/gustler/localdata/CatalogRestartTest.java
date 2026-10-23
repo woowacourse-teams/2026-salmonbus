@@ -7,7 +7,7 @@ import java.sql.DriverManager;
 import java.util.List;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class CatalogRestartTest {
     @Test
@@ -16,7 +16,7 @@ class CatalogRestartTest {
         var catalog = RouteDataset.readCatalog(Path.of(System.getProperty("dev.data.directory"), "catalog-routes.json"));
         var route = catalog.routes().stream().filter(item -> item.routeId().equals("234000879")).findFirst().orElseThrow();
         var dataset = new RouteDataset(catalog.version(), List.of(route));
-        try (var database = new PostgreSQLContainer<>("postgres:18-alpine")) {
+        try (var database = new PostgreSQLContainer("postgres:18-alpine")) {
             database.start();
             Flyway.configure().dataSource(database.getJdbcUrl(), database.getUsername(), database.getPassword())
                 .locations("classpath:db/migration").load().migrate();

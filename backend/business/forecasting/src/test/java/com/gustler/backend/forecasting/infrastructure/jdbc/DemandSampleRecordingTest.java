@@ -1,11 +1,13 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.gustler.backend.forecasting.application.evaluation.ForecastEvaluationWriter;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.SeatMissing;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Settled;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Skipped;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.SettledForecast;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
@@ -27,12 +29,11 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class DemandSampleRecordingTest {
-
-    /** 판마다 남는 두 판본. 기본값이 없어서 픽스처가 직접 넣는다. */
+    /** 수집 배치마다 기록할 두 판본. 기본값이 없어 픽스처에서 직접 지정한다. */
     private static final String NORMALIZATION_VERSION = "normalization-v1.0.0";
     private static final String COLLECTION_STRATEGY_VERSION = "adaptive-kst-v1.0.1";
 
-    /** 지나감(2)으로 넣어서 통과 순번이 상류 순번과 같다. 관측 시각 열은 SAL-84 가 지웠다. */
+    /** 운행 상태를 지나감(2)으로 설정해 통과 순번이 상류 순번과 같다. 관측 시각 열은 SAL-84 에서 제거했다. */
     private static final int RUNNING_STATE_DEPARTED = 2;
     private static final int SEATS_LEFT = 12;
 
@@ -48,7 +49,7 @@ class DemandSampleRecordingTest {
     private static final int STOPS_TO_NEXT_TARGET = NEXT_TARGET_STOP_ORDER - PASSED_STOP_ORDER;
     private static final int DEMAND_STATISTICS_REVISION = 3;
 
-    /** 판이 상류 응답을 받은 시각. 관측 시각의 권위가 여기 있다. */
+    /** 수집 배치가 상류 응답을 받은 시각. 관측 시각의 기준이다. */
     private static final OffsetDateTime RESPONSE_RECEIVED_AT =
         OffsetDateTime.parse("2026-08-19T11:14:04.911+09:00");
     private static final OffsetDateTime ARRIVAL_RESPONSE_RECEIVED_AT =
@@ -95,9 +96,9 @@ class DemandSampleRecordingTest {
         // when
         List<SettledForecast> actual = evaluationWriter.complete(List.of(
             ForecastEvaluation.completed(
-                vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.SeatMissing(arrivalObservationId), SCORED_AT),
+                vehicleObservationId, TARGET_STOP_ORDER, new SeatMissing(arrivalObservationId), SCORED_AT),
             ForecastEvaluation.completed(
-                vehicleObservationId, NEXT_TARGET_STOP_ORDER, new ArrivalLabel.Skipped(), SCORED_AT)));
+                vehicleObservationId, NEXT_TARGET_STOP_ORDER, new Skipped(), SCORED_AT)));
 
         // then
         assertThat(actual).isEmpty();
@@ -106,36 +107,43 @@ class DemandSampleRecordingTest {
 
     @Test
     void 정산과_함께_통계에_쓸_원본_값과_도착시각을_기록한다() {
-        long arrival = insertArrivalObservation();
+        // given
+        final long arrival = insertArrivalObservation();
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, 1, GENERATED_AT)));
 
+        // when
         evaluationWriter.complete(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
+            vehicleObservationId, TARGET_STOP_ORDER, new Settled(arrival, 0), SCORED_AT)));
 
+        // then
         assertThat(jdbcClient.sql("""
             SELECT route_version_id, prediction_observation_id, arrival_observation_id,
                    vehicle_id, target_stop_order, arrived_at, scored_at,
                    prediction_remaining_seats, arrival_remaining_seats
             FROM stop_demand_pending_sample WHERE prediction_observation_id = ?
             """).param(vehicleObservationId).query((rs, n) -> List.of(
-                rs.getLong("route_version_id"), rs.getLong("prediction_observation_id"),
-                rs.getLong("arrival_observation_id"), rs.getString("vehicle_id"),
-                rs.getInt("target_stop_order"), rs.getObject("arrived_at", OffsetDateTime.class).toInstant(),
-                rs.getObject("scored_at", OffsetDateTime.class).toInstant(),
-                rs.getInt("prediction_remaining_seats"), rs.getInt("arrival_remaining_seats"))).single())
+            rs.getLong("route_version_id"), rs.getLong("prediction_observation_id"),
+            rs.getLong("arrival_observation_id"), rs.getString("vehicle_id"),
+            rs.getInt("target_stop_order"), rs.getObject("arrived_at", OffsetDateTime.class).toInstant(),
+            rs.getObject("scored_at", OffsetDateTime.class).toInstant(),
+            rs.getInt("prediction_remaining_seats"), rs.getInt("arrival_remaining_seats"))).single())
             .containsExactly(routeVersionId, vehicleObservationId, arrival, VEHICLE_204000206,
                 TARGET_STOP_ORDER, ARRIVAL_RESPONSE_RECEIVED_AT.toInstant(), SCORED_AT, SEATS_LEFT, 0);
     }
 
     @Test
     void 정산_재시도는_처리_대상을_중복_기록하지_않는다() {
-        long arrival = insertArrivalObservation();
+        // given
+        final long arrival = insertArrivalObservation();
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, 1, GENERATED_AT)));
-        var settlement = ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT);
+        ForecastEvaluation settlement = ForecastEvaluation.completed(
+            vehicleObservationId, TARGET_STOP_ORDER, new Settled(arrival, 0), SCORED_AT);
 
+        // when
         evaluationWriter.complete(List.of(settlement));
         evaluationWriter.complete(List.of(settlement));
+
+        // then
         assertThat(pendingSampleCount()).isEqualTo(1);
 
         // 누적 완료 후 처리 대상을 지운 경우에도 정산 상태가 재기록을 막는다.
@@ -147,17 +155,27 @@ class DemandSampleRecordingTest {
 
     @Test
     void 처리_대상_저장에_실패하면_정산도_취소된다() {
-        long arrival = insertArrivalObservation();
+        // given
+        final long arrival = insertArrivalObservation();
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, 1, GENERATED_AT)));
         // 이 테스트 transaction 안에서만 INSERT 실패를 유발한다.
+
+        // when
         jdbcClient.sql("""
             ALTER TABLE stop_demand_pending_sample ADD CONSTRAINT test_reject_sample
             CHECK (prediction_remaining_seats < 0)
             """).update();
         jdbcClient.sql("SAVEPOINT before_settlement").update();
 
-        assertThatThrownBy(() -> evaluationWriter.complete(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT))))
+        // then
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> evaluationWriter.complete(List.of(ForecastEvaluation.completed(
+            vehicleObservationId, TARGET_STOP_ORDER, new Settled(arrival, 0), SCORED_AT))));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
 
         jdbcClient.sql("ROLLBACK TO SAVEPOINT before_settlement").update();
@@ -167,12 +185,15 @@ class DemandSampleRecordingTest {
 
     @Test
     void 후속_작업의_롤백은_정산과_처리_대상을_함께_되돌린다() {
-        long arrival = insertArrivalObservation();
+        // when
+        final long arrival = insertArrivalObservation();
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, 1, GENERATED_AT)));
-        var settlement = ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT);
+        ForecastEvaluation settlement = ForecastEvaluation.completed(
+            vehicleObservationId, TARGET_STOP_ORDER, new Settled(arrival, 0), SCORED_AT);
         jdbcClient.sql("SAVEPOINT before_settlement").update();
         evaluationWriter.complete(List.of(settlement));
+
+        // then
         assertThat(pendingSampleCount()).isEqualTo(1);
 
         jdbcClient.sql("ROLLBACK TO SAVEPOINT before_settlement").update();
@@ -186,22 +207,29 @@ class DemandSampleRecordingTest {
     @ParameterizedTest
     @ValueSource(strings = {"distant", "non_boarding", "missing_seats"})
     void 통계_입력_조건을_벗어난_정산은_처리_대상에_넣지_않는다(String excludedReason) {
-        long arrival = insertArrivalObservation();
-        int target = excludedReason.equals("distant") ? NEXT_TARGET_STOP_ORDER : TARGET_STOP_ORDER;
-        int horizon = excludedReason.equals("distant") ? STOPS_TO_NEXT_TARGET : 1;
+        // given
+        final long arrival = insertArrivalObservation();
+        final int target = targetForExclusion(excludedReason);
+        final int horizon = distanceForExclusion(excludedReason);
         saveForecasts(List.of(forecastOf(target, horizon, GENERATED_AT)));
         if (excludedReason.equals("non_boarding")) {
-            jdbcClient.sql("UPDATE route_stop SET boarding_allowed = false WHERE route_version_id = ? AND stop_order = ?")
-                .params(routeVersionId, target).update();
+            jdbcClient.sql(
+            "UPDATE route_stop SET boarding_allowed = false WHERE route_version_id = ? AND stop_order = ?")
+                .params(routeVersionId, target)
+                .update();
         }
         if (excludedReason.equals("missing_seats")) {
-            jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats = NULL, seat_unknown_reason = 'NOT_REPORTED' WHERE id = ?")
-                .param(vehicleObservationId).update();
+            jdbcClient.sql(
+            "UPDATE vehicle_observation SET remaining_seats = NULL, seat_unknown_reason = 'NOT_REPORTED' WHERE id = ?")
+                .param(vehicleObservationId)
+                .update();
         }
 
+        // when
         evaluationWriter.complete(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, target, new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
+            vehicleObservationId, target, new Settled(arrival, 0), SCORED_AT)));
 
+        // then
         assertThat(readStoredLabel(target).scoringState()).isEqualTo("SETTLED");
         assertThat(pendingSampleCount()).isZero();
     }
@@ -211,20 +239,20 @@ class DemandSampleRecordingTest {
     void 이전_판정_버전의_예보는_도착_좌석을_저장하되_후보정_증분에는_포함하지_않는다() {
         // given
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
-        long arrival = insertArrivalObservation();
+        final long arrival = insertArrivalObservation();
         jdbcClient.sql("UPDATE route_data_quality SET quality_revision = quality_revision + 1 WHERE route_id = ?")
             .param(routeId).update();
 
         // when
         List<SettledForecast> actual = evaluationWriter.complete(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
+            vehicleObservationId, TARGET_STOP_ORDER, new Settled(arrival, 0), SCORED_AT)));
 
         // then
         assertThat(actual).isEmpty();
         assertThat(jdbcClient.sql("SELECT scoring_state FROM forecast_evaluation WHERE vehicle_observation_id = ?")
-            .param(vehicleObservationId).query(String.class).single()).isEqualTo("SETTLED");
+                .param(vehicleObservationId).query(String.class).single()).isEqualTo("SETTLED");
         assertThat(jdbcClient.sql("SELECT seats_on_arrival FROM forecast_evaluation WHERE vehicle_observation_id = ?")
-            .param(vehicleObservationId).query(Integer.class).single()).isZero();
+                .param(vehicleObservationId).query(Integer.class).single()).isZero();
         // 6시간 통계는 후보정과 달리 예보의 이전 quality_revision 자체를 제외하지 않는다.
         assertThat(pendingSampleCount()).isEqualTo(1);
     }
@@ -233,18 +261,18 @@ class DemandSampleRecordingTest {
     void 편도가_제외된_뒤에는_도착_결과와_후보정_증분을_저장하지_않는다() {
         // given
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
-        long arrival = insertArrivalObservation();
+        final long arrival = insertArrivalObservation();
         jdbcClient.sql("UPDATE vehicle_one_way_trip SET status = 'EXCLUDED' WHERE start_observation_id = ?")
             .param(vehicleObservationId).update();
 
         // when
         List<SettledForecast> actual = evaluationWriter.complete(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
+            vehicleObservationId, TARGET_STOP_ORDER, new Settled(arrival, 0), SCORED_AT)));
 
         // then
         assertThat(actual).isEmpty();
         assertThat(jdbcClient.sql("SELECT scoring_state FROM forecast_evaluation WHERE vehicle_observation_id = ?")
-            .param(vehicleObservationId).query(String.class).single()).isEqualTo("PENDING");
+                .param(vehicleObservationId).query(String.class).single()).isEqualTo("PENDING");
         assertThat(pendingSampleCount()).isZero();
     }
 
@@ -252,18 +280,18 @@ class DemandSampleRecordingTest {
     void 다른_방향의_도착_관측으로_예보를_닫지_않는다() {
         // given
         saveForecasts(List.of(forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT)));
-        long arrival = insertArrivalObservation();
+        final long arrival = insertArrivalObservation();
         jdbcClient.sql("UPDATE route_version SET turn_sequence = 9 WHERE id = ?")
             .param(routeVersionId).update();
 
         // when
         List<SettledForecast> actual = evaluationWriter.complete(List.of(ForecastEvaluation.completed(
-            vehicleObservationId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrival, 0), SCORED_AT)));
+            vehicleObservationId, TARGET_STOP_ORDER, new Settled(arrival, 0), SCORED_AT)));
 
         // then
         assertThat(actual).isEmpty();
         assertThat(jdbcClient.sql("SELECT scoring_state FROM forecast_evaluation WHERE vehicle_observation_id = ?")
-            .param(vehicleObservationId).query(String.class).single()).isEqualTo("PENDING");
+                .param(vehicleObservationId).query(String.class).single()).isEqualTo("PENDING");
         assertThat(pendingSampleCount()).isZero();
     }
 
@@ -320,7 +348,10 @@ class DemandSampleRecordingTest {
     private static Instant instantOf(
         OffsetDateTime timestamp
     ) {
-        return timestamp == null ? null : timestamp.toInstant();
+        if (timestamp == null) {
+            return null;
+        }
+        return timestamp.toInstant();
     }
 
     private long insertRoute() {
@@ -349,9 +380,7 @@ class DemandSampleRecordingTest {
             .single();
     }
 
-    private void insertRouteStop(
-        final int stopOrder
-    ) {
+    private void insertRouteStop(final int stopOrder) {
         jdbcClient.sql("""
                 INSERT INTO route_stop (
                     route_version_id, stop_order, stop_id, name, direction, boarding_allowed
@@ -415,13 +444,13 @@ class DemandSampleRecordingTest {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
-            .params(
-                batchId, routeVersionId, sourceRowNumber,
-                vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
-                RUNNING_STATE_DEPARTED, SEATS_LEFT
-            )
-            .query(Long.class)
-            .single());
+                    .params(
+                        batchId, routeVersionId, sourceRowNumber,
+                        vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
+                        RUNNING_STATE_DEPARTED, SEATS_LEFT
+                    )
+                    .query(Long.class)
+                    .single());
     }
 
     private static String stopIdOf(
@@ -437,5 +466,19 @@ class DemandSampleRecordingTest {
         Integer seatsOnArrival,
         Instant scoredAt
     ) {
+    }
+
+    private static int targetForExclusion(String reason) {
+        if (reason.equals("distant")) {
+            return NEXT_TARGET_STOP_ORDER;
+        }
+        return TARGET_STOP_ORDER;
+    }
+
+    private static int distanceForExclusion(String reason) {
+        if (reason.equals("distant")) {
+            return STOPS_TO_NEXT_TARGET;
+        }
+        return 1;
     }
 }

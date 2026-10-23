@@ -1,10 +1,9 @@
 package com.gustler.backend.forecasting.application.statistics;
 
-import com.gustler.backend.forecasting.domain.statistics.StopDemandAggregator;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion;
+import com.gustler.backend.forecasting.domain.statistics.StopDemandAggregator;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandHourlyTotals;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -24,7 +23,10 @@ public class StopDemandStatisticsWriter {
         this.clock = clock;
     }
 
-    @Transactional
+    /**
+     * 기준 시각의 시간별 합계로 다음 통계 판본을 추가한다. 입력이 없으면 기존 판본을 유지하며 새 판본을 만들지 않는다.
+     */
+    @Transactional(readOnly = false)
     public void recompute(final long routeVersionId, Instant computedAt) {
         List<StopDemandHourlyTotals> totals = repository.readHourlyTotals(routeVersionId, computedAt);
         if (totals.isEmpty()) {

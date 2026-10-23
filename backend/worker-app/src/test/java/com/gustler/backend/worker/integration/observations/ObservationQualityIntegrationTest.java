@@ -1,7 +1,7 @@
 package com.gustler.backend.worker.integration.observations;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.gustler.backend.gbis.api.GbisLocationResult.Success;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
@@ -15,6 +15,8 @@ import com.gustler.backend.quota.api.CallQuota;
 import com.gustler.backend.support.PostgresTestContainer;
 import com.gustler.backend.worker.WorkerApplication;
 import com.gustler.backend.worker.configuration.CollectionRuntimeConfiguration;
+import com.gustler.backend.worker.integration.observations.ObservationQualityIntegrationTest
+    .QualityFailureConfiguration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -32,9 +34,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 @SpringBootTest(classes = WorkerApplication.class)
 @Import({PostgresTestContainer.class, CollectionRuntimeConfiguration.class,
-    ObservationQualityIntegrationTest.QualityFailureConfiguration.class})
+    QualityFailureConfiguration.class})
 class ObservationQualityIntegrationTest {
-
     private static final String ROUTE_3330 = "204000057";
     private static final String STOP_205000217 = "205000217";
     private static final String STOP_277103149 = "277103149";
@@ -105,9 +106,9 @@ class ObservationQualityIntegrationTest {
 
         // then
         assertThat(jdbc.sql("SELECT vehicle_id FROM trip_quality_rebuild WHERE route_version_id=?")
-            .param(routeVersionId).query(String.class).list()).containsExactly(VEHICLE_204000206);
+                .param(routeVersionId).query(String.class).list()).containsExactly(VEHICLE_204000206);
         assertThat(jdbc.sql("SELECT vehicle_id FROM forecast_eligible_observation WHERE route_version_id=?")
-            .param(routeVersionId).query(String.class).list()).containsExactly(VEHICLE_204003542);
+                .param(routeVersionId).query(String.class).list()).containsExactly(VEHICLE_204003542);
         assertThat(observationCount()).isEqualTo(2);
     }
 
@@ -121,9 +122,9 @@ class ObservationQualityIntegrationTest {
 
         // then
         assertThat(jdbc.sql("SELECT count(*) FROM trip_quality_rebuild WHERE route_version_id=?")
-            .param(routeVersionId).query(Integer.class).single()).isZero();
+                .param(routeVersionId).query(Integer.class).single()).isZero();
         assertThat(jdbc.sql("SELECT vehicle_trip_key FROM vehicle_observation WHERE observation_batch_id=?")
-            .param(batchId).query(String.class).list()).containsExactly((String) null);
+                .param(batchId).query(String.class).list()).containsExactly((String) null);
     }
 
     @Test
@@ -132,10 +133,14 @@ class ObservationQualityIntegrationTest {
         failingQualityHook.fail = true;
         BusLocation bus = bus(VEHICLE_204000206, 1, STOP_205000217, 2, 71);
 
-        // when & then
-        assertThatThrownBy(() -> ledger.conclude(batchId,
+        // when
+        Throwable caughtFailure = catchThrowable(() -> ledger.conclude(batchId,
             receivedAt -> GbisObservationMapper.response(new Success(QUERY_TIME, List.of(bus)), receivedAt),
-            RESPONSE_RECEIVED_AT))
+            RESPONSE_RECEIVED_AT));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalStateException.class)
             .hasMessage("품질 처리 실패");
         assertThat(columnOf("outcome", String.class)).isEqualTo("DISPATCHING");
@@ -145,10 +150,10 @@ class ObservationQualityIntegrationTest {
                 SELECT reserved_calls FROM daily_call_quota
                 WHERE provider = ? AND api_service = ? AND kst_date = ?
                 """).params(CallQuota.BUS_LOCATION.provider(), CallQuota.BUS_LOCATION.apiService(), KOREA_8_19)
-            .query(Integer.class).single()).isEqualTo(1);
+                .query(Integer.class).single()).isEqualTo(1);
         assertThat(observationCount()).isZero();
         assertThat(jdbc.sql("SELECT count(*) FROM trip_quality_rebuild WHERE route_version_id = ?")
-            .param(routeVersionId).query(Integer.class).single()).isZero();
+                .param(routeVersionId).query(Integer.class).single()).isZero();
     }
 
     private void loadBuses(List<BusLocation> buses) {
@@ -156,8 +161,13 @@ class ObservationQualityIntegrationTest {
             GbisObservationMapper.collect(buses), RESPONSE_RECEIVED_AT);
     }
 
-    private static BusLocation bus(String vehicleId, final int stopOrder, String stopId,
-                                   final int runningState, final int remainingSeats) {
+    private static BusLocation bus(
+        String vehicleId,
+        final int stopOrder,
+        String stopId,
+        final int runningState,
+        final int remainingSeats
+    ) {
         return new BusLocation("경기70아0001", vehicleId, 0, ROUTE_3330, 11,
             stopId, stopOrder, runningState, remainingSeats, 3, 1);
     }
@@ -174,7 +184,6 @@ class ObservationQualityIntegrationTest {
 
     @TestConfiguration(proxyBeanMethods = false)
     static class QualityFailureConfiguration {
-
         @Bean
         FailingQualityHook failingQualityHook() {
             return new FailingQualityHook();
@@ -183,7 +192,6 @@ class ObservationQualityIntegrationTest {
 
     @Order(Ordered.LOWEST_PRECEDENCE)
     static class FailingQualityHook implements CollectionQualityHook {
-
         private boolean fail;
 
         @Override

@@ -14,5 +14,8 @@ public interface RefreshRouteCatalog {
         return "";
     }
 
+    /**
+     * 원천 노선 정보를 읽어 현재 판본을 갱신한다. 할당량 부족이나 사용할 결과가 없으면 빈 값이다.
+     */
     Optional<RouteReference> refresh(String sourceRouteId, OffsetDateTime readAt);
 }

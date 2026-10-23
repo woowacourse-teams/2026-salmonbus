@@ -7,13 +7,12 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * 정류장 위치 층이 순번을 노선 안의 자리로 옮기는 것을 본다.
+ * 정류장 위치 계층이 순번을 노선의 상대 위치로 변환하는지 확인한다.
  *
- * <p>순번을 그대로 쓰지 않는 이유가 여기 나온다. 판본마다 정류장 수가 달라서 같은 순번이라도
- * 노선에서 서 있는 자리가 다르다.
+ * <p>판본마다 정류장 수가 다르므로 같은 순번이라도 노선의 상대 위치는 달라진다.
+ * 이 때문에 순번을 그대로 사용하지 않는다.
  */
 class StopPositionOnRouteTest {
-
     private static final long ROUTE_VERSION_3330 = 1L;
 
     private static final String UPSTREAM_ROUTE_3330 = "204000057";
@@ -41,7 +40,8 @@ class StopPositionOnRouteTest {
         // when
         final double actual = StopPositionOnRoute.of(30, stopsUpTo(40));
 
-        // then 60개짜리 판본에서는 같은 30번이 0.5 였다
+        // then
+        // 60개짜리 판본에서는 같은 30번이 0.5 였다
         assertThat(actual).isEqualTo(0.75);
     }
 

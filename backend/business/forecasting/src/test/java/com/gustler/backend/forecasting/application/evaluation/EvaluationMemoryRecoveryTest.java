@@ -11,8 +11,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gustler.backend.forecasting.api.ForecastPolicy;
+import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore.Key;
+import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore.Restored;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.application.quality.WorkerQualityState;
+import com.gustler.backend.forecasting.application.quality.WorkerQualityState.Snapshot;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationQuery;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import java.time.Clock;
@@ -22,10 +25,13 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -44,10 +50,10 @@ class EvaluationMemoryRecoveryTest {
     void 품질이_바뀌지_않으면_다음_정산에서_입력_준비용_품질_SELECT를_실행하지_않는다() {
         // given
         add(10);
-        var reads = new java.util.concurrent.atomic.AtomicInteger();
+        AtomicInteger reads = new AtomicInteger();
         service.useQualityMemory(new WorkerQualityState(version -> {
             reads.incrementAndGet();
-            return new WorkerQualityState.Snapshot(1, java.util.Set.of());
+            return new Snapshot(1, Set.of());
         }, 20));
 
         // when
@@ -56,8 +62,8 @@ class EvaluationMemoryRecoveryTest {
 
         // then
         assertThat(reads.get()).isEqualTo(1);
-        verify(quality, org.mockito.Mockito.never()).current(anyLong());
-        verify(quality, org.mockito.Mockito.never()).anyInvestigationPending(anyLong());
+        verify(quality, Mockito.never()).current(anyLong());
+        verify(quality, Mockito.never()).anyInvestigationPending(anyLong());
         verify(quality, times(2)).lock(1);
         assertThat(evaluatedVehicles).containsExactly("bus-10", "bus-10");
     }
@@ -83,7 +89,7 @@ class EvaluationMemoryRecoveryTest {
     void 정산_계산_중_품질이_바뀌어도_노선_전체의_완료_확인을_건너뛰지_않는다() {
         // given
         add(10);
-        var state = new WorkerQualityState(version -> new WorkerQualityState.Snapshot(1, java.util.Set.of()), 20);
+        WorkerQualityState state = new WorkerQualityState(version -> new Snapshot(1, Set.of()), 20);
         service.useQualityMemory(state);
         when(arrivals.findAfter(anyLong(), anyString(), any(), anyInt())).thenAnswer(call -> {
             state.beginChange().close();
@@ -103,21 +109,33 @@ class EvaluationMemoryRecoveryTest {
         when(work.routes()).thenReturn(List.of(1L));
         when(quality.lock(1)).thenReturn(1L);
         when(quality.current(1)).thenReturn(1L);
-        when(work.lastObservationId(1)).thenAnswer(call -> inputs.isEmpty() ? 0L : inputs.lastKey());
+        when(work.lastObservationId(1)).thenAnswer(call -> {
+            if (inputs.isEmpty()) {
+                return 0L;
+            }
+            return (long) inputs.lastKey();
+        });
         when(work.page(anyLong(), anyLong(), anyLong(), anyInt())).thenAnswer(call -> {
-            long after = call.getArgument(1);
-            long through = call.getArgument(2);
-            int limit = call.getArgument(3);
-            return inputs.keySet().stream().filter(id -> id > after && id <= through).limit(limit).toList();
+            final long after = call.getArgument(1);
+            final long through = call.getArgument(2);
+            final int limit = call.getArgument(3);
+            return inputs.keySet()
+                .stream()
+                .filter(id -> id > after && id <= through)
+                .limit(limit)
+                .toList();
         });
         when(work.revisions(anyLong(), any())).thenAnswer(call -> {
             List<Long> ids = call.getArgument(1);
-            return ids.stream().collect(Collectors.toMap(id -> id, id -> 1L));
+            return ids.stream()
+                .collect(Collectors.toMap(id -> id, id -> 1L));
         });
         when(work.restore(anyLong(), any())).thenAnswer(call -> {
             List<Long> ids = call.getArgument(1);
-            return ids.stream().map(id -> new EvaluationWorkStore.Restored(
-                new EvaluationWorkStore.Key(id, 2), Optional.of(inputs.get(id)))).toList();
+            return ids.stream()
+                .map(id -> new Restored(
+                    new Key(id, 2), Optional.of(inputs.get(id))))
+                .toList();
         });
         when(arrivals.findAfter(anyLong(), anyString(), any(), anyInt())).thenAnswer(call -> {
             evaluatedVehicles.add(call.getArgument(1));
@@ -144,14 +162,20 @@ class EvaluationMemoryRecoveryTest {
     @Test
     void 메모리가_가득_차도_아직_평가하지_않은_작업을_처리한다() {
         // given
-        for (long id = 1; id <= 17; id++) add(id);
+        for (long id = 1; id <= 17; id++) {
+            add(id);
+        }
 
         // when
-        for (int round = 0; round < 17; round++) commitRound();
+        for (int round = 0; round < 17; round++) {
+            commitRound();
+        }
 
         // then
-        assertThat(evaluatedVehicles).containsExactlyElementsOf(inputs.keySet().stream()
-            .map(id -> "bus-" + id).toList());
+        assertThat(evaluatedVehicles).containsExactlyElementsOf(inputs.keySet()
+            .stream()
+            .map(id -> "bus-" + id)
+            .toList());
         verify(work, times(17)).releaseCompleted(anyLong(), any());
     }
 
@@ -192,7 +216,7 @@ class EvaluationMemoryRecoveryTest {
         // given
         add(10);
         add(20);
-        var older = prepareRound();
+        List<TransactionSynchronization> older = prepareRound();
         commitRound();
         commitRound();
 
@@ -255,19 +279,22 @@ class EvaluationMemoryRecoveryTest {
     }
 
     private EvaluateForecastsService newService() {
-        return new EvaluateForecastsService(work, new EvaluationWorkPageReader(work), new EvaluationRouteCommitter(work, quality, writer,
-            new EvaluationQualityRecheck(work, arrivals, 400)), arrivals,
+        return new EvaluateForecastsService(work, new EvaluationWorkPageReader(work),
+            new EvaluationRouteCommitter(work, quality, writer,
+                new EvaluationQualityRecheck(work, arrivals, 400)), arrivals,
             quality, new ForecastPolicy(Duration.ofMinutes(5), 20, 1, 400),
             Clock.fixed(NOW, ZoneOffset.UTC), 12, 1,
             new RecentArrivalObservationCache(false, 30000, Duration.ofMinutes(30)));
     }
 
-    private void add(long id) {
+    private void add(final long id) {
         inputs.put(id, new PendingForecast(id, 2, 1, "bus-" + id, 1,
             NOW.minusSeconds(30), NOW.minusSeconds(30)));
     }
 
-    private void commitRound() { finish(prepareRound(), TransactionSynchronization.STATUS_COMMITTED); }
+    private void commitRound() {
+        finish(prepareRound(), TransactionSynchronization.STATUS_COMMITTED);
+    }
 
     private List<TransactionSynchronization> prepareRound() {
         TransactionSynchronizationManager.setActualTransactionActive(true);
@@ -281,7 +308,7 @@ class EvaluationMemoryRecoveryTest {
         }
     }
 
-    private static void finish(List<TransactionSynchronization> callbacks, int status) {
+    private static void finish(List<TransactionSynchronization> callbacks, final int status) {
         callbacks.forEach(callback -> callback.afterCompletion(status));
     }
 }

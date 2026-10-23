@@ -40,7 +40,7 @@ gbis:
   daily-limit: 10000 # 활용신청한 API 하나에 걸리는 하루 한도. 두 노선 90초 수집 실측이 8,194회다.
 
 collection:
-  # 기본을 꺼둔 채로 두고 실제로 도는 곳에서만 켠다. 켜면 15초마다 상류로 실호출이 나가는데,
+  # 기본을 꺼둔 채로 두고 실제로 도는 곳에서만 켠다. 켜면 시간대별 주기로 상류에 실호출이 나가는데,
   # 통합 테스트가 컨텍스트를 띄우는 내내 그게 나가면 하루 한도를 테스트가 깎는다.
   # 데모서버에서 COLLECTION_ENABLED=true 로 켠다. 서비스키와 같은 자리에 둔다.
   enabled: ${COLLECTION_ENABLED:false}
@@ -80,6 +80,12 @@ model:
 # 예보 배치와 라벨 회수 배치. 계수 번들이 없어 도는 배포가 하나도 없으므로 꺼둔 채로 낸다.
 # 켜는 것은 배포 행이 선 뒤다. 수집(collection.enabled)과 같은 방식으로 끈다.
 forecast:
+  evaluation-sampling:
+    # 모든 예보를 정산하고, 선택되지 않은 정상 평가는 최소 결과만 저장한다. 운영 검증 후 별도로 켠다.
+    enabled: ${FORECAST_EVALUATION_SAMPLING_ENABLED:false}
+    # GBIS 노선 ID를 쉼표로 구분한다. 비어 있으면 전체 노선에 적용한다.
+    route-ids: ${FORECAST_EVALUATION_SAMPLING_ROUTE_IDS:}
+    interval: ${FORECAST_EVALUATION_SAMPLING_INTERVAL:60s}
   quality-memory:
     # 단일 worker 전용. 수동 DB 품질 변경 또는 다중 worker 실행 시 끈다.
     enabled: ${FORECAST_QUALITY_MEMORY_ENABLED:false}
@@ -98,8 +104,8 @@ forecast:
     enabled: ${FORECAST_ARCHIVE_ENABLED:false}
     delete-enabled: ${FORECAST_ARCHIVE_DELETE_ENABLED:false}
     work-directory: ${FORECAST_ARCHIVE_WORK_DIRECTORY:/var/lib/salmonbus/evaluation-archive}
-    page-size: ${FORECAST_ARCHIVE_PAGE_SIZE:100}
-    max-file-bytes: 1048576
+    page-size: ${FORECAST_ARCHIVE_PAGE_SIZE:500}
+    max-file-bytes: ${FORECAST_ARCHIVE_MAX_FILE_BYTES:4194304}
     interval: 5s
     initial-delay: 60s
   same-day-initialization:
@@ -108,7 +114,7 @@ forecast:
     statement-timeout: 25s # 운영 단일 조회 14.93초 표본에 여유를 둔 초기값. 실행 로그로 재평가한다.
     lock-timeout: 100ms
   enabled: ${FORECAST_ENABLED:false}
-  interval: 10s # 예보가 안 붙은 판을 집으러 가는 주기. 수집이 첨두 15초라 그보다 짧게 둔다.
+  interval: 30s # 관측 저장 이벤트를 놓친 batch를 집으러 가는 주기. 늦게 붙은 예보도 정산 라벨 간격 90초 안에 들게 둔다.
   settlement-interval: 60s # 라벨 회수 주기. 예보와 다른 시계에서 돈다.
   statistics-step-interval: 100ms # 한 번에 한 노선의 작은 처리만 수행한 뒤 스레드를 반환한다.
   statistics-interval: 6h # 셀 통계 재계산 주기. 관측이 쌓여야 값이 바뀌어서 셋 중 제일 느리다.
@@ -123,7 +129,7 @@ forecast:
   # 한 회차에 회수를 시도할 예보 줄 수. 노선당 하루 89만~98만 행이 들어오니 두 노선이면 약 187만 행이다.
   # 60초마다 도니 하루 1,440회, 회차당 1,300행이면 겨우 맞고 여유가 없다. 세 배로 잡았다.
   pending-limit: 3000
-  # 한 차량의 뒤 관측을 얼마나 읽나. 첨두 15초 수집이면 400개가 100분치라 지평 12의 중앙 소요 26.5분을 덮는다.
+  # 한 차량의 뒤 관측을 얼마나 읽나. 첨두 20초 수집이면 400개가 약 133분치라 지평 12의 중앙 소요 26.5분을 덮는다.
   arrival-limit: 400
 
 route-geometry:
@@ -133,7 +139,6 @@ route-geometry:
 arrivals:
   enabled: ${ARRIVALS_ENABLED:false}
   internal-token: ${ARRIVAL_INTERNAL_TOKEN:}
-  daily-limit: 40000
   key-daily-limit: 10000
   queue-capacity: 8
   refresh-interval: 40s

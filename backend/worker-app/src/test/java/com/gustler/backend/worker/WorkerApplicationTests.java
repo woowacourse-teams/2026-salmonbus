@@ -1,20 +1,26 @@
 package com.gustler.backend.worker;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.gustler.backend.support.IntegrationTest;
 import org.junit.jupiter.api.Test;
 
 @IntegrationTest
 class WorkerApplicationTests {
-
     @Test
     void 컨텍스트가_뜬다() {
     }
 
     @Test
     void 클라이언트_API_클래스는_클래스패스에_아예_없다() {
-        assertThatThrownBy(() -> Class.forName("com.gustler.backend.api.route.controller.RouteController"))
+        // when
+        Throwable caughtFailure = catchThrowable(
+            () -> Class.forName("com.gustler.backend.api.route.controller.RouteController"));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(ClassNotFoundException.class);
     }
 }

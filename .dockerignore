@@ -22,15 +22,15 @@ dev/server/**
 !contract/
 contract/**
 !contract/station-arrivals-v2.openapi.json
+!contract/route-watch-v1.openapi.json
 !contract/route-geometry-v2.openapi.json
+!contract/auth-v1.openapi.json
 !contract/examples/
 contract/examples/**
-!contract/examples/chat-v1.json
 !docs/
 docs/**
 !docs/api/
 docs/api/**
-!docs/api/chat-websocket-public.md
 **/.env*
 **/build/
 **/.gradle/

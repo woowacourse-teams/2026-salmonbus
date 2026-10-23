@@ -1,9 +1,9 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuild;
-import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuildRepository;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuild.Phase;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuild.ScanWindow;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuildRepository;
 import com.gustler.backend.forecasting.domain.statistics.RebuildScope;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -15,9 +15,12 @@ import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
+/**
+ * 재집계 요청의 단계·커서·열린 관측 그룹을 저장한다.
+ * 없는 그룹 시각은 null로 유지한다.
+ */
 @Repository
 public class JdbcDemandStatisticsRebuildRepository implements DemandStatisticsRebuildRepository {
-
     private static final String SELECT = """
         SELECT /* salmonbus:demand_statistics_rebuild.select */ progress.request_id, progress.quality_revision, progress.data_until, progress.input_until_id,
                progress.observation_until_id, progress.cursor_id, progress.phase,
@@ -51,18 +54,18 @@ public class JdbcDemandStatisticsRebuildRepository implements DemandStatisticsRe
 
     private final JdbcClient jdbc;
 
-    public JdbcDemandStatisticsRebuildRepository(final JdbcClient jdbc) {
+    public JdbcDemandStatisticsRebuildRepository(JdbcClient jdbc) {
         this.jdbc = jdbc;
     }
 
     @Override
-    public Optional<DemandStatisticsRebuild> find(final long routeVersionId, final RebuildScope scope) {
+    public Optional<DemandStatisticsRebuild> find(final long routeVersionId, RebuildScope scope) {
         return jdbc.sql(SELECT).params(routeVersionId, scope.vehicleId())
             .query((rs, row) -> rebuildOf(routeVersionId, scope, rs)).optional();
     }
 
     @Override
-    public void save(final DemandStatisticsRebuild rebuild) {
+    public void save(DemandStatisticsRebuild rebuild) {
         jdbc.sql(UPSERT_PROGRESS)
             .param("version", rebuild.routeVersionId())
             .param("vehicle", rebuild.scope().vehicleId())
@@ -78,35 +81,52 @@ public class JdbcDemandStatisticsRebuildRepository implements DemandStatisticsRe
             .param("version", rebuild.routeVersionId())
             .param("vehicle", rebuild.scope().vehicleId())
             .param("batchUntilId", scan.batchUntilId())
-            .param("afterAt", scan.afterAt() == null ? null : offsetOf(scan.afterAt()))
+            .param("afterAt", offsetOrNull(scan.afterAt()))
             .param("afterBatchId", scan.afterBatchId())
-            .param("groupEndAt", scan.groupEndAt() == null ? null : offsetOf(scan.groupEndAt()))
+            .param("groupEndAt", offsetOrNull(scan.groupEndAt()))
             .param("groupEndId", scan.groupEndId())
             .update());
     }
 
     @Override
-    public void delete(final long routeVersionId, final RebuildScope scope) {
+    public void delete(final long routeVersionId, RebuildScope scope) {
         jdbc.sql("DELETE FROM stop_demand_rebuild_progress WHERE route_version_id = ? AND vehicle_id = ?")
             .params(routeVersionId, scope.vehicleId()).update();
     }
 
-    private static DemandStatisticsRebuild rebuildOf(final long routeVersionId, final RebuildScope scope,
-        final ResultSet rs) throws SQLException {
-        final ScanWindow scan = rs.getBoolean("has_scan") ? new ScanWindow(rs.getLong("batch_until_id"),
-            instantOrNull(rs.getObject("after_at", OffsetDateTime.class)), rs.getLong("after_batch_id"),
-            instantOrNull(rs.getObject("group_end_at", OffsetDateTime.class)), rs.getLong("group_end_id")) : null;
+    private static DemandStatisticsRebuild rebuildOf(final long routeVersionId, RebuildScope scope,
+        ResultSet rs) throws SQLException {
+        ScanWindow scan = scanWindowOf(rs);
         return new DemandStatisticsRebuild(routeVersionId, scope, rs.getObject("request_id", UUID.class),
             rs.getLong("quality_revision"), rs.getObject("data_until", OffsetDateTime.class).toInstant(),
             rs.getLong("input_until_id"), rs.getLong("observation_until_id"), rs.getLong("cursor_id"),
             Phase.valueOf(rs.getString("phase")), scan);
     }
 
-    private static Instant instantOrNull(final OffsetDateTime value) {
-        return value == null ? null : value.toInstant();
+    private static Instant instantOrNull(OffsetDateTime value) {
+        if (value == null) {
+            return null;
+        }
+        return value.toInstant();
     }
 
-    private static OffsetDateTime offsetOf(final Instant instant) {
+    private static OffsetDateTime offsetOf(Instant instant) {
         return instant.atOffset(ZoneOffset.UTC);
+    }
+
+    private static ScanWindow scanWindowOf(ResultSet rs) throws SQLException {
+        if (!rs.getBoolean("has_scan")) {
+            return null;
+        }
+        return new ScanWindow(rs.getLong("batch_until_id"),
+            instantOrNull(rs.getObject("after_at", OffsetDateTime.class)), rs.getLong("after_batch_id"),
+            instantOrNull(rs.getObject("group_end_at", OffsetDateTime.class)), rs.getLong("group_end_id"));
+    }
+
+    private static OffsetDateTime offsetOrNull(Instant instant) {
+        if (instant == null) {
+            return null;
+        }
+        return offsetOf(instant);
     }
 }

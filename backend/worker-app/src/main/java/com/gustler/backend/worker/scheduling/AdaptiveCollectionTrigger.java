@@ -1,7 +1,6 @@
 package com.gustler.backend.worker.scheduling;
 
 import com.gustler.backend.observations.api.CollectionTiming;
-
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -9,16 +8,15 @@ import org.springframework.scheduling.Trigger;
 import org.springframework.scheduling.TriggerContext;
 
 /**
- * 다음 판을 언제 부를지 정한다.
+ * 다음 수집의 실행 시각을 정한다.
  *
- * <p>간격이 시각대마다 달라 고정 지연으로는 안 된다. 직전 판이 끝난 시각이 어느 단계인지 보고
- * 그 단계의 간격만큼 뒤를 다음 차례로 잡는다.
+ * <p>간격이 시간대마다 달라 고정 지연으로는 지정할 수 없다. 직전 수집이 끝난 시각의 시간대를 보고
+ * 해당 간격만큼 뒤를 다음 실행 시각으로 정한다.
  *
- * <p>끝난 시각을 기준으로 재는 것이라 상류가 느리게 답한 만큼 다음 판이 밀린다.
- * 시작 시각 기준으로 재면 응답이 간격보다 오래 걸릴 때 판이 겹쳐 쌓인다.
+ * <p>완료 시각을 기준으로 하므로 상류가 늦게 응답한 만큼 다음 수집도 늦어진다.
+ * 시작 시각을 기준으로 하면 응답이 간격보다 오래 걸릴 때 수집이 겹쳐 쌓인다.
  */
 public class AdaptiveCollectionTrigger implements Trigger {
-
     private final Clock clock;
     private final Duration fixedInterval;
 
@@ -41,8 +39,9 @@ public class AdaptiveCollectionTrigger implements Trigger {
         if (lastCompletion == null) {
             return clock.instant();
         }
-        return fixedInterval == null
-            ? lastCompletion.plusSeconds(CollectionTiming.intervalSeconds(lastCompletion))
-            : lastCompletion.plus(fixedInterval);
+        if (fixedInterval == null) {
+            return lastCompletion.plusSeconds(CollectionTiming.intervalSeconds(lastCompletion));
+        }
+        return lastCompletion.plus(fixedInterval);
     }
 }

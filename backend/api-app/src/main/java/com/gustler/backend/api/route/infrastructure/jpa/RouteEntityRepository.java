@@ -4,8 +4,10 @@ import java.util.List;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 
+/**
+ * 현재 공개 노선과 예보 발행이 있는 노선의 식별을 읽는 JPA 경계다.
+ */
 public interface RouteEntityRepository extends Repository<RouteJpaEntity, Long> {
-
     @Query("""
         SELECT version.route
         FROM RouteVersionJpaEntity version

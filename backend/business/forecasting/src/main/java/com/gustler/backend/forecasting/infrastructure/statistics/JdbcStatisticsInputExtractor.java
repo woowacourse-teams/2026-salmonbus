@@ -2,6 +2,7 @@ package com.gustler.backend.forecasting.infrastructure.statistics;
 
 import com.gustler.backend.forecasting.domain.evaluation.ScoringState;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion;
+import com.gustler.backend.forecasting.infrastructure.statistics.StatisticsInputRow.Observation;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -55,19 +56,31 @@ final class JdbcStatisticsInputExtractor {
         transaction.setTimeout(5);
     }
 
-    Extracted extract(long route, long after, long through, Instant until, ZoneId zone, int maxRows) {
-        if (route <= 0 || after < 0 || through <= after || through - after > MAX_ID_SPAN
-            || until == null || zone == null || maxRows < 1 || maxRows > MAX_ROWS) {
-            throw new IllegalArgumentException("추출 노선·관측 범위·시각·건수 한도가 올바르지 않다");
+    Extracted extract(
+        final long route,
+        final long after,
+        final long through,
+        Instant until,
+        ZoneId zone,
+        final int maxRows
+    ) {
+        if (!hasValidObservationRange(route, after, through)) {
+            throw invalidExtractionRequest();
+        }
+        if (until == null || zone == null) {
+            throw invalidExtractionRequest();
+        }
+        if (maxRows < 1 || maxRows > MAX_ROWS) {
+            throw invalidExtractionRequest();
         }
         return transaction.execute(status -> {
             jdbc.sql("SET LOCAL statement_timeout = '2s'").update();
             jdbc.sql("SET LOCAL lock_timeout = '500ms'").update();
-            long revision = jdbc.sql("""
+            final long revision = jdbc.sql("""
                 SELECT q.quality_revision FROM route_data_quality q
                 JOIN route_version v ON v.route_id=q.route_id WHERE v.id=:route
                 """).param("route", route).query(Long.class).single();
-            boolean rebuilding = jdbc.sql("""
+            final boolean rebuilding = jdbc.sql("""
                 SELECT EXISTS(SELECT 1 FROM trip_quality_rebuild
                     WHERE route_version_id=:route AND NOT completed)
                 """).param("route", route).query(Boolean.class).single();
@@ -80,14 +93,28 @@ final class JdbcStatisticsInputExtractor {
             if (rows.size() > maxRows) {
                 throw new IllegalArgumentException("추출 건수 한도를 넘었다. 관측 ID 범위를 줄여야 한다");
             }
-            var scope = new StatisticsInputScope(StatisticsInputScope.SCHEMA_VERSION,
+            StatisticsInputScope scope = new StatisticsInputScope(StatisticsInputScope.SCHEMA_VERSION,
                 DemandStatisticsVersion.CURRENT_CALCULATION_VERSION, route, revision, until, zone, rows.size());
             StatisticsInputRows.verify(scope, rows.iterator());
             return new Extracted(scope, after, through, rows);
         });
     }
 
-    private StatisticsInputRow row(ResultSet rs, long revision) throws SQLException {
+    private boolean hasValidObservationRange(long route, long after, long through) {
+        if (route <= 0 || after < 0) {
+            return false;
+        }
+        if (through <= after) {
+            return false;
+        }
+        return through - after <= MAX_ID_SPAN;
+    }
+
+    private IllegalArgumentException invalidExtractionRequest() {
+        return new IllegalArgumentException("추출 노선·관측 범위·시각·건수 한도가 올바르지 않다");
+    }
+
+    private StatisticsInputRow row(ResultSet rs, final long revision) throws SQLException {
         Integer distance = rs.getObject("stops_to_target", Integer.class);
         Boolean boarding = rs.getObject("boarding_allowed", Boolean.class);
         if (distance == null || boarding == null) {
@@ -100,20 +127,28 @@ final class JdbcStatisticsInputExtractor {
             observation(rs, "source"), observation(rs, "arrival"));
     }
 
-    private StatisticsInputRow.Observation observation(ResultSet rs, String prefix) throws SQLException {
+    private Observation observation(ResultSet rs, String prefix) throws SQLException {
         Long id = rs.getObject(prefix + "_id", Long.class);
-        return id == null ? null : new StatisticsInputRow.Observation(id, rs.getLong(prefix + "_route"),
+        if (id == null) {
+            return null;
+        }
+        return new Observation(id, rs.getLong(prefix + "_route"),
             rs.getString(prefix + "_vehicle"), rs.getLong(prefix + "_direction"),
             rs.getObject(prefix + "_seats", Integer.class), rs.getBoolean(prefix + "_usable"));
     }
 
     private Instant instant(ResultSet rs, String column) throws SQLException {
         OffsetDateTime value = rs.getObject(column, OffsetDateTime.class);
-        return value == null ? null : value.toInstant();
+        if (value == null) {
+            return null;
+        }
+        return value.toInstant();
     }
 
     record Extracted(StatisticsInputScope scope, long afterObservationId, long throughObservationId,
         List<StatisticsInputRow> rows) {
-        Extracted { rows = List.copyOf(rows); }
+        Extracted {
+            rows = List.copyOf(rows);
+        }
     }
 }

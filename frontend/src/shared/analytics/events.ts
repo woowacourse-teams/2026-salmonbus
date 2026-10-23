@@ -1,4 +1,5 @@
-import type { Direction, ErrorCode, RouteStatus } from "@/shared/api/routeForecast.types";
+import type { ErrorCode } from "@/shared/api/apiError";
+import type { Direction, RouteStatus } from "@/shared/api/routeForecast.types";
 
 export type FailureProperties =
   | {

@@ -6,6 +6,9 @@ import type { LiveVehicleView } from "../components/liveVehiclePolicy";
 import type { RouteMapData } from "./routeMapModel";
 import { loadNaverMaps, subscribeNaverMapAuthFailure } from "./naverSdk";
 import { createNaverRouteMap, type RouteMapAdapter } from "./naverMapAdapter";
+import { nativeMapCapability } from "@/shared/native-map/bridge";
+import { createNativeRouteMap, type NativeRouteMapAdapter } from "./nativeMapAdapter";
+import { reportNativeMapFailure } from "@/shared/error-tracking/errorTracking";
 import * as styles from "./RouteMap.css";
 
 interface RouteMapProps {
@@ -44,12 +47,14 @@ export function RouteMap(props: RouteMapProps) {
   } = props;
   const regionRef = useRef<HTMLElement | null>(null);
   const elementRef = useRef<HTMLDivElement>(null);
-  const adapterRef = useRef<RouteMapAdapter | null>(null);
+  const adapterRef = useRef<RouteMapAdapter | NativeRouteMapAdapter | null>(null);
+  const lastFocusedStop = useRef<StopSelection | null>(null);
   const lastVehicleFocusRequest = useRef<RouteMapProps["vehicleFocusRequest"]>(null);
   const propsRef = useRef(props);
   const locationRequest = useRef(0);
   const [mapState, setMapState] = useState<MapState>({ status: "loading" });
   const [locationState, setLocationState] = useState<LocationState>({ status: "idle" });
+  const [nativeFailed, setNativeFailed] = useState(false);
 
   useLayoutEffect(() => {
     propsRef.current = props;
@@ -59,6 +64,7 @@ export function RouteMap(props: RouteMapProps) {
     const adapter = adapterRef.current;
     adapterRef.current = null;
     lastVehicleFocusRequest.current = null;
+    lastFocusedStop.current = null;
     locationRequest.current += 1;
     adapter?.destroy();
     elementRef.current?.replaceChildren();
@@ -104,6 +110,62 @@ export function RouteMap(props: RouteMapProps) {
       failed = true;
       failMap(data, error);
     };
+    const capability = nativeMapCapability();
+    if (capability !== null && !nativeFailed) {
+      const region = regionRef.current;
+      if (region !== null) {
+        try {
+          const current = propsRef.current;
+          const adapter = createNativeRouteMap({
+            capability,
+            region,
+            board: current.board,
+            data,
+            motion: current.motion,
+            initialSelection: current.selected,
+            onSelect: (selection) => propsRef.current.onSelect(selection),
+            onVehicleSelect: (selection, key) => propsRef.current.onVehicleSelect(selection, key),
+            onDeselect: () => propsRef.current.onDeselect(),
+            onError: (error, reason) => {
+              if (!active || failed || propsRef.current.data !== data) return;
+              if (reason === undefined) {
+                failActiveMap(error);
+                return;
+              }
+              failed = true;
+              disposeMap();
+              setMapState({ status: "loading" });
+              setLocationState({ status: "idle" });
+              setNativeFailed(true);
+              reportNativeMapFailure(reason, data.routeId);
+            },
+            onReady: () => {
+              if (!active || failed || propsRef.current.data !== data) return;
+              // 이전 앱도 초기 정류장을 확대할 수 있도록 준비 후 카메라 명령은 유지한다.
+              const selection = propsRef.current.selected;
+              if (selection !== null) adapterRef.current?.focus(selection);
+              lastFocusedStop.current = selection;
+              setMapState({ status: "ready", data });
+              setLocationState({ status: "idle" });
+            },
+          });
+          adapterRef.current = adapter;
+          lastFocusedStop.current = current.selected;
+          adapter.update(
+            current.selected,
+            current.activeDirection,
+            current.liveVehicleViews,
+            current.selectedVehicleKey,
+          );
+        } catch (error) {
+          failActiveMap(error);
+        }
+      }
+      return () => {
+        active = false;
+        disposeMap();
+      };
+    }
     const unsubscribeAuthFailure = subscribeNaverMapAuthFailure(() => failActiveMap(null));
     void loadNaverMaps(__NAVER_MAP_KEY_ID__)
       .then((sdk) => {
@@ -121,16 +183,20 @@ export function RouteMap(props: RouteMapProps) {
           () => failActiveMap(null),
           () => {
             if (!active || failed || propsRef.current.data !== data) return;
+            const selection = propsRef.current.selected;
+            if (selection !== null) adapterRef.current?.focus(selection, { animate: true });
+            lastFocusedStop.current = selection;
             setMapState({ status: "ready", data });
             setLocationState({ status: "idle" });
           },
           (selection, key) => propsRef.current.onVehicleSelect(selection, key),
           () => propsRef.current.onDeselect(),
+          current.selected,
         );
         adapterRef.current = adapter;
+        lastFocusedStop.current = current.selected;
         adapter.update(current.selected, current.activeDirection, current.liveVehicleViews, current.selectedVehicleKey);
         adapter.moveVehicles(current.motion.frames);
-        if (current.selected !== null) adapter.focus(current.selected);
         if (failed) {
           disposeMap();
           return;
@@ -144,7 +210,7 @@ export function RouteMap(props: RouteMapProps) {
       unsubscribeAuthFailure();
       disposeMap();
     };
-  }, [data, disposeMap, failMap]);
+  }, [data, disposeMap, failMap, nativeFailed]);
 
   useEffect(() => {
     runMapAction((adapter) => {
@@ -154,8 +220,12 @@ export function RouteMap(props: RouteMapProps) {
   }, [selected, activeDirection, liveVehicleViews, motion, selectedVehicleKey, mapState, runMapAction]);
 
   useEffect(() => {
-    if (selected !== null) runMapAction((adapter) => adapter.focus(selected));
-  }, [selected, runMapAction]);
+    if (mapState.status !== "ready" || mapState.data !== data) return;
+    const previous = lastFocusedStop.current;
+    lastFocusedStop.current = selected;
+    if (selected !== null && (selected.direction !== previous?.direction || selected.sequence !== previous?.sequence))
+      runMapAction((adapter) => adapter.focus(selected));
+  }, [selected, mapState, data, runMapAction]);
 
   useEffect(() => {
     if (mapState.status !== "ready" || !visible) {
@@ -170,10 +240,10 @@ export function RouteMap(props: RouteMapProps) {
     );
   }, [vehicleFocusRequest, mapState, visible, runMapAction]);
 
-  useEffect(
-    () => motion.subscribe(() => runMapAction((adapter) => adapter.moveVehicles(motion.frames))),
-    [motion, runMapAction],
-  );
+  useEffect(() => {
+    if (nativeMapCapability() !== null && !nativeFailed) return;
+    return motion.subscribe(() => runMapAction((adapter) => adapter.moveVehicles(motion.frames)));
+  }, [motion, runMapAction, nativeFailed]);
 
   useEffect(() => {
     const region = regionRef.current;
@@ -188,7 +258,33 @@ export function RouteMap(props: RouteMapProps) {
   }, [mapState, viewportHeight, runMapAction]);
 
   function locate() {
-    if (adapterRef.current === null) return;
+    const adapter = adapterRef.current;
+    if (adapter === null) return;
+    if ("native" in adapter) {
+      const request = ++locationRequest.current;
+      setLocationState({ status: "loading" });
+      void adapter
+        .locate(request)
+        .then((coordinate) => {
+          if (request !== locationRequest.current || adapterRef.current !== adapter) return;
+          runMapAction((current) => current.showLocation(coordinate));
+          setLocationState({ status: "idle" });
+        })
+        .catch((error: unknown) => {
+          if (request !== locationRequest.current || adapterRef.current !== adapter) return;
+          const reason = error instanceof Error ? error.message : "unavailable";
+          setLocationState({
+            status: "message",
+            message:
+              reason === "denied"
+                ? "iPhone 설정에서 연어버스의 위치 권한을 허용해주세요"
+                : reason === "timeout"
+                  ? "위치를 확인하는 데 시간이 걸려요. 다시 눌러주세요"
+                  : "현재 위치를 확인하지 못했어요. 다시 눌러주세요",
+          });
+        });
+      return;
+    }
     if (!navigator.geolocation) {
       setLocationState({ status: "message", message: "현재 위치를 지원하지 않는 환경이에요" });
       return;
@@ -245,7 +341,7 @@ export function RouteMap(props: RouteMapProps) {
         />
       </div>
       {unavailableMessage !== null ? (
-        <div className={styles.notice} role="status">
+        <div className={styles.notice} role="status" data-native-map-hit>
           <span>{unavailableMessage}</span>
           <span>정류장 목록은 계속 확인할 수 있어요</span>
         </div>
@@ -261,6 +357,7 @@ export function RouteMap(props: RouteMapProps) {
           className={styles.location}
           aria-label="현재 위치 보기"
           onClick={locate}
+          data-native-map-hit
           disabled={locationState.status === "loading"}
         >
           <svg
@@ -279,7 +376,7 @@ export function RouteMap(props: RouteMapProps) {
         </button>
       ) : null}
       {ready && locationState.status === "message" ? (
-        <div className={styles.locationNotice} role="status">
+        <div className={styles.locationNotice} role="status" data-native-map-hit>
           {locationState.message}
         </div>
       ) : null}

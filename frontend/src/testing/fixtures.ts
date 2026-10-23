@@ -1,4 +1,4 @@
-import type { Board, DirectionInfo, LiveVehicles, StopState, Vehicle } from "@/shared/api/routeForecast.types";
+import type { Board, DirectionInfo, StopState, Vehicle } from "@/shared/api/routeForecast.types";
 
 export const upInfo: DirectionInfo = {
   id: "UP",
@@ -60,20 +60,6 @@ export function vehicleAt(currentStopSequence: number, overrides: Partial<Vehicl
     stopName: `정류장${currentStopSequence}`,
     phase: "IN_TRANSIT",
     seat: { kind: "EXACT", remaining: 10 },
-    ...overrides,
-  };
-}
-
-export function liveVehiclesWith(vehicles: Vehicle[], overrides: Partial<LiveVehicles> = {}): LiveVehicles {
-  return {
-    routeId: "R1",
-    referenceVersionId: "v1",
-    observation: {
-      state: "VEHICLES_PRESENT",
-      observedAt: "2026-09-01T08:12:31+09:00",
-      staleAt: "2026-09-01T08:17:31+09:00",
-    },
-    vehicles,
     ...overrides,
   };
 }

@@ -72,19 +72,13 @@ final class BasisLifecycle {
     static void preserveData(RevisionStore.Revision previous, RevisionStore.Revision next,
             DataTransition.Approval approval) {
         if (approval != null) approval.verify(previous, next, java.time.Instant.now());
-        for (var name :
-                List.of(
-                        "tools/data-contract.sha256",
-                        "config/mongodb.yml",
-                        "infra/compose.yaml",
-                        "infra/init-chat.js")) {
-            Checks.require(
-                    previous.files().containsKey(name) && next.files().containsKey(name),
+        final boolean retirement = ChatRetirement.permits(previous, next);
+        for (var name : List.of("tools/data-contract.sha256", "infra/compose.yaml")) {
+            Checks.require(previous.files().containsKey(name) && next.files().containsKey(name),
                     "DEV_DATA_CHANGE_REQUIRES_PLAN");
         }
         for (var name : DataPreparation.FILES) {
-            Checks.require(
-                    previous.files().containsKey("tools/data/" + name)
+            Checks.require(previous.files().containsKey("tools/data/" + name)
                             && next.files().containsKey("tools/data/" + name),
                     "DEV_DATA_CHANGE_REQUIRES_PLAN");
         }
@@ -93,15 +87,10 @@ final class BasisLifecycle {
         for (var name : names) {
             if (name.equals("tools/data-contract.sha256")
                     && (approval != null || CompatiblePreparation.permits(previous, next))) continue;
-            if (name.startsWith("tools/data/")
-                    || List.of(
-                                    "tools/data-contract.sha256",
-                                    "config/mongodb.yml",
-                                    "infra/compose.yaml",
-                                    "infra/init-chat.js")
-                            .contains(name)) {
-                Checks.require(
-                        previous.files().containsKey(name)
+            if (retirement && ChatRetirement.INFRA_FILES.contains(name)) continue;
+            if (name.startsWith("tools/data/") || name.equals("tools/data-contract.sha256")
+                    || ChatRetirement.INFRA_FILES.contains(name)) {
+                Checks.require(previous.files().containsKey(name)
                                 && previous.files().get(name).equals(next.files().get(name)),
                         "DEV_DATA_CHANGE_REQUIRES_PLAN");
             }

@@ -1,5 +1,7 @@
 package com.gustler.backend.observations.api;
 
+import com.gustler.backend.observations.api.ObservationDeliveryBatch.Kind;
+import com.gustler.backend.observations.api.ObservationDeliveryBatch.Row;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -10,15 +12,22 @@ public record ObservationDeliveryBatch(long batchId, long routeVersionId, int at
     public ObservationDeliveryBatch {
         Objects.requireNonNull(kind);
         rows = List.copyOf(rows);
-        if (attempt < 1) throw new IllegalArgumentException("수집 시도 번호는 양수여야 한다");
-        if (kind == Kind.STORED) Objects.requireNonNull(observedAt);
+        if (attempt < 1) {
+            throw new IllegalArgumentException("수집 시도 번호는 양수여야 한다");
+        }
+        if (kind == Kind.STORED) {
+            Objects.requireNonNull(observedAt);
+        }
         if (kind == Kind.CLEARED && !rows.isEmpty()) {
             throw new IllegalArgumentException("관측 삭제 전달에는 관측을 담을 수 없다");
         }
     }
 
-    public enum Kind { CLEARED, STORED }
+    public enum Kind {
+        CLEARED, STORED
+    }
 
     public record Row(long observationId, String vehicleId, Integer remainingSeats,
-                      Integer passedStopOrder, Integer crowdLevel, Integer stopOrder, Integer runningState) { }
+        Integer passedStopOrder, Integer crowdLevel, Integer stopOrder, Integer runningState) {
+    }
 }

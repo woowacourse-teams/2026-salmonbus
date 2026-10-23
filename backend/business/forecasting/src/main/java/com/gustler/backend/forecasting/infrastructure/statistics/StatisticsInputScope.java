@@ -4,6 +4,9 @@ import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion
 import java.time.Instant;
 import java.time.ZoneId;
 
+/**
+ * 파일 통계 입력의 노선·판본·기준 시각·시간대 범위를 고정하는 값이다.
+ */
 record StatisticsInputScope(
     String schemaVersion,
     String calculationVersion,
@@ -22,11 +25,18 @@ record StatisticsInputScope(
         if (!DemandStatisticsVersion.CURRENT_CALCULATION_VERSION.equals(calculationVersion)) {
             throw new IllegalArgumentException("지원하지 않는 통계 계산 규칙이다");
         }
-        if (routeVersionId <= 0 || qualityRevision < 1 || rowCount < 0) {
+        if (!hasValidRange(routeVersionId, qualityRevision, rowCount)) {
             throw new IllegalArgumentException("노선 버전, 품질 판본, 자료 건수가 올바르지 않다");
         }
         if (dataUntil == null || zone == null) {
             throw new IllegalArgumentException("계산 기준 시각과 시간대가 필요하다");
         }
+    }
+
+    private static boolean hasValidRange(long routeVersionId, long qualityRevision, long rowCount) {
+        if (routeVersionId <= 0 || qualityRevision < 1) {
+            return false;
+        }
+        return rowCount >= 0;
     }
 }

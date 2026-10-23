@@ -1,6 +1,6 @@
 package com.gustler.backend.forecasting.domain.statistics;
 
-/** 집계가 낸 셀 하나. 어느 시간대의 것인지까지 담는다. */
+/** 집계 결과인 셀 하나와 해당 시간대를 담는다. */
 public record StopDemandMeasurement(
     TimeSlot timeSlot,
     StopDemandCell cell

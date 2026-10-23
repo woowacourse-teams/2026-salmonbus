@@ -2,8 +2,8 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.domain.statistics.DemandSample;
 import com.gustler.backend.forecasting.domain.statistics.DemandSamplePage;
-import com.gustler.backend.forecasting.domain.statistics.DemandSampleStore;
 import com.gustler.backend.forecasting.domain.statistics.DemandSamplePage.PendingSample;
+import com.gustler.backend.forecasting.domain.statistics.DemandSampleStore;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -11,9 +11,12 @@ import java.util.List;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
+/**
+ * 정산에서 생긴 통계 표본을 기록하고 제한된 페이지로 잠가 처리한다.
+ * 원본 정산과 표본 처리의 경계를 구분한다.
+ */
 @Repository
 public class JdbcDemandSampleStore implements DemandSampleStore {
-
     private static final String INSERT = """
         INSERT INTO stop_demand_pending_sample (
             route_version_id, prediction_observation_id, arrival_observation_id,
@@ -44,13 +47,13 @@ public class JdbcDemandSampleStore implements DemandSampleStore {
 
     private final JdbcClient jdbc;
 
-    public JdbcDemandSampleStore(final JdbcClient jdbc) {
+    public JdbcDemandSampleStore(JdbcClient jdbc) {
         this.jdbc = jdbc;
     }
 
     @Override
-    public void record(final List<DemandSample> samples) {
-        for (final DemandSample sample : samples) {
+    public void record(List<DemandSample> samples) {
+        for (DemandSample sample : samples) {
             jdbc.sql(INSERT)
                 .param("routeVersionId", sample.routeVersionId())
                 .param("predictionObservationId", sample.predictionObservationId())
@@ -66,8 +69,13 @@ public class JdbcDemandSampleStore implements DemandSampleStore {
     }
 
     @Override
-    public DemandSamplePage lockPage(final long routeVersionId, final String vehicleId, final long afterInputId,
-        final long inputUntilId, final int limit) {
+    public DemandSamplePage lockPage(
+        final long routeVersionId,
+        String vehicleId,
+        final long afterInputId,
+        final long inputUntilId,
+        final int limit
+    ) {
         return new DemandSamplePage(jdbc.sql(LOCK_PAGE)
             .param("version", routeVersionId).param("vehicle", vehicleId)
             .param("afterInputId", afterInputId).param("inputUntilId", inputUntilId).param("limit", limit)
@@ -82,7 +90,7 @@ public class JdbcDemandSampleStore implements DemandSampleStore {
     }
 
     @Override
-    public void remove(final List<Long> sampleIds) {
+    public void remove(List<Long> sampleIds) {
         if (sampleIds.isEmpty()) {
             return;
         }
@@ -94,7 +102,7 @@ public class JdbcDemandSampleStore implements DemandSampleStore {
         return jdbc.sql("SELECT COALESCE(max(id), 0) FROM stop_demand_pending_sample").query(Long.class).single();
     }
 
-    private static OffsetDateTime offsetOf(final Instant instant) {
+    private static OffsetDateTime offsetOf(Instant instant) {
         return instant.atOffset(ZoneOffset.UTC);
     }
 }

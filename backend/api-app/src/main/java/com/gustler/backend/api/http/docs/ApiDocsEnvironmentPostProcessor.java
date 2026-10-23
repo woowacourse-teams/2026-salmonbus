@@ -10,7 +10,6 @@ import org.springframework.core.env.MapPropertySource;
 
 /** 문서 제공 범위를 명시적인 local/dev 프로필로 제한한다. */
 public final class ApiDocsEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
-
     @Override
     public int getOrder() {
         return Ordered.LOWEST_PRECEDENCE;
@@ -18,11 +17,11 @@ public final class ApiDocsEnvironmentPostProcessor implements EnvironmentPostPro
 
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
-        boolean localOrDev = Arrays.stream(environment.getActiveProfiles())
+        final boolean localOrDev = Arrays.stream(environment.getActiveProfiles())
             .anyMatch(profile -> profile.equals("api-docs-local") || profile.equals("api-docs-dev"));
-        boolean production = Arrays.stream(environment.getActiveProfiles())
+        final boolean production = Arrays.stream(environment.getActiveProfiles())
             .anyMatch(profile -> profile.equals("prod") || profile.equals("production"));
-        boolean enabled = localOrDev && !production;
+        final boolean enabled = localOrDev && !production;
 
         environment.getPropertySources().addFirst(new MapPropertySource("apiDocsMode", Map.of(
             "springdoc.api-docs.enabled", enabled,

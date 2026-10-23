@@ -7,7 +7,6 @@ import java.util.HexFormat;
 
 /** 파일 내용과 식별 정보 문자열의 SHA-256 해시를 계산한다. */
 public final class Sha256 {
-
     private Sha256() {
     }
 

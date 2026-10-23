@@ -8,7 +8,6 @@ import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class VehiclePollOutcomeTest {
-
     @ParameterizedTest
     @CsvSource({
         "SUCCESS_ROWS, SUCCESS_ROWS",
@@ -18,14 +17,22 @@ class VehiclePollOutcomeTest {
         String databaseValue,
         VehiclePollOutcome expected
     ) {
-        assertThat(VehiclePollOutcome.fromDatabaseValue(databaseValue)).isEqualTo(expected);
+        // when
+        VehiclePollOutcome outcome = VehiclePollOutcome.fromDatabaseValue(databaseValue);
+
+        // then
+        assertThat(outcome).isEqualTo(expected);
     }
 
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = {"TRANSPORT_FAILURE", "IN_PROGRESS", "UNEXPECTED"})
     void 정상이_아닌_DB_outcome은_UNKNOWN으로_해석한다(String databaseValue) {
-        assertThat(VehiclePollOutcome.fromDatabaseValue(databaseValue))
+        // when
+        VehiclePollOutcome outcome = VehiclePollOutcome.fromDatabaseValue(databaseValue);
+
+        // then
+        assertThat(outcome)
             .isEqualTo(VehiclePollOutcome.UNKNOWN);
     }
 }

@@ -12,10 +12,13 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.ZoneId;
 
+/**
+ * 탑승판에 필요한 예보 행을 읽기 모델로 변환한다.
+ * 예보의 부재와 제공할 수 없는 수치를 구분한다.
+ */
 @Entity(name = "BoardSeatForecastJpaEntity")
 @Table(name = "seat_forecast")
 public class SeatForecastJpaEntity {
-
     @EmbeddedId
     private SeatForecastJpaId id;
 

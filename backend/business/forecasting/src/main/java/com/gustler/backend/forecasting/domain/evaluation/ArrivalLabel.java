@@ -8,7 +8,6 @@ package com.gustler.backend.forecasting.domain.evaluation;
  * 확정된 평가를 저장할 때는 대기 상태를 허용하지 않는 {@link EvaluationResult}로 변환한다.
  */
 public sealed interface ArrivalLabel {
-
     ScoringState scoringState();
 
     /** 이 판정으로 평가를 확정할 수 있는지 여부. 아직 도착하지 않았으면 확정하지 않는다. */
@@ -21,7 +20,6 @@ public sealed interface ArrivalLabel {
         long arrivalObservationId,
         int seatsOnArrival
     ) implements ArrivalLabel {
-
         public Settled {
             if (seatsOnArrival < 0) {
                 throw new IllegalArgumentException("도착 잔여석은 0석 이상이다: " + seatsOnArrival);
@@ -38,7 +36,6 @@ public sealed interface ArrivalLabel {
     record SeatMissing(
         long arrivalObservationId
     ) implements ArrivalLabel {
-
         @Override
         public ScoringState scoringState() {
             return ScoringState.SEAT_MISSING;
@@ -47,7 +44,6 @@ public sealed interface ArrivalLabel {
 
     /** 대상 정류장 순번을 건너뛰어 해당 정류장의 관측이 없다. */
     record Skipped() implements ArrivalLabel {
-
         @Override
         public ScoringState scoringState() {
             return ScoringState.SKIPPED;
@@ -56,7 +52,6 @@ public sealed interface ArrivalLabel {
 
     /** 대상 정류장에 도달하기 전에 추적이 끊겼다. 관측 공백·순번 되돌림·차량 ID 부재가 해당한다. */
     record Lost() implements ArrivalLabel {
-
         @Override
         public ScoringState scoringState() {
             return ScoringState.LOST;
@@ -65,7 +60,6 @@ public sealed interface ArrivalLabel {
 
     /** 아직 대상 정류장에 도달하지 않아 다음 평가 회차에서 다시 확인한다. */
     record NotArrivedYet() implements ArrivalLabel {
-
         @Override
         public ScoringState scoringState() {
             return ScoringState.PENDING;

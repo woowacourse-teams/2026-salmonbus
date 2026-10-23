@@ -1,18 +1,22 @@
 package com.gustler.backend.gbis.api;
 
 import com.gustler.backend.gbis.api.GbisClientOptions;
-
 import com.gustler.backend.gbis.api.GbisRawResponse.NotReceived;
 import com.gustler.backend.gbis.api.GbisRawResponse.PortalRejected;
 import com.gustler.backend.gbis.api.GbisRawResponse.Received;
 import com.gustler.backend.gbis.api.dto.PortalErrorResponse;
 import com.gustler.backend.gbis.api.dto.PortalErrorResponse.CommonHeader;
+import com.gustler.backend.gbis.api.dto.PortalErrorResponse.ServiceResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClient.ResponseSpec.ErrorHandler;
@@ -21,14 +25,13 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * GBIS 를 부르고 본문을 글자로 받는 자리. 어느 API 를 부르든 여기까지는 같다.
+ * GBIS 를 호출하고 본문을 문자열로 받는 공통 호출부다. 어느 API 를 호출하든 같은 처리를 거친다.
  *
- * <p>포털 오류는 GBIS 응답과 봉투가 아예 다르고, JSON 으로 올 때와 XML 로 올 때가 있다.
- * 그 처리를 API 마다 복사하면 한쪽만 고쳐지는 날이 온다.
+ * <p>포털 오류는 GBIS 응답과 봉투 형식이 다르며 JSON 으로 올 때와 XML 로 올 때가 있다.
+ * 이 처리를 API 마다 복사하면 한쪽만 수정되는 경우가 생긴다.
  */
 @Component
 public class GbisApiCaller {
-
     private static final String PORTAL_ERROR_ROOT = "OpenAPI_ServiceResponse";
     private static final Pattern REASON_CODE_IN_XML = Pattern.compile("<returnReasonCode>(.*?)</returnReasonCode>");
     private static final Pattern ERROR_CODE_IN_XML = Pattern.compile("<errMsg>(.*?)</errMsg>");
@@ -82,13 +85,23 @@ public class GbisApiCaller {
         return requestBy(path, "routeId", routeId, keyAlias);
     }
 
-    private GbisRawResponse getBy(String path, String parameter, String value, String keyAlias) {
+    private GbisRawResponse getBy(
+        String path,
+        String parameter,
+        String value,
+        String keyAlias
+    ) {
         return requestBy(path, parameter, value, keyAlias).response();
     }
 
-    private GbisHttpResult requestBy(String path, String parameter, String value, String keyAlias) {
+    private GbisHttpResult requestBy(
+        String path,
+        String parameter,
+        String value,
+        String keyAlias
+    ) {
         try {
-            var response = gbisRestClient.get()
+            ResponseEntity<byte[]> response = gbisRestClient.get()
                 .uri(builder -> builder
                     .path(path)
                     .queryParam("serviceKey", "{serviceKey}")
@@ -105,8 +118,10 @@ public class GbisApiCaller {
         } catch (RestClientException e) {
             diagnostic("collectionTransport", e.getClass().getSimpleName());
             Throwable cause = e;
-            var seen = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable, Boolean>());
-            while (cause.getCause() != null && seen.add(cause.getCause())) { cause = cause.getCause(); }
+            Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<Throwable, Boolean>());
+            while (cause.getCause() != null && seen.add(cause.getCause())) {
+                cause = cause.getCause();
+            }
             diagnostic("collectionTransportCause", cause.getClass().getSimpleName());
             // 예외 메시지에는 인증키를 포함한 요청 URL이 들어갈 수 있다.
             return new GbisHttpResult(new NotReceived(e.getClass().getSimpleName()), 0, null);
@@ -114,7 +129,9 @@ public class GbisApiCaller {
     }
 
     private static void diagnostic(String key, String value) {
-        if (MDC.get("collectionAttemptId") != null) { MDC.put(key, value); }
+        if (MDC.get("collectionAttemptId") != null) {
+            MDC.put(key, value);
+        }
     }
 
     private String decode(
@@ -157,7 +174,7 @@ public class GbisApiCaller {
         try {
             PortalErrorResponse parsed = objectMapper.readValue(body, PortalErrorResponse.class);
             return Optional.ofNullable(parsed.response())
-                .map(PortalErrorResponse.ServiceResponse::header);
+                .map(ServiceResponse::header);
         } catch (JacksonException e) {
             return Optional.empty();
         }

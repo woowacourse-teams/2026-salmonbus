@@ -19,7 +19,6 @@ import org.springframework.context.annotation.Import;
 @Import({PostgresTestContainer.class, ClockConfig.class, RouteCatalogConfiguration.class,
     ObservationsConfiguration.class, CallQuotaConfiguration.class, GbisConfiguration.class})
 class ObservationTestConfiguration {
-
     @Bean
     CallQuotaPolicy callQuotaPolicy() {
         return CallQuotaPolicy.sameForEveryApi(10_000);

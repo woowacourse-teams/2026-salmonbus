@@ -2,7 +2,6 @@ package com.gustler.backend.api.docs;
 
 /** 공개 문서용 합성 예시. contract의 같은 이름 예시와 문서 테스트에서 대조한다. */
 public final class RouteGeometryApiDocsExamples {
-
     public static final String READY = """
         {
           "routeId": "204000057",
@@ -318,5 +317,6 @@ public final class RouteGeometryApiDocsExamples {
         }
         """;
 
-    private RouteGeometryApiDocsExamples() { }
+    private RouteGeometryApiDocsExamples() {
+    }
 }

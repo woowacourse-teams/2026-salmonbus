@@ -2,8 +2,11 @@ package com.gustler.backend.observations.domain;
 
 import java.util.Objects;
 
+/**
+ * 알려진 잔여석과 미제공 사유를 구분한다.
+ * 알려진 0석을 결측으로 바꾸지 않는다.
+ */
 public sealed interface RemainingSeats {
-
     static RemainingSeats from(
         Integer remainingSeatCount
     ) {
@@ -19,7 +22,6 @@ public sealed interface RemainingSeats {
     record Known(
         int seats
     ) implements RemainingSeats {
-
         public Known {
             if (seats < 0) {
                 throw new IllegalArgumentException("아는 잔여석은 음수일 수 없다: " + seats);
@@ -30,7 +32,6 @@ public sealed interface RemainingSeats {
     record Unknown(
         SeatUnknownReason reason
     ) implements RemainingSeats {
-
         public Unknown {
             Objects.requireNonNull(reason, "잔여석을 모르면 사유가 있어야 한다");
         }

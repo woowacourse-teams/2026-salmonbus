@@ -1,28 +1,33 @@
 package com.gustler.backend.forecasting.domain.publication;
 
-import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
-import com.gustler.backend.forecasting.domain.model.TrajectoryGap;
+import com.gustler.backend.forecasting.domain.model.FullSeatStreak;
+import com.gustler.backend.forecasting.domain.model.FullSeatStreak.CutByGap;
+import com.gustler.backend.forecasting.domain.model.FullSeatStreak.SeenToEnd;
 import com.gustler.backend.forecasting.domain.model.ObservedSeats;
+import com.gustler.backend.forecasting.domain.model.ObservedSeats.Known;
 import com.gustler.backend.forecasting.domain.model.PrecedingVehicle;
 import com.gustler.backend.forecasting.domain.model.SeatSlope;
-import com.gustler.backend.forecasting.domain.model.FullSeatStreak;
+import com.gustler.backend.forecasting.domain.model.SeatSlope.Unknown;
+import com.gustler.backend.forecasting.domain.model.TrajectoryGap;
+import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
- * 관측 이력에서 차량마다 궤적 재료 셋을 만든다.
+ * 관측 이력에서 차량마다 궤적 입력 셋을 만든다.
  *
- * <p>규칙보다 결손이 비싸서 끊긴 자리를 판정하는 일이 전부 여기 모인다.
+ * <p>관측 결손에 따른 연결 중단을 일관되게 판정하도록 관련 규칙을 이곳에 모은다.
  *
  * <p>조회 어댑터가 vehicle_trip_key에 저장한 편도 ID를 전달한다. 편도가 다르면 연결을 끊고, 같은 편도 안에서도
- * 판 결손·순번 건너뜀·순번 역행으로 특징 계산을 끊는다.
+ * 수집 배치 결손·순번 건너뜀·순번 역행으로 특징 계산을 중단한다.
  */
 public final class VehicleTrajectoryAssembler {
-
     private static final int SAME_STOP = 0;
     private static final int NEXT_STOP = 1;
 
@@ -30,26 +35,24 @@ public final class VehicleTrajectoryAssembler {
     }
 
     /**
-     * 차량마다 궤적 재료를 만든다.
+     * 차량마다 궤적 입력을 만든다.
      *
-     * <p>보여 준 최대 잔여석만 30분 창 밖에서 온다. 이력 전부를 봐야 나오는 값이라 여기서
-     * 세지 않고 차량 아이디로 받는다.
+     * <p>관측한 최대 잔여석만 30분 창 밖의 전체 이력에서 얻는다. 여기서 계산하지 않고 차량 아이디별로 받는다.
      *
-     * <p><b>그 목록에 없는 차량은 궤적을 안 만든다.</b> 잔여석을 한 번도 안 보여 준 차량과 줄곧
-     * 만석이던 차량이 그 자리다. 정원을 모르는데 1석으로 꾸며 내면 지금 잔여석 비율이 늘 0 이고
-     * 정원 비율이 1/68 이라, 값은 나오는데 뜻이 없는 예보가 나간다. 예보를 안 내는 편이 낫다.
+     * <p><b>그 목록에 없는 차량은 궤적을 만들지 않는다.</b> 잔여석을 한 번도 관측하지 못했거나 줄곧
+     * 만석이던 차량이 해당한다. 정원을 모르는데 1석으로 임의 설정하면 현재 잔여석 비율이 항상 0 이고
+     * 정원 비율은 1/68 이 된다. 계산값에 의미가 없으므로 예보를 발행하지 않는 편이 낫다.
      */
     public static List<VehicleTrajectory> assemble(
         ObservationHistory history,
         Map<String, Integer> maximumSeatsByVehicle
     ) {
-        List<VehicleTrajectory> trajectories = new ArrayList<>();
-        for (TrajectoryObservation observation : history.targetBatch().observations()) {
-            if (!maximumSeatsByVehicle.containsKey(observation.vehicleId())) {
-                continue;
-            }
-            trajectories.add(trajectoryOf(history, observation, maximumSeatsByVehicle));
-        }
+        List<VehicleTrajectory> trajectories = history.targetBatch()
+            .observations()
+            .stream()
+            .filter(observation -> maximumSeatsByVehicle.containsKey(observation.vehicleId()))
+            .map(observation -> trajectoryOf(history, observation, maximumSeatsByVehicle))
+            .collect(Collectors.toCollection(ArrayList::new));
         return List.copyOf(trajectories);
     }
 
@@ -83,21 +86,23 @@ public final class VehicleTrajectoryAssembler {
 
         TrajectoryObservation later = target;
         for (int index = batches.size() - 2; index >= 0; index--) {
-            Optional<TrajectoryObservation> earlier = batches.get(index).observationOf(later.vehicleId());
+            ObservedBatch batch = batches.get(index);
+            Optional<TrajectoryObservation> earlier = batch.observationOf(later.vehicleId());
             if (earlier.isEmpty()) {
                 return new LinkedChain(linked, TrajectoryGap.OBSERVATION_BATCH_MISSING);
             }
-            Optional<TrajectoryGap> gap = gapBetween(earlier.get(), later);
+            TrajectoryObservation earlierObservation = earlier.get();
+            Optional<TrajectoryGap> gap = gapBetween(earlierObservation, later);
             if (gap.isPresent()) {
                 return new LinkedChain(linked, gap.get());
             }
-            linked.add(earlier.get());
-            later = earlier.get();
+            linked.add(earlierObservation);
+            later = earlierObservation;
         }
         return new LinkedChain(linked, TrajectoryGap.NO_EARLIER_OBSERVATION);
     }
 
-    /** 두 관측을 이어도 되나. 이으면 안 되는 사유가 있으면 그것을 준다. */
+    /** 두 관측의 연결 가능 여부를 확인하고 연결할 수 없으면 사유를 반환한다. */
     private static Optional<TrajectoryGap> gapBetween(
         TrajectoryObservation earlier,
         TrajectoryObservation later
@@ -120,20 +125,25 @@ public final class VehicleTrajectoryAssembler {
         TrajectoryObservation earlier,
         TrajectoryObservation later
     ) {
-        return earlier.vehicleTripKey() != null
-            && later.vehicleTripKey() != null
-            && !earlier.vehicleTripKey().equals(later.vehicleTripKey());
+        String earlierTripKey = earlier.vehicleTripKey();
+        String laterTripKey = later.vehicleTripKey();
+        if (earlierTripKey == null || laterTripKey == null) {
+            return false;
+        }
+        return !earlierTripKey.equals(laterTripKey);
     }
 
     private static SeatSlope slopeOf(
         LinkedChain chain
     ) {
         if (!chain.hasEarlierObservation()) {
-            return new SeatSlope.Unknown(chain.gap());
+            return new Unknown(chain.gap());
         }
-        if (!(chain.latest().seats() instanceof ObservedSeats.Known later)
-            || !(chain.justBeforeLatest().seats() instanceof ObservedSeats.Known earlier)) {
-            return new SeatSlope.Unknown(TrajectoryGap.SEATS_UNKNOWN);
+        TrajectoryObservation latest = chain.latest();
+        TrajectoryObservation justBeforeLatest = chain.justBeforeLatest();
+        if (!(latest.seats() instanceof Known later)
+                || !(justBeforeLatest.seats() instanceof Known earlier)) {
+            return new Unknown(TrajectoryGap.SEATS_UNKNOWN);
         }
         return new SeatSlope.Known(later.seats() - earlier.seats());
     }
@@ -151,10 +161,10 @@ public final class VehicleTrajectoryAssembler {
 
         for (TrajectoryObservation observation : chain.observations()) {
             if (observation.seats() instanceof ObservedSeats.Unknown) {
-                return new FullSeatStreak.CutByGap(stopCount, TrajectoryGap.SEATS_UNKNOWN);
+                return new CutByGap(stopCount, TrajectoryGap.SEATS_UNKNOWN);
             }
             if (!observation.isFull()) {
-                return new FullSeatStreak.SeenToEnd(stopCount);
+                return new SeenToEnd(stopCount);
             }
             if (!hasCounted || countedStopOrder != observation.passedStopOrder()) {
                 stopCount++;
@@ -162,12 +172,12 @@ public final class VehicleTrajectoryAssembler {
                 hasCounted = true;
             }
         }
-        return new FullSeatStreak.CutByGap(stopCount, chain.gap());
+        return new CutByGap(stopCount, chain.gap());
     }
 
     /**
-     * 같은 정류소를 나보다 앞서 지난 차. 그 순번에 처음 들어온 시각으로 앞뒤를 가리고,
-     * 나보다 먼저 들어온 차 중 가장 늦게 들어온 차를 고른다.
+     * 같은 정류소를 대상 차량보다 먼저 지난 차량을 찾는다. 해당 순번에 처음 진입한 시각으로 순서를 비교하고,
+     * 대상 차량보다 먼저 진입한 차량 중 가장 늦게 진입한 차량을 고른다.
      *
      * <p>같은 수집 배치의 차량은 관측 시각이 같아 통과 순서를 구분할 수 없다.
      * 외부 API의 행 순서도 통과 순서를 뜻하지 않는다. 같은 배치에서 해당 순번에 진입한 차량이 있으면
@@ -178,7 +188,8 @@ public final class VehicleTrajectoryAssembler {
         TrajectoryObservation target
     ) {
         Map<String, StopEntry> entryByVehicle = stopEntriesAt(history, target.passedStopOrder());
-        Instant enteredAt = entryByVehicle.get(target.vehicleId()).enteredAt();
+        StopEntry targetEntry = entryByVehicle.get(target.vehicleId());
+        Instant enteredAt = targetEntry.enteredAt();
 
         StopEntry nearestAhead = null;
         for (StopEntry other : entryByVehicle.values()) {
@@ -229,7 +240,7 @@ public final class VehicleTrajectoryAssembler {
     private static PrecedingVehicle toPrecedingVehicle(
         StopEntry ahead
     ) {
-        if (!(ahead.observation().seats() instanceof ObservedSeats.Known known)) {
+        if (!(ahead.observation().seats() instanceof Known known)) {
             return new PrecedingVehicle.Unknown(TrajectoryGap.SEATS_UNKNOWN);
         }
         return new PrecedingVehicle.Known(ahead.vehicleId(), known.seats(), ahead.enteredAt());
@@ -243,14 +254,21 @@ public final class VehicleTrajectoryAssembler {
     ) {
     }
 
-    /** 대상 관측에서 뒤로 이어진 관측들. 최신이 앞이고, gap 은 이어지기를 멈춘 사유다. */
+    /** 대상 관측에서 뒤로 이어진 관측들. 최신이 앞이며 gap 은 연결을 중단한 사유다. */
     private record LinkedChain(
         List<TrajectoryObservation> observations,
         TrajectoryGap gap
     ) {
-
         private static final int LATEST = 0;
+
         private static final int JUST_BEFORE_LATEST = 1;
+
+        /** 호출자가 가진 원본과 분리해 null·원소·순서를 보존한다. */
+        private LinkedChain {
+            if (observations != null) {
+                observations = Collections.unmodifiableList(new ArrayList<>(observations));
+            }
+        }
 
         boolean hasEarlierObservation() {
             return observations.size() > JUST_BEFORE_LATEST;

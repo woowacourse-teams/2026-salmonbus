@@ -30,8 +30,8 @@ export const test = base.extend<{ api: MockApi }>({
       const api: MockApi = {
         route: router.route,
         data: createApiData(),
-        mode: { routes: "success", board: "success", vehicles: "success", geometry: "success", arrivals: "success" },
-        requests: { routes: 0, board: 0, vehicles: 0, geometry: 0, arrivals: 0 },
+        mode: { routes: "success", watch: "success", geometry: "success", arrivals: "success" },
+        requests: { routes: 0, watch: 0, geometry: 0, arrivals: 0 },
         arrivalRequests: [],
         cacheMaxAgeSeconds: pollIntervalMs / 1_000,
       };
@@ -41,11 +41,14 @@ export const test = base.extend<{ api: MockApi }>({
         const request = route.request();
         const url = new URL(request.url());
         const path = url.pathname;
-        if (request.method() === "GET" && /^\/api\/chat\/rooms\/[^/]+$/.test(path)) {
-          await route.fulfill({ status: 404, headers: { "Cache-Control": "no-store" } });
+        if (path === "/api/auth/session") {
+          await route.fulfill({
+            status: 404,
+            headers: { "Cache-Control": "no-store" },
+            json: { code: "ENDPOINT_NOT_FOUND", message: "로그인 꺼짐", requestId: "test-auth-off" },
+          });
           return;
         }
-        // 채팅 테스트가 가상 노선을 재사용하므로 geometry도 요청한 노선 ID로 응답한다.
         const geometryRoute = /^\/api\/v2\/routes\/([^/]+)\/geometry$/.exec(path)?.[1];
         const endpoint: Endpoint | undefined = /^\/api\/v2\/stations\/[^/]+\/arrivals$/.test(path)
           ? "arrivals"
@@ -72,7 +75,10 @@ export const test = base.extend<{ api: MockApi }>({
           headers: {
             Date: new Date(now).toUTCString(),
             Age: "0",
-            "Cache-Control": `public, max-age=${endpoint === "arrivals" ? 5 : api.cacheMaxAgeSeconds}`,
+            "Cache-Control":
+              endpoint === "arrivals" && api.data.arrivals?.status === "UNAVAILABLE"
+                ? "no-store"
+                : `public, max-age=${endpoint === "arrivals" ? 5 : api.cacheMaxAgeSeconds}`,
           },
           json:
             endpoint === "arrivals"

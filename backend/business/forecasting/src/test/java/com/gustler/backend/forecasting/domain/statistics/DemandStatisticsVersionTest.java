@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.domain.statistics;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -13,7 +13,6 @@ import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class DemandStatisticsVersionTest {
-
     private static final long ROUTE_VERSION_ID = 1L;
     private static final String CALCULATION_VERSION = "v1";
     private static final int REVISION = 1;
@@ -39,8 +38,12 @@ class DemandStatisticsVersionTest {
         // given
         DemandStatisticsVersion version = versionOf(List.of(measurement(TimeSlot.MORNING, 1)));
 
-        // when & then
-        assertThatThrownBy(() -> version.measurements().clear())
+        // when
+        Throwable caughtFailure = catchThrowable(() -> version.measurements().clear());
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(UnsupportedOperationException.class);
     }
 
@@ -52,8 +55,12 @@ class DemandStatisticsVersionTest {
             new StopDemandMeasurement(TimeSlot.MORNING, new StopDemandCell(1, 0.7, 0.3, 20, 3))
         );
 
-        // when & then
-        assertThatThrownBy(() -> versionOf(measurements))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> versionOf(measurements));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("중복");
     }
@@ -80,10 +87,14 @@ class DemandStatisticsVersionTest {
         // given
         List<StopDemandMeasurement> measurements = List.of(measurement(TimeSlot.MORNING, 1));
 
-        // when & then
-        assertThatThrownBy(() -> new DemandStatisticsVersion(
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new DemandStatisticsVersion(
             routeVersionId, CALCULATION_VERSION, REVISION, DATA_UNTIL, COMPUTED_AT, measurements
-        )).isInstanceOf(IllegalArgumentException.class);
+        ));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull().isInstanceOf(IllegalArgumentException.class);
     }
 
     @ParameterizedTest
@@ -92,10 +103,14 @@ class DemandStatisticsVersionTest {
         // given
         List<StopDemandMeasurement> measurements = List.of(measurement(TimeSlot.MORNING, 1));
 
-        // when & then
-        assertThatThrownBy(() -> new DemandStatisticsVersion(
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new DemandStatisticsVersion(
             ROUTE_VERSION_ID, CALCULATION_VERSION, revision, DATA_UNTIL, COMPUTED_AT, measurements
-        )).isInstanceOf(IllegalArgumentException.class);
+        ));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull().isInstanceOf(IllegalArgumentException.class);
     }
 
     @ParameterizedTest
@@ -105,10 +120,14 @@ class DemandStatisticsVersionTest {
         // given
         List<StopDemandMeasurement> measurements = List.of(measurement(TimeSlot.MORNING, 1));
 
-        // when & then
-        assertThatThrownBy(() -> new DemandStatisticsVersion(
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new DemandStatisticsVersion(
             ROUTE_VERSION_ID, calculationVersion, REVISION, DATA_UNTIL, COMPUTED_AT, measurements
-        )).isInstanceOf(IllegalArgumentException.class);
+        ));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull().isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -130,19 +149,33 @@ class DemandStatisticsVersionTest {
         // given
         List<StopDemandMeasurement> measurements = List.of(measurement(TimeSlot.MORNING, 1));
 
-        // when & then
-        assertThatThrownBy(() -> new DemandStatisticsVersion(
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new DemandStatisticsVersion(
             ROUTE_VERSION_ID, CALCULATION_VERSION, REVISION, null, COMPUTED_AT, measurements
-        )).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new DemandStatisticsVersion(
+        ));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull().isInstanceOf(IllegalArgumentException.class);
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> new DemandStatisticsVersion(
             ROUTE_VERSION_ID, CALCULATION_VERSION, REVISION, DATA_UNTIL, null, measurements
-        )).isInstanceOf(IllegalArgumentException.class);
+        ));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull().isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void 집계_결과_목록이_없으면_통계_버전을_만들_수_없다() {
-        // when & then
-        assertThatThrownBy(() -> versionOf(null))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> versionOf(null));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -162,12 +195,28 @@ class DemandStatisticsVersionTest {
         StopDemandMeasurement missingTimeSlot = new StopDemandMeasurement(null, cell(1));
         StopDemandMeasurement missingCell = new StopDemandMeasurement(TimeSlot.MORNING, null);
 
-        // when & then
-        assertThatThrownBy(() -> versionOf(missingMeasurement))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> versionOf(missingMeasurement));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> versionOf(List.of(missingTimeSlot)))
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> versionOf(List.of(missingTimeSlot)));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> versionOf(List.of(missingCell)))
+
+        // when
+        Throwable phaseFailure2 = catchThrowable(() -> versionOf(List.of(missingCell)));
+
+        // then
+        assertThat(phaseFailure2)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 

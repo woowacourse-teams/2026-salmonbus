@@ -13,7 +13,6 @@ import org.springframework.context.annotation.Import;
 @EnableAutoConfiguration
 @Import({PostgresTestContainer.class, CallQuotaConfiguration.class})
 class QuotaTestConfiguration {
-
     @Bean
     CallQuotaPolicy callQuotaPolicy() {
         return CallQuotaPolicy.sameForEveryApi(10_000);

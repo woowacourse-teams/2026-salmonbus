@@ -1,5 +1,5 @@
 import type { ApproachingVehicle } from "@/shared/api/routeForecast.types";
-import { toSeatEstimate, toSeatLevel, type SeatEstimate, type SeatLevel } from "./seatGrade";
+import { toSeatEstimate, toSeatLevel, type SeatEstimate, type SeatLevel } from "@/shared/utils/seatGrade";
 
 interface ArrivalBase {
   vehicleId: string | null;

@@ -1,6 +1,7 @@
 package com.gustler.backend.api.route.infrastructure.jpa;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
@@ -11,7 +12,6 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.IncorrectResultSizeDataAccessException;
 
 class JpaRouteQueryRepositoryTest {
-
     private RouteEntityRepository routeRepository;
     private ModelDeploymentEntityRepository modelDeploymentRepository;
     private JpaRouteQueryRepository repository;
@@ -29,8 +29,12 @@ class JpaRouteQueryRepositoryTest {
         given(routeRepository.findAllCurrentRoutes())
             .willThrow(new DataAccessResourceFailureException("database unavailable"));
 
-        // when & then
-        assertThatThrownBy(repository::findAllCurrentRoutes)
+        // when
+        Throwable caughtFailure = catchThrowable(repository::findAllCurrentRoutes);
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(ServiceUnavailableException.class)
             .hasMessage("일시적인 서버 장애가 발생했습니다.");
     }
@@ -42,8 +46,12 @@ class JpaRouteQueryRepositoryTest {
             new IncorrectResultSizeDataAccessException(1, 2);
         given(routeRepository.findAllCurrentRoutes()).willThrow(exception);
 
-        // when & then
-        assertThatThrownBy(repository::findAllCurrentRoutes)
+        // when
+        Throwable caughtFailure = catchThrowable(repository::findAllCurrentRoutes);
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isSameAs(exception);
     }
 
@@ -53,8 +61,12 @@ class JpaRouteQueryRepositoryTest {
         given(modelDeploymentRepository.existsByState(ModelDeploymentState.ACTIVE))
             .willThrow(new DataAccessResourceFailureException("database unavailable"));
 
-        // when & then
-        assertThatThrownBy(repository::existsActiveModel)
+        // when
+        Throwable caughtFailure = catchThrowable(repository::existsActiveModel);
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(ServiceUnavailableException.class)
             .hasMessage("일시적인 서버 장애가 발생했습니다.");
     }
@@ -65,8 +77,12 @@ class JpaRouteQueryRepositoryTest {
         given(routeRepository.findForecastPublishedRouteIds())
             .willThrow(new DataAccessResourceFailureException("database unavailable"));
 
-        // when & then
-        assertThatThrownBy(repository::findForecastPublishedRouteIds)
+        // when
+        Throwable caughtFailure = catchThrowable(repository::findForecastPublishedRouteIds);
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(ServiceUnavailableException.class)
             .hasMessage("일시적인 서버 장애가 발생했습니다.");
     }

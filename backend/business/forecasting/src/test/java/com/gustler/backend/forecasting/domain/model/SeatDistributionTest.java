@@ -1,8 +1,7 @@
 package com.gustler.backend.forecasting.domain.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -11,28 +10,36 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class SeatDistributionTest {
-
     @Test
     void 좌석_수마다의_확률을_모두_더하면_1이_된다() {
-        // when & then
-        assertThatCode(() -> new SeatDistribution(List.of(0.2, 0.3, 0.5)))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new SeatDistribution(List.of(0.2, 0.3, 0.5)));
+
+        // then
+        assertThat(caughtFailure)
             .doesNotThrowAnyException();
     }
 
     @Test
     void 분포는_합이_1인_확률만_받는다() {
-        // when & then
-        assertThatThrownBy(() -> new SeatDistribution(List.of(0.2, 0.3)))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new SeatDistribution(List.of(0.2, 0.3)));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 
     @ParameterizedTest
     @ValueSource(doubles = {-0.1, 1.5, Double.NaN, Double.POSITIVE_INFINITY})
-    void 좌석_수별_확률은_0과_1_사이의_수다(
-        final double notChance
-    ) {
-        // when & then
-        assertThatThrownBy(() -> new SeatDistribution(List.of(notChance, 1.0 - notChance)))
+    void 좌석_수별_확률은_0과_1_사이의_수다(final double notChance) {
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new SeatDistribution(List.of(notChance, 1.0 - notChance)));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 
