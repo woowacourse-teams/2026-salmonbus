@@ -27,15 +27,14 @@ for (const width of [320, 425]) {
     await page.evaluate(() => document.fonts.ready);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await testInfo.attach("즐겨찾기 홈", { body: await page.screenshot(), contentType: "image/png" });
-    if (browserName === "chromium")
-      await page.screenshot({ path: `/private/tmp/salmonbus-sal249-qa/home-${width}.png` });
+    if (browserName === "chromium") await page.screenshot({ path: test.info().outputPath(`home-${width}.png`) });
     if (width === 425 && browserName === "chromium") {
-      await page.screenshot({ path: "/private/tmp/salmonbus-sal249-qa/home.png" });
+      await page.screenshot({ path: test.info().outputPath("home.png") });
       await page
         .getByRole("tabpanel")
         .getByRole("listitem")
         .first()
-        .screenshot({ path: "/private/tmp/salmonbus-sal249-qa/home-card.png" });
+        .screenshot({ path: test.info().outputPath("home-card.png") });
     }
 
     await page.getByRole("link", { name: "마이페이지", exact: true }).click();
@@ -49,7 +48,7 @@ for (const width of [320, 425]) {
     expect((await groups.getByRole("link", { name: "새 그룹 만들기", exact: true }).boundingBox())!.height).toBe(50);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     if (width === 425 && browserName === "chromium")
-      await page.screenshot({ path: "/private/tmp/salmonbus-sal249-qa/groups.png" });
+      await page.screenshot({ path: test.info().outputPath("groups.png") });
     await page.getByRole("link", { name: /즐겨찾기.*2 \/ 2/ }).click();
     await expect(page.getByRole("heading", { name: "즐겨찾기", exact: true })).toBeVisible();
     await expect(page.getByText(first!.name, { exact: false })).toBeVisible();
@@ -66,7 +65,7 @@ for (const width of [320, 425]) {
     await expect(page.getByRole("button", { name: "순서 편집", exact: true })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     if (width === 425 && browserName === "chromium")
-      await page.screenshot({ path: "/private/tmp/salmonbus-sal249-qa/group-detail.png" });
+      await page.screenshot({ path: test.info().outputPath("group-detail.png") });
 
     await page.goto(`/routes/${routeId}`);
     await page.getByRole("button", { name: `${first!.name} 즐겨찾기`, exact: true }).click();
@@ -78,7 +77,7 @@ for (const width of [320, 425]) {
     expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844);
     await testInfo.attach("즐겨찾기 저장 창", { body: await page.screenshot(), contentType: "image/png" });
     if (width === 425 && browserName === "chromium")
-      await page.screenshot({ path: "/private/tmp/salmonbus-sal249-qa/selection.png" });
+      await page.screenshot({ path: test.info().outputPath("selection.png") });
     await dialog.getByRole("button", { name: "취소", exact: true }).click();
     await page.goto("/");
     await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
@@ -87,7 +86,7 @@ for (const width of [320, 425]) {
     await expect(page.getByRole("dialog")).toHaveCount(0);
     expect(await editor.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     if (width === 425 && browserName === "chromium")
-      await page.screenshot({ path: "/private/tmp/salmonbus-sal249-qa/order.png" });
+      await page.screenshot({ path: test.info().outputPath("order.png") });
     expect(favorites.groups[0]!.id).toBe(defaultGroupId);
   });
 }

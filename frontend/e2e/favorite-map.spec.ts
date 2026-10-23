@@ -48,7 +48,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     await expect(pin).toHaveAttribute("aria-pressed", "true");
     await expect(pin).toBeInViewport();
     if (browserName === "chromium" && reducedMotion === "no-preference")
-      await page.screenshot({ path: "/private/tmp/salmonbus-sal249-qa/favorite-map.png" });
+      await page.screenshot({ path: test.info().outputPath("favorite-map.png") });
     const focused = await naverMap.snapshot();
     expect(focused.latitude).toBeCloseTo(point.y, 12);
     expect(focused.longitude).toBeCloseTo(point.x, 12);

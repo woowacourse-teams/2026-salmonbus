@@ -53,7 +53,7 @@ for (const width of [320, 425]) {
     await expect(selected).toHaveCSS("height", "50px");
     await expect(selected).toHaveCSS("border-radius", "14px");
     if (width === 425 && browserName === "chromium")
-      await page.screenshot({ path: "/private/tmp/salmonbus-group-bulk-selection.png" });
+      await page.screenshot({ path: test.info().outputPath("salmonbus-group-bulk-selection.png") });
     await selected.click();
     const dialog = page.getByRole("dialog", { name: /선택한 그룹 2개를/ });
     await expect(dialog).toHaveCSS("background-color", "rgb(255, 255, 255)");
@@ -62,7 +62,7 @@ for (const width of [320, 425]) {
     await expect(dialog.getByRole("heading")).toHaveCSS("font-size", "21px");
     await expect(dialog.getByRole("button", { name: "삭제", exact: true })).toHaveCSS("height", "48px");
     if (width === 425 && browserName === "chromium")
-      await page.screenshot({ path: "/private/tmp/salmonbus-group-bulk-dialog.png" });
+      await page.screenshot({ path: test.info().outputPath("salmonbus-group-bulk-dialog.png") });
     await dialog.getByRole("button", { name: "취소", exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await expect(selected).toBeFocused();
@@ -85,7 +85,7 @@ for (const width of [320, 425]) {
     await expect(page.getByText("그룹 2개를 삭제했어요", { exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     if (width === 425 && browserName === "chromium")
-      await page.screenshot({ path: "/private/tmp/salmonbus-group-bulk-complete.png" });
+      await page.screenshot({ path: test.info().outputPath("salmonbus-group-bulk-complete.png") });
   });
 }
 

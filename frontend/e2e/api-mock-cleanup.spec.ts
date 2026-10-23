@@ -1,5 +1,6 @@
 import { test, expect, type Request, type Route } from "@playwright/test";
 import { createApiMockRouter } from "./fixtures/api-mock-router";
+import { apiPaths } from "./fixtures/mock-data";
 
 function deferred() {
   let resolve!: () => void;
@@ -13,6 +14,42 @@ test.beforeEach(async ({ page }) => {
   // 앱 요청 없이 mock의 등록과 해제 순서만 검사할 수 있는 같은 origin의 빈 페이지다.
   await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: "<!doctype html>" }));
   await page.goto("/");
+});
+
+test("mock 해제 뒤의 API 요청은 실제 서버로 전달하지 않고 차단한다", async ({ page }) => {
+  const router = await createApiMockRouter(page);
+  await router.route((route) => route.fulfill({ json: { mocked: true } }));
+
+  const mocked = await page.evaluate(async (path) => (await fetch(path)).json(), apiPaths.watch);
+  expect(mocked).toEqual({ mocked: true });
+
+  await router.dispose();
+  const blocked = await page.evaluate(async (path) => {
+    try {
+      await fetch(path);
+      return false;
+    } catch {
+      return true;
+    }
+  }, apiPaths.watch);
+  expect(blocked).toBe(true);
+});
+
+test("실행 중 mock을 벗어난 API 요청은 차단하고 누출된 경로를 보고한다", async ({ page }) => {
+  const router = await createApiMockRouter(page);
+  await router.route((route) => route.fulfill({ json: { mocked: true } }));
+  await page.unrouteAll({ behavior: "wait" });
+
+  const blocked = await page.evaluate(async (path) => {
+    try {
+      await fetch(path);
+      return false;
+    } catch {
+      return true;
+    }
+  }, apiPaths.watch);
+  expect(blocked).toBe(true);
+  await expect(router.dispose()).rejects.toThrow(apiPaths.watch);
 });
 
 test("API에서 페이지로 리다이렉트한 요청도 mock 해제 전에 종료한다", async ({ page, browserName }) => {
@@ -200,22 +237,6 @@ test("mock이 등록된 동안 아무 mock도 응답하지 않은 요청은 끊�
 
   expect(await response).toBe("aborted");
   await expect(router.dispose()).rejects.toThrow("GET /api/cleanup/missing?groupId=1");
-});
-
-test("mock을 해제한 뒤에 나간 요청은 네트워크로 나가지 않는다", async ({ page }) => {
-  const router = await createApiMockRouter(page);
-  await router.route((route) => route.fulfill({ json: { endpoint: "board" } }));
-  await router.dispose();
-
-  const response = page.evaluate(async () => {
-    try {
-      return (await fetch("/api/cleanup/board")).status;
-    } catch {
-      return "aborted";
-    }
-  });
-
-  expect(await response).toBe("aborted");
 });
 
 test("요청이 mock에 걸린 사이 새 문서로 이동해도 해제가 멈추지 않는다", async ({ page }) => {

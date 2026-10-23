@@ -1,5 +1,4 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { PHONE_MEDIA } from "@/shared/styles/media";
 import { vars } from "@/shared/styles/tokens.css";
 
 export const page = style({
@@ -11,7 +10,10 @@ export const page = style({
   background: "#FAF9F7",
 });
 
-globalStyle(`html:has(${page})`, { "@media": { [PHONE_MEDIA]: { backgroundColor: vars.color.brand } } });
+// 홈이 화면을 꽉 채울 때만 바깥 배경을 헤더와 같은 색으로 칠한다.
+globalStyle(`html:has(${page})`, {
+  "@media": { "screen and (max-width: 425px)": { backgroundColor: vars.color.brand } },
+});
 
 export const header = style({
   padding: "calc(18px + env(safe-area-inset-top, 0px)) 24px 16px",
