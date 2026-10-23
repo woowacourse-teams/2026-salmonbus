@@ -210,9 +210,11 @@ test("표시 정보가 생략된 항목도 정상 카드와 함께 남기고 저
   await expect(page).toHaveURL(`/routes/${routeId}?direction=DOWN&stopId=${down.stopId}`);
 
   await page.goto(`/mypage/groups/${defaultGroupId}`);
-  await expect(page.getByText("노선 정보 없음 · 정류장 정보 없음")).toBeVisible();
+  await expect(page.getByText("노선 정보 없음", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("정류장 정보 없음", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "즐겨찾기 1 삭제", exact: true })).toBeEnabled();
-  await page.getByRole("button", { name: "순서 편집", exact: true }).click();
+  await page.getByRole("link", { name: "마이페이지로 돌아가기", exact: true }).click();
+  await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   await expect(
     page.getByRole("region", { name: "즐겨찾기 편집", exact: true }).getByText(up.name, { exact: true }),
   ).toBeVisible();

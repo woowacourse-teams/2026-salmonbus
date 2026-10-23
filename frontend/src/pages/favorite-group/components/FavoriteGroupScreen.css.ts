@@ -1,7 +1,34 @@
 import { style } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 
-export const title = style({ display: "flex", alignItems: "center", gap: 12, margin: "0 0 28px", fontSize: 25 });
+export const screen = style({
+  maxWidth: 356,
+  margin: "0 auto",
+  fontFamily: "'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif",
+  color: "#292A2D",
+});
+export const title = style({ display: "flex", alignItems: "center", gap: 10, margin: "0 0 16px", paddingRight: 12 });
+export const name = style({
+  flex: 1,
+  minWidth: 0,
+  overflowWrap: "anywhere",
+  margin: 0,
+  fontSize: 24,
+  lineHeight: "35px",
+  fontWeight: 700,
+});
+export const rename = style({
+  flexShrink: 0,
+  padding: 0,
+  border: 0,
+  background: "transparent",
+  color: vars.color.liveBus,
+  font: "inherit",
+  fontSize: 12,
+  fontWeight: 600,
+  lineHeight: "17px",
+  cursor: "pointer",
+});
 export const back = style({
   display: "grid",
   placeItems: "center",
@@ -12,5 +39,4 @@ export const back = style({
   background: vars.color.liveBus,
   color: "white",
   textDecoration: "none",
-  fontSize: 20,
 });

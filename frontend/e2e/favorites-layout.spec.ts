@@ -53,6 +53,16 @@ for (const width of [320, 425]) {
     await page.getByRole("link", { name: /즐겨찾기.*2 \/ 2/ }).click();
     await expect(page.getByRole("heading", { name: "즐겨찾기", exact: true })).toBeVisible();
     await expect(page.getByText(first!.name, { exact: false })).toBeVisible();
+    const detailCard = page.locator("main li").first();
+    const detailBounds = await detailCard.boundingBox();
+    expect(detailBounds!.width).toBe(width === 425 ? 356 : width - 64);
+    expect(detailBounds!.height).toBe(width === 425 ? 77 : 99);
+    await expect(page.getByRole("heading", { name: "즐겨찾기", exact: true })).toHaveCSS("font-size", "24px");
+    const remove = detailCard.getByRole("button", { name: /삭제/ });
+    expect((await remove.boundingBox())!.width).toBe(48);
+    expect((await remove.boundingBox())!.height).toBe(32);
+    await expect(page.getByRole("button", { name: "순서 편집", exact: true })).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     if (width === 425 && browserName === "chromium")
       await page.screenshot({ path: "/private/tmp/salmonbus-sal249-qa/group-detail.png" });
 
