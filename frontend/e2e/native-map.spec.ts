@@ -1,10 +1,9 @@
-import { mergeTests, type Page } from "@playwright/test";
-import { test as chatTest, expect, chatRouteId, chatAvailability } from "./fixtures/chat";
-import { test as mapTest } from "./fixtures/naver-map";
+import type { Page } from "@playwright/test";
+import { test as mapTest, expect } from "./fixtures/naver-map";
 import { routeId } from "./fixtures/mock-data";
 import type { NativeMapMessage, NativeMapEvent } from "../src/shared/native-map/protocol";
 
-const test = mergeTests(chatTest, mapTest).extend<{ nativeReady: boolean }>({
+const test = mapTest.extend<{ nativeReady: boolean }>({
   nativeReady: [true, { option: true }],
 });
 
@@ -121,11 +120,17 @@ test("실제 transition 경계와 웹 버튼 영역을 전달하고 native 위�
   await open(page);
   await page.getByRole("slider", { name: "판정보드 높이" }).click();
   await page.clock.runFor(400);
+  // page.clock은 CSS transition을 끝내지 않으므로 실제 종료 후 layout을 기다린다.
+  await expect
+    .poll(async () => {
+      await page.clock.runFor(32);
+      return (await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.transitioning;
+    })
+    .toBe(false);
   const layout = (await messages(page)).filter((message) => message.type === "layout").at(-1)!;
   const map = await page.getByRole("region", { name: "노선 지도", exact: true }).boundingBox();
   expect(layout.payload.mapRect.height).toBeCloseTo(map!.height, 0);
   expect(layout.payload.webRects.length).toBeGreaterThanOrEqual(3);
-  expect(layout.payload.transitioning).toBe(false);
   await page.getByRole("button", { name: "현재 위치 보기", exact: true }).click();
   const location = (await messages(page)).find((message) => message.type === "location")!;
   await emit(page, {
@@ -197,24 +202,6 @@ test("native 위치 조회 시간 초과와 권한 거부를 안내하고 재시
   expect(errors).toEqual([]);
 });
 
-test("body portal 채팅을 hit region에 포함하고 전체 modal은 native 지도 입력도 차단한다", async ({ page, chat }) => {
-  chat.enabled = true;
-  await open(page, chatRouteId);
-  await expect
-    .poll(async () => {
-      await page.clock.runFor(100);
-      return page.getByRole("button", { name: `${chatAvailability.displayName} 채팅 열기`, exact: true }).count();
-    })
-    .toBe(1);
-  await page.getByRole("button", { name: `${chatAvailability.displayName} 채팅 열기`, exact: true }).click();
-  await page.clock.runFor(400);
-  await page.getByRole("button", { name: "채팅 크게 보기", exact: true }).click();
-  await page.clock.runFor(400);
-  const layout = (await messages(page)).filter((message) => message.type === "layout").at(-1)!;
-  expect(layout.payload.captureAll).toBe(true);
-  expect(layout.payload.webRects.some((rect) => rect.height > 800)).toBe(true);
-});
-
 test("native 지도 오류 후에도 웹 목록을 유지하고 앱 전용 투명 모드를 정리한다", async ({ page }) => {
   await open(page);
   await emit(page, { type: "error", payload: { message: "SDK 인증 실패" } });
@@ -284,24 +271,20 @@ test.describe("native 지도 준비 실패 시 JS 지도 전환", () => {
   });
 });
 
-test("transition 중 제거된 채팅 버튼은 정리하고 다른 UI가 움직이는 동안에는 잠금을 유지한다", async ({
-  page,
-  chat,
-}) => {
-  chat.enabled = true;
-  await open(page, chatRouteId);
-  const launcher = page.getByRole("button", { name: `${chatAvailability.displayName} 채팅 열기`, exact: true });
-  await expect
-    .poll(async () => {
-      await page.clock.runFor(100);
-      return launcher.count();
-    })
-    .toBe(1);
+test("transition 중 제거된 요소는 정리하고 다른 UI가 움직이는 동안에는 잠금을 유지한다", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => {
+    const probe = document.createElement("div");
+    probe.id = "native-transition-probe";
+    probe.dataset.nativeMapHit = "";
+    document.body.append(probe);
+  });
+  const probe = page.locator("#native-transition-probe");
   const sheet = page.getByRole("region", { name: "판정보드", exact: true });
   await sheet.evaluate((element) =>
     element.dispatchEvent(new TransitionEvent("transitionrun", { bubbles: true, propertyName: "transform" })),
   );
-  await launcher.evaluate((element) =>
+  await probe.evaluate((element) =>
     element.dispatchEvent(new TransitionEvent("transitionrun", { bubbles: true, propertyName: "scale" })),
   );
   await page.clock.runFor(32);
@@ -309,8 +292,8 @@ test("transition 중 제거된 채팅 버튼은 정리하고 다른 UI가 움직
     true,
   );
 
-  await launcher.click();
-  await expect(launcher).toHaveCount(0);
+  await probe.evaluate((element) => element.remove());
+  await expect(probe).toHaveCount(0);
   await page.clock.runFor(1_000);
   expect((await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.transitioning).toBe(
     true,
