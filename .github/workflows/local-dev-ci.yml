@@ -8,8 +8,6 @@ on:
       - 'compose*.yaml'
       - '.dockerignore'
       - 'backend/**/build.gradle'
-      - 'contract/examples/chat-v1.json'
-      - 'docs/api/chat-websocket-public.md'
       - 'backend/settings.gradle'
       - 'backend/gradle.properties'
       - 'backend/gradlew'
@@ -35,8 +33,6 @@ concurrency:
 
 jobs:
   local-development:
-    # MongoDB 8.0은 현재 6.19+ 커널에서 기동하지 않는다(SERVER-121912).
-    # 2027-04-17 러너 지원 종료 전 MongoDB 이미지를 갱신하고 최신 ARM 러너로 복귀한다.
     runs-on: ubuntu-22.04-arm
     timeout-minutes: 20
     env:

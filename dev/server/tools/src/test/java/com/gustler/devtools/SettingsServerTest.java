@@ -38,7 +38,7 @@ class SettingsServerTest {
     void preparesPrivateSettingsAndReadableYaml() throws Exception {
         assertEquals("prepared", fixture.settings());
         assertEquals(0750, FileOps.attribute(fixture.layout.config(), "mode") & 0777);
-        assertEquals(9, hashes().size());
+        assertEquals(7, hashes().size());
         try (var paths = Files.list(fixture.layout.config())) {
             for (var path : paths.toList()) {
                 assertEquals(
@@ -63,17 +63,12 @@ class SettingsServerTest {
     }
 
     @Test
-    void differentOriginCommitVolumeAndInstanceCannotOverwriteSettings() throws Exception {
+    void differentCommitVolumeAndInstanceCannotOverwriteSettings() throws Exception {
         fixture.settings();
         var before = hashes();
         var preparation = new SettingsPreparation(fixture.layout);
         for (var values :
                 java.util.List.of(
-                        java.util.List.of(
-                                "https://other.example.test",
-                                Fixtures.COMMIT,
-                                "test-volume",
-                                "test-dev-instance"),
                         java.util.List.of(
                                 Fixtures.ORIGIN,
                                 "b".repeat(40),
@@ -156,7 +151,6 @@ class SettingsServerTest {
                         "api.env",
                         "worker.env",
                         "postgres.env",
-                        "mongodb.env",
                         "environment.json")) {
             script += " && test ! -r '" + config + "/" + name + "'";
         }

@@ -64,10 +64,8 @@ class BasisLifecycleServerTest {
                 List.of(
                         "tools/api.yml",
                         "tools/worker.yml",
-                        "config/mongodb.yml",
                         "systemd/salmonbus-dev-infra.service",
                         "infra/compose.yaml",
-                        "infra/init-chat.js",
                         "tools/data-contract.sha256",
                         "wiremock-image.tar")) {
             var target = path.resolve(file);
@@ -75,11 +73,6 @@ class BasisLifecycleServerTest {
             var content = file.equals("tools/api.yml") ? api : "stable:" + file + "\n";
             if (file.equals("tools/worker.yml")) {
                 content = Files.readString(fixture.source.resolve("worker.yml"));
-            }
-            if (file.equals("config/mongodb.yml")) {
-                content =
-                        Files.readString(
-                                fixture.source.resolveSibling("config").resolve("mongodb.yml"));
             }
             if (file.equals("systemd/salmonbus-dev-infra.service")) {
                 content = "unit:" + name + "\n";
@@ -107,7 +100,7 @@ class BasisLifecycleServerTest {
 
     private Map<String, String> secrets() throws Exception {
         var result = new TreeMap<String, String>();
-        for (var name : List.of("api", "worker", "postgres", "mongodb")) {
+        for (var name : List.of("api", "worker", "postgres")) {
             result.put(name, FileOps.sha(fixture.layout.config().resolve(name + ".env")));
         }
         return result;

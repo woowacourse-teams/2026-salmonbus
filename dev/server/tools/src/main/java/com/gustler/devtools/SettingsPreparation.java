@@ -28,11 +28,9 @@ final class SettingsPreparation {
     }
 
     static Map<String, Map<String, String>> create(String origin, String revision) {
-        Environment.origin(origin);
+        if (origin != null) Environment.origin(origin);
         Checks.require(revision.matches("[0-9a-f]{40}"), "DEV_REVISION");
         var password = password();
-        var admin = password();
-        var chat = password();
         var common =
                 Map.of(
                         "DB_URL",
@@ -43,18 +41,7 @@ final class SettingsPreparation {
                         password);
         var values =
                 Map.of(
-                        "api",
-                                Environment.combined(
-                                        common,
-                                        Map.of(
-                                                "CHAT_ENABLED",
-                                                "true",
-                                                "CHAT_ALLOWED_ORIGINS",
-                                                origin,
-                                                "CHAT_MONGODB_URI",
-                                                "mongodb://salmonbus_dev_chat:"
-                                                        + chat
-                                                        + "@127.0.0.1:27017/salmonbus_chat_dev?authSource=salmonbus_chat_dev")),
+                        "api", common,
                         "worker",
                                 Environment.combined(
                                         common,
@@ -75,14 +62,6 @@ final class SettingsPreparation {
                                         "salmonbus_dev",
                                         "POSTGRES_PASSWORD",
                                         password),
-                        "mongodb",
-                                Map.of(
-                                        "MONGO_INITDB_ROOT_USERNAME",
-                                        "salmonbus_dev_admin",
-                                        "MONGO_INITDB_ROOT_PASSWORD",
-                                        admin,
-                                        "MONGO_CHAT_PASSWORD",
-                                        chat),
                         "infra", Map.of("DEV_REVISION", revision));
         Environment.validate(values);
         return values;
@@ -108,20 +87,29 @@ final class SettingsPreparation {
                 destination,
                 java.nio.file.attribute.PosixFilePermissions.asFileAttribute(
                         java.nio.file.attribute.PosixFilePermissions.fromString("rwx------")));
+        final boolean legacy = Files.isRegularFile(source.resolve("../config/mongodb.yml").normalize());
         for (var name : Environment.KEYS.keySet()) {
             byte[] content =
                     name.equals("infra")
                             ? Environment.text(Map.of("DEV_REVISION", revision)).getBytes()
-                            : FileOps.privateText(layout.config().resolve(name + ".env"))
-                                    .getBytes();
+                            : name.equals("api") ? (legacy
+                                    ? FileOps.privateText(Files.isRegularFile(layout.config().resolve("retired-chat/api.env"))
+                                            ? layout.config().resolve("retired-chat/api.env") : layout.config().resolve("api.env"))
+                                    : Environment.text(ChatRetirement.databaseOnly(settings.get("api")))).getBytes()
+                            : FileOps.privateText(layout.config().resolve(name + ".env")).getBytes();
             writer.write(destination.resolve(name + ".env"), content, 0600);
         }
+        ChatRetirement.retain(layout.config(), destination, writer);
+        if (legacy) {
+            writer.write(destination.resolve("mongodb.env"),
+                    FileOps.privateText(ChatRetirement.saved(layout.config(), "mongodb.env")).getBytes(), 0600);
+        }
         var hashes = new TreeMap<String, String>();
-        for (var name : java.util.List.of("api.yml", "worker.yml", "mongodb.yml")) {
-            var file =
-                    name.equals("mongodb.yml")
-                            ? source.resolve("../config/" + name).normalize()
-                            : source.resolve(name);
+        var yamlNames = legacy ? java.util.List.of("api.yml", "worker.yml", "mongodb.yml")
+                : java.util.List.of("api.yml", "worker.yml");
+        for (var name : yamlNames) {
+            var file = name.equals("mongodb.yml") ? source.resolve("../config/" + name).normalize()
+                    : source.resolve(name);
             byte[] content = Files.readAllBytes(file);
             writer.write(destination.resolve(name), content, 0644);
             hashes.put(name, FileOps.sha(content));
@@ -144,8 +132,10 @@ final class SettingsPreparation {
         DatabaseTarget.preserve(layout.config(), destination, writer);
         ArrivalSettings.preserve(layout.config(), destination, writer);
         var updated = Environment.load(destination);
-        for (var name : java.util.List.of("api", "worker", "postgres", "mongodb")) {
-            Checks.require(updated.get(name).equals(settings.get(name)), "DEV_SECRETS_CHANGED");
+        for (var name : java.util.List.of("api", "worker", "postgres")) {
+            Checks.require(name.equals("api")
+                            ? ChatRetirement.databaseOnly(updated.get(name)).equals(ChatRetirement.databaseOnly(settings.get(name)))
+                            : updated.get(name).equals(settings.get(name)), "DEV_SECRETS_CHANGED");
         }
         FileOps.owner(destination, 0, group);
         FileOps.mode(destination, 0750);
@@ -160,7 +150,7 @@ final class SettingsPreparation {
             String revision,
             final int group)
             throws Exception {
-        Environment.origin(origin);
+        if (origin != null) Environment.origin(origin);
         Checks.require(revision.matches("[0-9a-f]{40}"), "DEV_REVISION");
         var directory = layout.config();
         Checks.require(
@@ -169,9 +159,6 @@ final class SettingsPreparation {
         var contents = new TreeMap<String, byte[]>();
         contents.put("api.yml", Files.readAllBytes(source.resolve("api.yml")));
         contents.put("worker.yml", Files.readAllBytes(source.resolve("worker.yml")));
-        contents.put(
-                "mongodb.yml",
-                Files.readAllBytes(source.resolve("../config/mongodb.yml").normalize()));
         var hashes = new TreeMap<String, String>();
         for (var entry : contents.entrySet()) {
             hashes.put(entry.getKey(), FileOps.sha(entry.getValue()));
@@ -201,8 +188,7 @@ final class SettingsPreparation {
             }
             var settings = Environment.load(directory);
             Checks.require(
-                    settings.get("api").get("CHAT_ALLOWED_ORIGINS").equals(origin)
-                            && settings.get("infra").get("DEV_REVISION").equals(revision),
+                    settings.get("infra").get("DEV_REVISION").equals(revision),
                     "EXISTING_SETTINGS_DIFFER");
             return "preserved";
         }
