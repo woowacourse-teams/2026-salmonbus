@@ -9,16 +9,28 @@ dependencies {
     testFixturesApi 'org.springframework:spring-jdbc'
     testFixturesApi 'org.springframework.boot:spring-boot-test'
     testFixturesApi 'org.springframework.boot:spring-boot-testcontainers'
-    testFixturesApi 'org.testcontainers:postgresql'
+    testFixturesApi 'org.testcontainers:testcontainers-postgresql'
     testFixturesApi 'com.tngtech.archunit:archunit-junit5:1.3.0'
+    testFixturesImplementation 'org.springframework.boot:spring-boot-jdbc'
+    testFixturesImplementation 'org.junit.jupiter:junit-jupiter-api'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-jdbc'
     testImplementation 'org.springframework.boot:spring-boot-flyway'
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
-    testImplementation 'org.testcontainers:junit-jupiter'
-    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    testImplementation 'org.testcontainers:testcontainers-postgresql'
     testRuntimeOnly 'org.flywaydb:flyway-database-postgresql'
     testRuntimeOnly 'org.postgresql:postgresql'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    // DddStorageMigrationTest 가 아래 파일을 상대 경로로 찾아 읽는다.
+    inputs.files(
+        rootProject.file('../dev/data/java/com/gustler/localdata/LocalData.java'),
+        rootProject.file('deploy/sql/rollback-observation-evaluation-work.sql'),
+        rootProject.file('deploy/sql/prepare-evaluation-work-transition.sql'))
+        .withPropertyName('migrationTransitionSources')
+        .withPathSensitivity(PathSensitivity.NONE)
 }

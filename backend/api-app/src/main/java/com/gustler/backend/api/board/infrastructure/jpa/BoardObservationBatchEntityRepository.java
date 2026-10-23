@@ -1,21 +1,25 @@
 package com.gustler.backend.api.board.infrastructure.jpa;
 
 import com.gustler.backend.api.route.infrastructure.jpa.RouteVersionJpaEntity;
+import java.time.OffsetDateTime;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * 탑승판의 발행·관측 기준 배치를 고르는 JPA 조회 경계다.
+ */
 public interface BoardObservationBatchEntityRepository
     extends Repository<ObservationBatchJpaEntity, Long> {
-
     @Query("""
         SELECT batch
         FROM BoardObservationBatchJpaEntity batch
         WHERE batch.routeVersion = :routeVersion
           AND batch.outcome IN ('SUCCESS_ROWS', 'SUCCESS_EMPTY')
           AND batch.responseReceivedAt IS NOT NULL
+          AND batch.responseReceivedAt >= :observedSince
           AND EXISTS (
               SELECT publication.id
               FROM BoardForecastPublicationJpaEntity publication
@@ -27,6 +31,7 @@ public interface BoardObservationBatchEntityRepository
         """)
     List<ObservationBatchJpaEntity> findLatestPublished(
         @Param("routeVersion") RouteVersionJpaEntity routeVersion,
+        @Param("observedSince") OffsetDateTime observedSince,
         Pageable pageable
     );
 
@@ -36,11 +41,13 @@ public interface BoardObservationBatchEntityRepository
         WHERE batch.routeVersion = :routeVersion
           AND batch.outcome IN ('SUCCESS_ROWS', 'SUCCESS_EMPTY')
           AND batch.responseReceivedAt IS NOT NULL
+          AND batch.responseReceivedAt >= :observedSince
         ORDER BY batch.responseReceivedAt DESC,
                  batch.id DESC
         """)
     List<ObservationBatchJpaEntity> findLatestObserved(
         @Param("routeVersion") RouteVersionJpaEntity routeVersion,
+        @Param("observedSince") OffsetDateTime observedSince,
         Pageable pageable
     );
 }

@@ -6,20 +6,19 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 
 /**
- * 계수 묶음을 이루는 파일 둘의 자리.
+ * 계수 묶음을 구성하는 두 파일의 경로.
  *
- * <p>symlink 를 거절한다. 배포 자리에 흔히 걸리는 {@code current} 같은 연결을 그대로 읽으면,
- * 요약값을 잰 파일과 실제로 읽은 파일이 도중에 갈릴 수 있다.
+ * <p>배포 경로에서 흔히 사용하는 {@code current} 같은 symlink 는 거절한다.
+ * 연결이 도중에 바뀌면 요약값을 계산한 파일과 실제 읽는 파일이 달라질 수 있다.
  *
- * <p>파일 둘만 보는 것으로는 모자라서 <b>묶음이 놓인 자리도 본다.</b> {@code current} 는 파일보다
- * 디렉터리에 걸리는 쪽이 흔하다. 자리가 연결이면 설명 파일을 읽은 뒤 연결이 옮겨 갔을 때
- * 다른 계수 파일을 읽게 되고, 그때 요약값이 안 맞아 적재가 실패한다.
+ * <p>파일뿐 아니라 계수 묶음의 디렉터리도 검사한다. {@code current} 는 파일보다
+ * 디렉터리에 연결하는 경우가 흔하다. 설명 파일을 읽은 뒤 연결이 바뀌면 다른 계수 파일을 읽게 되어
+ * 요약값 불일치로 적재가 실패한다.
  */
 record BundleFiles(
     Path manifest,
     Path weights
 ) {
-
     static final String MANIFEST_NAME = "manifest.json";
     static final String WEIGHTS_NAME = "weights.safetensors";
 
@@ -41,6 +40,9 @@ record BundleFiles(
         return read(weights);
     }
 
+    /**
+     * 심볼릭 링크가 아닌 일반 참조 파일만 최대 1 MiB까지 읽는다. 누락·크기 초과·읽기 실패는 번들 검증 오류로 처리한다.
+     */
     byte[] readRouteReference() {
         Path path = manifest.resolveSibling("route-reference.json");
         requireRegularFile(path, BundleCheck.ROUTE_REFERENCE);

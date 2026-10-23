@@ -23,7 +23,6 @@ public record StopDemandStatistics(
     int revision,
     List<StopDemandCell> cells
 ) {
-
     /** 이웃을 찾는 순번 거리. 자기 자신은 뺀다. */
     private static final int NEIGHBOUR_RADIUS = 4;
 
@@ -43,14 +42,14 @@ public record StopDemandStatistics(
         }
     }
 
-    /** 그 정류장에 도착할 때 자리가 얼마나 차 있었나. 세대 안에서 z 로 잰다. */
+    /** 정류장 도착 시 자리가 찬 비율을 같은 세대 안에서 z 로 표준화한다. */
     public double fillRateScoreAt(
         final int stopOrder
     ) {
         return scoreAt(stopOrder, StopDemandCell::averageFillRate);
     }
 
-    /** 그 정류장에서 순승차가 얼마나 있었나. 세대 안에서 z 로 잰다. */
+    /** 정류장의 순승차 비율을 같은 세대 안에서 z 로 표준화한다. */
     public double netBoardingScoreAt(
         final int stopOrder
     ) {
@@ -58,7 +57,7 @@ public record StopDemandStatistics(
     }
 
     /**
-     * 그 정류장의 셀이 없어 이웃으로 메웠나.
+     * 해당 정류장의 셀이 없어 이웃으로 보완했는지 확인한다.
      *
      * <p>모델이 읽는 것은 좌석 결측률이 아니라 이 값이다. 열로 두지 않는다.
      * 그 셀의 행이 있는지 없는지가 곧 지시자다.
@@ -113,7 +112,7 @@ public record StopDemandStatistics(
         return neighbourScoreAt(stopOrder, rate);
     }
 
-    /** 반경 4 안의 이웃 z값을 거리 제곱에 반비례하게 섞는다. 이웃도 없으면 세대 평균 자리다. */
+    /** 반경 4 안의 이웃 z값을 거리 제곱에 반비례하게 섞는다. 이웃도 없으면 세대 평균에 해당하는 z값을 사용한다. */
     private double neighbourScoreAt(
         final int stopOrder,
         RateOfCell rate
@@ -179,7 +178,6 @@ public record StopDemandStatistics(
 
     @FunctionalInterface
     private interface RateOfCell {
-
         double of(
             StopDemandCell cell
         );

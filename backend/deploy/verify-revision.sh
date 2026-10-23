@@ -40,11 +40,12 @@ for jar in "${jars[@]}"; do
             value = line
             sub(/^[^:]*:[[:space:]]*/, "", value); sub(/[[:space:]]*$/, "", value)
             if (path == "springdoc.swagger-ui.url" && value == "/api/docs/openapi") next
+            if (path ~ /^gbis\.(keys|named-keys)(\.|$)/ && value != "") { print "gbis-keys: " value; next }
             depth++; levels[depth] = indent; keys[depth] = key
           }
           { print }
         ' \
-      | grep -E '^[[:space:]]*(url|username|password|service-key(-[a-z])?)[[:space:]]*:' \
+      | grep -E '^[[:space:]]*(url|username|password|service-key(-[a-z])?|gbis-keys)[[:space:]]*:' \
       | grep -v '\${' || true)"
     if [ -n "$offending" ]; then
       keys="$(printf '%s\n' "$offending" \

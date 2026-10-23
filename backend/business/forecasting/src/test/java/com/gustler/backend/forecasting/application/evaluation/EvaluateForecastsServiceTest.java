@@ -1,17 +1,5 @@
 package com.gustler.backend.forecasting.application.evaluation;
 
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationQuery;
-import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
-import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
-import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
-import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.transaction.support.TransactionSynchronization;
-import java.util.Optional;
-import com.gustler.backend.forecasting.api.ForecastPolicy;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -23,11 +11,28 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.gustler.backend.forecasting.api.ForecastPolicy;
+import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore.Key;
+import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore.Restored;
+import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Lost;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.SeatMissing;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Settled;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Skipped;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationQuery;
+import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
+import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
+import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,11 +40,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @ExtendWith(MockitoExtension.class)
 class EvaluateForecastsServiceTest {
-
-    /** 혼잡도를 안 준 관측. 라벨 회수는 혼잡도를 안 본다. */
+    /** 혼잡도가 없는 관측으로, 라벨 회수에는 혼잡도를 사용하지 않는다. */
     private static final Integer CROWD_LEVEL_UNKNOWN = null;
 
     private static final long ROUTE_VERSION_3330 = 1L;
@@ -68,10 +74,12 @@ class EvaluateForecastsServiceTest {
 
     @BeforeEach
     void 회수_배치를_멈춘_시계로_세운다() {
-        job = new EvaluateForecastsService(work, new EvaluationWorkPageReader(work), new EvaluationRouteCommitter(work, quality, writer,
-            new EvaluationQualityRecheck(work, arrivalObservationQuery, properties().arrivalLimit())),
-            arrivalObservationQuery, quality, properties(), Clock.fixed(SETTLED_AT, ZoneOffset.UTC), 30000, 3,
-            new RecentArrivalObservationCache(false, 30000, Duration.ofMinutes(30)));
+        job =
+            new EvaluateForecastsService(work, new EvaluationWorkPageReader(work),
+                new EvaluationRouteCommitter(work, quality, writer,
+                    new EvaluationQualityRecheck(work, arrivalObservationQuery, properties().arrivalLimit())),
+                arrivalObservationQuery, quality, properties(), Clock.fixed(SETTLED_AT, ZoneOffset.UTC), 30000, 3,
+                new RecentArrivalObservationCache(false, 30000, Duration.ofMinutes(30)));
     }
 
     @Test
@@ -84,7 +92,7 @@ class EvaluateForecastsServiceTest {
         runRound();
 
         // then
-        assertThat(settledLabels()).containsExactly(new ArrivalLabel.Settled(ARRIVAL_OBSERVATION_ID, 0));
+        assertThat(settledLabels()).containsExactly(new Settled(ARRIVAL_OBSERVATION_ID, 0));
     }
 
     @Test
@@ -110,7 +118,7 @@ class EvaluateForecastsServiceTest {
         runRound();
 
         // then
-        assertThat(settledLabels()).containsExactly(new ArrivalLabel.SeatMissing(ARRIVAL_OBSERVATION_ID));
+        assertThat(settledLabels()).containsExactly(new SeatMissing(ARRIVAL_OBSERVATION_ID));
     }
 
     @Test
@@ -124,8 +132,8 @@ class EvaluateForecastsServiceTest {
 
         // then
         assertThat(settledLabels()).containsExactly(
-            new ArrivalLabel.Settled(ARRIVAL_OBSERVATION_ID, 0),
-            new ArrivalLabel.Settled(ARRIVAL_OBSERVATION_ID, 0));
+            new Settled(ARRIVAL_OBSERVATION_ID, 0),
+            new Settled(ARRIVAL_OBSERVATION_ID, 0));
     }
 
     @Test
@@ -223,9 +231,9 @@ class EvaluateForecastsServiceTest {
     @Test
     void 같은_관측의_일부_예보만_완료되면_나머지는_평가를_기다린다() {
         // given
-        long observationId = 100L;
-        int passedStopOrder = TARGET_STOP_ORDER - 1;
-        int laterTarget = TARGET_STOP_ORDER + 1;
+        final long observationId = 100L;
+        final int passedStopOrder = TARGET_STOP_ORDER - 1;
+        final int laterTarget = TARGET_STOP_ORDER + 1;
         PendingForecast reached = pending(observationId, passedStopOrder);
         PendingForecast waiting = new PendingForecast(
             observationId, laterTarget, ROUTE_VERSION_3330, VEHICLE_ID,
@@ -252,7 +260,7 @@ class EvaluateForecastsServiceTest {
         // given
         givenPendingOn(ROUTE_VERSION_3330, pending(100L, 40));
         givenArrivals();
-        int rounds = 3;
+        final int rounds = 3;
 
         // when
         for (int round = 0; round < rounds; round++) {
@@ -273,20 +281,29 @@ class EvaluateForecastsServiceTest {
         final long routeVersionId,
         PendingForecast... forecasts
     ) {
-        List<Long> ids = java.util.Arrays.stream(forecasts).map(PendingForecast::vehicleObservationId).distinct().sorted().toList();
+        List<Long> ids = Arrays.stream(forecasts)
+            .map(PendingForecast::vehicleObservationId)
+            .distinct()
+            .sorted()
+            .toList();
         when(work.routes()).thenReturn(List.of(routeVersionId));
-        when(work.lastObservationId(routeVersionId)).thenReturn(ids.isEmpty() ? 0L : ids.getLast());
-        if (ids.isEmpty()) return;
+        when(work.lastObservationId(routeVersionId)).thenReturn(lastIdOf(ids));
+        if (ids.isEmpty()) {
+            return;
+        }
         when(work.revisions(eq(routeVersionId), any())).thenReturn(ids.stream()
-            .collect(java.util.stream.Collectors.toMap(id -> id, id -> 1L)));
+                .collect(Collectors.toMap(id -> id, id -> 1L)));
         when(work.page(eq(routeVersionId), anyLong(), anyLong(), anyInt())).thenAnswer(call -> {
-            long after = call.getArgument(1);
-            return ids.stream().filter(id -> id > after).toList();
+            final long after = call.getArgument(1);
+            return ids.stream()
+                .filter(id -> id > after)
+                .toList();
         });
-        when(work.restore(eq(routeVersionId), any())).thenReturn(java.util.Arrays.stream(forecasts)
-            .map(f -> new EvaluationWorkStore.Restored(new EvaluationWorkStore.Key(f.vehicleObservationId(), f.targetStopOrder()),
-                Optional.of(new PendingForecast(f.vehicleObservationId(), f.targetStopOrder(), routeVersionId,
-                    f.vehicleId(), f.stopsToTarget(), f.observedAt(), f.generatedAt(), f.qualityDirection())))).toList());
+        when(work.restore(eq(routeVersionId), any())).thenReturn(Arrays.stream(forecasts)
+                .map(f -> new Restored(new Key(f.vehicleObservationId(), f.targetStopOrder()),
+                    Optional.of(new PendingForecast(f.vehicleObservationId(), f.targetStopOrder(), routeVersionId,
+                        f.vehicleId(), f.stopsToTarget(), f.observedAt(), f.generatedAt(), f.qualityDirection()))))
+                .toList());
     }
 
     private void runRound() {
@@ -302,22 +319,24 @@ class EvaluateForecastsServiceTest {
         }
     }
 
-    private void givenArrivals(
-        ArrivalCandidate... candidates
-    ) {
+    private void givenArrivals(ArrivalCandidate... candidates) {
         when(arrivalObservationQuery.findAfter(anyLong(), anyString(), any(), anyInt()))
             .thenReturn(List.of(candidates));
     }
 
     private List<ArrivalLabel> settledLabels() {
-        return captured().stream().<ArrivalLabel>map(evaluation -> switch (evaluation.state()) {
-            case SETTLED -> new ArrivalLabel.Settled(evaluation.result().arrivalObservationId(), evaluation.result().seatsOnArrival());
-            case SEAT_MISSING -> new ArrivalLabel.SeatMissing(evaluation.result().arrivalObservationId());
-            case SKIPPED -> new ArrivalLabel.Skipped();
-            case LOST -> new ArrivalLabel.Lost();
-            case QUALITY_EXCLUDED -> throw new AssertionError("품질 제외는 도착 판정이 아니라 저장소에서 처리한다");
-            case PENDING -> throw new AssertionError("평가 대기 상태를 저장하면 안 된다");
-        }).toList();
+        return captured().stream()
+            .<ArrivalLabel>map(evaluation -> switch (evaluation.state()) {
+                case SETTLED -> new Settled(evaluation.result()
+                    .arrivalObservationId(), evaluation.result()
+                    .seatsOnArrival());
+                case SEAT_MISSING -> new SeatMissing(evaluation.result().arrivalObservationId());
+                case SKIPPED -> new Skipped();
+                case LOST -> new Lost();
+                case QUALITY_EXCLUDED -> throw new AssertionError("품질 제외는 도착 판정이 아니라 저장소에서 처리한다");
+                case PENDING -> throw new AssertionError("평가 대기 상태를 저장하면 안 된다");
+            })
+            .toList();
     }
 
     private List<ForecastEvaluation> captured() {
@@ -366,5 +385,12 @@ class EvaluateForecastsServiceTest {
     private ForecastPolicy properties() {
         return new ForecastPolicy(
             Duration.ofMinutes(5), 20, 3000, 400);
+    }
+
+    private static long lastIdOf(List<Long> ids) {
+        if (ids.isEmpty()) {
+            return 0L;
+        }
+        return ids.getLast();
     }
 }

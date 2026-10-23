@@ -3,13 +3,13 @@ package com.gustler.backend.api.http;
 import com.gustler.backend.api.error.ApiException;
 import com.gustler.backend.api.error.ErrorCode;
 import com.gustler.backend.api.error.ErrorResponse;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.jpa.JpaSystemException;
-import org.springframework.dao.DataAccessResourceFailureException;
-import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -17,17 +17,18 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
- * 컨트롤러까지 온 요청의 오류를 우리 오류 응답 형식으로 낸다.
+ * 컨트롤러까지 온 요청의 오류를 서비스의 오류 응답 형식으로 반환한다.
  *
- * <p><b>여기를 안 지나는 오류가 있다.</b> 컨테이너가 {@code sendError} 로 넘긴 것은
+ * <p>이 처리기를 거치지 않는 오류가 있다. 컨테이너가 {@code sendError} 로 넘긴 것은
  * {@link ApiErrorController} 가, 톰캣이 주소를 해석하다 거절한 것은
- * {@link ContainerErrorResponseValve} 가 맡는다. 셋이 {@link ErrorHeaders} 와 {@link ErrorCode}
- * 를 같이 써서 어느 길로 나가든 같은 모양이 되게 한다.
+ * {@link ContainerErrorResponseValve} 가 맡는다. 세 처리기는 {@link ErrorHeaders} 와 {@link ErrorCode}
+ * 를 함께 사용해 처리 경로와 관계없이 같은 형식으로 응답한다.
  */
 @RestControllerAdvice
 public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
-
-
+    /**
+     * 업무 예외를 기존 오류 코드·메시지·requestId 응답으로 매핑한다. 예외 원문을 클라이언트 응답에 노출하지 않는다.
+     */
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ErrorResponse> handleApiException(
         ApiException exception
@@ -37,7 +38,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         exception.retryAfter().ifPresent(retryAfter ->
             headers.set(HttpHeaders.RETRY_AFTER, String.valueOf(retryAfter.toSeconds())));
 
-        return new ResponseEntity<>(bodyOf(code, exception.getMessage(), code.status().value(), exception), headers, code.status());
+        return new ResponseEntity<>(bodyOf(code, exception.getMessage(), code.status()
+            .value(), exception), headers, code.status());
     }
 
     @ExceptionHandler({
@@ -60,9 +62,9 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     /**
-     * 스프링이 먼저 잡는 예외의 응답도 같은 모양으로 낸다.
+     * 스프링이 먼저 처리하는 예외의 응답도 같은 형식으로 반환한다.
      *
-     * <p>스프링이 이미 실어 둔 {@code Allow} 같은 헤더는 그대로 두고 우리 것만 얹는다.
+     * <p>스프링이 설정한 {@code Allow} 같은 헤더는 유지하고 서비스 오류 헤더만 추가한다.
      */
     @Override
     protected ResponseEntity<Object> handleExceptionInternal(
@@ -83,21 +85,24 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     private ResponseEntity<ErrorResponse> respond(
         ErrorCode code, Throwable exception
     ) {
-        return new ResponseEntity<>(bodyOf(code, code.message(), code.status().value(), exception), errorHeaders(), code.status());
+        return new ResponseEntity<>(bodyOf(code, code.message(), code.status()
+            .value(), exception), errorHeaders(), code.status());
     }
 
     /**
-     * 응답에 실을 값을 만들면서 같은 식별자로 로그도 남긴다.
+     * 응답 값을 만들면서 같은 식별자로 로그를 남긴다.
      *
-     * <p>안 남기면 클라이언트가 받은 {@code requestId} 로 찾을 로그가 없다. 그러면 그 필드를
-     * 응답에 실은 뜻이 절반만 산다.
+     * <p>로그를 남기지 않으면 클라이언트가 받은 {@code requestId} 로 서버 로그를 찾을 수 없어
+     * 응답에 식별자를 포함하는 목적을 충분히 충족하지 못한다.
      *
-     * <p>서버 잘못은 {@code WARN}, 요청 잘못은 {@code INFO} 로 남긴다. 요청 잘못까지 경고로
-     * 올리면 잘못된 routeId 하나에 경고가 쌓여서 진짜 경고가 묻힌다.
+     * <p>서버 오류는 {@code WARN}, 요청 오류는 {@code INFO} 로 남긴다. 요청 오류까지 경고로
+     * 기록하면 잘못된 routeId 하나로 경고가 쌓여 실제 대응이 필요한 경고를 찾기 어려워진다.
      */
     private ErrorResponse bodyOf(
         ErrorCode code,
-        String message, int status, Throwable failure
+        String message,
+        final int status,
+        Throwable failure
     ) {
         String requestId = RequestId.ofCurrentRequest();
         ApiFailureLog.write(status, code, requestId, failure);

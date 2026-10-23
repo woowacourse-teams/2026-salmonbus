@@ -2,10 +2,10 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.gustler.backend.forecasting.domain.statistics.StopDemandHourlyTotals;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion;
-import com.gustler.backend.support.ConfirmedTripFixture;
+import com.gustler.backend.forecasting.domain.statistics.StopDemandHourlyTotals;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
+import com.gustler.backend.support.ConfirmedTripFixture;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -21,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class JdbcStopDemandStatisticsRepositorySeedTest {
-
     private static final String NORMALIZATION_VERSION = "normalization-v1.0.0";
     private static final String COLLECTION_STRATEGY_VERSION = "adaptive-kst-v1.0.1";
     private static final String OUTCOME_SUCCESS_ROWS = "SUCCESS_ROWS";
@@ -102,7 +101,7 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
     @Test
     void 원본_편도를_확인할_수_없는_seed_합계를_제외하고_ELIGIBLE_편도의_라벨만_집계한다() {
         // given
-        final UUID seedImportId = insertAppliedSeedImport();
+        UUID seedImportId = insertAppliedSeedImport();
         insertSeedHourlyTotal(seedImportId);
         insertSettledLabel(VEHICLE_AFTER_CUTOVER, ARRIVED_AFTER_CUTOVER);
 
@@ -123,7 +122,7 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
     @Test
     void seed_집계_기준_시각_이전이라도_ELIGIBLE_편도의_라벨은_집계한다() {
         // given
-        final UUID seedImportId = insertAppliedSeedImport();
+        UUID seedImportId = insertAppliedSeedImport();
         insertSeedHourlyTotal(seedImportId);
         insertSettledLabel(VEHICLE_BEFORE_CUTOVER, ARRIVED_BEFORE_CUTOVER);
 
@@ -143,7 +142,7 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
     @Test
     void seed_집계_기준과_같은_시각의_ELIGIBLE_라벨을_seed_합계_없이_집계한다() {
         // given
-        final UUID seedImportId = insertAppliedSeedImport();
+        UUID seedImportId = insertAppliedSeedImport();
         insertSeedHourlyTotal(seedImportId);
         insertSettledLabel(VEHICLE_ON_CUTOVER, ARRIVED_ON_CUTOVER);
 
@@ -224,7 +223,7 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
     }
 
     private UUID insertAppliedSeedImport() {
-        final UUID seedImportId = UUID.randomUUID();
+        UUID seedImportId = UUID.randomUUID();
         jdbcClient.sql("""
                 INSERT INTO stop_demand_seed_import (
                     id, calculation_version, final_cutover_at, status
@@ -238,9 +237,7 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
         return seedImportId;
     }
 
-    private void insertSeedHourlyTotal(
-        UUID seedImportId
-    ) {
+    private void insertSeedHourlyTotal(UUID seedImportId) {
         jdbcClient.sql("""
                 INSERT INTO stop_demand_seed_hourly_total (
                     seed_import_id, route_version_id, stop_order, arrival_date_kst,
@@ -287,12 +284,12 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
-            .params(
-                observationBatchId, routeVersionId, SOURCE_ROW_NUMBER,
-                vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
-                RUNNING_STATE_DEPARTED, remainingSeats)
-            .query(Long.class)
-            .single());
+                .params(
+                    observationBatchId, routeVersionId, SOURCE_ROW_NUMBER,
+                    vehicleId, stopOrder, stopIdOf(stopOrder), stopOrder,
+                    RUNNING_STATE_DEPARTED, remainingSeats)
+                .query(Long.class)
+                .single());
     }
 
     private long insertObservationBatch(
@@ -340,9 +337,7 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
             .single();
     }
 
-    private void insertRouteStop(
-        final int stopOrder
-    ) {
+    private void insertRouteStop(final int stopOrder) {
         jdbcClient.sql("""
                 INSERT INTO route_stop (
                     route_version_id, stop_order, stop_id, name, direction, boarding_allowed

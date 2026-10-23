@@ -10,17 +10,23 @@ import com.gustler.backend.maintenance.configuration.BundleInspectionCommandConf
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.stream.Stream;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 class BundleInspectionCommandTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
 
     @Test
     void 검수_구성에_DB와_활성화_빈이_없다() {
-        try (var context = new AnnotationConfigApplicationContext(BundleInspectionCommandConfiguration.class)) {
+        // when
+        try (AnnotationConfigApplicationContext context =
+            new AnnotationConfigApplicationContext(BundleInspectionCommandConfiguration.class)) {
+
+            // then
             assertThat(context.getBeansOfType(InspectModelBundle.class)).hasSize(1);
             assertThat(context.getBeansOfType(DataSource.class)).isEmpty();
             assertThat(context.getBeansOfType(ModelDeploymentRepository.class)).isEmpty();
@@ -31,11 +37,14 @@ class BundleInspectionCommandTest {
 
     @Test
     void 검수는_번들_파일을_변경하지_않는다() throws Exception {
+        // when
         BundleInspectionFixture.write(directory);
         byte[] manifest = Files.readAllBytes(directory.resolve("manifest.json"));
         byte[] weights = Files.readAllBytes(directory.resolve("weights.safetensors"));
         Object actual = MaintenanceApplication.run(CliArguments.parse(new String[] {
             "bundle-check", "--directory", directory.toString()}));
+
+        // then
         assertThat(actual).isInstanceOf(Map.class);
         Map<?, ?> result = (Map<?, ?>) actual;
         assertThat(result.get("validation")).isEqualTo("PASSED");
@@ -43,7 +52,7 @@ class BundleInspectionCommandTest {
         assertThat(result.get("accuracyEvaluated")).isEqualTo(false);
         assertThat(Files.readAllBytes(directory.resolve("manifest.json"))).isEqualTo(manifest);
         assertThat(Files.readAllBytes(directory.resolve("weights.safetensors"))).isEqualTo(weights);
-        try (var files = Files.list(directory)) {
+        try (Stream<Path> files = Files.list(directory)) {
             assertThat(files.map(p -> p.getFileName().toString()).toList())
                 .containsExactlyInAnyOrder("manifest.json", "weights.safetensors");
         }

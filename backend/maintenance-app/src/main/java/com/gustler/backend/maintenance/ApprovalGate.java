@@ -7,8 +7,10 @@ import java.util.HashSet;
 import java.util.Set;
 import tools.jackson.databind.JsonNode;
 
+/**
+ * 실행 대상과 승인 자료의 범위를 대조해 유지보수 명령의 실행 조건을 확인한다.
+ */
 public final class ApprovalGate {
-
     public static final String ACADEMY_TRIP_QUALITY_REBUILD = "ACADEMY_TRIP_QUALITY_REBUILD";
 
     private static final String SCHEMA = "salmonbus-migration-approval-v1";
@@ -78,9 +80,16 @@ public final class ApprovalGate {
             }
             return;
         }
-        if (value == null || !value.isString() || !expected.equals(value.stringValue())) {
+        if (!matchesExpectedText(value, expected)) {
             throw new MaintenanceException(code);
         }
+    }
+
+    private static boolean matchesExpectedText(JsonNode value, String expected) {
+        if (value == null || !value.isString()) {
+            return false;
+        }
+        return expected.equals(value.stringValue());
     }
 
     private static String text(
@@ -88,9 +97,16 @@ public final class ApprovalGate {
         String field
     ) {
         JsonNode value = root.get(field);
-        if (value == null || !value.isString() || value.stringValue().isBlank()) {
+        if (!hasText(value)) {
             throw new MaintenanceException("APPROVAL_FIELD_INVALID");
         }
         return value.stringValue();
+    }
+
+    private static boolean hasText(JsonNode value) {
+        if (value == null || !value.isString()) {
+            return false;
+        }
+        return !value.stringValue().isBlank();
     }
 }

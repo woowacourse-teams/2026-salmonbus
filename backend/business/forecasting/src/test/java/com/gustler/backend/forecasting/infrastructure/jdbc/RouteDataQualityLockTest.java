@@ -9,7 +9,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
@@ -23,14 +25,17 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @ForecastingIntegrationTest
 class RouteDataQualityLockTest {
-    @Autowired JdbcClient jdbc;
-    @Autowired RouteDataQualityAccess quality;
-    @Autowired PlatformTransactionManager transactions;
     private final List<Long> routes = new ArrayList<>();
+    @Autowired
+    JdbcClient jdbc;
+    @Autowired
+    RouteDataQualityAccess quality;
+    @Autowired
+    PlatformTransactionManager transactions;
 
     @AfterEach
     void 이번_테스트에서_만든_노선과_품질_행을_삭제한다() {
-        for (long route : routes) {
+        for (final long route : routes) {
             jdbc.sql("DELETE FROM route_data_quality WHERE route_id=?").param(route).update();
             jdbc.sql("DELETE FROM route WHERE id=?").param(route).update();
         }
@@ -39,15 +44,15 @@ class RouteDataQualityLockTest {
     @Test
     void 품질_행을_잠근_트랜잭션이_끝나야_같은_노선의_품질_버전을_변경할_수_있다() throws Exception {
         // given
-        long route = route();
+        final long route = route();
         inTransaction(() -> quality.lockByRoute(route));
-        var acquired = new CountDownLatch(1);
-        var release = new CountDownLatch(1);
-        var attempted = new CountDownLatch(1);
-        var holderPid = new AtomicInteger();
-        var writerPid = new AtomicInteger();
-        try (var workers = Executors.newFixedThreadPool(2)) {
-            var holding = workers.submit(() -> inTransaction(() -> {
+        CountDownLatch acquired = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch attempted = new CountDownLatch(1);
+        AtomicInteger holderPid = new AtomicInteger();
+        AtomicInteger writerPid = new AtomicInteger();
+        try (ExecutorService workers = Executors.newFixedThreadPool(2)) {
+            Future<Boolean> holding = workers.submit(() -> inTransaction(() -> {
                 holderPid.set(pid());
                 quality.lockByRoute(route);
                 acquired.countDown();
@@ -56,11 +61,13 @@ class RouteDataQualityLockTest {
             }));
             try {
                 await(acquired);
-                var changing = workers.submit(() -> inTransaction(() -> {
+                Future<Integer> changing = workers.submit(() -> inTransaction(() -> {
                     writerPid.set(pid());
                     attempted.countDown();
-                    return jdbc.sql("UPDATE route_data_quality SET quality_revision=quality_revision+1 WHERE route_id=?")
-                        .param(route).update();
+                    return jdbc.sql(
+                    "UPDATE route_data_quality SET quality_revision=quality_revision+1 WHERE route_id=?")
+                        .param(route)
+                        .update();
                 }));
 
                 // when
@@ -82,8 +89,8 @@ class RouteDataQualityLockTest {
     @Test
     void 한_노선의_품질_행을_잠근_상태에서도_다른_노선의_품질_행을_잠글_수_있다() throws Exception {
         // given
-        long first = route();
-        long second = route();
+        final long first = route();
+        final long second = route();
 
         // when
         whileLocked(first, () -> inTransaction(() -> {
@@ -98,7 +105,7 @@ class RouteDataQualityLockTest {
     @Test
     void 이미_생성된_품질_행을_잠가도_같은_노선의_route_행은_잠글_수_있다() throws Exception {
         // given
-        long route = route();
+        final long route = route();
         inTransaction(() -> quality.lockByRoute(route));
 
         // when
@@ -113,23 +120,23 @@ class RouteDataQualityLockTest {
     @Test
     void 같은_노선의_품질_행을_동시에_생성해도_행은_하나만_남고_두_요청_모두_처리를_완료한다() throws Exception {
         // given
-        long route = route();
-        var inserted = new CountDownLatch(1);
-        var release = new CountDownLatch(1);
-        var attempted = new CountDownLatch(1);
-        var holderPid = new AtomicInteger();
-        var secondPid = new AtomicInteger();
-        try (var workers = Executors.newFixedThreadPool(2)) {
-            var first = workers.submit(() -> inTransaction(() -> {
+        final long route = route();
+        CountDownLatch inserted = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch attempted = new CountDownLatch(1);
+        AtomicInteger holderPid = new AtomicInteger();
+        AtomicInteger secondPid = new AtomicInteger();
+        try (ExecutorService workers = Executors.newFixedThreadPool(2)) {
+            Future<Long> first = workers.submit(() -> inTransaction(() -> {
                 holderPid.set(pid());
-                long version = quality.lockByRoute(route);
+                final long version = quality.lockByRoute(route);
                 inserted.countDown();
                 await(release);
                 return version;
             }));
             try {
                 await(inserted);
-                var second = workers.submit(() -> inTransaction(() -> {
+                Future<Long> second = workers.submit(() -> inTransaction(() -> {
                     secondPid.set(pid());
                     attempted.countDown();
                     return quality.lockByRoute(route);
@@ -154,8 +161,8 @@ class RouteDataQualityLockTest {
     @Test
     void 높은_ID의_노선을_잠가도_낮은_ID의_다른_노선의_품질_행은_잠글_수_있다() throws Exception {
         // given
-        long lower = route();
-        long higher = route();
+        final long lower = route();
+        final long higher = route();
         inTransaction(() -> quality.lockByRoute(lower));
 
         // when
@@ -169,7 +176,7 @@ class RouteDataQualityLockTest {
 
     private long route() {
         String source = "quality-lock-" + UUID.randomUUID().toString().substring(0, 16);
-        long id = jdbc.sql("""
+        final long id = jdbc.sql("""
             INSERT INTO route(public_route_id,source_id,source_route_id,display_name,start_stop_name,end_stop_name)
             VALUES(?,'GBIS',?,'잠금 테스트','출발','도착') RETURNING id
             """).params(source, source).query(Long.class).single();
@@ -177,7 +184,7 @@ class RouteDataQualityLockTest {
         return id;
     }
 
-    private long revision(long route) {
+    private long revision(final long route) {
         return jdbc.sql("SELECT quality_revision FROM route_data_quality WHERE route_id=?")
             .param(route).query(Long.class).single();
     }
@@ -190,11 +197,11 @@ class RouteDataQualityLockTest {
         return new TransactionTemplate(transactions).execute(status -> action.get());
     }
 
-    private void whileLocked(long route, Runnable action) throws Exception {
-        var acquired = new CountDownLatch(1);
-        var release = new CountDownLatch(1);
-        try (var worker = Executors.newSingleThreadExecutor()) {
-            var holding = worker.submit(() -> inTransaction(() -> {
+    private void whileLocked(final long route, Runnable action) throws Exception {
+        CountDownLatch acquired = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try (ExecutorService worker = Executors.newSingleThreadExecutor()) {
+            Future<Boolean> holding = worker.submit(() -> inTransaction(() -> {
                 quality.lockByRoute(route);
                 acquired.countDown();
                 await(release);
@@ -212,19 +219,23 @@ class RouteDataQualityLockTest {
 
     private static void await(CountDownLatch latch) {
         try {
-            if (!latch.await(5, TimeUnit.SECONDS)) throw new AssertionError("테스트 트랜잭션 진행 대기 초과");
+            if (!latch.await(5, TimeUnit.SECONDS)) {
+                throw new AssertionError("테스트 트랜잭션 진행 대기 초과");
+            }
         } catch (InterruptedException failure) {
             Thread.currentThread().interrupt();
             throw new AssertionError(failure);
         }
     }
 
-    private void awaitBlocked(int waiting, int holding) {
-        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+    private void awaitBlocked(final int waiting, final int holding) {
+        final long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
         while (System.nanoTime() < deadline) {
-            boolean blocked = jdbc.sql("SELECT ? = ANY(pg_blocking_pids(?))")
+            final boolean blocked = jdbc.sql("SELECT ? = ANY(pg_blocking_pids(?))")
                 .params(holding, waiting).query(Boolean.class).single();
-            if (blocked) return;
+            if (blocked) {
+                return;
+            }
             LockSupport.parkNanos(Duration.ofMillis(10).toNanos());
         }
         throw new AssertionError("품질 행 잠금 대기를 확인하지 못했다");

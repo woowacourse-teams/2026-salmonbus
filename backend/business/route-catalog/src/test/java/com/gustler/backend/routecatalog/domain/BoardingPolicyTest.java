@@ -6,10 +6,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class BoardingPolicyTest {
-
     @ParameterizedTest
     @CsvSource({
-        // 277 두 곳은 3330 실측 위치정보 응답(location-live-snapshot.json)에서 뜬 경유 지점이다.
+        // 277 두 곳은 3330 실측 위치정보 응답(location-live-snapshot.json)에서 확인된 경유 지점이다.
         "277103149, false",
         "277103157, false",
         "205000217, true",  // 범계역

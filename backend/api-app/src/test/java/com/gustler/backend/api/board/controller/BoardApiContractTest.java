@@ -8,33 +8,29 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gustler.backend.api.board.application.BoardCachePolicy;
+import com.gustler.backend.api.support.FixedDaytimeClockConfig;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture.RouteContext;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.Clock;
-import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
 
 @IntegrationTest
 @Transactional
-@Import(BoardApiContractTest.FixedClockConfig.class)
+@Import(FixedDaytimeClockConfig.class)
 class BoardApiContractTest {
-
     private static final String ROUTE_ID = "204000057";
 
     @Autowired
@@ -59,6 +55,7 @@ class BoardApiContractTest {
 
     @Test
     void 최신_예보_완료_관측_묶음으로_v4_Board를_조립한다() throws Exception {
+        // given
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         OffsetDateTime observedAt = now.minusMinutes(1);
         RouteContext route = insertRoundTripRoute(now.minusDays(1));
@@ -88,11 +85,12 @@ class BoardApiContractTest {
             + new BoardCachePolicy(clock).maxAgeAt(observedAt).toSeconds()
             + ", public";
 
+        // when
         mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, cacheControl))
             .andExpect(jsonPath("$", aMapWithSize(6)))
-            .andExpect(jsonPath("$.route", aMapWithSize(8)))
+            .andExpect(jsonPath("$.route", aMapWithSize(9)))
             .andExpect(jsonPath("$.route.id").value(ROUTE_ID))
             .andExpect(jsonPath("$.route.status").value("FORECAST_READY"))
             .andExpect(jsonPath("$.route.turnSequence").value(2))
@@ -132,7 +130,59 @@ class BoardApiContractTest {
     }
 
     @Test
+    void 배차간격이_저장되지_않은_기존_노선_버전도_정상_응답하고_네_요일을_null로_낸다() throws Exception {
+        // given
+        OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
+        RouteContext route = insertPublishedRoundTripRoute(now);
+
+        // when
+        ResultActions httpResponse = mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID));
+
+        // then
+        httpResponse
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.route", aMapWithSize(9)))
+            .andExpect(jsonPath("$.route.headways", aMapWithSize(4)))
+            .andExpect(jsonPath("$.route.headways.weekday").isEmpty())
+            .andExpect(jsonPath("$.route.headways.saturday").isEmpty())
+            .andExpect(jsonPath("$.route.headways.sunday").isEmpty())
+            .andExpect(jsonPath("$.route.headways.holiday").isEmpty())
+            .andExpect(jsonPath("$.route.referenceVersionId").value(String.valueOf(route.routeVersionId())))
+            .andExpect(jsonPath("$.route.directions[0].firstDepartureTime").value("04:50"))
+            .andExpect(jsonPath("$.route.directions[1].lastDepartureTime").value("23:30"));
+    }
+
+    @Test
+    void 노선_버전에_저장된_요일별_배차간격을_분_단위_최소_최대로_낸다() throws Exception {
+        // given
+        OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
+        RouteContext route = insertPublishedRoundTripRoute(now);
+        fixture.updateHeadway(route, "weekday", 10, 20);
+        fixture.updateHeadway(route, "saturday", 15, 15);
+        fixture.updateHeadway(route, "holiday", 16, 35);
+
+        // when
+        ResultActions httpResponse2 = mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID));
+
+        // then
+        httpResponse2
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.route.headways.weekday", aMapWithSize(2)))
+            .andExpect(jsonPath("$.route.headways.weekday.minMinutes").value(10))
+            .andExpect(jsonPath("$.route.headways.weekday.maxMinutes").value(20))
+            .andExpect(jsonPath("$.route.headways.saturday.minMinutes").value(15))
+            .andExpect(jsonPath("$.route.headways.saturday.maxMinutes").value(15))
+            .andExpect(jsonPath("$.route.headways.sunday").isEmpty())
+            .andExpect(jsonPath("$.route.headways.holiday.minMinutes").value(16))
+            .andExpect(jsonPath("$.route.headways.holiday.maxMinutes").value(35))
+            .andExpect(jsonPath("$.route.referenceVersionId").value(String.valueOf(route.routeVersionId())))
+            .andExpect(jsonPath("$.model.releaseId").value("model-headway"))
+            .andExpect(jsonPath("$.stops.length()").value(3));
+    }
+
+    @Test
     void 예보_완료_관측_묶음이_같은_시각이면_ID가_큰_묶음을_선택한다() throws Exception {
+        // given
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         OffsetDateTime observedAt = now.minusMinutes(1);
         RouteContext route = insertRoundTripRoute(now.minusDays(1));
@@ -157,6 +207,7 @@ class BoardApiContractTest {
         insertSinglePrediction(route, firstBatch, firstModel, "FIRST", observedAt);
         insertSinglePrediction(route, secondBatch, secondModel, "SECOND", observedAt);
 
+        // when
         mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.vehiclesInService").value(2))
@@ -167,12 +218,14 @@ class BoardApiContractTest {
 
     @Test
     void ACTIVE_모델이_없으면_MODEL_OUT_OF_SCOPE_503이다() throws Exception {
+        // given
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         RouteContext route = insertRoundTripRoute(now.minusDays(1));
-        long retiredModel = fixture.insertModel("model-retired", "RETIRED", now.minusDays(1));
-        long batch = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
+        final long retiredModel = fixture.insertModel("model-retired", "RETIRED", now.minusDays(1));
+        final long batch = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
         fixture.insertPublication(batch, retiredModel, now, now);
 
+        // when
         mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
             .andExpect(status().isServiceUnavailable())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
@@ -187,7 +240,7 @@ class BoardApiContractTest {
         OffsetDateTime observedAt = now.minusMinutes(1);
         RouteContext route = insertRoundTripRoute(now.minusDays(1));
         fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
-        long batch = fixture.insertBatch(route, observedAt, "SUCCESS_EMPTY", 0);
+        final long batch = fixture.insertBatch(route, observedAt, "SUCCESS_EMPTY", 0);
         jdbcClient.sql("""
                 INSERT INTO forecast_publication (
                     source_batch_id, route_version_id,
@@ -205,8 +258,11 @@ class BoardApiContractTest {
             .param("publishedAt", now)
             .update();
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
+        // when
+        ResultActions httpResponse3 = mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID));
+
+        // then
+        httpResponse3
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.observedAt")
                 .value(DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(observedAt)))
@@ -217,10 +273,12 @@ class BoardApiContractTest {
 
     @Test
     void 발행된_예보도_정상_관측도_없으면_NO_RECENT_OBSERVATION_503이다() throws Exception {
+        // given
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         insertRoundTripRoute(now.minusDays(1));
         fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
 
+        // when
         mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
             .andExpect(status().isServiceUnavailable())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
@@ -230,10 +288,11 @@ class BoardApiContractTest {
 
     @Test
     void 예보_완료_관측_묶음이_5분을_넘으면_NO_RECENT_OBSERVATION_503이다() throws Exception {
+        // given
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         RouteContext route = insertRoundTripRoute(now.minusDays(1));
-        long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
-        long batch = fixture.insertBatch(
+        final long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        final long batch = fixture.insertBatch(
             route,
             now.minusMinutes(5).minusSeconds(1),
             "SUCCESS_EMPTY",
@@ -241,6 +300,7 @@ class BoardApiContractTest {
         );
         fixture.insertPublication(batch, model, now.minusMinutes(5), now.minusMinutes(5));
 
+        // when
         mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
             .andExpect(status().isServiceUnavailable())
             .andExpect(jsonPath("$.code").value("NO_RECENT_OBSERVATION"));
@@ -248,6 +308,7 @@ class BoardApiContractTest {
 
     @Test
     void routeId_형식이_잘못되면_INVALID_ROUTE_ID_400이다() throws Exception {
+        // when
         mockMvc.perform(get("/api/v1/routes/abc/board"))
             .andExpect(status().isBadRequest())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
@@ -257,6 +318,7 @@ class BoardApiContractTest {
 
     @Test
     void 현재_노선이_없으면_ROUTE_NOT_FOUND_404이다() throws Exception {
+        // when
         mockMvc.perform(get("/api/v1/routes/999999999/board"))
             .andExpect(status().isNotFound())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
@@ -266,14 +328,16 @@ class BoardApiContractTest {
 
     @Test
     void 예보가_없는_차량과_확률_0인_차량을_함께_반환한다() throws Exception {
+        // given
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         RouteContext route = insertRoundTripRoute(now.minusDays(1));
-        long modelId = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
-        long batchId = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_ROWS", 2);
+        final long modelId = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        final long batchId = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_ROWS", 2);
         fixture.insertPublication(batchId, modelId, now.plusSeconds(1), now.plusSeconds(1));
         fixture.insertObservation(route, batchId, 1, "A", 2, "STOP-2", now);
         insertPrediction(route, batchId, modelId, 2, "B", 2, "STOP-2", 3, 1, 1.0, 0.0, now);
 
+        // when
         mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.stops[2].approachingVehicles.length()").value(2))
@@ -288,12 +352,13 @@ class BoardApiContractTest {
 
     @Test
     void 모든_차량에_예보가_없어도_관측된_차량을_반환한다() throws Exception {
+        // given
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         RouteContext route = insertRoundTripRoute(now.minusDays(1));
-        long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
-        long batchId = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_ROWS", 1);
+        final long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        final long batchId = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_ROWS", 1);
         fixture.insertPublication(batchId, model, now, now);
-        long observationId = fixture.insertObservation(route, batchId, 1, "A", 2, "STOP-2", now);
+        final long observationId = fixture.insertObservation(route, batchId, 1, "A", 2, "STOP-2", now);
         // 실제 운영 관측이 아닌 회귀 테스트용 82석 입력이다.
         jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats = 82, seat_unknown_reason = NULL WHERE id = :id")
             .param("id", observationId).update();
@@ -305,6 +370,7 @@ class BoardApiContractTest {
             .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast", aMapWithSize(1)))
             .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast.status").value("UNAVAILABLE"));
 
+        // when
         mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.vehicles[0].vehicleId").value("A"))
@@ -318,19 +384,22 @@ class BoardApiContractTest {
         // given
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         RouteContext route = insertRoundTripRoute(now.minusDays(1));
-        long model = fixture.insertModel("model-quality", "ACTIVE", now.minusDays(1));
-        long batch = fixture.insertBatch(route, now, "SUCCESS_ROWS", 1);
+        final long model = fixture.insertModel("model-quality", "ACTIVE", now.minusDays(1));
+        final long batch = fixture.insertBatch(route, now, "SUCCESS_ROWS", 1);
         fixture.insertPublication(batch, model, now, now);
-        long observation = fixture.insertObservation(route, batch, 1, "A", 2, "STOP-2", now);
+        final long observation = fixture.insertObservation(route, batch, 1, "A", 2, "STOP-2", now);
         fixture.insertForecast(route, observation, 3, 1, model, 0.2, 40.0, now);
         jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats = 82, seat_unknown_reason = NULL WHERE id = ?")
             .param(observation).update();
-        jdbcClient.sql("UPDATE vehicle_one_way_trip SET status = 'EXCLUDED', evidence_observation_id = ? WHERE id = CAST(? AS text)")
-            .param(observation).param(observation).update();
+        jdbcClient.sql(
+        "UPDATE vehicle_one_way_trip SET status = 'EXCLUDED', evidence_observation_id = ? WHERE id = CAST(? AS text)")
+            .param(observation)
+            .param(observation)
+            .update();
 
         // when
-        var boardResponse = mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID));
-        var vehiclesResponse = mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID));
+        ResultActions boardResponse = mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID));
+        ResultActions vehiclesResponse = mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID));
 
         // then
         boardResponse.andExpect(status().isOk())
@@ -341,9 +410,9 @@ class BoardApiContractTest {
             .andExpect(jsonPath("$.vehicles[0].seat.kind").value("UNKNOWN"))
             .andExpect(jsonPath("$.vehicles[0].seat.remaining").doesNotExist());
         assertThat(jdbcClient.sql("SELECT remaining_seats FROM vehicle_observation WHERE id = ?")
-            .param(observation).query(Integer.class).single()).isEqualTo(82);
+                .param(observation).query(Integer.class).single()).isEqualTo(82);
         assertThat(jdbcClient.sql("SELECT count(*) FROM seat_forecast WHERE vehicle_observation_id = ?")
-            .param(observation).query(Integer.class).single()).isEqualTo(1);
+                .param(observation).query(Integer.class).single()).isEqualTo(1);
     }
 
     @Test
@@ -360,12 +429,16 @@ class BoardApiContractTest {
             + new BoardCachePolicy(clock).maxAgeAt(observedAt).toSeconds()
             + ", public";
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
+        // when
+        ResultActions httpResponse4 = mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID));
+
+        // then
+        httpResponse4
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, cacheControl))
             .andExpect(jsonPath("$", aMapWithSize(6)))
-            .andExpect(jsonPath("$.route", aMapWithSize(8)))
+            .andExpect(jsonPath("$.route", aMapWithSize(9)))
+            .andExpect(jsonPath("$.route.headways", aMapWithSize(4)))
             .andExpect(jsonPath("$.route.status").value("PREPARING"))
             .andExpect(jsonPath("$.route.referenceVersionId")
                 .value(String.valueOf(route.routeVersionId())))
@@ -396,8 +469,11 @@ class BoardApiContractTest {
         fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
         fixture.insertBatch(route, observedAt, "SUCCESS_EMPTY", 0);
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
+        // when
+        ResultActions httpResponse5 = mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID));
+
+        // then
+        httpResponse5
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.route.status").value("PREPARING"))
             .andExpect(jsonPath("$.observedAt")
@@ -416,8 +492,11 @@ class BoardApiContractTest {
         fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
         fixture.insertBatch(route, now.minusMinutes(5).minusSeconds(1), "SUCCESS_EMPTY", 0);
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
+        // when
+        ResultActions httpResponse6 = mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID));
+
+        // then
+        httpResponse6
             .andExpect(status().isServiceUnavailable())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
             .andExpect(jsonPath("$", aMapWithSize(3)))
@@ -439,8 +518,11 @@ class BoardApiContractTest {
         fixture.insertPublication(staleBatch, model, now.minusMinutes(5), now.minusMinutes(5));
         fixture.insertBatch(route, now.minusSeconds(30), "SUCCESS_ROWS", 1);
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
+        // when
+        ResultActions httpResponse7 = mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID));
+
+        // then
+        httpResponse7
             .andExpect(status().isServiceUnavailable())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
             .andExpect(jsonPath("$.code").value("NO_RECENT_OBSERVATION"));
@@ -454,8 +536,11 @@ class BoardApiContractTest {
         fixture.insertModel("model-retired", "RETIRED", now.minusDays(2));
         fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
+        // when
+        ResultActions httpResponse8 = mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID));
+
+        // then
+        httpResponse8
             .andExpect(status().isServiceUnavailable())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
             .andExpect(jsonPath("$.code").value("MODEL_OUT_OF_SCOPE"));
@@ -475,8 +560,11 @@ class BoardApiContractTest {
             .param(unanswered)
             .update();
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
+        // when
+        ResultActions httpResponse9 = mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID));
+
+        // then
+        httpResponse9
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.route.status").value("PREPARING"))
             .andExpect(jsonPath("$.observedAt")
@@ -497,8 +585,11 @@ class BoardApiContractTest {
         insertRoundTripStopsOf(current);
         fixture.insertBatch(current, observedAt, "SUCCESS_EMPTY", 0);
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
+        // when
+        ResultActions httpResponse10 = mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID));
+
+        // then
+        httpResponse10
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.route.status").value("PREPARING"))
             .andExpect(jsonPath("$.route.referenceVersionId")
@@ -518,8 +609,11 @@ class BoardApiContractTest {
         insertLegacyPublication(legacyBatch, now.minusMinutes(2));
         fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_ROWS", 1);
 
-        // when & then
-        mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
+        // when
+        ResultActions httpResponse11 = mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID));
+
+        // then
+        httpResponse11
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.route.status").value("FORECAST_READY"))
             .andExpect(jsonPath("$.observedAt")
@@ -550,6 +644,17 @@ class BoardApiContractTest {
             .param("publishedAt", publishedAt)
             .query(Long.class)
             .single();
+    }
+
+    private RouteContext insertPublishedRoundTripRoute(
+        OffsetDateTime now
+    ) {
+        OffsetDateTime observedAt = now.minusMinutes(1);
+        RouteContext route = insertRoundTripRoute(now.minusDays(1));
+        final long modelId = fixture.insertModel("model-headway", "ACTIVE", now.minusDays(1));
+        final long batchId = fixture.insertBatch(route, observedAt, "SUCCESS_ROWS", 1);
+        fixture.insertPublication(batchId, modelId, observedAt.plusSeconds(1), observedAt.plusSeconds(2));
+        return route;
     }
 
     private RouteContext insertRoundTripRoute(OffsetDateTime validFrom) {
@@ -647,14 +752,5 @@ class BoardApiContractTest {
             expectedSeats,
             observedAt.plusSeconds(1)
         );
-    }
-    @TestConfiguration(proxyBeanMethods = false)
-    static class FixedClockConfig {
-
-        @Bean
-        @Primary
-        Clock fixedDaytimeBoardClock() {
-            return Clock.fixed(Instant.parse("2026-08-27T03:00:00Z"), ZoneId.of("Asia/Seoul"));
-        }
     }
 }

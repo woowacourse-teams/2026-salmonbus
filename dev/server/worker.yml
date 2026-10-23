@@ -34,7 +34,7 @@ route-geometry:
 
 forecast:
   enabled: true
-  interval: 10s
+  interval: 30s
   settlement-interval: 60s
 
 model:

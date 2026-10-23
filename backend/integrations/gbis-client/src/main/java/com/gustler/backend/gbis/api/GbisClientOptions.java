@@ -2,8 +2,11 @@ package com.gustler.backend.gbis.api;
 
 import java.util.List;
 
+/**
+ * GBIS 주소와 키 별칭별 인증값이다.
+ * 키 목록을 복사해 보관하고 문자열 표현에는 인증값을 숨긴다.
+ */
 public record GbisClientOptions(String baseUrl, List<GbisKey> keys) {
-
     private static final String UNKNOWN_SLOT = "설정에 없는 GBIS 키 슬롯이다: ";
 
     public GbisClientOptions {

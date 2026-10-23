@@ -113,6 +113,14 @@ export function initErrorTracking(configuration: ErrorTrackingConfiguration) {
   };
 }
 
+export function reportNativeMapFailure(reason: "timeout" | "auth", routeId: string) {
+  Sentry.captureException(new Error(`Native map initialization failed: ${reason}`), {
+    level: "warning",
+    tags: { source: "native-map", failure_kind: reason, route_id: routeId },
+    fingerprint: ["native-map", reason],
+  });
+}
+
 export function createReactErrorHandlers(captureReactException: typeof Sentry.captureReactException): RootOptions {
   const createHandler =
     (kind: "caught" | "uncaught" | "recoverable") =>
@@ -148,7 +156,11 @@ export function createApiFailureReporter(
     const status = "status" in failure ? failure.status : null;
     const code = failure.kind === "contract" ? failure.error.code : failure.kind;
     const requestId =
-      failure.kind === "contract" ? failure.error.requestId : "requestId" in failure ? failure.requestId : null;
+      failure.kind === "contract"
+        ? (failure.error.requestId ?? null)
+        : "requestId" in failure
+          ? failure.requestId
+          : null;
     // 요청을 소유한 쪽에서 노선 정보와 그룹 경로를 전달한다. 수집기는 URL의 업무 의미를 해석하지 않는다.
     const endpoint = details.context?.endpoint ?? path;
     const event: ApiFailureEvent = {

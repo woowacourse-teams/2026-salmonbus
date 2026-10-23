@@ -23,6 +23,9 @@ class CompatiblePreparationTest {
 
         // when / then
         assertTrue(CompatiblePreparation.permits(old, next));
+        assertTrue(CompatiblePreparation.permits(old, revision(CompatiblePreparation.COLLECTED_DATA)));
+        assertTrue(CompatiblePreparation.permits(revision(CompatiblePreparation.COLLECTED_DATA), next));
+        assertFalse(CompatiblePreparation.permits(next, revision(CompatiblePreparation.COLLECTED_DATA)));
         assertFalse(CompatiblePreparation.permits(next, old));
         assertFalse(CompatiblePreparation.permits(revision("unknown"), next));
         assertFalse(CompatiblePreparation.permits(old, revision("unknown")));

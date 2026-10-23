@@ -20,13 +20,12 @@ import org.springframework.context.annotation.Import;
 @Import({PostgresTestContainer.class, ClockConfig.class, ForecastingConfiguration.class,
     ObservationPersistenceConfiguration.class})
 class ForecastingTestConfiguration {
-
     @Bean
     ForecastPolicy forecastPolicy(
         @Value("${forecast.staleness}") Duration staleness,
-        @Value("${forecast.batch-limit}") int batchLimit,
-        @Value("${forecast.pending-limit}") int pendingLimit,
-        @Value("${forecast.arrival-limit}") int arrivalLimit
+        @Value("${forecast.batch-limit}") final int batchLimit,
+        @Value("${forecast.pending-limit}") final int pendingLimit,
+        @Value("${forecast.arrival-limit}") final int arrivalLimit
     ) {
         return new ForecastPolicy(staleness, batchLimit, pendingLimit, arrivalLimit);
     }

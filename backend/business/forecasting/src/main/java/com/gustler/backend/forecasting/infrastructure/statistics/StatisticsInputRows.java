@@ -4,7 +4,6 @@ import java.util.Iterator;
 
 /** 전체 파일을 키순으로 합친 후보를 읽어 검증한다. 자료 자체는 메모리에 보관하지 않는다. */
 final class StatisticsInputRows {
-
     private StatisticsInputRows() {
     }
 

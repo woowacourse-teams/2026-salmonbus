@@ -5,6 +5,9 @@ import com.gustler.backend.api.route.domain.RouteStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;
 
+/**
+ * 노선 목록에서 사용할 식별과 표시·준비 상태를 공개 응답으로 전달한다.
+ */
 @Schema(requiredProperties = {"id", "displayName", "startStopName", "endStopName", "status"})
 public record RouteSummary(
     @Schema(description = "GBIS 노선 ID. 9자리 숫자 문자열", example = "123456789")
@@ -18,7 +21,6 @@ public record RouteSummary(
     @Schema(description = "FORECAST_READY는 현재 노선 판본의 예보가 준비됨, PREPARING은 아직 준비되지 않음")
     RouteStatus status
 ) {
-
     public RouteSummary {
         Objects.requireNonNull(id, "id는 null일 수 없습니다.");
         Objects.requireNonNull(displayName, "displayName은 null일 수 없습니다.");

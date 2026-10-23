@@ -23,8 +23,10 @@ import tools.jackson.databind.ObjectMapper;
 class RouteGeometrySupportDocsTest {
     private static final String GEOMETRY = "/api/v2/routes/{routeId}/geometry";
 
-    @Autowired private WebApplicationContext context;
-    @Autowired private ObjectMapper json;
+    @Autowired
+    private WebApplicationContext context;
+    @Autowired
+    private ObjectMapper json;
     private JsonNode document;
     private JsonNode contract;
 
@@ -38,9 +40,11 @@ class RouteGeometrySupportDocsTest {
 
     @Test
     void 생성문서와_공유명세가_dev_정적자료_범위와_수집대기_상태를_함께_설명한다() {
-        var operation = operation(document);
-        var shared = operation(contract);
+        // when
+        JsonNode operation = operation(document);
+        JsonNode shared = operation(contract);
 
+        // then
         assertThat(operation.path("operationId").asString()).isEqualTo("getRouteGeometry");
         assertThat(operation.path("summary")).isEqualTo(shared.path("summary"));
         assertThat(operation.path("description")).isEqualTo(shared.path("description"));
@@ -60,17 +64,20 @@ class RouteGeometrySupportDocsTest {
 
     @Test
     void 마커와_형상을_구분하고_READY여도_방향분리가_없을_수_있음을_필드와_예시에_명시한다() {
-        var properties = document.at("/components/schemas/RouteGeometryResponse/properties");
+        // when
+        JsonNode properties = document.at("/components/schemas/RouteGeometryResponse/properties");
+
+        // then
         assertThat(properties.at("/points/description").asString()).contains("별도 자료", "정류장 직선", "빈 배열");
         assertThat(properties.at("/busStops/description").asString()).contains("마커", "stopSequence");
         assertThat(properties.at("/paths/description").asString()).contains("함께 제공", "모호", "READY", "null");
         assertThat(properties.at("/turningPoint/description").asString()).contains("방문 순번", "인덱스");
         assertThat(properties.at("/status/description").asString()).contains("READY여도 paths=null");
 
-        var examples = operation(document).at("/responses/200/content/application~1json/examples");
-        var shared = operation(contract).at("/responses/200/content/application~1json/examples");
+        JsonNode examples = operation(document).at("/responses/200/content/application~1json/examples");
+        JsonNode shared = operation(contract).at("/responses/200/content/application~1json/examples");
         for (String name : List.of("ready", "partial", "notCollected", "withoutDirectionSplit")) {
-            var example = examples.path(name);
+            JsonNode example = examples.path(name);
             assertThat(example.path("summary").asString()).as(name).isNotBlank();
             assertThat(example.path("description").asString()).as(name).contains("합성 예시");
             assertThat(example.path("summary")).as(name).isEqualTo(shared.path(name).path("summary"));

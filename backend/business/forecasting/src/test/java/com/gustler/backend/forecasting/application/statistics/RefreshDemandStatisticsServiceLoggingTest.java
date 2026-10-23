@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.application.statistics;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -28,11 +28,13 @@ import org.springframework.transaction.TransactionSystemException;
 class RefreshDemandStatisticsServiceLoggingTest {
     private static final Instant COMPUTED_AT = Instant.parse("2026-09-25T00:00:00Z");
 
-    @Mock private RouteVersionQuery routes;
-    @Mock private StopDemandStatisticsWriter writer;
-
     private final ListAppender<ILoggingEvent> logs = new ListAppender<>();
     private final Logger logger = (Logger) LoggerFactory.getLogger(RefreshDemandStatisticsService.class);
+
+    @Mock
+    private RouteVersionQuery routes;
+    @Mock
+    private StopDemandStatisticsWriter writer;
     private RefreshDemandStatisticsService job;
 
     @BeforeEach
@@ -51,8 +53,11 @@ class RefreshDemandStatisticsServiceLoggingTest {
 
     @Test
     void writer가_반환한_뒤에만_KST_기준시각과_완료를_기록한다() {
+        // when
         when(routes.findActiveVersionIds()).thenReturn(List.of(1L));
         doAnswer(invocation -> {
+
+            // then
             assertThat(messages()).hasSize(1);
             assertThat(messages().getFirst())
                 .contains("status=STARTED", "computedAt=2026-09-25T09:00:00+09:00");
@@ -69,30 +74,43 @@ class RefreshDemandStatisticsServiceLoggingTest {
 
     @Test
     void writer의_커밋_예외는_실패만_기록하고_그대로_전파한다() {
+        // when
         when(routes.findActiveVersionIds()).thenReturn(List.of(1L));
-        var failure = new TransactionSystemException("commit failed");
+        TransactionSystemException failure = new TransactionSystemException("commit failed");
         doThrow(failure).when(writer).recompute(1L, COMPUTED_AT);
 
-        assertThatThrownBy(job::recomputeStopDemand).isSameAs(failure);
+        // then
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(job::recomputeStopDemand);
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull().isSameAs(failure);
 
         assertThat(messages()).hasSize(2);
         assertThat(messages().get(1)).contains("status=FAILED", "routeVersionId=1",
             "computedAt=2026-09-25T09:00:00+09:00", "durationMs=",
-            "exceptionType=TransactionSystemException").doesNotContain("COMPLETED");
+        "exceptionType=TransactionSystemException").doesNotContain("COMPLETED");
         assertThat(logs.list.get(1).getThrowableProxy()).isNull();
     }
 
     @Test
     void 활성_노선이_없으면_집계_로그를_남기지_않는다() {
+        // given
         when(routes.findActiveVersionIds()).thenReturn(List.of());
 
+        // when
         job.recomputeStopDemand();
 
+        // then
         assertThat(messages()).isEmpty();
         verifyNoInteractions(writer);
     }
 
     private List<String> messages() {
-        return logs.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
+        return logs.list.stream()
+            .map(ILoggingEvent::getFormattedMessage)
+            .toList();
     }
 }

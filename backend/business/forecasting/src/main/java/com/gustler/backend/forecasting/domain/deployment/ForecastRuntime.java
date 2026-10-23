@@ -11,7 +11,6 @@ import java.util.Optional;
  * <p>배치 하나는 이것을 한 번 받아 끝까지 쓴다. 그래서 그 배치의 모든 예보 행이 같은 계수에서 나온다.
  */
 public interface ForecastRuntime {
-
     /** 계수가 없거나 배포와 계수의 식별 정보가 일치하지 않으면 빈 결과를 반환한다. */
     Optional<RuntimeSnapshot> resolveActive();
 }

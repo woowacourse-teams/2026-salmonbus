@@ -1,62 +1,98 @@
 package com.gustler.backend.forecasting.infrastructure.statistics;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.spy;
-import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.Mockito.when;
 
-import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.util.UUID;
-import java.nio.file.Path;
-import java.util.Map;
-import java.util.List;
-import java.util.ArrayList;
-import java.time.Clock;
-import java.lang.management.ManagementFactory;
-import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline;
-import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuildStore;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
-import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcStopDemandStatisticsRepository;
-import com.gustler.backend.forecasting.domain.statistics.*;
+import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline;
+import com.gustler.backend.forecasting.application.statistics.DemandStatisticsPipeline.Step.Status;
+import com.gustler.backend.forecasting.application.statistics.DemandStatisticsRebuildStore;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluationRepository;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
-import java.util.concurrent.atomic.AtomicInteger;
-import static org.mockito.Mockito.when;
-import tools.jackson.databind.json.JsonMapper;
-import tools.jackson.databind.JsonNode;
-import java.util.HashMap;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRebuild;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion;
+import com.gustler.backend.forecasting.domain.statistics.StopDemandAggregator;
+import com.gustler.backend.forecasting.domain.statistics.StopDemandCell;
+import com.gustler.backend.forecasting.domain.statistics.StopDemandMeasurement;
+import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
+import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
+import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcStopDemandStatisticsRepository;
+import com.gustler.backend.forecasting.infrastructure.statistics.JdbcStatisticsInputExtractor.Extracted;
+import com.gustler.backend.forecasting.infrastructure.statistics.StatisticsExtractWriter.Bundle;
+import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
+import com.zaxxer.hikari.HikariDataSource;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryPoolMXBean;
+import java.lang.management.MemoryType;
 import java.nio.file.Files;
-import org.junit.jupiter.api.io.TempDir;
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import javax.sql.DataSource;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentMatchers;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.annotation.DirtiesContext.ClassMode;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 @ForecastingIntegrationTest
 @TestPropertySource(properties = "sal175.adoption-test=true")
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@DirtiesContext(classMode = ClassMode.AFTER_CLASS)
 class StatisticsArchiveAdoptionTest {
-    @Autowired DemandStatisticsPipeline pipeline;
-    @Autowired JdbcStopDemandStatisticsRepository statistics;
-    @Autowired ForecastEvaluationRepository evaluations;
-    @Autowired RouteDataQualityAccess quality;
-    @MockitoBean Clock clock;
-    @MockitoSpyBean JdbcClient jdbc;
-    @Autowired PlatformTransactionManager transactions;
-    @Autowired javax.sql.DataSource dataSource;
-    @MockitoSpyBean DemandStatisticsRebuildStore rebuildStore;
+    private static final Instant UNTIL = Instant.parse("2026-10-09T00:00:00Z");
+    private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
+    @Autowired
+    DemandStatisticsPipeline pipeline;
+    @Autowired
+    JdbcStopDemandStatisticsRepository statistics;
+    @Autowired
+    ForecastEvaluationRepository evaluations;
+    @Autowired
+    RouteDataQualityAccess quality;
+    @MockitoBean
+    Clock clock;
+    @MockitoSpyBean
+    JdbcClient jdbc;
+    @Autowired
+    PlatformTransactionManager transactions;
+    @Autowired
+    DataSource dataSource;
+    @MockitoSpyBean
+    DemandStatisticsRebuildStore rebuildStore;
     private DemandStatisticsRebuild measuredRebuild;
     private List<Long> measuredObservationIds;
     private String measuredAggregateSql;
@@ -64,9 +100,8 @@ class StatisticsArchiveAdoptionTest {
     private JdbcStatisticsInputExtractor extractor;
     private long route;
     private long source;
-    @TempDir Path directory;
-    private static final Instant UNTIL = Instant.parse("2026-10-09T00:00:00Z");
-    private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
+    @TempDir
+    Path directory;
 
     @BeforeEach
     void 완료된_정산이_있는_독립된_노선을_준비한다() {
@@ -74,7 +109,7 @@ class StatisticsArchiveAdoptionTest {
         when(clock.getZone()).thenReturn(ZONE);
         extractor = new JdbcStatisticsInputExtractor(jdbc, transactions);
         String key = UUID.randomUUID().toString().substring(0, 20);
-        long routeId = jdbc.sql("""
+        final long routeId = jdbc.sql("""
             INSERT INTO route(public_route_id,source_id,source_route_id,display_name,start_stop_name,end_stop_name)
             VALUES(:key,'GBIS',:key,'추출 시험','출발','도착') RETURNING id
             """).param("key", key).query(Long.class).single();
@@ -88,7 +123,7 @@ class StatisticsArchiveAdoptionTest {
             VALUES(:route,8,'stop-eight','출발','UP',true),
               (:route,9,'stop-nine','도착','UP',true),(:route,10,'stop-ten','다음','UP',true)
             """).param("route", route).update();
-        long batch = jdbc.sql("""
+        final long batch = jdbc.sql("""
             INSERT INTO observation_batch(route_version_id,scheduled_at,attempt_number,attempt_key,
               requested_at,response_received_at,outcome,normalization_version,collection_strategy_version)
             VALUES(:route,'2026-10-08T23:00:00Z',1,:key,'2026-10-08T23:00:00Z','2026-10-08T23:00:00Z',
@@ -99,13 +134,13 @@ class StatisticsArchiveAdoptionTest {
               vehicle_id,stop_order,stop_id,passed_stop_order,running_state,remaining_seats)
             VALUES(:batch,:route,0,'bus',8,'stop-eight',8,2,20) RETURNING id
             """).param("batch", batch).param("route", route).query(Long.class).single();
-        long model = jdbc.sql("""
+        final long model = jdbc.sql("""
             INSERT INTO model_deployment(deployment_key,release_id,model_key,model_version,bundle_digest,
               prediction_target_version,calculation_version,supported_scope_digest,data_until,state)
             VALUES(:key,'extract-test','seat-full-chance','1',:digest,'SEAT_FULL_CHANCE_V1','CALCULATION_V1',
               :digest,'2026-10-01T00:00:00Z','STAGED') RETURNING id
             """).param("key", UUID.randomUUID()).param("digest", "0".repeat(64)).query(Long.class).single();
-        long publication = jdbc.sql("""
+        final long publication = jdbc.sql("""
             INSERT INTO forecast_publication(source_batch_id,route_version_id,model_deployment_id,
               demand_statistics_revision,quality_revision,observed_at,generated_at,published_at,prediction_count)
             VALUES(:batch,:route,:model,1,1,'2026-10-08T23:00:00Z','2026-10-08T23:00:00Z',
@@ -117,7 +152,12 @@ class StatisticsArchiveAdoptionTest {
               expected_seats,generated_at,quality_revision,publication_id)
             SELECT :source,target,:route,target-8,:model,1,0.5,0.5,10,'2026-10-08T23:00:00Z',1,:publication
             FROM generate_series(9,10) target
-            """).param("source", source).param("route", route).param("model", model).param("publication", publication).update();
+            """)
+            .param("source", source)
+            .param("route", route)
+            .param("model", model)
+            .param("publication", publication)
+            .update();
         jdbc.sql("""
             INSERT INTO forecast_evaluation_result(vehicle_observation_id,target_stop_order,route_version_id,
               scoring_state,scored_at)
@@ -126,16 +166,15 @@ class StatisticsArchiveAdoptionTest {
             """).param("source", source).param("route", route).update();
     }
 
-
     @Test
     void 실제_정기_집계와_파일_계산은_같은_입력에서_같은_통계를_만든다() {
         // given
         settle();
 
         // when
-        int steps = finishPipeline();
-        var file = calculate(export(), Map.of("bus", 20));
-        var published = statistics.readAsOf(route, TimeSlot.MORNING,
+        final int steps = finishPipeline();
+        List<StopDemandMeasurement> file = calculate(export(), Map.of("bus", 20));
+        StopDemandStatistics published = statistics.readAsOf(route, TimeSlot.MORNING,
             DemandStatisticsVersion.CURRENT_CALCULATION_VERSION, UNTIL);
 
         // then
@@ -149,14 +188,20 @@ class StatisticsArchiveAdoptionTest {
     void 완료_이력만_삭제하면_기존_저장_경로는_같은_정산을_다시_대기로_만든다() {
         // given
         settle();
-        var pending = List.of(ForecastEvaluation.pending(source, 9));
-        transaction(() -> { quality.lock(route); evaluations.addPending(route, pending); });
+        List<ForecastEvaluation> pending = List.of(ForecastEvaluation.pending(source, 9));
+        transaction(() -> {
+            quality.lock(route);
+            evaluations.addPending(route, pending);
+        });
         assertThat(pendingCount()).isZero();
 
         // when
         jdbc.sql("DELETE FROM forecast_evaluation_result WHERE vehicle_observation_id=? AND target_stop_order=9")
             .param(source).update();
-        transaction(() -> { quality.lock(route); evaluations.addPending(route, pending); });
+        transaction(() -> {
+            quality.lock(route);
+            evaluations.addPending(route, pending);
+        });
 
         // then
         assertThat(pendingCount()).isEqualTo(1);
@@ -168,20 +213,22 @@ class StatisticsArchiveAdoptionTest {
     void 정산에_직접_연결되지_않은_과거_관측도_삭제하면_정원과_통계가_바뀐다() {
         // given
         settle();
-        long capacityObservation = observation(batch("2026-10-08T22:00:00Z"), "bus", 8, 40);
-        var before = reference().getFirst().cell();
-        var archived = export();
-        var archivedResult = calculate(archived, Map.of("bus", 40));
+        final long capacityObservation = observation(batch("2026-10-08T22:00:00Z"), "bus", 8, 40);
+        StopDemandCell before = reference().getFirst().cell();
+        Bundle archived = export();
+        List<StopDemandMeasurement> archivedResult = calculate(archived, Map.of("bus", 40));
 
         // when
         jdbc.sql("DELETE FROM vehicle_observation WHERE id=?").param(capacityObservation).update();
-        var after = reference().getFirst().cell();
+        StopDemandCell after = reference().getFirst().cell();
 
         // then
-        assertThat(before.averageFillRate()).isEqualTo(0.875);
-        assertThat(after.averageFillRate()).isEqualTo(0.75);
-        assertThat(before.averageNetBoardingRate()).isEqualTo(0.375);
-        assertThat(after.averageNetBoardingRate()).isEqualTo(0.75);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(before.averageFillRate()).isEqualTo(0.875);
+            softly.assertThat(after.averageFillRate()).isEqualTo(0.75);
+            softly.assertThat(before.averageNetBoardingRate()).isEqualTo(0.375);
+            softly.assertThat(after.averageNetBoardingRate()).isEqualTo(0.75);
+        }
         assertThat(archivedResult.getFirst().cell()).isEqualTo(before);
         report("capacity-retention", Map.of("beforeFillRate", before.averageFillRate(),
             "afterFillRate", after.averageFillRate(), "beforeNetBoardingRate", before.averageNetBoardingRate(),
@@ -191,14 +238,16 @@ class StatisticsArchiveAdoptionTest {
     @Test
     void 관측_번호만_진행시키면_뒤늦게_완료된_이전_관측의_정산을_놓친다() {
         // given
-        jdbc.sql("UPDATE forecast_evaluation_result SET scored_at='2026-10-10T00:00:00Z' WHERE vehicle_observation_id=? AND target_stop_order=9")
-            .param(source).update();
-        var first = extractor.extract(route, source - 1, source, UNTIL, ZONE, 10);
+        jdbc.sql(
+        "UPDATE forecast_evaluation_result SET scored_at='2026-10-10T00:00:00Z' WHERE vehicle_observation_id=? AND target_stop_order=9")
+            .param(source)
+            .update();
+        Extracted first = extractor.extract(route, source - 1, source, UNTIL, ZONE, 10);
         assertThat(first.rows()).extracting(StatisticsInputRow::targetStopOrder).containsExactly(10);
 
         // when
-        var next = extractor.extract(route, source, source + 1, UNTIL.plusSeconds(172800), ZONE, 10);
-        var revisited = extractor.extract(route, source - 1, source, UNTIL.plusSeconds(172800), ZONE, 10);
+        Extracted next = extractor.extract(route, source, source + 1, UNTIL.plusSeconds(172800), ZONE, 10);
+        Extracted revisited = extractor.extract(route, source - 1, source, UNTIL.plusSeconds(172800), ZONE, 10);
 
         // then
         assertThat(next.rows()).isEmpty();
@@ -211,24 +260,34 @@ class StatisticsArchiveAdoptionTest {
     void 완료_이력을_지운_뒤에도_파일_계산은_같고_원본을_복원하면_DB_계산도_돌아온다() {
         // given
         settle();
-        var before = reference();
-        var archived = export();
-        String raw = jdbc.sql("SELECT jsonb_agg(to_jsonb(e))::text FROM forecast_evaluation_result e WHERE vehicle_observation_id=?")
-            .param(source).query(String.class).single();
+        List<StopDemandMeasurement> before = reference();
+        Bundle archived = export();
+        String raw =
+            jdbc.sql(
+                "SELECT jsonb_agg(to_jsonb(e))::text FROM forecast_evaluation_result e WHERE vehicle_observation_id=?")
+                .param(source)
+                .query(String.class)
+                .single();
 
         // when
-        int removed = jdbc.sql("DELETE FROM forecast_evaluation_result WHERE vehicle_observation_id=?").param(source).update();
-        var missing = reference();
-        var file = calculate(archived, Map.of("bus", 20));
-        jdbc.sql("INSERT INTO forecast_evaluation_result SELECT * FROM jsonb_populate_recordset(NULL::forecast_evaluation_result, CAST(? AS jsonb))")
-            .param(raw).update();
-        var restored = reference();
+        final int removed = jdbc.sql("DELETE FROM forecast_evaluation_result WHERE vehicle_observation_id=?")
+            .param(source)
+            .update();
+        List<StopDemandMeasurement> missing = reference();
+        List<StopDemandMeasurement> file = calculate(archived, Map.of("bus", 20));
+        jdbc.sql(
+        "INSERT INTO forecast_evaluation_result SELECT * FROM jsonb_populate_recordset(NULL::forecast_evaluation_result, CAST(? AS jsonb))")
+            .param(raw)
+            .update();
+        List<StopDemandMeasurement> restored = reference();
 
         // then
         assertThat(removed).isEqualTo(2);
         assertThat(missing).isEmpty();
-        assertThat(file).isEqualTo(before);
-        assertThat(restored).isEqualTo(before);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(file).isEqualTo(before);
+            softly.assertThat(restored).isEqualTo(before);
+        }
         report("delete-and-restore", Map.of("deletedResults", removed, "dbSamplesAfterDelete", 0,
             "fileSamplesAfterDelete", file.getFirst().cell().sampleCount(),
             "dbSamplesAfterRestore", restored.getFirst().cell().sampleCount()));
@@ -290,7 +349,9 @@ class StatisticsArchiveAdoptionTest {
             """).param("route", route).update();
         Map<String, Integer> capacities = new HashMap<>();
         capacities.put("bus", 20);
-        for (int i = 0; i < vehicleCount; i++) capacities.put("benchmark-" + i, 20);
+        for (int i = 0; i < vehicleCount; i++) {
+            capacities.put("benchmark-" + i, 20);
+        }
         // 대량 fixture 적재 직후의 빈 통계로 실행 계획이 왜곡되지 않게 한다.
         for (String table : List.of("vehicle_observation", "observation_batch", "seat_forecast",
             "forecast_evaluation_result", "forecast_evaluation_work", "route_version", "route_stop",
@@ -306,7 +367,7 @@ class StatisticsArchiveAdoptionTest {
                 measuredObservationIds = List.copyOf(invocation.<List<Long>>getArgument(1));
             }
             return invocation.callRealMethod();
-        }).when(rebuildStore).addRebuildTotals(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyList());
+        }).when(rebuildStore).addRebuildTotals(ArgumentMatchers.any(), ArgumentMatchers.anyList());
         doAnswer(invocation -> {
             sqlCalls.incrementAndGet();
             String sql = invocation.getArgument(0);
@@ -314,26 +375,34 @@ class StatisticsArchiveAdoptionTest {
                 measuredAggregateSql = sql;
             }
             return invocation.callRealMethod();
-        }).when(jdbc).sql(org.mockito.ArgumentMatchers.anyString());
+        }).when(jdbc).sql(ArgumentMatchers.anyString());
 
         // when
         long start = System.nanoTime();
-        int steps = finishPipeline();
-        double pipelineMs = millis(start);
-        int pipelineSqlCalls = sqlCalls.get();
+        final int steps = finishPipeline();
+        final double pipelineMs = millis(start);
+        final int pipelineSqlCalls = sqlCalls.get();
         List<StopDemandMeasurement> published = new ArrayList<>();
-        for (var slot : TimeSlot.values()) {
-            for (var cell : statistics.readAsOf(route, slot, DemandStatisticsVersion.CURRENT_CALCULATION_VERSION, UNTIL).cells()) {
+        for (TimeSlot slot : TimeSlot.values()) {
+            for (
+                StopDemandCell cell : statistics.readAsOf(route, slot,
+                    DemandStatisticsVersion.CURRENT_CALCULATION_VERSION, UNTIL)
+                    .cells()) {
                 published.add(new StopDemandMeasurement(slot, cell));
             }
         }
         start = System.nanoTime();
-        long upper = jdbc.sql("SELECT max(id) FROM vehicle_observation WHERE route_version_id=?").param(route).query(Long.class).single();
-        var extracted = extractor.extract(route, source - 1, upper, UNTIL, ZONE, 10000);
-        var bundle = StatisticsExtractWriter.write(directory, extracted, 16 * 1024 * 1024);
-        double exportMs = millis(start);
-        int beforeFileSqlCalls = sqlCalls.get();
-        for (var pool : ManagementFactory.getMemoryPoolMXBeans()) pool.resetPeakUsage();
+        final long upper = jdbc.sql("SELECT max(id) FROM vehicle_observation WHERE route_version_id=?")
+            .param(route)
+            .query(Long.class)
+            .single();
+        Extracted extracted = extractor.extract(route, source - 1, upper, UNTIL, ZONE, 10000);
+        Bundle bundle = StatisticsExtractWriter.write(directory, extracted, 16 * 1024 * 1024);
+        final double exportMs = millis(start);
+        final int beforeFileSqlCalls = sqlCalls.get();
+        for (MemoryPoolMXBean pool : ManagementFactory.getMemoryPoolMXBeans()) {
+            pool.resetPeakUsage();
+        }
         List<Double> fileMs = new ArrayList<>();
         List<StopDemandMeasurement> calculated = List.of();
         for (int i = 0; i < 5; i++) {
@@ -341,33 +410,41 @@ class StatisticsArchiveAdoptionTest {
             calculated = calculate(bundle, capacities);
             fileMs.add(millis(start));
         }
-        long heapPoolPeaks = ManagementFactory.getMemoryPoolMXBeans().stream()
-            .filter(pool -> pool.getType() == java.lang.management.MemoryType.HEAP)
-            .mapToLong(pool -> pool.getPeakUsage().getUsed()).sum();
-        int fileSqlCalls = sqlCalls.get() - beforeFileSqlCalls;
+        final long heapPoolPeaks = ManagementFactory.getMemoryPoolMXBeans()
+            .stream()
+            .filter(pool -> pool.getType() == MemoryType.HEAP)
+            .mapToLong(pool -> pool.getPeakUsage().getUsed())
+            .sum();
+        final int fileSqlCalls = sqlCalls.get() - beforeFileSqlCalls;
         when(clock.instant()).thenReturn(UNTIL.plusSeconds(21600));
-        int beforeRefreshSqlCalls = sqlCalls.get();
+        final int beforeRefreshSqlCalls = sqlCalls.get();
         start = System.nanoTime();
-        int refreshSteps = finishPipeline();
-        double refreshMs = millis(start);
+        final int refreshSteps = finishPipeline();
+        final double refreshMs = millis(start);
 
         // then
         assertThat(calculated).hasSameSizeAs(published);
         double maxError = 0;
         for (int i = 0; i < calculated.size(); i++) {
-            var actual = calculated.get(i);
-            var expected = published.get(i);
+            StopDemandMeasurement actual = calculated.get(i);
+            StopDemandMeasurement expected = published.get(i);
             assertThat(actual.timeSlot()).isEqualTo(expected.timeSlot());
             assertThat(actual.cell().stopOrder()).isEqualTo(expected.cell().stopOrder());
             assertThat(actual.cell().sampleCount()).isEqualTo(expected.cell().sampleCount());
             assertThat(actual.cell().dayCount()).isEqualTo(expected.cell().dayCount());
-            maxError = Math.max(maxError, Math.abs(actual.cell().averageFillRate() - expected.cell().averageFillRate()));
-            maxError = Math.max(maxError, Math.abs(actual.cell().averageNetBoardingRate() - expected.cell().averageNetBoardingRate()));
+            maxError = Math.max(maxError, Math.abs(actual.cell()
+                        .averageFillRate() - expected.cell()
+                        .averageFillRate()));
+            maxError = Math.max(maxError, Math.abs(actual.cell()
+                        .averageNetBoardingRate() - expected.cell()
+                        .averageNetBoardingRate()));
         }
         assertThat(maxError).isLessThanOrEqualTo(1e-12);
-        assertThat(calculated.stream().mapToInt(value -> value.cell().sampleCount()).sum()).isEqualTo(sampleCount);
+        assertThat(calculated.stream()
+                .mapToInt(value -> value.cell().sampleCount())
+                .sum()).isEqualTo(sampleCount);
         assertThat(fileSqlCalls).isZero();
-        Map<String, Object> metrics = new java.util.LinkedHashMap<>();
+        Map<String, Object> metrics = new LinkedHashMap<>();
         metrics.put("samples", sampleCount);
         metrics.put("vehicles", vehicleCount);
         metrics.put("maxAbsoluteError", maxError);
@@ -383,11 +460,12 @@ class StatisticsArchiveAdoptionTest {
         metrics.put("fileCalculationSqlCalls", fileSqlCalls);
         metrics.put("fileBytes", Files.size(bundle.directory().resolve("rows.jsonl")));
         metrics.put("heapPoolPeakSumBytes", heapPoolPeaks);
-        metrics.put("scope", "synthetic; no S3; capacity map supplied; JVM pool peaks are not process RSS; sql calls include settings and transaction work");
+        metrics.put("scope",
+        "synthetic; no S3; capacity map supplied; JVM pool peaks are not process RSS; sql calls include settings and transaction work");
         report("bounded-performance-" + planMode, metrics);
-        var plan = explainMeasuredAggregate();
+        JsonNode plan = explainMeasuredAggregate();
         assertThat(plan).as("집계 SQL의 실제 실행 계획을 기록한다").isNotNull();
-        long storedObservations = jdbc.sql("SELECT count(*) FROM vehicle_observation").query(Long.class).single();
+        final long storedObservations = jdbc.sql("SELECT count(*) FROM vehicle_observation").query(Long.class).single();
         // 순차 읽기 자체를 금지하지 않는다. 전체를 한두 번 읽는 계획과 페이지마다 되풀이하는 계획을 구분한다.
         assertThat(observationRowsVisited(plan.path("Plan")))
             .as("한 페이지 때문에 전체 관측을 반복 조회하지 않는다")
@@ -396,7 +474,8 @@ class StatisticsArchiveAdoptionTest {
 
     @Test
     void 행을_삭제하는_것과_전체_스캔이_읽는_페이지를_줄이는_것은_다르다() {
-        // given: 일회용 Testcontainers DB에만 만드는 독립 실험 테이블이다.
+        // given
+        // 일회용 Testcontainers DB에만 만드는 독립 실험 테이블이다.
         jdbc.sql("""
             CREATE TABLE sal175_adoption_scan_probe AS
             SELECT row_number() OVER () AS sample_id,e.*,repeat('x',256) AS experimental_payload
@@ -405,17 +484,17 @@ class StatisticsArchiveAdoptionTest {
             """).param("source", source).update();
         try {
             jdbc.sql("ANALYZE sal175_adoption_scan_probe").update();
-            var before = scanProbe();
+            ScanProbe before = scanProbe();
 
             // when
             jdbc.sql("DELETE FROM sal175_adoption_scan_probe WHERE sample_id % 10 <> 0").update();
             jdbc.sql("ANALYZE sal175_adoption_scan_probe").update();
-            var deleted = scanProbe();
+            ScanProbe deleted = scanProbe();
             jdbc.sql("VACUUM (ANALYZE) sal175_adoption_scan_probe").update();
-            var vacuumed = scanProbe();
+            ScanProbe vacuumed = scanProbe();
             // 운영 권장 작업이 아니다. 물리 재작성과 일반 VACUUM의 차이를 재는 실험이다.
             jdbc.sql("VACUUM (FULL, ANALYZE) sal175_adoption_scan_probe").update();
-            var rewritten = scanProbe();
+            ScanProbe rewritten = scanProbe();
 
             // then
             assertThat(before.rows()).isEqualTo(10000);
@@ -434,31 +513,37 @@ class StatisticsArchiveAdoptionTest {
     }
 
     private ScanProbe scanProbe() {
-        String plan = jdbc.sql("EXPLAIN (ANALYZE,BUFFERS,FORMAT JSON) SELECT count(*) FROM sal175_adoption_scan_probe WHERE scoring_state='LOST'")
-            .query(String.class).single();
-        var document = JsonMapper.builder().build().readTree(plan).get(0);
-        var root = document.get("Plan");
-        long buffers = root.get("Shared Hit Blocks").asLong() + root.get("Shared Read Blocks").asLong();
-        long bytes = jdbc.sql("SELECT pg_relation_size('sal175_adoption_scan_probe')").query(Long.class).single();
-        long rows = jdbc.sql("SELECT count(*) FROM sal175_adoption_scan_probe").query(Long.class).single();
+        String plan =
+            jdbc.sql(
+                "EXPLAIN (ANALYZE,BUFFERS,FORMAT JSON) SELECT count(*) FROM sal175_adoption_scan_probe WHERE scoring_state='LOST'")
+                .query(String.class)
+                .single();
+        JsonNode document = JsonMapper.builder().build().readTree(plan).get(0);
+        JsonNode root = document.get("Plan");
+        final long buffers = root.get("Shared Hit Blocks").asLong() + root.get("Shared Read Blocks").asLong();
+        final long bytes = jdbc.sql("SELECT pg_relation_size('sal175_adoption_scan_probe')").query(Long.class).single();
+        final long rows = jdbc.sql("SELECT count(*) FROM sal175_adoption_scan_probe").query(Long.class).single();
         return new ScanProbe(rows, bytes, buffers, document.get("Execution Time").asDouble());
     }
 
-    private record ScanProbe(long rows, long bytes, long bufferPages, double executionMs) { }
+    private record ScanProbe(long rows, long bytes, long bufferPages, double executionMs) {
+    }
 
     @Test
     void 같은_파일을_재시도하거나_게시_객체를_다시_만들어도_통계는_한번만_저장된다() {
         // given
         settle();
-        var bundle = export();
+        Bundle bundle = export();
 
         // when
-        int first = publisher().publish(bundle, Map.of("bus", 20), 100);
-        int restarted = publisher().publish(bundle, Map.of("bus", 20), 100);
+        final int first = publisher().publish(bundle, Map.of("bus", 20), 100);
+        final int restarted = publisher().publish(bundle, Map.of("bus", 20), 100);
 
         // then
-        assertThat(first).isEqualTo(1);
-        assertThat(restarted).isEqualTo(first);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(first).isEqualTo(1);
+            softly.assertThat(restarted).isEqualTo(first);
+        }
         assertThat(publicationCount()).isEqualTo(1);
         assertThat(versionCount()).isEqualTo(1);
         assertThat(statistics.readAsOf(route, TimeSlot.MORNING,
@@ -472,17 +557,23 @@ class StatisticsArchiveAdoptionTest {
     void 처리_기록_저장이_실패하면_통계_버전과_결과도_함께_롤백된다() {
         // given
         settle();
-        var bundle = export();
-        doAnswer(invocation -> { throw new org.springframework.dao.DataIntegrityViolationException("기록 실패 주입"); })
-            .when(jdbc).sql(org.mockito.ArgumentMatchers.startsWith("INSERT INTO file_statistics_publication"));
+        Bundle bundle = export();
+        doAnswer(invocation -> {
+            throw new DataIntegrityViolationException("기록 실패 주입");
+        })
+            .when(jdbc).sql(ArgumentMatchers.startsWith("INSERT INTO file_statistics_publication"));
 
-        // when & then
-        assertThatThrownBy(() -> publisher().publish(bundle, Map.of("bus", 20), 100))
-            .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        // when
+        Throwable caughtFailure = catchThrowable(() -> publisher().publish(bundle, Map.of("bus", 20), 100));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
+            .isInstanceOf(DataIntegrityViolationException.class);
         assertThat(publicationCount()).isZero();
         assertThat(versionCount()).isZero();
         assertThat(jdbc.sql("SELECT count(*) FROM stop_demand_statistics WHERE route_version_id=?")
-            .param(route).query(Long.class).single()).isZero();
+                .param(route).query(Long.class).single()).isZero();
         report("publication-rollback", Map.of("versions", versionCount(), "receipts", publicationCount()));
     }
 
@@ -490,14 +581,18 @@ class StatisticsArchiveAdoptionTest {
     void 추출한_뒤_품질_판본이_바뀌면_이전_파일의_계산_결과를_게시하지_않는다() {
         // given
         settle();
-        var bundle = export();
+        Bundle bundle = export();
         jdbc.sql("""
             UPDATE route_data_quality SET quality_revision=quality_revision+1
             WHERE route_id=(SELECT route_id FROM route_version WHERE id=?)
             """).param(route).update();
 
-        // when & then
-        assertThatThrownBy(() -> publisher().publish(bundle, Map.of("bus", 20), 100))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> publisher().publish(bundle, Map.of("bus", 20), 100));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalStateException.class).hasMessageContaining("품질 판본");
         assertThat(publicationCount()).isZero();
         assertThat(versionCount()).isZero();
@@ -508,10 +603,15 @@ class StatisticsArchiveAdoptionTest {
     void 파일을_읽기_전에_외부에서_열린_DB_트랜잭션을_거부한다() {
         // given
         settle();
-        var bundle = export();
+        Bundle bundle = export();
 
-        // when & then
-        assertThatThrownBy(() -> transaction(() -> publisher().publish(bundle, Map.of("bus", 20), 100)))
+        // when
+        Throwable caughtFailure = catchThrowable(
+            () -> transaction(() -> publisher().publish(bundle, Map.of("bus", 20), 100)));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalStateException.class).hasMessageContaining("트랜잭션 밖");
         assertThat(versionCount()).isZero();
     }
@@ -520,13 +620,17 @@ class StatisticsArchiveAdoptionTest {
     void 더_최근_통계가_있으면_늦게_도착한_과거_계산으로_덮어쓰지_않는다() {
         // given
         settle();
-        var bundle = export();
+        Bundle bundle = export();
         statistics.append(new DemandStatisticsVersion(route, DemandStatisticsVersion.CURRENT_CALCULATION_VERSION,
             1, UNTIL.plusSeconds(1), UNTIL.plusSeconds(1), reference()));
         when(clock.instant()).thenReturn(UNTIL.plusSeconds(2));
 
-        // when & then
-        assertThatThrownBy(() -> publisher().publish(bundle, Map.of("bus", 20), 100))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> publisher().publish(bundle, Map.of("bus", 20), 100));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalStateException.class).hasMessageContaining("더 최근");
         assertThat(versionCount()).isEqualTo(1);
         assertThat(publicationCount()).isZero();
@@ -541,16 +645,20 @@ class StatisticsArchiveAdoptionTest {
         // given
         settle();
         publisher().publish(export(), Map.of("bus", 20), 100);
-        var extracted = extractor.extract(route, source - 1, source, UNTIL, ZONE, 10);
-        var scope = extracted.scope();
-        var partialScope = new StatisticsInputScope(scope.schemaVersion(), scope.calculationVersion(),
+        Extracted extracted = extractor.extract(route, source - 1, source, UNTIL, ZONE, 10);
+        StatisticsInputScope scope = extracted.scope();
+        StatisticsInputScope partialScope = new StatisticsInputScope(scope.schemaVersion(), scope.calculationVersion(),
             route, scope.qualityRevision(), UNTIL, ZONE, 1);
-        var partial = StatisticsExtractWriter.write(directory,
-            new JdbcStatisticsInputExtractor.Extracted(partialScope, source - 1, source,
+        Bundle partial = StatisticsExtractWriter.write(directory,
+            new Extracted(partialScope, source - 1, source,
                 extracted.rows().subList(0, 1)), 8192);
 
-        // when & then
-        assertThatThrownBy(() -> publisher().publish(partial, Map.of("bus", 20), 100))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> publisher().publish(partial, Map.of("bus", 20), 100));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalStateException.class).hasMessageContaining("전체 정산");
         assertThat(versionCount()).isEqualTo(1);
         assertThat(publicationCount()).isEqualTo(1);
@@ -562,12 +670,16 @@ class StatisticsArchiveAdoptionTest {
     void 추출한_뒤_정산_대상이_달라지면_이전_파일을_게시하지_않는다() {
         // given
         settle();
-        var bundle = export();
+        Bundle bundle = export();
         jdbc.sql("DELETE FROM forecast_evaluation_result WHERE vehicle_observation_id=? AND target_stop_order=10")
             .param(source).update();
 
-        // when & then
-        assertThatThrownBy(() -> publisher().publish(bundle, Map.of("bus", 20), 100))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> publisher().publish(bundle, Map.of("bus", 20), 100));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalStateException.class).hasMessageContaining("전체 정산");
         assertThat(versionCount()).isZero();
         assertThat(publicationCount()).isZero();
@@ -577,7 +689,7 @@ class StatisticsArchiveAdoptionTest {
     void S3로_옮긴_정산이_있으면_RDS에서_추출한_파일만으로_통계를_게시하지_않는다() {
         // given
         settle();
-        var bundle = export();
+        Bundle bundle = export();
         jdbc.sql("""
             INSERT INTO evaluation_archive_batch(id,route_version_id,quality_revision,lease_token,lease_until,
                 state,row_count,manifest_sha256,verified_at,storage_state,purged_at)
@@ -585,8 +697,12 @@ class StatisticsArchiveAdoptionTest {
             """).param("id", UUID.randomUUID()).param("route", route).param("token", UUID.randomUUID())
             .param("digest", "0".repeat(64)).update();
 
-        // when & then
-        assertThatThrownBy(() -> publisher().publish(bundle, Map.of("bus", 20), 100))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> publisher().publish(bundle, Map.of("bus", 20), 100));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalStateException.class).hasMessageContaining("RDS와 S3");
         assertThat(versionCount()).isZero();
         assertThat(publicationCount()).isZero();
@@ -603,7 +719,7 @@ class StatisticsArchiveAdoptionTest {
     }
 
     private long settle() {
-        long arrival = observation(batch("2026-10-08T23:10:00Z"), "bus", 9, 5);
+        final long arrival = observation(batch("2026-10-08T23:10:00Z"), "bus", 9, 5);
         jdbc.sql("""
             UPDATE forecast_evaluation_result SET scoring_state='SETTLED',arrival_observation_id=:arrival,
               seats_on_arrival=5,arrived_at='2026-10-08T23:10:00Z',arrival_route_version_id=:route,
@@ -619,25 +735,30 @@ class StatisticsArchiveAdoptionTest {
               requested_at,response_received_at,outcome,normalization_version,collection_strategy_version)
             VALUES(:route,CAST(:at AS timestamptz),1,:key,CAST(:at AS timestamptz),CAST(:at AS timestamptz),
               'SUCCESS_ROWS','normalization-v1.0.0','adaptive-kst-v1.0.1') RETURNING id
-            """).param("route", route).param("at", at).param("key", UUID.randomUUID().toString().substring(0,20))
+            """).param("route", route).param("at", at).param("key", UUID.randomUUID().toString().substring(0, 20))
             .query(Long.class).single();
     }
 
-    private long observation(long batch, String vehicle, int stop, int seats) {
+    private long observation(
+        final long batch,
+        String vehicle,
+        final int stop,
+        final int seats
+    ) {
         return jdbc.sql("""
             INSERT INTO vehicle_observation(observation_batch_id,route_version_id,source_row_number,
               vehicle_id,stop_order,stop_id,passed_stop_order,running_state,remaining_seats)
             VALUES(:batch,:route,0,:vehicle,:stop,:stopId,:stop,2,:seats) RETURNING id
             """).param("batch", batch).param("route", route).param("vehicle", vehicle).param("stop", stop)
-            .param("stopId", stop == 8 ? "stop-eight" : "stop-nine").param("seats", seats).query(Long.class).single();
+            .param("stopId", storedStopName(stop)).param("seats", seats).query(Long.class).single();
     }
 
-    private StatisticsExtractWriter.Bundle export() {
+    private Bundle export() {
         return StatisticsExtractWriter.write(directory,
             extractor.extract(route, source - 1, source, UNTIL, ZONE, 10), 8192);
     }
 
-    private List<StopDemandMeasurement> calculate(StatisticsExtractWriter.Bundle bundle, Map<String,Integer> capacities) {
+    private List<StopDemandMeasurement> calculate(Bundle bundle, Map<String, Integer> capacities) {
         return StatisticsFileCalculator.calculate(bundle.directory(), bundle.manifest().files(),
             bundle.manifest().scope(), capacities, 10000, 65536);
     }
@@ -650,19 +771,21 @@ class StatisticsArchiveAdoptionTest {
     private int finishPipeline() {
         for (int i = 1; i <= 1000; i++) {
             try {
-                if (pipeline.step(route).status() == DemandStatisticsPipeline.Step.Status.COMPLETED) return i;
-            } catch (org.springframework.dao.QueryTimeoutException failure) {
+                if (pipeline.step(route).status() == Status.COMPLETED) {
+                    return i;
+                }
+            } catch (QueryTimeoutException failure) {
                 explainMeasuredAggregate();
-                var prepared = jdbc.sql("""
+                List<Map<String, Object>> prepared = jdbc.sql("""
                     SELECT name,statement,generic_plans,custom_plans FROM pg_prepared_statements
                     WHERE statement LIKE '%INSERT INTO stop_demand_rebuild_total%'
                     """).query().listOfRows();
-                Map<String,Object> diagnostic = new java.util.LinkedHashMap<>();
+                Map<String, Object> diagnostic = new LinkedHashMap<>();
                 diagnostic.put("failedStep", i);
                 diagnostic.put("prepared", prepared);
                 String message = failure.getMessage();
-                int sqlStart = message.indexOf("SQL [");
-                int sqlEnd = message.lastIndexOf("]; ERROR:");
+                final int sqlStart = message.indexOf("SQL [");
+                final int sqlEnd = message.lastIndexOf("]; ERROR:");
                 if (sqlStart >= 0 && sqlEnd > sqlStart) {
                     String[] fragments = message.substring(sqlStart + 5, sqlEnd).split("\\?", -1);
                     StringBuilder sql = new StringBuilder(fragments[0]);
@@ -670,27 +793,28 @@ class StatisticsArchiveAdoptionTest {
                         sql.append('$').append(parameter).append(fragments[parameter]);
                     }
                     // GENERIC_PLAN의 $n은 JDBC 바인딩 값이 아니다. 단순 프로토콜로 서버에 전달한다.
-                    var pool = (com.zaxxer.hikari.HikariDataSource) dataSource;
-                    var diagnosticProperties = new java.util.Properties();
+                    HikariDataSource pool = (HikariDataSource) dataSource;
+                    Properties diagnosticProperties = new Properties();
                     diagnosticProperties.setProperty("user", pool.getUsername());
                     diagnosticProperties.setProperty("password", pool.getPassword());
                     diagnosticProperties.setProperty("preferQueryMode", "simple");
-                    try (var connection = java.sql.DriverManager.getConnection(pool.getJdbcUrl(), diagnosticProperties);
-                         var statement = connection.createStatement()) {
+                    try (Connection connection = DriverManager.getConnection(pool.getJdbcUrl(), diagnosticProperties);
+                        Statement statement = connection.createStatement()) {
                         statement.setQueryTimeout(5);
-                        try (var result = statement.executeQuery("EXPLAIN (FORMAT JSON, GENERIC_PLAN TRUE) " + sql)) {
+                        try (ResultSet result =
+                            statement.executeQuery("EXPLAIN (FORMAT JSON, GENERIC_PLAN TRUE) " + sql)) {
                             result.next();
                             diagnostic.put("failedQueryPlan", result.getString(1));
                         }
-                    } catch (java.sql.SQLException | RuntimeException explainFailure) {
+                    } catch (SQLException | RuntimeException explainFailure) {
                         diagnostic.put("failedQueryPlanError", explainFailure.getMessage());
                     }
                 }
-                for (var statement : prepared) {
+                for (Map<String, Object> statement : prepared) {
                     try {
                         diagnostic.put(statement.get("name").toString(), jdbc.sql(
                             "EXPLAIN (FORMAT JSON, GENERIC_PLAN TRUE) " + statement.get("statement"))
-                            .query(String.class).single());
+                                .query(String.class).single());
                     } catch (RuntimeException explainFailure) {
                         diagnostic.put("explainFailure", explainFailure.getMessage());
                     }
@@ -707,7 +831,9 @@ class StatisticsArchiveAdoptionTest {
     }
 
     private JsonNode explainMeasuredAggregate() {
-        if (measuredAggregateSql == null || measuredRebuild == null) return null;
+        if (measuredAggregateSql == null || measuredRebuild == null) {
+            return null;
+        }
         // 실제 업무의 500ms 제한은 그대로 둔다. 실패 분석용 EXPLAIN만 일회용 DB에서 실행하고 롤백한다.
         try {
             String plan = new TransactionTemplate(transactions).execute(status -> {
@@ -719,16 +845,17 @@ class StatisticsArchiveAdoptionTest {
                     .param("version", measuredRebuild.routeVersionId())
                     .param("vehicle", measuredRebuild.scope().vehicleId())
                     .param("request", UUID.randomUUID()).param("ids", measuredObservationIds)
-                    .param("until", measuredRebuild.dataUntil().atOffset(java.time.ZoneOffset.UTC))
+                    .param("until", measuredRebuild.dataUntil().atOffset(ZoneOffset.UTC))
                     .param("inputUntil", measuredRebuild.inputUntilId()).query(String.class).single();
             });
-            var parsed = JsonMapper.builder().build().readTree(plan);
+            JsonNode parsed = JsonMapper.builder().build().readTree(plan);
             report("rebuild-page-plan-" + measuredPlanMode, Map.of("observationIds", measuredObservationIds,
                 "sql", measuredAggregateSql, "plan", parsed,
                 "scope", "disposable PostgreSQL; EXPLAIN writes rolled back; diagnostic timeout 5s only"));
             return parsed.get(0);
         } catch (RuntimeException failure) {
-            report("rebuild-page-plan-" + measuredPlanMode, Map.of("diagnosticFailure", failure.getClass().getSimpleName()));
+            report("rebuild-page-plan-" + measuredPlanMode, Map.of("diagnosticFailure", failure.getClass()
+                    .getSimpleName()));
             return null;
         }
     }
@@ -737,9 +864,11 @@ class StatisticsArchiveAdoptionTest {
         long visited = 0;
         if ("vehicle_observation".equals(plan.path("Relation Name").asText())) {
             visited = (long) Math.ceil((plan.path("Actual Rows").asDouble()
-                + plan.path("Rows Removed by Filter").asDouble()) * plan.path("Actual Loops").asLong());
+                    + plan.path("Rows Removed by Filter").asDouble()) * plan.path("Actual Loops").asLong());
         }
-        for (var child : plan.path("Plans")) visited += observationRowsVisited(child);
+        for (JsonNode child : plan.path("Plans")) {
+            visited += observationRowsVisited(child);
+        }
         return visited;
     }
 
@@ -748,15 +877,24 @@ class StatisticsArchiveAdoptionTest {
             .param(source).query(Long.class).single();
     }
 
-    private static double millis(long start) { return (System.nanoTime() - start) / 1_000_000.0; }
+    private static double millis(final long start) {
+        return (System.nanoTime() - start) / 1_000_000.0;
+    }
 
     private static void report(String name, Map<String, ?> result) {
         try {
             Path output = Path.of("build", "reports", "sal175-adoption");
             Files.createDirectories(output);
             Files.writeString(output.resolve(name + ".json"), JsonMapper.builder().build().writeValueAsString(result));
-        } catch (java.io.IOException exception) {
-            throw new java.io.UncheckedIOException(exception);
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
         }
+    }
+
+    private static String storedStopName(final int stop) {
+        if (stop == 8) {
+            return "stop-eight";
+        }
+        return "stop-nine";
     }
 }

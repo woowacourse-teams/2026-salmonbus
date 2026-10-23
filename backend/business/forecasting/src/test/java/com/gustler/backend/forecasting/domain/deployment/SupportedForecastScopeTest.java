@@ -8,15 +8,12 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class SupportedForecastScopeTest {
-
     private static final SupportedForecastScope SCOPE =
         new SupportedForecastScope(List.of("1650", "3330"));
 
     @ParameterizedTest
     @ValueSource(strings = {"1650", "3330"})
-    void 계수_묶음이_담는_노선은_예보_범위_안이다(
-        String modelRoute
-    ) {
+    void 계수_묶음이_담는_노선은_예보_범위_안이다(String modelRoute) {
         // when
         final boolean actual = SCOPE.covers(modelRoute, 1);
 
@@ -35,9 +32,7 @@ class SupportedForecastScopeTest {
 
     @ParameterizedTest
     @ValueSource(ints = {1, 12})
-    void 예보_거리가_1정류장_앞부터_12정류장_앞까지면_예보_범위_안이다(
-        final int stopsAhead
-    ) {
+    void 예보_거리가_1정류장_앞부터_12정류장_앞까지면_예보_범위_안이다(final int stopsAhead) {
         // when
         final boolean actual = SCOPE.covers("1650", stopsAhead);
 
@@ -47,9 +42,7 @@ class SupportedForecastScopeTest {
 
     @ParameterizedTest
     @ValueSource(ints = {0, 13})
-    void 예보_거리가_0이거나_13정류장_앞이면_예보_범위_밖이다(
-        final int stopsAhead
-    ) {
+    void 예보_거리가_0이거나_13정류장_앞이면_예보_범위_밖이다(final int stopsAhead) {
         // when
         final boolean actual = SCOPE.covers("1650", stopsAhead);
 
@@ -68,9 +61,7 @@ class SupportedForecastScopeTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"234000050", "204000057"})
-    void 계수_묶음이_담는_GBIS_노선은_예보_범위_안이다(
-        String sourceRouteId
-    ) {
+    void 계수_묶음이_담는_GBIS_노선은_예보_범위_안이다(String sourceRouteId) {
         // when
         final boolean actual = SCOPE.coversSourceRoute(sourceRouteId);
 
@@ -89,9 +80,7 @@ class SupportedForecastScopeTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"204000070", "234000886", "233000392", "227000038", "228000184", "234000051"})
-    void 두_노선_계수_묶음에서는_모델_노선_매핑이_있는_새_노선도_예보_범위_밖이다(
-        String sourceRouteId
-    ) {
+    void 두_노선_계수_묶음에서는_모델_노선_매핑이_있는_새_노선도_예보_범위_밖이다(String sourceRouteId) {
         // when
         final boolean actual = SCOPE.coversSourceRoute(sourceRouteId);
 

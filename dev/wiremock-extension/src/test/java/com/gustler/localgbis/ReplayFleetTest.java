@@ -2,8 +2,11 @@ package com.gustler.localgbis;
 
 import java.nio.file.Path;
 import java.time.Clock;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
@@ -51,6 +54,24 @@ class ReplayFleetTest {
                 assertEquals(entry.getValue(), buses.get(index).get("remainSeatCnt"));
             }
         }
+    }
+
+    @Test
+    void keepsOneVehicleIdPerPlateAcrossRepeatedRuns() throws Exception {
+        var data = ReplayEngine.readRoutes(Path.of(System.getProperty("routes.file")));
+        var time = new AtomicLong();
+        var engine = new ReplayEngine(data, new ReplayEngine.Configuration("local-replay-v1", 30, 60, 3),
+            Clock.systemUTC(), time::get, "testrun1");
+        var vehicleIdsByPlate = new HashMap<Object, Set<Object>>();
+        for (long second = 0; second < 6 * 60 * 60; second += 30) {
+            time.set(second * 1_000_000_000L);
+            for (var bus : vehicles(engine.response("location", "normal", "204000070"))) {
+                vehicleIdsByPlate.computeIfAbsent(bus.get("plateNo"), plate -> new HashSet<>())
+                    .add(bus.get("vehId"));
+            }
+        }
+        assertFalse(vehicleIdsByPlate.isEmpty());
+        vehicleIdsByPlate.values().forEach(vehicleIds -> assertEquals(1, vehicleIds.size()));
     }
 
     @SuppressWarnings("unchecked")

@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.domain.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
@@ -9,7 +9,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class ObservedVehicleTest {
-
     private static final long ROUTE_VERSION_3330 = 1L;
     private static final Instant OBSERVED_AT = Instant.parse("2026-08-19T08:30:00+09:00");
     private static final int PASSED_STOP_44 = 44;
@@ -17,9 +16,7 @@ class ObservedVehicleTest {
 
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 3, 4})
-    void 혼잡도는_1등급부터_4등급까지다(
-        final int crowdLevel
-    ) {
+    void 혼잡도는_1등급부터_4등급까지다(final int crowdLevel) {
         // when
         ObservedVehicle actual = observedWith(crowdLevel);
 
@@ -38,8 +35,15 @@ class ObservedVehicleTest {
 
     @Test
     void 등급_밖의_혼잡도로는_관측을_만들_수_없다() {
-        // when, then 적재가 0을 미제공으로 접어 두는데 그 규칙이 깨진 값이 오면 여기서 멈춘다
-        assertThatThrownBy(() -> observedWith(0))
+        // given
+        // 적재 시 0을 미제공으로 처리하므로 이 규칙에 어긋난 값은 거절한다.
+
+        // when
+        Throwable caughtFailure = catchThrowable(() -> observedWith(0));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 

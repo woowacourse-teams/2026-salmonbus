@@ -13,6 +13,8 @@ import org.springframework.context.annotation.Import;
 
 /** 수동 정비에 필요한 기능만 등록한다. 스케줄과 모델 적재를 시작하지 않는다. */
 @Import({TripQualityInvestigationService.class, TripQualityMaintenanceService.class, RouteDataQualityChanges.class,
-    JdbcRouteDataQualityAccess.class, JdbcRouteDataQualityRepository.class, JdbcTripQualityInvestigationRepository.class,
+    JdbcRouteDataQualityAccess.class, JdbcRouteDataQualityRepository.class,
+    JdbcTripQualityInvestigationRepository.class,
     JdbcTripQualityStore.class, JdbcTripQualityMaintenanceStore.class, JdbcDemandStatisticsRebuildRequestStore.class})
-public class QualityMaintenanceConfiguration { }
+public class QualityMaintenanceConfiguration {
+}

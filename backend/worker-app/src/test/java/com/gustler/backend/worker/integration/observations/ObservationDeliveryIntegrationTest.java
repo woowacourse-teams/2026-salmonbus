@@ -1,31 +1,41 @@
 package com.gustler.backend.worker.integration.observations;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 import com.gustler.backend.forecasting.application.evaluation.ObservationDeliveryReceiver;
 import com.gustler.backend.forecasting.application.evaluation.ObservationDeliveryService;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
 import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcArrivalObservationQuery;
 import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcRecentObservationBatches;
 import com.gustler.backend.gbis.api.GbisLocationResult.Success;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
 import com.gustler.backend.observations.api.ObservationDeliveryBatch;
+import com.gustler.backend.observations.api.ObservationDeliveryBatch.Kind;
 import com.gustler.backend.observations.application.ObservationBatchLedger;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
 import com.gustler.backend.support.PostgresTestContainer;
 import com.gustler.backend.worker.WorkerApplication;
 import com.gustler.backend.worker.configuration.CollectionRuntimeConfiguration;
-import java.time.OffsetDateTime;
+import com.gustler.backend.worker.integration.observations.ObservationDeliveryIntegrationTest.ReceiverConfiguration;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import org.junit.jupiter.api.AfterEach;
@@ -44,23 +54,29 @@ import org.springframework.transaction.support.TransactionTemplate;
 @SpringBootTest(classes = WorkerApplication.class,
     properties = "forecast.evaluation.observation-cache.enabled=true")
 @Import({PostgresTestContainer.class, CollectionRuntimeConfiguration.class,
-    ObservationDeliveryIntegrationTest.ReceiverConfiguration.class})
+    ReceiverConfiguration.class})
 class ObservationDeliveryIntegrationTest {
     private static final OffsetDateTime AT = OffsetDateTime.parse("2026-08-19T11:14:00.123456789+09:00");
     private static final String SOURCE_ROUTE = "delivery-test-route";
-    @Autowired ObservationBatchLedger ledger;
-    @Autowired JdbcClient jdbc;
-    @Autowired PlatformTransactionManager transactions;
-    @Autowired RecordingReceiver receiver;
-    @Autowired JdbcArrivalObservationQuery arrivals;
-    @Autowired RouteDataQualityAccess quality;
+    @Autowired
+    ObservationBatchLedger ledger;
+    @Autowired
+    JdbcClient jdbc;
+    @Autowired
+    PlatformTransactionManager transactions;
+    @Autowired
+    RecordingReceiver receiver;
+    @Autowired
+    JdbcArrivalObservationQuery arrivals;
+    @Autowired
+    RouteDataQualityAccess quality;
     private long version;
     private long batch;
     private CollectionPlan plan;
 
     @BeforeEach
     void 수집할_노선을_준비한다() {
-        long route = jdbc.sql("""
+        final long route = jdbc.sql("""
             INSERT INTO route (public_route_id, source_id, source_route_id,
                 display_name, start_stop_name, end_stop_name)
             VALUES (:source, 'GBIS', :source, '전달 검증', '출발', '도착') RETURNING id
@@ -86,7 +102,8 @@ class ObservationDeliveryIntegrationTest {
         receiver.deliveries.clear();
         receiver.fail = false;
         receiver.accept = true;
-        receiver.onReceive = (id, batch) -> { };
+        receiver.onReceive = (id, batch) -> {
+        };
         jdbc.sql("""
             TRUNCATE vehicle_observation, observation_batch, route_stop, route_version, route,
                 daily_call_quota RESTART IDENTITY CASCADE
@@ -96,14 +113,14 @@ class ObservationDeliveryIntegrationTest {
     @Test
     void 관측_저장_트랜잭션이_커밋되면_수집한_차량_관측을_캐시에_넣는다() {
         // given
-        var source = spy(new JdbcRecentObservationBatches(jdbc));
-        var memory = memory(source);
+        JdbcRecentObservationBatches source = spy(new JdbcRecentObservationBatches(jdbc));
+        ObservationDeliveryService memory = memory(source);
         receiver.onReceive = memory::receive;
 
         // when
         save();
-        var result = new TransactionTemplate(transactions).execute(status -> {
-            long revision = quality.lock(version);
+        List<ArrivalCandidate> result = new TransactionTemplate(transactions).execute(status -> {
+            final long revision = quality.lock(version);
             return memory.begin(AT.plusSeconds(2).toInstant()).read(arrivals, version, revision, false,
                 receiver.deliveries.getFirst().batch().rows().getFirst().vehicleId(), AT.toInstant(), 100);
         });
@@ -111,8 +128,12 @@ class ObservationDeliveryIntegrationTest {
         // then
         assertThat(result).singleElement().satisfies(row -> {
             assertThat(row.remainingSeats()).isEqualTo(20);
-            assertThat(row.observedAt()).isEqualTo(jdbc.sql("SELECT response_received_at FROM observation_batch WHERE id = ?")
-                .param(batch).query(OffsetDateTime.class).single().toInstant());
+            assertThat(row.observedAt()).isEqualTo(
+                jdbc.sql("SELECT response_received_at FROM observation_batch WHERE id = ?")
+                    .param(batch)
+                    .query(OffsetDateTime.class)
+                    .single()
+                    .toInstant());
         });
         verify(source, never()).restore(anyLong(), anyList(), anyInt());
         assertDeliveryTableAbsent();
@@ -121,29 +142,33 @@ class ObservationDeliveryIntegrationTest {
     @Test
     void 커밋_후_전달이_지연돼도_정산은_DB에서_복원한다() throws Exception {
         // given
-        var source = spy(new JdbcRecentObservationBatches(jdbc));
-        var memory = memory(source);
-        var committed = new CountDownLatch(1);
-        var resume = new CountDownLatch(1);
+        JdbcRecentObservationBatches source = spy(new JdbcRecentObservationBatches(jdbc));
+        ObservationDeliveryService memory = memory(source);
+        CountDownLatch committed = new CountDownLatch(1);
+        CountDownLatch resume = new CountDownLatch(1);
         receiver.onReceive = (id, batch) -> {
             committed.countDown();
             try {
-                if (!resume.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("전달 재개 대기 초과");
+                if (!resume.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("전달 재개 대기 초과");
+                }
             } catch (InterruptedException failure) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException(failure);
             }
             memory.receive(id, batch);
         };
-        try (var executor = Executors.newSingleThreadExecutor()) {
-            var collecting = executor.submit(this::save);
+        try (ExecutorService executor = Executors.newSingleThreadExecutor()) {
+            Future<?> collecting = executor.submit(this::save);
             try {
                 assertThat(committed.await(5, TimeUnit.SECONDS)).isTrue();
 
                 // when
-                var result = new TransactionTemplate(transactions).execute(status -> {
-                    long revision = quality.lock(version);
-                    String vehicle = jdbc.sql("SELECT vehicle_id FROM vehicle_observation").query(String.class).single();
+                List<ArrivalCandidate> result = new TransactionTemplate(transactions).execute(status -> {
+                    final long revision = quality.lock(version);
+                    String vehicle = jdbc.sql("SELECT vehicle_id FROM vehicle_observation")
+                        .query(String.class)
+                        .single();
                     return memory.begin(AT.plusSeconds(2).toInstant()).read(arrivals, version, revision, false,
                         vehicle, AT.toInstant(), 100);
                 });
@@ -166,7 +191,7 @@ class ObservationDeliveryIntegrationTest {
     @Test
     void 관측_저장이_롤백되면_해당_배치의_차량_관측은_캐시에_남지_않는다() {
         // given
-        var transaction = new TransactionTemplate(transactions);
+        TransactionTemplate transaction = new TransactionTemplate(transactions);
 
         // when
         transaction.executeWithoutResult(status -> {
@@ -184,7 +209,7 @@ class ObservationDeliveryIntegrationTest {
     @Test
     void 관측_저장_트랜잭션이_커밋되기_전에는_수집한_차량_관측을_캐시에_넣지_않는다() {
         // given
-        var transaction = new TransactionTemplate(transactions);
+        TransactionTemplate transaction = new TransactionTemplate(transactions);
 
         // when
         transaction.executeWithoutResult(status -> {
@@ -219,7 +244,7 @@ class ObservationDeliveryIntegrationTest {
         assertDeliveryTableAbsent();
         assertThat(receiver.deliveries).isEmpty();
         assertThat(jdbc.sql("SELECT outcome FROM observation_batch WHERE id = ?")
-            .param(batch).query(String.class).single()).isEqualTo("SUCCESS_ROWS");
+                .param(batch).query(String.class).single()).isEqualTo("SUCCESS_ROWS");
     }
 
     @Test
@@ -228,18 +253,22 @@ class ObservationDeliveryIntegrationTest {
         save();
 
         // when
-        long reused = ledger.reserve(plan, AT.plusSeconds(1)).batchId();
+        final long reused = ledger.reserve(plan, AT.plusSeconds(1)).batchId();
         ledger.markDispatching(reused, AT, AT.plusSeconds(1), "a");
         save();
 
         // then
         assertThat(reused).isEqualTo(batch);
         assertThat(receiver.deliveries).hasSize(3);
-        assertThat(receiver.deliveries.stream().map(item -> item.batch().attempt()).toList())
+        assertThat(receiver.deliveries.stream()
+                .map(item -> item.batch().attempt())
+                .toList())
             .containsExactly(1, 2, 2);
-        assertThat(receiver.deliveries.stream().map(item -> item.batch().kind()).toList())
-            .containsExactly(ObservationDeliveryBatch.Kind.STORED,
-                ObservationDeliveryBatch.Kind.CLEARED, ObservationDeliveryBatch.Kind.STORED);
+        assertThat(receiver.deliveries.stream()
+                .map(item -> item.batch().kind())
+                .toList())
+            .containsExactly(Kind.STORED,
+                Kind.CLEARED, Kind.STORED);
         assertThat(receiver.deliveries.get(1).batch().rows()).isEmpty();
         assertThat(count("vehicle_observation")).isEqualTo(1);
     }
@@ -247,15 +276,15 @@ class ObservationDeliveryIntegrationTest {
     @Test
     void 관측_전달_테이블_없이_수집한_관측을_캐시에_반영한다() {
         // given
-        var source = spy(new JdbcRecentObservationBatches(jdbc));
-        var memory = memory(source);
+        JdbcRecentObservationBatches source = spy(new JdbcRecentObservationBatches(jdbc));
+        ObservationDeliveryService memory = memory(source);
         receiver.onReceive = memory::receive;
         assertDeliveryTableAbsent();
 
         // when
         save();
         new TransactionTemplate(transactions).executeWithoutResult(status -> {
-            long revision = quality.lock(version);
+            final long revision = quality.lock(version);
             String vehicle = receiver.deliveries.getFirst().batch().rows().getFirst().vehicleId();
             memory.begin(AT.plusSeconds(2).toInstant())
                 .read(arrivals, version, revision, false, vehicle, AT.toInstant(), 100);
@@ -269,11 +298,11 @@ class ObservationDeliveryIntegrationTest {
 
     private void assertDeliveryTableAbsent() {
         assertThat(jdbc.sql("SELECT to_regclass('observation_delivery') IS NULL")
-            .query(Boolean.class).single()).isTrue();
+                    .query(Boolean.class).single()).isTrue();
     }
 
     private void save() {
-        var bus = new BusLocation("경기70아0001", "delivery-test-vehicle", 0, SOURCE_ROUTE, 11,
+        BusLocation bus = new BusLocation("경기70아0001", "delivery-test-vehicle", 0, SOURCE_ROUTE, 11,
             "stop-one", 1, 2, 20, 3, 1);
         ledger.conclude(batch,
             at -> GbisObservationMapper.response(new Success("2026-08-19 11:14:00.9", List.of(bus)), at),
@@ -284,17 +313,21 @@ class ObservationDeliveryIntegrationTest {
         return jdbc.sql("SELECT count(*) FROM " + table).query(Integer.class).single();
     }
 
-    record Delivery(long id, ObservationDeliveryBatch batch) { }
+    record Delivery(long id, ObservationDeliveryBatch batch) {
+    }
 
     static class RecordingReceiver implements ObservationDeliveryReceiver {
         final List<Delivery> deliveries = new ArrayList<>();
         boolean fail;
         boolean accept = true;
-        BiConsumer<Long, ObservationDeliveryBatch> onReceive = (id, batch) -> { };
+        BiConsumer<Long, ObservationDeliveryBatch> onReceive = (id, batch) -> {
+        };
 
         @Override
-        public boolean receive(long id, ObservationDeliveryBatch batch) {
-            if (fail) throw new IllegalStateException("전달 실패");
+        public boolean receive(final long id, ObservationDeliveryBatch batch) {
+            if (fail) {
+                throw new IllegalStateException("전달 실패");
+            }
             deliveries.add(new Delivery(id, batch));
             onReceive.accept(id, batch);
             return accept;

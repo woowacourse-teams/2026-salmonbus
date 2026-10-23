@@ -8,17 +8,20 @@ import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
+/**
+ * 노선 전체와 차량별 재집계 요청의 우선순위·현재 식별·완료를 저장 경계에서 관리한다.
+ */
 @Repository
-public class JdbcDemandStatisticsRebuildRequestStore implements DemandStatisticsRebuildRequestStore, DemandStatisticsRebuildTrigger {
-
+public class JdbcDemandStatisticsRebuildRequestStore implements DemandStatisticsRebuildRequestStore,
+    DemandStatisticsRebuildTrigger {
     private final JdbcClient jdbc;
 
-    public JdbcDemandStatisticsRebuildRequestStore(final JdbcClient jdbc) {
+    public JdbcDemandStatisticsRebuildRequestStore(JdbcClient jdbc) {
         this.jdbc = jdbc;
     }
 
     @Override
-    public void request(final long routeVersionId, final RebuildScope scope) {
+    public void request(final long routeVersionId, RebuildScope scope) {
         jdbc.sql("""
             INSERT INTO stop_demand_rebuild_request(route_version_id, vehicle_id, request_id)
             VALUES (?, ?, ?)
@@ -28,24 +31,14 @@ public class JdbcDemandStatisticsRebuildRequestStore implements DemandStatistics
     }
 
     @Override
-    public void requestVehicle(final long routeVersionId, final String vehicleId) {
-        request(routeVersionId, RebuildScope.vehicle(vehicleId));
-    }
-
-    @Override
-    public void requestRoute(final long routeVersionId) {
-        request(routeVersionId, RebuildScope.wholeRoute());
-    }
-
-    @Override
-    public boolean isPending(final long routeVersionId, final RebuildScope scope) {
+    public boolean isPending(final long routeVersionId, RebuildScope scope) {
         return jdbc.sql("""
             SELECT EXISTS(SELECT 1 FROM stop_demand_rebuild_request WHERE route_version_id = ? AND vehicle_id = ?)
             """).params(routeVersionId, scope.vehicleId()).query(Boolean.class).single();
     }
 
     @Override
-    public boolean blocksAccumulation(final long routeVersionId, final String vehicleId) {
+    public boolean blocksAccumulation(final long routeVersionId, String vehicleId) {
         return jdbc.sql("""
             SELECT EXISTS(SELECT 1 FROM stop_demand_rebuild_request
                 WHERE route_version_id = ? AND vehicle_id IN ('', ?))
@@ -60,14 +53,14 @@ public class JdbcDemandStatisticsRebuildRequestStore implements DemandStatistics
     }
 
     @Override
-    public Optional<UUID> current(final long routeVersionId, final RebuildScope scope) {
+    public Optional<UUID> current(final long routeVersionId, RebuildScope scope) {
         return jdbc.sql("""
             SELECT request_id FROM stop_demand_rebuild_request WHERE route_version_id = ? AND vehicle_id = ?
             """).params(routeVersionId, scope.vehicleId()).query(UUID.class).optional();
     }
 
     @Override
-    public void complete(final long routeVersionId, final RebuildScope scope, final UUID requestId) {
+    public void complete(final long routeVersionId, RebuildScope scope, UUID requestId) {
         jdbc.sql("""
             DELETE FROM stop_demand_rebuild_request WHERE route_version_id = ? AND vehicle_id = ? AND request_id = ?
             """).params(routeVersionId, scope.vehicleId(), requestId).update();
@@ -79,5 +72,15 @@ public class JdbcDemandStatisticsRebuildRequestStore implements DemandStatistics
             UPDATE stop_demand_rebuild_request SET request_id = gen_random_uuid(), requested_at = CURRENT_TIMESTAMP
             WHERE route_version_id = ? AND vehicle_id <> ''
             """).param(routeVersionId).update();
+    }
+
+    @Override
+    public void requestVehicle(final long routeVersionId, String vehicleId) {
+        request(routeVersionId, RebuildScope.vehicle(vehicleId));
+    }
+
+    @Override
+    public void requestRoute(final long routeVersionId) {
+        request(routeVersionId, RebuildScope.wholeRoute());
     }
 }

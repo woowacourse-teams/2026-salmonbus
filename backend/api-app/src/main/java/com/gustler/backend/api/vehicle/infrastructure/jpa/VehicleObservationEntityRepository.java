@@ -5,9 +5,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * 지정한 수집 배치의 차량 관측을 읽거나 저장 모듈에서 배치 행을 정리하는 JPA 경계다.
+ */
 public interface VehicleObservationEntityRepository
     extends Repository<VehicleObservationJpaEntity, Long> {
-
     @Query("""
         SELECT observation
         FROM VehicleObservationJpaEntity observation

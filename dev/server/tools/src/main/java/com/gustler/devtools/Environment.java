@@ -18,10 +18,7 @@ final class Environment {
                             Set.of(
                                     "DB_URL",
                                     "DB_USERNAME",
-                                    "DB_PASSWORD",
-                                    "CHAT_ENABLED",
-                                    "CHAT_MONGODB_URI",
-                                    "CHAT_ALLOWED_ORIGINS"),
+                                    "DB_PASSWORD"),
                     "worker",
                             Set.of(
                                     "DB_URL",
@@ -32,11 +29,6 @@ final class Environment {
                                     "GBIS_SERVICE_KEY_C",
                                     "GBIS_SERVICE_KEY_D"),
                     "postgres", Set.of("POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD"),
-                    "mongodb",
-                            Set.of(
-                                    "MONGO_INITDB_ROOT_USERNAME",
-                                    "MONGO_INITDB_ROOT_PASSWORD",
-                                    "MONGO_CHAT_PASSWORD"),
                     "infra", Set.of("DEV_REVISION"));
     static final Set<String> RELEASE_KEYS =
             Set.of(
@@ -100,7 +92,7 @@ final class Environment {
         for (var entry : KEYS.entrySet()) {
             values.put(
                     entry.getKey(),
-                    parse(
+                    entry.getKey().equals("api") ? ChatRetirement.api(directory) : parse(
                             FileOps.privateText(directory.resolve(entry.getKey() + ".env")),
                             entry.getValue()));
         }
@@ -117,7 +109,6 @@ final class Environment {
         var postgres = settings.get("postgres");
         var api = settings.get("api");
         var worker = settings.get("worker");
-        var mongo = settings.get("mongodb");
         Checks.require(
                 "salmonbus_dev".equals(postgres.get("POSTGRES_DB"))
                         && "salmonbus_dev".equals(postgres.get("POSTGRES_USER")),
@@ -140,26 +131,6 @@ final class Environment {
                                 .stream()
                                 .allMatch(key -> "".equals(worker.get(key))),
                 "DEV_GBIS_KEY");
-        Checks.require("true".equals(api.get("CHAT_ENABLED")), "DEV_CHAT");
-        Checks.require(
-                "salmonbus_dev_admin".equals(mongo.get("MONGO_INITDB_ROOT_USERNAME")),
-                "DEV_MONGO_USER");
-        Checks.require(
-                java.util.List.of("MONGO_INITDB_ROOT_PASSWORD", "MONGO_CHAT_PASSWORD").stream()
-                                .allMatch(
-                                        key ->
-                                                mongo.get(key) != null
-                                                        && mongo.get(key).matches("[0-9a-f]{48}"))
-                        && !mongo.get("MONGO_CHAT_PASSWORD")
-                                .equals(mongo.get("MONGO_INITDB_ROOT_PASSWORD")),
-                "DEV_MONGO_PASSWORD");
-        Checks.require(
-                ("mongodb://salmonbus_dev_chat:"
-                                + mongo.get("MONGO_CHAT_PASSWORD")
-                                + "@127.0.0.1:27017/salmonbus_chat_dev?authSource=salmonbus_chat_dev")
-                        .equals(api.get("CHAT_MONGODB_URI")),
-                "DEV_MONGO_URI");
-        origin(api.get("CHAT_ALLOWED_ORIGINS"));
         Checks.require(
                 settings.get("infra").get("DEV_REVISION").matches("[0-9a-f]{40}"), "DEV_REVISION");
     }

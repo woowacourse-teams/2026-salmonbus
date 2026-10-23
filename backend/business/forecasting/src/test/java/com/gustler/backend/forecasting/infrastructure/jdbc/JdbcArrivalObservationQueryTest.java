@@ -3,10 +3,11 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
-import com.gustler.backend.support.ConfirmedTripFixture;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
+import com.gustler.backend.support.ConfirmedTripFixture;
 import java.time.OffsetDateTime;
 import java.util.List;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,17 +17,16 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class JdbcArrivalObservationQueryTest {
-
     private static final String SOURCE_ID = "GBIS";
     private static final String ROUTE_204000057 = "204000057";
     private static final String ROUTE_204000121 = "204000121";
     private static final String CONTENT_DIGEST = "0".repeat(64);
 
-    /** 판마다 남는 두 판본. 기본값이 없어서 픽스처가 직접 넣는다. */
+    /** 수집 배치마다 기록할 두 판본. 기본값이 없어 픽스처에서 직접 지정한다. */
     private static final String NORMALIZATION_VERSION = "normalization-v1.0.0";
     private static final String COLLECTION_STRATEGY_VERSION = "adaptive-kst-v1.0.1";
 
-    /** 차가 실린 판의 결말. 결말은 CHECK 이 아홉 값으로 막는다. */
+    /** 차량 관측이 포함된 수집 배치의 결과 상태. CHECK 이 아홉 값으로 제한한다. */
     private static final String SUCCESS_ROWS = "SUCCESS_ROWS";
 
     private static final String VEHICLE_204000206 = "204000206";
@@ -243,7 +243,9 @@ class JdbcArrivalObservationQueryTest {
         assertThat(limited).containsExactly(earlier);
         assertThat(ids).containsExactlyElementsOf(jdbcArrivalObservationQuery.findAfter(
             routeVersionId, VEHICLE_204000206, FORECAST_OBSERVED_AT.toInstant(), READ_LIMIT_TWO)
-            .stream().map(ArrivalCandidate::observationId).toList());
+                .stream()
+                .map(ArrivalCandidate::observationId)
+                .toList());
     }
 
     @Test
@@ -299,10 +301,12 @@ class JdbcArrivalObservationQueryTest {
             routeVersionId, VEHICLE_204000206, List.of(unknown, excluded));
 
         // then
-        assertThat(details).containsExactlyInAnyOrderElementsOf(jdbcArrivalObservationQuery.findAfter(
-            routeVersionId, VEHICLE_204000206, FORECAST_OBSERVED_AT.toInstant(), READ_LIMIT));
-        assertThat(details).allMatch(candidate -> candidate.qualityDirection() == null);
-        assertThat(details).anyMatch(candidate -> !candidate.hasKnownSeats());
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(details).containsExactlyInAnyOrderElementsOf(jdbcArrivalObservationQuery.findAfter(
+                routeVersionId, VEHICLE_204000206, FORECAST_OBSERVED_AT.toInstant(), READ_LIMIT));
+            softly.assertThat(details).allMatch(candidate -> candidate.qualityDirection() == null);
+            softly.assertThat(details).anyMatch(candidate -> !candidate.hasKnownSeats());
+        }
     }
 
     @Test
@@ -311,7 +315,7 @@ class JdbcArrivalObservationQueryTest {
         List<Long> ids = List.of();
 
         // when
-        var result = jdbcArrivalObservationQuery.findByIds(routeVersionId, VEHICLE_204000206, ids);
+        List<ArrivalCandidate> result = jdbcArrivalObservationQuery.findByIds(routeVersionId, VEHICLE_204000206, ids);
 
         // then
         assertThat(result).isEmpty();
@@ -358,7 +362,7 @@ class JdbcArrivalObservationQueryTest {
         return insertBatch(routeVersionId, responseReceivedAt);
     }
 
-    /** 관측 시각의 권위가 여기 있다. 응답을 받은 시각을 판에 남긴다. */
+    /** 관측 시각은 수집 배치에 기록한 응답 수신 시각을 기준으로 한다. */
     private long insertBatch(
         final long versionId,
         OffsetDateTime responseReceivedAt
@@ -373,7 +377,7 @@ class JdbcArrivalObservationQueryTest {
                 """)
             .params(
                 versionId, responseReceivedAt, 1,
-                "%s-%d".formatted(ROUTE_204000057, insertedBatchCount++),
+                    "%s-%d".formatted(ROUTE_204000057, insertedBatchCount++),
                 responseReceivedAt, responseReceivedAt, SUCCESS_ROWS,
                 NORMALIZATION_VERSION, COLLECTION_STRATEGY_VERSION
             )
@@ -422,7 +426,7 @@ class JdbcArrivalObservationQueryTest {
             RUNNING_STATE_DEPARTED, null, SEAT_NOT_REPORTED);
     }
 
-    /** 관측 시각 열은 SAL-84 가 지웠다. 관측 행에는 시각이 없다. */
+    /** 관측 시각 열은 SAL-84 에서 제거했다. 관측 행에는 시각이 없다. */
     private long insertObservation(
         final long versionId,
         final long batchId,
@@ -441,13 +445,13 @@ class JdbcArrivalObservationQueryTest {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
-            .params(
-                batchId, versionId, insertedObservationCount++,
-                vehicleId, stopOrder, stopIdOf(stopOrder), passedStopOrder,
-                runningState, remainingSeats, seatUnknownReason
-            )
-            .query(Long.class)
-            .single());
+                .params(
+                    batchId, versionId, insertedObservationCount++,
+                    vehicleId, stopOrder, stopIdOf(stopOrder), passedStopOrder,
+                    runningState, remainingSeats, seatUnknownReason
+                )
+                .query(Long.class)
+                .single());
     }
 
     private static String stopIdOf(

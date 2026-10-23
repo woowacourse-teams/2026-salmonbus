@@ -8,7 +8,6 @@ import com.gustler.backend.forecasting.domain.model.RouteStops;
  * <p>수집 구현을 직접 호출하지 않는다. 같은 route_stop을 읽더라도 별도의 조회 모델을 사용한다.
  */
 public interface RouteStopsQuery {
-
     /** 해당 버전의 전체 정류장을 순번 오름차순으로 읽고 Open API 노선 ID를 함께 반환한다. */
     RouteStops readStops(
         long routeVersionId

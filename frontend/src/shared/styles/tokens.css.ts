@@ -20,6 +20,7 @@ export const vars = createGlobalTheme(":root", {
     axisLine: "#B8B4AC",
     rowDivider: "#E2DFD8",
     compactRowSurface: "#F7F8FA",
+    searchFieldSurface: "#F2F4F6",
     mutedChipSurface: "#EDEDEB",
     forecastCardSurface: "#F7F7F5",
     forecastCardBorder: "#E3E2DE",
@@ -73,6 +74,7 @@ export const vars = createGlobalTheme(":root", {
     stopName: "-0.25px",
   },
   radius: {
+    boardSheet: "28px",
     badge: "4px",
     control: "10px",
     forecastCard: "10px",

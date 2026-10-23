@@ -1,6 +1,9 @@
 package com.gustler.backend.forecasting.application.evaluation;
 
+import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveRetentionStore.Location;
+import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveRetentionStore.Snapshot;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch;
+import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch.Row;
 import java.util.List;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -14,13 +17,22 @@ public final class RestoreArchivedEvaluationsService {
         this.source = source;
     }
 
+    /**
+     * DB 트랜잭션 밖에서 복원 파일을 검증한 뒤 준비한 상태에 반영한다. 기존 트랜잭션 안의 호출은 거부한다.
+     */
     public int restore(EvaluationArchiveBatch owned) {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("복원 파일은 DB 트랜잭션 밖에서 읽어야 한다");
         }
-        var prepared = store.prepareRestore(owned);
-        var rows = prepared.location() == EvaluationArchiveRetentionStore.Location.LIVE
-            ? List.<EvaluationArchiveBatch.Row>of() : source.readOriginal(prepared.batch());
+        Snapshot prepared = store.prepareRestore(owned);
+        List<Row> rows = readOriginalRowsIfNeeded(prepared);
         return store.restore(prepared, rows);
+    }
+
+    private List<Row> readOriginalRowsIfNeeded(Snapshot prepared) {
+        if (prepared.location() == Location.LIVE) {
+            return List.of();
+        }
+        return source.readOriginal(prepared.batch());
     }
 }

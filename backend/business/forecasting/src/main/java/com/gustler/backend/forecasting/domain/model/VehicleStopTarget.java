@@ -1,11 +1,12 @@
 package com.gustler.backend.forecasting.domain.model;
 
-
+/**
+ * 현재 관측과 예보 대상 방문을 연결해 정류장 거리와 입력 좌석을 제공한다.
+ */
 public record VehicleStopTarget(
     ObservedVehicle observation,
     RouteStop targetStop
 ) {
-
     public VehicleStopTarget {
         if (!observation.hasKnownSeats()) {
             throw new IllegalArgumentException("잔여석을 모르는 관측으로는 예보하지 않는다: " + observation);
@@ -16,7 +17,7 @@ public record VehicleStopTarget(
         if (observation.routeVersionId() != targetStop.routeVersionId()) {
             throw new IllegalArgumentException(
                 "관측과 대상 정류장의 노선 판본이 다르다: %d, %d"
-                    .formatted(observation.routeVersionId(), targetStop.routeVersionId())
+                .formatted(observation.routeVersionId(), targetStop.routeVersionId())
             );
         }
         distanceBetween(observation, targetStop);

@@ -24,25 +24,28 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.json.JsonCompareMode;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class StationArrivalsContractTest {
     @Test
     void 조회_판단과_DTO를_분리해도_외부_응답은_유지한다() throws Exception {
+        // given
         Instant received = Instant.parse("2026-10-14T03:00:00Z");
-        var repository = mock(ArrivalReadRepository.class);
-        var gateway = mock(ArrivalRefreshGateway.class);
-        var snapshot = new ArrivalSnapshot(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+        ArrivalReadRepository repository = mock(ArrivalReadRepository.class);
+        ArrivalRefreshGateway gateway = mock(ArrivalRefreshGateway.class);
+        ArrivalSnapshot snapshot = new ArrivalSnapshot(UUID.fromString("00000000-0000-0000-0000-000000000001"),
             "206000637", received, received.plusSeconds(40), received.plusSeconds(60), "source query time",
             List.of(new RouteArrival("204000057", "3330", 22, 12, null, null, "RUN",
                 List.of(new Prediction("vehicle-1", 1, 180, 3, 3, 0, null, null, 0, false)))));
         when(repository.visits("206000637")).thenReturn(List.of(
             new ArrivalVisit("204000057", "204000057", 7, 22, "UP", received.minusSeconds(100))));
         when(repository.latest("206000637")).thenReturn(Optional.of(snapshot));
-        var service = new ArrivalQueryService(repository, gateway, new ArrivalFreshnessPolicy(),
+        ArrivalQueryService service = new ArrivalQueryService(repository, gateway, new ArrivalFreshnessPolicy(),
             Clock.fixed(received.plusSeconds(10), ZoneOffset.UTC));
-        var mvc = MockMvcBuilders.standaloneSetup(new StationArrivalsController(service)).build();
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new StationArrivalsController(service)).build();
 
+        // when
         mvc.perform(get("/api/v2/stations/206000637/arrivals")
                 .param("routeId", "204000057").param("referenceVersionId", "7").param("stopSequence", "22"))
             .andExpect(status().isOk())
@@ -73,6 +76,8 @@ class StationArrivalsContractTest {
                   }]
                 }
                 """, JsonCompareMode.STRICT));
+
+        // then
         verifyNoInteractions(gateway);
     }
 }

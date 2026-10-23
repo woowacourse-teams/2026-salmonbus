@@ -12,11 +12,13 @@ import java.time.OffsetDateTime;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
+/**
+ * 조회 응답의 모델 식별과 학습 기준 시각을 저장된 배포 자료에서 읽는다.
+ */
 @Entity
 @Table(name = "model_deployment")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ModelDeploymentJpaEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

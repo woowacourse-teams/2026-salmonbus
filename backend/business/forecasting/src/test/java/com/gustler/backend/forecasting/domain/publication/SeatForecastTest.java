@@ -1,20 +1,18 @@
 package com.gustler.backend.forecasting.domain.publication;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
-import com.gustler.backend.forecasting.domain.model.VehicleStopTarget;
 import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.SeatDistribution;
 import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
+import com.gustler.backend.forecasting.domain.model.VehicleStopTarget;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class SeatForecastTest {
-
     private static final long DEPLOYMENT_ID = 1L;
 
     private static final Instant OBSERVED_AT = Instant.parse("2026-08-25T08:30:00Z");
@@ -79,19 +77,27 @@ class SeatForecastTest {
 
     @Test
     void 기대_잔여석은_0석_이상이다() {
-        // when & then
-        assertThatThrownBy(() -> new SeatForecast(
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new SeatForecast(
             OBSERVATION_ID, ROUTE_VERSION_3330, 49, 5, 1L, DEMAND_STATISTICS_REVISION,
-            0.38, 0.4, -0.1, GENERATED_AT))
+            0.38, 0.4, -0.1, GENERATED_AT));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void 예보는_1정류장_앞부터_12정류장_앞까지만_낸다() {
-        // when & then
-        assertThatThrownBy(() -> new SeatForecast(
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new SeatForecast(
             OBSERVATION_ID, ROUTE_VERSION_3330, 57, 13, 1L, DEMAND_STATISTICS_REVISION,
-            0.38, 0.4, 12.4, GENERATED_AT))
+            0.38, 0.4, 12.4, GENERATED_AT));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -111,6 +117,4 @@ class SeatForecastTest {
     private SeatForecastResult result() {
         return new SeatForecastResult(new SeatDistribution(List.of(0.4, 0.6)), 0.38);
     }
-
-
 }

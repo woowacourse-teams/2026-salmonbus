@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Request, type Route } from "@playwright/test";
 import { createApiMockRouter } from "./fixtures/api-mock-router";
+import { apiPaths } from "./fixtures/mock-data";
 
 function deferred() {
   let resolve!: () => void;
@@ -24,14 +25,70 @@ async function captureForwardedRequests(page: Page) {
   return forwarded;
 }
 
-test("빠른 채팅 mock이 끝나도 느린 보드와 차량 mock이 완료된 뒤 해제한다", async ({ page }) => {
+test("mock 해제 뒤의 API 요청은 실제 서버로 전달하지 않고 차단한다", async ({ page }) => {
   const forwarded = await captureForwardedRequests(page);
   const router = createApiMockRouter(page);
-  const endpoints = ["board", "vehicles", "chat"] as const;
+  await router.route((route) => route.fulfill({ json: { mocked: true } }));
+
+  const mocked = await page.evaluate(async (path) => (await fetch(path)).json(), apiPaths.watch);
+  expect(mocked).toEqual({ mocked: true });
+  expect(forwarded).toEqual([]);
+
+  await router.dispose();
+  const blocked = await page.evaluate(async (path) => {
+    try {
+      await fetch(path);
+      return false;
+    } catch {
+      return true;
+    }
+  }, apiPaths.watch);
+  expect(blocked).toBe(true);
+  expect(forwarded).toEqual([]);
+});
+
+test("실행 중 mock을 벗어난 API 요청은 차단하고 누출된 경로를 보고한다", async ({ page }) => {
+  const forwarded = await captureForwardedRequests(page);
+  const router = createApiMockRouter(page);
+  await router.route((route) => route.fulfill({ json: { mocked: true } }));
+  await page.unrouteAll({ behavior: "wait" });
+
+  const blocked = await page.evaluate(async (path) => {
+    try {
+      await fetch(path);
+      return false;
+    } catch {
+      return true;
+    }
+  }, apiPaths.watch);
+  expect(blocked).toBe(true);
+  expect(forwarded).toEqual([]);
+  await expect(router.dispose()).rejects.toMatchObject({
+    errors: [expect.objectContaining({ message: expect.stringContaining(apiPaths.watch) })],
+  });
+});
+
+test("API에서 페이지로 리다이렉트한 요청도 mock 해제 전에 종료한다", async ({ page, browserName }) => {
+  test.skip(browserName === "webkit", "WebKit의 route.fulfill은 302 응답을 지원하지 않는다");
+  const router = createApiMockRouter(page);
+  await router.route((route) =>
+    new URL(route.request().url()).pathname === "/api/redirect-start"
+      ? route.fulfill({ status: 302, headers: { Location: "/?redirect=finished" } })
+      : route.fulfill({ status: 404, json: { code: "ENDPOINT_NOT_FOUND", message: "test", requestId: "test" } }),
+  );
+  await page.goto("/api/redirect-start");
+  await expect(page).toHaveURL("/?redirect=finished");
+  await router.dispose();
+});
+
+test("빠른 404 mock이 끝나도 느린 보드와 차량 mock이 완료된 뒤 해제한다", async ({ page }) => {
+  const forwarded = await captureForwardedRequests(page);
+  const router = createApiMockRouter(page);
+  const endpoints = ["board", "vehicles", "missing"] as const;
   type Endpoint = (typeof endpoints)[number];
-  const entered = { board: deferred(), vehicles: deferred(), chat: deferred() };
-  const release = { board: deferred(), vehicles: deferred(), chat: deferred() };
-  const chatFinished = deferred();
+  const entered = { board: deferred(), vehicles: deferred(), missing: deferred() };
+  const release = { board: deferred(), vehicles: deferred(), missing: deferred() };
+  const missingFinished = deferred();
   let cleanup: Promise<void> | undefined;
   let disposed = false;
 
@@ -40,9 +97,9 @@ test("빠른 채팅 mock이 끝나도 느린 보드와 차량 mock이 완료된 
       const endpoint = new URL(route.request().url()).pathname.split("/").at(-1) as Endpoint;
       entered[endpoint].resolve();
       await release[endpoint].promise;
-      if (endpoint === "chat") {
+      if (endpoint === "missing") {
         await route.fulfill({ status: 404, json: { endpoint } });
-        chatFinished.resolve();
+        missingFinished.resolve();
       } else {
         const now = await page.evaluate(() => Date.now());
         await route.fulfill({ headers: { Date: new Date(now).toUTCString() }, json: { endpoint } });
@@ -56,8 +113,8 @@ test("빠른 채팅 mock이 끝나도 느린 보드와 차량 mock이 완료된 
     cleanup = router.dispose().then(() => {
       disposed = true;
     });
-    release.chat.resolve();
-    await chatFinished.promise;
+    release.missing.resolve();
+    await missingFinished.promise;
     await page.evaluate(() => Date.now());
     expect(disposed).toBe(false);
     expect(forwarded).toEqual([]);
@@ -129,11 +186,11 @@ test("추가 mock의 fallback 뒤에 시작하는 기본 mock도 완료된 뒤 �
   const router = createApiMockRouter(page);
   const overrideEntered = deferred();
   const boardEntered = deferred();
-  const chatEntered = deferred();
+  const missingEntered = deferred();
   const releaseFallback = deferred();
   const releaseBoard = deferred();
-  const releaseChat = deferred();
-  const chatFinished = deferred();
+  const releaseMissing = deferred();
+  const missingFinished = deferred();
   let cleanup: Promise<void> | undefined;
   let disposed = false;
 
@@ -146,11 +203,11 @@ test("추가 mock의 fallback 뒤에 시작하는 기본 mock도 완료된 뒤 �
   try {
     await router.route(fulfillBoard);
     await router.route(async (route) => {
-      if (new URL(route.request().url()).pathname.endsWith("/chat")) {
-        chatEntered.resolve();
-        await releaseChat.promise;
-        await route.fulfill({ status: 404, json: { endpoint: "chat" } });
-        chatFinished.resolve();
+      if (new URL(route.request().url()).pathname.endsWith("/missing")) {
+        missingEntered.resolve();
+        await releaseMissing.promise;
+        await route.fulfill({ status: 404, json: { endpoint: "missing" } });
+        missingFinished.resolve();
       } else {
         overrideEntered.resolve();
         await releaseFallback.promise;
@@ -159,16 +216,16 @@ test("추가 mock의 fallback 뒤에 시작하는 기본 mock도 완료된 뒤 �
     });
     const responses = page.evaluate(async () => {
       return await Promise.all(
-        ["board", "chat"].map(async (endpoint) => (await fetch(`/api/cleanup/${endpoint}`)).json()),
+        ["board", "missing"].map(async (endpoint) => (await fetch(`/api/cleanup/${endpoint}`)).json()),
       );
     });
-    await Promise.all([overrideEntered.promise, chatEntered.promise]);
+    await Promise.all([overrideEntered.promise, missingEntered.promise]);
 
     cleanup = router.dispose().then(() => {
       disposed = true;
     });
-    releaseChat.resolve();
-    await chatFinished.promise;
+    releaseMissing.resolve();
+    await missingFinished.promise;
     await page.evaluate(() => Date.now());
     expect(disposed).toBe(false);
 
@@ -177,10 +234,10 @@ test("추가 mock의 fallback 뒤에 시작하는 기본 mock도 완료된 뒤 �
     expect(disposed).toBe(false);
     releaseBoard.resolve();
     await cleanup;
-    expect(await responses).toEqual([{ endpoint: "board" }, { endpoint: "chat" }]);
+    expect(await responses).toEqual([{ endpoint: "board" }, { endpoint: "missing" }]);
     expect(forwarded).toEqual([]);
   } finally {
-    releaseChat.resolve();
+    releaseMissing.resolve();
     releaseFallback.resolve();
     releaseBoard.resolve();
     await (cleanup ?? router.dispose());

@@ -16,12 +16,14 @@ export function stationArrivalSelectionKey(selection: StationArrivalSelection): 
   ]);
 }
 
-/** Date/Age가 없더라도 로컬 시스템 시계 대신 응답 생성 시각부터 단조 시계로 진행한다. */
+/** 수집 중 no-store 응답은 초 단위 Date 대신 응답 생성 시각부터 단조 시계로 진행한다. */
 export function withStationArrivalClock(
   result: ApiResult<StationArrivalsResponse>,
   elapsedNow: () => number = () => performance.now(),
 ): ApiResult<StationArrivalsResponse> {
-  if (!result.ok || result.clock !== null) return result;
+  if (!result.ok) return result;
+  const shouldUseGeneratedAt = result.lifetime.noStore && result.body.refresh.reason === "COLLECTING";
+  if (result.clock !== null && !shouldUseGeneratedAt) return result;
 
   const generatedAt = Date.parse(result.body.generatedAt);
   if (!Number.isFinite(generatedAt)) return result;

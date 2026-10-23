@@ -8,7 +8,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class ModelRouteTest {
-
     @ParameterizedTest
     @CsvSource({
         "234000050, 1650", "204000057, 3330",
@@ -32,8 +31,11 @@ class ModelRouteTest {
 
     @Test
     void 목록에_없는_GBIS_노선은_옮기지_않는다() {
-        // when & then
-        assertThat(catchThrowable(() -> ModelRoute.of("999999999")))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> ModelRoute.of("999999999"));
+
+        // then
+        assertThat(caughtFailure)
             .isInstanceOf(IllegalArgumentException.class);
     }
 

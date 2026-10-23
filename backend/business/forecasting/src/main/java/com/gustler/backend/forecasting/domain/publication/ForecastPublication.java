@@ -18,9 +18,8 @@ public record ForecastPublication(
     Instant publishedAt,
     List<SeatForecast> predictions
 ) {
-
     public ForecastPublication {
-        if (sourceBatchId <= 0 || routeVersionId <= 0 || modelDeploymentId <= 0) {
+        if (!hasRequiredIdentifiers(sourceBatchId, routeVersionId, modelDeploymentId)) {
             throw new IllegalArgumentException("발행에는 수집 배치·노선 버전·모델 식별 정보가 필요하다");
         }
         if (demandStatisticsRevision < 0 || qualityRevision <= 0) {
@@ -32,10 +31,13 @@ public record ForecastPublication(
         predictions = List.copyOf(predictions);
         Set<PredictionKey> keys = new HashSet<>();
         for (SeatForecast prediction : predictions) {
-            if (prediction.routeVersionId() != routeVersionId
-                || prediction.modelDeploymentId() != modelDeploymentId
-                || prediction.demandStatisticsRevision() != demandStatisticsRevision
-                || !prediction.generatedAt().equals(generatedAt)) {
+            if (!belongsToPublication(
+                prediction,
+                routeVersionId,
+                modelDeploymentId,
+                demandStatisticsRevision,
+                generatedAt
+            )) {
                 throw new IllegalArgumentException("한 발행의 예측은 같은 노선 버전·모델·통계·계산 시각을 사용해야 한다");
             }
             if (!keys.add(new PredictionKey(prediction.vehicleObservationId(), prediction.targetStopOrder()))) {
@@ -44,9 +46,36 @@ public record ForecastPublication(
         }
     }
 
+    private static boolean hasRequiredIdentifiers(long sourceBatchId, long routeVersionId, long modelDeploymentId) {
+        if (sourceBatchId <= 0 || routeVersionId <= 0) {
+            return false;
+        }
+        return modelDeploymentId > 0;
+    }
+
+    private static boolean belongsToPublication(
+        SeatForecast prediction,
+        long routeVersionId,
+        long modelDeploymentId,
+        int demandStatisticsRevision,
+        Instant generatedAt
+    ) {
+        if (prediction.routeVersionId() != routeVersionId) {
+            return false;
+        }
+        if (prediction.modelDeploymentId() != modelDeploymentId) {
+            return false;
+        }
+        if (prediction.demandStatisticsRevision() != demandStatisticsRevision) {
+            return false;
+        }
+        return prediction.generatedAt().equals(generatedAt);
+    }
+
     public int predictionCount() {
         return predictions.size();
     }
 
-    private record PredictionKey(long observationId, int stopOrder) { }
+    private record PredictionKey(long observationId, int stopOrder) {
+    }
 }

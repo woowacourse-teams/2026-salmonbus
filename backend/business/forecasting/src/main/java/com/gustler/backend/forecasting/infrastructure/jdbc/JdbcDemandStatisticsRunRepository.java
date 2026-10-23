@@ -1,10 +1,10 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun;
-import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRunRepository;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun.FoldCursor;
-import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun.ReduceCursor;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun.Phase;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun.ReduceCursor;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRunRepository;
 import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -18,9 +18,12 @@ import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
+/**
+ * 통계 실행 단계에 해당하는 커서만 저장·복원한다.
+ * 누적·일별 합산·축약 커서의 부재를 구분한다.
+ */
 @Repository
 public class JdbcDemandStatisticsRunRepository implements DemandStatisticsRunRepository {
-
     private static final String NO_VEHICLE = "";
     private static final String NO_SLOT = "";
 
@@ -48,7 +51,7 @@ public class JdbcDemandStatisticsRunRepository implements DemandStatisticsRunRep
 
     private final JdbcClient jdbc;
 
-    public JdbcDemandStatisticsRunRepository(final JdbcClient jdbc) {
+    public JdbcDemandStatisticsRunRepository(JdbcClient jdbc) {
         this.jdbc = jdbc;
     }
 
@@ -58,10 +61,17 @@ public class JdbcDemandStatisticsRunRepository implements DemandStatisticsRunRep
     }
 
     @Override
-    public void save(final DemandStatisticsRun run) {
-        final Phase phase = run.phase();
-        final Optional<FoldCursor> fold = phase == Phase.FOLD ? run.foldCursor() : Optional.empty();
-        final Optional<ReduceCursor> reduce = phase == Phase.REDUCE ? run.reduceCursor() : Optional.empty();
+    public void save(DemandStatisticsRun run) {
+        Phase phase = run.phase();
+        Optional<FoldCursor> fold = Optional.empty();
+        if (phase == Phase.FOLD) {
+            fold = run.foldCursor();
+        }
+        Optional<ReduceCursor> reduce = Optional.empty();
+        if (phase == Phase.REDUCE) {
+            reduce = run.reduceCursor();
+        }
+        Optional<ReduceCursor> selectedReduce = reduce;
         jdbc.sql(UPSERT)
             .param("version", run.routeVersionId())
             .param("runId", run.runId())
@@ -69,44 +79,96 @@ public class JdbcDemandStatisticsRunRepository implements DemandStatisticsRunRep
             .param("phase", phase.name())
             .param("dataUntil", offsetOf(run.dataUntil()))
             .param("inputUntilId", run.inputUntilId())
-            .param("vehicleCursor", phase == Phase.ACCUMULATE ? run.vehicleCursor()
-                : fold.map(FoldCursor::vehicleId).orElse(NO_VEHICLE))
-            .param("cursorId", phase == Phase.ACCUMULATE ? run.inputCursor() : 0)
+            .param("vehicleCursor", vehicleCursorOf(run, phase, fold.map(FoldCursor::vehicleId).orElse(NO_VEHICLE)))
+            .param("cursorId", inputCursorOf(run, phase))
             .param("hourCursor", fold.map(cursor -> offsetOf(cursor.arrivedHourStart())).orElse(null))
             .param("stopCursor", fold.map(FoldCursor::targetStopOrder)
-                .or(() -> reduce.map(ReduceCursor::stopOrder)).orElse(0))
+                .or(() -> selectedReduce.map(ReduceCursor::stopOrder)).orElse(0))
             .param("slotCursor", reduce.map(cursor -> storedTimeSlotOf(cursor.timeSlot())).orElse(NO_SLOT))
             .param("dayCursor", reduce.map(ReduceCursor::arrivalDate).orElse(null))
             .param("completedAt", run.completedAt().map(JdbcDemandStatisticsRunRepository::offsetOf).orElse(null))
             .update();
     }
 
-    private static DemandStatisticsRun runOf(final long routeVersionId, final ResultSet rs) throws SQLException {
-        final Phase phase = Phase.valueOf(rs.getString("phase"));
-        final OffsetDateTime hour = rs.getObject("hour_cursor", OffsetDateTime.class);
-        final LocalDate day = rs.getObject("day_cursor", LocalDate.class);
-        final OffsetDateTime completedAt = rs.getObject("completed_at", OffsetDateTime.class);
+    private static DemandStatisticsRun runOf(final long routeVersionId, ResultSet rs) throws SQLException {
+        Phase phase = Phase.valueOf(rs.getString("phase"));
+        OffsetDateTime hour = rs.getObject("hour_cursor", OffsetDateTime.class);
+        LocalDate day = rs.getObject("day_cursor", LocalDate.class);
+        OffsetDateTime completedAt = rs.getObject("completed_at", OffsetDateTime.class);
         final boolean accumulating = phase == Phase.ACCUMULATE;
-        final FoldCursor fold = phase == Phase.FOLD && hour != null
-            ? new FoldCursor(rs.getString("vehicle_cursor"), hour.toInstant(), rs.getInt("stop_cursor")) : null;
-        final ReduceCursor reduce = phase == Phase.REDUCE && day != null
-            ? new ReduceCursor(rs.getInt("stop_cursor"), timeSlotOf(rs.getString("slot_cursor")), day) : null;
+        FoldCursor fold = readFoldCursor(rs, phase, hour);
+        ReduceCursor reduce = readReduceCursor(rs, phase, day);
         return new DemandStatisticsRun(routeVersionId, rs.getObject("run_id", UUID.class),
             rs.getLong("quality_revision"), phase, rs.getObject("data_until", OffsetDateTime.class).toInstant(),
-            rs.getLong("input_until_id"), accumulating ? rs.getString("vehicle_cursor") : NO_VEHICLE,
-            accumulating ? rs.getLong("cursor_id") : 0, fold, reduce,
-            completedAt == null ? null : completedAt.toInstant());
+            rs.getLong("input_until_id"), readVehicleCursor(rs, accumulating),
+            readInputCursor(rs, accumulating), fold, reduce,
+            instantOrNull(completedAt));
     }
 
-    private static String storedTimeSlotOf(final TimeSlot timeSlot) {
+    private static String storedTimeSlotOf(TimeSlot timeSlot) {
         return timeSlot.name().toLowerCase(Locale.ROOT);
     }
 
-    private static TimeSlot timeSlotOf(final String stored) {
+    private static TimeSlot timeSlotOf(String stored) {
         return TimeSlot.valueOf(stored.toUpperCase(Locale.ROOT));
     }
 
-    private static OffsetDateTime offsetOf(final Instant instant) {
+    private static OffsetDateTime offsetOf(Instant instant) {
         return instant.atOffset(ZoneOffset.UTC);
+    }
+
+    private static String vehicleCursorOf(DemandStatisticsRun run, Phase phase, String foldVehicle) {
+        if (phase == Phase.ACCUMULATE) {
+            return run.vehicleCursor();
+        }
+        return foldVehicle;
+    }
+
+    private static long inputCursorOf(DemandStatisticsRun run, Phase phase) {
+        if (phase == Phase.ACCUMULATE) {
+            return run.inputCursor();
+        }
+        return 0;
+    }
+
+    /**
+     * FOLD 단계이며 시각이 있을 때만 접기 커서의 나머지 열을 읽는다. 다른 단계나 시각 부재는 null이다.
+     */
+    private static FoldCursor readFoldCursor(ResultSet rs, Phase phase, OffsetDateTime hour) throws SQLException {
+        if (phase == Phase.FOLD && hour != null) {
+            return new FoldCursor(rs.getString("vehicle_cursor"), hour.toInstant(), rs.getInt("stop_cursor"));
+        }
+        return null;
+    }
+
+    /**
+     * REDUCE 단계이며 날짜가 있을 때만 축약 커서의 나머지 열을 읽는다. 다른 단계나 날짜 부재는 null이다.
+     */
+    private static ReduceCursor readReduceCursor(ResultSet rs, Phase phase, LocalDate day) throws SQLException {
+        if (phase == Phase.REDUCE && day != null) {
+            return new ReduceCursor(rs.getInt("stop_cursor"), timeSlotOf(rs.getString("slot_cursor")), day);
+        }
+        return null;
+    }
+
+    private static String readVehicleCursor(ResultSet rs, final boolean accumulating) throws SQLException {
+        if (accumulating) {
+            return rs.getString("vehicle_cursor");
+        }
+        return NO_VEHICLE;
+    }
+
+    private static long readInputCursor(ResultSet rs, final boolean accumulating) throws SQLException {
+        if (accumulating) {
+            return rs.getLong("cursor_id");
+        }
+        return 0;
+    }
+
+    private static Instant instantOrNull(OffsetDateTime timestamp) {
+        if (timestamp == null) {
+            return null;
+        }
+        return timestamp.toInstant();
     }
 }

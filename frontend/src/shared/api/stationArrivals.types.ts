@@ -21,7 +21,23 @@ export interface ArrivalSnapshot {
 
 export interface ArrivalRefresh {
   status: "IDLE" | "RUNNING" | "BLOCKED" | "FAILED";
-  reason: string | null;
+  reason:
+    | "COLLECTING"
+    | "STARTING"
+    | "RATE_LIMITED"
+    | "DAILY_QUOTA_EXHAUSTED"
+    | "BUSY"
+    | "QUEUE_EXPIRED"
+    | "NOT_DUE"
+    | "STORAGE_OR_COLLECTION_ERROR"
+    | "TRANSPORT_ERROR"
+    | "UPSTREAM_ERROR"
+    | "UNREADABLE_RESPONSE"
+    | "DAILY_QUOTA_EXCEEDED"
+    | "KEY_REJECTED"
+    | "REFRESH_DISABLED"
+    | "WORKER_UNAVAILABLE"
+    | null;
   suggestedRefreshAt: string;
 }
 

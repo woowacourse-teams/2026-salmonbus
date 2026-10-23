@@ -5,17 +5,15 @@ import java.util.List;
 /**
  * 만석 확률을 계산하는 계수. 설계행렬의 각 열에 계수 하나가 대응한다.
  *
- * <p>A18 의 1단계다. 좌석이 몇 석 남을지를 보기 전에 <b>만석인지 아닌지만 먼저 가른다.</b>
- * 문서는 이 단계를 허들이라고 적었다.
+ * <p>A18 문서의 1단계인 허들로, 좌석 수를 계산하기 전에 만석 여부를 구분한다.
  *
  * <p>서버에서 계수를 학습하지 않고 외부 학습 결과를 받아 사용한다.
  * 노선 2개와 예보 거리 12개에 각각 학습하므로 계수 집합은 24개이며 이 단계의 실수 계수는 744개다.
- * 이 객체는 전달받은 열별 계수로 보정 전 확률을 계산한다.
+ * 전달받은 열별 계수로 보정 전 확률을 계산한다.
  */
 public record FullChanceCoefficients(
     List<Double> byColumn
 ) {
-
     public FullChanceCoefficients {
         byColumn = List.copyOf(byColumn);
         if (byColumn.size() != SeatForecastDesignMatrix.COLUMN_COUNT) {

@@ -13,7 +13,6 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class JdbcCurrentRouteVersionQuery implements CurrentRouteVersionQuery {
-
     private static final String FIND_CURRENT_VERSION = """
         SELECT route_version.id
         FROM route_version

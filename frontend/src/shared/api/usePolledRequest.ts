@@ -2,7 +2,7 @@ import { useEffect, useEffectEvent, useState } from "react";
 import type { ApiResult } from "./client";
 import { createLatestRequestGate } from "./latestRequestGate";
 import { nextPollFrom } from "./pollSchedule";
-import { nextResourceFrom, PENDING_RESOURCE, type PolledResource } from "./polledResource";
+import { nextResourceFrom, IDLE_RESOURCE, PENDING_RESOURCE, type PolledResource } from "./polledResource";
 
 interface PolledState<T> {
   key: string;
@@ -11,12 +11,15 @@ interface PolledState<T> {
 
 export function usePolledRequest<T>(
   request: (key: string, signal: AbortSignal) => Promise<ApiResult<T>>,
-  key: string,
+  key: string | null,
+  revision: string | number = 0,
 ): PolledResource<T> {
   const [state, setState] = useState<PolledState<T> | null>(null);
   const requestResource = useEffectEvent(request);
 
   useEffect(() => {
+    if (key === null) return;
+
     const gate = createLatestRequestGate();
     let timer: number | undefined;
     let disposed = false;
@@ -57,7 +60,14 @@ export function usePolledRequest<T>(
       }
     };
 
+    const onOnline = () => {
+      if (document.visibilityState === "visible") {
+        load();
+      }
+    };
+
     document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("online", onOnline);
     if (document.visibilityState === "visible") {
       load();
     }
@@ -66,9 +76,11 @@ export function usePolledRequest<T>(
       disposed = true;
       clearTimer();
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("online", onOnline);
       gate.close();
     };
-  }, [key]);
+  }, [key, revision]);
 
+  if (key === null) return IDLE_RESOURCE;
   return state?.key === key ? state.resource : PENDING_RESOURCE;
 }

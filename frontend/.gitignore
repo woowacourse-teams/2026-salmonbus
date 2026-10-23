@@ -3,6 +3,7 @@ dist/
 
 env/.env*
 !env/.env.example
+!env/.env.kakao-local.example
 
 *storybook.log
 storybook-static
@@ -13,3 +14,5 @@ storybook-static
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+*.pen

@@ -1,7 +1,7 @@
 package com.gustler.backend;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.gustler.backend.support.IntegrationTest;
 import java.time.LocalDate;
@@ -14,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 @IntegrationTest
 @Transactional
 class DailyCallQuotaTableTest {
-
     private static final String PROVIDER_GBIS = "GBIS";
     private static final String API_SERVICE_BUS_LOCATION = "BUS_LOCATION";
     private static final LocalDate KST_DATE = LocalDate.of(2026, 8, 28);
@@ -36,22 +35,34 @@ class DailyCallQuotaTableTest {
 
     @Test
     void 쓴_횟수가_한도를_넘는_장부는_저장되지_않는다() {
-        // when & then
-        assertThatThrownBy(() -> insertQuota(DAILY_LIMIT_10000 + 1, DAILY_LIMIT_10000))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertQuota(DAILY_LIMIT_10000 + 1, DAILY_LIMIT_10000));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void 쓴_횟수가_음수인_장부는_저장되지_않는다() {
-        // when & then
-        assertThatThrownBy(() -> insertQuota(-1, DAILY_LIMIT_10000))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertQuota(-1, DAILY_LIMIT_10000));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void 한도가_0인_장부는_저장되지_않는다() {
-        // when & then
-        assertThatThrownBy(() -> insertQuota(0, 0))
+        // when
+        Throwable caughtFailure = catchThrowable(() -> insertQuota(0, 0));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull()
             .isInstanceOf(DataIntegrityViolationException.class);
     }
 

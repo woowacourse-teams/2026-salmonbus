@@ -2,9 +2,11 @@ package com.gustler.backend.forecasting.infrastructure.statistics;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.nio.channels.Channels;
+import java.nio.channels.SeekableByteChannel;
+import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
-import java.nio.channels.Channels;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -38,7 +40,7 @@ final class StatisticsInputReader implements Iterator<StatisticsInputRow>, AutoC
     private boolean finished;
     private boolean closed;
 
-    StatisticsInputReader(Path directory, List<StatisticsInputFile> files, int maxLineCharacters) {
+    StatisticsInputReader(Path directory, List<StatisticsInputFile> files, final int maxLineCharacters) {
         if (maxLineCharacters < 1) {
             throw new IllegalArgumentException("한 행의 최대 길이는 양수여야 한다");
         }
@@ -68,10 +70,10 @@ final class StatisticsInputReader implements Iterator<StatisticsInputRow>, AutoC
                         finished = true;
                         return false;
                     }
-                    var decoder = StandardCharsets.UTF_8.newDecoder()
+                    CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
                         .onMalformedInput(CodingErrorAction.REPORT)
                         .onUnmappableCharacter(CodingErrorAction.REPORT);
-                    var channel = Files.newByteChannel(directory.resolve(files.get(fileIndex++).name()),
+                    SeekableByteChannel channel = Files.newByteChannel(directory.resolve(files.get(fileIndex++).name()),
                         StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
                     input = new BufferedReader(Channels.newReader(channel, decoder, -1));
                 }
@@ -112,7 +114,10 @@ final class StatisticsInputReader implements Iterator<StatisticsInputRow>, AutoC
             }
             line.append((char) value);
         }
-        return line.isEmpty() ? null : line.toString();
+        if (line.isEmpty()) {
+            return null;
+        }
+        return line.toString();
     }
 
     @Override

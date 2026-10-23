@@ -1,5 +1,13 @@
 # 프런트엔드 환경변수
 
+카카오 로그인을 localhost에서 완료하려면 [카카오 로컬 로그인 설정](docs/kakao-local.md)을 따른다. 로컬 백엔드의 비밀 설정은 `env/.env.kakao-local`에 넣고, 공개 프론트엔드 환경변수와 분리한다.
+
+## 배포된 dev API로 로컬 실행
+
+`env/.env.development`에 `API_PROXY_TARGET=https://dev.salmonbus.com`을 설정합니다. 이 값은 webpack 개발 서버를 시작할 때 읽으므로, 변경한 뒤 `pnpm dev`를 다시 실행해야 합니다. 값을 비우면 로컬 백엔드(`http://localhost:8080`)로 요청합니다.
+
+로컬 서버가 다른 API를 가리키면 dev 백엔드가 배포돼 있어도 로그인 버튼이 비활성화될 수 있습니다. 로컬 `/api/auth/session`이 JSON 200을 반환하는지 먼저 확인합니다. 실제 소셜 인증의 콜백은 서버에 등록된 dev origin으로 돌아오므로, 로그인 왕복은 같은 dev origin에서 검증합니다.
+
 ## 지도 공개 키 ID
 
 네이버 Maps Web Dynamic Map의 공개 키 ID를 `WEBPACK_NAVER_MAP_KEY_ID`로 전달합니다. 이 값은 브라우저 번들에 포함되는 공개 식별자이며, NAVER Cloud의 애플리케이션에 등록한 Web 서비스 URL에서 사용합니다.

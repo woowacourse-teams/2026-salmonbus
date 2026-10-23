@@ -8,22 +8,28 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /** DB 컨테이너 없이 실제 정비 JAR의 검수 진입점을 검증한다. */
 class BundleInspectionProcessTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
     private int sequence;
 
     @Test
     void 번들_검수는_DB_설정_없이_실행된다() throws Exception {
+        // when
         Path bundle = directory.resolve("bundle");
         BundleInspectionFixture.write(bundle);
         Result result = execute(bundle);
+
+        // then
         assertThat(result.exitCode()).isZero();
-        var json = JsonMapper.builder().build().readTree(result.stdout());
+        JsonNode json = JsonMapper.builder().build().readTree(result.stdout());
         assertThat(json.get("status").stringValue()).isEqualTo("succeeded");
         assertThat(json.get("result").get("validation").stringValue()).isEqualTo("PASSED");
         assertThat(json.get("result").get("activated").booleanValue()).isFalse();
@@ -33,6 +39,7 @@ class BundleInspectionProcessTest {
 
     @Test
     void 부적합_번들_검수는_실패_종료한다() throws Exception {
+        // when
         Path bundle = directory.resolve("bundle");
         BundleInspectionFixture.write(bundle);
         Path weights = bundle.resolve("weights.safetensors");
@@ -40,9 +47,13 @@ class BundleInspectionProcessTest {
         changed[changed.length - 1] ^= 1;
         Files.write(weights, changed);
         Result result = execute(bundle);
-        assertThat(result.exitCode()).isEqualTo(1);
-        assertThat(result.stdout()).isBlank();
-        var json = JsonMapper.builder().build().readTree(result.stderr());
+
+        // then
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(result.exitCode()).isEqualTo(1);
+            softly.assertThat(result.stdout()).isBlank();
+        }
+        JsonNode json = JsonMapper.builder().build().readTree(result.stderr());
         assertThat(json.get("code").stringValue()).isEqualTo("BUNDLE_REJECTED_WEIGHTS_DIGEST");
     }
 
@@ -72,5 +83,6 @@ class BundleInspectionProcessTest {
         }
     }
 
-    private record Result(int exitCode, String stdout, String stderr) { }
+    private record Result(int exitCode, String stdout, String stderr) {
+    }
 }

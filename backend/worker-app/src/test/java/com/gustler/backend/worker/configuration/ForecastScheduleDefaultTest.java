@@ -7,17 +7,17 @@ import com.gustler.backend.forecasting.api.statistics.DemandStatisticsPolicy;
 import com.gustler.backend.support.IntegrationTest;
 import com.gustler.backend.worker.scheduling.ArrivalLabelJob;
 import java.time.Duration;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 
 /**
- * 계수 번들이 없어 도는 배포가 하나도 없는 동안은 배치를 켤 이유가 없다.
- * 기본값이 조용히 뒤집히면 아무 값도 못 내면서 몇 초마다 빈 질의만 돈다.
+ * 계수 번들이 없어 활성 배포가 하나도 없는 동안은 배치를 켤 이유가 없다.
+ * 기본값이 예고 없이 바뀌면 아무 값도 내지 못하면서 몇 초마다 빈 질의만 실행한다.
  */
 @IntegrationTest
 class ForecastScheduleDefaultTest {
-
     @Autowired
     private ApplicationContext applicationContext;
 
@@ -32,10 +32,12 @@ class ForecastScheduleDefaultTest {
 
     @Test
     void 예보를_끄면_예보_설정을_바인딩하지_않는다() {
-        // when & then
-        assertThat(applicationContext.getBeanNamesForType(ForecastProperties.class)).isEmpty();
-        assertThat(applicationContext.getBeanNamesForType(SameDayInitializationProperties.class)).isEmpty();
-        assertThat(applicationContext.getBeanNamesForType(ForecastPolicy.class)).isEmpty();
+        // then
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(applicationContext.getBeanNamesForType(ForecastProperties.class)).isEmpty();
+            softly.assertThat(applicationContext.getBeanNamesForType(SameDayInitializationProperties.class)).isEmpty();
+            softly.assertThat(applicationContext.getBeanNamesForType(ForecastPolicy.class)).isEmpty();
+        }
     }
 
     @Test

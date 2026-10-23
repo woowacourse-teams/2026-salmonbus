@@ -1,8 +1,9 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
+import com.gustler.backend.forecasting.application.quality.WorkerQualityState.Snapshot;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,7 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class WorkerQualitySnapshotTest {
-    @Autowired JdbcClient jdbc;
+    @Autowired
+    JdbcClient jdbc;
     private JdbcWorkerQualitySnapshotQuery query;
     private long route;
     private long version;
@@ -36,10 +38,8 @@ class WorkerQualitySnapshotTest {
 
     @Test
     void 품질_기록과_진행_중인_조사가_없으면_최초_버전과_빈_목록을_읽는다() {
-        // given
-
         // when
-        var result = query.read(version);
+        Snapshot result = query.read(version);
 
         // then
         assertThat(result.revision()).isEqualTo(1);
@@ -55,7 +55,7 @@ class WorkerQualitySnapshotTest {
         investigation("vehicle-B", true);
 
         // when
-        var result = query.read(version);
+        Snapshot result = query.read(version);
 
         // then
         assertThat(result.revision()).isEqualTo(7);
@@ -68,7 +68,7 @@ class WorkerQualitySnapshotTest {
         investigation("", false);
 
         // when
-        var result = query.read(version);
+        Snapshot result = query.read(version);
 
         // then
         assertThat(result.investigationPending("vehicle-A")).isTrue();
@@ -77,15 +77,15 @@ class WorkerQualitySnapshotTest {
 
     @Test
     void 존재하지_않는_노선_버전을_정상_상태로_반환하지_않는다() {
-        // given
-
         // when
+        Throwable caughtFailure = catchThrowable(() -> query.read(-1));
 
         // then
-        assertThatThrownBy(() -> query.read(-1)).isInstanceOf(EmptyResultDataAccessException.class);
+        assertThat(caughtFailure)
+            .isNotNull().isInstanceOf(EmptyResultDataAccessException.class);
     }
 
-    private void investigation(String vehicle, boolean completed) {
+    private void investigation(String vehicle, final boolean completed) {
         jdbc.sql("""
             INSERT INTO trip_quality_rebuild(route_version_id,vehicle_id,until_at,completed)
             VALUES(?,?,CURRENT_TIMESTAMP,?)

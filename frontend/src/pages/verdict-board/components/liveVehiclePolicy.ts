@@ -1,6 +1,7 @@
-import type { Board, Direction, LiveVehicles, Phase, Vehicle } from "@/shared/api/routeForecast.types";
+import type { Board, Direction, Phase, Vehicle } from "@/shared/api/routeForecast.types";
 
 export interface LiveVehicleMotionSegment {
+  segmentIndex: number;
   fromStopSequence: number;
   toStopSequence: number;
   startProgress: number;
@@ -33,19 +34,16 @@ const PHASE_MOTION_RULE: Record<Phase, PhaseMotionRule> = {
 
 export function liveVehicleViewsFor(
   board: Board,
-  liveVehicles: LiveVehicles | null | undefined,
+  vehicles: readonly Vehicle[],
   direction: Direction,
 ): LiveVehicleView[] {
-  if (liveVehicles === null || liveVehicles === undefined) return [];
-  if (!canDisplayLiveVehicles(board, liveVehicles)) return [];
-
   const stopSequences = board.stops
     .filter((stop) => stop.direction === direction)
     .map((stop) => stop.sequence)
     .sort((left, right) => left - right);
   const stopSequenceSet = new Set(stopSequences);
 
-  const visibleVehicles = liveVehicles.vehicles
+  const visibleVehicles = vehicles
     .filter((vehicle) => vehicle.direction === direction && stopSequenceSet.has(vehicle.currentStopSequence))
     .sort(vehicleOrderFor);
   const occurrenceByIdentity = new Map<string, number>();
@@ -55,14 +53,6 @@ export function liveVehicleViewsFor(
     vehicle,
     motionSegment: motionSegmentFor(vehicle, stopSequences),
   }));
-}
-
-function canDisplayLiveVehicles(board: Board, liveVehicles: LiveVehicles): boolean {
-  return (
-    liveVehicles.observation.state === "VEHICLES_PRESENT" &&
-    liveVehicles.routeId === board.route.id &&
-    liveVehicles.referenceVersionId === board.route.referenceVersionId
-  );
 }
 
 function vehicleOrderFor(left: Vehicle, right: Vehicle): number {
@@ -92,6 +82,7 @@ function motionSegmentFor(vehicle: Vehicle, stopSequences: number[]): LiveVehicl
 
   if (neighborStopSequence === undefined) {
     return {
+      segmentIndex: Math.max(0, Math.min(currentStopIndex, stopSequences.length - 2)),
       fromStopSequence: currentStopSequence,
       toStopSequence: currentStopSequence,
       startProgress: 0,
@@ -100,6 +91,7 @@ function motionSegmentFor(vehicle: Vehicle, stopSequences: number[]): LiveVehicl
   }
 
   return {
+    segmentIndex: Math.min(currentStopIndex, neighborIndex),
     fromStopSequence: rule.neighbor === "previous" ? neighborStopSequence : currentStopSequence,
     toStopSequence: rule.neighbor === "previous" ? currentStopSequence : neighborStopSequence,
     startProgress: rule.startProgress,

@@ -3,7 +3,6 @@ package com.gustler.backend.forecasting.application.publication;
 import static com.gustler.backend.diagnostics.Logfmt.quote;
 
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
-
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -14,22 +13,34 @@ import org.slf4j.LoggerFactory;
  * 재시작이나 캐시 퇴출 후에는 다시 기록하므로 배치 성공 횟수나 제외 총횟수가 아니다.
  */
 final class ForecastModelUsageLog {
-    private static final Logger log = LoggerFactory.getLogger(ForecastModelUsageLog.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(ForecastModelUsageLog.class);
     private static final int MAX_ROUTES = 256;
     private final Map<String, State> latest = new LinkedHashMap<>();
 
-    synchronized void committed(String routeId, String routeName, long routeVersionId, long batchId, RuntimeSnapshot runtime) {
+    synchronized void committed(
+        String routeId,
+        String routeName,
+        final long routeVersionId,
+        final long batchId,
+        RuntimeSnapshot runtime
+    ) {
         if (changed(routeId, new State(routeVersionId, runtime.deploymentId(), true))) {
-            log.info("event=forecast_model_used routeId={} routeName={} routeVersionId={} batchId={} "
-                    + "modelDeploymentId={} releaseId={} featureContractVersion={}",
-                quote(routeId), quote(routeName), routeVersionId, batchId, runtime.deploymentId(), quote(runtime.releaseId()),
+            LOGGER.info("event=forecast_model_used routeId={} routeName={} routeVersionId={} batchId={} "
+                + "modelDeploymentId={} releaseId={} featureContractVersion={}",
+                quote(routeId), quote(routeName), routeVersionId, batchId, runtime.deploymentId(),
+                quote(runtime.releaseId()),
                 quote(runtime.featureContractVersion()));
         }
     }
 
-    synchronized void referenceMismatch(String routeId, String routeName, long routeVersionId, RuntimeSnapshot runtime) {
+    synchronized void referenceMismatch(
+        String routeId,
+        String routeName,
+        final long routeVersionId,
+        RuntimeSnapshot runtime
+    ) {
         if (changed(routeId, new State(routeVersionId, runtime.deploymentId(), false))) {
-            log.warn("event=forecast_route_skipped reason=ROUTE_REFERENCE_MISMATCH routeId={} routeName={} "
+            LOGGER.warn("event=forecast_route_skipped reason=ROUTE_REFERENCE_MISMATCH routeId={} routeName={} "
                     + "routeVersionId={} modelDeploymentId={} releaseId={}",
                 quote(routeId), quote(routeName), routeVersionId, runtime.deploymentId(), quote(runtime.releaseId()));
         }
@@ -46,5 +57,6 @@ final class ForecastModelUsageLog {
         return true;
     }
 
-    private record State(long routeVersionId, long deploymentId, boolean committed) { }
+    private record State(long routeVersionId, long deploymentId, boolean committed) {
+    }
 }

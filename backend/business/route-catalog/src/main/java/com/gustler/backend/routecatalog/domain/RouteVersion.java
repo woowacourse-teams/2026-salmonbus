@@ -10,7 +10,6 @@ public record RouteVersion(
     OffsetDateTime validTo,
     RouteVersionContent content
 ) {
-
     public RouteVersion {
         Objects.requireNonNull(validFrom);
         Objects.requireNonNull(content);
@@ -29,6 +28,9 @@ public record RouteVersion(
         }
     }
 
+    /**
+     * 현재 판본의 유효 종료 시각을 반영한 값을 반환한다. 새 판본의 시작과 기존 판본 종료는 호출자가 함께 저장한다.
+     */
     public RouteVersion closeAt(OffsetDateTime at) {
         requireCurrent();
         if (!at.isAfter(validFrom)) {

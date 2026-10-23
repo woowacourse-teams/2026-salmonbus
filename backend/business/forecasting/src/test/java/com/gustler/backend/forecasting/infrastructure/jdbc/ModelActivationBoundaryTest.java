@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import com.gustler.backend.forecasting.api.model.LoadConfiguredModel;
 import com.gustler.backend.forecasting.api.model.LoadConfiguredModelCommand;
 import com.gustler.backend.forecasting.api.model.ModelLoadResult;
+import com.gustler.backend.forecasting.api.model.ModelLoadResult.Activated;
 import com.gustler.backend.forecasting.application.deployment.ModelBundleFiles;
 import com.gustler.backend.forecasting.application.deployment.ModelBundleLoader;
 import com.gustler.backend.forecasting.application.deployment.ModelStartupService;
@@ -31,7 +32,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @ForecastingIntegrationTest
 class ModelActivationBoundaryTest {
-
     private static final String MODEL_DIRECTORY = "test-model-directory";
 
     @Autowired
@@ -66,8 +66,10 @@ class ModelActivationBoundaryTest {
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             jdbcClient.sql("DELETE FROM model_deployment WHERE release_id = :release")
                 .param("release", releaseId).update();
-            originalActive.ifPresent(active -> jdbcClient.sql("UPDATE model_deployment SET state = 'ACTIVE' WHERE id = ?")
-                .param(active.id()).update());
+            originalActive.ifPresent(active ->
+                jdbcClient.sql("UPDATE model_deployment SET state = 'ACTIVE' WHERE id = ?")
+                    .param(active.id())
+                    .update());
         });
     }
 
@@ -93,13 +95,14 @@ class ModelActivationBoundaryTest {
         // then
         String startup = ModelStartupService.class.getName() + ".load";
         assertThat(transactions).containsExactly(startup, startup);
-        assertThat(actual).isEqualTo(new ModelLoadResult.Activated(repository.findActive().orElseThrow().id()));
+        assertThat(actual).isEqualTo(new Activated(repository.findActive().orElseThrow().id()));
         assertThat(repository.findActive().orElseThrow().releaseId()).isEqualTo(releaseId);
     }
 
     private static String currentTransaction() {
-        return TransactionSynchronizationManager.isActualTransactionActive()
-            ? TransactionSynchronizationManager.getCurrentTransactionName()
-            : null;
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            return TransactionSynchronizationManager.getCurrentTransactionName();
+        }
+        return null;
     }
 }

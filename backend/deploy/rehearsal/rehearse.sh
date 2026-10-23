@@ -192,8 +192,6 @@ for runtime_module in common api-app worker-app; do
   printf 'module build\n' > "$RUNTIME_FIXTURE/$runtime_module/build.gradle"
 done
 mkdir -p "$RUNTIME_FIXTURE/../contract/examples" "$RUNTIME_FIXTURE/../docs/api"
-printf 'chat example\n' > "$RUNTIME_FIXTURE/../contract/examples/chat-v1.json"
-printf 'chat guide\n' > "$RUNTIME_FIXTURE/../docs/api/chat-websocket-public.md"
 if runtime_source_digest api "$RUNTIME_FIXTURE" >/dev/null \
   && runtime_source_digest worker "$RUNTIME_FIXTURE" >/dev/null; then
   ok "아직 옮기지 않은 모듈 디렉터리가 없어도 기존 소스 지문을 계산한다"
@@ -226,10 +224,9 @@ for runtime_module in worker-app business/route-catalog business/observations bu
   check_runtime_change "$runtime_module/src/main/resources/module.properties" unchanged changed
   check_runtime_change "$runtime_module/build.gradle" unchanged changed
 done
-for runtime_path in api-app/src/main/java/Marker.java api-app/src/main/resources/application.yml api-app/build.gradle; do
-  check_runtime_change "$runtime_path" changed unchanged
-done
-for runtime_path in ../contract/examples/chat-v1.json ../docs/api/chat-websocket-public.md; do
+for runtime_path in api-app/src/main/java/Marker.java api-app/src/main/resources/application.yml api-app/build.gradle \
+  business/member/src/main/java/Marker.java business/member/src/main/resources/module.properties \
+  business/member/build.gradle; do
   check_runtime_change "$runtime_path" changed unchanged
 done
 for runtime_path in common/src/main/java/Marker.java common/src/main/resources/db/migration/V17__fixture.sql \
@@ -238,7 +235,8 @@ for runtime_path in common/src/main/java/Marker.java common/src/main/resources/d
   check_runtime_change "$runtime_path" changed changed
 done
 for runtime_path in maintenance-app/src/main/java/Marker.java maintenance-app/src/main/resources/maintenance.properties \
-  maintenance-app/build.gradle worker-app/src/test/java/MarkerTest.java \
+  maintenance-app/build.gradle runtime-test/build.gradle runtime-test/src/test/java/MarkerTest.java \
+  worker-app/src/test/java/MarkerTest.java \
   business/forecasting/src/test/java/MarkerTest.java business/forecasting/src/testFixtures/java/Fixture.java \
   ../docs/design.md ../frontend/src/page.ts; do
   check_runtime_change "$runtime_path" unchanged unchanged
@@ -680,7 +678,7 @@ else
 fi
 
 sec "10. 훅 로그에 값이 새지 않았는가"
-if grep -rqE 'GBIS_SERVICE_KEY(_[A-Z])?=[^$]|DB_PASSWORD=[^$]' "$WORK"/*.out 2>/dev/null; then
+if grep -rqE 'GBIS_SERVICE_KEY(_[A-Z])?=[^$]|GBIS_KEYS(_[A-Za-z0-9]+)?=[^$]|DB_PASSWORD=[^$]' "$WORK"/*.out 2>/dev/null; then
   bad "훅 출력에 값이 찍혔다"
 else
   ok "훅 출력에 값이 안 찍혔다"

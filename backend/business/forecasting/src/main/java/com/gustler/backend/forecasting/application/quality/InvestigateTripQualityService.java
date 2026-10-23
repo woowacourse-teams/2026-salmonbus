@@ -2,18 +2,22 @@ package com.gustler.backend.forecasting.application.quality;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.api.quality.InvestigateTripQuality;
-
-
-
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.jdbc.UncategorizedSQLException;
 import org.springframework.stereotype.Component;
 
+/**
+ * 대기 중인 차량 품질 조사를 한 회차씩 실행한다.
+ * 실패한 조사가 다음 호출을 독점하지 않도록 재시도 흐름을 조율한다.
+ */
 @Component
 public class InvestigateTripQualityService implements InvestigateTripQuality {
     private final TripQualityInvestigationService quality;
-    public InvestigateTripQualityService(TripQualityInvestigationService quality) { this.quality = quality; }
+
+    public InvestigateTripQualityService(TripQualityInvestigationService quality) {
+        this.quality = quality;
+    }
 
     public void investigate() {
         WorkerOperationLog.run("quality_investigation", "all", this::investigateOnce);
@@ -27,12 +31,15 @@ public class InvestigateTripQualityService implements InvestigateTripQuality {
             deferred(e);
         } catch (UncategorizedSQLException e) {
             // JDBC 드라이버/예외 변환기에 따라 PostgreSQL lock_timeout이 이 타입으로 전달된다.
-            if (!"55P03".equals(e.getSQLException().getSQLState())) { throw e; }
+            if (!"55P03".equals(e.getSQLException().getSQLState())) {
+                throw e;
+            }
             deferred(e);
         }
     }
 
     private static void deferred(Exception exception) {
-        WorkerOperationLog.warn("quality_investigation", "all", "DB_TIME_BUDGET_" + exception.getClass().getSimpleName());
+        WorkerOperationLog.warn("quality_investigation", "all", "DB_TIME_BUDGET_" + exception.getClass()
+            .getSimpleName());
     }
 }

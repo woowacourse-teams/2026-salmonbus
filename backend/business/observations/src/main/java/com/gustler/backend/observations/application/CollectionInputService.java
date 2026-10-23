@@ -9,8 +9,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 수집 배치가 예보 입력으로 확정되는 시점을 저장 경계에서 반영한다.
+ */
 @Component
-@Transactional(propagation = Propagation.MANDATORY)
+@Transactional(readOnly = false, propagation = Propagation.MANDATORY)
 public class CollectionInputService implements CollectionInputs {
     private final CollectionBatchRepository batches;
 

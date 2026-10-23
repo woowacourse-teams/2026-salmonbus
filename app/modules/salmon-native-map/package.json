@@ -1,0 +1,6 @@
+{
+  "name": "salmon-native-map",
+  "version": "1.0.0",
+  "private": true,
+  "description": "iOS Naver map and WebView touch routing for Salmonbus"
+}

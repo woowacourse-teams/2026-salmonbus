@@ -1,22 +1,20 @@
 package com.gustler.backend.forecasting.domain.publication;
 
-import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
-import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
+import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import org.junit.jupiter.api.Test;
 
 /**
- * 예보의 시간대를 무엇으로 정하는지 본다.
+ * 예보의 시간대 기준을 검증한다.
  *
- * <p>몇 시가 아침인지는 {@link TimeSlotTest} 가 본다. 여기서 보는 것은 <b>어느 시각을 보느냐</b>다.
+ * <p>몇 시가 아침인지는 {@link TimeSlotTest} 가 검증한다. 여기서는 <b>기준으로 사용하는 시각</b>을 확인한다.
  */
 class ForecastTimeSlotTest {
-
     private static final Clock KOREAN_CLOCK =
         Clock.fixed(Instant.parse("2026-08-19T00:00:00Z"), ZoneId.of("Asia/Seoul"));
 
@@ -26,7 +24,8 @@ class ForecastTimeSlotTest {
 
     @Test
     void 시간대는_관측을_받은_시각으로_정해진다() {
-        // given 아침 8시 30분에 받은 관측
+        // given
+        // 아침 8시 30분에 받은 관측
         PendingForecastBatch batch = batchReceivedAt(Instant.parse("2026-08-19T08:30:00+09:00"));
 
         // when
@@ -38,14 +37,16 @@ class ForecastTimeSlotTest {
 
     @Test
     void 밀린_batch_를_한참_뒤에_돌려도_같은_시간대가_나온다() {
-        // given 아침에 받았는데 예보는 낮에 돌린다
+        // given
+        // 아침에 받았는데 예보는 낮에 돌린다
         PendingForecastBatch batch = batchReceivedAt(Instant.parse("2026-08-19T08:30:00+09:00"));
         Clock middayClock = Clock.fixed(Instant.parse("2026-08-19T13:00:00+09:00"), ZoneId.of("Asia/Seoul"));
 
         // when
         TimeSlot actual = ForecastTimeSlot.of(batch, middayClock);
 
-        // then 언제 돌렸느냐로 아침이 그 밖이 되지 않는다
+        // then
+        // 언제 돌렸느냐로 아침이 그 밖이 되지 않는다
         assertThat(actual).isEqualTo(TimeSlot.MORNING);
     }
 

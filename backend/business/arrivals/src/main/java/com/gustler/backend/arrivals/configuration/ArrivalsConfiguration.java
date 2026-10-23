@@ -27,24 +27,34 @@ import tools.jackson.databind.ObjectMapper;
 @Configuration(proxyBeanMethods = false)
 public class ArrivalsConfiguration {
     @Bean
-    ArrivalStore arrivalStore(JdbcClient jdbc, ObjectMapper json) { return new JdbcArrivalStore(jdbc, json); }
+    ArrivalStore arrivalStore(JdbcClient jdbc, ObjectMapper json) {
+        return new JdbcArrivalStore(jdbc, json);
+    }
 
     @Bean
     ArrivalSource arrivalSource(@Qualifier("arrivalGbisOptions") GbisClientOptions options,
         ObjectMapper json, Clock clock) {
-        var client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
-        var factory = new JdkClientHttpRequestFactory(client);
+        HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(client);
         factory.setReadTimeout(Duration.ofSeconds(5));
-        var rest = RestClient.builder().baseUrl(options.baseUrl()).requestFactory(factory).build();
+        RestClient rest = RestClient.builder().baseUrl(options.baseUrl()).requestFactory(factory).build();
         return new GbisArrivalSource(new GbisApiCaller(rest, options, json), json, clock);
     }
 
     @Bean
-    RefreshStationArrivals refreshStationArrivals(ArrivalStore store, ArrivalSource source, ArrivalCallQuota quota,
-        @Qualifier("arrivalExecutor") Executor executor, ArrivalCollectionPolicy policy, Clock clock) {
+    RefreshStationArrivals refreshStationArrivals(
+        ArrivalStore store,
+        ArrivalSource source,
+        ArrivalCallQuota quota,
+        @Qualifier("arrivalExecutor") Executor executor,
+        ArrivalCollectionPolicy policy,
+        Clock clock
+    ) {
         return new ArrivalRefreshCoordinator(store, source, quota, executor, policy, clock, System::nanoTime);
     }
 
     @Bean
-    RetainArrivalSnapshots retainArrivalSnapshots(ArrivalStore store) { return store::purgeExpiredBefore; }
+    RetainArrivalSnapshots retainArrivalSnapshots(ArrivalStore store) {
+        return store::purgeExpiredBefore;
+    }
 }

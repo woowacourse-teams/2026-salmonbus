@@ -1,22 +1,21 @@
 package com.gustler.backend.quota.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class CallQuotaPolicyTest {
-
     private static final int LOCATION_LIMIT = 10_000;
     private static final int ROUTE_LIMIT = 500;
     private static final int SAME_LIMIT = 3;
 
     @Test
     void API마다_받은_한도를_그대로_돌려준다() {
-        // given
+        // when
         CallQuotaPolicy policy = new CallQuotaPolicy(limits(LOCATION_LIMIT, ROUTE_LIMIT));
 
         // then
@@ -26,7 +25,7 @@ class CallQuotaPolicyTest {
 
     @Test
     void 한도가_같은_설정은_모든_API에_같은_값을_준다() {
-        // given
+        // when
         CallQuotaPolicy policy = CallQuotaPolicy.sameForEveryApi(SAME_LIMIT);
 
         // then
@@ -40,15 +39,29 @@ class CallQuotaPolicyTest {
         Map<CallQuota, Integer> onlyLocation = new EnumMap<>(CallQuota.class);
         onlyLocation.put(CallQuota.BUS_LOCATION, LOCATION_LIMIT);
 
-        // when & then
-        assertThatIllegalArgumentException().isThrownBy(() -> new CallQuotaPolicy(onlyLocation));
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new CallQuotaPolicy(onlyLocation));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull().isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void 한도가_1보다_작으면_거절한다() {
-        // when & then
-        assertThatIllegalArgumentException().isThrownBy(() -> new CallQuotaPolicy(limits(LOCATION_LIMIT, 0)));
-        assertThatIllegalArgumentException().isThrownBy(() -> new CallQuotaPolicy(limits(-1, ROUTE_LIMIT)));
+        // when
+        Throwable caughtFailure = catchThrowable(() -> new CallQuotaPolicy(limits(LOCATION_LIMIT, 0)));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull().isInstanceOf(IllegalArgumentException.class);
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> new CallQuotaPolicy(limits(-1, ROUTE_LIMIT)));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull().isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -62,7 +75,13 @@ class CallQuotaPolicyTest {
 
         // then
         assertThat(policy.limitOf(CallQuota.BUS_ROUTE)).isEqualTo(ROUTE_LIMIT);
-        assertThatThrownBy(() -> policy.dailyLimits().put(CallQuota.BUS_ROUTE, LOCATION_LIMIT))
+
+        // when
+        Throwable phaseFailure1 = catchThrowable(() -> policy.dailyLimits().put(CallQuota.BUS_ROUTE, LOCATION_LIMIT));
+
+        // then
+        assertThat(phaseFailure1)
+            .isNotNull()
             .isInstanceOf(UnsupportedOperationException.class);
     }
 
@@ -71,5 +90,26 @@ class CallQuotaPolicyTest {
         limits.put(CallQuota.BUS_LOCATION, location);
         limits.put(CallQuota.BUS_ROUTE, route);
         return limits;
+    }
+
+    @Test
+    void 키별_한도가_있는_키는_그_한도를_없는_키는_API_한도를_쓴다() {
+        // when
+        CallQuotaPolicy policy = CallQuotaPolicy.sameForEveryApi(SAME_LIMIT, List.of("a", "e"), Map.of("e", 1));
+
+        // then
+        assertThat(policy.limitOf(CallQuota.BUS_LOCATION, "e")).isEqualTo(1);
+        assertThat(policy.limitOf(CallQuota.BUS_LOCATION, "a")).isEqualTo(SAME_LIMIT);
+    }
+
+    @Test
+    void 설정에_없는_키에_키별_한도를_주면_거절한다() {
+        // when
+        Throwable caughtFailure = catchThrowable(
+            () -> CallQuotaPolicy.sameForEveryApi(SAME_LIMIT, List.of("a"), Map.of("e", 1)));
+
+        // then
+        assertThat(caughtFailure)
+            .isNotNull().isInstanceOf(IllegalArgumentException.class);
     }
 }

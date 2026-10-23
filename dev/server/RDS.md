@@ -1,7 +1,7 @@
 # 공유 dev의 RDS 연결과 배포
 
 공유 dev의 API와 worker는 전용 RDS `salmonbus-dev-db`를 사용한다.
-개인 로컬 개발은 기존 Docker PostgreSQL 구성을 사용한다. MongoDB와 GBIS WireMock은
+개인 로컬 개발은 기존 Docker PostgreSQL 구성을 사용한다. GBIS WireMock은
 공유 dev EC2에 유지하며, 운영 DB는 전환 대상이 아니다.
 
 ## 연결 검증
@@ -16,7 +16,7 @@
 모두 검증된 dev RDS URL을 사용해야 한다. TLS는 `verify-full`로 인증서와 호스트명을
 검증한다. 앱에는 기존 dev 전용 계정을 사용하며 마스터 계정을 설정하지 않는다.
 systemd는 환경 파일의 DB 설정을 사용한다. worker의 GBIS loopback 고정과 실제 키 거부는
-유지한다. basis 교체 시 RDS 대상 파일·CA·앱 계정·Origin 설정을 보존한다.
+유지한다. basis 교체 시 RDS 대상 파일·CA·앱 계정을 보존한다.
 
 ## PR 머지 후 자동 배포
 
@@ -56,4 +56,4 @@ DB 원복이 필요하면 앱을 정지하고 전환 전 설정에 맞는 unit·
 RDS를 지원하지 않는 옛 basis로 되돌리기 전에 DB 설정과 기동 검증의 호환성을 확인한다.
 
 worker 설정과 차량 규모를 맞춘 뒤 안정된 구간의 실제 RDS 저장·읽기 부하를 비교한다.
-사용자 API·채팅 부하 시험은 별도 범위다.
+사용자 API 부하 시험은 별도 범위다.

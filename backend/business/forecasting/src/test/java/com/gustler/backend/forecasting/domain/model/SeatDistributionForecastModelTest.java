@@ -1,22 +1,19 @@
 package com.gustler.backend.forecasting.domain.model;
 
-import com.gustler.backend.forecasting.infrastructure.bundle.DummyBundle;
-import com.gustler.backend.forecasting.infrastructure.bundle.LoadedBundle;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.Assertions.within;
 
-import com.gustler.backend.forecasting.domain.model.SeatRangeException;
 import com.gustler.backend.forecasting.domain.model.SeatForecastInput;
 import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
+import com.gustler.backend.forecasting.domain.model.SeatRangeException;
+import com.gustler.backend.forecasting.infrastructure.bundle.DummyBundle;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** 예보 재료가 실제 계수 계산과 모델 입력 검증까지 연결되는지 확인한다. */
+/** 예보 입력이 실제 계수 계산과 모델 입력 검증까지 연결되는지 확인한다. */
 class SeatDistributionForecastModelTest {
-
     @TempDir
     Path directory;
 
@@ -43,8 +40,11 @@ class SeatDistributionForecastModelTest {
         SeatForecastResult actual = model.predict(input);
 
         // then
-        assertThat(actual.distribution().chanceBySeats().stream()
-            .mapToDouble(Double::doubleValue).sum()).isEqualTo(1.0, within(1e-12));
+        assertThat(actual.distribution()
+            .chanceBySeats()
+            .stream()
+            .mapToDouble(Double::doubleValue)
+            .sum()).isEqualTo(1.0, within(1e-12));
     }
 
     @Test
@@ -64,8 +64,8 @@ class SeatDistributionForecastModelTest {
     void 현재_잔여석이_허용_범위여도_과거_최대값이_모델_상한을_넘으면_거부한다() {
         // given
         SeatDistributionForecastModel model = model();
-        int currentSeats = SeatGrid.LARGEST_SEATS / 2;
-        int historicalMaximum = SeatGrid.LARGEST_SEATS + 1;
+        final int currentSeats = SeatGrid.LARGEST_SEATS / 2;
+        final int historicalMaximum = SeatGrid.LARGEST_SEATS + 1;
         SeatForecastInput input = ForecastInputFixture.of("204000057", currentSeats, historicalMaximum);
 
         // when

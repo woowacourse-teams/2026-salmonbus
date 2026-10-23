@@ -5,10 +5,16 @@ import com.gustler.backend.forecasting.domain.quality.RouteDataQualityRepository
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
+/**
+ * 노선 품질 상태를 잠가 읽고 갱신된 판본을 저장한다.
+ */
 @Repository
 public class JdbcRouteDataQualityRepository implements RouteDataQualityRepository {
     private final JdbcClient jdbc;
-    public JdbcRouteDataQualityRepository(final JdbcClient jdbc) { this.jdbc = jdbc; }
+
+    public JdbcRouteDataQualityRepository(JdbcClient jdbc) {
+        this.jdbc = jdbc;
+    }
 
     @Override
     public RouteDataQuality findForUpdate(final long version) {
@@ -19,7 +25,7 @@ public class JdbcRouteDataQualityRepository implements RouteDataQualityRepositor
     }
 
     @Override
-    public void save(final RouteDataQuality quality) {
+    public void save(RouteDataQuality quality) {
         jdbc.sql("UPDATE route_data_quality SET quality_revision = ? WHERE route_id = ?")
             .param(quality.revision()).param(quality.routeId()).update();
     }

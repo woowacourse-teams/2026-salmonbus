@@ -28,5 +28,9 @@ check 'Swagger 형제 설정의 URL은 차단한다' fail "$docs"$'  other:\n   
 check '같은 문서의 비밀번호는 차단한다' fail "$docs"$'spring:\n  datasource:\n    password: sentinel-secret\n'
 check '같은 문서의 사용자 이름은 차단한다' fail "$docs"$'spring:\n  datasource:\n    username: sentinel-secret\n'
 check '같은 문서의 서비스키는 차단한다' fail "$docs"$'gbis:\n  service-key-b: sentinel-secret\n'
+check '같은 문서의 새 형식 서비스키는 차단한다' fail "$docs"$'gbis:\n  keys:\n    e: sentinel-secret\n'
+check '한 줄로 적은 새 형식 서비스키도 차단한다' fail "$docs"$'gbis:\n  keys: e=sentinel-secret\n'
+check '별칭 서비스키 맵도 차단한다' fail "$docs"$'gbis:\n  named-keys:\n    e: sentinel-secret\n'
+check '새 형식 서비스키의 환경변수 자리표시자는 허용한다' pass "$docs"$'gbis:\n  keys:\n    e: ${GBIS_KEYS_E:}\n'
 check '같은 위치라도 뒤에 숨긴 URL은 차단한다' fail "$docs"$'    url: sentinel-secret\n'
 echo "비밀 검사 회귀 테스트: $passed 통과"

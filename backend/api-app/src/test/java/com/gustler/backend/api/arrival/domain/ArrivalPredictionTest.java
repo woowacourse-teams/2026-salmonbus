@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.arrival.contract.ArrivalSnapshot.Prediction;
 import java.time.Instant;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 
 class ArrivalPredictionTest {
@@ -11,17 +12,25 @@ class ArrivalPredictionTest {
 
     @Test
     void 초_정보가_없으면_분_정보를_수신시각에_더한다() {
-        var source = new Prediction(null, 1, null, 3, null, null, "NOT_PROVIDED", null, null, null);
-        var prediction = ArrivalPrediction.at(source, RECEIVED, RECEIVED.plusSeconds(10));
-        assertThat(prediction.resolution()).isEqualTo("MINUTES");
-        assertThat(prediction.expectedArrivalAt()).isEqualTo(RECEIVED.plusSeconds(180));
-        assertThat(prediction.remainingSeconds()).isEqualTo(170);
+        // when
+        Prediction source = new Prediction(null, 1, null, 3, null, null, "NOT_PROVIDED", null, null, null);
+        ArrivalPrediction prediction = ArrivalPrediction.at(source, RECEIVED, RECEIVED.plusSeconds(10));
+
+        // then
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(prediction.resolution()).isEqualTo("MINUTES");
+            softly.assertThat(prediction.expectedArrivalAt()).isEqualTo(RECEIVED.plusSeconds(180));
+            softly.assertThat(prediction.remainingSeconds()).isEqualTo(170);
+        }
     }
 
     @Test
     void 예상시각이_지났으면_실제_도착으로_취급하지_않는다() {
-        var source = new Prediction("vehicle-1", 1, 30, 1, null, 0, null, null, null, null);
-        var prediction = ArrivalPrediction.at(source, RECEIVED, RECEIVED.plusSeconds(31));
+        // when
+        Prediction source = new Prediction("vehicle-1", 1, 30, 1, null, 0, null, null, null, null);
+        ArrivalPrediction prediction = ArrivalPrediction.at(source, RECEIVED, RECEIVED.plusSeconds(31));
+
+        // then
         assertThat(prediction.available()).isFalse();
         assertThat(prediction.remainingSeconds()).isNull();
         assertThat(prediction.expectedArrivalAt()).isEqualTo(RECEIVED.plusSeconds(30));
@@ -29,10 +38,15 @@ class ArrivalPredictionTest {
 
     @Test
     void 초_정보를_우선하고_남은_시간은_올림한다() {
-        var source = new Prediction("vehicle-1", 1, 30, 1, null, 0, null, null, null, null);
-        var prediction = ArrivalPrediction.at(source, RECEIVED, RECEIVED.plusMillis(29_500));
-        assertThat(prediction.remainingSeconds()).isEqualTo(1);
-        assertThat(prediction.resolution()).isEqualTo("SECONDS");
+        // when
+        Prediction source = new Prediction("vehicle-1", 1, 30, 1, null, 0, null, null, null, null);
+        ArrivalPrediction prediction = ArrivalPrediction.at(source, RECEIVED, RECEIVED.plusMillis(29_500));
+
+        // then
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(prediction.remainingSeconds()).isEqualTo(1);
+            softly.assertThat(prediction.resolution()).isEqualTo("SECONDS");
+        }
         assertThat(ArrivalPrediction.at(source, RECEIVED, RECEIVED.plusSeconds(30)).remainingSeconds()).isZero();
     }
 }

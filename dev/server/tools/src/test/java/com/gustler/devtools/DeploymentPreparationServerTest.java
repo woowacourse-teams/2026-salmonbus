@@ -65,15 +65,14 @@ class DeploymentPreparationServerTest {
 
     private Path basis(Path path, String digest, String commit) throws Exception {
         Files.createDirectory(path);
-        for (var name : List.of("tools/api.yml", "tools/worker.yml", "config/mongodb.yml",
-                "systemd/salmonbus-dev-infra.service", "infra/compose.yaml", "infra/init-chat.js",
+        for (var name : List.of("tools/api.yml", "tools/worker.yml",
+                "systemd/salmonbus-dev-infra.service", "infra/compose.yaml",
                 "tools/data-contract.sha256", "wiremock-image.tar")) {
             var file = path.resolve(name);
             Files.createDirectories(file.getParent());
             var text = switch (name) {
                 case "tools/api.yml" -> Files.readString(fixture.source.resolve("api.yml"));
                 case "tools/worker.yml" -> Files.readString(fixture.source.resolve("worker.yml"));
-                case "config/mongodb.yml" -> Files.readString(fixture.source.resolveSibling("config/mongodb.yml"));
                 default -> "stable " + name + "\n";
             };
             Files.writeString(file, text);
@@ -448,7 +447,7 @@ class DeploymentPreparationServerTest {
         var before = Environment.load(config);
         preparation().prepare(incoming, apiEnvironment);
         var after = Environment.load(config);
-        for (var name : List.of("api", "worker", "postgres", "mongodb")) {
+        for (var name : List.of("api", "worker", "postgres")) {
             assertTrue(before.get(name).equals(after.get(name)), name + " settings must be preserved");
         }
         assertEquals(RevisionStore.verify(incoming.resolve("basis"), true).commit(),

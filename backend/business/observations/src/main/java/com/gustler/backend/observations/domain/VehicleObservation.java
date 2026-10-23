@@ -2,6 +2,10 @@ package com.gustler.backend.observations.domain;
 
 import java.util.Objects;
 
+/**
+ * 정규화한 원천 차량 관측이다.
+ * 정류장·운행 상태·좌석의 알려진 값과 미제공 의미를 구분한다.
+ */
 public record VehicleObservation(
     String vehicleId,
     String plateNumber,
@@ -14,7 +18,6 @@ public record VehicleObservation(
     Integer routeType,
     Integer tagless
 ) {
-
     private static final int LOWEST_CROWD_LEVEL = 1;
     private static final int HIGHEST_CROWD_LEVEL = 4;
     private static final int MOVING_BETWEEN_STOPS = 0;
@@ -58,12 +61,14 @@ public record VehicleObservation(
         return stopSequence;
     }
 
-    private static Integer crowdLevelOf(
-        Integer crowdLevel
-    ) {
-        if (crowdLevel == null || crowdLevel < LOWEST_CROWD_LEVEL || crowdLevel > HIGHEST_CROWD_LEVEL) {
+    private static Integer crowdLevelOf(Integer crowdLevel) {
+        if (crowdLevel == null || isOutsideCrowdLevelRange(crowdLevel)) {
             return null;
         }
         return crowdLevel;
+    }
+
+    private static boolean isOutsideCrowdLevelRange(int crowdLevel) {
+        return crowdLevel < LOWEST_CROWD_LEVEL || crowdLevel > HIGHEST_CROWD_LEVEL;
     }
 }

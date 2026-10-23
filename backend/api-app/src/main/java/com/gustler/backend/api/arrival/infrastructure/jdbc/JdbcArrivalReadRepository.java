@@ -9,12 +9,18 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.ObjectMapper;
 
+/**
+ * 현재 노선 판본의 정류장 방문과 저장된 도착정보 수신 결과를 API 조회 모델로 읽는다.
+ */
 @Repository
 public class JdbcArrivalReadRepository implements ArrivalReadRepository {
     private final JdbcClient jdbc;
     private final ObjectMapper json;
 
-    public JdbcArrivalReadRepository(JdbcClient jdbc, ObjectMapper json) { this.jdbc = jdbc; this.json = json; }
+    public JdbcArrivalReadRepository(JdbcClient jdbc, ObjectMapper json) {
+        this.jdbc = jdbc;
+        this.json = json;
+    }
 
     @Override
     public List<ArrivalVisit> visits(String stationId) {
@@ -26,7 +32,7 @@ public class JdbcArrivalReadRepository implements ArrivalReadRepository {
             WHERE stop.stop_id = ? AND version.valid_to IS NULL AND route.source_id = 'GBIS'
             ORDER BY route.public_route_id, stop.stop_order
             """).param(stationId).query((row, index) -> new ArrivalVisit(row.getString(1), row.getString(2),
-                row.getLong(3), row.getInt(4), row.getString(5), row.getTimestamp(6).toInstant())).list();
+            row.getLong(3), row.getInt(4), row.getString(5), row.getTimestamp(6).toInstant())).list();
     }
 
     @Override

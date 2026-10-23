@@ -15,7 +15,6 @@ public record StagedModelDeployment(
     String supportedScopeDigest,
     Instant dataUntil
 ) {
-
     public StagedModelDeployment {
         if (deploymentKey == null) {
             throw new IllegalArgumentException("적재마다 다른 키가 있어야 한다");

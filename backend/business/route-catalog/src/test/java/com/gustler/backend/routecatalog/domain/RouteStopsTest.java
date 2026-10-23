@@ -12,7 +12,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class RouteStopsTest {
-
     private static final int TURN_SEQUENCE_3330 = 43;
     private static final int STOP_COUNT_3330 = 85;
     private static final String STOP_208000069 = "208000069"; // 안양역. 3330 회차 정류소
@@ -45,7 +44,10 @@ class RouteStopsTest {
         ));
 
         // when
-        List<StopDirection> actual = routeStops.stops().stream().map(RouteStop::direction).toList();
+        List<StopDirection> actual = routeStops.stops()
+            .stream()
+            .map(RouteStop::direction)
+            .toList();
 
         // then
         assertThat(actual).containsOnly(UP);
@@ -74,7 +76,10 @@ class RouteStopsTest {
         ));
 
         // when
-        List<Integer> actual = routeStops.stops().stream().map(RouteStop::stopOrder).toList();
+        List<Integer> actual = routeStops.stops()
+            .stream()
+            .map(RouteStop::stopOrder)
+            .toList();
 
         // then
         assertThat(actual).containsExactly(2, 3);
@@ -90,7 +95,10 @@ class RouteStopsTest {
         ));
 
         // when
-        List<Boolean> actual = routeStops.stops().stream().map(RouteStop::boardingAllowed).toList();
+        List<Boolean> actual = routeStops.stops()
+            .stream()
+            .map(RouteStop::boardingAllowed)
+            .toList();
 
         // then
         assertThat(actual).containsExactly(true, false, true);
@@ -109,9 +117,7 @@ class RouteStopsTest {
 
     @ParameterizedTest
     @ValueSource(ints = {0, 999})
-    void 회차_순번은_경유하는_정류소_중_하나의_순번이다(
-        final int turnSequence
-    ) {
+    void 회차_순번은_경유하는_정류소_중_하나의_순번이다(final int turnSequence) {
         // when
         Throwable actual = catchThrowable(() -> RouteStops.from(turnSequence, eightyFiveUpstreamStops()));
 
@@ -133,7 +139,8 @@ class RouteStopsTest {
         RouteStops routeStops,
         final int stopOrder
     ) {
-        return routeStops.stops().stream()
+        return routeStops.stops()
+            .stream()
             .filter(stop -> stop.stopOrder() == stopOrder)
             .findFirst()
             .orElseThrow()

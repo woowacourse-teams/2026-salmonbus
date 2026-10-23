@@ -6,10 +6,10 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.*;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class DataTransitionDatabaseTest {
-    private static final PostgreSQLContainer<?> database = new PostgreSQLContainer<>("postgres:18")
+    private static final PostgreSQLContainer database = new PostgreSQLContainer("postgres:18")
             .withCreateContainerCmdModifier(command -> command.getHostConfig()
                     .withMemory(256L * 1024 * 1024).withNanoCPUs(1000000000L));
     private Connection connection;

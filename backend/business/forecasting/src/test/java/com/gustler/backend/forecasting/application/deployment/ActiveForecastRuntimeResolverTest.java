@@ -17,13 +17,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * 도는 배포와 올라온 계수의 신원이 안 섞이는지 본다.
+ * 활성 배포와 적재된 계수의 식별 정보가 섞이지 않는지 확인한다.
  *
- * <p>동키가 PR #47 에 남긴 우려가 이 자리다. 둘을 따로 읽으면 승격 순간에 ACTIVE 행은 B 인데
- * 계산은 A 계수로 하고 DB 에는 B 예보라고 적는 상태가 된다.
+ * <p>동키가 PR #47 에 남긴 우려를 검증한다. 둘을 따로 읽으면 승격 순간에 ACTIVE 행은 B인데
+ * 계산은 A 계수로 하고 DB에는 B의 예보로 기록하는 상태가 된다.
  */
 class ActiveForecastRuntimeResolverTest {
-
     @TempDir
     Path directory;
 
@@ -67,7 +66,8 @@ class ActiveForecastRuntimeResolverTest {
 
     @Test
     void 배포_행의_출시_식별자가_올라온_계수와_다르면_아무것도_안_낸다() {
-        // given ACTIVE 행은 B 인데 메모리에는 A 계수가 올라와 있는 상태다
+        // given
+        // ACTIVE 행은 B 인데 메모리에는 A 계수가 올라와 있는 상태다
         ModelRelease bundle = loaded();
         ActiveModelDeployment other = new ActiveModelDeployment(
             7L, bundle.featureContractVersion(), "other-release-0002", bundle.bundleDigest());
@@ -95,7 +95,8 @@ class ActiveForecastRuntimeResolverTest {
 
     @Test
     void 배포_행의_입력_규칙_버전이_올라온_계수와_다르면_아무것도_안_낸다() {
-        // given 계수는 같은데 입력을 만드는 규칙이 다르면 다른 뜻의 입력에 계수를 끼우게 된다
+        // given
+        // 계수는 같은데 입력을 만드는 규칙이 다르면 다른 뜻의 입력에 계수를 끼우게 된다
         ModelRelease bundle = loaded();
         ActiveModelDeployment other = new ActiveModelDeployment(
             7L, "seat-feature-contract-v9", bundle.releaseId(), bundle.bundleDigest());
@@ -115,10 +116,12 @@ class ActiveForecastRuntimeResolverTest {
         RuntimeSnapshot taken =
             resolver(deploymentOf(first), bundles).resolveActive().orElseThrow();
 
-        // when 도중에 다른 계수가 올라온다
+        // when
+        // 도중에 다른 계수가 올라온다
         bundles.add(loadedInto(directory.resolve("next")));
 
-        // then 이미 받아 든 것은 안 바뀐다
+        // then
+        // 이미 받아 든 것은 안 바뀐다
         assertThat(taken.bundleDigest()).isEqualTo(first.bundleDigest());
     }
 
@@ -133,7 +136,6 @@ class ActiveForecastRuntimeResolverTest {
         ActiveModelDeployment deployment
     ) {
         return new ModelDeploymentRepository() {
-
             @Override
             public Optional<ActiveModelDeployment> findActive() {
                 return Optional.ofNullable(deployment);
