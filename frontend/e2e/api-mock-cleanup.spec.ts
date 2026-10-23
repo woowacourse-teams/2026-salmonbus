@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Request, type Route } from "@playwright/test";
+import { test, expect, type Request, type Route } from "@playwright/test";
 import { createApiMockRouter } from "./fixtures/api-mock-router";
 
 function deferred() {
@@ -15,18 +15,9 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
-async function captureForwardedRequests(page: Page) {
-  const forwarded: string[] = [];
-  await page.context().route("**/api/**", async (route) => {
-    forwarded.push(new URL(route.request().url()).pathname);
-    await route.fulfill({ status: 502, json: { forwarded: true } });
-  });
-  return forwarded;
-}
-
 test("API에서 페이지로 리다이렉트한 요청도 mock 해제 전에 종료한다", async ({ page, browserName }) => {
   test.skip(browserName === "webkit", "WebKit의 route.fulfill은 302 응답을 지원하지 않는다");
-  const router = createApiMockRouter(page);
+  const router = await createApiMockRouter(page);
   await router.route((route) =>
     new URL(route.request().url()).pathname === "/api/redirect-start"
       ? route.fulfill({ status: 302, headers: { Location: "/?redirect=finished" } })
@@ -38,8 +29,7 @@ test("API에서 페이지로 리다이렉트한 요청도 mock 해제 전에 종
 });
 
 test("빠른 404 mock이 끝나도 느린 보드와 차량 mock이 완료된 뒤 해제한다", async ({ page }) => {
-  const forwarded = await captureForwardedRequests(page);
-  const router = createApiMockRouter(page);
+  const router = await createApiMockRouter(page);
   const endpoints = ["board", "vehicles", "missing"] as const;
   type Endpoint = (typeof endpoints)[number];
   const entered = { board: deferred(), vehicles: deferred(), missing: deferred() };
@@ -73,13 +63,11 @@ test("빠른 404 mock이 끝나도 느린 보드와 차량 mock이 완료된 뒤
     await missingFinished.promise;
     await page.evaluate(() => Date.now());
     expect(disposed).toBe(false);
-    expect(forwarded).toEqual([]);
 
     release.board.resolve();
     release.vehicles.resolve();
     await cleanup;
     expect(await responses).toEqual(endpoints.map((endpoint) => ({ endpoint })));
-    expect(forwarded).toEqual([]);
   } finally {
     for (const endpoint of endpoints) release[endpoint].resolve();
     await (cleanup ?? router.dispose());
@@ -88,7 +76,7 @@ test("빠른 404 mock이 끝나도 느린 보드와 차량 mock이 완료된 뒤
 
 for (const responseMode of ["fulfill", "abort"] as const) {
   test(`${responseMode}로 요청이 끝나도 handler가 완료된 뒤 해제한다`, async ({ page }) => {
-    const router = createApiMockRouter(page);
+    const router = await createApiMockRouter(page);
     const handlerResponded = deferred();
     const releaseHandler = deferred();
     const isBoardRequest = (request: Request) => new URL(request.url()).pathname === "/api/cleanup/board";
@@ -138,8 +126,7 @@ for (const responseMode of ["fulfill", "abort"] as const) {
 }
 
 test("추가 mock의 fallback 뒤에 시작하는 기본 mock도 완료된 뒤 해제한다", async ({ page }) => {
-  const forwarded = await captureForwardedRequests(page);
-  const router = createApiMockRouter(page);
+  const router = await createApiMockRouter(page);
   const overrideEntered = deferred();
   const boardEntered = deferred();
   const missingEntered = deferred();
@@ -191,11 +178,66 @@ test("추가 mock의 fallback 뒤에 시작하는 기본 mock도 완료된 뒤 �
     releaseBoard.resolve();
     await cleanup;
     expect(await responses).toEqual([{ endpoint: "board" }, { endpoint: "missing" }]);
-    expect(forwarded).toEqual([]);
   } finally {
     releaseMissing.resolve();
     releaseFallback.resolve();
     releaseBoard.resolve();
     await (cleanup ?? router.dispose());
+  }
+});
+
+test("mock이 등록된 동안 아무 mock도 응답하지 않은 요청은 끊고 주소와 함께 해제에서 실패한다", async ({ page }) => {
+  const router = await createApiMockRouter(page);
+  await router.route((route) => route.fallback());
+
+  const response = page.evaluate(async () => {
+    try {
+      return (await fetch("/api/cleanup/missing?groupId=1")).status;
+    } catch {
+      return "aborted";
+    }
+  });
+
+  expect(await response).toBe("aborted");
+  await expect(router.dispose()).rejects.toThrow("GET /api/cleanup/missing?groupId=1");
+});
+
+test("mock을 해제한 뒤에 나간 요청은 네트워크로 나가지 않는다", async ({ page }) => {
+  const router = await createApiMockRouter(page);
+  await router.route((route) => route.fulfill({ json: { endpoint: "board" } }));
+  await router.dispose();
+
+  const response = page.evaluate(async () => {
+    try {
+      return (await fetch("/api/cleanup/board")).status;
+    } catch {
+      return "aborted";
+    }
+  });
+
+  expect(await response).toBe("aborted");
+});
+
+test("요청이 mock에 걸린 사이 새 문서로 이동해도 해제가 멈추지 않는다", async ({ page }) => {
+  const router = await createApiMockRouter(page);
+  const entered = deferred();
+  const release = deferred();
+
+  try {
+    await router.route(async (route) => {
+      entered.resolve();
+      await release.promise;
+      await route.fulfill({ json: { endpoint: "board" } });
+    });
+    await page.evaluate(() => {
+      void fetch("/api/cleanup/board").catch(() => null);
+    });
+    await entered.promise;
+    await page.reload();
+
+    release.resolve();
+    await router.dispose();
+  } finally {
+    release.resolve();
   }
 });
