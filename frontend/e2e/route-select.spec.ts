@@ -39,6 +39,17 @@ test("키보드로 홈 검색바에 들어와 Enter를 누르면 검색 화면�
   await expect(routeSearchInput(page)).toBeFocused();
 });
 
+test("키보드로 홈 검색바에 들어와 바로 입력하면 친 글자가 검색 화면 입력창에 남는다", async ({ page }) => {
+  await page.goto("/");
+  await routeSearchEntry(page).focus();
+
+  await routeSearchEntry(page).press("3");
+  await finishSearchNavigation(page);
+
+  await expect(routeSearchInput(page)).toBeFocused();
+  await expect(routeSearchInput(page)).toHaveValue("3");
+});
+
 test("노선 조회 실패 후 재시도에 성공하면 노선을 선택할 수 있다", async ({ page, api }) => {
   api.mode.routes = "network-error";
   await page.goto("/");

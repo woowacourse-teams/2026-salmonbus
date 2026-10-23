@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from "react-router";
 import { track } from "@/shared/analytics/track";
 import { boardPathFor, paths } from "@/shared/routing/paths";
+import { initialInputFrom } from "@/shared/routing/routeSearchEntry";
 import { routeSelectedPropertiesOf, unmatchedQueryOf } from "./analytics/searchEventPolicy";
 import { useUnmatchedSearchEvent } from "./analytics/useUnmatchedSearchEvent";
 import { SearchForm } from "./components/SearchForm";
@@ -13,7 +14,7 @@ import * as styles from "./RouteSearchPage.css";
 export function RouteSearchPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { input, view, changeInput, retry } = useRouteSearch();
+  const { input, view, changeInput, retry } = useRouteSearch(initialInputFrom(location.state));
   useUnmatchedSearchEvent(unmatchedQueryOf(view, input));
 
   // 판정 보드에서 뒤로 가면 검색 화면을 거치지 않고 홈으로 간다.

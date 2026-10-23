@@ -3,8 +3,8 @@ import { createLatestRequestGate } from "@/shared/api/latestRequestGate";
 import { fetchRoutes } from "@/shared/api/routeForecast.api";
 import { searchViewFor, type RoutesState } from "./displayPolicy";
 
-export function useRouteSearch() {
-  const [input, setInput] = useState("");
+export function useRouteSearch(initialInput: string) {
+  const [input, setInput] = useState(initialInput);
   const [gate] = useState(createLatestRequestGate);
   const [routesState, setRoutesState] = useState<RoutesState>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);

@@ -6,6 +6,7 @@ import { LoginButton } from "@/shared/components/LoginButton";
 import { Notice } from "@/shared/components/Notice";
 import { paths } from "@/shared/routing/paths";
 import { useNavigateKeepingFocus } from "@/shared/routing/focusKeepingNavigation";
+import { routeSearchStateFor } from "@/shared/routing/routeSearchEntry";
 import { SEARCH_ENTRY_LABEL } from "./routeSelectCopy";
 import * as styles from "./RouteSelectPage.css";
 
@@ -18,6 +19,7 @@ export function RouteSelectPage() {
   // 사용자가 진짜 입력창을 직접 눌러야 iOS가 숫자 키패드를 확실히 띄운다.
   // 검색 화면으로는 탭 처리가 끝난 click에서 넘어간다. 포커스 순간에 넘어가면 남은 탭 이벤트가 검색 화면에 떨어져 포커스를 빼앗는다.
   const openRouteSearch = () => navigateKeepingFocus(paths.routeSearch);
+  const openRouteSearchWith = (input: string) => navigateKeepingFocus(paths.routeSearch, routeSearchStateFor(input));
 
   return (
     <div className={styles.page}>
@@ -36,7 +38,7 @@ export function RouteSelectPage() {
                 placeholder={SEARCH_ENTRY_LABEL}
                 aria-label={SEARCH_ENTRY_LABEL}
                 onClick={openRouteSearch}
-                onChange={openRouteSearch}
+                onChange={(event) => openRouteSearchWith(event.currentTarget.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") openRouteSearch();
                 }}

@@ -10,16 +10,16 @@ import type { NavigateKeepingFocus } from "@/shared/routing/focusKeepingNavigati
 export function useFocusKeepingNavigation(): { shownLocation: Location; navigateKeepingFocus: NavigateKeepingFocus } {
   const location = useLocation();
   const navigate = useNavigate();
-  const [pendingPathname, setPendingPathname] = useState<string | null>(null);
+  const [pending, setPending] = useState<{ pathname: string; state: unknown } | null>(null);
 
   useEffect(() => {
-    if (pendingPathname === null) return;
+    if (pending === null) return;
     let timer = 0;
     const frame = window.requestAnimationFrame(() => {
       timer = window.setTimeout(() => {
         startTransition(() => {
-          void navigate(pendingPathname);
-          setPendingPathname(null);
+          void navigate(pending.pathname, { state: pending.state });
+          setPending(null);
         });
       }, 0);
     });
@@ -27,9 +27,11 @@ export function useFocusKeepingNavigation(): { shownLocation: Location; navigate
       window.cancelAnimationFrame(frame);
       window.clearTimeout(timer);
     };
-  }, [pendingPathname, navigate]);
+  }, [pending, navigate]);
 
   const shownLocation =
-    pendingPathname === null ? location : { ...location, pathname: pendingPathname, search: "", hash: "" };
-  return { shownLocation, navigateKeepingFocus: setPendingPathname };
+    pending === null
+      ? location
+      : { ...location, pathname: pending.pathname, search: "", hash: "", state: pending.state };
+  return { shownLocation, navigateKeepingFocus: (pathname, state) => setPending({ pathname, state }) };
 }
