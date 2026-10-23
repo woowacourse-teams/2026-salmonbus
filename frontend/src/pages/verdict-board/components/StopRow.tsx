@@ -74,7 +74,6 @@ export function StopRow({
           className={expanded ? styles.favorite.expanded : styles.favorite.collapsed}
           target={{ routeId: favoriteRoute.routeId, direction: favoriteRoute.direction, stopId: stop.stopId }}
           stopName={stop.name}
-          directionName={favoriteRoute.directionName}
         />
       )}
       <div

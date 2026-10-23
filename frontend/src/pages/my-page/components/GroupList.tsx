@@ -7,7 +7,7 @@ import { Notice } from "@/shared/components/Notice";
 import * as styles from "./GroupList.css";
 import editIcon from "@/shared/assets/icons/favorite-edit.svg";
 import chevronIcon from "../assets/group-chevron.svg";
-import plusIcon from "../assets/group-plus.svg";
+import plusIcon from "@/shared/assets/icons/favorite-group-plus.svg";
 
 export function GroupList() {
   const { groups, resource, reload } = useFavorites();
