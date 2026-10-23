@@ -2,6 +2,7 @@ import type { FavoriteTarget } from "@/shared/api/favorites.types";
 
 export const paths = {
   routeSelect: "/",
+  routeSearch: "/search",
   board: "/routes/:routeId",
   login: "/login",
   mypage: "/mypage",

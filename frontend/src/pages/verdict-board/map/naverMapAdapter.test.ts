@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { boardMock } from "@/shared/api/routeForecast.mock";
 import { liveVehicleViewsFor } from "../components/liveVehiclePolicy";
-import { liveVehiclesMock } from "@/shared/api/routeForecast.mock";
-import type { StopSelection } from "../components/stopSelection";
+import { routeWatchMock } from "@/shared/api/routeForecast.mock";
 import { loadPreviewRouteMapData } from "./routeMapPreview";
 import type { NaverCoordinate, NaverMap, NaverMaps, NaverMarker } from "./naverSdk";
 import { createNaverRouteMap } from "./naverMapAdapter";
@@ -258,17 +257,7 @@ afterEach(() => {
 
 function setup(
   glSupported = true,
-  {
-    initialized = true,
-    reducedMotion = false,
-    visibleHeight = 350,
-    initialSelection = null,
-  }: {
-    initialized?: boolean;
-    reducedMotion?: boolean;
-    visibleHeight?: number;
-    initialSelection?: StopSelection | null;
-  } = {},
+  { initialized = true, reducedMotion = false, visibleHeight = 350 } = {},
   dataOverrides: Partial<RouteMapData> = {},
 ) {
   const pendingFrames = new Map<number, FrameRequestCallback>();
@@ -337,7 +326,6 @@ function setup(
     onReady,
     onVehicleSelect,
     onDeselect,
-    initialSelection,
   );
   const initialize = () => native.events.find((event) => event.name === "init")?.listener();
   if (initialized) initialize();
@@ -377,111 +365,6 @@ function visibleArrowDirections(native: ReturnType<typeof createRecordingSdk>) {
 }
 
 describe("네이버 지도 adapter", () => {
-  it.each([
-    { glSupported: true, reducedMotion: false },
-    { glSupported: true, reducedMotion: true },
-    { glSupported: false, reducedMotion: false },
-    { glSupported: false, reducedMotion: true },
-  ])("초기 선택 정류장에서 바로 지도를 시작한다 ($glSupported, $reducedMotion)", ({ glSupported, reducedMotion }) => {
-    const initialSelection = { direction: "DOWN" as const, sequence: 60 };
-    const { native, adapter, data, initialize, onReady, flushFrames } = setup(glSupported, {
-      initialized: false,
-      reducedMotion,
-      initialSelection,
-    });
-    const stop = data.stops.find(
-      (stop) => stop.direction === initialSelection.direction && stop.sequence === initialSelection.sequence,
-    )!;
-    expect(native.map.options.zoom).toBe(13);
-    expect(native.map.options.center.lat()).toBeCloseTo(stop.coordinate.latitude, 12);
-    expect(native.map.options.center.lng()).toBeCloseTo(stop.coordinate.longitude, 12);
-    expect(native.map.fits).toBe(0);
-    expect(onReady).not.toHaveBeenCalled();
-    const setZoom = jest.spyOn(native.map, "setZoom");
-    const setCenter = jest.spyOn(native.map, "setCenter");
-    onReady.mockImplementation(() => adapter.focus(initialSelection, { animate: true }));
-
-    initialize();
-    native.events.find((event) => event.name === "idle")!.listener();
-    flushFrames();
-    flushFrames();
-    expect(onReady).toHaveBeenCalledTimes(1);
-    flushFrames();
-    flushFrames(140);
-    if (reducedMotion) expect(native.map.zoom).toBe(15);
-    else {
-      expect(native.map.zoom).toBeGreaterThan(13);
-      expect(native.map.zoom).toBeLessThan(15);
-    }
-    flushFrames(600);
-
-    expect(native.map.fits).toBe(0);
-    expect(native.map.zoom).toBe(15);
-    expect(native.map.center.lat()).toBeCloseTo(stop.coordinate.latitude, 12);
-    expect(native.map.center.lng()).toBeCloseTo(stop.coordinate.longitude, 12);
-    expect(setZoom.mock.calls.some(([zoom]) => zoom === 15)).toBe(true);
-    expect(
-      setCenter.mock.calls.every(
-        ([center]) => center.lat() === stop.coordinate.latitude && center.lng() === stop.coordinate.longitude,
-      ),
-    ).toBe(true);
-  });
-
-  it("지도에 없는 초기 선택 정류장은 전체 경로로 시작한다", () => {
-    const { native, initialize } = setup(true, {
-      initialized: false,
-      initialSelection: { direction: "UP", sequence: -1 },
-    });
-    expect(native.map.options.zoom).toBe(10);
-    initialize();
-    expect(native.map.fits).toBe(1);
-    expect(native.map.zoom).toBe(13);
-  });
-
-  it("화면을 표시한 뒤 정류장으로 이동하면 중간 위치와 연속 줌을 거쳐 확대한다", () => {
-    const { native, adapter, data, flushFrames, windowListeners } = setup();
-    const selection = { direction: "UP" as const, sequence: 15 };
-    const stop = data.stops.find(
-      (stop) => stop.direction === selection.direction && stop.sequence === selection.sequence,
-    )!;
-    const before = native.map.center;
-    const zoom = native.map.zoom;
-    adapter.focus(selection, { animate: true });
-    expect(native.map.center).toBe(before);
-    expect(native.map.zoom).toBe(zoom);
-    flushFrames();
-    flushFrames(140);
-    expect(native.map.zoom).toBeGreaterThan(zoom);
-    expect(native.map.zoom).toBeLessThan(15);
-    expect(native.map.center.lat()).not.toBe(before.lat());
-    expect(native.map.center.lat()).not.toBe(stop.coordinate.latitude);
-    flushFrames(420);
-    expect(native.map.zoom).toBe(15);
-    expect(native.map.center.lat()).toBeCloseTo(stop.coordinate.latitude, 12);
-    expect(native.map.center.lng()).toBeCloseTo(stop.coordinate.longitude, 12);
-    expect(windowListeners.size).toBe(0);
-  });
-
-  it("정류장 확대 중 사용자 조작은 자동 이동을 취소하고 모션 줄이기는 즉시 이동한다", () => {
-    const selection = { direction: "UP" as const, sequence: 15 };
-    const { native, adapter, flushFrames, windowListeners } = setup();
-    adapter.focus(selection, { animate: true });
-    flushFrames();
-    flushFrames(140);
-    windowListeners.get("touchstart")!();
-    const center = native.map.center;
-    const zoom = native.map.zoom;
-    flushFrames(420);
-    expect(native.map.center).toBe(center);
-    expect(native.map.zoom).toBe(zoom);
-    adapter.destroy();
-
-    const reduced = setup(true, { reducedMotion: true });
-    reduced.adapter.focus(selection, { animate: true });
-    expect(reduced.native.map.zoom).toBe(15);
-    expect(reduced.windowListeners.size).toBe(0);
-  });
-
   it.each(["click", "tap"])("지도 배경의 %s는 카메라 이동 없이 선택 해제를 요청한다", (eventName) => {
     const { native, adapter, onDeselect, onSelect, onVehicleSelect } = setup();
     const selection = { direction: "UP" as const, sequence: 15 };
@@ -984,7 +867,7 @@ describe("네이버 지도 adapter", () => {
 
   it("방향별 도로가 없으면 차량을 최신 보고 정류장에 두고 진행률과 방향 응답이 바뀌어도 임의로 보간하지 않는다", () => {
     const { native, data, adapter, onVehicleSelect } = setup(true, { reducedMotion: true }, { paths: [] });
-    const view = liveVehicleViewsFor(boardMock, liveVehiclesMock, "UP")[0]!;
+    const view = liveVehicleViewsFor(routeWatchMock, routeWatchMock.vehicles, "UP")[0]!;
     const firstStop = data.stops.find(
       (stop) => stop.direction === "UP" && stop.sequence === view.vehicle.currentStopSequence,
     )!;
@@ -1042,7 +925,7 @@ describe("네이버 지도 adapter", () => {
 
   it("방향 도로가 없는 차량의 새 정류장 좌표를 모르면 이전 핀과 대기 포커스를 제거하고 좌표가 돌아오면 다시 표시한다", () => {
     const original = loadPreviewRouteMapData(boardMock)!;
-    const view = liveVehicleViewsFor(boardMock, liveVehiclesMock, "UP")[0]!;
+    const view = liveVehicleViewsFor(routeWatchMock, routeWatchMock.vehicles, "UP")[0]!;
     const missingStop = original.stops.find(
       (stop) => stop.direction === "UP" && stop.sequence !== view.vehicle.currentStopSequence,
     )!;
@@ -1089,7 +972,7 @@ describe("네이버 지도 adapter", () => {
   });
   it("목록과 같은 진행률로 핀을 옮기고 잔여석 0과 모름을 구분한다", () => {
     const { native, data, adapter } = setup();
-    const view = liveVehicleViewsFor(boardMock, liveVehiclesMock, "UP")[0]!;
+    const view = liveVehicleViewsFor(routeWatchMock, routeWatchMock.vehicles, "UP")[0]!;
     adapter.update(null, "UP", [{ ...view, vehicle: { ...view.vehicle, seat: { kind: "EXACT", remaining: 0 } } }]);
     const bus = native.markers.find(
       (item) => (item.options.icon.content as unknown as ElementStub).className === "bus",
@@ -1105,7 +988,7 @@ describe("네이버 지도 adapter", () => {
   });
   it("차량 버튼은 재사용하며 폴링으로 갱신된 방향과 정류장을 카메라 이동 없이 전달한다", () => {
     const { native, data, adapter, onSelect, onVehicleSelect } = setup();
-    const view = liveVehicleViewsFor(boardMock, liveVehiclesMock, "UP")[0]!;
+    const view = liveVehicleViewsFor(routeWatchMock, routeWatchMock.vehicles, "UP")[0]!;
     adapter.update(null, "UP", [view]);
     const bus = native.markers.find(
       (item) => (item.options.icon.content as unknown as ElementStub).dataset.mapVehicleKey === view.key,
@@ -1163,7 +1046,7 @@ describe("네이버 지도 adapter", () => {
   });
   it("이미 확대한 줌과 마커 DOM을 유지하며 이동 중인 핀의 최신 표시 좌표까지 부드럽게 이동한다", () => {
     const { native, adapter, onSelect, onVehicleSelect, flushFrames, windowListeners } = setup();
-    const view = liveVehicleViewsFor(boardMock, liveVehiclesMock, "UP")[0]!;
+    const view = liveVehicleViewsFor(routeWatchMock, routeWatchMock.vehicles, "UP")[0]!;
     adapter.update(null, "UP", [view]);
     const bus = native.markers.find(
       (item) => (item.options.icon.content as unknown as ElementStub).dataset.mapVehicleKey === view.key,
@@ -1210,7 +1093,7 @@ describe("네이버 지도 adapter", () => {
   });
   it("동작 줄이기를 사용하면 현재 표시된 차량 위치로 즉시 이동하고 포커스한다", () => {
     const { native, adapter, pendingFrames, windowListeners } = setup(true, { reducedMotion: true });
-    const view = liveVehicleViewsFor(boardMock, liveVehiclesMock, "UP")[0]!;
+    const view = liveVehicleViewsFor(routeWatchMock, routeWatchMock.vehicles, "UP")[0]!;
     adapter.update(null, "UP", [view]);
     const bus = native.markers.find(
       (item) => (item.options.icon.content as unknown as ElementStub).dataset.mapVehicleKey === view.key,
@@ -1227,7 +1110,7 @@ describe("네이버 지도 adapter", () => {
   });
   it("차량 선택은 포커스와 별개로 유지하고 폴링·선택 변경·해제에도 같은 마커를 사용한다", () => {
     const { native, adapter, onVehicleSelect } = setup(true, { reducedMotion: true });
-    const views = liveVehicleViewsFor(boardMock, liveVehiclesMock, "UP").slice(0, 2);
+    const views = liveVehicleViewsFor(routeWatchMock, routeWatchMock.vehicles, "UP").slice(0, 2);
     const [first, second] = views;
     expect(first).toBeDefined();
     expect(second).toBeDefined();
@@ -1277,7 +1160,7 @@ describe("네이버 지도 adapter", () => {
   });
   it("차량을 확대하면서 화면상 거리는 계속 줄이고 같은 버스도 다시 확대할 수 있다", () => {
     const { native, adapter, flushFrames } = setup();
-    const view = liveVehicleViewsFor(boardMock, liveVehiclesMock, "UP")[0]!;
+    const view = liveVehicleViewsFor(routeWatchMock, routeWatchMock.vehicles, "UP")[0]!;
     adapter.update(null, "UP", [view], view.key);
     const bus = native.markers.find(
       (marker) => (marker.options.icon.content as unknown as ElementStub).dataset.mapVehicleKey === view.key,
@@ -1321,7 +1204,7 @@ describe("네이버 지도 adapter", () => {
   });
   it("이미지 타일 fallback에서는 같은 정수 줌을 반복 설정하지 않는다", () => {
     const { native, adapter, flushFrames } = setup(false);
-    const view = liveVehicleViewsFor(boardMock, liveVehiclesMock, "UP")[0]!;
+    const view = liveVehicleViewsFor(routeWatchMock, routeWatchMock.vehicles, "UP")[0]!;
     adapter.update(null, "UP", [view]);
     native.map.zoom = 10;
     const setZoom = jest.spyOn(native.map, "setZoom");
@@ -1351,7 +1234,7 @@ describe("네이버 지도 adapter", () => {
     ];
     for (const interruption of interruptions) {
       const { native, adapter, flushFrames, windowListeners } = setup();
-      const view = liveVehicleViewsFor(boardMock, liveVehiclesMock, "UP")[0]!;
+      const view = liveVehicleViewsFor(routeWatchMock, routeWatchMock.vehicles, "UP")[0]!;
       adapter.update(null, "UP", [view]);
       const bus = native.markers.find(
         (item) => (item.options.icon.content as unknown as ElementStub).dataset.mapVehicleKey === view.key,
@@ -1384,7 +1267,7 @@ describe("네이버 지도 adapter", () => {
   });
   it("잔여석만 갱신해도 차량 마커와 핀·이미지 DOM을 그대로 사용한다", () => {
     const { native, adapter } = setup();
-    const view = liveVehicleViewsFor(boardMock, liveVehiclesMock, "UP")[0]!;
+    const view = liveVehicleViewsFor(routeWatchMock, routeWatchMock.vehicles, "UP")[0]!;
     adapter.update(null, "UP", [view]);
     const bus = native.markers.find(
       (item) => (item.options.icon.content as unknown as ElementStub).className === "bus",

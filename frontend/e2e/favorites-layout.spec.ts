@@ -13,9 +13,9 @@ for (const width of [320, 425]) {
     browserName,
   }, testInfo) => {
     await page.setViewportSize({ width, height: 844 });
-    const [first, second] = api.data.board.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
+    const [first, second] = api.data.watch.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
     first!.name = "야탑역.종합버스터미널";
-    api.data.board.route.directions[0].terminalStopName = "안양역";
+    api.data.watch.route.directions[0].terminalStopName = "안양역";
     second!.name = "안양역.시외버스터미널";
     favorites.groups[0]!.favorites = [
       storedFavorite({ routeId, stopId: first!.stopId, direction: "UP" }),

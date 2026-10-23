@@ -12,7 +12,7 @@ const route: RouteSummary = {
 
 describe("routeSelectedPropertiesOf", () => {
   it("고른 노선과 검색 결과 안 위치, 결과 개수를 담는다", () => {
-    expect(routeSelectedPropertiesOf(route, 0, 3)).toEqual({
+    expect(routeSelectedPropertiesOf({ route, position: 0, listedCount: 3 })).toEqual({
       route_id: "204000057",
       route_status: "FORECAST_READY",
       result_position: 0,

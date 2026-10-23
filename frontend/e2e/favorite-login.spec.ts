@@ -16,7 +16,7 @@ for (const width of [320, 425]) {
   }, testInfo) => {
     auth.member = null;
     await page.setViewportSize({ width, height: 844 });
-    const stop = api.data.board.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed)!;
+    const stop = api.data.watch.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed)!;
     const destination = `/routes/${routeId}?direction=DOWN&stopId=${stop.stopId}`;
     await page.goto(destination);
     const star = page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true });

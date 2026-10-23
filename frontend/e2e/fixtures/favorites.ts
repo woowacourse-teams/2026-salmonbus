@@ -86,7 +86,7 @@ export const test = authTest.extend<{ favorites: FavoritesMock }>({
             groups: groups.map((candidate) => ({
               ...candidate,
               favorites: candidate.favorites.map((favorite) => {
-                const stop = api.data.board.stops.find(
+                const stop = api.data.watch.stops.find(
                   (stop) => stop.stopId === favorite.stopId && stop.direction === favorite.direction,
                 );
                 const status = favorites.statuses[favorite.id] ?? "READY";
@@ -97,8 +97,8 @@ export const test = authTest.extend<{ favorites: FavoritesMock }>({
                   route: hasBoard
                     ? {
                         id: favorite.routeId,
-                        displayName: api.data.board.route.displayName,
-                        terminalStopName: api.data.board.route.directions.find(
+                        displayName: api.data.watch.route.displayName,
+                        terminalStopName: api.data.watch.route.directions.find(
                           (direction) => direction.id === favorite.direction,
                         )!.terminalStopName,
                       }

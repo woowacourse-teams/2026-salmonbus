@@ -219,7 +219,7 @@ test("body portal 채팅을 hit region에 포함하고 전체 modal은 native �
 
 favoriteNativeTest("즐겨찾기 dialog를 열면 native 지도 입력을 차단하고 닫으면 복구한다", async ({ page, api }) => {
   await open(page);
-  const stop = api.data.board.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+  const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
   await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.clock.runFor(32);
@@ -242,7 +242,7 @@ test.describe("native 지도 준비 실패 시 JS 지도 전환", () => {
   test.use({ nativeReady: false });
 
   test("즐겨찾기 정류장을 초기 native scene에 담고 이전 앱용 카메라 명령도 유지한다", async ({ page, api }) => {
-    const stop = api.data.board.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed)!;
+    const stop = api.data.watch.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed)!;
     await page.goto(`/routes/${routeId}?direction=DOWN&stopId=${stop.stopId}`);
     await expect.poll(async () => (await messages(page)).some((message) => message.type === "mount")).toBe(true);
     const mount = (await messages(page)).find((message) => message.type === "mount")!;
@@ -275,7 +275,7 @@ test.describe("native 지도 준비 실패 시 JS 지도 전환", () => {
   for (const failure of ["timeout", "native-timeout", "auth"] as const) {
     test(`${failure} 후 JS 지도를 유지하고 선택과 차량 이동을 연결한다`, async ({ page, naverMap, api }) => {
       api.cacheMaxAgeSeconds = 60;
-      api.data.vehicles.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1")!.phase = "IN_TRANSIT";
+      api.data.watch.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1")!.phase = "IN_TRANSIT";
       await page.goto(`/routes/${routeId}`);
       await expect.poll(async () => (await messages(page)).some((message) => message.type === "mount")).toBe(true);
       await emit(page, { type: "stopPress", payload: { selection: { direction: "UP", sequence: 1 } } });

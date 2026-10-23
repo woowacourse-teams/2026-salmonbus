@@ -11,7 +11,7 @@ for (const path of ["/", "/mypage"]) {
       }) => {
         await page.setViewportSize({ width: 425, height: 844 });
         await page.emulateMedia({ reducedMotion });
-        const [first, second] = api.data.board.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
+        const [first, second] = api.data.watch.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
         favorites.groups[0]!.favorites = [
           storedFavorite({ routeId, stopId: first!.stopId, direction: "UP" }),
           storedFavorite({ routeId, stopId: second!.stopId, direction: "UP" }, 5),

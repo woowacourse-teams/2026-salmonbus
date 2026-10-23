@@ -5,7 +5,7 @@ const schoolId = "10000000-0000-4000-8000-000000000003";
 const weekendId = "10000000-0000-4000-8000-000000000004";
 
 test.beforeEach(({ favorites, api }) => {
-  const stop = api.data.board.stops.find((item) => item.boardingAllowed)!;
+  const stop = api.data.watch.stops.find((item) => item.boardingAllowed)!;
   favorites.groups[0]!.name = "출퇴근";
   favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
   favorites.groups.push(

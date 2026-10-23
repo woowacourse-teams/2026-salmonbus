@@ -212,18 +212,18 @@ test("보드와 같은 노선 판본의 geometry API를 조회하고 같은 판�
   expect(initialGeometryRequests).toBeGreaterThan(0);
   expect(
     geometryRequests.every(
-      (url) => url.searchParams.get("referenceVersionId") === api.data.board.route.referenceVersionId,
+      (url) => url.searchParams.get("referenceVersionId") === api.data.watch.route.referenceVersionId,
     ),
   ).toBe(true);
   await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
 
-  const refreshedBoard = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === apiPaths.board && response.status() === 200,
+  const refreshedWatch = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
   );
   await page.clock.fastForward(pollIntervalMs);
-  await (await refreshedBoard).finished();
+  await (await refreshedWatch).finished();
   await page.clock.runFor(32);
-  expect(api.requests.board).toBeGreaterThan(1);
+  expect(api.requests.watch).toBeGreaterThan(1);
   expect(geometryRequests).toHaveLength(initialGeometryRequests);
   await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
 });
@@ -379,13 +379,12 @@ test("보드 판본이 바뀌면 이전 geometry 요청을 취소하고 새 좌�
     expect(oldRoutes.some((route) => route.request().failure() === null)).toBe(true);
     await expect(map(page).getByTestId("naver-map-test-double")).toHaveCount(0);
 
-    const replacedStop = api.data.board.stops.find((stop) => stop.sequence === 11);
+    const replacedStop = api.data.watch.stops.find((stop) => stop.sequence === 11);
     if (replacedStop === undefined) throw new Error("새 판본의 정류장이 없습니다");
     replacedStop.stopId = "replacement-stop";
     replacedStop.name = "새 판본 중앙역";
-    api.data.board.route.referenceVersionId = "2";
-    api.data.vehicles.referenceVersionId = "2";
-    api.data.geometry = createRouteGeometry(api.data.board);
+    api.data.watch.route.referenceVersionId = "2";
+    api.data.geometry = createRouteGeometry(api.data.watch);
     for (const point of api.data.geometry.points) {
       point.x += 1;
       point.y += 1;
@@ -1061,20 +1060,19 @@ test("70% 시트에서 버스 선택은 펼친 정류장을 유지하고 갱신�
   await expectVehicleCenteredOnMap(page, bus, naverMap);
   await expect(bus).toHaveAttribute("aria-pressed", "true");
 
-  const vehicle = api.data.vehicles.vehicles.find((item) => item.vehicleId === "bus-1");
-  const nextStop = api.data.board.stops.find((item) => item.direction === "UP" && item.sequence === 10);
+  const vehicle = api.data.watch.vehicles.find((item) => item.vehicleId === "bus-1");
+  const nextStop = api.data.watch.stops.find((item) => item.direction === "UP" && item.sequence === 10);
   if (vehicle === undefined || nextStop === undefined) throw new Error("갱신할 버스와 정류장이 없습니다");
   vehicle.currentStopSequence = nextStop.sequence;
   vehicle.stopId = nextStop.stopId;
   vehicle.stopName = nextStop.name;
-  api.data.board.observedAt = "2026-09-16T08:01:00+09:00";
-  api.data.vehicles.observation.observedAt = api.data.board.observedAt;
-  api.data.vehicles.observation.staleAt = "2026-09-16T08:06:00+09:00";
-  const refreshedVehicles = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === apiPaths.vehicles && response.status() === 200,
+  api.data.watch.observedAt = "2026-09-16T08:01:00+09:00";
+  api.data.watch.staleAt = "2026-09-16T08:06:00+09:00";
+  const refreshedWatch = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
   );
   await page.clock.fastForward(pollIntervalMs);
-  await (await refreshedVehicles).finished();
+  await (await refreshedWatch).finished();
   await page.clock.runFor(32);
   const latestBus = map(page).getByRole("button", {
     name: `${nextStop.name} 부근 버스, 현재 잔여 좌석 5석`,
@@ -1170,20 +1168,19 @@ test("목록 버스는 70% 시트와 펼침·스크롤을 유지하며 지도에
   await expectVehicleFocusedOnMap(page, marker, naverMap);
   expect(await list(page).evaluate((element) => element.scrollTop)).toBeCloseTo(scroll, 0);
 
-  const vehicle = api.data.vehicles.vehicles.find((item) => item.vehicleId === "bus-1");
-  const nextStop = api.data.board.stops.find((item) => item.direction === "UP" && item.sequence === 10);
+  const vehicle = api.data.watch.vehicles.find((item) => item.vehicleId === "bus-1");
+  const nextStop = api.data.watch.stops.find((item) => item.direction === "UP" && item.sequence === 10);
   if (vehicle === undefined || nextStop === undefined) throw new Error("갱신할 버스와 정류장이 없습니다");
   vehicle.currentStopSequence = nextStop.sequence;
   vehicle.stopId = nextStop.stopId;
   vehicle.stopName = nextStop.name;
-  api.data.board.observedAt = "2026-09-16T08:01:00+09:00";
-  api.data.vehicles.observation.observedAt = api.data.board.observedAt;
-  api.data.vehicles.observation.staleAt = "2026-09-16T08:06:00+09:00";
-  const refreshedVehicles = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === apiPaths.vehicles && response.status() === 200,
+  api.data.watch.observedAt = "2026-09-16T08:01:00+09:00";
+  api.data.watch.staleAt = "2026-09-16T08:06:00+09:00";
+  const refreshedWatch = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
   );
   await page.clock.fastForward(pollIntervalMs);
-  await (await refreshedVehicles).finished();
+  await (await refreshedWatch).finished();
   await page.clock.runFor(32);
   const latestTracker = list(page).getByRole("button", {
     name: `${nextStop.name} 정류장, 도착 중, 현재 잔여 좌석 5석`,
@@ -1214,7 +1211,7 @@ test("목록 버스를 누르면 이동 중인 지도 마커를 선택한 채 �
 }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   api.cacheMaxAgeSeconds = 5;
-  const vehicle = api.data.vehicles.vehicles.find((item) => item.vehicleId === "bus-1");
+  const vehicle = api.data.watch.vehicles.find((item) => item.vehicleId === "bus-1");
   if (vehicle === undefined) throw new Error("이동할 버스가 없습니다");
   vehicle.phase = "IN_TRANSIT";
   await openMap(page);
@@ -1307,7 +1304,7 @@ test("정류장명과 현재 좌석을 함께 표시하고 줌과 잔여석 응�
   api,
   naverMap,
 }) => {
-  const vehicle = api.data.vehicles.vehicles.find((item) => item.vehicleId === "bus-1");
+  const vehicle = api.data.watch.vehicles.find((item) => item.vehicleId === "bus-1");
   if (vehicle === undefined) throw new Error("갱신할 버스가 없습니다");
   vehicle.seat = { kind: "EXACT", remaining: 39 };
   await openMap(page);
@@ -1343,14 +1340,13 @@ test("정류장명과 현재 좌석을 함께 표시하고 줌과 잔여석 응�
   await expect(stopName).toBeHidden();
   await expect(bus).toBeVisible();
   vehicle.seat = { kind: "EXACT", remaining: 0 };
-  api.data.board.observedAt = "2026-09-16T08:01:00+09:00";
-  api.data.vehicles.observation.observedAt = api.data.board.observedAt;
-  api.data.vehicles.observation.staleAt = "2026-09-16T08:06:00+09:00";
-  const refreshedVehicles = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === apiPaths.vehicles && response.status() === 200,
+  api.data.watch.observedAt = "2026-09-16T08:01:00+09:00";
+  api.data.watch.staleAt = "2026-09-16T08:06:00+09:00";
+  const refreshedWatch = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
   );
   await page.clock.fastForward(pollIntervalMs);
-  await (await refreshedVehicles).finished();
+  await (await refreshedWatch).finished();
   await page.clock.runFor(32);
   const updatedBus = map(page).getByRole("button", {
     name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 0석",
@@ -1463,8 +1459,8 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
   }) => {
     const durationMs = 20_000;
     api.cacheMaxAgeSeconds = durationMs / 1_000;
-    const vehicle = api.data.vehicles.vehicles.find((item) => item.vehicleId === "bus-1");
-    const nextStop = api.data.board.stops.find((item) => item.direction === "UP" && item.sequence === 9);
+    const vehicle = api.data.watch.vehicles.find((item) => item.vehicleId === "bus-1");
+    const nextStop = api.data.watch.stops.find((item) => item.direction === "UP" && item.sequence === 9);
     if (vehicle === undefined || nextStop === undefined) throw new Error("이동할 버스와 정류장이 없습니다");
     vehicle.phase = "IN_TRANSIT";
     await page.emulateMedia({ reducedMotion });
@@ -1474,9 +1470,9 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
       .getByRole("button", { name: /현재 잔여 좌석 5석/ })
       .locator("..");
 
-    async function refreshVehicles() {
+    async function refreshWatch() {
       const response = page.waitForResponse(
-        (response) => new URL(response.url()).pathname === apiPaths.vehicles && response.status() === 200,
+        (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
       );
       await page.clock.fastForward(durationMs);
       await (await response).finished();
@@ -1493,11 +1489,11 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
       };
     }
 
-    await refreshVehicles();
+    await refreshWatch();
     const stopped = await positions();
     for (const phase of ["DEPARTED", "DEPARTED", "ARRIVING"] as const) {
       vehicle.phase = phase;
-      await refreshVehicles();
+      await refreshWatch();
       await page.clock.runFor(1_000);
       expect(await positions()).toEqual(stopped);
     }
@@ -1506,7 +1502,7 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
     vehicle.currentStopSequence = nextStop.sequence;
     vehicle.stopId = nextStop.stopId;
     vehicle.stopName = nextStop.name;
-    await refreshVehicles();
+    await refreshWatch();
     await page.clock.runFor(durationMs / 2);
     const moved = await positions();
     expect(Math.hypot(moved.map.x - stopped.map.x, moved.map.y - stopped.map.y)).toBeGreaterThan(1);
@@ -1886,22 +1882,19 @@ test("노선 버전 갱신 시 이전 순번의 선택을 새 정류장에 이�
   await handle(page).press("End");
   await expect(sheet(page)).toHaveAttribute("data-snap", "full");
 
-  const replacedStop = api.data.board.stops.find((item) => item.direction === "UP" && item.sequence === 11);
+  const replacedStop = api.data.watch.stops.find((item) => item.direction === "UP" && item.sequence === 11);
   if (replacedStop === undefined) throw new Error("갱신할 상행 정류장이 없습니다");
   replacedStop.stopId = "replacement-stop";
   replacedStop.name = "새 버전 중앙역";
-  api.data.board.route.referenceVersionId = "2";
-  api.data.geometry = createRouteGeometry(api.data.board);
-  api.data.board.observedAt = "2026-09-16T08:01:00+09:00";
-  api.data.board.staleAt = "2026-09-16T08:06:00+09:00";
-  api.data.vehicles.referenceVersionId = "2";
-  api.data.vehicles.observation.observedAt = api.data.board.observedAt;
-  api.data.vehicles.observation.staleAt = api.data.board.staleAt;
-  const refreshedBoard = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === apiPaths.board && response.status() === 200,
+  api.data.watch.route.referenceVersionId = "2";
+  api.data.geometry = createRouteGeometry(api.data.watch);
+  api.data.watch.observedAt = "2026-09-16T08:01:00+09:00";
+  api.data.watch.staleAt = "2026-09-16T08:06:00+09:00";
+  const refreshedWatch = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
   );
   await page.clock.fastForward(pollIntervalMs);
-  await (await refreshedBoard).finished();
+  await (await refreshedWatch).finished();
   await page.clock.runFor(32);
 
   await expect(sheet(page)).toHaveAttribute("data-snap", "half");
@@ -1913,10 +1906,10 @@ test("노선 버전 갱신 시 이전 순번의 선택을 새 정류장에 이�
 });
 
 test("선택 방향이 운행 전이어도 반대 방향은 운행 종료 안내의 버튼으로 확인할 수 있다", async ({ page, api }) => {
-  const up = api.data.board.route.directions.find((direction) => direction.id === "UP");
+  const up = api.data.watch.route.directions.find((direction) => direction.id === "UP");
   if (up === undefined) throw new Error("상행 운행 정보가 없습니다");
   up.firstDepartureTime = "09:00";
-  api.data.vehicles.vehicles = api.data.vehicles.vehicles.filter((vehicle) => vehicle.direction !== "UP");
+  api.data.watch.vehicles = api.data.watch.vehicles.filter((vehicle) => vehicle.direction !== "UP");
   await page.goto(`/routes/${routeId}`);
   await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).toBeVisible();
   await expect(sheet(page)).toHaveCount(0);
@@ -1932,7 +1925,7 @@ test("선택 방향이 운행 전이어도 반대 방향은 운행 종료 안내
 });
 
 test("막차 시각이 지나도 그 방향 차량이 달리고 있으면 판정 보드를 보여준다", async ({ page, api }) => {
-  const up = api.data.board.route.directions.find((direction) => direction.id === "UP");
+  const up = api.data.watch.route.directions.find((direction) => direction.id === "UP");
   if (up === undefined) throw new Error("상행 운행 정보가 없습니다");
   up.lastDepartureTime = "07:00";
   await page.goto(`/routes/${routeId}`);
@@ -1946,14 +1939,9 @@ test("막차 시각이 지나도 그 방향 차량이 달리고 있으면 판정
 
 test("운행 종료 화면에는 지도와 바텀시트가 없다", async ({ page, api }) => {
   const lateObservedAt = "2026-09-16T23:30:00+09:00";
-  api.data.board.observedAt = lateObservedAt;
-  api.data.board.vehiclesInService = 0;
-  api.data.vehicles.observation = {
-    state: "NO_VEHICLES_OBSERVED",
-    observedAt: lateObservedAt,
-    staleAt: "2026-09-16T23:35:00+09:00",
-  };
-  api.data.vehicles.vehicles = [];
+  api.data.watch.observedAt = lateObservedAt;
+  api.data.watch.vehiclesInService = 0;
+  api.data.watch.vehicles = [];
   await page.goto(`/routes/${routeId}`);
   await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).toBeVisible();
   await expect(sheet(page)).toHaveCount(0);

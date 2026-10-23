@@ -1,6 +1,16 @@
 import { apiPaths, routeId } from "./fixtures/mock-data";
 import { test, expect } from "./fixtures/api";
-import { routeButton, routeSearchInput, selectRoute } from "./utils/route-select";
+import {
+  finishSearchNavigation,
+  inServiceSection,
+  openRouteSearch,
+  pickRoute,
+  routeButton,
+  routeSearchBackLink,
+  routeSearchEntry,
+  routeSearchInput,
+  selectRoute,
+} from "./utils/route-select";
 import { boardBackLink } from "./utils/verdict-board";
 
 test.use({
@@ -10,9 +20,40 @@ test.use({
   trace: "retain-on-failure",
 });
 
+test("홈에서 검색창을 누르면 검색 화면으로 이동하고 입력창에 포커스가 간다", async ({ page }) => {
+  await page.goto("/");
+
+  await openRouteSearch(page);
+
+  await expect(routeSearchInput(page)).toBeFocused();
+  await expect(routeSearchInput(page)).toHaveValue("");
+});
+
+test("키보드로 홈 검색바에 들어와 Enter를 누르면 검색 화면으로 이동한다", async ({ page }) => {
+  await page.goto("/");
+  await routeSearchEntry(page).focus();
+
+  await routeSearchEntry(page).press("Enter");
+  await finishSearchNavigation(page);
+
+  await expect(routeSearchInput(page)).toBeFocused();
+});
+
+test("키보드로 홈 검색바에 들어와 바로 입력하면 친 글자가 검색 화면 입력창에 남는다", async ({ page }) => {
+  await page.goto("/");
+  await routeSearchEntry(page).focus();
+
+  await routeSearchEntry(page).press("3");
+  await finishSearchNavigation(page);
+
+  await expect(routeSearchInput(page)).toBeFocused();
+  await expect(routeSearchInput(page)).toHaveValue("3");
+});
+
 test("노선 조회 실패 후 재시도에 성공하면 노선을 선택할 수 있다", async ({ page, api }) => {
   api.mode.routes = "network-error";
   await page.goto("/");
+  await openRouteSearch(page);
 
   const status = page.getByRole("main").getByRole("status");
   const retry = page.getByRole("button", { name: "다시 시도하기", exact: true });
@@ -29,21 +70,17 @@ test("노선 조회 실패 후 재시도에 성공하면 노선을 선택할 수
   await response;
 
   await expect(status).toHaveText("");
-  const boardResponse = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === apiPaths.board && response.status() === 200,
+  const watchResponse = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
   );
-  const vehiclesResponse = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === apiPaths.vehicles && response.status() === 200,
-  );
-  await selectRoute(page);
-  for (const response of await Promise.all([boardResponse, vehiclesResponse])) {
-    expect(await response.finished()).toBeNull();
-  }
+  await pickRoute(page);
+  expect(await (await watchResponse).finished()).toBeNull();
 });
 
 test("노선 재시도도 실패하면 실패 안내와 재시도 버튼이 표시된다", async ({ page, api }) => {
   api.mode.routes = "network-error";
   await page.goto("/");
+  await openRouteSearch(page);
 
   const status = page.getByRole("main").getByRole("status");
   const retry = page.getByRole("button", { name: "다시 시도하기", exact: true });
@@ -68,6 +105,7 @@ test("노선 재시도도 실패하면 실패 안내와 재시도 버튼이 표�
 
 test("번호를 입력하면 일치하는 노선이 보이고, 일치하는 노선이 없으면 결과 없음을 알린다", async ({ page }) => {
   await page.goto("/");
+  await openRouteSearch(page);
   const input = routeSearchInput(page);
   const status = page.getByRole("main").getByRole("status");
 
@@ -82,6 +120,7 @@ test("번호를 입력하면 일치하는 노선이 보이고, 일치하는 노�
 
 test("지우기 버튼을 누르면 입력과 결과가 사라지고 입력창에 포커스가 남는다", async ({ page }) => {
   await page.goto("/");
+  await openRouteSearch(page);
   const input = routeSearchInput(page);
   await input.fill("33");
   await expect(routeButton(page)).toBeVisible();
@@ -90,12 +129,32 @@ test("지우기 버튼을 누르면 입력과 결과가 사라지고 입력창�
 
   await expect(input).toHaveValue("");
   await expect(input).toBeFocused();
+  await expect(inServiceSection(page)).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "어떤 노선을 찾아볼까요?", exact: true })).toBeVisible();
+});
+
+test("입력 전에는 노선 목록 대신 검색 안내를 보여 준다", async ({ page }) => {
+  await page.goto("/");
+  await openRouteSearch(page);
+
+  await expect(page.getByRole("heading", { name: "어떤 노선을 찾아볼까요?", exact: true })).toBeVisible();
   await expect(routeButton(page)).toHaveCount(0);
-  await expect(page).toHaveURL("/");
+  await expect(page.getByRole("main").getByRole("status")).toHaveText("");
+});
+
+test("입력하면 일치하는 노선을 서비스 중 노선 아래에 보여 준다", async ({ page }) => {
+  await page.goto("/");
+  await openRouteSearch(page);
+
+  await routeSearchInput(page).fill("33");
+
+  await expect(inServiceSection(page).getByRole("button")).toHaveText([/^3330/]);
+  await expect(routeButton(page)).toContainText("테스트 기점 ↔ 테스트 종점");
 });
 
 test("결과가 하나일 때 엔터를 누르면 그 노선의 판정 보드로 이동한다", async ({ page }) => {
   await page.goto("/");
+  await openRouteSearch(page);
   await routeSearchInput(page).fill("3330");
   await expect(page.getByRole("main").getByRole("status")).toHaveText("일치하는 노선 1개");
   await routeSearchInput(page).press("Enter");
@@ -112,35 +171,76 @@ test("결과가 여러 개면 엔터를 눌러도 이동하지 않는다", async
     status: "FORECAST_READY",
   });
   await page.goto("/");
+  await openRouteSearch(page);
   await routeSearchInput(page).fill("3");
   await expect(page.getByRole("main").getByRole("status")).toHaveText("일치하는 노선 2개");
 
   await routeSearchInput(page).press("Enter");
 
-  await expect(page).toHaveURL("/?q=3");
+  await expect(page).toHaveURL("/search");
 });
 
-test("판정 보드에서 뒤로 오면 입력한 번호와 결과가 남아 있다", async ({ page }) => {
+test("검색 화면에서 뒤로 가기를 누르면 홈으로 가고 방문 기록이 늘지 않는다", async ({ page }) => {
+  await page.goto("/");
+  const historyLength = await page.evaluate(() => history.length);
+  await openRouteSearch(page);
+  await routeSearchInput(page).fill("33");
+
+  await routeSearchBackLink(page).click();
+
+  await expect(page).toHaveURL("/");
+  await expect(routeSearchEntry(page)).toBeVisible();
+  expect(await page.evaluate(() => history.length)).toBe(historyLength + 1);
+});
+
+test("검색 화면으로 바로 들어오면 뒤로 가기가 홈으로 간다", async ({ page }) => {
+  await page.goto("/search");
+
+  await routeSearchBackLink(page).click();
+
+  await expect(page).toHaveURL("/");
+  await expect(routeSearchEntry(page)).toBeVisible();
+});
+
+test("검색 화면으로 바로 들어와 노선을 고르면 판정 보드의 뒤로 가기가 홈으로 간다", async ({ page }) => {
+  await page.goto("/search");
+  await pickRoute(page);
+
+  await boardBackLink(page).click();
+
+  await expect(page).toHaveURL("/");
+  await expect(routeSearchEntry(page)).toBeVisible();
+});
+
+test("검색 화면으로 바로 들어와 노선을 고르면 판정 보드에서 브라우저 뒤로 가기가 홈으로 간다", async ({ page }) => {
+  await page.goto("/search");
+  await pickRoute(page);
+
+  await page.goBack();
+
+  await expect(page).toHaveURL("/");
+  await expect(routeSearchEntry(page)).toBeVisible();
+});
+
+test("판정 보드에서 브라우저 뒤로 가기를 누르면 검색 화면을 거치지 않고 홈으로 간다", async ({ page }) => {
   await page.goto("/");
   await selectRoute(page);
 
   await page.goBack();
 
-  await expect(page).toHaveURL("/?q=3330");
-  await expect(routeSearchInput(page)).toHaveValue("3330");
-  await expect(routeButton(page)).toBeVisible();
+  await expect(page).toHaveURL("/");
+  await expect(routeSearchEntry(page)).toBeVisible();
 });
 
-test("판정 보드 헤더의 뒤로 가기를 눌러도 입력한 번호와 결과가 남아 있다", async ({ page }) => {
+test("판정 보드 헤더의 뒤로 가기를 누르면 홈으로 가고 방문 기록이 늘지 않는다", async ({ page }) => {
   await page.goto("/");
   await selectRoute(page);
   const historyLength = await page.evaluate(() => history.length);
 
   await boardBackLink(page).click();
 
-  await expect(page).toHaveURL("/?q=3330");
-  await expect(routeSearchInput(page)).toHaveValue("3330");
-  await expect(routeButton(page)).toBeVisible();
+  await expect(page).toHaveURL("/");
+  await expect(routeSearchEntry(page)).toBeVisible();
   expect(await page.evaluate(() => history.length)).toBe(historyLength);
 });
 
@@ -150,47 +250,16 @@ test("판정 보드로 바로 들어오면 헤더의 뒤로 가기가 노선 선
   await boardBackLink(page).click();
 
   await expect(page).toHaveURL("/");
-  await expect(routeSearchInput(page)).toHaveValue("");
+  await expect(routeSearchEntry(page)).toBeVisible();
 });
 
-test("화면 폭이 바뀌어도 홈 헤더 밖으로 주황 배경이 번지지 않는다", async ({ page }) => {
+test("홈에서만 html 배경을 주황으로 칠한다", async ({ page }) => {
   const htmlBackground = () => page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);
   await page.goto("/");
 
-  for (const width of [320, 390, 425, 500, 599, 600, 1280]) {
-    await page.setViewportSize({ width, height: 844 });
-    await expect.poll(htmlBackground).toBe("rgba(0, 0, 0, 0)");
-    await expect(page.getByRole("main").locator("header")).toHaveCSS("background-color", "rgb(232, 82, 63)");
-  }
+  await expect.poll(htmlBackground).toBe("rgb(232, 82, 63)");
 
-  await selectRoute(page);
+  await openRouteSearch(page);
 
   await expect.poll(htmlBackground).toBe("rgba(0, 0, 0, 0)");
-});
-
-test("번호를 한 글자씩 쳐도 방문 기록이 늘지 않는다", async ({ page }) => {
-  await page.goto("/");
-  const historyLength = await page.evaluate(() => history.length);
-
-  await routeSearchInput(page).pressSequentially("3330");
-
-  await expect(page).toHaveURL("/?q=3330");
-  expect(await page.evaluate(() => history.length)).toBe(historyLength);
-});
-
-test("상단 로고는 검색을 초기화하고 로그인 화면에서도 홈으로 이동한다", async ({ page }) => {
-  await page.goto("/");
-  await routeSearchInput(page).fill("3330");
-  await expect(page.getByRole("region", { name: "검색 결과", exact: true })).toBeVisible();
-  const logo = page.getByRole("link", { name: "Salmonbus 홈으로 이동", exact: true });
-  await expect(logo).toHaveAttribute("href", "/");
-  await logo.click();
-  await expect(page).toHaveURL("/");
-  await expect(routeSearchInput(page)).toHaveValue("");
-  await expect(page.getByRole("region", { name: "검색 결과", exact: true })).toHaveCount(0);
-
-  await page.goto("/login?returnTo=%2Fmypage");
-  await logo.press("Enter");
-  await expect(page).toHaveURL("/");
-  await expect(routeSearchInput(page)).toHaveValue("");
 });

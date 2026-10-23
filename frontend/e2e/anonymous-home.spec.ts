@@ -1,3 +1,4 @@
+import { openRouteSearch, routeButton, routeSearchInput } from "./utils/route-select";
 import { test, expect } from "./fixtures/auth";
 
 for (const width of [320, 425]) {
@@ -24,10 +25,11 @@ for (const width of [320, 425]) {
       await card.screenshot({ path: "/private/tmp/salmonbus-sal249-qa/anonymous-card.png" });
     }
 
-    await page.getByRole("textbox", { name: "노선 번호", exact: true }).fill("3330");
+    await openRouteSearch(page);
+    await routeSearchInput(page).fill("3330");
     await expect(card).toHaveCount(0);
-    await expect(page.getByRole("region", { name: "검색 결과", exact: true })).toBeVisible();
-    await page.getByRole("link", { name: "Salmonbus 홈으로 이동", exact: true }).click();
+    await expect(routeButton(page)).toBeVisible();
+    await page.getByRole("link", { name: "노선 선택으로 돌아가기", exact: true }).click();
     await expect(card).toBeVisible();
     await card.getByRole("link", { name: "로그인 / 회원가입", exact: true }).click();
     await expect(page).toHaveURL("/login?returnTo=%2F");

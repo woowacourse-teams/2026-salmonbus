@@ -12,7 +12,7 @@ for (const width of [320, 425]) {
       browserName,
     }) => {
       await page.setViewportSize({ width, height: 844 });
-      const [first, second] = api.data.board.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
+      const [first, second] = api.data.watch.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
       first!.name = "야탑역.종합버스터미널";
       const target = { routeId, stopId: first!.stopId, direction: first!.direction };
       favorites.groups[0]!.name = "출퇴근";
@@ -50,9 +50,9 @@ for (const width of [320, 425]) {
         );
       } else {
         await expect(dialog.getByText(first!.name, { exact: true })).toBeVisible();
-        await expect(dialog.getByText(api.data.board.route.displayName, { exact: true })).toBeVisible();
+        await expect(dialog.getByText(api.data.watch.route.displayName, { exact: true })).toBeVisible();
         await expect(dialog).toContainText(
-          `${api.data.board.route.directions.find((d) => d.id === first!.direction)!.terminalStopName} 방면`,
+          `${api.data.watch.route.directions.find((d) => d.id === first!.direction)!.terminalStopName} 방면`,
         );
       }
       const remove = dialog.getByRole("button", { name: "삭제", exact: true });

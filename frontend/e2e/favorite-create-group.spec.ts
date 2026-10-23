@@ -9,7 +9,7 @@ for (const width of [320, 425]) {
     browserName,
   }) => {
     await page.setViewportSize({ width, height: 844 });
-    const stop = api.data.board.stops.find((item) => item.boardingAllowed)!;
+    const stop = api.data.watch.stops.find((item) => item.boardingAllowed)!;
     await page.goto(`/routes/${routeId}`);
     await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "저장할 그룹 선택" });
@@ -50,7 +50,7 @@ test("그룹 이름 검증·중복·생성 실패 후에도 입력과 기존 선
   favorites,
   api,
 }) => {
-  const stop = api.data.board.stops.find((item) => item.boardingAllowed)!;
+  const stop = api.data.watch.stops.find((item) => item.boardingAllowed)!;
   await page.goto(`/routes/${routeId}`);
   await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "저장할 그룹 선택" });
@@ -81,7 +81,7 @@ test("그룹 이름 검증·중복·생성 실패 후에도 입력과 기존 선
 });
 
 test("그룹 생성 취소는 요청하지 않고 생성 후 모달 취소는 그룹만 남긴다", async ({ page, favorites, api }) => {
-  const stop = api.data.board.stops.find((item) => item.boardingAllowed)!;
+  const stop = api.data.watch.stops.find((item) => item.boardingAllowed)!;
   await page.goto(`/routes/${routeId}`);
   const star = page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true });
   await star.click();
@@ -108,7 +108,7 @@ test("그룹 생성 취소는 요청하지 않고 생성 후 모달 취소는 �
 
 test("세 번째 그룹을 만들면 추가 버튼을 숨기고 즐겨찾기 저장은 유지한다", async ({ page, favorites, api }) => {
   favorites.groups.push({ id: "10000000-0000-4000-8000-000000000003", name: "통학", favorites: [] });
-  const stop = api.data.board.stops.find((item) => item.boardingAllowed)!;
+  const stop = api.data.watch.stops.find((item) => item.boardingAllowed)!;
   await page.goto(`/routes/${routeId}`);
   await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "저장할 그룹 선택" });
@@ -136,7 +136,7 @@ test("그룹 생성 후 목록 갱신이 느려도 누락 오류나 중복 생�
       await response;
     await route.fallback();
   });
-  const stop = api.data.board.stops.find((item) => item.boardingAllowed)!;
+  const stop = api.data.watch.stops.find((item) => item.boardingAllowed)!;
   await page.goto(`/routes/${routeId}`);
   await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "저장할 그룹 선택" });

@@ -6,7 +6,7 @@ test.use({ viewport: { width: 425, height: 844 } });
 
 test("편집 정보를 다시 조회하는 동안 홈의 명칭과 카드 위치를 유지한다", async ({ page, favorites, api }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  const stop = api.data.board.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+  const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
   favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
   let release = () => {};
   const response = new Promise<void>((resolve) => {
@@ -32,7 +32,7 @@ test("편집 정보를 다시 조회하는 동안 홈의 명칭과 카드 위치
     const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
     const card = editor.getByRole("list", { name: "즐겨찾기 순서", exact: true }).getByRole("listitem").first();
     await expect(card.getByText(stop.name, { exact: true })).toBeVisible();
-    await expect(card.getByText(api.data.board.route.displayName, { exact: true })).toBeVisible();
+    await expect(card.getByText(api.data.watch.route.displayName, { exact: true })).toBeVisible();
     await expect(editor.getByText("즐겨찾기를 불러오고 있어요…", { exact: true })).toHaveCount(0);
     await expect(editor.getByText("노선 정보 없음", { exact: true })).toHaveCount(0);
     await expect(editor.getByText("정류장 정보 없음", { exact: true })).toHaveCount(0);
@@ -52,7 +52,7 @@ test("편집 정보를 다시 조회하는 동안 홈의 명칭과 카드 위치
 
 test("마이페이지 편집은 조회 중 카드 공간을 유지하고 조회 후 순서를 저장한다", async ({ page, favorites, api }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  const [first, second] = api.data.board.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
+  const [first, second] = api.data.watch.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
   first!.name = "첫 정류장";
   second!.name = "다음 정류장";
   favorites.groups[0]!.favorites = [
@@ -97,7 +97,7 @@ test("마이페이지 편집은 조회 중 카드 공간을 유지하고 조회 
     expect(loaded.width).toBeCloseTo(pending.width, 1);
     expect(loaded.height).toBeCloseTo(pending.height, 1);
     await editor
-      .getByRole("button", { name: `${api.data.board.route.displayName} · ${first!.name} 순서 변경`, exact: true })
+      .getByRole("button", { name: `${api.data.watch.route.displayName} · ${first!.name} 순서 변경`, exact: true })
       .press("ArrowDown");
     await editor.getByRole("button", { name: "완료", exact: true }).click();
     await expect(editor).toHaveCount(0);
@@ -113,7 +113,7 @@ test("편집 진입과 복귀를 반복해도 카드 등장 애니메이션을 �
   api,
 }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  const stop = api.data.board.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+  const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
   favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
   await page.goto("/");
   const panel = page.getByRole("tabpanel");
@@ -161,10 +161,10 @@ test("홈 영역이 편집 화면으로 바뀌고 카드를 잡고 이동·놓�
   api,
   browserName,
 }, testInfo) => {
-  const [first, second] = api.data.board.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
+  const [first, second] = api.data.watch.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
   first!.name = "야탑역.종합버스터미널";
   second!.name = "안양역.시외버스터미널";
-  api.data.board.route.directions[0].terminalStopName = "안양역";
+  api.data.watch.route.directions[0].terminalStopName = "안양역";
   favorites.groups[0]!.name = "출퇴근";
   favorites.groups[0]!.favorites = [
     storedFavorite({ routeId, stopId: first!.stopId, direction: "UP" }),
@@ -175,14 +175,16 @@ test("홈 영역이 편집 화면으로 바뀌고 카드를 잡고 이동·놓�
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("textbox", { name: /노선/ })).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "번호를 입력하면 탑승 확률을 알려드려요", exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole("link", { name: "마이페이지", exact: true })).toBeVisible();
   const cards = editor.getByRole("list", { name: "즐겨찾기 순서", exact: true }).getByRole("listitem");
   await expect(cards.first()).toContainText(first!.name);
   await page.evaluate(() => document.fonts.ready);
   if (browserName === "chromium") await page.screenshot({ path: "/private/tmp/salmonbus-sal249-qa/editor.png" });
   const grip = editor.getByRole("button", {
-    name: `${api.data.board.route.displayName} · ${first!.name} 순서 변경`,
+    name: `${api.data.watch.route.displayName} · ${first!.name} 순서 변경`,
     exact: true,
   });
   const handle = (await grip.boundingBox())!;
@@ -227,7 +229,7 @@ test("편집 중 삭제는 확인·실패·재시도가 가능하고 다른 그�
   api,
   browserName,
 }) => {
-  const [first, second] = api.data.board.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
+  const [first, second] = api.data.watch.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
   const target = { routeId, stopId: first!.stopId, direction: "UP" as const };
   const removed = storedFavorite(target);
   const kept = storedFavorite({ routeId, stopId: second!.stopId, direction: "UP" }, 5);
@@ -276,7 +278,7 @@ for (const width of [320, 425])
     api,
   }) => {
     await page.setViewportSize({ width, height: 844 });
-    const stop = api.data.board.stops.find((stop) => stop.boardingAllowed)!;
+    const stop = api.data.watch.stops.find((stop) => stop.boardingAllowed)!;
     stop.name = "긴정류장이름.종합버스터미널입구";
     favorites.groups[0]!.name = "일이삼사오육칠팔구십";
     favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
@@ -306,7 +308,7 @@ test("터치 손잡이를 놓으면 순서가 바뀌고 pointercancel이면 원�
   api,
 }) => {
   test.skip(browserName !== "chromium", "실제 터치 입력은 Chromium CDP에서 검증한다.");
-  const [first, second] = api.data.board.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
+  const [first, second] = api.data.watch.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
   favorites.groups[0]!.favorites = [
     storedFavorite({ routeId, stopId: first!.stopId, direction: "UP" }),
     storedFavorite({ routeId, stopId: second!.stopId, direction: "UP" }, 5),
@@ -408,7 +410,7 @@ for (const width of [320, 425]) {
     api,
   }) => {
     await page.setViewportSize({ width, height: 844 });
-    const stop = api.data.board.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+    const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
     favorites.groups[0]!.name = "출퇴근";
     favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
     favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [] });
@@ -557,7 +559,7 @@ for (const width of [320, 425]) {
     browserName,
   }) => {
     await page.setViewportSize({ width, height: 844 });
-    const stop = api.data.board.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+    const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
     favorites.groups.push({
       id: secondGroupId,
       name: "통학",

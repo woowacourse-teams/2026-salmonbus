@@ -15,7 +15,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     browserName,
   }) => {
     await page.emulateMedia({ reducedMotion });
-    const stop = api.data.board.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed)!;
+    const stop = api.data.watch.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed)!;
     favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
     await page.goto("/");
     await page.getByRole("tabpanel").getByRole("link").click();

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
-import { searchStatusLabel } from "./routeSelectCopy";
+import { searchStatusLabel } from "./routeSearchCopy";
 
 const route: RouteSummary = {
   id: "5600",
@@ -12,7 +12,7 @@ const route: RouteSummary = {
 
 describe("searchStatusLabel", () => {
   it("입력 전에는 알릴 것이 없다", () => {
-    expect(searchStatusLabel({ kind: "idle" })).toBe("");
+    expect(searchStatusLabel({ kind: "empty" })).toBe("");
   });
 
   it("목록을 받는 중이면 불러오는 중이라고 알린다", () => {

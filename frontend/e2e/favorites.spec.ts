@@ -1,3 +1,4 @@
+import { openRouteSearch, routeButton, routeSearchInput } from "./utils/route-select";
 import { test, expect, defaultGroupId, storedFavorite } from "./fixtures/favorites";
 import { routeId } from "./fixtures/mock-data";
 
@@ -65,7 +66,7 @@ for (const width of [320, 425]) {
 }
 
 test("선택한 그룹 조회에 실패해도 재시도하면 같은 그룹의 즐겨찾기를 불러온다", async ({ page, favorites, api }) => {
-  const stop = api.data.board.stops.find((stop) => stop.boardingAllowed)!;
+  const stop = api.data.watch.stops.find((stop) => stop.boardingAllowed)!;
   favorites.groups.push({
     id: secondGroupId,
     name: "통학",
@@ -101,8 +102,8 @@ test("홈은 첫 그룹을 조회하고 탭 변경 시 선택한 그룹만 조�
   favorites,
   api,
 }) => {
-  const up = api.data.board.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
-  const down = api.data.board.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed)!;
+  const up = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+  const down = api.data.watch.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed)!;
   favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: up.stopId, direction: "UP" })];
   favorites.groups.push({
     id: secondGroupId,
@@ -115,7 +116,7 @@ test("홈은 첫 그룹을 조회하고 탭 변경 시 선택한 그룹만 조�
   await expect(cards.getByText(up.name, { exact: true })).toBeVisible();
   await expect(
     cards.getByText(
-      `${api.data.board.route.directions.find((direction) => direction.id === "UP")!.terminalStopName} 방면`,
+      `${api.data.watch.route.directions.find((direction) => direction.id === "UP")!.terminalStopName} 방면`,
       { exact: true },
     ),
   ).toBeVisible();
@@ -141,7 +142,7 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
     browserName,
   }) => {
     await page.emulateMedia({ reducedMotion });
-    const [first, second] = api.data.board.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
+    const [first, second] = api.data.watch.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
     favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: first!.stopId, direction: "UP" })];
     favorites.groups.push({
       id: secondGroupId,
@@ -204,7 +205,7 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
 }
 
 test("그룹을 빠르게 다시 바꾸면 늦게 도착한 이전 응답을 표시하지 않는다", async ({ page, favorites, api }) => {
-  const stop = api.data.board.stops.find((stop) => stop.boardingAllowed)!;
+  const stop = api.data.watch.stops.find((stop) => stop.boardingAllowed)!;
   favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
   favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [] });
   let release = () => {};
@@ -250,7 +251,7 @@ test("그룹을 빠르게 다시 바꾸면 늦게 도착한 이전 응답을 표
 
 test("비회원은 로그인 후 원래 판정보드로 복귀하고 다시 눌러 저장한다", async ({ page, auth, favorites, api }) => {
   auth.member = null;
-  const stop = api.data.board.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+  const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
   const destination = `/routes/${routeId}?direction=UP&stopId=${stop.stopId}`;
   await page.goto(destination);
   const star = page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true });
@@ -275,7 +276,7 @@ test("서버의 일괄 저장 실패 시 선택과 기존 등록을 유지하고
   favorites,
   api,
 }) => {
-  const stop = api.data.board.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+  const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
   favorites.mutationError = "FAVORITE_LIMIT_EXCEEDED";
   await page.goto(`/routes/${routeId}`);
   await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
@@ -295,7 +296,7 @@ test("서버의 일괄 저장 실패 시 선택과 기존 등록을 유지하고
 });
 
 test("가득 찬 그룹의 기존 선택은 유지하고 한 그룹씩 또는 전체에서 해제한다", async ({ page, favorites, api }) => {
-  const [first, second] = api.data.board.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
+  const [first, second] = api.data.watch.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
   const target = { routeId, stopId: first!.stopId, direction: "UP" as const };
   favorites.groups[0]!.favorites = [storedFavorite(target), storedFavorite({ ...target, stopId: second!.stopId }, 5)];
   favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [storedFavorite(target, 4)] });
@@ -356,7 +357,7 @@ test("대표 그룹은 이름이 바뀌어도 보호하고 일반 그룹은 삭�
 });
 
 test("그룹과 즐겨찾기 순서를 키보드로 편집하고 전체 ID 목록으로 저장한다", async ({ page, favorites, api }) => {
-  const [first, second] = api.data.board.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
+  const [first, second] = api.data.watch.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
   favorites.groups[0]!.favorites = [
     storedFavorite({ routeId, stopId: first!.stopId, direction: "UP" }),
     storedFavorite({ routeId, stopId: second!.stopId, direction: "UP" }, 5),
@@ -401,7 +402,7 @@ for (const [status, label] of [
   ["ERROR", "이 즐겨찾기의 정보를 불러오지 못했어요"],
 ] as const) {
   test(`홈의 ${status} 항목도 유지하고 상태를 안내한다`, async ({ page, favorites, api }) => {
-    const stop = api.data.board.stops.find((stop) => stop.boardingAllowed)!;
+    const stop = api.data.watch.stops.find((stop) => stop.boardingAllowed)!;
     const saved = storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction });
     favorites.groups[0]!.favorites = [saved];
     favorites.statuses[saved.id] = status;
@@ -419,8 +420,8 @@ for (const [status, label] of [
 }
 
 test("표시 정보가 생략된 항목도 정상 카드와 함께 남기고 저장한 방면으로 이동한다", async ({ page, favorites, api }) => {
-  const up = api.data.board.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
-  const down = api.data.board.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed)!;
+  const up = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+  const down = api.data.watch.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed)!;
   const unavailable = storedFavorite({ routeId, stopId: down.stopId, direction: "DOWN" });
   favorites.groups[0]!.favorites = [unavailable, storedFavorite({ routeId, stopId: up.stopId, direction: "UP" }, 5)];
   favorites.statuses[unavailable.id] = "UNAVAILABLE";
@@ -458,7 +459,7 @@ test("순서 일부가 저장된 뒤 실패하면 저장된 부분을 유지하�
   favorites,
   api,
 }) => {
-  const [first, second] = api.data.board.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
+  const [first, second] = api.data.watch.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
   favorites.groups[0]!.favorites = [
     storedFavorite({ routeId, stopId: first!.stopId, direction: "UP" }),
     storedFavorite({ routeId, stopId: second!.stopId, direction: "UP" }, 5),
@@ -518,7 +519,7 @@ test("마이페이지에서 한 그룹의 즐겨찾기를 삭제해도 다른 �
   favorites,
   api,
 }) => {
-  const stop = api.data.board.stops.find((stop) => stop.boardingAllowed)!;
+  const stop = api.data.watch.stops.find((stop) => stop.boardingAllowed)!;
   const target = { routeId, stopId: stop.stopId, direction: stop.direction };
   favorites.groups[0]!.favorites = [storedFavorite(target)];
   favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [storedFavorite(target, 4)] });
@@ -531,7 +532,7 @@ test("마이페이지에서 한 그룹의 즐겨찾기를 삭제해도 다른 �
 });
 
 test("이미 가득 찬 그룹에 새 항목을 선택하면 저장을 막는다", async ({ page, favorites, api }) => {
-  const [first, second, third] = api.data.board.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
+  const [first, second, third] = api.data.watch.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
   favorites.groups[0]!.favorites = [
     storedFavorite({ routeId, stopId: first!.stopId, direction: "UP" }),
     storedFavorite({ routeId, stopId: second!.stopId, direction: "UP" }, 5),
@@ -550,7 +551,7 @@ test("갱신 실패 중 도착 예정 시간이 지나면 시간을 감추고 �
   favorites,
   api,
 }) => {
-  const stop = api.data.board.stops.find((stop) => stop.boardingAllowed)!;
+  const stop = api.data.watch.stops.find((stop) => stop.boardingAllowed)!;
   favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
   await page.goto("/");
   const panel = page.getByRole("tabpanel");
@@ -567,6 +568,7 @@ test("즐겨찾기 API의 404도 조회 실패 시안을 보여주고 공개 노
   favorites.unavailable = true;
   await page.goto("/");
   await expect(page.getByRole("alert")).toHaveText("즐겨찾기를 불러오지 못했어요");
-  await page.getByRole("textbox", { name: /노선/ }).fill("3330");
-  await expect(page.getByRole("region", { name: "검색 결과", exact: true })).toBeVisible();
+  await openRouteSearch(page);
+  await routeSearchInput(page).fill("3330");
+  await expect(routeButton(page)).toBeVisible();
 });

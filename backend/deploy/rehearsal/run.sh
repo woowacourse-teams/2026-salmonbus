@@ -7,6 +7,7 @@
 # 실제 Boot JAR 기동과 DB 전환·백업 복원 검증은 별도로 수행한다.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
+python3 "$HERE/../observability/test_application_metrics_dashboard.py"
 docker run --rm \
   -v "$HERE":/rehearse:ro \
   -v "$HERE/..":/deploy:ro \

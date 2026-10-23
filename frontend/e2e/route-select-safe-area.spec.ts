@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures/api";
-import { routeSearchInput } from "./utils/route-select";
+import { inServiceSection, openRouteSearch, routeSearchEntry, routeSearchInput } from "./utils/route-select";
 
 test.use({
   reducedMotion: "reduce",
@@ -16,7 +16,7 @@ for (const { width, height } of [
     { top: 0, bottom: 0 },
     { top: 59, bottom: 34 },
   ]) {
-    test(`화면 ${width}x${height}px, safe area ${insets.top}/${insets.bottom}px에서 검색창과 마지막 결과가 가려지지 않는다`, async ({
+    test(`화면 ${width}x${height}px, safe area ${insets.top}/${insets.bottom}px에서 홈 검색창 위치와 검색 화면의 마지막 결과가 가려지지 않는다`, async ({
       page,
       context,
       browserName,
@@ -35,26 +35,24 @@ for (const { width, height } of [
       }));
       await page.goto("/");
 
-      const search = page.getByRole("search");
-      const initialBox = await search.boundingBox();
-      expect(initialBox).not.toBeNull();
-      expect(initialBox!.y).toBeGreaterThanOrEqual(insets.top);
-      expect(initialBox!.y + initialBox!.height).toBeLessThan(height / 2);
+      const entryBox = await routeSearchEntry(page).boundingBox();
+      expect(entryBox).not.toBeNull();
+      expect(entryBox!.y).toBeGreaterThanOrEqual(insets.top);
+      expect(entryBox!.y + entryBox!.height).toBeLessThan(height / 2);
       const logoBox = await page.getByRole("img", { name: "연어 버스 로고", exact: true }).boundingBox();
       expect(logoBox).not.toBeNull();
       expect(logoBox!.y).toBeGreaterThanOrEqual(insets.top);
 
+      await openRouteSearch(page);
       await routeSearchInput(page).fill("3");
-      const results = page.getByRole("region", { name: "검색 결과", exact: true });
+      const results = inServiceSection(page);
       await expect(results.getByRole("button")).toHaveCount(30);
-      const searchBox = await search.boundingBox();
+      const searchBox = await page.getByRole("search").boundingBox();
       expect(searchBox).not.toBeNull();
-      expect(searchBox!.y).toBeGreaterThanOrEqual(logoBox!.y + logoBox!.height);
+      expect(searchBox!.y).toBeGreaterThanOrEqual(insets.top);
       const resultsBox = await results.boundingBox();
       expect(resultsBox).not.toBeNull();
-      const navigationBox = await page.getByRole("navigation", { name: "주요 메뉴" }).boundingBox();
-      expect(navigationBox).not.toBeNull();
-      expect(resultsBox!.y + resultsBox!.height).toBeLessThanOrEqual(navigationBox!.y);
+      expect(resultsBox!.y + resultsBox!.height).toBeLessThanOrEqual(height - insets.bottom);
 
       await results.evaluate((element) => {
         element.scrollTop = element.scrollHeight;
