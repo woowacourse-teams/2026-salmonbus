@@ -345,7 +345,7 @@ test("편집을 누를 때만 손잡이 공간이 열리며 모션 줄이기에�
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   const handle = page.getByRole("button", { name: "즐겨찾기 순서 변경", exact: true });
   const samples = await handle.evaluate((element) => {
-    getComputedStyle(element).width;
+    void getComputedStyle(element).width;
     const animation = element.getAnimations()[0];
     if (!animation) return null;
     animation.pause();

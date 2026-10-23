@@ -65,7 +65,7 @@ test("정류장을 펼치고 접으면 별이 상세 영역과 같은 속도로 
       element.click();
     });
     const middle = await star.evaluate((element) => {
-      getComputedStyle(element).top;
+      void getComputedStyle(element).top;
       const animation = element
         .getAnimations()
         .find((animation) => animation instanceof CSSTransition && animation.transitionProperty === "top");
