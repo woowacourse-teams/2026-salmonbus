@@ -16,8 +16,6 @@ import { boardBackLink } from "./utils/verdict-board";
 test.use({
   viewport: { width: 390, height: 844 },
   reducedMotion: "reduce",
-  screenshot: "only-on-failure",
-  trace: "retain-on-failure",
 });
 
 test("홈에서 검색창을 누르면 검색 화면으로 이동하고 입력창에 포커스가 간다", async ({ page }) => {

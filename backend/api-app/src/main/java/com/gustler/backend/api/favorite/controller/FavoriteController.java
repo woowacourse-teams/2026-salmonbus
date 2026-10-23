@@ -3,12 +3,13 @@ package com.gustler.backend.api.favorite.controller;
 import com.gustler.backend.api.account.MemberPrincipal;
 import com.gustler.backend.api.docs.ApiDocsTags;
 import com.gustler.backend.api.error.ErrorResponse;
+import com.gustler.backend.api.favorite.InvalidFavoriteOrderException;
 import com.gustler.backend.api.favorite.InvalidFavoriteRequestException;
 import com.gustler.backend.api.favorite.application.FavoriteGroupService;
 import com.gustler.backend.api.favorite.application.FavoriteSelectionService;
 import com.gustler.backend.api.favorite.dto.ReorderFavoritesRequest;
+import com.gustler.backend.api.favorite.dto.SaveFavoriteOrderRequest;
 import com.gustler.backend.api.favorite.dto.SaveFavoriteSelectionRequest;
-import java.util.UUID;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -16,6 +17,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
+import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -42,17 +45,20 @@ public class FavoriteController {
 
     @PutMapping("/favorite-selections")
     @Operation(operationId = "saveMyFavoriteSelection", summary = "노선 정류장 항목의 그룹 선택 저장",
-        description = "이 항목을 저장할 그룹 ID 전체를 보냅니다. 이미 같은 선택이면 변경하지 않습니다. "
+        description = "이 항목을 저장할 그룹 ID 전체를 보냅니다. "
+            + "이미 같은 선택이면 변경하지 않습니다. "
             + "한 그룹이라도 최대 2개를 넘으면 어떤 그룹도 변경하지 않습니다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "선택 상태 저장 완료"),
-        @ApiResponse(responseCode = "400", description = "노선, 정류장, 방향 또는 그룹 목록이 올바르지 않음",
+        @ApiResponse(responseCode = "400",
+            description = "노선, 정류장, 방향 또는 그룹 목록이 올바르지 않음",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @ApiResponse(responseCode = "401", description = "액세스 토큰이 없거나 유효하지 않음",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @ApiResponse(responseCode = "404", description = "내 즐겨찾기 그룹을 찾을 수 없음",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "409", description = "그룹 최대 개수 초과 또는 같은 방향의 방문 위치 중복",
+        @ApiResponse(responseCode = "409",
+            description = "그룹 최대 개수 초과 또는 같은 방향의 방문 위치 중복",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @ApiResponse(responseCode = "422", description = "현재 노선에서 승차할 수 없는 정류장",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -108,6 +114,38 @@ public class FavoriteController {
             throw new InvalidFavoriteRequestException();
         }
         selections.reorder(principal.publicId(), groupId, request.favoriteIds());
+        return noContent();
+    }
+
+    @PutMapping("/favorite-order")
+    @Operation(operationId = "saveMyFavoriteOrder", summary = "즐겨찾기 전체 순서 저장",
+        description = "현재 내 그룹과 각 그룹의 노선 정류장 항목 ID를 "
+            + "원하는 순서로 모두 보냅니다. "
+            + "하나라도 현재 상태와 다르면 어떤 순서도 변경하지 않습니다.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "전체 순서 저장 완료"),
+        @ApiResponse(responseCode = "400",
+            description = "그룹 또는 항목 ID가 누락, 중복되거나 현재 상태와 다른 요청",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "401", description = "액세스 토큰이 없거나 유효하지 않음",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<Void> reorderAll(
+        @Parameter(hidden = true) @AuthenticationPrincipal MemberPrincipal principal,
+        @RequestBody SaveFavoriteOrderRequest request
+    ) {
+        if (request == null || request.groups() == null) {
+            throw new InvalidFavoriteRequestException();
+        }
+        List<FavoriteGroupService.Order> orders;
+        try {
+            orders = request.groups().stream()
+                .map(group -> new FavoriteGroupService.Order(group.groupId(), group.favoriteIds()))
+                .toList();
+        } catch (RuntimeException exception) {
+            throw new InvalidFavoriteOrderException();
+        }
+        groups.reorderAll(principal.publicId(), orders);
         return noContent();
     }
 

@@ -37,7 +37,7 @@ public record FavoriteOverview(List<Group> groups) {
     }
 
     public record Eta(EtaStatus status, EtaReason reason, Instant expectedArrivalAt, Long remainingSeconds) {
-        public static Eta available(Instant expectedArrivalAt, long remainingSeconds) {
+        public static Eta available(Instant expectedArrivalAt, final long remainingSeconds) {
             return new Eta(EtaStatus.AVAILABLE, null, expectedArrivalAt, remainingSeconds);
         }
 

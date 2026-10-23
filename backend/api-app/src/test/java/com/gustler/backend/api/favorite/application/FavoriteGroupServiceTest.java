@@ -6,9 +6,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.gustler.backend.api.favorite.FavoriteGroupNameConflictException;
-import com.gustler.backend.api.favorite.InvalidFavoriteGroupOrderException;
+import com.gustler.backend.api.favorite.InvalidFavoriteOrderException;
 import com.gustler.backend.api.favorite.domain.FavoriteDirection;
 import com.gustler.backend.api.favorite.domain.FavoriteGroup;
+import com.gustler.backend.api.favorite.domain.FavoriteTarget;
 import com.gustler.backend.api.favorite.domain.MemberFavoriteGroups;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,10 +27,10 @@ class FavoriteGroupServiceTest {
 
     @Test
     void 첫_즐겨찾기와_그룹을_한번에_만든다() {
-        var target = service.targetOf("204000057", "277102322", FavoriteDirection.UP);
+        FavoriteTarget target = service.targetOf("204000057", "277102322", FavoriteDirection.UP);
         when(resolver.requireAvailable(target)).thenReturn(target);
 
-        var created = service.create(MEMBER_ID, " 출근 ", target);
+        FavoriteGroup created = service.create(MEMBER_ID, " 출근 ", target);
 
         assertThat(created.name().value()).isEqualTo("출근");
         assertThat(created.favorites()).singleElement().extracting(favorite -> favorite.target()).isEqualTo(target);
@@ -45,8 +46,8 @@ class FavoriteGroupServiceTest {
 
     @Test
     void 그룹_이름을_바꾸고_순서를_바꾼다() {
-        var first = service.create(MEMBER_ID, "출근", null);
-        var second = service.create(MEMBER_ID, "퇴근", null);
+        FavoriteGroup first = service.create(MEMBER_ID, "출근", null);
+        FavoriteGroup second = service.create(MEMBER_ID, "퇴근", null);
 
         service.rename(MEMBER_ID, first.id().value(), "평일");
         service.reorder(MEMBER_ID, List.of(second.id().value(), first.id().value()));
@@ -57,11 +58,11 @@ class FavoriteGroupServiceTest {
 
     @Test
     void 일부_그룹만_보낸_정렬은_거절한다() {
-        var first = service.create(MEMBER_ID, "출근", null);
+        FavoriteGroup first = service.create(MEMBER_ID, "출근", null);
         service.create(MEMBER_ID, "퇴근", null);
 
         assertThatThrownBy(() -> service.reorder(MEMBER_ID, List.of(first.id().value())))
-            .isInstanceOf(InvalidFavoriteGroupOrderException.class);
+            .isInstanceOf(InvalidFavoriteOrderException.class);
     }
 
     private static final class MemoryRepository implements FavoriteGroupRepository {

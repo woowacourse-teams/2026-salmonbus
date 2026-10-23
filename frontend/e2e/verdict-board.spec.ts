@@ -8,8 +8,6 @@ import { forecastFixtures } from "../src/testing/forecastFixtures";
 test.use({
   viewport: { width: 390, height: 844 },
   reducedMotion: "reduce",
-  screenshot: "only-on-failure",
-  trace: "retain-on-failure",
 });
 
 test("상행에서 하행으로 전환하면 하행 정류장만 순서대로 표시된다", async ({ page }) => {
