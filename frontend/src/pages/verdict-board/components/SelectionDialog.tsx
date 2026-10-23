@@ -15,7 +15,7 @@ import {
   selectedGroups,
 } from "@/shared/utils/favoritePolicy";
 import plusIcon from "@/shared/assets/icons/favorite-group-plus.svg";
-import * as styles from "./FavoriteButton.css";
+import * as styles from "./SelectionDialog.css";
 
 interface SelectionDialogProps {
   target: FavoriteTarget;
