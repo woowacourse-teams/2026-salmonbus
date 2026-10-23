@@ -1,9 +1,15 @@
 package com.gustler.backend.api.http.login;
 
+import com.gustler.backend.api.monitoring.UserMonitoring;
+import com.gustler.backend.api.monitoring.UserMonitoring.LoginResult;
+import com.gustler.backend.api.monitoring.UserMonitoring.MemberKind;
+import com.gustler.backend.member.api.LoginProvider;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import java.util.Set;
+import java.util.Locale;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.CacheControl;
@@ -32,6 +38,12 @@ final class SocialLoginFailureHandler implements AuthenticationFailureHandler {
     private static final Set<String> CANCELLATION_CODES = Set.of(
         OAuth2ErrorCodes.ACCESS_DENIED, "user_cancelled_authorize");
 
+    private final UserMonitoring monitoring;
+
+    SocialLoginFailureHandler(UserMonitoring monitoring) {
+        this.monitoring = monitoring;
+    }
+
     @Override
     public void onAuthenticationFailure(
         HttpServletRequest request,
@@ -42,14 +54,23 @@ final class SocialLoginFailureHandler implements AuthenticationFailureHandler {
         HttpSession session = request.getSession(false);
         String returnTo = ReturnTo.HOME;
         String parameter = LOGIN_PARAMETER;
+        boolean withdrawal = false;
         if (session != null) {
             returnTo = LoginSessions.takeReturnTo(session);
             if (LoginSessions.withdrawingMember(session).isPresent()) {
                 parameter = WITHDRAW_PARAMETER;
+                withdrawal = true;
             }
             session.invalidate();
         }
-        LOGGER.warn("소셜 로그인에 실패했다. reason={} cause={}", reason, exception.getClass().getSimpleName());
+        Optional<LoginProvider> provider = providerOf(request);
+        if (!withdrawal) {
+            LoginResult result = reason.equals("cancelled") ? LoginResult.CANCELLED : LoginResult.FAILED;
+            monitoring.login(provider, result, MemberKind.UNKNOWN);
+        }
+        LOGGER.warn("event=user_login status=FAILED provider={} reason={} cause={}",
+            provider.map(value -> value.name().toLowerCase(Locale.ROOT)).orElse("unknown"),
+            reason, exception.getClass().getSimpleName());
         response.setStatus(HttpStatus.FOUND.value());
         response.setHeader(HttpHeaders.LOCATION,
             UriComponentsBuilder.fromUriString(returnTo).replaceQueryParam(parameter, reason).build().toString());
@@ -62,5 +83,16 @@ final class SocialLoginFailureHandler implements AuthenticationFailureHandler {
             return "cancelled";
         }
         return "failed";
+    }
+
+    private static Optional<LoginProvider> providerOf(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        for (LoginProvider provider : LoginProvider.values()) {
+            String name = provider.name().toLowerCase(Locale.ROOT);
+            if (uri.equals("/api/auth/" + name + "/callback")) {
+                return Optional.of(provider);
+            }
+        }
+        return Optional.empty();
     }
 }

@@ -1,4 +1,4 @@
-import type { Board, Direction, LiveVehicles, RouteListResponse } from "../../src/shared/api/routeForecast.types";
+import type { Board, Direction, RouteListResponse, RouteWatch } from "../../src/shared/api/routeForecast.types";
 import type { RouteGeometry } from "../../src/shared/api/routeGeometry.types";
 import type { StationArrivalsResponse } from "../../src/shared/api/stationArrivals.types";
 
@@ -8,8 +8,7 @@ export const pollIntervalMs = 60_000;
 export const routeId = "200000001";
 export const apiPaths = {
   routes: "/api/v1/routes",
-  board: `/api/v1/routes/${routeId}/board`,
-  vehicles: `/api/v1/routes/${routeId}/vehicles`,
+  watch: `/api/v1/routes/${routeId}/watch`,
   geometry: `/api/v2/routes/${routeId}/geometry`,
 };
 
@@ -100,8 +99,7 @@ export function createRouteGeometry(board: Board): RouteGeometry {
 // 각 테스트가 별도의 응답 객체를 받아 병렬 실행 중에도 서로 영향을 주지 않는다.
 export function createApiData(): {
   routes: RouteListResponse;
-  board: Board;
-  vehicles: LiveVehicles;
+  watch: RouteWatch;
   geometry: RouteGeometry;
   arrivals: StationArrivalsResponse | null;
 } {
@@ -180,12 +178,9 @@ export function createApiData(): {
   return {
     arrivals: null,
     routes: { routes: [route] },
-    board,
     geometry: createRouteGeometry(board),
-    vehicles: {
-      routeId,
-      referenceVersionId: board.route.referenceVersionId,
-      observation: { state: "VEHICLES_PRESENT", observedAt, staleAt },
+    watch: {
+      ...board,
       vehicles: [
         {
           vehicleId: "bus-1",

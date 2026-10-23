@@ -6,9 +6,9 @@ plugins {
 dependencies {
     implementation project(':common')
     implementation project(':member')
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
-    implementation 'org.springframework.boot:spring-boot-starter-websocket'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-client'
     implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
@@ -16,7 +16,6 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-flyway'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
-    implementation 'org.mongodb:mongodb-driver-sync'
     runtimeOnly 'org.flywaydb:flyway-database-postgresql'
     runtimeOnly 'org.postgresql:postgresql'
     compileOnly 'org.projectlombok:lombok'
@@ -27,7 +26,6 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
     testImplementation 'org.testcontainers:testcontainers-postgresql'
-    testImplementation 'org.testcontainers:testcontainers-mongodb'
     testImplementation testFixtures(project(':common'))
     testCompileOnly 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -41,18 +39,10 @@ springBoot {
 tasks.named('test') {
     environment 'ARRIVALS_ENABLED', 'false'
     environment 'ROUTE_GEOMETRY_ENABLED', 'false'
-    def chatContractExamples = rootProject.file('../contract/examples/chat-v1.json')
-    def chatInitScript = rootProject.file('deploy/chat/init-chat-db.js')
     def arrivalsContract = rootProject.file('../contract/station-arrivals-v2.openapi.json')
     def geometryContract = rootProject.file('../contract/route-geometry-v2.openapi.json')
     def watchContract = rootProject.file('../contract/route-watch-v1.openapi.json')
     def authContract = rootProject.file('../contract/auth-v1.openapi.json')
-    inputs.file(chatContractExamples)
-        .withPropertyName('chatContractExamples')
-        .withPathSensitivity(PathSensitivity.NONE)
-    inputs.file(chatInitScript)
-        .withPropertyName('chatInitScript')
-        .withPathSensitivity(PathSensitivity.NONE)
     inputs.files(arrivalsContract, geometryContract, watchContract, authContract)
         .withPropertyName('v2OpenApiContracts')
         .withPathSensitivity(PathSensitivity.NONE)
@@ -61,8 +51,6 @@ tasks.named('test') {
         .withPropertyName('devApiConfig')
         .withPathSensitivity(PathSensitivity.NONE)
     doFirst {
-        systemProperty 'chat.contract.examples', chatContractExamples.absolutePath
-        systemProperty 'chat.init.script', chatInitScript.absolutePath
         systemProperty 'arrival.openapi.contract', arrivalsContract.absolutePath
         systemProperty 'geometry.openapi.contract', geometryContract.absolutePath
         systemProperty 'watch.openapi.contract', watchContract.absolutePath
@@ -70,21 +58,18 @@ tasks.named('test') {
     }
 }
 
-tasks.named('processResources') {
-    from(rootProject.file('../contract')) {
-        include 'examples/chat-v1.json'
-        into 'api-docs'
-    }
-    from(rootProject.file('../docs/api')) {
-        include 'chat-websocket-public.md'
-        into 'api-docs'
-    }
-}
-
 // API 실행 경로에 로그인용 회원 모듈 외의 쓰기 업무나 다른 실행 앱이 간접 의존으로 들어오지 않게 확인한다.
 tasks.register('verifyRuntimeProjects') {
     doLast {
-        def projects = configurations.runtimeClasspath.incoming.resolutionResult.allComponents
+        def components = configurations.runtimeClasspath.incoming.resolutionResult.allComponents
+        def retired = components.findAll {
+            it.moduleVersion?.group == 'org.mongodb' ||
+                it.moduleVersion?.name in ['spring-websocket', 'spring-messaging', 'spring-boot-starter-websocket']
+        }
+        if (!retired.empty) {
+            throw new GradleException("Retired chat runtime dependencies: ${retired*.id}")
+        }
+        def projects = components
             .findAll { it.id instanceof org.gradle.api.artifacts.component.ProjectComponentIdentifier }
             .collect { it.id.projectPath }
             .toSet()

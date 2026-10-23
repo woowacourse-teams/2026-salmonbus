@@ -1,14 +1,15 @@
 import { mergeTests, type Page } from "@playwright/test";
-import { test as chatTest, expect, chatRouteId, chatAvailability } from "./fixtures/chat";
-import { test as mapTest } from "./fixtures/naver-map";
+import { test as mapTest, expect } from "./fixtures/naver-map";
 import { routeId } from "./fixtures/mock-data";
 import type { BridgeEnvelope } from "../src/shared/bridge/bridge.types";
 import { NATIVE_MAP_CAPABILITIES } from "../src/shared/native-map/bridge";
 import type { NativeMapCommands, NativeMapEvent, NativeMapSession } from "../src/shared/native-map/protocol";
+import { test as favoritesTest } from "./fixtures/favorites";
 
-const test = mergeTests(chatTest, mapTest).extend<{ nativeReady: boolean }>({
+const test = mapTest.extend<{ nativeReady: boolean }>({
   nativeReady: [true, { option: true }],
 });
+const favoriteNativeTest = mergeTests(test, favoritesTest);
 
 /** 앱이 받은 map 메시지를 영역 이름을 떼고 세션 값을 꺼낸 모양. 아래 검사는 이 모양으로 읽는다. */
 type MapCommandMessage = {
@@ -61,13 +62,8 @@ async function messages(page: Page): Promise<MapCommandMessage[]> {
   return sent
     .filter((message) => message.type.startsWith("map."))
     .map((message) => {
-      const payload = message.payload as NativeMapSession;
-      return {
-        type: message.type.slice("map.".length),
-        sessionId: payload.sessionId,
-        revision: payload.revision,
-        payload,
-      } as MapCommandMessage;
+      const { sessionId, revision, ...payload } = message.payload as NativeMapSession;
+      return { type: message.type.slice("map.".length), sessionId, revision, payload } as MapCommandMessage;
     });
 }
 async function open(page: Page, id = routeId) {
@@ -135,11 +131,17 @@ test("실제 transition 경계와 웹 버튼 영역을 전달하고 native 위�
   await open(page);
   await page.getByRole("slider", { name: "판정보드 높이" }).click();
   await page.clock.runFor(400);
+  // page.clock은 CSS transition을 끝내지 않으므로 실제 종료 후 layout을 기다린다.
+  await expect
+    .poll(async () => {
+      await page.clock.runFor(32);
+      return (await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.transitioning;
+    })
+    .toBe(false);
   const layout = (await messages(page)).filter((message) => message.type === "layout").at(-1)!;
   const map = await page.getByRole("region", { name: "노선 지도", exact: true }).boundingBox();
   expect(layout.payload.mapRect.height).toBeCloseTo(map!.height, 0);
   expect(layout.payload.webRects.length).toBeGreaterThanOrEqual(3);
-  expect(layout.payload.transitioning).toBe(false);
   await page.getByRole("button", { name: "현재 위치 보기", exact: true }).click();
   const location = (await messages(page)).find((message) => message.type === "location")!;
   await emit(page, {
@@ -211,22 +213,16 @@ test("native 위치 조회 시간 초과와 권한 거부를 안내하고 재시
   expect(errors).toEqual([]);
 });
 
-test("body portal 채팅을 hit region에 포함하고 전체 modal은 native 지도 입력도 차단한다", async ({ page, chat }) => {
-  chat.enabled = true;
-  await open(page, chatRouteId);
-  await expect
-    .poll(async () => {
-      await page.clock.runFor(100);
-      return page.getByRole("button", { name: `${chatAvailability.displayName} 채팅 열기`, exact: true }).count();
-    })
-    .toBe(1);
-  await page.getByRole("button", { name: `${chatAvailability.displayName} 채팅 열기`, exact: true }).click();
-  await page.clock.runFor(400);
-  await page.getByRole("button", { name: "채팅 크게 보기", exact: true }).click();
-  await page.clock.runFor(400);
-  const layout = (await messages(page)).filter((message) => message.type === "layout").at(-1)!;
-  expect(layout.payload.captureAll).toBe(true);
-  expect(layout.payload.webRects.some((rect) => rect.height > 800)).toBe(true);
+favoriteNativeTest("즐겨찾기 dialog를 열면 native 지도 입력을 차단하고 닫으면 복구한다", async ({ page, api }) => {
+  await open(page);
+  const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+  await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.clock.runFor(32);
+  expect((await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.captureAll).toBe(true);
+  await page.getByRole("dialog").getByRole("button", { name: "취소", exact: true }).click();
+  await page.clock.runFor(32);
+  expect((await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.captureAll).toBe(false);
 });
 
 test("native 지도 오류 후에도 웹 목록을 유지하고 앱 전용 투명 모드를 정리한다", async ({ page }) => {
@@ -241,10 +237,41 @@ test("native 지도 오류 후에도 웹 목록을 유지하고 앱 전용 투�
 test.describe("native 지도 준비 실패 시 JS 지도 전환", () => {
   test.use({ nativeReady: false });
 
+  test("즐겨찾기 정류장을 초기 native scene에 담고 이전 앱용 카메라 명령도 유지한다", async ({ page, api }) => {
+    const stop = api.data.watch.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed)!;
+    await page.goto(`/routes/${routeId}?direction=DOWN&stopId=${stop.stopId}`);
+    await expect.poll(async () => (await messages(page)).some((message) => message.type === "mount")).toBe(true);
+    const mount = (await messages(page)).find((message) => message.type === "mount")!;
+    expect(mount.payload.selectedStop).toEqual({ direction: "DOWN", sequence: stop.sequence });
+    expect(mount.payload.activeDirection).toBe("DOWN");
+    const stopCommands = async () =>
+      (await messages(page)).filter((message) => message.type === "camera" && message.payload.command === "stop");
+    expect(await stopCommands()).toHaveLength(0);
+    await emit(page, { type: "ready", payload: {} });
+    await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
+    expect(await stopCommands()).toEqual([
+      expect.objectContaining({
+        payload: { command: "stop", selection: { direction: "DOWN", sequence: stop.sequence } },
+      }),
+    ]);
+    await page.clock.runFor(1_000);
+    expect(await stopCommands()).toHaveLength(1);
+  });
+
+  test("즐겨찾기 정류장이 유효하지 않으면 초기 native scene에서 선택하지 않는다", async ({ page }) => {
+    await page.goto(`/routes/${routeId}?direction=DOWN&stopId=unknown-stop`);
+    await expect.poll(async () => (await messages(page)).some((message) => message.type === "mount")).toBe(true);
+    const mount = (await messages(page)).find((message) => message.type === "mount")!;
+    expect(mount.payload.selectedStop).toBeNull();
+    await emit(page, { type: "ready", payload: {} });
+    await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
+    expect((await messages(page)).filter((message) => message.type === "camera")).toHaveLength(0);
+  });
+
   for (const failure of ["timeout", "native-timeout", "auth"] as const) {
     test(`${failure} 후 JS 지도를 유지하고 선택과 차량 이동을 연결한다`, async ({ page, naverMap, api }) => {
       api.cacheMaxAgeSeconds = 60;
-      api.data.vehicles.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1")!.phase = "IN_TRANSIT";
+      api.data.watch.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1")!.phase = "IN_TRANSIT";
       await page.goto(`/routes/${routeId}`);
       await expect.poll(async () => (await messages(page)).some((message) => message.type === "mount")).toBe(true);
       await emit(page, { type: "stopPress", payload: { selection: { direction: "UP", sequence: 1 } } });
@@ -262,6 +289,9 @@ test.describe("native 지도 준비 실패 시 JS 지도 전환", () => {
       expect(await page.locator("html").getAttribute("data-native-map")).toBeNull();
       expect((await messages(page)).filter((message) => message.type === "unmount")).toHaveLength(1);
       await expect(map.locator('button[data-map-stop-sequence="1"][aria-pressed="true"]')).toHaveCount(1);
+
+      await page.clock.runFor(600);
+      expect((await naverMap.snapshot()).zoom).toBe(15);
 
       const camera = await naverMap.snapshot();
       const mountCount = (await messages(page)).filter((message) => message.type === "mount").length;
@@ -298,24 +328,20 @@ test.describe("native 지도 준비 실패 시 JS 지도 전환", () => {
   });
 });
 
-test("transition 중 제거된 채팅 버튼은 정리하고 다른 UI가 움직이는 동안에는 잠금을 유지한다", async ({
-  page,
-  chat,
-}) => {
-  chat.enabled = true;
-  await open(page, chatRouteId);
-  const launcher = page.getByRole("button", { name: `${chatAvailability.displayName} 채팅 열기`, exact: true });
-  await expect
-    .poll(async () => {
-      await page.clock.runFor(100);
-      return launcher.count();
-    })
-    .toBe(1);
+test("transition 중 제거된 요소는 정리하고 다른 UI가 움직이는 동안에는 잠금을 유지한다", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => {
+    const probe = document.createElement("div");
+    probe.id = "native-transition-probe";
+    probe.dataset.nativeMapHit = "";
+    document.body.append(probe);
+  });
+  const probe = page.locator("#native-transition-probe");
   const sheet = page.getByRole("region", { name: "판정보드", exact: true });
   await sheet.evaluate((element) =>
     element.dispatchEvent(new TransitionEvent("transitionrun", { bubbles: true, propertyName: "transform" })),
   );
-  await launcher.evaluate((element) =>
+  await probe.evaluate((element) =>
     element.dispatchEvent(new TransitionEvent("transitionrun", { bubbles: true, propertyName: "scale" })),
   );
   await page.clock.runFor(32);
@@ -323,8 +349,8 @@ test("transition 중 제거된 채팅 버튼은 정리하고 다른 UI가 움직
     true,
   );
 
-  await launcher.click();
-  await expect(launcher).toHaveCount(0);
+  await probe.evaluate((element) => element.remove());
+  await expect(probe).toHaveCount(0);
   await page.clock.runFor(1_000);
   expect((await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.transitioning).toBe(
     true,

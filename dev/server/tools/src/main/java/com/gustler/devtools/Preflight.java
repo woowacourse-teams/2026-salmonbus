@@ -31,12 +31,18 @@ final class Preflight {
                 host.mounted(layout.data()).path("uuid").equals(marker.path("dataVolumeUuid")),
                 "DEV_DATA_MOUNT");
         var hashes = marker.path("configSha256");
+        var expectedConfigs = Files.isRegularFile(directory.resolve("mongodb.yml"))
+                ? Set.of("api.yml", "worker.yml", "mongodb.yml") : Set.of("api.yml", "worker.yml");
+        if (expectedConfigs.contains("mongodb.yml")) {
+            Checks.require(ChatRetirement.OLD_CONFIG.equals(FileOps.sha(directory.resolve("mongodb.yml"))),
+                    "DEV_RETIRED_CHAT_SETTINGS");
+        }
         Checks.require(
                 hashes.isObject()
                         && hashes.propertyStream()
                                 .map(Map.Entry::getKey)
                                 .collect(java.util.stream.Collectors.toSet())
-                                .equals(Set.of("api.yml", "worker.yml", "mongodb.yml")),
+                                .equals(expectedConfigs),
                 "DEV_CONFIG");
         for (var entry : hashes.properties()) {
             var file = directory.resolve(entry.getKey());

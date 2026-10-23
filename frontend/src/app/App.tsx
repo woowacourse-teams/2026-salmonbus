@@ -1,16 +1,17 @@
 import { BrowserRouter } from "react-router";
-import { ChatGate } from "@/features/chat";
 import { AuthProvider } from "./providers/AuthProvider";
 import { AuthReturn } from "./AuthReturn";
 import { AppRoutes } from "./routes";
+import { FavoritesProvider } from "./providers/FavoritesProvider";
 
 export function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AuthReturn />
-        <AppRoutes />
-        <ChatGate />
+        <FavoritesProvider>
+          <AuthReturn />
+          <AppRoutes />
+        </FavoritesProvider>
       </AuthProvider>
     </BrowserRouter>
   );

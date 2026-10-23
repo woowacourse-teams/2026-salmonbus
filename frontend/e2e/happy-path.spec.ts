@@ -29,8 +29,8 @@ for (const { direction, label, sequence, expectedArrivals } of [
 ] as const) {
   test(`${label} 노선을 선택해 실시간 차량 이동과 정류장별 좌석 예측을 확인한다`, async ({ page, api }) => {
     api.cacheMaxAgeSeconds = 20;
-    const stop = api.data.board.stops.find((stop) => stop.sequence === sequence)!;
-    const nextStop = api.data.board.stops.find((stop) => stop.sequence === sequence + 1)!;
+    const stop = api.data.watch.stops.find((stop) => stop.sequence === sequence)!;
+    const nextStop = api.data.watch.stops.find((stop) => stop.sequence === sequence + 1)!;
     const vehicle = {
       vehicleId: "moving-bus",
       direction,
@@ -40,7 +40,7 @@ for (const { direction, label, sequence, expectedArrivals } of [
       phase: "DEPARTED" as const,
       seat: { kind: "EXACT" as const, remaining: 5 },
     };
-    api.data.vehicles.vehicles = [vehicle];
+    api.data.watch.vehicles = [vehicle];
 
     await test.step("노선 선택 페이지에서 3330번 노선을 선택한다", async () => {
       await openBoard(page);
@@ -74,7 +74,7 @@ for (const { direction, label, sequence, expectedArrivals } of [
         { phase: "ARRIVING", stop: nextStop, description: "도착 중" },
       ] as const) {
         const previousY = await centerY(marker);
-        api.data.vehicles.vehicles = [
+        api.data.watch.vehicles = [
           {
             ...vehicle,
             phase: step.phase,
@@ -83,9 +83,9 @@ for (const { direction, label, sequence, expectedArrivals } of [
             stopName: step.stop.name,
           },
         ];
-        const requestsBefore = api.requests.vehicles;
+        const requestsBefore = api.requests.watch;
         const response = page.waitForResponse(
-          (response) => new URL(response.url()).pathname === apiPaths.vehicles && response.status() === 200,
+          (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
         );
         await page.clock.fastForward(pollIntervalMs);
         await (await response).finished();
@@ -93,7 +93,7 @@ for (const { direction, label, sequence, expectedArrivals } of [
           "aria-label",
           `${step.stop.name} 정류장, ${step.description}, 현재 잔여 좌석 5석`,
         );
-        expect(api.requests.vehicles).toBeGreaterThan(requestsBefore);
+        expect(api.requests.watch).toBeGreaterThan(requestsBefore);
 
         const motion = await expectForwardMotion(page, marker, from, to);
         // 같은 차량은 응답 갱신 때 순간이동하지 않고 이전 표시 위치에서 이어 움직인다.

@@ -1,7 +1,7 @@
 import type { Board, DirectionInfo } from "@/shared/api/routeForecast.types";
-import clockIcon from "./route-summary-icons/clock.svg";
-import timerIcon from "./route-summary-icons/timer.svg";
-import busIcon from "./route-summary-icons/bus.svg";
+import clockIcon from "../assets/route-summary-icons/clock.svg";
+import timerIcon from "../assets/route-summary-icons/timer.svg";
+import busIcon from "../assets/route-summary-icons/bus.svg";
 import * as styles from "./BoardRouteSummary.css";
 
 interface BoardRouteSummaryProps {

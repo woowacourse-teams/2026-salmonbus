@@ -4,6 +4,7 @@ import com.gustler.backend.api.account.token.AccessTokens;
 import com.gustler.backend.api.account.token.AuthCookies;
 import com.gustler.backend.api.account.token.WithdrawalTickets;
 import com.gustler.backend.api.favorite.application.DefaultFavoriteGroupService;
+import com.gustler.backend.api.monitoring.UserMonitoring;
 import com.gustler.backend.member.api.RefreshTokens;
 import com.gustler.backend.member.api.SignInWithSocialAccount;
 import com.gustler.backend.member.api.WithdrawMember;
@@ -123,6 +124,7 @@ public class SocialLoginConfiguration {
         ObjectProvider<AccessTokens> accessTokens,
         ObjectProvider<AuthCookies> authCookies,
         DefaultFavoriteGroupService defaultGroups,
+        UserMonitoring monitoring,
         ObjectProvider<AppleWithdrawal> appleWithdrawal,
         ObjectProvider<WithdrawalTickets> withdrawalTickets
     ) {
@@ -130,6 +132,6 @@ public class SocialLoginConfiguration {
             .collect(Collectors.toMap(secret -> APPLE, secret -> secret::issue));
         return new SocialLogin(
             registrations.orderedStream().toList(), clientSecrets, signIn, refreshTokens, accessTokens, authCookies,
-            defaultGroups, appleWithdrawal, withdrawalTickets);
+            defaultGroups, monitoring, appleWithdrawal, withdrawalTickets);
     }
 }

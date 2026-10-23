@@ -22,7 +22,7 @@ test("상행에서 하행으로 전환하면 하행 정류장만 순서대로 �
 });
 
 test("판정 보드 최초 조회 실패는 운행 없음이나 예측 없음과 구분된다", async ({ page, api }) => {
-  api.mode.board = "network-error";
+  api.mode.watch = "network-error";
   await page.goto("/");
   await selectRoute(page);
 
@@ -46,19 +46,19 @@ test("유효기간 안의 자동 갱신 실패 시 마지막 예측을 유지한
     /7정류장 전\s*시간 정보 없음\s*도착 시 2석 예상해요/,
   ]);
   const previousForecast = await arrivals.allTextContents();
-  const requestsBeforePoll = api.requests.board;
-  api.mode.board = "network-error";
+  const requestsBeforePoll = api.requests.watch;
+  api.mode.watch = "network-error";
 
   // 단순히 화면이 남았는지만 보지 않고 후속 폴링의 실제 네트워크 실패를 기다린다.
   const failedRequest = page.waitForEvent(
     "requestfailed",
-    (request) => new URL(request.url()).pathname === apiPaths.board,
+    (request) => new URL(request.url()).pathname === apiPaths.watch,
   );
   await page.clock.fastForward(pollIntervalMs);
   await failedRequest;
   await page.clock.runFor(1);
-  expect(api.requests.board).toBeGreaterThan(requestsBeforePoll);
-  expect(await page.evaluate(() => Date.now())).toBeLessThan(Date.parse(api.data.board.staleAt));
+  expect(api.requests.watch).toBeGreaterThan(requestsBeforePoll);
+  expect(await page.evaluate(() => Date.now())).toBeLessThan(Date.parse(api.data.watch.staleAt));
 
   await expect(stop).toHaveAttribute("aria-expanded", "true");
   await expect(arrivals).toHaveText(previousForecast);
@@ -79,22 +79,22 @@ test("자동 갱신 실패 후 다음 요청이 성공하면 새 예측으로 �
     /3정류장 전\s*시간 정보 없음\s*도착 시 5석 예상해요/,
     /7정류장 전\s*시간 정보 없음\s*도착 시 2석 예상해요/,
   ]);
-  const requestsBeforeFailure = api.requests.board;
-  api.mode.board = "network-error";
+  const requestsBeforeFailure = api.requests.watch;
+  api.mode.watch = "network-error";
 
   const failedRequest = page.waitForEvent(
     "requestfailed",
-    (request) => new URL(request.url()).pathname === apiPaths.board,
+    (request) => new URL(request.url()).pathname === apiPaths.watch,
   );
   await page.clock.fastForward(pollIntervalMs);
   await failedRequest;
   await page.clock.runFor(1);
-  expect(api.requests.board).toBeGreaterThan(requestsBeforeFailure);
-  expect(await page.evaluate(() => Date.now())).toBeLessThan(Date.parse(api.data.board.staleAt));
+  expect(api.requests.watch).toBeGreaterThan(requestsBeforeFailure);
+  expect(await page.evaluate(() => Date.now())).toBeLessThan(Date.parse(api.data.watch.staleAt));
 
   // 실패 직후 기존 예측의 유지 여부는 별도 테스트에서 검증한다.
   // 다음 성공 응답이 반영됐는지 구분하도록 예측 값과 항목 수를 바꾼다.
-  const stopData = api.data.board.stops.find((stop) => stop.name === targetStopNames.UP);
+  const stopData = api.data.watch.stops.find((stop) => stop.name === targetStopNames.UP);
   if (stopData === undefined) throw new Error("상행 목표 정류장 fixture가 필요합니다");
   stopData.approachingVehicles = [
     {
@@ -103,23 +103,23 @@ test("자동 갱신 실패 후 다음 요청이 성공하면 새 예측으로 �
       forecast: { status: "AVAILABLE", seatAvailableProbability: 0.9, expectedSeats: 9 },
     },
   ];
-  api.mode.board = "success";
-  const requestsBeforeRecovery = api.requests.board;
+  api.mode.watch = "success";
+  const requestsBeforeRecovery = api.requests.watch;
 
   const recoveredResponse = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === apiPaths.board && response.status() === 200,
+    (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
   );
   await page.clock.fastForward(pollIntervalMs);
   await (await recoveredResponse).finished();
-  expect(api.requests.board).toBeGreaterThan(requestsBeforeRecovery);
-  expect(await page.evaluate(() => Date.now())).toBeLessThan(Date.parse(api.data.board.staleAt));
+  expect(api.requests.watch).toBeGreaterThan(requestsBeforeRecovery);
+  expect(await page.evaluate(() => Date.now())).toBeLessThan(Date.parse(api.data.watch.staleAt));
 
   await expect(stop).toHaveAttribute("aria-expanded", "true");
   await expect(arrivals).toHaveText([/2정류장 전\s*시간 정보 없음\s*도착 시 9석 예상해요/]);
   await expect(arrivals.nth(0)).toBeVisible();
 });
 
-test("화면을 켜 둔 채 연결이 돌아오면 다음 폴링을 기다리지 않고 예보와 차량을 다시 불러온다", async ({ page, api }) => {
+test("화면을 켜 둔 채 연결이 돌아오면 다음 폴링을 기다리지 않고 판정 보드를 다시 불러온다", async ({ page, api }) => {
   await openBoard(page);
   const stop = targetStop(page, "UP");
   await stop.scrollIntoViewIfNeeded();
@@ -133,16 +133,16 @@ test("화면을 켜 둔 채 연결이 돌아오면 다음 폴링을 기다리지
 
   // 오프라인 요청이 mock까지 와도 실패하도록 응답도 실패로 맞춘다.
   await page.context().setOffline(true);
-  api.mode.board = "network-error";
-  api.mode.vehicles = "network-error";
-  const failed = (path: string) =>
-    page.waitForEvent("requestfailed", (request) => new URL(request.url()).pathname === path);
-  const pollFailed = Promise.all([failed(apiPaths.board), failed(apiPaths.vehicles)]);
+  api.mode.watch = "network-error";
+  const pollFailed = page.waitForEvent(
+    "requestfailed",
+    (request) => new URL(request.url()).pathname === apiPaths.watch,
+  );
   await page.clock.fastForward(pollIntervalMs);
   await pollFailed;
   await page.clock.runFor(1);
 
-  const stopData = api.data.board.stops.find((stop) => stop.name === targetStopNames.UP);
+  const stopData = api.data.watch.stops.find((stop) => stop.name === targetStopNames.UP);
   if (stopData === undefined) throw new Error("상행 목표 정류장 fixture가 필요합니다");
   stopData.approachingVehicles = [
     {
@@ -151,13 +151,12 @@ test("화면을 켜 둔 채 연결이 돌아오면 다음 폴링을 기다리지
       forecast: { status: "AVAILABLE", seatAvailableProbability: 0.9, expectedSeats: 9 },
     },
   ];
-  api.mode.board = "success";
-  api.mode.vehicles = "success";
+  api.mode.watch = "success";
 
   // 시계가 멈춰 있어서 60초 뒤 예약 요청은 실행될 수 없다. 여기서 오는 응답은 online이 시작한 요청이다.
-  const responded = (path: string) =>
-    page.waitForResponse((response) => new URL(response.url()).pathname === path && response.status() === 200);
-  const refilled = Promise.all([responded(apiPaths.board), responded(apiPaths.vehicles)]);
+  const refilled = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
+  );
   await page.context().setOffline(false);
   await refilled;
 
@@ -170,11 +169,10 @@ test("화면이 숨은 동안에는 연결이 돌아와도 요청하지 않고 �
   await page.context().setOffline(true);
 
   // 페이지가 요청을 보내는 순간에 세므로, 화면 복귀 요청이 앞 요청을 취소해도 횟수에 남는다.
-  const issuedRequests = { board: 0, vehicles: 0 };
+  const issuedRequests: string[] = [];
   page.on("request", (request) => {
     const path = new URL(request.url()).pathname;
-    if (path === apiPaths.board) issuedRequests.board += 1;
-    if (path === apiPaths.vehicles) issuedRequests.vehicles += 1;
+    if (path === apiPaths.watch) issuedRequests.push(path);
   });
 
   // 리스너를 먼저 붙여 두어야 online 이벤트를 놓치지 않는다. 객체로 감싸 Promise를 기다리지 않고 핸들만 받는다.
@@ -184,13 +182,13 @@ test("화면이 숨은 동안에는 연결이 돌아와도 요청하지 않고 �
   await page.context().setOffline(false);
   await onlineListener.evaluate((listener) => listener.delivered);
 
-  const responded = (path: string) =>
-    page.waitForResponse((response) => new URL(response.url()).pathname === path && response.status() === 200);
-  const reloaded = Promise.all([responded(apiPaths.board), responded(apiPaths.vehicles)]);
+  const reloaded = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
+  );
   await setVisibility(page, "visible");
   await reloaded;
 
-  expect(issuedRequests).toEqual({ board: 1, vehicles: 1 });
+  expect(issuedRequests).toHaveLength(1);
 });
 
 // Playwright는 탭 숨김을 직접 지원하지 않아서, 훅이 읽는 값을 덮어쓰고 이벤트를 보낸다.
@@ -207,10 +205,10 @@ function busMarkerAt(page: Page, stopName: string) {
     .getByRole("button", { name: new RegExp(`^${stopName} 정류장,`) });
 }
 
-async function pollBoardAndVehicles(page: Page) {
-  const responded = (path: string) =>
-    page.waitForResponse((response) => new URL(response.url()).pathname === path && response.status() === 200);
-  const polled = Promise.all([responded(apiPaths.board), responded(apiPaths.vehicles)]);
+async function pollRouteWatch(page: Page) {
+  const polled = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
+  );
   await page.clock.fastForward(pollIntervalMs);
   await polled;
   await settleMarkers(page);
@@ -221,9 +219,9 @@ async function settleMarkers(page: Page) {
   await page.clock.runFor(100);
 }
 
-test("차량이 먼저 다음 정류장으로 가도, 예보가 따라올 때 마커와 도착 예상이 한 번에 바뀐다", async ({ page, api }) => {
+test("다음 관측이 오면 마커와 도착 예상이 한 응답으로 함께 바뀐다", async ({ page, api }) => {
   // 정류장 8을 막 출발한 버스라서 목표 정류장(순번 11)까지 3정류장 전이다. 백엔드 horizonStops 계산과 같다.
-  const bus = api.data.vehicles.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1");
+  const bus = api.data.watch.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1");
   if (bus === undefined) throw new Error("bus-1 차량 fixture가 필요합니다");
   bus.phase = "DEPARTED";
   await openBoard(page);
@@ -235,51 +233,56 @@ test("차량이 먼저 다음 정류장으로 가도, 예보가 따라올 때 �
   await expect(nearestArrival).toHaveText(/3정류장 전\s*시간 정보 없음\s*도착 시 5석 예상해요/);
   await expect(busMarkerAt(page, "상행 정류장 8")).toBeVisible();
 
-  // 수집기가 다음 observation batch를 저장했지만 예보 발행은 아직이다. 차량 응답만 새 batch로 온다.
-  const nextObservedAt = "2026-09-16T08:00:15+09:00";
-  Object.assign(bus, { currentStopSequence: 9, stopId: "1009", stopName: "상행 정류장 9" });
-  api.data.vehicles.observation.observedAt = nextObservedAt;
-  await pollBoardAndVehicles(page);
-
-  await expect(busMarkerAt(page, "상행 정류장 8")).toBeVisible();
-  await expect(busMarkerAt(page, "상행 정류장 9")).toHaveCount(0);
-  await expect(nearestArrival).toHaveText(/3정류장 전\s*시간 정보 없음\s*도착 시 5석 예상해요/);
-
-  // 같은 batch의 예보가 발행되면 마커, 정류장 수, 좌석이 같이 바뀐다.
-  const target = api.data.board.stops.find((candidate) => candidate.name === targetStopNames.UP);
+  const target = api.data.watch.stops.find((candidate) => candidate.name === targetStopNames.UP);
   const forecastedBus = target?.approachingVehicles.find((vehicle) => vehicle.vehicleId === "bus-1");
   if (forecastedBus === undefined) throw new Error("상행 목표 정류장의 bus-1 예보 fixture가 필요합니다");
+  Object.assign(bus, { currentStopSequence: 9, stopId: "1009", stopName: "상행 정류장 9" });
   Object.assign(forecastedBus, {
     horizonStops: 2,
     forecast: { status: "AVAILABLE", seatAvailableProbability: 0.8, expectedSeats: 4 },
   });
-  api.data.board.observedAt = nextObservedAt;
-  await pollBoardAndVehicles(page);
+  api.data.watch.observedAt = "2026-09-16T08:00:15+09:00";
+  await pollRouteWatch(page);
 
   await expect(busMarkerAt(page, "상행 정류장 9")).toBeVisible();
   await expect(busMarkerAt(page, "상행 정류장 8")).toHaveCount(0);
   await expect(nearestArrival).toHaveText(/2정류장 전\s*시간 정보 없음\s*도착 시 4석 예상해요/);
 });
 
-test("수집 중이라 차량 응답이 비어 와도 마커가 사라지지 않는다", async ({ page, api }) => {
+test("판의 만료 시각이 지나면 차량 마커만 숨기고, 새 관측을 받으면 다시 표시한다", async ({ page, api }) => {
   await openBoard(page);
+  const stop = targetStop(page, "UP");
+  await stop.scrollIntoViewIfNeeded();
+  await stop.click();
   await settleMarkers(page);
+  const nearestArrival = targetRow(page, "UP").getByRole("listitem").nth(0);
   await expect(busMarkerAt(page, "상행 정류장 8")).toBeVisible();
-  const requestsBeforeCollecting = api.requests.vehicles;
 
-  // 다음 GBIS 응답을 저장하기 전에는 직전 정상 batch의 observedAt과 빈 목록이 UNKNOWN으로 온다.
-  api.data.vehicles.observation.state = "UNKNOWN";
-  api.data.vehicles.vehicles = [];
-  await pollBoardAndVehicles(page);
+  // 갱신이 계속 실패해서 마지막으로 받은 응답의 staleAt을 넘긴다.
+  api.mode.watch = "network-error";
+  const now = await page.evaluate(() => Date.now());
+  await page.clock.fastForward(Date.parse(api.data.watch.staleAt) - now + 1_000);
+  await settleMarkers(page);
 
-  expect(api.requests.vehicles).toBeGreaterThan(requestsBeforeCollecting);
-  await expect(busMarkerAt(page, "상행 정류장 8")).toBeVisible();
+  await expect(busMarkerAt(page, "상행 정류장 8")).toHaveCount(0);
+  await expect(stop).toHaveAttribute("aria-expanded", "true");
+  await expect(nearestArrival).toHaveText(/3정류장 전\s*시간 정보 없음\s*도착 시 5석 예상해요/);
+
+  // 만료 기록은 이전 관측에만 남으므로 새 관측의 차량은 다시 보여야 한다.
+  const bus = api.data.watch.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1");
+  if (bus === undefined) throw new Error("bus-1 차량 fixture가 필요합니다");
+  Object.assign(bus, { currentStopSequence: 9, stopId: "1009", stopName: "상행 정류장 9" });
+  api.data.watch.observedAt = "2026-09-16T08:05:00+09:00";
+  api.data.watch.staleAt = "2026-09-16T08:10:00+09:00";
+  api.mode.watch = "success";
+  await pollRouteWatch(page);
+
+  await expect(busMarkerAt(page, "상행 정류장 9")).toBeVisible();
 });
 
 test("운행 중인 차량이 없으면 운행 없음 안내를 표시한다", async ({ page, api }) => {
-  api.data.board.vehiclesInService = 0;
-  api.data.vehicles.observation.state = "NO_VEHICLES_OBSERVED";
-  api.data.vehicles.vehicles = [];
+  api.data.watch.vehiclesInService = 0;
+  api.data.watch.vehicles = [];
   await openBoard(page);
 
   await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).toBeVisible();
@@ -290,7 +293,7 @@ test("운행 중인 차량이 없으면 운행 없음 안내를 표시한다", a
 });
 
 test("운행 중인 노선의 특정 정류장에 접근 차량이 없으면 차량 없음 안내를 표시한다", async ({ page, api }) => {
-  const stopData = api.data.board.stops.find((stop) => stop.name === targetStopNames.UP);
+  const stopData = api.data.watch.stops.find((stop) => stop.name === targetStopNames.UP);
   if (stopData === undefined) throw new Error("상행 목표 정류장 fixture가 필요합니다");
   stopData.approachingVehicles = [];
   await openBoard(page);
@@ -334,12 +337,12 @@ for (const { name, vehicle, chip, seatLabel } of [
   },
 ]) {
   test(name, async ({ page, api }) => {
-    const stopData = api.data.board.stops.find((stop) => stop.name === targetStopNames.UP);
+    const stopData = api.data.watch.stops.find((stop) => stop.name === targetStopNames.UP);
     if (stopData === undefined) throw new Error("상행 목표 정류장 fixture가 필요합니다");
     stopData.approachingVehicles = [{ ...vehicle, vehicleId: "bus-1", horizonStops: 3 }];
 
     // 같은 차량의 현재 좌석이 도착 예측을 대신하지 않는지 확인한다.
-    const liveVehicle = api.data.vehicles.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1");
+    const liveVehicle = api.data.watch.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1");
     if (liveVehicle === undefined) throw new Error("bus-1 실시간 차량 fixture가 필요합니다");
     liveVehicle.seat = { kind: "EXACT", remaining: 28 };
 

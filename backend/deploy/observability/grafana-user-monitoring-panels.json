@@ -1,0 +1,508 @@
+{
+  "targetDashboard": {
+    "uid": "salmonbus-prod",
+    "title": "Salmonbus 운영 | 사용자 상태와 DB 원인",
+    "observedVersion": 54
+  },
+  "panelUpdates": [
+    {
+      "matchTitle": "EBS IOPS 크레딧 잔량",
+      "type": "timeseries",
+      "description": "EBS IOPS 크레딧 잔량의 시간 변화입니다. 50% 이상 초록, 20~50% 미만 주황, 20% 미만 빨강 기준을 유지합니다.",
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "min"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfigDefaultsCustom": {
+        "drawStyle": "line",
+        "lineInterpolation": "linear",
+        "lineWidth": 2,
+        "fillOpacity": 8,
+        "gradientMode": "none",
+        "spanNulls": false,
+        "showPoints": "auto",
+        "axisPlacement": "auto",
+        "stacking": { "mode": "none", "group": "A" },
+        "thresholdsStyle": { "mode": "line" }
+      }
+    },
+    {
+      "matchTitle": "EBS 처리량 크레딧 잔량",
+      "type": "timeseries",
+      "description": "EBS 처리량 크레딧 잔량의 시간 변화입니다. 50% 이상 초록, 20~50% 미만 주황, 20% 미만 빨강 기준을 유지합니다.",
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "min"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfigDefaultsCustom": {
+        "drawStyle": "line",
+        "lineInterpolation": "linear",
+        "lineWidth": 2,
+        "fillOpacity": 8,
+        "gradientMode": "none",
+        "spanNulls": false,
+        "showPoints": "auto",
+        "axisPlacement": "auto",
+        "stacking": { "mode": "none", "group": "A" },
+        "thresholdsStyle": { "mode": "line" }
+      }
+    }
+  ],
+  "panels": [
+    {
+      "id": 504,
+      "title": "사용자 지표",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 352,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 505,
+      "title": "현재 회원 수",
+      "description": "운영 DB를 5분마다 한 번 집계한 표본입니다. 여러 API 인스턴스의 같은 값을 더하지 않고 max로 봅니다.",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 353,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "max(salmonbus_users_current{job=\"salmonbus/api\"} >= 0)",
+          "legendFormat": "회원",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "미수집 / 표본 없음"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 506,
+      "title": "회원 수 표본 경과 시간",
+      "description": "10분을 넘으면 5분 주기 집계가 두 번 이상 갱신되지 않은 상태입니다.",
+      "type": "stat",
+      "gridPos": {
+        "x": 6,
+        "y": 353,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "time() - max(salmonbus_users_snapshot_timestamp{job=\"salmonbus/api\"} > 0)",
+          "legendFormat": "경과",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "noValue": "미수집 / 표본 없음",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 600
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 507,
+      "title": "가입 성공, 최근 24시간",
+      "description": "로그인이 아니라 새 회원 레코드가 커밋된 횟수입니다. 재시도와 기존 회원 로그인은 제외합니다.",
+      "type": "stat",
+      "gridPos": {
+        "x": 12,
+        "y": 353,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(salmonbus_user_registration_total{job=\"salmonbus/api\",result=\"success\"}[24h])) or vector(0)",
+          "legendFormat": "가입 성공",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 1,
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 508,
+      "title": "가입 실패, 최근 24시간",
+      "description": "닉네임 후보 소진과 저장소 오류의 합입니다. increase 추정값이라 소수일 수 있습니다.",
+      "type": "stat",
+      "gridPos": {
+        "x": 18,
+        "y": 353,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(salmonbus_user_registration_total{job=\"salmonbus/api\",result!=\"success\"}[24h])) or vector(0)",
+          "legendFormat": "가입 실패",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 1,
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 509,
+      "title": "가입 결과",
+      "description": "선택한 화면 기간의 가입 결과 증가량입니다. provider와 제한된 result만 라벨로 사용합니다.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 357,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by(provider,result)(increase(salmonbus_user_registration_total{job=\"salmonbus/api\"}[$__rate_interval]))",
+          "legendFormat": "{{provider}} / {{result}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "미수집 / 표본 없음"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 510,
+      "title": "로그인 결과",
+      "description": "성공, 취소, 실패와 신규, 기존 여부를 봅니다. 로그인 횟수이며 고유 사용자 수는 아닙니다.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 357,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by(provider,result,member)(increase(salmonbus_user_login_total{job=\"salmonbus/api\"}[$__rate_interval]))",
+          "legendFormat": "{{provider}} / {{result}} / {{member}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "미수집 / 표본 없음"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 511,
+      "title": "즐겨찾기 API 요청과 오류",
+      "description": "서버가 처리한 요청 횟수입니다. 자동 재시도와 같은 사용자의 반복 요청을 포함하므로 사용자 수가 아닙니다.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 365,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by(method,status)(rate(http_server_requests_seconds_count{job=\"salmonbus/api\",uri=~\"/api/me/favorite.*\"}[5m]))",
+          "legendFormat": "{{method}} / {{status}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "미수집 / 표본 없음"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 512,
+      "title": "핵심 board 및 watch API 오류",
+      "description": "탑승판과 watch 응답의 4xx와 5xx입니다. 4xx는 잘못된 입력도 포함하므로 서버 장애와 구분합니다.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 365,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by(uri,status)(rate(http_server_requests_seconds_count{job=\"salmonbus/api\",uri=~\"/api/v1/routes/{routeId}/(board|watch)\",status=~\"4..|5..\"}[5m]))",
+          "legendFormat": "{{uri}} / {{status}}",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "noValue": "미수집 / 표본 없음"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 513,
+      "title": "아직 이 지표로 알 수 없는 것",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 373,
+        "w": 24,
+        "h": 3
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "DAU, WAU, MAU, 첫 핵심행동 전환, 재방문과 리텐션, 화면 조회와 비회원 고유인원은 아직 알 수 없습니다. 로그인과 HTTP 요청 횟수는 사람 수가 아니며 자동 폴링과 재시도를 포함합니다. 이 값들은 프론트 행동 이벤트와 가명 사용자 키, KST 집계 기준을 합의한 다음 단계가 필요합니다. 사용자 ID, 이메일, IP, 토큰, 그룹명, 전체 URL을 메트릭 라벨로 추가하지 마세요."
+      }
+    }
+  ]
+}

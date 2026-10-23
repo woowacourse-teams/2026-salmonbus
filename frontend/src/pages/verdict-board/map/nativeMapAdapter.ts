@@ -19,6 +19,7 @@ export function createNativeRouteMap(options: {
   board: Board;
   data: RouteMapData;
   motion: LiveVehicleMotionStore;
+  initialSelection?: StopSelection | null;
   onSelect: (selection: StopSelection) => void;
   onVehicleSelect: (selection: StopSelection, key: string) => void;
   onDeselect: () => void;
@@ -26,6 +27,7 @@ export function createNativeRouteMap(options: {
   onError: (error: Error, reason?: "timeout" | "auth") => void;
 }): NativeRouteMapAdapter {
   const { region, board, data, motion, onSelect, onVehicleSelect, onDeselect, onReady, onError } = options;
+  const initialSelection = options.initialSelection ?? null;
   const channel = createNativeMapChannel();
   let vehicles: readonly LiveVehicleView[] = [];
   const sentPlans = new Map<string, string>();
@@ -34,8 +36,8 @@ export function createNativeRouteMap(options: {
     { resolve: (coordinate: GeoCoordinate) => void; reject: (error: Error) => void }
   >();
   let sceneState: NativeMapSceneState = {
-    activeDirection: board.route.directions[0].id,
-    selectedStop: null,
+    activeDirection: initialSelection?.direction ?? board.route.directions[0].id,
+    selectedStop: initialSelection,
     selectedVehicleKey: null,
     vehicles: [],
   };

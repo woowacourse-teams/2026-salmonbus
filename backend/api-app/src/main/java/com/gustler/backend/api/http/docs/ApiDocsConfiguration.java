@@ -35,7 +35,6 @@ public class ApiDocsConfiguration {
         "/api/v1/routes/{routeId}/vehicles",
         "/api/v2/routes/{routeId}/geometry",
         "/api/v2/stations/{stationId}/arrivals",
-        "/api/chat/rooms/{routeId}",
         "/api/auth/session",
         "/api/auth/refresh",
         "/api/auth/logout",
@@ -148,10 +147,8 @@ public class ApiDocsConfiguration {
                 .description("""
                     현재 구현된 HTTP API 계약입니다. 예시는 합성 데이터입니다.
 
-                    - 채팅이 꺼져 있으면 채팅 경로가, 로그인이 꺼져 있으면 로그인·회원 경로가 명세에서 빠집니다.
-                    - 채팅 메시지는 [WebSocket 메시지 계약](/api/docs/chat)을 따릅니다.
+                    - 로그인이 꺼져 있으면 로그인·회원 경로가 명세에서 빠집니다.
                     - 오류 응답은 `Cache-Control: no-store`이고 본문은 `code`·`message`·`requestId`입니다. 분기는 `code`로 합니다.
-                      채팅방 사용 여부의 404만 본문이 없습니다.
                     - dev 백엔드 연결 확인 전까지 Try it out은 꺼져 있습니다.
                     """)
                 .version(buildProperties.getVersion() + " / built " + buildProperties.getTime()))

@@ -18,9 +18,7 @@ env:
   # backend 밖에서 backend 테스트가 읽는 파일도 넣는다(dev/server/api.yml·worker.yml, dev/data/routes.json, dev/data/java).
   CHANGED_PATH_PATTERNS: >-
     backend/*
-    contract/examples/chat-v1.json
     contract/*.openapi.json
-    docs/api/chat-websocket-public.md
     dev/server/api.yml
     dev/server/worker.yml
     dev/data/routes.json
@@ -49,8 +47,6 @@ jobs:
         run: bash backend/deploy/rehearsal/run.sh
 
   backend-build:
-    # MongoDB 8.0의 커널 6.19+ 기동 오류(SERVER-121912)를 피해 6.8 커널 러너를 사용한다.
-    # 2027-04-17 러너 지원 종료 전 MongoDB 이미지를 갱신하고 최신 러너로 복귀한다.
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     permissions:

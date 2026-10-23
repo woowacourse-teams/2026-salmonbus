@@ -105,10 +105,8 @@ final class Packager {
                 repo.resolve("dev/server/worker.yml"),
                 repo.resolve("dev/server/replay.json"),
                 repo.resolve("dev/server/compose.yaml"),
-                repo.resolve("dev/server/init-chat.js"),
                 repo.resolve("dev/server/wiremock.Dockerfile"),
                 repo.resolve("dev/server/systemd/salmonbus-dev-infra.service"),
-                repo.resolve("dev/config/mongodb.yml"),
                 repo.resolve("dev/data/java"),
                 repo.resolve("dev/data/models"),
                 repo.resolve("dev/data/model-reference"),
@@ -295,11 +293,10 @@ final class Packager {
                         "PRIVATE_CONFIG_FIELD_IN_REVISION");
                 copy(source, basis.resolve("tools/" + name));
             }
-            copy(repo.resolve("dev/config/mongodb.yml"), basis.resolve("config/mongodb.yml"));
             for (var name : DataPreparation.FILES) {
                 copy(repo.resolve("dev/data/" + name), basis.resolve("tools/data/" + name));
             }
-            for (var name : List.of("compose.yaml", "init-chat.js")) {
+            for (var name : List.of("compose.yaml")) {
                 copy(repo.resolve("dev/server/" + name), basis.resolve("infra/" + name));
             }
             copy(
