@@ -1,3 +1,4 @@
+import { directionLabelOf } from "@/shared/utils/directionLabelOf";
 import { useEffect, useReducer, useRef, useState, type KeyboardEvent } from "react";
 import { Link } from "react-router";
 import type { FavoriteStatus, FavoriteTarget, HomeFavorite } from "@/shared/api/favorites.types";
@@ -194,7 +195,6 @@ interface FavoriteCardProps {
 
 function FavoriteCard({ favorite, savedDirection, elapsed, onRetry }: FavoriteCardProps) {
   const direction = favorite.stop.direction ?? savedDirection;
-  const terminalStopName = favorite.route.terminalStopName?.trim();
   return (
     <li className={homeStyles.card}>
       <Link
@@ -208,15 +208,7 @@ function FavoriteCard({ favorite, savedDirection, elapsed, onRetry }: FavoriteCa
         <div className={homeStyles.heading}>
           <RouteBadge>{favorite.route.displayName || "노선 정보 없음"}</RouteBadge>
           <span className={homeStyles.stop}>{favorite.stop.name || "정류장 정보 없음"}</span>
-          <span className={homeStyles.direction}>
-            {terminalStopName
-              ? `${terminalStopName} 방면`
-              : direction === "UP"
-                ? "상행"
-                : direction === "DOWN"
-                  ? "하행"
-                  : "방면 정보 없음"}
-          </span>
+          <span className={homeStyles.direction}>{directionLabelOf(favorite.route.terminalStopName, direction)}</span>
         </div>
         <div className={homeStyles.forecast}>
           {favorite.status === "READY" && favorite.approachingVehicles.length > 0 ? (

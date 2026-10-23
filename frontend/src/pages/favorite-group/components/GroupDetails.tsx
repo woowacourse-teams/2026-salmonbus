@@ -1,3 +1,4 @@
+import { directionLabelOf } from "@/shared/utils/directionLabelOf";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { deleteFavorite, deleteFavoriteGroup } from "@/shared/api/favorites.api";
@@ -54,11 +55,7 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
                   </span>
                 </span>
                 <span className={styles.direction}>
-                  {item?.route.terminalStopName?.trim()
-                    ? `${item.route.terminalStopName.trim()} 방면`
-                    : favorite.direction === "UP"
-                      ? "상행"
-                      : "하행"}
+                  {directionLabelOf(item?.route.terminalStopName, favorite.direction)}
                 </span>
               </span>
               <button
@@ -113,11 +110,7 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
                 <span className={styles.targetStop}>{deletingItem?.stop.name || "정류장 정보 없음"}</span>
               </div>
               <span className={styles.direction}>
-                {deletingItem?.route.terminalStopName?.trim()
-                  ? `${deletingItem.route.terminalStopName.trim()} 방면`
-                  : deleting.direction === "UP"
-                    ? "상행"
-                    : "하행"}
+                {directionLabelOf(deletingItem?.route.terminalStopName, deleting.direction)}
               </span>
             </div>
           )}

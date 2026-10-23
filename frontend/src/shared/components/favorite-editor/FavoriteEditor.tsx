@@ -1,3 +1,4 @@
+import { directionLabelOf } from "@/shared/utils/directionLabelOf";
 import { useEffect, useRef, useState } from "react";
 import { deleteFavorite, saveFavoriteOrder, saveGroupOrder } from "@/shared/api/favorites.api";
 import type { FavoriteGroup, HomeFavorite, SavedFavorite } from "@/shared/api/favorites.types";
@@ -197,11 +198,7 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
                         <span className={styles.stop}>{item?.stop.name || "정류장 정보 없음"}</span>
                       </div>
                       <span className={styles.direction}>
-                        {item?.route.terminalStopName?.trim()
-                          ? `${item.route.terminalStopName.trim()} 방면`
-                          : favorite.direction === "UP"
-                            ? "상행"
-                            : "하행"}
+                        {directionLabelOf(item?.route.terminalStopName, favorite.direction)}
                       </span>
                     </>
                   )}
