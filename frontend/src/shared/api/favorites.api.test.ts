@@ -86,6 +86,34 @@ describe("즐겨찾기 API 연결", () => {
     invalid.groups[0]!.favorites.push(invalid.groups[0]!.favorites[0]!);
     expect(homeFavoritesFrom(invalid)).toBeNull();
   });
+  it.each([3, 4])("그룹당 즐겨찾기 %i개 응답은 조회 허용 한도 3개로 검증한다", (count) => {
+    const favorites = Array.from({ length: count }, (_, index) => ({
+      ...home.groups[0]!.favorites[0]!,
+      id: `10000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+    }));
+    const overview = homeFavoritesFrom({ groups: [{ id, name: "출근", favorites }] });
+    const groups = favoriteGroupsFrom({
+      groups: [
+        {
+          id,
+          name: "출근",
+          favorites: favorites.map((favorite) => ({
+            id: favorite.id,
+            routeId: favorite.route.id,
+            stopId: favorite.stop.stopId,
+            direction: favorite.stop.direction,
+          })),
+        },
+      ],
+    });
+    if (count === 3) {
+      expect(overview?.groups[0]?.favorites).toHaveLength(3);
+      expect(groups?.groups[0]?.favorites).toHaveLength(3);
+    } else {
+      expect(overview).toBeNull();
+      expect(groups).toBeNull();
+    }
+  });
   it("배포된 terminalStopName 응답을 홈 조회의 성공 결과로 읽는다", async () => {
     global.fetch = jest.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify(home)));
     expect(await fetchHomeFavorites(id, new AbortController().signal)).toMatchObject({ ok: true, body: home });

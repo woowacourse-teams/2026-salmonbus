@@ -1,4 +1,4 @@
-import { MAX_FAVORITE_GROUPS, MAX_FAVORITES_PER_GROUP } from "@/shared/utils/favoritePolicy";
+import { MAX_FAVORITE_GROUPS } from "@/shared/utils/favoritePolicy";
 import { isRecord } from "@/shared/utils/valueGuards";
 import type { Direction, VehicleForecast } from "./routeForecast.types";
 import type {
@@ -10,6 +10,8 @@ import type {
   HomeFavorites,
   SavedFavorite,
 } from "./favorites.types";
+
+const MAX_RECEIVED_FAVORITES_PER_GROUP = 3;
 
 const FAVORITE_STATUSES: { [Status in FavoriteStatus]: Status } = {
   READY: "READY",
@@ -67,7 +69,7 @@ export function groupNameFrom(value: unknown): Pick<FavoriteGroup, "id" | "name"
 export function favoriteGroupFrom(value: unknown): FavoriteGroup | null {
   if (!isRecord(value)) return null;
   const group = groupNameFrom(value);
-  const favorites = listFrom(value.favorites, MAX_FAVORITES_PER_GROUP, savedFavoriteFrom);
+  const favorites = listFrom(value.favorites, MAX_RECEIVED_FAVORITES_PER_GROUP, savedFavoriteFrom);
   if (group === null || favorites === null || new Set(favorites.map((item) => item.id)).size !== favorites.length)
     return null;
   return { id: group.id, name: group.name, favorites };
@@ -185,7 +187,7 @@ function homeFavoriteFrom(value: unknown): HomeFavorite | null {
 function homeGroupFrom(value: unknown): HomeFavorites["groups"][number] | null {
   if (!isRecord(value)) return null;
   const group = groupNameFrom(value);
-  const favorites = listFrom(value.favorites, MAX_FAVORITES_PER_GROUP, homeFavoriteFrom);
+  const favorites = listFrom(value.favorites, MAX_RECEIVED_FAVORITES_PER_GROUP, homeFavoriteFrom);
   if (group === null || favorites === null || new Set(favorites.map((item) => item.id)).size !== favorites.length)
     return null;
   return { id: group.id, name: group.name, favorites };
