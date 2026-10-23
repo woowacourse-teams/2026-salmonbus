@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { deleteFavorite, saveFavoriteOrder, saveGroupOrder } from "@/shared/api/favorites.api";
 import type { FavoriteGroup, SavedFavorite } from "@/shared/api/favorites.types";
 import { latestSuccessOf } from "@/shared/api/polledResource";
+import { EmptyFavoriteGroup } from "@/shared/components/EmptyFavoriteGroup";
 import { RouteBadge } from "@/shared/components/RouteBadge";
 import { visuallyHidden } from "@/shared/styles/accessibility.css";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
@@ -201,12 +202,7 @@ export function FavoriteEditor({ onClose, initialGroupId }: FavoriteEditorProps)
           }}
         />
       )}
-      {group?.favorites.length === 0 && (
-        <div className={styles.empty}>
-          <p className={styles.emptyCount}>0 / 2</p>
-          <p className={styles.emptyDescription}>아직 등록한 정류장이 없어요</p>
-        </div>
-      )}
+      {group?.favorites.length === 0 && <EmptyFavoriteGroup />}
       {error && deleting === null && (
         <p className={common.error} role="alert">
           {error}

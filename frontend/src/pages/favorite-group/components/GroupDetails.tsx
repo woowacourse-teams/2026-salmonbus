@@ -8,6 +8,7 @@ import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
 import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
 import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
 import { RouteBadge } from "@/shared/components/RouteBadge";
+import { EmptyFavoriteGroup } from "@/shared/components/EmptyFavoriteGroup";
 import * as formStyles from "@/shared/styles/form.css";
 import * as styles from "./GroupDetails.css";
 
@@ -75,7 +76,7 @@ export function GroupDetails({ group }: GroupDetailsProps) {
           );
         })}
       </ul>
-      {group.favorites.length === 0 && <p className={formStyles.subtle}>아직 등록한 즐겨찾기가 없어요.</p>}
+      {group.favorites.length === 0 && <EmptyFavoriteGroup />}
       <div className={styles.groupActions}>
         <button
           ref={groupDeleteButton}

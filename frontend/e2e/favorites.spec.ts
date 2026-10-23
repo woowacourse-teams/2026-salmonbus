@@ -360,7 +360,7 @@ test("마이페이지에서 한 그룹의 즐겨찾기를 삭제해도 다른 �
   await page.goto(`/mypage/groups/${defaultGroupId}`);
   await page.getByRole("button", { name: `${stop.name} 삭제`, exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "삭제", exact: true }).click();
-  await expect(page.getByText("아직 등록한 즐겨찾기가 없어요.", { exact: true })).toBeVisible();
+  await expect(page.getByText("아직 등록한 정류장이 없어요", { exact: true })).toBeVisible();
   expect(favorites.groups[0]!.favorites).toHaveLength(0);
   expect(favorites.groups[1]!.favorites).toHaveLength(1);
 });

@@ -84,7 +84,7 @@ for (const width of [320, 425]) {
         expect(favorites.groups.map((g) => g.id)).toEqual([defaultGroupId]);
         expect(favorites.groups[0]!.favorites).toHaveLength(1);
       } else {
-        await expect(page.getByText("아직 등록한 즐겨찾기가 없어요.", { exact: true })).toBeVisible();
+        await expect(page.getByText("아직 등록한 정류장이 없어요", { exact: true })).toBeVisible();
         expect(favorites.groups[0]!.favorites).toHaveLength(0);
         expect(favorites.groups[1]!.favorites).toHaveLength(2);
         await expect(page.getByRole("button", { name: "그룹 삭제", exact: true })).toBeFocused();
