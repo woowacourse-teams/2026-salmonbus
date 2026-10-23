@@ -2,11 +2,16 @@ import type { ReactNode } from "react";
 import { BottomNavigation } from "./BottomNavigation";
 import * as styles from "./AccountLayout.css";
 
-export function AccountLayout({ children }: { children: ReactNode }) {
+interface AccountLayoutProps {
+  children: ReactNode;
+  contentClassName?: string;
+}
+
+export function AccountLayout({ children, contentClassName }: AccountLayoutProps) {
   return (
     <div className={styles.shell}>
       <div className={styles.top} />
-      <main className={styles.content}>{children}</main>
+      <main className={`${styles.content} ${contentClassName ?? ""}`}>{children}</main>
       <BottomNavigation />
     </div>
   );

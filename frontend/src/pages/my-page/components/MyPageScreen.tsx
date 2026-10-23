@@ -11,6 +11,7 @@ import { authErrorOf } from "@/shared/utils/authErrorOf";
 import * as buttonStyles from "@/shared/styles/button.css";
 import pencilIcon from "../assets/pencil.svg";
 import * as styles from "./MyPageScreen.css";
+import { pageEnter } from "@/shared/styles/pageTransition.css";
 
 export function MyPageScreen() {
   const active = useRef(false);
@@ -51,14 +52,14 @@ export function MyPageScreen() {
 
   if (state.status === "anonymous")
     return (
-      <AccountLayout>
+      <AccountLayout contentClassName={pageEnter}>
         <GuestMyPage />
         {typeof notice === "string" && <Notice key={notice} message={notice} />}
       </AccountLayout>
     );
 
   return (
-    <AccountLayout>
+    <AccountLayout contentClassName={pageEnter}>
       <h1 className={styles.title}>마이페이지</h1>
       {state.status === "authenticated" ? (
         <>

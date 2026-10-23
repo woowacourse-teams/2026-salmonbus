@@ -15,6 +15,7 @@ import { SearchResults } from "./SearchResults";
 import { submitTargetFor } from "./displayPolicy";
 import { useRouteSearch } from "../hooks/useRouteSearch";
 import * as styles from "./RouteSelectScreen.css";
+import { pageEnter } from "@/shared/styles/pageTransition.css";
 
 export function RouteSelectScreen() {
   const navigate = useNavigate();
@@ -37,7 +38,7 @@ export function RouteSelectScreen() {
 
   return (
     <div className={styles.page}>
-      <main>
+      <main className={pageEnter}>
         <header className={styles.header}>
           <h1 style={{ margin: 0 }}>
             <Brand

@@ -1,4 +1,4 @@
-import { style } from "@vanilla-extract/css";
+import { keyframes, style } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 
 export const navigation = style({
@@ -15,6 +15,8 @@ export const navigation = style({
   background: "white",
 });
 
+const selectTab = keyframes({ from: { color: "#858079" }, to: { color: vars.color.brand } });
+
 export const tab = style({
   display: "flex",
   flex: 1,
@@ -26,5 +28,12 @@ export const tab = style({
   color: "#858079",
   fontSize: 10,
   textDecoration: "none",
-  selectors: { '&[aria-current="page"]': { color: vars.color.brand } },
+  selectors: {
+    '&[aria-current="page"]': { color: vars.color.brand, animation: `${selectTab} 220ms ease both` },
+  },
+  "@media": {
+    "(prefers-reduced-motion: reduce)": {
+      selectors: { '&[aria-current="page"]': { animation: "none" } },
+    },
+  },
 });
