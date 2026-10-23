@@ -14,10 +14,8 @@ API 문서는 `api-app`이 현재 Controller/DTO에서 생성한다. 같은 빌�
 | `/api/docs/ui` | Swagger UI |
 | `/api/docs/openapi` | OpenAPI JSON |
 | `/api/docs/openapi.yaml` | OpenAPI YAML |
-| `/api/docs/chat` | WebSocket 메시지·연결·재접속 계약 |
-| `/api/docs/chat/examples` | WebSocket 프레임 합성 예시 |
 
-문서에는 구현된 HTTP API만 표시한다. v1의 노선 목록·보드·차량 관측과 v2의 정류장 도착정보·노선 geometry를 포함한다. 채팅이 꺼져 있으면 채팅방 가용성 GET도 명세에서 빠진다. 로그인이 켜져 있으면 아래 로그인 API도 표시한다. WebSocket `/stream`은 HTTP operation으로 표시하지 않고 별도 계약에서 설명한다. 차량의 구간 진행률은 제공하지 않으며 미구현 설계를 명세에 포함하지 않는다.
+문서에는 구현된 HTTP API만 표시한다. v1의 노선 목록·보드·차량 관측과 v2의 정류장 도착정보·노선 geometry를 포함한다. 로그인이 켜져 있으면 아래 로그인 API도 표시한다. 차량의 구간 진행률은 제공하지 않으며 미구현 설계를 명세에 포함하지 않는다.
 
 ## 로그인 API
 
@@ -71,15 +69,15 @@ dev Worker는 형상 수집과 카탈로그 전체 포함을 켜서 현재 GBIS 
 
 ## 새 API가 생길 때
 
-springdoc은 앱이 뜰 때 Spring Controller와 DTO에서 명세를 만든다. 현재 `springdoc.paths-to-match`는 `/api/v1/**`, 위의 v2 두 경로, 채팅방 가용성 경로, 로그인 API 경로 5개를 포함한다. 이 범위의 `@RestController` 경로와 DTO 기본 구조는 다음 빌드·배포 때 자동 반영된다. 다른 경로는 포함 범위를 먼저 검토해야 한다. 채팅처럼 `RouterFunction`으로 등록한 HTTP 경로에는 명시적인 `@RouterOperation`이 필요하다. WebSocket 프레임은 OpenAPI HTTP 경로로 자동 생성되지 않는다.
+springdoc은 앱이 뜰 때 Spring Controller와 DTO에서 명세를 만든다. 현재 `springdoc.paths-to-match`는 `/api/v1/**`, 위의 v2 두 경로, 로그인 API 경로 5개를 포함한다. 이 범위의 `@RestController` 경로와 DTO 기본 구조는 다음 빌드·배포 때 자동 반영된다. 다른 경로는 포함 범위를 먼저 검토해야 한다.
 
-Swagger UI는 API를 노선·정류장 도착정보·채팅·로그인·회원 묶음으로 나눠 보여 준다. 새 컨트롤러에는 `@Tag(name = ApiDocsTags.<묶음>)`을 붙인다. 묶음 이름과 순서는 `ApiDocsTags`에 있고, 문서에 operation이 없는 묶음은 표시하지 않는다.
+Swagger UI는 API를 노선·정류장 도착정보·로그인·회원 묶음으로 나눠 보여 준다. 새 컨트롤러에는 `@Tag(name = ApiDocsTags.<묶음>)`을 붙인다. 묶음 이름과 순서는 `ApiDocsTags`에 있고, 문서에 operation이 없는 묶음은 표시하지 않는다.
 
-자동 생성만으로 필드 의미·단위, null과 생략의 차이, 상태별 정상/오류 예시가 채워지지는 않는다. 새 API를 추가할 때 Controller의 응답 설명과 합성 예시, DTO의 `@Schema`, WebSocket 공개 안내를 실제 계약에 맞게 갱신한다. 현재 문서 테스트는 경로 6개(채팅 on이면 7개)를 확인하므로 새 경로가 생기면 테스트가 실패한다. 로그인 경로는 로그인을 켠 문서 테스트가 따로 확인한다. 이는 공개 문서에 새 API가 실리기 전에 범위와 예시를 검토하도록 하는 신호다. 문서 파일을 별도로 업로드할 필요는 없으며 검토를 마친 코드를 배포하면 같은 앱의 Swagger 화면이 새 명세를 보여준다.
+자동 생성만으로 필드 의미·단위, null과 생략의 차이, 상태별 정상/오류 예시가 채워지지는 않는다. 새 API를 추가할 때 Controller의 응답 설명과 합성 예시, DTO의 `@Schema`를 실제 계약에 맞게 갱신한다. 현재 문서 테스트는 경로 6개를 확인하므로 새 경로가 생기면 테스트가 실패한다. 로그인 경로는 로그인을 켠 문서 테스트가 따로 확인한다. 이는 공개 문서에 새 API가 실리기 전에 범위와 예시를 검토하도록 하는 신호다. 문서 파일을 별도로 업로드할 필요는 없으며 검토를 마친 코드를 배포하면 같은 앱의 Swagger 화면이 새 명세를 보여준다.
 
 ## Try it out과 dev 연결
 
-Swagger의 Try it out은 현재 모든 HTTP 메서드에서 꺼져 있다. 이 UI 설정은 **실제 API 호출 권한을 막는 장치가 아니다.** 기존 서비스 API와 WebSocket의 공개 정책은 그대로다.
+Swagger의 Try it out은 현재 모든 HTTP 메서드에서 꺼져 있다. 이 UI 설정은 **실제 API 호출 권한을 막는 장치가 아니다.** 기존 서비스 API의 공개 정책은 그대로다.
 
 dev 주소에서 실제로 dev 백엔드를 바라보는지, `/api/docs/*`가 같은 원본으로 전달되는지, UI와 명세가 브라우저에서 정상 로드되는지 확인한 뒤 GET 시험 기능을 별도로 검토한다. SAL-179 기록에는 dev 프론트의 `/api/*` 원본을 운영 백엔드에서 dev 백엔드로 바꾸는 단계가 따로 있다. 이 저장소 변경만으로 현재 원본을 확인하거나 전환하지 않는다.
 

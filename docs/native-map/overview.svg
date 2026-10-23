@@ -38,7 +38,7 @@
   <path d="M67 582H297M67 625H297M67 668H297" stroke="#e5c2b9"/>
   <text x="68" y="610" class="body">정류장 A</text><text x="290" y="610" text-anchor="end" class="small web">잔여석</text>
   <text x="68" y="653" class="body">정류장 B</text><text x="290" y="653" text-anchor="end" class="small web">도착 정보</text>
-  <text x="68" y="695" class="small muted">목록·시트·채팅은 기존 웹</text>
+  <text x="68" y="695" class="small muted">목록·시트은 기존 웹</text>
 
   <text x="364" y="203" class="heading">② 내부에서 겹친 두 화면</text>
   <rect x="364" y="224" width="271" height="215" rx="16" fill="#fff0ea" stroke="#d2573e" stroke-width="2"/>
@@ -47,7 +47,7 @@
   <text x="500" y="299" text-anchor="middle" class="small muted">지도 자리는 투명</text>
   <text x="500" y="321" text-anchor="middle" class="small muted">아래 iOS 지도가 보임</text>
   <rect x="383" y="352" width="233" height="68" rx="8" fill="#fff" stroke="#d2573e"/>
-  <text x="500" y="380" text-anchor="middle" class="body web bold">시트·목록·버튼·채팅</text>
+  <text x="500" y="380" text-anchor="middle" class="body web bold">시트·목록·버튼</text>
   <text x="500" y="404" text-anchor="middle" class="small web">기존 HTML / CSS / React</text>
   <path d="M500 448V469" class="line"/>
   <text x="500" y="494" text-anchor="middle" class="small muted">두 화면은 같은 앱 좌표를 사용</text>
@@ -69,7 +69,7 @@
   <text x="721" y="357" class="small muted">터치할 때 JavaScript 응답을 기다리지 않음</text>
   <path d="M958 375V395" class="line"/>
   <rect x="702" y="409" width="245" height="87" rx="12" fill="#fff0ea" stroke="#d2573e"/>
-  <text x="719" y="438" class="body web bold">시트·버튼·채팅 안</text>
+  <text x="719" y="438" class="body web bold">시트·버튼 안</text>
   <text x="719" y="467" class="body">→ WebView가 받음</text>
   <rect x="969" y="409" width="245" height="87" rx="12" fill="#e3f4ef" stroke="#147d68"/>
   <text x="986" y="438" class="body native bold">노출된 지도 안</text>

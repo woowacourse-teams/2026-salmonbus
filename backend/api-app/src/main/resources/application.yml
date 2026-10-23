@@ -15,13 +15,6 @@ server:
         same-site: lax
         max-age: 10m
 
-chat:
-  enabled: ${CHAT_ENABLED:false}
-  mongodb-uri: ${CHAT_MONGODB_URI:}
-  allowed-origins: ${CHAT_ALLOWED_ORIGINS:https://www.salmonbus.com}
-  max-connections: ${CHAT_MAX_CONNECTIONS:1000}
-  max-connections-per-address: ${CHAT_MAX_CONNECTIONS_PER_ADDRESS:30}
-
 spring:
   application:
     name: backend-api
@@ -71,7 +64,6 @@ springdoc:
     - /api/v1/**
     - /api/v2/stations/{stationId}/arrivals
     - /api/v2/routes/{routeId}/geometry
-    - /api/chat/rooms/{routeId}
     # 로그인 API 는 auth.enabled=true 일 때만 컨트롤러가 등록되므로 꺼져 있으면 명세에도 없다.
     # 브라우저 이동 경로(/api/auth/{provider}/start, /callback)는 보안 필터가 처리해 명세 대신 contract/auth-v1.md 에 적는다.
     - /api/auth/session
