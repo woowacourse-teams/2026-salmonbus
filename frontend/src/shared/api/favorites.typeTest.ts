@@ -1,3 +1,4 @@
+import type { HomeFavoritesSelection } from "@/shared/hooks/useFavorites";
 import type { FavoriteEta, FavoriteStatus, HomeFavorites } from "./favorites.types";
 
 const available: FavoriteEta = {
@@ -32,3 +33,11 @@ void [
   unknownStatus,
   missingGroups,
 ];
+
+const allGroups: HomeFavoritesSelection = { kind: "all" };
+const oneGroup: HomeFavoritesSelection = { kind: "group", groupId: "group-id" };
+// @ts-expect-error 전체 조회는 그룹 ID 문자열로 표현하지 않는다.
+const legacyAll: HomeFavoritesSelection = "all";
+// @ts-expect-error 특정 그룹 조회에는 그룹 ID가 필요하다.
+const missingGroupId: HomeFavoritesSelection = { kind: "group" };
+void [allGroups, oneGroup, legacyAll, missingGroupId];

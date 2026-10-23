@@ -4,6 +4,32 @@ import { routeId } from "./fixtures/mock-data";
 test.use({ viewport: { width: 425, height: 844 }, reducedMotion: "reduce" });
 const secondGroupId = "10000000-0000-4000-8000-000000000003";
 
+test("비회원은 즐겨찾기를 요청하지 않고 로그인 후 조회를 시작한다", async ({ page, auth, favorites }) => {
+  auth.member = null;
+  await page.clock.install();
+  await page.goto("/");
+  const guest = page.getByRole("region", { name: "내 정류장을 저장해 보세요", exact: true });
+  await expect(guest).toBeVisible();
+  await page.clock.fastForward(120_000);
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("online"));
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  expect(favorites.requests).toHaveLength(0);
+
+  await guest.getByRole("link", { name: "로그인 / 회원가입", exact: true }).click();
+  await page.getByRole("button", { name: "카카오로 계속하기", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "즐겨찾기", exact: true })).toBeVisible();
+  await expect(page.getByText("등록된 즐겨찾기가 없어요", { exact: true })).toBeVisible();
+  expect(favorites.requests.some((request) => request.path === "/api/me/favorite-groups")).toBe(true);
+  expect(
+    favorites.requests.some(
+      (request) =>
+        request.path === "/api/me/favorites" && new URLSearchParams(request.query).get("groupId") === defaultGroupId,
+    ),
+  ).toBe(true);
+});
+
 for (const width of [320, 425]) {
   test(`홈에서 그룹 조회에 실패하면 ${width}px 화면에 오류 시안을 표시하고 재시도한다`, async ({
     page,

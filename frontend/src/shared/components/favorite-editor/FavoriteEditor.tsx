@@ -37,7 +37,7 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
   const [deleting, setDeleting] = useState<SavedFavorite | null>(null);
   const [partial, setPartial] = useState(false);
   const [revision, retry] = useState(0);
-  const summaries = useHomeFavorites("all", revision);
+  const summaries = useHomeFavorites({ kind: "all" }, revision);
   const favorites =
     latestSuccessOf(summaries)?.body.groups.flatMap((candidate) => candidate.favorites) ?? initialFavorites ?? [];
   const hasGroupDetails =

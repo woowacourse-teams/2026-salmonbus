@@ -22,14 +22,17 @@ export function useFavorites() {
   return value;
 }
 
-export function useHomeFavorites(groupId: string | null, revision = 0) {
+export type HomeFavoritesSelection = { kind: "all" } | { kind: "group"; groupId: string };
+
+export function useHomeFavorites(selection: HomeFavoritesSelection | null, revision = 0) {
   const { memberId, revision: groupRevision } = useFavorites();
+  const key =
+    memberId === null || selection === null
+      ? null
+      : JSON.stringify([memberId, selection.kind, selection.kind === "group" ? selection.groupId : null]);
   return usePolledRequest(
-    (_, signal) =>
-      memberId === null || groupId === null
-        ? Promise.resolve({ ok: false as const, failure: { kind: "aborted" as const } })
-        : fetchHomeFavorites(groupId === "all" ? undefined : groupId, signal),
-    `${memberId ?? "anonymous"}:${groupId}`,
+    (_, signal) => fetchHomeFavorites(selection?.kind === "group" ? selection.groupId : undefined, signal),
+    key,
     `${groupRevision}:${revision}`,
   );
 }

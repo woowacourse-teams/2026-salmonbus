@@ -19,7 +19,7 @@ export function FavoritesNotice({ resource, onRetry, home = false }: FavoritesNo
         즐겨찾기를 불러오고 있어요…
       </p>
     );
-  if (resource.status === "success") return null;
+  if (resource.status === "idle" || resource.status === "success") return null;
   const retry = () => {
     if ("status" in resource.failure && resource.failure.status === 401) void reload();
     onRetry();

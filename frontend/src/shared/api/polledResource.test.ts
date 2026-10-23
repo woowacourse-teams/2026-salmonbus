@@ -1,6 +1,12 @@
 import { describe, expect, it } from "@jest/globals";
 import type { ApiFailure, ApiResult } from "./client";
-import { latestSuccessOf, nextResourceFrom, PENDING_RESOURCE, type PolledResource } from "./polledResource";
+import {
+  latestSuccessOf,
+  nextResourceFrom,
+  IDLE_RESOURCE,
+  PENDING_RESOURCE,
+  type PolledResource,
+} from "./polledResource";
 import type { ReferenceClock } from "./referenceClock";
 
 const lifetime = { noStore: false, maxAgeSeconds: 15, ageSeconds: 0 };
@@ -18,6 +24,14 @@ function failed(failure: ApiFailure): ApiResult<string> {
 }
 
 describe("nextResourceFrom", () => {
+  it("요청 전 idle과 실제 요청 취소 결과를 구분한다", () => {
+    expect(IDLE_RESOURCE).toEqual({ status: "idle" });
+    expect(nextResourceFrom(IDLE_RESOURCE, failed({ kind: "aborted" }), 1_000)).toEqual({
+      status: "loadingError",
+      failure: { kind: "aborted" },
+    });
+  });
+
   it("처음 응답이 성공이면 본문, 서버 시계, 수신 시각을 담은 성공이 된다", () => {
     expect(nextResourceFrom(PENDING_RESOURCE, succeeded("보드A", clockA), 1_000)).toEqual({
       status: "success",
@@ -70,6 +84,7 @@ describe("latestSuccessOf", () => {
   const latestSuccess = { body: "보드A", clock: null, receivedAt: 1_000 };
 
   it.each<[string, PolledResource<string>]>([
+    ["idle", IDLE_RESOURCE],
     ["pending", PENDING_RESOURCE],
     ["loadingError", { status: "loadingError", failure: networkFailure }],
   ])("%s 상태에서는 성공한 적이 없어 null을 돌려준다", (_status, resource) => {

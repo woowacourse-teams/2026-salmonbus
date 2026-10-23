@@ -21,7 +21,7 @@ interface GroupDetailsProps {
 export function GroupDetails({ group, representative }: GroupDetailsProps) {
   const [deleting, setDeleting] = useState<"group" | SavedFavorite | null>(null);
   const [revision, retry] = useState(0);
-  const summary = useHomeFavorites(group.id, revision);
+  const summary = useHomeFavorites({ kind: "group", groupId: group.id }, revision);
   const favorites = latestSuccessOf(summary)?.body.groups[0]?.favorites ?? [];
   const { busy, error, setError, run } = useFavoriteAction();
   const navigate = useNavigate();

@@ -41,7 +41,7 @@ export function HomeFavorites() {
     return ordering ? () => editButton.current?.focus() : undefined;
   }, [ordering]);
   const [revision, retry] = useReducer((value: number) => value + 1, 0);
-  const summary = useHomeFavorites(group?.id ?? null, revision);
+  const summary = useHomeFavorites(group ? { kind: "group", groupId: group.id } : null, revision);
   const latest = latestSuccessOf(summary);
   const [previous, setPrevious] = useState({ groupId: group?.id, latest });
   const previousGroup = groups.find((candidate) => candidate.id === previous.groupId);

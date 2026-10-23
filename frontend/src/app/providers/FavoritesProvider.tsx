@@ -13,14 +13,7 @@ export function FavoritesProvider({ children }: FavoritesProviderProps) {
   const { state: auth } = useAuth();
   const memberId = auth.status === "authenticated" ? auth.member.id : null;
   const [revision, reload] = useReducer((value: number) => value + 1, 0);
-  const resource = usePolledRequest(
-    (_, signal) =>
-      memberId === null
-        ? Promise.resolve({ ok: false as const, failure: { kind: "aborted" as const } })
-        : fetchFavoriteGroups(signal),
-    memberId ?? "anonymous",
-    revision,
-  );
+  const resource = usePolledRequest((_, signal) => fetchFavoriteGroups(signal), memberId, revision);
   const groups = latestSuccessOf(resource)?.body.groups ?? [];
   return <FavoritesContext value={{ auth, memberId, resource, groups, reload, revision }}>{children}</FavoritesContext>;
 }
