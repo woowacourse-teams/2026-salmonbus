@@ -56,6 +56,15 @@ export function HomeFavorites() {
         />
       </div>
     );
+  const loadingError =
+    resource.status === "loadingError" ? resource : group && summary.status === "loadingError" ? summary : null;
+  if (loadingError) {
+    return (
+      <section className="amp-mask" aria-label="내 즐겨찾기">
+        <FavoritesNotice home resource={loadingError} onRetry={resource.status === "loadingError" ? reload : retry} />
+      </section>
+    );
+  }
   return (
     <section className={`${homeStyles.section} amp-mask`} aria-label="내 즐겨찾기">
       <FavoritesNotice resource={resource} onRetry={reload} />

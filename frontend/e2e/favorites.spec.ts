@@ -4,6 +4,69 @@ import { routeId } from "./fixtures/mock-data";
 test.use({ viewport: { width: 425, height: 844 }, reducedMotion: "reduce" });
 const secondGroupId = "10000000-0000-4000-8000-000000000003";
 
+for (const width of [320, 425]) {
+  test(`홈에서 그룹 조회에 실패하면 ${width}px 화면에 오류 시안을 표시하고 재시도한다`, async ({
+    page,
+    favorites,
+    api,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 });
+    let failed = true;
+    await api.route(async (route) => {
+      if (new URL(route.request().url()).pathname !== "/api/me/favorite-groups" || !failed) {
+        await route.fallback();
+        return;
+      }
+      await route.fulfill({ status: 503, json: { code: "SERVICE_UNAVAILABLE", message: "Unavailable" } });
+    });
+    await page.goto("/");
+    await expect(page.getByRole("alert")).toHaveText("즐겨찾기를 불러오지 못했어요");
+    await expect(page.getByText("잠시 후 다시 시도해 주세요.", { exact: true })).toBeVisible();
+    await expect(page.getByRole("tablist")).toHaveCount(0);
+    await expect(page.getByText("등록된 즐겨찾기가 없어요", { exact: true })).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await testInfo.attach("즐겨찾기 조회 실패", { body: await page.screenshot(), contentType: "image/png" });
+
+    failed = false;
+    await page.getByRole("button", { name: "다시 시도", exact: true }).click();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(page.getByRole("tab", { name: "즐겨찾기", exact: true })).toHaveAttribute("aria-selected", "true");
+    expect(favorites.groups[0]!.id).toBe(defaultGroupId);
+  });
+}
+
+test("선택한 그룹 조회에 실패해도 재시도하면 같은 그룹의 즐겨찾기를 불러온다", async ({ page, favorites, api }) => {
+  const stop = api.data.board.stops.find((stop) => stop.boardingAllowed)!;
+  favorites.groups.push({
+    id: secondGroupId,
+    name: "통학",
+    favorites: [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })],
+  });
+  let failed = true;
+  const requestedGroups: string[] = [];
+  await api.route(async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname !== "/api/me/favorites" || url.searchParams.get("groupId") !== secondGroupId) {
+      await route.fallback();
+      return;
+    }
+    requestedGroups.push(url.searchParams.get("groupId")!);
+    if (failed) await route.abort("failed");
+    else await route.fallback();
+  });
+  await page.goto("/");
+  await page.getByRole("tab", { name: "통학", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveText("즐겨찾기를 불러오지 못했어요");
+  await expect(page.getByRole("tablist")).toHaveCount(0);
+  await expect(page.getByText("등록된 즐겨찾기가 없어요", { exact: true })).toHaveCount(0);
+
+  failed = false;
+  await page.getByRole("button", { name: "다시 시도", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "통학", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tabpanel").getByText(stop.name, { exact: true })).toBeVisible();
+  expect(requestedGroups).toEqual([secondGroupId, secondGroupId]);
+});
+
 test("홈은 첫 그룹을 조회하고 탭 변경 시 선택한 그룹만 조회하며 ETA 없는 차량도 표시한다", async ({
   page,
   favorites,
@@ -319,13 +382,14 @@ test("갱신 실패 중 도착 예정 시간이 지나면 시간을 감추고 �
   await page.clock.runFor(481_000);
   await expect(panel.getByText("도착 정보 없음", { exact: true })).toHaveCount(3);
   await expect(panel.getByText("도착 시 7석 예상해요", { exact: true })).toBeVisible();
+  await expect(page.getByText("즐겨찾기를 불러오지 못했어요", { exact: true })).toHaveCount(0);
   expect(favorites.groups[0]!.favorites).toHaveLength(1);
 });
 
-test("API 미완성 404는 준비 안내를 보여주고 공개 노선 검색을 유지한다", async ({ page, favorites }) => {
+test("즐겨찾기 API의 404도 조회 실패 시안을 보여주고 공개 노선 검색을 유지한다", async ({ page, favorites }) => {
   favorites.unavailable = true;
   await page.goto("/");
-  await expect(page.getByRole("alert")).toHaveText("즐겨찾기 기능을 준비 중이에요.");
+  await expect(page.getByRole("alert")).toHaveText("즐겨찾기를 불러오지 못했어요");
   await page.getByRole("textbox", { name: /노선/ }).fill("3330");
   await expect(page.getByRole("region", { name: "검색 결과", exact: true })).toBeVisible();
 });
