@@ -99,6 +99,8 @@ describe("requestJson", () => {
   it.each([
     [400, "INVALID_ROUTE_ID"],
     [400, "INVALID_REQUEST"],
+    [400, "INVALID_FAVORITE_GROUP_ORDER"],
+    [400, "INVALID_FAVORITE_ORDER"],
     [404, "ROUTE_NOT_FOUND"],
     [404, "ENDPOINT_NOT_FOUND"],
     [405, "METHOD_NOT_ALLOWED"],

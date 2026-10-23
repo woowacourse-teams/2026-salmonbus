@@ -181,7 +181,7 @@ export const test = authTest.extend<{ favorites: FavoritesMock }>({
             ids.length !== favorites.groups.length ||
             ids.some((id) => !favorites.groups.some((candidate) => candidate.id === id))
           ) {
-            await error(400, "INVALID_ORDER");
+            await error(400, "INVALID_FAVORITE_GROUP_ORDER");
             return;
           }
           favorites.groups = ids.map((id) => favorites.groups.find((candidate) => candidate.id === id)!);
@@ -218,7 +218,7 @@ export const test = authTest.extend<{ favorites: FavoritesMock }>({
             ids.length !== group.favorites.length ||
             ids.some((id) => !group.favorites.some((favorite) => favorite.id === id))
           ) {
-            await error(400, "INVALID_ORDER");
+            await error(400, "INVALID_FAVORITE_ORDER");
             return;
           }
           group.favorites = ids.map((id) => group.favorites.find((favorite) => favorite.id === id)!);

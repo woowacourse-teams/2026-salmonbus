@@ -50,7 +50,8 @@ export function favoriteErrorOf(failure: ApiFailure): string {
         return "같은 정류장에 여러 번 방문하는 노선이에요. 정류장을 다시 확인해 주세요.";
       case "FAVORITE_TARGET_UNAVAILABLE":
         return "현재 노선에서 즐겨찾기로 저장할 수 없는 정류장이에요.";
-      case "INVALID_ORDER":
+      case "INVALID_FAVORITE_GROUP_ORDER":
+      case "INVALID_FAVORITE_ORDER":
         return "목록이 변경됐어요. 다시 확인한 뒤 순서를 저장해 주세요.";
     }
   }
