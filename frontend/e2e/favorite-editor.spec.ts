@@ -246,3 +246,70 @@ test("편집 중 서버 그룹이 바뀌면 오류 화면을 닫아 새 목록�
   await expect(editor).toHaveCount(0);
   expect(favorites.groups.map((group) => group.id)).toEqual([secondGroupId, defaultGroupId, thirdGroupId]);
 });
+
+for (const width of [320, 425]) {
+  test(`${width}px 홈 편집 진입 전후 그룹 버튼 크기·위치와 카드 테두리를 유지한다`, async ({
+    page,
+    favorites,
+    api,
+  }) => {
+    await page.setViewportSize({ width, height: 844 });
+    const stop = api.data.board.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+    favorites.groups[0]!.name = "출퇴근";
+    favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
+    favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [] });
+    await page.goto("/");
+    const normalCard = page.getByRole("tabpanel").locator(":scope > ul > li").first();
+    await expect(normalCard).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    const tabs = await page.getByRole("tab").evaluateAll((elements) =>
+      elements.map((element) => {
+        const box = element.getBoundingClientRect();
+        return {
+          name: element.textContent!,
+          x: box.x,
+          y: box.y,
+          width: box.width,
+          height: box.height,
+          background: getComputedStyle(element).backgroundColor,
+        };
+      }),
+    );
+    const surface = await normalCard.evaluate((element) => {
+      const s = getComputedStyle(element);
+      const box = element.getBoundingClientRect();
+      return {
+        radius: s.borderRadius,
+        outline: s.outline,
+        offset: s.outlineOffset,
+        background: s.backgroundColor,
+        x: box.x,
+        y: box.y,
+        width: box.width,
+      };
+    });
+    await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
+    const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
+    for (const tab of tabs) {
+      const button = editor.getByRole("button", { name: tab.name, exact: true });
+      const group = button.locator("..");
+      const box = (await group.boundingBox())!;
+      for (const key of ["x", "y", "width", "height"] as const) expect(box[key]).toBeCloseTo(tab[key], 1);
+      await expect(group).toHaveCSS("background-color", tab.background);
+      const handle = group.getByRole("button", { name: `${tab.name} 순서 변경`, exact: true });
+      const grip = (await handle.boundingBox())!;
+      expect(grip.x).toBeGreaterThan(box.x + box.width / 2);
+      expect(grip.x + grip.width).toBeLessThanOrEqual(box.x + box.width);
+    }
+    const card = editor.getByRole("list", { name: "즐겨찾기 순서", exact: true }).locator("li").first();
+    await expect(card.getByText(stop.name, { exact: true })).toBeVisible();
+    const box = (await card.boundingBox())!;
+    expect(box.x).toBeCloseTo(surface.x, 1);
+    expect(box.y).toBeCloseTo(surface.y, 1);
+    expect(box.width).toBeCloseTo(surface.width, 1);
+    await expect(card).toHaveCSS("border-radius", surface.radius);
+    await expect(card).toHaveCSS("outline", surface.outline);
+    await expect(card).toHaveCSS("outline-offset", surface.offset);
+    await expect(card).toHaveCSS("background-color", surface.background);
+  });
+}

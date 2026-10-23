@@ -46,15 +46,13 @@ export function HomeFavorites() {
   const favorites = latest?.body.groups.find((candidate) => candidate.id === group?.id)?.favorites ?? [];
   if (ordering)
     return (
-      <div className={homeStyles.editor}>
-        <FavoriteEditor
-          {...(group ? { initialGroupId: group.id } : {})}
-          onClose={(saved) => {
-            setOrdering(false);
-            if (saved) showNotice();
-          }}
-        />
-      </div>
+      <FavoriteEditor
+        {...(group ? { initialGroupId: group.id } : {})}
+        onClose={(saved) => {
+          setOrdering(false);
+          if (saved) showNotice();
+        }}
+      />
     );
   const loadingError =
     resource.status === "loadingError" ? resource : group && summary.status === "loadingError" ? summary : null;

@@ -14,3 +14,11 @@ export const row = style([
   card,
   { display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 66 },
 ]);
+
+export const outlinedCard = style({
+  border: 0,
+  outline: "1px solid #EAE6E0",
+  outlineOffset: "-0.5px",
+  borderRadius: 14,
+  background: vars.color.surface,
+});

@@ -1,18 +1,15 @@
 import { style, styleVariants } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
-import { card as cardBase } from "@/shared/styles/surface.css";
+import { card as cardBase, outlinedCard } from "@/shared/styles/surface.css";
+import { pill } from "@/shared/styles/selection.css";
 import { text } from "@/shared/styles/button.css";
 
-export const editor = style({ marginTop: -8 });
 export const section = style({ width: "100%", maxWidth: 356, margin: "0 auto" });
 export const card = style([
   cardBase,
+  outlinedCard,
   {
     padding: "16px 18px",
-    border: 0,
-    outline: "1px solid #EAE6E0",
-    outlineOffset: "-0.5px",
-    borderRadius: 14,
     fontFamily: "'Noto Sans KR', sans-serif",
   },
 ]);
@@ -119,17 +116,13 @@ export const list = style({
   listStyle: "none",
 });
 export const tabs = style({ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 });
-export const tab = style({
-  border: 0,
-  borderRadius: 20,
-  padding: "8px 14px",
-  background: "#EEECE7",
-  color: vars.color.textBody,
-  font: "inherit",
-  fontSize: 13,
-  cursor: "pointer",
-  selectors: { '&[aria-selected="true"]': { background: vars.color.brand, color: "white" } },
-});
+export const tab = style([
+  pill,
+  {
+    cursor: "pointer",
+    selectors: { '&[aria-selected="true"]': { background: vars.color.brand, color: "white" } },
+  },
+]);
 export const homeEdit = style([
   text,
   { display: "grid", placeItems: "center", flexShrink: 0, width: 36, height: 32, padding: "6px 8px" },
