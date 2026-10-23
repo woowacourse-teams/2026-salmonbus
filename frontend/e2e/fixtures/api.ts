@@ -72,7 +72,7 @@ export const test = base.extend<{ api: MockApi }>({
           .evaluate(() => Date.now())
           .catch((error: unknown) => {
             // 요청이 걸린 사이 새 문서로 이동했다면 버려진 문서의 요청이라 응답하지 않는다.
-            if (error instanceof Error && error.message.includes("Execution context was destroyed")) return null;
+            if (isAbandonedDocumentError(error)) return null;
             throw error;
           });
         if (now === null) {
@@ -107,5 +107,9 @@ export const test = base.extend<{ api: MockApi }>({
     { auto: true },
   ],
 });
+
+export function isAbandonedDocumentError(error: unknown) {
+  return error instanceof Error && error.message.includes("Execution context was destroyed");
+}
 
 export { expect };

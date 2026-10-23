@@ -1,4 +1,5 @@
 import { test, expect, type Request, type Route } from "@playwright/test";
+import { isAbandonedDocumentError } from "./fixtures/api";
 import { createApiMockRouter } from "./fixtures/api-mock-router";
 import { apiPaths } from "./fixtures/mock-data";
 
@@ -24,6 +25,8 @@ test("mock 해제 뒤의 API 요청은 실제 서버로 전달하지 않고 차�
   expect(mocked).toEqual({ mocked: true });
 
   await router.dispose();
+  // dispose가 네트워크를 끊으므로 다시 연결해 남은 context route만으로 차단되는지 본다.
+  await page.context().setOffline(false);
   const blocked = await page.evaluate(async (path) => {
     try {
       await fetch(path);
@@ -261,4 +264,11 @@ test("요청이 mock에 걸린 사이 새 문서로 이동해도 해제가 멈�
   } finally {
     release.resolve();
   }
+});
+
+test("페이지에 묻는 중 새 문서로 이동해 생긴 오류를 버려진 문서의 오류로 판별한다", async ({ page }) => {
+  const pending = page.evaluate(() => new Promise<never>(() => {})).catch((error: unknown) => error);
+  await page.reload();
+
+  expect(isAbandonedDocumentError(await pending)).toBe(true);
 });
