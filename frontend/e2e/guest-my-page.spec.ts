@@ -9,8 +9,12 @@ for (const width of [320, 425]) {
     await page.goto("/mypage");
     await expect(page.getByRole("heading", { name: "연어버스에 합류 하세요!", exact: true })).toBeVisible();
     await expect(page.getByText("자주 타는 노선부터 출퇴근 그룹까지,", { exact: false })).toBeVisible();
-    const profile = page.getByRole("region", { name: "연어버스에 합류 하세요!" }).locator("img");
-    expect((await profile.boundingBox())!.width).toBe(34);
+    const profile = page.getByRole("img", { name: "살몽이", exact: true });
+    expect((await profile.boundingBox())!.width).toBe(64);
+    expect((await profile.boundingBox())!.height).toBe(64);
+    await expect
+      .poll(() => profile.evaluate((element) => element instanceof HTMLImageElement && element.naturalWidth > 0))
+      .toBe(true);
     const login = page.getByRole("link", { name: "로그인 / 회원가입", exact: true });
     expect((await login.boundingBox())!.height).toBe(52);
     await expect(login).toHaveAttribute("href", "/login?returnTo=%2Fmypage");
@@ -18,6 +22,9 @@ for (const width of [320, 425]) {
     await expect(page.getByRole("region", { name: "즐겨찾기 그룹 관리" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "마이페이지", exact: true })).toHaveAttribute("aria-current", "page");
     await page.evaluate(() => document.fonts.ready);
+    await page
+      .getByRole("main")
+      .evaluate((element) => Promise.all(element.getAnimations().map((animation) => animation.finished)));
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     if (width === 425 && browserName === "chromium")
       await page.screenshot({ path: "/private/tmp/salmonbus-guest-mypage.png" });

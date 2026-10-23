@@ -11,12 +11,9 @@ export const welcome = style({
   padding: "68px 0 16px",
 });
 export const profile = style({
-  display: "grid",
-  placeItems: "center",
   width: 64,
   height: 64,
-  borderRadius: 24,
-  background: "#FCE9E3",
+  objectFit: "contain",
 });
 export const headline = style({ margin: 0, fontSize: 22, fontWeight: 700, lineHeight: "32px", textAlign: "center" });
 export const description = style({

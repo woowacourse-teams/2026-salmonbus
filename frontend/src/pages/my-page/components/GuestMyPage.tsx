@@ -1,5 +1,5 @@
 import { LoginButton } from "@/shared/components/LoginButton";
-import guestProfile from "../assets/guest-profile.svg";
+import salmong from "@/shared/assets/images/salmong-logo/salmong-proud.png";
 import * as styles from "./GuestMyPage.css";
 
 export function GuestMyPage() {
@@ -7,9 +7,7 @@ export function GuestMyPage() {
     <div className={styles.page}>
       <h1 className={styles.title}>마이페이지</h1>
       <section className={styles.welcome} aria-labelledby="guest-mypage-title">
-        <div className={styles.profile}>
-          <img src={guestProfile} width="34" height="34" alt="" />
-        </div>
+        <img className={styles.profile} src={salmong} width="64" height="64" alt="살몽이" />
         <h2 id="guest-mypage-title" className={styles.headline}>
           연어버스에 합류 하세요!
         </h2>
