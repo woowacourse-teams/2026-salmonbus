@@ -190,10 +190,10 @@ test("기본 그룹도 다른 그룹이 남으면 삭제하고 이름이 바뀌�
   await expect(page).toHaveURL("/mypage");
   await page.getByRole("link", { name: /🚌통학/ }).click();
   await page.getByRole("button", { name: "그룹 이름 변경", exact: true }).click();
-  await page.getByRole("textbox", { name: "그룹 이름", exact: true }).fill("즐겨찾기");
+  await page.getByRole("textbox", { name: "변경할 그룹 이름", exact: true }).fill("즐겨찾기");
   await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("이미 사용 중");
-  await page.getByRole("textbox", { name: "그룹 이름", exact: true }).fill("주말");
+  await page.getByRole("textbox", { name: "변경할 그룹 이름", exact: true }).fill("주말");
   await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByRole("heading", { name: "주말", exact: true })).toBeVisible();
   await page.goto(`/mypage/groups/${defaultGroupId}`);

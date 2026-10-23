@@ -6,6 +6,7 @@ import { groupNameError } from "@/shared/utils/favoritePolicy";
 import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
 import * as buttons from "@/shared/styles/button.css";
 import * as formStyles from "@/shared/styles/form.css";
+import * as styles from "./GroupNameForm.css";
 
 interface CreateGroupNameFormProps {
   group?: never;
@@ -33,11 +34,13 @@ export function GroupNameForm({ group, onRenamed }: GroupNameFormProps) {
     }
   }
   return (
-    <form className="amp-mask" onSubmit={(event) => void submit(event)}>
-      <label htmlFor="group-name">그룹 이름</label>
+    <form className={`amp-mask ${group ? styles.form : ""}`} onSubmit={(event) => void submit(event)}>
+      <label className={group ? styles.label : undefined} htmlFor="group-name">
+        {group ? "변경할 그룹 이름" : "그룹 이름"}
+      </label>
       <input
         id="group-name"
-        className={formStyles.field}
+        className={group ? styles.field : formStyles.field}
         value={name}
         autoComplete="off"
         aria-describedby="group-name-help group-name-error"
@@ -47,15 +50,29 @@ export function GroupNameForm({ group, onRenamed }: GroupNameFormProps) {
           setError(null);
         }}
       />
-      <p id="group-name-help" className={formStyles.subtle}>
+      <p id="group-name-help" className={group ? styles.policy : formStyles.subtle}>
         앞뒤 공백을 제외한 1~10자
         <br />
         특수문자와 이모지도 사용할 수 있어요.
+        {group && (
+          <>
+            <br />
+            같은 이름의 그룹은 만들 수 없어요.
+          </>
+        )}
       </p>
-      <p id="group-name-error" className={formStyles.error} role="alert">
+      <p
+        id="group-name-error"
+        className={formStyles.error}
+        role="alert"
+        hidden={group !== undefined && error === null && (name === "" || invalid === null)}
+      >
         {error ?? (name !== "" ? invalid : null)}
       </p>
-      <button className={buttons.primary} disabled={busy || invalid !== null || name.trim() === group?.name}>
+      <button
+        className={group ? styles.save : buttons.primary}
+        disabled={busy || invalid !== null || name.trim() === group?.name}
+      >
         {busy ? "저장 중…" : group ? "저장" : "만들기"}
       </button>
     </form>

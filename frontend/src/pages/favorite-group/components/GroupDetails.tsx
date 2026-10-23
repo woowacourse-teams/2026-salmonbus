@@ -8,18 +8,14 @@ import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
 import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
 import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
 import { RouteBadge } from "@/shared/components/RouteBadge";
-import { GroupNameForm } from "./GroupNameForm";
-import * as buttons from "@/shared/styles/button.css";
 import * as formStyles from "@/shared/styles/form.css";
 import * as styles from "./GroupDetails.css";
 
 interface GroupDetailsProps {
   group: FavoriteGroup;
-  editing: boolean;
-  onEditEnd: () => void;
 }
 
-export function GroupDetails({ group, editing, onEditEnd }: GroupDetailsProps) {
+export function GroupDetails({ group }: GroupDetailsProps) {
   const { groups } = useFavorites();
   const [deleting, setDeleting] = useState<"group" | SavedFavorite | null>(null);
   const [revision, retry] = useState(0);
@@ -40,18 +36,6 @@ export function GroupDetails({ group, editing, onEditEnd }: GroupDetailsProps) {
   const lastCode = group.name.charCodeAt(group.name.length - 1);
   const objectParticle =
     lastCode >= 0xac00 && lastCode <= 0xd7a3 ? ((lastCode - 0xac00) % 28 === 0 ? "를" : "을") : " 그룹을";
-  if (editing)
-    return (
-      <>
-        <h2 className={styles.heading}>
-          그룹 이름 변경
-          <button className={buttons.text} onClick={onEditEnd}>
-            취소
-          </button>
-        </h2>
-        <GroupNameForm group={group} onRenamed={onEditEnd} />
-      </>
-    );
   const lastGroup = deleting === "group" && groups.length === 1;
   return (
     <section className="amp-mask">

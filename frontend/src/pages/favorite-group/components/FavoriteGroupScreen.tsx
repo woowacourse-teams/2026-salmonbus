@@ -18,14 +18,28 @@ export function FavoriteGroupScreen() {
   const { reload: reloadAuth } = useAuth();
   const [editingId, setEditingId] = useState<string | null>(null);
   const group = groups.find((candidate) => candidate.id === groupId);
+  const editing = auth.status === "authenticated" && group !== undefined && editingId === group.id;
   return (
     <AccountLayout>
       <div className={styles.screen}>
         <header className={`${styles.title} amp-mask`}>
-          <Link to="/mypage" className={styles.back} aria-label="마이페이지로 돌아가기">
-            <img src={backArrow} width="17" height="17" alt="" draggable={false} />
-          </Link>
-          <h1 className={styles.name}>{groupId === "new" ? "그룹 만들기" : (group?.name ?? "그룹 관리")}</h1>
+          {editing ? (
+            <button
+              type="button"
+              className={styles.back}
+              aria-label="그룹 관리로 돌아가기"
+              onClick={() => setEditingId(null)}
+            >
+              <img src={backArrow} width="17" height="17" alt="" draggable={false} />
+            </button>
+          ) : (
+            <Link to="/mypage" className={styles.back} aria-label="마이페이지로 돌아가기">
+              <img src={backArrow} width="17" height="17" alt="" draggable={false} />
+            </Link>
+          )}
+          <h1 className={styles.name}>
+            {editing ? "이름 변경" : groupId === "new" ? "그룹 만들기" : (group?.name ?? "그룹 관리")}
+          </h1>
           {group && auth.status === "authenticated" && editingId !== group.id && (
             <button
               type="button"
@@ -64,12 +78,11 @@ export function FavoriteGroupScreen() {
                 )
               )
             ) : group ? (
-              <GroupDetails
-                key={group.id}
-                group={group}
-                editing={editingId === group.id}
-                onEditEnd={() => setEditingId(null)}
-              />
+              editing ? (
+                <GroupNameForm key={group.id} group={group} onRenamed={() => setEditingId(null)} />
+              ) : (
+                <GroupDetails key={group.id} group={group} />
+              )
             ) : (
               resource.status === "success" && (
                 <p className={formStyles.error} role="alert">

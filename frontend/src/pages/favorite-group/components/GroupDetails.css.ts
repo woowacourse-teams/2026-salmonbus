@@ -1,14 +1,5 @@
 import { style } from "@vanilla-extract/css";
 
-export const heading = style({
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 12,
-  fontSize: 15,
-  fontWeight: 600,
-  margin: "0 0 16px",
-});
 export const list = style({
   display: "flex",
   flexDirection: "column",

@@ -30,6 +30,9 @@ export const rename = style({
   cursor: "pointer",
 });
 export const back = style({
+  padding: 0,
+  border: 0,
+  cursor: "pointer",
   display: "grid",
   placeItems: "center",
   flexShrink: 0,
