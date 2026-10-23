@@ -241,21 +241,35 @@ test("native 지도 오류 후에도 웹 목록을 유지하고 앱 전용 투�
 test.describe("native 지도 준비 실패 시 JS 지도 전환", () => {
   test.use({ nativeReady: false });
 
-  test("즐겨찾기 정류장 이동은 native ready 이후 한 번 전달한다", async ({ page, api }) => {
+  test("즐겨찾기 정류장을 초기 native scene에 담고 이전 앱용 카메라 명령도 유지한다", async ({ page, api }) => {
     const stop = api.data.board.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed)!;
     await page.goto(`/routes/${routeId}?direction=DOWN&stopId=${stop.stopId}`);
     await expect.poll(async () => (await messages(page)).some((message) => message.type === "mount")).toBe(true);
+    const mount = (await messages(page)).find((message) => message.type === "mount")!;
+    expect(mount.payload.selectedStop).toEqual({ direction: "DOWN", sequence: stop.sequence });
+    expect(mount.payload.activeDirection).toBe("DOWN");
     const stopCommands = async () =>
       (await messages(page)).filter((message) => message.type === "camera" && message.payload.command === "stop");
     expect(await stopCommands()).toHaveLength(0);
     await emit(page, { type: "ready", payload: {} });
-    await expect.poll(stopCommands).toHaveLength(1);
-    expect((await stopCommands())[0]?.payload).toEqual({
-      command: "stop",
-      selection: { direction: "DOWN", sequence: stop.sequence },
-    });
+    await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
+    expect(await stopCommands()).toEqual([
+      expect.objectContaining({
+        payload: { command: "stop", selection: { direction: "DOWN", sequence: stop.sequence } },
+      }),
+    ]);
     await page.clock.runFor(1_000);
     expect(await stopCommands()).toHaveLength(1);
+  });
+
+  test("즐겨찾기 정류장이 유효하지 않으면 초기 native scene에서 선택하지 않는다", async ({ page }) => {
+    await page.goto(`/routes/${routeId}?direction=DOWN&stopId=unknown-stop`);
+    await expect.poll(async () => (await messages(page)).some((message) => message.type === "mount")).toBe(true);
+    const mount = (await messages(page)).find((message) => message.type === "mount")!;
+    expect(mount.payload.selectedStop).toBeNull();
+    await emit(page, { type: "ready", payload: {} });
+    await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
+    expect((await messages(page)).filter((message) => message.type === "camera")).toHaveLength(0);
   });
 
   for (const failure of ["timeout", "native-timeout", "auth"] as const) {

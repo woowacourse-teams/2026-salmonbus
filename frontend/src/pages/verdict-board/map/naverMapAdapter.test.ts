@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { boardMock } from "@/shared/api/routeForecast.mock";
 import { liveVehicleViewsFor } from "../components/liveVehiclePolicy";
 import { liveVehiclesMock } from "@/shared/api/routeForecast.mock";
+import type { StopSelection } from "../components/stopSelection";
 import { loadPreviewRouteMapData } from "./routeMapPreview";
 import type { NaverCoordinate, NaverMap, NaverMaps, NaverMarker } from "./naverSdk";
 import { createNaverRouteMap } from "./naverMapAdapter";
@@ -257,7 +258,17 @@ afterEach(() => {
 
 function setup(
   glSupported = true,
-  { initialized = true, reducedMotion = false, visibleHeight = 350 } = {},
+  {
+    initialized = true,
+    reducedMotion = false,
+    visibleHeight = 350,
+    initialSelection = null,
+  }: {
+    initialized?: boolean;
+    reducedMotion?: boolean;
+    visibleHeight?: number;
+    initialSelection?: StopSelection | null;
+  } = {},
   dataOverrides: Partial<RouteMapData> = {},
 ) {
   const pendingFrames = new Map<number, FrameRequestCallback>();
@@ -326,6 +337,7 @@ function setup(
     onReady,
     onVehicleSelect,
     onDeselect,
+    initialSelection,
   );
   const initialize = () => native.events.find((event) => event.name === "init")?.listener();
   if (initialized) initialize();
@@ -365,7 +377,68 @@ function visibleArrowDirections(native: ReturnType<typeof createRecordingSdk>) {
 }
 
 describe("네이버 지도 adapter", () => {
-  it("즐겨찾기 정류장은 현재 화면에서 중간 위치와 연속 줌을 거쳐 확대한다", () => {
+  it.each([
+    { glSupported: true, reducedMotion: false },
+    { glSupported: true, reducedMotion: true },
+    { glSupported: false, reducedMotion: false },
+    { glSupported: false, reducedMotion: true },
+  ])("초기 선택 정류장에서 바로 지도를 시작한다 ($glSupported, $reducedMotion)", ({ glSupported, reducedMotion }) => {
+    const initialSelection = { direction: "DOWN" as const, sequence: 60 };
+    const { native, adapter, data, initialize, onReady, flushFrames } = setup(glSupported, {
+      initialized: false,
+      reducedMotion,
+      initialSelection,
+    });
+    const stop = data.stops.find(
+      (stop) => stop.direction === initialSelection.direction && stop.sequence === initialSelection.sequence,
+    )!;
+    expect(native.map.options.zoom).toBe(13);
+    expect(native.map.options.center.lat()).toBeCloseTo(stop.coordinate.latitude, 12);
+    expect(native.map.options.center.lng()).toBeCloseTo(stop.coordinate.longitude, 12);
+    expect(native.map.fits).toBe(0);
+    expect(onReady).not.toHaveBeenCalled();
+    const setZoom = jest.spyOn(native.map, "setZoom");
+    const setCenter = jest.spyOn(native.map, "setCenter");
+    onReady.mockImplementation(() => adapter.focus(initialSelection, { animate: true }));
+
+    initialize();
+    native.events.find((event) => event.name === "idle")!.listener();
+    flushFrames();
+    flushFrames();
+    expect(onReady).toHaveBeenCalledTimes(1);
+    flushFrames();
+    flushFrames(140);
+    if (reducedMotion) expect(native.map.zoom).toBe(15);
+    else {
+      expect(native.map.zoom).toBeGreaterThan(13);
+      expect(native.map.zoom).toBeLessThan(15);
+    }
+    flushFrames(600);
+
+    expect(native.map.fits).toBe(0);
+    expect(native.map.zoom).toBe(15);
+    expect(native.map.center.lat()).toBeCloseTo(stop.coordinate.latitude, 12);
+    expect(native.map.center.lng()).toBeCloseTo(stop.coordinate.longitude, 12);
+    expect(setZoom.mock.calls.some(([zoom]) => zoom === 15)).toBe(true);
+    expect(
+      setCenter.mock.calls.every(
+        ([center]) => center.lat() === stop.coordinate.latitude && center.lng() === stop.coordinate.longitude,
+      ),
+    ).toBe(true);
+  });
+
+  it("지도에 없는 초기 선택 정류장은 전체 경로로 시작한다", () => {
+    const { native, initialize } = setup(true, {
+      initialized: false,
+      initialSelection: { direction: "UP", sequence: -1 },
+    });
+    expect(native.map.options.zoom).toBe(10);
+    initialize();
+    expect(native.map.fits).toBe(1);
+    expect(native.map.zoom).toBe(13);
+  });
+
+  it("화면을 표시한 뒤 정류장으로 이동하면 중간 위치와 연속 줌을 거쳐 확대한다", () => {
     const { native, adapter, data, flushFrames, windowListeners } = setup();
     const selection = { direction: "UP" as const, sequence: 15 };
     const stop = data.stops.find(

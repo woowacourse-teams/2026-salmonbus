@@ -242,7 +242,13 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
       return
     }
     scene = nextScene
-    initialFitPending = true
+    let initialStop = nextScene.stops.first { $0.selection == nextScene.selectedStop }
+    initialFitPending = initialStop == nil
+    if let initialStop {
+      let camera = NMFCameraUpdate(scrollTo: initialStop.coordinate.naver, zoomTo: 13)
+      camera.animation = .none
+      mapView.moveCamera(camera)
+    }
     #if DEBUG
     NSLog("[SalmonNativeMap] mount stops=%ld paths=%ld vehicles=%ld", nextScene.stops.count,
           nextScene.paths.count, nextScene.vehicles.count)

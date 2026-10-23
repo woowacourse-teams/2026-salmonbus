@@ -58,6 +58,7 @@ export function createNaverRouteMap(
   onReady: () => void,
   onVehicleSelect: (selection: StopSelection, key: string) => void,
   onDeselect: () => void,
+  initialSelection: StopSelection | null = null,
 ): RouteMapAdapter {
   const createNativeEventHandler = (action: () => void) => () => {
     try {
@@ -68,12 +69,15 @@ export function createNaverRouteMap(
   };
   const mappedDirections = new Set(data.paths.map((path) => path.direction));
   const fullPath = data.fullPath ?? [];
-  const first = data.stops[0]?.coordinate ?? fullPath[0] ?? data.paths[0]?.coordinates[0];
+  const initialStop = data.stops.find(
+    (stop) => stop.direction === initialSelection?.direction && stop.sequence === initialSelection.sequence,
+  );
+  const first = initialStop?.coordinate ?? data.stops[0]?.coordinate ?? fullPath[0] ?? data.paths[0]?.coordinates[0];
   if (first === undefined) throw new Error("지도 좌표가 없어요");
   const toNaverCoordinate = (coordinate: GeoCoordinate) => new sdk.LatLng(coordinate.latitude, coordinate.longitude);
   const map = new sdk.Map(element, {
     center: toNaverCoordinate(first),
-    zoom: 10,
+    zoom: initialStop === undefined ? 10 : 13,
     size: new sdk.Size(element.clientWidth, element.clientHeight),
     zoomControl: false,
     scaleControl: false,
@@ -85,8 +89,8 @@ export function createNaverRouteMap(
     scrollWheel: true,
     disableDoubleClickZoom: false,
   });
-  let selected: StopSelection | null = null;
-  let activeDirection: Direction = board.route.directions[0].id;
+  let selected: StopSelection | null = initialSelection;
+  let activeDirection: Direction = initialStop?.direction ?? board.route.directions[0].id;
   let initialFitPending = true;
   let initialized = false;
   let initialViewIdle = false;
@@ -453,6 +457,11 @@ export function createNaverRouteMap(
   const routeCoordinates = fullPath.length > 0 ? fullPath : data.paths.flatMap((path) => path.coordinates);
   function fitInitialRoute() {
     if (!initialFitPending) return;
+    if (initialStop !== undefined) {
+      initialFitPending = false;
+      initialViewIdle = true;
+      return;
+    }
     initialFitPending = false;
     initialViewIdle = false;
     // 고정 캔버스의 위아래에서 잘리는 만큼 여백을 더해 보이는 영역 안에 경로를 맞춘다.
