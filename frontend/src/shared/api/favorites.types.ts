@@ -74,15 +74,3 @@ export interface HomeFavoriteGroup {
 export interface HomeFavorites {
   groups: HomeFavoriteGroup[];
 }
-
-export type FavoriteErrorCode =
-  | "INVALID_FAVORITE_GROUP_NAME"
-  | "INVALID_ORDER"
-  | "FAVORITE_GROUP_NOT_FOUND"
-  | "FAVORITE_NOT_FOUND"
-  | "FAVORITE_GROUP_LIMIT_EXCEEDED"
-  | "FAVORITE_GROUP_NAME_CONFLICT"
-  | "LAST_FAVORITE_GROUP"
-  | "FAVORITE_LIMIT_EXCEEDED"
-  | "FAVORITE_TARGET_AMBIGUOUS"
-  | "FAVORITE_TARGET_UNAVAILABLE";

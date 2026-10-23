@@ -1,12 +1,5 @@
-import type {
-  ApproachingVehicle,
-  Board,
-  ErrorCode,
-  ErrorResponse,
-  LiveVehicles,
-  RouteListResponse,
-  StopState,
-} from "./routeForecast.types";
+import type { ErrorCode, ErrorResponse } from "./apiError";
+import type { ApproachingVehicle, Board, LiveVehicles, RouteListResponse, StopState } from "./routeForecast.types";
 
 export const routeListMock = {
   routes: [
@@ -599,4 +592,4 @@ export const errorResponseMocks = {
     message: "요청을 처리하지 못했습니다.",
     requestId: "req-01J9X2ABCK",
   },
-} satisfies Record<ErrorCode, ErrorResponse>;
+} satisfies Partial<Record<ErrorCode, ErrorResponse>>;

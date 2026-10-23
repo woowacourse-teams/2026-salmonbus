@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import type { ApiFailure, ApiResult } from "./client";
 import { nextPollFrom } from "./pollSchedule";
-import type { ErrorCode } from "./routeForecast.types";
+import type { ErrorCode } from "./apiError";
 
 function success(lifetime: {
   maxAgeSeconds: number | null;

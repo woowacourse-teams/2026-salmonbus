@@ -10,7 +10,7 @@ async function request<T>(
   options: RequestOptions,
   parse: (body: unknown) => T | null,
 ): Promise<ApiResult<T>> {
-  const result = await memberRequest<unknown>(url, { ...options, errorRequestIdOptional: true });
+  const result = await memberRequest<unknown>(url, options);
   if (!result.ok) return result;
   const body = parse(result.body);
   return body === null

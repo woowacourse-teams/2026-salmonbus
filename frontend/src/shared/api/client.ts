@@ -2,44 +2,10 @@ import { isRecord } from "@/shared/utils/valueGuards";
 import { cacheLifetimeFrom, type CacheLifetime } from "./cacheControl";
 import { referenceClockFrom, type ReferenceClock } from "./referenceClock";
 import { retryAfterMillisFrom } from "./retryAfter";
-import type { ErrorCode, ErrorResponse } from "./routeForecast.types";
-import type { FavoriteErrorCode } from "./favorites.types";
+import { ERROR_CODES, type ErrorResponse } from "./apiError";
 
 const REQUEST_TIMEOUT_MS = 10_000;
 const TIMEOUT_REASON = "timeout";
-
-const ERROR_CODE_VALUES: { [Code in ErrorCode | FavoriteErrorCode]: Code } = {
-  INVALID_FAVORITE_GROUP_NAME: "INVALID_FAVORITE_GROUP_NAME",
-  INVALID_ORDER: "INVALID_ORDER",
-  FAVORITE_GROUP_NOT_FOUND: "FAVORITE_GROUP_NOT_FOUND",
-  FAVORITE_NOT_FOUND: "FAVORITE_NOT_FOUND",
-  FAVORITE_GROUP_LIMIT_EXCEEDED: "FAVORITE_GROUP_LIMIT_EXCEEDED",
-  FAVORITE_GROUP_NAME_CONFLICT: "FAVORITE_GROUP_NAME_CONFLICT",
-  LAST_FAVORITE_GROUP: "LAST_FAVORITE_GROUP",
-  FAVORITE_LIMIT_EXCEEDED: "FAVORITE_LIMIT_EXCEEDED",
-  FAVORITE_TARGET_AMBIGUOUS: "FAVORITE_TARGET_AMBIGUOUS",
-  FAVORITE_TARGET_UNAVAILABLE: "FAVORITE_TARGET_UNAVAILABLE",
-  INVALID_ROUTE_ID: "INVALID_ROUTE_ID",
-  INVALID_REQUEST: "INVALID_REQUEST",
-  ROUTE_NOT_FOUND: "ROUTE_NOT_FOUND",
-  STATION_NOT_FOUND: "STATION_NOT_FOUND",
-  REFERENCE_VERSION_CONFLICT: "REFERENCE_VERSION_CONFLICT",
-  ENDPOINT_NOT_FOUND: "ENDPOINT_NOT_FOUND",
-  METHOD_NOT_ALLOWED: "METHOD_NOT_ALLOWED",
-  INTERNAL_ERROR: "INTERNAL_ERROR",
-  UNAUTHENTICATED: "UNAUTHENTICATED",
-  CSRF_REJECTED: "CSRF_REJECTED",
-  NICKNAME_LENGTH: "NICKNAME_LENGTH",
-  NICKNAME_CHARACTERS: "NICKNAME_CHARACTERS",
-  NICKNAME_RESERVED: "NICKNAME_RESERVED",
-  NICKNAME_TAKEN: "NICKNAME_TAKEN",
-  REAUTH_REQUIRED: "REAUTH_REQUIRED",
-  SERVICE_UNAVAILABLE: "SERVICE_UNAVAILABLE",
-  MODEL_OUT_OF_SCOPE: "MODEL_OUT_OF_SCOPE",
-  NO_RECENT_OBSERVATION: "NO_RECENT_OBSERVATION",
-};
-
-const ERROR_CODES = Object.values(ERROR_CODE_VALUES);
 
 export interface ApiSuccess<T> {
   ok: true;
@@ -51,7 +17,7 @@ export interface ApiSuccess<T> {
 }
 
 export type ApiFailure =
-  | { kind: "contract"; error: ContractError; status: number; retryAfterMs: number | null }
+  | { kind: "contract"; error: ErrorResponse; status: number; retryAfterMs: number | null }
   | { kind: "rateLimited"; status: number; retryAfterMs: number | null; requestId: string | null }
   | { kind: "malformed"; status: number; requestId: string | null }
   | { kind: "timeout" }
@@ -90,7 +56,6 @@ export function resetApiFailureReporter(): void {
 
 export interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-  errorRequestIdOptional?: boolean;
   body?: unknown;
   headers?: Record<string, string>;
   signal?: AbortSignal;
@@ -157,11 +122,10 @@ async function executeRequest<T>(url: string, options: RequestOptions): Promise<
       return outcomeOf(failed(infrastructureFailure));
     }
 
-    if (response.status === 204)
-      return outcomeOf(interpret<T>(response, undefined, clock, options.errorRequestIdOptional));
+    if (response.status === 204) return outcomeOf(interpret<T>(response, undefined, clock));
     responseBody = await response.text();
     const body: unknown = JSON.parse(responseBody);
-    return outcomeOf(interpret<T>(response, body, clock, options.errorRequestIdOptional));
+    return outcomeOf(interpret<T>(response, body, clock));
   } catch (cause) {
     if (controller.signal.aborted) {
       return outcomeOf(failed(controller.signal.reason === TIMEOUT_REASON ? { kind: "timeout" } : { kind: "aborted" }));
@@ -188,17 +152,7 @@ function infrastructureFailureOf(response: Response, clock: ReferenceClock | nul
   return null;
 }
 
-type ContractError = Omit<ErrorResponse, "code" | "requestId"> & {
-  code: ErrorCode | FavoriteErrorCode;
-  requestId?: string;
-};
-
-function interpret<T>(
-  response: Response,
-  body: unknown,
-  clock: ReferenceClock | null,
-  errorRequestIdOptional = false,
-): ApiResult<T> {
+function interpret<T>(response: Response, body: unknown, clock: ReferenceClock | null): ApiResult<T> {
   const requestId = requestIdOf(response);
 
   if (response.ok) {
@@ -213,7 +167,7 @@ function interpret<T>(
     };
   }
 
-  const error = errorResponseFrom(body, errorRequestIdOptional);
+  const error = errorResponseFrom(body);
   if (error !== null) {
     return failed({
       kind: "contract",
@@ -226,12 +180,11 @@ function interpret<T>(
   return failed({ kind: "malformed", status: response.status, requestId });
 }
 
-function errorResponseFrom(value: unknown, errorRequestIdOptional: boolean): ContractError | null {
-  if (!isRecord(value) || typeof value.message !== "string") return null;
+function errorResponseFrom(value: unknown): ErrorResponse | null {
+  if (!isRecord(value) || typeof value.message !== "string" || typeof value.requestId !== "string") return null;
   const code = ERROR_CODES.find((code) => code === value.code);
   if (code === undefined) return null;
-  if (typeof value.requestId === "string") return { code, message: value.message, requestId: value.requestId };
-  return errorRequestIdOptional && value.requestId === undefined ? { code, message: value.message } : null;
+  return { code, message: value.message, requestId: value.requestId };
 }
 
 function retryAfterMsOf(response: Response, clock: ReferenceClock | null): number | null {

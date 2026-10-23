@@ -104,7 +104,7 @@ describe("즐겨찾기 API 연결", () => {
       }),
     );
   });
-  it("초안의 requestId 없는 오류를 읽되 기존 API의 검증은 유지한다", async () => {
+  it("즐겨찾기도 requestId 없는 오류는 잘못된 응답으로 분류한다", async () => {
     global.fetch = jest
       .fn<typeof fetch>()
       .mockImplementation(
@@ -113,9 +113,20 @@ describe("즐겨찾기 API 연결", () => {
       );
     expect(await saveGroupOrder([id])).toMatchObject({
       ok: false,
-      failure: { kind: "contract", error: { code: "LAST_FAVORITE_GROUP" } },
+      failure: { kind: "malformed", status: 409 },
     });
     expect(await requestJson("/api/me")).toMatchObject({ ok: false, failure: { kind: "malformed" } });
+  });
+  it("requestId가 있는 즐겨찾기 오류는 계약 오류로 읽는다", async () => {
+    global.fetch = jest.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ code: "LAST_FAVORITE_GROUP", message: "마지막 그룹", requestId: "request-1" }), {
+        status: 409,
+      }),
+    );
+    expect(await saveGroupOrder([id])).toMatchObject({
+      ok: false,
+      failure: { kind: "contract", error: { code: "LAST_FAVORITE_GROUP", requestId: "request-1" } },
+    });
   });
   it("깨진 그룹 성공 응답을 회원 데이터로 받아들이지 않는다", async () => {
     global.fetch = jest

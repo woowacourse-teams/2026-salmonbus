@@ -17,7 +17,10 @@ for (const width of [320, 425]) {
         await route.fallback();
         return;
       }
-      await route.fulfill({ status: 503, json: { code: "SERVICE_UNAVAILABLE", message: "Unavailable" } });
+      await route.fulfill({
+        status: 503,
+        json: { code: "SERVICE_UNAVAILABLE", message: "Unavailable", requestId: "e2e-favorites" },
+      });
     });
     await page.goto("/");
     await expect(page.getByRole("alert")).toHaveText("즐겨찾기를 불러오지 못했어요");

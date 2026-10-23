@@ -42,7 +42,11 @@ export const test = authTest.extend<{ favorites: FavoritesMock }>({
         const body = req.postData() ? (req.postDataJSON() as Record<string, unknown>) : null;
         favorites.requests.push({ path, query: url.search, method, body });
         const error = (status: number, code: string) =>
-          route.fulfill({ status, json: { code, message: code }, headers: { "Cache-Control": "no-store" } });
+          route.fulfill({
+            status,
+            json: { code, message: code, requestId: "e2e-favorites" },
+            headers: { "Cache-Control": "no-store" },
+          });
         const json = (value: unknown, status = 200) =>
           route.fulfill({ status, json: value, headers: { "Cache-Control": "no-store" } });
         const done = () => route.fulfill({ status: 204 });

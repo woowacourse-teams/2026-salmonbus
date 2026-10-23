@@ -102,7 +102,10 @@ for (const failedId of [schoolId, weekendId]) {
       if (route.request().method() === "DELETE" && path.startsWith("/api/me/favorite-groups/")) {
         calls.push(path.split("/").at(-1)!);
         if (fail && path.endsWith(failedId)) {
-          await route.fulfill({ status: 503, json: { code: "SERVICE_UNAVAILABLE", message: "try later" } });
+          await route.fulfill({
+            status: 503,
+            json: { code: "SERVICE_UNAVAILABLE", message: "try later", requestId: "e2e-favorites" },
+          });
           return;
         }
       }
