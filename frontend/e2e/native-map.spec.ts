@@ -217,7 +217,7 @@ test.describe("native 지도 준비 실패 시 JS 지도 전환", () => {
   for (const failure of ["timeout", "native-timeout", "auth"] as const) {
     test(`${failure} 후 JS 지도를 유지하고 선택과 차량 이동을 연결한다`, async ({ page, naverMap, api }) => {
       api.cacheMaxAgeSeconds = 60;
-      api.data.vehicles.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1")!.phase = "IN_TRANSIT";
+      api.data.watch.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1")!.phase = "IN_TRANSIT";
       await page.goto(`/routes/${routeId}`);
       await expect.poll(async () => (await messages(page)).some((message) => message.type === "mount")).toBe(true);
       await emit(page, { type: "stopPress", payload: { selection: { direction: "UP", sequence: 1 } } });

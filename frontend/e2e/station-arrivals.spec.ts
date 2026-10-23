@@ -147,7 +147,7 @@ test("선택 정류장과 방향을 바꾸면 이전 방문의 시간정보를 �
 
   // 같은 방향의 다른 방문을 선택하면 요청의 stationId와 stopSequence도 함께 바뀐다.
   api.data.arrivals = null;
-  const nextStop = api.data.board.stops.find((stop) => stop.direction === "UP" && stop.sequence === 12)!;
+  const nextStop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.sequence === 12)!;
   await page
     .getByRole("region", { name: "판정보드 정류장 목록", exact: true })
     .getByRole("button", { name: new RegExp(`^${nextStop.name}`) })

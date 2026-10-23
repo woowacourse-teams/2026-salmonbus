@@ -1,13 +1,12 @@
 import { requestJson, type ApiResult, type RequestOptions } from "./client";
-import type { Board, LiveVehicles, RouteListResponse } from "./routeForecast.types";
+import type { RouteListResponse, RouteWatch } from "./routeForecast.types";
 
 const API_BASE = "/api/v1";
 
 type FetchRequestOption = Required<Pick<RequestOptions, "signal">>;
 
 const ENDPOINTS = {
-  board: `${API_BASE}/routes/:routeId/board`,
-  vehicles: `${API_BASE}/routes/:routeId/vehicles`,
+  watch: `${API_BASE}/routes/:routeId/watch`,
 };
 
 function routeUrlFrom(endpoint: string, routeId: string): string {
@@ -18,19 +17,10 @@ export function fetchRoutes(options: FetchRequestOption): Promise<ApiResult<Rout
   return requestJson<RouteListResponse>(`${API_BASE}/routes`, options);
 }
 
-export function fetchBoard(routeId: string, options: FetchRequestOption): Promise<ApiResult<Board>> {
-  const endpoint = ENDPOINTS.board;
+export function fetchRouteWatch(routeId: string, options: FetchRequestOption): Promise<ApiResult<RouteWatch>> {
+  const endpoint = ENDPOINTS.watch;
 
-  return requestJson<Board>(routeUrlFrom(endpoint, routeId), {
-    ...options,
-    errorContext: { endpoint, tags: { route_id: routeId } },
-  });
-}
-
-export function fetchLiveVehicles(routeId: string, options: FetchRequestOption): Promise<ApiResult<LiveVehicles>> {
-  const endpoint = ENDPOINTS.vehicles;
-
-  return requestJson<LiveVehicles>(routeUrlFrom(endpoint, routeId), {
+  return requestJson<RouteWatch>(routeUrlFrom(endpoint, routeId), {
     ...options,
     errorContext: { endpoint, tags: { route_id: routeId } },
   });

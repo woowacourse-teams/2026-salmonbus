@@ -196,7 +196,7 @@ test("Apple 탈퇴 시작이 401이면 갱신 후 같은 요청을 재시도한�
 });
 
 test("방면·정류장이 담긴 판정보드 주소는 로그인 후에도 유지한다", async ({ page, api }) => {
-  const stop = api.data.board.stops.find((candidate) => candidate.direction === "DOWN" && candidate.boardingAllowed)!;
+  const stop = api.data.watch.stops.find((candidate) => candidate.direction === "DOWN" && candidate.boardingAllowed)!;
   const returnTo = `/routes/${routeId}?direction=DOWN&stopId=${stop.stopId}`;
   await page.goto(`/login?${new URLSearchParams({ returnTo })}`);
   await page.getByRole("button", { name: "카카오로 계속하기" }).click();
