@@ -31,6 +31,11 @@ export default defineConfig({
       name: "webkit",
       use: { ...devices["Desktop Safari"] },
     },
+
+    {
+      name: "iphone-15",
+      use: { ...devices["iPhone 15"] },
+    },
   ],
 
   webServer: {

@@ -639,7 +639,8 @@ test("축소에서는 선택한 방향의 화살표만 표시하고 확대하면
   await original.dispose();
 });
 
-test("GL 지도의 휠과 더블클릭은 부드럽게 확대하며 노선·마커 DOM을 유지한다", async ({ page, naverMap }) => {
+test("GL 지도의 휠과 더블클릭은 부드럽게 확대하며 노선·마커 DOM을 유지한다", async ({ page, naverMap, isMobile }) => {
+  test.skip(isMobile, "모바일 WebKit은 마우스 휠 입력을 지원하지 않는다");
   await openMap(page);
   await naverMap.setZoom(14);
   await naverMap.panToStop(11);
@@ -980,7 +981,9 @@ test.describe("지도 터치 선택 해제", () => {
 test("지도 버스의 목록 이동은 중간 위치를 거쳐 완료되고 수동 휠 입력은 자동 이동과 포커스를 취소한다", async ({
   page,
   naverMap,
+  isMobile,
 }) => {
+  test.skip(isMobile, "모바일 WebKit은 마우스 휠 입력을 지원하지 않는다");
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await openMap(page);
   const bus = map(page).getByRole("button", { name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 5석", exact: true });
@@ -1371,7 +1374,11 @@ test("정류장명과 현재 좌석을 함께 표시하고 줌과 잔여석 응�
   await observation.dispose();
 });
 
-test("키보드로 최소·절반·70%·전체를 선택하고 목록 스크롤은 시트 높이를 바꾸지 않는다", async ({ page }, testInfo) => {
+test("키보드로 최소·절반·70%·전체를 선택하고 목록 스크롤은 시트 높이를 바꾸지 않는다", async ({
+  page,
+  isMobile,
+}, testInfo) => {
+  test.skip(isMobile, "모바일 WebKit은 마우스 휠 입력을 지원하지 않는다");
   await openMap(page);
   await expect(handle(page)).toHaveAttribute("aria-valuemax", "3");
   await expect(handle(page)).toHaveAttribute("aria-valuenow", "1");
