@@ -15,7 +15,7 @@ export function routeSearchInput(page: Page) {
 }
 
 export function inServiceSection(page: Page) {
-  return page.getByRole("region", { name: "서비스 중인 노선", exact: true });
+  return page.getByRole("region", { name: "서비스 중 노선", exact: true });
 }
 
 export function routeSearchBackLink(page: Page) {

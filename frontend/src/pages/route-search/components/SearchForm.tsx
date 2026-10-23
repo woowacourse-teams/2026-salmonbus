@@ -55,7 +55,8 @@ export function SearchForm({ value, autoFocus = false, onChange, onClear, onSubm
           onClick={handleClear}
         >
           <svg className={styles.clearIcon} viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M7 7l10 10M17 7 7 17" />
+            <circle cx="12" cy="12" r="8" />
+            <path d="m9.5 9.5 5 5m0-5-5 5" />
           </svg>
         </button>
       )}

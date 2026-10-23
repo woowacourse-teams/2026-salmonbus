@@ -1,4 +1,4 @@
-import { globalStyle, style } from "@vanilla-extract/css";
+import { style } from "@vanilla-extract/css";
 import { PHONE_MEDIA } from "@/shared/styles/media";
 import { vars } from "@/shared/styles/tokens.css";
 
@@ -15,7 +15,7 @@ export const page = style({
   paddingBottom: SAFE_AREA_BOTTOM,
   overflow: "hidden",
   borderRadius: "26px",
-  backgroundColor: vars.color.brand,
+  backgroundColor: vars.color.surface,
 
   "@media": {
     [PHONE_MEDIA]: {
@@ -26,20 +26,11 @@ export const page = style({
   },
 });
 
-// iOS Safari는 상태 표시줄 아래 띠와 주소창 뒤를 html 배경색으로 칠한다. theme-color는 보지 않는다.
-globalStyle(`html:has(${page})`, {
-  "@media": {
-    [PHONE_MEDIA]: {
-      backgroundColor: vars.color.brand,
-    },
-  },
-});
-
 export const header = style({
   display: "flex",
   alignItems: "center",
-  gap: "4px",
-  padding: `calc(12px + ${SAFE_AREA_TOP}) 20px 0 8px`,
+  gap: "2px",
+  padding: `calc(8px + ${SAFE_AREA_TOP}) 16px 0 4px`,
 });
 
 export const back = style({
@@ -48,10 +39,10 @@ export const back = style({
   flexShrink: 0,
   width: "44px",
   height: "44px",
-  color: vars.color.onBrand,
+  color: vars.color.textStrong,
   selectors: {
     "&:focus-visible": {
-      outline: `2px solid ${vars.color.onBrand}`,
+      outline: `2px solid ${vars.color.focusRing}`,
       outlineOffset: "-4px",
       borderRadius: vars.radius.pill,
     },
@@ -73,5 +64,5 @@ export const results = style({
   flex: 1,
   flexDirection: "column",
   minHeight: 0,
-  padding: "4px 20px 16px",
+  padding: "8px 24px 16px",
 });

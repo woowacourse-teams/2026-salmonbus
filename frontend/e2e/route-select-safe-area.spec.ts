@@ -1,6 +1,6 @@
 import { PHONE_SEARCH_CENTER_DVH } from "../src/pages/route-select/routeSelectLayout";
 import { test, expect } from "./fixtures/api";
-import { openRouteSearch, routeSearchEntry, routeSearchInput } from "./utils/route-select";
+import { inServiceSection, openRouteSearch, routeSearchEntry, routeSearchInput } from "./utils/route-select";
 
 test.use({
   reducedMotion: "reduce",
@@ -49,7 +49,7 @@ for (const { width, height } of [
 
       await openRouteSearch(page);
       await routeSearchInput(page).fill("3");
-      const results = page.getByRole("region", { name: "검색 결과", exact: true });
+      const results = inServiceSection(page);
       await expect(results.getByRole("button")).toHaveCount(30);
       const searchBox = await page.getByRole("search").boundingBox();
       expect(searchBox).not.toBeNull();

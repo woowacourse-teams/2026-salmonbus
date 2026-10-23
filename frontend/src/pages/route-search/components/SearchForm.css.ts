@@ -6,33 +6,34 @@ export const form = style({
   flex: 1,
   alignItems: "center",
   minWidth: 0,
-  height: "52px",
-  paddingLeft: "20px",
-  borderRadius: "26px",
-  backgroundColor: vars.color.surface,
+  height: "44px",
+  paddingLeft: "16px",
+  borderRadius: "12px",
+  backgroundColor: vars.color.searchFieldSurface,
+});
+
+export const searchIcon = style({
+  flexShrink: 0,
+  width: "20px",
+  height: "20px",
+  marginRight: "12px",
+  fill: "none",
+  stroke: vars.color.iconMuted,
+  strokeWidth: 2,
+  strokeLinecap: "round",
 });
 
 export const input = style({
   flex: 1,
   minWidth: 0,
+  height: "100%",
   border: "none",
   outline: "none",
   background: "transparent",
   fontSize: "16px",
   color: vars.color.textStrong,
-  "::placeholder": { color: vars.color.textSubtle },
-  ":placeholder-shown": { caretColor: "transparent" },
-});
-
-export const searchIcon = style({
-  flexShrink: 0,
-  width: "22px",
-  height: "22px",
-  marginRight: "19px",
-  fill: "none",
-  stroke: vars.color.brand,
-  strokeWidth: 2,
-  strokeLinecap: "round",
+  caretColor: vars.color.brand,
+  "::placeholder": { color: vars.color.faint },
 });
 
 export const clearButton = style({
@@ -41,17 +42,16 @@ export const clearButton = style({
   flexShrink: 0,
   width: "44px",
   height: "44px",
-  marginRight: "8px",
   border: "none",
   background: "transparent",
-  color: vars.color.iconMuted,
+  color: vars.color.faint,
 });
 
 export const clearIcon = style({
-  width: "18px",
-  height: "18px",
+  width: "20px",
+  height: "20px",
   fill: "none",
   stroke: "currentColor",
-  strokeWidth: 2,
+  strokeWidth: 1.6,
   strokeLinecap: "round",
 });

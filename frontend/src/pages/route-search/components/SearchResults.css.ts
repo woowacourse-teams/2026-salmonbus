@@ -14,9 +14,40 @@ export const status = style({
   whiteSpace: "nowrap",
 });
 
+export const emptyGuide = style({
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  marginTop: "120px",
+  textAlign: "center",
+});
+
+export const emptyIcon = style({
+  width: "28px",
+  height: "28px",
+  marginBottom: "12px",
+  fill: "none",
+  stroke: vars.color.faint,
+  strokeWidth: 2,
+  strokeLinecap: "round",
+});
+
+export const emptyTitle = style({
+  margin: 0,
+  color: vars.color.textStrong,
+  fontSize: "16px",
+  fontWeight: 700,
+});
+
+export const emptyDescription = style({
+  margin: "8px 0 0",
+  color: vars.color.textSubtle,
+  fontSize: "13px",
+});
+
 export const notice = style({
-  margin: "12px 4px 0",
-  color: vars.color.onBrand,
+  margin: "20px 4px 0",
+  color: vars.color.textSubtle,
   fontSize: "14px",
   fontWeight: 600,
 });
@@ -27,33 +58,24 @@ export const retryButton = style({
   minHeight: "44px",
   marginTop: "8px",
   padding: "0 18px",
-  border: `1px solid ${vars.color.onBrand}`,
+  border: `1px solid ${vars.color.cardBorder}`,
   borderRadius: "22px",
   background: "transparent",
-  color: vars.color.onBrand,
+  color: vars.color.textStrong,
   fontWeight: 700,
 });
 
-export const sheet = style({
+export const section = style({
   minHeight: 0,
   overflowY: "auto",
-  marginTop: "8px",
-  padding: "10px 0",
-  borderRadius: "16px",
-  backgroundColor: vars.color.surface,
+  marginTop: "16px",
 });
 
 export const sectionTitle = style({
-  margin: "0 18px 4px",
-  color: vars.color.textSubtle,
-  fontSize: "12px",
-  fontWeight: 700,
-});
-
-export const count = style({
-  margin: "0 18px 4px",
-  color: vars.color.textSubtle,
-  fontSize: "12px",
+  margin: "0 0 4px",
+  color: vars.color.textBody,
+  fontSize: "13px",
+  fontWeight: 600,
 });
 
 export const list = style({
@@ -64,43 +86,27 @@ export const list = style({
 
 export const item = style({
   display: "grid",
-  gridTemplateColumns: "1fr auto",
+  gridTemplateColumns: "minmax(58px, max-content) 1fr",
+  columnGap: "8px",
   alignItems: "center",
-  gap: "8px",
   width: "100%",
-  minHeight: "56px",
-  padding: "8px 14px 8px 18px",
+  minHeight: "50px",
+  padding: 0,
   border: "none",
   background: "transparent",
   textAlign: "left",
 });
 
-export const itemText = style({
-  minWidth: 0,
-});
-
 export const routeNumber = style({
-  display: "block",
   color: vars.color.textStrong,
-  fontSize: "20px",
-  fontWeight: 800,
+  fontSize: "16px",
+  fontWeight: 700,
 });
 
 export const stops = style({
-  display: "block",
   overflow: "hidden",
-  color: vars.color.textSubtle,
-  fontSize: "12.5px",
+  color: vars.color.textBody,
+  fontSize: "14px",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
-});
-
-export const chevron = style({
-  width: "18px",
-  height: "18px",
-  fill: "none",
-  stroke: vars.color.iconMuted,
-  strokeWidth: 2,
-  strokeLinecap: "round",
-  strokeLinejoin: "round",
 });

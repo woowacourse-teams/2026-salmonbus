@@ -112,30 +112,27 @@ test("지우기 버튼을 누르면 입력과 결과가 사라지고 입력창�
 
   await expect(input).toHaveValue("");
   await expect(input).toBeFocused();
-  await expect(page.getByRole("region", { name: "검색 결과", exact: true })).toHaveCount(0);
-  await expect(inServiceSection(page)).toBeVisible();
+  await expect(inServiceSection(page)).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "어떤 노선을 찾아볼까요?", exact: true })).toBeVisible();
 });
 
-test("입력 전에는 서비스 중인 노선 전체를 보여 주고, 누르면 그 노선의 판정 보드로 이동한다", async ({ page, api }) => {
-  api.data.routes.routes.push({
-    id: "200000002",
-    displayName: "1650",
-    startStopName: "다른 기점",
-    endStopName: "다른 종점",
-    status: "FORECAST_READY",
-  });
+test("입력 전에는 노선 목록 대신 검색 안내를 보여 준다", async ({ page }) => {
   await page.goto("/");
   await openRouteSearch(page);
 
-  const items = inServiceSection(page).getByRole("button");
-  await expect(items).toHaveText([/^3330/, /^1650/]);
+  await expect(page.getByRole("heading", { name: "어떤 노선을 찾아볼까요?", exact: true })).toBeVisible();
+  await expect(routeButton(page)).toHaveCount(0);
   await expect(page.getByRole("main").getByRole("status")).toHaveText("");
+});
 
-  await inServiceSection(page)
-    .getByRole("button", { name: /^3330번 노선/ })
-    .click();
+test("입력하면 일치하는 노선을 서비스 중 노선 아래에 보여 준다", async ({ page }) => {
+  await page.goto("/");
+  await openRouteSearch(page);
 
-  await expect(page).toHaveURL(`/routes/${routeId}`);
+  await routeSearchInput(page).fill("33");
+
+  await expect(inServiceSection(page).getByRole("button")).toHaveText([/^3330/]);
+  await expect(routeButton(page)).toContainText("테스트 기점 ↔ 테스트 종점");
 });
 
 test("결과가 하나일 때 엔터를 누르면 그 노선의 판정 보드로 이동한다", async ({ page }) => {
@@ -239,17 +236,13 @@ test("판정 보드로 바로 들어오면 헤더의 뒤로 가기가 노선 선
   await expect(routeSearchEntry(page)).toBeVisible();
 });
 
-test("홈과 검색 화면에서만 html 배경을 주황으로 칠한다", async ({ page }) => {
+test("홈에서만 html 배경을 주황으로 칠한다", async ({ page }) => {
   const htmlBackground = () => page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);
   await page.goto("/");
 
   await expect.poll(htmlBackground).toBe("rgb(232, 82, 63)");
 
   await openRouteSearch(page);
-
-  await expect.poll(htmlBackground).toBe("rgb(232, 82, 63)");
-
-  await pickRoute(page);
 
   await expect.poll(htmlBackground).toBe("rgba(0, 0, 0, 0)");
 });

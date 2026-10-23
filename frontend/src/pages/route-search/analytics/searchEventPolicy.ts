@@ -4,14 +4,12 @@ import { searchDigitsFrom } from "../routeSearchPolicy";
 
 export function routeSelectedPropertiesOf({
   route,
-  selectedFrom,
   position,
   listedCount,
 }: RouteSelection): EventMap["route_selected"] {
   return {
     route_id: route.id,
     route_status: route.status,
-    selected_from: selectedFrom,
     result_position: position,
     result_count: listedCount,
   };
