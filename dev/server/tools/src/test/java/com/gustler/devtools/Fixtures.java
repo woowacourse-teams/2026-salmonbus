@@ -34,9 +34,6 @@ final class Fixtures {
         Files.writeString(source.resolve("api.yml"), "server:\n  port: 8080\n");
         Files.writeString(
                 source.resolve("worker.yml"), "gbis:\n  base-url: http://127.0.0.1:18080\n");
-        Files.writeString(
-                source.resolveSibling("config").resolve("mongodb.yml"),
-                "storage:\n  dbPath: /data/db\n");
         host.data = layout.data();
     }
 

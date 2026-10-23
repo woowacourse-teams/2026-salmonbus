@@ -51,7 +51,7 @@ docker compose logs worker
 
 Gradle 모듈을 추가하면 `dev/docker/backend.Dockerfile`의 빌드 설정 복사 목록도 함께 갱신해야 합니다. 실행 이미지에는 오프라인 기동에 필요한 의존성을 남기므로 백엔드의 Gradle 캐시를 빌드 cache mount로만 옮기지 않습니다.
 
-실행 중인 로컬 환경의 이력과 채팅을 비우려면 다른 터미널에서 실행합니다.
+실행 중인 로컬 환경의 이력을 비우려면 다른 터미널에서 실행합니다.
 
 ```sh
 ./dev/local.sh reset-data --yes

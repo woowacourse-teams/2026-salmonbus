@@ -1,4 +1,4 @@
-import type { Board, Direction, LiveVehicles, Phase, Vehicle } from "@/shared/api/routeForecast.types";
+import type { Board, Direction, Phase, Vehicle } from "@/shared/api/routeForecast.types";
 
 export interface LiveVehicleMotionSegment {
   segmentIndex: number;
@@ -34,19 +34,16 @@ const PHASE_MOTION_RULE: Record<Phase, PhaseMotionRule> = {
 
 export function liveVehicleViewsFor(
   board: Board,
-  liveVehicles: LiveVehicles | null | undefined,
+  vehicles: readonly Vehicle[],
   direction: Direction,
 ): LiveVehicleView[] {
-  if (liveVehicles === null || liveVehicles === undefined) return [];
-  if (!canDisplayLiveVehicles(board, liveVehicles)) return [];
-
   const stopSequences = board.stops
     .filter((stop) => stop.direction === direction)
     .map((stop) => stop.sequence)
     .sort((left, right) => left - right);
   const stopSequenceSet = new Set(stopSequences);
 
-  const visibleVehicles = liveVehicles.vehicles
+  const visibleVehicles = vehicles
     .filter((vehicle) => vehicle.direction === direction && stopSequenceSet.has(vehicle.currentStopSequence))
     .sort(vehicleOrderFor);
   const occurrenceByIdentity = new Map<string, number>();
@@ -56,14 +53,6 @@ export function liveVehicleViewsFor(
     vehicle,
     motionSegment: motionSegmentFor(vehicle, stopSequences),
   }));
-}
-
-function canDisplayLiveVehicles(board: Board, liveVehicles: LiveVehicles): boolean {
-  return (
-    liveVehicles.observation.state === "VEHICLES_PRESENT" &&
-    liveVehicles.routeId === board.route.id &&
-    liveVehicles.referenceVersionId === board.route.referenceVersionId
-  );
 }
 
 function vehicleOrderFor(left: Vehicle, right: Vehicle): number {

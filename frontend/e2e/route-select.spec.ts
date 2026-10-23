@@ -16,8 +16,6 @@ import { boardBackLink } from "./utils/verdict-board";
 test.use({
   viewport: { width: 390, height: 844 },
   reducedMotion: "reduce",
-  screenshot: "only-on-failure",
-  trace: "retain-on-failure",
 });
 
 test("홈에서 검색창을 누르면 검색 화면으로 이동하고 입력창에 포커스가 간다", async ({ page }) => {
@@ -70,16 +68,11 @@ test("노선 조회 실패 후 재시도에 성공하면 노선을 선택할 수
   await response;
 
   await expect(status).toHaveText("");
-  const boardResponse = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === apiPaths.board && response.status() === 200,
-  );
-  const vehiclesResponse = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === apiPaths.vehicles && response.status() === 200,
+  const watchResponse = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
   );
   await pickRoute(page);
-  for (const response of await Promise.all([boardResponse, vehiclesResponse])) {
-    expect(await response.finished()).toBeNull();
-  }
+  expect(await (await watchResponse).finished()).toBeNull();
 });
 
 test("노선 재시도도 실패하면 실패 안내와 재시도 버튼이 표시된다", async ({ page, api }) => {

@@ -53,7 +53,6 @@ class FavoriteSelectionPolicyTest {
         FavoriteGroup full = group("주말", OTHER_TARGET, FavoriteDomainFixture.THIRD_TARGET);
         MemberFavoriteGroups groups = new MemberFavoriteGroups(List.of(available, full));
 
-        // when & then
         assertThatThrownBy(() -> policy.plan(groups, List.of(available.id(), full.id()), TARGET))
             .isInstanceOf(FavoriteLimitExceededException.class);
     }

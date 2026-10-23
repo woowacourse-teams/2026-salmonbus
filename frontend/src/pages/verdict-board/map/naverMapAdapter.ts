@@ -1,5 +1,5 @@
 import type { Board, Direction } from "@/shared/api/routeForecast.types";
-import busFrontIcon from "./bus-front.svg";
+import busFrontIcon from "../assets/bus-front.svg";
 import type { StopSelection } from "../components/stopSelection";
 import type { LiveVehicleView } from "../components/liveVehiclePolicy";
 import type { GeoCoordinate, RouteMapData } from "./routeMapModel";
@@ -9,7 +9,7 @@ import * as styles from "./RouteMap.css";
 
 const DETAIL_ZOOM = 14;
 const INITIALIZATION_TIMEOUT_MS = 10_000;
-const VEHICLE_FOCUS_DURATION_MS = 560;
+const CAMERA_FOCUS_DURATION_MS = 560;
 
 interface StopMarker {
   selection: StopSelection;
@@ -41,7 +41,7 @@ export interface RouteMapAdapter {
   ) => void;
   moveVehicles: (frames: readonly { key: string; sequencePosition: number }[]) => void;
   resize: (width: number, height: number) => void;
-  focus: (selection: StopSelection) => void;
+  focus: (selection: StopSelection, options?: { animate?: boolean }) => void;
   focusVehicle: (key: string | null, options?: { focusMarker?: boolean }) => void;
   showLocation: (coordinate: GeoCoordinate) => void;
   destroy: () => void;
@@ -58,6 +58,7 @@ export function createNaverRouteMap(
   onReady: () => void,
   onVehicleSelect: (selection: StopSelection, key: string) => void,
   onDeselect: () => void,
+  initialSelection: StopSelection | null = null,
 ): RouteMapAdapter {
   const createNativeEventHandler = (action: () => void) => () => {
     try {
@@ -68,12 +69,15 @@ export function createNaverRouteMap(
   };
   const mappedDirections = new Set(data.paths.map((path) => path.direction));
   const fullPath = data.fullPath ?? [];
-  const first = data.stops[0]?.coordinate ?? fullPath[0] ?? data.paths[0]?.coordinates[0];
+  const initialStop = data.stops.find(
+    (stop) => stop.direction === initialSelection?.direction && stop.sequence === initialSelection.sequence,
+  );
+  const first = initialStop?.coordinate ?? data.stops[0]?.coordinate ?? fullPath[0] ?? data.paths[0]?.coordinates[0];
   if (first === undefined) throw new Error("지도 좌표가 없어요");
   const toNaverCoordinate = (coordinate: GeoCoordinate) => new sdk.LatLng(coordinate.latitude, coordinate.longitude);
   const map = new sdk.Map(element, {
     center: toNaverCoordinate(first),
-    zoom: 10,
+    zoom: initialStop === undefined ? 10 : 13,
     size: new sdk.Size(element.clientWidth, element.clientHeight),
     zoomControl: false,
     scaleControl: false,
@@ -85,8 +89,8 @@ export function createNaverRouteMap(
     scrollWheel: true,
     disableDoubleClickZoom: false,
   });
-  let selected: StopSelection | null = null;
-  let activeDirection: Direction = board.route.directions[0].id;
+  let selected: StopSelection | null = initialSelection;
+  let activeDirection: Direction = initialStop?.direction ?? board.route.directions[0].id;
   let initialFitPending = true;
   let initialized = false;
   let initialViewIdle = false;
@@ -172,64 +176,77 @@ export function createNaverRouteMap(
   let arrowsShowBothDirections: boolean | null = null;
   let userMarker: NaverMarker | null = null;
   const vehicles = new Map<string, VehicleMarker>();
-  let vehicleFocusFrame: number | null = null;
+  let cameraFocusFrame: number | null = null;
   let vehicleFocusKey: string | null = null;
-  const vehicleFocusInterruptEvents = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+  let cameraFocusRevision = 0;
+  const cameraFocusInterruptEvents = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
 
-  function cancelVehicleFocus() {
-    if (vehicleFocusFrame !== null) window.cancelAnimationFrame(vehicleFocusFrame);
-    vehicleFocusFrame = null;
+  function cancelCameraFocus() {
+    cameraFocusRevision += 1;
+    if (cameraFocusFrame !== null) window.cancelAnimationFrame(cameraFocusFrame);
+    cameraFocusFrame = null;
     vehicleFocusKey = null;
-    vehicleFocusInterruptEvents.forEach((event) => window.removeEventListener(event, cancelVehicleFocus, true));
+    cameraFocusInterruptEvents.forEach((event) => window.removeEventListener(event, cancelCameraFocus, true));
   }
 
   function focusVehicle(key: string | null, { focusMarker = true } = {}) {
-    cancelVehicleFocus();
+    cancelCameraFocus();
     if (destroyed || initializationFailed || key === null) return;
     const item = vehicles.get(key);
     if (item === undefined) return;
+    vehicleFocusKey = key;
+    animateCamera(
+      () => vehicles.get(key)?.coordinate,
+      16,
+      () => {
+        if (focusMarker) vehicles.get(key)?.element.focus({ preventScroll: true });
+      },
+    );
+  }
+
+  function animateCamera(target: () => GeoCoordinate | undefined, minimumZoom: number, onComplete?: () => void) {
+    const revision = cameraFocusRevision;
     const center = map.getCenter();
     const from = { latitude: center.lat(), longitude: center.lng() };
     const startZoom = map.getZoom();
-    const targetZoom = Math.max(startZoom, 16);
+    const targetZoom = Math.max(startZoom, minimumZoom);
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let startedAt: number | null = null;
-    vehicleFocusKey = key;
-    vehicleFocusInterruptEvents.forEach((event) =>
-      window.addEventListener(event, cancelVehicleFocus, { passive: true, capture: true }),
+    cameraFocusInterruptEvents.forEach((event) =>
+      window.addEventListener(event, cancelCameraFocus, { passive: true, capture: true }),
     );
     const animate = (now: number) => {
-      vehicleFocusFrame = null;
-      if (vehicleFocusKey !== key) return;
+      cameraFocusFrame = null;
+      if (cameraFocusRevision !== revision) return;
       createNativeEventHandler(() => {
-        const current = vehicles.get(key);
-        if (current === undefined) {
-          cancelVehicleFocus();
+        const coordinate = target();
+        if (coordinate === undefined) {
+          cancelCameraFocus();
           return;
         }
         startedAt ??= now;
-        const progress = reducedMotion ? 1 : Math.min(1, Math.max(0, (now - startedAt) / VEHICLE_FOCUS_DURATION_MS));
+        const progress = reducedMotion ? 1 : Math.min(1, Math.max(0, (now - startedAt) / CAMERA_FOCUS_DURATION_MS));
         const eased = 1 - (1 - progress) ** 3;
         const nextZoom = startZoom + (targetZoom - startZoom) * eased;
         const zoom = useInstantZoom ? Math.round(nextZoom) : nextZoom;
         if (map.getZoom() !== zoom) map.setZoom(zoom, false);
-        // 확대에 따른 화면 배율도 보정해 버스가 화면 밖으로 밀리지 않고 중앙으로 다가오게 한다.
+        // 확대 배율을 보정해 선택한 대상이 화면 밖으로 밀리지 않고 중앙으로 다가오게 한다.
         const remaining = (1 - eased) * 2 ** (startZoom - map.getZoom());
         map.setCenter(
           toNaverCoordinate({
-            latitude: current.coordinate.latitude + (from.latitude - current.coordinate.latitude) * remaining,
-            longitude: current.coordinate.longitude + (from.longitude - current.coordinate.longitude) * remaining,
+            latitude: coordinate.latitude + (from.latitude - coordinate.latitude) * remaining,
+            longitude: coordinate.longitude + (from.longitude - coordinate.longitude) * remaining,
           }),
         );
-        if (progress < 1) vehicleFocusFrame = window.requestAnimationFrame(animate);
+        if (progress < 1) cameraFocusFrame = window.requestAnimationFrame(animate);
         else {
-          cancelVehicleFocus();
-          if (focusMarker) current.element.focus({ preventScroll: true });
+          cancelCameraFocus();
+          onComplete?.();
         }
       })();
     };
     if (reducedMotion) animate(0);
-    else vehicleFocusFrame = window.requestAnimationFrame(animate);
+    else cameraFocusFrame = window.requestAnimationFrame(animate);
   }
   const stops: StopMarker[] = data.stops.flatMap((stop) => {
     const stopState = board.stops.find((item) => item.sequence === stop.sequence && item.direction === stop.direction);
@@ -378,8 +395,8 @@ export function createNaverRouteMap(
     arrowsShowBothDirections = showBothDirections;
   }
 
-  function focus(selection: StopSelection) {
-    cancelVehicleFocus();
+  function focus(selection: StopSelection, { animate = false } = {}) {
+    cancelCameraFocus();
     const stop = data.stops.find(
       (item) => item.sequence === selection.sequence && item.direction === selection.direction,
     );
@@ -387,8 +404,11 @@ export function createNaverRouteMap(
     initialFitPending = false;
     initialViewIdle = false;
     cancelReadyFrame();
-    map.setCenter(toNaverCoordinate(stop.coordinate));
-    map.setZoom(Math.max(15, map.getZoom()), false);
+    if (animate) animateCamera(() => stop.coordinate, 15);
+    else {
+      map.setCenter(toNaverCoordinate(stop.coordinate));
+      map.setZoom(Math.max(15, map.getZoom()), false);
+    }
   }
 
   function zoomAt(delta: number, clientX: number, clientY: number) {
@@ -437,6 +457,11 @@ export function createNaverRouteMap(
   const routeCoordinates = fullPath.length > 0 ? fullPath : data.paths.flatMap((path) => path.coordinates);
   function fitInitialRoute() {
     if (!initialFitPending) return;
+    if (initialStop !== undefined) {
+      initialFitPending = false;
+      initialViewIdle = true;
+      return;
+    }
     initialFitPending = false;
     initialViewIdle = false;
     // 고정 캔버스의 위아래에서 잘리는 만큼 여백을 더해 보이는 영역 안에 경로를 맞춘다.
@@ -505,7 +530,7 @@ export function createNaverRouteMap(
       const visibleKeys = new Set(nextVehicles.map((view) => view.key));
       for (const [key, item] of vehicles) {
         if (visibleKeys.has(key)) continue;
-        if (vehicleFocusKey === key) cancelVehicleFocus();
+        if (vehicleFocusKey === key) cancelCameraFocus();
         item.marker.setMap(null);
         vehicles.delete(key);
       }
@@ -516,7 +541,7 @@ export function createNaverRouteMap(
           view.vehicle.direction,
         );
         if (coordinate === null) {
-          if (vehicleFocusKey === view.key) cancelVehicleFocus();
+          if (vehicleFocusKey === view.key) cancelCameraFocus();
           vehicles.get(view.key)?.marker.setMap(null);
           vehicles.delete(view.key);
           return;
@@ -613,7 +638,7 @@ export function createNaverRouteMap(
     focus,
     focusVehicle,
     showLocation(coordinate) {
-      cancelVehicleFocus();
+      cancelCameraFocus();
       initialFitPending = false;
       initialViewIdle = false;
       cancelReadyFrame();
@@ -635,7 +660,7 @@ export function createNaverRouteMap(
     },
     destroy() {
       destroyed = true;
-      cancelVehicleFocus();
+      cancelCameraFocus();
       window.clearTimeout(initializationTimeout);
       initialFitPending = false;
       cancelReadyFrame();

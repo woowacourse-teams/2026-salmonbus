@@ -15,14 +15,14 @@ public final class FavoriteGroup {
     private final FavoriteGroupName name;
     private final List<Favorite> favorites;
 
-    public FavoriteGroup(
-        FavoriteGroupId id,
-        FavoriteGroupName name,
-        List<Favorite> favorites
-    ) {
+    public FavoriteGroup(FavoriteGroupId id, FavoriteGroupName name, List<Favorite> favorites) {
         this.id = Objects.requireNonNull(id, "즐겨찾기 그룹 ID는 null일 수 없습니다.");
         this.name = Objects.requireNonNull(name, "즐겨찾기 그룹 이름은 null일 수 없습니다.");
-        this.favorites = List.copyOf(Objects.requireNonNull(favorites, "즐겨찾기 목록은 null일 수 없습니다."));
+        List<Favorite> requiredFavorites = Objects.requireNonNull(
+            favorites,
+            "즐겨찾기 목록은 null일 수 없습니다."
+        );
+        this.favorites = List.copyOf(requiredFavorites);
         requireWithinLimit();
         requireUniqueTargets();
     }
@@ -39,9 +39,7 @@ public final class FavoriteGroup {
         return favorites;
     }
 
-    public boolean contains(
-        FavoriteTarget target
-    ) {
+    public boolean contains(FavoriteTarget target) {
         return favorites.stream()
             .map(Favorite::target)
             .anyMatch(target::equals);
@@ -56,9 +54,7 @@ public final class FavoriteGroup {
     }
 
     /** 같은 대상이면 기존 값을 유지하고 새 대상일 때만 한도를 검사한다. */
-    public FavoriteGroup add(
-        Favorite favorite
-    ) {
+    public FavoriteGroup add(Favorite favorite) {
         Objects.requireNonNull(favorite, "즐겨찾기는 null일 수 없습니다.");
         if (contains(favorite.target())) {
             return this;
@@ -69,9 +65,7 @@ public final class FavoriteGroup {
         return new FavoriteGroup(id, name, append(favorite));
     }
 
-    public FavoriteGroup remove(
-        FavoriteTarget target
-    ) {
+    public FavoriteGroup remove(FavoriteTarget target) {
         Objects.requireNonNull(target, "즐겨찾기 대상은 null일 수 없습니다.");
         List<Favorite> remaining = favorites.stream()
             .filter(favorite -> !favorite.target().equals(target))
@@ -92,25 +86,36 @@ public final class FavoriteGroup {
     public FavoriteGroup reorder(List<FavoriteId> orderedIds) {
         Objects.requireNonNull(orderedIds, "즐겨찾기 순서는 null일 수 없습니다.");
         List<FavoriteId> currentIds = favorites.stream().map(Favorite::id).toList();
-        if (orderedIds.size() != currentIds.size() || new HashSet<>(orderedIds).size() != orderedIds.size()
-            || !new HashSet<>(orderedIds).equals(new HashSet<>(currentIds))) {
-            throw new IllegalArgumentException("현재 즐겨찾기 ID를 빠짐없이 한 번씩 보내야 합니다.");
+        if (!hasSameIds(orderedIds, currentIds)) {
+            throw new IllegalArgumentException(
+                "현재 즐겨찾기 ID를 빠짐없이 한 번씩 보내야 합니다."
+            );
         }
         return new FavoriteGroup(id, name, orderedIds.stream()
             .map(favoriteId -> find(favoriteId).orElseThrow())
             .toList());
     }
 
-    public FavoriteGroup rename(
-        FavoriteGroupName changedName
-    ) {
-        return new FavoriteGroup(id, Objects.requireNonNull(changedName, "변경할 이름은 null일 수 없습니다."), favorites);
+    public FavoriteGroup rename(FavoriteGroupName changedName) {
+        FavoriteGroupName requiredName = Objects.requireNonNull(
+            changedName,
+            "변경할 이름은 null일 수 없습니다."
+        );
+        return new FavoriteGroup(id, requiredName, favorites);
     }
 
-    private List<Favorite> append(
-        Favorite favorite
-    ) {
+    private List<Favorite> append(Favorite favorite) {
         return Stream.concat(favorites.stream(), Stream.of(favorite)).toList();
+    }
+
+    private static boolean hasSameIds(List<FavoriteId> orderedIds, List<FavoriteId> currentIds) {
+        if (orderedIds.size() != currentIds.size()) {
+            return false;
+        }
+        if (new HashSet<>(orderedIds).size() != orderedIds.size()) {
+            return false;
+        }
+        return new HashSet<>(orderedIds).equals(new HashSet<>(currentIds));
     }
 
     private void requireWithinLimit() {
@@ -124,7 +129,9 @@ public final class FavoriteGroup {
             .map(Favorite::target)
             .toList();
         if (new HashSet<>(targets).size() != targets.size()) {
-            throw new IllegalArgumentException("같은 즐겨찾기 그룹에 같은 즐겨찾기 대상을 중복할 수 없습니다.");
+            throw new IllegalArgumentException(
+                "같은 즐겨찾기 그룹에 같은 즐겨찾기 대상을 중복할 수 없습니다."
+            );
         }
     }
 }

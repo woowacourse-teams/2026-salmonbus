@@ -11,10 +11,12 @@ import com.gustler.backend.api.favorite.domain.FavoriteId;
 import com.gustler.backend.api.favorite.domain.FavoriteTarget;
 import com.gustler.backend.api.favorite.domain.MemberFavoriteGroups;
 import com.gustler.backend.support.IntegrationTest;
+import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -85,7 +87,7 @@ class JdbcFavoriteGroupRepositoryTest {
     }
 
     @Test
-    void 회원을_삭제하면_그룹과_즐겨찾기를_연쇄_삭제하고_다른_회원_데이터는_유지한다() {
+    void 회원_삭제는_자신의_그룹과_즐겨찾기만_연쇄_삭제한다() {
         // given
         UUID deletedMember = insertMember("연어하나");
         UUID remainingMember = insertMember("연어둘");
@@ -107,18 +109,13 @@ class JdbcFavoriteGroupRepositoryTest {
         assertThat(jdbcClient.sql("SELECT count(*) FROM favorite_group").query(Long.class).single()).isZero();
     }
 
-    private MemberFavoriteGroups groups(
-        String... names
-    ) {
-        return new MemberFavoriteGroups(java.util.stream.IntStream.range(0, names.length)
+    private MemberFavoriteGroups groups(String... names) {
+        return new MemberFavoriteGroups(IntStream.range(0, names.length)
             .mapToObj(index -> group(names[index], index))
             .toList());
     }
 
-    private FavoriteGroup group(
-        String name,
-        int index
-    ) {
+    private FavoriteGroup group(String name, final int index) {
         return new FavoriteGroup(
             new FavoriteGroupId(uuid("group-" + name)),
             new FavoriteGroupName(name),
@@ -135,9 +132,7 @@ class JdbcFavoriteGroupRepositoryTest {
         return new FavoriteGroup(new FavoriteGroupId(UUID.randomUUID()), new FavoriteGroupName(name), List.of());
     }
 
-    private UUID insertMember(
-        String nickname
-    ) {
+    private UUID insertMember(String nickname) {
         UUID publicId = UUID.randomUUID();
         jdbcClient.sql("""
                 INSERT INTO member (public_id, nickname, created_at, last_login_at)
@@ -148,9 +143,7 @@ class JdbcFavoriteGroupRepositoryTest {
         return publicId;
     }
 
-    private static UUID uuid(
-        String value
-    ) {
-        return UUID.nameUUIDFromBytes(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    private static UUID uuid(String value) {
+        return UUID.nameUUIDFromBytes(value.getBytes(StandardCharsets.UTF_8));
     }
 }

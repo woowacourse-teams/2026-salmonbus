@@ -143,7 +143,7 @@ class DatabaseTargetServerTest {
         // then
         assertEquals(java.util.List.of(java.util.List.of(
                 "/usr/bin/docker", "compose", "--env-file", "/dev/null", "--file", "compose.yaml",
-                "up", "--detach", "--no-build", "--wait", "--wait-timeout", "180", "mongodb", "gbis-mock")),
+                "up", "--detach", "--no-build", "--wait", "--wait-timeout", "180", "gbis-mock")),
                 host.calls);
     }
 
@@ -157,8 +157,8 @@ class DatabaseTargetServerTest {
         DevTools.execute(new String[]{"start-infra"}, fixture.layout, host, environment);
 
         // then
-        assertEquals(java.util.List.of("postgres", "mongodb", "gbis-mock"),
-                host.calls.getFirst().subList(12, 15));
+        assertEquals(java.util.List.of("postgres", "gbis-mock"),
+                host.calls.getFirst().subList(12, host.calls.getFirst().size()));
     }
 
     @Test

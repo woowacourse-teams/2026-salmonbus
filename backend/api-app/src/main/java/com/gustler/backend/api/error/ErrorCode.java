@@ -16,16 +16,33 @@ public enum ErrorCode {
     NO_RECENT_OBSERVATION(HttpStatus.SERVICE_UNAVAILABLE, "예보 기준으로 사용할 최근 차량 관측이 없습니다."),
     SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "일시적인 서버 장애가 발생했습니다."),
 
-    FAVORITE_GROUP_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "회원은 즐겨찾기 그룹을 3개까지만 만들 수 있습니다."),
-    FAVORITE_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "즐겨찾기 그룹에는 즐겨찾기를 2개까지만 등록할 수 있습니다."),
-    INVALID_FAVORITE_GROUP_NAME(HttpStatus.BAD_REQUEST, "즐겨찾기 그룹 이름은 공백을 제외하고 1자 이상 10자 이하여야 합니다."),
+    FAVORITE_GROUP_LIMIT_EXCEEDED(
+        HttpStatus.CONFLICT,
+        "회원은 즐겨찾기 그룹을 3개까지만 만들 수 있습니다."
+    ),
+    FAVORITE_LIMIT_EXCEEDED(
+        HttpStatus.CONFLICT,
+        "즐겨찾기 그룹에는 즐겨찾기를 2개까지만 등록할 수 있습니다."
+    ),
+    INVALID_FAVORITE_GROUP_NAME(
+        HttpStatus.BAD_REQUEST,
+        "즐겨찾기 그룹 이름은 공백을 제외하고 1자 이상 10자 이하여야 합니다."
+    ),
     FAVORITE_GROUP_NAME_CONFLICT(HttpStatus.CONFLICT, "같은 이름의 즐겨찾기 그룹이 이미 있습니다."),
     FAVORITE_GROUP_NOT_FOUND(HttpStatus.NOT_FOUND, "즐겨찾기 그룹을 찾을 수 없습니다."),
-    LAST_FAVORITE_GROUP(HttpStatus.CONFLICT, "마지막 즐겨찾기 그룹은 삭제할 수 없습니다."),
-    INVALID_FAVORITE_GROUP_ORDER(HttpStatus.BAD_REQUEST, "현재 즐겨찾기 그룹 ID를 빠짐없이 한 번씩 보내야 합니다."),
-    INVALID_FAVORITE_ORDER(HttpStatus.BAD_REQUEST, "현재 즐겨찾기 ID를 빠짐없이 한 번씩 보내야 합니다."),
-    FAVORITE_TARGET_AMBIGUOUS(HttpStatus.CONFLICT, "현재 노선에서 같은 정류장 방문을 하나로 정할 수 없습니다."),
-    FAVORITE_TARGET_UNAVAILABLE(HttpStatus.UNPROCESSABLE_CONTENT, "현재 노선에서 승차할 수 없는 정류장입니다."),
+    LAST_FAVORITE_GROUP(HttpStatus.CONFLICT, "대표 즐겨찾기 그룹은 삭제할 수 없습니다."),
+    INVALID_FAVORITE_ORDER(
+        HttpStatus.BAD_REQUEST,
+        "현재 즐겨찾기 순서와 요청이 일치하지 않습니다."
+    ),
+    FAVORITE_TARGET_AMBIGUOUS(
+        HttpStatus.CONFLICT,
+        "현재 노선에서 같은 정류장 방문을 하나로 정할 수 없습니다."
+    ),
+    FAVORITE_TARGET_UNAVAILABLE(
+        HttpStatus.UNPROCESSABLE_CONTENT,
+        "현재 노선에서 승차할 수 없는 정류장입니다."
+    ),
 
     INVALID_REQUEST(HttpStatus.BAD_REQUEST, "요청 형식이 올바르지 않습니다."),
     ENDPOINT_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 경로를 찾을 수 없습니다."),

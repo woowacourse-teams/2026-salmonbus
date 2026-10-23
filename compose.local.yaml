@@ -34,26 +34,6 @@ services:
       retries: 20
     networks: [local]
 
-  mongodb:
-    logging: *local-logging
-    mem_limit: 768m
-    image: mongo:8.0@sha256:4968f22d0c6c10ef29952f3e807f62872ba22b3312f25803564fbfc08255efc2
-    entrypoint: [bash, /local-tools/run-database.sh, mongodb]
-    volumes:
-      - ./dev/docker:/local-tools:ro
-      - settings-data:/local-settings:ro
-      - ./dev/config/mongodb.yml:/local/config/mongodb.yml:ro
-      - mongodb-data:/data/db
-    depends_on:
-      settings-init:
-        condition: service_completed_successfully
-    healthcheck:
-      test: [CMD, mongosh, --quiet, --eval, "quit(db.adminCommand('ping').ok === 1 ? 0 : 1)"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    networks: [local]
-
   api:
     logging: *local-logging
     mem_limit: 1280m
@@ -74,8 +54,6 @@ services:
       - "127.0.0.1:8080:8080"
     depends_on:
       postgres:
-        condition: service_healthy
-      mongodb:
         condition: service_healthy
     healthcheck:
       test: [CMD, curl, --fail, --silent, --output, /dev/null, http://127.0.0.1:8080/actuator/health]
@@ -114,14 +92,6 @@ services:
             - dependencies.init
             - gradle.properties
             - runtime.init
-        - action: rebuild
-          path: ./contract/examples
-          include:
-            - chat-v1.json
-        - action: rebuild
-          path: ./docs/api
-          include:
-            - chat-websocket-public.md
     networks: [access, local]
 
   local-init:
@@ -299,5 +269,4 @@ networks:
 volumes:
   settings-data:
   postgres-data:
-  mongodb-data:
   model-data:

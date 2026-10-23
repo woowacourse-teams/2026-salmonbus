@@ -20,10 +20,7 @@ public record FavoriteTarget(
         Objects.requireNonNull(direction, "direction은 null일 수 없습니다.");
     }
 
-    private static void requirePublicId(
-        String value,
-        String field
-    ) {
+    private static void requirePublicId(String value, String field) {
         Objects.requireNonNull(value, field + "는 null일 수 없습니다.");
         if (!PUBLIC_ID_FORMAT.matcher(value).matches()) {
             throw new IllegalArgumentException(field + "는 9자리 숫자여야 합니다.");

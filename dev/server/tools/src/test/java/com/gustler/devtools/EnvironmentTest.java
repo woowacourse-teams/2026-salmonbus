@@ -67,27 +67,6 @@ class EnvironmentTest {
     }
 
     @Test
-    void rejectsMongoAdminAndRemoteConnections() {
-        var original = settings.get("api").get("CHAT_MONGODB_URI");
-        for (var uri :
-                java.util.List.of(
-                        original.replace("salmonbus_dev_chat:", "salmonbus_dev_admin:"),
-                        original.replace("127.0.0.1", "production.invalid"))) {
-            settings.get("api").put("CHAT_MONGODB_URI", uri);
-            rejected("DEV_MONGO_URI");
-        }
-    }
-
-    @Test
-    void rejectsReusingAdminPasswordForChat() {
-        settings.get("mongodb")
-                .put(
-                        "MONGO_CHAT_PASSWORD",
-                        settings.get("mongodb").get("MONGO_INITDB_ROOT_PASSWORD"));
-        rejected("DEV_MONGO_PASSWORD");
-    }
-
-    @Test
     void rejectsProductionWildcardAndNonOriginFrontendValues() {
         for (var value :
                 java.util.List.of(

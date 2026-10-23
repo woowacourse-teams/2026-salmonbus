@@ -1,29 +1,3 @@
-export type ErrorCode =
-  | "INVALID_ROUTE_ID"
-  | "INVALID_REQUEST"
-  | "ROUTE_NOT_FOUND"
-  | "STATION_NOT_FOUND"
-  | "REFERENCE_VERSION_CONFLICT"
-  | "ENDPOINT_NOT_FOUND"
-  | "METHOD_NOT_ALLOWED"
-  | "INTERNAL_ERROR"
-  | "UNAUTHENTICATED"
-  | "CSRF_REJECTED"
-  | "NICKNAME_LENGTH"
-  | "NICKNAME_CHARACTERS"
-  | "NICKNAME_RESERVED"
-  | "NICKNAME_TAKEN"
-  | "REAUTH_REQUIRED"
-  | "SERVICE_UNAVAILABLE"
-  | "MODEL_OUT_OF_SCOPE"
-  | "NO_RECENT_OBSERVATION";
-
-export interface ErrorResponse {
-  code: ErrorCode;
-  message: string;
-  requestId: string;
-}
-
 export type Direction = "UP" | "DOWN";
 
 export type RouteStatus = "FORECAST_READY" | "PREPARING";
@@ -124,17 +98,6 @@ export interface Vehicle {
   seat: SeatInfo;
 }
 
-export type ObservationState = "VEHICLES_PRESENT" | "NO_VEHICLES_OBSERVED" | "UNKNOWN";
-
-export interface Observation {
-  state: ObservationState;
-  observedAt: string | null;
-  staleAt: string | null;
-}
-
-export interface LiveVehicles {
-  routeId: string;
-  referenceVersionId: string;
-  observation: Observation;
+export interface RouteWatch extends Board {
   vehicles: Vehicle[];
 }

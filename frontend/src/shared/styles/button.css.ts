@@ -22,3 +22,15 @@ export const primary = style({
 });
 
 export const secondary = style([primary, { background: "#F0ECE7", color: "#59554F" }]);
+
+export const text = style({
+  padding: 6,
+  border: 0,
+  borderRadius: 4,
+  background: "transparent",
+  color: vars.color.textSubtle,
+  font: "inherit",
+  fontSize: 13,
+  cursor: "pointer",
+  selectors: { "&:disabled": { opacity: 0.45, cursor: "default" } },
+});

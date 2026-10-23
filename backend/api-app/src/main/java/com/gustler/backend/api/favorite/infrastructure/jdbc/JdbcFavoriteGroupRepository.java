@@ -57,17 +57,13 @@ public class JdbcFavoriteGroupRepository implements FavoriteGroupRepository {
 
     private final JdbcClient jdbcClient;
 
-    public JdbcFavoriteGroupRepository(
-        JdbcClient jdbcClient
-    ) {
+    public JdbcFavoriteGroupRepository(JdbcClient jdbcClient) {
         this.jdbcClient = jdbcClient;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<MemberFavoriteGroups> findByMemberPublicId(
-        UUID memberPublicId
-    ) {
+    public Optional<MemberFavoriteGroups> findByMemberPublicId(UUID memberPublicId) {
         Objects.requireNonNull(memberPublicId, "회원 공개 ID는 null일 수 없습니다.");
         List<FavoriteRow> rows = jdbcClient.sql(FIND_MEMBER_WITH_FAVORITES)
             .param(memberPublicId)
@@ -81,10 +77,7 @@ public class JdbcFavoriteGroupRepository implements FavoriteGroupRepository {
 
     @Override
     @Transactional
-    public Optional<MemberFavoriteGroups> ensureDefault(
-        UUID memberPublicId,
-        FavoriteGroup defaultGroup
-    ) {
+    public Optional<MemberFavoriteGroups> ensureDefault(UUID memberPublicId, FavoriteGroup defaultGroup) {
         Objects.requireNonNull(memberPublicId, "회원 공개 ID는 null일 수 없습니다.");
         Objects.requireNonNull(defaultGroup, "기본 즐겨찾기 그룹은 null일 수 없습니다.");
         Optional<Long> memberId = lockMember(memberPublicId);
@@ -104,10 +97,7 @@ public class JdbcFavoriteGroupRepository implements FavoriteGroupRepository {
 
     @Override
     @Transactional
-    public Optional<MemberFavoriteGroups> update(
-        UUID memberPublicId,
-        UnaryOperator<MemberFavoriteGroups> change
-    ) {
+    public Optional<MemberFavoriteGroups> update(UUID memberPublicId, UnaryOperator<MemberFavoriteGroups> change) {
         Objects.requireNonNull(memberPublicId, "회원 공개 ID는 null일 수 없습니다.");
         Objects.requireNonNull(change, "즐겨찾기 그룹 변경은 null일 수 없습니다.");
         Optional<Long> memberId = lockMember(memberPublicId);
@@ -129,17 +119,14 @@ public class JdbcFavoriteGroupRepository implements FavoriteGroupRepository {
             .optional();
     }
 
-    private MemberFavoriteGroups findByMemberId(long memberId) {
+    private MemberFavoriteGroups findByMemberId(final long memberId) {
         return groupsOf(jdbcClient.sql(FIND_FAVORITES)
             .param(memberId)
             .query(JdbcFavoriteGroupRepository::row)
             .list());
     }
 
-    private void replace(
-        long memberId,
-        MemberFavoriteGroups groups
-    ) {
+    private void replace(final long memberId, MemberFavoriteGroups groups) {
         jdbcClient.sql("DELETE FROM favorite_group WHERE member_id = ?")
             .param(memberId)
             .update();
@@ -152,9 +139,7 @@ public class JdbcFavoriteGroupRepository implements FavoriteGroupRepository {
         }
     }
 
-    private void insertFavorites(
-        FavoriteGroup group
-    ) {
+    private void insertFavorites(FavoriteGroup group) {
         for (int favoritePosition = 0; favoritePosition < group.favorites().size(); favoritePosition++) {
             Favorite favorite = group.favorites().get(favoritePosition);
             jdbcClient.sql(INSERT_FAVORITE)
@@ -164,9 +149,7 @@ public class JdbcFavoriteGroupRepository implements FavoriteGroupRepository {
         }
     }
 
-    private static MemberFavoriteGroups groupsOf(
-        List<FavoriteRow> rows
-    ) {
+    private static MemberFavoriteGroups groupsOf(List<FavoriteRow> rows) {
         Map<UUID, GroupRows> groups = new LinkedHashMap<>();
         for (FavoriteRow row : rows) {
             if (row.groupId() == null) {
@@ -185,10 +168,7 @@ public class JdbcFavoriteGroupRepository implements FavoriteGroupRepository {
             .toList());
     }
 
-    private static FavoriteRow row(
-        ResultSet rows,
-        int rowNumber
-    ) throws SQLException {
+    private static FavoriteRow row(ResultSet rows, final int rowNumber) throws SQLException {
         return new FavoriteRow(
             rows.getObject("group_id", UUID.class),
             rows.getString("group_name"),
@@ -200,7 +180,10 @@ public class JdbcFavoriteGroupRepository implements FavoriteGroupRepository {
     }
 
     private static FavoriteDirection direction(String value) {
-        return value == null ? null : FavoriteDirection.valueOf(value);
+        if (value == null) {
+            return null;
+        }
+        return FavoriteDirection.valueOf(value);
     }
 
     private record FavoriteRow(

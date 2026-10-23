@@ -1,11 +1,7 @@
 import { test, expect } from "./fixtures/api";
 import { inServiceSection, openRouteSearch, routeSearchEntry, routeSearchInput } from "./utils/route-select";
 
-test.use({
-  reducedMotion: "reduce",
-  screenshot: "only-on-failure",
-  trace: "retain-on-failure",
-});
+test.use({ reducedMotion: "reduce" });
 
 for (const { width, height } of [
   { width: 390, height: 844 },

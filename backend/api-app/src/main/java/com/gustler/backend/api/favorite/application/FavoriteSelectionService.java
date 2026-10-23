@@ -74,7 +74,7 @@ public class FavoriteSelectionService {
 
     private MemberFavoriteGroups applySelection(MemberFavoriteGroups groups, List<FavoriteGroupId> selected,
         FavoriteTarget target) {
-        final FavoriteSelectionPlan plan;
+        FavoriteSelectionPlan plan;
         try {
             plan = policy.plan(groups, selected, target);
         } catch (IllegalArgumentException exception) {

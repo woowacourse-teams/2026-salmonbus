@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.scheduling.annotation.ScheduledAnnotationBeanPostProcessor;
 
 /**
- * 로그인만 켜고 다른 기능(채팅은 기본으로 꺼져 있다)이 꺼져 있어도 만료 계통 정리 작업이 실제로 등록된다.
+ * 로그인만 켜고 다른 기능이 꺼져 있어도 만료 계통 정리 작업이 실제로 등록된다.
  *
  * <p>테스트 설정은 정리 주기를 끄므로 여기서만 운영 기본 주기({@link RefreshTokenPurge#DEFAULT_CRON})로 켠다.
  */

@@ -17,7 +17,6 @@ class FavoriteGroupTest {
         // given
         FavoriteGroup group = group("출근", TARGET, OTHER_TARGET);
 
-        // when & then
         assertThatThrownBy(() -> group.add(new Favorite(favoriteId("세번째"), THIRD_TARGET)))
             .isInstanceOf(FavoriteLimitExceededException.class);
     }

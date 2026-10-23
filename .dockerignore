@@ -27,12 +27,10 @@ contract/**
 !contract/auth-v1.openapi.json
 !contract/examples/
 contract/examples/**
-!contract/examples/chat-v1.json
 !docs/
 docs/**
 !docs/api/
 docs/api/**
-!docs/api/chat-websocket-public.md
 **/.env*
 **/build/
 **/.gradle/

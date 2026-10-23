@@ -36,7 +36,7 @@ flowchart TB
     App["RN 앱"] --> Host["NativeRouteMapHostView<br/>iOS 화면 구성·지도 제어"]
     Host --> Map["아래: NMFMapView<br/>네이버 iOS SDK"]
     Host --> Gate["위: TouchGate<br/>보이지 않는 터치 분기 로직"]
-    Gate --> Web["투명 WebView<br/>기존 Bottom Sheet·목록·버튼·채팅"]
+    Gate --> Web["투명 WebView<br/>기존 Bottom Sheet·목록·버튼"]
     classDef native fill:#e3f4ef,stroke:#147d68,color:#163d35
     classDef web fill:#fff0ea,stroke:#d2573e,color:#64342a
     classDef gate fill:#f0ebff,stroke:#7a5bb5,color:#49356f
@@ -53,7 +53,7 @@ flowchart TB
 | --- | --- | --- |
 | 노선·정류장·차량 API 요청 | 웹 | 기존 polling과 데이터 처리를 이어서 사용합니다. |
 | 선택한 방향·정류장·버스 | 웹 | 지도와 목록에서 선택해도 최종 state는 한곳에서 관리합니다. |
-| Bottom Sheet·목록·채팅·버튼 UI | 웹 | 기존 화면과 동작을 유지합니다. |
+| Bottom Sheet·목록·버튼 UI | 웹 | 기존 화면과 동작을 유지합니다. |
 | 노선·정류장·버스 마커 | iOS | `NMFMapView`와 native overlay로 그립니다. |
 | 지도 드래그·핀치 줌·카메라 | iOS | 실제 지도 view가 native 제스처를 받습니다. |
 | 현재 위치 권한과 조회 | iOS | 위치 버튼은 웹에 두고, 필요한 동작을 메시지로 요청합니다. |
@@ -85,11 +85,11 @@ flowchart TD
     Start["새 터치 시작"] --> Block{"화면 준비 전·전체 modal<br/>또는 시트 이동 중인가요?"}
     Block -->|"예"| Web["WebView에서 처리<br/>새 지도 조작 차단"]
     Block -->|"아니요"| Region{"캐시한 웹 UI 영역 안인가요?"}
-    Region -->|"시트·버튼·채팅 안"| Web
+    Region -->|"시트·버튼 안"| Web
     Region -->|"노출 지도 안"| Map["NMFMapView에서 처리<br/>지도 이동·줌·마커 선택"]
 ```
 
-시트 전체를 웹 영역으로 등록하므로 시트의 빈 여백도 웹이 받습니다. 목록 행이나 버튼만 등록하면 시트의 빈 곳을 드래그할 때 뒤 지도가 움직일 수 있습니다. 채팅처럼 `document.body`에 별도로 렌더되는 UI도 같은 측정 대상에 포함합니다.
+시트 전체를 웹 영역으로 등록하므로 시트의 빈 여백도 웹이 받습니다. 목록 행이나 버튼만 등록하면 시트의 빈 곳을 드래그할 때 뒤 지도가 움직일 수 있습니다. `document.body`에 별도로 렌더되는 UI도 같은 측정 대상에 포함합니다.
 
 한 손가락의 터치 대상은 시작할 때 정합니다. 시트에서 시작한 드래그가 지도 영역으로 넘어갔다고 중간에 native 지도로 다시 보내지 않습니다. 지도에서 시작한 드래그도 같은 원칙을 따릅니다. 다만 **두 번째 손가락, 시트 경계에서 시작하는 핀치, UIKit gesture recognizer 간 상호작용은 별도 실기기 검증이 필요**합니다. `hitTest` 구현만으로 모든 multi-touch 조합이 검증됐다고 볼 수는 없습니다.
 
@@ -287,7 +287,7 @@ Xcode 27.1에서 NMapsMap 3.24.0을 포함한 Simulator 빌드와 실제 앱 실
 | iOS Simulator | native module 등록·실제 `NMFMapView` 생성, 인증 설정, 경로와 마커, layout·카메라 연결, 재로드·종료 |
 | iPhone 실기기 | 지도 이동·핀치, 시트 드래그·목록 스크롤, 경계 터치·두 번째 손가락, 빠른 시트 전환 |
 | 위치·복구 | 위치 허용·거부, 지도 인증·네트워크 실패, 앱 백그라운드 복귀, 노선 전환 중 늦은 이벤트 |
-| 가림·접근성 | 키보드와 채팅 modal, Safe area·화면 크기 변경, VoiceOver에서 뒤 지도 노출 차단, SDK 로고·출처 가림 |
+| 가림·접근성 | 키보드와 modal, Safe area·화면 크기 변경, VoiceOver에서 뒤 지도 노출 차단, SDK 로고·출처 가림 |
 | 성능 | 실제 차량 수에서 마커 이동·카메라 조작, 웹과 native의 시각적 위치 차이, 불필요한 Bridge 메시지 여부 |
 
 ## 기술 문서

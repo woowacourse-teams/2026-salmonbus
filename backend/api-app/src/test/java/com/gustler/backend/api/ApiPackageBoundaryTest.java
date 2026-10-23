@@ -37,7 +37,7 @@ class ApiPackageBoundaryTest {
     private static final String TRANSPORT = "com.gustler.backend.api.http..";
     private static final String CONTRACT = "com.gustler.backend.api.error..";
     private static final String ARRIVAL_HTTP_CLIENT = PREFIX + "arrival.infrastructure.http..";
-    private static final List<String> FEATURES = List.of("arrival", "board", "chat", "favorite", "route", "vehicle");
+    private static final List<String> FEATURES = List.of("arrival", "board", "favorite", "route", "vehicle");
     private static final List<String> BUSINESS_MODULES = List.of(
         "com.gustler.backend.routecatalog..", "com.gustler.backend.observations..",
         "com.gustler.backend.forecasting..", "com.gustler.backend.arrivals..",

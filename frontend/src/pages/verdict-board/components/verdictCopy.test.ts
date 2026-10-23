@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { toSeatEstimate } from "./seatGrade";
+import { toSeatEstimate } from "@/shared/utils/seatGrade";
 import { chipLabel, seatLabel } from "./verdictCopy";
 
 describe("seatLabel", () => {

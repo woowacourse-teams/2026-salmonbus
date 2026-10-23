@@ -192,8 +192,6 @@ for runtime_module in common api-app worker-app; do
   printf 'module build\n' > "$RUNTIME_FIXTURE/$runtime_module/build.gradle"
 done
 mkdir -p "$RUNTIME_FIXTURE/../contract/examples" "$RUNTIME_FIXTURE/../docs/api"
-printf 'chat example\n' > "$RUNTIME_FIXTURE/../contract/examples/chat-v1.json"
-printf 'chat guide\n' > "$RUNTIME_FIXTURE/../docs/api/chat-websocket-public.md"
 if runtime_source_digest api "$RUNTIME_FIXTURE" >/dev/null \
   && runtime_source_digest worker "$RUNTIME_FIXTURE" >/dev/null; then
   ok "아직 옮기지 않은 모듈 디렉터리가 없어도 기존 소스 지문을 계산한다"
@@ -229,9 +227,6 @@ done
 for runtime_path in api-app/src/main/java/Marker.java api-app/src/main/resources/application.yml api-app/build.gradle \
   business/member/src/main/java/Marker.java business/member/src/main/resources/module.properties \
   business/member/build.gradle; do
-  check_runtime_change "$runtime_path" changed unchanged
-done
-for runtime_path in ../contract/examples/chat-v1.json ../docs/api/chat-websocket-public.md; do
   check_runtime_change "$runtime_path" changed unchanged
 done
 for runtime_path in common/src/main/java/Marker.java common/src/main/resources/db/migration/V17__fixture.sql \

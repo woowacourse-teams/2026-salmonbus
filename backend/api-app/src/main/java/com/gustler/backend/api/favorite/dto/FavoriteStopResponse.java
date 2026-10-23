@@ -1,9 +1,9 @@
 package com.gustler.backend.api.favorite.dto;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.gustler.backend.api.board.domain.BoardDirection;
-import com.gustler.backend.api.favorite.application.FavoriteOverview.Stop;
+import com.gustler.backend.api.favorite.application.FavoriteOverview;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 @JsonInclude(Include.NON_NULL)
@@ -13,8 +13,10 @@ public record FavoriteStopResponse(
     String name,
     BoardDirection direction
 ) {
-    static FavoriteStopResponse from(String stopId, Stop stop) {
-        return new FavoriteStopResponse(stopId, stop == null ? null : stop.name(),
-            stop == null ? null : stop.direction());
+    static FavoriteStopResponse from(String stopId, FavoriteOverview.Stop stop) {
+        if (stop == null) {
+            return new FavoriteStopResponse(stopId, null, null);
+        }
+        return new FavoriteStopResponse(stopId, stop.name(), stop.direction());
     }
 }

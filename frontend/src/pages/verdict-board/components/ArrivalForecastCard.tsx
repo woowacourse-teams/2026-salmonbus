@@ -3,7 +3,7 @@ import { latestSuccessOf } from "@/shared/api/polledResource";
 import { arrivalToneFor, type ArrivalView } from "./arrivalPolicy";
 import { arrivalTimingFor, type StationArrivalDetails } from "./stationArrivalPolicy";
 import { NO_VEHICLE_NOTICE, arrivalSeatLabel, stopsAwayLabel } from "./verdictCopy";
-import { SeatCountBadge } from "./SeatCountBadge";
+import { SeatCountBadge } from "@/shared/components/SeatCountBadge";
 import * as styles from "./ArrivalForecastCard.css";
 
 interface ArrivalForecastCardProps {

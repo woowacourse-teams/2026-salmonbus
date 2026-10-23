@@ -6,6 +6,7 @@ import { paths } from "@/shared/routing/paths";
 import { FocusKeepingNavigationContext } from "@/shared/routing/focusKeepingNavigation";
 import { LoginPage } from "@/pages/login";
 import { MyPage } from "@/pages/my-page";
+import { FavoriteGroupPage } from "@/pages/favorite-group";
 import { NicknamePage } from "@/pages/nickname";
 import { useFocusKeepingNavigation } from "./useFocusKeepingNavigation";
 
@@ -22,6 +23,7 @@ export function AppRoutes() {
         <Route path={paths.login} element={<LoginPage />} />
         <Route path={paths.mypage} element={<MyPage />} />
         <Route path={paths.nickname} element={<NicknamePage />} />
+        <Route path={paths.favoriteGroup} element={<FavoriteGroupPage />} />
       </Routes>
     </FocusKeepingNavigationContext>
   );

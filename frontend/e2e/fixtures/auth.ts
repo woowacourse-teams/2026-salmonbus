@@ -94,6 +94,16 @@ export const test = apiTest.extend<{ auth: AuthMock }>({
             auth.refreshable = false;
             await route.fulfill({ status: 204 });
           }
+        } else if (path === "/api/me/favorite-groups" && request.method() === "GET") {
+          await route.fulfill({
+            json: { groups: [{ id: "10000000-0000-4000-8000-000000000001", name: "즐겨찾기", favorites: [] }] },
+            headers: { "Cache-Control": "no-store" },
+          });
+        } else if (path === "/api/me/favorites" && request.method() === "GET") {
+          await route.fulfill({
+            json: { groups: [{ id: "10000000-0000-4000-8000-000000000001", name: "즐겨찾기", favorites: [] }] },
+            headers: { "Cache-Control": "no-store" },
+          });
         } else if (auth.mutationFails) {
           await error(503, "SERVICE_UNAVAILABLE");
         } else if (path === "/api/auth/logout") {

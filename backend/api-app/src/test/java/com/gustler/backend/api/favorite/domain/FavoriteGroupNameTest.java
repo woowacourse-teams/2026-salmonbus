@@ -13,7 +13,8 @@ class FavoriteGroupNameTest {
 
     @Test
     void 결합된_이모지는_사용자가_보는_한_문자로_센다() {
-        assertThat(new FavoriteGroupName("👨‍👩‍👧‍👦출근길").value()).isEqualTo("👨‍👩‍👧‍👦출근길");
+        assertThat(new FavoriteGroupName("👨‍👩‍👧‍👦출근길").value())
+            .isEqualTo("👨‍👩‍👧‍👦출근길");
     }
 
     @Test
