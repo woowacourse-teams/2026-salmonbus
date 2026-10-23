@@ -41,6 +41,7 @@ export const groupActions = style({
   justifyContent: "flex-end",
   marginTop: 16,
   paddingTop: 16,
+  paddingRight: 8,
 });
 export const deleteGroup = style({
   margin: 0,

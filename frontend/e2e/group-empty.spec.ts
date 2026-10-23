@@ -24,7 +24,7 @@ for (const width of [320, 425]) {
     expect(emptyBounds.width).toBe(width === 425 ? 356 : 256);
     expect(emptyBounds.height).toBeCloseTo(126.4, 0);
     expect(removeBounds.y - emptyBounds.y - emptyBounds.height).toBeCloseTo(32, 1);
-    expect(removeBounds.x + removeBounds.width).toBeCloseTo(emptyBounds.x + emptyBounds.width, 1);
+    expect(removeBounds.x + removeBounds.width).toBeCloseTo(emptyBounds.x + emptyBounds.width - 8, 1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     if (width === 425 && browserName === "chromium")
       await page.screenshot({ path: "/private/tmp/salmonbus-empty-detail.png" });

@@ -58,7 +58,7 @@ for (const width of [320, 425]) {
     expect(detailBounds!.width).toBe(width === 425 ? 356 : width - 64);
     expect(detailBounds!.height).toBe(width === 425 ? 77 : 99);
     const groupDeleteBounds = (await page.getByRole("button", { name: "그룹 삭제", exact: true }).boundingBox())!;
-    expect(groupDeleteBounds.x + groupDeleteBounds.width).toBeCloseTo(detailBounds!.x + detailBounds!.width, 1);
+    expect(groupDeleteBounds.x + groupDeleteBounds.width).toBeCloseTo(detailBounds!.x + detailBounds!.width - 8, 1);
     await expect(page.getByRole("heading", { name: "즐겨찾기", exact: true })).toHaveCSS("font-size", "24px");
     const remove = detailCard.getByRole("button", { name: /삭제/ });
     expect((await remove.boundingBox())!.width).toBe(48);
