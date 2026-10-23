@@ -17,8 +17,7 @@ class CollectedArrivalCandidatesTest {
 
     @ParameterizedTest
     @CsvSource({"0, 1, 0", "1, 0, 1", "2, 1, 0"})
-    void 기점에서는_정류소_도착만_이전_편도_방향이다(final int runningState, final int passedStopOrder,
-        final long direction) {
+    void 기점에서는_정류소_도착만_이전_편도_방향이다(final int runningState, final int passedStopOrder, final long direction) {
         // given
         Row row = new Row(1, "bus", 40, passedStopOrder, null, 1, runningState);
         ObservationDeliveryBatch batch = new ObservationDeliveryBatch(1, 1, 1, Kind.STORED, T, List.of(row));

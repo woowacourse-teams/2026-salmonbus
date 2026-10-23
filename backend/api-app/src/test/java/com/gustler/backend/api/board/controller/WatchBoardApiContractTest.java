@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -149,16 +150,18 @@ class WatchBoardApiContractTest {
             currentStopSequences.put(vehicle.path("vehicleId").asText(), vehicle.path("currentStopSequence").asInt());
         }
         List<String> checked = new ArrayList<>();
-        for (JsonNode stop : watch.path("stops")) {
-            for (JsonNode approaching : stop.path("approachingVehicles")) {
-                String vehicleId = approaching.path("vehicleId").asText();
-                assertThat(currentStopSequences).containsKey(vehicleId);
-                assertThat(approaching.path("remainingStops").asInt()).as(vehicleId)
-                    .isEqualTo(stop.path("sequence").asInt() - currentStopSequences.get(vehicleId));
-                checked.add(vehicleId);
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            for (JsonNode stop : watch.path("stops")) {
+                for (JsonNode approaching : stop.path("approachingVehicles")) {
+                    String vehicleId = approaching.path("vehicleId").asText();
+                    assertThat(currentStopSequences).containsKey(vehicleId);
+                    softly.assertThat(approaching.path("remainingStops").asInt()).as(vehicleId)
+                        .isEqualTo(stop.path("sequence").asInt() - currentStopSequences.get(vehicleId));
+                    checked.add(vehicleId);
+                }
             }
+            softly.assertThat(checked).containsExactlyInAnyOrder("V1", "V2", "V3");
         }
-        assertThat(checked).containsExactlyInAnyOrder("V1", "V2", "V3");
     }
 
     @Test

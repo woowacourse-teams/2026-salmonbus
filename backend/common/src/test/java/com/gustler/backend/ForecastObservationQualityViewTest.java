@@ -69,8 +69,7 @@ class ForecastObservationQualityViewTest {
 
     @ParameterizedTest
     @CsvSource({"0, 1, 0", "1, 0, 1", "2, 1, 0"})
-    void 기점에서는_정류소_도착만_이전_편도_방향으로_판정한다(final int runningState, final int passedStopOrder,
-        final long direction) {
+    void 기점에서는_정류소_도착만_이전_편도_방향으로_판정한다(final int runningState, final int passedStopOrder, final long direction) {
         // given
         jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
@@ -84,7 +83,7 @@ class ForecastObservationQualityViewTest {
 
         // when
         final long actual = jdbcClient.sql(
-                "SELECT quality_direction FROM forecast_observation_quality WHERE observation_batch_id = ?")
+            "SELECT quality_direction FROM forecast_observation_quality WHERE observation_batch_id = ?")
             .param(batchId)
             .query(Long.class)
             .single();

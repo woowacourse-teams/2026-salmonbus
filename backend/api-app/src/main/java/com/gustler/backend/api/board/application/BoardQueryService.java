@@ -382,11 +382,7 @@ public class BoardQueryService {
      * 정류장에 서 있는 차량이면 하나 작아야 한다. 두 순번의 정합을 DB가 보장하지 않으므로 이 관계가
      * 깨진 관측은 노출하지 않는다. 화면 거리는 0 이상이다.
      */
-    private record Approach(
-        BoardVehicleObservation vehicle,
-        int horizonStops,
-        int remainingStops
-    ) {
+    private record Approach(BoardVehicleObservation vehicle, int horizonStops, int remainingStops) {
         static Approach of(BoardStop stop, BoardVehicleObservation vehicle) {
             return new Approach(
                 vehicle,

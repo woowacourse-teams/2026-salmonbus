@@ -673,10 +673,7 @@ class BoardQueryServiceTest {
                 .toList());
     }
 
-    private void givenVehiclesApproaching(
-        final int targetSequence,
-        List<BoardVehicleObservation> vehicles
-    ) {
+    private void givenVehiclesApproaching(final int targetSequence, List<BoardVehicleObservation> vehicles) {
         given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(roundTripSnapshot()));
         given(repository.findStops(1L)).willReturn(List.of(
             stop(1, "기점", BoardDirection.UP, true),

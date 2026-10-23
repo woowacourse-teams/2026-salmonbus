@@ -1,6 +1,8 @@
 -- 기점(stop_order 1)에서 이전 편도로 보는 관측을 정류소 도착(운행 상태 1)으로 좁힌다.
 -- 교차로 통과(운행 상태 0)는 다른 규칙과 같이 기점을 지난 이번 편도로 본다.
 -- 외부 학습 조회의 이름, 컬럼 순서, 타입을 유지한다.
+SET LOCAL lock_timeout = '5s';
+
 CREATE OR REPLACE VIEW forecast_observation_quality AS
 SELECT observation.id,
        observation.observation_batch_id,
