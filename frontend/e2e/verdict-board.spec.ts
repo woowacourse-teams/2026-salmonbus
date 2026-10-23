@@ -249,7 +249,7 @@ test("다음 관측이 오면 마커와 도착 예상이 한 응답으로 함께
   await expect(nearestArrival).toHaveText(/2정류장 전\s*시간 정보 없음\s*도착 시 4석 예상해요/);
 });
 
-test("판의 만료 시각이 지나면 차량 마커만 숨기고 도착 예상은 남긴다", async ({ page, api }) => {
+test("판의 만료 시각이 지나면 차량 마커만 숨기고, 새 관측을 받으면 다시 표시한다", async ({ page, api }) => {
   await openBoard(page);
   const stop = targetStop(page, "UP");
   await stop.scrollIntoViewIfNeeded();
@@ -267,6 +267,17 @@ test("판의 만료 시각이 지나면 차량 마커만 숨기고 도착 예상
   await expect(busMarkerAt(page, "상행 정류장 8")).toHaveCount(0);
   await expect(stop).toHaveAttribute("aria-expanded", "true");
   await expect(nearestArrival).toHaveText(/3정류장 전\s*시간 정보 없음\s*도착 시 5석 예상해요/);
+
+  // 만료 기록은 이전 관측에만 남으므로 새 관측의 차량은 다시 보여야 한다.
+  const bus = api.data.watch.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1");
+  if (bus === undefined) throw new Error("bus-1 차량 fixture가 필요합니다");
+  Object.assign(bus, { currentStopSequence: 9, stopId: "1009", stopName: "상행 정류장 9" });
+  api.data.watch.observedAt = "2026-09-16T08:05:00+09:00";
+  api.data.watch.staleAt = "2026-09-16T08:10:00+09:00";
+  api.mode.watch = "success";
+  await pollRouteWatch(page);
+
+  await expect(busMarkerAt(page, "상행 정류장 9")).toBeVisible();
 });
 
 test("운행 중인 차량이 없으면 운행 없음 안내를 표시한다", async ({ page, api }) => {
