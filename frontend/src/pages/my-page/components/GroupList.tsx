@@ -5,7 +5,7 @@ import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
 import { FavoriteEditor } from "@/shared/components/favorite-editor/FavoriteEditor";
 import { Notice } from "@/shared/components/Notice";
 import * as styles from "./GroupList.css";
-import pencilIcon from "../assets/pencil.svg";
+import editIcon from "@/shared/assets/icons/favorite-edit.svg";
 import chevronIcon from "../assets/group-chevron.svg";
 import plusIcon from "../assets/group-plus.svg";
 
@@ -39,7 +39,7 @@ export function GroupList() {
           onClick={() => setOrdering(true)}
           aria-label="그룹과 즐겨찾기 순서 편집"
         >
-          <img src={pencilIcon} width="20" height="20" alt="" draggable={false} />
+          <img src={editIcon} width="20" height="20" alt="" draggable={false} />
         </button>
       </h2>
       <FavoritesNotice resource={resource} onRetry={reload} />

@@ -11,7 +11,10 @@ export const section = style({
   fontFamily: "'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif",
   color: "#292A2D",
 });
-export const edit = style([text, { display: "grid", placeItems: "center", padding: 0, flexShrink: 0 }]);
+export const edit = style([
+  text,
+  { display: "grid", placeItems: "center", flexShrink: 0, width: 36, height: 32, padding: "6px 8px" },
+]);
 export const heading = style({
   display: "flex",
   alignItems: "center",

@@ -11,7 +11,7 @@ import { FavoriteEditor } from "@/shared/components/favorite-editor/FavoriteEdit
 import { Notice } from "@/shared/components/Notice";
 import { favoritePath } from "@/shared/utils/favoritePolicy";
 import bookmarkIcon from "@/shared/assets/icons/bookmark.svg";
-import editIcon from "../assets/home-edit.svg";
+import editIcon from "@/shared/assets/icons/favorite-edit.svg";
 import * as homeStyles from "./HomeFavorites.css";
 import * as buttons from "@/shared/styles/button.css";
 import { RouteBadge } from "@/shared/components/RouteBadge";
