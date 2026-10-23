@@ -333,6 +333,7 @@ test("대표 그룹은 이름이 바뀌어도 보호하고 일반 그룹은 삭�
   await page.getByRole("textbox", { name: "그룹 이름", exact: true }).fill("  🚌통학  ");
   await page.getByRole("button", { name: "만들기", exact: true }).click();
   await expect(page).toHaveURL("/mypage");
+  await expect(page.getByText("그룹을 만들었어요", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: /🚌통학/ }).click();
   await page.getByRole("button", { name: "그룹 이름 변경", exact: true }).click();
   await page.getByRole("textbox", { name: "변경할 그룹 이름", exact: true }).fill("즐겨찾기");

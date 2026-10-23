@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, matchPath, useNavigate } from "react-router";
+import { useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router";
 import { AccountLayout } from "@/shared/components/AccountLayout";
-import { paths } from "@/shared/routing/paths";
+import { useStillOnScreen } from "@/shared/routing/stillOnScreen";
 import { LoginButton } from "@/shared/components/LoginButton";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { authErrorOf } from "@/shared/utils/authErrorOf";
@@ -54,13 +54,7 @@ export function NicknamePage() {
 }
 
 function NicknameForm({ current }: { current: string }) {
-  const active = useRef(false);
-  useEffect(() => {
-    active.current = true;
-    return () => {
-      active.current = false;
-    };
-  }, []);
+  const isStillOnScreen = useStillOnScreen();
   const { changeNickname } = useAuth();
   const navigate = useNavigate();
   const [nickname, setNickname] = useState(current);
@@ -74,9 +68,7 @@ function NicknameForm({ current }: { current: string }) {
     setBusy(true);
     setError(null);
     const result = await changeNickname(nickname);
-    // 라우터는 주소를 바로 바꾸고 화면 교체는 transition으로 미룬다. 그 사이에도 이 폼은 마운트되어 있으니 주소도 확인한다.
-    // active는 떠났다가 다시 들어온 경우를 막는다. 그때는 주소가 같아도 이 폼은 이미 사라진 화면이다.
-    if (!active.current || matchPath(paths.nickname, window.location.pathname) === null) return;
+    if (!isStillOnScreen()) return;
     setBusy(false);
     if (result.ok) {
       void navigate("/mypage", { replace: true, state: { notice: "닉네임을 변경했어요" } });
