@@ -1,6 +1,7 @@
 package com.gustler.backend.api.http.login;
 
 import com.gustler.backend.member.api.SignInWithSocialAccount;
+import com.gustler.backend.api.favorite.application.DefaultFavoriteGroupService;
 import com.gustler.backend.support.PostgresTestContainer;
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
@@ -37,5 +38,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 })
 @Import({PostgresTestContainer.class, FakeLoginProviders.class})
 @MockitoSpyBean(types = SignInWithSocialAccount.class)
+@MockitoSpyBean(types = DefaultFavoriteGroupService.class)
 public @interface LoginIntegrationTest {
 }

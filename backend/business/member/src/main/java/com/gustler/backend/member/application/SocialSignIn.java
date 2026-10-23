@@ -3,6 +3,8 @@ package com.gustler.backend.member.application;
 import com.gustler.backend.member.api.SignInWithSocialAccount;
 import com.gustler.backend.member.api.SignedInMember;
 import com.gustler.backend.member.api.SocialIdentity;
+import com.gustler.backend.member.api.MemberRegistrationEvents;
+import com.gustler.backend.member.api.MemberRegistrationEvents.Failure;
 import com.gustler.backend.member.domain.Member;
 import com.gustler.backend.member.domain.MemberRepository;
 import com.gustler.backend.member.domain.NewMember;
@@ -37,16 +39,31 @@ public class SocialSignIn implements SignInWithSocialAccount {
     private final MemberRepository memberRepository;
     private final Clock clock;
     private final NicknameGenerator nicknames;
+    private final MemberRegistrationEvents registrations;
 
     @Autowired
-    public SocialSignIn(MemberRepository memberRepository, Clock clock) {
-        this(memberRepository, clock, new SecureRandom());
+    public SocialSignIn(
+        MemberRepository memberRepository,
+        Clock clock,
+        Optional<MemberRegistrationEvents> registrations
+    ) {
+        this(memberRepository, clock, new SecureRandom(), registrations.orElse(MemberRegistrationEvents.NONE));
     }
 
     SocialSignIn(MemberRepository memberRepository, Clock clock, RandomGenerator random) {
+        this(memberRepository, clock, random, MemberRegistrationEvents.NONE);
+    }
+
+    SocialSignIn(
+        MemberRepository memberRepository,
+        Clock clock,
+        RandomGenerator random,
+        MemberRegistrationEvents registrations
+    ) {
         this.memberRepository = memberRepository;
         this.clock = clock;
         this.nicknames = new NicknameGenerator(random);
+        this.registrations = registrations;
     }
 
     @Override
@@ -59,10 +76,14 @@ public class SocialSignIn implements SignInWithSocialAccount {
     }
 
     private SignedInMember register(SocialIdentity identity) {
-        return registerWith(identity, () -> nicknames.withStop(SHORT_DIGITS))
+        Optional<SignedInMember> registered = registerWith(identity, () -> nicknames.withStop(SHORT_DIGITS))
             .or(() -> registerWith(identity, () -> nicknames.withStop(LONG_DIGITS)))
-            .or(() -> registerWith(identity, () -> nicknames.salmonOnly(SALMON_DIGITS)))
-            .orElseThrow(() -> new IllegalStateException("자동 생성 닉네임이 계속 겹쳐 가입하지 못했다"));
+            .or(() -> registerWith(identity, () -> nicknames.salmonOnly(SALMON_DIGITS)));
+        if (registered.isPresent()) {
+            return registered.get();
+        }
+        registrations.failed(identity.provider(), Failure.NICKNAME_EXHAUSTED);
+        throw new IllegalStateException("자동 생성 닉네임이 계속 겹쳐 가입하지 못했다");
     }
 
     private Optional<SignedInMember> registerWith(SocialIdentity identity, Supplier<Nickname> nextNickname) {
@@ -78,9 +99,18 @@ public class SocialSignIn implements SignInWithSocialAccount {
     private Optional<SignedInMember> tryRegister(SocialIdentity identity, Nickname nickname) {
         NewMember newMember = new NewMember(
             UUID.randomUUID(), nickname, identity.provider(), identity.subject(), OffsetDateTime.now(clock));
-        return switch (memberRepository.register(newMember)) {
-            case RegistrationResult.Registered registered ->
-                Optional.of(new SignedInMember(registered.member().publicId(), true));
+        RegistrationResult result;
+        try {
+            result = memberRepository.register(newMember);
+        } catch (RuntimeException exception) {
+            registrations.failed(identity.provider(), Failure.REPOSITORY);
+            throw exception;
+        }
+        return switch (result) {
+            case RegistrationResult.Registered registered -> {
+                registrations.succeeded(identity.provider());
+                yield Optional.of(new SignedInMember(registered.member().publicId(), true));
+            }
             case RegistrationResult.NicknameTaken taken -> Optional.empty();
             case RegistrationResult.AlreadyRegistered already -> Optional.of(loggedIn(
                 memberRepository.findByIdentity(identity.provider(), identity.subject())

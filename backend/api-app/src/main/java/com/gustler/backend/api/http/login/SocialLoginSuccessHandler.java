@@ -2,6 +2,10 @@ package com.gustler.backend.api.http.login;
 
 import com.gustler.backend.api.account.token.AccessTokens;
 import com.gustler.backend.api.account.token.AuthCookies;
+import com.gustler.backend.api.favorite.application.DefaultFavoriteGroupService;
+import com.gustler.backend.api.monitoring.UserMonitoring;
+import com.gustler.backend.api.monitoring.UserMonitoring.LoginResult;
+import com.gustler.backend.api.monitoring.UserMonitoring.MemberKind;
 import com.gustler.backend.member.api.IssuedRefreshToken;
 import com.gustler.backend.member.api.LoginProvider;
 import com.gustler.backend.member.api.MemberIdentity;
@@ -54,23 +58,29 @@ final class SocialLoginSuccessHandler implements AuthenticationSuccessHandler {
     private final RefreshTokens refreshTokens;
     private final AccessTokens accessTokens;
     private final AuthCookies authCookies;
+    private final DefaultFavoriteGroupService defaultGroups;
     private final AuthenticationFailureHandler failureHandler;
     private final Optional<AppleWithdrawal> withdrawal;
+    private final UserMonitoring monitoring;
 
     SocialLoginSuccessHandler(
         SignInWithSocialAccount signIn,
         RefreshTokens refreshTokens,
         AccessTokens accessTokens,
         AuthCookies authCookies,
+        DefaultFavoriteGroupService defaultGroups,
         AuthenticationFailureHandler failureHandler,
-        Optional<AppleWithdrawal> withdrawal
+        Optional<AppleWithdrawal> withdrawal,
+        UserMonitoring monitoring
     ) {
         this.signIn = signIn;
         this.refreshTokens = refreshTokens;
         this.accessTokens = accessTokens;
         this.authCookies = authCookies;
+        this.defaultGroups = defaultGroups;
         this.failureHandler = failureHandler;
         this.withdrawal = withdrawal;
+        this.monitoring = monitoring;
     }
 
     @Override
@@ -89,13 +99,16 @@ final class SocialLoginSuccessHandler implements AuthenticationSuccessHandler {
             return;
         }
         HttpHeaders cookies = new HttpHeaders();
+        SignedInMember member;
         try {
-            SignedInMember member = signIn.signIn(new SocialIdentity(provider, user.getSubject()));
+            member = signIn.signIn(new SocialIdentity(provider, user.getSubject()));
+            ensureDefaultGroup(member.publicId());
             String accessToken = accessTokens.issue(member.publicId());
             IssuedRefreshToken refreshToken = refreshTokens.issue(member.publicId());
             authCookies.write(cookies, accessToken, refreshToken);
         } catch (RuntimeException exception) {
-            LOGGER.error("회원 로그인을 처리하지 못했다", exception);
+            LOGGER.error("event=user_login status=FAILED provider={} phase=member_or_token cause={}",
+                provider.name().toLowerCase(Locale.ROOT), exception.getClass().getSimpleName());
             SecurityContextHolder.clearContext();
             failureHandler.onAuthenticationFailure(
                 request, response, new AuthenticationServiceException("회원 로그인을 처리하지 못했다", exception));
@@ -107,6 +120,15 @@ final class SocialLoginSuccessHandler implements AuthenticationSuccessHandler {
         String returnTo = LoginSessions.takeReturnTo(session);
         session.invalidate();
         redirect(response, cookies, returnTo);
+        monitoring.login(provider, LoginResult.SUCCESS, member.registered() ? MemberKind.NEW : MemberKind.EXISTING);
+    }
+
+    private void ensureDefaultGroup(UUID memberPublicId) {
+        try {
+            defaultGroups.ensure(memberPublicId);
+        } catch (RuntimeException exception) {
+            LOGGER.warn("기본 즐겨찾기 그룹을 만들지 못했습니다. 다음 즐겨찾기 조회에서 다시 시도합니다.", exception);
+        }
     }
 
     private void completeWithdrawal(

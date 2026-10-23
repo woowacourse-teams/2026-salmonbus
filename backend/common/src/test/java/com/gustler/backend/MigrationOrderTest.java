@@ -40,10 +40,10 @@ class MigrationOrderTest {
      * 번호가 거꾸로 배정되어도 다른 파일을 제외해 항상 통과하게 된다. 파일 이름으로 선택하고,
      * 해당 파일이 실제로 마지막 번호인지는 아래에서 별도로 검증한다.
      *
-     * <p>이 브랜치는 회원 로그인 테이블과 세션 테이블을 추가한다.
+     * <p>현재 로컬 브랜치는 아직 dev에 병합되지 않은 회원 PR과 즐겨찾기 테이블을 함께 포함한다.
      */
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
-        List.of("member_login");
+        List.of("member_login", "favorite");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";

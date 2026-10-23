@@ -1,6 +1,6 @@
 import { test, expect, testMember, redirectAuth } from "./fixtures/auth";
 import contract from "../../contract/auth-v1.openapi.json" with { type: "json" };
-import { routeButton, routeSearchInput } from "./utils/route-select";
+import { selectRoute } from "./utils/route-select";
 import { routeId } from "./fixtures/mock-data";
 
 test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
@@ -28,9 +28,7 @@ test("인증 API가 꺼져 있어도 노선을 검색하고 판정보드에 진�
   await expect(page.getByText("로그인 기능을 준비 중이에요. 노선 검색은 계속 이용할 수 있어요.")).toBeVisible();
   await expect(page.getByRole("button", { name: "카카오로 계속하기" })).toBeDisabled();
   await page.getByRole("link", { name: "돌아가기" }).click();
-  await routeSearchInput(page).fill("3330");
-  await routeButton(page).click();
-  await expect(page).toHaveURL(`/routes/${routeId}`);
+  await selectRoute(page);
 });
 
 for (const loginResult of ["failed", "cancelled"] as const) {

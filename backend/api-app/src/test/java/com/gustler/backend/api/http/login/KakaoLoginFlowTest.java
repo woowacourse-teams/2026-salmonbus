@@ -2,7 +2,11 @@ package com.gustler.backend.api.http.login;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 
+import com.gustler.backend.api.favorite.application.DefaultFavoriteGroupService;
+import io.micrometer.core.instrument.MeterRegistry;
 import com.nimbusds.jwt.JWTClaimsSet;
 import java.net.http.HttpResponse;
 import java.time.Instant;
@@ -52,6 +56,12 @@ class KakaoLoginFlowTest {
     @Autowired
     private FakeKakaoServer kakao;
 
+    @Autowired
+    private DefaultFavoriteGroupService defaultGroups;
+
+    @Autowired
+    private MeterRegistry meters;
+
     @BeforeEach
     void 상태를_비운다() {
         kakao.reset();
@@ -62,6 +72,8 @@ class KakaoLoginFlowTest {
     @Test
     void 처음_로그인하면_생성한_닉네임으로_회원이_만들어지고_돌아갈_경로로_보낸다() throws Exception {
         // given
+        double registrationsBefore = registration("success");
+        double loginsBefore = login("success", "new");
         TestBrowser browser = browser();
         HttpResponse<String> started = browser.get("/api/auth/kakao/start?returnTo=/routes/123456789?direction=UP");
         String authorization = location(started);
@@ -96,6 +108,32 @@ class KakaoLoginFlowTest {
             softly.assertThat(tokenRequest.authorizationHeader()).isNull();
             softly.assertThat(memberCount()).isEqualTo(1);
             softly.assertThat(identityCount()).isEqualTo(1);
+            softly.assertThat(favoriteGroupCount()).isEqualTo(1);
+            softly.assertThat(favoriteGroupName()).isEqualTo("출퇴근");
+            softly.assertThat(registration("success") - registrationsBefore).isEqualTo(1);
+            softly.assertThat(login("success", "new") - loginsBefore).isEqualTo(1);
+        });
+    }
+
+    @Test
+    void 기본_그룹을_만들지_못해도_회원가입과_로그인은_완료한다() throws Exception {
+        // given
+        doThrow(new IllegalStateException("기본 그룹 생성 실패"))
+            .when(defaultGroups).ensure(any());
+        TestBrowser browser = browser();
+        String authorization = location(browser.get("/api/auth/kakao/start"));
+
+        // when
+        String code = kakao.authorize(authorization, SUBJECT);
+        HttpResponse<String> callback = browser.get(callbackPath(authorization, code));
+
+        // then
+        JsonNode session = objectMapper.readTree(browser.get("/api/auth/session").body());
+        assertSoftly(softly -> {
+            softly.assertThat(callback.statusCode()).isEqualTo(HttpStatus.FOUND.value());
+            softly.assertThat(session.path("authenticated").asBoolean()).isTrue();
+            softly.assertThat(memberCount()).isEqualTo(1);
+            softly.assertThat(favoriteGroupCount()).isZero();
         });
     }
 
@@ -132,10 +170,13 @@ class KakaoLoginFlowTest {
     }
 
     @Test
-    void 다시_로그인하면_같은_회원이고_닉네임을_바꾸지_않는다() throws Exception {
+    void 다시_로그인하면_같은_회원이고_닉네임과_기본_그룹을_바꾸지_않는다() throws Exception {
         // given
+        double registrationsBefore = registration("success");
         String firstId = signIn();
         String firstNickname = nickname();
+        double registrationsAfterFirst = registration("success");
+        double existingLoginsBefore = login("success", "existing");
 
         // when
         String secondId = signIn();
@@ -145,6 +186,11 @@ class KakaoLoginFlowTest {
             softly.assertThat(secondId).isEqualTo(firstId);
             softly.assertThat(memberCount()).isEqualTo(1);
             softly.assertThat(nickname()).isEqualTo(firstNickname);
+            softly.assertThat(favoriteGroupCount()).isEqualTo(1);
+            softly.assertThat(favoriteGroupName()).isEqualTo("출퇴근");
+            softly.assertThat(registrationsAfterFirst - registrationsBefore).isEqualTo(1);
+            softly.assertThat(registration("success")).isEqualTo(registrationsAfterFirst);
+            softly.assertThat(login("success", "existing") - existingLoginsBefore).isEqualTo(1);
         });
     }
 
@@ -172,6 +218,7 @@ class KakaoLoginFlowTest {
     @Test
     void 제공자_화면에서_취소하면_cancelled로_돌려보내고_임시_세션을_지운다(CapturedOutput output) throws Exception {
         // given
+        double cancelledBefore = login("cancelled", "unknown");
         TestBrowser browser = browser();
         String authorization = location(browser.get("/api/auth/kakao/start?returnTo=/routes/123456789"));
         String state = stateOf(authorization);
@@ -186,6 +233,7 @@ class KakaoLoginFlowTest {
             softly.assertThat(memberCount()).isZero();
             softly.assertThat(sessionCount()).isZero();
             softly.assertThat(output.getAll()).doesNotContain(state);
+            softly.assertThat(login("cancelled", "unknown") - cancelledBefore).isEqualTo(1);
         });
     }
 
@@ -371,6 +419,26 @@ class KakaoLoginFlowTest {
 
     private long identityCount() {
         return jdbcClient.sql("SELECT count(*) FROM member_identity").query(Long.class).single();
+    }
+
+    private long favoriteGroupCount() {
+        return jdbcClient.sql("SELECT count(*) FROM favorite_group").query(Long.class).single();
+    }
+
+    private String favoriteGroupName() {
+        return jdbcClient.sql("SELECT name FROM favorite_group").query(String.class).single();
+    }
+
+    private double registration(String result) {
+        var counter = meters.find("salmonbus.user.registration")
+            .tags("provider", "kakao", "result", result).counter();
+        return counter == null ? 0 : counter.count();
+    }
+
+    private double login(String result, String member) {
+        var counter = meters.find("salmonbus.user.login")
+            .tags("provider", "kakao", "result", result, "member", member).counter();
+        return counter == null ? 0 : counter.count();
     }
 
     private long sessionCount() {

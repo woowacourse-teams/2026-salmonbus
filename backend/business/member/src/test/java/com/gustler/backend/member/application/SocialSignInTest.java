@@ -1,11 +1,14 @@
 package com.gustler.backend.member.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.member.api.LoginProvider;
 import com.gustler.backend.member.api.MemberIdentity;
 import com.gustler.backend.member.api.MemberProfile;
+import com.gustler.backend.member.api.MemberRegistrationEvents;
+import com.gustler.backend.member.api.MemberRegistrationEvents.Failure;
 import com.gustler.backend.member.api.SignedInMember;
 import com.gustler.backend.member.api.SocialIdentity;
 import com.gustler.backend.member.domain.Member;
@@ -134,6 +137,59 @@ class SocialSignInTest {
         });
     }
 
+    @Test
+    void 처음_인증한_계정은_가입_성공_이벤트를_한_번_남긴다() {
+        // given
+        RegistrationEvents events = new RegistrationEvents();
+        SocialSignIn monitored = new SocialSignIn(repository, CLOCK, new FirstChoiceRandom(), events);
+
+        // when
+        monitored.signIn(KAKAO);
+
+        // then
+        assertThat(events.values).containsExactly("KAKAO:success");
+    }
+
+    @Test
+    void 이미_가입한_계정과_동시_가입에서_진_요청은_가입_이벤트를_남기지_않는다() {
+        // given
+        signIn.signIn(KAKAO);
+        RegistrationEvents events = new RegistrationEvents();
+        SocialSignIn monitored = new SocialSignIn(repository, CLOCK, new FirstChoiceRandom(), events);
+
+        // when
+        monitored.signIn(KAKAO);
+        repository.raceOnNextRegister();
+        monitored.signIn(new SocialIdentity(LoginProvider.KAKAO, "racing-account"));
+
+        // then
+        assertThat(events.values).isEmpty();
+    }
+
+    @Test
+    void 닉네임_후보를_모두_썼으면_가입_실패_이벤트를_한_번_남긴다() {
+        // given
+        repository.rejectEveryNickname();
+        RegistrationEvents events = new RegistrationEvents();
+        SocialSignIn monitored = new SocialSignIn(repository, CLOCK, new FirstChoiceRandom(), events);
+
+        // when & then
+        assertThatThrownBy(() -> monitored.signIn(KAKAO)).isInstanceOf(IllegalStateException.class);
+        assertThat(events.values).containsExactly("KAKAO:nickname_exhausted");
+    }
+
+    @Test
+    void 회원_저장소가_실패하면_가입_실패_이벤트를_남긴다() {
+        // given
+        repository.failNextRegister();
+        RegistrationEvents events = new RegistrationEvents();
+        SocialSignIn monitored = new SocialSignIn(repository, CLOCK, new FirstChoiceRandom(), events);
+
+        // when & then
+        assertThatThrownBy(() -> monitored.signIn(KAKAO)).isInstanceOf(IllegalStateException.class);
+        assertThat(events.values).containsExactly("KAKAO:repository");
+    }
+
     /** 늘 범위의 맨 앞을 고르는 난수. 같은 가입 시도는 같은 닉네임을 만든다. */
     private static final class FirstChoiceRandom implements RandomGenerator {
         @Override
@@ -152,6 +208,7 @@ class SocialSignInTest {
         private final List<Member> members = new ArrayList<>();
         private boolean rejectEveryNickname;
         private boolean raceOnNextRegister;
+        private boolean failNextRegister;
         private int loginRecords;
         private int registerCalls;
 
@@ -161,6 +218,10 @@ class SocialSignInTest {
 
         void raceOnNextRegister() {
             raceOnNextRegister = true;
+        }
+
+        void failNextRegister() {
+            failNextRegister = true;
         }
 
         void occupy(String nickname) {
@@ -197,6 +258,10 @@ class SocialSignInTest {
         @Override
         public RegistrationResult register(NewMember newMember) {
             registerCalls++;
+            if (failNextRegister) {
+                failNextRegister = false;
+                throw new IllegalStateException("DB 장애");
+            }
             if (raceOnNextRegister) {
                 raceOnNextRegister = false;
                 add(new NewMember(UUID.randomUUID(), new Nickname("먼저가입"), newMember.provider(),
@@ -244,6 +309,20 @@ class SocialSignInTest {
 
         private static String key(LoginProvider provider, String subject) {
             return provider + ":" + subject;
+        }
+    }
+
+    private static final class RegistrationEvents implements MemberRegistrationEvents {
+        private final List<String> values = new ArrayList<>();
+
+        @Override
+        public void succeeded(LoginProvider provider) {
+            values.add(provider + ":success");
+        }
+
+        @Override
+        public void failed(LoginProvider provider, Failure failure) {
+            values.add(provider + ":" + failure.name().toLowerCase(Locale.ROOT));
         }
     }
 }

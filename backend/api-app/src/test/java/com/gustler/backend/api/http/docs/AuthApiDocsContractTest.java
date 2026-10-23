@@ -139,6 +139,10 @@ class AuthApiDocsContractTest {
             if (!path.getKey().startsWith("/api/auth/") && !path.getKey().startsWith("/api/me")) {
                 continue;
             }
+            // /api/me 아래의 즐겨찾기는 인증을 사용하지만 회원 프로필 명세의 소유 경로는 아니다.
+            if (path.getKey().startsWith("/api/me/favorite")) {
+                continue;
+            }
             for (String method : path.getValue().propertyNames()) {
                 operations.add(method + " " + path.getKey());
             }

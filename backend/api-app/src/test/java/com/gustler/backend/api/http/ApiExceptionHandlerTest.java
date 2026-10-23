@@ -14,6 +14,16 @@ import com.gustler.backend.api.error.ErrorCode;
 import com.gustler.backend.api.error.ErrorResponse;
 import com.gustler.backend.api.error.ServiceUnavailableException;
 import com.gustler.backend.api.error.UnauthenticatedException;
+import com.gustler.backend.api.favorite.FavoriteGroupLimitExceededException;
+import com.gustler.backend.api.favorite.FavoriteGroupNameConflictException;
+import com.gustler.backend.api.favorite.FavoriteGroupNotFoundException;
+import com.gustler.backend.api.favorite.FavoriteLimitExceededException;
+import com.gustler.backend.api.favorite.FavoriteTargetAmbiguousException;
+import com.gustler.backend.api.favorite.FavoriteTargetUnavailableException;
+import com.gustler.backend.api.favorite.InvalidFavoriteGroupNameException;
+import com.gustler.backend.api.favorite.InvalidFavoriteGroupOrderException;
+import com.gustler.backend.api.favorite.InvalidFavoriteOrderException;
+import com.gustler.backend.api.favorite.LastFavoriteGroupException;
 import com.gustler.backend.api.route.InvalidRouteIdException;
 import com.gustler.backend.api.route.RouteNotFoundException;
 import com.gustler.backend.member.api.NicknameViolation;
@@ -52,7 +62,17 @@ class ApiExceptionHandlerTest {
             new NicknameTakenException(),
             new ReauthRequiredException(),
             new Failure(ErrorCode.STATION_NOT_FOUND),
-            new Failure(ErrorCode.REFERENCE_VERSION_CONFLICT)
+            new Failure(ErrorCode.REFERENCE_VERSION_CONFLICT),
+            new FavoriteGroupLimitExceededException(),
+            new FavoriteLimitExceededException(),
+            new InvalidFavoriteGroupNameException(),
+            new FavoriteGroupNameConflictException(),
+            new FavoriteGroupNotFoundException(),
+            new LastFavoriteGroupException(),
+            new InvalidFavoriteGroupOrderException(),
+            new InvalidFavoriteOrderException(),
+            new FavoriteTargetAmbiguousException(),
+            new FavoriteTargetUnavailableException()
         );
     }
 
