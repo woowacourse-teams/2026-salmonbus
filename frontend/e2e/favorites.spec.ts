@@ -117,7 +117,7 @@ test("기본 그룹도 다른 그룹이 남으면 삭제하고 이름이 바뀌�
   await page.getByRole("dialog").getByRole("button", { name: "확인", exact: true }).click();
   expect(favorites.requests.some((request) => request.method === "DELETE")).toBe(false);
   await page.getByRole("link", { name: "마이페이지로 돌아가기" }).click();
-  await page.getByRole("link", { name: "＋ 새 그룹 만들기", exact: true }).click();
+  await page.getByRole("link", { name: "새 그룹 만들기", exact: true }).click();
   await page.getByRole("textbox", { name: "그룹 이름", exact: true }).fill("  🚌통학  ");
   await page.getByRole("button", { name: "만들기", exact: true }).click();
   await expect(page).toHaveURL("/mypage");

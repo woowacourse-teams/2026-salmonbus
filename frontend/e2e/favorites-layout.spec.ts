@@ -40,6 +40,14 @@ for (const width of [320, 425]) {
 
     await page.getByRole("link", { name: "마이페이지", exact: true }).click();
     await expect(page.getByRole("region", { name: "즐겨찾기 그룹 관리" }).getByRole("link")).toHaveCount(3);
+    const groups = page.getByRole("region", { name: "즐겨찾기 그룹 관리" });
+    const groupCard = groups.locator("ul a").first();
+    const groupBounds = await groupCard.boundingBox();
+    expect(groupBounds!.width).toBe(width === 425 ? 356 : width - 64);
+    expect(groupBounds!.height).toBe(89);
+    await expect(groupCard.getByText("2 / 2", { exact: true })).toHaveCSS("background-color", "rgb(255, 240, 235)");
+    expect((await groups.getByRole("link", { name: "새 그룹 만들기", exact: true }).boundingBox())!.height).toBe(50);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     if (width === 425 && browserName === "chromium")
       await page.screenshot({ path: "/private/tmp/salmonbus-sal249-qa/groups.png" });
     await page.getByRole("link", { name: /즐겨찾기.*2 \/ 2/ }).click();

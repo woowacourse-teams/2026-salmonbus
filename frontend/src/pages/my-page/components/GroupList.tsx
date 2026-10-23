@@ -1,4 +1,3 @@
-import * as surface from "@/shared/styles/surface.css";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useFavorites } from "@/shared/hooks/useFavorites";
@@ -7,6 +6,8 @@ import { FavoriteEditor } from "@/shared/components/favorite-editor/FavoriteEdit
 import { Notice } from "@/shared/components/Notice";
 import * as styles from "./GroupList.css";
 import pencilIcon from "../assets/pencil.svg";
+import chevronIcon from "../assets/group-chevron.svg";
+import plusIcon from "../assets/group-plus.svg";
 
 export function GroupList() {
   const { groups, resource, reload } = useFavorites();
@@ -28,7 +29,7 @@ export function GroupList() {
   return (
     <section className={`${styles.section} amp-mask`} aria-label="즐겨찾기 그룹 관리">
       <h2 className={styles.heading}>
-        내 그룹 {groups.length} / 3{" "}
+        <span>{`내 그룹  ${groups.length} / 3`}</span>
         <button
           ref={editButton}
           className={styles.edit}
@@ -43,19 +44,19 @@ export function GroupList() {
       <ul className={styles.list}>
         {groups.map((group) => (
           <li key={group.id}>
-            <Link className={surface.row} to={`/mypage/groups/${encodeURIComponent(group.id)}`}>
-              <span>
-                {group.name}
+            <Link className={styles.group} to={`/mypage/groups/${encodeURIComponent(group.id)}`}>
+              <span className={styles.info}>
+                <span className={styles.name}>{group.name}</span>
                 <span className={styles.count}>{group.favorites.length} / 2</span>
               </span>
-              <span aria-hidden="true">›</span>
+              <img src={chevronIcon} width="18" height="18" alt="" draggable={false} />
             </Link>
           </li>
         ))}
       </ul>
       {resource.status === "success" && groups.length < 3 && (
         <Link className={styles.add} to="/mypage/groups/new">
-          ＋ 새 그룹 만들기
+          <img src={plusIcon} width="18" height="18" alt="" draggable={false} />새 그룹 만들기
         </Link>
       )}
       {notice > 0 && <Notice key={notice} message="변경 사항을 저장했어요" />}
