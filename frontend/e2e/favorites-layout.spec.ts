@@ -33,7 +33,7 @@ for (const width of [320, 425]) {
       await page.screenshot({ path: "/private/tmp/salmonbus-sal249-qa/home.png" });
       await page
         .getByRole("tabpanel")
-        .locator(":scope > ul > li")
+        .getByRole("listitem")
         .first()
         .screenshot({ path: "/private/tmp/salmonbus-sal249-qa/home-card.png" });
     }

@@ -20,7 +20,9 @@ export const row = style({
   cursor: "pointer",
 });
 
-export const nickname = style([row, { minHeight: 32, fontSize: 22, fontWeight: 700 }]);
+export const nickname = style([row, { minHeight: 32, fontSize: 22, fontWeight: 700, cursor: "auto" }]);
+
+export const nicknameEdit = style({ display: "flex", flexShrink: 0, padding: 2, margin: -2 });
 
 export const caption = style({ color: "#68645F", fontSize: 12, lineHeight: 1.7, margin: "8px 0 24px" });
 

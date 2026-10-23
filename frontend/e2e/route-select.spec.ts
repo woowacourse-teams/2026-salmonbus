@@ -153,11 +153,15 @@ test("판정 보드로 바로 들어오면 헤더의 뒤로 가기가 노선 선
   await expect(routeSearchInput(page)).toHaveValue("");
 });
 
-test("노선 선택 화면에서만 html 배경을 주황으로 칠한다", async ({ page }) => {
+test("화면 폭이 바뀌어도 홈 헤더 밖으로 주황 배경이 번지지 않는다", async ({ page }) => {
   const htmlBackground = () => page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);
   await page.goto("/");
 
-  await expect.poll(htmlBackground).toBe("rgb(232, 82, 63)");
+  for (const width of [320, 390, 425, 500, 599, 600, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect.poll(htmlBackground).toBe("rgba(0, 0, 0, 0)");
+    await expect(page.getByRole("main").locator("header")).toHaveCSS("background-color", "rgb(232, 82, 63)");
+  }
 
   await selectRoute(page);
 

@@ -3,16 +3,20 @@ import { vars } from "@/shared/styles/tokens.css";
 import { text } from "@/shared/styles/button.css";
 import trashIcon from "@/shared/assets/icons/trash.svg";
 import checkIcon from "../assets/group-check.svg";
+import { modeTransition } from "@/shared/styles/transition.css";
 
-export const section = style({
-  display: "flex",
-  flexDirection: "column",
-  gap: 12,
-  maxWidth: 356,
-  margin: "0 auto 24px",
-  fontFamily: "'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif",
-  color: "#292A2D",
-});
+export const section = style([
+  modeTransition,
+  {
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+    maxWidth: 356,
+    margin: "0 auto 24px",
+    fontFamily: "'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif",
+    color: "#292A2D",
+  },
+]);
 export const edit = style([
   text,
   { display: "grid", placeItems: "center", flexShrink: 0, width: 36, height: 32, padding: "6px 8px" },

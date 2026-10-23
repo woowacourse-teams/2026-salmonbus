@@ -64,10 +64,12 @@ export function MyPageScreen() {
       {state.status === "authenticated" ? (
         <>
           <div className="amp-mask">
-            <Link className={styles.nickname} to="/mypage/nickname" aria-label="닉네임 수정">
+            <div className={styles.nickname}>
               <span>{state.member.nickname}님</span>
-              <img src={pencilIcon} width="20" height="20" alt="" draggable={false} />
-            </Link>
+              <Link className={styles.nicknameEdit} to="/mypage/nickname" aria-label="닉네임 수정">
+                <img src={pencilIcon} width="20" height="20" alt="" draggable={false} />
+              </Link>
+            </div>
             <p className={styles.caption}>
               {state.member.provider === "KAKAO" ? "카카오" : "Apple"} 계정으로 로그인 중
             </p>

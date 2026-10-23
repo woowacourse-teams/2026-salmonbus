@@ -79,6 +79,8 @@ test("닉네임 중복 오류 후 입력을 수정해 저장하고 재접속해�
   auth.member = { ...testMember };
   auth.nicknameError = "NICKNAME_TAKEN";
   await page.goto("/mypage");
+  await page.getByText(`${testMember.nickname}님`, { exact: true }).click();
+  await expect(page).toHaveURL("/mypage");
   await page.getByRole("link", { name: "닉네임 수정" }).click();
   const input = page.getByRole("textbox", { name: "닉네임", exact: true });
   await input.fill("연어");

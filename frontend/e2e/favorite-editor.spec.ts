@@ -4,6 +4,157 @@ import { routeId } from "./fixtures/mock-data";
 const secondGroupId = "10000000-0000-4000-8000-000000000003";
 test.use({ viewport: { width: 425, height: 844 } });
 
+test("편집 정보를 다시 조회하는 동안 홈의 명칭과 카드 위치를 유지한다", async ({ page, favorites, api }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const stop = api.data.board.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+  favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
+  let release = () => {};
+  const response = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await api.route(async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/me/favorites" && !url.searchParams.has("groupId")) await response;
+    await route.fallback();
+  });
+  await page.goto("/");
+  const homeCard = page.getByRole("tabpanel").getByRole("listitem").first();
+  await expect(homeCard.getByText(stop.name, { exact: true })).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+  const before = (await homeCard.boundingBox())!;
+  const requested = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === "/api/me/favorites" && !url.searchParams.has("groupId");
+  });
+  try {
+    await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
+    await requested;
+    const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
+    const card = editor.getByRole("list", { name: "즐겨찾기 순서", exact: true }).getByRole("listitem").first();
+    await expect(card.getByText(stop.name, { exact: true })).toBeVisible();
+    await expect(card.getByText(api.data.board.route.displayName, { exact: true })).toBeVisible();
+    await expect(editor.getByText("즐겨찾기를 불러오고 있어요…", { exact: true })).toHaveCount(0);
+    await expect(editor.getByText("노선 정보 없음", { exact: true })).toHaveCount(0);
+    await expect(editor.getByText("정류장 정보 없음", { exact: true })).toHaveCount(0);
+    const pending = (await card.boundingBox())!;
+    expect(pending.x).toBeCloseTo(before.x, 1);
+    expect(pending.y).toBeCloseTo(before.y, 1);
+    expect(pending.width).toBeCloseTo(before.width, 1);
+
+    stop.name = "새로 확인한 정류장";
+    release();
+    await expect(card.getByText(stop.name, { exact: true })).toBeVisible();
+    expect((await card.boundingBox())!.y).toBeCloseTo(before.y, 1);
+  } finally {
+    release();
+  }
+});
+
+test("마이페이지 편집은 조회 중 카드 공간을 유지하고 조회 후 순서를 저장한다", async ({ page, favorites, api }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const [first, second] = api.data.board.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
+  first!.name = "첫 정류장";
+  second!.name = "다음 정류장";
+  favorites.groups[0]!.favorites = [
+    storedFavorite({ routeId, stopId: first!.stopId, direction: "UP" }),
+    storedFavorite({ routeId, stopId: second!.stopId, direction: "UP" }, 5),
+  ];
+  let release = () => {};
+  const response = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await api.route(async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/me/favorites" && !url.searchParams.has("groupId")) await response;
+    await route.fallback();
+  });
+  await page.goto("/mypage");
+  await page.evaluate(() => document.fonts.ready);
+  const requested = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === "/api/me/favorites" && !url.searchParams.has("groupId");
+  });
+  try {
+    await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
+    await requested;
+    const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
+    await expect(editor).toHaveAttribute("aria-busy", "true");
+    await expect(editor.getByRole("status").filter({ hasText: "즐겨찾기를 불러오고 있어요…" })).toHaveCSS(
+      "position",
+      "absolute",
+    );
+    await expect(editor.getByText("노선 정보 없음", { exact: true })).toHaveCount(0);
+    await expect(editor.getByText("정류장 정보 없음", { exact: true })).toHaveCount(0);
+    const cards = editor.getByRole("list", { name: "즐겨찾기 순서", exact: true }).getByRole("listitem");
+    await expect(cards).toHaveCount(2);
+    const pending = (await cards.first().boundingBox())!;
+    release();
+    await expect(cards.first().getByText(first!.name, { exact: true })).toBeVisible();
+    await expect(editor).toHaveAttribute("aria-busy", "false");
+    const loaded = (await cards.first().boundingBox())!;
+    expect(loaded.x).toBeCloseTo(pending.x, 1);
+    expect(loaded.y).toBeCloseTo(pending.y, 1);
+    expect(loaded.width).toBeCloseTo(pending.width, 1);
+    expect(loaded.height).toBeCloseTo(pending.height, 1);
+    await editor
+      .getByRole("button", { name: `${api.data.board.route.displayName} · ${first!.name} 순서 변경`, exact: true })
+      .press("ArrowDown");
+    await editor.getByRole("button", { name: "완료", exact: true }).click();
+    await expect(editor).toHaveCount(0);
+    expect(favorites.groups[0]!.favorites.map((favorite) => favorite.stopId)).toEqual([second!.stopId, first!.stopId]);
+  } finally {
+    release();
+  }
+});
+
+test("편집 진입과 복귀를 반복해도 카드 등장 애니메이션을 다시 실행하지 않고 포커스를 복원한다", async ({
+  page,
+  favorites,
+  api,
+}) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  const stop = api.data.board.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+  favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
+  await page.goto("/");
+  const panel = page.getByRole("tabpanel");
+  await expect(panel.getByText(stop.name, { exact: true })).toBeVisible();
+  const edit = page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true });
+  const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
+  await edit.click();
+  await expect(editor.getByText(stop.name, { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(editor).toHaveCount(0);
+  await expect(edit).toBeFocused();
+  await expect(panel.locator(":scope > div")).toHaveCSS("animation-name", "none");
+  await edit.click();
+  await editor.getByRole("button", { name: "완료", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(edit).toBeFocused();
+  await expect(panel.getByText(stop.name, { exact: true })).toBeVisible();
+  await expect(panel.locator(":scope > div")).toHaveCSS("animation-name", "none");
+});
+
+test("홈과 마이페이지 편집 전환은 모션 줄이기 설정을 따른다", async ({ page, favorites }) => {
+  favorites.groups[0]!.name = "출퇴근";
+  for (const path of ["/", "/mypage"]) {
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.goto(path);
+    const edit = page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true });
+    const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
+    await edit.click();
+    await expect(editor.locator("..")).not.toHaveCSS("animation-name", "none");
+    await expect(editor.locator("..")).toHaveCSS("animation-duration", "0.22s");
+    await page.keyboard.press("Escape");
+    await expect(edit).toBeFocused();
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await edit.click();
+    await expect(editor.locator("..")).toHaveCSS("animation-name", "none");
+    await editor.getByRole("button", { name: "완료", exact: true }).click();
+    await expect(editor).toHaveCount(0);
+    await expect(edit).toBeFocused();
+  }
+});
+
 test("홈 영역이 편집 화면으로 바뀌고 카드를 잡고 이동·놓은 뒤 완료 토스트를 표시한다", async ({
   page,
   favorites,
@@ -262,9 +413,14 @@ for (const width of [320, 425]) {
     favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
     favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [] });
     await page.goto("/");
-    const normalCard = page.getByRole("tabpanel").locator(":scope > ul > li").first();
+    const normalCard = page.getByRole("tabpanel").getByRole("listitem").first();
     await expect(normalCard).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
+    await page
+      .getByRole("tabpanel")
+      .evaluate((element) =>
+        Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished)),
+      );
     const tabs = await page.getByRole("tab").evaluateAll((elements) =>
       elements.map((element) => {
         const box = element.getBoundingClientRect();

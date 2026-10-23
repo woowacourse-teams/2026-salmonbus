@@ -15,6 +15,7 @@ import editIcon from "@/shared/assets/icons/favorite-edit.svg";
 import * as homeStyles from "./HomeFavorites.css";
 import * as buttons from "@/shared/styles/button.css";
 import { RouteBadge } from "@/shared/components/RouteBadge";
+import { visuallyHidden } from "@/shared/styles/accessibility.css";
 
 const STATUS_LABEL: Record<Exclude<FavoriteStatus, "READY">, string> = {
   NO_VEHICLE: "도착 예정 차량이 없어요",
@@ -29,6 +30,11 @@ export function HomeFavorites() {
   const [selected, setSelected] = useState<string | null>(null);
   const group = groups.find((candidate) => candidate.id === selected) ?? groups[0];
   const [ordering, setOrdering] = useState(false);
+  const [animateGroup, setAnimateGroup] = useState(true);
+  const changeMode = (editing: boolean) => {
+    setAnimateGroup(false);
+    setOrdering(editing);
+  };
   const [notice, showNotice] = useReducer((value: number) => value + 1, 0);
   const editButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -37,22 +43,36 @@ export function HomeFavorites() {
   const [revision, retry] = useReducer((value: number) => value + 1, 0);
   const summary = useHomeFavorites(group?.id ?? null, revision);
   const latest = latestSuccessOf(summary);
+  const [previous, setPrevious] = useState({ groupId: group?.id, latest });
+  const previousGroup = groups.find((candidate) => candidate.id === previous.groupId);
+  const switching = summary.status === "pending" && previous.latest !== null && previousGroup !== undefined;
+  const shownLatest = switching ? previous.latest : latest;
+  const shownGroup = switching ? previousGroup : group;
+  const selectGroup = (id: string) => {
+    if (id === group?.id) return;
+    if (latest !== null) setPrevious({ groupId: group?.id, latest });
+    setAnimateGroup(true);
+    setSelected(id);
+  };
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (latest === null) return;
+    if (shownLatest === null) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [latest]);
-  const favorites = latest?.body.groups.find((candidate) => candidate.id === group?.id)?.favorites ?? [];
+  }, [shownLatest]);
+  const favorites = shownLatest?.body.groups.find((candidate) => candidate.id === shownGroup?.id)?.favorites ?? [];
   if (ordering)
     return (
-      <FavoriteEditor
-        {...(group ? { initialGroupId: group.id } : {})}
-        onClose={(saved) => {
-          setOrdering(false);
-          if (saved) showNotice();
-        }}
-      />
+      <div className={homeStyles.section}>
+        <FavoriteEditor
+          {...(group ? { initialGroupId: group.id } : {})}
+          {...(latest ? { initialFavorites: favorites } : {})}
+          onClose={(saved) => {
+            changeMode(false);
+            if (saved) showNotice();
+          }}
+        />
+      </div>
     );
   const loadingError =
     resource.status === "loadingError" ? resource : group && summary.status === "loadingError" ? summary : null;
@@ -83,7 +103,7 @@ export function HomeFavorites() {
                 aria-selected={group?.id === candidate.id}
                 tabIndex={group?.id === candidate.id ? 0 : -1}
                 key={candidate.id}
-                onClick={() => setSelected(candidate.id)}
+                onClick={() => selectGroup(candidate.id)}
                 onKeyDown={(event) => {
                   const next =
                     event.key === "ArrowRight"
@@ -99,7 +119,7 @@ export function HomeFavorites() {
                   const nextGroup = groups[next];
                   if (nextGroup === undefined) return;
                   event.preventDefault();
-                  setSelected(nextGroup.id);
+                  selectGroup(nextGroup.id);
                   event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
                 }}
               >
@@ -112,36 +132,53 @@ export function HomeFavorites() {
             type="button"
             className={homeStyles.homeEdit}
             aria-label="그룹과 즐겨찾기 순서 편집"
-            onClick={() => setOrdering(true)}
+            onClick={() => changeMode(true)}
           >
             <img src={editIcon} width="20" height="20" alt="" draggable={false} />
           </button>
         </div>
       )}
-      {group && <FavoritesNotice resource={summary} onRetry={retry} />}
+      {switching ? (
+        <p role="status" className={visuallyHidden}>
+          {group?.name} 그룹의 즐겨찾기를 불러오고 있어요…
+        </p>
+      ) : (
+        group && <FavoritesNotice resource={summary} onRetry={retry} />
+      )}
       <div
         id="home-favorites"
         role={group ? "tabpanel" : undefined}
         aria-labelledby={group ? `group-tab-${group.id}` : undefined}
+        aria-busy={summary.status === "pending"}
+        className={homeStyles.panel}
+        data-loading={switching}
       >
-        {((resource.status === "success" && !group) || (latest !== null && favorites.length === 0)) && (
-          <div className={homeStyles.homeEmpty}>
-            <img src={bookmarkIcon} width="34" height="34" alt="" draggable={false} />
-            <p className={homeStyles.homeEmptyTitle}>등록된 즐겨찾기가 없어요</p>
-            <p className={homeStyles.homeEmptyDescription}>자주 타는 노선에서 즐겨찾기를 추가해 보세요!</p>
-          </div>
-        )}
-        <ul className={homeStyles.list}>
-          {favorites.map((favorite) => (
-            <FavoriteCard
-              key={favorite.id}
-              favorite={favorite}
-              savedDirection={group?.favorites.find((candidate) => candidate.id === favorite.id)?.direction ?? null}
-              elapsed={Math.max(0, (now - (latest?.receivedAt ?? now)) / 1000)}
-              onRetry={retry}
-            />
-          ))}
-        </ul>
+        <div
+          key={shownGroup?.id}
+          className={shownLatest && animateGroup ? homeStyles.panelContent : undefined}
+          inert={switching}
+        >
+          {((resource.status === "success" && !group) || (shownLatest !== null && favorites.length === 0)) && (
+            <div className={homeStyles.homeEmpty}>
+              <img src={bookmarkIcon} width="34" height="34" alt="" draggable={false} />
+              <p className={homeStyles.homeEmptyTitle}>등록된 즐겨찾기가 없어요</p>
+              <p className={homeStyles.homeEmptyDescription}>자주 타는 노선에서 즐겨찾기를 추가해 보세요!</p>
+            </div>
+          )}
+          <ul className={homeStyles.list}>
+            {favorites.map((favorite) => (
+              <FavoriteCard
+                key={favorite.id}
+                favorite={favorite}
+                savedDirection={
+                  shownGroup?.favorites.find((candidate) => candidate.id === favorite.id)?.direction ?? null
+                }
+                elapsed={Math.max(0, (now - (shownLatest?.receivedAt ?? now)) / 1000)}
+                onRetry={retry}
+              />
+            ))}
+          </ul>
+        </div>
       </div>
       {notice > 0 && <Notice key={notice} message="변경 사항을 저장했어요" />}
     </section>

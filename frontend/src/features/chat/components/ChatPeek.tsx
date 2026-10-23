@@ -44,7 +44,7 @@ export function ChatPeek({ launcherRef, sheetId, displayName, unread, teaser, on
 function MessageIcon() {
   return (
     <svg className={styles.icon} viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M21 11.5a8.4 8.4 0 0 1-9 8.5 9.5 9.5 0 0 1-4-.9L3 21l1.6-4.6A8.4 8.4 0 1 1 21 11.5Z" />
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />
     </svg>
   );
 }

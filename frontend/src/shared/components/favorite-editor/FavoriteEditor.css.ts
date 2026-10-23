@@ -26,6 +26,8 @@ export const groupName = style({
   cursor: "pointer",
 });
 export const info = style({ display: "flex", flexDirection: "column", gap: 6, flex: 1, minWidth: 0 });
+export const loadingName = style({ height: 22, width: "80%", borderRadius: 4, background: "#EAE6E0" });
+export const loadingDirection = style({ height: 18, width: "45%", borderRadius: 4, background: "#EAE6E0" });
 export const cardHeading = style({ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flexWrap: "wrap" });
 export const stop = style({
   flex: "1 1 100px",

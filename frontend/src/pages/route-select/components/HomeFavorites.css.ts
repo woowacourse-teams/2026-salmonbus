@@ -1,10 +1,24 @@
-import { style, styleVariants } from "@vanilla-extract/css";
+import { keyframes, style, styleVariants } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 import { card as cardBase, outlinedCard } from "@/shared/styles/surface.css";
 import { pill } from "@/shared/styles/selection.css";
 import { text } from "@/shared/styles/button.css";
+import { modeTransition } from "@/shared/styles/transition.css";
 
-export const section = style({ width: "100%", maxWidth: 356, margin: "0 auto" });
+export const section = style([modeTransition, { width: "100%", maxWidth: 356, margin: "0 auto" }]);
+const enterGroup = keyframes({
+  from: { opacity: 0, transform: "translateY(6px)" },
+  to: { opacity: 1, transform: "translateY(0)" },
+});
+export const panel = style({
+  transition: "opacity 160ms ease",
+  selectors: { '&[data-loading="true"]': { opacity: 0.45 } },
+  "@media": { "(prefers-reduced-motion: reduce)": { transition: "none" } },
+});
+export const panelContent = style({
+  animation: `${enterGroup} 220ms cubic-bezier(0.22, 1, 0.36, 1) both`,
+  "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } },
+});
 export const card = style([
   cardBase,
   outlinedCard,
@@ -120,7 +134,9 @@ export const tab = style([
   pill,
   {
     cursor: "pointer",
+    transition: "background-color 160ms ease, color 160ms ease",
     selectors: { '&[aria-selected="true"]': { background: vars.color.liveBus, color: "white" } },
+    "@media": { "(prefers-reduced-motion: reduce)": { transition: "none" } },
   },
 ]);
 export const homeEdit = style([

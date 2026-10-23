@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { deleteFavorite, saveFavoriteOrder, saveGroupOrder } from "@/shared/api/favorites.api";
-import type { FavoriteGroup, SavedFavorite } from "@/shared/api/favorites.types";
+import type { FavoriteGroup, HomeFavorite, SavedFavorite } from "@/shared/api/favorites.types";
 import { latestSuccessOf } from "@/shared/api/polledResource";
 import { EmptyFavoriteGroup } from "@/shared/components/EmptyFavoriteGroup";
 import { RouteBadge } from "@/shared/components/RouteBadge";
@@ -19,6 +19,7 @@ import * as buttons from "@/shared/styles/button.css";
 interface FavoriteEditorProps {
   onClose: (saved: boolean) => void;
   initialGroupId?: string;
+  initialFavorites?: HomeFavorite[];
 }
 
 interface FavoriteOrderChange {
@@ -26,7 +27,7 @@ interface FavoriteOrderChange {
   ids: string[];
 }
 
-export function FavoriteEditor({ onClose, initialGroupId }: FavoriteEditorProps) {
+export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: FavoriteEditorProps) {
   const { groups, reload } = useFavorites();
   const [saved, setSaved] = useState(groups);
   const [draft, setDraft] = useState(groups);
@@ -36,7 +37,11 @@ export function FavoriteEditor({ onClose, initialGroupId }: FavoriteEditorProps)
   const [partial, setPartial] = useState(false);
   const [revision, retry] = useState(0);
   const summaries = useHomeFavorites("all", revision);
-  const favorites = latestSuccessOf(summaries)?.body.groups.flatMap((candidate) => candidate.favorites) ?? [];
+  const favorites =
+    latestSuccessOf(summaries)?.body.groups.flatMap((candidate) => candidate.favorites) ?? initialFavorites ?? [];
+  const hasGroupDetails =
+    initialFavorites !== undefined &&
+    group?.favorites.every((favorite) => favorites.some((item) => item.id === favorite.id));
   const { busy, error, setError, run } = useFavoriteAction();
   const editor = useRef<HTMLElement>(null);
   const doneButton = useRef<HTMLButtonElement>(null);
@@ -120,6 +125,7 @@ export function FavoriteEditor({ onClose, initialGroupId }: FavoriteEditorProps)
       ref={editor}
       className={`${styles.editor} amp-mask`}
       aria-label="즐겨찾기 편집"
+      aria-busy={summaries.status === "pending" && !hasGroupDetails}
       onKeyDown={(event) => {
         if (event.key === "Escape" && deleting === null) close();
       }}
@@ -150,7 +156,15 @@ export function FavoriteEditor({ onClose, initialGroupId }: FavoriteEditorProps)
           </>
         )}
       />
-      <FavoritesNotice resource={summaries} onRetry={() => retry((value) => value + 1)} />
+      {summaries.status === "pending" ? (
+        !hasGroupDetails && (
+          <p className={visuallyHidden} role="status">
+            즐겨찾기를 불러오고 있어요…
+          </p>
+        )
+      ) : (
+        <FavoritesNotice resource={summaries} onRetry={() => retry((value) => value + 1)} />
+      )}
       {group && group.favorites.length > 0 && (
         <SortableList
           key={group.id}
@@ -171,17 +185,26 @@ export function FavoriteEditor({ onClose, initialGroupId }: FavoriteEditorProps)
             return (
               <>
                 <div className={styles.info}>
-                  <div className={styles.cardHeading}>
-                    <RouteBadge>{item?.route.displayName || "노선 정보 없음"}</RouteBadge>
-                    <span className={styles.stop}>{item?.stop.name || "정류장 정보 없음"}</span>
-                  </div>
-                  <span className={styles.direction}>
-                    {item?.route.terminalStopName?.trim()
-                      ? `${item.route.terminalStopName.trim()} 방면`
-                      : favorite.direction === "UP"
-                        ? "상행"
-                        : "하행"}
-                  </span>
+                  {summaries.status === "pending" && !item ? (
+                    <>
+                      <span className={styles.loadingName} aria-hidden="true" />
+                      <span className={styles.loadingDirection} aria-hidden="true" />
+                    </>
+                  ) : (
+                    <>
+                      <div className={styles.cardHeading}>
+                        <RouteBadge>{item?.route.displayName || "노선 정보 없음"}</RouteBadge>
+                        <span className={styles.stop}>{item?.stop.name || "정류장 정보 없음"}</span>
+                      </div>
+                      <span className={styles.direction}>
+                        {item?.route.terminalStopName?.trim()
+                          ? `${item.route.terminalStopName.trim()} 방면`
+                          : favorite.direction === "UP"
+                            ? "상행"
+                            : "하행"}
+                      </span>
+                    </>
+                  )}
                 </div>
                 <button
                   type="button"
