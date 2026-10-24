@@ -1,7 +1,9 @@
 import { mergeTests, type Page } from "@playwright/test";
 import { test as mapTest, expect } from "./fixtures/naver-map";
 import { routeId } from "./fixtures/mock-data";
-import type { NativeMapMessage, NativeMapEvent } from "../src/shared/native-map/protocol";
+import type { BridgeEnvelope } from "../src/shared/bridge/bridge.types";
+import { NATIVE_MAP_CAPABILITIES } from "../src/shared/native-map/bridge";
+import type { NativeMapCommands, NativeMapEvent, NativeMapSession } from "../src/shared/native-map/protocol";
 import { test as favoritesTest } from "./fixtures/favorites";
 
 const test = mapTest.extend<{ nativeReady: boolean }>({
@@ -9,67 +11,74 @@ const test = mapTest.extend<{ nativeReady: boolean }>({
 });
 const favoriteNativeTest = mergeTests(test, favoritesTest);
 
+/** 앱이 받은 map 메시지를 영역 이름을 떼고 세션 값을 꺼낸 모양. 아래 검사는 이 모양으로 읽는다. */
+type MapCommandMessage = {
+  [K in keyof NativeMapCommands]: NativeMapSession & { type: K; payload: NativeMapCommands[K] };
+}[keyof NativeMapCommands];
+
 declare global {
   interface Window {
-    nativeMapMessages: NativeMapMessage[];
+    bridgeMessages: BridgeEnvelope[];
   }
 }
 
 test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "no-preference" });
 
 test.beforeEach(async ({ page, nativeReady }) => {
-  await page.addInitScript((nativeReady) => {
-    window.nativeMapMessages = [];
-    window.SalmonNativeMap = {
-      version: 1,
-      platform: "ios",
-      postMessage(raw) {
-        const message = JSON.parse(raw) as NativeMapMessage;
-        window.nativeMapMessages.push(message);
-        if ((message.type === "mount" && nativeReady) || message.type === "layout") {
-          queueMicrotask(() =>
-            window.dispatchEvent(
-              new CustomEvent("salmon:native-map", {
-                detail: {
-                  v: 1,
-                  sessionId: message.sessionId,
-                  revision: message.revision,
-                  type: message.type === "mount" ? "ready" : "ack",
-                  payload: message.type === "mount" ? {} : { revision: message.revision },
-                },
-              }),
-            ),
-          );
-        }
-      },
-    };
-  }, nativeReady);
+  await page.addInitScript(
+    ({ nativeReady, capabilities }) => {
+      window.bridgeMessages = [];
+      window.__SALMONBUS_APP__ = { appVersion: "1.0.0", capabilities };
+      window.ReactNativeWebView = {
+        postMessage(raw: string) {
+          const message = JSON.parse(raw) as BridgeEnvelope & { payload: { sessionId: string; revision: number } };
+          window.bridgeMessages.push(message);
+          if ((message.type === "map.mount" && nativeReady) || message.type === "map.layout") {
+            const { sessionId, revision } = message.payload;
+            queueMicrotask(() =>
+              window.dispatchEvent(
+                new CustomEvent("salmon:bridge", {
+                  detail: {
+                    v: 1,
+                    type: message.type === "map.mount" ? "map.ready" : "map.ack",
+                    payload:
+                      message.type === "map.mount"
+                        ? { sessionId, revision }
+                        : { sessionId, revision, appliedRevision: revision },
+                  },
+                }),
+              ),
+            );
+          }
+        },
+      };
+    },
+    { nativeReady, capabilities: NATIVE_MAP_CAPABILITIES },
+  );
 });
 
-async function messages(page: Page) {
-  return page.evaluate(() => window.nativeMapMessages);
+async function messages(page: Page): Promise<MapCommandMessage[]> {
+  const sent = await page.evaluate(() => window.bridgeMessages);
+  return sent
+    .filter((message) => message.type.startsWith("map."))
+    .map((message) => {
+      const { sessionId, revision, ...payload } = message.payload as NativeMapSession;
+      return { type: message.type.slice("map.".length), sessionId, revision, payload } as MapCommandMessage;
+    });
 }
 async function open(page: Page, id = routeId) {
   await page.goto(`/routes/${id}`);
   await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
   await page.clock.runFor(64);
 }
-async function emit(page: Page, event: Pick<NativeMapEvent, "type" | "payload">, sessionId?: string) {
+async function emit(page: Page, event: NativeMapEvent, sessionId?: string) {
+  const mount = (await messages(page)).find((message) => message.type === "mount")!;
   await page.evaluate(
-    ({ event, sessionId }) => {
-      const mount = window.nativeMapMessages.find((message) => message.type === "mount")!;
-      window.dispatchEvent(
-        new CustomEvent("salmon:native-map", {
-          detail: {
-            v: 1,
-            sessionId: sessionId ?? mount.sessionId,
-            revision: mount.revision,
-            ...event,
-          },
-        }),
-      );
+    ({ type, payload }) => window.dispatchEvent(new CustomEvent("salmon:bridge", { detail: { v: 1, type, payload } })),
+    {
+      type: `map.${event.type}`,
+      payload: { ...event.payload, sessionId: sessionId ?? mount.sessionId, revision: mount.revision },
     },
-    { event, sessionId },
   );
 }
 
