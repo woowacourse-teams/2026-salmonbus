@@ -63,7 +63,7 @@ class FavoriteOverviewServiceTest {
         assertThat(item.target()).isEqualTo(new FavoriteTarget(ROUTE_ID, STOP_ID, FavoriteDirection.UP));
         assertThat(item.board().stop().stopId()).isEqualTo(STOP_ID);
         assertThat(item.board().stop().approachingVehicles()).hasSize(3);
-        assertThat(item.board().stop().approachingVehicles().getFirst().watch().horizonStops()).isEqualTo(1);
+        assertThat(item.board().stop().approachingVehicles().getFirst().watch().remainingStops()).isEqualTo(1);
         assertThat(item.board().stop().approachingVehicles().get(2).eta().reason())
             .isEqualTo(FavoriteOverview.EtaReason.SOURCE_NOT_PROVIDED);
     }

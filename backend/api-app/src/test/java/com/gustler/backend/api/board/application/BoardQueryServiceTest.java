@@ -2,6 +2,7 @@ package com.gustler.backend.api.board.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -415,10 +416,10 @@ class BoardQueryServiceTest {
         // given
         givenRoundTripBoard(List.of(prediction(3, "FAR", 4, 2, 0.2, 10.0)));
         given(repository.findObservedVehicles(100L, 1L)).willReturn(List.of(
-            new BoardVehicleObservation("FAR", 4, 1),
-            new BoardVehicleObservation("C", 3, 2),
-            new BoardVehicleObservation("B", 2, 2),
-            new BoardVehicleObservation("A", 1, 2)));
+            new BoardVehicleObservation("FAR", 4, 1, 1),
+            new BoardVehicleObservation("C", 3, 2, 2),
+            new BoardVehicleObservation("B", 2, 2, 2),
+            new BoardVehicleObservation("A", 1, 2, 2)));
 
         // when
         List<ApproachingVehicle> vehicles = service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles();
@@ -434,7 +435,7 @@ class BoardQueryServiceTest {
         // when
         givenRoundTripBoard(List.of());
         given(repository.findObservedVehicles(100L, 1L)).willReturn(List.of(
-            new BoardVehicleObservation("A", 1, 2)));
+            new BoardVehicleObservation("A", 1, 2, 2)));
 
         // then
         assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
@@ -446,7 +447,7 @@ class BoardQueryServiceTest {
         // when
         givenRoundTripBoard(List.of(prediction(3, null, 2, 1, 1.0, 0.0)));
         given(repository.findObservedVehicles(100L, 1L)).willReturn(List.of(
-            new BoardVehicleObservation(null, 1, 2), new BoardVehicleObservation(null, 2, 2)));
+            new BoardVehicleObservation(null, 1, 2, 2), new BoardVehicleObservation(null, 2, 2, 2)));
 
         // then
         assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
@@ -464,15 +465,123 @@ class BoardQueryServiceTest {
             stop(2, "회차점", BoardDirection.UP, false),
             stop(13, "종점", BoardDirection.DOWN, true)));
         given(repository.findObservedVehicles(100L, 1L)).willReturn(List.of(
-            new BoardVehicleObservation("PAST", 1, 14),
-            new BoardVehicleObservation("HERE", 2, 13),
-            new BoardVehicleObservation("NEAR", 3, 12),
-            new BoardVehicleObservation("BOUNDARY", 4, 1),
-            new BoardVehicleObservation("TOO_FAR", 5, 0)));
+            new BoardVehicleObservation("PAST", 1, 14, 14),
+            new BoardVehicleObservation("HERE", 2, 13, 13),
+            new BoardVehicleObservation("NEAR", 3, 12, 12),
+            new BoardVehicleObservation("BOUNDARY", 4, 1, 1),
+            new BoardVehicleObservation("TOO_FAR", 5, 0, 0)));
 
         // then
         assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
             .extracting(ApproachingVehicle::vehicleId).containsExactly("NEAR", "BOUNDARY");
+    }
+
+    @Test
+    void 대상_정류장에_서_있는_차량은_남은_정류장_0으로_노출하고_예보를_연결한다() {
+        // given
+        givenRoundTripBoard(List.of(prediction(3, "A", 1, 1, 0.25, 10.0)));
+        given(repository.findObservedVehicles(100L, 1L)).willReturn(List.of(
+            new BoardVehicleObservation("A", 1, 2, 3)));
+
+        // when
+        List<ApproachingVehicle> vehicles = service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles();
+
+        // then
+        assertThat(vehicles).containsExactly(new ApproachingVehicle("A", 0, new Available(0.75, 10.0)));
+    }
+
+    @Test
+    void 앞_정류장에_서_있는_차량은_버스가_있는_정류장부터_세고_이동_중이거나_출발한_차량은_모델_거리와_같다() {
+        // given
+        givenVehiclesApproaching(20, List.of(
+            new BoardVehicleObservation("ARRIVING", 1, 16, 17),
+            new BoardVehicleObservation("IN_TRANSIT", 2, 15, 15),
+            new BoardVehicleObservation("DEPARTED", 3, 14, 14)));
+
+        // when
+        List<ApproachingVehicle> vehicles = service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles();
+
+        // then
+        assertThat(vehicles).extracting(ApproachingVehicle::vehicleId, ApproachingVehicle::remainingStops)
+            .containsExactly(tuple("ARRIVING", 3), tuple("IN_TRANSIT", 5), tuple("DEPARTED", 6));
+    }
+
+    @Test
+    void 모델_거리가_12를_넘는_도착_차량은_남은_정류장이_12여도_노출하지_않고_모델_거리_12까지는_노출한다() {
+        // given
+        givenVehiclesApproaching(20, List.of(
+            new BoardVehicleObservation("ARRIVING", 1, 7, 8),
+            new BoardVehicleObservation("DEPARTED", 2, 8, 8),
+            new BoardVehicleObservation("ARRIVING_EDGE", 3, 8, 9)));
+
+        // when
+        List<ApproachingVehicle> vehicles = service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles();
+
+        // then
+        assertThat(vehicles).extracting(ApproachingVehicle::vehicleId, ApproachingVehicle::remainingStops)
+            .containsExactly(tuple("ARRIVING_EDGE", 11), tuple("DEPARTED", 12));
+    }
+
+    @Test
+    void 남은_정류장이_가까운_차량부터_3대를_남긴다() {
+        // given
+        givenVehiclesApproaching(20, List.of(
+            new BoardVehicleObservation("A", 1, 19, 19),
+            new BoardVehicleObservation("B", 2, 17, 17),
+            new BoardVehicleObservation("C", 3, 17, 17),
+            new BoardVehicleObservation("D", 4, 17, 18)));
+
+        // when
+        List<ApproachingVehicle> vehicles = service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles();
+
+        // then
+        assertThat(vehicles).extracting(ApproachingVehicle::vehicleId, ApproachingVehicle::remainingStops)
+            .containsExactly(tuple("A", 1), tuple("D", 2), tuple("B", 3));
+    }
+
+    @Test
+    void 남은_정류장이_같으면_모델_거리가_짧은_차량이_앞선다() {
+        // given
+        givenVehiclesApproaching(20, List.of(
+            new BoardVehicleObservation("A", 1, 16, 17),
+            new BoardVehicleObservation("B", 2, 17, 17)));
+
+        // when
+        List<ApproachingVehicle> vehicles = service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles();
+
+        // then
+        assertThat(vehicles).extracting(ApproachingVehicle::vehicleId).containsExactly("B", "A");
+    }
+
+    @Test
+    void 두_거리가_같으면_차량_ID가_있는_차량이_ID_없는_차량보다_앞선다() {
+        // given
+        givenVehiclesApproaching(20, List.of(
+            new BoardVehicleObservation(null, 1, 17, 17),
+            new BoardVehicleObservation("Z", 2, 17, 17)));
+
+        // when
+        List<ApproachingVehicle> vehicles = service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles();
+
+        // then
+        assertThat(vehicles).extracting(ApproachingVehicle::vehicleId).containsExactly("Z", null);
+    }
+
+    @Test
+    void 버스가_있는_정류장과_지난_정류장의_정합이_깨진_관측은_노출하지_않는다() {
+        // given
+        givenVehiclesApproaching(20, List.of(
+            new BoardVehicleObservation("PAST_TARGET", 1, 19, 21),
+            new BoardVehicleObservation("BEHIND_PASSED", 2, 15, 13),
+            new BoardVehicleObservation("AHEAD_OF_PASSED", 3, 15, 17),
+            new BoardVehicleObservation("CONSISTENT", 4, 15, 16)));
+
+        // when
+        List<ApproachingVehicle> vehicles = service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles();
+
+        // then
+        assertThat(vehicles).extracting(ApproachingVehicle::vehicleId, ApproachingVehicle::remainingStops)
+            .containsExactly(tuple("CONSISTENT", 4));
     }
 
     @Test
@@ -482,8 +591,8 @@ class BoardQueryServiceTest {
             new SnapshotObservation(100L, OBSERVED_AT, 2, false))));
         given(repository.findStops(1L)).willReturn(roundTripStops());
         given(repository.findObservedVehicles(100L, 1L)).willReturn(List.of(
-            new BoardVehicleObservation("A", 1, 2),
-            new BoardVehicleObservation("B", 2, 1)));
+            new BoardVehicleObservation("A", 1, 2, 2),
+            new BoardVehicleObservation("B", 2, 1, 1)));
 
         // when
         BoardOverview actual = service.getBoard(ROUTE_ID);
@@ -559,9 +668,19 @@ class BoardQueryServiceTest {
         given(repository.findPredictions(100L)).willReturn(predictions);
         given(repository.findObservedVehicles(100L, 1L)).willReturn(predictions.stream()
                 .map(p -> new BoardVehicleObservation(p.vehicleId(), p.sourceRowNumber(),
-                    p.targetStopOrder() - p.stopsToTarget()))
+                    p.targetStopOrder() - p.stopsToTarget(), p.targetStopOrder() - p.stopsToTarget()))
                 .distinct()
                 .toList());
+    }
+
+    private void givenVehiclesApproaching(final int targetSequence, List<BoardVehicleObservation> vehicles) {
+        given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(roundTripSnapshot()));
+        given(repository.findStops(1L)).willReturn(List.of(
+            stop(1, "기점", BoardDirection.UP, true),
+            stop(2, "회차점", BoardDirection.UP, false),
+            stop(targetSequence, "종점", BoardDirection.DOWN, true)));
+        given(repository.findPredictions(100L)).willReturn(List.of());
+        given(repository.findObservedVehicles(100L, 1L)).willReturn(vehicles);
     }
 
     private Route route() {

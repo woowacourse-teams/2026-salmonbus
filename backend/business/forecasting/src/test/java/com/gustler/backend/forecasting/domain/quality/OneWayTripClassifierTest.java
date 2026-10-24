@@ -15,6 +15,7 @@ import java.time.Instant;
 import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class OneWayTripClassifierTest {
@@ -303,6 +304,32 @@ class OneWayTripClassifierTest {
     }
 
     @Test
+    void 복귀_방향의_차량이_기점을_교차로통과로_지나면_새_편도를_시작한다() {
+        // given
+        Previous before = previous(row(1, 19, 2, 40), 1, Status.ELIGIBLE);
+        Observation current = row(2, 1, 0, 42);
+
+        // when
+        Decision actual = classify(ROUTE, before, current);
+
+        // then
+        assertThat(actual).isEqualTo(new Decision(2, Status.ELIGIBLE, Boundary.DEPARTURE));
+    }
+
+    @Test
+    void 기점을_교차로통과로_지난_편도는_기점_출발_관측이_이어져도_같은_편도다() {
+        // given
+        Previous before = previous(row(2, 1, 0, 42), 2, Status.ELIGIBLE);
+        Observation current = row(3, 1, 2, 40);
+
+        // when
+        Decision actual = classify(ROUTE, before, current);
+
+        // then
+        assertThat(actual).isEqualTo(new Decision(2, Status.ELIGIBLE, Boundary.CONTINUATION));
+    }
+
+    @Test
     void 차량_ID가_없으면_기점_출발이어도_BOUNDARY_UNCONFIRMED를_반환한다() {
         // given
         Observation current = new Observation(1, null, T, 1, 2, 44);
@@ -463,5 +490,68 @@ class OneWayTripClassifierTest {
 
         // then
         assertThat(actual).isEqualTo(new Decision(100, Status.ELIGIBLE, Boundary.DIRECTION_CHANGE));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"1, 2", "1, 1", "2, 1"})
+    void 기점을_교차로통과로_지난_첫_관측부터_같은_ELIGIBLE_편도로_잇는다(final int stop, final int state) {
+        // given
+        Observation first = row(1, 1, 0, 44);
+        Decision firstDecision = classify(ROUTE, null, first);
+        Previous before = previous(first, firstDecision.tripId(), firstDecision.status());
+        Observation current = row(2, stop, state, 44);
+
+        // when
+        Decision actual = classify(ROUTE, before, current);
+
+        // then
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(firstDecision).isEqualTo(new Decision(1, Status.ELIGIBLE, Boundary.DEPARTURE));
+            softly.assertThat(actual).isEqualTo(new Decision(1, Status.ELIGIBLE, Boundary.CONTINUATION));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 700})
+    void 귀로_차량이_기점_도착_뒤_교차로통과로_지나면_간격과_관계없이_새_편도를_시작한다(final int seconds) {
+        // given
+        Previous before = new Previous(row(1, 1, 1, 44), 1, Status.ELIGIBLE, new Start(19, 2));
+        Observation current = new Observation(2, "bus", T.plusSeconds(1 + seconds), 1, 0, 44);
+
+        // when
+        Decision actual = classify(DEFAULT_ROUTE, before, current);
+
+        // then
+        assertThat(actual).isEqualTo(new Decision(2, Status.ELIGIBLE, Boundary.DEPARTURE));
+    }
+
+    @Test
+    void 기점을_교차로통과로_지난_첫_관측이_71석이면_이어지는_기점_출발도_EXCLUDED다() {
+        // given
+        Observation first = row(1, 1, 0, 71);
+        Decision firstDecision = classify(ROUTE, null, first);
+        Previous before = previous(first, firstDecision.tripId(), firstDecision.status());
+        Observation current = row(2, 1, 2, 44);
+
+        // when
+        Decision actual = classify(ROUTE, before, current);
+
+        // then
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(firstDecision).isEqualTo(new Decision(1, Status.EXCLUDED, Boundary.DEPARTURE));
+            softly.assertThat(actual).isEqualTo(new Decision(1, Status.EXCLUDED, Boundary.CONTINUATION));
+        }
+    }
+
+    @Test
+    void 기점의_운행_상태가_없으면_출발로_보지_않고_BOUNDARY_UNCONFIRMED다() {
+        // given
+        Observation current = new Observation(1, "bus", T, 1, null, 44);
+
+        // when
+        Decision actual = classify(ROUTE, null, current);
+
+        // then
+        assertThat(actual).isEqualTo(new Decision(1, Status.BOUNDARY_UNCONFIRMED, Boundary.UNCONFIRMED));
     }
 }
