@@ -110,7 +110,7 @@ export const test = authTest.extend<{ favorites: FavoritesMock }>({
                     status === "READY"
                       ? [0, 1, 2].map((index) => ({
                           vehicleId: String(index),
-                          horizonStops: 3 + index * 5,
+                          remainingStops: 3 + index * 4,
                           forecast: {
                             status: "AVAILABLE",
                             seatAvailableProbability: 0.82 - index * 0.3,

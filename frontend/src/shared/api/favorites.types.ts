@@ -24,7 +24,7 @@ export type FavoriteStatus = "READY" | "NO_VEHICLE" | "PREPARING" | "UNAVAILABLE
 
 export interface FavoriteArrival {
   vehicleId: string | null;
-  horizonStops: number;
+  remainingStops: number;
   forecast: VehicleForecast;
   eta: FavoriteEta;
 }

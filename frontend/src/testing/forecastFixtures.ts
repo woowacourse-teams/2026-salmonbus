@@ -3,7 +3,7 @@ import type { ApproachingVehicle } from "@/shared/api/routeForecast.types";
 export const forecastFixtures = {
   available: {
     vehicleId: null,
-    horizonStops: 1,
+    remainingStops: 1,
     forecast: {
       status: "AVAILABLE",
       seatAvailableProbability: 0.8,
@@ -12,7 +12,7 @@ export const forecastFixtures = {
   },
   withoutExpectedSeats: {
     vehicleId: null,
-    horizonStops: 1,
+    remainingStops: 1,
     forecast: {
       status: "AVAILABLE",
       seatAvailableProbability: 0.8,
@@ -20,7 +20,7 @@ export const forecastFixtures = {
   },
   zeroSeats: {
     vehicleId: null,
-    horizonStops: 1,
+    remainingStops: 1,
     forecast: {
       status: "AVAILABLE",
       seatAvailableProbability: 0.0,
@@ -29,7 +29,7 @@ export const forecastFixtures = {
   },
   unavailable: {
     vehicleId: null,
-    horizonStops: 1,
+    remainingStops: 1,
     forecast: {
       status: "UNAVAILABLE",
     },

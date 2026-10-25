@@ -24,10 +24,7 @@ export type ArrivalTone = SeatLevel | "unavailable";
 const MAX_ARRIVALS = 3;
 
 export function arrivalViewsFor(vehicles: readonly ApproachingVehicle[]): ArrivalView[] {
-  return [...vehicles]
-    .sort((left, right) => left.horizonStops - right.horizonStops)
-    .slice(0, MAX_ARRIVALS)
-    .map(toArrivalView);
+  return vehicles.slice(0, MAX_ARRIVALS).map(toArrivalView);
 }
 
 export function representativeArrival(arrivals: readonly [ArrivalView, ...ArrivalView[]]): ArrivalView {
@@ -39,19 +36,19 @@ export function arrivalToneFor(arrival: ArrivalView): ArrivalTone {
 }
 
 function toArrivalView(vehicle: ApproachingVehicle): ArrivalView {
-  const { vehicleId, horizonStops, forecast } = vehicle;
+  const { vehicleId, remainingStops, forecast } = vehicle;
   if (forecast.status !== "AVAILABLE") {
     return {
       kind: "unavailable",
       vehicleId,
-      stopsAway: horizonStops,
+      stopsAway: remainingStops,
     };
   }
 
   return {
     kind: "available",
     vehicleId,
-    stopsAway: horizonStops,
+    stopsAway: remainingStops,
     level: toSeatLevel(forecast.seatAvailableProbability),
     seatEstimate: toSeatEstimate(forecast.expectedSeats),
   };

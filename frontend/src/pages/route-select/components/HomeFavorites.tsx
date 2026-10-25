@@ -1,4 +1,5 @@
 import { directionLabelOf } from "@/shared/utils/directionLabelOf";
+import { stopsAwayLabelOf } from "@/shared/utils/stopsAwayLabelOf";
 import { useEffect, useReducer, useRef, useState, type KeyboardEvent } from "react";
 import { Link } from "react-router";
 import type { FavoriteStatus, FavoriteTarget, HomeFavorite } from "@/shared/api/favorites.types";
@@ -225,10 +226,12 @@ function FavoriteCard({ favorite, savedDirection, elapsed, onRetry }: FavoriteCa
                 return (
                   <li className={homeStyles.arrival} key={vehicle.vehicleId ?? index}>
                     <span className={homeStyles.timing}>
-                      <span className={timingAvailable ? homeStyles.eta : homeStyles.unavailableEta}>
-                        {timingAvailable ? `${Math.ceil(remaining / 60)}분 남음` : "도착 정보 없음"}
-                      </span>
-                      <span className={homeStyles.distance}>{vehicle.horizonStops}정류장 전</span>
+                      {vehicle.remainingStops > 0 && (
+                        <span className={timingAvailable ? homeStyles.eta : homeStyles.unavailableEta}>
+                          {timingAvailable ? `${Math.ceil(remaining / 60)}분 남음` : "도착 정보 없음"}
+                        </span>
+                      )}
+                      <span className={homeStyles.distance}>{stopsAwayLabelOf(vehicle.remainingStops)}</span>
                     </span>
                     <SeatCountBadge tone={tone} className={homeStyles.seatBadge[tone]} label={label} />
                   </li>

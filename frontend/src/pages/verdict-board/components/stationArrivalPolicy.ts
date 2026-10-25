@@ -9,12 +9,13 @@ export interface StationArrivalDetails {
 
 export interface ArrivalTiming {
   available: boolean;
-  stopsAway: number;
   label: string;
 }
 
-export function arrivalTimingFor(arrival: ArrivalView, details: StationArrivalDetails | null): ArrivalTiming {
-  const unavailable = { available: false, stopsAway: arrival.stopsAway, label: "시간 정보 없음" };
+// 정류장에 도착한 차량과 도착정보 거리가 판정 보드 거리와 다른 차량은 시간 칸을 비우도록 null을 돌려준다.
+export function arrivalTimingFor(arrival: ArrivalView, details: StationArrivalDetails | null): ArrivalTiming | null {
+  if (arrival.stopsAway === 0) return null;
+  const unavailable = { available: false, label: "시간 정보 없음" };
   if (details === null) return unavailable;
   const { resource, selection } = details;
   if (resource.status === "pending") return { ...unavailable, label: "확인 중" };
@@ -42,13 +43,13 @@ export function arrivalTimingFor(arrival: ArrivalView, details: StationArrivalDe
   const matches = route.arrivals.filter(({ vehicleId }) => vehicleId === arrival.vehicleId);
   const vehicle = matches.length === 1 ? matches[0] : undefined;
   if (vehicle === undefined) return unavailable;
+  if (vehicle.remainingStops !== arrival.stopsAway) return null;
   const { eta } = vehicle;
   const seconds = (Date.parse(eta.expectedArrivalAt) - clock.now()) / 1000;
   if (eta.status !== "AVAILABLE" || eta.remainingSeconds === null || !(seconds > 0)) return unavailable;
 
   return {
     available: true,
-    stopsAway: vehicle.remainingStops ?? arrival.stopsAway,
     label: seconds <= 60 ? "1분 이내" : `${Math.ceil(seconds / 60)}분 남음`,
   };
 }
