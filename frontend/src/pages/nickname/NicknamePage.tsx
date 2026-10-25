@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, matchPath, useNavigate } from "react-router";
 import { AccountLayout } from "@/shared/components/AccountLayout";
+import { paths } from "@/shared/routing/paths";
 import { LoginButton } from "@/shared/components/LoginButton";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { authErrorOf } from "@/shared/utils/authErrorOf";
@@ -75,9 +76,14 @@ function NicknameForm({ current }: { current: string }) {
     const result = await changeNickname(nickname);
     if (!active.current) return;
     setBusy(false);
-    if (result.ok) {
+    if (!result.ok) {
+      setError(authErrorOf(result.failure));
+      return;
+    }
+    // 라우터는 주소를 바로 바꾸고 화면 교체는 transition으로 미룬다. 그 사이에도 이 폼은 마운트되어 있으니 옮기기 전에 주소를 확인한다.
+    if (matchPath(paths.nickname, window.location.pathname) !== null) {
       void navigate("/mypage", { replace: true, state: { notice: "닉네임을 변경했어요" } });
-    } else setError(authErrorOf(result.failure));
+    }
   }
 
   return (

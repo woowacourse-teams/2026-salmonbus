@@ -6,6 +6,15 @@ const common = require("./webpack.common.cjs");
 const { DefinePlugin } = require("webpack");
 const { sentryWebpackPlugin } = require("@sentry/webpack-plugin");
 
+// webpack.common.cjs의 runtimeValue 값은 빌드 중에 process.env를 읽는다. webpack의 dotenv 옵션은 번들에만 값을 넣는다.
+try {
+  process.loadEnvFile(path.resolve(__dirname, "../env/.env.production"));
+} catch (error) {
+  if (error?.code !== "ENOENT") {
+    throw error;
+  }
+}
+
 const uploadSourceMaps = process.env.SENTRY_UPLOAD_SOURCEMAPS === "true";
 if (uploadSourceMaps) {
   for (const variable of ["SENTRY_AUTH_TOKEN", "APP_VERSION", "WEBPACK_SENTRY_DSN"]) {
