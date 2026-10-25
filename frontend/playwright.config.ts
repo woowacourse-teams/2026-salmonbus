@@ -31,6 +31,11 @@ export default defineConfig({
       name: "webkit",
       use: { ...devices["Desktop Safari"] },
     },
+
+    {
+      name: "iphone-15",
+      use: { ...devices["iPhone 15"] },
+    },
   ],
 
   webServer: {
@@ -38,6 +43,7 @@ export default defineConfig({
     url: "http://127.0.0.1:4173",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    // env/.env.development에 Amplitude 키가 있어도 E2E 이벤트가 Amplitude에 쌓이지 않게 비워 둔다.
     env: { WEBPACK_AMPLITUDE_API_KEY: "" },
   },
 });
