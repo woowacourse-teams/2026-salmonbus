@@ -12,7 +12,7 @@ export interface ArrivalTiming {
   label: string;
 }
 
-// 정류장에 도착한 차량과 도착정보 거리가 판정 보드 거리와 다른 차량은 시간 칸을 비우도록 null을 돌려준다.
+// 정류장에 도착한 차량은 시간 칸을 비우도록 null을 돌려준다.
 export function arrivalTimingFor(arrival: ArrivalView, details: StationArrivalDetails | null): ArrivalTiming | null {
   if (arrival.stopsAway === 0) return null;
   const unavailable = { available: false, label: "시간 정보 없음" };
@@ -42,8 +42,7 @@ export function arrivalTimingFor(arrival: ArrivalView, details: StationArrivalDe
   if (route?.status !== "READY" || arrival.vehicleId === null) return unavailable;
   const matches = route.arrivals.filter(({ vehicleId }) => vehicleId === arrival.vehicleId);
   const vehicle = matches.length === 1 ? matches[0] : undefined;
-  if (vehicle === undefined) return unavailable;
-  if (vehicle.remainingStops !== arrival.stopsAway) return null;
+  if (vehicle === undefined || vehicle.remainingStops !== arrival.stopsAway) return unavailable;
   const { eta } = vehicle;
   const seconds = (Date.parse(eta.expectedArrivalAt) - clock.now()) / 1000;
   if (eta.status !== "AVAILABLE" || eta.remainingSeconds === null || !(seconds > 0)) return unavailable;

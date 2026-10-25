@@ -246,9 +246,14 @@ test("다음 관측이 오면 마커와 도착 예상이 한 응답으로 함께
   await expect(nearestArrival).toHaveText(/2정류장 전\s*시간 정보 없음\s*도착 시 4석 예상해요/);
 });
 
-test("목표 정류장에 선 버스는 정류장 도착으로 맨 앞에 두고 시간 칸을 비운다", async ({ page, api }) => {
+test("서버가 맨 앞에 보낸 목표 정류장 도착 버스는 그 순서대로 정류장 도착으로 보이고 시간 칸이 비어 있다", async ({
+  page,
+  api,
+}) => {
   const target = api.data.watch.stops.find((stop) => stop.name === targetStopNames.UP);
-  const previous = api.data.watch.stops.find((stop) => stop.sequence === (target?.sequence ?? 0) - 1);
+  const previous = api.data.watch.stops.find(
+    (stop) => stop.direction === target?.direction && stop.sequence === (target?.sequence ?? 0) - 1,
+  );
   if (target === undefined || previous === undefined)
     throw new Error("상행 목표 정류장과 앞 정류장 fixture가 필요합니다");
   for (const [vehicleId, stop] of [

@@ -91,7 +91,10 @@ for (const mismatch of ["vehicle", "visit"] as const) {
   });
 }
 
-test("도착정보 거리가 판정 보드 거리와 다르면 판정 보드 거리를 두고 시간 칸만 비운다", async ({ page, api }) => {
+test("도착정보 거리가 판정 보드 거리와 다르면 판정 보드 거리를 두고 시간 정보 없음으로 표시한다", async ({
+  page,
+  api,
+}) => {
   const response = readyArrivals();
   response.routes[0]!.arrivals[1]!.remainingStops = 2;
   api.data.arrivals = response;
@@ -99,7 +102,7 @@ test("도착정보 거리가 판정 보드 거리와 다르면 판정 보드 거
   await targetStop(page, "UP").click();
 
   await expect(targetRow(page, "UP").getByRole("listitem")).toHaveText([
-    /^3정류장 전\s*도착 시 5석 예상해요$/,
+    /3정류장 전\s*시간 정보 없음\s*도착 시 5석 예상해요/,
     /7정류장 전\s*4분 남음\s*도착 시 2석 예상해요/,
   ]);
 });

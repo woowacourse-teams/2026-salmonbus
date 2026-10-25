@@ -120,10 +120,10 @@ describe("arrivalTimingFor", () => {
     expect(arrivalTimingFor(arrival, details)).toEqual(unavailable);
   });
 
-  it.each([2, 4, 0, null])("도착정보 거리 %s가 판정 보드 거리 3과 다르면 시간 칸을 비운다", (remainingStops) => {
+  it.each([2, 4, 0, null])("도착정보 거리 %s가 판정 보드 거리 3과 다르면 시간을 붙이지 않는다", (remainingStops) => {
     const details = detailsWith();
     details.resource.latestSuccess.body.routes[0]!.arrivals[0]!.remainingStops = remainingStops;
-    expect(arrivalTimingFor(arrival, details)).toBeNull();
+    expect(arrivalTimingFor(arrival, details)).toEqual(unavailable);
   });
 
   it("정류장에 도착한 차량은 도착정보와 상관없이 시간 칸을 비운다", () => {
