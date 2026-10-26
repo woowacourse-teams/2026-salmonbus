@@ -6,12 +6,18 @@ const common = require("./webpack.common.cjs");
 const { DefinePlugin } = require("webpack");
 const { sentryWebpackPlugin } = require("@sentry/webpack-plugin");
 
+// IGNORE_ENV_FILES=true면 env 파일을 읽지 않아서, 누가 빌드해도 같은 번들이 나온다.
+const ignoresEnvFiles = process.env.IGNORE_ENV_FILES === "true";
+const envDir = path.resolve(__dirname, "../env");
+
 // webpack.common.cjs의 runtimeValue 값은 빌드 중에 process.env를 읽는다. webpack의 dotenv 옵션은 번들에만 값을 넣는다.
-try {
-  process.loadEnvFile(path.resolve(__dirname, "../env/.env.production"));
-} catch (error) {
-  if (error?.code !== "ENOENT") {
-    throw error;
+if (!ignoresEnvFiles) {
+  try {
+    process.loadEnvFile(path.join(envDir, ".env.production"));
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      throw error;
+    }
   }
 }
 
@@ -25,7 +31,7 @@ if (uploadSourceMaps) {
 module.exports = merge(common, {
   mode: "production",
   dotenv: {
-    dir: path.resolve(__dirname, "../env"),
+    dir: ignoresEnvFiles ? false : envDir,
   },
   devtool: "hidden-source-map",
   output: {

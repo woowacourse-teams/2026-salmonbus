@@ -1,6 +1,22 @@
 import { defineConfig, devices } from "@playwright/test";
 import process from "node:process";
 
+const port = 4173;
+const baseURL = `http://127.0.0.1:${port}`;
+
+const staticServer = {
+  // CI에서도 앞 단계의 빌드를 다시 쓰지 않고, E2E가 검사할 번들을 직접 만든다.
+  command: `pnpm build && node e2e/static-server.ts --port ${port}`,
+  // 개인 env 파일의 Amplitude 키나 지도 키가 E2E 번들에 들어가지 않게 한다.
+  env: { IGNORE_ENV_FILES: "true" },
+};
+
+const devServer = {
+  command: `pnpm dev --host 127.0.0.1 --port ${port}`,
+  // env/.env.development를 읽어도 E2E 이벤트가 Amplitude에 쌓이지 않고, mock을 빠져나간 요청이 원격 서버로 가지 않게 한다.
+  env: { WEBPACK_AMPLITUDE_API_KEY: "", API_PROXY_TARGET: "" },
+};
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
@@ -9,7 +25,7 @@ export default defineConfig({
   ...(process.env.CI ? { workers: 1 } : {}),
   reporter: "html",
   use: {
-    baseURL: "http://127.0.0.1:4173",
+    baseURL,
     trace: { mode: "retain-on-first-failure", snapshots: false },
     screenshot: "only-on-failure",
     video: "on-first-retry",
@@ -39,11 +55,10 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: "pnpm dev --host 127.0.0.1 --port 4173",
-    url: "http://127.0.0.1:4173",
-    reuseExistingServer: !process.env.CI,
+    ...(process.env.E2E_SERVER === "dev" ? devServer : staticServer),
+    url: baseURL,
+    // 같은 포트에 다른 워크트리의 서버가 떠 있을 때 그 서버의 코드로 테스트가 돌지 않게 한다.
+    reuseExistingServer: false,
     timeout: 120_000,
-    // env/.env.development에 Amplitude 키가 있어도 E2E 이벤트가 Amplitude에 쌓이지 않게 비워 둔다.
-    env: { WEBPACK_AMPLITUDE_API_KEY: "" },
   },
 });
