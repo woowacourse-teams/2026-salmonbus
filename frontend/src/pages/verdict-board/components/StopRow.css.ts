@@ -22,7 +22,7 @@ const rowBase = style({
   paddingRight: ROW_PADDING_RIGHT,
   selectors: {
     "&:focus-visible": {
-      outline: `2px solid ${vars.color.textBody}`,
+      outline: `2px solid ${vars.color.focusRing}`,
       outlineOffset: "-2px",
     },
     // 시안의 구분선은 노선 축에서 시작한다. 왼쪽 끝까지 그으면 축 왼쪽에 네모 칸이 생긴다.
@@ -85,7 +85,7 @@ const headBase = style({
   },
   selectors: {
     "&:focus-visible": {
-      outline: `2px solid ${vars.color.textBody}`,
+      outline: `2px solid ${vars.color.focusRing}`,
       outlineOffset: "-2px",
     },
   },

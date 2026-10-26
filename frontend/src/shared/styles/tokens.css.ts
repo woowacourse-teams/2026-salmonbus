@@ -15,7 +15,7 @@ export const vars = createGlobalTheme(":root", {
     textMuted: "#5B6472",
     iconMuted: "#8A8781",
     faint: "#AAB2BC",
-    focusRing: "#E53D4D",
+    focusRing: "#454545",
 
     axisLine: "#B8B4AC",
     rowDivider: "#E2DFD8",
