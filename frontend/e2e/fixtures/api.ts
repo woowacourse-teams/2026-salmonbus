@@ -91,7 +91,13 @@ export const test = base.extend<{ api: MockApi }>({
           },
           json:
             endpoint === "arrivals"
-              ? (api.data.arrivals ?? createStationArrivalsData(url, now))
+              ? (api.data.arrivals ??
+                createStationArrivalsData(
+                  url,
+                  now,
+                  api.data.watch.stops.find((stop) => stop.sequence === Number(url.searchParams.get("stopSequence")))
+                    ?.approachingVehicles,
+                ))
               : endpoint === "geometry" && geometryRoute !== undefined && geometryRoute !== routeId
                 ? { ...api.data.geometry, routeId: decodeURIComponent(geometryRoute) }
                 : api.data[endpoint],
