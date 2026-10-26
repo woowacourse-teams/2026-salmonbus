@@ -34,6 +34,13 @@ async function openMap(page: Page) {
   await page.goto(`/routes/${routeId}`);
   await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
   await expect(page.getByTestId("naver-map-test-double")).toHaveCount(1);
+  await expect
+    .poll(async () => {
+      await page.clock.runFor(16);
+      return page.locator('link[rel="stylesheet"][href^="https://fonts.googleapis.com/"]').getAttribute("media");
+    })
+    .toBe("all");
+  await page.evaluate(() => document.fonts.ready);
   await page.clock.runFor(48);
   await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
 }
