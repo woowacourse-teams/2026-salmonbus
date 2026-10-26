@@ -10,7 +10,6 @@ import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveR
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch;
 import com.gustler.backend.forecasting.infrastructure.statistics.EvaluationArchiveFiles.Encoded;
 import com.gustler.backend.forecasting.infrastructure.statistics.EvaluationArchiveFiles.Manifest;
-import com.gustler.backend.forecasting.infrastructure.statistics.StatisticsExtractUploader.Command;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -26,23 +25,19 @@ public final class EvaluationArchiveObjectStore implements EvaluationArchiveStor
     private static final String ROOT = "salmonbus-be/evaluation-archive/v1/";
     private final Path workDirectory;
     private final long maxBytes;
-    private final Command command;
+    private final EvaluationArchiveObjects objects;
 
-    public EvaluationArchiveObjectStore(Path workDirectory, final long maxBytes) {
-        this(workDirectory, maxBytes, StatisticsExtractUploader::execute);
-    }
-
-    EvaluationArchiveObjectStore(Path workDirectory, final long maxBytes, Command command) {
-        if (!hasValidConfiguration(workDirectory, maxBytes, command)) {
+    public EvaluationArchiveObjectStore(Path workDirectory, final long maxBytes, EvaluationArchiveObjects objects) {
+        if (!hasValidConfiguration(workDirectory, maxBytes, objects)) {
             throw new IllegalArgumentException("작업 디렉터리와 16MiB 이하의 파일 한도가 필요하다");
         }
         this.workDirectory = workDirectory;
         this.maxBytes = maxBytes;
-        this.command = command;
+        this.objects = objects;
     }
 
-    private boolean hasValidConfiguration(Path workDirectory, long maxBytes, Command command) {
-        if (workDirectory == null || command == null) {
+    private boolean hasValidConfiguration(Path workDirectory, long maxBytes, EvaluationArchiveObjects objects) {
+        if (workDirectory == null || objects == null) {
             return false;
         }
         if (!Files.isDirectory(workDirectory, LinkOption.NOFOLLOW_LINKS)) {
@@ -111,11 +106,7 @@ public final class EvaluationArchiveObjectStore implements EvaluationArchiveStor
     ) throws IOException {
         RuntimeException putFailure = null;
         try {
-            command.run(List.of("aws", "s3api", "put-object", "--bucket", BUCKET, "--key", key,
-                "--body", source.toAbsolutePath().toString(), "--if-none-match", "*", "--checksum-algorithm", "SHA256",
-                "--tagging", "Service=techcourse&Role=techcourse-etc&ProjectTeam=salmonbus", "--region",
-                "ap-northeast-2",
-                "--cli-connect-timeout", "5", "--cli-read-timeout", "15", "--no-cli-pager", "--no-cli-auto-prompt"));
+            objects.putIfAbsent(BUCKET, key, source);
         } catch (RuntimeException exception) {
             if (Thread.currentThread().isInterrupted()) {
                 throw exception;
@@ -124,10 +115,7 @@ public final class EvaluationArchiveObjectStore implements EvaluationArchiveStor
         }
         try {
             // 같은 키가 이미 존재해도 전체 내용이 일치해야 재시도가 성공한다. 한 바이트 초과까지 확인한다.
-            command.run(List.of("aws", "s3api", "get-object", "--bucket", BUCKET, "--key", key,
-                "--range", "bytes=0-" + expected.length, "--region", "ap-northeast-2",
-                "--cli-connect-timeout", "5", "--cli-read-timeout", "15", "--no-cli-pager", "--no-cli-auto-prompt",
-                downloaded.toAbsolutePath().toString()));
+            objects.download(BUCKET, key, downloaded, expected.length);
             if (!matchesExpectedContent(downloaded, expected)) {
                 throw new IllegalStateException("S3에서 다시 읽은 원본이 예약 자료와 다르다");
             }
@@ -206,9 +194,7 @@ public final class EvaluationArchiveObjectStore implements EvaluationArchiveStor
      * 설정한 바이트 한도 안에서 아카이브를 내려받는다. 한도 초과는 불완전 파일을 정상 입력으로 반환하지 않고 실패로 전파한다.
      */
     private byte[] downloadBounded(String key, Path path, final long limit) throws IOException {
-        command.run(List.of("aws", "s3api", "get-object", "--bucket", BUCKET, "--key", key,
-            "--range", "bytes=0-" + limit, "--region", "ap-northeast-2", "--cli-connect-timeout", "5",
-            "--cli-read-timeout", "15", "--no-cli-pager", "--no-cli-auto-prompt", path.toAbsolutePath().toString()));
+        objects.download(BUCKET, key, path, limit);
         if (Files.isSymbolicLink(path) || Files.size(path) > limit) {
             throw new IllegalArgumentException("이관 파일의 크기 한도를 넘었다");
         }

@@ -31,7 +31,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
 
-/** AWS CLI 경계 대체 시험. 실제 S3 왕복 검증과 구분한다. */
+/** 객체 저장 경계 대체 시험. SDK의 HTTP 계약은 별도 시험에서 확인한다. */
 class EvaluationArchiveObjectStoreTest {
     private static final String ORIGINAL = """
         {"vehicle_observation_id":7,"target_stop_order":9,"route_version_id":3,"scoring_state":"LOST",\
@@ -286,7 +286,7 @@ class EvaluationArchiveObjectStoreTest {
     }
 
     private EvaluationArchiveObjectStore store(final long maxBytes) {
-        return new EvaluationArchiveObjectStore(directory, maxBytes, objects::run);
+        return new EvaluationArchiveObjectStore(directory, maxBytes, objects);
     }
 
     @Test
@@ -421,47 +421,48 @@ class EvaluationArchiveObjectStoreTest {
         }
     }
 
-    private static final class MemoryObjects {
+    private static final class MemoryObjects implements EvaluationArchiveObjects {
         final Map<String, byte[]> values = new HashMap<>();
         final List<String> actions = new ArrayList<>();
         boolean failManifest;
         boolean corruptDownloads;
 
-        void run(List<String> args) {
-            String key = value(args, "--key");
-            assertThat(value(args, "--bucket")).isEqualTo("techcourse-project-2026");
-            assertThat(key).startsWith("salmonbus-be/evaluation-archive/v1/");
+        @Override
+        public void putIfAbsent(String bucket, String key, Path source) {
+            verifyLocation(bucket, key);
+            actions.add("put:" + key.substring(key.lastIndexOf('/') + 1));
+            if (values.containsKey(key) || failManifest && key.endsWith("manifest.json")) {
+                throw new IllegalStateException("업로드 실패 주입");
+            }
             try {
-                if (args.contains("put-object")) {
-                    actions.add("put:" + key.substring(key.lastIndexOf('/') + 1));
-                    assertThat(value(args, "--if-none-match")).isEqualTo("*");
-                    assertThat(value(args, "--tagging")).contains("ProjectTeam=salmonbus");
-                    if (values.containsKey(key) || failManifest && key.endsWith("manifest.json")) {
-                        throw new IllegalStateException("업로드 실패 주입");
-                    }
-                    values.put(key, Files.readAllBytes(Path.of(value(args, "--body"))));
-
-                    return;
-                }
-
-                actions.add("get:" + key.substring(key.lastIndexOf('/') + 1));
-                byte[] bytes = values.get(key);
-                if (bytes == null) {
-                    throw new IllegalStateException("객체 없음");
-                }
-                final int requested = Integer.parseInt(value(args, "--range").substring("bytes=0-".length())) + 1;
-                byte[] copied = Arrays.copyOf(bytes, Math.min(requested, bytes.length));
-                if (corruptDownloads) {
-                    copied[0] ^= 1;
-                }
-                Files.write(Path.of(args.getLast()), copied);
+                values.put(key, Files.readAllBytes(source));
             } catch (IOException exception) {
                 throw new IllegalStateException(exception);
             }
         }
 
-        private static String value(List<String> args, String name) {
-            return args.get(args.indexOf(name) + 1);
+        @Override
+        public void download(String bucket, String key, Path destination, long maxBytes) {
+            verifyLocation(bucket, key);
+            actions.add("get:" + key.substring(key.lastIndexOf('/') + 1));
+            byte[] bytes = values.get(key);
+            if (bytes == null) {
+                throw new IllegalStateException("객체 없음");
+            }
+            byte[] copied = Arrays.copyOf(bytes, Math.min(Math.toIntExact(maxBytes + 1), bytes.length));
+            if (corruptDownloads) {
+                copied[0] ^= 1;
+            }
+            try {
+                Files.write(destination, copied);
+            } catch (IOException exception) {
+                throw new IllegalStateException(exception);
+            }
+        }
+
+        private void verifyLocation(String bucket, String key) {
+            assertThat(bucket).isEqualTo("techcourse-project-2026");
+            assertThat(key).startsWith("salmonbus-be/evaluation-archive/v1/");
         }
     }
 }
