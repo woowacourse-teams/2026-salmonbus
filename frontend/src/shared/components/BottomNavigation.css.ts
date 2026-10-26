@@ -1,4 +1,5 @@
 import { keyframes, style } from "@vanilla-extract/css";
+import { PHONE_MEDIA } from "@/shared/styles/media";
 import { vars } from "@/shared/styles/tokens.css";
 
 export const navigation = style({
@@ -9,6 +10,7 @@ export const navigation = style({
   display: "flex",
   width: "100%",
   maxWidth: 425,
+  "@media": { [PHONE_MEDIA]: { maxWidth: "none" } },
   zIndex: 20,
   paddingBottom: "env(safe-area-inset-bottom, 0px)",
   borderTop: "1px solid #EEEAE6",
