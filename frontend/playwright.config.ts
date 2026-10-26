@@ -7,8 +7,9 @@ const baseURL = `http://127.0.0.1:${port}`;
 const staticServer = {
   // CI에서도 앞 단계의 빌드를 다시 쓰지 않고, E2E가 검사할 번들을 직접 만든다.
   command: `pnpm build && node e2e/static-server.ts --port ${port}`,
-  // 개인 env 파일의 Amplitude 키나 지도 키가 E2E 번들에 들어가지 않게 한다.
-  env: { IGNORE_ENV_FILES: "true" },
+  // 개인 env 파일을 읽지 않아 누가 돌려도 같은 번들을 만든다.
+  // 셸에서 export한 Amplitude 키도 비워서 E2E 이벤트가 Amplitude에 쌓이지 않게 한다.
+  env: { IGNORE_ENV_FILES: "true", WEBPACK_AMPLITUDE_API_KEY: "" },
 };
 
 const devServer = {
