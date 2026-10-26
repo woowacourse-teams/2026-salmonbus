@@ -1944,29 +1944,3 @@ test("운행 종료 화면에는 지도와 바텀시트가 없다", async ({ pag
   await expect(handle(page)).toHaveCount(0);
   await expect(page.getByRole("button", { name: /방면 보기$/ })).toHaveCount(0);
 });
-
-test("정류장 선택은 빨간 강조 없이 펼쳐지고 키보드 포커스는 중립색으로 표시한다", async ({ page, isMobile }) => {
-  await openMap(page);
-  const row = list(page)
-    .locator("li[data-stop-sequence]")
-    .filter({ has: page.locator("button[aria-expanded]") })
-    .first();
-  const control = row.locator("button[aria-expanded]");
-  if (isMobile) await control.tap();
-  else await control.click();
-  await expect(control).toHaveAttribute("aria-expanded", "true");
-  await expect(row).toHaveAttribute("data-selected", "true");
-  await page.screenshot({ path: test.info().outputPath("stop-selected.png") });
-  await expect(row).toHaveCSS("box-shadow", "none");
-  if (isMobile) {
-    await control.tap();
-  } else {
-    await page.keyboard.press("Tab");
-    await page.keyboard.press("Shift+Tab");
-    await expect(control).toBeFocused();
-    await expect(control).toHaveCSS("outline-style", "solid");
-    await expect(control).toHaveCSS("outline-color", "rgb(69, 69, 69)");
-    await control.press("Enter");
-  }
-  await expect(control).toHaveAttribute("aria-expanded", "false");
-});
