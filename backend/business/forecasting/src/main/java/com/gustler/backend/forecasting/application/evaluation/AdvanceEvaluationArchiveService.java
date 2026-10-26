@@ -2,6 +2,7 @@ package com.gustler.backend.forecasting.application.evaluation;
 
 import com.gustler.backend.forecasting.api.evaluation.AdvanceEvaluationArchive;
 import com.gustler.backend.forecasting.api.evaluation.EvaluationArchivePolicy;
+import com.gustler.backend.forecasting.application.evaluation.ArchiveCompletedEvaluationsService.Archived;
 import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveQueue.Candidates;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationArchiveBatch.State;
@@ -57,14 +58,15 @@ public final class AdvanceEvaluationArchiveService implements AdvanceEvaluationA
                     batch.routeVersionId());
                 return;
             }
+            Archived archived = null;
             if (batch.state() == State.RESERVED) {
                 stage = "ARCHIVE";
-                archive.archive(batch);
+                archived = archive.archive(batch);
             }
             int removed = 0;
             if (policy.deleteEnabled()) {
                 stage = "PURGE";
-                removed = purge.purge(batch);
+                removed = purge.purge(batch, archived);
             }
             LOGGER.info(
                 "event=evaluation_archive status={} batchId={} routeVersionId={} rows={} deletedRows={} lastSuccessAt={} durationMs={}",

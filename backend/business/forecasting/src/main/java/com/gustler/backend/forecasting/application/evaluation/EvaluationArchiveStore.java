@@ -24,6 +24,6 @@ public interface EvaluationArchiveStore {
      */
     List<Row> readOwned(EvaluationArchiveBatch batch);
 
-    /** 실제 파일 왕복 검증을 끝낸 호출자만 사용한다. 삭제 허가를 의미하지 않는다. */
+    /** 파일 저장과 무결성 검증을 끝낸 호출자만 사용한다. 삭제 허가를 의미하지 않는다. */
     void recordVerified(EvaluationArchiveBatch batch, String manifestSha256);
 }

@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.configuration;
 
 import com.gustler.backend.forecasting.api.evaluation.AdvanceEvaluationArchive;
+import com.gustler.backend.forecasting.api.evaluation.EvaluationArchiveObjects;
 import com.gustler.backend.forecasting.api.evaluation.EvaluationArchivePolicy;
 import com.gustler.backend.forecasting.application.evaluation.AdvanceEvaluationArchiveService;
 import com.gustler.backend.forecasting.application.evaluation.ArchiveCompletedEvaluationsService;
@@ -9,7 +10,6 @@ import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveR
 import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveStore;
 import com.gustler.backend.forecasting.application.evaluation.PurgeArchivedEvaluationsService;
 import com.gustler.backend.forecasting.infrastructure.statistics.EvaluationArchiveObjectStore;
-import com.gustler.backend.forecasting.infrastructure.statistics.S3EvaluationArchiveObjects;
 import java.nio.file.Path;
 import java.time.Clock;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,18 +24,12 @@ import org.springframework.context.annotation.Lazy;
  */
 @Configuration(proxyBeanMethods = false)
 public class EvaluationArchiveConfiguration {
-    @Bean(destroyMethod = "close")
-    @Lazy
-    S3EvaluationArchiveObjects evaluationArchiveObjects() {
-        return S3EvaluationArchiveObjects.create();
-    }
-
     @Bean
     @Lazy
     EvaluationArchiveObjectStore evaluationArchiveObjectStore(
         @Value("${forecast.archive.work-directory:/var/lib/salmonbus/evaluation-archive}") Path directory,
         @Value("${forecast.archive.max-file-bytes:4194304}") final long maxBytes,
-        S3EvaluationArchiveObjects objects) {
+        EvaluationArchiveObjects objects) {
         return new EvaluationArchiveObjectStore(directory, maxBytes, objects);
     }
 

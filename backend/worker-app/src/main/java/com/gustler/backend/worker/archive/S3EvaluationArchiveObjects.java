@@ -1,15 +1,11 @@
-package com.gustler.backend.forecasting.infrastructure.statistics;
+package com.gustler.backend.worker.archive;
 
+import com.gustler.backend.forecasting.api.evaluation.EvaluationArchiveObjects;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.security.DigestInputStream;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
-import java.util.Base64;
 import java.util.Objects;
 import software.amazon.awssdk.awscore.retry.AwsRetryStrategy;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -51,17 +47,16 @@ public final class S3EvaluationArchiveObjects implements EvaluationArchiveObject
     }
 
     @Override
-    public void putIfAbsent(String bucket, String key, Path source) {
-        try {
-            PutObjectRequest request = PutObjectRequest.builder()
-                .bucket(bucket).key(key).ifNoneMatch("*")
-                .checksumAlgorithm(ChecksumAlgorithm.SHA256)
-                .checksumSHA256(checksum(source))
-                .tagging(TAGS).build();
-            client.putObject(request, RequestBody.fromFile(source));
-        } catch (IOException exception) {
-            throw new IllegalStateException("이관 업로드 파일을 읽지 못했다", exception);
+    public void putIfAbsent(String bucket, String key, Path source, String checksumSha256) {
+        if (checksumSha256 == null || !checksumSha256.matches("[A-Za-z0-9+/]{43}=")) {
+            throw new IllegalArgumentException("인코딩한 원본의 Base64 SHA-256이 필요하다");
         }
+        PutObjectRequest request = PutObjectRequest.builder()
+            .bucket(bucket).key(key).ifNoneMatch("*")
+            .checksumAlgorithm(ChecksumAlgorithm.SHA256)
+            .checksumSHA256(checksumSha256)
+            .tagging(TAGS).build();
+        client.putObject(request, RequestBody.fromFile(source));
     }
 
     @Override
@@ -98,18 +93,6 @@ public final class S3EvaluationArchiveObjects implements EvaluationArchiveObject
             Files.write(destination, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
         } catch (IOException exception) {
             throw new IllegalStateException("이관 다운로드 파일을 쓰지 못했다", exception);
-        }
-    }
-
-    private String checksum(Path source) throws IOException {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            try (var stream = new DigestInputStream(Files.newInputStream(source), digest)) {
-                stream.transferTo(OutputStream.nullOutputStream());
-            }
-            return Base64.getEncoder().encodeToString(digest.digest());
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256을 사용할 수 없다", exception);
         }
     }
 

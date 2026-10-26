@@ -3,6 +3,7 @@ package com.gustler.backend.forecasting.infrastructure.statistics;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import com.gustler.backend.forecasting.api.evaluation.EvaluationArchiveObjects;
 import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader.Reference;
 import java.io.IOException;
 import java.nio.file.DirectoryNotEmptyException;
@@ -23,7 +24,7 @@ class EvaluationArchiveCleanupBoundaryTest {
         EvaluationArchiveObjectStore store = new EvaluationArchiveObjectStore(directory, 1024,
             new EvaluationArchiveObjects() {
                 @Override
-                public void putIfAbsent(String bucket, String key, Path source) {
+                public void putIfAbsent(String bucket, String key, Path source, String checksumSha256) {
                     throw new AssertionError("업로드를 호출하면 안 된다");
                 }
 

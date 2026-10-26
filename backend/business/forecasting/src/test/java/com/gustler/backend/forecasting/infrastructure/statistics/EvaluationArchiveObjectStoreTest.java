@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import com.gustler.backend.forecasting.api.evaluation.EvaluationArchiveObjects;
 import com.gustler.backend.forecasting.api.evaluation.EvaluationArchivePolicy;
 import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveStorage.Verification;
 import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader;
@@ -16,9 +17,12 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,7 +51,7 @@ class EvaluationArchiveObjectStoreTest {
     Path directory;
 
     @Test
-    void 원본의_모든_열과_빈값을_보존하고_다시_받은_내용을_확인한다() throws Exception {
+    void 정상_저장은_원본의_모든_열과_빈값을_보존하고_GET하지_않는다() throws Exception {
         // given
         EvaluationArchiveObjectStore store = store(1024 * 1024);
 
@@ -61,8 +65,7 @@ class EvaluationArchiveObjectStoreTest {
         assertThat(JsonMapper.builder().build().readTree(copied).size()).isEqualTo(16);
         assertThat(verified.manifestSha256()).isEqualTo(
             EvaluationArchiveFiles.digest(objects.values.get(prefix() + "manifest.json")));
-        assertThat(objects.actions).containsExactly("put:evaluations.jsonl", "get:evaluations.jsonl",
-            "put:manifest.json", "get:manifest.json");
+        assertThat(objects.actions).containsExactly("put:evaluations.jsonl", "put:manifest.json");
         assertDirectoryEmpty();
     }
 
@@ -77,6 +80,8 @@ class EvaluationArchiveObjectStoreTest {
         // then
         assertThat(repeated).isEqualTo(first);
         assertThat(objects.values).hasSize(2);
+        assertThat(objects.actions).containsExactly("put:evaluations.jsonl", "put:manifest.json",
+            "put:evaluations.jsonl", "get:evaluations.jsonl", "put:manifest.json", "get:manifest.json");
     }
 
     @Test
@@ -117,8 +122,9 @@ class EvaluationArchiveObjectStoreTest {
     }
 
     @Test
-    void 업로드_뒤_다시_받은_자료가_바뀌면_설명_파일을_게시하지_않는다() {
+    void 업로드_응답이_유실된_뒤_다시_받은_자료가_바뀌면_설명_파일을_게시하지_않는다() {
         // given
+        objects.losePutResponse = true;
         objects.corruptDownloads = true;
 
         // when
@@ -130,6 +136,39 @@ class EvaluationArchiveObjectStoreTest {
             .isNotNull()
             .isInstanceOf(IllegalStateException.class);
         assertThat(objects.values).doesNotContainKey(prefix() + "manifest.json");
+    }
+
+    @Test
+    void 업로드_응답이_유실돼도_저장된_전체_내용이_같으면_성공한다() throws Exception {
+        // given
+        objects.losePutResponse = true;
+
+        // when
+        Verification verified = store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL)));
+
+        // then
+        assertThat(verified.manifestSha256()).isEqualTo(
+            EvaluationArchiveFiles.digest(objects.values.get(prefix() + "manifest.json")));
+        assertThat(objects.actions).containsExactly("put:evaluations.jsonl", "get:evaluations.jsonl",
+            "put:manifest.json", "get:manifest.json");
+        assertDirectoryEmpty();
+    }
+
+    @Test
+    void 임시_파일이_바뀌면_메모리_원본의_검증값으로_거절하고_설명_파일을_게시하지_않는다() throws Exception {
+        // given
+        objects.changeSource = true;
+
+        // when
+        Throwable failure = catchThrowable(() -> store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL))));
+
+        // then
+        assertThat(failure).isInstanceOf(IllegalStateException.class);
+        assertThat(failure.getSuppressed()).hasSize(1);
+        assertThat(failure.getSuppressed()[0]).hasMessage("BadDigest");
+        assertThat(objects.values).isEmpty();
+        assertThat(objects.actions).containsExactly("put:evaluations.jsonl", "get:evaluations.jsonl");
+        assertDirectoryEmpty();
     }
 
     @Test
@@ -426,18 +465,33 @@ class EvaluationArchiveObjectStoreTest {
         final List<String> actions = new ArrayList<>();
         boolean failManifest;
         boolean corruptDownloads;
+        boolean losePutResponse;
+        boolean changeSource;
 
         @Override
-        public void putIfAbsent(String bucket, String key, Path source) {
+        public void putIfAbsent(String bucket, String key, Path source, String checksumSha256) {
             verifyLocation(bucket, key);
             actions.add("put:" + key.substring(key.lastIndexOf('/') + 1));
             if (values.containsKey(key) || failManifest && key.endsWith("manifest.json")) {
                 throw new IllegalStateException("업로드 실패 주입");
             }
             try {
-                values.put(key, Files.readAllBytes(source));
+                if (changeSource) {
+                    Files.writeString(source, "changed before upload");
+                }
+                byte[] bytes = Files.readAllBytes(source);
+                String actual = Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-256").digest(bytes));
+                if (!actual.equals(checksumSha256)) {
+                    throw new IllegalStateException("BadDigest");
+                }
+                values.put(key, bytes);
             } catch (IOException exception) {
                 throw new IllegalStateException(exception);
+            } catch (NoSuchAlgorithmException exception) {
+                throw new IllegalStateException(exception);
+            }
+            if (losePutResponse) {
+                throw new IllegalStateException("저장 후 응답 유실 주입");
             }
         }
 

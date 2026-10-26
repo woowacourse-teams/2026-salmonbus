@@ -4,10 +4,7 @@ plugins {
 }
 
 dependencies {
-    implementation(project(':forecasting')) {
-        // 정비 명령은 S3 이관을 실행하지 않으므로 SDK를 런타임에 포함하지 않는다.
-        exclude group: 'software.amazon.awssdk'
-    }
+    implementation project(':forecasting')
     implementation 'org.springframework:spring-context'
     implementation 'org.springframework:spring-jdbc'
     implementation 'tools.jackson.core:jackson-databind'

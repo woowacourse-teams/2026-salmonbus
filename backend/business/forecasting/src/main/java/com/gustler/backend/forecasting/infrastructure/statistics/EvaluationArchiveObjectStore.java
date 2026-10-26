@@ -1,5 +1,6 @@
 package com.gustler.backend.forecasting.infrastructure.statistics;
 
+import com.gustler.backend.forecasting.api.evaluation.EvaluationArchiveObjects;
 import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveSource;
 import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveStorage;
 import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveStorage.Verification;
@@ -68,7 +69,7 @@ public final class EvaluationArchiveObjectStore implements EvaluationArchiveStor
             Files.write(manifest, encoded.manifest());
             String prefix = ROOT + "route-version=" + batch.routeVersionId() + "/batch=" + batch.id() + "/";
             ensureStored(prefix + "evaluations.jsonl", rowsFile, directory.resolve("downloaded-rows"), encoded.rows());
-            // 자료가 다시 읽히는 것을 확인한 다음 설명 파일을 게시한다.
+            // 원본 저장이 확인된 다음 설명 파일을 게시한다.
             ensureStored(prefix + "manifest.json", manifest, directory.resolve("downloaded-manifest"),
                 encoded.manifest());
             return new Verification("s3://" + BUCKET + "/" + prefix, EvaluationArchiveFiles.digest(encoded.manifest()));
@@ -104,26 +105,23 @@ public final class EvaluationArchiveObjectStore implements EvaluationArchiveStor
         Path downloaded,
         byte[] expected
     ) throws IOException {
-        RuntimeException putFailure = null;
         try {
-            objects.putIfAbsent(BUCKET, key, source);
+            objects.putIfAbsent(BUCKET, key, source, EvaluationArchiveFiles.checksumSha256(expected));
+            return;
         } catch (RuntimeException exception) {
             if (Thread.currentThread().isInterrupted()) {
                 throw exception;
             }
-            putFailure = exception;
-        }
-        try {
-            // 같은 키가 이미 존재해도 전체 내용이 일치해야 재시도가 성공한다. 한 바이트 초과까지 확인한다.
-            objects.download(BUCKET, key, downloaded, expected.length);
-            if (!matchesExpectedContent(downloaded, expected)) {
-                throw new IllegalStateException("S3에서 다시 읽은 원본이 예약 자료와 다르다");
+            try {
+                // 충돌·응답 유실로 저장 결과가 불확실하면 한 바이트 초과까지 읽어 전체를 비교한다.
+                objects.download(BUCKET, key, downloaded, expected.length);
+                if (!matchesExpectedContent(downloaded, expected)) {
+                    throw new IllegalStateException("S3에서 다시 읽은 원본이 예약 자료와 다르다");
+                }
+            } catch (IOException | RuntimeException readFailure) {
+                readFailure.addSuppressed(exception);
+                throw readFailure;
             }
-        } catch (IOException | RuntimeException exception) {
-            if (putFailure != null) {
-                exception.addSuppressed(putFailure);
-            }
-            throw exception;
         }
     }
 

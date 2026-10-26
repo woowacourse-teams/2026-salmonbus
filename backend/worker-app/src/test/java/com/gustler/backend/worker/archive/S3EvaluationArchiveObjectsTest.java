@@ -1,4 +1,4 @@
-package com.gustler.backend.forecasting.infrastructure.statistics;
+package com.gustler.backend.worker.archive;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.Map;
@@ -25,6 +26,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.services.s3.model.S3Exception;
@@ -67,7 +71,7 @@ class S3EvaluationArchiveObjectsTest {
         byte[] expected = "검증할 원본".getBytes(StandardCharsets.UTF_8);
         Path source = Files.write(directory.resolve("source"), expected);
 
-        objects.putIfAbsent("bucket", "rows", source);
+        objects.putIfAbsent("bucket", "rows", source, checksum(expected));
         for (int index = 0; index < 6; index++) {
             Path target = directory.resolve("received-" + index);
             objects.download("bucket", "rows", target, expected.length);
@@ -90,10 +94,36 @@ class S3EvaluationArchiveObjectsTest {
         stored.put("/bucket/rows", "원본".getBytes(StandardCharsets.UTF_8));
         Path source = Files.writeString(directory.resolve("source"), "변경된 원본");
 
-        assertThatThrownBy(() -> objects.putIfAbsent("bucket", "rows", source))
+        String checksum = checksum(Files.readAllBytes(source));
+        assertThatThrownBy(() -> objects.putIfAbsent("bucket", "rows", source, checksum))
             .isInstanceOfSatisfying(S3Exception.class, failure -> assertThat(failure.statusCode()).isEqualTo(412));
         assertThat(new String(stored.get("/bucket/rows"), StandardCharsets.UTF_8)).isEqualTo("원본");
         assertThat(requests).hasValue(1);
+    }
+
+    @Test
+    void 원본의_검증값을_만든_뒤_업로드_파일이_바뀌면_서버가_거절한다() throws Exception {
+        byte[] expected = "예약한 원본".getBytes(StandardCharsets.UTF_8);
+        String checksum = checksum(expected);
+        Path source = Files.writeString(directory.resolve("source"), "업로드 전에 바뀐 내용");
+
+        assertThatThrownBy(() -> objects.putIfAbsent("bucket", "rows", source, checksum))
+            .isInstanceOfSatisfying(S3Exception.class, failure -> assertThat(failure.statusCode()).isEqualTo(400));
+        assertThat(headers).containsEntry("x-amz-checksum-sha256", checksum);
+        assertThat(stored).isEmpty();
+        assertThat(requests).hasValue(1);
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"not-a-sha256-checksum"})
+    void 원본_검증값이_없거나_잘못되면_SDK의_파일_검증값_자동_계산으로_대체하지_않는다(String checksum) throws Exception {
+        Path source = Files.writeString(directory.resolve("source"), "원본");
+
+        assertThatThrownBy(() -> objects.putIfAbsent("bucket", "rows", source, checksum))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThat(requests).hasValue(0);
+        assertThat(stored).isEmpty();
     }
 
     @Test
@@ -179,6 +209,13 @@ class S3EvaluationArchiveObjectsTest {
             }
             if (exchange.getRequestMethod().equals("PUT")) {
                 byte[] body = exchange.getRequestBody().readAllBytes();
+                if (!checksum(body).equals(exchange.getRequestHeaders().getFirst("x-amz-checksum-sha256"))) {
+                    byte[] error = "<Error><Code>BadDigest</Code></Error>".getBytes(StandardCharsets.UTF_8);
+                    exchange.getResponseHeaders().set("Content-Type", "application/xml");
+                    exchange.sendResponseHeaders(400, error.length);
+                    exchange.getResponseBody().write(error);
+                    return;
+                }
                 if (stored.putIfAbsent(key, body) != null) {
                     exchange.sendResponseHeaders(412, -1);
                 } else {
@@ -205,6 +242,14 @@ class S3EvaluationArchiveObjectsTest {
                 }
             }
             exchange.getResponseBody().write(bytes);
+        }
+    }
+
+    private String checksum(byte[] bytes) {
+        try {
+            return Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-256").digest(bytes));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException(exception);
         }
     }
 }

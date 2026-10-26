@@ -14,6 +14,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.HexFormat;
@@ -140,8 +141,16 @@ final class EvaluationArchiveFiles {
     }
 
     static String digest(byte[] bytes) {
+        return HexFormat.of().formatHex(sha256(bytes));
+    }
+
+    static String checksumSha256(byte[] bytes) {
+        return Base64.getEncoder().encodeToString(sha256(bytes));
+    }
+
+    private static byte[] sha256(byte[] bytes) {
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+            return MessageDigest.getInstance("SHA-256").digest(bytes);
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException(exception);
         }
