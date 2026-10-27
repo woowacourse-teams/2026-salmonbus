@@ -11,6 +11,7 @@ import {
   MAX_FAVORITE_GROUPS,
   MAX_FAVORITES_PER_GROUP,
   exceedsFavoriteLimit,
+  favoriteCountFor,
   groupNameError,
   selectedGroups,
 } from "@/shared/utils/favoritePolicy";
@@ -69,7 +70,7 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
         <label className={`${styles.choice} amp-mask`} key={group.id}>
           <span>{group.name}</span>
           <span className={styles.choiceCount}>
-            {group.favorites.length} / {MAX_FAVORITES_PER_GROUP}
+            {favoriteCountFor(group, target, ids)} / {MAX_FAVORITES_PER_GROUP}
           </span>
           <input
             type="checkbox"

@@ -328,8 +328,10 @@ test("가득 찬 그룹의 기존 선택은 유지하고 한 그룹씩 또는 �
   await star.click();
   let dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("checkbox", { name: /즐겨찾기/ })).toBeChecked();
+  await expect(dialog.locator("label", { hasText: "즐겨찾기" })).toContainText("2 / 2");
   await expect(dialog.getByRole("button", { name: "저장", exact: true })).toBeEnabled();
   await dialog.getByRole("checkbox", { name: /즐겨찾기/ }).uncheck();
+  await expect(dialog.locator("label", { hasText: "즐겨찾기" })).toContainText("1 / 2");
   await dialog.getByRole("button", { name: "저장", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   await expect(star).toHaveAttribute("aria-pressed", "true");
@@ -565,9 +567,15 @@ test("이미 가득 찬 그룹에 새 항목을 선택하면 저장을 막는다
   await page.goto(`/routes/${routeId}`);
   await page.getByRole("button", { name: `${third!.name} 즐겨찾기`, exact: true }).click();
   const dialog = page.getByRole("dialog");
+  const count = dialog.locator("label", { hasText: "즐겨찾기" });
+  await expect(count).toContainText("2 / 2");
   await dialog.getByRole("checkbox", { name: /즐겨찾기/ }).check();
+  await expect(count).toContainText("3 / 2");
   await expect(dialog.getByRole("button", { name: "저장", exact: true })).toBeDisabled();
   await expect(dialog.getByRole("alert")).toContainText("2개까지");
+  await dialog.getByRole("checkbox", { name: /즐겨찾기/ }).uncheck();
+  await expect(count).toContainText("2 / 2");
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
   expect(favorites.requests.some((request) => request.method === "PUT")).toBe(false);
 });
 
