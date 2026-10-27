@@ -15,7 +15,7 @@ import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
 import { FavoriteEditor } from "@/shared/components/favorite-editor/FavoriteEditor";
 import { Notice } from "@/shared/components/Notice";
-import bookmarkIcon from "@/shared/assets/icons/bookmark.svg";
+import starOutline from "@/shared/assets/icons/star-outline.svg";
 import editIcon from "@/shared/assets/icons/favorite-edit.svg";
 import * as homeStyles from "./HomeFavorites.css";
 import * as buttons from "@/shared/styles/button.css";
@@ -166,9 +166,9 @@ export function HomeFavorites() {
         >
           {((resource.status === "success" && !group) || (shownLatest !== null && favorites.length === 0)) && (
             <div className={homeStyles.homeEmpty}>
-              <img src={bookmarkIcon} width="34" height="34" alt="" draggable={false} />
+              <img src={starOutline} width="34" height="34" alt="" draggable={false} />
               <p className={homeStyles.homeEmptyTitle}>등록된 즐겨찾기가 없어요</p>
-              <p className={homeStyles.homeEmptyDescription}>자주 타는 노선에서 즐겨찾기를 추가해 보세요!</p>
+              <p className={homeStyles.homeEmptyDescription}>노선을 선택하고 자주 타는 정류장의 별을 눌러 보세요</p>
             </div>
           )}
           <ul className={homeStyles.list}>

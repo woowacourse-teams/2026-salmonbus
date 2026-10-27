@@ -558,6 +558,18 @@ test("마이페이지에서 한 그룹의 즐겨찾기를 삭제해도 다른 �
   expect(favorites.groups[1]!.favorites).toHaveLength(1);
 });
 
+test("즐겨찾기가 없으면 판정 보드와 같은 별 아이콘으로 정류장의 별을 누르라고 안내한다", async ({ page, api }) => {
+  await page.goto("/");
+  const empty = page.getByText("등록된 즐겨찾기가 없어요", { exact: true }).locator("..");
+  await expect(empty).toContainText("정류장의 별을 눌러");
+  const emptyIcon = await empty.locator("img").getAttribute("src");
+  const stop = api.data.watch.stops.find((item) => item.boardingAllowed)!;
+  await page.goto(`/routes/${routeId}`);
+  const star = page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true });
+  await expect(star).toHaveAttribute("aria-pressed", "false");
+  expect(await star.locator("img").getAttribute("src")).toBe(emptyIcon);
+});
+
 test("이미 가득 찬 그룹에 새 항목을 선택하면 저장을 막는다", async ({ page, favorites, api }) => {
   const [first, second, third] = api.data.watch.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
   favorites.groups[0]!.favorites = [
