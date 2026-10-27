@@ -212,9 +212,11 @@ function FavoriteCard({ favorite, savedDirection, elapsed, onRetry }: FavoriteCa
         state={boardEntryStateFor("favorite")}
       >
         <div className={homeStyles.heading}>
-          <RouteBadge>{favorite.route.displayName || "노선 정보 없음"}</RouteBadge>
-          <span className={homeStyles.stop}>{favorite.stop.name || "정류장 정보 없음"}</span>
-          <span className={homeStyles.direction}>{directionLabelOf(favorite.route.terminalStopName, direction)}</span>
+          <RouteBadge className={homeStyles.routeBadge}>{favorite.route.displayName || "노선 정보 없음"}</RouteBadge>
+          <div className={homeStyles.stopInfo}>
+            <span className={homeStyles.stop}>{favorite.stop.name || "정류장 정보 없음"}</span>
+            <span className={homeStyles.direction}>{directionLabelOf(favorite.route.terminalStopName, direction)}</span>
+          </div>
         </div>
         <div className={homeStyles.forecast}>
           {favorite.status === "READY" && favorite.approachingVehicles.length > 0 ? (

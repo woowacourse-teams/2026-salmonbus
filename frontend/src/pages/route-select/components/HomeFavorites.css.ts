@@ -34,25 +34,41 @@ export const link = style({
   color: "inherit",
   textDecoration: "none",
 });
-export const heading = style({ display: "flex", alignItems: "center", gap: 8, minWidth: 0, height: 23 });
-export const stop = style({
+export const heading = style({ display: "flex", alignItems: "center", gap: 10, minWidth: 0 });
+export const routeBadge = style({
+  selectors: {
+    "&&": {
+      display: "flex",
+      alignSelf: "stretch",
+      alignItems: "center",
+      justifyContent: "center",
+      minWidth: 60,
+      padding: "0 10px",
+      borderRadius: 7,
+      fontSize: 18,
+      lineHeight: 1.4,
+    },
+  },
+});
+export const stopInfo = style({
+  display: "flex",
+  flexDirection: "column",
   flex: 1,
+  gap: 3,
   minWidth: 0,
-  overflow: "hidden",
+  overflowWrap: "anywhere",
+});
+export const stop = style({
   color: "#292A2D",
   fontSize: 16,
   fontWeight: 700,
-  lineHeight: "23px",
+  lineHeight: 1.4,
   letterSpacing: "-0.5px",
-  whiteSpace: "nowrap",
-  textOverflow: "ellipsis",
 });
 export const direction = style({
-  flexShrink: 0,
   color: "#837B74",
-  fontSize: 11,
-  lineHeight: "16px",
-  whiteSpace: "nowrap",
+  fontSize: 12,
+  lineHeight: 1.4,
 });
 export const forecast = style({
   overflow: "hidden",
