@@ -17,22 +17,19 @@ http.createServer((request, response) => {
   }
 
   const data = createApiData();
-  // Board and vehicles share one observation batch across independent requests.
+  // The board refreshes once per observation batch, so the forecast stays fresh while checking.
   const batch = Math.floor(Date.now() / 60_000) * 60_000;
-  data.board.observedAt = new Date(batch).toISOString();
-  data.board.staleAt = new Date(batch + 180_000).toISOString();
-  data.vehicles.observation.observedAt = data.board.observedAt;
-  data.vehicles.observation.staleAt = data.board.staleAt;
-  for (const direction of data.board.route.directions) {
+  data.watch.observedAt = new Date(batch).toISOString();
+  data.watch.staleAt = new Date(batch + 180_000).toISOString();
+  for (const direction of data.watch.route.directions) {
     direction.firstDepartureTime = '00:00';
     direction.lastDepartureTime = '23:59';
   }
 
   const responses = {
     '/api/v1/routes': data.routes,
-    [`/api/v1/routes/${data.board.route.id}/board`]: data.board,
-    [`/api/v1/routes/${data.board.route.id}/vehicles`]: data.vehicles,
-    [`/api/v2/routes/${data.board.route.id}/geometry`]: data.geometry,
+    [`/api/v1/routes/${data.watch.route.id}/watch`]: data.watch,
+    [`/api/v2/routes/${data.watch.route.id}/geometry`]: data.geometry,
   };
   const body = responses[url.pathname];
   if (body === undefined) {

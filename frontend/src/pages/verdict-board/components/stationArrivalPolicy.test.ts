@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import type { ArrivalVehicle } from "@/shared/api/stationArrivals.types";
+import type { ArrivalVehicle, StationArrivalsResponse } from "@/shared/api/stationArrivals.types";
 import { arrivalTimingFor, type StationArrivalDetails } from "./stationArrivalPolicy";
 import type { ArrivalView } from "./arrivalPolicy";
 
@@ -76,14 +76,14 @@ function detailsWith(seconds = 120) {
               arrivals: [vehicle],
             },
           ],
-        },
+        } as StationArrivalsResponse,
       },
     },
   } satisfies StationArrivalDetails;
 }
 
 describe("arrivalTimingFor", () => {
-  it("같은 차량의 남은 정류장 수와 시간만 연결하고 좌석 예보는 유지한다", () => {
+  it("같은 차량의 시간만 연결하고 watch 거리와 좌석 예보는 유지한다", () => {
     const details = detailsWith();
     const route = details.resource.latestSuccess.body.routes[0]!;
     route.arrivals.unshift({ ...route.arrivals[0]!, vehicleId: "another-bus", ordinal: 2, remainingStops: 9 });
@@ -120,11 +120,15 @@ describe("arrivalTimingFor", () => {
     expect(arrivalTimingFor(arrival, details)).toEqual(unavailable);
   });
 
-  it.each([2, 4, 0, null])("도착정보 거리 %s가 판정 보드 거리 3과 다르면 시간을 붙이지 않는다", (remainingStops) => {
-    const details = detailsWith();
-    details.resource.latestSuccess.body.routes[0]!.arrivals[0]!.remainingStops = remainingStops;
-    expect(arrivalTimingFor(arrival, details)).toEqual(unavailable);
-  });
+  it.each([2, 4, 0, null])(
+    "ETA 거리 %s가 watch 거리 3과 달라도 같은 차량의 유효한 시간은 표시한다",
+    (remainingStops) => {
+      const details = detailsWith();
+      details.resource.latestSuccess.body.routes[0]!.arrivals[0]!.remainingStops = remainingStops;
+      expect(arrivalTimingFor(arrival, details)).toEqual({ available: true, label: "2분 남음" });
+      expect(arrival.stopsAway).toBe(3);
+    },
+  );
 
   it("정류장에 도착한 차량은 도착정보와 상관없이 시간 칸을 비운다", () => {
     const arrived = { ...arrival, stopsAway: 0 };
@@ -135,12 +139,16 @@ describe("arrivalTimingFor", () => {
   it("서버 시각의 스냅샷 만료 즉시 시간을 사용하지 않는다", () => {
     const details = detailsWith();
     details.resource.latestSuccess.clock.now = () => now + 60000;
-    expect(arrivalTimingFor(arrival, details)).toEqual(unavailable);
+    expect(arrivalTimingFor(arrival, details)).toEqual({ available: false, label: "시간 재확인 중" });
+    details.resource.latestSuccess.clock.now = () => now;
+    details.resource.latestSuccess.body.reason = "STALE";
+    expect(arrivalTimingFor(arrival, details)).toEqual({ available: false, label: "시간 재확인 중" });
   });
 
   it("최초 조회와 수집 중은 확인 중으로 표시한다", () => {
     const details = detailsWith();
-    expect(arrivalTimingFor(arrival, { ...details, resource: { status: "pending" } })?.label).toBe("확인 중");
+    expect(arrivalTimingFor(arrival, { ...details, resource: { status: "idle" } })?.label).toBe("시간 확인 중");
+    expect(arrivalTimingFor(arrival, { ...details, resource: { status: "pending" } })?.label).toBe("시간 확인 중");
     const collecting: StationArrivalDetails = {
       ...details,
       resource: {
@@ -162,7 +170,50 @@ describe("arrivalTimingFor", () => {
         },
       },
     };
-    expect(arrivalTimingFor(arrival, collecting)?.label).toBe("확인 중");
+    expect(arrivalTimingFor(arrival, collecting)?.label).toBe("시간 확인 중");
+  });
+
+  it("빈 ETA나 제공 불가 응답은 시간만 숨기고 watch 거리와 좌석을 변경하지 않는다", () => {
+    const details = detailsWith();
+    const body = details.resource.latestSuccess.body;
+    for (const status of ["NO_PREDICTION", "UNAVAILABLE"] as const) {
+      body.status = status;
+      expect(arrivalTimingFor(arrival, details)).toEqual(unavailable);
+      body.status = "READY";
+      body.routes[0]!.status = status;
+      expect(arrivalTimingFor(arrival, details)).toEqual(unavailable);
+    }
+    body.routes = [];
+    expect(arrivalTimingFor(arrival, details)).toEqual(unavailable);
+    expect(arrival).toMatchObject({ stopsAway: 3, seatEstimate: { kind: "count", seats: 15 } });
+  });
+
+  it("시계나 snapshot이 없거나 방문이 검증되지 않으면 시간을 연결하지 않는다", () => {
+    const details = detailsWith();
+    const latest = details.resource.latestSuccess;
+    expect(
+      arrivalTimingFor(arrival, {
+        ...details,
+        resource: { ...details.resource, latestSuccess: { ...latest, clock: null } },
+      }),
+    ).toEqual(unavailable);
+    latest.body.routes[0]!.targetVisit.matchStatus = "UNVERIFIED";
+    expect(arrivalTimingFor(arrival, details)).toEqual(unavailable);
+    latest.body.routes[0]!.targetVisit.matchStatus = "MATCHED";
+    latest.body.snapshot = null;
+    expect(arrivalTimingFor(arrival, details)).toEqual(unavailable);
+  });
+
+  it("제공 불가이거나 잘못된 ETA 시각은 도착으로 추정하지 않는다", () => {
+    for (const eta of [
+      { status: "UNAVAILABLE" as const },
+      { remainingSeconds: null },
+      { expectedArrivalAt: "invalid" },
+    ]) {
+      const details = detailsWith();
+      Object.assign(details.resource.latestSuccess.body.routes[0]!.arrivals[0]!.eta, eta);
+      expect(arrivalTimingFor(arrival, details)).toEqual(unavailable);
+    }
   });
 
   it("재조회 실패도 아직 유효한 ETA는 유지한다", () => {

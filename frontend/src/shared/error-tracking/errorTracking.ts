@@ -17,6 +17,7 @@ interface ErrorTrackingConfiguration {
   dsn: string;
   environment: string;
   release: string;
+  tags?: Record<string, string>;
   storage?: Storage;
   contextForPage: () => PageErrorContext;
 }
@@ -66,6 +67,7 @@ export function initErrorTracking(configuration: ErrorTrackingConfiguration) {
     dsn: configuration.dsn,
     environment: configuration.environment,
     release: configuration.release,
+    initialScope: { tags: configuration.tags ?? {} },
     sampleRate: 1,
     tracesSampleRate: 0,
     sendClientReports: false,

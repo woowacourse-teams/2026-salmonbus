@@ -1,6 +1,8 @@
 import type { RootOptions } from "react-dom/client";
 import { initErrorTracking } from "@/shared/error-tracking/errorTracking";
 import { initApiFailureReporter } from "@/shared/api/client";
+import { appHostFrom } from "@/shared/bridge/bridge";
+import { clientPropertiesFrom } from "@/shared/bridge/clientProperties";
 import { isErrorTrackingEnabled, pageErrorContextFor } from "./appErrorTrackingPolicy";
 
 function initAppErrorTracking(): RootOptions {
@@ -20,6 +22,7 @@ function initAppErrorTracking(): RootOptions {
     dsn: __SENTRY_DSN__,
     environment: __SENTRY_ENVIRONMENT__,
     release: __APP_RELEASE__,
+    tags: clientPropertiesFrom(appHostFrom()),
     ...(storage ? { storage } : {}),
     contextForPage: () => pageErrorContextFor(window.location.pathname),
   });

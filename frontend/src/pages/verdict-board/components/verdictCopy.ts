@@ -15,6 +15,11 @@ const CHIP_LABELS: Record<ChipTone, string> = {
 const WAYPOINT_SUFFIX = "(경유)";
 const TURNAROUND_SUFFIX = "(회차지점)";
 
+export const ARRIVAL_TIME_LABELS = {
+  loading: "시간 확인 중",
+  stale: "시간 재확인 중",
+};
+
 export const WAYPOINT_CAPTION = "경유";
 export const NO_VEHICLE_NOTICE = "현재 예측할 수 있는 차량이 없습니다";
 export const OUT_OF_SERVICE_NOTICE = "현재는 운행시간이 아닙니다";

@@ -156,23 +156,25 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     guard let bytes = message.data(using: .utf8), bytes.count <= 4_000_000 else { return }
     do {
       let envelope = try JSONDecoder().decode(MapEnvelope.self, from: bytes)
-      guard envelope.v == 1, !envelope.sessionId.isEmpty, envelope.sessionId.count <= 128,
-            envelope.revision >= 0,
+      let session = envelope.payload
+      guard envelope.v == 1, envelope.type.hasPrefix("map."),
+            !session.sessionId.isEmpty, session.sessionId.count <= 128, session.revision >= 0,
             let object = try JSONSerialization.jsonObject(with: bytes) as? [String: Any],
             let payload = object["payload"] else { return }
+      let command = String(envelope.type.dropFirst("map.".count))
       let payloadBytes = try JSONSerialization.data(withJSONObject: payload)
-      if envelope.type == "mount" {
-        if sessionId == envelope.sessionId && envelope.revision <= lastRevision { return }
+      if command == "mount" {
+        if sessionId == session.sessionId && session.revision <= lastRevision { return }
         reset()
-        sessionId = envelope.sessionId
-        lastRevision = envelope.revision
+        sessionId = session.sessionId
+        lastRevision = session.revision
         let nextScene = try JSONDecoder().decode(MapScene.self, from: payloadBytes)
         mount(nextScene)
         return
       }
-      guard sessionId == envelope.sessionId, envelope.revision > lastRevision else { return }
-      lastRevision = envelope.revision
-      switch envelope.type {
+      guard sessionId == session.sessionId, session.revision > lastRevision else { return }
+      lastRevision = session.revision
+      switch command {
       case "updateScene":
         updateScene(try JSONDecoder().decode(MapSceneState.self, from: payloadBytes))
       case "layout":
@@ -180,7 +182,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
         guard layout.valid else { fail("지도 표시 영역을 확인하지 못했어요"); return }
         mapLayout = layout
         applyLayout()
-        emit("ack", ["revision": envelope.revision])
+        emit("ack", ["appliedRevision": session.revision])
       case "motion":
         updateMotion(try JSONDecoder().decode(MotionPayload.self, from: payloadBytes))
       case "camera":
@@ -711,8 +713,11 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
 
   private func emit(_ type: String, _ payload: [String: Any]) {
     guard let sessionId else { return }
-    let event: [String: Any] = ["v": 1, "sessionId": sessionId, "revision": max(0, lastRevision),
-                                "type": type, "payload": payload]
+    // sessionId와 revision은 세션 값 자리라서 이벤트 payload 필드 이름으로 쓰지 않는다.
+    var body = payload
+    body["sessionId"] = sessionId
+    body["revision"] = max(0, lastRevision)
+    let event: [String: Any] = ["v": 1, "type": "map.\(type)", "payload": body]
     guard let data = try? JSONSerialization.data(withJSONObject: event),
           let message = String(data: data, encoding: .utf8) else { return }
     onMapEvent(["message": message])
