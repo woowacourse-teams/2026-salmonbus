@@ -30,14 +30,13 @@ function firstSeenTimesFrom(text: string | null): FirstSeenTimes {
   try {
     const value: unknown = JSON.parse(text);
     if (!isRecord(value) || Array.isArray(value)) return new Map();
-    const entries = Object.entries(value);
-    return entries.every(isFirstSeenEntry) ? new Map(entries) : new Map();
+    const times = new Map<string, number>();
+    for (const [id, seenAt] of Object.entries(value)) {
+      if (typeof seenAt !== "number" || !Number.isSafeInteger(seenAt) || seenAt < 0) return new Map();
+      times.set(id, seenAt);
+    }
+    return times;
   } catch {
     return new Map();
   }
-}
-
-function isFirstSeenEntry(entry: [string, unknown]): entry is [string, number] {
-  const [, seenAt] = entry;
-  return typeof seenAt === "number" && Number.isSafeInteger(seenAt) && seenAt >= 0;
 }
