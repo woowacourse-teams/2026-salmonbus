@@ -1,7 +1,6 @@
 import { useState, type SubmitEvent } from "react";
-import { track } from "@/shared/analytics/track";
 import type { FavoriteTarget } from "@/shared/api/favorites.types";
-import { createFavoriteGroup, saveFavoriteSelections } from "@/shared/api/favorites.api";
+import { createFavoriteGroup } from "@/shared/api/favorites.api";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
 import { useFavorites } from "@/shared/hooks/useFavorites";
@@ -16,7 +15,7 @@ import {
   selectedGroups,
 } from "@/shared/utils/favoritePolicy";
 import plusIcon from "@/shared/assets/icons/favorite-group-plus.svg";
-import { favoriteAddedPropertiesOf } from "../analytics/favoriteEventPolicy";
+import { useSaveFavoriteSelections } from "../hooks/useSaveFavoriteSelections";
 import * as styles from "./SelectionDialog.css";
 
 interface SelectionDialogProps {
@@ -30,6 +29,7 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
   const [chosen, setChosen] = useState<string[] | null>(null);
   const ids = chosen ?? selectedGroups(groups, target);
   const { run, busy, error, setError } = useFavoriteAction();
+  const saveSelections = useSaveFavoriteSelections(target);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [beforeCreation, setBeforeCreation] = useState<typeof resource | null>(null);
@@ -173,17 +173,11 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
             disabled={
               busy || refreshingGroups || resource.status !== "success" || groups.length === 0 || full || missing
             }
-            onClick={() => {
-              const added = favoriteAddedPropertiesOf(groups, target, ids);
-              void run(async () => {
-                const result = await saveFavoriteSelections(target, ids);
-                // 저장 중에 화면을 떠나도 서버에는 담겼으니, 화면 상태가 아니라 저장 결과로 기록한다.
-                if (result.ok && added) track("favorite_added", added);
-                return result;
-              }).then((ok) => {
+            onClick={() =>
+              void run(() => saveSelections(ids)).then((ok) => {
                 if (ok) onSaved();
-              });
-            }}
+              })
+            }
           >
             {busy ? "저장 중…" : "저장"}
           </button>
