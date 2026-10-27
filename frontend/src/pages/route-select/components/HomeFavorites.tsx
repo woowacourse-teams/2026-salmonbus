@@ -6,6 +6,9 @@ import type { FavoriteStatus, FavoriteTarget, HomeFavorite } from "@/shared/api/
 import { latestSuccessOf } from "@/shared/api/polledResource";
 import { SeatCountBadge } from "@/shared/components/SeatCountBadge";
 import { toSeatEstimate, toSeatLevel } from "@/shared/utils/seatGrade";
+import { seatLabelOf } from "@/shared/utils/seatLabelOf";
+import { toRemainingTime } from "@/shared/utils/remainingTime";
+import { remainingTimeLabelOf } from "@/shared/utils/remainingTimeLabelOf";
 import { boardPathFor, favoritePath } from "@/shared/routing/paths";
 import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
@@ -215,28 +218,27 @@ function FavoriteCard({ favorite, savedDirection, elapsed, onRetry }: FavoriteCa
           {favorite.status === "READY" && favorite.approachingVehicles.length > 0 ? (
             <ul className={homeStyles.rows}>
               {favorite.approachingVehicles.map((vehicle, index) => {
-                const remaining =
-                  vehicle.eta.status === "AVAILABLE" ? Math.max(0, vehicle.eta.remainingSeconds - elapsed) : null;
+                const time = toRemainingTime(
+                  vehicle.eta.status === "AVAILABLE" ? vehicle.eta.remainingSeconds - elapsed : null,
+                );
                 const forecast = vehicle.forecast;
-                const timingAvailable = remaining !== null && remaining > 0;
                 const arrived = vehicle.remainingStops === 0;
                 const tone =
                   forecast.status === "AVAILABLE" ? toSeatLevel(forecast.seatAvailableProbability) : "unavailable";
                 const estimate = toSeatEstimate(forecast.status === "AVAILABLE" ? forecast.expectedSeats : undefined);
-                const label = estimate.kind === "unknown" ? "좌석 정보 없음" : `도착 시 ${estimate.seats}석 예상해요`;
                 return (
                   <li className={homeStyles.arrival} key={vehicle.vehicleId ?? index}>
                     <span className={homeStyles.timing}>
                       {!arrived && (
-                        <span className={timingAvailable ? homeStyles.eta : homeStyles.unavailableEta}>
-                          {timingAvailable ? `${Math.ceil(remaining / 60)}분 남음` : "도착 정보 없음"}
+                        <span className={time.kind === "known" ? homeStyles.eta : homeStyles.unavailableEta}>
+                          {remainingTimeLabelOf(time)}
                         </span>
                       )}
                       <span className={arrived ? homeStyles.eta : homeStyles.distance}>
                         {stopsAwayLabelOf(vehicle.remainingStops)}
                       </span>
                     </span>
-                    <SeatCountBadge tone={tone} className={homeStyles.seatBadge[tone]} label={label} />
+                    <SeatCountBadge tone={tone} className={homeStyles.seatBadge[tone]} label={seatLabelOf(estimate)} />
                   </li>
                 );
               })}
