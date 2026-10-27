@@ -25,3 +25,9 @@ export function initAnalytics() {
 export function isAnalyticsEnabled() {
   return initialized;
 }
+
+export function setAnalyticsMemberId(memberId: string | null) {
+  if (!initialized) return;
+  // 로그아웃에 reset()을 쓰면 device_id가 새로 생겨 같은 기기가 다른 사용자로 잡힌다.
+  amplitude.setUserId(memberId ?? undefined);
+}
