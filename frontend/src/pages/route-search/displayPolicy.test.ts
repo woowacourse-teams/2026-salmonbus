@@ -63,6 +63,24 @@ describe("searchViewFor", () => {
       expect(searchViewFor(ready, "56")).toEqual({ kind: "matched", routes: [{ ...route5600, isNew: false }] });
     });
 
+    it("일치하는 노선을 응답 순서가 아니라 번호 오름차순으로 보여준다", () => {
+      const route3000 = createRoute("3000");
+      const state: RoutesState = {
+        status: "ready",
+        routes: [route3330, route5600, route3000],
+        firstSeenTimes: new Map(),
+        checkedAt: FIRST_SEEN_AT,
+      };
+
+      expect(searchViewFor(state, "3")).toEqual({
+        kind: "matched",
+        routes: [
+          { ...route3000, isNew: false },
+          { ...route3330, isNew: false },
+        ],
+      });
+    });
+
     it("준비 중 노선은 앞부분이 일치해도 보여주지 않는다", () => {
       expect(searchViewFor(ready, "3")).toEqual({ kind: "matched", routes: [{ ...route3330, isNew: false }] });
     });

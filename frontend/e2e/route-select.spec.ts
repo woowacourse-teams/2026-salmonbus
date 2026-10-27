@@ -150,6 +150,22 @@ test("입력하면 일치하는 노선을 서비스 중 노선 아래에 보여 
   await expect(routeButton(page)).toContainText("테스트 기점 ↔ 테스트 종점");
 });
 
+test("입력하면 일치하는 노선을 응답 순서가 아니라 번호 오름차순으로 보여 준다", async ({ page, api }) => {
+  api.data.routes.routes.push({
+    id: "200000002",
+    displayName: "3000",
+    startStopName: "다른 기점",
+    endStopName: "다른 종점",
+    status: "FORECAST_READY",
+  });
+  await page.goto("/");
+  await openRouteSearch(page);
+
+  await routeSearchInput(page).fill("3");
+
+  await expect(inServiceSection(page).getByRole("button")).toHaveText([/^3000/, /^3330/]);
+});
+
 test("새로 생긴 서비스 중 노선은 다음 방문에 NEW로 보인다", async ({ page, api }) => {
   const afterLaunchDeadline = new Date("2027-01-10T08:00:00+09:00");
   await page.clock.setSystemTime(afterLaunchDeadline);
