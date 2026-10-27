@@ -1,5 +1,5 @@
 import { flush, setTransport, track as sendEvent } from "@amplitude/unified";
-import { isAnalyticsEnabled } from "./analytics";
+import { isAnalyticsEnabled, setAnalyticsMemberId } from "./analytics";
 import type { EventMap } from "./events";
 
 const LEAVING_WAIT_LIMIT_MS = 300;
@@ -7,6 +7,12 @@ const LEAVING_WAIT_LIMIT_MS = 300;
 export function track<E extends keyof EventMap>(event: E, properties: EventMap[E]) {
   if (!isAnalyticsEnabled()) return;
   sendEvent(event, properties);
+}
+
+// 회원 ID를 먼저 맞춘 뒤 보내서, 앱 조립 순서와 상관없이 이 이벤트에 회원 ID가 붙는다.
+export function trackAsMember<E extends keyof EventMap>(memberId: string, event: E, properties: EventMap[E]) {
+  setAnalyticsMemberId(memberId);
+  track(event, properties);
 }
 
 // SDK는 이벤트를 다음 틱에 큐로 옮겨서, 곧바로 다른 사이트로 떠나면 이벤트가 큐에 닿기 전에 사라진다.

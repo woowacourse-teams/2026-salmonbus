@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { track } from "@/shared/analytics/track";
+import { track, trackAsMember } from "@/shared/analytics/track";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { clearLoginReturn, readLoginReturn } from "@/shared/routing/loginReturn";
 
@@ -9,6 +9,7 @@ export function AuthReturn() {
   const location = useLocation();
   const navigate = useNavigate();
   const handledReturnKey = useRef<string | null>(null);
+  const memberId = state.status === "authenticated" ? state.member.id : null;
 
   useEffect(() => {
     if (location.pathname === "/login" || handledReturnKey.current === location.key) return;
@@ -35,12 +36,12 @@ export function AuthReturn() {
               : "회원탈퇴를 완료하지 못했어요. 다시 시도해 주세요.",
         },
       });
-    } else if (pending !== null && state.status === "authenticated") {
+    } else if (pending !== null && memberId !== null) {
       handledReturnKey.current = location.key;
-      track("login_finished", { provider: pending.provider, result: "succeeded" });
+      trackAsMember(memberId, "login_finished", { provider: pending.provider, result: "succeeded" });
       clearLoginReturn();
       void navigate(pending.returnTo, { replace: true });
     }
-  }, [location.key, location.pathname, location.search, navigate, state.status]);
+  }, [location.key, location.pathname, location.search, memberId, navigate]);
   return null;
 }
