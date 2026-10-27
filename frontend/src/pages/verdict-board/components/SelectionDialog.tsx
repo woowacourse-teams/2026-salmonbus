@@ -1,4 +1,5 @@
 import { useState, type SubmitEvent } from "react";
+import { track } from "@/shared/analytics/track";
 import type { FavoriteTarget } from "@/shared/api/favorites.types";
 import { createFavoriteGroup, saveFavoriteSelections } from "@/shared/api/favorites.api";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
@@ -15,6 +16,7 @@ import {
   selectedGroups,
 } from "@/shared/utils/favoritePolicy";
 import plusIcon from "@/shared/assets/icons/favorite-group-plus.svg";
+import { favoriteAddedPropertiesOf } from "../analytics/favoriteEventPolicy";
 import * as styles from "./SelectionDialog.css";
 
 interface SelectionDialogProps {
@@ -171,11 +173,14 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
             disabled={
               busy || refreshingGroups || resource.status !== "success" || groups.length === 0 || full || missing
             }
-            onClick={() =>
+            onClick={() => {
+              const added = favoriteAddedPropertiesOf(groups, target, ids);
               void run(() => saveFavoriteSelections(target, ids)).then((ok) => {
-                if (ok) onSaved();
-              })
-            }
+                if (!ok) return;
+                if (added) track("favorite_added", added);
+                onSaved();
+              });
+            }}
           >
             {busy ? "저장 중…" : "저장"}
           </button>

@@ -68,6 +68,14 @@ export interface EventMap {
     is_registered: boolean;
   };
 
+  favorite_added: {
+    route_id: string;
+    direction: Direction;
+    stop_id: string;
+    group_count: number;
+    favorite_count: number;
+  };
+
   stop_expanded:
     | (StopExpandedBase & {
         stop_kind: "boarding";
