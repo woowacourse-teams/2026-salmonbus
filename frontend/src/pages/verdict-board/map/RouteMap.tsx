@@ -9,6 +9,7 @@ import { createNaverRouteMap, type RouteMapAdapter } from "./naverMapAdapter";
 import { isNativeMapAvailable } from "@/shared/native-map/bridge";
 import { createNativeRouteMap, type NativeRouteMapAdapter } from "./nativeMapAdapter";
 import { reportNativeMapFailure } from "@/shared/error-tracking/errorTracking";
+import { NOTICE_DURATION_MS } from "@/shared/components/Notice";
 import * as styles from "./RouteMap.css";
 
 interface RouteMapProps {
@@ -242,6 +243,12 @@ export function RouteMap(props: RouteMapProps) {
     if (isNativeMapAvailable() && !nativeFailed) return;
     return motion.subscribe(() => runMapAction((adapter) => adapter.moveVehicles(motion.frames)));
   }, [motion, runMapAction, nativeFailed]);
+
+  useEffect(() => {
+    if (locationState.status !== "message") return;
+    const timer = window.setTimeout(() => setLocationState({ status: "idle" }), NOTICE_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [locationState]);
 
   useEffect(() => {
     const region = regionRef.current;
