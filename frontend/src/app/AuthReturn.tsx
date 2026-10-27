@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router";
+import { track } from "@/shared/analytics/track";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { clearLoginReturn, readLoginReturn } from "@/shared/routing/loginReturn";
 
@@ -18,6 +19,7 @@ export function AuthReturn() {
     const pending = readLoginReturn();
     if (login === "failed" || login === "cancelled") {
       handledReturnKey.current = location.key;
+      track("login_finished", { provider: pending?.provider ?? "unknown", result: login });
       clearLoginReturn();
       void navigate(`/login?${new URLSearchParams({ returnTo: pending?.returnTo ?? "/", login })}`, { replace: true });
     } else if (withdrawn || withdrawal === "failed" || withdrawal === "cancelled") {
@@ -35,6 +37,7 @@ export function AuthReturn() {
       });
     } else if (pending !== null && state.status === "authenticated") {
       handledReturnKey.current = location.key;
+      track("login_finished", { provider: pending.provider, result: "succeeded" });
       clearLoginReturn();
       void navigate(pending.returnTo, { replace: true });
     }

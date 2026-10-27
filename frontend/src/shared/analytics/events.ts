@@ -81,4 +81,9 @@ export interface EventMap {
     provider: LoginProvider;
     entry: "favorite" | "home" | "mypage";
   };
+
+  login_finished: {
+    provider: LoginProvider | "unknown";
+    result: "succeeded" | "cancelled" | "failed";
+  };
 }
