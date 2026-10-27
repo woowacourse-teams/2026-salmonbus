@@ -26,6 +26,8 @@ export function searchStatusLabel(view: SearchView): string {
       return LOADING_NOTICE;
     case "error":
       return LOAD_FAILED_NOTICE;
+    case "all":
+      return `${IN_SERVICE_TITLE} ${view.routes.length}개`;
     case "unmatched":
       return UNMATCHED_NOTICE;
     case "matched":

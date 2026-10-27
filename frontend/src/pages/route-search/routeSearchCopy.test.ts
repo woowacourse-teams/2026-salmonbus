@@ -24,6 +24,10 @@ describe("searchStatusLabel", () => {
     expect(searchStatusLabel({ kind: "error" })).toBe("노선을 불러오지 못했어요");
   });
 
+  it("입력 전 목록이면 서비스 중 노선 개수를 알린다", () => {
+    expect(searchStatusLabel({ kind: "all", routes: [route, { ...route, id: "3330" }] })).toBe("서비스 중 노선 2개");
+  });
+
   it("일치하는 노선이 없으면 결과 없음을 알린다", () => {
     expect(searchStatusLabel({ kind: "unmatched" })).toBe("일치하는 노선이 없어요");
   });

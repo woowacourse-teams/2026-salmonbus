@@ -72,6 +72,7 @@ function renderView(view: SearchView, onSelect: SearchResultsProps["onSelect"], 
           {UNMATCHED_NOTICE}
         </p>
       );
+    case "all":
     case "matched":
       return <InServiceSection routes={view.routes} onSelect={onSelect} />;
   }
