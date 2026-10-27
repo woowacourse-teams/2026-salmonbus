@@ -14,6 +14,13 @@ describe("앱 안 판별", () => {
   it.each([
     ["앱 정보와 postMessage가 둘 다 없을 때", {}],
     ["앱 정보만 있을 때", { __SALMONBUS_APP__: { appVersion: "1.0.0", capabilities: [] } }],
+    [
+      "옛 앱처럼 앱 정보 없이 ReactNativeWebView와 SalmonNativeMap만 있을 때",
+      {
+        ReactNativeWebView: { postMessage: jest.fn() },
+        SalmonNativeMap: { version: 1, platform: "ios", postMessage: jest.fn() },
+      },
+    ],
     ["appVersion이 없을 때", { ...inAppWindow().bridgeWindow, __SALMONBUS_APP__: { capabilities: [] } }],
     ["postMessage가 함수가 아닐 때", { ...inAppWindow().bridgeWindow, ReactNativeWebView: { postMessage: "x" } }],
   ])("%s 브라우저로 본다", (_name, bridgeWindow) => {
