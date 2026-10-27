@@ -21,6 +21,7 @@ export const vars = createGlobalTheme(":root", {
     rowDivider: "#E2DFD8",
     compactRowSurface: "#F7F8FA",
     searchFieldSurface: "#F2F4F6",
+    pressedRowSurface: "#F2F4F6",
     mutedChipSurface: "#EDEDEB",
     forecastCardSurface: "#F7F7F5",
     forecastCardBorder: "#E3E2DE",

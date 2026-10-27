@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { apiPaths, routeId } from "./fixtures/mock-data";
 import { test, expect } from "./fixtures/api";
 import {
@@ -169,6 +170,39 @@ test("입력 전 목록에서 노선을 누르면 그 노선의 판정 보드로
   await routeButton(page).click();
 
   await expect(page).toHaveURL(`/routes/${routeId}`);
+});
+
+async function pressRouteButton(page: Page) {
+  const box = await routeButton(page).boundingBox();
+  expect(box).not.toBeNull();
+  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  await page.mouse.down();
+}
+
+function pressStyleOf(page: Page) {
+  return routeButton(page).evaluate((element) => {
+    const { scale, backgroundColor } = getComputedStyle(element);
+    return { scale, backgroundColor };
+  });
+}
+
+test("노선 줄을 누르는 동안 줄이 살짝 작아지고 배경이 깔린다", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/");
+  await openRouteSearch(page);
+
+  await pressRouteButton(page);
+
+  await expect.poll(() => pressStyleOf(page)).toEqual({ scale: "0.98", backgroundColor: "rgb(242, 244, 246)" });
+});
+
+test("동작 줄이기 설정이면 노선 줄을 누르는 동안에도 크기가 그대로다", async ({ page }) => {
+  await page.goto("/");
+  await openRouteSearch(page);
+
+  await pressRouteButton(page);
+
+  expect((await pressStyleOf(page)).scale).toBe("none");
 });
 
 test("입력하면 일치하는 노선을 서비스 중 노선 아래에 보여 준다", async ({ page }) => {
