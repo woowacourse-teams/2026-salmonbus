@@ -1,6 +1,8 @@
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
 
-export type InServiceRoute = RouteSummary & { status: "FORECAST_READY" };
+export interface InServiceRoute extends RouteSummary {
+  status: "FORECAST_READY";
+}
 
 export function isInService(route: RouteSummary): route is InServiceRoute {
   return route.status === "FORECAST_READY";

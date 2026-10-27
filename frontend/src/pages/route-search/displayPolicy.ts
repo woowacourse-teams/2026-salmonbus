@@ -2,18 +2,20 @@ import type { RouteSummary } from "@/shared/api/routeForecast.types";
 import { isInService, matchingRoutesFor, type InServiceRoute } from "./routeSearchPolicy";
 
 export type RoutesState =
-  | { status: "loading" }
-  | { status: "error" }
+  | { status: "loading"; routes?: never; newRouteIds?: never }
+  | { status: "error"; routes?: never; newRouteIds?: never }
   | { status: "ready"; routes: RouteSummary[]; newRouteIds: ReadonlySet<string> };
 
-export type ListedRoute = InServiceRoute & { isNew: boolean };
+export interface ListedRoute extends InServiceRoute {
+  isNew: boolean;
+}
 
 export type SearchView =
-  | { kind: "empty" }
-  | { kind: "loading" }
-  | { kind: "error" }
+  | { kind: "empty"; routes?: never }
+  | { kind: "loading"; routes?: never }
+  | { kind: "error"; routes?: never }
   | { kind: "matched"; routes: ListedRoute[] }
-  | { kind: "unmatched" };
+  | { kind: "unmatched"; routes?: never };
 
 export function searchViewFor(routesState: RoutesState, input: string): SearchView {
   if (routesState.status === "error") return { kind: "error" };
