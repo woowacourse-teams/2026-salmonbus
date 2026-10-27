@@ -142,7 +142,7 @@ function OperatingBoard({
 }: OperatingBoardProps) {
   const viewport = useBoardViewport();
   const [search, setSearch] = useSearchParams();
-  const [snap, setSnap] = useState<BoardSheetSnap>("half");
+  const [snap, setSnap] = useState<BoardSheetSnap>("expanded");
   const [selected, setSelected] = useState<StopSelection | null>(() =>
     stopSelectionFrom(board, direction.id, search.get("stopId")),
   );

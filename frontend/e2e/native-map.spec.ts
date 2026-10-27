@@ -120,7 +120,7 @@ test("randomUUID가 없는 환경에서도 native 지도 연결과 선택 이벤
 
 test("실제 transition 경계와 웹 버튼 영역을 전달하고 native 위치·선택 이벤트를 연결한다", async ({ page }) => {
   await open(page);
-  await page.getByRole("slider", { name: "판정보드 높이" }).click();
+  await page.getByRole("slider", { name: "판정보드 높이" }).press("ArrowDown");
   await page.clock.runFor(400);
   // page.clock은 CSS transition을 끝내지 않으므로 실제 종료 후 layout을 기다린다.
   await expect
