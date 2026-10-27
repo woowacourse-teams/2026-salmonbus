@@ -134,11 +134,11 @@ export function MyPageScreen() {
             </p>
           )}
           <div className={styles.actions}>
-            <button type="button" className={buttonStyles.primary} disabled={busy} onClick={() => void confirm()}>
-              {busy ? "처리 중…" : action === "logout" ? "로그아웃" : "회원탈퇴"}
-            </button>
             <button type="button" className={buttonStyles.secondary} disabled={busy} onClick={() => setAction(null)}>
               취소
+            </button>
+            <button type="button" className={buttonStyles.primary} disabled={busy} onClick={() => void confirm()}>
+              {busy ? "처리 중…" : action === "logout" ? "로그아웃" : "회원탈퇴"}
             </button>
           </div>
         </ConfirmDialog>

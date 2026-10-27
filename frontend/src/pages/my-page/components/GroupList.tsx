@@ -208,15 +208,15 @@ export function GroupList() {
             </p>
           )}
           <div className={styles.dialogActions}>
+            <button className={styles.cancel} disabled={busy} onClick={() => setConfirming(false)}>
+              취소
+            </button>
             <button
               className={styles.confirm}
               disabled={busy || changed || selected.length === 0 || resource.status !== "success"}
               onClick={() => void removeSelected()}
             >
               {busy ? "삭제 중…" : "삭제"}
-            </button>
-            <button className={styles.cancel} disabled={busy} onClick={() => setConfirming(false)}>
-              취소
             </button>
           </div>
         </ConfirmDialog>
