@@ -1,8 +1,9 @@
 import { useEffect, useReducer } from "react";
 import { latestSuccessOf } from "@/shared/api/polledResource";
 import { stopsAwayLabelOf } from "@/shared/utils/stopsAwayLabelOf";
-import type { ArrivalView } from "./arrivalPolicy";
-import { stationArrivalPanelFor, type StationArrivalDetails } from "./stationArrivalPolicy";
+import { arrivalToneFor, type ArrivalView } from "./arrivalPolicy";
+import { arrivalTimingFor, type StationArrivalDetails } from "./stationArrivalPolicy";
+import { NO_VEHICLE_NOTICE, arrivalSeatLabel } from "./verdictCopy";
 import { SeatCountBadge } from "@/shared/components/SeatCountBadge";
 import * as styles from "./ArrivalForecastCard.css";
 
@@ -20,17 +21,10 @@ export function ArrivalForecastCard({ arrivals, stationArrivals }: ArrivalForeca
     return () => window.clearInterval(timer);
   }, [latest]);
 
-  const panel = stationArrivalPanelFor(stationArrivals, arrivals);
-  if (panel.kind !== "ready") {
-    const notice = {
-      loading: "도착정보 확인 중이에요",
-      unavailable: "도착정보를 불러오지 못했어요",
-      stale: "도착정보가 만료됐어요. 갱신을 기다리고 있어요",
-      empty: "현재 도착 예정 차량이 없어요",
-    }[panel.kind];
+  if (arrivals.length === 0) {
     return (
       <div className={styles.card}>
-        <p className={styles.notice}>{notice}</p>
+        <p className={styles.notice}>{NO_VEHICLE_NOTICE}</p>
       </div>
     );
   }
@@ -38,13 +32,13 @@ export function ArrivalForecastCard({ arrivals, stationArrivals }: ArrivalForeca
   return (
     <div className={styles.card}>
       <ul className={styles.list}>
-        {panel.arrivals.map((arrival) => {
-          const { timing, remainingStops } = arrival;
+        {arrivals.map((arrival, index) => {
+          const timing = arrivalTimingFor(arrival, stationArrivals);
           return (
-            <li key={arrival.ordinal} className={styles.row}>
+            <li key={arrival.vehicleId ?? index} className={styles.row}>
               <span className={styles.timing}>
-                <span className={remainingStops === 0 ? styles.remainingTime : styles.distance}>
-                  {remainingStops === null ? "거리 정보 없음" : stopsAwayLabelOf(remainingStops)}
+                <span className={arrival.stopsAway === 0 ? styles.remainingTime : styles.distance}>
+                  {stopsAwayLabelOf(arrival.stopsAway)}
                 </span>
                 {timing && (
                   <span className={timing.available ? styles.remainingTime : styles.unavailableTime}>
@@ -52,7 +46,7 @@ export function ArrivalForecastCard({ arrivals, stationArrivals }: ArrivalForeca
                   </span>
                 )}
               </span>
-              <SeatCountBadge tone={arrival.tone} label={arrival.seatLabel} />
+              <SeatCountBadge tone={arrivalToneFor(arrival)} label={arrivalSeatLabel(arrival)} />
             </li>
           );
         })}

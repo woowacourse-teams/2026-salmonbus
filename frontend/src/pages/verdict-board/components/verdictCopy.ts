@@ -12,13 +12,24 @@ const CHIP_LABELS: Record<ChipTone, string> = {
   noVehicle: "지금 오는 차량이 없어요",
 };
 
-export const SEAT_UNKNOWN_LABEL = "예상 좌석 정보 없음";
+const SEAT_UNKNOWN_LABEL = "예상 좌석 정보 없음";
 const SEAT_EMPTY_LABEL = "도착 시 빈자리가 없어요";
 
 const WAYPOINT_SUFFIX = "(경유)";
 const TURNAROUND_SUFFIX = "(회차지점)";
 
+export const ARRIVAL_TIME_LABELS = {
+  loading: "시간 확인 중",
+  unavailable: "시간 정보 없음",
+  stale: "시간 재확인 중",
+};
+
+export function arrivalTimeLabel(seconds: number): string {
+  return seconds <= 60 ? "1분 이내" : `${Math.ceil(seconds / 60)}분 남음`;
+}
+
 export const WAYPOINT_CAPTION = "경유";
+export const NO_VEHICLE_NOTICE = "현재 예측할 수 있는 차량이 없습니다";
 export const OUT_OF_SERVICE_NOTICE = "현재는 운행시간이 아닙니다";
 export const LOADING_NOTICE = "불러오는 중이에요";
 export const LOAD_FAILED_NOTICE = "정보를 불러오지 못했어요";

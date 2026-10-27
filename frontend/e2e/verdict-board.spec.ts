@@ -29,7 +29,7 @@ test("판정 보드 최초 조회 실패는 운행 없음이나 예측 없음과
   await expect(page.getByText(/도착 시 .*석 예상해요/)).toHaveCount(0);
   await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).not.toBeVisible();
   await expect(page.getByText("지금 오는 차량이 없어요", { exact: true })).not.toBeVisible();
-  await expect(page.getByText("현재 도착 예정 차량이 없어요", { exact: true })).not.toBeVisible();
+  await expect(page.getByText("현재 예측할 수 있는 차량이 없습니다", { exact: true })).not.toBeVisible();
 });
 
 test("유효기간 안의 자동 갱신 실패 시 마지막 예측을 유지한다 (현재 구현)", async ({ page, api }) => {
@@ -159,11 +159,8 @@ test("화면을 켜 둔 채 연결이 돌아오면 다음 폴링을 기다리지
   await page.context().setOffline(false);
   await refilled;
 
-  // watch 복구만으로 만료된 ETA 목록을 되살리지 않는다.
-  await expect(
-    targetRow(page, "UP").getByText("도착정보가 만료됐어요. 갱신을 기다리고 있어요", { exact: true }),
-  ).toBeVisible();
-  await expect(arrivals).toHaveCount(0);
+  // ETA가 복구되지 않아도 watch의 거리와 좌석은 먼저 갱신한다.
+  await expect(arrivals).toHaveText([/2정류장 전\s*시간 재확인 중\s*도착 시 9석 예상해요/]);
   api.mode.arrivals = "success";
   await targetStop(page, "UP").click();
   await targetStop(page, "UP").click();
@@ -226,7 +223,8 @@ async function settleMarkers(page: Page) {
   await page.clock.runFor(100);
 }
 
-test("watch와 ETA가 각각 갱신되면 마커와 도착정보에 반영된다", async ({ page, api }) => {
+test("watch가 먼저 갱신돼도 지도와 펼친 목록의 거리가 함께 바뀐다", async ({ page, api }) => {
+  api.cacheMaxAgeSeconds = 15;
   // 정류장 8에 있는 버스라서 목표 정류장(순번 11)까지 3정류장 전이다. 백엔드 remainingStops 계산과 같다.
   const bus = api.data.watch.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1");
   if (bus === undefined) throw new Error("bus-1 차량 fixture가 필요합니다");
@@ -248,8 +246,12 @@ test("watch와 ETA가 각각 갱신되면 마커와 도착정보에 반영된다
     forecast: { status: "AVAILABLE", seatAvailableProbability: 0.8, expectedSeats: 4 },
   });
   api.data.watch.observedAt = "2026-09-16T08:00:15+09:00";
-  await pollRouteWatch(page);
+  const watched = page.waitForResponse((response) => new URL(response.url()).pathname === apiPaths.watch);
+  await page.clock.fastForward(15_000);
+  await watched;
+  await settleMarkers(page);
 
+  expect(api.requests.arrivals).toBe(1);
   await expect(busMarkerAt(page, "상행 정류장 9")).toBeVisible();
   await expect(busMarkerAt(page, "상행 정류장 8")).toHaveCount(0);
   await expect(nearestArrival).toHaveText(/2정류장 전\s*(?:\d+분 남음|1분 이내)\s*도착 시 4석 예상해요/);
@@ -353,7 +355,7 @@ test("운행 중인 노선의 특정 정류장에 접근 차량이 없으면 차
   await expect(row.getByText("지금 오는 차량이 없어요", { exact: true })).toBeVisible();
   await stop.click();
   await expect(stop).toHaveAttribute("aria-expanded", "true");
-  await expect(row.getByText("현재 도착 예정 차량이 없어요", { exact: true })).toBeVisible();
+  await expect(row.getByText("현재 예측할 수 있는 차량이 없습니다", { exact: true })).toBeVisible();
   await expect(row.getByRole("listitem")).toHaveCount(0);
   await expect(page.getByText("정보를 불러오지 못했어요", { exact: true })).not.toBeVisible();
   await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).not.toBeVisible();
