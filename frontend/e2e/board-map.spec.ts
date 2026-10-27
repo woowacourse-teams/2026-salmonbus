@@ -1461,6 +1461,59 @@ test("헤더 드래그는 양 끝에 붙고 방향 버튼에서 시작한 드래
 });
 
 for (const reducedMotion of ["reduce", "no-preference"] as const) {
+  for (const source of ["지도", "목록"] as const) {
+    test(`${source}에서 버스를 선택하면 갱신 후에도 핀을 추적하고 지도 조작으로 멈춘다 (${reducedMotion})`, async ({
+      page,
+      api,
+      naverMap,
+    }) => {
+      const durationMs = 20_000;
+      api.cacheMaxAgeSeconds = durationMs / 1_000;
+      const vehicle = api.data.watch.vehicles.find((item) => item.vehicleId === "bus-1");
+      const nextStop = api.data.watch.stops.find((item) => item.direction === "UP" && item.sequence === 9);
+      if (vehicle === undefined || nextStop === undefined) throw new Error("추적할 차량과 다음 정류장이 없습니다");
+      vehicle.phase = "DEPARTED";
+      await page.emulateMedia({ reducedMotion });
+      await openMap(page);
+      const pin = map(page).getByRole("button", { name: /부근 버스, 현재 잔여 좌석 5석/ });
+      const tracker = list(page).getByRole("button", { name: /현재 잔여 좌석 5석/ });
+      if (source === "지도") await pin.click();
+      else await tracker.click();
+      await expectVehicleCenteredOnMap(page, pin, naverMap);
+      const initial = await naverMap.snapshot();
+
+      // 목록에 들어온 입력은 추적을 멈추지 않는다.
+      await list(page).dispatchEvent("wheel", { deltaY: 20 });
+      vehicle.phase = "IN_TRANSIT";
+      const response = page.waitForResponse((response) => new URL(response.url()).pathname === apiPaths.watch);
+      await page.clock.fastForward(durationMs);
+      await (await response).finished();
+      await page.clock.runFor(32);
+      await page.clock.runFor(durationMs / 4);
+      const moving = await naverMap.snapshot();
+      expect(Math.hypot(moving.latitude - initial.latitude, moving.longitude - initial.longitude)).toBeGreaterThan(0);
+      expect(await vehicleOffsetFromMapCenter(pin)).toBeLessThanOrEqual(1);
+      expect(moving.zoom).toBe(initial.zoom);
+
+      await page.getByTestId("naver-map-test-double").dispatchEvent("pointerdown");
+      const stopped = await naverMap.snapshot();
+      vehicle.phase = "DEPARTED";
+      vehicle.currentStopSequence = nextStop.sequence;
+      vehicle.stopId = nextStop.stopId;
+      vehicle.stopName = nextStop.name;
+      const nextResponse = page.waitForResponse((response) => new URL(response.url()).pathname === apiPaths.watch);
+      await page.clock.fastForward(durationMs);
+      await (await nextResponse).finished();
+      await page.clock.runFor(durationMs / 4);
+      expect(await naverMap.snapshot()).toEqual(stopped);
+      expect(await vehicleOffsetFromMapCenter(pin)).toBeGreaterThan(1);
+
+      await tracker.click();
+      await expectVehicleCenteredOnMap(page, pin, naverMap);
+      await expect(pin).toHaveAttribute("aria-pressed", "true");
+    });
+  }
+
   test(`뒤쪽 차량 응답에는 지도와 목록이 멈추고 앞선 응답이 오면 함께 이동한다 (${reducedMotion})`, async ({
     page,
     api,

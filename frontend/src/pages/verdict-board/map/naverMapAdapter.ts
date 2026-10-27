@@ -186,7 +186,7 @@ export function createNaverRouteMap(
     if (cameraFocusFrame !== null) window.cancelAnimationFrame(cameraFocusFrame);
     cameraFocusFrame = null;
     vehicleFocusKey = null;
-    cameraFocusInterruptEvents.forEach((event) => window.removeEventListener(event, cancelCameraFocus, true));
+    cameraFocusInterruptEvents.forEach((event) => element.removeEventListener(event, cancelCameraFocus, true));
   }
 
   function focusVehicle(key: string | null, { focusMarker = true } = {}) {
@@ -213,7 +213,7 @@ export function createNaverRouteMap(
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let startedAt: number | null = null;
     cameraFocusInterruptEvents.forEach((event) =>
-      window.addEventListener(event, cancelCameraFocus, { passive: true, capture: true }),
+      element.addEventListener(event, cancelCameraFocus, { passive: true, capture: true }),
     );
     const animate = (now: number) => {
       cameraFocusFrame = null;
@@ -240,7 +240,7 @@ export function createNaverRouteMap(
         );
         if (progress < 1) cameraFocusFrame = window.requestAnimationFrame(animate);
         else {
-          cancelCameraFocus();
+          if (vehicleFocusKey === null) cancelCameraFocus();
           onComplete?.();
         }
       })();
@@ -523,6 +523,7 @@ export function createNaverRouteMap(
       const directionChanged = activeDirection !== nextDirection;
       activeDirection = nextDirection;
       if (directionChanged) {
+        cancelCameraFocus();
         paths.forEach(({ direction, line }) => line.setOptions(routePathStyleFor(direction)));
         refreshArrows();
       }
@@ -626,6 +627,11 @@ export function createNaverRouteMap(
           item.count.style.transform = `translateY(${-index * 20}px)`;
         }),
       );
+      // 최초 이동이 끝나면 핀과 같은 보간 좌표를 사용해 카메라만 따라간다.
+      if (vehicleFocusKey !== null && cameraFocusFrame === null) {
+        const coordinate = vehicles.get(vehicleFocusKey)?.coordinate;
+        if (coordinate !== undefined) map.setCenter(toNaverCoordinate(coordinate));
+      }
     },
     resize(width, height) {
       if (width <= 0 || height <= 0) return;
