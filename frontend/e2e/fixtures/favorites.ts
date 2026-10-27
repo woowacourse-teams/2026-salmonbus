@@ -1,6 +1,7 @@
 import { test as authTest, expect, testMember } from "./auth";
 import type {
   FavoriteGroup,
+  FavoriteEta,
   FavoriteStatus,
   FavoriteTarget,
   SavedFavorite,
@@ -11,6 +12,7 @@ const uuid = (value: number) => `10000000-0000-4000-8000-${String(value).padStar
 interface FavoritesMock {
   groups: FavoriteGroup[];
   statuses: Record<string, FavoriteStatus>;
+  etaByVehicleId: Record<string, FavoriteEta>;
   unavailable: boolean;
   mutationError: string | null;
   orderFailureGroupId: string | null;
@@ -24,6 +26,7 @@ export const test = authTest.extend<{ favorites: FavoritesMock }>({
       const favorites: FavoritesMock = {
         groups: [{ id: defaultGroupId, name: "즐겨찾기", favorites: [] }],
         statuses: {},
+        etaByVehicleId: {},
         unavailable: false,
         mutationError: null,
         orderFailureGroupId: null,
@@ -117,13 +120,14 @@ export const test = authTest.extend<{ favorites: FavoritesMock }>({
                             expectedSeats: 7.4 - index * 3,
                           },
                           eta:
-                            index === 2
+                            favorites.etaByVehicleId[String(index)] ??
+                            (index === 2
                               ? { status: "UNAVAILABLE", reason: "SOURCE_NOT_PROVIDED" }
                               : {
                                   status: "AVAILABLE",
                                   expectedArrivalAt: "2026-09-16T08:07:00+09:00",
                                   remainingSeconds: 420 + index * 60,
-                                },
+                                }),
                         }))
                       : [],
                 };

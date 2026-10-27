@@ -84,17 +84,14 @@ for (const mismatch of ["vehicle", "visit"] as const) {
     await page.clock.runFor(1);
 
     await expect(targetRow(page, "UP").getByRole("listitem")).toHaveText([
-      /3정류장 전\s*시간 정보 없음\s*도착 시 5석 예상해요/,
-      /7정류장 전\s*시간 정보 없음\s*도착 시 2석 예상해요/,
+      /3정류장 전\s*도착 시 5석 예상해요/,
+      /7정류장 전\s*도착 시 2석 예상해요/,
     ]);
     await expect.poll(() => api.requests.arrivals).toBe(1);
   });
 }
 
-test("도착정보 거리가 판정 보드 거리와 다르면 판정 보드 거리를 두고 시간 정보 없음으로 표시한다", async ({
-  page,
-  api,
-}) => {
+test("도착정보 거리가 판정 보드 거리와 다르면 판정 보드 거리와 좌석 예보만 표시한다", async ({ page, api }) => {
   const response = readyArrivals();
   response.routes[0]!.arrivals[1]!.remainingStops = 2;
   api.data.arrivals = response;
@@ -102,7 +99,7 @@ test("도착정보 거리가 판정 보드 거리와 다르면 판정 보드 거
   await targetStop(page, "UP").click();
 
   await expect(targetRow(page, "UP").getByRole("listitem")).toHaveText([
-    /3정류장 전\s*시간 정보 없음\s*도착 시 5석 예상해요/,
+    /3정류장 전\s*도착 시 5석 예상해요/,
     /7정류장 전\s*4분 남음\s*도착 시 2석 예상해요/,
   ]);
 });
@@ -110,8 +107,13 @@ test("도착정보 거리가 판정 보드 거리와 다르면 판정 보드 거
 test("HTTP 캐시 5초 대신 응답의 40초 권장 시각에 재조회하고 닫으면 폴링을 멈춘다", async ({ page, api }) => {
   await openBoard(page);
   const stop = targetStop(page, "UP");
+  const arrivalResponse = page.waitForResponse((response) => new URL(response.url()).pathname === arrivalsPath);
   await stop.click();
-  await expect(targetRow(page, "UP").getByText("시간 정보 없음", { exact: true })).toHaveCount(2);
+  await (await arrivalResponse).finished();
+  await expect(targetRow(page, "UP").getByRole("listitem")).toHaveText([
+    /^3정류장 전\s*도착 시 5석 예상해요$/,
+    /^7정류장 전\s*도착 시 2석 예상해요$/,
+  ]);
   expect(api.requests.arrivals).toBe(1);
 
   await page.clock.fastForward(39_000);
@@ -144,7 +146,11 @@ test("최초 수집 중이면 초 단위 Date와 무관하게 권장하는 2초 
   await targetStop(page, "UP").click();
   await (await arrivalResponse).finished();
   await page.clock.runFor(1);
-  await expect(targetRow(page, "UP").getByText("확인 중", { exact: true })).toHaveCount(2);
+  await expect(targetRow(page, "UP").getByRole("listitem")).toHaveText([
+    /^3정류장 전\s*도착 시 5석 예상해요$/,
+    /^7정류장 전\s*도착 시 2석 예상해요$/,
+  ]);
+  await expect(targetRow(page, "UP").getByText("확인 중", { exact: true })).toHaveCount(0);
   expect(api.requests.arrivals).toBe(1);
 
   api.data.arrivals = readyArrivals();
@@ -182,9 +188,7 @@ test("선택 정류장과 방향을 바꾸면 이전 방문의 시간정보를 �
   await expect.poll(() => api.requests.arrivals).toBe(3);
   expect(api.arrivalRequests[2]!.pathname).toBe("/api/v2/stations/20011/arrivals");
   expect(api.arrivalRequests[2]!.searchParams.get("stopSequence")).toBe("23");
-  await expect(targetRow(page, "DOWN").getByRole("listitem")).toHaveText([
-    /2정류장 전\s*시간 정보 없음\s*도착 시 8석 예상해요/,
-  ]);
+  await expect(targetRow(page, "DOWN").getByRole("listitem")).toHaveText([/2정류장 전\s*도착 시 8석 예상해요/]);
 });
 
 for (const expires of ["eta", "snapshot"] as const) {
@@ -205,7 +209,7 @@ for (const expires of ["eta", "snapshot"] as const) {
     await expect(first.getByText(expires === "eta" ? "1분 이내" : "2분 남음", { exact: true })).toBeVisible();
 
     await page.clock.fastForward(2_000);
-    await expect(first.getByText("시간 정보 없음", { exact: true })).toBeVisible();
+    await expect(first).toHaveText(/^3정류장 전\s*도착 시 5석 예상해요$/);
     await expect(first.getByText("도착 시 5석 예상해요", { exact: true })).toBeVisible();
     await expect(first.getByText(/도착했|도착 완료/)).toHaveCount(0);
   });
@@ -223,8 +227,8 @@ test("도착정보 조회에 실패해도 기존 거리와 좌석 예측을 표�
   await page.clock.runFor(1);
 
   await expect(targetRow(page, "UP").getByRole("listitem")).toHaveText([
-    /3정류장 전\s*시간 정보 없음\s*도착 시 5석 예상해요/,
-    /7정류장 전\s*시간 정보 없음\s*도착 시 2석 예상해요/,
+    /3정류장 전\s*도착 시 5석 예상해요/,
+    /7정류장 전\s*도착 시 2석 예상해요/,
   ]);
   expect(api.requests.arrivals).toBe(1);
   await expect(page.getByText(targetStopNames.UP, { exact: true })).toBeVisible();

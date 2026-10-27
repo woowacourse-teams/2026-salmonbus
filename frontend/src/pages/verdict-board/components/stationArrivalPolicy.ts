@@ -7,28 +7,16 @@ export interface StationArrivalDetails {
   resource: PolledResource<StationArrivalsResponse>;
 }
 
-export interface ArrivalTiming {
-  available: boolean;
-  label: string;
-}
-
-// 정류장에 도착한 차량은 시간 칸을 비우도록 null을 돌려준다.
-export function arrivalTimingFor(arrival: ArrivalView, details: StationArrivalDetails | null): ArrivalTiming | null {
-  if (arrival.stopsAway === 0) return null;
-  const unavailable = { available: false, label: "시간 정보 없음" };
-  if (details === null) return unavailable;
+export function arrivalTimingFor(arrival: ArrivalView, details: StationArrivalDetails | null): string | null {
+  if (arrival.stopsAway === 0 || details === null) return null;
   const { resource, selection } = details;
-  if (resource.status === "pending") return { ...unavailable, label: "확인 중" };
 
   const latest = latestSuccessOf(resource);
-  if (latest === null || latest.clock === null) return unavailable;
+  if (latest === null || latest.clock === null) return null;
   const { body, clock } = latest;
-  if (body.stationId !== selection.stationId) return unavailable;
-  if (body.status === "UNAVAILABLE" && body.reason === "NOT_COLLECTED" && body.refresh.status === "RUNNING") {
-    return { ...unavailable, label: "확인 중" };
-  }
+  if (body.stationId !== selection.stationId) return null;
   if (body.status !== "READY" || body.snapshot === null || !(clock.now() < Date.parse(body.snapshot.staleAt))) {
-    return unavailable;
+    return null;
   }
 
   const route = body.routes.find(
@@ -39,16 +27,13 @@ export function arrivalTimingFor(arrival: ArrivalView, details: StationArrivalDe
       targetVisit.stopSequence === selection.stopSequence &&
       targetVisit.direction === selection.direction,
   );
-  if (route?.status !== "READY" || arrival.vehicleId === null) return unavailable;
+  if (route?.status !== "READY" || arrival.vehicleId === null) return null;
   const matches = route.arrivals.filter(({ vehicleId }) => vehicleId === arrival.vehicleId);
   const vehicle = matches.length === 1 ? matches[0] : undefined;
-  if (vehicle === undefined || vehicle.remainingStops !== arrival.stopsAway) return unavailable;
+  if (vehicle === undefined || vehicle.remainingStops !== arrival.stopsAway) return null;
   const { eta } = vehicle;
   const seconds = (Date.parse(eta.expectedArrivalAt) - clock.now()) / 1000;
-  if (eta.status !== "AVAILABLE" || eta.remainingSeconds === null || !(seconds > 0)) return unavailable;
+  if (eta.status !== "AVAILABLE" || eta.remainingSeconds === null || !(seconds > 0)) return null;
 
-  return {
-    available: true,
-    label: seconds <= 60 ? "1분 이내" : `${Math.ceil(seconds / 60)}분 남음`,
-  };
+  return seconds <= 60 ? "1분 이내" : `${Math.ceil(seconds / 60)}분 남음`;
 }

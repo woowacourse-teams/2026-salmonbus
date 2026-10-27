@@ -227,12 +227,10 @@ function FavoriteCard({ favorite, savedDirection, elapsed, onRetry }: FavoriteCa
                 return (
                   <li className={homeStyles.arrival} key={vehicle.vehicleId ?? index}>
                     <span className={homeStyles.timing}>
-                      {!arrived && (
-                        <span className={timingAvailable ? homeStyles.eta : homeStyles.unavailableEta}>
-                          {timingAvailable ? `${Math.ceil(remaining / 60)}분 남음` : "도착 정보 없음"}
-                        </span>
+                      {!arrived && timingAvailable && (
+                        <span className={homeStyles.eta}>{Math.ceil(remaining / 60)}분 남음</span>
                       )}
-                      <span className={arrived ? homeStyles.eta : homeStyles.distance}>
+                      <span className={arrived || !timingAvailable ? homeStyles.eta : homeStyles.distance}>
                         {stopsAwayLabelOf(vehicle.remainingStops)}
                       </span>
                     </span>
