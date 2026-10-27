@@ -120,8 +120,12 @@ test("홈은 첫 그룹을 조회하고 탭 변경 시 선택한 그룹만 조�
       { exact: true },
     ),
   ).toBeVisible();
-  await expect(cards.getByText("도착 정보 없음")).toBeVisible();
-  await expect(cards.getByText("도착 시 1석 예상해요")).toBeVisible();
+  const arrivalRows = cards.getByRole("listitem").getByRole("listitem");
+  await expect(arrivalRows).toHaveText([
+    /7분 남음\s*3정류장 전\s*도착 시 7석 예상해요/,
+    /8분 남음\s*7정류장 전\s*도착 시 4석 예상해요/,
+    /시간 정보 없음\s*11정류장 전\s*도착 시 1석 예상해요/,
+  ]);
   const queries = () => favorites.requests.filter((request) => request.path === "/api/me/favorites");
   expect(queries().every((request) => request.query.includes(defaultGroupId))).toBe(true);
   await page.getByRole("tab", { name: "즐겨찾기", exact: true }).press("ArrowRight");
@@ -414,7 +418,7 @@ for (const [status, label] of [
     if (status === "ERROR") {
       favorites.statuses[saved.id] = "READY";
       await panel.getByRole("button", { name: "다시 확인하기", exact: true }).click();
-      await expect(panel.getByText("도착 정보 없음")).toBeVisible();
+      await expect(panel.getByText("시간 정보 없음")).toBeVisible();
     }
     expect(favorites.groups[0]!.favorites).toHaveLength(1);
   });
@@ -556,10 +560,10 @@ test("갱신 실패 중 도착 예정 시간이 지나면 시간을 감추고 �
   favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
   await page.goto("/");
   const panel = page.getByRole("tabpanel");
-  await expect(panel.getByText("도착 정보 없음", { exact: true })).toHaveCount(1);
+  await expect(panel.getByText("시간 정보 없음", { exact: true })).toHaveCount(1);
   favorites.unavailable = true;
   await page.clock.runFor(481_000);
-  await expect(panel.getByText("도착 정보 없음", { exact: true })).toHaveCount(3);
+  await expect(panel.getByText("시간 정보 없음", { exact: true })).toHaveCount(3);
   await expect(panel.getByText("도착 시 7석 예상해요", { exact: true })).toBeVisible();
   await expect(page.getByText("즐겨찾기를 불러오지 못했어요", { exact: true })).toHaveCount(0);
   expect(favorites.groups[0]!.favorites).toHaveLength(1);

@@ -4,6 +4,7 @@ import type {
   ApproachingVehicle,
   Board,
   BoardRoute,
+  RouteHeadways,
   SeatInfo,
   StopState,
   Vehicle,
@@ -59,6 +60,21 @@ function rejectsUncheckedTurnSequence(route: BoardRoute): number {
   // @ts-expect-error turnSequence도 null일 수 있어서, null 확인 없이 바로 쓰면 막혀야 한다
   const sequence: number = route.turnSequence;
   return sequence;
+}
+
+function rejectsUncheckedHeadways(route: BoardRoute): RouteHeadways {
+  // @ts-expect-error headways는 응답에서 생략될 수 있다
+  return route.headways;
+}
+
+function rejectsUncheckedWeekday(headways: RouteHeadways): number {
+  // @ts-expect-error 요일별 배차간격은 null일 수 있다
+  return headways.weekday.minMinutes;
+}
+
+function narrowsHeadwayRange(route: BoardRoute): number | null {
+  const range = route.headways?.weekday;
+  return range == null ? null : range.minMinutes;
 }
 
 function rejectsLegacyStationId(stop: StopState): string {

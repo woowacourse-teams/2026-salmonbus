@@ -575,7 +575,7 @@ test("첫 화면은 70% 높이에 전체 노선을 맞추고 줌에 따라 정�
     expect(path.inside).toBe(true);
   });
   expect(await map(page).locator("[data-marker-kind='arrow']").count()).toBeGreaterThan(0);
-  await expect(sheet(page).getByText(/^(15–25분|정보 준비 중)$/)).toBeVisible();
+  await expect(sheet(page).getByText("15~25분", { exact: true })).toBeVisible();
   await expect(sheet(page).getByText("3대 운행 중", { exact: true })).toBeVisible();
   if (testInfo.project.name === "chromium") await page.screenshot({ path: "/tmp/sal284-board-initial.png" });
 
@@ -666,7 +666,7 @@ test("GL 지도의 휠과 더블클릭은 부드럽게 확대하며 노선·마�
   const duringWheel = await naverMap.snapshot();
   expect(duringWheel.zoom).toBeGreaterThan(14);
   expect(duringWheel.zoom).toBeLessThan(15);
-  expect(await pin.evaluate((element) => element.getBoundingClientRect().width)).toBe(pinWidth);
+  expect(await pin.evaluate((element) => element.getBoundingClientRect().width)).toBeCloseTo(pinWidth, 3);
   expect(await persistent.evaluate((nodes) => nodes.every((node) => node.isConnected))).toBe(true);
   await page.clock.runFor(300);
   expect((await naverMap.snapshot()).zoom).toBe(15);

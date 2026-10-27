@@ -1,4 +1,7 @@
 import * as amplitude from "@amplitude/unified";
+import { appHostFrom } from "@/shared/bridge/bridge";
+import { clientPropertiesFrom } from "@/shared/bridge/clientProperties";
+import { clientPropertiesPluginFor } from "./clientPropertiesPlugin";
 
 let initialized = false;
 
@@ -16,6 +19,7 @@ export function initAnalytics() {
 
   const appVersion = document.querySelector<HTMLMetaElement>('meta[name="app-version"]')?.content;
 
+  amplitude.add(clientPropertiesPluginFor(clientPropertiesFrom(appHostFrom())));
   amplitude.initAll(__AMPLITUDE_API_KEY__, {
     analytics: { autocapture: true, ...(appVersion ? { appVersion } : {}) },
     sessionReplay: { sampleRate: 1 },
