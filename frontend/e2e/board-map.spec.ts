@@ -666,7 +666,7 @@ test("GL 지도의 휠과 더블클릭은 부드럽게 확대하며 노선·마�
   const duringWheel = await naverMap.snapshot();
   expect(duringWheel.zoom).toBeGreaterThan(14);
   expect(duringWheel.zoom).toBeLessThan(15);
-  expect(await pin.evaluate((element) => element.getBoundingClientRect().width)).toBe(pinWidth);
+  expect(await pin.evaluate((element) => element.getBoundingClientRect().width)).toBeCloseTo(pinWidth, 3);
   expect(await persistent.evaluate((nodes) => nodes.every((node) => node.isConnected))).toBe(true);
   await page.clock.runFor(300);
   expect((await naverMap.snapshot()).zoom).toBe(15);

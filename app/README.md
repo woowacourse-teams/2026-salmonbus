@@ -15,7 +15,9 @@ Simulator에서 로컬 웹 서버에 연결할 때는 `http://127.0.0.1:<port>`�
 
 ## 코드 위치
 
-- `native-map/NativeRouteMap.tsx`: iOS capability 주입, 메시지 검증, native view의 TypeScript 계약
+- `bridge/bridge.ts`: 앱 정보(`window.__SALMONBUS_APP__`) 주입, 웹과 주고받는 envelope 검증, 웹으로 이벤트 전달
+- `native-map/NativeRouteMap.tsx`: native view의 TypeScript 계약
+- `native-map/nativeMapMessages.ts`: 앱이 받는 지도 메시지 목록(웹의 `NATIVE_MAP_CAPABILITIES`와 같음)
 - `plugins/withSceneLifecycle.js`: Expo의 `ExpoAppSceneDelegate`를 등록해 iOS 27의 scene lifecycle에서 앱 창과 React Native를 시작
 - `modules/salmon-native-map/ios/NativeRouteMapHostView.swift`: `NMFMapView`, WebView ancestor touch gate, 경로와 마커, 위치 권한
 - `modules/salmon-native-map/ios/MapContract.swift`: version 1 메시지 DTO
@@ -23,7 +25,7 @@ Simulator에서 로컬 웹 서버에 연결할 때는 `http://127.0.0.1:<port>`�
 
 웹은 API 요청과 선택 state를 유지합니다. native는 관측마다 받은 차량 이동 경로를 `CADisplayLink`로 보간하며, 매 프레임 WebView bridge를 통과하지 않습니다. 시트가 움직이는 동안 새 지도 touch를 막고 최종 영역을 적용한 뒤 다시 허용합니다. 이미 시작한 touch는 UIKit이 처음 정한 view에 남습니다.
 
-`pnpm test`, `pnpm typecheck`, `pnpm lint`로 config plugin과 TypeScript를 검사합니다. Swift와 SDK 연동은 Xcode Simulator build로 검사합니다. DEBUG build의 `[SalmonNativeMap]` 로그는 touch 대상, camera 이동 여부와 zoom, overlay 개수만 기록하며 클라이언트 키나 사용자 좌표를 기록하지 않습니다.
+`pnpm test`, `pnpm typecheck`, `pnpm lint`로 config plugin, bridge, TypeScript를 검사합니다. Swift와 SDK 연동은 Xcode Simulator build로 검사합니다. DEBUG build의 `[SalmonNativeMap]` 로그는 touch 대상, camera 이동 여부와 zoom, overlay 개수만 기록하며 클라이언트 키나 사용자 좌표를 기록하지 않습니다.
 
 마커 UI의 기준은 `frontend/src/pages/verdict-board/map/RouteMap.css.ts`와 `naverMapAdapter.ts`입니다. iOS의 `MapMarkerImages.swift`가 같은 치수·색상·글꼴로 이미지를 만들며, `ios/Resources`의 3x PNG는 웹의 원본 SVG에서 변환한 아이콘입니다. 아이콘 원본을 바꾸면 PNG도 함께 갱신합니다.
 

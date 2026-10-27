@@ -37,10 +37,10 @@ export function ArrivalForecastCard({ arrivals, stationArrivals }: ArrivalForeca
           return (
             <li key={arrival.vehicleId ?? index} className={styles.row}>
               <span className={styles.timing}>
+                {timing && <span className={styles.remainingTime}>{timing}</span>}
                 <span className={timing === null ? styles.remainingTime : styles.distance}>
                   {stopsAwayLabelOf(arrival.stopsAway)}
                 </span>
-                {timing !== null && <span className={styles.remainingTime}>{timing}</span>}
               </span>
               <SeatCountBadge tone={arrivalToneFor(arrival)} label={arrivalSeatLabel(arrival)} />
             </li>

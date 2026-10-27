@@ -53,8 +53,8 @@ test("펼친 목록은 watch 순서·거리·좌석을 유지하고 같은 차�
   expect(api.requests.arrivals).toBe(0);
   await targetStop(page, "UP").click();
   await expect(targetRow(page, "UP").getByRole("listitem")).toHaveText([
-    /3정류장 전\s*2분 남음\s*도착 시 5석 예상해요/,
-    /7정류장 전\s*4분 남음\s*도착 시 2석 예상해요/,
+    /2분 남음\s*3정류장 전\s*도착 시 5석 예상해요/,
+    /4분 남음\s*7정류장 전\s*도착 시 2석 예상해요/,
     /10정류장 전\s*도착 시 3석 예상해요/,
   ]);
   expect(api.arrivalRequests).toHaveLength(1);
@@ -165,7 +165,7 @@ test("선택 정류장과 방향을 바꾸면 이전 방문의 목록을 유지�
   expect(api.arrivalRequests[2]!.pathname).toBe("/api/v2/stations/20011/arrivals");
   expect(api.arrivalRequests[2]!.searchParams.get("stopSequence")).toBe("23");
   await expect(targetRow(page, "DOWN").getByRole("listitem")).toHaveText([
-    /2정류장 전\s*2분 남음\s*도착 시 8석 예상해요/,
+    /2분 남음\s*2정류장 전\s*도착 시 8석 예상해요/,
   ]);
 });
 

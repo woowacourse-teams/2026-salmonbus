@@ -1,6 +1,6 @@
 import type { ArrivalView, ArrivalTone } from "./arrivalPolicy";
 import type { StopView } from "./displayPolicy";
-import type { SeatEstimate } from "@/shared/utils/seatGrade";
+import { seatLabelOf } from "@/shared/utils/seatLabelOf";
 
 export type ChipTone = ArrivalTone | "noVehicle";
 
@@ -12,15 +12,8 @@ const CHIP_LABELS: Record<ChipTone, string> = {
   noVehicle: "지금 오는 차량이 없어요",
 };
 
-const SEAT_UNKNOWN_LABEL = "예상 좌석 정보 없음";
-const SEAT_EMPTY_LABEL = "도착 시 빈자리가 없어요";
-
 const WAYPOINT_SUFFIX = "(경유)";
 const TURNAROUND_SUFFIX = "(회차지점)";
-
-export function arrivalTimeLabel(seconds: number): string {
-  return seconds <= 60 ? "1분 이내" : `${Math.ceil(seconds / 60)}분 남음`;
-}
 
 export const WAYPOINT_CAPTION = "경유";
 export const NO_VEHICLE_NOTICE = "현재 예측할 수 있는 차량이 없습니다";
@@ -43,11 +36,5 @@ function withoutWaypointSuffix(name: string): string {
 }
 
 export function arrivalSeatLabel(arrival: ArrivalView): string {
-  return arrival.kind === "available" ? seatLabel(arrival.seatEstimate) : SEAT_UNKNOWN_LABEL;
-}
-
-export function seatLabel(estimate: SeatEstimate): string {
-  if (estimate.kind === "unknown") return SEAT_UNKNOWN_LABEL;
-  if (estimate.seats === 0) return SEAT_EMPTY_LABEL;
-  return `도착 시 ${estimate.seats}석 예상해요`;
+  return seatLabelOf(arrival.kind === "available" ? arrival.seatEstimate : { kind: "unknown" });
 }

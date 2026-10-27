@@ -69,8 +69,8 @@ test("유효기간 안의 자동 갱신 실패 시 마지막 예측을 유지한
 
   const arrivals = targetRow(page, "UP").getByRole("listitem");
   await expect(arrivals).toHaveText([
-    /3정류장 전\s*(?:\d+분 남음|1분 이내)\s*도착 시 5석 예상해요/,
-    /7정류장 전\s*(?:\d+분 남음|1분 이내)\s*도착 시 2석 예상해요/,
+    /(?:\d+분 남음|1분 이내)\s*3정류장 전\s*도착 시 5석 예상해요/,
+    /(?:\d+분 남음|1분 이내)\s*7정류장 전\s*도착 시 2석 예상해요/,
   ]);
   const previousForecast = await arrivals.allTextContents();
   const requestsBeforePoll = api.requests.watch;
@@ -103,8 +103,8 @@ test("자동 갱신 실패 후 다음 요청이 성공하면 새 예측으로 �
 
   const arrivals = targetRow(page, "UP").getByRole("listitem");
   await expect(arrivals).toHaveText([
-    /3정류장 전\s*(?:\d+분 남음|1분 이내)\s*도착 시 5석 예상해요/,
-    /7정류장 전\s*(?:\d+분 남음|1분 이내)\s*도착 시 2석 예상해요/,
+    /(?:\d+분 남음|1분 이내)\s*3정류장 전\s*도착 시 5석 예상해요/,
+    /(?:\d+분 남음|1분 이내)\s*7정류장 전\s*도착 시 2석 예상해요/,
   ]);
   const requestsBeforeFailure = api.requests.watch;
   api.mode.watch = "network-error";
@@ -142,7 +142,7 @@ test("자동 갱신 실패 후 다음 요청이 성공하면 새 예측으로 �
   expect(await page.evaluate(() => Date.now())).toBeLessThan(Date.parse(api.data.watch.staleAt));
 
   await expect(stop).toHaveAttribute("aria-expanded", "true");
-  await expect(arrivals).toHaveText([/2정류장 전\s*(?:\d+분 남음|1분 이내)\s*도착 시 9석 예상해요/]);
+  await expect(arrivals).toHaveText([/(?:\d+분 남음|1분 이내)\s*2정류장 전\s*도착 시 9석 예상해요/]);
   await expect(arrivals.nth(0)).toBeVisible();
 });
 
@@ -154,8 +154,8 @@ test("화면을 켜 둔 채 연결이 돌아오면 다음 폴링을 기다리지
 
   const arrivals = targetRow(page, "UP").getByRole("listitem");
   await expect(arrivals).toHaveText([
-    /3정류장 전\s*(?:\d+분 남음|1분 이내)\s*도착 시 5석 예상해요/,
-    /7정류장 전\s*(?:\d+분 남음|1분 이내)\s*도착 시 2석 예상해요/,
+    /(?:\d+분 남음|1분 이내)\s*3정류장 전\s*도착 시 5석 예상해요/,
+    /(?:\d+분 남음|1분 이내)\s*7정류장 전\s*도착 시 2석 예상해요/,
   ]);
 
   // 오프라인 요청이 mock까지 와도 실패하도록 응답도 실패로 맞춘다.
@@ -193,7 +193,7 @@ test("화면을 켜 둔 채 연결이 돌아오면 다음 폴링을 기다리지
   api.mode.arrivals = "success";
   await targetStop(page, "UP").click();
   await targetStop(page, "UP").click();
-  await expect(arrivals).toHaveText([/2정류장 전\s*(?:\d+분 남음|1분 이내)\s*도착 시 9석 예상해요/]);
+  await expect(arrivals).toHaveText([/(?:\d+분 남음|1분 이내)\s*2정류장 전\s*도착 시 9석 예상해요/]);
 });
 
 test("화면이 숨은 동안에는 연결이 돌아와도 요청하지 않고 다시 보일 때 한 번만 불러온다", async ({ page }) => {
@@ -263,7 +263,7 @@ test("watch가 먼저 갱신돼도 지도와 펼친 목록의 거리가 함께 �
   await stop.click();
   await settleMarkers(page);
   const nearestArrival = targetRow(page, "UP").getByRole("listitem").nth(0);
-  await expect(nearestArrival).toHaveText(/3정류장 전\s*(?:\d+분 남음|1분 이내)\s*도착 시 5석 예상해요/);
+  await expect(nearestArrival).toHaveText(/(?:\d+분 남음|1분 이내)\s*3정류장 전\s*도착 시 5석 예상해요/);
   await expect(busMarkerAt(page, "상행 정류장 8")).toBeVisible();
 
   const target = api.data.watch.stops.find((candidate) => candidate.name === targetStopNames.UP);
@@ -283,7 +283,7 @@ test("watch가 먼저 갱신돼도 지도와 펼친 목록의 거리가 함께 �
   expect(api.requests.arrivals).toBe(1);
   await expect(busMarkerAt(page, "상행 정류장 9")).toBeVisible();
   await expect(busMarkerAt(page, "상행 정류장 8")).toHaveCount(0);
-  await expect(nearestArrival).toHaveText(/2정류장 전\s*(?:\d+분 남음|1분 이내)\s*도착 시 4석 예상해요/);
+  await expect(nearestArrival).toHaveText(/(?:\d+분 남음|1분 이내)\s*2정류장 전\s*도착 시 4석 예상해요/);
 });
 
 test("서버가 맨 앞에 보낸 목표 정류장 도착 버스는 그 순서대로 정류장 도착으로 보이고 시간 칸이 비어 있다", async ({
@@ -325,7 +325,7 @@ test("서버가 맨 앞에 보낸 목표 정류장 도착 버스는 그 순서�
 
   await expect(targetRow(page, "UP").getByRole("listitem")).toHaveText([
     /^정류장 도착\s*도착 시 5석 예상해요$/,
-    /1정류장 전\s*(?:\d+분 남음|1분 이내)\s*도착 시 2석 예상해요/,
+    /(?:\d+분 남음|1분 이내)\s*1정류장 전\s*도착 시 2석 예상해요/,
   ]);
 });
 
@@ -346,7 +346,7 @@ test("판의 만료 시각이 지나면 차량 마커만 숨기고, 새 관측�
 
   await expect(busMarkerAt(page, "상행 정류장 8")).toHaveCount(0);
   await expect(stop).toHaveAttribute("aria-expanded", "true");
-  await expect(nearestArrival).toHaveText(/3정류장 전\s*(?:\d+분 남음|1분 이내)\s*도착 시 5석 예상해요/);
+  await expect(nearestArrival).toHaveText(/(?:\d+분 남음|1분 이내)\s*3정류장 전\s*도착 시 5석 예상해요/);
 
   // 만료 기록은 이전 관측에만 남으므로 새 관측의 차량은 다시 보여야 한다.
   const bus = api.data.watch.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1");
@@ -433,7 +433,7 @@ for (const { name, vehicle, chip, seatLabel } of [
     await expect(row.getByText(chip, { exact: true })).toBeVisible();
     await stop.click();
 
-    await expect(row.getByRole("listitem")).toHaveText([`3정류장 전2분 남음${seatLabel}`]);
+    await expect(row.getByRole("listitem")).toHaveText([`2분 남음3정류장 전${seatLabel}`]);
     await expect(row.getByText("지금 오는 차량이 없어요", { exact: true })).toHaveCount(0);
     await expect(row.getByText("도착 시 28석 예상해요", { exact: true })).toHaveCount(0);
   });

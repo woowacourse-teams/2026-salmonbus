@@ -1,7 +1,8 @@
 import { latestSuccessOf, type PolledResource } from "@/shared/api/polledResource";
 import type { StationArrivalSelection, StationArrivalsResponse } from "@/shared/api/stationArrivals.types";
 import type { ArrivalView } from "./arrivalPolicy";
-import { arrivalTimeLabel } from "./verdictCopy";
+import { toRemainingTime } from "@/shared/utils/remainingTime";
+import { remainingTimeLabelOf } from "@/shared/utils/remainingTimeLabelOf";
 
 export interface StationArrivalDetails {
   selection: StationArrivalSelection;
@@ -40,8 +41,7 @@ export function arrivalTimingFor(arrival: ArrivalView, details: StationArrivalDe
   // 거리와 좌석은 watch를 유지하고, 수집 시점이 다른 ETA에서는 같은 차량의 시간만 보탠다.
   if (vehicle === undefined) return null;
   const { eta } = vehicle;
-  const seconds = (Date.parse(eta.expectedArrivalAt) - now) / 1000;
-  if (eta.status !== "AVAILABLE" || eta.remainingSeconds === null || !(seconds > 0)) return null;
-
-  return arrivalTimeLabel(seconds);
+  if (eta.status !== "AVAILABLE" || eta.remainingSeconds === null) return null;
+  const time = toRemainingTime((Date.parse(eta.expectedArrivalAt) - now) / 1000);
+  return time.kind === "known" ? remainingTimeLabelOf(time) : null;
 }
