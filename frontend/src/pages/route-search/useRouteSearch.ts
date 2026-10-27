@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createLatestRequestGate } from "@/shared/api/latestRequestGate";
 import { fetchRoutes } from "@/shared/api/routeForecast.api";
 import { searchViewFor, type RoutesState } from "./displayPolicy";
+import { recordSeenRoutes } from "./new-route/seenRouteStorage";
 
 export function useRouteSearch(initialInput: string) {
   const [input, setInput] = useState(initialInput);
@@ -15,7 +16,12 @@ export function useRouteSearch(initialInput: string) {
       if (!ticket.isLatest() || (!result.ok && result.failure.kind === "aborted")) {
         return;
       }
-      setRoutesState(result.ok ? { status: "ready", routes: result.body.routes } : { status: "error" });
+      if (!result.ok) {
+        setRoutesState({ status: "error" });
+        return;
+      }
+      const { routes } = result.body;
+      setRoutesState({ status: "ready", routes, newRouteIds: recordSeenRoutes(routes, Date.now()) });
     });
     return () => gate.close();
   }, [gate, attempt]);

@@ -86,7 +86,7 @@ export const list = style({
 
 export const item = style({
   display: "grid",
-  gridTemplateColumns: "minmax(58px, max-content) 1fr",
+  gridTemplateColumns: "minmax(58px, max-content) 1fr auto",
   columnGap: "8px",
   alignItems: "center",
   width: "100%",
@@ -109,4 +109,10 @@ export const stops = style({
   fontSize: "14px",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
+});
+
+export const newBadge = style({
+  color: vars.color.brand,
+  fontSize: "12px",
+  fontWeight: 800,
 });

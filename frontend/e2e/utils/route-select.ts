@@ -2,8 +2,9 @@ import type { Page } from "@playwright/test";
 import { expect } from "../fixtures/api";
 import { routeId } from "../fixtures/mock-data";
 
+// fixture 시계가 출시 마감 전이라 첫 방문에도 3330번에 NEW가 붙는다. NEW를 보지 않는 테스트는 붙든 안 붙든 같은 버튼을 찾는다.
 export function routeButton(page: Page) {
-  return page.getByRole("button", { name: "3330번 노선, 테스트 기점부터 테스트 종점 구간", exact: true });
+  return page.getByRole("button", { name: /^3330번 노선, (새 노선, )?테스트 기점부터 테스트 종점 구간$/ });
 }
 
 export function routeSearchEntry(page: Page) {

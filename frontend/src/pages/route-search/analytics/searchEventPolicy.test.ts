@@ -1,13 +1,14 @@
 import { describe, expect, it } from "@jest/globals";
+import type { ListedRoute } from "../displayPolicy";
 import { routeSelectedPropertiesOf, unmatchedQueryOf } from "./searchEventPolicy";
-import type { InServiceRoute } from "../routeSearchPolicy";
 
-const route: InServiceRoute = {
+const route: ListedRoute = {
   id: "204000057",
   displayName: "3330",
   startStopName: "기점",
   endStopName: "종점",
   status: "FORECAST_READY",
+  isNew: false,
 };
 
 describe("routeSelectedPropertiesOf", () => {

@@ -1,17 +1,17 @@
 import { useId } from "react";
-import type { RouteSelection, SearchView } from "../displayPolicy";
+import type { ListedRoute, RouteSelection, SearchView } from "../displayPolicy";
 import {
   EMPTY_DESCRIPTION,
   EMPTY_TITLE,
   IN_SERVICE_TITLE,
   LOAD_FAILED_NOTICE,
   LOADING_NOTICE,
+  NEW_BADGE,
   RETRY_LABEL,
   UNMATCHED_NOTICE,
   routeButtonLabel,
   searchStatusLabel,
 } from "../routeSearchCopy";
-import type { InServiceRoute } from "../routeSearchPolicy";
 import * as styles from "./SearchResults.css";
 
 interface SearchResultsProps {
@@ -77,13 +77,7 @@ function renderView(view: SearchView, onSelect: SearchResultsProps["onSelect"], 
   }
 }
 
-function InServiceSection({
-  routes,
-  onSelect,
-}: {
-  routes: InServiceRoute[];
-  onSelect: SearchResultsProps["onSelect"];
-}) {
+function InServiceSection({ routes, onSelect }: { routes: ListedRoute[]; onSelect: SearchResultsProps["onSelect"] }) {
   const titleId = useId();
 
   return (
@@ -104,6 +98,7 @@ function InServiceSection({
               <span className={styles.stops}>
                 {route.startStopName} ↔ {route.endStopName}
               </span>
+              {route.isNew && <span className={styles.newBadge}>{NEW_BADGE}</span>}
             </button>
           </li>
         ))}

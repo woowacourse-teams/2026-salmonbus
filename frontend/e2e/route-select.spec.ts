@@ -1,4 +1,4 @@
-import { apiPaths, routeId } from "./fixtures/mock-data";
+import { apiPaths, observedAt, routeId } from "./fixtures/mock-data";
 import { test, expect } from "./fixtures/api";
 import {
   finishSearchNavigation,
@@ -148,6 +148,59 @@ test("입력하면 일치하는 노선을 서비스 중 노선 아래에 보여 
 
   await expect(inServiceSection(page).getByRole("button")).toHaveText([/^3330/]);
   await expect(routeButton(page)).toContainText("테스트 기점 ↔ 테스트 종점");
+});
+
+test("이 기기에서 처음 본 서비스 중 노선에 7일 동안 NEW를 붙이고, 준비 중 노선은 결과에서 뺀다", async ({
+  page,
+  api,
+}) => {
+  // 다시 들어올 때 노선 목록을 캐시가 아니라 새 응답으로 받는다.
+  api.cacheMaxAgeSeconds = 0;
+  const status = page.getByRole("main").getByRole("status");
+  const searchAgain = async () => {
+    await routeSearchBackLink(page).click();
+    await openRouteSearch(page);
+    await routeSearchInput(page).fill("3");
+  };
+
+  await page.goto("/");
+  await openRouteSearch(page);
+  await routeSearchInput(page).fill("3");
+
+  // fixture 시계가 출시 마감 전이라 처음 온 기기에서도 3330번은 NEW다.
+  await expect(status).toHaveText("일치하는 노선 1개");
+  await expect(
+    page.getByRole("button", { name: "3330번 노선, 새 노선, 테스트 기점부터 테스트 종점 구간", exact: true }),
+  ).toContainText("NEW");
+
+  api.data.routes.routes.push(
+    {
+      id: "200000002",
+      displayName: "3000",
+      startStopName: "새 기점",
+      endStopName: "새 종점",
+      status: "FORECAST_READY",
+    },
+    { id: "200000003", displayName: "3100", startStopName: "준비 기점", endStopName: "준비 종점", status: "PREPARING" },
+  );
+  await searchAgain();
+
+  await expect(status).toHaveText("일치하는 노선 2개");
+  await expect(
+    page.getByRole("button", { name: "3000번 노선, 새 노선, 새 기점부터 새 종점 구간", exact: true }),
+  ).toContainText("NEW");
+  await routeSearchInput(page).fill("31");
+  await expect(status).toHaveText("일치하는 노선이 없어요");
+
+  await page.clock.setSystemTime(new Date(observedAt).getTime() + 8 * 24 * 60 * 60_000);
+  await searchAgain();
+
+  await expect(status).toHaveText("일치하는 노선 2개");
+  await expect(page.getByRole("button", { name: "3000번 노선, 새 기점부터 새 종점 구간", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "3330번 노선, 테스트 기점부터 테스트 종점 구간", exact: true }),
+  ).toBeVisible();
+  await expect(inServiceSection(page)).not.toContainText("NEW");
 });
 
 test("결과가 하나일 때 엔터를 누르면 그 노선의 판정 보드로 이동한다", async ({ page }) => {

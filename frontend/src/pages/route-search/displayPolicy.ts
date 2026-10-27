@@ -1,25 +1,34 @@
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
 import { isInService, matchingRoutesFor, type InServiceRoute } from "./routeSearchPolicy";
 
-export type RoutesState = { status: "loading" } | { status: "error" } | { status: "ready"; routes: RouteSummary[] };
+export type RoutesState =
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "ready"; routes: RouteSummary[]; newRouteIds: ReadonlySet<string> };
+
+export type ListedRoute = InServiceRoute & { isNew: boolean };
 
 export type SearchView =
   | { kind: "empty" }
   | { kind: "loading" }
   | { kind: "error" }
-  | { kind: "matched"; routes: InServiceRoute[] }
+  | { kind: "matched"; routes: ListedRoute[] }
   | { kind: "unmatched" };
 
 export function searchViewFor(routesState: RoutesState, input: string): SearchView {
   if (routesState.status === "error") return { kind: "error" };
   if (input.trim() === "") return { kind: "empty" };
   if (routesState.status === "loading") return { kind: "loading" };
-  const matched = matchingRoutesFor(routesState.routes.filter(isInService), input);
+  const { routes, newRouteIds } = routesState;
+  const matched = matchingRoutesFor(routes.filter(isInService), input).map((route) => ({
+    ...route,
+    isNew: newRouteIds.has(route.id),
+  }));
   return matched.length > 0 ? { kind: "matched", routes: matched } : { kind: "unmatched" };
 }
 
 export interface RouteSelection {
-  route: InServiceRoute;
+  route: ListedRoute;
   position: number;
   listedCount: number;
 }
