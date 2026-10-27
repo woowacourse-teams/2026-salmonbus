@@ -23,7 +23,12 @@ const board = boardWith({
   ],
 });
 
-const timing = { routeId: "R1", now: Date.parse("2026-09-01T08:13:10+09:00"), loadMs: 1234.6 };
+const timing = {
+  routeId: "R1",
+  now: Date.parse("2026-09-01T08:13:10+09:00"),
+  loadMs: 1234.6,
+  entry: "search",
+} as const;
 
 describe("boardViewedPropertiesOf", () => {
   it("보고 있는 방향의 정류장만 센다", () => {
@@ -66,13 +71,14 @@ describe("boardViewedPropertiesOf", () => {
     expect(boardViewedPropertiesOf(board, "UP", timing).forecast_age_sec).toBe(30);
   });
 
-  it("보드 정보와 걸린 시간을 그대로 옮긴다", () => {
+  it("보드 정보와 걸린 시간, 진입 경로를 그대로 옮긴다", () => {
     expect(boardViewedPropertiesOf(board, "UP", timing)).toMatchObject({
       route_id: "R1",
       direction: "UP",
       model_release_id: "test",
       vehicles_in_service: 3,
       load_ms: 1235,
+      entry: "search",
     });
   });
 

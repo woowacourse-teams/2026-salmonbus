@@ -2,6 +2,7 @@ import type { EventMap } from "@/shared/analytics/events";
 import { failurePropertiesOf } from "@/shared/analytics/failureProperties";
 import type { ApiFailure } from "@/shared/api/client";
 import type { Direction } from "@/shared/api/routeForecast.types";
+import type { BoardEntry } from "@/shared/routing/boardEntry";
 import type { BoardScreen, ExpandableStopView } from "../components/displayPolicy";
 import { boardViewedPropertiesOf, stopExpandedPropertiesOf } from "./boardEventPolicy";
 
@@ -17,6 +18,7 @@ export interface BoardObservation {
   serverNow: number;
   elapsedNow: number;
   wallNow: number;
+  entry: BoardEntry;
 }
 
 export interface BoardVisit {
@@ -119,6 +121,7 @@ function eventStepOf(visit: BoardVisit, observation: BoardObservation): BoardVis
         routeId: visit.routeId,
         now: observation.serverNow,
         loadMs: observation.elapsedNow - visit.startedAt,
+        entry: observation.entry,
       });
       return { visit: { ...visit, viewed: true }, event: { name: "board_viewed", properties } };
     }

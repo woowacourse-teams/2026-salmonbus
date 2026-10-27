@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router";
 import { track } from "@/shared/analytics/track";
+import { boardEntryStateFor } from "@/shared/routing/boardEntry";
 import { boardPathFor, paths } from "@/shared/routing/paths";
 import { initialInputFrom } from "@/shared/routing/routeSearchEntry";
 import { routeSelectedPropertiesOf, unmatchedQueryOf } from "./analytics/searchEventPolicy";
@@ -24,10 +25,10 @@ export function RouteSearchPage() {
     const boardPath = boardPathFor(selection.route.id);
     if (location.key === "default") {
       void navigate(paths.routeSelect, { replace: true });
-      void navigate(boardPath);
+      void navigate(boardPath, { state: boardEntryStateFor("search") });
       return;
     }
-    void navigate(boardPath, { replace: true });
+    void navigate(boardPath, { replace: true, state: boardEntryStateFor("search") });
   };
 
   const handleSubmit = () => {

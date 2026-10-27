@@ -6,6 +6,7 @@ import { latestSuccessOf, type PolledResource } from "@/shared/api/polledResourc
 import { fetchRouteWatch } from "@/shared/api/routeForecast.api";
 import type { Board, Direction, DirectionInfo, RouteWatch, Vehicle } from "@/shared/api/routeForecast.types";
 import { usePolledRequest } from "@/shared/api/usePolledRequest";
+import { boardEntryFrom } from "@/shared/routing/boardEntry";
 import { paths } from "@/shared/routing/paths";
 import {
   directionInfoFor,
@@ -58,6 +59,9 @@ export function VerdictBoardScreen() {
 
 function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
   const [search, setSearch] = useSearchParams();
+  const location = useLocation();
+  // 방향을 바꾸면 주소를 바꾸면서 이동 state가 사라져서, 처음 그릴 때 읽은 진입 경로를 유지한다.
+  const [entry] = useState(() => boardEntryFrom(location.state));
   const watchResource = usePolledRequest(loadRouteWatch, routeId);
   const latestWatch = latestSuccessOf(watchResource);
   const freshLiveVehicles = useFreshLiveVehicles(latestWatch);
@@ -68,7 +72,7 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
   const [switched, setSwitched] = useState(false);
   const state = boardStateOf(watchResource, preferredDirection);
   const screen = boardScreenOf(state);
-  const { trackStopExpanded } = useBoardVisitEvents({ routeId, screen, latestSuccess: latestWatch });
+  const { trackStopExpanded } = useBoardVisitEvents({ routeId, screen, latestSuccess: latestWatch, entry });
 
   function selectDirection(next: Direction) {
     setPreferredDirection(next);

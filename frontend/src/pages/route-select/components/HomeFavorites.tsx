@@ -6,6 +6,7 @@ import type { FavoriteStatus, FavoriteTarget, HomeFavorite } from "@/shared/api/
 import { latestSuccessOf } from "@/shared/api/polledResource";
 import { SeatCountBadge } from "@/shared/components/SeatCountBadge";
 import { toSeatEstimate, toSeatLevel } from "@/shared/utils/seatGrade";
+import { boardEntryStateFor } from "@/shared/routing/boardEntry";
 import { boardPathFor, favoritePath } from "@/shared/routing/paths";
 import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
@@ -205,6 +206,7 @@ function FavoriteCard({ favorite, savedDirection, elapsed, onRetry }: FavoriteCa
             ? favoritePath({ routeId: favorite.route.id, stopId: favorite.stop.stopId, direction })
             : boardPathFor(favorite.route.id)
         }
+        state={boardEntryStateFor("favorite")}
       >
         <div className={homeStyles.heading}>
           <RouteBadge>{favorite.route.displayName || "노선 정보 없음"}</RouteBadge>

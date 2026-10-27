@@ -1,5 +1,6 @@
 import type { ErrorCode } from "@/shared/api/apiError";
 import type { Direction, RouteStatus } from "@/shared/api/routeForecast.types";
+import type { BoardEntry } from "@/shared/routing/boardEntry";
 
 export type FailureProperties =
   | {
@@ -49,6 +50,7 @@ export interface EventMap {
     very_low_count: number;
     unavailable_count: number;
     load_ms: number;
+    entry: BoardEntry;
   };
 
   board_unavailable:
