@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
+import { newRouteIdsFor } from "./newRoutePolicy";
 import { recordSeenRoutes } from "./seenRouteStorage";
 
 const STORAGE_KEY = "salmonbus.routeFirstSeen";
@@ -13,6 +14,10 @@ function createRoute(id: string): RouteSummary {
 const routeA = createRoute("A");
 const routeB = createRoute("B");
 const routeC = createRoute("C");
+
+function visit(routes: readonly RouteSummary[], now: number, openStorage: () => Pick<Storage, "getItem" | "setItem">) {
+  return newRouteIdsFor(recordSeenRoutes(routes, now, openStorage), now);
+}
 
 function createMemoryStorage(storedText: string | null = null) {
   const items = new Map<string, string>();
@@ -42,9 +47,9 @@ describe("recordSeenRoutes", () => {
     const storage = createMemoryStorage();
     const openStorage = () => storage;
 
-    expect(recordSeenRoutes([routeA], AFTER_DEADLINE, openStorage)).toEqual(new Set());
-    expect(recordSeenRoutes([routeA, routeB], AFTER_DEADLINE + HOUR, openStorage)).toEqual(new Set(["B"]));
-    expect(recordSeenRoutes([routeA, routeB], AFTER_DEADLINE + 2 * HOUR, openStorage)).toEqual(new Set(["B"]));
+    expect(visit([routeA], AFTER_DEADLINE, openStorage)).toEqual(new Set());
+    expect(visit([routeA, routeB], AFTER_DEADLINE + HOUR, openStorage)).toEqual(new Set(["B"]));
+    expect(visit([routeA, routeB], AFTER_DEADLINE + 2 * HOUR, openStorage)).toEqual(new Set(["B"]));
   });
 
   it.each([
@@ -58,17 +63,17 @@ describe("recordSeenRoutes", () => {
     const storage = createMemoryStorage(storedText);
     const openStorage = () => storage;
 
-    expect(recordSeenRoutes([routeA, routeB], AFTER_DEADLINE, openStorage)).toEqual(new Set());
-    expect(recordSeenRoutes([routeA, routeB, routeC], AFTER_DEADLINE + HOUR, openStorage)).toEqual(new Set(["C"]));
+    expect(visit([routeA, routeB], AFTER_DEADLINE, openStorage)).toEqual(new Set());
+    expect(visit([routeA, routeB, routeC], AFTER_DEADLINE + HOUR, openStorage)).toEqual(new Set(["C"]));
   });
 
-  describe("저장소를 쓸 수 없으면 NEW 없이 빈 집합을 돌려준다", () => {
+  describe("저장소를 쓸 수 없으면 NEW를 하나도 붙이지 않는다", () => {
     it("저장소를 꺼내다 예외가 나도 화면을 멈추지 않는다", () => {
       const openBlockedStorage = () => {
         throw new Error("SecurityError");
       };
 
-      expect(recordSeenRoutes([routeA, routeB], AFTER_DEADLINE, openBlockedStorage)).toEqual(new Set());
+      expect(visit([routeA, routeB], AFTER_DEADLINE, openBlockedStorage)).toEqual(new Set());
     });
 
     it("기록을 읽다 예외가 나면 저장하지 않는다", () => {
@@ -80,7 +85,7 @@ describe("recordSeenRoutes", () => {
         },
       };
 
-      expect(recordSeenRoutes([routeA, routeB], AFTER_DEADLINE, () => unreadableStorage)).toEqual(new Set());
+      expect(visit([routeA, routeB], AFTER_DEADLINE, () => unreadableStorage)).toEqual(new Set());
       expect(storage.writtenKeys).toEqual([]);
     });
 
@@ -94,8 +99,8 @@ describe("recordSeenRoutes", () => {
         },
       };
 
-      expect(recordSeenRoutes([routeA, routeB], AFTER_DEADLINE + HOUR, () => fullStorage)).toEqual(new Set());
-      expect(recordSeenRoutes([routeA, routeB], AFTER_DEADLINE + HOUR, () => storage)).toEqual(new Set(["B"]));
+      expect(visit([routeA, routeB], AFTER_DEADLINE + HOUR, () => fullStorage)).toEqual(new Set());
+      expect(visit([routeA, routeB], AFTER_DEADLINE + HOUR, () => storage)).toEqual(new Set(["B"]));
     });
   });
 });

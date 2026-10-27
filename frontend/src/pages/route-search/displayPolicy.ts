@@ -1,10 +1,11 @@
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
+import { newRouteIdsFor, type FirstSeenTimes } from "./new-route/newRoutePolicy";
 import { isInService, matchingRoutesFor, type InServiceRoute } from "./routeSearchPolicy";
 
 export type RoutesState =
-  | { status: "loading"; routes?: never; newRouteIds?: never }
-  | { status: "error"; routes?: never; newRouteIds?: never }
-  | { status: "ready"; routes: RouteSummary[]; newRouteIds: ReadonlySet<string> };
+  | { status: "loading"; routes?: never; firstSeenTimes?: never; checkedAt?: never }
+  | { status: "error"; routes?: never; firstSeenTimes?: never; checkedAt?: never }
+  | { status: "ready"; routes: RouteSummary[]; firstSeenTimes: FirstSeenTimes; checkedAt: number };
 
 export interface ListedRoute extends InServiceRoute {
   isNew: boolean;
@@ -21,7 +22,8 @@ export function searchViewFor(routesState: RoutesState, input: string): SearchVi
   if (routesState.status === "error") return { kind: "error" };
   if (input.trim() === "") return { kind: "empty" };
   if (routesState.status === "loading") return { kind: "loading" };
-  const { routes, newRouteIds } = routesState;
+  const { routes, firstSeenTimes, checkedAt } = routesState;
+  const newRouteIds = newRouteIdsFor(firstSeenTimes, checkedAt);
   const matched = matchingRoutesFor(routes.filter(isInService), input).map((route) => ({
     ...route,
     isNew: newRouteIds.has(route.id),

@@ -175,6 +175,36 @@ test("새로 생긴 서비스 중 노선은 다음 방문에 NEW로 보인다", 
   ).toContainText("NEW");
 });
 
+test("검색 화면을 연 채 7일이 지나면 검색어를 바꿀 때 NEW가 사라진다", async ({ page, api }) => {
+  await page.clock.setSystemTime(new Date("2027-01-10T08:00:00+09:00"));
+  api.cacheMaxAgeSeconds = 0;
+  await page.goto("/");
+  await openRouteSearch(page);
+  await routeSearchInput(page).fill("3");
+  await expect(page.getByRole("main").getByRole("status")).toHaveText("일치하는 노선 1개");
+
+  api.data.routes.routes.push({
+    id: "200000002",
+    displayName: "3000",
+    startStopName: "새 기점",
+    endStopName: "새 종점",
+    status: "FORECAST_READY",
+  });
+  await routeSearchBackLink(page).click();
+  await openRouteSearch(page);
+  await routeSearchInput(page).fill("3");
+  await expect(
+    page.getByRole("button", { name: "3000번 노선, 새 노선, 새 기점부터 새 종점 구간", exact: true }),
+  ).toContainText("NEW");
+
+  await page.clock.setSystemTime(new Date("2027-01-18T08:00:00+09:00"));
+  await routeSearchInput(page).fill("30");
+
+  const expiredRoute = page.getByRole("button", { name: "3000번 노선, 새 기점부터 새 종점 구간", exact: true });
+  await expect(expiredRoute).toBeVisible();
+  await expect(expiredRoute).not.toContainText("NEW");
+});
+
 test("출시 기간에 처음 온 기기는 1650번과 3330번을 뺀 서비스 중 노선에 NEW를 본다", async ({ page, api }) => {
   api.data.routes.routes.push(
     {

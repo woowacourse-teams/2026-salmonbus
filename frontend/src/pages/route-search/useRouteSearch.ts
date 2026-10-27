@@ -21,16 +21,26 @@ export function useRouteSearch(initialInput: string) {
         return;
       }
       const { routes } = result.body;
-      const newRouteIds = recordSeenRoutes(routes, Date.now());
-      setRoutesState({ status: "ready", routes, newRouteIds });
+      const checkedAt = Date.now();
+      setRoutesState({ status: "ready", routes, firstSeenTimes: recordSeenRoutes(routes, checkedAt), checkedAt });
     });
     return () => gate.close();
   }, [gate, attempt]);
+
+  const changeInput = (value: string) => {
+    const checkedAt = Date.now();
+    setInput(value);
+    setRoutesState((state) =>
+      state.status === "ready"
+        ? { status: "ready", routes: state.routes, firstSeenTimes: state.firstSeenTimes, checkedAt }
+        : state,
+    );
+  };
 
   const retry = () => {
     setRoutesState({ status: "loading" });
     setAttempt((current) => current + 1);
   };
 
-  return { input, view: searchViewFor(routesState, input), changeInput: setInput, retry };
+  return { input, view: searchViewFor(routesState, input), changeInput, retry };
 }
