@@ -37,6 +37,7 @@ export function AuthReturn() {
         },
       });
     } else if (pending !== null && memberId !== null) {
+      // 시작 기록이 없는 성공은 보내지 않는다. 서버의 성공 리다이렉트에는 결과 쿼리가 없어서 재방문과 구분할 수 없다.
       handledReturnKey.current = location.key;
       trackAsMember(memberId, "login_finished", { provider: pending.provider, result: "succeeded" });
       clearLoginReturn();
