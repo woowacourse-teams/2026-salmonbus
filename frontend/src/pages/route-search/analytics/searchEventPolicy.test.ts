@@ -16,7 +16,18 @@ describe("routeSelectedPropertiesOf", () => {
     expect(routeSelectedPropertiesOf({ route, position: 0, listedCount: 3 })).toEqual({
       route_id: "204000057",
       route_status: "FORECAST_READY",
+      is_new: false,
       result_position: 0,
+      result_count: 3,
+    });
+  });
+
+  it("새 노선을 고르면 새 노선이라고 담는다", () => {
+    expect(routeSelectedPropertiesOf({ route: { ...route, isNew: true }, position: 1, listedCount: 3 })).toEqual({
+      route_id: "204000057",
+      route_status: "FORECAST_READY",
+      is_new: true,
+      result_position: 1,
       result_count: 3,
     });
   });
