@@ -1,8 +1,9 @@
 import { describe, expect, it } from "@jest/globals";
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
 import { searchViewFor, submitSelectionFor, type RoutesState } from "./displayPolicy";
+import type { InServiceRoute } from "./routeSearchPolicy";
 
-function createRoute(displayName: string): RouteSummary {
+function createRoute(displayName: string): InServiceRoute {
   return {
     id: displayName,
     displayName,
@@ -14,10 +15,11 @@ function createRoute(displayName: string): RouteSummary {
 
 const route5600 = createRoute("5600");
 const route3330 = createRoute("3330");
+const preparingRoute3100: RouteSummary = { ...createRoute("3100"), status: "PREPARING" };
 
 const loading: RoutesState = { status: "loading" };
 const failed: RoutesState = { status: "error" };
-const ready: RoutesState = { status: "ready", routes: [route5600, route3330] };
+const ready: RoutesState = { status: "ready", routes: [route5600, route3330, preparingRoute3100] };
 
 describe("searchViewFor", () => {
   describe("목록 조회에 실패하면", () => {
@@ -51,6 +53,14 @@ describe("searchViewFor", () => {
 
     it("앞부분이 일치하는 노선을 보여준다", () => {
       expect(searchViewFor(ready, "56")).toEqual({ kind: "matched", routes: [route5600] });
+    });
+
+    it("준비 중 노선은 앞부분이 일치해도 보여주지 않는다", () => {
+      expect(searchViewFor(ready, "3")).toEqual({ kind: "matched", routes: [route3330] });
+    });
+
+    it("준비 중 노선만 일치하면 결과 없음을 보여준다", () => {
+      expect(searchViewFor(ready, "31")).toEqual({ kind: "unmatched" });
     });
 
     it("일치하는 노선이 없으면 결과 없음을 보여준다", () => {

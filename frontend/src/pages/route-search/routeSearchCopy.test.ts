@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@jest/globals";
-import type { RouteSummary } from "@/shared/api/routeForecast.types";
 import { searchStatusLabel } from "./routeSearchCopy";
+import type { InServiceRoute } from "./routeSearchPolicy";
 
-const route: RouteSummary = {
+const route: InServiceRoute = {
   id: "5600",
   displayName: "5600",
   startStopName: "기점",

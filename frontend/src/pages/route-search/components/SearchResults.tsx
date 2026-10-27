@@ -1,5 +1,4 @@
 import { useId } from "react";
-import type { RouteSummary } from "@/shared/api/routeForecast.types";
 import type { RouteSelection, SearchView } from "../displayPolicy";
 import {
   EMPTY_DESCRIPTION,
@@ -12,6 +11,7 @@ import {
   routeButtonLabel,
   searchStatusLabel,
 } from "../routeSearchCopy";
+import type { InServiceRoute } from "../routeSearchPolicy";
 import * as styles from "./SearchResults.css";
 
 interface SearchResultsProps {
@@ -77,7 +77,13 @@ function renderView(view: SearchView, onSelect: SearchResultsProps["onSelect"], 
   }
 }
 
-function InServiceSection({ routes, onSelect }: { routes: RouteSummary[]; onSelect: SearchResultsProps["onSelect"] }) {
+function InServiceSection({
+  routes,
+  onSelect,
+}: {
+  routes: InServiceRoute[];
+  onSelect: SearchResultsProps["onSelect"];
+}) {
   const titleId = useId();
 
   return (
