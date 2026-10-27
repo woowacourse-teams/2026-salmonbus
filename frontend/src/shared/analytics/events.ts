@@ -60,6 +60,14 @@ export interface EventMap {
     to_direction: Direction;
   };
 
+  favorite_button_clicked: {
+    route_id: string;
+    direction: Direction;
+    stop_id: string;
+    is_logged_in: boolean;
+    is_registered: boolean;
+  };
+
   stop_expanded:
     | (StopExpandedBase & {
         stop_kind: "boarding";
