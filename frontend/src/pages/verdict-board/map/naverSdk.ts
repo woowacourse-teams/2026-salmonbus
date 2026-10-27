@@ -15,7 +15,6 @@ interface NaverSize {
 export interface NaverMap {
   getOptions(key: "gl"): boolean;
   setOptions(options: {
-    overlayZoomEffect: string | null;
     scrollWheel: boolean;
     disableDoubleClickZoom: boolean;
   }): void;
