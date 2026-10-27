@@ -3,14 +3,16 @@ import { vars } from "@/shared/styles/tokens.css";
 
 const ROW_PADDING_RIGHT = "18px";
 const AXIS_TO_NAME = `calc(${vars.layout.nameX} - ${vars.layout.axisX})`;
-const HEAD_GAP = "8px";
+const HEAD_GAP = "4px";
 const WAYPOINT_GAP = "2px";
-const HEAD_PADDING_TOP = "14px";
+const HEAD_PADDING_TOP = "10px";
 const CHEVRON_SIZE = "18px";
 const NAME_TO_CHEVRON = "4px";
 const CHIP_HEIGHT = "19px";
-// 예보 카드는 이름 아래와 행 바닥 사이 정중앙에 온다. 위 여백은 openHeadHeight 안에 들어 있다.
+// 예보 카드는 이름 아래와 행 바닥 사이 정중앙에 온다. 위 여백은 OPEN_HEAD_HEIGHT 안에 들어 있다.
 const DETAIL_PADDING_BOTTOM = "13.5px";
+const NAME_LINE_HEIGHT = `calc(${vars.font.stopName} * ${vars.leading.stopName})`;
+const OPEN_HEAD_HEIGHT = `calc(${HEAD_PADDING_TOP} + ${NAME_LINE_HEIGHT} + ${DETAIL_PADDING_BOTTOM})`;
 const GROW = `${vars.duration.spring} ${vars.easing.slide}`;
 
 const rowBase = style({
@@ -94,7 +96,7 @@ const headBase = style({
 // 펼쳐도 정류장명이 제자리에 있도록 머리 영역을 위로 붙이고 높이만 바꾼다.
 export const head = styleVariants({
   collapsed: [headBase, { minHeight: vars.layout.headHeight }],
-  expanded: [headBase, { minHeight: vars.layout.openHeadHeight }],
+  expanded: [headBase, { minHeight: OPEN_HEAD_HEIGHT }],
 });
 
 export const headStack = style([stack, { flex: 1, gap: HEAD_GAP }]);
@@ -110,10 +112,7 @@ const favoriteBase = style({
 });
 export const favorite = styleVariants({
   collapsed: [favoriteBase, { top: `calc((${vars.layout.headHeight} - 32px) / 2)` }],
-  expanded: [
-    favoriteBase,
-    { top: `calc(${HEAD_PADDING_TOP} + ${vars.font.stopName} * ${vars.leading.stopName} / 2 - 16px)` },
-  ],
+  expanded: [favoriteBase, { top: `calc(${HEAD_PADDING_TOP} + ${NAME_LINE_HEIGHT} / 2 - 16px)` }],
 });
 
 const chipSlotBase = style({

@@ -95,8 +95,7 @@ export const vars = createGlobalTheme(":root", {
   layout: {
     axisX: "61px",
     nameX: "83px",
-    headHeight: "76px",
-    openHeadHeight: "48.5px",
+    headHeight: "64px",
     compactHeight: "48px",
     ring: "12px",
     ringCompact: "10px",
