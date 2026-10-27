@@ -369,29 +369,31 @@ function approachingVehiclesAt(stop: MockStop): ApproachingVehicle[] {
     .flatMap((vehicle): ApproachingVehicle[] => {
       if (vehicle.direction !== stop.direction) return [];
 
-      const horizonStops = stop.sequence - vehicle.currentStopSequence;
-      if (horizonStops <= 0 || horizonStops > MAX_MOCK_FORECAST_HORIZON) return [];
+      const remainingStops = stop.sequence - vehicle.currentStopSequence;
+      // 정류장에 서 있는 차량은 그 정류장을 아직 지나지 않았다. 백엔드처럼 지난 정류장에서 잰 거리로 노출 범위를 정한다.
+      const stopsFromPassedStop = vehicle.phase === "ARRIVING" ? remainingStops + 1 : remainingStops;
+      if (stopsFromPassedStop < 1 || stopsFromPassedStop > MAX_MOCK_FORECAST_HORIZON) return [];
 
       // 현재 좌석을 알아도 도착 예측은 제공하지 못하는 사례다.
       if (vehicle.vehicleId === "V-3330-UP-02B") {
-        return [{ vehicleId: vehicle.vehicleId, horizonStops, forecast: { status: "UNAVAILABLE" } }];
+        return [{ vehicleId: vehicle.vehicleId, remainingStops, forecast: { status: "UNAVAILABLE" } }];
       }
 
       if (vehicle.seat.kind === "UNKNOWN") {
         return [
           {
             vehicleId: vehicle.vehicleId,
-            horizonStops,
+            remainingStops,
             forecast: { status: "AVAILABLE", seatAvailableProbability: 0.5 },
           },
         ];
       }
 
-      const expectedSeats = Math.max(0, vehicle.seat.remaining - Math.ceil(horizonStops / 2));
+      const expectedSeats = Math.max(0, vehicle.seat.remaining - Math.ceil(remainingStops / 2));
       return [
         {
           vehicleId: vehicle.vehicleId,
-          horizonStops,
+          remainingStops,
           forecast: {
             status: "AVAILABLE",
             seatAvailableProbability: seatProbabilityFor(expectedSeats),
@@ -400,7 +402,7 @@ function approachingVehiclesAt(stop: MockStop): ApproachingVehicle[] {
         },
       ];
     })
-    .sort((left, right) => left.horizonStops - right.horizonStops)
+    .sort((left, right) => left.remainingStops - right.remainingStops)
     .slice(0, 3);
 }
 

@@ -46,10 +46,11 @@ public class BoardQueryService {
         "([01][0-9]|2[0-3]):[0-5][0-9]"
     );
     private static final int MAX_HORIZON_STOPS = 12;
-    private static final Comparator<BoardVehicleObservation> VEHICLE_ORDER = Comparator
-        .comparingInt(BoardVehicleObservation::passedStopOrder).reversed()
-        .thenComparing(BoardVehicleObservation::vehicleId, Comparator.nullsLast(Comparator.naturalOrder()))
-        .thenComparingInt(BoardVehicleObservation::sourceRowNumber);
+    private static final Comparator<Approach> APPROACH_ORDER = Comparator
+        .comparingInt(Approach::remainingStops)
+        .thenComparingInt(Approach::horizonStops)
+        .thenComparing(Approach::vehicleId, Comparator.nullsLast(Comparator.naturalOrder()))
+        .thenComparingInt(Approach::sourceRowNumber);
 
     private final BoardQueryRepository boardQueryRepository;
     private final BoardFreshnessPolicy freshnessPolicy;
@@ -348,15 +349,13 @@ public class BoardQueryService {
             return List.of();
         }
         return vehicles.stream()
-            .filter(vehicle -> {
-                final int horizon = stop.sequence() - vehicle.passedStopOrder();
-                return horizon >= 1 && horizon <= MAX_HORIZON_STOPS;
-            })
-            .sorted(VEHICLE_ORDER)
+            .map(vehicle -> Approach.of(stop, vehicle))
+            .filter(Approach::isDisplayable)
+            .sorted(APPROACH_ORDER)
             .limit(MAX_APPROACHING_VEHICLES)
-            .map(vehicle -> new ApproachingVehicle(
-                vehicle.vehicleId(), stop.sequence() - vehicle.passedStopOrder(),
-                forecastOf(predictionsBySourceRow.get(vehicle.sourceRowNumber()))))
+            .map(approach -> new ApproachingVehicle(
+                approach.vehicleId(), approach.remainingStops(),
+                forecastOf(predictionsBySourceRow.get(approach.sourceRowNumber()))))
             .toList();
     }
 
@@ -372,5 +371,44 @@ public class BoardQueryService {
             return requireDepartureTime(schedule.upLastDepartureTime());
         }
         return requireDepartureTime(schedule.downLastDepartureTime());
+    }
+
+    /**
+     * 한 정류장에 대한 차량의 모델 거리와 화면 거리다.
+     *
+     * <p>모델 거리는 대상 순번에서 버스가 지난 정류장 순번을 뺀 값이고, 노출 범위와 예보 거리가 이 값을 따른다.
+     * 화면 거리는 대상 순번에서 버스가 있는 정류장 순번(GBIS stationSeq)을 뺀 값이고, 0이면 대상 정류장에 도착 중이다.
+     * 노출 범위는 모델 거리 1~12로 정한다. 화면 거리는 모델 거리와 같거나
+     * 정류장에 서 있는 차량이면 하나 작아야 한다. 두 순번의 정합을 DB가 보장하지 않으므로 이 관계가
+     * 깨진 관측은 노출하지 않는다. 화면 거리는 0 이상이다.
+     */
+    private record Approach(BoardVehicleObservation vehicle, int horizonStops, int remainingStops) {
+        static Approach of(BoardStop stop, BoardVehicleObservation vehicle) {
+            return new Approach(
+                vehicle,
+                stop.sequence() - vehicle.passedStopOrder(),
+                stop.sequence() - vehicle.stopOrder()
+            );
+        }
+
+        String vehicleId() {
+            return vehicle.vehicleId();
+        }
+
+        int sourceRowNumber() {
+            return vehicle.sourceRowNumber();
+        }
+
+        boolean isDisplayable() {
+            return isWithinHorizon() && isConsistent();
+        }
+
+        private boolean isWithinHorizon() {
+            return horizonStops >= 1 && horizonStops <= MAX_HORIZON_STOPS;
+        }
+
+        private boolean isConsistent() {
+            return remainingStops == horizonStops || remainingStops == horizonStops - 1;
+        }
     }
 }

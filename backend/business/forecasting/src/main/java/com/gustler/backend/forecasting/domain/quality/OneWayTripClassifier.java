@@ -10,7 +10,7 @@ import java.util.Objects;
  * 좌석 범위 위반은 경계 종류와 관계없이 마지막에 제외 상태로 반영한다.
  */
 public final class OneWayTripClassifier {
-    public static final String RULE_VERSION = "one-way-seat-range-v3";
+    public static final String RULE_VERSION = "one-way-seat-range-v4";
     public static final Duration DEFAULT_MAXIMUM_GAP = Duration.ofMinutes(10);
 
     public enum Status {
@@ -162,10 +162,13 @@ public final class OneWayTripClassifier {
         return new Decision(tripId, status, boundary);
     }
 
+    /** 기점은 출발(2)과 교차로 통과(0)를, 회차지는 출발(2)만 편도 시작으로 본다. */
     static boolean isDeparture(Route route, Observation observation) {
-        return Integer.valueOf(2).equals(observation.runningState())
-            && (observation.stopOrder() == route.firstStop()
-                || Objects.equals(observation.stopOrder(), route.turnStop()));
+        Integer state = observation.runningState();
+        if (observation.stopOrder() == route.firstStop()) {
+            return Integer.valueOf(2).equals(state) || Integer.valueOf(0).equals(state);
+        }
+        return Integer.valueOf(2).equals(state) && Objects.equals(observation.stopOrder(), route.turnStop());
     }
 
     static int direction(Route route, Observation observation) {
@@ -177,7 +180,7 @@ public final class OneWayTripClassifier {
             return 0;
         }
         if (stopOrder == route.firstStop()
-            && !Integer.valueOf(2).equals(state)) {
+            && Integer.valueOf(1).equals(state)) {
             return 1;
         }
         if (isInboundAtTurnStop(route, stopOrder, state)) {

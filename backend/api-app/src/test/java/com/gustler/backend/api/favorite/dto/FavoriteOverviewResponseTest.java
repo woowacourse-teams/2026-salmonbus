@@ -60,7 +60,7 @@ class FavoriteOverviewResponseTest {
         assertThat(actual.at("/route/displayName").asString()).isEqualTo("M5422");
         assertThat(actual.at("/route/terminalStopName").asString()).isEqualTo("안양역");
         assertThat(actual.at("/stop/stopId").asString()).isEqualTo(TARGET.stopId());
-        assertThat(actual.at("/approachingVehicles/0/horizonStops").asInt()).isEqualTo(2);
+        assertThat(actual.at("/approachingVehicles/0/remainingStops").asInt()).isEqualTo(2);
         assertThat(actual.at("/approachingVehicles/0/forecast/status").asString())
             .isEqualTo("AVAILABLE");
         assertThat(actual.at("/approachingVehicles/0/eta/status").asString())

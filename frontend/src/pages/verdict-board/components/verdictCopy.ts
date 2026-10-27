@@ -38,10 +38,6 @@ function withoutWaypointSuffix(name: string): string {
   return name.endsWith(WAYPOINT_SUFFIX) ? name.slice(0, -WAYPOINT_SUFFIX.length).trimEnd() : name;
 }
 
-export function stopsAwayLabel(stopsAway: number): string {
-  return `${stopsAway}정류장 전`;
-}
-
 export function arrivalSeatLabel(arrival: ArrivalView): string {
   return arrival.kind === "available" ? seatLabel(arrival.seatEstimate) : SEAT_UNKNOWN_LABEL;
 }

@@ -1,8 +1,9 @@
 import { useEffect, useReducer } from "react";
 import { latestSuccessOf } from "@/shared/api/polledResource";
+import { stopsAwayLabelOf } from "@/shared/utils/stopsAwayLabelOf";
 import { arrivalToneFor, type ArrivalView } from "./arrivalPolicy";
 import { arrivalTimingFor, type StationArrivalDetails } from "./stationArrivalPolicy";
-import { NO_VEHICLE_NOTICE, arrivalSeatLabel, stopsAwayLabel } from "./verdictCopy";
+import { NO_VEHICLE_NOTICE, arrivalSeatLabel } from "./verdictCopy";
 import { SeatCountBadge } from "@/shared/components/SeatCountBadge";
 import * as styles from "./ArrivalForecastCard.css";
 
@@ -36,8 +37,14 @@ export function ArrivalForecastCard({ arrivals, stationArrivals }: ArrivalForeca
           return (
             <li key={arrival.vehicleId ?? index} className={styles.row}>
               <span className={styles.timing}>
-                <span className={styles.distance}>{stopsAwayLabel(timing.stopsAway)}</span>
-                <span className={timing.available ? styles.remainingTime : styles.unavailableTime}>{timing.label}</span>
+                <span className={arrival.stopsAway === 0 ? styles.remainingTime : styles.distance}>
+                  {stopsAwayLabelOf(arrival.stopsAway)}
+                </span>
+                {timing && (
+                  <span className={timing.available ? styles.remainingTime : styles.unavailableTime}>
+                    {timing.label}
+                  </span>
+                )}
               </span>
               <SeatCountBadge tone={arrivalToneFor(arrival)} label={arrivalSeatLabel(arrival)} />
             </li>

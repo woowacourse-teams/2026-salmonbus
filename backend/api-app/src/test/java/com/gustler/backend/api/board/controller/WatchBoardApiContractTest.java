@@ -17,6 +17,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -90,7 +95,7 @@ class WatchBoardApiContractTest {
             .andExpect(jsonPath("$.route.status").value("FORECAST_READY"))
             .andExpect(jsonPath("$.vehiclesInService").value(1))
             .andExpect(jsonPath("$.stops[2].approachingVehicles[0].vehicleId").value("V1"))
-            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].horizonStops").value(2))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].remainingStops").value(2))
             .andExpect(jsonPath("$.vehicles.length()").value(1))
             .andExpect(jsonPath("$.vehicles[0].vehicleId").value("V1"))
             .andExpect(jsonPath("$.vehicles[0].currentStopSequence").value(1))
@@ -122,6 +127,41 @@ class WatchBoardApiContractTest {
         assertThat(watchBody).isEqualTo(bodyOf(board));
         assertThat(watch.getResponse().getHeader(HttpHeaders.CACHE_CONTROL))
             .isEqualTo(board.getResponse().getHeader(HttpHeaders.CACHE_CONTROL));
+    }
+
+    @Test
+    void 접근_차량의_남은_정류장은_정류장_순번에서_같은_관측의_차량_현재_정류장_순번을_뺀_값이다() throws Exception {
+        // given
+        RouteContext route = insertRoundTripRoute();
+        final long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        OffsetDateTime publishedAt = now.minusMinutes(1);
+        final long published = fixture.insertBatch(route, publishedAt, "SUCCESS_ROWS", 3);
+        fixture.insertObservation(route, published, 1, "V1", 1, "STOP-1", 1, DEPARTED, 7, null);
+        fixture.insertObservation(route, published, 2, "V2", 2, "STOP-2", 1, ARRIVING, 5, null);
+        fixture.insertObservation(route, published, 3, "V3", 3, "STOP-3", 2, ARRIVING, 3, null);
+        fixture.insertPublication(published, model, publishedAt.plusSeconds(1), publishedAt.plusSeconds(2));
+
+        // when
+        JsonNode watch = bodyOf(mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID)).andReturn());
+
+        // then
+        Map<String, Integer> currentStopSequences = new HashMap<>();
+        for (JsonNode vehicle : watch.path("vehicles")) {
+            currentStopSequences.put(vehicle.path("vehicleId").asText(), vehicle.path("currentStopSequence").asInt());
+        }
+        List<String> checked = new ArrayList<>();
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            for (JsonNode stop : watch.path("stops")) {
+                for (JsonNode approaching : stop.path("approachingVehicles")) {
+                    String vehicleId = approaching.path("vehicleId").asText();
+                    assertThat(currentStopSequences).containsKey(vehicleId);
+                    softly.assertThat(approaching.path("remainingStops").asInt()).as(vehicleId)
+                        .isEqualTo(stop.path("sequence").asInt() - currentStopSequences.get(vehicleId));
+                    checked.add(vehicleId);
+                }
+            }
+            softly.assertThat(checked).containsExactlyInAnyOrder("V1", "V2", "V3");
+        }
     }
 
     @Test

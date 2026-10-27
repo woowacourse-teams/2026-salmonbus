@@ -19,8 +19,8 @@ function readyArrivals(): StationArrivalsResponse {
   route.status = "READY";
   // 판정보드 표시 순서와 다른 순서로 응답해 ordinal 대신 vehicleId로 결합하는지 확인한다.
   route.arrivals = [
-    { vehicleId: "bus-2", ordinal: 1 as const, remainingStops: 6, seconds: 240 },
-    { vehicleId: "bus-1", ordinal: 2 as const, remainingStops: 2, seconds: 120 },
+    { vehicleId: "bus-2", ordinal: 1 as const, remainingStops: 7, seconds: 240 },
+    { vehicleId: "bus-1", ordinal: 2 as const, remainingStops: 3, seconds: 120 },
   ].map(({ seconds, ...vehicle }) => ({
     ...vehicle,
     eta: {
@@ -51,8 +51,8 @@ test("정류장을 펼칠 때 선택한 방문으로 조회하고 차량 ID에 �
 
   await targetStop(page, "UP").click();
   await expect(targetRow(page, "UP").getByRole("listitem")).toHaveText([
-    /2정류장 전\s*2분 남음\s*도착 시 5석 예상해요/,
-    /6정류장 전\s*4분 남음\s*도착 시 2석 예상해요/,
+    /3정류장 전\s*2분 남음\s*도착 시 5석 예상해요/,
+    /7정류장 전\s*4분 남음\s*도착 시 2석 예상해요/,
   ]);
   expect(api.arrivalRequests).toHaveLength(1);
   expect(api.arrivalRequests[0]!.pathname).toBe(arrivalsPath);
@@ -90,6 +90,22 @@ for (const mismatch of ["vehicle", "visit"] as const) {
     await expect.poll(() => api.requests.arrivals).toBe(1);
   });
 }
+
+test("도착정보 거리가 판정 보드 거리와 다르면 판정 보드 거리를 두고 시간 정보 없음으로 표시한다", async ({
+  page,
+  api,
+}) => {
+  const response = readyArrivals();
+  response.routes[0]!.arrivals[1]!.remainingStops = 2;
+  api.data.arrivals = response;
+  await openBoard(page);
+  await targetStop(page, "UP").click();
+
+  await expect(targetRow(page, "UP").getByRole("listitem")).toHaveText([
+    /3정류장 전\s*시간 정보 없음\s*도착 시 5석 예상해요/,
+    /7정류장 전\s*4분 남음\s*도착 시 2석 예상해요/,
+  ]);
+});
 
 test("HTTP 캐시 5초 대신 응답의 40초 권장 시각에 재조회하고 닫으면 폴링을 멈춘다", async ({ page, api }) => {
   await openBoard(page);

@@ -109,6 +109,43 @@ class ReverseBoundarySearchTest {
         assertThat(search.replayStart().id()).isEqualTo(2);
     }
 
+    @Test
+    void 기점을_교차로통과로_지난_관측을_출발_후보로_찾는다() {
+        // given
+        ReverseBoundarySearch search = new ReverseBoundarySearch(ROUTE, row(5, 3, 2, 80), null);
+        List<Observation> rows = List.of(row(4, 2, 1, 60), row(3, 1, 0, 40), row(2, 7, 2, 20));
+
+        // when
+        rows.stream()
+            .takeWhile(ignored -> !search.boundaryConfirmed())
+            .forEachOrdered(search::inspect);
+
+        // then
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(search.boundaryConfirmed()).isTrue();
+            softly.assertThat(search.candidate().id()).isEqualTo(3);
+            softly.assertThat(search.replayStart().id()).isEqualTo(3);
+        }
+    }
+
+    @Test
+    void 기점_도착_뒤_교차로통과가_있으면_그_관측에서_경계를_확정한다() {
+        // given
+        ReverseBoundarySearch search = new ReverseBoundarySearch(ROUTE, row(5, 3, 2, 80), null);
+        List<Observation> rows = List.of(row(4, 2, 1, 60), row(3, 1, 0, 40), row(2, 1, 1, 30), row(1, 7, 2, 20));
+
+        // when
+        rows.stream()
+            .takeWhile(ignored -> !search.boundaryConfirmed())
+            .forEachOrdered(search::inspect);
+
+        // then
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(search.boundaryConfirmed()).isTrue();
+            softly.assertThat(search.replayStart().id()).isEqualTo(3);
+        }
+    }
+
     private static Observation row(
         final long id,
         final int stop,

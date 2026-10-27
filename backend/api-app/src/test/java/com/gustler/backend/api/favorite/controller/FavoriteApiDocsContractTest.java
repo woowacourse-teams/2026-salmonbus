@@ -90,11 +90,13 @@ class FavoriteApiDocsContractTest {
         JsonNode watchVehicle = document.at("/components/schemas/ApproachingVehicleResponse/properties");
 
         assertThat(names(favoriteVehicle)).containsExactlyInAnyOrder(
-            "vehicleId", "horizonStops", "forecast", "eta");
+            "vehicleId", "remainingStops", "forecast", "eta");
         assertThat(favoriteVehicle.at("/forecast/$ref")).isEqualTo(watchVehicle.at("/forecast/$ref"));
-        assertThat(favoriteVehicle.at("/horizonStops/type")).isEqualTo(watchVehicle.at("/horizonStops/type"));
-        assertThat(favoriteVehicle.at("/horizonStops/minimum"))
-            .isEqualTo(watchVehicle.at("/horizonStops/minimum"));
+        assertThat(favoriteVehicle.at("/remainingStops/type")).isEqualTo(watchVehicle.at("/remainingStops/type"));
+        assertThat(favoriteVehicle.at("/remainingStops/minimum"))
+            .isEqualTo(watchVehicle.at("/remainingStops/minimum"));
+        assertThat(favoriteVehicle.at("/remainingStops/maximum"))
+            .isEqualTo(watchVehicle.at("/remainingStops/maximum"));
     }
 
     @Test

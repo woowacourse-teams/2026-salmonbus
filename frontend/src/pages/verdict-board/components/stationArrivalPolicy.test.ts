@@ -11,13 +11,13 @@ const arrival: ArrivalView = {
   level: "high",
   seatEstimate: { kind: "count", seats: 15 },
 };
-const unavailable = { available: false, stopsAway: 3, label: "시간 정보 없음" };
+const unavailable = { available: false, label: "시간 정보 없음" };
 
 function detailsWith(seconds = 120) {
   const vehicle: ArrivalVehicle = {
     vehicleId: "bus-1",
     ordinal: 1,
-    remainingStops: 1,
+    remainingStops: 3,
     eta: {
       status: "AVAILABLE",
       reason: null,
@@ -87,7 +87,7 @@ describe("arrivalTimingFor", () => {
     const details = detailsWith();
     const route = details.resource.latestSuccess.body.routes[0]!;
     route.arrivals.unshift({ ...route.arrivals[0]!, vehicleId: "another-bus", ordinal: 2, remainingStops: 9 });
-    expect(arrivalTimingFor(arrival, details)).toEqual({ available: true, stopsAway: 1, label: "2분 남음" });
+    expect(arrivalTimingFor(arrival, details)).toEqual({ available: true, label: "2분 남음" });
     expect(arrival.seatEstimate).toEqual({ kind: "count", seats: 15 });
   });
 
@@ -95,7 +95,7 @@ describe("arrivalTimingFor", () => {
     const expected =
       seconds <= 0
         ? unavailable
-        : { available: true, stopsAway: 1, label: seconds <= 60 ? "1분 이내" : `${Math.ceil(seconds / 60)}분 남음` };
+        : { available: true, label: seconds <= 60 ? "1분 이내" : `${Math.ceil(seconds / 60)}분 남음` };
     expect(arrivalTimingFor(arrival, detailsWith(seconds))).toEqual(expected);
   });
 
@@ -120,16 +120,19 @@ describe("arrivalTimingFor", () => {
     expect(arrivalTimingFor(arrival, details)).toEqual(unavailable);
   });
 
-  it("0정류장 전은 유지하고 거리 미제공은 보드 거리로 표시한다", () => {
+  it.each([2, 4, 0, null])("도착정보 거리 %s가 판정 보드 거리 3과 다르면 시간을 붙이지 않는다", (remainingStops) => {
     const details = detailsWith();
-    const vehicle = details.resource.latestSuccess.body.routes[0]!.arrivals[0]!;
-    vehicle.remainingStops = 0;
-    expect(arrivalTimingFor(arrival, details).stopsAway).toBe(0);
-    vehicle.remainingStops = null;
-    expect(arrivalTimingFor(arrival, details).stopsAway).toBe(3);
+    details.resource.latestSuccess.body.routes[0]!.arrivals[0]!.remainingStops = remainingStops;
+    expect(arrivalTimingFor(arrival, details)).toEqual(unavailable);
   });
 
-  it("서버 시각의 스냅샷 만료 즉시 시간과 새 거리를 사용하지 않는다", () => {
+  it("정류장에 도착한 차량은 도착정보와 상관없이 시간 칸을 비운다", () => {
+    const arrived = { ...arrival, stopsAway: 0 };
+    expect(arrivalTimingFor(arrived, null)).toBeNull();
+    expect(arrivalTimingFor(arrived, detailsWith())).toBeNull();
+  });
+
+  it("서버 시각의 스냅샷 만료 즉시 시간을 사용하지 않는다", () => {
     const details = detailsWith();
     details.resource.latestSuccess.clock.now = () => now + 60000;
     expect(arrivalTimingFor(arrival, details)).toEqual(unavailable);
@@ -137,7 +140,7 @@ describe("arrivalTimingFor", () => {
 
   it("최초 조회와 수집 중은 확인 중으로 표시한다", () => {
     const details = detailsWith();
-    expect(arrivalTimingFor(arrival, { ...details, resource: { status: "pending" } }).label).toBe("확인 중");
+    expect(arrivalTimingFor(arrival, { ...details, resource: { status: "pending" } })?.label).toBe("확인 중");
     const collecting: StationArrivalDetails = {
       ...details,
       resource: {
@@ -159,7 +162,7 @@ describe("arrivalTimingFor", () => {
         },
       },
     };
-    expect(arrivalTimingFor(arrival, collecting).label).toBe("확인 중");
+    expect(arrivalTimingFor(arrival, collecting)?.label).toBe("확인 중");
   });
 
   it("재조회 실패도 아직 유효한 ETA는 유지한다", () => {
@@ -173,7 +176,7 @@ describe("arrivalTimingFor", () => {
           latestSuccess: details.resource.latestSuccess,
         },
       }),
-    ).toEqual({ available: true, stopsAway: 1, label: "2분 남음" });
+    ).toEqual({ available: true, label: "2분 남음" });
     expect(
       arrivalTimingFor(arrival, { ...details, resource: { status: "loadingError", failure: { kind: "timeout" } } }),
     ).toEqual(unavailable);

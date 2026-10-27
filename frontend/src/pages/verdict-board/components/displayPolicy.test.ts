@@ -103,7 +103,7 @@ describe("stopViewsFor", () => {
     const board = boardWith({
       stops: [
         stopAt(2, {
-          approachingVehicles: [{ ...forecastFixtures.available, horizonStops: 7 }, forecastFixtures.unavailable],
+          approachingVehicles: [forecastFixtures.unavailable, { ...forecastFixtures.available, remainingStops: 7 }],
         }),
         stopAt(3),
       ],

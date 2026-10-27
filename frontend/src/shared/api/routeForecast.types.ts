@@ -52,7 +52,7 @@ export type VehicleForecast = AvailableForecast | UnavailableForecast;
 
 export interface ApproachingVehicle {
   vehicleId: string | null;
-  horizonStops: number;
+  remainingStops: number;
   forecast: VehicleForecast;
 }
 

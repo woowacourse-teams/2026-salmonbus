@@ -97,7 +97,7 @@ test("자동 갱신 실패 후 다음 요청이 성공하면 새 예측으로 �
   stopData.approachingVehicles = [
     {
       vehicleId: "bus-1",
-      horizonStops: 2,
+      remainingStops: 2,
       forecast: { status: "AVAILABLE", seatAvailableProbability: 0.9, expectedSeats: 9 },
     },
   ];
@@ -145,7 +145,7 @@ test("화면을 켜 둔 채 연결이 돌아오면 다음 폴링을 기다리지
   stopData.approachingVehicles = [
     {
       vehicleId: "bus-1",
-      horizonStops: 2,
+      remainingStops: 2,
       forecast: { status: "AVAILABLE", seatAvailableProbability: 0.9, expectedSeats: 9 },
     },
   ];
@@ -218,10 +218,9 @@ async function settleMarkers(page: Page) {
 }
 
 test("다음 관측이 오면 마커와 도착 예상이 한 응답으로 함께 바뀐다", async ({ page, api }) => {
-  // 정류장 8을 막 출발한 버스라서 목표 정류장(순번 11)까지 3정류장 전이다. 백엔드 horizonStops 계산과 같다.
+  // 정류장 8에 있는 버스라서 목표 정류장(순번 11)까지 3정류장 전이다. 백엔드 remainingStops 계산과 같다.
   const bus = api.data.watch.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1");
   if (bus === undefined) throw new Error("bus-1 차량 fixture가 필요합니다");
-  bus.phase = "DEPARTED";
   await openBoard(page);
   const stop = targetStop(page, "UP");
   await stop.scrollIntoViewIfNeeded();
@@ -236,7 +235,7 @@ test("다음 관측이 오면 마커와 도착 예상이 한 응답으로 함께
   if (forecastedBus === undefined) throw new Error("상행 목표 정류장의 bus-1 예보 fixture가 필요합니다");
   Object.assign(bus, { currentStopSequence: 9, stopId: "1009", stopName: "상행 정류장 9" });
   Object.assign(forecastedBus, {
-    horizonStops: 2,
+    remainingStops: 2,
     forecast: { status: "AVAILABLE", seatAvailableProbability: 0.8, expectedSeats: 4 },
   });
   api.data.watch.observedAt = "2026-09-16T08:00:15+09:00";
@@ -245,6 +244,49 @@ test("다음 관측이 오면 마커와 도착 예상이 한 응답으로 함께
   await expect(busMarkerAt(page, "상행 정류장 9")).toBeVisible();
   await expect(busMarkerAt(page, "상행 정류장 8")).toHaveCount(0);
   await expect(nearestArrival).toHaveText(/2정류장 전\s*시간 정보 없음\s*도착 시 4석 예상해요/);
+});
+
+test("서버가 맨 앞에 보낸 목표 정류장 도착 버스는 그 순서대로 정류장 도착으로 보이고 시간 칸이 비어 있다", async ({
+  page,
+  api,
+}) => {
+  const target = api.data.watch.stops.find((stop) => stop.name === targetStopNames.UP);
+  const previous = api.data.watch.stops.find(
+    (stop) => stop.direction === target?.direction && stop.sequence === (target?.sequence ?? 0) - 1,
+  );
+  if (target === undefined || previous === undefined)
+    throw new Error("상행 목표 정류장과 앞 정류장 fixture가 필요합니다");
+  for (const [vehicleId, stop] of [
+    ["bus-1", target],
+    ["bus-2", previous],
+  ] as const) {
+    const bus = api.data.watch.vehicles.find((vehicle) => vehicle.vehicleId === vehicleId);
+    if (bus === undefined) throw new Error(`${vehicleId} 차량 fixture가 필요합니다`);
+    Object.assign(bus, { currentStopSequence: stop.sequence, stopId: stop.stopId, stopName: stop.name });
+  }
+  // 두 버스 모두 정류장에 서 있다. 앞 정류장에 선 버스는 1정류장 전이다.
+  target.approachingVehicles = [
+    {
+      vehicleId: "bus-1",
+      remainingStops: 0,
+      forecast: { status: "AVAILABLE", seatAvailableProbability: 0.8, expectedSeats: 5 },
+    },
+    {
+      vehicleId: "bus-2",
+      remainingStops: 1,
+      forecast: { status: "AVAILABLE", seatAvailableProbability: 0.5, expectedSeats: 2 },
+    },
+  ];
+
+  await openBoard(page);
+  const stop = targetStop(page, "UP");
+  await stop.scrollIntoViewIfNeeded();
+  await stop.click();
+
+  await expect(targetRow(page, "UP").getByRole("listitem")).toHaveText([
+    /^정류장 도착\s*도착 시 5석 예상해요$/,
+    /1정류장 전\s*시간 정보 없음\s*도착 시 2석 예상해요/,
+  ]);
 });
 
 test("판의 만료 시각이 지나면 차량 마커만 숨기고, 새 관측을 받으면 다시 표시한다", async ({ page, api }) => {
@@ -337,7 +379,7 @@ for (const { name, vehicle, chip, seatLabel } of [
   test(name, async ({ page, api }) => {
     const stopData = api.data.watch.stops.find((stop) => stop.name === targetStopNames.UP);
     if (stopData === undefined) throw new Error("상행 목표 정류장 fixture가 필요합니다");
-    stopData.approachingVehicles = [{ ...vehicle, vehicleId: "bus-1", horizonStops: 3 }];
+    stopData.approachingVehicles = [{ ...vehicle, vehicleId: "bus-1", remainingStops: 3 }];
 
     // 같은 차량의 현재 좌석이 도착 예측을 대신하지 않는지 확인한다.
     const liveVehicle = api.data.watch.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1");

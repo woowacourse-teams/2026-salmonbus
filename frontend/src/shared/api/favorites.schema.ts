@@ -122,9 +122,9 @@ function arrivalFrom(value: unknown): FavoriteArrival | null {
   if (
     !isRecord(value) ||
     !(value.vehicleId === null || typeof value.vehicleId === "string") ||
-    typeof value.horizonStops !== "number" ||
-    !Number.isInteger(value.horizonStops) ||
-    value.horizonStops < 0
+    typeof value.remainingStops !== "number" ||
+    !Number.isInteger(value.remainingStops) ||
+    value.remainingStops < 0
   )
     return null;
   const forecast = forecastFrom(value.forecast);
@@ -133,7 +133,7 @@ function arrivalFrom(value: unknown): FavoriteArrival | null {
     ? null
     : {
         vehicleId: value.vehicleId,
-        horizonStops: value.horizonStops,
+        remainingStops: value.remainingStops,
         forecast,
         eta,
       };

@@ -1,4 +1,5 @@
 import { directionLabelOf } from "@/shared/utils/directionLabelOf";
+import { stopsAwayLabelOf } from "@/shared/utils/stopsAwayLabelOf";
 import { useEffect, useReducer, useRef, useState, type KeyboardEvent } from "react";
 import { Link } from "react-router";
 import type { FavoriteStatus, FavoriteTarget, HomeFavorite } from "@/shared/api/favorites.types";
@@ -218,6 +219,7 @@ function FavoriteCard({ favorite, savedDirection, elapsed, onRetry }: FavoriteCa
                   vehicle.eta.status === "AVAILABLE" ? Math.max(0, vehicle.eta.remainingSeconds - elapsed) : null;
                 const forecast = vehicle.forecast;
                 const timingAvailable = remaining !== null && remaining > 0;
+                const arrived = vehicle.remainingStops === 0;
                 const tone =
                   forecast.status === "AVAILABLE" ? toSeatLevel(forecast.seatAvailableProbability) : "unavailable";
                 const estimate = toSeatEstimate(forecast.status === "AVAILABLE" ? forecast.expectedSeats : undefined);
@@ -225,10 +227,14 @@ function FavoriteCard({ favorite, savedDirection, elapsed, onRetry }: FavoriteCa
                 return (
                   <li className={homeStyles.arrival} key={vehicle.vehicleId ?? index}>
                     <span className={homeStyles.timing}>
-                      <span className={timingAvailable ? homeStyles.eta : homeStyles.unavailableEta}>
-                        {timingAvailable ? `${Math.ceil(remaining / 60)}분 남음` : "도착 정보 없음"}
+                      {!arrived && (
+                        <span className={timingAvailable ? homeStyles.eta : homeStyles.unavailableEta}>
+                          {timingAvailable ? `${Math.ceil(remaining / 60)}분 남음` : "도착 정보 없음"}
+                        </span>
+                      )}
+                      <span className={arrived ? homeStyles.eta : homeStyles.distance}>
+                        {stopsAwayLabelOf(vehicle.remainingStops)}
                       </span>
-                      <span className={homeStyles.distance}>{vehicle.horizonStops}정류장 전</span>
                     </span>
                     <SeatCountBadge tone={tone} className={homeStyles.seatBadge[tone]} label={label} />
                   </li>

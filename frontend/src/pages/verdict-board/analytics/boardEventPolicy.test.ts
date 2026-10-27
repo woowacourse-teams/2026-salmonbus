@@ -6,7 +6,7 @@ import { stopViewsFor, type ExpandableStopView } from "../components/displayPoli
 import { boardViewedPropertiesOf, stopExpandedPropertiesOf } from "./boardEventPolicy";
 
 function approaching(seatAvailableProbability: number): ApproachingVehicle[] {
-  return [{ vehicleId: null, horizonStops: 2, forecast: { status: "AVAILABLE", seatAvailableProbability } }];
+  return [{ vehicleId: null, remainingStops: 2, forecast: { status: "AVAILABLE", seatAvailableProbability } }];
 }
 
 const board = boardWith({

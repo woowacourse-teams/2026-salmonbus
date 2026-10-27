@@ -1,4 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
+import { PHONE_MEDIA } from "@/shared/styles/media";
 import { vars } from "@/shared/styles/tokens.css";
 import { primary } from "@/shared/styles/button.css";
 
@@ -6,6 +7,7 @@ export const login = style({
   display: "flex",
   flexDirection: "column",
   maxWidth: 425,
+  "@media": { [PHONE_MEDIA]: { maxWidth: "none" } },
   margin: "0 auto",
   minHeight: "100dvh",
   padding: "calc(20px + env(safe-area-inset-top, 0px)) 32px calc(28px + env(safe-area-inset-bottom, 0px))",
