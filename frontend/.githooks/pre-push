@@ -1,0 +1,18 @@
+#!/bin/sh
+# 푸시한 커밋의 FRONTEND-CI를 백그라운드에서 지켜본다. 푸시를 막거나 기다리게 하지 않는다.
+# 켜기: 리포 루트에서 git config core.hooksPath frontend/.githooks
+
+root=$(git rev-parse --show-toplevel) || exit 0
+if ! command -v node >/dev/null 2>&1; then
+  echo "ci-watch: node를 찾지 못해 CI 감시를 건너뜁니다." >&2
+  exit 0
+fi
+
+while read -r _ local_sha remote_ref _; do
+  case "$remote_ref" in refs/heads/*) ;; *) continue ;; esac
+  # 브랜치를 지우는 푸시는 SHA가 0으로만 채워져 온다.
+  case "$local_sha" in *[!0]*) ;; *) continue ;; esac
+  # 입출력을 이어 두면 터미널과 VS Code가 감시가 끝날 때까지 푸시를 기다린다.
+  nohup node "$root/frontend/scripts/ci-watch/main.ts" --sha "$local_sha" </dev/null >/dev/null 2>&1 &
+done
+exit 0

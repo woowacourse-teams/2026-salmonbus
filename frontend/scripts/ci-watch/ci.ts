@@ -1,0 +1,82 @@
+import { execFileSync } from "node:child_process";
+import { rmSync } from "node:fs";
+import path from "node:path";
+import { failedTestsFrom, loadReport, type FailedTest } from "./failures.ts";
+
+const workflow = "FRONTEND-CI";
+const artifactName = "playwright-results";
+const runFields = "databaseId,status,conclusion,event,headBranch,headSha,url";
+
+export interface CiRun {
+  databaseId: number;
+  status: string;
+  conclusion: string;
+  event: string;
+  headBranch: string;
+  headSha: string;
+  url: string;
+}
+
+// 기다려도 저절로 풀리지 않는 실패. 다시 시도하지 않고 바로 알린다.
+export class GhUnavailableError extends Error {}
+
+function gh(args: string[]) {
+  try {
+    return execFileSync("gh", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  } catch (error) {
+    const { code, status } = error as NodeJS.ErrnoException & { status?: number };
+    if (code === "ENOENT") throw new GhUnavailableError("gh 명령을 찾지 못했어요.");
+    // gh는 로그인이 안 돼 있으면 4로 끝난다.
+    if (status === 4) throw new GhUnavailableError("gh 로그인이 필요해요: gh auth login");
+    throw error;
+  }
+}
+
+export function fetchRunFor(sha: string): CiRun | undefined {
+  const runs: CiRun[] = JSON.parse(
+    gh(["run", "list", "--workflow", workflow, "--commit", sha, "--limit", "1", "--json", runFields]),
+  );
+  return runs[0];
+}
+
+export function fetchRun(runId: number): CiRun {
+  return JSON.parse(gh(["run", "view", String(runId), "--json", runFields]));
+}
+
+export function fetchLatestDevPushRun(): CiRun | undefined {
+  const runs: CiRun[] = JSON.parse(
+    gh([
+      "run",
+      "list",
+      "--workflow",
+      workflow,
+      "--branch",
+      "dev",
+      "--event",
+      "push",
+      "--status",
+      "completed",
+      "--limit",
+      "1",
+      "--json",
+      runFields,
+    ]),
+  );
+  return runs[0];
+}
+
+// E2E 단계까지 가지 못해 실패 기록이 없으면 null을 돌려준다.
+export function fetchFailures(runId: number, directory: string): FailedTest[] | null {
+  const expired = gh([
+    "api",
+    `repos/{owner}/{repo}/actions/runs/${runId}/artifacts`,
+    "--jq",
+    `.artifacts[] | select(.name == "${artifactName}") | .expired`,
+  ]).trim();
+  if (expired === "") return null;
+  if (expired.includes("true")) throw new Error(`실행 ${runId}의 ${artifactName} 기록이 만료됐습니다.`);
+
+  rmSync(directory, { recursive: true, force: true });
+  gh(["run", "download", String(runId), "-n", artifactName, "-D", directory]);
+  return failedTestsFrom(loadReport(path.join(directory, "playwright-report")));
+}
