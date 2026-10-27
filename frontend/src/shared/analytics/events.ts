@@ -1,4 +1,5 @@
 import type { ErrorCode } from "@/shared/api/apiError";
+import type { LoginProvider } from "@/shared/api/auth.types";
 import type { Direction, RouteStatus } from "@/shared/api/routeForecast.types";
 
 export type FailureProperties =
@@ -75,4 +76,9 @@ export interface EventMap {
         arrival_count: number;
       })
     | (StopExpandedBase & { stop_kind: "noVehicle"; arrival_count: 0 });
+
+  login_started: {
+    provider: LoginProvider;
+    entry: "favorite" | "home" | "mypage";
+  };
 }

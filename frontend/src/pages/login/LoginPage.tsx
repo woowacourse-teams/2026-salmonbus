@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
+import { track } from "@/shared/analytics/track";
 import type { LoginProvider } from "@/shared/api/auth.types";
 import { Brand } from "@/shared/components/Brand";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
@@ -7,6 +8,7 @@ import { useAuth } from "@/shared/hooks/useAuth";
 import { clearLoginReturn, saveLoginReturn } from "@/shared/routing/loginReturn";
 import { localReturnTo, boardReturnTo } from "@/shared/routing/loginReturnPolicy";
 import * as buttonStyles from "@/shared/styles/button.css";
+import { loginEntryOf } from "./analytics/loginEventPolicy";
 import * as styles from "./LoginPage.css";
 
 export function LoginPage() {
@@ -40,6 +42,7 @@ export function LoginPage() {
     if (pending) return;
     setLoginResult(null);
     saveLoginReturn(returnTo, provider);
+    track("login_started", { provider, entry: loginEntryOf(returnTo) });
     setPending(true);
     window.location.assign(
       `/api/auth/${provider.toLowerCase()}/start?${new URLSearchParams({ returnTo: boardReturnTo(returnTo) })}`,
