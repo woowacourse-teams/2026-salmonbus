@@ -18,6 +18,10 @@ const SEAT_EMPTY_LABEL = "도착 시 빈자리가 없어요";
 const WAYPOINT_SUFFIX = "(경유)";
 const TURNAROUND_SUFFIX = "(회차지점)";
 
+export function arrivalTimeLabel(seconds: number): string {
+  return seconds <= 60 ? "1분 이내" : `${Math.ceil(seconds / 60)}분 남음`;
+}
+
 export const WAYPOINT_CAPTION = "경유";
 export const NO_VEHICLE_NOTICE = "현재 예측할 수 있는 차량이 없습니다";
 export const OUT_OF_SERVICE_NOTICE = "현재는 운행시간이 아닙니다";

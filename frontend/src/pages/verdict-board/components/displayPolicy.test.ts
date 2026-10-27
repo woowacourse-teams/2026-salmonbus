@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
-import type { Vehicle } from "@/shared/api/routeForecast.types";
-import { serviceStateFor, stopViewsFor } from "./displayPolicy";
+import type { HeadwayRange, RouteHeadways, Vehicle } from "@/shared/api/routeForecast.types";
+import { headwayLabelFor, serviceStateFor, stopViewsFor } from "./displayPolicy";
 import { boardWith, stopAt, upInfo, vehicleAt } from "@/testing/fixtures";
 import { forecastFixtures } from "@/testing/forecastFixtures";
 
@@ -8,6 +8,77 @@ const observedAt = (clock: string, offset = "+09:00") => `2026-09-01T${clock}:00
 const upVehicle = vehicleAt(2);
 const downVehicle = vehicleAt(5);
 const noVehicles: Vehicle[] = [];
+
+describe("headwayLabelFor", () => {
+  const headways: RouteHeadways = {
+    weekday: { minMinutes: 10, maxMinutes: 20 },
+    saturday: { minMinutes: 15, maxMinutes: 25 },
+    sunday: { minMinutes: 20, maxMinutes: 30 },
+    holiday: { minMinutes: 30, maxMinutes: 40 },
+  };
+
+  it.each([
+    ["2026-10-26", "10~20분"],
+    ["2026-10-27", "10~20분"],
+    ["2026-10-28", "10~20분"],
+    ["2026-10-29", "10~20분"],
+    ["2026-10-30", "10~20분"],
+    ["2026-10-31", "15~25분"],
+    ["2026-11-01", "20~30분"],
+  ])("한국 시간 %s의 요일에 맞는 최소~최대 간격을 표시한다", (date, label) => {
+    expect(headwayLabelFor(headways, Date.parse(`${date}T08:00:00+09:00`))).toBe(label);
+  });
+
+  it.each([
+    ["2026-10-30T14:59:59Z", "10~20분"],
+    ["2026-10-30T15:00:00Z", "15~25분"],
+    ["2026-10-31T15:00:00Z", "20~30분"],
+    ["2026-11-01T15:00:00Z", "10~20분"],
+  ])("기기 시간대와 무관하게 %s의 한국 날짜를 사용한다", (date, label) => {
+    expect(headwayLabelFor(headways, Date.parse(date))).toBe(label);
+  });
+
+  const weekdayNow = Date.parse("2026-10-27T08:00:00+09:00");
+
+  it("headways가 없는 기존 응답은 정보 준비 중으로 표시한다", () => {
+    expect(headwayLabelFor(undefined, weekdayNow)).toBe("정보 준비 중");
+  });
+
+  it.each(["2026-10-27T08:00:00+09:00", "2026-10-31T08:00:00+09:00", "2026-11-01T08:00:00+09:00"])(
+    "오늘(%s)의 값이 없으면 다른 요일이나 공휴일 값으로 대신하지 않는다",
+    (date) => {
+      expect(
+        headwayLabelFor({ weekday: null, saturday: null, sunday: null, holiday: headways.holiday }, Date.parse(date)),
+      ).toBe("정보 준비 중");
+    },
+  );
+
+  it("최소와 최대가 같아도 범위를 그대로 표시한다", () => {
+    expect(headwayLabelFor({ ...headways, weekday: { minMinutes: 15, maxMinutes: 15 } }, weekdayNow)).toBe("15~15분");
+  });
+
+  it.each([
+    undefined,
+    "10~20",
+    {},
+    { minMinutes: "10", maxMinutes: 20 },
+    { minMinutes: 10 },
+    { minMinutes: 0, maxMinutes: 20 },
+    { minMinutes: -1, maxMinutes: 20 },
+    { minMinutes: 10.5, maxMinutes: 20 },
+    { minMinutes: 10, maxMinutes: 20.5 },
+    { minMinutes: 20, maxMinutes: 10 },
+    { minMinutes: 10, maxMinutes: 1441 },
+    { minMinutes: NaN, maxMinutes: Infinity },
+  ])("잘못된 범위 %p는 정보 준비 중으로 표시한다", (value) => {
+    const malformed = { ...headways, weekday: value as HeadwayRange };
+    expect(headwayLabelFor(malformed, weekdayNow)).toBe("정보 준비 중");
+  });
+
+  it("계약상 최대 간격인 1440분도 표시한다", () => {
+    expect(headwayLabelFor({ ...headways, weekday: { minMinutes: 1, maxMinutes: 1440 } }, weekdayNow)).toBe("1~1440분");
+  });
+});
 
 describe("serviceStateFor", () => {
   describe("관측 시각이 시간표 안이면", () => {

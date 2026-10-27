@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import type { Board, DirectionInfo } from "@/shared/api/routeForecast.types";
+import { headwayLabelFor } from "./displayPolicy";
 import clockIcon from "../assets/route-summary-icons/clock.svg";
 import timerIcon from "../assets/route-summary-icons/timer.svg";
 import busIcon from "../assets/route-summary-icons/bus.svg";
@@ -7,10 +9,15 @@ import * as styles from "./BoardRouteSummary.css";
 interface BoardRouteSummaryProps {
   board: Board;
   direction: DirectionInfo;
-  headwayLabel: string;
 }
 
-export function BoardRouteSummary({ board, direction, headwayLabel }: BoardRouteSummaryProps) {
+export function BoardRouteSummary({ board, direction }: BoardRouteSummaryProps) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   return (
     <div className={styles.summary}>
       <h1 className={styles.routeNumber}>{board.route.displayName}</h1>
@@ -32,7 +39,7 @@ export function BoardRouteSummary({ board, direction, headwayLabel }: BoardRoute
             <dt className={styles.label}>배차 간격</dt>
             <dd className={styles.value}>
               <img className={styles.summaryIcon} src={timerIcon} alt="" draggable={false} />
-              <span>{headwayLabel}</span>
+              <span>{headwayLabelFor(board.route.headways, now)}</span>
             </dd>
           </div>
           <div className={styles.detail}>
