@@ -175,10 +175,13 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
             }
             onClick={() => {
               const added = favoriteAddedPropertiesOf(groups, target, ids);
-              void run(() => saveFavoriteSelections(target, ids)).then((ok) => {
-                if (!ok) return;
-                if (added) track("favorite_added", added);
-                onSaved();
+              void run(async () => {
+                const result = await saveFavoriteSelections(target, ids);
+                // 저장 중에 화면을 떠나도 서버에는 담겼으니, 화면 상태가 아니라 저장 결과로 기록한다.
+                if (result.ok && added) track("favorite_added", added);
+                return result;
+              }).then((ok) => {
+                if (ok) onSaved();
               });
             }}
           >
