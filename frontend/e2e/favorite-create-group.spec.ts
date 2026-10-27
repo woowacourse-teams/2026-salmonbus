@@ -156,3 +156,51 @@ test("그룹 생성 후 목록 갱신이 느려도 누락 오류나 중복 생�
   await expect(dialog.getByRole("checkbox", { name: /통학/ })).toBeChecked();
   await expect(dialog.getByRole("button", { name: "저장", exact: true })).toBeEnabled();
 });
+
+test("그룹 만들기 중 홈으로 이동하면 늦은 응답이 마이페이지로 되돌리지 않는다", async ({ page, favorites }) => {
+  let finish!: () => void;
+  const release = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  await page.route("**/api/me/favorite-groups", async (route) => {
+    if (route.request().method() === "POST") await release;
+    await route.fallback();
+  });
+  await page.goto("/mypage/groups/new");
+  await page.getByRole("textbox", { name: "그룹 이름", exact: true }).fill("통학");
+  const started = page.waitForRequest((request) => request.method() === "POST");
+  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await started;
+  await page.getByRole("link", { name: "홈", exact: true }).click();
+  const response = page.waitForResponse((response) => response.request().method() === "POST");
+  finish();
+  await (await response).finished();
+  await page.clock.runFor(32);
+  await expect(page).toHaveURL("/");
+  await expect(page.getByRole("tab", { name: "즐겨찾기", exact: true })).toBeVisible();
+  expect(favorites.groups.map((group) => group.name)).toEqual(["즐겨찾기", "통학"]);
+});
+
+test("주소가 바뀐 뒤 도착한 그룹 만들기 응답은 화면을 옮기지 않는다", async ({ page, favorites }) => {
+  let finish!: () => void;
+  const release = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  await page.route("**/api/me/favorite-groups", async (route) => {
+    if (route.request().method() === "POST") await release;
+    await route.fallback();
+  });
+  await page.goto("/mypage/groups/new");
+  await page.getByRole("textbox", { name: "그룹 이름", exact: true }).fill("통학");
+  const started = page.waitForRequest((request) => request.method() === "POST");
+  await page.getByRole("button", { name: "만들기", exact: true }).click();
+  await started;
+  await page.evaluate(() => history.pushState(null, "", "/"));
+  const response = page.waitForResponse((response) => response.request().method() === "POST");
+  finish();
+  await (await response).finished();
+  await page.clock.runFor(32);
+  await expect(page.getByRole("button", { name: "만들기", exact: true })).toBeEnabled();
+  await expect(page).toHaveURL("/");
+  expect(favorites.groups.map((group) => group.name)).toEqual(["즐겨찾기", "통학"]);
+});

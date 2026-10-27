@@ -110,3 +110,10 @@ export const stops = style({
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 });
+
+export const newBadge = style({
+  gridColumn: 3,
+  color: vars.color.brand,
+  fontSize: "12px",
+  fontWeight: 800,
+});

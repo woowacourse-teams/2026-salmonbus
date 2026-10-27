@@ -1,10 +1,15 @@
 import { directionLabelOf } from "@/shared/utils/directionLabelOf";
+import { stopsAwayLabelOf } from "@/shared/utils/stopsAwayLabelOf";
 import { useEffect, useReducer, useRef, useState, type KeyboardEvent } from "react";
 import { Link } from "react-router";
 import type { FavoriteStatus, FavoriteTarget, HomeFavorite } from "@/shared/api/favorites.types";
 import { latestSuccessOf } from "@/shared/api/polledResource";
 import { SeatCountBadge } from "@/shared/components/SeatCountBadge";
 import { toSeatEstimate, toSeatLevel } from "@/shared/utils/seatGrade";
+import { seatLabelOf } from "@/shared/utils/seatLabelOf";
+import { toRemainingTime } from "@/shared/utils/remainingTime";
+import { remainingTimeLabelOf } from "@/shared/utils/remainingTimeLabelOf";
+import { boardEntryStateFor } from "@/shared/routing/boardEntry";
 import { boardPathFor, favoritePath } from "@/shared/routing/paths";
 import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
@@ -204,6 +209,7 @@ function FavoriteCard({ favorite, savedDirection, elapsed, onRetry }: FavoriteCa
             ? favoritePath({ routeId: favorite.route.id, stopId: favorite.stop.stopId, direction })
             : boardPathFor(favorite.route.id)
         }
+        state={boardEntryStateFor("favorite")}
       >
         <div className={homeStyles.heading}>
           <RouteBadge>{favorite.route.displayName || "노선 정보 없음"}</RouteBadge>
@@ -214,23 +220,25 @@ function FavoriteCard({ favorite, savedDirection, elapsed, onRetry }: FavoriteCa
           {favorite.status === "READY" && favorite.approachingVehicles.length > 0 ? (
             <ul className={homeStyles.rows}>
               {favorite.approachingVehicles.map((vehicle, index) => {
-                const remaining =
-                  vehicle.eta.status === "AVAILABLE" ? Math.max(0, vehicle.eta.remainingSeconds - elapsed) : null;
+                const time = toRemainingTime(
+                  vehicle.eta.status === "AVAILABLE" ? vehicle.eta.remainingSeconds - elapsed : null,
+                );
                 const forecast = vehicle.forecast;
-                const timingAvailable = remaining !== null && remaining > 0;
+                const arrived = vehicle.remainingStops === 0;
                 const tone =
                   forecast.status === "AVAILABLE" ? toSeatLevel(forecast.seatAvailableProbability) : "unavailable";
                 const estimate = toSeatEstimate(forecast.status === "AVAILABLE" ? forecast.expectedSeats : undefined);
-                const label = estimate.kind === "unknown" ? "좌석 정보 없음" : `도착 시 ${estimate.seats}석 예상해요`;
                 return (
                   <li className={homeStyles.arrival} key={vehicle.vehicleId ?? index}>
                     <span className={homeStyles.timing}>
-                      <span className={timingAvailable ? homeStyles.eta : homeStyles.unavailableEta}>
-                        {timingAvailable ? `${Math.ceil(remaining / 60)}분 남음` : "도착 정보 없음"}
+                      {!arrived && time.kind === "known" && (
+                        <span className={homeStyles.eta}>{remainingTimeLabelOf(time)}</span>
+                      )}
+                      <span className={arrived || time.kind === "unknown" ? homeStyles.eta : homeStyles.distance}>
+                        {stopsAwayLabelOf(vehicle.remainingStops)}
                       </span>
-                      <span className={homeStyles.distance}>{vehicle.horizonStops}정류장 전</span>
                     </span>
-                    <SeatCountBadge tone={tone} className={homeStyles.seatBadge[tone]} label={label} />
+                    <SeatCountBadge tone={tone} className={homeStyles.seatBadge[tone]} label={seatLabelOf(estimate)} />
                   </li>
                 );
               })}

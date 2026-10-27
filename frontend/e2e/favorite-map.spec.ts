@@ -52,7 +52,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     const focused = await naverMap.snapshot();
     expect(focused.latitude).toBeCloseTo(point.y, 12);
     expect(focused.longitude).toBeCloseTo(point.x, 12);
-    await page.getByRole("slider", { name: "판정보드 높이" }).press("ArrowUp");
+    await page.getByRole("slider", { name: "판정보드 높이" }).press("ArrowDown");
     await page.clock.runFor(600);
     expect(await naverMap.snapshot()).toEqual(focused);
   });

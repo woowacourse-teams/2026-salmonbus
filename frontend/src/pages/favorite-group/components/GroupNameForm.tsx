@@ -4,6 +4,7 @@ import { createFavoriteGroup, renameFavoriteGroup } from "@/shared/api/favorites
 import type { FavoriteGroup } from "@/shared/api/favorites.types";
 import { groupNameError } from "@/shared/utils/favoritePolicy";
 import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
+import { useStillOnScreen } from "@/shared/routing/stillOnScreen";
 import * as buttons from "@/shared/styles/button.css";
 import * as formStyles from "@/shared/styles/form.css";
 import * as styles from "./GroupNameForm.css";
@@ -24,13 +25,14 @@ export function GroupNameForm({ group, onRenamed }: GroupNameFormProps) {
   const [name, setName] = useState(group?.name ?? "");
   const { busy, error, setError, run } = useFavoriteAction();
   const navigate = useNavigate();
+  const isStillOnScreen = useStillOnScreen();
   const invalid = groupNameError(name);
   async function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (invalid || name.trim() === group?.name) return;
     if (await run(() => (group ? renameFavoriteGroup(group.id, name) : createFavoriteGroup(name)))) {
       if (onRenamed) onRenamed();
-      else void navigate("/mypage", { replace: true, state: { notice: "그룹을 만들었어요" } });
+      else if (isStillOnScreen()) void navigate("/mypage", { replace: true, state: { notice: "그룹을 만들었어요" } });
     }
   }
   return (

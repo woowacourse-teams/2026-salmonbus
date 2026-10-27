@@ -1,4 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
+import { PHONE_MEDIA } from "@/shared/styles/media";
 import { vars } from "@/shared/styles/tokens.css";
 
 export const shell = style({
@@ -6,6 +7,7 @@ export const shell = style({
   flexDirection: "column",
   width: "100%",
   maxWidth: 425,
+  "@media": { [PHONE_MEDIA]: { maxWidth: "none" } },
   minHeight: "100dvh",
   margin: "0 auto",
   background: "#FAF9F7",

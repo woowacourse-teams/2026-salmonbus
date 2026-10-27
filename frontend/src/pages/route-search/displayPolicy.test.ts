@@ -1,8 +1,13 @@
 import { describe, expect, it } from "@jest/globals";
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
 import { searchViewFor, submitSelectionFor, type RoutesState } from "./displayPolicy";
+import type { FirstSeenTimes } from "./new-route/newRoutePolicy";
+import type { InServiceRoute } from "./routeSearchPolicy";
 
-function createRoute(displayName: string): RouteSummary {
+const FIRST_SEEN_AT = Date.parse("2027-01-10T08:00:00+09:00");
+const NEW_PERIOD_MS = 7 * 24 * 60 * 60_000;
+
+function createRoute(displayName: string): InServiceRoute {
   return {
     id: displayName,
     displayName,
@@ -14,10 +19,15 @@ function createRoute(displayName: string): RouteSummary {
 
 const route5600 = createRoute("5600");
 const route3330 = createRoute("3330");
+const preparingRoute3100: RouteSummary = { ...createRoute("3100"), status: "PREPARING" };
+
+function createReadyState(firstSeenTimes: FirstSeenTimes, checkedAt: number): RoutesState {
+  return { status: "ready", routes: [route5600, route3330, preparingRoute3100], firstSeenTimes, checkedAt };
+}
 
 const loading: RoutesState = { status: "loading" };
 const failed: RoutesState = { status: "error" };
-const ready: RoutesState = { status: "ready", routes: [route5600, route3330] };
+const ready = createReadyState(new Map(), FIRST_SEEN_AT);
 
 describe("searchViewFor", () => {
   describe("목록 조회에 실패하면", () => {
@@ -50,7 +60,40 @@ describe("searchViewFor", () => {
     });
 
     it("앞부분이 일치하는 노선을 보여준다", () => {
-      expect(searchViewFor(ready, "56")).toEqual({ kind: "matched", routes: [route5600] });
+      expect(searchViewFor(ready, "56")).toEqual({ kind: "matched", routes: [{ ...route5600, isNew: false }] });
+    });
+
+    it("준비 중 노선은 앞부분이 일치해도 보여주지 않는다", () => {
+      expect(searchViewFor(ready, "3")).toEqual({ kind: "matched", routes: [{ ...route3330, isNew: false }] });
+    });
+
+    it("준비 중 노선만 일치하면 결과 없음을 보여준다", () => {
+      expect(searchViewFor(ready, "31")).toEqual({ kind: "unmatched" });
+    });
+
+    it("새 노선으로 판단한 노선에만 새 노선 표시를 붙인다", () => {
+      const withNewRoute = createReadyState(
+        new Map([
+          ["5600", 0],
+          ["3330", FIRST_SEEN_AT],
+        ]),
+        FIRST_SEEN_AT,
+      );
+
+      expect(searchViewFor(withNewRoute, "3")).toEqual({ kind: "matched", routes: [{ ...route3330, isNew: true }] });
+      expect(searchViewFor(withNewRoute, "56")).toEqual({ kind: "matched", routes: [{ ...route5600, isNew: false }] });
+    });
+
+    it("처음 본 지 7일이 되기 직전에 확인하면 새 노선 표시를 붙인다", () => {
+      const beforeExpiry = createReadyState(new Map([["3330", FIRST_SEEN_AT]]), FIRST_SEEN_AT + NEW_PERIOD_MS - 1);
+
+      expect(searchViewFor(beforeExpiry, "3")).toEqual({ kind: "matched", routes: [{ ...route3330, isNew: true }] });
+    });
+
+    it("처음 본 지 7일이 된 시각에 확인하면 새 노선 표시를 붙이지 않는다", () => {
+      const atExpiry = createReadyState(new Map([["3330", FIRST_SEEN_AT]]), FIRST_SEEN_AT + NEW_PERIOD_MS);
+
+      expect(searchViewFor(atExpiry, "3")).toEqual({ kind: "matched", routes: [{ ...route3330, isNew: false }] });
     });
 
     it("일치하는 노선이 없으면 결과 없음을 보여준다", () => {
@@ -69,15 +112,27 @@ describe("submitSelectionFor", () => {
   });
 
   it("결과가 정확히 1개면 그 노선이 목록 첫 번째 자리의 엔터 대상이다", () => {
-    expect(submitSelectionFor({ kind: "matched", routes: [route5600] })).toEqual({
-      route: route5600,
+    expect(submitSelectionFor({ kind: "matched", routes: [{ ...route5600, isNew: false }] })).toEqual({
+      route: { ...route5600, isNew: false },
       position: 0,
       listedCount: 1,
     });
   });
 
+  it("엔터 대상은 목록에 붙은 새 노선 표시를 그대로 가진다", () => {
+    expect(submitSelectionFor({ kind: "matched", routes: [{ ...route5600, isNew: true }] })?.route.isNew).toBe(true);
+  });
+
   it("결과가 2개 이상이면 엔터 대상이 없다", () => {
-    expect(submitSelectionFor({ kind: "matched", routes: [route5600, route3330] })).toBeNull();
+    expect(
+      submitSelectionFor({
+        kind: "matched",
+        routes: [
+          { ...route5600, isNew: false },
+          { ...route3330, isNew: false },
+        ],
+      }),
+    ).toBeNull();
   });
 
   it("일치하는 노선이 없으면 엔터 대상이 없다", () => {

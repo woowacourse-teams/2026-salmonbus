@@ -8,6 +8,12 @@
 
 로컬 서버가 다른 API를 가리키면 dev 백엔드가 배포돼 있어도 로그인 버튼이 비활성화될 수 있습니다. 로컬 `/api/auth/session`이 JSON 200을 반환하는지 먼저 확인합니다. 실제 소셜 인증의 콜백은 서버에 등록된 dev origin으로 돌아오므로, 로그인 왕복은 같은 dev origin에서 검증합니다.
 
+## E2E 서버
+
+`pnpm test:e2e`는 env 파일을 읽지 않는 운영 빌드를 만든 뒤 `dist`를 정적 서버(`e2e/static-server.ts`)로 띄워 테스트합니다. 개인 `env/.env.development`, `env/.env.production`의 값은 E2E 번들에 들어가지 않습니다. 정적 서버는 `/api` 요청에 404를 돌려주고, 그 밖의 경로에는 `index.html`을 돌려줍니다.
+
+개발 서버로 확인하려면 `pnpm test:e2e:dev`를 실행합니다. 두 명령 모두 4173 포트를 쓰고, 이 포트에 다른 서버가 떠 있으면 그 서버를 재사용하지 않고 시작 전에 멈춥니다.
+
 ## 지도 공개 키 ID
 
 네이버 Maps Web Dynamic Map의 공개 키 ID를 `WEBPACK_NAVER_MAP_KEY_ID`로 전달합니다. 이 값은 브라우저 번들에 포함되는 공개 식별자이며, NAVER Cloud의 애플리케이션에 등록한 Web 서비스 URL에서 사용합니다.

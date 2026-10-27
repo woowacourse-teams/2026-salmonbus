@@ -1,13 +1,14 @@
 import { describe, expect, it } from "@jest/globals";
-import type { RouteSummary } from "@/shared/api/routeForecast.types";
+import type { ListedRoute } from "../displayPolicy";
 import { routeSelectedPropertiesOf, unmatchedQueryOf } from "./searchEventPolicy";
 
-const route: RouteSummary = {
+const route: ListedRoute = {
   id: "204000057",
   displayName: "3330",
   startStopName: "기점",
   endStopName: "종점",
   status: "FORECAST_READY",
+  isNew: false,
 };
 
 describe("routeSelectedPropertiesOf", () => {
@@ -15,7 +16,18 @@ describe("routeSelectedPropertiesOf", () => {
     expect(routeSelectedPropertiesOf({ route, position: 0, listedCount: 3 })).toEqual({
       route_id: "204000057",
       route_status: "FORECAST_READY",
+      is_new: false,
       result_position: 0,
+      result_count: 3,
+    });
+  });
+
+  it("새 노선을 고르면 새 노선이라고 담는다", () => {
+    expect(routeSelectedPropertiesOf({ route: { ...route, isNew: true }, position: 1, listedCount: 3 })).toEqual({
+      route_id: "204000057",
+      route_status: "FORECAST_READY",
+      is_new: true,
+      result_position: 1,
       result_count: 3,
     });
   });

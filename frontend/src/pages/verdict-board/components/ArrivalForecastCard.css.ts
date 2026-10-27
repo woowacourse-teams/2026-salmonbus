@@ -64,11 +64,6 @@ export const remainingTime = style({
   fontWeight: 600,
 });
 
-export const unavailableTime = style([
-  remainingTime,
-  { fontSize: vars.font.distance, color: vars.color.textSubtle, fontWeight: 500 },
-]);
-
 export const notice = style({
   display: "flex",
   alignItems: "center",

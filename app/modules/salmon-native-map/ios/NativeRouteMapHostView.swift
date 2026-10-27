@@ -87,6 +87,8 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   private var initialFitPending = false
   private var initialFitScheduled = false
   private var pendingCameraCommand: CameraCommand?
+  private var vehicleFocusKey: String?
+  private var vehicleFocusRevision = 0
   private var vehicleFocusInFlight = false
   private var readySent = false
   private var failed = false
@@ -154,23 +156,25 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     guard let bytes = message.data(using: .utf8), bytes.count <= 4_000_000 else { return }
     do {
       let envelope = try JSONDecoder().decode(MapEnvelope.self, from: bytes)
-      guard envelope.v == 1, !envelope.sessionId.isEmpty, envelope.sessionId.count <= 128,
-            envelope.revision >= 0,
+      let session = envelope.payload
+      guard envelope.v == 1, envelope.type.hasPrefix("map."),
+            !session.sessionId.isEmpty, session.sessionId.count <= 128, session.revision >= 0,
             let object = try JSONSerialization.jsonObject(with: bytes) as? [String: Any],
             let payload = object["payload"] else { return }
+      let command = String(envelope.type.dropFirst("map.".count))
       let payloadBytes = try JSONSerialization.data(withJSONObject: payload)
-      if envelope.type == "mount" {
-        if sessionId == envelope.sessionId && envelope.revision <= lastRevision { return }
+      if command == "mount" {
+        if sessionId == session.sessionId && session.revision <= lastRevision { return }
         reset()
-        sessionId = envelope.sessionId
-        lastRevision = envelope.revision
+        sessionId = session.sessionId
+        lastRevision = session.revision
         let nextScene = try JSONDecoder().decode(MapScene.self, from: payloadBytes)
         mount(nextScene)
         return
       }
-      guard sessionId == envelope.sessionId, envelope.revision > lastRevision else { return }
-      lastRevision = envelope.revision
-      switch envelope.type {
+      guard sessionId == session.sessionId, session.revision > lastRevision else { return }
+      lastRevision = session.revision
+      switch command {
       case "updateScene":
         updateScene(try JSONDecoder().decode(MapSceneState.self, from: payloadBytes))
       case "layout":
@@ -178,7 +182,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
         guard layout.valid else { fail("지도 표시 영역을 확인하지 못했어요"); return }
         mapLayout = layout
         applyLayout()
-        emit("ack", ["revision": envelope.revision])
+        emit("ack", ["appliedRevision": session.revision])
       case "motion":
         updateMotion(try JSONDecoder().decode(MotionPayload.self, from: payloadBytes))
       case "camera":
@@ -194,6 +198,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   }
 
   public func reset() {
+    cancelVehicleFocus()
     initializationTimer?.invalidate()
     initializationTimer = nil
     finishLocation(error: "unavailable")
@@ -318,6 +323,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     }
     refreshRouteStyles()
     let keys = Set(state.vehicles.map(\.key))
+    if let key = vehicleFocusKey, !keys.contains(key) { cancelVehicleFocus() }
     for key in Array(vehicleMarkers.keys) where !keys.contains(key) {
       vehicleMarkers.removeValue(forKey: key)?.mapView = nil
       motions.removeValue(forKey: key)
@@ -483,11 +489,8 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   }
 
   private func moveCamera(_ command: CameraCommand) {
+    cancelVehicleFocus()
     if command.command == "vehicle", command.key == nil {
-      if vehicleFocusInFlight {
-        mapView.cancelTransitions()
-        vehicleFocusInFlight = false
-      }
       if pendingCameraCommand?.command == "vehicle" {
         pendingCameraCommand = nil
         if !readySent { initialFitPending = true }
@@ -519,7 +522,34 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     let update = NMFCameraUpdate(scrollTo: coordinate, zoomTo: max(minimumZoom, mapView.cameraPosition.zoom))
     update.animation = UIAccessibility.isReduceMotionEnabled ? .none : .easeIn
     update.animationDuration = 0.35
+    vehicleFocusKey = command.command == "vehicle" ? command.key : nil
     vehicleFocusInFlight = command.command == "vehicle"
+    let revision = vehicleFocusRevision
+    mapView.moveCamera(update) { [weak self] cancelled in
+      guard let self, self.vehicleFocusRevision == revision else { return }
+      self.vehicleFocusInFlight = false
+      if cancelled { self.cancelVehicleFocus() }
+      else { self.followVehicle() }
+    }
+  }
+
+  private func cancelVehicleFocus() {
+    vehicleFocusRevision += 1
+    vehicleFocusKey = nil
+    let inFlight = vehicleFocusInFlight
+    vehicleFocusInFlight = false
+    if inFlight { mapView.cancelTransitions() }
+  }
+
+  private func followVehicle() {
+    guard !vehicleFocusInFlight, let key = vehicleFocusKey,
+          let marker = vehicleMarkers[key], readySent, !failed else { return }
+    let center = mapView.cameraPosition.target
+    let coordinate = marker.position
+    guard center.lat != coordinate.lat || center.lng != coordinate.lng else { return }
+    // CADisplayLink가 보간한 핀 좌표를 그대로 따라가며 SDK 애니메이션을 겹치지 않는다.
+    let update = NMFCameraUpdate(scrollTo: coordinate)
+    update.animation = .none
     mapView.moveCamera(update)
   }
 
@@ -550,6 +580,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
       if let coordinate { vehicleMarkers[key]?.position = coordinate.naver }
       active = active || moving
     }
+    followVehicle()
     refreshVehicleImages()
     if !active { stopDisplayLink() }
   }
@@ -601,6 +632,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   public func mapViewDidFinishLoadingMap(_ mapView: NMFMapView) { notifyReady() }
 
   public func mapView(_ mapView: NMFMapView, cameraWillChangeByReason reason: Int, animated: Bool) {
+    if reason == NMFMapChangedByGesture || reason == NMFMapChangedByControl { cancelVehicleFocus() }
     #if DEBUG
     lastCameraChangeReason = reason
     NSLog("[SalmonNativeMap] camera willChange reason=%@ animated=%@",
@@ -609,6 +641,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   }
 
   public func mapView(_ mapView: NMFMapView, cameraIsChangingByReason reason: Int) {
+    if reason == NMFMapChangedByGesture || reason == NMFMapChangedByControl { cancelVehicleFocus() }
     refreshStopAnchors()
     refreshVehicleImages()
     refreshRouteStyles()
@@ -618,7 +651,6 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   }
 
   public func mapViewCameraIdle(_ mapView: NMFMapView) {
-    vehicleFocusInFlight = false
     refreshStopAnchors()
     refreshVehicleImages()
     refreshRouteStyles()
@@ -651,6 +683,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   }
 
   private func fail(_ message: String) {
+    cancelVehicleFocus()
     failed = true
     readySent = false
     gate.captureAll = true
@@ -680,8 +713,11 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
 
   private func emit(_ type: String, _ payload: [String: Any]) {
     guard let sessionId else { return }
-    let event: [String: Any] = ["v": 1, "sessionId": sessionId, "revision": max(0, lastRevision),
-                                "type": type, "payload": payload]
+    // sessionId와 revision은 세션 값 자리라서 이벤트 payload 필드 이름으로 쓰지 않는다.
+    var body = payload
+    body["sessionId"] = sessionId
+    body["revision"] = max(0, lastRevision)
+    let event: [String: Any] = ["v": 1, "type": "map.\(type)", "payload": body]
     guard let data = try? JSONSerialization.data(withJSONObject: event),
           let message = String(data: data, encoding: .utf8) else { return }
     onMapEvent(["message": message])

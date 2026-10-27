@@ -6,7 +6,7 @@ import type { LiveVehicleView } from "../components/liveVehiclePolicy";
 import type { RouteMapData } from "./routeMapModel";
 import { loadNaverMaps, subscribeNaverMapAuthFailure } from "./naverSdk";
 import { createNaverRouteMap, type RouteMapAdapter } from "./naverMapAdapter";
-import { nativeMapCapability } from "@/shared/native-map/bridge";
+import { isNativeMapAvailable } from "@/shared/native-map/bridge";
 import { createNativeRouteMap, type NativeRouteMapAdapter } from "./nativeMapAdapter";
 import { reportNativeMapFailure } from "@/shared/error-tracking/errorTracking";
 import * as styles from "./RouteMap.css";
@@ -110,14 +110,12 @@ export function RouteMap(props: RouteMapProps) {
       failed = true;
       failMap(data, error);
     };
-    const capability = nativeMapCapability();
-    if (capability !== null && !nativeFailed) {
+    if (isNativeMapAvailable() && !nativeFailed) {
       const region = regionRef.current;
       if (region !== null) {
         try {
           const current = propsRef.current;
           const adapter = createNativeRouteMap({
-            capability,
             region,
             board: current.board,
             data,
@@ -241,7 +239,7 @@ export function RouteMap(props: RouteMapProps) {
   }, [vehicleFocusRequest, mapState, visible, runMapAction]);
 
   useEffect(() => {
-    if (nativeMapCapability() !== null && !nativeFailed) return;
+    if (isNativeMapAvailable() && !nativeFailed) return;
     return motion.subscribe(() => runMapAction((adapter) => adapter.moveVehicles(motion.frames)));
   }, [motion, runMapAction, nativeFailed]);
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createLatestRequestGate } from "@/shared/api/latestRequestGate";
 import { fetchRoutes } from "@/shared/api/routeForecast.api";
 import { searchViewFor, type RoutesState } from "./displayPolicy";
+import { recordSeenRoutes } from "./new-route/seenRouteStorage";
 
 export function useRouteSearch(initialInput: string) {
   const [input, setInput] = useState(initialInput);
@@ -15,15 +16,31 @@ export function useRouteSearch(initialInput: string) {
       if (!ticket.isLatest() || (!result.ok && result.failure.kind === "aborted")) {
         return;
       }
-      setRoutesState(result.ok ? { status: "ready", routes: result.body.routes } : { status: "error" });
+      if (!result.ok) {
+        setRoutesState({ status: "error" });
+        return;
+      }
+      const { routes } = result.body;
+      const checkedAt = Date.now();
+      setRoutesState({ status: "ready", routes, firstSeenTimes: recordSeenRoutes(routes, checkedAt), checkedAt });
     });
     return () => gate.close();
   }, [gate, attempt]);
+
+  const changeInput = (value: string) => {
+    const checkedAt = Date.now();
+    setInput(value);
+    setRoutesState((state) =>
+      state.status === "ready"
+        ? { status: "ready", routes: state.routes, firstSeenTimes: state.firstSeenTimes, checkedAt }
+        : state,
+    );
+  };
 
   const retry = () => {
     setRoutesState({ status: "loading" });
     setAttempt((current) => current + 1);
   };
 
-  return { input, view: searchViewFor(routesState, input), changeInput: setInput, retry };
+  return { input, view: searchViewFor(routesState, input), changeInput, retry };
 }

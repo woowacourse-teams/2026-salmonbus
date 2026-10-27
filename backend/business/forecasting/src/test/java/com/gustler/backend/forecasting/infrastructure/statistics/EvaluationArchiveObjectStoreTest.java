@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import com.gustler.backend.forecasting.api.evaluation.EvaluationArchiveObjects;
 import com.gustler.backend.forecasting.api.evaluation.EvaluationArchivePolicy;
 import com.gustler.backend.forecasting.application.evaluation.EvaluationArchiveStorage.Verification;
 import com.gustler.backend.forecasting.application.statistics.StatisticsArchiveReader;
@@ -16,9 +17,12 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +35,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
 
-/** AWS CLI 경계 대체 시험. 실제 S3 왕복 검증과 구분한다. */
+/** 객체 저장 경계 대체 시험. SDK의 HTTP 계약은 별도 시험에서 확인한다. */
 class EvaluationArchiveObjectStoreTest {
     private static final String ORIGINAL = """
         {"vehicle_observation_id":7,"target_stop_order":9,"route_version_id":3,"scoring_state":"LOST",\
@@ -47,7 +51,7 @@ class EvaluationArchiveObjectStoreTest {
     Path directory;
 
     @Test
-    void 원본의_모든_열과_빈값을_보존하고_다시_받은_내용을_확인한다() throws Exception {
+    void 정상_저장은_원본의_모든_열과_빈값을_보존하고_GET하지_않는다() throws Exception {
         // given
         EvaluationArchiveObjectStore store = store(1024 * 1024);
 
@@ -61,8 +65,7 @@ class EvaluationArchiveObjectStoreTest {
         assertThat(JsonMapper.builder().build().readTree(copied).size()).isEqualTo(16);
         assertThat(verified.manifestSha256()).isEqualTo(
             EvaluationArchiveFiles.digest(objects.values.get(prefix() + "manifest.json")));
-        assertThat(objects.actions).containsExactly("put:evaluations.jsonl", "get:evaluations.jsonl",
-            "put:manifest.json", "get:manifest.json");
+        assertThat(objects.actions).containsExactly("put:evaluations.jsonl", "put:manifest.json");
         assertDirectoryEmpty();
     }
 
@@ -77,6 +80,8 @@ class EvaluationArchiveObjectStoreTest {
         // then
         assertThat(repeated).isEqualTo(first);
         assertThat(objects.values).hasSize(2);
+        assertThat(objects.actions).containsExactly("put:evaluations.jsonl", "put:manifest.json",
+            "put:evaluations.jsonl", "get:evaluations.jsonl", "put:manifest.json", "get:manifest.json");
     }
 
     @Test
@@ -117,8 +122,9 @@ class EvaluationArchiveObjectStoreTest {
     }
 
     @Test
-    void 업로드_뒤_다시_받은_자료가_바뀌면_설명_파일을_게시하지_않는다() {
+    void 업로드_응답이_유실된_뒤_다시_받은_자료가_바뀌면_설명_파일을_게시하지_않는다() {
         // given
+        objects.losePutResponse = true;
         objects.corruptDownloads = true;
 
         // when
@@ -130,6 +136,39 @@ class EvaluationArchiveObjectStoreTest {
             .isNotNull()
             .isInstanceOf(IllegalStateException.class);
         assertThat(objects.values).doesNotContainKey(prefix() + "manifest.json");
+    }
+
+    @Test
+    void 업로드_응답이_유실돼도_저장된_전체_내용이_같으면_성공한다() throws Exception {
+        // given
+        objects.losePutResponse = true;
+
+        // when
+        Verification verified = store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL)));
+
+        // then
+        assertThat(verified.manifestSha256()).isEqualTo(
+            EvaluationArchiveFiles.digest(objects.values.get(prefix() + "manifest.json")));
+        assertThat(objects.actions).containsExactly("put:evaluations.jsonl", "get:evaluations.jsonl",
+            "put:manifest.json", "get:manifest.json");
+        assertDirectoryEmpty();
+    }
+
+    @Test
+    void 임시_파일이_바뀌면_메모리_원본의_검증값으로_거절하고_설명_파일을_게시하지_않는다() throws Exception {
+        // given
+        objects.changeSource = true;
+
+        // when
+        Throwable failure = catchThrowable(() -> store(1024 * 1024).storeAndVerify(batch, List.of(row(ORIGINAL))));
+
+        // then
+        assertThat(failure).isInstanceOf(IllegalStateException.class);
+        assertThat(failure.getSuppressed()).hasSize(1);
+        assertThat(failure.getSuppressed()[0]).hasMessage("BadDigest");
+        assertThat(objects.values).isEmpty();
+        assertThat(objects.actions).containsExactly("put:evaluations.jsonl", "get:evaluations.jsonl");
+        assertDirectoryEmpty();
     }
 
     @Test
@@ -286,7 +325,7 @@ class EvaluationArchiveObjectStoreTest {
     }
 
     private EvaluationArchiveObjectStore store(final long maxBytes) {
-        return new EvaluationArchiveObjectStore(directory, maxBytes, objects::run);
+        return new EvaluationArchiveObjectStore(directory, maxBytes, objects);
     }
 
     @Test
@@ -421,47 +460,63 @@ class EvaluationArchiveObjectStoreTest {
         }
     }
 
-    private static final class MemoryObjects {
+    private static final class MemoryObjects implements EvaluationArchiveObjects {
         final Map<String, byte[]> values = new HashMap<>();
         final List<String> actions = new ArrayList<>();
         boolean failManifest;
         boolean corruptDownloads;
+        boolean losePutResponse;
+        boolean changeSource;
 
-        void run(List<String> args) {
-            String key = value(args, "--key");
-            assertThat(value(args, "--bucket")).isEqualTo("techcourse-project-2026");
-            assertThat(key).startsWith("salmonbus-be/evaluation-archive/v1/");
+        @Override
+        public void putIfAbsent(String bucket, String key, Path source, String checksumSha256) {
+            verifyLocation(bucket, key);
+            actions.add("put:" + key.substring(key.lastIndexOf('/') + 1));
+            if (values.containsKey(key) || failManifest && key.endsWith("manifest.json")) {
+                throw new IllegalStateException("업로드 실패 주입");
+            }
             try {
-                if (args.contains("put-object")) {
-                    actions.add("put:" + key.substring(key.lastIndexOf('/') + 1));
-                    assertThat(value(args, "--if-none-match")).isEqualTo("*");
-                    assertThat(value(args, "--tagging")).contains("ProjectTeam=salmonbus");
-                    if (values.containsKey(key) || failManifest && key.endsWith("manifest.json")) {
-                        throw new IllegalStateException("업로드 실패 주입");
-                    }
-                    values.put(key, Files.readAllBytes(Path.of(value(args, "--body"))));
+                if (changeSource) {
+                    Files.writeString(source, "changed before upload");
+                }
+                byte[] bytes = Files.readAllBytes(source);
+                String actual = Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-256").digest(bytes));
+                if (!actual.equals(checksumSha256)) {
+                    throw new IllegalStateException("BadDigest");
+                }
+                values.put(key, bytes);
+            } catch (IOException exception) {
+                throw new IllegalStateException(exception);
+            } catch (NoSuchAlgorithmException exception) {
+                throw new IllegalStateException(exception);
+            }
+            if (losePutResponse) {
+                throw new IllegalStateException("저장 후 응답 유실 주입");
+            }
+        }
 
-                    return;
-                }
-
-                actions.add("get:" + key.substring(key.lastIndexOf('/') + 1));
-                byte[] bytes = values.get(key);
-                if (bytes == null) {
-                    throw new IllegalStateException("객체 없음");
-                }
-                final int requested = Integer.parseInt(value(args, "--range").substring("bytes=0-".length())) + 1;
-                byte[] copied = Arrays.copyOf(bytes, Math.min(requested, bytes.length));
-                if (corruptDownloads) {
-                    copied[0] ^= 1;
-                }
-                Files.write(Path.of(args.getLast()), copied);
+        @Override
+        public void download(String bucket, String key, Path destination, long maxBytes) {
+            verifyLocation(bucket, key);
+            actions.add("get:" + key.substring(key.lastIndexOf('/') + 1));
+            byte[] bytes = values.get(key);
+            if (bytes == null) {
+                throw new IllegalStateException("객체 없음");
+            }
+            byte[] copied = Arrays.copyOf(bytes, Math.min(Math.toIntExact(maxBytes + 1), bytes.length));
+            if (corruptDownloads) {
+                copied[0] ^= 1;
+            }
+            try {
+                Files.write(destination, copied);
             } catch (IOException exception) {
                 throw new IllegalStateException(exception);
             }
         }
 
-        private static String value(List<String> args, String name) {
-            return args.get(args.indexOf(name) + 1);
+        private void verifyLocation(String bucket, String key) {
+            assertThat(bucket).isEqualTo("techcourse-project-2026");
+            assertThat(key).startsWith("salmonbus-be/evaluation-archive/v1/");
         }
     }
 }

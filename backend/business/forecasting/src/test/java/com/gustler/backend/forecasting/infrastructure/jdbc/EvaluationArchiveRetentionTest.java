@@ -639,6 +639,7 @@ class EvaluationArchiveRetentionTest {
         // then
         assertThat(liveCount()).isZero();
         assertThat(archived).hasSize(1);
+        assertThat(downloads).hasValue(0);
         assertThat(jdbc.sql("SELECT storage_state FROM evaluation_archive_batch WHERE route_version_id=?")
                 .param(route).query(String.class).single()).isEqualTo("PURGED");
     }
@@ -673,6 +674,22 @@ class EvaluationArchiveRetentionTest {
         // then
         assertThat(liveCount()).isZero();
         assertThat(location(reserved)).isEqualTo("PURGED");
+    }
+
+    @Test
+    void 검증_완료_뒤_재시작하면_S3_원본을_다시_읽어_삭제한다() {
+        // given
+        EvaluationArchiveBatch verified = ready();
+        jdbc.sql("UPDATE evaluation_archive_batch SET lease_until=clock_timestamp()-interval '1 second' WHERE id=?")
+            .param(verified.id()).update();
+
+        // when
+        automatic(true).advance();
+
+        // then
+        assertThat(downloads).hasValue(1);
+        assertThat(liveCount()).isZero();
+        assertThat(location(verified)).isEqualTo("PURGED");
     }
 
     @Test

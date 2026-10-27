@@ -1,5 +1,5 @@
 import type { Board } from "@/shared/api/routeForecast.types";
-import { createNativeMapChannel, type NativeMapCapability } from "@/shared/native-map/bridge";
+import { createNativeMapChannel } from "@/shared/native-map/bridge";
 import { startOverlayLayoutBridge } from "@/shared/native-map/overlayLayoutBridge";
 import type { NativeMapScene, NativeMapSceneState, NativeMapVehicle } from "@/shared/native-map/protocol";
 import type { StopSelection } from "../components/stopSelection";
@@ -15,7 +15,6 @@ export interface NativeRouteMapAdapter extends RouteMapAdapter {
 }
 
 export function createNativeRouteMap(options: {
-  capability: NativeMapCapability;
   region: HTMLElement;
   board: Board;
   data: RouteMapData;
@@ -27,9 +26,9 @@ export function createNativeRouteMap(options: {
   onReady: () => void;
   onError: (error: Error, reason?: "timeout" | "auth") => void;
 }): NativeRouteMapAdapter {
-  const { capability, region, board, data, motion, onSelect, onVehicleSelect, onDeselect, onReady, onError } = options;
+  const { region, board, data, motion, onSelect, onVehicleSelect, onDeselect, onReady, onError } = options;
   const initialSelection = options.initialSelection ?? null;
-  const channel = createNativeMapChannel(capability);
+  const channel = createNativeMapChannel();
   let vehicles: readonly LiveVehicleView[] = [];
   const sentPlans = new Map<string, string>();
   const locationRequests = new Map<

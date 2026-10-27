@@ -120,8 +120,12 @@ test("홈은 첫 그룹을 조회하고 탭 변경 시 선택한 그룹만 조�
       { exact: true },
     ),
   ).toBeVisible();
-  await expect(cards.getByText("도착 정보 없음")).toBeVisible();
-  await expect(cards.getByText("도착 시 1석 예상해요")).toBeVisible();
+  const arrivalRows = cards.getByRole("listitem").getByRole("listitem");
+  await expect(arrivalRows).toHaveText([
+    /7분 남음\s*3정류장 전\s*도착 시 7석 예상해요/,
+    /8분 남음\s*7정류장 전\s*도착 시 4석 예상해요/,
+    /11정류장 전\s*도착 시 1석 예상해요/,
+  ]);
   const queries = () => favorites.requests.filter((request) => request.path === "/api/me/favorites");
   expect(queries().every((request) => request.query.includes(defaultGroupId))).toBe(true);
   await page.getByRole("tab", { name: "즐겨찾기", exact: true }).press("ArrowRight");
@@ -132,6 +136,25 @@ test("홈은 첫 그룹을 조회하고 탭 변경 시 선택한 그룹만 조�
   await expect(page.getByRole("tab", { name: "즐겨찾기", exact: true })).toHaveAttribute("aria-selected", "true");
   await cards.getByRole("link").first().click();
   await expect(page).toHaveURL(`/routes/${routeId}?direction=UP&stopId=${up.stopId}`);
+});
+
+test("홈은 첫 차량의 ETA가 없어도 세 번째 차량의 유효한 ETA를 표시한다", async ({ page, favorites, api }) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  const stop = api.data.watch.stops.find((stop) => stop.boardingAllowed)!;
+  favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
+  favorites.etaByVehicleId = {
+    "0": { status: "UNAVAILABLE", reason: "VEHICLE_NOT_MATCHED" },
+    "2": { status: "AVAILABLE", expectedArrivalAt: "2026-09-16T08:09:00+09:00", remainingSeconds: 540 },
+  };
+  await page.goto("/");
+
+  const panel = page.getByRole("tabpanel");
+  await expect(panel.getByRole("link").first().getByRole("listitem")).toHaveText([
+    /^3정류장 전\s*도착 시 7석 예상해요$/,
+    /^8분 남음\s*7정류장 전\s*도착 시 4석 예상해요$/,
+    /^9분 남음\s*11정류장 전\s*도착 시 1석 예상해요$/,
+  ]);
+  await expect(panel.getByText(/확인 중|시간 정보 없음|도착 정보 없음/)).toHaveCount(0);
 });
 
 for (const reducedMotion of ["reduce", "no-preference"] as const) {
@@ -333,6 +356,7 @@ test("대표 그룹은 이름이 바뀌어도 보호하고 일반 그룹은 삭�
   await page.getByRole("textbox", { name: "그룹 이름", exact: true }).fill("  🚌통학  ");
   await page.getByRole("button", { name: "만들기", exact: true }).click();
   await expect(page).toHaveURL("/mypage");
+  await expect(page.getByText("그룹을 만들었어요", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: /🚌통학/ }).click();
   await page.getByRole("button", { name: "그룹 이름 변경", exact: true }).click();
   await page.getByRole("textbox", { name: "변경할 그룹 이름", exact: true }).fill("즐겨찾기");
@@ -413,7 +437,8 @@ for (const [status, label] of [
     if (status === "ERROR") {
       favorites.statuses[saved.id] = "READY";
       await panel.getByRole("button", { name: "다시 확인하기", exact: true }).click();
-      await expect(panel.getByText("도착 정보 없음")).toBeVisible();
+      await expect(panel.getByText("11정류장 전", { exact: true })).toBeVisible();
+      await expect(panel.getByText("시간 정보 없음")).toHaveCount(0);
     }
     expect(favorites.groups[0]!.favorites).toHaveLength(1);
   });
@@ -555,10 +580,16 @@ test("갱신 실패 중 도착 예정 시간이 지나면 시간을 감추고 �
   favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
   await page.goto("/");
   const panel = page.getByRole("tabpanel");
-  await expect(panel.getByText("도착 정보 없음", { exact: true })).toHaveCount(1);
+  await expect(panel.getByText("7분 남음", { exact: true })).toBeVisible();
+  await expect(panel.getByText("시간 정보 없음", { exact: true })).toHaveCount(0);
   favorites.unavailable = true;
   await page.clock.runFor(481_000);
-  await expect(panel.getByText("도착 정보 없음", { exact: true })).toHaveCount(3);
+  await expect(panel.getByRole("link").first().getByRole("listitem")).toHaveText([
+    /^3정류장 전\s*도착 시 7석 예상해요$/,
+    /^7정류장 전\s*도착 시 4석 예상해요$/,
+    /^11정류장 전\s*도착 시 1석 예상해요$/,
+  ]);
+  await expect(panel.getByText("시간 정보 없음", { exact: true })).toHaveCount(0);
   await expect(panel.getByText("도착 시 7석 예상해요", { exact: true })).toBeVisible();
   await expect(page.getByText("즐겨찾기를 불러오지 못했어요", { exact: true })).toHaveCount(0);
   expect(favorites.groups[0]!.favorites).toHaveLength(1);

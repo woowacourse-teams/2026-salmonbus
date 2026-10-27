@@ -78,14 +78,12 @@ export const timing = style({
   minWidth: 60,
   paddingLeft: 6,
 });
-export const eta = style({ color: vars.color.textStrong, fontSize: 12, fontWeight: 600, lineHeight: "17px" });
-export const unavailableEta = style({
-  color: vars.color.textSubtle,
-  fontSize: 10,
-  fontWeight: 500,
-  lineHeight: "14px",
-  maxWidth: "100%",
-  wordBreak: "keep-all",
+export const eta = style({
+  color: vars.color.textStrong,
+  fontSize: 12,
+  fontWeight: 600,
+  lineHeight: "17px",
+  whiteSpace: "nowrap",
 });
 export const distance = style({
   color: vars.color.textSubtle,

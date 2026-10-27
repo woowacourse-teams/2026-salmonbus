@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { track } from "@/shared/analytics/track";
 import type { FavoriteTarget } from "@/shared/api/favorites.types";
 import { Notice } from "@/shared/components/Notice";
 import { useFavorites } from "@/shared/hooks/useFavorites";
@@ -31,6 +32,13 @@ export function FavoriteButton({ className, target, stopName }: FavoriteButtonPr
         aria-pressed={registered}
         onClick={(event) => {
           event.currentTarget.focus({ preventScroll: true });
+          track("favorite_button_clicked", {
+            route_id: target.routeId,
+            direction: target.direction,
+            stop_id: target.stopId,
+            is_logged_in: auth.status === "authenticated",
+            is_registered: registered,
+          });
           reload();
           setOpen(registered ? "edit" : "new");
         }}

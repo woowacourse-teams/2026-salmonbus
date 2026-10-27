@@ -4,15 +4,17 @@ import { forecastFixtures } from "@/testing/forecastFixtures";
 import { arrivalViewsFor, representativeArrival, type ArrivalView } from "./arrivalPolicy";
 
 describe("arrivalViewsFor", () => {
-  it("거리순으로 정렬해도 도착 시간과 연결할 차량 ID를 유지한다", () => {
+  it("서버가 보낸 순서를 다시 정렬하지 않고 도착 시간과 연결할 차량 ID를 유지한다", () => {
     const arrivals = arrivalViewsFor([
-      { ...forecastFixtures.available, vehicleId: "far-bus", horizonStops: 7 },
-      { ...forecastFixtures.unavailable, vehicleId: "near-bus", horizonStops: 2 },
+      { ...forecastFixtures.available, vehicleId: "arrived-bus", remainingStops: 0 },
+      { ...forecastFixtures.unavailable, vehicleId: "far-bus", remainingStops: 7 },
+      { ...forecastFixtures.available, vehicleId: "near-bus", remainingStops: 2 },
     ]);
 
     expect(arrivals.map(({ vehicleId, stopsAway }) => ({ vehicleId, stopsAway }))).toEqual([
-      { vehicleId: "near-bus", stopsAway: 2 },
+      { vehicleId: "arrived-bus", stopsAway: 0 },
       { vehicleId: "far-bus", stopsAway: 7 },
+      { vehicleId: "near-bus", stopsAway: 2 },
     ]);
   });
 
@@ -23,7 +25,7 @@ describe("arrivalViewsFor", () => {
   });
 
   it("예측이 없어도 차량과 정류장 거리는 남기고 확률을 모름으로 표시한다", () => {
-    expect(arrivalViewsFor([{ ...forecastFixtures.unavailable, horizonStops: 7 }])).toEqual([
+    expect(arrivalViewsFor([{ ...forecastFixtures.unavailable, remainingStops: 7 }])).toEqual([
       { kind: "unavailable", vehicleId: null, stopsAway: 7 },
     ]);
   });
@@ -31,7 +33,7 @@ describe("arrivalViewsFor", () => {
   it("알 수 없는 예측 상태는 모름으로 표시한다", () => {
     const vehicle = {
       ...forecastFixtures.unavailable,
-      horizonStops: 7,
+      remainingStops: 7,
       forecast: { status: "UNKNOWN_STATUS" },
     } as unknown as ApproachingVehicle;
 
@@ -50,12 +52,12 @@ describe("arrivalViewsFor", () => {
     ]);
   });
 
-  it("예측 불가 차량도 거리순 최대 세 대에 포함하고 가장 가까우면 대표로 선택한다", () => {
+  it("예측 불가 차량도 앞의 세 대에 포함하고 서버가 맨 앞에 보낸 차량을 대표로 선택한다", () => {
     const vehicles = [
-      { ...forecastFixtures.available, horizonStops: 9 },
-      { ...forecastFixtures.available, horizonStops: 7 },
-      { ...forecastFixtures.unavailable, horizonStops: 1 },
-      { ...forecastFixtures.available, horizonStops: 3 },
+      { ...forecastFixtures.unavailable, remainingStops: 1 },
+      { ...forecastFixtures.available, remainingStops: 3 },
+      { ...forecastFixtures.available, remainingStops: 7 },
+      { ...forecastFixtures.available, remainingStops: 9 },
     ];
     const [first, ...rest] = arrivalViewsFor(vehicles);
     if (first === undefined) throw new Error("도착 예측이 비어 있습니다");
@@ -67,6 +69,5 @@ describe("arrivalViewsFor", () => {
       vehicleId: null,
       stopsAway: 1,
     });
-    expect(vehicles.map((vehicle) => vehicle.horizonStops)).toEqual([9, 7, 1, 3]);
   });
 });

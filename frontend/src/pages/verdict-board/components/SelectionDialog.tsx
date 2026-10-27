@@ -1,6 +1,6 @@
 import { useState, type SubmitEvent } from "react";
 import type { FavoriteTarget } from "@/shared/api/favorites.types";
-import { createFavoriteGroup, saveFavoriteSelections } from "@/shared/api/favorites.api";
+import { createFavoriteGroup } from "@/shared/api/favorites.api";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
 import { useFavorites } from "@/shared/hooks/useFavorites";
@@ -15,6 +15,7 @@ import {
   selectedGroups,
 } from "@/shared/utils/favoritePolicy";
 import plusIcon from "@/shared/assets/icons/favorite-group-plus.svg";
+import { useSaveFavoriteSelections } from "../hooks/useSaveFavoriteSelections";
 import * as styles from "./SelectionDialog.css";
 
 interface SelectionDialogProps {
@@ -28,6 +29,7 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
   const [chosen, setChosen] = useState<string[] | null>(null);
   const ids = chosen ?? selectedGroups(groups, target);
   const { run, busy, error, setError } = useFavoriteAction();
+  const saveSelections = useSaveFavoriteSelections(target);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [beforeCreation, setBeforeCreation] = useState<typeof resource | null>(null);
@@ -172,7 +174,7 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
               busy || refreshingGroups || resource.status !== "success" || groups.length === 0 || full || missing
             }
             onClick={() =>
-              void run(() => saveFavoriteSelections(target, ids)).then((ok) => {
+              void run(() => saveSelections(ids)).then((ok) => {
                 if (ok) onSaved();
               })
             }

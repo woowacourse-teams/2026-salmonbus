@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { AccountLayout } from "@/shared/components/AccountLayout";
+import { useStillOnScreen } from "@/shared/routing/stillOnScreen";
 import { LoginButton } from "@/shared/components/LoginButton";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { authErrorOf } from "@/shared/utils/authErrorOf";
@@ -53,13 +54,7 @@ export function NicknamePage() {
 }
 
 function NicknameForm({ current }: { current: string }) {
-  const active = useRef(false);
-  useEffect(() => {
-    active.current = true;
-    return () => {
-      active.current = false;
-    };
-  }, []);
+  const isStillOnScreen = useStillOnScreen();
   const { changeNickname } = useAuth();
   const navigate = useNavigate();
   const [nickname, setNickname] = useState(current);
@@ -73,11 +68,13 @@ function NicknameForm({ current }: { current: string }) {
     setBusy(true);
     setError(null);
     const result = await changeNickname(nickname);
-    if (!active.current) return;
     setBusy(false);
-    if (result.ok) {
-      void navigate("/mypage", { replace: true, state: { notice: "닉네임을 변경했어요" } });
-    } else setError(authErrorOf(result.failure));
+    if (!result.ok) {
+      setError(authErrorOf(result.failure));
+      return;
+    }
+    // 화면을 떠나는 중이어도 폼은 남아 있을 수 있으니 busy와 오류는 늘 정리하고, 마이페이지로 옮기는 건 아직 이 화면에 있을 때만 한다.
+    if (isStillOnScreen()) void navigate("/mypage", { replace: true, state: { notice: "닉네임을 변경했어요" } });
   }
 
   return (

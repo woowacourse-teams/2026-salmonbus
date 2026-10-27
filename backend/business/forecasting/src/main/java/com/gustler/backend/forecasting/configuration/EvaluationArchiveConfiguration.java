@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.configuration;
 
 import com.gustler.backend.forecasting.api.evaluation.AdvanceEvaluationArchive;
+import com.gustler.backend.forecasting.api.evaluation.EvaluationArchiveObjects;
 import com.gustler.backend.forecasting.api.evaluation.EvaluationArchivePolicy;
 import com.gustler.backend.forecasting.application.evaluation.AdvanceEvaluationArchiveService;
 import com.gustler.backend.forecasting.application.evaluation.ArchiveCompletedEvaluationsService;
@@ -27,8 +28,9 @@ public class EvaluationArchiveConfiguration {
     @Lazy
     EvaluationArchiveObjectStore evaluationArchiveObjectStore(
         @Value("${forecast.archive.work-directory:/var/lib/salmonbus/evaluation-archive}") Path directory,
-        @Value("${forecast.archive.max-file-bytes:4194304}") final long maxBytes) {
-        return new EvaluationArchiveObjectStore(directory, maxBytes);
+        @Value("${forecast.archive.max-file-bytes:4194304}") final long maxBytes,
+        EvaluationArchiveObjects objects) {
+        return new EvaluationArchiveObjectStore(directory, maxBytes, objects);
     }
 
     @Bean

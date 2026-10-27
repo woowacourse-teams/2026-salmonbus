@@ -4,6 +4,11 @@ plugins {
 }
 
 dependencies {
+    implementation platform('software.amazon.awssdk:bom:2.57.3')
+    implementation('software.amazon.awssdk:s3') {
+        exclude group: 'software.amazon.awssdk', module: 'netty-nio-client'
+    }
+    implementation 'software.amazon.awssdk:apache5-client'
     implementation project(':common')
     implementation project(':route-catalog')
     implementation project(':observations')

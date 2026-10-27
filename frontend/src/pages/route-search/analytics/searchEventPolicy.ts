@@ -10,6 +10,7 @@ export function routeSelectedPropertiesOf({
   return {
     route_id: route.id,
     route_status: route.status,
+    is_new: route.isNew,
     result_position: position,
     result_count: listedCount,
   };

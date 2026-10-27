@@ -1,25 +1,38 @@
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
-import { matchingRoutesFor } from "./routeSearchPolicy";
+import { newRouteIdsFor, type FirstSeenTimes } from "./new-route/newRoutePolicy";
+import { isInService, matchingRoutesFor, type InServiceRoute } from "./routeSearchPolicy";
 
-export type RoutesState = { status: "loading" } | { status: "error" } | { status: "ready"; routes: RouteSummary[] };
+export type RoutesState =
+  | { status: "loading"; routes?: never; firstSeenTimes?: never; checkedAt?: never }
+  | { status: "error"; routes?: never; firstSeenTimes?: never; checkedAt?: never }
+  | { status: "ready"; routes: RouteSummary[]; firstSeenTimes: FirstSeenTimes; checkedAt: number };
+
+export interface ListedRoute extends InServiceRoute {
+  isNew: boolean;
+}
 
 export type SearchView =
-  | { kind: "empty" }
-  | { kind: "loading" }
-  | { kind: "error" }
-  | { kind: "matched"; routes: RouteSummary[] }
-  | { kind: "unmatched" };
+  | { kind: "empty"; routes?: never }
+  | { kind: "loading"; routes?: never }
+  | { kind: "error"; routes?: never }
+  | { kind: "matched"; routes: ListedRoute[] }
+  | { kind: "unmatched"; routes?: never };
 
 export function searchViewFor(routesState: RoutesState, input: string): SearchView {
   if (routesState.status === "error") return { kind: "error" };
   if (input.trim() === "") return { kind: "empty" };
   if (routesState.status === "loading") return { kind: "loading" };
-  const matched = matchingRoutesFor(routesState.routes, input);
+  const { routes, firstSeenTimes, checkedAt } = routesState;
+  const newRouteIds = newRouteIdsFor(firstSeenTimes, checkedAt);
+  const matched = matchingRoutesFor(routes.filter(isInService), input).map((route) => ({
+    ...route,
+    isNew: newRouteIds.has(route.id),
+  }));
   return matched.length > 0 ? { kind: "matched", routes: matched } : { kind: "unmatched" };
 }
 
 export interface RouteSelection {
-  route: RouteSummary;
+  route: ListedRoute;
   position: number;
   listedCount: number;
 }

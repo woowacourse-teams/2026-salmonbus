@@ -21,9 +21,6 @@ const rowBase = style({
   columnGap: `calc(${vars.layout.nameX} - ${vars.layout.axisX} - ${vars.layout.ring} / 2)`,
   paddingRight: ROW_PADDING_RIGHT,
   selectors: {
-    '&[data-selected="true"]': {
-      boxShadow: `inset 3px 0 ${vars.color.focusRing}`,
-    },
     "&:focus-visible": {
       outline: `2px solid ${vars.color.focusRing}`,
       outlineOffset: "-2px",

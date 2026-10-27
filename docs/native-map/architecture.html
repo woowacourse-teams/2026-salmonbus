@@ -419,7 +419,7 @@ footer { margin-top:28px; padding-top:18px; border-top:1px solid var(--border); 
         ['web', '실제 영역 측정', '시트 + 버튼 영역'],
         ['gate', '좌표 변환 후 최신 영역 저장', 'layout + revision'],
         ['native', '최종 영역 적용·터치 판정 갱신', 'transitioning=false + 지도 ready 상태 확인'],
-        ['gate', '웹으로 적용 완료 알림', 'ack(revision) · 웹이 ACK를 기다려 해제하는 구조는 아님']
+        ['gate', '웹으로 적용 완료 알림', 'map.ack(appliedRevision) · 웹이 ACK를 기다려 해제하는 구조는 아님']
       ],
       detail: 'revision은 최신 명령 순서, ack는 layout 적용 알림. Native가 적용 시점에 터치를 판정하며 전달 지연은 남아 있음.'
     }
@@ -428,7 +428,7 @@ footer { margin-top:28px; padding-top:18px; border-top:1px solid var(--border); 
   const lifecycles = {
     ready: {
       steps: [
-        ['gate', '앱 기능 정보 확인', 'window.SalmonNativeMap · version: 1 · platform: ios'],
+        ['gate', '앱 기능 정보 확인', 'window.__SALMONBUS_APP__ · capabilities에 map 명령 7개'],
         ['native', '네이버 iOS 지도 준비', '새 sessionId · 경로와 마커 초기화'],
         ['web', '현재 화면 데이터 전체 전달', '경로 + 차량 + 선택 state + 웹 영역'],
         ['native', '데이터·영역 적용 완료', 'ready + ack'],

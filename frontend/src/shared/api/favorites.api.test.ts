@@ -20,7 +20,7 @@ const home = {
           approachingVehicles: [
             {
               vehicleId: null,
-              horizonStops: 3,
+              remainingStops: 3,
               forecast: { status: "AVAILABLE", seatAvailableProbability: 0.8, expectedSeats: 7.4 },
               eta: { status: "UNAVAILABLE", reason: "SOURCE_NOT_PROVIDED" },
             },
@@ -161,6 +161,16 @@ describe("즐겨찾기 API 연결", () => {
       .fn<typeof fetch>()
       .mockResolvedValue(new Response(JSON.stringify({ groups: [{ id: "invalid", name: "출근", favorites: [] }] })));
     expect(await fetchFavoriteGroups()).toMatchObject({ ok: false, failure: { kind: "malformed" } });
+  });
+  it("남은 정류장 수가 0 이상의 정수가 아니거나 없으면 거절한다", () => {
+    const missing = structuredClone(home);
+    Reflect.deleteProperty(missing.groups[0]!.favorites[0]!.approachingVehicles[0]!, "remainingStops");
+    expect(homeFavoritesFrom(missing)).toBeNull();
+    for (const invalid of [-1, 1.5, "3", null]) {
+      const response = structuredClone(home);
+      Reflect.set(response.groups[0]!.favorites[0]!.approachingVehicles[0]!, "remainingStops", invalid);
+      expect(homeFavoritesFrom(response)).toBeNull();
+    }
   });
   it("ETA가 없는 차량의 좌석 예보는 유효하며 잘못된 확률과 ETA는 거절한다", () => {
     expect(homeFavoritesFrom(home)).not.toBeNull();

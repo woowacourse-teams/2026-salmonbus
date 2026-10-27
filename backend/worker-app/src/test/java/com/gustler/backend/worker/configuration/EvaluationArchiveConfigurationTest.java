@@ -18,7 +18,8 @@ class EvaluationArchiveConfigurationTest {
     void 자동_이관을_꺼도_기존_S3_자료를_읽는_기능은_남는다() {
         // given
         ApplicationContextRunner runner =
-            new ApplicationContextRunner().withUserConfiguration(EvaluationArchiveConfiguration.class)
+            new ApplicationContextRunner().withUserConfiguration(EvaluationArchiveConfiguration.class,
+                    EvaluationArchiveStorageConfiguration.class)
                 .withPropertyValues("forecast.archive.enabled=false", "forecast.archive.work-directory=" + directory);
 
         // when
@@ -26,7 +27,11 @@ class EvaluationArchiveConfigurationTest {
 
             // then
             assertThat(context).hasNotFailed().doesNotHaveBean(AdvanceEvaluationArchive.class);
-            assertThat(context.getBeanProvider(StatisticsArchiveReader.class).getIfAvailable()).isNotNull();
+            assertThat(context.getBeanFactory().containsSingleton("evaluationArchiveObjects")).isFalse();
+            StatisticsArchiveReader reader = context.getBeanProvider(StatisticsArchiveReader.class).getIfAvailable();
+            assertThat(reader).isNotNull();
+            assertThat(context.getBeanFactory().containsSingleton("evaluationArchiveObjects")).isTrue();
+            assertThat(context.getBeanProvider(StatisticsArchiveReader.class).getIfAvailable()).isSameAs(reader);
         });
     }
 
@@ -34,7 +39,8 @@ class EvaluationArchiveConfigurationTest {
     void 이관_자료를_읽지_않는_서버는_작업_폴더가_없어도_시작한다() {
         // given
         ApplicationContextRunner runner =
-            new ApplicationContextRunner().withUserConfiguration(EvaluationArchiveConfiguration.class)
+            new ApplicationContextRunner().withUserConfiguration(EvaluationArchiveConfiguration.class,
+                    EvaluationArchiveStorageConfiguration.class)
                 .withPropertyValues("forecast.archive.enabled=false",
                     "forecast.archive.work-directory=" + directory.resolve("absent"));
 
@@ -43,6 +49,7 @@ class EvaluationArchiveConfigurationTest {
 
             // then
             assertThat(context).hasNotFailed().doesNotHaveBean(AdvanceEvaluationArchive.class);
+            assertThat(context.getBeanFactory().containsSingleton("evaluationArchiveObjects")).isFalse();
         });
     }
 }

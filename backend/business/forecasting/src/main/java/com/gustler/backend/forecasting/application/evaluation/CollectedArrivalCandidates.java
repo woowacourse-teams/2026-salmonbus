@@ -47,10 +47,7 @@ final class CollectedArrivalCandidates {
     }
 
     private static boolean isReturningAtFirstStop(int stop, Integer state) {
-        if (stop != 1 || state == null) {
-            return false;
-        }
-        return state != 2;
+        return stop == 1 && Integer.valueOf(1).equals(state);
     }
 
     private static int passedStopOrder(Row row) {
