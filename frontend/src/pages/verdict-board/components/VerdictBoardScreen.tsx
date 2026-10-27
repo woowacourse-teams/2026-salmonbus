@@ -279,11 +279,7 @@ function OperatingBoard({
                   <BoardBackLink inHeader />
                 </div>
               )}
-              <BoardRouteSummary
-                board={board}
-                direction={direction}
-                headwayLabel={__BOARD_MAP_PREVIEW__ ? "15–25분" : "정보 준비 중"}
-              />
+              <BoardRouteSummary board={board} direction={direction} />
               <DirectionTabs
                 directions={directionViewsFor(board)}
                 selected={direction.id}

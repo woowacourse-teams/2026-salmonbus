@@ -10,6 +10,35 @@ test.use({
   reducedMotion: "reduce",
 });
 
+test("watch 배차간격을 표시하고 다음 응답에 정보가 없으면 안내 문구로 바뀐다", async ({ page, api }) => {
+  await openBoard(page);
+  const summary = page.getByRole("definition").filter({ hasText: "15~25분" });
+  await expect(summary).toBeVisible();
+
+  api.data.watch.route.headways = { weekday: null, saturday: null, sunday: null, holiday: null };
+  const refreshed = page.waitForResponse(apiPaths.watch);
+  await page.clock.fastForward(pollIntervalMs);
+  await (await refreshed).finished();
+  await expect(page.getByText("정보 준비 중", { exact: true })).toBeVisible();
+  await expect(page.getByText("15~25분", { exact: true })).toHaveCount(0);
+
+  delete api.data.watch.route.headways;
+  const legacyResponse = page.waitForResponse(apiPaths.watch);
+  await page.clock.fastForward(pollIntervalMs);
+  await (await legacyResponse).finished();
+  await expect(page.getByText("정보 준비 중", { exact: true })).toBeVisible();
+});
+
+test("화면을 켜 둔 채 한국 시간 자정을 넘기면 새 응답 없이도 오늘의 배차간격으로 바뀐다", async ({ page, api }) => {
+  await page.clock.setSystemTime(new Date("2026-10-30T23:59:30+09:00"));
+  await openBoard(page);
+  await expect(page.getByText("15~25분", { exact: true })).toBeVisible();
+
+  api.mode.watch = "network-error";
+  await page.clock.runFor(60_000);
+  await expect(page.getByText("20~30분", { exact: true })).toBeVisible();
+});
+
 test("상행에서 하행으로 전환하면 하행 정류장만 순서대로 표시된다", async ({ page }) => {
   await openBoard(page);
   await directionButton(page, "UP").click();

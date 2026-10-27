@@ -29,6 +29,19 @@ export interface BoardRoute extends RouteCore {
   turnSequence: number | null;
   referenceVersionId: string;
   directions: [DirectionInfo, ...DirectionInfo[]];
+  headways?: RouteHeadways;
+}
+
+export interface HeadwayRange {
+  minMinutes: number;
+  maxMinutes: number;
+}
+
+export interface RouteHeadways {
+  weekday: HeadwayRange | null;
+  saturday: HeadwayRange | null;
+  sunday: HeadwayRange | null;
+  holiday: HeadwayRange | null;
 }
 
 export interface ModelInfo {

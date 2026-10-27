@@ -575,7 +575,7 @@ test("첫 화면은 70% 높이에 전체 노선을 맞추고 줌에 따라 정�
     expect(path.inside).toBe(true);
   });
   expect(await map(page).locator("[data-marker-kind='arrow']").count()).toBeGreaterThan(0);
-  await expect(sheet(page).getByText(/^(15–25분|정보 준비 중)$/)).toBeVisible();
+  await expect(sheet(page).getByText("15~25분", { exact: true })).toBeVisible();
   await expect(sheet(page).getByText("3대 운행 중", { exact: true })).toBeVisible();
   if (testInfo.project.name === "chromium") await page.screenshot({ path: "/tmp/sal284-board-initial.png" });
 
