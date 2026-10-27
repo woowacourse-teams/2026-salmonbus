@@ -1,4 +1,5 @@
 import { describe, expect, it, jest } from "@jest/globals";
+import { NATIVE_MAP_CAPABILITIES as APP_NATIVE_MAP_CAPABILITIES } from "../../../../app/native-map/nativeMapMessages";
 import { BRIDGE_EVENT } from "../bridge/bridge";
 import type { NativeMapEvent } from "./protocol";
 import { NATIVE_MAP_CAPABILITIES, createNativeMapChannel, isNativeMapAvailable, nativeMapEventFrom } from "./bridge";
@@ -14,15 +15,7 @@ function appWindow(capabilities: readonly string[] = NATIVE_MAP_CAPABILITIES) {
 
 describe("native map 메시지 목록", () => {
   it("앱의 app/native-map/nativeMapMessages.ts와 같은 목록이다", () => {
-    expect(NATIVE_MAP_CAPABILITIES).toEqual([
-      "map.mount",
-      "map.updateScene",
-      "map.motion",
-      "map.layout",
-      "map.camera",
-      "map.location",
-      "map.unmount",
-    ]);
+    expect(NATIVE_MAP_CAPABILITIES).toEqual(APP_NATIVE_MAP_CAPABILITIES);
   });
 });
 

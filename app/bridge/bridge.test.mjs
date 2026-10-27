@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import vm from 'node:vm';
 import { BRIDGE_EVENT, appBootstrapScriptFor, bridgeEventScriptFor, bridgeMessageFrom } from './bridge.ts';
-import { NATIVE_MAP_CAPABILITIES } from '../native-map/nativeMapMessages.ts';
 
 function webWindow() {
   const events = [];
@@ -71,19 +70,5 @@ describe('웹에 메시지 넘기기', () => {
     vm.runInContext(bridgeEventScriptFor({ type: 'map.error', payload }), context);
     assert.equal(events[0].detail.payload.polluted, undefined);
     assert.ok(Object.hasOwn(events[0].detail.payload, '__proto__'));
-  });
-});
-
-describe('지도 메시지 목록', () => {
-  it('웹의 NATIVE_MAP_CAPABILITIES와 같은 목록이다', () => {
-    assert.deepEqual(NATIVE_MAP_CAPABILITIES, [
-      'map.mount',
-      'map.updateScene',
-      'map.motion',
-      'map.layout',
-      'map.camera',
-      'map.location',
-      'map.unmount',
-    ]);
   });
 });
