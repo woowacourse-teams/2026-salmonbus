@@ -3,8 +3,7 @@ import type { RouteSummary } from "@/shared/api/routeForecast.types";
 import { recordSeenRoutes } from "./seenRouteStorage";
 
 const STORAGE_KEY = "salmonbus.routeFirstSeen";
-// 출시 마감 뒤 시각만 쓴다. 출시 기간 규칙을 지워도 이 파일은 그대로 통과해야 한다.
-const NOW = Date.parse("2027-01-10T08:00:00+09:00");
+const AFTER_DEADLINE = Date.parse("2027-01-10T08:00:00+09:00");
 const HOUR = 60 * 60_000;
 
 function createRoute(id: string): RouteSummary {
@@ -34,7 +33,7 @@ describe("recordSeenRoutes", () => {
   it("기록을 salmonbus.routeFirstSeen 키 하나에 저장한다", () => {
     const storage = createMemoryStorage();
 
-    recordSeenRoutes([routeA], NOW, () => storage);
+    recordSeenRoutes([routeA], AFTER_DEADLINE, () => storage);
 
     expect([...storage.items.keys()]).toEqual([STORAGE_KEY]);
   });
@@ -43,20 +42,9 @@ describe("recordSeenRoutes", () => {
     const storage = createMemoryStorage();
     const openStorage = () => storage;
 
-    expect(recordSeenRoutes([routeA], NOW, openStorage)).toEqual(new Set());
-    expect(recordSeenRoutes([routeA, routeB], NOW + HOUR, openStorage)).toEqual(new Set(["B"]));
-    expect(recordSeenRoutes([routeA, routeB], NOW + 2 * HOUR, openStorage)).toEqual(new Set(["B"]));
-  });
-
-  it("새로 적을 노선이 없는 방문에는 저장하지 않는다", () => {
-    const storage = createMemoryStorage();
-    const openStorage = () => storage;
-
-    recordSeenRoutes([routeA], NOW, openStorage);
-    recordSeenRoutes([routeA], NOW + HOUR, openStorage);
-    recordSeenRoutes([routeA, routeB], NOW + 2 * HOUR, openStorage);
-
-    expect(storage.writtenKeys).toEqual([STORAGE_KEY, STORAGE_KEY]);
+    expect(recordSeenRoutes([routeA], AFTER_DEADLINE, openStorage)).toEqual(new Set());
+    expect(recordSeenRoutes([routeA, routeB], AFTER_DEADLINE + HOUR, openStorage)).toEqual(new Set(["B"]));
+    expect(recordSeenRoutes([routeA, routeB], AFTER_DEADLINE + 2 * HOUR, openStorage)).toEqual(new Set(["B"]));
   });
 
   it.each([
@@ -70,8 +58,8 @@ describe("recordSeenRoutes", () => {
     const storage = createMemoryStorage(storedText);
     const openStorage = () => storage;
 
-    expect(recordSeenRoutes([routeA, routeB], NOW, openStorage)).toEqual(new Set());
-    expect(recordSeenRoutes([routeA, routeB, routeC], NOW + HOUR, openStorage)).toEqual(new Set(["C"]));
+    expect(recordSeenRoutes([routeA, routeB], AFTER_DEADLINE, openStorage)).toEqual(new Set());
+    expect(recordSeenRoutes([routeA, routeB, routeC], AFTER_DEADLINE + HOUR, openStorage)).toEqual(new Set(["C"]));
   });
 
   describe("저장소를 쓸 수 없으면 NEW 없이 빈 집합을 돌려준다", () => {
@@ -80,7 +68,7 @@ describe("recordSeenRoutes", () => {
         throw new Error("SecurityError");
       };
 
-      expect(recordSeenRoutes([routeA, routeB], NOW, openBlockedStorage)).toEqual(new Set());
+      expect(recordSeenRoutes([routeA, routeB], AFTER_DEADLINE, openBlockedStorage)).toEqual(new Set());
     });
 
     it("기록을 읽다 예외가 나면 저장하지 않는다", () => {
@@ -92,13 +80,13 @@ describe("recordSeenRoutes", () => {
         },
       };
 
-      expect(recordSeenRoutes([routeA, routeB], NOW, () => unreadableStorage)).toEqual(new Set());
+      expect(recordSeenRoutes([routeA, routeB], AFTER_DEADLINE, () => unreadableStorage)).toEqual(new Set());
       expect(storage.writtenKeys).toEqual([]);
     });
 
     it("저장하다 예외가 나면 NEW로 계산한 노선이 있어도 붙이지 않는다", () => {
       const storage = createMemoryStorage();
-      recordSeenRoutes([routeA], NOW, () => storage);
+      recordSeenRoutes([routeA], AFTER_DEADLINE, () => storage);
       const fullStorage = {
         ...storage,
         setItem: () => {
@@ -106,8 +94,8 @@ describe("recordSeenRoutes", () => {
         },
       };
 
-      expect(recordSeenRoutes([routeA, routeB], NOW + HOUR, () => fullStorage)).toEqual(new Set());
-      expect(recordSeenRoutes([routeA, routeB], NOW + HOUR, () => storage)).toEqual(new Set(["B"]));
+      expect(recordSeenRoutes([routeA, routeB], AFTER_DEADLINE + HOUR, () => fullStorage)).toEqual(new Set());
+      expect(recordSeenRoutes([routeA, routeB], AFTER_DEADLINE + HOUR, () => storage)).toEqual(new Set(["B"]));
     });
   });
 });

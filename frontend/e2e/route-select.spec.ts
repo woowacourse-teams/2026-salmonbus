@@ -154,7 +154,6 @@ test("이 기기에서 처음 본 서비스 중 노선에 7일 동안 NEW를 붙
   page,
   api,
 }) => {
-  // 다시 들어올 때 노선 목록을 캐시가 아니라 새 응답으로 받는다.
   api.cacheMaxAgeSeconds = 0;
   const status = page.getByRole("main").getByRole("status");
   const searchAgain = async () => {
@@ -167,7 +166,6 @@ test("이 기기에서 처음 본 서비스 중 노선에 7일 동안 NEW를 붙
   await openRouteSearch(page);
   await routeSearchInput(page).fill("3");
 
-  // fixture 시계가 출시 마감 전이라 처음 온 기기에서도 3330번은 NEW다.
   await expect(status).toHaveText("일치하는 노선 1개");
   await expect(
     page.getByRole("button", { name: "3330번 노선, 새 노선, 테스트 기점부터 테스트 종점 구간", exact: true }),

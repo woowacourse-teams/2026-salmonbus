@@ -21,7 +21,8 @@ export function useRouteSearch(initialInput: string) {
         return;
       }
       const { routes } = result.body;
-      setRoutesState({ status: "ready", routes, newRouteIds: recordSeenRoutes(routes, Date.now()) });
+      const newRouteIds = recordSeenRoutes(routes, Date.now());
+      setRoutesState({ status: "ready", routes, newRouteIds });
     });
     return () => gate.close();
   }, [gate, attempt]);

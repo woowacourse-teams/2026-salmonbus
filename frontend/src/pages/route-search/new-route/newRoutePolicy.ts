@@ -4,7 +4,6 @@ import { launchKnownRouteIdsFor } from "./newRouteLaunch";
 
 export type FirstSeenTimes = ReadonlyMap<string, number>;
 
-// 원래 알던 노선은 1970년에 처음 본 것으로 적어서 NEW 기간 계산만으로 걸러지게 한다.
 const KNOWN_BEFORE = 0;
 const NEW_PERIOD_MS = 7 * 24 * 60 * 60_000;
 
@@ -17,7 +16,8 @@ export function firstSeenTimesFor(
   const isFirstVisit = previous.size === 0;
   const times = new Map(previous);
   if (isFirstVisit) {
-    for (const id of launchKnownRouteIdsFor(now) ?? inServiceIds) times.set(id, KNOWN_BEFORE);
+    const knownBeforeIds = launchKnownRouteIdsFor(now) ?? inServiceIds;
+    for (const id of knownBeforeIds) times.set(id, KNOWN_BEFORE);
   }
   for (const id of inServiceIds) {
     if (!times.has(id)) times.set(id, now);
