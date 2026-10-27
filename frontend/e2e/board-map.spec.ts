@@ -30,17 +30,14 @@ function tab(page: Page, direction: "UP" | "DOWN") {
   });
 }
 
+const webFontStylesheet = /^https:\/\/fonts\.googleapis\.com\//;
+
 async function openMap(page: Page) {
+  // 위치를 재는 테스트가 외부 폰트 응답 속도와 성공 여부에 흔들리지 않게 폰트 CSS를 바로 비워서 돌려준다.
+  await page.route(webFontStylesheet, (route) => route.fulfill({ contentType: "text/css", body: "" }));
   await page.goto(`/routes/${routeId}`);
   await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
   await expect(page.getByTestId("naver-map-test-double")).toHaveCount(1);
-  await expect
-    .poll(async () => {
-      await page.clock.runFor(16);
-      return page.locator('link[rel="stylesheet"][href^="https://fonts.googleapis.com/"]').getAttribute("media");
-    })
-    .toBe("all");
-  await page.evaluate(() => document.fonts.ready);
   await page.clock.runFor(48);
   await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
 }
@@ -1950,4 +1947,44 @@ test("운행 종료 화면에는 지도와 바텀시트가 없다", async ({ pag
   await expect(map(page)).toHaveCount(0);
   await expect(handle(page)).toHaveCount(0);
   await expect(page.getByRole("button", { name: /방면 보기$/ })).toHaveCount(0);
+});
+
+test("폰트 CSS가 늦게 와도 첫 화면을 그리고, 도착한 뒤에도 전환이 시작되지 않는다", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  let releaseWebFont = () => {};
+  const webFontHeld = new Promise<void>((resolve) => {
+    releaseWebFont = resolve;
+  });
+  await page.route(webFontStylesheet, async (route) => {
+    await webFontHeld;
+    await route.fulfill({ contentType: "text/css", body: "" });
+  });
+  await page.addInitScript(() => {
+    const transitions: string[] = [];
+    Object.assign(window, { transitions });
+    document.addEventListener("transitionrun", (event) => transitions.push(event.propertyName), true);
+  });
+
+  await page.goto(`/routes/${routeId}`, { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
+
+  // 폰트 CSS가 첫 화면을 막으면 WebKit은 CSS가 도착한 뒤 스타일을 다시 계산하면서 행 높이와 글자색 전환을 시작한다.
+  releaseWebFont();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        [...document.styleSheets].some(
+          (sheet) =>
+            sheet.href?.startsWith("https://fonts.googleapis.com/") &&
+            matchMedia(sheet.media.mediaText || "all").matches,
+        ),
+      ),
+    )
+    .toBe(true);
+  expect(await page.evaluate(() => (window as unknown as { transitions: string[] }).transitions)).toEqual([]);
+
+  const stop = list(page).locator("li[data-stop-sequence='6'] button[aria-expanded]");
+  await stop.click();
+  await page.clock.runFor(400);
+  await expect(stop).toHaveAttribute("aria-expanded", "true");
 });
