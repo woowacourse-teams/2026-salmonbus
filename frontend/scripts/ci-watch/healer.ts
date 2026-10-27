@@ -104,7 +104,7 @@ export function promptFor(agent: Agent, failures: FailedTest[], reportDir: strin
     ...tests,
     "",
     `CI의 trace와 스크린샷은 ${reportDir} 아래에 있어요.`,
-    `셸에서 Playwright를 돌릴 때는 -c ${configFile}를 붙여 주세요.`,
+    "로컬 재현은 `test_run` 도구로 해 주세요.",
   ].join("\n");
 }
 

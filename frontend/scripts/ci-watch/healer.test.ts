@@ -55,6 +55,7 @@ describe("promptFor", () => {
     const prompt = promptFor("codex", [failure], "/state/123/artifact/playwright-report");
 
     expect(prompt).toContain("playwright_test_healer 에이전트로 실패한 테스트를 고쳐 주세요.");
+    expect(prompt).toContain("로컬 재현은 `test_run` 도구로 해 주세요.");
     expect(prompt).toContain("- [iphone-15] e2e/board-map.spec.ts:1463 › 확대한다");
     expect(prompt).toContain("CI 첫 실패 기록: /state/123/artifact/playwright-report/data/first.md");
   });
