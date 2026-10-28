@@ -6,6 +6,38 @@ import { routeId } from "./fixtures/mock-data";
 const test = mergeTests(mapTest, favoritesTest);
 
 for (const width of [320, 425]) {
+  test(`홈과 편집 카드의 방면은 ${width}px에서 단어 중간에 줄바꿈하지 않는다`, async ({ page, favorites, api }) => {
+    await page.setViewportSize({ width, height: 844 });
+    const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+    const terminal = "서울대학교병원장례식장앞";
+    api.data.watch.route.directions[0].terminalStopName = terminal;
+    favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: "UP" })];
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+    const suffixTops = (element: HTMLElement | SVGElement) => {
+      const node = element.firstChild!;
+      const length = node.textContent!.length;
+      return [length - 2, length - 1].map((index) => {
+        const range = document.createRange();
+        range.setStart(node, index);
+        range.setEnd(node, index + 1);
+        return range.getBoundingClientRect().top;
+      });
+    };
+    const direction = page.getByRole("tabpanel").getByText(`${terminal} 방면`, { exact: true });
+    await expect(direction).toBeVisible();
+    const homeTops = await direction.evaluate(suffixTops);
+    expect(homeTops[0]).toBe(homeTops[1]);
+    await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
+    const editorDirection = page
+      .getByRole("region", { name: "즐겨찾기 편집", exact: true })
+      .getByText(`${terminal} 방면`, { exact: true });
+    await expect(editorDirection).toBeVisible();
+    const editorTops = await editorDirection.evaluate(suffixTops);
+    expect(editorTops[0]).toBe(editorTops[1]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+
   test(`정보가 없는 카드는 ${width}px에서 안내와 재시도 버튼을 표시한다`, async ({ page, favorites, api }) => {
     await page.setViewportSize({ width, height: 844 });
     const stop = api.data.watch.stops.find((stop) => stop.boardingAllowed)!;

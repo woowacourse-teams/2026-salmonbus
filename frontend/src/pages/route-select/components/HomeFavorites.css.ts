@@ -58,6 +58,7 @@ export const direction = style({
   color: "#837B74",
   fontSize: 12,
   lineHeight: 1.4,
+  wordBreak: "keep-all",
 });
 export const forecast = style({
   overflow: "hidden",
