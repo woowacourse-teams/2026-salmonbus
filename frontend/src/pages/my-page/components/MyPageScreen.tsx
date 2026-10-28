@@ -7,6 +7,7 @@ import { LoginButton } from "@/shared/components/LoginButton";
 import { Notice } from "@/shared/components/Notice";
 import { GuestMyPage } from "./GuestMyPage";
 import { GroupList } from "./GroupList";
+import { PrivacySection } from "./PrivacySection";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { authErrorOf } from "@/shared/utils/authErrorOf";
 import * as buttonStyles from "@/shared/styles/button.css";
@@ -96,6 +97,7 @@ export function MyPageScreen() {
           >
             회원탈퇴<span aria-hidden="true">›</span>
           </button>
+          <PrivacySection />
         </>
       ) : state.status === "loading" ? (
         <p role="status" className={styles.caption}>
