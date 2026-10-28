@@ -40,7 +40,8 @@ CodeBuild는 `frontend/buildspec.yml`의 `pnpm build`로 정적 파일을 만듭
 Playwright Test Agents의 healer가 실패한 E2E를 로컬에서 다시 돌려 봅니다. 의도한 화면 변경이면 테스트를 고치고, 제품 버그로 보이면 테스트를 고치지 않고 보고합니다. healer와 healer를 부른 세션이 따르는 규칙은 [AGENTS.md](AGENTS.md)에 있습니다.
 
 - Claude Code와 Codex 모두 `frontend/`에서 실행해야 healer가 보입니다. 리포 루트에서 실행하면 보이지 않습니다.
-  - Claude Code: healer 정의 `.claude/agents/playwright-test-healer.md`, MCP 서버 설정 `.mcp.json`
+  - Claude Code: healer 정의 `.claude/agents/playwright-test-healer.md`, MCP 서버 설정 `.mcp.json`, 규칙을 불러오는 `CLAUDE.md`
+  - `CLAUDE.md`의 `@AGENTS.md` 줄은 지우지 않습니다. Claude Code는 이 폴더나 상위 폴더에 `CLAUDE.md`나 `CLAUDE.local.md`가 있으면 `AGENTS.md`를 스스로 읽지 않아서, 이 줄로 규칙을 불러옵니다.
   - Codex: healer 정의 `.codex/agents/playwright_test_healer.toml`, MCP 서버 설정 `.codex/config.toml`
 - 처음 실행할 때 허용이 필요합니다.
   - Claude Code: 시작할 때 `.mcp.json`의 `playwright-test` MCP 서버를 허용합니다.
