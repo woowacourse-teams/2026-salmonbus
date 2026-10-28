@@ -207,6 +207,9 @@ function FavoriteCard({ favorite, savedDirection, elapsed, onRetry }: FavoriteCa
           <p className={homeStyles.notice}>
             {favorite.status === "READY" ? STATUS_LABEL.ERROR : STATUS_LABEL[favorite.status]}
           </p>
+          {direction && (
+            <span className={homeStyles.direction}>{directionLabelOf(favorite.route.terminalStopName, direction)}</span>
+          )}
           {favorite.status === "ERROR" && <FavoritesRetryButton onRetry={onRetry}>다시 확인하기</FavoritesRetryButton>}
         </div>
       </li>

@@ -450,6 +450,31 @@ for (const [status, label] of [
   });
 }
 
+for (const width of [320, 425]) {
+  test(`구분이 필요한 즐겨찾기 두 개는 ${width}px에서 저장한 방면을 표시한다`, async ({ page, favorites, api }) => {
+    await page.setViewportSize({ width, height: 844 });
+    const up = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+    const down = api.data.watch.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed)!;
+    const first = storedFavorite({ routeId, stopId: up.stopId, direction: "UP" });
+    const second = storedFavorite({ routeId, stopId: down.stopId, direction: "DOWN" }, 5);
+    favorites.groups[0]!.favorites = [first, second];
+    favorites.statuses[first.id] = "AMBIGUOUS";
+    favorites.statuses[second.id] = "AMBIGUOUS";
+    await page.goto("/");
+    const panel = page.getByRole("tabpanel");
+    await expect(panel.getByText("승차할 정류장을 다시 확인해 주세요", { exact: true })).toHaveCount(2);
+    const cards = panel.getByRole("listitem");
+    await expect(cards).toHaveCount(2);
+    await expect(cards.first().getByText("상행", { exact: true })).toBeVisible();
+    await expect(cards.last().getByText("하행", { exact: true })).toBeVisible();
+    await expect(panel.getByRole("link")).toHaveCount(0);
+    await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
+    const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
+    await expect(editor.getByText("상행", { exact: true })).toBeVisible();
+    await expect(editor.getByText("하행", { exact: true })).toBeVisible();
+  });
+}
+
 test("정보가 없는 항목은 안내 카드로 남기고 정상 카드는 저장한 방면으로 이동한다", async ({ page, favorites, api }) => {
   const up = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
   const down = api.data.watch.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed)!;
