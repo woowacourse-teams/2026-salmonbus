@@ -4,6 +4,7 @@ import { useNavigate } from "react-router";
 import { deleteFavorite, deleteFavoriteGroup } from "@/shared/api/favorites.api";
 import type { FavoriteGroup, SavedFavorite } from "@/shared/api/favorites.types";
 import { latestSuccessOf } from "@/shared/api/polledResource";
+import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
 import { useHomeFavorites } from "@/shared/hooks/useFavorites";
@@ -40,7 +41,7 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
     lastCode >= 0xac00 && lastCode <= 0xd7a3 ? ((lastCode - 0xac00) % 28 === 0 ? "를" : "을") : " 그룹을";
   const protectedGroup = deleting === "group" && representative;
   return (
-    <section className="amp-mask">
+    <section {...maskedPropsFor()}>
       <FavoritesNotice resource={summary} onRetry={() => retry((value) => value + 1)} />
       <ul className={styles.list}>
         {group.favorites.map((favorite, index) => {
