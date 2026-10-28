@@ -5,6 +5,41 @@ import { routeId } from "./fixtures/mock-data";
 
 const test = mergeTests(mapTest, favoritesTest);
 
+test("겹치는 두 정류장명은 차이를 남기고 하나를 삭제하면 끝 말줄임으로 돌아간다", async ({ page, favorites, api }) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const [first, second] = api.data.watch.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
+  first!.name = "더샵지제역센트럴파크1.2단지(중)";
+  second!.name = "더샵지제역센트럴파크2.3단지(중)";
+  api.data.watch.route.displayName = "6801";
+  favorites.groups[0]!.favorites = [
+    storedFavorite({ routeId, stopId: first!.stopId, direction: "UP" }),
+    storedFavorite({ routeId, stopId: second!.stopId, direction: "UP" }, 5),
+  ];
+  await page.goto("/");
+  const labels = page.locator("[data-favorite-name]");
+  await expect(labels).toHaveCount(2);
+  await page.evaluate(() => document.fonts.ready);
+  await expect(labels.first().locator('[aria-hidden="true"]')).toContainText("1.2단지(중)");
+  await expect(labels.last().locator('[aria-hidden="true"]')).toContainText("2.3단지(중)");
+  await page.setViewportSize({ width: 375, height: 844 });
+  await expect(labels.locator('[aria-hidden="true"]')).toHaveCount(0);
+  await page.setViewportSize({ width: 320, height: 844 });
+  await expect(labels.locator('[aria-hidden="true"]')).toHaveCount(2);
+  await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
+  const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
+  await editor.getByRole("button", { name: `${second!.name} 삭제`, exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "즐겨찾기를 삭제할까요?", exact: true });
+  await dialog.getByRole("button", { name: "삭제하기", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await editor.getByRole("button", { name: "완료", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(labels).toHaveCount(1);
+  await expect(labels.locator('[aria-hidden="true"]')).toHaveCount(0);
+  await expect(labels).toHaveText(first!.name);
+  expect(await labels.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+});
+
 for (const width of [320, 425]) {
   test(`홈과 편집 카드의 방면은 ${width}px에서 단어 중간에 줄바꿈하지 않는다`, async ({ page, favorites, api }) => {
     await page.setViewportSize({ width, height: 844 });

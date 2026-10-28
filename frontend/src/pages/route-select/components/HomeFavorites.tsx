@@ -1,6 +1,6 @@
 import { directionLabelOf } from "@/shared/utils/directionLabelOf";
 import { stopsAwayLabelOf } from "@/shared/utils/stopsAwayLabelOf";
-import { useEffect, useReducer, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useReducer, useRef, useState, type KeyboardEvent } from "react";
 import { Link } from "react-router";
 import type { FavoriteStatus, FavoriteTarget, HomeFavorite } from "@/shared/api/favorites.types";
 import { latestSuccessOf } from "@/shared/api/polledResource";
@@ -21,6 +21,7 @@ import * as homeStyles from "./HomeFavorites.css";
 import * as buttons from "@/shared/styles/button.css";
 import { RouteBadge } from "@/shared/components/RouteBadge";
 import { visuallyHidden } from "@/shared/styles/accessibility.css";
+import { stopNameLabels } from "./stopNameLabels";
 
 const STATUS_LABEL: Record<Exclude<FavoriteStatus, "READY">, string> = {
   NO_VEHICLE: "도착 예정 차량이 없어요",
@@ -29,12 +30,15 @@ const STATUS_LABEL: Record<Exclude<FavoriteStatus, "READY">, string> = {
   AMBIGUOUS: "승차할 정류장을 다시 확인해 주세요",
   ERROR: "정류장 정보를 불러오지 못했어요",
 };
+const EMPTY_FAVORITES: HomeFavorite[] = [];
 
 export function HomeFavorites() {
   const { groups, resource, reload } = useFavorites();
   const [selected, setSelected] = useState<string | null>(null);
   const group = groups.find((candidate) => candidate.id === selected) ?? groups[0];
   const [ordering, setOrdering] = useState(false);
+  const list = useRef<HTMLUListElement>(null);
+  const [nameLabels, setNameLabels] = useState<Record<string, string>>({});
   const [animateGroup, setAnimateGroup] = useState(true);
   const changeMode = (editing: boolean) => {
     setAnimateGroup(false);
@@ -83,7 +87,60 @@ export function HomeFavorites() {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [shownLatest]);
-  const favorites = shownLatest?.body.groups.find((candidate) => candidate.id === shownGroup?.id)?.favorites ?? [];
+  const favorites =
+    shownLatest?.body.groups.find((candidate) => candidate.id === shownGroup?.id)?.favorites ?? EMPTY_FAVORITES;
+  useLayoutEffect(() => {
+    const elements = Array.from(list.current?.querySelectorAll<HTMLElement>("[data-favorite-name]") ?? []);
+    const firstElement = elements[0];
+    if (!firstElement) return;
+    const ruler = document.createElement("span");
+    ruler.setAttribute("aria-hidden", "true");
+    Object.assign(ruler.style, { position: "fixed", visibility: "hidden", left: "-10000px", whiteSpace: "nowrap" });
+    document.body.appendChild(ruler);
+    let active = true;
+    const update = () => {
+      if (!active) return;
+      const css = getComputedStyle(firstElement);
+      Object.assign(ruler.style, {
+        fontFamily: css.fontFamily,
+        fontSize: css.fontSize,
+        fontWeight: css.fontWeight,
+        fontStyle: css.fontStyle,
+        letterSpacing: css.letterSpacing,
+        fontKerning: css.fontKerning,
+      });
+      const inputs = elements.flatMap((element) => {
+        const favorite = favorites.find((item) => item.id === element.dataset.favoriteName);
+        if (!favorite?.stop.name) return [];
+        const direction =
+          favorite.stop.direction ?? shownGroup?.favorites.find((item) => item.id === favorite.id)?.direction;
+        return [
+          {
+            id: favorite.id,
+            name: favorite.stop.name,
+            group: JSON.stringify([favorite.route.id, direction]),
+            width: element.getBoundingClientRect().width,
+          },
+        ];
+      });
+      const next = stopNameLabels(inputs, (text) => {
+        ruler.textContent = text;
+        return ruler.getBoundingClientRect().width;
+      });
+      setNameLabels((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
+    };
+    const observer = new ResizeObserver(update);
+    elements.forEach((element) => observer.observe(element));
+    document.fonts.addEventListener("loadingdone", update);
+    void document.fonts.ready.then(update);
+    update();
+    return () => {
+      active = false;
+      observer.disconnect();
+      document.fonts.removeEventListener("loadingdone", update);
+      ruler.remove();
+    };
+  }, [favorites, ordering, resource.status, summary.status, shownGroup]);
   if (ordering)
     return (
       <div className={homeStyles.section}>
@@ -171,11 +228,12 @@ export function HomeFavorites() {
               <p className={homeStyles.homeEmptyDescription}>자주 타는 노선에서 즐겨찾기를 추가해 보세요!</p>
             </div>
           )}
-          <ul className={homeStyles.list}>
+          <ul ref={list} className={homeStyles.list}>
             {favorites.map((favorite) => (
               <FavoriteCard
                 key={favorite.id}
                 favorite={favorite}
+                displayStopName={nameLabels[favorite.id] ?? favorite.stop.name ?? ""}
                 savedDirection={
                   shownGroup?.favorites.find((candidate) => candidate.id === favorite.id)?.direction ?? null
                 }
@@ -193,12 +251,13 @@ export function HomeFavorites() {
 
 interface FavoriteCardProps {
   favorite: HomeFavorite;
+  displayStopName: string;
   savedDirection: FavoriteTarget["direction"] | null;
   elapsed: number;
   onRetry: () => void;
 }
 
-function FavoriteCard({ favorite, savedDirection, elapsed, onRetry }: FavoriteCardProps) {
+function FavoriteCard({ favorite, displayStopName, savedDirection, elapsed, onRetry }: FavoriteCardProps) {
   const direction = favorite.stop.direction ?? savedDirection;
   if (!favorite.route.displayName || !favorite.stop.name) {
     return (
@@ -231,7 +290,16 @@ function FavoriteCard({ favorite, savedDirection, elapsed, onRetry }: FavoriteCa
             {favorite.route.displayName || "노선 정보 없음"}
           </RouteBadge>
           <div className={homeStyles.stopNameAndDirection}>
-            <span className={homeStyles.stop}>{favorite.stop.name || "정류장 정보 없음"}</span>
+            <span className={homeStyles.stop} data-favorite-name={favorite.id}>
+              {displayStopName !== favorite.stop.name ? (
+                <>
+                  <span aria-hidden="true">{displayStopName}</span>
+                  <span className={visuallyHidden}>{favorite.stop.name}</span>
+                </>
+              ) : (
+                favorite.stop.name
+              )}
+            </span>
             <span className={homeStyles.direction}>{directionLabelOf(favorite.route.terminalStopName, direction)}</span>
           </div>
         </div>
