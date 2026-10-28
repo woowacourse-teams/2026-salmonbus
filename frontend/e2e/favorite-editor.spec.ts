@@ -270,6 +270,48 @@ test("편집 중 삭제는 확인·실패·재시도가 가능하고 다른 그�
   ]);
 });
 
+for (const width of [320, 425]) {
+  test(`편집 카드는 ${width}px에서 홈의 글자 크기를 유지하고 긴 정류장명을 모두 표시한다`, async ({
+    page,
+    favorites,
+    api,
+  }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+    stop.name = "분당서울대학교병원.장례식장.헬스케어혁신파크";
+    api.data.watch.route.directions[0].terminalStopName = "안양역";
+    favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
+    await page.goto("/");
+    const panel = page.getByRole("tabpanel");
+    const homeName = panel.getByText(stop.name, { exact: true });
+    const homeBadge = panel.getByText(api.data.watch.route.displayName, { exact: true });
+    await expect(homeName).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    const homeNameFont = await homeName.evaluate((element) => getComputedStyle(element).fontSize);
+    const homeNameWeight = await homeName.evaluate((element) => getComputedStyle(element).fontWeight);
+    const homeBadgeFont = await homeBadge.evaluate((element) => getComputedStyle(element).fontSize);
+    const homeNameHeight = (await homeName.boundingBox())!.height;
+    await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
+    const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
+    const name = editor.getByText(stop.name, { exact: true });
+    await expect(name).toBeVisible();
+    await expect(name).toHaveCSS("font-size", homeNameFont);
+    await expect(name).toHaveCSS("font-weight", homeNameWeight);
+    await expect(editor.getByText(api.data.watch.route.displayName, { exact: true })).toHaveCSS(
+      "font-size",
+      homeBadgeFont,
+    );
+    expect((await name.boundingBox())!.height).toBeGreaterThan(homeNameHeight);
+    expect(await name.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await expect(editor.getByRole("button", { name: `${stop.name} 삭제`, exact: true })).toBeVisible();
+    await expect(
+      editor.getByRole("button", { name: `${api.data.watch.route.displayName} · ${stop.name} 순서 변경`, exact: true }),
+    ).toBeVisible();
+  });
+}
+
 for (const width of [320, 425])
   test(`긴 그룹 이름 세 개와 정류장 이름도 ${width}px 편집 영역을 넘지 않고 취소할 수 있다`, async ({
     page,

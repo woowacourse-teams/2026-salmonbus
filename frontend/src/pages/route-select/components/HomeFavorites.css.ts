@@ -35,21 +35,7 @@ export const link = style({
   textDecoration: "none",
 });
 export const heading = style({ display: "flex", alignItems: "center", gap: 10, minWidth: 0 });
-export const routeBadge = style({
-  selectors: {
-    "&&": {
-      display: "flex",
-      alignSelf: "stretch",
-      alignItems: "center",
-      justifyContent: "center",
-      minWidth: 60,
-      padding: "0 10px",
-      borderRadius: 7,
-      fontSize: 18,
-      lineHeight: 1.4,
-    },
-  },
-});
+export const routeBadge = style({ alignSelf: "stretch" });
 export const stopInfo = style({
   display: "flex",
   flexDirection: "column",
