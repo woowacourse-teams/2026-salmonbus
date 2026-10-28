@@ -21,7 +21,7 @@ export function RouteSearchPage() {
   // 판정 보드에서 뒤로 가면 검색 화면을 거치지 않고 홈으로 간다.
   // 검색 화면이 첫 기록이면 그 자리를 홈으로 바꾼 뒤 보드를 쌓아서, 보드 앞에 홈이 있게 한다.
   const handleSelect = (selection: RouteSelection) => {
-    track("route_selected", routeSelectedPropertiesOf(selection));
+    track("route_selected", routeSelectedPropertiesOf(selection, input));
     const boardPath = boardPathFor(selection.route.id);
     if (location.key === "default") {
       void navigate(paths.routeSelect, { replace: true });
