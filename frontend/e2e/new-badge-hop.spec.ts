@@ -38,10 +38,11 @@ test("입력 전 목록이 보이고 1초가 지나면 보이는 NEW 배지 가�
   await openRouteSearch(page);
   await expect(page.getByRole("main").getByText("NEW", { exact: true })).toHaveCount(5);
 
-  await page.clock.runFor(900);
+  // 검색 화면을 여는 동안 시계가 100ms 흐르고, 그 사이 노선이 먼저 도착하면 타이머도 그만큼 먼저 시작된다.
+  await page.clock.runFor(800);
   expect(await hoppingBadgesOf(page)).toEqual([]);
 
-  await page.clock.runFor(100);
+  await page.clock.runFor(200);
   expect(await hoppingBadgesOf(page)).toEqual(["3330번 노선, 새 노선, 테스트 기점부터 테스트 종점 구간"]);
 });
 
