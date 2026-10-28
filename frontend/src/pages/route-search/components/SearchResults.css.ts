@@ -101,6 +101,8 @@ export const item = style({
   borderRadius: "12px",
   background: "transparent",
   textAlign: "left",
+  // 동작 줄이기 설정에서도 눌린 줄을 알 수 있게 배경은 움직임과 따로 둔다.
+  selectors: { "&:active": { backgroundColor: vars.color.pressedRowSurface } },
   "@media": {
     "(hover: hover)": {
       selectors: { "&:hover": { backgroundColor: vars.color.pressedRowSurface } },
@@ -110,11 +112,7 @@ export const item = style({
       scale: "1",
       transition: PRESS_OUT,
       selectors: {
-        "&:active": {
-          scale: `${PRESSED_SCALE}`,
-          transition: PRESS_IN,
-          backgroundColor: vars.color.pressedRowSurface,
-        },
+        "&:active": { scale: `${PRESSED_SCALE}`, transition: PRESS_IN },
       },
     },
   },

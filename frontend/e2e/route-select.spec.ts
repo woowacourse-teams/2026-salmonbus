@@ -191,13 +191,15 @@ test("노선 줄을 누르는 동안 줄이 살짝 작아지고 배경이 깔린
   await expect.poll(() => pressStyleOf(page)).toEqual({ scale: "0.98", backgroundColor: "rgb(242, 244, 246)" });
 });
 
-test("동작 줄이기 설정이면 노선 줄을 누르는 동안에도 크기가 그대로다", async ({ page }) => {
+// 데스크톱 프로젝트는 마우스가 줄 위에 있어 hover 배경도 같은 색이라, :active 배경은 hover가 없는 iphone-15에서 확인된다.
+// 동작 줄이기면 전환 없이 바로 바뀌어야 해서 기다리지 않고 한 번만 읽는다.
+test("동작 줄이기 설정이면 노선 줄을 누르는 동안 크기는 그대로고 배경만 깔린다", async ({ page }) => {
   await page.goto("/");
   await openRouteSearch(page);
 
   await pressRouteButton(page);
 
-  expect((await pressStyleOf(page)).scale).toBe("none");
+  expect(await pressStyleOf(page)).toEqual({ scale: "none", backgroundColor: "rgb(242, 244, 246)" });
 });
 
 test("입력하면 일치하는 노선을 서비스 중 노선 아래에 보여 준다", async ({ page }) => {
