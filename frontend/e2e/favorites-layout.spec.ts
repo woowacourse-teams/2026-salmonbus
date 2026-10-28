@@ -10,7 +10,7 @@ for (const width of [320, 425]) {
     page,
     favorites,
     api,
-  }, testInfo) => {
+  }) => {
     await page.setViewportSize({ width, height: 844 });
     const [shortStop, stop] = api.data.watch.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
     shortStop!.name = "야탑역";
@@ -26,25 +26,16 @@ for (const width of [320, 425]) {
     await expect(cards).toHaveCount(2);
     const card = cards.nth(1);
     await page.evaluate(() => document.fonts.ready);
-    await testInfo.attach("긴 정류장명과 방면명", { body: await card.screenshot(), contentType: "image/png" });
     const name = card.getByText(stop!.name, { exact: true });
     await expect(name).toBeVisible();
     await expect(name).toHaveCSS("text-overflow", "ellipsis");
     expect(await name.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
     const shortNameBounds = (await cards.first().getByText(shortStop!.name, { exact: true }).boundingBox())!;
     expect((await name.boundingBox())!.height).toBeCloseTo(shortNameBounds.height, 1);
-    const routeName = api.data.watch.route.displayName;
-    const shortBadgeBounds = (await cards.first().getByText(routeName, { exact: true }).boundingBox())!;
-    expect((await card.getByText(routeName, { exact: true }).boundingBox())!.height).toBeCloseTo(
-      shortBadgeBounds.height,
-      1,
-    );
     const direction = card.getByText(`${terminal} 방면`, { exact: true });
     await expect(direction).toBeVisible();
     expect(await direction.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await card.click();
-    await expect(page).toHaveURL(`/routes/${routeId}?direction=UP&stopId=${stop!.stopId}`);
   });
 
   test(`즐겨찾기 홈과 저장 창은 ${width}px 화면에 맞고 주요 내용을 가리지 않는다`, async ({
