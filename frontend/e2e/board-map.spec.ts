@@ -1821,7 +1821,10 @@ test("위쪽 정류장이 접힐 때 새로 펼친 정류장을 목록 상단으
   expect(nextTop).toBeLessThanOrEqual(originalTop + 1);
 });
 
-test("현재 위치 성공은 작은 반투명 원과 파란 점을 표시하고 권한 거부 안내는 잠시 뒤 닫는다", async ({ page, naverMap }) => {
+test("현재 위치 성공은 작은 반투명 원과 파란 점을 표시하고 권한 거부 안내는 잠시 뒤 닫는다", async ({
+  page,
+  naverMap,
+}) => {
   await openMap(page);
   await page.evaluate(() =>
     Object.defineProperty(navigator, "geolocation", {

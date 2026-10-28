@@ -14,10 +14,7 @@ interface NaverSize {
 }
 export interface NaverMap {
   getOptions(key: "gl"): boolean;
-  setOptions(options: {
-    scrollWheel: boolean;
-    disableDoubleClickZoom: boolean;
-  }): void;
+  setOptions(options: { scrollWheel: boolean; disableDoubleClickZoom: boolean }): void;
   getZoom(): number;
   setZoom(zoom: number, animate: boolean): void;
   zoomBy(delta: number, origin: NaverCoordinate, animate: boolean): void;
