@@ -21,7 +21,12 @@ export function initAnalytics() {
 
   amplitude.add(clientPropertiesPluginFor(clientPropertiesFrom(appHostFrom())));
   amplitude.initAll(__AMPLITUDE_API_KEY__, {
-    analytics: { autocapture: true, ...(appVersion ? { appVersion } : {}) },
+    analytics: {
+      autocapture: true,
+      // IP를 보내지 않으면 Amplitude가 IP로 지역도 추정하지 않는다.
+      trackingOptions: { ipAddress: false },
+      ...(appVersion ? { appVersion } : {}),
+    },
     sessionReplay: { sampleRate: 1 },
   });
 }
