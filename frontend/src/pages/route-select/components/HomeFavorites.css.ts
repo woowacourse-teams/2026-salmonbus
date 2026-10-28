@@ -59,6 +59,9 @@ export const stopInfo = style({
   overflowWrap: "anywhere",
 });
 export const stop = style({
+  overflow: "hidden",
+  whiteSpace: "nowrap",
+  textOverflow: "ellipsis",
   color: "#292A2D",
   fontSize: 16,
   fontWeight: 700,

@@ -6,30 +6,45 @@ import { routeId } from "./fixtures/mock-data";
 const test = mergeTests(mapTest, favoritesTest);
 
 for (const width of [320, 425]) {
-  test(`홈 즐겨찾기의 긴 정류장명과 방면명을 ${width}px 화면에서 모두 읽을 수 있다`, async ({
+  test(`홈 즐겨찾기의 긴 정류장명은 ${width}px 화면에서 한 줄 말줄임하고 방면명은 모두 표시한다`, async ({
     page,
     favorites,
     api,
   }, testInfo) => {
     await page.setViewportSize({ width, height: 844 });
-    const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
-    stop.name = "야탑역.종합버스터미널";
+    const [shortStop, stop] = api.data.watch.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
+    shortStop!.name = "야탑역";
+    stop!.name = "분당서울대학교병원.장례식장.헬스케어혁신파크";
     const terminal = "안양역.안양1번가.중앙시장.안양대교";
     api.data.watch.route.directions[0].terminalStopName = terminal;
-    favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: "UP" })];
+    favorites.groups[0]!.favorites = [
+      storedFavorite({ routeId, stopId: shortStop!.stopId, direction: "UP" }),
+      storedFavorite({ routeId, stopId: stop!.stopId, direction: "UP" }, 5),
+    ];
     await page.goto("/");
-    const card = page.getByRole("tabpanel").getByRole("link");
-    await expect(card).toHaveCount(1);
+    const cards = page.getByRole("tabpanel").getByRole("link");
+    await expect(cards).toHaveCount(2);
+    const card = cards.nth(1);
     await page.evaluate(() => document.fonts.ready);
     await testInfo.attach("긴 정류장명과 방면명", { body: await card.screenshot(), contentType: "image/png" });
-    for (const label of [stop.name, `${terminal} 방면`]) {
-      const text = card.getByText(label, { exact: true });
-      await expect(text).toBeVisible();
-      expect(await text.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-    }
+    const name = card.getByText(stop!.name, { exact: true });
+    await expect(name).toBeVisible();
+    await expect(name).toHaveCSS("text-overflow", "ellipsis");
+    expect(await name.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+    const shortNameBounds = (await cards.first().getByText(shortStop!.name, { exact: true }).boundingBox())!;
+    expect((await name.boundingBox())!.height).toBeCloseTo(shortNameBounds.height, 1);
+    const routeName = api.data.watch.route.displayName;
+    const shortBadgeBounds = (await cards.first().getByText(routeName, { exact: true }).boundingBox())!;
+    expect((await card.getByText(routeName, { exact: true }).boundingBox())!.height).toBeCloseTo(
+      shortBadgeBounds.height,
+      1,
+    );
+    const direction = card.getByText(`${terminal} 방면`, { exact: true });
+    await expect(direction).toBeVisible();
+    expect(await direction.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await card.click();
-    await expect(page).toHaveURL(`/routes/${routeId}?direction=UP&stopId=${stop.stopId}`);
+    await expect(page).toHaveURL(`/routes/${routeId}?direction=UP&stopId=${stop!.stopId}`);
   });
 
   test(`즐겨찾기 홈과 저장 창은 ${width}px 화면에 맞고 주요 내용을 가리지 않는다`, async ({
