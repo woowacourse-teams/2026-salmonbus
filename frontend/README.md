@@ -50,7 +50,8 @@ Playwright Test Agents의 healer가 실패한 E2E를 로컬에서 다시 돌려 
 - 부르는 예시
   - Claude Code: `playwright-test-healer 에이전트로 e2e/station-arrivals.spec.ts 실패를 고쳐 줘`. healer만 바로 쓰려면 `claude --agent playwright-test-healer`로 시작합니다.
   - Codex: `playwright_test_healer 에이전트로 e2e/station-arrivals.spec.ts 실패를 고쳐 줘`
+  - 실패한 파일과 줄, 프로젝트를 같이 알려 주면(예: `e2e/board-map.spec.ts:645 (chromium)`) healer가 그 테스트만 돌립니다. 파일만 알려 주면 그 파일만 돌리고, 파일도 알려 주지 않으면 돌리지 않고 실패한 파일과 줄을 알려 달라고 보고합니다.
 - healer는 마지막에 판정을 `테스트 수정`, `제품 버그 의심`, `판단 못 함` 중 하나로 보고합니다. `제품 버그 의심`과 `판단 못 함`이면 테스트는 그대로 두고 보고에 적힌 원인이나 근거를 확인합니다.
 - 개인 전역 지시(예: `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`)가 git 명령을 막으면 healer는 `AGENTS.md` 5번의 git 확인을 하지 못합니다. 이때 healer는 8번에 따라 테스트를 고치지 않고 `판단 못 함`으로 끝납니다.
 - healer는 커밋하지 않습니다. 고친 테스트는 사람이 diff를 리뷰하고 커밋합니다.
-- `npx playwright init-agents`를 다시 돌리면 두 healer 정의가 생성본으로 덮입니다. 다시 돌린 뒤에는 diff를 보고 `AGENTS.md`를 가리키는 문장과 Claude Code 정의의 `Bash` 도구를 되살리고, Codex 정의에 다시 생긴 `mcp_servers`는 지웁니다. Codex는 에이전트 파일의 `mcp_servers`를 쓰지 않아서 MCP 서버는 `.codex/config.toml`에 둡니다.
+- `npx playwright init-agents`를 다시 돌리면 두 healer 정의가 생성본으로 덮입니다. 다시 돌린 뒤에는 diff를 보고 `AGENTS.md`를 가리키는 문장, 실패한 테스트만 돌리라는 workflow 1번, Claude Code 정의의 `Bash` 도구를 되살리고, Codex 정의에 다시 생긴 `mcp_servers`는 지웁니다. Codex는 에이전트 파일의 `mcp_servers`를 쓰지 않아서 MCP 서버는 `.codex/config.toml`에 둡니다.
