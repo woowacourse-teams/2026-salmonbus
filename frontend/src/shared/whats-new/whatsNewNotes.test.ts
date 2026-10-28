@@ -3,7 +3,6 @@ import { WHATS_NEW_NOTES } from "./whatsNewNotes";
 
 const KST_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
-// 버전 PR에서 사람이 손으로 더하는 목록이라 잘못 적으면 그 소식이 에러 없이 안 뜬다. 여기서 먼저 막는다.
 describe("WHATS_NEW_NOTES", () => {
   it("번호는 양의 정수이고 겹치지 않으며 위로 갈수록 크다", () => {
     const ids = WHATS_NEW_NOTES.map((note) => note.id);

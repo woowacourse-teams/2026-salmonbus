@@ -12,7 +12,6 @@ const AUTO_SHOW_PERIOD_MS = 7 * 24 * 60 * 60_000;
 const KST_OFFSET_MS = 9 * 60 * 60_000;
 
 export function firstRecordFor(notes: readonly WhatsNewNote[], hasVisitedBefore: boolean): WhatsNewRecord {
-  // 처음 온 사람에게는 모든 소식이 새것이라 지금까지의 소식을 본 것으로 친다.
   return { lastSeenId: hasVisitedBefore ? 0 : latestIdOf(notes), autoShow: true, lastShownDay: null };
 }
 

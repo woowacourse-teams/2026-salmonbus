@@ -9,7 +9,6 @@ import {
 } from "./whatsNewPolicy";
 
 const STORAGE_KEY = "salmonbus.whatsNew";
-// NEW 배지 기록(SAL-231)이 있으면 새 소식 기능이 나오기 전부터 쓰던 기기다.
 const ROUTE_FIRST_SEEN_KEY = "salmonbus.routeFirstSeen";
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -56,8 +55,7 @@ function recordWhatsNewWith(
     if (stored === null) return;
     storage.setItem(STORAGE_KEY, JSON.stringify(nextRecordFor(stored)));
   } catch {
-    // 쓰기가 계속 실패하는 기기(저장 공간이 가득 찬 경우)는 같은 소식이 홈에 올 때마다 다시 뜰 수 있다.
-    // 드문 경우라 화면을 멈추지 않는 쪽을 고른다.
+    // 저장소에 쓰지 못해도 화면은 계속 쓰게 둔다. 이때는 같은 소식이 홈에 올 때마다 다시 뜬다.
   }
 }
 
