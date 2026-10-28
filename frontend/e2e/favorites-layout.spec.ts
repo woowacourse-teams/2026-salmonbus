@@ -6,6 +6,31 @@ import { routeId } from "./fixtures/mock-data";
 const test = mergeTests(mapTest, favoritesTest);
 
 for (const width of [320, 425]) {
+  test(`정보가 없는 카드는 ${width}px에서 안내와 재시도 버튼을 표시한다`, async ({ page, favorites, api }) => {
+    await page.setViewportSize({ width, height: 844 });
+    const stop = api.data.watch.stops.find((stop) => stop.boardingAllowed)!;
+    const saved = storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction });
+    favorites.groups[0]!.favorites = [saved];
+    favorites.statuses[saved.id] = "ERROR";
+    await page.goto("/");
+    const panel = page.getByRole("tabpanel");
+    const message = panel.getByText("정류장 정보를 불러오지 못했어요", { exact: true });
+    const retry = panel.getByRole("button", { name: "다시 확인하기", exact: true });
+    await expect(message).toBeVisible();
+    await expect(retry).toBeVisible();
+    await expect(panel.getByText("노선 정보 없음", { exact: true })).toHaveCount(0);
+    await expect(panel.getByText("정류장 정보 없음", { exact: true })).toHaveCount(0);
+    expect(await message.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    const retryBounds = (await retry.boundingBox())!;
+    expect(retryBounds.x).toBeGreaterThanOrEqual(0);
+    expect(retryBounds.x + retryBounds.width).toBeLessThanOrEqual(width);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    favorites.statuses[saved.id] = "READY";
+    await retry.click();
+    await expect(panel.getByText(stop.name, { exact: true })).toBeVisible();
+    await expect(message).toHaveCount(0);
+  });
+
   test(`홈 즐겨찾기의 긴 정류장명은 ${width}px 화면에서 한 줄 말줄임하고 방면명은 모두 표시한다`, async ({
     page,
     favorites,

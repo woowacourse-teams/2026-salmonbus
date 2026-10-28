@@ -137,6 +137,13 @@ export const notice = style({
   fontSize: 12,
   textAlign: "center",
 });
+export const unavailable = style({
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 8,
+  padding: "12px 0",
+});
 
 export const list = style({
   display: "flex",

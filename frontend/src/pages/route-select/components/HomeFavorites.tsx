@@ -12,7 +12,7 @@ import { remainingTimeLabelOf } from "@/shared/utils/remainingTimeLabelOf";
 import { boardEntryStateFor } from "@/shared/routing/boardEntry";
 import { boardPathFor, favoritePath } from "@/shared/routing/paths";
 import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
-import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
+import { FavoritesNotice, FavoritesRetryButton } from "@/shared/components/FavoritesNotice";
 import { FavoriteEditor } from "@/shared/components/favorite-editor/FavoriteEditor";
 import { Notice } from "@/shared/components/Notice";
 import bookmarkIcon from "@/shared/assets/icons/bookmark.svg";
@@ -27,7 +27,7 @@ const STATUS_LABEL: Record<Exclude<FavoriteStatus, "READY">, string> = {
   PREPARING: "도착 예보를 준비하고 있어요",
   UNAVAILABLE: "현재 노선에서 이 정류장을 이용할 수 없어요",
   AMBIGUOUS: "승차할 정류장을 다시 확인해 주세요",
-  ERROR: "이 즐겨찾기의 정보를 불러오지 못했어요",
+  ERROR: "정류장 정보를 불러오지 못했어요",
 };
 
 export function HomeFavorites() {
@@ -200,6 +200,18 @@ interface FavoriteCardProps {
 
 function FavoriteCard({ favorite, savedDirection, elapsed, onRetry }: FavoriteCardProps) {
   const direction = favorite.stop.direction ?? savedDirection;
+  if (!favorite.route.displayName || !favorite.stop.name) {
+    return (
+      <li className={homeStyles.card}>
+        <div className={homeStyles.unavailable}>
+          <p className={homeStyles.notice}>
+            {favorite.status === "READY" ? STATUS_LABEL.ERROR : STATUS_LABEL[favorite.status]}
+          </p>
+          {favorite.status === "ERROR" && <FavoritesRetryButton onRetry={onRetry}>다시 확인하기</FavoritesRetryButton>}
+        </div>
+      </li>
+    );
+  }
   return (
     <li className={homeStyles.card}>
       <Link
