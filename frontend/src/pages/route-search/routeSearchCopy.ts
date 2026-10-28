@@ -11,8 +11,8 @@ export const UNMATCHED_NOTICE = "일치하는 노선이 없어요";
 export const IN_SERVICE_TITLE = "서비스 중 노선";
 export const NEW_BADGE = "NEW";
 const NEW_ROUTE_LABEL = "새 노선";
-export const EMPTY_TITLE = "어떤 노선을 찾아볼까요?";
-export const EMPTY_DESCRIPTION = "노선 번호로 검색해 보세요.";
+export const EMPTY_TITLE = "지금 볼 수 있는 노선이 없어요";
+export const EMPTY_DESCRIPTION = "잠시 뒤에 다시 확인해 주세요.";
 
 export function matchedCountLabel(count: number): string {
   return `일치하는 노선 ${count}개`;
@@ -21,7 +21,7 @@ export function matchedCountLabel(count: number): string {
 export function searchStatusLabel(view: SearchView): string {
   switch (view.kind) {
     case "empty":
-      return "";
+      return `${EMPTY_TITLE}. ${EMPTY_DESCRIPTION}`;
     case "loading":
       return LOADING_NOTICE;
     case "error":

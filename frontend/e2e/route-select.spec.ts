@@ -158,6 +158,19 @@ test("입력 전에는 서비스 중 노선 전체를 번호 오름차순으로 
   ).toContainText("NEW");
 });
 
+test("서비스 중 노선이 하나도 없으면 입력 전에 볼 수 있는 노선이 없다고 알린다", async ({ page, api }) => {
+  api.data.routes.routes = api.data.routes.routes.map((route) => ({ ...route, status: "PREPARING" }));
+  await page.goto("/");
+  await openRouteSearch(page);
+
+  await expect(page.getByText("지금 볼 수 있는 노선이 없어요", { exact: true })).toBeVisible();
+  await expect(page.getByText("잠시 뒤에 다시 확인해 주세요.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("status")).toHaveText(
+    "지금 볼 수 있는 노선이 없어요. 잠시 뒤에 다시 확인해 주세요.",
+  );
+  await expect(inServiceSection(page)).toHaveCount(0);
+});
+
 test("입력 전 목록에서 노선을 누르면 그 노선의 판정 보드로 이동한다", async ({ page }) => {
   await page.goto("/");
   await openRouteSearch(page);
