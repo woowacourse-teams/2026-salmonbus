@@ -72,7 +72,11 @@ test("방향이 바뀔 때만 selection 진동을 보내고 같은 방향을 다
   expect(await appMessageTypes(page)).toEqual(["haptic.selection", "haptic.selection"]);
 });
 
-test("즐겨찾기를 저장하면 success 진동을 보낸다", async ({ page, api, favorites }) => {
+test("저장할 그룹을 체크하면 selection, 즐겨찾기를 저장하면 success 진동을 보낸다", async ({
+  page,
+  api,
+  favorites,
+}) => {
   const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
   await openInApp(page, `/routes/${routeId}?direction=UP`);
   await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
@@ -81,7 +85,7 @@ test("즐겨찾기를 저장하면 success 진동을 보낸다", async ({ page, 
   await dialog.getByRole("button", { name: "저장", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   expect(favorites.groups[0]!.favorites).toHaveLength(1);
-  expect(await appMessageTypes(page)).toEqual(["haptic.success"]);
+  expect(await appMessageTypes(page)).toEqual(["haptic.selection", "haptic.success"]);
 });
 
 test("저장 응답이 오기 전에 화면을 떠나면 결과 진동을 보내지 않는다", async ({ page, api, favorites }) => {
@@ -106,5 +110,5 @@ test("저장 응답이 오기 전에 화면을 떠나면 결과 진동을 보내
   finish();
   await expect(dialog).not.toBeVisible();
   expect(favorites.groups[0]!.favorites).toHaveLength(1);
-  expect(await appMessageTypes(page)).toEqual([]);
+  expect(await appMessageTypes(page)).toEqual(["haptic.selection"]);
 });
