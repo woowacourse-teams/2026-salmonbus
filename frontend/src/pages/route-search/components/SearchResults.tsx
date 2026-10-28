@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useRef, type Ref } from "react";
 import type { ListedRoute, RouteSelection, SearchView } from "../displayPolicy";
 import {
   EMPTY_DESCRIPTION,
@@ -13,26 +13,37 @@ import {
   searchStatusLabel,
 } from "../routeSearchCopy";
 import * as styles from "./SearchResults.css";
+import { useNewBadgeHop } from "./useNewBadgeHop";
 
 interface SearchResultsProps {
   view: SearchView;
   onSelect: (selection: RouteSelection) => void;
   onRetry: () => void;
+  newBadgeHopKey: string | null;
 }
 
-export function SearchResults({ view, onSelect, onRetry }: SearchResultsProps) {
+export function SearchResults({ view, onSelect, onRetry, newBadgeHopKey }: SearchResultsProps) {
+  // 목록이 결과 없음으로 바뀌었다 돌아와도 이미 뛴 입력을 기억하도록, 늘 마운트된 이 컴포넌트가 뛰기를 맡는다.
+  const sectionRef = useRef<HTMLElement>(null);
+  useNewBadgeHop(sectionRef, newBadgeHopKey);
+
   return (
     <>
       {/* 화면 낭독기는 이 문구로 결과 변화를 듣는다. 보이는 문구는 두 번 읽히지 않게 aria-hidden */}
       <p className={styles.status} role="status">
         {searchStatusLabel(view)}
       </p>
-      {renderView(view, onSelect, onRetry)}
+      {renderView(view, onSelect, onRetry, sectionRef)}
     </>
   );
 }
 
-function renderView(view: SearchView, onSelect: SearchResultsProps["onSelect"], onRetry: () => void) {
+function renderView(
+  view: SearchView,
+  onSelect: SearchResultsProps["onSelect"],
+  onRetry: () => void,
+  sectionRef: Ref<HTMLElement>,
+) {
   switch (view.kind) {
     case "empty":
       return (
@@ -74,15 +85,21 @@ function renderView(view: SearchView, onSelect: SearchResultsProps["onSelect"], 
       );
     case "all":
     case "matched":
-      return <InServiceSection routes={view.routes} onSelect={onSelect} />;
+      return <InServiceSection ref={sectionRef} routes={view.routes} onSelect={onSelect} />;
   }
 }
 
-function InServiceSection({ routes, onSelect }: { routes: ListedRoute[]; onSelect: SearchResultsProps["onSelect"] }) {
+interface InServiceSectionProps {
+  ref: Ref<HTMLElement>;
+  routes: ListedRoute[];
+  onSelect: SearchResultsProps["onSelect"];
+}
+
+function InServiceSection({ ref, routes, onSelect }: InServiceSectionProps) {
   const titleId = useId();
 
   return (
-    <section className={styles.section} aria-labelledby={titleId}>
+    <section ref={ref} className={styles.section} aria-labelledby={titleId}>
       <h2 id={titleId} className={styles.sectionTitle}>
         {IN_SERVICE_TITLE}
       </h2>
@@ -99,7 +116,11 @@ function InServiceSection({ routes, onSelect }: { routes: ListedRoute[]; onSelec
               <span className={styles.stops}>
                 {route.startStopName} ↔ {route.endStopName}
               </span>
-              {route.isNew && <span className={styles.newBadge}>{NEW_BADGE}</span>}
+              {route.isNew && (
+                <span className={styles.newBadge} data-new-badge>
+                  {NEW_BADGE}
+                </span>
+              )}
             </button>
           </li>
         ))}

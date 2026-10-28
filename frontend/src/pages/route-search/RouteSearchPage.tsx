@@ -8,6 +8,7 @@ import { useUnmatchedSearchEvent } from "./analytics/useUnmatchedSearchEvent";
 import { SearchForm } from "./components/SearchForm";
 import { SearchResults } from "./components/SearchResults";
 import { submitSelectionFor, type RouteSelection } from "./displayPolicy";
+import { newBadgeHopKeyFor } from "./new-route/newBadgeHopPolicy";
 import { BACK_LABEL } from "./routeSearchCopy";
 import { useRouteSearch } from "./useRouteSearch";
 import * as styles from "./RouteSearchPage.css";
@@ -49,7 +50,12 @@ export function RouteSearchPage() {
         />
       </header>
       <main className={styles.results}>
-        <SearchResults view={view} onSelect={handleSelect} onRetry={retry} />
+        <SearchResults
+          view={view}
+          onSelect={handleSelect}
+          onRetry={retry}
+          newBadgeHopKey={newBadgeHopKeyFor(view, input)}
+        />
       </main>
     </div>
   );
