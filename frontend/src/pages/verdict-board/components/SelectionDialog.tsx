@@ -174,7 +174,7 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
               busy || refreshingGroups || resource.status !== "success" || groups.length === 0 || full || missing
             }
             onClick={() =>
-              void run(() => saveSelections(ids)).then((ok) => {
+              void run(() => saveSelections(ids), { resultHaptic: true }).then((ok) => {
                 if (ok) onSaved();
               })
             }
