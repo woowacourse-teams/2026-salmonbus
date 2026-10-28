@@ -151,12 +151,7 @@ test("입력 전에는 서비스 중 노선 전체를 번호 오름차순으로 
   await page.goto("/");
   await openRouteSearch(page);
 
-  await expect(inServiceSection(page).getByRole("button")).toHaveText([
-    /^1500-2/,
-    /^3330/,
-    /^G8110/,
-    /^9300/,
-  ]);
+  await expect(inServiceSection(page).getByRole("button")).toHaveText([/^1500-2/, /^3330/, /^G8110/, /^9300/]);
   await expect(page.getByRole("main").getByRole("status")).toHaveText("서비스 중 노선 4개");
   await expect(
     page.getByRole("button", { name: "G8110번 노선, 새 노선, 기점부터 종점 구간", exact: true }),
