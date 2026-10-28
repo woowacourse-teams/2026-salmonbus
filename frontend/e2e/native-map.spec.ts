@@ -245,6 +245,24 @@ test.describe("설정 화면을 열 수 있는 앱", () => {
     await expect(notice).toHaveCount(0);
     expect(await settingsRequests()).toHaveLength(1);
   });
+
+  test("위치 권한 안내는 닫기를 왼쪽, 설정 열기를 오른쪽에 두고 Tab도 같은 순서로 옮겨 간다", async ({
+    page,
+    browserName,
+  }) => {
+    await open(page);
+    await page.getByRole("button", { name: "현재 위치 보기", exact: true }).click();
+    const location = (await messages(page)).filter((message) => message.type === "location").at(-1)!;
+    await emit(page, { type: "locationResult", payload: { requestId: location.payload.requestId, error: "denied" } });
+    const dismiss = page.getByRole("button", { name: "닫기", exact: true });
+    const settings = page.getByRole("button", { name: "설정 열기", exact: true });
+    await expect(settings).toBeVisible();
+    expect((await dismiss.boundingBox())!.x).toBeLessThan((await settings.boundingBox())!.x);
+    await dismiss.focus();
+    // WebKit은 Safari처럼 Option+Tab일 때만 버튼으로 초점을 옮긴다.
+    await page.keyboard.press(browserName === "webkit" ? "Alt+Tab" : "Tab");
+    await expect(settings).toBeFocused();
+  });
 });
 
 favoriteNativeTest("즐겨찾기 dialog를 열면 native 지도 입력을 차단하고 닫으면 복구한다", async ({ page, api }) => {

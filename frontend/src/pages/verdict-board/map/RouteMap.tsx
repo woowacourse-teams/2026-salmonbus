@@ -410,15 +410,15 @@ export function RouteMap(props: RouteMapProps) {
             {locationState.message}
           </p>
           <div className={styles.locationPromptActions}>
-            <button type="button" className={styles.locationSettingsButton} onClick={openSettings}>
-              설정 열기
-            </button>
             <button
               type="button"
               className={styles.locationDismissButton}
               onClick={() => setLocationState({ status: "idle" })}
             >
               닫기
+            </button>
+            <button type="button" className={styles.locationSettingsButton} onClick={openSettings}>
+              설정 열기
             </button>
           </div>
         </div>
