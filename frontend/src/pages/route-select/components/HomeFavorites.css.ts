@@ -86,14 +86,14 @@ export const timing = style({
 });
 export const eta = style({
   color: vars.color.textStrong,
-  fontSize: 12,
+  fontSize: vars.font.arrivalTime,
   fontWeight: 600,
   lineHeight: "17px",
   whiteSpace: "nowrap",
 });
 export const distance = style({
   color: vars.color.textSubtle,
-  fontSize: 10,
+  fontSize: vars.font.distance,
   fontWeight: 500,
   lineHeight: "14px",
   whiteSpace: "nowrap",
