@@ -1,6 +1,6 @@
 import { style } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
-import bookmarkIcon from "@/shared/assets/icons/bookmark.svg";
+import starOutline from "@/shared/assets/icons/star-outline.svg";
 
 export const guestCard = style({
   display: "flex",
@@ -22,7 +22,7 @@ export const guestIcon = style({
   width: 30,
   height: 30,
   background: vars.color.liveBus,
-  mask: `url(${bookmarkIcon}) center / contain no-repeat`,
+  mask: `url(${starOutline}) center / contain no-repeat`,
 });
 export const guestTitle = style({
   margin: 0,
