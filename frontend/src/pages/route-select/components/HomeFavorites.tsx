@@ -18,7 +18,6 @@ import { Notice } from "@/shared/components/Notice";
 import bookmarkIcon from "@/shared/assets/icons/bookmark.svg";
 import editIcon from "@/shared/assets/icons/favorite-edit.svg";
 import * as homeStyles from "./HomeFavorites.css";
-import * as buttons from "@/shared/styles/button.css";
 import { RouteBadge } from "@/shared/components/RouteBadge";
 import { visuallyHidden } from "@/shared/styles/accessibility.css";
 import { stopNameLabels } from "./stopNameLabels";
@@ -287,7 +286,7 @@ function FavoriteCard({ favorite, displayStopName, savedDirection, elapsed, onRe
       >
         <div className={homeStyles.heading}>
           <RouteBadge size="large" className={homeStyles.routeBadge}>
-            {favorite.route.displayName || "노선 정보 없음"}
+            {favorite.route.displayName}
           </RouteBadge>
           <div className={homeStyles.stopNameAndDirection}>
             <span className={homeStyles.stop} data-favorite-name={favorite.id}>
@@ -337,11 +336,6 @@ function FavoriteCard({ favorite, displayStopName, savedDirection, elapsed, onRe
           )}
         </div>
       </Link>
-      {favorite.status === "ERROR" && (
-        <button type="button" className={buttons.text} onClick={onRetry}>
-          다시 확인하기
-        </button>
-      )}
     </li>
   );
 }
