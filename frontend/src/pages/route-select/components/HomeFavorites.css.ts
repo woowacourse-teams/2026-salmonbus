@@ -36,7 +36,7 @@ export const link = style({
 });
 export const heading = style({ display: "flex", alignItems: "center", gap: 10, minWidth: 0 });
 export const routeBadge = style({ alignSelf: "stretch" });
-export const stopInfo = style({
+export const stopNameAndDirection = style({
   display: "flex",
   flexDirection: "column",
   flex: 1,

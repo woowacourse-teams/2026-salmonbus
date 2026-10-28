@@ -30,7 +30,7 @@ export const loadingName = style({ height: 22, width: "80%", borderRadius: 4, ba
 export const loadingDirection = style({ height: 18, width: "45%", borderRadius: 4, background: "#EAE6E0" });
 export const cardHeading = style({ display: "flex", alignItems: "center", gap: 10, minWidth: 0 });
 export const routeBadge = style({ alignSelf: "center", height: 42 });
-export const stopInfo = style({
+export const stopNameAndDirection = style({
   display: "flex",
   flexDirection: "column",
   flex: 1,

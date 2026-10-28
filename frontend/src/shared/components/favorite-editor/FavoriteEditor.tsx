@@ -199,7 +199,7 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
                       >
                         {item?.route.displayName || "노선 정보 없음"}
                       </RouteBadge>
-                      <div className={styles.stopInfo}>
+                      <div className={styles.stopNameAndDirection}>
                         <span className={styles.stop}>{item?.stop.name || "정류장 정보 없음"}</span>
                         <span className={styles.direction}>
                           {directionLabelOf(item?.route.terminalStopName, favorite.direction)}

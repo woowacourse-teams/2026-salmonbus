@@ -227,7 +227,7 @@ function FavoriteCard({ favorite, savedDirection, elapsed, onRetry }: FavoriteCa
           <RouteBadge size="large" className={homeStyles.routeBadge}>
             {favorite.route.displayName || "노선 정보 없음"}
           </RouteBadge>
-          <div className={homeStyles.stopInfo}>
+          <div className={homeStyles.stopNameAndDirection}>
             <span className={homeStyles.stop}>{favorite.stop.name || "정류장 정보 없음"}</span>
             <span className={homeStyles.direction}>{directionLabelOf(favorite.route.terminalStopName, direction)}</span>
           </div>
