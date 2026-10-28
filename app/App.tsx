@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import * as Application from 'expo-application';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet } from 'react-native';
+import { Linking, StyleSheet } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { LoadFailedView } from './LoadFailedView';
 import { appBootstrapScriptFor, bridgeEventScriptFor, bridgeMessageFrom, type BridgeMessage } from './bridge/bridge';
@@ -10,6 +10,7 @@ import { HAPTIC_CAPABILITIES } from './haptic/hapticMessages';
 import { playHaptic } from './haptic/playHaptic';
 import { NativeRouteMap, type NativeRouteMapRef } from './native-map/NativeRouteMap';
 import { NATIVE_MAP_CAPABILITIES } from './native-map/nativeMapMessages';
+import { SETTINGS_CAPABILITIES } from './settings/settingsMessages';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -34,6 +35,7 @@ function domainCapabilitiesOf<T extends DomainCapabilities<T>>(capabilities: T):
 const CAPABILITIES_BY_DOMAIN = domainCapabilitiesOf({
   map: NativeRouteMap !== null ? NATIVE_MAP_CAPABILITIES : [],
   haptic: HAPTIC_CAPABILITIES,
+  settings: SETTINGS_CAPABILITIES,
 });
 type BridgeDomain = keyof typeof CAPABILITIES_BY_DOMAIN;
 const APP_CAPABILITIES: readonly string[] = Object.values(CAPABILITIES_BY_DOMAIN).flat();
@@ -79,6 +81,9 @@ export default function App() {
   const handlersByDomain: Record<BridgeDomain, (message: BridgeMessage, raw: string) => void> = {
     map: (_message, raw) => handleMapMessage(raw),
     haptic: (message) => playHaptic(message),
+    settings: () => {
+      Linking.openSettings().catch(() => undefined);
+    },
   };
 
   function handleMapMessage(raw: string) {

@@ -1868,6 +1868,7 @@ test("현재 위치 성공은 작은 반투명 원과 파란 점을 표시하고
   await page.getByRole("button", { name: "현재 위치 보기", exact: true }).click();
   const deniedNotice = map(page).getByText("위치 권한을 허용하면 내 위치를 볼 수 있어요", { exact: true });
   await expect(deniedNotice).toBeVisible();
+  await expect(map(page).getByRole("button", { name: "설정 열기", exact: true })).toHaveCount(0);
   expect(await naverMap.snapshot()).toEqual(located);
   await page.clock.runFor(3_900);
   await expect(deniedNotice).toBeVisible();
