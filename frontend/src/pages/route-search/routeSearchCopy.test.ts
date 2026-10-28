@@ -13,7 +13,7 @@ const route: ListedRoute = {
 
 describe("searchStatusLabel", () => {
   it("서비스 중 노선이 하나도 없으면 볼 수 있는 노선이 없다고 알린다", () => {
-    expect(searchStatusLabel({ kind: "empty" })).toBe("지금 볼 수 있는 노선이 없어요. 잠시 뒤에 다시 확인해 주세요.");
+    expect(searchStatusLabel({ kind: "empty" })).toBe("지금 볼 수 있는 노선이 없어요. 잠시 뒤에 다시 불러와 주세요.");
   });
 
   it("목록을 받는 중이면 불러오는 중이라고 알린다", () => {

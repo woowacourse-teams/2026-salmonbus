@@ -164,11 +164,55 @@ test("서비스 중 노선이 하나도 없으면 입력 전에 볼 수 있는 �
   await openRouteSearch(page);
 
   await expect(page.getByText("지금 볼 수 있는 노선이 없어요", { exact: true })).toBeVisible();
-  await expect(page.getByText("잠시 뒤에 다시 확인해 주세요.", { exact: true })).toBeVisible();
+  await expect(page.getByText("잠시 뒤에 다시 불러와 주세요.", { exact: true })).toBeVisible();
   await expect(page.getByRole("main").getByRole("status")).toHaveText(
-    "지금 볼 수 있는 노선이 없어요. 잠시 뒤에 다시 확인해 주세요.",
+    "지금 볼 수 있는 노선이 없어요. 잠시 뒤에 다시 불러와 주세요.",
   );
+  await expect(page.getByRole("button", { name: "다시 불러오기", exact: true })).toBeVisible();
   await expect(inServiceSection(page)).toHaveCount(0);
+});
+
+test("서비스 중 노선이 없을 때 다시 불러오기를 누르면 서비스 중 노선이 보이고 입력창에 포커스가 남는다", async ({
+  page,
+  api,
+}) => {
+  api.data.routes.routes = api.data.routes.routes.map((route) => ({ ...route, status: "PREPARING" }));
+  await page.goto("/");
+  await openRouteSearch(page);
+  const reload = page.getByRole("button", { name: "다시 불러오기", exact: true });
+  await expect(reload).toBeVisible();
+
+  api.data.routes.routes = api.data.routes.routes.map((route) => ({ ...route, status: "FORECAST_READY" }));
+  const response = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.routes && response.status() === 200,
+  );
+  await reload.click();
+  await response;
+
+  await expect(inServiceSection(page).getByRole("button")).toHaveText([/^3330/]);
+  await expect(routeSearchInput(page)).toBeFocused();
+});
+
+test("다시 불러와도 서비스 중 노선이 없으면 같은 안내와 다시 불러오기 버튼이 다시 보인다", async ({ page, api }) => {
+  api.data.routes.routes = api.data.routes.routes.map((route) => ({ ...route, status: "PREPARING" }));
+  await page.goto("/");
+  await openRouteSearch(page);
+  const reload = page.getByRole("button", { name: "다시 불러오기", exact: true });
+  await expect(reload).toBeVisible();
+
+  const requestsBeforeReload = api.requests.routes;
+  const response = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.routes && response.status() === 200,
+  );
+  await reload.click();
+  await response;
+
+  expect(api.requests.routes).toBeGreaterThan(requestsBeforeReload);
+  await expect(page.getByRole("main").getByRole("status")).toHaveText(
+    "지금 볼 수 있는 노선이 없어요. 잠시 뒤에 다시 불러와 주세요.",
+  );
+  await expect(reload).toBeVisible();
+  await expect(reload).toBeEnabled();
 });
 
 test("입력 전 목록에서 노선을 누르면 그 노선의 판정 보드로 이동한다", async ({ page }) => {

@@ -15,22 +15,12 @@ export const status = style({
   whiteSpace: "nowrap",
 });
 
-export const emptyGuide = style({
+export const emptyNotice = style({
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
   marginTop: "120px",
   textAlign: "center",
-});
-
-export const emptyIcon = style({
-  width: "28px",
-  height: "28px",
-  marginBottom: "12px",
-  fill: "none",
-  stroke: vars.color.faint,
-  strokeWidth: 2,
-  strokeLinecap: "round",
 });
 
 export const emptyTitle = style({

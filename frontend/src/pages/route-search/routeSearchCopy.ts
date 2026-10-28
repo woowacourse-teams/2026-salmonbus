@@ -7,12 +7,13 @@ export const CLEAR_INPUT_LABEL = "검색어 지우기";
 export const LOADING_NOTICE = "노선을 불러오는 중이에요";
 export const LOAD_FAILED_NOTICE = "노선을 불러오지 못했어요";
 export const RETRY_LABEL = "다시 시도하기";
+export const RELOAD_LABEL = "다시 불러오기";
 export const UNMATCHED_NOTICE = "일치하는 노선이 없어요";
 export const IN_SERVICE_TITLE = "서비스 중 노선";
 export const NEW_BADGE = "NEW";
 const NEW_ROUTE_LABEL = "새 노선";
 export const EMPTY_TITLE = "지금 볼 수 있는 노선이 없어요";
-export const EMPTY_DESCRIPTION = "잠시 뒤에 다시 확인해 주세요.";
+export const EMPTY_DESCRIPTION = "잠시 뒤에 다시 불러와 주세요.";
 
 export function matchedCountLabel(count: number): string {
   return `일치하는 노선 ${count}개`;

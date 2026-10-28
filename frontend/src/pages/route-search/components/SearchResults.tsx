@@ -7,6 +7,7 @@ import {
   LOAD_FAILED_NOTICE,
   LOADING_NOTICE,
   NEW_BADGE,
+  RELOAD_LABEL,
   RETRY_LABEL,
   UNMATCHED_NOTICE,
   routeButtonLabel,
@@ -47,13 +48,12 @@ function renderView(
   switch (view.kind) {
     case "empty":
       return (
-        <div className={styles.emptyGuide} aria-hidden="true">
-          <svg className={styles.emptyIcon} viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-          <h2 className={styles.emptyTitle}>{EMPTY_TITLE}</h2>
-          <p className={styles.emptyDescription}>{EMPTY_DESCRIPTION}</p>
+        <div className={styles.emptyNotice}>
+          <div aria-hidden="true">
+            <h2 className={styles.emptyTitle}>{EMPTY_TITLE}</h2>
+            <p className={styles.emptyDescription}>{EMPTY_DESCRIPTION}</p>
+          </div>
+          <RetryButton label={RELOAD_LABEL} onRetry={onRetry} />
         </div>
       );
     case "loading":
@@ -66,15 +66,7 @@ function renderView(
       return (
         <div className={styles.notice}>
           <p aria-hidden="true">{LOAD_FAILED_NOTICE}</p>
-          {/* 누르는 순간 검색창 포커스가 빠지면 키패드가 내려가면서 버튼이 움직이고 클릭이 취소된다 */}
-          <button
-            className={styles.retryButton}
-            type="button"
-            onPointerDown={(event) => event.preventDefault()}
-            onClick={onRetry}
-          >
-            {RETRY_LABEL}
-          </button>
+          <RetryButton label={RETRY_LABEL} onRetry={onRetry} />
         </div>
       );
     case "unmatched":
@@ -87,6 +79,20 @@ function renderView(
     case "matched":
       return <InServiceSection ref={sectionRef} routes={view.routes} onSelect={onSelect} />;
   }
+}
+
+function RetryButton({ label, onRetry }: { label: string; onRetry: () => void }) {
+  // 누르는 순간 검색창 포커스가 빠지면 키패드가 내려가면서 버튼이 움직이고 클릭이 취소된다
+  return (
+    <button
+      className={styles.retryButton}
+      type="button"
+      onPointerDown={(event) => event.preventDefault()}
+      onClick={onRetry}
+    >
+      {label}
+    </button>
+  );
 }
 
 interface InServiceSectionProps {
