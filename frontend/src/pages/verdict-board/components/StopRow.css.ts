@@ -25,6 +25,7 @@ const rowBase = style({
       outline: `2px solid ${vars.color.focusRing}`,
       outlineOffset: "-2px",
     },
+    '[data-input-method="pointer"] &:focus': { outline: "none" },
     // 시안의 구분선은 노선 축에서 시작한다. 왼쪽 끝까지 그으면 축 왼쪽에 네모 칸이 생긴다.
     "&:not(:last-child)::after": {
       content: '""',
@@ -88,6 +89,7 @@ const headBase = style({
       outline: `2px solid ${vars.color.focusRing}`,
       outlineOffset: "-2px",
     },
+    '[data-input-method="pointer"] &:focus': { outline: "none" },
   },
 });
 

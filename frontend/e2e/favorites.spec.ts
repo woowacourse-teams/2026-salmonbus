@@ -5,6 +5,42 @@ import { routeId } from "./fixtures/mock-data";
 test.use({ viewport: { width: 425, height: 844 }, reducedMotion: "reduce" });
 const secondGroupId = "10000000-0000-4000-8000-000000000003";
 
+test.describe("홈 즐겨찾기에서 정류장으로 진입할 때의 포커스", () => {
+  test.use({ hasTouch: true });
+
+  for (const input of ["터치", "키보드"] as const) {
+    test(`${input}로 진입하면 입력 방식에 맞게 정류장 테두리를 표시한다`, async ({ page, favorites, api }) => {
+      const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.sequence === 11)!;
+      favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
+      await page.goto("/");
+      const favorite = page.getByRole("tabpanel").getByRole("link").first();
+      await expect(favorite).toBeVisible();
+      if (input === "터치") await favorite.tap();
+      else await favorite.press("Enter");
+
+      const list = page.getByRole("region", { name: "판정보드 정류장 목록", exact: true });
+      const control = list.locator(`[data-stop-sequence="${stop.sequence}"] button[aria-expanded]`);
+      await expect(control).toHaveAttribute("aria-expanded", "true");
+      await expect
+        .poll(async () => {
+          await page.clock.runFor(32);
+          return control.evaluate((element) => document.activeElement === element);
+        })
+        .toBe(true);
+      await expect(control).toBeInViewport();
+      expect(await list.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+
+      if (input === "터치") {
+        await expect(control).toHaveCSS("outline-style", "none");
+        await page.keyboard.press("Enter");
+        await expect(control).toHaveAttribute("aria-expanded", "false");
+      }
+      await expect(control).toBeFocused();
+      await expect(control).not.toHaveCSS("outline-style", "none");
+    });
+  }
+});
+
 test("비회원은 즐겨찾기를 요청하지 않고 로그인 후 조회를 시작한다", async ({ page, auth, favorites }) => {
   auth.member = null;
   await page.clock.install();
