@@ -85,6 +85,44 @@ class MemberWithdrawalTest {
     }
 
     @Test
+    void 제공자_계정으로_회원을_찾는다() {
+        // given
+        UUID publicId = register(LoginProvider.APPLE, "apple-1");
+        register(LoginProvider.APPLE, "apple-2");
+
+        // when
+        Optional<UUID> actual = withdrawMember.memberOf(new MemberIdentity(LoginProvider.APPLE, "apple-1"));
+
+        // then
+        assertThat(actual).contains(publicId);
+    }
+
+    @Test
+    void 다른_제공자로만_가입한_계정이면_회원이_비어_있다() {
+        // given
+        register(LoginProvider.KAKAO, "shared-subject");
+
+        // when
+        Optional<UUID> actual = withdrawMember.memberOf(new MemberIdentity(LoginProvider.APPLE, "shared-subject"));
+
+        // then
+        assertThat(actual).isEmpty();
+    }
+
+    @Test
+    void 탈퇴한_회원의_제공자_계정으로는_회원을_찾지_못한다() {
+        // given
+        UUID publicId = register(LoginProvider.APPLE, "apple-1");
+        withdrawMember.withdraw(publicId, ProviderUnlink.DONE);
+
+        // when
+        Optional<UUID> actual = withdrawMember.memberOf(new MemberIdentity(LoginProvider.APPLE, "apple-1"));
+
+        // then
+        assertThat(actual).isEmpty();
+    }
+
+    @Test
     void 탈퇴하면_회원과_제공자_계정과_리프레시_토큰이_지워지고_다른_회원은_그대로다() {
         // given
         UUID publicId = register(LoginProvider.KAKAO, SUBJECT);

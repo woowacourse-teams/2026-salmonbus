@@ -5,6 +5,7 @@ import com.gustler.backend.member.api.PendingUnlink;
 import com.gustler.backend.member.api.ProviderUnlink;
 import com.gustler.backend.member.api.WithdrawMember;
 import com.gustler.backend.member.api.WithdrawnMember;
+import com.gustler.backend.member.domain.Member;
 import com.gustler.backend.member.domain.MemberRepository;
 import com.gustler.backend.member.domain.ProviderUnlinkPolicy;
 import com.gustler.backend.member.domain.ProviderUnlinkRepository;
@@ -40,6 +41,12 @@ public class MemberWithdrawal implements WithdrawMember {
     @Transactional(readOnly = true)
     public Optional<MemberIdentity> identityOf(UUID publicId) {
         return memberRepository.findIdentity(publicId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<UUID> memberOf(MemberIdentity identity) {
+        return memberRepository.findByIdentity(identity.provider(), identity.subject()).map(Member::publicId);
     }
 
     @Override
