@@ -5,6 +5,7 @@
   },
   "build": {
     "preview": {
+      "environment": "preview",
       "env": {
         "EXPO_PUBLIC_WEB_URL": "https://dev.salmonbus.com"
       },
@@ -13,6 +14,7 @@
       }
     },
     "production": {
+      "environment": "production",
       "env": {
         "EXPO_PUBLIC_WEB_URL": "https://www.salmonbus.com"
       }
