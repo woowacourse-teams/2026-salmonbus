@@ -6,7 +6,7 @@ final class MapNavigationSnapshot: NSObject {
   private weak var webView: WKWebView?
   private var snapshot: UIView?
   private var displayLink: CADisplayLink?
-  private var gestureEnded = false
+  private var gestureEndedAt: CFTimeInterval?
   #if DEBUG
   private(set) var maximumSwipeOffset: CGFloat = 0
   #endif
@@ -50,14 +50,14 @@ final class MapNavigationSnapshot: NSObject {
       webView.scrollView.insertSubview(snapshot, at: 0)
       self.snapshot = snapshot
       mapContainer.alpha = 0
-      gestureEnded = false
+      gestureEndedAt = nil
       #if DEBUG
       maximumSwipeOffset = 0
       #endif
       displayLink = CADisplayLink(target: self, selector: #selector(checkTransition))
       displayLink?.add(to: .main, forMode: .common)
     case .ended, .cancelled, .failed:
-      gestureEnded = true
+      gestureEndedAt = CACurrentMediaTime()
       checkTransition()
     default: break
     }
@@ -71,7 +71,10 @@ final class MapNavigationSnapshot: NSObject {
       maximumSwipeOffset = max(maximumSwipeOffset, abs(offset))
     }
     #endif
-    if gestureEnded && webView.scrollView.superview === webView { finish() }
+    if let gestureEndedAt,
+       webView.scrollView.superview === webView || CACurrentMediaTime() - gestureEndedAt >= 1 {
+      finish()
+    }
   }
 
   func finish() {
@@ -79,6 +82,7 @@ final class MapNavigationSnapshot: NSObject {
     displayLink = nil
     snapshot?.removeFromSuperview()
     snapshot = nil
+    gestureEndedAt = nil
     mapContainer?.alpha = 1
   }
 }

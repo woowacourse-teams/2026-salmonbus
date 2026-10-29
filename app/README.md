@@ -36,7 +36,7 @@ Simulator에서 로컬 웹 서버에 연결할 때는 `http://127.0.0.1:<port>`�
 
 웹은 API 요청과 선택 state를 유지합니다. native는 관측마다 받은 차량 이동 경로를 `CADisplayLink`로 보간하며, 매 프레임 WebView bridge를 통과하지 않습니다. 시트가 움직이는 동안 새 지도 touch를 막고 최종 영역을 적용한 뒤 다시 허용합니다. 이미 시작한 touch는 UIKit이 처음 정한 view에 남습니다.
 
-iOS의 뒤로가기·앞으로가기 스와이프 중에는 `MapNavigationSnapshot.swift`가 지도 캡처를 WebView의 scroll view 안에 잠시 넣어 웹과 함께 움직이게 합니다. 이동 가능한 이력이 있는 화면 가장자리 20pt는 WebView가 받으며, 전환 완료·취소·앱 백그라운드 진입 시 캡처를 정리합니다. WebKit이 scroll view를 원래 부모로 돌려주는 시점에 정리하므로 iOS/WebKit 업데이트 시 완료와 취소를 함께 확인합니다.
+iOS의 뒤로가기·앞으로가기 스와이프 중에는 `MapNavigationSnapshot.swift`가 지도 캡처를 WebView의 scroll view 안에 잠시 넣어 웹과 함께 움직이게 합니다. 이동 가능한 이력이 있는 화면 가장자리 20pt는 WebView가 받으며, 전환 완료·취소·앱 백그라운드 진입 시 캡처를 정리합니다. 제스처 종료 후 WebKit이 scroll view를 원래 부모로 돌려주지 않더라도 1초가 지나면 캡처를 정리하고 실제 지도를 복구합니다. iOS/WebKit 업데이트 시 완료와 취소를 함께 확인합니다.
 
 `pnpm test`, `pnpm typecheck`, `pnpm lint`로 config plugin, bridge, TypeScript를 검사합니다. Swift와 SDK 연동은 Xcode Simulator build로 검사합니다. DEBUG build의 `[SalmonNativeMap]` 로그는 touch 대상, camera 이동 여부와 zoom, overlay 개수만 기록하며 클라이언트 키나 사용자 좌표를 기록하지 않습니다.
 
@@ -53,7 +53,7 @@ xcrun swiftc -parse-as-library -sdk "$(xcrun --sdk iphonesimulator --show-sdk-pa
 xcrun simctl spawn booted /tmp/SalmonMarkerChecks.app/SalmonMarkerChecks
 ```
 
-지도 전환의 WebView 탐색, history 유무에 따른 가장자리 터치, RTL 방향과 정리 처리는 다음 검사로 확인합니다.
+지도 전환의 WebView 탐색, history 유무에 따른 가장자리 터치, RTL 방향, 정리와 전환 지연 시 복구 처리는 다음 검사로 확인합니다.
 
 ```sh
 mkdir -p /tmp/SalmonNavigationChecks.app
