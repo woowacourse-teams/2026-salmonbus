@@ -69,6 +69,7 @@ for (const width of [320, 425, 659]) {
     await page.goto("/mypage");
     const region = page.getByRole("region", { name: "즐겨찾기 그룹 관리", exact: true });
     await expect(region.getByRole("link")).toHaveCount(3);
+    await page.evaluate(() => document.fonts.ready);
     const before = await region.getByRole("link").evaluateAll((cards) =>
       cards.map((card) => {
         const { x, y, width, height } = card.getBoundingClientRect();
