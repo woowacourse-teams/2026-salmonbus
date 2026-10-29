@@ -84,6 +84,7 @@ test("닉네임 중복 오류 후 입력을 수정해 저장하고 재접속해�
   await input.fill("연어");
   await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByText("이미 사용 중인 닉네임이에요.")).toBeVisible();
+  await expect(input).toBeFocused();
   auth.nicknameError = null;
   await input.fill("새연어");
   await page.getByRole("button", { name: "저장", exact: true }).click();

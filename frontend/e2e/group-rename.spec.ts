@@ -40,6 +40,7 @@ for (const width of [320, 425]) {
     await input.fill("통학");
     await save.click();
     await expect(page.getByRole("alert")).toContainText("이미 사용 중");
+    await expect(input).toBeFocused();
     await expect(input).toHaveValue("통학");
     await input.fill("회사 가는 길");
     await expect(page.getByRole("alert")).toBeHidden();

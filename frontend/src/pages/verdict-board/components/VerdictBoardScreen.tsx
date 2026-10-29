@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { track } from "@/shared/analytics/track";
 import { visuallyHidden } from "@/shared/styles/accessibility.css";
@@ -148,6 +148,7 @@ function OperatingBoard({
   onDirectionChange,
   onStopExpand,
 }: OperatingBoardProps) {
+  const sheetId = useId();
   const viewport = useBoardViewport();
   const [search, setSearch] = useSearchParams();
   const [snap, setSnap] = useState<BoardSheetSnap>("expanded");
@@ -258,6 +259,16 @@ function OperatingBoard({
   return (
     <div className={styles.page} style={{ height: viewport.height, top: viewport.top }}>
       <main className={styles.content}>
+        <a
+          href={`#${sheetId}`}
+          className={styles.skipLink}
+          onClick={(event) => {
+            event.preventDefault();
+            document.getElementById(sheetId)?.focus({ preventScroll: true });
+          }}
+        >
+          판정보드로 바로가기
+        </a>
         <div className={styles.mapSlot} inert={!mapVisible} aria-hidden={!mapVisible}>
           <RouteMap
             board={board}
@@ -277,6 +288,7 @@ function OperatingBoard({
           <BoardBackLink />
         </div>
         <BoardBottomSheet
+          id={sheetId}
           snap={snap}
           onSnapChange={setSnap}
           viewportHeight={viewport.height}

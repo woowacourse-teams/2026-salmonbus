@@ -26,6 +26,8 @@ for (const width of [320, 425]) {
     await input.press("Enter");
     await expect(dialog.getByRole("textbox")).toHaveCount(0);
     await expect(dialog.getByRole("checkbox", { name: /🚌 통학/ })).toBeChecked();
+    await expect(dialog.getByRole("checkbox", { name: /🚌 통학/ })).toBeFocused();
+    await expect(dialog.getByRole("checkbox", { name: /🚌 통학/ })).toHaveAccessibleName(/정류장 1개, 최대 2개/);
     await expect(dialog.getByRole("checkbox", { name: /즐겨찾기/ })).toBeChecked();
     expect(favorites.requests.find((request) => request.method === "POST")?.body).toEqual({ name: "🚌 통학" });
     expect(favorites.requests.some((request) => request.path === "/api/me/favorite-selections")).toBe(false);
@@ -66,6 +68,8 @@ test("그룹 이름 검증·중복·생성 실패 후에도 입력과 기존 선
   await input.fill("즐겨찾기");
   await create.click();
   await expect(dialog.getByRole("alert")).toContainText("이미 사용 중");
+  await expect(input).toBeFocused();
+  await expect(input).toHaveAccessibleDescription(/이미 사용 중/);
   await expect(input).toHaveValue("즐겨찾기");
   await input.fill("통학");
   favorites.mutationError = "INTERNAL_ERROR";
@@ -90,6 +94,7 @@ test("그룹 생성 취소는 요청하지 않고 생성 후 모달 취소는 �
   await add.click();
   await dialog.getByRole("textbox", { name: "그룹 이름", exact: true }).fill("미생성");
   await dialog.getByRole("button", { name: "돌아가기", exact: true }).click();
+  await expect(add).toBeFocused();
   expect(favorites.requests.filter((request) => request.method === "POST")).toHaveLength(0);
   await add.click();
   await dialog.getByRole("textbox", { name: "그룹 이름", exact: true }).fill("통학");
