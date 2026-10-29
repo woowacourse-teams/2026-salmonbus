@@ -4,6 +4,7 @@ final class NativeMapInteractionTests: XCTestCase {
   private var app: XCUIApplication!
 
   private struct MapState: Decodable {
+    let routeId: String
     let ready: Bool
     let zoom: Double
     let gestureMoves: Int
@@ -12,6 +13,8 @@ final class NativeMapInteractionTests: XCTestCase {
     let stops: Int
     let vehicles: Int
     let maximumSwipeOffset: Double
+    let routeFitsVisibleMap: Bool
+    let webTopEdgeEffectHidden: Bool?
   }
 
   override func setUpWithError() throws {
@@ -19,14 +22,25 @@ final class NativeMapInteractionTests: XCTestCase {
     app = XCUIApplication(bundleIdentifier: "com.salmonbus.app")
     app.launchArguments += ["--native-map-ui-testing"]
     app.launch()
+    let search = app.webViews.textFields.firstMatch
+    XCTAssertTrue(search.waitForExistence(timeout: 20))
+    search.tap()
+    search.typeText("3330")
+    let route = app.webViews.buttons.containing(NSPredicate(format: "label CONTAINS %@", "3330")).firstMatch
+    XCTAssertTrue(route.waitForExistence(timeout: 20), "The fixture route must be available in search")
+    route.tap()
   }
 
   func testNativePanWebSheetAndDoubleTap() throws {
-    openBoardIfNeeded()
     let initial = try waitForState("native map is ready with its route and vehicles", timeout: 90) {
-      $0.ready && !$0.captureAll && $0.visibleMapHeight > 180 && $0.stops > 0 && $0.vehicles > 0
+      $0.ready && $0.routeId == "200000001" && !$0.captureAll
+        && $0.visibleMapHeight > 180 && $0.stops > 0 && $0.vehicles > 0
     }
     attachScreenshot("01-native-map-and-web-sheet")
+    XCTAssertTrue(initial.routeFitsVisibleMap, "The full route must fit between the safe area and the web sheet")
+    if #available(iOS 26.0, *) {
+      XCTAssertEqual(initial.webTopEdgeEffectHidden, true, "The web overlay must not blur the native map's top edge")
+    }
 
     let y = CGFloat(initial.visibleMapHeight * 0.48)
     let start = coordinate(x: app.frame.width * 0.76, y: y)
@@ -45,6 +59,7 @@ final class NativeMapInteractionTests: XCTestCase {
       abs($0.visibleMapHeight - panned.visibleMapHeight) > 40 && !$0.captureAll
     }
     XCTAssertEqual(sheetMoved.gestureMoves, panned.gestureMoves, "Web sheet drag must not pan the native map")
+    XCTAssertEqual(sheetMoved.zoom, panned.zoom, accuracy: 0.001, "A settled layout must preserve the user's camera zoom")
     attachScreenshot("03-web-sheet-drag-map-camera-stayed")
 
     let doubleTap = coordinate(x: app.frame.width * 0.7, y: CGFloat(sheetMoved.visibleMapHeight * 0.42))
@@ -57,7 +72,6 @@ final class NativeMapInteractionTests: XCTestCase {
   }
 
   func testBackSwipeCancelAndBackLink() throws {
-    openBoardIfNeeded()
     let initial = try waitForState("native map is ready before back navigation", timeout: 90) {
       $0.ready && !$0.captureAll && $0.visibleMapHeight > 180 && $0.stops > 0
     }
@@ -82,18 +96,6 @@ final class NativeMapInteractionTests: XCTestCase {
     XCTAssertTrue(app.textFields["번호를 입력하면 탑승 확률을 알려드려요"].waitForExistence(timeout: 15),
                   "The back link must still work after cancelling a swipe")
     attachScreenshot("07-back-link-home-after-cancel")
-  }
-
-  private func openBoardIfNeeded() {
-    let search = app.textFields["번호를 입력하면 탑승 확률을 알려드려요"]
-    guard search.waitForExistence(timeout: 10) else { return }
-    search.tap()
-    let input = app.textFields["노선 번호"]
-    XCTAssertTrue(input.waitForExistence(timeout: 10))
-    input.typeText("3330")
-    let route = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "3330번 노선,")).firstMatch
-    XCTAssertTrue(route.waitForExistence(timeout: 15))
-    route.tap()
   }
 
   private var map: XCUIElement {

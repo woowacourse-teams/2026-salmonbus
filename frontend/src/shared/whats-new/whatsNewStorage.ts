@@ -1,12 +1,6 @@
 import { isRecord } from "@/shared/utils/valueGuards";
 import type { WhatsNewNote } from "./whatsNewNotes";
-import {
-  closedRecordFor,
-  firstRecordFor,
-  shownRecordFor,
-  type AutoShowChoice,
-  type WhatsNewRecord,
-} from "./whatsNewPolicy";
+import { closedRecordFor, firstRecordFor, shownRecordFor, type WhatsNewRecord } from "./whatsNewPolicy";
 
 const STORAGE_KEY = "salmonbus.whatsNew";
 const ROUTE_FIRST_SEEN_KEY = "salmonbus.routeFirstSeen";
@@ -39,10 +33,9 @@ export function recordWhatsNewShown(now: number, openStorage: () => WhatsNewStor
 
 export function recordWhatsNewClosed(
   shownNotes: readonly WhatsNewNote[],
-  autoShow: AutoShowChoice,
   openStorage: () => WhatsNewStorage = openLocalStorage,
 ): void {
-  recordWhatsNewWith((record) => closedRecordFor(record, shownNotes, autoShow), openStorage);
+  recordWhatsNewWith((record) => closedRecordFor(record, shownNotes), openStorage);
 }
 
 function recordWhatsNewWith(
@@ -64,11 +57,10 @@ function whatsNewRecordFrom(text: string | null): WhatsNewRecord | null {
   try {
     const value: unknown = JSON.parse(text);
     if (!isRecord(value)) return null;
-    const { lastSeenId, autoShow, lastShownDay } = value;
+    const { lastSeenId, lastShownDay } = value;
     if (typeof lastSeenId !== "number" || !Number.isSafeInteger(lastSeenId) || lastSeenId < 0) return null;
-    if (typeof autoShow !== "boolean") return null;
     if (lastShownDay !== null && (typeof lastShownDay !== "string" || !DAY_PATTERN.test(lastShownDay))) return null;
-    return { lastSeenId, autoShow, lastShownDay };
+    return { lastSeenId, lastShownDay };
   } catch {
     return null;
   }

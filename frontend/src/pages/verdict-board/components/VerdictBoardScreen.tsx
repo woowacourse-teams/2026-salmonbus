@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
+import type { EventMap } from "@/shared/analytics/events";
 import { track } from "@/shared/analytics/track";
 import type { ApiFailure, ApiResult } from "@/shared/api/client";
 import { latestSuccessOf, type PolledResource } from "@/shared/api/polledResource";
@@ -9,24 +10,18 @@ import { usePolledRequest } from "@/shared/api/usePolledRequest";
 import { playHaptic } from "@/shared/haptic/haptic";
 import { boardEntryFrom } from "@/shared/routing/boardEntry";
 import { paths } from "@/shared/routing/paths";
-import {
-  directionInfoFor,
-  directionViewsFor,
-  serviceStateFor,
-  stopViewsFor,
-  type BoardScreen,
-  type ExpandableStopView,
-} from "./displayPolicy";
+import { directionInfoFor, directionViewsFor, serviceStateFor, stopViewsFor, type BoardScreen } from "./displayPolicy";
 import { liveVehicleViewsFor } from "./liveVehiclePolicy";
 import { liveMotionDurationOf, useFreshLiveVehicles } from "../hooks/useFreshLiveVehicles";
 import { useLiveVehicleMotion } from "../hooks/useLiveVehicleMotion";
 import { useStationArrivals } from "../hooks/useStationArrivals";
-import { stopSelectionFrom, type StopSelection } from "./stopSelection";
+import { expandableRowOf, stopSelectionFrom, type StopSelection } from "./stopSelection";
 import type { BoardSheetSnap } from "./boardSheetPolicy";
 import { BoardBottomSheet } from "./BoardBottomSheet";
 import { BoardRouteSummary } from "./BoardRouteSummary";
 import { DirectionTabs } from "./DirectionTabs";
 import { StopBoard } from "./StopBoard";
+import type { StopExpandInput } from "../analytics/boardVisitPolicy";
 import { useBoardVisitEvents } from "../analytics/useBoardVisitEvents";
 import { RouteMap } from "../map/RouteMap";
 import { useRouteMapData } from "../map/useRouteMapData";
@@ -39,14 +34,16 @@ type BoardState =
   | { status: "error"; failure: ApiFailure }
   | { status: "ready"; watch: RouteWatch; direction: DirectionInfo };
 
+type DirectionSwitchSource = EventMap["direction_switched"]["source"];
+
 interface OperatingBoardProps {
   board: Board;
   direction: DirectionInfo;
   liveVehicles: readonly Vehicle[];
   liveMotionDurationMs: number;
   switched: boolean;
-  onDirectionChange: (direction: Direction) => void;
-  onStopExpand: (stop: ExpandableStopView, rowPosition: number) => void;
+  onDirectionChange: (direction: Direction, source: DirectionSwitchSource) => void;
+  onStopExpand: (expansion: StopExpandInput) => void;
 }
 
 function loadRouteWatch(routeId: string, signal: AbortSignal): Promise<ApiResult<RouteWatch>> {
@@ -75,11 +72,11 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
   const screen = boardScreenOf(state);
   const { trackStopExpanded } = useBoardVisitEvents({ routeId, screen, latestSuccess: latestWatch, entry });
 
-  function selectDirection(next: Direction) {
+  function selectDirection(next: Direction, source: DirectionSwitchSource) {
     setPreferredDirection(next);
     if (state.status === "ready" && next !== state.direction.id) {
       setSwitched(true);
-      track("direction_switched", { route_id: routeId, to_direction: next });
+      track("direction_switched", { route_id: routeId, to_direction: next, source });
       playHaptic("selection");
     }
     setSearch(
@@ -102,7 +99,7 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
         liveVehicles={freshLiveVehicles}
         liveMotionDurationMs={motionDurationMs}
         onDirectionChange={selectDirection}
-        onStopExpand={(stop, rowPosition) => trackStopExpanded(stop, state.direction.id, rowPosition)}
+        onStopExpand={trackStopExpanded}
       />
     );
   }
@@ -124,7 +121,7 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
             <button
               type="button"
               className={styles.alternateDirection}
-              onClick={() => selectDirection(runningDirection.id)}
+              onClick={() => selectDirection(runningDirection.id, "outOfService")}
             >
               {runningDirection.terminalStopName} 방면 보기
             </button>
@@ -199,17 +196,20 @@ function OperatingBoard({
   }
 
   function selectFromMap(selection: StopSelection) {
+    const reselected = selected?.direction === selection.direction && selected.sequence === selection.sequence;
     setSelected(selection);
     setVehicleFocusRequest(null);
     scrollToStop(selection);
     rememberSelection(selection);
+    const row = reselected ? null : expandableRowOf(stopViewsFor(board, selection.direction), selection.sequence);
+    if (row !== null) onStopExpand({ ...row, direction: selection.direction, source: "map" });
   }
 
   function scrollToStop(selection: StopSelection) {
     // 같은 위치를 다시 눌러도 목록 이동을 새로 요청한다.
     setScrollRequest({ ...selection });
     if (snap === "minimum") setSnap("half");
-    onDirectionChange(selection.direction);
+    onDirectionChange(selection.direction, "map");
   }
 
   function selectVehicleFromMap(selection: StopSelection, key: string) {
@@ -250,7 +250,7 @@ function OperatingBoard({
     setSelected(null);
     setScrollRequest(null);
     setVehicleFocusRequest(null);
-    onDirectionChange(next);
+    onDirectionChange(next, "tab");
   }
 
   return (
@@ -313,7 +313,9 @@ function OperatingBoard({
             scrollRequest={scrollRequest?.direction === direction.id ? scrollRequest : null}
             selectedVehicleKey={selectedVehicleKey}
             onToggle={toggleFromList}
-            onStopExpand={onStopExpand}
+            onStopExpand={(stop, rowPosition) =>
+              onStopExpand({ stop, direction: direction.id, rowPosition, source: "list" })
+            }
             onVehicleSelect={focusVehicleFromList}
             onVehicleDeselect={clearVehicleSelection}
           />
