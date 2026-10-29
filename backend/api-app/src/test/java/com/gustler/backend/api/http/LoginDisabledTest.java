@@ -49,6 +49,8 @@ class LoginDisabledTest {
             Arguments.of("POST", "/api/auth/apple/notifications"),
             Arguments.of("POST", "/api/auth/refresh"),
             Arguments.of("POST", "/api/auth/logout"),
+            Arguments.of("POST", "/api/auth/kakao/native/nonce"),
+            Arguments.of("POST", "/api/auth/apple/native"),
             Arguments.of("GET", "/api/me"),
             Arguments.of("GET", "/api/me/favorite-groups"),
             Arguments.of("GET", "/api/me/favorites"),
@@ -56,7 +58,8 @@ class LoginDisabledTest {
             Arguments.of("PATCH", "/api/me"),
             Arguments.of("DELETE", "/api/me"),
             Arguments.of("DELETE", "/api/me/sessions"),
-            Arguments.of("POST", "/api/me/withdrawal/apple"));
+            Arguments.of("POST", "/api/me/withdrawal/apple"),
+            Arguments.of("POST", "/api/me/withdrawal/apple/native"));
     }
 
     @ParameterizedTest

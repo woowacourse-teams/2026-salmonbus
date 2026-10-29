@@ -41,6 +41,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 final class FakeKakaoServer implements AutoCloseable {
     static final String CLIENT_ID = "test-rest-api-key";
     static final String CLIENT_SECRET = "test-client-secret";
+    static final String APP_KEY = "test-native-app-key";
 
     private final HttpServer server;
     private final RSAKey signingKey;
@@ -147,6 +148,28 @@ final class FakeKakaoServer implements AutoCloseable {
         } catch (JOSEException exception) {
             throw new IOException(exception);
         }
+    }
+
+    /**
+     * 앱의 카카오 SDK 가 받는 것과 같은 ID 토큰을 만든다. 대상은 네이티브 앱 키이고 nonce 는 앱이 넘긴 값 그대로다.
+     * {@code mutation} 으로 클레임을 바꾸거나 다른 키로 서명해 거절 경우를 만든다.
+     */
+    String appIdToken(String sub, String nonce, Consumer<JWTClaimsSet.Builder> mutation, boolean signWithOtherKey)
+        throws JOSEException {
+        Instant now = Instant.now();
+        JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
+            .issuer(baseUrl())
+            .audience(APP_KEY)
+            .subject(sub)
+            .issueTime(Date.from(now))
+            .expirationTime(Date.from(now.plusSeconds(300)))
+            .claim("nonce", nonce);
+        mutation.accept(claims);
+        RSAKey key = signWithOtherKey ? otherKey : signingKey;
+        SignedJWT jwt = new SignedJWT(
+            new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(key.getKeyID()).build(), claims.build());
+        jwt.sign(new RSASSASigner(key));
+        return jwt.serialize();
     }
 
     private String idToken(Grant grant) throws JOSEException {

@@ -6,6 +6,7 @@ import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
 import { useFavorites } from "@/shared/hooks/useFavorites";
 import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
+import { playHaptic } from "@/shared/haptic/haptic";
 import * as buttons from "@/shared/styles/button.css";
 import * as formStyles from "@/shared/styles/form.css";
 import {
@@ -77,9 +78,10 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
             type="checkbox"
             checked={ids.includes(group.id)}
             disabled={busy}
-            onChange={(event) =>
-              setChosen(event.target.checked ? [...ids, group.id] : ids.filter((id) => id !== group.id))
-            }
+            onChange={(event) => {
+              setChosen(event.target.checked ? [...ids, group.id] : ids.filter((id) => id !== group.id));
+              playHaptic("selection");
+            }}
           />
         </label>
       ))}
@@ -179,7 +181,7 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
               busy || refreshingGroups || resource.status !== "success" || groups.length === 0 || full || missing
             }
             onClick={() =>
-              void run(() => saveSelections(ids)).then((ok) => {
+              void run(() => saveSelections(ids), { resultHaptic: true }).then((ok) => {
                 if (ok) onSaved();
               })
             }

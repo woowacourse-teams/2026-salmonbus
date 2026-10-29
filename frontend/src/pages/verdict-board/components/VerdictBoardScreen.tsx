@@ -6,6 +6,7 @@ import { latestSuccessOf, type PolledResource } from "@/shared/api/polledResourc
 import { fetchRouteWatch } from "@/shared/api/routeForecast.api";
 import type { Board, Direction, DirectionInfo, RouteWatch, Vehicle } from "@/shared/api/routeForecast.types";
 import { usePolledRequest } from "@/shared/api/usePolledRequest";
+import { playHaptic } from "@/shared/haptic/haptic";
 import { boardEntryFrom } from "@/shared/routing/boardEntry";
 import { paths } from "@/shared/routing/paths";
 import {
@@ -79,6 +80,7 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
     if (state.status === "ready" && next !== state.direction.id) {
       setSwitched(true);
       track("direction_switched", { route_id: routeId, to_direction: next });
+      playHaptic("selection");
     }
     setSearch(
       (previous) => {

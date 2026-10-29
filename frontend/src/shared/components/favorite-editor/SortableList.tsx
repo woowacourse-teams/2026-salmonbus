@@ -1,5 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { visuallyHidden } from "@/shared/styles/accessibility.css";
+import { playHaptic } from "@/shared/haptic/haptic";
 import * as styles from "./SortableList.css";
 
 interface SortableItem {
@@ -22,6 +23,7 @@ interface PositionBox {
 interface DragSession {
   pointerId: number;
   from: number;
+  to: number;
   start: number;
   shift: number;
   boxes: PositionBox[];
@@ -169,12 +171,14 @@ export function SortableList<T extends SortableItem>({
                     session.current = {
                       pointerId: event.pointerId,
                       from: index,
+                      to: index,
                       start: horizontal ? event.clientX : event.clientY,
                       boxes,
                       shift,
                     };
                     setDrag({ from: index, to: index, offset: 0, shift });
                     event.currentTarget.setPointerCapture(event.pointerId);
+                    playHaptic("impact");
                   }}
                   onPointerMove={(event) => {
                     const current = session.current;
@@ -199,6 +203,10 @@ export function SortableList<T extends SortableItem>({
                         to = i;
                         distance = Math.abs(position - slot);
                       }
+                    }
+                    if (to !== current.to) {
+                      current.to = to;
+                      playHaptic("selection");
                     }
                     setDrag({ from: current.from, to, offset, shift: current.shift });
                   }}

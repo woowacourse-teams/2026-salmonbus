@@ -103,16 +103,20 @@ public class SocialLoginConfiguration {
         WithdrawMember withdrawMember,
         MeterRegistry meters
     ) {
+        AppleRevokeClient revokeClient = new AppleRevokeClient(
+            providerRestClient(), properties.apple().clientId(), properties.apple().revokeUri(), clientSecret);
+        return new AppleWithdrawal(withdrawMember, revokeClient, meters);
+    }
+
+    /** 제공자 API 를 부르는 클라이언트. 제공자가 응답하지 않아도 요청 스레드가 매달리지 않게 제한 시간을 둔다. */
+    static RestClient providerRestClient() {
         HttpClient httpClient = HttpClient.newBuilder()
             .version(HttpClient.Version.HTTP_1_1)
             .connectTimeout(PROVIDER_CONNECT_TIMEOUT)
             .build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
         requestFactory.setReadTimeout(PROVIDER_READ_TIMEOUT);
-        AppleRevokeClient revokeClient = new AppleRevokeClient(
-            RestClient.builder().requestFactory(requestFactory).build(),
-            properties.apple().clientId(), properties.apple().revokeUri(), clientSecret);
-        return new AppleWithdrawal(withdrawMember, revokeClient, meters);
+        return RestClient.builder().requestFactory(requestFactory).build();
     }
 
     @Bean
