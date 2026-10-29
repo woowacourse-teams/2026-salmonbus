@@ -1,6 +1,6 @@
 import { test, expect } from "./fixtures/auth";
 
-test("하단 탭은 고정되고 홈과 마이페이지 본문과 선택 색을 바꾸며 모션 줄이기에서는 애니메이션 없이 바꾼다", async ({
+test("하단 탭은 고정되고 홈과 마이페이지 본문과 선택 색을 전환 모션과 함께 바꾸며 모션 줄이기에서는 애니메이션 없이 바꾼다", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
@@ -22,6 +22,9 @@ test("하단 탭은 고정되고 홈과 마이페이지 본문과 선택 색을 
         if (reducedMotion === "reduce") {
           await expect(main).toHaveCSS("animation-name", "none");
           await expect(selected).toHaveCSS("animation-name", "none");
+        } else {
+          await expect(main).not.toHaveCSS("animation-name", "none");
+          await expect(selected).not.toHaveCSS("animation-name", "none");
         }
         const after = (await nav.boundingBox())!;
         for (const key of ["x", "y", "width", "height"] as const) expect(after[key]).toBeCloseTo(before[key], 1);
