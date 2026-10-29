@@ -7,7 +7,8 @@ import java.time.Clock;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import org.springframework.beans.factory.annotation.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,14 +23,20 @@ import tools.jackson.databind.ObjectMapper;
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(prefix = "auth", name = {"enabled", "apple.enabled"}, havingValue = "true")
 public class AppleNotificationConfiguration {
+    private static final Logger LOGGER = LoggerFactory.getLogger(AppleNotificationConfiguration.class);
+
     @Bean
     AppleNotificationVerifier appleNotificationVerifier(
         LoginProperties properties,
-        @Value("${auth.app.apple-client-id:}") String appClientId,
+        AppLoginProperties app,
         ObjectMapper objectMapper,
         Clock clock
     ) {
         LoginProperties.Apple apple = properties.apple();
+        String appClientId = app.appleClientId();
+        if (appClientId == null || appClientId.isBlank()) {
+            LOGGER.warn("앱 번들 ID(AUTH_APPLE_APP_ID)가 비어 있어 대상이 번들 ID인 애플 서버 간 알림은 모두 거절한다");
+        }
         Set<String> audiences = Stream.of(apple.clientId(), appClientId)
             .filter(audience -> audience != null && !audience.isBlank())
             .collect(Collectors.toUnmodifiableSet());

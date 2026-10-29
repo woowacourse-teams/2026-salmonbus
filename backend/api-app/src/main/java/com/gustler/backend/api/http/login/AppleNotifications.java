@@ -38,10 +38,16 @@ final class AppleNotifications {
 
     void apply(AppleAccountEvent event) {
         switch (event) {
-            case AppleAccountEvent.AccountDeleted(String subject) -> applied("account_deleted",
-                memberOf(subject).flatMap(member -> withdrawMember.withdraw(member, ProviderUnlink.DONE)).isPresent());
-            case AppleAccountEvent.ConsentRevoked(String subject) -> applied("consent_revoked",
-                memberOf(subject).map(refreshTokens::revokeAll).isPresent());
+            case AppleAccountEvent.AccountDeleted(String subject) -> {
+                boolean withdrawn = memberOf(subject)
+                    .flatMap(member -> withdrawMember.withdraw(member, ProviderUnlink.DONE))
+                    .isPresent();
+                applied("account_deleted", withdrawn);
+            }
+            case AppleAccountEvent.ConsentRevoked(String subject) -> {
+                boolean loggedOut = memberOf(subject).map(refreshTokens::revokeAll).isPresent();
+                applied("consent_revoked", loggedOut);
+            }
             case AppleAccountEvent.Ignored(String type) -> {
                 count("ignored", "ignored");
                 LOGGER.info("처리하지 않는 애플 서버 간 알림이다. type={}", type);
