@@ -39,3 +39,22 @@ test("회원 마이페이지는 회원탈퇴 아래 개인정보 묶음에 같�
   expect(privacy.y).toBeGreaterThan(withdraw.y + withdraw.height);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+test("같은 브라우저의 다른 탭에서 끄거나 켜면 열려 있는 마이페이지 스위치도 바로 따라간다", async ({
+  page,
+  context,
+}) => {
+  const other = await context.newPage();
+  await other.route("**/api/auth/session", (route) =>
+    route.fulfill({ json: { authenticated: false, refreshable: false }, headers: { "Cache-Control": "no-store" } }),
+  );
+  await page.goto("/mypage");
+  await other.goto("/mypage");
+  await expect(participation(other)).toBeChecked();
+
+  await participation(page).click();
+  await expect(participation(other)).not.toBeChecked();
+
+  await participation(page).click();
+  await expect(participation(other)).toBeChecked();
+});

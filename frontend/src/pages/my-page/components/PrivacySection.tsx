@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { isAnalyticsOptedOut, setAnalyticsOptOut } from "@/shared/analytics/analytics";
+import { useSyncExternalStore } from "react";
+import { isAnalyticsOptedOut, setAnalyticsOptOut, subscribeAnalyticsOptOut } from "@/shared/analytics/analytics";
 import * as styles from "./PrivacySection.css";
 
 export function PrivacySection() {
-  const [participating, setParticipating] = useState(() => !isAnalyticsOptedOut());
+  const optedOut = useSyncExternalStore(subscribeAnalyticsOptOut, isAnalyticsOptedOut);
   return (
     <section className={styles.section} aria-labelledby="privacy-title">
       <h2 id="privacy-title" className={styles.heading}>
@@ -16,12 +16,9 @@ export function PrivacySection() {
             className={styles.input}
             type="checkbox"
             role="switch"
-            checked={participating}
+            checked={!optedOut}
             aria-describedby="analytics-participation-help"
-            onChange={(event) => {
-              setParticipating(event.target.checked);
-              setAnalyticsOptOut(!event.target.checked);
-            }}
+            onChange={(event) => setAnalyticsOptOut(!event.target.checked)}
           />
           <span className={styles.thumb} aria-hidden="true" />
         </span>
