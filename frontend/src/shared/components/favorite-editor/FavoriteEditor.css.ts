@@ -1,4 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
+import { POINTER_INPUT } from "@/shared/input-method/inputMethod";
 import { vars } from "@/shared/styles/tokens.css";
 import { primary, secondary } from "@/shared/styles/button.css";
 
@@ -105,3 +106,4 @@ export const deleteTitle = style({
   },
 });
 globalStyle(`${editor} button:focus-visible`, { outline: `3px solid ${vars.color.focusRing}`, outlineOffset: 3 });
+globalStyle(`${POINTER_INPUT} ${editor} button:focus`, { outline: "none" });

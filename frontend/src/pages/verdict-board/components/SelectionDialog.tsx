@@ -1,6 +1,7 @@
 import { useState, type SubmitEvent } from "react";
 import type { FavoriteTarget } from "@/shared/api/favorites.types";
 import { createFavoriteGroup } from "@/shared/api/favorites.api";
+import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
 import { useFavorites } from "@/shared/hooks/useFavorites";
@@ -12,6 +13,7 @@ import {
   MAX_FAVORITE_GROUPS,
   MAX_FAVORITES_PER_GROUP,
   exceedsFavoriteLimit,
+  favoriteCountFor,
   groupNameError,
   selectedGroups,
 } from "@/shared/utils/favoritePolicy";
@@ -67,10 +69,10 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
         </p>
       )}
       {groups.map((group) => (
-        <label className={`${styles.choice} amp-mask`} key={group.id}>
+        <label {...maskedPropsFor(styles.choice)} key={group.id}>
           <span>{group.name}</span>
           <span className={styles.choiceCount}>
-            {group.favorites.length} / {MAX_FAVORITES_PER_GROUP}
+            {favoriteCountFor(group, target, ids)} / {MAX_FAVORITES_PER_GROUP}
           </span>
           <input
             type="checkbox"
@@ -84,7 +86,7 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
         </label>
       ))}
       {creating ? (
-        <form className={`${styles.createGroup} amp-mask`} onSubmit={(event) => void createGroup(event)}>
+        <form {...maskedPropsFor(styles.createGroup)} onSubmit={(event) => void createGroup(event)}>
           <label htmlFor="favorite-group-name">그룹 이름</label>
           <input
             id="favorite-group-name"
@@ -108,14 +110,6 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
           </p>
           <div className={formStyles.actions}>
             <button
-              className={buttons.primary}
-              disabled={
-                busy || invalidName !== null || groups.length >= MAX_FAVORITE_GROUPS || resource.status !== "success"
-              }
-            >
-              {busy ? "만드는 중…" : "만들기"}
-            </button>
-            <button
               className={buttons.secondary}
               type="button"
               disabled={busy}
@@ -126,6 +120,14 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
               }}
             >
               돌아가기
+            </button>
+            <button
+              className={buttons.primary}
+              disabled={
+                busy || invalidName !== null || groups.length >= MAX_FAVORITE_GROUPS || resource.status !== "success"
+              }
+            >
+              {busy ? "만드는 중…" : "만들기"}
             </button>
           </div>
         </form>
@@ -170,6 +172,9 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
       )}
       {!creating && (
         <div className={formStyles.actions}>
+          <button className={buttons.secondary} disabled={busy} onClick={onClose}>
+            취소
+          </button>
           <button
             className={buttons.primary}
             disabled={
@@ -182,9 +187,6 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
             }
           >
             {busy ? "저장 중…" : "저장"}
-          </button>
-          <button className={buttons.secondary} disabled={busy} onClick={onClose}>
-            취소
           </button>
         </div>
       )}

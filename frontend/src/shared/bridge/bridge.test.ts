@@ -1,5 +1,6 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import type { BridgeMessage } from "./bridge.types";
+import { SETTINGS_CAPABILITIES as APP_SETTINGS_CAPABILITIES } from "../../../../app/settings/settingsMessages";
+import type { AppCommandType, BridgeMessage } from "./bridge.types";
 import { BRIDGE_EVENT, appHostFrom, bridgeMessageFrom, isSupportedInApp, sendToApp, subscribeToApp } from "./bridge";
 
 function inAppWindow(capabilities: unknown[] = ["map.unmount"]) {
@@ -9,6 +10,12 @@ function inAppWindow(capabilities: unknown[] = ["map.unmount"]) {
     postMessage,
   };
 }
+
+describe("설정 메시지 목록", () => {
+  it("앱의 app/settings/settingsMessages.ts와 같은 목록이다", () => {
+    expect(APP_SETTINGS_CAPABILITIES).toEqual(["settings.open"] satisfies AppCommandType[]);
+  });
+});
 
 describe("앱 안 판별", () => {
   it.each([

@@ -14,6 +14,7 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
     "moduleDetection": "force",
     "noUncheckedIndexedAccess": true,
     "noImplicitReturns": true,
@@ -22,5 +23,5 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "e2e", "playwright.config.ts"]
+  "include": ["src", "e2e", "scripts", "playwright.config.ts"]
 }

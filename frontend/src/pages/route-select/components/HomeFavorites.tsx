@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useReducer, useRef, useState, type Keyboard
 import { Link } from "react-router";
 import type { FavoriteStatus, FavoriteTarget, HomeFavorite } from "@/shared/api/favorites.types";
 import { latestSuccessOf } from "@/shared/api/polledResource";
+import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { SeatCountBadge } from "@/shared/components/SeatCountBadge";
 import { toSeatEstimate, toSeatLevel } from "@/shared/utils/seatGrade";
 import { seatLabelOf } from "@/shared/utils/seatLabelOf";
@@ -16,7 +17,7 @@ import { playHaptic } from "@/shared/haptic/haptic";
 import { FavoritesNotice, FavoritesRetryButton } from "@/shared/components/FavoritesNotice";
 import { FavoriteEditor } from "@/shared/components/favorite-editor/FavoriteEditor";
 import { Notice } from "@/shared/components/Notice";
-import bookmarkIcon from "@/shared/assets/icons/bookmark.svg";
+import starOutline from "@/shared/assets/icons/star-outline.svg";
 import editIcon from "@/shared/assets/icons/favorite-edit.svg";
 import * as homeStyles from "./HomeFavorites.css";
 import { RouteBadge } from "@/shared/components/RouteBadge";
@@ -159,13 +160,13 @@ export function HomeFavorites() {
     resource.status === "loadingError" ? resource : group && summary.status === "loadingError" ? summary : null;
   if (loadingError) {
     return (
-      <section className="amp-mask" aria-label="내 즐겨찾기">
+      <section {...maskedPropsFor()} aria-label="내 즐겨찾기">
         <FavoritesNotice home resource={loadingError} onRetry={resource.status === "loadingError" ? reload : retry} />
       </section>
     );
   }
   return (
-    <section className={`${homeStyles.section} amp-mask`} aria-label="내 즐겨찾기">
+    <section {...maskedPropsFor(homeStyles.section)} aria-label="내 즐겨찾기">
       <FavoritesNotice resource={resource} onRetry={reload} />
       {groups.length > 0 && (
         <div className={homeStyles.tabs}>
@@ -224,9 +225,9 @@ export function HomeFavorites() {
         >
           {((resource.status === "success" && !group) || (shownLatest !== null && favorites.length === 0)) && (
             <div className={homeStyles.homeEmpty}>
-              <img src={bookmarkIcon} width="34" height="34" alt="" draggable={false} />
+              <img src={starOutline} width="34" height="34" alt="" draggable={false} />
               <p className={homeStyles.homeEmptyTitle}>등록된 즐겨찾기가 없어요</p>
-              <p className={homeStyles.homeEmptyDescription}>자주 타는 노선에서 즐겨찾기를 추가해 보세요!</p>
+              <p className={homeStyles.homeEmptyDescription}>노선을 선택하고 자주 타는 정류장의 별을 눌러 보세요</p>
             </div>
           )}
           <ul ref={list} className={homeStyles.list}>

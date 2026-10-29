@@ -25,7 +25,8 @@
     "test:e2e": "playwright test",
     "test:e2e:dev": "E2E_SERVER=dev playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:watch": "E2E_SLOW_MO=500 playwright test --project=chromium --headed --workers=1 --timeout=120000"
+    "test:e2e:watch": "E2E_SLOW_MO=500 playwright test --project=chromium --headed --workers=1 --timeout=120000",
+    "ci:watch": "node scripts/ci-watch/main.ts"
   },
   "dependencies": {
     "@amplitude/unified": "^1.1.29",

@@ -328,8 +328,10 @@ test("가득 찬 그룹의 기존 선택은 유지하고 한 그룹씩 또는 �
   await star.click();
   let dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("checkbox", { name: /즐겨찾기/ })).toBeChecked();
+  await expect(dialog.locator("label", { hasText: "즐겨찾기" })).toContainText("2 / 2");
   await expect(dialog.getByRole("button", { name: "저장", exact: true })).toBeEnabled();
   await dialog.getByRole("checkbox", { name: /즐겨찾기/ }).uncheck();
+  await expect(dialog.locator("label", { hasText: "즐겨찾기" })).toContainText("1 / 2");
   await dialog.getByRole("button", { name: "저장", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   await expect(star).toHaveAttribute("aria-pressed", "true");
@@ -588,6 +590,30 @@ test("마이페이지에서 한 그룹의 즐겨찾기를 삭제해도 다른 �
   expect(favorites.groups[1]!.favorites).toHaveLength(1);
 });
 
+test("즐겨찾기가 없으면 판정 보드와 같은 별 아이콘으로 정류장의 별을 누르라고 안내한다", async ({ page, api }) => {
+  await page.goto("/");
+  const empty = page.getByText("등록된 즐겨찾기가 없어요", { exact: true }).locator("..");
+  await expect(empty).toContainText("정류장의 별을 눌러");
+  const emptyIcon = await empty.locator("img").getAttribute("src");
+  const stop = api.data.watch.stops.find((item) => item.boardingAllowed)!;
+  await page.goto(`/routes/${routeId}`);
+  const star = page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true });
+  await expect(star).toHaveAttribute("aria-pressed", "false");
+  expect(await star.locator("img").getAttribute("src")).toBe(emptyIcon);
+});
+
+test("비회원 홈 안내 카드는 판정 보드와 같은 빈 별 아이콘을 쓴다", async ({ page, auth, api }) => {
+  auth.member = null;
+  await page.goto("/");
+  const card = page.getByRole("region", { name: "내 정류장을 저장해 보세요", exact: true });
+  const guestIcon = await card.locator("img").getAttribute("src");
+  const stop = api.data.watch.stops.find((item) => item.boardingAllowed)!;
+  await page.goto(`/routes/${routeId}`);
+  const star = page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true });
+  await expect(star).toHaveAttribute("aria-pressed", "false");
+  expect(await star.locator("img").getAttribute("src")).toBe(guestIcon);
+});
+
 test("이미 가득 찬 그룹에 새 항목을 선택하면 저장을 막는다", async ({ page, favorites, api }) => {
   const [first, second, third] = api.data.watch.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
   favorites.groups[0]!.favorites = [
@@ -597,9 +623,15 @@ test("이미 가득 찬 그룹에 새 항목을 선택하면 저장을 막는다
   await page.goto(`/routes/${routeId}`);
   await page.getByRole("button", { name: `${third!.name} 즐겨찾기`, exact: true }).click();
   const dialog = page.getByRole("dialog");
+  const count = dialog.locator("label", { hasText: "즐겨찾기" });
+  await expect(count).toContainText("2 / 2");
   await dialog.getByRole("checkbox", { name: /즐겨찾기/ }).check();
+  await expect(count).toContainText("3 / 2");
   await expect(dialog.getByRole("button", { name: "저장", exact: true })).toBeDisabled();
   await expect(dialog.getByRole("alert")).toContainText("2개까지");
+  await dialog.getByRole("checkbox", { name: /즐겨찾기/ }).uncheck();
+  await expect(count).toContainText("2 / 2");
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
   expect(favorites.requests.some((request) => request.method === "PUT")).toBe(false);
 });
 
