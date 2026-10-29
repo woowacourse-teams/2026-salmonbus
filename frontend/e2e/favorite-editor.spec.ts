@@ -1,5 +1,6 @@
 import { test, expect, storedFavorite, defaultGroupId } from "./fixtures/favorites";
 import { routeId } from "./fixtures/mock-data";
+import { expectFocusRing, nextFocusKeyFor } from "./utils/focus-ring";
 
 const secondGroupId = "10000000-0000-4000-8000-000000000003";
 test.use({ viewport: { width: 425, height: 844 } });
@@ -132,6 +133,40 @@ test("편집 진입과 복귀를 반복해도 카드 등장 애니메이션을 �
   await expect(edit).toBeFocused();
   await expect(panel.getByText(stop.name, { exact: true })).toBeVisible();
   await expect(panel.locator(":scope > div")).toHaveCSS("animation-name", "none");
+});
+
+test("포인터로 연 편집 화면의 그룹 칩과 돌아온 편집 버튼은 테두리가 없고 키보드로 열면 보인다", async ({
+  page,
+  browserName,
+}) => {
+  await page.goto("/");
+  const edit = page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true });
+  const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
+  const chip = editor.getByRole("button", { name: "즐겨찾기", exact: true, pressed: true });
+  await test.step("포인터로 열면 칩에 테두리 없음", async () => {
+    await edit.click();
+    await expectFocusRing(chip, "hidden");
+  });
+  await test.step("Escape로 닫으면 편집 버튼으로 포커스가 돌아감", async () => {
+    await page.keyboard.press("Escape");
+    await expect(edit).toBeFocused();
+  });
+  await test.step("키보드로 닫은 뒤 포인터로 다시 열어도 칩에 테두리 없음", async () => {
+    await edit.click();
+    await expectFocusRing(chip, "hidden");
+  });
+  await test.step("포인터로 완료하면 편집 버튼에 테두리 없음", async () => {
+    await editor.getByRole("button", { name: "완료", exact: true }).click();
+    await expectFocusRing(edit, "hidden");
+  });
+  await test.step("키보드로 열면 칩에 테두리", async () => {
+    const tabKey = nextFocusKeyFor(browserName);
+    await page.keyboard.press(`Shift+${tabKey}`);
+    await page.keyboard.press(tabKey);
+    await expect(edit).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expectFocusRing(chip, "shown");
+  });
 });
 
 test("홈과 마이페이지 편집 전환은 모션 줄이기 설정을 따른다", async ({ page, favorites }) => {

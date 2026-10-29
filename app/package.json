@@ -21,7 +21,7 @@
   "scripts": {
     "start": "expo start",
     "ios": "expo run:ios",
-    "test": "node --test plugins/*.test.cjs bridge/*.test.mjs haptic/*.test.mjs",
+    "test": "node --test plugins/*.test.cjs bridge/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint"
   },

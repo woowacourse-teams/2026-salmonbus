@@ -1,6 +1,7 @@
 import { useState, type SubmitEvent } from "react";
 import type { FavoriteTarget } from "@/shared/api/favorites.types";
 import { createFavoriteGroup } from "@/shared/api/favorites.api";
+import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
 import { useFavorites } from "@/shared/hooks/useFavorites";
@@ -67,7 +68,7 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
         </p>
       )}
       {groups.map((group) => (
-        <label className={`${styles.choice} amp-mask`} key={group.id}>
+        <label {...maskedPropsFor(styles.choice)} key={group.id}>
           <span>{group.name}</span>
           <span className={styles.choiceCount}>
             {favoriteCountFor(group, target, ids)} / {MAX_FAVORITES_PER_GROUP}
@@ -83,7 +84,7 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
         </label>
       ))}
       {creating ? (
-        <form className={`${styles.createGroup} amp-mask`} onSubmit={(event) => void createGroup(event)}>
+        <form {...maskedPropsFor(styles.createGroup)} onSubmit={(event) => void createGroup(event)}>
           <label htmlFor="favorite-group-name">그룹 이름</label>
           <input
             id="favorite-group-name"

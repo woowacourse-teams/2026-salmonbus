@@ -1,7 +1,8 @@
 import { MAX_FAVORITE_GROUPS, MAX_FAVORITES_PER_GROUP } from "@/shared/utils/favoritePolicy";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router";
 import { deleteFavoriteGroup } from "@/shared/api/favorites.api";
+import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { useFavorites } from "@/shared/hooks/useFavorites";
 import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
@@ -16,6 +17,7 @@ import plusIcon from "@/shared/assets/icons/favorite-group-plus.svg";
 
 export function GroupList() {
   const { groups, resource, reload } = useFavorites();
+  const labelIdPrefix = useId();
   const [mode, setMode] = useState<"view" | "order" | "delete">("view");
   const [selected, setSelected] = useState<string[]>([]);
   const [confirming, setConfirming] = useState(false);
@@ -79,7 +81,7 @@ export function GroupList() {
       </div>
     );
   return (
-    <section className={`${styles.section} amp-mask`} aria-label="즐겨찾기 그룹 관리">
+    <section {...maskedPropsFor(styles.section)} aria-label="즐겨찾기 그룹 관리">
       <h2 className={styles.heading}>
         <span>{`내 그룹  ${groups.length} / ${MAX_FAVORITE_GROUPS}`}</span>
         {deleting ? (
@@ -141,10 +143,14 @@ export function GroupList() {
                 ) : (
                   <label className={`${styles.group} ${styles.selection}`}>
                     {info}
+                    {/* Session Replay는 속성 값을 가리지 못해서, 그룹 이름은 aria-label 대신 숨긴 글자로 둔다. */}
+                    <span id={`${labelIdPrefix}${group.id}`} hidden>
+                      {`${group.name} 삭제 선택`}
+                    </span>
                     <input
                       className={styles.checkbox}
                       type="checkbox"
-                      aria-label={`${group.name} 삭제 선택`}
+                      aria-labelledby={`${labelIdPrefix}${group.id}`}
                       checked={selected.includes(group.id)}
                       disabled={busy || resource.status !== "success"}
                       onChange={(event) => {

@@ -444,11 +444,11 @@ export function createNaverRouteMap(
     event.stopPropagation();
     createNativeEventHandler(() => zoomAt(1, event.clientX, event.clientY))();
   };
-  // 하드웨어 가속을 사용할 수 없는 환경은 SDK가 이미지 타일 지도로 전환한다.
-  // 이 경우에만 오버레이를 숨기는 기존 확대 효과를 건너뛴다.
+  // 하드웨어 가속을 사용할 수 없는 환경은 SDK가 이미지 타일 지도로 전환하므로 확대를 정수 단계로 즉시 적용한다.
+  // 이때도 마커는 GL 모듈이 transform으로 배치해서, 오버레이 확대 효과를 켜면 그 위치를 덮어써 지도 왼쪽 위로 모인다.
   const useInstantZoom = !map.getOptions("gl");
   if (useInstantZoom) {
-    map.setOptions({ overlayZoomEffect: "all", scrollWheel: false, disableDoubleClickZoom: true });
+    map.setOptions({ scrollWheel: false, disableDoubleClickZoom: true });
     element.addEventListener("wheel", onWheel, { passive: false });
     element.addEventListener("dblclick", onDoubleClick);
     element.addEventListener("touchend", onTouchEnd, { passive: true, capture: true });

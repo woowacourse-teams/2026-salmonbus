@@ -1,4 +1,5 @@
 import { style } from "@vanilla-extract/css";
+import { POINTER_INPUT } from "@/shared/input-method/inputMethod";
 import { vars } from "@/shared/styles/tokens.css";
 
 export const sheet = style({
@@ -54,6 +55,7 @@ export const handle = style({
       outline: `2px solid ${vars.color.focusRing}`,
       outlineOffset: "-2px",
     },
+    [`${POINTER_INPUT} &:focus`]: { outline: "none" },
   },
 });
 

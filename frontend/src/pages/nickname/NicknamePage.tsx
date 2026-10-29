@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
+import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { AccountLayout } from "@/shared/components/AccountLayout";
 import { useStillOnScreen } from "@/shared/routing/stillOnScreen";
 import { LoginButton } from "@/shared/components/LoginButton";
@@ -78,7 +79,7 @@ function NicknameForm({ current }: { current: string }) {
   }
 
   return (
-    <form onSubmit={(event) => void submit(event)} className="amp-mask">
+    <form onSubmit={(event) => void submit(event)} {...maskedPropsFor()}>
       <label className={styles.label} htmlFor="nickname">
         닉네임
       </label>

@@ -6,6 +6,7 @@ on:
     paths:
       - "frontend/**"
       - "app/native-map/nativeMapMessages.ts"
+      - "app/settings/settingsMessages.ts"
       - "dev/docker/frontend.Dockerfile"
       - "compose*.yaml"
       - ".dockerignore"
@@ -16,6 +17,7 @@ on:
     paths:
       - "frontend/**"
       - "app/native-map/nativeMapMessages.ts"
+      - "app/settings/settingsMessages.ts"
       - "dev/docker/frontend.Dockerfile"
       - "compose*.yaml"
       - ".dockerignore"
