@@ -14,7 +14,8 @@ test("하단 탭으로 홈과 마이페이지를 오가면 현재 메뉴를 표�
   const movement = await indicator.evaluateHandle((element) => ({
     finished: new Promise<number>((resolve) => {
       element.addEventListener("transitionend", (event) => {
-        if (event.propertyName === "transform") resolve(element.getBoundingClientRect().x);
+        if (event instanceof TransitionEvent && event.propertyName === "transform")
+          resolve(element.getBoundingClientRect().x);
       });
     }),
   }));
