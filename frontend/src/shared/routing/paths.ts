@@ -8,10 +8,16 @@ export const paths = {
   mypage: "/mypage",
   nickname: "/mypage/nickname",
   favoriteGroup: "/mypage/groups/:groupId",
+  privacy: "/privacy",
+  privacyEdition: "/privacy/:effectiveDate",
 } as const;
 
 export function boardPathFor(routeId: string): string {
   return `/routes/${encodeURIComponent(routeId)}`;
+}
+
+export function privacyEditionPathFor(effectiveDate: string): string {
+  return `/privacy/${encodeURIComponent(effectiveDate)}`;
 }
 
 export function favoritePath(target: FavoriteTarget): string {

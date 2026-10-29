@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Route, Routes } from "react-router";
 import { RouteSearchPage } from "@/pages/route-search";
 import { RouteSelectPage } from "@/pages/route-select";
@@ -8,7 +9,24 @@ import { LoginPage } from "@/pages/login";
 import { MyPage } from "@/pages/my-page";
 import { FavoriteGroupPage } from "@/pages/favorite-group";
 import { NicknamePage } from "@/pages/nickname";
+import { AccountLayout } from "@/shared/components/AccountLayout";
 import { useFocusKeepingNavigation } from "./useFocusKeepingNavigation";
+
+const PrivacyPage = lazy(async () => ({
+  default: (await import(/* webpackChunkName: "privacy" */ "@/pages/privacy")).PrivacyPage,
+}));
+
+const privacyPage = (
+  <Suspense
+    fallback={
+      <AccountLayout>
+        <p role="status">처리방침을 불러오고 있어요…</p>
+      </AccountLayout>
+    }
+  >
+    <PrivacyPage />
+  </Suspense>
+);
 
 export function AppRoutes() {
   const { shownLocation, navigateKeepingFocus } = useFocusKeepingNavigation();
@@ -24,6 +42,8 @@ export function AppRoutes() {
         <Route path={paths.mypage} element={<MyPage />} />
         <Route path={paths.nickname} element={<NicknamePage />} />
         <Route path={paths.favoriteGroup} element={<FavoriteGroupPage />} />
+        <Route path={paths.privacy} element={privacyPage} />
+        <Route path={paths.privacyEdition} element={privacyPage} />
       </Routes>
     </FocusKeepingNavigationContext>
   );
