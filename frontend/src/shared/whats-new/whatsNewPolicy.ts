@@ -2,17 +2,14 @@ import type { WhatsNewNote } from "./whatsNewNotes";
 
 export interface WhatsNewRecord {
   lastSeenId: number;
-  autoShow: boolean;
   lastShownDay: string | null;
 }
-
-export type AutoShowChoice = "keep" | "stop";
 
 const AUTO_SHOW_PERIOD_MS = 7 * 24 * 60 * 60_000;
 const KST_OFFSET_MS = 9 * 60 * 60_000;
 
 export function firstRecordFor(notes: readonly WhatsNewNote[], hasVisitedBefore: boolean): WhatsNewRecord {
-  return { lastSeenId: hasVisitedBefore ? 0 : latestIdOf(notes), autoShow: true, lastShownDay: null };
+  return { lastSeenId: hasVisitedBefore ? 0 : latestIdOf(notes), lastShownDay: null };
 }
 
 export function notesToShowFor(
@@ -20,7 +17,7 @@ export function notesToShowFor(
   record: WhatsNewRecord,
   now: number,
 ): readonly WhatsNewNote[] {
-  if (!record.autoShow || record.lastShownDay === kstDayOf(now)) return [];
+  if (record.lastShownDay === kstDayOf(now)) return [];
   return notes
     .filter((note) => note.id > record.lastSeenId && now < autoShowEndOf(note))
     .sort((left, right) => right.id - left.id);
@@ -30,16 +27,8 @@ export function shownRecordFor(record: WhatsNewRecord, now: number): WhatsNewRec
   return { ...record, lastShownDay: kstDayOf(now) };
 }
 
-export function closedRecordFor(
-  record: WhatsNewRecord,
-  shownNotes: readonly WhatsNewNote[],
-  autoShow: AutoShowChoice,
-): WhatsNewRecord {
-  return {
-    ...record,
-    lastSeenId: Math.max(record.lastSeenId, latestIdOf(shownNotes)),
-    autoShow: autoShow === "stop" ? false : record.autoShow,
-  };
+export function closedRecordFor(record: WhatsNewRecord, shownNotes: readonly WhatsNewNote[]): WhatsNewRecord {
+  return { ...record, lastSeenId: Math.max(record.lastSeenId, latestIdOf(shownNotes)) };
 }
 
 function latestIdOf(notes: readonly WhatsNewNote[]): number {
