@@ -4,12 +4,14 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { Linking, StyleSheet } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
+import type { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
 import { LoadFailedView } from './LoadFailedView';
 import { appBootstrapScriptFor, bridgeEventScriptFor, bridgeMessageFrom, type BridgeMessage } from './bridge/bridge';
 import { HAPTIC_CAPABILITIES } from './haptic/hapticMessages';
 import { playHaptic } from './haptic/playHaptic';
 import { NativeRouteMap, type NativeRouteMapRef } from './native-map/NativeRouteMap';
 import { NATIVE_MAP_CAPABILITIES } from './native-map/nativeMapMessages';
+import { LOGIN_PROVIDER_ORIGINS, navigationDecisionFor } from './navigation/navigationPolicy';
 import { SETTINGS_CAPABILITIES } from './settings/settingsMessages';
 
 SplashScreen.preventAutoHideAsync();
@@ -24,6 +26,9 @@ function readWebUrl() {
 
 const WEB_URL = readWebUrl();
 const IN_APP_ORIGINS = [new URL(WEB_URL).origin];
+const NAVIGABLE_ORIGINS = [...IN_APP_ORIGINS, ...LOGIN_PROVIDER_ORIGINS];
+// 모든 이동이 allowNavigation에 오게 한다. 허용 판단은 navigationDecisionFor가 origin을 정확히 비교해서 한다.
+const EVERY_URL = ['*'];
 const SPLASH_BACKGROUND_COLOR = '#E8533F';
 // 영역 키와 그 영역 메시지의 type 앞부분이 다르면 tsc가 막는다 (map 키에는 map.* 만).
 type DomainCapabilities<T> = { [K in keyof T]: readonly `${K & string}.${string}`[] };
@@ -86,6 +91,12 @@ export default function App() {
     },
   };
 
+  function allowNavigation(request: ShouldStartLoadRequest) {
+    const decision = navigationDecisionFor(request.url, request.isTopFrame, NAVIGABLE_ORIGINS);
+    if (decision === 'openOutside') Linking.openURL(request.url).catch(() => undefined);
+    return decision === 'load';
+  }
+
   function handleMapMessage(raw: string) {
     const epoch = documentEpoch.current;
     // Imperative commands preserve ordering without a React render for every geometry update.
@@ -112,7 +123,8 @@ export default function App() {
       source={{ uri: WEB_URL }}
       style={[styles.webView, NativeRouteMap !== null && styles.transparentWebView]}
       containerStyle={NativeRouteMap !== null ? styles.transparentWebView : undefined}
-      originWhitelist={IN_APP_ORIGINS}
+      originWhitelist={EVERY_URL}
+      onShouldStartLoadWithRequest={allowNavigation}
       allowsBackForwardNavigationGestures
       automaticallyAdjustContentInsets={NativeRouteMap !== null ? false : undefined}
       contentInsetAdjustmentBehavior={NativeRouteMap !== null ? 'never' : undefined}
