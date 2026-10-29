@@ -336,9 +336,15 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
           }}
         >
           <p className={styles.deleteDescription}>
-            {protectedGroup
-              ? "다른 그룹을 맨 위로 옮긴 뒤 삭제해 주세요."
-              : `${deletingGroup.name} 그룹과 즐겨찾기 ${deletingGroup.favorites.length}개가 함께 삭제돼요. 다른 그룹의 즐겨찾기는 유지돼요.`}
+            {protectedGroup ? (
+              "다른 그룹을 맨 위로 옮긴 뒤 삭제해 주세요."
+            ) : (
+              <>
+                {deletingGroup.name} 그룹과 즐겨찾기 {deletingGroup.favorites.length}개가 함께 삭제돼요.
+                <br />
+                다른 그룹의 즐겨찾기는 유지돼요.
+              </>
+            )}
           </p>
           {error && (
             <p className={common.error} role="alert">

@@ -116,6 +116,7 @@ export const deleteDescription = style({
   fontSize: 13,
   lineHeight: 1.65,
   textAlign: "center",
+  wordBreak: "keep-all",
   overflowWrap: "anywhere",
 });
 export const deleteActions = style({ display: "flex", gap: 10, marginTop: 20 });
