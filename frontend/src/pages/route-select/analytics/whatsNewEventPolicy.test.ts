@@ -7,10 +7,14 @@ const newerNote: WhatsNewNote = { id: 3, publishedAt: "2026-11-12", features: ["
 
 describe("whatsNewViewedPropertiesOf", () => {
   it("함께 띄운 소식의 순서와 상관없이 가장 큰 소식 번호와 모든 소식의 기능 줄 수를 보낸다", () => {
-    const expected = { latest_note_id: 3, feature_count: 5 };
+    const expected = { latest_note_id: 3, feature_count: 5, new_route_count: 0 };
 
-    expect(whatsNewViewedPropertiesOf([newerNote, olderNote])).toEqual(expected);
-    expect(whatsNewViewedPropertiesOf([olderNote, newerNote])).toEqual(expected);
+    expect(whatsNewViewedPropertiesOf([newerNote, olderNote], 0)).toEqual(expected);
+    expect(whatsNewViewedPropertiesOf([olderNote, newerNote], 0)).toEqual(expected);
+  });
+
+  it("새 노선만 띄우면 소식 번호와 기능 줄 수는 0이고 새 노선 수를 보낸다", () => {
+    expect(whatsNewViewedPropertiesOf([], 7)).toEqual({ latest_note_id: 0, feature_count: 0, new_route_count: 7 });
   });
 });
 

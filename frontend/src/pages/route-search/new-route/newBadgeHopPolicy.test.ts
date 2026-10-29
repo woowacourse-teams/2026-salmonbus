@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import type { ListedRoute } from "../displayPolicy";
+import type { ListedRoute } from "@/shared/route-list/newRoutePolicy";
 import { hoppingBadgeIndexFor, newBadgeHopKeyFor } from "./newBadgeHopPolicy";
 
 function createRoute(displayName: string, isNew: boolean): ListedRoute {

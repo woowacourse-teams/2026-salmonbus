@@ -62,6 +62,12 @@ export async function createApiMockRouter(page: Page): Promise<ApiMockRouter> {
   return {
     async route(handler: ApiRouteHandler) {
       await page.route("**/api/**", async (route) => {
+        // 정리를 시작한 뒤에 들어온 요청은 테스트가 기다리지 않은 요청이라 handler에 넘기지 않고 끊는다.
+        // 네트워크를 끊은 뒤에는 handler가 응답하지 못하고, 정리가 그 handler를 기다리며 멈출 수 있다.
+        if (mocksRemoved) {
+          await route.abort().catch(() => {});
+          return;
+        }
         try {
           await handler(route);
         } catch (error) {
