@@ -4,7 +4,12 @@ import { apiPaths, createApiData, observedAt, pollIntervalMs, routeId } from "./
 import { createStationArrivalsData } from "./station-arrivals";
 
 type Endpoint = keyof typeof apiPaths | "arrivals";
-type ResponseMode = "success" | "network-error";
+type ResponseMode = "success" | "network-error" | ServiceUnavailable;
+
+interface ServiceUnavailable {
+  status: 503;
+  retryAfterSeconds?: number;
+}
 
 interface MockApi {
   route: ApiMockRouter["route"];
@@ -61,8 +66,13 @@ export const test = base.extend<{ api: MockApi }>({
 
         api.requests[endpoint] += 1;
         if (endpoint === "arrivals") api.arrivalRequests.push(url);
-        if (api.mode[endpoint] === "network-error") {
+        const mode = api.mode[endpoint];
+        if (mode === "network-error") {
           await route.abort("failed");
+          return;
+        }
+        if (mode !== "success") {
+          await route.fulfill(serviceUnavailableResponse(mode));
           return;
         }
 
@@ -116,6 +126,30 @@ export const test = base.extend<{ api: MockApi }>({
 
 export function isAbandonedDocumentError(error: unknown) {
   return error instanceof Error && error.message.includes("Execution context was destroyed");
+}
+
+// 백엔드는 다시 요청할 시각을 아는 최근 관측 없음에만 Retry-After를 붙이고, DB 사용 불가 같은 일시 장애에는 붙이지 않는다.
+function serviceUnavailableResponse({ status, retryAfterSeconds }: ServiceUnavailable) {
+  if (retryAfterSeconds === undefined) {
+    return {
+      status,
+      headers: { "Cache-Control": "no-store" },
+      json: {
+        code: "SERVICE_UNAVAILABLE",
+        message: "일시적인 서버 장애가 발생했습니다.",
+        requestId: "test-service-unavailable",
+      },
+    };
+  }
+  return {
+    status,
+    headers: { "Cache-Control": "no-store", "Retry-After": String(retryAfterSeconds) },
+    json: {
+      code: "NO_RECENT_OBSERVATION",
+      message: "예보 기준으로 사용할 최근 차량 관측이 없습니다.",
+      requestId: "test-no-recent-observation",
+    },
+  };
 }
 
 export { expect };
