@@ -21,10 +21,12 @@ private final class WebOverlayGate: UIView {
   var captureAll = true
   var mapRect = CGRect.zero
   var webRects: [CGRect] = []
+  weak var navigationSnapshot: MapNavigationSnapshot?
 
   override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
     guard !isHidden, alpha >= 0.01, isUserInteractionEnabled, bounds.contains(point) else { return nil }
-    let web = captureAll || !mapRect.contains(point) || webRects.contains { $0.contains(point) }
+    let web = captureAll || navigationSnapshot?.capturesNavigationEdge(point, in: self) == true
+      || !mapRect.contains(point) || webRects.contains { $0.contains(point) }
     #if DEBUG
     if event?.type == .touches { NSLog("[SalmonNativeMap] hit target=%@", web ? "web" : "map") }
     #endif
@@ -65,6 +67,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   private let mapContainer = UIView()
   private let gate = WebOverlayGate()
   private let mapView = RouteNaverMapView(frame: .zero)
+  private lazy var navigationSnapshot = MapNavigationSnapshot(mapContainer: mapContainer)
   private let locationManager = CLLocationManager()
   private var sessionId: String?
   private var lastRevision = -1
@@ -143,12 +146,15 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   }
 
   public override func unmountChildComponentView(_ childComponentView: UIView, index: Int) {
+    navigationSnapshot.finish()
     childComponentView.removeFromSuperview()
   }
 
   public override func layoutSubviews() {
     super.layoutSubviews()
     gate.frame = bounds
+    navigationSnapshot.attachWebView(in: gate)
+    gate.navigationSnapshot = navigationSnapshot
     applyLayout()
   }
 
@@ -588,6 +594,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   private func stopDisplayLink() { displayLink?.invalidate(); displayLink = nil }
 
   @objc private func enteredBackground() {
+    navigationSnapshot.finish()
     stopDisplayLink()
     finishLocation(error: "unavailable")
   }
@@ -704,6 +711,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
       "captureAll": gate.captureAll,
       "stops": stopMarkers.values.filter { $0.mapView === mapView }.count,
       "vehicles": vehicleMarkers.values.filter { $0.mapView === mapView }.count,
+      "maximumSwipeOffset": navigationSnapshot.maximumSwipeOffset,
     ]
     guard let data = try? JSONSerialization.data(withJSONObject: snapshot),
           let value = String(data: data, encoding: .utf8) else { return }

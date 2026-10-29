@@ -12,6 +12,7 @@ final class NativeMapInteractionTests: XCTestCase {
     let captureAll: Bool
     let stops: Int
     let vehicles: Int
+    let maximumSwipeOffset: Double
   }
 
   override func setUpWithError() throws {
@@ -22,6 +23,7 @@ final class NativeMapInteractionTests: XCTestCase {
   }
 
   func testNativePanWebSheetAndDoubleTap() throws {
+    openBoardIfNeeded()
     let initial = try waitForState("native map is ready with its route and vehicles", timeout: 90) {
       $0.ready && !$0.captureAll && $0.visibleMapHeight > 180 && $0.stops > 0 && $0.vehicles > 0
     }
@@ -54,6 +56,46 @@ final class NativeMapInteractionTests: XCTestCase {
     }
     XCTAssertGreaterThan(zoomed.zoom, sheetMoved.zoom)
     attachScreenshot("04-native-double-tap-zoom")
+  }
+
+  func testBackSwipeCancelAndBackLink() throws {
+    openBoardIfNeeded()
+    let initial = try waitForState("native map is ready before back navigation", timeout: 90) {
+      $0.ready && !$0.captureAll && $0.visibleMapHeight > 180 && $0.stops > 0
+    }
+    attachScreenshot("05-before-back-swipe")
+
+    let y = CGFloat(initial.visibleMapHeight * 0.5)
+    let edge = coordinate(x: 1, y: y)
+    edge.press(forDuration: 0.05, thenDragTo: coordinate(x: app.frame.width * 0.25, y: y),
+               withVelocity: .slow, thenHoldForDuration: 0.5)
+    let restored = try waitForState("cancelled back swipe restores the native map", timeout: 15) {
+      $0.ready && !$0.captureAll && $0.stops == initial.stops
+    }
+    let doubleTap = coordinate(x: app.frame.width * 0.65, y: y)
+    doubleTap.doubleTap()
+    let zoomed = try waitForState("restored native map still receives gestures", timeout: 15) {
+      $0.zoom > restored.zoom + 0.25
+    }
+    XCTAssertGreaterThan(zoomed.maximumSwipeOffset, 30, "The native map snapshot must move with WebKit's back swipe")
+    attachScreenshot("06-cancelled-back-swipe-map-restored")
+
+    app.links["노선 선택으로 돌아가기"].tap()
+    XCTAssertTrue(app.textFields["번호를 입력하면 탑승 확률을 알려드려요"].waitForExistence(timeout: 15),
+                  "The back link must still work after cancelling a swipe")
+    attachScreenshot("07-back-link-home-after-cancel")
+  }
+
+  private func openBoardIfNeeded() {
+    let search = app.textFields["번호를 입력하면 탑승 확률을 알려드려요"]
+    guard search.waitForExistence(timeout: 10) else { return }
+    search.tap()
+    let input = app.textFields["노선 번호"]
+    XCTAssertTrue(input.waitForExistence(timeout: 10))
+    input.typeText("3330")
+    let route = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "3330번 노선,")).firstMatch
+    XCTAssertTrue(route.waitForExistence(timeout: 15))
+    route.tap()
   }
 
   private var map: XCUIElement {
