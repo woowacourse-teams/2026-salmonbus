@@ -4,7 +4,7 @@ import type { FavoriteTarget } from "@/shared/api/favorites.types";
 import { Notice } from "@/shared/components/Notice";
 import { useFavorites } from "@/shared/hooks/useFavorites";
 import { selectedGroups } from "@/shared/utils/favoritePolicy";
-import starOutline from "../assets/star-outline.svg";
+import starOutline from "@/shared/assets/icons/star-outline.svg";
 import starFilled from "../assets/star-filled.svg";
 import { LoginPrompt } from "./LoginPrompt";
 import { SelectionDialog } from "./SelectionDialog";

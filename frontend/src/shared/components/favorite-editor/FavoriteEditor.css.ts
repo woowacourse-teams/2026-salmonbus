@@ -1,4 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
+import { POINTER_INPUT } from "@/shared/input-method/inputMethod";
 import { vars } from "@/shared/styles/tokens.css";
 import { primary, secondary } from "@/shared/styles/button.css";
 
@@ -28,17 +29,24 @@ export const groupName = style({
 export const info = style({ display: "flex", flexDirection: "column", gap: 6, flex: 1, minWidth: 0 });
 export const loadingName = style({ height: 22, width: "80%", borderRadius: 4, background: "#EAE6E0" });
 export const loadingDirection = style({ height: 18, width: "45%", borderRadius: 4, background: "#EAE6E0" });
-export const cardHeading = style({ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flexWrap: "wrap" });
-export const stop = style({
-  flex: "1 1 100px",
+export const cardHeading = style({ display: "flex", alignItems: "center", gap: 10, minWidth: 0 });
+export const routeBadge = style({ alignSelf: "center", height: 42 });
+export const stopNameAndDirection = style({
+  display: "flex",
+  flexDirection: "column",
+  flex: 1,
+  gap: 3,
   minWidth: 0,
-  fontSize: 15,
-  fontWeight: 600,
-  lineHeight: "22px",
-  color: "#292A2D",
   overflowWrap: "anywhere",
 });
-export const direction = style({ color: "#837B74", fontSize: 12, lineHeight: "18px" });
+export const stop = style({
+  color: "#292A2D",
+  fontSize: 16,
+  fontWeight: 700,
+  lineHeight: 1.4,
+  letterSpacing: "-0.5px",
+});
+export const direction = style({ color: "#837B74", fontSize: 12, lineHeight: 1.4, wordBreak: "keep-all" });
 export const trash = style({
   display: "grid",
   placeItems: "center",
@@ -98,3 +106,4 @@ export const deleteTitle = style({
   },
 });
 globalStyle(`${editor} button:focus-visible`, { outline: `3px solid ${vars.color.focusRing}`, outlineOffset: 3 });
+globalStyle(`${POINTER_INPUT} ${editor} button:focus`, { outline: "none" });

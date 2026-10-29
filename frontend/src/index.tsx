@@ -5,6 +5,7 @@ import "@/shared/styles/reset.css";
 import { App } from "@/app/App";
 import { AppErrorBoundary } from "@/app/AppErrorBoundary";
 import { initAnalytics } from "@/shared/analytics/analytics";
+import { initInputMethod } from "@/shared/input-method/inputMethod";
 
 const container = document.getElementById("root");
 if (!container) {
@@ -12,6 +13,7 @@ if (!container) {
 }
 
 initAnalytics();
+initInputMethod();
 
 createRoot(container, errorTrackingRootOptions).render(
   <StrictMode>

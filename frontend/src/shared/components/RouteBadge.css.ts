@@ -11,3 +11,18 @@ export const badge = style({
   fontWeight: 700,
   lineHeight: "16px",
 });
+
+export const large = style({
+  selectors: {
+    "&&": {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      minWidth: 60,
+      padding: "0 10px",
+      borderRadius: 7,
+      fontSize: 18,
+      lineHeight: 1.4,
+    },
+  },
+});

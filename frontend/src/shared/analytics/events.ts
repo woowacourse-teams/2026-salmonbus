@@ -33,6 +33,7 @@ export interface EventMap {
     is_new: boolean;
     result_position: number;
     result_count: number;
+    query_length: number;
   };
 
   route_search_unmatched: {

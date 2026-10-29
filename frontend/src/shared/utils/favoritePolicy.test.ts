@@ -1,5 +1,11 @@
 import { describe, expect, it } from "@jest/globals";
-import { exceedsFavoriteLimit, favoriteErrorOf, groupNameError, selectedGroups } from "./favoritePolicy";
+import {
+  exceedsFavoriteLimit,
+  favoriteCountFor,
+  favoriteErrorOf,
+  groupNameError,
+  selectedGroups,
+} from "./favoritePolicy";
 import type { FavoriteGroup, FavoriteTarget } from "@/shared/api/favorites.types";
 
 const target: FavoriteTarget = { routeId: "200000001", stopId: "200000011", direction: "UP" };
@@ -35,6 +41,21 @@ describe("즐겨찾기 정책", () => {
     expect(exceedsFavoriteLimit([group], { ...target, stopId: "200000012" }, [group.id])).toBe(true);
     expect(exceedsFavoriteLimit([group], { ...target, stopId: "200000012" }, [])).toBe(false);
     expect(group.favorites).toHaveLength(2);
+  });
+  it("그룹 개수는 저장하기 전 체크 상태를 따른다", () => {
+    const empty: FavoriteGroup = { id: "g2", name: "통학", favorites: [] };
+    const otherStop = { ...target, stopId: "200000012" };
+    expect(favoriteCountFor(empty, target, [])).toBe(0);
+    expect(favoriteCountFor(empty, target, [empty.id])).toBe(1);
+    expect(favoriteCountFor(group, target, [group.id])).toBe(2);
+    expect(favoriteCountFor(group, target, [])).toBe(1);
+    expect(favoriteCountFor(group, otherStop, [group.id])).toBe(3);
+  });
+  it("한도 검사는 표시하는 개수가 한도를 넘는 그룹이 있을 때만 막는다", () => {
+    const empty: FavoriteGroup = { id: "g2", name: "통학", favorites: [] };
+    const otherStop = { ...target, stopId: "200000012" };
+    expect(exceedsFavoriteLimit([group, empty], otherStop, [empty.id])).toBe(false);
+    expect(exceedsFavoriteLimit([group, empty], otherStop, [group.id, empty.id])).toBe(true);
   });
   it.each([" ", "가".repeat(11), "🚌".repeat(11)])("빈 이름과 10자를 넘는 이름을 거절한다: %s", (name) => {
     expect(groupNameError(name)).not.toBeNull();

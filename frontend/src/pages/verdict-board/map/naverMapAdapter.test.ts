@@ -616,10 +616,13 @@ describe("네이버 지도 adapter", () => {
     expect(native.map.fits).toBe(0);
     expect(native.map.destroyed).toBe(true);
   });
+  it("GL을 사용할 수 없어 이미지 타일로 바뀌어도 오버레이 확대 효과를 켜지 않는다", () => {
+    const { native } = setup(false);
+    expect(native.map.options.overlayZoomEffect).toBeNull();
+  });
   it("GL을 사용할 수 없으면 작은 휠 입력을 모아 포인터 위치를 기준으로 즉시 확대한다", () => {
     const { native, element } = setup(false);
     expect(native.map.options).toMatchObject({
-      overlayZoomEffect: "all",
       scrollWheel: false,
       disableDoubleClickZoom: true,
     });

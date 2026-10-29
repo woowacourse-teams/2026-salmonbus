@@ -9,6 +9,8 @@ import { createNaverRouteMap, type RouteMapAdapter } from "./naverMapAdapter";
 import { isNativeMapAvailable } from "@/shared/native-map/bridge";
 import { createNativeRouteMap, type NativeRouteMapAdapter } from "./nativeMapAdapter";
 import { reportNativeMapFailure } from "@/shared/error-tracking/errorTracking";
+import { NOTICE_DURATION_MS } from "@/shared/components/Notice";
+import { isSupportedInApp, sendToApp } from "@/shared/bridge/bridge";
 import * as styles from "./RouteMap.css";
 
 interface RouteMapProps {
@@ -31,7 +33,16 @@ type MapState =
   | { status: "loading" }
   | { status: "ready"; data: RouteMapData }
   | { status: "error"; data: RouteMapData; message: string };
-type LocationState = { status: "idle" } | { status: "loading" } | { status: "message"; message: string };
+type LocationState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "message"; message: string }
+  | { status: "settingsPrompt"; message: string };
+
+// 설정 버튼이 있는 안내는 화면 읽기 사용자가 버튼까지 갈 시간이 필요해서 시간 제한 없이 닫기 버튼으로 닫는다.
+function locationDeniedStateFor(message: string): LocationState {
+  return isSupportedInApp("settings.open") ? { status: "settingsPrompt", message } : { status: "message", message };
+}
 
 export function RouteMap(props: RouteMapProps) {
   const {
@@ -244,6 +255,12 @@ export function RouteMap(props: RouteMapProps) {
   }, [motion, runMapAction, nativeFailed]);
 
   useEffect(() => {
+    if (locationState.status !== "message") return;
+    const timer = window.setTimeout(() => setLocationState({ status: "idle" }), NOTICE_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [locationState]);
+
+  useEffect(() => {
     const region = regionRef.current;
     if (region === null) return;
     // 시트는 지도를 잘라 보이는 높이만 바꾼다. GL 버퍼 크기는 화면 크기가 바뀔 때만 갱신한다.
@@ -271,15 +288,17 @@ export function RouteMap(props: RouteMapProps) {
         .catch((error: unknown) => {
           if (request !== locationRequest.current || adapterRef.current !== adapter) return;
           const reason = error instanceof Error ? error.message : "unavailable";
-          setLocationState({
-            status: "message",
-            message:
-              reason === "denied"
-                ? "iPhone 설정에서 연어버스의 위치 권한을 허용해주세요"
-                : reason === "timeout"
-                  ? "위치를 확인하는 데 시간이 걸려요. 다시 눌러주세요"
-                  : "현재 위치를 확인하지 못했어요. 다시 눌러주세요",
-          });
+          setLocationState(
+            reason === "denied"
+              ? locationDeniedStateFor("iPhone 설정에서 연어버스의 위치 권한을 허용해주세요")
+              : {
+                  status: "message",
+                  message:
+                    reason === "timeout"
+                      ? "위치를 확인하는 데 시간이 걸려요. 다시 눌러주세요"
+                      : "현재 위치를 확인하지 못했어요. 다시 눌러주세요",
+                },
+          );
         });
       return;
     }
@@ -299,18 +318,25 @@ export function RouteMap(props: RouteMapProps) {
       },
       (error) => {
         if (request !== locationRequest.current) return;
-        setLocationState({
-          status: "message",
-          message:
-            error.code === 1
-              ? "위치 권한을 허용하면 내 위치를 볼 수 있어요"
-              : error.code === 3
-                ? "위치를 확인하는 데 시간이 걸려요. 다시 눌러주세요"
-                : "현재 위치를 확인하지 못했어요. 다시 눌러주세요",
-        });
+        setLocationState(
+          error.code === 1
+            ? locationDeniedStateFor("위치 권한을 허용하면 내 위치를 볼 수 있어요")
+            : {
+                status: "message",
+                message:
+                  error.code === 3
+                    ? "위치를 확인하는 데 시간이 걸려요. 다시 눌러주세요"
+                    : "현재 위치를 확인하지 못했어요. 다시 눌러주세요",
+              },
+        );
       },
       { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 },
     );
+  }
+
+  function openSettings() {
+    sendToApp("settings.open", {});
+    setLocationState({ status: "idle" });
   }
 
   const currentMapState =
@@ -376,6 +402,25 @@ export function RouteMap(props: RouteMapProps) {
       {ready && locationState.status === "message" ? (
         <div className={styles.locationNotice} role="status" data-native-map-hit>
           {locationState.message}
+        </div>
+      ) : null}
+      {ready && locationState.status === "settingsPrompt" ? (
+        <div className={styles.locationNotice} data-native-map-hit>
+          <p className={styles.locationPromptText} role="status">
+            {locationState.message}
+          </p>
+          <div className={styles.locationPromptActions}>
+            <button
+              type="button"
+              className={styles.locationDismissButton}
+              onClick={() => setLocationState({ status: "idle" })}
+            >
+              닫기
+            </button>
+            <button type="button" className={styles.locationSettingsButton} onClick={openSettings}>
+              설정 열기
+            </button>
+          </div>
         </div>
       ) : null}
     </section>
