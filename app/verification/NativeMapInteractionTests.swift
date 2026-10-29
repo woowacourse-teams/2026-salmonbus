@@ -1,6 +1,5 @@
 import XCTest
 
-/// Runs against a real NMFMapView and the existing web Bottom Sheet, with deterministic API data.
 final class NativeMapInteractionTests: XCTestCase {
   private var app: XCUIApplication!
 
@@ -38,7 +37,6 @@ final class NativeMapInteractionTests: XCTestCase {
     }
     attachScreenshot("02-native-pan-camera-moved")
 
-    // A touch starts on the web sheet handle. UIKit keeps that same touch in WebKit while it moves.
     let handleY = CGFloat(panned.visibleMapHeight) + 14
     let sheetStart = coordinate(x: app.frame.width * 0.5, y: handleY)
     let sheetEnd = coordinate(x: app.frame.width * 0.5, y: min(app.frame.height - 110, handleY + 200))

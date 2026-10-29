@@ -15,7 +15,6 @@ struct MapNavigationSnapshotChecks {
     let map = UIView(frame: host.bounds)
     let overlay = UIView(frame: host.bounds)
     let web = HistoryWebView(frame: host.bounds)
-    // RNCWebView can have siblings after WKWebView; discovering it must stop at the first match.
     overlay.addSubview(web)
     overlay.addSubview(UIView())
     host.addSubview(map)

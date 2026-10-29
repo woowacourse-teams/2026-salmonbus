@@ -1,7 +1,6 @@
 import UIKit
 import WebKit
 
-// WebKit animates its scroll view, so a sibling native map needs a temporary visual in that same view.
 final class MapNavigationSnapshot: NSObject {
   private weak var mapContainer: UIView?
   private weak var webView: WKWebView?
@@ -26,7 +25,6 @@ final class MapNavigationSnapshot: NSObject {
     finish()
     webView?.gestureRecognizers?.forEach { $0.removeTarget(self, action: #selector(swiped(_:))) }
     webView = findWebView(in: view)
-    // Observe the existing navigation pans; adding a competing recognizer can cancel WebKit's swipe.
     for gesture in webView?.gestureRecognizers ?? [] where gesture is UIPanGestureRecognizer {
       gesture.addTarget(self, action: #selector(swiped(_:)))
     }
@@ -73,7 +71,6 @@ final class MapNavigationSnapshot: NSObject {
       maximumSwipeOffset = max(maximumSwipeOffset, abs(offset))
     }
     #endif
-    // shortcut: WebKit restores this parent after a swipe; recheck when updating iOS/WebKit.
     if gestureEnded && webView.scrollView.superview === webView { finish() }
   }
 

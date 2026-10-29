@@ -16,7 +16,6 @@ private final class RouteNaverMapView: NMFMapView {
 private typealias RouteNaverMapView = NMFMapView
 #endif
 
-/// A real native ancestor of the WebView. UIKit skips the entire WebKit subtree in map holes.
 private final class WebOverlayGate: UIView {
   var captureAll = true
   var mapRect = CGRect.zero
@@ -140,7 +139,6 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
                                            name: UIScene.didActivateNotification, object: nil)
   }
 
-  // Fabric must mount the existing RNCWebView inside the gate, not beside it.
   public override func mountChildComponentView(_ childComponentView: UIView, index: Int) {
     gate.insertSubview(childComponentView, at: index)
   }
@@ -373,7 +371,6 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     for item in projected {
       guard let marker = stopMarkers[item.stop.key], let label = stopLabels[item.stop.key] else { continue }
       let offset = offsets[item.stop.key] ?? 0
-      // Offset presentation coordinates so SDK anchors stay within their documented 0...1 range.
       let coordinate = mapView.projection.latlng(from: CGPoint(x: item.point.x + offset, y: item.point.y))
       marker.position = coordinate
       let selected = state.selectedStop == item.stop.selection
@@ -420,7 +417,6 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
       line.color = (active ? MapMarkerImages.routeColor : MapMarkerImages.mutedColor.withAlphaComponent(0.95))
       line.passedColor = line.color
       line.zIndex = active ? 2 : 1
-      // Each directional path is already ordered in its own operating direction.
       line.patternIcon = !direction.isEmpty && (active || showBothDirections) ? routeArrowImage() : nil
     }
   }
@@ -430,7 +426,6 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     let rect = layout.nativeRect(layout.mapRect, in: bounds).intersection(bounds)
     gate.mapRect = rect
     gate.webRects = layout.webRects.map { layout.nativeRect($0, in: bounds) }
-    // During DOM geometry transitions, a new touch belongs to WebKit until the final layout is applied.
     gate.captureAll = layout.captureAll || layout.transitioning || !readySent || failed
     mapContainer.frame = rect.isNull ? .zero : rect
     let bufferHeight = max(bounds.height, rect.height)
@@ -448,8 +443,6 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
           mapContainer.bounds.width > 1, mapContainer.bounds.height > 1, window != nil else { return }
     initialFitScheduled = true
     let expectedSession = sessionId
-    // The SDK can finish its first tile load before its child renderer has laid out at our new frame.
-    // Defer camera fitting until the map's actual UIKit layout has completed.
     DispatchQueue.main.async { [weak self] in
       guard let self, self.sessionId == expectedSession else { return }
       self.initialFitScheduled = false
@@ -620,8 +613,6 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     readySent = true
     initializationTimer?.invalidate()
     initializationTimer = nil
-    // The first scene may arrive while the SDK's renderer still has a zero-sized frame.
-    // Bind every overlay to the loaded renderer before revealing the web map placeholder.
     for marker in stopMarkers.values { marker.mapView = nil; marker.mapView = mapView }
     for marker in stopLabels.values { marker.mapView = nil; marker.mapView = mapView }
     for marker in vehicleMarkers.values { marker.mapView = nil; marker.mapView = mapView }
