@@ -41,6 +41,7 @@ export interface EventMap {
     query: string;
   };
 
+  route_list_unavailable: FailureProperties & { attempt: number };
 
   board_viewed: {
     route_id: string;
