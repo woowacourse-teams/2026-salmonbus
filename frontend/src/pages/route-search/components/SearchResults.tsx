@@ -1,17 +1,17 @@
 import { useId, useRef, type Ref } from "react";
-import type { ListedRoute, RouteSelection, SearchView } from "../displayPolicy";
+import { RouteRow } from "@/shared/components/RouteRow";
+import type { ListedRoute } from "@/shared/route-list/newRoutePolicy";
+import type { RouteSelection, SearchView } from "../displayPolicy";
 import {
   EMPTY_DESCRIPTION,
   EMPTY_TITLE,
   IN_SERVICE_TITLE,
   LOAD_FAILED_NOTICE,
   LOADING_NOTICE,
-  NEW_BADGE,
   RELOAD_LABEL,
   RETRY_LABEL,
   UNMATCHED_NOTICE,
-  routeButtonLabel,
-  searchStatusLabel,
+  searchStatusLabelOf,
 } from "../routeSearchCopy";
 import * as styles from "./SearchResults.css";
 import { useNewBadgeHop } from "./useNewBadgeHop";
@@ -32,7 +32,7 @@ export function SearchResults({ view, onSelect, onRetry, newBadgeHopKey }: Searc
     <>
       {/* 화면 낭독기는 이 문구로 결과 변화를 듣는다. 보이는 문구는 두 번 읽히지 않게 aria-hidden */}
       <p className={styles.status} role="status">
-        {searchStatusLabel(view)}
+        {searchStatusLabelOf(view)}
       </p>
       {renderView(view, onSelect, onRetry, sectionRef)}
     </>
@@ -112,22 +112,7 @@ function InServiceSection({ ref, routes, onSelect }: InServiceSectionProps) {
       <ul className={styles.list}>
         {routes.map((route, position) => (
           <li key={route.id}>
-            <button
-              className={styles.item}
-              type="button"
-              aria-label={routeButtonLabel(route)}
-              onClick={() => onSelect({ route, position, listedCount: routes.length })}
-            >
-              <span className={styles.routeNumber}>{route.displayName}</span>
-              <span className={styles.stops}>
-                {route.startStopName} ↔ {route.endStopName}
-              </span>
-              {route.isNew && (
-                <span className={styles.newBadge} data-new-badge>
-                  {NEW_BADGE}
-                </span>
-              )}
-            </button>
+            <RouteRow route={route} onSelect={() => onSelect({ route, position, listedCount: routes.length })} />
           </li>
         ))}
       </ul>
