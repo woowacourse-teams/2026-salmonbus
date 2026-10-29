@@ -70,9 +70,10 @@ These rules take precedence over the instructions below.
   ```ts file=add-valid-todo.spec.ts
   // spec: specs/plan.md
   // seed: tests/seed.spec.ts
+  import { test, expect } from './fixtures/api';
 
   test.describe('Adding New Todos', () => {
-    test('Add Valid Todo', async { page } => {
+    test('Add Valid Todo', async ({ page }) => {
       // 1. Click in the "What needs to be done?" input field
       await page.click(...);
 

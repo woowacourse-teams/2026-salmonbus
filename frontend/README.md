@@ -118,6 +118,7 @@ Playwright Test Agents의 planner는 앱을 둘러보고 테스트 계획을 쓰
 - 4173 포트가 이미 쓰이고 있으면 포트만 바꾼 Playwright 설정을 만들고 MCP 서버를 `npx playwright run-test-mcp-server -c <그 설정>`으로 띄웁니다. Claude Code는 `--mcp-config`로, Codex는 `-c 'mcp_servers.playwright-test.args=[...]'`로 커밋된 설정 대신 쓸 수 있습니다.
 - `npx playwright init-agents`를 다시 돌린 뒤에는 위 healer 절의 복구와 함께 다음을 합니다.
   - 네 정의 파일의 `# Rules for this repository` 절을 되살립니다.
+  - 두 generator 정의의 예시 테스트에 `import { test, expect } from './fixtures/api';` 줄과 `async ({ page }) =>` 콜백을 되살립니다. 생성본 예시는 import가 없고 `async { page } =>`라서 문법이 틀립니다.
   - Codex 정의에 다시 생긴 `[mcp_servers.playwright-test]`와 `enabled_tools`를 지웁니다.
   - 새로 생긴 `specs/README.md`를 지웁니다. `e2e/seed.spec.ts`는 이름에 seed가 든 파일이 이미 있어서 새로 만들어지지 않습니다.
   - `pnpm exec prettier --write .claude/agents`로 형식을 맞춥니다.
