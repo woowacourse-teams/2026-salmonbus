@@ -29,7 +29,7 @@ describe("searchStatusLabel", () => {
   });
 
   it("일치하는 노선이 없으면 결과 없음을 알린다", () => {
-    expect(searchStatusLabel({ kind: "unmatched" })).toBe("일치하는 노선이 없어요");
+    expect(searchStatusLabel({ kind: "unmatched" })).toBe("일치하는 노선을 찾지 못했어요");
   });
 
   it("일치하는 노선이 있으면 개수를 알린다", () => {
