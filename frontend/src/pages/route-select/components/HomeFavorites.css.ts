@@ -34,25 +34,31 @@ export const link = style({
   color: "inherit",
   textDecoration: "none",
 });
-export const heading = style({ display: "flex", alignItems: "center", gap: 8, minWidth: 0, height: 23 });
-export const stop = style({
+export const heading = style({ display: "flex", alignItems: "center", gap: 10, minWidth: 0 });
+export const routeBadge = style({ alignSelf: "stretch" });
+export const stopNameAndDirection = style({
+  display: "flex",
+  flexDirection: "column",
   flex: 1,
+  gap: 3,
   minWidth: 0,
+  overflowWrap: "anywhere",
+});
+export const stop = style({
   overflow: "hidden",
+  whiteSpace: "nowrap",
+  textOverflow: "ellipsis",
   color: "#292A2D",
   fontSize: 16,
   fontWeight: 700,
-  lineHeight: "23px",
+  lineHeight: 1.4,
   letterSpacing: "-0.5px",
-  whiteSpace: "nowrap",
-  textOverflow: "ellipsis",
 });
 export const direction = style({
-  flexShrink: 0,
   color: "#837B74",
-  fontSize: 11,
-  lineHeight: "16px",
-  whiteSpace: "nowrap",
+  fontSize: 12,
+  lineHeight: 1.4,
+  wordBreak: "keep-all",
 });
 export const forecast = style({
   overflow: "hidden",
@@ -80,14 +86,14 @@ export const timing = style({
 });
 export const eta = style({
   color: vars.color.textStrong,
-  fontSize: 12,
+  fontSize: vars.font.arrivalTime,
   fontWeight: 600,
   lineHeight: "17px",
   whiteSpace: "nowrap",
 });
 export const distance = style({
   color: vars.color.textSubtle,
-  fontSize: 10,
+  fontSize: vars.font.distance,
   fontWeight: 500,
   lineHeight: "14px",
   whiteSpace: "nowrap",
@@ -117,6 +123,13 @@ export const notice = style({
   color: vars.color.textSubtle,
   fontSize: 12,
   textAlign: "center",
+});
+export const unavailable = style({
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 8,
+  padding: "12px 0",
 });
 
 export const list = style({

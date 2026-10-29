@@ -1,6 +1,5 @@
 import { style } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
-import bookmarkIcon from "@/shared/assets/icons/bookmark.svg";
 
 export const guestCard = style({
   display: "flex",
@@ -16,13 +15,6 @@ export const guestCard = style({
   boxShadow: "inset 0 0 0 1px #ECE8E3",
   fontFamily: "'Noto Sans KR', sans-serif",
   textAlign: "center",
-});
-export const guestIcon = style({
-  flexShrink: 0,
-  width: 30,
-  height: 30,
-  background: vars.color.liveBus,
-  mask: `url(${bookmarkIcon}) center / contain no-repeat`,
 });
 export const guestTitle = style({
   margin: 0,

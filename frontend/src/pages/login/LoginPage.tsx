@@ -132,9 +132,6 @@ export function LoginPage() {
         <ConfirmDialog title="로그인을 완료하지 못했어요" onCancel={dismissFailure}>
           <p className={styles.caption}>다시 로그인하거나 돌아가서 노선을 검색할 수 있어요.</p>
           <div className={styles.actions}>
-            <button className={buttonStyles.primary} type="button" onClick={dismissFailure}>
-              다시 로그인
-            </button>
             <button
               className={buttonStyles.secondary}
               type="button"
@@ -144,6 +141,9 @@ export function LoginPage() {
               }}
             >
               돌아가기
+            </button>
+            <button className={buttonStyles.primary} type="button" onClick={dismissFailure}>
+              다시 로그인
             </button>
           </div>
         </ConfirmDialog>

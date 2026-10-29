@@ -3,9 +3,7 @@ import UIKit
 @main
 struct MapMarkerImageChecks {
   static func main() throws {
-    for asset in ["bus-front", "stop-boarding", "stop-nonboarding"] {
-      precondition(UIImage(named: asset) != nil, "Missing web SVG asset: \(asset)")
-    }
+    precondition(UIImage(named: "bus-front") != nil, "Missing web SVG asset: bus-front")
     var images: [(String, UIImage)] = []
     for selected in [false, true] {
       for active in [true, false] {
@@ -15,6 +13,21 @@ struct MapMarkerImageChecks {
           precondition(image.size == CGSize(width: size, height: size))
           images.append(("stop \(selected) \(active) \(boarding)", image))
         }
+      }
+    }
+    for boarding in [true, false] {
+      precondition(MapMarkerImages.stop(selected: false, active: true, boardingAllowed: boarding).pngData()
+                   != MapMarkerImages.stop(selected: false, active: false, boardingAllowed: boarding).pngData(),
+                   "비선택 정류장은 활성 방향과 비활성 방향의 색상을 구분한다")
+      precondition(MapMarkerImages.stop(selected: true, active: true, boardingAllowed: boarding).pngData()
+                   == MapMarkerImages.stop(selected: true, active: false, boardingAllowed: boarding).pngData(),
+                   "선택한 정류장은 활성 방향과 관계없이 같은 강조를 사용한다")
+    }
+    for selected in [false, true] {
+      for active in [true, false] {
+        precondition(MapMarkerImages.stop(selected: selected, active: active, boardingAllowed: true).pngData()
+                     != MapMarkerImages.stop(selected: selected, active: active, boardingAllowed: false).pngData(),
+                     "승차 가능 정류장과 경유 정류장은 구분된다")
       }
     }
     let normal = MapMarkerImages.vehicle(caption: "현재 37석", showCount: true, stackIndex: 0)

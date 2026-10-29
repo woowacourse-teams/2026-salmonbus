@@ -4,6 +4,7 @@ import { BottomNavigation } from "@/shared/components/BottomNavigation";
 import { Brand } from "@/shared/components/Brand";
 import { GuestFavoritesCard } from "./GuestFavoritesCard";
 import { HomeFavorites } from "./HomeFavorites";
+import { WhatsNewOnEntry } from "./WhatsNewOnEntry";
 import { pageEnter } from "@/shared/styles/pageTransition.css";
 import { Notice } from "@/shared/components/Notice";
 import { paths } from "@/shared/routing/paths";
@@ -64,6 +65,7 @@ export function RouteSelectScreen() {
       </main>
       <BottomNavigation />
       {typeof notice === "string" && <Notice key={notice} message={notice} />}
+      <WhatsNewOnEntry />
     </div>
   );
 }

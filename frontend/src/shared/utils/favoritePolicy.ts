@@ -15,13 +15,13 @@ export function selectedGroups(groups: FavoriteGroup[], target: FavoriteTarget):
     .map((group) => group.id);
 }
 
+export function favoriteCountFor(group: FavoriteGroup, target: FavoriteTarget, ids: string[]): number {
+  const others = group.favorites.filter((favorite) => !sameFavorite(favorite, target)).length;
+  return ids.includes(group.id) ? others + 1 : others;
+}
+
 export function exceedsFavoriteLimit(groups: FavoriteGroup[], target: FavoriteTarget, ids: string[]): boolean {
-  return groups.some(
-    (group) =>
-      ids.includes(group.id) &&
-      group.favorites.length >= MAX_FAVORITES_PER_GROUP &&
-      !group.favorites.some((favorite) => sameFavorite(favorite, target)),
-  );
+  return groups.some((group) => favoriteCountFor(group, target, ids) > MAX_FAVORITES_PER_GROUP);
 }
 
 export function groupNameError(name: string): string | null {

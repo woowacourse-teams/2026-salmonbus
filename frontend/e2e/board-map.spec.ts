@@ -1821,7 +1821,10 @@ test("위쪽 정류장이 접힐 때 새로 펼친 정류장을 목록 상단으
   expect(nextTop).toBeLessThanOrEqual(originalTop + 1);
 });
 
-test("현재 위치 성공은 작은 반투명 원과 파란 점을 표시하고 권한 거부 시 안내한다", async ({ page, naverMap }) => {
+test("현재 위치 성공은 작은 반투명 원과 파란 점을 표시하고 권한 거부 안내는 잠시 뒤 닫는다", async ({
+  page,
+  naverMap,
+}) => {
   await openMap(page);
   await page.evaluate(() =>
     Object.defineProperty(navigator, "geolocation", {
@@ -1863,8 +1866,14 @@ test("현재 위치 성공은 작은 반투명 원과 파란 점을 표시하고
     }),
   );
   await page.getByRole("button", { name: "현재 위치 보기", exact: true }).click();
-  await expect(map(page).getByText("위치 권한을 허용하면 내 위치를 볼 수 있어요", { exact: true })).toBeVisible();
+  const deniedNotice = map(page).getByText("위치 권한을 허용하면 내 위치를 볼 수 있어요", { exact: true });
+  await expect(deniedNotice).toBeVisible();
+  await expect(map(page).getByRole("button", { name: "설정 열기", exact: true })).toHaveCount(0);
   expect(await naverMap.snapshot()).toEqual(located);
+  await page.clock.runFor(3_900);
+  await expect(deniedNotice).toBeVisible();
+  await page.clock.runFor(100);
+  await expect(deniedNotice).toHaveCount(0);
 });
 
 for (const failure of [

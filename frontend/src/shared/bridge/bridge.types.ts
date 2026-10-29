@@ -1,5 +1,6 @@
 import type { HapticCommands } from "../haptic/haptic.types";
 import type { NativeMapBridgeCommands, NativeMapBridgeEvents } from "../native-map/protocol";
+import type { SettingsCommands } from "../settings/settings.types";
 
 /**
  * 웹과 iOS 앱이 주고받는 메시지. type은 `<영역>.<동작>` 형식이다 (map.updateScene, haptic.impact).
@@ -19,7 +20,7 @@ export interface BridgeEnvelope extends BridgeMessage {
  * payload 값이 늘면 새 type을 만든다. 옛 앱이 새 type을 모를 때는 웹이 정한다:
  * 보조 피드백은 가까운 값으로 대신하고, 사용자가 누르는 기능과 결과가 중요한 요청은 숨긴다.
  */
-export type AppCommands = NativeMapBridgeCommands & HapticCommands;
+export type AppCommands = NativeMapBridgeCommands & HapticCommands & SettingsCommands;
 export type AppCommandType = keyof AppCommands;
 
 /** 앱이 웹에 보내는 메시지 전체 목록. */
