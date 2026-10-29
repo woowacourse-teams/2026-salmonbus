@@ -3,8 +3,12 @@ import * as Crypto from 'expo-crypto';
 import { initializeKakaoSDK } from '@react-native-kakao/core';
 import { login as loginWithKakao } from '@react-native-kakao/user';
 import { isCancellation, type SignInRequest, type SignInResult } from './authMessages';
+import { settleWithin } from './settleWithin';
 
 const KAKAO_NATIVE_APP_KEY = process.env.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY;
+// 카카오톡으로 넘어간 사용자가 직접 앱으로 돌아오면 카카오 SDK는 끝내 답하지 않는다.
+// 카카오 계정에 아이디와 비밀번호를 입력해 로그인할 시간은 남긴다.
+const SIGN_IN_TIMEOUT_MS = 3 * 60 * 1000;
 
 interface Credential {
   idToken: string;
@@ -16,7 +20,10 @@ let kakaoInitialization: Promise<void> | null = null;
 /** 실패해도 reject하지 않고 결과로 돌려준다. 웹이 답을 못 받으면 로그인 버튼이 꺼진 채 남는다. */
 export async function signInNatively({ id, provider, nonce }: SignInRequest): Promise<SignInResult> {
   try {
-    const credential = provider === 'apple' ? await appleCredentialFor(nonce) : await kakaoCredentialFor(nonce);
+    const credential = await settleWithin(
+      provider === 'apple' ? appleCredentialFor(nonce) : kakaoCredentialFor(nonce),
+      SIGN_IN_TIMEOUT_MS,
+    );
     if (credential === null) return { id, provider, status: 'failed', reason: 'unavailable' };
     return { id, provider, status: 'success', ...credential };
   } catch (error) {
