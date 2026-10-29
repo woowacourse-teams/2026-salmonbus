@@ -18,6 +18,8 @@ export function redirectAuth(route: Route, destination: string, browserName: str
     : route.fulfill({ status: 302, headers: { Location: destination } });
 }
 
+export const NATIVE_NONCE = "e2e-native-nonce-0123456789";
+
 export const testMember = {
   ...memberExample,
   nickname: "살몽",
@@ -32,6 +34,8 @@ interface AuthMock {
   nicknameError: string | null;
   mutationFails: boolean;
   loginResult: "success" | "cancelled" | "failed";
+  /** 앱 네이티브 로그인 API(SAL-318 제안 모양). false면 다른 없는 경로처럼 404다. */
+  nativeApi: boolean;
   requests: { path: string; method: string; csrf: string | undefined }[];
 }
 
@@ -46,6 +50,7 @@ export const test = apiTest.extend<{ auth: AuthMock }>({
         nicknameError: null,
         mutationFails: false,
         loginResult: "success",
+        nativeApi: false,
         requests: [],
       };
       // HTTP 로컬 서버의 테스트에서는 CSRF 읽기만 모의한다. Secure 쿠키 속성은 실환경에서 별도로 검증한다.
@@ -87,6 +92,14 @@ export const test = apiTest.extend<{ auth: AuthMock }>({
           await redirectAuth(route, destination.toString(), browserName);
         } else if (request.headers()["x-xsrf-token"] !== "e2e-csrf" && request.method() !== "GET") {
           await error(400, "CSRF_REJECTED");
+        } else if (auth.nativeApi && /^\/api\/auth\/(kakao|apple)\/native\/nonce$/.test(path)) {
+          await route.fulfill({ json: { nonce: NATIVE_NONCE }, headers: { "Cache-Control": "no-store" } });
+        } else if (auth.nativeApi && /^\/api\/auth\/(kakao|apple)\/native$/.test(path)) {
+          auth.member = { ...testMember, provider: path.includes("apple") ? "APPLE" : "KAKAO" };
+          await route.fulfill({ status: 204 });
+        } else if (auth.nativeApi && path === "/api/me/withdrawal/apple/native") {
+          auth.member = null;
+          await route.fulfill({ status: 204 });
         } else if (path === "/api/auth/refresh") {
           if (auth.refreshFails) await error(401, "UNAUTHENTICATED");
           else {
