@@ -2,7 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 import { boardEntryFrom, boardEntryStateFor } from "./boardEntry";
 
 describe("boardEntryFrom", () => {
-  it.each(["search", "favorite"] as const)("앱 화면이 넘긴 진입 경로를 읽는다: %s", (entry) => {
+  it.each(["search", "favorite", "whats_new"] as const)("앱 화면이 넘긴 진입 경로를 읽는다: %s", (entry) => {
     expect(boardEntryFrom(boardEntryStateFor(entry))).toBe(entry);
   });
 

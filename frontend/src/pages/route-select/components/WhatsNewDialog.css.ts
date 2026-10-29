@@ -1,5 +1,6 @@
 import { style } from "@vanilla-extract/css";
 import { POINTER_INPUT } from "@/shared/input-method/inputMethod";
+import { ROUTE_ROW_INSET } from "@/shared/styles/routeRow";
 import { vars } from "@/shared/styles/tokens.css";
 
 export const dialog = style({
@@ -29,6 +30,9 @@ export const notes = style({
   gap: 20,
   flex: "1 1 auto",
   minHeight: 0,
+  // 스크롤 영역은 옆으로 넘친 것을 잘라서, 노선 줄의 누른 배경이 들어갈 자리를 안쪽 여백으로 만든다.
+  margin: `0 -${ROUTE_ROW_INSET}`,
+  padding: `0 ${ROUTE_ROW_INSET}`,
   overflowY: "auto",
   selectors: { [`${POINTER_INPUT} &:focus`]: { outline: "none" } },
 });
@@ -36,6 +40,12 @@ export const notes = style({
 export const noteDate = style({ margin: 0, color: vars.color.textSubtle, fontSize: 12, fontWeight: 600 });
 
 export const sectionTitle = style({ margin: "8px 0 6px", color: vars.color.textBody, fontSize: 13, fontWeight: 700 });
+
+export const routesTitle = style([sectionTitle, { marginTop: 0 }]);
+
+export const routes = style({ margin: `0 -${ROUTE_ROW_INSET}`, padding: 0, listStyle: "none" });
+
+export const moreRoutes = style({ margin: "4px 0 0", color: vars.color.textSubtle, fontSize: 13 });
 
 export const features = style({
   display: "grid",
