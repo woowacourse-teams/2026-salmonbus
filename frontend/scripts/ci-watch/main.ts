@@ -21,6 +21,7 @@ import {
 import {
   collectChanges,
   createHealerWorktree,
+  envWithoutGitLocation,
   fetchCommits,
   missingDefinitionsFor,
   removeHealerWorktree,
@@ -43,6 +44,8 @@ const { values } = parseArgs({
   },
 });
 const healerFrom = values["healer-from"] && path.resolve(values["healer-from"]);
+// 감시와 healer가 돌리는 모든 git이 자기 폴더의 저장소를 보게, 시작할 때 hook이 넣은 위치 변수를 지운다.
+process.env = envWithoutGitLocation(process.env);
 const worktreeDir = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
 const logFile = values.sha ? path.join(stateRoot, "logs", `${values.sha}.log`) : null;
 

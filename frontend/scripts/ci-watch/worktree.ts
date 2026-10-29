@@ -17,6 +17,22 @@ const definitionsFor: Record<Agent, string[]> = {
   codex: [".codex/agents/playwright_test_healer.toml", "AGENTS.md"],
 };
 
+// `git rev-parse --local-env-vars` 가운데 git이 어느 저장소, 워크트리, index를 볼지 정하는 변수.
+const gitLocationVariables = new Set([
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_INDEX_FILE",
+  "GIT_COMMON_DIR",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_PREFIX",
+]);
+
+// 연결된 워크트리에서 푸시하면 hook에 GIT_DIR이 들어온다. 그대로 두면 임시 워크트리에서 돌린 git이 푸시한 워크트리의 저장소와 index를 본다.
+export function envWithoutGitLocation(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(env).filter(([name]) => !gitLocationVariables.has(name)));
+}
+
 function git(cwd: string, args: string[]) {
   return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 }
